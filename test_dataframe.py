@@ -126,9 +126,13 @@ def test_dataframe_basic():
     np.testing.assert_equal(flatdf['keys'].as_array(), hkeys)
     np.testing.assert_equal(flatdf['vals'].as_array(), hvals)
 
-    mat = flatdf.as_matrix(['keys', 'vals'])
+    mat = flatdf.as_matrix()
+
+    expect = np.vstack([hkeys, hvals]).T
+
+    print(expect)
     print(mat)
-    np.testing.assert_equal(mat, np.vstack([hkeys, hvals]))
+    np.testing.assert_equal(mat, expect)
 
 
 if __name__ == '__main__':

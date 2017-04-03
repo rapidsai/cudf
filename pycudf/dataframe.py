@@ -57,7 +57,13 @@ class DataFrame(object):
             msg = '{} requires all columns to be flat'.format(opname)
             raise ValueError(msg)
 
-    def as_matrix(self, columns, order='F'):
+    def as_matrix(self, columns=None):
+        """
+        Returns a (nrow x ncol) numpy ndarray in "F" order.
+        """
+        if columns is None:
+            columns = self.columns
+
         cols = [self._cols[k] for k in columns]
         ncol = len(cols)
         nrow = len(self)
@@ -70,10 +76,9 @@ class DataFrame(object):
             raise ValueError('all column must have the same dtype')
         self._sentry_flat(cols, 'as_matrix()')
 
-        matrix = cuda.device_array(shape=(ncol, nrow), dtype=dtype, order='F')
-
+        matrix = cuda.device_array(shape=(nrow, ncol), dtype=dtype, order="F")
         for colidx, inpcol in enumerate(cols):
-            cudautils.copy_column(matrix, colidx, inpcol.as_gpu_array())
+            matrix[:, colidx].copy_to_device(inpcol.as_gpu_array())
 
         return matrix.copy_to_host()
 
