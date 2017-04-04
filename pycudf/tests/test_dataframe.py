@@ -82,11 +82,21 @@ def test_series_basic():
     a4 = np.hstack([a1, a2, a3])
     np.testing.assert_equal(series.as_array(), a4)
 
+
+def test_series_indexing():
+    a1 = np.arange(20)
+    series = Series.from_any(a1)
     # Indexing
     sr1 = series[:12]
-    np.testing.assert_equal(sr1.as_array(), a4[:12])
-    sr2 = sr1[3:12]
-    np.testing.assert_equal(sr2.as_array(), a4[3:12])
+    assert not sr1.has_null_mask
+    np.testing.assert_equal(sr1.as_array(), a1[:12])
+    sr2 = sr1[3:]
+    assert not sr2.has_null_mask
+    np.testing.assert_equal(sr2.as_array(), a1[3:12])
+    # Index with stride
+    sr3 = sr2[::2]
+    assert sr3.has_null_mask
+    np.testing.assert_equal(sr3.as_array(), a1[3:12:2])
 
 
 def test_dataframe_basic():

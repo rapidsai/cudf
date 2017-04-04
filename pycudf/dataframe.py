@@ -6,7 +6,7 @@ import numpy as np
 
 from numba import cuda
 
-from . import cudautils
+from . import cudautils, utils
 
 
 class DataFrame(object):
@@ -71,6 +71,9 @@ class DataFrame(object):
         dtype = cols[0]
         if any(dtype != c.dtype for c in cols):
             raise ValueError('all column must have the same dtype')
+        for k, c in self._cols.items():
+            if c.has_null_mask:
+                raise ValueError("column {!r} is sparse".format(k))
 
         matrix = cuda.device_array(shape=(nrow, ncol), dtype=dtype, order="F")
         for colidx, inpcol in enumerate(cols):
@@ -174,7 +177,7 @@ class Series(object):
     def from_array(cls, array):
         return cls.from_buffer(Buffer(array))
 
-    def __init__(self, size, dtype, buffer=None):
+    def __init__(self, size, dtype, buffer=None, mask=None):
         """
         Allocate a empty series with [size x dtype].
         The memory is uninitialized
@@ -182,13 +185,24 @@ class Series(object):
         self._size = size
         self._dtype = np.dtype(dtype)
         self._buf = buffer
+        self._mask = mask
 
     def __len__(self):
         return self._size
 
     def __getitem__(self, arg):
         if isinstance(arg, slice):
-            return self.from_buffer(self._buf[arg])
+            if arg.step is not None:
+                dataslice = slice(arg.start, arg.stop, None)
+                data = self._buf[dataslice]
+                maskmem = _make_mask_from_stride(size=data.size,
+                                                 stride=arg.step)
+                mask = Buffer(maskmem)
+                sr = Series(size=data.size, dtype=data.dtype,  buffer=data,
+                            mask=mask)
+                return sr
+            else:
+                return self.from_buffer(self._buf[arg])
         else:
             raise NotImplementedError(type(arg))
 
@@ -211,11 +225,27 @@ class Series(object):
         # return new series
         return self.from_any(newbuf)
 
+    @property
+    def has_null_mask(self):
+        return self._mask is not None
+
+    def as_dense_buffer(self):
+        if self.has_null_mask:
+            return self._copy_to_dense_buffer()
+        else:
+            return self._buf
+
+    def _copy_to_dense_buffer(self):
+        data = self._buf.as_gpu_array()
+        mask = self._mask.as_gpu_array()
+        mem = cudautils.copy_to_dense(data=data, mask=mask)
+        return Buffer(mem)
+
     def as_array(self):
-        return self._buf.as_array()
+        return self.as_dense_buffer().as_array()
 
     def as_gpu_array(self):
-        return self._buf.as_gpu_array()
+        return self.as_dense_buffer().as_gpu_array()
 
 
 class BufferSentryError(ValueError):
@@ -239,4 +269,15 @@ class _BufferSentry(object):
     def contig(self):
         if not self._buf.is_c_contiguous():
             raise BufferSentryError('non contiguous')
+
+
+def _make_mask(size):
+    size = utils.calc_chunk_size(size, utils.mask_bitsize)
+    return cuda.device_array(shape=size, dtype=utils.mask_dtype)
+
+
+def _make_mask_from_stride(size, stride):
+    mask = _make_mask(size)
+    cudautils.set_mask_from_stride(mask=mask, stride=stride)
+    return mask
 
