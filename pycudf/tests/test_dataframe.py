@@ -79,7 +79,14 @@ def test_series_basic():
     a3 = np.arange(3)
     series = series.append(a3)
     assert len(series) == 18
-    np.testing.assert_equal(series.as_array(), np.hstack([a1, a2, a3]))
+    a4 = np.hstack([a1, a2, a3])
+    np.testing.assert_equal(series.as_array(), a4)
+
+    # Indexing
+    sr1 = series[:12]
+    np.testing.assert_equal(sr1.as_array(), a4[:12])
+    sr2 = sr1[3:12]
+    np.testing.assert_equal(sr2.as_array(), a4[3:12])
 
 
 def test_dataframe_basic():

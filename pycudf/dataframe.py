@@ -97,6 +97,23 @@ class Buffer(object):
         self.capacity = capacity
         self.dtype = self.mem.dtype
 
+    def __getitem__(self, arg):
+        if isinstance(arg, slice):
+            start = arg.start or 0
+            stop = arg.stop or -1
+            step = arg.step
+            assert step is None
+
+            if stop < 0:
+                stop = self.size
+
+            sliced = self.mem[start:stop]
+            size = stop - start
+            return Buffer(mem=sliced, size=size)
+
+        else:
+            raise NotImplementedError(type(arg))
+
     @property
     def avail_space(self):
         return self.capacity - self.size
@@ -168,6 +185,12 @@ class Series(object):
 
     def __len__(self):
         return self._size
+
+    def __getitem__(self, arg):
+        if isinstance(arg, slice):
+            return self.from_buffer(self._buf[arg])
+        else:
+            raise NotImplementedError(type(arg))
 
     @property
     def dtype(self):
