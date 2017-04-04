@@ -67,32 +67,19 @@ def test_series_basic():
     a1 = np.arange(10, dtype=np.float64)
     series = Series.from_any(a1)
     assert len(series) == 10
-    assert series.buffer_count == 1
+    np.testing.assert_equal(series.as_array(), np.hstack([a1]))
 
     # Add new buffer
     a2 = np.arange(5)
-    series.append(a2)
+    series = series.append(a2)
     assert len(series) == 15
-    assert series.buffer_count == 2
-
-    # Reserve space
-    series.reserve(10)
-    assert len(series) == 15
-    assert series.buffer_count == 3
+    np.testing.assert_equal(series.as_array(), np.hstack([a1, a2]))
 
     # Ensure appending to previous buffer
     a3 = np.arange(3)
-    series.append(a3)
+    series = series.append(a3)
     assert len(series) == 18
-    assert series.buffer_count == 3
-
-    # Flatten
-    flatseries = series.flatten()
-    assert flatseries.buffer_count == 1
-
-    got = flatseries.as_array()
-    expect = np.hstack([a1, a2, a3])
-    np.testing.assert_equal(got, expect)
+    np.testing.assert_equal(series.as_array(), np.hstack([a1, a2, a3]))
 
 
 def test_dataframe_basic():
@@ -111,22 +98,23 @@ def test_dataframe_basic():
     assert len(df) == 10
     assert df.columns == ('keys', 'vals')
 
-    # Add rows
-    df.add_row(keys=123, vals=321)
+    # Make another dataframe
+    df2 = DataFrame()
+    df2['keys'] = np.array([123], dtype=np.float64)
+    df2['vals'] = np.array([321], dtype=np.float64)
+
+    # Concat
+    df = df.concat(df2)
     assert len(df) == 11
 
     hkeys = np.asarray(np.arange(10, dtype=np.float64).tolist() + [123])
     hvals = np.asarray(rnd_vals.tolist() + [321])
 
-    with pytest.raises(ValueError):
-        df.as_matrix(['keys', 'vals'])
+    np.testing.assert_equal(df['keys'].as_array(), hkeys)
+    np.testing.assert_equal(df['vals'].as_array(), hvals)
 
-    # Flatten columns
-    flatdf = df.flatten_columns()
-    np.testing.assert_equal(flatdf['keys'].as_array(), hkeys)
-    np.testing.assert_equal(flatdf['vals'].as_array(), hvals)
-
-    mat = flatdf.as_matrix()
+    # As matrix
+    mat = df.as_matrix()
 
     expect = np.vstack([hkeys, hvals]).T
 
@@ -136,4 +124,5 @@ def test_dataframe_basic():
 
 
 if __name__ == '__main__':
-    test_dataframe_basic()
+    # test_dataframe_basic()
+    test_series_basic()

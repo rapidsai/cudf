@@ -15,7 +15,7 @@ class DataFrame(object):
         self._size = 0
 
     def __getitem__(self, name):
-        return SeriesView(self._cols[name])
+        return self._cols[name]
 
     def __setitem__(self, name, col):
         self.add_column(name, col)
@@ -32,30 +32,27 @@ class DataFrame(object):
                 raise ValueError('column size mismatch')
 
     def add_column(self, name, data):
+        if name in self._cols:
+            raise NameError('duplicated column name {!r}'.format(name))
         series = Series.from_any(data)
         self._sentry_column_size(len(series))
         self._cols[name] = series
         self._size = len(series)
 
-    def add_row(self, **kwargs):
-        if set(kwargs.keys()) != set(self.columns):
-            raise ValueError("must provide all columns")
+    def concat(self, *dfs):
+        # check columns
+        for df in dfs:
+            if df.columns != self.columns:
+                raise ValueError('columns mismatch')
 
-        for k, v in kwargs.items():
-            self._cols[k].append(v)
-
-        self._size += 1
-
-    def flatten_columns(self):
-        df = DataFrame()
-        for k, cols in self._cols.items():
-            df[k] = cols.flatten()
-        return df
-
-    def _sentry_flat(self, cols, opname='operation'):
-        if any(col.buffer_count != 1 for col in cols):
-            msg = '{} requires all columns to be flat'.format(opname)
-            raise ValueError(msg)
+        newdf = DataFrame()
+        # foreach column
+        for k, col in self._cols.items():
+            # append new rows to the column
+            for df in dfs:
+                col = col.append(df[k])
+            newdf[k] = col
+        return newdf
 
     def as_matrix(self, columns=None):
         """
@@ -74,7 +71,6 @@ class DataFrame(object):
         dtype = cols[0]
         if any(dtype != c.dtype for c in cols):
             raise ValueError('all column must have the same dtype')
-        self._sentry_flat(cols, 'as_matrix()')
 
         matrix = cuda.device_array(shape=(nrow, ncol), dtype=dtype, order="F")
         for colidx, inpcol in enumerate(cols):
@@ -86,6 +82,10 @@ class DataFrame(object):
 class Buffer(object):
     """A 1D gpu buffer.
     """
+    @classmethod
+    def from_empty(cls, mem):
+        return Buffer(mem, size=0, capacity=mem.size)
+
     def __init__(self, mem, size=None, capacity=None):
         if size is None:
             size = mem.size
@@ -132,6 +132,7 @@ class Buffer(object):
 class Series(object):
     """
     Data and null-masks are stored as List[Array].
+
     """
     min_alloc_size = 32
 
@@ -150,103 +151,48 @@ class Series(object):
 
     @classmethod
     def from_buffer(cls, buffer):
-        sr = Series(size=buffer.size, dtype=buffer.dtype)
-        sr._append(buffer)
-        return sr
+        return Series(size=buffer.size, dtype=buffer.dtype, buffer=buffer)
 
     @classmethod
     def from_array(cls, array):
         return cls.from_buffer(Buffer(array))
 
-    def __init__(self, size, dtype):
+    def __init__(self, size, dtype, buffer=None):
+        """
+        Allocate a empty series with [size x dtype].
+        The memory is uninitialized
+        """
         self._size = size
-        self._dtype = dtype
-        self._bufs = []
+        self._dtype = np.dtype(dtype)
+        self._buf = buffer
 
     def __len__(self):
         return self._size
 
     @property
-    def buffer_count(self):
-        return len(self._bufs)
-
-    @property
     def dtype(self):
         return self._dtype
 
-    def reserve(self, capacity):
-        if not self._have_append_space_for(capacity):
-            mem = cuda.device_array(shape=capacity, dtype=self.dtype)
-            self._append(Buffer(mem, size=0, capacity=capacity))
-
     def append(self, arbitrary):
-        series = Series.from_any(arbitrary)
-
-        if len(series) < self.min_alloc_size:
-            self.reserve(len(series))
-
-        for buf in series._bufs:
-            if self._have_append_space_for(buf.size):
-                last_buffer = self._bufs[-1]
-                last_buffer.extend(buf.as_gpu_array())
-            else:
-                self._append(buf.astype(self.dtype))
-            self._size += buf.size
-
-    def _have_append_space_for(self, needed):
-        if self._bufs:
-            last_buffer = self._bufs[-1]
-            return last_buffer.avail_space >= needed
-        else:
-            return False
-
-    def _append(self, buf):
-            self._bufs.append(buf)
-
-    def _sentry_single_buffer(self, opname='operation'):
-        if self.buffer_count != 1:
-            msg = '{} forbidden on multi-buffer Series'.format(opname)
-            raise ValueError(msg)
+        """
+        Returns a new copy.
+        """
+        other = Series.from_any(arbitrary)
+        newsize = len(self) + len(other)
+        # allocate memory
+        mem = cuda.device_array(shape=newsize, dtype=self._dtype)
+        newbuf = Buffer.from_empty(mem)
+        # copy into new memory
+        for buf in [self._buf, other._buf]:
+            newbuf.extend(buf.as_gpu_array())
+        # return new series
+        return self.from_any(newbuf)
 
     def as_array(self):
-        """
-        Sideeffect: combine all the buffers into one.
-        """
-        self._sentry_single_buffer('as_array')
-        return self._bufs[0].as_array()
+        return self._buf.as_array()
 
     def as_gpu_array(self):
-        self._sentry_single_buffer('as_gpu_array')
-        return self._bufs[0].as_gpu_array()
-
-    def flatten(self):
-        """
-        Returns a single buffer series.
-        """
-        if self.buffer_count == 1:
-            return self
-
-        mem = cuda.device_array(shape=len(self), dtype=self.dtype)
-        out = Buffer(mem, size=0, capacity=mem.size)
-        for buf in self._bufs:
-            out.extend(buf.as_gpu_array())
-        return Series.from_buffer(out)
-
-
-class SeriesView(object):
-    _exported = ['flatten',
-                 'as_array',
-                 'as_gpu_array',
-                 '__len__']
-
-    def __init__(self, series):
-        assert not isinstance(series, SeriesView)
-        self._series = series
-
-    def __getattr__(self, name):
-        if name not in type(self)._exported:
-            raise AttributeError(name)
-        return getattr(self._series, name)
+        return self._buf.as_gpu_array()
 
 
 class BufferSentryError(ValueError):
