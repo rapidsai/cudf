@@ -23,7 +23,7 @@ def test_buffer_append():
     assert buf.size == n - 4
     assert buf.capacity == n
     np.testing.assert_equal(buf.mem.copy_to_host(), expected)
-    np.testing.assert_equal(buf.as_array(), np.arange(n - 4, dtype=np.float64))
+    np.testing.assert_equal(buf.to_array(), np.arange(n - 4, dtype=np.float64))
 
     # Buffer.append
     buf.append(1.23)
@@ -57,7 +57,7 @@ def test_buffer_append():
     with pytest.raises(MemoryError):
         buf.append(987654)
 
-    np.testing.assert_equal(buf.as_array(), expected)
+    np.testing.assert_equal(buf.to_array(), expected)
     assert buf.size == n
     assert buf.capacity == n
 
@@ -67,20 +67,20 @@ def test_series_basic():
     a1 = np.arange(10, dtype=np.float64)
     series = Series.from_any(a1)
     assert len(series) == 10
-    np.testing.assert_equal(series.as_array(), np.hstack([a1]))
+    np.testing.assert_equal(series.to_array(), np.hstack([a1]))
 
     # Add new buffer
     a2 = np.arange(5)
     series = series.append(a2)
     assert len(series) == 15
-    np.testing.assert_equal(series.as_array(), np.hstack([a1, a2]))
+    np.testing.assert_equal(series.to_array(), np.hstack([a1, a2]))
 
     # Ensure appending to previous buffer
     a3 = np.arange(3)
     series = series.append(a3)
     assert len(series) == 18
     a4 = np.hstack([a1, a2, a3])
-    np.testing.assert_equal(series.as_array(), a4)
+    np.testing.assert_equal(series.to_array(), a4)
 
 
 def test_series_indexing():
@@ -89,14 +89,14 @@ def test_series_indexing():
     # Indexing
     sr1 = series[:12]
     assert not sr1.has_null_mask
-    np.testing.assert_equal(sr1.as_array(), a1[:12])
+    np.testing.assert_equal(sr1.to_array(), a1[:12])
     sr2 = sr1[3:]
     assert not sr2.has_null_mask
-    np.testing.assert_equal(sr2.as_array(), a1[3:12])
+    np.testing.assert_equal(sr2.to_array(), a1[3:12])
     # Index with stride
     sr3 = sr2[::2]
     assert sr3.has_null_mask
-    np.testing.assert_equal(sr3.as_array(), a1[3:12:2])
+    np.testing.assert_equal(sr3.to_array(), a1[3:12:2])
 
 
 def test_dataframe_basic():
@@ -105,13 +105,13 @@ def test_dataframe_basic():
 
     # Populate with cuda memory
     df['keys'] = cuda.to_device(np.arange(10, dtype=np.float64))
-    np.testing.assert_equal(df['keys'].as_array(), np.arange(10))
+    np.testing.assert_equal(df['keys'].to_array(), np.arange(10))
     assert len(df) == 10
 
     # Populate with numpy array
     rnd_vals = np.random.random(10)
     df['vals'] = rnd_vals
-    np.testing.assert_equal(df['vals'].as_array(), rnd_vals)
+    np.testing.assert_equal(df['vals'].to_array(), rnd_vals)
     assert len(df) == 10
     assert df.columns == ('keys', 'vals')
 
@@ -127,8 +127,8 @@ def test_dataframe_basic():
     hkeys = np.asarray(np.arange(10, dtype=np.float64).tolist() + [123])
     hvals = np.asarray(rnd_vals.tolist() + [321])
 
-    np.testing.assert_equal(df['keys'].as_array(), hkeys)
-    np.testing.assert_equal(df['vals'].as_array(), hvals)
+    np.testing.assert_equal(df['keys'].to_array(), hkeys)
+    np.testing.assert_equal(df['vals'].to_array(), hvals)
 
     # As matrix
     mat = df.as_matrix()

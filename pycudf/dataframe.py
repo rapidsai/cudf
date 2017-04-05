@@ -77,7 +77,7 @@ class DataFrame(object):
 
         matrix = cuda.device_array(shape=(nrow, ncol), dtype=dtype, order="F")
         for colidx, inpcol in enumerate(cols):
-            matrix[:, colidx].copy_to_device(inpcol.as_gpu_array())
+            matrix[:, colidx].copy_to_device(inpcol.to_gpu_array())
 
         return matrix.copy_to_host()
 
@@ -142,10 +142,10 @@ class Buffer(object):
         else:
             return Buffer(cudautils.astype(self.mem, dtype=dtype))
 
-    def as_array(self):
-        return self.as_gpu_array().copy_to_host()
+    def to_array(self):
+        return self.to_gpu_array().copy_to_host()
 
-    def as_gpu_array(self):
+    def to_gpu_array(self):
         return self.mem[:self.size]
 
 
@@ -184,7 +184,7 @@ class Series(object):
         """
         self._size = size
         self._dtype = np.dtype(dtype)
-        self._buf = buffer
+        self._data = buffer
         self._mask = mask
 
     def __len__(self):
@@ -194,7 +194,7 @@ class Series(object):
         if isinstance(arg, slice):
             if arg.step is not None:
                 dataslice = slice(arg.start, arg.stop, None)
-                data = self._buf[dataslice]
+                data = self._data[dataslice]
                 maskmem = _make_mask_from_stride(size=data.size,
                                                  stride=arg.step)
                 mask = Buffer(maskmem)
@@ -202,7 +202,7 @@ class Series(object):
                             mask=mask)
                 return sr
             else:
-                return self.from_buffer(self._buf[arg])
+                return self.from_buffer(self._data[arg])
         else:
             raise NotImplementedError(type(arg))
 
@@ -220,8 +220,8 @@ class Series(object):
         mem = cuda.device_array(shape=newsize, dtype=self._dtype)
         newbuf = Buffer.from_empty(mem)
         # copy into new memory
-        for buf in [self._buf, other._buf]:
-            newbuf.extend(buf.as_gpu_array())
+        for buf in [self._data, other._data]:
+            newbuf.extend(buf.to_gpu_array())
         # return new series
         return self.from_any(newbuf)
 
@@ -229,23 +229,40 @@ class Series(object):
     def has_null_mask(self):
         return self._mask is not None
 
-    def as_dense_buffer(self):
+    def to_dense_buffer(self):
         if self.has_null_mask:
             return self._copy_to_dense_buffer()
         else:
-            return self._buf
+            return self._data
 
     def _copy_to_dense_buffer(self):
-        data = self._buf.as_gpu_array()
-        mask = self._mask.as_gpu_array()
-        mem = cudautils.copy_to_dense(data=data, mask=mask)
-        return Buffer(mem)
+        data = self._data.to_gpu_array()
+        mask = self._mask.to_gpu_array()
+        nnz, mem = cudautils.copy_to_dense(data=data, mask=mask)
+        return Buffer(mem, size=nnz, capacity=mem.size)
 
-    def as_array(self):
-        return self.as_dense_buffer().as_array()
+    def to_array(self):
+        return self.to_dense_buffer().to_array()
 
-    def as_gpu_array(self):
-        return self.as_dense_buffer().as_gpu_array()
+    def to_gpu_array(self):
+        return self.to_dense_buffer().to_gpu_array()
+
+    @property
+    def data(self):
+        """
+        The gpu buffer for the data
+        """
+        return self._data
+
+    @property
+    def nullmask(self):
+        """
+        The gpu buffer for the null-mask
+        """
+        if self.has_null_mask:
+            return self._mask
+        else:
+            raise ValueError('Series has no null mask')
 
 
 class BufferSentryError(ValueError):

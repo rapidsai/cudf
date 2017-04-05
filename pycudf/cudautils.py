@@ -119,14 +119,23 @@ def gpu_copy_to_dense(data, mask, slots, out):
         out[idx] = data[tid]
 
 
-def copy_to_dense(data, mask):
+def copy_to_dense(data, mask, out=None):
     """
-    Return a dense gpu array given the data and mask gpu arrays.
+    The output array can be specified in `out`.
+
+    Return a 2-tuple of:
+    * number of non-null element
+    * a dense gpu array given the data and mask gpu arrays.
     """
     slots = cuda.device_array(shape=data.shape, dtype=np.uint64)
     gpu_mask_assign_slot[1, 32](mask, slots)
     sz = slots[-1:].copy_to_host() + 1
-    out = cuda.device_array(shape=sz, dtype=data.dtype)
+    if out is None:
+        out = cuda.device_array(shape=sz, dtype=data.dtype)
+    else:
+        # check
+        if sz >= out.size:
+            raise ValueError('output array too small')
     gpu_copy_to_dense.forall(data.size)(data, mask, slots, out)
-    return out
+    return (sz, out)
 
