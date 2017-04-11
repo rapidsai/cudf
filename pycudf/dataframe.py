@@ -95,25 +95,15 @@ class Buffer(object):
         if capacity is None:
             capacity = size
         self.mem = cudautils.to_device(mem)
-        _BufferSentry(self.mem).ndim(1).contig()
+        _BufferSentry(self.mem).ndim(1)
         self.size = size
         self.capacity = capacity
         self.dtype = self.mem.dtype
 
     def __getitem__(self, arg):
         if isinstance(arg, slice):
-            start = arg.start or 0
-            stop = arg.stop or -1
-            step = arg.step
-            assert step is None
-
-            if stop < 0:
-                stop = self.size
-
-            sliced = self.mem[start:stop]
-            size = stop - start
-            return Buffer(mem=sliced, size=size)
-
+            sliced = self.to_gpu_array()[arg]
+            return Buffer(sliced)
         else:
             raise NotImplementedError(type(arg))
 
@@ -192,17 +182,7 @@ class Series(object):
 
     def __getitem__(self, arg):
         if isinstance(arg, slice):
-            if arg.step is not None:
-                dataslice = slice(arg.start, arg.stop, None)
-                data = self._data[dataslice]
-                maskmem = _make_mask_from_stride(size=data.size,
-                                                 stride=arg.step)
-                mask = Buffer(maskmem)
-                sr = Series(size=data.size, dtype=data.dtype,  buffer=data,
-                            mask=mask)
-                return sr
-            else:
-                return self.from_buffer(self._data[arg])
+            return self.from_buffer(self._data[arg])
         else:
             raise NotImplementedError(type(arg))
 

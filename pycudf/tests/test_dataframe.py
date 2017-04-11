@@ -95,7 +95,7 @@ def test_series_indexing():
     np.testing.assert_equal(sr2.to_array(), a1[3:12])
     # Index with stride
     sr3 = sr2[::2]
-    assert sr3.has_null_mask
+    assert not sr3.has_null_mask
     np.testing.assert_equal(sr3.to_array(), a1[3:12:2])
 
 
