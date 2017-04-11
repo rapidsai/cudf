@@ -22,11 +22,11 @@ def test_onehot_simple():
         np.testing.assert_equal(arr[i + 1:], 0)
     # One Hot (DataFrame)
     df2 = df.one_hot_encoding(column='vals',
-                              prefix='vals-%s',
+                              prefix='vals',
                               cats=list(range(10)))
     assert df2.columns[0] == 'vals'
     for i in range(1, len(df2.columns)):
-        assert df2.columns[i] == 'vals-%s' % (i - 1)
+        assert df2.columns[i] == 'vals_%s' % (i - 1)
     got = df2.as_matrix(columns=df2.columns[1:])
     expect = np.identity(got.shape[0])
     np.testing.assert_equal(got, expect)
@@ -38,7 +38,7 @@ def test_onehot_random():
     high = 17
     size = 10
     df['src'] = src = np.random.randint(low=low, high=high, size=size)
-    df2 = df.one_hot_encoding(column='src', prefix='out-%s',
+    df2 = df.one_hot_encoding(column='src', prefix='out_',
                               cats=tuple(range(10, 17)))
     mat = df2.as_matrix(columns=df2.columns[1:])
 
