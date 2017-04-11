@@ -282,6 +282,15 @@ class Series(object):
         else:
             raise ValueError('Series has no null mask')
 
+    def astype(self, dtype):
+        """
+        Returns a new Series in by casting each values to the given dtype.
+        Returns the same Series object if the dtype didn't change.
+        """
+        if dtype == self.dtype:
+            return self
+        return Series.from_buffer(self.data.astype(dtype))
+
     def one_hot_encoding(self, cats, dtype='float64'):
         """
         Perform one-hot-encoding on the series using *cats* as the list

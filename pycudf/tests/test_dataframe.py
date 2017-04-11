@@ -154,6 +154,16 @@ def test_dataframe_column_add_drop():
     assert df.columns == ('b', 'c', 'a')
 
 
+def test_dataframe_astype():
+    df = DataFrame()
+    data = np.asarray(range(10), dtype=np.int32)
+    df['a'] = data
+    assert df['a'].dtype == np.dtype(np.int32)
+    df['b'] = df['a'].astype(np.float32)
+    assert df['b'].dtype == np.dtype(np.float32)
+    np.testing.assert_equal(df['a'].to_array(), df['b'].to_array())
+
+
 if __name__ == '__main__':
     # test_dataframe_basic()
     test_series_basic()
