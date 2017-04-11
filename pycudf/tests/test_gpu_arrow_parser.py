@@ -16,8 +16,10 @@ def test_gpu_parse_arrow_data():
     # test reader
     reader = GpuArrowReader(gpu_data)
     dtype = np.dtype(np.float32)
-    lat = reader[0].data_as(dtype).copy_to_host()
-    lon = reader[1].data_as(dtype).copy_to_host()
+    assert reader[0].name == 'dest_lat'
+    assert reader[1].name == 'dest_lon'
+    lat = reader[0].data.copy_to_host()
+    lon = reader[1].data.copy_to_host()
     assert lat.size == 23
     assert lon.size == 23
     np.testing.assert_array_less(lat, 42)
@@ -25,9 +27,13 @@ def test_gpu_parse_arrow_data():
     np.testing.assert_array_less(lon, -76)
     np.testing.assert_array_less(-105, lon)
 
+    dct = reader.to_dict()
+    np.testing.assert_array_equal(lat, dct['dest_lat'].copy_to_host())
+    np.testing.assert_array_equal(lon, dct['dest_lon'].copy_to_host())
+
 
 if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO)
-    _logger.setLevel(logging.DEBUG)
+    logging.getLogger('pycudf.gpuarrow').setLevel(logging.DEBUG)
 
-    main()
+    test_gpu_parse_arrow_data()
