@@ -18,5 +18,5 @@ dependencies:
 - wheel=0.29.0=py35_0
 - xz=5.2.2=1
 - zlib=1.2.8=3
-- llvmlite=0.17.0.dev=py35_27
-- numba=0.32.0rc1=np112py35_0
+- llvmlite=0.17.0=py35_0
+- numba=0.32.0=np112py35_0
