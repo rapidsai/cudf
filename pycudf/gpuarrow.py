@@ -1,6 +1,6 @@
 import logging
 import warnings
-from collections import namedtuple, Sequence
+from collections import namedtuple, Sequence, OrderedDict
 
 import numpy as np
 from numba import cuda
@@ -128,7 +128,10 @@ class GpuArrowReader(Sequence):
         return self._nodes[idx]
 
     def to_dict(self):
-        return dict((node.name, node.data) for node in self)
+        dct = OrderedDict()
+        for node in self:
+            dct[node.name] = node.data
+        return dct
 
     #
     # Metadata parsing
