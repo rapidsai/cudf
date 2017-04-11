@@ -140,6 +140,20 @@ def test_dataframe_basic():
     np.testing.assert_equal(mat, expect)
 
 
+def test_dataframe_column_add_drop():
+    df = DataFrame()
+    data = np.asarray(range(10))
+    df['a'] = data
+    df['b'] = data
+    assert df.columns == ('a', 'b')
+    del df['a']
+    assert df.columns == ('b',)
+    df['c'] = data
+    assert df.columns == ('b', 'c')
+    df['a'] = data
+    assert df.columns == ('b', 'c', 'a')
+
+
 if __name__ == '__main__':
     # test_dataframe_basic()
     test_series_basic()

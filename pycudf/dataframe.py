@@ -20,6 +20,9 @@ class DataFrame(object):
     def __setitem__(self, name, col):
         self.add_column(name, col)
 
+    def __delitem__(self, name):
+        self.drop_column(name)
+
     def __len__(self):
         return self._size
 
@@ -45,6 +48,11 @@ class DataFrame(object):
         self._sentry_column_size(len(series))
         self._cols[name] = series
         self._size = len(series)
+
+    def drop_column(self, name):
+        if name not in self._cols:
+            raise NameError('column {!r} does not exist'.format(name))
+        del self._cols[name]
 
     def concat(self, *dfs):
         # check columns
