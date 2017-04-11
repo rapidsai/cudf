@@ -139,3 +139,21 @@ def copy_to_dense(data, mask, out=None):
     gpu_copy_to_dense.forall(data.size)(data, mask, slots, out)
     return (sz, out)
 
+
+#
+# Binary kernels
+#
+
+@cuda.jit
+def gpu_equal_constant(arr, val, out):
+    i = cuda.grid(1)
+    if i < out.size:
+        out[i] = (arr[i] == val)
+
+
+def apply_equal_constant(arr, val, dtype):
+    out = cuda.device_array(shape=arr.size, dtype=dtype)
+    configured = gpu_equal_constant.forall(out.size)
+    configured(arr, val, out)
+    return out
+

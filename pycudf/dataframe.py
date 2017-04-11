@@ -31,6 +31,13 @@ class DataFrame(object):
         if self._cols and self._size != size:
                 raise ValueError('column size mismatch')
 
+    def copy(self):
+        "Shallow copy this dataframe"
+        df = DataFrame()
+        for k in self.columns:
+            df[k] = self[k]
+        return df
+
     def add_column(self, name, data):
         if name in self._cols:
             raise NameError('duplicated column name {!r}'.format(name))
@@ -54,9 +61,9 @@ class DataFrame(object):
             newdf[k] = col
         return newdf
 
-    def as_matrix(self, columns=None):
+    def as_gpu_matrix(self, columns=None):
         """
-        Returns a (nrow x ncol) numpy ndarray in "F" order.
+        Returns a (nrow x ncol) device ndarray in "F" order.
         """
         if columns is None:
             columns = self.columns
@@ -79,7 +86,30 @@ class DataFrame(object):
         for colidx, inpcol in enumerate(cols):
             matrix[:, colidx].copy_to_device(inpcol.to_gpu_array())
 
-        return matrix.copy_to_host()
+        return matrix
+
+    def as_matrix(self, columns=None):
+        """
+        Returns a (nrow x ncol) numpy ndarray in "F" order.
+        """
+        return self.as_gpu_matrix(columns=columns).copy_to_host()
+
+    def one_hot_encoding(self, column, prefix, cats, dtype='float64'):
+        """
+        *column* is the source column with binary encoding for the data.
+        *prefix* is the column name with a string formatting to create
+        the resulting column name for a given category; i.e. "val-%s".
+        *cats* is the sequence of categories in as integers.
+        *dtype* is the dtype for the outputs; defaults to float64.
+
+        Returns a new dataframe with new columns append for each category.
+        """
+        newnames = [prefix % cat for cat in cats]
+        newcols = self[column].one_hot_encoding(cats=cats, dtype=dtype)
+        outdf = self.copy()
+        for name, col in zip(newnames, newcols):
+            outdf.add_column(name, col)
+        return outdf
 
 
 class Buffer(object):
@@ -243,6 +273,25 @@ class Series(object):
             return self._mask
         else:
             raise ValueError('Series has no null mask')
+
+    def one_hot_encoding(self, cats, dtype='float64'):
+        """
+        Perform one-hot-encoding on the series using *cats* as the list
+        of categories.  The series must have integral dtype.
+        *dtype* specifies the output dtype.
+
+        Returns a sequence of new series for each category
+        """
+        if self.dtype.kind not in 'iu':
+            raise TypeError('expecting integral dtype')
+
+        dtype = np.dtype(dtype)
+        out = []
+        for cat in cats:
+            buf = cudautils.apply_equal_constant(arr=self.to_gpu_array(),
+                                                 val=cat, dtype=dtype)
+            out.append(Series.from_array(buf))
+        return out
 
 
 class BufferSentryError(ValueError):
