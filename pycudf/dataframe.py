@@ -180,11 +180,8 @@ class Buffer(object):
 
 class Series(object):
     """
-    Data and null-masks are stored as List[Array].
-
+    Data and null-masks
     """
-    min_alloc_size = 32
-
     @classmethod
     def from_any(cls, arbitrary):
         if isinstance(arbitrary, Series):
@@ -206,7 +203,14 @@ class Series(object):
     def from_array(cls, array):
         return cls.from_buffer(Buffer(array))
 
-    def __init__(self, size, dtype, buffer=None, mask=None):
+    @classmethod
+    def from_masked_array(cls, data, mask, null_count):
+        dbuf = Buffer(data)
+        mbuf = Buffer(mask)
+        return cls(size=dbuf.size, dtype=dbuf.dtype, buffer=dbuf, mask=mbuf,
+                   null_count=null_count)
+
+    def __init__(self, size, dtype, buffer=None, mask=None, null_count=None):
         """
         Allocate a empty series with [size x dtype].
         The memory is uninitialized
@@ -215,6 +219,11 @@ class Series(object):
         self._dtype = np.dtype(dtype)
         self._data = buffer
         self._mask = mask
+        if null_count is None:
+            if self._mask is not None:
+                raise ValueError('null_count must be provided')
+            null_count = 0
+        self._null_count = null_count
 
     def __len__(self):
         return self._size
@@ -245,8 +254,20 @@ class Series(object):
         return self.from_any(newbuf)
 
     @property
+    def null_count(self):
+        return self._null_count
+
+    @property
     def has_null_mask(self):
-        return self._mask is not None
+        return self.null_count > 0
+
+    def fillna(self, value):
+        if not self.has_null_mask:
+            return self
+        out = cudautils.fillna(data=self._data.to_gpu_array(),
+                               mask=self._mask.to_gpu_array(),
+                               value=value)
+        return self.from_array(out)
 
     def to_dense_buffer(self):
         if self.has_null_mask:

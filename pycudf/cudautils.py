@@ -141,6 +141,27 @@ def copy_to_dense(data, mask, out=None):
 
 
 #
+# Fill NA
+#
+
+
+@cuda.jit
+def gpu_fill_masked(value, validity, out):
+    tid = cuda.grid(1)
+    if tid < out.size:
+        valid = gpu_mask_get(validity, tid)
+        if not valid:
+            out[tid] = value
+
+
+def fillna(data, mask, value):
+    out = cuda.device_array_like(data)
+    out.copy_to_device(data)
+    configured = gpu_fill_masked.forall(data.size)
+    configured(value, mask, out)
+    return out
+
+#
 # Binary kernels
 #
 

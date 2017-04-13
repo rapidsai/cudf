@@ -10,6 +10,9 @@ from org.apache.arrow.flatbuf import (RecordBatch, Message, MessageHeader,
                                       Schema, Type, VectorType)
 
 
+from .utils import mask_dtype
+
+
 _logger = logging.getLogger(__name__)
 
 _MessageInfo = namedtuple('_MessageInfo', 'header,type,body_length')
@@ -74,8 +77,15 @@ class GpuArrowNodeReader(object):
     def __init__(self, gpu_data, desc):
         self._gpu_data = gpu_data
         self._desc = desc
-        if desc.null_count != 0:
-            raise NotImplementedError('null-mask is needed')
+        if self._desc.null_count:
+            if self._desc.length != self._desc.null_count:
+                msg = "unexpected self._desc.length != self._desc.null_count"
+                raise NotImplementedError(msg)
+
+
+    @property
+    def null_count(self):
+        return self._desc.null_count
 
     @property
     def dtype(self):
@@ -104,6 +114,25 @@ class GpuArrowNodeReader(object):
         """
         end = self._desc.length * self.dtype.itemsize
         return gpu_view_as(self.data_raw[:end], dtype=self.dtype)
+
+    @property
+    def null_raw(self):
+        "Accessor for the null buffer as a device array"
+        size = self._desc.null_buffer.length
+        start = self._desc.null_buffer.offset
+        stop = start + size
+        ary = self._gpu_data[start:stop]
+        if ary.size != size:
+            raise ValueError('data size mismatch')
+        return ary
+
+    @property
+    def null(self):
+        """
+        Return the null mask with the padding bytes truncated.
+        """
+        end = (self._desc.length // 8) * mask_dtype.itemsize
+        return gpu_view_as(self.null_raw[:end], dtype=mask_dtype)
 
 
 class GpuArrowReader(Sequence):

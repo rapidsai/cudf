@@ -1,7 +1,7 @@
 import numpy as np
 
 
-mask_dtype = np.dtype(np.uint32)
+mask_dtype = np.dtype(np.uint8)
 mask_bitsize = mask_dtype.itemsize * 8
 
 
