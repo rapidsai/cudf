@@ -18,7 +18,10 @@ class DataFrame(object):
         return self._cols[name]
 
     def __setitem__(self, name, col):
-        self.add_column(name, col)
+        if name in self._cols:
+            self._cols[name] = col
+        else:
+            self.add_column(name, col)
 
     def __delitem__(self, name):
         self.drop_column(name)
