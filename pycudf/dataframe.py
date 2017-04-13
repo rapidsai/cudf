@@ -335,6 +335,39 @@ class Series(object):
             out.append(Series.from_array(buf))
         return out
 
+    #
+    # Stats
+    #
+
+    def mean(self):
+        """
+        Compute the mean of the series
+        """
+        arr = self.to_dense_buffer().to_gpu_array()
+        return cudautils.compute_mean(arr)
+
+    def std(self):
+        """
+        Compute the standard deviation of the series
+        """
+        return np.sqrt(self.var())
+
+    def var(self):
+        """
+        Compute the variance of the series
+        """
+        arr = self.to_dense_buffer().to_gpu_array()
+        mu, var = cudautils.compute_stats(arr)
+        return var
+
+    def mean_var(self):
+        """
+        Compute mean and variance at the same time.
+        """
+        arr = self.to_dense_buffer().to_gpu_array()
+        mu, var = cudautils.compute_stats(arr)
+        return mu, var
+
 
 class BufferSentryError(ValueError):
     pass

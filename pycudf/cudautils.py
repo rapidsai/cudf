@@ -32,6 +32,14 @@ def astype(ary, dtype):
         return out
 
 
+def copy_array(arr, out=None):
+    if out is None:
+        out = cuda.device_array_like(arr)
+    assert out.size == arr.size
+    out.copy_to_device(arr)
+    return out
+
+
 # Copy column into a matrix
 
 @cuda.jit
@@ -177,4 +185,45 @@ def apply_equal_constant(arr, val, dtype):
     configured = gpu_equal_constant.forall(out.size)
     configured(arr, val, out)
     return out
+
+
+#
+# Reduction kernels
+#
+
+gpu_sum = cuda.reduce(lambda x, y: x + y)
+
+
+def compute_sum(arr, inplace=False):
+    """
+    If *inplace* is True, the *arr* is overwritten by this function.
+    """
+    if not inplace:
+        arr = copy_array(arr)
+    return gpu_sum(arr, init=0)
+
+
+def compute_mean(arr, inplace=False):
+    """
+    If *inplace* is True, the *arr* is overwritten by this function.
+    """
+    return compute_sum(arr, inplace=inplace) / arr.size
+
+
+@cuda.jit
+def gpu_variance_step(xs, mu, out):
+    tid = cuda.grid(1)
+    if tid < out.size:
+        x = xs[tid]
+        out[tid] = (x - mu) ** 2
+
+
+def compute_stats(arr):
+    """
+    Returns (mean, variance)
+    """
+    mu = compute_mean(arr)
+    tmp = cuda.device_array_like(arr)
+    gpu_variance_step.forall(arr.size)(arr, mu, tmp)
+    return mu, compute_mean(tmp, inplace=True)
 
