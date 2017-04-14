@@ -2,7 +2,7 @@ from itertools import product
 
 import numpy as np
 
-from numba import cuda, vectorize, types, uint64
+from numba import cuda, vectorize, types, uint64, int32, float64
 
 from .utils import mask_bitsize
 
@@ -227,3 +227,122 @@ def compute_stats(arr):
     gpu_variance_step.forall(arr.size)(arr, mu, tmp)
     return mu, compute_mean(tmp, inplace=True)
 
+
+@cuda.jit(device=True)
+def gpu_unique_set_insert(vset, sz, val):
+    """
+    Insert *val* into the *vset* of size *sz*.
+    Returns:
+        *   -1: out-of-space
+        * >= 0: the new size
+    """
+    for i in range(sz):
+        # value matches, so return current size
+        if vset[i] == val:
+            return sz
+
+    if sz > 0:
+        i += 1
+    # insert at next available slot
+    if i < vset.size:
+        vset[i] = val
+        return sz + 1
+
+    # out of space
+    return -1
+
+
+
+
+MAX_FAST_UNIQUE_K = 2 * 1024
+
+
+class UniqueK(object):
+    _cached_kernels = {}
+
+    def __init__(self, dtype):
+        dtype = np.dtype(dtype)
+        self._kernel = self._get_kernel(dtype)
+
+    @classmethod
+    def _get_kernel(cls, dtype):
+        try:
+            return cls._cached_kernels[dtype]
+        except KeyError:
+            return cls._compile(dtype)
+
+    @classmethod
+    def _compile(cls, dtype):
+        @cuda.jit
+        def gpu_unique_k(arr, k, out, outsz_ptr):
+            """
+            Note: run with small blocks.
+            """
+            tid = cuda.threadIdx.x
+            blksz = cuda.blockDim.x
+            base = 0
+
+            # shared memory
+            vset_size = 0
+            sm_mem_size = MAX_FAST_UNIQUE_K
+            vset = cuda.shared.array(sm_mem_size, dtype=float64)
+            share_vset_size = cuda.shared.array(1, dtype=int32)
+            share_loaded = cuda.shared.array(sm_mem_size, dtype=float64)
+            sm_mem_size = min(k, sm_mem_size)
+
+            while vset_size < sm_mem_size and base < arr.size:
+                pos = base + tid
+                valid_load = min(blksz, arr.size - base)
+                # load
+                if tid < valid_load:
+                    share_loaded[tid] = arr[pos]
+                # wait for load to complete
+                cuda.syncthreads()
+                # thread-0 inserts
+                if tid == 0:
+                    for i in range(valid_load):
+                        val = share_loaded[i]
+                        new_size = gpu_unique_set_insert(vset, vset_size, val)
+                        if new_size >= 0:
+                            vset_size = new_size
+                        else:
+                            vset_size = sm_mem_size + 1
+                    share_vset_size[0] = vset_size
+                # wait until the insert is done
+                cuda.syncthreads()
+                vset_size = share_vset_size[0]
+                # increment
+                base += blksz
+
+            # output
+            if vset_size <= sm_mem_size:
+                for i in range(tid, vset_size, blksz):
+                    out[i] = vset[i]
+                if tid == 0:
+                    outsz_ptr[0] = vset_size
+            else:
+                outsz_ptr[0] = -1
+
+        # cache
+        cls._cached_kernels[dtype] = gpu_unique_k
+        return gpu_unique_k
+
+    def run(self, arr, k):
+        if k >= MAX_FAST_UNIQUE_K:
+            raise NotImplementedError('k >= {}'.format(MAX_FAST_UNIQUE_K))
+        # setup mem
+        outsz_ptr = cuda.device_array(shape=1, dtype=np.intp)
+        out = cuda.device_array_like(arr)
+        # kernel
+        self._kernel[1, 64](arr, k, out, outsz_ptr)
+        # copy to host
+        unique_ct = outsz_ptr.copy_to_host()[0]
+        if unique_ct < 0:
+            raise ValueError('too many unique value (hint: increase k)')
+        else:
+            hout = out.copy_to_host()
+            return hout[:unique_ct]
+
+
+def compute_unique_k(arr, k):
+    return UniqueK(arr.dtype).run(arr, k)

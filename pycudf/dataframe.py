@@ -368,6 +368,13 @@ class Series(object):
         mu, var = cudautils.compute_stats(arr)
         return mu, var
 
+    def unique_k(self, k):
+        """
+        Returns a list of at most k unique values.
+        """
+        arr = self.to_dense_buffer().to_gpu_array()
+        return cudautils.compute_unique_k(arr, k=k)
+
 
 class BufferSentryError(ValueError):
     pass

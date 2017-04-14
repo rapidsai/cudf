@@ -25,6 +25,19 @@ def test_series_std():
     np.testing.assert_almost_equal(arr.std(), sr.std())
 
 
+def test_series_unique():
+    for size in [10 ** x for x in range(5)]:
+        arr = np.random.randint(low=0, high=10, size=size)
+        sr = Series.from_any(arr)
+        assert set(arr) == set(sr.unique_k(k=10))
+    # test out of space
+    arr = np.arange(10)
+    sr = Series.from_any(arr)
+    with pytest.raises(ValueError) as raises:
+        sr.unique_k(k=7)
+    raises.match('too many unique value')
+
+
 if __name__ == '__main__':
-    test_series_var()
+    test_series_unique()
 
