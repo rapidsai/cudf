@@ -7,6 +7,18 @@ from numba import cuda
 from pycudf.dataframe import DataFrame, Series
 
 
+def test_series_min():
+    arr = np.random.random(100)
+    sr = Series.from_any(arr)
+    np.testing.assert_almost_equal(arr.min(), sr.min())
+
+
+def test_series_max():
+    arr = np.random.random(100)
+    sr = Series.from_any(arr)
+    np.testing.assert_almost_equal(arr.max(), sr.max())
+
+
 def test_series_mean():
     arr = np.random.random(100)
     sr = Series.from_any(arr)
@@ -39,5 +51,5 @@ def test_series_unique():
 
 
 if __name__ == '__main__':
-    test_series_unique()
+    test_series_min()
 

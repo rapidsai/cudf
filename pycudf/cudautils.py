@@ -1,4 +1,5 @@
 from itertools import product
+from functools import partial
 
 import numpy as np
 
@@ -169,6 +170,7 @@ def fillna(data, mask, value):
     configured(value, mask, out)
     return out
 
+
 #
 # Binary kernels
 #
@@ -192,15 +194,22 @@ def apply_equal_constant(arr, val, dtype):
 #
 
 gpu_sum = cuda.reduce(lambda x, y: x + y)
+gpu_min = cuda.reduce(lambda x, y: min(x, y))
+gpu_max = cuda.reduce(lambda x, y: max(x, y))
 
 
-def compute_sum(arr, inplace=False):
+def _run_reduction(gpu_reduce, arr, init=0, inplace=False):
     """
     If *inplace* is True, the *arr* is overwritten by this function.
     """
     if not inplace:
         arr = copy_array(arr)
-    return gpu_sum(arr, init=0)
+    return gpu_reduce(arr, init=init)
+
+
+compute_sum = partial(_run_reduction, gpu_sum, init=0)
+compute_min = partial(_run_reduction, gpu_min)
+compute_max = partial(_run_reduction, gpu_max)
 
 
 def compute_mean(arr, inplace=False):
@@ -250,8 +259,6 @@ def gpu_unique_set_insert(vset, sz, val):
 
     # out of space
     return -1
-
-
 
 
 MAX_FAST_UNIQUE_K = 2 * 1024

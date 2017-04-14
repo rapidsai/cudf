@@ -339,6 +339,22 @@ class Series(object):
     # Stats
     #
 
+    def min(self):
+        """
+        Compute the min of the series
+        """
+        arr = self.to_dense_buffer().to_gpu_array()
+        maxval = utils.get_numeric_type_info(self.dtype).max
+        return cudautils.compute_min(arr, init=maxval)
+
+    def max(self):
+        """
+        Compute the max of the series
+        """
+        arr = self.to_dense_buffer().to_gpu_array()
+        minval = utils.get_numeric_type_info(self.dtype).min
+        return cudautils.compute_max(arr, init=minval)
+
     def mean(self):
         """
         Compute the mean of the series
