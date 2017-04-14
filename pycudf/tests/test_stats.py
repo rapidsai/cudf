@@ -51,12 +51,14 @@ def test_series_unique():
 
 
 def test_series_scale():
-    arr = np.random.randint(low=0, high=10, size=100)
+    arr = np.random.randint(low=-10, high=10, size=100)
     sr = Series.from_any(arr)
 
     vmin = arr.min()
     vmax = arr.max()
     scaled = (arr - vmin) / (vmax - vmin)
+    assert scaled.min() == 0
+    assert scaled.max() == 1
     np.testing.assert_equal(sr.scale().to_array(), scaled)
 
 
