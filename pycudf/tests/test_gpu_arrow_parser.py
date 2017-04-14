@@ -28,8 +28,8 @@ def test_gpu_parse_arrow_data():
     np.testing.assert_array_less(-105, lon)
 
     dct = reader.to_dict()
-    np.testing.assert_array_equal(lat, dct['dest_lat'].copy_to_host())
-    np.testing.assert_array_equal(lon, dct['dest_lon'].copy_to_host())
+    np.testing.assert_array_equal(lat, dct['dest_lat'].to_array())
+    np.testing.assert_array_equal(lon, dct['dest_lon'].to_array())
 
 
 if __name__ == '__main__':

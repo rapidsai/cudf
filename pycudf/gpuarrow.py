@@ -11,6 +11,7 @@ from org.apache.arrow.flatbuf import (RecordBatch, Message, MessageHeader,
 
 
 from .utils import mask_dtype
+from .dataframe import Series
 
 
 _logger = logging.getLogger(__name__)
@@ -157,10 +158,20 @@ class GpuArrowReader(Sequence):
         return self._nodes[idx]
 
     def to_dict(self):
-        dct = OrderedDict()
+        """
+        Return a dictionary of Series object
+        """
+        dc = OrderedDict()
         for node in self:
-            dct[node.name] = node.data
-        return dct
+            if node.null_count:
+                sr = Series.from_masked_array(data=node.data,
+                                              mask=node.null,
+                                              null_count=node.null_count)
+
+            else:
+                sr = Series.from_array(node.data)
+            dc[node.name] = sr
+        return dc
 
     #
     # Metadata parsing

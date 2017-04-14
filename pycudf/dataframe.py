@@ -10,8 +10,12 @@ from . import cudautils, utils
 
 
 class DataFrame(object):
-    def __init__(self):
+    def __init__(self, name_series=None):
         self._cols = OrderedDict()
+        # has initializer?
+        if name_series is not None:
+            for k, series in name_series:
+                self.add_column(k, series)
         self._size = 0
 
     def __getitem__(self, name):
