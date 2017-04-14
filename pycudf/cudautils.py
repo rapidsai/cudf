@@ -2,7 +2,7 @@ from itertools import product
 
 import numpy as np
 
-from numba import cuda, vectorize, types, uint64, int32, float64
+from numba import cuda, vectorize, types, uint64, int32, float64, numpy_support
 
 from .utils import mask_bitsize
 
@@ -273,6 +273,8 @@ class UniqueK(object):
 
     @classmethod
     def _compile(cls, dtype):
+        nbtype = numpy_support.from_dtype(dtype)
+
         @cuda.jit
         def gpu_unique_k(arr, k, out, outsz_ptr):
             """
@@ -285,9 +287,9 @@ class UniqueK(object):
             # shared memory
             vset_size = 0
             sm_mem_size = MAX_FAST_UNIQUE_K
-            vset = cuda.shared.array(sm_mem_size, dtype=float64)
+            vset = cuda.shared.array(sm_mem_size, dtype=nbtype)
             share_vset_size = cuda.shared.array(1, dtype=int32)
-            share_loaded = cuda.shared.array(sm_mem_size, dtype=float64)
+            share_loaded = cuda.shared.array(sm_mem_size, dtype=nbtype)
             sm_mem_size = min(k, sm_mem_size)
 
             while vset_size < sm_mem_size and base < arr.size:
