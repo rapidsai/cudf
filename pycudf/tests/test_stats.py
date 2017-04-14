@@ -50,6 +50,16 @@ def test_series_unique():
     raises.match('too many unique value')
 
 
+def test_series_scale():
+    arr = np.random.randint(low=0, high=10, size=100)
+    sr = Series.from_any(arr)
+
+    vmin = arr.min()
+    vmax = arr.max()
+    scaled = (arr - vmin) / (vmax - vmin)
+    np.testing.assert_equal(sr.scale().to_array(), scaled)
+
+
 if __name__ == '__main__':
-    test_series_min()
+    test_series_scale()
 

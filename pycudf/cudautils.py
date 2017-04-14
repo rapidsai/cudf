@@ -3,7 +3,7 @@ from functools import partial
 
 import numpy as np
 
-from numba import cuda, vectorize, types, uint64, int32, float64, numpy_support
+from numba import (cuda, vectorize, types, uint64, int32, float64, numpy_support)
 
 from .utils import mask_bitsize
 
@@ -187,6 +187,22 @@ def apply_equal_constant(arr, val, dtype):
     configured = gpu_equal_constant.forall(out.size)
     configured(arr, val, out)
     return out
+
+
+@cuda.jit
+def gpu_scale(arr, vmin, vmax, out):
+    i = cuda.grid(1)
+    if i < out.size:
+        val = arr[i]
+        out[i] = (val - vmin) / (vmax - vmin)
+
+
+def compute_scale(arr, vmin, vmax):
+    out = cuda.device_array(shape=arr.size, dtype=np.float64)
+    configured = gpu_scale.forall(out.size)
+    configured(arr, vmin, vmax, out)
+    return out
+
 
 
 #

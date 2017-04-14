@@ -391,6 +391,19 @@ class Series(object):
         arr = self.to_dense_buffer().to_gpu_array()
         return cudautils.compute_unique_k(arr, k=k)
 
+    def scale(self):
+        """
+        Scale values to [0, 1] in float64
+        """
+        if self.null_count != 0:
+            msg = 'masked series not supported by this operation'
+            raise NotImplementedError(msg)
+        vmin = self.min()
+        vmax = self.max()
+        gpuarr = self.to_gpu_array()
+        scaled = cudautils.compute_scale(gpuarr, vmin, vmax)
+        return Series.from_array(scaled)
+
 
 class BufferSentryError(ValueError):
     pass
