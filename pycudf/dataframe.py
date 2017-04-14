@@ -392,6 +392,8 @@ class Series(object):
         """
         Returns a list of at most k unique values.
         """
+        if self.null_count == len(self):
+            return np.empty(0, dtype=self.dtype)
         arr = self.to_dense_buffer().to_gpu_array()
         return cudautils.compute_unique_k(arr, k=k)
 
