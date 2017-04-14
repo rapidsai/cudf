@@ -232,14 +232,14 @@ def compute_mean(arr, inplace=False):
     """
     If *inplace* is True, the *arr* is overwritten by this function.
     """
-    return compute_sum(arr, inplace=inplace) / arr.size
+    return compute_sum(astype(arr, np.float64), inplace=inplace) / arr.size
 
 
 @cuda.jit
 def gpu_variance_step(xs, mu, out):
     tid = cuda.grid(1)
     if tid < out.size:
-        x = xs[tid]
+        x = float64(xs[tid])
         out[tid] = (x - mu) ** 2
 
 
