@@ -324,8 +324,8 @@ class Series(object):
 
         Returns a sequence of new series for each category
         """
-        if self.dtype.kind not in 'iu':
-            raise TypeError('expecting integral dtype')
+        if self.dtype.kind not in 'iuf':
+            raise TypeError('expecting integer or float dtype')
 
         dtype = np.dtype(dtype)
         out = []
