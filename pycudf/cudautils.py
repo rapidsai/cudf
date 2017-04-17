@@ -7,6 +7,7 @@ from numba import (cuda, vectorize, types, uint64, int32, float64, numpy_support
 
 from .utils import mask_bitsize
 from .sorting import RadixSort
+from .reduction import Reduce
 
 
 def to_device(ary):
@@ -210,17 +211,12 @@ def compute_scale(arr, vmin, vmax):
 # Reduction kernels
 #
 
-gpu_sum = cuda.reduce(lambda x, y: x + y)
-gpu_min = cuda.reduce(lambda x, y: min(x, y))
-gpu_max = cuda.reduce(lambda x, y: max(x, y))
+gpu_sum = Reduce(lambda x, y: x + y)
+gpu_min = Reduce(lambda x, y: min(x, y))
+gpu_max = Reduce(lambda x, y: max(x, y))
 
 
-def _run_reduction(gpu_reduce, arr, init=0, inplace=False):
-    """
-    If *inplace* is True, the *arr* is overwritten by this function.
-    """
-    if not inplace:
-        arr = copy_array(arr)
+def _run_reduction(gpu_reduce, arr, init=0):
     return gpu_reduce(arr, init=init)
 
 
@@ -229,11 +225,8 @@ compute_min = partial(_run_reduction, gpu_min)
 compute_max = partial(_run_reduction, gpu_max)
 
 
-def compute_mean(arr, inplace=False):
-    """
-    If *inplace* is True, the *arr* is overwritten by this function.
-    """
-    return compute_sum(astype(arr, np.float64), inplace=inplace) / arr.size
+def compute_mean(arr):
+    return compute_sum(astype(arr, np.float64)) / arr.size
 
 
 @cuda.jit
@@ -251,7 +244,7 @@ def compute_stats(arr):
     mu = compute_mean(arr)
     tmp = cuda.device_array_like(arr)
     gpu_variance_step.forall(arr.size)(arr, mu, tmp)
-    return mu, compute_mean(tmp, inplace=True)
+    return mu, compute_mean(tmp)
 
 
 @cuda.jit(device=True)
