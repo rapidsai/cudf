@@ -6,6 +6,7 @@ import numpy as np
 from numba import (cuda, vectorize, types, uint64, int32, float64, numpy_support)
 
 from .utils import mask_bitsize
+from .sorting import RadixSort
 
 
 def to_device(ary):
@@ -369,5 +370,73 @@ class UniqueK(object):
             return hout[:unique_ct]
 
 
+@cuda.jit
+def gpu_diff(arr, out):
+    """
+    Comptute out[i] = arr[i] - arr[i - 1] for i > 0.
+             out[0] = 1
+    """
+    i = cuda.grid(1)
+    if i == 0:
+        out[i] = True
+    if 0 < i < out.size:
+        out[i] = bool(arr[i] - arr[i - 1])
+
+
+@cuda.jit
+def gpu_insert_if_masked(arr, mask, out_idx, out_queue):
+    i = cuda.grid(1)
+    if i < arr.size:
+        diff = mask[i]
+        if diff:
+            wridx = cuda.atomic.add(out_idx, 0, 1)
+            if wridx < out_queue.size:
+                out_queue[wridx] = arr[i]
+
+
+class UniqueBySorting(object):
+    """
+    Compute unique element in an array by sorting
+    """
+    def __init__(self, maxcount, k, dtype):
+        dtype = np.dtype(dtype)
+        self._maxcount = maxcount
+        self._dtype = dtype
+        self._maxk = k
+        self._sorter = RadixSort(maxcount=maxcount, dtype=dtype)
+
+    def run_sort(self, arr):
+        self._sorter.sort(arr)
+
+    def run_diff(self, arr):
+        out = cuda.device_array(shape=arr.size, dtype=np.intp)
+        gpu_diff.forall(out.size)(arr, out)
+        return out
+
+    def run_gather(self, arr, diffs):
+        h_out_idx = np.zeros(1, dtype=np.intp)
+        out_queue = cuda.device_array(shape=self._maxk, dtype=arr.dtype)
+        gpu_insert_if_masked.forall(arr.size)(arr, diffs, h_out_idx, out_queue)
+        qsz = h_out_idx[0]
+        if self._maxk >= 0:
+            if qsz > self._maxk:
+                msg = 'too many unique value: unique values ({}) > k ({})'
+                raise ValueError(msg.format(qsz, self._maxk))
+            end = min(qsz, self._maxk)
+        else:
+            raise NotImplementedError('k is unbounded')
+        vals = out_queue[:end].copy_to_host()
+        return vals
+
+    def run(self, arr):
+        if arr.size > self._maxcount:
+            raise ValueError("`arr.size` >= maxcount")
+        copied = copy_array(arr)
+        self.run_sort(copied)
+        diffs = self.run_diff(copied)
+        return self.run_gather(copied, diffs)
+
+
 def compute_unique_k(arr, k):
-    return UniqueK(arr.dtype).run(arr, k)
+    # return UniqueK(arr.dtype).run(arr, k)
+    return UniqueBySorting(maxcount=arr.size, dtype=arr.dtype, k=k).run(arr)

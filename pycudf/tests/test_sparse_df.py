@@ -88,4 +88,4 @@ def test_reading_arrow_sparse_data():
 
 
 if __name__ == '__main__':
-    test_read_all()
+    test_reading_arrow_sparse_data()
