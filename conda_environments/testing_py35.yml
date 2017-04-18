@@ -21,3 +21,5 @@ dependencies:
 - zlib=1.2.8=3
 - llvmlite=0.17.0=py35_0
 - numba=0.32.0=np112py35_0
+- pip:
+  - flatbuffers==2015.12.22.1
