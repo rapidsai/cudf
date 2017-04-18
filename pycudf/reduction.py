@@ -62,7 +62,7 @@ def gpu_reduce_factory(fn, nbtype):
         if tid == 0:
             partials[blkid] = gpu_functor(sm_partials[0, 0], sm_partials[1, 0])
 
-    return cuda.jit(debug=True)(gpu_reduce_block_strided)
+    return cuda.jit(gpu_reduce_block_strided)
 
 
 class Reduce(object):
