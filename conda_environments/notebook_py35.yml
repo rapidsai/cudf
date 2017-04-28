@@ -3,8 +3,6 @@ channels:
 - !!python/unicode
   'numba'
 - !!python/unicode
-  'sklam/label/pr2023'
-- !!python/unicode
   'defaults'
 dependencies:
 - !!python/unicode
@@ -12,7 +10,7 @@ dependencies:
 - !!python/unicode
   'bleach=1.5.0=py35_0'
 - !!python/unicode
-  'cudatoolkit=7.5=0'
+  'cudatoolkit=8.0=0'
 - !!python/unicode
   'dbus=1.10.10=0'
 - !!python/unicode
@@ -136,7 +134,7 @@ dependencies:
 - !!python/unicode
   'tk=8.5.18=0'
 - !!python/unicode
-  'tornado=4.5=py35_0'
+  'tornado=4.5.1=py35_0'
 - !!python/unicode
   'traitlets=4.3.2=py35_0'
 - !!python/unicode
@@ -152,9 +150,9 @@ dependencies:
 - !!python/unicode
   'zlib=1.2.8=3'
 - !!python/unicode
-  'llvmlite=0.18.0.dev=py35_8'
+  'llvmlite=0.18'
 - !!python/unicode
-  'numba=0.33.0.dev=np112py35_21'
+  'numba=0.33'
 - pip:
   - flatbuffers==2015.12.22.1
   - ipython-genutils==0.2.0
