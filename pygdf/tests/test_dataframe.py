@@ -164,6 +164,59 @@ def test_dataframe_astype():
     np.testing.assert_equal(df['a'].to_array(), df['b'].to_array())
 
 
+def test_dataframe_loc():
+    df = DataFrame()
+    size = 123
+    df['a'] = ha = np.random.randint(low=0, high=100, size=size).astype(np.int32)
+    df['b'] = hb = np.random.random(size).astype(np.float32)
+    df['c'] = hc = np.random.randint(low=0, high=100, size=size).astype(np.int64)
+    df['d'] = hd = np.random.random(size).astype(np.float64)
+
+    # Row slice first 10
+    first_10 = df.loc[:10]
+    assert len(first_10) == 10
+    assert first_10.columns == tuple(['a', 'b', 'c', 'd'])
+    np.testing.assert_equal(first_10['a'].to_array(), ha[:10])
+    np.testing.assert_equal(first_10['b'].to_array(), hb[:10])
+    np.testing.assert_equal(first_10['c'].to_array(), hc[:10])
+    np.testing.assert_equal(first_10['d'].to_array(), hd[:10])
+    del first_10
+
+    # Row slice first 10
+    last_10 = df.loc[-10:]
+    assert len(last_10) == 10
+    assert last_10.columns == tuple(['a', 'b', 'c', 'd'])
+    np.testing.assert_equal(last_10['a'].to_array(), ha[-10:])
+    np.testing.assert_equal(last_10['b'].to_array(), hb[-10:])
+    np.testing.assert_equal(last_10['c'].to_array(), hc[-10:])
+    np.testing.assert_equal(last_10['d'].to_array(), hd[-10:])
+    del last_10
+
+    # Row slice [begin:end]
+    begin = 7
+    end = 121
+    subrange = df.loc[begin:end]
+    assert len(subrange) == end - begin
+    assert subrange.columns == tuple(['a', 'b', 'c', 'd'])
+    np.testing.assert_equal(subrange['a'].to_array(), ha[begin:end])
+    np.testing.assert_equal(subrange['b'].to_array(), hb[begin:end])
+    np.testing.assert_equal(subrange['c'].to_array(), hc[begin:end])
+    np.testing.assert_equal(subrange['d'].to_array(), hd[begin:end])
+    del subrange
+
+    # Row + Col slice
+    begin = 117
+    end = 123
+    fewer = df.loc[begin:end, ['c', 'd', 'a']]
+    assert len(fewer) == end - begin
+    assert fewer.columns == tuple(['c', 'd', 'a'])
+    np.testing.assert_equal(fewer['a'].to_array(), ha[begin:end])
+    np.testing.assert_equal(fewer['c'].to_array(), hc[begin:end])
+    np.testing.assert_equal(fewer['d'].to_array(), hd[begin:end])
+    del fewer
+
+
 if __name__ == '__main__':
     # test_dataframe_basic()
-    test_series_basic()
+    # test_series_basic()
+    test_dataframe_loc()

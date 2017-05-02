@@ -34,6 +34,13 @@ class DataFrame(object):
         return self._size
 
     @property
+    def loc(self):
+        """
+        Returns a label-based indexer.
+        """
+        return Loc(self)
+
+    @property
     def columns(self):
         return tuple(self._cols)
 
@@ -126,6 +133,29 @@ class DataFrame(object):
         for name, col in zip(newnames, newcols):
             outdf.add_column(name, col)
         return outdf
+
+
+class Loc(object):
+    """
+    For selection by label.
+    """
+
+    def __init__(self, df):
+        self._df = df
+
+    def __getitem__(self, arg):
+        if isinstance(arg, tuple):
+            row_slice, col_slice = arg
+        elif isinstance(arg, slice):
+            row_slice = arg
+            col_slice = self._df.columns
+        else:
+            raise TypeError(type(arg))
+
+        df = DataFrame()
+        for col in col_slice:
+            df[col] = self._df[col][row_slice]
+        return df
 
 
 class Buffer(object):
