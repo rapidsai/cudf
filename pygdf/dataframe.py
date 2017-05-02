@@ -10,6 +10,10 @@ from . import cudautils, utils
 
 
 class DataFrame(object):
+    """
+    A GPU Dataframe object.
+    """
+
     def __init__(self, name_series=None):
         self._cols = OrderedDict()
         # has initializer?
@@ -111,21 +115,42 @@ class DataFrame(object):
         return matrix
 
     def as_matrix(self, columns=None):
-        """
-        Returns a (nrow x ncol) numpy ndarray in "F" order.
+        """Covert to a matrix in host memory.
+
+        Parameters
+        ----------
+        columns: sequence of str
+            List of a column names to be extracted.  The order is preserved.
+            If None is specified, all columns are used.
+
+        Returns
+        -------
+        A (nrow x ncol) numpy ndarray in "F" order.
         """
         return self.as_gpu_matrix(columns=columns).copy_to_host()
 
     def one_hot_encoding(self, column, prefix, cats, prefix_sep='_',
                          dtype='float64'):
-        """
-        *column* is the source column with binary encoding for the data.
-        *prefix* is the new column name prefix.
-        *cats* is the sequence of categories in as integers.
-        *prefix_sep* is the separator between the prefix and the category.
-        *dtype* is the dtype for the outputs; defaults to float64.
+        """Expand a column with one-hot-encoding.
 
-        Returns a new dataframe with new columns append for each category.
+        Parameters
+        ----------
+
+        column : str
+            the source column with binary encoding for the data.
+        prefix : str
+            the new column name prefix.
+        cats : sequence of ints
+            the sequence of categories as integers.
+        prefix_sep : str
+            the separator between the prefix and the category.
+        dtype :
+            the dtype for the outputs; defaults to float64.
+
+        Returns
+        -------
+
+        a new dataframe with new columns append for each category.
         """
         newnames = [prefix_sep.join([prefix, str(cat)]) for cat in cats]
         newcols = self[column].one_hot_encoding(cats=cats, dtype=dtype)
