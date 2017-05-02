@@ -1,6 +1,6 @@
-# PyCUDF
+# PyGDF
 
-CUDA DataFrame implementation using Numba
+GPU DataFrame implementation using Numba
 
 
 # Setup minconda
