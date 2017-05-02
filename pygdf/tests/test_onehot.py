@@ -4,7 +4,7 @@ import numpy as np
 
 from numba import cuda
 
-from pycudf.dataframe import DataFrame
+from pygdf.dataframe import DataFrame
 
 
 def test_onehot_simple():

@@ -4,7 +4,7 @@ import numpy as np
 
 from numba import cuda
 
-from pycudf.dataframe import DataFrame, Series
+from pygdf.dataframe import DataFrame, Series
 
 
 def test_series_min():

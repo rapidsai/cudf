@@ -3,7 +3,7 @@ import logging
 import numpy as np
 from numba import cuda
 
-from pycudf.gpuarrow import GpuArrowReader
+from pygdf.gpuarrow import GpuArrowReader
 
 
 def test_gpu_parse_arrow_data():
@@ -34,6 +34,6 @@ def test_gpu_parse_arrow_data():
 
 if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO)
-    logging.getLogger('pycudf.gpuarrow').setLevel(logging.DEBUG)
+    logging.getLogger('pygdf.gpuarrow').setLevel(logging.DEBUG)
 
     test_gpu_parse_arrow_data()
