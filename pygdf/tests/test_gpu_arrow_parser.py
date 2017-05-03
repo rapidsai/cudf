@@ -15,7 +15,6 @@ def test_gpu_parse_arrow_data():
     del cpu_data
     # test reader
     reader = GpuArrowReader(gpu_data)
-    dtype = np.dtype(np.float32)
     assert reader[0].name == 'dest_lat'
     assert reader[1].name == 'dest_lon'
     lat = reader[0].data.copy_to_host()
