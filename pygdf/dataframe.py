@@ -327,7 +327,8 @@ class Series(object):
         dbuf = Buffer(data)
         mbuf = Buffer(mask)
         if null_count is None:
-            _, null_count = cudautils.mask_assign_slot(dbuf.size, mbuf.mem)
+            _, nnz = cudautils.mask_assign_slot(dbuf.size, mbuf.mem)
+            null_count = dbuf.size - nnz
         return cls(size=dbuf.size, dtype=dbuf.dtype, buffer=dbuf, mask=mbuf,
                    null_count=null_count)
 

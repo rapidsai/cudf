@@ -243,7 +243,7 @@ def test_dataframe_to_string():
     mask[0] = 0b00101101
 
     masked = Series.from_masked_array(data, mask)
-    assert masked.null_count == 4
+    assert masked.null_count == 2
     df['c'] = masked
 
     # check data
