@@ -1,9 +1,27 @@
 API Reference
 =============
 
+.. currentmodule:: pygdf.dataframe
 
-.. automodule:: pygdf.dataframe
+
+DataFrame
+---------
+
+.. autoclass:: DataFrame
     :members:
 
-.. autoclass:: pygdf.gpuarrow.GpuArrowReader
+
+Series
+------
+
+.. autoclass:: Series
+    :members:
+
+
+.. currentmodule:: pygdf.gpuarrow
+
+GpuArrowReader
+--------------
+
+.. autoclass:: GpuArrowReader
     :members:

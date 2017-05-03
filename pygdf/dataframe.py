@@ -12,6 +12,39 @@ from . import cudautils, utils
 class DataFrame(object):
     """
     A GPU Dataframe object.
+
+    Examples
+    --------
+
+    Build dataframe with `__setitem__`
+
+    >>> from pygdf.dataframe import DataFrame
+    >>> df = DataFrame()
+    >>> df['key'] = [0, 1, 2, 3, 4]
+    >>> df['val'] = [float(i + 10) for i in range(5)]  # insert column
+    >>> df
+      key val
+    0 0   10.0
+    1 1   11.0
+    2 2   12.0
+    3 3   13.0
+    4 4   14.0
+    >>> len(df)
+    5
+
+    Build dataframe with initializer
+
+    >>> import numpy as np
+    >>> df2 = DataFrame([('a', np.arange(10)),
+                         ('b', np.random.random(10))])
+    >>> df2
+      a b
+    0 0 0.777831724018
+    1 1 0.604480034669
+    2 2 0.664111858618
+    3 3 0.887777513028
+    4 4 0.55838311246
+    [5 more rows]
     """
 
     def __init__(self, name_series=None):
@@ -23,23 +56,47 @@ class DataFrame(object):
                 self.add_column(k, series)
 
     def __getitem__(self, name):
+        """Access column by *name*
+        """
         return self._cols[name]
 
     def __setitem__(self, name, col):
+        """Add/set column by *name*
+        """
         if name in self._cols:
             self._cols[name] = col
         else:
             self.add_column(name, col)
 
     def __delitem__(self, name):
+        """Drop the give column by *name*.
+        """
         self.drop_column(name)
 
     def __len__(self):
+        """Returns the number of rows
+        """
         return self._size
 
     def to_string(self, nrows=5, ncols=8):
+        """Convert to string
+
+        Parameters
+        ----------
+        nrows : int
+            Maximum number of rows to show.
+            If it is None, all rows are shown.
+
+        ncols : int
+            Maximum number of columns to show.
+            If it is None, all columns are shown.
+        """
+        if not self.columns:
+            return ''
         if nrows is None:
             nrows = len(self)
+        if ncols is None:
+            ncols = len(self.columns)
         lastcol = None
         if len(self.columns) > ncols:
             cols = self.columns[:ncols - 1] + self.columns[-1:]
@@ -50,7 +107,7 @@ class DataFrame(object):
         cells = OrderedDict()
         for c in cols:
             values = list(self[c][:nrows])
-            cells[c] = ['' if v is None else repr(v) for v in values]
+            cells[c] = ['' if v is None else str(v) for v in values]
 
         # compute column widths
         widths = {}
@@ -86,15 +143,49 @@ class DataFrame(object):
     def __str__(self):
         return self.to_string()
 
+    def __repr__(self):
+        return self.to_string()
+
     @property
     def loc(self):
         """
-        Returns a label-based indexer.
+        Returns a label-based indexer for row-slicing and column selection.
+
+        Examples
+        --------
+
+        >>> df = DataFrame([('a', list(range(20))),
+                            ('b', list(range(20))),
+                            ('c', list(range(20)))])
+        >>> df[:4]   # get first 4 rows of all columns
+          a b c
+        0 0 0 0
+        1 1 1 1
+        2 2 2 2
+        3 3 3 3
+        4 4 4 4
+        >>> df[-5:]  # get last 5 rows of all columns
+          a  b  c
+        0 15 15 15
+        1 16 16 16
+        2 17 17 17
+        3 18 18 18
+        4 19 19 19
+        >>> df[:10, ['a', 'b']]   # get first 10 rows from 'a' and 'b' columns.
+          a b
+        0 0 0
+        1 1 1
+        2 2 2
+        3 3 3
+        4 4 4
+        [5 more rows]
         """
         return Loc(self)
 
     @property
     def columns(self):
+        """Returns a tuple of columns
+        """
         return tuple(self._cols)
 
     def _sentry_column_size(self, size):
@@ -109,6 +200,15 @@ class DataFrame(object):
         return df
 
     def add_column(self, name, data):
+        """Add a column
+
+        Parameters
+        ----------
+        name : str
+            Name of column to be added.
+        data : Series, array-like
+            Values to be added.
+        """
         if name in self._cols:
             raise NameError('duplicated column name {!r}'.format(name))
         series = Series.from_any(data)
@@ -117,11 +217,25 @@ class DataFrame(object):
         self._size = len(series)
 
     def drop_column(self, name):
+        """Drop a column by *name*
+        """
         if name not in self._cols:
             raise NameError('column {!r} does not exist'.format(name))
         del self._cols[name]
 
     def concat(self, *dfs):
+        """Concat rows from other dataframes.
+
+        Parameters
+        ----------
+
+        *dfs : one or more DataFrame(s)
+
+        Returns
+        -------
+
+        A new dataframe with rows from each dataframe in ``*dfs``.
+        """
         # check columns
         for df in dfs:
             if df.columns != self.columns:
@@ -137,8 +251,17 @@ class DataFrame(object):
         return newdf
 
     def as_gpu_matrix(self, columns=None):
-        """
-        Returns a (nrow x ncol) device ndarray in "F" order.
+        """Covert to a matrix in device memory.
+
+        Parameters
+        ----------
+        columns: sequence of str
+            List of a column names to be extracted.  The order is preserved.
+            If None is specified, all columns are used.
+
+        Returns
+        -------
+        A (nrow x ncol) numpy ndarray in "F" order.
         """
         if columns is None:
             columns = self.columns
@@ -184,7 +307,6 @@ class DataFrame(object):
 
         Parameters
         ----------
-
         column : str
             the source column with binary encoding for the data.
         prefix : str
@@ -198,7 +320,6 @@ class DataFrame(object):
 
         Returns
         -------
-
         a new dataframe with new columns append for each category.
         """
         newnames = [prefix_sep.join([prefix, str(cat)]) for cat in cats]
@@ -299,10 +420,21 @@ class Buffer(object):
 
 class Series(object):
     """
-    Data and null-masks
+    Data and null-masks.
+
+    ``Series`` objects are used as columns of ``DataFrame``.
     """
     @classmethod
     def from_any(cls, arbitrary):
+        """Create Series from an arbitrary object
+
+        Currently support inputs are:
+
+        * ``Series``
+        * ``Buffer``
+        * numba device array
+        * numpy array
+        """
         if isinstance(arbitrary, Series):
             return arbitrary
         if isinstance(arbitrary, Buffer):
@@ -316,14 +448,35 @@ class Series(object):
 
     @classmethod
     def from_buffer(cls, buffer):
+        """Create a Series from a ``Buffer``
+        """
         return Series(size=buffer.size, dtype=buffer.dtype, buffer=buffer)
 
     @classmethod
     def from_array(cls, array):
+        """Create a Series from an array-like object.
+        """
         return cls.from_buffer(Buffer(array))
 
     @classmethod
     def from_masked_array(cls, data, mask, null_count=None):
+        """Create a Series with null-mask.
+
+        Parameters
+        ----------
+        data : 1D array-like
+            The values.  Null values must not be skipped.  They can appear
+            as garbage values.
+        mask : 1D array-like of numpy.uint8
+            The null-mask.  Valid values are marked as ``1``; otherwise ``0``.
+            The mask bit given the data index ``idx`` is computed as::
+
+                (mask[idx // 8] >> (idx % 8)) & 1
+        null_count : int, optional
+            The number of null values.
+            If None, it is calculated automatically.
+        """
+
         dbuf = Buffer(data)
         mbuf = Buffer(mask)
         if null_count is None:
@@ -348,6 +501,8 @@ class Series(object):
         self._null_count = null_count
 
     def __len__(self):
+        """Returns the size of the ``Series`` including null values.
+        """
         return self._size
 
     def __getitem__(self, arg):
@@ -379,10 +534,11 @@ class Series(object):
 
     @property
     def dtype(self):
+        """dtype of the Series"""
         return self._dtype
 
     def append(self, arbitrary):
-        """
+        """Append values from another ``Series`` or array-like object.
         Returns a new copy.
         """
         other = Series.from_any(arbitrary)
@@ -398,13 +554,19 @@ class Series(object):
 
     @property
     def null_count(self):
+        """Number of null values"""
         return self._null_count
 
     @property
     def has_null_mask(self):
+        """A boolean indicating whether a null-mask is needed"""
         return self.null_count > 0
 
     def fillna(self, value):
+        """Fill null values with ``value``.
+
+        Returns a copy with null filled.
+        """
         if not self.has_null_mask:
             return self
         out = cudautils.fillna(data=self._data.to_gpu_array(),
@@ -413,6 +575,13 @@ class Series(object):
         return self.from_array(out)
 
     def to_dense_buffer(self):
+        """Get dense (no null values) ``Buffer`` of the data.
+
+        Notes
+        -----
+
+        Null values are skipped.  Therefore, the output size could be smaller.
+        """
         if self.has_null_mask:
             return self._copy_to_dense_buffer()
         else:
@@ -425,22 +594,24 @@ class Series(object):
         return Buffer(mem, size=nnz, capacity=mem.size)
 
     def to_array(self):
+        """Get a dense numpy array for the data.
+        """
         return self.to_dense_buffer().to_array()
 
     def to_gpu_array(self):
+        """Get a dense numba device array for the data.
+        """
         return self.to_dense_buffer().to_gpu_array()
 
     @property
     def data(self):
-        """
-        The gpu buffer for the data
+        """The gpu buffer for the data
         """
         return self._data
 
     @property
     def nullmask(self):
-        """
-        The gpu buffer for the null-mask
+        """The gpu buffer for the null-mask
         """
         if self.has_null_mask:
             return self._mask
@@ -448,21 +619,32 @@ class Series(object):
             raise ValueError('Series has no null mask')
 
     def astype(self, dtype):
-        """
-        Returns a new Series in by casting each values to the given dtype.
-        Returns the same Series object if the dtype didn't change.
+        """Convert to the given ``dtype``.
+
+        Returns
+        -------
+        If the dtype changed, a new ``Series`` is returned by casting each
+        values to the given dtype.
+        If the dtype is not changed, ``self`` is returned.
         """
         if dtype == self.dtype:
             return self
         return Series.from_buffer(self.data.astype(dtype))
 
     def one_hot_encoding(self, cats, dtype='float64'):
-        """
-        Perform one-hot-encoding on the series using *cats* as the list
-        of categories.  The series must have integral dtype.
-        *dtype* specifies the output dtype.
+        """Perform one-hot-encoding
 
-        Returns a sequence of new series for each category
+        Parameters
+        ----------
+        cats : sequence of values
+                values representing each category.
+        dtype : numpy.dtype
+                specifies the output dtype.
+
+        Returns
+        -------
+        A sequence of new series for each category.  Its length is determined
+        by the length of ``cats``.
         """
         if self.dtype.kind not in 'iuf':
             raise TypeError('expecting integer or float dtype')
@@ -480,53 +662,46 @@ class Series(object):
     #
 
     def min(self):
-        """
-        Compute the min of the series
+        """Compute the min of the series
         """
         arr = self.to_dense_buffer().to_gpu_array()
         maxval = utils.get_numeric_type_info(self.dtype).max
         return cudautils.compute_min(arr, init=maxval)
 
     def max(self):
-        """
-        Compute the max of the series
+        """Compute the max of the series
         """
         arr = self.to_dense_buffer().to_gpu_array()
         minval = utils.get_numeric_type_info(self.dtype).min
         return cudautils.compute_max(arr, init=minval)
 
     def mean(self):
-        """
-        Compute the mean of the series
+        """Compute the mean of the series
         """
         arr = self.to_dense_buffer().to_gpu_array()
         return cudautils.compute_mean(arr)
 
     def std(self):
-        """
-        Compute the standard deviation of the series
+        """Compute the standard deviation of the series
         """
         return np.sqrt(self.var())
 
     def var(self):
-        """
-        Compute the variance of the series
+        """Compute the variance of the series
         """
         arr = self.to_dense_buffer().to_gpu_array()
         mu, var = cudautils.compute_stats(arr)
         return var
 
     def mean_var(self):
-        """
-        Compute mean and variance at the same time.
+        """Compute mean and variance at the same time.
         """
         arr = self.to_dense_buffer().to_gpu_array()
         mu, var = cudautils.compute_stats(arr)
         return mu, var
 
     def unique_k(self, k):
-        """
-        Returns a list of at most k unique values.
+        """Returns a list of at most k unique values.
         """
         if self.null_count == len(self):
             return np.empty(0, dtype=self.dtype)
@@ -534,8 +709,7 @@ class Series(object):
         return cudautils.compute_unique_k(arr, k=k)
 
     def scale(self):
-        """
-        Scale values to [0, 1] in float64
+        """Scale values to [0, 1] in float64
         """
         if self.null_count != 0:
             msg = 'masked series not supported by this operation'

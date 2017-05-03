@@ -82,7 +82,6 @@ class GpuArrowNodeReader(object):
                 msg = "unexpected self._desc.length != self._desc.null_count"
                 raise NotImplementedError(msg)
 
-
     @property
     def null_count(self):
         return self._desc.null_count
