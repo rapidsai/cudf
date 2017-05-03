@@ -1,9 +1,8 @@
-from itertools import product
 from functools import partial
 
 import numpy as np
 
-from numba import (cuda, vectorize, types, uint64, int32, float64, numpy_support)
+from numba import (cuda, njit, uint64, int32, float64, numpy_support)
 
 from .utils import mask_bitsize
 from .sorting import RadixSort
@@ -80,8 +79,8 @@ def set_mask_from_stride(mask, stride):
     configured(mask, stride)
 
 
-@cuda.jit(device=True)
-def gpu_mask_get(mask, pos):
+@njit
+def mask_get(mask, pos):
     return (mask[pos // mask_bitsize] >> (pos % mask_bitsize)) & 1
 
 
@@ -113,7 +112,7 @@ def gpu_mask_assign_slot(mask, slots):
         i = base + tid
         sm_prefix[tid] = 0
         if i < slots.size:
-            sm_prefix[tid] = gpu_mask_get(mask, i)
+            sm_prefix[tid] = mask_get(mask, i)
         if tid == 0:
             offset = gpu_prefixsum(sm_prefix[:32], offset)
             sm_prefix[32] = offset
@@ -125,9 +124,16 @@ def gpu_mask_assign_slot(mask, slots):
 @cuda.jit
 def gpu_copy_to_dense(data, mask, slots, out):
     tid = cuda.grid(1)
-    if tid < data.size and gpu_mask_get(mask, tid):
+    if tid < data.size and mask_get(mask, tid):
         idx = slots[tid]
         out[idx] = data[tid]
+
+
+def mask_assign_slot(size, mask):
+    slots = cuda.device_array(shape=size + 1, dtype=np.uint64)
+    gpu_mask_assign_slot[1, 32](mask, slots)
+    sz = int(slots[slots.size - 1])
+    return slots, sz
 
 
 def copy_to_dense(data, mask, out=None):
@@ -138,11 +144,11 @@ def copy_to_dense(data, mask, out=None):
     * number of non-null element
     * a dense gpu array given the data and mask gpu arrays.
     """
-    slots = cuda.device_array(shape=data.shape, dtype=np.uint64)
-    gpu_mask_assign_slot[1, 32](mask, slots)
-    sz = slots[-1:].copy_to_host() + 1
+    slots, sz = mask_assign_slot(size=data.size, mask=mask)
     if out is None:
-        out = cuda.device_array(shape=sz, dtype=data.dtype)
+        alloc_shape = max(sz, 1)   # can't allocate 0 bytes
+        out = cuda.device_array(shape=alloc_shape,
+                                dtype=data.dtype)
     else:
         # check
         if sz >= out.size:
@@ -160,7 +166,7 @@ def copy_to_dense(data, mask, out=None):
 def gpu_fill_masked(value, validity, out):
     tid = cuda.grid(1)
     if tid < out.size:
-        valid = gpu_mask_get(validity, tid)
+        valid = mask_get(validity, tid)
         if not valid:
             out[tid] = value
 

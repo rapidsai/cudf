@@ -15,12 +15,12 @@ class DataFrame(object):
     """
 
     def __init__(self, name_series=None):
+        self._size = 0
         self._cols = OrderedDict()
         # has initializer?
         if name_series is not None:
             for k, series in name_series:
                 self.add_column(k, series)
-        self._size = 0
 
     def __getitem__(self, name):
         return self._cols[name]
@@ -36,6 +36,55 @@ class DataFrame(object):
 
     def __len__(self):
         return self._size
+
+    def to_string(self, nrows=5, ncols=8):
+        if nrows is None:
+            nrows = len(self)
+        lastcol = None
+        if len(self.columns) > ncols:
+            cols = self.columns[:ncols - 1] + self.columns[-1:]
+            lastcol = cols[-1]
+        else:
+            cols = self.columns
+        # get values
+        cells = OrderedDict()
+        for c in cols:
+            values = list(self[c][:nrows])
+            cells[c] = ['' if v is None else repr(v) for v in values]
+
+        # compute column widths
+        widths = {}
+        for k, vs in cells.items():
+            widths[k] = max(len(k), max(map(len, vs)))
+        # format table
+        out = []
+        widthkey = len(str(nrows))
+        header = [' ' * widthkey]
+        header += ["{:{}}".format(k, widths[k]) for k in cols[:-1]]
+        if lastcol is not None:
+            header += ['...']
+        header += ["{:{}}".format(k, widths[k]) for k in cols[-1:]]
+        out.append(' '.join(header))
+        for i in range(nrows):
+            row = ["{:{}}".format(str(i), widthkey)]
+            for k, vs in cells.items():
+                if k == lastcol:
+                    row.append('...')
+                row.append("{:{}}".format(vs[i], widths[k]))
+            out.append(' '.join(row))
+
+        # show remiaining rows
+        remaining_rows = len(self) - nrows
+        if remaining_rows > 0:
+            out.append("[{} more rows]".format(remaining_rows))
+
+        # show remiaining cols
+        if lastcol is not None:
+            out.append("[{} more columns]".format(len(self.columns) - ncols))
+        return '\n'.join(out)
+
+    def __str__(self):
+        return self.to_string()
 
     @property
     def loc(self):
@@ -205,6 +254,14 @@ class Buffer(object):
         if isinstance(arg, slice):
             sliced = self.to_gpu_array()[arg]
             return Buffer(sliced)
+        elif isinstance(arg, int):
+            # normalize index
+            if arg < 0:
+                arg = self.size + arg
+            if arg >= self.size:
+                raise IndexError(arg)
+            # getitem
+            return self.mem[arg]
         else:
             raise NotImplementedError(type(arg))
 
@@ -266,9 +323,11 @@ class Series(object):
         return cls.from_buffer(Buffer(array))
 
     @classmethod
-    def from_masked_array(cls, data, mask, null_count):
+    def from_masked_array(cls, data, mask, null_count=None):
         dbuf = Buffer(data)
         mbuf = Buffer(mask)
+        if null_count is None:
+            _, null_count = cudautils.mask_assign_slot(dbuf.size, mbuf.mem)
         return cls(size=dbuf.size, dtype=dbuf.dtype, buffer=dbuf, mask=mbuf,
                    null_count=null_count)
 
@@ -292,7 +351,28 @@ class Series(object):
 
     def __getitem__(self, arg):
         if isinstance(arg, slice):
-            return self.from_buffer(self._data[arg])
+            if self.null_count > 0:
+                # compute mask slice
+                start = arg.start if arg.start else 0
+                stop = arg.stop if arg.stop else len(self)
+                if arg.step is not None and arg.step != 1:
+                    raise NotImplementedError(arg)
+                maskslice = slice(utils.calc_chunk_size(start,
+                                                        utils.mask_bitsize),
+                                  utils.calc_chunk_size(stop,
+                                                        utils.mask_bitsize))
+                # slicing
+                subdata = self._data.mem[arg]
+                submask = self._mask.mem[maskslice]
+                return self.from_masked_array(data=subdata, mask=submask)
+            else:
+                return self.from_buffer(self._data[arg])
+        elif isinstance(arg, int):
+            if self._mask is not None:
+                valid = cudautils.mask_get.py_func(self._mask, arg)
+            else:
+                valid = 1
+            return self._data[arg] if valid else None
         else:
             raise NotImplementedError(type(arg))
 
