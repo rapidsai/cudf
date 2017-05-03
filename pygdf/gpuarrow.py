@@ -176,28 +176,28 @@ class GpuArrowReader(Sequence):
     #
 
     def _open(self):
-        self.read_schema()
-        self.read_recordbatch()
+        self._read_schema()
+        self._read_recordbatch()
 
-    def read_schema(self):
+    def _read_schema(self):
         # Read schema
         self._logger.debug("reading schema")
-        size = self.read_msg_size()
+        size = self._read_msg_size()
         schema_buf = self._get(size).copy_to_host()
-        header = self.parse_msg_header(schema_buf)
+        header = self._parse_msg_header(schema_buf)
         if header.body_length > 0:
             raise MetadataParsingError("schema should not have body")
-        fds = self.parse_schema(header)
+        fds = self._parse_schema(header)
         self._fields.extend(fds)
 
-    def read_recordbatch(self):
+    def _read_recordbatch(self):
         # Read RecordBatch
         self._logger.debug("reading recordbatch")
-        size = self.read_msg_size()
+        size = self._read_msg_size()
         # Read message header
-        msg = self.read_msg_header(size)
+        msg = self._read_msg_header(size)
         body = self._get(msg.body_length)
-        for i, node in enumerate(self.parse_record_batch(msg)):
+        for i, node in enumerate(self._parse_record_batch(msg)):
             self._nodes.append(GpuArrowNodeReader(gpu_data=body, desc=node))
 
     def _get(self, size):
@@ -210,25 +210,25 @@ class GpuArrowReader(Sequence):
         self._readidx += size
         return ret
 
-    def read_int32(self):
+    def _read_int32(self):
         int32 = np.dtype(np.int32)
         nbytes = int32.itemsize
         data = self._get(nbytes)
         return gpu_view_as(data, dtype=int32)[0]
 
-    def read_msg_size(self):
-        size = self.read_int32()
+    def _read_msg_size(self):
+        size = self._read_int32()
         if size < 0:
             msg = 'invalid message size: ({}) < 0'.format(size)
             raise MetadataParsingError(msg)
         return size
 
-    def read_msg_header(self, size):
+    def _read_msg_header(self, size):
         buffer = self._get(size).copy_to_host()
-        header = self.parse_msg_header(buffer)
+        header = self._parse_msg_header(buffer)
         return header
 
-    def parse_msg_header(self, buffer):
+    def _parse_msg_header(self, buffer):
         self._logger.debug('parsing message header')
         msg = Message.Message.GetRootAsMessage(buffer, 0)
         body_size = msg.BodyLength()
@@ -241,7 +241,7 @@ class GpuArrowReader(Sequence):
         return _MessageInfo(header=msg.Header(), type=header_type,
                             body_length=body_size)
 
-    def parse_schema(self, msg):
+    def _parse_schema(self, msg):
         if msg.type != MessageHeader.MessageHeader.Schema:
             errmsg = 'expecting schema type'
             raise MetadataParsingError(errmsg)
@@ -274,7 +274,7 @@ class GpuArrowReader(Sequence):
         self._logger.debug('end parsing schema')
         return fields
 
-    def parse_record_batch(self, msg):
+    def _parse_record_batch(self, msg):
         if msg.type != MessageHeader.MessageHeader.RecordBatch:
             errmsg = 'expecting record batch type'
             raise MetadataParsingError(errmsg)
