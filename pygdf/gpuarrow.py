@@ -3,7 +3,6 @@ import warnings
 from collections import namedtuple, Sequence, OrderedDict
 
 import numpy as np
-from numba import cuda
 from numba.cuda.cudadrv.devicearray import DeviceNDArray
 
 from org.apache.arrow.flatbuf import (RecordBatch, Message, MessageHeader,

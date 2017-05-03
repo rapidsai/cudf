@@ -11,8 +11,8 @@ def calc_chunk_size(size, chunksize):
     return (size + chunksize - 1) // chunksize
 
 
-
 _TypeMinMax = namedtuple('_TypeMinMax', 'min,max')
+
 
 def get_numeric_type_info(dtype):
     if dtype.kind in 'iu':
