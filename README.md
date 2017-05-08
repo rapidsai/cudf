@@ -16,11 +16,11 @@ Users of the MapD Core database can output the results of a SQL query into the G
 
 ## Initial Committers
 
-Siu Kwan Lam
-Arno Candel
-Minggang Yu
-Stanley Seibert
-Jon Mckinney
-Bill Maimone
-Vinod Iyengar
-Todd Mostak
+- Siu Kwan Lam 
+- Arno Candel
+- Minggang Yu
+- Stanley Seibert
+- Jon Mckinney
+- Bill Maimone
+- Vinod Iyengar
+- Todd Mostak
