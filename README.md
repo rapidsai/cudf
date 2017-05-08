@@ -13,3 +13,14 @@ Our first project: an open source GPU Data Frame with a corresponding Python API
 Users of the MapD Core database can output the results of a SQL query into the GPU Data Frame, which then can be manipulated by the Continuum Analytics’ Anaconda NumPy-like Python API or used as input into the H2O suite of machine learning algorithms without additional data manipulation. In early internal tests, this approach exhibited order-of-magnitude improvements in processing times compared to passing the data between applications on a CPU. 
 
 ![Architecture](img/mapd-conda-h2o.png)
+
+## Initial Committers
+
+Siu Kwan Lam
+Arno Candel
+Minggang Yu 
+Stanley Seibert
+Jon Mckinney
+Bill Maimone
+Vinod Iyengar
+Todd Mostak
