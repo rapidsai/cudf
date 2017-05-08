@@ -18,7 +18,7 @@ Users of the MapD Core database can output the results of a SQL query into the G
 
 Siu Kwan Lam
 Arno Candel
-Minggang Yu 
+Minggang Yu
 Stanley Seibert
 Jon Mckinney
 Bill Maimone
