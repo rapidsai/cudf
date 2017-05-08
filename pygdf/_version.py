@@ -41,8 +41,8 @@ def get_config():
     cfg = VersioneerConfig()
     cfg.VCS = "git"
     cfg.style = "pep440"
-    cfg.tag_prefix = "'v'"
-    cfg.parentdir_prefix = "'pygdf-'"
+    cfg.tag_prefix = "v"
+    cfg.parentdir_prefix = "pygdf-"
     cfg.versionfile_source = "pygdf/_version.py"
     cfg.verbose = False
     return cfg
