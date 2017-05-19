@@ -1,0 +1,7 @@
+python:
+   version: 3.5
+
+conda:
+    file: conda_environments/builddocs_py35.yml
+
+
