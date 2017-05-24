@@ -7,6 +7,7 @@ typedef enum {
     GDF_INT8,
     GDF_INT16,
     GDF_INT32,
+    GDF_INT64,
     GDF_FLOAT32,
     GDF_FLOAT64,
 } gdf_dtype;
