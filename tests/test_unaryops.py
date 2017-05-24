@@ -2,9 +2,7 @@
 import numpy as np
 from numba import cuda
 
-from libgdf_cffi import ffi
-
-libgdf = ffi.dlopen('libgdf.so')
+from libgdf_cffi import ffi, libgdf
 
 
 def new_column():

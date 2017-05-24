@@ -1,6 +1,7 @@
 #ifndef GDF_GDF_H
 #define GDF_GDF_H
 
+#include <cstdlib>
 
 #include "cffi/types.h"
 

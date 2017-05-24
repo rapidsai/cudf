@@ -1,7 +1,7 @@
 all: libgdf.so
 
-libgdf.so: src/gdf.cu
-	nvcc -Iinclude -shared -o $@ $<
+libgdf.so: src/column.cpp src/unaryops.cu
+	nvcc -Iinclude -shared -o $@ $+
 
 clean:
 	rm -f libgdf.so

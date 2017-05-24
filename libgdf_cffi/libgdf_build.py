@@ -1,7 +1,7 @@
 import cffi
 
 ffibuilder = cffi.FFI()
-ffibuilder.set_source("libgdf_cffi", None)
+ffibuilder.set_source("libgdf_cffi.libgdf_cffi", None)
 
 for fname in ['types.h', 'functions.h']:
     with open('include/gdf/cffi/{}'.format(fname), 'r') as fin:

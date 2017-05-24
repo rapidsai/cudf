@@ -9,15 +9,6 @@ bool gdf_is_valid(const gdf_valid_type *valid, gdf_index_type pos) {
     return (valid[pos / GDF_VALID_BITSIZE] >> (pos % GDF_VALID_BITSIZE)) & 1;
 }
 
-
-template<typename T>
-struct DeviceSin {
-    __device__
-    T apply(T data) {
-        return sin(data);
-    }
-};
-
 template<typename T, typename F>
 __global__
 void gpu_unary_op(const T *data, const gdf_valid_type *valid,
@@ -70,19 +61,13 @@ struct UnaryOp {
 };
 
 
-gdf_size_type gdf_column_sizeof() {
-    return sizeof(gdf_column);
-}
-
-int gdf_column_view(gdf_column *column, void *data, gdf_valid_type *valid,
-                    gdf_size_type size, gdf_dtype dtype) {
-    column->data = data;
-    column->valid = valid;
-    column->size = size;
-    column->dtype = dtype;
-    return 0;
-}
-
+template<typename T>
+struct DeviceSin {
+    __device__
+    T apply(T data) {
+        return sin(data);
+    }
+};
 
 int gdf_sin_generic(gdf_column *input, gdf_column *output) {
     switch ( input->dtype ) {
