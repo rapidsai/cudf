@@ -1,13 +1,8 @@
 #include <math.h>
 
 #include <gdf/gdf.h>
+#include <gdf/utils.h>
 #include <gdf/errorutils.h>
-
-
-__device__
-bool gdf_is_valid(const gdf_valid_type *valid, gdf_index_type pos) {
-    return (valid[pos / GDF_VALID_BITSIZE] >> (pos % GDF_VALID_BITSIZE)) & 1;
-}
 
 template<typename T, typename F>
 __global__
