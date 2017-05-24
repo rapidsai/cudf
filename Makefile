@@ -1,6 +1,6 @@
 all: libgdf.so
 
-libgdf.so: src/column.cpp src/unaryops.cu src/binaryops.cu
+libgdf.so: src/column.cpp src/unaryops.cu src/binaryops.cu src/errorhandling.cpp
 	nvcc -Iinclude -shared -o $@ $+
 
 test:

@@ -30,7 +30,12 @@ void gpu_unary_op(const T *data, const gdf_valid_type *valid,
 template<typename T, typename F>
 struct UnaryOp {
     static
-    int launch(gdf_column *input, gdf_column *output) {
+    gdf_error launch(gdf_column *input, gdf_column *output) {
+        /* check for size of the columns */
+        if (input->size != output->size) {
+            return GDF_COLUMN_SIZE_MISMATCH;
+        }
+
         // find optimal blocksize
         int mingridsize, blocksize;
         CUDA_TRY(
@@ -51,7 +56,7 @@ struct UnaryOp {
         );
 
         CUDA_CHECK_LAST();
-        return 0;
+        return GDF_SUCCESS;
     }
 };
 
@@ -64,16 +69,16 @@ struct DeviceSin {
     }
 };
 
-int gdf_sin_generic(gdf_column *input, gdf_column *output) {
+gdf_error gdf_sin_generic(gdf_column *input, gdf_column *output) {
     switch ( input->dtype ) {
     case GDF_FLOAT32:
         return gdf_sin_f32(input, output);
     default:
-        return 1;
+        return GDF_UNSUPPORTED_DTYPE;
     }
 }
 
 
-int gdf_sin_f32(gdf_column *input, gdf_column *output) {
+gdf_error gdf_sin_f32(gdf_column *input, gdf_column *output) {
     return UnaryOp<float, DeviceSin<float> >::launch(input, output);
 }

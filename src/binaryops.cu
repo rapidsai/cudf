@@ -30,7 +30,11 @@ void gpu_binary_op(const T *lhs_data, const gdf_valid_type *lhs_valid,
 template<typename T, typename F>
 struct BinaryOp {
     static
-    int launch(gdf_column *lhs, gdf_column *rhs, gdf_column *output) {
+    gdf_error launch(gdf_column *lhs, gdf_column *rhs, gdf_column *output) {
+        if (lhs->size != rhs->size || lhs->size != output->size) {
+            return GDF_COLUMN_SIZE_MISMATCH;
+        }
+
         // find optimal blocksize
         int mingridsize, blocksize;
         CUDA_TRY(
@@ -53,7 +57,7 @@ struct BinaryOp {
         );
 
         CUDA_CHECK_LAST();
-        return 0;
+        return GDF_SUCCESS;
     }
 };
 
@@ -66,6 +70,6 @@ struct DeviceAdd {
     }
 };
 
-int gdf_add_f32(gdf_column *lhs, gdf_column *rhs, gdf_column *output) {
+gdf_error gdf_add_f32(gdf_column *lhs, gdf_column *rhs, gdf_column *output) {
     return BinaryOp<float, DeviceAdd<float> >::launch(lhs, rhs, output);
 }

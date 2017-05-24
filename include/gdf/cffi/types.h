@@ -11,8 +11,15 @@ typedef enum {
     GDF_FLOAT64,
 } gdf_dtype;
 
+typedef enum {
+    GDF_SUCCESS=0,
+    GDF_CUDA_ERROR,
+    GDF_UNSUPPORTED_DTYPE,
+    GDF_COLUMN_SIZE_MISMATCH,
+} gdf_error;
+
 typedef struct gdf_column_{
-    void  *data;
+    void *data;
     gdf_valid_type *valid;
     gdf_size_type size;
     gdf_dtype dtype;
