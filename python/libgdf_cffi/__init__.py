@@ -8,7 +8,7 @@ try:
 except ImportError:
     pass
 else:
-    libgdf_api = ffi.dlopen('libgdf.so')
+    libgdf_api = ffi.dlopen('libgdf.dylib')
     libgdf = _libgdf_wrapper(ffi, libgdf_api)
 
     del _libgdf_wrapper
