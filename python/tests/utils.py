@@ -16,4 +16,6 @@ def get_dtype(dtype):
     return {
         np.float32: libgdf.GDF_FLOAT32,
         np.float64: libgdf.GDF_FLOAT64,
+        np.int32:   libgdf.GDF_INT32,
+        np.int64:   libgdf.GDF_INT64,
     }[np.dtype(dtype).type]
