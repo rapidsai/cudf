@@ -1,8 +1,10 @@
 name: libgdf_dev
 channels:
 - numba
+- conda-forge
 - defaults
 dependencies:
+- flatbuffers=1.6.0=1
 - cffi=1.10.0=py35_0
 - mkl=2017.0.1=0
 - numpy=1.12.1=py35_0
