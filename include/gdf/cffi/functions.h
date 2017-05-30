@@ -54,7 +54,7 @@ gdf_error gdf_sqrt_f32(gdf_column *input, gdf_column *output);
 gdf_error gdf_sqrt_f64(gdf_column *input, gdf_column *output);
 
 
-/* misc */
+/* rounding */
 
 gdf_error gdf_ceil_generic(gdf_column *input, gdf_column *output);
 gdf_error gdf_ceil_f32(gdf_column *input, gdf_column *output);
@@ -64,7 +64,42 @@ gdf_error gdf_floor_generic(gdf_column *input, gdf_column *output);
 gdf_error gdf_floor_f32(gdf_column *input, gdf_column *output);
 gdf_error gdf_floor_f64(gdf_column *input, gdf_column *output);
 
+/* casting */
 
+gdf_error gdf_cast_generic_to_f32(gdf_column *input, gdf_column *output);
+gdf_error gdf_cast_i8_to_f32(gdf_column *input, gdf_column *output);
+gdf_error gdf_cast_i32_to_f32(gdf_column *input, gdf_column *output);
+gdf_error gdf_cast_i64_to_f32(gdf_column *input, gdf_column *output);
+gdf_error gdf_cast_f32_to_f32(gdf_column *input, gdf_column *output);
+gdf_error gdf_cast_f64_to_f32(gdf_column *input, gdf_column *output);
+
+gdf_error gdf_cast_generic_to_f64(gdf_column *input, gdf_column *output);
+gdf_error gdf_cast_i8_to_f64(gdf_column *input, gdf_column *output);
+gdf_error gdf_cast_i32_to_f64(gdf_column *input, gdf_column *output);
+gdf_error gdf_cast_i64_to_f64(gdf_column *input, gdf_column *output);
+gdf_error gdf_cast_f32_to_f64(gdf_column *input, gdf_column *output);
+gdf_error gdf_cast_f64_to_f64(gdf_column *input, gdf_column *output);
+
+gdf_error gdf_cast_generic_to_i8(gdf_column *input, gdf_column *output);
+gdf_error gdf_cast_i8_to_i8(gdf_column *input, gdf_column *output);
+gdf_error gdf_cast_i32_to_i8(gdf_column *input, gdf_column *output);
+gdf_error gdf_cast_i64_to_i8(gdf_column *input, gdf_column *output);
+gdf_error gdf_cast_f32_to_i8(gdf_column *input, gdf_column *output);
+gdf_error gdf_cast_f64_to_i8(gdf_column *input, gdf_column *output);
+
+gdf_error gdf_cast_generic_to_i32(gdf_column *input, gdf_column *output);
+gdf_error gdf_cast_i8_to_i32(gdf_column *input, gdf_column *output);
+gdf_error gdf_cast_i32_to_i32(gdf_column *input, gdf_column *output);
+gdf_error gdf_cast_i64_to_i32(gdf_column *input, gdf_column *output);
+gdf_error gdf_cast_f32_to_i32(gdf_column *input, gdf_column *output);
+gdf_error gdf_cast_f64_to_i32(gdf_column *input, gdf_column *output);
+
+gdf_error gdf_cast_generic_to_i64(gdf_column *input, gdf_column *output);
+gdf_error gdf_cast_i8_to_i64(gdf_column *input, gdf_column *output);
+gdf_error gdf_cast_i32_to_i64(gdf_column *input, gdf_column *output);
+gdf_error gdf_cast_i64_to_i64(gdf_column *input, gdf_column *output);
+gdf_error gdf_cast_f32_to_i64(gdf_column *input, gdf_column *output);
+gdf_error gdf_cast_f64_to_i64(gdf_column *input, gdf_column *output);
 
 /* binary operators */
 

@@ -6,26 +6,15 @@ from numba import cuda
 
 from libgdf_cffi import ffi, libgdf
 
-from .utils import new_column, unwrap_devary, get_dtype
+from .utils import new_column, unwrap_devary, get_dtype, gen_rand, fix_zeros
 
-def _gen_rand(dtype, size):
-    dtype = np.dtype(dtype)
-    if dtype.kind == 'f':
-        return np.random.random(size).astype(dtype)
-    elif dtype.kind == 'i':
-        return np.random.random_integers(low=-10000, high=10000, size=size).astype(dtype)
-    raise NotImplementedError('dtype.kind={}'.format(dtype.kind))
-
-
-def _fix_zeros(arr):
-    arr[arr == 0] = 1
 
 def arith_op_test(dtype, ulp, expect_fn, test_fn, nelem=128,
                   non_zero_rhs=False):
-    h_lhs = _gen_rand(dtype, nelem)
-    h_rhs = _gen_rand(dtype, nelem)
+    h_lhs = gen_rand(dtype, nelem)
+    h_rhs = gen_rand(dtype, nelem)
     if non_zero_rhs:
-        _fix_zeros(h_rhs)
+        fix_zeros(h_rhs)
     d_lhs = cuda.to_device(h_lhs)
     d_rhs = cuda.to_device(h_rhs)
     d_result = cuda.device_array_like(d_lhs)
@@ -53,8 +42,8 @@ def arith_op_test(dtype, ulp, expect_fn, test_fn, nelem=128,
 
 
 def logical_op_test(dtype, expect_fn, test_fn, nelem=128):
-    h_lhs = _gen_rand(dtype, nelem)
-    h_rhs = _gen_rand(dtype, nelem)
+    h_lhs = gen_rand(dtype, nelem)
+    h_rhs = gen_rand(dtype, nelem)
     d_lhs = cuda.to_device(h_lhs)
     d_rhs = cuda.to_device(h_rhs)
     d_result = cuda.device_array(d_lhs.size, dtype=np.bool)
