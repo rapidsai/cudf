@@ -3,6 +3,7 @@
 #include <gdf/ipc/Message_generated.h>
 
 #include <iostream>
+#include <sstream>
 #include <stdexcept>
 #include <memory>
 #include <vector>
@@ -38,7 +39,11 @@ public:
 
     struct BufferDesc {
         int64_t offset, length;
+    };
 
+    struct DTypeDesc {
+        std::string name;
+        int bitwidth;
     };
 
     struct NodeDesc {
@@ -46,12 +51,111 @@ public:
         int64_t length;
         int64_t null_count;
         BufferDesc null_buffer, data_buffer;
-        std::string type;
+        DTypeDesc dtype;
     };
 
     IpcParser(const char *buf)
-    :_d_buffer(buf), _d_curptr(buf)
+    :_d_buffer(buf), _d_curptr(buf), _d_data_body(nullptr), _failed(false)
     { /* empty */ }
+
+    void open() {
+        try {
+            read();
+        } catch ( ParseError e ) {
+            std::ostringstream oss;
+            oss << "ParseError: " << e.what();
+            _error_message = oss.str();
+            _failed = true;
+        }
+    }
+
+    bool is_failed() const {
+        return _failed;
+    }
+
+    const std::string& get_error() const {
+        return _error_message;
+    }
+
+    /*
+     * Returns the GPU pointer to the start of the data region.
+     */
+    const void* get_data() const {
+        return static_cast<const void*>(_d_data_body);
+    }
+
+    int64_t get_data_offset() const {
+        return _d_data_body - _d_buffer;
+    }
+
+    /*
+     * Returns the schema in json.
+     * The json contains a list metadata for each column.
+     */
+    const std::string& to_json() {
+        std::ostringstream oss;
+        oss << "[";
+        int ct = 0;
+        for (auto i=_nodes.begin(); i!=_nodes.end(); ++i, ++ct) {
+            if ( ct > 0 ) {
+                oss << ", ";
+            }
+            jsonify_node(oss, *i);
+        }
+        oss << "]";
+        _json_output = oss.str();
+        return _json_output;
+    }
+
+protected:
+
+    void jsonify_node(std::ostream &os, const NodeDesc &node) {
+        os << "{";
+
+        os << "\"name\": " << '"' << node.name << '"';
+        os << ", ";
+
+        os << "\"length\": " << node.length;
+        os << ", ";
+
+        os << "\"null_count\": " << node.null_count;
+        os << ", ";
+
+        os << "\"dtype\": ";
+        jsonify_dtype(os, node.dtype);
+        os << ", ";
+
+        os << "\"data_buffer\": ";
+        jsonify_buffer(os, node.data_buffer);
+        os << ", ";
+
+        os << "\"null_buffer\": ";
+        jsonify_buffer(os, node.null_buffer);
+
+        os << "}";
+    }
+
+    void jsonify_dtype(std::ostream &os, const DTypeDesc &dtype) {
+        os << "{";
+
+        os << "\"name\": " << '"' << dtype.name << '"';
+        os << ", ";
+
+        os << "\"bitwidth\": " << dtype.bitwidth;
+
+        os << "}";
+    }
+
+    void jsonify_buffer(std::ostream &os, const BufferDesc &buffer) {
+        os << "{";
+
+        os << "\"length\": " << buffer.length;
+        os << ", ";
+
+        os << "\"offset\": " << buffer.offset;
+
+        os << "}";
+    }
 
     void read() {
         if (_fields.size() || _nodes.size()) {
@@ -157,6 +261,8 @@ public:
 
                 if ( layout.vectortype == "DATA" ) {
                     out_node.data_buffer = bufdesc;
+                    out_node.dtype.name = fd.type;
+                    out_node.dtype.bitwidth = layout.bitwidth;
                 } else if ( layout.vectortype == "VALIDITY" ) {
                     out_node.null_buffer = bufdesc;
                 } else {
@@ -167,12 +273,10 @@ public:
             out_node.name = fd.name;
             out_node.length = node->length();
             out_node.null_count = node->null_count();
-            out_node.type = fd.type;
+
         }
     }
 
-
-protected:
     unique_bytes_type read_bytes(size_t size) {
         if (size <= 0) {
             throw ParseError("attempt to read zero or negative bytes");
@@ -202,23 +306,52 @@ protected:
         return size;
     }
 
-
-
 private:
     const char * const _d_buffer;
     const char *_d_curptr;
     const char *_d_data_body;
     std::vector<FieldDesc> _fields;
     std::vector<NodeDesc> _nodes;
-
+    bool _failed;
+    std::string _error_message;
+    // cache
+    std::string _json_output;
 };
 
+ipc_parser_type* cffi_wrap(IpcParser* obj){
+    return reinterpret_cast<ipc_parser_type*>(obj);
+}
 
-void gdf_ipc_parse(const char *device_bytes) {
-    try {
-        IpcParser parser(device_bytes);
-        parser.read();
-    } catch (IpcParser::ParseError e) {
-        std::cerr << "IPC parser error:" << e.what() << std::endl;
-    }
+IpcParser* cffi_unwrap(ipc_parser_type* hdl){
+    return reinterpret_cast<IpcParser*>(hdl);
+}
+
+ipc_parser_type* gdf_ipc_parser_open(const char *device_bytes) {
+    IpcParser *parser = new IpcParser(device_bytes);
+    parser->open();
+    return cffi_wrap(parser);
+}
+
+void gdf_ipc_parser_close(ipc_parser_type *handle) {
+    delete cffi_unwrap(handle);
+}
+
+int gdf_ipc_parser_failed(ipc_parser_type *handle) {
+    return cffi_unwrap(handle)->is_failed();
+}
+
+const char* gdf_ipc_parser_to_json(ipc_parser_type *handle) {
+    return cffi_unwrap(handle)->to_json().c_str();
+}
+
+const char* gdf_ipc_parser_get_error(ipc_parser_type *handle) {
+    return cffi_unwrap(handle)->get_error().c_str();
+}
+
+const void* gdf_ipc_parser_get_data(ipc_parser_type *handle) {
+    return cffi_unwrap(handle)->get_data();
+}
+
+int64_t gdf_ipc_parser_get_data_offset(ipc_parser_type *handle) {
+    return cffi_unwrap(handle)->get_data_offset();
 }

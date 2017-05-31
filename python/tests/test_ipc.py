@@ -1,11 +1,11 @@
-# import pytest
+import json
+from pprint import pprint
 
 import numpy as np
 from numba import cuda
+from numba.cuda.cudadrv.devicearray import DeviceNDArray
 
-from libgdf_cffi import ffi, libgdf, GDFError
-
-# from .utils import new_column, unwrap_devary, get_dtype, gen_rand
+from libgdf_cffi import ffi, libgdf
 
 
 def test_ipc():
@@ -16,8 +16,62 @@ def test_ipc():
     gpu_data = cuda.to_device(cpu_data)
     del cpu_data
 
+    # Use GDF IPC parser
     devptr = ffi.cast("void*", gpu_data.device_ctypes_pointer.value)
-    libgdf.gdf_ipc_parse(devptr)
+    ipcparser = libgdf.gdf_ipc_parser_open(devptr)
+    assert not libgdf.gdf_ipc_parser_failed(ipcparser)
+    assert not ffi.string(libgdf.gdf_ipc_parser_get_error(ipcparser))
+
+    # get schema as json
+    jsonraw = libgdf.gdf_ipc_parser_to_json(ipcparser)
+    jsontext = ffi.string(jsonraw).decode()
+    jsonparsed = json.loads(jsontext)
+    pprint(jsonparsed)
+
+    dataptr = libgdf.gdf_ipc_parser_get_data_offset(ipcparser)
+    dataptr = int(ffi.cast('uint64_t', dataptr))
+    data_region = gpu_data[dataptr:]
+    print(data_region.shape)
+
+    def get_column(schema):
+        offset = schema['data_buffer']['offset']
+        raw_size = schema['data_buffer']['length']
+        size = schema['length']
+        assert schema['dtype']['bitwidth'] == 32
+        assert schema['dtype']['name'] == 'FloatingPoint'
+        raw_data_col1 = data_region[offset:offset + raw_size]
+        assert raw_data_col1.size == raw_size
+
+        dtype = np.dtype(np.float32)
+        itemsize = dtype.itemsize
+        ary = DeviceNDArray(shape=(raw_size // itemsize,),
+                            strides=(itemsize,),
+                            dtype=dtype,
+                            gpu_data=raw_data_col1.gpu_data)
+        hary = ary[:size].copy_to_host()
+        return hary
+
+    # Get first column
+    schema_col1 = jsonparsed[0]
+    name_col1 = schema_col1['name']
+    assert name_col1 == 'dest_lat'
+
+    dest_lat = get_column(schema_col1)
+
+    # Get second column
+    schema_col2 = jsonparsed[1]
+    name_col2 = schema_col2['name']
+    assert name_col2 == 'dest_lon'
+
+    dest_lon = get_column(schema_col2)
+
+    libgdf.gdf_ipc_parser_close(ipcparser)
+
+    # Check data integrity
+    np.testing.assert_array_less(dest_lat, 42)
+    np.testing.assert_array_less(27, dest_lat)
+    np.testing.assert_array_less(dest_lon, -76)
+    np.testing.assert_array_less(-105, dest_lon)
 
 
 if __name__ == '__main__':

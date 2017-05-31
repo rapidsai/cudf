@@ -25,3 +25,6 @@ typedef struct gdf_column_{
     gdf_size_type size;
     gdf_dtype dtype;
 } gdf_column;
+
+struct _OpaqueIpcParser;
+typedef struct _OpaqueIpcParser ipc_parser_type;
