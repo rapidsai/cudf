@@ -6,6 +6,8 @@ import numpy as np
 
 from numba import cuda
 
+from libgdf_cffi import libgdf, ffi
+
 from . import cudautils, utils
 
 
@@ -499,6 +501,11 @@ class Series(object):
                 raise ValueError('null_count must be provided')
             null_count = 0
         self._null_count = null_count
+        # make cffi view for libgdf
+        libgdf.gdf_column_view
+        self._cffi_view = _libgdf_column(size=self._size,
+                                         data=self._data,
+                                         mask=self._mask)
 
     def __len__(self):
         """Returns the size of the ``Series`` including null values.
@@ -531,6 +538,33 @@ class Series(object):
             return self._data[arg] if valid else None
         else:
             raise NotImplementedError(type(arg))
+
+    def __bool__(self):
+        raise TypeError("can't compute boolean for {!r}".format(type(self)))
+
+    def _compare(self, other, fn):
+        if isinstance(other, Series):
+            return _libgdf_binaryop(fn, self, other)
+        else:
+            return NotImplemented
+
+    def __eq__(self, other):
+        return self._compare(other, fn=libgdf.gdf_eq_generic)
+
+    def __ne__(self, other):
+        return self._compare(other, fn=libgdf.gdf_ne_generic)
+
+    def __lt__(self, other):
+        return self._compare(other, fn=libgdf.gdf_lt_generic)
+
+    def __le__(self, other):
+        return self._compare(other, fn=libgdf.gdf_le_generic)
+
+    def __gt__(self, other):
+        return self._compare(other, fn=libgdf.gdf_gt_generic)
+
+    def __ge__(self, other):
+        return self._compare(other, fn=libgdf.gdf_ge_generic)
 
     @property
     def dtype(self):
@@ -754,3 +788,38 @@ def _make_mask_from_stride(size, stride):
     cudautils.set_mask_from_stride(mask=mask, stride=stride)
     return mask
 
+
+def _np_to_gdf_dtype(dtype):
+    return {
+        np.float64: libgdf.GDF_FLOAT64,
+        np.float32: libgdf.GDF_FLOAT32,
+        np.int64:   libgdf.GDF_INT64,
+        np.int32:   libgdf.GDF_INT32,
+        np.int8:    libgdf.GDF_INT8,
+        np.bool_:    libgdf.GDF_INT8,
+    }[np.dtype(dtype).type]
+
+
+def _libgdf_column(size, data, mask=None, dtype=None):
+    def unwrap(buffer):
+        if buffer is None:
+            return ffi.NULL
+        devary = buffer.to_gpu_array()
+        return ffi.cast('void*', devary.device_ctypes_pointer.value)
+
+    dtype = dtype or data.dtype
+    colview = ffi.new('gdf_column*')
+    libgdf.gdf_column_view(colview, unwrap(data), unwrap(mask), size,
+                           _np_to_gdf_dtype(dtype))
+
+    return colview
+
+
+def _libgdf_binaryop(binop, lhs, rhs):
+    out = Series.from_array(cuda.device_array(shape=len(lhs),
+                                              dtype=np.bool_))
+    lhs = lhs._cffi_view
+    rhs = rhs._cffi_view
+    res = out._cffi_view
+    binop(lhs, rhs, res)
+    return out
