@@ -1,0 +1,32 @@
+package:
+  name: libgdf_cffi
+  version: "0.1.0a1"
+
+source:
+  git_url: ../..
+
+build:
+  number: 0
+
+requirements:
+  # use channel:
+  #   - defaults
+  build:
+    - cmake
+    - python x.x
+    - cffi
+    - setuptools
+  run:
+    - libgdf
+    - python x.x
+    - cffi
+
+test:
+  commands:
+    - python -c "import libgdf_cffi"
+
+about:
+  home: http://gpuopenanalytics.com/
+  license: Apache
+  # license_file: LICENSE
+  summary: GPU Dataframe core library

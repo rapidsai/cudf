@@ -1,0 +1,28 @@
+package:
+  name: libgdf
+  version: "0.1.0a1"
+
+source:
+  git_url: ../..
+
+build:
+  number: 0
+
+requirements:
+  # use channel:
+  #   - defaults
+  #   - conda-forge
+  build:
+    - cmake
+    - flatbuffers
+
+test:
+  commands:
+    - test -f $PREFIX/include/gdf/gdf.h    # [unix or osx]
+    - test -f $PREFIX/lib/libgdf.dylib     # [osx]
+
+about:
+  home: http://gpuopenanalytics.com/
+  license: Apache
+  # license_file: LICENSE
+  summary: GPU Dataframe core library
