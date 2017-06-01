@@ -6,9 +6,9 @@ import numpy as np
 
 from numba import cuda
 
-from libgdf_cffi import libgdf, ffi
+from libgdf_cffi import libgdf
+from . import cudautils, utils, _gdf
 
-from . import cudautils, utils
 
 
 class DataFrame(object):
@@ -503,9 +503,8 @@ class Series(object):
         self._null_count = null_count
         # make cffi view for libgdf
         libgdf.gdf_column_view
-        self._cffi_view = _libgdf_column(size=self._size,
-                                         data=self._data,
-                                         mask=self._mask)
+        self._cffi_view = _gdf.columnview(size=self._size, data=self._data,
+                                          mask=self._mask)
 
     def __len__(self):
         """Returns the size of the ``Series`` including null values.
@@ -540,11 +539,59 @@ class Series(object):
             raise NotImplementedError(type(arg))
 
     def __bool__(self):
+        """Always raise TypeError when converting a Series
+        into a boolean.
+        """
         raise TypeError("can't compute boolean for {!r}".format(type(self)))
 
-    def _compare(self, other, fn):
+    def _call_binop(self, other, fn, out_dtype):
+        """
+        Internal util to call a binary operator *fn* on operands *self*
+        and *other* with output dtype *out_dtype*.  Returns the output
+        Series.
+        """
+        # Allocate output series
+        out = Series.from_array(cuda.device_array(shape=len(self),
+                                                  dtype=out_dtype))
+        _gdf.apply_binaryop(fn, self, other, out)
+        return out
+
+    def _binaryop(self, other, fn):
+        """
+        Internal util to call a binary operator *fn* on operands *self*
+        and *other*.  Return the output Series.  The output dtype is
+        determined by the input operands.
+        """
         if isinstance(other, Series):
-            return _libgdf_binaryop(fn, self, other)
+            return self._call_binop(other, fn, self.dtype)
+        else:
+            return NotImplemented
+
+    def __add__(self, other):
+        return self._binaryop(other, fn=libgdf.gdf_add_generic)
+
+    def __sub__(self, other):
+        return self._binaryop(other, fn=libgdf.gdf_sub_generic)
+
+    def __mul__(self, other):
+        return self._binaryop(other, fn=libgdf.gdf_mul_generic)
+
+    def __floordiv__(self, other):
+        return self._binaryop(other, fn=libgdf.gdf_floordiv_generic)
+
+    def __truediv__(self, other):
+        return self._binaryop(other, fn=libgdf.gdf_div_generic)
+
+    __div__ = __truediv__
+
+    def _compare(self, other, fn):
+        """
+        Internal util to call a comparison operator *fn*
+        comparing *self* and *other*.  Return the output Series.
+        The output dtype is always `np.bool_`.
+        """
+        if isinstance(other, Series):
+            return self._call_binop(other, fn, np.bool_)
         else:
             return NotImplemented
 
@@ -788,38 +835,3 @@ def _make_mask_from_stride(size, stride):
     cudautils.set_mask_from_stride(mask=mask, stride=stride)
     return mask
 
-
-def _np_to_gdf_dtype(dtype):
-    return {
-        np.float64: libgdf.GDF_FLOAT64,
-        np.float32: libgdf.GDF_FLOAT32,
-        np.int64:   libgdf.GDF_INT64,
-        np.int32:   libgdf.GDF_INT32,
-        np.int8:    libgdf.GDF_INT8,
-        np.bool_:    libgdf.GDF_INT8,
-    }[np.dtype(dtype).type]
-
-
-def _libgdf_column(size, data, mask=None, dtype=None):
-    def unwrap(buffer):
-        if buffer is None:
-            return ffi.NULL
-        devary = buffer.to_gpu_array()
-        return ffi.cast('void*', devary.device_ctypes_pointer.value)
-
-    dtype = dtype or data.dtype
-    colview = ffi.new('gdf_column*')
-    libgdf.gdf_column_view(colview, unwrap(data), unwrap(mask), size,
-                           _np_to_gdf_dtype(dtype))
-
-    return colview
-
-
-def _libgdf_binaryop(binop, lhs, rhs):
-    out = Series.from_array(cuda.device_array(shape=len(lhs),
-                                              dtype=np.bool_))
-    lhs = lhs._cffi_view
-    rhs = rhs._cffi_view
-    res = out._cffi_view
-    binop(lhs, rhs, res)
-    return out
