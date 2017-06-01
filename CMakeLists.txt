@@ -9,13 +9,19 @@ PROJECT(libgdf)
 cmake_minimum_required(VERSION 2.8)  # not sure about version required
 
 find_package(CUDA)
-include_directories(include)
+set (CMAKE_CXX_STANDARD 11)
+
+include_directories(include
+                    $ENV{CONDA_PREFIX}/include)
+
+set(CUDA_NVCC_FLAGS  ${CUDA_NVCC_FLAGS};-std=c++11)
 
 cuda_add_library(gdf SHARED
     src/binaryops.cu
     src/column.cpp
     src/errorhandling.cpp
     src/unaryops.cu
+    src/ipc.cu
 )
 
 # Command to symlink files into the build directory
