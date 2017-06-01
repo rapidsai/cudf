@@ -114,7 +114,7 @@ gdf_error gdf_cast_f64_to_i64(gdf_column *input, gdf_column *output);
 
 /* binary operators */
 
-/* artih */
+/* arith */
 
 gdf_error gdf_add_generic(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
 gdf_error gdf_add_i32(gdf_column *lhs, gdf_column *rhs, gdf_column *output);

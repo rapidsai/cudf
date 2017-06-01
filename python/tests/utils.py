@@ -22,6 +22,11 @@ def get_dtype(dtype):
     }[np.dtype(dtype).type]
 
 
+def seed_rand():
+    # A constant seed for deterministic testing
+    np.random.seed(0xabcdef)
+
+
 def gen_rand(dtype, size):
     dtype = np.dtype(dtype)
     if dtype.kind == 'f':
