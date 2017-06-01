@@ -1,0 +1,30 @@
+# Usage:
+#   conda build -c defaults -c conda-forge .
+package:
+  name: libgdf
+  version: {{ environ.get('GIT_DESCRIBE_TAG', '0.0.0.dev').lstrip('v') }}
+
+source:
+  git_url: ../..
+
+build:
+  number: {{ environ.get('GIT_DESCRIBE_NUMBER', 0) }}
+
+requirements:
+  # use channel:
+  #   - defaults
+  #   - conda-forge
+  build:
+    - cmake
+    - flatbuffers
+
+test:
+  commands:
+    - test -f $PREFIX/include/gdf/gdf.h    # [unix or osx]
+    - test -f $PREFIX/lib/libgdf.dylib     # [osx]
+
+about:
+  home: http://gpuopenanalytics.com/
+  license: Apache
+  # license_file: LICENSE
+  summary: GPU Dataframe core library

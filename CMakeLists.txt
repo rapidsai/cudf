@@ -53,3 +53,10 @@ add_custom_target(pytest DEPENDS copy_python)
 add_custom_command(
     TARGET pytest POST_BUILD
     COMMAND py.test -v)
+
+# The install target
+
+install(TARGETS gdf
+        LIBRARY DESTINATION lib)
+
+install(DIRECTORY include/gdf DESTINATION include)
