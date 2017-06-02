@@ -6,7 +6,9 @@ import numpy as np
 
 from numba import cuda
 
-from . import cudautils, utils
+from libgdf_cffi import libgdf
+from . import cudautils, utils, _gdf
+
 
 
 class DataFrame(object):
@@ -499,6 +501,10 @@ class Series(object):
                 raise ValueError('null_count must be provided')
             null_count = 0
         self._null_count = null_count
+        # make cffi view for libgdf
+        libgdf.gdf_column_view
+        self._cffi_view = _gdf.columnview(size=self._size, data=self._data,
+                                          mask=self._mask)
 
     def __len__(self):
         """Returns the size of the ``Series`` including null values.
@@ -531,6 +537,100 @@ class Series(object):
             return self._data[arg] if valid else None
         else:
             raise NotImplementedError(type(arg))
+
+    def __bool__(self):
+        """Always raise TypeError when converting a Series
+        into a boolean.
+        """
+        raise TypeError("can't compute boolean for {!r}".format(type(self)))
+
+    def _call_binop(self, other, fn, out_dtype):
+        """
+        Internal util to call a binary operator *fn* on operands *self*
+        and *other* with output dtype *out_dtype*.  Returns the output
+        Series.
+        """
+        # Allocate output series
+        out = Series.from_array(cuda.device_array(shape=len(self),
+                                                  dtype=out_dtype))
+        _gdf.apply_binaryop(fn, self, other, out)
+        return out
+
+    def _binaryop(self, other, fn):
+        """
+        Internal util to call a binary operator *fn* on operands *self*
+        and *other*.  Return the output Series.  The output dtype is
+        determined by the input operands.
+        """
+        if isinstance(other, Series):
+            return self._call_binop(other, fn, self.dtype)
+        else:
+            return NotImplemented
+
+    def _call_unaop(self, fn, out_dtype):
+        """
+        Internal util to call a unary operator *fn* on operands *self* with
+        output dtype *out_dtype*.  Returns the output Series.
+        """
+        # Allocate output series
+        out = Series.from_array(cuda.device_array(shape=len(self),
+                                                  dtype=out_dtype))
+        _gdf.apply_unaryop(fn, self, out)
+        return out
+
+    def _unaryop(self, fn):
+        """
+        Internal util to call a unary operator *fn* on operands *self*.
+        Return the output Series.  The output dtype is determined by the input
+        operand.
+        """
+        return self._call_unaop(fn, self.dtype)
+
+    def __add__(self, other):
+        return self._binaryop(other, fn=libgdf.gdf_add_generic)
+
+    def __sub__(self, other):
+        return self._binaryop(other, fn=libgdf.gdf_sub_generic)
+
+    def __mul__(self, other):
+        return self._binaryop(other, fn=libgdf.gdf_mul_generic)
+
+    def __floordiv__(self, other):
+        return self._binaryop(other, fn=libgdf.gdf_floordiv_generic)
+
+    def __truediv__(self, other):
+        return self._binaryop(other, fn=libgdf.gdf_div_generic)
+
+    __div__ = __truediv__
+
+    def _compare(self, other, fn):
+        """
+        Internal util to call a comparison operator *fn*
+        comparing *self* and *other*.  Return the output Series.
+        The output dtype is always `np.bool_`.
+        """
+        if isinstance(other, Series):
+            return self._call_binop(other, fn, np.bool_)
+        else:
+            return NotImplemented
+
+    def __eq__(self, other):
+        return self._compare(other, fn=libgdf.gdf_eq_generic)
+
+    def __ne__(self, other):
+        return self._compare(other, fn=libgdf.gdf_ne_generic)
+
+    def __lt__(self, other):
+        return self._compare(other, fn=libgdf.gdf_lt_generic)
+
+    def __le__(self, other):
+        return self._compare(other, fn=libgdf.gdf_le_generic)
+
+    def __gt__(self, other):
+        return self._compare(other, fn=libgdf.gdf_gt_generic)
+
+    def __ge__(self, other):
+        return self._compare(other, fn=libgdf.gdf_ge_generic)
 
     @property
     def dtype(self):
@@ -719,6 +819,24 @@ class Series(object):
         gpuarr = self.to_gpu_array()
         scaled = cudautils.compute_scale(gpuarr, vmin, vmax)
         return Series.from_array(scaled)
+
+    # Rounding
+
+    def ceil(self):
+        """Rounds each value upward to the smallest integral value not less
+        than the original.
+
+        Returns a new Series.
+        """
+        return self._unaryop(libgdf.gdf_ceil_generic)
+
+    def floor(self):
+        """Rounds each value downward to the largest integral value not greater
+        than the original.
+
+        Returns a new Series.
+        """
+        return self._unaryop(libgdf.gdf_floor_generic)
 
 
 class BufferSentryError(ValueError):
