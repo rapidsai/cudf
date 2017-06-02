@@ -567,6 +567,25 @@ class Series(object):
         else:
             return NotImplemented
 
+    def _call_unaop(self, fn, out_dtype):
+        """
+        Internal util to call a unary operator *fn* on operands *self* with
+        output dtype *out_dtype*.  Returns the output Series.
+        """
+        # Allocate output series
+        out = Series.from_array(cuda.device_array(shape=len(self),
+                                                  dtype=out_dtype))
+        _gdf.apply_unaryop(fn, self, out)
+        return out
+
+    def _unaryop(self, fn):
+        """
+        Internal util to call a unary operator *fn* on operands *self*.
+        Return the output Series.  The output dtype is determined by the input
+        operand.
+        """
+        return self._call_unaop(fn, self.dtype)
+
     def __add__(self, other):
         return self._binaryop(other, fn=libgdf.gdf_add_generic)
 
@@ -800,6 +819,24 @@ class Series(object):
         gpuarr = self.to_gpu_array()
         scaled = cudautils.compute_scale(gpuarr, vmin, vmax)
         return Series.from_array(scaled)
+
+    # Rounding
+
+    def ceil(self):
+        """Rounds each value upward to the smallest integral value not less
+        than the original.
+
+        Returns a new Series.
+        """
+        return self._unaryop(libgdf.gdf_ceil_generic)
+
+    def floor(self):
+        """Rounds each value downward to the largest integral value not greater
+        than the original.
+
+        Returns a new Series.
+        """
+        return self._unaryop(libgdf.gdf_floor_generic)
 
 
 class BufferSentryError(ValueError):

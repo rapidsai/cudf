@@ -31,6 +31,12 @@ def apply_binaryop(binop, lhs, rhs, out):
     binop(lhs._cffi_view, rhs._cffi_view, out._cffi_view)
 
 
+def apply_unaryop(unaop, inp, out):
+    """Apply unary operator *unaop* to *inp* and store to *out*.
+    """
+    unaop(inp._cffi_view, out._cffi_view)
+
+
 def np_to_gdf_dtype(dtype):
     """Util to convert numpy dtype to gdf dtype.
     """
