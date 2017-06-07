@@ -5,8 +5,11 @@ language: c++
 branches:
     only:
         - master
+env:
+  global:
+    secure: aNAYL4Upc0l+m1bU3S3fkiz5hLMWPAnRkAuO5zJ+8qoCanGuGthOGTTBnO8WwtD8G1L7n2opQ7xYKyW0oV+Ylv/vzmofVuOkVLcXrjGbeHe//Q06H+UkKyPMATTHR0cYIbMICOE5cNGVl8Zw3+i6yoLL5EQ/r65IWfPn0SxnJapPFCYwR9+p77u9d94Hw1tFdC3oqIVBnLsUl4q1eXQR+zDAFIRqjYyPGi3z014Vkqyy+sN5ysw4b8tIYCLqHl/YBb1ONFOo4+sG0RvxfxoyEk03LPvNYaYORUEvrXibPbkt3IkI3HGv690xLnI4JXheb7r//9rWCtSaOqnpGpnZQh4qjOOnY0Gtap3/FdBi8mITN6ytKsytTtBJ+Jhdzx1tHp4gFrrWJSEJGpHs2n5OneSDubFAQNEiwYX0K6K7A8R6a8JG6PTjvmZgVMrJ025gQoz4P9E2IRRhhyA0Z9tvEPnqaJUVdA06BK/ekKtW3+lECkNFvpB4WC9tK0WUzbw4PRNolfsr9ScmpzaFTpsv9HnYVcttgyoYylmmREpgCBCsQtmAHOARDFAXnLWtxIGKWciENVb40bwurXhKzqZ6QJbRoUpGFEkVTnHYnYv2qLK8zUm0toSagpA2hMxlppYgHtnWIRu1pW5HA7tK21BfH5tEW6IrQoDPjQSaLhboVzA=
 
-matrix :
+matrix:
   include:
     - env: CUDA=8.0.61-1 PYTHON=3.6
 
@@ -23,7 +26,10 @@ install:
   - nvcc --version
   - conda --version
   # install conda build
-  - conda install conda-build --yes
+  - conda install conda-build anaconda-client --yes
 script:
-  - conda build conda-recipes/libgdf --python=3.6 -c defaults -c conda-forge
+  - conda build conda-recipes/libgdf --python=${PYTHON} -c defaults -c conda-forge
 
+after_success:
+  - export UPLOADFILE=`conda build conda-recipes/libgdf --python=${PYTHON} --output`
+  - source ./travisci/upload-anaconda.sh
