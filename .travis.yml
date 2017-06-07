@@ -12,6 +12,9 @@ env:
 matrix:
   include:
     - env: CUDA=8.0.61-1
+    - env: CUDA=8.0.61-1 BUILD_CFFI=1 PYTHON=3.6
+    - env: CUDA=8.0.61-1 BUILD_CFFI=1 PYTHON=3.5
+    - env: CUDA=8.0.61-1 BUILD_CFFI=1 PYTHON=2.7
 
 before_install:
   - source ./travisci/install-cuda-trusty.sh
@@ -28,8 +31,11 @@ install:
   # install conda build
   - conda install conda-build anaconda-client --yes
 script:
-  - conda build conda-recipes/libgdf -c defaults -c conda-forge
+  # build ligdf
+  - source ./travisci/build_libgdf.sh
+  # build libgdf_cffi
+  - source ./travisci/build_libgdf_cffi.sh
 
 after_success:
-  - export UPLOADFILE=`conda build conda-recipes/libgdf --output`
-  - source ./travisci/upload-anaconda.sh
+  - source ./travisci/upload.sh
+

@@ -16,6 +16,7 @@ requirements:
     - python x.x
     - cffi
     - setuptools
+    - libgdf
   run:
     - libgdf
     - python x.x
