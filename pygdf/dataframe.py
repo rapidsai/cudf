@@ -284,7 +284,8 @@ class DataFrame(object):
 
         matrix = cuda.device_array(shape=(nrow, ncol), dtype=dtype, order="F")
         for colidx, inpcol in enumerate(cols):
-            matrix[:, colidx].copy_to_device(inpcol.to_gpu_array())
+            dense = inpcol.to_gpu_array(fillna='pandas')
+            matrix[:, colidx].copy_to_device(dense)
 
         return matrix
 
@@ -331,6 +332,16 @@ class DataFrame(object):
             outdf.add_column(name, col)
         return outdf
 
+    def to_pandas(self):
+        """Conversion to pandas dataframe
+        """
+        import pandas as pd
+
+        from pprint import pprint
+
+        dct = {k: c for k, c in self._cols.items()}
+
+        return pd.DataFrame.from_dict()
 
 class Loc(object):
     """
@@ -674,16 +685,33 @@ class Series(object):
                                value=value)
         return self.from_array(out)
 
-    def to_dense_buffer(self):
+    def to_dense_buffer(self, fillna=None):
         """Get dense (no null values) ``Buffer`` of the data.
+
+        Parameters
+        ----------
+        fillna : str or None
+            See *fillna* in ``.to_array``.
 
         Notes
         -----
 
-        Null values are skipped.  Therefore, the output size could be smaller.
+        if ``fillna`` is ``None``, null values are skipped.  Therefore, the
+        output size could be smaller.
         """
+        if fillna not in {None, 'pandas'}:
+            raise ValueError('invalid for fillna')
+
         if self.has_null_mask:
-            return self._copy_to_dense_buffer()
+            if fillna == 'pandas':
+                # cast non-float types to float64
+                col = (self.astype(np.float64)
+                       if self.dtype.kind != 'f'
+                       else self)
+                # fill nan
+                return col.fillna(np.nan)
+            else:
+                return self._copy_to_dense_buffer()
         else:
             return self._data
 
@@ -693,15 +721,39 @@ class Series(object):
         nnz, mem = cudautils.copy_to_dense(data=data, mask=mask)
         return Buffer(mem, size=nnz, capacity=mem.size)
 
-    def to_array(self):
+    def to_array(self, fillna=None):
         """Get a dense numpy array for the data.
-        """
-        return self.to_dense_buffer().to_array()
 
-    def to_gpu_array(self):
-        """Get a dense numba device array for the data.
+        Parameters
+        ----------
+        fillna : str or None
+            Defaults to None, which will skip null values.
+            If it equals "pandas", null values are filled with NaNs.
+            Non integral dtype is promoted to np.float64.
+
+        Notes
+        -----
+
+        if ``fillna`` is ``None``, null values are skipped.  Therefore, the
+        output size could be smaller.
         """
-        return self.to_dense_buffer().to_gpu_array()
+        return self.to_dense_buffer(fillna=fillna).to_array()
+
+    def to_gpu_array(self, fillna=None):
+        """Get a dense numba device array for the data.
+
+        Parameters
+        ----------
+        fillna : str or None
+            See *fillna* in ``.to_array``.
+
+        Notes
+        -----
+
+        if ``fillna`` is ``None``, null values are skipped.  Therefore, the
+        output size could be smaller.
+        """
+        return self.to_dense_buffer(fillna=fillna).to_gpu_array()
 
     @property
     def data(self):
