@@ -333,15 +333,13 @@ class DataFrame(object):
         return outdf
 
     def to_pandas(self):
-        """Conversion to pandas dataframe
+        """Convert to a Pandas DataFrame.
         """
         import pandas as pd
 
-        from pprint import pprint
+        dct = {k: c.to_array(fillna='pandas') for k, c in self._cols.items()}
+        return pd.DataFrame.from_dict(dct)
 
-        dct = {k: c for k, c in self._cols.items()}
-
-        return pd.DataFrame.from_dict()
 
 class Loc(object):
     """
