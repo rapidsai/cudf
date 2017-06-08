@@ -354,8 +354,9 @@ class DataFrame(object):
             raise TypeError('not a pandas.DataFrame')
 
         df = cls()
-        for colk, colvals in dataframe.to_dict(orient='series').items():
-            df[colk] = colvals.values
+
+        for colk in dataframe.columns:
+            df[colk] = dataframe[colk].values
         return df
 
 

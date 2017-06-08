@@ -11,7 +11,7 @@ def test_to_pandas():
 
     pdf = df.to_pandas()
 
-    assert len(df.columns) == len(pdf.columns)
+    assert tuple(df.columns) == tuple(pdf.columns)
 
     assert df['a'].dtype == pdf['a'].dtype
     assert df['b'].dtype == pdf['b'].dtype
@@ -27,7 +27,7 @@ def test_from_pandas():
 
     df = DataFrame.from_pandas(pdf)
 
-    assert len(df.columns) == len(pdf.columns)
+    assert tuple(df.columns) == tuple(pdf.columns)
 
     assert df['a'].dtype == pdf['a'].dtype
     assert df['b'].dtype == pdf['b'].dtype
