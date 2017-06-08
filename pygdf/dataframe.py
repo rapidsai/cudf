@@ -47,6 +47,26 @@ class DataFrame(object):
     3 3 0.887777513028
     4 4 0.55838311246
     [5 more rows]
+
+    Convert from a Pandas DataFrame.
+
+    >>> import pandas as pd
+    >>> from pygdf.dataframe import DataFrame
+    >>> pdf = pd.DataFrame({'a': [0, 1, 2, 3],
+    ...                     'b': [0.1, 0.2, None, 0.3]})
+    >>> pdf
+    a    b
+    0  0  0.1
+    1  1  0.2
+    2  2  NaN
+    3  3  0.3
+    >>> df = DataFrame.from_pandas(pdf)
+    >>> df
+    a b
+    0 0 0.1
+    1 1 0.2
+    2 2 nan
+    3 3 0.3
     """
 
     def __init__(self, name_series=None):
