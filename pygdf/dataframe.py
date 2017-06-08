@@ -340,6 +340,24 @@ class DataFrame(object):
         dct = {k: c.to_array(fillna='pandas') for k, c in self._cols.items()}
         return pd.DataFrame.from_dict(dct)
 
+    @classmethod
+    def from_pandas(cls, dataframe):
+        """Convert from a Pandas DataFrame.
+
+        Raises
+        ------
+        TypeError for invalid input type.
+        """
+        import pandas as pd
+
+        if not isinstance(dataframe, pd.DataFrame):
+            raise TypeError('not a pandas.DataFrame')
+
+        df = cls()
+        for colk, colvals in dataframe.to_dict(orient='series').items():
+            df[colk] = colvals.values
+        return df
+
 
 class Loc(object):
     """
