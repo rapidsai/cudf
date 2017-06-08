@@ -97,6 +97,7 @@ class DataFrame(object):
             return ''
         if nrows is None:
             nrows = len(self)
+        nrows = min(nrows, len(self))  # cap row count
         if ncols is None:
             ncols = len(self.columns)
         lastcol = None

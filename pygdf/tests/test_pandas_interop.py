@@ -34,3 +34,19 @@ def test_from_pandas():
 
     assert len(df['a']) == len(pdf['a'])
     assert len(df['b']) == len(pdf['b'])
+
+
+def test_from_pandas_ex1():
+    pdf = pd.DataFrame({'a': [0, 1, 2, 3],
+                        'b': [0.1, 0.2, None, 0.3]})
+    print(pdf)
+    df = DataFrame.from_pandas(pdf)
+    print(df)
+
+    assert tuple(df.columns) == tuple(pdf.columns)
+    assert np.all(df['a'].to_array() == pdf['a'])
+    matches = df['b'].to_array() == pdf['b']
+    # the 3d element is False due to (nan == nan) == False
+    assert np.all(matches == [True, True, False, True])
+    assert np.isnan(df['b'].to_array()[2])
+    assert np.isnan(pdf['b'][2])
