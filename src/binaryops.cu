@@ -429,3 +429,60 @@ gdf_error gdf_ne_f64(gdf_column *lhs, gdf_column *rhs, gdf_column *output) {
     return LogicalOp<double, DeviceNe<double> >::launch(lhs, rhs, output);
 }
 
+
+// bitwise
+
+
+#define DEF_BITWISE_OP(F)                                                 \
+gdf_error F##_generic(gdf_column *lhs, gdf_column *rhs, gdf_column *output) { \
+    if( lhs->dtype != rhs->dtype ) return GDF_UNSUPPORTED_DTYPE;              \
+    if( output->dtype != lhs->dtype ) return GDF_UNSUPPORTED_DTYPE;           \
+    switch ( lhs->dtype ) {                                                   \
+    case GDF_INT8:    return F##_i8(lhs, rhs, output);                        \
+    case GDF_INT32:   return F##_i32(lhs, rhs, output);                       \
+    case GDF_INT64:   return F##_i64(lhs, rhs, output);                       \
+    default: return GDF_UNSUPPORTED_DTYPE;                                    \
+    }                                                                         \
+}
+
+#define DEF_BITWISE_IMPL(POSTFIX, CTYPE, TEMPLATE)                                       \
+gdf_error gdf_bitwise_##POSTFIX(gdf_column *lhs, gdf_column *rhs, gdf_column *output) {  \
+    return ArithOp<CTYPE, TEMPLATE<CTYPE> >::launch(lhs, rhs, output);                   \
+}
+
+#define DEF_BITWISE_IMPL_GROUP(NAME, TEMPLATE)      \
+DEF_BITWISE_OP(gdf_bitwise_##NAME)                  \
+DEF_BITWISE_IMPL(NAME##_i8, int8_t, TEMPLATE)       \
+DEF_BITWISE_IMPL(NAME##_i32, int32_t, TEMPLATE)     \
+DEF_BITWISE_IMPL(NAME##_i64, int64_t, TEMPLATE)
+
+
+template<typename T>
+struct DeviceBitwiseAnd {
+    __device__
+    T apply(T lhs, T rhs) {
+        return lhs & rhs;
+    }
+};
+
+
+template<typename T>
+struct DeviceBitwiseOr {
+    __device__
+    T apply(T lhs, T rhs) {
+        return lhs | rhs;
+    }
+};
+
+
+template<typename T>
+struct DeviceBitwiseXor {
+    __device__
+    T apply(T lhs, T rhs) {
+        return lhs ^ rhs;
+    }
+};
+
+DEF_BITWISE_IMPL_GROUP(and, DeviceBitwiseAnd)
+DEF_BITWISE_IMPL_GROUP(or, DeviceBitwiseOr)
+DEF_BITWISE_IMPL_GROUP(xor, DeviceBitwiseXor)
