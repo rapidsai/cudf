@@ -238,6 +238,7 @@ gdf_error gdf_div_f64(gdf_column *lhs, gdf_column *rhs, gdf_column *output) {
 gdf_error F##_generic(gdf_column *lhs, gdf_column *rhs, gdf_column *output) { \
     if( output->dtype != GDF_INT8 ) return GDF_UNSUPPORTED_DTYPE;             \
     switch ( lhs->dtype ) {                                                   \
+    case GDF_INT8:    return F##_i8(lhs, rhs, output);                        \
     case GDF_INT32:   return F##_i32(lhs, rhs, output);                       \
     case GDF_INT64:   return F##_i64(lhs, rhs, output);                       \
     case GDF_FLOAT32: return F##_f32(lhs, rhs, output);                       \
@@ -297,6 +298,10 @@ struct DeviceNe {
 
 DEF_LOGICAL_OP_NUM(gdf_gt)
 
+gdf_error gdf_gt_i8(gdf_column *lhs, gdf_column *rhs, gdf_column *output) {
+    return LogicalOp<int8_t, DeviceGt<int8_t> >::launch(lhs, rhs, output);
+}
+
 gdf_error gdf_gt_i32(gdf_column *lhs, gdf_column *rhs, gdf_column *output) {
     return LogicalOp<int32_t, DeviceGt<int32_t> >::launch(lhs, rhs, output);
 }
@@ -314,6 +319,10 @@ gdf_error gdf_gt_f64(gdf_column *lhs, gdf_column *rhs, gdf_column *output) {
 }
 
 DEF_LOGICAL_OP_NUM(gdf_ge)
+
+gdf_error gdf_ge_i8(gdf_column *lhs, gdf_column *rhs, gdf_column *output) {
+    return LogicalOp<int8_t, DeviceGe<int8_t> >::launch(lhs, rhs, output);
+}
 
 gdf_error gdf_ge_i32(gdf_column *lhs, gdf_column *rhs, gdf_column *output) {
     return LogicalOp<int32_t, DeviceGe<int32_t> >::launch(lhs, rhs, output);
@@ -334,6 +343,10 @@ gdf_error gdf_ge_f64(gdf_column *lhs, gdf_column *rhs, gdf_column *output) {
 
 DEF_LOGICAL_OP_NUM(gdf_lt)
 
+gdf_error gdf_lt_i8(gdf_column *lhs, gdf_column *rhs, gdf_column *output) {
+    return LogicalOp<int8_t, DeviceLt<int8_t> >::launch(lhs, rhs, output);
+}
+
 gdf_error gdf_lt_i32(gdf_column *lhs, gdf_column *rhs, gdf_column *output) {
     return LogicalOp<int32_t, DeviceLt<int32_t> >::launch(lhs, rhs, output);
 }
@@ -351,6 +364,10 @@ gdf_error gdf_lt_f64(gdf_column *lhs, gdf_column *rhs, gdf_column *output) {
 }
 
 DEF_LOGICAL_OP_NUM(gdf_le)
+
+gdf_error gdf_le_i8(gdf_column *lhs, gdf_column *rhs, gdf_column *output) {
+    return LogicalOp<int8_t, DeviceLe<int8_t> >::launch(lhs, rhs, output);
+}
 
 gdf_error gdf_le_i32(gdf_column *lhs, gdf_column *rhs, gdf_column *output) {
     return LogicalOp<int32_t, DeviceLe<int32_t> >::launch(lhs, rhs, output);
@@ -370,6 +387,10 @@ gdf_error gdf_le_f64(gdf_column *lhs, gdf_column *rhs, gdf_column *output) {
 
 DEF_LOGICAL_OP_NUM(gdf_eq)
 
+gdf_error gdf_eq_i8(gdf_column *lhs, gdf_column *rhs, gdf_column *output) {
+    return LogicalOp<int8_t, DeviceEq<int8_t> >::launch(lhs, rhs, output);
+}
+
 gdf_error gdf_eq_i32(gdf_column *lhs, gdf_column *rhs, gdf_column *output) {
     return LogicalOp<int32_t, DeviceEq<int32_t> >::launch(lhs, rhs, output);
 }
@@ -387,6 +408,10 @@ gdf_error gdf_eq_f64(gdf_column *lhs, gdf_column *rhs, gdf_column *output) {
 }
 
 DEF_LOGICAL_OP_NUM(gdf_ne)
+
+gdf_error gdf_ne_i8(gdf_column *lhs, gdf_column *rhs, gdf_column *output) {
+    return LogicalOp<int8_t, DeviceNe<int8_t> >::launch(lhs, rhs, output);
+}
 
 gdf_error gdf_ne_i32(gdf_column *lhs, gdf_column *rhs, gdf_column *output) {
     return LogicalOp<int32_t, DeviceNe<int32_t> >::launch(lhs, rhs, output);

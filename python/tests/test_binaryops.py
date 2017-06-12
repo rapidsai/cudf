@@ -113,6 +113,7 @@ params_logical_types = [
     np.float32,
     np.int32,
     np.int64,
+    np.bool,
 ]
 
 @pytest.mark.parametrize('dtype', params_logical_types)

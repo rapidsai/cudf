@@ -19,6 +19,7 @@ def get_dtype(dtype):
         np.int64:   libgdf.GDF_INT64,
         np.int32:   libgdf.GDF_INT32,
         np.int8:    libgdf.GDF_INT8,
+        np.bool_:   libgdf.GDF_INT8,
     }[np.dtype(dtype).type]
 
 
@@ -33,6 +34,8 @@ def gen_rand(dtype, size):
         return np.random.random(size).astype(dtype)
     elif dtype.kind == 'i':
         return np.random.random_integers(low=-10000, high=10000, size=size).astype(dtype)
+    elif dtype.kind == 'b':
+        return np.random.random_integers(low=0, high=1, size=size).astype(np.bool)
     raise NotImplementedError('dtype.kind={}'.format(dtype.kind))
 
 
