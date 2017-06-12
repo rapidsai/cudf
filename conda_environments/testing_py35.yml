@@ -11,5 +11,6 @@ dependencies:
 - cudatoolkit=8.0
 - llvmlite>=0.18
 - numpy=1.12.1
+- pandas
 - numba>=0.33
 - libgdf_cffi>=0.1.0a1.dev

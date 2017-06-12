@@ -31,6 +31,19 @@ def test_fillna():
     assert not dense.has_null_mask
 
 
+def test_to_dense_array():
+    data = np.random.random(8)
+    mask = np.asarray([0b11010110], dtype=np.byte)
+
+    sr = Series.from_masked_array(data=data, mask=mask, null_count=3)
+    assert sr.null_count > 0
+    assert sr.null_count != len(sr)
+    filled = sr.to_array(fillna='pandas')
+    dense = sr.to_array()
+    assert dense.size < filled.size
+    assert filled.size == len(sr)
+
+
 def test_reading_arrow_sparse_data():
     darr = read_data()
     gar = GpuArrowReader(darr)
