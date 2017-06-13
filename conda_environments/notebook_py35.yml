@@ -3,6 +3,8 @@ channels:
 - !!python/unicode
   'numba'
 - !!python/unicode
+  'gpuopenanalytics/label/dev'
+- !!python/unicode
   'defaults'
 dependencies:
 - !!python/unicode
@@ -153,6 +155,8 @@ dependencies:
   'llvmlite=0.18'
 - !!python/unicode
   'numba=0.33'
+- !!python/unicode
+  'libgdf_cffi=0.1.0a1.dev'
 - pip:
   - flatbuffers==2015.12.22.1
   - ipython-genutils==0.2.0
