@@ -491,12 +491,11 @@ DEF_BITWISE_IMPL_GROUP(xor, DeviceBitwiseXor)
 // validity
 
 gdf_column gdf_validity_column(const gdf_column &col) {
-    const size_t valid_size = sizeof(gdf_valid_type);
     gdf_column ret;
     ret.data = col.valid;
     ret.dtype = GDF_INT8;
     ret.valid = nullptr;
-    ret.size = (col.size + valid_size - 1) / valid_size;
+    ret.size = (col.size + GDF_VALID_BITSIZE - 1) / GDF_VALID_BITSIZE;
     return ret;
 }
 
