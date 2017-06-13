@@ -136,6 +136,12 @@ def mask_assign_slot(size, mask):
     return slots, sz
 
 
+def count_nonzero_mask(mask):
+    # TODO: this needs optimization
+    _, nnz = mask_assign_slot(mask.size * mask_bitsize, mask)
+    return nnz
+
+
 def copy_to_dense(data, mask, out=None):
     """
     The output array can be specified in `out`.

@@ -531,7 +531,7 @@ class Series(object):
         dbuf = Buffer(data)
         mbuf = Buffer(mask)
         if null_count is None:
-            _, nnz = cudautils.mask_assign_slot(dbuf.size, mbuf.mem)
+            nnz = cudautils.count_nonzero_mask(mbuf.mem)
             null_count = dbuf.size - nnz
         return cls(size=dbuf.size, dtype=dbuf.dtype, buffer=dbuf, mask=mbuf,
                    null_count=null_count)
@@ -551,7 +551,6 @@ class Series(object):
             null_count = 0
         self._null_count = null_count
         # make cffi view for libgdf
-        libgdf.gdf_column_view
         self._cffi_view = _gdf.columnview(size=self._size, data=self._data,
                                           mask=self._mask)
 
@@ -600,9 +599,14 @@ class Series(object):
         Series.
         """
         # Allocate output series
-        out = Series.from_array(cuda.device_array(shape=len(self),
-                                                  dtype=out_dtype))
-        _gdf.apply_binaryop(fn, self, other, out)
+        data = cuda.device_array(shape=len(self), dtype=out_dtype)
+        if self.has_null_mask or other.has_null_mask:
+            mask_size = utils.calc_chunk_size(data.size, utils.mask_bitsize)
+            mask = cuda.device_array(shape=mask_size, dtype=utils.mask_dtype)
+            out = Series.from_masked_array(data, mask, null_count=data.size)
+        else:
+            out = Series.from_array(data)
+        self._null_count = _gdf.apply_binaryop(fn, self, other, out)
         return out
 
     def _binaryop(self, other, fn):
@@ -709,7 +713,7 @@ class Series(object):
     @property
     def has_null_mask(self):
         """A boolean indicating whether a null-mask is needed"""
-        return self.null_count > 0
+        return self._mask is not None
 
     def fillna(self, value):
         """Fill null values with ``value``.
