@@ -47,14 +47,13 @@ def test_series_compare(cmpop):
     np.testing.assert_equal(cmpop(sr1, sr2).to_array(),  cmpop(arr1, arr2))
 
 
-def test_validity_add():
-    nelem = 8
+@pytest.mark.parametrize('nelem', [1, 7, 8, 9, 32, 64, 128])
+def test_validity_add(nelem):
     # LHS
     lhs_data = np.random.random(nelem)
     lhs_mask = utils.random_bitmask(nelem)
     lhs_bitmask = utils.expand_bits_to_bytes(lhs_mask)
     lhs_null_count = utils.count_zero(lhs_bitmask)
-    print(lhs_null_count)
     lhs = Series.from_masked_array(lhs_data, lhs_mask, lhs_null_count)
     # RHS
     rhs_data = np.random.random(nelem)
@@ -65,7 +64,7 @@ def test_validity_add():
     # Result
     res = lhs + rhs
     res_mask = np.asarray(utils.expand_bits_to_bytes(lhs_mask & rhs_mask),
-                          dtype=np.bool)
+                          dtype=np.bool)[:nelem]
     # Fill NA values
     na_value = -10000
     got = res.fillna(na_value).to_array()
