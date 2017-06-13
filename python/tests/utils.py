@@ -41,3 +41,13 @@ def gen_rand(dtype, size):
 
 def fix_zeros(arr, val=1):
     arr[arr == 0] = val
+
+
+def buffer_as_bits(data):
+    def fix_binary(x):
+        x = x[2:]
+        diff = 8 - len(x)
+        return ('0' * diff + x)[::-1]
+
+    binaries = ''.join(fix_binary(bin(x)) for x in bytearray(data))
+    return list(map(lambda x: x == '1', binaries))

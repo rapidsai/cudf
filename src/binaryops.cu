@@ -486,3 +486,27 @@ struct DeviceBitwiseXor {
 DEF_BITWISE_IMPL_GROUP(and, DeviceBitwiseAnd)
 DEF_BITWISE_IMPL_GROUP(or, DeviceBitwiseOr)
 DEF_BITWISE_IMPL_GROUP(xor, DeviceBitwiseXor)
+
+
+// validity
+
+gdf_column gdf_validity_column(const gdf_column &col) {
+    const size_t valid_size = sizeof(gdf_valid_type);
+    gdf_column ret;
+    ret.data = col.valid;
+    ret.dtype = GDF_INT8;
+    ret.valid = nullptr;
+    ret.size = (col.size + valid_size - 1) / valid_size;
+    return ret;
+}
+
+gdf_error gdf_validity_and(gdf_column *lhs, gdf_column *rhs, gdf_column *output) {
+    if ( !lhs->valid || !rhs->valid || !output->valid ) {
+        return GDF_VALIDITY_MISSING;
+    }
+    gdf_column x = gdf_validity_column(*lhs);
+    gdf_column y = gdf_validity_column(*rhs);
+    gdf_column z = gdf_validity_column(*output);
+    gdf_bitwise_and_i8(&x, &y, &z);
+    return GDF_SUCCESS;
+}
