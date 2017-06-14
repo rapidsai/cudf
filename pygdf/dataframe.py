@@ -4,7 +4,7 @@ from collections import OrderedDict
 
 import numpy as np
 import pandas as pd
-from pandas.core.dtypes.dtypes import ExtensionDtype
+from pandas.core.dtypes.dtypes import ExtensionDtype, CategoricalDtype
 
 from numba import cuda
 
@@ -486,6 +486,12 @@ class Series(object):
         """
         if isinstance(arbitrary, Series):
             return arbitrary
+
+        # Handle pandas type
+        if isinstance(arbitrary, pd.Categorical):
+            return cls.from_categorical(arbitrary)
+
+        # Handle internal types
         if isinstance(arbitrary, Buffer):
             return cls.from_buffer(arbitrary)
         elif cuda.devicearray.is_cuda_ndarray(arbitrary):
@@ -494,6 +500,26 @@ class Series(object):
             if not isinstance(arbitrary, np.ndarray):
                 arbitrary = np.asarray(arbitrary)
             return cls.from_array(arbitrary)
+
+    @classmethod
+    def from_categorical(cls, categorical):
+        from .categorical import CategoricalSeries
+
+        # TODO fix mutability issue in numba to avoid the .copy()
+        codes = categorical.codes.copy()
+        dtype = categorical.dtype
+        valid_codes = codes != -1
+        buf = Buffer(codes)
+        categories = categorical.categories
+        ordered = categorical.ordered
+        params = dict(size=buf.size, dtype=dtype, buffer=buf,
+                      categories=categories, ordered=ordered)
+        if not np.all(valid_codes):
+            mask = utils.boolmask_to_bitmask(valid_codes)
+            nnz = np.count_nonzero(valid_codes)
+            null_count = codes.size - nnz
+            params.update(dict(mask=Buffer(mask), null_count=null_count))
+        return CategoricalSeries(**params)
 
     @classmethod
     def from_buffer(cls, buffer):
@@ -540,7 +566,9 @@ class Series(object):
         The memory is uninitialized
         """
         self._size = size
-        self._dtype = np.dtype(dtype)
+        self._dtype = (dtype
+                       if isinstance(dtype, ExtensionDtype)
+                       else np.dtype(dtype))
         self._data = buffer
         self._mask = mask
         if null_count is None:
@@ -701,7 +729,7 @@ class Series(object):
         other = Series.from_any(arbitrary)
         newsize = len(self) + len(other)
         # allocate memory
-        mem = cuda.device_array(shape=newsize, dtype=self._dtype)
+        mem = cuda.device_array(shape=newsize, dtype=self.data.dtype)
         newbuf = Buffer.from_empty(mem)
         # copy into new memory
         for buf in [self._data, other._data]:
