@@ -504,6 +504,9 @@ class Series(object):
     @classmethod
     def from_masked_array(cls, data, mask, null_count=None):
         """Create a Series with null-mask.
+        This is equivalent to:
+
+            Series.from_any(data).set_mask(mask, null_count=null_count)
 
         Parameters
         ----------
@@ -519,11 +522,7 @@ class Series(object):
             The number of null values.
             If None, it is calculated automatically.
         """
-
-        dbuf = Buffer(data)
-        mbuf = Buffer(mask)
-        return cls(size=dbuf.size, dtype=dbuf.dtype, buffer=dbuf, mask=mbuf,
-                   null_count=null_count)
+        return cls.from_any(data).set_mask(mask, null_count=null_count)
 
     def __init__(self, size, dtype, buffer=None, mask=None, null_count=None):
         """
@@ -573,6 +572,30 @@ class Series(object):
             mask = cuda.device_array(shape=mask_size, dtype=utils.mask_dtype)
             params.update(dict(mask=Buffer(mask), null_count=data.size))
         return self._copy_construct(**params)
+
+    def set_mask(self, mask, null_count=None):
+        """Create new Series by setting a mask array.
+
+        This will override the existing mask.
+
+        Parameters
+        ----------
+        mask : 1D array-like of numpy.uint8
+            The null-mask.  Valid values are marked as ``1``; otherwise ``0``.
+            The mask bit given the data index ``idx`` is computed as::
+
+                (mask[idx // 8] >> (idx % 8)) & 1
+        null_count : int, optional
+            The number of null values.
+            If None, it is calculated automatically.
+
+        """
+        if not isinstance(mask, Buffer):
+            mask = Buffer(mask)
+        if mask.dtype not in (np.dtype(np.uint8), np.dtype(np.int8)):
+            msg = 'mask must be of byte; but got {}'.format(mask.dtype)
+            raise ValueError(msg)
+        return self._copy_construct(mask=mask, null_count=null_count)
 
     def __len__(self):
         """Returns the size of the ``Series`` including null values.
