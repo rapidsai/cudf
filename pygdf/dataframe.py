@@ -564,6 +564,16 @@ class Series(object):
         params.update(kwargs)
         return cls(**params)
 
+    def _empty_like(self, dtype, has_mask):
+        """Create a new Series with the same length"""
+        data = cuda.device_array(shape=len(self), dtype=dtype)
+        params = dict(buffer=Buffer(data), dtype=dtype)
+        if has_mask:
+            mask_size = utils.calc_chunk_size(data.size, utils.mask_bitsize)
+            mask = cuda.device_array(shape=mask_size, dtype=utils.mask_dtype)
+            params.update(dict(mask=Buffer(mask), null_count=data.size))
+        return self._copy_construct(**params)
+
     def __len__(self):
         """Returns the size of the ``Series`` including null values.
         """
@@ -655,14 +665,10 @@ class Series(object):
         Series.
         """
         # Allocate output series
-        data = cuda.device_array(shape=len(self), dtype=out_dtype)
-        if self.has_null_mask or other.has_null_mask:
-            mask_size = utils.calc_chunk_size(data.size, utils.mask_bitsize)
-            mask = cuda.device_array(shape=mask_size, dtype=utils.mask_dtype)
-            out = Series.from_masked_array(data, mask, null_count=data.size)
-        else:
-            out = Series.from_array(data)
-        self._null_count = _gdf.apply_binaryop(fn, self, other, out)
+        needs_mask = self.has_null_mask or other.has_null_mask
+        out = self._empty_like(dtype=out_dtype, has_mask=needs_mask)
+        # Call and fix null_count
+        out._null_count = _gdf.apply_binaryop(fn, self, other, out)
         return out
 
     def _binaryop(self, other, fn):
@@ -683,13 +689,7 @@ class Series(object):
         """
         # Allocate output series
         data = cuda.device_array(shape=len(self), dtype=out_dtype)
-        if self.has_null_mask:
-            # Borrow null mask from self
-            mask = self._mask.mem
-            out = Series.from_masked_array(data, mask,
-                                           null_count=self.null_count)
-        else:
-            out = Series.from_array(data)
+        out = self._copy_construct(buffer=Buffer(data))
         _gdf.apply_unaryop(fn, self, out)
         return out
 
