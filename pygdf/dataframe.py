@@ -4,13 +4,12 @@ from collections import OrderedDict
 
 import numpy as np
 import pandas as pd
-from pandas.core.dtypes.dtypes import ExtensionDtype, CategoricalDtype
+from pandas.core.dtypes.dtypes import ExtensionDtype
 
 from numba import cuda
 
 from libgdf_cffi import libgdf
-from . import cudautils, utils, _gdf
-
+from . import cudautils, utils, _gdf, formatting
 
 
 class DataFrame(object):
@@ -115,55 +114,24 @@ class DataFrame(object):
             Maximum number of columns to show.
             If it is None, all columns are shown.
         """
-        if not self.columns:
-            return ''
         if nrows is None:
             nrows = len(self)
-        nrows = min(nrows, len(self))  # cap row count
-        if ncols is None:
-            ncols = len(self.columns)
-        lastcol = None
-        if len(self.columns) > ncols:
-            cols = self.columns[:ncols - 1] + self.columns[-1:]
-            lastcol = cols[-1]
         else:
-            cols = self.columns
-        # get values
-        cells = OrderedDict()
-        for c in cols:
-            values = list(self[c][:nrows])
-            cells[c] = ['' if v is None else str(v) for v in values]
+            nrows = min(nrows, len(self))  # cap row count
 
-        # compute column widths
-        widths = {}
-        for k, vs in cells.items():
-            widths[k] = max(len(k), max(map(len, vs)))
-        # format table
-        out = []
-        widthkey = len(str(nrows))
-        header = [' ' * widthkey]
-        header += ["{:{}}".format(k, widths[k]) for k in cols[:-1]]
-        if lastcol is not None:
-            header += ['...']
-        header += ["{:{}}".format(k, widths[k]) for k in cols[-1:]]
-        out.append(' '.join(header))
-        for i in range(nrows):
-            row = ["{:{}}".format(str(i), widthkey)]
-            for k, vs in cells.items():
-                if k == lastcol:
-                    row.append('...')
-                row.append("{:{}}".format(vs[i], widths[k]))
-            out.append(' '.join(row))
+        if ncols is None:
+            ncols = len(self)
 
-        # show remiaining rows
-        remaining_rows = len(self) - nrows
-        if remaining_rows > 0:
-            out.append("[{} more rows]".format(remaining_rows))
+        more_cols = len(self.columns) - ncols
+        more_rows = len(self) - nrows
 
-        # show remiaining cols
-        if lastcol is not None:
-            out.append("[{} more columns]".format(len(self.columns) - ncols))
-        return '\n'.join(out)
+        # Prepare cells
+        cols = OrderedDict()
+        for h in self.columns[:ncols]:
+            cols[h] = self[h].values_to_string(nrows=nrows)
+        # Format into a table
+        return formatting.format(cols=cols, show_headers=True,
+                                 more_cols=more_cols, more_rows=more_rows)
 
     def __str__(self):
         return self.to_string()
@@ -525,7 +493,7 @@ class Series(object):
     def from_buffer(cls, buffer):
         """Create a Series from a ``Buffer``
         """
-        return Series(size=buffer.size, dtype=buffer.dtype, buffer=buffer)
+        return cls(size=buffer.size, dtype=buffer.dtype, buffer=buffer)
 
     @classmethod
     def from_array(cls, array):
@@ -554,9 +522,6 @@ class Series(object):
 
         dbuf = Buffer(data)
         mbuf = Buffer(mask)
-        if null_count is None:
-            nnz = cudautils.count_nonzero_mask(mbuf.mem)
-            null_count = dbuf.size - nnz
         return cls(size=dbuf.size, dtype=dbuf.dtype, buffer=dbuf, mask=mbuf,
                    null_count=null_count)
 
@@ -573,12 +538,31 @@ class Series(object):
         self._mask = mask
         if null_count is None:
             if self._mask is not None:
-                raise ValueError('null_count must be provided')
-            null_count = 0
+                nnz = cudautils.count_nonzero_mask(self._mask.mem)
+                null_count = self._size - nnz
+            else:
+                null_count = 0
         self._null_count = null_count
         # make cffi view for libgdf
         self._cffi_view = _gdf.columnview(size=self._size, data=self._data,
                                           mask=self._mask)
+
+    def _copy_construct_defaults(self):
+        return dict(
+            size=self._size,
+            dtype=self._dtype,
+            buffer=self._data,
+            mask=self._mask,
+            null_count=self._null_count,
+        )
+
+    def _copy_construct(self, **kwargs):
+        """Shallow copy this object by replacing certain ctor args.
+        """
+        params = self._copy_construct_defaults()
+        cls = type(self)
+        params.update(kwargs)
+        return cls(**params)
 
     def __len__(self):
         """Returns the size of the ``Series`` including null values.
@@ -600,15 +584,24 @@ class Series(object):
                 # slicing
                 subdata = self._data.mem[arg]
                 submask = self._mask.mem[maskslice]
-                return self.from_masked_array(data=subdata, mask=submask)
+                return self._copy_construct(size=subdata.size,
+                                            buffer=Buffer(subdata),
+                                            mask=Buffer(submask),
+                                            null_count=None)
             else:
-                return self.from_buffer(self._data[arg])
+                newbuffer = self._data[arg]
+                return self._copy_construct(size=newbuffer.size,
+                                            buffer=newbuffer,
+                                            mask=None,
+                                            null_count=None)
         elif isinstance(arg, int):
+            # The following triggers a IndexError if out-of-bound
+            val = self._data[arg]
             if self._mask is not None:
                 valid = cudautils.mask_get.py_func(self._mask, arg)
             else:
                 valid = 1
-            return self._data[arg] if valid else None
+            return val if valid else None
         else:
             raise NotImplementedError(type(arg))
 
@@ -617,6 +610,43 @@ class Series(object):
         into a boolean.
         """
         raise TypeError("can't compute boolean for {!r}".format(type(self)))
+
+    def values_to_string(self, nrows=None):
+        """Returns a list of string for each element.
+        """
+        values = self[:nrows]
+        out = ['' if v is None else self._element_to_str(v) for v in values]
+        return out
+
+    def _element_to_str(self, value):
+        return str(value)
+
+    def to_string(self, nrows=5):
+        """Convert to string
+
+        Parameters
+        ----------
+        nrows : int
+            Maximum number of rows to show.
+            If it is None, all rows are shown.
+        """
+        if nrows is None:
+            nrows = len(self)
+        else:
+            nrows = min(nrows, len(self))  # cap row count
+
+        more_rows = len(self) - nrows
+
+        # Prepare cells
+        cols = OrderedDict([('', self.values_to_string(nrows=nrows))])
+        # Format into a table
+        return formatting.format(cols=cols, more_rows=more_rows)
+
+    def __str__(self):
+        return self.to_string()
+
+    def __repr__(self):
+        return self.to_string()
 
     def _call_binop(self, other, fn, out_dtype):
         """

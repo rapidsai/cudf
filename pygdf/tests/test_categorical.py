@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 
-from pygdf.dataframe import Series, DataFrame
+from pygdf.dataframe import Series
 
 
 def test_categorical_basic():
@@ -18,6 +18,15 @@ def test_categorical_basic():
     np.testing.assert_array_equal(pdsr.cat.codes.data, sr.cat.codes.to_array())
     np.testing.assert_array_equal(pdsr.cat.codes.dtype, sr.cat.codes.dtype)
 
+    string = str(sr)
+    expect_str = """
+0 a
+1 a
+2 b
+3 c
+4 a
+"""
+    assert all(x == y for x, y in zip(string.split(), expect_str.split()))
 
 
 def test_categorical_missing():
@@ -30,3 +39,13 @@ def test_categorical_missing():
     np.testing.assert_array_equal(pdsr.cat.codes.data,
                                   sr.cat.codes.to_array(fillna='pandas'))
     np.testing.assert_array_equal(pdsr.cat.codes.dtype, sr.cat.codes.dtype)
+
+    string = str(sr)
+    expect_str = """
+0 a
+1
+2
+3 c
+4 a
+"""
+    assert string.split() == expect_str.split()
