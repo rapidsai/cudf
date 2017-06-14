@@ -3,6 +3,8 @@ from __future__ import print_function, division
 from collections import OrderedDict
 
 import numpy as np
+import pandas as pd
+from pandas.core.dtypes.dtypes import ExtensionDtype
 
 from numba import cuda
 
@@ -356,8 +358,6 @@ class DataFrame(object):
     def to_pandas(self):
         """Convert to a Pandas DataFrame.
         """
-        import pandas as pd
-
         dct = {k: c.to_array(fillna='pandas') for k, c in self._cols.items()}
         return pd.DataFrame.from_dict(dct)
 
@@ -369,8 +369,6 @@ class DataFrame(object):
         ------
         TypeError for invalid input type.
         """
-        import pandas as pd
-
         if not isinstance(dataframe, pd.DataFrame):
             raise TypeError('not a pandas.DataFrame')
 
