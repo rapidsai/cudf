@@ -626,8 +626,14 @@ class Series(object):
         output dtype *out_dtype*.  Returns the output Series.
         """
         # Allocate output series
-        out = Series.from_array(cuda.device_array(shape=len(self),
-                                                  dtype=out_dtype))
+        data = cuda.device_array(shape=len(self), dtype=out_dtype)
+        if self.has_null_mask:
+            # Borrow null mask from self
+            mask = self._mask.mem
+            out = Series.from_masked_array(data, mask,
+                                           null_count=self.null_count)
+        else:
+            out = Series.from_array(data)
         _gdf.apply_unaryop(fn, self, out)
         return out
 

@@ -28,6 +28,8 @@ def columnview(size, data, mask=None, dtype=None):
 def apply_binaryop(binop, lhs, rhs, out):
     """Apply binary operator *binop* to operands *lhs* and *rhs*.
     The result is stored to *out*.
+
+    Returns the number of null values.
     """
     args = (lhs._cffi_view, rhs._cffi_view, out._cffi_view)
     # apply binary operator
@@ -40,10 +42,14 @@ def apply_binaryop(binop, lhs, rhs, out):
     else:
         return 0
 
+
 def apply_unaryop(unaop, inp, out):
     """Apply unary operator *unaop* to *inp* and store to *out*.
+
     """
-    unaop(inp._cffi_view, out._cffi_view)
+    args = (inp._cffi_view, out._cffi_view)
+    # apply unary operator
+    unaop(*args)
 
 
 def np_to_gdf_dtype(dtype):
