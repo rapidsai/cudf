@@ -755,23 +755,33 @@ class Series(object):
 
     __div__ = __truediv__
 
+    def _unordered_compare(self, other, cmpops):
+        if not isinstance(other, Series):
+            return NotImplemented
+        return self._impl.unordered_compare(cmpops, self, other)
+
+    def _ordered_compare(self, other, cmpops):
+        if not isinstance(other, Series):
+            return NotImplemented
+        return self._impl.ordered_compare(cmpops, self, other)
+
     def __eq__(self, other):
-        return self._impl.unordered_compare('eq', self, other)
+        return self._unordered_compare(other, 'eq')
 
     def __ne__(self, other):
-        return self._impl.unordered_compare('ne', self, other)
+        return self._unordered_compare(other, 'ne')
 
     def __lt__(self, other):
-        return self._impl.ordered_compare('lt', self, other)
+        return self._ordered_compare(other, 'lt')
 
     def __le__(self, other):
-        return self._impl.ordered_compare('le', self, other)
+        return self._ordered_compare(other, 'le')
 
     def __gt__(self, other):
-        return self._impl.ordered_compare('gt', self, other)
+        return self._ordered_compare(other, 'gt')
 
     def __ge__(self, other):
-        return self._impl.ordered_compare('ge', self, other)
+        return self._ordered_compare(other, 'ge')
 
     @property
     def cat(self):

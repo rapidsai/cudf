@@ -61,20 +61,14 @@ class CategoricalSeriesImpl(SeriesImpl):
         return str(self._decode(value))
 
     def unordered_compare(self, cmpop, lhs, rhs):
-        if not isinstance(rhs, Series):
-            return NotImplemented
         if self != rhs._impl:
             raise TypeError('Categoricals can only compare with the same type')
-        return self._codes_impl.compare(lhs, rhs,
-                                        fn=numerical.unordered_impl[cmpop])
+        return self._codes_impl.unordered_compare(cmpop, lhs, rhs)
 
     def ordered_compare(self, cmpop, lhs, rhs):
-        if not isinstance(rhs, Series):
-            return NotImplemented
         if not (self._ordered and rhs._impl._ordered):
             msg = "Unordered Categoricals can only compare equality or not"
             raise TypeError(msg)
         if self != rhs._impl:
             raise TypeError('Categoricals can only compare with the same type')
-        return self._codes_impl.compare(lhs, rhs,
-                                        fn=numerical.ordered_impl[cmpop])
+        return self._codes_impl.ordered_compare(cmpop, lhs, rhs)

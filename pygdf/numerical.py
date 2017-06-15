@@ -3,16 +3,15 @@ import numpy as np
 from libgdf_cffi import libgdf
 
 from .series_impl import SeriesImpl
-from .dataframe import Series
 from . import _gdf
 
 
-unordered_impl = {
+_unordered_impl = {
     'eq': libgdf.gdf_eq_generic,
     'ne': libgdf.gdf_ne_generic,
 }
 
-ordered_impl = {
+_ordered_impl = {
     'lt': libgdf.gdf_lt_generic,
     'le': libgdf.gdf_le_generic,
     'gt': libgdf.gdf_gt_generic,
@@ -28,30 +27,22 @@ class NumericalSeriesImpl(SeriesImpl):
         return str(value)
 
     def unordered_compare(self, cmpop, lhs, rhs):
-        if not isinstance(rhs, Series):
-            return NotImplemented
-        return self.compare(lhs, rhs, fn=unordered_impl[cmpop])
+        return self._compare(lhs, rhs, fn=_unordered_impl[cmpop])
 
     def ordered_compare(self, cmpop, lhs, rhs):
-        if not isinstance(rhs, Series):
-            return NotImplemented
-        return self.compare(lhs, rhs, fn=ordered_impl[cmpop])
+        return self._compare(lhs, rhs, fn=_ordered_impl[cmpop])
 
     #
-    # Helpers
+    # Internals
     #
 
-    def compare(self, lhs, rhs, fn):
+    def _compare(self, lhs, rhs, fn):
         """
         Internal util to call a comparison operator *fn*
         comparing *lhs* and *rhs*.  Return the output Series.
         The output dtype is always `np.bool_`.
         """
         return self._call_binop(lhs, rhs, fn, np.bool_)
-
-    #
-    # Internals
-    #
 
     def _call_binop(self, lhs, rhs, fn, out_dtype):
         """
