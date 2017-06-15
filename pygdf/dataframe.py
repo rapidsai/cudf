@@ -9,7 +9,7 @@ from pandas.core.dtypes.dtypes import ExtensionDtype, CategoricalDtype
 from numba import cuda
 
 from libgdf_cffi import libgdf
-from . import cudautils, utils, _gdf, formatting, numerical
+from . import cudautils, utils, _gdf, formatting
 
 
 class DataFrame(object):
@@ -479,7 +479,8 @@ class Series(object):
         # TODO pending pandas to be improved
         #       https://github.com/pandas-dev/pandas/issues/14711
         #       https://github.com/pandas-dev/pandas/pull/16015
-        impl = CategoricalSeriesImpl(categorical.categories,
+        impl = CategoricalSeriesImpl(dtype, codes.dtype,
+                                     categorical.categories,
                                      categorical.ordered)
 
         valid_codes = codes != -1
@@ -533,6 +534,8 @@ class Series(object):
         Allocate a empty series with [size x dtype].
         The memory is uninitialized
         """
+        from .numerical import NumericalSeriesImpl
+
         self._size = size
 
         if not isinstance(dtype, ExtensionDtype):
@@ -541,7 +544,7 @@ class Series(object):
         self._dtype = dtype
         self._data = buffer
         self._mask = mask
-        self._impl = (numerical.NumericalSeriesImpl(dtype)
+        self._impl = (NumericalSeriesImpl(dtype)
                       if impl is None else impl)
         if null_count is None:
             if self._mask is not None:
@@ -572,10 +575,10 @@ class Series(object):
         params.update(kwargs)
         return cls(**params)
 
-    def _empty_like(self, dtype, has_mask):
+    def _empty_like(self, dtype, has_mask, impl):
         """Create a new Series with the same length"""
         data = cuda.device_array(shape=len(self), dtype=dtype)
-        params = dict(buffer=Buffer(data), dtype=dtype)
+        params = dict(buffer=Buffer(data), dtype=dtype, impl=impl)
         if has_mask:
             mask_size = utils.calc_chunk_size(data.size, utils.mask_bitsize)
             mask = cuda.device_array(shape=mask_size, dtype=utils.mask_dtype)
@@ -696,9 +699,11 @@ class Series(object):
         and *other* with output dtype *out_dtype*.  Returns the output
         Series.
         """
+        from .numerical import NumericalSeriesImpl
         # Allocate output series
         needs_mask = self.has_null_mask or other.has_null_mask
-        out = self._empty_like(dtype=out_dtype, has_mask=needs_mask)
+        out = self._empty_like(dtype=out_dtype, has_mask=needs_mask,
+                               impl=NumericalSeriesImpl(out_dtype))
         # Call and fix null_count
         out._null_count = _gdf.apply_binaryop(fn, self, other, out)
         return out
@@ -750,34 +755,23 @@ class Series(object):
 
     __div__ = __truediv__
 
-    def _compare(self, other, fn):
-        """
-        Internal util to call a comparison operator *fn*
-        comparing *self* and *other*.  Return the output Series.
-        The output dtype is always `np.bool_`.
-        """
-        if isinstance(other, Series):
-            return self._call_binop(other, fn, np.bool_)
-        else:
-            return NotImplemented
-
     def __eq__(self, other):
-        return self._compare(other, fn=libgdf.gdf_eq_generic)
+        return self._impl.unordered_compare('eq', self, other)
 
     def __ne__(self, other):
-        return self._compare(other, fn=libgdf.gdf_ne_generic)
+        return self._impl.unordered_compare('ne', self, other)
 
     def __lt__(self, other):
-        return self._compare(other, fn=libgdf.gdf_lt_generic)
+        return self._impl.ordered_compare('lt', self, other)
 
     def __le__(self, other):
-        return self._compare(other, fn=libgdf.gdf_le_generic)
+        return self._impl.ordered_compare('le', self, other)
 
     def __gt__(self, other):
-        return self._compare(other, fn=libgdf.gdf_gt_generic)
+        return self._impl.ordered_compare('gt', self, other)
 
     def __ge__(self, other):
-        return self._compare(other, fn=libgdf.gdf_ge_generic)
+        return self._impl.ordered_compare('ge', self, other)
 
     @property
     def cat(self):

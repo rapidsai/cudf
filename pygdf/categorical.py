@@ -1,6 +1,6 @@
 from .dataframe import Series
 from .series_impl import SeriesImpl
-
+from . import numerical
 
 class CategoricalAccessor(object):
     def __init__(self, parent, categories, ordered):
@@ -29,9 +29,18 @@ class CategoricalAccessor(object):
 
 
 class CategoricalSeriesImpl(SeriesImpl):
-    def __init__(self, categories, ordered):
+    def __init__(self, dtype, codes_dtype, categories, ordered):
+        super(CategoricalSeriesImpl, self).__init__(dtype)
         self._categories = categories
         self._ordered = ordered
+        self._codes_impl = numerical.NumericalSeriesImpl(codes_dtype)
+
+    def __eq__(self, other):
+        if isinstance(other, CategoricalSeriesImpl):
+            return all([self.dtype == other.dtype,
+                        tuple(self._categories) == tuple(other._categories),
+                        self._ordered == other._ordered,
+                        self._codes_impl == other._codes_impl])
 
     def _encode(self, value):
         for i, cat in enumerate(self._categories):
@@ -50,3 +59,22 @@ class CategoricalSeriesImpl(SeriesImpl):
 
     def element_to_str(self, value):
         return str(self._decode(value))
+
+    def unordered_compare(self, cmpop, lhs, rhs):
+        if not isinstance(rhs, Series):
+            return NotImplemented
+        if self != rhs._impl:
+            raise TypeError('Categoricals can only compare with the same type')
+        return self._codes_impl.compare(lhs, rhs,
+                                        fn=numerical.unordered_impl[cmpop])
+
+    def ordered_compare(self, cmpop, lhs, rhs):
+        if not isinstance(rhs, Series):
+            return NotImplemented
+        if not (self._ordered and rhs._impl._ordered):
+            msg = "Unordered Categoricals can only compare equality or not"
+            raise TypeError(msg)
+        if self != rhs._impl:
+            raise TypeError('Categoricals can only compare with the same type')
+        return self._codes_impl.compare(lhs, rhs,
+                                        fn=numerical.ordered_impl[cmpop])
