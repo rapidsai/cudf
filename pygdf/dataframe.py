@@ -4,12 +4,12 @@ from collections import OrderedDict
 
 import numpy as np
 import pandas as pd
-from pandas.core.dtypes.dtypes import ExtensionDtype
+from pandas.core.dtypes.dtypes import ExtensionDtype, CategoricalDtype
 
 from numba import cuda
 
 from libgdf_cffi import libgdf
-from . import cudautils, utils, _gdf, formatting
+from . import cudautils, utils, _gdf, formatting, numerical
 
 
 class DataFrame(object):
@@ -471,23 +471,26 @@ class Series(object):
 
     @classmethod
     def from_categorical(cls, categorical):
-        from .categorical import CategoricalSeries
+        from .categorical import CategoricalSeriesImpl
 
         # TODO fix mutability issue in numba to avoid the .copy()
         codes = categorical.codes.copy()
         dtype = categorical.dtype
+        # TODO pending pandas to be improved
+        #       https://github.com/pandas-dev/pandas/issues/14711
+        #       https://github.com/pandas-dev/pandas/pull/16015
+        impl = CategoricalSeriesImpl(categorical.categories,
+                                     categorical.ordered)
+
         valid_codes = codes != -1
         buf = Buffer(codes)
-        categories = categorical.categories
-        ordered = categorical.ordered
-        params = dict(size=buf.size, dtype=dtype, buffer=buf,
-                      categories=categories, ordered=ordered)
+        params = dict(size=buf.size, dtype=dtype, buffer=buf, impl=impl)
         if not np.all(valid_codes):
             mask = utils.boolmask_to_bitmask(valid_codes)
             nnz = np.count_nonzero(valid_codes)
             null_count = codes.size - nnz
             params.update(dict(mask=Buffer(mask), null_count=null_count))
-        return CategoricalSeries(**params)
+        return Series(**params)
 
     @classmethod
     def from_buffer(cls, buffer):
@@ -524,17 +527,22 @@ class Series(object):
         """
         return cls.from_any(data).set_mask(mask, null_count=null_count)
 
-    def __init__(self, size, dtype, buffer=None, mask=None, null_count=None):
+    def __init__(self, size, dtype, buffer=None, mask=None, null_count=None,
+                 impl=None):
         """
         Allocate a empty series with [size x dtype].
         The memory is uninitialized
         """
         self._size = size
-        self._dtype = (dtype
-                       if isinstance(dtype, ExtensionDtype)
-                       else np.dtype(dtype))
+
+        if not isinstance(dtype, ExtensionDtype):
+            dtype = np.dtype(dtype)
+
+        self._dtype = dtype
         self._data = buffer
         self._mask = mask
+        self._impl = (numerical.NumericalSeriesImpl(dtype)
+                      if impl is None else impl)
         if null_count is None:
             if self._mask is not None:
                 nnz = cudautils.count_nonzero_mask(self._mask.mem)
@@ -542,7 +550,7 @@ class Series(object):
             else:
                 null_count = 0
         self._null_count = null_count
-        # make cffi view for libgdf
+        # Make cffi view for libgdf
         self._cffi_view = _gdf.columnview(size=self._size, data=self._data,
                                           mask=self._mask)
 
@@ -553,6 +561,7 @@ class Series(object):
             buffer=self._data,
             mask=self._mask,
             null_count=self._null_count,
+            impl=self._impl,
         )
 
     def _copy_construct(self, **kwargs):
@@ -652,7 +661,7 @@ class Series(object):
         return out
 
     def _element_to_str(self, value):
-        return str(value)
+        return self._impl.element_to_str(value)
 
     def to_string(self, nrows=5):
         """Convert to string
@@ -769,6 +778,10 @@ class Series(object):
 
     def __ge__(self, other):
         return self._compare(other, fn=libgdf.gdf_ge_generic)
+
+    @property
+    def cat(self):
+        return self._impl.cat(self)
 
     @property
     def dtype(self):

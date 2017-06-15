@@ -1,4 +1,5 @@
 from .dataframe import Series
+from .series_impl import SeriesImpl
 
 
 class CategoricalAccessor(object):
@@ -26,39 +27,26 @@ class CategoricalAccessor(object):
         else:
             return Series.from_buffer(data)
 
+
+class CategoricalSeriesImpl(SeriesImpl):
+    def __init__(self, categories, ordered):
+        self._categories = categories
+        self._ordered = ordered
+
     def _encode(self, value):
-        for i, cat in enumerate(self.categories):
+        for i, cat in enumerate(self._categories):
             if cat == value:
                 return i
         return -1
 
     def _decode(self, value):
-        for i, cat in enumerate(self.categories):
+        for i, cat in enumerate(self._categories):
             if i == value:
                 return cat
 
+    def cat(self, series):
+        return CategoricalAccessor(series, categories=self._categories,
+                                   ordered=self._ordered)
 
-class CategoricalSeries(Series):
-    def __init__(self, *args, **kwargs):
-        categories = kwargs.pop('categories')
-        ordered = kwargs.pop('ordered')
-        self._cat = CategoricalAccessor(self, categories=categories,
-                                        ordered=ordered)
-        super(CategoricalSeries, self).__init__(*args, **kwargs)
-
-    @property
-    def cat(self):
-        return self._cat
-
-    def _element_to_str(self, value):
-        """Overriding
-        """
-        return str(self.cat._decode(value))
-
-    def _copy_construct_defaults(self):
-        """Overriding
-        """
-        params = super(CategoricalSeries, self)._copy_construct_defaults()
-        params['categories'] = self._cat.categories
-        params['ordered'] = self._cat.ordered
-        return params
+    def element_to_str(self, value):
+        return str(self._decode(value))
