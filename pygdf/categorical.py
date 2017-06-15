@@ -60,6 +60,14 @@ class CategoricalSeriesImpl(SeriesImpl):
     def element_to_str(self, value):
         return str(self._decode(value))
 
+    def binary_operator(self, binop, lhs, rhs):
+        msg = 'Categorical cannot perform the operation: {}'.format(binop)
+        raise TypeError(msg)
+
+    def unary_operator(self, unaryop, series):
+        msg = 'Categorical cannot perform the operation: {}'.format(unaryop)
+        raise TypeError(msg)
+
     def unordered_compare(self, cmpop, lhs, rhs):
         if self != rhs._impl:
             raise TypeError('Categoricals can only compare with the same type')

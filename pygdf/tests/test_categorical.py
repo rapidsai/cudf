@@ -114,3 +114,30 @@ def test_categorical_compare_ordered():
     # test using ordered operators
     np.testing.assert_array_equal(pdsr1 < pdsr2, sr1 < sr2)
     np.testing.assert_array_equal(pdsr1 > pdsr2, sr1 > sr2)
+
+
+def test_categorical_binary_add():
+    cat = pd.Categorical(['a', 'a', 'b', 'c', 'a'], categories=['a', 'b', 'c'])
+    pdsr = pd.Series(cat)
+    sr = Series.from_any(cat)
+
+    with pytest.raises(TypeError) as raises:
+        pdsr + pdsr
+    raises.match('Categorical cannot perform the operation \+')
+
+    with pytest.raises(TypeError) as raises:
+        sr + sr
+    raises.match('Categorical cannot perform the operation: add')
+
+def test_categorical_unary_ceil():
+    cat = pd.Categorical(['a', 'a', 'b', 'c', 'a'], categories=['a', 'b', 'c'])
+    pdsr = pd.Series(cat)
+    sr = Series.from_any(cat)
+
+    with pytest.raises(AttributeError) as raises:
+        pdsr.ceil()
+    raises.match(r'''no attribute ['"]ceil['"]''')
+
+    with pytest.raises(TypeError) as raises:
+        sr.ceil()
+    raises.match('Categorical cannot perform the operation: ceil')
