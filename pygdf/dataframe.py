@@ -4,11 +4,10 @@ from collections import OrderedDict
 
 import numpy as np
 import pandas as pd
-from pandas.core.dtypes.dtypes import ExtensionDtype, CategoricalDtype
+from pandas.core.dtypes.dtypes import ExtensionDtype
 
 from numba import cuda
 
-from libgdf_cffi import libgdf
 from . import cudautils, utils, _gdf, formatting
 
 
@@ -693,42 +692,15 @@ class Series(object):
     def __repr__(self):
         return self.to_string()
 
-    def _call_binop(self, other, fn, out_dtype):
-        """
-        Internal util to call a binary operator *fn* on operands *self*
-        and *other* with output dtype *out_dtype*.  Returns the output
-        Series.
-        """
-        from .numerical import NumericalSeriesImpl
-        # Allocate output series
-        needs_mask = self.has_null_mask or other.has_null_mask
-        out = self._empty_like(dtype=out_dtype, has_mask=needs_mask,
-                               impl=NumericalSeriesImpl(out_dtype))
-        # Call and fix null_count
-        out._null_count = _gdf.apply_binaryop(fn, self, other, out)
-        return out
-
     def _binaryop(self, other, fn):
         """
         Internal util to call a binary operator *fn* on operands *self*
         and *other*.  Return the output Series.  The output dtype is
         determined by the input operands.
         """
-        if isinstance(other, Series):
-            return self._call_binop(other, fn, self.dtype)
-        else:
+        if not isinstance(other, Series):
             return NotImplemented
-
-    def _call_unaop(self, fn, out_dtype):
-        """
-        Internal util to call a unary operator *fn* on operands *self* with
-        output dtype *out_dtype*.  Returns the output Series.
-        """
-        # Allocate output series
-        data = cuda.device_array(shape=len(self), dtype=out_dtype)
-        out = self._copy_construct(buffer=Buffer(data))
-        _gdf.apply_unaryop(fn, self, out)
-        return out
+        return self._impl.binary_operator(fn, self, other)
 
     def _unaryop(self, fn):
         """
@@ -736,22 +708,22 @@ class Series(object):
         Return the output Series.  The output dtype is determined by the input
         operand.
         """
-        return self._call_unaop(fn, self.dtype)
+        return self._impl.unary_operator(fn, self)
 
     def __add__(self, other):
-        return self._binaryop(other, fn=libgdf.gdf_add_generic)
+        return self._binaryop(other, 'add')
 
     def __sub__(self, other):
-        return self._binaryop(other, fn=libgdf.gdf_sub_generic)
+        return self._binaryop(other, 'sub')
 
     def __mul__(self, other):
-        return self._binaryop(other, fn=libgdf.gdf_mul_generic)
+        return self._binaryop(other, 'mul')
 
     def __floordiv__(self, other):
-        return self._binaryop(other, fn=libgdf.gdf_floordiv_generic)
+        return self._binaryop(other, 'floordiv')
 
     def __truediv__(self, other):
-        return self._binaryop(other, fn=libgdf.gdf_div_generic)
+        return self._binaryop(other, 'truediv')
 
     __div__ = __truediv__
 
@@ -1024,7 +996,7 @@ class Series(object):
 
         Returns a new Series.
         """
-        return self._unaryop(libgdf.gdf_ceil_generic)
+        return self._unaryop('ceil')
 
     def floor(self):
         """Rounds each value downward to the largest integral value not greater
@@ -1032,7 +1004,7 @@ class Series(object):
 
         Returns a new Series.
         """
-        return self._unaryop(libgdf.gdf_floor_generic)
+        return self._unaryop('floor')
 
 
 class BufferSentryError(ValueError):

@@ -1,7 +1,10 @@
 import numpy as np
 
+from numba import cuda
+
 from libgdf_cffi import libgdf
 
+from .dataframe import Buffer
 from .series_impl import SeriesImpl
 from . import _gdf
 
@@ -18,6 +21,19 @@ _ordered_impl = {
     'ge': libgdf.gdf_ge_generic,
 }
 
+_binary_impl = {
+    'add': libgdf.gdf_add_generic,
+    'sub': libgdf.gdf_sub_generic,
+    'mul': libgdf.gdf_mul_generic,
+    'floordiv': libgdf.gdf_floordiv_generic,
+    'truediv': libgdf.gdf_div_generic,
+}
+
+_unary_impl = {
+    'ceil': libgdf.gdf_ceil_generic,
+    'floor': libgdf.gdf_floor_generic,
+}
+
 
 class NumericalSeriesImpl(SeriesImpl):
     def __init__(self, dtype):
@@ -25,6 +41,13 @@ class NumericalSeriesImpl(SeriesImpl):
 
     def element_to_str(self, value):
         return str(value)
+
+    def binary_operator(self, binop, lhs, rhs):
+        fn = _binary_impl[binop]
+        return self._call_binop(lhs, rhs, fn, self.dtype)
+
+    def unary_operator(self, unaryop, series):
+        return self._call_unaryop(series, _unary_impl[unaryop], self.dtype)
 
     def unordered_compare(self, cmpop, lhs, rhs):
         return self._compare(lhs, rhs, fn=_unordered_impl[cmpop])
@@ -56,4 +79,16 @@ class NumericalSeriesImpl(SeriesImpl):
                               impl=NumericalSeriesImpl(out_dtype))
         # Call and fix null_count
         out._null_count = _gdf.apply_binaryop(fn, lhs, rhs, out)
+        return out
+
+    def _call_unaryop(self, series, fn, out_dtype):
+        """
+        Internal util to call a unary operator *fn* on operands *self* with
+        output dtype *out_dtype*.  Returns the output Series.
+        """
+        # Allocate output series
+        data = cuda.device_array_like(series.data.mem)
+        out = series._copy_construct(dtype=out_dtype, buffer=Buffer(data),
+                                     impl=NumericalSeriesImpl(out_dtype))
+        _gdf.apply_unaryop(fn, series, out)
         return out
