@@ -1,11 +1,8 @@
 import numpy as np
 
-from numba import cuda
-
 from libgdf_cffi import libgdf
 
-from .dataframe import Buffer
-from . import _gdf, series_impl
+from . import _gdf, series_impl, utils
 
 
 # Operator mappings
@@ -62,6 +59,13 @@ class NumericalSeriesImpl(series_impl.SeriesImpl):
 
     def ordered_compare(self, cmpop, lhs, rhs):
         return self._compare(lhs, rhs, fn=_ordered_impl[cmpop])
+
+    def normalize_compare_value(self, series, other):
+        if np.min_scalar_type(other).kind in 'biuf':
+            ary = utils.scalar_broadcast_to(other, shape=len(series))
+            sr = series.from_any(ary)
+            return sr
+        return NotImplemented
 
     def element_indexing(self, series, index):
         return series_impl.element_indexing(series, index)

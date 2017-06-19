@@ -729,14 +729,18 @@ class Series(object):
 
     __div__ = __truediv__
 
+    def _normalize_compare_value(self, other):
+        if isinstance(other, Series):
+            return other
+        else:
+            return self._impl.normalize_compare_value(self, other)
+
     def _unordered_compare(self, other, cmpops):
-        if not isinstance(other, Series):
-            return NotImplemented
+        other = self._normalize_compare_value(other)
         return self._impl.unordered_compare(cmpops, self, other)
 
     def _ordered_compare(self, other, cmpops):
-        if not isinstance(other, Series):
-            return NotImplemented
+        other = self._normalize_compare_value(other)
         return self._impl.ordered_compare(cmpops, self, other)
 
     def __eq__(self, other):

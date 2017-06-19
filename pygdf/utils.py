@@ -49,3 +49,12 @@ def make_mask(size):
     """
     size = calc_chunk_size(size, mask_bitsize)
     return cuda.device_array(shape=size, dtype=mask_dtype)
+
+
+def scalar_broadcast_to(scalar, shape):
+    if not isinstance(shape, tuple):
+        shape = (shape,)
+    arr = np.broadcast_to(np.asarray(scalar), shape=shape)
+    # FIXME: this is wasteful, but numba can't slice 0-strided array
+    arr = np.ascontiguousarray(arr)
+    return cuda.to_device(arr)

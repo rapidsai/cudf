@@ -1,8 +1,9 @@
 from __future__ import division
 
-import pytest
 import operator
+import random
 
+import pytest
 import numpy as np
 
 from pygdf.dataframe import Series
@@ -45,6 +46,15 @@ def test_series_compare(cmpop):
     np.testing.assert_equal(cmpop(sr1, sr1).to_array(),  cmpop(arr1, arr1))
     np.testing.assert_equal(cmpop(sr2, sr2).to_array(),  cmpop(arr2, arr2))
     np.testing.assert_equal(cmpop(sr1, sr2).to_array(),  cmpop(arr1, arr2))
+
+
+@pytest.mark.parametrize('cmpop', _cmpops)
+def test_series_compare_scalar(cmpop):
+    arr1 = np.random.random(100)
+    sr1 = Series.from_any(arr1)
+    rhs = np.asscalar(random.choice(arr1))
+    np.testing.assert_equal(cmpop(sr1, rhs).to_array(),  cmpop(arr1, rhs))
+    np.testing.assert_equal(cmpop(rhs, sr1).to_array(),  cmpop(rhs, arr1))
 
 
 @pytest.mark.parametrize('nelem', [1, 7, 8, 9, 32, 64, 128])

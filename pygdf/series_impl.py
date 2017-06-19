@@ -55,6 +55,11 @@ class SeriesImpl(object):
     def ordered_compare(self, cmpop, lhs, rhs):
         raise NotImplementedError
 
+    def normalize_compare_value(self, series, other):
+        """Normalize the *other* value in a comparison when it is not a Series
+        """
+        raise NotImplementedError
+
     # Indexing
 
     def element_indexing(self, series, value):
