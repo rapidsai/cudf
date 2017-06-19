@@ -450,6 +450,7 @@ class Series(object):
         * ``Buffer``
         * numba device array
         * numpy array
+        * pandas.Categorical
         """
         if isinstance(arbitrary, Series):
             return arbitrary
@@ -484,7 +485,7 @@ class Series(object):
 
         valid_codes = codes != -1
         buf = Buffer(codes)
-        params = dict(size=buf.size, dtype=dtype, buffer=buf, impl=impl)
+        params = dict(size=buf.size, buffer=buf, impl=impl)
         if not np.all(valid_codes):
             mask = utils.boolmask_to_bitmask(valid_codes)
             nnz = np.count_nonzero(valid_codes)
@@ -496,7 +497,7 @@ class Series(object):
     def from_buffer(cls, buffer):
         """Create a Series from a ``Buffer``
         """
-        return cls(size=buffer.size, dtype=buffer.dtype, buffer=buffer)
+        return cls(size=buffer.size, buffer=buffer)
 
     @classmethod
     def from_array(cls, array):
@@ -527,7 +528,7 @@ class Series(object):
         """
         return cls.from_any(data).set_mask(mask, null_count=null_count)
 
-    def __init__(self, size, dtype, buffer=None, mask=None, null_count=None,
+    def __init__(self, size, buffer=None, mask=None, null_count=None,
                  impl=None):
         """
         Allocate a empty series with [size x dtype].
@@ -536,14 +537,9 @@ class Series(object):
         from .numerical import NumericalSeriesImpl
 
         self._size = size
-
-        if not isinstance(dtype, ExtensionDtype):
-            dtype = np.dtype(dtype)
-
-        self._dtype = dtype
         self._data = buffer
         self._mask = mask
-        self._impl = (NumericalSeriesImpl(dtype)
+        self._impl = (NumericalSeriesImpl(buffer.dtype)
                       if impl is None else impl)
         if null_count is None:
             if self._mask is not None:
@@ -559,7 +555,6 @@ class Series(object):
     def _copy_construct_defaults(self):
         return dict(
             size=self._size,
-            dtype=self._dtype,
             buffer=self._data,
             mask=self._mask,
             null_count=self._null_count,
@@ -753,7 +748,7 @@ class Series(object):
     @property
     def dtype(self):
         """dtype of the Series"""
-        return self._dtype
+        return self._impl.dtype
 
     def append(self, arbitrary):
         """Append values from another ``Series`` or array-like object.

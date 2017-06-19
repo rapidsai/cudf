@@ -52,6 +52,7 @@ class SeriesImpl(object):
 
 def empty_like(df, dtype=None, masked=None, impl=None):
     """Create a new empty Series with the same length.
+    Note: Both the data and mask buffer are empty.
 
     Parameters
     ----------
@@ -63,20 +64,48 @@ def empty_like(df, dtype=None, masked=None, impl=None):
         Defaults to the same as this.
     impl : SeriesImpl; defaults to None
         The SeriesImpl to use for operation delegation.
-        Defaults to the same as this.
+        Defaults to a NumericalSeriesImpl for the dtype argument.
     """
+    from .numerical import NumericalSeriesImpl
+
     # Prepare args
     if dtype is None:
         dtype = df.data.dtype
     if masked is None:
         masked = df.has_null_mask
     if impl is None:
-        impl = df._impl
+        impl = NumericalSeriesImpl(dtype)
     # Real work
     data = cuda.device_array(shape=len(df), dtype=dtype)
-    params = dict(buffer=Buffer(data), dtype=dtype, impl=impl)
+    params = dict(buffer=Buffer(data), impl=impl)
     if masked:
         mask_size = utils.calc_chunk_size(data.size, utils.mask_bitsize)
         mask = cuda.device_array(shape=mask_size, dtype=utils.mask_dtype)
         params.update(dict(mask=Buffer(mask), null_count=data.size))
+    return df._copy_construct(**params)
+
+
+def empty_like_same_mask(df, dtype=None, impl=None):
+    """Create a new empty Series with the same length and the same mask.
+
+    Parameters
+    ----------
+    dtype : np.dtype like; defaults to None
+        The dtype of the data buffer.
+        Defaults to the same dtype as this.
+    impl : SeriesImpl; defaults to None
+        The SeriesImpl to use for operation delegation.
+        Defaults to a NumericalSeriesImpl for the dtype argument.
+    """
+    from .numerical import NumericalSeriesImpl
+    # Prepare args
+    if dtype is None:
+        dtype = df.data.dtype
+    if impl is None:
+        impl = NumericalSeriesImpl(dtype)
+    # Real work
+    data = cuda.device_array(shape=len(df), dtype=dtype)
+    params = dict(buffer=Buffer(data), impl=impl)
+    if df.has_null_mask:
+        params.update(mask=df.nullmask)
     return df._copy_construct(**params)
