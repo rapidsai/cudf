@@ -9,7 +9,7 @@ from pygdf.dataframe import Series
 def test_categorical_basic():
     cat = pd.Categorical(['a', 'a', 'b', 'c', 'a'], categories=['a', 'b', 'c'])
     pdsr = pd.Series(cat)
-    sr = Series.from_any(cat)
+    sr = Series(cat)
     np.testing.assert_array_equal(cat.codes, sr.to_array())
     assert sr.dtype == pdsr.dtype
 
@@ -133,7 +133,7 @@ def test_categorical_binary_add():
 def test_categorical_unary_ceil():
     cat = pd.Categorical(['a', 'a', 'b', 'c', 'a'], categories=['a', 'b', 'c'])
     pdsr = pd.Series(cat)
-    sr = Series.from_any(cat)
+    sr = Series(cat)
 
     with pytest.raises(AttributeError) as raises:
         pdsr.ceil()

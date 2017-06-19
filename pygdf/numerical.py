@@ -95,8 +95,6 @@ class NumericalSeriesImpl(series_impl.SeriesImpl):
         output dtype *out_dtype*.  Returns the output Series.
         """
         # Allocate output series
-        # data = cuda.device_array(len(series), dtype=out_dtype)
-        # out = series._copy_construct(buffer=Buffer(data))
         out = series_impl.empty_like_same_mask(series, dtype=out_dtype)
         _gdf.apply_unaryop(fn, series, out)
         return out

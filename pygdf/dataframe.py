@@ -439,6 +439,21 @@ class Series(object):
 
     ``Series`` objects are used as columns of ``DataFrame``.
     """
+    class Init(object):
+        """
+        Initializer object
+        """
+        def __init__(self, **kwargs):
+            self._params = kwargs
+
+        def parameters(self, **kwargs):
+            dupset = frozenset(kwargs.keys()) & frozenset(self._params.keys())
+            if dupset:
+                raise ValueError("duplicated kws: {}",
+                                 ', '.join(map(str, dupset)))
+            kwargs.update(self._params)
+            return kwargs
+
     @classmethod
     def from_any(cls, arbitrary):
         """Create Series from an arbitrary object
@@ -490,13 +505,13 @@ class Series(object):
             nnz = np.count_nonzero(valid_codes)
             null_count = codes.size - nnz
             params.update(dict(mask=Buffer(mask), null_count=null_count))
-        return Series(**params)
+        return Series(cls.Init(**params))
 
     @classmethod
     def from_buffer(cls, buffer):
         """Create a Series from a ``Buffer``
         """
-        return cls(size=buffer.size, buffer=buffer)
+        return cls(cls.Init(size=buffer.size, buffer=buffer))
 
     @classmethod
     def from_array(cls, array):
@@ -527,11 +542,18 @@ class Series(object):
         """
         return cls.from_any(data).set_mask(mask, null_count=null_count)
 
-    def __init__(self, size, buffer=None, mask=None, null_count=None,
-                 impl=None):
+    def __new__(cls, arg, **kwargs):
+        if isinstance(arg, cls.Init):
+            instance = object.__new__(cls)
+            instance._init_detail(**arg.parameters(**kwargs))
+        else:
+            instance = cls.from_any(arg, **kwargs)
+        return instance
+
+    def _init_detail(self, size, buffer=None, mask=None, null_count=None,
+                     impl=None):
         """
-        Allocate a empty series with [size x dtype].
-        The memory is uninitialized
+        Actual initializer of the instance
         """
         from . import series_impl
 
@@ -566,7 +588,7 @@ class Series(object):
         params = self._copy_construct_defaults()
         cls = type(self)
         params.update(kwargs)
-        return cls(**params)
+        return cls(cls.Init(**params))
 
     def set_mask(self, mask, null_count=None):
         """Create new Series by setting a mask array.
