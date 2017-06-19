@@ -142,3 +142,15 @@ def test_categorical_unary_ceil():
     with pytest.raises(TypeError) as raises:
         sr.ceil()
     raises.match('Categorical cannot perform the operation: ceil')
+
+
+def test_categorical_element_indexing():
+    """
+    Element indexing to a cat column must give the underlying object
+    not the numerical index.
+    """
+    cat = pd.Categorical(['a', 'a', 'b', 'c', 'a'], categories=['a', 'b', 'c'])
+    pdsr = pd.Series(cat)
+    sr = Series(cat)
+    assert list(pdsr) == list(sr)
+    assert list(pdsr.cat.codes) == list(sr.cat.codes)

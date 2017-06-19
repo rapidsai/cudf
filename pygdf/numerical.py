@@ -63,6 +63,9 @@ class NumericalSeriesImpl(series_impl.SeriesImpl):
     def ordered_compare(self, cmpop, lhs, rhs):
         return self._compare(lhs, rhs, fn=_ordered_impl[cmpop])
 
+    def element_indexing(self, series, index):
+        return series_impl.element_indexing(series, index)
+
     #
     # Internals
     #

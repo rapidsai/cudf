@@ -67,7 +67,7 @@ class CategoricalSeriesImpl(SeriesImpl):
                                    ordered=self._ordered)
 
     def element_to_str(self, value):
-        return str(self._decode(value))
+        return str(value)
 
     def binary_operator(self, binop, lhs, rhs):
         msg = 'Categorical cannot perform the operation: {}'.format(binop)
@@ -89,3 +89,7 @@ class CategoricalSeriesImpl(SeriesImpl):
         if self != rhs._impl:
             raise TypeError('Categoricals can only compare with the same type')
         return self._codes_impl.ordered_compare(cmpop, lhs, rhs)
+
+    def element_indexing(self, series, index):
+        val = self._codes_impl.element_indexing(series, index)
+        return self._decode(val) if val is not None else val

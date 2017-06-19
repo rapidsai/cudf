@@ -1,7 +1,7 @@
 from numba import cuda
 
 from .dataframe import Buffer
-from . import utils
+from . import utils, cudautils
 
 
 class SeriesImpl(object):
@@ -34,8 +34,12 @@ class SeriesImpl(object):
     def cat(self, series):
         raise TypeError('not a categorical series')
 
+    # String
+
     def element_to_str(self, value):
         raise NotImplementedError
+
+    # Operators
 
     def binary_operator(self, binop, lhs, rhs):
         raise NotImplementedError
@@ -43,10 +47,17 @@ class SeriesImpl(object):
     def unary_operator(self, unaryop, series):
         raise NotImplementedError
 
+    # Comparators
+
     def unordered_compare(self, cmpop, lhs, rhs):
         raise NotImplementedError
 
     def ordered_compare(self, cmpop, lhs, rhs):
+        raise NotImplementedError
+
+    # Indexing
+
+    def element_indexing(self, series, value):
         raise NotImplementedError
 
 
@@ -115,3 +126,18 @@ def get_default_impl(dtype):
     from .numerical import NumericalSeriesImpl
 
     return NumericalSeriesImpl(dtype)
+
+
+def element_indexing(series, index):
+    """Default implementation for indexing to an element
+
+    Raises
+    ------
+    ``IndexError`` if out-of-bound
+    """
+    val = series.data[index]  # this raises IndexError
+    valid = (cudautils.mask_get.py_func(series.nullmask, index)
+             if series.has_null_mask else True)
+    return val if valid else None
+
+

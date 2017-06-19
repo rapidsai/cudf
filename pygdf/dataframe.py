@@ -647,12 +647,7 @@ class Series(object):
                                             null_count=None)
         elif isinstance(arg, int):
             # The following triggers a IndexError if out-of-bound
-            val = self._data[arg]
-            if self._mask is not None:
-                valid = cudautils.mask_get.py_func(self._mask, arg)
-            else:
-                valid = 1
-            return val if valid else None
+            return self._impl.element_indexing(self, arg)
         else:
             raise NotImplementedError(type(arg))
 
