@@ -9,11 +9,15 @@ from .series_impl import SeriesImpl
 from . import _gdf
 
 
+# Operator mappings
+
+#   Unordered comparators
 _unordered_impl = {
     'eq': libgdf.gdf_eq_generic,
     'ne': libgdf.gdf_ne_generic,
 }
 
+#   Ordered comparators
 _ordered_impl = {
     'lt': libgdf.gdf_lt_generic,
     'le': libgdf.gdf_le_generic,
@@ -21,6 +25,7 @@ _ordered_impl = {
     'ge': libgdf.gdf_ge_generic,
 }
 
+#   Binary operators
 _binary_impl = {
     'add': libgdf.gdf_add_generic,
     'sub': libgdf.gdf_sub_generic,
@@ -29,6 +34,7 @@ _binary_impl = {
     'truediv': libgdf.gdf_div_generic,
 }
 
+#   Unary operators
 _unary_impl = {
     'ceil': libgdf.gdf_ceil_generic,
     'floor': libgdf.gdf_floor_generic,
@@ -36,6 +42,9 @@ _unary_impl = {
 
 
 class NumericalSeriesImpl(SeriesImpl):
+    """
+    Implements operations for numerical Series.
+    """
     def __init__(self, dtype):
         super(NumericalSeriesImpl, self).__init__(dtype)
 

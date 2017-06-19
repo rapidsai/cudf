@@ -87,12 +87,12 @@ def test_categorical_compare_unordered():
 
 
 def test_categorical_compare_ordered():
-    cat1 = pd.Categorical(['a', 'a', 'b', 'c', 'a'], categories=['a', 'b', 'c'],
-                          ordered=True)
+    cat1 = pd.Categorical(['a', 'a', 'b', 'c', 'a'],
+                          categories=['a', 'b', 'c'], ordered=True)
     pdsr1 = pd.Series(cat1)
     sr1 = Series.from_any(cat1)
-    cat2 = pd.Categorical(['a', 'b', 'a', 'c', 'b'], categories=['a', 'b', 'c'],
-                          ordered=True)
+    cat2 = pd.Categorical(['a', 'b', 'a', 'c', 'b'],
+                          categories=['a', 'b', 'c'], ordered=True)
     pdsr2 = pd.Series(cat2)
     sr2 = Series.from_any(cat2)
 
@@ -128,6 +128,7 @@ def test_categorical_binary_add():
     with pytest.raises(TypeError) as raises:
         sr + sr
     raises.match('Categorical cannot perform the operation: add')
+
 
 def test_categorical_unary_ceil():
     cat = pd.Categorical(['a', 'a', 'b', 'c', 'a'], categories=['a', 'b', 'c'])

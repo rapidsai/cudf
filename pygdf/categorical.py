@@ -2,7 +2,11 @@ from .dataframe import Series
 from .series_impl import SeriesImpl
 from . import numerical
 
+
 class CategoricalAccessor(object):
+    """
+    This mimicks pandas `df.cat` interface.
+    """
     def __init__(self, parent, categories, ordered):
         self._parent = parent
         self._categories = tuple(categories)
@@ -29,10 +33,15 @@ class CategoricalAccessor(object):
 
 
 class CategoricalSeriesImpl(SeriesImpl):
+    """
+    Implements a Categorical Series that treats integral values as index
+    into a dictionary that map to arbitrary objects (e.g. string).
+    """
     def __init__(self, dtype, codes_dtype, categories, ordered):
         super(CategoricalSeriesImpl, self).__init__(dtype)
         self._categories = categories
         self._ordered = ordered
+        # This contains the `.code` series implementation
         self._codes_impl = numerical.NumericalSeriesImpl(codes_dtype)
 
     def __eq__(self, other):
