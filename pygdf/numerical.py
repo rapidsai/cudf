@@ -5,8 +5,7 @@ from numba import cuda
 from libgdf_cffi import libgdf
 
 from .dataframe import Buffer
-from .series_impl import SeriesImpl
-from . import _gdf
+from . import _gdf, series_impl
 
 
 # Operator mappings
@@ -41,7 +40,7 @@ _unary_impl = {
 }
 
 
-class NumericalSeriesImpl(SeriesImpl):
+class NumericalSeriesImpl(series_impl.SeriesImpl):
     """
     Implements operations for numerical Series.
     """
@@ -83,9 +82,9 @@ class NumericalSeriesImpl(SeriesImpl):
         Series.
         """
         # Allocate output series
-        needs_mask = lhs.has_null_mask or rhs.has_null_mask
-        out = lhs._empty_like(dtype=out_dtype, has_mask=needs_mask,
-                              impl=NumericalSeriesImpl(out_dtype))
+        masked = lhs.has_null_mask or rhs.has_null_mask
+        out = series_impl.empty_like(lhs, dtype=out_dtype, masked=masked,
+                                     impl=NumericalSeriesImpl(out_dtype))
         # Call and fix null_count
         out._null_count = _gdf.apply_binaryop(fn, lhs, rhs, out)
         return out

@@ -574,20 +574,11 @@ class Series(object):
         params.update(kwargs)
         return cls(**params)
 
-    def _empty_like(self, dtype, has_mask, impl):
-        """Create a new Series with the same length"""
-        data = cuda.device_array(shape=len(self), dtype=dtype)
-        params = dict(buffer=Buffer(data), dtype=dtype, impl=impl)
-        if has_mask:
-            mask_size = utils.calc_chunk_size(data.size, utils.mask_bitsize)
-            mask = cuda.device_array(shape=mask_size, dtype=utils.mask_dtype)
-            params.update(dict(mask=Buffer(mask), null_count=data.size))
-        return self._copy_construct(**params)
-
     def set_mask(self, mask, null_count=None):
         """Create new Series by setting a mask array.
 
-        This will override the existing mask.
+        This will override the existing mask.  The returned Series will reference
+        the same data buffer as this Series.
 
         Parameters
         ----------
