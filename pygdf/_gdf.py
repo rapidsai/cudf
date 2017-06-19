@@ -36,9 +36,7 @@ def apply_binaryop(binop, lhs, rhs, out):
     binop(*args)
     # validity mask
     if out.has_null_mask:
-        libgdf.gdf_validity_and(*args)
-        nnz = cudautils.count_nonzero_mask(out._mask.mem)
-        return len(out) - nnz
+        return apply_mask_and(lhs, rhs, out)
     else:
         return 0
 
@@ -50,6 +48,13 @@ def apply_unaryop(unaop, inp, out):
     args = (inp._cffi_view, out._cffi_view)
     # apply unary operator
     unaop(*args)
+
+
+def apply_mask_and(series, mask, out):
+    args = (series._cffi_view, mask._cffi_view, out._cffi_view)
+    libgdf.gdf_validity_and(*args)
+    nnz = cudautils.count_nonzero_mask(out._mask.mem)
+    return len(out) - nnz
 
 
 def np_to_gdf_dtype(dtype):

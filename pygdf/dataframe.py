@@ -621,7 +621,13 @@ class Series(object):
         return self._size
 
     def __getitem__(self, arg):
-        if isinstance(arg, slice):
+        from . import series_impl
+
+        if isinstance(arg, Series):
+            # FIXME inefficient .to_array() D->H
+            return series_impl.masking(self, arg)
+
+        elif isinstance(arg, slice):
             if self.null_count > 0:
                 # compute mask slice
                 start = arg.start if arg.start else 0
@@ -650,6 +656,14 @@ class Series(object):
             return self._impl.element_indexing(self, arg)
         else:
             raise NotImplementedError(type(arg))
+
+    def __iter__(self):
+        def iterator():
+            for i in range(len(self)):
+                v = self[i]
+                if v is not None:
+                    yield v
+        return iter(iterator())
 
     def __bool__(self):
         """Always raise TypeError when converting a Series
@@ -784,6 +798,11 @@ class Series(object):
             newbuf.extend(buf.to_gpu_array())
         # return new series
         return self.from_any(newbuf)
+
+    @property
+    def valid_count(self):
+        """Number of null values"""
+        return self._size - self._null_count
 
     @property
     def null_count(self):

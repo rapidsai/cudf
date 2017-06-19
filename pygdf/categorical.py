@@ -1,6 +1,7 @@
+import numpy as np
+
 from .dataframe import Series
-from .series_impl import SeriesImpl
-from . import numerical
+from . import numerical, utils, series_impl
 
 
 class CategoricalAccessor(object):
@@ -32,7 +33,7 @@ class CategoricalAccessor(object):
             return Series.from_buffer(data)
 
 
-class CategoricalSeriesImpl(SeriesImpl):
+class CategoricalSeriesImpl(series_impl.SeriesImpl):
     """
     Implements a Categorical Series that treats integral values as index
     into a dictionary that map to arbitrary objects (e.g. string).
@@ -89,6 +90,14 @@ class CategoricalSeriesImpl(SeriesImpl):
         if self != rhs._impl:
             raise TypeError('Categoricals can only compare with the same type')
         return self._codes_impl.ordered_compare(cmpop, lhs, rhs)
+
+    def normalize_compare_value(self, series, other):
+        code = self._codes_impl.dtype.type(self._encode(other))
+        darr = utils.scalar_broadcast_to(code, shape=len(series))
+        out = series_impl.empty_like_same_mask(series, impl=self)
+        # FIXME: not efficient
+        out.data.mem.copy_to_device(darr)
+        return out
 
     def element_indexing(self, series, index):
         val = self._codes_impl.element_indexing(series, index)

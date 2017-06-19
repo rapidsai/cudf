@@ -1,7 +1,7 @@
 from numba import cuda
 
 from .dataframe import Buffer
-from . import utils, cudautils
+from . import utils, cudautils, _gdf
 
 
 class SeriesImpl(object):
@@ -146,3 +146,16 @@ def element_indexing(series, index):
     return val if valid else None
 
 
+def masking(series, boolmask):
+    """Apply a boolean mask to a series
+    """
+    bools = utils.boolmask_to_bitmask(boolmask.to_array())
+    if series.has_null_mask:
+        # If the series has a mask
+        masked = boolmask.set_mask(bools)
+        out = empty_like(series, masked, masked=True)
+        _gdf.apply_mask_and(series, masked, out)
+        return out
+    else:
+        # If the series has no mask
+        return series.set_mask(bools)

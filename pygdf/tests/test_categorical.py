@@ -154,3 +154,37 @@ def test_categorical_element_indexing():
     sr = Series(cat)
     assert list(pdsr) == list(sr)
     assert list(pdsr.cat.codes) == list(sr.cat.codes)
+
+
+def test_categorical_masking():
+    """
+    Test common operation for getting a all rows that matches a certain
+    category.
+    """
+    cat = pd.Categorical(['a', 'a', 'b', 'c', 'a'], categories=['a', 'b', 'c'])
+    pdsr = pd.Series(cat)
+    sr = Series(cat)
+
+    # check scalar comparison
+    expect_matches = (pdsr == 'a')
+    got_matches = (sr == 'a')
+
+    print('---expect_matches---')
+    print(expect_matches)
+    print('---got_matches---')
+    print(got_matches)
+    np.testing.assert_array_equal(expect_matches.values,
+                                  got_matches.to_array())
+
+    # mask series
+    expect_masked = pdsr[expect_matches]
+    got_masked = sr[got_matches]
+
+    print('---expect_masked---')
+    print(expect_masked)
+    print('---got_masked---')
+    print(got_masked)
+
+    assert len(expect_masked) == len(got_masked)
+    assert len(expect_masked) == got_masked.valid_count
+    assert list(expect_masked) == list(got_masked)
