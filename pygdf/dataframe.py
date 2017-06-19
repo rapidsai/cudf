@@ -264,7 +264,7 @@ class DataFrame(object):
             raise ValueError("require at least 1 column")
         if nrow < 1:
             raise ValueError("require at least 1 row")
-        dtype = cols[0]
+        dtype = cols[0].dtype
         if any(dtype != c.dtype for c in cols):
             raise ValueError('all column must have the same dtype')
         for k, c in self._cols.items():
