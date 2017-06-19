@@ -79,8 +79,7 @@ def empty_like(df, dtype=None, masked=None, impl=None):
     data = cuda.device_array(shape=len(df), dtype=dtype)
     params = dict(buffer=Buffer(data), impl=impl)
     if masked:
-        mask_size = utils.calc_chunk_size(data.size, utils.mask_bitsize)
-        mask = cuda.device_array(shape=mask_size, dtype=utils.mask_dtype)
+        mask = utils.make_mask(data.size)
         params.update(dict(mask=Buffer(mask), null_count=data.size))
     return df._copy_construct(**params)
 
@@ -109,3 +108,4 @@ def empty_like_same_mask(df, dtype=None, impl=None):
     if df.has_null_mask:
         params.update(mask=df.nullmask)
     return df._copy_construct(**params)
+

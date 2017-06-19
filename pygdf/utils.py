@@ -2,7 +2,7 @@ from collections import namedtuple
 
 import numpy as np
 
-from numba import njit
+from numba import njit, cuda
 
 mask_dtype = np.dtype(np.uint8)
 mask_bitsize = mask_dtype.itemsize * 8
@@ -42,3 +42,10 @@ def boolmask_to_bitmask(bools):
         if x:
             mask_set(mask, i)
     return mask
+
+
+def make_mask(size):
+    """Create mask to obtain at least *size* number of bits.
+    """
+    size = calc_chunk_size(size, mask_bitsize)
+    return cuda.device_array(shape=size, dtype=mask_dtype)

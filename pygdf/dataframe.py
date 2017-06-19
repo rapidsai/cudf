@@ -1014,15 +1014,3 @@ class _BufferSentry(object):
     def contig(self):
         if not self._buf.is_c_contiguous():
             raise BufferSentryError('non contiguous')
-
-
-def _make_mask(size):
-    size = utils.calc_chunk_size(size, utils.mask_bitsize)
-    return cuda.device_array(shape=size, dtype=utils.mask_dtype)
-
-
-def _make_mask_from_stride(size, stride):
-    mask = _make_mask(size)
-    cudautils.set_mask_from_stride(mask=mask, stride=stride)
-    return mask
-
