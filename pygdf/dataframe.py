@@ -4,7 +4,6 @@ from collections import OrderedDict
 
 import numpy as np
 import pandas as pd
-from pandas.core.dtypes.dtypes import ExtensionDtype
 
 from numba import cuda
 
@@ -534,12 +533,12 @@ class Series(object):
         Allocate a empty series with [size x dtype].
         The memory is uninitialized
         """
-        from .numerical import NumericalSeriesImpl
+        from . import series_impl
 
         self._size = size
         self._data = buffer
         self._mask = mask
-        self._impl = (NumericalSeriesImpl(buffer.dtype)
+        self._impl = (series_impl.get_default_impl(buffer.dtype)
                       if impl is None else impl)
         if null_count is None:
             if self._mask is not None:
@@ -572,8 +571,8 @@ class Series(object):
     def set_mask(self, mask, null_count=None):
         """Create new Series by setting a mask array.
 
-        This will override the existing mask.  The returned Series will reference
-        the same data buffer as this Series.
+        This will override the existing mask.  The returned Series will
+        reference the same data buffer as this Series.
 
         Parameters
         ----------

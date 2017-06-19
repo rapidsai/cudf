@@ -64,17 +64,15 @@ def empty_like(df, dtype=None, masked=None, impl=None):
         Defaults to the same as this.
     impl : SeriesImpl; defaults to None
         The SeriesImpl to use for operation delegation.
-        Defaults to a NumericalSeriesImpl for the dtype argument.
+        Defaults to ``get_default_impl(dtype)``.
     """
-    from .numerical import NumericalSeriesImpl
-
     # Prepare args
     if dtype is None:
         dtype = df.data.dtype
     if masked is None:
         masked = df.has_null_mask
     if impl is None:
-        impl = NumericalSeriesImpl(dtype)
+        impl = get_default_impl(dtype)
     # Real work
     data = cuda.device_array(shape=len(df), dtype=dtype)
     params = dict(buffer=Buffer(data), impl=impl)
@@ -94,14 +92,14 @@ def empty_like_same_mask(df, dtype=None, impl=None):
         Defaults to the same dtype as this.
     impl : SeriesImpl; defaults to None
         The SeriesImpl to use for operation delegation.
-        Defaults to a NumericalSeriesImpl for the dtype argument.
+        Defaults to ``get_default_impl(dtype)``.
     """
-    from .numerical import NumericalSeriesImpl
+
     # Prepare args
     if dtype is None:
         dtype = df.data.dtype
     if impl is None:
-        impl = NumericalSeriesImpl(dtype)
+        impl = get_default_impl(dtype)
     # Real work
     data = cuda.device_array(shape=len(df), dtype=dtype)
     params = dict(buffer=Buffer(data), impl=impl)
@@ -109,3 +107,11 @@ def empty_like_same_mask(df, dtype=None, impl=None):
         params.update(mask=df.nullmask)
     return df._copy_construct(**params)
 
+
+def get_default_impl(dtype):
+    """
+    Returns the default SeriesImpl for the given dtype.
+    """
+    from .numerical import NumericalSeriesImpl
+
+    return NumericalSeriesImpl(dtype)
