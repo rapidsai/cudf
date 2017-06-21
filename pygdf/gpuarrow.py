@@ -52,10 +52,6 @@ class GpuArrowNodeReader(object):
     def __init__(self, gpu_data, desc):
         self._gpu_data = gpu_data
         self._desc = desc
-        if self._desc.null_count:
-            if self._desc.length != self._desc.null_count:
-                msg = "unexpected self._desc.length != self._desc.null_count"
-                raise NotImplementedError(msg)
 
     @property
     def null_count(self):
