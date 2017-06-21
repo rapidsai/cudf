@@ -147,37 +147,64 @@ gdf_error gdf_div_f64(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
 /* logical */
 
 gdf_error gdf_gt_generic(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
+gdf_error gdf_gt_i8(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
 gdf_error gdf_gt_i32(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
 gdf_error gdf_gt_i64(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
 gdf_error gdf_gt_f32(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
 gdf_error gdf_gt_f64(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
 
 gdf_error gdf_ge_generic(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
+gdf_error gdf_ge_i8(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
 gdf_error gdf_ge_i32(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
 gdf_error gdf_ge_i64(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
 gdf_error gdf_ge_f32(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
 gdf_error gdf_ge_f64(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
 
 gdf_error gdf_lt_generic(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
+gdf_error gdf_lt_i8(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
 gdf_error gdf_lt_i32(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
 gdf_error gdf_lt_i64(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
 gdf_error gdf_lt_f32(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
 gdf_error gdf_lt_f64(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
 
 gdf_error gdf_le_generic(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
+gdf_error gdf_le_i8(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
 gdf_error gdf_le_i32(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
 gdf_error gdf_le_i64(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
 gdf_error gdf_le_f32(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
 gdf_error gdf_le_f64(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
 
 gdf_error gdf_eq_generic(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
+gdf_error gdf_eq_i8(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
 gdf_error gdf_eq_i32(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
 gdf_error gdf_eq_i64(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
 gdf_error gdf_eq_f32(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
 gdf_error gdf_eq_f64(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
 
 gdf_error gdf_ne_generic(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
+gdf_error gdf_ne_i8(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
 gdf_error gdf_ne_i32(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
 gdf_error gdf_ne_i64(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
 gdf_error gdf_ne_f32(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
 gdf_error gdf_ne_f64(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
+
+/* bitwise */
+
+gdf_error gdf_bitwise_and_generic(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
+gdf_error gdf_bitwise_and_i8(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
+gdf_error gdf_bitwise_and_i32(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
+gdf_error gdf_bitwise_and_i64(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
+
+gdf_error gdf_bitwise_or_generic(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
+gdf_error gdf_bitwise_or_i8(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
+gdf_error gdf_bitwise_or_i32(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
+gdf_error gdf_bitwise_or_i64(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
+
+gdf_error gdf_bitwise_xor_generic(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
+gdf_error gdf_bitwise_xor_i8(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
+gdf_error gdf_bitwise_xor_i32(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
+gdf_error gdf_bitwise_xor_i64(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
+
+/* validity */
+
+gdf_error gdf_validity_and(gdf_column *lhs, gdf_column *rhs, gdf_column *output);

@@ -19,6 +19,7 @@ def get_dtype(dtype):
         np.int64:   libgdf.GDF_INT64,
         np.int32:   libgdf.GDF_INT32,
         np.int8:    libgdf.GDF_INT8,
+        np.bool_:   libgdf.GDF_INT8,
     }[np.dtype(dtype).type]
 
 
@@ -33,8 +34,20 @@ def gen_rand(dtype, size):
         return np.random.random(size).astype(dtype)
     elif dtype.kind == 'i':
         return np.random.random_integers(low=-10000, high=10000, size=size).astype(dtype)
+    elif dtype.kind == 'b':
+        return np.random.random_integers(low=0, high=1, size=size).astype(np.bool)
     raise NotImplementedError('dtype.kind={}'.format(dtype.kind))
 
 
 def fix_zeros(arr, val=1):
     arr[arr == 0] = val
+
+
+def buffer_as_bits(data):
+    def fix_binary(x):
+        x = x[2:]
+        diff = 8 - len(x)
+        return ('0' * diff + x)[::-1]
+
+    binaries = ''.join(fix_binary(bin(x)) for x in bytearray(data))
+    return list(map(lambda x: x == '1', binaries))

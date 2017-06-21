@@ -1,5 +1,6 @@
 
 import pytest
+import functools
 
 import numpy as np
 from numba import cuda
@@ -113,6 +114,7 @@ params_logical_types = [
     np.float32,
     np.int32,
     np.int64,
+    np.bool,
 ]
 
 @pytest.mark.parametrize('dtype', params_logical_types)
@@ -139,6 +141,56 @@ def test_eq(dtype):
 @pytest.mark.parametrize('dtype', params_logical_types)
 def test_ne(dtype):
     logical_op_test(dtype, np.not_equal, libgdf.gdf_ne_generic)
+
+
+# bitwise
+
+params_bitwise_types = [
+    np.int32,
+    np.int64,
+    np.int8,
+]
+
+def bitwise_op_test(dtype, expect_fn, test_fn, nelem=128):
+    h_lhs = gen_rand(dtype, nelem)
+    h_rhs = gen_rand(dtype, nelem)
+
+    d_lhs = cuda.to_device(h_lhs)
+    d_rhs = cuda.to_device(h_rhs)
+    d_result = cuda.device_array_like(d_lhs)
+
+    col_lhs = new_column()
+    col_rhs = new_column()
+    col_result = new_column()
+    gdf_dtype = get_dtype(dtype)
+
+    libgdf.gdf_column_view(col_lhs, unwrap_devary(d_lhs), ffi.NULL, nelem,
+                           gdf_dtype)
+    libgdf.gdf_column_view(col_rhs, unwrap_devary(d_rhs), ffi.NULL, nelem,
+                           gdf_dtype)
+    libgdf.gdf_column_view(col_result, unwrap_devary(d_result), ffi.NULL, nelem,
+                           gdf_dtype)
+
+    expect = expect_fn(h_lhs, h_rhs)
+    test_fn(col_lhs, col_rhs, col_result)
+    got = d_result.copy_to_host()
+    print('got')
+    print(got)
+    print('expect')
+    print(expect)
+    np.testing.assert_array_equal(expect, got)
+
+@pytest.mark.parametrize('dtype', params_bitwise_types)
+def test_bitwise_and(dtype):
+    bitwise_op_test(dtype, np.bitwise_and, libgdf.gdf_bitwise_and_generic)
+
+@pytest.mark.parametrize('dtype', params_bitwise_types)
+def test_bitwise_or(dtype):
+    bitwise_op_test(dtype, np.bitwise_or, libgdf.gdf_bitwise_or_generic)
+
+@pytest.mark.parametrize('dtype', params_bitwise_types)
+def test_bitwise_xor(dtype):
+    bitwise_op_test(dtype, np.bitwise_xor, libgdf.gdf_bitwise_xor_generic)
 
 
 if __name__ == '__main__':

@@ -17,6 +17,7 @@ typedef enum {
     GDF_CUDA_ERROR,
     GDF_UNSUPPORTED_DTYPE,
     GDF_COLUMN_SIZE_MISMATCH,
+    GDF_VALIDITY_MISSING,
 } gdf_error;
 
 typedef struct gdf_column_{

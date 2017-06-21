@@ -7,5 +7,6 @@ const char * gdf_error_get_name(gdf_error errcode) {
     GETNAME(GDF_CUDA_ERROR)
     GETNAME(GDF_UNSUPPORTED_DTYPE)
     GETNAME(GDF_COLUMN_SIZE_MISMATCH)
+    GETNAME(GDF_VALIDITY_MISSING)
     }
 }
