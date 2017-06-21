@@ -181,6 +181,12 @@ class DataFrame(object):
         """
         return tuple(self._cols)
 
+    @property
+    def index(self):
+        """Returns the index of the DataFrame
+        """
+        return self._index
+
     def copy(self):
         "Shallow copy this dataframe"
         df = DataFrame()
@@ -361,6 +367,19 @@ class DataFrame(object):
         for colk in dataframe.columns:
             df[colk] = dataframe[colk].values
         return df
+
+    def to_records(self, index=True):
+        """Covert to a numpy recarray
+        """
+        members = [('index', self.index.dtype)] if index else []
+        members += [(col, self[col].dtype) for col in self.columns]
+        dtype = np.dtype(members)
+        ret = np.recarray(len(self), dtype=dtype)
+        if index:
+            ret['index'] = self.index.values
+        for col in self.columns:
+            ret[col] = self[col].to_array()
+        return ret
 
 
 class Loc(object):
@@ -1120,6 +1139,14 @@ class DefaultIndex(Index):
         else:
             return NotImplemented
 
+    @property
+    def dtype(self):
+        return np.dtype(np.int64)
+
+    @property
+    def values(self):
+        return np.arange(len(self), dtype=self.dtype)
+
 
 class Int64Index(Index):
     @classmethod
@@ -1146,3 +1173,7 @@ class Int64Index(Index):
     @property
     def values(self):
         return self._values
+
+    @property
+    def dtype(self):
+        return self._values.dtype
