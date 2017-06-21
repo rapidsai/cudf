@@ -69,6 +69,7 @@ class DataFrame(object):
     """
 
     def __init__(self, name_series=None):
+        self._index = EmptyIndex()
         self._size = 0
         self._cols = OrderedDict()
         # has initializer?
@@ -85,7 +86,7 @@ class DataFrame(object):
         """Add/set column by *name*
         """
         if name in self._cols:
-            self._cols[name] = col
+            self._cols[name] = self._prepare_series_for_add(col)
         else:
             self.add_column(name, col)
 
@@ -128,8 +129,9 @@ class DataFrame(object):
         for h in self.columns[:ncols]:
             cols[h] = self[h].values_to_string(nrows=nrows)
         # Format into a table
-        return formatting.format(cols=cols, show_headers=True,
-                                 more_cols=more_cols, more_rows=more_rows)
+        return formatting.format(index=self._index, cols=cols,
+                                 show_headers=True, more_cols=more_cols,
+                                 more_rows=more_rows)
 
     def __str__(self):
         return self.to_string()
@@ -179,16 +181,34 @@ class DataFrame(object):
         """
         return tuple(self._cols)
 
-    def _sentry_column_size(self, size):
-        if self._cols and self._size != size:
-                raise ValueError('column size mismatch')
-
     def copy(self):
         "Shallow copy this dataframe"
         df = DataFrame()
         for k in self.columns:
             df[k] = self[k]
         return df
+
+    def _prepare_series_for_add(self, col):
+        """Prepare a series to be added to the DataFrame.
+
+        Parameters
+        ----------
+        col : Series, array-like
+            Values to be added.
+
+        Returns
+        -------
+        The prepared Series object.
+        """
+        series = Series.from_any(col)
+        empty_index = isinstance(self._index, EmptyIndex)
+        if empty_index or self._index == series.index:
+            if empty_index:
+                self._index = series.index
+            self._size = len(series)
+            return series
+        else:
+            raise NotImplementedError("join needed")
 
     def add_column(self, name, data):
         """Add a column
@@ -202,10 +222,8 @@ class DataFrame(object):
         """
         if name in self._cols:
             raise NameError('duplicated column name {!r}'.format(name))
-        series = Series.from_any(data)
-        self._sentry_column_size(len(series))
+        series = self._prepare_series_for_add(data)
         self._cols[name] = series
-        self._size = len(series)
 
     def drop_column(self, name):
         """Drop a column by *name*
@@ -551,7 +569,7 @@ class Series(object):
         return instance
 
     def _init_detail(self, size, buffer=None, mask=None, null_count=None,
-                     impl=None):
+                     index=None, impl=None):
         """
         Actual initializer of the instance
         """
@@ -560,6 +578,7 @@ class Series(object):
         self._size = size
         self._data = buffer
         self._mask = mask
+        self._index = DefaultIndex(self._size) if index is None else index
         self._impl = (series_impl.get_default_impl(buffer.dtype)
                       if impl is None else impl)
         if null_count is None:
@@ -589,6 +608,9 @@ class Series(object):
         cls = type(self)
         params.update(kwargs)
         return cls(cls.Init(**params))
+
+    def set_index(self, index):
+        return self._copy_construct(index=index)
 
     def set_mask(self, mask, null_count=None):
         """Create new Series by setting a mask array.
@@ -624,8 +646,7 @@ class Series(object):
         from . import series_impl
 
         if isinstance(arg, Series):
-            # FIXME inefficient .to_array() D->H
-            return series_impl.masking(self, arg)
+            return series_impl.select_by_boolmask(self, arg)
 
         elif isinstance(arg, slice):
             if self.null_count > 0:
@@ -656,14 +677,6 @@ class Series(object):
             return self._impl.element_indexing(self, arg)
         else:
             raise NotImplementedError(type(arg))
-
-    def __iter__(self):
-        def iterator():
-            for i in range(len(self)):
-                v = self[i]
-                if v is not None:
-                    yield v
-        return iter(iterator())
 
     def __bool__(self):
         """Always raise TypeError when converting a Series
@@ -700,7 +713,8 @@ class Series(object):
         # Prepare cells
         cols = OrderedDict([('', self.values_to_string(nrows=nrows))])
         # Format into a table
-        return formatting.format(cols=cols, more_rows=more_rows)
+        return formatting.format(index=self.index,
+                                 cols=cols, more_rows=more_rows)
 
     def __str__(self):
         return self.to_string()
@@ -903,6 +917,12 @@ class Series(object):
         return self._data
 
     @property
+    def index(self):
+        """The index object
+        """
+        return self._index
+
+    @property
     def nullmask(self):
         """The gpu buffer for the null-mask
         """
@@ -1053,3 +1073,76 @@ class _BufferSentry(object):
     def contig(self):
         if not self._buf.is_c_contiguous():
             raise BufferSentryError('non contiguous')
+
+
+class Index(object):
+    pass
+
+
+class EmptyIndex(Index):
+    """
+    A singleton class to represent an empty index when a DataFrame is created
+    without any initializer.
+    """
+    _singleton = None
+
+    def __new__(cls):
+        if cls._singleton is None:
+            cls._singleton = object.__new__(EmptyIndex)
+        return cls._singleton
+
+    def __getitem__(self, index):
+        raise IndexError
+
+    def __len__(self):
+        return 0
+
+
+class DefaultIndex(Index):
+    """Basic 0..size
+    """
+    def __init__(self, size):
+        self._size = size
+
+    def __len__(self):
+        return self._size
+
+    def __getitem__(self, index):
+        if index < 0:
+            index += len(self)
+        if 0 > index >= len(self):
+            raise IndexError
+        return index
+
+    def __eq__(self, other):
+        if isinstance(other, DefaultIndex):
+            return self._size == other._size
+        else:
+            return NotImplemented
+
+
+class Int64Index(Index):
+    @classmethod
+    def make_range(cls, count):
+        return cls(np.arange(count, dtype=np.int64))
+
+    def __init__(self, buf):
+        if not isinstance(buf, Buffer):
+            buf = Buffer(buf)
+        self._values = buf
+
+    def __len__(self):
+        return self._values.size
+
+    def __getitem__(self, index):
+        return self._values[index]
+
+    def __eq__(self, other):
+        if isinstance(other, Int64Index):
+            return self._values == other._values
+        else:
+            return NotImplemented
+
+    @property
+    def values(self):
+        return self._values

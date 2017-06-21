@@ -4,13 +4,14 @@ Define how data are formatted
 from collections import OrderedDict
 
 
-def format(cols, show_headers=True, more_cols=0, more_rows=0,
+def format(index, cols, show_headers=True, more_cols=0, more_rows=0,
            min_width=4):
     """
     Format columnar data.
 
     Parameters
     ----------
+    index : Index
     cols : OrderedDict
         A dictionary of `column_name: column_values`, where `column_values` is
         a list of str to be displayed
@@ -55,7 +56,7 @@ def format(cols, show_headers=True, more_cols=0, more_rows=0,
         out.append(' '.join(header))
     #   format rows
     for i in range(nrows):
-        row = [cell_template.format(str(i), widthkey)]
+        row = [cell_template.format(str(index[i]), widthkey)]
         for k, vs in cols.items():
             if k == lastcol:
                 row.append('...')

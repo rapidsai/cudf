@@ -1,6 +1,8 @@
+import numpy as np
+
 from numba import cuda
 
-from .dataframe import Buffer
+from .dataframe import Buffer, Int64Index
 from . import utils, cudautils, _gdf
 
 
@@ -146,16 +148,18 @@ def element_indexing(series, index):
     return val if valid else None
 
 
-def masking(series, boolmask):
-    """Apply a boolean mask to a series
+def select_by_boolmask(series, boolmask):
+    """Select by a boolean mask to a series
     """
-    bools = utils.boolmask_to_bitmask(boolmask.to_array())
-    if series.has_null_mask:
-        # If the series has a mask
-        masked = boolmask.set_mask(bools)
-        out = empty_like(series, masked, masked=True)
-        _gdf.apply_mask_and(series, masked, out)
-        return out
-    else:
-        # If the series has no mask
-        return series.set_mask(bools)
+    # XXX: inefficient impl
+    bools = boolmask.to_array()
+    indices = np.arange(bools.size)
+    selinds = indices[bools]
+
+    selvals = series.to_array()[bools]
+    assert not series.has_null_mask
+
+    params = dict(size=selvals.size,  buffer=Buffer(selvals),
+                  impl=series._impl, index=Int64Index(selinds))
+
+    return series._copy_construct(**params)
