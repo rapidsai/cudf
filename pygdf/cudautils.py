@@ -14,6 +14,20 @@ def to_device(ary):
     return dary
 
 
+# GPU array initializer
+
+@cuda.jit
+def gpu_arange(size, out):
+    i = cuda.grid(1)
+    if i < size:
+        out[i] = i
+
+
+def arange(size):
+    out = cuda.device_array(size, dtype=np.int64)
+    gpu_arange.forall(size, out)
+    return out
+
 # GPU array type casting
 
 

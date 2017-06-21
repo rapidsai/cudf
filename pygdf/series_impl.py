@@ -151,13 +151,13 @@ def element_indexing(series, index):
 def select_by_boolmask(series, boolmask):
     """Select by a boolean mask to a series
     """
-    # XXX: inefficient impl
-    bools = boolmask.to_array()
-    indices = np.arange(bools.size)
-    selinds = indices[bools]
+    # FIXME: inefficient boolmask to bitmask
+    boolbits = utils.boolmask_to_bitmask(boolmask.to_array())
+    indices = cudautils.arange(len(boolmask))
+    _, selinds = cudautils.copy_to_dense(indices, mask=boolbits)
+    _, selvals = cudautils.copy_to_dense(series.to_gpu_array(), mask=boolbits)
 
-    selvals = series.to_array()[bools]
-    assert not series.has_null_mask
+    assert not series.has_null_mask   # the nullmask needs to be recomputed
 
     params = dict(size=selvals.size,  buffer=Buffer(selvals),
                   impl=series._impl, index=Int64Index(selinds))
