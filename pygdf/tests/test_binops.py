@@ -7,6 +7,8 @@ import numpy as np
 
 from pygdf.dataframe import Series
 
+from . import utils
+
 
 _binops = [
     operator.add,
@@ -44,3 +46,34 @@ def test_series_compare(cmpop):
     np.testing.assert_equal(cmpop(sr2, sr2).to_array(),  cmpop(arr2, arr2))
     np.testing.assert_equal(cmpop(sr1, sr2).to_array(),  cmpop(arr1, arr2))
 
+
+@pytest.mark.parametrize('nelem', [1, 7, 8, 9, 32, 64, 128])
+def test_validity_add(nelem):
+    # LHS
+    lhs_data = np.random.random(nelem)
+    lhs_mask = utils.random_bitmask(nelem)
+    lhs_bitmask = utils.expand_bits_to_bytes(lhs_mask)
+    lhs_null_count = utils.count_zero(lhs_bitmask)
+    lhs = Series.from_masked_array(lhs_data, lhs_mask, lhs_null_count)
+    # RHS
+    rhs_data = np.random.random(nelem)
+    rhs_mask = utils.random_bitmask(nelem)
+    rhs_bitmask = utils.expand_bits_to_bytes(rhs_mask)
+    rhs_null_count = utils.count_zero(rhs_bitmask)
+    rhs = Series.from_masked_array(rhs_data, rhs_mask, rhs_null_count)
+    # Result
+    res = lhs + rhs
+    res_mask = np.asarray(utils.expand_bits_to_bytes(lhs_mask & rhs_mask),
+                          dtype=np.bool)[:nelem]
+    # Fill NA values
+    na_value = -10000
+    got = res.fillna(na_value).to_array()
+    expect = lhs_data + rhs_data
+    expect[~res_mask] = na_value
+    # Check
+    print('expect')
+    print(expect)
+    print('got')
+    print(got)
+
+    np.testing.assert_array_equal(expect, got)

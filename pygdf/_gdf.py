@@ -4,6 +4,7 @@ This file provide binding to the libgdf library.
 import numpy as np
 
 from libgdf_cffi import ffi, libgdf
+from . import cudautils
 
 
 def columnview(size, data, mask=None, dtype=None):
@@ -27,14 +28,28 @@ def columnview(size, data, mask=None, dtype=None):
 def apply_binaryop(binop, lhs, rhs, out):
     """Apply binary operator *binop* to operands *lhs* and *rhs*.
     The result is stored to *out*.
+
+    Returns the number of null values.
     """
-    binop(lhs._cffi_view, rhs._cffi_view, out._cffi_view)
+    args = (lhs._cffi_view, rhs._cffi_view, out._cffi_view)
+    # apply binary operator
+    binop(*args)
+    # validity mask
+    if out.has_null_mask:
+        libgdf.gdf_validity_and(*args)
+        nnz = cudautils.count_nonzero_mask(out._mask.mem)
+        return len(out) - nnz
+    else:
+        return 0
 
 
 def apply_unaryop(unaop, inp, out):
     """Apply unary operator *unaop* to *inp* and store to *out*.
+
     """
-    unaop(inp._cffi_view, out._cffi_view)
+    args = (inp._cffi_view, out._cffi_view)
+    # apply unary operator
+    unaop(*args)
 
 
 def np_to_gdf_dtype(dtype):
