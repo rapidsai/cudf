@@ -233,3 +233,16 @@ gdf_error gdf_product_i32(gdf_column *col, int32_t *dev_result, gdf_size_type de
 gdf_error gdf_sum_squared_generic(gdf_column *col, void *dev_result, gdf_size_type dev_result_size);
 gdf_error gdf_sum_squared_f64(gdf_column *col, double *dev_result, gdf_size_type dev_result_size);
 gdf_error gdf_sum_squared_f32(gdf_column *col, float *dev_result, gdf_size_type dev_result_size);
+
+
+gdf_error gdf_min_generic(gdf_column *col, void *dev_result, gdf_size_type dev_result_size);
+gdf_error gdf_min_f64(gdf_column *col, double *dev_result, gdf_size_type dev_result_size);
+gdf_error gdf_min_f32(gdf_column *col, float *dev_result, gdf_size_type dev_result_size);
+gdf_error gdf_min_i64(gdf_column *col, int64_t *dev_result, gdf_size_type dev_result_size);
+gdf_error gdf_min_i32(gdf_column *col, int32_t *dev_result, gdf_size_type dev_result_size);
+
+gdf_error gdf_max_generic(gdf_column *col, void *dev_result, gdf_size_type dev_result_size);
+gdf_error gdf_max_f64(gdf_column *col, double *dev_result, gdf_size_type dev_result_size);
+gdf_error gdf_max_f32(gdf_column *col, float *dev_result, gdf_size_type dev_result_size);
+gdf_error gdf_max_i64(gdf_column *col, int64_t *dev_result, gdf_size_type dev_result_size);
+gdf_error gdf_max_i32(gdf_column *col, int32_t *dev_result, gdf_size_type dev_result_size);

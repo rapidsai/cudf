@@ -4,6 +4,8 @@
 
 #include <cub/block/block_reduce.cuh>
 
+#include <limits>
+
 #define REDUCTION_BLOCK_SIZE 128
 
 
@@ -167,6 +169,29 @@ struct DeviceSumSquared {
 };
 
 
+struct DeviceMin {
+    typedef IdentityLoader Loader;
+    typedef DeviceMin second;
+
+    template<typename T>
+    __device__
+    T operator() (const T &lhs, const T &rhs) {
+        return lhs <= rhs? lhs: rhs;
+    }
+};
+
+
+struct DeviceMax {
+    typedef IdentityLoader Loader;
+    typedef DeviceMax second;
+
+    template<typename T>
+    __device__
+    T operator() (const T &lhs, const T &rhs) {
+        return lhs >= rhs? lhs: rhs;
+    }
+};
+
 #define DEF_REDUCE_OP_NUM(F)                                                      \
 gdf_error F##_generic(gdf_column *col, void *dev_result,                          \
                           gdf_size_type dev_result_size) {                        \
@@ -221,3 +246,19 @@ DEF_REDUCE_IMPL(gdf_product_i32, DeviceProduct, int32_t, 1)
 DEF_REDUCE_OP_REAL(gdf_sum_squared)
 DEF_REDUCE_IMPL(gdf_sum_squared_f64, DeviceSumSquared, double, 0)
 DEF_REDUCE_IMPL(gdf_sum_squared_f32, DeviceSumSquared, float, 0)
+
+/* Min */
+
+DEF_REDUCE_OP_NUM(gdf_min)
+DEF_REDUCE_IMPL(gdf_min_f64, DeviceMin, double, std::numeric_limits<double>::max())
+DEF_REDUCE_IMPL(gdf_min_f32, DeviceMin, float, std::numeric_limits<float>::max())
+DEF_REDUCE_IMPL(gdf_min_i64, DeviceMin, int64_t, std::numeric_limits<int64_t>::max())
+DEF_REDUCE_IMPL(gdf_min_i32, DeviceMin, int32_t, std::numeric_limits<int32_t>::max())
+
+/* Max */
+
+DEF_REDUCE_OP_NUM(gdf_max)
+DEF_REDUCE_IMPL(gdf_max_f64, DeviceMax, double, std::numeric_limits<double>::min())
+DEF_REDUCE_IMPL(gdf_max_f32, DeviceMax, float, std::numeric_limits<float>::min())
+DEF_REDUCE_IMPL(gdf_max_i64, DeviceMax, int64_t, std::numeric_limits<int64_t>::min())
+DEF_REDUCE_IMPL(gdf_max_i32, DeviceMax, int32_t, std::numeric_limits<int32_t>::min())
