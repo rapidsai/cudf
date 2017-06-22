@@ -23,6 +23,7 @@ cuda_add_library(gdf SHARED
     src/errorhandling.cpp
     src/unaryops.cu
     src/ipc.cu
+    src/reductions.cu
 )
 
 # Command to symlink files into the build directory
