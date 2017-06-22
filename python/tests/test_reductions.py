@@ -100,3 +100,35 @@ def test_sum_masked(nelem):
     expect = data[boolmask].sum()
 
     np.testing.assert_almost_equal(expect, got)
+
+
+accuracy_for_dtype = {
+    np.float64: 6,
+    np.float32: 5
+}
+params_real_only = list(product([np.float64, np.float32], params_sizes))
+
+
+@pytest.mark.parametrize('dtype,nelem', params_real_only)
+def test_sum_squared(dtype, nelem):
+    decimal = accuracy_for_dtype[dtype]
+    data = gen_rand(dtype, nelem)
+    d_data = cuda.to_device(data)
+    d_result = cuda.device_array(libgdf.gdf_reduce_optimal_output_size(),
+                                 dtype=d_data.dtype)
+
+    col_data = new_column()
+    gdf_dtype = get_dtype(dtype)
+
+    libgdf.gdf_column_view(col_data, unwrap_devary(d_data), ffi.NULL, nelem,
+                           gdf_dtype)
+
+    libgdf.gdf_sum_squared_generic(col_data, unwrap_devary(d_result),
+                                   d_result.size)
+    got = d_result.copy_to_host()[0]
+    expect = (data ** 2).sum()
+
+    print('expect:', expect)
+    print('got:', got)
+
+    np.testing.assert_array_almost_equal(expect, got, decimal=decimal)
