@@ -209,7 +209,14 @@ gdf_error gdf_bitwise_xor_i64(gdf_column *lhs, gdf_column *rhs, gdf_column *outp
 
 gdf_error gdf_validity_and(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
 
-/* reductions */
+/* reductions
+
+The following reduction functions use the result array as a temporary working
+space.  Use gdf_reduce_optimal_output_size() to get its optimal size.
+*/
+
+unsigned int gdf_reduce_optimal_output_size();
+
 gdf_error gdf_sum_generic(gdf_column *col, void *dev_result, gdf_size_type dev_result_size);
 gdf_error gdf_sum_f64(gdf_column *col, double *dev_result, gdf_size_type dev_result_size);
 gdf_error gdf_sum_f32(gdf_column *col, float *dev_result, gdf_size_type dev_result_size);
@@ -222,4 +229,3 @@ gdf_error gdf_product_f32(gdf_column *col, float *dev_result, gdf_size_type dev_
 gdf_error gdf_product_i64(gdf_column *col, int64_t *dev_result, gdf_size_type dev_result_size);
 gdf_error gdf_product_i32(gdf_column *col, int32_t *dev_result, gdf_size_type dev_result_size);
 
-/* stats */

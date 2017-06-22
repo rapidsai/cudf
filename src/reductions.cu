@@ -4,6 +4,8 @@
 
 #include <cub/block/block_reduce.cuh>
 
+#define REDUCTION_BLOCK_SIZE 128
+
 /*
 Generic reduction implementation with support for validity mask
 */
@@ -13,7 +15,7 @@ __global__
 void gpu_reduction_op(const T *data, const gdf_valid_type *mask,
                       gdf_size_type size, T *results, F functor, T identity)
 {
-    typedef cub::BlockReduce<T, 128> BlockReduce;
+    typedef cub::BlockReduce<T, REDUCTION_BLOCK_SIZE> BlockReduce;
     __shared__ typename BlockReduce::TempStorage temp_storage;
 
     int tid = threadIdx.x;
@@ -79,8 +81,10 @@ struct ReduceOp {
     void launch_once(const T *data, gdf_valid_type *valid, gdf_size_type size,
                      T *output, gdf_size_type output_size, T identity) {
         // find needed gridsize
-        int blocksize = 128;
-        int gridsize = output_size;
+        // use atmost REDUCTION_BLOCK_SIZE blocks
+        int blocksize = REDUCTION_BLOCK_SIZE;
+        int gridsize = (output_size < REDUCTION_BLOCK_SIZE?
+                        output_size : REDUCTION_BLOCK_SIZE);
 
         F functor;
         // launch kernel
@@ -97,7 +101,6 @@ struct ReduceOp {
     }
 
 };
-
 
 
 template<typename T>
@@ -131,6 +134,11 @@ gdf_error F##_generic(gdf_column *col, void *dev_result,                        
 #define DEF_REDUCE_IMPL(F, OP, T, ID)                                         \
 gdf_error F(gdf_column *col, T *dev_result, gdf_size_type dev_result_size) {  \
     return ReduceOp<T, OP<T> >::launch(col, ID, dev_result, dev_result_size); \
+}
+
+
+unsigned int gdf_reduce_optimal_output_size() {
+    return REDUCTION_BLOCK_SIZE;
 }
 
 
