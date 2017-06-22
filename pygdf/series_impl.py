@@ -1,9 +1,7 @@
-import numpy as np
-
 from numba import cuda
 
 from .dataframe import Buffer, Int64Index
-from . import utils, cudautils, _gdf
+from . import utils, cudautils
 
 
 class SeriesImpl(object):
@@ -33,8 +31,15 @@ class SeriesImpl(object):
 
     # Methods below are all overridable
 
+    # Categorical
+
     def cat(self, series):
         raise TypeError('not a categorical series')
+
+    # Stats
+
+    def stats(self, series):
+        raise TypeError('stats function is not supported')
 
     # String
 
