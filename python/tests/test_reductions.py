@@ -8,7 +8,8 @@ from numba import cuda
 
 from libgdf_cffi import ffi, libgdf
 
-from .utils import new_column, unwrap_devary, get_dtype, gen_rand, fix_zeros
+from .utils import (new_column, unwrap_devary, get_dtype, gen_rand,
+                    buffer_as_bits)
 
 
 params_dtype = [
@@ -73,3 +74,26 @@ def test_product(dtype, nelem):
     print('got:', got)
 
     np.testing.assert_array_almost_equal(expect, got)
+
+
+@pytest.mark.parametrize('nelem', params_sizes)
+def test_sum_masked(nelem):
+    dtype = np.float64
+    data = gen_rand(dtype, nelem)
+    mask = gen_rand(np.int8, (nelem + 8 - 1) // 8)
+
+    d_data = cuda.to_device(data)
+    d_mask = cuda.to_device(mask)
+    d_result = cuda.device_array(128, dtype=d_data.dtype)
+
+    col_data = new_column()
+    gdf_dtype = get_dtype(dtype)
+    libgdf.gdf_column_view(col_data, unwrap_devary(d_data),
+                           unwrap_devary(d_mask), nelem, gdf_dtype)
+    libgdf.gdf_sum_generic(col_data, unwrap_devary(d_result), d_result.size)
+
+    got = d_result.copy_to_host()[0]
+    boolmask = buffer_as_bits(mask)[:nelem]
+    expect = data[boolmask].sum()
+
+    np.testing.assert_almost_equal(expect, got)
