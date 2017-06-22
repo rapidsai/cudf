@@ -108,6 +108,14 @@ struct DeviceSum {
     }
 };
 
+template<typename T>
+struct DeviceProduct {
+    __device__
+    T operator() (const T &lhs, const T &rhs) {
+        return lhs * rhs;
+    }
+};
+
 #define DEF_REDUCE_OP_NUM(F)                                                      \
 gdf_error F##_generic(gdf_column *col, void *dev_result,                          \
                           gdf_size_type dev_result_size) {                        \
@@ -133,4 +141,12 @@ DEF_REDUCE_IMPL(gdf_sum_f64, DeviceSum, double, 0)
 DEF_REDUCE_IMPL(gdf_sum_f32, DeviceSum, float, 0)
 DEF_REDUCE_IMPL(gdf_sum_i64, DeviceSum, int64_t, 0)
 DEF_REDUCE_IMPL(gdf_sum_i32, DeviceSum, int32_t, 0)
+
+/* Product */
+
+DEF_REDUCE_OP_NUM(gdf_product)
+DEF_REDUCE_IMPL(gdf_product_f64, DeviceProduct, double, 1)
+DEF_REDUCE_IMPL(gdf_product_f32, DeviceProduct, float, 1)
+DEF_REDUCE_IMPL(gdf_product_i64, DeviceProduct, int64_t, 1)
+DEF_REDUCE_IMPL(gdf_product_i32, DeviceProduct, int32_t, 1)
 

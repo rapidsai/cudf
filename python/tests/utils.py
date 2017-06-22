@@ -28,14 +28,18 @@ def seed_rand():
     np.random.seed(0xabcdef)
 
 
-def gen_rand(dtype, size):
+def gen_rand(dtype, size, **kwargs):
     dtype = np.dtype(dtype)
     if dtype.kind == 'f':
         return np.random.random(size).astype(dtype)
     elif dtype.kind == 'i':
-        return np.random.random_integers(low=-10000, high=10000, size=size).astype(dtype)
+        low = kwargs.get('low', -10000)
+        high = kwargs.get('high', 10000)
+        return np.random.random_integers(low=low, high=high, size=size).astype(dtype)
     elif dtype.kind == 'b':
-        return np.random.random_integers(low=0, high=1, size=size).astype(np.bool)
+        low = kwargs.get('low', 0)
+        high = kwargs.get('high', 1)
+        return np.random.random_integers(low=low, high=high, size=size).astype(np.bool)
     raise NotImplementedError('dtype.kind={}'.format(dtype.kind))
 
 

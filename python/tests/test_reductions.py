@@ -1,5 +1,6 @@
-
+from __future__ import division, print_function
 import pytest
+import random
 from itertools import product
 
 import numpy as np
@@ -17,13 +18,6 @@ params_dtype = [
     np.int32,
 ]
 
-ulp_of_dtype = {
-    np.float64: 1,
-    np.float32: 1,
-    np.int64: 0,
-    np.int32: 0,
-}
-
 params_sizes = [1, 2, 3, 127, 128, 129, 200, 10000]
 
 params = list(product(params_dtype, params_sizes))
@@ -31,8 +25,6 @@ params = list(product(params_dtype, params_sizes))
 
 @pytest.mark.parametrize('dtype,nelem', params)
 def test_sum(dtype, nelem):
-    ulp = ulp_of_dtype[dtype]
-
     data = gen_rand(dtype, nelem)
     d_data = cuda.to_device(data)
     d_result = cuda.device_array(128, dtype=d_data.dtype)
@@ -50,5 +42,34 @@ def test_sum(dtype, nelem):
     print('expect:', expect)
     print('got:', got)
 
-    np.testing.assert_array_max_ulp(expect, got, maxulp=ulp)
+    np.testing.assert_array_almost_equal(expect, got)
 
+
+@pytest.mark.parametrize('dtype,nelem', params)
+def test_product(dtype, nelem):
+    if np.dtype(dtype).kind == 'i':
+        data = np.ones(nelem, dtype=dtype)
+        # Set at most 30 items to [0..2) to keep the value within 2^32
+        for _ in range(30):
+            data[random.randrange(nelem)] = random.random() * 2
+    else:
+        data = gen_rand(dtype, nelem)
+
+    print('max', data.max(), 'min', data.min())
+    d_data = cuda.to_device(data)
+    d_result = cuda.device_array(128, dtype=d_data.dtype)
+
+    col_data = new_column()
+    gdf_dtype = get_dtype(dtype)
+
+    libgdf.gdf_column_view(col_data, unwrap_devary(d_data), ffi.NULL, nelem,
+                           gdf_dtype)
+
+    libgdf.gdf_product_generic(col_data, unwrap_devary(d_result), d_result.size)
+    got = d_result.copy_to_host()[0]
+    expect = np.product(data)
+
+    print('expect:', expect)
+    print('got:', got)
+
+    np.testing.assert_array_almost_equal(expect, got)
