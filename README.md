@@ -6,6 +6,31 @@ libgdf is a C library for implementing common functionality for a GPU Data Frame
 
 The following instructions are tested on Linux and OSX systems.
 
+## Get dependencies
+
+It is recommended to setup a conda environment for the dependencies.
+
+```bash
+# create the conda environment (assuming in build directory)
+$ conda env create --name libgdf_dev --file ../conda_environments/dev_py35.yml
+# activate the environment
+$ source activate libgdf_dev
+```
+
+This installs the required `cmake`, `flatbuffers` into the `libgdf_dev` conda
+environment and activates it.
+
+For additional information, the python cffi wrapper code requires `cffi` and
+`pytest`.  The testing code requires `numba` and `cudatoolkit` as an
+additional dependency.  All these are installed from the previous commands.
+
+The environment can be updated from `../conda_environments/dev_py35.yml` as
+development includes/changes the depedencies.  To do so, run:
+
+```bash
+$ conda env update --name libgdf_dev --file ../conda_environments/dev_py35.yml
+```
+
 ## Configure and build
 
 This project uses cmake for building the C/C++ library.  To configure cmake,
@@ -27,23 +52,6 @@ To make development and testing more seamless, the python files and tests
 can be symlinked into the build directory by running `make copy_python`.
 With that, any changes to the python files are reflected in the build
 directory.  To rebuild the libgdf, run `make` again.
-
-
-## Get dependencies for Python code
-
-
-It is recommended to setup a conda environment for the dependencies.
-
-```bash
-# create the conda environment (assuming in build directory)
-$ conda env create --name libgdf_dev --file ../conda_environments/dev_py35.yml
-# activate the environment
-$ source activate libgdf_dev
-```
-
-For additional information, the python cffi wrapper code requires `cffi` and
-`pytest`.  The testing code requires `numba` and `cudatoolkit` as an
-additional dependency.
 
 ## Run tests
 
