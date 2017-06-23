@@ -37,7 +37,7 @@ class DataFrame(object):
 
     >>> import numpy as np
     >>> df2 = DataFrame([('a', np.arange(10)),
-                         ('b', np.random.random(10))])
+    ...                  ('b', np.random.random(10))])
     >>> df2
       a b
     0 0 0.777831724018
@@ -77,10 +77,41 @@ class DataFrame(object):
             for k, series in name_series:
                 self.add_column(k, series)
 
-    def __getitem__(self, name):
-        """Access column by *name*
+    def __getitem__(self, arg):
         """
-        return self._cols[name]
+        If *arg* is a ``str``, return the column Series.
+        If *arg* is a ``slice``, return a new DataFrame with all columns
+        sliced to the specified range.
+
+        Examples
+        --------
+        >>> df = DataFrame([('a', list(range(20))),
+        ...                 ('b', list(range(20))),
+        ...                 ('c', list(range(20)))])
+        >>> df[:4]    # get first 4 rows of all columns
+             a    b    c
+        0    0    0    0
+        1    1    1    1
+        2    2    2    2
+        3    3    3    3
+        >>> df[-5:]  # get last 5 rows of all columns
+             a    b    c
+        15   15   15   15
+        16   16   16   16
+        17   17   17   17
+        18   18   18   18
+        19   19   19   19
+        """
+        if isinstance(arg, str):
+            return self._cols[arg]
+        elif isinstance(arg, slice):
+            df = DataFrame()
+            for k, col in self._cols.items():
+                df[k] = col[arg]
+            return df
+        else:
+            msg = "__getitem__ on type {!r} is not supported"
+            raise TypeError(msg.format(arg))
 
     def __setitem__(self, name, col):
         """Add/set column by *name*
@@ -148,30 +179,15 @@ class DataFrame(object):
         --------
 
         >>> df = DataFrame([('a', list(range(20))),
-                            ('b', list(range(20))),
-                            ('c', list(range(20)))])
-        >>> df[:4]   # get first 4 rows of all columns
-          a b c
-        0 0 0 0
-        1 1 1 1
-        2 2 2 2
-        3 3 3 3
-        4 4 4 4
-        >>> df[-5:]  # get last 5 rows of all columns
-          a  b  c
-        0 15 15 15
-        1 16 16 16
-        2 17 17 17
-        3 18 18 18
-        4 19 19 19
-        >>> df[:10, ['a', 'b']]   # get first 10 rows from 'a' and 'b' columns.
-          a b
-        0 0 0
-        1 1 1
-        2 2 2
-        3 3 3
-        4 4 4
-        [5 more rows]
+        ...                 ('b', list(range(20))),
+        ...                 ('c', list(range(20)))])
+        # get rows from index 2 to index 5 from 'a' and 'b' columns.
+        >>> df.loc[2:5, ['a', 'b']]
+             a    b
+        2    2    2
+        3    3    3
+        4    4    4
+        5    5    5
         """
         return Loc(self)
 
@@ -443,7 +459,10 @@ class Loc(object):
 
         df = DataFrame()
         for col in col_slice:
-            df[col] = self._df[col][row_slice]
+            sr = self._df[col]
+            begin, end = sr.index.find_label_range(row_slice.start,
+                                                   row_slice.stop)
+            df[col] = sr[begin:end]
         return df
 
 
@@ -470,12 +489,7 @@ class Buffer(object):
             sliced = self.to_gpu_array()[arg]
             return Buffer(sliced)
         elif isinstance(arg, int):
-            # normalize index
-            if arg < 0:
-                arg = self.size + arg
-            if arg >= self.size:
-                raise IndexError(arg)
-            # getitem
+            arg = utils.normalize_index(arg, self.size)
             return self.mem[arg]
         else:
             raise NotImplementedError(type(arg))
@@ -710,10 +724,12 @@ class Series(object):
             return series_impl.select_by_boolmask(self, arg)
 
         elif isinstance(arg, slice):
+            # compute mask slice
+            start = arg.start if arg.start else 0
+            stop = arg.stop if arg.stop else len(self)
+            start, stop = [utils.normalize_index(x, len(self), doraise=False)
+                           for x in [start, stop]]
             if self.null_count > 0:
-                # compute mask slice
-                start = arg.start if arg.start else 0
-                stop = arg.stop if arg.stop else len(self)
                 if arg.step is not None and arg.step != 1:
                     raise NotImplementedError(arg)
                 maskslice = slice(utils.calc_chunk_size(start,
@@ -723,16 +739,20 @@ class Series(object):
                 # slicing
                 subdata = self._data.mem[arg]
                 submask = self._mask.mem[maskslice]
+                index = Int64Index.make_range(start, stop)
                 return self._copy_construct(size=subdata.size,
                                             buffer=Buffer(subdata),
                                             mask=Buffer(submask),
-                                            null_count=None)
+                                            null_count=None,
+                                            index=index)
             else:
+                index = Int64Index.make_range(start, stop)
                 newbuffer = self._data[arg]
                 return self._copy_construct(size=newbuffer.size,
                                             buffer=newbuffer,
                                             mask=None,
-                                            null_count=None)
+                                            null_count=None,
+                                            index=index)
         elif isinstance(arg, int):
             # The following triggers a IndexError if out-of-bound
             return self._impl.element_indexing(self, arg)
@@ -1162,10 +1182,7 @@ class DefaultIndex(Index):
         return self._size
 
     def __getitem__(self, index):
-        if index < 0:
-            index += len(self)
-        if 0 > index >= len(self):
-            raise IndexError
+        index = utils.normalize_index(index, len(self))
         return index
 
     def __eq__(self, other):
@@ -1182,11 +1199,20 @@ class DefaultIndex(Index):
     def values(self):
         return np.arange(len(self), dtype=self.dtype)
 
+    def find_label_range(self, first, last):
+        begin, end = first, last
+        if last is not None:
+            end = last + 1
+        return begin, end
+
 
 class Int64Index(Index):
     @classmethod
-    def make_range(cls, count):
-        return cls(np.arange(count, dtype=np.int64))
+    def make_range(cls, start, stop=None):
+        if stop is None:
+            return cls(np.arange(start, dtype=np.int64))
+        else:
+            return cls(np.arange(start, stop, dtype=np.int64))
 
     def __init__(self, buf):
         if not isinstance(buf, Buffer):
@@ -1196,12 +1222,17 @@ class Int64Index(Index):
     def __len__(self):
         return self._values.size
 
+    def __repr__(self):
+        ar = self._values.to_array()
+        return "Int64Index({})".format(ar)
+
     def __getitem__(self, index):
         return self._values[index]
 
     def __eq__(self, other):
         if isinstance(other, Int64Index):
-            return self._values == other._values
+            # FIXME inefficient comparison
+            return np.all(self._values.to_array() == other._values.to_array())
         else:
             return NotImplemented
 
@@ -1212,3 +1243,15 @@ class Int64Index(Index):
     @property
     def dtype(self):
         return self._values.dtype
+
+    def find_label_range(self, first, last):
+        # FIXME inefficient find
+        ar = self._values.to_array()
+        begin, end = None, None
+        if first is not None:
+            begin = np.argwhere(ar == first)[0, 0]
+        if last is not None:
+            end = np.argwhere(ar == last)[-1, 0]
+            end += 1
+        return begin, end
+

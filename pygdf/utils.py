@@ -58,3 +58,14 @@ def scalar_broadcast_to(scalar, shape):
     # FIXME: this is wasteful, but numba can't slice 0-strided array
     arr = np.ascontiguousarray(arr)
     return cuda.to_device(arr)
+
+
+def normalize_index(index, size, doraise=True):
+    """Normalize negative index
+    """
+    if index < 0:
+        index = size + index
+    if doraise and not (0 <= index < size):
+        raise IndexError('out-of-bound')
+    return min(index, size)
+
