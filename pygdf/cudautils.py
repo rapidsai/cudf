@@ -4,7 +4,7 @@ import numpy as np
 
 from numba import (cuda, njit, uint64, int32, float64, numpy_support)
 
-from .utils import mask_bitsize
+from .utils import mask_bitsize, mask_get
 from .sorting import RadixSort
 from .reduction import Reduce
 
@@ -13,6 +13,20 @@ def to_device(ary):
     dary, _ = cuda._auto_device(ary)
     return dary
 
+
+# GPU array initializer
+
+@cuda.jit
+def gpu_arange(size, out):
+    i = cuda.grid(1)
+    if i < size:
+        out[i] = i
+
+
+def arange(size):
+    out = cuda.device_array(size, dtype=np.int64)
+    gpu_arange.forall(size, out)
+    return out
 
 # GPU array type casting
 
@@ -77,11 +91,6 @@ def set_mask_from_stride(mask, stride):
     taskct = mask.size
     configured = gpu_set_mask_from_stride.forall(taskct)
     configured(mask, stride)
-
-
-@njit
-def mask_get(mask, pos):
-    return (mask[pos // mask_bitsize] >> (pos % mask_bitsize)) & 1
 
 
 @cuda.jit(device=True)

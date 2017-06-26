@@ -10,7 +10,8 @@ dependencies:
 - accelerate_cudalib=2.0
 - cudatoolkit=8.0
 - llvmlite>=0.18
+- six>=1.10.0
 - numpy=1.12.1
-- pandas
+- pandas>=0.20.2
 - numba>=0.33
 - libgdf_cffi>=0.1.0a1.dev

@@ -271,7 +271,7 @@ def test_dataframe_to_string():
 5 6 16 5
 '''
     # values should match despite whitespace difference
-    assert all(x == y for x, y in zip(got.split(), expect.split()))
+    assert got.split() == expect.split()
 
 
 if __name__ == '__main__':

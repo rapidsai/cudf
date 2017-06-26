@@ -157,6 +157,8 @@ dependencies:
   'numba=0.33'
 - !!python/unicode
   'libgdf_cffi=0.1.0a1.dev'
+- !!python/unicode
+  'pandas=0.20.2'
 - pip:
   - flatbuffers==2015.12.22.1
   - ipython-genutils==0.2.0

@@ -3,12 +3,11 @@ from __future__ import print_function, division
 from collections import OrderedDict
 
 import numpy as np
+import pandas as pd
 
 from numba import cuda
 
-from libgdf_cffi import libgdf
-from . import cudautils, utils, _gdf
-
+from . import cudautils, utils, _gdf, formatting
 
 
 class DataFrame(object):
@@ -70,6 +69,7 @@ class DataFrame(object):
     """
 
     def __init__(self, name_series=None):
+        self._index = EmptyIndex()
         self._size = 0
         self._cols = OrderedDict()
         # has initializer?
@@ -86,7 +86,7 @@ class DataFrame(object):
         """Add/set column by *name*
         """
         if name in self._cols:
-            self._cols[name] = col
+            self._cols[name] = self._prepare_series_for_add(col)
         else:
             self.add_column(name, col)
 
@@ -113,55 +113,25 @@ class DataFrame(object):
             Maximum number of columns to show.
             If it is None, all columns are shown.
         """
-        if not self.columns:
-            return ''
         if nrows is None:
             nrows = len(self)
-        nrows = min(nrows, len(self))  # cap row count
-        if ncols is None:
-            ncols = len(self.columns)
-        lastcol = None
-        if len(self.columns) > ncols:
-            cols = self.columns[:ncols - 1] + self.columns[-1:]
-            lastcol = cols[-1]
         else:
-            cols = self.columns
-        # get values
-        cells = OrderedDict()
-        for c in cols:
-            values = list(self[c][:nrows])
-            cells[c] = ['' if v is None else str(v) for v in values]
+            nrows = min(nrows, len(self))  # cap row count
 
-        # compute column widths
-        widths = {}
-        for k, vs in cells.items():
-            widths[k] = max(len(k), max(map(len, vs)))
-        # format table
-        out = []
-        widthkey = len(str(nrows))
-        header = [' ' * widthkey]
-        header += ["{:{}}".format(k, widths[k]) for k in cols[:-1]]
-        if lastcol is not None:
-            header += ['...']
-        header += ["{:{}}".format(k, widths[k]) for k in cols[-1:]]
-        out.append(' '.join(header))
-        for i in range(nrows):
-            row = ["{:{}}".format(str(i), widthkey)]
-            for k, vs in cells.items():
-                if k == lastcol:
-                    row.append('...')
-                row.append("{:{}}".format(vs[i], widths[k]))
-            out.append(' '.join(row))
+        if ncols is None:
+            ncols = len(self)
 
-        # show remiaining rows
-        remaining_rows = len(self) - nrows
-        if remaining_rows > 0:
-            out.append("[{} more rows]".format(remaining_rows))
+        more_cols = len(self.columns) - ncols
+        more_rows = len(self) - nrows
 
-        # show remiaining cols
-        if lastcol is not None:
-            out.append("[{} more columns]".format(len(self.columns) - ncols))
-        return '\n'.join(out)
+        # Prepare cells
+        cols = OrderedDict()
+        for h in self.columns[:ncols]:
+            cols[h] = self[h].values_to_string(nrows=nrows)
+        # Format into a table
+        return formatting.format(index=self._index, cols=cols,
+                                 show_headers=True, more_cols=more_cols,
+                                 more_rows=more_rows)
 
     def __str__(self):
         return self.to_string()
@@ -211,16 +181,34 @@ class DataFrame(object):
         """
         return tuple(self._cols)
 
-    def _sentry_column_size(self, size):
-        if self._cols and self._size != size:
-                raise ValueError('column size mismatch')
-
     def copy(self):
         "Shallow copy this dataframe"
         df = DataFrame()
         for k in self.columns:
             df[k] = self[k]
         return df
+
+    def _prepare_series_for_add(self, col):
+        """Prepare a series to be added to the DataFrame.
+
+        Parameters
+        ----------
+        col : Series, array-like
+            Values to be added.
+
+        Returns
+        -------
+        The prepared Series object.
+        """
+        series = Series.from_any(col)
+        empty_index = isinstance(self._index, EmptyIndex)
+        if empty_index or self._index == series.index:
+            if empty_index:
+                self._index = series.index
+            self._size = len(series)
+            return series
+        else:
+            raise NotImplementedError("join needed")
 
     def add_column(self, name, data):
         """Add a column
@@ -234,10 +222,8 @@ class DataFrame(object):
         """
         if name in self._cols:
             raise NameError('duplicated column name {!r}'.format(name))
-        series = Series.from_any(data)
-        self._sentry_column_size(len(series))
+        series = self._prepare_series_for_add(data)
         self._cols[name] = series
-        self._size = len(series)
 
     def drop_column(self, name):
         """Drop a column by *name*
@@ -296,7 +282,7 @@ class DataFrame(object):
             raise ValueError("require at least 1 column")
         if nrow < 1:
             raise ValueError("require at least 1 row")
-        dtype = cols[0]
+        dtype = cols[0].dtype
         if any(dtype != c.dtype for c in cols):
             raise ValueError('all column must have the same dtype')
         for k, c in self._cols.items():
@@ -356,8 +342,6 @@ class DataFrame(object):
     def to_pandas(self):
         """Convert to a Pandas DataFrame.
         """
-        import pandas as pd
-
         dct = {k: c.to_array(fillna='pandas') for k, c in self._cols.items()}
         return pd.DataFrame.from_dict(dct)
 
@@ -369,8 +353,6 @@ class DataFrame(object):
         ------
         TypeError for invalid input type.
         """
-        import pandas as pd
-
         if not isinstance(dataframe, pd.DataFrame):
             raise TypeError('not a pandas.DataFrame')
 
@@ -475,6 +457,21 @@ class Series(object):
 
     ``Series`` objects are used as columns of ``DataFrame``.
     """
+    class Init(object):
+        """
+        Initializer object
+        """
+        def __init__(self, **kwargs):
+            self._params = kwargs
+
+        def parameters(self, **kwargs):
+            dupset = frozenset(kwargs.keys()) & frozenset(self._params.keys())
+            if dupset:
+                raise ValueError("duplicated kws: {}",
+                                 ', '.join(map(str, dupset)))
+            kwargs.update(self._params)
+            return kwargs
+
     @classmethod
     def from_any(cls, arbitrary):
         """Create Series from an arbitrary object
@@ -485,9 +482,16 @@ class Series(object):
         * ``Buffer``
         * numba device array
         * numpy array
+        * pandas.Categorical
         """
         if isinstance(arbitrary, Series):
             return arbitrary
+
+        # Handle pandas type
+        if isinstance(arbitrary, pd.Categorical):
+            return cls.from_categorical(arbitrary)
+
+        # Handle internal types
         if isinstance(arbitrary, Buffer):
             return cls.from_buffer(arbitrary)
         elif cuda.devicearray.is_cuda_ndarray(arbitrary):
@@ -498,10 +502,34 @@ class Series(object):
             return cls.from_array(arbitrary)
 
     @classmethod
+    def from_categorical(cls, categorical):
+        from .categorical import CategoricalSeriesImpl
+
+        # TODO fix mutability issue in numba to avoid the .copy()
+        codes = categorical.codes.copy()
+        dtype = categorical.dtype
+        # TODO pending pandas to be improved
+        #       https://github.com/pandas-dev/pandas/issues/14711
+        #       https://github.com/pandas-dev/pandas/pull/16015
+        impl = CategoricalSeriesImpl(dtype, codes.dtype,
+                                     categorical.categories,
+                                     categorical.ordered)
+
+        valid_codes = codes != -1
+        buf = Buffer(codes)
+        params = dict(size=buf.size, buffer=buf, impl=impl)
+        if not np.all(valid_codes):
+            mask = utils.boolmask_to_bitmask(valid_codes)
+            nnz = np.count_nonzero(valid_codes)
+            null_count = codes.size - nnz
+            params.update(dict(mask=Buffer(mask), null_count=null_count))
+        return Series(cls.Init(**params))
+
+    @classmethod
     def from_buffer(cls, buffer):
         """Create a Series from a ``Buffer``
         """
-        return Series(size=buffer.size, dtype=buffer.dtype, buffer=buffer)
+        return cls(cls.Init(size=buffer.size, buffer=buffer))
 
     @classmethod
     def from_array(cls, array):
@@ -512,6 +540,9 @@ class Series(object):
     @classmethod
     def from_masked_array(cls, data, mask, null_count=None):
         """Create a Series with null-mask.
+        This is equivalent to:
+
+            Series.from_any(data).set_mask(mask, null_count=null_count)
 
         Parameters
         ----------
@@ -527,32 +558,84 @@ class Series(object):
             The number of null values.
             If None, it is calculated automatically.
         """
+        return cls.from_any(data).set_mask(mask, null_count=null_count)
 
-        dbuf = Buffer(data)
-        mbuf = Buffer(mask)
-        if null_count is None:
-            nnz = cudautils.count_nonzero_mask(mbuf.mem)
-            null_count = dbuf.size - nnz
-        return cls(size=dbuf.size, dtype=dbuf.dtype, buffer=dbuf, mask=mbuf,
-                   null_count=null_count)
+    def __new__(cls, arg, **kwargs):
+        if isinstance(arg, cls.Init):
+            instance = object.__new__(cls)
+            instance._init_detail(**arg.parameters(**kwargs))
+        else:
+            instance = cls.from_any(arg, **kwargs)
+        return instance
 
-    def __init__(self, size, dtype, buffer=None, mask=None, null_count=None):
+    def _init_detail(self, size, buffer=None, mask=None, null_count=None,
+                     index=None, impl=None):
         """
-        Allocate a empty series with [size x dtype].
-        The memory is uninitialized
+        Actual initializer of the instance
         """
+        from . import series_impl
+
         self._size = size
-        self._dtype = np.dtype(dtype)
         self._data = buffer
         self._mask = mask
+        self._index = DefaultIndex(self._size) if index is None else index
+        self._impl = (series_impl.get_default_impl(buffer.dtype)
+                      if impl is None else impl)
         if null_count is None:
             if self._mask is not None:
-                raise ValueError('null_count must be provided')
-            null_count = 0
+                nnz = cudautils.count_nonzero_mask(self._mask.mem)
+                null_count = self._size - nnz
+            else:
+                null_count = 0
         self._null_count = null_count
-        # make cffi view for libgdf
+        # Make cffi view for libgdf
         self._cffi_view = _gdf.columnview(size=self._size, data=self._data,
                                           mask=self._mask)
+
+    def _copy_construct_defaults(self):
+        return dict(
+            size=self._size,
+            buffer=self._data,
+            mask=self._mask,
+            null_count=self._null_count,
+            impl=self._impl,
+        )
+
+    def _copy_construct(self, **kwargs):
+        """Shallow copy this object by replacing certain ctor args.
+        """
+        params = self._copy_construct_defaults()
+        cls = type(self)
+        params.update(kwargs)
+        return cls(cls.Init(**params))
+
+    def set_index(self, index):
+        return self._copy_construct(index=index)
+
+    def set_mask(self, mask, null_count=None):
+        """Create new Series by setting a mask array.
+
+        This will override the existing mask.  The returned Series will
+        reference the same data buffer as this Series.
+
+        Parameters
+        ----------
+        mask : 1D array-like of numpy.uint8
+            The null-mask.  Valid values are marked as ``1``; otherwise ``0``.
+            The mask bit given the data index ``idx`` is computed as::
+
+                (mask[idx // 8] >> (idx % 8)) & 1
+        null_count : int, optional
+            The number of null values.
+            If None, it is calculated automatically.
+
+        """
+        if not isinstance(mask, Buffer):
+            mask = Buffer(mask)
+        if mask.dtype not in (np.dtype(np.uint8), np.dtype(np.int8)):
+            msg = 'mask must be of byte; but got {}'.format(mask.dtype)
+            raise ValueError(msg)
+        return self._copy_construct(mask=mask, null_count=null_count)
 
     def __len__(self):
         """Returns the size of the ``Series`` including null values.
@@ -560,7 +643,12 @@ class Series(object):
         return self._size
 
     def __getitem__(self, arg):
-        if isinstance(arg, slice):
+        from . import series_impl
+
+        if isinstance(arg, Series):
+            return series_impl.select_by_boolmask(self, arg)
+
+        elif isinstance(arg, slice):
             if self.null_count > 0:
                 # compute mask slice
                 start = arg.start if arg.start else 0
@@ -574,15 +662,19 @@ class Series(object):
                 # slicing
                 subdata = self._data.mem[arg]
                 submask = self._mask.mem[maskslice]
-                return self.from_masked_array(data=subdata, mask=submask)
+                return self._copy_construct(size=subdata.size,
+                                            buffer=Buffer(subdata),
+                                            mask=Buffer(submask),
+                                            null_count=None)
             else:
-                return self.from_buffer(self._data[arg])
+                newbuffer = self._data[arg]
+                return self._copy_construct(size=newbuffer.size,
+                                            buffer=newbuffer,
+                                            mask=None,
+                                            null_count=None)
         elif isinstance(arg, int):
-            if self._mask is not None:
-                valid = cudautils.mask_get.py_func(self._mask, arg)
-            else:
-                valid = 1
-            return self._data[arg] if valid else None
+            # The following triggers a IndexError if out-of-bound
+            return self._impl.element_indexing(self, arg)
         else:
             raise NotImplementedError(type(arg))
 
@@ -592,22 +684,43 @@ class Series(object):
         """
         raise TypeError("can't compute boolean for {!r}".format(type(self)))
 
-    def _call_binop(self, other, fn, out_dtype):
+    def values_to_string(self, nrows=None):
+        """Returns a list of string for each element.
         """
-        Internal util to call a binary operator *fn* on operands *self*
-        and *other* with output dtype *out_dtype*.  Returns the output
-        Series.
-        """
-        # Allocate output series
-        data = cuda.device_array(shape=len(self), dtype=out_dtype)
-        if self.has_null_mask or other.has_null_mask:
-            mask_size = utils.calc_chunk_size(data.size, utils.mask_bitsize)
-            mask = cuda.device_array(shape=mask_size, dtype=utils.mask_dtype)
-            out = Series.from_masked_array(data, mask, null_count=data.size)
-        else:
-            out = Series.from_array(data)
-        self._null_count = _gdf.apply_binaryop(fn, self, other, out)
+        values = self[:nrows]
+        out = ['' if v is None else self._element_to_str(v) for v in values]
         return out
+
+    def _element_to_str(self, value):
+        return self._impl.element_to_str(value)
+
+    def to_string(self, nrows=5):
+        """Convert to string
+
+        Parameters
+        ----------
+        nrows : int
+            Maximum number of rows to show.
+            If it is None, all rows are shown.
+        """
+        if nrows is None:
+            nrows = len(self)
+        else:
+            nrows = min(nrows, len(self))  # cap row count
+
+        more_rows = len(self) - nrows
+
+        # Prepare cells
+        cols = OrderedDict([('', self.values_to_string(nrows=nrows))])
+        # Format into a table
+        return formatting.format(index=self.index,
+                                 cols=cols, more_rows=more_rows)
+
+    def __str__(self):
+        return self.to_string()
+
+    def __repr__(self):
+        return self.to_string()
 
     def _binaryop(self, other, fn):
         """
@@ -615,27 +728,9 @@ class Series(object):
         and *other*.  Return the output Series.  The output dtype is
         determined by the input operands.
         """
-        if isinstance(other, Series):
-            return self._call_binop(other, fn, self.dtype)
-        else:
+        if not isinstance(other, Series):
             return NotImplemented
-
-    def _call_unaop(self, fn, out_dtype):
-        """
-        Internal util to call a unary operator *fn* on operands *self* with
-        output dtype *out_dtype*.  Returns the output Series.
-        """
-        # Allocate output series
-        data = cuda.device_array(shape=len(self), dtype=out_dtype)
-        if self.has_null_mask:
-            # Borrow null mask from self
-            mask = self._mask.mem
-            out = Series.from_masked_array(data, mask,
-                                           null_count=self.null_count)
-        else:
-            out = Series.from_array(data)
-        _gdf.apply_unaryop(fn, self, out)
-        return out
+        return self._impl.binary_operator(fn, self, other)
 
     def _unaryop(self, fn):
         """
@@ -643,58 +738,65 @@ class Series(object):
         Return the output Series.  The output dtype is determined by the input
         operand.
         """
-        return self._call_unaop(fn, self.dtype)
+        return self._impl.unary_operator(fn, self)
 
     def __add__(self, other):
-        return self._binaryop(other, fn=libgdf.gdf_add_generic)
+        return self._binaryop(other, 'add')
 
     def __sub__(self, other):
-        return self._binaryop(other, fn=libgdf.gdf_sub_generic)
+        return self._binaryop(other, 'sub')
 
     def __mul__(self, other):
-        return self._binaryop(other, fn=libgdf.gdf_mul_generic)
+        return self._binaryop(other, 'mul')
 
     def __floordiv__(self, other):
-        return self._binaryop(other, fn=libgdf.gdf_floordiv_generic)
+        return self._binaryop(other, 'floordiv')
 
     def __truediv__(self, other):
-        return self._binaryop(other, fn=libgdf.gdf_div_generic)
+        return self._binaryop(other, 'truediv')
 
     __div__ = __truediv__
 
-    def _compare(self, other, fn):
-        """
-        Internal util to call a comparison operator *fn*
-        comparing *self* and *other*.  Return the output Series.
-        The output dtype is always `np.bool_`.
-        """
+    def _normalize_compare_value(self, other):
         if isinstance(other, Series):
-            return self._call_binop(other, fn, np.bool_)
+            return other
         else:
-            return NotImplemented
+            return self._impl.normalize_compare_value(self, other)
+
+    def _unordered_compare(self, other, cmpops):
+        other = self._normalize_compare_value(other)
+        return self._impl.unordered_compare(cmpops, self, other)
+
+    def _ordered_compare(self, other, cmpops):
+        other = self._normalize_compare_value(other)
+        return self._impl.ordered_compare(cmpops, self, other)
 
     def __eq__(self, other):
-        return self._compare(other, fn=libgdf.gdf_eq_generic)
+        return self._unordered_compare(other, 'eq')
 
     def __ne__(self, other):
-        return self._compare(other, fn=libgdf.gdf_ne_generic)
+        return self._unordered_compare(other, 'ne')
 
     def __lt__(self, other):
-        return self._compare(other, fn=libgdf.gdf_lt_generic)
+        return self._ordered_compare(other, 'lt')
 
     def __le__(self, other):
-        return self._compare(other, fn=libgdf.gdf_le_generic)
+        return self._ordered_compare(other, 'le')
 
     def __gt__(self, other):
-        return self._compare(other, fn=libgdf.gdf_gt_generic)
+        return self._ordered_compare(other, 'gt')
 
     def __ge__(self, other):
-        return self._compare(other, fn=libgdf.gdf_ge_generic)
+        return self._ordered_compare(other, 'ge')
+
+    @property
+    def cat(self):
+        return self._impl.cat(self)
 
     @property
     def dtype(self):
         """dtype of the Series"""
-        return self._dtype
+        return self._impl.dtype
 
     def append(self, arbitrary):
         """Append values from another ``Series`` or array-like object.
@@ -703,13 +805,18 @@ class Series(object):
         other = Series.from_any(arbitrary)
         newsize = len(self) + len(other)
         # allocate memory
-        mem = cuda.device_array(shape=newsize, dtype=self._dtype)
+        mem = cuda.device_array(shape=newsize, dtype=self.data.dtype)
         newbuf = Buffer.from_empty(mem)
         # copy into new memory
         for buf in [self._data, other._data]:
             newbuf.extend(buf.to_gpu_array())
         # return new series
         return self.from_any(newbuf)
+
+    @property
+    def valid_count(self):
+        """Number of null values"""
+        return self._size - self._null_count
 
     @property
     def null_count(self):
@@ -808,6 +915,12 @@ class Series(object):
         """The gpu buffer for the data
         """
         return self._data
+
+    @property
+    def index(self):
+        """The index object
+        """
+        return self._index
 
     @property
     def nullmask(self):
@@ -928,7 +1041,7 @@ class Series(object):
 
         Returns a new Series.
         """
-        return self._unaryop(libgdf.gdf_ceil_generic)
+        return self._unaryop('ceil')
 
     def floor(self):
         """Rounds each value downward to the largest integral value not greater
@@ -936,7 +1049,7 @@ class Series(object):
 
         Returns a new Series.
         """
-        return self._unaryop(libgdf.gdf_floor_generic)
+        return self._unaryop('floor')
 
 
 class BufferSentryError(ValueError):
@@ -962,13 +1075,74 @@ class _BufferSentry(object):
             raise BufferSentryError('non contiguous')
 
 
-def _make_mask(size):
-    size = utils.calc_chunk_size(size, utils.mask_bitsize)
-    return cuda.device_array(shape=size, dtype=utils.mask_dtype)
+class Index(object):
+    pass
 
 
-def _make_mask_from_stride(size, stride):
-    mask = _make_mask(size)
-    cudautils.set_mask_from_stride(mask=mask, stride=stride)
-    return mask
+class EmptyIndex(Index):
+    """
+    A singleton class to represent an empty index when a DataFrame is created
+    without any initializer.
+    """
+    _singleton = None
 
+    def __new__(cls):
+        if cls._singleton is None:
+            cls._singleton = object.__new__(EmptyIndex)
+        return cls._singleton
+
+    def __getitem__(self, index):
+        raise IndexError
+
+    def __len__(self):
+        return 0
+
+
+class DefaultIndex(Index):
+    """Basic 0..size
+    """
+    def __init__(self, size):
+        self._size = size
+
+    def __len__(self):
+        return self._size
+
+    def __getitem__(self, index):
+        if index < 0:
+            index += len(self)
+        if 0 > index >= len(self):
+            raise IndexError
+        return index
+
+    def __eq__(self, other):
+        if isinstance(other, DefaultIndex):
+            return self._size == other._size
+        else:
+            return NotImplemented
+
+
+class Int64Index(Index):
+    @classmethod
+    def make_range(cls, count):
+        return cls(np.arange(count, dtype=np.int64))
+
+    def __init__(self, buf):
+        if not isinstance(buf, Buffer):
+            buf = Buffer(buf)
+        self._values = buf
+
+    def __len__(self):
+        return self._values.size
+
+    def __getitem__(self, index):
+        return self._values[index]
+
+    def __eq__(self, other):
+        if isinstance(other, Int64Index):
+            return self._values == other._values
+        else:
+            return NotImplemented
+
+    @property
+    def values(self):
+        return self._values
