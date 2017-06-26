@@ -181,6 +181,19 @@ class DataFrame(object):
         """
         return tuple(self._cols)
 
+    @property
+    def index(self):
+        """Returns the index of the DataFrame
+        """
+        return self._index
+
+    def set_index(self, index):
+        """Return a new DataFrame with a new index
+        """
+        df = self.copy()
+        df._index = index
+        return df
+
     def copy(self):
         "Shallow copy this dataframe"
         df = DataFrame()
@@ -360,6 +373,54 @@ class DataFrame(object):
 
         for colk in dataframe.columns:
             df[colk] = dataframe[colk].values
+        return df
+
+    def to_records(self, index=True):
+        """Covert to a numpy recarray
+
+        Parameters
+        ----------
+        index : bool
+            Whether to include the index in the output.
+
+        Returns
+        -------
+        numpy recarray
+        """
+        members = [('index', self.index.dtype)] if index else []
+        members += [(col, self[col].dtype) for col in self.columns]
+        dtype = np.dtype(members)
+        ret = np.recarray(len(self), dtype=dtype)
+        if index:
+            ret['index'] = self.index.values
+        for col in self.columns:
+            ret[col] = self[col].to_array()
+        return ret
+
+    @classmethod
+    def from_records(self, data, index=None, columns=None):
+        """Convert from a numpy recarray or structured array
+
+        Parameters
+        ----------
+        data : numpy structured dtype or recarray
+        index : str
+            The name of the index column in *data*.
+            If None, the default index is used.
+        columns: list of str
+            List of column names to include.
+        Returns
+        -------
+        DataFrame
+        """
+        names = data.dtype.names if columns is None else columns
+        df = DataFrame()
+        for k in names:
+            # FIXME: unnecessary copy
+            df[k] = np.ascontiguousarray(data[k])
+        if index is not None:
+            indices = data[index]
+            return df.set_index(Int64Index(indices.astype(np.int64)))
         return df
 
 
@@ -1120,6 +1181,14 @@ class DefaultIndex(Index):
         else:
             return NotImplemented
 
+    @property
+    def dtype(self):
+        return np.dtype(np.int64)
+
+    @property
+    def values(self):
+        return np.arange(len(self), dtype=self.dtype)
+
 
 class Int64Index(Index):
     @classmethod
@@ -1145,4 +1214,8 @@ class Int64Index(Index):
 
     @property
     def values(self):
-        return self._values
+        return self._values.to_array()
+
+    @property
+    def dtype(self):
+        return self._values.dtype
