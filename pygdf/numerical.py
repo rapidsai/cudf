@@ -1,3 +1,5 @@
+from __future__ import print_function, division
+
 import numpy as np
 
 from libgdf_cffi import libgdf
@@ -43,6 +45,9 @@ class NumericalSeriesImpl(series_impl.SeriesImpl):
     """
     def __init__(self, dtype):
         super(NumericalSeriesImpl, self).__init__(dtype)
+
+    def stats(self, series):
+        return Stats(series)
 
     def element_to_str(self, value):
         return str(value)
@@ -105,3 +110,25 @@ class NumericalSeriesImpl(series_impl.SeriesImpl):
         out = series_impl.empty_like_same_mask(series, dtype=out_dtype)
         _gdf.apply_unaryop(fn, series, out)
         return out
+
+
+class Stats(object):
+    def __init__(self, series):
+        self._series = series
+
+    def min(self):
+        return _gdf.apply_reduce(libgdf.gdf_min_generic, self._series)
+
+    def max(self):
+        return _gdf.apply_reduce(libgdf.gdf_max_generic, self._series)
+
+    def mean(self):
+        asum = _gdf.apply_reduce(libgdf.gdf_sum_generic, self._series)
+        return asum / len(self._series)
+
+    def mean_var(self):
+        mu = self.mean()
+        n = len(self._series)
+        asum = _gdf.apply_reduce(libgdf.gdf_sum_squared_generic, self._series)
+        var = asum / n - mu ** 2
+        return mu, var

@@ -3,8 +3,14 @@ This file provide binding to the libgdf library.
 """
 import numpy as np
 
+from numba import cuda
+
 from libgdf_cffi import ffi, libgdf
 from . import cudautils
+
+
+def unwrap_devary(devary):
+    return ffi.cast('void*', devary.device_ctypes_pointer.value)
 
 
 def columnview(size, data, mask=None, dtype=None):
@@ -15,7 +21,7 @@ def columnview(size, data, mask=None, dtype=None):
         if buffer is None:
             return ffi.NULL
         devary = buffer.to_gpu_array()
-        return ffi.cast('void*', devary.device_ctypes_pointer.value)
+        return unwrap_devary(devary)
 
     dtype = dtype or data.dtype
     colview = ffi.new('gdf_column*')
@@ -68,4 +74,14 @@ def np_to_gdf_dtype(dtype):
         np.int8:    libgdf.GDF_INT8,
         np.bool_:   libgdf.GDF_INT8,
     }[np.dtype(dtype).type]
+
+
+def apply_reduce(fn, inp):
+    # allocate output+temp array
+    outsz = libgdf.gdf_reduce_optimal_output_size()
+    out = cuda.device_array(outsz, dtype=inp.dtype)
+    # call reduction
+    fn(inp._cffi_view, unwrap_devary(out), outsz)
+    # return 1st element
+    return out[0]
 

@@ -1038,22 +1038,17 @@ class Series(object):
     def min(self):
         """Compute the min of the series
         """
-        arr = self.to_dense_buffer().to_gpu_array()
-        maxval = utils.get_numeric_type_info(self.dtype).max
-        return cudautils.compute_min(arr, init=maxval)
+        return self._impl.stats(self).min()
 
     def max(self):
         """Compute the max of the series
         """
-        arr = self.to_dense_buffer().to_gpu_array()
-        minval = utils.get_numeric_type_info(self.dtype).min
-        return cudautils.compute_max(arr, init=minval)
+        return self._impl.stats(self).max()
 
     def mean(self):
         """Compute the mean of the series
         """
-        arr = self.to_dense_buffer().to_gpu_array()
-        return cudautils.compute_mean(arr)
+        return self._impl.stats(self).mean()
 
     def std(self):
         """Compute the standard deviation of the series
@@ -1063,15 +1058,13 @@ class Series(object):
     def var(self):
         """Compute the variance of the series
         """
-        arr = self.to_dense_buffer().to_gpu_array()
-        mu, var = cudautils.compute_stats(arr)
+        mu, var = self.mean_var()
         return var
 
     def mean_var(self):
         """Compute mean and variance at the same time.
         """
-        arr = self.to_dense_buffer().to_gpu_array()
-        mu, var = cudautils.compute_stats(arr)
+        mu, var = self._impl.stats(self).mean_var()
         return mu, var
 
     def unique_k(self, k):
