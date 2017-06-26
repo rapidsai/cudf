@@ -7,6 +7,8 @@ if [ -n "$MACOSX_DEPLOYMENT_TARGET" ]; then
     export MACOSX_DEPLOYMENT_TARGET=10.11
 fi
 
+# Cleanup local git
+git clean -xdf
 # Use CMake-based build procedure
 mkdir build
 cd build

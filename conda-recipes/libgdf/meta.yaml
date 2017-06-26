@@ -5,7 +5,8 @@ package:
   version: {{ environ.get('GIT_DESCRIBE_TAG', '0.0.0.dev').lstrip('v') }}
 
 source:
-  git_url: ../..
+  # git_url: ../..
+  path: ../..
 
 build:
   number: {{ environ.get('GIT_DESCRIBE_NUMBER', 0) }}

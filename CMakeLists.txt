@@ -12,7 +12,8 @@ find_package(CUDA)
 set (CMAKE_CXX_STANDARD 11)
 
 include_directories(include
-                    $ENV{CONDA_PREFIX}/include)
+                    $ENV{CONDA_PREFIX}/include
+                    ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/cub)
 
 set(CUDA_NVCC_FLAGS  ${CUDA_NVCC_FLAGS};-std=c++11)
 
@@ -22,6 +23,7 @@ cuda_add_library(gdf SHARED
     src/errorhandling.cpp
     src/unaryops.cu
     src/ipc.cu
+    src/reductions.cu
 )
 
 # Command to symlink files into the build directory
@@ -29,6 +31,7 @@ cuda_add_library(gdf SHARED
 add_custom_command(  # link the include directory
     OUTPUT include
     COMMAND ${CMAKE_COMMAND} -E create_symlink ${CMAKE_CURRENT_SOURCE_DIR}/include include
+
     DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/include)
 
 add_custom_command(  # link the python directory
