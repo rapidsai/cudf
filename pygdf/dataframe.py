@@ -7,7 +7,7 @@ import pandas as pd
 
 from numba import cuda
 
-from . import cudautils, utils, _gdf, formatting
+from . import cudautils, utils, _gdf, formatting, queryutils
 
 
 class DataFrame(object):
@@ -367,6 +367,32 @@ class DataFrame(object):
         for name, col in zip(newnames, newcols):
             outdf.add_column(name, col)
         return outdf
+
+    def query(self, expr):
+        """Query with a boolean expression
+
+        See pandas.DataFrame.query
+
+        Parameters
+        ----------
+        expr : str
+            A boolean expression.  Names in the expression refers to the
+            columns.  Any name prefixed with `@` refer to the variables in
+            the calling environment.
+
+        Returns
+        -------
+        filtered :  DataFrame
+        """
+        # TODO add `@` support
+        boolmask = queryutils.query_execute(self, expr)
+
+        selected = Series.from_array(boolmask)
+        newdf = DataFrame()
+        for col in self.columns:
+            newseries = self[col][selected]
+            newdf[col] = newseries
+        return newdf
 
     def to_pandas(self):
         """Convert to a Pandas DataFrame.
