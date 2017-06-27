@@ -1,5 +1,6 @@
 from __future__ import print_function, division
 
+import inspect
 from collections import OrderedDict
 
 import numpy as np
@@ -369,9 +370,9 @@ class DataFrame(object):
         return outdf
 
     def query(self, expr):
-        """Query with a boolean expression
+        """Query with a boolean expression using Numba to compile a GPU kernel.
 
-        See pandas.DataFrame.query
+        See pandas.DataFrame.query.
 
         Parameters
         ----------
@@ -384,8 +385,14 @@ class DataFrame(object):
         -------
         filtered :  DataFrame
         """
-        # TODO add `@` support
-        boolmask = queryutils.query_execute(self, expr)
+        # Get calling environment
+        callframe = inspect.currentframe().f_back
+        callenv = {
+            'locals': callframe.f_locals,
+            'globals': callframe.f_globals,
+        }
+        # Run query
+        boolmask = queryutils.query_execute(self, expr, callenv)
 
         selected = Series.from_array(boolmask)
         newdf = DataFrame()

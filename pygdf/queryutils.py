@@ -143,12 +143,21 @@ def {kernelname}(out, {args}):
 def _wrap_query_expr(name, fn, args):
     """Wrap the query expression in a cuda kernel.
     """
+    def _add_idx(arg):
+        if arg.startswith(ENVREF_PREFIX):
+            return arg
+        else:
+            return '{}[idx]'.format(arg)
+
+    def _add_prefix(arg):
+        return '_args_{}'.format(arg)
+
     glbls = {
         'queryfn': fn,
         'cuda': cuda,
     }
-    kernargs = ['_args_{}'.format(a) for a in args]
-    indiced_args = ['{}[idx]'.format(a) for a in kernargs]
+    kernargs = map(_add_prefix, args)
+    indiced_args = map(_add_prefix, map(_add_idx, args))
     src = _kernel_source.format(kernelname=name,
                                 args=', '.join(kernargs),
                                 indiced_args=', '.join(indiced_args))
@@ -157,20 +166,40 @@ def _wrap_query_expr(name, fn, args):
     return kernel
 
 
-def query_execute(df, expr):
+def query_execute(df, expr, callenv):
     """Compile & execute the query expression
+
+    Parameters
+    ----------
+    df : DataFrame
+    expr : str
+        boolean expression
+    callenv : dict
+        Contains keys 'locals' and 'globals' which are both dict.
+        They represent the local and global dictionaries of the caller.
     """
     # compile
     compiled = query_compile(expr)
     kernel = compiled['kernel']
-    # prepare args
-    if compiled['refnames']:
-        raise NotImplementedError('env ref not supported yet')
+    # process env args
+    envargs = []
+    envdict = callenv['globals'].copy()
+    envdict.update(callenv['locals'])
+    for name in compiled['refnames']:
+        name = name[len(ENVREF_PREFIX):]
+        try:
+            val = envdict[name]
+        except KeyError:
+            msg = '{!r} not defined in the calling environment'
+            raise NameError(msg.format(name))
+        else:
+            envargs.append(val)
+    # prepare col args
     colarrays = [df[col].to_gpu_array() for col in compiled['colnames']]
     # allocate output buffer
     nrows = len(df)
     out = cuda.device_array(nrows, dtype=np.bool_)
     # run kernel
-    args = [out] + colarrays
+    args = [out] + colarrays + envargs
     kernel.forall(nrows)(*args)
     return out
