@@ -101,6 +101,12 @@ _cache = {}
 def query_compile(expr):
     """Compile the query expression.
 
+    This generates a CUDA Kernel for the query expression.  The kernel is
+    cached for reuse.  All variable names, including both references to
+    columns and references to variables in the calling environment, in the
+    expression are passed as argument to the kernel. Thus, the kernel is
+    reusable on any dataframe and in any environment.
+
     Parameters
     ----------
     expr : str
@@ -114,7 +120,9 @@ def query_compile(expr):
     """
 
     funcid = 'queryexpr_{:x}'.format(np.uintp(hash(expr)))
+    # Load cache
     compiled = _cache.get(funcid)
+    # Cache not found
     if compiled is None:
         info = query_parser(expr)
         fn = query_builder(info, funcid)
@@ -127,6 +135,7 @@ def query_compile(expr):
 
         compiled = info.copy()
         compiled['kernel'] = kernel
+        # Store cache
         _cache[funcid] = compiled
     return compiled
 
@@ -168,6 +177,8 @@ def _wrap_query_expr(name, fn, args):
 
 def query_execute(df, expr, callenv):
     """Compile & execute the query expression
+
+    Note: the expression is compiled and cached for future reuse.
 
     Parameters
     ----------
