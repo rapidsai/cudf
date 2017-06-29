@@ -37,7 +37,7 @@ def mask_set(mask, pos):
 
 def boolmask_to_bitmask(bools):
     masksize = calc_chunk_size(bools.size, mask_bitsize)
-    mask = np.empty(masksize, dtype=mask_dtype)
+    mask = np.zeros(masksize, dtype=mask_dtype)
     for i, x in enumerate(bools):
         if x:
             mask_set(mask, i)

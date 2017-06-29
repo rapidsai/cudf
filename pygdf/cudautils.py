@@ -25,7 +25,7 @@ def gpu_arange(size, out):
 
 def arange(size):
     out = cuda.device_array(size, dtype=np.int64)
-    gpu_arange.forall(size, out)
+    gpu_arange.forall(size)(size, out)
     return out
 
 # GPU array type casting
