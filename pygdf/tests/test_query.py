@@ -82,3 +82,16 @@ def test_query_ref_env(data, fn):
     np.testing.assert_array_almost_equal(df2['b'].to_array(), bb[expect_mask])
 
 
+def test_query_env_changing():
+    df = DataFrame()
+    df['a'] = aa = np.arange(100)
+    expr = 'a < @c'
+    # first attempt
+    c = 10
+    got = df.query(expr)
+    np.testing.assert_array_equal(aa[aa < c], got['a'].to_array())
+    # change env
+    c = 50
+    got = df.query(expr)
+    np.testing.assert_array_equal(aa[aa < c], got['a'].to_array())
+
