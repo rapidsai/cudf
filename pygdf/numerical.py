@@ -116,6 +116,12 @@ class Stats(object):
     def __init__(self, series):
         self._series = series
 
+    def _ensure_real_dtype(self):
+        series = self._series
+        if issubclass(self._series.dtype.type, np.integer):
+            series = series.astype(np.float64)
+        return series
+
     def min(self):
         return _gdf.apply_reduce(libgdf.gdf_min_generic, self._series)
 
@@ -123,12 +129,15 @@ class Stats(object):
         return _gdf.apply_reduce(libgdf.gdf_max_generic, self._series)
 
     def mean(self):
-        asum = _gdf.apply_reduce(libgdf.gdf_sum_generic, self._series)
+
+        asum = _gdf.apply_reduce(libgdf.gdf_sum_generic,
+                                 self._ensure_real_dtype())
         return asum / len(self._series)
 
     def mean_var(self):
         mu = self.mean()
         n = len(self._series)
-        asum = _gdf.apply_reduce(libgdf.gdf_sum_squared_generic, self._series)
+        asum = _gdf.apply_reduce(libgdf.gdf_sum_squared_generic,
+                                 self._ensure_real_dtype())
         var = asum / n - mu ** 2
         return mu, var

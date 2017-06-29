@@ -19,20 +19,26 @@ def test_series_max():
     np.testing.assert_almost_equal(arr.max(), sr.max())
 
 
-def test_series_mean():
-    arr = np.random.random(100)
+params_dtypes = [np.int32, np.float32, np.float64]
+
+
+@pytest.mark.parametrize('dtype', params_dtypes)
+def test_series_mean(dtype):
+    arr = np.random.random(100).astype(dtype)
     sr = Series.from_any(arr)
     np.testing.assert_almost_equal(arr.mean(), sr.mean())
 
 
-def test_series_var():
-    arr = np.random.random(100)
+@pytest.mark.parametrize('dtype', params_dtypes)
+def test_series_var(dtype):
+    arr = np.random.random(100).astype(dtype)
     sr = Series.from_any(arr)
     np.testing.assert_almost_equal(arr.var(), sr.var())
 
 
-def test_series_std():
-    arr = np.random.random(100)
+@pytest.mark.parametrize('dtype', params_dtypes)
+def test_series_std(dtype):
+    arr = np.random.random(100).astype(dtype)
     sr = Series.from_any(arr)
     np.testing.assert_almost_equal(arr.std(), sr.std())
 
