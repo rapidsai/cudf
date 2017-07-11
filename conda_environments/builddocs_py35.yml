@@ -1,25 +1,33 @@
 name: builddocs_py35
 channels:
+- gpuopenanalytics/label/dev
 - numba
 - defaults
 dependencies:
 - accelerate_cudalib=2.0=0
+- cffi=1.10.0=py35_0
 - mkl=2017.0.1=0
 - numpy=1.12.1=py35_0
 - openssl=1.0.2k=1
+- pandas=0.20.2=np112py35_0
 - pip=9.0.1=py35_1
 - py=1.4.33=py35_0
+- pycparser=2.17=py35_0
 - python=3.5.3=1
+- python-dateutil=2.6.0=py35_0
+- pytz=2017.2=py35_0
 - readline=6.2=2
 - setuptools=27.2.0=py35_0
+- six=1.10.0=py35_0
 - sqlite=3.13.0=0
 - tk=8.5.18=0
 - wheel=0.29.0=py35_0
 - xz=5.2.2=1
 - zlib=1.2.8=3
+- libgdf=0.1.0a1.dev=2
+- libgdf_cffi=0.1.0a1.dev=py35_2
 - llvmlite=0.18.0=py35_0
 - numba=0.33.0=np112py35_0
-- pandas=0.20.2=np112py35_0
 - pip:
   - alabaster==0.7.10
   - babel==2.4.0
@@ -27,15 +35,13 @@ dependencies:
   - flatbuffers==2015.12.22.1
   - imagesize==0.7.1
   - jinja2==2.9.6
+  - libgdf-cffi==0.1.0a1
   - markupsafe==1.0
   - numpydoc==0.6.0
   - pygments==2.2.0
-  - pytz==2017.2
   - requests==2.14.2
-  - six==1.10.0
   - snowballstemmer==1.2.1
   - sphinx==1.6.1
   - sphinx-rtd-theme==0.2.4
   - sphinxcontrib-websupport==1.0.1
   - typing==3.6.1
-
