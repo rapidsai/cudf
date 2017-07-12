@@ -15,6 +15,8 @@ include_directories(include
                     $ENV{CONDA_PREFIX}/include
                     ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/cub)
 
+link_directories($ENV{CONDA_PREFIX}/lib)
+
 set(CUDA_NVCC_FLAGS  ${CUDA_NVCC_FLAGS};-std=c++11)
 
 cuda_add_library(gdf SHARED
@@ -25,6 +27,8 @@ cuda_add_library(gdf SHARED
     src/ipc.cu
     src/reductions.cu
 )
+
+target_link_libraries(gdf arrow)
 
 # Command to symlink files into the build directory
 
