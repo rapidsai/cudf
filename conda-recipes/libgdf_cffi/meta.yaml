@@ -1,6 +1,7 @@
+{% set version = environ.get('GIT_DESCRIBE_TAG', '0.0.0.dev').lstrip('v') %}
 package:
   name: libgdf_cffi
-  version: {{ environ.get('GIT_DESCRIBE_TAG', '0.0.0.dev').lstrip('v') }}
+  version: {{ version }}
 
 source:
   # git_url: ../..
@@ -18,7 +19,7 @@ requirements:
     - cffi
     - setuptools
   run:
-    - libgdf
+    - libgdf  {{ version }}
     - python x.x
     - cffi
 
