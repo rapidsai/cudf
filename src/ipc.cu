@@ -254,6 +254,7 @@ protected:
         std::shared_ptr<ipc::RecordBatchStreamReader> reader;
         ipc::RecordBatchStreamReader::Open(buffer, &reader);
         _schema = reader->schema();
+        if (!_schema) throw ParseError("failed to parse schema");
         // Parse the schema
         parse_schema(_schema);
     }
