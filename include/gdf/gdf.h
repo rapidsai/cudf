@@ -2,7 +2,7 @@
 #define GDF_GDF_H
 
 #include <cstdlib>
-
+#include <cstdint>
 #include "cffi/types.h"
 
 #define GDF_VALID_BITSIZE (sizeof(gdf_valid_type) * 8)
