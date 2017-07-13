@@ -38,9 +38,11 @@ def gpu_view_as(arr, dtype, shape=None, strides=None):
 
 
 def _schema_to_dtype(name, bitwidth):
-    if name == 'FloatingPoint':
+    if name in ('DOUBLE', 'FLOAT'):
         ret = getattr(np, 'float{:d}'.format(bitwidth))
-    elif name == 'Int':
+    elif name in ('INT', 'INT32', 'INT64'):
+        ret = getattr(np, 'int{:d}'.format(bitwidth))
+    elif name == 'DICTIONARY':
         ret = getattr(np, 'int{:d}'.format(bitwidth))
     else:
         fmt = "unsupported type {} {}-bits"
@@ -106,9 +108,10 @@ class GpuArrowNodeReader(object):
 
 
 class GpuArrowReader(Sequence):
-    def __init__(self, gpu_data):
+    def __init__(self, schema_data, gpu_data):
         loggername = '{}@{:08x}'.format(self.__class__.__name__, id(self))
         self._logger = _logger.getChild(loggername)
+        self._schema_data = schema_data
         self._gpu_data = gpu_data
         self._nodes = []
 
@@ -145,17 +148,19 @@ class GpuArrowReader(Sequence):
     #
 
     def _open(self):
-        nodelist, dataptr = self._parse_metdata()
-
-        for dctnode in nodelist:
+        schema, layoutinfo, dataptr = self._parse_metdata()
+        from pprint import pprint
+        pprint(schema)
+        pprint(layoutinfo)
+        for fielddesc, layout in zip(schema['schema']['fields'], layoutinfo):
             _logger.debug('reading data from libgdf IPCParser')
             nodedesc = _NodeDesc(
-                name=dctnode['name'],
-                length=dctnode['length'],
-                null_count=dctnode['null_count'],
-                null_buffer=_BufferDesc(**dctnode['null_buffer']),
-                data_buffer=_BufferDesc(**dctnode['data_buffer']),
-                dtype=_schema_to_dtype(**dctnode['dtype']),
+                name=layout['name'],
+                length=layout['length'],
+                null_count=layout['null_count'],
+                null_buffer=_BufferDesc(**layout['null_buffer']),
+                data_buffer=_BufferDesc(**layout['data_buffer']),
+                dtype=_schema_to_dtype(**layout['dtype']),
                 )
             node = GpuArrowNodeReader(gpu_data=dataptr,
                                       desc=nodedesc)
@@ -166,31 +171,44 @@ class GpuArrowReader(Sequence):
         from libgdf_cffi import ffi, libgdf
 
         @contextmanager
-        def open_parser(devptr):
+        def open_parser(schema_ptr, schema_len):
             "context to destroy the parser"
             _logger.debug('open IPCParser')
-            ipcparser = libgdf.gdf_ipc_parser_open(devptr)
+            ipcparser = libgdf.gdf_ipc_parser_open(schema_ptr, schema_len)
             yield ipcparser
             _logger.debug('close IPCParser')
             libgdf.gdf_ipc_parser_close(ipcparser)
 
-        # get void* from the gpu array
-        devptr = ffi.cast("void*", self._gpu_data.device_ctypes_pointer.value)
-
-        # parse
-        with open_parser(devptr) as ipcparser:
-            # check for failure
+        def check_error(ipcparser):
             if libgdf.gdf_ipc_parser_failed(ipcparser):
                 raw_error = libgdf.gdf_ipc_parser_get_error(ipcparser)
                 error = ffi.string(raw_error).decode()
                 _logger.error('IPCParser failed: %s', error)
                 raise MetadataParsingError(error)
 
+        def load_json(jsonraw):
+            jsontext = ffi.string(jsonraw).decode()
+            return json.loads(jsontext)
+
+        # get void* from the gpu array
+        schema_ptr = ffi.cast("void*", self._schema_data.ctypes.data)
+
+        # parse schema
+        with open_parser(schema_ptr, len(self._schema_data)) as ipcparser:
+            # check for failure in parseing the schema
+            check_error(ipcparser)
+
+            gpu_ptr = ffi.cast("void*", self._gpu_data.device_ctypes_pointer.value)
+            libgdf.gdf_ipc_parser_open_recordbatches(ipcparser, gpu_ptr,
+                                                     self._gpu_data.size)
+            # check for failure in parsing the recordbatches
+            check_error(ipcparser)
             # get schema as json
             _logger.debug('IPCParser get metadata as json')
-            jsonraw = libgdf.gdf_ipc_parser_to_json(ipcparser)
-            jsontext = ffi.string(jsonraw).decode()
-            outdct = json.loads(jsontext)
+            schemadct = load_json(
+                libgdf.gdf_ipc_parser_get_schema_json(ipcparser))
+            layoutdct = load_json(
+                libgdf.gdf_ipc_parser_get_layout_json(ipcparser))
 
             # get data offset
             _logger.debug('IPCParser data region offset')
@@ -198,4 +216,4 @@ class GpuArrowReader(Sequence):
             dataoffset = int(ffi.cast('uint64_t', dataoffset))
             dataptr = self._gpu_data[dataoffset:]
 
-        return outdct, dataptr
+        return schemadct, layoutdct, dataptr
