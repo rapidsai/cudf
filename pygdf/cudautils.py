@@ -152,7 +152,8 @@ def count_nonzero_mask(mask):
 
 
 def copy_to_dense(data, mask, out=None):
-    """
+    """Copy *data* with validity bits in *mask* into *out*.
+
     The output array can be specified in `out`.
 
     Return a 2-tuple of:
@@ -161,11 +162,13 @@ def copy_to_dense(data, mask, out=None):
     """
     slots, sz = mask_assign_slot(size=data.size, mask=mask)
     if out is None:
-        alloc_shape = max(sz, 1)   # can't allocate 0 bytes
-        out = cuda.device_array(shape=alloc_shape,
-                                dtype=data.dtype)
+        # output buffer is not provided
+        # allocate one
+        alloc_shape = sz
+        out = cuda.device_array(shape=alloc_shape, dtype=data.dtype)
     else:
-        # check
+        # output buffer is provided
+        # check it
         if sz >= out.size:
             raise ValueError('output array too small')
     gpu_copy_to_dense.forall(data.size)(data, mask, slots, out)
