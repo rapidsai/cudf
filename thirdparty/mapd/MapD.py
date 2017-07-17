@@ -99,6 +99,13 @@ class Iface(object):
         """
         pass
 
+    def get_memory_cpu(self, session):
+        """
+        Parameters:
+         - session
+        """
+        pass
+
     def get_memory_summary(self, session):
         """
         Parameters:
@@ -131,7 +138,18 @@ class Iface(object):
         """
         pass
 
-    def sql_execute_gpudf(self, session, query, device_id, first_n):
+    def sql_execute_df(self, session, query, device_type, device_id, first_n):
+        """
+        Parameters:
+         - session
+         - query
+         - device_type
+         - device_id
+         - first_n
+        """
+        pass
+
+    def sql_execute_gdf(self, session, query, device_id, first_n):
         """
         Parameters:
          - session
@@ -800,6 +818,39 @@ class Client(Iface):
             raise result.e
         raise TApplicationException(TApplicationException.MISSING_RESULT, "get_memory_gpu failed: unknown result")
 
+    def get_memory_cpu(self, session):
+        """
+        Parameters:
+         - session
+        """
+        self.send_get_memory_cpu(session)
+        return self.recv_get_memory_cpu()
+
+    def send_get_memory_cpu(self, session):
+        self._oprot.writeMessageBegin('get_memory_cpu', TMessageType.CALL, self._seqid)
+        args = get_memory_cpu_args()
+        args.session = session
+        args.write(self._oprot)
+        self._oprot.writeMessageEnd()
+        self._oprot.trans.flush()
+
+    def recv_get_memory_cpu(self):
+        iprot = self._iprot
+        (fname, mtype, rseqid) = iprot.readMessageBegin()
+        if mtype == TMessageType.EXCEPTION:
+            x = TApplicationException()
+            x.read(iprot)
+            iprot.readMessageEnd()
+            raise x
+        result = get_memory_cpu_result()
+        result.read(iprot)
+        iprot.readMessageEnd()
+        if result.success is not None:
+            return result.success
+        if result.e is not None:
+            raise result.e
+        raise TApplicationException(TApplicationException.MISSING_RESULT, "get_memory_cpu failed: unknown result")
+
     def get_memory_summary(self, session):
         """
         Parameters:
@@ -936,7 +987,48 @@ class Client(Iface):
             raise result.e
         raise TApplicationException(TApplicationException.MISSING_RESULT, "sql_execute failed: unknown result")
 
-    def sql_execute_gpudf(self, session, query, device_id, first_n):
+    def sql_execute_df(self, session, query, device_type, device_id, first_n):
+        """
+        Parameters:
+         - session
+         - query
+         - device_type
+         - device_id
+         - first_n
+        """
+        self.send_sql_execute_df(session, query, device_type, device_id, first_n)
+        return self.recv_sql_execute_df()
+
+    def send_sql_execute_df(self, session, query, device_type, device_id, first_n):
+        self._oprot.writeMessageBegin('sql_execute_df', TMessageType.CALL, self._seqid)
+        args = sql_execute_df_args()
+        args.session = session
+        args.query = query
+        args.device_type = device_type
+        args.device_id = device_id
+        args.first_n = first_n
+        args.write(self._oprot)
+        self._oprot.writeMessageEnd()
+        self._oprot.trans.flush()
+
+    def recv_sql_execute_df(self):
+        iprot = self._iprot
+        (fname, mtype, rseqid) = iprot.readMessageBegin()
+        if mtype == TMessageType.EXCEPTION:
+            x = TApplicationException()
+            x.read(iprot)
+            iprot.readMessageEnd()
+            raise x
+        result = sql_execute_df_result()
+        result.read(iprot)
+        iprot.readMessageEnd()
+        if result.success is not None:
+            return result.success
+        if result.e is not None:
+            raise result.e
+        raise TApplicationException(TApplicationException.MISSING_RESULT, "sql_execute_df failed: unknown result")
+
+    def sql_execute_gdf(self, session, query, device_id, first_n):
         """
         Parameters:
          - session
@@ -944,12 +1036,12 @@ class Client(Iface):
          - device_id
          - first_n
         """
-        self.send_sql_execute_gpudf(session, query, device_id, first_n)
-        return self.recv_sql_execute_gpudf()
+        self.send_sql_execute_gdf(session, query, device_id, first_n)
+        return self.recv_sql_execute_gdf()
 
-    def send_sql_execute_gpudf(self, session, query, device_id, first_n):
-        self._oprot.writeMessageBegin('sql_execute_gpudf', TMessageType.CALL, self._seqid)
-        args = sql_execute_gpudf_args()
+    def send_sql_execute_gdf(self, session, query, device_id, first_n):
+        self._oprot.writeMessageBegin('sql_execute_gdf', TMessageType.CALL, self._seqid)
+        args = sql_execute_gdf_args()
         args.session = session
         args.query = query
         args.device_id = device_id
@@ -958,7 +1050,7 @@ class Client(Iface):
         self._oprot.writeMessageEnd()
         self._oprot.trans.flush()
 
-    def recv_sql_execute_gpudf(self):
+    def recv_sql_execute_gdf(self):
         iprot = self._iprot
         (fname, mtype, rseqid) = iprot.readMessageBegin()
         if mtype == TMessageType.EXCEPTION:
@@ -966,14 +1058,14 @@ class Client(Iface):
             x.read(iprot)
             iprot.readMessageEnd()
             raise x
-        result = sql_execute_gpudf_result()
+        result = sql_execute_gdf_result()
         result.read(iprot)
         iprot.readMessageEnd()
         if result.success is not None:
             return result.success
         if result.e is not None:
             raise result.e
-        raise TApplicationException(TApplicationException.MISSING_RESULT, "sql_execute_gpudf failed: unknown result")
+        raise TApplicationException(TApplicationException.MISSING_RESULT, "sql_execute_gdf failed: unknown result")
 
     def interrupt(self, session):
         """
@@ -2022,11 +2114,13 @@ class Processor(Iface, TProcessor):
         self._processMap["stop_heap_profile"] = Processor.process_stop_heap_profile
         self._processMap["get_heap_profile"] = Processor.process_get_heap_profile
         self._processMap["get_memory_gpu"] = Processor.process_get_memory_gpu
+        self._processMap["get_memory_cpu"] = Processor.process_get_memory_cpu
         self._processMap["get_memory_summary"] = Processor.process_get_memory_summary
         self._processMap["clear_cpu_memory"] = Processor.process_clear_cpu_memory
         self._processMap["clear_gpu_memory"] = Processor.process_clear_gpu_memory
         self._processMap["sql_execute"] = Processor.process_sql_execute
-        self._processMap["sql_execute_gpudf"] = Processor.process_sql_execute_gpudf
+        self._processMap["sql_execute_df"] = Processor.process_sql_execute_df
+        self._processMap["sql_execute_gdf"] = Processor.process_sql_execute_gdf
         self._processMap["interrupt"] = Processor.process_interrupt
         self._processMap["sql_validate"] = Processor.process_sql_validate
         self._processMap["set_execution_mode"] = Processor.process_set_execution_mode
@@ -2335,6 +2429,28 @@ class Processor(Iface, TProcessor):
         oprot.writeMessageEnd()
         oprot.trans.flush()
 
+    def process_get_memory_cpu(self, seqid, iprot, oprot):
+        args = get_memory_cpu_args()
+        args.read(iprot)
+        iprot.readMessageEnd()
+        result = get_memory_cpu_result()
+        try:
+            result.success = self._handler.get_memory_cpu(args.session)
+            msg_type = TMessageType.REPLY
+        except (TTransport.TTransportException, KeyboardInterrupt, SystemExit):
+            raise
+        except TMapDException as e:
+            msg_type = TMessageType.REPLY
+            result.e = e
+        except Exception as ex:
+            msg_type = TMessageType.EXCEPTION
+            logging.exception(ex)
+            result = TApplicationException(TApplicationException.INTERNAL_ERROR, 'Internal error')
+        oprot.writeMessageBegin("get_memory_cpu", msg_type, seqid)
+        result.write(oprot)
+        oprot.writeMessageEnd()
+        oprot.trans.flush()
+
     def process_get_memory_summary(self, seqid, iprot, oprot):
         args = get_memory_summary_args()
         args.read(iprot)
@@ -2423,13 +2539,13 @@ class Processor(Iface, TProcessor):
         oprot.writeMessageEnd()
         oprot.trans.flush()
 
-    def process_sql_execute_gpudf(self, seqid, iprot, oprot):
-        args = sql_execute_gpudf_args()
+    def process_sql_execute_df(self, seqid, iprot, oprot):
+        args = sql_execute_df_args()
         args.read(iprot)
         iprot.readMessageEnd()
-        result = sql_execute_gpudf_result()
+        result = sql_execute_df_result()
         try:
-            result.success = self._handler.sql_execute_gpudf(args.session, args.query, args.device_id, args.first_n)
+            result.success = self._handler.sql_execute_df(args.session, args.query, args.device_type, args.device_id, args.first_n)
             msg_type = TMessageType.REPLY
         except (TTransport.TTransportException, KeyboardInterrupt, SystemExit):
             raise
@@ -2440,7 +2556,29 @@ class Processor(Iface, TProcessor):
             msg_type = TMessageType.EXCEPTION
             logging.exception(ex)
             result = TApplicationException(TApplicationException.INTERNAL_ERROR, 'Internal error')
-        oprot.writeMessageBegin("sql_execute_gpudf", msg_type, seqid)
+        oprot.writeMessageBegin("sql_execute_df", msg_type, seqid)
+        result.write(oprot)
+        oprot.writeMessageEnd()
+        oprot.trans.flush()
+
+    def process_sql_execute_gdf(self, seqid, iprot, oprot):
+        args = sql_execute_gdf_args()
+        args.read(iprot)
+        iprot.readMessageEnd()
+        result = sql_execute_gdf_result()
+        try:
+            result.success = self._handler.sql_execute_gdf(args.session, args.query, args.device_id, args.first_n)
+            msg_type = TMessageType.REPLY
+        except (TTransport.TTransportException, KeyboardInterrupt, SystemExit):
+            raise
+        except TMapDException as e:
+            msg_type = TMessageType.REPLY
+            result.e = e
+        except Exception as ex:
+            msg_type = TMessageType.EXCEPTION
+            logging.exception(ex)
+            result = TApplicationException(TApplicationException.INTERNAL_ERROR, 'Internal error')
+        oprot.writeMessageBegin("sql_execute_gdf", msg_type, seqid)
         result.write(oprot)
         oprot.writeMessageEnd()
         oprot.trans.flush()
@@ -4660,6 +4798,138 @@ class get_memory_gpu_result(object):
         return not (self == other)
 
 
+class get_memory_cpu_args(object):
+    """
+    Attributes:
+     - session
+    """
+
+    thrift_spec = (
+        None,  # 0
+        (1, TType.STRING, 'session', 'UTF8', None, ),  # 1
+    )
+
+    def __init__(self, session=None,):
+        self.session = session
+
+    def read(self, iprot):
+        if iprot._fast_decode is not None and isinstance(iprot.trans, TTransport.CReadableTransport) and self.thrift_spec is not None:
+            iprot._fast_decode(self, iprot, (self.__class__, self.thrift_spec))
+            return
+        iprot.readStructBegin()
+        while True:
+            (fname, ftype, fid) = iprot.readFieldBegin()
+            if ftype == TType.STOP:
+                break
+            if fid == 1:
+                if ftype == TType.STRING:
+                    self.session = iprot.readString().decode('utf-8') if sys.version_info[0] == 2 else iprot.readString()
+                else:
+                    iprot.skip(ftype)
+            else:
+                iprot.skip(ftype)
+            iprot.readFieldEnd()
+        iprot.readStructEnd()
+
+    def write(self, oprot):
+        if oprot._fast_encode is not None and self.thrift_spec is not None:
+            oprot.trans.write(oprot._fast_encode(self, (self.__class__, self.thrift_spec)))
+            return
+        oprot.writeStructBegin('get_memory_cpu_args')
+        if self.session is not None:
+            oprot.writeFieldBegin('session', TType.STRING, 1)
+            oprot.writeString(self.session.encode('utf-8') if sys.version_info[0] == 2 else self.session)
+            oprot.writeFieldEnd()
+        oprot.writeFieldStop()
+        oprot.writeStructEnd()
+
+    def validate(self):
+        return
+
+    def __repr__(self):
+        L = ['%s=%r' % (key, value)
+             for key, value in self.__dict__.items()]
+        return '%s(%s)' % (self.__class__.__name__, ', '.join(L))
+
+    def __eq__(self, other):
+        return isinstance(other, self.__class__) and self.__dict__ == other.__dict__
+
+    def __ne__(self, other):
+        return not (self == other)
+
+
+class get_memory_cpu_result(object):
+    """
+    Attributes:
+     - success
+     - e
+    """
+
+    thrift_spec = (
+        (0, TType.STRING, 'success', 'UTF8', None, ),  # 0
+        (1, TType.STRUCT, 'e', (TMapDException, TMapDException.thrift_spec), None, ),  # 1
+    )
+
+    def __init__(self, success=None, e=None,):
+        self.success = success
+        self.e = e
+
+    def read(self, iprot):
+        if iprot._fast_decode is not None and isinstance(iprot.trans, TTransport.CReadableTransport) and self.thrift_spec is not None:
+            iprot._fast_decode(self, iprot, (self.__class__, self.thrift_spec))
+            return
+        iprot.readStructBegin()
+        while True:
+            (fname, ftype, fid) = iprot.readFieldBegin()
+            if ftype == TType.STOP:
+                break
+            if fid == 0:
+                if ftype == TType.STRING:
+                    self.success = iprot.readString().decode('utf-8') if sys.version_info[0] == 2 else iprot.readString()
+                else:
+                    iprot.skip(ftype)
+            elif fid == 1:
+                if ftype == TType.STRUCT:
+                    self.e = TMapDException()
+                    self.e.read(iprot)
+                else:
+                    iprot.skip(ftype)
+            else:
+                iprot.skip(ftype)
+            iprot.readFieldEnd()
+        iprot.readStructEnd()
+
+    def write(self, oprot):
+        if oprot._fast_encode is not None and self.thrift_spec is not None:
+            oprot.trans.write(oprot._fast_encode(self, (self.__class__, self.thrift_spec)))
+            return
+        oprot.writeStructBegin('get_memory_cpu_result')
+        if self.success is not None:
+            oprot.writeFieldBegin('success', TType.STRING, 0)
+            oprot.writeString(self.success.encode('utf-8') if sys.version_info[0] == 2 else self.success)
+            oprot.writeFieldEnd()
+        if self.e is not None:
+            oprot.writeFieldBegin('e', TType.STRUCT, 1)
+            self.e.write(oprot)
+            oprot.writeFieldEnd()
+        oprot.writeFieldStop()
+        oprot.writeStructEnd()
+
+    def validate(self):
+        return
+
+    def __repr__(self):
+        L = ['%s=%r' % (key, value)
+             for key, value in self.__dict__.items()]
+        return '%s(%s)' % (self.__class__.__name__, ', '.join(L))
+
+    def __eq__(self, other):
+        return isinstance(other, self.__class__) and self.__dict__ == other.__dict__
+
+    def __ne__(self, other):
+        return not (self == other)
+
+
 class get_memory_summary_args(object):
     """
     Attributes:
@@ -5216,7 +5486,188 @@ class sql_execute_result(object):
         return not (self == other)
 
 
-class sql_execute_gpudf_args(object):
+class sql_execute_df_args(object):
+    """
+    Attributes:
+     - session
+     - query
+     - device_type
+     - device_id
+     - first_n
+    """
+
+    thrift_spec = (
+        None,  # 0
+        (1, TType.STRING, 'session', 'UTF8', None, ),  # 1
+        (2, TType.STRING, 'query', 'UTF8', None, ),  # 2
+        (3, TType.I32, 'device_type', None, None, ),  # 3
+        (4, TType.I32, 'device_id', None, 0, ),  # 4
+        (5, TType.I32, 'first_n', None, -1, ),  # 5
+    )
+
+    def __init__(self, session=None, query=None, device_type=None, device_id=thrift_spec[4][4], first_n=thrift_spec[5][4],):
+        self.session = session
+        self.query = query
+        self.device_type = device_type
+        self.device_id = device_id
+        self.first_n = first_n
+
+    def read(self, iprot):
+        if iprot._fast_decode is not None and isinstance(iprot.trans, TTransport.CReadableTransport) and self.thrift_spec is not None:
+            iprot._fast_decode(self, iprot, (self.__class__, self.thrift_spec))
+            return
+        iprot.readStructBegin()
+        while True:
+            (fname, ftype, fid) = iprot.readFieldBegin()
+            if ftype == TType.STOP:
+                break
+            if fid == 1:
+                if ftype == TType.STRING:
+                    self.session = iprot.readString().decode('utf-8') if sys.version_info[0] == 2 else iprot.readString()
+                else:
+                    iprot.skip(ftype)
+            elif fid == 2:
+                if ftype == TType.STRING:
+                    self.query = iprot.readString().decode('utf-8') if sys.version_info[0] == 2 else iprot.readString()
+                else:
+                    iprot.skip(ftype)
+            elif fid == 3:
+                if ftype == TType.I32:
+                    self.device_type = iprot.readI32()
+                else:
+                    iprot.skip(ftype)
+            elif fid == 4:
+                if ftype == TType.I32:
+                    self.device_id = iprot.readI32()
+                else:
+                    iprot.skip(ftype)
+            elif fid == 5:
+                if ftype == TType.I32:
+                    self.first_n = iprot.readI32()
+                else:
+                    iprot.skip(ftype)
+            else:
+                iprot.skip(ftype)
+            iprot.readFieldEnd()
+        iprot.readStructEnd()
+
+    def write(self, oprot):
+        if oprot._fast_encode is not None and self.thrift_spec is not None:
+            oprot.trans.write(oprot._fast_encode(self, (self.__class__, self.thrift_spec)))
+            return
+        oprot.writeStructBegin('sql_execute_df_args')
+        if self.session is not None:
+            oprot.writeFieldBegin('session', TType.STRING, 1)
+            oprot.writeString(self.session.encode('utf-8') if sys.version_info[0] == 2 else self.session)
+            oprot.writeFieldEnd()
+        if self.query is not None:
+            oprot.writeFieldBegin('query', TType.STRING, 2)
+            oprot.writeString(self.query.encode('utf-8') if sys.version_info[0] == 2 else self.query)
+            oprot.writeFieldEnd()
+        if self.device_type is not None:
+            oprot.writeFieldBegin('device_type', TType.I32, 3)
+            oprot.writeI32(self.device_type)
+            oprot.writeFieldEnd()
+        if self.device_id is not None:
+            oprot.writeFieldBegin('device_id', TType.I32, 4)
+            oprot.writeI32(self.device_id)
+            oprot.writeFieldEnd()
+        if self.first_n is not None:
+            oprot.writeFieldBegin('first_n', TType.I32, 5)
+            oprot.writeI32(self.first_n)
+            oprot.writeFieldEnd()
+        oprot.writeFieldStop()
+        oprot.writeStructEnd()
+
+    def validate(self):
+        return
+
+    def __repr__(self):
+        L = ['%s=%r' % (key, value)
+             for key, value in self.__dict__.items()]
+        return '%s(%s)' % (self.__class__.__name__, ', '.join(L))
+
+    def __eq__(self, other):
+        return isinstance(other, self.__class__) and self.__dict__ == other.__dict__
+
+    def __ne__(self, other):
+        return not (self == other)
+
+
+class sql_execute_df_result(object):
+    """
+    Attributes:
+     - success
+     - e
+    """
+
+    thrift_spec = (
+        (0, TType.STRUCT, 'success', (TDataFrame, TDataFrame.thrift_spec), None, ),  # 0
+        (1, TType.STRUCT, 'e', (TMapDException, TMapDException.thrift_spec), None, ),  # 1
+    )
+
+    def __init__(self, success=None, e=None,):
+        self.success = success
+        self.e = e
+
+    def read(self, iprot):
+        if iprot._fast_decode is not None and isinstance(iprot.trans, TTransport.CReadableTransport) and self.thrift_spec is not None:
+            iprot._fast_decode(self, iprot, (self.__class__, self.thrift_spec))
+            return
+        iprot.readStructBegin()
+        while True:
+            (fname, ftype, fid) = iprot.readFieldBegin()
+            if ftype == TType.STOP:
+                break
+            if fid == 0:
+                if ftype == TType.STRUCT:
+                    self.success = TDataFrame()
+                    self.success.read(iprot)
+                else:
+                    iprot.skip(ftype)
+            elif fid == 1:
+                if ftype == TType.STRUCT:
+                    self.e = TMapDException()
+                    self.e.read(iprot)
+                else:
+                    iprot.skip(ftype)
+            else:
+                iprot.skip(ftype)
+            iprot.readFieldEnd()
+        iprot.readStructEnd()
+
+    def write(self, oprot):
+        if oprot._fast_encode is not None and self.thrift_spec is not None:
+            oprot.trans.write(oprot._fast_encode(self, (self.__class__, self.thrift_spec)))
+            return
+        oprot.writeStructBegin('sql_execute_df_result')
+        if self.success is not None:
+            oprot.writeFieldBegin('success', TType.STRUCT, 0)
+            self.success.write(oprot)
+            oprot.writeFieldEnd()
+        if self.e is not None:
+            oprot.writeFieldBegin('e', TType.STRUCT, 1)
+            self.e.write(oprot)
+            oprot.writeFieldEnd()
+        oprot.writeFieldStop()
+        oprot.writeStructEnd()
+
+    def validate(self):
+        return
+
+    def __repr__(self):
+        L = ['%s=%r' % (key, value)
+             for key, value in self.__dict__.items()]
+        return '%s(%s)' % (self.__class__.__name__, ', '.join(L))
+
+    def __eq__(self, other):
+        return isinstance(other, self.__class__) and self.__dict__ == other.__dict__
+
+    def __ne__(self, other):
+        return not (self == other)
+
+
+class sql_execute_gdf_args(object):
     """
     Attributes:
      - session
@@ -5277,7 +5728,7 @@ class sql_execute_gpudf_args(object):
         if oprot._fast_encode is not None and self.thrift_spec is not None:
             oprot.trans.write(oprot._fast_encode(self, (self.__class__, self.thrift_spec)))
             return
-        oprot.writeStructBegin('sql_execute_gpudf_args')
+        oprot.writeStructBegin('sql_execute_gdf_args')
         if self.session is not None:
             oprot.writeFieldBegin('session', TType.STRING, 1)
             oprot.writeString(self.session.encode('utf-8') if sys.version_info[0] == 2 else self.session)
@@ -5312,7 +5763,7 @@ class sql_execute_gpudf_args(object):
         return not (self == other)
 
 
-class sql_execute_gpudf_result(object):
+class sql_execute_gdf_result(object):
     """
     Attributes:
      - success
@@ -5320,7 +5771,7 @@ class sql_execute_gpudf_result(object):
     """
 
     thrift_spec = (
-        (0, TType.STRUCT, 'success', (TGpuDataFrame, TGpuDataFrame.thrift_spec), None, ),  # 0
+        (0, TType.STRUCT, 'success', (TDataFrame, TDataFrame.thrift_spec), None, ),  # 0
         (1, TType.STRUCT, 'e', (TMapDException, TMapDException.thrift_spec), None, ),  # 1
     )
 
@@ -5339,7 +5790,7 @@ class sql_execute_gpudf_result(object):
                 break
             if fid == 0:
                 if ftype == TType.STRUCT:
-                    self.success = TGpuDataFrame()
+                    self.success = TDataFrame()
                     self.success.read(iprot)
                 else:
                     iprot.skip(ftype)
@@ -5358,7 +5809,7 @@ class sql_execute_gpudf_result(object):
         if oprot._fast_encode is not None and self.thrift_spec is not None:
             oprot.trans.write(oprot._fast_encode(self, (self.__class__, self.thrift_spec)))
             return
-        oprot.writeStructBegin('sql_execute_gpudf_result')
+        oprot.writeStructBegin('sql_execute_gdf_result')
         if self.success is not None:
             oprot.writeFieldBegin('success', TType.STRUCT, 0)
             self.success.write(oprot)

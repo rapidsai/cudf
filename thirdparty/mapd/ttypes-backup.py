@@ -106,6 +106,21 @@ class TExecuteMode(object):
     }
 
 
+class TDeviceType(object):
+    CPU = 0
+    GPU = 1
+
+    _VALUES_TO_NAMES = {
+        0: "CPU",
+        1: "GPU",
+    }
+
+    _NAMES_TO_VALUES = {
+        "CPU": 0,
+        "GPU": 1,
+    }
+
+
 class TTableType(object):
     DELIMITED = 0
     POLYGON = 1
@@ -1333,23 +1348,26 @@ class TQueryResult(object):
         return not (self == other)
 
 
-class TGpuDataFrame(object):
+class TDataFrame(object):
     """
     Attributes:
-     - schema
+     - sm_handle
+     - sm_size
      - df_handle
      - df_size
     """
 
     thrift_spec = (
         None,  # 0
-        (1, TType.STRING, 'schema', 'BINARY', None, ),  # 1
-        (2, TType.STRING, 'df_handle', 'BINARY', None, ),  # 2
-        (3, TType.I64, 'df_size', None, None, ),  # 3
+        (1, TType.STRING, 'sm_handle', 'BINARY', None, ),  # 1
+        (2, TType.I64, 'sm_size', None, None, ),  # 2
+        (3, TType.STRING, 'df_handle', 'BINARY', None, ),  # 3
+        (4, TType.I64, 'df_size', None, None, ),  # 4
     )
 
-    def __init__(self, schema=None, df_handle=None, df_size=None,):
-        self.schema = schema
+    def __init__(self, sm_handle=None, sm_size=None, df_handle=None, df_size=None,):
+        self.sm_handle = sm_handle
+        self.sm_size = sm_size
         self.df_handle = df_handle
         self.df_size = df_size
 
@@ -1364,15 +1382,20 @@ class TGpuDataFrame(object):
                 break
             if fid == 1:
                 if ftype == TType.STRING:
-                    self.schema = iprot.readBinary()
+                    self.sm_handle = iprot.readBinary()
                 else:
                     iprot.skip(ftype)
             elif fid == 2:
+                if ftype == TType.I64:
+                    self.sm_size = iprot.readI64()
+                else:
+                    iprot.skip(ftype)
+            elif fid == 3:
                 if ftype == TType.STRING:
                     self.df_handle = iprot.readBinary()
                 else:
                     iprot.skip(ftype)
-            elif fid == 3:
+            elif fid == 4:
                 if ftype == TType.I64:
                     self.df_size = iprot.readI64()
                 else:
@@ -1386,17 +1409,21 @@ class TGpuDataFrame(object):
         if oprot._fast_encode is not None and self.thrift_spec is not None:
             oprot.trans.write(oprot._fast_encode(self, (self.__class__, self.thrift_spec)))
             return
-        oprot.writeStructBegin('TGpuDataFrame')
-        if self.schema is not None:
-            oprot.writeFieldBegin('schema', TType.STRING, 1)
-            oprot.writeBinary(self.schema)
+        oprot.writeStructBegin('TDataFrame')
+        if self.sm_handle is not None:
+            oprot.writeFieldBegin('sm_handle', TType.STRING, 1)
+            oprot.writeBinary(self.sm_handle)
+            oprot.writeFieldEnd()
+        if self.sm_size is not None:
+            oprot.writeFieldBegin('sm_size', TType.I64, 2)
+            oprot.writeI64(self.sm_size)
             oprot.writeFieldEnd()
         if self.df_handle is not None:
-            oprot.writeFieldBegin('df_handle', TType.STRING, 2)
+            oprot.writeFieldBegin('df_handle', TType.STRING, 3)
             oprot.writeBinary(self.df_handle)
             oprot.writeFieldEnd()
         if self.df_size is not None:
-            oprot.writeFieldBegin('df_size', TType.I64, 3)
+            oprot.writeFieldBegin('df_size', TType.I64, 4)
             oprot.writeI64(self.df_size)
             oprot.writeFieldEnd()
         oprot.writeFieldStop()
