@@ -610,11 +610,16 @@ class Series(object):
             return cls.from_array(arbitrary)
 
     @classmethod
-    def from_categorical(cls, categorical):
+    def from_categorical(cls, categorical, codes=None):
+        """Creates from a pandas.Categorical
+
+        If ``codes`` is defined, use it instead of ``categorical.codes``
+        """
         from .categorical import CategoricalSeriesImpl
 
         # TODO fix mutability issue in numba to avoid the .copy()
-        codes = categorical.codes.copy()
+        codes = (categorical.codes.copy()
+                 if codes is None else codes)
         dtype = categorical.dtype
         # TODO pending pandas to be improved
         #       https://github.com/pandas-dev/pandas/issues/14711

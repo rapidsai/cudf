@@ -10,18 +10,23 @@ from pygdf.dataframe import Series, DataFrame
 
 
 def read_data():
-    datapath = os.path.join(os.path.dirname(__file__), 'data', 'ipums_tiny.pickle')
+    basedir = os.path.dirname(__file__)
+    # load schema
+    schemapath = os.path.join(basedir, 'data', 'schema_ipums.pickle')
+    with open(schemapath, 'rb') as fin:
+        schema = pickle.load(fin)
+    # load data
+    datapath = os.path.join(basedir, 'data', 'data_ipums.pickle')
     with open(datapath, 'rb') as fin:
         data = pickle.load(fin)
-    # print(data)
     darr = cuda.to_device(data)
-    return darr
+    return schema, darr
 
 
 def test_fillna():
-    darr = read_data()
-    gar = GpuArrowReader(darr)
-    masked_col = gar[9]
+    schema, darr = read_data()
+    gar = GpuArrowReader(schema, darr)
+    masked_col = gar[8]
     assert masked_col.null_count
     sr = Series.from_masked_array(data=masked_col.data, mask=masked_col.null,
                                   null_count=masked_col.null_count)
@@ -45,8 +50,8 @@ def test_to_dense_array():
 
 
 def test_reading_arrow_sparse_data():
-    darr = read_data()
-    gar = GpuArrowReader(darr)
+    schema, darr = read_data()
+    gar = GpuArrowReader(schema, darr)
 
     df = DataFrame(gar.to_dict().items())
 

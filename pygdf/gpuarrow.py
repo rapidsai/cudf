@@ -4,6 +4,7 @@ from contextlib import contextmanager
 from collections import namedtuple, Sequence, OrderedDict
 
 import numpy as np
+import pandas as pd
 from numba.cuda.cudadrv.devicearray import DeviceNDArray
 
 from .utils import mask_dtype
@@ -15,7 +16,7 @@ _logger = logging.getLogger(__name__)
 _BufferDesc = namedtuple("_BufferDesc", "offset,length")
 _NodeDesc = namedtuple(
     "_NodeDesc",
-    'name,length,null_count,null_buffer,data_buffer,dtype'
+    'name,length,null_count,null_buffer,data_buffer,dtype,schema'
     )
 
 
@@ -38,9 +39,11 @@ def gpu_view_as(arr, dtype, shape=None, strides=None):
 
 
 def _schema_to_dtype(name, bitwidth):
-    if name == 'FloatingPoint':
+    if name in ('DOUBLE', 'FLOAT'):
         ret = getattr(np, 'float{:d}'.format(bitwidth))
-    elif name == 'Int':
+    elif name in ('INT', 'INT32', 'INT64'):
+        ret = getattr(np, 'int{:d}'.format(bitwidth))
+    elif name == 'DICTIONARY':
         ret = getattr(np, 'int{:d}'.format(bitwidth))
     else:
         fmt = "unsupported type {} {}-bits"
@@ -49,9 +52,26 @@ def _schema_to_dtype(name, bitwidth):
 
 
 class GpuArrowNodeReader(object):
-    def __init__(self, gpu_data, desc):
+    def __init__(self, schema, gpu_data, desc):
+        self._schema = schema
         self._gpu_data = gpu_data
         self._desc = desc
+
+    @property
+    def schema(self):
+        """Access to the schema of the result set
+        """
+        return self._schema
+
+    @property
+    def field_schema(self):
+        """Access to the schema of this field
+        """
+        return self._desc.schema
+
+    @property
+    def is_dictionary(self):
+        return 'dictionary' in self.field_schema
 
     @property
     def null_count(self):
@@ -104,11 +124,47 @@ class GpuArrowNodeReader(object):
         end = (self._desc.length // 8) * mask_dtype.itemsize
         return gpu_view_as(self.null_raw[:end], dtype=mask_dtype)
 
+    def make_series(self):
+        """Make a Series object out of this node
+        """
+        if self.is_dictionary:
+            sr = self._make_dictionary_series()
+        else:
+            sr = Series.from_array(self.data)
+
+        # set nullmask
+        if self.null_count:
+            sr = sr.set_mask(self.null, null_count=self.null_count)
+
+        return sr
+
+    def _make_dictionary_series(self):
+        """Make a dictionary-encoded series from this node
+        """
+        assert self.is_dictionary
+        # create dictionary-encoded column
+        dict_meta = self.field_schema['dictionary']
+        dictid = dict_meta['id']   # start from 1
+        if dict_meta['indexType']['name'] != 'int':
+            msg = 'non integer type index for dictionary'
+            raise MetadataParsingError(msg)
+        ordered = dict_meta['isOrdered']
+        # find dictionary
+        for dictionary in self.schema['dictionaries']:
+            if dictionary['id'] == dictid:
+                break
+        categories = dictionary['data']['columns'][0]['DATA']
+        # make dummy categorical
+        cat = pd.Categorical([], categories=categories, ordered=ordered)
+        # make the series
+        return Series.from_categorical(cat, codes=self.data)
+
 
 class GpuArrowReader(Sequence):
-    def __init__(self, gpu_data):
+    def __init__(self, schema_data, gpu_data):
         loggername = '{}@{:08x}'.format(self.__class__.__name__, id(self))
         self._logger = _logger.getChild(loggername)
+        self._schema_data = schema_data
         self._gpu_data = gpu_data
         self._nodes = []
 
@@ -130,34 +186,27 @@ class GpuArrowReader(Sequence):
         """
         dc = OrderedDict()
         for node in self:
-            if node.null_count:
-                sr = Series.from_masked_array(data=node.data,
-                                              mask=node.null,
-                                              null_count=node.null_count)
-
-            else:
-                sr = Series.from_array(node.data)
-            dc[node.name] = sr
+            dc[node.name] = node.make_series()
         return dc
 
     #
     # Private API
     #
-
     def _open(self):
-        nodelist, dataptr = self._parse_metdata()
-
-        for dctnode in nodelist:
+        schema, layoutinfo, dataptr = self._parse_metdata()
+        for fielddesc, layout in zip(schema['schema']['fields'], layoutinfo):
             _logger.debug('reading data from libgdf IPCParser')
             nodedesc = _NodeDesc(
-                name=dctnode['name'],
-                length=dctnode['length'],
-                null_count=dctnode['null_count'],
-                null_buffer=_BufferDesc(**dctnode['null_buffer']),
-                data_buffer=_BufferDesc(**dctnode['data_buffer']),
-                dtype=_schema_to_dtype(**dctnode['dtype']),
+                name=layout['name'],
+                length=layout['length'],
+                null_count=layout['null_count'],
+                null_buffer=_BufferDesc(**layout['null_buffer']),
+                data_buffer=_BufferDesc(**layout['data_buffer']),
+                dtype=_schema_to_dtype(**layout['dtype']),
+                schema=fielddesc,
                 )
-            node = GpuArrowNodeReader(gpu_data=dataptr,
+            node = GpuArrowNodeReader(schema=schema,
+                                      gpu_data=dataptr,
                                       desc=nodedesc)
             self._nodes.append(node)
 
@@ -166,31 +215,45 @@ class GpuArrowReader(Sequence):
         from libgdf_cffi import ffi, libgdf
 
         @contextmanager
-        def open_parser(devptr):
+        def open_parser(schema_ptr, schema_len):
             "context to destroy the parser"
             _logger.debug('open IPCParser')
-            ipcparser = libgdf.gdf_ipc_parser_open(devptr)
+            ipcparser = libgdf.gdf_ipc_parser_open(schema_ptr, schema_len)
             yield ipcparser
             _logger.debug('close IPCParser')
             libgdf.gdf_ipc_parser_close(ipcparser)
 
-        # get void* from the gpu array
-        devptr = ffi.cast("void*", self._gpu_data.device_ctypes_pointer.value)
-
-        # parse
-        with open_parser(devptr) as ipcparser:
-            # check for failure
+        def check_error(ipcparser):
             if libgdf.gdf_ipc_parser_failed(ipcparser):
                 raw_error = libgdf.gdf_ipc_parser_get_error(ipcparser)
                 error = ffi.string(raw_error).decode()
                 _logger.error('IPCParser failed: %s', error)
                 raise MetadataParsingError(error)
 
+        def load_json(jsonraw):
+            jsontext = ffi.string(jsonraw).decode()
+            return json.loads(jsontext)
+
+        # get void* from the gpu array
+        schema_ptr = ffi.cast("void*", self._schema_data.ctypes.data)
+
+        # parse schema
+        with open_parser(schema_ptr, len(self._schema_data)) as ipcparser:
+            # check for failure in parseing the schema
+            check_error(ipcparser)
+
+            gpu_addr = self._gpu_data.device_ctypes_pointer.value
+            gpu_ptr = ffi.cast("void*", gpu_addr)
+            libgdf.gdf_ipc_parser_open_recordbatches(ipcparser, gpu_ptr,
+                                                     self._gpu_data.size)
+            # check for failure in parsing the recordbatches
+            check_error(ipcparser)
             # get schema as json
             _logger.debug('IPCParser get metadata as json')
-            jsonraw = libgdf.gdf_ipc_parser_to_json(ipcparser)
-            jsontext = ffi.string(jsonraw).decode()
-            outdct = json.loads(jsontext)
+            schemadct = load_json(
+                libgdf.gdf_ipc_parser_get_schema_json(ipcparser))
+            layoutdct = load_json(
+                libgdf.gdf_ipc_parser_get_layout_json(ipcparser))
 
             # get data offset
             _logger.debug('IPCParser data region offset')
@@ -198,4 +261,4 @@ class GpuArrowReader(Sequence):
             dataoffset = int(ffi.cast('uint64_t', dataoffset))
             dataptr = self._gpu_data[dataoffset:]
 
-        return outdct, dataptr
+        return schemadct, layoutdct, dataptr
