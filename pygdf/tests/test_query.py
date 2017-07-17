@@ -25,7 +25,7 @@ def test_query_parser(text, expect_args):
     assert tuple(argspec.args) == tuple(expect_args)
 
 
-params_query_data = list(product([7, 8, 9, 16, 100, 129], range(2)))
+params_query_data = list(product([1, 2, 7, 8, 9, 16, 100, 129], range(2)))
 params_query_fn = [
     (lambda a, b: a < b, 'a < b'),
     (lambda a, b: a * 2 >= b, 'a * 2 >= b'),

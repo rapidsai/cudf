@@ -10,7 +10,9 @@ from . import cudautils
 
 
 def unwrap_devary(devary):
-    return ffi.cast('void*', devary.device_ctypes_pointer.value)
+    ptrval = devary.device_ctypes_pointer.value
+    ptrval = ptrval or ffi.NULL   # replace None with NULL
+    return ffi.cast('void*', ptrval)
 
 
 def columnview(size, data, mask=None, dtype=None):
