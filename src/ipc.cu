@@ -252,7 +252,8 @@ protected:
         const auto payload = std::make_shared<arrow::Buffer>(schema_buf, length);
         auto buffer = std::make_shared<io::BufferReader>(payload);
         std::shared_ptr<ipc::RecordBatchStreamReader> reader;
-        ipc::RecordBatchStreamReader::Open(buffer, &reader);
+        auto status = ipc::RecordBatchStreamReader::Open(buffer, &reader);
+        if ( !status.ok() ) throw ParseError(status.message());
         _schema = reader->schema();
         if (!_schema) throw ParseError("failed to parse schema");
         // Parse the schema
