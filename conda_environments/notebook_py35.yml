@@ -156,7 +156,7 @@ dependencies:
 - !!python/unicode
   'numba=0.33'
 - !!python/unicode
-  'libgdf_cffi=0.1.0a1.dev'
+  'libgdf_cffi=0.1.0a1.dev=py35_27'
 - !!python/unicode
   'pandas=0.20.2'
 - pip:
