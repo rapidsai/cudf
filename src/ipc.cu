@@ -2,6 +2,12 @@
 #include <gdf/ipc/Schema_generated.h>
 #include <gdf/ipc/Message_generated.h>
 
+#include "arrow/buffer.h"
+#include "arrow/io/memory.h"
+#include "arrow/ipc/reader.h"
+#include "arrow/ipc/json.h"
+#include "arrow/type.h"
+
 #include <iostream>
 #include <sstream>
 #include <stdexcept>
@@ -10,6 +16,63 @@
 #include <string>
 
 using namespace org::apache::arrow;
+
+namespace {
+
+using namespace arrow;
+
+static std::string GetBufferTypeName(BufferType type) {
+  switch (type) {
+    case BufferType::DATA:
+      return "DATA";
+    case BufferType::OFFSET:
+      return "OFFSET";
+    case BufferType::TYPE:
+      return "TYPE";
+    case BufferType::VALIDITY:
+      return "VALIDITY";
+    default:
+      break;
+  }
+  return "UNKNOWN";
+}
+
+
+static std::string GetTypeName(Type::type id) {
+    switch (id) {
+    #define SHOW_TYPE_NAME(K) case Type::K: return #K;
+    SHOW_TYPE_NAME(NA)
+    SHOW_TYPE_NAME(BOOL)
+    SHOW_TYPE_NAME(UINT8)
+    SHOW_TYPE_NAME(INT8)
+    SHOW_TYPE_NAME(UINT16)
+    SHOW_TYPE_NAME(INT16)
+    SHOW_TYPE_NAME(UINT32)
+    SHOW_TYPE_NAME(INT32)
+    SHOW_TYPE_NAME(UINT64)
+    SHOW_TYPE_NAME(INT64)
+    SHOW_TYPE_NAME(HALF_FLOAT)
+    SHOW_TYPE_NAME(FLOAT)
+    SHOW_TYPE_NAME(DOUBLE)
+    SHOW_TYPE_NAME(STRING)
+    SHOW_TYPE_NAME(BINARY)
+    SHOW_TYPE_NAME(FIXED_SIZE_BINARY)
+    SHOW_TYPE_NAME(DATE32)
+    SHOW_TYPE_NAME(DATE64)
+    SHOW_TYPE_NAME(TIMESTAMP)
+    SHOW_TYPE_NAME(TIME32)
+    SHOW_TYPE_NAME(TIME64)
+    SHOW_TYPE_NAME(INTERVAL)
+    SHOW_TYPE_NAME(DECIMAL)
+    SHOW_TYPE_NAME(LIST)
+    SHOW_TYPE_NAME(STRUCT)
+    SHOW_TYPE_NAME(UNION)
+    SHOW_TYPE_NAME(DICTIONARY)
+    #undef SHOW_TYPE_NAME
+  }
+  return "UNKNOWN";
+}
+}
 
 class IpcParser {
 public:
@@ -54,13 +117,24 @@ public:
         DTypeDesc dtype;
     };
 
-    IpcParser(const char *buf)
-    :_d_buffer(buf), _d_curptr(buf), _d_data_body(nullptr), _failed(false)
+    IpcParser()
+    :_d_buffer(nullptr), _d_curptr(nullptr), _d_data_body(nullptr), _failed(false)
     { /* empty */ }
 
-    void open() {
+    void open(const uint8_t *schema, size_t length) {
         try {
-            read();
+            read_schema(schema, length);
+        } catch ( ParseError e ) {
+            std::ostringstream oss;
+            oss << "ParseError: " << e.what();
+            _error_message = oss.str();
+            _failed = true;
+        }
+    }
+
+    void open_recordbatches(const uint8_t *recordbatches, size_t length) {
+        try {
+            read_record_batch(recordbatches, length);
         } catch ( ParseError e ) {
             std::ostringstream oss;
             oss << "ParseError: " << e.what();
@@ -89,22 +163,34 @@ public:
     }
 
     /*
-     * Returns the schema in json.
+     * Returns the layout information in json.
      * The json contains a list metadata for each column.
      */
-    const std::string& to_json() {
-        std::ostringstream oss;
-        oss << "[";
-        int ct = 0;
-        for (auto i=_nodes.begin(); i!=_nodes.end(); ++i, ++ct) {
-            if ( ct > 0 ) {
-                oss << ", ";
+    const std::string& get_layout_json() {
+        if ( _json_output.size() == 0 ) {
+            std::ostringstream oss;
+            oss << "[";
+            int ct = 0;
+            for (auto i=_nodes.begin(); i!=_nodes.end(); ++i, ++ct) {
+                if ( ct > 0 ) {
+                    oss << ", ";
+                }
+                jsonify_node(oss, *i);
             }
-            jsonify_node(oss, *i);
+            oss << "]";
+            _json_output = oss.str();
         }
-        oss << "]";
-        _json_output = oss.str();
         return _json_output;
+    }
+
+    const std::string& get_schema_json() {
+        if ( _json_schema_output.size() == 0 ) {
+            // To JSON
+            std::unique_ptr<arrow::ipc::JsonWriter> json_writer;
+            arrow::ipc::JsonWriter::Open(_schema, &json_writer);
+            json_writer->Finish(&_json_schema_output);
+        }
+        return _json_schema_output;
     }
 
 protected:
@@ -157,33 +243,36 @@ protected:
         os << "}";
     }
 
-    void read() {
+    void read_schema(const uint8_t *schema_buf, size_t length) {
         if (_fields.size() || _nodes.size()) {
-            throw ParseError("cannot call .read() more than once");
+            throw ParseError("cannot open more than once");
         }
-        read_schema();
-        read_record_batch();
+
+        // Use Arrow to load the schema
+        const auto payload = std::make_shared<arrow::Buffer>(schema_buf, length);
+        auto buffer = std::make_shared<io::BufferReader>(payload);
+        std::shared_ptr<ipc::RecordBatchStreamReader> reader;
+        auto status = ipc::RecordBatchStreamReader::Open(buffer, &reader);
+        if ( !status.ok() ) throw ParseError(status.message());
+        _schema = reader->schema();
+        if (!_schema) throw ParseError("failed to parse schema");
+        // Parse the schema
+        parse_schema(_schema);
     }
 
-    void read_schema() {
+    void read_record_batch(const uint8_t *recordbatches, size_t length) {
+        _d_curptr = _d_buffer = recordbatches;
+
         int size = read_msg_size();
         auto header_buf = read_bytes(size);
         auto header = parse_msg_header(header_buf);
-        if ( header.body_length > 0) {
-            throw ParseError("schema should not have a body");
-        }
-        parse_schema(header);
-    }
 
-    void read_record_batch() {
-        int size = read_msg_size();
-        auto header_buf = read_bytes(size);
-        auto header = parse_msg_header(header_buf);
         if ( header.body_length <= 0) {
             throw ParseError("recordbatch should have a body");
         }
         // store the current ptr as the data ptr
         _d_data_body = _d_curptr;
+
         parse_record_batch(header);
     }
 
@@ -196,29 +285,26 @@ protected:
         return mi;
     }
 
-    void parse_schema(MessageInfo msg) {
-        if ( msg.type != flatbuf::MessageHeader_Schema ) {
-            throw ParseError("expecting schema type");
-        }
-        auto schema = static_cast<const flatbuf::Schema*>(msg.header);
+    void parse_schema(std::shared_ptr<arrow::Schema> schema) {
         auto fields = schema->fields();
 
-        _fields.reserve(fields->Length());
-        for ( int i=0; i < fields->Length(); ++i ){
-            auto field = fields->Get(i);
+        _fields.reserve(fields.size());
+        for ( int i=0; i < fields.size(); ++i ){
+            auto field = fields[i];
 
             _fields.push_back(FieldDesc());
             auto & out_field = _fields.back();
 
-            out_field.name = field->name()->str();
-            out_field.type = flatbuf::EnumNameType(field->type_type());
+            out_field.name = field->name();
+            out_field.type = GetTypeName(field->type()->id());
 
-            auto layouts = field->layout();
-            for ( int j=0; j < layouts->Length(); ++j ) {
-                auto layout = layouts->Get(j);
+            auto layouts = field->type()->GetBufferLayout();
+            for ( int j=0; j < layouts.size(); ++j ) {
+                auto layout = layouts[j];
                 LayoutDesc layout_desc;
-                layout_desc.bitwidth = layout->bit_width();
-                layout_desc.vectortype = flatbuf::EnumNameVectorType(layout->type());
+                layout_desc.bitwidth = layout.bit_width();
+
+                layout_desc.vectortype = GetBufferTypeName(layout.type());
                 out_field.layouts.push_back(layout_desc);
             }
         }
@@ -307,15 +393,19 @@ protected:
     }
 
 private:
-    const char * const _d_buffer;
-    const char *_d_curptr;
-    const char *_d_data_body;
+    const uint8_t *_d_buffer;
+    const uint8_t *_d_curptr;
+    const uint8_t *_d_data_body;
+
+    std::shared_ptr<arrow::Schema> _schema;
+
     std::vector<FieldDesc> _fields;
     std::vector<NodeDesc> _nodes;
     bool _failed;
     std::string _error_message;
     // cache
     std::string _json_output;
+    std::string _json_schema_output;
 };
 
 ipc_parser_type* cffi_wrap(IpcParser* obj){
@@ -326,9 +416,10 @@ IpcParser* cffi_unwrap(ipc_parser_type* hdl){
     return reinterpret_cast<IpcParser*>(hdl);
 }
 
-ipc_parser_type* gdf_ipc_parser_open(const char *device_bytes) {
-    IpcParser *parser = new IpcParser(device_bytes);
-    parser->open();
+ipc_parser_type* gdf_ipc_parser_open(const uint8_t *schema, size_t length) {
+    IpcParser *parser = new IpcParser;
+    parser->open(schema, length);
+
     return cffi_wrap(parser);
 }
 
@@ -340,8 +431,14 @@ int gdf_ipc_parser_failed(ipc_parser_type *handle) {
     return cffi_unwrap(handle)->is_failed();
 }
 
-const char* gdf_ipc_parser_to_json(ipc_parser_type *handle) {
-    return cffi_unwrap(handle)->to_json().c_str();
+
+const char *gdf_ipc_parser_get_schema_json(ipc_parser_type *handle) {
+    return cffi_unwrap(handle)->get_schema_json().c_str();
+}
+
+
+const char* gdf_ipc_parser_get_layout_json(ipc_parser_type *handle) {
+    return cffi_unwrap(handle)->get_layout_json().c_str();
 }
 
 const char* gdf_ipc_parser_get_error(ipc_parser_type *handle) {
@@ -355,3 +452,11 @@ const void* gdf_ipc_parser_get_data(ipc_parser_type *handle) {
 int64_t gdf_ipc_parser_get_data_offset(ipc_parser_type *handle) {
     return cffi_unwrap(handle)->get_data_offset();
 }
+
+void gdf_ipc_parser_open_recordbatches(ipc_parser_type *handle,
+                                       const uint8_t *recordbatches,
+                                       size_t length)
+{
+    return cffi_unwrap(handle)->open_recordbatches(recordbatches, length);
+}
+

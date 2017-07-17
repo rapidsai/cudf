@@ -18,6 +18,9 @@ requirements:
   build:
     - cmake
     - flatbuffers
+    - arrow-cpp 0.5.*
+  run:
+    - arrow-cpp 0.5.*
 
 test:
   commands:
