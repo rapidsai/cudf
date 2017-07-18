@@ -26,6 +26,7 @@ cuda_add_library(gdf SHARED
     src/unaryops.cu
     src/ipc.cu
     src/reductions.cu
+    src/sorting.cu
 )
 
 target_link_libraries(gdf arrow)

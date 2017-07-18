@@ -8,5 +8,6 @@ const char * gdf_error_get_name(gdf_error errcode) {
     GETNAME(GDF_UNSUPPORTED_DTYPE)
     GETNAME(GDF_COLUMN_SIZE_MISMATCH)
     GETNAME(GDF_VALIDITY_MISSING)
+    GETNAME(GDF_VALIDITY_UNSUPPORTED)
     }
 }

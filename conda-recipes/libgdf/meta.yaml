@@ -18,9 +18,11 @@ requirements:
   build:
     - cmake
     - flatbuffers
-    - arrow-cpp 0.5.*
+    - arrow-cpp 0.5.*       # [~osx]
+    - arrow-cpp 0.5.0.pre np112py35_0  # [osx]
   run:
-    - arrow-cpp 0.5.*
+    - arrow-cpp 0.5.*       # [~osx]
+    - arrow-cpp 0.5.0.pre np112py35_0  # [osx]
 
 test:
   commands:

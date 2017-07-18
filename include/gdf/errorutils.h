@@ -5,4 +5,7 @@
 
 #define CUDA_CHECK_LAST() CUDA_TRY(cudaGetLastError())
 
+
+#define GDF_REQUIRE(F, S) if (!(F)) return (S);
+
 #endif // GDF_ERRORUTILS_H

@@ -27,6 +27,34 @@ int64_t gdf_ipc_parser_get_data_offset(ipc_parser_type *handle);
 const char *gdf_ipc_parser_get_schema_json(ipc_parser_type *handle) ;
 const char *gdf_ipc_parser_get_layout_json(ipc_parser_type *handle) ;
 
+
+/* sorting */
+radixsort_plan_type* gdf_radixsort_plan(size_t num_items, int descending,
+                                        unsigned begin_bit, unsigned end_bit);
+gdf_error gdf_radixsort_plan_setup(radixsort_plan_type *hdl,
+                                   size_t sizeof_key, size_t sizeof_val);
+gdf_error gdf_radixsort_plan_free(radixsort_plan_type *hdl);
+
+/*
+ * The following function performs a sort on the key and value columns.
+ */
+gdf_error gdf_radixsort_i32(radixsort_plan_type *hdl,
+                            gdf_column *keycol,
+                            gdf_column *valcol);
+gdf_error gdf_radixsort_i64(radixsort_plan_type *hdl,
+                            gdf_column *keycol,
+                            gdf_column *valcol);
+gdf_error gdf_radixsort_f32(radixsort_plan_type *hdl,
+                            gdf_column *keycol,
+                            gdf_column *valcol);
+gdf_error gdf_radixsort_f64(radixsort_plan_type *hdl,
+                            gdf_column *keycol,
+                            gdf_column *valcol);
+gdf_error gdf_radixsort_generic(radixsort_plan_type *hdl,
+                                gdf_column *keycol,
+                                gdf_column *valcol);
+
+
 /* unary operators */
 
 /* trig */

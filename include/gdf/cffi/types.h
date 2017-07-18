@@ -18,6 +18,7 @@ typedef enum {
     GDF_UNSUPPORTED_DTYPE,
     GDF_COLUMN_SIZE_MISMATCH,
     GDF_VALIDITY_MISSING,
+    GDF_VALIDITY_UNSUPPORTED,
 } gdf_error;
 
 typedef struct gdf_column_{
@@ -29,3 +30,7 @@ typedef struct gdf_column_{
 
 struct _OpaqueIpcParser;
 typedef struct _OpaqueIpcParser ipc_parser_type;
+
+
+struct _OpaqueRadixsortPlan;
+typedef struct _OpaqueRadixsortPlan radixsort_plan_type;
