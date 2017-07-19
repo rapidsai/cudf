@@ -69,3 +69,11 @@ def normalize_index(index, size, doraise=True):
         raise IndexError('out-of-bound')
     return min(index, size)
 
+
+def normalize_slice(arg, size):
+    """Normalize slice
+    """
+    start = arg.start if arg.start is not None else 0
+    stop = arg.stop if arg.stop is not None else size
+    return (normalize_index(start, size, doraise=False),
+            normalize_index(stop, size, doraise=False))

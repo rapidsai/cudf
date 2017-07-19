@@ -28,6 +28,19 @@ def arange(size, dtype=np.int64):
     gpu_arange.forall(size)(size, out)
     return out
 
+
+@cuda.jit
+def gpu_arange_reversed(size, out):
+    i = cuda.grid(1)
+    if i < size:
+        out[i] = size - i - 1
+
+
+def arange_reversed(size, dtype=np.int64):
+    out = cuda.device_array(size, dtype=dtype)
+    gpu_arange_reversed.forall(size)(size, out)
+    return out
+
 # GPU array type casting
 
 
@@ -194,6 +207,13 @@ def gather(data, index, out=None):
         out = cuda.device_array_like(data)
     gpu_gather.forall(index.size)(data, index, out)
     return out
+
+
+def reverse_array(data, out=None):
+    rinds = arange_reversed(data.size)
+    out = gather(data=data, index=rinds, out=out)
+    return out
+
 
 #
 # Fill NA

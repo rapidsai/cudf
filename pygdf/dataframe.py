@@ -719,6 +719,8 @@ class Series(object):
         """
         from . import series_impl
 
+        if index is not None and not isinstance(index, Index):
+            raise TypeError('index not a Index type: got {!r}'.format(index))
         self._size = size
         self._data = buffer
         self._mask = mask
@@ -794,10 +796,7 @@ class Series(object):
 
         elif isinstance(arg, slice):
             # compute mask slice
-            start = arg.start if arg.start else 0
-            stop = arg.stop if arg.stop else len(self)
-            start, stop = [utils.normalize_index(x, len(self), doraise=False)
-                           for x in [start, stop]]
+            start, stop = utils.normalize_slice(arg, len(self))
             if self.null_count > 0:
                 if arg.step is not None and arg.step != 1:
                     raise NotImplementedError(arg)
@@ -808,14 +807,14 @@ class Series(object):
                 # slicing
                 subdata = self._data.mem[arg]
                 submask = self._mask.mem[maskslice]
-                index = Int64Index.make_range(start, stop)
+                index = self.index[arg]
                 return self._copy_construct(size=subdata.size,
                                             buffer=Buffer(subdata),
                                             mask=Buffer(submask),
                                             null_count=None,
                                             index=index)
             else:
-                index = Int64Index.make_range(start, stop)
+                index = self.index[arg]
                 newbuffer = self._data[arg]
                 return self._copy_construct(size=newbuffer.size,
                                             buffer=newbuffer,
@@ -1119,6 +1118,20 @@ class Series(object):
         vals, inds = self._sort(ascending=ascending)
         return vals.set_index(Int64Index(inds.to_gpu_array()))
 
+    def _n_largest_or_smallest(self, largest, n, keep):
+        direction = largest
+        if keep == 'first':
+            return self.sort_values(ascending=not direction)[:n]
+        elif keep == 'last':
+            return self.sort_values(ascending=direction)[-n:].reverse()
+        else:
+            raise ValueError('keep must be either "first", "last"')
+
+    def nlargest(self, n=5, keep='first'):
+        return self._n_largest_or_smallest(n=n, keep=keep, largest=True)
+
+    def nsmallest(self, n=5, keep='first'):
+        return self._n_largest_or_smallest(n=n, keep=keep, largest=False)
 
     def _sort(self, ascending=True):
         """
@@ -1135,6 +1148,14 @@ class Series(object):
                                     dtype=np.int64))
         _gdf.apply_sort(sr_key, sr_inds, ascending=ascending)
         return sr_key, sr_inds
+
+    def reverse(self):
+        """Reverse the Series
+        """
+        data = cudautils.reverse_array(self.to_gpu_array())
+        index = Int64Index(cudautils.reverse_array(self.index.gpu_values))
+        return self._copy_construct(buffer=Buffer(data), index=index)
+
 
     def one_hot_encoding(self, cats, dtype='float64'):
         """Perform one-hot-encoding
@@ -1293,7 +1314,14 @@ class DefaultIndex(Index):
         return self._size
 
     def __getitem__(self, index):
-        index = utils.normalize_index(index, len(self))
+        if isinstance(index, slice):
+            assert index.step is None
+            start, stop = utils.normalize_slice(index, len(self))
+            return Int64Index.make_range(start, stop)
+        elif isinstance(index, int):
+            index = utils.normalize_index(index, len(self))
+        else:
+            raise ValueError(index)
         return index
 
     def __eq__(self, other):
@@ -1309,6 +1337,10 @@ class DefaultIndex(Index):
     @property
     def values(self):
         return np.arange(len(self), dtype=self.dtype)
+
+    @property
+    def gpu_values(self):
+        return cudautils.arange(len(self), dtype=self.dtype)
 
     def find_label_range(self, first, last):
         begin, end = first, last
@@ -1338,7 +1370,11 @@ class Int64Index(Index):
         return "Int64Index({})".format(ar)
 
     def __getitem__(self, index):
-        return self._values[index]
+        res = self._values[index]
+        if not isinstance(index, int):
+            return Int64Index(res)
+        else:
+            return res
 
     def __eq__(self, other):
         if isinstance(other, Int64Index):
@@ -1350,6 +1386,10 @@ class Int64Index(Index):
     @property
     def values(self):
         return self._values.to_array()
+
+    @property
+    def gpu_values(self):
+        return self._values.to_gpu_array()
 
     @property
     def dtype(self):
@@ -1365,4 +1405,3 @@ class Int64Index(Index):
             end = np.argwhere(ar == last)[-1, 0]
             end += 1
         return begin, end
-

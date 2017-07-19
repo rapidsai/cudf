@@ -40,3 +40,37 @@ def test_series_argsort(nelem, dtype, asc):
     else:
         expected = np.argsort(-sr.to_array(), kind='mergesort')
     np.testing.assert_array_equal(expected, res.to_array())
+
+
+def test_series_nlargest():
+    """Indirectly tests Series.sort_values()
+    """
+    sr = Series([0, 1, 1, 2, 2, 2, 3, 3])
+    got = sr.nlargest(3)  # default keep='first'
+    assert list(got) == [3, 3, 2]
+    assert list(got.index.values) == [6, 7, 3]
+
+    got = sr.nlargest(3, keep='last')
+    assert list(got) == [3, 3, 2]
+    assert list(got.index.values) == [7, 6, 5]
+
+    with pytest.raises(ValueError) as raises:
+        sr.nlargest(3, keep='what')
+    assert raises.match('keep must be either "first", "last"')
+
+
+def test_series_nsmallest():
+    """Indirectly tests Series.sort_values()
+    """
+    sr = Series([0, 1, 1, 2, 2, 2, 3, 3])
+    got = sr.nsmallest(3)  # default keep='first'
+    assert list(got) == [0, 1, 1]
+    assert list(got.index.values) == [0, 1, 2]
+
+    got = sr.nsmallest(3, keep='last')
+    assert list(got) == [0, 1, 1]
+    assert list(got.index.values) == [0, 2, 1]
+
+    with pytest.raises(ValueError) as raises:
+        sr.nsmallest(3, keep='what')
+    assert raises.match('keep must be either "first", "last"')
