@@ -369,6 +369,31 @@ class DataFrame(object):
             outdf.add_column(name, col)
         return outdf
 
+    def sort_values(self, by, ascending=True):
+        """
+        Sort by values.
+
+        Difference from pandas:
+        * *by* must be the name of a single column.
+        * Support axis='index' only.
+        * Not supporting: inplace, kind, na_position
+
+        Details:
+        Uses parallel radixsort, which is a stable sort.
+        """
+        # argsort the `by` column
+        sorted_indices = self[by].argsort()
+        index = Int64Index(sorted_indices.to_gpu_array())
+        df = DataFrame()
+        # Perform out = data[index] for all columns
+        for k in self.columns:
+            col = self[k]
+            out = cudautils.gather(data=col.to_gpu_array(),
+                                   index=sorted_indices.to_gpu_array())
+            sr = Series.from_array(out).set_index(index)
+            df[k] = sr
+        return df
+
     def query(self, expr):
         """Query with a boolean expression using Numba to compile a GPU kernel.
 
@@ -557,6 +582,12 @@ class Buffer(object):
 
     def to_gpu_array(self):
         return self.mem[:self.size]
+
+    def copy(self):
+        """Deep copy the buffer
+        """
+        return Buffer(mem=cudautils.copy_array(self.mem),
+                      size=self.size, capacity=self.capacity)
 
 
 class Series(object):
@@ -1062,6 +1093,23 @@ class Series(object):
         if dtype == self.dtype:
             return self
         return Series.from_buffer(self.data.astype(dtype))
+
+    def argsort(self, ascending=True):
+        """Returns a Series of int64 index that will sort the series.
+
+        Uses stable parallel radixsort.
+
+        Returns
+        -------
+        result: Series
+        """
+        if self._mask:
+            raise ValueError('masked array not supported')
+        sr_key = self._copy_construct(buffer=self._data.copy())
+        sr_inds = Series.from_array(cudautils.arange(len(sr_key),
+                                    dtype=np.int64))
+        _gdf.apply_sort(sr_key, sr_inds, ascending=ascending)
+        return sr_inds
 
     def one_hot_encoding(self, cats, dtype='float64'):
         """Perform one-hot-encoding

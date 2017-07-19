@@ -87,3 +87,18 @@ def apply_reduce(fn, inp):
     # return 1st element
     return out[0]
 
+
+def apply_sort(sr_keys, sr_vals, ascending=True):
+    nelem = len(sr_keys)
+    begin_bit = 0
+    end_bit = sr_keys.dtype.itemsize * 8
+    plan = libgdf.gdf_radixsort_plan(nelem, not ascending, begin_bit, end_bit)
+    sizeof_key = sr_keys.dtype.itemsize
+    sizeof_val = sr_vals.dtype.itemsize
+    try:
+        libgdf.gdf_radixsort_plan_setup(plan, sizeof_key, sizeof_val)
+        libgdf.gdf_radixsort_generic(plan,
+                                     sr_keys._cffi_view,
+                                     sr_vals._cffi_view)
+    finally:
+        libgdf.gdf_radixsort_plan_free(plan)

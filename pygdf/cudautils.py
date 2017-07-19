@@ -23,8 +23,8 @@ def gpu_arange(size, out):
         out[i] = i
 
 
-def arange(size):
-    out = cuda.device_array(size, dtype=np.int64)
+def arange(size, dtype=np.int64):
+    out = cuda.device_array(size, dtype=dtype)
     gpu_arange.forall(size)(size, out)
     return out
 
@@ -174,6 +174,26 @@ def copy_to_dense(data, mask, out=None):
     gpu_copy_to_dense.forall(data.size)(data, mask, slots, out)
     return (sz, out)
 
+#
+# Gather
+#
+
+@cuda.jit
+def gpu_gather(data, index, out):
+    i = cuda.grid(1)
+    if i < index.size:
+        out[i] = data[index[i]
+        ]
+
+def gather(data, index, out=None):
+    """Perform ``out = data[index]`` on the GPU
+    """
+    if data.size != index.size:
+        raise ValueError('size mismatch')
+    if out is None:
+        out = cuda.device_array_like(data)
+    gpu_gather.forall(index.size)(data, index, out)
+    return out
 
 #
 # Fill NA
