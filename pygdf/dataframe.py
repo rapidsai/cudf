@@ -1103,13 +1103,38 @@ class Series(object):
         -------
         result: Series
         """
+        return self._sort(ascending=ascending)[1]
+
+    def sort_values(self, ascending=True):
+        """
+        Sort by values.
+
+        Difference from pandas:
+        * Support axis='index' only.
+        * Not supporting: inplace, kind, na_position
+
+        Details:
+        Uses parallel radixsort, which is a stable sort.
+        """
+        vals, inds = self._sort(ascending=ascending)
+        return vals.set_index(Int64Index(inds.to_gpu_array()))
+
+
+    def _sort(self, ascending=True):
+        """
+        Sort by values
+
+        Returns
+        -------
+        2-tuple of key and index
+        """
         if self._mask:
             raise ValueError('masked array not supported')
         sr_key = self._copy_construct(buffer=self._data.copy())
         sr_inds = Series.from_array(cudautils.arange(len(sr_key),
                                     dtype=np.int64))
         _gdf.apply_sort(sr_key, sr_inds, ascending=ascending)
-        return sr_inds
+        return sr_key, sr_inds
 
     def one_hot_encoding(self, cats, dtype='float64'):
         """Perform one-hot-encoding
