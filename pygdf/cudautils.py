@@ -23,9 +23,22 @@ def gpu_arange(size, out):
         out[i] = i
 
 
-def arange(size):
-    out = cuda.device_array(size, dtype=np.int64)
+def arange(size, dtype=np.int64):
+    out = cuda.device_array(size, dtype=dtype)
     gpu_arange.forall(size)(size, out)
+    return out
+
+
+@cuda.jit
+def gpu_arange_reversed(size, out):
+    i = cuda.grid(1)
+    if i < size:
+        out[i] = size - i - 1
+
+
+def arange_reversed(size, dtype=np.int64):
+    out = cuda.device_array(size, dtype=dtype)
+    gpu_arange_reversed.forall(size)(size, out)
     return out
 
 # GPU array type casting
@@ -173,6 +186,32 @@ def copy_to_dense(data, mask, out=None):
             raise ValueError('output array too small')
     gpu_copy_to_dense.forall(data.size)(data, mask, slots, out)
     return (sz, out)
+
+#
+# Gather
+#
+
+
+@cuda.jit
+def gpu_gather(data, index, out):
+    i = cuda.grid(1)
+    if i < index.size:
+        out[i] = data[index[i]]
+
+
+def gather(data, index, out=None):
+    """Perform ``out = data[index]`` on the GPU
+    """
+    if out is None:
+        out = cuda.device_array(shape=index.size, dtype=data.dtype)
+    gpu_gather.forall(index.size)(data, index, out)
+    return out
+
+
+def reverse_array(data, out=None):
+    rinds = arange_reversed(data.size)
+    out = gather(data=data, index=rinds, out=out)
+    return out
 
 
 #

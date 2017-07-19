@@ -369,6 +369,66 @@ class DataFrame(object):
             outdf.add_column(name, col)
         return outdf
 
+    def sort_values(self, by, ascending=True):
+        """
+        Sort by values.
+
+        Difference from pandas:
+        * *by* must be the name of a single column.
+        * Support axis='index' only.
+        * Not supporting: inplace, kind, na_position
+
+        Details:
+        Uses parallel radixsort, which is a stable sort.
+        """
+        # argsort the `by` column
+        sorted_indices = self[by].argsort()
+        index = Int64Index(sorted_indices.to_gpu_array())
+        df = DataFrame()
+        # Perform out = data[index] for all columns
+        for k in self.columns:
+            col = self[k]
+            out = cudautils.gather(data=col.to_gpu_array(),
+                                   index=sorted_indices.to_gpu_array())
+            sr = Series.from_array(out).set_index(index)
+            df[k] = sr
+        return df
+
+    def nlargest(self, n, columns, keep='first'):
+        """Get the rows of the DataFrame sorted by the n largest value of *columns*
+
+        Difference from pandas:
+        * Only a single column is supported in *columns*
+        """
+        return self._n_largest_or_smallest('nlargest', n, columns, keep)
+
+    def nsmallest(self, n, columns, keep='first'):
+        """Get the rows of the DataFrame sorted by the n smallest value of *columns*
+
+        Difference from pandas:
+        * Only a single column is supported in *columns*
+        """
+        return self._n_largest_or_smallest('nsmallest', n, columns, keep)
+
+    def _n_largest_or_smallest(self, method, n, columns, keep):
+        # Get column to operate on
+        if not isinstance(columns, str):
+            [column] = columns
+        else:
+            column = columns
+        if not (0 <= n < len(self)):
+            raise ValueError("n out-of-bound")
+        col = self[column]
+        # Operate
+        sorted_series = getattr(col, method)(n=n, keep=keep)
+        df = DataFrame()
+        for k in self.columns:
+            if k == column:
+                df[k] = sorted_series
+            else:
+                df[k] = self[k].take(df.index.gpu_values)
+        return df
+
     def query(self, expr):
         """Query with a boolean expression using Numba to compile a GPU kernel.
 
@@ -558,6 +618,12 @@ class Buffer(object):
     def to_gpu_array(self):
         return self.mem[:self.size]
 
+    def copy(self):
+        """Deep copy the buffer
+        """
+        return Buffer(mem=cudautils.copy_array(self.mem),
+                      size=self.size, capacity=self.capacity)
+
 
 class Series(object):
     """
@@ -688,6 +754,8 @@ class Series(object):
         """
         from . import series_impl
 
+        if index is not None and not isinstance(index, Index):
+            raise TypeError('index not a Index type: got {!r}'.format(index))
         self._size = size
         self._data = buffer
         self._mask = mask
@@ -763,10 +831,7 @@ class Series(object):
 
         elif isinstance(arg, slice):
             # compute mask slice
-            start = arg.start if arg.start else 0
-            stop = arg.stop if arg.stop else len(self)
-            start, stop = [utils.normalize_index(x, len(self), doraise=False)
-                           for x in [start, stop]]
+            start, stop = utils.normalize_slice(arg, len(self))
             if self.null_count > 0:
                 if arg.step is not None and arg.step != 1:
                     raise NotImplementedError(arg)
@@ -777,14 +842,14 @@ class Series(object):
                 # slicing
                 subdata = self._data.mem[arg]
                 submask = self._mask.mem[maskslice]
-                index = Int64Index.make_range(start, stop)
+                index = self.index[arg]
                 return self._copy_construct(size=subdata.size,
                                             buffer=Buffer(subdata),
                                             mask=Buffer(submask),
                                             null_count=None,
                                             index=index)
             else:
-                index = Int64Index.make_range(start, stop)
+                index = self.index[arg]
                 newbuffer = self._data[arg]
                 return self._copy_construct(size=newbuffer.size,
                                             buffer=newbuffer,
@@ -796,6 +861,14 @@ class Series(object):
             return self._impl.element_indexing(self, arg)
         else:
             raise NotImplementedError(type(arg))
+
+    def take(self, indices):
+        """Return Series by taking values from the corresponding *indices*.
+        """
+        indices = Buffer(indices).to_gpu_array()
+        data = cudautils.gather(data=self.to_gpu_array(), index=indices)
+        index = self.index.take(indices)
+        return self._copy_construct(buffer=Buffer(data), index=index)
 
     def __bool__(self):
         """Always raise TypeError when converting a Series
@@ -1063,6 +1136,76 @@ class Series(object):
             return self
         return Series.from_buffer(self.data.astype(dtype))
 
+    def argsort(self, ascending=True):
+        """Returns a Series of int64 index that will sort the series.
+
+        Uses stable parallel radixsort.
+
+        Returns
+        -------
+        result: Series
+        """
+        return self._sort(ascending=ascending)[1]
+
+    def sort_values(self, ascending=True):
+        """
+        Sort by values.
+
+        Difference from pandas:
+        * Support axis='index' only.
+        * Not supporting: inplace, kind, na_position
+
+        Details:
+        Uses parallel radixsort, which is a stable sort.
+        """
+        vals, inds = self._sort(ascending=ascending)
+        return vals.set_index(Int64Index(inds.to_gpu_array()))
+
+    def _n_largest_or_smallest(self, largest, n, keep):
+        if not (0 <= n < len(self)):
+            raise ValueError("n out-of-bound")
+        direction = largest
+        if keep == 'first':
+            return self.sort_values(ascending=not direction)[:n]
+        elif keep == 'last':
+            return self.sort_values(ascending=direction)[-n:].reverse()
+        else:
+            raise ValueError('keep must be either "first", "last"')
+
+    def nlargest(self, n=5, keep='first'):
+        """Returns a new Series of the *n* largest element.
+        """
+        return self._n_largest_or_smallest(n=n, keep=keep, largest=True)
+
+    def nsmallest(self, n=5, keep='first'):
+        """Returns a new Series of the *n* smallest element.
+        """
+        return self._n_largest_or_smallest(n=n, keep=keep, largest=False)
+
+    def _sort(self, ascending=True):
+        """
+        Sort by values
+
+        Returns
+        -------
+        2-tuple of key and index
+        """
+        if self._mask:
+            raise ValueError('masked array not supported')
+        sr_key = self._copy_construct(buffer=self._data.copy())
+        sr_inds = Series.from_array(cudautils.arange(len(sr_key),
+                                    dtype=np.int64))
+        _gdf.apply_sort(sr_key, sr_inds, ascending=ascending)
+        return sr_key, sr_inds
+
+    def reverse(self):
+        """Reverse the Series
+        """
+        data = cudautils.reverse_array(self.to_gpu_array())
+        index = Int64Index(cudautils.reverse_array(self.index.gpu_values))
+        return self._copy_construct(buffer=Buffer(data), index=index)
+
+
     def one_hot_encoding(self, cats, dtype='float64'):
         """Perform one-hot-encoding
 
@@ -1188,7 +1331,9 @@ class _BufferSentry(object):
 
 
 class Index(object):
-    pass
+    def take(self, indices):
+        index = cudautils.gather(data=self.gpu_values, index=indices)
+        return Int64Index(index)
 
 
 class EmptyIndex(Index):
@@ -1220,7 +1365,14 @@ class DefaultIndex(Index):
         return self._size
 
     def __getitem__(self, index):
-        index = utils.normalize_index(index, len(self))
+        if isinstance(index, slice):
+            assert index.step is None
+            start, stop = utils.normalize_slice(index, len(self))
+            return Int64Index.make_range(start, stop)
+        elif isinstance(index, int):
+            index = utils.normalize_index(index, len(self))
+        else:
+            raise ValueError(index)
         return index
 
     def __eq__(self, other):
@@ -1236,6 +1388,10 @@ class DefaultIndex(Index):
     @property
     def values(self):
         return np.arange(len(self), dtype=self.dtype)
+
+    @property
+    def gpu_values(self):
+        return cudautils.arange(len(self), dtype=self.dtype)
 
     def find_label_range(self, first, last):
         begin, end = first, last
@@ -1265,7 +1421,11 @@ class Int64Index(Index):
         return "Int64Index({})".format(ar)
 
     def __getitem__(self, index):
-        return self._values[index]
+        res = self._values[index]
+        if not isinstance(index, int):
+            return Int64Index(res)
+        else:
+            return res
 
     def __eq__(self, other):
         if isinstance(other, Int64Index):
@@ -1277,6 +1437,10 @@ class Int64Index(Index):
     @property
     def values(self):
         return self._values.to_array()
+
+    @property
+    def gpu_values(self):
+        return self._values.to_gpu_array()
 
     @property
     def dtype(self):
@@ -1292,4 +1456,3 @@ class Int64Index(Index):
             end = np.argwhere(ar == last)[-1, 0]
             end += 1
         return begin, end
-
