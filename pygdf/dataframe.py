@@ -394,6 +394,41 @@ class DataFrame(object):
             df[k] = sr
         return df
 
+    def nlargest(self, n, columns, keep='first'):
+        """Get the rows of the DataFrame sorted by the n largest value of *columns*
+
+        Difference from pandas:
+        * Only a single column is supported in *columns*
+        """
+        return self._n_largest_or_smallest('nlargest', n, columns, keep)
+
+    def nsmallest(self, n, columns, keep='first'):
+        """Get the rows of the DataFrame sorted by the n smallest value of *columns*
+
+        Difference from pandas:
+        * Only a single column is supported in *columns*
+        """
+        return self._n_largest_or_smallest('nsmallest', n, columns, keep)
+
+    def _n_largest_or_smallest(self, method, n, columns, keep):
+        # Get column to operate on
+        if not isinstance(columns, str):
+            [column] = columns
+        else:
+            column = columns
+        if not (0 <= n < len(self)):
+            raise ValueError("n out-of-bound")
+        col = self[column]
+        # Operate
+        sorted_series = getattr(col, method)(n=n, keep=keep)
+        df = DataFrame()
+        for k in self.columns:
+            if k == column:
+                df[k] = sorted_series
+            else:
+                df[k] = self[k].take(df.index.gpu_values)
+        return df
+
     def query(self, expr):
         """Query with a boolean expression using Numba to compile a GPU kernel.
 
@@ -827,6 +862,14 @@ class Series(object):
         else:
             raise NotImplementedError(type(arg))
 
+    def take(self, indices):
+        """Return Series by taking values from the corresponding *indices*.
+        """
+        indices = Buffer(indices).to_gpu_array()
+        data = cudautils.gather(data=self.to_gpu_array(), index=indices)
+        index = self.index.take(indices)
+        return self._copy_construct(buffer=Buffer(data), index=index)
+
     def __bool__(self):
         """Always raise TypeError when converting a Series
         into a boolean.
@@ -1119,6 +1162,8 @@ class Series(object):
         return vals.set_index(Int64Index(inds.to_gpu_array()))
 
     def _n_largest_or_smallest(self, largest, n, keep):
+        if not (0 <= n < len(self)):
+            raise ValueError("n out-of-bound")
         direction = largest
         if keep == 'first':
             return self.sort_values(ascending=not direction)[:n]
@@ -1128,9 +1173,13 @@ class Series(object):
             raise ValueError('keep must be either "first", "last"')
 
     def nlargest(self, n=5, keep='first'):
+        """Returns a new Series of the *n* largest element.
+        """
         return self._n_largest_or_smallest(n=n, keep=keep, largest=True)
 
     def nsmallest(self, n=5, keep='first'):
+        """Returns a new Series of the *n* smallest element.
+        """
         return self._n_largest_or_smallest(n=n, keep=keep, largest=False)
 
     def _sort(self, ascending=True):
@@ -1282,7 +1331,9 @@ class _BufferSentry(object):
 
 
 class Index(object):
-    pass
+    def take(self, indices):
+        index = cudautils.gather(data=self.gpu_values, index=indices)
+        return Int64Index(index)
 
 
 class EmptyIndex(Index):

@@ -74,3 +74,32 @@ def test_series_nsmallest():
     with pytest.raises(ValueError) as raises:
         sr.nsmallest(3, keep='what')
     assert raises.match('keep must be either "first", "last"')
+
+@pytest.mark.parametrize('nelem,n', [(10, 5), (100, 10)])
+def test_dataframe_nlargest(nelem, n):
+    np.random.seed(0)
+    df = DataFrame()
+    df['a'] = aa = np.random.random(nelem)
+    df['b'] = bb = np.random.random(nelem)
+    res = df.nlargest(n, 'a')
+
+    # Check
+    inds = np.argsort(aa)
+    np.testing.assert_array_equal(res['a'].to_array(), aa[inds][-n:][::-1])
+    np.testing.assert_array_equal(res['b'].to_array(), bb[inds][-n:][::-1])
+    np.testing.assert_array_equal(res.index.values, inds[-n:][::-1])
+
+
+@pytest.mark.parametrize('nelem,n', [(10, 5), (100, 10)])
+def test_dataframe_nsmallest(nelem, n):
+    np.random.seed(0)
+    df = DataFrame()
+    df['a'] = aa = np.random.random(nelem)
+    df['b'] = bb = np.random.random(nelem)
+    res = df.nsmallest(n, 'a')
+
+    # Check
+    inds = np.argsort(-aa)
+    np.testing.assert_array_equal(res['a'].to_array(), aa[inds][-n:][::-1])
+    np.testing.assert_array_equal(res['b'].to_array(), bb[inds][-n:][::-1])
+    np.testing.assert_array_equal(res.index.values, inds[-n:][::-1])

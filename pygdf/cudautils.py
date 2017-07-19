@@ -191,20 +191,19 @@ def copy_to_dense(data, mask, out=None):
 # Gather
 #
 
+
 @cuda.jit
 def gpu_gather(data, index, out):
     i = cuda.grid(1)
     if i < index.size:
-        out[i] = data[index[i]
-        ]
+        out[i] = data[index[i]]
+
 
 def gather(data, index, out=None):
     """Perform ``out = data[index]`` on the GPU
     """
-    if data.size != index.size:
-        raise ValueError('size mismatch')
     if out is None:
-        out = cuda.device_array_like(data)
+        out = cuda.device_array(shape=index.size, dtype=data.dtype)
     gpu_gather.forall(index.size)(data, index, out)
     return out
 
