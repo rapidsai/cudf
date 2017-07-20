@@ -31,29 +31,47 @@ class EmptyIndex(Index):
         return 0
 
 
-class DefaultIndex(Index):
-    """Basic 0..size
+class RangeIndex(Index):
+    """Basic start..stop
     """
-    def __init__(self, size):
-        self._size = size
+    def __init__(self, start, stop=None):
+        """RangeIndex(size), RangeIndex(start, stop)
+
+        Parameters
+        ----------
+        size, start, stop: int
+        """
+        if stop is None:
+            start, stop = 0, start
+        self._start = start
+        self._stop = stop
+
+    def __repr__(self):
+        return "{}(start={}, stop={})".format(self.__class__.__name__,
+                                              self._start, self._stop)
 
     def __len__(self):
-        return self._size
+        return self._stop - self._start
 
     def __getitem__(self, index):
         if isinstance(index, slice):
-            assert index.step is None
             start, stop = utils.normalize_slice(index, len(self))
-            return Int64Index.make_range(start, stop)
+            start += self._start
+            stop += self._start
+            if index.step is None:
+                return RangeIndex(start, stop)
+            else:
+                return Int64Index.make_range(start, stop)[::index.step]
         elif isinstance(index, int):
             index = utils.normalize_index(index, len(self))
+            index += self._start
+            return index
         else:
             raise ValueError(index)
-        return index
 
     def __eq__(self, other):
-        if isinstance(other, DefaultIndex):
-            return self._size == other._size
+        if isinstance(other, RangeIndex):
+            return (self._start == other._start and self._stop == other._stop)
         else:
             return NotImplemented
 
@@ -63,17 +81,29 @@ class DefaultIndex(Index):
 
     @property
     def values(self):
-        return np.arange(len(self), dtype=self.dtype)
+        return np.arange(self._start, self._stop, dtype=self.dtype)
 
     @property
     def gpu_values(self):
-        return cudautils.arange(len(self), dtype=self.dtype)
+        return cudautils.arange(self._start, self._stop, dtype=self.dtype)
 
     def find_label_range(self, first, last):
-        begin, end = first, last
-        if last is not None:
+        # clip first to range
+        if first < self._start:
+            begin = self._start
+        elif first < self._stop:
+            begin = first
+        else:
+            begin = self._stop
+        # clip last to range
+        if last < self._start:
+            end = begin
+        elif last < self._stop:
             end = last + 1
-        return begin, end
+        else:
+            end = self._stop
+        # shift to index
+        return begin - self._start, end - self._start
 
 
 class Int64Index(Index):

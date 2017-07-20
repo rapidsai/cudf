@@ -9,7 +9,7 @@ from numba import cuda
 
 from . import cudautils, utils, _gdf, formatting
 from .buffer import Buffer
-from .index import Index, DefaultIndex, Int64Index
+from .index import Index, RangeIndex, Int64Index
 
 
 class Series(object):
@@ -146,7 +146,7 @@ class Series(object):
         self._size = size
         self._data = buffer
         self._mask = mask
-        self._index = DefaultIndex(self._size) if index is None else index
+        self._index = RangeIndex(self._size) if index is None else index
         self._impl = (series_impl.get_default_impl(buffer.dtype)
                       if impl is None else impl)
         if null_count is None:

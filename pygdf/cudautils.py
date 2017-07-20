@@ -17,15 +17,18 @@ def to_device(ary):
 # GPU array initializer
 
 @cuda.jit
-def gpu_arange(size, out):
+def gpu_arange(start, size, out):
     i = cuda.grid(1)
     if i < size:
-        out[i] = i
+        out[i] = i + start
 
 
-def arange(size, dtype=np.int64):
+def arange(start, stop=None, dtype=np.int64):
+    if stop is None:
+        start, stop = 0, start
+    size = stop - start
     out = cuda.device_array(size, dtype=dtype)
-    gpu_arange.forall(size)(size, out)
+    gpu_arange.forall(size)(start, size, out)
     return out
 
 
