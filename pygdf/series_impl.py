@@ -1,6 +1,7 @@
 from numba import cuda
 
-from .dataframe import Buffer, Int64Index
+from .buffer import Buffer
+from .index import Int64Index
 from . import utils, cudautils
 
 
