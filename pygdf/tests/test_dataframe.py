@@ -236,7 +236,6 @@ def test_dataframe_loc():
     np.testing.assert_equal(fewer['d'].to_array(), hd[begin:end + 1])
 
 
-
 def test_dataframe_to_string():
     # Test basic
     df = DataFrame([('a', [1, 2, 3, 4, 5, 6]),
@@ -295,5 +294,20 @@ def test_dataframe_to_string():
     assert got.split() == expect.split()
 
 
-if __name__ == '__main__':
-    test_dataframe_to_string()
+def test_dataframe_to_string_wide():
+    # Test basic
+    df = DataFrame()
+    for i in range(100):
+        df['a{}'.format(i)] = list(range(3))
+    got = df.to_string()
+    print(got)
+    expect = '''
+    a0   a1   a2   a3   a4   a5   a6 ...  a99
+0    0    0    0    0    0    0    0 ...    0
+1    1    1    1    1    1    1    1 ...    1
+2    2    2    2    2    2    2    2 ...    2
+[92 more columns]
+'''
+    # values should match despite whitespace difference
+    assert got.split() == expect.split()
+

@@ -158,8 +158,12 @@ class DataFrame(object):
 
         # Prepare cells
         cols = OrderedDict()
-        for h in self.columns[:ncols]:
+        use_cols = list(self.columns[:ncols - 1])
+        use_cols.append(self.columns[-1])
+
+        for h in use_cols:
             cols[h] = self[h].values_to_string(nrows=nrows)
+
         # Format into a table
         return formatting.format(index=self._index, cols=cols,
                                  show_headers=True, more_cols=more_cols,
