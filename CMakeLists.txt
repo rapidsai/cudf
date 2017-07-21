@@ -13,11 +13,12 @@ set (CMAKE_CXX_STANDARD 11)
 
 include_directories(include
                     $ENV{CONDA_PREFIX}/include
-                    ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/cub)
+                    ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/cub
+                    ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/moderngpu/src)
 
 link_directories($ENV{CONDA_PREFIX}/lib)
 
-set(CUDA_NVCC_FLAGS  ${CUDA_NVCC_FLAGS};-std=c++11)
+set(CUDA_NVCC_FLAGS  ${CUDA_NVCC_FLAGS};-std=c++11;--expt-extended-lambda)
 
 cuda_add_library(gdf SHARED
     src/binaryops.cu
