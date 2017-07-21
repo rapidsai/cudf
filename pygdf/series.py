@@ -9,7 +9,7 @@ from numba import cuda
 
 from . import cudautils, utils, _gdf, formatting
 from .buffer import Buffer
-from .index import Index, RangeIndex, Int64Index
+from .index import Index, RangeIndex, GenericIndex
 
 
 class Series(object):
@@ -282,6 +282,9 @@ class Series(object):
             Maximum number of rows to show.
             If it is None, all rows are shown.
         """
+        if len(self) == 0:
+            return "<empty Series of dtype={}>".format(self.dtype)
+
         if nrows is None:
             nrows = len(self)
         else:
@@ -546,7 +549,7 @@ class Series(object):
         Uses parallel radixsort, which is a stable sort.
         """
         vals, inds = self._sort(ascending=ascending)
-        return vals.set_index(Int64Index(inds.to_gpu_array()))
+        return vals.set_index(GenericIndex(inds.to_gpu_array()))
 
     def _n_largest_or_smallest(self, largest, n, keep):
         if not (0 <= n < len(self)):
@@ -589,7 +592,7 @@ class Series(object):
         """Reverse the Series
         """
         data = cudautils.reverse_array(self.to_gpu_array())
-        index = Int64Index(cudautils.reverse_array(self.index.gpu_values))
+        index = GenericIndex(cudautils.reverse_array(self.index.gpu_values))
         return self._copy_construct(buffer=Buffer(data), index=index)
 
 
@@ -618,6 +621,29 @@ class Series(object):
                                                  val=cat, dtype=dtype)
             out.append(Series.from_array(buf))
         return out
+
+    # Find / Search
+
+    def find_first_value(self, value):
+        """
+        Returns offset of first value that matches
+        """
+        # FIXME: Inefficient find in CPU code
+        arr = self.to_array()
+        indices = np.argwhere(arr == value)
+        if not indices:
+            raise ValueError('value not found')
+        return indices[0, 0]
+
+    def find_last_value(self, value):
+        """
+        Returns offset of last value that matches
+        """
+        arr = self.to_array()
+        indices = np.argwhere(arr == value)
+        if not indices:
+            raise ValueError('value not found')
+        return indices[-1, 0]
 
     #
     # Stats

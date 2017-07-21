@@ -1,7 +1,7 @@
 from numba import cuda
 
 from .buffer import Buffer
-from .index import Int64Index
+from .index import GenericIndex
 from . import utils, cudautils
 
 
@@ -166,6 +166,6 @@ def select_by_boolmask(series, boolmask):
     assert not series.has_null_mask   # the nullmask needs to be recomputed
 
     params = dict(size=selvals.size,  buffer=Buffer(selvals),
-                  impl=series._impl, index=Int64Index(selinds))
+                  impl=series._impl, index=GenericIndex(selinds))
 
     return series._copy_construct(**params)

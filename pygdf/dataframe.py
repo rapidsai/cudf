@@ -9,7 +9,7 @@ import pandas as pd
 from numba import cuda
 
 from . import cudautils, formatting, queryutils
-from .index import Int64Index, EmptyIndex
+from .index import GenericIndex, EmptyIndex
 from .series import Series
 
 
@@ -385,7 +385,7 @@ class DataFrame(object):
         """
         # argsort the `by` column
         sorted_indices = self[by].argsort()
-        index = Int64Index(sorted_indices.to_gpu_array())
+        index = GenericIndex(sorted_indices.to_gpu_array())
         df = DataFrame()
         # Perform out = data[index] for all columns
         for k in self.columns:
@@ -531,7 +531,7 @@ class DataFrame(object):
             df[k] = np.ascontiguousarray(data[k])
         if index is not None:
             indices = data[index]
-            return df.set_index(Int64Index(indices.astype(np.int64)))
+            return df.set_index(GenericIndex(indices.astype(np.int64)))
         return df
 
 

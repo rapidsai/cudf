@@ -8,8 +8,9 @@ from .buffer import Buffer
 
 class Index(object):
     def take(self, indices):
+        assert self.dtype.kind == 'i'
         index = cudautils.gather(data=self.gpu_values, index=indices)
-        return Int64Index(index)
+        return GenericIndex(index)
 
 
 class EmptyIndex(Index):
@@ -61,7 +62,7 @@ class RangeIndex(Index):
             if index.step is None:
                 return RangeIndex(start, stop)
             else:
-                return Int64Index.make_range(start, stop)[::index.step]
+                return index_from_range(start, stop, index.step)
         elif isinstance(index, int):
             index = utils.normalize_index(index, len(self))
             index += self._start
@@ -106,39 +107,54 @@ class RangeIndex(Index):
         return begin - self._start, end - self._start
 
 
-class Int64Index(Index):
-    @classmethod
-    def make_range(cls, start, stop=None):
-        if stop is None:
-            return cls(np.arange(start, dtype=np.int64))
-        else:
-            return cls(np.arange(start, stop, dtype=np.int64))
+def index_from_range(start, stop=None, step=None):
+    vals = cudautils.arange(start, stop, step, dtype=np.int64)
+    return GenericIndex(vals)
 
-    def __init__(self, buf):
-        if not isinstance(buf, Buffer):
-            buf = Buffer(buf)
-        self._values = buf
+
+class GenericIndex(Index):
+    def __new__(self, values):
+        from .series import Series
+
+        values = Series(values)
+        if len(values) == 0:
+            # for empty index, return a EmptyIndex instead
+            return EmptyIndex()
+        else:
+            # Make GenericIndex object
+            res = Index.__new__(GenericIndex)
+            # Force simple index
+            res._values = values.set_index(RangeIndex(len(values)))
+            return res
 
     def __len__(self):
         return self._values.size
 
     def __repr__(self):
         ar = self._values.to_array()
-        return "Int64Index({})".format(ar)
+        return "{}({})".format(self.__class__.__name__, ar)
 
     def __getitem__(self, index):
         res = self._values[index]
         if not isinstance(index, int):
-            return Int64Index(res)
+            return GenericIndex(res)
         else:
             return res
 
     def __eq__(self, other):
-        if isinstance(other, Int64Index):
+        if isinstance(other, GenericIndex):
             # FIXME inefficient comparison
-            return np.all(self._values.to_array() == other._values.to_array())
+            booleans = self.as_series() == other.as_series()
+            return np.all(booleans.to_array())
         else:
             return NotImplemented
+
+    def as_series(self):
+        """Convert the index as a Series.
+        """
+        from .series import Series
+
+        return self._values
 
     @property
     def values(self):
@@ -153,12 +169,11 @@ class Int64Index(Index):
         return self._values.dtype
 
     def find_label_range(self, first, last):
-        # FIXME inefficient find
-        ar = self._values.to_array()
+        sr = self.as_series()
         begin, end = None, None
         if first is not None:
-            begin = np.argwhere(ar == first)[0, 0]
+            begin = sr.find_first_value(first)
         if last is not None:
-            end = np.argwhere(ar == last)[-1, 0]
+            end = sr.find_last_value(last)
             end += 1
         return begin, end

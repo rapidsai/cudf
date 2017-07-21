@@ -18,6 +18,17 @@ def unwrap_devary(devary):
 def columnview(size, data, mask=None, dtype=None):
     """
     Make a column view.
+
+    Parameters
+    ----------
+    size : int
+        Data count.
+    data : Buffer
+        The data buffer.
+    mask : Buffer; optional
+        The mask buffer.
+    dtype : numpy.dtype; optional
+        The dtype of the data.  Defaults to *data.dtype*.
     """
     def unwrap(buffer):
         if buffer is None:
