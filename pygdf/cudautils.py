@@ -26,7 +26,7 @@ def gpu_arange(start, size, step, out):
 def arange(start, stop=None, step=1, dtype=np.int64):
     if stop is None:
         start, stop = 0, start
-    size = stop - start
+    size = (stop - start + (step - 1)) // step
     out = cuda.device_array(size, dtype=dtype)
     gpu_arange.forall(size)(start, size, step, out)
     return out

@@ -128,11 +128,12 @@ class GenericIndex(Index):
             return res
 
     def __len__(self):
-        return self._values.size
+        return len(self._values)
 
     def __repr__(self):
-        ar = self._values.to_array()
-        return "{}({})".format(self.__class__.__name__, ar)
+        vals = [self._values[i] for i in range(min(len(self), 10))]
+        return "{}({}, dtype={})".format(self.__class__.__name__,
+                                         vals, self._values.dtype)
 
     def __getitem__(self, index):
         res = self._values[index]
