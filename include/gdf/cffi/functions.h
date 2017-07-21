@@ -54,6 +54,14 @@ gdf_error gdf_radixsort_generic(radixsort_plan_type *hdl,
                                 gdf_column *keycol,
                                 gdf_column *valcol);
 
+/* joining */
+
+gdf_error gdf_inner_join_i32(gdf_column *leftcol, gdf_column *rightcol,
+                             join_result_type **out_result);
+
+gdf_error gdf_join_result_free(join_result_type *result);
+void* gdf_join_result_data(join_result_type *result);
+size_t gdf_join_result_size(join_result_type *result);
 
 /* unary operators */
 

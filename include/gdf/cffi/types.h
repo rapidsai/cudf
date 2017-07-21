@@ -34,3 +34,7 @@ typedef struct _OpaqueIpcParser ipc_parser_type;
 
 struct _OpaqueRadixsortPlan;
 typedef struct _OpaqueRadixsortPlan radixsort_plan_type;
+
+
+struct _OpaqueJoinResult;
+typedef struct _OpaqueJoinResult join_result_type;
