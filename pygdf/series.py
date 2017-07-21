@@ -178,6 +178,14 @@ class Series(object):
         return cls(cls.Init(**params))
 
     def set_index(self, index):
+        """Returns a new Series with a different index.
+
+        Parameters
+        ----------
+        index : Index, Series-convertible
+            the new index or values for the new index
+        """
+        index = index if isinstance(index, Index) else GenericIndex(index)
         return self._copy_construct(index=index)
 
     def set_mask(self, mask, null_count=None):

@@ -114,7 +114,7 @@ def index_from_range(start, stop=None, step=None):
 
 class GenericIndex(Index):
     def __new__(self, values):
-        from .series import Series
+        from .series import Series  # cyclic dep on Series
 
         values = Series(values)
         if len(values) == 0:

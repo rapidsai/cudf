@@ -9,7 +9,7 @@ import pandas as pd
 from numba import cuda
 
 from . import cudautils, formatting, queryutils
-from .index import GenericIndex, EmptyIndex
+from .index import GenericIndex, EmptyIndex, Index
 from .series import Series
 
 
@@ -208,10 +208,26 @@ class DataFrame(object):
 
     def set_index(self, index):
         """Return a new DataFrame with a new index
+
+        Parameters
+        ----------
+        index : Index, Series-convertible or str
+            Index: the new index.
+            Series-convertible: values for the new index.
+            str: name of column to be used as series
         """
-        df = self.copy()
-        df._index = index
-        return df
+        # When index is a column name
+        if isinstance(index, str):
+            df = self.copy()
+            df.drop_column(index)
+            return df.set_index(self[index])
+        # Otherwise
+        else:
+            index = index if isinstance(index, Index) else GenericIndex(index)
+            df = DataFrame()
+            for k in self.columns:
+                df[k] = self[k].set_index(index)
+            return df
 
     def copy(self):
         "Shallow copy this dataframe"
@@ -385,7 +401,7 @@ class DataFrame(object):
         """
         # argsort the `by` column
         sorted_indices = self[by].argsort()
-        index = GenericIndex(sorted_indices.to_gpu_array())
+        index = sorted_indices.to_gpu_array()
         df = DataFrame()
         # Perform out = data[index] for all columns
         for k in self.columns:
@@ -531,7 +547,7 @@ class DataFrame(object):
             df[k] = np.ascontiguousarray(data[k])
         if index is not None:
             indices = data[index]
-            return df.set_index(GenericIndex(indices.astype(np.int64)))
+            return df.set_index(indices.astype(np.int64))
         return df
 
 
@@ -553,11 +569,10 @@ class Loc(object):
             raise TypeError(type(arg))
 
         df = DataFrame()
+        begin, end = self._df.index.find_label_range(row_slice.start,
+                                                     row_slice.stop)
         for col in col_slice:
             sr = self._df[col]
-            begin, end = sr.index.find_label_range(row_slice.start,
-                                                   row_slice.stop)
             df[col] = sr[begin:end]
+
         return df
-
-
