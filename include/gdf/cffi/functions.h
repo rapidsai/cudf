@@ -58,6 +58,14 @@ gdf_error gdf_radixsort_generic(gdf_radixsort_plan_type *hdl,
 
 gdf_error gdf_inner_join_i32(gdf_column *leftcol, gdf_column *rightcol,
                              gdf_join_result_type **out_result);
+gdf_error gdf_inner_join_i64(gdf_column *leftcol, gdf_column *rightcol,
+                             gdf_join_result_type **out_result);
+gdf_error gdf_inner_join_f32(gdf_column *leftcol, gdf_column *rightcol,
+                             gdf_join_result_type **out_result);
+gdf_error gdf_inner_join_f64(gdf_column *leftcol, gdf_column *rightcol,
+                             gdf_join_result_type **out_result);
+gdf_error gdf_inner_join_generic(gdf_column *leftcol, gdf_column *rightcol,
+                                 gdf_join_result_type **out_result);
 
 gdf_error gdf_join_result_free(gdf_join_result_type *result);
 void* gdf_join_result_data(gdf_join_result_type *result);

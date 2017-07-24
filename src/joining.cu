@@ -125,19 +125,6 @@ join_result_base* cffi_unwrap(gdf_join_result_type* hdl) {
 
 } // end anony namespace
 
-gdf_error gdf_inner_join_i32(gdf_column *leftcol, gdf_column *rightcol,
-                             gdf_join_result_type **out_result) {
-    using namespace mgpu;
-    typedef int32_t T;
-    std::unique_ptr<join_result<int2> > result_ptr(new join_result<int2>);
-    result_ptr->result = inner_join((T*)leftcol->data, leftcol->size,
-                                    (T*)rightcol->data, rightcol->size,
-                                    less_t<T>(), result_ptr->context);
-    CUDA_CHECK_LAST();
-    *out_result = cffi_wrap(result_ptr.release());
-    return GDF_SUCCESS;
-}
-
 gdf_error gdf_join_result_free(gdf_join_result_type *result) {
     delete cffi_unwrap(result);
     CUDA_CHECK_LAST();
@@ -150,4 +137,50 @@ void* gdf_join_result_data(gdf_join_result_type *result) {
 
 size_t gdf_join_result_size(gdf_join_result_type *result) {
     return cffi_unwrap(result)->size();
+}
+
+
+// Size limit due to use of int32 as join output.
+// FIXME: upgrade to 64-bit
+#define MAX_JOIN_SIZE (0xffffffffu)
+
+
+#define DEF_INNER_JOIN(Fn, T)                                               \
+gdf_error gdf_inner_join_##Fn(gdf_column *leftcol, gdf_column *rightcol,    \
+                              gdf_join_result_type **out_result) {          \
+    using namespace mgpu;                                                   \
+    if ( leftcol->dtype != rightcol->dtype) return GDF_UNSUPPORTED_DTYPE;   \
+    if ( leftcol->size >= MAX_JOIN_SIZE ) return GDF_COLUMN_SIZE_TOO_BIG;   \
+    if ( rightcol->size >= MAX_JOIN_SIZE ) return GDF_COLUMN_SIZE_TOO_BIG;  \
+    std::unique_ptr<join_result<int2> > result_ptr(new join_result<int2>);  \
+    result_ptr->result = inner_join((T*)leftcol->data, leftcol->size,       \
+                                    (T*)rightcol->data, rightcol->size,     \
+                                    less_t<T>(), result_ptr->context);      \
+    CUDA_CHECK_LAST();                                                      \
+    *out_result = cffi_wrap(result_ptr.release());                          \
+    return GDF_SUCCESS;                                                     \
+}
+
+
+DEF_INNER_JOIN(i32, int32_t)
+DEF_INNER_JOIN(i64, int64_t)
+DEF_INNER_JOIN(f32, float)
+DEF_INNER_JOIN(f64, double)
+
+
+gdf_error gdf_inner_join_generic(gdf_column *leftcol, gdf_column * rightcol,
+                                 gdf_join_result_type **out_result)
+{
+    switch ( leftcol->dtype ){
+    case GDF_INT32:
+        return gdf_inner_join_i32(leftcol, rightcol, out_result);
+    case GDF_INT64:
+        return gdf_inner_join_i64(leftcol, rightcol, out_result);
+    case GDF_FLOAT32:
+        return gdf_inner_join_f32(leftcol, rightcol, out_result);
+    case GDF_FLOAT64:
+        return gdf_inner_join_f64(leftcol, rightcol, out_result);
+    default:
+        return GDF_UNSUPPORTED_DTYPE;
+    }
 }

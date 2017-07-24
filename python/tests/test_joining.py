@@ -1,4 +1,4 @@
-from itertools import product
+from __future__ import print_function
 import ctypes
 
 import pytest
@@ -8,27 +8,28 @@ from numba import cuda
 
 from libgdf_cffi import ffi, libgdf
 
-from .utils import new_column, unwrap_devary, get_dtype, gen_rand
+from .utils import new_column, unwrap_devary, get_dtype
 
 
-def test_innerjoin(dtype=np.int32):
+@pytest.mark.parametrize('dtype', [np.int32, np.int64, np.float32, np.float64])
+def test_innerjoin(dtype):
     cuda.current_context()
     # Make data
     left = np.array([0, 0, 1, 2, 3], dtype=dtype)
     d_left = cuda.to_device(left)
     col_left = new_column()
-    libgdf.gdf_column_view(col_left, unwrap_devary(d_left), ffi.NULL, left.size,
-                           get_dtype(d_left.dtype))
+    libgdf.gdf_column_view(col_left, unwrap_devary(d_left), ffi.NULL,
+                           left.size, get_dtype(d_left.dtype))
 
     right = np.array([0, 1, 2, 2, 3], dtype=dtype)
     d_right = cuda.to_device(right)
     col_right = new_column()
-    libgdf.gdf_column_view(col_right, unwrap_devary(d_right), ffi.NULL, right.size,
-                           get_dtype(d_right.dtype))
+    libgdf.gdf_column_view(col_right, unwrap_devary(d_right), ffi.NULL,
+                           right.size, get_dtype(d_right.dtype))
 
     join_result_ptr = ffi.new("gdf_join_result_type**", None)
 
-    libgdf.gdf_inner_join_i32(col_left, col_right, join_result_ptr)
+    libgdf.gdf_inner_join_generic(col_left, col_right, join_result_ptr)
     join_result = join_result_ptr[0]
     print('join_result', join_result)
 
