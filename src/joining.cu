@@ -41,10 +41,27 @@ Uses code from https://github.com/moderngpu/moderngpu which has the following li
 
 
 #include <memory>
+#include <iostream>
 
 namespace {
 
 using namespace mgpu;
+
+std::ostream& operator << (std::ostream& out, int2 vec) {
+    return out << "(" << vec.x << ", " << vec.y << ")";
+}
+
+template <typename T>
+void dump_mem(const char name[], const mem_t<T> & mem) {
+
+    auto data = from_mem(mem);
+    std::cout << name << " = " ;
+    for (int i=0; i < data.size(); ++i) {
+        std::cout << data[i] << ", ";
+    }
+    std::cout << "\n";
+}
+
 
 template<typename launch_arg_t = empty_t,
   typename a_it, typename b_it, typename comp_t>
@@ -149,6 +166,94 @@ mem_t<int2> left_join(a_it a, int a_count, b_it b, int b_count,
     return output;
 }
 
+
+
+template<typename launch_arg_t = empty_t,
+  typename a_it, typename b_it, typename comp_t>
+mem_t<int2> outer_join(a_it a, int a_count, b_it b, int b_count,
+    comp_t comp, context_t& context) {
+
+    // Compute lower and upper bounds of a into b.
+    mem_t<int> lower(a_count, context);
+    mem_t<int> upper(a_count, context);
+    sorted_search<bounds_lower, launch_arg_t>(a, a_count, b, b_count,
+    lower.data(), comp, context);
+    sorted_search<bounds_upper, launch_arg_t>(a, a_count, b, b_count,
+    upper.data(), comp, context);
+
+    // Compute output ranges by scanning upper - lower. Retrieve the reduction
+    // of the scan, which specifies the size of the output array to allocate.
+    mem_t<int> scanned_sizes(a_count, context);
+    const int* lower_data = lower.data();
+    const int* upper_data = upper.data();
+
+    mem_t<int> count(1, context);
+    transform_scan<int>([=]MGPU_DEVICE(int index) {
+        auto out = upper_data[index] - lower_data[index];
+        if ( upper_data[index] == lower_data[index] )
+            out += 1;
+        return out;
+    }, a_count, scanned_sizes.data(), plus_t<int>(), count.data(), context);
+
+    /////// BEGIN Added for outer
+    // Compute lower and upper bounds of b into a.
+    mem_t<int> lower_rev(b_count, context);
+    mem_t<int> upper_rev(b_count, context);
+    sorted_search<bounds_lower, launch_arg_t>(b, b_count, a, a_count,
+    lower_rev.data(), comp, context);
+    sorted_search<bounds_upper, launch_arg_t>(b, b_count, a, a_count,
+    upper_rev.data(), comp, context);
+
+    mem_t<int> matches(b_count, context);
+    mem_t<int> matches_count(1, context);
+
+    const int* lower_rev_data = lower_rev.data();
+    const int* upper_rev_data = upper_rev.data();
+    transform_scan<int>([=]MGPU_DEVICE(int index){
+        return upper_rev_data[index] == lower_rev_data[index];
+    }, b_count, matches.data(), plus_t<int>(), matches_count.data(), context);
+
+    int append_count = from_mem(matches_count)[0];
+    /////// END Added for outer
+
+
+
+
+    // Allocate an int2 output array and use load-balancing search to compute
+    // the join.
+    int join_count = from_mem(count)[0];
+    mem_t<int2> output(join_count + append_count, context); ////// for OUTER: allocate extra space
+    int2* output_data = output.data();
+
+    // Use load-balancing search on the segmens. The output is a pair with
+    // a_index = seg and b_index = lower_data[seg] + rank.
+    //
+    // **libgdf changes**
+    //  - tuple<int> lower -> tuple<int, int> lower
+    //    to workaround error with 1-tuple
+    auto k = [=]MGPU_DEVICE(int index, int seg, int rank, tuple<int, int> lower_upper) {
+        auto lower = get<0>(lower_upper);
+        auto upper = get<1>(lower_upper);
+        auto result = lower + rank;
+        if ( lower == upper ) result = -1;
+        output_data[index] = make_int2(seg, result);
+    };
+    // **libgdf changes**
+    //  - make_tuple(lower_data) -> make_tuple(lower_data, lower_data)
+    //    to workaround error with 1-tuple
+    transform_lbs<launch_arg_t>(k, join_count, scanned_sizes.data(), a_count,
+        make_tuple(lower_data, upper_data), context);
+
+
+    /////// BEGIN Added for outer
+
+    auto app2 = [=]MGPU_DEVICE(int index, int seg, int rank) {
+        output_data[index + join_count] = make_int2(-1, seg);
+    };
+    transform_lbs<launch_arg_t>(app2, append_count, matches.data(), matches.size(), context);
+    /////// END Added for outer
+    return output;
+}
 struct join_result_base {
     virtual ~join_result_base() {}
     virtual void* data() = 0;
@@ -242,4 +347,12 @@ DEF_LEFT_JOIN(i32, int32_t)
 DEF_LEFT_JOIN(i64, int64_t)
 DEF_LEFT_JOIN(f32, float)
 DEF_LEFT_JOIN(f64, double)
+
+
+#define DEF_OUTER_JOIN(Fn, T) DEF_JOIN(outer_join_ ## Fn, T, outer_join)
+DEF_JOIN_DISP(outer_join)
+DEF_OUTER_JOIN(i32, int32_t)
+DEF_OUTER_JOIN(i64, int64_t)
+DEF_OUTER_JOIN(f32, float)
+DEF_OUTER_JOIN(f64, double)
 

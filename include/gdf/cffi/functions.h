@@ -78,6 +78,17 @@ gdf_error gdf_left_join_f64(gdf_column *leftcol, gdf_column *rightcol,
 gdf_error gdf_left_join_generic(gdf_column *leftcol, gdf_column *rightcol,
                                 gdf_join_result_type **out_result);
 
+gdf_error gdf_outer_join_i32(gdf_column *leftcol, gdf_column *rightcol,
+                             gdf_join_result_type **out_result);
+gdf_error gdf_outer_join_i64(gdf_column *leftcol, gdf_column *rightcol,
+                             gdf_join_result_type **out_result);
+gdf_error gdf_outer_join_f32(gdf_column *leftcol, gdf_column *rightcol,
+                             gdf_join_result_type **out_result);
+gdf_error gdf_outer_join_f64(gdf_column *leftcol, gdf_column *rightcol,
+                             gdf_join_result_type **out_result);
+gdf_error gdf_outer_join_generic(gdf_column *leftcol, gdf_column *rightcol,
+                                 gdf_join_result_type **out_result);
+
 gdf_error gdf_join_result_free(gdf_join_result_type *result);
 void* gdf_join_result_data(gdf_join_result_type *result);
 size_t gdf_join_result_size(gdf_join_result_type *result);
