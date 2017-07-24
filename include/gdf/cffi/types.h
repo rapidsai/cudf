@@ -29,12 +29,12 @@ typedef struct gdf_column_{
 } gdf_column;
 
 struct _OpaqueIpcParser;
-typedef struct _OpaqueIpcParser ipc_parser_type;
+typedef struct _OpaqueIpcParser gdf_ipc_parser_type;
 
 
 struct _OpaqueRadixsortPlan;
-typedef struct _OpaqueRadixsortPlan radixsort_plan_type;
+typedef struct _OpaqueRadixsortPlan gdf_radixsort_plan_type;
 
 
 struct _OpaqueJoinResult;
-typedef struct _OpaqueJoinResult join_result_type;
+typedef struct _OpaqueJoinResult gdf_join_result_type;

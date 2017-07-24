@@ -26,7 +26,7 @@ def test_innerjoin(dtype=np.int32):
     libgdf.gdf_column_view(col_right, unwrap_devary(d_right), ffi.NULL, right.size,
                            get_dtype(d_right.dtype))
 
-    join_result_ptr = ffi.new("join_result_type**", None)
+    join_result_ptr = ffi.new("gdf_join_result_type**", None)
 
     libgdf.gdf_inner_join_i32(col_left, col_right, join_result_ptr)
     join_result = join_result_ptr[0]

@@ -408,52 +408,52 @@ private:
     std::string _json_schema_output;
 };
 
-ipc_parser_type* cffi_wrap(IpcParser* obj){
-    return reinterpret_cast<ipc_parser_type*>(obj);
+gdf_ipc_parser_type* cffi_wrap(IpcParser* obj){
+    return reinterpret_cast<gdf_ipc_parser_type*>(obj);
 }
 
-IpcParser* cffi_unwrap(ipc_parser_type* hdl){
+IpcParser* cffi_unwrap(gdf_ipc_parser_type* hdl){
     return reinterpret_cast<IpcParser*>(hdl);
 }
 
-ipc_parser_type* gdf_ipc_parser_open(const uint8_t *schema, size_t length) {
+gdf_ipc_parser_type* gdf_ipc_parser_open(const uint8_t *schema, size_t length) {
     IpcParser *parser = new IpcParser;
     parser->open(schema, length);
 
     return cffi_wrap(parser);
 }
 
-void gdf_ipc_parser_close(ipc_parser_type *handle) {
+void gdf_ipc_parser_close(gdf_ipc_parser_type *handle) {
     delete cffi_unwrap(handle);
 }
 
-int gdf_ipc_parser_failed(ipc_parser_type *handle) {
+int gdf_ipc_parser_failed(gdf_ipc_parser_type *handle) {
     return cffi_unwrap(handle)->is_failed();
 }
 
 
-const char *gdf_ipc_parser_get_schema_json(ipc_parser_type *handle) {
+const char *gdf_ipc_parser_get_schema_json(gdf_ipc_parser_type *handle) {
     return cffi_unwrap(handle)->get_schema_json().c_str();
 }
 
 
-const char* gdf_ipc_parser_get_layout_json(ipc_parser_type *handle) {
+const char* gdf_ipc_parser_get_layout_json(gdf_ipc_parser_type *handle) {
     return cffi_unwrap(handle)->get_layout_json().c_str();
 }
 
-const char* gdf_ipc_parser_get_error(ipc_parser_type *handle) {
+const char* gdf_ipc_parser_get_error(gdf_ipc_parser_type *handle) {
     return cffi_unwrap(handle)->get_error().c_str();
 }
 
-const void* gdf_ipc_parser_get_data(ipc_parser_type *handle) {
+const void* gdf_ipc_parser_get_data(gdf_ipc_parser_type *handle) {
     return cffi_unwrap(handle)->get_data();
 }
 
-int64_t gdf_ipc_parser_get_data_offset(ipc_parser_type *handle) {
+int64_t gdf_ipc_parser_get_data_offset(gdf_ipc_parser_type *handle) {
     return cffi_unwrap(handle)->get_data_offset();
 }
 
-void gdf_ipc_parser_open_recordbatches(ipc_parser_type *handle,
+void gdf_ipc_parser_open_recordbatches(gdf_ipc_parser_type *handle,
                                        const uint8_t *recordbatches,
                                        size_t length)
 {

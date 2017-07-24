@@ -115,18 +115,18 @@ struct join_result : public join_result_base {
     }
 };
 
-join_result_type* cffi_wrap(join_result_base *obj) {
-    return reinterpret_cast<join_result_type*>(obj);
+gdf_join_result_type* cffi_wrap(join_result_base *obj) {
+    return reinterpret_cast<gdf_join_result_type*>(obj);
 }
 
-join_result_base* cffi_unwrap(join_result_type* hdl) {
+join_result_base* cffi_unwrap(gdf_join_result_type* hdl) {
     return reinterpret_cast<join_result_base*>(hdl);
 }
 
 } // end anony namespace
 
 gdf_error gdf_inner_join_i32(gdf_column *leftcol, gdf_column *rightcol,
-                             join_result_type **out_result) {
+                             gdf_join_result_type **out_result) {
     using namespace mgpu;
     typedef int32_t T;
     std::unique_ptr<join_result<int2> > result_ptr(new join_result<int2>);
@@ -138,16 +138,16 @@ gdf_error gdf_inner_join_i32(gdf_column *leftcol, gdf_column *rightcol,
     return GDF_SUCCESS;
 }
 
-gdf_error gdf_join_result_free(join_result_type *result) {
+gdf_error gdf_join_result_free(gdf_join_result_type *result) {
     delete cffi_unwrap(result);
     CUDA_CHECK_LAST();
     return GDF_SUCCESS;
 }
 
-void* gdf_join_result_data(join_result_type *result) {
+void* gdf_join_result_data(gdf_join_result_type *result) {
     return cffi_unwrap(result)->data();
 }
 
-size_t gdf_join_result_size(join_result_type *result) {
+size_t gdf_join_result_size(gdf_join_result_type *result) {
     return cffi_unwrap(result)->size();
 }
