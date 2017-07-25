@@ -228,6 +228,28 @@ def gather(data, index, out=None):
     return out
 
 
+@cuda.jit
+def gpu_gather_joined_index(lkeys, rkeys, lidx, ridx, out):
+    gid = cuda.grid(1)
+    if gid < lidx.size:
+        # Try getting from the left side first
+        pos = lidx[gid]
+        if pos != -1:
+            # Get from left
+            out[gid] = lkeys[pos]
+        else:
+            # Get from right
+            pos = ridx[gid]
+            out[gid] = rkeys[pos]
+
+
+def gather_joined_index(lkeys, rkeys, lidx, ridx):
+    assert lidx.size == ridx.size
+    out = cuda.device_array(lidx.size, dtype=lkeys.dtype)
+    gpu_gather_joined_index.forall(lidx.size)(lkeys, rkeys, lidx, ridx, out)
+    return out
+
+
 def reverse_array(data, out=None):
     rinds = arange_reversed(data.size)
     out = gather(data=data, index=rinds, out=out)
