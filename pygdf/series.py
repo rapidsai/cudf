@@ -166,6 +166,7 @@ class Series(object):
             buffer=self._data,
             mask=self._mask,
             null_count=self._null_count,
+            index=self._index,
             impl=self._impl,
         )
 
