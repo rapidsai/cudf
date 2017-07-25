@@ -17,6 +17,7 @@ typedef enum {
     GDF_CUDA_ERROR,
     GDF_UNSUPPORTED_DTYPE,
     GDF_COLUMN_SIZE_MISMATCH,
+    GDF_COLUMN_SIZE_TOO_BIG,
     GDF_VALIDITY_MISSING,
     GDF_VALIDITY_UNSUPPORTED,
 } gdf_error;
@@ -29,8 +30,12 @@ typedef struct gdf_column_{
 } gdf_column;
 
 struct _OpaqueIpcParser;
-typedef struct _OpaqueIpcParser ipc_parser_type;
+typedef struct _OpaqueIpcParser gdf_ipc_parser_type;
 
 
 struct _OpaqueRadixsortPlan;
-typedef struct _OpaqueRadixsortPlan radixsort_plan_type;
+typedef struct _OpaqueRadixsortPlan gdf_radixsort_plan_type;
+
+
+struct _OpaqueJoinResult;
+typedef struct _OpaqueJoinResult gdf_join_result_type;

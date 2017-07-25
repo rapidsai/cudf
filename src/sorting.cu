@@ -134,29 +134,29 @@ struct RadixSort {
     }
 };
 
-radixsort_plan_type* cffi_wrap(RadixSortPlan* obj){
-    return reinterpret_cast<radixsort_plan_type*>(obj);
+gdf_radixsort_plan_type* cffi_wrap(RadixSortPlan* obj){
+    return reinterpret_cast<gdf_radixsort_plan_type*>(obj);
 }
 
-RadixSortPlan* cffi_unwrap(radixsort_plan_type* hdl){
+RadixSortPlan* cffi_unwrap(gdf_radixsort_plan_type* hdl){
     return reinterpret_cast<RadixSortPlan*>(hdl);
 }
 
 
-radixsort_plan_type* gdf_radixsort_plan(size_t num_items, int descending,
+gdf_radixsort_plan_type* gdf_radixsort_plan(size_t num_items, int descending,
                                         unsigned begin_bit, unsigned end_bit){
     return cffi_wrap(new RadixSortPlan(num_items, descending,
                                        begin_bit, end_bit));
 }
 
-gdf_error gdf_radixsort_plan_setup(radixsort_plan_type *hdl,
+gdf_error gdf_radixsort_plan_setup(gdf_radixsort_plan_type *hdl,
                                    size_t sizeof_key,
                                    size_t sizeof_val)
 {
     return cffi_unwrap(hdl)->setup(sizeof_key, sizeof_val);
 }
 
-gdf_error gdf_radixsort_plan_free(radixsort_plan_type *hdl) {
+gdf_error gdf_radixsort_plan_free(gdf_radixsort_plan_type *hdl) {
     auto plan = cffi_unwrap(hdl);
     gdf_error status = plan->teardown();
     delete plan;
@@ -165,7 +165,7 @@ gdf_error gdf_radixsort_plan_free(radixsort_plan_type *hdl) {
 
 
 #define WRAP(Fn, Tk, Tv)                                                    \
-gdf_error gdf_radixsort_##Fn(radixsort_plan_type *hdl,                      \
+gdf_error gdf_radixsort_##Fn(gdf_radixsort_plan_type *hdl,                      \
                              gdf_column *keycol,                            \
                              gdf_column *valcol)                            \
 {                                                                           \
@@ -195,7 +195,7 @@ WRAP(i32, int32_t, int64_t)
 WRAP(i64, int64_t, int64_t)
 
 
-gdf_error gdf_radixsort_generic(radixsort_plan_type *hdl,
+gdf_error gdf_radixsort_generic(gdf_radixsort_plan_type *hdl,
                                 gdf_column *keycol,
                                 gdf_column *valcol)
 {

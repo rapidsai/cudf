@@ -12,48 +12,98 @@ const char * gdf_error_get_name(gdf_error errcode);
 
 /* ipc */
 
-ipc_parser_type* gdf_ipc_parser_open(const uint8_t *schema, size_t length);
-void gdf_ipc_parser_open_recordbatches(ipc_parser_type *handle,
+gdf_ipc_parser_type* gdf_ipc_parser_open(const uint8_t *schema, size_t length);
+void gdf_ipc_parser_open_recordbatches(gdf_ipc_parser_type *handle,
                                        const uint8_t *recordbatches,
                                        size_t length);
 
-void gdf_ipc_parser_close(ipc_parser_type *handle);
-int gdf_ipc_parser_failed(ipc_parser_type *handle);
-const char* gdf_ipc_parser_to_json(ipc_parser_type *handle);
-const char* gdf_ipc_parser_get_error(ipc_parser_type *handle);
-const void* gdf_ipc_parser_get_data(ipc_parser_type *handle);
-int64_t gdf_ipc_parser_get_data_offset(ipc_parser_type *handle);
+void gdf_ipc_parser_close(gdf_ipc_parser_type *handle);
+int gdf_ipc_parser_failed(gdf_ipc_parser_type *handle);
+const char* gdf_ipc_parser_to_json(gdf_ipc_parser_type *handle);
+const char* gdf_ipc_parser_get_error(gdf_ipc_parser_type *handle);
+const void* gdf_ipc_parser_get_data(gdf_ipc_parser_type *handle);
+int64_t gdf_ipc_parser_get_data_offset(gdf_ipc_parser_type *handle);
 
-const char *gdf_ipc_parser_get_schema_json(ipc_parser_type *handle) ;
-const char *gdf_ipc_parser_get_layout_json(ipc_parser_type *handle) ;
+const char *gdf_ipc_parser_get_schema_json(gdf_ipc_parser_type *handle) ;
+const char *gdf_ipc_parser_get_layout_json(gdf_ipc_parser_type *handle) ;
 
 
 /* sorting */
-radixsort_plan_type* gdf_radixsort_plan(size_t num_items, int descending,
+gdf_radixsort_plan_type* gdf_radixsort_plan(size_t num_items, int descending,
                                         unsigned begin_bit, unsigned end_bit);
-gdf_error gdf_radixsort_plan_setup(radixsort_plan_type *hdl,
+gdf_error gdf_radixsort_plan_setup(gdf_radixsort_plan_type *hdl,
                                    size_t sizeof_key, size_t sizeof_val);
-gdf_error gdf_radixsort_plan_free(radixsort_plan_type *hdl);
+gdf_error gdf_radixsort_plan_free(gdf_radixsort_plan_type *hdl);
 
 /*
  * The following function performs a sort on the key and value columns.
  */
-gdf_error gdf_radixsort_i32(radixsort_plan_type *hdl,
+gdf_error gdf_radixsort_i32(gdf_radixsort_plan_type *hdl,
                             gdf_column *keycol,
                             gdf_column *valcol);
-gdf_error gdf_radixsort_i64(radixsort_plan_type *hdl,
+gdf_error gdf_radixsort_i64(gdf_radixsort_plan_type *hdl,
                             gdf_column *keycol,
                             gdf_column *valcol);
-gdf_error gdf_radixsort_f32(radixsort_plan_type *hdl,
+gdf_error gdf_radixsort_f32(gdf_radixsort_plan_type *hdl,
                             gdf_column *keycol,
                             gdf_column *valcol);
-gdf_error gdf_radixsort_f64(radixsort_plan_type *hdl,
+gdf_error gdf_radixsort_f64(gdf_radixsort_plan_type *hdl,
                             gdf_column *keycol,
                             gdf_column *valcol);
-gdf_error gdf_radixsort_generic(radixsort_plan_type *hdl,
+gdf_error gdf_radixsort_generic(gdf_radixsort_plan_type *hdl,
                                 gdf_column *keycol,
                                 gdf_column *valcol);
 
+/* joining
+
+These functions return the result in *out_result*.
+Use the *gdf_join_result_* functions to extract data and deallocate.
+The result is a sequence of indices for the left (L) and right (R)
+keys in the form of
+
+    L0, R0, L1, R1, L2, R2, ..., Ln-1, Rn-1, Ln, Rn
+
+where n is the size returned from *gdf_join_result_size()*, which
+gives the number of int pairs in the output array.
+*/
+
+
+gdf_error gdf_inner_join_i32(gdf_column *leftcol, gdf_column *rightcol,
+                             gdf_join_result_type **out_result);
+gdf_error gdf_inner_join_i64(gdf_column *leftcol, gdf_column *rightcol,
+                             gdf_join_result_type **out_result);
+gdf_error gdf_inner_join_f32(gdf_column *leftcol, gdf_column *rightcol,
+                             gdf_join_result_type **out_result);
+gdf_error gdf_inner_join_f64(gdf_column *leftcol, gdf_column *rightcol,
+                             gdf_join_result_type **out_result);
+gdf_error gdf_inner_join_generic(gdf_column *leftcol, gdf_column *rightcol,
+                                 gdf_join_result_type **out_result);
+
+gdf_error gdf_left_join_i32(gdf_column *leftcol, gdf_column *rightcol,
+                            gdf_join_result_type **out_result);
+gdf_error gdf_left_join_i64(gdf_column *leftcol, gdf_column *rightcol,
+                            gdf_join_result_type **out_result);
+gdf_error gdf_left_join_f32(gdf_column *leftcol, gdf_column *rightcol,
+                            gdf_join_result_type **out_result);
+gdf_error gdf_left_join_f64(gdf_column *leftcol, gdf_column *rightcol,
+                            gdf_join_result_type **out_result);
+gdf_error gdf_left_join_generic(gdf_column *leftcol, gdf_column *rightcol,
+                                gdf_join_result_type **out_result);
+
+gdf_error gdf_outer_join_i32(gdf_column *leftcol, gdf_column *rightcol,
+                             gdf_join_result_type **out_result);
+gdf_error gdf_outer_join_i64(gdf_column *leftcol, gdf_column *rightcol,
+                             gdf_join_result_type **out_result);
+gdf_error gdf_outer_join_f32(gdf_column *leftcol, gdf_column *rightcol,
+                             gdf_join_result_type **out_result);
+gdf_error gdf_outer_join_f64(gdf_column *leftcol, gdf_column *rightcol,
+                             gdf_join_result_type **out_result);
+gdf_error gdf_outer_join_generic(gdf_column *leftcol, gdf_column *rightcol,
+                                 gdf_join_result_type **out_result);
+
+gdf_error gdf_join_result_free(gdf_join_result_type *result);
+void* gdf_join_result_data(gdf_join_result_type *result);
+size_t gdf_join_result_size(gdf_join_result_type *result);
 
 /* unary operators */
 
