@@ -63,8 +63,8 @@ keys in the form of
 
     L0, R0, L1, R1, L2, R2, ..., Ln-1, Rn-1, Ln, Rn
 
-where n is half of the size returned from *gdf_join_result_size()*, which
-gives the total length of the output array.
+where n is the size returned from *gdf_join_result_size()*, which
+gives the number of int pairs in the output array.
 */
 
 
