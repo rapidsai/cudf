@@ -44,6 +44,20 @@ def arange_reversed(size, dtype=np.int64):
     gpu_arange_reversed.forall(size)(size, out)
     return out
 
+
+@cuda.jit
+def gpu_ones(size, out):
+    i = cuda.grid(1)
+    if i < size:
+        out[i] = 1
+
+
+def ones(size, dtype):
+    out = cuda.device_array(size, dtype=dtype)
+    gpu_ones.forall(size)(size, out)
+    return out
+
+
 # GPU array type casting
 
 
