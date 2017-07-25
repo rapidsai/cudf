@@ -469,6 +469,10 @@ class DataFrame(object):
                 newcol = indf[k].take(idx).set_mask(mask).set_index(joinidx)
                 outdf[fix_name(k, suffix)] = newcol
 
+        def gather_empty(outdf, indf, idx, joinidx, suffix):
+            for k in indf.columns:
+                outdf[fix_name(k, suffix)] = indf[k][:0]
+
         lhs = self.sort_index()
         rhs = other.sort_index()
 
@@ -477,14 +481,21 @@ class DataFrame(object):
 
         df = DataFrame()
         with _gdf.apply_join(lkey, rkey, how=how) as (lidx, ridx):
-            joined_index = cudautils.gather_joined_index(lkey.to_gpu_array(),
-                                                         rkey.to_gpu_array(),
-                                                         lidx, ridx)
+            if lidx.size > 0:
+                joined_index = cudautils.gather_joined_index(lkey.to_gpu_array(),
+                                                             rkey.to_gpu_array(),
+                                                             lidx, ridx)
+                gather_fn = gather_cols
+            else:
+                joined_index = None
+                gather_fn = gather_empty
             # gather left columns
-            gather_cols(df, lhs, lidx, joined_index, lsuffix)
+            gather_fn(df, lhs, lidx, joined_index, lsuffix)
             # gather right columns
-            gather_cols(df, rhs, ridx, joined_index, rsuffix)
+            gather_fn(df, rhs, ridx, joined_index, rsuffix)
 
+        # if sort:
+        #     return df.sort_index()
         return df
 
     def query(self, expr):

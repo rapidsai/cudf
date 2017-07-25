@@ -30,6 +30,10 @@ def make_params():
     for how in hows:
         yield (aa, bb, how)
 
+    aa = np.random.random(50)
+    bb = np.random.random(50)
+    for how in hows:
+        yield (aa, bb, how)
 
 @pytest.mark.parametrize('aa,bb,how', make_params())
 def test_dataframe_join(aa, bb, how):
@@ -41,7 +45,9 @@ def test_dataframe_join(aa, bb, how):
         ts = timer()
         df1 = df.set_index('a')
         df2 = df.set_index('b')
-        joined = df1.join(df2, how=how)
+        print(df1)
+        print(df2)
+        joined = df1.join(df2, how=how, sort=True)
         te = timer()
         print(type(df), te - ts)
         return joined

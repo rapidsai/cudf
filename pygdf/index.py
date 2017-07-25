@@ -37,6 +37,9 @@ class EmptyIndex(Index):
     def __len__(self):
         return 0
 
+    def values(self):
+        return np.empty(0, dtype=np.int64)
+
 
 class RangeIndex(Index):
     """Basic start..stop
