@@ -140,8 +140,8 @@ def test_leftjoin(dtype):
     assert right_pos == (0, 1, 0, 1, -1, 4, 4)
 
 
-# @pytest.mark.parametrize('dtype', [np.int32, np.int64, np.float32, np.float64])
-def test_outerjoin(dtype=np.int32):
+@pytest.mark.parametrize('dtype', [np.int32, np.int64, np.float32, np.float64])
+def test_outerjoin(dtype):
     cuda.current_context()
     # Make data
     left = np.array([0, 0, 4, 5, 5], dtype=dtype)
