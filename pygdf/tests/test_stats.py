@@ -24,21 +24,30 @@ params_dtypes = [np.int32, np.float32, np.float64]
 
 @pytest.mark.parametrize('dtype', params_dtypes)
 def test_series_mean(dtype):
-    arr = np.random.random(100).astype(dtype)
+    arr = np.random.random(100)
+    if issubclass(arr.dtype.type, np.integer):
+        arr *= 100
+    arr = arr.astype(dtype)
     sr = Series.from_any(arr)
     np.testing.assert_almost_equal(arr.mean(), sr.mean())
 
 
 @pytest.mark.parametrize('dtype', params_dtypes)
 def test_series_var(dtype):
-    arr = np.random.random(100).astype(dtype)
+    arr = np.random.random(100)
+    if issubclass(arr.dtype.type, np.integer):
+        arr *= 100
+    arr = arr.astype(dtype)
     sr = Series.from_any(arr)
     np.testing.assert_almost_equal(arr.var(), sr.var())
 
 
 @pytest.mark.parametrize('dtype', params_dtypes)
 def test_series_std(dtype):
-    arr = np.random.random(100).astype(dtype)
+    arr = np.random.random(100)
+    if issubclass(arr.dtype.type, np.integer):
+        arr *= 100
+    arr = arr.astype(dtype)
     sr = Series.from_any(arr)
     np.testing.assert_almost_equal(arr.std(), sr.std())
 
