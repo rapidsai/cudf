@@ -54,7 +54,19 @@ gdf_error gdf_radixsort_generic(gdf_radixsort_plan_type *hdl,
                                 gdf_column *keycol,
                                 gdf_column *valcol);
 
-/* joining */
+/* joining
+
+These functions return the result in *out_result*.
+Use the *gdf_join_result_* functions to extract data and deallocate.
+The result is a sequence of indices for the left (L) and right (R)
+keys in the form of
+
+    L0, R0, L1, R1, L2, R2, ..., Ln-1, Rn-1, Ln, Rn
+
+where n is half of the size returned from *gdf_join_result_size()*, which
+gives the total length of the output array.
+*/
+
 
 gdf_error gdf_inner_join_i32(gdf_column *leftcol, gdf_column *rightcol,
                              gdf_join_result_type **out_result);
