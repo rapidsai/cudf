@@ -143,6 +143,9 @@ class Series(object):
 
         if index is not None and not isinstance(index, Index):
             raise TypeError('index not a Index type: got {!r}'.format(index))
+        # XXX: probably remove *size*
+        if buffer is not None:
+            size = buffer.size
         self._size = size
         self._data = buffer
         self._mask = mask
@@ -156,9 +159,13 @@ class Series(object):
             else:
                 null_count = 0
         self._null_count = null_count
+
+    @property
+    def _cffi_view(self):
         # Make cffi view for libgdf
-        self._cffi_view = _gdf.columnview(size=self._size, data=self._data,
-                                          mask=self._mask)
+        # XXX columnview enforces contiguous but Series doesn't
+        return _gdf.columnview(size=self._size, data=self._data,
+                               mask=self._mask)
 
     def _copy_construct_defaults(self):
         return dict(
@@ -231,13 +238,13 @@ class Series(object):
             if self.null_count > 0:
                 if arg.step is not None and arg.step != 1:
                     raise NotImplementedError(arg)
-                maskslice = slice(utils.calc_chunk_size(start,
-                                                        utils.mask_bitsize),
-                                  utils.calc_chunk_size(stop,
-                                                        utils.mask_bitsize))
+
+                # compute new mask
+                mask = Series(cudautils.ones(len(self), np.bool))
+                mask = mask.set_mask(self._mask).fillna(False)
                 # slicing
                 subdata = self._data.mem[arg]
-                submask = self._mask.mem[maskslice]
+                submask = mask[arg].as_mask()
                 index = self.index[arg]
                 return self._copy_construct(size=subdata.size,
                                             buffer=Buffer(subdata),
@@ -521,6 +528,12 @@ class Series(object):
             return self._mask
         else:
             raise ValueError('Series has no null mask')
+
+    def as_mask(self):
+        """Convert booleans to bitmask
+        """
+        # FIXME: inefficient
+        return Buffer(utils.boolmask_to_bitmask(self.to_array())).to_gpu_array()
 
     def astype(self, dtype):
         """Convert to the given ``dtype``.
