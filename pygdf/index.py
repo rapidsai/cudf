@@ -12,6 +12,12 @@ class Index(object):
         index = cudautils.gather(data=self.gpu_values, index=indices)
         return GenericIndex(index)
 
+    def as_series(self):
+        raise NotImplementedError
+
+    def argsort(self, ascending=True):
+        return self.as_series().argsort(ascending=ascending)
+
 
 class EmptyIndex(Index):
     """
@@ -82,11 +88,11 @@ class RangeIndex(Index):
 
     @property
     def values(self):
-        return np.arange(self._start, self._stop, dtype=self.dtype)
+        return self.as_series().to_array()
 
     @property
     def gpu_values(self):
-        return cudautils.arange(self._start, self._stop, dtype=self.dtype)
+        return self.as_series().to_gpu_array()
 
     def find_label_range(self, first, last):
         # clip first to range
@@ -105,6 +111,11 @@ class RangeIndex(Index):
             end = self._stop
         # shift to index
         return begin - self._start, end - self._start
+
+    def as_series(self):
+        from .series import Series
+        vals = cudautils.arange(self._start, self._stop, dtype=self.dtype)
+        return Series(vals)
 
 
 def index_from_range(start, stop=None, step=None):

@@ -387,6 +387,18 @@ class DataFrame(object):
             outdf.add_column(name, col)
         return outdf
 
+    def _sort_by(self, sorted_indices):
+        df = DataFrame()
+        # Perform out = data[index] for all columns
+        for k in self.columns:
+            df[k] = self[k].take(sorted_indices.to_gpu_array())
+        return df
+
+    def sort_index(self, ascending=True):
+        """Sort by the index
+        """
+        return self._sort_by(self.index.argsort(ascending=ascending))
+
     def sort_values(self, by, ascending=True):
         """
         Sort by values.
@@ -400,17 +412,7 @@ class DataFrame(object):
         Uses parallel radixsort, which is a stable sort.
         """
         # argsort the `by` column
-        sorted_indices = self[by].argsort()
-        index = sorted_indices.to_gpu_array()
-        df = DataFrame()
-        # Perform out = data[index] for all columns
-        for k in self.columns:
-            col = self[k]
-            out = cudautils.gather(data=col.to_gpu_array(),
-                                   index=sorted_indices.to_gpu_array())
-            sr = Series.from_array(out).set_index(index)
-            df[k] = sr
-        return df
+        return self._sort_by(self[by].argsort(ascending=ascending))
 
     def nlargest(self, n, columns, keep='first'):
         """Get the rows of the DataFrame sorted by the n largest value of *columns*
