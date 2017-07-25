@@ -199,7 +199,10 @@ def copy_to_dense(data, mask, out=None):
 def gpu_gather(data, index, out):
     i = cuda.grid(1)
     if i < index.size:
-        out[i] = data[index[i]]
+        idx = index[i]
+        # Only do it if the index is in range
+        if 0 <= idx < data.size:
+            out[i] = data[idx]
 
 
 def gather(data, index, out=None):
