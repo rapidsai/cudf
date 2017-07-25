@@ -8,7 +8,7 @@ import pandas as pd
 
 from numba import cuda
 
-from . import cudautils, formatting, queryutils
+from . import cudautils, formatting, queryutils, _gdf
 from .index import GenericIndex, EmptyIndex, Index
 from .series import Series
 
@@ -447,6 +447,43 @@ class DataFrame(object):
                 df[k] = sorted_series
             else:
                 df[k] = self[k].take(df.index.gpu_values)
+        return df
+
+    def join(self, other, how='left', lsuffix='', rsuffix='', sort=False):
+        """Join columns with other DataFrame on index or on a key column.
+        """
+        lhs = self.sort_index()
+        rhs = other.sort_index()
+
+        lkey = lhs.index.as_series()
+        rkey = rhs.index.as_series()
+
+        same_names = set(self.columns) & set(other.columns)
+        if same_names and not (lsuffix and rsuffix):
+            raise ValueError('there are overlapping columns but '
+                             'lsuffix and rsuffix are not defined')
+
+        def fix_name(name, suffix):
+            if name in same_names:
+                return "{}{}".format(name, suffix)
+            return name
+
+        def gather_cols(outdf, indf, idx, joinidx, suffix):
+            mask = (Series(idx) != -1).as_mask()
+            for k in indf.columns:
+                newcol = indf[k].take(idx).set_mask(mask).set_index(joinidx)
+                outdf[fix_name(k, suffix)] = newcol
+
+        df = DataFrame()
+        with _gdf.apply_join(lkey, rkey, how=how) as (lidx, ridx):
+            joined_index = cudautils.gather_joined_index(lkey.to_gpu_array(),
+                                                         rkey.to_gpu_array(),
+                                                         lidx, ridx)
+            # gather left columns
+            gather_cols(df, lhs, lidx, joined_index, lsuffix)
+            # gather right columns
+            gather_cols(df, rhs, ridx, joined_index, rsuffix)
+
         return df
 
     def query(self, expr):
