@@ -452,11 +452,6 @@ class DataFrame(object):
     def join(self, other, how='left', lsuffix='', rsuffix='', sort=False):
         """Join columns with other DataFrame on index or on a key column.
         """
-        lhs = self.sort_index()
-        rhs = other.sort_index()
-
-        lkey = lhs.index.as_series()
-        rkey = rhs.index.as_series()
 
         same_names = set(self.columns) & set(other.columns)
         if same_names and not (lsuffix and rsuffix):
@@ -473,6 +468,12 @@ class DataFrame(object):
             for k in indf.columns:
                 newcol = indf[k].take(idx).set_mask(mask).set_index(joinidx)
                 outdf[fix_name(k, suffix)] = newcol
+
+        lhs = self.sort_index()
+        rhs = other.sort_index()
+
+        lkey = lhs.index.as_series()
+        rkey = rhs.index.as_series()
 
         df = DataFrame()
         with _gdf.apply_join(lkey, rkey, how=how) as (lidx, ridx):

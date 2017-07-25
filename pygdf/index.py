@@ -8,7 +8,7 @@ from .buffer import Buffer
 
 class Index(object):
     def take(self, indices):
-        assert self.dtype.kind == 'i'
+        assert indices.dtype.kind in 'iu'
         index = cudautils.gather(data=self.gpu_values, index=indices)
         return GenericIndex(index)
 
