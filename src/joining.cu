@@ -1,6 +1,6 @@
 /*
 
-Uses code from https://github.com/moderngpu/moderngpu which has the following license:
+Adapted from https://github.com/moderngpu/moderngpu which has the following license:
 
 > Copyright (c) 2016, Sean Baxter
 > All rights reserved.
@@ -63,61 +63,16 @@ void dump_mem(const char name[], const mem_t<T> & mem) {
 }
 
 
-template<typename launch_arg_t = empty_t,
-  typename a_it, typename b_it, typename comp_t>
-mem_t<int2> inner_join(a_it a, int a_count, b_it b, int b_count,
-  comp_t comp, context_t& context) {
-
-  // Compute lower and upper bounds of a into b.
-  mem_t<int> lower(a_count, context);
-  mem_t<int> upper(a_count, context);
-  sorted_search<bounds_lower, launch_arg_t>(a, a_count, b, b_count,
-    lower.data(), comp, context);
-  sorted_search<bounds_upper, launch_arg_t>(a, a_count, b, b_count,
-    upper.data(), comp, context);
-
-  // Compute output ranges by scanning upper - lower. Retrieve the reduction
-  // of the scan, which specifies the size of the output array to allocate.
-  mem_t<int> scanned_sizes(a_count, context);
-  const int* lower_data = lower.data();
-  const int* upper_data = upper.data();
-
-  mem_t<int> count(1, context);
-  transform_scan<int>([=]MGPU_DEVICE(int index) {
-    return upper_data[index] - lower_data[index];
-  }, a_count, scanned_sizes.data(), plus_t<int>(), count.data(), context);
-
-  // Allocate an int2 output array and use load-balancing search to compute
-  // the join.
-  int join_count = from_mem(count)[0];
-  mem_t<int2> output(join_count, context);
-  int2* output_data = output.data();
-
-  // Use load-balancing search on the segmens. The output is a pair with
-  // a_index = seg and b_index = lower_data[seg] + rank.
-  //
-  // **libgdf changes**
-  //  - tuple<int> lower -> tuple<int, int> lower
-  //    to workaround error with 1-tuple
-  auto k = [=]MGPU_DEVICE(int index, int seg, int rank, tuple<int, int> lower) {
-    output_data[index] = make_int2(seg, get<0>(lower) + rank);
-  };
-  // **libgdf changes**
-  //  - make_tuple(lower_data) -> make_tuple(lower_data, lower_data)
-  //    to workaround error with 1-tuple
-  transform_lbs<launch_arg_t>(k, join_count, scanned_sizes.data(), a_count,
-    make_tuple(lower_data, lower_data), context);
-
-  return output;
-}
+struct _join_bounds {
+    mem_t<int> lower, upper;
+};
 
 
 template<typename launch_arg_t = empty_t,
   typename a_it, typename b_it, typename comp_t>
-mem_t<int2> left_join(a_it a, int a_count, b_it b, int b_count,
+_join_bounds compute_join_bounds(a_it a, int a_count, b_it b, int b_count,
     comp_t comp, context_t& context) {
 
-    // Compute lower and upper bounds of a into b.
     mem_t<int> lower(a_count, context);
     mem_t<int> upper(a_count, context);
     sorted_search<bounds_lower, launch_arg_t>(a, a_count, b, b_count,
@@ -125,87 +80,121 @@ mem_t<int2> left_join(a_it a, int a_count, b_it b, int b_count,
     sorted_search<bounds_upper, launch_arg_t>(a, a_count, b, b_count,
     upper.data(), comp, context);
 
+    // Prepare output
+    _join_bounds bounds;
+    lower.swap(bounds.lower);
+    upper.swap(bounds.upper);
+    return bounds;
+}
+
+
+mem_t<int> scan_join_bounds(const _join_bounds &bounds, int a_count, int b_count,
+                            context_t &context, bool isInner,
+                            int &out_join_count)
+{
     // Compute output ranges by scanning upper - lower. Retrieve the reduction
     // of the scan, which specifies the size of the output array to allocate.
     mem_t<int> scanned_sizes(a_count, context);
-    const int* lower_data = lower.data();
-    const int* upper_data = upper.data();
+    const int* lower_data = bounds.lower.data();
+    const int* upper_data = bounds.upper.data();
 
     mem_t<int> count(1, context);
-    transform_scan<int>([=]MGPU_DEVICE(int index) {
-        auto out = upper_data[index] - lower_data[index];
-        if ( upper_data[index] == lower_data[index] )
-            out += 1;
-        return out;
-    }, a_count, scanned_sizes.data(), plus_t<int>(), count.data(), context);
 
+    if (isInner){
+        transform_scan<int>([=]MGPU_DEVICE(int index) {
+            return upper_data[index] - lower_data[index];
+        }, a_count, scanned_sizes.data(), plus_t<int>(), count.data(), context);
+    } else {
+        transform_scan<int>([=]MGPU_DEVICE(int index) {
+            auto out = upper_data[index] - lower_data[index];
+            if ( upper_data[index] == lower_data[index] ){
+                // for left-only keys, allocate a slot
+                out += 1;
+            }
+            return out;
+        }, a_count, scanned_sizes.data(), plus_t<int>(), count.data(), context);
+    }
+
+    // Prepare output
+    out_join_count = from_mem(count)[0];
+    return scanned_sizes;
+}
+
+
+template<typename launch_arg_t = empty_t>
+mem_t<int2> compute_joined_indices(const _join_bounds &bounds,
+                                   const mem_t<int> &scanned_sizes,
+                                   int a_count, int join_count,
+                                   context_t &context,
+                                   bool isInner, int append_count=0)
+{
     // Allocate an int2 output array and use load-balancing search to compute
     // the join.
-    int join_count = from_mem(count)[0];
-    mem_t<int2> output(join_count, context);
+
+    const int* lower_data = bounds.lower.data();
+    const int* upper_data = bounds.upper.data();
+
+    // for outer join: allocate extra space for appending the right indices
+    mem_t<int2> output(join_count + append_count, context);
     int2* output_data = output.data();
 
-    // Use load-balancing search on the segmens. The output is a pair with
-    // a_index = seg and b_index = lower_data[seg] + rank.
-    //
-    // **libgdf changes**
-    //  - tuple<int> lower -> tuple<int, int> lower
-    //    to workaround error with 1-tuple
-    auto k = [=]MGPU_DEVICE(int index, int seg, int rank, tuple<int, int> lower_upper) {
-        auto lower = get<0>(lower_upper);
-        auto upper = get<1>(lower_upper);
-        auto result = lower + rank;
-        if ( lower == upper ) result = -1;
-        output_data[index] = make_int2(seg, result);
-    };
-    // **libgdf changes**
-    //  - make_tuple(lower_data) -> make_tuple(lower_data, lower_data)
-    //    to workaround error with 1-tuple
-    transform_lbs<launch_arg_t>(k, join_count, scanned_sizes.data(), a_count,
-        make_tuple(lower_data, upper_data), context);
+    if (isInner){
+        // Use load-balancing search on the segments. The output is a pair with
+        // a_index = seg and b_index = lower_data[seg] + rank.
+        auto k = [=]MGPU_DEVICE(int index, int seg, int rank, const int *lower) {
+            output_data[index] = make_int2(seg, lower[seg] + rank);
+        };
+
+        transform_lbs<launch_arg_t>(k, join_count, scanned_sizes.data(), a_count,
+                                    context, lower_data);
+    } else {
+        // Use load-balancing search on the segments. The output is a pair with
+        // a_index = seg
+        // b_index = lower_data[seg] + rank { if lower_data[seg] != upper_data[seg] }
+        //         = -1                     { otherwise }
+        auto k = [=]MGPU_DEVICE(int index, int seg, int rank, tuple<int, int> lower_upper) {
+            auto lower = get<0>(lower_upper);
+            auto upper = get<1>(lower_upper);
+            auto result = lower + rank;
+            if ( lower == upper ) result = -1;
+            output_data[index] = make_int2(seg, result);
+        };
+        transform_lbs<launch_arg_t>(k, join_count, scanned_sizes.data(), a_count,
+                                    make_tuple(lower_data, upper_data), context);
+    }
     return output;
 }
 
 
+template<typename launch_arg_t = empty_t, typename T>
+void outer_join_append_right(T *output_data,
+                             const mem_t<int> &matches,
+                             int append_count, int join_count,
+                             context_t &context) {
+    auto appender = [=]MGPU_DEVICE(int index, int seg, int rank) {
+        output_data[index + join_count] = make_int2(-1, seg);
+    };
+    transform_lbs<launch_arg_t>(appender, append_count, matches.data(),
+                                matches.size(), context);
+}
 
 template<typename launch_arg_t = empty_t,
-  typename a_it, typename b_it, typename comp_t>
-mem_t<int2> outer_join(a_it a, int a_count, b_it b, int b_count,
-    comp_t comp, context_t& context) {
-
-    // Compute lower and upper bounds of a into b.
-    mem_t<int> lower(a_count, context);
-    mem_t<int> upper(a_count, context);
-    sorted_search<bounds_lower, launch_arg_t>(a, a_count, b, b_count,
-    lower.data(), comp, context);
-    sorted_search<bounds_upper, launch_arg_t>(a, a_count, b, b_count,
-    upper.data(), comp, context);
-
-    // Compute output ranges by scanning upper - lower. Retrieve the reduction
-    // of the scan, which specifies the size of the output array to allocate.
-    mem_t<int> scanned_sizes(a_count, context);
-    const int* lower_data = lower.data();
-    const int* upper_data = upper.data();
-
-    mem_t<int> count(1, context);
-    transform_scan<int>([=]MGPU_DEVICE(int index) {
-        auto out = upper_data[index] - lower_data[index];
-        if ( upper_data[index] == lower_data[index] )
-            out += 1;
-        return out;
-    }, a_count, scanned_sizes.data(), plus_t<int>(), count.data(), context);
-
-    /////// BEGIN Added for outer
+         typename a_it, typename b_it, typename comp_t>
+mem_t<int> outer_join_count_matches(a_it a, int a_count, b_it b, int b_count,
+                                     comp_t comp, context_t &context,
+                                     int &append_count)
+{
+    mem_t<int> matches(b_count, context);
+    mem_t<int> matches_count(1, context);
     // Compute lower and upper bounds of b into a.
     mem_t<int> lower_rev(b_count, context);
     mem_t<int> upper_rev(b_count, context);
-    sorted_search<bounds_lower, launch_arg_t>(b, b_count, a, a_count,
-    lower_rev.data(), comp, context);
-    sorted_search<bounds_upper, launch_arg_t>(b, b_count, a, a_count,
-    upper_rev.data(), comp, context);
-
-    mem_t<int> matches(b_count, context);
-    mem_t<int> matches_count(1, context);
+    sorted_search<bounds_lower, launch_arg_t>(
+        b, b_count, a, a_count, lower_rev.data(), comp, context
+    );
+    sorted_search<bounds_upper, launch_arg_t>(
+        b, b_count, a, a_count, upper_rev.data(), comp, context
+    );
 
     const int* lower_rev_data = lower_rev.data();
     const int* upper_rev_data = upper_rev.data();
@@ -213,47 +202,63 @@ mem_t<int2> outer_join(a_it a, int a_count, b_it b, int b_count,
         return upper_rev_data[index] == lower_rev_data[index];
     }, b_count, matches.data(), plus_t<int>(), matches_count.data(), context);
 
-    int append_count = from_mem(matches_count)[0];
-    /////// END Added for outer
+    // Prepare output
+    append_count = from_mem(matches_count)[0];
+    return matches;
+}
 
 
 
-
-    // Allocate an int2 output array and use load-balancing search to compute
-    // the join.
-    int join_count = from_mem(count)[0];
-    mem_t<int2> output(join_count + append_count, context); ////// for OUTER: allocate extra space
-    int2* output_data = output.data();
-
-    // Use load-balancing search on the segmens. The output is a pair with
-    // a_index = seg and b_index = lower_data[seg] + rank.
-    //
-    // **libgdf changes**
-    //  - tuple<int> lower -> tuple<int, int> lower
-    //    to workaround error with 1-tuple
-    auto k = [=]MGPU_DEVICE(int index, int seg, int rank, tuple<int, int> lower_upper) {
-        auto lower = get<0>(lower_upper);
-        auto upper = get<1>(lower_upper);
-        auto result = lower + rank;
-        if ( lower == upper ) result = -1;
-        output_data[index] = make_int2(seg, result);
-    };
-    // **libgdf changes**
-    //  - make_tuple(lower_data) -> make_tuple(lower_data, lower_data)
-    //    to workaround error with 1-tuple
-    transform_lbs<launch_arg_t>(k, join_count, scanned_sizes.data(), a_count,
-        make_tuple(lower_data, upper_data), context);
-
-
-    /////// BEGIN Added for outer
-
-    auto app2 = [=]MGPU_DEVICE(int index, int seg, int rank) {
-        output_data[index + join_count] = make_int2(-1, seg);
-    };
-    transform_lbs<launch_arg_t>(app2, append_count, matches.data(), matches.size(), context);
-    /////// END Added for outer
+template<typename launch_arg_t = empty_t,
+         typename a_it, typename b_it, typename comp_t>
+mem_t<int2> inner_join(a_it a, int a_count, b_it b, int b_count,
+                       comp_t comp, context_t& context)
+{
+    _join_bounds bounds = compute_join_bounds(a, a_count, b, b_count, comp, context);
+    int join_count;
+    mem_t<int> scanned_sizes = scan_join_bounds(bounds, a_count, b_count, context, true,
+                                                join_count);
+    mem_t<int2> output = compute_joined_indices(bounds, scanned_sizes, a_count,
+                                                join_count, context, true);
     return output;
 }
+
+
+template<typename launch_arg_t = empty_t,
+         typename a_it, typename b_it, typename comp_t>
+mem_t<int2> left_join(a_it a, int a_count, b_it b, int b_count,
+                      comp_t comp, context_t& context)
+{
+    _join_bounds bounds = compute_join_bounds(a, a_count, b, b_count, comp, context);
+    int join_count;
+    mem_t<int> scanned_sizes = scan_join_bounds(bounds, a_count, b_count, context, false,
+                                                join_count);
+    mem_t<int2> output = compute_joined_indices(bounds, scanned_sizes, a_count,
+                                                join_count, context, false, 0);
+    return output;
+}
+
+template<typename launch_arg_t = empty_t,
+  typename a_it, typename b_it, typename comp_t>
+mem_t<int2> outer_join(a_it a, int a_count, b_it b, int b_count,
+                       comp_t comp, context_t& context)
+{
+    _join_bounds bounds = compute_join_bounds(a, a_count, b, b_count, comp,
+                                              context);
+    int join_count;
+    mem_t<int> scanned_sizes = scan_join_bounds(bounds, a_count, b_count, context, false,
+                                                join_count);
+    int append_count;
+    mem_t<int> matches = outer_join_count_matches(a, a_count, b, b_count,
+                                                  comp, context, append_count );
+    mem_t<int2> output = compute_joined_indices(bounds, scanned_sizes, a_count,
+                                                join_count, context, false, append_count);
+    outer_join_append_right(output.data(), matches, append_count, join_count,
+                            context);
+    return output;
+}
+
+
 struct join_result_base {
     virtual ~join_result_base() {}
     virtual void* data() = 0;
