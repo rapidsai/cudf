@@ -40,13 +40,14 @@ def _call_join(api, col_left, col_right):
     addr = ctypes.c_uint64(int(ffi.cast("uintptr_t", dataptr)))
     print(hex(addr.value))
     memptr = cuda.driver.MemoryPointer(context=cuda.current_context(),
-                                       pointer=addr, size=2 * 4 * datasize)
+                                       pointer=addr, size=4 * datasize)
     print(memptr)
-    ary = cuda.devicearray.DeviceNDArray(shape=(2 * datasize,), strides=(4,),
+    ary = cuda.devicearray.DeviceNDArray(shape=(datasize,), strides=(4,),
                                          dtype=np.dtype(np.int32),
                                          gpu_data=memptr)
 
-    joined_idx = ary.reshape(datasize, 2).copy_to_host()
+    joined_idx = ary.reshape(2, datasize//2).copy_to_host()
+    print(joined_idx)
 
     libgdf.gdf_join_result_free(join_result)
     return joined_idx
@@ -76,13 +77,15 @@ def test_innerjoin(dtype):
     # 2       3        2
     # 2       3        3
     # 3       4        4
-    left_idx, right_idx = zip(*[(left[a], right[b]) for a, b in joined_idx])
-    assert left_idx == right_idx
-    left_pos, right_pos = zip(*joined_idx)
+    left_pos, right_pos = joined_idx
+    left_idx = left[left_pos]
+    right_idx = right[right_pos]
+
+    assert list(left_idx) == list(right_idx)
     # left_pos == a_left
-    assert left_pos == (0, 1, 2, 3, 3, 4)
+    assert tuple(left_pos) == (0, 1, 2, 3, 3, 4)
     # right_pos == a_right
-    assert right_pos == (0, 0, 1, 2, 3, 4)
+    assert tuple(right_pos) == (0, 0, 1, 2, 3, 4)
 
 
 @pytest.mark.parametrize('dtype', [np.int32, np.int64, np.float32, np.float64])
@@ -109,15 +112,16 @@ def test_leftjoin(dtype):
     # 4       2      NaN
     # 5       3      4.0
     # 5       4      4.0
-    left_idx, right_idx = zip(*[(left[a], right[b] if b != -1 else None)
-                                for a, b in joined_idx])
-    assert left_idx == (0, 0, 0, 0, 4, 5, 5)
-    assert right_idx == (0, 0, 0, 0, None, 5, 5)
-    left_pos, right_pos = zip(*joined_idx)
+    left_pos, right_pos = joined_idx
+    left_idx = [left[a] for a in left_pos]
+    right_idx = [right[b] if b != -1 else None for b in right_pos]
+
+    assert tuple(left_idx) == (0, 0, 0, 0, 4, 5, 5)
+    assert tuple(right_idx) == (0, 0, 0, 0, None, 5, 5)
     # left_pos == a_left
-    assert left_pos == (0, 0, 1, 1, 2, 3, 4)
+    assert tuple(left_pos) == (0, 0, 1, 1, 2, 3, 4)
     # right_pos == a_right
-    assert right_pos == (0, 1, 0, 1, -1, 4, 4)
+    assert tuple(right_pos) == (0, 1, 0, 1, -1, 4, 4)
 
 
 @pytest.mark.parametrize('dtype', [np.int32, np.int64, np.float32, np.float64])
@@ -165,14 +169,13 @@ def test_outerjoin(dtype):
         if x != -1:
             return arr[x]
 
-    for a, b in joined_idx:
-        print(at(left, a), at(right, b), '|', a, b)
-    left_idx, right_idx = zip(*[(at(left, a), at(right, b))
-                                for a, b in joined_idx])
-    assert left_idx == (0, 0, 0, 0, 4, 5, 5, None, None)
-    assert right_idx == (0, 0, 0, 0, None, 5, 5, 2, 3)
-    left_pos, right_pos = zip(*joined_idx)
+    left_pos, right_pos = joined_idx
+    left_idx = [at(left, a) for a in left_pos]
+    right_idx = [at(right, b) for b in right_pos]
+
+    assert tuple(left_idx) == (0, 0, 0, 0, 4, 5, 5, None, None)
+    assert tuple(right_idx) == (0, 0, 0, 0, None, 5, 5, 2, 3)
     # left_pos == a_left
-    assert left_pos == (0, 0, 1, 1, 2, 3, 4, -1, -1)
+    assert tuple(left_pos) == (0, 0, 1, 1, 2, 3, 4, -1, -1)
     # right_pos == a_right
-    assert right_pos == (0, 1, 0, 1, -1, 4, 4, 2, 3)
+    assert tuple(right_pos) == (0, 1, 0, 1, -1, 4, 4, 2, 3)
