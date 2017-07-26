@@ -269,9 +269,16 @@ class Series(object):
         """Return Series by taking values from the corresponding *indices*.
         """
         indices = Buffer(indices).to_gpu_array()
-        data = cudautils.gather(data=self.to_gpu_array(), index=indices)
+        data = cudautils.gather(data=self.data.to_gpu_array(), index=indices)
+
+        if self._mask:
+            mask = Series(cudautils.ones(len(self), np.bool))
+            mask = mask.set_mask(self._mask).fillna(False).take(indices).as_mask()
+            mask = Buffer(mask)
+        else:
+            mask = None
         index = self.index.take(indices)
-        return self._copy_construct(buffer=Buffer(data), index=index)
+        return self._copy_construct(buffer=Buffer(data), index=index, mask=mask)
 
     def __bool__(self):
         """Always raise TypeError when converting a Series
