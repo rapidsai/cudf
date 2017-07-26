@@ -14,7 +14,7 @@ from pygdf.dataframe import DataFrame, Series
 def make_params():
     np.random.seed(0)
 
-    hows = 'left,inner'.split(',')
+    hows = 'left,inner,outer'.split(',')
 
     # Test specific cases (1)
     aa = [0, 0, 4, 5, 5]
