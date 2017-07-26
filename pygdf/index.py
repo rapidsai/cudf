@@ -20,6 +20,14 @@ class Index(object):
     def argsort(self, ascending=True):
         return self.as_series().argsort(ascending=ascending)
 
+    @property
+    def values(self):
+        return self.as_series().to_array()
+
+    @property
+    def gpu_values(self):
+        return self.as_series().to_gpu_array()
+
 
 class EmptyIndex(Index):
     """
@@ -39,16 +47,11 @@ class EmptyIndex(Index):
     def __len__(self):
         return 0
 
-    def values(self):
-        return np.empty(0, dtype=np.int64)
-
-    def gpu_values(self):
-        return cuda.device_array(0, dtype=np.int64)
-
     def as_series(self):
         from .series import Series
 
-        return Series(self.gpu_values())
+        return Series(np.empty(0, dtype=np.int64))
+
 
 class RangeIndex(Index):
     """Basic start..stop
@@ -97,14 +100,6 @@ class RangeIndex(Index):
     @property
     def dtype(self):
         return np.dtype(np.int64)
-
-    @property
-    def values(self):
-        return self.as_series().to_array()
-
-    @property
-    def gpu_values(self):
-        return self.as_series().to_gpu_array()
 
     def find_label_range(self, first, last):
         # clip first to range
@@ -179,14 +174,6 @@ class GenericIndex(Index):
         from .series import Series
 
         return self._values
-
-    @property
-    def values(self):
-        return self._values.to_array()
-
-    @property
-    def gpu_values(self):
-        return self._values.to_gpu_array()
 
     @property
     def dtype(self):
