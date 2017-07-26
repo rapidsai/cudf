@@ -70,6 +70,15 @@ class Buffer(object):
         return Buffer(mem=cudautils.copy_array(self.mem),
                       size=self.size, capacity=self.capacity)
 
+    def as_contiguous(self):
+        out = Buffer(mem=cudautils.as_contiguous(self.mem),
+                     size=self.size, capacity=self.capacity)
+        assert out.is_contiguous()
+        return out
+
+    def is_contiguous(self):
+        return self.mem.is_c_contiguous()
+
 
 class BufferSentryError(ValueError):
     pass

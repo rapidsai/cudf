@@ -82,8 +82,17 @@ def copy_array(arr, out=None):
     if out is None:
         out = cuda.device_array_like(arr)
     assert out.size == arr.size
-    out.copy_to_device(arr)
+    if arr.is_c_contiguous() and out.is_c_contiguous():
+        out.copy_to_device(arr)
+    else:
+        gpu_copy.forall(out.size)(arr, out)
     return out
+
+
+def as_contiguous(arr):
+    assert arr.ndim == 1
+    out = cuda.device_array(shape=arr.shape, dtype=arr.dtype)
+    return copy_array(arr, out=out)
 
 
 # Copy column into a matrix

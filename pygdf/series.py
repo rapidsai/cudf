@@ -144,6 +144,10 @@ class Series(object):
         if index is not None and not isinstance(index, Index):
             raise TypeError('index not a Index type: got {!r}'.format(index))
 
+        # Forces Series content to be contiguous
+        if not buffer.is_contiguous():
+            buffer = buffer.as_contiguous()
+
         self._size = buffer.size if buffer else 0
         self._data = buffer
         self._mask = mask
@@ -157,13 +161,8 @@ class Series(object):
             else:
                 null_count = 0
         self._null_count = null_count
-
-    @property
-    def _cffi_view(self):
-        # Make cffi view for libgdf
-        # XXX columnview enforces contiguous but Series doesn't
-        return _gdf.columnview(size=self._size, data=self._data,
-                               mask=self._mask)
+        self._cffi_view = _gdf.columnview(size=self._size, data=self._data,
+                                          mask=self._mask)
 
     def _copy_construct_defaults(self):
         return dict(
