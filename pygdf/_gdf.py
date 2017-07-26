@@ -36,7 +36,6 @@ def columnview(size, data, mask=None, dtype=None):
     def unwrap(buffer):
         if buffer is None:
             return ffi.NULL
-        # XXX: perhaps, Series should force contiguous array
         assert buffer.mem.is_c_contiguous(), "libGDF expects contiguous memory"
         devary = buffer.to_gpu_array()
         return unwrap_devary(devary)
