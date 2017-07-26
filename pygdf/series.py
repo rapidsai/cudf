@@ -240,8 +240,7 @@ class Series(object):
                     raise NotImplementedError(arg)
 
                 # compute new mask
-                mask = Series(cudautils.ones(len(self), np.bool))
-                mask = mask.set_mask(self._mask).fillna(False)
+                mask = self._get_mask_as_series()
                 # slicing
                 subdata = self._data.mem[arg]
                 submask = mask[arg].as_mask()
@@ -272,13 +271,16 @@ class Series(object):
         data = cudautils.gather(data=self.data.to_gpu_array(), index=indices)
 
         if self._mask:
-            mask = Series(cudautils.ones(len(self), np.bool))
-            mask = mask.set_mask(self._mask).fillna(False).take(indices).as_mask()
+            mask = self._get_mask_as_series().take(indices).as_mask()
             mask = Buffer(mask)
         else:
             mask = None
         index = self.index.take(indices)
         return self._copy_construct(buffer=Buffer(data), index=index, mask=mask)
+
+    def _get_mask_as_series(self):
+        mask = Series(cudautils.ones(len(self), dtype=np.bool))
+        return mask.set_mask(self._mask).fillna(False)
 
     def __bool__(self):
         """Always raise TypeError when converting a Series
