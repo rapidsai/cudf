@@ -139,7 +139,6 @@ mem_t<int> compute_joined_indices(const _join_bounds &bounds,
         // Use load-balancing search on the segments. The output is a pair with
         // a_index = seg and b_index = lower_data[seg] + rank.
         auto k = [=]MGPU_DEVICE(int index, int seg, int rank, const int *lower) {
-            // output_data[index] = make_int2(seg, lower[seg] + rank);
             output_data[index] = seg;
             output_data[index + output_npairs] = lower[seg] + rank;
         };
@@ -156,7 +155,6 @@ mem_t<int> compute_joined_indices(const _join_bounds &bounds,
             auto upper = get<1>(lower_upper);
             auto result = lower + rank;
             if ( lower == upper ) result = -1;
-            // output_data[index] = make_int2(seg, result);
             output_data[index] = seg;
             output_data[index + output_npairs] = result;
         };
@@ -174,7 +172,6 @@ void outer_join_append_right(T *output_data,
                              context_t &context) {
     int output_npairs = join_count + append_count;
     auto appender = [=]MGPU_DEVICE(int index, int seg, int rank) {
-        // output_data[index + join_count] = make_int2(-1, seg);
         output_data[index + join_count] = -1;
         output_data[index + join_count + output_npairs] = seg;
     };
