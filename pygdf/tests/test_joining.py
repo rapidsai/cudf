@@ -15,21 +15,26 @@ def make_params():
     np.random.seed(0)
 
     hows = 'left,inner'.split(',')
+
+    # Test specific cases (1)
     aa = [0, 0, 4, 5, 5]
     bb = [0, 0, 2, 3, 5]
     for how in hows:
         yield (aa, bb, how)
 
+    # Test specific cases (2)
     aa = [0, 0, 1, 2, 3]
     bb = [0, 1, 2, 2, 3]
     for how in hows:
         yield (aa, bb, how)
 
+    # Test large random integer inputs
     aa = np.random.randint(0, 50, 100)
     bb = np.random.randint(0, 50, 100)
     for how in hows:
         yield (aa, bb, how)
 
+    # Test floating point inputs
     aa = np.random.random(50)
     bb = np.random.random(50)
     for how in hows:
@@ -66,6 +71,8 @@ def test_dataframe_join(aa, bb, how):
 
 def _check_series(expect, got):
     magic = 0xdeadbeaf
+    print("expect\n", expect)
+    print("got\n", got.to_string(nrows=None))
     direct_equal = np.all(expect.values == got.to_array())
     nanfilled_equal = np.all(expect.fillna(magic).values ==
                              got.fillna(magic).to_array())

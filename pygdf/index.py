@@ -2,6 +2,8 @@ from __future__ import print_function, division
 
 import numpy as np
 
+from numba import cuda
+
 from . import cudautils, utils
 from .buffer import Buffer
 
@@ -40,6 +42,13 @@ class EmptyIndex(Index):
     def values(self):
         return np.empty(0, dtype=np.int64)
 
+    def gpu_values(self):
+        return cuda.device_array(0, dtype=np.int64)
+
+    def as_series(self):
+        from .series import Series
+
+        return Series(self.gpu_values())
 
 class RangeIndex(Index):
     """Basic start..stop
