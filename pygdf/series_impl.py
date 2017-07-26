@@ -165,7 +165,7 @@ def select_by_boolmask(series, boolmask):
 
     assert not series.has_null_mask   # the nullmask needs to be recomputed
 
-    params = dict(size=selvals.size,  buffer=Buffer(selvals),
-                  impl=series._impl, index=GenericIndex(selinds))
+    params = dict(buffer=Buffer(selvals), impl=series._impl,
+                  index=GenericIndex(selinds))
 
     return series._copy_construct(**params)

@@ -83,7 +83,7 @@ class Series(object):
 
         valid_codes = codes != -1
         buf = Buffer(codes)
-        params = dict(size=buf.size, buffer=buf, impl=impl)
+        params = dict(buffer=buf, impl=impl)
         if not np.all(valid_codes):
             mask = utils.boolmask_to_bitmask(valid_codes)
             nnz = np.count_nonzero(valid_codes)
@@ -95,7 +95,7 @@ class Series(object):
     def from_buffer(cls, buffer):
         """Create a Series from a ``Buffer``
         """
-        return cls(cls.Init(size=buffer.size, buffer=buffer))
+        return cls(cls.Init(buffer=buffer))
 
     @classmethod
     def from_array(cls, array):
@@ -134,7 +134,7 @@ class Series(object):
             instance = cls.from_any(arg, **kwargs)
         return instance
 
-    def _init_detail(self, size, buffer=None, mask=None, null_count=None,
+    def _init_detail(self, buffer=None, mask=None, null_count=None,
                      index=None, impl=None):
         """
         Actual initializer of the instance
@@ -143,10 +143,8 @@ class Series(object):
 
         if index is not None and not isinstance(index, Index):
             raise TypeError('index not a Index type: got {!r}'.format(index))
-        # XXX: probably remove *size*
-        if buffer is not None:
-            size = buffer.size
-        self._size = size
+
+        self._size = buffer.size if buffer else 0
         self._data = buffer
         self._mask = mask
         self._index = RangeIndex(self._size) if index is None else index
@@ -169,7 +167,6 @@ class Series(object):
 
     def _copy_construct_defaults(self):
         return dict(
-            size=self._size,
             buffer=self._data,
             mask=self._mask,
             null_count=self._null_count,
@@ -245,16 +242,14 @@ class Series(object):
                 subdata = self._data.mem[arg]
                 submask = mask[arg].as_mask()
                 index = self.index[arg]
-                return self._copy_construct(size=subdata.size,
-                                            buffer=Buffer(subdata),
+                return self._copy_construct(buffer=Buffer(subdata),
                                             mask=Buffer(submask),
                                             null_count=None,
                                             index=index)
             else:
                 index = self.index[arg]
                 newbuffer = self._data[arg]
-                return self._copy_construct(size=newbuffer.size,
-                                            buffer=newbuffer,
+                return self._copy_construct(buffer=newbuffer,
                                             mask=None,
                                             null_count=None,
                                             index=index)
