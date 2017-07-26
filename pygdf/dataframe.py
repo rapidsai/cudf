@@ -494,8 +494,8 @@ class DataFrame(object):
             # gather right columns
             gather_fn(df, rhs, ridx, joined_index, rsuffix)
 
-        # if sort:
-        #     return df.sort_index()
+        if sort:
+            return df.sort_index()
         return df
 
     def query(self, expr):
