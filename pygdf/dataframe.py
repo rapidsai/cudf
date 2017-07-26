@@ -449,15 +449,56 @@ class DataFrame(object):
                 df[k] = self[k].take(df.index.gpu_values)
         return df
 
-    def join(self, other, how='left', lsuffix='', rsuffix='', sort=False):
+    def join(self, other, on=None, how='left', lsuffix='', rsuffix='',
+             sort=False):
         """Join columns with other DataFrame on index or on a key column.
+
+        Parameters
+        ----------
+        other : DataFrame
+        how : str
+            Only accepts "left", "right", "inner", "outer"
+        lsuffix, rsuffix : str
+            The suffices to add to the left (*lsuffix*) and right (*rsuffix)
+            column names when avoiding conflicts.
+        sort : bool
+            Set to True to ensure sorted ordering.
+
+        Returns
+        -------
+        joined : DataFrame
+
+        Notes
+        -----
+
+        Difference from pandas:
+
+        - *other* must be a single DataFrame for now.
+        - *on* is not supported yet due to lack of multi-index support.
         """
+        if how not in 'left,right,inner,outer':
+            raise ValueError('unsupported {!r} join'.format(how))
+        if on is not None:
+            raise ValueError('"on" is not supported yet')
 
         same_names = set(self.columns) & set(other.columns)
         if same_names and not (lsuffix and rsuffix):
             raise ValueError('there are overlapping columns but '
                              'lsuffix and rsuffix are not defined')
 
+        return self._join(other=other, how=how, lsuffix=lsuffix,
+                          rsuffix=rsuffix, sort=sort, same_names=same_names)
+
+    def _join(self, other, how, lsuffix, rsuffix, sort, same_names,
+              rightjoin=False):
+        if how == 'right':
+            # libgdf doesn't support right join directly, we will swap the
+            # dfs and use left join
+            return other._join(other=self, how='left', lsuffix=rsuffix,
+                               rsuffix=lsuffix, sort=sort,
+                               same_names=same_names, rightjoin=True)
+
+        # Perform left, inner and outer join
         def fix_name(name, suffix):
             if name in same_names:
                 return "{}{}".format(name, suffix)
@@ -482,18 +523,24 @@ class DataFrame(object):
         df = DataFrame()
         with _gdf.apply_join(lkey, rkey, how=how) as (lidx, ridx):
             if lidx.size > 0:
-                joined_index = cudautils.gather_joined_index(lkey.to_gpu_array(),
-                                                             rkey.to_gpu_array(),
-                                                             lidx, ridx)
+                joined_index = cudautils.gather_joined_index(
+                    lkey.to_gpu_array(), rkey.to_gpu_array(), lidx, ridx)
                 gather_fn = gather_cols
             else:
                 joined_index = None
                 gather_fn = gather_empty
-            # gather left columns
-            gather_fn(df, lhs, lidx, joined_index, lsuffix)
-            # gather right columns
-            gather_fn(df, rhs, ridx, joined_index, rsuffix)
 
+            # Gather the columns for the output.
+            # This depends on whether we are actually doing a right join
+            left_args = (df, lhs, lidx, joined_index, lsuffix)
+            right_args = (df, rhs, ridx, joined_index, rsuffix)
+            args_order = ((right_args, left_args)
+                          if rightjoin
+                          else (left_args, right_args))
+            for args in args_order:
+                gather_fn(*args)
+
+        # User requested a sort?
         if sort and len(df):
             return df.sort_index()
         return df
