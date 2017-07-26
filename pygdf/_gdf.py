@@ -149,13 +149,9 @@ def apply_join(sr_lhs, sr_rhs, how):
     # Extract result
     join_result = join_result_ptr[0]
     dataptr = libgdf.gdf_join_result_data(join_result)
-    npairs = libgdf.gdf_join_result_size(join_result)
+    datasize = libgdf.gdf_join_result_size(join_result)
     ary = _as_numba_devarray(intaddr=int(ffi.cast("uintptr_t", dataptr)),
-                             nelem=npairs * 2, dtype=np.int32)
-    ary = ary.reshape(npairs, 2)
-    # XXX: changes how libgdf return the data so that it is already contiguous
-    hary = ary.copy_to_host()
-    lidx = cuda.to_device(np.ascontiguousarray(hary[:, 0]))
-    ridx = cuda.to_device(np.ascontiguousarray(hary[:, 1]))
-    yield lidx, ridx
+                             nelem=datasize, dtype=np.int32)
+    ary = ary.reshape(2, datasize // 2)
+    yield ((ary[0], ary[1]) if datasize > 0 else (ary, ary))
     libgdf.gdf_join_result_free(join_result)
