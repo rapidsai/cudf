@@ -200,6 +200,7 @@ gdf_error F##_generic(gdf_column *col, void *dev_result,                        
     case GDF_FLOAT32: return F##_f32(col, (float*)dev_result, dev_result_size);   \
     case GDF_INT64:   return F##_i64(col, (int64_t*)dev_result, dev_result_size); \
     case GDF_INT32:   return F##_i32(col, (int32_t*)dev_result, dev_result_size); \
+    case GDF_INT8:    return F##_i8(col,  (int8_t*)dev_result, dev_result_size);  \
     default:          return GDF_UNSUPPORTED_DTYPE;                               \
     }                                                                             \
 }
@@ -232,6 +233,7 @@ DEF_REDUCE_IMPL(gdf_sum_f64, DeviceSum, double, 0)
 DEF_REDUCE_IMPL(gdf_sum_f32, DeviceSum, float, 0)
 DEF_REDUCE_IMPL(gdf_sum_i64, DeviceSum, int64_t, 0)
 DEF_REDUCE_IMPL(gdf_sum_i32, DeviceSum, int32_t, 0)
+DEF_REDUCE_IMPL(gdf_sum_i8,  DeviceSum, int8_t, 0)
 
 /* Product */
 
@@ -240,6 +242,7 @@ DEF_REDUCE_IMPL(gdf_product_f64, DeviceProduct, double, 1)
 DEF_REDUCE_IMPL(gdf_product_f32, DeviceProduct, float, 1)
 DEF_REDUCE_IMPL(gdf_product_i64, DeviceProduct, int64_t, 1)
 DEF_REDUCE_IMPL(gdf_product_i32, DeviceProduct, int32_t, 1)
+DEF_REDUCE_IMPL(gdf_product_i8,  DeviceProduct, int8_t, 1)
 
 /* Sum Squared */
 
@@ -254,6 +257,7 @@ DEF_REDUCE_IMPL(gdf_min_f64, DeviceMin, double, std::numeric_limits<double>::max
 DEF_REDUCE_IMPL(gdf_min_f32, DeviceMin, float, std::numeric_limits<float>::max())
 DEF_REDUCE_IMPL(gdf_min_i64, DeviceMin, int64_t, std::numeric_limits<int64_t>::max())
 DEF_REDUCE_IMPL(gdf_min_i32, DeviceMin, int32_t, std::numeric_limits<int32_t>::max())
+DEF_REDUCE_IMPL(gdf_min_i8, DeviceMin, int8_t, std::numeric_limits<int8_t>::max())
 
 /* Max */
 
@@ -262,3 +266,4 @@ DEF_REDUCE_IMPL(gdf_max_f64, DeviceMax, double, std::numeric_limits<double>::min
 DEF_REDUCE_IMPL(gdf_max_f32, DeviceMax, float, std::numeric_limits<float>::min())
 DEF_REDUCE_IMPL(gdf_max_i64, DeviceMax, int64_t, std::numeric_limits<int64_t>::min())
 DEF_REDUCE_IMPL(gdf_max_i32, DeviceMax, int32_t, std::numeric_limits<int32_t>::min())
+DEF_REDUCE_IMPL(gdf_max_i8, DeviceMax, int8_t,  std::numeric_limits<int8_t>::min())

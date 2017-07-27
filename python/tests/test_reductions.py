@@ -17,6 +17,7 @@ params_dtype = [
     np.float32,
     np.int64,
     np.int32,
+    np.int8,
 ]
 
 params_sizes = [1, 2, 3, 127, 128, 129, 200, 10000]
@@ -39,7 +40,7 @@ def test_sum(dtype, nelem):
 
     libgdf.gdf_sum_generic(col_data, unwrap_devary(d_result), d_result.size)
     got = d_result.copy_to_host()[0]
-    expect = data.sum()
+    expect = dtype(data.sum())
 
     print('expect:', expect)
     print('got:', got)
