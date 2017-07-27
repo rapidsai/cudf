@@ -12,7 +12,8 @@ from .utils import new_column, unwrap_devary, get_dtype, gen_rand
 
 radixsort_args = list(product([2, 3, 10, 11, 100, 1000, 5000],
                               [True, False],
-                              [np.int32, np.int64, np.float32, np.float64]))
+                              [np.int8, np.int32, np.int64,
+                               np.float32, np.float64]))
 
 
 @pytest.mark.parametrize('nelem,descending,dtype', radixsort_args)
@@ -20,7 +21,16 @@ def test_radixsort(nelem, descending, dtype):
     def expected_fn(key):
         # Use mergesort for stable sort
         # Negate the key for descending
-        sorted_idx = np.argsort(-key if descending else key,
+        if issubclass(dtype, np.integer):
+            def negate_values(v):
+                return ~key
+        else:
+            # Note: this doesn't work on the smallest value of integer
+            #       i.e. -((int8)-128) -> -128
+            def negate_values(v):
+                return -key
+
+        sorted_idx = np.argsort(negate_values(key) if descending else key,
                                 kind='mergesort')
         sorted_keys = key[sorted_idx]
         # Returns key, vals

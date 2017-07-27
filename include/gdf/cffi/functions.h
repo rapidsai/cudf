@@ -38,6 +38,9 @@ gdf_error gdf_radixsort_plan_free(gdf_radixsort_plan_type *hdl);
 /*
  * The following function performs a sort on the key and value columns.
  */
+gdf_error gdf_radixsort_i8(gdf_radixsort_plan_type *hdl,
+                           gdf_column *keycol,
+                           gdf_column *valcol);
 gdf_error gdf_radixsort_i32(gdf_radixsort_plan_type *hdl,
                             gdf_column *keycol,
                             gdf_column *valcol);
@@ -67,7 +70,8 @@ where n/2 is the size returned from *gdf_join_result_size()*, which
 gives the number of int pairs in the output array.
 */
 
-
+gdf_error gdf_inner_join_i8(gdf_column *leftcol, gdf_column *rightcol,
+                             gdf_join_result_type **out_result);
 gdf_error gdf_inner_join_i32(gdf_column *leftcol, gdf_column *rightcol,
                              gdf_join_result_type **out_result);
 gdf_error gdf_inner_join_i64(gdf_column *leftcol, gdf_column *rightcol,
@@ -79,6 +83,8 @@ gdf_error gdf_inner_join_f64(gdf_column *leftcol, gdf_column *rightcol,
 gdf_error gdf_inner_join_generic(gdf_column *leftcol, gdf_column *rightcol,
                                  gdf_join_result_type **out_result);
 
+gdf_error gdf_left_join_i8(gdf_column *leftcol, gdf_column *rightcol,
+                            gdf_join_result_type **out_result);
 gdf_error gdf_left_join_i32(gdf_column *leftcol, gdf_column *rightcol,
                             gdf_join_result_type **out_result);
 gdf_error gdf_left_join_i64(gdf_column *leftcol, gdf_column *rightcol,
@@ -90,6 +96,8 @@ gdf_error gdf_left_join_f64(gdf_column *leftcol, gdf_column *rightcol,
 gdf_error gdf_left_join_generic(gdf_column *leftcol, gdf_column *rightcol,
                                 gdf_join_result_type **out_result);
 
+gdf_error gdf_outer_join_i8(gdf_column *leftcol, gdf_column *rightcol,
+                             gdf_join_result_type **out_result);
 gdf_error gdf_outer_join_i32(gdf_column *leftcol, gdf_column *rightcol,
                              gdf_join_result_type **out_result);
 gdf_error gdf_outer_join_i64(gdf_column *leftcol, gdf_column *rightcol,
@@ -307,12 +315,14 @@ gdf_error gdf_sum_f64(gdf_column *col, double *dev_result, gdf_size_type dev_res
 gdf_error gdf_sum_f32(gdf_column *col, float *dev_result, gdf_size_type dev_result_size);
 gdf_error gdf_sum_i64(gdf_column *col, int64_t *dev_result, gdf_size_type dev_result_size);
 gdf_error gdf_sum_i32(gdf_column *col, int32_t *dev_result, gdf_size_type dev_result_size);
+gdf_error gdf_sum_i8(gdf_column *col, int8_t *dev_result, gdf_size_type dev_result_size);
 
 gdf_error gdf_product_generic(gdf_column *col, void *dev_result, gdf_size_type dev_result_size);
 gdf_error gdf_product_f64(gdf_column *col, double *dev_result, gdf_size_type dev_result_size);
 gdf_error gdf_product_f32(gdf_column *col, float *dev_result, gdf_size_type dev_result_size);
 gdf_error gdf_product_i64(gdf_column *col, int64_t *dev_result, gdf_size_type dev_result_size);
 gdf_error gdf_product_i32(gdf_column *col, int32_t *dev_result, gdf_size_type dev_result_size);
+gdf_error gdf_product_i8(gdf_column *col, int8_t *dev_result, gdf_size_type dev_result_size);
 
 /* sum squared is useful for variance implementation */
 gdf_error gdf_sum_squared_generic(gdf_column *col, void *dev_result, gdf_size_type dev_result_size);
@@ -325,9 +335,11 @@ gdf_error gdf_min_f64(gdf_column *col, double *dev_result, gdf_size_type dev_res
 gdf_error gdf_min_f32(gdf_column *col, float *dev_result, gdf_size_type dev_result_size);
 gdf_error gdf_min_i64(gdf_column *col, int64_t *dev_result, gdf_size_type dev_result_size);
 gdf_error gdf_min_i32(gdf_column *col, int32_t *dev_result, gdf_size_type dev_result_size);
+gdf_error gdf_min_i8(gdf_column *col, int8_t *dev_result, gdf_size_type dev_result_size);
 
 gdf_error gdf_max_generic(gdf_column *col, void *dev_result, gdf_size_type dev_result_size);
 gdf_error gdf_max_f64(gdf_column *col, double *dev_result, gdf_size_type dev_result_size);
 gdf_error gdf_max_f32(gdf_column *col, float *dev_result, gdf_size_type dev_result_size);
 gdf_error gdf_max_i64(gdf_column *col, int64_t *dev_result, gdf_size_type dev_result_size);
 gdf_error gdf_max_i32(gdf_column *col, int32_t *dev_result, gdf_size_type dev_result_size);
+gdf_error gdf_max_i8(gdf_column *col, int8_t *dev_result, gdf_size_type dev_result_size);

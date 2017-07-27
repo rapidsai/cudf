@@ -191,6 +191,7 @@ gdf_error gdf_radixsort_##Fn(gdf_radixsort_plan_type *hdl,                      
 
 WRAP(f32, float,   int64_t)
 WRAP(f64, double,  int64_t)
+WRAP(i8,  int8_t,  int64_t)
 WRAP(i32, int32_t, int64_t)
 WRAP(i64, int64_t, int64_t)
 
@@ -202,6 +203,7 @@ gdf_error gdf_radixsort_generic(gdf_radixsort_plan_type *hdl,
     GDF_REQUIRE(valcol->dtype == GDF_INT64, GDF_UNSUPPORTED_DTYPE);
     // dispatch table
     switch ( keycol->dtype ) {
+    case GDF_INT8:    return gdf_radixsort_i8(hdl, keycol, valcol);
     case GDF_INT32:   return gdf_radixsort_i32(hdl, keycol, valcol);
     case GDF_INT64:   return gdf_radixsort_i64(hdl, keycol, valcol);
     case GDF_FLOAT32: return gdf_radixsort_f32(hdl, keycol, valcol);

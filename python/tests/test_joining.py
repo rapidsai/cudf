@@ -53,7 +53,10 @@ def _call_join(api, col_left, col_right):
     return joined_idx
 
 
-@pytest.mark.parametrize('dtype', [np.int32, np.int64, np.float32, np.float64])
+params_dtypes = [np.int8, np.int32, np.int64, np.float32, np.float64]
+
+
+@pytest.mark.parametrize('dtype', params_dtypes)
 def test_innerjoin(dtype):
     # Make data
     left = np.array([0, 0, 1, 2, 3], dtype=dtype)
@@ -88,7 +91,7 @@ def test_innerjoin(dtype):
     assert tuple(right_pos) == (0, 0, 1, 2, 3, 4)
 
 
-@pytest.mark.parametrize('dtype', [np.int32, np.int64, np.float32, np.float64])
+@pytest.mark.parametrize('dtype', params_dtypes)
 def test_leftjoin(dtype):
     # Make data
     left = np.array([0, 0, 4, 5, 5], dtype=dtype)
@@ -124,7 +127,7 @@ def test_leftjoin(dtype):
     assert tuple(right_pos) == (0, 1, 0, 1, -1, 4, 4)
 
 
-@pytest.mark.parametrize('dtype', [np.int32, np.int64, np.float32, np.float64])
+@pytest.mark.parametrize('dtype', params_dtypes)
 def test_outerjoin(dtype):
     # Make data
     left = np.array([0, 0, 4, 5, 5], dtype=dtype)
