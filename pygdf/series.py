@@ -189,7 +189,7 @@ class Series(object):
         index : Index, Series-convertible
             the new index or values for the new index
         """
-        index = index if isinstance(index, Index) else GenericIndex(Series(index).to_gpu_array())
+        index = index if isinstance(index, Index) else GenericIndex(index)
         return self._copy_construct(index=index)
 
     def as_index(self):
