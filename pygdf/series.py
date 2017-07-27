@@ -189,8 +189,11 @@ class Series(object):
         index : Index, Series-convertible
             the new index or values for the new index
         """
-        index = index if isinstance(index, Index) else GenericIndex(index)
+        index = index if isinstance(index, Index) else GenericIndex(Series(index).to_gpu_array())
         return self._copy_construct(index=index)
+
+    def as_index(self):
+        return self._impl.as_index(self)
 
     def set_mask(self, mask, null_count=None):
         """Create new Series by setting a mask array.
@@ -270,7 +273,8 @@ class Series(object):
         else:
             mask = None
         index = self.index.take(indices)
-        return self._copy_construct(buffer=Buffer(data), index=index, mask=mask)
+        return self._copy_construct(buffer=Buffer(data), index=index,
+                                    mask=mask)
 
     def _get_mask_as_series(self):
         mask = Series(cudautils.ones(len(self), dtype=np.bool))
@@ -511,6 +515,9 @@ class Series(object):
         """
         return self.to_dense_buffer(fillna=fillna).to_gpu_array()
 
+    def to_pandas(self):
+        return self._impl.to_pandas(self)
+
     @property
     def data(self):
         """The gpu buffer for the data
@@ -605,13 +612,7 @@ class Series(object):
         -------
         2-tuple of key and index
         """
-        if self._mask:
-            raise ValueError('masked array not supported')
-        sr_key = self._copy_construct(buffer=self._data.copy())
-        sr_inds = Series.from_array(cudautils.arange(len(sr_key),
-                                    dtype=np.int64))
-        _gdf.apply_sort(sr_key, sr_inds, ascending=ascending)
-        return sr_key, sr_inds
+        return self._impl.sort_by_values(self, ascending=ascending)
 
     def reverse(self):
         """Reverse the Series

@@ -12,6 +12,7 @@ class Index(object):
     def take(self, indices):
         assert indices.dtype.kind in 'iu'
         index = cudautils.gather(data=self.gpu_values, index=indices)
+        index = self.as_series()._copy_construct(buffer=Buffer(index))
         return GenericIndex(index)
 
     def as_series(self):
@@ -22,7 +23,7 @@ class Index(object):
 
     @property
     def values(self):
-        return self.as_series().to_array()
+        return np.asarray(self.as_series())
 
     @property
     def gpu_values(self):
@@ -142,7 +143,7 @@ class GenericIndex(Index):
             # Make GenericIndex object
             res = Index.__new__(GenericIndex)
             # Force simple index
-            res._values = values.set_index(RangeIndex(len(values)))
+            res._values = values.as_index()
             return res
 
     def __len__(self):

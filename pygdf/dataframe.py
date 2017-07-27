@@ -580,7 +580,7 @@ class DataFrame(object):
     def to_pandas(self):
         """Convert to a Pandas DataFrame.
         """
-        dct = {k: c.to_array(fillna='pandas') for k, c in self._cols.items()}
+        dct = {k: c.to_pandas() for k, c in self._cols.items()}
         return pd.DataFrame.from_dict(dct)
 
     @classmethod

@@ -1,10 +1,11 @@
 from __future__ import print_function, division
 
 import numpy as np
+import pandas as pd
 
 from libgdf_cffi import libgdf
 
-from . import _gdf, series_impl, utils
+from . import _gdf, series_impl, utils, cudautils
 
 
 # Operator mappings
@@ -74,6 +75,26 @@ class NumericalSeriesImpl(series_impl.SeriesImpl):
 
     def element_indexing(self, series, index):
         return series_impl.element_indexing(series, index)
+
+    def sort_by_values(self, series, ascending):
+        from .series import Series
+
+        if series._mask:
+            raise ValueError('masked array not supported')
+        sr_key = series._copy_construct(buffer=series._data.copy(),
+                                        impl=self)
+        sr_inds = Series.from_array(cudautils.arange(len(sr_key),
+                                    dtype=np.int64))
+        _gdf.apply_sort(sr_key, sr_inds, ascending=ascending)
+        return sr_key, sr_inds
+
+    def as_index(self, series):
+        from .index import RangeIndex
+
+        return series.set_index(RangeIndex(len(series)))
+
+    def to_pandas(self, series):
+        return pd.Series(series.to_array(fillna='pandas'))
 
     #
     # Internals
