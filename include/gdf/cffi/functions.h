@@ -38,6 +38,9 @@ gdf_error gdf_radixsort_plan_free(gdf_radixsort_plan_type *hdl);
 /*
  * The following function performs a sort on the key and value columns.
  */
+gdf_error gdf_radixsort_i8(gdf_radixsort_plan_type *hdl,
+                           gdf_column *keycol,
+                           gdf_column *valcol);
 gdf_error gdf_radixsort_i32(gdf_radixsort_plan_type *hdl,
                             gdf_column *keycol,
                             gdf_column *valcol);
