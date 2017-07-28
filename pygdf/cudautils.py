@@ -547,3 +547,38 @@ class UniqueBySorting(object):
 def compute_unique_k(arr, k):
     # return UniqueK(arr.dtype).run(arr, k)
     return UniqueBySorting(maxcount=arr.size, dtype=arr.dtype, k=k).run(arr)
+
+
+# Find segments
+
+@cuda.jit
+def gpu_mark_segment_begins(arr, markers):
+    i = cuda.grid(1)
+    if i == 0:
+        markers[0] = 1
+    if 0 < i < markers.size:
+        markers[i] = arr[i] != arr[i - 1]
+
+
+@cuda.jit
+def gpu_scatter_segment_begins(markers, scanned, begins):
+    i = cuda.grid(1)
+    if i < markers.size:
+        if markers[i]:
+            idx = scanned[i]
+            begins[idx] = i
+
+
+def find_segments(arr):
+    markers = cuda.device_array(arr.size, dtype=np.int8)
+    gpu_mark_segment_begins.forall(arr.size)(arr, markers)
+    print('markers', markers.copy_to_host())
+    # FIXME: slow scan begin
+    scanned = np.cumsum(markers.copy_to_host().astype(np.int32)) - 1
+    print('scanned', scanned)
+    ct = scanned[-1] + 1
+    # FIXME: slow scan end
+    print('ct', ct)
+    begins = cuda.device_array(shape=int(ct), dtype=np.intp)
+    gpu_scatter_segment_begins.forall(begins.size)(markers, scanned, begins)
+    return begins

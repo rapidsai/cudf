@@ -29,6 +29,12 @@ class Index(object):
     def gpu_values(self):
         return self.as_series().to_gpu_array()
 
+    def find_segments(self):
+        """Return the beginning index for segments
+        """
+        segments = cudautils.find_segments(self.gpu_values)
+        return list(segments.copy_to_host())
+
 
 class EmptyIndex(Index):
     """

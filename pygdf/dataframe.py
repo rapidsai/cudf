@@ -547,6 +547,11 @@ class DataFrame(object):
             return df.sort_index()
         return df
 
+    def groupby(self, by):
+        from .grouper import Grouper
+
+        return Grouper(self, by=by)
+
     def query(self, expr):
         """Query with a boolean expression using Numba to compile a GPU kernel.
 
