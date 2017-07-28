@@ -6,7 +6,7 @@ from numba import cuda
 
 from pygdf.dataframe import Series, DataFrame
 from pygdf.buffer import Buffer
-from pygdf.settings import settings
+from pygdf.settings import set_options
 
 
 def test_buffer_basic():
@@ -239,7 +239,7 @@ def test_dataframe_loc():
 
 
 def test_dataframe_to_string():
-    with settings.set_options(formatting={'nrows': 5, 'ncols': 8}):
+    with set_options(formatting={'nrows': 5, 'ncols': 8}):
         # Test basic
         df = DataFrame([('a', [1, 2, 3, 4, 5, 6]),
                         ('b', [11, 12, 13, 14, 15, 16])])

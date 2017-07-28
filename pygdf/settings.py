@@ -64,6 +64,7 @@ class _settings(object):
 
 # The global singleton for global settings
 settings = _settings()
+set_options = settings.set_options
 
 
 # Singleton NOTSET class & object

@@ -1,7 +1,6 @@
 import numpy as np
 
-from numba import cuda
-from .dataframe import DataFrame, Series, Buffer
+from .dataframe import DataFrame, Series
 
 
 class Appender(object):
