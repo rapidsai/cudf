@@ -12,6 +12,7 @@ from . import cudautils, formatting, queryutils, _gdf
 from .index import GenericIndex, EmptyIndex, Index
 from .series import Series
 from .buffer import Buffer
+from .settings import NOTSET, settings
 
 
 class DataFrame(object):
@@ -135,7 +136,7 @@ class DataFrame(object):
         """
         return self._size
 
-    def to_string(self, nrows=5, ncols=8):
+    def to_string(self, nrows=NOTSET, ncols=NOTSET):
         """Convert to string
 
         Parameters
@@ -148,6 +149,11 @@ class DataFrame(object):
             Maximum number of columns to show.
             If it is None, all columns are shown.
         """
+        if nrows is NOTSET:
+            nrows = settings.formatting.get('nrows')
+        if ncols is NOTSET:
+            ncols = settings.formatting.get('ncols')
+
         if nrows is None:
             nrows = len(self)
         else:
