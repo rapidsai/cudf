@@ -49,15 +49,16 @@ class Grouper(object):
         segs = df.index.find_segments()
         for s, e in zip(segs, segs[1:] + [None]):
             grouped = df[s:e]
-            # FIXME numpy.scalar getitem to Index
-            index = df.index[s:s+1][0]
-            inner_indices = indices + [index]
-            if innerlevels:
-                for grp in self._group_level(grouped, innerlevels,
-                                             indices=inner_indices):
-                    yield grp
-            else:
-                yield inner_indices, grouped
+            if len(grouped):
+                # FIXME numpy.scalar getitem to Index
+                index = df.index[int(s)]
+                inner_indices = indices + [index]
+                if innerlevels:
+                    for grp in self._group_level(grouped, innerlevels,
+                                                 indices=inner_indices):
+                        yield grp
+                else:
+                    yield inner_indices, grouped
 
     def mean(self):
         return self._form_groups(lambda sr: sr.mean())
