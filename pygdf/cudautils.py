@@ -572,13 +572,10 @@ def gpu_scatter_segment_begins(markers, scanned, begins):
 def find_segments(arr):
     markers = cuda.device_array(arr.size, dtype=np.int8)
     gpu_mark_segment_begins.forall(arr.size)(arr, markers)
-    print('markers', markers.copy_to_host())
     # FIXME: slow scan begin
     scanned = np.cumsum(markers.copy_to_host().astype(np.int32)) - 1
-    print('scanned', scanned)
     ct = scanned[-1] + 1
     # FIXME: slow scan end
-    print('ct', ct)
     begins = cuda.device_array(shape=int(ct), dtype=np.intp)
     gpu_scatter_segment_begins.forall(begins.size)(markers, scanned, begins)
     return begins
