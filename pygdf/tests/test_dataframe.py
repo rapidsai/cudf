@@ -4,7 +4,8 @@ import numpy as np
 
 from numba import cuda
 
-from pygdf.dataframe import Buffer, BufferSentryError, Series, DataFrame
+from pygdf.dataframe import Series, DataFrame
+from pygdf.buffer import Buffer
 
 
 def test_buffer_basic():

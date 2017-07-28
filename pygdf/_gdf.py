@@ -1,6 +1,9 @@
 """
 This file provide binding to the libgdf library.
 """
+import ctypes
+import contextlib
+
 import numpy as np
 
 from numba import cuda
@@ -18,10 +21,22 @@ def unwrap_devary(devary):
 def columnview(size, data, mask=None, dtype=None):
     """
     Make a column view.
+
+    Parameters
+    ----------
+    size : int
+        Data count.
+    data : Buffer
+        The data buffer.
+    mask : Buffer; optional
+        The mask buffer.
+    dtype : numpy.dtype; optional
+        The dtype of the data.  Defaults to *data.dtype*.
     """
     def unwrap(buffer):
         if buffer is None:
             return ffi.NULL
+        assert buffer.mem.is_c_contiguous(), "libGDF expects contiguous memory"
         devary = buffer.to_gpu_array()
         return unwrap_devary(devary)
 
@@ -102,3 +117,40 @@ def apply_sort(sr_keys, sr_vals, ascending=True):
                                      sr_vals._cffi_view)
     finally:
         libgdf.gdf_radixsort_plan_free(plan)
+
+
+_join_how_api = {
+    'left': libgdf.gdf_left_join_generic,
+    'inner': libgdf.gdf_inner_join_generic,
+    'outer': libgdf.gdf_outer_join_generic,
+}
+
+
+def _as_numba_devarray(intaddr, nelem, dtype):
+    dtype = np.dtype(dtype)
+    addr = ctypes.c_uint64(intaddr)
+    elemsize = dtype.itemsize
+    datasize = elemsize * nelem
+    memptr = cuda.driver.MemoryPointer(context=cuda.current_context(),
+                                       pointer=addr, size=datasize)
+    return cuda.devicearray.DeviceNDArray(shape=(nelem,), strides=(elemsize,),
+                                          dtype=dtype, gpu_data=memptr)
+
+
+@contextlib.contextmanager
+def apply_join(sr_lhs, sr_rhs, how):
+    """Returns a tuple of the left and right joined indices as gpu arrays.
+    """
+    joiner = _join_how_api[how]
+    join_result_ptr = ffi.new("gdf_join_result_type**", None)
+    # Call libgdf
+    joiner(sr_lhs._cffi_view, sr_rhs._cffi_view, join_result_ptr)
+    # Extract result
+    join_result = join_result_ptr[0]
+    dataptr = libgdf.gdf_join_result_data(join_result)
+    datasize = libgdf.gdf_join_result_size(join_result)
+    ary = _as_numba_devarray(intaddr=int(ffi.cast("uintptr_t", dataptr)),
+                             nelem=datasize, dtype=np.int32)
+    ary = ary.reshape(2, datasize // 2)
+    yield ((ary[0], ary[1]) if datasize > 0 else (ary, ary))
+    libgdf.gdf_join_result_free(join_result)

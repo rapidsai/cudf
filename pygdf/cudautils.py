@@ -17,15 +17,18 @@ def to_device(ary):
 # GPU array initializer
 
 @cuda.jit
-def gpu_arange(size, out):
+def gpu_arange(start, size, step, out):
     i = cuda.grid(1)
     if i < size:
-        out[i] = i
+        out[i] = i * step + start
 
 
-def arange(size, dtype=np.int64):
+def arange(start, stop=None, step=1, dtype=np.int64):
+    if stop is None:
+        start, stop = 0, start
+    size = (stop - start + (step - 1)) // step
     out = cuda.device_array(size, dtype=dtype)
-    gpu_arange.forall(size)(size, out)
+    gpu_arange.forall(size)(start, size, step, out)
     return out
 
 
@@ -40,6 +43,20 @@ def arange_reversed(size, dtype=np.int64):
     out = cuda.device_array(size, dtype=dtype)
     gpu_arange_reversed.forall(size)(size, out)
     return out
+
+
+@cuda.jit
+def gpu_ones(size, out):
+    i = cuda.grid(1)
+    if i < size:
+        out[i] = 1
+
+
+def ones(size, dtype):
+    out = cuda.device_array(size, dtype=dtype)
+    gpu_ones.forall(size)(size, out)
+    return out
+
 
 # GPU array type casting
 
@@ -65,8 +82,17 @@ def copy_array(arr, out=None):
     if out is None:
         out = cuda.device_array_like(arr)
     assert out.size == arr.size
-    out.copy_to_device(arr)
+    if arr.is_c_contiguous() and out.is_c_contiguous():
+        out.copy_to_device(arr)
+    else:
+        gpu_copy.forall(out.size)(arr, out)
     return out
+
+
+def as_contiguous(arr):
+    assert arr.ndim == 1
+    out = cuda.device_array(shape=arr.shape, dtype=arr.dtype)
+    return copy_array(arr, out=out)
 
 
 # Copy column into a matrix
@@ -196,7 +222,10 @@ def copy_to_dense(data, mask, out=None):
 def gpu_gather(data, index, out):
     i = cuda.grid(1)
     if i < index.size:
-        out[i] = data[index[i]]
+        idx = index[i]
+        # Only do it if the index is in range
+        if 0 <= idx < data.size:
+            out[i] = data[idx]
 
 
 def gather(data, index, out=None):
@@ -205,6 +234,28 @@ def gather(data, index, out=None):
     if out is None:
         out = cuda.device_array(shape=index.size, dtype=data.dtype)
     gpu_gather.forall(index.size)(data, index, out)
+    return out
+
+
+@cuda.jit
+def gpu_gather_joined_index(lkeys, rkeys, lidx, ridx, out):
+    gid = cuda.grid(1)
+    if gid < lidx.size:
+        # Try getting from the left side first
+        pos = lidx[gid]
+        if pos != -1:
+            # Get from left
+            out[gid] = lkeys[pos]
+        else:
+            # Get from right
+            pos = ridx[gid]
+            out[gid] = rkeys[pos]
+
+
+def gather_joined_index(lkeys, rkeys, lidx, ridx):
+    assert lidx.size == ridx.size
+    out = cuda.device_array(lidx.size, dtype=lkeys.dtype)
+    gpu_gather_joined_index.forall(lidx.size)(lkeys, rkeys, lidx, ridx, out)
     return out
 
 
