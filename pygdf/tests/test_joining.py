@@ -3,6 +3,7 @@ from timeit import default_timer as timer
 import pytest
 
 import numpy as np
+import pandas as pd
 
 from pygdf.dataframe import DataFrame
 
@@ -100,4 +101,25 @@ def test_dataframe_join_suffix():
     assert np.all(expect.index.values == got.index.values)
     for k in expect.columns:
         _check_series(expect[k], got[k])
+
+
+def test_dataframe_join_cats():
+    ldf = DataFrame()
+    ldf['a'] = pd.Categorical(list('aababcabbc'), categories=list('abc'))
+    ldf['b'] = bb = np.arange(len(ldf))
+    lhs = ldf.set_index('a')
+
+    rdf = DataFrame()
+    rdf['a'] = pd.Categorical(list('abcac'), categories=list('abc'))
+    rdf['c'] = cc = np.arange(len(rdf))
+    rhs = rdf.set_index('a')
+
+    got = lhs.join(rhs)
+    # Just do some rough checking here.
+    # Note: pandas fails to join on categorical index.
+    assert list(got.columns) == ['b', 'c']
+    assert len(got) > 0
+    assert set(got.index.values) & set('abc')
+    assert set(got['b']) & set(bb)
+    assert set(got['c']) & set(cc)
 

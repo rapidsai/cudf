@@ -1,4 +1,5 @@
 import numpy as np
+import pandas as pd
 
 from .dataframe import Series
 from . import numerical, utils, series_impl
@@ -102,3 +103,15 @@ class CategoricalSeriesImpl(series_impl.SeriesImpl):
     def element_indexing(self, series, index):
         val = self._codes_impl.element_indexing(series, index)
         return self._decode(val) if val is not None else val
+
+    def sort_by_values(self, series, ascending):
+        return self._codes_impl.sort_by_values(series, ascending)
+
+    def as_index(self, series):
+        return self._codes_impl.as_index(series)
+
+    def to_pandas(self, series):
+        values = list(series)
+        return pd.Categorical(values, categories=self._categories,
+                              ordered=self._ordered)
+

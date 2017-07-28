@@ -11,6 +11,7 @@ from numba import cuda
 from . import cudautils, formatting, queryutils, _gdf
 from .index import GenericIndex, EmptyIndex, Index
 from .series import Series
+from .buffer import Buffer
 
 
 class DataFrame(object):
@@ -529,6 +530,7 @@ class DataFrame(object):
             if lidx.size > 0:
                 joined_index = cudautils.gather_joined_index(
                     lkey.to_gpu_array(), rkey.to_gpu_array(), lidx, ridx)
+                joined_index = lkey._copy_construct(buffer=Buffer(joined_index))
                 gather_fn = gather_cols
             else:
                 joined_index = None
@@ -584,7 +586,7 @@ class DataFrame(object):
     def to_pandas(self):
         """Convert to a Pandas DataFrame.
         """
-        dct = {k: c.to_array(fillna='pandas') for k, c in self._cols.items()}
+        dct = {k: c.to_pandas() for k, c in self._cols.items()}
         return pd.DataFrame.from_dict(dct)
 
     @classmethod

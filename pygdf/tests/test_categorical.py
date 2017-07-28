@@ -3,7 +3,7 @@ import pytest
 import numpy as np
 import pandas as pd
 
-from pygdf.dataframe import Series
+from pygdf.dataframe import Series, DataFrame
 
 
 def test_categorical_basic():
@@ -188,3 +188,32 @@ def test_categorical_masking():
     assert len(expect_masked) == len(got_masked)
     assert len(expect_masked) == got_masked.valid_count
     assert list(expect_masked) == list(got_masked)
+
+
+def test_df_cat_set_index():
+    df = DataFrame()
+    df['a'] = pd.Categorical(list('aababcabbc'), categories=list('abc'))
+    df['b'] = np.arange(len(df))
+    got = df.set_index('a')
+
+    pddf = df.to_pandas()
+    expect = pddf.set_index('a')
+
+    assert list(expect.columns) == list(got.columns)
+    assert list(expect.index.values) == list(got.index.values)
+    np.testing.assert_array_equal(expect.index.values, got.index.values)
+    np.testing.assert_array_equal(expect['b'].values, got['b'].to_array())
+
+
+def test_df_cat_sort_index():
+    df = DataFrame()
+    df['a'] = pd.Categorical(list('aababcabbc'), categories=list('abc'))
+    df['b'] = np.arange(len(df))
+
+    got = df.set_index('a').sort_index()
+    expect = df.to_pandas().set_index('a').sort_index()
+
+    assert list(expect.columns) == list(got.columns)
+    assert list(expect.index.values) == list(got.index.values)
+    np.testing.assert_array_equal(expect.index.values, got.index.values)
+    np.testing.assert_array_equal(expect['b'].values, got['b'].to_array())
