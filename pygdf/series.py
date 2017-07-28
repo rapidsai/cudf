@@ -296,6 +296,9 @@ class Series(object):
     def _element_to_str(self, value):
         return self._impl.element_to_str(value)
 
+    def head(self, n=5):
+        return self[:n]
+
     def to_string(self, nrows=NOTSET):
         """Convert to string
 

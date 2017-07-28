@@ -136,6 +136,9 @@ class DataFrame(object):
         """
         return self._size
 
+    def head(self, n=5):
+        return self[:n]
+
     def to_string(self, nrows=NOTSET, ncols=NOTSET):
         """Convert to string
 
