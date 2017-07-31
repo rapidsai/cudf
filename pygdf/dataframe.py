@@ -557,6 +557,26 @@ class DataFrame(object):
         return df
 
     def groupby(self, by):
+        """Groupby
+
+        Parameters
+        ----------
+        by : list-of-str or str
+            Column name(s) to form that groups by.
+
+        Returns
+        -------
+        The groupby object
+
+        Notes
+        -----
+        Only a minimal number of operations is implemented so far.
+
+        - Only *by* argument is supported.
+        - The output is always sorted according to the *by* columns.
+        - Since we don't support multiindex, the *by* columns are stored
+          as regular columns.
+        """
         from .grouper import Grouper
 
         return Grouper(self, by=by)
@@ -640,7 +660,7 @@ class DataFrame(object):
 
     @classmethod
     def from_records(self, data, index=None, columns=None):
-        """Convert from a numpy recarray or structured array
+        """Convert from a numpy recarray or structured array.
 
         Parameters
         ----------
@@ -648,8 +668,9 @@ class DataFrame(object):
         index : str
             The name of the index column in *data*.
             If None, the default index is used.
-        columns: list of str
+        columns : list of str
             List of column names to include.
+
         Returns
         -------
         DataFrame

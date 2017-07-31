@@ -39,10 +39,12 @@ class Appender(object):
 
 
 def _auto_generate_grouper_agg(members):
+    def make_fun(f):
+        return lambda self: self.agg(f)
+
     for k, f in members['_NAMED_FUNCTIONS'].items():
-        def fn(self):
-            return self.agg(f)
-        fn.__mean__ = k
+        fn = make_fun(f)
+        fn.__name__ = k
         members[k] = fn
 
 
@@ -86,6 +88,7 @@ class Grouper(object):
                     newk = '{}_{}'.format(k, functor.__name__)
                     appenders[newk] = Appender(dtype=self._df[k].dtype)
                     cur_fn_mapping[newk] = functor
+        # Grouping
         for idx, grp in self._group_level(self._df, self._by):
             for k, v in zip(self._by, idx):
                 appenders[k].append(v)
@@ -120,6 +123,22 @@ class Grouper(object):
 
     def agg(self, args):
         """Invoke aggregation functions on the groups.
+
+        Parameters
+        ----------
+        args: dict, list, str, callable
+            - str: The aggregate function name.
+            - callable: The aggregate function.
+            - list: List of *str* or *callable* of the aggregate function.
+            - dict: key-value pairs of source columna name and list of
+                    aggregate functions as *str* or *callable*.
+
+        Returns
+        -------
+        result : DataFrame
+
+        Notes
+        -----
         """
         def _get_function(x):
             if isinstance(x, str):
