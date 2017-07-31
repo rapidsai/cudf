@@ -45,6 +45,13 @@ def _auto_generate_grouper_agg(members):
     for k, f in members['_NAMED_FUNCTIONS'].items():
         fn = make_fun(f)
         fn.__name__ = k
+        fn.__doc__ = """Compute the {} of each group
+
+Returns
+-------
+
+result : DataFrame
+""".format(k)
         members[k] = fn
 
 
@@ -127,11 +134,15 @@ class Grouper(object):
         Parameters
         ----------
         args: dict, list, str, callable
-            - str: The aggregate function name.
-            - callable: The aggregate function.
-            - list: List of *str* or *callable* of the aggregate function.
-            - dict: key-value pairs of source columna name and list of
-                    aggregate functions as *str* or *callable*.
+            - str
+                The aggregate function name.
+            - callable
+                The aggregate function.
+            - list
+                List of *str* or *callable* of the aggregate function.
+            - dict
+                key-value pairs of source column name and list of
+                aggregate functions as *str* or *callable*.
 
         Returns
         -------

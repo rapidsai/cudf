@@ -18,6 +18,16 @@ Series
     :members:
 
 
+
+.. currentmodule:: pygdf.grouper
+
+Groupby
+-------
+
+.. autoclass:: Grouper
+    :members:
+
+
 .. currentmodule:: pygdf.gpuarrow
 
 GpuArrowReader
