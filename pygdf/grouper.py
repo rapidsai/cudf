@@ -3,17 +3,37 @@ import numpy as np
 from .dataframe import DataFrame, Series
 
 
+TEN_MB = 10 ** 7
+
+
 class Appender(object):
-    def __init__(self, dtype):
-        self.dtype = dtype
-        self.values = []
+    """For fast appending of data into a Series.
+    """
+    def __init__(self, dtype, bufsize=TEN_MB):
+        dtype = np.dtype(dtype)
+        # Max queue size is buffer size divided by itemsize
+        self._max_q_sz = max(bufsize // dtype.itemsize, 1)
+        self._queue = []
+        # Initialize empty Series
+        self._result = Series(np.empty(shape=0, dtype=dtype))
 
     def append(self, value):
-        # FIXME: inefficient append
-        self.values.append(value)
+        self._queue.append(value)
+        # Flush when queue is full
+        if len(self._queue) >= self._max_q_sz:
+            self.flush()
+
+    def flush(self):
+        # Append to Series
+        buf = np.asarray(self._queue, dtype=self._result.dtype)
+        self._result = self._result.append(buf)
+        # Reset queue
+        self._queue.clear()
 
     def get(self):
-        return Series(np.asarray(self.values, dtype=self.dtype))
+        self.flush()
+        assert self._result is not None
+        return self._result
 
 
 class Grouper(object):
@@ -62,6 +82,4 @@ class Grouper(object):
 
     def mean(self):
         return self._form_groups(lambda sr: sr.mean())
-
-
 
