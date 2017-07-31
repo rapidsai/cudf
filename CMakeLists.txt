@@ -29,6 +29,7 @@ cuda_add_library(gdf SHARED
     src/reductions.cu
     src/sorting.cu
     src/joining.cu
+    src/scan.cu
 )
 
 target_link_libraries(gdf arrow)
