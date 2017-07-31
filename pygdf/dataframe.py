@@ -163,7 +163,7 @@ class DataFrame(object):
             nrows = min(nrows, len(self))  # cap row count
 
         if ncols is None:
-            ncols = len(self)
+            ncols = len(self.columns)
 
         more_cols = len(self.columns) - ncols
         more_rows = len(self) - nrows

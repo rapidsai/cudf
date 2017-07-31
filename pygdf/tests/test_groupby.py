@@ -22,12 +22,25 @@ def make_frame(dataframe_class, nelem, seed=0):
 def test_groupby_mean(nelem):
     # gdf
     got_df = make_frame(DataFrame, nelem=nelem).groupby(('x', 'y')).mean()
-    print(got_df)
     got = np.sort(got_df['val'].to_array())
     # pandas
     expect_df = make_frame(pd.DataFrame, nelem=nelem).groupby(('x', 'y')).mean()
     expect = np.sort(expect_df['val'].values)
-    print(expect_df)
     # verify
     np.testing.assert_array_almost_equal(expect, got)
+
+
+@pytest.mark.parametrize('nelem', [2, 100])
+def test_groupby_agg_mean_min(nelem):
+    # gdf (Note: lack of multindex)
+    got_df = make_frame(DataFrame, nelem=nelem).groupby(('x', 'y')).agg(['mean', 'min'])
+    got_mean = np.sort(got_df['val_mean'].to_array())
+    got_min = np.sort(got_df['val_min'].to_array())
+    # pandas
+    expect_df = make_frame(pd.DataFrame, nelem=nelem).groupby(('x', 'y')).agg(['mean', 'min'])
+    expect_mean = np.sort(expect_df['val', 'mean'].values)
+    expect_min = np.sort(expect_df['val', 'min'].values)
+    # verify
+    np.testing.assert_array_almost_equal(expect_mean, got_mean)
+    np.testing.assert_array_almost_equal(expect_min, got_min)
 
