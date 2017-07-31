@@ -45,7 +45,7 @@ def test_sum(dtype, nelem):
     print('expect:', expect)
     print('got:', got)
 
-    np.testing.assert_array_almost_equal(expect, got)
+    np.testing.assert_array_almost_equal_nulp(expect, got, nulp=1)
 
 
 @pytest.mark.parametrize('dtype,nelem', params)
