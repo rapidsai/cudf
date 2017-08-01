@@ -4,7 +4,7 @@ import numpy as np
 
 from numba import (cuda, njit, uint64, int32, float64, numpy_support)
 
-from .utils import mask_bitsize, mask_get
+from .utils import mask_bitsize, mask_get, mask_set, make_mask
 from .sorting import RadixSort
 from .reduction import Reduce
 from . import _gdf
@@ -209,6 +209,29 @@ def copy_to_dense(data, mask, out=None):
             raise ValueError('output array too small')
     gpu_copy_to_dense.forall(data.size)(data, mask, slots, out)
     return (sz, out)
+
+
+@cuda.jit
+def gpu_compact_mask_bytes(bools, bits):
+    tid = cuda.grid(1)
+    base = tid * mask_bitsize
+    for i in range(base, base + mask_bitsize):
+        if i >= bools.size:
+            break
+        if bools[i]:
+            mask_set(bits, i)
+
+
+def compact_mask_bytes(boolbytes):
+    """Convert booleans (in bytes) to a bitmask
+    """
+    bits = make_mask(boolbytes.size)
+    # Fill zero
+    gpu_fill_value.forall(bits.size)(bits, 0)
+    # Compact
+    gpu_compact_mask_bytes.forall(bits.size)(boolbytes, bits)
+    return bits
+
 
 #
 # Gather
