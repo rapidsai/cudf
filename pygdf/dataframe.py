@@ -81,6 +81,12 @@ class DataFrame(object):
             for k, series in name_series:
                 self.add_column(k, series)
 
+    @property
+    def dtypes(self):
+        """Return the dtypes in this object."""
+        return pd.Series([x.dtype for x in self._cols.values()],
+                         index=self._cols.keys())
+
     def __getitem__(self, arg):
         """
         If *arg* is a ``str``, return the column Series.

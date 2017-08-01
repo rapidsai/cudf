@@ -1,6 +1,7 @@
 import pytest
 
 import numpy as np
+import pandas as pd
 
 from numba import cuda
 
@@ -312,3 +313,10 @@ def test_dataframe_to_string_wide():
     # values should match despite whitespace difference
     assert got.split() == expect.split()
 
+
+def test_dataframe_dtypes():
+    dtypes = pd.Series([np.int32, np.float32, np.float64],
+                       index=['c', 'a', 'b'])
+    df = DataFrame([(k, np.ones(10, dtype=v))
+                    for k, v in dtypes.iteritems()])
+    assert df.dtypes.equals(dtypes)
