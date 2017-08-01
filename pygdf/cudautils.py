@@ -154,16 +154,15 @@ def gpu_expand_mask_bits(bits, out):
     This is a flexible kernel that can be launch with any number of blocks
     and threads.
     """
-    for idx in range(cuda.grid(1), bits.size, cuda.gridsize(1)):
-        base = idx * mask_bitsize
-        for i in range(base, base + mask_bitsize):
-            out[i] = mask_get(bits, i)
+    for i in range(cuda.grid(1), out.size, cuda.gridsize(1)):
+        out[i] = mask_get(bits, i)
 
 
 def mask_assign_slot(size, mask):
     dtype = (np.int32 if size < 2 ** 31 else np.int64)
     expanded_mask = cuda.device_array(size, dtype=dtype)
-    gpu_expand_mask_bits.forall(min(8 * 128, size))(mask, expanded_mask)
+    numtasks = min(64 * 128, expanded_mask.size)
+    gpu_expand_mask_bits.forall(numtasks)(mask, expanded_mask)
 
     # Allocate output
     slots = cuda.device_array(shape=expanded_mask.size + 1,
