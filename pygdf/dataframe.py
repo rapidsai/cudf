@@ -82,6 +82,25 @@ class DataFrame(object):
             for k, series in name_series:
                 self.add_column(k, series)
 
+    @property
+    def dtypes(self):
+        """Return the dtypes in this object."""
+        return pd.Series([x.dtype for x in self._cols.values()],
+                         index=self._cols.keys())
+
+    def __dir__(self):
+        o = set(dir(type(self)))
+        o.update(self.__dict__)
+        o.update(c for c in self.columns if
+                 (isinstance(c, pd.compat.string_types) and
+                  pd.compat.isidentifier(c)))
+        return list(o)
+
+    def __getattr__(self, key):
+        if key in self._cols:
+            return self[key]
+        raise AttributeError("'DataFrame' object has no attribute %r" % key)
+
     def __getitem__(self, arg):
         """
         If *arg* is a ``str``, return the column Series.
@@ -170,8 +189,12 @@ class DataFrame(object):
 
         # Prepare cells
         cols = OrderedDict()
-        for h in self.columns[:ncols]:
+        use_cols = list(self.columns[:ncols - 1])
+        use_cols.append(self.columns[-1])
+
+        for h in use_cols:
             cols[h] = self[h].values_to_string(nrows=nrows)
+
         # Format into a table
         return formatting.format(index=self._index, cols=cols,
                                  show_headers=True, more_cols=more_cols,

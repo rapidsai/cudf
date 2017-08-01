@@ -1,6 +1,7 @@
 import pytest
 
 import numpy as np
+import pandas as pd
 
 from numba import cuda
 
@@ -297,5 +298,44 @@ def test_dataframe_to_string():
         assert got.split() == expect.split()
 
 
-if __name__ == '__main__':
-    test_dataframe_to_string()
+def test_dataframe_to_string_wide():
+    # Test basic
+    df = DataFrame()
+    for i in range(100):
+        df['a{}'.format(i)] = list(range(3))
+    got = df.to_string()
+    print(got)
+    expect = '''
+    a0   a1   a2   a3   a4   a5   a6 ...  a99
+0    0    0    0    0    0    0    0 ...    0
+1    1    1    1    1    1    1    1 ...    1
+2    2    2    2    2    2    2    2 ...    2
+[92 more columns]
+'''
+    # values should match despite whitespace difference
+    assert got.split() == expect.split()
+
+
+def test_dataframe_dtypes():
+    dtypes = pd.Series([np.int32, np.float32, np.float64],
+                       index=['c', 'a', 'b'])
+    df = DataFrame([(k, np.ones(10, dtype=v))
+                    for k, v in dtypes.iteritems()])
+    assert df.dtypes.equals(dtypes)
+
+
+def test_dataframe_dir_and_getattr():
+    df = DataFrame([('a', np.ones(10)),
+                    ('b', np.ones(10)),
+                    ('not an id', np.ones(10)),
+                    ('oop$', np.ones(10))])
+    o = dir(df)
+    assert {'a', 'b'}.issubset(o)
+    assert 'not an id' not in o
+    assert 'oop$' not in o
+
+    # Getattr works
+    assert df.a is df['a']
+    assert df.b is df['b']
+    with pytest.raises(AttributeError):
+        df.not_a_column
