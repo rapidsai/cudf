@@ -87,6 +87,19 @@ class DataFrame(object):
         return pd.Series([x.dtype for x in self._cols.values()],
                          index=self._cols.keys())
 
+    def __dir__(self):
+        o = set(dir(type(self)))
+        o.update(self.__dict__)
+        o.update(c for c in self.columns if
+                 (isinstance(c, pd.compat.string_types) and
+                  pd.compat.isidentifier(c)))
+        return list(o)
+
+    def __getattr__(self, key):
+        if key in self._cols:
+            return self[key]
+        raise AttributeError("'DataFrame' object has no attribute %r" % key)
+
     def __getitem__(self, arg):
         """
         If *arg* is a ``str``, return the column Series.

@@ -320,3 +320,20 @@ def test_dataframe_dtypes():
     df = DataFrame([(k, np.ones(10, dtype=v))
                     for k, v in dtypes.iteritems()])
     assert df.dtypes.equals(dtypes)
+
+
+def test_dataframe_dir_and_getattr():
+    df = DataFrame([('a', np.ones(10)),
+                    ('b', np.ones(10)),
+                    ('not an id', np.ones(10)),
+                    ('oop$', np.ones(10))])
+    o = dir(df)
+    assert {'a', 'b'}.issubset(o)
+    assert 'not an id' not in o
+    assert 'oop$' not in o
+
+    # Getattr works
+    assert df.a is df['a']
+    assert df.b is df['b']
+    with pytest.raises(AttributeError):
+        df.not_a_column
