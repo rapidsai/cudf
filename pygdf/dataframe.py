@@ -12,6 +12,7 @@ from . import cudautils, formatting, queryutils, _gdf
 from .index import GenericIndex, EmptyIndex, Index
 from .series import Series
 from .buffer import Buffer
+from .settings import NOTSET, settings
 
 
 class DataFrame(object):
@@ -154,7 +155,10 @@ class DataFrame(object):
         """
         return self._size
 
-    def to_string(self, nrows=5, ncols=8):
+    def head(self, n=5):
+        return self[:n]
+
+    def to_string(self, nrows=NOTSET, ncols=NOTSET):
         """Convert to string
 
         Parameters
@@ -167,13 +171,18 @@ class DataFrame(object):
             Maximum number of columns to show.
             If it is None, all columns are shown.
         """
+        if nrows is NOTSET:
+            nrows = settings.formatting.get('nrows')
+        if ncols is NOTSET:
+            ncols = settings.formatting.get('ncols')
+
         if nrows is None:
             nrows = len(self)
         else:
             nrows = min(nrows, len(self))  # cap row count
 
         if ncols is None:
-            ncols = len(self)
+            ncols = len(self.columns)
 
         more_cols = len(self.columns) - ncols
         more_rows = len(self) - nrows
@@ -570,6 +579,31 @@ class DataFrame(object):
             return df.sort_index()
         return df
 
+    def groupby(self, by):
+        """Groupby
+
+        Parameters
+        ----------
+        by : list-of-str or str
+            Column name(s) to form that groups by.
+
+        Returns
+        -------
+        The groupby object
+
+        Notes
+        -----
+        Only a minimal number of operations is implemented so far.
+
+        - Only *by* argument is supported.
+        - The output is always sorted according to the *by* columns.
+        - Since we don't support multiindex, the *by* columns are stored
+          as regular columns.
+        """
+        from .grouper import Grouper
+
+        return Grouper(self, by=by)
+
     def query(self, expr):
         """Query with a boolean expression using Numba to compile a GPU kernel.
 
@@ -649,7 +683,7 @@ class DataFrame(object):
 
     @classmethod
     def from_records(self, data, index=None, columns=None):
-        """Convert from a numpy recarray or structured array
+        """Convert from a numpy recarray or structured array.
 
         Parameters
         ----------
@@ -657,8 +691,9 @@ class DataFrame(object):
         index : str
             The name of the index column in *data*.
             If None, the default index is used.
-        columns: list of str
+        columns : list of str
             List of column names to include.
+
         Returns
         -------
         DataFrame

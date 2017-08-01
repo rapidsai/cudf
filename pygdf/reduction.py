@@ -15,7 +15,7 @@ def gpu_reduce_factory(fn, nbtype):
         number of threadblocks, which must be passed as *numblocks*.
         The initial value is set with *init*.
 
-        Launch config:
+        Launch settings:
 
         Blocksize must be mutiple of warpsize and it is limited to 4 warps.
         """

@@ -10,7 +10,7 @@ from numba import cuda
 from . import cudautils, utils, _gdf, formatting
 from .buffer import Buffer
 from .index import Index, RangeIndex, GenericIndex
-
+from .settings import NOTSET, settings
 
 class Series(object):
     """
@@ -296,7 +296,10 @@ class Series(object):
     def _element_to_str(self, value):
         return self._impl.element_to_str(value)
 
-    def to_string(self, nrows=5):
+    def head(self, n=5):
+        return self[:n]
+
+    def to_string(self, nrows=NOTSET):
         """Convert to string
 
         Parameters
@@ -305,6 +308,9 @@ class Series(object):
             Maximum number of rows to show.
             If it is None, all rows are shown.
         """
+        if nrows is NOTSET:
+            nrows = settings.formatting.get(nrows)
+
         if len(self) == 0:
             return "<empty Series of dtype={}>".format(self.dtype)
 
