@@ -3,7 +3,7 @@ import pytest
 import numpy as np
 from numba import cuda
 
-from libgdf_cffi import ffi, libgdf
+from libgdf_cffi import ffi, libgdf, GDFError
 
 from .utils import new_column, unwrap_devary, get_dtype, gen_rand, fix_zeros
 
@@ -189,6 +189,76 @@ def test_bitwise_or(dtype):
 @pytest.mark.parametrize('dtype', params_bitwise_types)
 def test_bitwise_xor(dtype):
     bitwise_op_test(dtype, np.bitwise_xor, libgdf.gdf_bitwise_xor_generic)
+
+
+def test_lhs_rhs_dtype_mismatch():
+    lhs_dtype = np.int32
+    rhs_dtype = np.float32
+    nelem = 5
+    h_lhs = np.arange(nelem, dtype=lhs_dtype)
+    h_rhs = np.arange(nelem, dtype=rhs_dtype)
+
+    d_lhs = cuda.to_device(h_lhs)
+    d_rhs = cuda.to_device(h_rhs)
+    d_result = cuda.device_array_like(d_lhs)
+
+    col_lhs = new_column()
+    col_rhs = new_column()
+    col_result = new_column()
+
+    libgdf.gdf_column_view(col_lhs, unwrap_devary(d_lhs), ffi.NULL, nelem,
+                           get_dtype(lhs_dtype))
+    libgdf.gdf_column_view(col_rhs, unwrap_devary(d_rhs), ffi.NULL, nelem,
+                           get_dtype(rhs_dtype))
+    libgdf.gdf_column_view(col_result, unwrap_devary(d_result), ffi.NULL, nelem,
+                           get_dtype(lhs_dtype))
+
+    with pytest.raises(GDFError) as raises:
+        libgdf.gdf_add_generic(col_lhs, col_rhs, col_result)
+    raises.match("GDF_UNSUPPORTED_DTYPE")
+
+    with pytest.raises(GDFError) as raises:
+        libgdf.gdf_eq_generic(col_lhs, col_rhs, col_result)
+    raises.match("GDF_UNSUPPORTED_DTYPE")
+
+    with pytest.raises(GDFError) as raises:
+        libgdf.gdf_bitwise_and_generic(col_lhs, col_rhs, col_result)
+    raises.match("GDF_UNSUPPORTED_DTYPE")
+
+
+def test_output_dtype_mismatch():
+    lhs_dtype = np.int32
+    rhs_dtype = np.int32
+    nelem = 5
+    h_lhs = np.arange(nelem, dtype=lhs_dtype)
+    h_rhs = np.arange(nelem, dtype=rhs_dtype)
+
+    d_lhs = cuda.to_device(h_lhs)
+    d_rhs = cuda.to_device(h_rhs)
+    d_result = cuda.device_array(d_lhs.size, dtype=np.float32)
+
+    col_lhs = new_column()
+    col_rhs = new_column()
+    col_result = new_column()
+
+    libgdf.gdf_column_view(col_lhs, unwrap_devary(d_lhs), ffi.NULL, nelem,
+                           get_dtype(lhs_dtype))
+    libgdf.gdf_column_view(col_rhs, unwrap_devary(d_rhs), ffi.NULL, nelem,
+                           get_dtype(rhs_dtype))
+    libgdf.gdf_column_view(col_result, unwrap_devary(d_result), ffi.NULL, nelem,
+                           get_dtype(d_result.dtype))
+
+    with pytest.raises(GDFError) as raises:
+        libgdf.gdf_add_generic(col_lhs, col_rhs, col_result)
+    raises.match("GDF_UNSUPPORTED_DTYPE")
+
+    with pytest.raises(GDFError) as raises:
+        libgdf.gdf_eq_generic(col_lhs, col_rhs, col_result)
+    raises.match("GDF_UNSUPPORTED_DTYPE")
+
+    with pytest.raises(GDFError) as raises:
+        libgdf.gdf_bitwise_and_generic(col_lhs, col_rhs, col_result)
+    raises.match("GDF_UNSUPPORTED_DTYPE")
 
 
 if __name__ == '__main__':

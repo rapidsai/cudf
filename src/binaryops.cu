@@ -31,10 +31,9 @@ template<typename T, typename Tout, typename F>
 struct BinaryOp {
     static
     gdf_error launch(gdf_column *lhs, gdf_column *rhs, gdf_column *output) {
-        if (lhs->size != rhs->size || lhs->size != output->size) {
-            return GDF_COLUMN_SIZE_MISMATCH;
-        }
-
+        GDF_REQUIRE(lhs->size == rhs->size, GDF_COLUMN_SIZE_MISMATCH);
+        GDF_REQUIRE(lhs->size == output->size, GDF_COLUMN_SIZE_MISMATCH);
+        GDF_REQUIRE(lhs->dtype == rhs->dtype, GDF_UNSUPPORTED_DTYPE);
         // find optimal blocksize
         int mingridsize, blocksize;
         CUDA_TRY(
@@ -65,6 +64,7 @@ template<typename T, typename F>
 struct ArithOp {
     static
     gdf_error launch(gdf_column *lhs, gdf_column *rhs, gdf_column *output) {
+        GDF_REQUIRE(output->dtype == lhs->dtype, GDF_UNSUPPORTED_DTYPE);
         return BinaryOp<T, T, F>::launch(lhs, rhs, output);
     }
 };
@@ -73,6 +73,7 @@ template<typename T, typename F>
 struct LogicalOp {
     static
     gdf_error launch(gdf_column *lhs, gdf_column *rhs, gdf_column *output) {
+        GDF_REQUIRE(output->dtype == GDF_INT8, GDF_UNSUPPORTED_DTYPE);
         return BinaryOp<T, int8_t, F>::launch(lhs, rhs, output);
     }
 };
@@ -236,7 +237,6 @@ gdf_error gdf_div_f64(gdf_column *lhs, gdf_column *rhs, gdf_column *output) {
 
 #define DEF_LOGICAL_OP_NUM(F)                                                 \
 gdf_error F##_generic(gdf_column *lhs, gdf_column *rhs, gdf_column *output) { \
-    if( output->dtype != GDF_INT8 ) return GDF_UNSUPPORTED_DTYPE;             \
     switch ( lhs->dtype ) {                                                   \
     case GDF_INT8:    return F##_i8(lhs, rhs, output);                        \
     case GDF_INT32:   return F##_i32(lhs, rhs, output);                       \
@@ -435,8 +435,6 @@ gdf_error gdf_ne_f64(gdf_column *lhs, gdf_column *rhs, gdf_column *output) {
 
 #define DEF_BITWISE_OP(F)                                                 \
 gdf_error F##_generic(gdf_column *lhs, gdf_column *rhs, gdf_column *output) { \
-    if( lhs->dtype != rhs->dtype ) return GDF_UNSUPPORTED_DTYPE;              \
-    if( output->dtype != lhs->dtype ) return GDF_UNSUPPORTED_DTYPE;           \
     switch ( lhs->dtype ) {                                                   \
     case GDF_INT8:    return F##_i8(lhs, rhs, output);                        \
     case GDF_INT32:   return F##_i32(lhs, rhs, output);                       \
@@ -500,9 +498,7 @@ gdf_column gdf_validity_column(const gdf_column &col) {
 }
 
 gdf_error gdf_validity_and(gdf_column *lhs, gdf_column *rhs, gdf_column *output) {
-    if ( !lhs->valid || !rhs->valid || !output->valid ) {
-        return GDF_VALIDITY_MISSING;
-    }
+    GDF_REQUIRE ( lhs->valid && rhs->valid && output->valid, GDF_VALIDITY_MISSING);
     gdf_column x = gdf_validity_column(*lhs);
     gdf_column y = gdf_validity_column(*rhs);
     gdf_column z = gdf_validity_column(*output);
