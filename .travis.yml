@@ -7,8 +7,8 @@ branches:
         - master
 env:
   global:
-    # TODO
-    # secure:
+    secure: "f0YF7hvJaJdjaizXWyAiG26f9Z97/iDRMDGogalhrqAdkxLbrEczQ1RibWt1ZoAZPcWuMYckX4jtLADNSMyl5sfICAvXNoCy4QBz0685nDnJq/+TnGHTiyf0AI+/sKDr8vAlecwOtjfLmksbxspZ380IOwIuawSoy6w3viprLESrd+CgsRwemXM+d2TWFswEwgyH2oPJKAQYpsRdAEBtm3ZiDjBgYyVU36qaTTuNaH7RgqJKAI5nIEdXkMtDrl+4lLCfrFj5AjebYzZIDNMqOHsXRWoHPZCBBaAv3XXfgVY5tRR+NgZGVBgHx9Q8deKTjw9cuArhWSdJjWGKKK/thf7aQGfD9Tzqj1ueMDHWYj6RH62AzJPtimQTNXvHOtFFU9pCv5Fvp8HLAb8Fm/oTLAPc2/mMa10HoQ5zJvfXpS3TZDP6XpCKbN4ZxRVP8ZVu31n2C7qnQ+DFj10R62pxCP3ALztnpoBwXXsAlpPT0KC9OcAtmuDFkNYtLGR2Z2djlPuqMuu6yWO/i2Gnfnk2jaPL0Hgnr86SmoA5KyE+gsOusJtagXvRQBAMFwSJNJKcQFqoU0/E0wjhH+CAkkBBW5wUBumjmz4Jv5b1qEBQwAc7phSoNvhh7j/eoMuDjkxLkcfLgxwhAjXac8IF0Ua9QhLeelt2N+CMoqdO1m+IsaQ="
+
 
 matrix:
   include:
