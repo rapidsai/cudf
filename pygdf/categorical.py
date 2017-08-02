@@ -46,14 +46,11 @@ class CategoricalSeriesImpl(series_impl.SeriesImpl):
         self._codes_impl = numerical.NumericalSeriesImpl(codes_dtype)
 
     def __eq__(self, other):
-        try:
-            return (isinstance(other, CategoricalSeriesImpl) and
-                    self.dtype == other.dtype and
-                    tuple(self._categories) == tuple(other._categories) and
-                    self._ordered == other._ordered and
-                    self._codes_impl == other._codes_impl)
-        except Exception:
-            return False
+        return (isinstance(other, CategoricalSeriesImpl) and
+                self.dtype == other.dtype and
+                tuple(self._categories) == tuple(other._categories) and
+                self._ordered == other._ordered and
+                self._codes_impl == other._codes_impl)
 
     def _encode(self, value):
         for i, cat in enumerate(self._categories):
