@@ -5,6 +5,7 @@ import pandas as pd
 
 from numba import cuda
 
+import pygdf as gd
 from pygdf.dataframe import Series, DataFrame
 from pygdf.buffer import Buffer
 from pygdf.settings import set_options
@@ -124,7 +125,7 @@ def test_dataframe_basic():
     df2['vals'] = np.array([321], dtype=np.float64)
 
     # Concat
-    df = df.concat(df2)
+    df = gd.concat([df, df2])
     assert len(df) == 11
 
     hkeys = np.asarray(np.arange(10, dtype=np.float64).tolist() + [123])

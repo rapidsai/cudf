@@ -313,32 +313,17 @@ class DataFrame(object):
             raise NameError('column {!r} does not exist'.format(name))
         del self._cols[name]
 
-    def concat(self, *dfs):
-        """Concat rows from other dataframes.
+    @classmethod
+    def _concat(cls, objs):
+        if len(set(o.columns for o in objs)) != 1:
+            raise ValueError('columns mismatch')
 
-        Parameters
-        ----------
-
-        *dfs : one or more DataFrame(s)
-
-        Returns
-        -------
-
-        A new dataframe with rows from each dataframe in ``*dfs``.
-        """
-        # check columns
-        for df in dfs:
-            if df.columns != self.columns:
-                raise ValueError('columns mismatch')
-
-        newdf = DataFrame()
-        # foreach column
-        for k, col in self._cols.items():
-            # append new rows to the column
-            for df in dfs:
-                col = col.append(df[k])
-            newdf[k] = col
-        return newdf
+        index = Index._concat([o.index for o in objs])
+        data = [(c, Series._concat([o[c] for o in objs], index=index))
+                for c in objs[0].columns]
+        out = cls(data)
+        out._index = index
+        return out
 
     def as_gpu_matrix(self, columns=None):
         """Covert to a matrix in device memory.
@@ -639,8 +624,9 @@ class DataFrame(object):
     def to_pandas(self):
         """Convert to a Pandas DataFrame.
         """
-        dct = {k: c.to_pandas() for k, c in self._cols.items()}
-        return pd.DataFrame.from_dict(dct)
+        index = self.index.to_pandas()
+        data = {c: x.to_pandas(index=index) for c, x in self._cols.items()}
+        return pd.DataFrame(data, columns=list(self._cols), index=index)
 
     @classmethod
     def from_pandas(cls, dataframe):

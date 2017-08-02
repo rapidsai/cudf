@@ -93,8 +93,10 @@ class NumericalSeriesImpl(series_impl.SeriesImpl):
 
         return series.set_index(RangeIndex(len(series)))
 
-    def to_pandas(self, series):
-        return pd.Series(series.to_array(fillna='pandas'))
+    def to_pandas(self, series, index=True):
+        if index is True:
+            index = series.index.to_pandas()
+        return pd.Series(series.to_array(fillna='pandas'), index=index)
 
     #
     # Internals
