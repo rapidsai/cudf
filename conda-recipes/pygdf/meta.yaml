@@ -24,7 +24,7 @@ requirements:
     - libgdf_cffi
     - pandas
     - numba
-
+    - accelerate_cudalib
 test:
   imports:
     - pygdf
