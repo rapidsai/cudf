@@ -2,61 +2,32 @@ import pytest
 
 import numpy as np
 
-from numba import cuda
-
-from pygdf.dataframe import DataFrame, Series
-
-
-def test_series_min():
-    arr = np.random.random(100)
-    sr = Series.from_any(arr)
-    np.testing.assert_almost_equal(arr.min(), sr.min())
-
-
-def test_series_max():
-    arr = np.random.random(100)
-    sr = Series.from_any(arr)
-    np.testing.assert_almost_equal(arr.max(), sr.max())
+from pygdf.dataframe import Series
 
 
 params_dtypes = [np.int32, np.float32, np.float64]
+methods = ['min', 'max', 'sum', 'mean', 'var', 'std']
 
 
+@pytest.mark.parametrize('method', methods)
 @pytest.mark.parametrize('dtype', params_dtypes)
-def test_series_mean(dtype):
+def test_series_reductions(method, dtype):
     arr = np.random.random(100)
-    if issubclass(arr.dtype.type, np.integer):
+    if np.issubdtype(dtype, np.integer):
         arr *= 100
+    mask = arr > 10
     arr = arr.astype(dtype)
-    sr = Series.from_any(arr)
-    np.testing.assert_almost_equal(arr.mean(), sr.mean())
-
-
-@pytest.mark.parametrize('dtype', params_dtypes)
-def test_series_var(dtype):
-    arr = np.random.random(100)
-    if issubclass(arr.dtype.type, np.integer):
-        arr *= 100
-    arr = arr.astype(dtype)
-    sr = Series.from_any(arr)
-    np.testing.assert_almost_equal(arr.var(), sr.var())
-
-
-@pytest.mark.parametrize('dtype', params_dtypes)
-def test_series_std(dtype):
-    arr = np.random.random(100)
-    if issubclass(arr.dtype.type, np.integer):
-        arr *= 100
-    arr = arr.astype(dtype)
-    sr = Series.from_any(arr)
-    np.testing.assert_almost_equal(arr.std(), sr.std())
+    arr2 = arr[mask]
+    sr = Series.from_masked_array(arr, Series(mask).as_mask())
+    np.testing.assert_almost_equal(arr2.mean(), sr.mean())
 
 
 def test_series_unique():
     for size in [10 ** x for x in range(5)]:
-        arr = np.random.randint(low=0, high=10, size=size)
-        sr = Series.from_any(arr)
-        assert set(arr) == set(sr.unique_k(k=10))
+        arr = np.random.randint(low=-1, high=10, size=size)
+        mask = arr != -1
+        sr = Series.from_masked_array(arr, Series(mask).as_mask())
+        assert set(arr[mask]) == set(sr.unique_k(k=10))
     # test out of space
     arr = np.arange(10)
     sr = Series.from_any(arr)
@@ -75,8 +46,3 @@ def test_series_scale():
     assert scaled.min() == 0
     assert scaled.max() == 1
     np.testing.assert_equal(sr.scale().to_array(), scaled)
-
-
-if __name__ == '__main__':
-    test_series_scale()
-
