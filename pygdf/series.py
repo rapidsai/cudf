@@ -426,7 +426,7 @@ class Series(object):
 
     @property
     def valid_count(self):
-        """Number of null values"""
+        """Number of non-null values"""
         return self._size - self._null_count
 
     @property
@@ -562,7 +562,8 @@ class Series(object):
         """
         if dtype == self.dtype:
             return self
-        return Series.from_buffer(self.data.astype(dtype))
+        return self._copy_construct(buffer=self.data.astype(dtype),
+                                    impl=None)
 
     def argsort(self, ascending=True):
         """Returns a Series of int64 index that will sort the series.
@@ -680,6 +681,9 @@ class Series(object):
     #
     # Stats
     #
+    def count(self):
+        """The number of non-null values"""
+        return self.valid_count
 
     def min(self):
         """Compute the min of the series
@@ -690,6 +694,10 @@ class Series(object):
         """Compute the max of the series
         """
         return self._impl.stats(self).max()
+
+    def sum(self):
+        """Compute the sum of the series"""
+        return self._impl.stats(self).sum()
 
     def mean(self):
         """Compute the mean of the series

@@ -35,12 +35,13 @@ def test_categorical_missing():
     cat = pd.Categorical(['a', '_', '_', 'c', 'a'], categories=['a', 'b', 'c'])
     pdsr = pd.Series(cat)
     sr = Series.from_any(cat)
-    np.testing.assert_array_equal(cat.codes, sr.to_array(fillna='pandas'))
+    fillna = lambda x: np.where(np.isnan(x), -1, x)
+    np.testing.assert_array_equal(cat.codes, fillna(sr.to_array(fillna='pandas')))
     assert sr.null_count == 2
 
     np.testing.assert_array_equal(pdsr.cat.codes.data,
-                                  sr.cat.codes.to_array(fillna='pandas'))
-    np.testing.assert_array_equal(pdsr.cat.codes.dtype, sr.cat.codes.dtype)
+                                  fillna(sr.cat.codes.to_array(fillna='pandas')))
+    np.testing.assert_equal(pdsr.cat.codes.dtype, sr.cat.codes.dtype)
 
     string = str(sr)
     expect_str = """
