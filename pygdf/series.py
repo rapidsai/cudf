@@ -419,12 +419,16 @@ class Series(object):
             if o._impl != head._impl:
                 raise ValueError("All series must be of same type")
 
-        data = head._impl.concat(objs)
+        newsize = sum(map(len, objs))
+        # Concatenate data
+        mem = cuda.device_array(shape=newsize, dtype=head._data.dtype)
+        data = Buffer.from_empty(mem)
+        for o in objs:
+            data.extend(o._data.to_gpu_array())
 
         # Concatenate mask if present
         if all(o.has_null_mask for o in objs):
             # FIXME: Inefficient
-            newsize = sum(map(len, objs))
             mem = cuda.device_array(shape=newsize, dtype=np.bool)
             mask = Buffer.from_empty(mem)
             null_count = 0

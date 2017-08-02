@@ -116,6 +116,3 @@ class CategoricalSeriesImpl(series_impl.SeriesImpl):
                                          categories=self._categories,
                                          ordered=self._ordered)
         return pd.Series(data, index=index)
-
-    def concat(self, objs):
-        return self._codes_impl.concat(objs)
