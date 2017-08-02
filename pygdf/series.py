@@ -12,6 +12,7 @@ from .buffer import Buffer
 from .index import Index, RangeIndex, GenericIndex
 from .settings import NOTSET, settings
 
+
 class Series(object):
     """
     Data and null-masks.
@@ -278,7 +279,9 @@ class Series(object):
 
     def _get_mask_as_series(self):
         mask = Series(cudautils.ones(len(self), dtype=np.bool))
-        return mask.set_mask(self._mask).fillna(False)
+        if self._mask is not None:
+            mask = mask.set_mask(self._mask).fillna(False)
+        return mask
 
     def __bool__(self):
         """Always raise TypeError when converting a Series
@@ -409,6 +412,40 @@ class Series(object):
         """dtype of the Series"""
         return self._impl.dtype
 
+    @classmethod
+    def _concat(cls, objs, index=True):
+        head = objs[0]
+        for o in objs:
+            if o._impl != head._impl:
+                raise ValueError("All series must be of same type")
+
+        data = head._impl.concat(objs)
+
+        # Concatenate mask if present
+        if all(o.has_null_mask for o in objs):
+            # FIXME: Inefficient
+            newsize = sum(map(len, objs))
+            mem = cuda.device_array(shape=newsize, dtype=np.bool)
+            mask = Buffer.from_empty(mem)
+            null_count = 0
+            for o in objs:
+                mask.extend(o._get_mask_as_series()._data.to_gpu_array())
+                null_count += o._null_count
+            mask = Buffer(utils.boolmask_to_bitmask(mask.to_array()))
+        else:
+            mask = None
+            null_count = 0
+
+        # Concatenate index if not provided
+        if index is True:
+            index = Index._concat([o.index for o in objs])
+
+        return cls(cls.Init(buffer=data,
+                            mask=mask,
+                            null_count=null_count,
+                            index=index,
+                            impl=head._impl))
+
     def append(self, arbitrary):
         """Append values from another ``Series`` or array-like object.
         Returns a new copy.
@@ -521,8 +558,8 @@ class Series(object):
         """
         return self.to_dense_buffer(fillna=fillna).to_gpu_array()
 
-    def to_pandas(self):
-        return self._impl.to_pandas(self)
+    def to_pandas(self, index=True):
+        return self._impl.to_pandas(self, index=index)
 
     @property
     def data(self):
@@ -626,7 +663,6 @@ class Series(object):
         data = cudautils.reverse_array(self.to_gpu_array())
         index = GenericIndex(cudautils.reverse_array(self.index.gpu_values))
         return self._copy_construct(buffer=Buffer(data), index=index)
-
 
     def one_hot_encoding(self, cats, dtype='float64'):
         """Perform one-hot-encoding
@@ -750,6 +786,3 @@ class Series(object):
         Returns a new Series.
         """
         return self._unaryop('floor')
-
-
-

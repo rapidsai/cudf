@@ -1,8 +1,7 @@
 from __future__ import print_function, division
 
+import pandas as pd
 import numpy as np
-
-from numba import cuda
 
 from . import cudautils, utils
 from .buffer import Buffer
@@ -25,6 +24,9 @@ class Index(object):
     def values(self):
         return np.asarray(self.as_series())
 
+    def to_pandas(self):
+        return pd.Index(self.as_series().to_pandas())
+
     @property
     def gpu_values(self):
         return self.as_series().to_gpu_array()
@@ -34,6 +36,14 @@ class Index(object):
         """
         segments = cudautils.find_segments(self.gpu_values)
         return list(segments.copy_to_host())
+
+    @classmethod
+    def _concat(cls, objs):
+        from .series import Series
+        data = Series._concat([o.as_series() for o in objs], index=None)
+        # TODO: add ability to concatenate indices without always casting to
+        # `GenericIndex`
+        return GenericIndex(data)
 
 
 class EmptyIndex(Index):
@@ -131,6 +141,10 @@ class RangeIndex(Index):
         vals = cudautils.arange(self._start, self._stop, dtype=self.dtype)
         return Series(vals)
 
+    def to_pandas(self):
+        return pd.RangeIndex(start=self._start, stop=self._stop,
+                             dtype=self.dtype)
+
 
 def index_from_range(start, stop=None, step=None):
     vals = cudautils.arange(start, stop, step, dtype=np.int64)
@@ -178,8 +192,6 @@ class GenericIndex(Index):
     def as_series(self):
         """Convert the index as a Series.
         """
-        from .series import Series
-
         return self._values
 
     @property

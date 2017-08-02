@@ -2,10 +2,12 @@ from __future__ import print_function, division
 
 import numpy as np
 import pandas as pd
+from numba import cuda
 
 from libgdf_cffi import libgdf
 
 from . import _gdf, series_impl, utils, cudautils
+from .buffer import Buffer
 
 
 # Operator mappings
@@ -93,8 +95,19 @@ class NumericalSeriesImpl(series_impl.SeriesImpl):
 
         return series.set_index(RangeIndex(len(series)))
 
-    def to_pandas(self, series):
-        return pd.Series(series.to_array(fillna='pandas'))
+    def to_pandas(self, series, index=True):
+        if index is True:
+            index = series.index.to_pandas()
+        return pd.Series(series.to_array(fillna='pandas'), index=index)
+
+    def concat(self, objs):
+        newsize = sum(map(len, objs))
+        # Concatenate data
+        mem = cuda.device_array(shape=newsize, dtype=self.dtype)
+        data = Buffer.from_empty(mem)
+        for o in objs:
+            data.extend(o._data.to_gpu_array())
+        return data
 
     #
     # Internals
