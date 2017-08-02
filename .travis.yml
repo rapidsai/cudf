@@ -33,4 +33,4 @@ script:
   - source ./travisci/build_pygdf.sh
 
 after_success:
-  - source ./travisci/upload.sh
+  - source ./travisci/upload-anaconda.sh
