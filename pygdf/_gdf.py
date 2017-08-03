@@ -18,6 +18,18 @@ def unwrap_devary(devary):
     return ffi.cast('void*', ptrval)
 
 
+def columnview_from_devary(devary, dtype=None):
+    return _columnview(size=devary.size,  data=unwrap_devary(devary),
+                       mask=ffi.NULL, dtype=dtype or devary.dtype)
+
+
+def _columnview(size, data, mask, dtype):
+    colview = ffi.new('gdf_column*')
+    libgdf.gdf_column_view(colview, data, mask, size,
+                           np_to_gdf_dtype(dtype))
+    return colview
+
+
 def columnview(size, data, mask=None, dtype=None):
     """
     Make a column view.
@@ -41,11 +53,8 @@ def columnview(size, data, mask=None, dtype=None):
         return unwrap_devary(devary)
 
     dtype = dtype or data.dtype
-    colview = ffi.new('gdf_column*')
-    libgdf.gdf_column_view(colview, unwrap(data), unwrap(mask), size,
-                           np_to_gdf_dtype(dtype))
-
-    return colview
+    return _columnview(size=size, data=unwrap(data), mask=unwrap(mask),
+                       dtype=dtype)
 
 
 def apply_binaryop(binop, lhs, rhs, out):
@@ -154,3 +163,7 @@ def apply_join(sr_lhs, sr_rhs, how):
     ary = ary.reshape(2, datasize // 2)
     yield ((ary[0], ary[1]) if datasize > 0 else (ary, ary))
     libgdf.gdf_join_result_free(join_result)
+
+
+def apply_prefixsum(sr_inp, sr_out, inclusive):
+    libgdf.gdf_prefixsum_generic(sr_inp, sr_out, inclusive)

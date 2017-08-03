@@ -86,7 +86,7 @@ class Series(object):
         buf = Buffer(codes)
         params = dict(buffer=buf, impl=impl)
         if not np.all(valid_codes):
-            mask = utils.boolmask_to_bitmask(valid_codes)
+            mask = cudautils.compact_mask_bytes(valid_codes)
             nnz = np.count_nonzero(valid_codes)
             null_count = codes.size - nnz
             params.update(dict(mask=Buffer(mask), null_count=null_count))
@@ -588,9 +588,12 @@ class Series(object):
 
     def as_mask(self):
         """Convert booleans to bitmask
+
+        Returns
+        -------
+        device array
         """
-        # FIXME: inefficient
-        return Buffer(utils.boolmask_to_bitmask(self.to_array())).to_gpu_array()
+        return cudautils.compact_mask_bytes(self.to_gpu_array())
 
     def astype(self, dtype):
         """Convert to the given ``dtype``.

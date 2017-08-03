@@ -4,7 +4,7 @@ import numpy as np
 
 from numba import (cuda, njit, uint64, int32, float64, numpy_support)
 
-from .utils import mask_bitsize, mask_get
+from .utils import mask_bitsize, mask_get, mask_set, make_mask
 from .sorting import RadixSort
 from .reduction import Reduce
 
@@ -132,43 +132,6 @@ def set_mask_from_stride(mask, stride):
     configured(mask, stride)
 
 
-@cuda.jit(device=True)
-def gpu_prefixsum(data, initial):
-    # XXX slow imp
-    acc = initial
-    for i in range(data.size):
-        tmp = data[i]
-        data[i] = acc
-        acc += tmp
-    return acc
-
-
-@cuda.jit
-def gpu_mask_assign_slot(mask, slots):
-    """
-    Assign output slot from the given mask.
-
-    Note:
-    * this is a single wrap, single block kernel
-    """
-    tid = cuda.threadIdx.x
-    blksz = cuda.blockDim.x
-
-    sm_prefix = cuda.shared.array(shape=(33,), dtype=uint64)
-    offset = 0
-    for base in range(0, slots.size, blksz):
-        i = base + tid
-        sm_prefix[tid] = 0
-        if i < slots.size:
-            sm_prefix[tid] = mask_get(mask, i)
-        if tid == 0:
-            offset = gpu_prefixsum(sm_prefix[:32], offset)
-            sm_prefix[32] = offset
-        offset = sm_prefix[32]
-        if i < slots.size:
-            slots[i] = sm_prefix[tid]
-
-
 @cuda.jit
 def gpu_copy_to_dense(data, mask, slots, out):
     tid = cuda.grid(1)
@@ -177,9 +140,43 @@ def gpu_copy_to_dense(data, mask, slots, out):
         out[idx] = data[tid]
 
 
+@cuda.jit
+def gpu_fill_value(data, value):
+    tid = cuda.grid(1)
+    if tid < data.size:
+        data[tid] = value
+
+
+@cuda.jit
+def gpu_expand_mask_bits(bits, out):
+    """Expand each bits in bitmask *bits* into an element in out.
+    This is a flexible kernel that can be launch with any number of blocks
+    and threads.
+    """
+    for i in range(cuda.grid(1), out.size, cuda.gridsize(1)):
+        out[i] = mask_get(bits, i)
+
+
 def mask_assign_slot(size, mask):
-    slots = cuda.device_array(shape=size + 1, dtype=np.uint64)
-    gpu_mask_assign_slot[1, 32](mask, slots)
+    from . import _gdf
+
+    dtype = (np.int32 if size < 2 ** 31 else np.int64)
+    expanded_mask = cuda.device_array(size, dtype=dtype)
+    numtasks = min(64 * 128, expanded_mask.size)
+    gpu_expand_mask_bits.forall(numtasks)(mask, expanded_mask)
+
+    # Allocate output
+    slots = cuda.device_array(shape=expanded_mask.size + 1,
+                              dtype=expanded_mask.dtype)
+
+    # Fill 0 to slot[0]
+    gpu_fill_value[1, 1](slots[:1], 0)
+
+    # Compute prefixsum on the mask
+    col_slots = _gdf.columnview_from_devary(slots[1:])
+    col_mask = _gdf.columnview_from_devary(expanded_mask)
+    _gdf.apply_prefixsum(col_mask, col_slots, inclusive=True)
+
     sz = int(slots[slots.size - 1])
     return slots, sz
 
@@ -212,6 +209,29 @@ def copy_to_dense(data, mask, out=None):
             raise ValueError('output array too small')
     gpu_copy_to_dense.forall(data.size)(data, mask, slots, out)
     return (sz, out)
+
+
+@cuda.jit
+def gpu_compact_mask_bytes(bools, bits):
+    tid = cuda.grid(1)
+    base = tid * mask_bitsize
+    for i in range(base, base + mask_bitsize):
+        if i >= bools.size:
+            break
+        if bools[i]:
+            mask_set(bits, i)
+
+
+def compact_mask_bytes(boolbytes):
+    """Convert booleans (in bytes) to a bitmask
+    """
+    bits = make_mask(boolbytes.size)
+    # Fill zero
+    gpu_fill_value.forall(bits.size)(bits, 0)
+    # Compact
+    gpu_compact_mask_bytes.forall(bits.size)(boolbytes, bits)
+    return bits
+
 
 #
 # Gather

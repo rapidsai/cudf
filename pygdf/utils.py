@@ -35,15 +35,6 @@ def mask_set(mask, pos):
     mask[pos // mask_bitsize] |= 1 << (pos % mask_bitsize)
 
 
-def boolmask_to_bitmask(bools):
-    masksize = calc_chunk_size(bools.size, mask_bitsize)
-    mask = np.zeros(masksize, dtype=mask_dtype)
-    for i, x in enumerate(bools):
-        if x:
-            mask_set(mask, i)
-    return mask
-
-
 def make_mask(size):
     """Create mask to obtain at least *size* number of bits.
     """

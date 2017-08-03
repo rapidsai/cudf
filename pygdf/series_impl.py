@@ -157,8 +157,7 @@ def element_indexing(series, index):
 def select_by_boolmask(series, boolmask):
     """Select by a boolean mask to a series
     """
-    # FIXME: inefficient boolmask to bitmask
-    boolbits = utils.boolmask_to_bitmask(boolmask.to_array())
+    boolbits = cudautils.compact_mask_bytes(boolmask.to_gpu_array())
     indices = cudautils.arange(len(boolmask))
     _, selinds = cudautils.copy_to_dense(indices, mask=boolbits)
     _, selvals = cudautils.copy_to_dense(series.to_gpu_array(), mask=boolbits)
