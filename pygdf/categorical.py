@@ -25,7 +25,7 @@ class CategoricalAccessor(object):
     def codes(self):
         data = self._parent.data
         if self._parent.has_null_mask:
-            mask = self._parent._mask
+            mask = self._parent._column.mask
             null_count = self._parent.null_count
             return Series.from_masked_array(data=data.mem, mask=mask.mem,
                                             null_count=null_count)

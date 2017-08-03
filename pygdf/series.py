@@ -11,6 +11,7 @@ from . import cudautils, utils, _gdf, formatting
 from .buffer import Buffer
 from .index import Index, RangeIndex, GenericIndex
 from .settings import NOTSET, settings
+from .column import Column
 
 
 class Series(object):
@@ -149,27 +150,20 @@ class Series(object):
         if not buffer.is_contiguous():
             buffer = buffer.as_contiguous()
 
+        self._column = Column(data=buffer,
+                              mask=mask,
+                              null_count=null_count)
+
         self._size = buffer.size if buffer else 0
-        self._data = buffer
-        self._mask = mask
         self._index = RangeIndex(self._size) if index is None else index
         self._impl = (series_impl.get_default_impl(buffer.dtype)
                       if impl is None else impl)
-        if null_count is None:
-            if self._mask is not None:
-                nnz = cudautils.count_nonzero_mask(self._mask.mem)
-                null_count = self._size - nnz
-            else:
-                null_count = 0
-        self._null_count = null_count
-        self._cffi_view = _gdf.columnview(size=self._size, data=self._data,
-                                          mask=self._mask)
 
     def _copy_construct_defaults(self):
         return dict(
-            buffer=self._data,
-            mask=self._mask,
-            null_count=self._null_count,
+            buffer=self._column.data,
+            mask=self._column.mask,
+            null_count=self.null_count,
             index=self._index,
             impl=self._impl,
         )
@@ -181,6 +175,10 @@ class Series(object):
         cls = type(self)
         params.update(kwargs)
         return cls(cls.Init(**params))
+
+    @property
+    def _cffi_view(self):
+        return self._column.cffi_view
 
     def set_index(self, index):
         """Returns a new Series with a different index.
@@ -242,7 +240,7 @@ class Series(object):
                 # compute new mask
                 mask = self._get_mask_as_series()
                 # slicing
-                subdata = self._data.mem[arg]
+                subdata = self._column.data.mem[arg]
                 submask = mask[arg].as_mask()
                 index = self.index[arg]
                 return self._copy_construct(buffer=Buffer(subdata),
@@ -251,7 +249,7 @@ class Series(object):
                                             index=index)
             else:
                 index = self.index[arg]
-                newbuffer = self._data[arg]
+                newbuffer = self._column.data[arg]
                 return self._copy_construct(buffer=newbuffer,
                                             mask=None,
                                             null_count=None,
@@ -268,7 +266,7 @@ class Series(object):
         indices = Buffer(indices).to_gpu_array()
         data = cudautils.gather(data=self.data.to_gpu_array(), index=indices)
 
-        if self._mask:
+        if self._column.mask:
             mask = self._get_mask_as_series().take(indices).as_mask()
             mask = Buffer(mask)
         else:
@@ -279,8 +277,8 @@ class Series(object):
 
     def _get_mask_as_series(self):
         mask = Series(cudautils.ones(len(self), dtype=np.bool))
-        if self._mask is not None:
-            mask = mask.set_mask(self._mask).fillna(False)
+        if self._column.mask is not None:
+            mask = mask.set_mask(self._column.mask).fillna(False)
         return mask
 
     def __bool__(self):
@@ -421,10 +419,10 @@ class Series(object):
 
         newsize = sum(map(len, objs))
         # Concatenate data
-        mem = cuda.device_array(shape=newsize, dtype=head._data.dtype)
+        mem = cuda.device_array(shape=newsize, dtype=head._column.data.dtype)
         data = Buffer.from_empty(mem)
         for o in objs:
-            data.extend(o._data.to_gpu_array())
+            data.extend(o._column.data.to_gpu_array())
 
         # Concatenate mask if present
         if all(o.has_null_mask for o in objs):
@@ -433,7 +431,7 @@ class Series(object):
             mask = Buffer.from_empty(mem)
             null_count = 0
             for o in objs:
-                mask.extend(o._get_mask_as_series()._data.to_gpu_array())
+                mask.extend(o._get_mask_as_series().to_gpu_array())
                 null_count += o._null_count
             mask = Buffer(utils.boolmask_to_bitmask(mask.to_array()))
         else:
@@ -460,7 +458,7 @@ class Series(object):
         mem = cuda.device_array(shape=newsize, dtype=self.data.dtype)
         newbuf = Buffer.from_empty(mem)
         # copy into new memory
-        for buf in [self._data, other._data]:
+        for buf in [self._column.data, other._column.data]:
             newbuf.extend(buf.to_gpu_array())
         # return new series
         return self.from_any(newbuf)
@@ -468,17 +466,17 @@ class Series(object):
     @property
     def valid_count(self):
         """Number of non-null values"""
-        return self._size - self._null_count
+        return self._column.valid_count
 
     @property
     def null_count(self):
         """Number of null values"""
-        return self._null_count
+        return self._column.null_count
 
     @property
     def has_null_mask(self):
         """A boolean indicating whether a null-mask is needed"""
-        return self._mask is not None
+        return self._column.has_null_mask
 
     def fillna(self, value):
         """Fill null values with ``value``.
@@ -487,8 +485,8 @@ class Series(object):
         """
         if not self.has_null_mask:
             return self
-        out = cudautils.fillna(data=self._data.to_gpu_array(),
-                               mask=self._mask.to_gpu_array(),
+        out = cudautils.fillna(data=self._column.data.to_gpu_array(),
+                               mask=self._column.mask.to_gpu_array(),
                                value=value)
         return self.from_array(out)
 
@@ -520,11 +518,11 @@ class Series(object):
             else:
                 return self._copy_to_dense_buffer()
         else:
-            return self._data
+            return self._column.data
 
     def _copy_to_dense_buffer(self):
-        data = self._data.to_gpu_array()
-        mask = self._mask.to_gpu_array()
+        data = self._column.data.to_gpu_array()
+        mask = self._column.mask.to_gpu_array()
         nnz, mem = cudautils.copy_to_dense(data=data, mask=mask)
         return Buffer(mem, size=nnz, capacity=mem.size)
 
@@ -569,7 +567,7 @@ class Series(object):
     def data(self):
         """The gpu buffer for the data
         """
-        return self._data
+        return self._column.data
 
     @property
     def index(self):
@@ -581,10 +579,7 @@ class Series(object):
     def nullmask(self):
         """The gpu buffer for the null-mask
         """
-        if self.has_null_mask:
-            return self._mask
-        else:
-            raise ValueError('Series has no null mask')
+        return self._column.nullmask
 
     def as_mask(self):
         """Convert booleans to bitmask

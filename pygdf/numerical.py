@@ -79,9 +79,9 @@ class NumericalSeriesImpl(series_impl.SeriesImpl):
     def sort_by_values(self, series, ascending):
         from .series import Series
 
-        if series._mask:
+        if series._column.mask:
             raise ValueError('masked array not supported')
-        sr_key = series._copy_construct(buffer=series._data.copy(),
+        sr_key = series._copy_construct(buffer=series._column.data.copy(),
                                         impl=self)
         sr_inds = Series.from_array(cudautils.arange(len(sr_key),
                                     dtype=np.int64))
