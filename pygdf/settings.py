@@ -8,6 +8,7 @@ Available keys:
     - ncols : max number of columns to show
 
 """
+from copy import deepcopy
 import threading
 from contextlib import contextmanager
 from collections import defaultdict
@@ -44,7 +45,7 @@ class _settings(object):
 
     def _push(self, **kwargs):
         # Copy previous context and update
-        dct = self._tos.copy()
+        dct = deepcopy(self._tos)
         for k, v in kwargs.items():
             dct[k].update(v)
         # Add new context

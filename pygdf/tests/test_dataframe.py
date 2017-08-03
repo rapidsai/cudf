@@ -304,7 +304,7 @@ def test_dataframe_to_string_wide():
     df = DataFrame()
     for i in range(100):
         df['a{}'.format(i)] = list(range(3))
-    got = df.to_string()
+    got = df.to_string(ncols=8)
     print(got)
     expect = '''
     a0   a1   a2   a3   a4   a5   a6 ...  a99
