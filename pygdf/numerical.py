@@ -99,6 +99,9 @@ class NumericalSeriesImpl(series_impl.SeriesImpl):
             index = series.index.to_pandas()
         return pd.Series(series.to_array(fillna='pandas'), index=index)
 
+    def shim_wrap_column(self, column):
+        return NumericalColumn(column, dtype=column.dtype)
+
     #
     # Internals
     #
@@ -161,3 +164,29 @@ class Stats(object):
         asum = _gdf.apply_reduce(libgdf.gdf_sum_squared_generic, x)
         var = asum / n - mu ** 2
         return mu, var
+
+
+class NumericalColumn(series_impl.ColumnOps):
+    @property
+    def shim_impl(self):
+        return NumericalSeriesImpl(self.dtype)
+
+    def binary_operator(self, binop, rhs):
+        if isinstance(rhs, NumericalColumn):
+            op = _binary_impl[binop]
+            return numeric_column_binop(lhs=self, rhs=rhs, op=op,
+                                        out_dtype=self.dtype)
+        else:
+            return NotImplemented
+
+
+def numeric_column_binop(lhs, rhs, op, out_dtype):
+     # Allocate output series
+    masked = lhs.has_null_mask or rhs.has_null_mask
+    impl = NumericalSeriesImpl(out_dtype)
+    out = series_impl.column_empty_like(lhs, dtype=out_dtype, masked=masked)
+    # Call and fix null_count
+    null_count = _gdf.apply_binaryop(op, lhs, rhs, out)
+    out = out.replace(null_count=null_count)
+    return impl.shim_wrap_column(out)
+

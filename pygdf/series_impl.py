@@ -1,3 +1,5 @@
+import numpy as np
+
 from numba import cuda
 
 from .buffer import Buffer
@@ -105,7 +107,8 @@ def empty_like(df, dtype=None, masked=None, impl=None):
         mask = utils.make_mask(data.size)
         params.update(dict(mask=Buffer(mask), null_count=data.size))
 
-    return df._copy_construct(data=Column(**params), impl=impl)
+    col = impl.shim_wrap_column(Column(**params))
+    return df._copy_construct(data=col, impl=impl)
 
 
 def empty_like_same_mask(df, dtype=None, impl=None):
@@ -172,3 +175,27 @@ def select_by_boolmask(series, boolmask):
                   index=GenericIndex(selinds))
 
     return series._copy_construct(**params)
+
+
+class ColumnOps(Column):
+    def __init__(self, column, dtype):
+        super(ColumnOps, self).__init__(data=column.data,
+                                        mask=column.mask,
+                                        null_count=column.null_count)
+        # Logical dtype
+        self._dtype = dtype
+
+    @property
+    def dtype(self):
+        return self._dtype
+
+
+def column_empty_like(column, dtype, masked):
+    """Allocate a new column like the given *column*
+    """
+    data = cuda.device_array(shape=len(column), dtype=dtype)
+    params = dict(data=Buffer(data))
+    if masked:
+        mask = utils.make_mask(data.size)
+        params.update(dict(mask=Buffer(mask), null_count=data.size))
+    return Column(**params)

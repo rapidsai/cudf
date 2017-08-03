@@ -116,3 +116,26 @@ class CategoricalSeriesImpl(series_impl.SeriesImpl):
                                          categories=self._categories,
                                          ordered=self._ordered)
         return pd.Series(data, index=index)
+
+    def shim_wrap_column(self, column):
+        return CategoricalColumn(column, dtype=self.dtype,
+                                 categories=self._categories,
+                                 ordered=self._ordered)
+
+
+class CategoricalColumn(series_impl.ColumnOps):
+    def __init__(self, column, dtype, categories, ordered):
+        super(CategoricalColumn, self).__init__(column=column, dtype=dtype)
+        self._categories = tuple(categories)
+        self._ordered = bool(ordered)
+
+    @property
+    def shim_impl(self):
+        return CategoricalSeriesImpl(dtype=self.dtype,
+                                     codes_dtype=self.data.dtype,
+                                     categories=self._categories,
+                                     ordered=self._ordered)
+
+    def binary_operator(self, binop, rhs):
+        msg = 'Categorical cannot perform the operation: {}'.format(binop)
+        raise TypeError(msg)

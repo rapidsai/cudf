@@ -149,11 +149,12 @@ class Series(object):
         if index is not None and not isinstance(index, Index):
             raise TypeError('index not a Index type: got {!r}'.format(index))
 
-        self._column = data
+        assert isinstance(data, Column)
+        impl = (series_impl.get_default_impl(data.dtype)
+                if impl is None else impl)
+        self._column = impl.shim_wrap_column(data)
         self._size = len(data) if data else 0
         self._index = RangeIndex(self._size) if index is None else index
-        self._impl = (series_impl.get_default_impl(data.dtype)
-                      if impl is None else impl)
 
     def _copy_construct_defaults(self):
         return dict(
@@ -169,6 +170,11 @@ class Series(object):
         cls = type(self)
         params.update(kwargs)
         return cls(cls.Init(**params))
+
+    @property
+    def _impl(self):
+        """XXX: SHIM"""
+        return self._column.shim_impl
 
     @property
     def _cffi_view(self):
@@ -333,7 +339,8 @@ class Series(object):
         """
         if not isinstance(other, Series):
             return NotImplemented
-        return self._impl.binary_operator(fn, self, other)
+        outcol = self._column.binary_operator(fn, other._column)
+        return self._copy_construct(data=outcol, impl=outcol.shim_impl)
 
     def _unaryop(self, fn):
         """

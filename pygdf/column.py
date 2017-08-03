@@ -2,6 +2,8 @@
 A column is data + validity-mask.
 LibGDF operates on column.
 """
+import numpy as np
+
 from . import _gdf
 from . import cudautils
 
@@ -51,6 +53,9 @@ class Column(object):
                                data=self._data,
                                mask=self._mask)
 
+    # XXX: retired this
+    _cffi_view = cffi_view
+
     @property
     def valid_count(self):
         """Number of non-null values"""
@@ -83,4 +88,3 @@ class Column(object):
         }
         params.update(kwargs)
         return Column(**params)
-
