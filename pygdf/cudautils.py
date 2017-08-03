@@ -7,7 +7,6 @@ from numba import (cuda, njit, uint64, int32, float64, numpy_support)
 from .utils import mask_bitsize, mask_get, mask_set, make_mask
 from .sorting import RadixSort
 from .reduction import Reduce
-from . import _gdf
 
 
 def to_device(ary):
@@ -159,6 +158,8 @@ def gpu_expand_mask_bits(bits, out):
 
 
 def mask_assign_slot(size, mask):
+    from . import _gdf
+
     dtype = (np.int32 if size < 2 ** 31 else np.int64)
     expanded_mask = cuda.device_array(size, dtype=dtype)
     numtasks = min(64 * 128, expanded_mask.size)
