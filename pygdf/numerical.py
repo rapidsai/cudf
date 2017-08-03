@@ -6,6 +6,7 @@ import pandas as pd
 from libgdf_cffi import libgdf
 
 from . import _gdf, series_impl, utils, cudautils
+from .column import Column
 
 
 # Operator mappings
@@ -81,8 +82,8 @@ class NumericalSeriesImpl(series_impl.SeriesImpl):
 
         if series._column.mask:
             raise ValueError('masked array not supported')
-        sr_key = series._copy_construct(buffer=series._column.data.copy(),
-                                        impl=self)
+        col = Column(series._column.data.copy())
+        sr_key = series._copy_construct(data=col, impl=self)
         sr_inds = Series.from_array(cudautils.arange(len(sr_key),
                                     dtype=np.int64))
         _gdf.apply_sort(sr_key, sr_inds, ascending=ascending)

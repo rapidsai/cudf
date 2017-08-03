@@ -543,7 +543,8 @@ class DataFrame(object):
             if lidx.size > 0:
                 joined_index = cudautils.gather_joined_index(
                     lkey.to_gpu_array(), rkey.to_gpu_array(), lidx, ridx)
-                joined_index = lkey._copy_construct(buffer=Buffer(joined_index))
+                col = lkey._column.replace(data=Buffer(joined_index))
+                joined_index = lkey._copy_construct(data=col)
                 gather_fn = gather_cols
             else:
                 joined_index = None

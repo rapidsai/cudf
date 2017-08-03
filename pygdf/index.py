@@ -5,13 +5,16 @@ import numpy as np
 
 from . import cudautils, utils
 from .buffer import Buffer
+from .column import Column
 
 
 class Index(object):
     def take(self, indices):
         assert indices.dtype.kind in 'iu'
         index = cudautils.gather(data=self.gpu_values, index=indices)
-        index = self.as_series()._copy_construct(buffer=Buffer(index))
+        sr = self.as_series()
+        col = sr._column.replace(data=Buffer(index))
+        index = sr._copy_construct(data=col)
         return GenericIndex(index)
 
     def as_series(self):

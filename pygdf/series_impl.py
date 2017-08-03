@@ -3,6 +3,7 @@ from numba import cuda
 from .buffer import Buffer
 from .index import GenericIndex
 from . import utils, cudautils
+from .column import Column
 
 
 class SeriesImpl(object):
@@ -99,11 +100,12 @@ def empty_like(df, dtype=None, masked=None, impl=None):
         impl = get_default_impl(dtype)
     # Real work
     data = cuda.device_array(shape=len(df), dtype=dtype)
-    params = dict(buffer=Buffer(data), impl=impl)
+    params = dict(data=Buffer(data))
     if masked:
         mask = utils.make_mask(data.size)
         params.update(dict(mask=Buffer(mask), null_count=data.size))
-    return df._copy_construct(**params)
+
+    return df._copy_construct(data=Column(**params), impl=impl)
 
 
 def empty_like_same_mask(df, dtype=None, impl=None):
@@ -126,10 +128,11 @@ def empty_like_same_mask(df, dtype=None, impl=None):
         impl = get_default_impl(dtype)
     # Real work
     data = cuda.device_array(shape=len(df), dtype=dtype)
-    params = dict(buffer=Buffer(data), impl=impl)
+    params = dict(data=Buffer(data))
     if df.has_null_mask:
         params.update(mask=df.nullmask)
-    return df._copy_construct(**params)
+    col = Column(**params)
+    return df._copy_construct(data=col, impl=impl)
 
 
 def get_default_impl(dtype):
@@ -157,6 +160,7 @@ def element_indexing(series, index):
 def select_by_boolmask(series, boolmask):
     """Select by a boolean mask to a series
     """
+    assert not series.has_null_mask
     boolbits = cudautils.compact_mask_bytes(boolmask.to_gpu_array())
     indices = cudautils.arange(len(boolmask))
     _, selinds = cudautils.copy_to_dense(indices, mask=boolbits)
@@ -164,7 +168,7 @@ def select_by_boolmask(series, boolmask):
 
     assert not series.has_null_mask   # the nullmask needs to be recomputed
 
-    params = dict(buffer=Buffer(selvals), impl=series._impl,
+    params = dict(data=Column(Buffer(selvals)), impl=series._impl,
                   index=GenericIndex(selinds))
 
     return series._copy_construct(**params)

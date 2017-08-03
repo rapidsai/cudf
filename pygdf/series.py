@@ -25,6 +25,8 @@ class Series(object):
         Initializer object
         """
         def __init__(self, **kwargs):
+            unknown = set(kwargs.keys()) - {'data','impl', 'index'}
+            assert not unknown, unknown
             self._params = kwargs
 
         def parameters(self, **kwargs):
@@ -85,19 +87,20 @@ class Series(object):
 
         valid_codes = codes != -1
         buf = Buffer(codes)
-        params = dict(buffer=buf, impl=impl)
+        params = dict(data=buf)
         if not np.all(valid_codes):
             mask = cudautils.compact_mask_bytes(valid_codes)
             nnz = np.count_nonzero(valid_codes)
             null_count = codes.size - nnz
             params.update(dict(mask=Buffer(mask), null_count=null_count))
-        return Series(cls.Init(**params))
+        col = Column(**params)
+        return Series(cls.Init(data=col, impl=impl))
 
     @classmethod
     def from_buffer(cls, buffer):
         """Create a Series from a ``Buffer``
         """
-        return cls(cls.Init(buffer=buffer))
+        return cls(cls.Init(data=Column(buffer)))
 
     @classmethod
     def from_array(cls, array):
@@ -136,7 +139,7 @@ class Series(object):
             instance = cls.from_any(arg, **kwargs)
         return instance
 
-    def _init_detail(self, buffer=None, mask=None, null_count=None,
+    def _init_detail(self, data=None, null_count=None,
                      index=None, impl=None):
         """
         Actual initializer of the instance
@@ -146,24 +149,15 @@ class Series(object):
         if index is not None and not isinstance(index, Index):
             raise TypeError('index not a Index type: got {!r}'.format(index))
 
-        # Forces Series content to be contiguous
-        if not buffer.is_contiguous():
-            buffer = buffer.as_contiguous()
-
-        self._column = Column(data=buffer,
-                              mask=mask,
-                              null_count=null_count)
-
-        self._size = buffer.size if buffer else 0
+        self._column = data
+        self._size = len(data) if data else 0
         self._index = RangeIndex(self._size) if index is None else index
-        self._impl = (series_impl.get_default_impl(buffer.dtype)
+        self._impl = (series_impl.get_default_impl(data.dtype)
                       if impl is None else impl)
 
     def _copy_construct_defaults(self):
         return dict(
-            buffer=self._column.data,
-            mask=self._column.mask,
-            null_count=self.null_count,
+            data=self._column,
             index=self._index,
             impl=self._impl,
         )
@@ -217,7 +211,8 @@ class Series(object):
         if mask.dtype not in (np.dtype(np.uint8), np.dtype(np.int8)):
             msg = 'mask must be of byte; but got {}'.format(mask.dtype)
             raise ValueError(msg)
-        return self._copy_construct(mask=mask, null_count=null_count)
+        col = Column(data=self._column.data, mask=mask, null_count=null_count)
+        return self._copy_construct(data=col)
 
     def __len__(self):
         """Returns the size of the ``Series`` including null values.
@@ -243,16 +238,12 @@ class Series(object):
                 subdata = self._column.data.mem[arg]
                 submask = mask[arg].as_mask()
                 index = self.index[arg]
-                return self._copy_construct(buffer=Buffer(subdata),
-                                            mask=Buffer(submask),
-                                            null_count=None,
-                                            index=index)
+                col = Column(data=Buffer(subdata), mask=Buffer(submask))
+                return self._copy_construct(data=col, index=index)
             else:
                 index = self.index[arg]
                 newbuffer = self._column.data[arg]
-                return self._copy_construct(buffer=newbuffer,
-                                            mask=None,
-                                            null_count=None,
+                return self._copy_construct(data=Column(data=newbuffer),
                                             index=index)
         elif isinstance(arg, int):
             # The following triggers a IndexError if out-of-bound
@@ -272,8 +263,8 @@ class Series(object):
         else:
             mask = None
         index = self.index.take(indices)
-        return self._copy_construct(buffer=Buffer(data), index=index,
-                                    mask=mask)
+        col = Column(data=Buffer(data), mask=mask)
+        return self._copy_construct(data=col, index=index)
 
     def _get_mask_as_series(self):
         mask = Series(cudautils.ones(len(self), dtype=np.bool))
@@ -442,11 +433,8 @@ class Series(object):
         if index is True:
             index = Index._concat([o.index for o in objs])
 
-        return cls(cls.Init(buffer=data,
-                            mask=mask,
-                            null_count=null_count,
-                            index=index,
-                            impl=head._impl))
+        col = Column(data=data, mask=mask, null_count=null_count)
+        return cls(cls.Init(data=col, index=index, impl=head._impl))
 
     def append(self, arbitrary):
         """Append values from another ``Series`` or array-like object.
@@ -601,7 +589,9 @@ class Series(object):
         """
         if dtype == self.dtype:
             return self
-        return self._copy_construct(buffer=self.data.astype(dtype),
+
+        casted = self.data.astype(dtype)
+        return self._copy_construct(data=self._column.replace(data=casted),
                                     impl=None)
 
     def argsort(self, ascending=True):
@@ -665,7 +655,8 @@ class Series(object):
         """
         data = cudautils.reverse_array(self.to_gpu_array())
         index = GenericIndex(cudautils.reverse_array(self.index.gpu_values))
-        return self._copy_construct(buffer=Buffer(data), index=index)
+        col = self._column.replace(data=Buffer(data))
+        return self._copy_construct(data=col, index=index)
 
     def one_hot_encoding(self, cats, dtype='float64'):
         """Perform one-hot-encoding
