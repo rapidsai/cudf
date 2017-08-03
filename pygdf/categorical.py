@@ -1,4 +1,3 @@
-import numpy as np
 import pandas as pd
 
 from .dataframe import Series
@@ -47,11 +46,11 @@ class CategoricalSeriesImpl(series_impl.SeriesImpl):
         self._codes_impl = numerical.NumericalSeriesImpl(codes_dtype)
 
     def __eq__(self, other):
-        if isinstance(other, CategoricalSeriesImpl):
-            return all([self.dtype == other.dtype,
-                        tuple(self._categories) == tuple(other._categories),
-                        self._ordered == other._ordered,
-                        self._codes_impl == other._codes_impl])
+        return (isinstance(other, CategoricalSeriesImpl) and
+                self.dtype == other.dtype and
+                tuple(self._categories) == tuple(other._categories) and
+                self._ordered == other._ordered and
+                self._codes_impl == other._codes_impl)
 
     def _encode(self, value):
         for i, cat in enumerate(self._categories):
@@ -110,8 +109,10 @@ class CategoricalSeriesImpl(series_impl.SeriesImpl):
     def as_index(self, series):
         return self._codes_impl.as_index(series)
 
-    def to_pandas(self, series):
-        values = list(series)
-        return pd.Categorical(values, categories=self._categories,
-                              ordered=self._ordered)
-
+    def to_pandas(self, series, index=True):
+        if index is True:
+            index = series.index.to_pandas()
+        data = pd.Categorical.from_codes(series.cat.codes.to_array(),
+                                         categories=self._categories,
+                                         ordered=self._ordered)
+        return pd.Series(data, index=index)

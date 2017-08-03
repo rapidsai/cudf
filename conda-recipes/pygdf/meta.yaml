@@ -1,0 +1,36 @@
+# Usage:
+#   conda build -c defaults -c conda-forge .
+package:
+  name: pygdf
+  version: {{ environ.get('GIT_DESCRIBE_TAG', '0.0.0.dev').lstrip('v') }}
+
+source:
+  path: ../..
+
+build:
+  number: {{ environ.get('GIT_DESCRIBE_NUMBER', 0) }}
+
+requirements:
+  build:
+    - python
+    - setuptools
+    - libgdf
+    - libgdf_cffi
+    - numba
+  run:
+    - python
+    - setuptools
+    - libgdf
+    - libgdf_cffi
+    - pandas
+    - numba
+    - accelerate_cudalib
+test:
+  imports:
+    - pygdf
+
+about:
+  home: http://gpuopenanalytics.com/
+  license: Apache
+  # license_file: LICENSE
+  summary: GPU Dataframe core library

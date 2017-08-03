@@ -1,5 +1,6 @@
 from .dataframe import DataFrame
 from .series import Series
+from .multi import concat
 
 from .settings import set_options
 

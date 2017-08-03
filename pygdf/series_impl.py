@@ -18,13 +18,13 @@ class SeriesImpl(object):
         self._dtype = dtype
 
     def __eq__(self, other):
-        return self.dtype == other.dtype
+        try:
+            return self.dtype == other.dtype
+        except Exception:
+            return False
 
     def __ne__(self, other):
-        out = self.dtype == other.dtype
-        if out is NotImplemented:
-            return out
-        return not out
+        return not self == other
 
     @property
     def dtype(self):

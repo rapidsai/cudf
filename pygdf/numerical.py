@@ -93,8 +93,10 @@ class NumericalSeriesImpl(series_impl.SeriesImpl):
 
         return series.set_index(RangeIndex(len(series)))
 
-    def to_pandas(self, series):
-        return pd.Series(series.to_array(fillna='pandas'))
+    def to_pandas(self, series, index=True):
+        if index is True:
+            index = series.index.to_pandas()
+        return pd.Series(series.to_array(fillna='pandas'), index=index)
 
     #
     # Internals
@@ -137,28 +139,24 @@ class Stats(object):
     def __init__(self, series):
         self._series = series
 
-    def _ensure_real_dtype(self):
-        series = self._series
-        if issubclass(self._series.dtype.type, np.integer):
-            series = series.astype(np.float64)
-        return series
-
     def min(self):
         return _gdf.apply_reduce(libgdf.gdf_min_generic, self._series)
 
     def max(self):
         return _gdf.apply_reduce(libgdf.gdf_max_generic, self._series)
 
-    def mean(self):
+    def sum(self):
+        dt = np.promote_types('i8', self._series.dtype)
+        x = self._series.astype(dt)
+        return _gdf.apply_reduce(libgdf.gdf_sum_generic, x)
 
-        asum = _gdf.apply_reduce(libgdf.gdf_sum_generic,
-                                 self._ensure_real_dtype())
-        return asum / len(self._series)
+    def mean(self):
+        return self.sum().astype('f8') / self._series.valid_count
 
     def mean_var(self):
-        mu = self.mean()
-        n = len(self._series)
-        asum = _gdf.apply_reduce(libgdf.gdf_sum_squared_generic,
-                                 self._ensure_real_dtype())
+        x = self._series.astype('f8')
+        mu = x.mean()
+        n = x.valid_count
+        asum = _gdf.apply_reduce(libgdf.gdf_sum_squared_generic, x)
         var = asum / n - mu ** 2
         return mu, var
