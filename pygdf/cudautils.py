@@ -552,7 +552,7 @@ class UniqueBySorting(object):
             end = min(qsz, self._maxk)
         else:
             raise NotImplementedError('k is unbounded')
-        vals = out_queue[:end].copy_to_host()
+        vals = out_queue[:end]
         return vals
 
     def run(self, arr):
