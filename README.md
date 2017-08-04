@@ -6,6 +6,10 @@ libgdf is a C library for implementing common functionality for a GPU Data Frame
 
 The following instructions are tested on Linux and OSX systems.
 
+Compiler requirement:
+
+* gcc 4.8 (required to be ABI compatible with libarrow).
+
 ## Get dependencies
 
 It is recommended to setup a conda environment for the dependencies.
