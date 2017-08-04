@@ -113,6 +113,14 @@ gdf_error gdf_join_result_free(gdf_join_result_type *result);
 void* gdf_join_result_data(gdf_join_result_type *result);
 size_t gdf_join_result_size(gdf_join_result_type *result);
 
+/* prefixsum */
+
+gdf_error gdf_prefixsum_generic(gdf_column *inp, gdf_column *out, int inclusive);
+gdf_error gdf_prefixsum_i8(gdf_column *inp, gdf_column *out, int inclusive);
+gdf_error gdf_prefixsum_i32(gdf_column *inp, gdf_column *out, int inclusive);
+gdf_error gdf_prefixsum_i64(gdf_column *inp, gdf_column *out, int inclusive);
+
+
 /* unary operators */
 
 /* trig */
