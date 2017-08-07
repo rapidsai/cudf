@@ -372,15 +372,18 @@ class Series(object):
         if isinstance(other, Series):
             return other
         else:
-            return self._impl.normalize_compare_value(self, other)
+            col = self._column.normalize_compare_value(other)
+            return self._copy_construct(data=col, impl=col.shim_impl)
 
     def _unordered_compare(self, other, cmpops):
         other = self._normalize_compare_value(other)
-        return self._impl.unordered_compare(cmpops, self, other)
+        outcol = self._column.unordered_compare(cmpops, other._column)
+        return self._copy_construct(data=outcol, impl=outcol.shim_impl)
 
     def _ordered_compare(self, other, cmpops):
         other = self._normalize_compare_value(other)
-        return self._impl.ordered_compare(cmpops, self, other)
+        outcol = self._column.ordered_compare(cmpops, other._column)
+        return self._copy_construct(data=outcol, impl=outcol.shim_impl)
 
     def __eq__(self, other):
         return self._unordered_compare(other, 'eq')
@@ -402,12 +405,12 @@ class Series(object):
 
     @property
     def cat(self):
-        return self._impl.cat(self)
+        return self._column.cat()
 
     @property
     def dtype(self):
         """dtype of the Series"""
-        return self._impl.dtype
+        return self._column.dtype
 
     @classmethod
     def _concat(cls, objs, index=True):
@@ -598,8 +601,7 @@ class Series(object):
         if dtype == self.dtype:
             return self
 
-        casted = self.data.astype(dtype)
-        return self._copy_construct(data=self._column.replace(data=casted),
+        return self._copy_construct(data=self._column.astype(dtype),
                                     impl=None)
 
     def argsort(self, ascending=True):
@@ -725,21 +727,21 @@ class Series(object):
     def min(self):
         """Compute the min of the series
         """
-        return self._impl.stats(self).min()
+        return self._column.stats.min()
 
     def max(self):
         """Compute the max of the series
         """
-        return self._impl.stats(self).max()
+        return self._column.stats.max()
 
     def sum(self):
         """Compute the sum of the series"""
-        return self._impl.stats(self).sum()
+        return self._column.stats.sum()
 
     def mean(self):
         """Compute the mean of the series
         """
-        return self._impl.stats(self).mean()
+        return self._column.stats.mean()
 
     def std(self):
         """Compute the standard deviation of the series
@@ -755,7 +757,7 @@ class Series(object):
     def mean_var(self):
         """Compute mean and variance at the same time.
         """
-        mu, var = self._impl.stats(self).mean_var()
+        mu, var = self._column.stats.mean_var()
         return mu, var
 
     def unique_k(self, k):

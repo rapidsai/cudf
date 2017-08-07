@@ -178,16 +178,20 @@ def select_by_boolmask(series, boolmask):
 
 
 class ColumnOps(Column):
-    def __init__(self, column, dtype):
-        super(ColumnOps, self).__init__(data=column.data,
-                                        mask=column.mask,
-                                        null_count=column.null_count)
+    def __init__(self, **kwargs):
+        dtype = kwargs.pop('dtype')
+        super(ColumnOps, self).__init__(**kwargs)
         # Logical dtype
         self._dtype = dtype
 
     @property
     def dtype(self):
         return self._dtype
+
+    def _replace_defaults(self):
+        params = super(ColumnOps, self)._replace_defaults()
+        params.update(dict(dtype=self._dtype))
+        return params
 
 
 def column_empty_like(column, dtype, masked):

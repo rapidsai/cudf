@@ -7,6 +7,7 @@ from libgdf_cffi import libgdf
 
 from . import _gdf, series_impl, utils, cudautils
 from .column import Column
+from .buffer import Buffer
 
 
 # Operator mappings
@@ -100,7 +101,7 @@ class NumericalSeriesImpl(series_impl.SeriesImpl):
         return pd.Series(series.to_array(fillna='pandas'), index=index)
 
     def shim_wrap_column(self, column):
-        return NumericalColumn(column, dtype=column.dtype)
+        return column.view(NumericalColumn, dtype=column.dtype)
 
     #
     # Internals
@@ -184,6 +185,58 @@ class NumericalColumn(series_impl.ColumnOps):
         return numeric_column_unaryop(self, op=_unary_impl[unaryop],
                                       out_dtype=self.dtype)
 
+    def unordered_compare(self, cmpop, rhs):
+        return numeric_column_compare(self, rhs, op=_unordered_impl[cmpop])
+
+    def ordered_compare(self, cmpop, rhs):
+        return numeric_column_compare(self, rhs, op=_ordered_impl[cmpop])
+
+    def normalize_compare_value(self, other):
+        if np.min_scalar_type(other).kind in 'biuf':
+            ary = utils.scalar_broadcast_to(other, shape=len(self))
+            return self.replace(data=Buffer(ary), dtype=ary.dtype)
+        else:
+            raise TypeError('cannot broadcast {}'.format(type(other)))
+
+    @property
+    def stats(self):
+        return ColumnStats(self)
+
+    def astype(self, dtype):
+        if self.dtype == dtype:
+            return self
+        else:
+            col = self.replace(data=self.data.astype(dtype),
+                               dtype=dtype)
+            return col
+
+
+class ColumnStats(object):
+    def __init__(self, column):
+        self._column = column
+
+    def min(self):
+        return _gdf.apply_reduce(libgdf.gdf_min_generic, self._column)
+
+    def max(self):
+        return _gdf.apply_reduce(libgdf.gdf_max_generic, self._column)
+
+    def sum(self):
+        dt = np.promote_types('i8', self._column.dtype)
+        x = self._column.astype(dt)
+        return _gdf.apply_reduce(libgdf.gdf_sum_generic, x)
+
+    def mean(self):
+        return self.sum().astype('f8') / self._column.valid_count
+
+    def mean_var(self):
+        x = self._column.astype('f8')
+        mu = x.mean()
+        n = x.valid_count
+        asum = _gdf.apply_reduce(libgdf.gdf_sum_squared_generic, x)
+        var = asum / n - mu ** 2
+        return mu, var
+
 
 def numeric_column_binop(lhs, rhs, op, out_dtype):
      # Allocate output series
@@ -201,3 +254,7 @@ def numeric_column_unaryop(operand, op, out_dtype):
     _gdf.apply_unaryop(op, operand, out)
     impl = NumericalSeriesImpl(out_dtype)
     return impl.shim_wrap_column(out)
+
+
+def numeric_column_compare(lhs, rhs, op):
+    return numeric_column_binop(lhs, rhs, op, out_dtype=np.bool_)

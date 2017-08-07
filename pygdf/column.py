@@ -80,11 +80,22 @@ class Column(object):
         else:
             raise ValueError('Column has no null mask')
 
-    def replace(self, **kwargs):
+    def _replace_defaults(self):
         params = {
             'data': self.data,
             'mask': self.mask,
             'null_count': self.null_count,
         }
+        return params
+
+    def replace(self, **kwargs):
+        params = self._replace_defaults()
         params.update(kwargs)
-        return Column(**params)
+        return type(self)(**params)
+
+    def view(self, newcls, **kwargs):
+        """View the underlying column data differently.
+        """
+        params = Column._replace_defaults(self)
+        params.update(kwargs)
+        return newcls(**params)
