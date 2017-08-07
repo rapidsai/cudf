@@ -2,8 +2,6 @@
 A column is data + validity-mask.
 LibGDF operates on column.
 """
-import numpy as np
-
 from . import _gdf
 from . import cudautils
 
@@ -99,3 +97,15 @@ class Column(object):
         params = Column._replace_defaults(self)
         params.update(kwargs)
         return newcls(**params)
+
+    def element_indexing(self, index):
+        """Default implementation for indexing to an element
+
+        Raises
+        ------
+        ``IndexError`` if out-of-bound
+        """
+        val = self.data[index]  # this can raise IndexError
+        valid = (cudautils.mask_get.py_func(self.nullmask, index)
+                 if self.has_null_mask else True)
+        return val if valid else None

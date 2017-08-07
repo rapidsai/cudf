@@ -188,6 +188,9 @@ class ColumnOps(Column):
     def dtype(self):
         return self._dtype
 
+    def is_type_equivalent(self, other):
+        return self.shim_impl == other.shim_impl
+
     def _replace_defaults(self):
         params = super(ColumnOps, self)._replace_defaults()
         params.update(dict(dtype=self._dtype))
@@ -224,3 +227,22 @@ def column_empty_like_same_mask(column, dtype=None):
     if column.has_null_mask:
         params.update(mask=column.nullmask)
     return Column(**params)
+
+
+def column_select_by_boolmask(column, boolmask):
+    """Select by a boolean mask to a column.
+
+    Returns (selected_column, selected_positions)
+    """
+    assert not column.has_null_mask
+    boolbits = cudautils.compact_mask_bytes(boolmask.to_gpu_array())
+    indices = cudautils.arange(len(boolmask))
+    _, selinds = cudautils.copy_to_dense(indices, mask=boolbits)
+    _, selvals = cudautils.copy_to_dense(column.data.to_gpu_array(),
+                                         mask=boolbits)
+
+    assert not column.has_null_mask   # the nullmask needs to be recomputed
+
+    selected_values = column.replace(data=Buffer(selvals))
+    selected_index = Buffer(selinds)
+    return selected_values, selected_index

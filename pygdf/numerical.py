@@ -172,6 +172,9 @@ class NumericalColumn(series_impl.ColumnOps):
     def shim_impl(self):
         return NumericalSeriesImpl(self.dtype)
 
+    def is_type_equivalent(self, other):
+        return self.shim_impl == other.shim_impl
+
     def binary_operator(self, binop, rhs):
         if isinstance(rhs, NumericalColumn):
             op = _binary_impl[binop]
@@ -209,6 +212,27 @@ class NumericalColumn(series_impl.ColumnOps):
             col = self.replace(data=self.data.astype(dtype),
                                dtype=dtype)
             return col
+
+    def sort_by_values(self, ascending):
+        if self.mask:
+            raise ValueError('masked array not supported')
+        # Clone data buffer as the key
+        col_keys = self.replace(data=self.data.copy())
+        # Create new array for the positions
+        inds = Buffer(cudautils.arange(len(self)))
+        col_inds = self.replace(data=inds, dtype=inds.dtype)
+        _gdf.apply_sort(col_keys, col_inds, ascending=ascending)
+        return col_keys, col_inds
+
+    def as_index(self, series):
+        from .index import RangeIndex
+
+        return series.set_index(RangeIndex(len(series)))
+
+    def to_pandas(self, series, index=True):
+        if index is True:
+            index = series.index.to_pandas()
+        return pd.Series(series.to_array(fillna='pandas'), index=index)
 
 
 class ColumnStats(object):

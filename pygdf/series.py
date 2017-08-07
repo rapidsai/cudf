@@ -192,7 +192,7 @@ class Series(object):
         return self._copy_construct(index=index)
 
     def as_index(self):
-        return self._impl.as_index(self)
+        return self.set_index(RangeIndex(len(self)))
 
     def set_mask(self, mask, null_count=None):
         """Create new Series by setting a mask array.
@@ -229,7 +229,9 @@ class Series(object):
         from . import series_impl
 
         if isinstance(arg, Series):
-            return series_impl.select_by_boolmask(self, arg)
+            selvals, selinds = series_impl.column_select_by_boolmask(self._column, arg)
+            return self._copy_construct(data=selvals,
+                                        index=GenericIndex(selinds))
 
         elif isinstance(arg, slice):
             # compute mask slice
@@ -253,7 +255,7 @@ class Series(object):
                                             index=index)
         elif isinstance(arg, int):
             # The following triggers a IndexError if out-of-bound
-            return self._impl.element_indexing(self, arg)
+            return self._column.element_indexing(arg)
         else:
             raise NotImplementedError(type(arg))
 
@@ -288,11 +290,8 @@ class Series(object):
         """Returns a list of string for each element.
         """
         values = self[:nrows]
-        out = ['' if v is None else self._element_to_str(v) for v in values]
+        out = ['' if v is None else str(v) for v in values]
         return out
-
-    def _element_to_str(self, value):
-        return self._impl.element_to_str(value)
 
     def head(self, n=5):
         return self[:n]
@@ -416,7 +415,7 @@ class Series(object):
     def _concat(cls, objs, index=True):
         head = objs[0]
         for o in objs:
-            if o._impl != head._impl:
+            if not o._column.is_type_equivalent(head._column):
                 raise ValueError("All series must be of same type")
 
         newsize = sum(map(len, objs))
@@ -560,7 +559,7 @@ class Series(object):
         return self.to_dense_buffer(fillna=fillna).to_gpu_array()
 
     def to_pandas(self, index=True):
-        return self._impl.to_pandas(self, index=index)
+        return self._column.to_pandas(self, index=index)
 
     @property
     def data(self):
@@ -658,7 +657,10 @@ class Series(object):
         -------
         2-tuple of key and index
         """
-        return self._impl.sort_by_values(self, ascending=ascending)
+        col_keys, col_inds = self._column.sort_by_values(ascending=ascending)
+        sr_keys = self._copy_construct(data=col_keys, impl=None)
+        sr_inds = self._copy_construct(data=col_inds, impl=None)
+        return sr_keys, sr_inds
 
     def reverse(self):
         """Reverse the Series

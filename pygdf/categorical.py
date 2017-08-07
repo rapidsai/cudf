@@ -110,14 +110,6 @@ class CategoricalSeriesImpl(series_impl.SeriesImpl):
     def as_index(self, series):
         return self._codes_impl.as_index(series)
 
-    def to_pandas(self, series, index=True):
-        if index is True:
-            index = series.index.to_pandas()
-        data = pd.Categorical.from_codes(series.cat.codes.to_array(),
-                                         categories=self._categories,
-                                         ordered=self._ordered)
-        return pd.Series(data, index=index)
-
     def shim_wrap_column(self, column):
         return column.view(CategoricalColumn, dtype=self.dtype,
                            categories=self._categories,
@@ -183,6 +175,21 @@ class CategoricalColumn(series_impl.ColumnOps):
 
     def astype(self, dtype):
         return self.as_numerical.astype(dtype)
+
+    def sort_by_values(self, ascending):
+        return self.as_numerical.sort_by_values(ascending)
+
+    def element_indexing(self, index):
+        val = self.as_numerical.element_indexing(index)
+        return self._decode(val) if val is not None else val
+
+    def to_pandas(self, series, index=True):
+        if index is True:
+            index = series.index.to_pandas()
+        data = pd.Categorical.from_codes(series.cat.codes.to_array(),
+                                         categories=self._categories,
+                                         ordered=self._ordered)
+        return pd.Series(data, index=index)
 
     def _encode(self, value):
         for i, cat in enumerate(self._categories):
