@@ -139,3 +139,7 @@ class CategoricalColumn(series_impl.ColumnOps):
     def binary_operator(self, binop, rhs):
         msg = 'Categorical cannot perform the operation: {}'.format(binop)
         raise TypeError(msg)
+
+    def unary_operator(self, unaryop):
+        msg = 'Categorical cannot perform the operation: {}'.format(unaryop)
+        raise TypeError(msg)

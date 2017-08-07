@@ -174,10 +174,15 @@ class NumericalColumn(series_impl.ColumnOps):
     def binary_operator(self, binop, rhs):
         if isinstance(rhs, NumericalColumn):
             op = _binary_impl[binop]
+            print('dtype = ', self.dtype)
             return numeric_column_binop(lhs=self, rhs=rhs, op=op,
                                         out_dtype=self.dtype)
         else:
             return NotImplemented
+
+    def unary_operator(self, unaryop):
+        return numeric_column_unaryop(self, op=_unary_impl[unaryop],
+                                      out_dtype=self.dtype)
 
 
 def numeric_column_binop(lhs, rhs, op, out_dtype):
@@ -190,3 +195,9 @@ def numeric_column_binop(lhs, rhs, op, out_dtype):
     out = out.replace(null_count=null_count)
     return impl.shim_wrap_column(out)
 
+
+def numeric_column_unaryop(operand, op, out_dtype):
+    out = series_impl.column_empty_like_same_mask(operand, dtype=out_dtype)
+    _gdf.apply_unaryop(op, operand, out)
+    impl = NumericalSeriesImpl(out_dtype)
+    return impl.shim_wrap_column(out)

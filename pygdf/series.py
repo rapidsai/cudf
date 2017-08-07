@@ -348,7 +348,8 @@ class Series(object):
         Return the output Series.  The output dtype is determined by the input
         operand.
         """
-        return self._impl.unary_operator(fn, self)
+        outcol = self._column.unary_operator(fn)
+        return self._copy_construct(data=outcol, impl=outcol.shim_impl)
 
     def __add__(self, other):
         return self._binaryop(other, 'add')

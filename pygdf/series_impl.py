@@ -199,3 +199,24 @@ def column_empty_like(column, dtype, masked):
         mask = utils.make_mask(data.size)
         params.update(dict(mask=Buffer(mask), null_count=data.size))
     return Column(**params)
+
+
+def column_empty_like_same_mask(column, dtype=None):
+    """Create a new empty Column with the same length and the same mask.
+
+    Parameters
+    ----------
+    dtype : np.dtype like; defaults to None
+        The dtype of the data buffer.
+        Defaults to the same dtype as this.
+    """
+
+    # Prepare args
+    if dtype is None:
+        dtype = column.data.dtype
+    # Real work
+    data = cuda.device_array(shape=len(column), dtype=dtype)
+    params = dict(data=Buffer(data))
+    if column.has_null_mask:
+        params.update(mask=column.nullmask)
+    return Column(**params)
