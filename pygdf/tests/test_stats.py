@@ -12,14 +12,25 @@ methods = ['min', 'max', 'sum', 'mean', 'var', 'std']
 @pytest.mark.parametrize('method', methods)
 @pytest.mark.parametrize('dtype', params_dtypes)
 def test_series_reductions(method, dtype):
+    np.random.seed(0)
     arr = np.random.random(100)
     if np.issubdtype(dtype, np.integer):
         arr *= 100
-    mask = arr > 10
+        mask = arr > 10
+    else:
+        mask = arr > 0.5
+
     arr = arr.astype(dtype)
     arr2 = arr[mask]
     sr = Series.from_masked_array(arr, Series(mask).as_mask())
-    np.testing.assert_almost_equal(arr2.mean(), sr.mean())
+
+    def call_test(sr):
+        fn = getattr(sr, method)
+        return fn()
+
+    expect, got = call_test(arr2), call_test(sr)
+    print(expect, got)
+    np.testing.assert_approx_equal(expect, got)
 
 
 def test_series_unique():

@@ -25,7 +25,7 @@ class Series(object):
         Initializer object
         """
         def __init__(self, **kwargs):
-            unknown = set(kwargs.keys()) - {'data','impl', 'index'}
+            unknown = set(kwargs.keys()) - {'data', 'index'}
             assert not unknown, unknown
             self._params = kwargs
 
@@ -72,35 +72,35 @@ class Series(object):
 
         If ``codes`` is defined, use it instead of ``categorical.codes``
         """
-        from .categorical import CategoricalSeriesImpl
-
+        from .categorical import CategoricalColumn
         # TODO fix mutability issue in numba to avoid the .copy()
         codes = (categorical.codes.copy()
                  if codes is None else codes)
-        dtype = categorical.dtype
         # TODO pending pandas to be improved
         #       https://github.com/pandas-dev/pandas/issues/14711
         #       https://github.com/pandas-dev/pandas/pull/16015
-        impl = CategoricalSeriesImpl(dtype, codes.dtype,
-                                     categorical.categories,
-                                     categorical.ordered)
-
         valid_codes = codes != -1
         buf = Buffer(codes)
-        params = dict(data=buf)
+        params = dict(data=buf, dtype=categorical.dtype,
+                      categories=categorical.categories,
+                      ordered=categorical.ordered)
         if not np.all(valid_codes):
             mask = cudautils.compact_mask_bytes(valid_codes)
             nnz = np.count_nonzero(valid_codes)
             null_count = codes.size - nnz
             params.update(dict(mask=Buffer(mask), null_count=null_count))
-        col = Column(**params)
-        return Series(cls.Init(data=col, impl=impl))
+
+        col = CategoricalColumn(**params)
+        return Series(cls.Init(data=col))
 
     @classmethod
     def from_buffer(cls, buffer):
         """Create a Series from a ``Buffer``
         """
-        return cls(cls.Init(data=Column(buffer)))
+        from .numerical import NumericalColumn
+
+        col = NumericalColumn(data=buffer, dtype=buffer.dtype)
+        return cls(cls.Init(data=col))
 
     @classmethod
     def from_array(cls, array):
@@ -149,10 +149,10 @@ class Series(object):
         if index is not None and not isinstance(index, Index):
             raise TypeError('index not a Index type: got {!r}'.format(index))
 
-        assert isinstance(data, Column)
-        impl = (series_impl.get_default_impl(data.dtype)
-                if impl is None else impl)
-        self._column = impl.shim_wrap_column(data)
+        assert isinstance(data, series_impl.ColumnOps)
+        # impl = (series_impl.get_default_impl(data.dtype)
+        #         if impl is None else impl)
+        self._column = data
         self._size = len(data) if data else 0
         self._index = RangeIndex(self._size) if index is None else index
 
@@ -160,7 +160,6 @@ class Series(object):
         return dict(
             data=self._column,
             index=self._index,
-            impl=self._impl,
         )
 
     def _copy_construct(self, **kwargs):
@@ -170,11 +169,6 @@ class Series(object):
         cls = type(self)
         params.update(kwargs)
         return cls(cls.Init(**params))
-
-    @property
-    def _impl(self):
-        """XXX: SHIM"""
-        return self._column.shim_impl
 
     @property
     def _cffi_view(self):
@@ -217,7 +211,7 @@ class Series(object):
         if mask.dtype not in (np.dtype(np.uint8), np.dtype(np.int8)):
             msg = 'mask must be of byte; but got {}'.format(mask.dtype)
             raise ValueError(msg)
-        col = Column(data=self._column.data, mask=mask, null_count=null_count)
+        col = self._column.replace(mask=mask, null_count=null_count)
         return self._copy_construct(data=col)
 
     def __len__(self):
@@ -246,13 +240,14 @@ class Series(object):
                 subdata = self._column.data.mem[arg]
                 submask = mask[arg].as_mask()
                 index = self.index[arg]
-                col = Column(data=Buffer(subdata), mask=Buffer(submask))
+                col = self._column.replace(data=Buffer(subdata),
+                                           mask=Buffer(submask))
                 return self._copy_construct(data=col, index=index)
             else:
                 index = self.index[arg]
                 newbuffer = self._column.data[arg]
-                return self._copy_construct(data=Column(data=newbuffer),
-                                            index=index)
+                col = self._column.replace(data=newbuffer)
+                return self._copy_construct(data=col, index=index)
         elif isinstance(arg, int):
             # The following triggers a IndexError if out-of-bound
             return self._column.element_indexing(arg)
@@ -271,7 +266,7 @@ class Series(object):
         else:
             mask = None
         index = self.index.take(indices)
-        col = Column(data=Buffer(data), mask=mask)
+        col = self._column.replace(data=Buffer(data), mask=mask)
         return self._copy_construct(data=col, index=index)
 
     def _get_mask_as_series(self):
@@ -339,7 +334,7 @@ class Series(object):
         if not isinstance(other, Series):
             return NotImplemented
         outcol = self._column.binary_operator(fn, other._column)
-        return self._copy_construct(data=outcol, impl=outcol.shim_impl)
+        return self._copy_construct(data=outcol)
 
     def _unaryop(self, fn):
         """
@@ -348,7 +343,7 @@ class Series(object):
         operand.
         """
         outcol = self._column.unary_operator(fn)
-        return self._copy_construct(data=outcol, impl=outcol.shim_impl)
+        return self._copy_construct(data=outcol)
 
     def __add__(self, other):
         return self._binaryop(other, 'add')
@@ -372,17 +367,17 @@ class Series(object):
             return other
         else:
             col = self._column.normalize_compare_value(other)
-            return self._copy_construct(data=col, impl=col.shim_impl)
+            return self._copy_construct(data=col)
 
     def _unordered_compare(self, other, cmpops):
         other = self._normalize_compare_value(other)
         outcol = self._column.unordered_compare(cmpops, other._column)
-        return self._copy_construct(data=outcol, impl=outcol.shim_impl)
+        return self._copy_construct(data=outcol)
 
     def _ordered_compare(self, other, cmpops):
         other = self._normalize_compare_value(other)
         outcol = self._column.ordered_compare(cmpops, other._column)
-        return self._copy_construct(data=outcol, impl=outcol.shim_impl)
+        return self._copy_construct(data=outcol)
 
     def __eq__(self, other):
         return self._unordered_compare(other, 'eq')
@@ -443,8 +438,8 @@ class Series(object):
         if index is True:
             index = Index._concat([o.index for o in objs])
 
-        col = Column(data=data, mask=mask, null_count=null_count)
-        return cls(cls.Init(data=col, index=index, impl=head._impl))
+        col = head._column.replace(data=data, mask=mask, null_count=null_count)
+        return cls(cls.Init(data=col, index=index))
 
     def append(self, arbitrary):
         """Append values from another ``Series`` or array-like object.
@@ -600,8 +595,7 @@ class Series(object):
         if dtype == self.dtype:
             return self
 
-        return self._copy_construct(data=self._column.astype(dtype),
-                                    impl=None)
+        return self._copy_construct(data=self._column.astype(dtype))
 
     def argsort(self, ascending=True):
         """Returns a Series of int64 index that will sort the series.
@@ -658,8 +652,8 @@ class Series(object):
         2-tuple of key and index
         """
         col_keys, col_inds = self._column.sort_by_values(ascending=ascending)
-        sr_keys = self._copy_construct(data=col_keys, impl=None)
-        sr_inds = self._copy_construct(data=col_inds, impl=None)
+        sr_keys = self._copy_construct(data=col_keys)
+        sr_inds = self._copy_construct(data=col_inds)
         return sr_keys, sr_inds
 
     def reverse(self):

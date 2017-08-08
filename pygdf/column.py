@@ -27,6 +27,17 @@ class Column(object):
     def __len__(self):
         return self._data.size
 
+    def __eq__(self, other):
+        if isinstance(other, Column):
+            return (self._data == other._data and
+                    self._mask == other._mask and
+                    self._null_count == other._null_count)
+        else:
+            return NotImplemented
+
+    def __ne__(self, other):
+        return not (self == other)
+
     @property
     def dtype(self):
         return self._data.dtype
