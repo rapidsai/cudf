@@ -1,7 +1,7 @@
 import pandas as pd
 
 from .dataframe import Series
-from . import numerical, utils, series_impl
+from . import numerical, utils, columnops
 from .buffer import Buffer
 
 
@@ -34,7 +34,7 @@ class CategoricalAccessor(object):
             return Series.from_buffer(data)
 
 
-class CategoricalColumn(series_impl.ColumnOps):
+class CategoricalColumn(columnops.ColumnOps):
     def __init__(self, **kwargs):
         categories = kwargs.pop('categories')
         ordered = kwargs.pop('ordered')

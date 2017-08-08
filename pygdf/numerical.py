@@ -5,7 +5,7 @@ import pandas as pd
 
 from libgdf_cffi import libgdf
 
-from . import _gdf, series_impl, utils, cudautils
+from . import _gdf, columnops, utils, cudautils
 from .column import Column
 from .buffer import Buffer
 
@@ -42,7 +42,7 @@ _unary_impl = {
 }
 
 
-class NumericalColumn(series_impl.ColumnOps):
+class NumericalColumn(columnops.ColumnOps):
     def __init__(self, **kwargs):
         super(NumericalColumn, self).__init__(**kwargs)
         assert self._dtype == self._data.dtype
@@ -132,7 +132,7 @@ class ColumnStats(object):
 def numeric_column_binop(lhs, rhs, op, out_dtype):
      # Allocate output series
     masked = lhs.has_null_mask or rhs.has_null_mask
-    out = series_impl.column_empty_like(lhs, dtype=out_dtype, masked=masked)
+    out = columnops.column_empty_like(lhs, dtype=out_dtype, masked=masked)
     # Call and fix null_count
     null_count = _gdf.apply_binaryop(op, lhs, rhs, out)
     out = out.replace(null_count=null_count)
@@ -140,7 +140,7 @@ def numeric_column_binop(lhs, rhs, op, out_dtype):
 
 
 def numeric_column_unaryop(operand, op, out_dtype):
-    out = series_impl.column_empty_like_same_mask(operand, dtype=out_dtype)
+    out = columnops.column_empty_like_same_mask(operand, dtype=out_dtype)
     _gdf.apply_unaryop(op, operand, out)
     return out.view(NumericalColumn, dtype=out_dtype)
 

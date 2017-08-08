@@ -144,13 +144,13 @@ class Series(object):
         """
         Actual initializer of the instance
         """
-        from . import series_impl
+        from . import columnops
 
         if index is not None and not isinstance(index, Index):
             raise TypeError('index not a Index type: got {!r}'.format(index))
 
-        assert isinstance(data, series_impl.ColumnOps)
-        # impl = (series_impl.get_default_impl(data.dtype)
+        assert isinstance(data, columnops.ColumnOps)
+        # impl = (columnops.get_default_impl(data.dtype)
         #         if impl is None else impl)
         self._column = data
         self._size = len(data) if data else 0
@@ -220,10 +220,10 @@ class Series(object):
         return self._size
 
     def __getitem__(self, arg):
-        from . import series_impl
+        from . import columnops
 
         if isinstance(arg, Series):
-            selvals, selinds = series_impl.column_select_by_boolmask(self._column, arg)
+            selvals, selinds = columnops.column_select_by_boolmask(self._column, arg)
             return self._copy_construct(data=selvals,
                                         index=GenericIndex(selinds))
 
