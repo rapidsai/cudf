@@ -20,22 +20,6 @@ class Series(object):
 
     ``Series`` objects are used as columns of ``DataFrame``.
     """
-    class Init(object):
-        """
-        Initializer object
-        """
-        def __init__(self, **kwargs):
-            unknown = set(kwargs.keys()) - {'data', 'index'}
-            assert not unknown, unknown
-            self._params = kwargs
-
-        def parameters(self, **kwargs):
-            dupset = frozenset(kwargs.keys()) & frozenset(self._params.keys())
-            if dupset:
-                raise ValueError("duplicated kws: {}",
-                                 ', '.join(map(str, dupset)))
-            kwargs.update(self._params)
-            return kwargs
 
     @classmethod
     def from_any(cls, arbitrary):
@@ -91,7 +75,7 @@ class Series(object):
             params.update(dict(mask=Buffer(mask), null_count=null_count))
 
         col = CategoricalColumn(**params)
-        return Series(cls.Init(data=col))
+        return Series(data=col)
 
     @classmethod
     def from_buffer(cls, buffer):
@@ -100,7 +84,7 @@ class Series(object):
         from .numerical import NumericalColumn
 
         col = NumericalColumn(data=buffer, dtype=buffer.dtype)
-        return cls(cls.Init(data=col))
+        return cls(data=col)
 
     @classmethod
     def from_array(cls, array):
@@ -131,16 +115,16 @@ class Series(object):
         """
         return cls.from_any(data).set_mask(mask, null_count=null_count)
 
-    def __new__(cls, arg, **kwargs):
-        if isinstance(arg, cls.Init):
+    def __new__(cls, data=None, index=None):
+        if isinstance(data, Column):
             instance = object.__new__(cls)
-            instance._init_detail(**arg.parameters(**kwargs))
+            instance._init_detail(data=data, index=index)
         else:
-            instance = cls.from_any(arg, **kwargs)
+            assert index is None
+            instance = cls.from_any(data)
         return instance
 
-    def _init_detail(self, data=None, null_count=None,
-                     index=None, impl=None):
+    def _init_detail(self, data=None, index=None):
         """
         Actual initializer of the instance
         """
@@ -168,7 +152,7 @@ class Series(object):
         params = self._copy_construct_defaults()
         cls = type(self)
         params.update(kwargs)
-        return cls(cls.Init(**params))
+        return cls(**params)
 
     @property
     def _cffi_view(self):
@@ -413,7 +397,7 @@ class Series(object):
             index = Index._concat([o.index for o in objs])
 
         col = Column._concat([o._column for o in objs])
-        return cls(cls.Init(data=col, index=index))
+        return cls(data=col, index=index)
 
     def append(self, arbitrary):
         """Append values from another ``Series`` or array-like object.
