@@ -3,9 +3,6 @@ from __future__ import print_function, division
 from collections import OrderedDict
 
 import numpy as np
-import pandas as pd
-
-from numba import cuda
 
 from . import cudautils, utils, formatting
 from .buffer import Buffer
@@ -13,7 +10,6 @@ from .index import Index, RangeIndex, GenericIndex
 from .settings import NOTSET, settings
 from .column import Column
 from . import columnops
-from .numerical import NumericalColumn
 
 
 class Series(object):
@@ -22,24 +18,6 @@ class Series(object):
 
     ``Series`` objects are used as columns of ``DataFrame``.
     """
-
-    @classmethod
-    def from_any(cls, arbitrary):
-        """Create Series from an arbitrary object
-
-        Currently support inputs are:
-
-        * ``Series``
-        * ``Buffer``
-        * numba device array
-        * numpy array
-        * pandas.Categorical
-        """
-        if isinstance(arbitrary, Series):
-            return arbitrary._copy_construct()
-
-        return Series(data=columnops.as_column(arbitrary))
-
     @classmethod
     def from_categorical(cls, categorical, codes=None):
         """Creates from a pandas.Categorical
@@ -56,7 +34,7 @@ class Series(object):
         """Create a Series with null-mask.
         This is equivalent to:
 
-            Series.from_any(data).set_mask(mask, null_count=null_count)
+            Series(data).set_mask(mask, null_count=null_count)
 
         Parameters
         ----------
@@ -72,10 +50,14 @@ class Series(object):
             The number of null values.
             If None, it is calculated automatically.
         """
-        return cls.from_any(data).set_mask(mask, null_count=null_count)
+        col = columnops.as_column(data).set_mask(mask, null_count=null_count)
+        return cls(data=col)
 
     def __init__(self, data, index=None):
-        if not isinstance(data, Column):
+        if isinstance(data, Series):
+            index = data._index
+            data = data._column
+        if not isinstance(data, columnops.ColumnOps):
             data = columnops.as_column(data)
 
         if index is not None and not isinstance(index, Index):
@@ -135,12 +117,7 @@ class Series(object):
             If None, it is calculated automatically.
 
         """
-        if not isinstance(mask, Buffer):
-            mask = Buffer(mask)
-        if mask.dtype not in (np.dtype(np.uint8), np.dtype(np.int8)):
-            msg = 'mask must be of byte; but got {}'.format(mask.dtype)
-            raise ValueError(msg)
-        col = self._column.replace(mask=mask, null_count=null_count)
+        col = self._column.set_mask(mask, null_count=null_count)
         return self._copy_construct(data=col)
 
     def __len__(self):
@@ -347,10 +324,10 @@ class Series(object):
         """Append values from another ``Series`` or array-like object.
         Returns a new copy with the index resetted.
         """
-        other = Series.from_any(arbitrary)
+        other = Series(arbitrary)
         other_col = other._column
         # return new series
-        return self.from_any(self._column.append(other_col))
+        return Series(self._column.append(other_col))
 
     @property
     def valid_count(self):

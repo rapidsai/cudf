@@ -34,7 +34,7 @@ def test_categorical_basic():
 def test_categorical_missing():
     cat = pd.Categorical(['a', '_', '_', 'c', 'a'], categories=['a', 'b', 'c'])
     pdsr = pd.Series(cat)
-    sr = Series.from_any(cat)
+    sr = Series(cat)
     fillna = lambda x: np.where(np.isnan(x), -1, x)
     np.testing.assert_array_equal(cat.codes, fillna(sr.to_array(fillna='pandas')))
     assert sr.null_count == 2
@@ -58,7 +58,7 @@ def test_categorical_compare_unordered():
     cat = pd.Categorical(['a', 'a', 'b', 'c', 'a'], categories=['a', 'b', 'c'])
     pdsr = pd.Series(cat)
 
-    sr = Series.from_any(cat)
+    sr = Series(cat)
 
     # test equal
     out = sr == sr
@@ -91,11 +91,11 @@ def test_categorical_compare_ordered():
     cat1 = pd.Categorical(['a', 'a', 'b', 'c', 'a'],
                           categories=['a', 'b', 'c'], ordered=True)
     pdsr1 = pd.Series(cat1)
-    sr1 = Series.from_any(cat1)
+    sr1 = Series(cat1)
     cat2 = pd.Categorical(['a', 'b', 'a', 'c', 'b'],
                           categories=['a', 'b', 'c'], ordered=True)
     pdsr2 = pd.Series(cat2)
-    sr2 = Series.from_any(cat2)
+    sr2 = Series(cat2)
 
     # test equal
     out = sr1 == sr1
@@ -120,7 +120,7 @@ def test_categorical_compare_ordered():
 def test_categorical_binary_add():
     cat = pd.Categorical(['a', 'a', 'b', 'c', 'a'], categories=['a', 'b', 'c'])
     pdsr = pd.Series(cat)
-    sr = Series.from_any(cat)
+    sr = Series(cat)
 
     with pytest.raises(TypeError) as raises:
         pdsr + pdsr

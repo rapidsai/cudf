@@ -92,6 +92,32 @@ class Column(object):
                                data=self._data,
                                mask=self._mask)
 
+    def set_mask(self, mask, null_count=None):
+        """Create new Column by setting the mask
+
+        This will override the existing mask.  The returned Series will
+        reference the same data buffer as this Series.
+
+        Parameters
+        ----------
+        mask : 1D array-like of numpy.uint8
+            The null-mask.  Valid values are marked as ``1``; otherwise ``0``.
+            The mask bit given the data index ``idx`` is computed as::
+
+                (mask[idx // 8] >> (idx % 8)) & 1
+        null_count : int, optional
+            The number of null values.
+            If None, it is calculated automatically.
+
+        """
+        if not isinstance(mask, Buffer):
+            mask = Buffer(mask)
+        if mask.dtype not in (np.dtype(np.uint8), np.dtype(np.int8)):
+            msg = 'mask must be of byte; but got {}'.format(mask.dtype)
+            raise ValueError(msg)
+        return self.replace(mask=mask, null_count=null_count)
+
+
     def to_gpu_array(self, fillna=None):
         """Get a dense numba device array for the data.
 

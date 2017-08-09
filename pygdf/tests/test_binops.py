@@ -23,7 +23,7 @@ _binops = [
 @pytest.mark.parametrize('binop', _binops)
 def test_series_binop(binop):
     arr = np.random.random(100)
-    sr = Series.from_any(arr)
+    sr = Series(arr)
     np.testing.assert_equal(binop(sr, sr).to_array(), binop(arr, arr))
 
 
@@ -41,8 +41,8 @@ _cmpops = [
 def test_series_compare(cmpop):
     arr1 = np.random.random(100)
     arr2 = np.random.random(100)
-    sr1 = Series.from_any(arr1)
-    sr2 = Series.from_any(arr2)
+    sr1 = Series(arr1)
+    sr2 = Series(arr2)
     np.testing.assert_equal(cmpop(sr1, sr1).to_array(),  cmpop(arr1, arr1))
     np.testing.assert_equal(cmpop(sr2, sr2).to_array(),  cmpop(arr2, arr2))
     np.testing.assert_equal(cmpop(sr1, sr2).to_array(),  cmpop(arr1, arr2))
@@ -51,7 +51,7 @@ def test_series_compare(cmpop):
 @pytest.mark.parametrize('cmpop', _cmpops)
 def test_series_compare_scalar(cmpop):
     arr1 = np.random.random(100)
-    sr1 = Series.from_any(arr1)
+    sr1 = Series(arr1)
     rhs = np.asscalar(random.choice(arr1))
     np.testing.assert_equal(cmpop(sr1, rhs).to_array(),  cmpop(arr1, rhs))
     np.testing.assert_equal(cmpop(rhs, sr1).to_array(),  cmpop(rhs, arr1))

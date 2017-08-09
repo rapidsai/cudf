@@ -69,7 +69,7 @@ def test_buffer_append():
 def test_series_basic():
     # Make series from buffer
     a1 = np.arange(10, dtype=np.float64)
-    series = Series.from_any(a1)
+    series = Series(a1)
     assert len(series) == 10
     np.testing.assert_equal(series.to_array(), np.hstack([a1]))
 
@@ -89,7 +89,7 @@ def test_series_basic():
 
 def test_series_indexing():
     a1 = np.arange(20)
-    series = Series.from_any(a1)
+    series = Series(a1)
     # Indexing
     sr1 = series[:12]
     assert not sr1.has_null_mask

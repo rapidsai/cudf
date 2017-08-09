@@ -281,7 +281,7 @@ class DataFrame(object):
         -------
         The prepared Series object.
         """
-        series = Series.from_any(col)
+        series = Series(col)
         empty_index = isinstance(self._index, EmptyIndex)
         if empty_index or self._index == series.index:
             if empty_index:

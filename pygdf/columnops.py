@@ -95,6 +95,7 @@ def as_column(arbitrary):
 
     Currently support inputs are:
 
+    * ``Column``
     * ``Buffer``
     * numba device array
     * numpy array
@@ -102,7 +103,14 @@ def as_column(arbitrary):
     """
     from . import numerical, categorical
 
-    if isinstance(arbitrary, pd.Categorical):
+    if isinstance(arbitrary, Column):
+        if not isinstance(arbitrary, ColumnOps):
+            # interpret as numeric
+            return arbitrary.view(numerical.NumericalColumn,
+                                  dtype=arbitrary.dtype)
+        else:
+            return arbitrary
+    elif isinstance(arbitrary, pd.Categorical):
         return categorical.pandas_categorical_as_column(arbitrary)
     elif isinstance(arbitrary, Buffer):
         return numerical.NumericalColumn(data=arbitrary, dtype=arbitrary.dtype)

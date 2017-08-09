@@ -41,7 +41,7 @@ def test_series_unique():
         assert set(arr[mask]) == set(sr.unique_k(k=10))
     # test out of space
     arr = np.arange(10)
-    sr = Series.from_any(arr)
+    sr = Series(arr)
     with pytest.raises(ValueError) as raises:
         sr.unique_k(k=7)
     raises.match('too many unique value')
@@ -49,7 +49,7 @@ def test_series_unique():
 
 def test_series_scale():
     arr = np.random.randint(low=-10, high=10, size=100)
-    sr = Series.from_any(arr)
+    sr = Series(arr)
 
     vmin = arr.min()
     vmax = arr.max()
