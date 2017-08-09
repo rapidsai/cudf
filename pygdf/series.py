@@ -587,7 +587,9 @@ class Series(object):
         """
         if self.null_count == len(self):
             return np.empty(0, dtype=self.dtype)
-        return cudautils.compute_unique_k(self.to_gpu_array(), k=k)
+        arr = self.to_gpu_array()
+        res = cudautils.compute_unique_k(arr, k=k)
+        return Series(res)
 
     def scale(self):
         """Scale values to [0, 1] in float64
