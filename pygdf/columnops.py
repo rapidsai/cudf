@@ -1,12 +1,8 @@
-import numpy as np
-
 from numba import cuda
 
 from .buffer import Buffer
-from .index import GenericIndex
 from . import utils, cudautils
 from .column import Column
-
 
 
 class ColumnOps(Column):
@@ -38,6 +34,10 @@ class ColumnOps(Column):
         params = super(ColumnOps, self)._replace_defaults()
         params.update(dict(dtype=self._dtype))
         return params
+
+    def argsort(self, ascending):
+        _, inds = self.sort_by_values(ascending=ascending)
+        return inds
 
 
 def column_empty_like(column, dtype, masked):
@@ -71,6 +71,7 @@ def column_select_by_boolmask(column, boolmask):
 
     Returns (selected_column, selected_positions)
     """
+    from .numerical import NumericalColumn
     assert not column.has_null_mask
     boolbits = cudautils.compact_mask_bytes(boolmask.to_gpu_array())
     indices = cudautils.arange(len(boolmask))
@@ -82,4 +83,5 @@ def column_select_by_boolmask(column, boolmask):
 
     selected_values = column.replace(data=Buffer(selvals))
     selected_index = Buffer(selinds)
-    return selected_values, selected_index
+    return selected_values, NumericalColumn(data=selected_index,
+                                            dtype=selected_index.dtype)

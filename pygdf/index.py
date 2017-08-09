@@ -3,8 +3,9 @@ from __future__ import print_function, division
 import pandas as pd
 import numpy as np
 
-from . import cudautils, utils
+from . import cudautils, utils, columnops
 from .buffer import Buffer
+from .numerical import NumericalColumn
 from .column import Column
 
 
@@ -12,27 +13,24 @@ class Index(object):
     def take(self, indices):
         assert indices.dtype.kind in 'iu'
         index = cudautils.gather(data=self.gpu_values, index=indices)
-        sr = self.as_series()
-        col = sr._column.replace(data=Buffer(index))
-        index = sr._copy_construct(data=col)
-        return GenericIndex(index)
-
-    def as_series(self):
-        raise NotImplementedError
+        col = self.as_column().replace(data=Buffer(index))
+        return GenericIndex(col)
 
     def argsort(self, ascending=True):
-        return self.as_series().argsort(ascending=ascending)
+        return self.as_column().argsort(ascending=ascending)
 
     @property
     def values(self):
-        return np.asarray(self.as_series())
+        return np.asarray([i for i in self.as_column()])
 
     def to_pandas(self):
-        return pd.Index(self.as_series().to_pandas())
+        what = self.as_column().to_pandas()
+        print(type(what))
+        return pd.Index(self.as_column().to_pandas())
 
     @property
     def gpu_values(self):
-        return self.as_series().to_gpu_array()
+        return self.as_column().to_gpu_array()
 
     def find_segments(self):
         """Return the beginning index for segments
@@ -42,8 +40,7 @@ class Index(object):
 
     @classmethod
     def _concat(cls, objs):
-        from .series import Series
-        data = Series._concat([o.as_series() for o in objs], index=None)
+        data = Column._concat([o.as_column() for o in objs])
         # TODO: add ability to concatenate indices without always casting to
         # `GenericIndex`
         return GenericIndex(data)
@@ -67,10 +64,9 @@ class EmptyIndex(Index):
     def __len__(self):
         return 0
 
-    def as_series(self):
-        from .series import Series
-
-        return Series(np.empty(0, dtype=np.int64))
+    def as_column(self):
+        buf = Buffer(np.empty(0, dtype=np.int64))
+        return NumericalColumn(data=buf, dtype=buf.dtype)
 
 
 class RangeIndex(Index):
@@ -139,10 +135,9 @@ class RangeIndex(Index):
         # shift to index
         return begin - self._start, end - self._start
 
-    def as_series(self):
-        from .series import Series
+    def as_column(self):
         vals = cudautils.arange(self._start, self._stop, dtype=self.dtype)
-        return Series(vals)
+        return NumericalColumn(data=Buffer(vals), dtype=vals.dtype)
 
     def to_pandas(self):
         return pd.RangeIndex(start=self._start, stop=self._stop,
@@ -151,22 +146,32 @@ class RangeIndex(Index):
 
 def index_from_range(start, stop=None, step=None):
     vals = cudautils.arange(start, stop, step, dtype=np.int64)
-    return GenericIndex(vals)
+    return GenericIndex(NumericalColumn(data=Buffer(vals), dtype=vals.dtype))
 
 
 class GenericIndex(Index):
     def __new__(self, values):
-        from .series import Series  # cyclic dep on Series
+        from .series import Series
 
-        values = Series(values)
+        # normalize the input
+        if isinstance(values, Series):
+            values = values._column
+        elif isinstance(values, columnops.ColumnOps):
+            values = values
+        else:
+            values = NumericalColumn(data=Buffer(values), dtype=values.dtype)
+
+        assert isinstance(values, columnops.ColumnOps), type(values)
+        assert values.null_count == 0
+
+        # return the index instance
         if len(values) == 0:
             # for empty index, return a EmptyIndex instead
             return EmptyIndex()
         else:
             # Make GenericIndex object
             res = Index.__new__(GenericIndex)
-            # Force simple index
-            res._values = values.as_index()
+            res._values = values
             return res
 
     def __len__(self):
@@ -186,13 +191,11 @@ class GenericIndex(Index):
 
     def __eq__(self, other):
         if isinstance(other, GenericIndex):
-            # FIXME inefficient comparison
-            booleans = self.as_series() == other.as_series()
-            return np.all(booleans.to_array())
+            return self._values.unordered_compare('eq', other._values).all()
         else:
             return NotImplemented
 
-    def as_series(self):
+    def as_column(self):
         """Convert the index as a Series.
         """
         return self._values
@@ -202,11 +205,11 @@ class GenericIndex(Index):
         return self._values.dtype
 
     def find_label_range(self, first, last):
-        sr = self.as_series()
+        col = self._values
         begin, end = None, None
         if first is not None:
-            begin = sr.find_first_value(first)
+            begin = col.find_first_value(first)
         if last is not None:
-            end = sr.find_last_value(last)
+            end = col.find_last_value(last)
             end += 1
         return begin, end

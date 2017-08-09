@@ -6,7 +6,6 @@ import pandas as pd
 from libgdf_cffi import libgdf
 
 from . import _gdf, columnops, utils, cudautils
-from .column import Column
 from .buffer import Buffer
 
 
@@ -50,7 +49,6 @@ class NumericalColumn(columnops.ColumnOps):
     def binary_operator(self, binop, rhs):
         if isinstance(rhs, NumericalColumn):
             op = _binary_impl[binop]
-            print('dtype = ', self.dtype)
             return numeric_column_binop(lhs=self, rhs=rhs, op=op,
                                         out_dtype=self.dtype)
         else:
@@ -96,10 +94,11 @@ class NumericalColumn(columnops.ColumnOps):
         _gdf.apply_sort(col_keys, col_inds, ascending=ascending)
         return col_keys, col_inds
 
-    def to_pandas(self, series, index=True):
-        if index is True:
-            index = series.index.to_pandas()
-        return pd.Series(series.to_array(fillna='pandas'), index=index)
+    def to_pandas(self, index=None):
+        return pd.Series(self.to_array(fillna='pandas'), index=index)
+
+    def all(self):
+        return self.stats.min() == True
 
 
 class ColumnStats(object):

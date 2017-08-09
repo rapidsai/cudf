@@ -7,7 +7,7 @@ import pandas as pd
 
 from numba import cuda
 
-from . import cudautils, utils, _gdf, formatting
+from . import cudautils, utils, formatting
 from .buffer import Buffer
 from .index import Index, RangeIndex, GenericIndex
 from .settings import NOTSET, settings
@@ -408,37 +408,11 @@ class Series(object):
 
     @classmethod
     def _concat(cls, objs, index=True):
-        head = objs[0]
-        for o in objs:
-            if not o._column.is_type_equivalent(head._column):
-                raise ValueError("All series must be of same type")
-
-        newsize = sum(map(len, objs))
-        # Concatenate data
-        mem = cuda.device_array(shape=newsize, dtype=head._column.data.dtype)
-        data = Buffer.from_empty(mem)
-        for o in objs:
-            data.extend(o._column.data.to_gpu_array())
-
-        # Concatenate mask if present
-        if all(o.has_null_mask for o in objs):
-            # FIXME: Inefficient
-            mem = cuda.device_array(shape=newsize, dtype=np.bool)
-            mask = Buffer.from_empty(mem)
-            null_count = 0
-            for o in objs:
-                mask.extend(o._get_mask_as_series().to_gpu_array())
-                null_count += o._null_count
-            mask = Buffer(utils.boolmask_to_bitmask(mask.to_array()))
-        else:
-            mask = None
-            null_count = 0
-
         # Concatenate index if not provided
         if index is True:
             index = Index._concat([o.index for o in objs])
 
-        col = head._column.replace(data=data, mask=mask, null_count=null_count)
+        col = Column._concat([o._column for o in objs])
         return cls(cls.Init(data=col, index=index))
 
     def append(self, arbitrary):
@@ -554,7 +528,9 @@ class Series(object):
         return self.to_dense_buffer(fillna=fillna).to_gpu_array()
 
     def to_pandas(self, index=True):
-        return self._column.to_pandas(self, index=index)
+        if index is True:
+            index = self.index.to_pandas()
+        return self._column.to_pandas(index=index)
 
     @property
     def data(self):

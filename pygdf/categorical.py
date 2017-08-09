@@ -94,10 +94,8 @@ class CategoricalColumn(columnops.ColumnOps):
         val = self.as_numerical.element_indexing(index)
         return self._decode(val) if val is not None else val
 
-    def to_pandas(self, series, index=True):
-        if index is True:
-            index = series.index.to_pandas()
-        data = pd.Categorical.from_codes(series.cat.codes.to_array(),
+    def to_pandas(self, index=None):
+        data = pd.Categorical.from_codes(self.cat().codes.to_array(),
                                          categories=self._categories,
                                          ordered=self._ordered)
         return pd.Series(data, index=index)

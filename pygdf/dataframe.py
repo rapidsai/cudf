@@ -535,16 +535,16 @@ class DataFrame(object):
         lhs = self.sort_index()
         rhs = other.sort_index()
 
-        lkey = lhs.index.as_series()
-        rkey = rhs.index.as_series()
+        lkey = lhs.index.as_column()
+        rkey = rhs.index.as_column()
 
         df = DataFrame()
         with _gdf.apply_join(lkey, rkey, how=how) as (lidx, ridx):
             if lidx.size > 0:
                 joined_index = cudautils.gather_joined_index(
                     lkey.to_gpu_array(), rkey.to_gpu_array(), lidx, ridx)
-                col = lkey._column.replace(data=Buffer(joined_index))
-                joined_index = lkey._copy_construct(data=col)
+                col = lkey.replace(data=Buffer(joined_index))
+                joined_index = lkey.replace(data=col.data)
                 gather_fn = gather_cols
             else:
                 joined_index = None
