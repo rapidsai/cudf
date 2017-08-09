@@ -54,6 +54,9 @@ class Column(object):
         self._data = data
         self._mask = mask
 
+        if mask is None:
+            null_count = 0
+
         if null_count is None:
             if self._mask is not None:
                 nnz = cudautils.count_nonzero_mask(self._mask.mem)
@@ -205,6 +208,18 @@ class Column(object):
         else:
             raise NotImplementedError(type(arg))
 
+    def fillna(self, value):
+        """Fill null values with ``value``.
+
+        Returns a copy with null filled.
+        """
+        if not self.has_null_mask:
+            return self
+        out = cudautils.fillna(data=self.data.to_gpu_array(),
+                               mask=self.mask.to_gpu_array(),
+                               value=value)
+        return self.replace(data=Buffer(out), mask=None, null_count=0)
+
     def to_dense_buffer(self, fillna=None):
         """Get dense (no null values) ``Buffer`` of the data.
 
@@ -261,3 +276,19 @@ class Column(object):
         if not indices:
             raise ValueError('value not found')
         return indices[-1, 0]
+
+    def append(self, other):
+        """Append another column
+        """
+        if self.has_null_mask or other.has_null_mask:
+            raise NotImplementedError("append masked column is not supported")
+        newsize = len(self) + len(other)
+        # allocate memory
+        mem = cuda.device_array(shape=newsize, dtype=self.data.dtype)
+        newbuf = Buffer.from_empty(mem)
+        # copy into new memory
+        for buf in [self.data, other.data]:
+            newbuf.extend(buf.to_gpu_array())
+        # return new column
+        return self.replace(data=newbuf)
+

@@ -1,3 +1,6 @@
+import numpy as np
+import pandas as pd
+
 from numba import cuda
 
 from .buffer import Buffer
@@ -85,3 +88,28 @@ def column_select_by_boolmask(column, boolmask):
     selected_index = Buffer(selinds)
     return selected_values, NumericalColumn(data=selected_index,
                                             dtype=selected_index.dtype)
+
+
+def as_column(arbitrary):
+    """Create a Column from an arbitrary object
+
+    Currently support inputs are:
+
+    * ``Buffer``
+    * numba device array
+    * numpy array
+    * pandas.Categorical
+    """
+    from . import numerical, categorical
+
+    if isinstance(arbitrary, pd.Categorical):
+        return categorical.pandas_categorical_as_column(arbitrary)
+    elif isinstance(arbitrary, Buffer):
+        return numerical.NumericalColumn(data=arbitrary, dtype=arbitrary.dtype)
+    elif cuda.devicearray.is_cuda_ndarray(arbitrary):
+        return as_column(Buffer(arbitrary))
+    elif isinstance(arbitrary, np.ndarray):
+        return as_column(Buffer(arbitrary))
+    else:
+        return as_column(np.asarray(arbitrary))
+

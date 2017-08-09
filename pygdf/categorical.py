@@ -1,9 +1,10 @@
 import pandas as pd
+import numpy as np
 
 from .dataframe import Series
 from . import numerical, utils, columnops
 from .buffer import Buffer
-
+from . import cudautils
 
 class CategoricalAccessor(object):
     """
@@ -31,7 +32,7 @@ class CategoricalAccessor(object):
             return Series.from_masked_array(data=data.mem, mask=mask.mem,
                                             null_count=null_count)
         else:
-            return Series.from_buffer(data)
+            return Series(data)
 
 
 class CategoricalColumn(columnops.ColumnOps):
@@ -110,3 +111,27 @@ class CategoricalColumn(columnops.ColumnOps):
         for i, cat in enumerate(self._categories):
             if i == value:
                 return cat
+
+
+def pandas_categorical_as_column(categorical, codes=None):
+    """Creates a CategoricalColumn from a pandas.Categorical
+
+    If ``codes`` is defined, use it instead of ``categorical.codes``
+    """
+    # TODO fix mutability issue in numba to avoid the .copy()
+    codes = (categorical.codes.copy() if codes is None else codes)
+    # TODO pending pandas to be improved
+    #       https://github.com/pandas-dev/pandas/issues/14711
+    #       https://github.com/pandas-dev/pandas/pull/16015
+    valid_codes = codes != -1
+    buf = Buffer(codes)
+    params = dict(data=buf, dtype=categorical.dtype,
+                  categories=categorical.categories,
+                  ordered=categorical.ordered)
+    if not np.all(valid_codes):
+        mask = cudautils.compact_mask_bytes(valid_codes)
+        nnz = np.count_nonzero(valid_codes)
+        null_count = codes.size - nnz
+        params.update(dict(mask=Buffer(mask), null_count=null_count))
+
+    return CategoricalColumn(**params)

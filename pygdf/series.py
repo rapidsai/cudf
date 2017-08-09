@@ -12,6 +12,8 @@ from .buffer import Buffer
 from .index import Index, RangeIndex, GenericIndex
 from .settings import NOTSET, settings
 from .column import Column
+from . import columnops
+from .numerical import NumericalColumn
 
 
 class Series(object):
@@ -34,21 +36,9 @@ class Series(object):
         * pandas.Categorical
         """
         if isinstance(arbitrary, Series):
-            return arbitrary
+            return arbitrary._copy_construct()
 
-        # Handle pandas type
-        if isinstance(arbitrary, pd.Categorical):
-            return cls.from_categorical(arbitrary)
-
-        # Handle internal types
-        if isinstance(arbitrary, Buffer):
-            return cls.from_buffer(arbitrary)
-        elif cuda.devicearray.is_cuda_ndarray(arbitrary):
-            return cls.from_array(arbitrary)
-        else:
-            if not isinstance(arbitrary, np.ndarray):
-                arbitrary = np.asarray(arbitrary)
-            return cls.from_array(arbitrary)
+        return Series(data=columnops.as_column(arbitrary))
 
     @classmethod
     def from_categorical(cls, categorical, codes=None):
@@ -56,41 +46,10 @@ class Series(object):
 
         If ``codes`` is defined, use it instead of ``categorical.codes``
         """
-        from .categorical import CategoricalColumn
-        # TODO fix mutability issue in numba to avoid the .copy()
-        codes = (categorical.codes.copy()
-                 if codes is None else codes)
-        # TODO pending pandas to be improved
-        #       https://github.com/pandas-dev/pandas/issues/14711
-        #       https://github.com/pandas-dev/pandas/pull/16015
-        valid_codes = codes != -1
-        buf = Buffer(codes)
-        params = dict(data=buf, dtype=categorical.dtype,
-                      categories=categorical.categories,
-                      ordered=categorical.ordered)
-        if not np.all(valid_codes):
-            mask = cudautils.compact_mask_bytes(valid_codes)
-            nnz = np.count_nonzero(valid_codes)
-            null_count = codes.size - nnz
-            params.update(dict(mask=Buffer(mask), null_count=null_count))
+        from .categorical import pandas_categorical_as_column
 
-        col = CategoricalColumn(**params)
+        col = pandas_categorical_as_column(categorical, codes=codes)
         return Series(data=col)
-
-    @classmethod
-    def from_buffer(cls, buffer):
-        """Create a Series from a ``Buffer``
-        """
-        from .numerical import NumericalColumn
-
-        col = NumericalColumn(data=buffer, dtype=buffer.dtype)
-        return cls(data=col)
-
-    @classmethod
-    def from_array(cls, array):
-        """Create a Series from an array-like object.
-        """
-        return cls.from_buffer(Buffer(array))
 
     @classmethod
     def from_masked_array(cls, data, mask, null_count=None):
@@ -115,30 +74,16 @@ class Series(object):
         """
         return cls.from_any(data).set_mask(mask, null_count=null_count)
 
-    def __new__(cls, data=None, index=None):
-        if isinstance(data, Column):
-            instance = object.__new__(cls)
-            instance._init_detail(data=data, index=index)
-        else:
-            assert index is None
-            instance = cls.from_any(data)
-        return instance
-
-    def _init_detail(self, data=None, index=None):
-        """
-        Actual initializer of the instance
-        """
-        from . import columnops
+    def __init__(self, data, index=None):
+        if not isinstance(data, Column):
+            data = columnops.as_column(data)
 
         if index is not None and not isinstance(index, Index):
             raise TypeError('index not a Index type: got {!r}'.format(index))
 
         assert isinstance(data, columnops.ColumnOps)
-        # impl = (columnops.get_default_impl(data.dtype)
-        #         if impl is None else impl)
         self._column = data
-        self._size = len(data) if data else 0
-        self._index = RangeIndex(self._size) if index is None else index
+        self._index = RangeIndex(len(data)) if index is None else index
 
     def _copy_construct_defaults(self):
         return dict(
@@ -201,13 +146,12 @@ class Series(object):
     def __len__(self):
         """Returns the size of the ``Series`` including null values.
         """
-        return self._size
+        return len(self._column)
 
     def __getitem__(self, arg):
-        from . import columnops
-
         if isinstance(arg, Series):
-            selvals, selinds = columnops.column_select_by_boolmask(self._column, arg)
+            selvals, selinds = columnops.column_select_by_boolmask(
+                self._column, arg)
             return self._copy_construct(data=selvals,
                                         index=GenericIndex(selinds))
 
@@ -401,18 +345,12 @@ class Series(object):
 
     def append(self, arbitrary):
         """Append values from another ``Series`` or array-like object.
-        Returns a new copy.
+        Returns a new copy with the index resetted.
         """
         other = Series.from_any(arbitrary)
-        newsize = len(self) + len(other)
-        # allocate memory
-        mem = cuda.device_array(shape=newsize, dtype=self.data.dtype)
-        newbuf = Buffer.from_empty(mem)
-        # copy into new memory
-        for buf in [self._column.data, other._column.data]:
-            newbuf.extend(buf.to_gpu_array())
+        other_col = other._column
         # return new series
-        return self.from_any(newbuf)
+        return self.from_any(self._column.append(other_col))
 
     @property
     def valid_count(self):
@@ -434,48 +372,8 @@ class Series(object):
 
         Returns a copy with null filled.
         """
-        if not self.has_null_mask:
-            return self
-        out = cudautils.fillna(data=self._column.data.to_gpu_array(),
-                               mask=self._column.mask.to_gpu_array(),
-                               value=value)
-        return self.from_array(out)
-
-    def to_dense_buffer(self, fillna=None):
-        """Get dense (no null values) ``Buffer`` of the data.
-
-        Parameters
-        ----------
-        fillna : str or None
-            See *fillna* in ``.to_array``.
-
-        Notes
-        -----
-
-        if ``fillna`` is ``None``, null values are skipped.  Therefore, the
-        output size could be smaller.
-        """
-        if fillna not in {None, 'pandas'}:
-            raise ValueError('invalid for fillna')
-
-        if self.has_null_mask:
-            if fillna == 'pandas':
-                # cast non-float types to float64
-                col = (self.astype(np.float64)
-                       if self.dtype.kind != 'f'
-                       else self)
-                # fill nan
-                return col.fillna(np.nan)
-            else:
-                return self._copy_to_dense_buffer()
-        else:
-            return self._column.data
-
-    def _copy_to_dense_buffer(self):
-        data = self._column.data.to_gpu_array()
-        mask = self._column.mask.to_gpu_array()
-        nnz, mem = cudautils.copy_to_dense(data=data, mask=mask)
-        return Buffer(mem, size=nnz, capacity=mem.size)
+        data = self._column.fillna(value)
+        return self._copy_construct(data=data)
 
     def to_array(self, fillna=None):
         """Get a dense numpy array for the data.
@@ -493,7 +391,7 @@ class Series(object):
         if ``fillna`` is ``None``, null values are skipped.  Therefore, the
         output size could be smaller.
         """
-        return self.to_dense_buffer(fillna=fillna).to_array()
+        return self._column.to_array(fillna=fillna)
 
     def to_gpu_array(self, fillna=None):
         """Get a dense numba device array for the data.
@@ -509,7 +407,7 @@ class Series(object):
         if ``fillna`` is ``None``, null values are skipped.  Therefore, the
         output size could be smaller.
         """
-        return self.to_dense_buffer(fillna=fillna).to_gpu_array()
+        return self._column.to_gpu_array(fillna=fillna)
 
     def to_pandas(self, index=True):
         if index is True:
@@ -647,7 +545,7 @@ class Series(object):
         for cat in cats:
             buf = cudautils.apply_equal_constant(arr=self.to_gpu_array(),
                                                  val=cat, dtype=dtype)
-            out.append(Series.from_array(buf))
+            out.append(Series(buf))
         return out
 
     # Find / Search
@@ -656,22 +554,13 @@ class Series(object):
         """
         Returns offset of first value that matches
         """
-        # FIXME: Inefficient find in CPU code
-        arr = self.to_array()
-        indices = np.argwhere(arr == value)
-        if not indices:
-            raise ValueError('value not found')
-        return indices[0, 0]
+        return self._column.find_first_value(value)
 
     def find_last_value(self, value):
         """
         Returns offset of last value that matches
         """
-        arr = self.to_array()
-        indices = np.argwhere(arr == value)
-        if not indices:
-            raise ValueError('value not found')
-        return indices[-1, 0]
+        return self._column.find_last_value(value)
 
     #
     # Stats
@@ -721,8 +610,7 @@ class Series(object):
         """
         if self.null_count == len(self):
             return np.empty(0, dtype=self.dtype)
-        arr = self.to_dense_buffer().to_gpu_array()
-        return cudautils.compute_unique_k(arr, k=k)
+        return cudautils.compute_unique_k(self.to_gpu_array(), k=k)
 
     def scale(self):
         """Scale values to [0, 1] in float64
@@ -734,7 +622,7 @@ class Series(object):
         vmax = self.max()
         gpuarr = self.to_gpu_array()
         scaled = cudautils.compute_scale(gpuarr, vmin, vmax)
-        return Series.from_array(scaled)
+        return Series(scaled)
 
     # Rounding
 

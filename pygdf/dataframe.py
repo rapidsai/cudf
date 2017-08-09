@@ -615,7 +615,7 @@ class DataFrame(object):
         # Run query
         boolmask = queryutils.query_execute(self, expr, callenv)
 
-        selected = Series.from_array(boolmask)
+        selected = Series(boolmask)
         newdf = DataFrame()
         for col in self.columns:
             newseries = self[col][selected]
