@@ -4,7 +4,6 @@ channels:
 - numba
 - defaults
 dependencies:
-- accelerate_cudalib=2.0=0
 - cffi=1.10.0=py35_0
 - mkl=2017.0.1=0
 - numpy=1.12.1=py35_0

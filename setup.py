@@ -4,7 +4,6 @@ import versioneer
 
 
 packages = ['pygdf',
-            'pygdf.sorting',
             'pygdf.tests',
             ]
 

@@ -1,11 +1,8 @@
-from functools import partial
-
 import numpy as np
 
-from numba import (cuda, njit, uint64, int32, float64, numpy_support)
+from numba import cuda, int32, numpy_support
 
 from .utils import mask_bitsize, mask_get, mask_set, make_mask
-from .sorting import RadixSort
 
 
 def to_device(ary):
@@ -493,10 +490,16 @@ class UniqueBySorting(object):
         self._maxcount = maxcount
         self._dtype = dtype
         self._maxk = k
-        self._sorter = RadixSort(maxcount=maxcount, dtype=dtype)
+        # self._sorter = RadixSort(maxcount=maxcount, dtype=dtype)
 
     def run_sort(self, arr):
-        self._sorter.sort(arr)
+        # self._sorter.sort(arr)
+        from . import _gdf
+        from .columnops import as_column
+
+        col = as_column(arr)
+        idx = as_column(np.arange(arr.size, dtype=np.int64))
+        _gdf.apply_sort(col, idx)
 
     def run_diff(self, arr):
         out = cuda.device_array(shape=arr.size, dtype=np.intp)
