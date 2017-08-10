@@ -6,6 +6,7 @@ from . import numerical, utils, columnops
 from .buffer import Buffer
 from . import cudautils
 
+
 class CategoricalAccessor(object):
     """
     This mimicks pandas `df.cat` interface.
@@ -36,7 +37,23 @@ class CategoricalAccessor(object):
 
 
 class CategoricalColumn(columnops.TypedColumnBase):
+    """Implements operations for Columns of Categorical type
+    """
     def __init__(self, **kwargs):
+        """
+        Parameters
+        ----------
+        data : Buffer
+            The code values
+        mask : Buffer; optional
+            The validity mask
+        null_count : int; optional
+            The number of null values in the mask.
+        categories : iterable
+            The categories
+        ordered : bool
+            whether the categorical has a logical ordering (e.g. less than)
+        """
         categories = kwargs.pop('categories')
         ordered = kwargs.pop('ordered')
         super(CategoricalColumn, self).__init__(**kwargs)

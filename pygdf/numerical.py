@@ -43,6 +43,18 @@ _unary_impl = {
 
 class NumericalColumn(columnops.TypedColumnBase):
     def __init__(self, **kwargs):
+        """
+        Parameters
+        ----------
+        data : Buffer
+            The code values
+        mask : Buffer; optional
+            The validity mask
+        null_count : int; optional
+            The number of null values in the mask.
+        dtype : np.dtype
+            Data type
+        """
         super(NumericalColumn, self).__init__(**kwargs)
         assert self._dtype == self._data.dtype
 

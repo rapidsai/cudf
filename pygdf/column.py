@@ -65,6 +65,16 @@ class Column(object):
         return col
 
     def __init__(self, data, mask=None, null_count=None):
+        """
+        Parameters
+        ----------
+        data : Buffer
+            The code values
+        mask : Buffer; optional
+            The validity mask
+        null_count : int; optional
+            The number of null values in the mask.
+        """
         # Forces Column content to be contiguous
         if not data.is_contiguous():
             data = data.as_contiguous()
