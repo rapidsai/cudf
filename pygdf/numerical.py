@@ -71,10 +71,6 @@ class NumericalColumn(columnops.TypedColumnBase):
         else:
             raise TypeError('cannot broadcast {}'.format(type(other)))
 
-    @property
-    def stats(self):
-        return ColumnStats(self)
-
     def astype(self, dtype):
         if self.dtype == dtype:
             return self
@@ -98,30 +94,25 @@ class NumericalColumn(columnops.TypedColumnBase):
         return pd.Series(self.to_array(fillna='pandas'), index=index)
 
     def all(self):
-        return self.stats.min() == True
-
-
-class ColumnStats(object):
-    def __init__(self, column):
-        self._column = column
+        return bool(self.min())
 
     def min(self):
-        return _gdf.apply_reduce(libgdf.gdf_min_generic, self._column)
+        return _gdf.apply_reduce(libgdf.gdf_min_generic, self)
 
     def max(self):
-        return _gdf.apply_reduce(libgdf.gdf_max_generic, self._column)
+        return _gdf.apply_reduce(libgdf.gdf_max_generic, self)
 
     def sum(self):
-        dt = np.promote_types('i8', self._column.dtype)
-        x = self._column.astype(dt)
+        dt = np.promote_types('i8', self.dtype)
+        x = self.astype(dt)
         return _gdf.apply_reduce(libgdf.gdf_sum_generic, x)
 
     def mean(self):
-        return self.sum().astype('f8') / self._column.valid_count
+        return self.sum().astype('f8') / self.valid_count
 
     def mean_var(self):
-        x = self._column.astype('f8')
-        mu = x.stats.mean()
+        x = self.astype('f8')
+        mu = x.mean()
         n = x.valid_count
         asum = _gdf.apply_reduce(libgdf.gdf_sum_squared_generic, x)
         var = asum / n - mu ** 2

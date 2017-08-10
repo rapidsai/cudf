@@ -20,6 +20,18 @@ class Column(object):
 
     These operations work on each data element as plain-old-data.
     Any logical operations are implemented in subclasses of *TypedColumnBase*.
+
+    Attributes
+    ----------
+    _data : Buffer
+        The data buffer
+    _mask : Buffer
+        The validity mask
+    _null_count : int
+        Number of null values in the mask.
+
+    These attributes are exported in the properties (e.g. *data*, *mask*,
+    *null_count*).
     """
     @classmethod
     def _concat(cls, objs):
@@ -195,6 +207,10 @@ class Column(object):
 
     def replace(self, **kwargs):
         """Replace attibutes of the class and return a new Column.
+
+        Valid keywords are valid parameters for ``self.__init__``.
+        Any omitted keywords will be defaulted to the corresponding
+        attributes in ``self``.
         """
         params = self._replace_defaults()
         params.update(kwargs)
@@ -203,6 +219,16 @@ class Column(object):
     def view(self, newcls, **kwargs):
         """View the underlying column data differently using a subclass of
         *TypedColumnBase*.
+
+        Parameters
+        ----------
+        newcls : TypedColumnBase
+            The logical view to be used
+        **kwargs :
+            Additional paramters for instantiating instance of *newcls*.
+            Valid keywords are valid parameters for ``newcls.__init__``.
+            Any omitted keywords will be defaulted to the corresponding
+            attributes in ``self``.
         """
         params = Column._replace_defaults(self)
         params.update(kwargs)

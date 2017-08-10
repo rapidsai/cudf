@@ -533,21 +533,21 @@ class Series(object):
     def min(self):
         """Compute the min of the series
         """
-        return self._column.stats.min()
+        return self._column.min()
 
     def max(self):
         """Compute the max of the series
         """
-        return self._column.stats.max()
+        return self._column.max()
 
     def sum(self):
         """Compute the sum of the series"""
-        return self._column.stats.sum()
+        return self._column.sum()
 
     def mean(self):
         """Compute the mean of the series
         """
-        return self._column.stats.mean()
+        return self._column.mean()
 
     def std(self):
         """Compute the standard deviation of the series
@@ -563,7 +563,7 @@ class Series(object):
     def mean_var(self):
         """Compute mean and variance at the same time.
         """
-        mu, var = self._column.stats.mean_var()
+        mu, var = self._column.mean_var()
         return mu, var
 
     def unique_k(self, k):

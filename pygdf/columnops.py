@@ -19,6 +19,10 @@ class TypedColumnBase(Column):
 
     This class provides common operations to implement logical view and
     type-based operations for the column.
+
+    Notes
+    -----
+    For designed to be instantiated directly.  Instantiate subclasses instead.
     """
     def __init__(self, **kwargs):
         dtype = kwargs.pop('dtype')
