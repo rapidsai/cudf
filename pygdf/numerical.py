@@ -129,7 +129,7 @@ class ColumnStats(object):
 
 
 def numeric_column_binop(lhs, rhs, op, out_dtype):
-     # Allocate output series
+     # Allocate output
     masked = lhs.has_null_mask or rhs.has_null_mask
     out = columnops.column_empty_like(lhs, dtype=out_dtype, masked=masked)
     # Call and fix null_count

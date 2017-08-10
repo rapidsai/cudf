@@ -1,10 +1,11 @@
 from __future__ import print_function, division
 
 from collections import OrderedDict
+from numbers import Number
 
 import numpy as np
 
-from . import cudautils, utils, formatting
+from . import cudautils, formatting
 from .buffer import Buffer
 from .index import Index, RangeIndex, GenericIndex
 from .settings import NOTSET, settings
@@ -133,27 +134,10 @@ class Series(object):
                                         index=GenericIndex(selinds))
 
         elif isinstance(arg, slice):
-            # compute mask slice
-            start, stop = utils.normalize_slice(arg, len(self))
-            if self.null_count > 0:
-                if arg.step is not None and arg.step != 1:
-                    raise NotImplementedError(arg)
-
-                # compute new mask
-                mask = self._get_mask_as_series()
-                # slicing
-                subdata = self._column.data.mem[arg]
-                submask = mask[arg].as_mask()
-                index = self.index[arg]
-                col = self._column.replace(data=Buffer(subdata),
-                                           mask=Buffer(submask))
-                return self._copy_construct(data=col, index=index)
-            else:
-                index = self.index[arg]
-                newbuffer = self._column.data[arg]
-                col = self._column.replace(data=newbuffer)
-                return self._copy_construct(data=col, index=index)
-        elif isinstance(arg, int):
+            index = self.index[arg]         # slice index
+            col = self._column[arg]         # slice column
+            return self._copy_construct(data=col, index=index)
+        elif isinstance(arg, Number):
             # The following triggers a IndexError if out-of-bound
             return self._column.element_indexing(arg)
         else:

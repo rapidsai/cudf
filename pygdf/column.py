@@ -14,6 +14,13 @@ from .buffer import Buffer
 
 
 class Column(object):
+    """An immutable structure for storing data and mask for a column.
+    This should be considered as the physical layer that provides
+    container operations on the data and mask.
+
+    These operations work on each data element as plain-old-data.
+    Any logical operations are implemented in subclasses of *ColumnOps*.
+    """
     @classmethod
     def _concat(cls, objs):
         head = objs[0]
@@ -46,7 +53,7 @@ class Column(object):
         return col
 
     def __init__(self, data, mask=None, null_count=None):
-        # Forces Series content to be contiguous
+        # Forces Column content to be contiguous
         if not data.is_contiguous():
             data = data.as_contiguous()
 
@@ -95,8 +102,8 @@ class Column(object):
     def set_mask(self, mask, null_count=None):
         """Create new Column by setting the mask
 
-        This will override the existing mask.  The returned Series will
-        reference the same data buffer as this Series.
+        This will override the existing mask.  The returned Column will
+        reference the same data buffer as this Column.
 
         Parameters
         ----------
@@ -116,7 +123,6 @@ class Column(object):
             msg = 'mask must be of byte; but got {}'.format(mask.dtype)
             raise ValueError(msg)
         return self.replace(mask=mask, null_count=null_count)
-
 
     def to_gpu_array(self, fillna=None):
         """Get a dense numba device array for the data.
@@ -188,6 +194,8 @@ class Column(object):
         return params
 
     def replace(self, **kwargs):
+        """
+        """
         params = self._replace_defaults()
         params.update(kwargs)
         return type(self)(**params)
@@ -225,8 +233,7 @@ class Column(object):
                 # slicing
                 subdata = self.data[arg]
                 submask = self.mask[arg]
-                col = self._column.replace(data=Buffer(subdata),
-                                           mask=Buffer(submask))
+                col = self.replace(data=subdata, mask=submask)
                 return col
             else:
                 newbuffer = self.data[arg]
