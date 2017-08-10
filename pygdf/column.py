@@ -194,14 +194,15 @@ class Column(object):
         return params
 
     def replace(self, **kwargs):
-        """
+        """Replace attibutes of the class and return a new Column.
         """
         params = self._replace_defaults()
         params.update(kwargs)
         return type(self)(**params)
 
     def view(self, newcls, **kwargs):
-        """View the underlying column data differently.
+        """View the underlying column data differently using a subclass of
+        *ColumnOps*.
         """
         params = Column._replace_defaults(self)
         params.update(kwargs)

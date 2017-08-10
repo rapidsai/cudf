@@ -9,6 +9,11 @@ from .column import Column
 
 
 class ColumnOps(Column):
+    """Column+Operations
+
+    This class provides common operations to implement logical view and
+    type-based operations for the column.
+    """
     def __init__(self, **kwargs):
         dtype = kwargs.pop('dtype')
         super(ColumnOps, self).__init__(**kwargs)
@@ -20,10 +25,13 @@ class ColumnOps(Column):
         return self._dtype
 
     def is_type_equivalent(self, other):
+        """Is the logical type of the column equal to the other column.
+        """
         mine = self._replace_defaults()
         theirs = other._replace_defaults()
 
         def remove_base(dct):
+            # removes base attributes in the phyiscal layer.
             basekeys = Column._replace_defaults(self).keys()
             for k in basekeys:
                 del dct[k]
@@ -41,6 +49,9 @@ class ColumnOps(Column):
     def argsort(self, ascending):
         _, inds = self.sort_by_values(ascending=ascending)
         return inds
+
+    def sort_by_values(self, ascending):
+        raise NotImplementedError
 
 
 def column_empty_like(column, dtype, masked):
