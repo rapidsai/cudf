@@ -571,8 +571,7 @@ class Series(object):
         """
         if self.null_count == len(self):
             return np.empty(0, dtype=self.dtype)
-        arr = self.to_gpu_array()
-        res = cudautils.compute_unique_k(arr, k=k)
+        res = self._column.unique_k(k=k)
         return Series(res)
 
     def scale(self):
