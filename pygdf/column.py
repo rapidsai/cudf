@@ -180,9 +180,6 @@ class Column(object):
         """
         return self.to_dense_buffer(fillna=fillna).to_array()
 
-    # XXX: retired this
-    _cffi_view = cffi_view
-
     @property
     def valid_count(self):
         """Number of non-null values"""

@@ -82,10 +82,6 @@ class Series(object):
         params.update(kwargs)
         return cls(**params)
 
-    @property
-    def _cffi_view(self):
-        return self._column.cffi_view
-
     def set_index(self, index):
         """Returns a new Series with a different index.
 
