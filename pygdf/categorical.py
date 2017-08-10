@@ -35,7 +35,7 @@ class CategoricalAccessor(object):
             return Series(data)
 
 
-class CategoricalColumn(columnops.ColumnOps):
+class CategoricalColumn(columnops.TypedColumnBase):
     def __init__(self, **kwargs):
         categories = kwargs.pop('categories')
         ordered = kwargs.pop('ordered')

@@ -1,3 +1,8 @@
+"""
+Provides base classes and utils for implementing type-specific logical
+view of Columns.
+"""
+
 import numpy as np
 import pandas as pd
 
@@ -8,15 +13,16 @@ from . import utils, cudautils
 from .column import Column
 
 
-class ColumnOps(Column):
-    """Column+Operations
+class TypedColumnBase(Column):
+    """Base class for all typed column
+    e.g. NumericalColumn, CategoricalColumn
 
     This class provides common operations to implement logical view and
     type-based operations for the column.
     """
     def __init__(self, **kwargs):
         dtype = kwargs.pop('dtype')
-        super(ColumnOps, self).__init__(**kwargs)
+        super(TypedColumnBase, self).__init__(**kwargs)
         # Logical dtype
         self._dtype = dtype
 
@@ -42,7 +48,7 @@ class ColumnOps(Column):
         return type(self) == type(other) and mine == theirs
 
     def _replace_defaults(self):
-        params = super(ColumnOps, self)._replace_defaults()
+        params = super(TypedColumnBase, self)._replace_defaults()
         params.update(dict(dtype=self._dtype))
         return params
 
@@ -111,11 +117,17 @@ def as_column(arbitrary):
     * numba device array
     * numpy array
     * pandas.Categorical
+
+    Returns
+    -------
+    result : subclass of TypedColumnBase
+        - CategoricalColumn for pandas.Categorical input.
+        - NumericalColumn for all other inputs.
     """
     from . import numerical, categorical
 
     if isinstance(arbitrary, Column):
-        if not isinstance(arbitrary, ColumnOps):
+        if not isinstance(arbitrary, TypedColumnBase):
             # interpret as numeric
             return arbitrary.view(numerical.NumericalColumn,
                                   dtype=arbitrary.dtype)

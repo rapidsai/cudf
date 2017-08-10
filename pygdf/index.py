@@ -156,12 +156,12 @@ class GenericIndex(Index):
         # normalize the input
         if isinstance(values, Series):
             values = values._column
-        elif isinstance(values, columnops.ColumnOps):
+        elif isinstance(values, columnops.TypedColumnBase):
             values = values
         else:
             values = NumericalColumn(data=Buffer(values), dtype=values.dtype)
 
-        assert isinstance(values, columnops.ColumnOps), type(values)
+        assert isinstance(values, columnops.TypedColumnBase), type(values)
         assert values.null_count == 0
 
         # return the index instance

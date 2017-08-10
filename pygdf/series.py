@@ -58,13 +58,13 @@ class Series(object):
         if isinstance(data, Series):
             index = data._index
             data = data._column
-        if not isinstance(data, columnops.ColumnOps):
+        if not isinstance(data, columnops.TypedColumnBase):
             data = columnops.as_column(data)
 
         if index is not None and not isinstance(index, Index):
             raise TypeError('index not a Index type: got {!r}'.format(index))
 
-        assert isinstance(data, columnops.ColumnOps)
+        assert isinstance(data, columnops.TypedColumnBase)
         self._column = data
         self._index = RangeIndex(len(data)) if index is None else index
 

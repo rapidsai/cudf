@@ -19,7 +19,7 @@ class Column(object):
     container operations on the data and mask.
 
     These operations work on each data element as plain-old-data.
-    Any logical operations are implemented in subclasses of *ColumnOps*.
+    Any logical operations are implemented in subclasses of *TypedColumnBase*.
     """
     @classmethod
     def _concat(cls, objs):
@@ -202,7 +202,7 @@ class Column(object):
 
     def view(self, newcls, **kwargs):
         """View the underlying column data differently using a subclass of
-        *ColumnOps*.
+        *TypedColumnBase*.
         """
         params = Column._replace_defaults(self)
         params.update(kwargs)

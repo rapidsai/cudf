@@ -41,7 +41,7 @@ _unary_impl = {
 }
 
 
-class NumericalColumn(columnops.ColumnOps):
+class NumericalColumn(columnops.TypedColumnBase):
     def __init__(self, **kwargs):
         super(NumericalColumn, self).__init__(**kwargs)
         assert self._dtype == self._data.dtype
