@@ -6,7 +6,6 @@ from numba import (cuda, njit, uint64, int32, float64, numpy_support)
 
 from .utils import mask_bitsize, mask_get, mask_set, make_mask
 from .sorting import RadixSort
-from .reduction import Reduce
 
 
 def to_device(ary):
@@ -340,45 +339,9 @@ def compute_scale(arr, vmin, vmax):
     return out
 
 
-
 #
-# Reduction kernels
+# Misc kernels
 #
-
-gpu_sum = Reduce(lambda x, y: x + y)
-gpu_min = Reduce(lambda x, y: min(x, y))
-gpu_max = Reduce(lambda x, y: max(x, y))
-
-
-def _run_reduction(gpu_reduce, arr, init=0):
-    return gpu_reduce(arr, init=init)
-
-
-compute_sum = partial(_run_reduction, gpu_sum, init=0)
-compute_min = partial(_run_reduction, gpu_min)
-compute_max = partial(_run_reduction, gpu_max)
-
-
-def compute_mean(arr):
-    return compute_sum(astype(arr, np.float64)) / arr.size
-
-
-@cuda.jit
-def gpu_variance_step(xs, mu, out):
-    tid = cuda.grid(1)
-    if tid < out.size:
-        x = float64(xs[tid])
-        out[tid] = (x - mu) ** 2
-
-
-def compute_stats(arr):
-    """
-    Returns (mean, variance)
-    """
-    mu = compute_mean(arr)
-    tmp = cuda.device_array_like(arr)
-    gpu_variance_step.forall(arr.size)(arr, mu, tmp)
-    return mu, compute_mean(tmp)
 
 
 @cuda.jit(device=True)
