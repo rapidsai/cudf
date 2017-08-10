@@ -130,7 +130,7 @@ class GpuArrowNodeReader(object):
         if self.is_dictionary:
             sr = self._make_dictionary_series()
         else:
-            sr = Series.from_array(self.data)
+            sr = Series(self.data)
 
         # set nullmask
         if self.null_count:

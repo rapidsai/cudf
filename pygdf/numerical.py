@@ -5,7 +5,8 @@ import pandas as pd
 
 from libgdf_cffi import libgdf
 
-from . import _gdf, series_impl, utils, cudautils
+from . import _gdf, columnops, utils, cudautils
+from .buffer import Buffer
 
 
 # Operator mappings
@@ -40,123 +41,130 @@ _unary_impl = {
 }
 
 
-class NumericalSeriesImpl(series_impl.SeriesImpl):
-    """
-    Implements operations for numerical Series.
-    """
-    def __init__(self, dtype):
-        super(NumericalSeriesImpl, self).__init__(dtype)
+class NumericalColumn(columnops.TypedColumnBase):
+    def __init__(self, **kwargs):
+        """
+        Parameters
+        ----------
+        data : Buffer
+            The code values
+        mask : Buffer; optional
+            The validity mask
+        null_count : int; optional
+            The number of null values in the mask.
+        dtype : np.dtype
+            Data type
+        """
+        super(NumericalColumn, self).__init__(**kwargs)
+        assert self._dtype == self._data.dtype
 
-    def stats(self, series):
-        return Stats(series)
+    def binary_operator(self, binop, rhs):
+        if isinstance(rhs, NumericalColumn):
+            op = _binary_impl[binop]
+            return numeric_column_binop(lhs=self, rhs=rhs, op=op,
+                                        out_dtype=self.dtype)
+        else:
+            return NotImplemented
 
-    def element_to_str(self, value):
-        return str(value)
+    def unary_operator(self, unaryop):
+        return numeric_column_unaryop(self, op=_unary_impl[unaryop],
+                                      out_dtype=self.dtype)
 
-    def binary_operator(self, binop, lhs, rhs):
-        fn = _binary_impl[binop]
-        return self._call_binop(lhs, rhs, fn, self.dtype)
+    def unordered_compare(self, cmpop, rhs):
+        return numeric_column_compare(self, rhs, op=_unordered_impl[cmpop])
 
-    def unary_operator(self, unaryop, series):
-        return self._call_unaryop(series, _unary_impl[unaryop], self.dtype)
+    def ordered_compare(self, cmpop, rhs):
+        return numeric_column_compare(self, rhs, op=_ordered_impl[cmpop])
 
-    def unordered_compare(self, cmpop, lhs, rhs):
-        return self._compare(lhs, rhs, fn=_unordered_impl[cmpop])
+    def normalize_compare_value(self, other):
+        other_dtype = np.min_scalar_type(other)
+        if other_dtype.kind in 'biuf':
+            other_dtype = np.promote_types(self.dtype, other_dtype)
+            ary = utils.scalar_broadcast_to(other, shape=len(self),
+                                            dtype=other_dtype)
+            return self.replace(data=Buffer(ary), dtype=ary.dtype)
+        else:
+            raise TypeError('cannot broadcast {}'.format(type(other)))
 
-    def ordered_compare(self, cmpop, lhs, rhs):
-        return self._compare(lhs, rhs, fn=_ordered_impl[cmpop])
+    def astype(self, dtype):
+        if self.dtype == dtype:
+            return self
+        else:
+            col = self.replace(data=self.data.astype(dtype),
+                               dtype=dtype)
+            return col
 
-    def normalize_compare_value(self, series, other):
-        if np.min_scalar_type(other).kind in 'biuf':
-            ary = utils.scalar_broadcast_to(other, shape=len(series))
-            sr = series.from_any(ary)
-            return sr
-        return NotImplemented
-
-    def element_indexing(self, series, index):
-        return series_impl.element_indexing(series, index)
-
-    def sort_by_values(self, series, ascending):
-        from .series import Series
-
-        if series._mask:
+    def sort_by_values(self, ascending):
+        if self.mask:
             raise ValueError('masked array not supported')
-        sr_key = series._copy_construct(buffer=series._data.copy(),
-                                        impl=self)
-        sr_inds = Series.from_array(cudautils.arange(len(sr_key),
-                                    dtype=np.int64))
-        _gdf.apply_sort(sr_key, sr_inds, ascending=ascending)
-        return sr_key, sr_inds
+        # Clone data buffer as the key
+        col_keys = self.replace(data=self.data.copy())
+        # Create new array for the positions
+        inds = Buffer(cudautils.arange(len(self)))
+        col_inds = self.replace(data=inds, dtype=inds.dtype)
+        _gdf.apply_sort(col_keys, col_inds, ascending=ascending)
+        return col_keys, col_inds
 
-    def as_index(self, series):
-        from .index import RangeIndex
+    def to_pandas(self, index=None):
+        return pd.Series(self.to_array(fillna='pandas'), index=index)
 
-        return series.set_index(RangeIndex(len(series)))
+    def unique_k(self, k):
+        # make dense column
+        densecol = self.replace(data=self.to_dense_buffer(), mask=None)
+        # sort the column
+        sortcol, _ = densecol.sort_by_values(ascending=True)
+        # find segments
+        sortedvals = sortcol.to_gpu_array()
+        segs = cudautils.find_segments(sortedvals)
+        # TODO: we can now support unlimited number of unique values
+        #       thus, we don't need to set the limit
+        if segs.size > k:
+            raise ValueError('too many unique value')
+        # gather result
+        out = cudautils.gather(data=sortedvals, index=segs)
+        return self.replace(data=Buffer(out), mask=None)
 
-    def to_pandas(self, series, index=True):
-        if index is True:
-            index = series.index.to_pandas()
-        return pd.Series(series.to_array(fillna='pandas'), index=index)
-
-    #
-    # Internals
-    #
-
-    def _compare(self, lhs, rhs, fn):
-        """
-        Internal util to call a comparison operator *fn*
-        comparing *lhs* and *rhs*.  Return the output Series.
-        The output dtype is always `np.bool_`.
-        """
-        return self._call_binop(lhs, rhs, fn, np.bool_)
-
-    def _call_binop(self, lhs, rhs, fn, out_dtype):
-        """
-        Internal util to call a binary operator *fn* on operands *lhs*
-        and *rhs* with output dtype *out_dtype*.  Returns the output
-        Series.
-        """
-        # Allocate output series
-        masked = lhs.has_null_mask or rhs.has_null_mask
-        out = series_impl.empty_like(lhs, dtype=out_dtype, masked=masked,
-                                     impl=NumericalSeriesImpl(out_dtype))
-        # Call and fix null_count
-        out._null_count = _gdf.apply_binaryop(fn, lhs, rhs, out)
-        return out
-
-    def _call_unaryop(self, series, fn, out_dtype):
-        """
-        Internal util to call a unary operator *fn* on operands *self* with
-        output dtype *out_dtype*.  Returns the output Series.
-        """
-        # Allocate output series
-        out = series_impl.empty_like_same_mask(series, dtype=out_dtype)
-        _gdf.apply_unaryop(fn, series, out)
-        return out
-
-
-class Stats(object):
-    def __init__(self, series):
-        self._series = series
+    def all(self):
+        return bool(self.min())
 
     def min(self):
-        return _gdf.apply_reduce(libgdf.gdf_min_generic, self._series)
+        return _gdf.apply_reduce(libgdf.gdf_min_generic, self)
 
     def max(self):
-        return _gdf.apply_reduce(libgdf.gdf_max_generic, self._series)
+        return _gdf.apply_reduce(libgdf.gdf_max_generic, self)
 
     def sum(self):
-        dt = np.promote_types('i8', self._series.dtype)
-        x = self._series.astype(dt)
+        dt = np.promote_types('i8', self.dtype)
+        x = self.astype(dt)
         return _gdf.apply_reduce(libgdf.gdf_sum_generic, x)
 
     def mean(self):
-        return self.sum().astype('f8') / self._series.valid_count
+        return self.sum().astype('f8') / self.valid_count
 
     def mean_var(self):
-        x = self._series.astype('f8')
+        x = self.astype('f8')
         mu = x.mean()
         n = x.valid_count
         asum = _gdf.apply_reduce(libgdf.gdf_sum_squared_generic, x)
         var = asum / n - mu ** 2
         return mu, var
+
+
+def numeric_column_binop(lhs, rhs, op, out_dtype):
+     # Allocate output
+    masked = lhs.has_null_mask or rhs.has_null_mask
+    out = columnops.column_empty_like(lhs, dtype=out_dtype, masked=masked)
+    # Call and fix null_count
+    null_count = _gdf.apply_binaryop(op, lhs, rhs, out)
+    out = out.replace(null_count=null_count)
+    return out.view(NumericalColumn, dtype=out_dtype)
+
+
+def numeric_column_unaryop(operand, op, out_dtype):
+    out = columnops.column_empty_like_same_mask(operand, dtype=out_dtype)
+    _gdf.apply_unaryop(op, operand, out)
+    return out.view(NumericalColumn, dtype=out_dtype)
+
+
+def numeric_column_compare(lhs, rhs, op):
+    return numeric_column_binop(lhs, rhs, op, out_dtype=np.bool_)

@@ -281,7 +281,7 @@ class DataFrame(object):
         -------
         The prepared Series object.
         """
-        series = Series.from_any(col)
+        series = Series(col)
         empty_index = isinstance(self._index, EmptyIndex)
         if empty_index or self._index == series.index:
             if empty_index:
@@ -535,15 +535,16 @@ class DataFrame(object):
         lhs = self.sort_index()
         rhs = other.sort_index()
 
-        lkey = lhs.index.as_series()
-        rkey = rhs.index.as_series()
+        lkey = lhs.index.as_column()
+        rkey = rhs.index.as_column()
 
         df = DataFrame()
         with _gdf.apply_join(lkey, rkey, how=how) as (lidx, ridx):
             if lidx.size > 0:
                 joined_index = cudautils.gather_joined_index(
                     lkey.to_gpu_array(), rkey.to_gpu_array(), lidx, ridx)
-                joined_index = lkey._copy_construct(buffer=Buffer(joined_index))
+                col = lkey.replace(data=Buffer(joined_index))
+                joined_index = lkey.replace(data=col.data)
                 gather_fn = gather_cols
             else:
                 joined_index = None
@@ -614,7 +615,7 @@ class DataFrame(object):
         # Run query
         boolmask = queryutils.query_execute(self, expr, callenv)
 
-        selected = Series.from_array(boolmask)
+        selected = Series(boolmask)
         newdf = DataFrame()
         for col in self.columns:
             newseries = self[col][selected]

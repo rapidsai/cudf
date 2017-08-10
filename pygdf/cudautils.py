@@ -1,12 +1,8 @@
-from functools import partial
-
 import numpy as np
 
-from numba import (cuda, njit, uint64, int32, float64, numpy_support)
+from numba import cuda, int32, numpy_support
 
 from .utils import mask_bitsize, mask_get, mask_set, make_mask
-from .sorting import RadixSort
-from .reduction import Reduce
 
 
 def to_device(ary):
@@ -158,27 +154,38 @@ def gpu_expand_mask_bits(bits, out):
 
 
 def mask_assign_slot(size, mask):
-    from . import _gdf
-
+    # expand bits into bytes
     dtype = (np.int32 if size < 2 ** 31 else np.int64)
     expanded_mask = cuda.device_array(size, dtype=dtype)
     numtasks = min(64 * 128, expanded_mask.size)
     gpu_expand_mask_bits.forall(numtasks)(mask, expanded_mask)
 
-    # Allocate output
-    slots = cuda.device_array(shape=expanded_mask.size + 1,
-                              dtype=expanded_mask.dtype)
+    # compute prefixsum
+    slots = prefixsum(expanded_mask)
+    sz = int(slots[slots.size - 1])
+    return slots, sz
 
+
+def prefixsum(vals):
+    """Compute the full prefixsum.
+
+    Given the input of N.  The output size is N + 1.
+    The first value is always 0.  The last value is the sum of *vals*.
+    """
+    from . import _gdf
+
+    # Allocate output
+    slots = cuda.device_array(shape=vals.size + 1,
+                              dtype=vals.dtype)
     # Fill 0 to slot[0]
     gpu_fill_value[1, 1](slots[:1], 0)
 
     # Compute prefixsum on the mask
-    col_slots = _gdf.columnview_from_devary(slots[1:])
-    col_mask = _gdf.columnview_from_devary(expanded_mask)
-    _gdf.apply_prefixsum(col_mask, col_slots, inclusive=True)
+    _gdf.apply_prefixsum(_gdf.columnview_from_devary(vals),
+                         _gdf.columnview_from_devary(slots[1:]),
+                         inclusive=True)
 
-    sz = int(slots[slots.size - 1])
-    return slots, sz
+    return slots
 
 
 def count_nonzero_mask(mask):
@@ -340,45 +347,9 @@ def compute_scale(arr, vmin, vmax):
     return out
 
 
-
 #
-# Reduction kernels
+# Misc kernels
 #
-
-gpu_sum = Reduce(lambda x, y: x + y)
-gpu_min = Reduce(lambda x, y: min(x, y))
-gpu_max = Reduce(lambda x, y: max(x, y))
-
-
-def _run_reduction(gpu_reduce, arr, init=0):
-    return gpu_reduce(arr, init=init)
-
-
-compute_sum = partial(_run_reduction, gpu_sum, init=0)
-compute_min = partial(_run_reduction, gpu_min)
-compute_max = partial(_run_reduction, gpu_max)
-
-
-def compute_mean(arr):
-    return compute_sum(astype(arr, np.float64)) / arr.size
-
-
-@cuda.jit
-def gpu_variance_step(xs, mu, out):
-    tid = cuda.grid(1)
-    if tid < out.size:
-        x = float64(xs[tid])
-        out[tid] = (x - mu) ** 2
-
-
-def compute_stats(arr):
-    """
-    Returns (mean, variance)
-    """
-    mu = compute_mean(arr)
-    tmp = cuda.device_array_like(arr)
-    gpu_variance_step.forall(arr.size)(arr, mu, tmp)
-    return mu, compute_mean(tmp)
 
 
 @cuda.jit(device=True)
@@ -530,10 +501,16 @@ class UniqueBySorting(object):
         self._maxcount = maxcount
         self._dtype = dtype
         self._maxk = k
-        self._sorter = RadixSort(maxcount=maxcount, dtype=dtype)
+        # self._sorter = RadixSort(maxcount=maxcount, dtype=dtype)
 
     def run_sort(self, arr):
-        self._sorter.sort(arr)
+        # self._sorter.sort(arr)
+        from . import _gdf
+        from .columnops import as_column
+
+        col = as_column(arr)
+        idx = as_column(np.arange(arr.size, dtype=np.int64))
+        _gdf.apply_sort(col, idx)
 
     def run_diff(self, arr):
         out = cuda.device_array(shape=arr.size, dtype=np.intp)
@@ -590,12 +567,24 @@ def gpu_scatter_segment_begins(markers, scanned, begins):
 
 
 def find_segments(arr):
-    markers = cuda.device_array(arr.size, dtype=np.int8)
+    """Find beginning indices of runs of equal values.
+
+    Returns
+    -------
+    starting_indices : device array
+        The starting indices of start of segments.
+        Total segment count will be equal to the length of this.
+    """
+    from . import _gdf
+
+    # Compute diffs of consecutive elements
+    markers = cuda.device_array(arr.size, dtype=np.int32)
     gpu_mark_segment_begins.forall(markers.size)(arr, markers)
-    # FIXME: slow scan begin
-    scanned = np.cumsum(markers.copy_to_host().astype(np.int32)) - 1
-    ct = scanned[-1] + 1
-    # FIXME: slow scan end
+    # Compute index of marked locations
+    slots = prefixsum(markers)
+    ct = slots[slots.size - 1]
+    scanned = slots[:-1]
+    # Compact segments
     begins = cuda.device_array(shape=int(ct), dtype=np.intp)
     gpu_scatter_segment_begins.forall(markers.size)(markers, scanned, begins)
     return begins

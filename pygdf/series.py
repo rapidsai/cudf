@@ -1,16 +1,16 @@
 from __future__ import print_function, division
 
 from collections import OrderedDict
+from numbers import Number
 
 import numpy as np
-import pandas as pd
 
-from numba import cuda
-
-from . import cudautils, utils, _gdf, formatting
+from . import cudautils, formatting
 from .buffer import Buffer
 from .index import Index, RangeIndex, GenericIndex
 from .settings import NOTSET, settings
+from .column import Column
+from . import columnops
 
 
 class Series(object):
@@ -19,97 +19,23 @@ class Series(object):
 
     ``Series`` objects are used as columns of ``DataFrame``.
     """
-    class Init(object):
-        """
-        Initializer object
-        """
-        def __init__(self, **kwargs):
-            self._params = kwargs
-
-        def parameters(self, **kwargs):
-            dupset = frozenset(kwargs.keys()) & frozenset(self._params.keys())
-            if dupset:
-                raise ValueError("duplicated kws: {}",
-                                 ', '.join(map(str, dupset)))
-            kwargs.update(self._params)
-            return kwargs
-
-    @classmethod
-    def from_any(cls, arbitrary):
-        """Create Series from an arbitrary object
-
-        Currently support inputs are:
-
-        * ``Series``
-        * ``Buffer``
-        * numba device array
-        * numpy array
-        * pandas.Categorical
-        """
-        if isinstance(arbitrary, Series):
-            return arbitrary
-
-        # Handle pandas type
-        if isinstance(arbitrary, pd.Categorical):
-            return cls.from_categorical(arbitrary)
-
-        # Handle internal types
-        if isinstance(arbitrary, Buffer):
-            return cls.from_buffer(arbitrary)
-        elif cuda.devicearray.is_cuda_ndarray(arbitrary):
-            return cls.from_array(arbitrary)
-        else:
-            if not isinstance(arbitrary, np.ndarray):
-                arbitrary = np.asarray(arbitrary)
-            return cls.from_array(arbitrary)
-
     @classmethod
     def from_categorical(cls, categorical, codes=None):
         """Creates from a pandas.Categorical
 
         If ``codes`` is defined, use it instead of ``categorical.codes``
         """
-        from .categorical import CategoricalSeriesImpl
+        from .categorical import pandas_categorical_as_column
 
-        # TODO fix mutability issue in numba to avoid the .copy()
-        codes = (categorical.codes.copy()
-                 if codes is None else codes)
-        dtype = categorical.dtype
-        # TODO pending pandas to be improved
-        #       https://github.com/pandas-dev/pandas/issues/14711
-        #       https://github.com/pandas-dev/pandas/pull/16015
-        impl = CategoricalSeriesImpl(dtype, codes.dtype,
-                                     categorical.categories,
-                                     categorical.ordered)
-
-        valid_codes = codes != -1
-        buf = Buffer(codes)
-        params = dict(buffer=buf, impl=impl)
-        if not np.all(valid_codes):
-            mask = cudautils.compact_mask_bytes(valid_codes)
-            nnz = np.count_nonzero(valid_codes)
-            null_count = codes.size - nnz
-            params.update(dict(mask=Buffer(mask), null_count=null_count))
-        return Series(cls.Init(**params))
-
-    @classmethod
-    def from_buffer(cls, buffer):
-        """Create a Series from a ``Buffer``
-        """
-        return cls(cls.Init(buffer=buffer))
-
-    @classmethod
-    def from_array(cls, array):
-        """Create a Series from an array-like object.
-        """
-        return cls.from_buffer(Buffer(array))
+        col = pandas_categorical_as_column(categorical, codes=codes)
+        return Series(data=col)
 
     @classmethod
     def from_masked_array(cls, data, mask, null_count=None):
         """Create a Series with null-mask.
         This is equivalent to:
 
-            Series.from_any(data).set_mask(mask, null_count=null_count)
+            Series(data).set_mask(mask, null_count=null_count)
 
         Parameters
         ----------
@@ -125,53 +51,27 @@ class Series(object):
             The number of null values.
             If None, it is calculated automatically.
         """
-        return cls.from_any(data).set_mask(mask, null_count=null_count)
+        col = columnops.as_column(data).set_mask(mask, null_count=null_count)
+        return cls(data=col)
 
-    def __new__(cls, arg, **kwargs):
-        if isinstance(arg, cls.Init):
-            instance = object.__new__(cls)
-            instance._init_detail(**arg.parameters(**kwargs))
-        else:
-            instance = cls.from_any(arg, **kwargs)
-        return instance
-
-    def _init_detail(self, buffer=None, mask=None, null_count=None,
-                     index=None, impl=None):
-        """
-        Actual initializer of the instance
-        """
-        from . import series_impl
+    def __init__(self, data, index=None):
+        if isinstance(data, Series):
+            index = data._index
+            data = data._column
+        if not isinstance(data, columnops.TypedColumnBase):
+            data = columnops.as_column(data)
 
         if index is not None and not isinstance(index, Index):
             raise TypeError('index not a Index type: got {!r}'.format(index))
 
-        # Forces Series content to be contiguous
-        if not buffer.is_contiguous():
-            buffer = buffer.as_contiguous()
-
-        self._size = buffer.size if buffer else 0
-        self._data = buffer
-        self._mask = mask
-        self._index = RangeIndex(self._size) if index is None else index
-        self._impl = (series_impl.get_default_impl(buffer.dtype)
-                      if impl is None else impl)
-        if null_count is None:
-            if self._mask is not None:
-                nnz = cudautils.count_nonzero_mask(self._mask.mem)
-                null_count = self._size - nnz
-            else:
-                null_count = 0
-        self._null_count = null_count
-        self._cffi_view = _gdf.columnview(size=self._size, data=self._data,
-                                          mask=self._mask)
+        assert isinstance(data, columnops.TypedColumnBase)
+        self._column = data
+        self._index = RangeIndex(len(data)) if index is None else index
 
     def _copy_construct_defaults(self):
         return dict(
-            buffer=self._data,
-            mask=self._mask,
-            null_count=self._null_count,
+            data=self._column,
             index=self._index,
-            impl=self._impl,
         )
 
     def _copy_construct(self, **kwargs):
@@ -180,7 +80,7 @@ class Series(object):
         params = self._copy_construct_defaults()
         cls = type(self)
         params.update(kwargs)
-        return cls(cls.Init(**params))
+        return cls(**params)
 
     def set_index(self, index):
         """Returns a new Series with a different index.
@@ -194,7 +94,7 @@ class Series(object):
         return self._copy_construct(index=index)
 
     def as_index(self):
-        return self._impl.as_index(self)
+        return self.set_index(RangeIndex(len(self)))
 
     def set_mask(self, mask, null_count=None):
         """Create new Series by setting a mask array.
@@ -214,51 +114,28 @@ class Series(object):
             If None, it is calculated automatically.
 
         """
-        if not isinstance(mask, Buffer):
-            mask = Buffer(mask)
-        if mask.dtype not in (np.dtype(np.uint8), np.dtype(np.int8)):
-            msg = 'mask must be of byte; but got {}'.format(mask.dtype)
-            raise ValueError(msg)
-        return self._copy_construct(mask=mask, null_count=null_count)
+        col = self._column.set_mask(mask, null_count=null_count)
+        return self._copy_construct(data=col)
 
     def __len__(self):
         """Returns the size of the ``Series`` including null values.
         """
-        return self._size
+        return len(self._column)
 
     def __getitem__(self, arg):
-        from . import series_impl
-
         if isinstance(arg, Series):
-            return series_impl.select_by_boolmask(self, arg)
+            selvals, selinds = columnops.column_select_by_boolmask(
+                self._column, arg)
+            return self._copy_construct(data=selvals,
+                                        index=GenericIndex(selinds))
 
         elif isinstance(arg, slice):
-            # compute mask slice
-            start, stop = utils.normalize_slice(arg, len(self))
-            if self.null_count > 0:
-                if arg.step is not None and arg.step != 1:
-                    raise NotImplementedError(arg)
-
-                # compute new mask
-                mask = self._get_mask_as_series()
-                # slicing
-                subdata = self._data.mem[arg]
-                submask = mask[arg].as_mask()
-                index = self.index[arg]
-                return self._copy_construct(buffer=Buffer(subdata),
-                                            mask=Buffer(submask),
-                                            null_count=None,
-                                            index=index)
-            else:
-                index = self.index[arg]
-                newbuffer = self._data[arg]
-                return self._copy_construct(buffer=newbuffer,
-                                            mask=None,
-                                            null_count=None,
-                                            index=index)
-        elif isinstance(arg, int):
+            index = self.index[arg]         # slice index
+            col = self._column[arg]         # slice column
+            return self._copy_construct(data=col, index=index)
+        elif isinstance(arg, Number):
             # The following triggers a IndexError if out-of-bound
-            return self._impl.element_indexing(self, arg)
+            return self._column.element_indexing(arg)
         else:
             raise NotImplementedError(type(arg))
 
@@ -268,19 +145,19 @@ class Series(object):
         indices = Buffer(indices).to_gpu_array()
         data = cudautils.gather(data=self.data.to_gpu_array(), index=indices)
 
-        if self._mask:
+        if self._column.mask:
             mask = self._get_mask_as_series().take(indices).as_mask()
             mask = Buffer(mask)
         else:
             mask = None
         index = self.index.take(indices)
-        return self._copy_construct(buffer=Buffer(data), index=index,
-                                    mask=mask)
+        col = self._column.replace(data=Buffer(data), mask=mask)
+        return self._copy_construct(data=col, index=index)
 
     def _get_mask_as_series(self):
         mask = Series(cudautils.ones(len(self), dtype=np.bool))
-        if self._mask is not None:
-            mask = mask.set_mask(self._mask).fillna(False)
+        if self._column.mask is not None:
+            mask = mask.set_mask(self._column.mask).fillna(False)
         return mask
 
     def __bool__(self):
@@ -293,11 +170,8 @@ class Series(object):
         """Returns a list of string for each element.
         """
         values = self[:nrows]
-        out = ['' if v is None else self._element_to_str(v) for v in values]
+        out = ['' if v is None else str(v) for v in values]
         return out
-
-    def _element_to_str(self, value):
-        return self._impl.element_to_str(value)
 
     def head(self, n=5):
         return self[:n]
@@ -344,7 +218,8 @@ class Series(object):
         """
         if not isinstance(other, Series):
             return NotImplemented
-        return self._impl.binary_operator(fn, self, other)
+        outcol = self._column.binary_operator(fn, other._column)
+        return self._copy_construct(data=outcol)
 
     def _unaryop(self, fn):
         """
@@ -352,7 +227,8 @@ class Series(object):
         Return the output Series.  The output dtype is determined by the input
         operand.
         """
-        return self._impl.unary_operator(fn, self)
+        outcol = self._column.unary_operator(fn)
+        return self._copy_construct(data=outcol)
 
     def __add__(self, other):
         return self._binaryop(other, 'add')
@@ -375,15 +251,20 @@ class Series(object):
         if isinstance(other, Series):
             return other
         else:
-            return self._impl.normalize_compare_value(self, other)
+            col = self._column.normalize_compare_value(other)
+            return self._copy_construct(data=col)
 
     def _unordered_compare(self, other, cmpops):
         other = self._normalize_compare_value(other)
-        return self._impl.unordered_compare(cmpops, self, other)
+        lhs = self._column.astype(other.dtype)
+        outcol = lhs.unordered_compare(cmpops, other._column)
+        return self._copy_construct(data=outcol)
 
     def _ordered_compare(self, other, cmpops):
         other = self._normalize_compare_value(other)
-        return self._impl.ordered_compare(cmpops, self, other)
+        lhs = self._column.astype(other.dtype)
+        outcol = lhs.ordered_compare(cmpops, other._column)
+        return self._copy_construct(data=outcol)
 
     def __eq__(self, other):
         return self._unordered_compare(other, 'eq')
@@ -405,128 +286,53 @@ class Series(object):
 
     @property
     def cat(self):
-        return self._impl.cat(self)
+        return self._column.cat()
 
     @property
     def dtype(self):
         """dtype of the Series"""
-        return self._impl.dtype
+        return self._column.dtype
 
     @classmethod
     def _concat(cls, objs, index=True):
-        head = objs[0]
-        for o in objs:
-            if o._impl != head._impl:
-                raise ValueError("All series must be of same type")
-
-        newsize = sum(map(len, objs))
-        # Concatenate data
-        mem = cuda.device_array(shape=newsize, dtype=head._data.dtype)
-        data = Buffer.from_empty(mem)
-        for o in objs:
-            data.extend(o._data.to_gpu_array())
-
-        # Concatenate mask if present
-        if all(o.has_null_mask for o in objs):
-            # FIXME: Inefficient
-            mem = cuda.device_array(shape=newsize, dtype=np.bool)
-            mask = Buffer.from_empty(mem)
-            null_count = 0
-            for o in objs:
-                mask.extend(o._get_mask_as_series()._data.to_gpu_array())
-                null_count += o._null_count
-            mask = Buffer(utils.boolmask_to_bitmask(mask.to_array()))
-        else:
-            mask = None
-            null_count = 0
-
         # Concatenate index if not provided
         if index is True:
             index = Index._concat([o.index for o in objs])
 
-        return cls(cls.Init(buffer=data,
-                            mask=mask,
-                            null_count=null_count,
-                            index=index,
-                            impl=head._impl))
+        col = Column._concat([o._column for o in objs])
+        return cls(data=col, index=index)
 
     def append(self, arbitrary):
         """Append values from another ``Series`` or array-like object.
-        Returns a new copy.
+        Returns a new copy with the index resetted.
         """
-        other = Series.from_any(arbitrary)
-        newsize = len(self) + len(other)
-        # allocate memory
-        mem = cuda.device_array(shape=newsize, dtype=self.data.dtype)
-        newbuf = Buffer.from_empty(mem)
-        # copy into new memory
-        for buf in [self._data, other._data]:
-            newbuf.extend(buf.to_gpu_array())
+        other = Series(arbitrary)
+        other_col = other._column
         # return new series
-        return self.from_any(newbuf)
+        return Series(self._column.append(other_col))
 
     @property
     def valid_count(self):
         """Number of non-null values"""
-        return self._size - self._null_count
+        return self._column.valid_count
 
     @property
     def null_count(self):
         """Number of null values"""
-        return self._null_count
+        return self._column.null_count
 
     @property
     def has_null_mask(self):
         """A boolean indicating whether a null-mask is needed"""
-        return self._mask is not None
+        return self._column.has_null_mask
 
     def fillna(self, value):
         """Fill null values with ``value``.
 
         Returns a copy with null filled.
         """
-        if not self.has_null_mask:
-            return self
-        out = cudautils.fillna(data=self._data.to_gpu_array(),
-                               mask=self._mask.to_gpu_array(),
-                               value=value)
-        return self.from_array(out)
-
-    def to_dense_buffer(self, fillna=None):
-        """Get dense (no null values) ``Buffer`` of the data.
-
-        Parameters
-        ----------
-        fillna : str or None
-            See *fillna* in ``.to_array``.
-
-        Notes
-        -----
-
-        if ``fillna`` is ``None``, null values are skipped.  Therefore, the
-        output size could be smaller.
-        """
-        if fillna not in {None, 'pandas'}:
-            raise ValueError('invalid for fillna')
-
-        if self.has_null_mask:
-            if fillna == 'pandas':
-                # cast non-float types to float64
-                col = (self.astype(np.float64)
-                       if self.dtype.kind != 'f'
-                       else self)
-                # fill nan
-                return col.fillna(np.nan)
-            else:
-                return self._copy_to_dense_buffer()
-        else:
-            return self._data
-
-    def _copy_to_dense_buffer(self):
-        data = self._data.to_gpu_array()
-        mask = self._mask.to_gpu_array()
-        nnz, mem = cudautils.copy_to_dense(data=data, mask=mask)
-        return Buffer(mem, size=nnz, capacity=mem.size)
+        data = self._column.fillna(value)
+        return self._copy_construct(data=data)
 
     def to_array(self, fillna=None):
         """Get a dense numpy array for the data.
@@ -544,7 +350,7 @@ class Series(object):
         if ``fillna`` is ``None``, null values are skipped.  Therefore, the
         output size could be smaller.
         """
-        return self.to_dense_buffer(fillna=fillna).to_array()
+        return self._column.to_array(fillna=fillna)
 
     def to_gpu_array(self, fillna=None):
         """Get a dense numba device array for the data.
@@ -560,16 +366,18 @@ class Series(object):
         if ``fillna`` is ``None``, null values are skipped.  Therefore, the
         output size could be smaller.
         """
-        return self.to_dense_buffer(fillna=fillna).to_gpu_array()
+        return self._column.to_gpu_array(fillna=fillna)
 
     def to_pandas(self, index=True):
-        return self._impl.to_pandas(self, index=index)
+        if index is True:
+            index = self.index.to_pandas()
+        return self._column.to_pandas(index=index)
 
     @property
     def data(self):
         """The gpu buffer for the data
         """
-        return self._data
+        return self._column.data
 
     @property
     def index(self):
@@ -581,10 +389,7 @@ class Series(object):
     def nullmask(self):
         """The gpu buffer for the null-mask
         """
-        if self.has_null_mask:
-            return self._mask
-        else:
-            raise ValueError('Series has no null mask')
+        return self._column.nullmask
 
     def as_mask(self):
         """Convert booleans to bitmask
@@ -606,8 +411,8 @@ class Series(object):
         """
         if dtype == self.dtype:
             return self
-        return self._copy_construct(buffer=self.data.astype(dtype),
-                                    impl=None)
+
+        return self._copy_construct(data=self._column.astype(dtype))
 
     def argsort(self, ascending=True):
         """Returns a Series of int64 index that will sort the series.
@@ -663,14 +468,18 @@ class Series(object):
         -------
         2-tuple of key and index
         """
-        return self._impl.sort_by_values(self, ascending=ascending)
+        col_keys, col_inds = self._column.sort_by_values(ascending=ascending)
+        sr_keys = self._copy_construct(data=col_keys)
+        sr_inds = self._copy_construct(data=col_inds)
+        return sr_keys, sr_inds
 
     def reverse(self):
         """Reverse the Series
         """
         data = cudautils.reverse_array(self.to_gpu_array())
         index = GenericIndex(cudautils.reverse_array(self.index.gpu_values))
-        return self._copy_construct(buffer=Buffer(data), index=index)
+        col = self._column.replace(data=Buffer(data))
+        return self._copy_construct(data=col, index=index)
 
     def one_hot_encoding(self, cats, dtype='float64'):
         """Perform one-hot-encoding
@@ -695,7 +504,7 @@ class Series(object):
         for cat in cats:
             buf = cudautils.apply_equal_constant(arr=self.to_gpu_array(),
                                                  val=cat, dtype=dtype)
-            out.append(Series.from_array(buf))
+            out.append(Series(buf))
         return out
 
     # Find / Search
@@ -704,22 +513,13 @@ class Series(object):
         """
         Returns offset of first value that matches
         """
-        # FIXME: Inefficient find in CPU code
-        arr = self.to_array()
-        indices = np.argwhere(arr == value)
-        if not indices:
-            raise ValueError('value not found')
-        return indices[0, 0]
+        return self._column.find_first_value(value)
 
     def find_last_value(self, value):
         """
         Returns offset of last value that matches
         """
-        arr = self.to_array()
-        indices = np.argwhere(arr == value)
-        if not indices:
-            raise ValueError('value not found')
-        return indices[-1, 0]
+        return self._column.find_last_value(value)
 
     #
     # Stats
@@ -731,21 +531,21 @@ class Series(object):
     def min(self):
         """Compute the min of the series
         """
-        return self._impl.stats(self).min()
+        return self._column.min()
 
     def max(self):
         """Compute the max of the series
         """
-        return self._impl.stats(self).max()
+        return self._column.max()
 
     def sum(self):
         """Compute the sum of the series"""
-        return self._impl.stats(self).sum()
+        return self._column.sum()
 
     def mean(self):
         """Compute the mean of the series
         """
-        return self._impl.stats(self).mean()
+        return self._column.mean()
 
     def std(self):
         """Compute the standard deviation of the series
@@ -761,7 +561,7 @@ class Series(object):
     def mean_var(self):
         """Compute mean and variance at the same time.
         """
-        mu, var = self._impl.stats(self).mean_var()
+        mu, var = self._column.mean_var()
         return mu, var
 
     def unique_k(self, k):
@@ -769,9 +569,8 @@ class Series(object):
         """
         if self.null_count == len(self):
             return np.empty(0, dtype=self.dtype)
-        arr = self.to_dense_buffer().to_gpu_array()
-        res = cudautils.compute_unique_k(arr, k=k)
-        return Series.from_array(res)
+        res = self._column.unique_k(k=k)
+        return Series(res)
 
     def scale(self):
         """Scale values to [0, 1] in float64
@@ -783,7 +582,7 @@ class Series(object):
         vmax = self.max()
         gpuarr = self.to_gpu_array()
         scaled = cudautils.compute_scale(gpuarr, vmin, vmax)
-        return Series.from_array(scaled)
+        return Series(scaled)
 
     # Rounding
 

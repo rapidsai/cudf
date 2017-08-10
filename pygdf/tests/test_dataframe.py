@@ -69,7 +69,7 @@ def test_buffer_append():
 def test_series_basic():
     # Make series from buffer
     a1 = np.arange(10, dtype=np.float64)
-    series = Series.from_any(a1)
+    series = Series(a1)
     assert len(series) == 10
     np.testing.assert_equal(series.to_array(), np.hstack([a1]))
 
@@ -89,7 +89,7 @@ def test_series_basic():
 
 def test_series_indexing():
     a1 = np.arange(20)
-    series = Series.from_any(a1)
+    series = Series(a1)
     # Indexing
     sr1 = series[:12]
     assert not sr1.has_null_mask
@@ -304,7 +304,7 @@ def test_dataframe_to_string_wide():
     df = DataFrame()
     for i in range(100):
         df['a{}'.format(i)] = list(range(3))
-    got = df.to_string()
+    got = df.to_string(ncols=8)
     print(got)
     expect = '''
     a0   a1   a2   a3   a4   a5   a6 ...  a99
