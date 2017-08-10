@@ -77,8 +77,11 @@ class NumericalColumn(columnops.TypedColumnBase):
         return numeric_column_compare(self, rhs, op=_ordered_impl[cmpop])
 
     def normalize_compare_value(self, other):
-        if np.min_scalar_type(other).kind in 'biuf':
-            ary = utils.scalar_broadcast_to(other, shape=len(self))
+        other_dtype = np.min_scalar_type(other)
+        if other_dtype.kind in 'biuf':
+            other_dtype = np.promote_types(self.dtype, other_dtype)
+            ary = utils.scalar_broadcast_to(other, shape=len(self),
+                                            dtype=other_dtype)
             return self.replace(data=Buffer(ary), dtype=ary.dtype)
         else:
             raise TypeError('cannot broadcast {}'.format(type(other)))

@@ -96,13 +96,16 @@ class CategoricalColumn(columnops.TypedColumnBase):
         return self.as_numerical.ordered_compare(cmpop, rhs)
 
     def normalize_compare_value(self, other):
-        code = self.data.dtype.type(self._encode(other))
-        ary = utils.scalar_broadcast_to(code, shape=len(self))
+        ary = utils.scalar_broadcast_to(self._encode(other), shape=len(self),
+                                        dtype=self.data.dtype)
         col = self.replace(data=Buffer(ary), dtype=self.dtype,
                            categories=self._categories, ordered=self._ordered)
         return col
 
     def astype(self, dtype):
+        # custom dtype can't be compared with `==`
+        if self.dtype is dtype:
+            return self
         return self.as_numerical.astype(dtype)
 
     def sort_by_values(self, ascending):
