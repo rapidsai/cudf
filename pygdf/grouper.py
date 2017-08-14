@@ -60,6 +60,7 @@ class Grouper(object):
                         'std': Series.std,
                         'min': Series.min,
                         'max': Series.max,
+                        'count': Series.count,
                         }
 
     def __init__(self, df, by):
