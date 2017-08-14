@@ -24,8 +24,6 @@ class Index(object):
         return np.asarray([i for i in self.as_column()])
 
     def to_pandas(self):
-        what = self.as_column().to_pandas()
-        print(type(what))
         return pd.Index(self.as_column().to_pandas())
 
     @property
