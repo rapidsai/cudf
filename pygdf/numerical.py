@@ -149,6 +149,28 @@ class NumericalColumn(columnops.TypedColumnBase):
         var = asum / n - mu ** 2
         return mu, var
 
+    def applymap(self, udf, out_dtype=None):
+        """Apply a elemenwise function to transform the values in the Column.
+
+        Parameters
+        ----------
+        udf : function
+            Wrapped by numba jit for call on the GPU as a device function.
+        out_dtype  : numpy.dtype; optional
+            The dtype for use in the output.
+            By default, use the same dtype as *self.dtype*.
+
+        Returns
+        -------
+        result : Column
+            The mask is preserved.
+        """
+        if out_dtype is None:
+            out_dtype = self.dtype
+        out = columnops.column_applymap(udf=udf, column=self,
+                                         out_dtype=out_dtype)
+        return self.replace(data=out)
+
 
 def numeric_column_binop(lhs, rhs, op, out_dtype):
      # Allocate output
@@ -168,3 +190,4 @@ def numeric_column_unaryop(operand, op, out_dtype):
 
 def numeric_column_compare(lhs, rhs, op):
     return numeric_column_binop(lhs, rhs, op, out_dtype=np.bool_)
+
