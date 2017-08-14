@@ -231,6 +231,8 @@ class Column(object):
         """
         params = self._replace_defaults()
         params.update(kwargs)
+        if 'mask' in kwargs and 'null_count' not in kwargs:
+            del params['null_count']
         return type(self)(**params)
 
     def view(self, newcls, **kwargs):
@@ -249,6 +251,8 @@ class Column(object):
         """
         params = Column._replace_defaults(self)
         params.update(kwargs)
+        if 'mask' in kwargs and 'null_count' not in kwargs:
+            del params['null_count']
         return newcls(**params)
 
     def element_indexing(self, index):
