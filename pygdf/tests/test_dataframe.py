@@ -217,6 +217,11 @@ def test_dataframe_loc():
     df['c'] = hc = np.random.randint(low=0, high=100, size=size).astype(np.int64)
     df['d'] = hd = np.random.random(size).astype(np.float64)
 
+    # Full slice
+    full = df.loc[:, ['c']]
+    assert full.columns == tuple(['c'])
+    np.testing.assert_equal(full['c'].to_array(), hc)
+
     begin = 117
     end = 122
     fewer = df.loc[begin:end, ['c', 'd', 'a']]
