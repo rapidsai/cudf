@@ -507,6 +507,32 @@ class Series(object):
             out.append(Series(buf))
         return out
 
+    # UDF related
+
+    def applymap(self, udf, out_dtype=None):
+        """Apply a elemenwise function to transform the values in the Column.
+
+        The user function is expected to take one argument and return the
+        result, which will be stored to the output Series.  The function
+        cannot reference globals except for other simple scalar objects.
+
+        Parameters
+        ----------
+        udf : function
+            Wrapped by ``numba.cuda.jit`` for call on the GPU as a device
+            function.
+        out_dtype  : numpy.dtype; optional
+            The dtype for use in the output.
+            By default, the result will have the same dtype as the source.
+
+        Returns
+        -------
+        result : Series
+            The mask and index are preserved.
+        """
+        res_col = self._column.applymap(udf, out_dtype=out_dtype)
+        return self._copy_construct(data=res_col)
+
     # Find / Search
 
     def find_first_value(self, value):

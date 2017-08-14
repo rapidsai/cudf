@@ -6,7 +6,7 @@ view of Columns.
 import numpy as np
 import pandas as pd
 
-from numba import cuda
+from numba import cuda, njit
 
 from .buffer import Buffer
 from . import utils, cudautils
@@ -147,4 +147,53 @@ def as_column(arbitrary):
         return as_column(Buffer(arbitrary))
     else:
         return as_column(np.asarray(arbitrary))
+
+
+def column_applymap(udf, column, out_dtype):
+    """Apply a elemenwise function to transform the values in the Column.
+
+    Parameters
+    ----------
+    udf : function
+        Wrapped by numba jit for call on the GPU as a device function.
+    column : Column
+        The source column.
+    out_dtype  : numpy.dtype
+        The dtype for use in the output.
+
+    Returns
+    -------
+    result : Buffer
+    """
+    core = njit(udf)
+    results = cuda.device_array(shape=len(column), dtype=out_dtype)
+    values = column.data.to_gpu_array()
+    if column.mask:
+        # For masked columns
+        @cuda.jit
+        def kernel_masked(values, masks, results):
+            i = cuda.grid(1)
+            # in range?
+            if i < values.size:
+                # valid?
+                if utils.mask_get(masks, i):
+                    # call udf
+                    results[i] = core(values[i])
+
+        masks = column.mask.to_gpu_array()
+        kernel_masked.forall(len(column))(values, masks, results)
+    else:
+        # For non-masked columns
+        @cuda.jit
+        def kernel_non_masked(values, results):
+            i = cuda.grid(1)
+            # in range?
+            if i < values.size:
+                # call udf
+                results[i] = core(values[i])
+
+        kernel_non_masked.forall(len(column))(values, results)
+    # Output
+    return Buffer(results)
+
 
