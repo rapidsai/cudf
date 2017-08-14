@@ -165,9 +165,9 @@ class Grouper(object):
 
         elif isinstance(args, dict):
             for k, v in args.items():
-                functors[k] = [[_get_function(v)]
+                functors[k] = ([_get_function(v)]
                                if not isinstance(v, (tuple, list))
-                               else [_get_function(x) for x in v]]
+                               else [_get_function(x) for x in v])
         else:
             return self.agg([args])
         return self._form_groups(functors)
