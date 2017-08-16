@@ -16,7 +16,7 @@ class Appender(object):
     """For fast appending of data into a Column.
     """
     def __init__(self, parent, bufsize=TEN_MB):
-        # Keep referene to parent Column
+        # Keep reference to parent Column
         self._parent = parent
         # Get physical dtype
         dtype = np.dtype(parent.data.dtype)
