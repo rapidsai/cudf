@@ -41,7 +41,7 @@ def gpu_view_as(arr, dtype, shape=None, strides=None):
 def _schema_to_dtype(name, bitwidth):
     if name in ('DOUBLE', 'FLOAT'):
         ret = getattr(np, 'float{:d}'.format(bitwidth))
-    elif name in ('INT', 'INT32', 'INT64'):
+    elif name in ('INT', 'INT16', 'INT32', 'INT64'):
         ret = getattr(np, 'int{:d}'.format(bitwidth))
     elif name == 'DICTIONARY':
         ret = getattr(np, 'int{:d}'.format(bitwidth))
