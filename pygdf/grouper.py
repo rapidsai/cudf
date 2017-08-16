@@ -2,22 +2,30 @@ from collections import OrderedDict
 
 import numpy as np
 
+from numba import cuda
+
 from .dataframe import DataFrame, Series
+from .column import Column
+from .buffer import Buffer
 
 
 TEN_MB = 10 ** 7
 
 
 class Appender(object):
-    """For fast appending of data into a Series.
+    """For fast appending of data into a Column.
     """
-    def __init__(self, dtype, bufsize=TEN_MB):
-        dtype = np.dtype(dtype)
+    def __init__(self, parent, bufsize=TEN_MB):
+        # Keep reference to parent Column
+        self._parent = parent
+        # Get physical dtype
+        dtype = np.dtype(parent.data.dtype)
         # Max queue size is buffer size divided by itemsize
         self._max_q_sz = max(bufsize // dtype.itemsize, 1)
         self._queue = []
-        # Initialize empty Series
-        self._result = Series(np.empty(shape=0, dtype=dtype))
+        # Initialize empty Column
+        raw_buf = cuda.device_array(shape=0, dtype=dtype)
+        self._result = Column(Buffer.from_empty(raw_buf))
 
     def append(self, value):
         self._queue.append(value)
@@ -27,15 +35,17 @@ class Appender(object):
 
     def flush(self):
         # Append to Series
-        buf = np.asarray(self._queue, dtype=self._result.dtype)
-        self._result = self._result.append(buf)
+        buf = Buffer(np.asarray(self._queue, dtype=self._result.dtype))
+        self._result = self._result.append(Column(buf))
         # Reset queue
         self._queue.clear()
 
     def get(self):
         self.flush()
         assert self._result is not None
-        return self._result
+        assert not self._result.has_null_mask
+        col = self._result
+        return Series(self._parent.replace(data=col.data, mask=None))
 
 
 def _auto_generate_grouper_agg(members):
@@ -60,6 +70,7 @@ class Grouper(object):
                         'std': Series.std,
                         'min': Series.min,
                         'max': Series.max,
+                        'count': Series.count,
                         }
 
     def __init__(self, df, by):
@@ -80,20 +91,20 @@ class Grouper(object):
         appenders = OrderedDict()
         # The "by" columns
         for k in self._by:
-            appenders[k] = Appender(dtype=self._df[k].dtype)
+            appenders[k] = Appender(parent=self._df[k]._column)
         # The "value" columns
         for k, vs in functors.items():
             if k not in self._df.columns:
                 raise NameError('column {:r} not found'.format(k))
             if len(vs) == 1:
                 [functor] = vs
-                appenders[k] = Appender(dtype=self._df[k].dtype)
+                appenders[k] = Appender(parent=self._df[k]._column)
                 functors_mapping[k] = {k: functor}
             else:
                 functors_mapping[k] = cur_fn_mapping = OrderedDict()
                 for functor in vs:
                     newk = '{}_{}'.format(k, functor.__name__)
-                    appenders[newk] = Appender(dtype=self._df[k].dtype)
+                    appenders[newk] = Appender(parent=self._df[k]._column)
                     cur_fn_mapping[newk] = functor
         # Grouping
         for idx, grp in self._group_level(self._df, self._by):
@@ -118,8 +129,10 @@ class Grouper(object):
         for s, e in zip(segs, segs[1:] + [None]):
             grouped = df[s:e]
             if len(grouped):
+                # NOTE: index at the Buffer level to get raw values
                 # FIXME numpy.scalar getitem to Index
-                index = df.index[int(s)]
+                #       (e.g. the need of `int(s)`)
+                index = df.index.as_column().data[int(s)]
                 inner_indices = indices + [index]
                 if innerlevels:
                     for grp in self._group_level(grouped, innerlevels,
@@ -164,9 +177,9 @@ class Grouper(object):
 
         elif isinstance(args, dict):
             for k, v in args.items():
-                functors[k] = [[_get_function(v)]
+                functors[k] = ([_get_function(v)]
                                if not isinstance(v, (tuple, list))
-                               else [_get_function(x) for x in v]]
+                               else [_get_function(x) for x in v])
         else:
             return self.agg([args])
         return self._form_groups(functors)

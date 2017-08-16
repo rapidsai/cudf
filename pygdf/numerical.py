@@ -95,7 +95,7 @@ class NumericalColumn(columnops.TypedColumnBase):
             return col
 
     def sort_by_values(self, ascending):
-        if self.mask:
+        if self.has_null_mask:
             raise ValueError('masked array not supported')
         # Clone data buffer as the key
         col_keys = self.replace(data=self.data.copy())

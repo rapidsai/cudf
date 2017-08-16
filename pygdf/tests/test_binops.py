@@ -59,18 +59,23 @@ def test_series_compare_scalar(cmpop):
 
 @pytest.mark.parametrize('nelem', [1, 7, 8, 9, 32, 64, 128])
 def test_validity_add(nelem):
+    np.random.seed(0)
     # LHS
     lhs_data = np.random.random(nelem)
     lhs_mask = utils.random_bitmask(nelem)
-    lhs_bitmask = utils.expand_bits_to_bytes(lhs_mask)
+    lhs_bitmask = utils.expand_bits_to_bytes(lhs_mask)[:nelem]
     lhs_null_count = utils.count_zero(lhs_bitmask)
-    lhs = Series.from_masked_array(lhs_data, lhs_mask, lhs_null_count)
+    assert lhs_null_count >= 0
+    lhs = Series.from_masked_array(lhs_data, lhs_mask)
+    assert lhs.null_count == lhs_null_count
     # RHS
     rhs_data = np.random.random(nelem)
     rhs_mask = utils.random_bitmask(nelem)
-    rhs_bitmask = utils.expand_bits_to_bytes(rhs_mask)
+    rhs_bitmask = utils.expand_bits_to_bytes(rhs_mask)[:nelem]
     rhs_null_count = utils.count_zero(rhs_bitmask)
-    rhs = Series.from_masked_array(rhs_data, rhs_mask, rhs_null_count)
+    assert rhs_null_count >= 0
+    rhs = Series.from_masked_array(rhs_data, rhs_mask)
+    assert rhs.null_count == rhs_null_count
     # Result
     res = lhs + rhs
     res_mask = np.asarray(utils.expand_bits_to_bytes(lhs_mask & rhs_mask),

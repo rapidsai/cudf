@@ -85,7 +85,7 @@ def apply_unaryop(unaop, inp, out):
 def apply_mask_and(col, mask, out):
     args = (col.cffi_view, mask.cffi_view, out.cffi_view)
     libgdf.gdf_validity_and(*args)
-    nnz = cudautils.count_nonzero_mask(out.mask.mem)
+    nnz = cudautils.count_nonzero_mask(out.mask.mem, size=len(out))
     return len(out) - nnz
 
 

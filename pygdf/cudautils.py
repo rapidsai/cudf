@@ -188,9 +188,10 @@ def prefixsum(vals):
     return slots
 
 
-def count_nonzero_mask(mask):
+def count_nonzero_mask(mask, size):
+    assert mask.size * mask_bitsize >= size
     # TODO: this needs optimization
-    _, nnz = mask_assign_slot(mask.size * mask_bitsize, mask)
+    _, nnz = mask_assign_slot(size, mask)
     return nnz
 
 

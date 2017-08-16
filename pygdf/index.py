@@ -24,8 +24,6 @@ class Index(object):
         return np.asarray([i for i in self.as_column()])
 
     def to_pandas(self):
-        what = self.as_column().to_pandas()
-        print(type(what))
         return pd.Index(self.as_column().to_pandas())
 
     @property
@@ -119,14 +117,16 @@ class RangeIndex(Index):
 
     def find_label_range(self, first, last):
         # clip first to range
-        if first < self._start:
+        if first is None or first < self._start:
             begin = self._start
         elif first < self._stop:
             begin = first
         else:
             begin = self._stop
         # clip last to range
-        if last < self._start:
+        if last is None:
+            end = self._stop
+        elif last < self._start:
             end = begin
         elif last < self._stop:
             end = last + 1

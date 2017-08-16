@@ -44,3 +44,22 @@ def test_groupby_agg_mean_min(nelem):
     np.testing.assert_array_almost_equal(expect_mean, got_mean)
     np.testing.assert_array_almost_equal(expect_min, got_min)
 
+
+def test_groupby_cats():
+    df = DataFrame()
+    df['cats'] = pd.Categorical(list('aabaacaab'))
+    df['vals'] = np.random.random(len(df))
+
+    cats = np.asarray(list(df['cats']))
+    vals = df['vals'].to_array()
+
+    grouped = df.groupby(['cats']).mean()
+
+    got_vals = grouped['vals']
+    got_cats = grouped['cats']
+
+    for c, v in zip(got_cats, got_vals):
+        print(c, v)
+        expect = vals[cats == c].mean()
+        np.testing.assert_almost_equal(v, expect)
+

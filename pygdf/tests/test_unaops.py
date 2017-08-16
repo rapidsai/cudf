@@ -26,7 +26,7 @@ def test_validity_ceil(nelem):
     # Data
     data = np.random.random(nelem) * 100
     mask = utils.random_bitmask(nelem)
-    bitmask = utils.expand_bits_to_bytes(mask)
+    bitmask = utils.expand_bits_to_bytes(mask)[:nelem]
     null_count = utils.count_zero(bitmask)
     sr = Series.from_masked_array(data, mask, null_count)
 

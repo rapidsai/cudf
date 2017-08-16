@@ -26,4 +26,5 @@ def expand_bits_to_bytes(arr):
 
 
 def count_zero(arr):
+    arr = np.asarray(arr)
     return np.count_nonzero(arr == 0)

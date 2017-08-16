@@ -86,12 +86,22 @@ class Column(object):
         if mask is None:
             null_count = 0
 
+        assert null_count is None or null_count >= 0
         if null_count is None:
             if self._mask is not None:
-                nnz = cudautils.count_nonzero_mask(self._mask.mem)
+                nnz = cudautils.count_nonzero_mask(self._mask.mem,
+                                                   size=len(self))
                 null_count = len(self) - nnz
+                if null_count == 0:
+                    self._mask = None
             else:
                 null_count = 0
+
+        assert 0 <= null_count <= len(self)
+        if null_count == 0:
+            # Remove mask if null_count is zero
+            self._mask = None
+
         self._null_count = null_count
 
     def __len__(self):
@@ -221,6 +231,8 @@ class Column(object):
         """
         params = self._replace_defaults()
         params.update(kwargs)
+        if 'mask' in kwargs and 'null_count' not in kwargs:
+            del params['null_count']
         return type(self)(**params)
 
     def view(self, newcls, **kwargs):
@@ -239,6 +251,8 @@ class Column(object):
         """
         params = Column._replace_defaults(self)
         params.update(kwargs)
+        if 'mask' in kwargs and 'null_count' not in kwargs:
+            del params['null_count']
         return newcls(**params)
 
     def element_indexing(self, index):
