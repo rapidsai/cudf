@@ -4,7 +4,8 @@ import numpy as np
 
 from numba import cuda
 
-from pygdf.dataframe import DataFrame
+from pygdf.dataframe import DataFrame, Series
+from . import utils
 
 
 def test_onehot_simple():
@@ -47,6 +48,30 @@ def test_onehot_random():
         arr = mat[:, colidx]
         mask = src == val
         np.testing.assert_equal(arr, mask)
+
+
+def test_onehot_masked():
+    np.random.seed(0)
+    high = 5
+    size = 100
+    arr = np.random.randint(low=0, high=high, size=size)
+    bitmask = utils.random_bitmask(size)
+    bytemask = np.asarray(utils.expand_bits_to_bytes(bitmask)[:size],
+                          dtype=np.bool_)
+    arr[~bytemask] = -1
+
+    df = DataFrame()
+    df['a'] = Series(arr).set_mask(bitmask)
+
+    out = df.one_hot_encoding('a', cats=list(range(high)),
+                              prefix='a', dtype=np.int32)
+
+    assert out.columns == tuple(['a', 'a_0', 'a_1', 'a_2', 'a_3', 'a_4'])
+    np.testing.assert_array_equal(out['a_0'] == 1, arr == 0)
+    np.testing.assert_array_equal(out['a_1'] == 1, arr == 1)
+    np.testing.assert_array_equal(out['a_2'] == 1, arr == 2)
+    np.testing.assert_array_equal(out['a_3'] == 1, arr == 3)
+    np.testing.assert_array_equal(out['a_4'] == 1, arr == 4)
 
 
 if __name__ == '__main__':

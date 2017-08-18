@@ -320,16 +320,45 @@ def fillna(data, mask, value):
 #
 
 @cuda.jit
+def gpu_equal_constant_masked(arr, mask, val, out):
+    i = cuda.grid(1)
+    if i < out.size:
+        res = (arr[i] == val) if mask_get(mask, i) else False
+        out[i] = res
+
+
+@cuda.jit
 def gpu_equal_constant(arr, val, out):
     i = cuda.grid(1)
     if i < out.size:
         out[i] = (arr[i] == val)
 
 
-def apply_equal_constant(arr, val, dtype):
+def apply_equal_constant(arr, mask, val, dtype):
+    """Compute ``arr[mask] == val``
+
+    Parameters
+    ----------
+    arr : device array
+        data
+    mask : device array
+        validity mask
+    val : scalar
+        value to compare against
+    dtype : np.dtype
+        output array dtype
+
+    Returns
+    -------
+    result : device array
+    """
     out = cuda.device_array(shape=arr.size, dtype=dtype)
-    configured = gpu_equal_constant.forall(out.size)
-    configured(arr, val, out)
+    if mask is not None:
+        configured = gpu_equal_constant_masked.forall(out.size)
+        configured(arr, mask, val, out)
+    else:
+        configured = gpu_equal_constant.forall(out.size)
+        configured(arr, val, out)
     return out
 
 
