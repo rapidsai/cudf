@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 from numba.cuda.cudadrv.devicearray import DeviceNDArray
 
-from .utils import mask_dtype
+from .utils import mask_dtype, mask_bitsize
 from .dataframe import Series
 
 
@@ -121,7 +121,9 @@ class GpuArrowNodeReader(object):
         """
         Return the null mask with the padding bytes truncated.
         """
-        end = (self._desc.length // 8) * mask_dtype.itemsize
+        bits = mask_bitsize
+        itemsize = mask_dtype.itemsize
+        end = ((self._desc.length + bits - 1) // bits) * itemsize
         return gpu_view_as(self.null_raw[:end], dtype=mask_dtype)
 
     def make_series(self):

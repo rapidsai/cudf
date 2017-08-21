@@ -85,6 +85,9 @@ class Column(object):
 
         if mask is None:
             null_count = 0
+        else:
+            # check that mask length is sufficient
+            assert mask.size * utils.mask_bitsize >= len(self)
 
         assert null_count is None or null_count >= 0
         if null_count is None:
