@@ -1,4 +1,5 @@
 #include <cmath>
+#include <algorithm>
 
 #include <gdf/gdf.h>
 #include <gdf/utils.h>
@@ -43,7 +44,8 @@ struct UnaryOp {
                                                gpu_unary_op<T, Tout, F>)
         );
         // find needed gridsize
-        int gridsize = (input->size + blocksize - 1) / blocksize;
+        int neededgridsize = (input->size + blocksize - 1) / blocksize;
+        int gridsize = std::min(neededgridsize, mingridsize);
 
         F functor;
         gpu_unary_op<<<gridsize, blocksize>>>(
