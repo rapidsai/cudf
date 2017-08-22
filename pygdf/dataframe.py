@@ -353,7 +353,9 @@ class DataFrame(object):
             raise ValueError('all column must have the same dtype')
         for k, c in self._cols.items():
             if c.has_null_mask:
-                raise ValueError("column {!r} is sparse".format(k))
+                errmsg = ("column {!r} has null values"
+                          "hint: use .fillna() to replace null values")
+                raise ValueError(errmsg.format(k))
 
         matrix = cuda.device_array(shape=(nrow, ncol), dtype=dtype, order="F")
         for colidx, inpcol in enumerate(cols):
