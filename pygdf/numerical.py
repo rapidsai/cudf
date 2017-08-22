@@ -91,7 +91,7 @@ class NumericalColumn(columnops.TypedColumnBase):
             return self
         else:
             col = self.replace(data=self.data.astype(dtype),
-                               dtype=dtype)
+                               dtype=np.dtype(dtype))
             return col
 
     def sort_by_values(self, ascending):

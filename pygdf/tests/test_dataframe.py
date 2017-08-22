@@ -162,9 +162,9 @@ def test_dataframe_astype():
     df = DataFrame()
     data = np.asarray(range(10), dtype=np.int32)
     df['a'] = data
-    assert df['a'].dtype == np.dtype(np.int32)
+    assert df['a'].dtype is np.dtype(np.int32)
     df['b'] = df['a'].astype(np.float32)
-    assert df['b'].dtype == np.dtype(np.float32)
+    assert df['b'].dtype is np.dtype(np.float32)
     np.testing.assert_equal(df['a'].to_array(), df['b'].to_array())
 
 
