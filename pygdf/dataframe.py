@@ -354,7 +354,7 @@ class DataFrame(object):
         for k, c in self._cols.items():
             if c.has_null_mask:
                 errmsg = ("column {!r} has null values"
-                          "hint: use .fillna() to remove null values")
+                          "hint: use .fillna() to replace null values")
                 raise ValueError(errmsg.format(k))
 
         matrix = cuda.device_array(shape=(nrow, ncol), dtype=dtype, order="F")
