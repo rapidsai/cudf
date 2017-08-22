@@ -10,6 +10,8 @@ from pygdf.dataframe import Series, DataFrame
 from pygdf.buffer import Buffer
 from pygdf.settings import set_options
 
+from . import utils
+
 
 def test_buffer_basic():
     n = 10
@@ -345,3 +347,53 @@ def test_dataframe_dir_and_getattr():
     assert df.b is df['b']
     with pytest.raises(AttributeError):
         df.not_a_column
+
+
+def test_dataframe_as_gpu_matrix():
+    df = DataFrame()
+
+    nelem = 123
+    for k in 'abcd':
+        df[k] = np.random.random(nelem)
+
+    # Check all columns
+    mat = df.as_gpu_matrix().copy_to_host()
+    assert mat.shape == (nelem, 4)
+    for i, k in enumerate(df.columns):
+        np.testing.assert_array_equal(df[k].to_array(), mat[:, i])
+
+    # Check column subset
+    mat = df.as_gpu_matrix(columns=['a', 'c']).copy_to_host()
+    assert mat.shape == (nelem, 2)
+
+    for i, k in enumerate('ac'):
+        np.testing.assert_array_equal(df[k].to_array(), mat[:, i])
+
+
+def test_dataframe_as_gpu_matrix_null_values():
+    df = DataFrame()
+
+    nelem = 123
+    na = -10000
+
+    refvalues = {}
+    for k in 'abcd':
+        df[k] = data = np.random.random(nelem)
+        bitmask = utils.random_bitmask(nelem)
+        df[k] = df[k].set_mask(bitmask)
+        boolmask = np.asarray(utils.expand_bits_to_bytes(bitmask)[:nelem],
+                              dtype=np.bool_)
+        data[~boolmask] = na
+        refvalues[k] = data
+
+    # Check null value causes error
+    with pytest.raises(ValueError) as raises:
+        df.as_gpu_matrix()
+    raises.match("column 'a' has null values")
+
+    for k in df.columns:
+        df[k] = df[k].fillna(na)
+
+    mat = df.as_gpu_matrix().copy_to_host()
+    for i, k in enumerate(df.columns):
+        np.testing.assert_array_equal(refvalues[k], mat[:, i])
