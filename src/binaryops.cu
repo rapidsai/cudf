@@ -1,3 +1,5 @@
+#include <algorithm>
+
 #include <gdf/gdf.h>
 #include <gdf/utils.h>
 #include <gdf/errorutils.h>
@@ -41,7 +43,8 @@ struct BinaryOp {
                                                gpu_binary_op<T, Tout, F>)
         );
         // find needed gridsize
-        int gridsize = (lhs->size + blocksize - 1) / blocksize;
+        int neededgridsize = (lhs->size + blocksize - 1) / blocksize;
+        int gridsize = std::min(mingridsize, neededgridsize);
 
         F functor;
         gpu_binary_op<<<gridsize, blocksize>>>(
