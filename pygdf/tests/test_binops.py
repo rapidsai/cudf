@@ -2,6 +2,7 @@ from __future__ import division
 
 import operator
 import random
+from itertools import product
 
 import pytest
 import numpy as np
@@ -48,9 +49,9 @@ def test_series_compare(cmpop):
     np.testing.assert_equal(cmpop(sr1, sr2).to_array(),  cmpop(arr1, arr2))
 
 
-@pytest.mark.parametrize('cmpop', _cmpops)
-def test_series_compare_scalar(cmpop):
-    arr1 = np.random.random(100)
+@pytest.mark.parametrize('nelem,cmpop', list(product([1, 2, 100], _cmpops)))
+def test_series_compare_scalar(nelem, cmpop):
+    arr1 = np.random.random(nelem)
     sr1 = Series(arr1)
     rhs = np.asscalar(random.choice(arr1))
     np.testing.assert_equal(cmpop(sr1, rhs).to_array(),  cmpop(arr1, rhs))

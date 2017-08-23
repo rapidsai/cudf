@@ -42,13 +42,18 @@ def make_mask(size):
     return cuda.device_array(shape=size, dtype=mask_dtype)
 
 
+def require_writeable_array(arr):
+    # This should be fixed in numba (numba issue #2521)
+    return np.require(arr, requirements='W')
+
+
 def scalar_broadcast_to(scalar, shape, dtype):
     if not isinstance(shape, tuple):
         shape = (shape,)
     arr = np.broadcast_to(np.asarray(scalar, dtype=dtype), shape=shape)
     # FIXME: this is wasteful, but numba can't slice 0-strided array
-    arr = np.ascontiguousarray(arr)
-    return cuda.to_device(arr)
+    arr = np.ascontiguousarray(np.asarray(arr))
+    return cuda.to_device(require_writeable_array(arr))
 
 
 def normalize_index(index, size, doraise=True):
