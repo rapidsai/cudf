@@ -218,3 +218,21 @@ def test_df_cat_sort_index():
     assert list(expect.index.values) == list(got.index.values)
     np.testing.assert_array_equal(expect.index.values, got.index.values)
     np.testing.assert_array_equal(expect['b'].values, got['b'].to_array())
+
+
+def test_cat_series_binop_error():
+    df = DataFrame()
+    df['a'] = pd.Categorical(list('aababcabbc'), categories=list('abc'))
+    df['b'] = np.arange(len(df))
+
+    dfa = df['a']
+    dfb = df['b']
+
+    # lhs is a categorical
+    with pytest.raises(TypeError) as raises:
+        dfa + dfb
+    raises.match("Categorical cannot perform the operation: add")
+    # if lhs is a numerical
+    with pytest.raises(TypeError) as raises:
+        dfb + dfa
+    raises.match("'add' operator not supported")

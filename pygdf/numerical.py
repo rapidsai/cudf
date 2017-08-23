@@ -65,7 +65,8 @@ class NumericalColumn(columnops.TypedColumnBase):
             return numeric_column_binop(lhs=lhs, rhs=rhs, op=op,
                                         out_dtype=lhs.dtype)
         else:
-            return NotImplemented
+            msg = "{!r} operator not supported between {} and {}"
+            raise TypeError(msg.format(binop, type(self), type(rhs)))
 
     def unary_operator(self, unaryop):
         return numeric_column_unaryop(self, op=_unary_impl[unaryop],
