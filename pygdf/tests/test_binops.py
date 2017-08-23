@@ -93,3 +93,19 @@ def test_validity_add(nelem):
     print(got)
 
     np.testing.assert_array_equal(expect, got)
+
+
+_dtypes = [
+    np.int32, np.int64,
+    np.float32, np.float64,
+]
+
+
+@pytest.mark.parametrize('binop,lhs_dtype,rhs_dtype',
+                         list(product([operator.add, operator.mul], _dtypes, _dtypes)))
+def test_series_binop_mixed_dtype(binop, lhs_dtype, rhs_dtype):
+    nelem = 10
+    lhs = Series((np.random.random(nelem) * nelem).astype(lhs_dtype))
+    rhs = Series((np.random.random(nelem) * nelem).astype(rhs_dtype))
+    np.testing.assert_almost_equal(binop(lhs, rhs).to_array(),
+                                   binop(lhs, rhs))
