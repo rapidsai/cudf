@@ -458,16 +458,17 @@ class DataFrame(object):
             column = columns
         if not (0 <= n < len(self)):
             raise ValueError("n out-of-bound")
-        col = self[column]
+        col = self[column].reset_index()
         # Operate
         sorted_series = getattr(col, method)(n=n, keep=keep)
         df = DataFrame()
+        new_positions = sorted_series.index.gpu_values
         for k in self.columns:
             if k == column:
                 df[k] = sorted_series
             else:
-                df[k] = self[k].take(df.index.gpu_values)
-        return df
+                df[k] = self[k].reset_index().take(new_positions)
+        return df.set_index(self.index.take(new_positions))
 
     def join(self, other, on=None, how='left', lsuffix='', rsuffix='',
              sort=False):
