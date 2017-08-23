@@ -10,6 +10,9 @@ from pygdf.dataframe import DataFrame, Series
 
 sort_nelem_args = [2, 257]
 sort_dtype_args = [np.int32, np.int64, np.float32, np.float64]
+sort_slice_args = [slice(1, None), slice(None, -1), slice(1, -1)]
+
+
 
 @pytest.mark.parametrize('nelem,dtype',
                          list(product(sort_nelem_args,
@@ -25,6 +28,20 @@ def test_dataframe_sort_values(nelem, dtype):
     np.testing.assert_array_equal(sorted_df.index.values, sorted_index)
     np.testing.assert_array_equal(sorted_df['a'], aa[sorted_index])
     np.testing.assert_array_equal(sorted_df['b'], bb[sorted_index])
+
+
+@pytest.mark.parametrize('nelem,sliceobj',
+                         list(product([10, 100], sort_slice_args)))
+def test_dataframe_sort_values_sliced(nelem, sliceobj):
+    np.random.seed(0)
+    df = pd.DataFrame()
+    df['a'] = np.random.random(nelem)
+
+    expect = df[sliceobj]['a'].sort_values()
+    gdf = DataFrame.from_pandas(df)
+    got = gdf[sliceobj]['a'].sort_values()
+    assert (got.to_pandas() == expect).all()
+
 
 
 @pytest.mark.parametrize('nelem,dtype,asc',
@@ -106,10 +123,8 @@ def test_dataframe_nsmallest(nelem, n):
     np.testing.assert_array_equal(res.index.values, inds[-n:][::-1])
 
 
-param_sliceobjs = [slice(1, None), slice(None, -1), slice(1, -1)]
-
 @pytest.mark.parametrize('counts,sliceobj',
-                         list(product([(10, 5), (100, 10)], param_sliceobjs)))
+                         list(product([(10, 5), (100, 10)], sort_slice_args)))
 def test_dataframe_nlargest_sliced(counts, sliceobj):
     nelem, n = counts
     np.random.seed(0)
@@ -124,7 +139,7 @@ def test_dataframe_nlargest_sliced(counts, sliceobj):
 
 
 @pytest.mark.parametrize('counts,sliceobj',
-                         list(product([(10, 5), (100, 10)], param_sliceobjs)))
+                         list(product([(10, 5), (100, 10)], sort_slice_args)))
 def test_dataframe_nsmallest_sliced(counts, sliceobj):
     nelem, n = counts
     np.random.seed(0)
