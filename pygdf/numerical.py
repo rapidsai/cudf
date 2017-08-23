@@ -72,10 +72,12 @@ class NumericalColumn(columnops.TypedColumnBase):
                                       out_dtype=self.dtype)
 
     def unordered_compare(self, cmpop, rhs):
-        return numeric_column_compare(self, rhs, op=_unordered_impl[cmpop])
+        lhs, rhs = numeric_normalize_types(self, rhs)
+        return numeric_column_compare(lhs, rhs, op=_unordered_impl[cmpop])
 
     def ordered_compare(self, cmpop, rhs):
-        return numeric_column_compare(self, rhs, op=_ordered_impl[cmpop])
+        lhs, rhs = numeric_normalize_types(self, rhs)
+        return numeric_column_compare(lhs, rhs, op=_ordered_impl[cmpop])
 
     def normalize_compare_value(self, other):
         other_dtype = np.min_scalar_type(other)

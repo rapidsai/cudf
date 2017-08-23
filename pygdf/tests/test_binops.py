@@ -102,10 +102,29 @@ _dtypes = [
 
 
 @pytest.mark.parametrize('binop,lhs_dtype,rhs_dtype',
-                         list(product([operator.add, operator.mul], _dtypes, _dtypes)))
+                         list(product([operator.add, operator.mul],
+                                      _dtypes, _dtypes)))
 def test_series_binop_mixed_dtype(binop, lhs_dtype, rhs_dtype):
     nelem = 10
-    lhs = Series((np.random.random(nelem) * nelem).astype(lhs_dtype))
-    rhs = Series((np.random.random(nelem) * nelem).astype(rhs_dtype))
-    np.testing.assert_almost_equal(binop(lhs, rhs).to_array(),
+    lhs = (np.random.random(nelem) * nelem).astype(lhs_dtype)
+    rhs = (np.random.random(nelem) * nelem).astype(rhs_dtype)
+    np.testing.assert_almost_equal(binop(Series(lhs), Series(rhs)).to_array(),
                                    binop(lhs, rhs))
+
+
+@pytest.mark.parametrize('cmpop,lhs_dtype,rhs_dtype',
+                         list(product(_cmpops, _dtypes, _dtypes)))
+def test_series_cmpop_mixed_dtype(cmpop, lhs_dtype, rhs_dtype):
+    print(cmpop, lhs_dtype, rhs_dtype)
+    nelem = 5
+    lhs = (np.random.random(nelem) * nelem).astype(lhs_dtype)
+    rhs = (np.random.random(nelem) * nelem).astype(rhs_dtype)
+    print(lhs)
+    print(rhs)
+    exp = cmpop(lhs, rhs)
+    got = cmpop(Series(lhs), Series(rhs)).to_array()
+    print('exp', exp)
+    print('got', got)
+
+    np.testing.assert_array_equal(cmpop(Series(lhs), Series(rhs)).to_array(),
+                                  cmpop(lhs, rhs))

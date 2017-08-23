@@ -261,14 +261,12 @@ class Series(object):
 
     def _unordered_compare(self, other, cmpops):
         other = self._normalize_compare_value(other)
-        lhs = self._column.astype(other.dtype)
-        outcol = lhs.unordered_compare(cmpops, other._column)
+        outcol = self._column.unordered_compare(cmpops, other._column)
         return self._copy_construct(data=outcol)
 
     def _ordered_compare(self, other, cmpops):
         other = self._normalize_compare_value(other)
-        lhs = self._column.astype(other.dtype)
-        outcol = lhs.ordered_compare(cmpops, other._column)
+        outcol = self._column.ordered_compare(cmpops, other._column)
         return self._copy_construct(data=outcol)
 
     def __eq__(self, other):
