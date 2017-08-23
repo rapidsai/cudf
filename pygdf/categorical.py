@@ -85,7 +85,7 @@ class CategoricalColumn(columnops.TypedColumnBase):
     def unordered_compare(self, cmpop, rhs):
         if not self.is_type_equivalent(rhs):
             raise TypeError('Categoricals can only compare with the same type')
-        return self.as_numerical.unordered_compare(cmpop, rhs)
+        return self.as_numerical.unordered_compare(cmpop, rhs.as_numerical)
 
     def ordered_compare(self, cmpop, rhs):
         if not (self._ordered and rhs._ordered):
@@ -93,7 +93,7 @@ class CategoricalColumn(columnops.TypedColumnBase):
             raise TypeError(msg)
         if not self.is_type_equivalent(rhs):
             raise TypeError('Categoricals can only compare with the same type')
-        return self.as_numerical.ordered_compare(cmpop, rhs)
+        return self.as_numerical.ordered_compare(cmpop, rhs.as_numerical)
 
     def normalize_compare_value(self, other):
         ary = utils.scalar_broadcast_to(self._encode(other), shape=len(self),

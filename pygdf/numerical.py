@@ -61,20 +61,24 @@ class NumericalColumn(columnops.TypedColumnBase):
     def binary_operator(self, binop, rhs):
         if isinstance(rhs, NumericalColumn):
             op = _binary_impl[binop]
-            return numeric_column_binop(lhs=self, rhs=rhs, op=op,
-                                        out_dtype=self.dtype)
+            lhs, rhs = numeric_normalize_types(self, rhs)
+            return numeric_column_binop(lhs=lhs, rhs=rhs, op=op,
+                                        out_dtype=lhs.dtype)
         else:
-            return NotImplemented
+            msg = "{!r} operator not supported between {} and {}"
+            raise TypeError(msg.format(binop, type(self), type(rhs)))
 
     def unary_operator(self, unaryop):
         return numeric_column_unaryop(self, op=_unary_impl[unaryop],
                                       out_dtype=self.dtype)
 
     def unordered_compare(self, cmpop, rhs):
-        return numeric_column_compare(self, rhs, op=_unordered_impl[cmpop])
+        lhs, rhs = numeric_normalize_types(self, rhs)
+        return numeric_column_compare(lhs, rhs, op=_unordered_impl[cmpop])
 
     def ordered_compare(self, cmpop, rhs):
-        return numeric_column_compare(self, rhs, op=_ordered_impl[cmpop])
+        lhs, rhs = numeric_normalize_types(self, rhs)
+        return numeric_column_compare(lhs, rhs, op=_ordered_impl[cmpop])
 
     def normalize_compare_value(self, other):
         other_dtype = np.min_scalar_type(other)
@@ -173,7 +177,9 @@ class NumericalColumn(columnops.TypedColumnBase):
 
 
 def numeric_column_binop(lhs, rhs, op, out_dtype):
-     # Allocate output
+    if lhs.dtype != rhs.dtype:
+        raise TypeError('{} != {}'.format(lhs.dtype, rhs.dtype))
+    # Allocate output
     masked = lhs.has_null_mask or rhs.has_null_mask
     out = columnops.column_empty_like(lhs, dtype=out_dtype, masked=masked)
     # Call and fix null_count
@@ -191,3 +197,9 @@ def numeric_column_unaryop(operand, op, out_dtype):
 def numeric_column_compare(lhs, rhs, op):
     return numeric_column_binop(lhs, rhs, op, out_dtype=np.bool_)
 
+
+def numeric_normalize_types(*args):
+    """Cast all args to a common type using numpy promotion logic
+    """
+    dtype = np.result_type(*[a.dtype for a in args])
+    return [a.astype(dtype) for a in args]
