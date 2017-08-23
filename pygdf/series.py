@@ -82,6 +82,11 @@ class Series(object):
         params.update(kwargs)
         return cls(**params)
 
+    def reset_index(self):
+        """Reset index to RangeIndex
+        """
+        return self._copy_construct(index=RangeIndex(len(self)))
+
     def set_index(self, index):
         """Returns a new Series with a different index.
 
@@ -437,7 +442,8 @@ class Series(object):
         Uses parallel radixsort, which is a stable sort.
         """
         vals, inds = self._sort(ascending=ascending)
-        return vals.set_index(GenericIndex(inds.to_gpu_array()))
+        index = self.index.take(inds.to_gpu_array())
+        return vals.set_index(index)
 
     def _n_largest_or_smallest(self, largest, n, keep):
         if not (0 <= n < len(self)):
