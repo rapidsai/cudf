@@ -506,8 +506,11 @@ class Series(object):
         dtype = np.dtype(dtype)
         out = []
         for cat in cats:
-            buf = cudautils.apply_equal_constant(arr=self.to_gpu_array(),
-                                                 val=cat, dtype=dtype)
+            mask = None #self.nullmask.to_gpu_array()
+            buf = cudautils.apply_equal_constant(
+                        arr=self.data.to_gpu_array(),
+                        mask=mask,
+                        val=cat, dtype=dtype)
             out.append(Series(buf))
         return out
 
