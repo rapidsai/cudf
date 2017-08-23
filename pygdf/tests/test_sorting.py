@@ -3,6 +3,7 @@ from itertools import product
 import pytest
 
 import numpy as np
+import pandas as pd
 
 from pygdf.dataframe import DataFrame, Series
 
@@ -103,3 +104,35 @@ def test_dataframe_nsmallest(nelem, n):
     np.testing.assert_array_equal(res['a'].to_array(), aa[inds][-n:][::-1])
     np.testing.assert_array_equal(res['b'].to_array(), bb[inds][-n:][::-1])
     np.testing.assert_array_equal(res.index.values, inds[-n:][::-1])
+
+
+param_sliceobjs = [slice(1, None), slice(None, -1), slice(1, -1)]
+
+@pytest.mark.parametrize('counts,sliceobj',
+                         list(product([(10, 5), (100, 10)], param_sliceobjs)))
+def test_dataframe_nlargest_sliced(counts, sliceobj):
+    nelem, n = counts
+    np.random.seed(0)
+    df = pd.DataFrame()
+    df['a'] = np.random.random(nelem)
+    df['b'] = np.random.random(nelem)
+
+    expect = df[sliceobj].nlargest(n, 'a')
+    gdf = DataFrame.from_pandas(df)
+    got = gdf[sliceobj].nlargest(n, 'a')
+    assert (got.to_pandas() == expect).all().all()
+
+
+@pytest.mark.parametrize('counts,sliceobj',
+                         list(product([(10, 5), (100, 10)], param_sliceobjs)))
+def test_dataframe_nsmallest_sliced(counts, sliceobj):
+    nelem, n = counts
+    np.random.seed(0)
+    df = pd.DataFrame()
+    df['a'] = np.random.random(nelem)
+    df['b'] = np.random.random(nelem)
+
+    expect = df[sliceobj].nsmallest(n, 'a')
+    gdf = DataFrame.from_pandas(df)
+    got = gdf[sliceobj].nsmallest(n, 'a')
+    assert (got.to_pandas() == expect).all().all()
