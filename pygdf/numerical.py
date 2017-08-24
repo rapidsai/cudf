@@ -1,5 +1,7 @@
 from __future__ import print_function, division
 
+import numbers
+
 import numpy as np
 import pandas as pd
 
@@ -172,8 +174,17 @@ class NumericalColumn(columnops.TypedColumnBase):
         if out_dtype is None:
             out_dtype = self.dtype
         out = columnops.column_applymap(udf=udf, column=self,
-                                         out_dtype=out_dtype)
+                                        out_dtype=out_dtype)
         return self.replace(data=out)
+
+    def default_na_value(self):
+        """Returns the default NA value for this column
+        """
+        dkind = self.dtype.kind
+        if dkind == 'f':
+            return np.nan
+        else:
+            raise TypeError("numeric column of {} has no NaN value".format(self.dtype))
 
 
 def numeric_column_binop(lhs, rhs, op, out_dtype):

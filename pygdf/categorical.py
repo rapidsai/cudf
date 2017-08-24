@@ -132,6 +132,9 @@ class CategoricalColumn(columnops.TypedColumnBase):
             if i == value:
                 return cat
 
+    def default_na_value(self):
+        return -1
+
 
 def pandas_categorical_as_column(categorical, codes=None):
     """Creates a CategoricalColumn from a pandas.Categorical
