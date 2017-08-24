@@ -131,8 +131,8 @@ class Series(object):
         if isinstance(arg, Series):
             selvals, selinds = columnops.column_select_by_boolmask(
                 self._column, arg)
-            return self._copy_construct(data=selvals,
-                                        index=GenericIndex(selinds))
+            index = self.index.take(selinds.to_gpu_array())
+            return self._copy_construct(data=selvals, index=index)
 
         elif isinstance(arg, slice):
             index = self.index[arg]         # slice index
