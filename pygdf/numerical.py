@@ -81,6 +81,9 @@ class NumericalColumn(columnops.TypedColumnBase):
         return numeric_column_compare(lhs, rhs, op=_ordered_impl[cmpop])
 
     def normalize_compare_value(self, other):
+        return self.normalize_binop_value(other)
+
+    def normalize_binop_value(self, other):
         other_dtype = np.min_scalar_type(other)
         if other_dtype.kind in 'biuf':
             other_dtype = np.promote_types(self.dtype, other_dtype)
