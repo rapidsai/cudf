@@ -28,6 +28,14 @@ def test_series_binop(binop):
     np.testing.assert_equal(binop(sr, sr).to_array(), binop(arr, arr))
 
 
+@pytest.mark.parametrize('binop', _binops)
+def test_series_binop_scalar(binop):
+    arr = np.random.random(100)
+    rhs = np.asscalar(random.choice(arr))
+    sr = Series(arr)
+    np.testing.assert_equal(binop(sr, rhs).to_array(), binop(arr, rhs))
+
+
 _cmpops = [
     operator.lt,
     operator.gt,
