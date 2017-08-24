@@ -35,13 +35,17 @@ def test_categorical_missing():
     cat = pd.Categorical(['a', '_', '_', 'c', 'a'], categories=['a', 'b', 'c'])
     pdsr = pd.Series(cat)
     sr = Series(cat)
-    fillna = lambda x: np.where(np.isnan(x), -1, x)
-    np.testing.assert_array_equal(cat.codes, fillna(sr.to_array(fillna='pandas')))
+    np.testing.assert_array_equal(cat.codes, sr.to_array(fillna='pandas'))
     assert sr.null_count == 2
 
     np.testing.assert_array_equal(pdsr.cat.codes.data,
-                                  fillna(sr.cat.codes.to_array(fillna='pandas')))
+                                  sr.cat.codes.fillna(-1).to_array())
     np.testing.assert_equal(pdsr.cat.codes.dtype, sr.cat.codes.dtype)
+
+    # integer doesn't have nan value
+    with pytest.raises(TypeError) as raises:
+        sr.cat.codes.to_array(fillna='pandas')
+    raises.match('NaN value')
 
     string = str(sr)
     expect_str = """

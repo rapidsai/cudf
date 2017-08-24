@@ -323,12 +323,9 @@ class Column(object):
 
         if self.has_null_mask:
             if fillna == 'pandas':
-                # cast non-float types to float64
-                col = (self.astype(np.float64)
-                       if self.dtype.kind != 'f'
-                       else self)
+                na_value = self.default_na_value()
                 # fill nan
-                return col.fillna(np.nan)
+                return self.fillna(na_value)
             else:
                 return self._copy_to_dense_buffer()
         else:
