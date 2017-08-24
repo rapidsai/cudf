@@ -251,13 +251,6 @@ class Series(object):
 
     __div__ = __truediv__
 
-    def _normalize_compare_value(self, other):
-        if isinstance(other, Series):
-            return other
-        else:
-            col = self._column.normalize_compare_value(other)
-            return self._copy_construct(data=col)
-
     def _normalize_binop_value(self, other):
         if isinstance(other, Series):
             return other
@@ -266,12 +259,12 @@ class Series(object):
             return self._copy_construct(data=col)
 
     def _unordered_compare(self, other, cmpops):
-        other = self._normalize_compare_value(other)
+        other = self._normalize_binop_value(other)
         outcol = self._column.unordered_compare(cmpops, other._column)
         return self._copy_construct(data=outcol)
 
     def _ordered_compare(self, other, cmpops):
-        other = self._normalize_compare_value(other)
+        other = self._normalize_binop_value(other)
         outcol = self._column.ordered_compare(cmpops, other._column)
         return self._copy_construct(data=outcol)
 
