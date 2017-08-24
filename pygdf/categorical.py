@@ -95,7 +95,7 @@ class CategoricalColumn(columnops.TypedColumnBase):
             raise TypeError('Categoricals can only compare with the same type')
         return self.as_numerical.ordered_compare(cmpop, rhs.as_numerical)
 
-    def normalize_compare_value(self, other):
+    def normalize_binop_value(self, other):
         ary = utils.scalar_broadcast_to(self._encode(other), shape=len(self),
                                         dtype=self.data.dtype)
         col = self.replace(data=Buffer(ary), dtype=self.dtype,

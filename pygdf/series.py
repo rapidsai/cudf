@@ -221,8 +221,7 @@ class Series(object):
         and *other*.  Return the output Series.  The output dtype is
         determined by the input operands.
         """
-        if not isinstance(other, Series):
-            return NotImplemented
+        other = self._normalize_binop_value(other)
         outcol = self._column.binary_operator(fn, other._column)
         return self._copy_construct(data=outcol)
 
@@ -252,20 +251,20 @@ class Series(object):
 
     __div__ = __truediv__
 
-    def _normalize_compare_value(self, other):
+    def _normalize_binop_value(self, other):
         if isinstance(other, Series):
             return other
         else:
-            col = self._column.normalize_compare_value(other)
+            col = self._column.normalize_binop_value(other)
             return self._copy_construct(data=col)
 
     def _unordered_compare(self, other, cmpops):
-        other = self._normalize_compare_value(other)
+        other = self._normalize_binop_value(other)
         outcol = self._column.unordered_compare(cmpops, other._column)
         return self._copy_construct(data=outcol)
 
     def _ordered_compare(self, other, cmpops):
-        other = self._normalize_compare_value(other)
+        other = self._normalize_binop_value(other)
         outcol = self._column.ordered_compare(cmpops, other._column)
         return self._copy_construct(data=outcol)
 
