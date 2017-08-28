@@ -14,14 +14,12 @@ requirements:
   build:
     - python
     - setuptools
-    - libgdf
-    - libgdf_cffi
     - numba
   run:
     - python
     - setuptools
-    - libgdf
-    - libgdf_cffi
+    - libgdf 0.1.0a2.*
+    - libgdf_cffi 0.1.0a2.*
     - pandas
     - numba
 test:
