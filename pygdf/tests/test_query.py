@@ -4,8 +4,11 @@ import inspect
 
 import pytest
 import numpy as np
+import pandas as pd
+from pandas.util.testing import assert_frame_equal
 from itertools import product
 
+import pygdf
 from pygdf import queryutils
 from pygdf.dataframe import DataFrame
 
@@ -94,4 +97,26 @@ def test_query_env_changing():
     c = 50
     got = df.query(expr)
     np.testing.assert_array_equal(aa[aa < c], got['a'].to_array())
+
+
+def test_query_splitted_combine():
+    np.random.seed(0)
+    df = pd.DataFrame({'x': np.random.randint(0, 5, size=10),
+                       'y': np.random.normal(size=10)})
+    gdf = DataFrame.from_pandas(df)
+
+    # Split the GDF
+    s1 = gdf[:5]
+    s2 = gdf[5:]
+
+    # Do the query
+    expr = 'x > 2'
+    q1 = s1.query(expr)
+    q2 = s2.query(expr)
+    # Combine
+    got = pygdf.concat([q1, q2]).to_pandas()
+
+    # Should equal to just querying the original GDF
+    expect = gdf.query(expr).to_pandas()
+    assert_frame_equal(got, expect)
 

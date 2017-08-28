@@ -12,9 +12,14 @@ from .column import Column
 class Index(object):
     def take(self, indices):
         assert indices.dtype.kind in 'iu'
-        index = cudautils.gather(data=self.gpu_values, index=indices)
-        col = self.as_column().replace(data=Buffer(index))
-        return GenericIndex(col)
+        if indices.size == 0:
+            # Empty indices
+            return RangeIndex(indices.size)
+        else:
+            # Gather
+            index = cudautils.gather(data=self.gpu_values, index=indices)
+            col = self.as_column().replace(data=Buffer(index))
+            return GenericIndex(col)
 
     def argsort(self, ascending=True):
         return self.as_column().argsort(ascending=ascending)
