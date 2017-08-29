@@ -107,6 +107,12 @@ class Column(object):
 
         self._null_count = null_count
 
+    def __sizeof__(self):
+        n = self._data.__sizeof__()
+        if self._mask:
+            n += self._mask.__sizeof__()
+        return n
+
     def __len__(self):
         return self._data.size
 

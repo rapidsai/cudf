@@ -97,8 +97,9 @@ class DataFrame(object):
         return list(o)
 
     def __getattr__(self, key):
-        if key in self._cols:
+        if key != '_cols' and key in self._cols:
             return self[key]
+
         raise AttributeError("'DataFrame' object has no attribute %r" % key)
 
     def __getitem__(self, arg):
@@ -149,6 +150,9 @@ class DataFrame(object):
         """Drop the give column by *name*.
         """
         self.drop_column(name)
+
+    def __sizeof__(self):
+        return sum(col.__sizeof__() for col in self._cols.values())
 
     def __len__(self):
         """Returns the number of rows
