@@ -179,6 +179,9 @@ class GenericIndex(Index):
             res._values = values
             return res
 
+    def __sizeof__(self):
+        return self._values.__sizeof__()
+
     def __len__(self):
         return len(self._values)
 

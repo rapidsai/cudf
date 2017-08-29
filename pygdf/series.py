@@ -122,6 +122,9 @@ class Series(object):
         col = self._column.set_mask(mask, null_count=null_count)
         return self._copy_construct(data=col)
 
+    def __sizeof__(self):
+        return self._column.__sizeof__() + self._index.__sizeof__()
+
     def __len__(self):
         """Returns the size of the ``Series`` including null values.
         """

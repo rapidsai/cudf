@@ -23,6 +23,12 @@ class Buffer(object):
         self.capacity = capacity
         self.dtype = self.mem.dtype
 
+    def __reduce__(self):
+        return type(self), (self.to_array(), self.size, self.capacity)
+
+    def __sizeof__(self):
+        return self.mem.alloc_size
+
     def __getitem__(self, arg):
         if isinstance(arg, slice):
             sliced = self.to_gpu_array()[arg]
