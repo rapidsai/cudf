@@ -5,7 +5,7 @@ import numpy as np
 from numba import cuda
 import pandas as pd
 
-from pygdf.dataframe import DataFrame, GenericIndex
+from pygdf.dataframe import DataFrame, GenericIndex, Buffer
 
 
 def check_serialization(df):
@@ -69,3 +69,17 @@ def test_pickle_index():
     pickled = pickle.dumps(idx)
     out = pickle.loads(pickled)
     assert idx == out
+
+
+def test_pickle_buffer():
+    arr = np.arange(10)
+    buf = Buffer(arr, size=4, capacity=arr.size)
+    assert buf.size == 4
+    assert buf.capacity == 10
+    pickled = pickle.dumps(buf)
+    unpacked = pickle.loads(pickled)
+    # Check that unpacked capacity equals buf.size
+    assert unpacked.size == 4
+    assert unpacked.capacity == 4
+    assert unpacked.mem.size == unpacked.capacity
+    np.testing.assert_equal(unpacked.to_array(), arr[:unpacked.size])
