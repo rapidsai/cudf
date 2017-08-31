@@ -46,4 +46,11 @@ Using `mapdql`:
     ```SQL
     COPY ipums_easy FROM './ipums_easy.csv';
     ```
+3. create table `player_attributes` with the content in
+   `./create_table_player_attributes.txt`
 
+4. import CSV
+
+    ```SQL
+    COPY player_attributes FROM './player_attributes.csv';
+    ```
