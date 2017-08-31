@@ -24,7 +24,9 @@ class Buffer(object):
         self.dtype = self.mem.dtype
 
     def __reduce__(self):
-        return type(self), (self.to_array(), self.size, self.capacity)
+        cpumem = self.to_array()
+        # Note: pickled Buffer only stores *size* element.
+        return type(self), (cpumem,)
 
     def __sizeof__(self):
         return self.mem.alloc_size
