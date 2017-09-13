@@ -1,10 +1,12 @@
-from collections import OrderedDict
+from collections import OrderedDict, defaultdict
+from timeit import default_timer as timer
 
 import numpy as np
 
 from numba import cuda
 
 from .dataframe import DataFrame, Series
+from . import concat
 from .column import Column
 from .buffer import Buffer
 
@@ -89,9 +91,6 @@ class Grouper(object):
         """
         functors_mapping = OrderedDict()
         appenders = OrderedDict()
-        # The "by" columns
-        for k in self._by:
-            appenders[k] = Appender(parent=self._df[k]._column)
         # The "value" columns
         for k, vs in functors.items():
             if k not in self._df.columns:
@@ -107,39 +106,94 @@ class Grouper(object):
                     appenders[newk] = Appender(parent=self._df[k]._column)
                     cur_fn_mapping[newk] = functor
         # Grouping
-        for idx, grp in self._group_level(self._df, self._by):
-            for k, v in zip(self._by, idx):
-                appenders[k].append(v)
-            for k in grp.columns:
-                for newk, functor in functors_mapping[k].items():
-                    appenders[newk].append(functor(grp[k]))
+        grouped_df, segs = self._group_dataframe(self._df, self._by)
 
+        # Grouped values
         outdf = DataFrame()
-        for k, app in appenders.items():
-            outdf[k] = app.get()
+        sr_segs = Buffer(np.asarray(segs))
+
+        for k in self._by:
+            outdf[k] = grouped_df[k].take(sr_segs.to_gpu_array()).reset_index()
+
+        size = len(outdf)
+
+        # Append value columns
+        for k, infos in functors_mapping.items():
+            values = defaultdict(lambda: np.zeros(size, dtype=np.float64))
+            begin = segs
+            end = segs[1:] + [len(grouped_df)]
+            sr = grouped_df[k].reset_index()
+            for i, (s, e) in enumerate(zip(begin, end)):
+                for newk, functor in infos.items():
+                    values[newk][i] = functor(sr[s:e])
+            # Store
+            for k, buf in values.items():
+                outdf[k] = buf
+
         return outdf
 
-    def _group_level(self, df, levels, indices=[]):
-        """A generator that yields (indices, grouped_df).
+    def _group_dataframe(self, df, levels):
+        """Group dataframe.
+
+        The output dataframe has the same number of rows as the input
+        dataframe.  The rows are shuffled so that the groups are moved
+        together in ascending order based on the multi-level index.
+
+        Parameters
+        ----------
+        df : DataFrame
+        levels : list[str]
+            Column names for the multi-level index.
+
+        Returns
+        -------
+        (grouped_df, segs)
+            * grouped_df is the grouped DataFrame
+            * segs is a list[int] of group starting index.
         """
-        col = levels[0]
-        innerlevels = levels[1:]
+        # Prepare dataframe
+        orig_df = df.copy()
+        df = df.loc[:, levels].reset_index()
+        rowid_column = '__pygdf.groupby.rowid'
+        df[rowid_column] = df.index.as_column()
+
+        # Process first level
+        col_stack = list(reversed(levels))
+        col = col_stack.pop()
+        # first level
         df = df.set_index(col).sort_index()
         segs = df.index.find_segments()
-        for s, e in zip(segs, segs[1:] + [None]):
-            grouped = df[s:e]
-            if len(grouped):
-                # NOTE: index at the Buffer level to get raw values
-                # FIXME numpy.scalar getitem to Index
-                #       (e.g. the need of `int(s)`)
-                index = df.index.as_column().data[int(s)]
-                inner_indices = indices + [index]
-                if innerlevels:
-                    for grp in self._group_level(grouped, innerlevels,
-                                                 indices=inner_indices):
-                        yield grp
+
+        # Handle the remaining level
+        while col_stack:
+            col = col_stack.pop()
+            newsegs = []
+            groups = []
+            for s, e in zip(segs, segs[1:] + [len(df)]):
+                sliced = df[s:e].copy()
+                # the following branch if for optimization on groups
+                # that are too small
+                if e - s > 1:
+                    grouped = sliced.set_index(col).sort_index()
+                    grpsegs = np.asarray(grouped.index.find_segments()) + s
                 else:
-                    yield inner_indices, grouped
+                    # too small
+                    grouped = sliced
+                    grouped.drop_column(col)
+                    grpsegs = [s]
+                newsegs.extend(grpsegs)
+                groups.append(grouped.reset_index())
+            df = concat(groups)   # set new base DF
+            segs = newsegs        # set new segments
+
+        # Shuffle
+        reordering_indices = df[rowid_column].to_gpu_array()
+        out_df = DataFrame()
+        for k in orig_df.columns:
+            col = orig_df[k].reset_index()
+            newcol = col.take(reordering_indices)
+            out_df[k] = newcol
+        return out_df, segs
 
     def agg(self, args):
         """Invoke aggregation functions on the groups.
