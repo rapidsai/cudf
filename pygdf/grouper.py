@@ -11,45 +11,6 @@ from .column import Column
 from .buffer import Buffer
 
 
-TEN_MB = 10 ** 7
-
-
-class Appender(object):
-    """For fast appending of data into a Column.
-    """
-    def __init__(self, parent, bufsize=TEN_MB):
-        # Keep reference to parent Column
-        self._parent = parent
-        # Get physical dtype
-        dtype = np.dtype(parent.data.dtype)
-        # Max queue size is buffer size divided by itemsize
-        self._max_q_sz = max(bufsize // dtype.itemsize, 1)
-        self._queue = []
-        # Initialize empty Column
-        raw_buf = cuda.device_array(shape=0, dtype=dtype)
-        self._result = Column(Buffer.from_empty(raw_buf))
-
-    def append(self, value):
-        self._queue.append(value)
-        # Flush when queue is full
-        if len(self._queue) >= self._max_q_sz:
-            self.flush()
-
-    def flush(self):
-        # Append to Series
-        buf = Buffer(np.asarray(self._queue, dtype=self._result.dtype))
-        self._result = self._result.append(Column(buf))
-        # Reset queue
-        self._queue.clear()
-
-    def get(self):
-        self.flush()
-        assert self._result is not None
-        assert not self._result.has_null_mask
-        col = self._result
-        return Series(self._parent.replace(data=col.data, mask=None))
-
-
 def _auto_generate_grouper_agg(members):
     def make_fun(f):
         return lambda self: self.agg(f)
@@ -90,20 +51,17 @@ class Grouper(object):
 
         """
         functors_mapping = OrderedDict()
-        appenders = OrderedDict()
         # The "value" columns
         for k, vs in functors.items():
             if k not in self._df.columns:
                 raise NameError('column {:r} not found'.format(k))
             if len(vs) == 1:
                 [functor] = vs
-                appenders[k] = Appender(parent=self._df[k]._column)
                 functors_mapping[k] = {k: functor}
             else:
                 functors_mapping[k] = cur_fn_mapping = OrderedDict()
                 for functor in vs:
                     newk = '{}_{}'.format(k, functor.__name__)
-                    appenders[newk] = Appender(parent=self._df[k]._column)
                     cur_fn_mapping[newk] = functor
         # Grouping
         grouped_df, segs = self._group_dataframe(self._df, self._by)
