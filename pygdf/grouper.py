@@ -28,6 +28,22 @@ result : DataFrame
         members[k] = fn
 
 
+@cuda.jit
+def group_mean(data, segments, output):
+    i = cuda.grid(1)
+    if i < segments.size:
+        s = segments[i]
+        e = (segments[i + 1]
+             if (i + 1) < segments.size
+             else data.size)
+        # mean calculation
+        carry = 0.0
+        n = e - s
+        for j in range(s, e):
+            carry += data[j]
+        output[i] = carry / n
+
+
 class Grouper(object):
     _NAMED_FUNCTIONS = {'mean': Series.mean,
                         'std': Series.std,
@@ -81,9 +97,18 @@ class Grouper(object):
             begin = segs
             end = segs[1:] + [len(grouped_df)]
             sr = grouped_df[k].reset_index()
-            for i, (s, e) in enumerate(zip(begin, end)):
+            if functor.__name__ == 'mean':
+                dev_begins = cuda.to_device(np.asarray(begin))
+                dev_out = cuda.device_array(size, dtype=np.float64)
                 for newk, functor in infos.items():
-                    values[newk][i] = functor(sr[s:e])
+                    group_mean.forall(size)(sr.to_gpu_array(),
+                                            dev_begins,
+                                            dev_out)
+                    values[newk] = dev_out
+            else:
+                for i, (s, e) in enumerate(zip(begin, end)):
+                    for newk, functor in infos.items():
+                        values[newk][i] = functor(sr[s:e])
             # Store
             for k, buf in values.items():
                 outdf[k] = buf
