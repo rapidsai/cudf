@@ -57,6 +57,47 @@ gdf_error gdf_radixsort_generic(gdf_radixsort_plan_type *hdl,
                                 gdf_column *keycol,
                                 gdf_column *valcol);
 
+/* segmented sorting */
+gdf_segmented_radixsort_plan_type* gdf_segmented_radixsort_plan(size_t num_items, int descending,
+    unsigned begin_bit, unsigned end_bit);
+gdf_error gdf_segmented_radixsort_plan_setup(gdf_segmented_radixsort_plan_type *hdl,
+size_t sizeof_key, size_t sizeof_val);
+gdf_error gdf_segmented_radixsort_plan_free(gdf_segmented_radixsort_plan_type *hdl);
+
+/*
+* The following function performs a sort on the key and value columns.
+*/
+gdf_error gdf_segmented_radixsort_i8(gdf_segmented_radixsort_plan_type *hdl,
+                                     gdf_column *keycol, gdf_column *valcol,
+                                     unsigned num_segments,
+                                     unsigned *d_begin_offsets,
+                                     unsigned *d_end_offsets);
+gdf_error gdf_segmented_radixsort_i32(gdf_segmented_radixsort_plan_type *hdl,
+                                     gdf_column *keycol, gdf_column *valcol,
+                                     unsigned num_segments,
+                                     unsigned *d_begin_offsets,
+                                     unsigned *d_end_offsets);
+gdf_error gdf_segmented_radixsort_i64(gdf_segmented_radixsort_plan_type *hdl,
+                                     gdf_column *keycol, gdf_column *valcol,
+                                     unsigned num_segments,
+                                     unsigned *d_begin_offsets,
+                                     unsigned *d_end_offsets);
+gdf_error gdf_segmented_radixsort_f32(gdf_segmented_radixsort_plan_type *hdl,
+                                     gdf_column *keycol, gdf_column *valcol,
+                                     unsigned num_segments,
+                                     unsigned *d_begin_offsets,
+                                     unsigned *d_end_offsets);
+gdf_error gdf_segmented_radixsort_f64(gdf_segmented_radixsort_plan_type *hdl,
+                                     gdf_column *keycol, gdf_column *valcol,
+                                     unsigned num_segments,
+                                     unsigned *d_begin_offsets,
+                                     unsigned *d_end_offsets);
+gdf_error gdf_segmented_radixsort_generic(gdf_segmented_radixsort_plan_type *hdl,
+                                     gdf_column *keycol, gdf_column *valcol,
+                                     unsigned num_segments,
+                                     unsigned *d_begin_offsets,
+                                     unsigned *d_end_offsets);
+
 /* joining
 
 These functions return the result in *out_result*.

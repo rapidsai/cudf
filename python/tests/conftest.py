@@ -1,6 +1,7 @@
 """
 py.test will automatically detect this file.
 """
+import random
 import pytest
 from . import utils
 
@@ -13,3 +14,4 @@ def rand_seed():
     # Run with: `py.test -s` to see ensure the following message is printed.
     print("Seeding np.random")
     utils.seed_rand()
+    random.seed(0)

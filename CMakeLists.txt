@@ -30,6 +30,7 @@ cuda_add_library(gdf SHARED
     src/sorting.cu
     src/joining.cu
     src/scan.cu
+    src/segmented_sorting.cu
 )
 
 target_link_libraries(gdf arrow)
