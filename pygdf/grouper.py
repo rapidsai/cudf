@@ -144,9 +144,22 @@ class Grouper(object):
 
         # Perform grouping
         df, segs = self._group_first_level(col_order[0], rowid_column, df)
-        reordering_indices, segs = self._group_inner_levels(
-            col_order[1:], df[rowid_column], segs)
-        out_df = self._group_shuffle(orig_df, reordering_indices)
+        rowidcol = df[rowid_column]
+        sorted_keys = [Series(df.index.as_column())]
+        del df
+
+        more_keys, reordering_indices, segs = self._group_inner_levels(
+                                            col_order[1:], rowidcol, segs)
+        sorted_keys.extend(more_keys)
+        valcols = [k for k in orig_df.columns if k not in levels]
+        # Prepare output
+        # All key columns are already sorted
+        out_df = DataFrame()
+        for k, sr in zip(levels, sorted_keys):
+            out_df[k] = sr
+        # Shuffle the value columns
+        self._group_shuffle(orig_df.loc[:, valcols],
+                            reordering_indices, out_df)
         return out_df, list(segs)
 
     def _group_first_level(self, col, rowid_column, df):
@@ -189,7 +202,10 @@ class Grouper(object):
 
         Returns
         -------
-        (reordering_indices, segments)
+        (sorted_keys, reordering_indices, segments)
+            - sorted_keys : list[Series]
+                List of sorted key columns.
+                Column order is same as arg *columns*.
             - reordering_indices : device array
                 The indices to gather on to shuffle the dataframe
                 into the grouped seqence.
@@ -197,6 +213,7 @@ class Grouper(object):
                 Group begin offsets.
         """
         dsegs = cuda.to_device(np.asarray(segs, dtype=np.uint32))
+        sorted_keys = []
         for col in columns:
             # Shuffle the key column according to the previous groups
             srkeys = self._df[col].take(rowidcol.to_gpu_array(),
@@ -204,18 +221,21 @@ class Grouper(object):
             # Segmented sort on the key
             shuf = Column(Buffer(cudautils.arange(len(srkeys))))
             _gdf.apply_segsort(srkeys._column, shuf, dsegs)
+            sorted_keys.append(srkeys)   # keep sorted key cols
             # Determine segments
             dsegs = cudautils.find_segments(srkeys.to_gpu_array(), dsegs)
             # Shuffle
             rowidcol = rowidcol.take(shuf.to_gpu_array(), ignore_index=True)
 
         reordering_indices = rowidcol.to_gpu_array()
-        return reordering_indices, dsegs.copy_to_host()
+        return sorted_keys, reordering_indices, dsegs.copy_to_host()
 
-    def _group_shuffle(self, orig_df, reordering_indices):
-        out_df = DataFrame()
-        for k in orig_df.columns:
-            col = orig_df[k].reset_index()
+    def _group_shuffle(self, src_df, reordering_indices, out_df):
+        """Shuffle columns in *src_df* with *reordering_indices*
+        and store the new columns into *out_df*
+        """
+        for k in src_df.columns:
+            col = src_df[k].reset_index()
             newcol = col.take(reordering_indices, ignore_index=True)
             out_df[k] = newcol
         return out_df
