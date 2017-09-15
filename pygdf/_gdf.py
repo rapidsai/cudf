@@ -114,6 +114,8 @@ def apply_reduce(fn, inp):
 
 
 def apply_sort(col_keys, col_vals, ascending=True):
+    """Inplace sort
+    """
     nelem = len(col_keys)
     begin_bit = 0
     end_bit = col_keys.dtype.itemsize * 8
@@ -171,17 +173,24 @@ def apply_prefixsum(col_inp, col_out, inclusive):
 
 
 def apply_segsort(col_keys, col_vals, segments, descending=False):
+    """Inplace segemented sort
+
+    Parameters
+    ----------
+    col_keys : Column
+    col_vals : Column
+    segments : device array
+    """
     # prepare
-    fullsegs = np.empty(len(segments) + 1, dtype=np.uint32)
-    begins = fullsegs[:-1]
-    begins[:] = segments
-    ends = fullsegs[1:]
-    ends[-1] = len(col_keys)
-
-    d_begins = cuda.to_device(begins)
-    d_ends = cuda.to_device(ends)
-
     nelem = len(col_keys)
+
+    d_fullsegs = cuda.device_array(segments.size + 1, dtype=np.uint32)
+    d_begins = d_fullsegs[:-1]
+    d_ends = d_fullsegs[1:]
+
+    d_begins.copy_to_device(segments)
+    d_ends[-1:].copy_to_device(np.asarray([nelem], dtype=d_ends.dtype))
+
     begin_bit = 0
     end_bit = col_keys.dtype.itemsize * 8
 
@@ -196,7 +205,7 @@ def apply_segsort(col_keys, col_vals, segments, descending=False):
         libgdf.gdf_segmented_radixsort_generic(plan,
                                                col_keys.cffi_view,
                                                col_vals.cffi_view,
-                                               len(segments),
+                                               segments.size,
                                                unwrap_devary(d_begins),
                                                unwrap_devary(d_ends))
     finally:

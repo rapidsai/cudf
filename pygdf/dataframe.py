@@ -575,13 +575,17 @@ class DataFrame(object):
             return df.sort_index()
         return df
 
-    def groupby(self, by):
+    def groupby(self, by, sort=False):
         """Groupby
 
         Parameters
         ----------
         by : list-of-str or str
             Column name(s) to form that groups by.
+        sort: bool
+            Force sorting group keys.
+            Depends on the underlying algorithm.
+            Current algorithm always sort.
 
         Returns
         -------

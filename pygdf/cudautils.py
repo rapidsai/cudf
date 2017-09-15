@@ -606,11 +606,19 @@ def gpu_mark_seg_segments(begins, markers):
 def find_segments(arr, segs=None):
     """Find beginning indices of runs of equal values.
 
+    Parameters
+    ----------
+    arr : device array
+        The operand.
+    segs : optional; device array
+        Segment offsets that must exist in the output.
+
     Returns
     -------
     starting_indices : device array
         The starting indices of start of segments.
         Total segment count will be equal to the length of this.
+
     """
     from . import _gdf
 

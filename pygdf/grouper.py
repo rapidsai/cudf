@@ -135,57 +135,95 @@ class Grouper(object):
             * segs is a list[int] of group starting index.
         """
         # Prepare dataframe
-        orig_df = DataFrame()
-        for k in df.columns:
-            orig_df[k] = Series(df[k]._column.copy_data())
-
+        orig_df = df.copy()
         df = df.loc[:, levels].reset_index()
         rowid_column = '__pygdf.groupby.rowid'
         df[rowid_column] = df.index.as_column()
 
-        # Process first level
-        col_stack = list(reversed(levels))
-        col = col_stack.pop()
+        col_order = list(levels)
+
+        # Perform grouping
+        df, segs = self._group_first_level(col_order[0], df)
+        reordering_indices, segs = self._group_inner_levels(
+            col_order[1:], rowid_column, df, segs)
+        out_df = self._group_shuffle(orig_df, reordering_indices)
+        return out_df, list(segs)
+
+    def _group_first_level(self, col, df):
+        """Group first level *col* of *df*
+
+        Parameters
+        ----------
+        col : str
+            Name of the first group key column.
+        df : DataFrame
+            The dataframe being grouped.
+
+        Returns
+        -------
+        (df, segs)
+            - df : DataFrame
+                Sorted by *col- * index
+            - segs : list
+                Sequence of group begin offsets
+        """
         # first level
         df = df.set_index(col).sort_index()
         segs = df.index.find_segments()
+        return df, segs
 
-        def foo(df, segs):
-            # Handle the remaining level
-            while col_stack:
-                col = col_stack.pop()
+    def _group_inner_levels(self, columns, rowid_column, df, segs):
+        """Group the second and onwards level.
 
-                shuf = Column(Buffer(cudautils.arange(len(df))))
+        Parameters
+        ----------
+        columns : sequence[str]
+            Group keys.  The order is important.
+        rowid_column : str
+            The name of the special column with the original rowid.
+            It's internally used to determine the shuffling order.
+        df : DataFrame
+            The dataframe being grouped.
+        segs : sequence[int]
+            First level group begin offsets.
 
-                srkeys = Series(df[col]._column.copy_data())
-                _gdf.apply_segsort(srkeys._column, shuf, segs)
+        Returns
+        -------
+        (reordering_indices, segments)
+            - reordering_indices : device array
+                The indices to gather on to shuffle the dataframe
+                into the grouped seqence.
+            - segments : np.array
+                Group begin offsets.
+        """
+        dsegs = cuda.to_device(np.asarray(segs, dtype=np.uint32))
+        for col in columns:
+            # Segmented sort on the key
+            shuf = Column(Buffer(cudautils.arange(len(df))))
+            srkeys = Series(df[col]._column.copy_data())
+            _gdf.apply_segsort(srkeys._column, shuf, dsegs)
+            # Determine segments
+            dsegs = cudautils.find_segments(srkeys.to_gpu_array(),
+                                            dsegs)
+            # Shuffle inner dataframe
+            # TODO: further cut the amount of shuffling to the columns
+            #       we don't need to shuffle other key columns at until
+            #       we operate on them.
+            olddf = df.reset_index()
+            df = DataFrame()
+            for k in (c for c in olddf.columns if c != col):
+                df[k] = olddf[k].take(shuf.to_gpu_array())
 
-                dsegs = Series(segs).to_gpu_array()
-                hsegs = cudautils.find_segments(srkeys.to_gpu_array(),
-                                                dsegs)
-                segs = hsegs.copy_to_host()
+        reordering_indices = df[rowid_column].to_gpu_array()
+        return reordering_indices, dsegs.copy_to_host()
 
-                olddf = df.reset_index()
-                df = DataFrame()
-                for k in (c for c in olddf.columns if c != col):
-                    df[k] = olddf[k].take(shuf.to_gpu_array())
-
-            reordering_indices = df[rowid_column].to_gpu_array()
-            return reordering_indices, segs
-
-        # Shuffle
-        reordering_indices, segs = foo(df, segs)
-
-        def shuffle():
-            out_df = DataFrame()
-            for k in orig_df.columns:
-                col = orig_df[k].reset_index()
-                newcol = col.take(reordering_indices)
-                out_df[k] = newcol
-            return out_df
-
-        out_df = shuffle()
-        return out_df, list(segs)
+    def _group_shuffle(self, orig_df, reordering_indices):
+        out_df = DataFrame()
+        for k in orig_df.columns:
+            col = orig_df[k].reset_index()
+            newcol = col.take(reordering_indices)
+            out_df[k] = newcol
+        return out_df
 
     def agg(self, args):
         """Invoke aggregation functions on the groups.
