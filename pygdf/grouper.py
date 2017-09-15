@@ -143,13 +143,13 @@ class Grouper(object):
         col_order = list(levels)
 
         # Perform grouping
-        df, segs = self._group_first_level(col_order[0], df)
+        df, segs = self._group_first_level(col_order[0], rowid_column, df)
         reordering_indices, segs = self._group_inner_levels(
-            col_order[1:], rowid_column, df, segs)
+            col_order[1:], df[rowid_column], segs)
         out_df = self._group_shuffle(orig_df, reordering_indices)
         return out_df, list(segs)
 
-    def _group_first_level(self, col, df):
+    def _group_first_level(self, col, rowid_column, df):
         """Group first level *col* of *df*
 
         Parameters
@@ -167,12 +167,12 @@ class Grouper(object):
             - segs : list
                 Sequence of group begin offsets
         """
-        # first level
+        df = df.loc[:, [col, rowid_column]]
         df = df.set_index(col).sort_index()
         segs = df.index.find_segments()
         return df, segs
 
-    def _group_inner_levels(self, columns, rowid_column, df, segs):
+    def _group_inner_levels(self, columns, rowidcol, segs):
         """Group the second and onwards level.
 
         Parameters
@@ -198,30 +198,25 @@ class Grouper(object):
         """
         dsegs = cuda.to_device(np.asarray(segs, dtype=np.uint32))
         for col in columns:
+            # Shuffle the key column according to the previous groups
+            srkeys = self._df[col].take(rowidcol.to_gpu_array(),
+                                        ignore_index=True)
             # Segmented sort on the key
-            shuf = Column(Buffer(cudautils.arange(len(df))))
-            srkeys = Series(df[col]._column.copy_data())
+            shuf = Column(Buffer(cudautils.arange(len(srkeys))))
             _gdf.apply_segsort(srkeys._column, shuf, dsegs)
             # Determine segments
-            dsegs = cudautils.find_segments(srkeys.to_gpu_array(),
-                                            dsegs)
-            # Shuffle inner dataframe
-            # TODO: further cut the amount of shuffling to the columns
-            #       we don't need to shuffle other key columns at until
-            #       we operate on them.
-            olddf = df.reset_index()
-            df = DataFrame()
-            for k in (c for c in olddf.columns if c != col):
-                df[k] = olddf[k].take(shuf.to_gpu_array())
+            dsegs = cudautils.find_segments(srkeys.to_gpu_array(), dsegs)
+            # Shuffle
+            rowidcol = rowidcol.take(shuf.to_gpu_array(), ignore_index=True)
 
-        reordering_indices = df[rowid_column].to_gpu_array()
+        reordering_indices = rowidcol.to_gpu_array()
         return reordering_indices, dsegs.copy_to_host()
 
     def _group_shuffle(self, orig_df, reordering_indices):
         out_df = DataFrame()
         for k in orig_df.columns:
             col = orig_df[k].reset_index()
-            newcol = col.take(reordering_indices)
+            newcol = col.take(reordering_indices, ignore_index=True)
             out_df[k] = newcol
         return out_df
 

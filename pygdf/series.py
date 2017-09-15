@@ -147,7 +147,7 @@ class Series(object):
         else:
             raise NotImplementedError(type(arg))
 
-    def take(self, indices):
+    def take(self, indices, ignore_index=False):
         """Return Series by taking values from the corresponding *indices*.
         """
         indices = Buffer(indices).to_gpu_array()
@@ -158,7 +158,11 @@ class Series(object):
             mask = Buffer(mask)
         else:
             mask = None
-        index = self.index.take(indices)
+        if ignore_index:
+            index = self._index
+        else:
+            index = self.index.take(indices)
+
         col = self._column.replace(data=Buffer(data), mask=mask)
         return self._copy_construct(data=col, index=index)
 
