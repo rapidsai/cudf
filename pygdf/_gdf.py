@@ -183,13 +183,16 @@ def apply_segsort(col_keys, col_vals, segments, descending=False):
     """
     # prepare
     nelem = len(col_keys)
+    seg_dtype = np.uint32
 
-    d_fullsegs = cuda.device_array(segments.size + 1, dtype=np.uint32)
+    d_fullsegs = cuda.device_array(segments.size + 1, dtype=seg_dtype)
     d_begins = d_fullsegs[:-1]
     d_ends = d_fullsegs[1:]
 
-    d_begins.copy_to_device(segments)
-    d_ends[-1:].copy_to_device(np.asarray([nelem], dtype=d_ends.dtype))
+    # Note: .astype is required below because .copy_to_device
+    #       is just a plain memcpy
+    d_begins.copy_to_device(cudautils.astype(segments, dtype=seg_dtype))
+    d_ends[-1:].copy_to_device(np.require([nelem], dtype=seg_dtype))
 
     begin_bit = 0
     end_bit = col_keys.dtype.itemsize * 8
