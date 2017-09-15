@@ -231,6 +231,10 @@ class Column(object):
         }
         return params
 
+    def copy_data(self):
+        return self.replace(data=self.data.copy())
+
+
     def replace(self, **kwargs):
         """Replace attibutes of the class and return a new Column.
 

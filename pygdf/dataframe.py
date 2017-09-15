@@ -9,7 +9,7 @@ import pandas as pd
 from numba import cuda
 
 from . import cudautils, formatting, queryutils, _gdf
-from .index import GenericIndex, EmptyIndex, Index
+from .index import GenericIndex, EmptyIndex, Index, RangeIndex
 from .series import Series
 from .buffer import Buffer
 from .settings import NOTSET, settings
@@ -265,6 +265,9 @@ class DataFrame(object):
             for k in self.columns:
                 df[k] = self[k].set_index(index)
             return df
+
+    def reset_index(self):
+        return self.set_index(RangeIndex(len(self)))
 
     def copy(self):
         "Shallow copy this dataframe"
@@ -572,13 +575,17 @@ class DataFrame(object):
             return df.sort_index()
         return df
 
-    def groupby(self, by):
+    def groupby(self, by, sort=False):
         """Groupby
 
         Parameters
         ----------
         by : list-of-str or str
             Column name(s) to form that groups by.
+        sort: bool
+            Force sorting group keys.
+            Depends on the underlying algorithm.
+            Current algorithm always sort.
 
         Returns
         -------
