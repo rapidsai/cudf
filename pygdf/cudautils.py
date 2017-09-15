@@ -596,7 +596,14 @@ def gpu_scatter_segment_begins(markers, scanned, begins):
             begins[idx] = i
 
 
-def find_segments(arr):
+@cuda.jit
+def gpu_mark_seg_segments(begins, markers):
+    i = cuda.grid(1)
+    if i < begins.size:
+        markers[begins[i]] = 1
+
+
+def find_segments(arr, segs=None):
     """Find beginning indices of runs of equal values.
 
     Returns
@@ -610,6 +617,8 @@ def find_segments(arr):
     # Compute diffs of consecutive elements
     markers = cuda.device_array(arr.size, dtype=np.int32)
     gpu_mark_segment_begins.forall(markers.size)(arr, markers)
+    if segs is not None:
+        gpu_mark_seg_segments.forall(segs.size)(segs, markers)
     # Compute index of marked locations
     slots = prefixsum(markers)
     ct = slots[slots.size - 1]

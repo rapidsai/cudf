@@ -168,3 +168,38 @@ def apply_join(col_lhs, col_rhs, how):
 
 def apply_prefixsum(col_inp, col_out, inclusive):
     libgdf.gdf_prefixsum_generic(col_inp, col_out, inclusive)
+
+
+def apply_segsort(col_keys, col_vals, segments, descending=False):
+    # prepare
+    fullsegs = np.empty(len(segments) + 1, dtype=np.uint32)
+    begins = fullsegs[:-1]
+    begins[:] = segments
+    ends = fullsegs[1:]
+    ends[-1] = len(col_keys)
+
+    d_begins = cuda.to_device(begins)
+    d_ends = cuda.to_device(ends)
+
+    nelem = len(col_keys)
+    begin_bit = 0
+    end_bit = col_keys.dtype.itemsize * 8
+
+    sizeof_key = col_keys.data.dtype.itemsize
+    sizeof_val = col_vals.data.dtype.itemsize
+
+    # sort
+    plan = libgdf.gdf_segmented_radixsort_plan(nelem, descending,
+                                               begin_bit, end_bit)
+    try:
+        libgdf.gdf_segmented_radixsort_plan_setup(plan, sizeof_key, sizeof_val)
+        libgdf.gdf_segmented_radixsort_generic(plan,
+                                               col_keys.cffi_view,
+                                               col_vals.cffi_view,
+                                               len(segments),
+                                               unwrap_devary(d_begins),
+                                               unwrap_devary(d_ends))
+    finally:
+        libgdf.gdf_segmented_radixsort_plan_free(plan)
+
+

@@ -6,7 +6,7 @@ import numpy as np
 from numba import cuda
 
 from .dataframe import DataFrame, Series
-from . import concat
+from . import concat, _gdf, cudautils
 from .column import Column
 from .buffer import Buffer
 
@@ -81,7 +81,6 @@ class Grouper(object):
                     cur_fn_mapping[newk] = functor
         # Grouping
         grouped_df, segs = self._group_dataframe(self._df, self._by)
-
         # Grouped values
         outdf = DataFrame()
         sr_segs = Buffer(np.asarray(segs))
@@ -96,6 +95,7 @@ class Grouper(object):
             values = defaultdict(lambda: np.zeros(size, dtype=np.float64))
             begin = segs
             end = segs[1:] + [len(grouped_df)]
+
             sr = grouped_df[k].reset_index()
             if functor.__name__ == 'mean':
                 dev_begins = cuda.to_device(np.asarray(begin))
@@ -135,7 +135,10 @@ class Grouper(object):
             * segs is a list[int] of group starting index.
         """
         # Prepare dataframe
-        orig_df = df.copy()
+        orig_df = DataFrame()
+        for k in df.columns:
+            orig_df[k] = Series(df[k]._column.copy_data())
+
         df = df.loc[:, levels].reset_index()
         rowid_column = '__pygdf.groupby.rowid'
         df[rowid_column] = df.index.as_column()
@@ -147,36 +150,42 @@ class Grouper(object):
         df = df.set_index(col).sort_index()
         segs = df.index.find_segments()
 
-        # Handle the remaining level
-        while col_stack:
-            col = col_stack.pop()
-            newsegs = []
-            groups = []
-            for s, e in zip(segs, segs[1:] + [len(df)]):
-                sliced = df[s:e].copy()
-                # the following branch if for optimization on groups
-                # that are too small
-                if e - s > 1:
-                    grouped = sliced.set_index(col).sort_index()
-                    grpsegs = np.asarray(grouped.index.find_segments()) + s
-                else:
-                    # too small
-                    grouped = sliced
-                    grouped.drop_column(col)
-                    grpsegs = [s]
-                newsegs.extend(grpsegs)
-                groups.append(grouped.reset_index())
-            df = concat(groups)   # set new base DF
-            segs = newsegs        # set new segments
+        def foo(df, segs):
+            # Handle the remaining level
+            while col_stack:
+                col = col_stack.pop()
+
+                shuf = Column(Buffer(cudautils.arange(len(df))))
+
+                srkeys = Series(df[col]._column.copy_data())
+                _gdf.apply_segsort(srkeys._column, shuf, segs)
+
+                dsegs = Series(segs).to_gpu_array()
+                hsegs = cudautils.find_segments(srkeys.to_gpu_array(),
+                                                dsegs)
+                segs = hsegs.copy_to_host()
+
+                olddf = df.reset_index()
+                df = DataFrame()
+                for k in (c for c in olddf.columns if c != col):
+                    df[k] = olddf[k].take(shuf.to_gpu_array())
+
+            reordering_indices = df[rowid_column].to_gpu_array()
+            return reordering_indices, segs
 
         # Shuffle
-        reordering_indices = df[rowid_column].to_gpu_array()
-        out_df = DataFrame()
-        for k in orig_df.columns:
-            col = orig_df[k].reset_index()
-            newcol = col.take(reordering_indices)
-            out_df[k] = newcol
-        return out_df, segs
+        reordering_indices, segs = foo(df, segs)
+
+        def shuffle():
+            out_df = DataFrame()
+            for k in orig_df.columns:
+                col = orig_df[k].reset_index()
+                newcol = col.take(reordering_indices)
+                out_df[k] = newcol
+            return out_df
+
+        out_df = shuffle()
+        return out_df, list(segs)
 
     def agg(self, args):
         """Invoke aggregation functions on the groups.
