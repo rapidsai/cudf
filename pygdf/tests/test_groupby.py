@@ -6,13 +6,16 @@ import pandas as pd
 from pygdf.dataframe import DataFrame
 
 
-def make_frame(dataframe_class, nelem, seed=0):
+def make_frame(dataframe_class, nelem, seed=0, extra_levels=()):
     np.random.seed(seed)
 
     df = dataframe_class()
 
     df['x'] = np.random.randint(0, 5, nelem)
     df['y'] = np.random.randint(0, 3, nelem)
+    for lvl in extra_levels:
+        df[lvl] = np.random.randint(0, 2, nelem)
+
     df['val'] = np.random.random(nelem)
 
     return df
@@ -29,6 +32,19 @@ def test_groupby_mean(nelem):
     # verify
     np.testing.assert_array_almost_equal(expect, got)
 
+
+@pytest.mark.parametrize('nelem', [2, 3, 100, 1000])
+def test_groupby_mean_3level(nelem):
+    lvls = 'z'
+    bys = list('xyz')
+    # gdf
+    got_df = make_frame(DataFrame, nelem=nelem, extra_levels=lvls).groupby(bys).mean()
+    got = np.sort(got_df['val'].to_array())
+    # pandas
+    expect_df = make_frame(pd.DataFrame, nelem=nelem, extra_levels=lvls).groupby(bys).mean()
+    expect = np.sort(expect_df['val'].values)
+    # verify
+    np.testing.assert_array_almost_equal(expect, got)
 
 @pytest.mark.parametrize('nelem', [2, 100])
 def test_groupby_agg_mean_min(nelem):
