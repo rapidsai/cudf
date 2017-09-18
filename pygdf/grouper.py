@@ -1,4 +1,4 @@
-from collections import OrderedDict, defaultdict
+from collections import OrderedDict, defaultdict, namedtuple
 from timeit import default_timer as timer
 
 import numpy as np
@@ -64,10 +64,21 @@ class Grouper(object):
     def _group_iterator(self):
         """Group iterator
         """
-        grouped_df, segs = self._group_dataframe(self._df, self._by)
+        grouped_df, segs = self.grouped_dataframe()
         for begin, end in zip(segs, segs[1:] + [None]):
             yield grouped_df[begin:end]
 
+    def grouped_dataframe(self):
+        """Get the intermediate dataframe after shuffling the rows into
+        groups.
+
+        Returns
+        -------
+        (df, segs)
+        """
+        grouped_df, segs = self._group_dataframe(self._df, self._by)
+        tup = namedtuple('grouped_dataframe', ['df', 'segs'])
+        return tup(df=grouped_df, segs=segs)
 
     def _form_groups(self, functors):
         """
