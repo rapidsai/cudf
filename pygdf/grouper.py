@@ -58,6 +58,17 @@ class Grouper(object):
         self._val_columns = [idx for idx in self._df.columns
                              if idx not in self._by]
 
+    def __iter__(self):
+        return self._group_iterator()
+
+    def _group_iterator(self):
+        """Group iterator
+        """
+        grouped_df, segs = self._group_dataframe(self._df, self._by)
+        for begin, end in zip(segs, segs[1:] + [None]):
+            yield grouped_df[begin:end]
+
+
     def _form_groups(self, functors):
         """
         Parameters
