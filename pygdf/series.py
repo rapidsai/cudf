@@ -159,7 +159,7 @@ class Series(object):
         else:
             mask = None
         if ignore_index:
-            index = self._index
+            index = RangeIndex(indices.size)
         else:
             index = self.index.take(indices)
 

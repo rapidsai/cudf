@@ -1,12 +1,12 @@
-from collections import OrderedDict, defaultdict
-from timeit import default_timer as timer
+from collections import OrderedDict, defaultdict, namedtuple
 
+from itertools import chain
 import numpy as np
 
 from numba import cuda
 
 from .dataframe import DataFrame, Series
-from . import concat, _gdf, cudautils
+from . import _gdf, cudautils
 from .column import Column
 from .buffer import Buffer
 
@@ -44,6 +44,9 @@ def group_mean(data, segments, output):
         output[i] = carry / n
 
 
+_dfsegs_pack = namedtuple('_dfsegs_pack', ['df', 'segs'])
+
+
 class Grouper(object):
     _NAMED_FUNCTIONS = {'mean': Series.mean,
                         'std': Series.std,
@@ -57,6 +60,32 @@ class Grouper(object):
         self._by = [by] if isinstance(by, str) else list(by)
         self._val_columns = [idx for idx in self._df.columns
                              if idx not in self._by]
+
+    def __iter__(self):
+        return self._group_iterator()
+
+    def _group_iterator(self):
+        """Group iterator
+
+        Returns each group as a DataFrame.
+        """
+        grouped = self.as_df()
+        segs = grouped.segs.to_array()
+        for begin, end in zip(segs, chain(segs[1:], [len(grouped.df)])):
+            yield grouped.df[begin:end]
+
+    def as_df(self):
+        """Get the intermediate dataframe after shuffling the rows into
+        groups.
+
+        Returns
+        -------
+        (df, segs) : namedtuple
+            - df : DataFrame
+            - segs : Series
+                Beginning offsets of each group.
+        """
+        return self._group_dataframe(self._df, self._by)
 
     def _form_groups(self, functors):
         """
@@ -80,10 +109,10 @@ class Grouper(object):
                     newk = '{}_{}'.format(k, functor.__name__)
                     cur_fn_mapping[newk] = functor
         # Grouping
-        grouped_df, segs = self._group_dataframe(self._df, self._by)
+        grouped_df, sr_segs = self._group_dataframe(self._df, self._by)
         # Grouped values
         outdf = DataFrame()
-        sr_segs = Buffer(np.asarray(segs))
+        segs = sr_segs.to_array()
 
         for k in self._by:
             outdf[k] = grouped_df[k].take(sr_segs.to_gpu_array()).reset_index()
@@ -94,8 +123,6 @@ class Grouper(object):
         for k, infos in functors_mapping.items():
             values = defaultdict(lambda: np.zeros(size, dtype=np.float64))
             begin = segs
-            end = segs[1:] + [len(grouped_df)]
-
             sr = grouped_df[k].reset_index()
             if functor.__name__ == 'mean':
                 dev_begins = cuda.to_device(np.asarray(begin))
@@ -106,6 +133,7 @@ class Grouper(object):
                                             dev_out)
                     values[newk] = dev_out
             else:
+                end = chain(segs[1:], [len(grouped_df)])
                 for i, (s, e) in enumerate(zip(begin, end)):
                     for newk, functor in infos.items():
                         values[newk][i] = functor(sr[s:e])
@@ -130,9 +158,11 @@ class Grouper(object):
 
         Returns
         -------
-        (grouped_df, segs)
-            * grouped_df is the grouped DataFrame
-            * segs is a list[int] of group starting index.
+        (df, segs) : namedtuple
+            * df : DataFrame
+                The grouped dataframe.
+            * segs : Series.
+                 Group starting index.
         """
         # Prepare dataframe
         orig_df = df.copy()
@@ -160,7 +190,7 @@ class Grouper(object):
         # Shuffle the value columns
         self._group_shuffle(orig_df.loc[:, valcols],
                             reordering_indices, out_df)
-        return out_df, list(segs)
+        return _dfsegs_pack(df=out_df, segs=segs)
 
     def _group_first_level(self, col, rowid_column, df):
         """Group first level *col* of *df*
@@ -177,13 +207,13 @@ class Grouper(object):
         (df, segs)
             - df : DataFrame
                 Sorted by *col- * index
-            - segs : list
-                Sequence of group begin offsets
+            - segs : Series
+                Group begin offsets
         """
         df = df.loc[:, [col, rowid_column]]
         df = df.set_index(col).sort_index()
         segs = df.index.find_segments()
-        return df, segs
+        return df, Series(segs)
 
     def _group_inner_levels(self, columns, rowidcol, segs):
         """Group the second and onwards level.
@@ -197,7 +227,7 @@ class Grouper(object):
             It's internally used to determine the shuffling order.
         df : DataFrame
             The dataframe being grouped.
-        segs : sequence[int]
+        segs : Series
             First level group begin offsets.
 
         Returns
@@ -209,10 +239,10 @@ class Grouper(object):
             - reordering_indices : device array
                 The indices to gather on to shuffle the dataframe
                 into the grouped seqence.
-            - segments : np.array
+            - segments : Series
                 Group begin offsets.
         """
-        dsegs = cuda.to_device(np.asarray(segs, dtype=np.uint32))
+        dsegs = segs.astype(dtype=np.uint32).to_gpu_array()
         sorted_keys = []
         for col in columns:
             # Shuffle the key column according to the previous groups
@@ -228,7 +258,7 @@ class Grouper(object):
             rowidcol = rowidcol.take(shuf.to_gpu_array(), ignore_index=True)
 
         reordering_indices = rowidcol.to_gpu_array()
-        return sorted_keys, reordering_indices, dsegs.copy_to_host()
+        return sorted_keys, reordering_indices, Series(dsegs)
 
     def _group_shuffle(self, src_df, reordering_indices, out_df):
         """Shuffle columns in *src_df* with *reordering_indices*

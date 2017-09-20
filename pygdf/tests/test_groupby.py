@@ -79,3 +79,42 @@ def test_groupby_cats():
         expect = vals[cats == c].mean()
         np.testing.assert_almost_equal(v, expect)
 
+
+def test_groupby_iterate_groups():
+    np.random.seed(0)
+    df = DataFrame()
+    nelem = 20
+    df['key1'] = np.random.randint(0, 3, nelem)
+    df['key2'] = np.random.randint(0, 2, nelem)
+    df['val1'] = np.random.random(nelem)
+    df['val2'] = np.random.random(nelem)
+
+    def assert_values_equal(arr):
+        np.testing.assert_array_equal(arr[0], arr)
+
+    for grp in df.groupby(['key1', 'key2']):
+        pddf = grp.to_pandas()
+        for k in 'key1,key2'.split(','):
+            assert_values_equal(pddf[k].values)
+
+
+def test_groupby_as_df():
+    np.random.seed(0)
+    df = DataFrame()
+    nelem = 20
+    df['key1'] = np.random.randint(0, 3, nelem)
+    df['key2'] = np.random.randint(0, 2, nelem)
+    df['val1'] = np.random.random(nelem)
+    df['val2'] = np.random.random(nelem)
+
+    def assert_values_equal(arr):
+        np.testing.assert_array_equal(arr[0], arr)
+
+    df, segs = df.groupby(['key1', 'key2']).as_df()
+    for s, e in zip(segs, list(segs[1:]) + [None]):
+        grp = df[s:e]
+        pddf = grp.to_pandas()
+        for k in 'key1,key2'.split(','):
+            assert_values_equal(pddf[k].values)
+
+

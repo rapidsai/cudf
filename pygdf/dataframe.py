@@ -575,17 +575,20 @@ class DataFrame(object):
             return df.sort_index()
         return df
 
-    def groupby(self, by, sort=False):
+    def groupby(self, by, sort=False, as_index=False):
         """Groupby
 
         Parameters
         ----------
         by : list-of-str or str
             Column name(s) to form that groups by.
-        sort: bool
+        sort : bool
             Force sorting group keys.
             Depends on the underlying algorithm.
             Current algorithm always sort.
+        as_index : bool; defaults to False
+            Must be False.  Provided to be API compatible with pandas.
+            The keys are always left as regular columns in the result.
 
         Returns
         -------
@@ -593,6 +596,10 @@ class DataFrame(object):
 
         Notes
         -----
+        Unlike pandas, this groupby operation behaves like a SQL groupby.
+        No empty rows are returned.  (For categorical keys, pandas returns
+        rows for all categories even if they are no corresponding values.)
+
         Only a minimal number of operations is implemented so far.
 
         - Only *by* argument is supported.
@@ -601,7 +608,9 @@ class DataFrame(object):
           as regular columns.
         """
         from .grouper import Grouper
-
+        if as_index:
+            msg = "as_index==True not supported due to the lack of multi-index"
+            raise NotImplementedError(msg)
         return Grouper(self, by=by)
 
     def query(self, expr):
