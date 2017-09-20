@@ -44,6 +44,8 @@ def group_mean(data, segments, output):
         output[i] = carry / n
 
 
+_grouped_dataframe = namedtuple('_grouped_dataframe', ['df', 'segs'])
+
 class Grouper(object):
     _NAMED_FUNCTIONS = {'mean': Series.mean,
                         'std': Series.std,
@@ -63,6 +65,8 @@ class Grouper(object):
 
     def _group_iterator(self):
         """Group iterator
+
+        Returns each group as a DataFrame.
         """
         grouped_df, segs = self.grouped_dataframe()
         for begin, end in zip(segs, segs[1:] + [None]):
@@ -75,10 +79,12 @@ class Grouper(object):
         Returns
         -------
         (df, segs)
+            - df : DataFrame
+            - segs : list[int]
+                List of int offsets for the beginning of each group.
         """
         grouped_df, segs = self._group_dataframe(self._df, self._by)
-        tup = namedtuple('grouped_dataframe', ['df', 'segs'])
-        return tup(df=grouped_df, segs=segs)
+        return _grouped_dataframe(df=grouped_df, segs=segs)
 
     def _form_groups(self, functors):
         """
