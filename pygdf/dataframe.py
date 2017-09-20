@@ -608,7 +608,9 @@ class DataFrame(object):
           as regular columns.
         """
         from .grouper import Grouper
-        assert not as_index
+        if as_index:
+            msg = "as_index==True not supported due to the lack of multi-index"
+            raise NotImplementedError(msg)
         return Grouper(self, by=by)
 
     def query(self, expr):
