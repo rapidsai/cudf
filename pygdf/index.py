@@ -37,9 +37,13 @@ class Index(object):
 
     def find_segments(self):
         """Return the beginning index for segments
+
+        Returns
+        -------
+        result : NumericalColumn
         """
         segments = cudautils.find_segments(self.gpu_values)
-        return list(segments.copy_to_host())
+        return NumericalColumn(data=Buffer(segments), dtype=segments.dtype)
 
     @classmethod
     def _concat(cls, objs):

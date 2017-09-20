@@ -620,8 +620,6 @@ def find_segments(arr, segs=None):
         Total segment count will be equal to the length of this.
 
     """
-    from . import _gdf
-
     # Compute diffs of consecutive elements
     markers = cuda.device_array(arr.size, dtype=np.int32)
     gpu_mark_segment_begins.forall(markers.size)(arr, markers)

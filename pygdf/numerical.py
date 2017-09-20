@@ -127,7 +127,7 @@ class NumericalColumn(columnops.TypedColumnBase):
         if segs.size > k:
             raise ValueError('too many unique value')
         # gather result
-        out = cudautils.gather(data=sortedvals, index=segs)
+        out = cudautils.gather(data=sortedvals, index=segs.to_gpu_array())
         return self.replace(data=Buffer(out), mask=None)
 
     def all(self):
