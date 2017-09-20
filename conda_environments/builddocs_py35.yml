@@ -23,10 +23,9 @@ dependencies:
 - wheel=0.29.0=py35_0
 - xz=5.2.2=1
 - zlib=1.2.8=3
-- libgdf=0.1.0a1.dev=2
-- libgdf_cffi=0.1.0a1.dev=py35_2
-- llvmlite=0.18.0=py35_0
-- numba=0.33.0=np112py35_0
+- libgdf=0.1.0a2.dev
+- libgdf_cffi=0.1.0a2.dev
+- numba=0.35.0=np112py35_0
 - pip:
   - alabaster==0.7.10
   - babel==2.4.0
@@ -34,7 +33,7 @@ dependencies:
   - flatbuffers==2015.12.22.1
   - imagesize==0.7.1
   - jinja2==2.9.6
-  - libgdf-cffi==0.1.0a1
+  - libgdf-cffi==0.1.0a2.dev
   - markupsafe==1.0
   - numpydoc==0.6.0
   - pygments==2.2.0

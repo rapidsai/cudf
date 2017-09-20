@@ -28,8 +28,8 @@ dependencies:
 - wheel=0.29.0=py35_0
 - xz=5.2.2=1
 - zlib=1.2.8=3
-- libgdf=0.1.0a1.dev=hc00b221_72
-- libgdf_cffi=0.1.0a1.dev=py35hacc5fee_72
+- libgdf=0.1.0a2.dev=hb999fd6_2
+- libgdf_cffi=0.1.0a2.dev=py36heb3cf4d_2
 - cudatoolkit=8.0=0
 - llvmlite=0.19.0=py35_0
-- numba=0.34.0=np112py35_81
+- numba>=0.35.0
