@@ -2,11 +2,9 @@
 #include <gdf/ipc/Schema_generated.h>
 #include <gdf/ipc/Message_generated.h>
 
-#include "arrow/buffer.h"
-#include "arrow/io/memory.h"
-#include "arrow/ipc/reader.h"
-#include "arrow/ipc/json.h"
-#include "arrow/type.h"
+#include <arrow/api.h>
+#include <arrow/io/api.h>
+#include <arrow/ipc/api.h>
 
 #include <iostream>
 #include <sstream>
@@ -459,4 +457,3 @@ void gdf_ipc_parser_open_recordbatches(gdf_ipc_parser_type *handle,
 {
     return cffi_unwrap(handle)->open_recordbatches(recordbatches, length);
 }
-
