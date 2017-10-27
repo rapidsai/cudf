@@ -99,7 +99,8 @@ def test_ipc():
     field_names = [f['name'] for f in schema_fields]
     assert field_names == ['idx', 'name', 'weight']
 
-    assert schema_fields[1]['dictionary']['id'] == 1
+    # check the dictionary id in schema
+    assert schema_fields[1]['dictionary']['id'] == dicts[0]['id']
 
     # Get "idx" column
     idx_buf_off = json_rb[0]['data_buffer']['offset']
