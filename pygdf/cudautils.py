@@ -377,6 +377,36 @@ def compute_scale(arr, vmin, vmax):
     return out
 
 
+@cuda.jit
+def gpu_label(arr, cat, val, out):
+    i = cuda.grid(1)
+    if i < out.size:
+        res = (val) if (arr[i] == cat) else arr[i]
+        out[i] = res
+
+
+def apply_label(arr, cat, val, dtype):
+    """
+
+    Parameters
+    ----------
+    arr : device array
+        data
+    cat : Unique category value
+    val : scalar
+        value to compare against
+    dtype : np.dtype
+        output array dtype
+
+    Returns
+    -------
+    result : device array
+    """
+    out = cuda.device_array(shape=arr.size, dtype=dtype)
+    configured = gpu_label.forall(out.size)
+    configured(arr, cat, val, out)
+    return out
+
 #
 # Misc kernels
 #
@@ -526,6 +556,7 @@ class UniqueBySorting(object):
     """
     Compute unique element in an array by sorting
     """
+
     def __init__(self, maxcount, k, dtype):
         dtype = np.dtype(dtype)
         self._maxcount = maxcount

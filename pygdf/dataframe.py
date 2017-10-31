@@ -414,6 +414,34 @@ class DataFrame(object):
             outdf.add_column(name, col)
         return outdf
 
+    def label_encoding(self, column, prefix, cats, prefix_sep='_', dtype='float64'):
+        """Encode labels in a column with label encoding.
+
+        Parameters
+        ----------
+        column : str
+            the source column with binary encoding for the data.
+        prefix : str
+            the new column name prefix.
+        cats : sequence of ints
+            the sequence of categories as integers.
+        prefix_sep : str
+            the separator between the prefix and the category.
+        dtype :
+            the dtype for the outputs; defaults to float64.
+
+        Returns
+        -------
+        a new dataframe with new columns append for each category.
+        """
+
+        newname = prefix_sep.join([prefix, 'labels'])
+        newcol = self[column].label_encoding(cats=cats, dtype=dtype)
+        outdf = self.copy()
+        outdf.add_column(newname, newcol)
+
+        return outdf
+
     def _sort_by(self, sorted_indices):
         df = DataFrame()
         # Perform out = data[index] for all columns

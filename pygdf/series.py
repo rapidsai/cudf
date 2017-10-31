@@ -512,13 +512,45 @@ class Series(object):
         dtype = np.dtype(dtype)
         out = []
         for cat in cats:
-            mask = None #self.nullmask.to_gpu_array()
+            mask = None  # self.nullmask.to_gpu_array()
             buf = cudautils.apply_equal_constant(
-                        arr=self.data.to_gpu_array(),
-                        mask=mask,
-                        val=cat, dtype=dtype)
+                arr=self.data.to_gpu_array(),
+                mask=mask,
+                val=cat, dtype=dtype)
             out.append(Series(buf))
         return out
+
+    def label_encoding(self, cats, dtype='float64'):
+        """Perform label encoding
+
+        Parameters
+        ----------
+        values : sequence of input values
+        dtype: numpy.dtype
+               specifies the output dtype (Default value: float64)
+
+        Returns
+        -------
+        A sequence of encoded labels with value between 0 and n-1 classes(cats)
+        """
+
+        if self.null_count != 0:
+            mesg = 'series contains NULL values'
+            raise ValueError(mesg)
+
+        if self.dtype.kind not in 'iuf':
+            raise TypeError('expecting integer or float dtype')
+
+        dtype = np.dtype(dtype)
+        lab = list(range(len(cats)))
+        gpuarr = self.to_gpu_array()
+
+        for i, cat in enumerate(cats):
+            if i > 0:
+                gpuarr = labeled
+            labeled = cudautils.apply_label(gpuarr, cat, lab[i], dtype)
+
+        return Series(labeled)
 
     # UDF related
 
