@@ -542,13 +542,9 @@ class Series(object):
             raise TypeError('expecting integer or float dtype')
 
         dtype = np.dtype(dtype)
-        lab = list(range(len(cats)))
         gpuarr = self.to_gpu_array()
 
-        for i, cat in enumerate(cats):
-            if i > 0:
-                gpuarr = labeled
-            labeled = cudautils.apply_label(gpuarr, cat, lab[i], dtype)
+        labeled = cudautils.apply_label(gpuarr, cats, dtype)
 
         return Series(labeled)
 
