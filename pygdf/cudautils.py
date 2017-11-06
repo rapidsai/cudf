@@ -379,12 +379,15 @@ def compute_scale(arr, vmin, vmax):
 
 @cuda.jit
 def gpu_label(arr, labarr, out):
-    i, j = cuda.grid(1), cuda.grid(1)
-    for i in range(out.size):
+    i = cuda.grid(1)
+    if i < out.size:
         val = arr[i]
-        if j < (labarr.size) / 2 and val == labarr[j][0]:
-            res = labarr[j][1]
-            out[i] = res
+        out[i] = -1
+        for j in range(labarr.shape[0]):
+            if val == labarr[j][0]:
+                res = labarr[j][1]
+                out[i] = res
+                break
 
 
 def apply_label(arr, cats, dtype):
