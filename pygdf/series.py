@@ -434,6 +434,12 @@ class Series(object):
         """
         return self._sort(ascending=ascending)[1]
 
+    def sort_index(self, ascending=True):
+        """Sort by the index.
+        """
+        inds = self.index.argsort(ascending=ascending)
+        return self.take(inds.to_gpu_array())
+
     def sort_values(self, ascending=True):
         """
         Sort by values.

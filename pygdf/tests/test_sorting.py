@@ -59,6 +59,19 @@ def test_series_argsort(nelem, dtype, asc):
         expected = np.argsort(-sr.to_array(), kind='mergesort')
     np.testing.assert_array_equal(expected, res.to_array())
 
+@pytest.mark.parametrize('nelem,asc',
+                         list(product(sort_nelem_args,
+                                      [True, False])))
+def test_series_sort_index(nelem, asc):
+    np.random.seed(0)
+    sr = Series((100 * np.random.random(nelem)))
+    orig = sr.to_array()
+    got = sr.sort_values().sort_index(ascending=asc).to_array()
+    if not asc:
+        # Reverse the array for descending sort
+        got = got[::-1]
+    np.testing.assert_array_equal(orig, got)
+
 
 def test_series_nlargest():
     """Indirectly tests Series.sort_values()
