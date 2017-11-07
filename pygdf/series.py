@@ -1,5 +1,6 @@
 from __future__ import print_function, division
 
+import warnings
 from collections import OrderedDict
 from numbers import Number
 
@@ -638,11 +639,15 @@ class Series(object):
         return mu, var
 
     def unique_k(self, k):
+        warnings.warn("Use .unique() instead", DeprecationWarning)
+        return self.unique()
+
+    def unique(self):
         """Returns a list of at most k unique values.
         """
         if self.null_count == len(self):
             return np.empty(0, dtype=self.dtype)
-        res = self._column.unique_k(k=k)
+        res = self._column.unique()
         return Series(res)
 
     def scale(self):

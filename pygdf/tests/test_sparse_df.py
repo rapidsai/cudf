@@ -65,7 +65,7 @@ def test_reading_arrow_sparse_data():
     uniques = {}
     for k in feature_names:
         try:
-            uniquevals = df[k].unique_k(k=1000)
+            uniquevals = df[k].unique()
             uniques[k] = uniquevals
         except ValueError:
             num_cols.add(k)

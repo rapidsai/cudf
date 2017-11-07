@@ -12,7 +12,7 @@ def test_label_encode():
 
     # initialize data frame
     df['cats'] = np.random.randint(7, size=10, dtype=np.int32)
-    vals = df['cats'].unique_k(10)
+    vals = df['cats'].unique()
     lab = dict(zip(vals, list(range(len(vals)))))
 
     # label encode series
@@ -38,7 +38,7 @@ def test_label_encode_drop_one():
 
     # initialize data frame
     df['cats'] = np.random.randint(7, size=10, dtype=np.int32)
-    vals = list(df['cats'].unique_k(10))
+    vals = list(df['cats'].unique())
     # drop 1 randomly
     del vals[random.randrange(len(vals))]
 
