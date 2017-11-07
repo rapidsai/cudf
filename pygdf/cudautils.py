@@ -377,6 +377,42 @@ def compute_scale(arr, vmin, vmax):
     return out
 
 
+@cuda.jit
+def gpu_label(arr, labarr, out):
+    i = cuda.grid(1)
+    if i < out.size:
+        val = arr[i]
+        out[i] = -1
+        for j in range(labarr.shape[0]):
+            if val == labarr[j][0]:
+                res = labarr[j][1]
+                out[i] = res
+                break
+
+
+def apply_label(arr, cats, dtype):
+    """
+    Parameters
+    ----------
+    arr : device array
+        data
+    cat : Unique category value
+    # lab : scalar list
+        values to compare against
+    dtype : np.dtype
+        output array dtype
+
+    Returns
+    -------
+    result : device array
+    """
+    lab = np.column_stack((cats, list(range(len(cats)))))
+    labarr = cuda.to_device(lab)
+    out = cuda.device_array(shape=arr.size, dtype=dtype)
+    configured = gpu_label.forall(out.size)
+    configured(arr, labarr, out)
+    return out
+
 #
 # Misc kernels
 #
@@ -526,6 +562,7 @@ class UniqueBySorting(object):
     """
     Compute unique element in an array by sorting
     """
+
     def __init__(self, maxcount, k, dtype):
         dtype = np.dtype(dtype)
         self._maxcount = maxcount
