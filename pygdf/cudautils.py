@@ -378,14 +378,14 @@ def compute_scale(arr, vmin, vmax):
 
 
 @cuda.jit
-def gpu_label(arr, labarr, out):
+def gpu_label(arr, cats, enc, out):
     i = cuda.grid(1)
     if i < out.size:
         val = arr[i]
         out[i] = -1
-        for j in range(labarr.shape[0]):
-            if val == labarr[j][0]:
-                res = labarr[j][1]
+        for j in range(cats.shape[0]):
+            if val == cats[j]:
+                res = enc[j]
                 out[i] = res
                 break
 
@@ -406,11 +406,11 @@ def apply_label(arr, cats, dtype):
     -------
     result : device array
     """
-    lab = np.column_stack((cats, list(range(len(cats)))))
-    labarr = cuda.to_device(lab)
+    encs = np.asarray(list(range(cats.size)))
+    d_encs = to_device(encs)
     out = cuda.device_array(shape=arr.size, dtype=dtype)
     configured = gpu_label.forall(out.size)
-    configured(arr, labarr, out)
+    configured(arr, cats, d_encs, out)
     return out
 
 #

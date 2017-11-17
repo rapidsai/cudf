@@ -550,8 +550,8 @@ class Series(object):
 
         dtype = np.dtype(dtype)
         gpuarr = self.to_gpu_array()
-
-        labeled = cudautils.apply_label(gpuarr, cats, dtype)
+        sr_cats = Series(cats)
+        labeled = cudautils.apply_label(gpuarr, sr_cats.to_gpu_array(), dtype)
 
         return Series(labeled)
 
