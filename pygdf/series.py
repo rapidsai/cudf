@@ -555,6 +555,13 @@ class Series(object):
 
         return Series(labeled)
 
+    def factorize(self):
+        cats = self.unique()
+        min_dtype = np.min_scalar_type(len(cats))
+        label_dtype = getattr(np, "int{}".format(min_dtype.itemsize * 8))
+        labels = self.label_encoding(cats=cats, dtype=label_dtype)
+        return labels, cats
+
     # UDF related
 
     def applymap(self, udf, out_dtype=None):
