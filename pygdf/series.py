@@ -527,15 +527,18 @@ class Series(object):
             out.append(Series(buf))
         return out
 
-    def label_encoding(self, cats, dtype='float64'):
+    def label_encoding(self, cats, dtype=None, missing_value=-1):
         """Perform label encoding
 
         Parameters
         ----------
         values : sequence of input values
-        dtype: numpy.dtype
-               specifies the output dtype (Default value: float64)
-
+        dtype: numpy.dtype; optional
+               Specifies the output dtype.  If `None` is given, the
+               smallest possible integer dtype (starting with np.int32)
+               is used.
+        missing_value : number
+               Value to be used to indicate missing value. Default to `-1`.
         Returns
         -------
         A sequence of encoded labels with value between 0 and n-1 classes(cats)
@@ -548,10 +551,18 @@ class Series(object):
         if self.dtype.kind not in 'iuf':
             raise TypeError('expecting integer or float dtype')
 
-        dtype = np.dtype(dtype)
         gpuarr = self.to_gpu_array()
         sr_cats = Series(cats)
-        labeled = cudautils.apply_label(gpuarr, sr_cats.to_gpu_array(), dtype)
+        if dtype is None:
+            if len(sr_cats) <= np.iinfo(np.int32).max:
+                dtype = np.int32
+            elif len(sr_cats) <= np.iinfo(np.int64).max:
+                dtype = np.int64
+            else:
+                raise ValueError('too many categories')
+        dtype = np.dtype(dtype)
+        labeled = cudautils.apply_label(gpuarr, sr_cats.to_gpu_array(), dtype,
+                                        missing_value)
 
         return Series(labeled)
 
