@@ -527,7 +527,7 @@ class Series(object):
             out.append(Series(buf))
         return out
 
-    def label_encoding(self, cats, dtype=None, missing_value=-1):
+    def label_encoding(self, cats, dtype=None, na_sentinel=-1):
         """Perform label encoding
 
         Parameters
@@ -537,8 +537,8 @@ class Series(object):
                Specifies the output dtype.  If `None` is given, the
                smallest possible integer dtype (starting with np.int32)
                is used.
-        missing_value : number
-               Value to be used to indicate missing value. Default to `-1`.
+        na_sentinel : number
+            Value to indicate missing category.
         Returns
         -------
         A sequence of encoded labels with value between 0 and n-1 classes(cats)
@@ -554,23 +554,34 @@ class Series(object):
         gpuarr = self.to_gpu_array()
         sr_cats = Series(cats)
         if dtype is None:
-            if len(sr_cats) <= np.iinfo(np.int32).max:
-                dtype = np.int32
-            elif len(sr_cats) <= np.iinfo(np.int64).max:
-                dtype = np.int64
-            else:
-                raise ValueError('too many categories')
+            # Get smallest type to represent the category size
+            min_dtype = np.min_scalar_type(len(cats))
+            # Normalize the size to at least 32-bit
+            normalized_sizeof = max(4, min_dtype.itemsize)
+            dtype = getattr(np, "int{}".format(normalized_sizeof * 8))
         dtype = np.dtype(dtype)
         labeled = cudautils.apply_label(gpuarr, sr_cats.to_gpu_array(), dtype,
-                                        missing_value)
+                                        na_sentinel)
 
         return Series(labeled)
 
-    def factorize(self):
+    def factorize(self, na_sentinel=-1):
+        """Encode the input values as integer labels
+
+        Parameters
+        ----------
+        na_sentinel : number
+            Value to indicate missing category.
+
+        Returns
+        --------
+        (labels, cats) : (Series, Series)
+            - *labels* contains the encoded values
+            - *cats* contains the categories in order that the N-th
+              item corresponds to the (N-1) code.
+        """
         cats = self.unique()
-        min_dtype = np.min_scalar_type(len(cats))
-        label_dtype = getattr(np, "int{}".format(min_dtype.itemsize * 8))
-        labels = self.label_encoding(cats=cats, dtype=label_dtype)
+        labels = self.label_encoding(cats=cats)
         return labels, cats
 
     # UDF related

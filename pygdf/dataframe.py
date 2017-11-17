@@ -415,7 +415,7 @@ class DataFrame(object):
         return outdf
 
     def label_encoding(self, column, prefix, cats, prefix_sep='_', dtype=None,
-                       missing_value=-1):
+                       na_sentinel=-1):
         """Encode labels in a column with label encoding.
 
         Parameters
@@ -430,16 +430,16 @@ class DataFrame(object):
             the separator between the prefix and the category.
         dtype :
             the dtype for the outputs; see Series.label_encoding
-        missing_value : number
-            Value to indicate missing.
+        na_sentinel : number
+            Value to indicate missing category.
         Returns
         -------
-        a new dataframe with new columns append for each category.
+        a new dataframe with a new column append for the coded values.
         """
 
         newname = prefix_sep.join([prefix, 'labels'])
         newcol = self[column].label_encoding(cats=cats, dtype=dtype,
-                                             missing_value=missing_value)
+                                             na_sentinel=na_sentinel)
         outdf = self.copy()
         outdf.add_column(newname, newcol)
 

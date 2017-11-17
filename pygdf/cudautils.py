@@ -378,11 +378,11 @@ def compute_scale(arr, vmin, vmax):
 
 
 @cuda.jit
-def gpu_label(arr, cats, enc, missing_value, out):
+def gpu_label(arr, cats, enc, na_sentinel, out):
     i = cuda.grid(1)
     if i < out.size:
         val = arr[i]
-        out[i] = missing_value
+        out[i] = na_sentinel
         for j in range(cats.shape[0]):
             if val == cats[j]:
                 res = enc[j]
@@ -390,7 +390,7 @@ def gpu_label(arr, cats, enc, missing_value, out):
                 break
 
 
-def apply_label(arr, cats, dtype, missing_value):
+def apply_label(arr, cats, dtype, na_sentinel):
     """
     Parameters
     ----------
@@ -400,7 +400,7 @@ def apply_label(arr, cats, dtype, missing_value):
         Unique category value
     dtype : np.dtype
         output array dtype
-    missing_value : int
+    na_sentinel : int
         Value to indicate missing value
     Returns
     -------
@@ -410,7 +410,7 @@ def apply_label(arr, cats, dtype, missing_value):
     d_encs = to_device(encs)
     out = cuda.device_array(shape=arr.size, dtype=dtype)
     configured = gpu_label.forall(out.size)
-    configured(arr, cats, d_encs, missing_value, out)
+    configured(arr, cats, d_encs, na_sentinel, out)
     return out
 
 #

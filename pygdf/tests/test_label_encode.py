@@ -39,7 +39,7 @@ def test_label_encode(nelem, dtype):
     lab = dict(zip(vals, range(len(vals))))
 
     # label encode series
-    ncol = df['cats'].label_encoding(cats=vals, dtype=dtype)
+    ncol = df['cats'].label_encoding(cats=vals)
     arr = ncol.to_array()
 
     # verify labels of new column
@@ -47,8 +47,7 @@ def test_label_encode(nelem, dtype):
         np.testing.assert_equal(arr[i], lab.get(df.cats[i], None))
 
     # label encode data frame
-    df2 = df.label_encoding(column='cats', prefix='cats', cats=vals,
-                            dtype=dtype)
+    df2 = df.label_encoding(column='cats', prefix='cats', cats=vals)
 
     assert df2.columns[0] == 'cats'
     assert df2.columns[1] == 'cats_labels'
@@ -97,7 +96,7 @@ def test_label_encode_float_output():
     encoder = {c: i for i, c in enumerate(cats)}
     df2 = df.label_encoding(column='cats', prefix='cats',
                             cats=cats, dtype=np.float32,
-                            missing_value=np.nan)
+                            na_sentinel=np.nan)
 
     got = df2['cats_labels'].to_array()
 
