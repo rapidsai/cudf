@@ -50,3 +50,18 @@ def test_from_pandas_ex1():
     assert np.all(matches == [True, True, False, True])
     assert np.isnan(df['b'].to_array()[2])
     assert np.isnan(pdf['b'][2])
+
+
+def test_from_pandas_with_index():
+    pdf = pd.DataFrame({'a': [0, 1, 2, 3],
+                        'b': [0.1, 0.2, None, 0.3]})
+    pdf = pdf.set_index(np.asarray([4, 3, 2, 1]))
+    df = DataFrame.from_pandas(pdf)
+
+    # Check columns
+    np.testing.assert_array_equal(df.a.to_array(), pdf.a)
+    np.testing.assert_array_equal(df.b.to_array(), pdf.b)
+    # Check index
+    np.testing.assert_array_equal(df.index.values, pdf.index.values)
+    # Check again using pandas testing tool on frames
+    pd.util.testing.assert_frame_equal(df.to_pandas(), pdf)

@@ -692,10 +692,11 @@ class DataFrame(object):
             raise TypeError('not a pandas.DataFrame')
 
         df = cls()
-
+        # Set columns
         for colk in dataframe.columns:
             df[colk] = dataframe[colk].values
-        return df
+        # Set index
+        return df.set_index(dataframe.index.values)
 
     def to_records(self, index=True):
         """Covert to a numpy recarray
