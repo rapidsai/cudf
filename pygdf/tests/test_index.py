@@ -1,7 +1,10 @@
 """
 Test related to Index
 """
+import pytest
+
 from pygdf.dataframe import DataFrame
+from pygdf.index import EmptyIndex
 
 
 def test_df_set_index_from_series():
@@ -32,3 +35,11 @@ def test_df_set_index_from_name():
     print(sliced_strided)
     assert len(sliced_strided) == 3
     assert list(sliced_strided.index.values) == [2, 4, 6]
+
+
+def test_df_slice_empty_index():
+    df = DataFrame()
+    assert isinstance(df.index, EmptyIndex)
+    assert isinstance(df.index[:1], EmptyIndex)
+    with pytest.raises(IndexError):
+        df.index[1]
