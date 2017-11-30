@@ -288,8 +288,11 @@ class DataFrame(object):
         -------
         The prepared Series object.
         """
-        series = Series(col)
         empty_index = isinstance(self._index, EmptyIndex)
+        if isinstance(col, Series) or empty_index:
+            series = Series(col)
+        else:
+            series = Series(col, index=self.index)
         if empty_index or self._index == series.index:
             if empty_index:
                 self._index = series.index

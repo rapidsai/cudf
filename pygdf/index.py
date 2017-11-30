@@ -52,6 +52,15 @@ class Index(object):
         # `GenericIndex`
         return GenericIndex(data)
 
+    def __eq__(self, other):
+        if not isinstance(other, Index):
+            return NotImplemented
+
+        lhs = self.as_column()
+        rhs = other.as_column()
+        res = lhs.unordered_compare('eq', rhs).all()
+        return res
+
 
 class EmptyIndex(Index):
     """
@@ -120,7 +129,7 @@ class RangeIndex(Index):
         if isinstance(other, RangeIndex):
             return (self._start == other._start and self._stop == other._stop)
         else:
-            return NotImplemented
+            return super(RangeIndex, self).__eq__(other)
 
     @property
     def dtype(self):
@@ -210,7 +219,7 @@ class GenericIndex(Index):
         if isinstance(other, GenericIndex):
             return self._values.unordered_compare('eq', other._values).all()
         else:
-            return NotImplemented
+            return super(GenericIndex, self).__eq__(other)
 
     def as_column(self):
         """Convert the index as a Series.
