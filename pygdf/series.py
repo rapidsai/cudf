@@ -672,7 +672,7 @@ class Series(object):
         return self.unique()
 
     def unique(self):
-        """Returns a list of at most k unique values.
+        """Returns unique values of this Series.
         """
         if self.null_count == len(self):
             return np.empty(0, dtype=self.dtype)
