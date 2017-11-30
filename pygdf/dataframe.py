@@ -269,6 +269,12 @@ class DataFrame(object):
     def reset_index(self):
         return self.set_index(RangeIndex(len(self)))
 
+    def take(self, positions):
+        out = DataFrame()
+        for col in self.columns:
+            out[col] = self[col].take(positions, ignore_index=True)
+        return out
+
     def copy(self):
         "Shallow copy this dataframe"
         df = DataFrame()
