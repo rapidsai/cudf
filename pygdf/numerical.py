@@ -114,7 +114,7 @@ class NumericalColumn(columnops.TypedColumnBase):
     def to_pandas(self, index=None):
         return pd.Series(self.to_array(fillna='pandas'), index=index)
 
-    def unique_k(self, k):
+    def unique(self):
         # make dense column
         densecol = self.replace(data=self.to_dense_buffer(), mask=None)
         # sort the column
@@ -122,10 +122,6 @@ class NumericalColumn(columnops.TypedColumnBase):
         # find segments
         sortedvals = sortcol.to_gpu_array()
         segs = cudautils.find_segments(sortedvals)
-        # TODO: we can now support unlimited number of unique values
-        #       thus, we don't need to set the limit
-        if segs.size > k:
-            raise ValueError('too many unique value')
         # gather result
         out = cudautils.gather(data=sortedvals, index=segs)
         return self.replace(data=Buffer(out), mask=None)

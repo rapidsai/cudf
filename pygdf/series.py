@@ -1,5 +1,6 @@
 from __future__ import print_function, division
 
+import warnings
 from collections import OrderedDict
 from numbers import Number
 
@@ -526,15 +527,18 @@ class Series(object):
             out.append(Series(buf))
         return out
 
-    def label_encoding(self, cats, dtype='float64'):
+    def label_encoding(self, cats, dtype=None, na_sentinel=-1):
         """Perform label encoding
 
         Parameters
         ----------
         values : sequence of input values
-        dtype: numpy.dtype
-               specifies the output dtype (Default value: float64)
-
+        dtype: numpy.dtype; optional
+               Specifies the output dtype.  If `None` is given, the
+               smallest possible integer dtype (starting with np.int32)
+               is used.
+        na_sentinel : number
+            Value to indicate missing category.
         Returns
         -------
         A sequence of encoded labels with value between 0 and n-1 classes(cats)
@@ -547,12 +551,38 @@ class Series(object):
         if self.dtype.kind not in 'iuf':
             raise TypeError('expecting integer or float dtype')
 
-        dtype = np.dtype(dtype)
         gpuarr = self.to_gpu_array()
-
-        labeled = cudautils.apply_label(gpuarr, cats, dtype)
+        sr_cats = Series(cats)
+        if dtype is None:
+            # Get smallest type to represent the category size
+            min_dtype = np.min_scalar_type(len(cats))
+            # Normalize the size to at least 32-bit
+            normalized_sizeof = max(4, min_dtype.itemsize)
+            dtype = getattr(np, "int{}".format(normalized_sizeof * 8))
+        dtype = np.dtype(dtype)
+        labeled = cudautils.apply_label(gpuarr, sr_cats.to_gpu_array(), dtype,
+                                        na_sentinel)
 
         return Series(labeled)
+
+    def factorize(self, na_sentinel=-1):
+        """Encode the input values as integer labels
+
+        Parameters
+        ----------
+        na_sentinel : number
+            Value to indicate missing category.
+
+        Returns
+        --------
+        (labels, cats) : (Series, Series)
+            - *labels* contains the encoded values
+            - *cats* contains the categories in order that the N-th
+              item corresponds to the (N-1) code.
+        """
+        cats = self.unique()
+        labels = self.label_encoding(cats=cats)
+        return labels, cats
 
     # UDF related
 
@@ -638,11 +668,15 @@ class Series(object):
         return mu, var
 
     def unique_k(self, k):
-        """Returns a list of at most k unique values.
+        warnings.warn("Use .unique() instead", DeprecationWarning)
+        return self.unique()
+
+    def unique(self):
+        """Returns unique values of this Series.
         """
         if self.null_count == len(self):
             return np.empty(0, dtype=self.dtype)
-        res = self._column.unique_k(k=k)
+        res = self._column.unique()
         return Series(res)
 
     def scale(self):
