@@ -333,7 +333,7 @@ class DataFrame(object):
         return out
 
     def as_gpu_matrix(self, columns=None):
-        """Covert to a matrix in device memory.
+        """Convert to a matrix in device memory.
 
         Parameters
         ----------
@@ -518,7 +518,7 @@ class DataFrame(object):
         how : str
             Only accepts "left", "right", "inner", "outer"
         lsuffix, rsuffix : str
-            The suffices to add to the left (*lsuffix*) and right (*rsuffix)
+            The suffices to add to the left (*lsuffix*) and right (*rsuffix*)
             column names when avoiding conflicts.
         sort : bool
             Set to True to ensure sorted ordering.
