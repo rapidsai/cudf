@@ -354,7 +354,7 @@ class Column(object):
         # FIXME: Inefficient find in CPU code
         arr = self.to_array()
         indices = np.argwhere(arr == value)
-        if not indices:
+        if not len(indices):
             raise ValueError('value not found')
         return indices[0, 0]
 
@@ -364,7 +364,7 @@ class Column(object):
         """
         arr = self.to_array()
         indices = np.argwhere(arr == value)
-        if not indices:
+        if not len(indices):
             raise ValueError('value not found')
         return indices[-1, 0]
 
