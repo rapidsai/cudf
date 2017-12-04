@@ -55,6 +55,8 @@ class Index(object):
     def __eq__(self, other):
         if not isinstance(other, Index):
             return NotImplemented
+        elif len(self) != len(other):
+            return False
 
         lhs = self.as_column()
         rhs = other.as_column()
@@ -215,12 +217,6 @@ class GenericIndex(Index):
         else:
             return res
 
-    def __eq__(self, other):
-        if isinstance(other, GenericIndex):
-            return self._values.unordered_compare('eq', other._values).all()
-        else:
-            return super(GenericIndex, self).__eq__(other)
-
     def as_column(self):
         """Convert the index as a Series.
         """
@@ -231,6 +227,15 @@ class GenericIndex(Index):
         return self._values.dtype
 
     def find_label_range(self, first, last):
+        """Find range that starts with *first* and ends with *last*,
+        inclusively.
+
+        Returns
+        -------
+        begin, end : 2-tuple of int
+            The starting index and the ending index.
+            The *last* value occurs at ``end - 1`` position.
+        """
         col = self._values
         begin, end = None, None
         if first is not None:
