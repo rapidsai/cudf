@@ -524,7 +524,7 @@ class Series(object):
                 arr=self.data.to_gpu_array(),
                 mask=mask,
                 val=cat, dtype=dtype)
-            out.append(Series(buf))
+            out.append(Series(buf, index=self.index))
         return out
 
     def label_encoding(self, cats, dtype=None, na_sentinel=-1):
