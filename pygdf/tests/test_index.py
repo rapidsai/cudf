@@ -67,5 +67,8 @@ def test_index_comparision():
     rg = RangeIndex(start, stop)
     gi = GenericIndex(np.arange(start, stop))
     assert rg == gi
+    assert gi == rg
     assert rg[:-1] != gi
-
+    assert rg[:-1] == gi[:-1]
+    assert EmptyIndex() != rg
+    assert EmptyIndex() != gi
