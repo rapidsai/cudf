@@ -269,10 +269,10 @@ class DataFrame(object):
     def reset_index(self):
         return self.set_index(RangeIndex(len(self)))
 
-    def take(self, positions):
+    def take(self, positions, ignore_index=False):
         out = DataFrame()
         for col in self.columns:
-            out[col] = self[col].take(positions, ignore_index=True)
+            out[col] = self[col].take(positions, ignore_index=ignore_index)
         return out
 
     def copy(self):

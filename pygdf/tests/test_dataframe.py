@@ -397,3 +397,29 @@ def test_dataframe_as_gpu_matrix_null_values():
     mat = df.as_gpu_matrix().copy_to_host()
     for i, k in enumerate(df.columns):
         np.testing.assert_array_equal(refvalues[k], mat[:, i])
+
+
+@pytest.mark.parametrize('ntake', [0, 1, 10, 123, 122, 200])
+def test_dataframe_take(ntake):
+    np.random.seed(0)
+    df = DataFrame()
+
+    nelem = 123
+    df['ii'] = ii = np.random.randint(0, 20, nelem)
+    df['ff'] = ff = np.random.random(nelem)
+
+    take_indices = np.random.randint(0, len(df), ntake)
+
+    def check(**kwargs):
+        out = df.take(take_indices, **kwargs)
+        assert len(out) == ntake
+        np.testing.assert_array_equal(out.ii.to_array(), ii[take_indices])
+        np.testing.assert_array_equal(out.ff.to_array(), ff[take_indices])
+        if kwargs.get('ignore_index'):
+            np.testing.assert_array_equal(out.index, np.arange(ntake))
+        else:
+            np.testing.assert_array_equal(out.index, take_indices)
+
+
+    check()
+    check(ignore_index=True)
