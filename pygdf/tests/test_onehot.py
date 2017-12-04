@@ -4,7 +4,7 @@ import numpy as np
 
 from numba import cuda
 
-from pygdf.dataframe import DataFrame, Series
+from pygdf.dataframe import DataFrame, Series, GenericIndex
 from . import utils
 
 
@@ -72,6 +72,22 @@ def test_onehot_masked():
     np.testing.assert_array_equal(out['a_2'] == 1, arr == 2)
     np.testing.assert_array_equal(out['a_3'] == 1, arr == 3)
     np.testing.assert_array_equal(out['a_4'] == 1, arr == 4)
+
+
+def test_onehot_generic_index():
+    np.random.seed(0)
+    size = 33
+    indices = np.random.randint(low=0, high=100, size=size)
+    df = DataFrame()
+    values = np.random.randint(low=0, high=4, size=size)
+    df['fo'] = Series(values, index=GenericIndex(indices))
+    out = df.one_hot_encoding('fo', cats=df.fo.unique(), prefix='fo',
+                              dtype=np.int32)
+    assert set(out.columns) == {'fo', 'fo_0', 'fo_1', 'fo_2', 'fo_3'}
+    np.testing.assert_array_equal(values == 0, out.fo_0.to_array())
+    np.testing.assert_array_equal(values == 1, out.fo_1.to_array())
+    np.testing.assert_array_equal(values == 2, out.fo_2.to_array())
+    np.testing.assert_array_equal(values == 3, out.fo_3.to_array())
 
 
 if __name__ == '__main__':
