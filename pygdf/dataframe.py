@@ -269,6 +269,12 @@ class DataFrame(object):
     def reset_index(self):
         return self.set_index(RangeIndex(len(self)))
 
+    def take(self, positions, ignore_index=False):
+        out = DataFrame()
+        for col in self.columns:
+            out[col] = self[col].take(positions, ignore_index=ignore_index)
+        return out
+
     def copy(self):
         "Shallow copy this dataframe"
         df = DataFrame()
@@ -288,8 +294,11 @@ class DataFrame(object):
         -------
         The prepared Series object.
         """
-        series = Series(col)
         empty_index = isinstance(self._index, EmptyIndex)
+        if isinstance(col, Series) or empty_index:
+            series = Series(col)
+        else:
+            series = Series(col, index=self.index)
         if empty_index or self._index == series.index:
             if empty_index:
                 self._index = series.index
@@ -695,10 +704,11 @@ class DataFrame(object):
             raise TypeError('not a pandas.DataFrame')
 
         df = cls()
-
+        # Set columns
         for colk in dataframe.columns:
             df[colk] = dataframe[colk].values
-        return df
+        # Set index
+        return df.set_index(dataframe.index.values)
 
     def to_records(self, index=True):
         """Covert to a numpy recarray

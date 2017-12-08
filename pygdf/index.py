@@ -52,6 +52,17 @@ class Index(object):
         # `GenericIndex`
         return GenericIndex(data)
 
+    def __eq__(self, other):
+        if not isinstance(other, Index):
+            return NotImplemented
+        elif len(self) != len(other):
+            return False
+
+        lhs = self.as_column()
+        rhs = other.as_column()
+        res = lhs.unordered_compare('eq', rhs).all()
+        return res
+
 
 class EmptyIndex(Index):
     """
@@ -66,6 +77,8 @@ class EmptyIndex(Index):
         return cls._singleton
 
     def __getitem__(self, index):
+        if isinstance(index, slice):
+            return self
         raise IndexError
 
     def __len__(self):
@@ -118,7 +131,7 @@ class RangeIndex(Index):
         if isinstance(other, RangeIndex):
             return (self._start == other._start and self._stop == other._stop)
         else:
-            return NotImplemented
+            return super(RangeIndex, self).__eq__(other)
 
     @property
     def dtype(self):
@@ -204,12 +217,6 @@ class GenericIndex(Index):
         else:
             return res
 
-    def __eq__(self, other):
-        if isinstance(other, GenericIndex):
-            return self._values.unordered_compare('eq', other._values).all()
-        else:
-            return NotImplemented
-
     def as_column(self):
         """Convert the index as a Series.
         """
@@ -220,6 +227,15 @@ class GenericIndex(Index):
         return self._values.dtype
 
     def find_label_range(self, first, last):
+        """Find range that starts with *first* and ends with *last*,
+        inclusively.
+
+        Returns
+        -------
+        begin, end : 2-tuple of int
+            The starting index and the ending index.
+            The *last* value occurs at ``end - 1`` position.
+        """
         col = self._values
         begin, end = None, None
         if first is not None:

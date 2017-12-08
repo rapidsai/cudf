@@ -152,6 +152,11 @@ class Series(object):
         """Return Series by taking values from the corresponding *indices*.
         """
         indices = Buffer(indices).to_gpu_array()
+        # Handle zero size
+        if indices.size == 0:
+            return self._copy_construct(data=self.data[:0],
+                                        index=self.index[:0])
+
         data = cudautils.gather(data=self.data.to_gpu_array(), index=indices)
 
         if self._column.mask:
@@ -524,7 +529,7 @@ class Series(object):
                 arr=self.data.to_gpu_array(),
                 mask=mask,
                 val=cat, dtype=dtype)
-            out.append(Series(buf))
+            out.append(Series(buf, index=self.index))
         return out
 
     def label_encoding(self, cats, dtype=None, na_sentinel=-1):
