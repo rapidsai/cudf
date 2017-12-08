@@ -19,12 +19,12 @@ Series
 
 
 
-.. currentmodule:: pygdf.grouper
+.. currentmodule:: pygdf.groupby
 
 Groupby
 -------
 
-.. autoclass:: Grouper
+.. autoclass:: Groupby
     :members:
 
 

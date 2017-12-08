@@ -647,11 +647,11 @@ class DataFrame(object):
         - Since we don't support multiindex, the *by* columns are stored
           as regular columns.
         """
-        from .grouper import Grouper
+        from .groupby import Groupby
         if as_index:
             msg = "as_index==True not supported due to the lack of multi-index"
             raise NotImplementedError(msg)
-        return Grouper(self, by=by)
+        return Groupby(self, by=by)
 
     def query(self, expr):
         """Query with a boolean expression using Numba to compile a GPU kernel.

@@ -47,7 +47,9 @@ def group_mean(data, segments, output):
 _dfsegs_pack = namedtuple('_dfsegs_pack', ['df', 'segs'])
 
 
-class Grouper(object):
+class Groupby(object):
+    """Groupby object returned by pygdf.DataFrame.groupby().
+    """
     _NAMED_FUNCTIONS = {'mean': Series.mean,
                         'std': Series.std,
                         'min': Series.min,
@@ -56,6 +58,14 @@ class Grouper(object):
                         }
 
     def __init__(self, df, by):
+        """
+        Parameters
+        ----------
+        df : DataFrame
+        by : str of list of str
+            Column(s) that grouping is based on.
+            It can be a single or list of column names.
+        """
         self._df = df
         self._by = [by] if isinstance(by, str) else list(by)
         self._val_columns = [idx for idx in self._df.columns
