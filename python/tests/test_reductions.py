@@ -45,7 +45,8 @@ def test_sum(dtype, nelem):
     print('expect:', expect)
     print('got:', got)
 
-    np.testing.assert_array_almost_equal_nulp(expect, got, nulp=1)
+    decimal = 4 if dtype == np.float32 else 6
+    np.testing.assert_array_almost_equal(expect, got, decimal=decimal)
 
 
 @pytest.mark.parametrize('dtype,nelem', params)
