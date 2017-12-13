@@ -26,10 +26,24 @@ def test_series_reductions(method, dtype):
 
     def call_test(sr):
         fn = getattr(sr, method)
-        return fn()
+        if method in ['std', 'var']:
+            return fn(ddof=1)
+        else:
+            return fn()
 
     expect, got = call_test(arr2), call_test(sr)
     print(expect, got)
+    np.testing.assert_approx_equal(expect, got)
+
+
+@pytest.mark.parametrize('ddof', range(3))
+def test_series_std(ddof):
+    np.random.seed(0)
+    arr = np.random.random(100) - 0.5
+    sr = Series(arr)
+    pd = sr.to_pandas()
+    got = sr.std(ddof=ddof)
+    expect = pd.std(ddof=ddof)
     np.testing.assert_approx_equal(expect, got)
 
 

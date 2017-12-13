@@ -143,12 +143,13 @@ class NumericalColumn(columnops.TypedColumnBase):
     def mean(self):
         return self.sum().astype('f8') / self.valid_count
 
-    def mean_var(self):
+    def mean_var(self, ddof=1):
         x = self.astype('f8')
         mu = x.mean()
         n = x.valid_count
         asum = _gdf.apply_reduce(libgdf.gdf_sum_squared_generic, x)
-        var = asum / n - mu ** 2
+        div = n - ddof
+        var = asum / div - (mu ** 2) * n / div
         return mu, var
 
     def applymap(self, udf, out_dtype=None):
