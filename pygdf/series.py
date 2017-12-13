@@ -655,21 +655,21 @@ class Series(object):
         """
         return self._column.mean()
 
-    def std(self):
+    def std(self, ddof=1):
         """Compute the standard deviation of the series
         """
-        return np.sqrt(self.var())
+        return np.sqrt(self.var(ddof=ddof))
 
-    def var(self):
+    def var(self, ddof=1):
         """Compute the variance of the series
         """
-        mu, var = self.mean_var()
+        mu, var = self.mean_var(ddof=ddof)
         return var
 
-    def mean_var(self):
+    def mean_var(self, ddof=1):
         """Compute mean and variance at the same time.
         """
-        mu, var = self._column.mean_var()
+        mu, var = self._column.mean_var(ddof=ddof)
         return mu, var
 
     def unique_k(self, k):
