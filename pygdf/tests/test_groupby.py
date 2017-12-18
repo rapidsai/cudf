@@ -118,3 +118,25 @@ def test_groupby_as_df():
             assert_values_equal(pddf[k].values)
 
 
+def test_groupby_apply():
+    np.random.seed(0)
+    df = DataFrame()
+    nelem = 20
+    df['key1'] = np.random.randint(0, 3, nelem)
+    df['key2'] = np.random.randint(0, 2, nelem)
+    df['val1'] = np.random.random(nelem)
+    df['val2'] = np.random.random(nelem)
+
+    expect_grpby = df.to_pandas().groupby(['key1', 'key2'],
+                                          as_index=False)
+    got_grpby = df.groupby(['key1', 'key2'])
+
+    def foo(df):
+        df['out'] = df['val1'] + df['val2']
+        return df
+
+    expect = expect_grpby.apply(foo)
+    expect = expect.sort_values(['key1', 'key2']).reset_index(drop=True)
+
+    got = got_grpby.apply(foo).to_pandas()
+    pd.util.testing.assert_frame_equal(expect, got)

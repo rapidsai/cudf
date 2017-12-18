@@ -101,8 +101,8 @@ class RangeIndex(Index):
         """
         if stop is None:
             start, stop = 0, start
-        self._start = start
-        self._stop = stop
+        self._start = int(start)
+        self._stop = int(stop)
 
     def __repr__(self):
         return "{}(start={}, stop={})".format(self.__class__.__name__,
