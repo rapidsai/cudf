@@ -31,7 +31,11 @@ def seed_rand():
 def gen_rand(dtype, size, **kwargs):
     dtype = np.dtype(dtype)
     if dtype.kind == 'f':
-        return np.random.random(size).astype(dtype)
+        res = np.random.random(size=size).astype(dtype)
+        if kwargs.get('positive_only', False):
+            return res
+        else:
+            return (res * 2 - 1)
     elif dtype.kind == 'i':
         low = kwargs.get('low', -10000)
         high = kwargs.get('high', 10000)

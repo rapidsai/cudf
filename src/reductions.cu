@@ -262,8 +262,8 @@ DEF_REDUCE_IMPL(gdf_min_i8, DeviceMin, int8_t, std::numeric_limits<int8_t>::max(
 /* Max */
 
 DEF_REDUCE_OP_NUM(gdf_max)
-DEF_REDUCE_IMPL(gdf_max_f64, DeviceMax, double, std::numeric_limits<double>::min())
-DEF_REDUCE_IMPL(gdf_max_f32, DeviceMax, float, std::numeric_limits<float>::min())
-DEF_REDUCE_IMPL(gdf_max_i64, DeviceMax, int64_t, std::numeric_limits<int64_t>::min())
-DEF_REDUCE_IMPL(gdf_max_i32, DeviceMax, int32_t, std::numeric_limits<int32_t>::min())
-DEF_REDUCE_IMPL(gdf_max_i8, DeviceMax, int8_t,  std::numeric_limits<int8_t>::min())
+DEF_REDUCE_IMPL(gdf_max_f64, DeviceMax, double, std::numeric_limits<double>::lowest())
+DEF_REDUCE_IMPL(gdf_max_f32, DeviceMax, float, std::numeric_limits<float>::lowest())
+DEF_REDUCE_IMPL(gdf_max_i64, DeviceMax, int64_t, std::numeric_limits<int64_t>::lowest())
+DEF_REDUCE_IMPL(gdf_max_i32, DeviceMax, int32_t, std::numeric_limits<int32_t>::lowest())
+DEF_REDUCE_IMPL(gdf_max_i8, DeviceMax, int8_t,  std::numeric_limits<int8_t>::lowest())

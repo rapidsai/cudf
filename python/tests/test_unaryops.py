@@ -11,8 +11,10 @@ from libgdf_cffi import ffi, libgdf, GDFError
 from .utils import new_column, unwrap_devary, get_dtype, gen_rand
 
 
-def math_op_test(dtype, ulp, expect_fn, test_fn, nelem=128, scale=1):
-    h_data = (gen_rand(dtype, nelem) * scale).astype(dtype)
+def math_op_test(dtype, ulp, expect_fn, test_fn, nelem=128, scale=1,
+                 positive_only=False):
+    randvals = gen_rand(dtype, nelem, positive_only=positive_only)
+    h_data = (randvals * scale).astype(dtype)
     d_data = cuda.to_device(h_data)
     d_result = cuda.device_array_like(d_data)
 
@@ -112,8 +114,8 @@ def test_unsupported_dtype_error():
 
 
 params_real_types = [
-    (np.float64, 2),
-    (np.float32, 3),
+    (np.float64, 3),
+    (np.float32, 4),
 ]
 
 
@@ -158,14 +160,16 @@ def test_exp(dtype, ulp):
 
 @pytest.mark.parametrize('dtype,ulp', params_real_types)
 def test_log(dtype, ulp):
-    math_op_test(dtype, ulp, np.log, libgdf.gdf_log_generic)
+    math_op_test(dtype, ulp, np.log, libgdf.gdf_log_generic,
+                 positive_only=True)
 
 
 # power
 
 @pytest.mark.parametrize('dtype,ulp', params_real_types)
 def test_sqrt(dtype, ulp):
-    math_op_test(dtype, ulp, np.sqrt, libgdf.gdf_sqrt_generic)
+    math_op_test(dtype, ulp, np.sqrt, libgdf.gdf_sqrt_generic,
+                 positive_only=True)
 
 
 # rounding
