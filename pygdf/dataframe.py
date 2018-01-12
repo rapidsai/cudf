@@ -740,6 +740,10 @@ class DataFrame(object):
         """
         return applyutils.apply_rows(self, func, incols, outcols, kwargs)
 
+    def apply_chunks(self, func, incols, outcols, kwargs, chunks):
+        return applyutils.apply_chunks(self, func, incols, outcols, kwargs,
+                                       chunks=chunks)
+
     def to_pandas(self):
         """Convert to a Pandas DataFrame.
         """
