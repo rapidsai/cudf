@@ -8,7 +8,7 @@ import pandas as pd
 
 from numba import cuda
 
-from . import cudautils, formatting, queryutils, _gdf
+from . import cudautils, formatting, queryutils, _gdf, applyutils
 from .index import GenericIndex, EmptyIndex, Index, RangeIndex
 from .series import Series
 from .buffer import Buffer
@@ -684,6 +684,61 @@ class DataFrame(object):
             newseries = self[col][selected]
             newdf[col] = newseries
         return newdf
+
+    def apply_rows(self, func, incols, outcols, kwargs):
+        """Apply a user function as a CUDA kernel over each row.
+
+        Parameters
+        ----------
+        func : function
+        incols: list
+            A list of names of input columns
+        outcols: dict
+            A dictionary of output column names and their dtype.
+        kwargs: dict
+            name-value of extra arguments.  These values are passed
+            directly into the function.
+
+        Examples
+        --------
+
+        With a ``DataFrame`` like so:
+
+        >>> df = DataFrame()
+        >>> df['in1'] = in1 = np.arange(nelem)
+        >>> df['in2'] = in2 = np.arange(nelem)
+        >>> df['in3'] = in3 = np.arange(nelem)
+
+        Define the user function for ``.apply_rows``:
+
+        >>> def kernel(in1, in2, in3, out1, out2, extra1, extra2):
+        ...     for i, (x, y, z) in enumerate(zip(in1, in2, in3)):
+        ...         out1[i] = extra2 * x - extra1 * y
+        ...         out2[i] = y - extra1 * z
+
+        The user function should loop over the columns and set the output for
+        each row.  Each iteration of the loop **MUST** be independent of each
+        other.  The order of the loop execution can be arbitrary.
+
+        Call ``.apply_rows`` with the name of the input columns, the name and
+        dtype of the output columns, and, optionally, a dict of extra
+        arguments.
+
+        >>> outdf = df.apply_rows(kernel,
+        ...                       incols=['in1', 'in2', 'in3'],
+        ...                       outcols=dict(out1=np.float64,
+        ...                                    out2=np.float64),
+        ...                       kwargs=dict(extra1=2.3, extra2=3.4))
+
+        **Notes**
+
+        The arguments corresponding to input/output columns are cuda
+        device arrays from numba. These arrays are strided in a way to
+        improve parallelism when the code is executed on the GPU.
+        The loop in the user function may look like serial code but it will be
+        executed by multiple threads.
+        """
+        return applyutils.apply_rows(self, func, incols, outcols, kwargs)
 
     def to_pandas(self):
         """Convert to a Pandas DataFrame.
