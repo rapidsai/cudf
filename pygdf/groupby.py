@@ -325,21 +325,6 @@ class Groupby(object):
             return self.agg([args])
         return self._agg_groups(functors)
 
-    def _combine(self, functors, chunks):
-        outdf = concat([chk[:1].loc[:, list(self._by)] for chk in chunks])
-        outdf = outdf.reset_index()
-
-        for col, funclist in functors.items():
-            namer = ((lambda k, f: '{}_{}'.format(k, f.__name__))
-                     if len(funclist) > 1
-                     else (lambda k, f: k))
-
-            for aggfn in funclist:
-                aggvals = np.asarray([aggfn(chk[col]) for chk in chunks])
-                outdf[namer(col, aggfn)] = aggvals
-
-        return outdf
-
     _auto_generate_grouper_agg(locals())
 
     def apply(self, function):
@@ -347,9 +332,11 @@ class Groupby(object):
         """
         if not callable(function):
             raise TypeError("type {!r} is not callable", type(function))
-        transform = SerialTransform(function)
-        chunks = transform(self._get_chunks())
-        return concat(chunks)
+
+        df, segs = self.as_df()
+        ends = chain(segs[1:], [None])
+        chunks = [df[s:e] for s, e in zip(segs, ends)]
+        return concat([function(chk) for chk in chunks])
 
     def apply_grouped(self, function, **kwargs):
         if not callable(function):
@@ -358,20 +345,3 @@ class Groupby(object):
         df, segs = self.as_df()
         kwargs.update({'chunks': segs})
         return df.apply_chunks(function, **kwargs)
-
-    def _get_chunks(self):
-        """Group chunks and return them
-        """
-        df, segs = self._group_dataframe(self._df, self._by)
-        ends = chain(segs[1:], [None])
-        chunks = [df[s:e] for s, e in zip(segs, ends)]
-        return chunks
-
-
-class SerialTransform(object):
-    def __init__(self, functor):
-        self._function = functor
-
-    def __call__(self, chunks):
-        return [self._function(chk) for chk in chunks]
-

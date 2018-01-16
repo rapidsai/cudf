@@ -5,16 +5,69 @@ from numba.utils import pysignature, exec_
 from numba import six
 from numba import cuda
 
+from pygdf.docutils import docfmt, docfmt_partial
 from pygdf import cudautils
 from pygdf.series import Series
 
 
+_doc_applyparams = """
+func : function
+    The transformation function that will be executed on the CUDA GPU.
+incols: list
+    A list of names of input columns.
+outcols: dict
+    A dictionary of output column names and their dtype.
+kwargs: dict
+    name-value of extra arguments.  These values are passed
+    directly into the function.
+"""
+
+_doc_applychunkparams = """
+chunks : int or Series-like
+            If it is an ``int``, it is the chunksize.
+            If it is an array, it contains integer offset for the start of each
+            chunk.  The span of a chunk for chunk i-th is
+            ``data[chunks[i] : chunks[i + 1]]`` for any ``i + 1 < chunks.size``;
+            or, ``data[chunks[i]:]`` for the ``i == len(chunks) - 1``.
+tpb : int; optional
+    It is the thread-per-block for the underlying kernel.
+    The default uses 1 thread to emulate serial execution for
+    each chunk.  It is a good starting point but inefficient.
+    Its maximum possible value is limited by the available CUDA GPU
+    resources.
+"""
+
+doc_apply = docfmt_partial(params=_doc_applyparams)
+doc_applychunks = docfmt_partial(params=_doc_applyparams,
+                                 params_chunks=_doc_applychunkparams)
+
+
+@doc_apply()
 def apply_rows(df, func, incols, outcols, kwargs):
+    """Row-wise transformation
+
+    Parameters
+    ----------
+    df : DataFrame
+        The source dataframe.
+    {params}
+
+    """
     applyrows = ApplyRowsCompiler(func, incols, outcols, kwargs)
     return applyrows.run(df)
 
 
+@doc_applychunks()
 def apply_chunks(df, func, incols, outcols, kwargs, chunks, tpb):
+    """Chunk-wise transformation
+
+    Parameters
+    ----------
+    df : DataFrame
+        The source dataframe.
+    {params}
+    {params_chunks}
+    """
     applyrows = ApplyChunksCompiler(func, incols, outcols, kwargs)
     return applyrows.run(df, chunks=chunks, tpb=tpb)
 
@@ -89,7 +142,12 @@ class ApplyChunksCompiler(ApplyKernelCompilerBase):
 
 def _make_row_wise_kernel(func, argnames, extras):
     """
-    Make a kernel that does a stride loop over the input columns.
+    Make a kernel that does a stride loop over the input rows.
+
+    Each thread is responsible for a row in each iteration.
+    Several iteration may be needed to handling a large number of rows.
+
+    The resulting kernel can be used with any 1D grid size and 1D block size.
     """
     # Build kernel source
     argnames = list(map(_mangle_user, argnames))
@@ -129,6 +187,18 @@ def row_wise_kernel({args}):
 
 
 def _make_chunk_wise_kernel(func, argnames, extras):
+    """
+    Make a kernel that does a stride loop over the input chunks.
+
+    Each block is responsible for a chunk in each iteration.
+    Several iteration may be needed to handling a large number of chunks.
+
+    The user function *func* will have all threads in the block for its
+    computation.
+
+    The resulting kernel can be used with any 1D grid size and 1D block size.
+    """
+
     # Build kernel source
     argnames = list(map(_mangle_user, argnames))
     extras = list(map(_mangle_user, extras))
