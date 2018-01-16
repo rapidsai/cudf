@@ -9,14 +9,23 @@
 # 'source' this script, rather than executing it in a sub-process.
 #
 set -e
-travis_retry wget http://developer.download.nvidia.com/compute/cuda/repos/ubuntu1404/x86_64/cuda-repo-ubuntu1404_${CUDA}_amd64.deb
-travis_retry sudo dpkg -i cuda-repo-ubuntu1404_${CUDA}_amd64.deb
-travis_retry sudo apt-get update -qq
-export CUDA_APT=${CUDA:0:3}
-export CUDA_APT=${CUDA_APT/./-}
-# travis_retry sudo apt-get install -y cuda-drivers cuda-core-${CUDA_APT} cuda-cudart-dev-${CUDA_APT} cuda-cufft-dev-${CUDA_APT}
-travis_retry sudo apt-get install -y cuda-drivers cuda-core-${CUDA_APT} cuda-cudart-dev-${CUDA_APT}
-travis_retry sudo apt-get clean
+
+# CUDA 8 we can use the repo
+if [ ${CUDA:0:1} == '8' ]; then
+    travis_retry wget http://developer.download.nvidia.com/compute/cuda/repos/ubuntu1404/x86_64/cuda-repo-ubuntu1404_${CUDA}_amd64.deb
+    travis_retry sudo dpkg -i cuda-repo-ubuntu1404_${CUDA}_amd64.deb
+    travis_retry sudo apt-get update -qq
+    export CUDA_APT=${CUDA:0:3}
+    export CUDA_APT=${CUDA_APT/./-}
+    # travis_retry sudo apt-get install -y cuda-drivers cuda-core-${CUDA_APT} cuda-cudart-dev-${CUDA_APT} cuda-cufft-dev-${CUDA_APT}
+    travis_retry sudo apt-get install -y cuda-drivers cuda-core-${CUDA_APT} cuda-cudart-dev-${CUDA_APT}
+    travis_retry sudo apt-get clean
+else
+    # CUDA 9 we use the sh installer
+    travis_retry wget https://developer.nvidia.com/compute/cuda/${CUDA:0:3}/Prod/local_installers/cuda_${CUDA}_linux-run
+    chmod +x cuda_*_linux_run
+    ./cuda_*_linux_run --silent --toolkit
+fi
 export CUDA_HOME=/usr/local/cuda-${CUDA:0:3}
 export LD_LIBRARY_PATH=${CUDA_HOME}/lib64:${LD_LIBRARY_PATH}
 export PATH=${CUDA_HOME}/bin:${PATH}
