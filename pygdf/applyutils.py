@@ -1,12 +1,12 @@
 from weakref import WeakKeyDictionary
 import functools
 
-import numpy as np
 from numba.utils import pysignature, exec_
 from numba import six
 from numba import cuda
 
 from pygdf import cudautils
+from pygdf.series import Series
 
 
 def apply_rows(df, func, incols, outcols, kwargs):
@@ -14,9 +14,9 @@ def apply_rows(df, func, incols, outcols, kwargs):
     return applyrows.run(df)
 
 
-def apply_chunks(df, func, incols, outcols, kwargs, chunks):
+def apply_chunks(df, func, incols, outcols, kwargs, chunks, tpb):
     applyrows = ApplyChunksCompiler(func, incols, outcols, kwargs)
-    return applyrows.run(df, chunks=chunks)
+    return applyrows.run(df, chunks=chunks, tpb=tpb)
 
 
 class ApplyKernelCompilerBase(object):
@@ -60,7 +60,7 @@ class ApplyRowsCompiler(ApplyKernelCompilerBase):
 
     def launch_kernel(self, df, args):
         blksz = 64
-        blkct = min(16, max(1, len(df) // blksz))
+        blkct = cudautils.optimal_block_count(len(df) // blksz)
         self.kernel[blkct, blksz](*args)
 
 
@@ -72,17 +72,19 @@ class ApplyChunksCompiler(ApplyKernelCompilerBase):
                                                        extra_argnames)
         return kernel
 
-    def launch_kernel(self, df, args, chunks):
+    def launch_kernel(self, df, args, chunks, tpb):
         chunks = self.normalize_chunks(len(df), chunks)
-        print("chunks", chunks.copy_to_host())
-        self.kernel.forall(chunks.size - 1)(chunks, *args)
+        blkct = cudautils.optimal_block_count(chunks.size)
+        self.kernel[blkct, tpb](len(df), chunks, *args)
 
     def normalize_chunks(self, size, chunks):
         if isinstance(chunks, six.integer_types):
-            stride = min(int(chunks), size)
-            return cudautils.arange(0, size + stride, stride)
+            # *chunks* is the chunksize
+            return cudautils.arange(0, size, chunks)
         else:
-            raise NotImplementedError
+            # *chunks* is an array of chunk leading offset
+            chunks = Series(chunks)
+            return chunks.to_gpu_array()
 
 
 def _make_row_wise_kernel(func, argnames, extras):
@@ -131,29 +133,33 @@ def _make_chunk_wise_kernel(func, argnames, extras):
     argnames = list(map(_mangle_user, argnames))
     extras = list(map(_mangle_user, extras))
     source = """
-def chunk_wise_kernel(chunks, {args}):
+def chunk_wise_kernel(nrows, chunks, {args}):
 {body}
 """
 
     args = ', '.join(argnames)
     body = []
 
-    body.append('tid = cuda.grid(1)')
-    body.append('ntid = cuda.gridsize(1)')
+    body.append('blkid = cuda.blockIdx.x')
+    body.append('nblkid = cuda.gridDim.x')
+    body.append('tid = cuda.threadIdx.x')
+    body.append('ntid = cuda.blockDim.x')
 
-    # Escape condition
-    body.append('if tid + 1 >= chunks.size: return')
+    # Stride loop over the block
+    body.append('for curblk in range(blkid, chunks.size, nblkid):')
+    indent = ' ' * 4
 
+    body.append(indent + 'start = chunks[curblk]')
+    body.append(indent + 'stop = chunks[curblk + 1] if curblk + 1 < chunks.size else nrows')
+
+    slicedargs = {}
     for a in argnames:
         if a not in extras:
-            start = 'chunks[tid]'
-            stop = 'chunks[tid + 1]'
-            stride = ''
-            srcidx = '{a} = {a}[{start}:{stop}:{stride}]'
-            body.append(srcidx.format(a=a, start=start, stop=stop,
-                                      stride=stride))
-
-    body.append("inner({})".format(args))
+            slicedargs[a] = "{}[start:stop]".format(a)
+        else:
+            slicedargs[a] = str(a)
+    body.append("{}inner({})".format(indent,
+                                     ', '.join(slicedargs[k] for k in argnames)))
 
     indented = ['{}{}'.format(' ' * 4, ln) for ln in body]
     # Finalize source

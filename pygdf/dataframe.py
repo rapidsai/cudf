@@ -691,6 +691,8 @@ class DataFrame(object):
         Parameters
         ----------
         func : function
+            It is wrapped into a CUDA device function by
+            ``numba.cuda.jit(device=True)``.
         incols: list
             A list of names of input columns
         outcols: dict
@@ -740,9 +742,48 @@ class DataFrame(object):
         """
         return applyutils.apply_rows(self, func, incols, outcols, kwargs)
 
-    def apply_chunks(self, func, incols, outcols, kwargs, chunks):
+    def apply_chunks(self, func, incols, outcols, kwargs, chunks, tpb=1):
+        """
+        Parameters
+        ----------
+        func, incols, outcols, kwargs :
+            Same as in ``.apply_rows()``
+        chunks : int or 1D-array
+            If it is an ``int``, it is the chunksize.
+            If it is an array, it contains integer offset for the start of each
+            chunk.  The span of a chunk for chunk i-th is
+            ``data[chunks[i] : chunks[i + 1]]`` for any ``i + 1 < chunks.size``;
+            or, ``data[chunks[i]:]`` for the ``i == len(chunks) - 1``.
+        tpb : int; optional
+            It is the thread-per-block for the underlying kernel.
+            The default uses 1 thread to emulate serial execution for
+            each chunk.  It is a good starting point but inefficient.
+
+        Examples
+        --------
+
+        For ``tpb > 1``, ``func`` is executed by ``tpb`` number of threads
+        concurrently.  To access the thread id and count,
+        use ``numba.cuda.threadIdx.x`` and ``numba.cuda.blockDim.x``,
+        respectively (See `numba CUDA kernel documentation`_).  For example:
+
+        .. _numba CUDA kernel documentation: http://numba.pydata.org/numba-doc/latest/cuda/kernels.html
+
+        >>> from numba import cuda
+        >>> def kernel(in1, in2, in3, out1):
+        ...     for i in range(cuda.threadIdx.x, in1.size, cuda.blockDim.x):
+        ...         x = in1[i]
+        ...         y = in2[i]
+        ...         z = in3[i]
+        ...         out1[i] = x * y + z
+
+        See also
+        --------
+        .apply_rows
+
+        """
         return applyutils.apply_chunks(self, func, incols, outcols, kwargs,
-                                       chunks=chunks)
+                                       chunks=chunks, tpb=tpb)
 
     def to_pandas(self):
         """Convert to a Pandas DataFrame.
