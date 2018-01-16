@@ -742,7 +742,7 @@ class DataFrame(object):
         """
         return applyutils.apply_rows(self, func, incols, outcols, kwargs)
 
-    def apply_chunks(self, func, incols, outcols, kwargs, chunks, tpb=1):
+    def apply_chunks(self, func, incols, outcols, kwargs={}, chunks=None, tpb=1):
         """
         Parameters
         ----------
@@ -782,6 +782,8 @@ class DataFrame(object):
         .apply_rows
 
         """
+        if chunks is None:
+            raise ValueError('*chunks* must be defined')
         return applyutils.apply_chunks(self, func, incols, outcols, kwargs,
                                        chunks=chunks, tpb=tpb)
 

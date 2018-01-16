@@ -351,6 +351,14 @@ class Groupby(object):
         chunks = transform(self._get_chunks())
         return concat(chunks)
 
+    def apply_grouped(self, function, **kwargs):
+        if not callable(function):
+            raise TypeError("type {!r} is not callable", type(function))
+
+        df, segs = self.as_df()
+        kwargs.update({'chunks': segs})
+        return df.apply_chunks(function, **kwargs)
+
     def _get_chunks(self):
         """Group chunks and return them
         """
