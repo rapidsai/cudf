@@ -13,6 +13,7 @@ matrix:
   include:
     - env: CUDA=8.0.61-1
     - env: CUDA=9.0.176_384.81
+    - env: CUDA=9.1.85_387.26
     - env: CUDA=8.0.61-1 BUILD_CFFI=1 PYTHON=3.6
     - env: CUDA=8.0.61-1 BUILD_CFFI=1 PYTHON=3.5
     - env: CUDA=8.0.61-1 BUILD_CFFI=1 PYTHON=2.7
