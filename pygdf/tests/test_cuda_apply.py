@@ -108,8 +108,6 @@ def test_df_apply_custom_chunks(nelem):
     np.testing.assert_array_almost_equal(got_out2, expect_out2)
 
 
-
-
 @pytest.mark.parametrize('nelem', [1, 15, 30, 64, 128, 1000])
 @pytest.mark.parametrize('tpb', [1, 8, 16, 64])
 def test_df_apply_custom_chunks_tpb(nelem, tpb):
