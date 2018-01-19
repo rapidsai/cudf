@@ -10,6 +10,7 @@ source:
 
 build:
   number: {{ environ.get('GIT_DESCRIBE_NUMBER', 0) }}
+  string: 'cuda{{ environ['CUDA'][0:3] }}_{{ environ.get('GIT_DESCRIBE_NUMBER', 0) }}'
 
 requirements:
   # use channel:
@@ -22,6 +23,8 @@ requirements:
 
   run:
     - arrow-cpp 0.7.*
+    # Not strictly needed for libgdf, but needed to match the CUDA version of other libs in environment
+    - cudatoolkit {{ environ['CUDA'][0:3] }}*
 
 test:
   commands:
