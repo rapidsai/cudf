@@ -12,7 +12,7 @@ set -e
 
 # CUDA 8 we can use the repo
 if [ ${CUDA:0:1} == '8' ]; then
-    travis_retry wget http://developer.download.nvidia.com/compute/cuda/repos/ubuntu1404/x86_64/cuda-repo-ubuntu1404_${CUDA}_amd64.deb
+    travis_retry wget --progress=dot:mega http://developer.download.nvidia.com/compute/cuda/repos/ubuntu1404/x86_64/cuda-repo-ubuntu1404_${CUDA}_amd64.deb
     travis_retry sudo dpkg -i cuda-repo-ubuntu1404_${CUDA}_amd64.deb
     travis_retry sudo apt-get update -qq
     export CUDA_APT=${CUDA:0:3}
@@ -22,7 +22,7 @@ if [ ${CUDA:0:1} == '8' ]; then
     travis_retry sudo apt-get clean
 else
     # CUDA 9 we use the sh installer
-    travis_retry wget https://developer.nvidia.com/compute/cuda/${CUDA:0:3}/Prod/local_installers/cuda_${CUDA}_linux-run
+    travis_retry wget --progress=dot:mega https://developer.nvidia.com/compute/cuda/${CUDA:0:3}/Prod/local_installers/cuda_${CUDA}_linux-run
     chmod +x cuda_*_linux_run
     ./cuda_*_linux_run --silent --toolkit
 fi
