@@ -23,7 +23,7 @@ if [ ${CUDA:0:1} == '8' ]; then
 else
     # CUDA 9 we use the sh installer
     travis_retry wget --progress=dot:mega https://developer.nvidia.com/compute/cuda/${CUDA:0:3}/Prod/local_installers/cuda_${CUDA}_linux-run
-    chmod +x cuda_*_linux_run
+    chmod +x cuda_*_linux-run
     ./cuda_*_linux_run --silent --toolkit
 fi
 export CUDA_HOME=/usr/local/cuda-${CUDA:0:3}
