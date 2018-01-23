@@ -420,6 +420,6 @@ def test_dataframe_take(ntake):
         else:
             np.testing.assert_array_equal(out.index, take_indices)
 
-
     check()
     check(ignore_index=True)
+

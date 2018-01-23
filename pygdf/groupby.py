@@ -6,6 +6,7 @@ import numpy as np
 from numba import cuda
 
 from .dataframe import DataFrame, Series
+from .multi import concat
 from . import _gdf, cudautils
 from .column import Column
 from .buffer import Buffer
@@ -97,8 +98,9 @@ class Groupby(object):
         """
         return self._group_dataframe(self._df, self._by)
 
-    def _form_groups(self, functors):
-        """
+    def _agg_groups(self, functors):
+        """Aggregate the groups
+
         Parameters
         ----------
         functors: dict
@@ -321,6 +323,25 @@ class Groupby(object):
                                else [_get_function(x) for x in v])
         else:
             return self.agg([args])
-        return self._form_groups(functors)
+        return self._agg_groups(functors)
 
     _auto_generate_grouper_agg(locals())
+
+    def apply(self, function):
+        """Apply a transformation function over the grouped chunk.
+        """
+        if not callable(function):
+            raise TypeError("type {!r} is not callable", type(function))
+
+        df, segs = self.as_df()
+        ends = chain(segs[1:], [None])
+        chunks = [df[s:e] for s, e in zip(segs, ends)]
+        return concat([function(chk) for chk in chunks])
+
+    def apply_grouped(self, function, **kwargs):
+        if not callable(function):
+            raise TypeError("type {!r} is not callable", type(function))
+
+        df, segs = self.as_df()
+        kwargs.update({'chunks': segs})
+        return df.apply_chunks(function, **kwargs)

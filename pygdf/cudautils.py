@@ -5,6 +5,12 @@ from numba import cuda, int32, numpy_support
 from .utils import mask_bitsize, mask_get, mask_set, make_mask
 
 
+def optimal_block_count(minblkct):
+    """Return the optimal block count for a CUDA kernel launch.
+    """
+    return min(16, max(1, minblkct))
+
+
 def to_device(ary):
     dary, _ = cuda._auto_device(ary)
     return dary

@@ -8,7 +8,7 @@ import pandas as pd
 
 from numba import cuda
 
-from . import cudautils, formatting, queryutils, _gdf
+from . import cudautils, formatting, queryutils, _gdf, applyutils
 from .index import GenericIndex, EmptyIndex, Index, RangeIndex
 from .series import Series
 from .buffer import Buffer
@@ -684,6 +684,97 @@ class DataFrame(object):
             newseries = self[col][selected]
             newdf[col] = newseries
         return newdf
+
+    @applyutils.doc_apply()
+    def apply_rows(self, func, incols, outcols, kwargs):
+        """Transform each row using the user-provided function.
+
+        Parameters
+        ----------
+        {params}
+
+        Examples
+        --------
+
+        With a ``DataFrame`` like so:
+
+        >>> df = DataFrame()
+        >>> df['in1'] = in1 = np.arange(nelem)
+        >>> df['in2'] = in2 = np.arange(nelem)
+        >>> df['in3'] = in3 = np.arange(nelem)
+
+        Define the user function for ``.apply_rows``:
+
+        >>> def kernel(in1, in2, in3, out1, out2, extra1, extra2):
+        ...     for i, (x, y, z) in enumerate(zip(in1, in2, in3)):
+        ...         out1[i] = extra2 * x - extra1 * y
+        ...         out2[i] = y - extra1 * z
+
+        The user function should loop over the columns and set the output for
+        each row.  Each iteration of the loop **MUST** be independent of each
+        other.  The order of the loop execution can be arbitrary.
+
+        Call ``.apply_rows`` with the name of the input columns, the name and
+        dtype of the output columns, and, optionally, a dict of extra
+        arguments.
+
+        >>> outdf = df.apply_rows(kernel,
+        ...                       incols=['in1', 'in2', 'in3'],
+        ...                       outcols=dict(out1=np.float64,
+        ...                                    out2=np.float64),
+        ...                       kwargs=dict(extra1=2.3, extra2=3.4))
+
+        **Notes**
+
+        When ``func`` is invoked, the array args corresponding to the
+        input/output are strided in a way that improves parallelism on the GPU.
+        The loop in the function may look like serial code but it will be
+        executed concurrently by multiple threads.
+        """
+        return applyutils.apply_rows(self, func, incols, outcols, kwargs)
+
+    @applyutils.doc_applychunks()
+    def apply_chunks(self, func, incols, outcols, kwargs={}, chunks=None, tpb=1):
+        """Transform user-specified chunks using the user-provided function.
+
+        Parameters
+        ----------
+        {params}
+        {params_chunks}
+
+        Examples
+        --------
+
+        For ``tpb > 1``, ``func`` is executed by ``tpb`` number of threads
+        concurrently.  To access the thread id and count,
+        use ``numba.cuda.threadIdx.x`` and ``numba.cuda.blockDim.x``,
+        respectively (See `numba CUDA kernel documentation`_).
+
+        .. _numba CUDA kernel documentation: http://numba.pydata.org/numba-doc/latest/cuda/kernels.html
+
+        In the example below, the *kernel* is invoked concurrently on each
+        specified chunk.  The *kernel* computes the corresponding output
+        for the chunk.  By looping over the range
+        ``range(cuda.threadIdx.x, in1.size, cuda.blockDim.x)``, the *kernel*
+        function can be used with any *tpb* in a efficient manner.
+
+        >>> from numba import cuda
+        >>> def kernel(in1, in2, in3, out1):
+        ...     for i in range(cuda.threadIdx.x, in1.size, cuda.blockDim.x):
+        ...         x = in1[i]
+        ...         y = in2[i]
+        ...         z = in3[i]
+        ...         out1[i] = x * y + z
+
+        See also
+        --------
+        .apply_rows
+
+        """
+        if chunks is None:
+            raise ValueError('*chunks* must be defined')
+        return applyutils.apply_chunks(self, func, incols, outcols, kwargs,
+                                       chunks=chunks, tpb=tpb)
 
     def to_pandas(self):
         """Convert to a Pandas DataFrame.
