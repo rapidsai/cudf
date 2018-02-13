@@ -53,9 +53,12 @@ class Groupby(object):
     """
     _NAMED_FUNCTIONS = {'mean': Series.mean,
                         'std': Series.std,
+                        'var': Series.var,
                         'min': Series.min,
                         'max': Series.max,
                         'count': Series.count,
+                        'sum': Series.sum,
+                        'sum_of_squares': Series.sum_of_squares,
                         }
 
     def __init__(self, df, by):

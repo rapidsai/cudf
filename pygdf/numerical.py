@@ -147,10 +147,14 @@ class NumericalColumn(columnops.TypedColumnBase):
         x = self.astype('f8')
         mu = x.mean()
         n = x.valid_count
-        asum = _gdf.apply_reduce(libgdf.gdf_sum_squared_generic, x)
+        asum = x.sum_of_squares()
         div = n - ddof
         var = asum / div - (mu ** 2) * n / div
         return mu, var
+
+    def sum_of_squares(self):
+        x = self.astype('f8')
+        return _gdf.apply_reduce(libgdf.gdf_sum_squared_generic, x)
 
     def applymap(self, udf, out_dtype=None):
         """Apply a elemenwise function to transform the values in the Column.

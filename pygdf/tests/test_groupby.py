@@ -4,6 +4,7 @@ import numpy as np
 import pandas as pd
 
 from pygdf.dataframe import DataFrame
+from pygdf.groupby import Groupby
 
 
 def make_frame(dataframe_class, nelem, seed=0, extra_levels=()):
@@ -185,3 +186,20 @@ def test_groupby_apply_grouped():
 
     pd.util.testing.assert_frame_equal(expect, got)
 
+
+@pytest.mark.parametrize('nelem', [100, 500])
+@pytest.mark.parametrize('func', ['mean', 'std', 'var', 'min',
+                                  'max', 'count', 'sum'])
+def test_groupby_2keys_agg(nelem, func):
+    # gdf (Note: lack of multindex)
+    got_df = make_frame(DataFrame, nelem=nelem)\
+        .groupby(('x', 'y')).agg(func)
+
+    got_agg = np.sort(got_df['val'].to_array())
+    # pandas
+    expect_df = make_frame(pd.DataFrame, nelem=nelem)\
+        .groupby(('x', 'y')).agg(func)
+
+    expect_agg = np.sort(expect_df['val'].values)
+    # verify
+    np.testing.assert_array_almost_equal(expect_agg, got_agg)

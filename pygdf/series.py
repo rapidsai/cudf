@@ -672,6 +672,9 @@ class Series(object):
         mu, var = self._column.mean_var(ddof=ddof)
         return mu, var
 
+    def sum_of_squares(self):
+        return self._column.sum_of_squares()
+
     def unique_k(self, k):
         warnings.warn("Use .unique() instead", DeprecationWarning)
         return self.unique()
