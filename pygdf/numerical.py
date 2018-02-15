@@ -9,6 +9,7 @@ from libgdf_cffi import libgdf
 
 from . import _gdf, columnops, utils, cudautils
 from .buffer import Buffer
+from .serialize import register_distributed_serializer
 
 
 # Operator mappings
@@ -59,6 +60,19 @@ class NumericalColumn(columnops.TypedColumnBase):
         """
         super(NumericalColumn, self).__init__(**kwargs)
         assert self._dtype == self._data.dtype
+
+    def serialize(self, serialize):
+        header, frames = super(NumericalColumn, self).serialize(serialize)
+        assert 'dtype' not in header
+        header['dtype'] = self._dtype
+        return header, frames
+
+    @classmethod
+    def deserialize(cls, deserialize, header, frames):
+        data, mask = cls._deserialize_data_mask(deserialize, header, frames)
+        col = cls(data=data, mask=mask, null_count=header['null_count'],
+                  dtype=header['dtype'])
+        return col
 
     def binary_operator(self, binop, rhs):
         if isinstance(rhs, NumericalColumn):
@@ -215,3 +229,6 @@ def numeric_normalize_types(*args):
     """
     dtype = np.result_type(*[a.dtype for a in args])
     return [a.astype(dtype) for a in args]
+
+
+register_distributed_serializer(NumericalColumn)

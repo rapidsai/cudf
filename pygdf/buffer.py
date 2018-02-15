@@ -3,6 +3,7 @@ from __future__ import print_function, division
 import numpy as np
 
 from . import cudautils, utils
+from .serialize import register_distributed_serializer
 
 
 class Buffer(object):
@@ -22,6 +23,16 @@ class Buffer(object):
         self.size = size
         self.capacity = capacity
         self.dtype = self.mem.dtype
+
+    def serialize(self, serialize):
+        header = {}
+        header['mem'], frames = serialize(self.to_array())
+        return header, frames
+
+    @classmethod
+    def deserialize(cls, deserialize, header, frames):
+        mem = deserialize(header['mem'], frames)
+        return Buffer(mem)
 
     def __reduce__(self):
         cpumem = self.to_array()
@@ -109,3 +120,6 @@ class _BufferSentry(object):
     def contig(self):
         if not self._buf.is_c_contiguous():
             raise BufferSentryError('non contiguous')
+
+
+register_distributed_serializer(Buffer)

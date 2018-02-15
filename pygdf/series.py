@@ -12,6 +12,7 @@ from .index import Index, RangeIndex, GenericIndex
 from .settings import NOTSET, settings
 from .column import Column
 from . import columnops
+from .serialize import register_distributed_serializer
 
 
 class Series(object):
@@ -68,6 +69,26 @@ class Series(object):
         assert isinstance(data, columnops.TypedColumnBase)
         self._column = data
         self._index = RangeIndex(len(data)) if index is None else index
+
+    def serialize(self, serialize):
+        header = {}
+        frames = []
+        header['index'], index_frames = serialize(self._index)
+        frames.extend(index_frames)
+        header['index_frame_count'] = len(index_frames)
+        header['column'], column_frames = serialize(self._column)
+        frames.extend(column_frames)
+        header['column_frame_count'] = len(column_frames)
+        return header, frames
+
+    @classmethod
+    def deserialize(cls, deserialize, header, frames):
+        index_nframes = header['index_frame_count']
+        index = deserialize(header['index'], frames[:index_nframes])
+        frames = frames[index_nframes:]
+        column_nframes = header['column_frame_count']
+        column = deserialize(header['column'], frames[:column_nframes])
+        return Series(column, index=index)
 
     def _copy_construct_defaults(self):
         return dict(
@@ -716,3 +737,6 @@ class Series(object):
         Returns a new Series.
         """
         return self._unaryop('floor')
+
+
+register_distributed_serializer(Series)

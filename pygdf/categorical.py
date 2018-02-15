@@ -5,6 +5,7 @@ from .dataframe import Series
 from . import numerical, utils, columnops
 from .buffer import Buffer
 from . import cudautils
+from .serialize import register_distributed_serializer
 
 
 class CategoricalAccessor(object):
@@ -59,6 +60,24 @@ class CategoricalColumn(columnops.TypedColumnBase):
         super(CategoricalColumn, self).__init__(**kwargs)
         self._categories = tuple(categories)
         self._ordered = bool(ordered)
+
+    def serialize(self, serialize):
+        header, frames = super(CategoricalColumn, self).serialize(serialize)
+        assert 'dtype' not in header
+        header['dtype'] = self._dtype
+        header['categories'] = self._categories
+        header['ordered'] = self._ordered
+        return header, frames
+
+    @classmethod
+    def deserialize(cls, deserialize, header, frames):
+        data, mask = cls._deserialize_data_mask(deserialize, header, frames)
+        dtype = header['dtype']
+        categories = header['categories']
+        ordered = header['ordered']
+        col = cls(data=data, mask=mask, null_count=header['null_count'],
+                  dtype=dtype, categories=categories, ordered=ordered)
+        return col
 
     def _replace_defaults(self):
         params = super(CategoricalColumn, self)._replace_defaults()
@@ -116,7 +135,8 @@ class CategoricalColumn(columnops.TypedColumnBase):
         return self._decode(val) if val is not None else val
 
     def to_pandas(self, index=None):
-        data = pd.Categorical.from_codes(self.cat().codes.to_array(),
+        codes = self.cat().codes.fillna(-1).to_array()
+        data = pd.Categorical.from_codes(codes,
                                          categories=self._categories,
                                          ordered=self._ordered)
         return pd.Series(data, index=index)
@@ -158,3 +178,6 @@ def pandas_categorical_as_column(categorical, codes=None):
         params.update(dict(mask=Buffer(mask), null_count=null_count))
 
     return CategoricalColumn(**params)
+
+
+register_distributed_serializer(CategoricalColumn)

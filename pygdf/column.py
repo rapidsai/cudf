@@ -107,6 +107,29 @@ class Column(object):
 
         self._null_count = null_count
 
+    def serialize(self, serialize):
+        header = {
+            'null_count': self._null_count,
+        }
+        frames = []
+
+        header['data_buffer'], data_frames = serialize(self._data)
+        header['data_frame_count'] = len(data_frames)
+        frames.extend(data_frames)
+        header['mask_buffer'], mask_frames = serialize(self._mask)
+        header['mask_frame_count'] = len(mask_frames)
+        frames.extend(mask_frames)
+        header['frame_count'] = len(frames)
+        return header, frames
+
+    @classmethod
+    def _deserialize_data_mask(cls, deserialize, header, frames):
+        data_nframe = header['data_frame_count']
+        mask_nframe = header['mask_frame_count']
+        data = deserialize(header['data_buffer'], frames[:data_nframe])
+        mask = deserialize(header['mask_buffer'], frames[data_nframe:data_nframe + mask_nframe])
+        return data, mask
+
     def __sizeof__(self):
         n = self._data.__sizeof__()
         if self._mask:
