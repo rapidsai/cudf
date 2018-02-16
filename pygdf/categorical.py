@@ -64,7 +64,7 @@ class CategoricalColumn(columnops.TypedColumnBase):
     def serialize(self, serialize):
         header, frames = super(CategoricalColumn, self).serialize(serialize)
         assert 'dtype' not in header
-        header['dtype'] = self._dtype
+        header['dtype'] = serialize(self._dtype)
         header['categories'] = self._categories
         header['ordered'] = self._ordered
         return header, frames
@@ -72,7 +72,7 @@ class CategoricalColumn(columnops.TypedColumnBase):
     @classmethod
     def deserialize(cls, deserialize, header, frames):
         data, mask = cls._deserialize_data_mask(deserialize, header, frames)
-        dtype = header['dtype']
+        dtype = deserialize(*header['dtype'])
         categories = header['categories']
         ordered = header['ordered']
         col = cls(data=data, mask=mask, null_count=header['null_count'],

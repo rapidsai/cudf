@@ -4,6 +4,7 @@ import numpy as np
 
 from . import cudautils, utils
 from .serialize import register_distributed_serializer
+from .gpu_ipc_broker import serialize_gpu_data, rebuild_gpu_data, is_using_ipc
 
 
 class Buffer(object):
@@ -26,12 +27,19 @@ class Buffer(object):
 
     def serialize(self, serialize):
         header = {}
-        header['mem'], frames = serialize(self.to_array())
+        if is_using_ipc():
+            header['mem'], frames = serialize_gpu_data(self.to_gpu_array())
+        else:
+            header['mem'], frames = serialize(self.to_array())
         return header, frames
 
     @classmethod
     def deserialize(cls, deserialize, header, frames):
-        mem = deserialize(header['mem'], frames)
+        if is_using_ipc():
+            mem = rebuild_gpu_data(**header['mem'])
+        else:
+            mem = deserialize(header['mem'], frames)
+            mem.flags['WRITEABLE'] = True  # XXX: hack for numba to work
         return Buffer(mem)
 
     def __reduce__(self):
