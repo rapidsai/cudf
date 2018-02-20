@@ -1,11 +1,20 @@
 import numpy as np
 import pandas as pd
-from distributed.protocol import serialize, deserialize
+try:
+    from distributed.protocol import serialize, deserialize
+    _have_distributed = True
+except ImportError:
+    _have_distributed = False
 
+import pytest
 import pygdf
 from . import utils
 
 
+require_distributed = pytest.mark.skipif(not _have_distributed, reason='no distributed')
+
+
+@require_distributed
 def test_serialize_dataframe():
     df = pygdf.DataFrame()
     df['a'] = np.arange(100)
@@ -16,24 +25,28 @@ def test_serialize_dataframe():
     pd.util.testing.assert_frame_equal(df.to_pandas(), outdf.to_pandas())
 
 
+@require_distributed
 def test_serialize_series():
     sr = pygdf.Series(np.arange(100))
     outsr = deserialize(*serialize(sr))
     pd.util.testing.assert_series_equal(sr.to_pandas(), outsr.to_pandas())
 
 
+@require_distributed
 def test_serialize_range_index():
     index = pygdf.index.RangeIndex(10, 20)
     outindex = deserialize(*serialize(index))
     assert index == outindex
 
 
+@require_distributed
 def test_serialize_generic_index():
     index = pygdf.index.GenericIndex(pygdf.Series(np.arange(10)))
     outindex = deserialize(*serialize(index))
     assert index == outindex
 
 
+@require_distributed
 def test_serialize_masked_series():
     nelem = 50
     data = np.random.random(nelem)
@@ -46,6 +59,7 @@ def test_serialize_masked_series():
     pd.util.testing.assert_series_equal(sr.to_pandas(), outsr.to_pandas())
 
 
+@require_distributed
 def test_serialize_groupby():
     df = pygdf.DataFrame()
     df['key'] = np.random.randint(0, 20, 100)
