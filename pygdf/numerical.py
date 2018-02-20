@@ -64,14 +64,14 @@ class NumericalColumn(columnops.TypedColumnBase):
     def serialize(self, serialize):
         header, frames = super(NumericalColumn, self).serialize(serialize)
         assert 'dtype' not in header
-        header['dtype'] = self._dtype
+        header['dtype'] = serialize(self._dtype)
         return header, frames
 
     @classmethod
     def deserialize(cls, deserialize, header, frames):
         data, mask = cls._deserialize_data_mask(deserialize, header, frames)
         col = cls(data=data, mask=mask, null_count=header['null_count'],
-                  dtype=header['dtype'])
+                  dtype=deserialize(*header['dtype']))
         return col
 
     def binary_operator(self, binop, rhs):
