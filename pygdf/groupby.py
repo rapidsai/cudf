@@ -10,6 +10,7 @@ from .multi import concat
 from . import _gdf, cudautils
 from .column import Column
 from .buffer import Buffer
+from .serialize import register_distributed_serializer
 
 
 def _auto_generate_grouper_agg(members):
@@ -74,6 +75,19 @@ class Groupby(object):
         self._by = [by] if isinstance(by, str) else list(by)
         self._val_columns = [idx for idx in self._df.columns
                              if idx not in self._by]
+
+    def serialize(self, serialize):
+        header = {
+            'by': self._by,
+        }
+        header['df'], frames = serialize(self._df)
+        return header, frames
+
+    @classmethod
+    def deserialize(cls, deserialize, header, frames):
+        by = header['by']
+        df = deserialize(header['df'], frames)
+        return Groupby(df, by)
 
     def __iter__(self):
         return self._group_iterator()
@@ -348,3 +362,6 @@ class Groupby(object):
         df, segs = self.as_df()
         kwargs.update({'chunks': segs})
         return df.apply_chunks(function, **kwargs)
+
+
+register_distributed_serializer(Groupby)
