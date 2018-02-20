@@ -2,14 +2,17 @@ import pickle
 import multiprocessing
 import logging
 import collections
-
-import zmq
 import socket
 import threading
-from timeit import default_timer as timer
 
 from numba import cuda
-import weakref
+
+try:
+    import zmq
+    _HAVE_ZMQ = True
+except ImportError:
+    _HAVE_ZMQ = False
+
 
 logger = logging.getLogger(__name__)
 
@@ -21,12 +24,15 @@ _server_lock = threading.Lock()
 
 _USING_IPC = False
 
+
 def is_using_ipc():
     return _USING_IPC
 
 
 def enable_ipc():
     global _USING_IPC
+    if not _HAVE_ZMQ:
+        raise ImportError("can't import zmq")
     _USING_IPC = True
     start_server()
 
@@ -145,7 +151,7 @@ def _handle_request(req):
         return pickle.dumps(data.copy_to_host())
     elif method == 'IPC':
         # IPC
-        out =  pickle.dumps(_out_cache.get_ipc(key))
+        out = pickle.dumps(_out_cache.get_ipc(key))
         return out
     elif method == 'DROP':
         # DROP
@@ -184,14 +190,15 @@ def _request_transfer(key, remoteinfo):
         logger.info("request by NET: %s->%s", theiraddr, myaddr)
         socket.send(pickle.dumps(('NET', key)))
         rcv = socket.recv()
-        output =  cuda.to_device(pickle.loads(rcv))
+        output = cuda.to_device(pickle.loads(rcv))
         # Release
         _request_drop(socket, key)
         return output
 
+
 def _request_drop(socket, key):
     socket.send(pickle.dumps(('DROP', key)))
-    rcv = socket.recv()
+    socket.recv()
 
 
 def start_server():
