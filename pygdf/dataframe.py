@@ -585,7 +585,7 @@ class DataFrame(object):
             raise ValueError('"on" is not supported yet')
 
         same_names = set(self.columns) & set(other.columns)
-        if same_names and not (lsuffix and rsuffix):
+        if same_names and not (lsuffix or rsuffix):
             raise ValueError('there are overlapping columns but '
                              'lsuffix and rsuffix are not defined')
 
