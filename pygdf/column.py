@@ -135,7 +135,6 @@ class Column(object):
 
         data = Buffer(cudautils.ones(len(self), dtype=np.bool_))
         mask = NumericalColumn(data=data, mask=None, null_count=0, dtype=np.bool_)
-        print(mask)
         if self._mask is not None:
             mask = mask.set_mask(self._mask).fillna(False)
         return mask
