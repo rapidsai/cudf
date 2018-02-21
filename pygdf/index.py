@@ -2,14 +2,28 @@ from __future__ import print_function, division
 
 import pandas as pd
 import numpy as np
+import pickle
 
 from . import cudautils, utils, columnops
 from .buffer import Buffer
 from .numerical import NumericalColumn
 from .column import Column
+from .serialize import register_distributed_serializer
 
 
 class Index(object):
+    def serialize(self, serialize):
+        header = {}
+        header['payload'], frames = serialize(pickle.dumps(self))
+        header['frame_count'] = len(frames)
+        return header, frames
+
+    @classmethod
+    def deserialize(cls, deserialize, header, frames):
+        payload = deserialize(header['payload'],
+                              frames[:header['frame_count']])
+        return pickle.loads(payload)
+
     def take(self, indices):
         assert indices.dtype.kind in 'iu'
         if indices.size == 0:
@@ -196,6 +210,18 @@ class GenericIndex(Index):
             res._values = values
             return res
 
+    def serialize(self, serialize):
+        header = {}
+        header['payload'], frames = serialize(self._values)
+        header['frame_count'] = len(frames)
+        return header, frames
+
+    @classmethod
+    def deserialize(cls, deserialize, header, frames):
+        payload = deserialize(header['payload'],
+                              frames[:header['frame_count']])
+        return cls(payload)
+
     def __sizeof__(self):
         return self._values.__sizeof__()
 
@@ -244,3 +270,7 @@ class GenericIndex(Index):
             end = col.find_last_value(last)
             end += 1
         return begin, end
+
+
+register_distributed_serializer(RangeIndex)
+register_distributed_serializer(GenericIndex)

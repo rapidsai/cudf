@@ -13,6 +13,7 @@ from .index import GenericIndex, EmptyIndex, Index, RangeIndex
 from .series import Series
 from .buffer import Buffer
 from .settings import NOTSET, settings
+from .serialize import register_distributed_serializer
 
 
 class DataFrame(object):
@@ -73,14 +74,48 @@ class DataFrame(object):
     3 3 0.3
     """
 
-    def __init__(self, name_series=None):
-        self._index = EmptyIndex()
-        self._size = 0
+    def __init__(self, name_series=None, index=None):
+        if index is None:
+            index = EmptyIndex()
+        self._index = index
+        self._size = len(index)
         self._cols = OrderedDict()
         # has initializer?
         if name_series is not None:
             for k, series in name_series:
                 self.add_column(k, series)
+
+    def serialize(self, serialize):
+        header = {}
+        frames = []
+        header['index'], index_frames = serialize(self._index)
+        header['index_frame_count'] = len(index_frames)
+        frames.extend(index_frames)
+        # Use the column directly to avoid duplicating the index
+        columns = [col._column for col in self._cols.values()]
+        serialized_columns = zip(*map(serialize, columns))
+        header['columns'], column_frames = serialized_columns
+        header['column_names'] = tuple(self._cols)
+        for f in column_frames:
+            frames.extend(f)
+        return header, frames
+
+    @classmethod
+    def deserialize(cls, deserialize, header, frames):
+        # Reconstruct the index
+        index_header = header['index']
+        index_frames = frames[:header['index_frame_count']]
+        index = deserialize(index_header, index_frames)
+        # Reconstruct the columns
+        column_frames = frames[header['index_frame_count']:]
+        columns = []
+        for k, meta in zip(header['column_names'], header['columns']):
+            col_frame_count = meta['frame_count']
+            colobj = deserialize(meta, column_frames[:col_frame_count])
+            columns.append((k, colobj))
+            # Advance frames
+            column_frames = column_frames[col_frame_count:]
+        return cls(columns, index=index)
 
     @property
     def dtypes(self):
@@ -876,3 +911,6 @@ class Loc(object):
             df[col] = sr[begin:end]
 
         return df
+
+
+register_distributed_serializer(DataFrame)
