@@ -48,15 +48,15 @@ class Column(object):
             data.extend(o.data.to_gpu_array())
 
         # Concatenate mask if present
-        if all(o.has_null_mask for o in objs):
+        if any(o.has_null_mask for o in objs):
             # FIXME: Inefficient
             mem = cuda.device_array(shape=newsize, dtype=np.bool)
             mask = Buffer.from_empty(mem)
             null_count = 0
             for o in objs:
-                mask.extend(o._get_mask_as_series().to_gpu_array())
+                mask.extend(o._get_mask_as_column().to_gpu_array())
                 null_count += o._null_count
-            mask = Buffer(utils.boolmask_to_bitmask(mask.to_array()))
+            mask = Buffer(cudautils.compact_mask_bytes(mask.to_gpu_array()))
         else:
             mask = None
             null_count = 0
@@ -129,6 +129,15 @@ class Column(object):
         data = deserialize(header['data_buffer'], frames[:data_nframe])
         mask = deserialize(header['mask_buffer'], frames[data_nframe:data_nframe + mask_nframe])
         return data, mask
+
+    def _get_mask_as_column(self):
+        from .numerical import NumericalColumn
+
+        data = Buffer(cudautils.ones(len(self), dtype=np.bool_))
+        mask = NumericalColumn(data=data, mask=None, null_count=0, dtype=np.bool_)
+        if self._mask is not None:
+            mask = mask.set_mask(self._mask).fillna(False)
+        return mask
 
     def __sizeof__(self):
         n = self._data.__sizeof__()
