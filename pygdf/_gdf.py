@@ -183,6 +183,9 @@ def apply_segsort(col_keys, col_vals, segments, descending=False):
     """
     # prepare
     nelem = len(col_keys)
+    if nelem == segments.size:
+        return
+
     seg_dtype = np.uint32
 
     d_fullsegs = cuda.device_array(segments.size + 1, dtype=seg_dtype)
