@@ -61,6 +61,21 @@ def group_max(data, segments, output):
         output[i] = tmp
 
 
+@cuda.jit
+def group_min(data, segments, output):
+    i = cuda.grid(1)
+    if i < segments.size:
+        s = segments[i]
+        e = (segments[i + 1]
+             if (i + 1) < segments.size
+             else data.size)
+
+        tmp = data[s]
+        for j in range(s + 1, e):
+            tmp = min(tmp, data[j])
+        output[i] = tmp
+
+
 _dfsegs_pack = namedtuple('_dfsegs_pack', ['df', 'segs'])
 
 
@@ -163,7 +178,7 @@ class Groupby(object):
 
         size = len(outdf)
 
-        # Append value columns
+    # Append value columns
         for k, infos in functors_mapping.items():
             values = defaultdict(lambda: np.zeros(size, dtype=np.float64))
             begin = segs
@@ -182,6 +197,15 @@ class Groupby(object):
                 dev_out = cuda.device_array(size, dtype=sr.dtype)
                 for newk, functor in infos.items():
                     group_max.forall(size)(sr.to_gpu_array(),
+                                           dev_begins,
+                                           dev_out)
+                    values[newk] = dev_out
+
+            elif functor.__name__ == 'min':
+                dev_begins = cuda.to_device(np.asarray(begin))
+                dev_out = cuda.device_array(size, dtype=sr.dtype)
+                for newk, functor in infos.items():
+                    group_min.forall(size)(sr.to_gpu_array(),
                                            dev_begins,
                                            dev_out)
                     values[newk] = dev_out
