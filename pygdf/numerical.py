@@ -198,6 +198,8 @@ class NumericalColumn(columnops.TypedColumnBase):
         dkind = self.dtype.kind
         if dkind == 'f':
             return np.nan
+        elif dkind in 'iu':
+            return -1
         else:
             raise TypeError("numeric column of {} has no NaN value".format(self.dtype))
 
