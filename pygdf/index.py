@@ -102,6 +102,9 @@ class EmptyIndex(Index):
         buf = Buffer(np.empty(0, dtype=np.int64))
         return NumericalColumn(data=buf, dtype=buf.dtype)
 
+    def find_label_range(self, first, last):
+        return None, None
+
 
 class RangeIndex(Index):
     """Basic start..stop
