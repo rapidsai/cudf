@@ -46,6 +46,21 @@ def group_mean(data, segments, output):
         output[i] = carry / n
 
 
+@cuda.jit
+def group_max(data, segments, output):
+    i = cuda.grid(1)
+    if i < segments.size:
+        s = segments[i]
+        e = (segments[i + 1]
+             if (i + 1) < segments.size
+             else data.size)
+
+        tmp = data[s]
+        for j in range(s + 1, e):
+            tmp = max(tmp, data[j])
+        output[i] = tmp
+
+
 _dfsegs_pack = namedtuple('_dfsegs_pack', ['df', 'segs'])
 
 
@@ -160,6 +175,15 @@ class Groupby(object):
                     group_mean.forall(size)(sr.to_gpu_array(),
                                             dev_begins,
                                             dev_out)
+                    values[newk] = dev_out
+
+            elif functor.__name__ == 'max':
+                dev_begins = cuda.to_device(np.asarray(begin))
+                dev_out = cuda.device_array(size, dtype=sr.dtype)
+                for newk, functor in infos.items():
+                    group_max.forall(size)(sr.to_gpu_array(),
+                                           dev_begins,
+                                           dev_out)
                     values[newk] = dev_out
             else:
                 end = chain(segs[1:], [len(grouped_df)])
