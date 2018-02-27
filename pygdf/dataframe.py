@@ -365,11 +365,14 @@ class DataFrame(object):
         del self._cols[name]
 
     @classmethod
-    def _concat(cls, objs):
+    def _concat(cls, objs, ignore_index=False):
         if len(set(o.columns for o in objs)) != 1:
             raise ValueError('columns mismatch')
 
-        index = Index._concat([o.index for o in objs])
+        if ignore_index:
+            index = RangeIndex(sum(map(len, objs)))
+        else:
+            index = Index._concat([o.index for o in objs])
         data = [(c, Series._concat([o[c] for o in objs], index=index))
                 for c in objs[0].columns]
         out = cls(data)
