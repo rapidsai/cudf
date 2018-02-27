@@ -3,6 +3,7 @@ This file provide binding to the libgdf library.
 """
 import ctypes
 import contextlib
+import itertools
 
 import numpy as np
 
@@ -203,17 +204,24 @@ def apply_segsort(col_keys, col_vals, segments, descending=False):
     sizeof_key = col_keys.data.dtype.itemsize
     sizeof_val = col_vals.data.dtype.itemsize
 
+    segsize_limit = 2 ** 16 - 1
     # sort
     plan = libgdf.gdf_segmented_radixsort_plan(nelem, descending,
                                                begin_bit, end_bit)
     try:
         libgdf.gdf_segmented_radixsort_plan_setup(plan, sizeof_key, sizeof_val)
-        libgdf.gdf_segmented_radixsort_generic(plan,
-                                               col_keys.cffi_view,
-                                               col_vals.cffi_view,
-                                               segments.size,
-                                               unwrap_devary(d_begins),
-                                               unwrap_devary(d_ends))
+        # The following is to handle the segument size limit due to
+        # max CUDA grid size.
+        range0 = range(0, segments.size, segsize_limit)
+        range1 = itertools.chain(range0[1:], [segments.size])
+        for s, e in zip(range0, range1):
+            segsize = e - s
+            libgdf.gdf_segmented_radixsort_generic(plan,
+                                                   col_keys.cffi_view,
+                                                   col_vals.cffi_view,
+                                                   segsize,
+                                                   unwrap_devary(d_begins[s:]),
+                                                   unwrap_devary(d_ends[s:]))
     finally:
         libgdf.gdf_segmented_radixsort_plan_free(plan)
 
