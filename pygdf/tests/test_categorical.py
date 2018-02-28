@@ -31,7 +31,7 @@ def test_categorical_basic():
     assert all(x == y for x, y in zip(string.split(), expect_str.split()))
 
 
-def test_categorical_missing():
+def test_categorical_integer():
     cat = pd.Categorical(['a', '_', '_', 'c', 'a'], categories=['a', 'b', 'c'])
     pdsr = pd.Series(cat)
     sr = Series(cat)
@@ -41,11 +41,6 @@ def test_categorical_missing():
     np.testing.assert_array_equal(pdsr.cat.codes.data,
                                   sr.cat.codes.fillna(-1).to_array())
     np.testing.assert_equal(pdsr.cat.codes.dtype, sr.cat.codes.dtype)
-
-    # integer doesn't have nan value
-    with pytest.raises(TypeError) as raises:
-        sr.cat.codes.to_array(fillna='pandas')
-    raises.match('NaN value')
 
     string = str(sr)
     expect_str = """
