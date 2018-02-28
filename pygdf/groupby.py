@@ -330,13 +330,19 @@ class Groupby(object):
         """
         dsegs = segs.astype(dtype=np.uint32).to_gpu_array()
         sorted_keys = []
+        plan_cache = {}
         for col in columns:
             # Shuffle the key column according to the previous groups
             srkeys = self._df[col].take(rowidcol.to_gpu_array(),
                                         ignore_index=True)
             # Segmented sort on the key
             shuf = Column(Buffer(cudautils.arange(len(srkeys))))
-            _gdf.apply_segsort(srkeys._column, shuf, dsegs)
+
+            cache_key = (len(srkeys), srkeys.dtype, shuf.dtype)
+            plan = plan_cache.get(cache_key)
+            plan = _gdf.apply_segsort(srkeys._column, shuf, dsegs, plan=plan)
+            plan_cache[cache_key] = plan
+
             sorted_keys.append(srkeys)   # keep sorted key cols
             # Determine segments
             dsegs = cudautils.find_segments(srkeys.to_gpu_array(), dsegs)
