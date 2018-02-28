@@ -367,7 +367,8 @@ class DataFrame(object):
     @classmethod
     def _concat(cls, objs, ignore_index=False):
         if len(set(o.columns for o in objs)) != 1:
-            raise ValueError('columns mismatch')
+            what = set(o.columns for o in objs)
+            raise ValueError('columns mismatch: {}'.format(what))
 
         if ignore_index:
             index = RangeIndex(sum(map(len, objs)))
