@@ -30,8 +30,9 @@ def format(index, cols, show_headers=True, more_cols=0, more_rows=0,
     The `str` of the formatted output
     """
     if not cols:
-        return []
-
+        return "Empty DataFrame"
+    if len(list(cols.values())[0]) == 0:
+        return "Empty DataFrame"
     # get number of rows from the first column
     nrows = len(next(iter(cols.values())))
     headers = tuple(cols.keys())
@@ -40,7 +41,7 @@ def format(index, cols, show_headers=True, more_cols=0, more_rows=0,
     # compute column widths
     widths = {}
     for k, vs in cols.items():
-        widths[k] = max(len(k), max(map(len, vs)), min_width)
+        widths[k] = max(len(k), max(map(len, vs), default=0), min_width)
     # format table
     out = []
     widthkey = len(str(nrows))
