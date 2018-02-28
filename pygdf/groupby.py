@@ -80,7 +80,6 @@ def group_min(data, segments, output):
         output[i] = tmp
 
 
-
 _dfsegs_pack = namedtuple('_dfsegs_pack', ['df', 'segs'])
 
 
@@ -205,8 +204,8 @@ class Groupby(object):
                     dev_out = cuda.device_array(size, dtype=sr.dtype)
                     if size > 0:
                         group_max.forall(size)(sr.to_gpu_array(),
-                                            dev_begins,
-                                            dev_out)
+                                               dev_begins,
+                                               dev_out)
                     values[newk] = dev_out
 
                 elif functor.__name__ == 'min':
@@ -214,8 +213,8 @@ class Groupby(object):
                     dev_out = cuda.device_array(size, dtype=sr.dtype)
                     if size > 0:
                         group_min.forall(size)(sr.to_gpu_array(),
-                                            dev_begins,
-                                            dev_out)
+                                               dev_begins,
+                                               dev_out)
                     values[newk] = dev_out
                 else:
                     end = chain(segs[1:], [len(grouped_df)])
@@ -249,6 +248,7 @@ class Groupby(object):
                  Group starting index.
         """
         if len(df) == 0:
+            # Groupby on empty dataframe
             return _dfsegs_pack(df=df, segs=Buffer(np.asarray([])))
         # Prepare dataframe
         orig_df = df.copy()

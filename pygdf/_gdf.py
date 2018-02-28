@@ -185,6 +185,8 @@ def apply_segsort(col_keys, col_vals, segments, descending=False):
     # prepare
     nelem = len(col_keys)
     if nelem == segments.size:
+        # As many seguments as there are elements.
+        # Nothing to do.
         return
 
     seg_dtype = np.uint32
