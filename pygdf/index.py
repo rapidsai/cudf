@@ -145,7 +145,9 @@ class RangeIndex(Index):
             raise ValueError(index)
 
     def __eq__(self, other):
-        if isinstance(other, RangeIndex):
+        if isinstance(other, EmptyIndex):
+            return len(self) == 0
+        elif isinstance(other, RangeIndex):
             return (self._start == other._start and self._stop == other._stop)
         else:
             return super(RangeIndex, self).__eq__(other)
