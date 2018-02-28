@@ -4,6 +4,7 @@ from itertools import chain
 import numpy as np
 
 from numba import cuda
+from numba.numpy_support import from_dtype
 
 from .dataframe import DataFrame, Series
 from .multi import concat
@@ -15,7 +16,9 @@ from .serialize import register_distributed_serializer
 
 def _auto_generate_grouper_agg(members):
     def make_fun(f):
-        return lambda self: self.agg(f)
+        def groupby_agg(self):
+            return self.agg(f)
+        return groupby_agg
 
     for k, f in members['_NAMED_FUNCTIONS'].items():
         fn = make_fun(f)
@@ -61,6 +64,7 @@ def group_max(data, segments, output):
         output[i] = tmp
 
 
+
 @cuda.jit
 def group_min(data, segments, output):
     i = cuda.grid(1)
@@ -74,6 +78,7 @@ def group_min(data, segments, output):
         for j in range(s + 1, e):
             tmp = min(tmp, data[j])
         output[i] = tmp
+
 
 
 _dfsegs_pack = namedtuple('_dfsegs_pack', ['df', 'segs'])
@@ -158,7 +163,7 @@ class Groupby(object):
         # The "value" columns
         for k, vs in functors.items():
             if k not in self._df.columns:
-                raise NameError('column {:r} not found'.format(k))
+                raise NameError('column {} not found'.format(k))
             if len(vs) == 1:
                 [functor] = vs
                 functors_mapping[k] = {k: functor}
@@ -167,6 +172,8 @@ class Groupby(object):
                 for functor in vs:
                     newk = '{}_{}'.format(k, functor.__name__)
                     cur_fn_mapping[newk] = functor
+
+            del functor
         # Grouping
         grouped_df, sr_segs = self._group_dataframe(self._df, self._by)
         # Grouped values
@@ -178,41 +185,41 @@ class Groupby(object):
 
         size = len(outdf)
 
-    # Append value columns
+        # Append value columns
         for k, infos in functors_mapping.items():
             values = defaultdict(lambda: np.zeros(size, dtype=np.float64))
             begin = segs
             sr = grouped_df[k].reset_index()
-            if functor.__name__ == 'mean':
-                dev_begins = cuda.to_device(np.asarray(begin))
-                dev_out = cuda.device_array(size, dtype=np.float64)
-                for newk, functor in infos.items():
-                    group_mean.forall(size)(sr.to_gpu_array(),
+            for newk, functor in infos.items():
+                if functor.__name__ == 'mean':
+                    dev_begins = cuda.to_device(np.asarray(begin))
+                    dev_out = cuda.device_array(size, dtype=np.float64)
+                    if size > 0:
+                        group_mean.forall(size)(sr.to_gpu_array(),
+                                                dev_begins,
+                                                dev_out)
+                    values[newk] = dev_out
+
+                elif functor.__name__ == 'max':
+                    dev_begins = cuda.to_device(np.asarray(begin))
+                    dev_out = cuda.device_array(size, dtype=sr.dtype)
+                    if size > 0:
+                        group_max.forall(size)(sr.to_gpu_array(),
                                             dev_begins,
                                             dev_out)
                     values[newk] = dev_out
 
-            elif functor.__name__ == 'max':
-                dev_begins = cuda.to_device(np.asarray(begin))
-                dev_out = cuda.device_array(size, dtype=sr.dtype)
-                for newk, functor in infos.items():
-                    group_max.forall(size)(sr.to_gpu_array(),
-                                           dev_begins,
-                                           dev_out)
+                elif functor.__name__ == 'min':
+                    dev_begins = cuda.to_device(np.asarray(begin))
+                    dev_out = cuda.device_array(size, dtype=sr.dtype)
+                    if size > 0:
+                        group_min.forall(size)(sr.to_gpu_array(),
+                                            dev_begins,
+                                            dev_out)
                     values[newk] = dev_out
-
-            elif functor.__name__ == 'min':
-                dev_begins = cuda.to_device(np.asarray(begin))
-                dev_out = cuda.device_array(size, dtype=sr.dtype)
-                for newk, functor in infos.items():
-                    group_min.forall(size)(sr.to_gpu_array(),
-                                           dev_begins,
-                                           dev_out)
-                    values[newk] = dev_out
-            else:
-                end = chain(segs[1:], [len(grouped_df)])
-                for i, (s, e) in enumerate(zip(begin, end)):
-                    for newk, functor in infos.items():
+                else:
+                    end = chain(segs[1:], [len(grouped_df)])
+                    for i, (s, e) in enumerate(zip(begin, end)):
                         values[newk][i] = functor(sr[s:e])
             # Store
             for k, buf in values.items():
@@ -241,6 +248,8 @@ class Groupby(object):
             * segs : Series.
                  Group starting index.
         """
+        if len(df) == 0:
+            return _dfsegs_pack(df=df, segs=Buffer(np.asarray([])))
         # Prepare dataframe
         orig_df = df.copy()
         df = df.loc[:, levels].reset_index()
