@@ -313,11 +313,12 @@ class DataFrame(object):
     def copy(self):
         "Shallow copy this dataframe"
         df = DataFrame()
-        for k in self.columns:
-            df[k] = self[k]
+        df._index = self._index
+        df._size = self._size
+        df._cols = self._cols.copy()
         return df
 
-    def _prepare_series_for_add(self, col):
+    def _prepare_series_for_add(self, col, forceindex=False):
         """Prepare a series to be added to the DataFrame.
 
         Parameters
@@ -334,7 +335,7 @@ class DataFrame(object):
             series = Series(col)
         else:
             series = Series(col, index=self.index)
-        if empty_index or self._index == series.index:
+        if forceindex or empty_index or self._index == series.index:
             if empty_index:
                 self._index = series.index
             self._size = len(series)
@@ -342,7 +343,7 @@ class DataFrame(object):
         else:
             raise NotImplementedError("join needed")
 
-    def add_column(self, name, data):
+    def add_column(self, name, data, forceindex=False):
         """Add a column
 
         Parameters
@@ -354,7 +355,8 @@ class DataFrame(object):
         """
         if name in self._cols:
             raise NameError('duplicated column name {!r}'.format(name))
-        series = self._prepare_series_for_add(data)
+
+        series = self._prepare_series_for_add(data, forceindex=True)
         self._cols[name] = series
 
     def drop_column(self, name):
@@ -725,7 +727,7 @@ class DataFrame(object):
         return newdf
 
     @applyutils.doc_apply()
-    def apply_rows(self, func, incols, outcols, kwargs):
+    def apply_rows(self, func, incols, outcols, kwargs, cache_key=None):
         """Transform each row using the user-provided function.
 
         Parameters
@@ -770,7 +772,7 @@ class DataFrame(object):
         The loop in the function may look like serial code but it will be
         executed concurrently by multiple threads.
         """
-        return applyutils.apply_rows(self, func, incols, outcols, kwargs)
+        return applyutils.apply_rows(self, func, incols, outcols, kwargs, cache_key=cache_key)
 
     @applyutils.doc_applychunks()
     def apply_chunks(self, func, incols, outcols, kwargs={}, chunks=None, tpb=1):
@@ -912,7 +914,7 @@ class Loc(object):
                                                      row_slice.stop)
         for col in col_slice:
             sr = self._df[col]
-            df[col] = sr[begin:end]
+            df.add_column(col, sr[begin:end], forceindex=True)
 
         return df
 

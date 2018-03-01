@@ -173,7 +173,8 @@ def apply_prefixsum(col_inp, col_out, inclusive):
     libgdf.gdf_prefixsum_generic(col_inp, col_out, inclusive)
 
 
-def apply_segsort(col_keys, col_vals, segments, descending=False):
+def apply_segsort(col_keys, col_vals, segments, descending=False,
+                  plan=None):
     """Inplace segemented sort
 
     Parameters
@@ -189,42 +190,62 @@ def apply_segsort(col_keys, col_vals, segments, descending=False):
         # Nothing to do.
         return
 
-    seg_dtype = np.uint32
+    if plan is None:
+        plan = SegmentedRadixortPlan(nelem, col_keys.dtype, col_vals.dtype,
+                                     descending=descending)
 
-    d_fullsegs = cuda.device_array(segments.size + 1, dtype=seg_dtype)
-    d_begins = d_fullsegs[:-1]
-    d_ends = d_fullsegs[1:]
+    plan.sort(segments, col_keys, col_vals)
+    return plan
 
-    # Note: .astype is required below because .copy_to_device
-    #       is just a plain memcpy
-    d_begins.copy_to_device(cudautils.astype(segments, dtype=seg_dtype))
-    d_ends[-1:].copy_to_device(np.require([nelem], dtype=seg_dtype))
 
-    begin_bit = 0
-    end_bit = col_keys.dtype.itemsize * 8
+class SegmentedRadixortPlan(object):
+    def __init__(self, nelem, key_dtype, val_dtype, descending=False):
+        begin_bit = 0
+        self.sizeof_key = key_dtype.itemsize
+        self.sizeof_val = val_dtype.itemsize
+        end_bit = self.sizeof_key * 8
+        plan = libgdf.gdf_segmented_radixsort_plan(nelem, descending,
+                                                   begin_bit, end_bit)
+        self.plan = plan
+        self.nelem = nelem
+        self.is_closed = False
+        self.setup()
 
-    sizeof_key = col_keys.data.dtype.itemsize
-    sizeof_val = col_vals.data.dtype.itemsize
+    def __del__(self):
+        if not self.is_closed:
+            self.close()
 
-    segsize_limit = 2 ** 16 - 1
-    # sort
-    plan = libgdf.gdf_segmented_radixsort_plan(nelem, descending,
-                                               begin_bit, end_bit)
-    try:
-        libgdf.gdf_segmented_radixsort_plan_setup(plan, sizeof_key, sizeof_val)
+    def close(self):
+        libgdf.gdf_segmented_radixsort_plan_free(self.plan)
+        self.is_closed = True
+        self.plan = None
+
+    def setup(self):
+        libgdf.gdf_segmented_radixsort_plan_setup(self.plan, self.sizeof_key,
+                                                  self.sizeof_val)
+
+    def sort(self, segments, col_keys, col_vals):
+        seg_dtype = np.uint32
+        segsize_limit = 2 ** 16 - 1
+
+        d_fullsegs = cuda.device_array(segments.size + 1, dtype=seg_dtype)
+        d_begins = d_fullsegs[:-1]
+        d_ends = d_fullsegs[1:]
+
+        # Note: .astype is required below because .copy_to_device
+        #       is just a plain memcpy
+        d_begins.copy_to_device(cudautils.astype(segments, dtype=seg_dtype))
+        d_ends[-1:].copy_to_device(np.require([self.nelem], dtype=seg_dtype))
+
         # The following is to handle the segument size limit due to
         # max CUDA grid size.
         range0 = range(0, segments.size, segsize_limit)
         range1 = itertools.chain(range0[1:], [segments.size])
         for s, e in zip(range0, range1):
             segsize = e - s
-            libgdf.gdf_segmented_radixsort_generic(plan,
+            libgdf.gdf_segmented_radixsort_generic(self.plan,
                                                    col_keys.cffi_view,
                                                    col_vals.cffi_view,
                                                    segsize,
                                                    unwrap_devary(d_begins[s:]),
                                                    unwrap_devary(d_ends[s:]))
-    finally:
-        libgdf.gdf_segmented_radixsort_plan_free(plan)
-
-

@@ -60,6 +60,19 @@ def ones(size, dtype):
     return out
 
 
+@cuda.jit
+def gpu_zeros(size, out):
+    i = cuda.grid(1)
+    if i < size:
+        out[i] = 0
+
+
+def zeros(size, dtype):
+    out = cuda.device_array(size, dtype=dtype)
+    gpu_zeros.forall(size)(size, out)
+    return out
+
+
 # GPU array type casting
 
 
@@ -548,8 +561,9 @@ def gpu_mark_segment_begins(arr, markers):
     i = cuda.grid(1)
     if i == 0:
         markers[0] = 1
-    if 0 < i < markers.size:
-        markers[i] = arr[i] != arr[i - 1]
+    elif 0 < i < markers.size:
+        if not markers[i]:
+            markers[i] = arr[i] != arr[i - 1]
 
 
 @cuda.jit
@@ -568,7 +582,7 @@ def gpu_mark_seg_segments(begins, markers):
         markers[begins[i]] = 1
 
 
-def find_segments(arr, segs=None):
+def find_segments(arr, segs=None, markers=None):
     """Find beginning indices of runs of equal values.
 
     Parameters
@@ -586,9 +600,14 @@ def find_segments(arr, segs=None):
 
     """
     # Compute diffs of consecutive elements
-    markers = cuda.device_array(arr.size, dtype=np.int32)
+    null_markers = markers is None
+    if null_markers:
+        markers = zeros(arr.size, dtype=np.int32)
+    else:
+        assert markers.size == arr.size
+        assert markers.dtype == np.dtype(np.int32), markers.dtype
     gpu_mark_segment_begins.forall(markers.size)(arr, markers)
-    if segs is not None:
+    if segs is not None and null_markers:
         gpu_mark_seg_segments.forall(segs.size)(segs, markers)
     # Compute index of marked locations
     slots = prefixsum(markers)
@@ -597,4 +616,4 @@ def find_segments(arr, segs=None):
     # Compact segments
     begins = cuda.device_array(shape=int(ct), dtype=np.intp)
     gpu_scatter_segment_begins.forall(markers.size)(markers, scanned, begins)
-    return begins
+    return begins, markers
