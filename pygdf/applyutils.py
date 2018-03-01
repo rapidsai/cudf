@@ -43,7 +43,7 @@ doc_applychunks = docfmt_partial(params=_doc_applyparams,
 
 
 @doc_apply()
-def apply_rows(df, func, incols, outcols, kwargs):
+def apply_rows(df, func, incols, outcols, kwargs, cache_key):
     """Row-wise transformation
 
     Parameters
@@ -53,7 +53,8 @@ def apply_rows(df, func, incols, outcols, kwargs):
     {params}
 
     """
-    applyrows = ApplyRowsCompiler(func, incols, outcols, kwargs)
+    applyrows = ApplyRowsCompiler(func, incols, outcols, kwargs,
+                                  cache_key=cache_key)
     return applyrows.run(df)
 
 
@@ -68,18 +69,19 @@ def apply_chunks(df, func, incols, outcols, kwargs, chunks, tpb):
     {params}
     {params_chunks}
     """
-    applyrows = ApplyChunksCompiler(func, incols, outcols, kwargs)
+    applyrows = ApplyChunksCompiler(func, incols, outcols, kwargs, cache_key=None)
     return applyrows.run(df, chunks=chunks, tpb=tpb)
 
 
 class ApplyKernelCompilerBase(object):
-    def __init__(self, func, incols, outcols, kwargs):
+    def __init__(self, func, incols, outcols, kwargs, cache_key):
         # Get signature of user function
         sig = pysignature(func)
         self.sig = sig
         self.incols = incols
         self.outcols = outcols
         self.kwargs = kwargs
+        self.cache_key = cache_key
         self.kernel = self.compile(func, sig.parameters.keys(), kwargs.keys())
 
     def run(self, df, **launch_params):
@@ -107,7 +109,7 @@ class ApplyRowsCompiler(ApplyKernelCompilerBase):
 
     def compile(self, func, argnames, extra_argnames):
         # Compile kernel
-        kernel = _load_cache_or_make_row_wise_kernel(func, argnames,
+        kernel = _load_cache_or_make_row_wise_kernel(self.cache_key, func, argnames,
                                                      extra_argnames)
         return kernel
 
@@ -243,18 +245,23 @@ def chunk_wise_kernel(nrows, chunks, {args}):
     return kernel
 
 
-_cache = WeakKeyDictionary()
+_cache = dict() #WeakKeyDictionary()
 
 
 @functools.wraps(_make_row_wise_kernel)
-def _load_cache_or_make_row_wise_kernel(func, *args, **kwargs):
+def _load_cache_or_make_row_wise_kernel(cache_key, func, *args, **kwargs):
     """Caching version of ``_make_row_wise_kernel``.
     """
+    if cache_key is None:
+        cache_key = func
     try:
-        return _cache[func]
+        out = _cache[cache_key]
+        # print("apply cache loaded", cache_key)
+        return out
     except KeyError:
+        # print("apply cache NOT loaded", cache_key)
         kernel = _make_row_wise_kernel(func, *args, **kwargs)
-        _cache[func] = kernel
+        _cache[cache_key] = kernel
         return kernel
 
 
