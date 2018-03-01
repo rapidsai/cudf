@@ -56,8 +56,12 @@ class Index(object):
         -------
         result : NumericalColumn
         """
-        segments = cudautils.find_segments(self.gpu_values)
-        return NumericalColumn(data=Buffer(segments), dtype=segments.dtype)
+        segments, _ = self._find_segments()
+        return segments
+
+    def _find_segments(self):
+        seg, markers = cudautils.find_segments(self.gpu_values)
+        return NumericalColumn(data=Buffer(seg), dtype=seg.dtype), markers
 
     @classmethod
     def _concat(cls, objs):

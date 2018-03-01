@@ -259,13 +259,14 @@ class Groupby(object):
         col_order = list(levels)
 
         # Perform grouping
-        df, segs = self._group_first_level(col_order[0], rowid_column, df)
+        df, segs, markers = self._group_first_level(col_order[0], rowid_column, df)
         rowidcol = df[rowid_column]
         sorted_keys = [Series(df.index.as_column())]
         del df
 
         more_keys, reordering_indices, segs = self._group_inner_levels(
-                                            col_order[1:], rowidcol, segs)
+                                            col_order[1:], rowidcol, segs,
+                                            markers=markers)
         sorted_keys.extend(more_keys)
         valcols = [k for k in orig_df.columns if k not in levels]
         # Prepare output
@@ -298,10 +299,10 @@ class Groupby(object):
         """
         df = df.loc[:, [col, rowid_column]]
         df = df.set_index(col).sort_index()
-        segs = df.index.find_segments()
-        return df, Series(segs)
+        segs, markers = df.index._find_segments()
+        return df, Series(segs), markers
 
-    def _group_inner_levels(self, columns, rowidcol, segs):
+    def _group_inner_levels(self, columns, rowidcol, segs, markers):
         """Group the second and onwards level.
 
         Parameters
@@ -345,7 +346,8 @@ class Groupby(object):
 
             sorted_keys.append(srkeys)   # keep sorted key cols
             # Determine segments
-            dsegs = cudautils.find_segments(srkeys.to_gpu_array(), dsegs)
+            dsegs, markers = cudautils.find_segments(srkeys.to_gpu_array(),
+                                                     dsegs, markers=markers)
             # Shuffle
             rowidcol = rowidcol.take(shuf.to_gpu_array(), ignore_index=True)
 

@@ -135,7 +135,7 @@ class NumericalColumn(columnops.TypedColumnBase):
         sortcol, _ = densecol.sort_by_values(ascending=True)
         # find segments
         sortedvals = sortcol.to_gpu_array()
-        segs = cudautils.find_segments(sortedvals)
+        segs, _ = cudautils.find_segments(sortedvals)
         # gather result
         out = cudautils.gather(data=sortedvals, index=segs)
         return self.replace(data=Buffer(out), mask=None)
