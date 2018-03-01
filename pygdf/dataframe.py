@@ -313,8 +313,9 @@ class DataFrame(object):
     def copy(self):
         "Shallow copy this dataframe"
         df = DataFrame()
-        for k in self.columns:
-            df[k] = self[k]
+        df._index = self._index
+        df._size = self._size
+        df._cols = self._cols.copy()
         return df
 
     def _prepare_series_for_add(self, col):
@@ -334,7 +335,7 @@ class DataFrame(object):
             series = Series(col)
         else:
             series = Series(col, index=self.index)
-        if empty_index or self._index == series.index:
+        if empty_index or self._index is series.index or self._index == series.index:
             if empty_index:
                 self._index = series.index
             self._size = len(series)
