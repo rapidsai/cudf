@@ -115,11 +115,43 @@ def test_dataframe_join_cats():
     rhs = rdf.set_index('a')
 
     got = lhs.join(rhs)
+    expect = lhs.to_pandas().join(rhs.to_pandas())
+
+    # Note: pandas make a object Index after joining
+    pd.util.testing.assert_frame_equal(got.to_pandas().reset_index(drop=True),
+                                       expect.reset_index(drop=True))
+
     # Just do some rough checking here.
-    # Note: pandas fails to join on categorical index.
     assert list(got.columns) == ['b', 'c']
     assert len(got) > 0
     assert set(got.index.values) & set('abc')
     assert set(got['b']) & set(bb)
     assert set(got['c']) & set(cc)
 
+
+def test_dataframe_join_mismatch_cats():
+    pdf1 = pd.DataFrame({"join_col": ["a", "b", "c", "d", "e"],
+                         "data_col_left": [1, 2, 3, 4, 5]})
+    pdf2 = pd.DataFrame({"join_col": ["c", "e", "f"],
+                         "data_col_right": [6, 7, 8]})
+
+    pdf1["join_col"] = pdf1["join_col"].astype("category")
+    pdf2["join_col"] = pdf2["join_col"].astype("category")
+
+    gdf1 = DataFrame.from_pandas(pdf1)
+    gdf2 = DataFrame.from_pandas(pdf2)
+
+    gdf1 = gdf1.set_index("join_col")
+    gdf2 = gdf2.set_index("join_col")
+
+    pdf1 = pdf1.set_index('join_col')
+    pdf2 = pdf2.set_index('join_col')
+    join_gdf = gdf1.join(gdf2)
+    join_pdf = pdf1.join(pdf2)
+
+    got = join_gdf.to_pandas()
+    expect = join_pdf.fillna(-1)  # note: pygdf join doesn't mask NA
+
+    expect.data_col_right = expect.data_col_right.astype(np.int64)
+    pd.util.testing.assert_frame_equal(got, expect, check_names=False,
+                                       check_index_type=False)

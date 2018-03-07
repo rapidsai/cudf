@@ -623,33 +623,25 @@ class DataFrame(object):
             for k in indf.columns:
                 outdf[fix_name(k, suffix)] = indf[k][:0]
 
-        lhs = self.sort_index()
-        rhs = other.sort_index()
-
-        lkey = lhs.index.as_column()
-        rkey = rhs.index.as_column()
+        lhs = self
+        rhs = other
 
         df = DataFrame()
-        with _gdf.apply_join(lkey, rkey, how=how) as (lidx, ridx):
-            if lidx.size > 0:
-                joined_index = cudautils.gather_joined_index(
-                    lkey.to_gpu_array(), rkey.to_gpu_array(), lidx, ridx)
-                col = lkey.replace(data=Buffer(joined_index))
-                joined_index = lkey.replace(data=col.data)
-                gather_fn = gather_cols
-            else:
-                joined_index = None
-                gather_fn = gather_empty
 
-            # Gather the columns for the output.
-            # This depends on whether we are actually doing a right join
-            left_args = (df, lhs, lidx, joined_index, lsuffix)
-            right_args = (df, rhs, ridx, joined_index, rsuffix)
-            args_order = ((right_args, left_args)
-                          if rightjoin
-                          else (left_args, right_args))
-            for args in args_order:
-                gather_fn(*args)
+        joined_index, indexers = lhs.index.join(rhs.index, how=how,
+                                                return_indexers=True)
+        gather_fn = (gather_cols if len(joined_index) else gather_empty)
+        lidx = indexers[0].to_gpu_array()
+        ridx = indexers[1].to_gpu_array()
+
+        # Gather columns
+        left_args = (df, lhs, lidx, joined_index, lsuffix)
+        right_args = (df, rhs, ridx, joined_index, rsuffix)
+        args_order = ((right_args, left_args)
+                      if rightjoin
+                      else (left_args, right_args))
+        for args in args_order:
+            gather_fn(*args)
 
         # User requested a sort?
         if sort and len(df):

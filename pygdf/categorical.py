@@ -36,6 +36,13 @@ class CategoricalAccessor(object):
         else:
             return Series(data)
 
+    def set_categories(self, categories):
+        cat = self._parent.to_pandas()
+        # FIXME: this is using pandas to recode the categories
+        cat = cat.cat.set_categories(categories)
+        what = pd.Categorical(cat)
+        return pandas_categorical_as_column(what)
+
 
 class CategoricalColumn(columnops.TypedColumnBase):
     """Implements operations for Columns of Categorical type
@@ -154,6 +161,48 @@ class CategoricalColumn(columnops.TypedColumnBase):
 
     def default_na_value(self):
         return -1
+
+    def join(self, other, how='left', return_indexers=False):
+        if not isinstance(other, CategoricalColumn):
+            raise TypeError('*other* is not a categorical column')
+        if self._ordered != other._ordered or self._ordered:
+            raise TypeError('cannot join on ordered column')
+
+        # Determine new categories after join
+        lcats = self._categories
+        rcats = other._categories
+        if how == 'left':
+            cats = lcats
+            other = other.cat().set_categories(cats).fillna(-1)
+
+        elif how == 'right':
+            cats = rcats
+        elif how == 'inner':
+            cats = lcats & rcats
+        elif how == 'outer':
+            cats = lcats | rcats
+        else:
+            raise ValueError('unknown *how* ({!r})'.format(how))
+
+        # Do join as numeric column
+        join_result = self.as_numerical.join(
+            other.as_numerical, how=how,
+            return_indexers=return_indexers)
+
+        if return_indexers:
+            joined_index, indexers = join_result
+        else:
+            joined_index = join_result
+
+        # Fix index.  Make it categorical
+        joined_index = joined_index.view(CategoricalColumn,
+                                         dtype=self.dtype,
+                                         categories=tuple(cats),
+                                         ordered=self._ordered)
+        if return_indexers:
+            return joined_index, indexers
+        else:
+            return joined_index
 
 
 def pandas_categorical_as_column(categorical, codes=None):
