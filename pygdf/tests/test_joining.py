@@ -129,9 +129,10 @@ def test_dataframe_join_cats():
     assert set(got['c']) & set(cc)
 
 
-def test_dataframe_join_mismatch_cats():
+@pytest.mark.parametrize('how', ['left', 'right', 'inner', 'outer'])
+def test_dataframe_join_mismatch_cats(how):
     pdf1 = pd.DataFrame({"join_col": ["a", "b", "c", "d", "e"],
-                         "data_col_left": [1, 2, 3, 4, 5]})
+                         "data_col_left": [10, 20, 30, 40, 50]})
     pdf2 = pd.DataFrame({"join_col": ["c", "e", "f"],
                          "data_col_right": [6, 7, 8]})
 
@@ -146,12 +147,16 @@ def test_dataframe_join_mismatch_cats():
 
     pdf1 = pdf1.set_index('join_col')
     pdf2 = pdf2.set_index('join_col')
-    join_gdf = gdf1.join(gdf2)
-    join_pdf = pdf1.join(pdf2)
+    join_gdf = gdf1.join(gdf2, how=how)
+    join_pdf = pdf1.join(pdf2, how=how)
 
     got = join_gdf.to_pandas()
     expect = join_pdf.fillna(-1)  # note: pygdf join doesn't mask NA
 
     expect.data_col_right = expect.data_col_right.astype(np.int64)
+    expect.data_col_left = expect.data_col_left.astype(np.int64)
     pd.util.testing.assert_frame_equal(got, expect, check_names=False,
-                                       check_index_type=False)
+                                       check_index_type=False,
+                                       # For inner joins, pandas return weird categories.
+                                       check_categorical=how != 'inner')
+    assert list(got.index) == list(expect.index)

@@ -174,13 +174,15 @@ class CategoricalColumn(columnops.TypedColumnBase):
         if how == 'left':
             cats = lcats
             other = other.cat().set_categories(cats).fillna(-1)
-
         elif how == 'right':
             cats = rcats
-        elif how == 'inner':
-            cats = lcats & rcats
-        elif how == 'outer':
-            cats = lcats | rcats
+            self = self.cat().set_categories(cats).fillna(-1)
+        elif how in ['inner', 'outer']:
+            # Do the join using the union of categories from both side.
+            # Adjust for inner joins afterwards
+            cats = sorted(set(lcats) | set(rcats))
+            self = self.cat().set_categories(cats).fillna(-1)
+            other = other.cat().set_categories(cats).fillna(-1)
         else:
             raise ValueError('unknown *how* ({!r})'.format(how))
 
@@ -199,6 +201,13 @@ class CategoricalColumn(columnops.TypedColumnBase):
                                          dtype=self.dtype,
                                          categories=tuple(cats),
                                          ordered=self._ordered)
+
+        if how == 'inner':
+            # Adjust for inner join.
+            # Only retain categories common on both side.
+            cats = sorted(set(lcats) & set(rcats))
+            joined_index = joined_index.cat().set_categories(cats)
+
         if return_indexers:
             return joined_index, indexers
         else:

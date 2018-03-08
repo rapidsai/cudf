@@ -236,11 +236,9 @@ class NumericalColumn(columnops.TypedColumnBase):
                     return idxrange.take(idx).set_mask(mask).fillna(-1)
 
                 if len(joined_index) > 0:
-                    idxrange = Series(columnops.as_column(
-                                        cudautils.arange(len(joined_index))))
                     indexers = (
-                        gather(idxrange.take(largsort.to_gpu_array()), lidx),
-                        gather(idxrange.take(rargsort.to_gpu_array()), ridx),
+                        gather(Series(largsort), lidx),
+                        gather(Series(rargsort), ridx),
                     )
                 else:
                     indexers = (
