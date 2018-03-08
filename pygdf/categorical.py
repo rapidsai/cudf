@@ -37,11 +37,18 @@ class CategoricalAccessor(object):
             return Series(data)
 
     def set_categories(self, categories):
-        cat = self._parent.to_pandas()
-        # FIXME: this is using pandas to recode the categories
-        cat = cat.cat.set_categories(categories)
-        what = pd.Categorical(cat)
-        return pandas_categorical_as_column(what)
+        """Returns a new categorical column with the given indices.
+        """
+        codemap = {v: i for i, v in enumerate(categories)}
+        h_recoder = np.zeros(len(self.categories),
+                             dtype=self._parent.data.dtype)
+        for i, catval in enumerate(self.categories):
+            h_recoder[i] = codemap.get(catval, self._parent.default_na_value())
+        # recode the data buffer
+        recoded = cudautils.recode(self._parent.data.to_gpu_array(), h_recoder,
+                                   self._parent.default_na_value())
+        buf_rec = Buffer(recoded)
+        return self._parent.replace(data=buf_rec, categories=categories)
 
 
 class CategoricalColumn(columnops.TypedColumnBase):
