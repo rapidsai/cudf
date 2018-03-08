@@ -1,6 +1,7 @@
 from __future__ import print_function, division
 
 import numpy as np
+from numba import cuda
 
 from . import cudautils, utils
 from .serialize import register_distributed_serializer
@@ -12,7 +13,16 @@ class Buffer(object):
     """
     @classmethod
     def from_empty(cls, mem):
-        return Buffer(mem, size=0, capacity=mem.size)
+        """From empty device array
+        """
+        return cls(mem, size=0, capacity=mem.size)
+
+    @classmethod
+    def null(cls, dtype):
+        """Create a "null" buffer with a zero-sized device array.
+        """
+        mem = cuda.device_array(0, dtype=dtype)
+        return cls(mem, size=0, capacity=0)
 
     def __init__(self, mem, size=None, capacity=None):
         if size is None:

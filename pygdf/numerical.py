@@ -203,6 +203,52 @@ class NumericalColumn(columnops.TypedColumnBase):
         else:
             raise TypeError("numeric column of {} has no NaN value".format(self.dtype))
 
+    def join(self, other, how='left', return_indexers=False):
+        """Join with another column.
+
+        When the column is a index, set *return_indexers* to obtain
+        the indices for shuffling the remaining columns.
+        """
+        from .series import Series
+
+        if not self.is_type_equivalent(other):
+            raise TypeError('*other* is not compatible')
+
+        lkey, largsort = self.sort_by_values(True)
+        rkey, rargsort = other.sort_by_values(True)
+        with _gdf.apply_join(lkey, rkey, how=how) as (lidx, ridx):
+            if lidx.size > 0:
+                raw_index = cudautils.gather_joined_index(
+                    lkey.to_gpu_array(),
+                    rkey.to_gpu_array(),
+                    lidx,
+                    ridx,
+                )
+                buf_index = Buffer(raw_index)
+            else:
+                buf_index = Buffer.null(dtype=self.dtype)
+
+            joined_index = lkey.replace(data=buf_index)
+
+            if return_indexers:
+                def gather(idxrange, idx):
+                    mask = (Series(idx) != -1).as_mask()
+                    return idxrange.take(idx).set_mask(mask).fillna(-1)
+
+                if len(joined_index) > 0:
+                    indexers = (
+                        gather(Series(largsort), lidx),
+                        gather(Series(rargsort), ridx),
+                    )
+                else:
+                    indexers = (
+                        Series(Buffer.null(dtype=np.intp)),
+                        Series(Buffer.null(dtype=np.intp))
+                    )
+                return joined_index, indexers
+            else:
+                return joined_index
+
 
 def numeric_column_binop(lhs, rhs, op, out_dtype):
     if lhs.dtype != rhs.dtype:
