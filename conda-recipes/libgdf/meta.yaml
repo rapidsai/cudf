@@ -11,6 +11,9 @@ source:
 build:
   number: {{ environ.get('GIT_DESCRIBE_NUMBER', 0) }}
   string: 'cuda{{ environ['CUDA'][0:3] }}_{{ environ.get('GIT_DESCRIBE_NUMBER', 0) }}'
+  script_env:
+    - CC
+    - CXX
 
 requirements:
   # use channel:
