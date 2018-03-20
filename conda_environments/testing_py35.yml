@@ -11,4 +11,4 @@ dependencies:
 - libgdf=0.1.0a2.dev
 - libgdf_cffi=0.1.0a2.dev
 - numba>=0.35.0
-- pandas=0.21.*
+- pandas=0.20.3
