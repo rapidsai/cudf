@@ -12,3 +12,4 @@ dependencies:
 - libgdf_cffi=0.1.0a2.dev
 - numba>=0.35.0
 - pandas=0.20.3
+- notebook>=0.5.0
