@@ -176,6 +176,7 @@ class DataFrame(object):
     def __setitem__(self, name, col):
         """Add/set column by *name*
         """
+
         if name in self._cols:
             self._cols[name] = self._prepare_series_for_add(col)
         else:
@@ -318,6 +319,32 @@ class DataFrame(object):
         df._cols = self._cols.copy()
         return df
 
+    def _sanitize_columns(self, col):
+        """Sanitize pre-appended
+           col values
+        """
+        if len(self) == 0 and len(self.columns) > 0:
+            series = Series(col)
+            val = np.empty(len(series.index)) * np.NaN
+            for name in self._cols:
+                self._cols[name] = self._prepare_series_for_add(val)
+
+        col = self._sanitize_values(col)
+        return col
+
+    def _sanitize_values(self, col):
+        """Sanitize col values before
+           being added
+        """
+        index = self._index
+        series = Series(col)
+        if len(series.index) == 1:
+            val = np.full(len(index), col)
+            return val
+        elif len(index) > 0 and series.index != index:
+            raise ValueError('Length of values does not match index length')
+        return col
+
     def _prepare_series_for_add(self, col, forceindex=False):
         """Prepare a series to be added to the DataFrame.
 
@@ -330,13 +357,14 @@ class DataFrame(object):
         -------
         The prepared Series object.
         """
+        col = self._sanitize_columns(col)
         empty_index = isinstance(self._index, EmptyIndex)
         if isinstance(col, Series) or empty_index:
             series = Series(col)
         else:
             series = Series(col, index=self.index)
         if forceindex or empty_index or self._index == series.index:
-            if empty_index:
+            if empty_index and len(series.index) > 0:
                 self._index = series.index
             self._size = len(series)
             return series
@@ -353,6 +381,7 @@ class DataFrame(object):
         data : Series, array-like
             Values to be added.
         """
+
         if name in self._cols:
             raise NameError('duplicated column name {!r}'.format(name))
 
