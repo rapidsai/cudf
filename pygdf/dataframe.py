@@ -327,7 +327,9 @@ class DataFrame(object):
             series = Series(col)
             val = np.empty(len(series.index)) * np.NaN
             for name in self._cols:
-                self._cols[name] = self._prepare_series_for_add(val)
+                self._cols[name] = Series(val)
+            self._index = series.index
+            self._size = len(series)
 
         col = self._sanitize_values(col)
         return col
@@ -359,12 +361,9 @@ class DataFrame(object):
         """
         col = self._sanitize_columns(col)
         empty_index = isinstance(self._index, EmptyIndex)
-        if isinstance(col, Series) or empty_index:
-            series = Series(col)
-        else:
-            series = Series(col, index=self.index)
+        series = Series(col)
         if forceindex or empty_index or self._index == series.index:
-            if empty_index and len(series.index) > 0:
+            if empty_index:
                 self._index = series.index
             self._size = len(series)
             return series
@@ -385,7 +384,7 @@ class DataFrame(object):
         if name in self._cols:
             raise NameError('duplicated column name {!r}'.format(name))
 
-        series = self._prepare_series_for_add(data, forceindex=True)
+        series = self._prepare_series_for_add(data, forceindex=forceindex)
         self._cols[name] = series
 
     def drop_column(self, name):

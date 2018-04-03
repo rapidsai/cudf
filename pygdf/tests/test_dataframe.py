@@ -423,3 +423,30 @@ def test_dataframe_take(ntake):
     check()
     check(ignore_index=True)
 
+def test_dataframe_append_empty():
+    # Test issue 110
+    pdf = pd.DataFrame({
+        "key": [1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 4],
+        "value": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+        })
+    gdf = DataFrame.from_pandas(pdf)
+
+    gdf['newcol'] = 100
+    pdf['newcol'] = 100
+
+    assert len(gdf['newcol']) == len(pdf)
+    assert len(pdf['newcol']) == len(pdf)
+    pd.testing.assert_frame_equal(gdf.to_pandas(), pdf)
+
+
+def test_dataframe_append_to_empty():
+    # Test issue 125
+    pdf = pd.DataFrame()
+    pdf['a'] = []
+    pdf['b'] = [1, 2, 3]
+
+    gdf = DataFrame()
+    gdf['a'] = []
+    gdf['b'] = [1, 2, 3]
+
+    pd.testing.assert_frame_equal(gdf.to_pandas(), pdf)
