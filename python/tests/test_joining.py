@@ -88,11 +88,14 @@ def test_innerjoin(dtype):
     right_idx = right[right_pos]
 
     assert list(left_idx) == list(right_idx)
+    # sort before checking since the hash join may produce results in random order
+    tmp = sorted(zip(left_pos, right_pos), key=lambda pair: (pair[0], pair[1]))
+    left_pos = [x for x,_ in tmp]
+    right_pos = [x for _,x in tmp]
     # left_pos == a_left
     assert tuple(left_pos) == (0, 1, 2, 3, 3, 4)
     # right_pos == a_right
     assert tuple(right_pos) == (0, 0, 1, 2, 3, 4)
-
 
 @pytest.mark.parametrize('dtype', params_dtypes)
 def test_leftjoin(dtype):

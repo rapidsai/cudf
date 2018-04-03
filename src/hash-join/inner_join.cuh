@@ -95,12 +95,14 @@ __global__ void probe_hash_tbl(
 #endif
             //flush output cache if next iteration does not fit
             if ( current_idx_shared[warp_id]+warp_size >= output_cache_size ) {
+	        // count how many active threads participating here which could be less than warp_size
+	        int num_threads = __popc(activemask);
                 int output_offset = 0;
                 if ( 0 == lane_id )
                     output_offset = atomicAdd( current_idx, current_idx_shared[warp_id] );
                 output_offset = cub::ShuffleIndex(output_offset, 0, warp_size, activemask);
 
-                for ( int shared_out_idx = lane_id; shared_out_idx<current_idx_shared[warp_id]; shared_out_idx+=warp_size ) {
+                for ( int shared_out_idx = lane_id; shared_out_idx<current_idx_shared[warp_id]; shared_out_idx+=num_threads ) {
                     joined[output_offset+shared_out_idx] = joined_shared[warp_id][shared_out_idx];
                 }
 #if defined(CUDA_VERSION) && CUDA_VERSION >= 9000
@@ -116,12 +118,14 @@ __global__ void probe_hash_tbl(
 
         //final flush of output cache
         if ( current_idx_shared[warp_id] > 0 ) {
+	    // count how many active threads participating here which could be less than warp_size
+	    int num_threads = __popc(activemask);
             int output_offset = 0;
             if ( 0 == lane_id )
                 output_offset = atomicAdd( current_idx, current_idx_shared[warp_id] );
             output_offset = cub::ShuffleIndex(output_offset, 0, warp_size, activemask);
 
-            for ( int shared_out_idx = lane_id; shared_out_idx<current_idx_shared[warp_id]; shared_out_idx+=warp_size ) {
+            for ( int shared_out_idx = lane_id; shared_out_idx<current_idx_shared[warp_id]; shared_out_idx+=num_threads ) {
                 joined[output_offset+shared_out_idx] = joined_shared[warp_id][shared_out_idx];
             }
         }
