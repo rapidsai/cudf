@@ -20,6 +20,12 @@ link_directories($ENV{CONDA_PREFIX}/lib)
 
 set(CUDA_NVCC_FLAGS  ${CUDA_NVCC_FLAGS};-std=c++11;--expt-extended-lambda)
 
+# switch between hash-join and sort-join
+option(HASH_JOIN "hash-based join" OFF)
+if(HASH_JOIN)
+  set(CUDA_NVCC_FLAGS  ${CUDA_NVCC_FLAGS};-DHASH_JOIN)
+endif()
+
 cuda_add_library(gdf SHARED
     src/binaryops.cu
     src/column.cpp
