@@ -7,8 +7,9 @@ import numpy as np
 import pandas as pd
 
 from numba import cuda
+from numba.cuda.cudadrv.devicearray import DeviceNDArray
 
-from . import cudautils, formatting, queryutils, _gdf, applyutils
+from . import cudautils, formatting, queryutils, _gdf, applyutils, utils
 from .index import GenericIndex, EmptyIndex, Index, RangeIndex
 from .series import Series
 from .buffer import Buffer
@@ -323,11 +324,15 @@ class DataFrame(object):
         """Sanitize pre-appended
            col values
         """
-        if len(self) == 0 and len(self.columns) > 0:
-            series = Series(col)
-            val = np.empty(len(series.index)) * np.NaN
+        series = Series(col)
+        if len(self) == 0 and len(self.columns) > 0 and len(series) > 0:
+            ind = series.index
+            arr = cuda.device_array(shape=len(ind),dtype=np.float64)
+            size = utils.calc_chunk_size(arr.size, utils.mask_bitsize)
+            mask = cudautils.zeros(size, dtype=utils.mask_dtype)
+            val = Series.from_masked_array(arr, mask, null_count=len(ind))
             for name in self._cols:
-                self._cols[name] = Series(val)
+                self._cols[name] = val
             self._index = series.index
             self._size = len(series)
 
@@ -340,10 +345,13 @@ class DataFrame(object):
         """
         index = self._index
         series = Series(col)
-        if len(series.index) == 1:
-            val = np.full(len(index), col)
-            return val
-        elif len(index) > 0 and series.index != index:
+        sind = series.index
+        VALID = isinstance(col, (np.ndarray, DeviceNDArray, list, Series))
+        if len(self) > 0 and len(series) == 1 and not VALID:
+            arr = cuda.device_array(shape=len(index), dtype=series.dtype)
+            cudautils.gpu_fill_value.forall(arr.size)(arr, col)
+            return Series(arr)
+        elif len(self) > 0 and sind != index:
             raise ValueError('Length of values does not match index length')
         return col
 
