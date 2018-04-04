@@ -76,18 +76,19 @@ __global__ void probe_hash_tbl(
                 if (!optimized && !key_compare( probe_tbl[i], it->first ) ) {
                     ++it;
                     running = (it != range.second);
-                    continue;
                 }
-                joined_type joined_val;
-                joined_val.x = it->second;
-                joined_val.y = offset+i;
+                else {
+                    joined_type joined_val;
+                    joined_val.x = it->second;
+                    joined_val.y = offset+i;
 
-                int my_current_idx = atomicAdd( current_idx_shared+warp_id, 1 );
-                //its guranteed to fit into the shared cache
-                joined_shared[warp_id][my_current_idx] = joined_val;
+                    int my_current_idx = atomicAdd( current_idx_shared+warp_id, 1 );
+                    //its guranteed to fit into the shared cache
+                    joined_shared[warp_id][my_current_idx] = joined_val;
 
-                ++it;
-                running = (it != range.second);
+                    ++it;
+                    running = (it != range.second);
+                }
             }
 
 #if defined(CUDA_VERSION) && CUDA_VERSION >= 9000
