@@ -18,6 +18,7 @@ git clone --recurse-submodules git@github.com:gpuopenanalytics/libgdf.git
 ```
 Or, after cloning:
 ```
+cd libgdf
 git submodule update --init --recursive
 ```
 
