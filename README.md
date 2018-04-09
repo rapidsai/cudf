@@ -12,6 +12,15 @@ Compiler requirement:
 
 ## Get dependencies
 
+**Note**: This repo uses submodules. Make sure you cloned recursively:
+```
+git clone --recurse-submodules git@github.com:gpuopenanalytics/libgdf.git
+```
+Or, after cloning:
+```
+git submodule update --init --recursive
+```
+
 It is recommended to setup a conda environment for the dependencies.
 
 ```bash
@@ -49,6 +58,11 @@ cmake ..      # configure cmake
 To build the C/C++ code, run `make`.  This should produce a shared library
 named `libgdf.so` or `libgdf.dylib`.
 
+If you run into compile errors about missing header files:
+```
+cub/device/device_segmented_radix_sort.cuh: No such file or directory
+```
+See the note about submodules in the Get dependencies section above.
 
 ## Link python files into the build directory
 
