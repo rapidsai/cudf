@@ -231,38 +231,39 @@ mem_t<int> inner_join(a_it a, int a_count, b_it b, int b_count,
     return output;
 }
 
-// TODO: can we move this inside the function or instantiate properly for all supported types
-typedef struct { int x, y; } joined_type;
+// TODO: change this to int64 when the join output is updated to int64
+typedef int size_type;
+typedef struct { size_type x, y; } joined_type;
 
 template<typename launch_arg_t = empty_t,
          typename a_it, typename b_it, typename comp_t>
-mem_t<int> inner_join_hash(a_it a, int a_count, b_it b, int b_count,
-                       comp_t comp, context_t& context)
+mem_t<size_type> inner_join_hash(a_it a, size_type a_count, b_it b, size_type b_count,
+				comp_t comp, context_t& context, bool flip_indices = false)
 {
 #ifdef HASH_JOIN
     // here follows the custom code for hash-joins
     typedef typename std::iterator_traits<a_it>::value_type key_type;
 
-    // TODO: swap buffers if a_count > b_count but make sure to swap the output indices as well
-    //if (a_count > b_count)
-    //  return inner_join(b, b_count, a, a_count, comp, context);
+    // swap buffers if a_count > b_count to use the smaller table for build
+    if (a_count > b_count)
+      return inner_join_hash(b, b_count, a, a_count, comp, context, true);
 
     // TODO: find an estimate for the output buffer size
     const double matching_rate = a_count;
-    int joined_size = (int)(b_count * matching_rate);
+    size_type joined_size = (size_type)(b_count * matching_rate);
 
     // create a temp output buffer to store pairs
     joined_type *joined;
     CUDA_RT_CALL( cudaMallocManaged(&joined, sizeof(joined_type) * joined_size) );
 
     // allocate a counter
-    key_type* joined_idx;
+    size_type* joined_idx;
     CUDA_RT_CALL( cudaMallocManaged(&joined_idx, sizeof(key_type)) );
     CUDA_RT_CALL( cudaMemsetAsync(joined_idx, 0, sizeof(key_type), 0) );  
 
     // step 1: initialize a HT for the smaller buffer A
-    typedef concurrent_unordered_multimap<key_type, key_type, -1, -1> multimap_type;
-    size_t hash_tbl_size = (size_t)(a_count * 100 / HASH_TBL_OCC);
+    typedef concurrent_unordered_multimap<key_type, size_type, -1, -1> multimap_type;
+    size_type hash_tbl_size = (size_type)(a_count * 100 / HASH_TBL_OCC);
     std::auto_ptr<multimap_type> hash_tbl(new multimap_type(hash_tbl_size));
     hash_tbl->prefetch(0);  // FIXME: use GPU device id from the context?
 
@@ -272,26 +273,26 @@ mem_t<int> inner_join_hash(a_it a, int a_count, b_it b, int b_count,
     CUDA_RT_CALL( cudaGetLastError() );
 
     // step 3: scan B, probe the HT and output the joined indices
-    probe_hash_tbl<multimap_type, key_type, key_type, joined_type, 128, 128>
+    probe_hash_tbl<multimap_type, key_type, size_type, joined_type, 128, 128>
 		   <<<(b_count+block_size-1)/block_size, block_size>>>
                     (hash_tbl.get(), b, b_count, joined, joined_idx, 0);
     CUDA_RT_CALL( cudaDeviceSynchronize() );
 
     // TODO: can we avoid this transformation from pairs to decoupled?
-    int output_npairs = *joined_idx;
-    mem_t<int> output(2 * output_npairs, context);
-    int* output_data = output.data();
-    auto k = [=] MGPU_DEVICE(int index) {
-      output_data[index] = joined[index].x;
-      output_data[index + output_npairs] = joined[index].y;
+    size_type output_npairs = *joined_idx;
+    mem_t<size_type> output(2 * output_npairs, context);
+    size_type* output_data = output.data();
+    auto k = [=] MGPU_DEVICE(size_type index) {
+      output_data[index] = flip_indices ? joined[index].y : joined[index].x;
+      output_data[index + output_npairs] = flip_indices ? joined[index].x : joined[index].y;
     };
     transform(k, output_npairs, context);
 #else
     _join_bounds bounds = compute_join_bounds(a, a_count, b, b_count, comp, context);
-    int join_count;
-    mem_t<int> scanned_sizes = scan_join_bounds(bounds, a_count, b_count, context, true,
+    size_type join_count;
+    mem_t<size_type> scanned_sizes = scan_join_bounds(bounds, a_count, b_count, context, true,
                                                 join_count);
-    mem_t<int> output = compute_joined_indices(bounds, scanned_sizes, a_count,
+    mem_t<size_type> output = compute_joined_indices(bounds, scanned_sizes, a_count,
                                                join_count, context, true);
 #endif
     return output;
@@ -415,9 +416,10 @@ gdf_error gdf_##Fn##_generic(gdf_column *leftcol, gdf_column * rightcol,    \
 #define DEF_INNER_JOIN(Fn, T) DEF_JOIN(inner_join_ ## Fn, T, inner_join)
 #define DEF_INNER_JOIN_HASH(Fn, T) DEF_JOIN(inner_join_ ## Fn, T, inner_join_hash)
 DEF_JOIN_DISP(inner_join)
-DEF_INNER_JOIN(i8,  int8_t)
+DEF_INNER_JOIN_HASH(i8,  int8_t)
+DEF_INNER_JOIN_HASH(i16, int16_t)
 DEF_INNER_JOIN_HASH(i32, int32_t)
-DEF_INNER_JOIN(i64, int64_t)
+DEF_INNER_JOIN_HASH(i64, int64_t)
 DEF_INNER_JOIN(f32, float)
 DEF_INNER_JOIN(f64, double)
 
