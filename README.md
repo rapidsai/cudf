@@ -52,13 +52,13 @@ py.test
 
 The GPU Open Analytics Initiative (GoAi) seeks to foster and develop open collaboration between GPU analytics projects and products to enable data scientists to efficiently combine the best tools for their workflows. The first project of GoAi is the GPU DataFrame (GDF), which enables tabular data to be directly exchanged between libraries and applications on the GPU.
 
-![GOAI](img/goai_logo.png)
+<div align="center"><img src="img/goai_logo.png" width="50%"/></div>
 
 ### GPU DataFrame
 
 The GPU DataFrame is a common API that enables efficient interchange of tabular data between processes running on the GPU. End-to-end computation on the GPU avoids unnecessary copying and converting of data off the GPU, reducing compute time and cost for high-performance analytics common in artificial intelligence workloads. The GPU DataFrame uses the [Apache Arrow](https://arrow.apache.org/) columnar data format on the GPU. Currently, a subset of the features in Arrow are supported.
 
-![Architecture](img/GDF_community.png)
+<div align="center"><img src="img/GDF_community.png" width="50%"/></div>
 
 ## Getting Started
 
