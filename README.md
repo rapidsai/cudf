@@ -2,7 +2,9 @@
 
 [![Documentation Status](https://readthedocs.org/projects/pygdf/badge/?version=latest)](http://pygdf.readthedocs.io/en/latest/?badge=latest)
 
-PyGDF implements the Python interface to access and manipulate the GPU DataFrame of [GPU Open Analytics Initiative (GoAi)](http://gpuopenanalytics.com/).  We aim to provide a simple interface that is similar to the Pandas DataFrame and hide the details of GPU programming.
+PyGDF implements the Python interface to access and manipulate the GPU DataFrame of [GPU Open Analytics Initiative (GoAi)](http://gpuopenanalytics.com/).  We aim to provide a simple interface that is similar to the Pandas DataFrame and hide the details of GPU programming. 
+
+[Read more about GoAi and the GDF](#gpu-open-analytics-initiative)
 
 ## Setup
 
@@ -48,7 +50,11 @@ In the source root directory and with the development environment activated, run
 py.test
 ```
 
-## GPU open analytics initiative
+## Getting Started
+
+Please see the [Demo Docker Repository](https://github.com/gpuopenanalytics/demo-docker) for example notebooks on how you can utilize the GPU DataFrame.
+
+## GPU Open Analytics Initiative
 
 The GPU Open Analytics Initiative (GoAi) seeks to foster and develop open collaboration between GPU analytics projects and products to enable data scientists to efficiently combine the best tools for their workflows. The first project of GoAi is the GPU DataFrame (GDF), which enables tabular data to be directly exchanged between libraries and applications on the GPU.
 
@@ -59,7 +65,3 @@ The GPU Open Analytics Initiative (GoAi) seeks to foster and develop open collab
 The GPU DataFrame is a common API that enables efficient interchange of tabular data between processes running on the GPU. End-to-end computation on the GPU avoids unnecessary copying and converting of data off the GPU, reducing compute time and cost for high-performance analytics common in artificial intelligence workloads. The GPU DataFrame uses the [Apache Arrow](https://arrow.apache.org/) columnar data format on the GPU. Currently, a subset of the features in Arrow are supported.
 
 <div align="center"><img src="img/GDF_community.png" width="50%"/></div>
-
-## Getting Started
-
-Please see the [Demo Docker Repository](https://github.com/gpuopenanalytics/demo-docker) for example notebooks on how you can utilize the GPU DataFrame.
