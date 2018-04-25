@@ -225,12 +225,14 @@ mem_t<size_type> inner_join_hash(a_it a, size_type a_count, b_it b, size_type b_
     // TODO: can we avoid this transformation from pairs to decoupled?
     size_type output_npairs = *joined_idx;
     mem_t<size_type> output(2 * output_npairs, context);
-    size_type* output_data = output.data();
-    auto k = [=] MGPU_DEVICE(size_type index) {
-      output_data[index] = flip_indices ? joined[index].y : joined[index].x;
-      output_data[index + output_npairs] = flip_indices ? joined[index].x : joined[index].y;
-    };
-    transform(k, output_npairs, context);
+    if (output_npairs > 0) {
+      size_type* output_data = output.data();
+      auto k = [=] MGPU_DEVICE(size_type index) {
+        output_data[index] = flip_indices ? joined[index].y : joined[index].x;
+        output_data[index + output_npairs] = flip_indices ? joined[index].x : joined[index].y;
+      };
+      transform(k, output_npairs, context);
+    }
 #else
     _join_bounds bounds = compute_join_bounds(a, a_count, b, b_count, comp, context);
     size_type join_count;
