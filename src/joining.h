@@ -208,7 +208,7 @@ mem_t<size_type> inner_join_hash(a_it a, size_type a_count, b_it b, size_type b_
     // step 1: initialize a HT for the smaller buffer A
     typedef concurrent_unordered_multimap<key_type, size_type, -1, -1> multimap_type;
     size_type hash_tbl_size = (size_type)(a_count * 100 / HASH_TBL_OCC);
-    std::auto_ptr<multimap_type> hash_tbl(new multimap_type(hash_tbl_size));
+    std::unique_ptr<multimap_type> hash_tbl(new multimap_type(hash_tbl_size));
     hash_tbl->prefetch(0);  // FIXME: use GPU device id from the context?
 
     // step 2: build the HT

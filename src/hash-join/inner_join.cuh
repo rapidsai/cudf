@@ -62,14 +62,18 @@ __global__ void probe_hash_tbl(
     int i = threadIdx.x + blockIdx.x * blockDim.x;
 
 #if defined(CUDA_VERSION) && CUDA_VERSION >= 9000
-    const int activemask = __ballot_sync(0xffffffff, i < probe_tbl_size);
+    const unsigned int activemask = __ballot_sync(0xffffffff, i < probe_tbl_size);
 #endif
     if ( i < probe_tbl_size ) {
         //OPT: merging equal_range and writing of output values could avoid redundant memory rountrips
         auto range = multi_map->equal_range(probe_tbl[i]);
         bool running = (range.first != range.second);
         auto it = range.first;
+#if defined(CUDA_VERSION) && CUDA_VERSION >= 9000
         while ( __any_sync( activemask, running ) )
+#else
+        while ( __any( running ) )
+#endif
         {
             if ( running )
             {
@@ -96,8 +100,11 @@ __global__ void probe_hash_tbl(
 #endif
             //flush output cache if next iteration does not fit
             if ( current_idx_shared[warp_id]+warp_size >= output_cache_size ) {
-	        // count how many active threads participating here which could be less than warp_size
-	        int num_threads = __popc(activemask);
+                // count how many active threads participating here which could be less than warp_size
+#if defined(CUDA_VERSION) && CUDA_VERSION < 9000
+                const unsigned int activemask = __ballot(1);
+#endif
+                int num_threads = __popc(activemask);
                 int output_offset = 0;
                 if ( 0 == lane_id )
                     output_offset = atomicAdd( current_idx, current_idx_shared[warp_id] );
@@ -119,8 +126,11 @@ __global__ void probe_hash_tbl(
 
         //final flush of output cache
         if ( current_idx_shared[warp_id] > 0 ) {
-	    // count how many active threads participating here which could be less than warp_size
-	    int num_threads = __popc(activemask);
+            // count how many active threads participating here which could be less than warp_size
+#if defined(CUDA_VERSION) && CUDA_VERSION < 9000
+            const unsigned int activemask = __ballot(1);
+#endif
+            int num_threads = __popc(activemask);
             int output_offset = 0;
             if ( 0 == lane_id )
                 output_offset = atomicAdd( current_idx, current_idx_shared[warp_id] );
