@@ -20,6 +20,18 @@ link_directories($ENV{CONDA_PREFIX}/lib)
 
 set(CUDA_NVCC_FLAGS  ${CUDA_NVCC_FLAGS};-std=c++11;--expt-extended-lambda)
 
+IF(CUDA_VERSION_MAJOR GREATER 7)
+    set(CUDA_NVCC_FLAGS ${CUDA_NVCC_FLAGS};-gencode;arch=compute_60,code=sm_60)
+ENDIF(CUDA_VERSION_MAJOR GREATER 7)
+
+IF(CUDA_VERSION_MAJOR GREATER 8)
+    set(CUDA_NVCC_FLAGS ${CUDA_NVCC_FLAGS};-gencode;arch=compute_70,code=sm_70)
+ENDIF(CUDA_VERSION_MAJOR GREATER 8)
+
+IF(CMAKE_BUILD_TYPE MATCHES DEBUG)
+    set(CUDA_NVCC_FLAGS ${CUDA_NVCC_FLAGS};-g;-G)
+ENDIF(CMAKE_BUILD_TYPE MATCHES DEBUG)
+
 # switch between hash-join and sort-join
 option(HASH_JOIN "hash-based join" OFF)
 if(HASH_JOIN)
