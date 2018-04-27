@@ -195,7 +195,8 @@ mem_t<size_type> inner_join_hash(a_it a, size_type a_count, b_it b, size_type b_
       return inner_join_hash(b, b_count, a, a_count, comp, context, true);
 
     // TODO: find an estimate for the output buffer size
-    const double matching_rate = a_count;
+    // currently using 10x maximum expansion rate
+    const double matching_rate = 10;
     size_type joined_size = (size_type)(b_count * matching_rate);
 
     // create a temp output buffer to store pairs
@@ -265,7 +266,8 @@ mem_t<size_type> inner_join_hash(a1_it a1, a2_it a2, size_type a_count,
     return inner_join_hash(b1, b2, b_count, a1, a2, a_count, comp, context, true);
 
   // TODO: find an estimate for the output buffer size
-  const double matching_rate = a_count;
+  // currently using 10x maximum expansion rate
+  const double matching_rate = 10;
   size_type joined_size = (size_type)(b_count * matching_rate);
 
   // create a temp output buffer to store pairs
