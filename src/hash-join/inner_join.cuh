@@ -65,10 +65,12 @@ __global__ void probe_hash_tbl(
     const unsigned int activemask = __ballot_sync(0xffffffff, i < probe_tbl_size);
 #endif
     if ( i < probe_tbl_size ) {
-        //OPT: merging equal_range and writing of output values could avoid redundant memory rountrips
-        auto range = multi_map->equal_range(probe_tbl[i]);
-        bool running = (range.first != range.second);
-        auto it = range.first;
+        const auto unused_key = multi_map->get_unused_key();
+        const auto end = multi_map->end();
+        const key_type probe_key = probe_tbl[i];
+        auto it = multi_map->find(probe_key);
+
+        bool running = (end != it);
 #if defined(CUDA_VERSION) && CUDA_VERSION >= 9000
         while ( __any_sync( activemask, running ) )
 #else
@@ -77,9 +79,12 @@ __global__ void probe_hash_tbl(
         {
             if ( running )
             {
-                if (!optimized && !key_compare( probe_tbl[i], it->first ) ) {
+                if ( key_compare( unused_key, it->first ) ) {
+                    running = false;
+                }
+                else if (!key_compare( probe_key, it->first ) ) {
                     ++it;
-                    running = (it != range.second);
+                    running = (end != it);
                 }
                 else {
                     joined_type joined_val;
@@ -87,11 +92,11 @@ __global__ void probe_hash_tbl(
                     joined_val.y = offset+i;
 
                     int my_current_idx = atomicAdd( current_idx_shared+warp_id, 1 );
-                    //its guranteed to fit into the shared cache
+                    //its guaranteed to fit into the shared cache
                     joined_shared[warp_id][my_current_idx] = joined_val;
 
                     ++it;
-                    running = (it != range.second);
+                    running = (end != it);
                 }
             }
 
@@ -181,20 +186,29 @@ __global__ void probe_hash_tbl(
     int i = threadIdx.x + blockIdx.x * blockDim.x;
 
 #if defined(CUDA_VERSION) && CUDA_VERSION >= 9000
-    const int activemask = __ballot_sync(0xffffffff, i < probe_tbl_size);
+    const unsigned int activemask = __ballot_sync(0xffffffff, i < probe_tbl_size);
 #endif
     if ( i < probe_tbl_size ) {
-        //OPT: merging equal_range and writing of output values could avoid redundant memory rountrips
-        auto range = multi_map->equal_range(probe_col1[i]);
-        bool running = (range.first != range.second);
-        auto it = range.first;
+        const auto unused_key = multi_map->get_unused_key();
+        const auto end = multi_map->end();
+        const key_type1 probe_col1_key = probe_col1[i];
+        auto it = multi_map->find(probe_col1_key);
+
+        bool running = (end != it);
+#if defined(CUDA_VERSION) && CUDA_VERSION >= 9000
         while ( __any_sync( activemask, running ) )
+#else
+        while ( __any( running ) )
+#endif
         {
             if ( running )
             {
-                if (!optimized && (!key_compare( probe_col1[i], it->first ) || (probe_col2[i] != build_col2[it->second]))) {
+                if ( key_compare( unused_key, it->first ) ) {
+                    running = false;
+                }
+                else if ((!key_compare( probe_col1_key, it->first ) || (probe_col2[i] != build_col2[it->second]))) {
                     ++it;
-                    running = (it != range.second);
+                    running = (end != it);
                 }
                 else {
                     joined_type joined_val;
@@ -202,11 +216,11 @@ __global__ void probe_hash_tbl(
                     joined_val.y = offset+i;
 
                     int my_current_idx = atomicAdd( current_idx_shared+warp_id, 1 );
-                    //its guranteed to fit into the shared cache
+                    //its guaranteed to fit into the shared cache
                     joined_shared[warp_id][my_current_idx] = joined_val;
 
                     ++it;
-                    running = (it != range.second);
+                    running = (end != it);
                 }
             }
 
@@ -216,6 +230,9 @@ __global__ void probe_hash_tbl(
             //flush output cache if next iteration does not fit
             if ( current_idx_shared[warp_id]+warp_size >= output_cache_size ) {
                 // count how many active threads participating here which could be less than warp_size
+#if defined(CUDA_VERSION) && CUDA_VERSION < 9000
+                const unsigned int activemask = __ballot(1);
+#endif
                 int num_threads = __popc(activemask);
                 int output_offset = 0;
                 if ( 0 == lane_id )
@@ -239,6 +256,9 @@ __global__ void probe_hash_tbl(
         //final flush of output cache
         if ( current_idx_shared[warp_id] > 0 ) {
             // count how many active threads participating here which could be less than warp_size
+#if defined(CUDA_VERSION) && CUDA_VERSION < 9000
+            const unsigned int activemask = __ballot(1);
+#endif
             int num_threads = __popc(activemask);
             int output_offset = 0;
             if ( 0 == lane_id )

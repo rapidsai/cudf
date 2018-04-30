@@ -176,6 +176,7 @@ mem_t<int> inner_join(a_it a, int a_count, b_it b, int b_count,
     return output;
 }
 
+// TODO: a global typedef with the name size_type note even part of a name space is not a good idea
 // TODO: change this to int64 when the join output is updated to int64
 typedef int size_type;
 typedef struct { size_type x, y; } joined_type;
