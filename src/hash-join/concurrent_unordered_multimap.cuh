@@ -182,7 +182,11 @@ template <typename Key,
           Element unused_element,
           typename Hasher = default_hash<Key>,
           typename Equality = equal_to<Key>,
+#ifdef HT_LEGACY_ALLOCATOR
+          typename Allocator = legacy_allocator<thrust::pair<Key, Element> >,
+#else
           typename Allocator = managed_allocator<thrust::pair<Key, Element> >,
+#endif
           bool count_collisions = false>
 class concurrent_unordered_multimap : public managed
 {
@@ -344,8 +348,10 @@ public:
     
     void prefetch( const int dev_id )
     {
+#ifndef HT_LEGACY_ALLOCATOR
         CUDA_RT_CALL( cudaMemPrefetchAsync(this, sizeof(*this), dev_id, 0) );
         CUDA_RT_CALL( cudaMemPrefetchAsync(m_hashtbl_values, m_hashtbl_size*sizeof(value_type), dev_id, 0) );
+#endif
     }
     
 private:

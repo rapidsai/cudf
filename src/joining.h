@@ -255,7 +255,8 @@ template<typename launch_arg_t = empty_t,
          typename comp_t>
 mem_t<size_type> inner_join_hash(a1_it a1, a2_it a2, size_type a_count,
                                  b1_it b1, b2_it b2, size_type b_count,
-                                 comp_t comp, context_t& context, bool flip_indices = false)
+                                 comp_t comp, context_t& context,
+				 size_type estimated_join_count = 0, bool flip_indices = false)
 {
 #ifdef HASH_JOIN
   // here follows the custom code for hash-joins
@@ -274,6 +275,10 @@ mem_t<size_type> inner_join_hash(a1_it a1, a2_it a2, size_type a_count,
   // create a temp output buffer to store pairs
   joined_type *joined;
   CUDA_RT_CALL( cudaMallocManaged(&joined, sizeof(joined_type) * joined_size) );
+
+  // prefetch the estimated output size
+  if (estimated_join_count > 0)
+    CUDA_RT_CALL( cudaMemPrefetchAsync(joined, sizeof(joined_type) * estimated_join_count, 0) ); // FIXME: use GPU device id from the context?
 
   // allocate a counter
   size_type* joined_idx;
