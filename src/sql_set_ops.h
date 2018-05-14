@@ -622,6 +622,94 @@ thrust::pair<typename VectorIndexT::iterator, typename VectorValsT::iterator>
 			    d_indx, d_agg_p, d_kout, d_vout, sorted, stream);
 }
 
+//Multi-column group-by MIN:
+//
+//Input:
+//sz         = # rows
+//tptrs      = table as a tuple of columns (pointers to device arrays);
+//d_agg      = column (device vector) to get aggregated;       
+//stream     = cudaStream to work in;
+//Output:
+//d_indx     = reordering of indices after sorting;
+//             (passed as argument to avoid allcoations inside the stream)
+//d_agg_p    = reordering of d_agg after sorting;
+//             (passed as argument to avoid allcoations inside the stream)
+//d_kout     = indices of rows after group by;
+//d_vout     = aggregated values (MINIMIZ-ed) as a result of group-by; 
+//Return:
+//ret        = pair of iterators into (d_kout, d_vout), respectively;
+//
+template<typename VectorValsT,
+	 typename VectorIndexT,
+	 typename TplPtrs,
+	 ColumnOrderingPolicy orderp = ColumnOrderingPolicy::Sort>
+thrust::pair<typename VectorIndexT::iterator, typename VectorValsT::iterator>
+      multi_col_group_by_min(size_t sz,
+			     const TplPtrs& tptrs,
+			     const VectorValsT& d_agg,
+			     VectorIndexT& d_indx,
+			     VectorValsT& d_agg_p,
+			     VectorIndexT& d_kout,
+			     VectorValsT& d_vout,
+			     bool sorted = false,
+			     cudaStream_t stream = NULL)
+{
+  using ValsT  = typename VectorValsT::value_type;
+  auto lamb = [] __host__ __device__ (ValsT x, ValsT y){
+    return (x<y?x:y);
+  };
+
+  using ReducerT = decltype(lamb);
+  
+  return multi_col_group_by<VectorValsT, VectorIndexT, TplPtrs, ReducerT, orderp>(sz, tptrs, d_agg,
+			    lamb,
+			    d_indx, d_agg_p, d_kout, d_vout, sorted, stream);
+}
+
+//Multi-column group-by MAX:
+//
+//Input:
+//sz         = # rows
+//tptrs      = table as a tuple of columns (pointers to device arrays);
+//d_agg      = column (device vector) to get aggregated;       
+//stream     = cudaStream to work in;
+//Output:
+//d_indx     = reordering of indices after sorting;
+//             (passed as argument to avoid allcoations inside the stream)
+//d_agg_p    = reordering of d_agg after sorting;
+//             (passed as argument to avoid allcoations inside the stream)
+//d_kout     = indices of rows after group by;
+//d_vout     = aggregated values (MXIMIZ-ed) as a result of group-by; 
+//Return:
+//ret        = pair of iterators into (d_kout, d_vout), respectively;
+//
+template<typename VectorValsT,
+	 typename VectorIndexT,
+	 typename TplPtrs,
+	 ColumnOrderingPolicy orderp = ColumnOrderingPolicy::Sort>
+thrust::pair<typename VectorIndexT::iterator, typename VectorValsT::iterator>
+      multi_col_group_by_max(size_t sz,
+			     const TplPtrs& tptrs,
+			     const VectorValsT& d_agg,
+			     VectorIndexT& d_indx,
+			     VectorValsT& d_agg_p,
+			     VectorIndexT& d_kout,
+			     VectorValsT& d_vout,
+			     bool sorted = false,
+			     cudaStream_t stream = NULL)
+{
+  using ValsT  = typename VectorValsT::value_type;
+  auto lamb = [] __host__ __device__ (ValsT x, ValsT y){
+    return (x>y?x:y);
+  };
+
+  using ReducerT = decltype(lamb);
+  
+  return multi_col_group_by<VectorValsT, VectorIndexT, TplPtrs, ReducerT, orderp>(sz, tptrs, d_agg,
+			    lamb,
+			    d_indx, d_agg_p, d_kout, d_vout, sorted, stream);
+}
+
 //Multi-column group-by AVERAGE:
 //
 //Input:
