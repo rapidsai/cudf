@@ -281,7 +281,7 @@ size_t multi_col_filter(size_t nrows,
 //d_indx     = reordering of indices after sorting;
 //             (passed as argument to avoid allocations inside the stream)
 //d_kout     = indices of rows after group by;
-//d_vout     = aggregated values (counted) as a result of group-by; 
+//d_vout     = aggregated values (COUNT-ed) as a result of group-by; 
 //d_items    = device_vector of items corresponding to indices in d_flt_indx;
 //Return:
 //ret        = pair of iterators into (d_kout, d_vout), respectively;
@@ -577,3 +577,100 @@ thrust::pair<typename VectorIndexT::iterator, typename VectorValsT::iterator>
 
   return thrust::make_pair(fst, snd);
 }
+
+//Multi-column group-by SUM:
+//
+//Input:
+//sz         = # rows
+//tptrs      = table as a tuple of columns (pointers to device arrays);
+//d_agg      = column (device vector) to get aggregated;       
+//stream     = cudaStream to work in;
+//Output:
+//d_indx     = reordering of indices after sorting;
+//             (passed as argument to avoid allcoations inside the stream)
+//d_agg_p    = reordering of d_agg after sorting;
+//             (passed as argument to avoid allcoations inside the stream)
+//d_kout     = indices of rows after group by;
+//d_vout     = aggregated values (SUM-ed) as a result of group-by; 
+//Return:
+//ret        = pair of iterators into (d_kout, d_vout), respectively;
+//
+template<typename VectorValsT,
+	 typename VectorIndexT,
+	 typename TplPtrs,
+	 ColumnOrderingPolicy orderp = ColumnOrderingPolicy::Sort>
+thrust::pair<typename VectorIndexT::iterator, typename VectorValsT::iterator>
+      multi_col_group_by_sum(size_t sz,
+			     const TplPtrs& tptrs,
+			     const VectorValsT& d_agg,
+			     VectorIndexT& d_indx,
+			     VectorValsT& d_agg_p,
+			     VectorIndexT& d_kout,
+			     VectorValsT& d_vout,
+			     bool sorted = false,
+			     cudaStream_t stream = NULL)
+{
+  using ValsT  = typename VectorValsT::value_type;
+  auto lamb = [] __host__ __device__ (ValsT x, ValsT y){
+			      return x+y;
+  };
+
+  using ReducerT = decltype(lamb);
+  
+  return multi_col_group_by<VectorValsT, VectorIndexT, TplPtrs, ReducerT, orderp>(sz, tptrs, d_agg,
+			    lamb,
+			    d_indx, d_agg_p, d_kout, d_vout, sorted, stream);
+}
+
+//Multi-column group-by AVERAGE:
+//
+//Input:
+//sz         = # rows
+//tptrs      = table as a tuple of columns (pointers to device arrays);
+//d_agg      = column (device vector) to get aggregated;       
+//stream     = cudaStream to work in;
+//Output:
+//d_indx     = reordering of indices after sorting;
+//             (passed as argument to avoid allcoations inside the stream)
+//d_cout     = (COUNT-ed) values as a result of group-by;
+//d_agg_p    = reordering of d_agg after sorting;
+//             (passed as argument to avoid allcoations inside the stream)
+//d_kout     = indices of rows after group by;
+//d_vout     = aggregated values (AVERAGE-d) as a result of group-by; 
+//Return:
+//ret        = pair of iterators into (d_kout, d_vout), respectively;
+//
+template<typename VectorValsT,
+	 typename VectorIndexT,
+	 typename TplPtrs,
+	 ColumnOrderingPolicy orderp = ColumnOrderingPolicy::Sort>
+thrust::pair<typename VectorIndexT::iterator, typename VectorValsT::iterator>
+      multi_col_group_by_avg(size_t sz,
+			     const TplPtrs& tptrs,
+			     const VectorValsT& d_agg,
+			     VectorIndexT& d_indx,
+			     VectorIndexT& d_cout,
+			     VectorValsT& d_agg_p,
+			     VectorIndexT& d_kout,
+			     VectorValsT& d_vout,
+			     bool sorted = false,
+			     cudaStream_t stream = NULL)
+{
+  using IndexT = typename VectorIndexT::value_type;
+  using ValsT  = typename VectorValsT::value_type;
+  
+  auto pair_count = multi_col_group_by_count<TplPtrs, VectorIndexT, orderp>(sz, tptrs, d_indx, d_kout, d_cout, sorted, stream);
+  
+  auto pair_sum = multi_col_group_by_sum<VectorValsT, VectorIndexT, TplPtrs, orderp>(sz, tptrs, d_agg, d_indx, d_agg_p, d_kout, d_vout, sorted, stream);
+
+  thrust::transform(d_cout.begin(), d_cout.end(),
+		    d_vout.begin(),
+		    d_vout.begin(),
+		    [] __host__ __device__ (IndexT n, ValsT sum){
+		      return sum/static_cast<ValsT>(n);
+		    });
+
+  return pair_sum;
+}
+
+
