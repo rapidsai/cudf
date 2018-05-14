@@ -111,15 +111,20 @@ gdf_error gdf_##Fn##_generic(gdf_column *leftcol, gdf_column * rightcol,    \
     }                                                                       \
 }
 
+#ifdef HASH_JOIN
+#define DEF_INNER_JOIN(Fn, T) DEF_JOIN(inner_join_ ## Fn, T, inner_join_hash)
+#define DEF_INNER_JOIN_FP(Fn, T) DEF_JOIN(inner_join_ ## Fn, T, inner_join)
+#else
 #define DEF_INNER_JOIN(Fn, T) DEF_JOIN(inner_join_ ## Fn, T, inner_join)
-#define DEF_INNER_JOIN_HASH(Fn, T) DEF_JOIN(inner_join_ ## Fn, T, inner_join_hash)
+#define DEF_INNER_JOIN_FP(Fn, T) DEF_JOIN(inner_join_ ## Fn, T, inner_join)
+#endif
 DEF_JOIN_DISP(inner_join)
-DEF_INNER_JOIN_HASH(i8,  int8_t)
-DEF_INNER_JOIN_HASH(i16, int16_t)
-DEF_INNER_JOIN_HASH(i32, int32_t)
-DEF_INNER_JOIN_HASH(i64, int64_t)
-DEF_INNER_JOIN(f32, float)
-DEF_INNER_JOIN(f64, double)
+DEF_INNER_JOIN(i8,  int8_t)
+DEF_INNER_JOIN(i16, int16_t)
+DEF_INNER_JOIN(i32, int32_t)
+DEF_INNER_JOIN(i64, int64_t)
+DEF_INNER_JOIN_FP(f32, float)
+DEF_INNER_JOIN_FP(f64, double)
 
 
 #define DEF_LEFT_JOIN(Fn, T) DEF_JOIN(left_join_ ## Fn, T, left_join)
