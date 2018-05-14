@@ -279,7 +279,7 @@ size_t multi_col_filter(size_t nrows,
 //stream     = cudaStream to work in;
 //Output:
 //d_indx     = reordering of indices after sorting;
-//             (passed as argument to avoid allcoations inside the stream)
+//             (passed as argument to avoid allocations inside the stream)
 //d_kout     = indices of rows after group by;
 //d_vout     = aggregated values (counted) as a result of group-by; 
 //d_items    = device_vector of items corresponding to indices in d_flt_indx;
@@ -528,7 +528,7 @@ thrust::pair<typename VectorIndexT::iterator, typename VectorValsT::iterator>
       multi_col_group_by(size_t sz,
 			 const TplPtrs& tptrs,
 			 const VectorValsT& d_agg,
-			 Reducer& fctr,
+			 Reducer fctr,
 			 VectorIndexT& d_indx,
 			 VectorValsT& d_agg_p,
 			 VectorIndexT& d_kout,
