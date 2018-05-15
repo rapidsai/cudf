@@ -11,19 +11,17 @@
 
 using namespace mgpu;
 
-// TODO: a global typedef with the name size_type note even part of a name space is not a good idea
-// TODO: change this to int64 when the join output is updated to int64
-typedef int size_type;
-typedef struct { size_type x, y; } joined_type;
-
 // single-column join
-template<typename launch_arg_t = empty_t,
-         typename a_it, typename b_it, typename comp_t>
+template<typename size_type,
+	 typename a_it, typename b_it,
+	 typename comp_t>
 mem_t<size_type> inner_join_hash(a_it a, size_type a_count, b_it b, size_type b_count,
-                                comp_t comp, context_t& context, bool flip_indices = false)
+                                comp_t comp, context_t& context,
+				bool flip_indices = false)
 {
   // here follows the custom code for hash-joins
   typedef typename std::iterator_traits<a_it>::value_type key_type;
+  typedef thrust::pair<size_type, size_type> joined_type;
 
   // swap buffers if a_count > b_count to use the smaller table for build
   if (a_count > b_count)
@@ -66,8 +64,8 @@ mem_t<size_type> inner_join_hash(a_it a, size_type a_count, b_it b, size_type b_
   if (output_npairs > 0) {
     size_type* output_data = output.data();
     auto k = [=] MGPU_DEVICE(size_type index) {
-      output_data[index] = flip_indices ? joined[index].y : joined[index].x;
-      output_data[index + output_npairs] = flip_indices ? joined[index].x : joined[index].y;
+      output_data[index] = flip_indices ? joined[index].second : joined[index].first;
+      output_data[index + output_npairs] = flip_indices ? joined[index].first : joined[index].second;
     };
     transform(k, output_npairs, context);
   }
@@ -76,7 +74,7 @@ mem_t<size_type> inner_join_hash(a_it a, size_type a_count, b_it b, size_type b_
 }
 
 // two-column join
-template<typename launch_arg_t = empty_t,
+template<typename size_type,
          typename a1_it, typename b1_it,
          typename a2_it, typename b2_it,
          typename comp_t>
@@ -88,10 +86,11 @@ mem_t<size_type> inner_join_hash(a1_it a1, a2_it a2, size_type a_count,
   // here follows the custom code for hash-joins
   typedef typename std::iterator_traits<a1_it>::value_type key_type1;
   typedef typename std::iterator_traits<a2_it>::value_type key_type2;
+  typedef thrust::pair<size_type, size_type> joined_type;
 
   // swap buffers if a_count > b_count to use the smaller table for build
   if (a_count > b_count)
-    return inner_join_hash(b1, b2, b_count, a1, a2, a_count, comp, context, true);
+    return inner_join_hash(b1, b2, b_count, a1, a2, a_count, comp, context, estimated_join_count, true);
 
   // TODO: find an estimate for the output buffer size
   // currently using 10x maximum expansion rate
@@ -134,8 +133,8 @@ mem_t<size_type> inner_join_hash(a1_it a1, a2_it a2, size_type a_count,
   if (output_npairs > 0) {
     size_type* output_data = output.data();
     auto k = [=] MGPU_DEVICE(size_type index) {
-      output_data[index] = flip_indices ? joined[index].y : joined[index].x;
-      output_data[index + output_npairs] = flip_indices ? joined[index].x : joined[index].y;
+      output_data[index] = flip_indices ? joined[index].second : joined[index].first;
+      output_data[index + output_npairs] = flip_indices ? joined[index].first : joined[index].second;
     };
     transform(k, output_npairs, context);
   }

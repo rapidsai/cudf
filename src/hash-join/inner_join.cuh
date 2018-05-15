@@ -88,8 +88,8 @@ __global__ void probe_hash_tbl(
                 }
                 else {
                     joined_type joined_val;
-                    joined_val.x = it->second;
-                    joined_val.y = offset+i;
+                    joined_val.first = it->second;
+                    joined_val.second = offset+i;
 
                     int my_current_idx = atomicAdd( current_idx_shared+warp_id, 1 );
                     //its guaranteed to fit into the shared cache
@@ -212,8 +212,8 @@ __global__ void probe_hash_tbl(
                 }
                 else {
                     joined_type joined_val;
-                    joined_val.x = it->second;
-                    joined_val.y = offset+i;
+                    joined_val.first = it->second;
+                    joined_val.second = offset+i;
 
                     int my_current_idx = atomicAdd( current_idx_shared+warp_id, 1 );
                     //its guaranteed to fit into the shared cache
