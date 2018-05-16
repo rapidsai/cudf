@@ -11,6 +11,13 @@
 
 using namespace mgpu;
 
+// TODO: thrust::pair<size_type, size_type> would be better here, but doesn't work correctly
+//       I haven't had time to investigate in detail but it generates a lot of STS for the probe kernel
+//       looks like the constructor gets invoked for shared memory cache and it messes things up
+//       thus I replaced thrust::pair with a bare pair struct that works just fine
+template<typename size_type>
+struct join_pair { size_type first, second; };
+
 // single-column join
 template<typename size_type,
 	 typename a_it, typename b_it,
@@ -21,7 +28,7 @@ mem_t<size_type> inner_join_hash(a_it a, size_type a_count, b_it b, size_type b_
 {
   // here follows the custom code for hash-joins
   typedef typename std::iterator_traits<a_it>::value_type key_type;
-  typedef thrust::pair<size_type, size_type> joined_type;
+  typedef join_pair<size_type> joined_type;
 
   // swap buffers if a_count > b_count to use the smaller table for build
   if (a_count > b_count)
@@ -86,7 +93,7 @@ mem_t<size_type> inner_join_hash(a1_it a1, a2_it a2, size_type a_count,
   // here follows the custom code for hash-joins
   typedef typename std::iterator_traits<a1_it>::value_type key_type1;
   typedef typename std::iterator_traits<a2_it>::value_type key_type2;
-  typedef thrust::pair<size_type, size_type> joined_type;
+  typedef join_pair<size_type> joined_type;
 
   // swap buffers if a_count > b_count to use the smaller table for build
   if (a_count > b_count)
@@ -138,6 +145,7 @@ mem_t<size_type> inner_join_hash(a1_it a1, a2_it a2, size_type a_count,
     };
     transform(k, output_npairs, context);
   }
+  cudaDeviceSynchronize();
 
   return output;
 }
