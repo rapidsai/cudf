@@ -1,3 +1,7 @@
+/* Copyright 2018 NVIDIA Corporation.  All rights reserved. */
+
+//Multi-column Filter, Order-By, and Group-By functionality
+
 # pragma once
 
 #include <iostream>
@@ -456,6 +460,158 @@ thrust::pair<IndexT*, ValsT*>
   return ret;
 }
 
+//SUM
+//
+template<typename ValsT,
+	 typename IndexT,
+	 typename TplPtrs>
+__host__ __device__
+thrust::pair<IndexT*, ValsT*>
+      multi_col_group_by_sum_sort(size_t         sz,
+				  const TplPtrs& tptrs,
+				  const ValsT*   ptr_d_agg,
+				  IndexT*        ptr_d_indx,
+				  ValsT*         ptr_d_agg_p,
+				  IndexT*        ptr_d_kout,
+				  ValsT*         ptr_d_vout,
+				  bool           sorted = false,
+				  cudaStream_t   stream = NULL)
+{
+  auto lamb = [] __host__ __device__ (ValsT x, ValsT y){
+			      return x+y;
+  };
+
+  using ReducerT = decltype(lamb);
+  
+  return multi_col_group_by_via_sort<ValsT, IndexT, TplPtrs, ReducerT>(sz,
+								       tptrs,
+								       ptr_d_agg,
+								       lamb,
+								       ptr_d_indx,
+								       ptr_d_agg_p,
+								       ptr_d_kout,
+								       ptr_d_vout,
+								       sorted,
+								       stream);
+}
+
+//MIN
+//
+template<typename ValsT,
+	 typename IndexT,
+	 typename TplPtrs>
+__host__ __device__
+thrust::pair<IndexT*, ValsT*>
+      multi_col_group_by_min_sort(size_t         sz,
+				  const TplPtrs& tptrs,
+				  const ValsT*   ptr_d_agg,
+				  IndexT*        ptr_d_indx,
+				  ValsT*         ptr_d_agg_p,
+				  IndexT*        ptr_d_kout,
+				  ValsT*         ptr_d_vout,
+				  bool           sorted = false,
+				  cudaStream_t   stream = NULL)
+{
+  auto lamb = [] __host__ __device__ (ValsT x, ValsT y){
+    return (x<y?x:y);
+  };
+
+  using ReducerT = decltype(lamb);
+  
+  return multi_col_group_by_via_sort<ValsT, IndexT, TplPtrs, ReducerT>(sz,
+								       tptrs,
+								       ptr_d_agg,
+								       lamb,
+								       ptr_d_indx,
+								       ptr_d_agg_p,
+								       ptr_d_kout,
+								       ptr_d_vout,
+								       sorted,
+								       stream);
+}
+
+//MAX
+//
+template<typename ValsT,
+	 typename IndexT,
+	 typename TplPtrs>
+__host__ __device__
+thrust::pair<IndexT*, ValsT*>
+      multi_col_group_by_max_sort(size_t         sz,
+				  const TplPtrs& tptrs,
+				  const ValsT*   ptr_d_agg,
+				  IndexT*        ptr_d_indx,
+				  ValsT*         ptr_d_agg_p,
+				  IndexT*        ptr_d_kout,
+				  ValsT*         ptr_d_vout,
+				  bool           sorted = false,
+				  cudaStream_t   stream = NULL)
+{
+  auto lamb = [] __host__ __device__ (ValsT x, ValsT y){
+    return (x>y?x:y);
+  };
+
+  using ReducerT = decltype(lamb);
+  
+  return multi_col_group_by_via_sort<ValsT, IndexT, TplPtrs, ReducerT>(sz,
+								       tptrs,
+								       ptr_d_agg,
+								       lamb,
+								       ptr_d_indx,
+								       ptr_d_agg_p,
+								       ptr_d_kout,
+								       ptr_d_vout,
+								       sorted,
+								       stream);
+}
+
+//AVERAGE
+//
+template<typename ValsT,
+	 typename IndexT,
+	 typename TplPtrs>
+__host__ __device__
+thrust::pair<IndexT*, ValsT*>
+      multi_col_group_by_avg_sort(size_t         sz,
+				  const TplPtrs& tptrs,
+				  const ValsT*   ptr_d_agg,
+				  IndexT*        ptr_d_indx,
+				  IndexT*        ptr_d_cout,
+				  ValsT*         ptr_d_agg_p,
+				  IndexT*        ptr_d_kout,
+				  ValsT*         ptr_d_vout,
+				  bool           sorted = false,
+				  cudaStream_t   stream = NULL)
+{
+  auto pair_count = multi_col_group_by_count_via_sort(sz,
+						      tptrs,
+						      ptr_d_indx,
+						      ptr_d_kout,
+						      ptr_d_cout,
+						      sorted,
+						      stream);
+  
+  auto pair_sum = multi_col_group_by_sum_sort(sz,
+					      tptrs,
+					      ptr_d_agg,
+					      ptr_d_indx,
+					      ptr_d_agg_p,
+					      ptr_d_kout,
+					      ptr_d_vout,
+					      sorted,
+					      stream);
+
+  thrust::transform(thrust::cuda::par.on(stream),
+		    ptr_d_cout, ptr_d_cout + sz,
+		    ptr_d_vout,
+		    ptr_d_vout,
+		    [] __host__ __device__ (IndexT n, ValsT sum){
+		      return sum/static_cast<ValsT>(n);
+		    });
+
+  return pair_sum;
+}
+
 //generic (purposely do-nothing) implementation
 //
 template<typename TplPtrs,
@@ -751,7 +907,8 @@ thrust::pair<typename VectorIndexT::iterator, typename VectorValsT::iterator>
   
   auto pair_sum = multi_col_group_by_sum<VectorValsT, VectorIndexT, TplPtrs, orderp>(sz, tptrs, d_agg, d_indx, d_agg_p, d_kout, d_vout, sorted, stream);
 
-  thrust::transform(d_cout.begin(), d_cout.end(),
+  thrust::transform(thrust::cuda::par.on(stream),
+		    d_cout.begin(), d_cout.end(),
 		    d_vout.begin(),
 		    d_vout.begin(),
 		    [] __host__ __device__ (IndexT n, ValsT sum){
