@@ -344,10 +344,14 @@ public:
     
     void prefetch( const int dev_id )
     {
-#ifndef HT_LEGACY_ALLOCATOR
         CUDA_RT_CALL( cudaMemPrefetchAsync(this, sizeof(*this), dev_id, 0) );
-        CUDA_RT_CALL( cudaMemPrefetchAsync(m_hashtbl_values, m_hashtbl_size*sizeof(value_type), dev_id, 0) );
-#endif
+        
+        cudaPointerAttributes hashtbl_values_ptr_attributes;
+        cudaError_t status = cudaPointerGetAttributes( &hashtbl_values_ptr_attributes, m_hashtbl_values );
+        
+        if ( cudaSuccess == status && hashtbl_values_ptr_attributes.isManaged ) {
+            CUDA_RT_CALL( cudaMemPrefetchAsync(m_hashtbl_values, m_hashtbl_size*sizeof(value_type), dev_id, 0) );
+        }
     }
     
 private:
