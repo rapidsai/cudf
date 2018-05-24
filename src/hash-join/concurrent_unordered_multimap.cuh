@@ -182,11 +182,7 @@ template <typename Key,
           Element unused_element,
           typename Hasher = default_hash<Key>,
           typename Equality = equal_to<Key>,
-#ifdef HT_LEGACY_ALLOCATOR
-          typename Allocator = legacy_allocator<thrust::pair<Key, Element> >,
-#else
           typename Allocator = managed_allocator<thrust::pair<Key, Element> >,
-#endif
           bool count_collisions = false>
 class concurrent_unordered_multimap : public managed
 {

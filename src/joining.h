@@ -49,7 +49,11 @@ mem_t<size_type> inner_join_hash(a_it a, size_type a_count, b_it b, size_type b_
   CUDA_RT_CALL( cudaMemsetAsync(joined_idx, 0, sizeof(size_type), 0) );
 
   // step 1: initialize a HT for the smaller buffer A
+#ifdef HT_LEGACY_ALLOCATOR
+  typedef concurrent_unordered_multimap<key_type, size_type, -1, -1, default_hash<key_type>, equal_to<key_type>, legacy_allocator<thrust::pair<key_type, size_type> > > multimap_type;
+#else
   typedef concurrent_unordered_multimap<key_type, size_type, -1, -1> multimap_type;
+#endif
   size_type hash_tbl_size = (size_type)(a_count * 100 / HASH_TBL_OCC);
   std::unique_ptr<multimap_type> hash_tbl(new multimap_type(hash_tbl_size));
   hash_tbl->prefetch(0);  // FIXME: use GPU device id from the context?
@@ -118,7 +122,11 @@ mem_t<size_type> inner_join_hash(a1_it a1, a2_it a2, size_type a_count,
   CUDA_RT_CALL( cudaMemsetAsync(joined_idx, 0, sizeof(size_type), 0) );
 
   // step 1: initialize a HT for the smaller buffer A
+#ifdef HT_LEGACY_ALLOCATOR
+  typedef concurrent_unordered_multimap<key_type1, size_type, -1, -1, default_hash<key_type1>, equal_to<key_type1>, legacy_allocator<thrust::pair<key_type1, size_type> > > multimap_type;
+#else
   typedef concurrent_unordered_multimap<key_type1, size_type, -1, -1> multimap_type;
+#endif
   size_type hash_tbl_size = (size_type)(a_count * 100 / HASH_TBL_OCC);
   std::unique_ptr<multimap_type> hash_tbl(new multimap_type(hash_tbl_size));
   hash_tbl->prefetch(0);  // FIXME: use GPU device id from the context?
