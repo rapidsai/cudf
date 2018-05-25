@@ -303,10 +303,15 @@ public:
     }
     
     __forceinline__
-    __host__ __device__ const_iterator find(const key_type& k) const
+    __host__ __device__ const_iterator find(const key_type& k, const int pass=0, const int num_passes=1) const
     {
+        const size_type chunk_size = m_hashtbl_size/num_passes;
         size_type key_hash = m_hf( k );
         size_type hash_tbl_idx = key_hash%m_hashtbl_size;
+        
+        if ( ( pass < (num_passes-1) && hash_tbl_idx/chunk_size != pass ) ||
+             ( (num_passes-1) == pass && hash_tbl_idx/chunk_size < pass ) )
+            return end();
 
         value_type* begin_ptr = 0;
         
