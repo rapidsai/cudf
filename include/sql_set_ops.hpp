@@ -153,6 +153,52 @@ struct LesserIndex<Tuple, 0, imax>
   }
 };
 
+//RTI for "opaque" tuple of pairs comparison fctr;
+//("opaque" as opposed to "transparent"
+// variadic pack expansion, which doesn't
+// compile with device functions) 
+//
+//generic-case template:
+//Note: need two indices as template args
+//in order to avoid reverting the tuple
+//for proper comparison order
+//
+template<typename TuplePairPtr, size_t i, size_t imax>
+struct PairsComparer
+{
+  //version with tuple of pair of pointers:
+  //one pointer to an array,
+  //the other to just one value (of same type)
+  //(for filter)
+  //
+  __host__ __device__ 
+  static bool equal(const TuplePairPtr& tplpairptrs, size_t i1)
+  {
+    if( thrust::get<imax-i>(tplpairptrs)[i1] ==
+  	*(thrust::get<imax-i+1>(tplpairptrs)) )
+      return PairsComparer<TuplePairPtr, i-2, imax>::equal(tplpairptrs, i1);
+    else
+      return false;
+  }
+};
+
+//Partial specialization for bottom of RTI recursion:
+//
+template<typename TuplePairPtr, size_t imax>
+struct PairsComparer<TuplePairPtr, 1, imax>
+{
+  //version with tuple of pair of pointers:
+  //one pointer to an array,
+  //the other to just one value (of same type)
+  //(for filter)
+  //
+  __host__ __device__ 
+  static bool equal(const TuplePairPtr& tplpairptrs, size_t i1)
+  {
+    return (thrust::get<imax-1>(tplpairptrs)[i1] == *(thrust::get<imax>(tplpairptrs)));
+  }
+};
+
 //###########################################################################
 //#                          Multi-column ORDER-BY:                         #
 //###########################################################################
@@ -243,6 +289,39 @@ size_t multi_col_filter(size_t nrows,
 		    ptr_d_flt_indx,
 		    [tptrs, tvals] __host__ __device__ (size_t indx){
 		      return LesserIndex<TplPtrs, thrust::tuple_size<TplPtrs>::value-1, thrust::tuple_size<TplPtrs>::value-1>::equal(tptrs, tvals, indx);
+		    });
+
+  size_t new_sz = thrust::distance(ptr_d_flt_indx,ret_iter_last);
+  
+  return new_sz;
+}
+
+//version with tuple of pairs of pointers
+//(adjacent pointers of same type; Example:
+// thrust::tuple<T1*, T1*, T2*, T2*,...,Tn*, Tn*>)
+//
+//CAVEAT: all adjacent pairs of
+//        pointers must reside on __device__!
+//
+//(All must be passed by pointers because of type erasure in pygdf
+// and, consequently, the NestedIfThenElser expects uniform type erasure)
+//
+template<typename TplPairsPtrs,
+	 typename IndexT>
+__host__ __device__
+size_t multi_col_filter(size_t nrows,
+			const TplPairsPtrs& tptrs,
+			IndexT* ptr_d_flt_indx,
+			cudaStream_t stream = NULL)
+{
+  //actual filtering happens here:
+  //
+  auto ret_iter_last =
+    thrust::copy_if(thrust::cuda::par.on(stream),
+		    thrust::make_counting_iterator<IndexT>(0), thrust::make_counting_iterator<IndexT>(nrows),
+		    ptr_d_flt_indx,
+		    [tptrs] __host__ __device__ (IndexT indx){
+		      return PairsComparer<TplPairsPtrs, thrust::tuple_size<TplPairsPtrs>::value-1, thrust::tuple_size<TplPairsPtrs>::value-1>::equal(tptrs, indx);
 		    });
 
   size_t new_sz = thrust::distance(ptr_d_flt_indx,ret_iter_last);
