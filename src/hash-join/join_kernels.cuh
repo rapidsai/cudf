@@ -1,5 +1,12 @@
 /* Copyright 2018 NVIDIA Corporation.  All rights reserved. */
 
+#define JoinNoneValue 	(-1)
+
+enum JoinType {
+  INNER_JOIN,
+  LEFT_JOIN,
+};
+
 #ifndef CUDA_RT_CALL
 #define CUDA_RT_CALL( call )                                                                       \
 {                                                                                                  \
@@ -28,6 +35,7 @@ __global__ void build_hash_tbl(
 }
 
 template<
+    JoinType join_type,
     typename multimap_type,
     typename key_type,
     typename size_type,
@@ -40,7 +48,8 @@ __global__ void probe_hash_tbl(
     const size_type probe_tbl_size,
     joined_type * const joined,
     size_type* const current_idx,
-    const size_type offset,
+    const size_type max_size,
+    const size_type offset = 0,
     const bool optimized = false)
 {
     typedef typename multimap_type::key_equal key_compare_type;
@@ -59,7 +68,7 @@ __global__ void probe_hash_tbl(
     __syncwarp();
 #endif
 
-    int i = threadIdx.x + blockIdx.x * blockDim.x;
+    size_type i = threadIdx.x + blockIdx.x * blockDim.x;
 
 #if defined(CUDA_VERSION) && CUDA_VERSION >= 9000
     const unsigned int activemask = __ballot_sync(0xffffffff, i < probe_tbl_size);
@@ -70,7 +79,8 @@ __global__ void probe_hash_tbl(
         const key_type probe_key = probe_tbl[i];
         auto it = multi_map->find(probe_key);
 
-        bool running = (end != it);
+        bool running = (join_type == LEFT_JOIN) || (end != it);	// for left-joins we always need to add an output
+	bool found_match = false;
 #if defined(CUDA_VERSION) && CUDA_VERSION >= 9000
         while ( __any_sync( activemask, running ) )
 #else
@@ -79,7 +89,10 @@ __global__ void probe_hash_tbl(
         {
             if ( running )
             {
-                if ( key_compare( unused_key, it->first ) ) {
+		if (join_type == LEFT_JOIN && (end == it)) {
+		    running = false;	// add once on the first iteration
+		}
+		else if ( key_compare( unused_key, it->first ) ) {
                     running = false;
                 }
                 else if (!key_compare( probe_key, it->first ) ) {
@@ -88,8 +101,8 @@ __global__ void probe_hash_tbl(
                 }
                 else {
                     joined_type joined_val;
-                    joined_val.first = it->second;
-                    joined_val.second = offset+i;
+                    joined_val.first = offset+i;
+                    joined_val.second = it->second;
 
                     int my_current_idx = atomicAdd( current_idx_shared+warp_id, 1 );
                     //its guaranteed to fit into the shared cache
@@ -97,7 +110,18 @@ __global__ void probe_hash_tbl(
 
                     ++it;
                     running = (end != it);
+		    found_match = true;
                 }
+		if ((join_type == LEFT_JOIN) && (!running) && (!found_match)) {
+		  // add (left, none) pair to the output
+                  joined_type joined_val;
+                  joined_val.first = offset+i;
+                  joined_val.second = JoinNoneValue;
+
+                  int my_current_idx = atomicAdd( current_idx_shared+warp_id, 1 );
+                  //its guaranteed to fit into the shared cache
+                  joined_shared[warp_id][my_current_idx] = joined_val;
+		}
             }
 
 #if defined(CUDA_VERSION) && CUDA_VERSION >= 9000
@@ -110,7 +134,7 @@ __global__ void probe_hash_tbl(
                 const unsigned int activemask = __ballot(1);
 #endif
                 int num_threads = __popc(activemask);
-                int output_offset = 0;
+                unsigned long long int output_offset = 0;
                 if ( 0 == lane_id )
                     output_offset = atomicAdd( current_idx, current_idx_shared[warp_id] );
                 output_offset = cub::ShuffleIndex(output_offset, 0, warp_size, activemask);
@@ -136,13 +160,15 @@ __global__ void probe_hash_tbl(
             const unsigned int activemask = __ballot(1);
 #endif
             int num_threads = __popc(activemask);
-            int output_offset = 0;
+            unsigned long long int output_offset = 0;
             if ( 0 == lane_id )
                 output_offset = atomicAdd( current_idx, current_idx_shared[warp_id] );
             output_offset = cub::ShuffleIndex(output_offset, 0, warp_size, activemask);
 
             for ( int shared_out_idx = lane_id; shared_out_idx<current_idx_shared[warp_id]; shared_out_idx+=num_threads ) {
-                joined[output_offset+shared_out_idx] = joined_shared[warp_id][shared_out_idx];
+                size_type thread_offset = output_offset + shared_out_idx;
+		if (thread_offset < max_size)
+                   joined[thread_offset] = joined_shared[warp_id][shared_out_idx];
             }
         }
     }
@@ -164,7 +190,8 @@ __global__ void probe_hash_tbl(
     const key_type2* build_col2,
     joined_type * const joined,
     size_type* const current_idx,
-    const size_type offset,
+    const size_type max_size,
+    const size_type offset = 0,
     const bool optimized = false)
 {
     typedef typename multimap_type::key_equal key_compare_type;
@@ -183,7 +210,7 @@ __global__ void probe_hash_tbl(
     __syncwarp();
 #endif
 
-    int i = threadIdx.x + blockIdx.x * blockDim.x;
+    size_type i = threadIdx.x + blockIdx.x * blockDim.x;
 
 #if defined(CUDA_VERSION) && CUDA_VERSION >= 9000
     const unsigned int activemask = __ballot_sync(0xffffffff, i < probe_tbl_size);
@@ -212,8 +239,8 @@ __global__ void probe_hash_tbl(
                 }
                 else {
                     joined_type joined_val;
-                    joined_val.first = it->second;
-                    joined_val.second = offset+i;
+                    joined_val.first = offset+i;
+                    joined_val.second = it->second;
 
                     int my_current_idx = atomicAdd( current_idx_shared+warp_id, 1 );
                     //its guaranteed to fit into the shared cache
@@ -234,7 +261,7 @@ __global__ void probe_hash_tbl(
                 const unsigned int activemask = __ballot(1);
 #endif
                 int num_threads = __popc(activemask);
-                int output_offset = 0;
+                unsigned long long int output_offset = 0;
                 if ( 0 == lane_id )
                     output_offset = atomicAdd( current_idx, current_idx_shared[warp_id] );
                 output_offset = cub::ShuffleIndex(output_offset, 0, warp_size, activemask);
@@ -260,14 +287,68 @@ __global__ void probe_hash_tbl(
             const unsigned int activemask = __ballot(1);
 #endif
             int num_threads = __popc(activemask);
-            int output_offset = 0;
+            unsigned long long int output_offset = 0;
             if ( 0 == lane_id )
                 output_offset = atomicAdd( current_idx, current_idx_shared[warp_id] );
             output_offset = cub::ShuffleIndex(output_offset, 0, warp_size, activemask);
 
             for ( int shared_out_idx = lane_id; shared_out_idx<current_idx_shared[warp_id]; shared_out_idx+=num_threads ) {
-                joined[output_offset+shared_out_idx] = joined_shared[warp_id][shared_out_idx];
+                size_type thread_offset = output_offset + shared_out_idx;
+		if (thread_offset < max_size)
+                  joined[thread_offset] = joined_shared[warp_id][shared_out_idx];
             }
+        }
+    }
+}
+
+template<
+    typename multimap_type,
+    typename key_type,
+    typename size_type,
+    typename joined_type,
+    int block_size>
+__global__ void probe_hash_tbl_uniq_keys(
+    multimap_type * multi_map,
+    const key_type* probe_tbl,
+    const size_type probe_tbl_size,
+    joined_type * const joined,
+    unsigned long long int* const current_idx,
+    const size_type offset)
+{
+    __shared__ int current_idx_shared;
+    __shared__ unsigned long long int output_offset_shared;
+    __shared__ joined_type joined_shared[block_size];
+    if ( 0 == threadIdx.x ) {
+        output_offset_shared = 0;
+        current_idx_shared = 0;
+    }
+    
+    __syncthreads();
+
+    size_type i = threadIdx.x + blockIdx.x * blockDim.x;
+    if ( i < probe_tbl_size ) {
+        const auto end = multi_map->end();
+        auto it = multi_map->find(probe_tbl[i]);
+        if ( end != it ) {
+            joined_type joined_val;
+            joined_val.first = offset+i;
+            joined_val.second = it->second;
+            int my_current_idx = atomicAdd( &current_idx_shared, 1 );
+            //its guranteed to fit into the shared cache
+            joined_shared[my_current_idx] = joined_val;
+        }
+    }
+    
+    __syncthreads();
+    
+    if ( current_idx_shared > 0 ) {
+        if ( 0 == threadIdx.x ) {
+            output_offset_shared = atomicAdd( current_idx, current_idx_shared );
+        }
+        __syncthreads();
+        
+        if ( threadIdx.x < current_idx_shared ) {
+            joined[output_offset_shared+threadIdx.x] = joined_shared[threadIdx.x];
         }
     }
 }

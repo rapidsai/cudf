@@ -97,6 +97,22 @@ gdf_error gdf_##Fn(gdf_column *leftcol, gdf_column *rightcol,               \
     return GDF_SUCCESS;                                                     \
 }
 
+//TODO: DEF_JOIN_HASH can be merged with DEF_JOIN conce inner_join is using gdf_size_type
+#define DEF_JOIN_HASH(Fn, T, Joiner, JoinType)                              \
+gdf_error gdf_##Fn(gdf_column *leftcol, gdf_column *rightcol,               \
+                   gdf_join_result_type **out_result) {                     \
+    using namespace mgpu;                                                   \
+    if ( leftcol->dtype != rightcol->dtype) return GDF_UNSUPPORTED_DTYPE;   \
+    if ( leftcol->size >= MAX_JOIN_SIZE ) return GDF_COLUMN_SIZE_TOO_BIG;   \
+    if ( rightcol->size >= MAX_JOIN_SIZE ) return GDF_COLUMN_SIZE_TOO_BIG;  \
+    std::unique_ptr<join_result<int> > result_ptr(new join_result<int>);    \
+    result_ptr->result = Joiner<JoinType>((T*)leftcol->data, (int)leftcol->size,      \
+                                (T*)rightcol->data, (int)rightcol->size,    \
+                                less_t<T>(), result_ptr->context);          \
+    CUDA_CHECK_LAST();                                                      \
+    *out_result = cffi_wrap(result_ptr.release());                          \
+    return GDF_SUCCESS;                                                     \
+}
 
 #define DEF_JOIN_DISP(Fn)                                                   \
 gdf_error gdf_##Fn##_generic(gdf_column *leftcol, gdf_column * rightcol,    \
@@ -112,7 +128,7 @@ gdf_error gdf_##Fn##_generic(gdf_column *leftcol, gdf_column * rightcol,    \
 }
 
 #ifdef HASH_JOIN
-#define DEF_INNER_JOIN(Fn, T) DEF_JOIN(inner_join_ ## Fn, T, inner_join_hash)
+#define DEF_INNER_JOIN(Fn, T) DEF_JOIN_HASH(inner_join_ ## Fn, T, join_hash, INNER_JOIN)
 #define DEF_INNER_JOIN_FP(Fn, T) DEF_JOIN(inner_join_ ## Fn, T, inner_join)
 #else
 #define DEF_INNER_JOIN(Fn, T) DEF_JOIN(inner_join_ ## Fn, T, inner_join)
@@ -127,13 +143,19 @@ DEF_INNER_JOIN_FP(f32, float)
 DEF_INNER_JOIN_FP(f64, double)
 
 
+#ifdef HASH_JOIN
+#define DEF_LEFT_JOIN(Fn, T) DEF_JOIN_HASH(left_join_ ## Fn, T, join_hash, LEFT_JOIN)
+#define DEF_LEFT_JOIN_FP(Fn, T) DEF_JOIN(left_join_ ## Fn, T, left_join)
+#else
 #define DEF_LEFT_JOIN(Fn, T) DEF_JOIN(left_join_ ## Fn, T, left_join)
+#define DEF_LEFT_JOIN_FP(Fn, T) DEF_JOIN(left_join_ ## Fn, T, left_join)
+#endif
 DEF_JOIN_DISP(left_join)
 DEF_LEFT_JOIN(i8,  int8_t)
 DEF_LEFT_JOIN(i32, int32_t)
 DEF_LEFT_JOIN(i64, int64_t)
-DEF_LEFT_JOIN(f32, float)
-DEF_LEFT_JOIN(f64, double)
+DEF_LEFT_JOIN_FP(f32, float)
+DEF_LEFT_JOIN_FP(f64, double)
 
 
 #define DEF_OUTER_JOIN(Fn, T) DEF_JOIN(outer_join_ ## Fn, T, outer_join)

@@ -1,3 +1,4 @@
+// Copyright 2017 NVIDIA Corporation.  All rights reserved.
 #ifndef MANAGED_CUH
 #define MANAGED_CUH
 

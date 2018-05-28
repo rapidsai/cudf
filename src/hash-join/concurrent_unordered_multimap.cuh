@@ -1,16 +1,10 @@
-/* Copyright 2017-2018 NVIDIA Corporation.  All rights reserved.
- *
- * Please refer to the NVIDIA end user license agreement (EULA) associated
- * with this source code for terms and conditions that govern your use of
- * this software. Any use, reproduction, disclosure, or distribution of
- * this software and related documentation outside the terms of the EULA
- * is strictly prohibited.
- */
+/* Copyright 2017-2018 NVIDIA Corporation.  All rights reserved. */
 #ifndef CONCURRENT_UNORDERED_MULTIMAP_CUH
 #define CONCURRENT_UNORDERED_MULTIMAP_CUH
 
 #include <iterator>
 #include <type_traits>
+#include <cassert>
 
 #include <thrust/pair.h>
 
@@ -46,6 +40,96 @@ __inline__ __device__ int64_t atomicAdd(int64_t* address, int64_t val)
   return (int64_t)atomicAdd((unsigned long long*)address, (unsigned long long)val);
 }
 
+template<typename pair_type>
+__forceinline__
+__device__ pair_type load_pair_vectorized( const pair_type* __restrict__ const ptr )
+{
+    if ( sizeof(uint4) == sizeof(pair_type) ) {
+        union pair_type2vec_type
+        {
+            uint4       vec_val;
+            pair_type   pair_val;
+        };
+        pair_type2vec_type converter = {0,0,0,0};
+        converter.vec_val = *reinterpret_cast<const uint4*>(ptr);
+        return converter.pair_val;
+    } else if ( sizeof(uint2) == sizeof(pair_type) ) {
+        union pair_type2vec_type
+        {
+            uint2       vec_val;
+            pair_type   pair_val;
+        };
+        pair_type2vec_type converter = {0,0};
+        converter.vec_val = *reinterpret_cast<const uint2*>(ptr);
+        return converter.pair_val;
+    } else if ( sizeof(int) == sizeof(pair_type) ) {
+        union pair_type2vec_type
+        {
+            int         vec_val;
+            pair_type   pair_val;
+        };
+        pair_type2vec_type converter = {0};
+        converter.vec_val = *reinterpret_cast<const int*>(ptr);
+        return converter.pair_val;
+    } else if ( sizeof(short) == sizeof(pair_type) ) {
+        union pair_type2vec_type
+        {
+            short       vec_val;
+            pair_type   pair_val;
+        };
+        pair_type2vec_type converter = {0};
+        converter.vec_val = *reinterpret_cast<const short*>(ptr);
+        return converter.pair_val;
+    } else {
+        return *ptr;
+    }
+}
+
+template<typename pair_type>
+__forceinline__
+__device__ void store_pair_vectorized( pair_type* __restrict__ const ptr, const pair_type val )
+{
+    if ( sizeof(uint4) == sizeof(pair_type) ) {
+        union pair_type2vec_type
+        {
+            uint4       vec_val;
+            pair_type   pair_val;
+        };
+        pair_type2vec_type converter = {0,0,0,0};
+        converter.pair_val = val;
+        *reinterpret_cast<uint4*>(ptr) = converter.vec_val;
+    } else if ( sizeof(uint2) == sizeof(pair_type) ) {
+        union pair_type2vec_type
+        {
+            uint2       vec_val;
+            pair_type   pair_val;
+        };
+        pair_type2vec_type converter = {0,0};
+        converter.pair_val = val;
+        *reinterpret_cast<uint2*>(ptr) = converter.vec_val;
+    } else if ( sizeof(int) == sizeof(pair_type) ) {
+        union pair_type2vec_type
+        {
+            int         vec_val;
+            pair_type   pair_val;
+        };
+        pair_type2vec_type converter = {0};
+        converter.pair_val = val;
+        *reinterpret_cast<int*>(ptr) = converter.vec_val;
+    } else if ( sizeof(short) == sizeof(pair_type) ) {
+        union pair_type2vec_type
+        {
+            short       vec_val;
+            pair_type   pair_val;
+        };
+        pair_type2vec_type converter = {0};
+        converter.pair_val = val;
+        *reinterpret_cast<short*>(ptr) = converter.vec_val;
+    } else {
+        *ptr = val;
+    }
+}
+
 template<typename value_type, typename size_type, typename key_type, typename elem_type>
 __global__ void init_hashtbl(
     value_type* __restrict__ const hashtbl_values,
@@ -56,7 +140,7 @@ __global__ void init_hashtbl(
     const size_type idx = blockIdx.x * blockDim.x + threadIdx.x;
     if ( idx < n )
     {
-        hashtbl_values[idx] = thrust::make_pair( key_val, elem_val );
+        store_pair_vectorized( hashtbl_values + idx, thrust::make_pair( key_val, elem_val ) );
     }
 }
 
@@ -204,16 +288,28 @@ private:
         unsigned long long int  longlong;
         value_type              pair;
     };
+    
 public:
 
     explicit concurrent_unordered_multimap(size_type n,
                                            const Hasher& hf = hasher(),
                                            const Equality& eql = key_equal(),
                                            const allocator_type& a = allocator_type())
-        : m_hf(hf), m_equal(eql), m_allocator(a) , m_hashtbl_size(n), m_optimized(false), m_collisions(0)
+        : m_hf(hf), m_equal(eql), m_allocator(a), m_hashtbl_size(n), m_hashtbl_capacity(n), m_collisions(0)
     {
-        m_hashtbl_values = m_allocator.allocate( m_hashtbl_size );
+        m_hashtbl_values = m_allocator.allocate( m_hashtbl_capacity );
         constexpr int block_size = 128;
+        {
+            cudaPointerAttributes hashtbl_values_ptr_attributes;
+            cudaError_t status = cudaPointerGetAttributes( &hashtbl_values_ptr_attributes, m_hashtbl_values );
+            
+            if ( cudaSuccess == status && hashtbl_values_ptr_attributes.isManaged ) {
+                int dev_id = 0;
+                CUDA_RT_CALL( cudaGetDevice( &dev_id ) );
+                CUDA_RT_CALL( cudaMemPrefetchAsync(m_hashtbl_values, m_hashtbl_size*sizeof(value_type), dev_id, 0) );
+            }
+        }
+        
         init_hashtbl<<<((m_hashtbl_size-1)/block_size)+1,block_size>>>( m_hashtbl_values, m_hashtbl_size, unused_key, unused_element );
         CUDA_RT_CALL( cudaGetLastError() );
         CUDA_RT_CALL( cudaStreamSynchronize(0) );
@@ -221,7 +317,7 @@ public:
     
     ~concurrent_unordered_multimap()
     {
-        m_allocator.deallocate( m_hashtbl_values, m_hashtbl_size );
+        m_allocator.deallocate( m_hashtbl_values, m_hashtbl_capacity );
     }
     
     __host__ __device__ iterator begin()
@@ -242,7 +338,7 @@ public:
     }
     
     __forceinline__
-    __host__ __device__ key_type get_unused_key() const
+    static constexpr __host__ __device__ key_type get_unused_key()
     {
         return unused_key;
     }
@@ -254,6 +350,7 @@ public:
         value_type* hashtbl_values      = m_hashtbl_values;
         const size_type key_hash        = m_hf( x.first );
         size_type hash_tbl_idx          = key_hash%hashtbl_size;
+        
         value_type* it = 0;
         
         while (0 == it) {
@@ -303,16 +400,11 @@ public:
     }
     
     __forceinline__
-    __host__ __device__ const_iterator find(const key_type& k, const int pass=0, const int num_passes=1) const
+    __host__ __device__ const_iterator find(const key_type& k ) const
     {
-        const size_type chunk_size = m_hashtbl_size/num_passes;
         size_type key_hash = m_hf( k );
         size_type hash_tbl_idx = key_hash%m_hashtbl_size;
         
-        if ( ( pass < (num_passes-1) && hash_tbl_idx/chunk_size != pass ) ||
-             ( (num_passes-1) == pass && hash_tbl_idx/chunk_size < pass ) )
-            return end();
-
         value_type* begin_ptr = 0;
         
         size_type counter = 0;
@@ -334,6 +426,29 @@ public:
         return const_iterator( m_hashtbl_values,m_hashtbl_values+m_hashtbl_size,begin_ptr);
     }
     
+    void assign_async( const concurrent_unordered_multimap& other, cudaStream_t stream = 0 )
+    {
+        m_collisions = other.m_collisions;
+        if ( other.m_hashtbl_size <= m_hashtbl_capacity ) {
+            m_hashtbl_size = other.m_hashtbl_size;
+        } else {
+            m_allocator.deallocate( m_hashtbl_values, m_hashtbl_capacity );
+            m_hashtbl_capacity = other.m_hashtbl_size;
+            m_hashtbl_size = other.m_hashtbl_size;
+            
+            m_hashtbl_values = m_allocator.allocate( m_hashtbl_capacity );
+        }
+        CUDA_RT_CALL( cudaMemcpyAsync( m_hashtbl_values, other.m_hashtbl_values, m_hashtbl_size*sizeof(value_type), cudaMemcpyDefault, stream ) );
+    }
+    
+    void clear_async( cudaStream_t stream = 0 ) 
+    {
+        constexpr int block_size = 128;
+        init_hashtbl<<<((m_hashtbl_size-1)/block_size)+1,block_size,0,stream>>>( m_hashtbl_values, m_hashtbl_size, unused_key, unused_element );
+        if ( count_collisions )
+            m_collisions = 0;
+    }
+    
     unsigned long long get_num_collisions() const
     {
         return m_collisions;
@@ -347,28 +462,26 @@ public:
         }
     }
     
-    void prefetch( const int dev_id )
+    void prefetch( const int dev_id, cudaStream_t stream = 0 )
     {
-        CUDA_RT_CALL( cudaMemPrefetchAsync(this, sizeof(*this), dev_id, 0) );
-        
         cudaPointerAttributes hashtbl_values_ptr_attributes;
         cudaError_t status = cudaPointerGetAttributes( &hashtbl_values_ptr_attributes, m_hashtbl_values );
         
         if ( cudaSuccess == status && hashtbl_values_ptr_attributes.isManaged ) {
-            CUDA_RT_CALL( cudaMemPrefetchAsync(m_hashtbl_values, m_hashtbl_size*sizeof(value_type), dev_id, 0) );
+            CUDA_RT_CALL( cudaMemPrefetchAsync(m_hashtbl_values, m_hashtbl_size*sizeof(value_type), dev_id, stream) );
         }
+        CUDA_RT_CALL( cudaMemPrefetchAsync(this, sizeof(*this), dev_id, stream) );
     }
     
 private:
     const hasher            m_hf;
     const key_equal         m_equal;
     
-    allocator_type  m_allocator;
+    allocator_type              m_allocator;
     
-    const size_type m_hashtbl_size;
-    value_type*     m_hashtbl_values;
-    
-    bool            m_optimized;
+    size_type   m_hashtbl_size;
+    size_type   m_hashtbl_capacity;
+    value_type* m_hashtbl_values;
     
     unsigned long long m_collisions;
 };

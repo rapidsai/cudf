@@ -63,6 +63,9 @@ def test_innerjoin(dtype):
     # Make data
     left = np.array([0, 0, 1, 2, 3], dtype=dtype)
     right = np.array([0, 1, 2, 2, 3], dtype=dtype)
+#    left = np.array([44, 47, 0, 3, 3, 39, 9, 19, 21, 36, 23, 6, 24, 24, 12, 1, 38, 39, 23, 46, 24, 17, 37, 25, 13, 8, 9, 20, 16, 5, 15, 47, 0, 18, 35, 24, 49, 29, 19, 19, 14, 39, 32, 1, 9, 32, 31, 10, 23, 35, 11, 28, 34, 0, 0, 36, 5, 38, 40, 17, 15, 4, 41, 42, 31, 1, 1, 39, 41, 35, 38, 11, 46, 18, 27, 0, 14, 35, 12, 42, 20, 11, 4, 6, 4, 47, 3, 12, 36, 40, 14, 15, 20, 35, 23, 15, 13, 21, 48, 49], dtype=dtype)
+#    right = np.array([5, 41, 35, 0, 31, 5, 30, 0, 49, 36, 34, 48, 29, 3, 34, 42, 13, 48, 39, 21, 9, 0, 10, 43, 23, 2, 34, 35, 30, 3, 18, 46, 35, 20, 17, 27, 14, 41, 1, 36, 10, 22, 43, 40, 11, 2, 16, 32, 0, 38, 19, 46, 42, 40, 13, 30, 24, 2, 3, 30, 34, 43, 13, 48, 40, 8, 19, 31, 8, 26, 2, 3, 44, 14, 32, 4, 3, 45, 11, 22, 13, 45, 11, 16, 24, 29, 21, 46, 25, 16, 19, 33, 40, 32, 36, 6, 21, 31, 13, 7], dtype=dtype)
+
     with _make_input(left, right) as (col_left, col_right):
         # Join
         joined_idx = _call_join(libgdf.gdf_inner_join_generic, col_left,
@@ -126,8 +129,16 @@ def test_leftjoin(dtype):
     left_idx = [left[a] for a in left_pos]
     right_idx = [right[b] if b != -1 else None for b in right_pos]
 
+    # sort before checking since the hash join may produce results in random order
+    left_idx = sorted(left_idx)
     assert tuple(left_idx) == (0, 0, 0, 0, 4, 5, 5)
-    assert tuple(right_idx) == (0, 0, 0, 0, None, 5, 5)
+    # sort wouldn't work for nans
+    #assert tuple(right_idx) == (0, 0, 0, 0, None, 5, 5)
+
+    # sort before checking since the hash join may produce results in random order
+    tmp = sorted(zip(left_pos, right_pos), key=lambda pair: (pair[0], pair[1]))
+    left_pos = [x for x,_ in tmp]
+    right_pos = [x for _,x in tmp]
     # left_pos == a_left
     assert tuple(left_pos) == (0, 0, 1, 1, 2, 3, 4)
     # right_pos == a_right

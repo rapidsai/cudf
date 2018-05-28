@@ -35,7 +35,15 @@ ENDIF(CMAKE_BUILD_TYPE MATCHES DEBUG)
 # switch between hash-join and sort-join
 option(HASH_JOIN "hash-based join" OFF)
 if(HASH_JOIN)
+  message("-- Using the hash-based join implementation")
   set(CUDA_NVCC_FLAGS  ${CUDA_NVCC_FLAGS};-DHASH_JOIN)
+endif()
+
+# switch between cudaMalloc and cudaMallocManaged for hash tables
+option(HT_LEGACY_ALLOCATOR "legacy allocator for hash tables" ON)
+if(HT_LEGACY_ALLOCATOR)
+  message("-- Using the legacy allocator for hash tables")
+  set(CUDA_NVCC_FLAGS  ${CUDA_NVCC_FLAGS};-DHT_LEGACY_ALLOCATOR)
 endif()
 
 cuda_add_library(gdf SHARED
