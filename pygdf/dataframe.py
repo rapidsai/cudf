@@ -7,8 +7,9 @@ import numpy as np
 import pandas as pd
 
 from numba import cuda
+from numba.cuda.cudadrv.devicearray import DeviceNDArray
 
-from . import cudautils, formatting, queryutils, _gdf, applyutils
+from . import cudautils, formatting, queryutils, _gdf, applyutils, utils
 from .index import GenericIndex, EmptyIndex, Index, RangeIndex
 from .series import Series
 from .buffer import Buffer
@@ -176,6 +177,7 @@ class DataFrame(object):
     def __setitem__(self, name, col):
         """Add/set column by *name*
         """
+
         if name in self._cols:
             self._cols[name] = self._prepare_series_for_add(col)
         else:
@@ -318,6 +320,41 @@ class DataFrame(object):
         df._cols = self._cols.copy()
         return df
 
+    def _sanitize_columns(self, col):
+        """Sanitize pre-appended
+           col values
+        """
+        series = Series(col)
+        if len(self) == 0 and len(self.columns) > 0 and len(series) > 0:
+            ind = series.index
+            arr = cuda.device_array(shape=len(ind),dtype=np.float64)
+            size = utils.calc_chunk_size(arr.size, utils.mask_bitsize)
+            mask = cudautils.zeros(size, dtype=utils.mask_dtype)
+            val = Series.from_masked_array(arr, mask, null_count=len(ind))
+            for name in self._cols:
+                self._cols[name] = val
+            self._index = series.index
+            self._size = len(series)
+
+        col = self._sanitize_values(col)
+        return col
+
+    def _sanitize_values(self, col):
+        """Sanitize col values before
+           being added
+        """
+        index = self._index
+        series = Series(col)
+        sind = series.index
+        VALID = isinstance(col, (np.ndarray, DeviceNDArray, list, Series))
+        if len(self) > 0 and len(series) == 1 and not VALID:
+            arr = cuda.device_array(shape=len(index), dtype=series.dtype)
+            cudautils.gpu_fill_value.forall(arr.size)(arr, col)
+            return Series(arr)
+        elif len(self) > 0 and sind != index:
+            raise ValueError('Length of values does not match index length')
+        return col
+
     def _prepare_series_for_add(self, col, forceindex=False):
         """Prepare a series to be added to the DataFrame.
 
@@ -330,11 +367,9 @@ class DataFrame(object):
         -------
         The prepared Series object.
         """
+        col = self._sanitize_columns(col)
         empty_index = isinstance(self._index, EmptyIndex)
-        if isinstance(col, Series) or empty_index:
-            series = Series(col)
-        else:
-            series = Series(col, index=self.index)
+        series = Series(col)
         if forceindex or empty_index or self._index == series.index:
             if empty_index:
                 self._index = series.index
@@ -353,10 +388,11 @@ class DataFrame(object):
         data : Series, array-like
             Values to be added.
         """
+
         if name in self._cols:
             raise NameError('duplicated column name {!r}'.format(name))
 
-        series = self._prepare_series_for_add(data, forceindex=True)
+        series = self._prepare_series_for_add(data, forceindex=forceindex)
         self._cols[name] = series
 
     def drop_column(self, name):

@@ -6,3 +6,4 @@ __pycache__/
 build/
 .vscode/
 docs/_build
+**.pytest_cache/
