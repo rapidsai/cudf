@@ -458,7 +458,7 @@ class DataFrame(object):
         return matrix
 
     def as_matrix(self, columns=None):
-        """Covert to a matrix in host memory.
+        """Convert to a matrix in host memory.
 
         Parameters
         ----------
@@ -871,7 +871,7 @@ class DataFrame(object):
         return df.set_index(dataframe.index.values)
 
     def to_records(self, index=True):
-        """Covert to a numpy recarray
+        """Convert to a numpy recarray
 
         Parameters
         ----------
