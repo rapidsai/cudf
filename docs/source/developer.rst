@@ -21,7 +21,7 @@ Here's a quick map to decide which file contains which feature:
     - ``numerical.py`` for numeric columns
     - ``categorical.py`` for categorical columns
 - ``Buffer``:
-    - buffer.py
+    - ``buffer.py``
 - ``.apply()`` and simliar functions:
     - ``applyutils.py``
 - ``.query()`` and similar functions:
