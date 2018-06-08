@@ -6,7 +6,7 @@ Welcome to pygdf's documentation!
    :caption: Contents:
 
    api.rst
-
+   developer.rst
 
 Indices and tables
 ==================
