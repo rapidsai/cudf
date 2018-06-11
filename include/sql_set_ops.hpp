@@ -1,6 +1,6 @@
 /* Copyright 2018 NVIDIA Corporation.  All rights reserved. */
 
-//Multi-column Filter, Order-By, and Group-By functionality
+//C++ style of interface for Multi-column Filter, Order-By, and Group-By functionality
 
 # pragma once
 
