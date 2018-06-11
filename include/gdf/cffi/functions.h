@@ -9,6 +9,9 @@ gdf_error gdf_column_view(gdf_column *column, void *data, gdf_valid_type *valid,
 
 const char * gdf_error_get_name(gdf_error errcode);
 
+int gdf_cuda_last_error();
+const char * gdf_cuda_error_string(int cuda_error);
+const char * gdf_cuda_error_name(int cuda_error);
 
 /* ipc */
 
