@@ -61,8 +61,18 @@ def test_dataframe_join_how(aa, bb, how):
 
     assert list(expect.columns) == list(got.columns)
     assert np.all(expect.index.values == got.index.values)
-    _check_series(expect['b'], got['b'])
-    _check_series(expect['a'], got['a'])
+    if(how=='inner'):
+        tmp = sorted(zip(expect['b'], expect['a']), key=lambda pair: (pair[0], pair[1]))
+        tmp2 = sorted(zip(got['b'], got['a']), key=lambda pair: (pair[0], pair[1]))
+        left_pos1 = [x for x,_ in tmp]
+        right_pos1 = [x for _,x in tmp]
+        left_pos2 = [x for x,_ in tmp2]
+        right_pos2 = [x for _,x in tmp2]
+        assert tuple(left_pos1)==tuple(left_pos2)
+        assert tuple(right_pos1)==tuple(right_pos2)
+    else:
+        _check_series(expect['b'], got['b'])
+        _check_series(expect['a'], got['a'])
 
 
 def _check_series(expect, got):
