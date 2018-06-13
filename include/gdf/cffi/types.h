@@ -27,6 +27,7 @@ typedef struct gdf_column_{
     gdf_valid_type *valid;
     gdf_size_type size;
     gdf_dtype dtype;
+    gdf_size_type null_count = 0;
 } gdf_column;
 
 struct _OpaqueIpcParser;
@@ -43,3 +44,14 @@ typedef struct _OpaqueSegmentedRadixsortPlan gdf_segmented_radixsort_plan_type;
 
 struct _OpaqueJoinResult;
 typedef struct _OpaqueJoinResult gdf_join_result_type;
+
+
+
+typedef enum{
+	GDF_EQUALS,
+	GDF_NOT_EQUALS,
+	GDF_LESS_THAN,
+	GDF_LESS_THAN_OR_EQUALS,
+	GDF_GREATER_THAN,
+	GDF_GREATER_THAN_OR_EQUALS
+} gdf_comparison_operator;
