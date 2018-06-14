@@ -8,6 +8,15 @@
 #include "hash-join/join_compute_api.h"
 #include "sort-join.cuh"
 
+#define EXPAND_JOIN(func) \
+  if (a2 != NULL && b2 != NULL) \
+    if (a3 != NULL && b3 != NULL) \
+      error = func(context, (void**)&joined, joined_idx, joined_size, a, a_count, b, b_count, a2, b2, a3, b3); \
+    else \
+      error = func(context, (void**)&joined, joined_idx, joined_size, a, a_count, b, b_count, a2, b2); \
+  else \
+      error = func(context, (void**)&joined, joined_idx, joined_size, a, a_count, b, b_count);
+
 using namespace mgpu;
 
 // transpose
@@ -24,15 +33,19 @@ void pairs_to_decoupled(mem_t<size_type> &output, const size_type output_npairs,
   }
 }
 
-// two-table single-column join
+// N-column join (N up to 3 currently)
 template<JoinType join_type,
 	 typename size_type,
-	 typename a_it, typename b_it,
+	 typename col1_it,
+	 typename col2_it,
+	 typename col3_it,
 	 typename comp_t>
-mem_t<size_type> join_hash(a_it a, size_type a_count,
-				 b_it b, size_type b_count,
-				 comp_t comp, context_t& context,
-				 size_type estimated_join_count = 0, bool flip_indices = false)
+mem_t<size_type> join_hash(col1_it a, size_type a_count,
+			   col1_it b, size_type b_count,
+			   col2_it a2, col2_it b2,
+			   col3_it a3, col3_it b3,
+			   comp_t comp, context_t& context,
+			   size_type estimated_join_count = 0, bool flip_indices = false)
 {
   // here follows the custom code for hash-joins
   typedef join_pair<size_type> joined_type;
@@ -40,7 +53,7 @@ mem_t<size_type> join_hash(a_it a, size_type a_count,
   if (join_type == INNER_JOIN) {
     // swap buffers if we're doing inner join & b_count > a_count to use the smaller table for build
     if (b_count > a_count)
-      return join_hash<join_type>(b, b_count, a, a_count, comp, context, estimated_join_count, true);
+      return join_hash<join_type>(b, b_count, a, a_count, b2, a2, b3, a3, comp, context, estimated_join_count, true);
   }
 
   // allocate a counter
@@ -67,8 +80,12 @@ mem_t<size_type> join_hash(a_it a, size_type a_count,
 
     // using the new low-level API for hash-joins
     switch (join_type) {
-    case INNER_JOIN: error = InnerJoinHash(context, (void**)&joined, joined_idx, joined_size, a, a_count, b, b_count); break;
-    case LEFT_JOIN: error = LeftJoinHash(context, (void**)&joined, joined_idx, joined_size, a, a_count, b, b_count); break;
+    case INNER_JOIN:
+      EXPAND_JOIN(InnerJoinHash)
+      break;
+    case LEFT_JOIN:
+      EXPAND_JOIN(LeftJoinHash)
+      break;
     }
 
     output_npairs = *joined_idx;
@@ -76,65 +93,6 @@ mem_t<size_type> join_hash(a_it a, size_type a_count,
       cudaGetLastError();			// clear any errors
       CUDA_RT_CALL( cudaFree(joined) );		// free allocated memory
       joined_size *= 2; 			// simple heuristic, just double the size
-    }
-    else {
-      cont = false; // found the right output size!
-    }
-  }
-
-  // TODO: can we avoid this transformation?
-  mem_t<size_type> output(2 * output_npairs, context);
-  pairs_to_decoupled(output, output_npairs, joined, context, flip_indices);
-
-  return output;
-}
-
-// two-table two-column inner join
-template<typename size_type,
-         typename a1_it, typename b1_it,
-         typename a2_it, typename b2_it,
-	 typename comp_t>
-mem_t<size_type> inner_join_hash(a1_it a1, a2_it a2, size_type a_count,
-                                 b1_it b1, b2_it b2, size_type b_count,
-				 comp_t comp, context_t& context,
-				 size_type estimated_join_count = 0, bool flip_indices = false)
-{
-  // here follows the custom code for hash-joins
-  typedef join_pair<size_type> joined_type;
-
-  // swap buffers if b_count > a_count to use the smaller table for build
-  if (b_count > a_count)
-    return inner_join_hash(b1, b2, b_count, a1, a2, a_count, comp, context, estimated_join_count, true);
-
-  // allocate a counter
-  size_type *joined_idx;
-  CUDA_RT_CALL( cudaMallocManaged(&joined_idx, sizeof(size_type)) );
-
-  // TODO: here we don't know the output size so we'll start with some estimate and increase as necessary
-  size_type joined_size = (size_type)(a_count);
-  if (estimated_join_count > 0)
-    joined_size = estimated_join_count;
-
-  joined_type* joined = NULL;
-  size_type output_npairs = 0;
-
-  bool cont = true;
-  while (cont) {
-    // allocate an output buffer to store pairs, prefetch the estimated output size
-    CUDA_RT_CALL( cudaMallocManaged(&joined, sizeof(joined_type) * joined_size) );
-    CUDA_RT_CALL( cudaMemPrefetchAsync(joined, sizeof(joined_type) * joined_size, 0) ); // FIXME: use GPU device id from the context?
-
-    // reset the counter
-    CUDA_RT_CALL( cudaMemsetAsync(joined_idx, 0, sizeof(size_type), 0) );
-
-    // using the new low-level API for hash-joins
-    cudaError_t error = InnerJoinHash(context, (void**)&joined, joined_idx, joined_size, a1, a_count, b1, b_count, a2, b2);
-
-    output_npairs = *joined_idx;
-    if (error != cudaSuccess || output_npairs > joined_size) {
-      cudaGetLastError();                       // clear any errors
-      CUDA_RT_CALL( cudaFree(joined) );         // free allocated memory
-      joined_size *= 2;                         // simple heuristic, just double the size
     }
     else {
       cont = false; // found the right output size!

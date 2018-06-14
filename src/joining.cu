@@ -108,6 +108,8 @@ gdf_error gdf_##Fn(gdf_column *leftcol, gdf_column *rightcol,               \
     std::unique_ptr<join_result<int> > result_ptr(new join_result<int>);    \
     result_ptr->result = Joiner<JoinType>((T*)leftcol->data, (int)leftcol->size,      \
                                 (T*)rightcol->data, (int)rightcol->size,    \
+				(int32_t*)NULL, (int32_t*)NULL,		    \
+				(int32_t*)NULL, (int32_t*)NULL,		    \
                                 less_t<T>(), result_ptr->context);          \
     CUDA_CHECK_LAST();                                                      \
     *out_result = cffi_wrap(result_ptr.release());                          \
@@ -125,6 +127,34 @@ gdf_error gdf_##Fn##_generic(gdf_column *leftcol, gdf_column * rightcol,    \
     case GDF_FLOAT64: return gdf_##Fn##_f64(leftcol, rightcol, out_result); \
     default: return GDF_UNSUPPORTED_DTYPE;                                  \
     }                                                                       \
+}
+
+// multi-column join function
+gdf_error gdf_multi_left_join_generic(int num_cols, gdf_column **leftcol, gdf_column **rightcol, gdf_join_result_type **out_result)
+{
+  // check the right table has matching types and the same number of rows
+  for (int i = 0; i < num_cols; i++) {
+    if (rightcol[i]->dtype != leftcol[i]->dtype) return GDF_UNSUPPORTED_DTYPE;
+    if (rightcol[i]->size != leftcol[i]->size) return GDF_UNSUPPORTED_JOIN;
+  }
+
+  // TODO: this is a hack implementation instantiated only for specific types
+  //       we need a generic way to expand various type combinations
+  if (num_cols != 3) return GDF_UNSUPPORTED_JOIN;
+  if (num_cols > 0 && leftcol[0]->dtype != GDF_INT64) return GDF_UNSUPPORTED_DTYPE;
+  if (num_cols > 1 && leftcol[1]->dtype != GDF_INT32) return GDF_UNSUPPORTED_DTYPE;
+  if (num_cols > 2 && leftcol[2]->dtype != GDF_INT32) return GDF_UNSUPPORTED_DTYPE;
+
+  std::unique_ptr<join_result<int> > result_ptr(new join_result<int>);
+  result_ptr->result = join_hash<LEFT_JOIN>(
+				(int64_t*)leftcol[0]->data, (int)leftcol[0]->size,
+                                (int64_t*)rightcol[0]->data, (int)rightcol[0]->size,
+                                (int32_t*)leftcol[1]->data, (int32_t*)rightcol[1]->data,
+                                (int32_t*)leftcol[2]->data, (int32_t*)rightcol[2]->data,
+                                less_t<int64_t>(), result_ptr->context);
+  CUDA_CHECK_LAST();
+  *out_result = cffi_wrap(result_ptr.release());
+  return GDF_SUCCESS;
 }
 
 #ifdef HASH_JOIN

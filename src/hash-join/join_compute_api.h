@@ -219,6 +219,17 @@ cudaError_t InnerJoinHash(context_t &compute_ctx, void **out, size_type *out_cou
   return error;
 }
 
+template<typename input_it, typename input2_it, typename input3_it, typename size_type>
+cudaError_t InnerJoinHash(context_t &compute_ctx, void **out, size_type *out_count, const size_type max_out_count,
+			  const input_it a, const size_type a_count, const input_it b, const size_type b_count,
+			  const input2_it a2, const input2_it b2,
+			  const input3_it a3, const input3_it b3,
+			  std::shared_future<void>* dependency = 0)
+{
+  // TODO: implement this
+  return cudaErrorNotSupported;
+}
+
 /// \brief Performs a hash based left join of columns a and b.
 ///
 /// It is possible to pass in preallocated ArrayData, in which case new memory via the MemoryPool associated
@@ -271,3 +282,23 @@ cudaError_t LeftJoinHash(context_t &compute_ctx, void **out, size_type *out_coun
   return error;
 }
 
+template<typename input_it, typename input2_it, typename size_type>
+cudaError_t LeftJoinHash(context_t &compute_ctx, void **out, size_type *out_count, const size_type max_out_count,
+                          const input_it a, const size_type a_count, const input_it b, const size_type b_count,
+			  const input2_it a2, const input2_it b2,
+                          std::shared_future<void>* dependency = 0)
+{
+  // TODO: implement this
+  return cudaErrorNotSupported;
+}
+
+template<typename input_it, typename input2_it, typename input3_it, typename size_type>
+cudaError_t LeftJoinHash(context_t &compute_ctx, void **out, size_type *out_count, const size_type max_out_count,
+                          const input_it a, const size_type a_count, const input_it b, const size_type b_count,
+			  const input2_it a2, const input2_it b2,
+			  const input3_it a3, const input3_it b3,
+                          std::shared_future<void>* dependency = 0)
+{
+  // TODO: implement this
+  return cudaErrorNotSupported;
+}
