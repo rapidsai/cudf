@@ -419,5 +419,5 @@ gdf_error gpu_comparison_static_f64(gdf_column *lhs, double value, gdf_column *o
 gdf_error gpu_comparison(gdf_column *lhs, gdf_column *rhs, gdf_column *output,gdf_comparison_operator operation);
 
 //takes a stencil and uses it to compact a colum e.g. remove all values for which the stencil = 0
-//gdf_error gpu_apply_stencil(gdf_column *lhs, gdf_column * stencil, gdf_column * output);
+gdf_error gpu_apply_stencil(gdf_column *lhs, gdf_column * stencil, gdf_column * output);
 

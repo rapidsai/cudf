@@ -12,6 +12,8 @@
 #include <thrust/iterator/iterator_adaptor.h>
 #include <thrust/device_vector.h>
 
+//std lib
+#include <map>
 
 /*
  * bit_mask_null_counts Generated using the following code
@@ -2510,26 +2512,27 @@ template<typename Iterator>
     }
 };
 
-
+typedef repeat_iterator<thrust::detail::normal_iterator<thrust::device_ptr<gdf_valid_type> > > gdf_valid_iterator;
 
 template<typename stencil_type>
 struct is_stencil_true
 {
 	__host__ __device__
-	bool operator()(const thrust::tuple<stencil_type, gdf_valid_iterator> value)
+	bool operator()(const thrust::tuple<stencil_type, gdf_valid_iterator::value_type> value)
 	{
-		return (thrust::get<2>(value) == 1) && (thrust::get<1>(value) != 0);
+		return (thrust::get<1>(value) == 1) && (thrust::get<0>(value) != 0);
 	}
 };
 
 
 
-std::map<gdf_type, int16_t> column_type_width = {{GDF_INT8, sizeof(int8_t)}, {GDF_INT16, sizeof(int16_t)},{GDF_INT32, sizeof(int32_t)}, {GDF_INT64, sizeof(int64_t)},
+std::map<gdf_dtype, int16_t> column_type_width = {{GDF_INT8, sizeof(int8_t)}, {GDF_INT16, sizeof(int16_t)},{GDF_INT32, sizeof(int32_t)}, {GDF_INT64, sizeof(int64_t)},
 		{GDF_FLOAT32, sizeof(float)}, {GDF_FLOAT64, sizeof(double)} };
 //because applying a stencil only needs to know the WIDTH of a type for copying to output, we won't be making a bunch of templated version to store this but rather
 //storing a map from gdf_type to width
 gdf_error gpu_apply_stencil(gdf_column *lhs, gdf_column * stencil, gdf_column * output){
 	//TODO: add a rquire here that output and lhs are the same size
+
 
 	//find the width in bytes of this data type
 	auto searched_item = column_type_width.find(lhs->dtype);
@@ -2543,7 +2546,7 @@ gdf_error gpu_apply_stencil(gdf_column *lhs, gdf_column * stencil, gdf_column * 
 
 
 
-	gdf_valid_iterator valid_iterator(thrust::detail::make_normal_iterator(thrust::device_pointer_cast(stencil->valid)));
+	gdf_valid_iterator valid_iterator(thrust::detail::make_normal_iterator(thrust::device_pointer_cast(stencil->valid)),GDF_VALID_BITSIZE);
 	//TODO: can probably make this happen with some kind of iterator so it can work on any width size
 	if(stencil_width == 1){
 		//zip the stencil and the valid iterator together
@@ -2560,7 +2563,7 @@ gdf_error gpu_apply_stencil(gdf_column *lhs, gdf_column * stencil, gdf_column * 
 			thrust::detail::normal_iterator<thrust::device_ptr<int8_t> > output_start =
 					thrust::detail::make_normal_iterator(thrust::device_pointer_cast((int8_t *) output->data));
 			thrust::detail::normal_iterator<thrust::device_ptr<int8_t> > output_end =
-					thrust::copy_if(thrust::cuda::par.on(stream),input_start,input_start + lhs->size,zipped_stencil_iter,output_start,is_stencil_true());
+					thrust::copy_if(thrust::cuda::par.on(stream),input_start,input_start + lhs->size,zipped_stencil_iter,output_start,is_stencil_true<thrust::detail::normal_iterator<thrust::device_ptr<int8_t> >::value_type >());
 			output->size = output_end - output_start;
 		}else if(width == 2){
 			thrust::detail::normal_iterator<thrust::device_ptr<int16_t> > input_start =
@@ -2568,7 +2571,7 @@ gdf_error gpu_apply_stencil(gdf_column *lhs, gdf_column * stencil, gdf_column * 
 			thrust::detail::normal_iterator<thrust::device_ptr<int16_t> > output_start =
 					thrust::detail::make_normal_iterator(thrust::device_pointer_cast((int16_t *) output->data));
 			thrust::detail::normal_iterator<thrust::device_ptr<int16_t> > output_end =
-					thrust::copy_if(thrust::cuda::par.on(stream),input_start,input_start + lhs->size,zipped_stencil_iter,output_start,is_stencil_true());
+					thrust::copy_if(thrust::cuda::par.on(stream),input_start,input_start + lhs->size,zipped_stencil_iter,output_start,is_stencil_true<thrust::detail::normal_iterator<thrust::device_ptr<int8_t> >::value_type >());
 			output->size = output_end - output_start;
 		}else if(width == 4){
 			thrust::detail::normal_iterator<thrust::device_ptr<int32_t> > input_start =
@@ -2576,7 +2579,7 @@ gdf_error gpu_apply_stencil(gdf_column *lhs, gdf_column * stencil, gdf_column * 
 			thrust::detail::normal_iterator<thrust::device_ptr<int32_t> > output_start =
 					thrust::detail::make_normal_iterator(thrust::device_pointer_cast((int32_t *) output->data));
 			thrust::detail::normal_iterator<thrust::device_ptr<int32_t> > output_end =
-					thrust::copy_if(thrust::cuda::par.on(stream),input_start,input_start + lhs->size,zipped_stencil_iter,output_start,is_stencil_true());
+					thrust::copy_if(thrust::cuda::par.on(stream),input_start,input_start + lhs->size,zipped_stencil_iter,output_start,is_stencil_true<thrust::detail::normal_iterator<thrust::device_ptr<int8_t> >::value_type >());
 			output->size = output_end - output_start;
 		}else if(width == 8){
 			thrust::detail::normal_iterator<thrust::device_ptr<int64_t> > input_start =
@@ -2584,7 +2587,7 @@ gdf_error gpu_apply_stencil(gdf_column *lhs, gdf_column * stencil, gdf_column * 
 			thrust::detail::normal_iterator<thrust::device_ptr<int64_t> > output_start =
 					thrust::detail::make_normal_iterator(thrust::device_pointer_cast((int64_t *) output->data));
 			thrust::detail::normal_iterator<thrust::device_ptr<int64_t> > output_end =
-					thrust::copy_if(thrust::cuda::par.on(stream),input_start,input_start + lhs->size,zipped_stencil_iter,output_start,is_stencil_true());
+					thrust::copy_if(thrust::cuda::par.on(stream),input_start,input_start + lhs->size,zipped_stencil_iter,output_start,is_stencil_true<thrust::detail::normal_iterator<thrust::device_ptr<int8_t> >::value_type >());
 			output->size = output_end - output_start;
 		}
 
@@ -2592,7 +2595,7 @@ gdf_error gpu_apply_stencil(gdf_column *lhs, gdf_column * stencil, gdf_column * 
 		typedef thrust::tuple<thrust::detail::normal_iterator<thrust::device_ptr<int16_t> >,gdf_valid_iterator> zipped_stencil_tuple;
 		typedef thrust::zip_iterator<zipped_stencil_tuple> zipped_stencil_iterator;
 
-		zipped_stencil_iterator iter(thrust::make_tuple(thrust::detail::make_normal_iterator(thrust::device_pointer_cast((int16_t * )stencil->data)),valid_iterator));
+		zipped_stencil_iterator zipped_stencil_iter(thrust::make_tuple(thrust::detail::make_normal_iterator(thrust::device_pointer_cast((int16_t * )stencil->data)),valid_iterator));
 
 		if(width == 1){
 			thrust::detail::normal_iterator<thrust::device_ptr<int8_t> > input_start =
@@ -2600,7 +2603,7 @@ gdf_error gpu_apply_stencil(gdf_column *lhs, gdf_column * stencil, gdf_column * 
 			thrust::detail::normal_iterator<thrust::device_ptr<int8_t> > output_start =
 					thrust::detail::make_normal_iterator(thrust::device_pointer_cast((int8_t *) output->data));
 			thrust::detail::normal_iterator<thrust::device_ptr<int8_t> > output_end =
-					thrust::copy_if(thrust::cuda::par.on(stream),input_start,input_start + lhs->size,zipped_stencil_iter,output_start,is_stencil_true());
+					thrust::copy_if(thrust::cuda::par.on(stream),input_start,input_start + lhs->size,zipped_stencil_iter,output_start,is_stencil_true<thrust::detail::normal_iterator<thrust::device_ptr<int16_t> >::value_type >());
 			output->size = output_end - output_start;
 		}else if(width == 2){
 			thrust::detail::normal_iterator<thrust::device_ptr<int16_t> > input_start =
@@ -2608,7 +2611,7 @@ gdf_error gpu_apply_stencil(gdf_column *lhs, gdf_column * stencil, gdf_column * 
 			thrust::detail::normal_iterator<thrust::device_ptr<int16_t> > output_start =
 					thrust::detail::make_normal_iterator(thrust::device_pointer_cast((int16_t *) output->data));
 			thrust::detail::normal_iterator<thrust::device_ptr<int16_t> > output_end =
-					thrust::copy_if(thrust::cuda::par.on(stream),input_start,input_start + lhs->size,zipped_stencil_iter,output_start,is_stencil_true());
+					thrust::copy_if(thrust::cuda::par.on(stream),input_start,input_start + lhs->size,zipped_stencil_iter,output_start,is_stencil_true<thrust::detail::normal_iterator<thrust::device_ptr<int16_t> >::value_type >());
 			output->size = output_end - output_start;
 		}else if(width == 4){
 			thrust::detail::normal_iterator<thrust::device_ptr<int32_t> > input_start =
@@ -2616,7 +2619,7 @@ gdf_error gpu_apply_stencil(gdf_column *lhs, gdf_column * stencil, gdf_column * 
 			thrust::detail::normal_iterator<thrust::device_ptr<int32_t> > output_start =
 					thrust::detail::make_normal_iterator(thrust::device_pointer_cast((int32_t *) output->data));
 			thrust::detail::normal_iterator<thrust::device_ptr<int32_t> > output_end =
-					thrust::copy_if(thrust::cuda::par.on(stream),input_start,input_start + lhs->size,zipped_stencil_iter,output_start,is_stencil_true());
+					thrust::copy_if(thrust::cuda::par.on(stream),input_start,input_start + lhs->size,zipped_stencil_iter,output_start,is_stencil_true<thrust::detail::normal_iterator<thrust::device_ptr<int16_t> >::value_type >());
 			output->size = output_end - output_start;
 		}else if(width == 8){
 			thrust::detail::normal_iterator<thrust::device_ptr<int64_t> > input_start =
@@ -2624,14 +2627,14 @@ gdf_error gpu_apply_stencil(gdf_column *lhs, gdf_column * stencil, gdf_column * 
 			thrust::detail::normal_iterator<thrust::device_ptr<int64_t> > output_start =
 					thrust::detail::make_normal_iterator(thrust::device_pointer_cast((int64_t *) output->data));
 			thrust::detail::normal_iterator<thrust::device_ptr<int64_t> > output_end =
-					thrust::copy_if(thrust::cuda::par.on(stream),input_start,input_start + lhs->size,zipped_stencil_iter,output_start,is_stencil_true());
+					thrust::copy_if(thrust::cuda::par.on(stream),input_start,input_start + lhs->size,zipped_stencil_iter,output_start,is_stencil_true<thrust::detail::normal_iterator<thrust::device_ptr<int16_t> >::value_type >());
 			output->size = output_end - output_start;
 		}
 	}else if(stencil_width == 4){
 		typedef thrust::tuple<thrust::detail::normal_iterator<thrust::device_ptr<int32_t> >,gdf_valid_iterator> zipped_stencil_tuple;
 		typedef thrust::zip_iterator<zipped_stencil_tuple> zipped_stencil_iterator;
 
-		zipped_stencil_iterator iter(thrust::make_tuple(thrust::detail::make_normal_iterator(thrust::device_pointer_cast((int32_t * )stencil->data)),valid_iterator));
+		zipped_stencil_iterator zipped_stencil_iter(thrust::make_tuple(thrust::detail::make_normal_iterator(thrust::device_pointer_cast((int32_t * )stencil->data)),valid_iterator));
 
 		if(width == 1){
 			thrust::detail::normal_iterator<thrust::device_ptr<int8_t> > input_start =
@@ -2639,7 +2642,7 @@ gdf_error gpu_apply_stencil(gdf_column *lhs, gdf_column * stencil, gdf_column * 
 			thrust::detail::normal_iterator<thrust::device_ptr<int8_t> > output_start =
 					thrust::detail::make_normal_iterator(thrust::device_pointer_cast((int8_t *) output->data));
 			thrust::detail::normal_iterator<thrust::device_ptr<int8_t> > output_end =
-					thrust::copy_if(thrust::cuda::par.on(stream),input_start,input_start + lhs->size,zipped_stencil_iter,output_start,is_stencil_true());
+					thrust::copy_if(thrust::cuda::par.on(stream),input_start,input_start + lhs->size,zipped_stencil_iter,output_start,is_stencil_true<thrust::detail::normal_iterator<thrust::device_ptr<int32_t> >::value_type >());
 			output->size = output_end - output_start;
 		}else if(width == 2){
 			thrust::detail::normal_iterator<thrust::device_ptr<int16_t> > input_start =
@@ -2647,7 +2650,7 @@ gdf_error gpu_apply_stencil(gdf_column *lhs, gdf_column * stencil, gdf_column * 
 			thrust::detail::normal_iterator<thrust::device_ptr<int16_t> > output_start =
 					thrust::detail::make_normal_iterator(thrust::device_pointer_cast((int16_t *) output->data));
 			thrust::detail::normal_iterator<thrust::device_ptr<int16_t> > output_end =
-					thrust::copy_if(thrust::cuda::par.on(stream),input_start,input_start + lhs->size,zipped_stencil_iter,output_start,is_stencil_true());
+					thrust::copy_if(thrust::cuda::par.on(stream),input_start,input_start + lhs->size,zipped_stencil_iter,output_start,is_stencil_true<thrust::detail::normal_iterator<thrust::device_ptr<int32_t> >::value_type >());
 			output->size = output_end - output_start;
 		}else if(width == 4){
 			thrust::detail::normal_iterator<thrust::device_ptr<int32_t> > input_start =
@@ -2655,7 +2658,7 @@ gdf_error gpu_apply_stencil(gdf_column *lhs, gdf_column * stencil, gdf_column * 
 			thrust::detail::normal_iterator<thrust::device_ptr<int32_t> > output_start =
 					thrust::detail::make_normal_iterator(thrust::device_pointer_cast((int32_t *) output->data));
 			thrust::detail::normal_iterator<thrust::device_ptr<int32_t> > output_end =
-					thrust::copy_if(thrust::cuda::par.on(stream),input_start,input_start + lhs->size,zipped_stencil_iter,output_start,is_stencil_true());
+					thrust::copy_if(thrust::cuda::par.on(stream),input_start,input_start + lhs->size,zipped_stencil_iter,output_start,is_stencil_true<thrust::detail::normal_iterator<thrust::device_ptr<int32_t> >::value_type >());
 			output->size = output_end - output_start;
 		}else if(width == 8){
 			thrust::detail::normal_iterator<thrust::device_ptr<int64_t> > input_start =
@@ -2663,14 +2666,14 @@ gdf_error gpu_apply_stencil(gdf_column *lhs, gdf_column * stencil, gdf_column * 
 			thrust::detail::normal_iterator<thrust::device_ptr<int64_t> > output_start =
 					thrust::detail::make_normal_iterator(thrust::device_pointer_cast((int64_t *) output->data));
 			thrust::detail::normal_iterator<thrust::device_ptr<int64_t> > output_end =
-					thrust::copy_if(thrust::cuda::par.on(stream),input_start,input_start + lhs->size,zipped_stencil_iter,output_start,is_stencil_true());
+					thrust::copy_if(thrust::cuda::par.on(stream),input_start,input_start + lhs->size,zipped_stencil_iter,output_start,is_stencil_true<thrust::detail::normal_iterator<thrust::device_ptr<int32_t> >::value_type >());
 			output->size = output_end - output_start;
 		}
 	}else if(stencil_width == 8){
 		typedef thrust::tuple<thrust::detail::normal_iterator<thrust::device_ptr<int64_t> >,gdf_valid_iterator> zipped_stencil_tuple;
 		typedef thrust::zip_iterator<zipped_stencil_tuple> zipped_stencil_iterator;
 
-		zipped_stencil_iterator iter(thrust::make_tuple(thrust::detail::make_normal_iterator(thrust::device_pointer_cast((int64_t * )stencil->data)),valid_iterator));
+		zipped_stencil_iterator zipped_stencil_iter(thrust::make_tuple(thrust::detail::make_normal_iterator(thrust::device_pointer_cast((int64_t * )stencil->data)),valid_iterator));
 
 		if(width == 1){
 			thrust::detail::normal_iterator<thrust::device_ptr<int8_t> > input_start =
@@ -2678,7 +2681,7 @@ gdf_error gpu_apply_stencil(gdf_column *lhs, gdf_column * stencil, gdf_column * 
 			thrust::detail::normal_iterator<thrust::device_ptr<int8_t> > output_start =
 					thrust::detail::make_normal_iterator(thrust::device_pointer_cast((int8_t *) output->data));
 			thrust::detail::normal_iterator<thrust::device_ptr<int8_t> > output_end =
-					thrust::copy_if(thrust::cuda::par.on(stream),input_start,input_start + lhs->size,zipped_stencil_iter,output_start,is_stencil_true());
+					thrust::copy_if(thrust::cuda::par.on(stream),input_start,input_start + lhs->size,zipped_stencil_iter,output_start,is_stencil_true<thrust::detail::normal_iterator<thrust::device_ptr<int64_t> >::value_type >());
 			output->size = output_end - output_start;
 		}else if(width == 2){
 			thrust::detail::normal_iterator<thrust::device_ptr<int16_t> > input_start =
@@ -2686,7 +2689,7 @@ gdf_error gpu_apply_stencil(gdf_column *lhs, gdf_column * stencil, gdf_column * 
 			thrust::detail::normal_iterator<thrust::device_ptr<int16_t> > output_start =
 					thrust::detail::make_normal_iterator(thrust::device_pointer_cast((int16_t *) output->data));
 			thrust::detail::normal_iterator<thrust::device_ptr<int16_t> > output_end =
-					thrust::copy_if(thrust::cuda::par.on(stream),input_start,input_start + lhs->size,zipped_stencil_iter,output_start,is_stencil_true());
+					thrust::copy_if(thrust::cuda::par.on(stream),input_start,input_start + lhs->size,zipped_stencil_iter,output_start,is_stencil_true<thrust::detail::normal_iterator<thrust::device_ptr<int64_t> >::value_type >());
 			output->size = output_end - output_start;
 		}else if(width == 4){
 			thrust::detail::normal_iterator<thrust::device_ptr<int32_t> > input_start =
@@ -2694,7 +2697,7 @@ gdf_error gpu_apply_stencil(gdf_column *lhs, gdf_column * stencil, gdf_column * 
 			thrust::detail::normal_iterator<thrust::device_ptr<int32_t> > output_start =
 					thrust::detail::make_normal_iterator(thrust::device_pointer_cast((int32_t *) output->data));
 			thrust::detail::normal_iterator<thrust::device_ptr<int32_t> > output_end =
-					thrust::copy_if(thrust::cuda::par.on(stream),input_start,input_start + lhs->size,zipped_stencil_iter,output_start,is_stencil_true());
+					thrust::copy_if(thrust::cuda::par.on(stream),input_start,input_start + lhs->size,zipped_stencil_iter,output_start,is_stencil_true<thrust::detail::normal_iterator<thrust::device_ptr<int64_t> >::value_type >());
 			output->size = output_end - output_start;
 		}else if(width == 8){
 			thrust::detail::normal_iterator<thrust::device_ptr<int64_t> > input_start =
@@ -2702,7 +2705,7 @@ gdf_error gpu_apply_stencil(gdf_column *lhs, gdf_column * stencil, gdf_column * 
 			thrust::detail::normal_iterator<thrust::device_ptr<int64_t> > output_start =
 					thrust::detail::make_normal_iterator(thrust::device_pointer_cast((int64_t *) output->data));
 			thrust::detail::normal_iterator<thrust::device_ptr<int64_t> > output_end =
-					thrust::copy_if(thrust::cuda::par.on(stream),input_start,input_start + lhs->size,zipped_stencil_iter,output_start,is_stencil_true());
+					thrust::copy_if(thrust::cuda::par.on(stream),input_start,input_start + lhs->size,zipped_stencil_iter,output_start,is_stencil_true<thrust::detail::normal_iterator<thrust::device_ptr<int64_t> >::value_type >());
 			output->size = output_end - output_start;
 		}
 	}
@@ -2713,5 +2716,4 @@ gdf_error gpu_apply_stencil(gdf_column *lhs, gdf_column * stencil, gdf_column * 
 
 	return GDF_SUCCESS;
 
-}
-*/
+}*/
