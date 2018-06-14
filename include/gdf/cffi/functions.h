@@ -407,7 +407,7 @@ gdf_error gdf_max_i8(gdf_column *col, int8_t *dev_result, gdf_size_type dev_resu
  */
 
 
-
+//These compare every value on the left hand side to a static value and return a stencil in output which will have 1 when the comparison operation returns 1 and 0 otherwise
 gdf_error gpu_comparison_static_i8(gdf_column *lhs, int8_t value, gdf_column *output,gdf_comparison_operator operation);
 gdf_error gpu_comparison_static_i16(gdf_column *lhs, int16_t value, gdf_column *output,gdf_comparison_operator operation);
 gdf_error gpu_comparison_static_i32(gdf_column *lhs, int32_t value, gdf_column *output,gdf_comparison_operator operation);
@@ -415,8 +415,9 @@ gdf_error gpu_comparison_static_i64(gdf_column *lhs, int64_t value, gdf_column *
 gdf_error gpu_comparison_static_f32(gdf_column *lhs, float value, gdf_column *output,gdf_comparison_operator operation);
 gdf_error gpu_comparison_static_f64(gdf_column *lhs, double value, gdf_column *output,gdf_comparison_operator operation);
 
-
-
-
+//allows you two compare two columns against each other using a comparison operation, retunrs a stencil like functions above
 gdf_error gpu_comparison(gdf_column *lhs, gdf_column *rhs, gdf_column *output,gdf_comparison_operator operation);
+
+//takes a stencil and uses it to compact a colum e.g. remove all values for which the stencil = 0
+//gdf_error gpu_apply_stencil(gdf_column *lhs, gdf_column * stencil, gdf_column * output);
 
