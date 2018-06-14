@@ -55,25 +55,52 @@ def test_dataframe_join_how(aa, bb, how):
 
     expect = work(df.to_pandas())
     got = work(df)
+    expecto = expect.copy()
+    goto = got.copy()
+
+    # Type conversion to handle NoneType
+    expectb = expect.b
+    expecta = expect.a
+    gotb = got.b
+    gota = got.a
+    got.drop_column('b')
+    got.add_column('b',gotb.astype(np.float64).fillna(np.nan))
+    got.drop_column('a')
+    got.add_column('a',gota.astype(np.float64).fillna(np.nan))
+    expect.drop(['b'], axis=1)
+    expect['b'] = expectb.astype(np.float64).fillna(np.nan)
+    expect.drop(['a'], axis=1)
+    expect['a'] = expecta.astype(np.float64).fillna(np.nan)
 
     # print(expect)
     # print(got.to_string(nrows=None))
 
     assert list(expect.columns) == list(got.columns)
     assert np.all(expect.index.values == got.index.values)
-    if(how=='inner'):
-        tmp = sorted(zip(expect['b'], expect['a']), key=lambda pair: (pair[0], pair[1]))
-        tmp2 = sorted(zip(got['b'], got['a']), key=lambda pair: (pair[0], pair[1]))
-        left_pos1 = [x for x,_ in tmp]
-        right_pos1 = [x for _,x in tmp]
-        left_pos2 = [x for x,_ in tmp2]
-        right_pos2 = [x for _,x in tmp2]
-        assert tuple(left_pos1)==tuple(left_pos2)
-        assert tuple(right_pos1)==tuple(right_pos2)
+    if(how!='outer'):
+        pd.util.testing.assert_frame_equal(got.to_pandas().sort_values(['b','a']).reset_index(drop=True), expect.sort_values(['b','a']).reset_index(drop=True))
+        # if(how=='right'):
+        #     _sorted_check_series(expect['a'], expect['b'], got['a'], got['b'])
+        # else:
+        #     _sorted_check_series(expect['b'], expect['a'], got['b'], got['a'])
     else:
-        _check_series(expect['b'], got['b'])
-        _check_series(expect['a'], got['a'])
+        _check_series(expecto['b'], goto['b'])
+        _check_series(expecto['a'], goto['a'])
 
+# def _sorted_check_series(expect1, expect2, got1, got2):
+#     magic = 0xdeadbeaf
+#     tmp = sorted(zip(expect1, expect2), key=lambda pair: (pair[0], pair[1]))
+#     tmp2 = sorted(zip(got1.astype(np.float64).fillna(np.nan), got2.astype(np.float64).fillna(np.nan)), key=lambda pair: (pair[0], pair[1]))
+#     left_pos1 = [x for x,_ in tmp]
+#     right_pos1 = [x for _,x in tmp]
+#     left_pos2 = [x for x,_ in tmp2]
+#     right_pos2 = [x for _,x in tmp2]
+#     left_pos1 = pd.Series(left_pos1).fillna(magic).tolist()
+#     left_pos2 = pd.Series(left_pos2).fillna(magic).tolist()
+#     right_pos1 = pd.Series(right_pos1).fillna(magic).tolist()
+#     right_pos2 = pd.Series(right_pos2).fillna(magic).tolist()
+#     assert tuple(left_pos1)==tuple(left_pos2)
+#     assert tuple(right_pos1)==tuple(right_pos2)
 
 def _check_series(expect, got):
     magic = 0xdeadbeaf
@@ -99,13 +126,13 @@ def test_dataframe_join_suffix():
     with pytest.raises(ValueError) as raises:
         left.join(right)
     raises.match("there are overlapping columns but lsuffix"
-                 " and rsuffix are not defined")
+                    " and rsuffix are not defined")
 
-    got = left.join(right, lsuffix='_left', rsuffix='_right')
+    got = left.join(right, lsuffix='_left', rsuffix='_right', sort=True)
     # Get expected value
     pddf = df.to_pandas()
     expect = pddf.set_index('a').join(pddf.set_index('c'),
-                                      lsuffix='_left', rsuffix='_right')
+                                        lsuffix='_left', rsuffix='_right')
     # Check
     assert list(expect.columns) == list(got.columns)
     assert np.all(expect.index.values == got.index.values)
@@ -128,7 +155,7 @@ def test_dataframe_join_cats():
     expect = lhs.to_pandas().join(rhs.to_pandas())
 
     # Note: pandas make a object Index after joining
-    pd.util.testing.assert_frame_equal(got.to_pandas().reset_index(drop=True),
+    pd.util.testing.assert_frame_equal(got.sort_values(by='b').to_pandas().sort_index().reset_index(drop=True),
                                        expect.reset_index(drop=True))
 
     # Just do some rough checking here.
@@ -157,7 +184,7 @@ def test_dataframe_join_mismatch_cats(how):
 
     pdf1 = pdf1.set_index('join_col')
     pdf2 = pdf2.set_index('join_col')
-    join_gdf = gdf1.join(gdf2, how=how)
+    join_gdf = gdf1.join(gdf2, how=how, sort=True)
     join_pdf = pdf1.join(pdf2, how=how)
 
     got = join_gdf.to_pandas()
