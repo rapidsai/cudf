@@ -312,11 +312,11 @@ __global__ void probe_hash_tbl_uniq_keys(
     const key_type* probe_tbl,
     const size_type probe_tbl_size,
     joined_type * const joined,
-    unsigned long long int* const current_idx,
+    size_type* const current_idx,
     const size_type offset)
 {
     __shared__ int current_idx_shared;
-    __shared__ unsigned long long int output_offset_shared;
+    __shared__ size_type output_offset_shared;
     __shared__ joined_type joined_shared[block_size];
     if ( 0 == threadIdx.x ) {
         output_offset_shared = 0;
@@ -352,3 +352,4 @@ __global__ void probe_hash_tbl_uniq_keys(
         }
     }
 }
+
