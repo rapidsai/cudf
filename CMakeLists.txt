@@ -11,6 +11,12 @@ cmake_minimum_required(VERSION 2.8)  # not sure about version required
 find_package(CUDA)
 set (CMAKE_CXX_STANDARD 11)
 
+# Include CMake modules
+include(FeatureSummary)
+include(CheckIncludeFiles)
+include(CheckLibraryExists)
+include(CTest)
+
 include_directories(include
                     $ENV{CONDA_PREFIX}/include
                     ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/cub
@@ -73,3 +79,48 @@ install(TARGETS gdf
         LIBRARY DESTINATION lib)
 
 install(DIRECTORY include/gdf DESTINATION include)
+
+
+
+
+execute_process(
+    COMMAND ${CMAKE_COMMAND} -G "${CMAKE_GENERATOR}" .
+    RESULT_VARIABLE result
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/thirdparty/googletest/
+    OUTPUT_FILE ${CMAKE_FILES_DIRECTORY}/thirdparty/googletest-install/
+)
+
+if(result)
+    message(FATAL_ERROR "CMake step for googletest failed: ${result}")
+endif()
+
+execute_process(
+    COMMAND ${CMAKE_COMMAND} --build .
+    RESULT_VARIABLE result
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/thirdparty/googletest/
+)
+
+if(result)
+    message(FATAL_ERROR "Build step for googletest failed: ${result}")
+endif()
+
+# Prevent overriding the parent project's compiler/linker
+# settings on Windows
+set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
+
+
+
+# Locate the Google Test package.
+# Requires that you build with:
+#   -DGTEST_ROOT:PATH=/path/to/googletest_install_dir
+set(GTEST_ROOT ${CMAKE_FILES_DIRECTORY}/thirdparty/googletest-install/)
+message(STATUS "GTEST_ROOT: " ${GTEST_ROOT})
+find_package(GTest QUIET)
+set_package_properties(GTest PROPERTIES TYPE OPTIONAL PURPOSE "Google C++ Testing Framework (Google Test)." URL "https://github.com/google/googletest")
+
+if(GTEST_FOUND)
+    include_directories(${GTEST_INCLUDE_DIRS})
+    message(STATUS "Google C++ Testing Framework (Google Test) found in ${GTEST_ROOT}")
+else()
+    message(AUTHOR_WARNING "Google C++ Testing Framework (Google Test) not found: automated tests are disabled.")
+endif()

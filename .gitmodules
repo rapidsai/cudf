@@ -5,5 +5,5 @@
 	path = thirdparty/moderngpu
 	url = https://github.com/moderngpu/moderngpu.git
 [submodule "thirdparty/googletest"]
-        path = thirdparty/googletest
-        url = https://github.com/google/googletest.git
+	path = thirdparty/googletest
+	url = https://github.com/google/googletest.git
