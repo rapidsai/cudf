@@ -9,6 +9,7 @@
 #include <thrust/transform.h>
 #include <thrust/functional.h>
 #include <thrust/execution_policy.h>
+#include <thrust/iterator/iterator_adaptor.h>
 #include <thrust/device_vector.h>
 
 
@@ -147,7 +148,7 @@ struct gdf_extract_datetime_day_date64_op : public thrust::unary_function<int64_
 
 1528935590000
 '2018-06-14 00:19:50'
-*/
+ */
 
 struct gdf_extract_datetime_hour_date64_op : public thrust::unary_function<int64_t, int16_t>
 {
@@ -263,21 +264,21 @@ gdf_error gdf_extract_datetime_year(gdf_column *input, gdf_column *output) {
 	gdf_size_type num_chars_bitmask = ( ( input->size +( GDF_VALID_BITSIZE - 1)) / GDF_VALID_BITSIZE );
 	thrust::copy(thrust::cuda::par.on(stream), input->valid, input->valid + num_chars_bitmask, output->valid); // copy over valid bitmask
 
-	switch ( input->dtype ) {
-	    case    GDF_DATE64:
-	    	thrust::device_ptr<int64_t> input_ptr((int64_t *) input->data);
-	    	thrust::device_ptr<int16_t> output_ptr((int16_t *) output->data);
-	    	gdf_extract_datetime_year_date64_op op;
-	    	thrust::transform(thrust::cuda::par.on(stream), thrust::detail::make_normal_iterator(input_ptr),
-	    			thrust::detail::make_normal_iterator(input_ptr) + input->size, hrust::detail::make_normal_iterator(output_ptr), op);
+	if ( input->dtype == GDF_DATE64 ) {
+		thrust::device_ptr<int64_t> input_ptr((int64_t *) input->data);
+		thrust::device_ptr<int16_t> output_ptr((int16_t *) output->data);
+		gdf_extract_datetime_year_date64_op op;
+		thrust::transform(thrust::cuda::par.on(stream), thrust::detail::make_normal_iterator(input_ptr),
+				thrust::detail::make_normal_iterator(input_ptr) + input->size, thrust::detail::make_normal_iterator(output_ptr), op);
 
-	    case   GDF_DATE32:
-	    	thrust::device_ptr<int32_t> input_ptr((int32_t *) input->data);
-	    	thrust::device_ptr<int16_t> output_ptr((int16_t *) output->data);
-	    	gdf_extract_datetime_year_date32_op op;
-	    	thrust::transform(thrust::cuda::par.on(stream), thrust::detail::make_normal_iterator(input_ptr),
-	    			thrust::detail::make_normal_iterator(input_ptr) + input->size, hrust::detail::make_normal_iterator(output_ptr), op);
-	    default: return GDF_UNSUPPORTED_DTYPE;
+	}else if (input->dtype == GDF_DATE32) {
+		thrust::device_ptr<int32_t> input_ptr((int32_t *) input->data);
+		thrust::device_ptr<int16_t> output_ptr((int16_t *) output->data);
+		gdf_extract_datetime_year_date32_op op;
+		thrust::transform(thrust::cuda::par.on(stream), thrust::detail::make_normal_iterator(input_ptr),
+				thrust::detail::make_normal_iterator(input_ptr) + input->size, thrust::detail::make_normal_iterator(output_ptr), op);
+	} else {
+		return GDF_UNSUPPORTED_DTYPE;
 	}
 
 	cudaStreamSynchronize(stream);
@@ -298,21 +299,21 @@ gdf_error gdf_extract_datetime_month(gdf_column *input, gdf_column *output) {
 	gdf_size_type num_chars_bitmask = ( ( input->size +( GDF_VALID_BITSIZE - 1)) / GDF_VALID_BITSIZE );
 	thrust::copy(thrust::cuda::par.on(stream), input->valid, input->valid + num_chars_bitmask, output->valid); // copy over valid bitmask
 
-	switch ( input->dtype ) {
-	    case    GDF_DATE64:
-	    	thrust::device_ptr<int64_t> input_ptr((int64_t *) input->data);
-	    	thrust::device_ptr<int16_t> output_ptr((int16_t *) output->data);
-	    	gdf_extract_datetime_month_date64_op op;
-	    	thrust::transform(thrust::cuda::par.on(stream), thrust::detail::make_normal_iterator(input_ptr),
-	    			thrust::detail::make_normal_iterator(input_ptr) + input->size, hrust::detail::make_normal_iterator(output_ptr), op);
+	if ( input->dtype == GDF_DATE64 ) {
+		thrust::device_ptr<int64_t> input_ptr((int64_t *) input->data);
+		thrust::device_ptr<int16_t> output_ptr((int16_t *) output->data);
+		gdf_extract_datetime_month_date64_op op;
+		thrust::transform(thrust::cuda::par.on(stream), thrust::detail::make_normal_iterator(input_ptr),
+				thrust::detail::make_normal_iterator(input_ptr) + input->size, thrust::detail::make_normal_iterator(output_ptr), op);
 
-	    case   GDF_DATE32:
-	    	thrust::device_ptr<int32_t> input_ptr((int32_t *) input->data);
-	    	thrust::device_ptr<int16_t> output_ptr((int16_t *) output->data);
-	    	gdf_extract_datetime_month_date32_op op;
-	    	thrust::transform(thrust::cuda::par.on(stream), thrust::detail::make_normal_iterator(input_ptr),
-	    			thrust::detail::make_normal_iterator(input_ptr) + input->size, hrust::detail::make_normal_iterator(output_ptr), op);
-	    default: return GDF_UNSUPPORTED_DTYPE;
+	}else if (input->dtype == GDF_DATE32) {
+		thrust::device_ptr<int32_t> input_ptr((int32_t *) input->data);
+		thrust::device_ptr<int16_t> output_ptr((int16_t *) output->data);
+		gdf_extract_datetime_month_date32_op op;
+		thrust::transform(thrust::cuda::par.on(stream), thrust::detail::make_normal_iterator(input_ptr),
+				thrust::detail::make_normal_iterator(input_ptr) + input->size, thrust::detail::make_normal_iterator(output_ptr), op);
+	} else {
+		return GDF_UNSUPPORTED_DTYPE;
 	}
 
 	cudaStreamSynchronize(stream);
@@ -333,21 +334,21 @@ gdf_error gdf_extract_datetime_day(gdf_column *input, gdf_column *output) {
 	gdf_size_type num_chars_bitmask = ( ( input->size +( GDF_VALID_BITSIZE - 1)) / GDF_VALID_BITSIZE );
 	thrust::copy(thrust::cuda::par.on(stream), input->valid, input->valid + num_chars_bitmask, output->valid); // copy over valid bitmask
 
-	switch ( input->dtype ) {
-	    case    GDF_DATE64:
-	    	thrust::device_ptr<int64_t> input_ptr((int64_t *) input->data);
-	    	thrust::device_ptr<int16_t> output_ptr((int16_t *) output->data);
-	    	gdf_extract_datetime_day_date64_op op;
-	    	thrust::transform(thrust::cuda::par.on(stream), thrust::detail::make_normal_iterator(input_ptr),
-	    			thrust::detail::make_normal_iterator(input_ptr) + input->size, hrust::detail::make_normal_iterator(output_ptr), op);
+	if ( input->dtype == GDF_DATE64 ) {
+		thrust::device_ptr<int64_t> input_ptr((int64_t *) input->data);
+		thrust::device_ptr<int16_t> output_ptr((int16_t *) output->data);
+		gdf_extract_datetime_day_date64_op op;
+		thrust::transform(thrust::cuda::par.on(stream), thrust::detail::make_normal_iterator(input_ptr),
+				thrust::detail::make_normal_iterator(input_ptr) + input->size, thrust::detail::make_normal_iterator(output_ptr), op);
 
-	    case   GDF_DATE32:
-	    	thrust::device_ptr<int32_t> input_ptr((int32_t *) input->data);
-	    	thrust::device_ptr<int16_t> output_ptr((int16_t *) output->data);
-	    	gdf_extract_datetime_day_date32_op op;
-	    	thrust::transform(thrust::cuda::par.on(stream), thrust::detail::make_normal_iterator(input_ptr),
-	    			thrust::detail::make_normal_iterator(input_ptr) + input->size, hrust::detail::make_normal_iterator(output_ptr), op);
-	    default: return GDF_UNSUPPORTED_DTYPE;
+	}else if (input->dtype == GDF_DATE32) {
+		thrust::device_ptr<int32_t> input_ptr((int32_t *) input->data);
+		thrust::device_ptr<int16_t> output_ptr((int16_t *) output->data);
+		gdf_extract_datetime_day_date32_op op;
+		thrust::transform(thrust::cuda::par.on(stream), thrust::detail::make_normal_iterator(input_ptr),
+				thrust::detail::make_normal_iterator(input_ptr) + input->size, thrust::detail::make_normal_iterator(output_ptr), op);
+	} else {
+		return GDF_UNSUPPORTED_DTYPE;
 	}
 
 	cudaStreamSynchronize(stream);
@@ -369,15 +370,15 @@ gdf_error gdf_extract_datetime_hour(gdf_column *input, gdf_column *output) {
 	gdf_size_type num_chars_bitmask = ( ( input->size +( GDF_VALID_BITSIZE - 1)) / GDF_VALID_BITSIZE );
 	thrust::copy(thrust::cuda::par.on(stream), input->valid, input->valid + num_chars_bitmask, output->valid); // copy over valid bitmask
 
-	switch ( input->dtype ) {
-	    case    GDF_DATE64:
-	    	thrust::device_ptr<int64_t> input_ptr((int64_t *) input->data);
-	    	thrust::device_ptr<int16_t> output_ptr((int16_t *) output->data);
-	    	gdf_extract_datetime_hour_date64_op op;
-	    	thrust::transform(thrust::cuda::par.on(stream), thrust::detail::make_normal_iterator(input_ptr),
-	    			thrust::detail::make_normal_iterator(input_ptr) + input->size, hrust::detail::make_normal_iterator(output_ptr), op);
+	if ( input->dtype == GDF_DATE64 ) {
+		thrust::device_ptr<int64_t> input_ptr((int64_t *) input->data);
+		thrust::device_ptr<int16_t> output_ptr((int16_t *) output->data);
+		gdf_extract_datetime_hour_date64_op op;
+		thrust::transform(thrust::cuda::par.on(stream), thrust::detail::make_normal_iterator(input_ptr),
+				thrust::detail::make_normal_iterator(input_ptr) + input->size, thrust::detail::make_normal_iterator(output_ptr), op);
 
-	    default: return GDF_UNSUPPORTED_DTYPE;
+	} else {
+		return GDF_UNSUPPORTED_DTYPE;
 	}
 
 	cudaStreamSynchronize(stream);
@@ -399,15 +400,15 @@ gdf_error gdf_extract_datetime_minute(gdf_column *input, gdf_column *output) {
 	gdf_size_type num_chars_bitmask = ( ( input->size +( GDF_VALID_BITSIZE - 1)) / GDF_VALID_BITSIZE );
 	thrust::copy(thrust::cuda::par.on(stream), input->valid, input->valid + num_chars_bitmask, output->valid); // copy over valid bitmask
 
-	switch ( input->dtype ) {
-	    case    GDF_DATE64:
-	    	thrust::device_ptr<int64_t> input_ptr((int64_t *) input->data);
-	    	thrust::device_ptr<int16_t> output_ptr((int16_t *) output->data);
-	    	gdf_extract_datetime_minute_date64_op op;
-	    	thrust::transform(thrust::cuda::par.on(stream), thrust::detail::make_normal_iterator(input_ptr),
-	    			thrust::detail::make_normal_iterator(input_ptr) + input->size, hrust::detail::make_normal_iterator(output_ptr), op);
+	if ( input->dtype == GDF_DATE64 ) {
+		thrust::device_ptr<int64_t> input_ptr((int64_t *) input->data);
+		thrust::device_ptr<int16_t> output_ptr((int16_t *) output->data);
+		gdf_extract_datetime_minute_date64_op op;
+		thrust::transform(thrust::cuda::par.on(stream), thrust::detail::make_normal_iterator(input_ptr),
+				thrust::detail::make_normal_iterator(input_ptr) + input->size, thrust::detail::make_normal_iterator(output_ptr), op);
 
-	    default: return GDF_UNSUPPORTED_DTYPE;
+	} else {
+		return GDF_UNSUPPORTED_DTYPE;
 	}
 
 	cudaStreamSynchronize(stream);
@@ -429,15 +430,15 @@ gdf_error gdf_extract_datetime_second(gdf_column *input, gdf_column *output) {
 	gdf_size_type num_chars_bitmask = ( ( input->size +( GDF_VALID_BITSIZE - 1)) / GDF_VALID_BITSIZE );
 	thrust::copy(thrust::cuda::par.on(stream), input->valid, input->valid + num_chars_bitmask, output->valid); // copy over valid bitmask
 
-	switch ( input->dtype ) {
-	    case    GDF_DATE64:
-	    	thrust::device_ptr<int64_t> input_ptr((int64_t *) input->data);
-	    	thrust::device_ptr<int16_t> output_ptr((int16_t *) output->data);
-	    	gdf_extract_datetime_second_date64_op op;
-	    	thrust::transform(thrust::cuda::par.on(stream), thrust::detail::make_normal_iterator(input_ptr),
-	    			thrust::detail::make_normal_iterator(input_ptr) + input->size, hrust::detail::make_normal_iterator(output_ptr), op);
+	if ( input->dtype == GDF_DATE64 ) {
+		thrust::device_ptr<int64_t> input_ptr((int64_t *) input->data);
+		thrust::device_ptr<int16_t> output_ptr((int16_t *) output->data);
+		gdf_extract_datetime_second_date64_op op;
+		thrust::transform(thrust::cuda::par.on(stream), thrust::detail::make_normal_iterator(input_ptr),
+				thrust::detail::make_normal_iterator(input_ptr) + input->size, thrust::detail::make_normal_iterator(output_ptr), op);
 
-	    default: return GDF_UNSUPPORTED_DTYPE;
+	} else {
+		return GDF_UNSUPPORTED_DTYPE;
 	}
 
 	cudaStreamSynchronize(stream);
