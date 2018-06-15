@@ -108,199 +108,58 @@ gdf_error gpu_apply_stencil(gdf_column *lhs, gdf_column * stencil, gdf_column * 
 	bit_position_iterator bit_position_iter(thrust::make_counting_iterator<gdf_size_type>(0), modulus_bit_width());
 	gdf_valid_iterator valid_iterator(thrust::detail::make_normal_iterator(thrust::device_pointer_cast(stencil->valid)),GDF_VALID_BITSIZE);
 	//TODO: can probably make this happen with some kind of iterator so it can work on any width size
-	if(stencil_width == 1){
-		//zip the stencil and the valid iterator together
-		typedef thrust::tuple<thrust::detail::normal_iterator<thrust::device_ptr<int8_t> >,gdf_valid_iterator, bit_position_iterator > zipped_stencil_tuple;
-		typedef thrust::zip_iterator<zipped_stencil_tuple> zipped_stencil_iterator;
+ 
+	//zip the stencil and the valid iterator together
+	typedef thrust::tuple<thrust::detail::normal_iterator<thrust::device_ptr<int8_t> >,gdf_valid_iterator, bit_position_iterator > zipped_stencil_tuple;
+	typedef thrust::zip_iterator<zipped_stencil_tuple> zipped_stencil_iterator;
 
-		//what kind of shit is that you might wonder?
-		//well basically we are zipping up an iterator to the stencil, one to the bit masks, and one which lets us get the bit position based on our index
-		zipped_stencil_iterator zipped_stencil_iter(
-				thrust::make_tuple(
-						thrust::detail::make_normal_iterator(thrust::device_pointer_cast((int8_t * )stencil->data)),
-						valid_iterator,
-						thrust::make_transform_iterator<modulus_bit_width, thrust::counting_iterator<gdf_size_type> >(
-								thrust::make_counting_iterator<gdf_size_type>(0),
-								modulus_bit_width())
-				));
+	//what kind of shit is that you might wonder?
+	//well basically we are zipping up an iterator to the stencil, one to the bit masks, and one which lets us get the bit position based on our index
+	zipped_stencil_iterator zipped_stencil_iter(
+			thrust::make_tuple(
+					thrust::detail::make_normal_iterator(thrust::device_pointer_cast((int8_t * )stencil->data)),
+					valid_iterator,
+					thrust::make_transform_iterator<modulus_bit_width, thrust::counting_iterator<gdf_size_type> >(
+							thrust::make_counting_iterator<gdf_size_type>(0),
+							modulus_bit_width())
+			));
 
-		//NOTE!!!! the output column is getting set to a specific size  but we are NOT compacting the allocation,
-		//whoever calls that should handle that
-		if(width == 1){
-			thrust::detail::normal_iterator<thrust::device_ptr<int8_t> > input_start =
-					thrust::detail::make_normal_iterator(thrust::device_pointer_cast((int8_t *) lhs->data));
-			thrust::detail::normal_iterator<thrust::device_ptr<int8_t> > output_start =
-					thrust::detail::make_normal_iterator(thrust::device_pointer_cast((int8_t *) output->data));
-			thrust::detail::normal_iterator<thrust::device_ptr<int8_t> > output_end =
-					thrust::copy_if(thrust::cuda::par.on(stream),input_start,input_start + lhs->size,zipped_stencil_iter,output_start,is_stencil_true<thrust::detail::normal_iterator<thrust::device_ptr<int8_t> >::value_type >());
-			output->size = output_end - output_start;
-		}else if(width == 2){
-			thrust::detail::normal_iterator<thrust::device_ptr<int16_t> > input_start =
-					thrust::detail::make_normal_iterator(thrust::device_pointer_cast((int16_t *) lhs->data));
-			thrust::detail::normal_iterator<thrust::device_ptr<int16_t> > output_start =
-					thrust::detail::make_normal_iterator(thrust::device_pointer_cast((int16_t *) output->data));
-			thrust::detail::normal_iterator<thrust::device_ptr<int16_t> > output_end =
-					thrust::copy_if(thrust::cuda::par.on(stream),input_start,input_start + lhs->size,zipped_stencil_iter,output_start,is_stencil_true<thrust::detail::normal_iterator<thrust::device_ptr<int8_t> >::value_type >());
-			output->size = output_end - output_start;
-		}else if(width == 4){
-			thrust::detail::normal_iterator<thrust::device_ptr<int32_t> > input_start =
-					thrust::detail::make_normal_iterator(thrust::device_pointer_cast((int32_t *) lhs->data));
-			thrust::detail::normal_iterator<thrust::device_ptr<int32_t> > output_start =
-					thrust::detail::make_normal_iterator(thrust::device_pointer_cast((int32_t *) output->data));
-			thrust::detail::normal_iterator<thrust::device_ptr<int32_t> > output_end =
-					thrust::copy_if(thrust::cuda::par.on(stream),input_start,input_start + lhs->size,zipped_stencil_iter,output_start,is_stencil_true<thrust::detail::normal_iterator<thrust::device_ptr<int8_t> >::value_type >());
-			output->size = output_end - output_start;
-		}else if(width == 8){
-			thrust::detail::normal_iterator<thrust::device_ptr<int64_t> > input_start =
-					thrust::detail::make_normal_iterator(thrust::device_pointer_cast((int64_t *) lhs->data));
-			thrust::detail::normal_iterator<thrust::device_ptr<int64_t> > output_start =
-					thrust::detail::make_normal_iterator(thrust::device_pointer_cast((int64_t *) output->data));
-			thrust::detail::normal_iterator<thrust::device_ptr<int64_t> > output_end =
-					thrust::copy_if(thrust::cuda::par.on(stream),input_start,input_start + lhs->size,zipped_stencil_iter,output_start,is_stencil_true<thrust::detail::normal_iterator<thrust::device_ptr<int8_t> >::value_type >());
-			output->size = output_end - output_start;
-		}
-
-	}else if(stencil_width == 2){
-		typedef thrust::tuple<thrust::detail::normal_iterator<thrust::device_ptr<int16_t> >,gdf_valid_iterator, bit_position_iterator > zipped_stencil_tuple;
-		typedef thrust::zip_iterator<zipped_stencil_tuple> zipped_stencil_iterator;
-
-
-		zipped_stencil_iterator zipped_stencil_iter(
-				thrust::make_tuple(
-						thrust::detail::make_normal_iterator(thrust::device_pointer_cast((int16_t * )stencil->data)),
-						valid_iterator,
-						thrust::make_transform_iterator<modulus_bit_width, thrust::counting_iterator<gdf_size_type> >(
-								thrust::make_counting_iterator<gdf_size_type>(0),
-								modulus_bit_width())
-				));
-
-		if(width == 1){
-			thrust::detail::normal_iterator<thrust::device_ptr<int8_t> > input_start =
-					thrust::detail::make_normal_iterator(thrust::device_pointer_cast((int8_t *) lhs->data));
-			thrust::detail::normal_iterator<thrust::device_ptr<int8_t> > output_start =
-					thrust::detail::make_normal_iterator(thrust::device_pointer_cast((int8_t *) output->data));
-			thrust::detail::normal_iterator<thrust::device_ptr<int8_t> > output_end =
-					thrust::copy_if(thrust::cuda::par.on(stream),input_start,input_start + lhs->size,zipped_stencil_iter,output_start,is_stencil_true<thrust::detail::normal_iterator<thrust::device_ptr<int16_t> >::value_type >());
-			output->size = output_end - output_start;
-		}else if(width == 2){
-			thrust::detail::normal_iterator<thrust::device_ptr<int16_t> > input_start =
-					thrust::detail::make_normal_iterator(thrust::device_pointer_cast((int16_t *) lhs->data));
-			thrust::detail::normal_iterator<thrust::device_ptr<int16_t> > output_start =
-					thrust::detail::make_normal_iterator(thrust::device_pointer_cast((int16_t *) output->data));
-			thrust::detail::normal_iterator<thrust::device_ptr<int16_t> > output_end =
-					thrust::copy_if(thrust::cuda::par.on(stream),input_start,input_start + lhs->size,zipped_stencil_iter,output_start,is_stencil_true<thrust::detail::normal_iterator<thrust::device_ptr<int16_t> >::value_type >());
-			output->size = output_end - output_start;
-		}else if(width == 4){
-			thrust::detail::normal_iterator<thrust::device_ptr<int32_t> > input_start =
-					thrust::detail::make_normal_iterator(thrust::device_pointer_cast((int32_t *) lhs->data));
-			thrust::detail::normal_iterator<thrust::device_ptr<int32_t> > output_start =
-					thrust::detail::make_normal_iterator(thrust::device_pointer_cast((int32_t *) output->data));
-			thrust::detail::normal_iterator<thrust::device_ptr<int32_t> > output_end =
-					thrust::copy_if(thrust::cuda::par.on(stream),input_start,input_start + lhs->size,zipped_stencil_iter,output_start,is_stencil_true<thrust::detail::normal_iterator<thrust::device_ptr<int16_t> >::value_type >());
-			output->size = output_end - output_start;
-		}else if(width == 8){
-			thrust::detail::normal_iterator<thrust::device_ptr<int64_t> > input_start =
-					thrust::detail::make_normal_iterator(thrust::device_pointer_cast((int64_t *) lhs->data));
-			thrust::detail::normal_iterator<thrust::device_ptr<int64_t> > output_start =
-					thrust::detail::make_normal_iterator(thrust::device_pointer_cast((int64_t *) output->data));
-			thrust::detail::normal_iterator<thrust::device_ptr<int64_t> > output_end =
-					thrust::copy_if(thrust::cuda::par.on(stream),input_start,input_start + lhs->size,zipped_stencil_iter,output_start,is_stencil_true<thrust::detail::normal_iterator<thrust::device_ptr<int16_t> >::value_type >());
-			output->size = output_end - output_start;
-		}
-	}else if(stencil_width == 4){
-		typedef thrust::tuple<thrust::detail::normal_iterator<thrust::device_ptr<int32_t> >,gdf_valid_iterator, bit_position_iterator > zipped_stencil_tuple;
-		typedef thrust::zip_iterator<zipped_stencil_tuple> zipped_stencil_iterator;
-
-		zipped_stencil_iterator zipped_stencil_iter(
-				thrust::make_tuple(
-						thrust::detail::make_normal_iterator(thrust::device_pointer_cast((int32_t * )stencil->data)),
-						valid_iterator,
-						thrust::make_transform_iterator<modulus_bit_width, thrust::counting_iterator<gdf_size_type> >(
-								thrust::make_counting_iterator<gdf_size_type>(0),
-								modulus_bit_width())
-				));
-
-		if(width == 1){
-			thrust::detail::normal_iterator<thrust::device_ptr<int8_t> > input_start =
-					thrust::detail::make_normal_iterator(thrust::device_pointer_cast((int8_t *) lhs->data));
-			thrust::detail::normal_iterator<thrust::device_ptr<int8_t> > output_start =
-					thrust::detail::make_normal_iterator(thrust::device_pointer_cast((int8_t *) output->data));
-			thrust::detail::normal_iterator<thrust::device_ptr<int8_t> > output_end =
-					thrust::copy_if(thrust::cuda::par.on(stream),input_start,input_start + lhs->size,zipped_stencil_iter,output_start,is_stencil_true<thrust::detail::normal_iterator<thrust::device_ptr<int32_t> >::value_type >());
-			output->size = output_end - output_start;
-		}else if(width == 2){
-			thrust::detail::normal_iterator<thrust::device_ptr<int16_t> > input_start =
-					thrust::detail::make_normal_iterator(thrust::device_pointer_cast((int16_t *) lhs->data));
-			thrust::detail::normal_iterator<thrust::device_ptr<int16_t> > output_start =
-					thrust::detail::make_normal_iterator(thrust::device_pointer_cast((int16_t *) output->data));
-			thrust::detail::normal_iterator<thrust::device_ptr<int16_t> > output_end =
-					thrust::copy_if(thrust::cuda::par.on(stream),input_start,input_start + lhs->size,zipped_stencil_iter,output_start,is_stencil_true<thrust::detail::normal_iterator<thrust::device_ptr<int32_t> >::value_type >());
-			output->size = output_end - output_start;
-		}else if(width == 4){
-			thrust::detail::normal_iterator<thrust::device_ptr<int32_t> > input_start =
-					thrust::detail::make_normal_iterator(thrust::device_pointer_cast((int32_t *) lhs->data));
-			thrust::detail::normal_iterator<thrust::device_ptr<int32_t> > output_start =
-					thrust::detail::make_normal_iterator(thrust::device_pointer_cast((int32_t *) output->data));
-			thrust::detail::normal_iterator<thrust::device_ptr<int32_t> > output_end =
-					thrust::copy_if(thrust::cuda::par.on(stream),input_start,input_start + lhs->size,zipped_stencil_iter,output_start,is_stencil_true<thrust::detail::normal_iterator<thrust::device_ptr<int32_t> >::value_type >());
-			output->size = output_end - output_start;
-		}else if(width == 8){
-			thrust::detail::normal_iterator<thrust::device_ptr<int64_t> > input_start =
-					thrust::detail::make_normal_iterator(thrust::device_pointer_cast((int64_t *) lhs->data));
-			thrust::detail::normal_iterator<thrust::device_ptr<int64_t> > output_start =
-					thrust::detail::make_normal_iterator(thrust::device_pointer_cast((int64_t *) output->data));
-			thrust::detail::normal_iterator<thrust::device_ptr<int64_t> > output_end =
-					thrust::copy_if(thrust::cuda::par.on(stream),input_start,input_start + lhs->size,zipped_stencil_iter,output_start,is_stencil_true<thrust::detail::normal_iterator<thrust::device_ptr<int32_t> >::value_type >());
-			output->size = output_end - output_start;
-		}
-	}else if(stencil_width == 8){
-		typedef thrust::tuple<thrust::detail::normal_iterator<thrust::device_ptr<int64_t> >,gdf_valid_iterator, bit_position_iterator > zipped_stencil_tuple;
-		typedef thrust::zip_iterator<zipped_stencil_tuple> zipped_stencil_iterator;
-
-
-		zipped_stencil_iterator zipped_stencil_iter(
-				thrust::make_tuple(
-						thrust::detail::make_normal_iterator(thrust::device_pointer_cast((int64_t * )stencil->data)),
-						valid_iterator,
-						thrust::make_transform_iterator<modulus_bit_width, thrust::counting_iterator<gdf_size_type> >(
-								thrust::make_counting_iterator<gdf_size_type>(0),
-								modulus_bit_width())
-				));
-
-		if(width == 1){
-			thrust::detail::normal_iterator<thrust::device_ptr<int8_t> > input_start =
-					thrust::detail::make_normal_iterator(thrust::device_pointer_cast((int8_t *) lhs->data));
-			thrust::detail::normal_iterator<thrust::device_ptr<int8_t> > output_start =
-					thrust::detail::make_normal_iterator(thrust::device_pointer_cast((int8_t *) output->data));
-			thrust::detail::normal_iterator<thrust::device_ptr<int8_t> > output_end =
-					thrust::copy_if(thrust::cuda::par.on(stream),input_start,input_start + lhs->size,zipped_stencil_iter,output_start,is_stencil_true<thrust::detail::normal_iterator<thrust::device_ptr<int64_t> >::value_type >());
-			output->size = output_end - output_start;
-		}else if(width == 2){
-			thrust::detail::normal_iterator<thrust::device_ptr<int16_t> > input_start =
-					thrust::detail::make_normal_iterator(thrust::device_pointer_cast((int16_t *) lhs->data));
-			thrust::detail::normal_iterator<thrust::device_ptr<int16_t> > output_start =
-					thrust::detail::make_normal_iterator(thrust::device_pointer_cast((int16_t *) output->data));
-			thrust::detail::normal_iterator<thrust::device_ptr<int16_t> > output_end =
-					thrust::copy_if(thrust::cuda::par.on(stream),input_start,input_start + lhs->size,zipped_stencil_iter,output_start,is_stencil_true<thrust::detail::normal_iterator<thrust::device_ptr<int64_t> >::value_type >());
-			output->size = output_end - output_start;
-		}else if(width == 4){
-			thrust::detail::normal_iterator<thrust::device_ptr<int32_t> > input_start =
-					thrust::detail::make_normal_iterator(thrust::device_pointer_cast((int32_t *) lhs->data));
-			thrust::detail::normal_iterator<thrust::device_ptr<int32_t> > output_start =
-					thrust::detail::make_normal_iterator(thrust::device_pointer_cast((int32_t *) output->data));
-			thrust::detail::normal_iterator<thrust::device_ptr<int32_t> > output_end =
-					thrust::copy_if(thrust::cuda::par.on(stream),input_start,input_start + lhs->size,zipped_stencil_iter,output_start,is_stencil_true<thrust::detail::normal_iterator<thrust::device_ptr<int64_t> >::value_type >());
-			output->size = output_end - output_start;
-		}else if(width == 8){
-			thrust::detail::normal_iterator<thrust::device_ptr<int64_t> > input_start =
-					thrust::detail::make_normal_iterator(thrust::device_pointer_cast((int64_t *) lhs->data));
-			thrust::detail::normal_iterator<thrust::device_ptr<int64_t> > output_start =
-					thrust::detail::make_normal_iterator(thrust::device_pointer_cast((int64_t *) output->data));
-			thrust::detail::normal_iterator<thrust::device_ptr<int64_t> > output_end =
-					thrust::copy_if(thrust::cuda::par.on(stream),input_start,input_start + lhs->size,zipped_stencil_iter,output_start,is_stencil_true<thrust::detail::normal_iterator<thrust::device_ptr<int64_t> >::value_type >());
-			output->size = output_end - output_start;
-		}
+	//NOTE!!!! the output column is getting set to a specific size  but we are NOT compacting the allocation,
+	//whoever calls that should handle that
+	if(width == 1){
+		thrust::detail::normal_iterator<thrust::device_ptr<int8_t> > input_start =
+				thrust::detail::make_normal_iterator(thrust::device_pointer_cast((int8_t *) lhs->data));
+		thrust::detail::normal_iterator<thrust::device_ptr<int8_t> > output_start =
+				thrust::detail::make_normal_iterator(thrust::device_pointer_cast((int8_t *) output->data));
+		thrust::detail::normal_iterator<thrust::device_ptr<int8_t> > output_end =
+				thrust::copy_if(thrust::cuda::par.on(stream),input_start,input_start + lhs->size,zipped_stencil_iter,output_start,is_stencil_true<thrust::detail::normal_iterator<thrust::device_ptr<int8_t> >::value_type >());
+		output->size = output_end - output_start;
+	}else if(width == 2){
+		thrust::detail::normal_iterator<thrust::device_ptr<int16_t> > input_start =
+				thrust::detail::make_normal_iterator(thrust::device_pointer_cast((int16_t *) lhs->data));
+		thrust::detail::normal_iterator<thrust::device_ptr<int16_t> > output_start =
+				thrust::detail::make_normal_iterator(thrust::device_pointer_cast((int16_t *) output->data));
+		thrust::detail::normal_iterator<thrust::device_ptr<int16_t> > output_end =
+				thrust::copy_if(thrust::cuda::par.on(stream),input_start,input_start + lhs->size,zipped_stencil_iter,output_start,is_stencil_true<thrust::detail::normal_iterator<thrust::device_ptr<int8_t> >::value_type >());
+		output->size = output_end - output_start;
+	}else if(width == 4){
+		thrust::detail::normal_iterator<thrust::device_ptr<int32_t> > input_start =
+				thrust::detail::make_normal_iterator(thrust::device_pointer_cast((int32_t *) lhs->data));
+		thrust::detail::normal_iterator<thrust::device_ptr<int32_t> > output_start =
+				thrust::detail::make_normal_iterator(thrust::device_pointer_cast((int32_t *) output->data));
+		thrust::detail::normal_iterator<thrust::device_ptr<int32_t> > output_end =
+				thrust::copy_if(thrust::cuda::par.on(stream),input_start,input_start + lhs->size,zipped_stencil_iter,output_start,is_stencil_true<thrust::detail::normal_iterator<thrust::device_ptr<int8_t> >::value_type >());
+		output->size = output_end - output_start;
+	}else if(width == 8){
+		thrust::detail::normal_iterator<thrust::device_ptr<int64_t> > input_start =
+				thrust::detail::make_normal_iterator(thrust::device_pointer_cast((int64_t *) lhs->data));
+		thrust::detail::normal_iterator<thrust::device_ptr<int64_t> > output_start =
+				thrust::detail::make_normal_iterator(thrust::device_pointer_cast((int64_t *) output->data));
+		thrust::detail::normal_iterator<thrust::device_ptr<int64_t> > output_end =
+				thrust::copy_if(thrust::cuda::par.on(stream),input_start,input_start + lhs->size,zipped_stencil_iter,output_start,is_stencil_true<thrust::detail::normal_iterator<thrust::device_ptr<int8_t> >::value_type >());
+		output->size = output_end - output_start;
 	}
+ 
 
 	//TODO:BRING OVER THE BITMASK!!!
 
