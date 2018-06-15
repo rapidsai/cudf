@@ -302,6 +302,8 @@ gdf_error gpu_apply_stencil(gdf_column *lhs, gdf_column * stencil, gdf_column * 
 		}
 	}
 
+	//TODO:BRING OVER THE BITMASK!!!
+
 	cudaStreamSynchronize(stream);
 
 	cudaStreamDestroy(stream);
