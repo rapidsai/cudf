@@ -129,29 +129,59 @@ gdf_error gdf_##Fn##_generic(gdf_column *leftcol, gdf_column * rightcol,    \
     }                                                                       \
 }
 
+#define JOIN_HASH_TYPES(T1, l1, r1, T2, l2, r2, T3, l3, r3) \
+  result_ptr->result = join_hash<LEFT_JOIN>( \
+				(T1*)leftcol[0]->data, (int)leftcol[0]->size, \
+                                (T1*)rightcol[0]->data, (int)rightcol[0]->size, \
+                                (T2*)leftcol[1]->data, (T2*)rightcol[1]->data, \
+                                (T3*)leftcol[2]->data, (T3*)rightcol[2]->data, \
+                                less_t<int64_t>(), result_ptr->context);
+
+#define JOIN_HASH_T3(T1, l1, r1, T2, l2, r2, T3, l3, r3) \
+  if (T3 == GDF_INT32) { JOIN_HASH_TYPES(T1, l1, r1, T2, l2, r2, int32_t, l3, r3) } \
+  if (T3 == GDF_INT64) { JOIN_HASH_TYPES(T1, l1, r1, T2, l2, r2, int64_t, l3, r3) }
+
+#define JOIN_HASH_T2(T1, l1, r1, T2, l2, r2, T3, l3, r3) \
+  if (T2 == GDF_INT32) { JOIN_HASH_T3(T1, l1, r1, int32_t, l2, r2, T3, l3, r3) } \
+  if (T2 == GDF_INT64) { JOIN_HASH_T3(T1, l1, r1, int64_t, l2, r2, T3, l3, r3) }
+
+#define JOIN_HASH_T1(T1, l1, r1, T2, l2, r2, T3, l3, r3) \
+  if (T1 == GDF_INT32) { JOIN_HASH_T2(int32_t, l1, r1, T2, l2, r2, T3, l3, r3) } \
+  if (T1 == GDF_INT64) { JOIN_HASH_T2(int64_t, l1, r1, T2, l2, r2, T3, l3, r3) }
+
 // multi-column join function
 gdf_error gdf_multi_left_join_generic(int num_cols, gdf_column **leftcol, gdf_column **rightcol, gdf_join_result_type **out_result)
 {
-  // check the right table has matching types and the same number of rows
+  // check that the columns have matching types and the same number of rows
   for (int i = 0; i < num_cols; i++) {
     if (rightcol[i]->dtype != leftcol[i]->dtype) return GDF_UNSUPPORTED_DTYPE;
     if (rightcol[i]->size != leftcol[i]->size) return GDF_UNSUPPORTED_JOIN;
   }
 
-  // TODO: this is a hack implementation instantiated only for specific types
-  //       we need a generic way to expand various type combinations
-  if (num_cols != 3) return GDF_UNSUPPORTED_JOIN;
-  if (num_cols > 0 && leftcol[0]->dtype != GDF_INT64) return GDF_UNSUPPORTED_DTYPE;
-  if (num_cols > 1 && leftcol[1]->dtype != GDF_INT32) return GDF_UNSUPPORTED_DTYPE;
-  if (num_cols > 2 && leftcol[2]->dtype != GDF_INT32) return GDF_UNSUPPORTED_DTYPE;
+  // TODO: currently support up to 3 columns, and only int32 and int64 types
+  if (num_cols > 3) return GDF_UNSUPPORTED_JOIN;
+  for (int i = 0; i < num_cols; i++)
+    if (leftcol[i]->dtype != GDF_INT32 && leftcol[i]->dtype != GDF_INT64) return GDF_UNSUPPORTED_DTYPE;
 
   std::unique_ptr<join_result<int> > result_ptr(new join_result<int>);
-  result_ptr->result = join_hash<LEFT_JOIN>(
-				(int64_t*)leftcol[0]->data, (int)leftcol[0]->size,
-                                (int64_t*)rightcol[0]->data, (int)rightcol[0]->size,
-                                (int32_t*)leftcol[1]->data, (int32_t*)rightcol[1]->data,
-                                (int32_t*)leftcol[2]->data, (int32_t*)rightcol[2]->data,
-                                less_t<int64_t>(), result_ptr->context);
+  switch (num_cols) {
+  case 1:
+    JOIN_HASH_T1(leftcol[0]->dtype, leftcol[0]->data, rightcol[0]->data,
+		 GDF_INT32, NULL, NULL,
+		 GDF_INT32, NULL, NULL)
+    break;
+  case 2:
+    JOIN_HASH_T1(leftcol[0]->dtype, leftcol[0]->data, rightcol[0]->data,
+		 leftcol[1]->dtype, leftcol[1]->data, rightcol[1]->data,
+		 GDF_INT32, NULL, NULL)
+    break;
+  case 3:
+    JOIN_HASH_T1(leftcol[0]->dtype, leftcol[0]->data, rightcol[0]->data,
+		 leftcol[1]->dtype, leftcol[1]->data, rightcol[1]->data,
+		 leftcol[2]->dtype, leftcol[2]->data, rightcol[2]->data)
+    break;
+  }
+
   CUDA_CHECK_LAST();
   *out_result = cffi_wrap(result_ptr.release());
   return GDF_SUCCESS;

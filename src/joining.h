@@ -8,15 +8,6 @@
 #include "hash-join/join_compute_api.h"
 #include "sort-join.cuh"
 
-#define EXPAND_JOIN(func) \
-  if (a2 != NULL && b2 != NULL) \
-    if (a3 != NULL && b3 != NULL) \
-      error = func(context, (void**)&joined, joined_idx, joined_size, a, a_count, b, b_count, a2, b2, a3, b3); \
-    else \
-      error = func(context, (void**)&joined, joined_idx, joined_size, a, a_count, b, b_count, a2, b2); \
-  else \
-      error = func(context, (void**)&joined, joined_idx, joined_size, a, a_count, b, b_count);
-
 using namespace mgpu;
 
 // transpose
@@ -80,12 +71,8 @@ mem_t<size_type> join_hash(col1_it a, size_type a_count,
 
     // using the new low-level API for hash-joins
     switch (join_type) {
-    case INNER_JOIN:
-      EXPAND_JOIN(InnerJoinHash)
-      break;
-    case LEFT_JOIN:
-      EXPAND_JOIN(LeftJoinHash)
-      break;
+    case INNER_JOIN: error = InnerJoinHash(context, (void**)&joined, joined_idx, joined_size, a, a_count, b, b_count, 0, a2, b2, a3, b3); break;
+    case LEFT_JOIN: error = LeftJoinHash(context, (void**)&joined, joined_idx, joined_size, a, a_count, b, b_count, 0, a2, b2, a3, b3); break;
     }
 
     output_npairs = *joined_idx;
