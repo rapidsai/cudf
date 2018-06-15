@@ -254,6 +254,15 @@ gdf_error gdf_cast_i64_to_i64(gdf_column *input, gdf_column *output);
 gdf_error gdf_cast_f32_to_i64(gdf_column *input, gdf_column *output);
 gdf_error gdf_cast_f64_to_i64(gdf_column *input, gdf_column *output);
 
+/* datetime extract*/
+gdf_error gdf_extract_datetime_year(gdf_column *input, gdf_column *output);
+gdf_error gdf_extract_datetime_month(gdf_column *input, gdf_column *output);
+gdf_error gdf_extract_datetime_day(gdf_column *input, gdf_column *output);
+gdf_error gdf_extract_datetime_hour(gdf_column *input, gdf_column *output);
+gdf_error gdf_extract_datetime_minute(gdf_column *input, gdf_column *output);
+gdf_error gdf_extract_datetime_second(gdf_column *input, gdf_column *output);
+
+
 /* binary operators */
 
 /* arith */
