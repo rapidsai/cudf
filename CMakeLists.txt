@@ -21,10 +21,6 @@ include(CheckIncludeFiles)
 include(CheckLibraryExists)
 include(CTest)
 
-find_package(CUDA)
-
-set(CUDA_NVCC_FLAGS  ${CUDA_NVCC_FLAGS};-std=c++11;--expt-extended-lambda)
-
 # Include custom modules (see cmake directory)
 include(ConfigureGoogleTest)
 
@@ -34,6 +30,10 @@ include_directories(include
                     ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/moderngpu/src)
 
 link_directories($ENV{CONDA_PREFIX}/lib)
+
+find_package(CUDA)
+
+set(CUDA_NVCC_FLAGS  ${CUDA_NVCC_FLAGS};-std=c++11;--expt-extended-lambda)
 
 cuda_add_library(gdf SHARED
     src/binaryops.cu
@@ -89,13 +89,13 @@ install(TARGETS gdf
 
 install(DIRECTORY include/gdf DESTINATION include)
 
+
 find_package(GTest QUIET)
 set_package_properties(GTest PROPERTIES TYPE OPTIONAL PURPOSE "Google C++ Testing Framework (Google Test)." URL "https://github.com/google/googletest")
 
 if(GTEST_FOUND)
-    enable_testing()
-    include_directories(${GTEST_INCLUDE_DIRS})
     message(STATUS "Google C++ Testing Framework (Google Test) found in ${GTEST_ROOT}")
+    include_directories(${GTEST_INCLUDE_DIRS})
     add_subdirectory(test)
 else()
     message(AUTHOR_WARNING "Google C++ Testing Framework (Google Test) not found: automated tests are disabled.")

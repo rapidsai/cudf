@@ -35,14 +35,4 @@ set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
 set(GTEST_ROOT ${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/thirdparty/googletest-install/)
 message(STATUS "GTEST_ROOT: " ${GTEST_ROOT})
 
-#pass the dependency libraries as optional arguments using ${ARGN}
-#NOTE the order of libraries matter, so try to link first with the most high level lib
-function(configure_test TEST_NAME Tests_SRCS)
-    message(STATUS "${TEST_NAME} will link against: gdf arrow")
-
-    cuda_add_executable(${TEST_NAME} ${Tests_SRCS})
-    target_link_libraries(${TEST_NAME} gdf arrow GTest::GTest ${GTEST_ROOT}/lib/libgmock.a ${GTEST_ROOT}/lib/libgmock_main.a)
-
-    #register the target as CMake test so we can use ctest for this executable
-    add_test(NAME ${TEST_NAME} COMMAND ${TEST_NAME})
-endfunction()
+link_directories(${GTEST_ROOT}/lib/)
