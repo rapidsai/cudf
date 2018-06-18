@@ -26,6 +26,18 @@ def test_serialize_dataframe():
 
 
 @require_distributed
+def test_serialize_dataframe_with_index():
+    df = pygdf.DataFrame()
+    df['a'] = np.arange(100)
+    df['b'] = np.random.random(100)
+    df['c'] = pd.Categorical(['a', 'b', 'c', '_', '_'] * 20,
+                             categories=['a', 'b', 'c'])
+    df = df.sort_values('b')
+    outdf = deserialize(*serialize(df))
+    pd.util.testing.assert_frame_equal(df.to_pandas(), outdf.to_pandas())
+
+
+@require_distributed
 def test_serialize_series():
     sr = pygdf.Series(np.arange(100))
     outsr = deserialize(*serialize(sr))
