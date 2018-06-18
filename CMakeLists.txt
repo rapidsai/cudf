@@ -32,6 +32,7 @@ cuda_add_library(gdf SHARED
     src/scan.cu
     src/segmented_sorting.cu
     src/filterops.cu
+    src/bitmaskops.cu
 	src/streamcompactionops.cu
 )
 if (NOT arrow)
