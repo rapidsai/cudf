@@ -2,6 +2,8 @@
 #include <iostream>
 #include <vector>
 
+#include <thrust/device_vector.h>
+
 #include "gtest/gtest.h"
 #include <gdf/gdf.h>
 #include "../include/gdf/cffi/functions.h"
@@ -20,7 +22,7 @@ TEST(gdf_extract_datetime_TEST, date64Tests) {
 	outputCol.dtype = GDF_INT16;
 	outputCol.size = colSize;
 
-	int64_t inputData(colSize);
+	std::vector<int64_t> inputData(colSize);
 	inputData[0] = 1528935590000;	// '2018-06-14 00:19:50.000'
 	inputData[1] = 1528935599999;	// '2018-06-14 00:19:59.999'
 	inputData[2] = -1577923201000;	// '1919-12-31 23:59:59.000'
@@ -32,9 +34,9 @@ TEST(gdf_extract_datetime_TEST, date64Tests) {
 
 
 	thrust::device_vector<int64_t> intputDataDev(inputData);
-	thrust::device_vector<char> inputValidDev(1,0);
+	thrust::device_vector<gdf_valid_type> inputValidDev(1,0);
 	thrust::device_vector<int64_t> outDataDev(colSize);
-	thrust::device_vector<char> outputValidDev(1,0);
+	thrust::device_vector<gdf_valid_type> outputValidDev(1,0);
 
 	inputCol.data = thrust::raw_pointer_cast(intputDataDev.data());
 	inputCol.valid = thrust::raw_pointer_cast(inputValidDev.data());
@@ -157,7 +159,7 @@ TEST(gdf_extract_datetime_TEST, date32Tests) {
 	outputCol.dtype = GDF_INT16;
 	outputCol.size = colSize;
 
-	int32_t inputData(colSize);
+	std::vector<int32_t> inputData(colSize);
 	inputData[0] = 17696;	// '2018-06-14'
 	inputData[1] = 17697;	// '2018-06-15'
 	inputData[2] = -18364;	// '1919-12-31'
@@ -169,9 +171,9 @@ TEST(gdf_extract_datetime_TEST, date32Tests) {
 
 
 	thrust::device_vector<int32_t> intputDataDev(inputData);
-	thrust::device_vector<char> inputValidDev(1,0);
+	thrust::device_vector<gdf_valid_type> inputValidDev(1,0);
 	thrust::device_vector<int32_t> outDataDev(colSize);
-	thrust::device_vector<char> outputValidDev(1,0);
+	thrust::device_vector<gdf_valid_type> outputValidDev(1,0);
 
 	inputCol.data = thrust::raw_pointer_cast(intputDataDev.data());
 	inputCol.valid = thrust::raw_pointer_cast(inputValidDev.data());
