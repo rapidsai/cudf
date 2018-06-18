@@ -448,3 +448,11 @@ def test_dataframe_append_to_empty():
     gdf['b'] = [1, 2, 3]
 
     pd.testing.assert_frame_equal(gdf.to_pandas(), pdf)
+
+
+def test_dataframe_setitem_index_len1():
+    gdf = DataFrame()
+    gdf['a'] = [1]
+    gdf['b'] = gdf.index.as_column()
+
+    np.testing.assert_equal(gdf.b.to_array(), [0])
