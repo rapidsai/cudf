@@ -353,7 +353,7 @@ class DataFrame(object):
             arr = cuda.device_array(shape=len(index), dtype=series.dtype)
             cudautils.gpu_fill_value.forall(arr.size)(arr, col)
             return Series(arr)
-        elif len(self) > 0 and sind != index:
+        elif len(self) > 0 and len(sind) != len(index):
             raise ValueError('Length of values does not match index length')
         return col
 
