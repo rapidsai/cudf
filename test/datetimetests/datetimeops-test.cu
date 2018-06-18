@@ -6,7 +6,7 @@
 
 #include "gtest/gtest.h"
 #include <gdf/gdf.h>
-#include "../include/gdf/cffi/functions.h"
+#include <gdf/cffi/functions.h>
 
 
 
@@ -35,7 +35,7 @@ TEST(gdf_extract_datetime_TEST, date64Tests) {
 
 	thrust::device_vector<int64_t> intputDataDev(inputData);
 	thrust::device_vector<gdf_valid_type> inputValidDev(1,0);
-	thrust::device_vector<int64_t> outDataDev(colSize);
+	thrust::device_vector<int16_t> outDataDev(colSize);
 	thrust::device_vector<gdf_valid_type> outputValidDev(1,0);
 
 	inputCol.data = thrust::raw_pointer_cast(intputDataDev.data());
@@ -172,7 +172,7 @@ TEST(gdf_extract_datetime_TEST, date32Tests) {
 
 	thrust::device_vector<int32_t> intputDataDev(inputData);
 	thrust::device_vector<gdf_valid_type> inputValidDev(1,0);
-	thrust::device_vector<int32_t> outDataDev(colSize);
+	thrust::device_vector<int16_t> outDataDev(colSize);
 	thrust::device_vector<gdf_valid_type> outputValidDev(1,0);
 
 	inputCol.data = thrust::raw_pointer_cast(intputDataDev.data());
