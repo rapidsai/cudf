@@ -85,7 +85,7 @@ class DataFrame(object):
         # has initializer?
         if name_series is not None:
             for k, series in name_series:
-                self.add_column(k, series)
+                self.add_column(k, series, forceindex=index is not None)
 
     def serialize(self, serialize):
         header = {}
@@ -328,7 +328,7 @@ class DataFrame(object):
         series = Series(col)
         if len(self) == 0 and len(self.columns) > 0 and len(series) > 0:
             ind = series.index
-            arr = cuda.device_array(shape=len(ind),dtype=np.float64)
+            arr = cuda.device_array(shape=len(ind), dtype=np.float64)
             size = utils.calc_chunk_size(arr.size, utils.mask_bitsize)
             mask = cudautils.zeros(size, dtype=utils.mask_dtype)
             val = Series.from_masked_array(arr, mask, null_count=len(ind))
