@@ -34,6 +34,13 @@ cuda_add_library(gdf SHARED
     src/filterops.cu
 	src/streamcompactionops.cu
 )
+if (NOT arrow)
+    set(ARROW_ROOT ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/arrow/cpp)
+    add_library(arrow STATIC IMPORTED)
+    set_target_properties(arrow PROPERTIES
+        IMPORTED_LOCATION ${ARROW_ROOT}/build/latest/libarrow.a
+        INTERFACE_INCLUDE_DIRECTORIES ${ARROW_ROOT}/src)
+endif()
 
 target_link_libraries(gdf arrow)
 
@@ -74,3 +81,5 @@ install(TARGETS gdf
         LIBRARY DESTINATION lib)
 
 install(DIRECTORY include/gdf DESTINATION include)
+
+add_subdirectory(tests)

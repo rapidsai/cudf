@@ -1,25 +1,17 @@
-/*
- ============================================================================
- Name        : testing-libgdf.cu
- Author      : felipe
- Version     :
- Copyright   : Your copyright notice
- Description : Compute sum of reciprocals using STL on CPU and Thrust on GPU
- ============================================================================
- */
+#include "gtest/gtest.h"
 
 
 #include <iostream>
 #include <gdf/gdf.h>
 #include <gdf/cffi/functions.h>
 #include <thrust/functional.h>
+#include <thrust/device_ptr.h>
+
 #include <thrust/execution_policy.h>
 #include <cuda_runtime.h>
 
-int main(void)
-{
-
-	gdf_size_type num_elements = 8;
+TEST(Example, Equals) {
+  gdf_size_type num_elements = 8;
 
 	char * data_left;
 	char * data_right;
@@ -30,9 +22,6 @@ int main(void)
 
 	thrust::device_ptr<int8_t> left_ptr= thrust::device_pointer_cast((int8_t *) data_left);
 	int8_t int8_value = 2;
-//	thrust::fill(thrust::detail::make_normal_iterator(left_ptr), thrust::detail::make_normal_iterator(left_ptr + num_elements), int8_value);
-	thrust::copy(thrust::make_counting_iterator<int8_t>(0),thrust::make_counting_iterator<int8_t>(0) + num_elements, thrust::detail::make_normal_iterator(left_ptr));
-
 
 
 	thrust::device_ptr<int8_t> right_ptr= thrust::device_pointer_cast((int8_t *) data_right);
@@ -91,5 +80,6 @@ int main(void)
 	cudaFree(valid_out);
 	delete[] host_data_out;
 	delete valid;
-	return 0;
+
+  EXPECT_EQ(1, 1);
 }
