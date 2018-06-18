@@ -12,6 +12,7 @@ from numba.cuda.cudadrv.devicearray import DeviceNDArray
 from . import cudautils, formatting, queryutils, _gdf, applyutils, utils
 from .index import GenericIndex, EmptyIndex, Index, RangeIndex
 from .series import Series
+from .column import Column
 from .buffer import Buffer
 from .settings import NOTSET, settings
 from .serialize import register_distributed_serializer
@@ -346,7 +347,8 @@ class DataFrame(object):
         index = self._index
         series = Series(col)
         sind = series.index
-        VALID = isinstance(col, (np.ndarray, DeviceNDArray, list, Series))
+        VALID = isinstance(col, (np.ndarray, DeviceNDArray, list, Series,
+                                 Column))
         if len(self) > 0 and len(series) == 1 and not VALID:
             arr = cuda.device_array(shape=len(index), dtype=series.dtype)
             cudautils.gpu_fill_value.forall(arr.size)(arr, col)
