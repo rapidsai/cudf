@@ -5,7 +5,6 @@ from numba import cuda
 
 from . import cudautils, utils
 from .serialize import register_distributed_serializer
-from .gpu_ipc_broker import serialize_gpu_data, rebuild_gpu_data, is_using_ipc
 
 
 class Buffer(object):
@@ -35,18 +34,28 @@ class Buffer(object):
         self.capacity = capacity
         self.dtype = self.mem.dtype
 
-    def serialize(self, serialize):
+    def serialize(self, serialize, context=None):
+        from .serialize import should_use_ipc
+
+        use_ipc = should_use_ipc(context)
+        print("use_ipc {}".format(use_ipc))
         header = {}
-        if is_using_ipc():
-            header['mem'], frames = serialize_gpu_data(self.to_gpu_array())
+        if use_ipc:
+            ipch = self.to_gpu_array().get_ipc_handle()
+            header['kind'] = 'ipc'
+            header['mem'], frames = serialize(ipch)
         else:
+            header['kind'] = 'normal'
             header['mem'], frames = serialize(self.to_array())
         return header, frames
 
     @classmethod
     def deserialize(cls, deserialize, header, frames):
-        if is_using_ipc():
-            mem = rebuild_gpu_data(**header['mem'])
+        if header['kind'] == 'ipc':
+            ipch = deserialize(header['mem'], frames)
+            with ipch as data:
+                mem = cuda.device_array_like(data)
+                mem.copy_to_device(data)
         else:
             mem = deserialize(header['mem'], frames)
             mem.flags['WRITEABLE'] = True  # XXX: hack for numba to work
