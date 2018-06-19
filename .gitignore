@@ -6,9 +6,4 @@ __pycache__
 .cache
 .vscode
 build
-
-tests/lib/
-
-thirdparty/arrow/
-
-\.idea/
+/thirdparty/arrow/
