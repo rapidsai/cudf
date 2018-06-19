@@ -12,54 +12,7 @@
 #include <thrust/iterator/iterator_adaptor.h>
 #include <thrust/device_vector.h>
 
-
-
-
 /*
- * Brainstorming
- *
- * functions needed:
- * extract_datetime_year
- * extract_datetime_month
- * extract_datetime_day
- * extract_datetime_hour
- * extract_datetime_minute
- * extract_datetime_second
- *
- * input formats:
- * date64
- * date32
- * timestamp with second, milisecond, microsecond, nanosecond
- *
- * these functions depend on starting dateformat may need to just implement them all?
- *
- *
- */
-
-
-/* original unittime to date functions
- *
- * int unixDate = unixTime/86400000;
-		int totalDays = 719469 + unixDate;
-
-		int year = 400*totalDays/146097;
-		totalDays -= (365*year + year/4 - year/100 + year/400);
-		int month = (totalDays*5 + 457)/153;
-
-		int day = totalDays - ((153*month - 457)/5);
-
-		if (day == 0){
-			month--;
-			day = totalDays - ((153*month - 457)/5);
-		}
-
-		if(month > 12){
-			month -= 12;
-			year++;
-		}
-
-		another one more complex
- *
  * from http://howardhinnant.github.io/date_algorithms.html
  * int z = unixTime/86400000;
  * z += 719468;
@@ -73,10 +26,6 @@
     const unsigned m = mp + (mp < 10 ? 3 : -9);                            // [1, 12]
     return std::tuple<Int, unsigned, unsigned>(y + (m <= 2), m, d);
  */
-
-
-
-
 
 
 struct gdf_extract_datetime_year_date64_op : public thrust::unary_function<int64_t, int16_t>
@@ -137,14 +86,6 @@ struct gdf_extract_datetime_day_date64_op : public thrust::unary_function<int64_
 	}
 };
 
-/*
-
-1528996790 unix time
-5:19:50 pm UTC | Thursday, June 14, 2018
-
-1528935590000
-'2018-06-14 00:19:50'
- */
 
 struct gdf_extract_datetime_hour_date64_op : public thrust::unary_function<int64_t, int16_t>
 {
@@ -246,12 +187,11 @@ struct gdf_extract_datetime_day_date32_op : public thrust::unary_function<int32_
 gdf_error gdf_extract_datetime_year(gdf_column *input, gdf_column *output) {
 
 	GDF_REQUIRE(input->size == output->size, GDF_COLUMN_SIZE_MISMATCH);
-	GDF_REQUIRE(output->dtype == GDF_INT16, GDF_UNSUPPORTED_DTYPE);  // WSM do we want extracted values to be other than 16-bit?
+	GDF_REQUIRE(output->dtype == GDF_INT16, GDF_UNSUPPORTED_DTYPE);
 
 	cudaStream_t stream;
 	cudaStreamCreate(&stream);
 
-	// WSM DO WE NEED TO DO THIS? DO WE WANT TO DO IT THIS WAY?
 	gdf_size_type num_chars_bitmask = ( ( input->size +( GDF_VALID_BITSIZE - 1)) / GDF_VALID_BITSIZE );
 	thrust::copy(thrust::cuda::par.on(stream), input->valid, input->valid + num_chars_bitmask, output->valid); // copy over valid bitmask
 
@@ -281,12 +221,11 @@ gdf_error gdf_extract_datetime_year(gdf_column *input, gdf_column *output) {
 gdf_error gdf_extract_datetime_month(gdf_column *input, gdf_column *output) {
 
 	GDF_REQUIRE(input->size == output->size, GDF_COLUMN_SIZE_MISMATCH);
-	GDF_REQUIRE(output->dtype == GDF_INT16, GDF_UNSUPPORTED_DTYPE);  // WSM do we want extracted values to be other than 16-bit?
+	GDF_REQUIRE(output->dtype == GDF_INT16, GDF_UNSUPPORTED_DTYPE);
 
 	cudaStream_t stream;
 	cudaStreamCreate(&stream);
 
-	// WSM DO WE NEED TO DO THIS? DO WE WANT TO DO IT THIS WAY?
 	gdf_size_type num_chars_bitmask = ( ( input->size +( GDF_VALID_BITSIZE - 1)) / GDF_VALID_BITSIZE );
 	thrust::copy(thrust::cuda::par.on(stream), input->valid, input->valid + num_chars_bitmask, output->valid); // copy over valid bitmask
 
@@ -316,12 +255,11 @@ gdf_error gdf_extract_datetime_month(gdf_column *input, gdf_column *output) {
 gdf_error gdf_extract_datetime_day(gdf_column *input, gdf_column *output) {
 
 	GDF_REQUIRE(input->size == output->size, GDF_COLUMN_SIZE_MISMATCH);
-	GDF_REQUIRE(output->dtype == GDF_INT16, GDF_UNSUPPORTED_DTYPE);  // WSM do we want extracted values to be other than 16-bit?
+	GDF_REQUIRE(output->dtype == GDF_INT16, GDF_UNSUPPORTED_DTYPE);
 
 	cudaStream_t stream;
 	cudaStreamCreate(&stream);
 
-	// WSM DO WE NEED TO DO THIS? DO WE WANT TO DO IT THIS WAY?
 	gdf_size_type num_chars_bitmask = ( ( input->size +( GDF_VALID_BITSIZE - 1)) / GDF_VALID_BITSIZE );
 	thrust::copy(thrust::cuda::par.on(stream), input->valid, input->valid + num_chars_bitmask, output->valid); // copy over valid bitmask
 
@@ -351,13 +289,12 @@ gdf_error gdf_extract_datetime_day(gdf_column *input, gdf_column *output) {
 gdf_error gdf_extract_datetime_hour(gdf_column *input, gdf_column *output) {
 
 	GDF_REQUIRE(input->size == output->size, GDF_COLUMN_SIZE_MISMATCH);
-	GDF_REQUIRE(output->dtype == GDF_INT16, GDF_UNSUPPORTED_DTYPE);  // WSM do we want extracted values to be other than 16-bit?
+	GDF_REQUIRE(output->dtype == GDF_INT16, GDF_UNSUPPORTED_DTYPE);
 	GDF_REQUIRE(input->dtype != GDF_DATE32, GDF_UNSUPPORTED_DTYPE);
 
 	cudaStream_t stream;
 	cudaStreamCreate(&stream);
 
-	// WSM DO WE NEED TO DO THIS? DO WE WANT TO DO IT THIS WAY?
 	gdf_size_type num_chars_bitmask = ( ( input->size +( GDF_VALID_BITSIZE - 1)) / GDF_VALID_BITSIZE );
 	thrust::copy(thrust::cuda::par.on(stream), input->valid, input->valid + num_chars_bitmask, output->valid); // copy over valid bitmask
 
@@ -381,13 +318,12 @@ gdf_error gdf_extract_datetime_hour(gdf_column *input, gdf_column *output) {
 gdf_error gdf_extract_datetime_minute(gdf_column *input, gdf_column *output) {
 
 	GDF_REQUIRE(input->size == output->size, GDF_COLUMN_SIZE_MISMATCH);
-	GDF_REQUIRE(output->dtype == GDF_INT16, GDF_UNSUPPORTED_DTYPE);  // WSM do we want extracted values to be other than 16-bit?
+	GDF_REQUIRE(output->dtype == GDF_INT16, GDF_UNSUPPORTED_DTYPE);
 	GDF_REQUIRE(input->dtype != GDF_DATE32, GDF_UNSUPPORTED_DTYPE);
 
 	cudaStream_t stream;
 	cudaStreamCreate(&stream);
 
-	// WSM DO WE NEED TO DO THIS? DO WE WANT TO DO IT THIS WAY?
 	gdf_size_type num_chars_bitmask = ( ( input->size +( GDF_VALID_BITSIZE - 1)) / GDF_VALID_BITSIZE );
 	thrust::copy(thrust::cuda::par.on(stream), input->valid, input->valid + num_chars_bitmask, output->valid); // copy over valid bitmask
 
@@ -411,13 +347,12 @@ gdf_error gdf_extract_datetime_minute(gdf_column *input, gdf_column *output) {
 gdf_error gdf_extract_datetime_second(gdf_column *input, gdf_column *output) {
 
 	GDF_REQUIRE(input->size == output->size, GDF_COLUMN_SIZE_MISMATCH);
-	GDF_REQUIRE(output->dtype == GDF_INT16, GDF_UNSUPPORTED_DTYPE);  // WSM do we want extracted values to be other than 16-bit?
+	GDF_REQUIRE(output->dtype == GDF_INT16, GDF_UNSUPPORTED_DTYPE);
 	GDF_REQUIRE(input->dtype != GDF_DATE32, GDF_UNSUPPORTED_DTYPE);
 
 	cudaStream_t stream;
 	cudaStreamCreate(&stream);
 
-	// WSM DO WE NEED TO DO THIS? DO WE WANT TO DO IT THIS WAY?
 	gdf_size_type num_chars_bitmask = ( ( input->size +( GDF_VALID_BITSIZE - 1)) / GDF_VALID_BITSIZE );
 	thrust::copy(thrust::cuda::par.on(stream), input->valid, input->valid + num_chars_bitmask, output->valid); // copy over valid bitmask
 
