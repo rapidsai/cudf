@@ -131,10 +131,10 @@ gdf_error gdf_##Fn##_generic(gdf_column *leftcol, gdf_column * rightcol,    \
 
 #define JOIN_HASH_TYPES(T1, l1, r1, T2, l2, r2, T3, l3, r3) \
   result_ptr->result = join_hash<LEFT_JOIN>( \
-				(T1*)leftcol[0]->data, (int)leftcol[0]->size, \
-                                (T1*)rightcol[0]->data, (int)rightcol[0]->size, \
-                                (T2*)leftcol[1]->data, (T2*)rightcol[1]->data, \
-                                (T3*)leftcol[2]->data, (T3*)rightcol[2]->data, \
+				(T1*)l1, (int)leftcol[0]->size, \
+                                (T1*)r1, (int)rightcol[0]->size, \
+                                (T2*)l2, (T2*)r2, \
+                                (T3*)l3, (T3*)r3, \
                                 less_t<int64_t>(), result_ptr->context);
 
 #define JOIN_HASH_T3(T1, l1, r1, T2, l2, r2, T3, l3, r3) \
