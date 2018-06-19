@@ -12,7 +12,7 @@
 
 TEST(gdf_extract_datetime_TEST, date64Tests) {
 
-	int colSize = 8;
+	int colSize = 11;
 
 	gdf_column inputCol;
 	gdf_column outputCol;
@@ -29,14 +29,17 @@ TEST(gdf_extract_datetime_TEST, date64Tests) {
 	inputData[3] = 1582934401123;   // '2020-02-29 00:00:01.123'
 	inputData[4] = 0;               // '1970-01-01 00:00:00.000'
 	inputData[5] = 2309653342222;   // '2043-03-11 02:22:22.222'
-	inputData[6] = 893032230345;    // '1998-04-20 12:30:30.345'
-	inputData[7] = -4870653059987;  // '1815-08-28 16:49:01.987
+	inputData[6] = 893075430345;    // '1998-04-20 12:30:30.345'
+	inputData[7] = -4870653058987;  // '1815-08-28 16:49:01.987
+	inputData[8] = -4500;           // '1969-12-31 23:59:55.500'
+	inputData[9] = -169138999;  // '1969-12-30 01:01:01.001
+	inputData[10] = -5999;           // '1969-12-31 23:59:54.001'
 
 
 	thrust::device_vector<int64_t> intputDataDev(inputData);
-	thrust::device_vector<gdf_valid_type> inputValidDev(1,0);
+	thrust::device_vector<gdf_valid_type> inputValidDev(2,0);
 	thrust::device_vector<int16_t> outDataDev(colSize);
-	thrust::device_vector<gdf_valid_type> outputValidDev(1,0);
+	thrust::device_vector<gdf_valid_type> outputValidDev(2,0);
 
 	inputCol.data = thrust::raw_pointer_cast(intputDataDev.data());
 	inputCol.valid = thrust::raw_pointer_cast(inputValidDev.data());
@@ -59,6 +62,9 @@ TEST(gdf_extract_datetime_TEST, date64Tests) {
 		EXPECT_TRUE( results[5] == 2043);
 		EXPECT_TRUE( results[6] == 1998);
 		EXPECT_TRUE( results[7] == 1815);
+		EXPECT_TRUE( results[8] == 1969);
+		EXPECT_TRUE( results[9] == 1969);
+		EXPECT_TRUE( results[10] == 1969);
 	}
 	{
 		gdf_error gdfError = gdf_extract_datetime_month(&inputCol, &outputCol);
@@ -76,6 +82,9 @@ TEST(gdf_extract_datetime_TEST, date64Tests) {
 		EXPECT_TRUE( results[5] == 3);
 		EXPECT_TRUE( results[6] == 4);
 		EXPECT_TRUE( results[7] == 8);
+		EXPECT_TRUE( results[8] == 12);
+		EXPECT_TRUE( results[9] == 12);
+		EXPECT_TRUE( results[10] == 12);
 	}
 	{
 		gdf_error gdfError = gdf_extract_datetime_day(&inputCol, &outputCol);
@@ -93,6 +102,9 @@ TEST(gdf_extract_datetime_TEST, date64Tests) {
 		EXPECT_TRUE( results[5] == 11);
 		EXPECT_TRUE( results[6] == 20);
 		EXPECT_TRUE( results[7] == 28);
+		EXPECT_TRUE( results[8] == 31);
+		EXPECT_TRUE( results[9] == 30);
+		EXPECT_TRUE( results[10] == 31);
 	}
 	{
 		gdf_error gdfError = gdf_extract_datetime_hour(&inputCol, &outputCol);
@@ -110,6 +122,9 @@ TEST(gdf_extract_datetime_TEST, date64Tests) {
 		EXPECT_TRUE( results[5] == 2);
 		EXPECT_TRUE( results[6] == 12);
 		EXPECT_TRUE( results[7] == 16);
+		EXPECT_TRUE( results[8] == 23);
+		EXPECT_TRUE( results[9] == 1);
+		EXPECT_TRUE( results[10] == 23);
 	}
 	{
 		gdf_error gdfError = gdf_extract_datetime_minute(&inputCol, &outputCol);
@@ -126,7 +141,10 @@ TEST(gdf_extract_datetime_TEST, date64Tests) {
 		EXPECT_TRUE( results[4] == 0);
 		EXPECT_TRUE( results[5] == 22);
 		EXPECT_TRUE( results[6] == 30);
-		EXPECT_TRUE( results[7] == 1);
+		EXPECT_TRUE( results[7] == 49);
+		EXPECT_TRUE( results[8] == 59);
+		EXPECT_TRUE( results[9] == 1);
+		EXPECT_TRUE( results[10] == 59);
 	}
 	{
 		gdf_error gdfError = gdf_extract_datetime_second(&inputCol, &outputCol);
@@ -141,9 +159,12 @@ TEST(gdf_extract_datetime_TEST, date64Tests) {
 		EXPECT_TRUE( results[2] == 59);
 		EXPECT_TRUE( results[3] == 1);
 		EXPECT_TRUE( results[4] == 0);
-		EXPECT_TRUE( results[5] == 222);
-		EXPECT_TRUE( results[6] == 345);
-		EXPECT_TRUE( results[7] == 987);
+		EXPECT_TRUE( results[5] == 22);
+		EXPECT_TRUE( results[6] == 30);
+		EXPECT_TRUE( results[7] == 1);
+		EXPECT_TRUE( results[8] == 55);
+		EXPECT_TRUE( results[9] == 1);
+		EXPECT_TRUE( results[10] == 54);
 	}
 }
 
@@ -162,7 +183,7 @@ TEST(gdf_extract_datetime_TEST, date32Tests) {
 	std::vector<int32_t> inputData(colSize);
 	inputData[0] = 17696;	// '2018-06-14'
 	inputData[1] = 17697;	// '2018-06-15'
-	inputData[2] = -18364;	// '1919-12-31'
+	inputData[2] = -18264;	// '1919-12-31'
 	inputData[3] = 18321;   // '2020-02-29'
 	inputData[4] = 0;               // '1970-01-01'
 	inputData[5] = 26732;   // '2043-03-11'

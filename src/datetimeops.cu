@@ -92,7 +92,7 @@ struct gdf_extract_datetime_year_date64_op : public thrust::unary_function<int64
 		const int y = static_cast<int>(yoe) + era * 400;
 		const unsigned doy = doe - (365*yoe + yoe/4 - yoe/100);                // [0, 365]
 		const unsigned mp = (5*doy + 2)/153;                                   // [0, 11]
-		const unsigned d = doy - (153*mp+2)/5 + 1;                             // [1, 31]
+//		const unsigned d = doy - (153*mp+2)/5 + 1;                             // [1, 31]
 		const unsigned m = mp + (mp < 10 ? 3 : -9);                            // [1, 12]
 		if (m <= 2)
 			return y + 1;
@@ -111,10 +111,10 @@ struct gdf_extract_datetime_month_date64_op : public thrust::unary_function<int6
 		const int era = (z >= 0 ? z : z - 146096) / 146097;
 		const unsigned doe = static_cast<unsigned>(z - era * 146097);          // [0, 146096]
 		const unsigned yoe = (doe - doe/1460 + doe/36524 - doe/146096) / 365;  // [0, 399]
-		const int y = static_cast<int>(yoe) + era * 400;
+//		const int y = static_cast<int>(yoe) + era * 400;
 		const unsigned doy = doe - (365*yoe + yoe/4 - yoe/100);                // [0, 365]
 		const unsigned mp = (5*doy + 2)/153;                                   // [0, 11]
-		const unsigned d = doy - (153*mp+2)/5 + 1;                             // [1, 31]
+//		const unsigned d = doy - (153*mp+2)/5 + 1;                             // [1, 31]
 		return mp + (mp < 10 ? 3 : -9);                            // [1, 12]
 
 	}
@@ -130,7 +130,7 @@ struct gdf_extract_datetime_day_date64_op : public thrust::unary_function<int64_
 		const int era = (z >= 0 ? z : z - 146096) / 146097;
 		const unsigned doe = static_cast<unsigned>(z - era * 146097);          // [0, 146096]
 		const unsigned yoe = (doe - doe/1460 + doe/36524 - doe/146096) / 365;  // [0, 399]
-		const int y = static_cast<int>(yoe) + era * 400;
+//		const int y = static_cast<int>(yoe) + era * 400;
 		const unsigned doy = doe - (365*yoe + yoe/4 - yoe/100);                // [0, 365]
 		const unsigned mp = (5*doy + 2)/153;                                   // [0, 11]
 		return doy - (153*mp+2)/5 + 1;                             // [1, 31]
@@ -151,7 +151,7 @@ struct gdf_extract_datetime_hour_date64_op : public thrust::unary_function<int64
 	__host__ __device__
 	int16_t operator()(int64_t unixTime) // unixTime is milliseconds since the UNIX epoch
 	{
-		return (unixTime % 86400000)/3600000;
+		return unixTime >= 0 ? ((unixTime % 86400000)/3600000) : ((86400000+ (unixTime % 86400000))/3600000);
 	}
 };
 
@@ -160,7 +160,7 @@ struct gdf_extract_datetime_minute_date64_op : public thrust::unary_function<int
 	__host__ __device__
 	int16_t operator()(int64_t unixTime) // unixTime is milliseconds since the UNIX epoch
 	{
-		return (unixTime % 3600000)/60000 ;
+		return unixTime >= 0 ? ((unixTime % 3600000)/60000) :  ((3600000 + (unixTime % 3600000))/60000);
 	}
 };
 
@@ -169,7 +169,7 @@ struct gdf_extract_datetime_second_date64_op : public thrust::unary_function<int
 	__host__ __device__
 	int16_t operator()(int64_t unixTime) // unixTime is milliseconds since the UNIX epoch
 	{
-		return (unixTime % 60000)/1000;
+		return unixTime >= 0 ? ((unixTime % 60000)/1000) : ((60000 + (unixTime % 60000))/1000);
 	}
 };
 
@@ -178,7 +178,7 @@ struct gdf_extract_datetime_millisecond_date64_op : public thrust::unary_functio
 	__host__ __device__
 	int16_t operator()(int64_t unixTime) // unixTime is milliseconds since the UNIX epoch
 	{
-		return unixTime % 1000;
+		return unixTime >= 0 ? unixTime % 1000 :  1000 + unixTime % 1000;
 	}
 };
 
@@ -188,17 +188,19 @@ struct gdf_extract_datetime_year_date32_op : public thrust::unary_function<int32
 	__host__ __device__
 	int16_t operator()(int32_t unixDate) // unixDate is days since the UNIX epoch
 	{
-		int totalDays = 719469 + unixDate;
-		int year = 400*totalDays/146097;
-		totalDays -= (365*year + year/4 - year/100 + year/400);
-		int month = (totalDays*5 + 457)/153;
-		if ((totalDays - ((153*month - 457)/5)) == 0){
-			month--;
-		}
-		if(month > 12){
-			year++;
-		}
-		return year;
+		const int z = unixDate + 719468;
+		const int era = (z >= 0 ? z : z - 146096) / 146097;
+		const unsigned doe = static_cast<unsigned>(z - era * 146097);          // [0, 146096]
+		const unsigned yoe = (doe - doe/1460 + doe/36524 - doe/146096) / 365;  // [0, 399]
+		const int y = static_cast<int>(yoe) + era * 400;
+		const unsigned doy = doe - (365*yoe + yoe/4 - yoe/100);                // [0, 365]
+		const unsigned mp = (5*doy + 2)/153;                                   // [0, 11]
+		//		const unsigned d = doy - (153*mp+2)/5 + 1;                             // [1, 31]
+		const unsigned m = mp + (mp < 10 ? 3 : -9);                            // [1, 12]
+		if (m <= 2)
+			return y + 1;
+		else
+			return y;
 	}
 };
 
@@ -208,17 +210,15 @@ struct gdf_extract_datetime_month_date32_op : public thrust::unary_function<int3
 	__host__ __device__
 	int16_t operator()(int32_t unixDate) // unixDate is days since the UNIX epoch
 	{
-		int totalDays = 719469 + unixDate;
-		int year = 400*totalDays/146097;
-		totalDays -= (365*year + year/4 - year/100 + year/400);
-		int month = (totalDays*5 + 457)/153;
-		if ((totalDays - ((153*month - 457)/5)) == 0){
-			month--;
-		}
-		if(month > 12){
-			month -= 12;
-		}
-		return month;
+		const int z = unixDate + 719468;
+		const int era = (z >= 0 ? z : z - 146096) / 146097;
+		const unsigned doe = static_cast<unsigned>(z - era * 146097);          // [0, 146096]
+		const unsigned yoe = (doe - doe/1460 + doe/36524 - doe/146096) / 365;  // [0, 399]
+		//		const int y = static_cast<int>(yoe) + era * 400;
+		const unsigned doy = doe - (365*yoe + yoe/4 - yoe/100);                // [0, 365]
+		const unsigned mp = (5*doy + 2)/153;                                   // [0, 11]
+		//		const unsigned d = doy - (153*mp+2)/5 + 1;                             // [1, 31]
+		return mp + (mp < 10 ? 3 : -9);
 	}
 };
 
@@ -228,19 +228,14 @@ struct gdf_extract_datetime_day_date32_op : public thrust::unary_function<int32_
 	__host__ __device__
 	int16_t operator()(int32_t unixDate) // unixDate is days since the UNIX epoch
 	{
-		int totalDays = 719469 + unixDate;
-
-		int year = 400*totalDays/146097;
-		totalDays -= (365*year + year/4 - year/100 + year/400);
-		int month = (totalDays*5 + 457)/153;
-
-		int day = totalDays - ((153*month - 457)/5);
-
-		if (day == 0){
-			month--;
-			day = totalDays - ((153*month - 457)/5);
-		}
-		return day;
+		const int z = unixDate + 719468;
+		const int era = (z >= 0 ? z : z - 146096) / 146097;
+		const unsigned doe = static_cast<unsigned>(z - era * 146097);          // [0, 146096]
+		const unsigned yoe = (doe - doe/1460 + doe/36524 - doe/146096) / 365;  // [0, 399]
+		//		const int y = static_cast<int>(yoe) + era * 400;
+		const unsigned doy = doe - (365*yoe + yoe/4 - yoe/100);                // [0, 365]
+		const unsigned mp = (5*doy + 2)/153;                                   // [0, 11]
+		return doy - (153*mp+2)/5 + 1;                             // [1, 31]
 	}
 };
 
