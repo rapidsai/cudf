@@ -83,4 +83,4 @@ install(TARGETS gdf
 
 install(DIRECTORY include/gdf DESTINATION include)
 
-add_subdirectory(tests)
+add_subdirectory(tests) 
