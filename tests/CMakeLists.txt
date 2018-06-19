@@ -18,6 +18,6 @@ enable_testing()
 # -------------------
 message(STATUS "******** Configuring tests ********")
 
-add_subdirectory(datetimetests)
+add_subdirectory(datetime)
 
 message(STATUS "******** Tests are ready ********")
