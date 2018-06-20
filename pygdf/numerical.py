@@ -235,7 +235,7 @@ class NumericalColumn(columnops.TypedColumnBase):
 
         lkey, largsort = self.sort_by_values(True)
         rkey, rargsort = other.sort_by_values(True)
-        with _gdf.apply_join(lkey, rkey, how=how) as (lidx, ridx):
+        with _gdf.apply_join([lkey], [rkey], how=how) as (lidx, ridx):
             if lidx.size > 0:
                 raw_index = cudautils.gather_joined_index(
                         lkey.to_gpu_array(),
