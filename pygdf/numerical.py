@@ -203,7 +203,7 @@ class NumericalColumn(columnops.TypedColumnBase):
         else:
             raise TypeError("numeric column of {} has no NaN value".format(self.dtype))
 
-    def join(self, other, how='left', return_indexers=False, type='sort'):
+    def join(self, other, left_on=None, right_on=None, how='left', return_indexers=False, type='sort'):
 
         # Single column join using sort-based implementation
         if type == 'sort':
@@ -225,6 +225,10 @@ class NumericalColumn(columnops.TypedColumnBase):
         the indices for shuffling the remaining columns.
         """
         from .series import Series
+
+        if other is None:
+            return self._stub_merge(left_on=left_on, right_on=right_on,
+                                    how=how, return_indexers=return_indexers)
 
         if not self.is_type_equivalent(other):
             raise TypeError('*other* is not compatible')
