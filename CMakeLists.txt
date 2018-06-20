@@ -10,10 +10,10 @@ PROJECT(libgdf)
 cmake_minimum_required(VERSION 2.8)  # not sure about version required
 
 set(CMAKE_CXX_STANDARD 11)
-set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/Modules/" ${CMAKE_MODULE_PATH})
+message(STATUS "Using C++ standard: c++${CMAKE_CXX_STANDARD}")
 
+set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/Modules/" ${CMAKE_MODULE_PATH})
 message(STATUS "CMAKE_MODULE_PATH:" "${CMAKE_MODULE_PATH}")
-message(STATUS "Using C++ compiler: ${CMAKE_CXX_COMPILER}")
 
 # Include CMake modules
 include(FeatureSummary)
@@ -25,11 +25,8 @@ include(CTest)
 include(ConfigureGoogleTest)
 
 include_directories(include
-                    $ENV{CONDA_PREFIX}/include
                     ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/cub
                     ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/moderngpu/src)
-
-link_directories($ENV{CONDA_PREFIX}/lib)
 
 find_package(CUDA)
 
@@ -89,6 +86,7 @@ install(TARGETS gdf
 
 install(DIRECTORY include/gdf DESTINATION include)
 
+# Configure the C++ tests
 
 find_package(GTest QUIET)
 set_package_properties(GTest PROPERTIES TYPE OPTIONAL PURPOSE "Google C++ Testing Framework (Google Test)." URL "https://github.com/google/googletest")
