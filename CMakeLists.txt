@@ -96,7 +96,7 @@ set_package_properties(GTest PROPERTIES TYPE OPTIONAL PURPOSE "Google C++ Testin
 if(GTEST_FOUND)
     message(STATUS "Google C++ Testing Framework (Google Test) found in ${GTEST_ROOT}")
     include_directories(${GTEST_INCLUDE_DIRS})
-    add_subdirectory(test)
+    add_subdirectory(tests)
 else()
     message(AUTHOR_WARNING "Google C++ Testing Framework (Google Test) not found: automated tests are disabled.")
 endif()
