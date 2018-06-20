@@ -136,6 +136,7 @@ _join_how_api = {
     'left': libgdf.gdf_left_join_generic,
     'inner': libgdf.gdf_inner_join_generic,
     'outer': libgdf.gdf_outer_join_generic,
+    'multi-left': libgdf.gdf_multi_left_join_generic,
 }
 
 
@@ -151,13 +152,27 @@ def _as_numba_devarray(intaddr, nelem, dtype):
 
 
 @contextlib.contextmanager
-def apply_join(col_lhs, col_rhs, how):
+def apply_join(col_lhs, col_rhs, how, ncols=3):
     """Returns a tuple of the left and right joined indices as gpu arrays.
     """
+    if(col_lhs.__len__() != col_rhs.__len__()):
+        raise ValueError("Unequal #columns in list 'col_lhs' and list 'col_rhs'")
+
     joiner = _join_how_api[how]
     join_result_ptr = ffi.new("gdf_join_result_type**", None)
-    # Call libgdf
-    joiner(col_lhs.cffi_view, col_rhs.cffi_view, join_result_ptr)
+    
+    if(how=='multi-left'):
+        list_lhs = []
+        list_rhs = []
+        for i in col_lhs.__len__():
+            list_lhs.append(col_lhs[i].cffi_view)
+            list_rhs.append(col_rhs[i].cffi_view)
+
+        # Call libgdf
+        joiner(list_lhs, list_rhs, join_result_ptr)
+    else:
+        joiner(col_lhs[0].cffi_view, col_rhs[0].cffi_view, join_result_ptr)
+
     # Extract result
     join_result = join_result_ptr[0]
     dataptr = libgdf.gdf_join_result_data(join_result)
