@@ -23,6 +23,7 @@ include(CTest)
 
 # Include custom modules (see cmake directory)
 include(ConfigureGoogleTest)
+include(ConfigureArrow)
 
 include_directories(include
                     ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/cub
