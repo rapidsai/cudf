@@ -203,7 +203,22 @@ class NumericalColumn(columnops.TypedColumnBase):
         else:
             raise TypeError("numeric column of {} has no NaN value".format(self.dtype))
 
-    def join(self, other, how='left', return_indexers=False):
+    def join(self, other, how='left', return_indexers=False, type='sort'):
+
+        # Single column join using sort-based implementation
+        if type == 'sort':
+            return self._sortjoin(other=other, how=how, return_indexers=return_indexers)
+        elif type == 'hash':
+            return self._hashjoin(other=other, how=how)
+        else:
+            raise ValueError('Unsupported join type') 
+
+    def _hashjoin(self, other, how='left'):
+
+        return 
+        
+
+    def _sortjoin(self, other, how='left', return_indexers=False):
         """Join with another column.
 
         When the column is a index, set *return_indexers* to obtain
@@ -219,11 +234,11 @@ class NumericalColumn(columnops.TypedColumnBase):
         with _gdf.apply_join(lkey, rkey, how=how) as (lidx, ridx):
             if lidx.size > 0:
                 raw_index = cudautils.gather_joined_index(
-                    lkey.to_gpu_array(),
-                    rkey.to_gpu_array(),
-                    lidx,
-                    ridx,
-                )
+                        lkey.to_gpu_array(),
+                        rkey.to_gpu_array(),
+                        lidx,
+                        ridx,
+                        )
                 buf_index = Buffer(raw_index)
             else:
                 buf_index = Buffer.null(dtype=self.dtype)
@@ -237,15 +252,15 @@ class NumericalColumn(columnops.TypedColumnBase):
 
                 if len(joined_index) > 0:
                     indexers = (
-                        gather(Series(largsort), lidx),
-                        gather(Series(rargsort), ridx),
-                    )
+                            gather(Series(largsort), lidx),
+                            gather(Series(rargsort), ridx),
+                            )
                 else:
                     indexers = (
-                        Series(Buffer.null(dtype=np.intp)),
-                        Series(Buffer.null(dtype=np.intp))
-                    )
-                return joined_index, indexers
+                            Series(Buffer.null(dtype=np.intp)),
+                            Series(Buffer.null(dtype=np.intp))
+                            )
+                    return joined_index, indexers
             else:
                 return joined_index
 
