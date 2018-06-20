@@ -21,18 +21,8 @@ if(result)
     message(FATAL_ERROR "Build step for arrow failed: ${result}")
 endif()
 
-# Prevent overriding the parent project's compiler/linker
-# settings on Windows
-set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
-
-# Prevent overriding the parent project's compiler/linker
-# settings on Windows
-set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
-
-# Locate the Google Test package.
+# Locate the Arrow package.
 # Requires that you build with:
-#   -DGTEST_ROOT:PATH=/path/to/googletest_install_dir
-set(ARROW_ROOT ${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/thirdparty/arrow-install/)
+#   -DARROW_ROOT:PATH=/path/to/arrow_install_dir
+set(ARROW_ROOT ${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/thirdparty/arrow-download/arrow-prefix/src/arrow-install/usr/local/)
 message(STATUS "ARROW_ROOT: " ${ARROW_ROOT})
-
-#link_directories(${GTEST_ROOT}/lib/)
