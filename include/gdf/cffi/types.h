@@ -10,8 +10,9 @@ typedef enum {
     GDF_INT64,
     GDF_FLOAT32,
     GDF_FLOAT64,
-	GDF_DATE32,
-	GDF_DATE64
+	GDF_DATE32,   // int32_t days since the UNIX epoch
+	GDF_DATE64,   // int64_t milliseconds since the UNIX epoch
+	GDF_TIMESTAMP // Exact timestamp encoded with int64 since UNIX epoch (Default unit millisecond)
 } gdf_dtype;
 
 typedef enum {
@@ -24,12 +25,29 @@ typedef enum {
     GDF_VALIDITY_UNSUPPORTED,
 } gdf_error;
 
+typedef enum {
+	TIME_UNIT_NONE=0, // default (undefined)
+	TIME_UNIT_s,   // second
+	TIME_UNIT_ms,  // millisecond
+	TIME_UNIT_us,  // microsecond
+	TIME_UNIT_ns   // nanosecond
+} gdf_time_unit;
+
+struct gdf_dtype_extra_info {
+	gdf_time_unit time_unit;
+	// here we can also hold info for decimal datatype or any other datatype that requires additional information
+};
+
 typedef struct gdf_column_{
     void *data;
     gdf_valid_type *valid;
     gdf_size_type size;
     gdf_dtype dtype;
+    gdf_dtype_extra_info dtype_info;
 } gdf_column;
+
+
+
 
 struct _OpaqueIpcParser;
 typedef struct _OpaqueIpcParser gdf_ipc_parser_type;
