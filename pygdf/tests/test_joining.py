@@ -160,3 +160,62 @@ def test_dataframe_join_mismatch_cats(how):
                                        # For inner joins, pandas return weird categories.
                                        check_categorical=how != 'inner')
     assert list(got.index) == list(expect.index)
+
+
+def test_dataframe_multi_column_join():
+    np.random.seed(0)
+
+    # Make GDF
+    df_left = DataFrame()
+    nelem = 10
+    df_left['key1'] = np.random.randint(0, 3, nelem)
+    df_left['key2'] = np.random.randint(0, 5, nelem)
+    df_left['val1'] = np.arange(nelem)
+
+    df_right = DataFrame()
+    nelem = 10
+    df_right['key1'] = np.random.randint(0, 3, nelem)
+    df_right['key2'] = np.random.randint(0, 5, nelem)
+    df_right['val1'] = np.arange(nelem)
+
+    # Make pandas DF
+    pddf_left = df_left.to_pandas()
+    pddf_right = df_right.to_pandas()
+    print(pddf_left)
+    print(pddf_right)
+
+    # Expected result
+    pddf_joined = pddf_left.merge(pddf_right, on=['key1', 'key2'], how='left',
+                                  sort=True)
+    print(pddf_joined)
+
+    # Test (doesn't check for ordering)
+    join_result = df_left.merge(df_right, on=['key1', 'key2'], how='left')
+
+    def normalize(x):
+        if x is None:
+            return x
+        x = float(x)
+        if np.isnan(x):
+            return None
+        else:
+            return x
+
+    def build_mapping(join_result):
+        mapping = {}
+        for i in range(len(join_result)):
+            keys = join_result.key1[i], join_result.key2[i]
+            vals = (
+                normalize(join_result.val1_x[i]),
+                normalize(join_result.val1_y[i]),
+            )
+            mapping[keys] = vals
+        return mapping
+
+    # Build got key-value mapping
+    expect_map = build_mapping(pddf_joined)
+    got_map = build_mapping(join_result)
+
+    print(expect_map)
+    print(got_map)
+    assert expect_map == got_map
