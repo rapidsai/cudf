@@ -152,7 +152,7 @@ def _as_numba_devarray(intaddr, nelem, dtype):
 
 
 @contextlib.contextmanager
-def apply_join(col_lhs, col_rhs, how, ncols=3):
+def apply_join(col_lhs, col_rhs, how):
     """Returns a tuple of the left and right joined indices as gpu arrays.
     """
     if(col_lhs.__len__() != col_rhs.__len__()):
