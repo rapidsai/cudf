@@ -264,7 +264,7 @@ class NumericalColumn(columnops.TypedColumnBase):
                             Series(Buffer.null(dtype=np.intp)),
                             Series(Buffer.null(dtype=np.intp))
                             )
-                    return joined_index, indexers
+                return joined_index, indexers
             else:
                 return joined_index
 
