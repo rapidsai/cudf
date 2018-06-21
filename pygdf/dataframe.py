@@ -652,24 +652,25 @@ class DataFrame(object):
 
         left_cols = []
         for l in left_on:
-            left_cols.append(left[l])
+            left_cols.append(left[l]._column)
 
         right_cols = []
         for r in right_on:
-            right_cols.append(right[r])
+            right_cols.append(right[r]._column)
 
         with _gdf.apply_join(left_cols, right_cols, how) as (left_indices, right_indices):
             if left_indices.size > 0:
                 # For each column we joined on, gather the values from each column
                 # using the indices from the join
-                for i,col_name in enumerate(left_on):
+                joined_values = []
+                for i in range(left_on.__len__()):
                     # TODO Instead of calling 'gather_joined_index' for every column 
                     # that we are joining on, we should implement a 
                     # 'multi_gather_joined_index' that can gather a value from
                     # each column at once
                     raw_values = cudautils.gather_joined_index(
-                                left_cols[i],
-                                right_cols[i],
+                                left_cols[i].to_gpu_array(),
+                                right_cols[i].to_gpu_array(),
                                 left_indices,
                                 right_indices,
                                 )
