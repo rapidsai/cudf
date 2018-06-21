@@ -8,13 +8,11 @@ include(ExternalProject)
 
 set(ARROW_VERSION "apache-arrow-0.7.1")
 
-message(STATUS "sdsffsf a ${ARROW_VERSION} b")
-
 if (NOT "$ENV{PARQUET_ARROW_VERSION}" STREQUAL "")
     set(ARROW_VERSION "$ENV{PARQUET_ARROW_VERSION}")
 endif()
 
-message(STATUS "sdsffsf a ${ARROW_VERSION} b")
+message(STATUS "Using Apache Arrow version: ${ARROW_VERSION}")
 
 set(ARROW_URL "https://github.com/apache/arrow/archive/${ARROW_VERSION}.tar.gz")
 
