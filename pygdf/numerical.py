@@ -203,17 +203,18 @@ class NumericalColumn(columnops.TypedColumnBase):
         else:
             raise TypeError("numeric column of {} has no NaN value".format(self.dtype))
 
-    def join(self, other, left_on=None, right_on=None, how='left', return_indexers=False, type='sort'):
+    def join(self, other, how='left', return_indexers=False, type='sort'):
 
         # Single column join using sort-based implementation
         if type == 'sort':
             return self._sortjoin(other=other, how=how, return_indexers=return_indexers)
         elif type == 'hash':
-            return self._hashjoin(other=other, how=how)
+            # Get list of columns from self with left_on and from other with right_on
+            return self._hashjoin(other=other, left_on=left_on, right_on=right_on, how=how, return_indexers=return_indexers)
         else:
             raise ValueError('Unsupported join type') 
 
-    def _hashjoin(self, other, how='left'):
+    def _hashjoin(self, other, how='left', return_indexers=False):
 
         return 
         
