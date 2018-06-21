@@ -606,8 +606,11 @@ class DataFrame(object):
         lhs = self
         rhs = other
         # XXX: Replace this stub
-        joined_indices, indexers = self._stub_merge(
-            lhs, rhs, left_on=on, right_on=on, how=how, return_indexers=True
+        #joined_indices, indexers = self._stub_merge(
+        #    lhs, rhs, left_on=on, right_on=on, how=how, return_indexers=True
+        #    )
+        joined_indices, indexers = self._merge_gdf(
+            lhs, rhs, left_on=on, right_on=on, how='multi-left', return_indices=True
             )
 
         # XXX: Prepare output.  same as _join.  code duplication
@@ -639,6 +642,46 @@ class DataFrame(object):
 
         return df
 
+    def _merge_gdf(self, left, right, left_on, right_on, how, return_indices):
+
+        from . import columnops
+
+        assert how == 'multi-left'
+        assert return_indices
+        assert len(left_on) == len(right_on)
+
+        left_cols = []
+        for l in left_on:
+            left_cols.append(left[l])
+
+        right_cols = []
+        for r in right_on:
+            right_cols.append(right[r])
+
+        with _gdf.apply_join(left_cols, right_cols, how) as (left_indices, right_indices):
+            if left_indices.size > 0:
+                # For each column we joined on, gather the values from each column
+                # using the indices from the join
+                for i,col_name in enumerate(left_on):
+                    # TODO Instead of calling 'gather_joined_index' for every column 
+                    # that we are joining on, we should implement a 
+                    # 'multi_gather_joined_index' that can gather a value from
+                    # each column at once
+                    raw_values = cudautils.gather_joined_index(
+                                left_cols[i],
+                                right_cols[i],
+                                left_indices,
+                                right_indices,
+                                )
+                    buffered_values = Buffer(raw_values)
+
+                    joined_values.append(left_cols[i].replace(data=buffered_values))
+
+        if return_indices:
+            return joined_values, joined_indices
+        else:
+            return joined_indices
+
     def _stub_merge(self, left, right, left_on, right_on, how, return_indexers):
         """Stub implementation
 
@@ -651,6 +694,7 @@ class DataFrame(object):
             One of 'left', 'right', 'inner', 'outer'
         return_indexers : bool
             See return value documentation.
+
 
         Returns
         -------
