@@ -164,7 +164,7 @@ def apply_join(col_lhs, col_rhs, how):
     if(how=='multi-left'):
         list_lhs = []
         list_rhs = []
-        for i in col_lhs.__len__():
+        for i in range(0,col_lhs.__len__()):
             list_lhs.append(col_lhs[i].cffi_view)
             list_rhs.append(col_rhs[i].cffi_view)
 
