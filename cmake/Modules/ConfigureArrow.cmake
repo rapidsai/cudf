@@ -36,3 +36,9 @@ configure_file(${ARROW_GENERATED_IPC_DIR}/File_generated.h ${CMAKE_SOURCE_DIR}/i
 configure_file(${ARROW_GENERATED_IPC_DIR}/Message_generated.h ${CMAKE_SOURCE_DIR}/include/gdf/ipc/Message_generated.h COPYONLY)
 configure_file(${ARROW_GENERATED_IPC_DIR}/Schema_generated.h ${CMAKE_SOURCE_DIR}/include/gdf/ipc/Schema_generated.h COPYONLY)
 configure_file(${ARROW_GENERATED_IPC_DIR}/Tensor_generated.h ${CMAKE_SOURCE_DIR}/include/gdf/ipc/Tensor_generated.h COPYONLY)
+
+# Add transitive dependency: Flatbuffers
+set(FLATBUFFERS_ROOT ${ARROW_DOWNLOAD_BINARY_DIR}/arrow-prefix/src/arrow-build/flatbuffers_ep-prefix/src/flatbuffers_ep-install/)
+
+include_directories(${FLATBUFFERS_ROOT}/include/)
+link_directories(${FLATBUFFERS_ROOT}/lib/)
