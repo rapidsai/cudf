@@ -12,6 +12,11 @@ typedef enum {
     GDF_FLOAT64,
 } gdf_dtype;
 
+
+/*
+ * GDF error enum type.
+ * Any changes here should be reflected in `gdf_error_get_name` as well.
+ */
 typedef enum {
     GDF_SUCCESS=0,
     GDF_CUDA_ERROR,
