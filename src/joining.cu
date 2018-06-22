@@ -160,13 +160,13 @@ gdf_error gdf_multi_left_join_generic(int num_cols, gdf_column **leftcol, gdf_co
 {
   // check that the columns have matching types and the same number of rows
   for (int i = 0; i < num_cols; i++) {
-    if (rightcol[i]->dtype != leftcol[i]->dtype) return GDF_UNSUPPORTED_DTYPE;
-    if (i > 0 && leftcol[i]->size != leftcol[i-1]->size) return GDF_UNSUPPORTED_JOIN;
-    if (i > 0 && rightcol[i]->size != rightcol[i-1]->size) return GDF_UNSUPPORTED_JOIN;
+    if (rightcol[i]->dtype != leftcol[i]->dtype) return GDF_JOIN_DTYPE_MISMATCH;
+    if (i > 0 && leftcol[i]->size != leftcol[i-1]->size) return GDF_COLUMN_SIZE_MISMATCH;
+    if (i > 0 && rightcol[i]->size != rightcol[i-1]->size) return GDF_COLUMN_SIZE_MISMATCH;
   }
 
   // TODO: currently support up to 3 columns, and only int32 and int64 types
-  if (num_cols > 3) return GDF_UNSUPPORTED_JOIN;
+  if (num_cols > 3) return GDF_JOIN_TOO_MANY_COLUMNS;
   for (int i = 0; i < num_cols; i++) {
     if (leftcol[i]->dtype != GDF_INT8 &&
         leftcol[i]->dtype != GDF_INT16 &&
