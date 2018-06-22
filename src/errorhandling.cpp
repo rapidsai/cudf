@@ -12,5 +12,8 @@ const char * gdf_error_get_name(gdf_error errcode) {
     GETNAME(GDF_COLUMN_SIZE_TOO_BIG)
     GETNAME(GDF_VALIDITY_MISSING)
     GETNAME(GDF_VALIDITY_UNSUPPORTED)
+    default:
+        // This means we are missing an entry above for a gdf_error value.
+        return "Internal error. Unknown error code.";
     }
 }
