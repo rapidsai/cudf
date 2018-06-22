@@ -138,14 +138,20 @@ gdf_error gdf_##Fn##_generic(gdf_column *leftcol, gdf_column * rightcol,    \
                                 less_t<int64_t>(), result_ptr->context);
 
 #define JOIN_HASH_T3(T1, l1, r1, T2, l2, r2, T3, l3, r3) \
+  if (T3 == GDF_INT8)  { JOIN_HASH_TYPES(T1, l1, r1, T2, l2, r2, int8_t, l3, r3) } \
+  if (T3 == GDF_INT16) { JOIN_HASH_TYPES(T1, l1, r1, T2, l2, r2, int16_t, l3, r3) } \
   if (T3 == GDF_INT32) { JOIN_HASH_TYPES(T1, l1, r1, T2, l2, r2, int32_t, l3, r3) } \
   if (T3 == GDF_INT64) { JOIN_HASH_TYPES(T1, l1, r1, T2, l2, r2, int64_t, l3, r3) }
 
 #define JOIN_HASH_T2(T1, l1, r1, T2, l2, r2, T3, l3, r3) \
+  if (T2 == GDF_INT8)  { JOIN_HASH_T3(T1, l1, r1, int8_t, l2, r2, T3, l3, r3) } \
+  if (T2 == GDF_INT16) { JOIN_HASH_T3(T1, l1, r1, int16_t, l2, r2, T3, l3, r3) } \
   if (T2 == GDF_INT32) { JOIN_HASH_T3(T1, l1, r1, int32_t, l2, r2, T3, l3, r3) } \
   if (T2 == GDF_INT64) { JOIN_HASH_T3(T1, l1, r1, int64_t, l2, r2, T3, l3, r3) }
 
 #define JOIN_HASH_T1(T1, l1, r1, T2, l2, r2, T3, l3, r3) \
+  if (T1 == GDF_INT8)  { JOIN_HASH_T2(int8_t, l1, r1, T2, l2, r2, T3, l3, r3) } \
+  if (T1 == GDF_INT16) { JOIN_HASH_T2(int16_t, l1, r1, T2, l2, r2, T3, l3, r3) } \
   if (T1 == GDF_INT32) { JOIN_HASH_T2(int32_t, l1, r1, T2, l2, r2, T3, l3, r3) } \
   if (T1 == GDF_INT64) { JOIN_HASH_T2(int64_t, l1, r1, T2, l2, r2, T3, l3, r3) }
 
@@ -155,13 +161,18 @@ gdf_error gdf_multi_left_join_generic(int num_cols, gdf_column **leftcol, gdf_co
   // check that the columns have matching types and the same number of rows
   for (int i = 0; i < num_cols; i++) {
     if (rightcol[i]->dtype != leftcol[i]->dtype) return GDF_UNSUPPORTED_DTYPE;
-    if (rightcol[i]->size != leftcol[i]->size) return GDF_UNSUPPORTED_JOIN;
+    if (i > 0 && leftcol[i]->size != leftcol[i-1]->size) return GDF_UNSUPPORTED_JOIN;
+    if (i > 0 && rightcol[i]->size != rightcol[i-1]->size) return GDF_UNSUPPORTED_JOIN;
   }
 
   // TODO: currently support up to 3 columns, and only int32 and int64 types
   if (num_cols > 3) return GDF_UNSUPPORTED_JOIN;
-  for (int i = 0; i < num_cols; i++)
-    if (leftcol[i]->dtype != GDF_INT32 && leftcol[i]->dtype != GDF_INT64) return GDF_UNSUPPORTED_DTYPE;
+  for (int i = 0; i < num_cols; i++) {
+    if (leftcol[i]->dtype != GDF_INT8 &&
+        leftcol[i]->dtype != GDF_INT16 &&
+        leftcol[i]->dtype != GDF_INT32 &&
+	leftcol[i]->dtype != GDF_INT64) return GDF_UNSUPPORTED_DTYPE;
+  }
 
   std::unique_ptr<join_result<int> > result_ptr(new join_result<int>);
   switch (num_cols) {
