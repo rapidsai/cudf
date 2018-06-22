@@ -89,6 +89,7 @@ gdf_error gdf_cast_generic_to_##TO(gdf_column *input, gdf_column *output) {   \
     case   GDF_INT64: return gdf_cast_i64_to_##TO(input, output);             \
     case GDF_FLOAT32: return gdf_cast_f32_to_##TO(input, output);             \
     case GDF_FLOAT64: return gdf_cast_f64_to_##TO(input, output);             \
+    case GDF_DATE32:  return gdf_cast_date32_to_##TO(input, output);             \
     default: return GDF_UNSUPPORTED_DTYPE;                                    \
     }                                                                         \
 }
@@ -321,6 +322,9 @@ DEF_CAST_IMPL(i32, f32, int32_t, float)
 DEF_CAST_IMPL(i64, f32, int64_t, float)
 DEF_CAST_IMPL(f32, f32,   float, float)
 DEF_CAST_IMPL(f64, f32,  double, float)
+DEF_CAST_IMPL(date32, f32,  int32_t, float)
+DEF_CAST_IMPL(date64, f32,  int64_t, float)
+DEF_CAST_IMPL(timestamp, f32,  int64_t, float)
 
 DEF_CAST_OP(f64)
 DEF_CAST_IMPL(i8,  f64,  int8_t, double)

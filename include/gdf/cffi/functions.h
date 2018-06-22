@@ -219,12 +219,17 @@ gdf_error gdf_floor_f64(gdf_column *input, gdf_column *output);
 
 /* casting */
 
+// ROMMEL add here funcions for casting from date64, date32 and timestamp to the other types and viceversa
+
 gdf_error gdf_cast_generic_to_f32(gdf_column *input, gdf_column *output);
 gdf_error gdf_cast_i8_to_f32(gdf_column *input, gdf_column *output);
 gdf_error gdf_cast_i32_to_f32(gdf_column *input, gdf_column *output);
 gdf_error gdf_cast_i64_to_f32(gdf_column *input, gdf_column *output);
 gdf_error gdf_cast_f32_to_f32(gdf_column *input, gdf_column *output);
 gdf_error gdf_cast_f64_to_f32(gdf_column *input, gdf_column *output);
+gdf_error gdf_cast_date32_to_f32(gdf_column *input, gdf_column *output);
+gdf_error gdf_cast_date64_to_f32(gdf_column *input, gdf_column *output);
+gdf_error gdf_cast_timestamp_to_f32(gdf_column *input, gdf_column *output);
 
 gdf_error gdf_cast_generic_to_f64(gdf_column *input, gdf_column *output);
 gdf_error gdf_cast_i8_to_f64(gdf_column *input, gdf_column *output);
@@ -253,6 +258,14 @@ gdf_error gdf_cast_i32_to_i64(gdf_column *input, gdf_column *output);
 gdf_error gdf_cast_i64_to_i64(gdf_column *input, gdf_column *output);
 gdf_error gdf_cast_f32_to_i64(gdf_column *input, gdf_column *output);
 gdf_error gdf_cast_f64_to_i64(gdf_column *input, gdf_column *output);
+
+gdf_error gdf_cast_generic_to_date32(gdf_column *input, gdf_column *output);
+gdf_error gdf_cast_i8_to_date32(gdf_column *input, gdf_column *output);
+gdf_error gdf_cast_i32_to_date32(gdf_column *input, gdf_column *output);
+gdf_error gdf_cast_i64_to_date32(gdf_column *input, gdf_column *output);
+gdf_error gdf_cast_f32_to_date32(gdf_column *input, gdf_column *output);
+gdf_error gdf_cast_f64_to_date32(gdf_column *input, gdf_column *output);
+
 
 /* datetime extract*/
 gdf_error gdf_extract_datetime_year(gdf_column *input, gdf_column *output);
