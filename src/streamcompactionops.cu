@@ -6,6 +6,12 @@
 #include <cuda_runtime.h>
 #include <vector>
 #include <thrust/functional.h>
+#include <thrust/device_ptr.h>
+#include <thrust/device_vector.h>
+#include <thrust/copy.h>
+#include <thrust/remove.h>
+#include <thrust/iterator/counting_iterator.h>
+
 #include <thrust/execution_policy.h>
 #include <thrust/iterator/iterator_adaptor.h>
 #include <thrust/iterator/transform_iterator.h>
@@ -61,6 +67,22 @@ struct modulus_bit_width : public thrust::unary_function<gdf_size_type,gdf_size_
 	gdf_size_type operator()(gdf_size_type x) const
 	{
 		return x % GDF_VALID_BITSIZE;
+		// x << 
+	}
+};
+
+// note: functor inherits from unary_function
+struct shift_operator : public thrust::unary_function<gdf_valid_type,gdf_valid_type>
+{
+	int num_bits;
+	shift_operator (int num_bits) {
+		this->num_bits = num_bits;
+	}
+	
+	__host__ __device__
+	gdf_valid_type operator()(gdf_valid_type x) const
+	{
+		return x << num_bits;
 	}
 };
 
@@ -242,4 +264,48 @@ gdf_error gpu_apply_stencil(gdf_column *lhs, gdf_column * stencil, gdf_column * 
 
 	return GDF_SUCCESS;
 
+}
+
+gdf_error gpu_concat(gdf_column *lhs, gdf_column *rhs, gdf_column *output)
+{
+	GDF_REQUIRE( (lhs->dtype == output->dtype ) && ( rhs->dtype == output->dtype), GDF_VALIDITY_MISSING);
+	GDF_REQUIRE(output->size == lhs->size + rhs->size, GDF_COLUMN_SIZE_MISMATCH);
+	cudaStream_t stream;
+	cudaStreamCreate(&stream);
+
+	//@todo: check if  lsh->dtype is NOT GDF_invalid
+	int type_width = column_type_width[ lhs->dtype ];
+
+	//data 
+	cudaMemcpyAsync(output->data, lhs->data, type_width * lhs->size, cudaMemcpyDeviceToDevice, stream);
+
+	cudaMemcpyAsync( (void *)( (int8_t*) (output->data) + type_width * lhs->size), rhs->data, type_width * rhs->size, cudaMemcpyDeviceToDevice, stream);
+
+	int  left_valid_with_n_bytes =  sizeof(int8_t) * (lhs->size + GDF_VALID_BITSIZE - 1) / GDF_VALID_BITSIZE;
+	int  right_valid_with_n_bytes =  sizeof(int8_t) * (rhs->size + GDF_VALID_BITSIZE - 1) / GDF_VALID_BITSIZE;
+    // cudaMemcpyAsync(output->valid, lhs->valid, sizeof(int8_t) * (column->size + GDF_VALID_BITSIZE - 1) / GDF_VALID_BITSIZE, cudaMemcpyDeviceToDevice, stream);
+	
+	/*for(size_t i = 0; i < left_valid_with_n_bytes; i++) {
+		char * left_char = new char[1];
+		cudaError_t error = cudaMemcpyAsync(left_char, &lhs->valid[i], sizeof(gdf_valid_type), cudaMemcpyDeviceToHost, stream);
+		
+		for(size_t j = 0; j < right_valid_with_n_bytes; j++) {
+			char * right_char = new char[1];
+			error = cudaMemcpyAsync(right_char, &rhs->valid[i], sizeof(gdf_valid_type), cudaMemcpyDeviceToHost, stream);
+
+			int num_bits;
+			shift_operator functor(num_bits);
+			
+			//thrust::transform(V1.begin(), V1.end(), V2.begin(), V3.begin(),  thrust::bit_or<int>());
+
+		}
+	}*/
+	
+
+
+	//delete []last_char;
+	cudaStreamSynchronize(stream);
+	cudaStreamDestroy(stream);
+
+	return GDF_SUCCESS;
 }

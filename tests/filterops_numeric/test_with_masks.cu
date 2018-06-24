@@ -20,14 +20,12 @@
 
 #include <thrust/execution_policy.h>
 #include <cuda_runtime.h>
-#include "utils.cuh"
+#include "test_utils.h"
 
 #define BIT_FIVE 0x10
 #define BIT_SIX 0x20
 
-
 TEST(FilterOperationTest, WithOffBits){
-
     gdf_size_type num_elements = 8;
 
     char * data_left;
@@ -59,7 +57,8 @@ TEST(FilterOperationTest, WithOffBits){
     *valid = *valid & ~(1 << num);
     num = 6;
     *valid = *valid & ~(1 << num);
-
+    std::cout << "binary: \n";
+    print_binary(*valid);
     //shold set lef tand bits 4 and 6 to off
 
     gdf_valid_type * valid_device;
@@ -98,12 +97,21 @@ TEST(FilterOperationTest, WithOffBits){
 
 
     error = gpu_comparison_static_i8(&lhs,3,&output,GDF_EQUALS);
+    std::cout<<"gpu_comparison_static_i8"<<std::endl;
+
+    print_column(&output);
+
     error = gpu_comparison(&lhs,&rhs,&output,GDF_GREATER_THAN);
 
+    // gpu_concat (lsh, rhs, output)
+        // lsh, rhs, output, same type
+        //  output = lsh + rhs
+        // 
     print_column(&output);
 
     gpu_apply_stencil(&lhs, &output, &rhs);
 
+    std::cout<<"gpu_apply_stencil"<<std::endl;
 
     print_column(&rhs);
 

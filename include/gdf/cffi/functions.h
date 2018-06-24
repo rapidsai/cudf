@@ -432,6 +432,8 @@ gdf_error gpu_comparison(gdf_column *lhs, gdf_column *rhs, gdf_column *output,gd
 //takes a stencil and uses it to compact a colum e.g. remove all values for which the stencil = 0
 gdf_error gpu_apply_stencil(gdf_column *lhs, gdf_column * stencil, gdf_column * output);
 
+//concat two gdf_columns
+gdf_error gpu_concat(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
 
 
 

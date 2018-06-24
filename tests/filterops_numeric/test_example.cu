@@ -8,7 +8,16 @@
 
 #include <thrust/execution_policy.h>
 #include <cuda_runtime.h>
- #include "utils.cuh"
+#include "tests_utils.h"
+/*
+ ============================================================================
+ Name        : testing-libgdf.cu
+ Author      : felipe
+ Version     :
+ Copyright   : Your copyright notice
+ Description : Compute sum of reciprocals using STL on CPU and Thrust on GPU
+ ============================================================================
+ */
 
 TEST(Example, Equals)
 {
