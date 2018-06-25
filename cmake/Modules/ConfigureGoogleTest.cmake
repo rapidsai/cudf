@@ -34,3 +34,5 @@ set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
 #   -DGTEST_ROOT:PATH=/path/to/googletest_install_dir
 set(GTEST_ROOT ${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/thirdparty/googletest-install/)
 message(STATUS "GTEST_ROOT: " ${GTEST_ROOT})
+
+link_directories(${GTEST_ROOT}/lib/)

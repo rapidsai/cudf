@@ -27,7 +27,6 @@ endif()
 # Requires that you build with:
 #   -DARROW_ROOT:PATH=/path/to/arrow_install_dir
 set(ARROW_ROOT ${ARROW_DOWNLOAD_BINARY_DIR}/arrow-prefix/src/arrow-install/usr/local/)
-message(STATUS "ARROW_ROOT: " ${ARROW_ROOT})
 
 # Copy the arrow-format flatbuffer headers to include/ipc using configure_file (will sync if input file changes)
 set(ARROW_GENERATED_IPC_DIR ${ARROW_DOWNLOAD_BINARY_DIR}/arrow-prefix/src/arrow/cpp/src/arrow/ipc/)
