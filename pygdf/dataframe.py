@@ -594,9 +594,9 @@ class DataFrame(object):
                 df[k] = self[k].reset_index().take(new_positions)
         return df.set_index(self.index.take(new_positions))
 
-    def merge(self, other, on=None, how='left', lsuffix='_x', rsuffix='_y'):
-        if how not in ['left', 'right', 'inner', 'outer']:
-            raise ValueError('unsupported {!r} join'.format(how))
+    def merge(self, other, on=None, how='multi-left', lsuffix='_x', rsuffix='_y'):
+        if how != 'multi-left':
+            raise ValueError('{!r} join not implemented yet'.format(how))
 
         same_names = set(self.columns) & set(other.columns)
         if same_names and not (lsuffix or rsuffix):
@@ -610,7 +610,7 @@ class DataFrame(object):
         #    lhs, rhs, left_on=on, right_on=on, how=how, return_joined_indicies=True
         #    )
         joined_values, joined_indicies = self._merge_gdf(
-            lhs, rhs, left_on=on, right_on=on, how='multi-left', return_indices=True
+            lhs, rhs, left_on=on, right_on=on, how=how, return_indices=True
             )
 
         # XXX: Prepare output.  same as _join.  code duplication
@@ -643,7 +643,7 @@ class DataFrame(object):
         return df
 
     def _merge_gdf(self, left, right, left_on, right_on, how, return_indices):
-        
+
         from pygdf import cudautils
 
         assert how == 'multi-left'
@@ -665,9 +665,9 @@ class DataFrame(object):
                 # using the indices from the join
                 joined_values = []
 
-                for i in range(left_on.__len__()):
-                    # TODO Instead of calling 'gather_joined_index' for every column 
-                    # that we are joining on, we should implement a 
+                for i in range(len(left_on)):
+                    # TODO Instead of calling 'gather_joined_index' for every column
+                    # that we are joining on, we should implement a
                     # 'multi_gather_joined_index' that can gather a value from
                     # each column at once
                     raw_values = cudautils.gather_joined_index(
@@ -680,7 +680,7 @@ class DataFrame(object):
 
                     joined_values.append(left_cols[i].replace(data=buffered_values))
 
-                joined_indices = (cudautils.copy_array(left_indices), 
+                joined_indices = (cudautils.copy_array(left_indices),
                                     cudautils.copy_array(right_indices))
 
         if return_indices:

@@ -155,21 +155,21 @@ def _as_numba_devarray(intaddr, nelem, dtype):
 def apply_join(col_lhs, col_rhs, how):
     """Returns a tuple of the left and right joined indices as gpu arrays.
     """
-    if(col_lhs.__len__() != col_rhs.__len__()):
+    if(len(col_lhs) != len(col_rhs)):
         raise ValueError("Unequal #columns in list 'col_lhs' and list 'col_rhs'")
 
     joiner = _join_how_api[how]
     join_result_ptr = ffi.new("gdf_join_result_type**", None)
-    
+
     if(how=='multi-left'):
         list_lhs = []
         list_rhs = []
-        for i in range(col_lhs.__len__()):
+        for i in range(len(col_lhs)):
             list_lhs.append(col_lhs[i].cffi_view)
             list_rhs.append(col_rhs[i].cffi_view)
 
         # Call libgdf
-        joiner(col_lhs.__len__(),list_lhs, list_rhs, join_result_ptr)
+        joiner(len(col_lhs),list_lhs, list_rhs, join_result_ptr)
     else:
         joiner(col_lhs[0].cffi_view, col_rhs[0].cffi_view, join_result_ptr)
 
