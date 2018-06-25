@@ -7,7 +7,7 @@
 #include <thrust/execution_policy.h>
 #include <cuda_runtime.h>
 #include <tuple>
-#include "tests_utils.h"
+#include "helper/utils.cuh"
 
 template<typename RawType, typename PointerType>
 auto init_device_vector(gdf_size_type num_elements) -> std::tuple<RawType *, thrust::device_ptr<PointerType> >

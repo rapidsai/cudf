@@ -266,6 +266,123 @@ gdf_error gpu_apply_stencil(gdf_column *lhs, gdf_column * stencil, gdf_column * 
 
 }
 
+auto get_number_of_bytes_for_valid (size_t column_size) -> size_t {
+    return sizeof(gdf_valid_type) * (column_size + GDF_VALID_BITSIZE - 1) / GDF_VALID_BITSIZE;
+}
+
+
+size_t  valid_left_length(gdf_column *column) {
+    int  n_bytes = get_number_of_bytes_for_valid(column->size);
+    size_t length = column->size - GDF_VALID_BITSIZE * (n_bytes - 1);
+    if (n_bytes == 1 ) {
+        length = column->size;
+    }
+    return  length;
+}
+
+struct valid_array_iterator{
+    gdf_column* column;
+    size_t iter;
+    size_t n_bytes;
+    size_t init_length;
+    gdf_valid_type init_value; 
+	size_t number_of_calls;
+    valid_array_iterator(gdf_column* column, gdf_valid_type init, size_t init_size, size_t  init_index = 1) {
+        this->column = column;
+        this->n_bytes =  sizeof(int8_t) * (column->size + GDF_VALID_BITSIZE - 1) / GDF_VALID_BITSIZE;
+        this->init_value = init;
+        this->init_length = init_size;
+        this->iter = init_index;
+		this->number_of_calls = 0;
+    }
+
+    template <typename Functor>
+    void for_each(Functor output_functor) {
+        gdf_valid_type prev = this->init_value;
+        size_t prev_length = this->init_length;
+
+        gdf_valid_type current;
+        size_t current_length;
+        std::tie(current, current_length) = next_node();
+
+        size_t length = column->size - GDF_VALID_BITSIZE * (n_bytes - 1);
+        while (true) {
+            auto result = concat_bins(prev, current, prev_length, current_length, last_with_too_many_bits(), length);
+            output_functor(result, iter);
+			number_of_calls++;
+            auto result_size = prev_length + current_length;
+            if ( !has_next() )
+                break;
+            prev_length = this->init_length;
+            prev = this->column->valid[iter - 1];
+            std::tie(current, current_length) = next_node();
+        }
+        if (last_with_too_many_bits()) {
+            auto len = length - current_length;
+            auto result = this->column->valid[n_bytes - 1];
+            result = result << current_length;
+            result = result >> current_length;
+            output_functor(result, iter + 1);
+			number_of_calls++;
+        }
+    }
+    bool last_with_too_many_bits() {
+        size_t length = column->size - GDF_VALID_BITSIZE * (n_bytes - 1);
+        if (iter == n_bytes) { // the last one
+            // the last one has to many bits
+            if (this->init_length + length > GDF_VALID_BITSIZE) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    std::tuple<gdf_valid_type, size_t> next_node() {
+        gdf_valid_type valid;
+        size_t length = column->size - GDF_VALID_BITSIZE * (n_bytes - 1);
+        if (iter == n_bytes - 1) { // the last one
+            valid = this->column->valid[iter];
+            // the last one has to many bits
+            if (this->init_length + length > GDF_VALID_BITSIZE) {
+                length = GDF_VALID_BITSIZE - this->init_length;
+            }
+        }
+        else {
+            length = GDF_VALID_BITSIZE - this->init_length;
+            valid = this->column->valid[iter] >> this->init_length;
+        }
+        iter++;
+        return std::make_tuple(valid, length);
+    }
+
+	auto concat_bins (gdf_valid_type A, gdf_valid_type B, int len_a, int len_b, bool has_next = false, size_t right_length = -1) -> gdf_valid_type  {
+		A = A << len_b;
+		if (!has_next) {
+			B = B << len_a;
+			B = B >> len_a;
+		} else {
+			B = B >> right_length - len_b;
+		}
+		return  (A | B);
+	}
+    bool has_next() {
+        return iter < n_bytes;
+    }
+};
+
+gdf_valid_type * gdf_valid_from_device(gdf_column* column, cudaStream_t &stream) {
+    gdf_valid_type * host_valid_out;
+    size_t n_bytes = get_number_of_bytes_for_valid(column->size);
+    host_valid_out = new gdf_valid_type[n_bytes];
+    cudaMemcpyAsync(host_valid_out, column->valid, n_bytes, cudaMemcpyDeviceToHost, stream);
+    return host_valid_out;
+}
+
+void gdf_copy_valid_from_host_to_device (gdf_column *column, gdf_column *device,  size_t lnbytes, size_t n_bytes, cudaStream_t &stream) {
+    gdf_valid_type *host_valid = column->valid;
+    cudaMemcpyAsync(device->valid + sizeof(gdf_valid_type) * (lnbytes - 1), host_valid, n_bytes, cudaMemcpyHostToDevice, stream);
+}
+
 gdf_error gpu_concat(gdf_column *lhs, gdf_column *rhs, gdf_column *output)
 {
 	GDF_REQUIRE( (lhs->dtype == output->dtype ) && ( rhs->dtype == output->dtype), GDF_VALIDITY_MISSING);
@@ -276,36 +393,33 @@ gdf_error gpu_concat(gdf_column *lhs, gdf_column *rhs, gdf_column *output)
 	//@todo: check if  lsh->dtype is NOT GDF_invalid
 	int type_width = column_type_width[ lhs->dtype ];
 
-	//data 
+	//copy data 
 	cudaMemcpyAsync(output->data, lhs->data, type_width * lhs->size, cudaMemcpyDeviceToDevice, stream);
-
 	cudaMemcpyAsync( (void *)( (int8_t*) (output->data) + type_width * lhs->size), rhs->data, type_width * rhs->size, cudaMemcpyDeviceToDevice, stream);
-
-	int  left_valid_with_n_bytes =  sizeof(int8_t) * (lhs->size + GDF_VALID_BITSIZE - 1) / GDF_VALID_BITSIZE;
-	int  right_valid_with_n_bytes =  sizeof(int8_t) * (rhs->size + GDF_VALID_BITSIZE - 1) / GDF_VALID_BITSIZE;
-    // cudaMemcpyAsync(output->valid, lhs->valid, sizeof(int8_t) * (column->size + GDF_VALID_BITSIZE - 1) / GDF_VALID_BITSIZE, cudaMemcpyDeviceToDevice, stream);
 	
-	/*for(size_t i = 0; i < left_valid_with_n_bytes; i++) {
-		char * left_char = new char[1];
-		cudaError_t error = cudaMemcpyAsync(left_char, &lhs->valid[i], sizeof(gdf_valid_type), cudaMemcpyDeviceToHost, stream);
+	int lnbytes = get_number_of_bytes_for_valid(lhs->size);
+	int rnbytes = get_number_of_bytes_for_valid(rhs->size);
+    if (lnbytes > 1) {
+		cudaMemcpyAsync(output->valid, lhs->valid, sizeof(gdf_valid_type) * (lnbytes - 1), cudaMemcpyDeviceToDevice, stream);
+	}
+    int last_char_index = sizeof(gdf_valid_type) * lnbytes - 1;
+	gdf_valid_type* left_char = new gdf_valid_type[1];
+	cudaError_t error = cudaMemcpyAsync(left_char, &lhs->valid[last_char_index], sizeof(gdf_valid_type), cudaMemcpyDeviceToHost, stream);
 		
-		for(size_t j = 0; j < right_valid_with_n_bytes; j++) {
-			char * right_char = new char[1];
-			error = cudaMemcpyAsync(right_char, &rhs->valid[i], sizeof(gdf_valid_type), cudaMemcpyDeviceToHost, stream);
-
-			int num_bits;
-			shift_operator functor(num_bits);
-			
-			//thrust::transform(V1.begin(), V1.end(), V2.begin(), V3.begin(),  thrust::bit_or<int>());
-
-		}
-	}*/
-	
-
-
-	//delete []last_char;
+	size_t len_prev = valid_left_length(lhs);
+    if (rhs->size > 0) {
+		gdf_column rhs_host = *rhs;
+        rhs_host.valid = gdf_valid_from_device(rhs, stream);
+        gdf_valid_type * host_output_valid = new gdf_valid_type[rnbytes];
+		valid_array_iterator iter(&rhs_host, *left_char, len_prev, 0);
+		iter.for_each( [&host_output_valid, &lnbytes] (gdf_valid_type result, size_t iter) {
+ 			std::memcpy ( host_output_valid + sizeof(gdf_valid_type) * (iter - 1) , &result, sizeof(gdf_valid_type));
+        });
+		cudaMemcpyAsync(output->valid + sizeof(gdf_valid_type) * (lnbytes - 1), host_output_valid, iter.number_of_calls, cudaMemcpyHostToDevice, stream);
+		delete [] host_output_valid;
+	}
+	delete []left_char;
 	cudaStreamSynchronize(stream);
 	cudaStreamDestroy(stream);
-
 	return GDF_SUCCESS;
 }

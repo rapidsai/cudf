@@ -7,59 +7,7 @@
 #include <thrust/execution_policy.h>
 #include <cuda_runtime.h>
 #include <tuple>
-#include "tests_utils.h"
-
-template <typename gdf_type>
-gdf_dtype gdf_enum_type_for()
-{
-    return GDF_invalid;
-}
-
-template <>
-gdf_dtype gdf_enum_type_for<int8_t>()
-{
-    return GDF_INT8;
-}
-
-template <>
-gdf_dtype gdf_enum_type_for<int16_t>()
-{
-    return GDF_INT16;
-}
-
-template <>
-gdf_dtype gdf_enum_type_for<int32_t>()
-{
-    return GDF_INT32;
-}
-
-template <>
-gdf_dtype gdf_enum_type_for<int64_t>()
-{
-    return GDF_INT64;
-}
-
-template <>
-gdf_dtype gdf_enum_type_for<float>()
-{
-    return GDF_FLOAT32;
-}
-
-template <>
-gdf_dtype gdf_enum_type_for<double>()
-{
-    return GDF_FLOAT64;
-}
-
-template <typename RawType, typename PointerType>
-auto init_device_vector(gdf_size_type num_elements) -> std::tuple<RawType *, thrust::device_ptr<PointerType>>
-{
-    RawType *device_pointer;
-    cudaError_t cuda_error = cudaMalloc((void **)&device_pointer, sizeof(PointerType) * num_elements);
-    EXPECT_TRUE( cuda_error == cudaError::cudaSuccess );
-    thrust::device_ptr<PointerType> device_wrapper = thrust::device_pointer_cast((PointerType *)device_pointer);
-    return std::make_tuple(device_pointer, device_wrapper);
-}
+#include "helper/utils.cuh"
 
 template <typename LeftValueType, typename RightValueType>
 void test_filterops_augmented()

@@ -1,4 +1,6 @@
 /* column operations */
+#ifndef _GDF_FUNCTIONS_H_
+#define _GDF_FUNCTIONS_H_
 
 gdf_size_type gdf_column_sizeof();
 
@@ -435,5 +437,4 @@ gdf_error gpu_apply_stencil(gdf_column *lhs, gdf_column * stencil, gdf_column * 
 //concat two gdf_columns
 gdf_error gpu_concat(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
 
-
-
+#endif

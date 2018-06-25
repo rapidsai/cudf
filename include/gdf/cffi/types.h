@@ -1,3 +1,6 @@
+#ifndef _GDF_TYPES_H_
+#define _GDF_TYPES_H_
+
 typedef size_t gdf_size_type;
 typedef gdf_size_type gdf_index_type;
 typedef unsigned char gdf_valid_type;
@@ -57,3 +60,5 @@ typedef enum{
 	GDF_GREATER_THAN,
 	GDF_GREATER_THAN_OR_EQUALS
 } gdf_comparison_operator;
+
+#endif

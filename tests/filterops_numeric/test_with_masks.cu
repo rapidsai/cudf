@@ -20,7 +20,7 @@
 
 #include <thrust/execution_policy.h>
 #include <cuda_runtime.h>
-#include "test_utils.h"
+#include "helper/utils.cuh"
 
 #define BIT_FIVE 0x10
 #define BIT_SIX 0x20

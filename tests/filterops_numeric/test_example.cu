@@ -8,7 +8,8 @@
 
 #include <thrust/execution_policy.h>
 #include <cuda_runtime.h>
-#include "tests_utils.h"
+#include "helper/utils.cuh"
+
 /*
  ============================================================================
  Name        : testing-libgdf.cu
