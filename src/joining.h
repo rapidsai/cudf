@@ -84,8 +84,8 @@ mgpu::mem_t<size_type> join_hash(col1_it a, size_type a_count,
 
     // using the new low-level API for hash-joins
     switch (join_type) {
-    case INNER_JOIN: error = InnerJoinHash(context, (void**)&joined, d_joined_idx, joined_size, a, a_count, b, b_count, 0, a2, b2, a3, b3); break;
-    case LEFT_JOIN: error = LeftJoinHash(context, (void**)&joined, d_joined_idx, joined_size, a, a_count, b, b_count, 0, a2, b2, a3, b3); break;
+    case INNER_JOIN: error = InnerJoinHash(context, (void**)&joined, d_joined_idx, joined_size, a, a_count, b, b_count, a2, b2, a3, b3); break;
+    case LEFT_JOIN: error = LeftJoinHash(context, (void**)&joined, d_joined_idx, joined_size, a, a_count, b, b_count, a2, b2, a3, b3); break;
     }
 
     // copy the counter to the cpu

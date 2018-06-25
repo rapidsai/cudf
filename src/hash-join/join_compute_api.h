@@ -41,7 +41,6 @@ struct join_pair { size_type first, second; };
 /// \param[in] maximum size of the allocated output to avoid overflow
 /// \param[in] a first column to join from table1 (larger table)
 /// \param[in] b first column to join from table2 (smaller table)
-/// \param[in] dependency optional dependency to wait for before this operation is started.
 /// \param[in] additional columns to join (default = NULL)
 template<typename input_it,
 	 typename input2_it,
@@ -49,7 +48,6 @@ template<typename input_it,
 	 typename size_type>
 cudaError_t InnerJoinHash(mgpu::context_t &compute_ctx, void **out, size_type *out_count, const size_type max_out_count,
 			  const input_it a, const size_type a_count, const input_it b, const size_type b_count,
-			  std::shared_future<void>* dependency = 0,
 			  const input2_it a2 = (int*)NULL, const input2_it b2 = (int*)NULL,
 			  const input3_it a3 = (int*)NULL, const input3_it b3 = (int*)NULL)
 {
@@ -101,7 +99,6 @@ cudaError_t InnerJoinHash(mgpu::context_t &compute_ctx, void **out, size_type *o
 /// \param[in] maximum size of the allocated output to avoid overflow
 /// \param[in] a first column to join (left)
 /// \param[in] b second column to join (right)
-/// \param[in] dependency optional dependency to wait for before this operation is started.
 /// \param[in] additional columns to join (default = NULL)
 template<typename input_it,
 	 typename input2_it,
@@ -109,7 +106,6 @@ template<typename input_it,
 	 typename size_type>
 cudaError_t LeftJoinHash(mgpu::context_t &compute_ctx, void **out, size_type *out_count, const size_type max_out_count,
                           const input_it a, const size_type a_count, const input_it b, const size_type b_count,
-                          std::shared_future<void>* dependency = 0,
 			  const input2_it a2 = (int*)NULL, const input2_it b2 = (int*)NULL,
 			  const input3_it a3 = (int*)NULL, const input3_it b3 = (int*)NULL)
 {
