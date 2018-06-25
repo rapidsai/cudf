@@ -1,4 +1,19 @@
-/* Copyright 2017-2018 NVIDIA Corporation.  All rights reserved. */
+/*
+ * Copyright (c) 2017-2018, NVIDIA CORPORATION.  All rights reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 #ifndef CONCURRENT_UNORDERED_MULTIMAP_CUH
 #define CONCURRENT_UNORDERED_MULTIMAP_CUH
 
@@ -11,6 +26,17 @@
 #include "managed_allocator.cuh"
 #include "managed.cuh"
 #include "hash_functions.cuh"
+
+// TODO: replace this with CUDA_TRY and propagate the error
+#ifndef CUDA_RT_CALL
+#define CUDA_RT_CALL( call ) 									   \
+{                                                                                                  \
+    cudaError_t cudaStatus = call;                                                                 \
+    if ( cudaSuccess != cudaStatus )                                                               \
+        fprintf(stderr, "ERROR: CUDA RT call \"%s\" in line %d of file %s failed with %s (%d).\n", \
+                        #call, __LINE__, __FILE__, cudaGetErrorString(cudaStatus), cudaStatus);    \
+}
+#endif
 
 // TODO: can we do this more efficiently?
 __inline__ __device__ int8_t atomicCAS(int8_t* address, int8_t compare, int8_t val)

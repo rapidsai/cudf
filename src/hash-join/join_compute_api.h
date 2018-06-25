@@ -1,4 +1,19 @@
-/* Copyright 2018 NVIDIA Corporation.  All rights reserved. */
+/*
+ * Copyright (c) 2018, NVIDIA CORPORATION.  All rights reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 #include <cuda_runtime.h>
 #include <future>
 
@@ -12,15 +27,10 @@
 
 #include <moderngpu/context.hxx>
 
-using namespace mgpu;
+constexpr int DEFAULT_HASH_TBL_OCCUPANCY = 50;
+constexpr int DEFAULT_CUDA_BLOCK_SIZE = 128;
+constexpr int DEFAULT_CUDA_CACHE_SIZE = 128;
 
-#define DEFAULT_HASH_TBL_OCCUPANCY	50
-#define DEFAULT_CUDA_BLOCK_SIZE		128
-#define DEFAULT_CUDA_CACHE_SIZE		128
-
-// TODO: thrust::pair<size_type, size_type> would be better here, but doesn't work correctly
-//       since the constructor gets invoked for shared memory cache and creates race condition
-//       thus I replaced thrust::pair with a bare pair struct that works just fine
 template<typename size_type>
 struct join_pair { size_type first, second; };
 
@@ -42,17 +52,17 @@ class cuda_future : public std::shared_future<T> {
 };
 
 struct HashTbl_t {
-
+  // TODO
 };
 
 /// \brief Creates an empty hash table with the given capacity.
-cudaError_t CreateHashTbl(context_t &compute_ctx, std::shared_ptr<HashTbl_t>* out, int64_t capacity);
+cudaError_t CreateHashTbl(mgpu::context_t &compute_ctx, std::shared_ptr<HashTbl_t>* out, int64_t capacity);
 
 /// \brief Fills the passed in HashTbl from the passed in Datum variant.
 ///
 /// Asynchronous operation. If the capacity of the passed in HashTbl is sufficient no memory allocation is performed.
 template<typename input_it>
-cudaError_t BuildHashTblAsync(context_t &compute_ctx, std::shared_ptr<std::shared_future<void>>* done, std::shared_ptr<HashTbl_t> out, const input_it& in, std::shared_future<void>* dependency = 0)
+cudaError_t BuildHashTblAsync(mgpu::context_t &compute_ctx, std::shared_ptr<std::shared_future<void>>* done, std::shared_ptr<HashTbl_t> out, const input_it& in, std::shared_future<void>* dependency = 0)
 {
     cudaStream_t stream = compute_ctx.stream();
     cuda_future<void>* cuda_dependency = ( 0 != dependency ) ? static_cast<cuda_future<void>*>(dependency) : 0;
@@ -64,7 +74,7 @@ cudaError_t BuildHashTblAsync(context_t &compute_ctx, std::shared_ptr<std::share
         }
         else if ( 0 != cuda_dependency->getEvent() )
         {
-            CUDA_RT_CALL( cudaStreamWaitEvent( stream, cuda_dependency->getEvent(), 0 ) );
+            cudaStreamWaitEvent( stream, cuda_dependency->getEvent(), 0 );
         }
     }
     else if ( 0 != dependency && dependency->valid() )
@@ -75,7 +85,7 @@ cudaError_t BuildHashTblAsync(context_t &compute_ctx, std::shared_ptr<std::share
     //...
     
     cudaEvent_t event = compute_ctx.event();
-    CUDA_RT_CALL( cudaEventRecord( event, stream ) );
+    cudaEventRecord( event, stream );
     *done = std::make_shared<cuda_future<void> >(event);
     return cudaSuccess;
 }
@@ -94,7 +104,7 @@ cudaError_t BuildHashTblAsync(context_t &compute_ctx, std::shared_ptr<std::share
 /// \return Status
 /// Asynchronous operation. If the capacity of the passed in ArrayData is sufficient no memory allocation is performed.
 template<typename input_it, typename output_it>
-cudaError_t ProbeHashTblAsync(context_t &compute_ctx, std::shared_ptr<std::shared_future<void>>* done, std::shared_ptr<output_it>* out, const HashTbl_t& ht, const input_it& in, std::shared_future<void>* dependency = 0);
+cudaError_t ProbeHashTblAsync(mgpu::context_t &compute_ctx, std::shared_ptr<std::shared_future<void>>* done, std::shared_ptr<output_it>* out, const HashTbl_t& ht, const input_it& in, std::shared_future<void>* dependency = 0);
 
 /// \brief Performs an async hash based inner join of columns a and b.
 ///
@@ -107,12 +117,10 @@ cudaError_t ProbeHashTblAsync(context_t &compute_ctx, std::shared_ptr<std::share
 /// \param[in] b second column to join
 /// \param[in] dependency optional dependency to wait for before this operation is started.
 template<typename input1_it, typename input2_it, typename output_it>
-cudaError_t InnerJoinHashAsync(context_t &compute_ctx, std::shared_ptr<std::shared_future<void>>* done, std::shared_ptr<output_it>* out, std::shared_ptr<HashTbl_t> ht, const input1_it& a, const input2_it& b, std::shared_future<void>* dependency = 0);
+cudaError_t InnerJoinHashAsync(mgpu::context_t &compute_ctx, std::shared_ptr<std::shared_future<void>>* done, std::shared_ptr<output_it>* out, std::shared_ptr<HashTbl_t> ht, const input1_it& a, const input2_it& b, std::shared_future<void>* dependency = 0);
 
 /// \brief Performs a hash based inner join of columns a and b, stores only rows that have matching values in columns a2 and b2, etc.
 /// 
-/// It is possible to pass in preallocated ArrayData, in which case new memory via the MemoryPool associated
-/// with handle is only allocated if the capacity of the passed in ArrayData container is not sufficient.
 /// \param[in] compute_ctx The CudaComputeContext to shedule this to.
 /// \param[out] out row references into a and b of matching rows
 /// \param[in] maximum size of the allocated output to avoid overflow
@@ -124,7 +132,7 @@ template<typename input_it,
 	 typename input2_it,
 	 typename input3_it,
 	 typename size_type>
-cudaError_t InnerJoinHash(context_t &compute_ctx, void **out, size_type *out_count, const size_type max_out_count,
+cudaError_t InnerJoinHash(mgpu::context_t &compute_ctx, void **out, size_type *out_count, const size_type max_out_count,
 			  const input_it a, const size_type a_count, const input_it b, const size_type b_count,
 			  std::shared_future<void>* dependency = 0,
 			  const input2_it a2 = (int*)NULL, const input2_it b2 = (int*)NULL,
@@ -173,8 +181,6 @@ cudaError_t InnerJoinHash(context_t &compute_ctx, void **out, size_type *out_cou
 
 /// \brief Performs a hash based left join of columns a and b.
 ///
-/// It is possible to pass in preallocated ArrayData, in which case new memory via the MemoryPool associated
-/// with handle is only allocated if the capacity of the passed in ArrayData container is not sufficient.
 /// \param[in] compute_ctx The CudaComputeContext to shedule this to.
 /// \param[out] out row references into a and b of matching rows
 /// \param[in] maximum size of the allocated output to avoid overflow
@@ -186,7 +192,7 @@ template<typename input_it,
 	 typename input2_it,
 	 typename input3_it,
 	 typename size_type>
-cudaError_t LeftJoinHash(context_t &compute_ctx, void **out, size_type *out_count, const size_type max_out_count,
+cudaError_t LeftJoinHash(mgpu::context_t &compute_ctx, void **out, size_type *out_count, const size_type max_out_count,
                           const input_it a, const size_type a_count, const input_it b, const size_type b_count,
                           std::shared_future<void>* dependency = 0,
 			  const input2_it a2 = (int*)NULL, const input2_it b2 = (int*)NULL,

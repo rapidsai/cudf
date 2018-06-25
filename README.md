@@ -41,9 +41,9 @@ This project uses cmake for building the C/C++ library.  To configure cmake,
 run:
 
 ```bash
-mkdir build                         # create build directory for out-of-source build
-cd build                            # enter the build directory
-CC=gcc-4.8 CXX=g++-4.8 cmake ..     # configure cmake with GCC 4.8 for ABI compatibility with libarrow binary
+mkdir build   # create build directory for out-of-source build
+cd build      # enter the build directory
+cmake ..      # configure cmake
 ```
 
 To build the C/C++ code, run `make`.  This should produce a shared library

@@ -1,21 +1,25 @@
-/* Copyright 2018 NVIDIA Corporation.  All rights reserved. */
+/*
+ * Copyright (c) 2018, NVIDIA CORPORATION.  All rights reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 
-#define JoinNoneValue 	(-1)
+constexpr int JoinNoneValue = -1;
 
 enum JoinType {
   INNER_JOIN,
   LEFT_JOIN,
 };
-
-#ifndef CUDA_RT_CALL
-#define CUDA_RT_CALL( call )                                                                       \
-{                                                                                                  \
-    cudaError_t cudaStatus = call;                                                                 \
-    if ( cudaSuccess != cudaStatus )                                                               \
-        fprintf(stderr, "ERROR: CUDA RT call \"%s\" in line %d of file %s failed with %s (%d).\n", \
-                        #call, __LINE__, __FILE__, cudaGetErrorString(cudaStatus), cudaStatus);    \
-}
-#endif
 
 #include "concurrent_unordered_multimap.cuh"
 #include <cub/cub.cuh>
@@ -32,6 +36,20 @@ __global__ void build_hash_tbl(
     if ( i < build_tbl_size ) {
       multi_map->insert( thrust::make_pair( build_tbl[i], i ) );
     }
+}
+
+template<typename size_type,
+	 typename joined_type>
+__inline__ __device__ void add_pair_to_cache(const size_type first, const size_type second, int *current_idx_shared, const int warp_id, joined_type *joined_shared)
+{
+  joined_type joined_val;
+  joined_val.first = first;
+  joined_val.second = second;
+
+  int my_current_idx = atomicAdd(current_idx_shared + warp_id, 1);
+
+  // its guaranteed to fit into the shared cache
+  joined_shared[my_current_idx] = joined_val;
 }
 
 template<
@@ -106,27 +124,14 @@ __global__ void probe_hash_tbl(
                     running = (end != it);
                 }
                 else {
-                    joined_type joined_val;
-                    joined_val.first = offset+i;
-                    joined_val.second = it->second;
-
-                    int my_current_idx = atomicAdd( current_idx_shared+warp_id, 1 );
-                    //its guaranteed to fit into the shared cache
-                    joined_shared[warp_id][my_current_idx] = joined_val;
+		    add_pair_to_cache(offset+i, it->second, current_idx_shared, warp_id, joined_shared[warp_id]);
 
                     ++it;
                     running = (end != it);
 		    found_match = true;
                 }
 		if ((join_type == LEFT_JOIN) && (!running) && (!found_match)) {
-		  // add (left, none) pair to the output
-                  joined_type joined_val;
-                  joined_val.first = offset+i;
-                  joined_val.second = JoinNoneValue;
-
-                  int my_current_idx = atomicAdd( current_idx_shared+warp_id, 1 );
-                  //its guaranteed to fit into the shared cache
-                  joined_shared[warp_id][my_current_idx] = joined_val;
+		  add_pair_to_cache(offset+i, JoinNoneValue, current_idx_shared, warp_id, joined_shared[warp_id]);
 		}
             }
 
