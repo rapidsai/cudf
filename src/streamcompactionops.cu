@@ -58,15 +58,28 @@ private:
 
 typedef repeat_iterator<thrust::detail::normal_iterator<thrust::device_ptr<gdf_valid_type> > > gdf_valid_iterator;
 
+size_t get_number_of_bytes_for_valid (size_t column_size) {
+    return sizeof(gdf_valid_type) * (column_size + GDF_VALID_BITSIZE - 1) / GDF_VALID_BITSIZE;
+}
 
 
 // note: functor inherits from unary_function
 struct modulus_bit_width : public thrust::unary_function<gdf_size_type,gdf_size_type>
 {
+	size_t n_bytes;
+	size_t column_size;
+	
+	modulus_bit_width (size_t b_nytes, size_t column_size) {
+		this->n_bytes = n_bytes;
+		this->column_size = column_size;
+	}
 	__host__ __device__
 	gdf_size_type operator()(gdf_size_type x) const
 	{
-		return x % GDF_VALID_BITSIZE;
+		int col_position = x / 8;	
+        int length_col = n_bytes != col_position+1 ? GDF_VALID_BITSIZE : column_size - GDF_VALID_BITSIZE * (n_bytes - 1);
+		//return x % GDF_VALID_BITSIZE;
+		return (length_col - 1) - (x % 8);
 		// x << 
 	}
 };
@@ -111,21 +124,33 @@ struct is_bit_set
 		return ((thrust::get<0>(value) >> position) & 1);
 	}
 };
-
+/*
+	//before
+	for(int i = 0; i < column->size; i++){
+		int col_position = i / 8;
+		int bit_offset = i % 8;
+	}
+	//now 
+	for(int i = 0; i < column->size; i++) {
+        int col_position =  i / 8;
+		// i = col_position * 8
+        int length_col = n_bytes != col_position+1 ? GDF_VALID_BITSIZE : column->size - GDF_VALID_BITSIZE * (n_bytes - 1);
+        int bit_offset =  (length_col - 1) - (i % 8);
+    }
+*/
 struct bit_mask_pack_op : public thrust::unary_function<int64_t,gdf_valid_type>
 {
-
 	__host__ __device__
 		gdf_valid_type operator()(const int64_t expanded)
 		{
-		gdf_valid_type result = 0;
-		 for(int i = 0; i < GDF_VALID_BITSIZE; i++){
-			 unsigned char byte = (expanded >> (i * 8));
-			 result |= (byte & 1) << i;
-		 }
-		 return result;
+			gdf_valid_type result = 0;
+			for(int i = 0; i < GDF_VALID_BITSIZE; i++){
+				// 0, 8, 16, ....,48,  56
+				unsigned char byte = (expanded >> ( (GDF_VALID_BITSIZE - 1 - i )  * 8));
+				result |= (byte & 1) << i;
+			}
+			return (result);
 		}
-
 };
 
 /*
@@ -140,7 +165,8 @@ std::map<gdf_dtype, int16_t> column_type_width = {{GDF_INT8, sizeof(int8_t)}, {G
 //because applying a stencil only needs to know the WIDTH of a type for copying to output, we won't be making a bunch of templated version to store this but rather
 //storing a map from gdf_type to width
 gdf_error gpu_apply_stencil(gdf_column *lhs, gdf_column * stencil, gdf_column * output){
-	//TODO: add a rquire here that output and lhs are the same size
+	//OK: add a rquire here that output and lhs are the same size
+	GDF_REQUIRE(output->size == lhs->size, GDF_COLUMN_SIZE_MISMATCH);
 
 
 	//find the width in bytes of this data type
@@ -153,8 +179,9 @@ gdf_error gpu_apply_stencil(gdf_column *lhs, gdf_column * stencil, gdf_column * 
 	cudaStream_t stream;
 	cudaStreamCreate(&stream);
 
+	size_t n_bytes = get_number_of_bytes_for_valid(stencil->size);
 
-	bit_position_iterator bit_position_iter(thrust::make_counting_iterator<gdf_size_type>(0), modulus_bit_width());
+	bit_position_iterator bit_position_iter(thrust::make_counting_iterator<gdf_size_type>(0), modulus_bit_width(n_bytes, stencil->size));
 	gdf_valid_iterator valid_iterator(thrust::detail::make_normal_iterator(thrust::device_pointer_cast(stencil->valid)),GDF_VALID_BITSIZE);
 	//TODO: can probably make this happen with some kind of iterator so it can work on any width size
 
@@ -170,7 +197,7 @@ gdf_error gpu_apply_stencil(gdf_column *lhs, gdf_column * stencil, gdf_column * 
 					valid_iterator,
 					thrust::make_transform_iterator<modulus_bit_width, thrust::counting_iterator<gdf_size_type> >(
 							thrust::make_counting_iterator<gdf_size_type>(0),
-							modulus_bit_width())
+							modulus_bit_width(n_bytes, stencil->size))
 			));
 
 	//NOTE!!!! the output column is getting set to a specific size  but we are NOT compacting the allocation,
@@ -231,7 +258,7 @@ gdf_error gpu_apply_stencil(gdf_column *lhs, gdf_column * stencil, gdf_column * 
 					valid_iterator,
 					thrust::make_transform_iterator<modulus_bit_width, thrust::counting_iterator<gdf_size_type> >(
 							thrust::make_counting_iterator<gdf_size_type>(0),
-							modulus_bit_width())
+							modulus_bit_width(n_bytes, stencil->size))
 			)
 	);
 
@@ -265,11 +292,6 @@ gdf_error gpu_apply_stencil(gdf_column *lhs, gdf_column * stencil, gdf_column * 
 	return GDF_SUCCESS;
 
 }
-
-auto get_number_of_bytes_for_valid (size_t column_size) -> size_t {
-    return sizeof(gdf_valid_type) * (column_size + GDF_VALID_BITSIZE - 1) / GDF_VALID_BITSIZE;
-}
-
 
 size_t  valid_left_length(gdf_column *column) {
     int  n_bytes = get_number_of_bytes_for_valid(column->size);
@@ -399,15 +421,19 @@ gdf_error gpu_concat(gdf_column *lhs, gdf_column *rhs, gdf_column *output)
 	
 	int lnbytes = get_number_of_bytes_for_valid(lhs->size);
 	int rnbytes = get_number_of_bytes_for_valid(rhs->size);
-    if (lnbytes > 1) {
+  
+	if (lnbytes > 1) {
 		cudaMemcpyAsync(output->valid, lhs->valid, sizeof(gdf_valid_type) * (lnbytes - 1), cudaMemcpyDeviceToDevice, stream);
 	}
-    int last_char_index = sizeof(gdf_valid_type) * lnbytes - 1;
+	int last_char_index = sizeof(gdf_valid_type) * lnbytes - 1;
 	gdf_valid_type* left_char = new gdf_valid_type[1];
 	cudaError_t error = cudaMemcpyAsync(left_char, &lhs->valid[last_char_index], sizeof(gdf_valid_type), cudaMemcpyDeviceToHost, stream);
-		
 	size_t len_prev = valid_left_length(lhs);
-    if (rhs->size > 0) {
+
+	if (lnbytes == 0) {
+        cudaMemcpyAsync(output->valid, rhs->valid, sizeof(gdf_valid_type) * rnbytes, cudaMemcpyDeviceToDevice, stream);
+    }
+    else if (rhs->size > 0) {
 		gdf_column rhs_host = *rhs;
         rhs_host.valid = gdf_valid_from_device(rhs, stream);
         gdf_valid_type * host_output_valid = new gdf_valid_type[rnbytes];
@@ -416,9 +442,12 @@ gdf_error gpu_concat(gdf_column *lhs, gdf_column *rhs, gdf_column *output)
  			std::memcpy ( host_output_valid + sizeof(gdf_valid_type) * (iter - 1) , &result, sizeof(gdf_valid_type));
         });
 		cudaMemcpyAsync(output->valid + sizeof(gdf_valid_type) * (lnbytes - 1), host_output_valid, iter.number_of_calls, cudaMemcpyHostToDevice, stream);
+	
 		delete [] host_output_valid;
-	}
-	delete []left_char;
+		delete [] left_char;
+	} else if (lnbytes == 1){
+		cudaMemcpyAsync(output->valid, lhs->valid, sizeof(gdf_valid_type), cudaMemcpyDeviceToDevice, stream);
+    }
 	cudaStreamSynchronize(stream);
 	cudaStreamDestroy(stream);
 	return GDF_SUCCESS;
