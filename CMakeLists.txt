@@ -50,6 +50,9 @@ cuda_add_library(gdf SHARED
     src/bitmaskops.cu
 	src/streamcompactionops.cu
     src/datetimeops.cu
+    src/sqls_ops.cu
+	src/hashops.cu
+	src/windowedops.cu
 )
 if (NOT arrow)
     set(ARROW_ROOT ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/arrow/cpp)

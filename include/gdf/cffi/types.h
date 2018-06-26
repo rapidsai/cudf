@@ -11,7 +11,8 @@ typedef enum {
     GDF_FLOAT32,
     GDF_FLOAT64,
 	GDF_DATE32,
-	GDF_DATE64
+	GDF_DATE64,
+    N_GDF_TYPES, /* additional types should go BEFORE N_GDF_TYPES */
 } gdf_dtype;
 
 typedef enum {
