@@ -13,8 +13,6 @@
 #include <thrust/device_vector.h>
 #include "bitmaskops.h"
 
-//std lib
-#include <map>
 
 
 

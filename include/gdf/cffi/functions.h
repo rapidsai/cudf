@@ -432,6 +432,14 @@ gdf_error gpu_comparison(gdf_column *lhs, gdf_column *rhs, gdf_column *output,gd
 //takes a stencil and uses it to compact a colum e.g. remove all values for which the stencil = 0
 gdf_error gpu_apply_stencil(gdf_column *lhs, gdf_column * stencil, gdf_column * output);
 
+/*
+ * Hashing
+ */
+class cudaStream_t;
+gdf_error gpu_hash_columns(gdf_column ** columns_to_hash, int num_columns, gdf_column * output_column, cudaStream_t * stream);
 
+/*
+ * gdf introspection utlities
+ */
 
-
+gdf_error get_column_byte_width(gdf_column * col, int & width);

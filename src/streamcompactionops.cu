@@ -106,17 +106,12 @@ struct bit_mask_pack_op : public thrust::unary_function<int64_t,gdf_valid_type>
 
 };
 
-/*
-damn im passing out, ok how im going to do this, ill derefence the fucking entire character, offsetting with the iterator i make however the fuck that works right?
-		then i will make it so that i zip a counting iterator as well and use that counting iterator to figure out which bit to and
-		i think something like a repeat iterator or somethign else will suffce
 
- */
 
-std::map<gdf_dtype, int16_t> column_type_width = {{GDF_INT8, sizeof(int8_t)}, {GDF_INT16, sizeof(int16_t)},{GDF_INT32, sizeof(int32_t)}, {GDF_INT64, sizeof(int64_t)},
-		{GDF_FLOAT32, sizeof(float)}, {GDF_FLOAT64, sizeof(double)} };
 //because applying a stencil only needs to know the WIDTH of a type for copying to output, we won't be making a bunch of templated version to store this but rather
 //storing a map from gdf_type to width
+//TODO: add a way for the space where we store temp bitmaps for compaction be allocated
+//on the outside
 gdf_error gpu_apply_stencil(gdf_column *lhs, gdf_column * stencil, gdf_column * output){
 	//TODO: add a rquire here that output and lhs are the same size
 
