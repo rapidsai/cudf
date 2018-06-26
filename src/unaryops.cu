@@ -317,83 +317,22 @@ struct DeviceCast {
 gdf_error gdf_cast_##VFROM##_to_##VTO(gdf_column *input, gdf_column *output)  \
 { return UnaryOp<TFROM, TTO, DeviceCast<TFROM, TTO> >::launch(input, output); }
 
+#define DEF_CAST_IMPL_TEMPLATE(ABREV, PHYSICAL_TYPE)  \
+DEF_CAST_OP(ABREV) \
+DEF_CAST_IMPL(i8,        ABREV,  int8_t, PHYSICAL_TYPE) \
+DEF_CAST_IMPL(i32,       ABREV, int32_t, PHYSICAL_TYPE) \
+DEF_CAST_IMPL(i64,       ABREV, int64_t, PHYSICAL_TYPE) \
+DEF_CAST_IMPL(f32,       ABREV,   float, PHYSICAL_TYPE) \
+DEF_CAST_IMPL(f64,       ABREV,  double, PHYSICAL_TYPE) \
+DEF_CAST_IMPL(date32,    ABREV, int32_t, PHYSICAL_TYPE) \
+DEF_CAST_IMPL(date64,    ABREV, int64_t, PHYSICAL_TYPE) \
+DEF_CAST_IMPL(timestamp, ABREV, int64_t, PHYSICAL_TYPE)
 
-DEF_CAST_OP(f32)
-DEF_CAST_IMPL(i8,        f32,  int8_t, float)
-DEF_CAST_IMPL(i32,       f32, int32_t, float)
-DEF_CAST_IMPL(i64,       f32, int64_t, float)
-DEF_CAST_IMPL(f32,       f32,   float, float)
-DEF_CAST_IMPL(f64,       f32,  double, float)
-DEF_CAST_IMPL(date32,    f32, int32_t, float)
-DEF_CAST_IMPL(date64,    f32, int64_t, float)
-DEF_CAST_IMPL(timestamp, f32, int64_t, float)
-
-DEF_CAST_OP(f64)
-DEF_CAST_IMPL(i8,        f64,  int8_t, double)
-DEF_CAST_IMPL(i32,       f64, int32_t, double)
-DEF_CAST_IMPL(i64,       f64, int64_t, double)
-DEF_CAST_IMPL(f32,       f64,   float, double)
-DEF_CAST_IMPL(f64,       f64,  double, double)
-DEF_CAST_IMPL(date32,    f64, int32_t, double)
-DEF_CAST_IMPL(date64,    f64, int64_t, double)
-DEF_CAST_IMPL(timestamp, f64, int64_t, double)
-
-DEF_CAST_OP(i8)
-DEF_CAST_IMPL(i8,        i8,  int8_t, int8_t)
-DEF_CAST_IMPL(i32,       i8, int32_t, int8_t)
-DEF_CAST_IMPL(i64,       i8, int64_t, int8_t)
-DEF_CAST_IMPL(f32,       i8,   float, int8_t)
-DEF_CAST_IMPL(f64,       i8,  double, int8_t)
-DEF_CAST_IMPL(date32,    i8, int32_t, int8_t)
-DEF_CAST_IMPL(date64,    i8, int64_t, int8_t)
-DEF_CAST_IMPL(timestamp, i8, int64_t, int8_t)
-
-DEF_CAST_OP(i32)
-DEF_CAST_IMPL(i8,        i32,  int8_t, int32_t)
-DEF_CAST_IMPL(i32,       i32, int32_t, int32_t)
-DEF_CAST_IMPL(i64,       i32, int64_t, int32_t)
-DEF_CAST_IMPL(f32,       i32,   float, int32_t)
-DEF_CAST_IMPL(f64,       i32,  double, int32_t)
-DEF_CAST_IMPL(date32,    i32, int32_t, int32_t)
-DEF_CAST_IMPL(date64,    i32, int64_t, int32_t)
-DEF_CAST_IMPL(timestamp, i32, int64_t, int32_t)
-
-DEF_CAST_OP(i64)
-DEF_CAST_IMPL(i8,        i64,  int8_t, int64_t)
-DEF_CAST_IMPL(i32,       i64, int32_t, int64_t)
-DEF_CAST_IMPL(i64,       i64, int64_t, int64_t)
-DEF_CAST_IMPL(f32,       i64,   float, int64_t)
-DEF_CAST_IMPL(f64,       i64,  double, int64_t)
-DEF_CAST_IMPL(date32,    i64, int32_t, int64_t)
-DEF_CAST_IMPL(date64,    i64, int64_t, int64_t)
-DEF_CAST_IMPL(timestamp, i64, int64_t, int64_t)
-
-DEF_CAST_OP(date32)
-DEF_CAST_IMPL(i8,        date32,  int8_t, int32_t)
-DEF_CAST_IMPL(i32,       date32, int32_t, int32_t)
-DEF_CAST_IMPL(i64,       date32, int64_t, int32_t)
-DEF_CAST_IMPL(f32,       date32,   float, int32_t)
-DEF_CAST_IMPL(f64,       date32,  double, int32_t)
-DEF_CAST_IMPL(date32,    date32, int32_t, int32_t)
-DEF_CAST_IMPL(date64,    date32, int64_t, int32_t)
-DEF_CAST_IMPL(timestamp, date32, int64_t, int32_t)
-
-DEF_CAST_OP(date64)
-DEF_CAST_IMPL(i8,        date64,  int8_t, int64_t)
-DEF_CAST_IMPL(i32,       date64, int32_t, int64_t)
-DEF_CAST_IMPL(i64,       date64, int64_t, int64_t)
-DEF_CAST_IMPL(f32,       date64,   float, int64_t)
-DEF_CAST_IMPL(f64,       date64,  double, int64_t)
-DEF_CAST_IMPL(date32,    date64, int32_t, int64_t)
-DEF_CAST_IMPL(date64,    date64, int64_t, int64_t)
-DEF_CAST_IMPL(timestamp, date64, int64_t, int64_t)
-
-DEF_CAST_OP(timestamp)
-DEF_CAST_IMPL(i8,        timestamp,  int8_t, int64_t)
-DEF_CAST_IMPL(i32,       timestamp, int32_t, int64_t)
-DEF_CAST_IMPL(i64,       timestamp, int64_t, int64_t)
-DEF_CAST_IMPL(f32,       timestamp,   float, int64_t)
-DEF_CAST_IMPL(f64,       timestamp,  double, int64_t)
-DEF_CAST_IMPL(date32,    timestamp, int32_t, int64_t)
-DEF_CAST_IMPL(date64,    timestamp, int64_t, int64_t)
-DEF_CAST_IMPL(timestamp, timestamp, int64_t, int64_t)
+DEF_CAST_IMPL_TEMPLATE(f32, float)
+DEF_CAST_IMPL_TEMPLATE(f64, double)
+DEF_CAST_IMPL_TEMPLATE(i8, int8_t)
+DEF_CAST_IMPL_TEMPLATE(i32, int32_t)
+DEF_CAST_IMPL_TEMPLATE(i64, int64_t)
+DEF_CAST_IMPL_TEMPLATE(date32, int32_t)
+DEF_CAST_IMPL_TEMPLATE(date64, int64_t)
+DEF_CAST_IMPL_TEMPLATE(timestamp, int64_t)
