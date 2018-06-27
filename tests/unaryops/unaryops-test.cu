@@ -12,21 +12,21 @@
 #include <gdf/gdf.h>
 #include <gdf/cffi/functions.h>
 
-// For all the other datatypes bigger than char, the maximum value (that fits into all types) will be std::numeric_limits<short>::max() 
-template<typename T>
-void fill_with_random_values(std::vector<T>& input, size_t size)
+// Generates random values between 0 and the maximum possible value of the data type with the minimum max() value
+template<typename TOUT, typename TFROM>
+void fill_with_random_values(std::vector<TFROM>& input, size_t size)
 {
 	std::random_device rd;
 	std::default_random_engine eng(rd());
 	std::uniform_real_distribution<float> floating_dis;
 
-	if(sizeof(T) == sizeof(gdf_valid_type))
-		floating_dis = std::uniform_real_distribution<float>(0, std::numeric_limits<gdf_valid_type>::max());
+	if( std::numeric_limits<TFROM>::max() < std::numeric_limits<TOUT>::max() )
+		floating_dis = std::uniform_real_distribution<float>(0, std::numeric_limits<TFROM>::max());
 	else
-		floating_dis = std::uniform_real_distribution<float>(0, std::numeric_limits<short>::max());
+		floating_dis = std::uniform_real_distribution<float>(0, std::numeric_limits<TOUT>::max());
 
 	std::generate(input.begin(), input.end(), [floating_dis, eng]() mutable {
-		return static_cast<T>(floating_dis(eng));
+		return static_cast<TFROM>(floating_dis(eng));
 	});
 }
 
@@ -64,7 +64,7 @@ gdf_error gdf_host_cast_##VFROM##_to_##VTO(gdf_column *input, gdf_column *output
 		outputCol.size = colSize;												\
 																				\
 		std::vector<TFROM> inputData(colSize);									\
-		fill_with_random_values(inputData, colSize);							\
+		fill_with_random_values<TTO, TFROM>(inputData, colSize);				\
 																				\
 		thrust::device_vector<TFROM> intputDataDev(inputData);					\
 		thrust::device_vector<TTO> outDataDev(colSize);							\
@@ -144,7 +144,7 @@ DEF_CAST_TYPE_TEST(timestamp, GDF_TIMESTAMP, int64_t)
 		originalOutputCol.size = colSize;										\
 																				\
 		std::vector<TFROM> inputData(colSize);									\
-		fill_with_random_values(inputData, colSize);							\
+		fill_with_random_values<TTO, TFROM>(inputData, colSize);				\
 																				\
 		thrust::device_vector<TFROM> intputDataDev(inputData);					\
 		thrust::device_vector<TTO> outDataDev(colSize);							\
