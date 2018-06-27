@@ -18,16 +18,29 @@ void fill_with_random_values(std::vector<TFROM>& input, size_t size)
 {
 	std::random_device rd;
 	std::default_random_engine eng(rd());
-	std::uniform_real_distribution<float> floating_dis;
 
-	if( std::numeric_limits<TFROM>::max() < std::numeric_limits<TOUT>::max() )
-		floating_dis = std::uniform_real_distribution<float>(0, std::numeric_limits<TFROM>::max());
-	else
-		floating_dis = std::uniform_real_distribution<float>(0, std::numeric_limits<TOUT>::max());
+	if (sizeof(TOUT) > 8 || sizeof(TFROM) > 8){
+		std::uniform_real_distribution<double> floating_dis;
+		if( std::numeric_limits<TFROM>::max() < std::numeric_limits<TOUT>::max() )
+			floating_dis = std::uniform_real_distribution<double>(std::numeric_limits<TFROM>::min(), std::numeric_limits<TFROM>::max());
+		else
+			floating_dis = std::uniform_real_distribution<double>(std::numeric_limits<TOUT>::min(), std::numeric_limits<TOUT>::max());
 
-	std::generate(input.begin(), input.end(), [floating_dis, eng]() mutable {
-		return static_cast<TFROM>(floating_dis(eng));
-	});
+		std::generate(input.begin(), input.end(), [floating_dis, eng]() mutable {
+			return static_cast<TFROM>(floating_dis(eng));
+		});
+	} else {
+		std::uniform_real_distribution<float> floating_dis;
+		if( std::numeric_limits<TFROM>::max() < std::numeric_limits<TOUT>::max() )
+			floating_dis = std::uniform_real_distribution<float>(std::numeric_limits<TFROM>::min(), std::numeric_limits<TFROM>::max());
+		else
+			floating_dis = std::uniform_real_distribution<float>(std::numeric_limits<TOUT>::min(), std::numeric_limits<TOUT>::max());
+
+		std::generate(input.begin(), input.end(), [floating_dis, eng]() mutable {
+			return static_cast<TFROM>(floating_dis(eng));
+		});
+	}
+
 }
 
 // CPU casting
