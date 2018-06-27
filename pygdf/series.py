@@ -720,15 +720,13 @@ class Series(object):
 
 
     def value_count(self):
-        """Returns unique values of this Series and their count in a new dataframe
+        """Returns unique values of this Series.
         """
-        vc_df = dataframe.DataFrame()
         if self.null_count == len(self):
             return 0
-        res = Series(self._column.value_count())
-        vc_df.add_column('index', self.unique())
-        vc_df.add_column('value_count', res)
-        return vc_df.set_index('index')
+        vals, cnts = self._column.value_count()
+        res = Series(cnts, index=GenericIndex(vals))
+        return res
 
     def scale(self):
         """Scale values to [0, 1] in float64

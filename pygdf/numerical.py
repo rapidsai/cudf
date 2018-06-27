@@ -151,8 +151,12 @@ class NumericalColumn(columnops.TypedColumnBase):
 
     def value_count(self):
         segs, sortedvals = self._unique_segments()
-        out = cudautils.value_count(segs, len(sortedvals))
-        return self.replace(data=Buffer(out), mask=None)
+        # Return both values and their counts
+        out1 = cudautils.gather(data=sortedvals, index=segs)
+        out2 = cudautils.value_count(segs, len(sortedvals))
+        out_vals = self.replace(data=Buffer(out1), mask=None)
+        out_counts = self.replace(data=Buffer(out2), mask=None)
+        return out_vals, out_counts
 
     def all(self):
         return bool(self.min())
