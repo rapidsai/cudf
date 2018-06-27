@@ -1,3 +1,5 @@
+# Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved. (Apache)
+
 import numpy as np
 
 from numba import cuda, int32, numpy_support

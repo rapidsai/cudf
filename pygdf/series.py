@@ -1,3 +1,5 @@
+# Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved. (Apache)
+
 from __future__ import print_function, division
 
 import warnings
