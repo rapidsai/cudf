@@ -620,6 +620,21 @@ def find_segments(arr, segs=None, markers=None):
 
 
 @cuda.jit
+def gpu_value_counts(arr, counts, total_size):
+    i = cuda.grid(1)
+    if 0 <= i < arr.size - 1:
+        counts[i] = arr[i+1] - arr[i]
+    elif i == arr.size - 1:
+        counts[i] = total_size - arr[i]
+
+
+def value_count(arr, total_size):
+    counts = cuda.device_array(shape=len(arr), dtype=np.intp)
+    gpu_value_counts.forall(arr.size)(arr, counts, total_size)
+    return counts
+
+
+@cuda.jit
 def gpu_recode(newdata, data, record_table, na_value):
     for i in range(cuda.threadIdx.x, data.size, cuda.blockDim.x):
         val = data[i]

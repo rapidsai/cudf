@@ -7,6 +7,7 @@ from numbers import Number
 import numpy as np
 
 from . import cudautils, formatting
+from . import dataframe
 from .buffer import Buffer
 from .index import Index, RangeIndex, GenericIndex
 from .settings import NOTSET, settings
@@ -707,6 +708,27 @@ class Series(object):
             return np.empty(0, dtype=self.dtype)
         res = self._column.unique()
         return Series(res)
+
+    def unique_count(self):
+        """Returns the number of unique valies of the Series: approximate version,
+        and exact version to be moved to libgdf
+        """
+        if self.null_count == len(self):
+            return 0
+        return self._column.unique_count()
+        # return len(self._column.unique())
+
+
+    def value_count(self):
+        """Returns unique values of this Series and their count in a new dataframe
+        """
+        vc_df = dataframe.DataFrame()
+        if self.null_count == len(self):
+            return 0
+        res = Series(self._column.value_count())
+        vc_df.add_column('index', self.unique())
+        vc_df.add_column('value_count', res)
+        return vc_df.set_index('index')
 
     def scale(self):
         """Scale values to [0, 1] in float64

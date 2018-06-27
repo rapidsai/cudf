@@ -128,16 +128,30 @@ class NumericalColumn(columnops.TypedColumnBase):
     def to_pandas(self, index=None):
         return pd.Series(self.to_array(fillna='pandas'), index=index)
 
-    def unique(self):
+    def _unique_segments(self):
+        """ Common code for unique, unique_count and value_counts"""
         # make dense column
         densecol = self.replace(data=self.to_dense_buffer(), mask=None)
         # sort the column
         sortcol, _ = densecol.sort_by_values(ascending=True)
         # find segments
         sortedvals = sortcol.to_gpu_array()
-        segs, _ = cudautils.find_segments(sortedvals)
+        segs, begins = cudautils.find_segments(sortedvals)
+        return segs, sortedvals
+
+    def unique(self):
+        segs, sortedvals = self._unique_segments()
         # gather result
         out = cudautils.gather(data=sortedvals, index=segs)
+        return self.replace(data=Buffer(out), mask=None)
+
+    def unique_count(self):
+        segs, _ = self._unique_segments()
+        return len(segs)
+
+    def value_count(self):
+        segs, sortedvals = self._unique_segments()
+        out = cudautils.value_count(segs, len(sortedvals))
         return self.replace(data=Buffer(out), mask=None)
 
     def all(self):
