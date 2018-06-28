@@ -59,6 +59,10 @@ mgpu::mem_t<size_type> join_hash(col1_it a, size_type a_count,
       return join_hash<join_type>(b, b_count, a, a_count, b2, a2, b3, a3, comp, context, estimated_join_count, true);
   }
 
+  // get device id
+  int dev_ordinal;
+  CUDA_RT_CALL( cudaGetDevice(&dev_ordinal) );
+
   // allocate a counter
   size_type *d_joined_idx, *h_joined_idx;
   CUDA_RT_CALL( cudaMalloc(&d_joined_idx, sizeof(size_type)) );
@@ -77,7 +81,7 @@ mgpu::mem_t<size_type> join_hash(col1_it a, size_type a_count,
   while (cont) {
     // allocate an output buffer to store pairs, prefetch the estimated output size
     CUDA_RT_CALL( cudaMallocManaged(&joined, sizeof(joined_type) * joined_size) );
-    CUDA_RT_CALL( cudaMemPrefetchAsync(joined, sizeof(joined_type) * joined_size, 0) ); // FIXME: use GPU device id from the context?
+    CUDA_RT_CALL( cudaMemPrefetchAsync(joined, sizeof(joined_type) * joined_size, dev_ordinal) );
 
     // reset the counter
     CUDA_RT_CALL( cudaMemsetAsync(d_joined_idx, 0, sizeof(size_type), 0) );
@@ -105,9 +109,12 @@ mgpu::mem_t<size_type> join_hash(col1_it a, size_type a_count,
   mgpu::mem_t<size_type> output(2 * (*h_joined_idx), context);
   pairs_to_decoupled(output, (*h_joined_idx), joined, context, flip_indices);
 
-  // free memory used for counters
+  // free memory used for the counters
   CUDA_RT_CALL( cudaFree(d_joined_idx) );
   CUDA_RT_CALL( cudaFreeHost(h_joined_idx) );
+
+  // free memory used for the join output
+  CUDA_RT_CALL( cudaFree(joined) );
 
   return output;
 }
