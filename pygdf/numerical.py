@@ -158,7 +158,7 @@ class NumericalColumn(columnops.TypedColumnBase):
         segs, _ = self._unique_segments()
         return len(segs)
 
-    def value_count(self, type='sort'):
+    def value_counts(self, type='sort'):
         if type is not 'sort':
             msg = 'non sort based value_count() not implemented yet'
             raise NotImplementedError(msg)

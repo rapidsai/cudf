@@ -727,7 +727,7 @@ class Series(object):
         # return len(self._column.unique())
 
 
-    def value_count(self, type='sort'):
+    def value_counts(self, type='sort'):
         """Returns unique values of this Series.
         """
         if type is not 'sort':
