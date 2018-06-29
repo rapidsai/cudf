@@ -12,10 +12,12 @@
 template <typename LeftValueType, typename RightValueType>
 void test_filterops_using_templates(gdf_comparison_operator gdf_operator = GDF_EQUALS)
 {
-    for (int column_size = 0; column_size < 100; column_size += 3)
+    //0, ..., 100,
+    //100, 10000, 10000, 100000
+    for (int column_size = 0; column_size < 10; column_size += 1)
     {
         const int max_size = 8;
-        for (int init_value = 0; init_value <= 0; init_value++)
+        for (int init_value = 0; init_value <= 1; init_value++)
         {
             gdf_column lhs = gen_gdb_column<LeftValueType>(column_size, init_value); // 4, 2, 0
             // lhs.null_count = 2;
@@ -39,6 +41,7 @@ void test_filterops_using_templates(gdf_comparison_operator gdf_operator = GDF_E
 
             check_column_for_comparison_operation<LeftValueType, RightValueType>(&lhs, &rhs, &output, gdf_operator);
 
+            /// lhs.dtype === rhs.dtype
             gpu_apply_stencil(&lhs, &output, &rhs);
 
             check_column_for_stencil_operation<LeftValueType, RightValueType>(&lhs, &output, &rhs);

@@ -146,17 +146,17 @@ auto print_column(gdf_column * column) -> void {
     auto host_valid_out = get_gdf_valid_from_device(column);
     std::cout<<"Printing Column\t null_count:" << column->null_count << "\t type " << column->dtype <<  std::endl;
     int  n_bytes =  sizeof(int8_t) * (column->size + GDF_VALID_BITSIZE - 1) / GDF_VALID_BITSIZE;
-    for(int i = 0; i < column->size; i++) {
-        int col_position =  i / 8;
-        int length_col = n_bytes != col_position+1 ? GDF_VALID_BITSIZE : column->size - GDF_VALID_BITSIZE * (n_bytes - 1);
-        int bit_offset =  (length_col - 1) - (i % 8);
-        if (sizeof(ValueType) == 1) {
-            std::cout << "host_out[" << i << "] = " << ((int)host_out[i])<<" valid="<<((host_valid_out[col_position] >> bit_offset ) & 1)<<std::endl;
+    // for(int i = 0; i < column->size; i++) {
+    //     int col_position =  i / 8;
+    //     int length_col = n_bytes != col_position+1 ? GDF_VALID_BITSIZE : column->size - GDF_VALID_BITSIZE * (n_bytes - 1);
+    //     int bit_offset =  (length_col - 1) - (i % 8);
+    //     if (sizeof(ValueType) == 1) {
+    //         std::cout << "host_out[" << i << "] = " << ((int)host_out[i])<<" valid="<<((host_valid_out[col_position] >> bit_offset ) & 1)<<std::endl;
 
-        } else {
-            std::cout << "host_out[" << i << "] = " << ((ValueType)host_out[i])<<" valid="<<((host_valid_out[col_position] >> bit_offset ) & 1)<<std::endl;
-        }
-    }
+    //     } else {
+    //         std::cout << "host_out[" << i << "] = " << ((ValueType)host_out[i])<<" valid="<<((host_valid_out[col_position] >> bit_offset ) & 1)<<std::endl;
+    //     }
+    // }
     for (int i = 0; i < n_bytes; i++) {
         int length = n_bytes != i+1 ? GDF_VALID_BITSIZE : column->size - GDF_VALID_BITSIZE * (n_bytes - 1);
         print_binary(host_valid_out[i], length);
@@ -171,18 +171,22 @@ gdf_column gen_gdb_column(size_t column_size, ValueType init_value)
     char *raw_pointer;
     auto gdf_enum_type_value =  gdf_enum_type_for<ValueType>();
     thrust::device_ptr<ValueType> device_pointer;
+   // std::cout << "0. gen_gdb_column\n";     
     std::tie(raw_pointer, device_pointer) = init_device_vector<char, ValueType>(column_size);
-
+   // std::cout << "1. gen_gdb_column\n"; 
+    
     using thrust::detail::make_normal_iterator;
     thrust::fill(make_normal_iterator(device_pointer), make_normal_iterator(device_pointer + column_size), init_value);
-
+    //std::cout << "2. gen_gdb_column\n"; 
+    
     gdf_valid_type *host_valid = gen_gdf_valid(column_size, init_value);
     size_t n_bytes = get_number_of_bytes_for_valid(column_size);
 
     gdf_valid_type *valid_value_pointer;
     cudaMalloc((void **)&valid_value_pointer, n_bytes);
     cudaMemcpy(valid_value_pointer, host_valid, n_bytes, cudaMemcpyHostToDevice);
-
+   // std::cout << "3. gen_gdb_column\n"; 
+    
     gdf_column output;
     auto zero_bits = output.null_count = count_zero_bits(host_valid, column_size);
 
@@ -191,6 +195,8 @@ gdf_column gen_gdb_column(size_t column_size, ValueType init_value)
                              column_size,
                              gdf_enum_type_value,
                              zero_bits);
+    //std::cout << "4. gen_gdb_column\n"; 
+    
     delete []host_valid;
     return output;
 }
@@ -286,6 +292,10 @@ void check_column_for_concat_operation(gdf_column *lhs, gdf_column *rhs, gdf_col
         
         auto computed = gdf_valid_to_str(output_valid, output->size);
         auto expected = gdf_valid_to_str(lhs_valid, lhs->size) + gdf_valid_to_str(rhs_valid, rhs->size);
+
+        //std::cout << "computed: " <<  computed << std::endl;
+        //std::cout << "expected: " << expected << std::endl;
+
         delete[] lhs_valid;
         delete[] rhs_valid;
         delete[] output_valid;    

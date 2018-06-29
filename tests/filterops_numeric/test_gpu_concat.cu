@@ -123,6 +123,12 @@ TEST(GdfConcat, CaseWithInput_2_2_Output3)
     gdf_column rhs = gen_gdb_column<ValueType>(rhs_size, 3);
     gdf_column output = gen_gdb_column<ValueType>(lhs_size + rhs_size, 0);
 
+    std::cout << "*****left**************\n";
+    print_column(&lhs);
+    std::cout << "*****right**************\n";
+    print_column(&rhs);
+    std::cout << "*******************\n";
+
     gpu_concat(&lhs, &rhs, &output);
     check_column_for_concat_operation<ValueType>(&lhs, &rhs, &output);
     delete_gdf_column(&lhs);
@@ -176,6 +182,12 @@ TEST(GdfConcat, CaseWithInput_1_4_Output5)
     std::cout << "*******************\n";
 
     gpu_concat(&lhs, &rhs, &output);
+
+
+  std::cout << "*****output**************\n";
+  print_column(&output);
+  std::cout << "*******************\n";
+
     check_column_for_concat_operation<ValueType>(&lhs, &rhs, &output);
 
     delete_gdf_column(&lhs);
@@ -218,12 +230,53 @@ TEST(GdfConcat, CaseWithInput_0_9_Output2)
     delete_gdf_column(&output);
 }
 
+TEST(GdfConcat, CaseWithInput_5_11_Output22)
+{
+    //  3 + 8, 8, 8, 7      // caso especial
+    //  3|5, 3|5, 3|5, 3|5, 2
+
+    // 100
+    //  10101111 10101111 10101111 10000 00
+    // 100 10101
+    //
+    //      11110101
+    //            11110101
+    //                11110000
+    //                        00
+
+    const size_t lhs_size = 5;
+    const size_t rhs_size = 8 + 5;
+
+    gdf_column lhs = gen_gdb_column<ValueType>(lhs_size, 2);
+    gdf_column rhs = gen_gdb_column<ValueType>(rhs_size, 3);
+    gdf_column output = gen_gdb_column<ValueType>(lhs_size + rhs_size, 0);
+    std::cout << "*****left**************\n";
+    print_column(&lhs);
+    std::cout << "*****right**************\n";
+    print_column(&rhs);
+    std::cout << "*******************\n";
+
+    gpu_concat(&lhs, &rhs, &output);
+    std::cout << "*****output**************\n";
+    print_column(&output);
+    std::cout << "*******************\n";
+
+    check_column_for_concat_operation<ValueType>(&lhs, &rhs, &output);
+
+    delete_gdf_column(&lhs);
+    delete_gdf_column(&rhs);
+    delete_gdf_column(&output);
+}
+
+
 TEST(GpuConcatTest, WithDifferentColumnSizes)
 {
     using ValueType = int16_t;
-    for (int lhs_size = 0; lhs_size < 10; lhs_size += 1)
+    //0, ..., 100,
+    //100, 10000, 10000, 100000
+    for (int lhs_size = 0; lhs_size < 100; lhs_size += 1)
     {
-        for (int rhs_size = 0; rhs_size < 10; rhs_size += 3)
+        for (int rhs_size = 0; rhs_size < 100; rhs_size += 1)
         {
             gdf_column lhs = gen_gdb_column<ValueType>(lhs_size, 2);
 
@@ -231,12 +284,6 @@ TEST(GpuConcatTest, WithDifferentColumnSizes)
 
             gdf_column output = gen_gdb_column<ValueType>(lhs_size + rhs_size, 0);
             gdf_error error = gpu_concat(&lhs, &rhs, &output);
-
-            // std::cout << "Left" << std::endl;
-            // print_column<ValueType>(&lhs);
-
-            // std::cout << "Right" << std::endl;
-            // print_column<ValueType>(&rhs);
 
             // std::cout << "Output" << std::endl;
             // print_column<ValueType>(&output);
