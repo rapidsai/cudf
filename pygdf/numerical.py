@@ -141,18 +141,27 @@ class NumericalColumn(columnops.TypedColumnBase):
         segs, begins = cudautils.find_segments(sortedvals)
         return segs, sortedvals
 
-    def unique(self, type='hash'):
+    def unique(self, type='sort'):
         # type variable will indicate what algorithm to use to calculate unique, not used right now
+        if type is not 'sort':
+            msg = 'non sort based unique() not implemented yet'
+            raise NotImplementedError(msg)
         segs, sortedvals = self._unique_segments()
         # gather result
         out = cudautils.gather(data=sortedvals, index=segs)
         return self.replace(data=Buffer(out), mask=None)
 
-    def unique_count(self, type='hash'):
+    def unique_count(self, type='sort'):
+        if type is not 'sort':
+            msg = 'non sort based unique_count() not implemented yet'
+            raise NotImplementedError(msg)
         segs, _ = self._unique_segments()
         return len(segs)
 
-    def value_count(self, type='hash'):
+    def value_count(self, type='sort'):
+        if type is not 'sort':
+            msg = 'non sort based value_count() not implemented yet'
+            raise NotImplementedError(msg)
         segs, sortedvals = self._unique_segments()
         # Return both values and their counts
         out1 = cudautils.gather(data=sortedvals, index=segs)
