@@ -735,7 +735,7 @@ class Series(object):
             raise NotImplementedError(msg)
         if self.null_count == len(self):
             return 0
-        vals, cnts = self._column.value_count(type=type)
+        vals, cnts = self._column.value_counts(type=type)
         res = Series(cnts, index=GenericIndex(vals))
         return res
 
