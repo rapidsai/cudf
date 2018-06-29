@@ -7,9 +7,13 @@
 #include <algorithm>
 
 #include <thrust/device_vector.h>
+#include <thrust/random.h>
+#include <thrust/transform.h>
+#include <thrust/iterator/counting_iterator.h>
 
 #include "gtest/gtest.h"
 #include <gdf/gdf.h>
+#include <gdf/utils.h>
 #include <gdf/cffi/functions.h>
 
 // Generates random values between 0 and the maximum possible value of the data type with the minimum max() value
@@ -40,7 +44,20 @@ void fill_with_random_values(std::vector<TFROM>& input, size_t size)
 			return static_cast<TFROM>(floating_dis(eng));
 		});
 	}
+}
 
+// Generates random bitmaps
+void fill_random_bitmap(std::vector<gdf_valid_type>& valid_input, size_t size)
+{
+	std::random_device rd;
+	std::default_random_engine eng(rd());
+
+	std::uniform_int_distribution<gdf_valid_type> int_dis;
+	int_dis = std::uniform_int_distribution<gdf_valid_type>(std::numeric_limits<gdf_valid_type>::min(), std::numeric_limits<gdf_valid_type>::max());
+
+	std::generate(valid_input.begin(), valid_input.end(), [int_dis, eng]() mutable {
+		return int_dis(eng);
+	});
 }
 
 // CPU casting
@@ -200,3 +217,125 @@ DEF_CAST_SWAP_TEST(f32, f64, GDF_FLOAT32, GDF_FLOAT64,  float, double)
 DEF_CAST_SWAP_TEST(date32, date64, GDF_DATE32, GDF_DATE64,  int32_t, int64_t)
 DEF_CAST_SWAP_TEST(date32, timestamp, GDF_DATE32, GDF_TIMESTAMP,  int32_t, int64_t)
 DEF_CAST_SWAP_TEST(date64, timestamp, GDF_DATE64, GDF_TIMESTAMP,  int64_t, int64_t)
+
+struct generateValidRandom
+{
+    __device__
+    gdf_valid_type operator () (int idx)
+    {
+        thrust::default_random_engine eng;
+        thrust::uniform_int_distribution<gdf_valid_type> int_dis;
+        eng.discard(idx);
+        return int_dis(eng);
+    }
+};
+
+TEST(gdf_unaryops_output_valid_TEST, checkingValidAndDtype) {
+
+	//The output datatype is set by the casting function
+	{
+		const int colSize = 1024;
+		gdf_column inputCol;
+		gdf_column outputCol;
+
+		inputCol.dtype = GDF_FLOAT32;
+		inputCol.size = colSize;
+		outputCol.size = colSize;
+
+		std::vector<float> inputData(colSize);
+		fill_with_random_values<double, float>(inputData, colSize);
+
+		thrust::device_vector<float> intputDataDev(inputData);
+		thrust::device_vector<double> outputDataDev(colSize);
+
+		inputCol.data = thrust::raw_pointer_cast(intputDataDev.data());
+		inputCol.valid = nullptr;
+		outputCol.data = thrust::raw_pointer_cast(outputDataDev.data());
+		outputCol.valid = nullptr;
+
+		gdf_error gdfError = gdf_cast_f32_to_f64(&inputCol, &outputCol);
+		EXPECT_TRUE( gdfError == GDF_SUCCESS );
+		EXPECT_TRUE( outputCol.dtype == GDF_FLOAT64 );
+	}
+
+	//The input and output valid bitmaps are equal
+	{
+		const int colSize = 1024;
+		gdf_column inputCol;
+		gdf_column outputCol;
+
+		inputCol.dtype = GDF_FLOAT32;
+		inputCol.size = colSize;
+		outputCol.dtype = GDF_FLOAT32;
+		outputCol.size = colSize;
+
+		std::vector<float> inputData(colSize);
+		fill_with_random_values<float, float>(inputData, colSize);
+
+		thrust::device_vector<float> intputDataDev(inputData);
+		thrust::device_vector<float> outputDataDev(colSize);
+
+		gdf_size_type num_chars_bitmask = gdf_get_num_chars_bitmask(inputCol.size);
+		thrust::device_vector<gdf_valid_type> inputValidDev(num_chars_bitmask);
+		thrust::device_vector<gdf_valid_type> outputValidDev(num_chars_bitmask);
+
+		thrust::transform(thrust::make_counting_iterator(static_cast<gdf_size_type>(0)), thrust::make_counting_iterator(num_chars_bitmask), inputValidDev.begin(), generateValidRandom());
+
+		inputCol.data = thrust::raw_pointer_cast(intputDataDev.data());
+		inputCol.valid = thrust::raw_pointer_cast(inputValidDev.data());
+		outputCol.data = thrust::raw_pointer_cast(outputDataDev.data());
+		outputCol.valid = thrust::raw_pointer_cast(outputValidDev.data());
+
+		gdf_error gdfError = gdf_cast_f32_to_f32(&inputCol, &outputCol);
+		EXPECT_TRUE( gdfError == GDF_SUCCESS );
+		EXPECT_TRUE( outputCol.dtype == GDF_FLOAT32 );
+
+		bool result = thrust::equal(inputValidDev.begin(), inputValidDev.end(), outputValidDev.begin());
+
+		EXPECT_TRUE( result == true );
+	}
+
+	//Testing with a colSize not divisible by 8
+	{
+		const int colSize = 1000;
+		gdf_column inputCol;
+		gdf_column outputCol;
+
+		inputCol.dtype = GDF_FLOAT32;
+		inputCol.size = colSize;
+		outputCol.dtype = GDF_FLOAT32;
+		outputCol.size = colSize;
+
+		std::vector<float> inputData(colSize);
+		fill_with_random_values<float, float>(inputData, colSize);
+
+		thrust::device_vector<float> intputDataDev(inputData);
+		thrust::device_vector<float> outputDataDev(colSize);
+
+		gdf_size_type num_chars_bitmask = gdf_get_num_chars_bitmask(inputCol.size);
+		thrust::device_vector<gdf_valid_type> inputValidDev(num_chars_bitmask);
+		thrust::device_vector<gdf_valid_type> outputValidDev(num_chars_bitmask);
+
+		thrust::transform(thrust::make_counting_iterator(static_cast<gdf_size_type>(0)), thrust::make_counting_iterator(num_chars_bitmask), inputValidDev.begin(), generateValidRandom());
+
+		inputCol.data = thrust::raw_pointer_cast(intputDataDev.data());
+		inputCol.valid = thrust::raw_pointer_cast(inputValidDev.data());
+		outputCol.data = thrust::raw_pointer_cast(outputDataDev.data());
+		outputCol.valid = thrust::raw_pointer_cast(outputValidDev.data());
+
+		gdf_error gdfError = gdf_cast_f32_to_f32(&inputCol, &outputCol);
+		EXPECT_TRUE( gdfError == GDF_SUCCESS );
+		EXPECT_TRUE( outputCol.dtype == GDF_FLOAT32 );
+
+		bool result = thrust::equal(inputValidDev.begin(), inputValidDev.end(), outputValidDev.begin());
+
+		EXPECT_TRUE( result == true );
+
+		std::vector<float> results(colSize);
+		thrust::copy(outputDataDev.begin(), outputDataDev.end(), results.begin());
+
+		for (int i = 0; i < colSize; i++){
+			EXPECT_TRUE( results[i] == outputDataDev[i] );
+		}
+	}
+}

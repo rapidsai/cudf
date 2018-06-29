@@ -5,6 +5,8 @@
 #include <gdf/utils.h>
 #include <gdf/errorutils.h>
 
+#include <thrust/device_vector.h>
+
 template<typename T, typename Tout, typename F>
 __global__
 void gpu_unary_op(const T *data, const gdf_valid_type *valid,
@@ -313,26 +315,35 @@ struct DeviceCast {
     }
 };
 
-#define DEF_CAST_IMPL(VFROM, VTO, TFROM, TTO)                                 \
-gdf_error gdf_cast_##VFROM##_to_##VTO(gdf_column *input, gdf_column *output)  \
-{ return UnaryOp<TFROM, TTO, DeviceCast<TFROM, TTO> >::launch(input, output); }
+#define DEF_CAST_IMPL(VFROM, VTO, TFROM, TTO, LTFROM, LTO)                          \
+gdf_error gdf_cast_##VFROM##_to_##VTO(gdf_column *input, gdf_column *output) {      \
+    GDF_REQUIRE(input->dtype == LTFROM, GDF_UNSUPPORTED_DTYPE);                     \
+                                                                                    \
+    output->dtype = LTO;                                                            \
+    if (input->valid && output->valid) {                                            \
+        gdf_size_type num_chars_bitmask = gdf_get_num_chars_bitmask(input->size);   \
+        thrust::copy(thrust::device, input->valid, input->valid + num_chars_bitmask, output->valid);\
+    }                                                                               \
+                                                                                    \
+    return UnaryOp<TFROM, TTO, DeviceCast<TFROM, TTO> >::launch(input, output);     \
+}
 
-#define DEF_CAST_IMPL_TEMPLATE(ABREV, PHYSICAL_TYPE)  \
-DEF_CAST_OP(ABREV) \
-DEF_CAST_IMPL(i8,        ABREV,  int8_t, PHYSICAL_TYPE) \
-DEF_CAST_IMPL(i32,       ABREV, int32_t, PHYSICAL_TYPE) \
-DEF_CAST_IMPL(i64,       ABREV, int64_t, PHYSICAL_TYPE) \
-DEF_CAST_IMPL(f32,       ABREV,   float, PHYSICAL_TYPE) \
-DEF_CAST_IMPL(f64,       ABREV,  double, PHYSICAL_TYPE) \
-DEF_CAST_IMPL(date32,    ABREV, int32_t, PHYSICAL_TYPE) \
-DEF_CAST_IMPL(date64,    ABREV, int64_t, PHYSICAL_TYPE) \
-DEF_CAST_IMPL(timestamp, ABREV, int64_t, PHYSICAL_TYPE)
+#define DEF_CAST_IMPL_TEMPLATE(ABREV, PHYSICAL_TYPE, LOGICAL_TYPE)                    \
+DEF_CAST_OP(ABREV)                                                                    \
+DEF_CAST_IMPL(i8,        ABREV,  int8_t, PHYSICAL_TYPE, GDF_INT8,       LOGICAL_TYPE) \
+DEF_CAST_IMPL(i32,       ABREV, int32_t, PHYSICAL_TYPE, GDF_INT32,      LOGICAL_TYPE) \
+DEF_CAST_IMPL(i64,       ABREV, int64_t, PHYSICAL_TYPE, GDF_INT64,      LOGICAL_TYPE) \
+DEF_CAST_IMPL(f32,       ABREV,   float, PHYSICAL_TYPE, GDF_FLOAT32,    LOGICAL_TYPE) \
+DEF_CAST_IMPL(f64,       ABREV,  double, PHYSICAL_TYPE, GDF_FLOAT64,    LOGICAL_TYPE) \
+DEF_CAST_IMPL(date32,    ABREV, int32_t, PHYSICAL_TYPE, GDF_DATE32,     LOGICAL_TYPE) \
+DEF_CAST_IMPL(date64,    ABREV, int64_t, PHYSICAL_TYPE, GDF_DATE64,     LOGICAL_TYPE) \
+DEF_CAST_IMPL(timestamp, ABREV, int64_t, PHYSICAL_TYPE, GDF_TIMESTAMP,  LOGICAL_TYPE)
 
-DEF_CAST_IMPL_TEMPLATE(f32, float)
-DEF_CAST_IMPL_TEMPLATE(f64, double)
-DEF_CAST_IMPL_TEMPLATE(i8, int8_t)
-DEF_CAST_IMPL_TEMPLATE(i32, int32_t)
-DEF_CAST_IMPL_TEMPLATE(i64, int64_t)
-DEF_CAST_IMPL_TEMPLATE(date32, int32_t)
-DEF_CAST_IMPL_TEMPLATE(date64, int64_t)
-DEF_CAST_IMPL_TEMPLATE(timestamp, int64_t)
+DEF_CAST_IMPL_TEMPLATE(f32, float, GDF_FLOAT32)
+DEF_CAST_IMPL_TEMPLATE(f64, double, GDF_FLOAT64)
+DEF_CAST_IMPL_TEMPLATE(i8, int8_t, GDF_INT8)
+DEF_CAST_IMPL_TEMPLATE(i32, int32_t, GDF_INT32)
+DEF_CAST_IMPL_TEMPLATE(i64, int64_t, GDF_INT64)
+DEF_CAST_IMPL_TEMPLATE(date32, int32_t, GDF_DATE32)
+DEF_CAST_IMPL_TEMPLATE(date64, int64_t, GDF_DATE64)
+DEF_CAST_IMPL_TEMPLATE(timestamp, int64_t, GDF_TIMESTAMP)
