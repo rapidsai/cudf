@@ -9,7 +9,6 @@ from numbers import Number
 import numpy as np
 
 from . import cudautils, formatting
-from . import dataframe
 from .buffer import Buffer
 from .index import Index, RangeIndex, GenericIndex
 from .settings import NOTSET, settings
@@ -703,30 +702,40 @@ class Series(object):
         warnings.warn("Use .unique() instead", DeprecationWarning)
         return self.unique()
 
-    def unique(self):
+    def unique(self, type='sort'):
         """Returns unique values of this Series.
+        default='sort' will be changed to 'hash' when implemented.
         """
+        if type is not 'sort':
+            msg = 'non sort based unique() not implemented yet'
+            raise NotImplementedError(msg)
         if self.null_count == len(self):
             return np.empty(0, dtype=self.dtype)
-        res = self._column.unique()
+        res = self._column.unique(type=type)
         return Series(res)
 
-    def unique_count(self):
+    def unique_count(self, type='sort'):
         """Returns the number of unique valies of the Series: approximate version,
         and exact version to be moved to libgdf
         """
+        if type is not 'sort':
+            msg = 'non sort based unique_count() not implemented yet'
+            raise NotImplementedError(msg)
         if self.null_count == len(self):
             return 0
-        return self._column.unique_count()
+        return self._column.unique_count(type=type)
         # return len(self._column.unique())
 
 
-    def value_count(self):
+    def value_count(self, type='sort'):
         """Returns unique values of this Series.
         """
+        if type is not 'sort':
+            msg = 'non sort based value_count() not implemented yet'
+            raise NotImplementedError(msg)
         if self.null_count == len(self):
             return 0
-        vals, cnts = self._column.value_count()
+        vals, cnts = self._column.value_count(type=type)
         res = Series(cnts, index=GenericIndex(vals))
         return res
 
