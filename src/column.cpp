@@ -27,36 +27,37 @@ gdf_error gdf_column_view_augmented(gdf_column *column, void *data, gdf_valid_ty
 
 
 gdf_error get_column_byte_width(gdf_column * col, int & width){
-	// switch(expression) {
+	
+	switch(col->dtype) {
 
-	// case GDF_INT8 :
-	// 	width = 1;
-	// 	break;
-	// case GDF_INT16 :
-	// 	width = 2;
-	// 	break;
-	// case GDF_INT32 :
-	// 	width = 4;
-	// 	break;
-	// case GDF_INT64 :
-	// 	width = 8;
-	// 	break;
-	// case GDF_FLOAT32 :
-	// 	width = 4;
-	// 	break;
-	// case GDF_FLOAT64 :
-	// 	width = 8;
-	// 	break;
-	// case GDF_DATE32 :
-	// 	width = 4;
-	// 	break;
-	// case GDF_DATE64 :
-	// 	width = 8;
-	// 	break;
-	// default :
-	// 	width = -1;
-	// 	return GDF_UNSUPPORTED_DTYPE;
-	// }
+	case GDF_INT8 :
+		width = 1;
+		break;
+	case GDF_INT16 :
+		width = 2;
+		break;
+	case GDF_INT32 :
+		width = 4;
+		break;
+	case GDF_INT64 :
+		width = 8;
+		break;
+	case GDF_FLOAT32 :
+		width = 4;
+		break;
+	case GDF_FLOAT64 :
+		width = 8;
+		break;
+	case GDF_DATE32 :
+		width = 4;
+		break;
+	case GDF_DATE64 :
+		width = 8;
+		break;
+	default :
+		width = -1;
+		return GDF_UNSUPPORTED_DTYPE;
+	}
 
 	return GDF_SUCCESS;
 }

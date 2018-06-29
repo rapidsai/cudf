@@ -442,7 +442,7 @@ gdf_error gpu_concat(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
  */
 //class cudaStream_t;
 
-//gdf_error gpu_hash_columns(gdf_column ** columns_to_hash, int num_columns, gdf_column * output_column, cudaStream_t * stream);
+gdf_error gpu_hash_columns(gdf_column ** columns_to_hash, int num_columns, gdf_column * output_column, void * stream);
 
 /*
  * gdf introspection utlities
