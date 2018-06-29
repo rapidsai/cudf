@@ -59,7 +59,7 @@ def test_series_unique():
         assert len(set(arr[mask])) == sr.unique_count()
         df = pd.DataFrame(data=arr[mask], columns=['col'])
         expect = df.col.value_counts().sort_index()
-        got = sr.value_count().to_pandas().sort_index()
+        got = sr.value_counts().to_pandas().sort_index()
         print(expect.head())
         print(got.head())
         assert got.equals(expect)
