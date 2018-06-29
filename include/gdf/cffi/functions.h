@@ -415,6 +415,7 @@ gdf_error gdf_max_i8(gdf_column *col, int8_t *dev_result, gdf_size_type dev_resu
 
 
 
+
 /*
  * Filtering and comparison operators
  */
@@ -434,7 +435,106 @@ gdf_error gpu_comparison(gdf_column *lhs, gdf_column *rhs, gdf_column *output,gd
 //takes a stencil and uses it to compact a colum e.g. remove all values for which the stencil = 0
 gdf_error gpu_apply_stencil(gdf_column *lhs, gdf_column * stencil, gdf_column * output);
 
-//concat two gdf_columns
 gdf_error gpu_concat(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
+
+/*
+ * Hashing
+ */
+//class cudaStream_t;
+
+//gdf_error gpu_hash_columns(gdf_column ** columns_to_hash, int num_columns, gdf_column * output_column, cudaStream_t * stream);
+
+/*
+ * gdf introspection utlities
+ */
+
+gdf_error get_column_byte_width(gdf_column * col, int & width);
+
+/* 
+ Multi-Column SQL ops:
+   WHERE (Filtering)
+   ORDER-BY
+   GROUP-BY
+ */
+gdf_error gdf_order_by(size_t nrows,     //in: # rows
+		       gdf_column* cols, //in: host-side array of gdf_columns
+		       size_t ncols,     //in: # cols
+		       void** d_cols,    //out: pre-allocated device-side array to be filled with gdf_column::data for each column; slicing of gdf_column array (host)
+		       int* d_types,     //out: pre-allocated device-side array to be filled with gdf_colum::dtype for each column; slicing of gdf_column array (host)
+		       size_t* d_indx);  //out: device-side array of re-rdered row indices
+
+gdf_error gdf_filter(size_t nrows,     //in: # rows
+		     gdf_column* cols, //in: host-side array of gdf_columns
+		     size_t ncols,     //in: # cols
+		     void** d_cols,    //out: pre-allocated device-side array to be filled with gdf_column::data for each column; slicing of gdf_column array (host)
+		     int* d_types,     //out: pre-allocated device-side array to be filled with gdf_colum::dtype for each column; slicing of gdf_column array (host)
+		     void** d_vals,    //in: device-side array of values to filter against (type-erased)
+		     size_t* d_indx,   //out: device-side array of row indices that remain after filtering
+		     size_t* new_sz);  //out: host-side # rows that remain after filtering
+
+gdf_error gdf_group_by_count(size_t nrows,     //in: # rows
+			     gdf_column* cols, //in: host-side array of gdf_columns
+			     size_t ncols,     //in: # cols
+			     int flag_sorted,  //in: flag specififying if rows are pre-sorted (1) or not (0)
+			     void** d_cols,    //out: pre-allocated device-side array to be filled with gdf_column::data for each column; slicing of gdf_column array (host)
+			     int* d_types,     //out: pre-allocated device-side array to be filled with gdf_colum::dtype for each column; slicing of gdf_column array (host)
+			     int* d_indx,      //out: device-side array of row indices after sorting
+			     int* d_kout,      //out: device-side array of rows after gropu-by
+			     int* d_count,     //out: device-side array of aggregated values (COUNT-ed) as a result of group-by;
+			     size_t* new_sz);  //out: host-side # rows of d_count
+
+gdf_error gdf_group_by_sum(size_t nrows,     //in: # rows
+			   gdf_column* cols, //in: host-side array of gdf_columns
+			   size_t ncols,     //in: # cols
+			   int flag_sorted,  //in: flag specififying if rows are pre-sorted (1) or not (0)
+			   gdf_column agg_in,//in: column to aggregate
+			   void** d_cols,    //out: pre-allocated device-side array to be filled with gdf_column::data for each column; slicing of gdf_column array (host)
+			   int* d_types,     //out: pre-allocated device-side array to be filled with gdf_colum::dtype for each column; slicing of gdf_column array (host)
+			   int* d_indx,      //out: device-side array of row indices after sorting
+			   gdf_column agg_p, //out: reordering of d_agg after sorting; requires shallow (trivial) copy-construction (see static_assert below);
+			   int* d_kout,      //out: device-side array of rows after gropu-by
+			   gdf_column c_vout,//out: aggregated column; requires shallow (trivial) copy-construction (see static_assert below);
+			   size_t* new_sz);  //out: host-side # rows of d_count
+
+gdf_error gdf_group_by_min(size_t nrows,     //in: # rows
+			   gdf_column* cols, //in: host-side array of gdf_columns
+			   size_t ncols,     //in: # cols
+			   int flag_sorted,  //in: flag specififying if rows are pre-sorted (1) or not (0)
+			   gdf_column agg_in,//in: column to aggregate
+			   void** d_cols,    //out: pre-allocated device-side array to be filled with gdf_column::data for each column; slicing of gdf_column array (host)
+			   int* d_types,     //out: pre-allocated device-side array to be filled with gdf_colum::dtype for each column; slicing of gdf_column array (host)
+			   int* d_indx,      //out: device-side array of row indices after sorting
+			   gdf_column agg_p, //out: reordering of d_agg after sorting; requires shallow (trivial) copy-construction (see static_assert below);
+			   int* d_kout,      //out: device-side array of rows after gropu-by
+			   gdf_column c_vout,//out: aggregated column; requires shallow (trivial) copy-construction (see static_assert below);
+			   size_t* new_sz);  //out: host-side # rows of d_count
+
+
+gdf_error gdf_group_by_max(size_t nrows,     //in: # rows
+			   gdf_column* cols, //in: host-side array of gdf_columns
+			   size_t ncols,     //in: # cols
+			   int flag_sorted,  //in: flag specififying if rows are pre-sorted (1) or not (0)
+			   gdf_column agg_in,//in: column to aggregate
+			   void** d_cols,    //out: pre-allocated device-side array to be filled with gdf_column::data for each column; slicing of gdf_column array (host)
+			   int* d_types,     //out: pre-allocated device-side array to be filled with gdf_colum::dtype for each column; slicing of gdf_column array (host)
+			   int* d_indx,      //out: device-side array of row indices after sorting
+			   gdf_column agg_p, //out: reordering of d_agg after sorting; requires shallow (trivial) copy-construction (see static_assert below);
+			   int* d_kout,      //out: device-side array of rows after gropu-by
+			   gdf_column c_vout,//out: aggregated column; requires shallow (trivial) copy-construction (see static_assert below);
+			   size_t* new_sz);  //out: host-side # rows of d_count
+
+gdf_error gdf_group_by_avg(size_t nrows,     //in: # rows
+			   gdf_column* cols, //in: host-side array of gdf_columns
+			   size_t ncols,     //in: # cols
+			   int flag_sorted,  //in: flag specififying if rows are pre-sorted (1) or not (0)
+			   gdf_column agg_in,//in: column to aggregate
+			   void** d_cols,    //out: pre-allocated device-side array to be filled with gdf_column::data for each column; slicing of gdf_column array (host)
+			   int* d_types,     //out: pre-allocated device-side array to be filled with gdf_colum::dtype for each column; slicing of gdf_column array (host)
+			   int* d_indx,      //out: device-side array of row indices after sorting
+			   int* d_cout,      //out: device-side array of (COUNT-ed) values as a result of group-by;
+			   gdf_column agg_p, //out: reordering of d_agg after sorting; requires shallow (trivial) copy-construction (see static_assert below);
+			   int* d_kout,      //out: device-side array of rows after gropu-by
+			   gdf_column c_vout,//out: aggregated column; requires shallow (trivial) copy-construction (see static_assert below);
+			   size_t* new_sz);  //out: host-side # rows of d_count
 
 #endif

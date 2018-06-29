@@ -69,15 +69,10 @@ gdf_error apply_bitmask_to_bitmask(gdf_size_type & out_null_count, gdf_valid_typ
 	thrust::device_ptr<gdf_valid_type> valid_left_end_ptr = thrust::device_pointer_cast(valid_left + num_chars_bitmask );
 	thrust::device_ptr<gdf_valid_type> valid_right_ptr = thrust::device_pointer_cast(valid_right);
 
-	//TODO:: I am assuming
+
 	thrust::transform(thrust::cuda::par.on(stream), thrust::detail::make_normal_iterator(valid_left_ptr),
 			thrust::detail::make_normal_iterator(valid_left_end_ptr), thrust::detail::make_normal_iterator(valid_right_ptr),
 			thrust::detail::make_normal_iterator(valid_out_ptr), thrust::bit_and<gdf_valid_type>());
-
-	//figure out how to count nulls from the bitmask on gpu
-	//a fast algorithm would create a look up table that stores how many bits are set for each value
-	//then we make a thrust::permutation iterator based on those values, we can hold it in gpu memory if we want o rmake it part of initializing
-	//we can also copy it in adhoc its really not that big at all
 
 
 	char * last_char = new char[1];
