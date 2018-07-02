@@ -99,6 +99,11 @@ if(HASH_JOIN)
   set(CUDA_NVCC_FLAGS  ${CUDA_NVCC_FLAGS};-DHASH_JOIN)
 endif()
 
+<<<<<<< 38a4e53a2a07d4d620a8c504b3f484fea7b7530d
+=======
+
+
+>>>>>>> Pulled in new files from Will @ BlazingDBs libgdf PR that added GoogleTest functionality. Renamed his datetime test to hash_map. Trying to build but currently fails.
 # switch between cudaMalloc and cudaMallocManaged for hash tables
 option(HT_LEGACY_ALLOCATOR "legacy allocator for hash tables" ON)
 if(HT_LEGACY_ALLOCATOR)
@@ -169,6 +174,7 @@ add_custom_command(TARGET pytest POST_BUILD
                    COMMAND ${CMAKE_COMMAND} -E env LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:${CMAKE_BINARY_DIR} py.test -v
                    WORKING_DIRECTORY --cache-clear --junitxml=junit.xml tests)
 
+
 # The install target
 install(TARGETS gdf LIBRARY DESTINATION lib)
 install(DIRECTORY include/gdf DESTINATION include)
@@ -186,6 +192,5 @@ if(GTEST_FOUND)
 else()
     message(AUTHOR_WARNING "Google C++ Testing Framework (Google Test) not found: automated tests are disabled.")
 endif()
-
 # Print the project summary
 feature_summary(WHAT ALL INCLUDE_QUIET_PACKAGES FATAL_ON_MISSING_REQUIRED_PACKAGES)
