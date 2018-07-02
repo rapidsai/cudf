@@ -12,10 +12,23 @@
 #include <thrust/iterator/iterator_adaptor.h>
 #include <thrust/device_vector.h>
 
-/*
- * from http://howardhinnant.github.io/date_algorithms.html
- * int z = unixTime/86400000;
- * z += 719468;
+/*  Portions of the code below is borrowed from a paper by Howard Hinnant dated 2013-09-07  http://howardhinnant.github.io/date_algorithms.html  as seen on July 2nd, 2018
+ The piece of code borrowed and modified is:
+
+ **************************************************************************************
+// Returns year/month/day triple in civil calendar
+// Preconditions:  z is number of days since 1970-01-01 and is in the range:
+//                   [numeric_limits<Int>::min(), numeric_limits<Int>::max()-719468].
+template <class Int>
+constexpr
+std::tuple<Int, unsigned, unsigned>
+civil_from_days(Int z) noexcept
+{
+    static_assert(std::numeric_limits<unsigned>::digits >= 18,
+             "This algorithm has not been ported to a 16 bit unsigned integer");
+    static_assert(std::numeric_limits<Int>::digits >= 20,
+             "This algorithm has not been ported to a 16 bit signed integer");
+    z += 719468;
     const Int era = (z >= 0 ? z : z - 146096) / 146097;
     const unsigned doe = static_cast<unsigned>(z - era * 146097);          // [0, 146096]
     const unsigned yoe = (doe - doe/1460 + doe/36524 - doe/146096) / 365;  // [0, 399]
@@ -25,6 +38,9 @@
     const unsigned d = doy - (153*mp+2)/5 + 1;                             // [1, 31]
     const unsigned m = mp + (mp < 10 ? 3 : -9);                            // [1, 12]
     return std::tuple<Int, unsigned, unsigned>(y + (m <= 2), m, d);
+}
+
+******************************************************************************************
  */
 
 
@@ -51,13 +67,12 @@ struct gdf_extract_year_from_unixtime_op : public thrust::unary_function<int64_t
 	{
 		const int z = ((unixTime >= 0 ? unixTime : unixTime - (units_per_day - 1)) / units_per_day) + 719468;
 		const int era = (z >= 0 ? z : z - 146096) / 146097;
-		const unsigned doe = static_cast<unsigned>(z - era * 146097);          // [0, 146096]
-		const unsigned yoe = (doe - doe/1460 + doe/36524 - doe/146096) / 365;  // [0, 399]
+		const unsigned doe = static_cast<unsigned>(z - era * 146097);
+		const unsigned yoe = (doe - doe/1460 + doe/36524 - doe/146096) / 365;
 		const int y = static_cast<int>(yoe) + era * 400;
-		const unsigned doy = doe - (365*yoe + yoe/4 - yoe/100);                // [0, 365]
-		const unsigned mp = (5*doy + 2)/153;                                   // [0, 11]
-//		const unsigned d = doy - (153*mp+2)/5 + 1;                             // [1, 31]
-		const unsigned m = mp + (mp < 10 ? 3 : -9);                            // [1, 12]
+		const unsigned doy = doe - (365*yoe + yoe/4 - yoe/100);
+		const unsigned mp = (5*doy + 2)/153;
+		const unsigned m = mp + (mp < 10 ? 3 : -9);
 		if (m <= 2)
 			return y + 1;
 		else
@@ -87,13 +102,11 @@ struct gdf_extract_month_from_unixtime_op : public thrust::unary_function<int64_
 	{
 		const int z = ((unixTime >= 0 ? unixTime : unixTime - (units_per_day - 1)) / units_per_day) + 719468;
 		const int era = (z >= 0 ? z : z - 146096) / 146097;
-		const unsigned doe = static_cast<unsigned>(z - era * 146097);          // [0, 146096]
-		const unsigned yoe = (doe - doe/1460 + doe/36524 - doe/146096) / 365;  // [0, 399]
-//		const int y = static_cast<int>(yoe) + era * 400;
-		const unsigned doy = doe - (365*yoe + yoe/4 - yoe/100);                // [0, 365]
-		const unsigned mp = (5*doy + 2)/153;                                   // [0, 11]
-//		const unsigned d = doy - (153*mp+2)/5 + 1;                             // [1, 31]
-		return mp + (mp < 10 ? 3 : -9);                            // [1, 12]
+		const unsigned doe = static_cast<unsigned>(z - era * 146097);
+		const unsigned yoe = (doe - doe/1460 + doe/36524 - doe/146096) / 365;
+		const unsigned doy = doe - (365*yoe + yoe/4 - yoe/100);
+		const unsigned mp = (5*doy + 2)/153;
+		return mp + (mp < 10 ? 3 : -9);
 
 	}
 };
@@ -121,12 +134,11 @@ struct gdf_extract_day_from_unixtime_op : public thrust::unary_function<int64_t,
 	{
 		const int z = ((unixTime >= 0 ? unixTime : unixTime - (units_per_day - 1)) / units_per_day) + 719468;
 		const int era = (z >= 0 ? z : z - 146096) / 146097;
-		const unsigned doe = static_cast<unsigned>(z - era * 146097);          // [0, 146096]
-		const unsigned yoe = (doe - doe/1460 + doe/36524 - doe/146096) / 365;  // [0, 399]
-//		const int y = static_cast<int>(yoe) + era * 400;
-		const unsigned doy = doe - (365*yoe + yoe/4 - yoe/100);                // [0, 365]
-		const unsigned mp = (5*doy + 2)/153;                                   // [0, 11]
-		return doy - (153*mp+2)/5 + 1;                             // [1, 31]
+		const unsigned doe = static_cast<unsigned>(z - era * 146097);
+		const unsigned yoe = (doe - doe/1460 + doe/36524 - doe/146096) / 365;
+		const unsigned doy = doe - (365*yoe + yoe/4 - yoe/100);
+		const unsigned mp = (5*doy + 2)/153;
+		return doy - (153*mp+2)/5 + 1;
 	}
 };
 
@@ -233,13 +245,12 @@ struct gdf_extract_year_from_date32_op : public thrust::unary_function<int32_t, 
 	{
 		const int z = unixDate + 719468;
 		const int era = (z >= 0 ? z : z - 146096) / 146097;
-		const unsigned doe = static_cast<unsigned>(z - era * 146097);          // [0, 146096]
-		const unsigned yoe = (doe - doe/1460 + doe/36524 - doe/146096) / 365;  // [0, 399]
+		const unsigned doe = static_cast<unsigned>(z - era * 146097);
+		const unsigned yoe = (doe - doe/1460 + doe/36524 - doe/146096) / 365;
 		const int y = static_cast<int>(yoe) + era * 400;
-		const unsigned doy = doe - (365*yoe + yoe/4 - yoe/100);                // [0, 365]
-		const unsigned mp = (5*doy + 2)/153;                                   // [0, 11]
-		//		const unsigned d = doy - (153*mp+2)/5 + 1;                             // [1, 31]
-		const unsigned m = mp + (mp < 10 ? 3 : -9);                            // [1, 12]
+		const unsigned doy = doe - (365*yoe + yoe/4 - yoe/100);
+		const unsigned mp = (5*doy + 2)/153;
+		const unsigned m = mp + (mp < 10 ? 3 : -9);
 		if (m <= 2)
 			return y + 1;
 		else
@@ -255,12 +266,10 @@ struct gdf_extract_month_from_date32_op : public thrust::unary_function<int32_t,
 	{
 		const int z = unixDate + 719468;
 		const int era = (z >= 0 ? z : z - 146096) / 146097;
-		const unsigned doe = static_cast<unsigned>(z - era * 146097);          // [0, 146096]
-		const unsigned yoe = (doe - doe/1460 + doe/36524 - doe/146096) / 365;  // [0, 399]
-		//		const int y = static_cast<int>(yoe) + era * 400;
-		const unsigned doy = doe - (365*yoe + yoe/4 - yoe/100);                // [0, 365]
-		const unsigned mp = (5*doy + 2)/153;                                   // [0, 11]
-		//		const unsigned d = doy - (153*mp+2)/5 + 1;                             // [1, 31]
+		const unsigned doe = static_cast<unsigned>(z - era * 146097);
+		const unsigned yoe = (doe - doe/1460 + doe/36524 - doe/146096) / 365;
+		const unsigned doy = doe - (365*yoe + yoe/4 - yoe/100);
+		const unsigned mp = (5*doy + 2)/153;
 		return mp + (mp < 10 ? 3 : -9);
 	}
 };
@@ -273,12 +282,11 @@ struct gdf_extract_day_from_date32_op : public thrust::unary_function<int32_t, i
 	{
 		const int z = unixDate + 719468;
 		const int era = (z >= 0 ? z : z - 146096) / 146097;
-		const unsigned doe = static_cast<unsigned>(z - era * 146097);          // [0, 146096]
-		const unsigned yoe = (doe - doe/1460 + doe/36524 - doe/146096) / 365;  // [0, 399]
-		//		const int y = static_cast<int>(yoe) + era * 400;
-		const unsigned doy = doe - (365*yoe + yoe/4 - yoe/100);                // [0, 365]
-		const unsigned mp = (5*doy + 2)/153;                                   // [0, 11]
-		return doy - (153*mp+2)/5 + 1;                             // [1, 31]
+		const unsigned doe = static_cast<unsigned>(z - era * 146097);
+		const unsigned yoe = (doe - doe/1460 + doe/36524 - doe/146096) / 365;
+		const unsigned doy = doe - (365*yoe + yoe/4 - yoe/100);
+		const unsigned mp = (5*doy + 2)/153;
+		return doy - (153*mp+2)/5 + 1;
 	}
 };
 
