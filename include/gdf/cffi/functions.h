@@ -167,6 +167,10 @@ gdf_error gdf_prefixsum_i64(gdf_column *inp, gdf_column *out, int inclusive);
 
 /* unary operators */
 
+/* hashing */
+
+gdf_error gdf_hash(int num_cols, gdf_column **input, gdf_hash_func hash, gdf_join_result_type **out_result);
+
 /* trig */
 
 gdf_error gdf_sin_generic(gdf_column *input, gdf_column *output);

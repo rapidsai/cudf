@@ -28,6 +28,10 @@ typedef enum {
 } gdf_error;
 
 typedef enum {
+    GDF_HASH_MURMUR3=0,
+} gdf_hash_func;
+
+typedef enum {
 	TIME_UNIT_NONE=0, // default (undefined)
 	TIME_UNIT_s,   // second
 	TIME_UNIT_ms,  // millisecond
