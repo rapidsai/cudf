@@ -292,7 +292,6 @@ __host__ __device__ bool operator!=(const cycle_iterator_adapter<T>& lhs, const 
 template <typename Key,
           typename Element,
           Key unused_key,
-          Element unused_element,
           typename Hasher = default_hash<Key>,
           typename Equality = equal_to<Key>,
           typename Allocator = managed_allocator<thrust::pair<Key, Element> >,
@@ -323,8 +322,9 @@ public:
     explicit concurrent_unordered_multimap(size_type n,
                                            const Hasher& hf = hasher(),
                                            const Equality& eql = key_equal(),
-                                           const allocator_type& a = allocator_type())
-        : m_hf(hf), m_equal(eql), m_allocator(a), m_hashtbl_size(n), m_hashtbl_capacity(n), m_collisions(0)
+                                           const allocator_type& a = allocator_type(),
+                                           const mapped_type unused_element = std::numeric_limits<mapped_type>::max())
+        : m_hf(hf), m_equal(eql), m_allocator(a), m_hashtbl_size(n), m_hashtbl_capacity(n), m_collisions(0), m_unused_element(unused_element)
     {
         m_hashtbl_values = m_allocator.allocate( m_hashtbl_capacity );
         constexpr int block_size = 128;
@@ -339,7 +339,7 @@ public:
             }
         }
         
-        init_hashtbl<<<((m_hashtbl_size-1)/block_size)+1,block_size>>>( m_hashtbl_values, m_hashtbl_size, unused_key, unused_element );
+        init_hashtbl<<<((m_hashtbl_size-1)/block_size)+1,block_size>>>( m_hashtbl_values, m_hashtbl_size, unused_key, m_unused_element );
         CUDA_RT_CALL( cudaGetLastError() );
         CUDA_RT_CALL( cudaStreamSynchronize(0) );
     }
@@ -389,7 +389,7 @@ public:
                  sizeof(unsigned long long int) == sizeof(value_type) )
             {
                 pair2longlong converter = {0ull};
-                converter.pair = thrust::make_pair( unused_key, unused_element );
+                converter.pair = thrust::make_pair( unused_key, m_unused_element );
                 const unsigned long long int unused = converter.longlong;
                 converter.pair = x;
                 const unsigned long long int value = converter.longlong;
@@ -473,7 +473,7 @@ public:
     void clear_async( cudaStream_t stream = 0 ) 
     {
         constexpr int block_size = 128;
-        init_hashtbl<<<((m_hashtbl_size-1)/block_size)+1,block_size,0,stream>>>( m_hashtbl_values, m_hashtbl_size, unused_key, unused_element );
+        init_hashtbl<<<((m_hashtbl_size-1)/block_size)+1,block_size,0,stream>>>( m_hashtbl_values, m_hashtbl_size, unused_key, m_unused_element );
         if ( count_collisions )
             m_collisions = 0;
     }
@@ -505,6 +505,8 @@ public:
 private:
     const hasher            m_hf;
     const key_equal         m_equal;
+
+    const mapped_type       m_unused_element;
     
     allocator_type              m_allocator;
     
