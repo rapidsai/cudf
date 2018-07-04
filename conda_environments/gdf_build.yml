@@ -1,0 +1,14 @@
+name: gdf
+channels:
+- numba
+- conda-forge
+- defaults
+dependencies:
+- pip
+- setuptools
+- cmake
+- cudatoolkit
+- numba
+- pandas
+- flatbuffers
+- arrow-cpp=0.7.1
