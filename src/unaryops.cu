@@ -315,6 +315,24 @@ struct DeviceCast {
     }
 };
 
+template<typename From, typename To, int64_t units_factor>
+struct UpCasting {
+    __device__
+    To apply(From data) {
+        return (To)(data*units_factor);
+    }
+};
+
+template<typename From, typename To, int64_t units_factor>
+struct DownCasting {
+    __device__
+    To apply(From data) {
+        return (To)((data-(units_factor-1)*(data<0))/units_factor); //ceiling only when data is negative
+    }
+};
+
+// GDF_DATE64 == (GDF_TIMESTAMP && output->dtype_info.time_unit == TIME_UNIT_ms)
+
 #define DEF_CAST_IMPL(VFROM, VTO, TFROM, TTO, LTFROM, LTO)                          \
 gdf_error gdf_cast_##VFROM##_to_##VTO(gdf_column *input, gdf_column *output) {      \
     GDF_REQUIRE(input->dtype == LTFROM, GDF_UNSUPPORTED_DTYPE);                     \
@@ -325,6 +343,49 @@ gdf_error gdf_cast_##VFROM##_to_##VTO(gdf_column *input, gdf_column *output) {  
         thrust::copy(thrust::device, input->valid, input->valid + num_chars_bitmask, output->valid);\
     }                                                                               \
                                                                                     \
+    if( LTFROM == GDF_DATE32 && ( LTO == GDF_TIMESTAMP && output->dtype_info.time_unit == TIME_UNIT_s ) )\
+        return UnaryOp<TFROM, TTO, UpCasting<TFROM, TTO, 86400> >::launch(input, output); \
+    else if( ( LTO == GDF_TIMESTAMP && output->dtype_info.time_unit == TIME_UNIT_s ) && LTFROM == GDF_DATE32 )\
+        return UnaryOp<TFROM, TTO, DownCasting<TFROM, TTO, 86400> >::launch(input, output); \
+    else if( LTFROM == GDF_DATE32 && ( LTO == GDF_DATE64 || ( LTO == GDF_TIMESTAMP && output->dtype_info.time_unit == TIME_UNIT_ms ) ) )\
+        return UnaryOp<TFROM, TTO, UpCasting<TFROM, TTO, 86400000> >::launch(input, output); \
+    else if( ( LTFROM == GDF_DATE64 || ( LTFROM == GDF_TIMESTAMP && input->dtype_info.time_unit == TIME_UNIT_ms ) ) && LTO == GDF_DATE32 )\
+        return UnaryOp<TFROM, TTO, DownCasting<TFROM, TTO, 86400000> >::launch(input, output); \
+    else if( LTFROM == GDF_DATE32 && ( LTO == GDF_TIMESTAMP && output->dtype_info.time_unit == TIME_UNIT_us ) )\
+        return UnaryOp<TFROM, TTO, UpCasting<TFROM, TTO, 86400000000> >::launch(input, output); \
+    else if( ( LTO == GDF_TIMESTAMP && output->dtype_info.time_unit == TIME_UNIT_us ) && LTFROM == GDF_DATE32 )\
+        return UnaryOp<TFROM, TTO, DownCasting<TFROM, TTO, 86400000000> >::launch(input, output); \
+    else if( LTFROM == GDF_DATE32 && ( LTO == GDF_TIMESTAMP && output->dtype_info.time_unit == TIME_UNIT_ns ) )\
+        return UnaryOp<TFROM, TTO, UpCasting<TFROM, TTO, 86400000000000> >::launch(input, output); \
+    else if( ( LTO == GDF_TIMESTAMP && output->dtype_info.time_unit == TIME_UNIT_ns ) && LTFROM == GDF_DATE32 )\
+        return UnaryOp<TFROM, TTO, DownCasting<TFROM, TTO, 86400000000000> >::launch(input, output); \
+    else if( LTFROM == GDF_TIMESTAMP && LTO == GDF_TIMESTAMP )                      \
+    {                                                                               \
+        if( input->dtype_info.time_unit == TIME_UNIT_s && output->dtype_info.time_unit == TIME_UNIT_ms )\
+            return UnaryOp<TFROM, TTO, UpCasting<TFROM, TTO, 1000> >::launch(input, output); \
+        else if( input->dtype_info.time_unit == TIME_UNIT_ms && output->dtype_info.time_unit == TIME_UNIT_s )\
+            return UnaryOp<TFROM, TTO, DownCasting<TFROM, TTO, 1000> >::launch(input, output); \
+        else if( input->dtype_info.time_unit == TIME_UNIT_s && output->dtype_info.time_unit == TIME_UNIT_us )\
+            return UnaryOp<TFROM, TTO, UpCasting<TFROM, TTO, 1000000> >::launch(input, output); \
+        else if( input->dtype_info.time_unit == TIME_UNIT_us && output->dtype_info.time_unit == TIME_UNIT_s )\
+            return UnaryOp<TFROM, TTO, DownCasting<TFROM, TTO, 1000000> >::launch(input, output); \
+        else if( input->dtype_info.time_unit == TIME_UNIT_s && output->dtype_info.time_unit == TIME_UNIT_ns )\
+            return UnaryOp<TFROM, TTO, UpCasting<TFROM, TTO, 1000000000> >::launch(input, output); \
+        else if( input->dtype_info.time_unit == TIME_UNIT_ns && output->dtype_info.time_unit == TIME_UNIT_s )\
+            return UnaryOp<TFROM, TTO, DownCasting<TFROM, TTO, 1000000000> >::launch(input, output); \
+        else if( input->dtype_info.time_unit == TIME_UNIT_us && output->dtype_info.time_unit == TIME_UNIT_ns )\
+            return UnaryOp<TFROM, TTO, UpCasting<TFROM, TTO, 1000> >::launch(input, output); \
+        else if( input->dtype_info.time_unit == TIME_UNIT_ns && output->dtype_info.time_unit == TIME_UNIT_us )\
+            return UnaryOp<TFROM, TTO, DownCasting<TFROM, TTO, 1000> >::launch(input, output); \
+        else if( input->dtype_info.time_unit == TIME_UNIT_ms && output->dtype_info.time_unit == TIME_UNIT_ns )\
+            return UnaryOp<TFROM, TTO, UpCasting<TFROM, TTO, 1000000> >::launch(input, output); \
+        else if( input->dtype_info.time_unit == TIME_UNIT_ns && output->dtype_info.time_unit == TIME_UNIT_ms )\
+            return UnaryOp<TFROM, TTO, DownCasting<TFROM, TTO, 1000000> >::launch(input, output); \
+        else if( input->dtype_info.time_unit == TIME_UNIT_us && output->dtype_info.time_unit == TIME_UNIT_ms )\
+            return UnaryOp<TFROM, TTO, DownCasting<TFROM, TTO, 1000> >::launch(input, output); \
+        else if( input->dtype_info.time_unit == TIME_UNIT_ms && output->dtype_info.time_unit == TIME_UNIT_us )\
+            return UnaryOp<TFROM, TTO, UpCasting<TFROM, TTO, 1000> >::launch(input, output); \
+    }                                                                               \
     return UnaryOp<TFROM, TTO, DeviceCast<TFROM, TTO> >::launch(input, output);     \
 }
 

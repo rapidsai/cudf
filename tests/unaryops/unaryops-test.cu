@@ -97,18 +97,18 @@ gdf_error gdf_host_cast_##VFROM##_to_##VTO(gdf_column *input, gdf_column *output
 		fill_with_random_values<TTO, TFROM>(inputData, colSize);				\
 																				\
 		thrust::device_vector<TFROM> intputDataDev(inputData);					\
-		thrust::device_vector<TTO> outDataDev(colSize);							\
+		thrust::device_vector<TTO> outputDataDev(colSize);							\
 																				\
 		inputCol.data = thrust::raw_pointer_cast(intputDataDev.data());			\
 		inputCol.valid = nullptr;												\
-		outputCol.data = thrust::raw_pointer_cast(outDataDev.data());			\
+		outputCol.data = thrust::raw_pointer_cast(outputDataDev.data());			\
 		outputCol.valid = nullptr;												\
 																				\
 		gdf_error gdfError = gdf_cast_##VFROM##_to_##VTO(&inputCol, &outputCol);\
 		EXPECT_TRUE( gdfError == GDF_SUCCESS );									\
 																				\
 		std::vector<TTO> results(colSize);										\
-		thrust::copy(outDataDev.begin(), outDataDev.end(), results.begin());	\
+		thrust::copy(outputDataDev.begin(), outputDataDev.end(), results.begin());	\
 																				\
 		std::vector<TTO> outputData(colSize);									\
 		inputCol.data = inputData.data();										\
@@ -153,9 +153,6 @@ DEF_CAST_TYPE_TEST(i32, GDF_INT32, int32_t)
 DEF_CAST_TYPE_TEST(i64, GDF_INT64, int64_t)
 DEF_CAST_TYPE_TEST(f32, GDF_FLOAT32, float)
 DEF_CAST_TYPE_TEST(f64, GDF_FLOAT64, double)
-DEF_CAST_TYPE_TEST(date32, GDF_DATE32, int32_t)
-DEF_CAST_TYPE_TEST(date64, GDF_DATE64, int64_t)
-DEF_CAST_TYPE_TEST(timestamp, GDF_TIMESTAMP, int64_t)
 
 // Casting from T1 to T2, and then casting from T2 to T1 results in the same value 
 #define DEF_CAST_SWAP_TEST(VFROM, VTO, VVFROM, VVTO, TFROM, TTO)				\
@@ -177,14 +174,14 @@ DEF_CAST_TYPE_TEST(timestamp, GDF_TIMESTAMP, int64_t)
 		fill_with_random_values<TTO, TFROM>(inputData, colSize);				\
 																				\
 		thrust::device_vector<TFROM> intputDataDev(inputData);					\
-		thrust::device_vector<TTO> outDataDev(colSize);							\
-		thrust::device_vector<TFROM> origOutDataDev(colSize);					\
+		thrust::device_vector<TTO> outputDataDev(colSize);							\
+		thrust::device_vector<TFROM> origOutputDataDev(colSize);					\
 																				\
 		inputCol.data = thrust::raw_pointer_cast(intputDataDev.data());			\
 		inputCol.valid = nullptr;												\
-		outputCol.data = thrust::raw_pointer_cast(outDataDev.data());			\
+		outputCol.data = thrust::raw_pointer_cast(outputDataDev.data());			\
 		outputCol.valid = nullptr;												\
-		originalOutputCol.data = thrust::raw_pointer_cast(origOutDataDev.data());\
+		originalOutputCol.data = thrust::raw_pointer_cast(origOutputDataDev.data());\
 		originalOutputCol.valid = nullptr;										\
 																				\
 		gdf_error gdfError = gdf_cast_##VFROM##_to_##VTO(&inputCol, &outputCol);\
@@ -193,7 +190,7 @@ DEF_CAST_TYPE_TEST(timestamp, GDF_TIMESTAMP, int64_t)
 		EXPECT_TRUE( gdfError == GDF_SUCCESS );									\
 																				\
 		std::vector<TFROM> results(colSize);									\
-		thrust::copy(origOutDataDev.begin(), origOutDataDev.end(), results.begin());\
+		thrust::copy(origOutputDataDev.begin(), origOutputDataDev.end(), results.begin());\
 																				\
 		for (int i = 0; i < colSize; i++){										\
 			EXPECT_TRUE( results[i] == inputData[i] );							\
@@ -329,13 +326,1817 @@ TEST(gdf_unaryops_output_valid_TEST, checkingValidAndDtype) {
 
 		bool result = thrust::equal(inputValidDev.begin(), inputValidDev.end(), outputValidDev.begin());
 
-		EXPECT_TRUE( result == true );
+		EXPECT_TRUE( result );
 
 		std::vector<float> results(colSize);
 		thrust::copy(outputDataDev.begin(), outputDataDev.end(), results.begin());
 
 		for (int i = 0; i < colSize; i++){
 			EXPECT_TRUE( results[i] == outputDataDev[i] );
+		}
+	}
+}
+
+TEST(gdf_date_casting_TEST, date32_to_date64) {
+
+	//date32 to date64
+	{
+		int colSize = 8;
+
+		gdf_column inputCol;
+		gdf_column outputCol;
+
+		inputCol.dtype = GDF_DATE32;
+		inputCol.size = colSize;
+		outputCol.dtype = GDF_DATE64;
+		outputCol.size = colSize;
+
+		std::vector<int32_t> inputData = {
+			17696,	// '2018-06-14'
+			17697,	// '2018-06-15'
+			-18264,	// '1919-12-31'
+			18321,   // '2020-02-29'
+			0,       // '1970-01-01'
+			26732,   // '2043-03-11'
+			10336,    // '1998-04-20'
+			-56374  // '1815-08-28
+		};
+
+		std::vector<int64_t> outputData = {
+			1528934400000,	// '2018-06-14 00:00:00.000'
+			1529020800000,	// '2018-06-15 00:00:00.000'
+			-1578009600000,	// '1919-12-31 00:00:00.000'
+			1582934400000,   // '2020-02-29 00:00:00.000'
+			0,            // '1970-01-01 00:00:00.000'
+			2309644800000,   // '2043-03-11 00:00:00.000'
+			893030400000,    // '1998-04-20 00:00:00.000'
+			-4870713600000  // '1815-08-28 00:00:00.000'
+		};
+
+		thrust::device_vector<int32_t> intputDataDev(inputData);
+		thrust::device_vector<gdf_valid_type> inputValidDev(1,255);
+		thrust::device_vector<int64_t> outputDataDev(colSize);
+		thrust::device_vector<gdf_valid_type> outputValidDev(1,255);
+
+		inputCol.data = thrust::raw_pointer_cast(intputDataDev.data());
+		inputCol.valid = thrust::raw_pointer_cast(inputValidDev.data());
+		outputCol.data = thrust::raw_pointer_cast(outputDataDev.data());
+		outputCol.valid = thrust::raw_pointer_cast(outputValidDev.data());
+
+		gdf_error gdfError = gdf_cast_date32_to_date64(&inputCol, &outputCol);
+
+		EXPECT_TRUE( gdfError == GDF_SUCCESS );
+		EXPECT_TRUE( outputCol.dtype == GDF_DATE64 );
+
+		bool result = thrust::equal(inputValidDev.begin(), inputValidDev.end(), outputValidDev.begin());
+		EXPECT_TRUE( result );
+
+		std::vector<int64_t> results(colSize);
+		thrust::copy(outputDataDev.begin(), outputDataDev.end(), results.begin());
+
+		for (int i = 0; i < colSize; i++){
+			EXPECT_TRUE( results[i] == outputData[i] );
+		}
+	}
+
+	// date64 to date32
+	{
+		int colSize = 30;
+
+		gdf_column inputCol;
+		gdf_column outputCol;
+
+		inputCol.dtype = GDF_DATE64;
+		inputCol.size = colSize;
+		outputCol.dtype = GDF_DATE32;
+		outputCol.size = colSize;
+
+		// timestamps with milliseconds
+		std::vector<int64_t> inputData = {
+			1528935590000, // '2018-06-14 00:19:50.000'
+			1528935599999, // '2018-06-14 00:19:59.999'
+			-1577923201000, // '1919-12-31 23:59:59.000'
+			1582934401123, // '2020-02-29 00:00:01.123'
+			0,             // '1970-01-01 00:00:00.000'
+			2309653342222, // '2043-03-11 02:22:22.222'
+			893075430345, // '1998-04-20 12:30:30.345'
+			-4870653058987,  // '1815-08-28 16:49:01.013'
+			-4500,            // '1969-12-31 23:59:55.500'
+			-169138999,    // '1969-12-30 01:01:01.001'
+			-5999,        // '1969-12-31 23:59:54.001'
+			-1991063752000, //	'1906-11-28 06:44:08'
+			-1954281039000, //	'1908-01-28 00:09:21'
+			-1669612095000, //	'1917-02-03 18:51:45'
+			-1184467876000, //	'1932-06-19 21:08:44'
+			362079575000, //	'1981-06-22 17:39:35'
+			629650040000, //	'1989-12-14 14:47:20'
+			692074060000, //	'1991-12-07 02:47:40'
+			734734764000, //	'1993-04-13 20:59:24'
+			1230998894000, //	'2009-01-03 16:08:14'
+			1521989991000, //	'2018-03-25 14:59:51'
+			1726355294000, //	'2024-09-14 23:08:14'
+			-1722880051000, //	'1915-05-29 06:12:29'
+			-948235893000, //	'1939-12-15 01:08:27'
+			-811926962000, //	'1944-04-09 16:43:58'
+			-20852065000, //	'1969-05-04 15:45:35'
+			191206704000, //	'1976-01-23 00:58:24'
+			896735912000, //	'1998-06-01 21:18:32'
+			1262903093000, //	'2010-01-07 22:24:53'
+			1926203568000 //	'2031-01-15 00:32:48'
+		};
+
+		std::vector<int32_t> outputData = {
+			17696,	// '2018-06-14'
+			17696,	// '2018-06-14'
+			-18264,	// '1919-12-31'
+			18321,  // '2020-02-29'
+			0,      // '1970-01-01'
+			26732,  // '2043-03-11'
+			10336,  // '1998-04-20'
+			-56374, // '1815-08-28'
+			-1,		// '1969-12-31'
+			-2,		// '1969-12-30'
+			-1,		// '1969-12-31'
+			-23045,	// '1906-11-28'
+			-22619,	// '1908-01-28'
+			-19325,	// '1917-02-03'
+			-13710,	// '1932-06-19'
+			4190,	// '1981-06-22'
+			7287,	// '1989-12-14'
+			8010,	// '1991-12-07'
+			8503,	// '1993-04-13'
+			14247,	// '2009-01-03'
+			17615,	// '2018-03-25'
+			19980,	// '2024-09-14'
+			-19941,	// '1915-05-29'
+			-10975,	// '1939-12-15'
+			-9398,	// '1944-04-09'
+			-242,	// '1969-05-04'
+			2213,	// '1976-01-23'
+			10378,	// '1998-06-01'
+			14616,	// '2010-01-07'
+			22294	// '2031-01-15'
+		};
+
+		thrust::device_vector<int64_t> intputDataDev(inputData);
+		thrust::device_vector<gdf_valid_type> inputValidDev(4);
+		inputValidDev[0] = 255;
+		inputValidDev[1] = 255;
+		inputValidDev[2] = 255;
+		inputValidDev[3] = 63;
+		thrust::device_vector<int32_t> outputDataDev(colSize);
+		thrust::device_vector<gdf_valid_type> outputValidDev(4);
+
+		inputCol.data = thrust::raw_pointer_cast(intputDataDev.data());
+		inputCol.valid = thrust::raw_pointer_cast(inputValidDev.data());
+		outputCol.data = thrust::raw_pointer_cast(outputDataDev.data());
+		outputCol.valid = thrust::raw_pointer_cast(outputValidDev.data());
+
+		gdf_error gdfError = gdf_cast_date64_to_date32(&inputCol, &outputCol);
+
+		EXPECT_TRUE( gdfError == GDF_SUCCESS );
+		EXPECT_TRUE( outputCol.dtype == GDF_DATE32 );
+
+		bool result = thrust::equal(inputValidDev.begin(), inputValidDev.end(), outputValidDev.begin());
+		EXPECT_TRUE( result );
+
+		std::vector<int32_t> results(colSize);
+		thrust::copy(outputDataDev.begin(), outputDataDev.end(), results.begin());
+
+		for (int i = 0; i < colSize; i++){
+			EXPECT_TRUE( results[i] == outputData[i] );
+		}
+	}
+}
+
+TEST(gdf_date_casting_TEST, date32_to_timestamp) {
+
+	//date32 to timestamp s
+	{
+		int colSize = 8;
+
+		gdf_column inputCol;
+		gdf_column outputCol;
+
+		inputCol.dtype = GDF_DATE32;
+		inputCol.size = colSize;
+		outputCol.dtype = GDF_TIMESTAMP;
+		outputCol.size = colSize;
+		outputCol.dtype_info.time_unit = TIME_UNIT_s;
+
+		std::vector<int32_t> inputData = {
+			17696,	// '2018-06-14'
+			17697,	// '2018-06-15'
+			-18264,	// '1919-12-31'
+			18321,   // '2020-02-29'
+			0,       // '1970-01-01'
+			26732,   // '2043-03-11'
+			10336,    // '1998-04-20'
+			-56374  // '1815-08-28
+		};
+
+		std::vector<int64_t> outputData = {
+			1528934400,	// '2018-06-14 00:00:00'
+			1529020800,	// '2018-06-15 00:00:00'
+			-1578009600,	// '1919-12-31 00:00:00'
+			1582934400,   // '2020-02-29 00:00:00'
+			0,            // '1970-01-01 00:00:00'
+			2309644800,   // '2043-03-11 00:00:00'
+			893030400,    // '1998-04-20 00:00:00'
+			-4870713600  // '1815-08-28 00:00:00'
+		};
+
+		thrust::device_vector<int32_t> intputDataDev(inputData);
+		thrust::device_vector<gdf_valid_type> inputValidDev(1,255);
+		thrust::device_vector<int64_t> outputDataDev(colSize);
+		thrust::device_vector<gdf_valid_type> outputValidDev(1,255);
+
+		inputCol.data = thrust::raw_pointer_cast(intputDataDev.data());
+		inputCol.valid = thrust::raw_pointer_cast(inputValidDev.data());
+		outputCol.data = thrust::raw_pointer_cast(outputDataDev.data());
+		outputCol.valid = thrust::raw_pointer_cast(outputValidDev.data());
+
+		gdf_error gdfError = gdf_cast_date32_to_timestamp(&inputCol, &outputCol);
+
+		EXPECT_TRUE( gdfError == GDF_SUCCESS );
+		EXPECT_TRUE( outputCol.dtype == GDF_TIMESTAMP );
+		EXPECT_TRUE( outputCol.dtype_info.time_unit == TIME_UNIT_s );
+
+		bool result = thrust::equal(inputValidDev.begin(), inputValidDev.end(), outputValidDev.begin());
+		EXPECT_TRUE( result );
+
+		std::vector<int64_t> results(colSize);
+		thrust::copy(outputDataDev.begin(), outputDataDev.end(), results.begin());
+
+		for (int i = 0; i < colSize; i++){
+			if(results[i] != outputData[i])
+				std::cout<<results[i] <<" =? " << outputData[i] << std::endl;
+			EXPECT_TRUE( results[i] == outputData[i] );
+		}
+	}
+
+	//date32 to timestamp ms
+	{
+		int colSize = 8;
+
+		gdf_column inputCol;
+		gdf_column outputCol;
+
+		inputCol.dtype = GDF_DATE32;
+		inputCol.size = colSize;
+		outputCol.dtype = GDF_TIMESTAMP;
+		outputCol.size = colSize;
+		outputCol.dtype_info.time_unit = TIME_UNIT_ms;
+
+		std::vector<int32_t> inputData = {
+			17696,	// '2018-06-14'
+			17697,	// '2018-06-15'
+			-18264,	// '1919-12-31'
+			18321,   // '2020-02-29'
+			0,       // '1970-01-01'
+			26732,   // '2043-03-11'
+			10336,    // '1998-04-20'
+			-56374  // '1815-08-28
+		};
+
+		std::vector<int64_t> outputData = {
+			1528934400000,	// '2018-06-14 00:00:00.000'
+			1529020800000,	// '2018-06-15 00:00:00.000'
+			-1578009600000,	// '1919-12-31 00:00:00.000'
+			1582934400000,   // '2020-02-29 00:00:00.000'
+			0,            // '1970-01-01 00:00:00.000'
+			2309644800000,   // '2043-03-11 00:00:00.000'
+			893030400000,    // '1998-04-20 00:00:00.000'
+			-4870713600000  // '1815-08-28 00:00:00.000'
+		};
+
+		thrust::device_vector<int32_t> intputDataDev(inputData);
+		thrust::device_vector<gdf_valid_type> inputValidDev(1,255);
+		thrust::device_vector<int64_t> outputDataDev(colSize);
+		thrust::device_vector<gdf_valid_type> outputValidDev(1,255);
+
+		inputCol.data = thrust::raw_pointer_cast(intputDataDev.data());
+		inputCol.valid = thrust::raw_pointer_cast(inputValidDev.data());
+		outputCol.data = thrust::raw_pointer_cast(outputDataDev.data());
+		outputCol.valid = thrust::raw_pointer_cast(outputValidDev.data());
+
+		gdf_error gdfError = gdf_cast_date32_to_timestamp(&inputCol, &outputCol);
+
+		EXPECT_TRUE( gdfError == GDF_SUCCESS );
+		EXPECT_TRUE( outputCol.dtype == GDF_TIMESTAMP );
+		EXPECT_TRUE( outputCol.dtype_info.time_unit == TIME_UNIT_ms );
+
+		bool result = thrust::equal(inputValidDev.begin(), inputValidDev.end(), outputValidDev.begin());
+		EXPECT_TRUE( result );
+
+		std::vector<int64_t> results(colSize);
+		thrust::copy(outputDataDev.begin(), outputDataDev.end(), results.begin());
+
+		for (int i = 0; i < colSize; i++){
+			EXPECT_TRUE( results[i] == outputData[i] );
+		}
+	}
+
+	//timestamp ms to date32
+	{
+		int colSize = 8;
+
+		gdf_column inputCol;
+		gdf_column outputCol;
+
+		inputCol.dtype = GDF_TIMESTAMP;
+		inputCol.size = colSize;
+		inputCol.dtype_info.time_unit = TIME_UNIT_ms;
+		outputCol.dtype = GDF_DATE32;
+		outputCol.size = colSize;
+
+		std::vector<int64_t> inputData = {
+			1528935590000, // '2018-06-14 00:19:50.000'
+			1528935599999, // '2018-06-14 00:19:59.999'
+			-1577923201000, // '1919-12-31 23:59:59.000'
+			1582934401123, // '2020-02-29 00:00:01.123'
+			0,             // '1970-01-01 00:00:00.000'
+			2309653342222, // '2043-03-11 02:22:22.222'
+			893075430345, // '1998-04-20 12:30:30.345'
+			-4870653058987,  // '1815-08-28 16:49:01.013'
+		};
+
+		std::vector<int32_t> outputData = {
+			17696,	// '2018-06-14'
+			17696,	// '2018-06-14'
+			-18264,	// '1919-12-31'
+			18321,   // '2020-02-29'
+			0,       // '1970-01-01'
+			26732,   // '2043-03-11'
+			10336,    // '1998-04-20'
+			-56374  // '1815-08-28
+		};
+
+		thrust::device_vector<int64_t> intputDataDev(inputData);
+		thrust::device_vector<gdf_valid_type> inputValidDev(1,255);
+		thrust::device_vector<int32_t> outputDataDev(colSize);
+		thrust::device_vector<gdf_valid_type> outputValidDev(1,255);
+
+		inputCol.data = thrust::raw_pointer_cast(intputDataDev.data());
+		inputCol.valid = thrust::raw_pointer_cast(inputValidDev.data());
+		outputCol.data = thrust::raw_pointer_cast(outputDataDev.data());
+		outputCol.valid = thrust::raw_pointer_cast(outputValidDev.data());
+
+		gdf_error gdfError = gdf_cast_timestamp_to_date32(&inputCol, &outputCol);
+
+		EXPECT_TRUE( gdfError == GDF_SUCCESS );
+		EXPECT_TRUE( outputCol.dtype == GDF_DATE32 );
+
+		bool result = thrust::equal(inputValidDev.begin(), inputValidDev.end(), outputValidDev.begin());
+		EXPECT_TRUE( result );
+
+		std::vector<int32_t> results(colSize);
+		thrust::copy(outputDataDev.begin(), outputDataDev.end(), results.begin());
+
+		for (int i = 0; i < colSize; i++){
+			EXPECT_TRUE( results[i] == outputData[i] );
+		}
+	}
+}
+
+TEST(gdf_date_casting_TEST, date64_to_timestamp) {
+
+	// date64 to timestamp ms
+	{
+		int colSize = 30;
+
+		gdf_column inputCol;
+		gdf_column outputCol;
+
+		inputCol.dtype = GDF_DATE64;
+		inputCol.size = colSize;
+		outputCol.dtype = GDF_TIMESTAMP;
+		outputCol.size = colSize;
+		outputCol.dtype_info.time_unit = TIME_UNIT_ms;
+
+		// timestamps with milliseconds
+		std::vector<int64_t> inputData = {
+			1528935590000, // '2018-06-14 00:19:50.000'
+			1528935599999, // '2018-06-14 00:19:59.999'
+			-1577923201000, // '1919-12-31 23:59:59.000'
+			1582934401123, // '2020-02-29 00:00:01.123'
+			0,             // '1970-01-01 00:00:00.000'
+			2309653342222, // '2043-03-11 02:22:22.222'
+			893075430345, // '1998-04-20 12:30:30.345'
+			-4870653058987,  // '1815-08-28 16:49:01.013'
+			-4500,            // '1969-12-31 23:59:55.500'
+			-169138999,    // '1969-12-30 01:01:01.001'
+			-5999,        // '1969-12-31 23:59:54.001'
+			-1991063752000, //	'1906-11-28 06:44:08'
+			-1954281039000, //	'1908-01-28 00:09:21'
+			-1669612095000, //	'1917-02-03 18:51:45'
+			-1184467876000, //	'1932-06-19 21:08:44'
+			362079575000, //	'1981-06-22 17:39:35'
+			629650040000, //	'1989-12-14 14:47:20'
+			692074060000, //	'1991-12-07 02:47:40'
+			734734764000, //	'1993-04-13 20:59:24'
+			1230998894000, //	'2009-01-03 16:08:14'
+			1521989991000, //	'2018-03-25 14:59:51'
+			1726355294000, //	'2024-09-14 23:08:14'
+			-1722880051000, //	'1915-05-29 06:12:29'
+			-948235893000, //	'1939-12-15 01:08:27'
+			-811926962000, //	'1944-04-09 16:43:58'
+			-20852065000, //	'1969-05-04 15:45:35'
+			191206704000, //	'1976-01-23 00:58:24'
+			896735912000, //	'1998-06-01 21:18:32'
+			1262903093000, //	'2010-01-07 22:24:53'
+			1926203568000 //	'2031-01-15 00:32:48'
+		};
+
+		std::vector<int64_t> outputData(colSize);
+
+		thrust::device_vector<int64_t> intputDataDev(inputData);
+		thrust::device_vector<gdf_valid_type> inputValidDev(4);
+		inputValidDev[0] = 255;
+		inputValidDev[1] = 255;
+		inputValidDev[2] = 255;
+		inputValidDev[3] = 63;
+		thrust::device_vector<int64_t> outputDataDev(colSize);
+		thrust::device_vector<gdf_valid_type> outputValidDev(4);
+
+		inputCol.data = thrust::raw_pointer_cast(intputDataDev.data());
+		inputCol.valid = thrust::raw_pointer_cast(inputValidDev.data());
+		outputCol.data = thrust::raw_pointer_cast(outputDataDev.data());
+		outputCol.valid = thrust::raw_pointer_cast(outputValidDev.data());
+
+		gdf_error gdfError = gdf_cast_date64_to_timestamp(&inputCol, &outputCol);
+
+		EXPECT_TRUE( gdfError == GDF_SUCCESS );
+		EXPECT_TRUE( outputCol.dtype == GDF_TIMESTAMP );
+		EXPECT_TRUE( outputCol.dtype_info.time_unit = TIME_UNIT_ms );
+
+		bool result = thrust::equal(inputValidDev.begin(), inputValidDev.end(), outputValidDev.begin());
+		EXPECT_TRUE( result );
+
+		std::vector<int64_t> results(colSize);
+		thrust::copy(outputDataDev.begin(), outputDataDev.end(), results.begin());
+
+		for (int i = 0; i < colSize; i++){
+			EXPECT_TRUE( results[i] == inputData[i] );
+		}
+	}
+}
+
+TEST(gdf_timestamp_casting_TEST, timestamp_to_timestamp) {
+
+	//timestamp to timestamp from s to ms
+	{
+		int colSize = 30;
+
+		gdf_column inputCol;
+		gdf_column outputCol;
+
+		inputCol.dtype = GDF_TIMESTAMP;
+		inputCol.size = colSize;
+		inputCol.dtype_info.time_unit = TIME_UNIT_s;
+		outputCol.dtype = GDF_TIMESTAMP;
+		outputCol.size = colSize;
+		outputCol.dtype_info.time_unit = TIME_UNIT_ms;
+
+		// timestamps with seconds
+		std::vector<int64_t> inputData = {
+			1528935590, // '2018-06-14 00:19:50'
+			1528935599, // '2018-06-14 00:19:59'
+			-1577923201, // '1919-12-31 23:59:59'
+			1582934401, // '2020-02-29 00:00:01'
+			0,             // '1970-01-01 00:00:00'
+			2309653342, // '2043-03-11 02:22:22'
+			893075430, // '1998-04-20 12:30:30'
+			-4870653059,  // '1815-08-28 16:49:01'
+			-5,            // '1969-12-31 23:59:55'
+			-169139,    // '1969-12-30 01:01:01'
+			-6,        // '1969-12-31 23:59:54'
+			-1991063752, //	'1906-11-28 06:44:08'
+			-1954281039, //	'1908-01-28 00:09:21'
+			-1669612095, //	'1917-02-03 18:51:45'
+			-1184467876, //	'1932-06-19 21:08:44'
+			362079575, //	'1981-06-22 17:39:35'
+			629650040, //	'1989-12-14 14:47:20'
+			692074060, //	'1991-12-07 02:47:40'
+			734734764, //	'1993-04-13 20:59:24'
+			1230998894, //	'2009-01-03 16:08:14'
+			1521989991, //	'2018-03-25 14:59:51'
+			1726355294, //	'2024-09-14 23:08:14'
+			-1722880051, //	'1915-05-29 06:12:29'
+			-948235893, //	'1939-12-15 01:08:27'
+			-811926962, //	'1944-04-09 16:43:58'
+			-20852065, //	'1969-05-04 15:45:35'
+			191206704, //	'1976-01-23 00:58:24'
+			896735912, //	'1998-06-01 21:18:32'
+			1262903093, //	'2010-01-07 22:24:53'
+			1926203568 //	'2031-01-15 00:32:48'
+		};
+
+		// timestamps with milliseconds
+		std::vector<int64_t> outputData = {
+			1528935590000, // '2018-06-14 00:19:50.000'
+			1528935599000, // '2018-06-14 00:19:59.000'
+			-1577923201000, // '1919-12-31 23:59:59.000'
+			1582934401000, // '2020-02-29 00:00:01.000'
+			0,             // '1970-01-01 00:00:00.000'
+			2309653342000, // '2043-03-11 02:22:22.000'
+			893075430000, // '1998-04-20 12:30:30.000'
+			-4870653059000,  // '1815-08-28 16:49:01.000
+			-5000,            // '1969-12-31 23:59:55.000'
+			-169139000,    // '1969-12-30 01:01:01.000
+			-6000,        // '1969-12-31 23:59:54.000'
+			-1991063752000, //	1906-11-28 06:44:08.000
+			-1954281039000, //	1908-01-28 00:09:21.000
+			-1669612095000, //	1917-02-03 18:51:45.000
+			-1184467876000, //	1932-06-19 21:08:44.000
+			362079575000, //	1981-06-22 17:39:35.000
+			629650040000, //	1989-12-14 14:47:20.000
+			692074060000, //	1991-12-07 02:47:40.000
+			734734764000, //	1993-04-13 20:59:24.000
+			1230998894000, //	2009-01-03 16:08:14.000
+			1521989991000, //	2018-03-25 14:59:51.000
+			1726355294000, //	2024-09-14 23:08:14.000
+			-1722880051000, //	1915-05-29 06:12:29.000
+			-948235893000, //	1939-12-15 01:08:27.000
+			-811926962000, //	1944-04-09 16:43:58.000
+			-20852065000, //	1969-05-04 15:45:35.000
+			191206704000, //	1976-01-23 00:58:24.000
+			896735912000, //	1998-06-01 21:18:32.000
+			1262903093000, //	2010-01-07 22:24:53.000
+			1926203568000 //	2031-01-15 00:32:48.000
+		};
+
+		thrust::device_vector<int64_t> intputDataDev(inputData);
+		thrust::device_vector<gdf_valid_type> inputValidDev(4);
+		inputValidDev[0] = 255;
+		inputValidDev[1] = 255;
+		inputValidDev[2] = 255;
+		inputValidDev[3] = 63;
+		thrust::device_vector<int64_t> outputDataDev(colSize);
+		thrust::device_vector<gdf_valid_type> outputValidDev(4);
+
+		inputCol.data = thrust::raw_pointer_cast(intputDataDev.data());
+		inputCol.valid = thrust::raw_pointer_cast(inputValidDev.data());
+		outputCol.data = thrust::raw_pointer_cast(outputDataDev.data());
+		outputCol.valid = thrust::raw_pointer_cast(outputValidDev.data());
+
+		gdf_error gdfError = gdf_cast_timestamp_to_timestamp(&inputCol, &outputCol);
+
+		EXPECT_TRUE( gdfError == GDF_SUCCESS );
+		EXPECT_TRUE( outputCol.dtype == GDF_TIMESTAMP );
+		EXPECT_TRUE( outputCol.dtype_info.time_unit == TIME_UNIT_ms );
+
+		bool result = thrust::equal(inputValidDev.begin(), inputValidDev.end(), outputValidDev.begin());
+		EXPECT_TRUE( result );
+
+		std::vector<int64_t> results(colSize);
+		thrust::copy(outputDataDev.begin(), outputDataDev.end(), results.begin());
+
+		for (int i = 0; i < colSize; i++){
+			EXPECT_TRUE( results[i] == outputData[i] );
+		}
+	}
+
+	//timestamp to timestamp from ms to s
+	{
+		int colSize = 30;
+
+		gdf_column inputCol;
+		gdf_column outputCol;
+
+		inputCol.dtype = GDF_TIMESTAMP;
+		inputCol.size = colSize;
+		inputCol.dtype_info.time_unit = TIME_UNIT_ms;
+		outputCol.dtype = GDF_TIMESTAMP;
+		outputCol.size = colSize;
+		outputCol.dtype_info.time_unit = TIME_UNIT_s;
+
+		// timestamps with milliseconds
+		std::vector<int64_t> inputData = {
+			1528935590000, // '2018-06-14 00:19:50.000'
+			1528935599999, // '2018-06-14 00:19:59.999'
+			-1577923201000, // '1919-12-31 23:59:59.000'
+			1582934401123, // '2020-02-29 00:00:01.123'
+			0,             // '1970-01-01 00:00:00.000'
+			2309653342222, // '2043-03-11 02:22:22.222'
+			893075430345, // '1998-04-20 12:30:30.345'
+			-4870653058987,  // '1815-08-28 16:49:01.013'
+			-4500,            // '1969-12-31 23:59:55.500'
+			-169138999,    // '1969-12-30 01:01:01.001'
+			-5999,        // '1969-12-31 23:59:54.001'
+			-1991063752000, //	'1906-11-28 06:44:08.000'
+			-1954281039000, //	'1908-01-28 00:09:21.000'
+			-1669612095000, //	'1917-02-03 18:51:45.000'
+			-1184467876000, //	'1932-06-19 21:08:44.000'
+			362079575000, //	'1981-06-22 17:39:35.000'
+			629650040000, //	'1989-12-14 14:47:20.000'
+			692074060000, //	'1991-12-07 02:47:40.000'
+			734734764000, //	'1993-04-13 20:59:24.000'
+			1230998894000, //	'2009-01-03 16:08:14.000'
+			1521989991000, //	'2018-03-25 14:59:51.000'
+			1726355294000, //	'2024-09-14 23:08:14.000'
+			-1722880051000, //	'1915-05-29 06:12:29.000'
+			-948235893000, //	'1939-12-15 01:08:27.000'
+			-811926962000, //	'1944-04-09 16:43:58.000'
+			-20852065000, //	'1969-05-04 15:45:35.000'
+			191206704000, //	'1976-01-23 00:58:24.000'
+			896735912000, //	'1998-06-01 21:18:32.000'
+			1262903093000, //	'2010-01-07 22:24:53.000'
+			1926203568000 //	'2031-01-15 00:32:48.000'
+		};
+
+		// timestamps with seconds
+		std::vector<int64_t> outputData = {
+			1528935590, // '2018-06-14 00:19:50'
+			1528935599, // '2018-06-14 00:19:59'
+			-1577923201, // '1919-12-31 23:59:59'
+			1582934401, // '2020-02-29 00:00:01'
+			0,             // '1970-01-01 00:00:00'
+			2309653342, // '2043-03-11 02:22:22'
+			893075430, // '1998-04-20 12:30:30'
+			-4870653059,  // '1815-08-28 16:49:01'
+			-5,            // '1969-12-31 23:59:55'
+			-169139,    // '1969-12-30 01:01:01'
+			-6,        // '1969-12-31 23:59:54'
+			-1991063752, //	'1906-11-28 06:44:08'
+			-1954281039, //	'1908-01-28 00:09:21'
+			-1669612095, //	'1917-02-03 18:51:45'
+			-1184467876, //	'1932-06-19 21:08:44'
+			362079575, //	'1981-06-22 17:39:35'
+			629650040, //	'1989-12-14 14:47:20'
+			692074060, //	'1991-12-07 02:47:40'
+			734734764, //	'1993-04-13 20:59:24'
+			1230998894, //	'2009-01-03 16:08:14'
+			1521989991, //	'2018-03-25 14:59:51'
+			1726355294, //	'2024-09-14 23:08:14'
+			-1722880051, //	'1915-05-29 06:12:29'
+			-948235893, //	'1939-12-15 01:08:27'
+			-811926962, //	'1944-04-09 16:43:58'
+			-20852065, //	'1969-05-04 15:45:35'
+			191206704, //	'1976-01-23 00:58:24'
+			896735912, //	'1998-06-01 21:18:32'
+			1262903093, //	'2010-01-07 22:24:53'
+			1926203568 //	'2031-01-15 00:32:48'
+		};
+
+		thrust::device_vector<int64_t> intputDataDev(inputData);
+		thrust::device_vector<gdf_valid_type> inputValidDev(4);
+		inputValidDev[0] = 255;
+		inputValidDev[1] = 255;
+		inputValidDev[2] = 255;
+		inputValidDev[3] = 63;
+		thrust::device_vector<int64_t> outputDataDev(colSize);
+		thrust::device_vector<gdf_valid_type> outputValidDev(4);
+
+		inputCol.data = thrust::raw_pointer_cast(intputDataDev.data());
+		inputCol.valid = thrust::raw_pointer_cast(inputValidDev.data());
+		outputCol.data = thrust::raw_pointer_cast(outputDataDev.data());
+		outputCol.valid = thrust::raw_pointer_cast(outputValidDev.data());
+
+		gdf_error gdfError = gdf_cast_timestamp_to_timestamp(&inputCol, &outputCol);
+
+		EXPECT_TRUE( gdfError == GDF_SUCCESS );
+		EXPECT_TRUE( outputCol.dtype == GDF_TIMESTAMP );
+		EXPECT_TRUE( outputCol.dtype_info.time_unit == TIME_UNIT_s );
+
+		bool result = thrust::equal(inputValidDev.begin(), inputValidDev.end(), outputValidDev.begin());
+		EXPECT_TRUE( result );
+
+		std::vector<int64_t> results(colSize);
+		thrust::copy(outputDataDev.begin(), outputDataDev.end(), results.begin());
+
+		for (int i = 0; i < colSize; i++){
+			EXPECT_TRUE( results[i] == outputData[i] );
+		}
+	}
+
+	//timestamp to timestamp from s to us
+	{
+		int colSize = 30;
+
+		gdf_column inputCol;
+		gdf_column outputCol;
+
+		inputCol.dtype = GDF_TIMESTAMP;
+		inputCol.size = colSize;
+		inputCol.dtype_info.time_unit = TIME_UNIT_s;
+		outputCol.dtype = GDF_TIMESTAMP;
+		outputCol.size = colSize;
+		outputCol.dtype_info.time_unit = TIME_UNIT_us;
+
+		// timestamps with seconds
+		std::vector<int64_t> inputData = {
+			1528935590, // '2018-06-14 00:19:50'
+			1528935599, // '2018-06-14 00:19:59'
+			-1577923201, // '1919-12-31 23:59:59'
+			1582934401, // '2020-02-29 00:00:01'
+			0,             // '1970-01-01 00:00:00'
+			2309653342, // '2043-03-11 02:22:22'
+			893075430, // '1998-04-20 12:30:30'
+			-4870653059,  // '1815-08-28 16:49:01'
+			-5,            // '1969-12-31 23:59:55'
+			-169139,    // '1969-12-30 01:01:01'
+			-6,        // '1969-12-31 23:59:54'
+			-1991063752, //	'1906-11-28 06:44:08'
+			-1954281039, //	'1908-01-28 00:09:21'
+			-1669612095, //	'1917-02-03 18:51:45'
+			-1184467876, //	'1932-06-19 21:08:44'
+			362079575, //	'1981-06-22 17:39:35'
+			629650040, //	'1989-12-14 14:47:20'
+			692074060, //	'1991-12-07 02:47:40'
+			734734764, //	'1993-04-13 20:59:24'
+			1230998894, //	'2009-01-03 16:08:14'
+			1521989991, //	'2018-03-25 14:59:51'
+			1726355294, //	'2024-09-14 23:08:14'
+			-1722880051, //	'1915-05-29 06:12:29'
+			-948235893, //	'1939-12-15 01:08:27'
+			-811926962, //	'1944-04-09 16:43:58'
+			-20852065, //	'1969-05-04 15:45:35'
+			191206704, //	'1976-01-23 00:58:24'
+			896735912, //	'1998-06-01 21:18:32'
+			1262903093, //	'2010-01-07 22:24:53'
+			1926203568 //	'2031-01-15 00:32:48'
+		};
+
+		// timestamps with microseconds
+		std::vector<int64_t> outputData = {
+			1528935590000000, // '2018-06-14 00:19:50.000000'
+			1528935599000000, // '2018-06-14 00:19:59.000000'
+			-1577923201000000, // '1919-12-31 23:59:59.000000'
+			1582934401000000, // '2020-02-29 00:00:01.000000'
+			0,             // '1970-01-01 00:00:00.000000'
+			2309653342000000, // '2043-03-11 02:22:22.000000'
+			893075430000000, // '1998-04-20 12:30:30.000000'
+			-4870653059000000,  // '1815-08-28 16:49:01.000000'
+			-5000000,            // '1969-12-31 23:59:55.000000'
+			-169139000000,    // '1969-12-30 01:01:01.000000'
+			-6000000,        // '1969-12-31 23:59:54.000000'
+			-1991063752000000, //	'1906-11-28 06:44:08.000000'
+			-1954281039000000, //	'1908-01-28 00:09:21.000000'
+			-1669612095000000, //	'1917-02-03 18:51:45.000000'
+			-1184467876000000, //	'1932-06-19 21:08:44.000000'
+			362079575000000, //	'1981-06-22 17:39:35.000000'
+			629650040000000, //	'1989-12-14 14:47:20.000000'
+			692074060000000, //	'1991-12-07 02:47:40.000000'
+			734734764000000, //	'1993-04-13 20:59:24.000000'
+			1230998894000000, //	'2009-01-03 16:08:14.000000'
+			1521989991000000, //	'2018-03-25 14:59:51.000000'
+			1726355294000000, //	'2024-09-14 23:08:14.000000'
+			-1722880051000000, //	'1915-05-29 06:12:29.000000'
+			-948235893000000, //	'1939-12-15 01:08:27.000000'
+			-811926962000000, //	'1944-04-09 16:43:58.000000'
+			-20852065000000, //	'1969-05-04 15:45:35.000000'
+			191206704000000, //	'1976-01-23 00:58:24.000000'
+			896735912000000, //	'1998-06-01 21:18:32.000000'
+			1262903093000000, //	'2010-01-07 22:24:53.000000'
+			1926203568000000 //	'2031-01-15 00:32:48.000000'
+		};
+
+		thrust::device_vector<int64_t> intputDataDev(inputData);
+		thrust::device_vector<gdf_valid_type> inputValidDev(4);
+		inputValidDev[0] = 255;
+		inputValidDev[1] = 255;
+		inputValidDev[2] = 255;
+		inputValidDev[3] = 63;
+		thrust::device_vector<int64_t> outputDataDev(colSize);
+		thrust::device_vector<gdf_valid_type> outputValidDev(4);
+
+		inputCol.data = thrust::raw_pointer_cast(intputDataDev.data());
+		inputCol.valid = thrust::raw_pointer_cast(inputValidDev.data());
+		outputCol.data = thrust::raw_pointer_cast(outputDataDev.data());
+		outputCol.valid = thrust::raw_pointer_cast(outputValidDev.data());
+
+		gdf_error gdfError = gdf_cast_timestamp_to_timestamp(&inputCol, &outputCol);
+
+		EXPECT_TRUE( gdfError == GDF_SUCCESS );
+		EXPECT_TRUE( outputCol.dtype == GDF_TIMESTAMP );
+		EXPECT_TRUE( outputCol.dtype_info.time_unit == TIME_UNIT_us );
+
+		bool result = thrust::equal(inputValidDev.begin(), inputValidDev.end(), outputValidDev.begin());
+		EXPECT_TRUE( result );
+
+		std::vector<int64_t> results(colSize);
+		thrust::copy(outputDataDev.begin(), outputDataDev.end(), results.begin());
+
+		for (int i = 0; i < colSize; i++){
+			EXPECT_TRUE( results[i] == outputData[i] );
+		}
+	}
+
+	//timestamp to timestamp from us to s
+	{
+		int colSize = 30;
+
+		gdf_column inputCol;
+		gdf_column outputCol;
+
+		inputCol.dtype = GDF_TIMESTAMP;
+		inputCol.size = colSize;
+		inputCol.dtype_info.time_unit = TIME_UNIT_us;
+		outputCol.dtype = GDF_TIMESTAMP;
+		outputCol.size = colSize;
+		outputCol.dtype_info.time_unit = TIME_UNIT_s;
+
+		// timestamps with microseconds
+		std::vector<int64_t> inputData = {
+			1528935590000000, // '2018-06-14 00:19:50.000000'
+			1528935599999999, // '2018-06-14 00:19:59.999999'
+			-1577923201000000, // '1919-12-31 23:59:59.000000'
+			1582934401123123, // '2020-02-29 00:00:01.123123'
+			0,             // '1970-01-01 00:00:00.000000'
+			2309653342222222, // '2043-03-11 02:22:22.222222'
+			893075430345543, // '1998-04-20 12:30:30.345543'
+			-4870653058987789,  // '1815-08-28 16:49:01.012211'
+			-4500005,            // '1969-12-31 23:59:55.499995'
+			-169138999999,    // '1969-12-30 01:01:01.000001'
+			-5999999,        // '1969-12-31 23:59:54.000001'
+			-1991063752000000, //	'1906-11-28 06:44:08.000000'
+			-1954281039000000, //	'1908-01-28 00:09:21.000000'
+			-1669612095000000, //	'1917-02-03 18:51:45.000000'
+			-1184467876000000, //	'1932-06-19 21:08:44.000000'
+			362079575000000, //	'1981-06-22 17:39:35.000000'
+			629650040000000, //	'1989-12-14 14:47:20.000000'
+			692074060000000, //	'1991-12-07 02:47:40.000000'
+			734734764000000, //	'1993-04-13 20:59:24.000000'
+			1230998894000000, //	'2009-01-03 16:08:14.000000'
+			1521989991000000, //	'2018-03-25 14:59:51.000000'
+			1726355294000000, //	'2024-09-14 23:08:14.000000'
+			-1722880051000000, //	'1915-05-29 06:12:29.000000'
+			-948235893000000, //	'1939-12-15 01:08:27.000000'
+			-811926962000000, //	'1944-04-09 16:43:58.000000'
+			-20852065000000, //	'1969-05-04 15:45:35.000000'
+			191206704000000, //	'1976-01-23 00:58:24.000000'
+			896735912000000, //	'1998-06-01 21:18:32.000000'
+			1262903093000000, //	'2010-01-07 22:24:53.000000'
+			1926203568000000 //	'2031-01-15 00:32:48.000000'
+		};
+
+		// timestamps with seconds
+		std::vector<int64_t> outputData = {
+			1528935590, // '2018-06-14 00:19:50'
+			1528935599, // '2018-06-14 00:19:59'
+			-1577923201, // '1919-12-31 23:59:59'
+			1582934401, // '2020-02-29 00:00:01'
+			0,             // '1970-01-01 00:00:00'
+			2309653342, // '2043-03-11 02:22:22'
+			893075430, // '1998-04-20 12:30:30'
+			-4870653059,  // '1815-08-28 16:49:01'
+			-5,            // '1969-12-31 23:59:55'
+			-169139,    // '1969-12-30 01:01:01'
+			-6,        // '1969-12-31 23:59:54'
+			-1991063752, //	'1906-11-28 06:44:08'
+			-1954281039, //	'1908-01-28 00:09:21'
+			-1669612095, //	'1917-02-03 18:51:45'
+			-1184467876, //	'1932-06-19 21:08:44'
+			362079575, //	'1981-06-22 17:39:35'
+			629650040, //	'1989-12-14 14:47:20'
+			692074060, //	'1991-12-07 02:47:40'
+			734734764, //	'1993-04-13 20:59:24'
+			1230998894, //	'2009-01-03 16:08:14'
+			1521989991, //	'2018-03-25 14:59:51'
+			1726355294, //	'2024-09-14 23:08:14'
+			-1722880051, //	'1915-05-29 06:12:29'
+			-948235893, //	'1939-12-15 01:08:27'
+			-811926962, //	'1944-04-09 16:43:58'
+			-20852065, //	'1969-05-04 15:45:35'
+			191206704, //	'1976-01-23 00:58:24'
+			896735912, //	'1998-06-01 21:18:32'
+			1262903093, //	'2010-01-07 22:24:53'
+			1926203568 //	'2031-01-15 00:32:48'
+		};
+
+		thrust::device_vector<int64_t> intputDataDev(inputData);
+		thrust::device_vector<gdf_valid_type> inputValidDev(4);
+		inputValidDev[0] = 255;
+		inputValidDev[1] = 255;
+		inputValidDev[2] = 255;
+		inputValidDev[3] = 63;
+		thrust::device_vector<int64_t> outputDataDev(colSize);
+		thrust::device_vector<gdf_valid_type> outputValidDev(4);
+
+		inputCol.data = thrust::raw_pointer_cast(intputDataDev.data());
+		inputCol.valid = thrust::raw_pointer_cast(inputValidDev.data());
+		outputCol.data = thrust::raw_pointer_cast(outputDataDev.data());
+		outputCol.valid = thrust::raw_pointer_cast(outputValidDev.data());
+
+		gdf_error gdfError = gdf_cast_timestamp_to_timestamp(&inputCol, &outputCol);
+
+		EXPECT_TRUE( gdfError == GDF_SUCCESS );
+		EXPECT_TRUE( outputCol.dtype == GDF_TIMESTAMP );
+		EXPECT_TRUE( outputCol.dtype_info.time_unit == TIME_UNIT_s );
+
+		bool result = thrust::equal(inputValidDev.begin(), inputValidDev.end(), outputValidDev.begin());
+		EXPECT_TRUE( result );
+
+		std::vector<int64_t> results(colSize);
+		thrust::copy(outputDataDev.begin(), outputDataDev.end(), results.begin());
+
+		for (int i = 0; i < colSize; i++){
+			EXPECT_TRUE( results[i] == outputData[i] );
+		}
+	}
+
+	//timestamp to timestamp from s to ns
+	{
+		int colSize = 30;
+
+		gdf_column inputCol;
+		gdf_column outputCol;
+
+		inputCol.dtype = GDF_TIMESTAMP;
+		inputCol.size = colSize;
+		inputCol.dtype_info.time_unit = TIME_UNIT_s;
+		outputCol.dtype = GDF_TIMESTAMP;
+		outputCol.size = colSize;
+		outputCol.dtype_info.time_unit = TIME_UNIT_ns;
+
+		// timestamps with seconds
+		std::vector<int64_t> inputData = {
+			1528935590, // '2018-06-14 00:19:50'
+			1528935599, // '2018-06-14 00:19:59'
+			-1577923201, // '1919-12-31 23:59:59'
+			1582934401, // '2020-02-29 00:00:01'
+			0,             // '1970-01-01 00:00:00'
+			2309653342, // '2043-03-11 02:22:22'
+			893075430, // '1998-04-20 12:30:30'
+			-4870653059,  // '1815-08-28 16:49:01'
+			-5,            // '1969-12-31 23:59:55'
+			-169139,    // '1969-12-30 01:01:01'
+			-6,        // '1969-12-31 23:59:54'
+			-1991063752, //	'1906-11-28 06:44:08'
+			-1954281039, //	'1908-01-28 00:09:21'
+			-1669612095, //	'1917-02-03 18:51:45'
+			-1184467876, //	'1932-06-19 21:08:44'
+			362079575, //	'1981-06-22 17:39:35'
+			629650040, //	'1989-12-14 14:47:20'
+			692074060, //	'1991-12-07 02:47:40'
+			734734764, //	'1993-04-13 20:59:24'
+			1230998894, //	'2009-01-03 16:08:14'
+			1521989991, //	'2018-03-25 14:59:51'
+			1726355294, //	'2024-09-14 23:08:14'
+			-1722880051, //	'1915-05-29 06:12:29'
+			-948235893, //	'1939-12-15 01:08:27'
+			-811926962, //	'1944-04-09 16:43:58'
+			-20852065, //	'1969-05-04 15:45:35'
+			191206704, //	'1976-01-23 00:58:24'
+			896735912, //	'1998-06-01 21:18:32'
+			1262903093, //	'2010-01-07 22:24:53'
+			1926203568 //	'2031-01-15 00:32:48'
+		};
+
+		// timestamps with nanoseconds
+		std::vector<int64_t> outputData = {
+			1528935590000000000, // '2018-06-14 00:19:50.000000000'
+			1528935599000000000, // '2018-06-14 00:19:59.000000000'
+			-1577923201000000000, // '1919-12-31 23:59:59.000000000'
+			1582934401000000000, // '2020-02-29 00:00:01.000000000'
+			0,             // '1970-01-01 00:00:00.000000000'
+			2309653342000000000, // '2043-03-11 02:22:22.000000000'
+			893075430000000000, // '1998-04-20 12:30:30.000000000'
+			-4870653059000000000,  // '1815-08-28 16:49:01.000000000'
+			-5000000000,            // '1969-12-31 23:59:55.000000000'
+			-169139000000000,    // '1969-12-30 01:01:01.000000000'
+			-6000000000,        // '1969-12-31 23:59:54.000000000'
+			-1991063752000000000, //	'1906-11-28 06:44:08.000000000'
+			-1954281039000000000, //	'1908-01-28 00:09:21.000000000'
+			-1669612095000000000, //	'1917-02-03 18:51:45.000000000'
+			-1184467876000000000, //	'1932-06-19 21:08:44.000000000'
+			362079575000000000, //	'1981-06-22 17:39:35.000000000'
+			629650040000000000, //	'1989-12-14 14:47:20.000000000'
+			692074060000000000, //	'1991-12-07 02:47:40.000000000'
+			734734764000000000, //	'1993-04-13 20:59:24.000000000'
+			1230998894000000000, //	'2009-01-03 16:08:14.000000000'
+			1521989991000000000, //	'2018-03-25 14:59:51.000000000'
+			1726355294000000000, //	'2024-09-14 23:08:14.000000000'
+			-1722880051000000000, //	'1915-05-29 06:12:29.000000000'
+			-948235893000000000, //	'1939-12-15 01:08:27.000000000'
+			-811926962000000000, //	'1944-04-09 16:43:58.000000000'
+			-20852065000000000, //	'1969-05-04 15:45:35.000000000'
+			191206704000000000, //	'1976-01-23 00:58:24.000000000'
+			896735912000000000, //	'1998-06-01 21:18:32.000000000'
+			1262903093000000000, //	'2010-01-07 22:24:53.000000000'
+			1926203568000000000 //	'2031-01-15 00:32:48.000000000'
+		};
+
+		thrust::device_vector<int64_t> intputDataDev(inputData);
+		thrust::device_vector<gdf_valid_type> inputValidDev(4);
+		inputValidDev[0] = 255;
+		inputValidDev[1] = 255;
+		inputValidDev[2] = 255;
+		inputValidDev[3] = 63;
+		thrust::device_vector<int64_t> outputDataDev(colSize);
+		thrust::device_vector<gdf_valid_type> outputValidDev(4);
+
+		inputCol.data = thrust::raw_pointer_cast(intputDataDev.data());
+		inputCol.valid = thrust::raw_pointer_cast(inputValidDev.data());
+		outputCol.data = thrust::raw_pointer_cast(outputDataDev.data());
+		outputCol.valid = thrust::raw_pointer_cast(outputValidDev.data());
+
+		gdf_error gdfError = gdf_cast_timestamp_to_timestamp(&inputCol, &outputCol);
+
+		EXPECT_TRUE( gdfError == GDF_SUCCESS );
+		EXPECT_TRUE( outputCol.dtype == GDF_TIMESTAMP );
+		EXPECT_TRUE( outputCol.dtype_info.time_unit == TIME_UNIT_ns );
+
+		bool result = thrust::equal(inputValidDev.begin(), inputValidDev.end(), outputValidDev.begin());
+		EXPECT_TRUE( result );
+
+		std::vector<int64_t> results(colSize);
+		thrust::copy(outputDataDev.begin(), outputDataDev.end(), results.begin());
+
+		for (int i = 0; i < colSize; i++){
+			EXPECT_TRUE( results[i] == outputData[i] );
+		}
+	}
+
+	//timestamp to timestamp from ns to s
+	{
+		int colSize = 30;
+
+		gdf_column inputCol;
+		gdf_column outputCol;
+
+		inputCol.dtype = GDF_TIMESTAMP;
+		inputCol.size = colSize;
+		inputCol.dtype_info.time_unit = TIME_UNIT_ns;
+		outputCol.dtype = GDF_TIMESTAMP;
+		outputCol.size = colSize;
+		outputCol.dtype_info.time_unit = TIME_UNIT_s;
+
+		// timestamps with nanoseconds
+		std::vector<int64_t> inputData = {
+			1528935590000000000, // '2018-06-14 00:19:50.000000000'
+			1528935599999999999, // '2018-06-14 00:19:59.999999999'
+			-1577923201000000000, // '1919-12-31 23:59:59.000000000'
+			1582934401123123123, // '2020-02-29 00:00:01.123123123'
+			0,             // '1970-01-01 00:00:00.000000000'
+			2309653342222222222, // '2043-03-11 02:22:22.222222222'
+			893075430345543345, // '1998-04-20 12:30:30.345543345'
+			-4870653058987789987,  // '1815-08-28 16:49:01.012210013'
+			-4500000005,            // '1969-12-31 23:59:55.499999995'
+			-169138999999999,    // '1969-12-30 01:01:01.000000001'
+			-5999999999,        // '1969-12-31 23:59:54.000000001'
+			-1991063752000000000, //	'1906-11-28 06:44:08.000000000'
+			-1954281039000000000, //	'1908-01-28 00:09:21.000000000'
+			-1669612095000000000, //	'1917-02-03 18:51:45.000000000'
+			-1184467876000000000, //	'1932-06-19 21:08:44.000000000'
+			362079575000000000, //	'1981-06-22 17:39:35.000000000'
+			629650040000000000, //	'1989-12-14 14:47:20.000000000'
+			692074060000000000, //	'1991-12-07 02:47:40.000000000'
+			734734764000000000, //	'1993-04-13 20:59:24.000000000'
+			1230998894000000000, //	'2009-01-03 16:08:14.000000000'
+			1521989991000000000, //	'2018-03-25 14:59:51.000000000'
+			1726355294000000000, //	'2024-09-14 23:08:14.000000000'
+			-1722880051000000000, //	'1915-05-29 06:12:29.000000000'
+			-948235893000000000, //	'1939-12-15 01:08:27.000000000'
+			-811926962000000000, //	'1944-04-09 16:43:58.000000000'
+			-20852065000000000, //	'1969-05-04 15:45:35.000000000'
+			191206704000000000, //	'1976-01-23 00:58:24.000000000'
+			896735912000000000, //	'1998-06-01 21:18:32.000000000'
+			1262903093000000000, //	'2010-01-07 22:24:53.000000000'
+			1926203568000000000 //	'2031-01-15 00:32:48.000000000'
+		};
+
+		// timestamps with seconds
+		std::vector<int64_t> outputData = {
+			1528935590, // '2018-06-14 00:19:50'
+			1528935599, // '2018-06-14 00:19:59'
+			-1577923201, // '1919-12-31 23:59:59'
+			1582934401, // '2020-02-29 00:00:01'
+			0,             // '1970-01-01 00:00:00'
+			2309653342, // '2043-03-11 02:22:22'
+			893075430, // '1998-04-20 12:30:30'
+			-4870653059,  // '1815-08-28 16:49:01'
+			-5,            // '1969-12-31 23:59:55'
+			-169139,    // '1969-12-30 01:01:01'
+			-6,        // '1969-12-31 23:59:54'
+			-1991063752, //	'1906-11-28 06:44:08'
+			-1954281039, //	'1908-01-28 00:09:21'
+			-1669612095, //	'1917-02-03 18:51:45'
+			-1184467876, //	'1932-06-19 21:08:44'
+			362079575, //	'1981-06-22 17:39:35'
+			629650040, //	'1989-12-14 14:47:20'
+			692074060, //	'1991-12-07 02:47:40'
+			734734764, //	'1993-04-13 20:59:24'
+			1230998894, //	'2009-01-03 16:08:14'
+			1521989991, //	'2018-03-25 14:59:51'
+			1726355294, //	'2024-09-14 23:08:14'
+			-1722880051, //	'1915-05-29 06:12:29'
+			-948235893, //	'1939-12-15 01:08:27'
+			-811926962, //	'1944-04-09 16:43:58'
+			-20852065, //	'1969-05-04 15:45:35'
+			191206704, //	'1976-01-23 00:58:24'
+			896735912, //	'1998-06-01 21:18:32'
+			1262903093, //	'2010-01-07 22:24:53'
+			1926203568 //	'2031-01-15 00:32:48'
+		};
+
+		thrust::device_vector<int64_t> intputDataDev(inputData);
+		thrust::device_vector<gdf_valid_type> inputValidDev(4);
+		inputValidDev[0] = 255;
+		inputValidDev[1] = 255;
+		inputValidDev[2] = 255;
+		inputValidDev[3] = 63;
+		thrust::device_vector<int64_t> outputDataDev(colSize);
+		thrust::device_vector<gdf_valid_type> outputValidDev(4);
+
+		inputCol.data = thrust::raw_pointer_cast(intputDataDev.data());
+		inputCol.valid = thrust::raw_pointer_cast(inputValidDev.data());
+		outputCol.data = thrust::raw_pointer_cast(outputDataDev.data());
+		outputCol.valid = thrust::raw_pointer_cast(outputValidDev.data());
+
+		gdf_error gdfError = gdf_cast_timestamp_to_timestamp(&inputCol, &outputCol);
+
+		EXPECT_TRUE( gdfError == GDF_SUCCESS );
+		EXPECT_TRUE( outputCol.dtype == GDF_TIMESTAMP );
+		EXPECT_TRUE( outputCol.dtype_info.time_unit == TIME_UNIT_s );
+
+		bool result = thrust::equal(inputValidDev.begin(), inputValidDev.end(), outputValidDev.begin());
+		EXPECT_TRUE( result );
+
+		std::vector<int64_t> results(colSize);
+		thrust::copy(outputDataDev.begin(), outputDataDev.end(), results.begin());
+
+		for (int i = 0; i < colSize; i++){
+			EXPECT_TRUE( results[i] == outputData[i] );
+		}
+	}
+
+	//timestamp to timestamp from us to ns
+	{
+		int colSize = 30;
+
+		gdf_column inputCol;
+		gdf_column outputCol;
+
+		inputCol.dtype = GDF_TIMESTAMP;
+		inputCol.size = colSize;
+		inputCol.dtype_info.time_unit = TIME_UNIT_us;
+		outputCol.dtype = GDF_TIMESTAMP;
+		outputCol.size = colSize;
+		outputCol.dtype_info.time_unit = TIME_UNIT_ns;
+
+		// timestamps with microseconds
+		std::vector<int64_t> inputData = {
+			1528935590000000, // '2018-06-14 00:19:50.000000'
+			1528935599999999, // '2018-06-14 00:19:59.999999'
+			-1577923201000000, // '1919-12-31 23:59:59.000000'
+			1582934401123123, // '2020-02-29 00:00:01.123123'
+			0,             // '1970-01-01 00:00:00.000000'
+			2309653342222222, // '2043-03-11 02:22:22.222222'
+			893075430345543, // '1998-04-20 12:30:30.345543'
+			-4870653058987789,  // '1815-08-28 16:49:01.012211'
+			-4500005,            // '1969-12-31 23:59:55.499995'
+			-169138999999,    // '1969-12-30 01:01:01.000001'
+			-5999999,        // '1969-12-31 23:59:54.000001'
+			-1991063752000000, //	'1906-11-28 06:44:08.000000'
+			-1954281039000000, //	'1908-01-28 00:09:21.000000'
+			-1669612095000000, //	'1917-02-03 18:51:45.000000'
+			-1184467876000000, //	'1932-06-19 21:08:44.000000'
+			362079575000000, //	'1981-06-22 17:39:35.000000'
+			629650040000000, //	'1989-12-14 14:47:20.000000'
+			692074060000000, //	'1991-12-07 02:47:40.000000'
+			734734764000000, //	'1993-04-13 20:59:24.000000'
+			1230998894000000, //	'2009-01-03 16:08:14.000000'
+			1521989991000000, //	'2018-03-25 14:59:51.000000'
+			1726355294000000, //	'2024-09-14 23:08:14.000000'
+			-1722880051000000, //	'1915-05-29 06:12:29.000000'
+			-948235893000000, //	'1939-12-15 01:08:27.000000'
+			-811926962000000, //	'1944-04-09 16:43:58.000000'
+			-20852065000000, //	'1969-05-04 15:45:35.000000'
+			191206704000000, //	'1976-01-23 00:58:24.000000'
+			896735912000000, //	'1998-06-01 21:18:32.000000'
+			1262903093000000, //	'2010-01-07 22:24:53.000000'
+			1926203568000000 //	'2031-01-15 00:32:48.000000'
+		};
+
+		// timestamps with nanoseconds
+		std::vector<int64_t> outputData = {
+			1528935590000000000, // '2018-06-14 00:19:50.000000000'
+			1528935599999999000, // '2018-06-14 00:19:59.999999000'
+			-1577923201000000000, // '1919-12-31 23:59:59.000000000'
+			1582934401123123000, // '2020-02-29 00:00:01.123123000'
+			0,             // '1970-01-01 00:00:00.000000000'
+			2309653342222222000, // '2043-03-11 02:22:22.222222000'
+			893075430345543000, // '1998-04-20 12:30:30.345543000'
+			-4870653058987789000,  // '1815-08-28 16:49:01.012211000'
+			-4500005000,            // '1969-12-31 23:59:55.499995000'
+			-169138999999000,    // '1969-12-30 01:01:01.000001000'
+			-5999999000,        // '1969-12-31 23:59:54.000001000'
+			-1991063752000000000, //	'1906-11-28 06:44:08.000000000'
+			-1954281039000000000, //	'1908-01-28 00:09:21.000000000'
+			-1669612095000000000, //	'1917-02-03 18:51:45.000000000'
+			-1184467876000000000, //	'1932-06-19 21:08:44.000000000'
+			362079575000000000, //	'1981-06-22 17:39:35.000000000'
+			629650040000000000, //	'1989-12-14 14:47:20.000000000'
+			692074060000000000, //	'1991-12-07 02:47:40.000000000'
+			734734764000000000, //	'1993-04-13 20:59:24.000000000'
+			1230998894000000000, //	'2009-01-03 16:08:14.000000000'
+			1521989991000000000, //	'2018-03-25 14:59:51.000000000'
+			1726355294000000000, //	'2024-09-14 23:08:14.000000000'
+			-1722880051000000000, //	'1915-05-29 06:12:29.000000000'
+			-948235893000000000, //	'1939-12-15 01:08:27.000000000'
+			-811926962000000000, //	'1944-04-09 16:43:58.000000000'
+			-20852065000000000, //	'1969-05-04 15:45:35.000000000'
+			191206704000000000, //	'1976-01-23 00:58:24.000000000'
+			896735912000000000, //	'1998-06-01 21:18:32.000000000'
+			1262903093000000000, //	'2010-01-07 22:24:53.000000000'
+			1926203568000000000 //	'2031-01-15 00:32:48.000000000'
+		};
+
+		thrust::device_vector<int64_t> intputDataDev(inputData);
+		thrust::device_vector<gdf_valid_type> inputValidDev(4);
+		inputValidDev[0] = 255;
+		inputValidDev[1] = 255;
+		inputValidDev[2] = 255;
+		inputValidDev[3] = 63;
+		thrust::device_vector<int64_t> outputDataDev(colSize);
+		thrust::device_vector<gdf_valid_type> outputValidDev(4);
+
+		inputCol.data = thrust::raw_pointer_cast(intputDataDev.data());
+		inputCol.valid = thrust::raw_pointer_cast(inputValidDev.data());
+		outputCol.data = thrust::raw_pointer_cast(outputDataDev.data());
+		outputCol.valid = thrust::raw_pointer_cast(outputValidDev.data());
+
+		gdf_error gdfError = gdf_cast_timestamp_to_timestamp(&inputCol, &outputCol);
+
+		EXPECT_TRUE( gdfError == GDF_SUCCESS );
+		EXPECT_TRUE( outputCol.dtype == GDF_TIMESTAMP );
+		EXPECT_TRUE( outputCol.dtype_info.time_unit == TIME_UNIT_ns );
+
+		bool result = thrust::equal(inputValidDev.begin(), inputValidDev.end(), outputValidDev.begin());
+		EXPECT_TRUE( result );
+
+		std::vector<int64_t> results(colSize);
+		thrust::copy(outputDataDev.begin(), outputDataDev.end(), results.begin());
+
+		for (int i = 0; i < colSize; i++){
+			EXPECT_TRUE( results[i] == outputData[i] );
+		}
+	}
+
+	//timestamp to timestamp from ns to us
+	{
+		int colSize = 30;
+
+		gdf_column inputCol;
+		gdf_column outputCol;
+
+		inputCol.dtype = GDF_TIMESTAMP;
+		inputCol.size = colSize;
+		inputCol.dtype_info.time_unit = TIME_UNIT_ns;
+		outputCol.dtype = GDF_TIMESTAMP;
+		outputCol.size = colSize;
+		outputCol.dtype_info.time_unit = TIME_UNIT_us;
+
+		// timestamps with nanoseconds
+		std::vector<int64_t> inputData = {
+			1528935590000000000, // '2018-06-14 00:19:50.000000000'
+			1528935599999999999, // '2018-06-14 00:19:59.999999999'
+			-1577923201000000000, // '1919-12-31 23:59:59.000000000'
+			1582934401123123123, // '2020-02-29 00:00:01.123123123'
+			0,             // '1970-01-01 00:00:00.000000000'
+			2309653342222222222, // '2043-03-11 02:22:22.222222222'
+			893075430345543345, // '1998-04-20 12:30:30.345543345'
+			-4870653058987789987,  // '1815-08-28 16:49:01.012210013'
+			-4500000005,            // '1969-12-31 23:59:55.499999995'
+			-169138999999999,    // '1969-12-30 01:01:01.000000001'
+			-5999999999,        // '1969-12-31 23:59:54.000000001'
+			-1991063752000000000, //	'1906-11-28 06:44:08.000000000'
+			-1954281039000000000, //	'1908-01-28 00:09:21.000000000'
+			-1669612095000000000, //	'1917-02-03 18:51:45.000000000'
+			-1184467876000000000, //	'1932-06-19 21:08:44.000000000'
+			362079575000000000, //	'1981-06-22 17:39:35.000000000'
+			629650040000000000, //	'1989-12-14 14:47:20.000000000'
+			692074060000000000, //	'1991-12-07 02:47:40.000000000'
+			734734764000000000, //	'1993-04-13 20:59:24.000000000'
+			1230998894000000000, //	'2009-01-03 16:08:14.000000000'
+			1521989991000000000, //	'2018-03-25 14:59:51.000000000'
+			1726355294000000000, //	'2024-09-14 23:08:14.000000000'
+			-1722880051000000000, //	'1915-05-29 06:12:29.000000000'
+			-948235893000000000, //	'1939-12-15 01:08:27.000000000'
+			-811926962000000000, //	'1944-04-09 16:43:58.000000000'
+			-20852065000000000, //	'1969-05-04 15:45:35.000000000'
+			191206704000000000, //	'1976-01-23 00:58:24.000000000'
+			896735912000000000, //	'1998-06-01 21:18:32.000000000'
+			1262903093000000000, //	'2010-01-07 22:24:53.000000000'
+			1926203568000000000 //	'2031-01-15 00:32:48.000000000'
+		};
+
+		// timestamps with microseconds
+		std::vector<int64_t> outputData = {
+			1528935590000000, // '2018-06-14 00:19:50.000000'
+			1528935599999999, // '2018-06-14 00:19:59.999999'
+			-1577923201000000, // '1919-12-31 23:59:59.000000'
+			1582934401123123, // '2020-02-29 00:00:01.123123'
+			0,             // '1970-01-01 00:00:00.000000'
+			2309653342222222, // '2043-03-11 02:22:22.222222'
+			893075430345543, // '1998-04-20 12:30:30.345543'
+			-4870653058987790,  // '1815-08-28 16:49:01.012210'
+			-4500001,            // '1969-12-31 23:59:55.499999'
+			-169139000000,    // '1969-12-30 01:01:01.000000'
+			-6000000,        // '1969-12-31 23:59:54.000000'
+			-1991063752000000, //	'1906-11-28 06:44:08.000000'
+			-1954281039000000, //	'1908-01-28 00:09:21.000000'
+			-1669612095000000, //	'1917-02-03 18:51:45.000000'
+			-1184467876000000, //	'1932-06-19 21:08:44.000000'
+			362079575000000, //	'1981-06-22 17:39:35.000000'
+			629650040000000, //	'1989-12-14 14:47:20.000000'
+			692074060000000, //	'1991-12-07 02:47:40.000000'
+			734734764000000, //	'1993-04-13 20:59:24.000000'
+			1230998894000000, //	'2009-01-03 16:08:14.000000'
+			1521989991000000, //	'2018-03-25 14:59:51.000000'
+			1726355294000000, //	'2024-09-14 23:08:14.000000'
+			-1722880051000000, //	'1915-05-29 06:12:29.000000'
+			-948235893000000, //	'1939-12-15 01:08:27.000000'
+			-811926962000000, //	'1944-04-09 16:43:58.000000'
+			-20852065000000, //	'1969-05-04 15:45:35.000000'
+			191206704000000, //	'1976-01-23 00:58:24.000000'
+			896735912000000, //	'1998-06-01 21:18:32.000000'
+			1262903093000000, //	'2010-01-07 22:24:53.000000'
+			1926203568000000 //	'2031-01-15 00:32:48.000000'
+		};
+
+		thrust::device_vector<int64_t> intputDataDev(inputData);
+		thrust::device_vector<gdf_valid_type> inputValidDev(4);
+		inputValidDev[0] = 255;
+		inputValidDev[1] = 255;
+		inputValidDev[2] = 255;
+		inputValidDev[3] = 63;
+		thrust::device_vector<int64_t> outputDataDev(colSize);
+		thrust::device_vector<gdf_valid_type> outputValidDev(4);
+
+		inputCol.data = thrust::raw_pointer_cast(intputDataDev.data());
+		inputCol.valid = thrust::raw_pointer_cast(inputValidDev.data());
+		outputCol.data = thrust::raw_pointer_cast(outputDataDev.data());
+		outputCol.valid = thrust::raw_pointer_cast(outputValidDev.data());
+
+		gdf_error gdfError = gdf_cast_timestamp_to_timestamp(&inputCol, &outputCol);
+
+		EXPECT_TRUE( gdfError == GDF_SUCCESS );
+		EXPECT_TRUE( outputCol.dtype == GDF_TIMESTAMP );
+		EXPECT_TRUE( outputCol.dtype_info.time_unit == TIME_UNIT_us );
+
+		bool result = thrust::equal(inputValidDev.begin(), inputValidDev.end(), outputValidDev.begin());
+		EXPECT_TRUE( result );
+
+		std::vector<int64_t> results(colSize);
+		thrust::copy(outputDataDev.begin(), outputDataDev.end(), results.begin());
+
+		for (int i = 0; i < colSize; i++){
+			EXPECT_TRUE( results[i] == outputData[i] );
+		}
+	}
+
+	//timestamp to timestamp from ms to ns
+	{
+		int colSize = 30;
+
+		gdf_column inputCol;
+		gdf_column outputCol;
+
+		inputCol.dtype = GDF_TIMESTAMP;
+		inputCol.size = colSize;
+		inputCol.dtype_info.time_unit = TIME_UNIT_ms;
+		outputCol.dtype = GDF_TIMESTAMP;
+		outputCol.size = colSize;
+		outputCol.dtype_info.time_unit = TIME_UNIT_ns;
+
+		// timestamps with milliseconds
+		std::vector<int64_t> inputData = {
+			1528935590000, // '2018-06-14 00:19:50.000'
+			1528935599999, // '2018-06-14 00:19:59.999'
+			-1577923201000, // '1919-12-31 23:59:59.000'
+			1582934401123, // '2020-02-29 00:00:01.123'
+			0,             // '1970-01-01 00:00:00.000'
+			2309653342222, // '2043-03-11 02:22:22.222'
+			893075430345, // '1998-04-20 12:30:30.345'
+			-4870653058987,  // '1815-08-28 16:49:01.013'
+			-4500,            // '1969-12-31 23:59:55.500'
+			-169138999,    // '1969-12-30 01:01:01.001'
+			-5999,        // '1969-12-31 23:59:54.001'
+			-1991063752000, //	'1906-11-28 06:44:08.000'
+			-1954281039000, //	'1908-01-28 00:09:21.000'
+			-1669612095000, //	'1917-02-03 18:51:45.000'
+			-1184467876000, //	'1932-06-19 21:08:44.000'
+			362079575000, //	'1981-06-22 17:39:35.000'
+			629650040000, //	'1989-12-14 14:47:20.000'
+			692074060000, //	'1991-12-07 02:47:40.000'
+			734734764000, //	'1993-04-13 20:59:24.000'
+			1230998894000, //	'2009-01-03 16:08:14.000'
+			1521989991000, //	'2018-03-25 14:59:51.000'
+			1726355294000, //	'2024-09-14 23:08:14.000'
+			-1722880051000, //	'1915-05-29 06:12:29.000'
+			-948235893000, //	'1939-12-15 01:08:27.000'
+			-811926962000, //	'1944-04-09 16:43:58.000'
+			-20852065000, //	'1969-05-04 15:45:35.000'
+			191206704000, //	'1976-01-23 00:58:24.000'
+			896735912000, //	'1998-06-01 21:18:32.000'
+			1262903093000, //	'2010-01-07 22:24:53.000'
+			1926203568000 //	'2031-01-15 00:32:48.000'
+		};
+
+		// timestamps with nanoseconds
+		std::vector<int64_t> outputData = {
+			1528935590000000000, // '2018-06-14 00:19:50.000000000'
+			1528935599999000000, // '2018-06-14 00:19:59.999000000'
+			-1577923201000000000, // '1919-12-31 23:59:59.000000000'
+			1582934401123000000, // '2020-02-29 00:00:01.123000000'
+			0,             // '1970-01-01 00:00:00.000000000'
+			2309653342222000000, // '2043-03-11 02:22:22.222000000'
+			893075430345000000, // '1998-04-20 12:30:30.345000000'
+			-4870653058987000000,  // '1815-08-28 16:49:01.013000000'
+			-4500000000,            // '1969-12-31 23:59:55.500000000'
+			-169138999000000,    // '1969-12-30 01:01:01.001000000'
+			-5999000000,        // '1969-12-31 23:59:54.001000000'
+			-1991063752000000000, //	'1906-11-28 06:44:08.000000000'
+			-1954281039000000000, //	'1908-01-28 00:09:21.000000000'
+			-1669612095000000000, //	'1917-02-03 18:51:45.000000000'
+			-1184467876000000000, //	'1932-06-19 21:08:44.000000000'
+			362079575000000000, //	'1981-06-22 17:39:35.000000000'
+			629650040000000000, //	'1989-12-14 14:47:20.000000000'
+			692074060000000000, //	'1991-12-07 02:47:40.000000000'
+			734734764000000000, //	'1993-04-13 20:59:24.000000000'
+			1230998894000000000, //	'2009-01-03 16:08:14.000000000'
+			1521989991000000000, //	'2018-03-25 14:59:51.000000000'
+			1726355294000000000, //	'2024-09-14 23:08:14.000000000'
+			-1722880051000000000, //	'1915-05-29 06:12:29.000000000'
+			-948235893000000000, //	'1939-12-15 01:08:27.000000000'
+			-811926962000000000, //	'1944-04-09 16:43:58.000000000'
+			-20852065000000000, //	'1969-05-04 15:45:35.000000000'
+			191206704000000000, //	'1976-01-23 00:58:24.000000000'
+			896735912000000000, //	'1998-06-01 21:18:32.000000000'
+			1262903093000000000, //	'2010-01-07 22:24:53.000000000'
+			1926203568000000000 //	'2031-01-15 00:32:48.000000000'
+		};
+
+		thrust::device_vector<int64_t> intputDataDev(inputData);
+		thrust::device_vector<gdf_valid_type> inputValidDev(4);
+		inputValidDev[0] = 255;
+		inputValidDev[1] = 255;
+		inputValidDev[2] = 255;
+		inputValidDev[3] = 63;
+		thrust::device_vector<int64_t> outputDataDev(colSize);
+		thrust::device_vector<gdf_valid_type> outputValidDev(4);
+
+		inputCol.data = thrust::raw_pointer_cast(intputDataDev.data());
+		inputCol.valid = thrust::raw_pointer_cast(inputValidDev.data());
+		outputCol.data = thrust::raw_pointer_cast(outputDataDev.data());
+		outputCol.valid = thrust::raw_pointer_cast(outputValidDev.data());
+
+		gdf_error gdfError = gdf_cast_timestamp_to_timestamp(&inputCol, &outputCol);
+
+		EXPECT_TRUE( gdfError == GDF_SUCCESS );
+		EXPECT_TRUE( outputCol.dtype == GDF_TIMESTAMP );
+		EXPECT_TRUE( outputCol.dtype_info.time_unit == TIME_UNIT_ns );
+
+		bool result = thrust::equal(inputValidDev.begin(), inputValidDev.end(), outputValidDev.begin());
+		EXPECT_TRUE( result );
+
+		std::vector<int64_t> results(colSize);
+		thrust::copy(outputDataDev.begin(), outputDataDev.end(), results.begin());
+
+		for (int i = 0; i < colSize; i++){
+			EXPECT_TRUE( results[i] == outputData[i] );
+		}
+	}
+
+	//timestamp to timestamp from ns to ms
+	{
+		int colSize = 30;
+
+		gdf_column inputCol;
+		gdf_column outputCol;
+
+		inputCol.dtype = GDF_TIMESTAMP;
+		inputCol.size = colSize;
+		inputCol.dtype_info.time_unit = TIME_UNIT_ns;
+		outputCol.dtype = GDF_TIMESTAMP;
+		outputCol.size = colSize;
+		outputCol.dtype_info.time_unit = TIME_UNIT_ms;
+
+		// timestamps with nanoseconds
+		std::vector<int64_t> inputData = {
+			1528935590000000000, // '2018-06-14 00:19:50.000000000'
+			1528935599999999999, // '2018-06-14 00:19:59.999999999'
+			-1577923201000000000, // '1919-12-31 23:59:59.000000000'
+			1582934401123123123, // '2020-02-29 00:00:01.123123123'
+			0,             // '1970-01-01 00:00:00.000000000'
+			2309653342222222222, // '2043-03-11 02:22:22.222222222'
+			893075430345543345, // '1998-04-20 12:30:30.345543345'
+			-4870653058987789987,  // '1815-08-28 16:49:01.012210013'
+			-4500000005,            // '1969-12-31 23:59:55.499999995'
+			-169138999999999,    // '1969-12-30 01:01:01.000000001'
+			-5999999999,        // '1969-12-31 23:59:54.000000001'
+			-1991063752000000000, //	'1906-11-28 06:44:08.000000000'
+			-1954281039000000000, //	'1908-01-28 00:09:21.000000000'
+			-1669612095000000000, //	'1917-02-03 18:51:45.000000000'
+			-1184467876000000000, //	'1932-06-19 21:08:44.000000000'
+			362079575000000000, //	'1981-06-22 17:39:35.000000000'
+			629650040000000000, //	'1989-12-14 14:47:20.000000000'
+			692074060000000000, //	'1991-12-07 02:47:40.000000000'
+			734734764000000000, //	'1993-04-13 20:59:24.000000000'
+			1230998894000000000, //	'2009-01-03 16:08:14.000000000'
+			1521989991000000000, //	'2018-03-25 14:59:51.000000000'
+			1726355294000000000, //	'2024-09-14 23:08:14.000000000'
+			-1722880051000000000, //	'1915-05-29 06:12:29.000000000'
+			-948235893000000000, //	'1939-12-15 01:08:27.000000000'
+			-811926962000000000, //	'1944-04-09 16:43:58.000000000'
+			-20852065000000000, //	'1969-05-04 15:45:35.000000000'
+			191206704000000000, //	'1976-01-23 00:58:24.000000000'
+			896735912000000000, //	'1998-06-01 21:18:32.000000000'
+			1262903093000000000, //	'2010-01-07 22:24:53.000000000'
+			1926203568000000000 //	'2031-01-15 00:32:48.000000000'
+		};
+
+		// timestamps with milliseconds
+		std::vector<int64_t> outputData = {
+			1528935590000, // '2018-06-14 00:19:50.000'
+			1528935599999, // '2018-06-14 00:19:59.999'
+			-1577923201000, // '1919-12-31 23:59:59.000'
+			1582934401123, // '2020-02-29 00:00:01.123'
+			0,             // '1970-01-01 00:00:00.000'
+			2309653342222, // '2043-03-11 02:22:22.222'
+			893075430345, // '1998-04-20 12:30:30.345'
+			-4870653058988,  // '1815-08-28 16:49:01.012'
+			-4501,            // '1969-12-31 23:59:55.499'
+			-169139000,    // '1969-12-30 01:01:01.000'
+			-6000,        // '1969-12-31 23:59:54.000'
+			-1991063752000, //	'1906-11-28 06:44:08.000'
+			-1954281039000, //	'1908-01-28 00:09:21.000'
+			-1669612095000, //	'1917-02-03 18:51:45.000'
+			-1184467876000, //	'1932-06-19 21:08:44.000'
+			362079575000, //	'1981-06-22 17:39:35.000'
+			629650040000, //	'1989-12-14 14:47:20.000'
+			692074060000, //	'1991-12-07 02:47:40.000'
+			734734764000, //	'1993-04-13 20:59:24.000'
+			1230998894000, //	'2009-01-03 16:08:14.000'
+			1521989991000, //	'2018-03-25 14:59:51.000'
+			1726355294000, //	'2024-09-14 23:08:14.000'
+			-1722880051000, //	'1915-05-29 06:12:29.000'
+			-948235893000, //	'1939-12-15 01:08:27.000'
+			-811926962000, //	'1944-04-09 16:43:58.000'
+			-20852065000, //	'1969-05-04 15:45:35.000'
+			191206704000, //	'1976-01-23 00:58:24.000'
+			896735912000, //	'1998-06-01 21:18:32.000'
+			1262903093000, //	'2010-01-07 22:24:53.000'
+			1926203568000 //	'2031-01-15 00:32:48.000'
+		};
+
+		thrust::device_vector<int64_t> intputDataDev(inputData);
+		thrust::device_vector<gdf_valid_type> inputValidDev(4);
+		inputValidDev[0] = 255;
+		inputValidDev[1] = 255;
+		inputValidDev[2] = 255;
+		inputValidDev[3] = 63;
+		thrust::device_vector<int64_t> outputDataDev(colSize);
+		thrust::device_vector<gdf_valid_type> outputValidDev(4);
+
+		inputCol.data = thrust::raw_pointer_cast(intputDataDev.data());
+		inputCol.valid = thrust::raw_pointer_cast(inputValidDev.data());
+		outputCol.data = thrust::raw_pointer_cast(outputDataDev.data());
+		outputCol.valid = thrust::raw_pointer_cast(outputValidDev.data());
+
+		gdf_error gdfError = gdf_cast_timestamp_to_timestamp(&inputCol, &outputCol);
+
+		EXPECT_TRUE( gdfError == GDF_SUCCESS );
+		EXPECT_TRUE( outputCol.dtype == GDF_TIMESTAMP );
+		EXPECT_TRUE( outputCol.dtype_info.time_unit == TIME_UNIT_ms );
+
+		bool result = thrust::equal(inputValidDev.begin(), inputValidDev.end(), outputValidDev.begin());
+		EXPECT_TRUE( result );
+
+		std::vector<int64_t> results(colSize);
+		thrust::copy(outputDataDev.begin(), outputDataDev.end(), results.begin());
+
+		for (int i = 0; i < colSize; i++){
+			EXPECT_TRUE( results[i] == outputData[i] );
+		}
+	}
+
+	//timestamp to timestamp from us to ms
+	{
+		int colSize = 30;
+
+		gdf_column inputCol;
+		gdf_column outputCol;
+
+		inputCol.dtype = GDF_TIMESTAMP;
+		inputCol.size = colSize;
+		inputCol.dtype_info.time_unit = TIME_UNIT_us;
+		outputCol.dtype = GDF_TIMESTAMP;
+		outputCol.size = colSize;
+		outputCol.dtype_info.time_unit = TIME_UNIT_ms;
+
+		// timestamps with microseconds
+		std::vector<int64_t> inputData = {
+			1528935590000000, // '2018-06-14 00:19:50.000000'
+			1528935599999999, // '2018-06-14 00:19:59.999999'
+			-1577923201000000, // '1919-12-31 23:59:59.000000'
+			1582934401123123, // '2020-02-29 00:00:01.123123'
+			0,             // '1970-01-01 00:00:00.000000'
+			2309653342222222, // '2043-03-11 02:22:22.222222'
+			893075430345543, // '1998-04-20 12:30:30.345543'
+			-4870653058987789,  // '1815-08-28 16:49:01.012211'
+			-4500005,            // '1969-12-31 23:59:55.499995'
+			-169138999999,    // '1969-12-30 01:01:01.000001'
+			-5999999,        // '1969-12-31 23:59:54.000001'
+			-1991063752000000, //	'1906-11-28 06:44:08.000000'
+			-1954281039000000, //	'1908-01-28 00:09:21.000000'
+			-1669612095000000, //	'1917-02-03 18:51:45.000000'
+			-1184467876000000, //	'1932-06-19 21:08:44.000000'
+			362079575000000, //	'1981-06-22 17:39:35.000000'
+			629650040000000, //	'1989-12-14 14:47:20.000000'
+			692074060000000, //	'1991-12-07 02:47:40.000000'
+			734734764000000, //	'1993-04-13 20:59:24.000000'
+			1230998894000000, //	'2009-01-03 16:08:14.000000'
+			1521989991000000, //	'2018-03-25 14:59:51.000000'
+			1726355294000000, //	'2024-09-14 23:08:14.000000'
+			-1722880051000000, //	'1915-05-29 06:12:29.000000'
+			-948235893000000, //	'1939-12-15 01:08:27.000000'
+			-811926962000000, //	'1944-04-09 16:43:58.000000'
+			-20852065000000, //	'1969-05-04 15:45:35.000000'
+			191206704000000, //	'1976-01-23 00:58:24.000000'
+			896735912000000, //	'1998-06-01 21:18:32.000000'
+			1262903093000000, //	'2010-01-07 22:24:53.000000'
+			1926203568000000 //	'2031-01-15 00:32:48.000000'
+		};
+
+		// timestamps with milliseconds
+		std::vector<int64_t> outputData = {
+			1528935590000, // '2018-06-14 00:19:50.000'
+			1528935599999, // '2018-06-14 00:19:59.999'
+			-1577923201000, // '1919-12-31 23:59:59.000'
+			1582934401123, // '2020-02-29 00:00:01.123'
+			0,             // '1970-01-01 00:00:00.000'
+			2309653342222, // '2043-03-11 02:22:22.222'
+			893075430345, // '1998-04-20 12:30:30.345'
+			-4870653058988,  // '1815-08-28 16:49:01.012'
+			-4501,            // '1969-12-31 23:59:55.499'
+			-169139000,    // '1969-12-30 01:01:01.000'
+			-6000,        // '1969-12-31 23:59:54.000'
+			-1991063752000, //	'1906-11-28 06:44:08.000'
+			-1954281039000, //	'1908-01-28 00:09:21.000'
+			-1669612095000, //	'1917-02-03 18:51:45.000'
+			-1184467876000, //	'1932-06-19 21:08:44.000'
+			362079575000, //	'1981-06-22 17:39:35.000'
+			629650040000, //	'1989-12-14 14:47:20.000'
+			692074060000, //	'1991-12-07 02:47:40.000'
+			734734764000, //	'1993-04-13 20:59:24.000'
+			1230998894000, //	'2009-01-03 16:08:14.000'
+			1521989991000, //	'2018-03-25 14:59:51.000'
+			1726355294000, //	'2024-09-14 23:08:14.000'
+			-1722880051000, //	'1915-05-29 06:12:29.000'
+			-948235893000, //	'1939-12-15 01:08:27.000'
+			-811926962000, //	'1944-04-09 16:43:58.000'
+			-20852065000, //	'1969-05-04 15:45:35.000'
+			191206704000, //	'1976-01-23 00:58:24.000'
+			896735912000, //	'1998-06-01 21:18:32.000'
+			1262903093000, //	'2010-01-07 22:24:53.000'
+			1926203568000 //	'2031-01-15 00:32:48.000'
+		};
+
+		thrust::device_vector<int64_t> intputDataDev(inputData);
+		thrust::device_vector<gdf_valid_type> inputValidDev(4);
+		inputValidDev[0] = 255;
+		inputValidDev[1] = 255;
+		inputValidDev[2] = 255;
+		inputValidDev[3] = 63;
+		thrust::device_vector<int64_t> outputDataDev(colSize);
+		thrust::device_vector<gdf_valid_type> outputValidDev(4);
+
+		inputCol.data = thrust::raw_pointer_cast(intputDataDev.data());
+		inputCol.valid = thrust::raw_pointer_cast(inputValidDev.data());
+		outputCol.data = thrust::raw_pointer_cast(outputDataDev.data());
+		outputCol.valid = thrust::raw_pointer_cast(outputValidDev.data());
+
+		gdf_error gdfError = gdf_cast_timestamp_to_timestamp(&inputCol, &outputCol);
+
+		EXPECT_TRUE( gdfError == GDF_SUCCESS );
+		EXPECT_TRUE( outputCol.dtype == GDF_TIMESTAMP );
+		EXPECT_TRUE( outputCol.dtype_info.time_unit == TIME_UNIT_ms );
+
+		bool result = thrust::equal(inputValidDev.begin(), inputValidDev.end(), outputValidDev.begin());
+		EXPECT_TRUE( result );
+
+		std::vector<int64_t> results(colSize);
+		thrust::copy(outputDataDev.begin(), outputDataDev.end(), results.begin());
+
+		for (int i = 0; i < colSize; i++){
+			EXPECT_TRUE( results[i] == outputData[i] );
+		}
+	}
+
+	//timestamp to timestamp from ms to us
+	{
+		int colSize = 30;
+
+		gdf_column inputCol;
+		gdf_column outputCol;
+
+		inputCol.dtype = GDF_TIMESTAMP;
+		inputCol.size = colSize;
+		inputCol.dtype_info.time_unit = TIME_UNIT_ms;
+		outputCol.dtype = GDF_TIMESTAMP;
+		outputCol.size = colSize;
+		outputCol.dtype_info.time_unit = TIME_UNIT_us;
+
+		// timestamps with milliseconds
+		std::vector<int64_t> inputData = {
+			1528935590000, // '2018-06-14 00:19:50.000'
+			1528935599999, // '2018-06-14 00:19:59.999'
+			-1577923201000, // '1919-12-31 23:59:59.000'
+			1582934401123, // '2020-02-29 00:00:01.123'
+			0,             // '1970-01-01 00:00:00.000'
+			2309653342222, // '2043-03-11 02:22:22.222'
+			893075430345, // '1998-04-20 12:30:30.345'
+			-4870653058987,  // '1815-08-28 16:49:01.013'
+			-4500,            // '1969-12-31 23:59:55.500'
+			-169138999,    // '1969-12-30 01:01:01.001'
+			-5999,        // '1969-12-31 23:59:54.001'
+			-1991063752000, //	'1906-11-28 06:44:08.000'
+			-1954281039000, //	'1908-01-28 00:09:21.000'
+			-1669612095000, //	'1917-02-03 18:51:45.000'
+			-1184467876000, //	'1932-06-19 21:08:44.000'
+			362079575000, //	'1981-06-22 17:39:35.000'
+			629650040000, //	'1989-12-14 14:47:20.000'
+			692074060000, //	'1991-12-07 02:47:40.000'
+			734734764000, //	'1993-04-13 20:59:24.000'
+			1230998894000, //	'2009-01-03 16:08:14.000'
+			1521989991000, //	'2018-03-25 14:59:51.000'
+			1726355294000, //	'2024-09-14 23:08:14.000'
+			-1722880051000, //	'1915-05-29 06:12:29.000'
+			-948235893000, //	'1939-12-15 01:08:27.000'
+			-811926962000, //	'1944-04-09 16:43:58.000'
+			-20852065000, //	'1969-05-04 15:45:35.000'
+			191206704000, //	'1976-01-23 00:58:24.000'
+			896735912000, //	'1998-06-01 21:18:32.000'
+			1262903093000, //	'2010-01-07 22:24:53.000'
+			1926203568000 //	'2031-01-15 00:32:48.000'
+		};
+
+		// timestamps with microseconds
+		std::vector<int64_t> outputData = {
+			1528935590000000, // '2018-06-14 00:19:50.000000'
+			1528935599999000, // '2018-06-14 00:19:59.999000'
+			-1577923201000000, // '1919-12-31 23:59:59.000000'
+			1582934401123000, // '2020-02-29 00:00:01.123000'
+			0,             // '1970-01-01 00:00:00.000000'
+			2309653342222000, // '2043-03-11 02:22:22.222000'
+			893075430345000, // '1998-04-20 12:30:30.345000'
+			-4870653058987000,  // '1815-08-28 16:49:01.013000'
+			-4500000,            // '1969-12-31 23:59:55.500000'
+			-169138999000,    // '1969-12-30 01:01:01.001000'
+			-5999000,        // '1969-12-31 23:59:54.001000'
+			-1991063752000000, //	'1906-11-28 06:44:08.000000'
+			-1954281039000000, //	'1908-01-28 00:09:21.000000'
+			-1669612095000000, //	'1917-02-03 18:51:45.000000'
+			-1184467876000000, //	'1932-06-19 21:08:44.000000'
+			362079575000000, //	'1981-06-22 17:39:35.000000'
+			629650040000000, //	'1989-12-14 14:47:20.000000'
+			692074060000000, //	'1991-12-07 02:47:40.000000'
+			734734764000000, //	'1993-04-13 20:59:24.000000'
+			1230998894000000, //	'2009-01-03 16:08:14.000000'
+			1521989991000000, //	'2018-03-25 14:59:51.000000'
+			1726355294000000, //	'2024-09-14 23:08:14.000000'
+			-1722880051000000, //	'1915-05-29 06:12:29.000000'
+			-948235893000000, //	'1939-12-15 01:08:27.000000'
+			-811926962000000, //	'1944-04-09 16:43:58.000000'
+			-20852065000000, //	'1969-05-04 15:45:35.000000'
+			191206704000000, //	'1976-01-23 00:58:24.000000'
+			896735912000000, //	'1998-06-01 21:18:32.000000'
+			1262903093000000, //	'2010-01-07 22:24:53.000000'
+			1926203568000000 //	'2031-01-15 00:32:48.000000'
+		};
+
+		thrust::device_vector<int64_t> intputDataDev(inputData);
+		thrust::device_vector<gdf_valid_type> inputValidDev(4);
+		inputValidDev[0] = 255;
+		inputValidDev[1] = 255;
+		inputValidDev[2] = 255;
+		inputValidDev[3] = 63;
+		thrust::device_vector<int64_t> outputDataDev(colSize);
+		thrust::device_vector<gdf_valid_type> outputValidDev(4);
+
+		inputCol.data = thrust::raw_pointer_cast(intputDataDev.data());
+		inputCol.valid = thrust::raw_pointer_cast(inputValidDev.data());
+		outputCol.data = thrust::raw_pointer_cast(outputDataDev.data());
+		outputCol.valid = thrust::raw_pointer_cast(outputValidDev.data());
+
+		gdf_error gdfError = gdf_cast_timestamp_to_timestamp(&inputCol, &outputCol);
+
+		EXPECT_TRUE( gdfError == GDF_SUCCESS );
+		EXPECT_TRUE( outputCol.dtype == GDF_TIMESTAMP );
+		EXPECT_TRUE( outputCol.dtype_info.time_unit == TIME_UNIT_us );
+
+		bool result = thrust::equal(inputValidDev.begin(), inputValidDev.end(), outputValidDev.begin());
+		EXPECT_TRUE( result );
+
+		std::vector<int64_t> results(colSize);
+		thrust::copy(outputDataDev.begin(), outputDataDev.end(), results.begin());
+
+		for (int i = 0; i < colSize; i++){
+			EXPECT_TRUE( results[i] == outputData[i] );
 		}
 	}
 }
