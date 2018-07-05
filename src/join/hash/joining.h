@@ -20,7 +20,7 @@
 #include <memory>
 
 #include "join_compute_api.h"
-#include "join/sort/sort-join.cuh"
+#include "../sort/sort-join.cuh"
 
 // transpose
 template<typename size_type, typename joined_type>

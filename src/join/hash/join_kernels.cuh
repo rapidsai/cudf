@@ -21,7 +21,7 @@ enum JoinType {
   LEFT_JOIN,
 };
 
-#include "hashmap/concurrent_unordered_multimap.cuh"
+#include "../../hashmap/concurrent_unordered_multimap.cuh"
 #include <cub/cub.cuh>
 
 constexpr int warp_size = 32;
