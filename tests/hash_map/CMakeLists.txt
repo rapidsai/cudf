@@ -1,5 +1,5 @@
 set(hash_test_SRCS
-    multimap-test.cu,
+    multimap-test.cu
     join-test.cu
 )
 
