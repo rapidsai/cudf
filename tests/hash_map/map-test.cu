@@ -7,7 +7,7 @@
 #include "gtest/gtest.h"
 #include <gdf/gdf.h>
 #include <gdf/cffi/functions.h>
-#include <../../src/hashmap/concurrent_unordered_multimap.cuh>
+#include <../../src/hashmap/concurrent_unordered_map.cuh>
 
 // This is necessary to do a parametrized typed-test over multiple template arguments
 template <typename Key, typename Value>
@@ -18,17 +18,17 @@ struct KeyValueTypes
 };
 
 
-// A new instance of this class will be created for each *TEST(MultimapTest, ...)
+// A new instance of this class will be created for each *TEST(MapTest, ...)
 // Put all repeated stuff for each test here
 template <class T>
-class MultimapTest : public testing::Test 
+class MapTest : public testing::Test 
 {
 public:
   using key_type = typename T::key_type;
   using value_type = typename T::value_type;
 
 
-  concurrent_unordered_multimap<key_type, 
+  concurrent_unordered_map<key_type, 
                                 value_type, 
                                 std::numeric_limits<key_type>::max() > the_map;
 
@@ -38,14 +38,14 @@ public:
   const int size;
 
 
-  MultimapTest(const int hash_table_size = 100)
+  MapTest(const int hash_table_size = 100)
     : the_map(hash_table_size), size(hash_table_size)
   {
 
 
   }
 
-  ~MultimapTest(){
+  ~MapTest(){
   }
 
 
@@ -67,9 +67,9 @@ typedef ::testing::Types< KeyValueTypes<int,int>,
                           KeyValueTypes<unsigned long long int, unsigned long long int>
                           > Implementations;
 
-TYPED_TEST_CASE(MultimapTest, Implementations);
+TYPED_TEST_CASE(MapTest, Implementations);
 
-TYPED_TEST(MultimapTest, InitialState)
+TYPED_TEST(MapTest, InitialState)
 {
   using key_type = typename TypeParam::key_type;
   using value_type = typename TypeParam::value_type;
@@ -80,7 +80,7 @@ TYPED_TEST(MultimapTest, InitialState)
 
 }
 
-TYPED_TEST(MultimapTest, CheckUnusedValues){
+TYPED_TEST(MapTest, CheckUnusedValues){
 
   EXPECT_EQ(this->the_map.get_unused_key(), this->unused_key);
 
@@ -89,7 +89,7 @@ TYPED_TEST(MultimapTest, CheckUnusedValues){
   EXPECT_EQ(begin->second, this->unused_value);
 }
 
-TYPED_TEST(MultimapTest, Insert)
+TYPED_TEST(MapTest, Insert)
 {
   using key_type = typename TypeParam::key_type;
   using value_type = typename TypeParam::value_type;
@@ -116,4 +116,38 @@ TYPED_TEST(MultimapTest, Insert)
 
 }
 
+TYPED_TEST(MapTest, MaxAggregationTest)
+{
 
+  using key_type = typename TypeParam::key_type;
+  using value_type = typename TypeParam::value_type;
+
+  thrust::pair<key_type, value_type> first_pair{0,0};
+  thrust::pair<key_type, value_type> second_pair{0,10};
+  thrust::pair<key_type, value_type> third_pair{0,5};
+
+  auto max = [](value_type a, value_type b) { return std::max<value_type>(a,b); };
+
+  this->the_map.insert(first_pair, max);
+  auto found = this->the_map.find(0);
+  EXPECT_EQ(0, found->second);
+
+  this->the_map.insert(second_pair, max);
+  found = this->the_map.find(0);
+  EXPECT_EQ(10, found->second);
+
+  this->the_map.insert(third_pair, max);
+  found = this->the_map.find(0);
+  EXPECT_EQ(10, found->second);
+
+  this->the_map.insert(thrust::make_pair(0,11), max);
+  found = this->the_map.find(0);
+  EXPECT_EQ(11, found->second);
+
+}
+
+
+int main(int argc, char * argv[]){
+  testing::InitGoogleTest(&argc, argv);
+  return RUN_ALL_TESTS();
+}

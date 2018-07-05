@@ -370,6 +370,72 @@ public:
     {
         return unused_key;
     }
+
+    template<typename Aggregation_Operator>
+    __forceinline__
+    __host__ __device__ iterator insert(const value_type& x, Aggregation_Operator op)
+    {
+        const size_type hashtbl_size    = m_hashtbl_size;
+        value_type* hashtbl_values      = m_hashtbl_values;
+        const size_type key_hash        = m_hf( x.first );
+        size_type hash_tbl_idx          = key_hash%hashtbl_size;
+        
+        value_type* it = 0;
+        
+        while (0 == it) {
+            value_type* tmp_it = hashtbl_values + hash_tbl_idx;
+#ifdef __CUDA_ARCH__
+            /*
+            if ( std::numeric_limits<key_type>::is_integer && std::numeric_limits<mapped_type>::is_integer &&
+                 sizeof(unsigned long long int) == sizeof(value_type) )
+            {
+                pair2longlong converter = {0ull};
+                converter.pair = thrust::make_pair( unused_key, m_unused_element );
+                const unsigned long long int unused = converter.longlong;
+                converter.pair = x;
+                const unsigned long long int value = converter.longlong;
+                const unsigned long long int old_val = atomicCAS( reinterpret_cast<unsigned long long int*>(tmp_it), unused, value );
+                if ( old_val == unused ) {
+                    it = tmp_it;
+                }
+                else if ( count_collisions )
+                {
+                    atomicAdd( &m_collisions, 1 );
+                }
+            } else {
+                const key_type old_key = atomicCAS( &(tmp_it->first), unused_key, x.first );
+                if ( m_equal( unused_key, old_key ) ) {
+                    (m_hashtbl_values+hash_tbl_idx)->second = x.second;
+                    it = tmp_it;
+                }
+                else if ( count_collisions )
+                {
+                    atomicAdd( &m_collisions, 1 );
+                }
+            }
+            */
+#else
+            
+            #pragma omp critical
+            {
+              // Empty bucket, insert key and value
+              if ( m_equal( unused_key, tmp_it->first ) ) {
+                hashtbl_values[hash_tbl_idx] = thrust::make_pair( x.first, x.second );
+                it = tmp_it;
+              }
+              // This key has been inserted before, perform aggregation on value
+              else if( m_equal(x.first, tmp_it->first) ){
+                const Element new_value = op(x.second, tmp_it->second);
+                hashtbl_values[hash_tbl_idx].second = new_value;
+                it = tmp_it;
+              }
+            }
+#endif
+            hash_tbl_idx = (hash_tbl_idx+1)%hashtbl_size;
+        }
+        
+        return iterator( m_hashtbl_values,m_hashtbl_values+hashtbl_size,it);
+    }
     
     __forceinline__
     __host__ __device__ iterator insert(const value_type& x)
