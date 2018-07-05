@@ -7,7 +7,7 @@
 #include "gtest/gtest.h"
 #include <gdf/gdf.h>
 #include <gdf/cffi/functions.h>
-#include </home/jhemstad/RAPIDS/libgdf/src/hash-join/concurrent_unordered_multimap.cuh>
+#include <../../src/hashmap/concurrent_unordered_multimap.cuh>
 
 // This is necessary to do a parametrized typed-test over multiple template arguments
 template <typename Key, typename Value>
@@ -18,10 +18,10 @@ struct KeyValueTypes
 };
 
 
-// A new instance of this class will be created for each *TEST(HashTest, ...)
+// A new instance of this class will be created for each *TEST(MultimapTest, ...)
 // Put all repeated stuff for each test here
 template <class T>
-class HashTest : public testing::Test 
+class MultimapTest : public testing::Test 
 {
 public:
   using key_type = typename T::key_type;
@@ -38,14 +38,14 @@ public:
   const int size;
 
 
-  HashTest(const int hash_table_size = 100)
+  MultimapTest(const int hash_table_size = 100)
     : the_map(hash_table_size), size(hash_table_size)
   {
 
 
   }
 
-  ~HashTest(){
+  ~MultimapTest(){
   }
 
 
@@ -59,15 +59,17 @@ typedef ::testing::Types< KeyValueTypes<int,int>,
                           KeyValueTypes<int,float>, 
                           KeyValueTypes<int,double>,
                           KeyValueTypes<int,long long int>,
+                          KeyValueTypes<int,unsigned long long int>,
                           KeyValueTypes<unsigned long long int, int>,
                           KeyValueTypes<unsigned long long int, float>,
                           KeyValueTypes<unsigned long long int, double>,
+                          KeyValueTypes<unsigned long long int, long long int>,
                           KeyValueTypes<unsigned long long int, unsigned long long int>
                           > Implementations;
 
-TYPED_TEST_CASE(HashTest, Implementations);
+TYPED_TEST_CASE(MultimapTest, Implementations);
 
-TYPED_TEST(HashTest, InitialState)
+TYPED_TEST(MultimapTest, InitialState)
 {
   using key_type = typename TypeParam::key_type;
   using value_type = typename TypeParam::value_type;
@@ -78,7 +80,7 @@ TYPED_TEST(HashTest, InitialState)
 
 }
 
-TYPED_TEST(HashTest, CheckUnusedValues){
+TYPED_TEST(MultimapTest, CheckUnusedValues){
 
   EXPECT_EQ(this->the_map.get_unused_key(), this->unused_key);
 
@@ -87,7 +89,7 @@ TYPED_TEST(HashTest, CheckUnusedValues){
   EXPECT_EQ(begin->second, this->unused_value);
 }
 
-TYPED_TEST(HashTest, Insert)
+TYPED_TEST(MultimapTest, Insert)
 {
   using key_type = typename TypeParam::key_type;
   using value_type = typename TypeParam::value_type;
