@@ -19,8 +19,8 @@
 #include <limits>
 #include <memory>
 
-#include "hash-join/join_compute_api.h"
-#include "sort-join.cuh"
+#include "join_compute_api.h"
+#include "join/sort/sort-join.cuh"
 
 // transpose
 template<typename size_type, typename joined_type>
