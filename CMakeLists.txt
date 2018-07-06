@@ -130,7 +130,7 @@ set_package_properties(GTest PROPERTIES TYPE OPTIONAL
 if(GTEST_FOUND)
     message(STATUS "Google C++ Testing Framework (Google Test) found in ${GTEST_ROOT}")
     include_directories(${GTEST_INCLUDE_DIRS})
-    add_subdirectory(tests)
+    add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/src/tests)
 else()
     message(AUTHOR_WARNING "Google C++ Testing Framework (Google Test) not found: automated tests are disabled.")
 endif()
