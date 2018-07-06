@@ -33,7 +33,7 @@ install:
   # install conda build
   - conda install conda-build anaconda-client --yes
   # install libboost
-  - apt-get install libboost-all-dev
+  - sudo apt-get install libboost-all-dev
 
 script:
   # build ligdf
