@@ -20,6 +20,32 @@ link_directories($ENV{CONDA_PREFIX}/lib)
 
 set(CUDA_NVCC_FLAGS  ${CUDA_NVCC_FLAGS};-std=c++11;--expt-extended-lambda)
 
+IF(CUDA_VERSION_MAJOR GREATER 7)
+    set(CUDA_NVCC_FLAGS ${CUDA_NVCC_FLAGS};-gencode;arch=compute_60,code=sm_60)
+ENDIF(CUDA_VERSION_MAJOR GREATER 7)
+
+IF(CUDA_VERSION_MAJOR GREATER 8)
+    set(CUDA_NVCC_FLAGS ${CUDA_NVCC_FLAGS};-gencode;arch=compute_70,code=sm_70)
+ENDIF(CUDA_VERSION_MAJOR GREATER 8)
+
+IF(CMAKE_BUILD_TYPE MATCHES DEBUG)
+    set(CUDA_NVCC_FLAGS ${CUDA_NVCC_FLAGS};-g;-G)
+ENDIF(CMAKE_BUILD_TYPE MATCHES DEBUG)
+
+# switch between hash-join and sort-join
+option(HASH_JOIN "hash-based join" OFF)
+if(HASH_JOIN)
+  message("-- Using the hash-based join implementation")
+  set(CUDA_NVCC_FLAGS  ${CUDA_NVCC_FLAGS};-DHASH_JOIN)
+endif()
+
+# switch between cudaMalloc and cudaMallocManaged for hash tables
+option(HT_LEGACY_ALLOCATOR "legacy allocator for hash tables" ON)
+if(HT_LEGACY_ALLOCATOR)
+  message("-- Using the legacy allocator for hash tables")
+  set(CUDA_NVCC_FLAGS  ${CUDA_NVCC_FLAGS};-DHT_LEGACY_ALLOCATOR)
+endif()
+
 cuda_add_library(gdf SHARED
     src/binaryops.cu
     src/column.cpp
