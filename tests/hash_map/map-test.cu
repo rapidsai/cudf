@@ -116,7 +116,7 @@ TYPED_TEST(MapTest, Insert)
 
 }
 
-TYPED_TEST(MapTest, MaxAggregationTest)
+TYPED_TEST(MapTest, MaxAggregationTestHost)
 {
 
   using key_type = typename TypeParam::key_type;
@@ -141,6 +141,22 @@ TYPED_TEST(MapTest, MaxAggregationTest)
   EXPECT_EQ(10, found->second);
 
   this->the_map.insert(thrust::make_pair(0,11), max);
+  found = this->the_map.find(0);
+  EXPECT_EQ(11, found->second);
+
+
+  this->the_map.insert(thrust::make_pair(7, 42), max);
+  found = this->the_map.find(7);
+  EXPECT_EQ(42, found->second);
+
+  this->the_map.insert(thrust::make_pair(7, 62), max);
+  found = this->the_map.find(7);
+  EXPECT_EQ(62, found->second);
+
+  this->the_map.insert(thrust::make_pair(7, 42), max);
+  found = this->the_map.find(7);
+  EXPECT_EQ(62, found->second);
+
   found = this->the_map.find(0);
   EXPECT_EQ(11, found->second);
 

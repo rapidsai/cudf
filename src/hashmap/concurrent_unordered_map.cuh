@@ -383,55 +383,80 @@ public:
         value_type* it = 0;
         
         while (0 == it) {
-            value_type* tmp_it = hashtbl_values + hash_tbl_idx;
+          value_type* tmp_it = hashtbl_values + hash_tbl_idx;
 #ifdef __CUDA_ARCH__
-            /*
-            if ( std::numeric_limits<key_type>::is_integer && std::numeric_limits<mapped_type>::is_integer &&
-                 sizeof(unsigned long long int) == sizeof(value_type) )
-            {
-                pair2longlong converter = {0ull};
-                converter.pair = thrust::make_pair( unused_key, m_unused_element );
-                const unsigned long long int unused = converter.longlong;
-                converter.pair = x;
-                const unsigned long long int value = converter.longlong;
-                const unsigned long long int old_val = atomicCAS( reinterpret_cast<unsigned long long int*>(tmp_it), unused, value );
-                if ( old_val == unused ) {
-                    it = tmp_it;
-                }
-                else if ( count_collisions )
-                {
-                    atomicAdd( &m_collisions, 1 );
-                }
-            } else {
-                const key_type old_key = atomicCAS( &(tmp_it->first), unused_key, x.first );
-                if ( m_equal( unused_key, old_key ) ) {
-                    (m_hashtbl_values+hash_tbl_idx)->second = x.second;
-                    it = tmp_it;
-                }
-                else if ( count_collisions )
-                {
-                    atomicAdd( &m_collisions, 1 );
-                }
+
+          const key_type old_key = atomicCAS( &(tmp_it->first), unused_key, x.first );
+
+          // Empty bucket, insert key and value
+          if ( m_equal( unused_key, old_key ) ) {
+            (m_hashtbl_values+hash_tbl_idx)->second = x.second;
+            it = tmp_it;
+          }
+
+          // Check for collision with another key. If this is the key we're looking for
+          // perform the aggregation with the old value atomically
+          // TODO: Use template specialization to make use of native atomic functions
+          // TODO: How to handle data types less than 32 bits?
+          else if ( m_equal(x.first, old_key) ){
+
+            if(sizeof(Element) == sizeof(unsigned long long int)){
+                unsigned long long int * const target = (unsigned long long int* ) &(hashtbl_values[hash_tbl_idx].second);
+
+                unsigned long long int old_value = (unsigned long long int) hashtbl_values[hash_tbl_idx].second;
+
+                unsigned long long int expected = 0;
+
+              do {
+
+                expected = old_value;
+
+                const Element new_value = op(x.second, old_value);
+
+                old_value = atomicCAS(target, expected, (unsigned long long int) new_value);
+
+              }while( expected != old_value);
             }
-            */
+
+            else if(sizeof(Element) == sizeof(int)){
+                int * const target = ( int* ) &(hashtbl_values[hash_tbl_idx].second);
+
+                int old_value = ( int) hashtbl_values[hash_tbl_idx].second;
+
+                int expected = 0;
+
+              do {
+
+                expected = old_value;
+
+                const Element new_value = op(x.second, old_value);
+
+                old_value = atomicCAS(target, expected, (int) new_value);
+
+              }while( expected != old_value);
+
+            }
+            it = tmp_it;
+          }
+
 #else
-            
-            #pragma omp critical
-            {
-              // Empty bucket, insert key and value
-              if ( m_equal( unused_key, tmp_it->first ) ) {
-                hashtbl_values[hash_tbl_idx] = thrust::make_pair( x.first, x.second );
-                it = tmp_it;
-              }
-              // This key has been inserted before, perform aggregation on value
-              else if( m_equal(x.first, tmp_it->first) ){
-                const Element new_value = op(x.second, tmp_it->second);
-                hashtbl_values[hash_tbl_idx].second = new_value;
-                it = tmp_it;
-              }
+
+#pragma omp critical
+          {
+            // Empty bucket, insert key and value
+            if ( m_equal( unused_key, tmp_it->first ) ) {
+              hashtbl_values[hash_tbl_idx] = thrust::make_pair( x.first, x.second );
+              it = tmp_it;
             }
+            // This key has been inserted before, perform aggregation on value
+            else if( m_equal(x.first, tmp_it->first) ){
+              const Element new_value = op(x.second, tmp_it->second);
+              hashtbl_values[hash_tbl_idx].second = new_value;
+              it = tmp_it;
+            }
+          }
 #endif
-            hash_tbl_idx = (hash_tbl_idx+1)%hashtbl_size;
+          hash_tbl_idx = (hash_tbl_idx+1)%hashtbl_size;
         }
         
         return iterator( m_hashtbl_values,m_hashtbl_values+hashtbl_size,it);
