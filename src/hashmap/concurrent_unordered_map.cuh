@@ -63,6 +63,21 @@ __inline__ __device__ int64_t atomicCAS(int64_t* address, int64_t compare, int64
   return (int64_t)atomicCAS((unsigned long long*)address, (unsigned long long)compare, (unsigned long long)val);
 }
 
+__inline__ __device__ long long int atomicCAS(long long int* address, long long int compare, long long int val)
+{
+  return (long long int)atomicCAS((unsigned long long*)address, (unsigned long long)compare, (unsigned long long)val);
+}
+
+__inline__ __device__ double atomicCAS(double* address, double compare, double val)
+{
+  return __longlong_as_double(atomicCAS((unsigned long long int*)address, __double_as_longlong(compare), __double_as_longlong(val)));
+}
+
+__inline__ __device__ float atomicCAS(float* address, float compare, float val)
+{
+  return __int_as_float(atomicCAS((int*)address, __float_as_int(compare), __float_as_int(val)));
+}
+
 __inline__ __device__ int64_t atomicAdd(int64_t* address, int64_t val)
 {
   return (int64_t)atomicAdd((unsigned long long*)address, (unsigned long long)val);
@@ -400,42 +415,22 @@ public:
           // TODO: How to handle data types less than 32 bits?
           else if ( m_equal(x.first, old_key) ){
 
-            if(sizeof(Element) == sizeof(unsigned long long int)){
-                unsigned long long int * const target = (unsigned long long int* ) &(hashtbl_values[hash_tbl_idx].second);
+            Element * const target = &(hashtbl_values[hash_tbl_idx].second);
 
-                unsigned long long int old_value = (unsigned long long int) hashtbl_values[hash_tbl_idx].second;
+            Element old_value = *target;
 
-                unsigned long long int expected = 0;
+            Element expected = old_value;
 
-              do {
+            do {
 
-                expected = old_value;
+              expected = old_value;
 
-                const Element new_value = op(x.second, old_value);
+              Element new_value = op(x.second, old_value);
 
-                old_value = atomicCAS(target, expected, (unsigned long long int) new_value);
+              old_value = atomicCAS(target, expected, new_value);
 
-              }while( expected != old_value);
-            }
+            }while( expected != old_value);
 
-            else if(sizeof(Element) == sizeof(int)){
-                int * const target = ( int* ) &(hashtbl_values[hash_tbl_idx].second);
-
-                int old_value = ( int) hashtbl_values[hash_tbl_idx].second;
-
-                int expected = 0;
-
-              do {
-
-                expected = old_value;
-
-                const Element new_value = op(x.second, old_value);
-
-                old_value = atomicCAS(target, expected, (int) new_value);
-
-              }while( expected != old_value);
-
-            }
             it = tmp_it;
           }
 
