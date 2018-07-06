@@ -46,8 +46,7 @@ find_package(CUDA)
 set_package_properties(
     CUDA PROPERTIES TYPE REQUIRED
     PURPOSE "NVIDIA CUDA® parallel computing platform and programming model."
-    URL "https://developer.nvidia.com/cuda-zone"
-)
+    URL "https://developer.nvidia.com/cuda-zone")
 
 if(CUDA_FOUND)
     message(STATUS "CUDA ${CUDA_VERSION} found in ${CUDA_TOOLKIT_ROOT_DIR}")
