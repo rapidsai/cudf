@@ -20,6 +20,8 @@ typedef enum {
     GDF_COLUMN_SIZE_TOO_BIG,
     GDF_VALIDITY_MISSING,
     GDF_VALIDITY_UNSUPPORTED,
+    GDF_JOIN_DTYPE_MISMATCH,
+    GDF_JOIN_TOO_MANY_COLUMNS,
 } gdf_error;
 
 typedef struct gdf_column_{
