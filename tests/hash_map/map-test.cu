@@ -126,7 +126,7 @@ TYPED_TEST(MapTest, MaxAggregationTestHost)
   thrust::pair<key_type, value_type> second_pair{0,10};
   thrust::pair<key_type, value_type> third_pair{0,5};
 
-  auto max = [](value_type a, value_type b) { return std::max<value_type>(a,b); };
+  auto max = [](value_type a, value_type b) { return (a >= b ? a : b); };
 
   this->the_map.insert(first_pair, max);
   auto found = this->the_map.find(0);
@@ -159,6 +159,52 @@ TYPED_TEST(MapTest, MaxAggregationTestHost)
 
   found = this->the_map.find(0);
   EXPECT_EQ(11, found->second);
+
+}
+
+
+template<typename map_type, typename Aggregation_Operator>
+__global__ void build_table(map_type * const the_map,
+                            const typename map_type::key_type* const input_keys,
+                            const typename map_type::mapped_type* const input_values,
+                            const typename map_type::size_type input_size,
+                            Aggregation_Operator op)
+{
+
+  using size_type = typename map_type::size_type;
+
+  const size_type i = threadIdx.x + blockIdx.x * blockDim.x;
+
+  if( i < input_size ){
+    the_map->insert(thrust::make_pair(input_keys[i], input_values[i]), op);
+  }
+
+}
+
+TYPED_TEST(MapTest, AggregationTestDevice)
+{
+  using key_type = typename TypeParam::key_type;
+  using value_type = typename TypeParam::value_type;
+
+  std::vector<key_type>   keys   {0, 0, 0, 5, 5, 5, 10, 10, 10, 11, 12, 13};
+  std::vector<value_type> values {0, 1, 2, 5, 5, 4, 13, 12, 11,  6, 97, 42};
+
+  thrust::device_vector<key_type> d_keys{keys};
+  thrust::device_vector<value_type> d_values{values};
+
+
+  //using size_type = typename (this->the_map)::size_type;
+  //size_type input_size = keys.size();
+
+  //auto max = [] __device__ (value_type a, value_type b) { return (a >= b ? a : b); };
+
+  //build_table<<<1,256>>>(&(this->the_map),
+  //                        thrust::raw_pointer_cast(d_keys.data()),
+  //                        thrust::raw_pointer_cast(d_values.data()),
+  //                        input_size,
+  //                        max);
+
+
 
 }
 
