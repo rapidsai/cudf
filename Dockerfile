@@ -1,10 +1,7 @@
 # An integration test & dev container which builds and installs libgdf & pygdf from master
 
+# Update based on your host's CUDA driver version
 FROM nvidia/cuda:9.2-devel
-# Or, change base image to for your installed CUDA driver version
-# Tested working with
-#FROM nvidia/cuda:9.1-devel
-#FROM nvidia/cuda:9.0-devel
 
 RUN apt update -y --fix-missing && \
     apt upgrade -y && \
@@ -33,6 +30,7 @@ ENV LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/cuda/lib64:/usr/local/lib
 ENV CC=/usr/bin/gcc-4.8
 ENV CXX=/usr/bin/g++-4.8
 
+# Update the URLs below to build against forks, other branches, or specific PR
 RUN git clone --recurse-submodules https://github.com/gpuopenanalytics/libgdf
 RUN git clone --recurse-submodules https://github.com/gpuopenanalytics/pygdf
 RUN source activate gdf && \

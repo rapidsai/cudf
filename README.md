@@ -36,7 +36,8 @@ python setup.py install
 
 Note: This assumes dependencies including (libgdf)[https://github.com/gpuopenanalytics/libgdf] are already installed, so it is recommended to use the conda environment.
 
-There is also a Dockerfile which builds and installs LibGDF and PyGDF from source:
+There is also a Dockerfile which builds and installs LibGDF and PyGDF from master for each:
+**Note**: CUDA version (specified in Dockerfile and conda_environments/gdf_build.yml) must match the CUDA driver version installed on the host which will run this container.
 ```
 # From pygdf project root, with CUDA 9.2 driver installed on host machine:
 docker build -t pygdf .

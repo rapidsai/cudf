@@ -7,7 +7,8 @@ dependencies:
 - pip
 - setuptools
 - cmake
-- cudatoolkit
+# Update based on your host's CUDA driver version
+- cudatoolkit=9.2
 - numba
 - pandas
 - flatbuffers
