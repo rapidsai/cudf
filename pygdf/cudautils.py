@@ -1,3 +1,5 @@
+# Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
+
 import numpy as np
 
 from numba import cuda, int32, numpy_support
@@ -617,6 +619,21 @@ def find_segments(arr, segs=None, markers=None):
     begins = cuda.device_array(shape=int(ct), dtype=np.intp)
     gpu_scatter_segment_begins.forall(markers.size)(markers, scanned, begins)
     return begins, markers
+
+
+@cuda.jit
+def gpu_value_counts(arr, counts, total_size):
+    i = cuda.grid(1)
+    if 0 <= i < arr.size - 1:
+        counts[i] = arr[i+1] - arr[i]
+    elif i == arr.size - 1:
+        counts[i] = total_size - arr[i]
+
+
+def value_count(arr, total_size):
+    counts = cuda.device_array(shape=len(arr), dtype=np.intp)
+    gpu_value_counts.forall(arr.size)(arr, counts, total_size)
+    return counts
 
 
 @cuda.jit

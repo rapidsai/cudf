@@ -1,6 +1,9 @@
+# Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
+
 import pytest
 
 import numpy as np
+import pandas as pd
 
 from pygdf.dataframe import Series
 
@@ -53,6 +56,13 @@ def test_series_unique():
         mask = arr != -1
         sr = Series.from_masked_array(arr, Series(mask).as_mask())
         assert set(arr[mask]) == set(sr.unique().to_array())
+        assert len(set(arr[mask])) == sr.unique_count()
+        df = pd.DataFrame(data=arr[mask], columns=['col'])
+        expect = df.col.value_counts().sort_index()
+        got = sr.value_counts().to_pandas().sort_index()
+        print(expect.head())
+        print(got.head())
+        assert got.equals(expect)
 
 
 def test_series_scale():
