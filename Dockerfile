@@ -31,8 +31,11 @@ ENV CC=/usr/bin/gcc-4.8
 ENV CXX=/usr/bin/g++-4.8
 
 # Update the URLs below to build against forks, other branches, or specific PR
-RUN git clone --recurse-submodules https://github.com/gpuopenanalytics/libgdf
-RUN git clone --recurse-submodules https://github.com/gpuopenanalytics/pygdf
+ARG LIBGDF_REPO=https://github.com/gpuopenanalytics/libgdf
+ARG PYGDF_REPO=https://github.com/gpuopenanalytics/pygdf
+RUN git clone --recurse-submodules ${LIBGDF_REPO}
+RUN git clone --recurse-submodules ${PYGDF_REPO}
+
 RUN source activate gdf && \
     mkdir -p /libgdf/build && \
     cd /libgdf/build && \
