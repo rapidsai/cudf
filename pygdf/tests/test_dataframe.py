@@ -218,7 +218,7 @@ def test_dataframe_loc():
     size = 123
     df['a'] = ha = np.random.randint(low=0, high=100, size=size)\
         .astype(np.int32)
-    df['b'] = np.random.random(size).astype(np.float32)
+    df['b'] = hb = np.random.random(size).astype(np.float32)  # noqa: F841
     df['c'] = hc = np.random.randint(low=0, high=100, size=size)\
         .astype(np.int64)
     df['d'] = hd = np.random.random(size).astype(np.float64)
