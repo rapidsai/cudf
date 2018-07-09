@@ -1,3 +1,21 @@
+/*
+ * Copyright 2018 BlazingDB, Inc.
+ *     Copyright 2018 Felipe Aramburu <felipe@blazingdb.com>
+ *     Copyright 2018 Alexander Ocsa <alexander@blazingdb.com>
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 #include <gdf/gdf.h>
 #include <gdf/utils.h>
 #include <gdf/errorutils.h>
@@ -18,9 +36,6 @@
 
 //std lib
 #include <map>
-
-
-
 
 //wow the freaking example from iterator_adaptpr, what a break right!
 template<typename Iterator>
@@ -121,35 +136,7 @@ struct shift_right: public thrust::unary_function<gdf_valid_type,gdf_valid_type>
 
   }
 };
-
-
-/*
-
-
- gdf_valid_type concat_bins (gdf_valid_type A, gdf_valid_type B, int len_a, int len_b, bool has_next, size_t right_length){
-    std::cout << "A | B\n";
-    print_binary(A, len_a);
-    print_binary(B, len_b);
-    std::cout << has_next << "\t" << right_length <<  "\n";
-
-    A = A << len_b;
-    if (!has_next) {
-		std::cout << "case 1: sum last_bytes: " << std::endl;
-
-        B = B << len_a;
-        B = B >> len_a;
-    } else {
-		std::cout << "case 2: sum last_bytes: " << std::endl;
-        B = B >> right_length - len_b;
-    }
-    std::cout << "A | B\n";
-    print_binary(A, len_a);
-    print_binary(B, len_b);
-    std::cout << "\n";
-    return  (A | B);
-}
-
-*/
+ 
 struct bit_or: public thrust::unary_function<thrust::tuple<gdf_valid_type,gdf_valid_type>,gdf_valid_type>
 {
 	 
@@ -186,21 +173,8 @@ struct is_bit_set
 
 		return ((thrust::get<0>(value) >> position) & 1);
 	}
-};
-/*
-	//before
-	for(int i = 0; i < column->size; i++){
-		int col_position = i / 8;
-		int bit_offset = i % 8;
-	}
-	//now 
-	for(int i = 0; i < column->size; i++) {
-        int col_position =  i / 8;
-		// i = col_position * 8
-        int length_col = n_bytes != col_position+1 ? GDF_VALID_BITSIZE : column->size - GDF_VALID_BITSIZE * (n_bytes - 1);
-        int bit_offset =  (length_col - 1) - (i % 8);
-    }
-*/
+}; 
+
 struct bit_mask_pack_op : public thrust::unary_function<int64_t,gdf_valid_type>
 {
 	__host__ __device__
@@ -227,7 +201,7 @@ std::map<gdf_dtype, int16_t> column_type_width = {{GDF_INT8, sizeof(int8_t)}, {G
 gdf_error gpu_apply_stencil(gdf_column *lhs, gdf_column * stencil, gdf_column * output){
 	//OK: add a rquire here that output and lhs are the same size
 	GDF_REQUIRE(output->size == lhs->size, GDF_COLUMN_SIZE_MISMATCH);
-	//// lhs.dtype === output.dtype
+	GDF_REQUIRE(lhs->dtype == output->dtype, GDF_VALIDITY_MISSING);
 
 	//find the width in bytes of this data type
 	auto searched_item = column_type_width.find(lhs->dtype);

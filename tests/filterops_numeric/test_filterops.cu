@@ -1,3 +1,21 @@
+/*
+ * Copyright 2018 BlazingDB, Inc.
+ *     Copyright 2018 Alexander Ocsa <alexander@blazingdb.com>
+ *     Copyright 2018 Felipe Aramburu <felipe@blazingdb.com>
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 #include "gtest/gtest.h"
 #include <iostream>
 #include <gdf/gdf.h>
@@ -8,6 +26,48 @@
 #include <cuda_runtime.h>
 #include <tuple>
 #include "helper/utils.cuh"
+
+/*
+ ============================================================================
+ Description : Compute gpu_comparison and apply_stencil of gdf_columns using Thrust on GPU
+ ============================================================================
+ */
+
+TEST(FilterOperationsTest, usage_example) {
+
+    using LeftValueType = int16_t;
+    using RightValueType = int16_t;
+    
+    gdf_column lhs = gen_gdb_column<LeftValueType>(column_size, init_value); // 4, 2, 0
+    
+    gdf_column rhs = gen_gdb_column<RightValueType>(column_size, 0.01 + max_size - init_value); // 0, 2, 4
+
+    gdf_column output = gen_gdb_column<int8_t>(column_size, 0);
+
+    gdf_error error = gpu_comparison(&lhs, &rhs, &output, gdf_operator);
+    EXPECT_TRUE(error == GDF_SUCCESS);
+
+    std::cout << "Left" << std::endl;
+    print_column<LeftValueType>(&lhs);
+
+    std::cout << "Right" << std::endl;
+    print_column<RightValueType>(&rhs);
+
+    std::cout << "Output" << std::endl;
+    print_column<int8_t>(&output);
+
+    check_column_for_comparison_operation<LeftValueType, RightValueType>(&lhs, &rhs, &output, gdf_operator);
+
+    /// lhs.dtype === rhs.dtype
+    gpu_apply_stencil(&lhs, &output, &rhs);
+
+    check_column_for_stencil_operation<LeftValueType, RightValueType>(&lhs, &output, &rhs);
+
+    delete_gdf_column(&lhs);
+    delete_gdf_column(&rhs);
+    delete_gdf_column(&output);
+}
+
 
 template <typename LeftValueType, typename RightValueType>
 void test_filterops_using_templates(gdf_comparison_operator gdf_operator = GDF_EQUALS)
@@ -30,22 +90,12 @@ void test_filterops_using_templates(gdf_comparison_operator gdf_operator = GDF_E
             gdf_error error = gpu_comparison(&lhs, &rhs, &output, gdf_operator);
             EXPECT_TRUE(error == GDF_SUCCESS);
 
-            // std::cout << "Left" << std::endl;
-            // print_column<LeftValueType>(&lhs);
-
-            // std::cout << "Right" << std::endl;
-            // print_column<RightValueType>(&rhs);
-
-            // std::cout << "Output" << std::endl;
-            // print_column<int8_t>(&output);
-
             check_column_for_comparison_operation<LeftValueType, RightValueType>(&lhs, &rhs, &output, gdf_operator);
 
-            /// lhs.dtype === rhs.dtype
-            gpu_apply_stencil(&lhs, &output, &rhs);
-
-            check_column_for_stencil_operation<LeftValueType, RightValueType>(&lhs, &output, &rhs);
-
+            if (lhs.dtype === rhs.dtype ) {
+                gpu_apply_stencil(&lhs, &output, &rhs);
+                check_column_for_stencil_operation<LeftValueType, RightValueType>(&lhs, &output, &rhs);
+            }
 
             delete_gdf_column(&lhs);
             delete_gdf_column(&rhs);

@@ -1,13 +1,20 @@
 /*
- ============================================================================
- Name        : testing-libgdf.cu
- Author      : felipe
- Version     :
- Copyright   : Your copyright notice
- Description : Compute sum of reciprocals using STL on CPU and Thrust on GPU
- ============================================================================
+ * Copyright 2018 BlazingDB, Inc.
+ *     Copyright 2018 Alexander Ocsa <alexander@blazingdb.com>
+ *     Copyright 2018 Felipe Aramburu <felipe@blazingdb.com>
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
-
 #include "gtest/gtest.h"
 
 #include <iostream>
@@ -22,6 +29,38 @@
 #include "helper/utils.cuh"
 
 using ValueType = int16_t;
+
+/*
+ ============================================================================
+ Description : Compute concat of gdf_columns using Thrust on GPU
+ ============================================================================
+ */
+TEST(GdfConcat, usage_example) {
+    const size_t lhs_size = 10;
+    const size_t rhs_size = 20;
+    gdf_column lhs = gen_gdb_column<ValueType>(lhs_size, 2);
+    gdf_column rhs = gen_gdb_column<ValueType>(rhs_size, 3);
+    std::cout << "*****left**************\n";
+    print_column(&lhs);
+    std::cout << "*****right**************\n";
+    print_column(&rhs);
+    std::cout << "*******************\n";
+    
+    // reserve space for gdf_column output
+    gdf_column output = gen_gdb_column<ValueType>(lhs_size + rhs_size, 0);
+
+    //call gpu_concat
+    gpu_concat(&lhs, &rhs, &output);
+    std::cout << "*****output**************\n";
+    print_column(&output);
+    
+    // check results
+    check_column_for_concat_operation<ValueType>(&lhs, &rhs, &output);
+    
+    delete_gdf_column(&lhs);
+    delete_gdf_column(&rhs);
+    delete_gdf_column(&output);
+}
 
 TEST(GdfConcat, CaseWithZeroLeft)
 {
