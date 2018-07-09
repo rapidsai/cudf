@@ -1,3 +1,5 @@
+# Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
+
 import numpy as np
 
 from pygdf.dataframe import DataFrame, Series, GenericIndex
