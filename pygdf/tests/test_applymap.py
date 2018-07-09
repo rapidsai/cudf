@@ -33,7 +33,7 @@ def test_applymap_round(nelem, masked):
 
     # Call applymap
     out = sr.applymap(lambda x: (floor(x) + 1 if x - floor(x) >= 0.5
-                                  else floor(x)))
+                                 else floor(x)))
 
     if masked:
         # Fill masked values
@@ -43,4 +43,3 @@ def test_applymap_round(nelem, masked):
     expect = np.round(data)
     got = out.to_array()
     np.testing.assert_array_almost_equal(expect, got)
-

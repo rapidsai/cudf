@@ -157,6 +157,7 @@ def test_dataframe_join_mismatch_cats(how):
     expect.data_col_left = expect.data_col_left.astype(np.int64)
     pd.util.testing.assert_frame_equal(got, expect, check_names=False,
                                        check_index_type=False,
-                                       # For inner joins, pandas return weird categories.
+                                       # For inner joins, pandas returns
+                                       # weird categories.
                                        check_categorical=how != 'inner')
     assert list(got.index) == list(expect.index)

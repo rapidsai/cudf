@@ -173,9 +173,11 @@ def test_dataframe_astype():
 def test_dataframe_slicing():
     df = DataFrame()
     size = 123
-    df['a'] = ha = np.random.randint(low=0, high=100, size=size).astype(np.int32)
+    df['a'] = ha = np.random.randint(low=0, high=100, size=size)\
+        .astype(np.int32)
     df['b'] = hb = np.random.random(size).astype(np.float32)
-    df['c'] = hc = np.random.randint(low=0, high=100, size=size).astype(np.int64)
+    df['c'] = hc = np.random.randint(low=0, high=100, size=size)\
+        .astype(np.int64)
     df['d'] = hd = np.random.random(size).astype(np.float64)
 
     # Row slice first 10
@@ -214,9 +216,11 @@ def test_dataframe_slicing():
 def test_dataframe_loc():
     df = DataFrame()
     size = 123
-    df['a'] = ha = np.random.randint(low=0, high=100, size=size).astype(np.int32)
-    df['b'] = hb = np.random.random(size).astype(np.float32)
-    df['c'] = hc = np.random.randint(low=0, high=100, size=size).astype(np.int64)
+    df['a'] = ha = np.random.randint(low=0, high=100, size=size)\
+        .astype(np.int32)
+    df['b'] = np.random.random(size).astype(np.float32)
+    df['c'] = hc = np.random.randint(low=0, high=100, size=size)\
+        .astype(np.int64)
     df['d'] = hd = np.random.random(size).astype(np.float64)
 
     # Full slice
@@ -422,6 +426,7 @@ def test_dataframe_take(ntake):
 
     check()
     check(ignore_index=True)
+
 
 def test_dataframe_append_empty():
     pdf = pd.DataFrame({

@@ -119,4 +119,3 @@ def test_query_splitted_combine():
     # Should equal to just querying the original GDF
     expect = gdf.query(expr).to_pandas()
     assert_frame_equal(got, expect)
-

@@ -4,7 +4,6 @@ import numpy as np
 import pandas as pd
 
 from pygdf.dataframe import DataFrame
-from pygdf.groupby import Groupby
 
 
 def make_frame(dataframe_class, nelem, seed=0, extra_levels=()):

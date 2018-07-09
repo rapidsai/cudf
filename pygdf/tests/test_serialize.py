@@ -11,7 +11,8 @@ import pygdf
 from . import utils
 
 
-require_distributed = pytest.mark.skipif(not _have_distributed, reason='no distributed')
+require_distributed = pytest.mark.skipif(not _have_distributed,
+                                         reason='no distributed')
 
 
 @require_distributed
