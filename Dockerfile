@@ -33,6 +33,8 @@ ENV CXX=/usr/bin/g++-4.8
 # Update the URLs below to build against forks, other branches, or specific PR
 ARG LIBGDF_REPO=https://github.com/gpuopenanalytics/libgdf
 ARG PYGDF_REPO=https://github.com/gpuopenanalytics/pygdf
+# For example, to build libgdf against https://github.com/gpuopenanalytics/pygdf/pull/138:
+#ARG PYGDF_REPO="https://github.com/dantegd/pygdf -b enh-ext-unique-value-counts /pygdf"
 RUN git clone --recurse-submodules ${LIBGDF_REPO}
 RUN git clone --recurse-submodules ${PYGDF_REPO}
 

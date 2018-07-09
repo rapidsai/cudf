@@ -48,7 +48,6 @@ docker build -t pygdf .
 
 # Make sure nvidia-docker2 is installed: https://github.com/nvidia/nvidia-docker/wiki/Installation-(version-2.0)
 docker run --runtime=nvidia -it pygdf bash
-~/pygdf$ docker run --runtime=nvidia -it pygdf bash
 /# source activate gdf
 (gdf) root@3f689ba9c842:/# python -c "import pygdf"
 (gdf) root@3f689ba9c842:/# 
