@@ -32,6 +32,7 @@ install:
   - conda --version
   # install conda build
   - conda install conda-build anaconda-client --yes
+  - conda install anaconda libboost --yes
 script:
   # build ligdf
   - source ./travisci/build_libgdf.sh
