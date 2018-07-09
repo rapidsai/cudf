@@ -1,3 +1,5 @@
+# Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
+
 """
 Helper functions for parameterized docstring
 """
@@ -53,4 +55,3 @@ def docfmt(**kwargs):
 
 def docfmt_partial(**kwargs):
     return functools.partial(docfmt, **kwargs)
-

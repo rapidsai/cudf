@@ -1,3 +1,5 @@
+# Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
+
 import ast
 
 import six
@@ -45,7 +47,7 @@ def query_parser(text):
     Returns
     -------
     info: a `dict` of the parsed info
-    """
+    """  # noqa
     # convert any '@' to
     text = text.replace('@', ENVREF_PREFIX)
     tree = ast.parse(text)

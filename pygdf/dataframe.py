@@ -1,3 +1,5 @@
+# Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
+
 from __future__ import print_function, division
 
 import inspect
@@ -802,10 +804,12 @@ class DataFrame(object):
         The loop in the function may look like serial code but it will be
         executed concurrently by multiple threads.
         """
-        return applyutils.apply_rows(self, func, incols, outcols, kwargs, cache_key=cache_key)
+        return applyutils.apply_rows(self, func, incols, outcols, kwargs,
+                                     cache_key=cache_key)
 
     @applyutils.doc_applychunks()
-    def apply_chunks(self, func, incols, outcols, kwargs={}, chunks=None, tpb=1):
+    def apply_chunks(self, func, incols, outcols, kwargs={}, chunks=None,
+                     tpb=1):
         """Transform user-specified chunks using the user-provided function.
 
         Parameters
@@ -821,7 +825,8 @@ class DataFrame(object):
         use ``numba.cuda.threadIdx.x`` and ``numba.cuda.blockDim.x``,
         respectively (See `numba CUDA kernel documentation`_).
 
-        .. _numba CUDA kernel documentation: http://numba.pydata.org/numba-doc/latest/cuda/kernels.html
+        .. _numba CUDA kernel documentation:
+        http://numba.pydata.org/numba-doc/latest/cuda/kernels.html
 
         In the example below, the *kernel* is invoked concurrently on each
         specified chunk.  The *kernel* computes the corresponding output

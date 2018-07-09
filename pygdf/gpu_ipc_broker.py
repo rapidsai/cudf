@@ -1,3 +1,5 @@
+# Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
+
 import pickle
 import multiprocessing
 import logging
@@ -208,8 +210,3 @@ def start_server():
             return
         _server_started = True
         init_server()
-
-
-
-
-
