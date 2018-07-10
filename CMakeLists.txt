@@ -117,6 +117,7 @@ cuda_add_library(gdf SHARED
     src/reductions.cu
     src/sorting.cu
     src/joining.cu
+    src/hashing.cu
     src/scan.cu
     src/segmented_sorting.cu
     src/datetimeops.cu
