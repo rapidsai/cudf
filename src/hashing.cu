@@ -105,7 +105,7 @@ gdf_error gdf_hash(int num_cols, gdf_column **input, gdf_hash_func hash, gdf_joi
   // launch a kernel
   const int rows_per_block = HASH_KERNEL_BLOCK_SIZE * HASH_KERNEL_ROWS_PER_THREAD;
   const int64_t grid = (num_rows + rows_per_block-1) / rows_per_block;
-  hash_cols<<<grid, HASH_KERNEL_BLOCK_SIZE>>>(num_rows, num_cols, d_col_data, d_col_int_dtype, output.data());
+  hash_cols<<<grid, HASH_KERNEL_BLOCK_SIZE>>>(num_rows, num_cols, d_col_data, d_col_int_dtype, result_ptr->result.data());
 
   // TODO: do we need to synchronize here
   cudaDeviceSynchronize();
