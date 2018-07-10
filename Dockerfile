@@ -1,7 +1,8 @@
 # An integration test & dev container which builds and installs libgdf & pygdf from master
 
-# Update based on your host's CUDA driver version
-FROM nvidia/cuda:9.2-devel
+# Specify alternate CUDA toolkit version as Docker build-arg
+ARG CUDA_VERSION=9.2
+FROM nvidia/cuda:${CUDA_VERSION}-devel
 
 RUN apt update -y --fix-missing && \
     apt upgrade -y && \
@@ -30,11 +31,11 @@ ENV LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/cuda/lib64:/usr/local/lib
 ENV CC=/usr/bin/gcc-4.8
 ENV CXX=/usr/bin/g++-4.8
 
-# Update the URLs below to build against forks, other branches, or specific PR
+# Specify alternate URLs via build-args to build against forks, other branches, or specific PR
 ARG LIBGDF_REPO=https://github.com/gpuopenanalytics/libgdf
 ARG PYGDF_REPO=https://github.com/gpuopenanalytics/pygdf
-# For example, to build libgdf against https://github.com/gpuopenanalytics/pygdf/pull/138:
-#ARG PYGDF_REPO="https://github.com/dantegd/pygdf -b enh-ext-unique-value-counts /pygdf"
+# To build container against https://github.com/gpuopenanalytics/pygdf/pull/138:
+# docker build --build-arg PYGDF_REPO="https://github.com/dantegd/pygdf -b enh-ext-unique-value-counts" -t gdf .
 RUN git clone --recurse-submodules ${LIBGDF_REPO}
 RUN git clone --recurse-submodules ${PYGDF_REPO}
 
