@@ -26,15 +26,15 @@ def _make_hash_input(hash_input, ncols):
     yield ci
 
 def _call_hash_multi(api, ncols, col_input, magic):
-    join_result_ptr = ffi.new("gdf_join_result_type**", None)
+    hash_result_ptr = ffi.new("gdf_join_result_type**", None)
 
-    api(ncols, col_input, magic, join_result_ptr)
-    join_result = join_result_ptr[0]
-    print('join_result', join_result)
+    api(ncols, col_input, magic, hash_result_ptr)
+    hash_result = hash_result_ptr[0]
+    print('hash_result', hash_result)
 
-    dataptr = libgdf.gdf_join_result_data(join_result)
+    dataptr = libgdf.gdf_join_result_data(hash_result)
     print(dataptr)
-    datasize = libgdf.gdf_join_result_size(join_result)
+    datasize = libgdf.gdf_join_result_size(hash_result)
     print(datasize)
 
     addr = ctypes.c_uint64(int(ffi.cast("uintptr_t", dataptr)))
@@ -46,11 +46,11 @@ def _call_hash_multi(api, ncols, col_input, magic):
                                          dtype=np.dtype(np.int32),
                                          gpu_data=memptr)
 
-    joined_idx = ary.copy_to_host()
-    print(joined_idx)
+    hashed_idx = ary.copy_to_host()
+    print(hashed_idx)
 
-    libgdf.gdf_join_result_free(join_result)
-    return joined_idx
+    libgdf.gdf_join_result_free(hash_result)
+    return hashed_idx
 
 
 multi_params_dtypes = [np.int32, np.int64]
