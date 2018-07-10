@@ -1,6 +1,7 @@
 #include <cstdlib>
 #include <iostream>
 #include <vector>
+#include <unordered_map>
 
 #include <thrust/device_vector.h>
 
@@ -17,6 +18,21 @@ struct KeyValueTypes
   using key_type = Key;
   using value_type = Value;
 };
+
+// Have to use a functor instead of a device lambda because
+// you can't create a device lambda inside of a Google Test
+// because the macro expands into a private member function
+// and you can't have a device lambda inside a private member
+// function
+template<typename value_type>
+  struct max_op
+  {
+    __host__ __device__
+    value_type operator()(value_type a, value_type b)
+    {
+      return (a > b? a : b);
+    }
+  };
 
 
 // A new instance of this class will be created for each *TEST(MapTest, ...)
@@ -35,10 +51,99 @@ struct MapTest : public testing::Test
 
   const int size;
 
+  const int THREAD_BLOCK_SIZE{256};
 
-  MapTest(const int hash_table_size = 100)
+  std::vector<key_type> keys;
+  std::vector<value_type> values;
+  thrust::device_vector<key_type> d_keys;
+  thrust::device_vector<value_type> d_values;
+
+  std::unordered_map<key_type, value_type> expected_values;
+
+  MapTest(const int hash_table_size = 10000)
     : size(hash_table_size), the_map(new map_type(hash_table_size))
   {
+  }
+
+  int create_input(const int num_unique_keys, const int num_values_per_key, const int max_key = RAND_MAX, const int max_value = RAND_MAX)
+  {
+
+
+    const int TOTAL_PAIRS = num_unique_keys * num_values_per_key;
+
+    this->the_map.reset(new map_type(2*TOTAL_PAIRS));
+
+    keys.reserve(TOTAL_PAIRS);
+    values.reserve(TOTAL_PAIRS);
+
+    // Always use the same seed so the random sequence is the same each time
+    std::srand(0);
+
+    for(int i = 0; i < num_unique_keys; ++i )
+    {
+      // Create random key
+      key_type current_key = std::rand() % max_key;
+
+      // Don't use unused_key
+      while(current_key == this->unused_key)
+      {
+        current_key = std::rand();
+      }
+
+      // For the current key, generate random values
+      for(int j = 0; j < num_values_per_key; ++j)
+      {
+        value_type current_value = std::rand() % max_value;
+
+        // Don't use unused_value
+        while(current_value == this->unused_value)
+        {
+          current_value = std::rand();
+        }
+
+        // Store current key and value
+        keys.push_back(current_key);
+        values.push_back(current_value);
+
+        // Use a STL map to keep track of the max value for each key
+        auto found = expected_values.find(current_key);
+
+        // Key doesn't exist yet, insert it
+        if(found == expected_values.end())
+        {
+          expected_values.insert(std::make_pair(current_key,current_value));
+        }
+        // Key exists, update the value with the max
+        else
+        {
+          max_op<value_type> op;
+          value_type new_value = op(found->second, current_value);
+          found->second = new_value;
+        }
+      }
+    }
+
+    d_keys = keys;
+    d_values = values;
+    return TOTAL_PAIRS;
+  }
+
+  void check_answer(){
+
+    for(auto const &k : this->expected_values)
+    {
+      key_type test_key = k.first;
+
+      value_type expected_value = k.second;
+
+      auto found = this->the_map->find(test_key);
+
+      ASSERT_NE(this->the_map->end(), found);
+
+      value_type test_value = found->second;
+
+      EXPECT_EQ(expected_value, test_value) << "Key is: " << test_key;
+    }
   }
 
   ~MapTest(){
@@ -51,20 +156,21 @@ struct MapTest : public testing::Test
 // to nest multiple types inside of the KeyValueTypes struct above
 // KeyValueTypes<type1, type2> implies key_type = type1, value_type = type2
 // This list is the types across which Google Test will run our tests
-typedef ::testing::Types< KeyValueTypes<int,int>,
-                          KeyValueTypes<int,float>,
-                          KeyValueTypes<int,double>,
-                          KeyValueTypes<int,long long int>,
-                          KeyValueTypes<int,unsigned long long int>,
-                          KeyValueTypes<unsigned long long int, int>,
-                          KeyValueTypes<unsigned long long int, float>,
-                          KeyValueTypes<unsigned long long int, double>,
-                          KeyValueTypes<unsigned long long int, long long int>,
-                          KeyValueTypes<unsigned long long int, unsigned long long int>
+typedef ::testing::Types< KeyValueTypes<int,int>
+                         // KeyValueTypes<int,float>,
+                         // KeyValueTypes<int,double>,
+                         // KeyValueTypes<int,long long int>,
+                         // KeyValueTypes<int,unsigned long long int>,
+                         // KeyValueTypes<unsigned long long int, int>,
+                         // KeyValueTypes<unsigned long long int, float>,
+                         // KeyValueTypes<unsigned long long int, double>,
+                         // KeyValueTypes<unsigned long long int, long long int>,
+                         // KeyValueTypes<unsigned long long int, unsigned long long int>
                           > Implementations;
 
 TYPED_TEST_CASE(MapTest, Implementations);
 
+/*
 TYPED_TEST(MapTest, InitialState)
 {
   using key_type = typename TypeParam::key_type;
@@ -105,7 +211,7 @@ TYPED_TEST(MapTest, Insert)
   // Make sure all the pairs are in the map
   for(const auto& it : pairs){
     auto found = this->the_map->find(it.first);
-    EXPECT_NE(found, this->the_map->end());
+    ASSERT_NE(found, this->the_map->end());
     EXPECT_EQ(found->first, it.first);
     EXPECT_EQ(found->second, it.second);
   }
@@ -156,6 +262,7 @@ TYPED_TEST(MapTest, MaxAggregationTestHost)
   EXPECT_EQ(11, found->second);
 
 }
+*/
 
 
 template<typename map_type, typename Aggregation_Operator>
@@ -178,20 +285,6 @@ __global__ void build_table(map_type * const the_map,
 
 }
 
-// Have to use a functor instead of a device lambda because
-// you can't create a device lambda inside of a Google Test
-// because the macro expands into a private member function
-// and you can't have a device lambda inside a private member
-// function
-template<typename value_type>
-struct max_op
-{
-  __host__ __device__
-  value_type operator()(value_type a, value_type b)
-  {
-    return (a > b? a : b);
-  }
-};
 
 
 TYPED_TEST(MapTest, MaxAggregationTestDevice)
@@ -200,38 +293,21 @@ TYPED_TEST(MapTest, MaxAggregationTestDevice)
   using value_type = typename TypeParam::value_type;
   using size_type = typename MapTest<TypeParam>::map_type::size_type;
 
-  std::vector<key_type>     keys   {0, 0, 0, 5, 5, 5, 10, 10, 10, 11, 12, 13};
-  std::vector<value_type>   values {0, 1, 2, 5, 5, 4, 13, 12, 11,  6, 97, 42};
+  const size_type input_size = this->create_input(512, 256*256);
 
-  thrust::device_vector<key_type> d_keys(keys);
-  thrust::device_vector<value_type> d_values(values);
+  key_type *k = thrust::raw_pointer_cast(this->d_keys.data());
+  value_type *v = thrust::raw_pointer_cast(this->d_values.data());
 
-  key_type *k = thrust::raw_pointer_cast(d_keys.data());
-  value_type *v = thrust::raw_pointer_cast(d_values.data());
+  const dim3 grid_size ((input_size + this->THREAD_BLOCK_SIZE -1) / this->THREAD_BLOCK_SIZE,1,1);
+  const dim3 block_size (this->THREAD_BLOCK_SIZE, 1, 1);
 
-  size_type input_size = keys.size();
+  std::cout << "Input Size: " << input_size << " Grid Size: " << grid_size.x << " Block Size: " << block_size.x << std::endl;
 
   cudaDeviceSynchronize();
-  build_table<<<1,256>>>((this->the_map).get(), k, v, input_size, max_op<value_type>());
+  build_table<<<grid_size, block_size>>>((this->the_map).get(), k, v, input_size, max_op<value_type>());
   cudaDeviceSynchronize(); 
 
-  auto found = this->the_map->find(0);
-  EXPECT_EQ(2, found->second);
-
-  found = this->the_map->find(5);
-  EXPECT_EQ(5, found->second);
-
-  found = this->the_map->find(10);
-  EXPECT_EQ(13, found->second);
-
-  found = this->the_map->find(11);
-  EXPECT_EQ(6, found->second);
-
-  found = this->the_map->find(13);
-  EXPECT_EQ(42, found->second);
-
-  found = this->the_map->find(12);
-  EXPECT_EQ(97, found->second);
+  this->check_answer();
 
 }
 
