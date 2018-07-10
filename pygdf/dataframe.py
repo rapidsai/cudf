@@ -824,7 +824,7 @@ class DataFrame(object):
         use ``numba.cuda.threadIdx.x`` and ``numba.cuda.blockDim.x``,
         respectively (See `numba CUDA kernel documentation`_).
 
-        .. _numba CUDA kernel documentation:
+        .. _numba CUDA kernel documentation:\
         http://numba.pydata.org/numba-doc/latest/cuda/kernels.html
 
         In the example below, the *kernel* is invoked concurrently on each
