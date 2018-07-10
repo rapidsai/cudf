@@ -43,6 +43,7 @@ A Dockerfile is provided for building and installing LibGDF and PyGDF from their
 * Host's installed nvidia driver must support >= the specified CUDA version (9.2 by default).
 * Alternative CUDA_VERSION should be specified via Docker [build-arg](https://docs.docker.com/engine/reference/commandline/build/#set-build-time-variables---build-arg) in Dockerfile):) and as cudatoolkit version in conda_environments/gdf_build.yml
 * Alternate branches for libgdf and pygdf may be specified as Docker build-args LIBGDF_REPO and PYGDF_REPO. See Dockerfile for example.
+* Alternate OS versions may be specified as Docker build-arg LINUX_VERSION. See list of [available images](https://hub.docker.com/r/nvidia/cuda/).
 
 From pygdf project root, to build with defaults:
 ```

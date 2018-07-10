@@ -2,7 +2,8 @@
 
 # Specify alternate CUDA toolkit version as Docker build-arg
 ARG CUDA_VERSION=9.2
-FROM nvidia/cuda:${CUDA_VERSION}-devel
+ARG LINUX_VERSION=ubuntu16.04
+FROM nvidia/cuda:${CUDA_VERSION}-devel-${LINUX_VERSION}
 
 RUN apt update -y --fix-missing && \
     apt upgrade -y && \
