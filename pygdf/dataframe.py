@@ -11,11 +11,10 @@ import pandas as pd
 from numba import cuda
 from numba.cuda.cudadrv.devicearray import DeviceNDArray
 
-from . import cudautils, formatting, queryutils, _gdf, applyutils, utils
+from . import cudautils, formatting, queryutils, applyutils, utils
 from .index import GenericIndex, EmptyIndex, Index, RangeIndex
 from .series import Series
 from .column import Column
-from .buffer import Buffer
 from .settings import NOTSET, settings
 from .serialize import register_distributed_serializer
 

@@ -1,13 +1,12 @@
 # Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
 
-from weakref import WeakKeyDictionary
 import functools
 
 from numba.utils import pysignature, exec_
 from numba import six
 from numba import cuda
 
-from pygdf.docutils import docfmt, docfmt_partial
+from pygdf.docutils import docfmt_partial
 from pygdf import cudautils
 from pygdf.series import Series
 

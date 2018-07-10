@@ -6,7 +6,6 @@ from itertools import chain
 import numpy as np
 
 from numba import cuda
-from numba.numpy_support import from_dtype
 
 from .dataframe import DataFrame, Series
 from .multi import concat
