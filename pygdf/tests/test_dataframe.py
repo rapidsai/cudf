@@ -1,3 +1,5 @@
+# Copyright (c) 2018, NVIDIA CORPORATION.
+
 import pytest
 
 import numpy as np
@@ -173,9 +175,11 @@ def test_dataframe_astype():
 def test_dataframe_slicing():
     df = DataFrame()
     size = 123
-    df['a'] = ha = np.random.randint(low=0, high=100, size=size).astype(np.int32)
+    df['a'] = ha = np.random.randint(low=0, high=100, size=size)\
+        .astype(np.int32)
     df['b'] = hb = np.random.random(size).astype(np.float32)
-    df['c'] = hc = np.random.randint(low=0, high=100, size=size).astype(np.int64)
+    df['c'] = hc = np.random.randint(low=0, high=100, size=size)\
+        .astype(np.int64)
     df['d'] = hd = np.random.random(size).astype(np.float64)
 
     # Row slice first 10
@@ -214,9 +218,11 @@ def test_dataframe_slicing():
 def test_dataframe_loc():
     df = DataFrame()
     size = 123
-    df['a'] = ha = np.random.randint(low=0, high=100, size=size).astype(np.int32)
-    df['b'] = hb = np.random.random(size).astype(np.float32)
-    df['c'] = hc = np.random.randint(low=0, high=100, size=size).astype(np.int64)
+    df['a'] = ha = np.random.randint(low=0, high=100, size=size)\
+        .astype(np.int32)
+    df['b'] = hb = np.random.random(size).astype(np.float32)  # noqa: F841
+    df['c'] = hc = np.random.randint(low=0, high=100, size=size)\
+        .astype(np.int64)
     df['d'] = hd = np.random.random(size).astype(np.float64)
 
     # Full slice
@@ -423,6 +429,7 @@ def test_dataframe_take(ntake):
     check()
     check(ignore_index=True)
 
+
 def test_dataframe_append_empty():
     pdf = pd.DataFrame({
         "key": [1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 4],
@@ -448,3 +455,11 @@ def test_dataframe_append_to_empty():
     gdf['b'] = [1, 2, 3]
 
     pd.testing.assert_frame_equal(gdf.to_pandas(), pdf)
+
+
+def test_dataframe_setitem_index_len1():
+    gdf = DataFrame()
+    gdf['a'] = [1]
+    gdf['b'] = gdf.index.as_column()
+
+    np.testing.assert_equal(gdf.b.to_array(), [0])

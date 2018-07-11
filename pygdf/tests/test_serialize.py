@@ -1,3 +1,5 @@
+# Copyright (c) 2018, NVIDIA CORPORATION.
+
 import numpy as np
 import pandas as pd
 try:
@@ -11,7 +13,8 @@ import pygdf
 from . import utils
 
 
-require_distributed = pytest.mark.skipif(not _have_distributed, reason='no distributed')
+require_distributed = pytest.mark.skipif(not _have_distributed,
+                                         reason='no distributed')
 
 
 @require_distributed
@@ -21,6 +24,18 @@ def test_serialize_dataframe():
     df['b'] = np.arange(100, dtype=np.float32)
     df['c'] = pd.Categorical(['a', 'b', 'c', '_', '_'] * 20,
                              categories=['a', 'b', 'c'])
+    outdf = deserialize(*serialize(df))
+    pd.util.testing.assert_frame_equal(df.to_pandas(), outdf.to_pandas())
+
+
+@require_distributed
+def test_serialize_dataframe_with_index():
+    df = pygdf.DataFrame()
+    df['a'] = np.arange(100)
+    df['b'] = np.random.random(100)
+    df['c'] = pd.Categorical(['a', 'b', 'c', '_', '_'] * 20,
+                             categories=['a', 'b', 'c'])
+    df = df.sort_values('b')
     outdf = deserialize(*serialize(df))
     pd.util.testing.assert_frame_equal(df.to_pandas(), outdf.to_pandas())
 

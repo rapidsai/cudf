@@ -1,4 +1,5 @@
-import logging
+# Copyright (c) 2018, NVIDIA CORPORATION.
+
 import os.path
 import pickle
 

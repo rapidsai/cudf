@@ -195,5 +195,3 @@ def column_applymap(udf, column, out_dtype):
         kernel_non_masked.forall(len(column))(values, results)
     # Output
     return Buffer(results)
-
-

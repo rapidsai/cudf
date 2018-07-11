@@ -34,7 +34,30 @@ git clone https://github.com/gpuopenanalytics/pygdf.git
 python setup.py install
 ```
 
-Note: This will not install dependencies automatically, so it is recommended to use the conda environment.
+**Note**: This assumes dependencies including [libgdf](https://github.com/gpuopenanalytics/libgdf) are already installed, so it is recommended to use the conda environment.
+
+A Dockerfile is provided for building and installing LibGDF and PyGDF from their respective master branches.
+
+**Note**:
+* We test with and recommended installing [nvidia-docker2](https://github.com/nvidia/nvidia-docker/wiki/Installation-(version-2.0))
+* Host's installed nvidia driver must support >= the specified CUDA version (9.2 by default).
+* Alternative CUDA_VERSION should be specified via Docker [build-arg](https://docs.docker.com/engine/reference/commandline/build/#set-build-time-variables---build-arg) in Dockerfile):) and as cudatoolkit version in conda_environments/gdf_build.yml
+* Alternate branches for libgdf and pygdf may be specified as Docker build-args LIBGDF_REPO and PYGDF_REPO. See Dockerfile for example.
+* Ubuntu 16.04 is the default OS for this container. Alternate OSes may be specified as Docker build-arg LINUX_VERSION. See list of [available images](https://hub.docker.com/r/nvidia/cuda/).
+
+From pygdf project root, to build with defaults:
+```
+docker build -t pygdf .
+...
+ ---> ec65aaa3d4b1
+ Successfully built ec65aaa3d4b1
+ Successfully tagged pygdf:latest
+
+docker run --runtime=nvidia -it pygdf bash
+/# source activate gdf
+(gdf) root@3f689ba9c842:/# python -c "import pygdf"
+(gdf) root@3f689ba9c842:/# 
+```
 
 ### Pip
 

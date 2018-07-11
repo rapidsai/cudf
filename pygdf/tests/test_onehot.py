@@ -1,8 +1,6 @@
-import pytest
+# Copyright (c) 2018, NVIDIA CORPORATION.
 
 import numpy as np
-
-from numba import cuda
 
 from pygdf.dataframe import DataFrame, Series, GenericIndex
 from . import utils
@@ -92,4 +90,3 @@ def test_onehot_generic_index():
 
 if __name__ == '__main__':
     test_onehot_random()
-
