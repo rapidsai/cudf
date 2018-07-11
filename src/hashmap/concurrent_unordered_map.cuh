@@ -500,6 +500,7 @@ public:
         return iterator( m_hashtbl_values,m_hashtbl_values+hashtbl_size, current_hash_bucket);
     }
     
+    /* This function is not currently implemented
     __forceinline__
     __host__ __device__ iterator insert(const value_type& x)
     {
@@ -555,6 +556,7 @@ public:
         
         return iterator( m_hashtbl_values,m_hashtbl_values+hashtbl_size,it);
     }
+    */
     
     __forceinline__
     __host__ __device__ const_iterator find(const key_type& k ) const
