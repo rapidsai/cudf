@@ -386,6 +386,19 @@ public:
         return unused_key;
     }
 
+    /* --------------------------------------------------------------------------*/
+    /** 
+     * @Synopsis  Inserts a new (key, value) pair. If the key already exists in the map
+                  an aggregation operation is performed with the new value and existing value.
+                  E.g., if the aggregation operation is 'max', then the maximum is computed
+                  between the new value and existing value and the result is stored in the map.
+     * 
+     * @Param x The new (key, value) pair to insert
+     * @Param op The aggregation operation to perform
+     * 
+     * @Returns An iterator to the newly inserted key,value pair
+     */
+    /* ----------------------------------------------------------------------------*/
     template<typename Aggregation_Operator>
     __forceinline__
     __host__ __device__ iterator insert(const value_type& x, Aggregation_Operator op)
@@ -393,68 +406,98 @@ public:
         const size_type hashtbl_size    = m_hashtbl_size;
         value_type* hashtbl_values      = m_hashtbl_values;
         const size_type key_hash        = m_hf( x.first );
-        size_type hash_tbl_idx          = key_hash%hashtbl_size;
+        size_type current_index         = key_hash % hashtbl_size;
+        value_type *current_hash_bucket = &(hashtbl_values[current_index]);
+
+        const key_type insert_key = x.first;
+        const mapped_type insert_value = x.second;
         
-        value_type* it = 0;
+        bool insert_success = false;
         
-        while (0 == it) {
-          value_type* tmp_it = hashtbl_values + hash_tbl_idx;
+        while (false == insert_success) {
+
+          key_type * const existing_key = &(current_hash_bucket->first);
+          mapped_type * const existing_value = &(current_hash_bucket->second);
+
 #ifdef __CUDA_ARCH__
 
-          const key_type old_key = atomicCAS( &(tmp_it->first), unused_key, x.first );
 
-          // Empty bucket, insert key and value
+          // Try and set the existing_key for the current hash bucket to insert_key
+          const key_type old_key = atomicCAS( existing_key, unused_key, insert_key);
+
+          // If old_key == unused_key, the current hash bucket was empty
+          // and existing_key was updated to insert_key by the atomicCAS. 
+          // Update existing_value to insert_value
           if ( m_equal( unused_key, old_key ) ) {
-            (m_hashtbl_values+hash_tbl_idx)->second = x.second;
-            it = tmp_it;
+            *existing_value = insert_value;
+            insert_success = true;
           }
 
-          // Check for collision with another key. If this is the key we're looking for
-          // perform the aggregation with the old value atomically
+          // Current hash bucket is not empty. If old_key == insert_key
+          // perform the atomic aggregation of existing_value and insert_value
           // TODO: Use template specialization to make use of native atomic functions
           // TODO: How to handle data types less than 32 bits?
-          else if ( m_equal(x.first, old_key) ){
+          else if ( m_equal(insert_key, old_key) ){
 
-            Element * const target = &(hashtbl_values[hash_tbl_idx].second);
+            mapped_type old_value = *existing_value;
 
-            Element old_value = *target;
+            mapped_type expected;
 
-            Element expected = old_value;
-
-            do {
-
+            // Attempt to perform the aggregation with existing_value and
+            // store the result atomically
+            do 
+            {
               expected = old_value;
 
-              Element new_value = op(x.second, old_value);
+              const mapped_type new_value = op(insert_value, old_value);
 
-              old_value = atomicCAS(target, expected, new_value);
+              old_value = atomicCAS(existing_value, expected, new_value);
+            }
+            // Guard against another thread's update to existing_value and
+            // ensure that existing_value has been updated from its initial state
+            // to ensure that the aggregation is valid
+            while( expected != old_value || (old_value == m_unused_element));
 
-            }while( expected != old_value);
-
-            it = tmp_it;
+            insert_success = true;
           }
+
+          // Current hash bucket is not empty, but the existing_key != insert_key
+          // This is a hash collision with another key, move to next bucket
+          else
+          {
+            current_index = (current_index+1)%hashtbl_size;
+            current_hash_bucket = &(hashtbl_values[current_index]);
+          }
+          
 
 #else
 
 #pragma omp critical
           {
             // Empty bucket, insert key and value
-            if ( m_equal( unused_key, tmp_it->first ) ) {
-              hashtbl_values[hash_tbl_idx] = thrust::make_pair( x.first, x.second );
-              it = tmp_it;
+            if ( m_equal( unused_key, *existing_key) ) 
+            {
+              hashtbl_values[current_index] = thrust::make_pair( insert_key, insert_value);
+              insert_success = true;
             }
             // This key has been inserted before, perform aggregation on value
-            else if( m_equal(x.first, tmp_it->first) ){
-              const Element new_value = op(x.second, tmp_it->second);
-              hashtbl_values[hash_tbl_idx].second = new_value;
-              it = tmp_it;
+            else if( m_equal(insert_key, *existing_key) )
+            {
+              const Element new_value = op(insert_value, *existing_value);
+              *existing_value = new_value;
+              insert_success = true;
+            }
+            // Otherwise, this is a hash collision with another key, check the next bucket
+            else
+            {
+              current_index = (current_index+1)%hashtbl_size;
+              current_hash_bucket = &(hashtbl_values[current_index]);
             }
           }
 #endif
-          hash_tbl_idx = (hash_tbl_idx+1)%hashtbl_size;
         }
         
-        return iterator( m_hashtbl_values,m_hashtbl_values+hashtbl_size,it);
+        return iterator( m_hashtbl_values,m_hashtbl_values+hashtbl_size, current_hash_bucket);
     }
     
     __forceinline__
