@@ -53,26 +53,28 @@ def _call_hash_multi(api, ncols, col_input, magic):
     return hashed_idx
 
 
-multi_params_dtypes = [np.int32, np.int64]
-
-
-@pytest.mark.parametrize('dtype', multi_params_dtypes)
-def test_hashing(dtype):
+def test_hashing():
     # Make data
     nrows = 8
     hash_input = []
-    hash_input1 = np.array(np.random.randint(0, 28, nrows), dtype=np.int32)
+    hash_input1 = np.array(np.random.randint(0, 28, nrows), dtype=np.int8)
     hash_input1[-1] = hash_input1[0]
     hash_input.append(hash_input1)
-    hash_input2 = np.array(np.random.randint(0, 28, nrows), dtype=np.int64)
+    hash_input2 = np.array(np.random.randint(0, 28, nrows), dtype=np.int16)
     hash_input2[-1] = hash_input2[0]
     hash_input.append(hash_input2)
-    hash_input3 = np.array(np.random.randint(0, 28, nrows), dtype=np.float32)
+    hash_input3 = np.array(np.random.randint(0, 28, nrows), dtype=np.int32)
     hash_input3[-1] = hash_input3[0]
     hash_input.append(hash_input3)
-    hash_input4 = np.array(np.random.randint(0, 28, nrows), dtype=np.float64)
+    hash_input4 = np.array(np.random.randint(0, 28, nrows), dtype=np.int64)
     hash_input4[-1] = hash_input4[0]
-    hash_input.append(hash_input4) 
+    hash_input.append(hash_input4)
+    hash_input5 = np.array(np.random.randint(0, 28, nrows), dtype=np.float32)
+    hash_input5[-1] = hash_input5[0]
+    hash_input.append(hash_input5)
+    hash_input6 = np.array(np.random.randint(0, 28, nrows), dtype=np.float64)
+    hash_input6[-1] = hash_input6[0]
+    hash_input.append(hash_input6) 
 
     ncols = len(hash_input)
     magic = 0
@@ -83,4 +85,4 @@ def test_hashing(dtype):
 
     # Check if first and last row are equal
     assert tuple([hashed_column[0]]) == tuple([hashed_column[-1]])
-            
+    
