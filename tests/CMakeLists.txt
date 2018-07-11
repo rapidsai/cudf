@@ -25,5 +25,8 @@ add_subdirectory(datetime)
 add_subdirectory(hashing)
 add_subdirectory(unaryops)
 add_subdirectory(filterops_numeric)
+add_subdirectory(hash_map)
+add_subdirectory(groupby)
+
 
 message(STATUS "******** Tests are ready ********")
