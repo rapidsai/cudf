@@ -234,31 +234,3 @@ def test_dataframe_multi_column_join():
             join_result[col] = join_result[col].astype(np.float64).fillna(np.nan)
 
     pd.util.testing.assert_frame_equal(join_result.to_pandas().sort_values(list(pddf_joined.columns)).reset_index(drop=True), pddf_joined)
-
-    # def normalize(x):
-    #     if x is None:
-    #         return x
-    #     x = np.float64(x)
-    #     if np.isnan(x):
-    #         return None
-    #     else:
-    #         return x
-
-    # def build_mapping(join_result):
-    #     mapping = {}
-    #     for i in range(len(join_result)):
-    #         keys = join_result.key1[i], join_result.key2[i]
-    #         vals = (
-    #             normalize(join_result.val1_x[i]),
-    #             normalize(join_result.val1_y[i]),
-    #         )
-    #         mapping[keys] = vals
-    #     return mapping
-
-    # # Build got key-value mapping
-    # expect_map = build_mapping(pddf_joined)
-    # got_map = build_mapping(join_result)
-
-    # print(expect_map)
-    # print(got_map)
-    # assert expect_map == got_map

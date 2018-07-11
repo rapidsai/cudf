@@ -212,12 +212,13 @@ class NumericalColumn(columnops.TypedColumnBase):
             # Get list of columns from self with left_on and from other with right_on
             return self._hashjoin(other=other, left_on=left_on, right_on=right_on, how=how, return_indexers=return_indexers)
         else:
-            raise ValueError('Unsupported join type') 
+            raise ValueError('Unsupported join type')
 
     def _hashjoin(self, other, how='left', return_indexers=False):
+        msg = "numerical hash join not implemented yet."
+        raise NotImplementedError(msg)
+        return
 
-        return 
-        
 
     def _sortjoin(self, other, how='left', return_indexers=False):
         """Join with another column.
@@ -226,10 +227,6 @@ class NumericalColumn(columnops.TypedColumnBase):
         the indices for shuffling the remaining columns.
         """
         from .series import Series
-
-        if other is None:
-            return self._stub_merge(left_on=left_on, right_on=right_on,
-                                    how=how, return_indexers=return_indexers)
 
         if not self.is_type_equivalent(other):
             raise TypeError('*other* is not compatible')

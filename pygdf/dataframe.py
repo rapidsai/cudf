@@ -594,8 +594,8 @@ class DataFrame(object):
                 df[k] = self[k].reset_index().take(new_positions)
         return df.set_index(self.index.take(new_positions))
 
-    def merge(self, other, on=None, how='multi-left', lsuffix='_x', rsuffix='_y'):
-        if how != 'multi-left':
+    def merge(self, other, on=None, how='left', lsuffix='_x', rsuffix='_y', type='sort'):
+        if how != 'left':
             raise ValueError('{!r} join not implemented yet'.format(how))
 
         same_names = set(self.columns) & set(other.columns)
@@ -646,7 +646,7 @@ class DataFrame(object):
 
         from pygdf import cudautils
 
-        assert how == 'multi-left'
+        assert how == 'left'
         assert return_indices
         assert len(left_on) == len(right_on)
 
@@ -685,50 +685,6 @@ class DataFrame(object):
 
         if return_indices:
             return joined_values, joined_indices
-        else:
-            return joined_indices
-
-    def _stub_merge(self, left, right, left_on, right_on, how, return_indexers):
-        """Stub implementation
-
-        Parameters
-        ----------
-        left, right : DataFrame
-        left_on, right_on: list[str] or tuple[str]
-            sequence of column names to be joined on
-        how : str
-            One of 'left', 'right', 'inner', 'outer'
-        return_indexers : bool
-            See return value documentation.
-
-
-        Returns
-        -------
-        joined_indices, indexers
-            If *return_indexers* is *True*.
-
-        joined_indices
-            If *return_indexers* is *False*.
-
-        The *joined_indices* indices are *Column*s of the joined key columns.
-        The *indexers* contain 2 device arrays of indices to shuffle the value
-        columns into joined order.  The first device array is for the left
-        dataframe.  The second device array is for the right dataframe.
-        """
-        from . import columnops
-
-        assert how == 'left'
-        assert return_indexers
-        left = left.to_pandas().set_index(left_on)
-        right = right.to_pandas().set_index(right_on)
-        merged = left.index.join(right.index, how=how, sort=True,
-                                 return_indexers=True)
-        multi_index = merged[0]
-        joined_indices = list(map(lambda x: columnops.as_column(np.asarray(x).copy()),
-                              multi_index.labels))
-        indexers = [cuda.to_device(x) for x in merged[1:]]
-        if return_indexers:
-            return joined_indices, indexers
         else:
             return joined_indices
 
