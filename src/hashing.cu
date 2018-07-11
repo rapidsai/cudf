@@ -25,7 +25,7 @@ constexpr int HASH_KERNEL_ROWS_PER_THREAD = 1;
 // convert to int dtype with the same size
 gdf_dtype to_int_dtype(gdf_type type)
 {
-  switch (input[i]->dtype) {
+  switch (type) {
     case GDF_INT8:
     case GDF_INT16:
     case GDF_INT32:
@@ -45,15 +45,17 @@ uint32_t hashed(void *ptr, int int_dtype, int index)
 {
   // TODO: add switch to select the right hash class, currently we only support Murmur3 anyways
   switch (int_dtype) {
-  case GDF_INT8: return default_hash<int8_t>(((int8_t*)ptr)[index]);
-  case GDF_INT16: return default_hash<int16_t>(((int16_t*)ptr)[index]);
-  case GDF_INT32: return default_hash<int32_t>(((int32_t*)ptr)[index]);
-  case GDF_INT64: return default_hash<int64_t>(((int64_t*)ptr)[index]);
+  case GDF_INT8:  { default_hash<int8_t> hasher; return hasher(((int8_t*)ptr)[index]); }
+  case GDF_INT16: { default_hash<int16_t> hasher; return hasher(((int16_t*)ptr)[index]); }
+  case GDF_INT32: { default_hash<int32_t> hasher; return hasher(((int32_t*)ptr)[index]); }
+  case GDF_INT64: { default_hash<int64_t> hasher; return hasher(((int64_t*)ptr)[index]); }
+  default:
+    return 0;
   }
 }
 
-__device__ __inline__
 template<typename size_type>
+__device__ __inline__
 void hash_combine(size_type &seed, const uint32_t hash_val)
 {
   seed ^= hash_val + 0x9e3779b9 + (seed<<6) + (seed>>2);
@@ -62,7 +64,7 @@ void hash_combine(size_type &seed, const uint32_t hash_val)
 // one thread handles multiple rows
 // d_col_data[i]: column's data (on device)
 // d_col_int_dtype[i]: column's dtype (converted to int) 
-__global__ void hash_cols(int num_rows, int num_cols, void **d_col_data, int *d_col_int_dtype, int *d_output)
+__global__ void hash_cols(int num_rows, int num_cols, void **d_col_data, gdf_dtype *d_col_int_dtype, int *d_output)
 {
   for (int row = threadIdx.x + blockIdx.x * blockDim.x; row < num_rows; row += blockDim.x * gridDim.x) {
     uint32_t seed = 0;
@@ -74,11 +76,14 @@ __global__ void hash_cols(int num_rows, int num_cols, void **d_col_data, int *d_
   }
 }
 
-gdf_error gdf_hash(int num_cols, gdf_column **input, gdf_hash_func hash, gdf_join_result_type **out_result)
+gdf_error gdf_hash(int num_cols, gdf_column **input, gdf_hash_func hash, gdf_column *output)
 {
   // check that all columns have the same size
   for (int i = 0; i < num_cols; i++)
     if (i > 0 && input[i]->size != input[i-1]->size) return GDF_COLUMN_SIZE_MISMATCH;
+  // check that the output dtype is int32
+  // TODO: do we need to support int64 as well?
+  if (output->dtype != GDF_INT32) return GDF_UNSUPPORTED_DTYPE;
   int64_t num_rows = input[0]->size;
 
   // copy data pointers to device
@@ -90,29 +95,28 @@ gdf_error gdf_hash(int num_cols, gdf_column **input, gdf_hash_func hash, gdf_joi
   cudaMemcpy(d_col_data, h_col_data, num_cols * sizeof(void*), cudaMemcpyDefault);
 
   // copy dtype (converted to int) to device
-  void *d_col_int_dtype, *h_col_int_dtype;
-  cudaMalloc(&d_col_int_dtype, num_cols * sizeof(int));
-  cudaMallocHost(&h_col_int_dtype, num_cols * sizeof(int));
+  gdf_dtype *d_col_int_dtype, *h_col_int_dtype;
+  cudaMalloc(&d_col_int_dtype, num_cols * sizeof(gdf_dtype));
+  cudaMallocHost(&h_col_int_dtype, num_cols * sizeof(gdf_dtype));
   for (int i = 0; i < num_cols; i++)
     h_col_int_dtype[i] = to_int_dtype(input[i]->dtype);
-  cudaMemcpy(d_col_int_dtype, h_col_int_dtype, num_cols * sizeof(int), cudaMemcpyDefault);
-
-  // allocate output
-  std::unique_ptr<join_result<int>> result_ptr(new join_result<int>);
-  mgpu::mem_t<int> output(num_rows, context);
-  result_ptr->result = output;
+  cudaMemcpy(d_col_int_dtype, h_col_int_dtype, num_cols * sizeof(gdf_dtype), cudaMemcpyDefault);
 
   // launch a kernel
   const int rows_per_block = HASH_KERNEL_BLOCK_SIZE * HASH_KERNEL_ROWS_PER_THREAD;
   const int64_t grid = (num_rows + rows_per_block-1) / rows_per_block;
-  hash_cols<<<grid, HASH_KERNEL_BLOCK_SIZE>>>(num_rows, num_cols, d_col_data, d_col_int_dtype, result_ptr->result.data());
+  hash_cols<<<grid, HASH_KERNEL_BLOCK_SIZE>>>(num_rows, num_cols, d_col_data, d_col_int_dtype, (int32_t*)output->data);
 
   // TODO: do we need to synchronize here
   cudaDeviceSynchronize();
+  CUDA_CHECK_LAST();
 
-  // TODO: free temp memory
+  // free temp memory
+  cudaFree(d_col_data);
+  cudaFreeHost(h_col_data);
+  cudaFree(d_col_int_dtype);
+  cudaFreeHost(h_col_int_dtype);
 
-  *out_result = cffi_wrap(result_ptr.release());
   return GDF_SUCCESS;
 
 }

@@ -169,7 +169,11 @@ gdf_error gdf_prefixsum_i64(gdf_column *inp, gdf_column *out, int inclusive);
 
 /* hashing */
 
-gdf_error gdf_hash(int num_cols, gdf_column **input, gdf_hash_func hash, gdf_join_result_type **out_result);
+// num_cols: the number of columns
+// input: a list of the column pointers
+// hash: the hashing function to use
+// output: the output column, allocated by the caller, must have GDF_INT32 dtype
+gdf_error gdf_hash(int num_cols, gdf_column **input, gdf_hash_func hash, gdf_column *output);
 
 /* trig */
 
