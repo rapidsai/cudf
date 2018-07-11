@@ -343,8 +343,13 @@ def test_multileftjoin(dtype):
                     assert tuple(left_idx) == (1, 1, 3, 1, 2)
 
 
-def test_multi_merge_left(left_nrows=60, right_nrows=60, left_nkeys=4, right_nkeys=5, how='left'):
-    print(left_nrows, right_nrows, left_nkeys, right_nkeys, how)
+def tests_two_column_merge_left(left_nkeys=4, right_nkeys=5):
+    """Test for issue #57.
+    An issue that can trigger an error in cuda-memcheck.
+    """
+    how='left'
+    left_nrows = 60
+    right_nrows = 60
 
     np.random.seed(0)
 
@@ -353,7 +358,6 @@ def test_multi_merge_left(left_nrows=60, right_nrows=60, left_nkeys=4, right_nke
         np.random.randint(0, left_nkeys, size=left_nrows),
         np.random.randint(0, left_nkeys, size=left_nrows),
     ]
-    data = np.arange(left_nrows, dtype=np.int32)
     right_cols = [
         np.random.randint(0, right_nkeys, size=right_nrows),
         np.random.randint(0, right_nkeys, size=right_nrows),
@@ -363,3 +367,9 @@ def test_multi_merge_left(left_nrows=60, right_nrows=60, left_nkeys=4, right_nke
         joined_idx = _call_join_multi(libgdf.gdf_multi_left_join_generic, 2,
                                       col_left, col_right)
 
+    # Just check that the indices in `joined_idx` are valid
+    assert joined_idx.shape[0] == 2
+    assert np.all(0 <= joined_idx[0])
+    assert np.all(-1 <= joined_idx[1])
+    assert np.all(joined_idx[0] < left_nrows)
+    assert np.all(joined_idx[1] < right_nrows)
