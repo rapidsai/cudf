@@ -1,7 +1,8 @@
+# Copyright (c) 2018, NVIDIA CORPORATION.
+
 """
 Define how data are formatted
 """
-from collections import OrderedDict
 
 
 def format(index, cols, show_headers=True, more_cols=0, more_rows=0,

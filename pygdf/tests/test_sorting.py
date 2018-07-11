@@ -1,3 +1,5 @@
+# Copyright (c) 2018, NVIDIA CORPORATION.
+
 from itertools import product
 
 import pytest
@@ -11,7 +13,6 @@ from pygdf.dataframe import DataFrame, Series
 sort_nelem_args = [2, 257]
 sort_dtype_args = [np.int32, np.int64, np.float32, np.float64]
 sort_slice_args = [slice(1, None), slice(None, -1), slice(1, -1)]
-
 
 
 @pytest.mark.parametrize('nelem,dtype',
@@ -43,7 +44,6 @@ def test_dataframe_sort_values_sliced(nelem, sliceobj):
     assert (got.to_pandas() == expect).all()
 
 
-
 @pytest.mark.parametrize('nelem,dtype,asc',
                          list(product(sort_nelem_args,
                                       sort_dtype_args,
@@ -58,6 +58,7 @@ def test_series_argsort(nelem, dtype, asc):
     else:
         expected = np.argsort(-sr.to_array(), kind='mergesort')
     np.testing.assert_array_equal(expected, res.to_array())
+
 
 @pytest.mark.parametrize('nelem,asc',
                          list(product(sort_nelem_args,
@@ -105,6 +106,7 @@ def test_series_nsmallest():
     with pytest.raises(ValueError) as raises:
         sr.nsmallest(3, keep='what')
     assert raises.match('keep must be either "first", "last"')
+
 
 @pytest.mark.parametrize('nelem,n', [(10, 5), (100, 10)])
 def test_dataframe_nlargest(nelem, n):

@@ -1,3 +1,5 @@
+# Copyright (c) 2018, NVIDIA CORPORATION.
+
 from __future__ import print_function, division
 
 import pandas as pd

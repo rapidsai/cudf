@@ -1,3 +1,5 @@
+# Copyright (c) 2018, NVIDIA CORPORATION.
+
 import numpy as np
 import pandas as pd
 try:
@@ -11,7 +13,8 @@ import pygdf
 from . import utils
 
 
-require_distributed = pytest.mark.skipif(not _have_distributed, reason='no distributed')
+require_distributed = pytest.mark.skipif(not _have_distributed,
+                                         reason='no distributed')
 
 
 @require_distributed

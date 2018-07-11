@@ -1,4 +1,4 @@
-# Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2018, NVIDIA CORPORATION.
 
 from __future__ import print_function, division
 
@@ -725,7 +725,6 @@ class Series(object):
             return 0
         return self._column.unique_count(type=type)
         # return len(self._column.unique())
-
 
     def value_counts(self, type='sort'):
         """Returns unique values of this Series.

@@ -1,3 +1,5 @@
+# Copyright (c) 2018, NVIDIA CORPORATION.
+
 import pytest
 import random
 from itertools import product
@@ -78,7 +80,8 @@ def test_label_encode_drop_one():
         np.testing.assert_equal(arr[i], lab.get(df.cats[i], -1))
 
     # label encode data frame
-    df2 = df.label_encoding(column='cats', prefix='cats', cats=vals, dtype='float32')
+    df2 = df.label_encoding(column='cats', prefix='cats', cats=vals,
+                            dtype='float32')
 
     assert df2.columns[0] == 'cats'
     assert df2.columns[1] == 'cats_labels'

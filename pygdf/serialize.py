@@ -1,11 +1,9 @@
 try:
-    import distributed
+    import distributed.protocol as _dp
 except ImportError:
     def register_distributed_serializer(cls):
         pass
 else:
-    import distributed.protocol as _dp
-
     def register_distributed_serializer(cls):
         _dp.register_serialization(cls, _serialize, _deserialize)
 

@@ -1,8 +1,6 @@
-# Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2018, NVIDIA CORPORATION.
 
 from __future__ import print_function, division
-
-import numbers
 
 import numpy as np
 import pandas as pd
@@ -142,7 +140,8 @@ class NumericalColumn(columnops.TypedColumnBase):
         return segs, sortedvals
 
     def unique(self, type='sort'):
-        # type variable will indicate what algorithm to use to calculate unique, not used right now
+        # type variable will indicate what algorithm to use to
+        # calculate unique, not used right now
         if type is not 'sort':
             msg = 'non sort based unique() not implemented yet'
             raise NotImplementedError(msg)
@@ -231,7 +230,8 @@ class NumericalColumn(columnops.TypedColumnBase):
         elif dkind in 'iu':
             return -1
         else:
-            raise TypeError("numeric column of {} has no NaN value".format(self.dtype))
+            raise TypeError(
+                "numeric column of {} has no NaN value".format(self.dtype))
 
     def join(self, other, how='left', return_indexers=False):
         """Join with another column.

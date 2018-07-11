@@ -1,8 +1,9 @@
+# Copyright (c) 2018, NVIDIA CORPORATION.
+
 """
 Test related to Index
 """
 import pytest
-import itertools
 
 import numpy as np
 
