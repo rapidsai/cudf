@@ -399,9 +399,9 @@ public:
      * @Returns An iterator to the newly inserted key,value pair
      */
     /* ----------------------------------------------------------------------------*/
-    template<typename Aggregation_Operator>
+    template<typename aggregation_type>
     __forceinline__
-    __host__ __device__ iterator insert(const value_type& x, Aggregation_Operator op)
+    __host__ __device__ iterator insert(const value_type& x, aggregation_type op)
     {
         const size_type hashtbl_size    = m_hashtbl_size;
         value_type* hashtbl_values      = m_hashtbl_values;
