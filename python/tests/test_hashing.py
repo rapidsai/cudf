@@ -60,18 +60,23 @@ def test_hashing():
     hash_input1 = np.array(np.random.randint(0, 28, nrows), dtype=np.int8)
     hash_input1[-1] = hash_input1[0]
     hash_input.append(hash_input1)
-    hash_input2 = np.array(np.random.randint(0, 28, nrows), dtype=np.int16)
-    hash_input2[-1] = hash_input2[0]
-    hash_input.append(hash_input2)
+
+    # hash_input2 = np.array(np.random.randint(0, 28, nrows), dtype=np.int16)
+    # hash_input2[-1] = hash_input2[0]
+    # hash_input.append(hash_input2)
+
     hash_input3 = np.array(np.random.randint(0, 28, nrows), dtype=np.int32)
     hash_input3[-1] = hash_input3[0]
     hash_input.append(hash_input3)
+
     hash_input4 = np.array(np.random.randint(0, 28, nrows), dtype=np.int64)
     hash_input4[-1] = hash_input4[0]
     hash_input.append(hash_input4)
+
     hash_input5 = np.array(np.random.randint(0, 28, nrows), dtype=np.float32)
     hash_input5[-1] = hash_input5[0]
     hash_input.append(hash_input5)
+    
     hash_input6 = np.array(np.random.randint(0, 28, nrows), dtype=np.float64)
     hash_input6[-1] = hash_input6[0]
     hash_input.append(hash_input6) 
@@ -80,7 +85,7 @@ def test_hashing():
     magic = 0
     
     with _make_hash_input(hash_input, ncols) as (col_input):
-        # Join
+        # Hash
         hashed_column = _call_hash_multi(libgdf.gdf_hash, ncols, col_input, magic)
 
     # Check if first and last row are equal
