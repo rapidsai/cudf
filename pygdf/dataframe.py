@@ -597,7 +597,8 @@ class DataFrame(object):
                 df[k] = self[k].reset_index().take(new_positions)
         return df.set_index(self.index.take(new_positions))
 
-    def merge(self, other, on=None, how='left', lsuffix='_x', rsuffix='_y', type='sort'):
+    def merge(self, other, on=None, how='left', lsuffix='_x', rsuffix='_y',
+              type='sort'):
         if how != 'left':
             raise ValueError('{!r} join not implemented yet'.format(how))
 
@@ -609,9 +610,9 @@ class DataFrame(object):
         lhs = self
         rhs = other
         # XXX: Replace this stub
-        #joined_values, joined_indicies = self._stub_merge(
-        #    lhs, rhs, left_on=on, right_on=on, how=how, return_joined_indicies=True
-        #    )
+        # joined_values, joined_indicies = self._stub_merge(
+        #    lhs, rhs, left_on=on, right_on=on, how=how,
+        #    return_joined_indicies=True)
         joined_values, joined_indicies = self._merge_gdf(
             lhs, rhs, left_on=on, right_on=on, how=how, return_indices=True
             )
@@ -661,16 +662,17 @@ class DataFrame(object):
         for r in right_on:
             right_cols.append(right[r]._column)
 
-        joined_indices = [];
-        with _gdf.apply_join(left_cols, right_cols, how) as (left_indices, right_indices):
+        joined_indices = []
+        with _gdf.apply_join(left_cols, right_cols, how) as (left_indices,
+                                                             right_indices):
             if left_indices.size > 0:
-                # For each column we joined on, gather the values from each column
-                # using the indices from the join
+                # For each column we joined on, gather the values from each
+                # column using the indices from the join
                 joined_values = []
 
                 for i in range(len(left_on)):
-                    # TODO Instead of calling 'gather_joined_index' for every column
-                    # that we are joining on, we should implement a
+                    # TODO Instead of calling 'gather_joined_index' for every
+                    # column that we are joining on, we should implement a
                     # 'multi_gather_joined_index' that can gather a value from
                     # each column at once
                     raw_values = cudautils.gather_joined_index(
@@ -681,10 +683,11 @@ class DataFrame(object):
                                 )
                     buffered_values = Buffer(raw_values)
 
-                    joined_values.append(left_cols[i].replace(data=buffered_values))
+                    joined_values.append(left_cols[i]
+                                         .replace(data=buffered_values))
 
                 joined_indices = (cudautils.copy_array(left_indices),
-                                    cudautils.copy_array(right_indices))
+                                  cudautils.copy_array(right_indices))
 
         if return_indices:
             return joined_values, joined_indices
