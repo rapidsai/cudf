@@ -13,11 +13,12 @@
 
 
 // This is necessary to do a parametrized typed-test over multiple template arguments
-template <typename Key, typename Value>
+template <typename Key, typename Value, typename Aggregation_Operator>
 struct KeyValueTypes
 {
   using key_type = Key;
   using value_type = Value;
+  using op_type = Aggregation_Operator;
 };
 
 // Have to use a functor instead of a device lambda because
@@ -35,6 +36,16 @@ template<typename value_type>
     }
   };
 
+template<typename value_type>
+  struct min_op
+  {
+    __host__ __device__
+    value_type operator()(value_type a, value_type b)
+    {
+      return (a < b? a : b);
+    }
+  };
+
 
 // A new instance of this class will be created for each *TEST(MapTest, ...)
 // Put all repeated stuff for each test here
@@ -43,6 +54,7 @@ struct MapTest : public testing::Test
 {
   using key_type = typename T::key_type;
   using value_type = typename T::value_type;
+  using op_type = typename T::op_type;
   using map_type = concurrent_unordered_map<key_type, value_type, std::numeric_limits<key_type>::max()>;
   using pair_type = thrust::pair<key_type, value_type>;
 
@@ -66,12 +78,12 @@ struct MapTest : public testing::Test
   {
   }
 
-  pair_type * create_input(const int num_unique_keys, const int num_values_per_key, const int max_key = RAND_MAX, const int max_value = RAND_MAX, bool shuffle = false)
+  pair_type * create_input(const int num_unique_keys, const int num_values_per_key, const int ratio = 1, const int max_key = RAND_MAX, const int max_value = RAND_MAX, bool shuffle = false)
   {
 
     const int TOTAL_PAIRS = num_unique_keys * num_values_per_key;
 
-    this->the_map.reset(new map_type(2*TOTAL_PAIRS));
+    this->the_map.reset(new map_type(ratio*TOTAL_PAIRS));
 
     pairs.reserve(TOTAL_PAIRS);
 
@@ -114,7 +126,7 @@ struct MapTest : public testing::Test
         // Key exists, update the value with the operator
         else
         {
-          max_op<value_type> op;
+          op_type op;
           value_type new_value = op(found->second, current_value);
           found->second = new_value;
         }
@@ -157,16 +169,26 @@ struct MapTest : public testing::Test
 // to nest multiple types inside of the KeyValueTypes struct above
 // KeyValueTypes<type1, type2> implies key_type = type1, value_type = type2
 // This list is the types across which Google Test will run our tests
-typedef ::testing::Types< KeyValueTypes<int,int>
-                         // KeyValueTypes<int,float>,
-                         // KeyValueTypes<int,double>,
-                         // KeyValueTypes<int,long long int>,
-                         // KeyValueTypes<int,unsigned long long int>,
-                         // KeyValueTypes<unsigned long long int, int>,
-                         // KeyValueTypes<unsigned long long int, float>,
-                         // KeyValueTypes<unsigned long long int, double>,
-                         // KeyValueTypes<unsigned long long int, long long int>,
-                         // KeyValueTypes<unsigned long long int, unsigned long long int>
+typedef ::testing::Types< KeyValueTypes<int,int,max_op<int>>,
+                          KeyValueTypes<int,float,max_op<int>>,
+                          KeyValueTypes<int,double,max_op<int>>,
+                          KeyValueTypes<int,long long int,max_op<int>>,
+                          KeyValueTypes<int,unsigned long long int,max_op<int>>,
+                          KeyValueTypes<unsigned long long int, int,max_op<int>>,
+                          KeyValueTypes<unsigned long long int, float,max_op<int>>,
+                          KeyValueTypes<unsigned long long int, double,max_op<int>>,
+                          KeyValueTypes<unsigned long long int, long long int,max_op<int>>,
+                          KeyValueTypes<unsigned long long int, unsigned long long int,max_op<int>>,
+                          KeyValueTypes<int,int,min_op<int>>,
+                          KeyValueTypes<int,float,min_op<int>>,
+                          KeyValueTypes<int,double,min_op<int>>,
+                          KeyValueTypes<int,long long int,min_op<int>>,
+                          KeyValueTypes<int,unsigned long long int,min_op<int>>,
+                          KeyValueTypes<unsigned long long int, int,min_op<int>>,
+                          KeyValueTypes<unsigned long long int, float,min_op<int>>,
+                          KeyValueTypes<unsigned long long int, double,min_op<int>>,
+                          KeyValueTypes<unsigned long long int, long long int,min_op<int>>,
+                          KeyValueTypes<unsigned long long int, unsigned long long int,min_op<int>>
                           > Implementations;
 
 TYPED_TEST_CASE(MapTest, Implementations);
@@ -191,6 +213,7 @@ TYPED_TEST(MapTest, CheckUnusedValues){
   EXPECT_EQ(begin->second, this->unused_value);
 }
 
+/*
 TYPED_TEST(MapTest, Insert)
 {
   using key_type = typename TypeParam::key_type;
@@ -215,10 +238,10 @@ TYPED_TEST(MapTest, Insert)
     EXPECT_EQ(found->first, it.first);
     EXPECT_EQ(found->second, it.second);
   }
-
 }
+*/
 
-TYPED_TEST(MapTest, MaxAggregationTestHost)
+TYPED_TEST(MapTest, AggregationTestHost)
 {
 
   using key_type = typename TypeParam::key_type;
@@ -284,24 +307,78 @@ __global__ void build_table(map_type * const the_map,
 
 
 
-TYPED_TEST(MapTest, MaxAggregationTestDevice)
+TYPED_TEST(MapTest, AggregationTestDeviceAllSame)
 {
   using value_type = typename TypeParam::value_type;
   using pair_type = typename MapTest<TypeParam>::pair_type;
+  using op_type = typename MapTest<TypeParam>::op_type;
 
-  pair_type * d_pairs = this->create_input(512, 256*256);
+  pair_type * d_pairs = this->create_input(1, 1<<20);
 
   const dim3 grid_size ((this->d_pairs.size() + this->THREAD_BLOCK_SIZE -1) / this->THREAD_BLOCK_SIZE,1,1);
   const dim3 block_size (this->THREAD_BLOCK_SIZE, 1, 1);
 
-  std::cout << "Input Size: " << this->d_pairs.size() << " Grid Size: " << grid_size.x << " Block Size: " << block_size.x << std::endl;
-
   cudaDeviceSynchronize();
-  build_table<<<grid_size, block_size>>>((this->the_map).get(), d_pairs, this->d_pairs.size(), max_op<value_type>());
+  build_table<<<grid_size, block_size>>>((this->the_map).get(), d_pairs, this->d_pairs.size(), op_type());
   cudaDeviceSynchronize(); 
 
   this->check_answer();
 
+}
+
+TYPED_TEST(MapTest, AggregationTestDeviceAllUnique)
+{
+  using value_type = typename TypeParam::value_type;
+  using pair_type = typename MapTest<TypeParam>::pair_type;
+  using op_type = typename MapTest<TypeParam>::op_type;
+  
+
+  pair_type * d_pairs = this->create_input(1<<16, 1);
+
+  const dim3 grid_size ((this->d_pairs.size() + this->THREAD_BLOCK_SIZE -1) / this->THREAD_BLOCK_SIZE,1,1);
+  const dim3 block_size (this->THREAD_BLOCK_SIZE, 1, 1);
+
+  cudaDeviceSynchronize();
+  build_table<<<grid_size, block_size>>>((this->the_map).get(), d_pairs, this->d_pairs.size(), op_type());
+  cudaDeviceSynchronize(); 
+
+  this->check_answer();
+}
+
+TYPED_TEST(MapTest, AggregationTestDeviceWarpSame)
+{
+  using value_type = typename TypeParam::value_type;
+  using pair_type = typename MapTest<TypeParam>::pair_type;
+  using op_type = typename MapTest<TypeParam>::op_type;
+
+  pair_type * d_pairs = this->create_input(1<<15, 32);
+
+  const dim3 grid_size ((this->d_pairs.size() + this->THREAD_BLOCK_SIZE -1) / this->THREAD_BLOCK_SIZE,1,1);
+  const dim3 block_size (this->THREAD_BLOCK_SIZE, 1, 1);
+
+  cudaDeviceSynchronize();
+  build_table<<<grid_size, block_size>>>((this->the_map).get(), d_pairs, this->d_pairs.size(), op_type());
+  cudaDeviceSynchronize(); 
+
+  this->check_answer();
+}
+
+TYPED_TEST(MapTest, AggregationTestDeviceBlockSame)
+{
+  using value_type = typename TypeParam::value_type;
+  using pair_type = typename MapTest<TypeParam>::pair_type;
+  using op_type = typename MapTest<TypeParam>::op_type;
+
+  pair_type * d_pairs = this->create_input(1<<12, this->THREAD_BLOCK_SIZE);
+
+  const dim3 grid_size ((this->d_pairs.size() + this->THREAD_BLOCK_SIZE -1) / this->THREAD_BLOCK_SIZE,1,1);
+  const dim3 block_size (this->THREAD_BLOCK_SIZE, 1, 1);
+
+  cudaDeviceSynchronize();
+  build_table<<<grid_size, block_size>>>((this->the_map).get(), d_pairs, this->d_pairs.size(), op_type());
+  cudaDeviceSynchronize(); 
+
+  this->check_answer();
 }
 
 
