@@ -2,6 +2,7 @@
 #include <iostream>
 #include <vector>
 #include <unordered_map>
+#include <random>
 
 #include <thrust/device_vector.h>
 
@@ -43,6 +44,7 @@ struct MapTest : public testing::Test
   using key_type = typename T::key_type;
   using value_type = typename T::value_type;
   using map_type = concurrent_unordered_map<key_type, value_type, std::numeric_limits<key_type>::max()>;
+  using pair_type = thrust::pair<key_type, value_type>;
 
   std::unique_ptr<map_type> the_map;
 
@@ -53,10 +55,9 @@ struct MapTest : public testing::Test
 
   const int THREAD_BLOCK_SIZE{256};
 
-  std::vector<key_type> keys;
-  std::vector<value_type> values;
-  thrust::device_vector<key_type> d_keys;
-  thrust::device_vector<value_type> d_values;
+  std::vector<std::pair<key_type,value_type>> pairs;
+
+  thrust::device_vector<pair_type> d_pairs;
 
   std::unordered_map<key_type, value_type> expected_values;
 
@@ -65,16 +66,14 @@ struct MapTest : public testing::Test
   {
   }
 
-  int create_input(const int num_unique_keys, const int num_values_per_key, const int max_key = RAND_MAX, const int max_value = RAND_MAX)
+  pair_type * create_input(const int num_unique_keys, const int num_values_per_key, const int max_key = RAND_MAX, const int max_value = RAND_MAX, bool shuffle = false)
   {
-
 
     const int TOTAL_PAIRS = num_unique_keys * num_values_per_key;
 
     this->the_map.reset(new map_type(2*TOTAL_PAIRS));
 
-    keys.reserve(TOTAL_PAIRS);
-    values.reserve(TOTAL_PAIRS);
+    pairs.reserve(TOTAL_PAIRS);
 
     // Always use the same seed so the random sequence is the same each time
     std::srand(0);
@@ -102,8 +101,7 @@ struct MapTest : public testing::Test
         }
 
         // Store current key and value
-        keys.push_back(current_key);
-        values.push_back(current_value);
+        pairs.push_back(std::make_pair(current_key, current_value));
 
         // Use a STL map to keep track of the max value for each key
         auto found = expected_values.find(current_key);
@@ -113,7 +111,7 @@ struct MapTest : public testing::Test
         {
           expected_values.insert(std::make_pair(current_key,current_value));
         }
-        // Key exists, update the value with the max
+        // Key exists, update the value with the operator
         else
         {
           max_op<value_type> op;
@@ -123,9 +121,12 @@ struct MapTest : public testing::Test
       }
     }
 
-    d_keys = keys;
-    d_values = values;
-    return TOTAL_PAIRS;
+    if(shuffle == true)
+      std::random_shuffle(pairs.begin(), pairs.end());
+
+    d_pairs = pairs;
+
+    return thrust::raw_pointer_cast(d_pairs.data());
   }
 
   void check_answer(){
@@ -170,7 +171,6 @@ typedef ::testing::Types< KeyValueTypes<int,int>
 
 TYPED_TEST_CASE(MapTest, Implementations);
 
-/*
 TYPED_TEST(MapTest, InitialState)
 {
   using key_type = typename TypeParam::key_type;
@@ -262,13 +262,11 @@ TYPED_TEST(MapTest, MaxAggregationTestHost)
   EXPECT_EQ(11, found->second);
 
 }
-*/
 
 
 template<typename map_type, typename Aggregation_Operator>
 __global__ void build_table(map_type * const the_map,
-                            const typename map_type::key_type * const input_keys,
-                            const typename map_type::mapped_type * const input_values,
+                            const typename map_type::value_type * const input_pairs,
                             const typename map_type::size_type input_size,
                             Aggregation_Operator op)
 {
@@ -278,8 +276,7 @@ __global__ void build_table(map_type * const the_map,
   size_type i = threadIdx.x + blockIdx.x * blockDim.x;
 
   while( i < input_size ){
-    const auto p = thrust::make_pair(input_keys[i], input_values[i]);
-    the_map->insert(p, op);
+    the_map->insert(input_pairs[i], op);
     i += blockDim.x * gridDim.x;
   }
 
@@ -289,22 +286,18 @@ __global__ void build_table(map_type * const the_map,
 
 TYPED_TEST(MapTest, MaxAggregationTestDevice)
 {
-  using key_type = typename TypeParam::key_type;
   using value_type = typename TypeParam::value_type;
-  using size_type = typename MapTest<TypeParam>::map_type::size_type;
+  using pair_type = typename MapTest<TypeParam>::pair_type;
 
-  const size_type input_size = this->create_input(512, 256*256);
+  pair_type * d_pairs = this->create_input(512, 256*256);
 
-  key_type *k = thrust::raw_pointer_cast(this->d_keys.data());
-  value_type *v = thrust::raw_pointer_cast(this->d_values.data());
-
-  const dim3 grid_size ((input_size + this->THREAD_BLOCK_SIZE -1) / this->THREAD_BLOCK_SIZE,1,1);
+  const dim3 grid_size ((this->d_pairs.size() + this->THREAD_BLOCK_SIZE -1) / this->THREAD_BLOCK_SIZE,1,1);
   const dim3 block_size (this->THREAD_BLOCK_SIZE, 1, 1);
 
-  std::cout << "Input Size: " << input_size << " Grid Size: " << grid_size.x << " Block Size: " << block_size.x << std::endl;
+  std::cout << "Input Size: " << this->d_pairs.size() << " Grid Size: " << grid_size.x << " Block Size: " << block_size.x << std::endl;
 
   cudaDeviceSynchronize();
-  build_table<<<grid_size, block_size>>>((this->the_map).get(), k, v, input_size, max_op<value_type>());
+  build_table<<<grid_size, block_size>>>((this->the_map).get(), d_pairs, this->d_pairs.size(), max_op<value_type>());
   cudaDeviceSynchronize(); 
 
   this->check_answer();
