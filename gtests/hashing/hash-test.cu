@@ -31,20 +31,14 @@ struct gdf_hashing_test : public ::testing::Test {
 	}
 };
 
-TEST(gdf_hashing_test, simpleTest) {
-
-  EXPECT_TRUE( 1+1 == 2 );
-
-}
-
-TEST(gdf_hashing_test, twoColTest) {
+TEST(gdf_hashing_test, allDtypesTest) {
 
 	int nrows = 5;
 	int ncols = 6;
 
 	gdf_column **inputCol;
 	inputCol = (gdf_column**) malloc(sizeof(gdf_column)* ncols);
-	for(size_t i=0;i<nrows;i++)
+	for(size_t i=0;i<ncols;i++)
 		inputCol[i] = (gdf_column*) malloc(sizeof(gdf_column));
 
 	gdf_column outputCol;
