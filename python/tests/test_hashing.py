@@ -26,11 +26,11 @@ def _make_hash_input(hash_input, ncols):
     yield ci
 
 def _call_hash_multi(api, ncols, col_input, magic, nrows):
-    outro = np.zeros(nrows,dtype=np.int32)
-    d_out = cuda.to_device(outro)
+    out_ary = np.zeros(nrows,dtype=np.int32)
+    d_out = cuda.to_device(out_ary)
     col_out = new_column()
     libgdf.gdf_column_view(col_out, unwrap_devary(d_out), ffi.NULL,
-                           outro.size, get_dtype(d_out.dtype))
+                           out_ary.size, get_dtype(d_out.dtype))
 
     api(ncols, col_input, magic, col_out)
 
@@ -87,7 +87,6 @@ def test_hashing():
 
     ncols = len(hash_input)
     magic = 0
-    print("ncols ",ncols)
     
     with _make_hash_input(hash_input, ncols) as (col_input):
         # Hash
