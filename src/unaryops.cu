@@ -1,3 +1,9 @@
+/*
+ *
+ * Code edits and additions
+ * 		Copyright 2018 Rommel Quintanilla <rommel@blazingdb.com>
+ */
+
 #include <cmath>
 #include <algorithm>
 
