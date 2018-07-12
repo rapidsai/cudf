@@ -51,7 +51,6 @@ def _call_hash_multi(api, ncols, col_input, magic, nrows):
     hashed_result = ary.copy_to_host()
     print(hashed_result)
 
-    # libgdf.gdf_join_result_free(hash_result)
     return hashed_result
 
 
@@ -79,10 +78,12 @@ def test_hashing():
     hash_input5[-1] = hash_input5[0]
     hash_input.append(hash_input5)
     
-    # pytest on all test files fails if rows>5
     # hash_input6 = np.array(np.random.randint(0, 28, nrows), dtype=np.float64)
     # hash_input6[-1] = hash_input6[0]
     # hash_input.append(hash_input6)
+
+    # pytest on all test files fails if columns>5, but works well if called seperately like
+    # pytest --cache-clear -vvs ~/libgdf/python/tests/test_hashing.py
 
     ncols = len(hash_input)
     magic = 0
