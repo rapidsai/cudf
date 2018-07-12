@@ -1,49 +1,26 @@
 /*
-
-Adapted from https://github.com/moderngpu/moderngpu which has the following license:
-
-> Copyright (c) 2016, Sean Baxter
-> All rights reserved.
->
-> Redistribution and use in source and binary forms, with or without
-> modification, are permitted provided that the following conditions are met:
->
-> 1. Redistributions of source code must retain the above copyright notice, this
->    list of conditions and the following disclaimer.
-> 2. Redistributions in binary form must reproduce the above copyright notice,
->    this list of conditions and the following disclaimer in the documentation
->    and/or other materials provided with the distribution.
->
-> THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
-> ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
-> WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-> DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR
-> ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
-> (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
-> LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
-> ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
-> (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
-> SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
->
-> The views and conclusions contained in the software and documentation are those
-> of the authors and should not be interpreted as representing official policies,
-> either expressed or implied, of the FreeBSD Project.
-*/
-
+ * Copyright (c) 2017, NVIDIA CORPORATION.  All rights reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 
 #include <gdf/gdf.h>
 #include <gdf/errorutils.h>
 
-
-#include <moderngpu/kernel_sortedsearch.hxx>
-#include <moderngpu/kernel_scan.hxx>
-#include <moderngpu/kernel_load_balance.hxx>
-
-
 #include <memory>
 #include <iostream>
 
-namespace {
+#include "joining.h"
 
 using namespace mgpu;
 
@@ -58,228 +35,6 @@ void dump_mem(const char name[], const mem_t<T> & mem) {
     std::cout << "\n";
 }
 
-
-struct _join_bounds {
-    mem_t<int> lower, upper;
-};
-
-
-template<typename launch_arg_t = empty_t,
-  typename a_it, typename b_it, typename comp_t>
-_join_bounds compute_join_bounds(a_it a, int a_count, b_it b, int b_count,
-    comp_t comp, context_t& context) {
-
-    mem_t<int> lower(a_count, context);
-    mem_t<int> upper(a_count, context);
-    sorted_search<bounds_lower, launch_arg_t>(a, a_count, b, b_count,
-    lower.data(), comp, context);
-    sorted_search<bounds_upper, launch_arg_t>(a, a_count, b, b_count,
-    upper.data(), comp, context);
-
-    // Prepare output
-    _join_bounds bounds;
-    lower.swap(bounds.lower);
-    upper.swap(bounds.upper);
-    return bounds;
-}
-
-
-mem_t<int> scan_join_bounds(const _join_bounds &bounds, int a_count, int b_count,
-                            context_t &context, bool isInner,
-                            int &out_join_count)
-{
-    // Compute output ranges by scanning upper - lower. Retrieve the reduction
-    // of the scan, which specifies the size of the output array to allocate.
-    mem_t<int> scanned_sizes(a_count, context);
-    const int* lower_data = bounds.lower.data();
-    const int* upper_data = bounds.upper.data();
-
-    mem_t<int> count(1, context);
-
-    if (isInner){
-        transform_scan<int>([=]MGPU_DEVICE(int index) {
-            return upper_data[index] - lower_data[index];
-        }, a_count, scanned_sizes.data(), plus_t<int>(), count.data(), context);
-    } else {
-        transform_scan<int>([=]MGPU_DEVICE(int index) {
-            auto out = upper_data[index] - lower_data[index];
-            if ( upper_data[index] == lower_data[index] ){
-                // for left-only keys, allocate a slot
-                out += 1;
-            }
-            return out;
-        }, a_count, scanned_sizes.data(), plus_t<int>(), count.data(), context);
-    }
-
-    // Prepare output
-    out_join_count = from_mem(count)[0];
-    return scanned_sizes;
-}
-
-
-template<typename launch_arg_t = empty_t>
-mem_t<int> compute_joined_indices(const _join_bounds &bounds,
-                                   const mem_t<int> &scanned_sizes,
-                                   int a_count, int join_count,
-                                   context_t &context,
-                                   bool isInner, int append_count=0)
-{
-    // Allocate an int output array and use load-balancing search to compute
-    // the join.
-
-    const int* lower_data = bounds.lower.data();
-    const int* upper_data = bounds.upper.data();
-
-    // for outer join: allocate extra space for appending the right indices
-    int output_npairs = join_count + append_count;
-    mem_t<int> output(2 * output_npairs, context);
-    int* output_data = output.data();
-
-    if (isInner){
-        // Use load-balancing search on the segments. The output is a pair with
-        // a_index = seg and b_index = lower_data[seg] + rank.
-        auto k = [=]MGPU_DEVICE(int index, int seg, int rank, const int *lower) {
-            output_data[index] = seg;
-            output_data[index + output_npairs] = lower[seg] + rank;
-        };
-
-        transform_lbs<launch_arg_t>(k, join_count, scanned_sizes.data(), a_count,
-                                    context, lower_data);
-    } else {
-        // Use load-balancing search on the segments. The output is a pair with
-        // a_index = seg
-        // b_index = lower_data[seg] + rank { if lower_data[seg] != upper_data[seg] }
-        //         = -1                     { otherwise }
-        auto k = [=]MGPU_DEVICE(int index, int seg, int rank, tuple<int, int> lower_upper) {
-            auto lower = get<0>(lower_upper);
-            auto upper = get<1>(lower_upper);
-            auto result = lower + rank;
-            if ( lower == upper ) result = -1;
-            output_data[index] = seg;
-            output_data[index + output_npairs] = result;
-        };
-        transform_lbs<launch_arg_t>(k, join_count, scanned_sizes.data(), a_count,
-                                    make_tuple(lower_data, upper_data), context);
-    }
-    return output;
-}
-
-
-template<typename launch_arg_t = empty_t, typename T>
-void outer_join_append_right(T *output_data,
-                             const mem_t<int> &matches,
-                             int append_count, int join_count,
-                             context_t &context) {
-    int output_npairs = join_count + append_count;
-    auto appender = [=]MGPU_DEVICE(int index, int seg, int rank) {
-        output_data[index + join_count] = -1;
-        output_data[index + join_count + output_npairs] = seg;
-    };
-    transform_lbs<launch_arg_t>(appender, append_count, matches.data(),
-                                matches.size(), context);
-}
-
-template<typename launch_arg_t = empty_t,
-         typename a_it, typename b_it, typename comp_t>
-mem_t<int> outer_join_count_matches(a_it a, int a_count, b_it b, int b_count,
-                                     comp_t comp, context_t &context,
-                                     int &append_count)
-{
-    mem_t<int> matches(b_count, context);
-    mem_t<int> matches_count(1, context);
-    // Compute lower and upper bounds of b into a.
-    mem_t<int> lower_rev(b_count, context);
-    mem_t<int> upper_rev(b_count, context);
-    sorted_search<bounds_lower, launch_arg_t>(
-        b, b_count, a, a_count, lower_rev.data(), comp, context
-    );
-    sorted_search<bounds_upper, launch_arg_t>(
-        b, b_count, a, a_count, upper_rev.data(), comp, context
-    );
-
-    const int* lower_rev_data = lower_rev.data();
-    const int* upper_rev_data = upper_rev.data();
-    transform_scan<int>([=]MGPU_DEVICE(int index){
-        return upper_rev_data[index] == lower_rev_data[index];
-    }, b_count, matches.data(), plus_t<int>(), matches_count.data(), context);
-
-    // Prepare output
-    append_count = from_mem(matches_count)[0];
-    return matches;
-}
-
-
-
-template<typename launch_arg_t = empty_t,
-         typename a_it, typename b_it, typename comp_t>
-mem_t<int> inner_join(a_it a, int a_count, b_it b, int b_count,
-                       comp_t comp, context_t& context)
-{
-    _join_bounds bounds = compute_join_bounds(a, a_count, b, b_count, comp, context);
-    int join_count;
-    mem_t<int> scanned_sizes = scan_join_bounds(bounds, a_count, b_count, context, true,
-                                                join_count);
-    mem_t<int> output = compute_joined_indices(bounds, scanned_sizes, a_count,
-                                               join_count, context, true);
-    return output;
-}
-
-
-template<typename launch_arg_t = empty_t,
-         typename a_it, typename b_it, typename comp_t>
-mem_t<int> left_join(a_it a, int a_count, b_it b, int b_count,
-                      comp_t comp, context_t& context)
-{
-    _join_bounds bounds = compute_join_bounds(a, a_count, b, b_count, comp, context);
-    int join_count;
-    mem_t<int> scanned_sizes = scan_join_bounds(bounds, a_count, b_count, context, false,
-                                                join_count);
-    mem_t<int> output = compute_joined_indices(bounds, scanned_sizes, a_count,
-                                               join_count, context, false, 0);
-    return output;
-}
-
-template<typename launch_arg_t = empty_t,
-  typename a_it, typename b_it, typename comp_t>
-mem_t<int> outer_join(a_it a, int a_count, b_it b, int b_count,
-                       comp_t comp, context_t& context)
-{
-    _join_bounds bounds = compute_join_bounds(a, a_count, b, b_count, comp,
-                                              context);
-    int join_count;
-    mem_t<int> scanned_sizes = scan_join_bounds(bounds, a_count, b_count, context, false,
-                                                join_count);
-    int append_count;
-    mem_t<int> matches = outer_join_count_matches(a, a_count, b, b_count,
-                                                  comp, context, append_count );
-    mem_t<int> output = compute_joined_indices(bounds, scanned_sizes, a_count,
-                                               join_count, context, false, append_count);
-    outer_join_append_right(output.data(), matches, append_count, join_count,
-                            context);
-    return output;
-}
-
-
-struct join_result_base {
-    virtual ~join_result_base() {}
-    virtual void* data() = 0;
-    virtual size_t size() = 0;
-};
-
-template <typename T>
-struct join_result : public join_result_base {
-    standard_context_t context;
-    mem_t<T> result;
-
-    join_result() : context(false) {}
-    virtual void* data() {
-        return result.data();
-    }
-    virtual size_t size() {
-        return result.size();
-    }
-};
-
 gdf_join_result_type* cffi_wrap(join_result_base *obj) {
     return reinterpret_cast<gdf_join_result_type*>(obj);
 }
@@ -287,8 +42,6 @@ gdf_join_result_type* cffi_wrap(join_result_base *obj) {
 join_result_base* cffi_unwrap(gdf_join_result_type* hdl) {
     return reinterpret_cast<join_result_base*>(hdl);
 }
-
-} // end anony namespace
 
 gdf_error gdf_join_result_free(gdf_join_result_type *result) {
     delete cffi_unwrap(result);
@@ -325,6 +78,24 @@ gdf_error gdf_##Fn(gdf_column *leftcol, gdf_column *rightcol,               \
     return GDF_SUCCESS;                                                     \
 }
 
+//TODO: DEF_JOIN_HASH can be merged with DEF_JOIN conce inner_join is using gdf_size_type
+#define DEF_JOIN_HASH(Fn, T, Joiner, JoinType)                              \
+gdf_error gdf_##Fn(gdf_column *leftcol, gdf_column *rightcol,               \
+                   gdf_join_result_type **out_result) {                     \
+    using namespace mgpu;                                                   \
+    if ( leftcol->dtype != rightcol->dtype) return GDF_UNSUPPORTED_DTYPE;   \
+    if ( leftcol->size >= MAX_JOIN_SIZE ) return GDF_COLUMN_SIZE_TOO_BIG;   \
+    if ( rightcol->size >= MAX_JOIN_SIZE ) return GDF_COLUMN_SIZE_TOO_BIG;  \
+    std::unique_ptr<join_result<int> > result_ptr(new join_result<int>);    \
+    result_ptr->result = Joiner<JoinType>((T*)leftcol->data, (int)leftcol->size,      \
+                                (T*)rightcol->data, (int)rightcol->size,    \
+				(int32_t*)NULL, (int32_t*)NULL,		    \
+				(int32_t*)NULL, (int32_t*)NULL,		    \
+                                less_t<T>(), result_ptr->context);          \
+    CUDA_CHECK_LAST();                                                      \
+    *out_result = cffi_wrap(result_ptr.release());                          \
+    return GDF_SUCCESS;                                                     \
+}
 
 #define DEF_JOIN_DISP(Fn)                                                   \
 gdf_error gdf_##Fn##_generic(gdf_column *leftcol, gdf_column * rightcol,    \
@@ -339,23 +110,104 @@ gdf_error gdf_##Fn##_generic(gdf_column *leftcol, gdf_column * rightcol,    \
     }                                                                       \
 }
 
+#define JOIN_HASH_TYPES(T1, l1, r1, T2, l2, r2, T3, l3, r3) \
+  result_ptr->result = join_hash<LEFT_JOIN>( \
+				(T1*)l1, (int)leftcol[0]->size, \
+                                (T1*)r1, (int)rightcol[0]->size, \
+                                (T2*)l2, (T2*)r2, \
+                                (T3*)l3, (T3*)r3, \
+                                less_t<int64_t>(), result_ptr->context);
 
+#define JOIN_HASH_T3(T1, l1, r1, T2, l2, r2, T3, l3, r3) \
+  if (T3 == GDF_INT8)  { JOIN_HASH_TYPES(T1, l1, r1, T2, l2, r2, int8_t, l3, r3) } \
+  if (T3 == GDF_INT16) { JOIN_HASH_TYPES(T1, l1, r1, T2, l2, r2, int16_t, l3, r3) } \
+  if (T3 == GDF_INT32) { JOIN_HASH_TYPES(T1, l1, r1, T2, l2, r2, int32_t, l3, r3) } \
+  if (T3 == GDF_INT64) { JOIN_HASH_TYPES(T1, l1, r1, T2, l2, r2, int64_t, l3, r3) }
+
+#define JOIN_HASH_T2(T1, l1, r1, T2, l2, r2, T3, l3, r3) \
+  if (T2 == GDF_INT8)  { JOIN_HASH_T3(T1, l1, r1, int8_t, l2, r2, T3, l3, r3) } \
+  if (T2 == GDF_INT16) { JOIN_HASH_T3(T1, l1, r1, int16_t, l2, r2, T3, l3, r3) } \
+  if (T2 == GDF_INT32) { JOIN_HASH_T3(T1, l1, r1, int32_t, l2, r2, T3, l3, r3) } \
+  if (T2 == GDF_INT64) { JOIN_HASH_T3(T1, l1, r1, int64_t, l2, r2, T3, l3, r3) }
+
+#define JOIN_HASH_T1(T1, l1, r1, T2, l2, r2, T3, l3, r3) \
+  if (T1 == GDF_INT8)  { JOIN_HASH_T2(int8_t, l1, r1, T2, l2, r2, T3, l3, r3) } \
+  if (T1 == GDF_INT16) { JOIN_HASH_T2(int16_t, l1, r1, T2, l2, r2, T3, l3, r3) } \
+  if (T1 == GDF_INT32) { JOIN_HASH_T2(int32_t, l1, r1, T2, l2, r2, T3, l3, r3) } \
+  if (T1 == GDF_INT64) { JOIN_HASH_T2(int64_t, l1, r1, T2, l2, r2, T3, l3, r3) }
+
+// multi-column join function
+gdf_error gdf_multi_left_join_generic(int num_cols, gdf_column **leftcol, gdf_column **rightcol, gdf_join_result_type **out_result)
+{
+  // check that the columns have matching types and the same number of rows
+  for (int i = 0; i < num_cols; i++) {
+    if (rightcol[i]->dtype != leftcol[i]->dtype) return GDF_JOIN_DTYPE_MISMATCH;
+    if (i > 0 && leftcol[i]->size != leftcol[i-1]->size) return GDF_COLUMN_SIZE_MISMATCH;
+    if (i > 0 && rightcol[i]->size != rightcol[i-1]->size) return GDF_COLUMN_SIZE_MISMATCH;
+  }
+
+  // TODO: currently support up to 3 columns, and only int32 and int64 types
+  if (num_cols > 3) return GDF_JOIN_TOO_MANY_COLUMNS;
+  for (int i = 0; i < num_cols; i++) {
+    if (leftcol[i]->dtype != GDF_INT8 &&
+        leftcol[i]->dtype != GDF_INT16 &&
+        leftcol[i]->dtype != GDF_INT32 &&
+	leftcol[i]->dtype != GDF_INT64) return GDF_UNSUPPORTED_DTYPE;
+  }
+
+  std::unique_ptr<join_result<int> > result_ptr(new join_result<int>);
+  switch (num_cols) {
+  case 1:
+    JOIN_HASH_T1(leftcol[0]->dtype, leftcol[0]->data, rightcol[0]->data,
+		 GDF_INT32, NULL, NULL,
+		 GDF_INT32, NULL, NULL)
+    break;
+  case 2:
+    JOIN_HASH_T1(leftcol[0]->dtype, leftcol[0]->data, rightcol[0]->data,
+		 leftcol[1]->dtype, leftcol[1]->data, rightcol[1]->data,
+		 GDF_INT32, NULL, NULL)
+    break;
+  case 3:
+    JOIN_HASH_T1(leftcol[0]->dtype, leftcol[0]->data, rightcol[0]->data,
+		 leftcol[1]->dtype, leftcol[1]->data, rightcol[1]->data,
+		 leftcol[2]->dtype, leftcol[2]->data, rightcol[2]->data)
+    break;
+  }
+
+  CUDA_CHECK_LAST();
+  *out_result = cffi_wrap(result_ptr.release());
+  return GDF_SUCCESS;
+}
+
+#ifdef HASH_JOIN
+#define DEF_INNER_JOIN(Fn, T) DEF_JOIN_HASH(inner_join_ ## Fn, T, join_hash, INNER_JOIN)
+#define DEF_INNER_JOIN_FP(Fn, T) DEF_JOIN(inner_join_ ## Fn, T, inner_join)
+#else
 #define DEF_INNER_JOIN(Fn, T) DEF_JOIN(inner_join_ ## Fn, T, inner_join)
+#define DEF_INNER_JOIN_FP(Fn, T) DEF_JOIN(inner_join_ ## Fn, T, inner_join)
+#endif
 DEF_JOIN_DISP(inner_join)
 DEF_INNER_JOIN(i8,  int8_t)
+DEF_INNER_JOIN(i16, int16_t)
 DEF_INNER_JOIN(i32, int32_t)
 DEF_INNER_JOIN(i64, int64_t)
-DEF_INNER_JOIN(f32, float)
-DEF_INNER_JOIN(f64, double)
+DEF_INNER_JOIN_FP(f32, float)
+DEF_INNER_JOIN_FP(f64, double)
 
 
+#ifdef HASH_JOIN
+#define DEF_LEFT_JOIN(Fn, T) DEF_JOIN_HASH(left_join_ ## Fn, T, join_hash, LEFT_JOIN)
+#define DEF_LEFT_JOIN_FP(Fn, T) DEF_JOIN(left_join_ ## Fn, T, left_join)
+#else
 #define DEF_LEFT_JOIN(Fn, T) DEF_JOIN(left_join_ ## Fn, T, left_join)
+#define DEF_LEFT_JOIN_FP(Fn, T) DEF_JOIN(left_join_ ## Fn, T, left_join)
+#endif
 DEF_JOIN_DISP(left_join)
 DEF_LEFT_JOIN(i8,  int8_t)
 DEF_LEFT_JOIN(i32, int32_t)
 DEF_LEFT_JOIN(i64, int64_t)
-DEF_LEFT_JOIN(f32, float)
-DEF_LEFT_JOIN(f64, double)
+DEF_LEFT_JOIN_FP(f32, float)
+DEF_LEFT_JOIN_FP(f64, double)
 
 
 #define DEF_OUTER_JOIN(Fn, T) DEF_JOIN(outer_join_ ## Fn, T, outer_join)

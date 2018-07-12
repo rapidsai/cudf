@@ -7,3 +7,8 @@ __pycache__
 .vscode
 build
 /thirdparty/googletest/
+/include/gdf/ipc/File_generated.h
+/include/gdf/ipc/Message_generated.h
+/include/gdf/ipc/Schema_generated.h
+/include/gdf/ipc/Tensor_generated.h
+python/libgdf_cffi/libgdf_cffi.py
