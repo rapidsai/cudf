@@ -43,9 +43,9 @@ TEST(gdf_hashing_test, twoColTest) {
 	int ncols = 2;
 
 	gdf_column **inputCol;
-	inputCol = (gdf_column**) malloc(sizeof(gdf_column*)* ncols);
+	inputCol = (gdf_column**) malloc(sizeof(gdf_column)* ncols);
 	for(size_t i=0;i<nrows;i++)
-		inputCol[i] = (gdf_column*) malloc(sizeof(gdf_column*));
+		inputCol[i] = (gdf_column*) malloc(sizeof(gdf_column));
 
 	gdf_column outputCol;
 
