@@ -92,7 +92,7 @@ IF(CMAKE_BUILD_TYPE MATCHES DEBUG)
 ENDIF(CMAKE_BUILD_TYPE MATCHES DEBUG)
 
 # switch between hash-join and sort-join
-option(HASH_JOIN "hash-based join" OFF)
+option(HASH_JOIN "hash-based join" ON)
 if(HASH_JOIN)
   message("-- Using the hash-based join implementation")
   set(CUDA_NVCC_FLAGS  ${CUDA_NVCC_FLAGS};-DHASH_JOIN)
