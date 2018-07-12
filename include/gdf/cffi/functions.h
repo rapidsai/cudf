@@ -427,67 +427,49 @@ gdf_error gdf_filter(size_t nrows,     //in: # rows
 		     size_t* d_indx,   //out: device-side array of row indices that remain after filtering
 		     size_t* new_sz);  //out: host-side # rows that remain after filtering
 
-gdf_error gdf_group_by_count(size_t nrows,     //in: # rows
-			     gdf_column* cols, //in: host-side array of gdf_columns
-			     size_t ncols,     //in: # cols
-			     int flag_sorted,  //in: flag specififying if rows are pre-sorted (1) or not (0)
-			     void** d_cols,    //out: pre-allocated device-side array to be filled with gdf_column::data for each column; slicing of gdf_column array (host)
-			     int* d_types,     //out: pre-allocated device-side array to be filled with gdf_colum::dtype for each column; slicing of gdf_column array (host)
-			     int* d_indx,      //out: device-side array of row indices after sorting
-			     int* d_kout,      //out: device-side array of rows after gropu-by
-			     int* d_count,     //out: device-side array of aggregated values (COUNT-ed) as a result of group-by;
-			     size_t* new_sz);  //out: host-side # rows of d_count
+gdf_error gdf_group_by_sum(int ncols,                    // # columns
+                           gdf_column** cols,            //input cols
+                           gdf_column* col_agg,          //column to aggregate on
+                           gdf_column* out_col_indices,  //if not null return indices of re-ordered rows
+                           gdf_column** out_col_values,  //if not null return the grouped-by columns
+                                                         //(multi-gather based on indices, which are needed anyway)
+                           gdf_column* out_col_agg,      //aggregation result
+                           gdf_context* ctxt);           //struct with additional info: bool is_sorted, flag_sort_or_hash, bool flag_count_distinct
 
-gdf_error gdf_group_by_sum(size_t nrows,     //in: # rows
-			   gdf_column* cols, //in: host-side array of gdf_columns
-			   size_t ncols,     //in: # cols
-			   int flag_sorted,  //in: flag specififying if rows are pre-sorted (1) or not (0)
-			   gdf_column agg_in,//in: column to aggregate
-			   void** d_cols,    //out: pre-allocated device-side array to be filled with gdf_column::data for each column; slicing of gdf_column array (host)
-			   int* d_types,     //out: pre-allocated device-side array to be filled with gdf_colum::dtype for each column; slicing of gdf_column array (host)
-			   int* d_indx,      //out: device-side array of row indices after sorting
-			   gdf_column agg_p, //out: reordering of d_agg after sorting; requires shallow (trivial) copy-construction (see static_assert below);
-			   int* d_kout,      //out: device-side array of rows after gropu-by
-			   gdf_column c_vout,//out: aggregated column; requires shallow (trivial) copy-construction (see static_assert below);
-			   size_t* new_sz);  //out: host-side # rows of d_count
-
-gdf_error gdf_group_by_min(size_t nrows,     //in: # rows
-			   gdf_column* cols, //in: host-side array of gdf_columns
-			   size_t ncols,     //in: # cols
-			   int flag_sorted,  //in: flag specififying if rows are pre-sorted (1) or not (0)
-			   gdf_column agg_in,//in: column to aggregate
-			   void** d_cols,    //out: pre-allocated device-side array to be filled with gdf_column::data for each column; slicing of gdf_column array (host)
-			   int* d_types,     //out: pre-allocated device-side array to be filled with gdf_colum::dtype for each column; slicing of gdf_column array (host)
-			   int* d_indx,      //out: device-side array of row indices after sorting
-			   gdf_column agg_p, //out: reordering of d_agg after sorting; requires shallow (trivial) copy-construction (see static_assert below);
-			   int* d_kout,      //out: device-side array of rows after gropu-by
-			   gdf_column c_vout,//out: aggregated column; requires shallow (trivial) copy-construction (see static_assert below);
-			   size_t* new_sz);  //out: host-side # rows of d_count
+gdf_error gdf_group_by_min(int ncols,                    // # columns
+                           gdf_column** cols,            //input cols
+                           gdf_column* col_agg,          //column to aggregate on
+                           gdf_column* out_col_indices,  //if not null return indices of re-ordered rows
+                           gdf_column** out_col_values,  //if not null return the grouped-by columns
+                                                         //(multi-gather based on indices, which are needed anyway)
+                           gdf_column* out_col_agg,      //aggregation result
+                           gdf_context* ctxt);            //struct with additional info: bool is_sorted, flag_sort_or_hash, bool flag_count_distinct
 
 
-gdf_error gdf_group_by_max(size_t nrows,     //in: # rows
-			   gdf_column* cols, //in: host-side array of gdf_columns
-			   size_t ncols,     //in: # cols
-			   int flag_sorted,  //in: flag specififying if rows are pre-sorted (1) or not (0)
-			   gdf_column agg_in,//in: column to aggregate
-			   void** d_cols,    //out: pre-allocated device-side array to be filled with gdf_column::data for each column; slicing of gdf_column array (host)
-			   int* d_types,     //out: pre-allocated device-side array to be filled with gdf_colum::dtype for each column; slicing of gdf_column array (host)
-			   int* d_indx,      //out: device-side array of row indices after sorting
-			   gdf_column agg_p, //out: reordering of d_agg after sorting; requires shallow (trivial) copy-construction (see static_assert below);
-			   int* d_kout,      //out: device-side array of rows after gropu-by
-			   gdf_column c_vout,//out: aggregated column; requires shallow (trivial) copy-construction (see static_assert below);
-			   size_t* new_sz);  //out: host-side # rows of d_count
+gdf_error gdf_group_by_max(int ncols,                    // # columns
+                           gdf_column** cols,            //input cols
+                           gdf_column* col_agg,          //column to aggregate on
+                           gdf_column* out_col_indices,  //if not null return indices of re-ordered rows
+                           gdf_column** out_col_values,  //if not null return the grouped-by columns
+                                                         //(multi-gather based on indices, which are needed anyway)
+                           gdf_column* out_col_agg,      //aggregation result
+                           gdf_context* ctxt);            //struct with additional info: bool is_sorted, flag_sort_or_hash, bool flag_count_distinct
 
-gdf_error gdf_group_by_avg(size_t nrows,     //in: # rows
-			   gdf_column* cols, //in: host-side array of gdf_columns
-			   size_t ncols,     //in: # cols
-			   int flag_sorted,  //in: flag specififying if rows are pre-sorted (1) or not (0)
-			   gdf_column agg_in,//in: column to aggregate
-			   void** d_cols,    //out: pre-allocated device-side array to be filled with gdf_column::data for each column; slicing of gdf_column array (host)
-			   int* d_types,     //out: pre-allocated device-side array to be filled with gdf_colum::dtype for each column; slicing of gdf_column array (host)
-			   int* d_indx,      //out: device-side array of row indices after sorting
-			   int* d_cout,      //out: device-side array of (COUNT-ed) values as a result of group-by;
-			   gdf_column agg_p, //out: reordering of d_agg after sorting; requires shallow (trivial) copy-construction (see static_assert below);
-			   int* d_kout,      //out: device-side array of rows after gropu-by
-			   gdf_column c_vout,//out: aggregated column; requires shallow (trivial) copy-construction (see static_assert below);
-			   size_t* new_sz);  //out: host-side # rows of d_count
+
+gdf_error gdf_group_by_avg(int ncols,                    // # columns
+                           gdf_column** cols,            //input cols
+                           gdf_column* col_agg,          //column to aggregate on
+                           gdf_column* out_col_indices,  //if not null return indices of re-ordered rows
+                           gdf_column** out_col_values,  //if not null return the grouped-by columns
+                                                         //(multi-gather based on indices, which are needed anyway)
+                           gdf_column* out_col_agg,      //aggregation result
+                           gdf_context* ctxt);            //struct with additional info: bool is_sorted, flag_sort_or_hash, bool flag_count_distinct
+
+gdf_error gdf_group_by_count(int ncols,                    // # columns
+                             gdf_column** cols,            //input cols
+                             gdf_column* col_agg,          //column to aggregate on
+                             gdf_column* out_col_indices,  //if not null return indices of re-ordered rows
+                             gdf_column** out_col_values,  //if not null return the grouped-by columns
+                                                         //(multi-gather based on indices, which are needed anyway)
+                             gdf_column* out_col_agg,      //aggregation result
+                             gdf_context* ctxt);            //struct with additional info: bool is_sorted, flag_sort_or_hash, bool flag_count_distinct

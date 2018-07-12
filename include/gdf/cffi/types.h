@@ -22,10 +22,12 @@ typedef enum {
     GDF_UNSUPPORTED_DTYPE,
     GDF_COLUMN_SIZE_MISMATCH,
     GDF_COLUMN_SIZE_TOO_BIG,
+    GDF_DATASET_EMPTY,
     GDF_VALIDITY_MISSING,
     GDF_VALIDITY_UNSUPPORTED,
     GDF_JOIN_DTYPE_MISMATCH,
     GDF_JOIN_TOO_MANY_COLUMNS,
+    GDF_UNSUPPORTED_METHOD,
 } gdf_error;
 
 typedef enum {
@@ -49,8 +51,28 @@ typedef struct gdf_column_{
     gdf_dtype_extra_info dtype_info;
 } gdf_column;
 
+typedef enum {
+  GDF_SORT = 0,
+  GDF_HASH,
+  N_GDF_METHODS,  /* additional methods should go BEFORE N_GDF_METHODS */
+} gdf_method;
 
+typedef enum {
+  GDF_SUM = 0,
+  GDF_MIN,
+  GDF_MAX,
+  GDF_AVG,
+  GDF_COUNT,
+  GDF_COUNT_DISTINCT,
+  N_GDF_AGG_OPS, /* additional aggregation ops should go BEFORE N_GDF_... */
+} gdf_agg_op;
 
+/* additonal flags */
+typedef struct gdf_context_{
+  int flag_sorted;        /* 0 = No, 1 = yes */
+  gdf_method flag_method; /* what method is used */
+  int flag_distinct;      /* for COUNT: DISTINCT = 1, else = 0 */
+} gdf_context;
 
 struct _OpaqueIpcParser;
 typedef struct _OpaqueIpcParser gdf_ipc_parser_type;

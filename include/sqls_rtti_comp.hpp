@@ -24,6 +24,10 @@
 #include <thrust/advance.h>
 #include <thrust/gather.h>
 
+//for int<n>_t:
+//
+#include <cstdint>
+
 ///#include "gdf/cffi/types.h"
 
 template<typename IndexT>
@@ -281,28 +285,28 @@ private:
       {
       case GDF_INT8:
 	{
-	  using ColType = char;
+	  using ColType = int8_t;//char;
 	  
 	  ColType dummy;
 	  return pred(col_index, columns_, dummy);
 	}
       case GDF_INT16:
 	{
-	  using ColType = short;
+	  using ColType = int16_t;//short;
 
 	  ColType dummy;
 	  return pred(col_index, columns_, dummy);
 	}
       case GDF_INT32:
 	{
-	  using ColType = int;
+	  using ColType = int32_t;//int;
 
 	  ColType dummy;
 	  return pred(col_index, columns_, dummy);
 	}
       case GDF_INT64:
 	{
-	  using ColType = long;
+	  using ColType = int64_t;//long;
 
 	  ColType dummy;
 	  return pred(col_index, columns_, dummy);
