@@ -9,8 +9,6 @@ RUN apt update -y --fix-missing && \
     apt upgrade -y && \
     apt install -y \
       git \
-      build-essential \
-      python3-dev \
       gcc-4.8 \
       g++-4.8
 
@@ -25,12 +23,12 @@ SHELL ["/bin/bash", "-c"]
 # Combined libgdf/pygdf conda env
 ADD conda_environments/gdf_build.yml /conda_environments/gdf_build.yml
 # Also tested working with 3.5
-ENV PYTHON_VERSION=3.6
+ARG PYTHON_VERSION=3.6
 RUN conda env create -n gdf python=${PYTHON_VERSION} --file /conda_environments/gdf_build.yml
 
 ENV LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/cuda/lib64:/usr/local/lib
-ENV CC=/usr/bin/gcc-4.8
-ENV CXX=/usr/bin/g++-4.8
+ARG CC=/usr/bin/gcc-4.8
+ARG CXX=/usr/bin/g++-4.8
 
 # Specify alternate URLs via build-args to build against forks, other branches, or specific PR
 ARG LIBGDF_REPO=https://github.com/gpuopenanalytics/libgdf
