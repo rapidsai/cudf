@@ -600,7 +600,7 @@ class DataFrame(object):
     def merge(self, other, on=None, how='left', lsuffix='_x', rsuffix='_y',
               type='sort'):
         if how != 'left':
-            raise ValueError('{!r} join not implemented yet'.format(how))
+            raise NotImplementedError('{!r} join not implemented yet'.format(how))
 
         same_names = set(self.columns) & set(other.columns)
         if same_names and not (lsuffix or rsuffix):
@@ -722,9 +722,9 @@ class DataFrame(object):
         - *on* is not supported yet due to lack of multi-index support.
         """
         if how not in ['left', 'right', 'inner', 'outer']:
-            raise ValueError('unsupported {!r} join'.format(how))
+            raise NotImplementedError('unsupported {!r} join'.format(how))
         if on is not None:
-            raise ValueError('"on" is not supported yet')
+            raise NotImplementedError('"on" is not supported yet')
 
         same_names = set(self.columns) & set(other.columns)
         if same_names and not (lsuffix or rsuffix):
