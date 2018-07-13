@@ -495,6 +495,32 @@ class DataFrame(object):
         Returns
         -------
         a new dataframe with new columns append for each category.
+
+        Examples
+        -------
+        >>> import pandas as pd
+        >>> from pygdf.dataframe import DataFrame as gdf
+
+        >>> pet_owner = [1, 2, 3, 4, 5]
+        >>> pet_type = ['fish', 'dog', 'fish', 'bird', 'fish']
+
+        >>> df = pd.DataFrame({'pet_owner': pet_owner, 'pet_type': pet_type})
+        >>> df.pet_type = df.pet_type.astype('category')
+
+        Create a column with numerically encoded category values
+        >>> df['pet_codes'] = df.pet_type.cat.codes
+        >>> my_gdf = gdf.from_pandas(df)
+
+        Create the list of category codes to use in the encoding
+        >>> codes = my_gdf.pet_codes.unique()
+        >>> enc_gdf = my_gdf.one_hot_encoding('pet_codes', 'pet_dummy', codes)
+        >>> enc_gdf.head()
+          pet_owner pet_type pet_codes pet_dummy_0 pet_dummy_1 pet_dummy_2
+          0         1     fish         2         0.0         0.0         1.0
+          1         2      dog         1         0.0         1.0         0.0
+          2         3     fish         2         0.0         0.0         1.0
+          3         4     bird         0         1.0         0.0         0.0
+          4         5     fish         2         0.0         0.0         1.0
         """
         newnames = [prefix_sep.join([prefix, str(cat)]) for cat in cats]
         newcols = self[column].one_hot_encoding(cats=cats, dtype=dtype)
