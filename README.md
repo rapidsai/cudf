@@ -45,7 +45,7 @@ A Dockerfile is provided for building and installing LibGDF and PyGDF from their
 * Alternate branches for libgdf and pygdf may be specified as Docker build-args LIBGDF_REPO and PYGDF_REPO. See Dockerfile for example.
 * Ubuntu 16.04 is the default OS for this container. Alternate OSes may be specified as Docker build-arg LINUX_VERSION. See list of [available images](https://hub.docker.com/r/nvidia/cuda/).
 * Python 3.6 is default, but other versions may be specified via PYTHON_VERSION build-arg
-* GCC & G++ 4.8 are default for ABI compatibility with [Apache Arrow](http://arrow.apache.org/) version, but other versions may be specified via CC and CXX build-args respectively
+* GCC & G++ 5.x are default compiler versions, but other versions (which are supplied by the OS package manager) may be specified via CC and CXX build-args respectively
 
 From pygdf project root, to build with defaults:
 ```
