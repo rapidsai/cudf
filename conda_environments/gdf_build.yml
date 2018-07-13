@@ -6,10 +6,7 @@ channels:
 dependencies:
 - pip
 - setuptools
-- cmake
 # Update based on your host's CUDA driver version
 - cudatoolkit
 - numba
 - pandas
-- flatbuffers
-- arrow-cpp=0.7.1
