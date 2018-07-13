@@ -7,7 +7,8 @@ import numpy as np
 from numba import cuda
 import pandas as pd
 
-from pygdf.dataframe import DataFrame, GenericIndex, Buffer
+from pygdf.dataframe import DataFrame, GenericIndex
+from pygdf.buffer import Buffer
 
 
 def check_serialization(df):
