@@ -1,6 +1,4 @@
 /* column operations */
-#ifndef _GDF_FUNCTIONS_H_
-#define _GDF_FUNCTIONS_H_
 
 gdf_size_type gdf_column_sizeof();
 
@@ -536,5 +534,3 @@ gdf_error gdf_group_by_avg(size_t nrows,     //in: # rows
 			   int* d_kout,      //out: device-side array of rows after gropu-by
 			   gdf_column c_vout,//out: aggregated column; requires shallow (trivial) copy-construction (see static_assert below);
 			   size_t* new_sz);  //out: host-side # rows of d_count
-
-#endif

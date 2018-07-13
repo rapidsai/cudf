@@ -11,6 +11,7 @@ gdf_error gdf_column_view(gdf_column *column, void *data, gdf_valid_type *valid,
 	column->valid = valid;
 	column->size = size;
 	column->dtype = dtype;
+	column->null_count = 0;
 	return GDF_SUCCESS;
 }
 

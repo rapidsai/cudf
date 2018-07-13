@@ -1,5 +1,3 @@
-#ifndef _GDF_TYPES_H_
-#define _GDF_TYPES_H_
 
 typedef size_t gdf_size_type;
 typedef gdf_size_type gdf_index_type;
@@ -34,7 +32,7 @@ typedef struct gdf_column_{
     gdf_valid_type *valid;
     gdf_size_type size;
     gdf_dtype dtype;
-    gdf_size_type null_count = 0;
+    gdf_size_type null_count;
 } gdf_column;
 
 struct _OpaqueIpcParser;
@@ -81,5 +79,3 @@ typedef enum{
 	GDF_WINDOW_STDDEV,
 	GDF_WINDOW_VAR //variance
 } window_reduction_type;
-
-#endif
