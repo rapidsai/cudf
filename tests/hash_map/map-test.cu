@@ -13,12 +13,12 @@
 
 
 // This is necessary to do a parametrized typed-test over multiple template arguments
-template <typename Key, typename Value, typename Aggregation_Operator>
+template <typename Key, typename Value, typename aggregation_type>
 struct KeyValueTypes
 {
   using key_type = Key;
   using value_type = Value;
-  using op_type = Aggregation_Operator;
+  using op_type = aggregation_type;
 };
 
 // Have to use a functor instead of a device lambda because
@@ -58,12 +58,13 @@ struct MapTest : public testing::Test
   using map_type = concurrent_unordered_map<key_type, value_type, std::numeric_limits<key_type>::max()>;
   using pair_type = thrust::pair<key_type, value_type>;
 
-  std::unique_ptr<map_type> the_map;
+  std::unique_ptr<map_type> the_map{nullptr};
 
   const key_type unused_key = std::numeric_limits<key_type>::max();
+
   const value_type unused_value = std::numeric_limits<value_type>::max();
 
-  const int size;
+  int size{0};
 
   const int THREAD_BLOCK_SIZE{256};
 
@@ -73,17 +74,15 @@ struct MapTest : public testing::Test
 
   std::unordered_map<key_type, value_type> expected_values;
 
-  MapTest(const int hash_table_size = 10000)
-    : size(hash_table_size), the_map(new map_type(hash_table_size))
-  {
-  }
 
-  pair_type * create_input(const int num_unique_keys, const int num_values_per_key, const int ratio = 1, const int max_key = RAND_MAX, const int max_value = RAND_MAX, bool shuffle = false)
+  pair_type * create_input(const int num_unique_keys, const int num_values_per_key, const int ratio = 1, const int max_key = 4096, const int max_value = 4096, bool shuffle = false)
   {
 
     const int TOTAL_PAIRS = num_unique_keys * num_values_per_key;
 
-    this->the_map.reset(new map_type(ratio*TOTAL_PAIRS));
+    this->size = ratio*TOTAL_PAIRS;
+
+    this->the_map.reset(new map_type(this->size));
 
     pairs.reserve(TOTAL_PAIRS);
 
@@ -169,26 +168,26 @@ struct MapTest : public testing::Test
 // to nest multiple types inside of the KeyValueTypes struct above
 // KeyValueTypes<type1, type2> implies key_type = type1, value_type = type2
 // This list is the types across which Google Test will run our tests
-typedef ::testing::Types< KeyValueTypes<int,int,max_op<int>>,
-                          KeyValueTypes<int,float,max_op<int>>,
-                          KeyValueTypes<int,double,max_op<int>>,
-                          KeyValueTypes<int,long long int,max_op<int>>,
-                          KeyValueTypes<int,unsigned long long int,max_op<int>>,
-                          KeyValueTypes<unsigned long long int, int,max_op<int>>,
-                          KeyValueTypes<unsigned long long int, float,max_op<int>>,
-                          KeyValueTypes<unsigned long long int, double,max_op<int>>,
-                          KeyValueTypes<unsigned long long int, long long int,max_op<int>>,
-                          KeyValueTypes<unsigned long long int, unsigned long long int,max_op<int>>,
-                          KeyValueTypes<int,int,min_op<int>>,
-                          KeyValueTypes<int,float,min_op<int>>,
-                          KeyValueTypes<int,double,min_op<int>>,
-                          KeyValueTypes<int,long long int,min_op<int>>,
-                          KeyValueTypes<int,unsigned long long int,min_op<int>>,
-                          KeyValueTypes<unsigned long long int, int,min_op<int>>,
-                          KeyValueTypes<unsigned long long int, float,min_op<int>>,
-                          KeyValueTypes<unsigned long long int, double,min_op<int>>,
-                          KeyValueTypes<unsigned long long int, long long int,min_op<int>>,
-                          KeyValueTypes<unsigned long long int, unsigned long long int,min_op<int>>
+typedef ::testing::Types< //KeyValueTypes<int,int,max_op<int>>,
+                          //KeyValueTypes<int,float,max_op<int>>,
+                          //KeyValueTypes<int,double,max_op<int>>,
+                          //KeyValueTypes<int,long long int,max_op<int>>,
+                          //KeyValueTypes<int,unsigned long long int,max_op<int>>,
+                          //KeyValueTypes<unsigned long long int, int,max_op<int>>,
+                          //KeyValueTypes<unsigned long long int, float,max_op<int>>,
+                          //KeyValueTypes<unsigned long long int, double,max_op<int>>,
+                          //KeyValueTypes<unsigned long long int, long long int,max_op<int>>,
+                          //KeyValueTypes<unsigned long long int, unsigned long long int,max_op<int>>,
+                          //KeyValueTypes<int,int,min_op<int>>,
+                          //KeyValueTypes<int,float,min_op<int>>,
+                          //KeyValueTypes<int,double,min_op<int>>,
+                          KeyValueTypes<int,long long int,min_op<int>>
+                          //KeyValueTypes<int,unsigned long long int,min_op<int>>,
+                          //KeyValueTypes<unsigned long long int, int,min_op<int>>,
+                          //KeyValueTypes<unsigned long long int, float,min_op<int>>,
+                          //KeyValueTypes<unsigned long long int, double,min_op<int>>,
+                          //KeyValueTypes<unsigned long long int, long long int,min_op<int>>,
+                          //KeyValueTypes<unsigned long long int, unsigned long long int,min_op<int>>*/
                           > Implementations;
 
 TYPED_TEST_CASE(MapTest, Implementations);
@@ -207,6 +206,7 @@ TYPED_TEST(MapTest, InitialState)
 TYPED_TEST(MapTest, CheckUnusedValues){
 
   EXPECT_EQ(this->the_map->get_unused_key(), this->unused_key);
+  EXPECT_EQ(this->the_map->get_unused_element(), this->unused_value);
 
   auto begin = this->the_map->begin();
   EXPECT_EQ(begin->first, this->unused_key);
@@ -287,11 +287,11 @@ TYPED_TEST(MapTest, AggregationTestHost)
 }
 
 
-template<typename map_type, typename Aggregation_Operator>
+template<typename map_type, typename aggregation_type>
 __global__ void build_table(map_type * const the_map,
                             const typename map_type::value_type * const input_pairs,
                             const typename map_type::size_type input_size,
-                            Aggregation_Operator op)
+                            aggregation_type op)
 {
 
   using size_type = typename map_type::size_type;
@@ -333,7 +333,7 @@ TYPED_TEST(MapTest, AggregationTestDeviceAllUnique)
   using op_type = typename MapTest<TypeParam>::op_type;
   
 
-  pair_type * d_pairs = this->create_input(1<<16, 1);
+  pair_type * d_pairs = this->create_input(2048, 1);
 
   const dim3 grid_size ((this->d_pairs.size() + this->THREAD_BLOCK_SIZE -1) / this->THREAD_BLOCK_SIZE,1,1);
   const dim3 block_size (this->THREAD_BLOCK_SIZE, 1, 1);
