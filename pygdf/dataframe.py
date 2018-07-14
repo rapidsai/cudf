@@ -407,11 +407,11 @@ class DataFrame(object):
 
     @classmethod
     def _concat(cls, objs, ignore_index=False):
-        objs = [o for o in objs if len(o) > 0]
         if len(set(o.columns for o in objs)) != 1:
             what = set(o.columns for o in objs)
             raise ValueError('columns mismatch: {}'.format(what))
-
+        # Filter out inputs that have 0 length
+        objs = [o for o in objs if len(o) > 0]
         if ignore_index:
             index = RangeIndex(sum(map(len, objs)))
         else:
