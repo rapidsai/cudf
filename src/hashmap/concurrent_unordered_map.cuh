@@ -216,7 +216,7 @@ __global__ void init_hashtbl(
         //store_pair_vectorized( hashtbl_values + idx, thrust::make_pair( key_val, elem_val ) );
       hashtbl_values[idx].first = key_val;
       hashtbl_values[idx].second = elem_val;
-      printf("Initialized key: %d value: %d index: %d\n", hashtbl_values[idx].first, hashtbl_values[idx].second, idx);
+      //printf("Initialized key: %d value: %d index: %d\n", hashtbl_values[idx].first, hashtbl_values[idx].second, idx);
     }
 }
 
@@ -455,30 +455,30 @@ public:
 
         const int idx = threadIdx.x + blockDim.x * blockIdx.x;
         if(idx < m_hashtbl_size){
-          printf("index: %d key: %d value: %lld\n", idx, hashtbl_values[idx].first, hashtbl_values[idx].second);
+          //printf("index: %d key: %d value: %llu\n", idx, hashtbl_values[idx].first, hashtbl_values[idx].second);
         }
         
         while (false == insert_success) {
 
 #ifdef __CUDA_ARCH__
 
+          mapped_type old_value = hashtbl_values[current_index].second;
+
           // Try and set the existing_key for the current hash bucket to insert_key
           //const key_type old_key = atomicCAS( existing_key, unused_key, insert_key);
           const key_type old_key = atomicCAS(&(hashtbl_values[current_index].first), unused_key, x.first);
-          const mapped_type old_value = hashtbl_values[current_index].second;
 
           // If old_key == unused_key, the current hash bucket was empty
           // and existing_key was updated to insert_key by the atomicCAS. 
           // Update existing_value to insert_value
           if ( m_equal( unused_key, old_key ) ) {
 
-            //hashtbl_values[current_index].second = x.second;
-            atomicExch(&(hashtbl_values[current_index].second), x.second);
+            const mapped_type existing_value = hashtbl_values[current_index].second;
 
-            int t = threadIdx.x + blockDim.x * blockIdx.x;
+            hashtbl_values[current_index].second = x.second;
+            //atomicExch(&(hashtbl_values[current_index].second), x.second);
 
-            printf("thread: %d index: %lu inserted new key: %d  new value: %lld old key: %d old value: %lld \n", 
-                t, current_index, hashtbl_values[current_index].first, hashtbl_values[current_index].second, old_key, old_value);
+            printf("inserted new key: %d new value: %llu old key: %d old value: %llu \n", x.first, x.second, old_key, existing_value);
 
             insert_success = true;
           }
@@ -489,15 +489,13 @@ public:
           // TODO: How to handle data types less than 32 bits?
           else if ( m_equal(x.first, old_key) ){
 
-            mapped_type old_value = hashtbl_values[current_index].second;
-
             mapped_type expected = 0;
 
             mapped_type result_value = 0;
 
             // Attempt to perform the aggregation with existing_value and
             // store the result atomically
-            do 
+            do
             {
               expected = old_value;
 
@@ -508,11 +506,9 @@ public:
             // Guard against another thread's update to existing_value and
             // ensure that existing_value has been updated from its initial state
             // to ensure that the aggregation is valid
-            while( expected != old_value || (old_value == m_unused_element));
+            while( expected != old_value || (old_value == m_unused_element) );
 
-            int t = threadIdx.x + blockDim.x * blockIdx.x;
-
-            printf("thread: %d index: %lu updating key: %d with value: %lld old_value: %lld result value: %lld \n", t, current_index, x.first, x.second, old_value, result_value);
+            printf("updating key: %d with value: %llu old_value: %llu result value: %llu \n", x.first, x.second, old_value, result_value);
 
             insert_success = true;
           }
@@ -521,6 +517,7 @@ public:
           // This is a hash collision with another key, move to next bucket
           else
           {
+//            //printf("collision: key: %d index: %ld \n", x.first, current_index);
             current_index = (current_index+1)%hashtbl_size;
             current_hash_bucket = &(hashtbl_values[current_index]);
           }

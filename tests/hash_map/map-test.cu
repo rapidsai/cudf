@@ -74,6 +74,10 @@ struct MapTest : public testing::Test
 
   std::unordered_map<key_type, value_type> expected_values;
 
+  MapTest(int _size=100)
+    : size(_size), the_map(new map_type(_size))
+  {}
+
 
   pair_type * create_input(const int num_unique_keys, const int num_values_per_key, const int ratio = 1, const int max_key = 4096, const int max_value = 4096, bool shuffle = false)
   {
@@ -168,26 +172,26 @@ struct MapTest : public testing::Test
 // to nest multiple types inside of the KeyValueTypes struct above
 // KeyValueTypes<type1, type2> implies key_type = type1, value_type = type2
 // This list is the types across which Google Test will run our tests
-typedef ::testing::Types< //KeyValueTypes<int,int,max_op<int>>,
-                          //KeyValueTypes<int,float,max_op<int>>,
-                          //KeyValueTypes<int,double,max_op<int>>,
-                          //KeyValueTypes<int,long long int,max_op<int>>,
-                          //KeyValueTypes<int,unsigned long long int,max_op<int>>,
-                          //KeyValueTypes<unsigned long long int, int,max_op<int>>,
-                          //KeyValueTypes<unsigned long long int, float,max_op<int>>,
-                          //KeyValueTypes<unsigned long long int, double,max_op<int>>,
-                          //KeyValueTypes<unsigned long long int, long long int,max_op<int>>,
-                          //KeyValueTypes<unsigned long long int, unsigned long long int,max_op<int>>,
-                          //KeyValueTypes<int,int,min_op<int>>,
-                          //KeyValueTypes<int,float,min_op<int>>,
-                          //KeyValueTypes<int,double,min_op<int>>,
-                          KeyValueTypes<int,long long int,min_op<int>>
-                          //KeyValueTypes<int,unsigned long long int,min_op<int>>,
-                          //KeyValueTypes<unsigned long long int, int,min_op<int>>,
-                          //KeyValueTypes<unsigned long long int, float,min_op<int>>,
-                          //KeyValueTypes<unsigned long long int, double,min_op<int>>,
-                          //KeyValueTypes<unsigned long long int, long long int,min_op<int>>,
-                          //KeyValueTypes<unsigned long long int, unsigned long long int,min_op<int>>*/
+typedef ::testing::Types< //KeyValueTypes<int, int, max_op<int>>,
+                          //KeyValueTypes<int, float, max_op<float>>,
+                          //KeyValueTypes<int, double, max_op<double>>,
+                          //KeyValueTypes<int, long long int, max_op<long long int>>,
+                          //KeyValueTypes<int, unsigned long long int, max_op<unsigned long long int>>,
+                          //KeyValueTypes<unsigned long long int, int, max_op<int>>,
+                          //KeyValueTypes<unsigned long long int, float, max_op<float>>,
+                          //KeyValueTypes<unsigned long long int, double, max_op<double>>,
+                          //KeyValueTypes<unsigned long long int, long long int, max_op<long long int>>,
+                          //KeyValueTypes<unsigned long long int, unsigned long long int, max_op<unsigned long long int>>,
+                          //KeyValueTypes<int, int, min_op<int>>,
+                          //KeyValueTypes<int, float, min_op<float>>,
+                          //KeyValueTypes<int, double, min_op<double>>,
+                          //KeyValueTypes<int, long long int, min_op<long long int>>,
+                          KeyValueTypes<int, unsigned long long int, min_op<unsigned long long int>>
+                          //KeyValueTypes<unsigned long long int, int, min_op<int>>,
+                          //KeyValueTypes<unsigned long long int, float, min_op<float>>,
+                          //KeyValueTypes<unsigned long long int, double, min_op<double>>,
+                          //KeyValueTypes<unsigned long long int, long long int, min_op<long long int>>,
+                          //KeyValueTypes<unsigned long long int, unsigned long long int, min_op<unsigned long long int>>
                           > Implementations;
 
 TYPED_TEST_CASE(MapTest, Implementations);
@@ -241,6 +245,7 @@ TYPED_TEST(MapTest, Insert)
 }
 */
 
+/*
 TYPED_TEST(MapTest, AggregationTestHost)
 {
 
@@ -285,6 +290,7 @@ TYPED_TEST(MapTest, AggregationTestHost)
   EXPECT_EQ(11, found->second);
 
 }
+*/
 
 
 template<typename map_type, typename aggregation_type>
@@ -369,7 +375,7 @@ TYPED_TEST(MapTest, AggregationTestDeviceBlockSame)
   using pair_type = typename MapTest<TypeParam>::pair_type;
   using op_type = typename MapTest<TypeParam>::op_type;
 
-  pair_type * d_pairs = this->create_input(1<<12, this->THREAD_BLOCK_SIZE);
+  pair_type * d_pairs = this->create_input(512, this->THREAD_BLOCK_SIZE);
 
   const dim3 grid_size ((this->d_pairs.size() + this->THREAD_BLOCK_SIZE -1) / this->THREAD_BLOCK_SIZE,1,1);
   const dim3 block_size (this->THREAD_BLOCK_SIZE, 1, 1);
