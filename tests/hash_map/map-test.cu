@@ -29,7 +29,8 @@ struct KeyValueTypes
 template<typename value_type>
   struct max_op
   {
-    //static const value_type IDENTITY{std}
+    constexpr static value_type IDENTITY{std::numeric_limits<value_type>::min()};
+
     __host__ __device__
     value_type operator()(value_type a, value_type b)
     {
@@ -40,6 +41,8 @@ template<typename value_type>
 template<typename value_type>
   struct min_op
   {
+    constexpr static value_type IDENTITY{std::numeric_limits<value_type>::max()};
+
     __host__ __device__
     value_type operator()(value_type a, value_type b)
     {
@@ -62,7 +65,7 @@ struct MapTest : public testing::Test
   std::unique_ptr<map_type> the_map;
 
   const key_type unused_key = std::numeric_limits<key_type>::max();
-  const value_type unused_value = std::numeric_limits<value_type>::max();
+  const value_type unused_value = op_type::IDENTITY;
 
   const int size;
 
@@ -75,7 +78,7 @@ struct MapTest : public testing::Test
   std::unordered_map<key_type, value_type> expected_values;
 
   MapTest(const int hash_table_size = 10000)
-    : size(hash_table_size), the_map(new map_type(hash_table_size))
+    : size(hash_table_size), the_map(new map_type(hash_table_size, op_type::IDENTITY))
   {
   }
 
@@ -84,7 +87,7 @@ struct MapTest : public testing::Test
 
     const int TOTAL_PAIRS = num_unique_keys * num_values_per_key;
 
-    this->the_map.reset(new map_type(ratio*TOTAL_PAIRS));
+    this->the_map.reset(new map_type(ratio*TOTAL_PAIRS, unused_value));
 
     pairs.reserve(TOTAL_PAIRS);
 

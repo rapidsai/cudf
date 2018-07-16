@@ -334,10 +334,10 @@ private:
 public:
 
     explicit concurrent_unordered_map(size_type n,
-                                           const Hasher& hf = hasher(),
-                                           const Equality& eql = key_equal(),
-                                           const allocator_type& a = allocator_type(),
-                                           const mapped_type unused_element = std::numeric_limits<mapped_type>::max())
+                                      const mapped_type unused_element,
+                                      const Hasher& hf = hasher(),
+                                      const Equality& eql = key_equal(),
+                                      const allocator_type& a = allocator_type())
         : m_hf(hf), m_equal(eql), m_allocator(a), m_hashtbl_size(n), m_hashtbl_capacity(n), m_collisions(0), m_unused_element(unused_element)
     {
         m_hashtbl_values = m_allocator.allocate( m_hashtbl_capacity );
