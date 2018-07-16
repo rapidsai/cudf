@@ -63,22 +63,9 @@ __inline__ __device__ int64_t atomicCAS(int64_t* address, int64_t compare, int64
   return (int64_t)atomicCAS((unsigned long long*)address, (unsigned long long)compare, (unsigned long long)val);
 }
 
-union test
-{
-  long long ll;
-  unsigned long long ull;
-};
-
 __inline__ __device__ long long int atomicCAS(long long int* address, long long int compare, long long int val)
 {
-  //test converter;
-  //converter.ll = compare;
-  //test val_converter;
-  //val_converter.ll = val;
-  //test result_converter;
-  //result_converter.ull = atomicCAS((unsigned long long*)address, converter.ull, val_converter.ull);
-  //return result_converter.ll;
-  return (long long int)atomicCAS((unsigned long long*)address, (unsigned long long int) compare, (unsigned long long int) val);
+  return (long long int)atomicCAS((unsigned long long*)address, (unsigned long long)compare, (unsigned long long)val);
 }
 
 __inline__ __device__ double atomicCAS(double* address, double compare, double val)
@@ -95,18 +82,6 @@ __inline__ __device__ int64_t atomicAdd(int64_t* address, int64_t val)
 {
   return (int64_t)atomicAdd((unsigned long long*)address, (unsigned long long)val);
 }
-
-__inline__ __device__ long long int atomicExch(long long int* address, long long int val)
-{
-  return (long long int)atomicExch((unsigned long long*)address, (unsigned long long)val);
-}
-
-__inline__ __device__ double atomicExch(double* address, double val)
-{
-  return __longlong_as_double(atomicExch((unsigned long long int*)address, __double_as_longlong(val)));
-}
-
-
 
 template<typename pair_type>
 __forceinline__
@@ -206,17 +181,9 @@ __global__ void init_hashtbl(
     const elem_type elem_val)
 {
     const size_type idx = blockIdx.x * blockDim.x + threadIdx.x;
-
-    if(threadIdx.x ==0){
-      //printf("init_hashtbl size: %d, index: %d\n",n, idx);
-    }
-
     if ( idx < n )
     {
-        //store_pair_vectorized( hashtbl_values + idx, thrust::make_pair( key_val, elem_val ) );
-      hashtbl_values[idx].first = key_val;
-      hashtbl_values[idx].second = elem_val;
-      printf("Initialized key: %d value: %d index: %d\n", hashtbl_values[idx].first, hashtbl_values[idx].second, idx);
+        store_pair_vectorized( hashtbl_values + idx, thrust::make_pair( key_val, elem_val ) );
     }
 }
 
@@ -389,9 +356,6 @@ public:
         init_hashtbl<<<((m_hashtbl_size-1)/block_size)+1,block_size>>>( m_hashtbl_values, m_hashtbl_size, unused_key, m_unused_element );
         CUDA_RT_CALL( cudaGetLastError() );
         CUDA_RT_CALL( cudaStreamSynchronize(0) );
-        cudaDeviceSynchronize();
-
-        //printf("created new map. Unused key: %d unused element %d\n", unused_key, m_unused_element);
     }
     
     ~concurrent_unordered_map()
@@ -422,12 +386,6 @@ public:
         return unused_key;
     }
 
-    __forceinline__
-    __host__ __device__ mapped_type get_unused_element()
-    {
-        return m_unused_element;
-    }
-
     /* --------------------------------------------------------------------------*/
     /** 
      * @Synopsis  Inserts a new (key, value) pair. If the key already exists in the map
@@ -443,7 +401,7 @@ public:
     /* ----------------------------------------------------------------------------*/
     template<typename aggregation_type>
     __forceinline__
-     __device__ iterator insert(const value_type& x, aggregation_type op)
+    __host__ __device__ iterator insert(const value_type& x, aggregation_type op)
     {
         const size_type hashtbl_size    = m_hashtbl_size;
         value_type* hashtbl_values      = m_hashtbl_values;
@@ -451,35 +409,27 @@ public:
         size_type current_index         = key_hash % hashtbl_size;
         value_type *current_hash_bucket = &(hashtbl_values[current_index]);
 
+        const key_type insert_key = x.first;
+        const mapped_type insert_value = x.second;
+        
         bool insert_success = false;
-
-        const int idx = threadIdx.x + blockDim.x * blockIdx.x;
-        if(idx < m_hashtbl_size){
-          printf("index: %d key: %d value: %lld\n", idx, hashtbl_values[idx].first, hashtbl_values[idx].second);
-        }
         
         while (false == insert_success) {
 
+          key_type * const existing_key = &(current_hash_bucket->first);
+          mapped_type * const existing_value = &(current_hash_bucket->second);
+
 #ifdef __CUDA_ARCH__
 
+
           // Try and set the existing_key for the current hash bucket to insert_key
-          //const key_type old_key = atomicCAS( existing_key, unused_key, insert_key);
-          const key_type old_key = atomicCAS(&(hashtbl_values[current_index].first), unused_key, x.first);
-          const mapped_type old_value = hashtbl_values[current_index].second;
+          const key_type old_key = atomicCAS( existing_key, unused_key, insert_key);
 
           // If old_key == unused_key, the current hash bucket was empty
           // and existing_key was updated to insert_key by the atomicCAS. 
           // Update existing_value to insert_value
           if ( m_equal( unused_key, old_key ) ) {
-
-            //hashtbl_values[current_index].second = x.second;
-            atomicExch(&(hashtbl_values[current_index].second), x.second);
-
-            int t = threadIdx.x + blockDim.x * blockIdx.x;
-
-            printf("thread: %d index: %lu inserted new key: %d  new value: %lld old key: %d old value: %lld \n", 
-                t, current_index, hashtbl_values[current_index].first, hashtbl_values[current_index].second, old_key, old_value);
-
+            *existing_value = insert_value;
             insert_success = true;
           }
 
@@ -487,13 +437,11 @@ public:
           // perform the atomic aggregation of existing_value and insert_value
           // TODO: Use template specialization to make use of native atomic functions
           // TODO: How to handle data types less than 32 bits?
-          else if ( m_equal(x.first, old_key) ){
+          else if ( m_equal(insert_key, old_key) ){
 
-            mapped_type old_value = hashtbl_values[current_index].second;
+            mapped_type old_value = *existing_value;
 
-            mapped_type expected = 0;
-
-            mapped_type result_value = 0;
+            mapped_type expected;
 
             // Attempt to perform the aggregation with existing_value and
             // store the result atomically
@@ -501,18 +449,14 @@ public:
             {
               expected = old_value;
 
-              result_value = op(x.second, old_value);
+              const mapped_type new_value = op(insert_value, old_value);
 
-              old_value = atomicCAS(&(hashtbl_values[current_index].second), expected, result_value);
+              old_value = atomicCAS(existing_value, expected, new_value);
             }
             // Guard against another thread's update to existing_value and
             // ensure that existing_value has been updated from its initial state
             // to ensure that the aggregation is valid
             while( expected != old_value || (old_value == m_unused_element));
-
-            int t = threadIdx.x + blockDim.x * blockIdx.x;
-
-            printf("thread: %d index: %lu updating key: %d with value: %lld old_value: %lld result value: %lld \n", t, current_index, x.first, x.second, old_value, result_value);
 
             insert_success = true;
           }
@@ -528,7 +472,6 @@ public:
 
 #else
 
-         /* 
 #pragma omp critical
           {
             // Empty bucket, insert key and value
@@ -551,7 +494,6 @@ public:
               current_hash_bucket = &(hashtbl_values[current_index]);
             }
           }
-*/
 #endif
         }
         
