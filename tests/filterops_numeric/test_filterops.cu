@@ -37,7 +37,11 @@ TEST(FilterOperationsTest, usage_example) {
 
     using LeftValueType = int16_t;
     using RightValueType = int16_t;
-    
+    int column_size = 10;
+    int init_value = 10;
+    int max_size = 4;
+    gdf_comparison_operator gdf_operator = GDF_EQUALS;
+
     gdf_column lhs = gen_gdb_column<LeftValueType>(column_size, init_value); // 4, 2, 0
     
     gdf_column rhs = gen_gdb_column<RightValueType>(column_size, 0.01 + max_size - init_value); // 0, 2, 4
@@ -92,7 +96,7 @@ void test_filterops_using_templates(gdf_comparison_operator gdf_operator = GDF_E
 
             check_column_for_comparison_operation<LeftValueType, RightValueType>(&lhs, &rhs, &output, gdf_operator);
 
-            if (lhs.dtype === rhs.dtype ) {
+            if (lhs.dtype == rhs.dtype ) {
                 gpu_apply_stencil(&lhs, &output, &rhs);
                 check_column_for_stencil_operation<LeftValueType, RightValueType>(&lhs, &output, &rhs);
             }
