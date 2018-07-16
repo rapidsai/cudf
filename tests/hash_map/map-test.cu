@@ -170,25 +170,25 @@ struct MapTest : public testing::Test
 // KeyValueTypes<type1, type2> implies key_type = type1, value_type = type2
 // This list is the types across which Google Test will run our tests
 typedef ::testing::Types< KeyValueTypes<int,int,max_op<int>>,
-                          KeyValueTypes<int,float,max_op<int>>,
-                          KeyValueTypes<int,double,max_op<int>>,
-                          KeyValueTypes<int,long long int,max_op<int>>,
-                          KeyValueTypes<int,unsigned long long int,max_op<int>>,
+                          KeyValueTypes<int,float,max_op<float>>,
+                          KeyValueTypes<int,double,max_op<double>>,
+                          KeyValueTypes<int,long long int,max_op<long long int>>,
+                          KeyValueTypes<int,unsigned long long int,max_op<unsigned long long int>>,
                           KeyValueTypes<unsigned long long int, int,max_op<int>>,
-                          KeyValueTypes<unsigned long long int, float,max_op<int>>,
-                          KeyValueTypes<unsigned long long int, double,max_op<int>>,
-                          KeyValueTypes<unsigned long long int, long long int,max_op<int>>,
-                          KeyValueTypes<unsigned long long int, unsigned long long int,max_op<int>>,
+                          KeyValueTypes<unsigned long long int, float,max_op<float>>,
+                          KeyValueTypes<unsigned long long int, double,max_op<double>>,
+                          KeyValueTypes<unsigned long long int, long long int,max_op<long long int>>,
+                          KeyValueTypes<unsigned long long int, unsigned long long int,max_op<unsigned long long int>>,
                           KeyValueTypes<int,int,min_op<int>>,
-                          KeyValueTypes<int,float,min_op<int>>,
-                          KeyValueTypes<int,double,min_op<int>>,
-                          KeyValueTypes<int,long long int,min_op<int>>,
-                          KeyValueTypes<int,unsigned long long int,min_op<int>>,
+                          KeyValueTypes<int,float,min_op<float>>,
+                          KeyValueTypes<int,double,min_op<double>>,
+                          KeyValueTypes<int,long long int,min_op<long long int>>,
+                          KeyValueTypes<int,unsigned long long int,min_op<unsigned long long int>>,
                           KeyValueTypes<unsigned long long int, int,min_op<int>>,
-                          KeyValueTypes<unsigned long long int, float,min_op<int>>,
-                          KeyValueTypes<unsigned long long int, double,min_op<int>>,
-                          KeyValueTypes<unsigned long long int, long long int,min_op<int>>,
-                          KeyValueTypes<unsigned long long int, unsigned long long int,min_op<int>>
+                          KeyValueTypes<unsigned long long int, float,min_op<float>>,
+                          KeyValueTypes<unsigned long long int, double,min_op<double>>,
+                          KeyValueTypes<unsigned long long int, long long int,min_op<long long int>>,
+                          KeyValueTypes<unsigned long long int, unsigned long long int,min_op<unsigned long long int>>
                           > Implementations;
 
 TYPED_TEST_CASE(MapTest, Implementations);
