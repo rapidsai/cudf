@@ -82,7 +82,7 @@ struct MapTest : public testing::Test
   {
   }
 
-  pair_type * create_input(const int num_unique_keys, const int num_values_per_key, const int ratio = 1, const int max_key = RAND_MAX, const int max_value = RAND_MAX, bool shuffle = false)
+  pair_type * create_input(const int num_unique_keys, const int num_values_per_key, const int ratio = 2, const int max_key = RAND_MAX, const int max_value = RAND_MAX, bool shuffle = false)
   {
 
     const int TOTAL_PAIRS = num_unique_keys * num_values_per_key;
@@ -309,7 +309,7 @@ TYPED_TEST(MapTest, AggregationTestDeviceAllUnique)
   using op_type = typename MapTest<TypeParam>::op_type;
   
 
-  pair_type * d_pairs = this->create_input(1<<16, 1);
+  pair_type * d_pairs = this->create_input(1<<18, 1);
 
   const dim3 grid_size ((this->d_pairs.size() + this->THREAD_BLOCK_SIZE -1) / this->THREAD_BLOCK_SIZE,1,1);
   const dim3 block_size (this->THREAD_BLOCK_SIZE, 1, 1);

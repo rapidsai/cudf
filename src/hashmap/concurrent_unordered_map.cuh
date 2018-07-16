@@ -416,30 +416,26 @@ public:
         
         while (false == insert_success) {
 
-          key_type * const existing_key = &(current_hash_bucket->first);
-          mapped_type * const existing_value = &(current_hash_bucket->second);
+          key_type& existing_key = current_hash_bucket->first;
+          mapped_type& existing_value = current_hash_bucket->second;
 
 #ifdef __CUDA_ARCH__
 
-
           // Try and set the existing_key for the current hash bucket to insert_key
-          const key_type old_key = atomicCAS( existing_key, unused_key, insert_key);
+          const key_type old_key = atomicCAS( &existing_key, unused_key, insert_key);
 
           // If old_key == unused_key, the current hash bucket was empty
           // and existing_key was updated to insert_key by the atomicCAS. 
-          // Update existing_value to insert_value
-          if ( m_equal( unused_key, old_key ) ) {
-            *existing_value = insert_value;
-            insert_success = true;
-          }
-
-          // Current hash bucket is not empty. If old_key == insert_key
-          // perform the atomic aggregation of existing_value and insert_value
+          // If old_key == insert_key, this key has already been inserted. 
+          // In either case, perform the atomic aggregation of existing_value and insert_value
+          // Because the hash table is initialized with the identity value of the aggregation
+          // operation, it is safe to perform the operation when the existing_value still 
+          // has its initial value
           // TODO: Use template specialization to make use of native atomic functions
           // TODO: How to handle data types less than 32 bits?
-          else if ( m_equal(insert_key, old_key) ){
+          if ( m_equal( unused_key, old_key ) || m_equal(insert_key, old_key) ) {
 
-            mapped_type old_value = *existing_value;
+            mapped_type old_value = existing_value;
 
             mapped_type expected;
 
@@ -451,50 +447,37 @@ public:
 
               const mapped_type new_value = op(insert_value, old_value);
 
-              old_value = atomicCAS(existing_value, expected, new_value);
+              old_value = atomicCAS(&existing_value, expected, new_value);
             }
-            // Guard against another thread's update to existing_value and
-            // ensure that existing_value has been updated from its initial state
-            // to ensure that the aggregation is valid
-            while( expected != old_value || (old_value == m_unused_element));
+            // Guard against another thread's update to existing_value
+            while( expected != old_value );
 
             insert_success = true;
           }
 
-          // Current hash bucket is not empty, but the existing_key != insert_key
-          // This is a hash collision with another key, move to next bucket
-          else
-          {
-            current_index = (current_index+1)%hashtbl_size;
-            current_hash_bucket = &(hashtbl_values[current_index]);
-          }
-          
+
 
 #else
 
 #pragma omp critical
           {
             // Empty bucket, insert key and value
-            if ( m_equal( unused_key, *existing_key) ) 
+            if ( m_equal( unused_key, existing_key) ) 
             {
               hashtbl_values[current_index] = thrust::make_pair( insert_key, insert_value);
               insert_success = true;
             }
             // This key has been inserted before, perform aggregation on value
-            else if( m_equal(insert_key, *existing_key) )
+            else if( m_equal(insert_key, existing_key) )
             {
-              const Element new_value = op(insert_value, *existing_value);
-              *existing_value = new_value;
+              const Element new_value = op(insert_value, existing_value);
+              existing_value = new_value;
               insert_success = true;
-            }
-            // Otherwise, this is a hash collision with another key, check the next bucket
-            else
-            {
-              current_index = (current_index+1)%hashtbl_size;
-              current_hash_bucket = &(hashtbl_values[current_index]);
             }
           }
 #endif
+          current_index = (current_index+1)%hashtbl_size;
+          current_hash_bucket = &(hashtbl_values[current_index]);
         }
         
         return iterator( m_hashtbl_values,m_hashtbl_values+hashtbl_size, current_hash_bucket);
