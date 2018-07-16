@@ -57,9 +57,8 @@ class Column(object):
             mask = Buffer.from_empty(mem)
             null_count = 0
             for o in objs:
-                if len(o) > 0:
-                    mask.extend(o._get_mask_as_column().to_gpu_array())
-                    null_count += o._null_count
+                mask.extend(o._get_mask_as_column().to_gpu_array())
+                null_count += o._null_count
             mask = Buffer(cudautils.compact_mask_bytes(mask.to_gpu_array()))
         else:
             mask = None
