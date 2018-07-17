@@ -600,7 +600,8 @@ class DataFrame(object):
     def merge(self, other, on=None, how='left', lsuffix='_x', rsuffix='_y',
               type='sort'):
         if how != 'left':
-            raise NotImplementedError('{!r} join not implemented yet'.format(how))
+            raise NotImplementedError('{!r} join not implemented yet'
+                                      .format(how))
 
         same_names = set(self.columns) & set(other.columns)
         if same_names and not (lsuffix or rsuffix):

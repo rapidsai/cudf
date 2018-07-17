@@ -237,10 +237,14 @@ class NumericalColumn(columnops.TypedColumnBase):
 
         # Single column join using sort-based implementation
         if type == 'sort':
-            return self._sortjoin(other=other, how=how, return_indexers=return_indexers)
+            return self._sortjoin(other=other, how=how,
+                                  return_indexers=return_indexers)
         elif type == 'hash':
-            # Get list of columns from self with left_on and from other with right_on
-            return self._hashjoin(other=other, left_on=left_on, right_on=right_on, how=how, return_indexers=return_indexers)
+            # Get list of columns from self with left_on and
+            # from other with right_on
+            return self._hashjoin(other=other, left_on=left_on,
+                                  right_on=right_on, how=how,
+                                  return_indexers=return_indexers)
         else:
             raise ValueError('Unsupported join type')
 
@@ -248,7 +252,6 @@ class NumericalColumn(columnops.TypedColumnBase):
         msg = "Hash based join on index not implemented yet."
         raise NotImplementedError(msg)
         return
-
 
     def _sortjoin(self, other, how='left', return_indexers=False):
         """Join with another column.

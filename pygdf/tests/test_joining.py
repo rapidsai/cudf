@@ -66,9 +66,9 @@ def test_dataframe_join_how(aa, bb, how):
     gotb = got.b
     gota = got.a
     got.drop_column('b')
-    got.add_column('b',gotb.astype(np.float64).fillna(np.nan))
+    got.add_column('b', gotb.astype(np.float64).fillna(np.nan))
     got.drop_column('a')
-    got.add_column('a',gota.astype(np.float64).fillna(np.nan))
+    got.add_column('a', gota.astype(np.float64).fillna(np.nan))
     expect.drop(['b'], axis=1)
     expect['b'] = expectb.astype(np.float64).fillna(np.nan)
     expect.drop(['a'], axis=1)
@@ -79,15 +79,20 @@ def test_dataframe_join_how(aa, bb, how):
 
     assert list(expect.columns) == list(got.columns)
     assert np.all(expect.index.values == got.index.values)
-    if(how!='outer'):
-        pd.util.testing.assert_frame_equal(got.to_pandas().sort_values(['b','a']).reset_index(drop=True), expect.sort_values(['b','a']).reset_index(drop=True))
+    if(how != 'outer'):
+        pd.util.testing.assert_frame_equal(
+            got.to_pandas().sort_values(['b', 'a']).reset_index(drop=True),
+            expect.sort_values(['b', 'a']).reset_index(drop=True))
         # if(how=='right'):
-        #     _sorted_check_series(expect['a'], expect['b'], got['a'], got['b'])
+        #     _sorted_check_series(expect['a'], expect['b'],
+        #                          got['a'], got['b'])
         # else:
-        #     _sorted_check_series(expect['b'], expect['a'], got['b'], got['a'])
+        #     _sorted_check_series(expect['b'], expect['a'], got['b'],
+        #                          got['a'])
     else:
         _check_series(expecto['b'], goto['b'])
         _check_series(expecto['a'], goto['a'])
+
 
 def _check_series(expect, got):
     magic = 0xdeadbeaf
@@ -113,13 +118,13 @@ def test_dataframe_join_suffix():
     with pytest.raises(ValueError) as raises:
         left.join(right)
     raises.match("there are overlapping columns but lsuffix"
-                    " and rsuffix are not defined")
+                 " and rsuffix are not defined")
 
     got = left.join(right, lsuffix='_left', rsuffix='_right', sort=True)
     # Get expected value
     pddf = df.to_pandas()
     expect = pddf.set_index('a').join(pddf.set_index('c'),
-                                        lsuffix='_left', rsuffix='_right')
+                                      lsuffix='_left', rsuffix='_right')
     # Check
     assert list(expect.columns) == list(got.columns)
     assert np.all(expect.index.values == got.index.values)
@@ -142,8 +147,12 @@ def test_dataframe_join_cats():
     expect = lhs.to_pandas().join(rhs.to_pandas())
 
     # Note: pandas make a object Index after joining
-    pd.util.testing.assert_frame_equal(got.sort_values(by='b').to_pandas().sort_index().reset_index(drop=True),
-                                       expect.reset_index(drop=True))
+    pd.util.testing.assert_frame_equal(
+        got.sort_values(by='b')
+        .to_pandas()
+        .sort_index()
+        .reset_index(drop=True),
+        expect.reset_index(drop=True))
 
     # Just do some rough checking here.
     assert list(got.columns) == ['b', 'c']
@@ -218,7 +227,14 @@ def test_dataframe_multi_column_join():
     join_result = df_left.merge(df_right, on=['key1', 'key2'], how='left')
 
     for col in list(pddf_joined.columns):
-        if(col.count('_y')>0):
-            join_result[col] = join_result[col].astype(np.float64).fillna(np.nan)
+        if(col.count('_y') > 0):
+            join_result[col] = (join_result[col]
+                                .astype(np.float64)
+                                .fillna(np.nan))
 
-    pd.util.testing.assert_frame_equal(join_result.to_pandas().sort_values(list(pddf_joined.columns)).reset_index(drop=True), pddf_joined)
+    pd.util.testing.assert_frame_equal(
+        join_result
+        .to_pandas()
+        .sort_values(list(pddf_joined.columns))
+        .reset_index(drop=True),
+        pddf_joined)

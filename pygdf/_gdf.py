@@ -157,12 +157,13 @@ def apply_join(col_lhs, col_rhs, how):
     """Returns a tuple of the left and right joined indices as gpu arrays.
     """
     if(len(col_lhs) != len(col_rhs)):
-        raise ValueError("Unequal #columns in list 'col_lhs' and list 'col_rhs'")
+        msg = "Unequal #columns in list 'col_lhs' and list 'col_rhs'"
+        raise ValueError(msg)
 
     joiner = _join_how_api[how]
     join_result_ptr = ffi.new("gdf_join_result_type**", None)
 
-    if(how=='left'):
+    if(how == 'left'):
         list_lhs = []
         list_rhs = []
         for i in range(len(col_lhs)):
@@ -170,7 +171,7 @@ def apply_join(col_lhs, col_rhs, how):
             list_rhs.append(col_rhs[i].cffi_view)
 
         # Call libgdf
-        joiner(len(col_lhs),list_lhs, list_rhs, join_result_ptr)
+        joiner(len(col_lhs), list_lhs, list_rhs, join_result_ptr)
     else:
         joiner(col_lhs[0].cffi_view, col_rhs[0].cffi_view, join_result_ptr)
 
