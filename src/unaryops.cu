@@ -13,6 +13,7 @@
 
 #include <thrust/copy.h>
 #include <thrust/device_vector.h>
+#include <thrust/execution_policy.h>
 
 template<typename T, typename Tout, typename F>
 __global__
