@@ -98,8 +98,6 @@ if(HASH_JOIN)
   set(CUDA_NVCC_FLAGS  ${CUDA_NVCC_FLAGS};-DHASH_JOIN)
 endif()
 
-find_package(CUDA)
-
 # switch between cudaMalloc and cudaMallocManaged for hash tables
 option(HT_LEGACY_ALLOCATOR "legacy allocator for hash tables" ON)
 if(HT_LEGACY_ALLOCATOR)
