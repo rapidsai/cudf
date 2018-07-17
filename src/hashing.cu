@@ -23,7 +23,7 @@ constexpr int HASH_KERNEL_BLOCK_SIZE = 256;
 constexpr int HASH_KERNEL_ROWS_PER_THREAD = 1;
 
 // convert to int dtype with the same size
-gdf_dtype to_int_dtype(gdf_type type)
+gdf_dtype to_int_dtype(gdf_dtype type)
 {
   switch (type) {
     case GDF_INT8:

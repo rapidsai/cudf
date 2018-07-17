@@ -19,6 +19,6 @@ enable_testing()
 message(STATUS "******** Configuring tests ********")
 
 add_subdirectory(datetime)
-add_subdirectory(hash_map)
+add_subdirectory(hashing)
 
 message(STATUS "******** Tests are ready ********")
