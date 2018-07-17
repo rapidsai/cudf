@@ -1,3 +1,22 @@
+=======
+/*
+ * Copyright 2018 BlazingDB, Inc.
+ *     Copyright 2018 William Scott Malpica <william@blazingdb.com>
+ *     Copyright 2018 Rommel Quintanilla <rommel@blazingdb.com>
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 #include <cstdlib>
 #include <iostream>
 #include <vector>
@@ -7,6 +26,7 @@
 #include "gtest/gtest.h"
 #include <gdf/gdf.h>
 #include <gdf/cffi/functions.h>
+
 
 TEST(gdf_extract_from_datetime_example_test, usage_example) {
 
@@ -69,7 +89,7 @@ TEST(gdf_extract_from_datetime_example_test, usage_example) {
 	// Output column
 	thrust::device_vector<int16_t> outDataDev(colSize);
 	thrust::device_vector<gdf_valid_type> outValidDev(1,0);
-	
+
 	gdf_column outputInt16Col;
 	outputInt16Col.dtype = GDF_INT16;
 	outputInt16Col.size = colSize;
@@ -264,6 +284,7 @@ TEST(gdf_extract_from_datetime_example_test, usage_example) {
 	}
 
 }
+
 
 struct gdf_extract_from_datetime_test : public ::testing::Test {
 
@@ -722,7 +743,6 @@ TEST(gdf_extract_datetime_TEST, date32Tests) {
 	inputData[5] = 26732;   // '2043-03-11'
 	inputData[6] = 10336;    // '1998-04-20'
 	inputData[7] = -56374;  // '1815-08-28'
-
 
 	thrust::device_vector<int32_t> intputDataDev(inputData);
 	thrust::device_vector<gdf_valid_type> inputValidDev(1,0);

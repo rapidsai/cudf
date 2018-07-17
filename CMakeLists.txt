@@ -27,7 +27,6 @@ PROJECT(libgdf)
 cmake_minimum_required(VERSION 2.8)  # not sure about version required
 
 set(CMAKE_CXX_STANDARD 11)
-
 message(STATUS "Using C++ standard: c++${CMAKE_CXX_STANDARD}")
 
 set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/Modules/" ${CMAKE_MODULE_PATH})
@@ -98,12 +97,15 @@ if(HASH_JOIN)
   set(CUDA_NVCC_FLAGS  ${CUDA_NVCC_FLAGS};-DHASH_JOIN)
 endif()
 
+find_package(CUDA)
+
 # switch between cudaMalloc and cudaMallocManaged for hash tables
 option(HT_LEGACY_ALLOCATOR "legacy allocator for hash tables" ON)
 if(HT_LEGACY_ALLOCATOR)
   message("-- Using the legacy allocator for hash tables")
   set(CUDA_NVCC_FLAGS  ${CUDA_NVCC_FLAGS};-DHT_LEGACY_ALLOCATOR)
 endif()
+
 
 cuda_add_library(gdf SHARED
     src/binaryops.cu
@@ -144,7 +146,9 @@ add_custom_target(   # target to link the python files and trigger cffi
 
 # The test target
 add_custom_target(pytest DEPENDS copy_python)
-add_custom_command(TARGET pytest POST_BUILD COMMAND py.test -v)
+add_custom_command(TARGET pytest POST_BUILD
+                   COMMAND ${CMAKE_COMMAND} -E env LD_LIBRARY_PATH=$LD_LIBRARY_PATH:${CMAKE_BINARY_DIR} py.test -v
+                   WORKING_DIRECTORY tests)
 
 # The install target
 install(TARGETS gdf LIBRARY DESTINATION lib)
