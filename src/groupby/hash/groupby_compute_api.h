@@ -47,7 +47,7 @@ cudaError_t GroupbyHash(mgpu::context_t &compute_ctx,
   switch(aggregation_op)
   {
     case aggregation_operation::max_op:
-      the_map.reset(hash_table_size, max_op<aggregation_type>::IDENTITY);
+      the_map.reset(new map_type(hash_table_size, max_op<aggregation_type>::IDENTITY));
       error = cudaDeviceSynchronize();
       if(error != cudaSuccess)
         return error;
@@ -62,7 +62,7 @@ cudaError_t GroupbyHash(mgpu::context_t &compute_ctx,
       break;
 
     case aggregation_operation::min_op:
-      the_map.reset(hash_table_size, min_op<aggregation_type>::IDENTITY);
+      the_map.reset(new map_type(hash_table_size, min_op<aggregation_type>::IDENTITY));
       error = cudaDeviceSynchronize();
       if(error != cudaSuccess)
         return error;
