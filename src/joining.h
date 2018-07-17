@@ -17,7 +17,6 @@
 /* Header-only join C++ API (high-level) */
 
 #include <limits>
-#include <iostream>
 #include <memory>
 
 #include "hash-join/join_compute_api.h"
