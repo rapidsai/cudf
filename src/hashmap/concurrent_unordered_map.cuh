@@ -379,6 +379,14 @@ public:
     {
         return const_iterator( m_hashtbl_values,m_hashtbl_values+m_hashtbl_size,m_hashtbl_values+m_hashtbl_size );
     }
+    __host__ __device__ size_type get_size() const
+    {
+        return m_hashtbl_size;
+    }
+    __host__ __device__ value_type* data() const
+    {
+      return m_hashtbl_values;
+    }
     
     __forceinline__
     static constexpr __host__ __device__ key_type get_unused_key()
