@@ -1,3 +1,5 @@
+#ifndef GROUPBY_KERNELS_H
+#define GROUPBY_KERNELS_H
 
 #include "../../hashmap/concurrent_unordered_map.cuh"
 
@@ -83,3 +85,4 @@ __global__ void extract_groupby_result(const map_type * const __restrict__ the_m
     i += gridDim.x * blockDim.x;
   }
 }
+#endif
