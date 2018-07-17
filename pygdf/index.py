@@ -5,6 +5,7 @@ from __future__ import print_function, division
 import pandas as pd
 import numpy as np
 import pickle
+from numba import cuda
 
 from . import cudautils, utils, columnops
 from .buffer import Buffer
@@ -193,7 +194,10 @@ class RangeIndex(Index):
         return begin - self._start, end - self._start
 
     def as_column(self):
-        vals = cudautils.arange(self._start, self._stop, dtype=self.dtype)
+        if len(self) > 0:
+            vals = cudautils.arange(self._start, self._stop, dtype=self.dtype)
+        else:
+            vals = cuda.device_array(0, dtype=self.dtype)
         return NumericalColumn(data=Buffer(vals), dtype=vals.dtype)
 
     def to_pandas(self):

@@ -41,7 +41,8 @@ class Column(object):
         for o in objs:
             if not o.is_type_equivalent(head):
                 raise ValueError("All series must be of same type")
-
+        # Filter out inputs that have 0 length
+        objs = [o for o in objs if len(o) > 0]
         newsize = sum(map(len, objs))
         # Concatenate data
         mem = cuda.device_array(shape=newsize, dtype=head.data.dtype)
