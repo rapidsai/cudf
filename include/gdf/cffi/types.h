@@ -12,7 +12,7 @@ typedef enum {
     GDF_FLOAT64,
     GDF_DATE32,   // int32_t days since the UNIX epoch
     GDF_DATE64,   // int64_t milliseconds since the UNIX epoch
-    GDF_TIMESTAMP, // Exact timestamp encoded with int64 since UNIX epoch (Default unit millisecond)
+    GDF_TIMESTAMP,// Exact timestamp encoded with int64 since UNIX epoch (Default unit millisecond)
     N_GDF_TYPES, /* additional types should go BEFORE N_GDF_TYPES */
 } gdf_dtype;
 
