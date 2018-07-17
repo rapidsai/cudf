@@ -102,7 +102,7 @@ def test_hashing():
     # pytest --cache-clear -vvs ~/libgdf/python/tests/test_hashing.py
 
     ncols = len(hash_input)
-    magic = 0
+    magic = libgdf.GDF_HASH_MURMUR3
     
     with _make_hash_input(hash_input, ncols) as (col_input):
         # Hash
