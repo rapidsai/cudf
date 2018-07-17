@@ -5,6 +5,8 @@ function(configure_test TEST_NAME Tests_SRCS)
 
     cuda_add_executable(${TEST_NAME} ${Tests_SRCS})
     target_link_libraries(${TEST_NAME} gmock_main gmock GTest::GTest gdf arrow)
+    set_target_properties(${TEST_NAME} PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/gtests/")
 
     #register the target as CMake test so we can use ctest for this executable
     add_test(NAME ${TEST_NAME} COMMAND ${TEST_NAME})
