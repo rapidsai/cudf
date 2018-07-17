@@ -11,6 +11,7 @@
 #include <gdf/utils.h>
 #include <gdf/errorutils.h>
 
+#include <thrust/copy.h>
 #include <thrust/device_vector.h>
 
 template<typename T, typename Tout, typename F>
