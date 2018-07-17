@@ -89,21 +89,6 @@ def test_dataframe_join_how(aa, bb, how):
         _check_series(expecto['b'], goto['b'])
         _check_series(expecto['a'], goto['a'])
 
-# def _sorted_check_series(expect1, expect2, got1, got2):
-#     magic = 0xdeadbeaf
-#     tmp = sorted(zip(expect1, expect2), key=lambda pair: (pair[0], pair[1]))
-#     tmp2 = sorted(zip(got1.astype(np.float64).fillna(np.nan), got2.astype(np.float64).fillna(np.nan)), key=lambda pair: (pair[0], pair[1]))
-#     left_pos1 = [x for x,_ in tmp]
-#     right_pos1 = [x for _,x in tmp]
-#     left_pos2 = [x for x,_ in tmp2]
-#     right_pos2 = [x for _,x in tmp2]
-#     left_pos1 = pd.Series(left_pos1).fillna(magic).tolist()
-#     left_pos2 = pd.Series(left_pos2).fillna(magic).tolist()
-#     right_pos1 = pd.Series(right_pos1).fillna(magic).tolist()
-#     right_pos2 = pd.Series(right_pos2).fillna(magic).tolist()
-#     assert tuple(left_pos1)==tuple(left_pos2)
-#     assert tuple(right_pos1)==tuple(right_pos2)
-
 def _check_series(expect, got):
     magic = 0xdeadbeaf
     # print("expect\n", expect)

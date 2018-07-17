@@ -136,7 +136,8 @@ _join_how_api = {
     'left': libgdf.gdf_left_join_generic,
     'inner': libgdf.gdf_inner_join_generic,
     'outer': libgdf.gdf_outer_join_generic,
-    'multi-left': libgdf.gdf_multi_left_join_generic,
+    'left': libgdf.gdf_multi_left_join_generic,
+    'left-compat': libgdf.gdf_left_join_generic,
 }
 
 
@@ -161,7 +162,7 @@ def apply_join(col_lhs, col_rhs, how):
     joiner = _join_how_api[how]
     join_result_ptr = ffi.new("gdf_join_result_type**", None)
 
-    if(how=='multi-left'):
+    if(how=='left'):
         list_lhs = []
         list_rhs = []
         for i in range(len(col_lhs)):

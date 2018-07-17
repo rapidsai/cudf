@@ -245,7 +245,7 @@ class NumericalColumn(columnops.TypedColumnBase):
             raise ValueError('Unsupported join type')
 
     def _hashjoin(self, other, how='left', return_indexers=False):
-        msg = "numerical hash join not implemented yet."
+        msg = "Hash based join on index not implemented yet."
         raise NotImplementedError(msg)
         return
 
