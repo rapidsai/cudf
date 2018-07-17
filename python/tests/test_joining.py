@@ -26,6 +26,25 @@ def _make_input(left, right):
 
     yield col_left, col_right
 
+@contextmanager
+def _make_input_multi(left, right, ncols):
+    cl = []
+    cr = []
+
+    for i in range(ncols):
+        d_left = cuda.to_device(left[i])
+        col_left = new_column()
+        libgdf.gdf_column_view(col_left, unwrap_devary(d_left), ffi.NULL,
+                            left[i].size, get_dtype(d_left.dtype))
+        cl.append(col_left)
+
+        d_right = cuda.to_device(right[i])
+        col_right = new_column()
+        libgdf.gdf_column_view(col_right, unwrap_devary(d_right), ffi.NULL,
+                            right[i].size, get_dtype(d_right.dtype))
+        cr.append(col_right)
+
+    yield cl, cr
 
 def _call_join(api, col_left, col_right):
     join_result_ptr = ffi.new("gdf_join_result_type**", None)
@@ -54,15 +73,45 @@ def _call_join(api, col_left, col_right):
     libgdf.gdf_join_result_free(join_result)
     return joined_idx
 
+def _call_join_multi(api, ncols, col_left, col_right):
+    join_result_ptr = ffi.new("gdf_join_result_type**", None)
+
+    api(ncols, col_left, col_right, join_result_ptr)
+    join_result = join_result_ptr[0]
+    print('join_result', join_result)
+
+    dataptr = libgdf.gdf_join_result_data(join_result)
+    print(dataptr)
+    datasize = libgdf.gdf_join_result_size(join_result)
+    print(datasize)
+
+    addr = ctypes.c_uint64(int(ffi.cast("uintptr_t", dataptr)))
+    print(hex(addr.value))
+    memptr = cuda.driver.MemoryPointer(context=cuda.current_context(),
+                                       pointer=addr, size=4 * datasize)
+    print(memptr)
+    ary = cuda.devicearray.DeviceNDArray(shape=(datasize,), strides=(4,),
+                                         dtype=np.dtype(np.int32),
+                                         gpu_data=memptr)
+
+    joined_idx = ary.reshape(2, datasize//2).copy_to_host()
+    print(joined_idx)
+
+    libgdf.gdf_join_result_free(join_result)
+    return joined_idx
+    
 
 params_dtypes = [np.int8, np.int32, np.int64, np.float32, np.float64]
-
+multi_params_dtypes = [np.int32, np.int64]
 
 @pytest.mark.parametrize('dtype', params_dtypes)
 def test_innerjoin(dtype):
     # Make data
     left = np.array([0, 0, 1, 2, 3], dtype=dtype)
     right = np.array([0, 1, 2, 2, 3], dtype=dtype)
+#    left = np.array([44, 47, 0, 3, 3, 39, 9, 19, 21, 36, 23, 6, 24, 24, 12, 1, 38, 39, 23, 46, 24, 17, 37, 25, 13, 8, 9, 20, 16, 5, 15, 47, 0, 18, 35, 24, 49, 29, 19, 19, 14, 39, 32, 1, 9, 32, 31, 10, 23, 35, 11, 28, 34, 0, 0, 36, 5, 38, 40, 17, 15, 4, 41, 42, 31, 1, 1, 39, 41, 35, 38, 11, 46, 18, 27, 0, 14, 35, 12, 42, 20, 11, 4, 6, 4, 47, 3, 12, 36, 40, 14, 15, 20, 35, 23, 15, 13, 21, 48, 49], dtype=dtype)
+#    right = np.array([5, 41, 35, 0, 31, 5, 30, 0, 49, 36, 34, 48, 29, 3, 34, 42, 13, 48, 39, 21, 9, 0, 10, 43, 23, 2, 34, 35, 30, 3, 18, 46, 35, 20, 17, 27, 14, 41, 1, 36, 10, 22, 43, 40, 11, 2, 16, 32, 0, 38, 19, 46, 42, 40, 13, 30, 24, 2, 3, 30, 34, 43, 13, 48, 40, 8, 19, 31, 8, 26, 2, 3, 44, 14, 32, 4, 3, 45, 11, 22, 13, 45, 11, 16, 24, 29, 21, 46, 25, 16, 19, 33, 40, 32, 36, 6, 21, 31, 13, 7], dtype=dtype)
+
     with _make_input(left, right) as (col_left, col_right):
         # Join
         joined_idx = _call_join(libgdf.gdf_inner_join_generic, col_left,
@@ -88,11 +137,14 @@ def test_innerjoin(dtype):
     right_idx = right[right_pos]
 
     assert list(left_idx) == list(right_idx)
+    # sort before checking since the hash join may produce results in random order
+    tmp = sorted(zip(left_pos, right_pos), key=lambda pair: (pair[0], pair[1]))
+    left_pos = [x for x,_ in tmp]
+    right_pos = [x for _,x in tmp]
     # left_pos == a_left
     assert tuple(left_pos) == (0, 1, 2, 3, 3, 4)
     # right_pos == a_right
     assert tuple(right_pos) == (0, 0, 1, 2, 3, 4)
-
 
 @pytest.mark.parametrize('dtype', params_dtypes)
 def test_leftjoin(dtype):
@@ -122,9 +174,19 @@ def test_leftjoin(dtype):
     left_pos, right_pos = joined_idx
     left_idx = [left[a] for a in left_pos]
     right_idx = [right[b] if b != -1 else None for b in right_pos]
+    print(left_idx)
+    print(right_idx)
 
+    # sort before checking since the hash join may produce results in random order
+    left_idx = sorted(left_idx)
     assert tuple(left_idx) == (0, 0, 0, 0, 4, 5, 5)
-    assert tuple(right_idx) == (0, 0, 0, 0, None, 5, 5)
+    # sort wouldn't work for nans
+    #assert tuple(right_idx) == (0, 0, 0, 0, None, 5, 5)
+
+    # sort before checking since the hash join may produce results in random order
+    tmp = sorted(zip(left_pos, right_pos), key=lambda pair: (pair[0], pair[1]))
+    left_pos = [x for x,_ in tmp]
+    right_pos = [x for _,x in tmp]
     # left_pos == a_left
     assert tuple(left_pos) == (0, 0, 1, 1, 2, 3, 4)
     # right_pos == a_right
@@ -186,3 +248,97 @@ def test_outerjoin(dtype):
     assert tuple(left_pos) == (0, 0, 1, 1, 2, 3, 4, -1, -1)
     # right_pos == a_right
     assert tuple(right_pos) == (0, 1, 0, 1, -1, 4, 4, 2, 3)
+
+
+@pytest.mark.parametrize('dtype', multi_params_dtypes)
+def test_multileftjoin(dtype):
+    # Make data
+    left = np.array([[0, 0, 4, 5, 5], [1, 2, 2, 3, 4], [1, 1, 3, 1, 2]], dtype=dtype)
+    right = np.array([[0, 0, 2, 3, 5], [1, 2, 3, 3, 4], [3, 3, 2, 1, 1]], dtype=dtype)
+    
+    for k in range(3):
+        with _make_input_multi(left, right, k+1) as (col_left, col_right):
+            # Join
+            joined_idx = _call_join_multi(libgdf.gdf_multi_left_join_generic, k+1, col_left,
+                                    col_right)
+
+        # Check answer
+        # Can be generated by:
+        # >>> df = pd.DataFrame()
+        # >>> df2 = pd.DataFrame()
+        # >>> df['a'] = [0, 0, 4, 5, 5]
+        # >>> df2['a'] = [0, 0, 2, 3, 5]
+        # >>> df['b'] = [1, 2, 2, 3,4]
+        # >>> df2['b'] = [1, 2, 3, 3,4]
+        # >>> df['c'] = [1, 1, 3, 1, 2]
+        # >>> df2['c'] = [3, 3, 2, 1, 1]
+        # >>> joined = df.merge(df2, how='left', on=['a'], suffixes=['_remove', ''])
+        # >>> joined = df.merge(df2, how='left', on=['a'], suffixes=['_remove', ''])
+        # >>> joined
+        # a  b_remove  c_remove    b    c
+        # 0  0         1         1  1.0  3.0
+        # 1  0         1         1  2.0  3.0
+        # 2  0         2         1  1.0  3.0
+        # 3  0         2         1  2.0  3.0
+        # 4  4         2         3  NaN  NaN
+        # 5  5         3         1  4.0  1.0
+        # 6  5         4         2  4.0  1.0
+        # >>> joined = df.merge(df2, how='left', on=['a','b'], suffixes=['_remove', ''])
+        # >>> joined
+        # a  b  c_remove    c
+        # 0  0  1         1  3.0
+        # 1  0  2         1  3.0
+        # 2  4  2         3  NaN
+        # 3  5  3         1  NaN
+        # 4  5  4         2  1.0
+        # >>> joined = df.merge(df2, how='left', suffixes=['_remove', ''])
+        # >>> joined
+        # a  b  c
+        # 0  0  1  1
+        # 1  0  2  1
+        # 2  4  2  3
+        # 3  5  3  1
+        # 4  5  4  2
+
+        left_pos, right_pos = joined_idx
+
+        # sort before checking since the hash join may produce results in random order
+        tmp = sorted(zip(left_pos, right_pos), key=lambda pair: (pair[0], pair[1]))
+        left_pos = [x for x,_ in tmp]
+        right_pos = [x for _,x in tmp]
+
+        if(k==0):
+
+            assert tuple(left_pos) == (0, 0, 1, 1, 2, 3, 4)
+            assert tuple(right_pos) == (0, 1, 0, 1, -1, 4, 4)
+        
+            left_idx = [left[0][a] for a in left_pos]
+
+            assert tuple(left_idx) == (0, 0, 0, 0, 4, 5, 5)
+
+           
+        elif(k==1):
+
+            assert tuple(left_pos) == (0, 1, 2, 3, 4)
+
+            for l in range(2):
+                left_idx = [left[l][a] for a in left_pos]
+
+                if(l==0):
+                    assert tuple(left_idx) == (0, 0, 4, 5, 5)
+                elif(l==1):
+                    assert tuple(left_idx) == (1, 2, 2, 3, 4)
+
+        elif(k==2):
+            
+            assert tuple(left_pos) == (0, 1, 2, 3, 4)          
+            for l in range(3):
+                left_idx = [left[l][a] for a in left_pos]
+
+                if(l==0):
+                    assert tuple(left_idx) == (0, 0, 4, 5, 5)
+                elif(l==1):
+                    assert tuple(left_idx) == (1, 2, 2, 3, 4)
+                elif(l==2):
+                    assert tuple(left_idx) == (1, 1, 3, 1, 2)
+            

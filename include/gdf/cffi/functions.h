@@ -137,6 +137,9 @@ gdf_error gdf_left_join_f64(gdf_column *leftcol, gdf_column *rightcol,
 gdf_error gdf_left_join_generic(gdf_column *leftcol, gdf_column *rightcol,
                                 gdf_join_result_type **out_result);
 
+gdf_error gdf_multi_left_join_generic(int num_cols, gdf_column **leftcol,
+							gdf_column **rightcol, gdf_join_result_type **out_result);
+
 gdf_error gdf_outer_join_i8(gdf_column *leftcol, gdf_column *rightcol,
                              gdf_join_result_type **out_result);
 gdf_error gdf_outer_join_i32(gdf_column *leftcol, gdf_column *rightcol,
@@ -253,6 +256,15 @@ gdf_error gdf_cast_i32_to_i64(gdf_column *input, gdf_column *output);
 gdf_error gdf_cast_i64_to_i64(gdf_column *input, gdf_column *output);
 gdf_error gdf_cast_f32_to_i64(gdf_column *input, gdf_column *output);
 gdf_error gdf_cast_f64_to_i64(gdf_column *input, gdf_column *output);
+
+/* datetime extract*/
+gdf_error gdf_extract_datetime_year(gdf_column *input, gdf_column *output);
+gdf_error gdf_extract_datetime_month(gdf_column *input, gdf_column *output);
+gdf_error gdf_extract_datetime_day(gdf_column *input, gdf_column *output);
+gdf_error gdf_extract_datetime_hour(gdf_column *input, gdf_column *output);
+gdf_error gdf_extract_datetime_minute(gdf_column *input, gdf_column *output);
+gdf_error gdf_extract_datetime_second(gdf_column *input, gdf_column *output);
+
 
 /* binary operators */
 
