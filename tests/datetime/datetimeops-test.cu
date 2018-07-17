@@ -1,4 +1,3 @@
-=======
 /*
  * Copyright 2018 BlazingDB, Inc.
  *     Copyright 2018 William Scott Malpica <william@blazingdb.com>

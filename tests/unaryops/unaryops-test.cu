@@ -551,20 +551,67 @@ DEF_CAST_TYPE_TEST(f64, GDF_FLOAT64, double)
 	}																			\
 }
 
+// Casting from T1 to T2, and then casting from T2 to T1 results in the same value
+#define DEF_CAST_SWAP_TEST_TO_TIMESTAMP(VFROM, VVFROM, TFROM)				\
+	TEST(gdf_cast_swap_TEST, VFROM##_to_timestamp) {								\
+	{																			\
+		int colSize = 1024;														\
+		gdf_column inputCol;													\
+		gdf_column outputCol;													\
+		gdf_column originalOutputCol;											\
+																				\
+		inputCol.dtype = VVFROM;												\
+		inputCol.size = colSize;												\
+		outputCol.dtype = GDF_TIMESTAMP;													\
+		outputCol.size = colSize;												\
+		originalOutputCol.dtype = VVFROM;										\
+		originalOutputCol.size = colSize;										\
+																				\
+		std::vector<TFROM> inputData(colSize);									\
+		fill_with_random_values<int64_t, TFROM>(inputData, colSize);				\
+																				\
+		thrust::device_vector<TFROM> inputDataDev(inputData);					\
+		thrust::device_vector<int64_t> outputDataDev(colSize);						\
+		thrust::device_vector<TFROM> origOutputDataDev(colSize);				\
+																				\
+		inputCol.data = thrust::raw_pointer_cast(inputDataDev.data());			\
+		inputCol.valid = nullptr;												\
+		outputCol.data = thrust::raw_pointer_cast(outputDataDev.data());		\
+		outputCol.valid = nullptr;												\
+		originalOutputCol.data = thrust::raw_pointer_cast(origOutputDataDev.data());\
+		originalOutputCol.valid = nullptr;										\
+																				\
+		gdf_error gdfError = gdf_cast_##VFROM##_to_timestamp(&inputCol, &outputCol, TIME_UNIT_ms);\
+		EXPECT_TRUE( gdfError == GDF_SUCCESS );									\
+		gdfError = gdf_cast_timestamp_to_##VFROM(&outputCol, &originalOutputCol);	\
+		EXPECT_TRUE( gdfError == GDF_SUCCESS );									\
+																				\
+		std::vector<TFROM> results(colSize);									\
+		thrust::copy(origOutputDataDev.begin(), origOutputDataDev.end(), results.begin());\
+																				\
+		for (int i = 0; i < colSize; i++){										\
+			EXPECT_TRUE( results[i] == inputData[i] );							\
+		}																		\
+																				\
+		EXPECT_TRUE( gdfError == GDF_SUCCESS );									\
+	}																			\
+}
+
 DEF_CAST_SWAP_TEST(i8, i32, GDF_INT8, GDF_INT32,  int8_t, int32_t)
 DEF_CAST_SWAP_TEST(i8, i64, GDF_INT8, GDF_INT64,  int8_t, int64_t)
 DEF_CAST_SWAP_TEST(i8, f32, GDF_INT8, GDF_FLOAT32,  int8_t, float)
 DEF_CAST_SWAP_TEST(i8, f64, GDF_INT8, GDF_FLOAT64,  int8_t, double)
 DEF_CAST_SWAP_TEST(i8, date32, GDF_INT8, GDF_DATE32,  int8_t, int32_t)
 DEF_CAST_SWAP_TEST(i8, date64, GDF_INT8, GDF_DATE64,  int8_t, int64_t)
-DEF_CAST_SWAP_TEST(i8, timestamp, GDF_INT8, GDF_TIMESTAMP,  int8_t, int64_t)
 DEF_CAST_SWAP_TEST(i32, i64, GDF_INT32, GDF_INT64,  int32_t, int64_t)
 DEF_CAST_SWAP_TEST(i32, f64, GDF_INT32, GDF_FLOAT64,  int32_t, double)
 DEF_CAST_SWAP_TEST(i32, f32, GDF_INT32, GDF_FLOAT32,  int32_t, float)
 DEF_CAST_SWAP_TEST(f32, f64, GDF_FLOAT32, GDF_FLOAT64,  float, double)
 DEF_CAST_SWAP_TEST(date32, date64, GDF_DATE32, GDF_DATE64,  int32_t, int64_t)
-DEF_CAST_SWAP_TEST(date32, timestamp, GDF_DATE32, GDF_TIMESTAMP,  int32_t, int64_t)
-DEF_CAST_SWAP_TEST(date64, timestamp, GDF_DATE64, GDF_TIMESTAMP,  int64_t, int64_t)
+
+DEF_CAST_SWAP_TEST_TO_TIMESTAMP(i8, GDF_INT8, int8_t)
+DEF_CAST_SWAP_TEST_TO_TIMESTAMP(date32, GDF_DATE32, int32_t)
+DEF_CAST_SWAP_TEST_TO_TIMESTAMP(date64, GDF_DATE64, int64_t)
 
 struct generateValidRandom
 {
