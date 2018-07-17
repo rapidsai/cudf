@@ -35,10 +35,10 @@ typedef enum {
 	TIME_UNIT_ns   // nanosecond
 } gdf_time_unit;
 
-struct gdf_dtype_extra_info {
+typedef struct {
 	gdf_time_unit time_unit;
 	// here we can also hold info for decimal datatype or any other datatype that requires additional information
-};
+} gdf_dtype_extra_info;
 
 typedef struct gdf_column_{
     void *data;
