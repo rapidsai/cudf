@@ -379,7 +379,7 @@ public:
     {
         return const_iterator( m_hashtbl_values,m_hashtbl_values+m_hashtbl_size,m_hashtbl_values+m_hashtbl_size );
     }
-    __host__ __device__ size_type get_size() const
+    __host__ __device__ size_type size() const
     {
         return m_hashtbl_size;
     }
