@@ -624,6 +624,94 @@ class DataFrame(object):
                 df[k] = self[k].reset_index().take(new_positions)
         return df.set_index(self.index.take(new_positions))
 
+    def merge(self, other, on=None, how='left', lsuffix='_x', rsuffix='_y'):
+        if how not in ['left', 'right', 'inner', 'outer']:
+            raise ValueError('unsupported {!r} join'.format(how))
+
+        same_names = set(self.columns) & set(other.columns)
+        if same_names and not (lsuffix or rsuffix):
+            raise ValueError('there are overlapping columns but '
+                             'lsuffix and rsuffix are not defined')
+
+        lhs = self
+        rhs = other
+        # XXX: Replace this stub
+        joined_indices, indexers = self._stub_merge(
+            lhs, rhs, left_on=on, right_on=on, how=how, return_indexers=True
+            )
+
+        # XXX: Prepare output.  same as _join.  code duplication
+        # Perform left, inner and outer join
+        def fix_name(name, suffix):
+            if name in same_names:
+                return "{}{}".format(name, suffix)
+            return name
+
+        def gather_cols(outdf, indf, on, idx, joinidx, suffix):
+            mask = (Series(idx) != -1).as_mask()
+            for k in on:
+                newcol = indf[k].take(idx).set_mask(mask).set_index(joinidx)
+                outdf[fix_name(k, suffix)] = newcol
+
+        def gather_empty(outdf, indf, idx, joinidx, suffix):
+            for k in indf.columns:
+                outdf[fix_name(k, suffix)] = indf[k][:0]
+
+        df = DataFrame()
+        for key, col in zip(on, joined_indices):
+            df[key] = col
+
+        left_indexer, right_indexer = indexers
+        gather_cols(df, lhs, [x for x in lhs.columns if x not in on],
+                    left_indexer, df.index, lsuffix)
+        gather_cols(df, rhs, [x for x in rhs.columns if x not in on],
+                    right_indexer, df.index, rsuffix)
+
+        return df
+
+    def _stub_merge(self, left, right, left_on, right_on, how, return_indexers):
+        """Stub implementation
+
+        Parameters
+        ----------
+        left, right : DataFrame
+        left_on, right_on: list[str] or tuple[str]
+            sequence of column names to be joined on
+        how : str
+            One of 'left', 'right', 'inner', 'outer'
+        return_indexers : bool
+            See return value documentation.
+
+        Returns
+        -------
+        joined_indices, indexers
+            If *return_indexers* is *True*.
+
+        joined_indices
+            If *return_indexers* is *False*.
+
+        The *joined_indices* indices are *Column*s of the joined key columns.
+        The *indexers* contain 2 device arrays of indices to shuffle the value
+        columns into joined order.  The first device array is for the left
+        dataframe.  The second device array is for the right dataframe.
+        """
+        from . import columnops
+
+        assert how == 'left'
+        assert return_indexers
+        left = left.to_pandas().set_index(left_on)
+        right = right.to_pandas().set_index(right_on)
+        merged = left.index.join(right.index, how=how, sort=True,
+                                 return_indexers=True)
+        multi_index = merged[0]
+        joined_indices = list(map(lambda x: columnops.as_column(np.asarray(x).copy()),
+                              multi_index.labels))
+        indexers = [cuda.to_device(x) for x in merged[1:]]
+        if return_indexers:
+            return joined_indices, indexers
+        else:
+            return joined_indices
+
     def join(self, other, on=None, how='left', lsuffix='', rsuffix='',
              sort=False):
         """Join columns with other DataFrame on index or on a key column.
@@ -651,7 +739,7 @@ class DataFrame(object):
         - *other* must be a single DataFrame for now.
         - *on* is not supported yet due to lack of multi-index support.
         """
-        if how not in 'left,right,inner,outer':
+        if how not in ['left', 'right', 'inner', 'outer']:
             raise ValueError('unsupported {!r} join'.format(how))
         if on is not None:
             raise ValueError('"on" is not supported yet')
