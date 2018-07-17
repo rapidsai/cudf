@@ -11,8 +11,9 @@ import pandas as pd
 from numba import cuda
 from numba.cuda.cudadrv.devicearray import DeviceNDArray
 
-from . import cudautils, formatting, queryutils, applyutils, utils
+from . import cudautils, formatting, queryutils, applyutils, utils, _gdf
 from .index import GenericIndex, EmptyIndex, Index, RangeIndex
+from .buffer import Buffer
 from .series import Series
 from .column import Column
 from .settings import NOTSET, settings
@@ -876,6 +877,15 @@ class DataFrame(object):
             raise ValueError('*chunks* must be defined')
         return applyutils.apply_chunks(self, func, incols, outcols, kwargs,
                                        chunks=chunks, tpb=tpb)
+
+    def hash(self, columns):
+        """Hash the given *columns* and return a new Series
+        """
+        cols = [self[k]._column for k in columns]
+        buf = Buffer(cuda.device_array(len(self), dtype=np.int32))
+        result = Series(buf)
+        _gdf.hash_columns(cols, result._column)
+        return result
 
     def to_pandas(self):
         """Convert to a Pandas DataFrame.

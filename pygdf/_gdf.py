@@ -249,3 +249,20 @@ class SegmentedRadixortPlan(object):
                                                    segsize,
                                                    unwrap_devary(d_begins[s:]),
                                                    unwrap_devary(d_ends[s:]))
+
+
+def hash_columns(columns, result):
+    """Hash the *columns* and store in *result*.
+    Returns *result*
+    """
+    assert len(columns) > 0
+    assert result.dtype == np.int32
+    # No-op for 0-sized
+    if len(result) == 0:
+        return result
+    col_input = [col.cffi_view for col in columns]
+    col_out = result.cffi_view
+    ncols = len(col_input)
+    hashfn = libgdf.GDF_HASH_MURMUR3
+    libgdf.gdf_hash(ncols, col_input, hashfn, col_out)
+    return result

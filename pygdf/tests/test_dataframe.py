@@ -463,3 +463,13 @@ def test_dataframe_setitem_index_len1():
     gdf['b'] = gdf.index.as_column()
 
     np.testing.assert_equal(gdf.b.to_array(), [0])
+
+
+@pytest.mark.parametrize('nrows', [1, 8, 100, 1000])
+def test_dataframe_hash_columns(nrows):
+    gdf = DataFrame()
+    gdf['a'] = range(nrows)
+    gdf['b'] = gdf.a + 100
+    out = gdf.hash(['a', 'b'])
+    assert isinstance(out, Series)
+    assert len(out) == nrows
