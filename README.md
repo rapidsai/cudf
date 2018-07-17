@@ -8,30 +8,42 @@ The following instructions are tested on Linux and OSX systems.
 
 Compiler requirement:
 
-* gcc 4.8 (required to be ABI compatible with libarrow).
+* g++-4.8 or
+* g++-5.4
 
 ## Get dependencies
 
 **Note**: This repo uses submodules. Make sure you cloned recursively:
-```
+
+```bash
 git clone --recurse-submodules git@github.com:gpuopenanalytics/libgdf.git
 ```
+
 Or, after cloning:
-```
+
+```bash
 cd libgdf
 git submodule update --init --recursive
 ```
 
-It is recommended to setup a conda environment for the dependencies.
+Since cmake will download and build Apache Arrow you may need to install Boost C++:
+
+```bash
+$ sudo apt-get install libboost-all-dev
+```
+
+To run the python tests it is recommended to setup a conda environment for the dependencies.
 
 ```bash
 # create the conda environment (assuming in build directory)
 $ conda env create --name libgdf_dev --file ../conda_environments/dev_py35.yml
 # activate the environment
 $ source activate libgdf_dev
+$ conda install arrow-cpp=0.7.1 -c conda-forge
+$ conda install pyarrow=0.7.1 -c conda-forge
 ```
 
-This installs the required `cmake`, `flatbuffers` into the `libgdf_dev` conda
+This installs the required `cmake` and `pyarrow` into the `libgdf_dev` conda
 environment and activates it.
 
 For additional information, the python cffi wrapper code requires `cffi` and
@@ -47,13 +59,13 @@ $ conda env update --name libgdf_dev --file ../conda_environments/dev_py35.yml
 
 ## Configure and build
 
-This project uses cmake for building the C/C++ library.  To configure cmake,
+This project uses cmake for building the C/C++ library. To configure cmake,
 run:
 
 ```bash
 mkdir build   # create build directory for out-of-source build
 cd build      # enter the build directory
-cmake ..      # configure cmake
+cmake ..      # configure cmake (will download and build Apache Arrow and Google Test)
 ```
 
 To build the C/C++ code, run `make`.  This should produce a shared library
@@ -81,4 +93,3 @@ conda environment activated), run below to exceute test:
 ```bash
 make pytest   # this auto trigger target "copy_python"
 ```
-
