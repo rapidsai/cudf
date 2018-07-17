@@ -100,8 +100,6 @@ endif()
 
 find_package(CUDA)
 
-set(CUDA_NVCC_FLAGS  ${CUDA_NVCC_FLAGS};-std=c++11;--expt-extended-lambda)
-
 # switch between cudaMalloc and cudaMallocManaged for hash tables
 option(HT_LEGACY_ALLOCATOR "legacy allocator for hash tables" ON)
 if(HT_LEGACY_ALLOCATOR)
