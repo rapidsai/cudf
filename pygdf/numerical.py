@@ -118,7 +118,8 @@ class NumericalColumn(columnops.TypedColumnBase):
         if self.has_null_mask:
             raise ValueError('masked array not supported')
         # Clone data buffer as the key
-        col_keys = self.replace(data=self.data.copy())
+        col_keys = self.replace(data=self.data.copy(),
+                                dtype=self._data.dtype)
         # Create new array for the positions
         inds = Buffer(cudautils.arange(len(self)))
         col_inds = self.replace(data=inds, dtype=inds.dtype)
@@ -166,7 +167,7 @@ class NumericalColumn(columnops.TypedColumnBase):
         out1 = cudautils.gather(data=sortedvals, index=segs)
         out2 = cudautils.value_count(segs, len(sortedvals))
         out_vals = self.replace(data=Buffer(out1), mask=None)
-        out_counts = self.replace(data=Buffer(out2), mask=None)
+        out_counts = NumericalColumn(data=Buffer(out2), dtype=np.intp)
         return out_vals, out_counts
 
     def all(self):

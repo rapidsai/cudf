@@ -155,6 +155,52 @@ class CategoricalColumn(columnops.TypedColumnBase):
                                          ordered=self._ordered)
         return pd.Series(data, index=index)
 
+    def to_pandas(self, index=None):
+        return pd.Series(self.to_array(fillna='pandas'), index=index)
+
+    def _unique_segments(self):
+        """ Common code for unique, unique_count and value_counts"""
+        # make dense column
+        densecol = self.replace(data=self.to_dense_buffer(), mask=None)
+        # sort the column
+        sortcol, _ = densecol.sort_by_values(ascending=True)
+        # find segments
+        sortedvals = sortcol.to_gpu_array()
+        segs, begins = cudautils.find_segments(sortedvals)
+        return segs, sortedvals
+
+    def unique(self, type='sort'):
+        # type variable will indicate what algorithm to use to
+        # calculate unique, not used right now
+        if type is not 'sort':
+            msg = 'non sort based unique() not implemented yet'
+            raise NotImplementedError(msg)
+        segs, sortedvals = self._unique_segments()
+        # gather result
+        out = cudautils.gather(data=sortedvals, index=segs)
+        return self.replace(data=Buffer(out), mask=None)
+
+    def unique_count(self, type='sort'):
+        if type is not 'sort':
+            msg = 'non sort based unique_count() not implemented yet'
+            raise NotImplementedError(msg)
+        segs, _ = self._unique_segments()
+        return len(segs)
+
+    def value_counts(self, type='sort'):
+        if type is not 'sort':
+            msg = 'non sort based value_count() not implemented yet'
+            raise NotImplementedError(msg)
+        segs, sortedvals = self._unique_segments()
+        # Return both values and their counts
+        out1 = cudautils.gather(data=sortedvals, index=segs)
+        out2 = cudautils.value_count(segs, len(sortedvals))
+        out_vals = self.replace(data=Buffer(out1), mask=None)
+        # out_counts = self.replace(data=Buffer(out2), mask=None)
+        # out_vals = NumericalColumn(data=Buffer(out1), dtype=)
+        out_counts = numerical.NumericalColumn(data=Buffer(out2), dtype=np.intp)
+        return out_vals, out_counts
+
     def _encode(self, value):
         for i, cat in enumerate(self._categories):
             if cat == value:

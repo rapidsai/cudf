@@ -726,7 +726,7 @@ class Series(object):
         return self._column.unique_count(type=type)
         # return len(self._column.unique())
 
-    def value_counts(self, type='sort'):
+    def value_counts(self, type='sort', sort=True):
         """Returns unique values of this Series.
         """
         if type is not 'sort':
@@ -736,6 +736,8 @@ class Series(object):
             return 0
         vals, cnts = self._column.value_counts(type=type)
         res = Series(cnts, index=GenericIndex(vals))
+        if sort:
+            return res.sort_values(ascending=False)
         return res
 
     def scale(self):
