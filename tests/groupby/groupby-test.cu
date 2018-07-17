@@ -10,6 +10,7 @@
 
 #include "gtest/gtest.h"
 #include <../../src/groupby/hash/groupby_kernels.cuh>
+#include <../../src/groupby/hash/groupby_compute_api.h>
 
 // This is necessary to do a parametrized typed-test over multiple template arguments
 template <typename Key, typename Value, template <typename> typename Aggregation_Operator>
@@ -18,35 +19,6 @@ struct KeyValueTypes
   using key_type = Key;
   using value_type = Value;
   using op_type = Aggregation_Operator<value_type>;
-};
-
-// Have to use a functor instead of a device lambda because
-// you can't create a device lambda inside of a Google Test
-// because the macro expands into a private member function
-// and you can't have a device lambda inside a private member
-// function
-template<typename value_type>
-struct max_op
-{
-  constexpr static value_type IDENTITY{std::numeric_limits<value_type>::min()};
-
-  __host__ __device__
-    value_type operator()(value_type a, value_type b)
-    {
-      return (a > b? a : b);
-    }
-};
-
-template<typename value_type>
-struct min_op
-{
-  constexpr static value_type IDENTITY{std::numeric_limits<value_type>::max()};
-
-  __host__ __device__
-    value_type operator()(value_type a, value_type b)
-    {
-      return (a < b? a : b);
-    }
 };
 
 // A new instance of this class will be created for each *TEST(GroupByTest, ...)
