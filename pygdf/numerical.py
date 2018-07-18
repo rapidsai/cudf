@@ -242,8 +242,7 @@ class NumericalColumn(columnops.TypedColumnBase):
         elif type == 'hash':
             # Get list of columns from self with left_on and
             # from other with right_on
-            return self._hashjoin(other=other, left_on=left_on,
-                                  right_on=right_on, how=how,
+            return self._hashjoin(other=other, how=how,
                                   return_indexers=return_indexers)
         else:
             raise ValueError('Unsupported join type')

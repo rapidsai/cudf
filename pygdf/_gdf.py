@@ -133,7 +133,6 @@ def apply_sort(col_keys, col_vals, ascending=True):
 
 
 _join_how_api = {
-    'left': libgdf.gdf_left_join_generic,
     'inner': libgdf.gdf_inner_join_generic,
     'outer': libgdf.gdf_outer_join_generic,
     'left': libgdf.gdf_multi_left_join_generic,
