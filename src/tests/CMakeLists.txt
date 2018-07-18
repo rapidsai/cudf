@@ -19,5 +19,6 @@ enable_testing()
 message(STATUS "******** Configuring tests ********")
 
 add_subdirectory(foo-sample)
+add_subdirectory(sqls)
 
 message(STATUS "******** Tests are ready ********")
