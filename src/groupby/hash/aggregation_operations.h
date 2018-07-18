@@ -1,11 +1,5 @@
 #ifndef AGGREGATION_OPERATIONS_H
 #define AGGREGATION_OPERATIONS_H
-enum class aggregation_operation
-{
-  max_op,
-  min_op
-};
-
 template<typename value_type>
 struct max_op
 {

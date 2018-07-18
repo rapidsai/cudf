@@ -2,7 +2,6 @@
 #define GROUPBY_COMPUTE_API_H
 
 #include <cuda_runtime.h>
-#include <moderngpu/context.hxx>
 #include "groupby_kernels.cuh"
 #include "aggregation_operations.h"
 
@@ -11,13 +10,14 @@ constexpr unsigned int THREAD_BLOCK_SIZE{256};
 
 template<typename groupby_type,
          typename aggregation_type,
-         typename size_type>
-cudaError_t GroupbyHash(mgpu::context_t &compute_ctx, 
-                        const groupby_type * const groupby_column_in,
+         typename size_type,
+         typename aggregation_operation>
+cudaError_t GroupbyHash(const groupby_type * const groupby_column_in,
                         const aggregation_type * const aggregation_column_in,
                         const size_type column_size,
                         groupby_type * const groupby_column_out,
                         aggregation_type * const aggregation_column_out,
+                        size_type * out_size,
                         aggregation_operation aggregation_op)
 {
 
@@ -44,42 +44,20 @@ cudaError_t GroupbyHash(mgpu::context_t &compute_ctx,
   const dim3 build_grid_size ((column_size + THREAD_BLOCK_SIZE - 1) / THREAD_BLOCK_SIZE, 1, 1);
   const dim3 block_size (THREAD_BLOCK_SIZE, 1, 1);
 
-  switch(aggregation_op)
-  {
-    case aggregation_operation::max_op:
-      the_map.reset(new map_type(hash_table_size, max_op<aggregation_type>::IDENTITY));
-      error = cudaDeviceSynchronize();
-      if(error != cudaSuccess)
-        return error;
-      build_aggregation_table<<<build_grid_size, block_size>>>(the_map.get(), 
-                                                         groupby_column_in, 
-                                                         groupby_column_out,
-                                                         column_size,
-                                                         max_op<aggregation_type>());
-      error = cudaDeviceSynchronize();
-      if(error != cudaSuccess)
-        return error;
-      break;
+  the_map.reset(new map_type(hash_table_size, aggregation_operation::IDENTITY));
 
-    case aggregation_operation::min_op:
-      the_map.reset(new map_type(hash_table_size, min_op<aggregation_type>::IDENTITY));
-      error = cudaDeviceSynchronize();
-      if(error != cudaSuccess)
-        return error;
-      build_aggregation_table<<<build_grid_size, block_size>>>(the_map.get(), 
-                                                         groupby_column_in, 
-                                                         groupby_column_out,
-                                                         column_size,
-                                                         min_op<aggregation_type>());
-      error = cudaDeviceSynchronize();
-      if(error != cudaSuccess)
-        return error;
-      break;
+  error = cudaDeviceSynchronize();
+  if(error != cudaSuccess)
+    return error;
 
-    default:
-      return cudaErrorNotSupported;
-      break;
-  }
+  build_aggregation_table<<<build_grid_size, block_size>>>(the_map.get(), 
+                                                           groupby_column_in, 
+                                                           aggregation_column_in,
+                                                           column_size,
+                                                           aggregation_op);
+  error = cudaDeviceSynchronize();
+  if(error != cudaSuccess)
+    return error;
 
   unsigned int * global_write_index{nullptr};
   cudaMallocManaged(&global_write_index, sizeof(unsigned int));
@@ -99,6 +77,8 @@ cudaError_t GroupbyHash(mgpu::context_t &compute_ctx,
   error = cudaDeviceSynchronize();
   if(error != cudaSuccess)
     return error;
+
+  *out_size = *global_write_index;
 
   return error;
 }
