@@ -1,3 +1,4 @@
+
 #=============================================================================
 # Copyright 2018 BlazingDB, Inc.
 #     Copyright 2018 Percy Camilo Triveño Aucahuasi <percy@blazingdb.com>
@@ -29,5 +30,5 @@ ExternalProject_Add(googletest
     SOURCE_DIR        "${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/thirdparty/googletest-src"
     BINARY_DIR        "${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/thirdparty/googletest-build"
     INSTALL_DIR       "${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/thirdparty/googletest-install"
-    CMAKE_ARGS        -Dgtest_build_samples=OFF -DCMAKE_INSTALL_PREFIX:PATH=${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/thirdparty/googletest-install
+    CMAKE_ARGS        -Dgtest_build_samples=ON -DCMAKE_INSTALL_PREFIX:PATH=${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/thirdparty/googletest-install
 )

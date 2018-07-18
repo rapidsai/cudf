@@ -11,9 +11,10 @@ typedef enum {
     GDF_INT64,
     GDF_FLOAT32,
     GDF_FLOAT64,
-	GDF_DATE32,
-	GDF_DATE64,
-    N_GDF_TYPES, /* additional types should go BEFORE N_GDF_TYPES */
+    GDF_DATE32,    // int32_t days since the UNIX epoch
+    GDF_DATE64,    // int64_t milliseconds since the UNIX epoch
+    GDF_TIMESTAMP, // Exact timestamp encoded with int64 since UNIX epoch (Default unit millisecond)
+    N_GDF_TYPES    // additional types should go BEFORE N_GDF_TYPES
 } gdf_dtype;
 
 typedef enum {
@@ -24,8 +25,23 @@ typedef enum {
     GDF_COLUMN_SIZE_TOO_BIG,
     GDF_VALIDITY_MISSING,
     GDF_VALIDITY_UNSUPPORTED,
-    GDF_INVALID_API_CALL
+    GDF_INVALID_API_CALL,
+    GDF_JOIN_DTYPE_MISMATCH,
+    GDF_JOIN_TOO_MANY_COLUMNS,
 } gdf_error;
+
+typedef enum {
+	TIME_UNIT_NONE=0, // default (undefined)
+	TIME_UNIT_s,   // second
+	TIME_UNIT_ms,  // millisecond
+	TIME_UNIT_us,  // microsecond
+	TIME_UNIT_ns   // nanosecond
+} gdf_time_unit;
+
+typedef struct {
+	gdf_time_unit time_unit;
+	// here we can also hold info for decimal datatype or any other datatype that requires additional information
+} gdf_dtype_extra_info;
 
 typedef struct gdf_column_{
     void *data;
@@ -33,7 +49,11 @@ typedef struct gdf_column_{
     gdf_size_type size;
     gdf_dtype dtype;
     gdf_size_type null_count;
+    gdf_dtype_extra_info dtype_info;
 } gdf_column;
+
+
+
 
 struct _OpaqueIpcParser;
 typedef struct _OpaqueIpcParser gdf_ipc_parser_type;

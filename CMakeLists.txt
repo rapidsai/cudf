@@ -27,6 +27,7 @@ PROJECT(libgdf)
 cmake_minimum_required(VERSION 2.8)  # not sure about version required
 
 set(CMAKE_CXX_STANDARD 11)
+message(STATUS "Using C++ compiler: ${CMAKE_CXX_COMPILER}")
 message(STATUS "Using C++ standard: c++${CMAKE_CXX_STANDARD}")
 
 set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/Modules/" ${CMAKE_MODULE_PATH})
@@ -46,8 +47,7 @@ find_package(CUDA)
 set_package_properties(
     CUDA PROPERTIES TYPE REQUIRED
     PURPOSE "NVIDIA CUDA® parallel computing platform and programming model."
-    URL "https://developer.nvidia.com/cuda-zone"
-)
+    URL "https://developer.nvidia.com/cuda-zone")
 
 if(CUDA_FOUND)
     message(STATUS "CUDA ${CUDA_VERSION} found in ${CUDA_TOOLKIT_ROOT_DIR}")
@@ -79,25 +79,55 @@ include_directories(
     "${ARROW_INCLUDEDIR}"
 )
 
+IF(CUDA_VERSION_MAJOR GREATER 7)
+    set(CUDA_NVCC_FLAGS ${CUDA_NVCC_FLAGS};-gencode;arch=compute_60,code=sm_60)
+ENDIF(CUDA_VERSION_MAJOR GREATER 7)
+
+IF(CUDA_VERSION_MAJOR GREATER 8)
+    set(CUDA_NVCC_FLAGS ${CUDA_NVCC_FLAGS};-gencode;arch=compute_70,code=sm_70)
+ENDIF(CUDA_VERSION_MAJOR GREATER 8)
+
+IF(CMAKE_BUILD_TYPE MATCHES DEBUG)
+    set(CUDA_NVCC_FLAGS ${CUDA_NVCC_FLAGS};-g;-G)
+ENDIF(CMAKE_BUILD_TYPE MATCHES DEBUG)
+
+# switch between hash-join and sort-join
+option(HASH_JOIN "hash-based join" OFF)
+if(HASH_JOIN)
+  message("-- Using the hash-based join implementation")
+  set(CUDA_NVCC_FLAGS  ${CUDA_NVCC_FLAGS};-DHASH_JOIN)
+endif()
+
+find_package(CUDA)
+
+# switch between cudaMalloc and cudaMallocManaged for hash tables
+option(HT_LEGACY_ALLOCATOR "legacy allocator for hash tables" ON)
+if(HT_LEGACY_ALLOCATOR)
+  message("-- Using the legacy allocator for hash tables")
+  set(CUDA_NVCC_FLAGS  ${CUDA_NVCC_FLAGS};-DHT_LEGACY_ALLOCATOR)
+endif()
+
+
 cuda_add_library(gdf SHARED
     src/binaryops.cu
+    src/bitmaskops.cu
     src/column.cpp
+    src/datetimeops.cu
     src/errorhandling.cpp
-    src/unaryops.cu
+    src/filterops.cu
+    src/hashops.cu
     src/ipc.cu
-    src/reductions.cu
-    src/sorting.cu
     src/joining.cu
+    src/reductions.cu
     src/scan.cu
     src/segmented_sorting.cu
-    src/filterops.cu
-    src/bitmaskops.cu
-	src/streamcompactionops.cu
-    src/datetimeops.cu
+    src/sorting.cu
     src/sqls_ops.cu
-	src/hashops.cu
-	#src/windowedops.cu
+    src/streamcompactionops.cu
+    src/unaryops.cu
+    #src/windowedops.cu
 )
+
 
 target_link_libraries(gdf arrow)
 
@@ -124,7 +154,9 @@ add_custom_target(   # target to link the python files and trigger cffi
 
 # The test target
 add_custom_target(pytest DEPENDS copy_python)
-add_custom_command(TARGET pytest POST_BUILD COMMAND py.test -v)
+add_custom_command(TARGET pytest POST_BUILD
+                   COMMAND ${CMAKE_COMMAND} -E env LD_LIBRARY_PATH=$LD_LIBRARY_PATH:${CMAKE_BINARY_DIR} py.test -v
+                   WORKING_DIRECTORY tests)
 
 # The install target
 install(TARGETS gdf LIBRARY DESTINATION lib)
@@ -139,7 +171,7 @@ set_package_properties(GTest PROPERTIES TYPE OPTIONAL
 if(GTEST_FOUND)
     message(STATUS "Google C++ Testing Framework (Google Test) found in ${GTEST_ROOT}")
     include_directories(${GTEST_INCLUDE_DIRS})
-    add_subdirectory(tests)
+    add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/src/tests)
 else()
     message(AUTHOR_WARNING "Google C++ Testing Framework (Google Test) not found: automated tests are disabled.")
 endif()

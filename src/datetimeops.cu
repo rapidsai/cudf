@@ -1,3 +1,20 @@
+/*
+ * Copyright 2018 BlazingDB, Inc.
+ *     Copyright 2018 William Scott Malpica <william@blazingdb.com>
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 
 #include <gdf/gdf.h>
 #include <gdf/utils.h>
@@ -12,10 +29,23 @@
 #include <thrust/iterator/iterator_adaptor.h>
 #include <thrust/device_vector.h>
 
-/*
- * from http://howardhinnant.github.io/date_algorithms.html
- * int z = unixTime/86400000;
- * z += 719468;
+/*  Portions of the code below is borrowed from a paper by Howard Hinnant dated 2013-09-07  http://howardhinnant.github.io/date_algorithms.html  as seen on July 2nd, 2018
+ The piece of code borrowed and modified is:
+
+ **************************************************************************************
+// Returns year/month/day triple in civil calendar
+// Preconditions:  z is number of days since 1970-01-01 and is in the range:
+//                   [numeric_limits<Int>::min(), numeric_limits<Int>::max()-719468].
+template <class Int>
+constexpr
+std::tuple<Int, unsigned, unsigned>
+civil_from_days(Int z) noexcept
+{
+    static_assert(std::numeric_limits<unsigned>::digits >= 18,
+             "This algorithm has not been ported to a 16 bit unsigned integer");
+    static_assert(std::numeric_limits<Int>::digits >= 20,
+             "This algorithm has not been ported to a 16 bit signed integer");
+    z += 719468;
     const Int era = (z >= 0 ? z : z - 146096) / 146097;
     const unsigned doe = static_cast<unsigned>(z - era * 146097);          // [0, 146096]
     const unsigned yoe = (doe - doe/1460 + doe/36524 - doe/146096) / 365;  // [0, 399]
@@ -25,24 +55,41 @@
     const unsigned d = doy - (153*mp+2)/5 + 1;                             // [1, 31]
     const unsigned m = mp + (mp < 10 ? 3 : -9);                            // [1, 12]
     return std::tuple<Int, unsigned, unsigned>(y + (m <= 2), m, d);
+}
+
+******************************************************************************************
  */
 
 
-struct gdf_extract_datetime_year_date64_op : public thrust::unary_function<int64_t, int16_t>
+struct gdf_extract_year_from_unixtime_op : public thrust::unary_function<int64_t, int16_t>
 {
+
+	int64_t units_per_day;
+	__host__ __device__
+	gdf_extract_year_from_unixtime_op(gdf_time_unit unit){
+		if (unit == TIME_UNIT_s)   // second
+			units_per_day = 86400;
+		else if (unit == TIME_UNIT_ms)   // millisecond
+			units_per_day = 86400000;
+		else if (unit == TIME_UNIT_us)   // microsecond
+			units_per_day = 86400000000;
+		else if (unit == TIME_UNIT_ns)   // nanosecond
+			units_per_day = 86400000000000;
+		else
+			units_per_day = 86400000;   // default to millisecond
+	}
 
 	__host__ __device__
 	int16_t operator()(int64_t unixTime) // unixTime is milliseconds since the UNIX epoch
 	{
-		const int z = ((unixTime >= 0 ? unixTime : unixTime - 86399999) / 86400000) + 719468;
+		const int z = ((unixTime >= 0 ? unixTime : unixTime - (units_per_day - 1)) / units_per_day) + 719468;
 		const int era = (z >= 0 ? z : z - 146096) / 146097;
-		const unsigned doe = static_cast<unsigned>(z - era * 146097);          // [0, 146096]
-		const unsigned yoe = (doe - doe/1460 + doe/36524 - doe/146096) / 365;  // [0, 399]
+		const unsigned doe = static_cast<unsigned>(z - era * 146097);
+		const unsigned yoe = (doe - doe/1460 + doe/36524 - doe/146096) / 365;
 		const int y = static_cast<int>(yoe) + era * 400;
-		const unsigned doy = doe - (365*yoe + yoe/4 - yoe/100);                // [0, 365]
-		const unsigned mp = (5*doy + 2)/153;                                   // [0, 11]
-//		const unsigned d = doy - (153*mp+2)/5 + 1;                             // [1, 31]
-		const unsigned m = mp + (mp < 10 ? 3 : -9);                            // [1, 12]
+		const unsigned doy = doe - (365*yoe + yoe/4 - yoe/100);
+		const unsigned mp = (5*doy + 2)/153;
+		const unsigned m = mp + (mp < 10 ? 3 : -9);
 		if (m <= 2)
 			return y + 1;
 		else
@@ -50,80 +97,164 @@ struct gdf_extract_datetime_year_date64_op : public thrust::unary_function<int64
 	}
 };
 
-struct gdf_extract_datetime_month_date64_op : public thrust::unary_function<int64_t, int16_t>
+struct gdf_extract_month_from_unixtime_op : public thrust::unary_function<int64_t, int16_t>
 {
+	int64_t units_per_day;
+	__host__ __device__
+	gdf_extract_month_from_unixtime_op(gdf_time_unit unit){
+		if (unit == TIME_UNIT_s)   // second
+			units_per_day = 86400;
+		else if (unit == TIME_UNIT_ms)   // millisecond
+			units_per_day = 86400000;
+		else if (unit == TIME_UNIT_us)   // microsecond
+			units_per_day = 86400000000;
+		else if (unit == TIME_UNIT_ns)   // nanosecond
+			units_per_day = 86400000000000;
+		else
+			units_per_day = 86400000;   // default to millisecond
+	}
 
 	__host__ __device__
 	int16_t operator()(int64_t unixTime) // unixTime is milliseconds since the UNIX epoch
 	{
-		const int z = ((unixTime >= 0 ? unixTime : unixTime - 86399999) / 86400000) + 719468;
+		const int z = ((unixTime >= 0 ? unixTime : unixTime - (units_per_day - 1)) / units_per_day) + 719468;
 		const int era = (z >= 0 ? z : z - 146096) / 146097;
-		const unsigned doe = static_cast<unsigned>(z - era * 146097);          // [0, 146096]
-		const unsigned yoe = (doe - doe/1460 + doe/36524 - doe/146096) / 365;  // [0, 399]
-//		const int y = static_cast<int>(yoe) + era * 400;
-		const unsigned doy = doe - (365*yoe + yoe/4 - yoe/100);                // [0, 365]
-		const unsigned mp = (5*doy + 2)/153;                                   // [0, 11]
-//		const unsigned d = doy - (153*mp+2)/5 + 1;                             // [1, 31]
-		return mp + (mp < 10 ? 3 : -9);                            // [1, 12]
+		const unsigned doe = static_cast<unsigned>(z - era * 146097);
+		const unsigned yoe = (doe - doe/1460 + doe/36524 - doe/146096) / 365;
+		const unsigned doy = doe - (365*yoe + yoe/4 - yoe/100);
+		const unsigned mp = (5*doy + 2)/153;
+		return mp + (mp < 10 ? 3 : -9);
 
 	}
 };
 
-struct gdf_extract_datetime_day_date64_op : public thrust::unary_function<int64_t, int16_t>
+struct gdf_extract_day_from_unixtime_op : public thrust::unary_function<int64_t, int16_t>
 {
+
+	int64_t units_per_day;
+	__host__ __device__
+	gdf_extract_day_from_unixtime_op(gdf_time_unit unit){
+		if (unit == TIME_UNIT_s)   // second
+			units_per_day = 86400;
+		else if (unit == TIME_UNIT_ms)   // millisecond
+			units_per_day = 86400000;
+		else if (unit == TIME_UNIT_us)   // microsecond
+			units_per_day = 86400000000;
+		else if (unit == TIME_UNIT_ns)   // nanosecond
+			units_per_day = 86400000000000;
+		else
+			units_per_day = 86400000;   // default to millisecond
+	}
 
 	__host__ __device__
 	int16_t operator()(int64_t unixTime) // unixTime is milliseconds since the UNIX epoch
 	{
-		const int z = ((unixTime >= 0 ? unixTime : unixTime - 86399999) / 86400000) + 719468;
+		const int z = ((unixTime >= 0 ? unixTime : unixTime - (units_per_day - 1)) / units_per_day) + 719468;
 		const int era = (z >= 0 ? z : z - 146096) / 146097;
-		const unsigned doe = static_cast<unsigned>(z - era * 146097);          // [0, 146096]
-		const unsigned yoe = (doe - doe/1460 + doe/36524 - doe/146096) / 365;  // [0, 399]
-//		const int y = static_cast<int>(yoe) + era * 400;
-		const unsigned doy = doe - (365*yoe + yoe/4 - yoe/100);                // [0, 365]
-		const unsigned mp = (5*doy + 2)/153;                                   // [0, 11]
-		return doy - (153*mp+2)/5 + 1;                             // [1, 31]
+		const unsigned doe = static_cast<unsigned>(z - era * 146097);
+		const unsigned yoe = (doe - doe/1460 + doe/36524 - doe/146096) / 365;
+		const unsigned doy = doe - (365*yoe + yoe/4 - yoe/100);
+		const unsigned mp = (5*doy + 2)/153;
+		return doy - (153*mp+2)/5 + 1;
 	}
 };
 
 
-struct gdf_extract_datetime_hour_date64_op : public thrust::unary_function<int64_t, int16_t>
+struct gdf_extract_hour_from_unixtime_op : public thrust::unary_function<int64_t, int16_t>
 {
+	int64_t units_per_day;
+	int64_t units_per_hour;
+	__host__ __device__
+	gdf_extract_hour_from_unixtime_op(gdf_time_unit unit){
+		if (unit == TIME_UNIT_s) {   // second
+			units_per_day = 86400;
+			units_per_hour = 3600;
+		} else if (unit == TIME_UNIT_ms) {   // millisecond
+			units_per_day = 86400000;
+			units_per_hour = 3600000;
+		} else if (unit == TIME_UNIT_us) {  // microsecond
+			units_per_day = 86400000000;
+			units_per_hour = 3600000000;
+		} else if (unit == TIME_UNIT_ns) {  // nanosecond
+			units_per_day = 86400000000000;
+			units_per_hour = 3600000000000;
+		} 	else {
+			units_per_day = 86400000;   // default to millisecond
+			units_per_hour = 3600000;
+		}
+	}
+
 	__host__ __device__
 	int16_t operator()(int64_t unixTime) // unixTime is milliseconds since the UNIX epoch
 	{
-		return unixTime >= 0 ? ((unixTime % 86400000)/3600000) : ((86400000+ (unixTime % 86400000))/3600000);
+		return unixTime >= 0 ? ((unixTime % units_per_day)/units_per_hour) : ((units_per_day + (unixTime % units_per_day))/units_per_hour);
 	}
 };
 
-struct gdf_extract_datetime_minute_date64_op : public thrust::unary_function<int64_t, int16_t>
+struct gdf_extract_minute_from_unixtime_op : public thrust::unary_function<int64_t, int16_t>
 {
+	int64_t units_per_hour;
+	int64_t units_per_minute;
+	__host__ __device__
+	gdf_extract_minute_from_unixtime_op(gdf_time_unit unit){
+		if (unit == TIME_UNIT_s) {   // second
+			units_per_hour = 3600;
+			units_per_minute = 60;
+		} else if (unit == TIME_UNIT_ms) {   // millisecond
+			units_per_hour = 3600000;
+			units_per_minute = 60000;
+		} else if (unit == TIME_UNIT_us) {  // microsecond
+			units_per_hour = 3600000000;
+			units_per_minute = 60000000;
+		} else if (unit == TIME_UNIT_ns) {  // nanosecond
+			units_per_hour = 3600000000000;
+			units_per_minute = 60000000000;
+		} 	else {  // default to millisecond
+			units_per_hour = 3600000;
+			units_per_minute = 60000;
+		}
+	}
+
 	__host__ __device__
 	int16_t operator()(int64_t unixTime) // unixTime is milliseconds since the UNIX epoch
 	{
-		return unixTime >= 0 ? ((unixTime % 3600000)/60000) :  ((3600000 + (unixTime % 3600000))/60000);
+		return unixTime >= 0 ? ((unixTime % units_per_hour)/units_per_minute) :  ((units_per_hour + (unixTime % units_per_hour))/units_per_minute);
 	}
 };
 
-struct gdf_extract_datetime_second_date64_op : public thrust::unary_function<int64_t, int16_t>
+struct gdf_extract_second_from_unixtime_op : public thrust::unary_function<int64_t, int16_t>
 {
+	int64_t units_per_minute;
+	int64_t units_per_second;
+	__host__ __device__
+	gdf_extract_second_from_unixtime_op(gdf_time_unit unit){
+		if (unit == TIME_UNIT_s) {   // second
+			units_per_minute = 60;
+			units_per_second = 1;
+		} else if (unit == TIME_UNIT_ms) {   // millisecond
+			units_per_minute = 60000;
+			units_per_second = 1000;
+		} else if (unit == TIME_UNIT_us) {  // microsecond
+			units_per_minute = 60000000;
+			units_per_second = 1000000;
+		} else if (unit == TIME_UNIT_ns) {  // nanosecond
+			units_per_minute = 60000000000;
+			units_per_second = 1000000000;
+		} 	else {  // default to millisecond
+			units_per_minute = 60000;
+			units_per_second = 1000;
+		}
+	}
+
 	__host__ __device__
 	int16_t operator()(int64_t unixTime) // unixTime is milliseconds since the UNIX epoch
 	{
-		return unixTime >= 0 ? ((unixTime % 60000)/1000) : ((60000 + (unixTime % 60000))/1000);
+		return unixTime >= 0 ? ((unixTime % units_per_minute)/units_per_second) : ((units_per_minute + (unixTime % units_per_minute))/units_per_second);
 	}
 };
 
-struct gdf_extract_datetime_millisecond_date64_op : public thrust::unary_function<int64_t, int16_t>
-{
-	__host__ __device__
-	int16_t operator()(int64_t unixTime) // unixTime is milliseconds since the UNIX epoch
-	{
-		return unixTime >= 0 ? unixTime % 1000 :  1000 + unixTime % 1000;
-	}
-};
 
-struct gdf_extract_datetime_year_date32_op : public thrust::unary_function<int32_t, int16_t>
+struct gdf_extract_year_from_date32_op : public thrust::unary_function<int32_t, int16_t>
 {
 
 	__host__ __device__
@@ -131,13 +262,12 @@ struct gdf_extract_datetime_year_date32_op : public thrust::unary_function<int32
 	{
 		const int z = unixDate + 719468;
 		const int era = (z >= 0 ? z : z - 146096) / 146097;
-		const unsigned doe = static_cast<unsigned>(z - era * 146097);          // [0, 146096]
-		const unsigned yoe = (doe - doe/1460 + doe/36524 - doe/146096) / 365;  // [0, 399]
+		const unsigned doe = static_cast<unsigned>(z - era * 146097);
+		const unsigned yoe = (doe - doe/1460 + doe/36524 - doe/146096) / 365;
 		const int y = static_cast<int>(yoe) + era * 400;
-		const unsigned doy = doe - (365*yoe + yoe/4 - yoe/100);                // [0, 365]
-		const unsigned mp = (5*doy + 2)/153;                                   // [0, 11]
-		//		const unsigned d = doy - (153*mp+2)/5 + 1;                             // [1, 31]
-		const unsigned m = mp + (mp < 10 ? 3 : -9);                            // [1, 12]
+		const unsigned doy = doe - (365*yoe + yoe/4 - yoe/100);
+		const unsigned mp = (5*doy + 2)/153;
+		const unsigned m = mp + (mp < 10 ? 3 : -9);
 		if (m <= 2)
 			return y + 1;
 		else
@@ -145,7 +275,7 @@ struct gdf_extract_datetime_year_date32_op : public thrust::unary_function<int32
 	}
 };
 
-struct gdf_extract_datetime_month_date32_op : public thrust::unary_function<int32_t, int16_t>
+struct gdf_extract_month_from_date32_op : public thrust::unary_function<int32_t, int16_t>
 {
 
 	__host__ __device__
@@ -153,17 +283,15 @@ struct gdf_extract_datetime_month_date32_op : public thrust::unary_function<int3
 	{
 		const int z = unixDate + 719468;
 		const int era = (z >= 0 ? z : z - 146096) / 146097;
-		const unsigned doe = static_cast<unsigned>(z - era * 146097);          // [0, 146096]
-		const unsigned yoe = (doe - doe/1460 + doe/36524 - doe/146096) / 365;  // [0, 399]
-		//		const int y = static_cast<int>(yoe) + era * 400;
-		const unsigned doy = doe - (365*yoe + yoe/4 - yoe/100);                // [0, 365]
-		const unsigned mp = (5*doy + 2)/153;                                   // [0, 11]
-		//		const unsigned d = doy - (153*mp+2)/5 + 1;                             // [1, 31]
+		const unsigned doe = static_cast<unsigned>(z - era * 146097);
+		const unsigned yoe = (doe - doe/1460 + doe/36524 - doe/146096) / 365;
+		const unsigned doy = doe - (365*yoe + yoe/4 - yoe/100);
+		const unsigned mp = (5*doy + 2)/153;
 		return mp + (mp < 10 ? 3 : -9);
 	}
 };
 
-struct gdf_extract_datetime_day_date32_op : public thrust::unary_function<int32_t, int16_t>
+struct gdf_extract_day_from_date32_op : public thrust::unary_function<int32_t, int16_t>
 {
 
 	__host__ __device__
@@ -171,12 +299,11 @@ struct gdf_extract_datetime_day_date32_op : public thrust::unary_function<int32_
 	{
 		const int z = unixDate + 719468;
 		const int era = (z >= 0 ? z : z - 146096) / 146097;
-		const unsigned doe = static_cast<unsigned>(z - era * 146097);          // [0, 146096]
-		const unsigned yoe = (doe - doe/1460 + doe/36524 - doe/146096) / 365;  // [0, 399]
-		//		const int y = static_cast<int>(yoe) + era * 400;
-		const unsigned doy = doe - (365*yoe + yoe/4 - yoe/100);                // [0, 365]
-		const unsigned mp = (5*doy + 2)/153;                                   // [0, 11]
-		return doy - (153*mp+2)/5 + 1;                             // [1, 31]
+		const unsigned doe = static_cast<unsigned>(z - era * 146097);
+		const unsigned yoe = (doe - doe/1460 + doe/36524 - doe/146096) / 365;
+		const unsigned doy = doe - (365*yoe + yoe/4 - yoe/100);
+		const unsigned mp = (5*doy + 2)/153;
+		return doy - (153*mp+2)/5 + 1;
 	}
 };
 
@@ -198,16 +325,24 @@ gdf_error gdf_extract_datetime_year(gdf_column *input, gdf_column *output) {
 	if ( input->dtype == GDF_DATE64 ) {
 		thrust::device_ptr<int64_t> input_ptr((int64_t *) input->data);
 		thrust::device_ptr<int16_t> output_ptr((int16_t *) output->data);
-		gdf_extract_datetime_year_date64_op op;
+		gdf_extract_year_from_unixtime_op op(TIME_UNIT_ms);
 		thrust::transform(thrust::cuda::par.on(stream), thrust::detail::make_normal_iterator(input_ptr),
 				thrust::detail::make_normal_iterator(input_ptr) + input->size, thrust::detail::make_normal_iterator(output_ptr), op);
 
 	}else if (input->dtype == GDF_DATE32) {
 		thrust::device_ptr<int32_t> input_ptr((int32_t *) input->data);
 		thrust::device_ptr<int16_t> output_ptr((int16_t *) output->data);
-		gdf_extract_datetime_year_date32_op op;
+		gdf_extract_year_from_date32_op op;
 		thrust::transform(thrust::cuda::par.on(stream), thrust::detail::make_normal_iterator(input_ptr),
 				thrust::detail::make_normal_iterator(input_ptr) + input->size, thrust::detail::make_normal_iterator(output_ptr), op);
+
+	}else if (input->dtype == GDF_TIMESTAMP) {
+		thrust::device_ptr<int64_t> input_ptr((int64_t *) input->data);
+		thrust::device_ptr<int16_t> output_ptr((int16_t *) output->data);
+		gdf_extract_year_from_unixtime_op op(input->dtype_info.time_unit);
+		thrust::transform(thrust::cuda::par.on(stream), thrust::detail::make_normal_iterator(input_ptr),
+				thrust::detail::make_normal_iterator(input_ptr) + input->size, thrust::detail::make_normal_iterator(output_ptr), op);
+
 	} else {
 		return GDF_UNSUPPORTED_DTYPE;
 	}
@@ -232,16 +367,24 @@ gdf_error gdf_extract_datetime_month(gdf_column *input, gdf_column *output) {
 	if ( input->dtype == GDF_DATE64 ) {
 		thrust::device_ptr<int64_t> input_ptr((int64_t *) input->data);
 		thrust::device_ptr<int16_t> output_ptr((int16_t *) output->data);
-		gdf_extract_datetime_month_date64_op op;
+		gdf_extract_month_from_unixtime_op op(TIME_UNIT_ms);
 		thrust::transform(thrust::cuda::par.on(stream), thrust::detail::make_normal_iterator(input_ptr),
 				thrust::detail::make_normal_iterator(input_ptr) + input->size, thrust::detail::make_normal_iterator(output_ptr), op);
 
 	}else if (input->dtype == GDF_DATE32) {
 		thrust::device_ptr<int32_t> input_ptr((int32_t *) input->data);
 		thrust::device_ptr<int16_t> output_ptr((int16_t *) output->data);
-		gdf_extract_datetime_month_date32_op op;
+		gdf_extract_month_from_date32_op op;
 		thrust::transform(thrust::cuda::par.on(stream), thrust::detail::make_normal_iterator(input_ptr),
 				thrust::detail::make_normal_iterator(input_ptr) + input->size, thrust::detail::make_normal_iterator(output_ptr), op);
+
+	}else if (input->dtype == GDF_TIMESTAMP) {
+		thrust::device_ptr<int64_t> input_ptr((int64_t *) input->data);
+		thrust::device_ptr<int16_t> output_ptr((int16_t *) output->data);
+		gdf_extract_month_from_unixtime_op op(input->dtype_info.time_unit);
+		thrust::transform(thrust::cuda::par.on(stream), thrust::detail::make_normal_iterator(input_ptr),
+				thrust::detail::make_normal_iterator(input_ptr) + input->size, thrust::detail::make_normal_iterator(output_ptr), op);
+
 	} else {
 		return GDF_UNSUPPORTED_DTYPE;
 	}
@@ -266,16 +409,24 @@ gdf_error gdf_extract_datetime_day(gdf_column *input, gdf_column *output) {
 	if ( input->dtype == GDF_DATE64 ) {
 		thrust::device_ptr<int64_t> input_ptr((int64_t *) input->data);
 		thrust::device_ptr<int16_t> output_ptr((int16_t *) output->data);
-		gdf_extract_datetime_day_date64_op op;
+		gdf_extract_day_from_unixtime_op op(TIME_UNIT_ms);
 		thrust::transform(thrust::cuda::par.on(stream), thrust::detail::make_normal_iterator(input_ptr),
 				thrust::detail::make_normal_iterator(input_ptr) + input->size, thrust::detail::make_normal_iterator(output_ptr), op);
 
 	}else if (input->dtype == GDF_DATE32) {
 		thrust::device_ptr<int32_t> input_ptr((int32_t *) input->data);
 		thrust::device_ptr<int16_t> output_ptr((int16_t *) output->data);
-		gdf_extract_datetime_day_date32_op op;
+		gdf_extract_day_from_date32_op op;
 		thrust::transform(thrust::cuda::par.on(stream), thrust::detail::make_normal_iterator(input_ptr),
 				thrust::detail::make_normal_iterator(input_ptr) + input->size, thrust::detail::make_normal_iterator(output_ptr), op);
+
+	}else if (input->dtype == GDF_TIMESTAMP) {
+		thrust::device_ptr<int64_t> input_ptr((int64_t *) input->data);
+		thrust::device_ptr<int16_t> output_ptr((int16_t *) output->data);
+		gdf_extract_day_from_unixtime_op op(input->dtype_info.time_unit);
+		thrust::transform(thrust::cuda::par.on(stream), thrust::detail::make_normal_iterator(input_ptr),
+				thrust::detail::make_normal_iterator(input_ptr) + input->size, thrust::detail::make_normal_iterator(output_ptr), op);
+
 	} else {
 		return GDF_UNSUPPORTED_DTYPE;
 	}
@@ -301,7 +452,14 @@ gdf_error gdf_extract_datetime_hour(gdf_column *input, gdf_column *output) {
 	if ( input->dtype == GDF_DATE64 ) {
 		thrust::device_ptr<int64_t> input_ptr((int64_t *) input->data);
 		thrust::device_ptr<int16_t> output_ptr((int16_t *) output->data);
-		gdf_extract_datetime_hour_date64_op op;
+		gdf_extract_hour_from_unixtime_op op(TIME_UNIT_ms);;
+		thrust::transform(thrust::cuda::par.on(stream), thrust::detail::make_normal_iterator(input_ptr),
+				thrust::detail::make_normal_iterator(input_ptr) + input->size, thrust::detail::make_normal_iterator(output_ptr), op);
+
+	}else if (input->dtype == GDF_TIMESTAMP) {
+		thrust::device_ptr<int64_t> input_ptr((int64_t *) input->data);
+		thrust::device_ptr<int16_t> output_ptr((int16_t *) output->data);
+		gdf_extract_hour_from_unixtime_op op(input->dtype_info.time_unit);
 		thrust::transform(thrust::cuda::par.on(stream), thrust::detail::make_normal_iterator(input_ptr),
 				thrust::detail::make_normal_iterator(input_ptr) + input->size, thrust::detail::make_normal_iterator(output_ptr), op);
 
@@ -330,7 +488,14 @@ gdf_error gdf_extract_datetime_minute(gdf_column *input, gdf_column *output) {
 	if ( input->dtype == GDF_DATE64 ) {
 		thrust::device_ptr<int64_t> input_ptr((int64_t *) input->data);
 		thrust::device_ptr<int16_t> output_ptr((int16_t *) output->data);
-		gdf_extract_datetime_minute_date64_op op;
+		gdf_extract_minute_from_unixtime_op op(TIME_UNIT_ms);
+		thrust::transform(thrust::cuda::par.on(stream), thrust::detail::make_normal_iterator(input_ptr),
+				thrust::detail::make_normal_iterator(input_ptr) + input->size, thrust::detail::make_normal_iterator(output_ptr), op);
+
+	}else if (input->dtype == GDF_TIMESTAMP) {
+		thrust::device_ptr<int64_t> input_ptr((int64_t *) input->data);
+		thrust::device_ptr<int16_t> output_ptr((int16_t *) output->data);
+		gdf_extract_minute_from_unixtime_op op(input->dtype_info.time_unit);
 		thrust::transform(thrust::cuda::par.on(stream), thrust::detail::make_normal_iterator(input_ptr),
 				thrust::detail::make_normal_iterator(input_ptr) + input->size, thrust::detail::make_normal_iterator(output_ptr), op);
 
@@ -359,7 +524,14 @@ gdf_error gdf_extract_datetime_second(gdf_column *input, gdf_column *output) {
 	if ( input->dtype == GDF_DATE64 ) {
 		thrust::device_ptr<int64_t> input_ptr((int64_t *) input->data);
 		thrust::device_ptr<int16_t> output_ptr((int16_t *) output->data);
-		gdf_extract_datetime_second_date64_op op;
+		gdf_extract_second_from_unixtime_op op(TIME_UNIT_ms);;
+		thrust::transform(thrust::cuda::par.on(stream), thrust::detail::make_normal_iterator(input_ptr),
+				thrust::detail::make_normal_iterator(input_ptr) + input->size, thrust::detail::make_normal_iterator(output_ptr), op);
+
+	}else if (input->dtype == GDF_TIMESTAMP) {
+		thrust::device_ptr<int64_t> input_ptr((int64_t *) input->data);
+		thrust::device_ptr<int16_t> output_ptr((int16_t *) output->data);
+		gdf_extract_second_from_unixtime_op op(input->dtype_info.time_unit);
 		thrust::transform(thrust::cuda::par.on(stream), thrust::detail::make_normal_iterator(input_ptr),
 				thrust::detail::make_normal_iterator(input_ptr) + input->size, thrust::detail::make_normal_iterator(output_ptr), op);
 
