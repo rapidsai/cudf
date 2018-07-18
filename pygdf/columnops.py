@@ -128,7 +128,7 @@ def as_column(arbitrary):
         - CategoricalColumn for pandas.Categorical input.
         - NumericalColumn for all other inputs.
     """
-    from . import numerical, categorical
+    from . import numerical, categorical, datetime
 
     if isinstance(arbitrary, Column):
         if not isinstance(arbitrary, TypedColumnBase):
@@ -144,7 +144,13 @@ def as_column(arbitrary):
     elif cuda.devicearray.is_cuda_ndarray(arbitrary):
         return as_column(Buffer(arbitrary))
     elif isinstance(arbitrary, np.ndarray):
-        return as_column(Buffer(arbitrary))
+        if arbitrary.dtype.kind == 'M':
+            # hack, coerce to int, then set the dtype
+            buf = Buffer(arbitrary.astype('int64'))
+            buf.dtype = arbitrary.dtype
+            return datetime.DatetimeColumn(data=buf, dtype=arbitrary.dtype)
+        else:
+            return as_column(Buffer(arbitrary))
     else:
         return as_column(np.asarray(arbitrary))
 

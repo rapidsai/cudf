@@ -1,7 +1,7 @@
 import pytest
 import pandas as pd
 
-from pygdf.dataframe import Series, Index
+from pygdf.dataframe import Series, Index, DataFrame
 
 
 def data1():
@@ -38,3 +38,9 @@ def test_dt_index(data, field):
         getattr(gdf_data, field).to_array(),
         getattr(pd_data, field).values
     )
+
+
+def test_setitem_datetime():
+    a = DataFrame()
+    a['a'] = pd.date_range('20010101', '20010105').values
+    # TODO check some stuff
