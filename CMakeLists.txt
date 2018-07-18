@@ -125,8 +125,9 @@ cuda_add_library(gdf SHARED
     src/ipc.cu
     src/reductions.cu
     src/sorting.cu
-    src/join/hash/joining.cu
+    src/join/joining.cu
     src/hashing.cu
+    src/groupby/groupby.cu
     src/scan.cu
     src/segmented_sorting.cu
     src/sorting.cu
