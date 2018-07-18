@@ -643,7 +643,7 @@ class DataFrame(object):
         #    lhs, rhs, left_on=on, right_on=on, how=how,
         #    return_joined_indicies=True)
         joined_values, joined_indicies = self._merge_gdf(
-            lhs, rhs, left_on=on, right_on=on, how='multi-left',
+            lhs, rhs, left_on=on, right_on=on, how=how,
             return_indices=True)
 
         # XXX: Prepare output.  same as _join.  code duplication
@@ -679,7 +679,7 @@ class DataFrame(object):
 
         from pygdf import cudautils
 
-        assert how == 'multi-left'
+        assert how == 'left'
         assert return_indices
         assert len(left_on) == len(right_on)
 
