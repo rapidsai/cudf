@@ -11,6 +11,7 @@
 #include "gtest/gtest.h"
 #include <../../src/groupby/hash/groupby_kernels.cuh>
 #include <../../src/groupby/hash/groupby_compute_api.h>
+#include <../../src/groupby/hash/aggregation_operations.h>
 
 // This is necessary to do a parametrized typed-test over multiple template arguments
 template <typename Key, typename Value, template <typename> typename Aggregation_Operator>
@@ -206,10 +207,32 @@ struct GroupByTest : public testing::Test
 
       ASSERT_NE(expected_values.end(), found) << "key: " << groupby_key;
 
-      EXPECT_EQ(found->first, groupby_key);
-      EXPECT_EQ(found->second, aggregation_value);
+      EXPECT_EQ(found->first, groupby_key) << "index: " << i;
+      EXPECT_EQ(found->second, aggregation_value) << "key: " << groupby_key << " index: " << i << " of " << result_size;
     }
 
+  }
+
+  unsigned int groupby(const key_type * const groupby_column, const value_type * const aggregation_column)
+  {
+
+    // TODO: Find a more efficient way to size the output buffer.
+    // In general, input_size is going to be larger than the actual
+    // size of the result.
+    cudaMallocManaged(&d_groupby_result, input_size * sizeof(key_type));
+    cudaMallocManaged(&d_aggregation_result, input_size * sizeof(value_type));
+
+    size_type result_size{0};
+
+    GroupbyHash(groupby_column,
+                aggregation_column,
+                input_size,
+                d_groupby_result,
+                d_aggregation_result,
+                &result_size,
+                op_type());
+
+    return result_size;
   }
 
 
@@ -353,6 +376,22 @@ TYPED_TEST(GroupByTest, AggregationTestDeviceBlockSame)
   this->build_aggregation_table_device(input);
   this->verify_aggregation_table();
   unsigned int result_size = this->extract_groupby_result_device();
+  this->verify_groupby_result(result_size);
+
+  // The size of the result should be equal to the number of unique keys
+  auto begin = this->d_groupby_column.begin();
+  auto end = this->d_groupby_column.end();
+  thrust::sort(begin, end);
+  unsigned int unique_count = thrust::unique(begin, end) - begin;
+  EXPECT_EQ(unique_count, result_size);
+}
+
+TYPED_TEST(GroupByTest, GroupBy)
+{
+  const int num_keys = 1<<16;
+  const int num_values_per_key = 1;
+  auto input = this->create_input(num_keys, num_values_per_key);
+  const unsigned int result_size = this->groupby(input.first, input.second);
   this->verify_groupby_result(result_size);
 
   // The size of the result should be equal to the number of unique keys
