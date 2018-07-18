@@ -643,8 +643,8 @@ class DataFrame(object):
         #    lhs, rhs, left_on=on, right_on=on, how=how,
         #    return_joined_indicies=True)
         joined_values, joined_indicies = self._merge_gdf(
-            lhs, rhs, left_on=on, right_on=on, how='multi-left', return_indices=True
-            )
+            lhs, rhs, left_on=on, right_on=on, how='multi-left',
+            return_indices=True)
 
         # XXX: Prepare output.  same as _join.  code duplication
         # Perform left, inner and outer join
