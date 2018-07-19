@@ -740,8 +740,8 @@ class DataFrame(object):
 
         Returns
         -------
-        joined : DataFrame
-
+        joined : DataFrame
+        
         Notes
         -----
 
