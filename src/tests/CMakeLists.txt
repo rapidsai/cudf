@@ -1,4 +1,4 @@
-#=============================================================================
+﻿#=============================================================================
 # Copyright 2018 BlazingDB, Inc.
 #     Copyright 2018 Percy Camilo Triveño Aucahuasi <percy@blazingdb.com>
 #     Copyright 2018 Cristhian Alberto Gonzales Castillo <cristhian@blazingdb.com>
@@ -38,6 +38,7 @@ message(STATUS "******** Configuring tests ********")
 
 add_subdirectory(foo-sample)
 add_subdirectory(datetime)
+add_subdirectory(hashing)
 add_subdirectory(sqls)
 
 message(STATUS "******** Tests are ready ********")
