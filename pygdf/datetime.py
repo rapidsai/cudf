@@ -9,8 +9,7 @@ class DatetimeColumn(columnops.TypedColumnBase):
     def __init__(self, data, mask=None, null_count=None, dtype=None):
         # currently libgdf datetime kernels fail if mask is null
         if mask is None:
-            mask = np.empty(data.mem.size, dtype=np.bool)
-            mask[:] = True
+            mask = np.ones(data.mem.size, dtype=np.bool)
             mask = compact_mask_bytes(mask)
             mask = Buffer(mask)
         super(DatetimeColumn, self).__init__(data=data,
@@ -22,34 +21,18 @@ class DatetimeColumn(columnops.TypedColumnBase):
         self._mask = mask
 
 
-funcs = {
-    'year': libgdf.gdf_extract_datetime_year,
-    'month': libgdf.gdf_extract_datetime_month,
-    'day': libgdf.gdf_extract_datetime_day,
-    'hour': libgdf.gdf_extract_datetime_hour,
-    'minute': libgdf.gdf_extract_datetime_minute,
-    'second': libgdf.gdf_extract_datetime_second,
-}
-
-
-# def fake_extract_field(field):
-#     def func(column, out):
-#         data = getattr(pd.to_datetime(column.to_array()), field)
-#         out._data[:] = data
-#     return func
-
-
-# python_funcs = {
-#     'year': fake_extract_field('year')
-# }
-
-
-# funcs = python_funcs
-
-
 class DatetimeProperties(object):
+
+    _funcs = {
+        'year': libgdf.gdf_extract_datetime_year,
+        'month': libgdf.gdf_extract_datetime_month,
+        'day': libgdf.gdf_extract_datetime_day,
+        'hour': libgdf.gdf_extract_datetime_hour,
+        'minute': libgdf.gdf_extract_datetime_minute,
+        'second': libgdf.gdf_extract_datetime_second,
+    }
+
     def __init__(self, dt_column):
-        # self.dt_column = weakref.ref(dt_column)
         self.dt_column = dt_column
 
     @property
@@ -83,7 +66,7 @@ class DatetimeProperties(object):
         )
         # force mask again
         out._mask = self.dt_column.mask
-        _gdf.apply_unaryop(funcs[field],
+        _gdf.apply_unaryop(self._funcs[field],
                            self.dt_column,
                            out)
         return out
