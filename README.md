@@ -38,10 +38,10 @@ python setup.py install
 
 A Dockerfile is provided for building and installing LibGDF and PyGDF from their respective master branches.
 
-**Note**:
+**Notes**:
 * We test with and recommended installing [nvidia-docker2](https://github.com/nvidia/nvidia-docker/wiki/Installation-(version-2.0))
 * Host's installed nvidia driver must support >= the specified CUDA version (9.2 by default).
-* Alternative CUDA_VERSION should be specified via Docker [build-arg](https://docs.docker.com/engine/reference/commandline/build/#set-build-time-variables---build-arg) and as cudatoolkit version in conda_environments/gdf_build.yml
+* Alternative CUDA_VERSION should be specified via Docker [build-arg](https://docs.docker.com/engine/reference/commandline/build/#set-build-time-variables---build-arg)
 * Alternate branches for libgdf and pygdf may be specified as Docker build-args LIBGDF_REPO and PYGDF_REPO. See Dockerfile for example.
 * Ubuntu 16.04 is the default OS for this container. Alternate OSes may be specified as Docker build-arg LINUX_VERSION. See list of [available images](https://hub.docker.com/r/nvidia/cuda/).
 * Python 3.6 is default, but other versions may be specified via PYTHON_VERSION build-arg
