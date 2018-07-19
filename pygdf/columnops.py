@@ -146,11 +146,12 @@ def as_column(arbitrary):
     elif isinstance(arbitrary, np.ndarray):
         if arbitrary.dtype.kind == 'M':
             # hack, coerce to int, then set the dtype
+            arbitrary = arbitrary.astype('datetime64[ms]')
             dtype = np.int64
             assert arbitrary.dtype.itemsize==8
-            buf = Buffer(arbitrary.astype(dtype, copy=False)) #.astype(arbitrary.dtype) # -> numba TypingError
+            buf = Buffer(arbitrary.astype(dtype, copy=False))
             buf.dtype = arbitrary.dtype
-            return datetime.DatetimeColumn(data=buf, dtype=arbitrary.dtype)
+            return datetime.DatetimeColumn(data=buf, dtype=buf.dtype)
         else:
             return as_column(Buffer(arbitrary))
     else:
