@@ -16,13 +16,15 @@ from .serialize import register_distributed_serializer
 
 from libgdf_cffi import ffi, libgdf, GDFError
 
-import pytest
+# import pytest
+
+print("class")
 
 
 class LibGdfGroupby(object):
     """Groupby object returned by pygdf.DataFrame.groupby().
     """
-   
+
     def __init__(self, df, by):
         """
         Parameters
@@ -32,47 +34,78 @@ class LibGdfGroupby(object):
             Column(s) that grouping is based on.
             It can be a single or list of column names.
         """
+        print("__init__")
+
         self._df = df
         self._by = [by] if isinstance(by, str) else list(by)
         self._val_columns = [idx for idx in self._df.columns
                              if idx not in self._by]
 
     def mean(self):
-#          """
-#         gdf_error gdf_group_by_avg(int ncols,                    // # columns
-#                            gdf_column** cols,            //input cols
-#                            gdf_column* col_agg,          //column to aggregate on
-#                            gdf_column* out_col_indices,  //if not null return indices of re-ordered rows
-#                            gdf_column** out_col_values,  //if not null return the grouped-by columns
-#                                                          //(multi-gather based on indices, which are needed anyway)
-#                            gdf_column* out_col_agg,      //aggregation result
-#                            gdf_context* ctxt);            //struct with additional info: bool is_sorted, flag_sort_or_hash, bool flag_count_distinct
-#        """
-       ncols = len(self._by)
-       cols = [self._df[thisBy]._column.cffi_view for thisBy in self._by]
-       
-       col_agg = self._df[self._val_columns[0]]._column.cffi_view
-       
-       out_col_indices = ffi.new('gdf_column*', None)
-       out_col_values = ffi.new('gdf_column**', None)
-       out_col_agg = ffi.new('gdf_column*')
-       
-       out_col_agg.dtype = col_agg.dtype
-       
-       ctx = ffi.new('gdf_context*')
-       ctx.flag_sorted = 1
-       ctx.flag_method = libgdf.GDF_SORT
-              
-       err = libgdf.gdf_group_by_avg(ncols, cols, col_agg, out_col_indices, out_col_values, out_col_agg, ctx)
-       
-       print(err)
-       
-       print("done mean")
-       
-       
-       
-       
-       """
+        #          """
+        #         gdf_error gdf_group_by_avg(int ncols,                    // # columns
+        #                            gdf_column** cols,            //input cols
+        #                            gdf_column* col_agg,          //column to aggregate on
+        #                            gdf_column* out_col_indices,  //if not null return indices of re-ordered rows
+        #                            gdf_column** out_col_values,  //if not null return the grouped-by columns
+        #                                                          //(multi-gather based on indices, which are needed anyway)
+        #                            gdf_column* out_col_agg,      //aggregation result
+        #                            gdf_context* ctxt);            //struct with additional info: bool is_sorted, flag_sort_or_hash, bool flag_count_distinct
+        #        """
+        print("start mean")
+
+        ncols = len(self._by)
+        cols = [self._df[thisBy]._column.cffi_view for thisBy in self._by]
+
+        col_agg = self._df[self._val_columns[0]]._column.cffi_view
+        col_agg_dtype = self._df[self._val_columns[0]]._column.data.dtype
+        print("start dtypes")
+        print(col_agg_dtype)
+#        col_agg_dtype = _gdf.np_to_gdf_dtype(self._df[self._val_columns[0]]._column.data.dtype)
+#        print(col_agg_dtype)
+
+#        out_col_indices = ffi.new('gdf_column*', None)
+        out_col_indices = ffi.NULL
+#        out_col_values = [ffi.new('gdf_column*', None) for thisBy in self._by]
+#        out_col_values = ffi.new('gdf_column**', None)
+        out_col_values = ffi.NULL
+#        out_col_agg = ffi.new('gdf_column*')
+
+#        out_col_agg.dtype = col_agg.dtype
+
+        print("start prints")
+        print(col_agg.size)
+        print(col_agg_dtype)
+
+        out_col_agg_buf = Buffer(cuda.device_array(
+            col_agg.size, dtype=col_agg_dtype))
+        print("start buffrer")
+        print(out_col_agg_buf.size)
+        print(out_col_agg_buf.capacity)
+        print(out_col_agg_buf.dtype)
+        out_col_agg_series = Series(out_col_agg_buf)
+        out_col_agg = Series(out_col_agg_buf)._column.cffi_view
+        print("start out_col_agg")
+        print(out_col_agg.size)
+        print(out_col_agg.dtype)
+
+        ctx = ffi.new('gdf_context*')
+        ctx.flag_sorted = 1
+        ctx.flag_method = libgdf.GDF_SORT
+
+        err = libgdf.gdf_group_by_avg(
+            ncols, cols, col_agg, out_col_indices, out_col_values, out_col_agg, ctx)
+
+        print(err)
+
+        print("done mean")
+        
+        result = DataFrame()
+        result[self._val_columns[0]] = out_col_agg_series
+        
+        return result
+
+        """
        wsm todo
        
        i think we can access the columns of a data frame and turn them into gdf_columns
@@ -85,5 +118,3 @@ class LibGdfGroupby(object):
        
        
        """
-       
-       

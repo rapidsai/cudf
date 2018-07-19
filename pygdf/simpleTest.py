@@ -27,34 +27,37 @@ def test_groupby_mean(nelem = 3):
     
     df = make_frame(DataFrame, nelem=nelem)
     
-#     from pygdf.groupby import Groupby
+    from pygdf.groupby import Groupby
     from pygdf.libgdf_groupby import LibGdfGroupby
     
     by = ('x', 'y')
-#     gb = Groupby(df, by=by)
     
-    newgd = LibGdfGroupby(df, by=by)
     
-    newgot_df = newgd.mean()
+    newgd = LibGdfGroupby(df, by=by)    
+    newgot_df = newgd.mean()    
+    newgot = np.sort(newgot_df['val'].to_array())
     
     print(newgot_df)
     print("done")
     
     pass
     
-#     got_df = make_frame(DataFrame, nelem=nelem).groupby(('x', 'y')).mean()
-#     got_df = gb.mean()
-#     got = np.sort(got_df['val'].to_array())
-#     # pandas
-#     expect_df = make_frame(pd.DataFrame,
-#                            nelem=nelem).groupby(('x', 'y')).mean()
-#     expect = np.sort(expect_df['val'].values)
-#     
-#     print(got)
-#     # verify
-#     np.testing.assert_array_almost_equal(expect, got)
+    gb = Groupby(df, by=by)
+    got_df = gb.mean()
+    got = np.sort(got_df['val'].to_array())
+    # pandas
+    expect_df = make_frame(pd.DataFrame,
+                           nelem=nelem).groupby(('x', 'y')).mean()
+    expect = np.sort(expect_df['val'].values)
+     
+    print(got)
+    # verify
+    np.testing.assert_array_almost_equal(expect, got)
+    
+    print(newgot)
+    np.testing.assert_array_almost_equal(expect, newgot)
 
-
+print("done1")
 test_groupby_mean(3)
 
 
