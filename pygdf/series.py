@@ -13,6 +13,7 @@ from .buffer import Buffer
 from .index import Index, RangeIndex, GenericIndex
 from .settings import NOTSET, settings
 from .column import Column
+from .datetime import DatetimeColumn, DatetimeProperties
 from . import columnops
 from .serialize import register_distributed_serializer
 
@@ -82,6 +83,13 @@ class Series(object):
         frames.extend(column_frames)
         header['column_frame_count'] = len(column_frames)
         return header, frames
+
+    @property
+    def dt(self):
+        if isinstance(self._column, DatetimeColumn):
+            return DatetimeProperties(self._column)
+        else:
+            raise AttributeError("Can only use .dt accessor with datetimelike values")
 
     @classmethod
     def deserialize(cls, deserialize, header, frames):

@@ -146,9 +146,9 @@ def as_column(arbitrary):
     elif isinstance(arbitrary, np.ndarray):
         if arbitrary.dtype.kind == 'M':
             # hack, coerce to int, then set the dtype
-            buf = Buffer(arbitrary.astype('int64'))
-            buf.dtype = arbitrary.dtype
-            return datetime.DatetimeColumn(data=buf, dtype=arbitrary.dtype)
+            dtype = np.int64
+            buf = Buffer(arbitrary.astype(dtype))
+            return datetime.DatetimeColumn(data=buf, dtype=dtype)
         else:
             return as_column(Buffer(arbitrary))
     else:
