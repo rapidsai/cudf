@@ -34,6 +34,7 @@ message(STATUS "Using C++ standard: c++${CMAKE_CXX_STANDARD}")
 set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/Modules/" ${CMAKE_MODULE_PATH})
 message(STATUS "CMAKE_MODULE_PATH:" "${CMAKE_MODULE_PATH}")
 
+
 # Include CMake modules
 include(FeatureSummary)
 include(CheckIncludeFiles)
@@ -99,11 +100,8 @@ if(HASH_JOIN)
   set(CUDA_NVCC_FLAGS  ${CUDA_NVCC_FLAGS};-DHASH_JOIN)
 endif()
 
-<<<<<<< 38a4e53a2a07d4d620a8c504b3f484fea7b7530d
-=======
+find_package(CUDA)
 
-
->>>>>>> Pulled in new files from Will @ BlazingDBs libgdf PR that added GoogleTest functionality. Renamed his datetime test to hash_map. Trying to build but currently fails.
 # switch between cudaMalloc and cudaMallocManaged for hash tables
 option(HT_LEGACY_ALLOCATOR "legacy allocator for hash tables" ON)
 if(HT_LEGACY_ALLOCATOR)
