@@ -1,8 +1,11 @@
 #ifndef AGGREGATION_OPERATIONS_H
 #define AGGREGATION_OPERATIONS_H
+
+#include <limits>
+
 template<typename value_type>
-struct max_op
-{
+struct max_op{
+
   constexpr static value_type IDENTITY{std::numeric_limits<value_type>::min()};
 
   __host__ __device__
@@ -13,8 +16,9 @@ struct max_op
 };
 
 template<typename value_type>
-struct min_op
+struct min_op 
 {
+
   constexpr static value_type IDENTITY{std::numeric_limits<value_type>::max()};
 
   __host__ __device__

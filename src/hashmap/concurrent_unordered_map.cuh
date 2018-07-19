@@ -20,6 +20,7 @@
 #include <iterator>
 #include <type_traits>
 #include <cassert>
+#include <iostream>
 
 #include <thrust/pair.h>
 

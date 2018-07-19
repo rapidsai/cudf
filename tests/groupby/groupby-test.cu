@@ -11,7 +11,7 @@
 #include "gtest/gtest.h"
 #include <../../src/groupby/hash/groupby_kernels.cuh>
 #include <../../src/groupby/hash/groupby_compute_api.h>
-#include <../../src/groupby/hash/aggregation_operations.h>
+#include <../../src/groupby/hash/aggregation_operations.cuh>
 
 // This is necessary to do a parametrized typed-test over multiple template arguments
 template <typename Key, typename Value, template <typename> typename Aggregation_Operator>
