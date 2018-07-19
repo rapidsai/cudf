@@ -43,5 +43,7 @@ add_subdirectory(datetime)
 add_subdirectory(hashing)
 add_subdirectory(join)
 add_subdirectory(sqls)
+add_subdirectory(hash_map)
+add_subdirectory(groupby)
 
 message(STATUS "******** Tests are ready ********")
