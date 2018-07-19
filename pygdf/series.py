@@ -89,7 +89,8 @@ class Series(object):
         if isinstance(self._column, DatetimeColumn):
             return DatetimeProperties(self._column)
         else:
-            raise AttributeError("Can only use .dt accessor with datetimelike values")
+            raise AttributeError("Can only use .dt accessor with datetimelike "
+                                 "values")
 
     @classmethod
     def deserialize(cls, deserialize, header, frames):

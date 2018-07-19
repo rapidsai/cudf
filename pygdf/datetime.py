@@ -1,7 +1,6 @@
 import numpy as np
-from libgdf_cffi import ffi, libgdf
-import weakref
-from . import _gdf, columnops, utils, cudautils
+from libgdf_cffi import libgdf
+from . import _gdf, columnops
 from .buffer import Buffer
 from .cudautils import compact_mask_bytes
 
@@ -18,10 +17,9 @@ class DatetimeColumn(columnops.TypedColumnBase):
                                              mask=mask,
                                              null_count=null_count,
                                              dtype=dtype
-        )
+                                             )
         # the column constructor removes mask if it's all true
         self._mask = mask
-
 
 
 funcs = {

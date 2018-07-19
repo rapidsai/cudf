@@ -2,7 +2,7 @@ import pytest
 import numpy as np
 import pandas as pd
 
-from pygdf.dataframe import Series, Index, DataFrame
+from pygdf.dataframe import Series, DataFrame
 
 
 def data1():
@@ -19,6 +19,7 @@ fields = ['year', 'month', 'day',
           'hour', 'minute', 'second']
 
 # fields = ['year']
+
 
 @pytest.mark.parametrize('data', [data1(), data2()])
 def test_series(data):

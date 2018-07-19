@@ -148,7 +148,7 @@ def as_column(arbitrary):
             # hack, coerce to int, then set the dtype
             arbitrary = arbitrary.astype('datetime64[ms]')
             dtype = np.int64
-            assert arbitrary.dtype.itemsize==8
+            assert arbitrary.dtype.itemsize == 8
             buf = Buffer(arbitrary.astype(dtype, copy=False))
             buf.dtype = arbitrary.dtype
             return datetime.DatetimeColumn(data=buf, dtype=buf.dtype)

@@ -64,7 +64,7 @@ class Buffer(object):
         if isinstance(arg, slice):
             sliced = self.to_gpu_array()[arg]
             buf = Buffer(sliced)
-            buf.dtype = self.dtype # for np.datetime64 support
+            buf.dtype = self.dtype  # for np.datetime64 support
             return buf
         elif isinstance(arg, int):
             arg = utils.normalize_index(arg, self.size)
