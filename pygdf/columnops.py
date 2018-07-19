@@ -147,8 +147,10 @@ def as_column(arbitrary):
         if arbitrary.dtype.kind == 'M':
             # hack, coerce to int, then set the dtype
             dtype = np.int64
-            buf = Buffer(arbitrary.astype(dtype))
-            return datetime.DatetimeColumn(data=buf, dtype=dtype)
+            assert arbitrary.dtype.itemsize==8
+            buf = Buffer(arbitrary.astype(dtype, copy=False)) #.astype(arbitrary.dtype) # -> numba TypingError
+            buf.dtype = arbitrary.dtype
+            return datetime.DatetimeColumn(data=buf, dtype=arbitrary.dtype)
         else:
             return as_column(Buffer(arbitrary))
     else:

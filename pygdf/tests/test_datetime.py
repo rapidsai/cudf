@@ -21,6 +21,15 @@ fields = ['year', 'month', 'day',
 fields = ['year']
 
 @pytest.mark.parametrize('data', [data1(), data2()])
+def test_series(data):
+    pd_data = pd.Series(data.copy())
+    gdf_data = Series(pd_data)
+    np.testing.assert_equal(
+        np.array(pd_data),
+        np.array(gdf_data),
+        )
+
+@pytest.mark.parametrize('data', [data1(), data2()])
 @pytest.mark.parametrize('field', fields)
 def test_dt_series(data, field):
     pd_data = pd.Series(data.copy())

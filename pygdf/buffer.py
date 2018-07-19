@@ -63,10 +63,12 @@ class Buffer(object):
     def __getitem__(self, arg):
         if isinstance(arg, slice):
             sliced = self.to_gpu_array()[arg]
-            return Buffer(sliced)
+            buf = Buffer(sliced)
+            buf.dtype = self.dtype # for np.datetime64 support
+            return buf
         elif isinstance(arg, int):
             arg = utils.normalize_index(arg, self.size)
-            return self.mem[arg]
+            return self.mem[arg].view(dtype=self.dtype)
         else:
             raise NotImplementedError(type(arg))
 
