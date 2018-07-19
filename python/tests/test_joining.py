@@ -99,7 +99,7 @@ def _call_join_multi(api, ncols, col_left, col_right):
 
     libgdf.gdf_join_result_free(join_result)
     return joined_idx
-    
+
 
 params_dtypes = [np.int8, np.int32, np.int64, np.float32, np.float64]
 multi_params_dtypes = [np.int32, np.int64]
@@ -255,7 +255,7 @@ def test_multileftjoin(dtype):
     # Make data
     left = np.array([[0, 0, 4, 5, 5], [1, 2, 2, 3, 4], [1, 1, 3, 1, 2]], dtype=dtype)
     right = np.array([[0, 0, 2, 3, 5], [1, 2, 3, 3, 4], [3, 3, 2, 1, 1]], dtype=dtype)
-    
+
     for k in range(3):
         with _make_input_multi(left, right, k+1) as (col_left, col_right):
             # Join
@@ -311,12 +311,12 @@ def test_multileftjoin(dtype):
 
             assert tuple(left_pos) == (0, 0, 1, 1, 2, 3, 4)
             assert tuple(right_pos) == (0, 1, 0, 1, -1, 4, 4)
-        
+
             left_idx = [left[0][a] for a in left_pos]
 
             assert tuple(left_idx) == (0, 0, 0, 0, 4, 5, 5)
 
-           
+
         elif(k==1):
 
             assert tuple(left_pos) == (0, 1, 2, 3, 4)
@@ -330,8 +330,8 @@ def test_multileftjoin(dtype):
                     assert tuple(left_idx) == (1, 2, 2, 3, 4)
 
         elif(k==2):
-            
-            assert tuple(left_pos) == (0, 1, 2, 3, 4)          
+
+            assert tuple(left_pos) == (0, 1, 2, 3, 4)
             for l in range(3):
                 left_idx = [left[l][a] for a in left_pos]
 
@@ -341,4 +341,35 @@ def test_multileftjoin(dtype):
                     assert tuple(left_idx) == (1, 2, 2, 3, 4)
                 elif(l==2):
                     assert tuple(left_idx) == (1, 1, 3, 1, 2)
-            
+
+
+def tests_two_column_merge_left(left_nkeys=4, right_nkeys=5):
+    """Test for issue #57.
+    An issue that can trigger an error in cuda-memcheck.
+    """
+    how='left'
+    left_nrows = 60
+    right_nrows = 60
+
+    np.random.seed(0)
+
+    # PyGDF
+    left_cols = [
+        np.random.randint(0, left_nkeys, size=left_nrows),
+        np.random.randint(0, left_nkeys, size=left_nrows),
+    ]
+    right_cols = [
+        np.random.randint(0, right_nkeys, size=right_nrows),
+        np.random.randint(0, right_nkeys, size=right_nrows),
+    ]
+
+    with _make_input_multi(left_cols, right_cols, 2) as (col_left, col_right):
+        joined_idx = _call_join_multi(libgdf.gdf_multi_left_join_generic, 2,
+                                      col_left, col_right)
+
+    # Just check that the indices in `joined_idx` are valid
+    assert joined_idx.shape[0] == 2
+    assert np.all(0 <= joined_idx[0])
+    assert np.all(-1 <= joined_idx[1])
+    assert np.all(joined_idx[0] < left_nrows)
+    assert np.all(joined_idx[1] < right_nrows)
