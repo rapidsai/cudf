@@ -95,7 +95,7 @@ gdf_error gpu_hash_columns(gdf_column ** columns_to_hash, int num_columns, gdf_c
 	cudaMalloc(&widths,sizeof(int) * num_columns);
 	int * host_widths = new int[num_columns];
 	for(int i = 0; i <  num_columns; i++){
-		get_column_byte_width(columns_to_hash[i], host_widths[i]);
+		get_column_byte_width(columns_to_hash[i], &host_widths[i]);
 	}
 	cudaMemcpyAsync(widths,host_widths,sizeof(int) * num_columns,cudaMemcpyHostToDevice,*stream);
 

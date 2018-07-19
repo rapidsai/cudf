@@ -361,8 +361,6 @@ gdf_error gdf_bitwise_or_i64(gdf_column *lhs, gdf_column *rhs, gdf_column *outpu
  * Filtering and comparison operators
  */
 
-gdf_error gpu_comparison(gdf_column *lhs, gdf_column *rhs, gdf_column *output,gdf_comparison_operator operation);
-
 gdf_error gdf_bitwise_xor_generic(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
 gdf_error gdf_bitwise_xor_i8(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
 gdf_error gdf_bitwise_xor_i32(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
@@ -449,7 +447,7 @@ gdf_error gpu_hash_columns(gdf_column ** columns_to_hash, int num_columns, gdf_c
  * gdf introspection utlities
  */
 
-gdf_error get_column_byte_width(gdf_column * col, int & width);
+gdf_error get_column_byte_width(gdf_column * col, int * width);
 
 /* 
  Multi-Column SQL ops:
