@@ -15,4 +15,4 @@ cd build
 # configure
 cmake $CMAKE_COMMON_VARIABLES ..
 # build
-make install
+make -j$CPU_COUNT install
