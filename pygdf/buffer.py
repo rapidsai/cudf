@@ -68,7 +68,11 @@ class Buffer(object):
             return buf
         elif isinstance(arg, int):
             arg = utils.normalize_index(arg, self.size)
-            return self.mem[arg].view(dtype=self.dtype)
+            # the dtype argument is necessary for datetime64 support
+            # because currently we can't pass datetime64 types into
+            # cuda dev arrays, so the type of the cuda dev array is
+            # an i64, and we view it as the dtype on the buffer
+            return self.mem[arg].view(self.dtype)
         else:
             raise NotImplementedError(type(arg))
 
