@@ -69,13 +69,24 @@ class Column(object):
 
     @staticmethod
     def from_cffi_view(cffi_view):
-        da = _gdf._as_numba_devarray(
+        # Deal with the data
+        device_data = _gdf._as_numba_devarray(
             int(_gdf.ffi.cast('intptr_t', cffi_view.data)),
             cffi_view.size,
             _gdf.gdf_to_np_dtype(cffi_view.dtype),
             )
-        buf = Buffer(da)
-        return Column(data=buf)
+        data_buf = Buffer(device_data)
+        # Deal with the valid-mask
+        if cffi_view.valid:
+            device_mask = _gdf._as_numba_devarray(
+                int(_gdf.ffi.cast('intptr_t', cffi_view.valid)),
+                utils.calc_chunk_size(cffi_view.size, utils.mask_bitsize),
+                utils.mask_dtype,
+                )
+            mask = Buffer(device_mask)
+        else:
+            mask = None
+        return Column(data=data_buf, mask=mask)
 
     def __init__(self, data, mask=None, null_count=None):
         """

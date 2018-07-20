@@ -111,6 +111,8 @@ def np_to_gdf_dtype(dtype):
 
 
 def gdf_to_np_dtype(dtype):
+    """Util to convert gdf dtype to numpy dtype.
+    """
     return np.dtype(_gdf2np_dtype[dtype])
 
 
