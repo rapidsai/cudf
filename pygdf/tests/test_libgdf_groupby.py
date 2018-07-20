@@ -44,8 +44,8 @@ def test_groupby_mean_3level(nelem):
     lvls = 'z'
     bys = list('xyz')
     # gdf
-    got_df = make_frame(DataFrame, nelem=nelem,
-                        extra_levels=lvls).groupby(bys, method="GDF_SORT").mean()
+    got_df = make_frame(DataFrame, nelem=nelem, extra_levels=lvls)\
+                            .groupby(bys, method="GDF_SORT").mean()
     got = np.sort(got_df['val'].to_array())
     # pandas
     expect_df = make_frame(pd.DataFrame, nelem=nelem,
@@ -58,8 +58,8 @@ def test_groupby_mean_3level(nelem):
 @pytest.mark.parametrize('nelem', [2, 100])
 def test_groupby_agg_mean_min(nelem):
     # gdf (Note: lack of multindex)
-    got_df = make_frame(DataFrame, nelem=nelem).groupby(('x', 'y'), method="GDF_SORT")\
-                                               .agg(['mean', 'min'])
+    got_df = make_frame(DataFrame, nelem=nelem).groupby(('x', 'y'), \
+                                method="GDF_SORT").agg(['mean', 'min'])
     got_mean = np.sort(got_df['val_mean'].to_array())
     got_min = np.sort(got_df['val_min'].to_array())
     # pandas

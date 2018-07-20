@@ -58,13 +58,13 @@ def test_groupby_mean_3level(nelem):
 @pytest.mark.parametrize('nelem', [2, 100])
 def test_groupby_agg_mean_min(nelem):
     # gdf (Note: lack of multindex)
-    got_df = make_frame(DataFrame, nelem=nelem).groupby(('x', 'y'), method="pygdf")\
-                                               .agg(['mean', 'min'])
+    got_df = make_frame(DataFrame, nelem=nelem).groupby(('x', 'y'), 
+                                method="pygdf").agg(['mean', 'min'])
     got_mean = np.sort(got_df['val_mean'].to_array())
     got_min = np.sort(got_df['val_min'].to_array())
     # pandas
-    expect_df = make_frame(pd.DataFrame, nelem=nelem).groupby(('x', 'y'))\
-                                                     .agg(['mean', 'min'])
+    expect_df = make_frame(pd.DataFrame, nelem=nelem).groupby(\
+                              ('x', 'y')).agg(['mean', 'min'])
     expect_mean = np.sort(expect_df['val', 'mean'].values)
     expect_min = np.sort(expect_df['val', 'min'].values)
     # verify

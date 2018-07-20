@@ -644,7 +644,7 @@ class DataFrame(object):
         #    return_joined_indicies=True)
         joined_values, joined_indicies = self._merge_gdf(
             lhs, rhs, left_on=on, right_on=on, how=how, return_indices=True
-            )
+        )
 
         # XXX: Prepare output.  same as _join.  code duplication
         # Perform left, inner and outer join
@@ -705,11 +705,11 @@ class DataFrame(object):
                     # 'multi_gather_joined_index' that can gather a value from
                     # each column at once
                     raw_values = cudautils.gather_joined_index(
-                                left_cols[i].to_gpu_array(),
-                                right_cols[i].to_gpu_array(),
-                                left_indices,
-                                right_indices,
-                                )
+                        left_cols[i].to_gpu_array(),
+                        right_cols[i].to_gpu_array(),
+                        left_indices,
+                        right_indices,
+                    )
                     buffered_values = Buffer(raw_values)
 
                     joined_values.append(left_cols[i]
@@ -741,7 +741,7 @@ class DataFrame(object):
         Returns
         -------
         joined : DataFrame
-        
+
         Notes
         -----
 
@@ -855,12 +855,11 @@ class DataFrame(object):
             return Groupby(self, by=by)
         else:
             from .libgdf_groupby import LibGdfGroupby
-            
+
             if as_index:
                 msg = "as_index==True not supported due to the lack of multi-index"
                 raise NotImplementedError(msg)
             return LibGdfGroupby(self, by=by, method=method)
-            
 
     def query(self, expr):
         """Query with a boolean expression using Numba to compile a GPU kernel.

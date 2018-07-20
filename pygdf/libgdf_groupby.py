@@ -1,19 +1,11 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
 
-from collections import OrderedDict, defaultdict, namedtuple
-
-from itertools import chain
 import numpy as np
 
 from numba import cuda
 
 from .dataframe import DataFrame, Series
-from .multi import concat
-from . import _gdf, cudautils
-from .column import Column
 from .buffer import Buffer
-from .serialize import register_distributed_serializer
-from .index import RangeIndex
 
 from libgdf_cffi import ffi, libgdf, GDFError
 
@@ -47,7 +39,8 @@ class LibGdfGroupby(object):
         else:
             self._method = libgdf.GDF_HASH
 
-    def _apply_agg(self, agg_type, result, add_col_values, ctx, val_columns, val_columns_out=None):
+    def _apply_agg(self, agg_type, result, add_col_values,
+                   ctx, val_columns, val_columns_out=None):
 
         if (val_columns_out is None):
             val_columns_out = val_columns
@@ -150,7 +143,8 @@ class LibGdfGroupby(object):
 
         val_columns = self._val_columns
 
-        return self._apply_agg(agg_type, result, add_col_values, ctx, val_columns)
+        return self._apply_agg(
+            agg_type, result, add_col_values, ctx, val_columns)
 
     def max(self):
         agg_type = "max"
@@ -165,7 +159,8 @@ class LibGdfGroupby(object):
 
         val_columns = self._val_columns
 
-        return self._apply_agg(agg_type, result, add_col_values, ctx, val_columns)
+        return self._apply_agg(
+            agg_type, result, add_col_values, ctx, val_columns)
 
     def count(self):
         agg_type = "count"
@@ -180,7 +175,8 @@ class LibGdfGroupby(object):
 
         val_columns = self._val_columns
 
-        return self._apply_agg(agg_type, result, add_col_values, ctx, val_columns)
+        return self._apply_agg(
+            agg_type, result, add_col_values, ctx, val_columns)
 
     def sum(self):
         agg_type = "sum"
@@ -195,7 +191,8 @@ class LibGdfGroupby(object):
 
         val_columns = self._val_columns
 
-        return self._apply_agg(agg_type, result, add_col_values, ctx, val_columns)
+        return self._apply_agg(
+            agg_type, result, add_col_values, ctx, val_columns)
 
     def mean(self):
         agg_type = "mean"
@@ -210,7 +207,8 @@ class LibGdfGroupby(object):
 
         val_columns = self._val_columns
 
-        return self._apply_agg(agg_type, result, add_col_values, ctx, val_columns)
+        return self._apply_agg(
+            agg_type, result, add_col_values, ctx, val_columns)
 
     def agg(self, args):
 
