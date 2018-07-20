@@ -89,19 +89,20 @@ def apply_mask_and(col, mask, out):
     nnz = cudautils.count_nonzero_mask(out.mask.mem, size=len(out))
     return len(out) - nnz
 
+_np2gdf_dtype = {
+    np.float64: libgdf.GDF_FLOAT64,
+    np.float32: libgdf.GDF_FLOAT32,
+    np.int64:   libgdf.GDF_INT64,
+    np.int32:   libgdf.GDF_INT32,
+    np.int16:   libgdf.GDF_INT16,
+    np.int8:    libgdf.GDF_INT8,
+    np.bool_:   libgdf.GDF_INT8,
+}
 
 def np_to_gdf_dtype(dtype):
     """Util to convert numpy dtype to gdf dtype.
     """
-    return {
-        np.float64: libgdf.GDF_FLOAT64,
-        np.float32: libgdf.GDF_FLOAT32,
-        np.int64:   libgdf.GDF_INT64,
-        np.int32:   libgdf.GDF_INT32,
-        np.int16:   libgdf.GDF_INT16,
-        np.int8:    libgdf.GDF_INT8,
-        np.bool_:   libgdf.GDF_INT8,
-    }[np.dtype(dtype).type]
+    return _np2gdf_dtype[np.dtype(dtype).type]
 
 
 def apply_reduce(fn, inp):
