@@ -3,6 +3,11 @@
 
 #include <limits>
 
+// This header defines the functors that may be used as aggregation operations for 
+// the hash-based groupby implementation. Each functor must define an 'identity value'.
+// The identity value 'I' of an operation 'op' is defined as: for any x, op(x,I) == x.
+// This identity value is used to initialize the hash table values
+
 template<typename value_type>
 struct max_op{
 
