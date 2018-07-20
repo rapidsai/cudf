@@ -13,9 +13,10 @@ from .buffer import Buffer
 from .index import Index, RangeIndex, GenericIndex
 from .settings import NOTSET, settings
 from .column import Column
-from .datetime import DatetimeColumn, DatetimeProperties
+from .datetime import DatetimeColumn, extract_dt_field
 from . import columnops
 from .serialize import register_distributed_serializer
+from libgdf_cffi import libgdf
 
 
 class Series(object):
@@ -87,7 +88,7 @@ class Series(object):
     @property
     def dt(self):
         if isinstance(self._column, DatetimeColumn):
-            return DatetimeProperties(self._column)
+            return DatetimeProperties(self)
         else:
             raise AttributeError("Can only use .dt accessor with datetimelike "
                                  "values")
@@ -779,3 +780,47 @@ class Series(object):
 
 
 register_distributed_serializer(Series)
+
+
+class DatetimeProperties(object):
+
+    _funcs = {
+        'year': libgdf.gdf_extract_datetime_year,
+        'month': libgdf.gdf_extract_datetime_month,
+        'day': libgdf.gdf_extract_datetime_day,
+        'hour': libgdf.gdf_extract_datetime_hour,
+        'minute': libgdf.gdf_extract_datetime_minute,
+        'second': libgdf.gdf_extract_datetime_second,
+    }
+
+    def __init__(self, series):
+        self.series = series
+
+    @property
+    def year(self):
+        return self.get('year')
+
+    @property
+    def month(self):
+        return self.get('month')
+
+    @property
+    def day(self):
+        return self.get('day')
+
+    @property
+    def hour(self):
+        return self.get('hour')
+
+    @property
+    def minute(self):
+        return self.get('minute')
+
+    @property
+    def second(self):
+        return self.get('second')
+
+    def get(self, field):
+        out_column = extract_dt_field(self._funcs[field],
+                                      self.series._column)
+        return Series(data=out_column, index=self.series._index)

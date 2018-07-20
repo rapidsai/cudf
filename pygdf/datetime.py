@@ -1,6 +1,5 @@
 import numpy as np
-from libgdf_cffi import libgdf
-from . import _gdf, columnops
+from . import columnops, _gdf
 from .buffer import Buffer
 from .cudautils import compact_mask_bytes
 
@@ -21,52 +20,14 @@ class DatetimeColumn(columnops.TypedColumnBase):
         self._mask = mask
 
 
-class DatetimeProperties(object):
-
-    _funcs = {
-        'year': libgdf.gdf_extract_datetime_year,
-        'month': libgdf.gdf_extract_datetime_month,
-        'day': libgdf.gdf_extract_datetime_day,
-        'hour': libgdf.gdf_extract_datetime_hour,
-        'minute': libgdf.gdf_extract_datetime_minute,
-        'second': libgdf.gdf_extract_datetime_second,
-    }
-
-    def __init__(self, dt_column):
-        self.dt_column = dt_column
-
-    @property
-    def year(self):
-        return self.get('year')
-
-    @property
-    def month(self):
-        return self.get('month')
-
-    @property
-    def day(self):
-        return self.get('day')
-
-    @property
-    def hour(self):
-        return self.get('hour')
-
-    @property
-    def minute(self):
-        return self.get('minute')
-
-    @property
-    def second(self):
-        return self.get('second')
-
-    def get(self, field):
-        out = columnops.column_empty_like_same_mask(
-            self.dt_column,
-            dtype=np.int16
-        )
-        # force mask again
-        out._mask = self.dt_column.mask
-        _gdf.apply_unaryop(self._funcs[field],
-                           self.dt_column,
-                           out)
-        return out
+def extract_dt_field(op, input_column):
+    out = columnops.column_empty_like_same_mask(
+        input_column,
+        dtype=np.int16
+    )
+    # force mask again
+    out._mask = input_column.mask
+    _gdf.apply_unaryop(op,
+                       input_column,
+                       out)
+    return out
