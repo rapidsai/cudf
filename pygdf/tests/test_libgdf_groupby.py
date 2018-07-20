@@ -116,10 +116,10 @@ def test_groupby_agg_min_max_dictargs(nelem):
 #     df['key2'] = np.random.randint(0, 2, nelem)
 #     df['val1'] = np.random.random(nelem)
 #     df['val2'] = np.random.random(nelem)
-# 
+#
 #     def assert_values_equal(arr):
 #         np.testing.assert_array_equal(arr[0], arr)
-# 
+#
 #     for grp in df.groupby(['key1', 'key2'], method="GDF_SORT"):
 #         pddf = grp.to_pandas()
 #         for k in 'key1,key2'.split(','):
