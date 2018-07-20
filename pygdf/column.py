@@ -69,7 +69,10 @@ class Column(object):
 
     @staticmethod
     def from_cffi_view(cffi_view):
+        """Create a Column object from a cffi struct gdf_column*.
+        """
         # Deal with the data
+        # XXX: no dtor is set
         device_data = _gdf._as_numba_devarray(
             int(_gdf.ffi.cast('intptr_t', cffi_view.data)),
             cffi_view.size,
@@ -78,6 +81,7 @@ class Column(object):
         data_buf = Buffer(device_data)
         # Deal with the valid-mask
         if cffi_view.valid:
+            # XXX: no dtor is set
             device_mask = _gdf._as_numba_devarray(
                 int(_gdf.ffi.cast('intptr_t', cffi_view.valid)),
                 utils.calc_chunk_size(cffi_view.size, utils.mask_bitsize),
