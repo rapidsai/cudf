@@ -4,4 +4,4 @@ set(hash_test_SRCS
     map-test.cu
 )
 
-configure_test(hash_test "${hash_test_SRCS}")
+configure_test(hash_map_test "${hash_test_SRCS}")
