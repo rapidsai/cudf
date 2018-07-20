@@ -67,6 +67,16 @@ class Column(object):
         col = head.replace(data=data, mask=mask, null_count=null_count)
         return col
 
+    @staticmethod
+    def from_cffi_view(cffi_view):
+        da = _gdf._as_numba_devarray(
+            int(_gdf.ffi.cast('intptr_t', cffi_view.data)),
+            cffi_view.size,
+            _gdf.gdf_to_np_dtype(cffi_view.dtype),
+            )
+        buf = Buffer(da)
+        return Column(data=buf)
+
     def __init__(self, data, mask=None, null_count=None):
         """
         Parameters
