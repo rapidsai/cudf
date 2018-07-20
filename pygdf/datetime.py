@@ -19,6 +19,16 @@ class DatetimeColumn(columnops.TypedColumnBase):
         # the column constructor removes mask if it's all true
         self._mask = mask
 
+    @classmethod
+    def from_numpy(cls, array):
+        # hack, coerce to int, then set the dtype
+        array = array.astype('datetime64[ms]')
+        dtype = np.int64
+        assert array.dtype.itemsize == 8
+        buf = Buffer(array.astype(dtype, copy=False))
+        buf.dtype = array.dtype
+        return cls(data=buf, dtype=buf.dtype)
+
 
 def extract_dt_field(op, input_column):
     out = columnops.column_empty_like_same_mask(

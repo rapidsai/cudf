@@ -1,8 +1,9 @@
 import pytest
 import numpy as np
 import pandas as pd
-
+from pandas.util.testing import assert_index_equal
 from pygdf.dataframe import Series, DataFrame
+from pygdf.index import DatetimeIndex
 
 
 def data1():
@@ -42,15 +43,13 @@ def test_dt_series(data, field):
     np.testing.assert_equal(base, test)
 
 
-# @pytest.mark.parametrize('data', [data1(), data2()])
-# @pytest.mark.parametrize('field', fields)
-# def test_dt_index(data, field):
-#     pd_data = data.copy()
-#     gdf_data = Index(pd_data)
-#     np.testing.assert_equal(
-#         getattr(gdf_data, field).to_array(),
-#         getattr(pd_data, field).values
-#     )
+@pytest.mark.parametrize('data', [data1()])
+@pytest.mark.parametrize('field', fields)
+def test_dt_index(data, field):
+    pd_data = data.copy()
+    gdf_data = DatetimeIndex(pd_data)
+    assert_index_equal(getattr(gdf_data, field).to_pandas(),
+                       getattr(pd_data, field))
 
 
 def test_setitem_datetime():
