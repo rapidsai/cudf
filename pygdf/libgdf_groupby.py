@@ -63,7 +63,6 @@ class LibGdfGroupby(object):
         col_count = 0
         for val_col in val_columns:
             col_agg = self._df[val_col]._column.cffi_view
-            col_agg_dtype = self._df[val_col]._column.data.dtype
             
 #              assuming here that if there are multiple aggregations that the aggregated results will be in the same order for GDF_SORT method
             if need_to_index:
@@ -78,7 +77,11 @@ class LibGdfGroupby(object):
             else :
                 out_col_values = ffi.NULL
     
-            out_col_agg_series = Series(Buffer(cuda.device_array(col_agg.size, dtype=col_agg_dtype)))
+            if agg_type == "count":
+                out_col_agg_series = Series(Buffer(cuda.device_array(col_agg.size, dtype=np.int64)))
+            else:
+                out_col_agg_series = Series(Buffer(cuda.device_array(col_agg.size, dtype=self._df[val_col]._column.data.dtype)))
+                
             out_col_agg = out_col_agg_series._column.cffi_view
     
             if agg_type == "min":
@@ -206,7 +209,7 @@ class LibGdfGroupby(object):
         return self._apply_agg(agg_type, result, add_col_values, ctx, val_columns)
         
     
-    def agg(self, agg_list):
+    def agg(self, args):
         
         result = DataFrame()
         add_col_values = True
@@ -216,14 +219,28 @@ class LibGdfGroupby(object):
         ctx.flag_method = self._method
         ctx.flag_distinct = 0
         
-        for agg_type in agg_list:
+        if isinstance(args, (tuple, list)):
+            for agg_type in args:
+                
+                val_columns_out = [val + '_' + agg_type for val in self._val_columns] 
             
-            val_columns_out = [val + '_' + agg_type for val in self._val_columns] 
-        
-            result = self._apply_agg(agg_type, result, add_col_values, ctx, self._val_columns, val_columns_out)
+                result = self._apply_agg(agg_type, result, add_col_values, ctx, self._val_columns, val_columns_out)
+                
+                add_col_values = False # we only want to add them once
+
+        elif isinstance(args, dict):
+            for val, agg_type in args.items():
+                
+                val_columns_out = [val + '_' + agg_type] 
             
-            add_col_values = False # we only want to add them once
-        
+                result = self._apply_agg(agg_type, result, add_col_values, ctx, [val], val_columns_out)
+                
+                add_col_values = False # we only want to add them once
+            
+        else:
+            result = self.agg([args])
+            
+                            
         return result
             
     

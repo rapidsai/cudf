@@ -8,7 +8,7 @@ import pandas as pd
 from pygdf.dataframe import DataFrame
 
 
-def make_frame(dataframe_class, nelem, seed=0, extra_levels=()):
+def make_frame(dataframe_class, nelem, seed=0, extra_levels=(), extra_vals=()):
     np.random.seed(seed)
 
     df = dataframe_class()
@@ -17,8 +17,10 @@ def make_frame(dataframe_class, nelem, seed=0, extra_levels=()):
     df['y'] = np.random.randint(0, 3, nelem)
     for lvl in extra_levels:
         df[lvl] = np.random.randint(0, 2, nelem)
-
+    
     df['val'] = np.random.random(nelem)
+    for val in extra_vals:
+        df[val] = np.random.random(nelem)
 
     return df
 
@@ -67,6 +69,23 @@ def test_groupby_agg_mean_min(nelem):
     # verify
     np.testing.assert_array_almost_equal(expect_mean, got_mean)
     np.testing.assert_array_almost_equal(expect_min, got_min)
+    
+    
+@pytest.mark.parametrize('nelem', [2, 100])
+def test_groupby_agg_min_max_dictargs(nelem):
+    # gdf (Note: lack of multindex)
+    got_df = make_frame(DataFrame, nelem=nelem, extra_vals='ab').groupby(
+        ('x', 'y'), method="pygdf").agg({'a': 'min', 'b': 'max'})
+    got_min = np.sort(got_df['a'].to_array())
+    got_max = np.sort(got_df['b'].to_array())
+    # pandas
+    expect_df = make_frame(pd.DataFrame, nelem=nelem, extra_vals='ab').groupby(
+        ('x', 'y')).agg({'a': 'min', 'b': 'max'})
+    expect_min = np.sort(expect_df['a'].values)
+    expect_max = np.sort(expect_df['b'].values)
+    # verify
+    np.testing.assert_array_almost_equal(expect_min, got_min)
+    np.testing.assert_array_almost_equal(expect_max, got_max)
 
 
 def test_groupby_cats():
