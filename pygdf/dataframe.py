@@ -813,7 +813,9 @@ class DataFrame(object):
             return df.sort_index()
         return df
 
-    def groupby(self, by, sort=False, as_index=False):
+
+# method can be  "pygdf", "GDF_SORT", "GDF_HASH"
+    def groupby(self, by, sort=False, as_index=False, method="GDF_SORT"):
         """Groupby
 
         Parameters
@@ -845,11 +847,20 @@ class DataFrame(object):
         - Since we don't support multiindex, the *by* columns are stored
           as regular columns.
         """
-        from .groupby import Groupby
-        if as_index:
-            msg = "as_index==True not supported due to the lack of multi-index"
-            raise NotImplementedError(msg)
-        return Groupby(self, by=by)
+        if (method == "pygdf"):
+            from .groupby import Groupby
+            if as_index:
+                msg = "as_index==True not supported due to the lack of multi-index"
+                raise NotImplementedError(msg)
+            return Groupby(self, by=by)
+        else:
+            from .libgdf_groupby import LibGdfGroupby
+            
+            if as_index:
+                msg = "as_index==True not supported due to the lack of multi-index"
+                raise NotImplementedError(msg)
+            return LibGdfGroupby(self, by=by, method=method)
+            
 
     def query(self, expr):
         """Query with a boolean expression using Numba to compile a GPU kernel.

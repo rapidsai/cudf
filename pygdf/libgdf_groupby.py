@@ -28,7 +28,7 @@ class LibGdfGroupby(object):
     """Groupby object returned by pygdf.DataFrame.groupby().
     """
 
-    def __init__(self, df, by):
+    def __init__(self, df, by, method="GDF_SORT"):
         """
         Parameters
         ----------
@@ -43,46 +43,30 @@ class LibGdfGroupby(object):
         self._by = [by] if isinstance(by, str) else list(by)
         self._val_columns = [idx for idx in self._df.columns
                              if idx not in self._by]
-
-    def mean(self):
-        #          """
-        #         gdf_error gdf_group_by_avg(int ncols,                    // # columns
-        #                            gdf_column** cols,            //input cols
-        #                            gdf_column* col_agg,          //column to aggregate on
-        #                            gdf_column* out_col_indices,  //if not null return indices of re-ordered rows
-        #                            gdf_column** out_col_values,  //if not null return the grouped-by columns
-        #                                                          //(multi-gather based on indices, which are needed anyway)
-        #                            gdf_column* out_col_agg,      //aggregation result
-        #                            gdf_context* ctxt);            //struct with additional info: bool is_sorted, flag_sort_or_hash, bool flag_count_distinct
-        #        """
-        print("start mean")
-
-        result = DataFrame()
+        if (method == "GDF_SORT"):
+            self._method = libgdf.GDF_SORT
+        else:
+            self._method = libgdf.GDF_HASH
+            
+            
+    def _apply_agg(self, agg_type, result, add_col_values, ctx, val_columns):
         
-        indexes = DataFrame()
-        
-        ctx = ffi.new('gdf_context*')
-        ctx.flag_sorted = 0
-        ctx.flag_method = libgdf.GDF_SORT
-        ctx.flag_distinct = 0
-
         ncols = len(self._by)
         cols = [self._df[thisBy]._column.cffi_view for thisBy in self._by]
         
-        first_run = True
-        multiple_aggs = len(self._val_columns) > 0
+        first_run = add_col_values
+        need_to_index = len(self._val_columns) > 0 and self._method == libgdf.GDF_HASH
         
-        for val_col in self._val_columns:
+        for val_col in val_columns:
             col_agg = self._df[val_col]._column.cffi_view
             col_agg_dtype = self._df[val_col]._column.data.dtype
             
-            #  assuming here that if there are multiple aggregations that the aggregated results will be in the same order
-            # this may need to be revised for hash group bys. May want to collect indexes to join multiple resulting aggregations
-#             if multiple_aggs:
-#                 out_col_indices_series = Series(Buffer(cuda.device_array(col_agg.size, dtype=np.int32)))
-#                 out_col_indices = out_col_indices_series._column.cffi_view
-#             else:
-            out_col_indices = ffi.NULL
+#              assuming here that if there are multiple aggregations that the aggregated results will be in the same order for GDF_SORT method
+            if need_to_index:
+                out_col_indices_series = Series(Buffer(cuda.device_array(col_agg.size, dtype=np.int32)))
+                out_col_indices = out_col_indices_series._column.cffi_view
+            else:
+                out_col_indices = ffi.NULL
 
             if first_run:
                 out_col_values_series = [Series(Buffer(cuda.device_array(col_agg.size, dtype=self._df[self._by[i]]._column.data.dtype))) for i in range(0,ncols)]
@@ -93,13 +77,27 @@ class LibGdfGroupby(object):
             out_col_agg_series = Series(Buffer(cuda.device_array(col_agg.size, dtype=col_agg_dtype)))
             out_col_agg = out_col_agg_series._column.cffi_view
     
-            err = libgdf.gdf_group_by_avg(
-                ncols, cols, col_agg, out_col_indices, out_col_values, out_col_agg, ctx)
+            if agg_type == "min":
+                err = libgdf.gdf_group_by_min(
+                    ncols, cols, col_agg, out_col_indices, out_col_values, out_col_agg, ctx)
+            elif agg_type == "max":
+                err = libgdf.gdf_group_by_max(
+                    ncols, cols, col_agg, out_col_indices, out_col_values, out_col_agg, ctx)
+            elif agg_type == "count":
+                err = libgdf.gdf_group_by_count(
+                    ncols, cols, col_agg, out_col_indices, out_col_values, out_col_agg, ctx)
+            elif agg_type == "sum":
+                err = libgdf.gdf_group_by_sum(
+                    ncols, cols, col_agg, out_col_indices, out_col_values, out_col_agg, ctx)
+            elif agg_type == "mean":
+                err = libgdf.gdf_group_by_avg(
+                    ncols, cols, col_agg, out_col_indices, out_col_values, out_col_agg, ctx)
+            else:
+                print("ERROR: this aggregator has not been implemented yet")
+
+            if (err is not None):    
+                print(err)
     
-            print(err)
-    
-            print("done mean")
-            
             num_row_results = out_col_agg.size
             
             if first_run:
@@ -111,13 +109,119 @@ class LibGdfGroupby(object):
             out_col_agg_series.data.size = num_row_results
             out_col_agg_series = out_col_agg_series.reset_index()
             
-            #  assuming here that if there are multiple aggregations that the aggregated results will be in the same order
-            # this may need to be revised for hash group bys
+            
+            if need_to_index:
+                out_col_indices_series.data.size = num_row_results
+                out_col_indices_series = out_col_indices_series.reset_index()
+                # TODO do something with the indices to align data
+            
+            
             result[val_col] = out_col_agg_series  
             
+            out_col_agg_series.data.size = num_row_results
+            out_col_agg_series = out_col_agg_series.reset_index()
+                        
             first_run = False
             
         return result
+    
+    def min(self):        
+        agg_type = "min"
+        
+        result = DataFrame()
+        add_col_values = True
+        
+        ctx = ffi.new('gdf_context*')
+        ctx.flag_sorted = 0
+        ctx.flag_method = self._method
+        ctx.flag_distinct = 0
+        
+        val_columns = self._val_columns 
+        
+        return self._apply_agg(agg_type, result, add_col_values, ctx, val_columns)
+    
+    def max(self):        
+        agg_type = "max"
+        
+        result = DataFrame()
+        add_col_values = True
+        
+        ctx = ffi.new('gdf_context*')
+        ctx.flag_sorted = 0
+        ctx.flag_method = self._method
+        ctx.flag_distinct = 0
+        
+        val_columns = self._val_columns 
+        
+        return self._apply_agg(agg_type, result, add_col_values, ctx, val_columns)
+    
+    def count(self):        
+        agg_type = "count"
+        
+        result = DataFrame()
+        add_col_values = True
+        
+        ctx = ffi.new('gdf_context*')
+        ctx.flag_sorted = 0
+        ctx.flag_method = self._method
+        ctx.flag_distinct = 0
+        
+        val_columns = self._val_columns 
+        
+        return self._apply_agg(agg_type, result, add_col_values, ctx, val_columns)
+    
+    def sum(self):        
+        agg_type = "sum"
+        
+        result = DataFrame()
+        add_col_values = True
+        
+        ctx = ffi.new('gdf_context*')
+        ctx.flag_sorted = 0
+        ctx.flag_method = self._method
+        ctx.flag_distinct = 0
+        
+        val_columns = self._val_columns 
+        
+        return self._apply_agg(agg_type, result, add_col_values, ctx, val_columns)  
+        
+    def mean(self):        
+        agg_type = "mean"
+        
+        result = DataFrame()
+        add_col_values = True
+        
+        ctx = ffi.new('gdf_context*')
+        ctx.flag_sorted = 0
+        ctx.flag_method = self._method
+        ctx.flag_distinct = 0
+        
+        val_columns = self._val_columns 
+        
+        return self._apply_agg(agg_type, result, add_col_values, ctx, val_columns)
+        
+    
+    def agg(self, agg_list):
+        
+        result = DataFrame()
+        add_col_values = True
+        
+        ctx = ffi.new('gdf_context*')
+        ctx.flag_sorted = 0
+        ctx.flag_method = self._method
+        ctx.flag_distinct = 0
+        
+        for agg_type in agg_list:
+            
+            val_columns = [val + '_' + agg_type for val in self._val_columns] 
+        
+            result = self._apply_agg(agg_type, result, add_col_values, ctx, val_columns)
+            
+            add_col_values = False # we only want to add them once
+            
+        return result
+            
+    
         
    
   

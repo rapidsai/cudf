@@ -36,13 +36,16 @@ def test_groupby_mean(nelem = 20):
     expect = np.sort(expect_df['val'].values)
     expect2 = np.sort(expect_df['v'].values)
     
+    print("expect_df")
+    print(expect_df)
+    print("expect_df")
     
     from pygdf.groupby import Groupby    
     
     df = make_frame(DataFrame, nelem=nelem, extra_vals=lvls)
     
     print("df")
-    print(df)
+#     print(df)
     print("df")
     
     gb = Groupby(df, by=by)
@@ -74,17 +77,18 @@ def test_groupby_mean(nelem = 20):
     print("newgot_df")
     
     np.testing.assert_array_almost_equal(expect, newgot)
-    np.testing.assert_array_almost_equal(expect, newgot2)
+    np.testing.assert_array_almost_equal(expect2, newgot2)
     
+       
     
     
     
     
     
 
-print("done1")
-test_groupby_mean(20)
 
+test_groupby_mean(10000000)
+print("done done")
 
 # 
 # 
