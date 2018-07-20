@@ -1,3 +1,5 @@
+#pragma once
+
 /* column operations */
 
 gdf_size_type gdf_column_sizeof();
@@ -236,6 +238,9 @@ gdf_error gdf_cast_i32_to_f32(gdf_column *input, gdf_column *output);
 gdf_error gdf_cast_i64_to_f32(gdf_column *input, gdf_column *output);
 gdf_error gdf_cast_f32_to_f32(gdf_column *input, gdf_column *output);
 gdf_error gdf_cast_f64_to_f32(gdf_column *input, gdf_column *output);
+gdf_error gdf_cast_date32_to_f32(gdf_column *input, gdf_column *output);
+gdf_error gdf_cast_date64_to_f32(gdf_column *input, gdf_column *output);
+gdf_error gdf_cast_timestamp_to_f32(gdf_column *input, gdf_column *output);
 
 gdf_error gdf_cast_generic_to_f64(gdf_column *input, gdf_column *output);
 gdf_error gdf_cast_i8_to_f64(gdf_column *input, gdf_column *output);
@@ -243,6 +248,9 @@ gdf_error gdf_cast_i32_to_f64(gdf_column *input, gdf_column *output);
 gdf_error gdf_cast_i64_to_f64(gdf_column *input, gdf_column *output);
 gdf_error gdf_cast_f32_to_f64(gdf_column *input, gdf_column *output);
 gdf_error gdf_cast_f64_to_f64(gdf_column *input, gdf_column *output);
+gdf_error gdf_cast_date32_to_f64(gdf_column *input, gdf_column *output);
+gdf_error gdf_cast_date64_to_f64(gdf_column *input, gdf_column *output);
+gdf_error gdf_cast_timestamp_to_f64(gdf_column *input, gdf_column *output);
 
 gdf_error gdf_cast_generic_to_i8(gdf_column *input, gdf_column *output);
 gdf_error gdf_cast_i8_to_i8(gdf_column *input, gdf_column *output);
@@ -250,6 +258,9 @@ gdf_error gdf_cast_i32_to_i8(gdf_column *input, gdf_column *output);
 gdf_error gdf_cast_i64_to_i8(gdf_column *input, gdf_column *output);
 gdf_error gdf_cast_f32_to_i8(gdf_column *input, gdf_column *output);
 gdf_error gdf_cast_f64_to_i8(gdf_column *input, gdf_column *output);
+gdf_error gdf_cast_date32_to_i8(gdf_column *input, gdf_column *output);
+gdf_error gdf_cast_date64_to_i8(gdf_column *input, gdf_column *output);
+gdf_error gdf_cast_timestamp_to_i8(gdf_column *input, gdf_column *output);
 
 gdf_error gdf_cast_generic_to_i32(gdf_column *input, gdf_column *output);
 gdf_error gdf_cast_i8_to_i32(gdf_column *input, gdf_column *output);
@@ -257,6 +268,9 @@ gdf_error gdf_cast_i32_to_i32(gdf_column *input, gdf_column *output);
 gdf_error gdf_cast_i64_to_i32(gdf_column *input, gdf_column *output);
 gdf_error gdf_cast_f32_to_i32(gdf_column *input, gdf_column *output);
 gdf_error gdf_cast_f64_to_i32(gdf_column *input, gdf_column *output);
+gdf_error gdf_cast_date32_to_i32(gdf_column *input, gdf_column *output);
+gdf_error gdf_cast_date64_to_i32(gdf_column *input, gdf_column *output);
+gdf_error gdf_cast_timestamp_to_i32(gdf_column *input, gdf_column *output);
 
 gdf_error gdf_cast_generic_to_i64(gdf_column *input, gdf_column *output);
 gdf_error gdf_cast_i8_to_i64(gdf_column *input, gdf_column *output);
@@ -264,6 +278,39 @@ gdf_error gdf_cast_i32_to_i64(gdf_column *input, gdf_column *output);
 gdf_error gdf_cast_i64_to_i64(gdf_column *input, gdf_column *output);
 gdf_error gdf_cast_f32_to_i64(gdf_column *input, gdf_column *output);
 gdf_error gdf_cast_f64_to_i64(gdf_column *input, gdf_column *output);
+gdf_error gdf_cast_date32_to_i64(gdf_column *input, gdf_column *output);
+gdf_error gdf_cast_date64_to_i64(gdf_column *input, gdf_column *output);
+gdf_error gdf_cast_timestamp_to_i64(gdf_column *input, gdf_column *output);
+
+gdf_error gdf_cast_generic_to_date32(gdf_column *input, gdf_column *output);
+gdf_error gdf_cast_i8_to_date32(gdf_column *input, gdf_column *output);
+gdf_error gdf_cast_i32_to_date32(gdf_column *input, gdf_column *output);
+gdf_error gdf_cast_i64_to_date32(gdf_column *input, gdf_column *output);
+gdf_error gdf_cast_f32_to_date32(gdf_column *input, gdf_column *output);
+gdf_error gdf_cast_f64_to_date32(gdf_column *input, gdf_column *output);
+gdf_error gdf_cast_date32_to_date32(gdf_column *input, gdf_column *output);
+gdf_error gdf_cast_date64_to_date32(gdf_column *input, gdf_column *output);
+gdf_error gdf_cast_timestamp_to_date32(gdf_column *input, gdf_column *output);
+
+gdf_error gdf_cast_generic_to_date64(gdf_column *input, gdf_column *output);
+gdf_error gdf_cast_i8_to_date64(gdf_column *input, gdf_column *output);
+gdf_error gdf_cast_i32_to_date64(gdf_column *input, gdf_column *output);
+gdf_error gdf_cast_i64_to_date64(gdf_column *input, gdf_column *output);
+gdf_error gdf_cast_f32_to_date64(gdf_column *input, gdf_column *output);
+gdf_error gdf_cast_f64_to_date64(gdf_column *input, gdf_column *output);
+gdf_error gdf_cast_date32_to_date64(gdf_column *input, gdf_column *output);
+gdf_error gdf_cast_date64_to_date64(gdf_column *input, gdf_column *output);
+gdf_error gdf_cast_timestamp_to_date64(gdf_column *input, gdf_column *output);
+
+gdf_error gdf_cast_generic_to_timestamp(gdf_column *input, gdf_column *output, gdf_time_unit time_unit);
+gdf_error gdf_cast_i8_to_timestamp(gdf_column *input, gdf_column *output, gdf_time_unit time_unit);
+gdf_error gdf_cast_i32_to_timestamp(gdf_column *input, gdf_column *output, gdf_time_unit time_unit);
+gdf_error gdf_cast_i64_to_timestamp(gdf_column *input, gdf_column *output, gdf_time_unit time_unit);
+gdf_error gdf_cast_f32_to_timestamp(gdf_column *input, gdf_column *output, gdf_time_unit time_unit);
+gdf_error gdf_cast_f64_to_timestamp(gdf_column *input, gdf_column *output, gdf_time_unit time_unit);
+gdf_error gdf_cast_date32_to_timestamp(gdf_column *input, gdf_column *output, gdf_time_unit time_unit);
+gdf_error gdf_cast_date64_to_timestamp(gdf_column *input, gdf_column *output, gdf_time_unit time_unit);
+gdf_error gdf_cast_timestamp_to_timestamp(gdf_column *input, gdf_column *output, gdf_time_unit time_unit);
 
 /* datetime extract*/
 gdf_error gdf_extract_datetime_year(gdf_column *input, gdf_column *output);

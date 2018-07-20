@@ -20,5 +20,6 @@ message(STATUS "******** Configuring tests ********")
 
 add_subdirectory(datetime)
 add_subdirectory(hashing)
+add_subdirectory(unaryops)
 
 message(STATUS "******** Tests are ready ********")

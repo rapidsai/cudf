@@ -27,7 +27,6 @@
 #include <gdf/cffi/functions.h>
 
 
-
 TEST(gdf_extract_from_datetime_example_test, usage_example) {
 
 	// gdf_column input examples for date32, date64 and timestamp (in seconds)
@@ -742,8 +741,7 @@ TEST(gdf_extract_datetime_TEST, date32Tests) {
 	inputData[4] = 0;               // '1970-01-01'
 	inputData[5] = 26732;   // '2043-03-11'
 	inputData[6] = 10336;    // '1998-04-20'
-	inputData[7] = -56374;  // '1815-08-287
-
+	inputData[7] = -56374;  // '1815-08-28'
 
 	thrust::device_vector<int32_t> intputDataDev(inputData);
 	thrust::device_vector<gdf_valid_type> inputValidDev(1,0);

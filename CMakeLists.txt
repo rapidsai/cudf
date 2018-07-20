@@ -27,7 +27,6 @@ PROJECT(libgdf)
 cmake_minimum_required(VERSION 2.8)  # not sure about version required
 
 set(CMAKE_CXX_STANDARD 11)
-message(STATUS "Using C++ compiler: ${CMAKE_CXX_COMPILER}")
 message(STATUS "Using C++ standard: c++${CMAKE_CXX_STANDARD}")
 
 set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/Modules/" ${CMAKE_MODULE_PATH})
@@ -121,7 +120,6 @@ cuda_add_library(gdf SHARED
     src/datetimeops.cu
     src/sqls_ops.cu
 )
-
 
 target_link_libraries(gdf arrow)
 
