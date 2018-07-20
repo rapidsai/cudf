@@ -82,13 +82,43 @@ def test_groupby_mean(nelem = 20):
        
     
     
-    
+def old_make_frame(dataframe_class, nelem, seed=0, extra_levels=()):
+    np.random.seed(seed)
+
+    df = dataframe_class()
+
+    df['x'] = np.random.randint(0, 5, nelem)
+    df['y'] = np.random.randint(0, 3, nelem)
+    for lvl in extra_levels:
+        df[lvl] = np.random.randint(0, 2, nelem)
+
+    df['val'] = np.random.random(nelem)
+
+    return df  
     
     
 
 
-test_groupby_mean(10000000)
+# test_groupby_mean(10000000)
 print("done done")
+
+def test_groupby_agg_mean_min(nelem):
+   # gdf (Note: lack of multindex)
+    got_df = old_make_frame(DataFrame, nelem=nelem).groupby(('x', 'y'), method = "GDF_SORT")\
+                                               .agg(['mean', 'min'])
+    got_mean = np.sort(got_df['val_mean'].to_array())
+    got_min = np.sort(got_df['val_min'].to_array())
+    # pandas
+    expect_df = old_make_frame(pd.DataFrame, nelem=nelem).groupby(('x', 'y'))\
+                                                     .agg(['mean', 'min'])
+    expect_mean = np.sort(expect_df['val', 'mean'].values)
+    expect_min = np.sort(expect_df['val', 'min'].values)
+    # verify
+    np.testing.assert_array_almost_equal(expect_mean, got_mean)
+    np.testing.assert_array_almost_equal(expect_min, got_min)
+
+test_groupby_agg_mean_min(2)
+test_groupby_agg_mean_min(100)
 
 # 
 # 

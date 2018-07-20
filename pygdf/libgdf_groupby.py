@@ -49,7 +49,10 @@ class LibGdfGroupby(object):
             self._method = libgdf.GDF_HASH
             
             
-    def _apply_agg(self, agg_type, result, add_col_values, ctx, val_columns):
+    def _apply_agg(self, agg_type, result, add_col_values, ctx, val_columns, val_columns_out = None):
+        
+        if (val_columns_out is None):
+            val_columns_out = val_columns
         
         ncols = len(self._by)
         cols = [self._df[thisBy]._column.cffi_view for thisBy in self._by]
@@ -57,6 +60,7 @@ class LibGdfGroupby(object):
         first_run = add_col_values
         need_to_index = len(self._val_columns) > 0 and self._method == libgdf.GDF_HASH
         
+        col_count = 0
         for val_col in val_columns:
             col_agg = self._df[val_col]._column.cffi_view
             col_agg_dtype = self._df[val_col]._column.data.dtype
@@ -116,12 +120,13 @@ class LibGdfGroupby(object):
                 # TODO do something with the indices to align data
             
             
-            result[val_col] = out_col_agg_series  
+            result[val_columns_out[col_count]] = out_col_agg_series  
             
             out_col_agg_series.data.size = num_row_results
             out_col_agg_series = out_col_agg_series.reset_index()
                         
             first_run = False
+            col_count = col_count + 1
             
         return result
     
@@ -213,12 +218,12 @@ class LibGdfGroupby(object):
         
         for agg_type in agg_list:
             
-            val_columns = [val + '_' + agg_type for val in self._val_columns] 
+            val_columns_out = [val + '_' + agg_type for val in self._val_columns] 
         
-            result = self._apply_agg(agg_type, result, add_col_values, ctx, val_columns)
+            result = self._apply_agg(agg_type, result, add_col_values, ctx, self._val_columns, val_columns_out)
             
             add_col_values = False # we only want to add them once
-            
+        
         return result
             
     
