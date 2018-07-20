@@ -6,7 +6,7 @@ import pandas as pd
 from pygdf.dataframe import DataFrame
 
 
-def make_frame(dataframe_class, nelem, seed=0, extra_levels=()):
+def make_frame(dataframe_class, nelem, seed=0, extra_levels=(), extra_vals=()):
     np.random.seed(seed)
 
     df = dataframe_class()
@@ -17,48 +17,73 @@ def make_frame(dataframe_class, nelem, seed=0, extra_levels=()):
         df[lvl] = np.random.randint(0, 2, nelem)
 
     df['val'] = np.random.random(nelem)
+    for val in extra_vals:
+        df[val] = np.random.random(nelem)
 
     return df
 
 
 
-def test_groupby_mean(nelem = 3):
-    # gdf
-    
-    df = make_frame(DataFrame, nelem=nelem)
-    
-    from pygdf.groupby import Groupby
-    from pygdf.libgdf_groupby import LibGdfGroupby
-    
+def test_groupby_mean(nelem = 20):
+        
     by = ('x', 'y')
     
+    lvls = 'v'
     
-    newgd = LibGdfGroupby(df, by=by)    
-    newgot_df = newgd.mean()    
-    newgot = np.sort(newgot_df['val'].to_array())
+    # pandas    
+    expect_df = make_frame(pd.DataFrame,
+                           nelem=nelem, extra_vals=lvls).groupby(('x', 'y')).mean()
+    expect = np.sort(expect_df['val'].values)
+    expect2 = np.sort(expect_df['v'].values)
     
-    print(newgot_df)
-    print("done")
     
-    pass
+    from pygdf.groupby import Groupby    
+    
+    df = make_frame(DataFrame, nelem=nelem, extra_vals=lvls)
+    
+    print("df")
+    print(df)
+    print("df")
     
     gb = Groupby(df, by=by)
     got_df = gb.mean()
     got = np.sort(got_df['val'].to_array())
-    # pandas
-    expect_df = make_frame(pd.DataFrame,
-                           nelem=nelem).groupby(('x', 'y')).mean()
-    expect = np.sort(expect_df['val'].values)
+    got2 = np.sort(got_df['v'].to_array())
+    
      
-    print(got)
+    print("got_df")
+    print(got_df)
+    print("got_df")
+    
     # verify
     np.testing.assert_array_almost_equal(expect, got)
+    np.testing.assert_array_almost_equal(expect2, got2)
     
-    print(newgot)
+    
+    
+    from pygdf.libgdf_groupby import LibGdfGroupby
+    
+    newdf = make_frame(DataFrame, nelem=nelem, extra_vals=lvls)
+    newgd = LibGdfGroupby(newdf, by=by)    
+    newgot_df = newgd.mean()    
+    newgot = np.sort(newgot_df['val'].to_array())
+    newgot2 = np.sort(newgot_df['v'].to_array())
+    
+    print("newgot_df")
+    print(newgot_df)
+    print("newgot_df")
+    
     np.testing.assert_array_almost_equal(expect, newgot)
+    np.testing.assert_array_almost_equal(expect, newgot2)
+    
+    
+    
+    
+    
+    
 
 print("done1")
-test_groupby_mean(3)
+test_groupby_mean(20)
 
 
 # 

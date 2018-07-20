@@ -13,8 +13,11 @@ from . import _gdf, cudautils
 from .column import Column
 from .buffer import Buffer
 from .serialize import register_distributed_serializer
+from .index import RangeIndex
 
 from libgdf_cffi import ffi, libgdf, GDFError
+
+
 
 # import pytest
 
@@ -54,67 +57,67 @@ class LibGdfGroupby(object):
         #        """
         print("start mean")
 
+        result = DataFrame()
+        
+        indexes = DataFrame()
+        
+        ctx = ffi.new('gdf_context*')
+        ctx.flag_sorted = 0
+        ctx.flag_method = libgdf.GDF_SORT
+        ctx.flag_distinct = 0
+
         ncols = len(self._by)
         cols = [self._df[thisBy]._column.cffi_view for thisBy in self._by]
-
-        col_agg = self._df[self._val_columns[0]]._column.cffi_view
-        col_agg_dtype = self._df[self._val_columns[0]]._column.data.dtype
-        print("start dtypes")
-        print(col_agg_dtype)
-#        col_agg_dtype = _gdf.np_to_gdf_dtype(self._df[self._val_columns[0]]._column.data.dtype)
-#        print(col_agg_dtype)
-
-#        out_col_indices = ffi.new('gdf_column*', None)
-        out_col_indices = ffi.NULL
-#        out_col_values = [ffi.new('gdf_column*', None) for thisBy in self._by]
-#        out_col_values = ffi.new('gdf_column**', None)
-        out_col_values = ffi.NULL
-#        out_col_agg = ffi.new('gdf_column*')
-
-#        out_col_agg.dtype = col_agg.dtype
-
-        print("start prints")
-        print(col_agg.size)
-        print(col_agg_dtype)
-
-        out_col_agg_buf = Buffer(cuda.device_array(
-            col_agg.size, dtype=col_agg_dtype))
-        print("start buffrer")
-        print(out_col_agg_buf.size)
-        print(out_col_agg_buf.capacity)
-        print(out_col_agg_buf.dtype)
-        out_col_agg_series = Series(out_col_agg_buf)
-        out_col_agg = Series(out_col_agg_buf)._column.cffi_view
-        print("start out_col_agg")
-        print(out_col_agg.size)
-        print(out_col_agg.dtype)
-
-        ctx = ffi.new('gdf_context*')
-        ctx.flag_sorted = 1
-        ctx.flag_method = libgdf.GDF_SORT
-
-        err = libgdf.gdf_group_by_avg(
-            ncols, cols, col_agg, out_col_indices, out_col_values, out_col_agg, ctx)
-
-        print(err)
-
-        print("done mean")
         
-        result = DataFrame()
-        result[self._val_columns[0]] = out_col_agg_series
+        first_run = True
+        multiple_aggs = len(self._val_columns) > 0
         
+        for val_col in self._val_columns:
+            col_agg = self._df[val_col]._column.cffi_view
+            col_agg_dtype = self._df[val_col]._column.data.dtype
+            
+            #  assuming here that if there are multiple aggregations that the aggregated results will be in the same order
+            # this may need to be revised for hash group bys. May want to collect indexes to join multiple resulting aggregations
+#             if multiple_aggs:
+#                 out_col_indices_series = Series(Buffer(cuda.device_array(col_agg.size, dtype=np.int32)))
+#                 out_col_indices = out_col_indices_series._column.cffi_view
+#             else:
+            out_col_indices = ffi.NULL
+
+            if first_run:
+                out_col_values_series = [Series(Buffer(cuda.device_array(col_agg.size, dtype=self._df[self._by[i]]._column.data.dtype))) for i in range(0,ncols)]
+                out_col_values = [out_col_values_series[i]._column.cffi_view for i in range(0,ncols)]
+            else :
+                out_col_values = ffi.NULL
+    
+            out_col_agg_series = Series(Buffer(cuda.device_array(col_agg.size, dtype=col_agg_dtype)))
+            out_col_agg = out_col_agg_series._column.cffi_view
+    
+            err = libgdf.gdf_group_by_avg(
+                ncols, cols, col_agg, out_col_indices, out_col_values, out_col_agg, ctx)
+    
+            print(err)
+    
+            print("done mean")
+            
+            num_row_results = out_col_agg.size
+            
+            if first_run:
+                for i in range(0,ncols):
+                    out_col_values_series[i].data.size = num_row_results
+                    out_col_values_series[i] = out_col_values_series[i].reset_index()
+                    result[self._by[i]] = out_col_values_series[i]
+    
+            out_col_agg_series.data.size = num_row_results
+            out_col_agg_series = out_col_agg_series.reset_index()
+            
+            #  assuming here that if there are multiple aggregations that the aggregated results will be in the same order
+            # this may need to be revised for hash group bys
+            result[val_col] = out_col_agg_series  
+            
+            first_run = False
+            
         return result
-
-        """
-       wsm todo
-       
-       i think we can access the columns of a data frame and turn them into gdf_columns
-       df[col]._column.cffi_view  something like that
-       
-       so we need to take the columns from the df that we are grouping by and place into a gdf_column ** (HARD?)
-       then we need to take the column(s) to agg and make into a gdf_column* (EASY?)
-       and collect the result
-       how to we print or assert?? 
-       
-       
-       """
+        
+   
+  
