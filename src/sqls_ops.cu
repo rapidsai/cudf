@@ -8,6 +8,8 @@
 
 ///#include "../include/sqls_rtti_comp.hpp" -- CORRECT: put me back
 #include "sqls_rtti_comp.hpp"
+#include "groupby/groupby.cuh"
+#include "groupby/hash/aggregation_operations.cuh"
 
 //using IndexT = int;//okay...
 using IndexT = size_t;
@@ -1146,7 +1148,31 @@ gdf_error gdf_group_by_single(int ncols,                    // # columns
   else if( ctxt->flag_method == GDF_HASH )
     {
       //TODO:
+
       //HASH-based
+      switch(op)
+      {
+        case GDF_MAX:
+          {
+            return gdf_group_by_hash<max_op>(ncols,
+                                             cols,
+                                             col_agg,
+                                             out_col_values,
+                                             out_col_agg);
+            break;
+          }
+        case GDF_MIN:
+          {
+            return gdf_group_by_hash<min_op>(ncols,
+                                             cols,
+                                             col_agg,
+                                             out_col_values,
+                                             out_col_agg);
+            break;
+          }
+        default:
+          return GDF_UNSUPPORTED_METHOD;
+      }
     }
   else
     {
