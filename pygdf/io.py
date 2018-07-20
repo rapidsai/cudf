@@ -8,6 +8,24 @@ def _wrap_string(text):
 
 
 def read_csv(path, names, dtypes, delimiter=',', ):
+    """Read a CSV file and return a DataFrame
+
+    Parameters
+    ----------
+    path : str
+        CSV filepath
+    name : list[str]
+        List of column names
+    dtypes : list[str]
+        List of dtype names for each column
+    delimiter : str; default to ','
+        The separator character.
+
+    Returns
+    -------
+    df : DataFrame
+        The parsed DataFrame
+    """
     ncols = len(names)
     out = libgdf.read_csv(
         _wrap_string(path),
