@@ -1,7 +1,8 @@
-from ._gdf import ffi, libgdf, np_to_gdf_dtype
+from ._gdf import ffi, libgdf
 from .column import Column
 from .numerical import NumericalColumn
 from .dataframe import DataFrame
+
 
 def _wrap_string(text):
     return ffi.new("char[]", text.encode())
