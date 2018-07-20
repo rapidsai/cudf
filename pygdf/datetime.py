@@ -2,9 +2,19 @@ import numpy as np
 from . import columnops, _gdf
 from .buffer import Buffer
 from .cudautils import compact_mask_bytes
+from libgdf_cffi import libgdf
 
 
 class DatetimeColumn(columnops.TypedColumnBase):
+    funcs = {
+        'year': libgdf.gdf_extract_datetime_year,
+        'month': libgdf.gdf_extract_datetime_month,
+        'day': libgdf.gdf_extract_datetime_day,
+        'hour': libgdf.gdf_extract_datetime_hour,
+        'minute': libgdf.gdf_extract_datetime_minute,
+        'second': libgdf.gdf_extract_datetime_second,
+    }
+
     def __init__(self, data, mask=None, null_count=None, dtype=None):
         # currently libgdf datetime kernels fail if mask is null
         if mask is None:
@@ -29,15 +39,38 @@ class DatetimeColumn(columnops.TypedColumnBase):
         buf.dtype = array.dtype
         return cls(data=buf, dtype=buf.dtype)
 
+    @property
+    def year(self):
+        return self.get_dt_field('year')
 
-def extract_dt_field(op, input_column):
-    out = columnops.column_empty_like_same_mask(
-        input_column,
-        dtype=np.int16
-    )
-    # force mask again
-    out._mask = input_column.mask
-    _gdf.apply_unaryop(op,
-                       input_column,
-                       out)
-    return out
+    @property
+    def month(self):
+        return self.get_dt_field('month')
+
+    @property
+    def day(self):
+        return self.get_dt_field('day')
+
+    @property
+    def hour(self):
+        return self.get_dt_field('hour')
+
+    @property
+    def minute(self):
+        return self.get_dt_field('minute')
+
+    @property
+    def second(self):
+        return self.get_dt_field('second')
+
+    def get_dt_field(self, field):
+        out = columnops.column_empty_like_same_mask(
+            self,
+            dtype=np.int16
+        )
+        # force mask again
+        out._mask = self.mask
+        _gdf.apply_unaryop(self.funcs[field],
+                           self,
+                           out)
+        return out

@@ -11,7 +11,7 @@ from . import cudautils, utils, columnops
 from .buffer import Buffer
 from .numerical import NumericalColumn
 from .column import Column
-from .datetime import extract_dt_field, DatetimeColumn
+from .datetime import DatetimeColumn
 from .serialize import register_distributed_serializer
 
 
@@ -323,32 +323,30 @@ class DatetimeIndex(GenericIndex):
 
     @property
     def year(self):
-        return self.get('year')
+        return self.get_dt_field('year')
 
     @property
     def month(self):
-        return self.get('month')
+        return self.get_dt_field('month')
 
     @property
     def day(self):
-        return self.get('day')
+        return self.get_dt_field('day')
 
     @property
     def hour(self):
-        return self.get('hour')
+        return self.get_dt_field('hour')
 
     @property
     def minute(self):
-        return self.get('minute')
+        return self.get_dt_field('minute')
 
     @property
     def second(self):
-        return self.get('second')
+        return self.get_dt_field('second')
 
-    def get(self, field):
-        from .series import DatetimeProperties
-        out_column = extract_dt_field(DatetimeProperties._funcs[field],
-                                      self._values)
+    def get_dt_field(self, field):
+        out_column = self._values.get_dt_field(field)
         # columnops.column_empty_like always returns a Column object
         # but we need a NumericalColumn for GenericIndex..
         # how should this be handled?
