@@ -19,6 +19,7 @@
 #include <iterator>
 #include <type_traits>
 #include <numeric>
+#include <unordered_map>
 //
 
 #include <cassert>
@@ -88,6 +89,69 @@ bool compare(const Vector<T>& d_v, const std::vector<T>& baseline, T eps)
 			    [eps](T v1, T v2){
 			      return (std::abs(v1-v2) < eps);
 			    });
+}
+
+TEST(HashGroupByTest, max)
+{
+
+  std::vector<int64_t> groupby_column{ 1, 1, 2, 2, 3, 3, 4 };
+  std::vector<double>  aggregation_column{2., 3., 5., 2., 6., 6., 7.};
+
+  const size_t size = groupby_column.size();
+
+  thrust::device_vector<int64_t> d_groupby_column(groupby_column);
+  thrust::device_vector<double> d_aggregation_column(aggregation_column);
+
+  gdf_column gdf_groupby_column;
+  gdf_groupby_column.data = static_cast<void*>(d_groupby_column.data().get());
+  gdf_groupby_column.size = size;
+  gdf_groupby_column.dtype = GDF_INT64;
+
+  gdf_column gdf_aggregation_column;
+  gdf_aggregation_column.data = static_cast<void*>(d_aggregation_column.data().get());
+  gdf_aggregation_column.size = size;
+  gdf_aggregation_column.dtype = GDF_FLOAT64;
+
+  thrust::device_vector<int64_t> groupby_result{size};
+  thrust::device_vector<double> aggregation_result{size};
+
+  gdf_column gdf_groupby_result;
+  gdf_groupby_result.data = static_cast<void*>(groupby_result.data().get());
+  gdf_groupby_result.size = size;
+  gdf_groupby_result.dtype = GDF_INT64;
+
+  gdf_column gdf_aggregation_result;
+  gdf_aggregation_result.data = static_cast<void*>(aggregation_result.data().get());
+  gdf_aggregation_result.size = size;
+  gdf_aggregation_result.dtype = GDF_FLOAT64;
+
+  gdf_context context{0, GDF_HASH, 0};
+
+  gdf_column * p_gdf_groupby_column = &gdf_groupby_column;
+
+  gdf_column * p_gdf_groupby_result = &gdf_groupby_result;
+
+  gdf_group_by_max((int) 1,      
+                   &p_gdf_groupby_column,
+                   &gdf_aggregation_column,
+                   nullptr,         
+                   &p_gdf_groupby_result,
+                   &gdf_aggregation_result,
+                   &context);
+
+  std::unordered_map<int64_t, double> expected_results { {1,3.}, {2,5.}, {3,6.}, {4,7.} };
+
+  ASSERT_EQ(expected_results.size(), gdf_groupby_result.size);
+  ASSERT_EQ(expected_results.size(), gdf_aggregation_result.size);
+
+  for(int i = 0; i < gdf_aggregation_result.size; ++i){
+    const int64_t key = groupby_result[i];
+    const double value = aggregation_result[i];
+    auto found = expected_results.find(groupby_result[i]);
+    EXPECT_EQ(found->first, key);
+    EXPECT_EQ(found->second, value);
+  }
+
 }
 
 TEST(gdf_group_by_sum, UsageTestSum)
