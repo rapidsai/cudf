@@ -5,6 +5,8 @@
 #include <limits>
 #include <memory>
 #include "groupby_kernels.cuh"
+#include <cub/util_allocator.cuh>
+#include <cub/device/device_radix_sort.cuh>
 
 // The occupancy of the hash table determines it's capacity. A value of 50 implies
 // 50% occupancy, i.e., hash_table_size == 2 * input_size
@@ -38,8 +40,8 @@ template<typename groupby_type,
 cudaError_t GroupbyHash(const groupby_type * const in_groupby_column,
                         const aggregation_type * const in_aggregation_column,
                         const size_type in_column_size,
-                        groupby_type * const out_groupby_column,
-                        aggregation_type * const out_aggregation_column,
+                        groupby_type * out_groupby_column,
+                        aggregation_type * out_aggregation_column,
                         size_type * out_size,
                         aggregation_operation aggregation_op,
                         bool sort_result = false)
@@ -119,14 +121,50 @@ cudaError_t GroupbyHash(const groupby_type * const in_groupby_column,
   // Optionally sort the groupby/aggregation result columns
   if(true == sort_result)
   {
+    // Allocate double buffers needed for the cub Radix Sort
+    groupby_type * groupby_result_alt;
+    cudaMalloc(&groupby_result_alt, *out_size * sizeof(groupby_type));
 
+    aggregation_type * aggregation_result_alt;
+    cudaMalloc(&aggregation_result_alt, *out_size * sizeof(aggregation_type));
+
+    cub::DoubleBuffer<groupby_type>     d_keys(out_groupby_column, groupby_result_alt);
+    cub::DoubleBuffer<aggregation_type> d_vals(out_aggregation_column, aggregation_result_alt);
+
+    // When called with temp_storage == nullptr, simply returns the required allocation size in
+    // temp_storage_bytes
+    void *d_temp_storage = nullptr;
+    size_t temp_storage_bytes = 0;
+    cub::DeviceRadixSort::SortPairs(d_temp_storage, temp_storage_bytes, d_keys, d_vals, *out_size);
+    
+    // allocate temp storage here and call sort again to actually sort arrays
+    cudaMalloc(&d_temp_storage, temp_storage_bytes);
+    cub::DeviceRadixSort::SortPairs(d_temp_storage, temp_storage_bytes, d_keys, d_vals, *out_size);
+
+    error = cudaDeviceSynchronize();
+    if(error != cudaSuccess)
+      return error;
+
+    // Update output pointers with sorted result
+    // TODO Find a better way to do this. 
+    // Sorted output may be in a different buffer than what was originally passed in... need to copy it 
+    cudaMemcpy(out_groupby_column, d_keys.Current(), *out_size * sizeof(groupby_type), cudaMemcpyDefault);
+    cudaMemcpy(out_aggregation_column, d_vals.Current(), *out_size * sizeof(aggregation_type), cudaMemcpyDefault);
+
+    // Free work buffers
+    cudaFree(d_temp_storage);
+    
+    // FIXME These currently cause segfaults
+    cudaFree(groupby_result_alt);
+    cudaFree(aggregation_result_alt);
   }
-
-  
 
   return error;
 }
 #endif
+
+
+
 
 
 

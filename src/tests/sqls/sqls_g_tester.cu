@@ -94,8 +94,8 @@ bool compare(const Vector<T>& d_v, const std::vector<T>& baseline, T eps)
 TEST(HashGroupByTest, max)
 {
 
-  std::vector<int64_t> groupby_column{ 1, 1, 2, 2, 3, 3, 4 };
-  std::vector<double>  aggregation_column{2., 3., 5., 2., 6., 6., 7.};
+  std::vector<int64_t> groupby_column{ 2, 2, 1, 1, 4, 3, 3, 42, 42  };
+  std::vector<double>  aggregation_column{5., 2., 2., 3., 7., 6., 6., 42., 51. };
 
   const size_t size = groupby_column.size();
 
@@ -142,17 +142,19 @@ TEST(HashGroupByTest, max)
                    &gdf_aggregation_result,
                    &context);
 
+  print_v(groupby_result, std::cout);
+  print_v(aggregation_result, std::cout);
 
   // Make sure results are sorted
   if(1 == flag_sort_result){
-    std::map<int64_t, double> expected_results { {1,3.}, {2,5.}, {3,6.}, {4,7.} };
+    std::map<int64_t, double> expected_results { {1,3.}, {2,5.}, {3,6.}, {4,7.}, {42, 51.} };
     ASSERT_EQ(expected_results.size(), gdf_groupby_result.size);
     ASSERT_EQ(expected_results.size(), gdf_aggregation_result.size);
 
     int i = 0;
     for(auto kv : expected_results){
-      EXPECT_EQ(kv.first, groupby_result[++i]);
-      EXPECT_EQ(kv.second, aggregation_result[i]);
+      EXPECT_EQ(kv.first, groupby_result[i]) << "index: " << i;
+      EXPECT_EQ(kv.second, aggregation_result[i++]) << "index: " << i;
     }
   }
   else
