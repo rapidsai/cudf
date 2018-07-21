@@ -107,20 +107,19 @@ class LibGdfGroupby(object):
 
             if first_run:
                 for i in range(0, ncols):
-                    out_col_values_series[i].data.size = num_row_results
-                    out_col_values_series[i] = out_col_values_series[i].reset_index(
-                    )
-                    result[self._by[i]] = out_col_values_series[i]
+                    #out_col_values_series[i].data.size = num_row_results
+                    #out_col_values_series[i] = out_col_values_series[i].reset_index()
+                    result[self._by[i]] = out_col_values_series[i][:num_row_results]
 
             out_col_agg_series.data.size = num_row_results
             out_col_agg_series = out_col_agg_series.reset_index()
 
-            if need_to_index:
-                out_col_indices_series.data.size = num_row_results
-                out_col_indices_series = out_col_indices_series.reset_index()
+#            if need_to_index:
+#                out_col_indices_series.data.size = num_row_results
+#                out_col_indices_series = out_col_indices_series.reset_index()
                 # TODO do something with the indices to align data
 
-            result[val_columns_out[col_count]] = out_col_agg_series
+            result[val_columns_out[col_count]] = out_col_agg_series[:num_row_results]
 
             out_col_agg_series.data.size = num_row_results
             out_col_agg_series = out_col_agg_series.reset_index()
