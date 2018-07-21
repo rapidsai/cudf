@@ -40,6 +40,9 @@ gdf_error gdf_group_by_hash(int ncols,
   // The size of the result column(s)
   gdf_size_type out_size{0};
 
+  std::cout << "Groupby Column Type: " << groupby_column_type << std::endl;
+  std::cout << "Aggregation Column Type: " << aggregation_column_type << std::endl;
+
   // TODO Currently only supports GDF_INT64 groupby columns and GDF_INT64, GDF_FLOAT64 aggregation columns
   switch(groupby_column_type)
   {
