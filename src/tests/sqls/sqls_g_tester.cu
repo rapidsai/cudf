@@ -125,7 +125,10 @@ TEST(HashGroupByTest, max)
   gdf_aggregation_result.size = size;
   gdf_aggregation_result.dtype = GDF_FLOAT64;
 
-  gdf_context context{0, GDF_HASH, 0};
+  // Determines if the final result is sorted
+  int flag_sort_result = 1;
+
+  gdf_context context{0, GDF_HASH, 0, flag_sort_result};
 
   gdf_column * p_gdf_groupby_column = &gdf_groupby_column;
 
@@ -139,19 +142,33 @@ TEST(HashGroupByTest, max)
                    &gdf_aggregation_result,
                    &context);
 
-  std::unordered_map<int64_t, double> expected_results { {1,3.}, {2,5.}, {3,6.}, {4,7.} };
 
-  ASSERT_EQ(expected_results.size(), gdf_groupby_result.size);
-  ASSERT_EQ(expected_results.size(), gdf_aggregation_result.size);
+  // Make sure results are sorted
+  if(1 == flag_sort_result){
+    std::map<int64_t, double> expected_results { {1,3.}, {2,5.}, {3,6.}, {4,7.} };
+    ASSERT_EQ(expected_results.size(), gdf_groupby_result.size);
+    ASSERT_EQ(expected_results.size(), gdf_aggregation_result.size);
 
-  for(int i = 0; i < gdf_aggregation_result.size; ++i){
-    const int64_t key = groupby_result[i];
-    const double value = aggregation_result[i];
-    auto found = expected_results.find(groupby_result[i]);
-    EXPECT_EQ(found->first, key);
-    EXPECT_EQ(found->second, value);
+    int i = 0;
+    for(auto kv : expected_results){
+      EXPECT_EQ(kv.first, groupby_result[++i]);
+      EXPECT_EQ(kv.second, aggregation_result[i]);
+    }
   }
+  else
+  {
+    std::unordered_map<int64_t, double> expected_results { {1,3.}, {2,5.}, {3,6.}, {4,7.} };
+    ASSERT_EQ(expected_results.size(), gdf_groupby_result.size);
+    ASSERT_EQ(expected_results.size(), gdf_aggregation_result.size);
 
+    for(int i = 0; i < gdf_aggregation_result.size; ++i){
+      const int64_t key = groupby_result[i];
+      const double value = aggregation_result[i];
+      auto found = expected_results.find(groupby_result[i]);
+      EXPECT_EQ(found->first, key);
+      EXPECT_EQ(found->second, value);
+    }
+  }
 }
 
 TEST(gdf_group_by_sum, UsageTestSum)
@@ -214,7 +231,7 @@ TEST(gdf_group_by_sum, UsageTestSum)
 
   //input
   //{
-  gdf_context ctxt{0, GDF_SORT, 0};
+  gdf_context ctxt{0, GDF_SORT, 0, 0};
   std::vector<gdf_column*> v_pcols(ncols);
   for(int i = 0; i < ncols; ++i)
     {
@@ -362,7 +379,7 @@ TEST(gdf_group_by_count, UsageTestCount)
 
   //input
   //{
-  gdf_context ctxt{0, GDF_SORT, 0};
+  gdf_context ctxt{0, GDF_SORT, 0, 0};
   std::vector<gdf_column*> v_pcols(ncols);
   for(int i = 0; i < ncols; ++i)
     {
@@ -508,7 +525,7 @@ TEST(gdf_group_by_avg, UsageTestAvg)
 
   //input
   //{
-  gdf_context ctxt{0, GDF_SORT, 0};
+  gdf_context ctxt{0, GDF_SORT, 0, 0};
   std::vector<gdf_column*> v_pcols(ncols);
   for(int i = 0; i < ncols; ++i)
     {
@@ -659,7 +676,7 @@ TEST(gdf_group_by_min, UsageTestMin)
 
   //input
   //{
-  gdf_context ctxt{0, GDF_SORT, 0};
+  gdf_context ctxt{0, GDF_SORT, 0, 0};
   std::vector<gdf_column*> v_pcols(ncols);
   for(int i = 0; i < ncols; ++i)
     {
@@ -810,7 +827,7 @@ TEST(gdf_group_by_max, UsageTestMax)
 
   //input
   //{
-  gdf_context ctxt{0, GDF_SORT, 0};
+  gdf_context ctxt{0, GDF_SORT, 0, 0};
   std::vector<gdf_column*> v_pcols(ncols);
   for(int i = 0; i < ncols; ++i)
     {

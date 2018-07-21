@@ -41,7 +41,8 @@ cudaError_t GroupbyHash(const groupby_type * const in_groupby_column,
                         groupby_type * const out_groupby_column,
                         aggregation_type * const out_aggregation_column,
                         size_type * out_size,
-                        aggregation_operation aggregation_op)
+                        aggregation_operation aggregation_op,
+                        bool sort_result = false)
 {
 
   using map_type = concurrent_unordered_map<groupby_type, aggregation_type, std::numeric_limits<groupby_type>::max()>;
@@ -113,6 +114,15 @@ cudaError_t GroupbyHash(const groupby_type * const in_groupby_column,
   // At the end of the extraction kernel, the global write index will be equal to
   // the size of the output. Update the output size.
   *out_size = *global_write_index;
+  cudaFree(global_write_index);
+
+  // Optionally sort the groupby/aggregation result columns
+  if(true == sort_result)
+  {
+
+  }
+
+  
 
   return error;
 }

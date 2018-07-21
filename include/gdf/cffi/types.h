@@ -84,6 +84,7 @@ typedef struct gdf_context_{
   int flag_sorted;        /* 0 = No, 1 = yes */
   gdf_method flag_method; /* what method is used */
   int flag_distinct;      /* for COUNT: DISTINCT = 1, else = 0 */
+  int flag_sort_result;   /* When method is GDF_HASH, 0 = result is not sorted, 1 = result is sorted */
 } gdf_context;
 
 struct _OpaqueIpcParser;

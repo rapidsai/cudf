@@ -25,7 +25,8 @@ gdf_error gdf_group_by_hash(int ncols,
                             gdf_column* in_groupby_columns[],        
                             gdf_column* in_aggregation_column,       
                             gdf_column* out_groupby_columns[],
-                            gdf_column* out_aggregation_column)
+                            gdf_column* out_aggregation_column,
+                            bool sort_result = false)
 {
 
   // TODO Currently only supports a single groupby column
@@ -99,7 +100,7 @@ gdf_error gdf_group_by_hash(int ncols,
               groupby_type * out_group_col = static_cast<groupby_type *>(out_groupby_columns[0]->data);
               aggregation_type * out_agg_col = static_cast<aggregation_type *>(out_aggregation_column->data);
 
-              if(cudaSuccess != GroupbyHash(in_group_col, in_agg_col, in_size, out_group_col, out_agg_col, &out_size, op_type()))
+              if(cudaSuccess != GroupbyHash(in_group_col, in_agg_col, in_size, out_group_col, out_agg_col, &out_size, op_type(), sort_result))
               {
                 return GDF_CUDA_ERROR;
               }
@@ -121,7 +122,7 @@ gdf_error gdf_group_by_hash(int ncols,
               groupby_type * out_group_col = static_cast<groupby_type *>(out_groupby_columns[0]->data);
               aggregation_type * out_agg_col = static_cast<aggregation_type *>(out_aggregation_column->data);
 
-              if(cudaSuccess != GroupbyHash(in_group_col, in_agg_col, in_size, out_group_col, out_agg_col, &out_size, op_type()))
+              if(cudaSuccess != GroupbyHash(in_group_col, in_agg_col, in_size, out_group_col, out_agg_col, &out_size, op_type(), sort_result))
               {
                 return GDF_CUDA_ERROR;
               }

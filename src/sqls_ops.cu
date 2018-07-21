@@ -1147,6 +1147,13 @@ gdf_error gdf_group_by_single(int ncols,                    // # columns
     }
   else if( ctxt->flag_method == GDF_HASH )
     {
+
+      bool sort_result = false;
+
+      if(1 == ctxt->flag_sort_result){
+        sort_result = true;
+      }
+
       switch(op)
       {
         case GDF_MAX:
@@ -1155,7 +1162,8 @@ gdf_error gdf_group_by_single(int ncols,                    // # columns
                                              cols,
                                              col_agg,
                                              out_col_values,
-                                             out_col_agg);
+                                             out_col_agg,
+                                             sort_result);
             break;
           }
         case GDF_MIN:
@@ -1164,7 +1172,8 @@ gdf_error gdf_group_by_single(int ncols,                    // # columns
                                              cols,
                                              col_agg,
                                              out_col_values,
-                                             out_col_agg);
+                                             out_col_agg,
+                                             sort_result);
             break;
           }
         default:
