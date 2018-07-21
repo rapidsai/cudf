@@ -126,6 +126,7 @@ gdf_error gdf_group_by_hash(int ncols,
 
               if(cudaSuccess != GroupbyHash(in_group_col, in_agg_col, in_size, out_group_col, out_agg_col, &out_size, op_type()))
               {
+                std::cout << "GroupbyHash returned a cudaFailure. " << std::endl;
                 return GDF_CUDA_ERROR;
               }
 
@@ -151,7 +152,7 @@ gdf_error gdf_group_by_hash(int ncols,
               using aggregation_type = int32_t;
             }
           default:
-            std::cout << "Unsupported aggregation column type" << std::endl;
+            std::cout << "Unsupported aggregation column type: " << aggregation_column_type << std::endl;
             return GDF_UNSUPPORTED_DTYPE;
 
         }
@@ -168,5 +169,6 @@ gdf_error gdf_group_by_hash(int ncols,
       return GDF_UNSUPPORTED_DTYPE;
   }
 
+  return GDF_SUCCESS;
 
 }

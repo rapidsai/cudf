@@ -1147,9 +1147,6 @@ gdf_error gdf_group_by_single(int ncols,                    // # columns
     }
   else if( ctxt->flag_method == GDF_HASH )
     {
-      //TODO:
-
-      //HASH-based
       switch(op)
       {
         case GDF_MAX:
@@ -1171,6 +1168,7 @@ gdf_error gdf_group_by_single(int ncols,                    // # columns
             break;
           }
         default:
+          std::cout << "Unsupported aggregation method for hash-based groupby." << std::endl;
           return GDF_UNSUPPORTED_METHOD;
       }
     }
