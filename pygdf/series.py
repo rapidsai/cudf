@@ -1,6 +1,5 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
 
-from __future__ import print_function, division
 
 import warnings
 from collections import OrderedDict
@@ -702,12 +701,15 @@ class Series(object):
         warnings.warn("Use .unique() instead", DeprecationWarning)
         return self.unique()
 
-    def unique(self, type='sort'):
+    def unique(self, type='sort', sort=True):
         """Returns unique values of this Series.
         default='sort' will be changed to 'hash' when implemented.
         """
         if type is not 'sort':
             msg = 'non sort based unique() not implemented yet'
+            raise NotImplementedError(msg)
+        if not sort:
+            msg = 'not sorted unique not implemented yet.'
             raise NotImplementedError(msg)
         if self.null_count == len(self):
             return np.empty(0, dtype=self.dtype)

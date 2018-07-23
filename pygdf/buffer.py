@@ -1,4 +1,3 @@
-from __future__ import print_function, division
 
 import numpy as np
 from numba import cuda
@@ -24,9 +23,12 @@ class Buffer(object):
         mem = cuda.device_array(0, dtype=dtype)
         return cls(mem, size=0, capacity=0)
 
-    def __init__(self, mem, size=None, capacity=None):
+    def __init__(self, mem, size=None, capacity=None, categorical=False):
         if size is None:
-            size = mem.size
+            if categorical:
+                size = len(mem)
+            else:
+                size = mem.size
         if capacity is None:
             capacity = size
         self.mem = cudautils.to_device(mem)
