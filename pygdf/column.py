@@ -67,6 +67,31 @@ class Column(object):
         col = head.replace(data=data, mask=mask, null_count=null_count)
         return col
 
+    @staticmethod
+    def from_cffi_view(cffi_view):
+        """Create a Column object from a cffi struct gdf_column*.
+        """
+        # Deal with the data
+        # XXX: no dtor is set
+        device_data = _gdf.wrap_libgdf_pointer(
+            int(_gdf.ffi.cast('intptr_t', cffi_view.data)),
+            cffi_view.size,
+            _gdf.gdf_to_np_dtype(cffi_view.dtype),
+            )
+        data_buf = Buffer(device_data)
+        # Deal with the valid-mask
+        if cffi_view.valid:
+            # XXX: no dtor is set
+            device_mask = _gdf.wrap_libgdf_pointer(
+                int(_gdf.ffi.cast('intptr_t', cffi_view.valid)),
+                utils.calc_chunk_size(cffi_view.size, utils.mask_bitsize),
+                utils.mask_dtype,
+                )
+            mask = Buffer(device_mask)
+        else:
+            mask = None
+        return Column(data=data_buf, mask=mask)
+
     def __init__(self, data, mask=None, null_count=None):
         """
         Parameters

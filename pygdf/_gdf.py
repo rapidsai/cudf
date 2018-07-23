@@ -90,18 +90,40 @@ def apply_mask_and(col, mask, out):
     return len(out) - nnz
 
 
+_np2gdf_dtype = {
+    np.float64: libgdf.GDF_FLOAT64,
+    np.float32: libgdf.GDF_FLOAT32,
+    np.int64:   libgdf.GDF_INT64,
+    np.int32:   libgdf.GDF_INT32,
+    np.int16:   libgdf.GDF_INT16,
+    np.int8:    libgdf.GDF_INT8,
+    np.bool_:   libgdf.GDF_INT8,
+}
+
+_np2gdf_dtype = {
+    np.float64: libgdf.GDF_FLOAT64,
+    np.float32: libgdf.GDF_FLOAT32,
+    np.int64:   libgdf.GDF_INT64,
+    np.int32:   libgdf.GDF_INT32,
+    np.int16:   libgdf.GDF_INT16,
+    np.int8:    libgdf.GDF_INT8,
+    np.bool_:   libgdf.GDF_INT8,
+}
+
+
+_gdf2np_dtype = {v: k for k, v in _np2gdf_dtype.items()}
+
+
 def np_to_gdf_dtype(dtype):
     """Util to convert numpy dtype to gdf dtype.
     """
-    return {
-        np.float64: libgdf.GDF_FLOAT64,
-        np.float32: libgdf.GDF_FLOAT32,
-        np.int64:   libgdf.GDF_INT64,
-        np.int32:   libgdf.GDF_INT32,
-        np.int16:   libgdf.GDF_INT16,
-        np.int8:    libgdf.GDF_INT8,
-        np.bool_:   libgdf.GDF_INT8,
-    }[np.dtype(dtype).type]
+    return _np2gdf_dtype[np.dtype(dtype).type]
+
+
+def gdf_to_np_dtype(dtype):
+    """Util to convert gdf dtype to numpy dtype.
+    """
+    return np.dtype(_gdf2np_dtype[dtype])
 
 
 def apply_reduce(fn, inp):
@@ -140,15 +162,40 @@ _join_how_api = {
 }
 
 
-def _as_numba_devarray(intaddr, nelem, dtype):
+def _make_mem_finalizer(dtor, bytesize):
+    """Make memory finalizer for externally allocated memory
+    """
+    def mem_finalize(context, handle):
+        deallocations = context.deallocations
+
+        def core():
+            deallocations.add_item(dtor, handle, size=bytesize)
+
+        return core
+
+    return mem_finalize
+
+
+def _as_numba_devarray(intaddr, nelem, dtype, cb_dtor=None):
     dtype = np.dtype(dtype)
     addr = ctypes.c_uint64(intaddr)
     elemsize = dtype.itemsize
     datasize = elemsize * nelem
+    finalizer = (None
+                 if cb_dtor is None
+                 else _make_mem_finalizer(cb_dtor, datasize))
     memptr = cuda.driver.MemoryPointer(context=cuda.current_context(),
-                                       pointer=addr, size=datasize)
+                                       pointer=addr, size=datasize,
+                                       finalizer=finalizer)
     return cuda.devicearray.DeviceNDArray(shape=(nelem,), strides=(elemsize,),
                                           dtype=dtype, gpu_data=memptr)
+
+
+def wrap_libgdf_pointer(intaddr, nelem, dtype, refct=True):
+    """Wrap libgdf defined pointer for refcounting.
+    """
+    return _as_numba_devarray(intaddr, nelem, dtype,
+                              cb_dtor=cuda.driver.driver.cuMemFree)
 
 
 @contextlib.contextmanager
