@@ -73,7 +73,7 @@ class Column(object):
         """
         # Deal with the data
         # XXX: no dtor is set
-        device_data = _gdf._as_numba_devarray(
+        device_data = _gdf.wrap_libgdf_pointer(
             int(_gdf.ffi.cast('intptr_t', cffi_view.data)),
             cffi_view.size,
             _gdf.gdf_to_np_dtype(cffi_view.dtype),
@@ -82,7 +82,7 @@ class Column(object):
         # Deal with the valid-mask
         if cffi_view.valid:
             # XXX: no dtor is set
-            device_mask = _gdf._as_numba_devarray(
+            device_mask = _gdf.wrap_libgdf_pointer(
                 int(_gdf.ffi.cast('intptr_t', cffi_view.valid)),
                 utils.calc_chunk_size(cffi_view.size, utils.mask_bitsize),
                 utils.mask_dtype,

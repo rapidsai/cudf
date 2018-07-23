@@ -162,15 +162,40 @@ _join_how_api = {
 }
 
 
-def _as_numba_devarray(intaddr, nelem, dtype):
+def _make_mem_finalizer(dtor, bytesize):
+    """Make memory finalizer for externally allocated memory
+    """
+    def mem_finalize(context, handle):
+        deallocations = context.deallocations
+
+        def core():
+            deallocations.add_item(dtor, handle, size=bytesize)
+
+        return core
+
+    return mem_finalize
+
+
+def _as_numba_devarray(intaddr, nelem, dtype, cb_dtor=None):
     dtype = np.dtype(dtype)
     addr = ctypes.c_uint64(intaddr)
     elemsize = dtype.itemsize
     datasize = elemsize * nelem
+    finalizer = (None
+                 if cb_dtor is None
+                 else _make_mem_finalizer(cb_dtor, datasize))
     memptr = cuda.driver.MemoryPointer(context=cuda.current_context(),
-                                       pointer=addr, size=datasize)
+                                       pointer=addr, size=datasize,
+                                       finalizer=finalizer)
     return cuda.devicearray.DeviceNDArray(shape=(nelem,), strides=(elemsize,),
                                           dtype=dtype, gpu_data=memptr)
+
+
+def wrap_libgdf_pointer(intaddr, nelem, dtype, refct=True):
+    """Wrap libgdf defined pointer for refcounting.
+    """
+    return _as_numba_devarray(intaddr, nelem, dtype,
+                              cb_dtor=cuda.driver.driver.cuMemFree)
 
 
 @contextlib.contextmanager
