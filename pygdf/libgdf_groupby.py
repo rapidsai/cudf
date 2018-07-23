@@ -12,7 +12,7 @@ from libgdf_cffi import ffi, libgdf, GDFError
 
 # import pytest
 
-print("class")
+#print("class")
 
 
 class LibGdfGroupby(object):
@@ -28,7 +28,7 @@ class LibGdfGroupby(object):
             Column(s) that grouping is based on.
             It can be a single or list of column names.
         """
-        print("__init__")
+        #print("__init__")
 
         self._df = df
         self._by = [by] if isinstance(by, str) else list(by)
@@ -42,6 +42,9 @@ class LibGdfGroupby(object):
     def _apply_agg(self, agg_type, result, add_col_values,
                    ctx, val_columns, val_columns_out=None):
 
+        if (self._method == libgdf.GDF_HASH):
+            ctx.flag_sort_result = 1
+
         if (val_columns_out is None):
             val_columns_out = val_columns
 
@@ -49,8 +52,9 @@ class LibGdfGroupby(object):
         cols = [self._df[thisBy]._column.cffi_view for thisBy in self._by]
 
         first_run = add_col_values
-        need_to_index = len(
-            self._val_columns) > 0 and self._method == libgdf.GDF_HASH
+        need_to_index = False
+#        need_to_index = len(
+#            self._val_columns) > 0 and self._method == libgdf.GDF_HASH
 
         col_count = 0
         for val_col in val_columns:
@@ -65,7 +69,7 @@ class LibGdfGroupby(object):
             else:
                 out_col_indices = ffi.NULL
 
-            if first_run:
+            if first_run or self._method == libgdf.GDF_HASH:
                 out_col_values_series = [Series(Buffer(cuda.device_array(
                     col_agg.size, dtype=self._df[self._by[i]]._column.data.dtype))) for i in range(0, ncols)]
                 out_col_values = [
@@ -222,8 +226,10 @@ class LibGdfGroupby(object):
         if isinstance(args, (tuple, list)):
             for agg_type in args:
 
-                val_columns_out = [val + '_' +
-                                   agg_type for val in self._val_columns]
+                # we don't need to change the output column names
+#                val_columns_out = [val + '_' +
+#                                   agg_type for val in self._val_columns]
+                val_colums_out = self._val_columns
 
                 result = self._apply_agg(
                     agg_type, result, add_col_values, ctx, self._val_columns, val_columns_out)
@@ -233,7 +239,9 @@ class LibGdfGroupby(object):
         elif isinstance(args, dict):
             for val, agg_type in args.items():
 
-                val_columns_out = [val + '_' + agg_type]
+                # we don't need to change the output column names
+#                val_columns_out = [val + '_' + agg_type]
+                val_columns_out = [val]
 
                 result = self._apply_agg(agg_type, result, add_col_values, ctx, [
                                          val], val_columns_out)
