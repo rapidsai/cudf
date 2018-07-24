@@ -148,7 +148,7 @@ add_custom_target(   # target to link the python files and trigger cffi
 add_custom_target(pytest DEPENDS copy_python)
 add_custom_command(TARGET pytest POST_BUILD
                    COMMAND ${CMAKE_COMMAND} -E env LD_LIBRARY_PATH=$LD_LIBRARY_PATH:${CMAKE_BINARY_DIR} py.test -v
-                   WORKING_DIRECTORY --cache-clear tests)
+                   WORKING_DIRECTORY --cache-clear --junitxml=junit.xml tests)
 
 # The install target
 install(TARGETS gdf LIBRARY DESTINATION lib)
