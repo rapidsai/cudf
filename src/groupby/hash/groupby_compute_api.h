@@ -47,7 +47,12 @@ cudaError_t GroupbyHash(const groupby_type * const in_groupby_column,
                         bool sort_result = false)
 {
 
-  using map_type = concurrent_unordered_map<groupby_type, aggregation_type, std::numeric_limits<groupby_type>::max()>;
+  using map_type = concurrent_unordered_map<groupby_type, 
+                                            aggregation_type, 
+                                            std::numeric_limits<groupby_type>::max(), 
+                                            default_hash<groupby_type>, 
+                                            equal_to<aggregation_type>, 
+                                            legacy_allocator<thrust::pair<groupby_type, aggregation_type> > >;
 
   cudaError_t error{cudaSuccess};
 
@@ -75,7 +80,9 @@ cudaError_t GroupbyHash(const groupby_type * const in_groupby_column,
   // Initialize the hash table with the aggregation operation functor's identity value
   the_map.reset(new map_type(hash_table_size, aggregation_operation::IDENTITY));
 
-  error = cudaDeviceSynchronize();
+  //the_map->prefetch(0);
+
+  error = cudaGetLastError();
   if(error != cudaSuccess)
     return error;
 
@@ -87,16 +94,17 @@ cudaError_t GroupbyHash(const groupby_type * const in_groupby_column,
                                                            in_aggregation_column,
                                                            in_column_size,
                                                            aggregation_op);
-  error = cudaDeviceSynchronize();
+  error = cudaGetLastError();
   if(error != cudaSuccess)
     return error;
 
   // Used by threads to coordinate where to write their results
   unsigned int * global_write_index{nullptr};
   cudaMallocManaged(&global_write_index, sizeof(unsigned int));
-  *global_write_index = 0;
+  cudaMemset(global_write_index, 0, sizeof(unsigned int));
+  //*global_write_index = 0;
 
-  error = cudaDeviceSynchronize();
+  error = cudaGetLastError();
   if(error != cudaSuccess)
     return error;
 
