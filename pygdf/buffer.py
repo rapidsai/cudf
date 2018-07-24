@@ -63,10 +63,16 @@ class Buffer(object):
     def __getitem__(self, arg):
         if isinstance(arg, slice):
             sliced = self.to_gpu_array()[arg]
-            return Buffer(sliced)
+            buf = Buffer(sliced)
+            buf.dtype = self.dtype  # for np.datetime64 support
+            return buf
         elif isinstance(arg, int):
             arg = utils.normalize_index(arg, self.size)
-            return self.mem[arg]
+            # the dtype argument is necessary for datetime64 support
+            # because currently we can't pass datetime64 types into
+            # cuda dev arrays, so the type of the cuda dev array is
+            # an i64, and we view it as the dtype on the buffer
+            return self.mem[arg].view(self.dtype)
         else:
             raise NotImplementedError(type(arg))
 

@@ -13,6 +13,7 @@ from .buffer import Buffer
 from .index import Index, RangeIndex, GenericIndex
 from .settings import NOTSET, settings
 from .column import Column
+from .datetime import DatetimeColumn
 from . import columnops
 from .serialize import register_distributed_serializer
 
@@ -82,6 +83,14 @@ class Series(object):
         frames.extend(column_frames)
         header['column_frame_count'] = len(column_frames)
         return header, frames
+
+    @property
+    def dt(self):
+        if isinstance(self._column, DatetimeColumn):
+            return DatetimeProperties(self)
+        else:
+            raise AttributeError("Can only use .dt accessor with datetimelike "
+                                 "values")
 
     @classmethod
     def deserialize(cls, deserialize, header, frames):
@@ -770,3 +779,37 @@ class Series(object):
 
 
 register_distributed_serializer(Series)
+
+
+class DatetimeProperties(object):
+
+    def __init__(self, series):
+        self.series = series
+
+    @property
+    def year(self):
+        return self.get_dt_field('year')
+
+    @property
+    def month(self):
+        return self.get_dt_field('month')
+
+    @property
+    def day(self):
+        return self.get_dt_field('day')
+
+    @property
+    def hour(self):
+        return self.get_dt_field('hour')
+
+    @property
+    def minute(self):
+        return self.get_dt_field('minute')
+
+    @property
+    def second(self):
+        return self.get_dt_field('second')
+
+    def get_dt_field(self, field):
+        out_column = self.series._column.get_dt_field(field)
+        return Series(data=out_column, index=self.series._index)
