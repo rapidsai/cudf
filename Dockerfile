@@ -28,10 +28,15 @@ SHELL ["/bin/bash", "-c"]
 # Build combined libgdf/pygdf conda env
 ARG PYTHON_VERSION=3.6
 RUN conda create -n gdf python=${PYTHON_VERSION}
+
+ARG NUMBA_VERSION=0.40.0
+ARG NUMPY_VERSION=1.14.3
 # Locked to Pandas 0.20.3 by https://github.com/gpuopenanalytics/pygdf/issues/118
+ARG PANDAS_VERSION=0.20.3
 RUN conda install -n gdf -y -c numba -c conda-forge -c defaults \
-      numba \
-      pandas=0.20.3
+      numba=${NUMBA_VERSION} \
+      numpy=${NUMPY_VERSION} \
+      pandas=${PANDAS_VERSION}
 
 # LibGDF build/install
 ARG LIBGDF_REPO=https://github.com/gpuopenanalytics/libgdf
