@@ -77,8 +77,8 @@ def test_groupby_agg_min_max_dictargs(nelem):
     # gdf (Note: lack of multindex)
     got_df = make_frame(DataFrame, nelem=nelem, extra_vals='ab').groupby(
         ('x', 'y'), method="GDF_SORT").agg({'a': 'min', 'b': 'max'})
-    got_min = np.sort(got_df['a_min'].to_array())
-    got_max = np.sort(got_df['b_max'].to_array())
+    got_min = np.sort(got_df['a'].to_array())
+    got_max = np.sort(got_df['b'].to_array())
     # pandas
     expect_df = make_frame(pd.DataFrame, nelem=nelem, extra_vals='ab').groupby(
         ('x', 'y')).agg({'a': 'min', 'b': 'max'})
@@ -217,7 +217,7 @@ def test_groupby_2keys_agg(nelem, func):
     got_df = make_frame(DataFrame, nelem=nelem)\
         .groupby(('x', 'y'), method="GDF_SORT").agg(func)
 
-    got_agg = np.sort(got_df['val_' + func].to_array())
+    got_agg = np.sort(got_df['val'].to_array())
     # pandas
     expect_df = make_frame(pd.DataFrame, nelem=nelem)\
         .groupby(('x', 'y')).agg(func)
