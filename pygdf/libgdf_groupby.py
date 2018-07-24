@@ -1,9 +1,9 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
 
 import numpy as np
+import collections
 
 from numba import cuda
-
 from .dataframe import DataFrame, Series
 from .buffer import Buffer
 
@@ -18,7 +18,7 @@ class LibGdfGroupby(object):
                         'min': libgdf.gdf_group_by_min,
                         'max': libgdf.gdf_group_by_max,
                         'count': libgdf.gdf_group_by_count,
-                        'sum': libgdf.gdf_group_by_sum,                        
+                        'sum': libgdf.gdf_group_by_sum,
                         }
 
     def __init__(self, df, by, method="GDF_SORT"):
@@ -86,15 +86,23 @@ class LibGdfGroupby(object):
                     col_agg.size, dtype=self._df[val_col]._column.data.dtype)))
 
             out_col_agg = out_col_agg_series._column.cffi_view
-            
+
             agg_func = self._NAMED_FUNCTIONS.get(agg_type, None)
             if agg_func is None:
-                raise RuntimeError("ERROR: this aggregator has not been implemented yet")
-            err = agg_func(ncols, cols, col_agg, out_col_indices, out_col_values, out_col_agg, ctx)
+                raise RuntimeError(
+                    "ERROR: this aggregator has not been implemented yet")
+            err = agg_func(
+                ncols,
+                cols,
+                col_agg,
+                out_col_indices,
+                out_col_values,
+                out_col_agg,
+                ctx)
 
             if (err is not None):
                 print(err)
-                raise RuntimeError(err)                
+                raise RuntimeError(err)
 
             num_row_results = out_col_agg.size
 
@@ -108,9 +116,10 @@ class LibGdfGroupby(object):
 #            if need_to_index:
 #                out_col_indices_series.data.size = num_row_results
 #                out_col_indices_series = out_col_indices_series.reset_index()
-                # TODO do something with the indices to align data
+            # TODO do something with the indices to align data
 
-            result[val_columns_out[col_count]] = out_col_agg_series[:num_row_results]
+            result[val_columns_out[col_count]
+                   ] = out_col_agg_series[:num_row_results]
 
             out_col_agg_series.data.size = num_row_results
             out_col_agg_series = out_col_agg_series.reset_index()
@@ -119,8 +128,7 @@ class LibGdfGroupby(object):
             col_count = col_count + 1
 
         return result
-    
-    
+
     def _apply_basic_agg(self, agg_type):
         result = DataFrame()
         add_col_values = True
@@ -137,19 +145,18 @@ class LibGdfGroupby(object):
 
     def min(self):
         return self._apply_basic_agg("min")
-    
+
     def max(self):
         return self._apply_basic_agg("max")
-    
+
     def count(self):
         return self._apply_basic_agg("count")
-    
+
     def sum(self):
         return self._apply_basic_agg("sum")
-    
+
     def mean(self):
         return self._apply_basic_agg("mean")
-                
 
     def agg(self, args):
 
@@ -161,12 +168,13 @@ class LibGdfGroupby(object):
         ctx.flag_method = self._method
         ctx.flag_distinct = 0
 
-        if isinstance(args, (tuple, list)):
+        if not isinstance(args, str) and isinstance(
+                args, collections.abc.Sequence):
             for agg_type in args:
 
                 # we don't need to change the output column names
-#                val_columns_out = [val + '_' +
-#                                   agg_type for val in self._val_columns]
+                #                val_columns_out = [val + '_' +
+                # agg_type for val in self._val_columns]
                 val_columns_out = self._val_columns
 
                 result = self._apply_agg(
@@ -174,11 +182,11 @@ class LibGdfGroupby(object):
 
                 add_col_values = False  # we only want to add them once
 
-        elif isinstance(args, dict):
+        elif isinstance(args, collections.abc.Mapping):
             for val, agg_type in args.items():
 
                 # we don't need to change the output column names
-#                val_columns_out = [val + '_' + agg_type]
+                #                val_columns_out = [val + '_' + agg_type]
                 val_columns_out = [val]
 
                 result = self._apply_agg(agg_type, result, add_col_values, ctx, [
