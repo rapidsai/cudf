@@ -21,6 +21,7 @@
 #    $ cmake ..          # configure build system
 #    $ make              # make libgdf
 #    $ make pytest       # trigger test
+#    $ make install      # install libgdf
 
 PROJECT(libgdf)
 
