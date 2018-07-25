@@ -69,6 +69,20 @@ else()
     set(ARROW_FOUND TRUE)
     add_library(arrow STATIC IMPORTED)
     set_target_properties(arrow PROPERTIES IMPORTED_LOCATION "${ARROW_STATIC_LIB}")
+
+    # Using pkgconfig to determine and set CPP the macros ARROW_METADATA_V?
+    set( ENV{PKG_CONFIG_PATH} "$ENV{PKG_CONFIG_PATH}:${ARROW_ROOT}/lib/pkgconfig" )
+    find_package(PkgConfig)
+    pkg_search_module(_ARROW REQUIRED arrow) # using only version information
+    ADD_DEFINITIONS(-DARROW_VERSION="${_ARROW_VERSION}")
+    if ("${_ARROW_VERSION}" MATCHES "^(0.8.0|0.9.0|0.10.0)$")
+      ADD_DEFINITIONS(-DARROW_METADATA_V4)
+    elseif ("${_ARROW_VERSION}" MATCHES "^(0.7.0|0.7.1)$")
+      ADD_DEFINITIONS(-DARROW_METADATA_V3)
+    else()
+      message(WARNING "Unrecognized arrow version: ${_ARROW_VERSION}, assuming the most recent.")
+      ADD_DEFINITIONS(-DARROW_METADATA_V4)
+    endif()
 endif ()
 
 mark_as_advanced(
