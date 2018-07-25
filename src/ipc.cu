@@ -19,6 +19,7 @@ namespace {
 
 using namespace arrow;
 
+#if ARROW_VERSION < 800
 static std::string GetBufferTypeName(BufferType type) {
   switch (type) {
     case BufferType::DATA:
@@ -34,7 +35,9 @@ static std::string GetBufferTypeName(BufferType type) {
   }
   return "UNKNOWN";
 }
-
+#else
+  #warning "not implemented for this arrow version"
+#endif
 
 static std::string GetTypeName(Type::type id) {
     switch (id) {
@@ -301,9 +304,12 @@ protected:
                 auto layout = layouts[j];
                 LayoutDesc layout_desc;
                 layout_desc.bitwidth = layout.bit_width();
-
+#if ARROW_VERSION < 800
                 layout_desc.vectortype = GetBufferTypeName(layout.type());
                 out_field.layouts.push_back(layout_desc);
+#else
+#warning "not implemented for this arrow version"
+#endif
             }
         }
     }
@@ -333,10 +339,13 @@ protected:
 
             for ( int j=0; j < buffer_per_node; ++j ) {
                 auto buf = rb->buffers()->Get(i * buffer_per_node + j);
+#if ARROW_VERSION < 800
                 if ( buf->page() != -1 ) {
                     std::cerr << "buf.Page() != -1; metadata format changed!\n";
                 }
-
+#else
+#warning "not implemented for this arrow version"
+#endif
                 const auto &layout = fd.layouts[j];
 
                 BufferDesc bufdesc;
