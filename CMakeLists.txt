@@ -121,7 +121,8 @@ cuda_add_library(gdf SHARED
     src/sqls_ops.cu
 )
 
-target_link_libraries(gdf arrow)
+# boost_regex may be necessary only when arrow==0.9.0
+target_link_libraries(gdf arrow boost_regex)
 
 # Command to symlink files into the build directory
 add_custom_command(  # link the include directory
