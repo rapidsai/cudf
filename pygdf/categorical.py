@@ -166,7 +166,7 @@ class CategoricalColumn(columnops.TypedColumnBase):
         segs, begins = cudautils.find_segments(sortedvals)
         return segs, sortedvals
 
-    def unique(self, type=None):
+    def unique(self, method=None):
         return CategoricalColumn(
             data=Buffer(list(range(0, len(self._categories))),
                         categorical=True),
@@ -174,15 +174,15 @@ class CategoricalColumn(columnops.TypedColumnBase):
             ordered=self._ordered,
             dtype=self.dtype)
 
-    def unique_count(self, type='sort'):
-        if type is not 'sort':
+    def unique_count(self, method='sort'):
+        if method is not 'sort':
             msg = 'non sort based unique_count() not implemented yet'
             raise NotImplementedError(msg)
         segs, _ = self._unique_segments()
         return len(segs)
 
-    def value_counts(self, type='sort'):
-        if type is not 'sort':
+    def value_counts(self, method='sort'):
+        if method is not 'sort':
             msg = 'non sort based value_count() not implemented yet'
             raise NotImplementedError(msg)
         segs, sortedvals = self._unique_segments()

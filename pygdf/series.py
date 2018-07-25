@@ -701,11 +701,11 @@ class Series(object):
         warnings.warn("Use .unique() instead", DeprecationWarning)
         return self.unique()
 
-    def unique(self, type='sort', sort=True):
+    def unique(self, method='sort', sort=True):
         """Returns unique values of this Series.
         default='sort' will be changed to 'hash' when implemented.
         """
-        if type is not 'sort':
+        if method is not 'sort':
             msg = 'non sort based unique() not implemented yet'
             raise NotImplementedError(msg)
         if not sort:
@@ -713,30 +713,30 @@ class Series(object):
             raise NotImplementedError(msg)
         if self.null_count == len(self):
             return np.empty(0, dtype=self.dtype)
-        res = self._column.unique(type=type)
+        res = self._column.unique(method=method)
         return Series(res)
 
-    def unique_count(self, type='sort'):
+    def unique_count(self, method='sort'):
         """Returns the number of unique valies of the Series: approximate version,
         and exact version to be moved to libgdf
         """
-        if type is not 'sort':
+        if method is not 'sort':
             msg = 'non sort based unique_count() not implemented yet'
             raise NotImplementedError(msg)
         if self.null_count == len(self):
             return 0
-        return self._column.unique_count(type=type)
+        return self._column.unique_count(method=method)
         # return len(self._column.unique())
 
-    def value_counts(self, type='sort', sort=True):
+    def value_counts(self, method='sort', sort=True):
         """Returns unique values of this Series.
         """
-        if type is not 'sort':
+        if method is not 'sort':
             msg = 'non sort based value_count() not implemented yet'
             raise NotImplementedError(msg)
         if self.null_count == len(self):
             return 0
-        vals, cnts = self._column.value_counts(type=type)
+        vals, cnts = self._column.value_counts(method=method)
         res = Series(cnts, index=GenericIndex(vals))
         if sort:
             return res.sort_values(ascending=False)
