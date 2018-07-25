@@ -70,7 +70,7 @@ else()
     add_library(arrow STATIC IMPORTED)
     set_target_properties(arrow PROPERTIES IMPORTED_LOCATION "${ARROW_STATIC_LIB}")
 
-    # Using pkgconfig to determine and set CPP the macros ARROW_METADATA_V?
+    # Using pkgconfig to determine arrow version information for CPP macros
     set( ENV{PKG_CONFIG_PATH} "$ENV{PKG_CONFIG_PATH}:${ARROW_ROOT}/lib/pkgconfig" )
     find_package(PkgConfig)
     pkg_search_module(_ARROW REQUIRED arrow) # using only version information

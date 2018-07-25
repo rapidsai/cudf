@@ -187,9 +187,13 @@ public:
     const std::string& get_schema_json() {
         if ( _json_schema_output.size() == 0 ) {
             // To JSON
+#if ARROW_VERSION < 800
             std::unique_ptr<arrow::ipc::JsonWriter> json_writer;
             arrow::ipc::JsonWriter::Open(_schema, &json_writer);
             json_writer->Finish(&_json_schema_output);
+#else
+  #warning "not implemented for this arrow version"
+#endif
         }
         return _json_schema_output;
     }
@@ -253,8 +257,12 @@ protected:
         const auto payload = std::make_shared<arrow::Buffer>(schema_buf, length);
         auto buffer = std::make_shared<io::BufferReader>(payload);
         std::shared_ptr<ipc::RecordBatchStreamReader> reader;
+#if ARROW_VERSION < 800
         auto status = ipc::RecordBatchStreamReader::Open(buffer, &reader);
         if ( !status.ok() ) throw ParseError(status.message());
+#else
+#warning "not implemented for this arrow version"
+#endif
         _schema = reader->schema();
         if (!_schema) throw ParseError("failed to parse schema");
         // Parse the schema
@@ -298,19 +306,18 @@ protected:
 
             out_field.name = field->name();
             out_field.type = GetTypeName(field->type()->id());
-
+#if ARROW_VERSION < 800
             auto layouts = field->type()->GetBufferLayout();
             for ( int j=0; j < layouts.size(); ++j ) {
                 auto layout = layouts[j];
                 LayoutDesc layout_desc;
                 layout_desc.bitwidth = layout.bit_width();
-#if ARROW_VERSION < 800
                 layout_desc.vectortype = GetBufferTypeName(layout.type());
                 out_field.layouts.push_back(layout_desc);
+            }
 #else
 #warning "not implemented for this arrow version"
 #endif
-            }
         }
     }
 
