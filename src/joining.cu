@@ -17,9 +17,6 @@
 #include <gdf/gdf.h>
 #include <gdf/errorutils.h>
 
-#include <memory>
-#include <iostream>
-
 #include "joining.h"
 
 using namespace mgpu;

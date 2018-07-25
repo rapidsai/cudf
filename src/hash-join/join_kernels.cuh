@@ -151,7 +151,9 @@ __global__ void probe_hash_tbl(
                 output_offset = cub::ShuffleIndex(output_offset, 0, warp_size, activemask);
 
                 for ( int shared_out_idx = lane_id; shared_out_idx<current_idx_shared[warp_id]; shared_out_idx+=num_threads ) {
-                    joined[output_offset+shared_out_idx] = joined_shared[warp_id][shared_out_idx];
+                    size_type thread_offset = output_offset + shared_out_idx;
+                    if (thread_offset < max_size)
+		       joined[thread_offset] = joined_shared[warp_id][shared_out_idx];
                 }
 #if defined(CUDA_VERSION) && CUDA_VERSION >= 9000
                 __syncwarp(activemask);

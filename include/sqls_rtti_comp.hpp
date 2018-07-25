@@ -24,8 +24,13 @@
 #include <thrust/advance.h>
 #include <thrust/gather.h>
 
+//for int<n>_t:
+//
+#include <cstdint>
+
 ///#include "gdf/cffi/types.h"
 
+template<typename IndexT>
 struct LesserRTTI
 {
   // LesserRTTI(const thrust::device_vector<void*>& cols,
@@ -63,14 +68,14 @@ struct LesserRTTI
   
 
   __host__ __device__
-  bool equal(int row1, int row2) const
+  bool equal(IndexT row1, IndexT row2) const
   {
     for(int col_index = 0; col_index < sz_; ++col_index)
       {
 	gdf_dtype col_type = static_cast<gdf_dtype>(rtti_[col_index]);
 
-	OpEqual eq;
-	switch( type_dispatcher(eq, col_type, col_index, row1, row2) )
+	OpEqual eq(row1, row2);
+	switch( type_dispatcher(eq, col_type, col_index) )
 	  {
 	  case State::False:
 	    return false;
@@ -90,8 +95,8 @@ struct LesserRTTI
       {
 	gdf_dtype col_type = static_cast<gdf_dtype>(rtti_[col_index]);
 
-	OpEqualV eq(vals_);
-	switch( type_dispatcher(eq, col_type, col_index, row1, 0) )
+	OpEqualV eq(vals_, row1);
+	switch( type_dispatcher(eq, col_type, col_index) )
 	  {
 	  case State::False:
 	    return false;
@@ -105,14 +110,14 @@ struct LesserRTTI
   }
 
   __host__ __device__
-  bool less(int row1, int row2) const
+  bool less(IndexT row1, IndexT row2) const
   {
     for(int col_index = 0; col_index < sz_; ++col_index)
       {
 	gdf_dtype col_type = static_cast<gdf_dtype>(rtti_[col_index]);
 
-	OpLess less;
-	switch( type_dispatcher(less, col_type, col_index, row1, row2) )
+	OpLess less(row1, row2);
+	switch( type_dispatcher(less, col_type, col_index) )
 	  {
 	  case State::False:
 	    return false;
@@ -125,10 +130,25 @@ struct LesserRTTI
     return false;
   }
 
+  __host__ __device__
+  void gather(void** d_ppcols_out, size_t* d_indices, size_t nrows_new) const
+  {
+     Gatherer g(d_ppcols_out,
+		d_indices,
+		nrows_new);
+     
+    for(int col_index = 0; col_index < sz_; ++col_index)
+      {
+	gdf_dtype col_type = static_cast<gdf_dtype>(rtti_[col_index]);
+                         
+	type_dispatcher(g, col_type, col_index);
+      }
+  }
+
   template<typename ColType>
   __host__ __device__
    static ColType at(int col_index,
-		     int row,
+		     IndexT row,
 		     const void* const * columns)
   {
     return (static_cast<const ColType* const>(columns[col_index]))[row];
@@ -140,20 +160,20 @@ private:
   struct OpLess
   {
      __host__ __device__
-    OpLess(void)
+     OpLess(IndexT row1, IndexT row2):
+       row1_(row1),
+       row2_(row2)
     {
     }
     
      template<typename ColType>
      __host__ __device__
      State operator() (int col_index,
-		       int row1,
-		       int row2,
 		       const void* const * columns,
 		       ColType )
     {
-      ColType res1 = LesserRTTI::at<ColType>(col_index, row1, columns);
-      ColType res2 = LesserRTTI::at<ColType>(col_index, row2, columns);
+      ColType res1 = LesserRTTI::at<ColType>(col_index, row1_, columns);
+      ColType res2 = LesserRTTI::at<ColType>(col_index, row2_, columns);
       
       if( res1 < res2 )
 	return State::True;
@@ -162,50 +182,55 @@ private:
       else
 	return State::False;
     }
+  private:
+    IndexT row1_;
+    IndexT row2_;
   };
 
   struct OpEqual
   {
      __host__ __device__
-    OpEqual(void)
+     OpEqual(IndexT row1, IndexT row2):
+       row1_(row1),
+       row2_(row2)
     {
     }
     
      template<typename ColType>
      __host__ __device__
      State operator() (int col_index,
-		       int row1,
-		       int row2,
 		       const void* const * columns,
 		       ColType )
     {
-      ColType res1 = LesserRTTI::at<ColType>(col_index, row1, columns);
-      ColType res2 = LesserRTTI::at<ColType>(col_index, row2, columns);
+      ColType res1 = LesserRTTI::at<ColType>(col_index, row1_, columns);
+      ColType res2 = LesserRTTI::at<ColType>(col_index, row2_, columns);
       
       if( res1 != res2 )
 	return State::False;
       else
 	return State::Undecided;
     }
+  private:
+    IndexT row1_;
+    IndexT row2_;
   };
 
   struct OpEqualV
   {
      __host__ __device__
-     explicit OpEqualV(const void* const * vals):
-       target_vals_(vals)
+     OpEqualV(const void* const * vals, IndexT row):
+       target_vals_(vals),
+       row_(row)
     {
     }
     
      template<typename ColType>
      __host__ __device__
      State operator() (int col_index,
-		       size_t row1,
-		       size_t ,//ignored
 		       const void* const * columns,
 		       ColType )
     {
-      ColType res1 = LesserRTTI::at<ColType>(col_index, row1, columns);
+      ColType res1 = LesserRTTI::at<ColType>(col_index, row_, columns);
       ColType res2 = LesserRTTI::at<ColType>(col_index, 0, target_vals_);
       
       if( res1 != res2 )
@@ -216,55 +241,89 @@ private:
 
   private:
     const void* const * target_vals_;
-  }; 
+    IndexT row_;
+  };
+
+  struct Gatherer
+  {
+    __host__ __device__
+    Gatherer(void** d_cols_out,
+	     size_t* d_indices,
+	     size_t nrows_new):
+      d_cols_out_(d_cols_out),
+      d_indices_(d_indices),
+      nrows_new_(nrows_new)
+    {
+    }
+
+    template<typename ColType>
+    __host__ __device__
+    State operator() (int col_index,
+		      const void* const * columns,
+		      ColType )
+    {
+      const ColType* const d_in = static_cast<const ColType* const>(columns[col_index]);
+      ColType* d_out = static_cast<ColType*>(d_cols_out_[col_index]);
+      thrust::gather(thrust::device,
+		     d_indices_, d_indices_ + nrows_new_, //map of indices
+		     d_in,                             //source
+		     d_out);                           //=source[map]
+
+      return State::True;
+    }
+  private:
+    void** d_cols_out_;
+    size_t* d_indices_;
+    size_t nrows_new_;
+  };
 
   template<typename Predicate>
   __host__ __device__
-  State type_dispatcher(Predicate pred, gdf_dtype col_type, int col_index, int row1, int row2) const
+  State type_dispatcher(Predicate pred, gdf_dtype col_type, int col_index) const
   {
     switch( col_type )
       {
       case GDF_INT8:
 	{
-	  using ColType = char;
+	  using ColType = int8_t;//char;
 	  
 	  ColType dummy;
-	  return pred(col_index, row1, row2, columns_, dummy);
+	  return pred(col_index, columns_, dummy);
 	}
       case GDF_INT16:
 	{
-	  using ColType = short;
+	  using ColType = int16_t;//short;
 
 	  ColType dummy;
-	  return pred(col_index, row1, row2, columns_, dummy);
+	  return pred(col_index, columns_, dummy);
 	}
       case GDF_INT32:
 	{
-	  using ColType = int;
+	  using ColType = int32_t;//int;
 
 	  ColType dummy;
-	  return pred(col_index, row1, row2, columns_, dummy);
+	  return pred(col_index, columns_, dummy);
 	}
       case GDF_INT64:
 	{
-	  using ColType = long;
+	  using ColType = int64_t;//long;
 
 	  ColType dummy;
-	  return pred(col_index, row1, row2, columns_, dummy);
+	  return pred(col_index, columns_, dummy);
 	}
       case GDF_FLOAT32:
 	{
 	  using ColType = float;
 
 	  ColType dummy;
-	  return pred(col_index, row1, row2, columns_, dummy);
+	  return pred(col_index, columns_, dummy);
 	}
       case GDF_FLOAT64:
 	{
 	  using ColType = double;
 
 	  ColType dummy;
-	  return pred(col_index, row1, row2, columns_, dummy);
+	  return pred(col_index, columns_, dummy);
 	}
 
       default:
@@ -306,7 +365,7 @@ void multi_col_order_by(size_t nrows,
 			IndexT*      d_indx,
 			cudaStream_t stream = NULL)
 {
-  LesserRTTI f(d_cols, d_gdf_t, ncols);
+  LesserRTTI<IndexT> f(d_cols, d_gdf_t, ncols);
 
   thrust::sequence(thrust::cuda::par.on(stream), d_indx, d_indx+nrows, 0);//cannot use counting_iterator
   //                                          2 reasons:
@@ -351,7 +410,7 @@ size_t multi_col_filter(size_t nrows,
 			IndexT* ptr_d_flt_indx,
 			cudaStream_t stream = NULL)
 {
-  LesserRTTI f(d_cols, d_gdf_t, ncols, d_vals);
+  LesserRTTI<size_t> f(d_cols, d_gdf_t, ncols, d_vals);//size_t, not IndexT, because of counting_iterator below;
   
   //actual filtering happens here:
   //
@@ -409,7 +468,7 @@ multi_col_group_by_count_sort(size_t         nrows,
   if( !sorted )
     multi_col_order_by(nrows, ncols, d_cols, d_gdf_t, ptr_d_indx, stream);
 
-  LesserRTTI f(d_cols, d_gdf_t, ncols);
+  LesserRTTI<IndexT> f(d_cols, d_gdf_t, ncols);
 
   thrust::pair<IndexT*, IndexT*> ret =
     thrust::reduce_by_key(thrust::cuda::par.on(stream),
@@ -478,7 +537,7 @@ size_t multi_col_group_by_sort(size_t         nrows,
   		 ptr_d_agg,                    //source[i]
   		 ptr_d_agg_p);                 //source[map[i]]
 
-  LesserRTTI f(d_cols, d_gdf_t, ncols);
+  LesserRTTI<IndexT> f(d_cols, d_gdf_t, ncols);
   
   thrust::pair<IndexT*, ValsT*> ret =
     thrust::reduce_by_key(thrust::cuda::par.on(stream),
