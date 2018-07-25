@@ -1,5 +1,5 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
-
+import pytest
 import os.path
 import pickle
 
@@ -23,7 +23,7 @@ def read_data():
     darr = cuda.to_device(data)
     return schema, darr
 
-
+@pytest.mark.skip(reason='segfaults, arrow 0.9.0 support not implemented in libgdf')
 def test_fillna():
     schema, darr = read_data()
     gar = GpuArrowReader(schema, darr)
@@ -49,7 +49,7 @@ def test_to_dense_array():
     assert dense.size < filled.size
     assert filled.size == len(sr)
 
-
+@pytest.mark.skip(reason='segfaults, arrow 0.9.0 support not implemented in libgdf')
 def test_reading_arrow_sparse_data():
     schema, darr = read_data()
     gar = GpuArrowReader(schema, darr)
