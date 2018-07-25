@@ -188,10 +188,14 @@ public:
         if ( _json_schema_output.size() == 0 ) {
             // To JSON
 #if ARROW_VERSION < 800
-            std::unique_ptr<arrow::ipc::JsonWriter> json_writer;
+	    std::unique_ptr<arrow::ipc::JsonWriter> json_writer;	    
             arrow::ipc::JsonWriter::Open(_schema, &json_writer);
             json_writer->Finish(&_json_schema_output);
 #else
+	    std::cout << "not impl get_schema_json" << std::endl;
+	    std::unique_ptr<arrow::ipc::internal::json::JsonWriter> json_writer;
+            arrow::ipc::internal::json::JsonWriter::Open(_schema, &json_writer);
+            json_writer->Finish(&_json_schema_output);
   #warning "not implemented for this arrow version"
 #endif
         }
@@ -252,17 +256,19 @@ protected:
         if (_fields.size() || _nodes.size()) {
             throw ParseError("cannot open more than once");
         }
-
         // Use Arrow to load the schema
         const auto payload = std::make_shared<arrow::Buffer>(schema_buf, length);
         auto buffer = std::make_shared<io::BufferReader>(payload);
-        std::shared_ptr<ipc::RecordBatchStreamReader> reader;
 #if ARROW_VERSION < 800
-        auto status = ipc::RecordBatchStreamReader::Open(buffer, &reader);
-        if ( !status.ok() ) throw ParseError(status.message());
+	std::shared_ptr<ipc::RecordBatchStreamReader> reader;
 #else
-#warning "not implemented for this arrow version"
+        std::shared_ptr<ipc::RecordBatchReader> reader;
 #endif
+        auto status = ipc::RecordBatchStreamReader::Open(buffer, &reader);
+        if ( !status.ok() ) {
+	  std::cout << "read_schema:" << status.message() << std::endl;
+	  throw ParseError(status.message());
+	}
         _schema = reader->schema();
         if (!_schema) throw ParseError("failed to parse schema");
         // Parse the schema
@@ -316,6 +322,7 @@ protected:
                 out_field.layouts.push_back(layout_desc);
             }
 #else
+	    std::cout << "not impl parse_schema" << std::endl;
 #warning "not implemented for this arrow version"
 #endif
         }
@@ -351,6 +358,7 @@ protected:
                     std::cerr << "buf.Page() != -1; metadata format changed!\n";
                 }
 #else
+		std::cout << "not impl parse_record_batch" << std::endl;
 #warning "not implemented for this arrow version"
 #endif
                 const auto &layout = fd.layouts[j];
@@ -431,7 +439,10 @@ IpcParser* cffi_unwrap(gdf_ipc_parser_type* hdl){
 }
 
 gdf_ipc_parser_type* gdf_ipc_parser_open(const uint8_t *schema, size_t length) {
+      std::cout << "IN gdf_ipc_parser_open\n" << std::endl;
     IpcParser *parser = new IpcParser;
+    
+
     parser->open(schema, length);
 
     return cffi_wrap(parser);
