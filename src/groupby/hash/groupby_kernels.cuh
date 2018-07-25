@@ -69,7 +69,7 @@ __global__ void extract_groupby_result(const map_type * const __restrict__ the_m
 
   size_type i = threadIdx.x + blockIdx.x * blockDim.x;
 
-  constexpr key_type unused_key{the_map->get_unused_key()};
+  constexpr key_type unused_key{map_type::get_unused_key()};
 
   const typename map_type::value_type * const __restrict__ hashtabl_values = the_map->data();
 
