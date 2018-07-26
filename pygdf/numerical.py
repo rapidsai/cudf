@@ -5,6 +5,7 @@ from __future__ import print_function, division
 import numpy as np
 import pandas as pd
 
+from numba import cuda
 from libgdf_cffi import libgdf
 
 from . import _gdf, columnops, utils, cudautils
@@ -328,6 +329,17 @@ def numeric_normalize_types(*args):
     """
     dtype = np.result_type(*[a.dtype for a in args])
     return [a.astype(dtype) for a in args]
+
+
+def column_hash_values(column0, *other_columns):
+    """Hash all values in the given columns.
+    Returns a new NumericalColumn[int32]
+    """
+    columns = [column0, *other_columns]
+    buf = Buffer(cuda.device_array(len(column0), dtype=np.int32))
+    result = NumericalColumn(data=buf, dtype=buf.dtype)
+    _gdf.hash_columns(columns, result)
+    return result
 
 
 register_distributed_serializer(NumericalColumn)

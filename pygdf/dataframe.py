@@ -987,13 +987,13 @@ class DataFrame(object):
             Sequence of column names. If columns is *None* (unspecified),
             all columns in the frame are used.
         """
+        from . import numerical
+
         if columns is None:
             columns = self.columns
+
         cols = [self[k]._column for k in columns]
-        buf = Buffer(cuda.device_array(len(self), dtype=np.int32))
-        result = Series(buf)
-        _gdf.hash_columns(cols, result._column)
-        return result
+        return Series(numerical.column_hash_values(*cols))
 
     def to_pandas(self):
         """Convert to a Pandas DataFrame.
