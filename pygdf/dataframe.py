@@ -18,7 +18,6 @@ from .series import Series
 from .column import Column
 from .settings import NOTSET, settings
 from .serialize import register_distributed_serializer
-from .buffer import Buffer
 
 
 class DataFrame(object):
