@@ -18,6 +18,7 @@ from .series import Series
 from .column import Column
 from .settings import NOTSET, settings
 from .serialize import register_distributed_serializer
+from .buffer import Buffer
 
 
 class DataFrame(object):
@@ -411,7 +412,8 @@ class DataFrame(object):
         if len(set(o.columns for o in objs)) != 1:
             what = set(o.columns for o in objs)
             raise ValueError('columns mismatch: {}'.format(what))
-
+        # Filter out inputs that have 0 length
+        objs = [o for o in objs if len(o) > 0]
         if ignore_index:
             index = RangeIndex(sum(map(len, objs)))
         else:
@@ -624,6 +626,104 @@ class DataFrame(object):
                 df[k] = self[k].reset_index().take(new_positions)
         return df.set_index(self.index.take(new_positions))
 
+    def merge(self, other, on=None, how='left', lsuffix='_x', rsuffix='_y',
+              type='sort'):
+        if how != 'left':
+            raise NotImplementedError('{!r} join not implemented yet'
+                                      .format(how))
+
+        same_names = set(self.columns) & set(other.columns)
+        if same_names and not (lsuffix or rsuffix):
+            raise ValueError('there are overlapping columns but '
+                             'lsuffix and rsuffix are not defined')
+
+        lhs = self
+        rhs = other
+        # XXX: Replace this stub
+        # joined_values, joined_indicies = self._stub_merge(
+        #    lhs, rhs, left_on=on, right_on=on, how=how,
+        #    return_joined_indicies=True)
+        joined_values, joined_indicies = self._merge_gdf(
+            lhs, rhs, left_on=on, right_on=on, how=how,
+            return_indices=True)
+
+        # XXX: Prepare output.  same as _join.  code duplication
+        # Perform left, inner and outer join
+        def fix_name(name, suffix):
+            if name in same_names:
+                return "{}{}".format(name, suffix)
+            return name
+
+        def gather_cols(outdf, indf, on, idx, joinidx, suffix):
+            mask = (Series(idx) != -1).as_mask()
+            for k in on:
+                newcol = indf[k].take(idx).set_mask(mask).set_index(joinidx)
+                outdf[fix_name(k, suffix)] = newcol
+
+        def gather_empty(outdf, indf, idx, joinidx, suffix):
+            for k in indf.columns:
+                outdf[fix_name(k, suffix)] = indf[k][:0]
+
+        df = DataFrame()
+        for key, col in zip(on, joined_values):
+            df[key] = col
+
+        left_indices, right_indices = joined_indicies
+        gather_cols(df, lhs, [x for x in lhs.columns if x not in on],
+                    left_indices, df.index, lsuffix)
+        gather_cols(df, rhs, [x for x in rhs.columns if x not in on],
+                    right_indices, df.index, rsuffix)
+
+        return df
+
+    def _merge_gdf(self, left, right, left_on, right_on, how, return_indices):
+
+        from pygdf import cudautils
+
+        assert how == 'left'
+        assert return_indices
+        assert len(left_on) == len(right_on)
+
+        left_cols = []
+        for l in left_on:
+            left_cols.append(left[l]._column)
+
+        right_cols = []
+        for r in right_on:
+            right_cols.append(right[r]._column)
+
+        joined_indices = []
+        with _gdf.apply_join(left_cols, right_cols, how) as (left_indices,
+                                                             right_indices):
+            if left_indices.size > 0:
+                # For each column we joined on, gather the values from each
+                # column using the indices from the join
+                joined_values = []
+
+                for i in range(len(left_on)):
+                    # TODO Instead of calling 'gather_joined_index' for every
+                    # column that we are joining on, we should implement a
+                    # 'multi_gather_joined_index' that can gather a value from
+                    # each column at once
+                    raw_values = cudautils.gather_joined_index(
+                                left_cols[i].to_gpu_array(),
+                                right_cols[i].to_gpu_array(),
+                                left_indices,
+                                right_indices,
+                                )
+                    buffered_values = Buffer(raw_values)
+
+                    joined_values.append(left_cols[i]
+                                         .replace(data=buffered_values))
+
+                joined_indices = (cudautils.copy_array(left_indices),
+                                  cudautils.copy_array(right_indices))
+
+        if return_indices:
+            return joined_values, joined_indices
+        else:
+            return joined_indices
+
     def join(self, other, on=None, how='left', lsuffix='', rsuffix='',
              sort=False):
         """Join columns with other DataFrame on index or on a key column.
@@ -651,10 +751,10 @@ class DataFrame(object):
         - *other* must be a single DataFrame for now.
         - *on* is not supported yet due to lack of multi-index support.
         """
-        if how not in 'left,right,inner,outer':
-            raise ValueError('unsupported {!r} join'.format(how))
+        if how not in ['left', 'right', 'inner', 'outer']:
+            raise NotImplementedError('unsupported {!r} join'.format(how))
         if on is not None:
-            raise ValueError('"on" is not supported yet')
+            raise NotImplementedError('"on" is not supported yet')
 
         same_names = set(self.columns) & set(other.columns)
         if same_names and not (lsuffix or rsuffix):

@@ -41,7 +41,8 @@ class Column(object):
         for o in objs:
             if not o.is_type_equivalent(head):
                 raise ValueError("All series must be of same type")
-
+        # Filter out inputs that have 0 length
+        objs = [o for o in objs if len(o) > 0]
         newsize = sum(map(len, objs))
         # Concatenate data
         mem = cuda.device_array(shape=newsize, dtype=head.data.dtype)
@@ -174,7 +175,8 @@ class Column(object):
         """
         return _gdf.columnview(size=self._data.size,
                                data=self._data,
-                               mask=self._mask)
+                               mask=self._mask,
+                               dtype=self.dtype)
 
     def set_mask(self, mask, null_count=None):
         """Create new Column by setting the mask

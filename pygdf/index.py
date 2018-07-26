@@ -5,11 +5,13 @@ from __future__ import print_function, division
 import pandas as pd
 import numpy as np
 import pickle
+from numba import cuda
 
 from . import cudautils, utils, columnops
 from .buffer import Buffer
 from .numerical import NumericalColumn
 from .column import Column
+from .datetime import DatetimeColumn
 from .serialize import register_distributed_serializer
 
 
@@ -193,7 +195,10 @@ class RangeIndex(Index):
         return begin - self._start, end - self._start
 
     def as_column(self):
-        vals = cudautils.arange(self._start, self._stop, dtype=self.dtype)
+        if len(self) > 0:
+            vals = cudautils.arange(self._start, self._stop, dtype=self.dtype)
+        else:
+            vals = cuda.device_array(0, dtype=self.dtype)
         return NumericalColumn(data=Buffer(vals), dtype=vals.dtype)
 
     def to_pandas(self):
@@ -295,3 +300,58 @@ class GenericIndex(Index):
 
 register_distributed_serializer(RangeIndex)
 register_distributed_serializer(GenericIndex)
+
+
+class DatetimeIndex(GenericIndex):
+    # TODO this constructor should take a timezone or something to be
+    # consistent with pandas
+    def __new__(self, values):
+        # we should be more strict on what we accept here but
+        # we'd have to go and figure out all the semantics around
+        # pandas dtindex creation first which.  For now
+        # just make sure we handle np.datetime64 arrays
+        # and then just dispatch upstream
+        if isinstance(values, np.ndarray) and values.dtype.kind == 'M':
+            values = DatetimeColumn.from_numpy(values)
+        elif isinstance(values, pd.DatetimeIndex):
+            values = DatetimeColumn.from_numpy(values.values)
+        # can someone look this over, I never remember how to
+        # override __new__ properly
+        res = Index.__new__(DatetimeIndex)
+        res._values = values
+        return res
+
+    @property
+    def year(self):
+        return self.get_dt_field('year')
+
+    @property
+    def month(self):
+        return self.get_dt_field('month')
+
+    @property
+    def day(self):
+        return self.get_dt_field('day')
+
+    @property
+    def hour(self):
+        return self.get_dt_field('hour')
+
+    @property
+    def minute(self):
+        return self.get_dt_field('minute')
+
+    @property
+    def second(self):
+        return self.get_dt_field('second')
+
+    def get_dt_field(self, field):
+        out_column = self._values.get_dt_field(field)
+        # columnops.column_empty_like always returns a Column object
+        # but we need a NumericalColumn for GenericIndex..
+        # how should this be handled?
+        out_column = NumericalColumn(data=out_column.data,
+                                     mask=out_column.mask,
+                                     null_count=out_column.null_count,
+                                     dtype=out_column.dtype)
+        return GenericIndex(out_column)
