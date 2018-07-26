@@ -485,3 +485,8 @@ def test_dataframe_hash_columns(nrows):
     out_one = gdf.hash_columns(['a']).to_array()
     # First matches last
     assert out_one[0] == out_one[-1]
+    # Equivalent to the Series.hash_values()
+    np.testing.assert_array_equal(
+        gdf.a.hash_values().to_array(),
+        out_one,
+        )

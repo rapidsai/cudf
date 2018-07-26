@@ -784,7 +784,7 @@ class Series(object):
         """
         from . import numerical
 
-        return Series(numerical.column_hash_values(self))
+        return Series(numerical.column_hash_values(self._column))
 
 
 register_distributed_serializer(Series)
