@@ -978,9 +978,17 @@ class DataFrame(object):
         return applyutils.apply_chunks(self, func, incols, outcols, kwargs,
                                        chunks=chunks, tpb=tpb)
 
-    def hash(self, columns):
+    def hash_columns(self, columns=None):
         """Hash the given *columns* and return a new Series
+
+        Parameters
+        ----------
+        column : sequence of str; optional
+            Sequence of column names. If columns is *None* (unspecified),
+            all columns in the frame are used.
         """
+        if columns is None:
+            columns = self.columns
         cols = [self[k]._column for k in columns]
         buf = Buffer(cuda.device_array(len(self), dtype=np.int32))
         result = Series(buf)

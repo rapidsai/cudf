@@ -468,8 +468,20 @@ def test_dataframe_setitem_index_len1():
 @pytest.mark.parametrize('nrows', [1, 8, 100, 1000])
 def test_dataframe_hash_columns(nrows):
     gdf = DataFrame()
-    gdf['a'] = range(nrows)
+    data = np.asarray(range(nrows))
+    data[0] = data[-1]  # make first and last the same
+    gdf['a'] = data
     gdf['b'] = gdf.a + 100
-    out = gdf.hash(['a', 'b'])
+    out = gdf.hash_columns(['a', 'b'])
     assert isinstance(out, Series)
     assert len(out) == nrows
+    assert out.dtype == np.int32
+
+    # Check default
+    out_all = gdf.hash_columns()
+    np.testing.assert_array_equal(out.to_array(), out_all.to_array())
+
+    # Check single column
+    out_one = gdf.hash_columns(['a']).to_array()
+    # First matches last
+    assert out_one[0] == out_one[-1]
