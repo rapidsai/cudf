@@ -72,7 +72,7 @@ cudaError_t GroupbyHash(const groupby_type * const in_groupby_column,
 
   // The hash table occupancy and the input size determines the size of the hash table
   // e.g., for a 50% occupancy, the size of the hash table is twice that of the input
-  const size_type hash_table_size = (in_column_size * 100 / DEFAULT_HASH_TABLE_OCCUPANCY);
+  const size_type hash_table_size = (in_column_size / DEFAULT_HASH_TABLE_OCCUPANCY) * 100;
 
   const dim3 build_grid_size ((in_column_size + THREAD_BLOCK_SIZE - 1) / THREAD_BLOCK_SIZE, 1, 1);
   const dim3 block_size (THREAD_BLOCK_SIZE, 1, 1);
