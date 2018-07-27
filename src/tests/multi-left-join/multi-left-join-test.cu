@@ -24,6 +24,16 @@ using namespace std;
 using namespace mgpu;
 
 
+template <typename T>
+struct non_negative
+{
+  __host__ __device__
+  bool operator()(const T x)
+  {
+    return (x >= 0);
+  }
+};
+
 gdf_column
 create_gdf_column(thrust::device_vector<int> &d) {
     gdf_column c = {thrust::raw_pointer_cast(d.data()), nullptr, d.size(), GDF_INT32, TIME_UNIT_NONE};
@@ -131,12 +141,13 @@ TEST(gdf_multi_left_join_TEST, case1) {
     thrust::device_vector<int> l_pos;
     thrust::device_vector<int> r_pos;
     auto err = call_gdf_test(l, r, l_pos, r_pos, 1);
-    thrust::device_vector<int> map_out(l_pos.size());
+    thrust::device_vector<int> map_out(l_pos.size(), -1);
 
     EXPECT_THAT(host_vec(l_pos), ElementsAre(0, 0, 1, 1, 2, 3, 4));
     EXPECT_THAT(host_vec(r_pos), ElementsAre(0, 1, 0, 1, -1, 4, 4));
 
-    thrust::gather(l_pos.begin(), l_pos.end(), l[0].begin(), map_out.begin());
+    thrust::gather_if(l_pos.begin(), l_pos.end(), l_pos.begin(), l[0].begin(), map_out.begin(),
+            non_negative<int>());
     EXPECT_THAT(host_vec(map_out), ElementsAre(0, 0, 0, 0, 4, 5, 5));
 
     ASSERT_EQ(err, GDF_SUCCESS);
@@ -153,12 +164,16 @@ TEST(gdf_multi_left_join_TEST, case2) {
     EXPECT_THAT(host_vec(l_pos), ElementsAre(0, 1, 2, 3, 4));
 
     {
-        thrust::gather(l_pos.begin(), l_pos.end(), l[0].begin(), map_out.begin());
+        thrust::fill(map_out.begin(), map_out.end(), -1);
+        thrust::gather_if(l_pos.begin(), l_pos.end(), l_pos.begin(), l[0].begin(), map_out.begin(),
+                non_negative<int>());
         EXPECT_THAT(host_vec(map_out), ElementsAre(0, 0, 4, 5, 5));
     }
 
     {
-        thrust::gather(l_pos.begin(), l_pos.end(), l[1].begin(), map_out.begin());
+        thrust::fill(map_out.begin(), map_out.end(), -1);
+        thrust::gather_if(l_pos.begin(), l_pos.end(), l_pos.begin(), l[1].begin(), map_out.begin(),
+                non_negative<int>());
         EXPECT_THAT(host_vec(map_out), ElementsAre(1, 2, 2, 3, 4));
     }
 
@@ -176,17 +191,23 @@ TEST(gdf_multi_left_join_TEST, case3) {
     EXPECT_THAT(host_vec(l_pos), ElementsAre(0, 1, 2, 3, 4));
 
     {
-        thrust::gather(l_pos.begin(), l_pos.end(), l[0].begin(), map_out.begin());
+        thrust::fill(map_out.begin(), map_out.end(), -1);
+        thrust::gather_if(l_pos.begin(), l_pos.end(), l_pos.begin(), l[0].begin(), map_out.begin(),
+                non_negative<int>());
         EXPECT_THAT(host_vec(map_out), ElementsAre(0, 0, 4, 5, 5));
     }
 
     {
-        thrust::gather(l_pos.begin(), l_pos.end(), l[1].begin(), map_out.begin());
+        thrust::fill(map_out.begin(), map_out.end(), -1);
+        thrust::gather_if(l_pos.begin(), l_pos.end(), l_pos.begin(), l[1].begin(), map_out.begin(),
+                non_negative<int>());
         EXPECT_THAT(host_vec(map_out), ElementsAre(1, 2, 2, 3, 4));
     }
 
     {
-        thrust::gather(l_pos.begin(), l_pos.end(), l[2].begin(), map_out.begin());
+        thrust::fill(map_out.begin(), map_out.end(), -1);
+        thrust::gather_if(l_pos.begin(), l_pos.end(), l_pos.begin(), l[2].begin(), map_out.begin(),
+                non_negative<int>());
         EXPECT_THAT(host_vec(map_out), ElementsAre(1, 1, 3, 1, 2));
     }
 
@@ -200,11 +221,10 @@ TEST(join_TEST, gdf_inner_join) {
 
     auto err = call_gdf_single_column_test(l, r, dl, dr, l_pos, r_pos, gdf_inner_join_generic);
 
-    thrust::device_vector<int> l_idx(l_pos.size());
-    thrust::device_vector<int> r_idx(r_pos.size());
-
-    thrust::gather(l_pos.begin(), l_pos.end(), dl.begin(), l_idx.begin());
-    thrust::gather(r_pos.begin(), r_pos.end(), dr.begin(), r_idx.begin());
+    thrust::device_vector<int> l_idx(l_pos.size(), -1);
+    thrust::device_vector<int> r_idx(r_pos.size(), -1);
+    thrust::gather_if(l_pos.begin(), l_pos.end(), l_pos.begin(), dl.begin(), l_idx.begin(), non_negative<int>());
+    thrust::gather_if(r_pos.begin(), r_pos.end(), r_pos.begin(), dr.begin(), r_idx.begin(), non_negative<int>());
 
     EXPECT_THAT(host_vec(l_idx), ElementsAreArray(host_vec(r_idx)));
     EXPECT_THAT(host_vec(l_pos), ElementsAre(0, 1, 2, 3, 3, 4));
@@ -220,15 +240,34 @@ TEST(join_TEST, gdf_left_join) {
 
     auto err = call_gdf_single_column_test(l, r, dl, dr, l_pos, r_pos, gdf_left_join_generic);
 
-    thrust::device_vector<int> l_idx(l_pos.size());
-    thrust::device_vector<int> r_idx(r_pos.size());
-
-    thrust::gather(l_pos.begin(), l_pos.end(), dl.begin(), l_idx.begin());
-    thrust::gather(r_pos.begin(), r_pos.end(), dr.begin(), r_idx.begin());
+    thrust::device_vector<int> l_idx(l_pos.size(), -1);
+    thrust::device_vector<int> r_idx(r_pos.size(), -1);
+    thrust::gather_if(l_pos.begin(), l_pos.end(), l_pos.begin(), dl.begin(), l_idx.begin(), non_negative<int>());
+    thrust::gather_if(r_pos.begin(), r_pos.end(), r_pos.begin(), dr.begin(), r_idx.begin(), non_negative<int>());
 
     EXPECT_THAT(host_vec(l_idx), ElementsAre(0, 0, 0, 0, 4, 5, 5));
     EXPECT_THAT(host_vec(l_pos), ElementsAre(0, 0, 1, 1, 2, 3, 4));
     EXPECT_THAT(host_vec(r_pos), ElementsAre(0, 1, 0, 1, -1, 4, 4));
+
+    ASSERT_EQ(err, GDF_SUCCESS);
+}
+
+TEST(join_TEST, gdf_outer_join) {
+    std::vector<int> l{0, 0, 4, 5, 5};
+    std::vector<int> r{0, 0, 2, 3, 5};
+    thrust::device_vector<int> dl, dr, l_pos, r_pos;
+
+    auto err = call_gdf_single_column_test(l, r, dl, dr, l_pos, r_pos, gdf_outer_join_generic);
+
+    thrust::device_vector<int> l_idx(l_pos.size(), -1);
+    thrust::device_vector<int> r_idx(r_pos.size(), -1);
+    thrust::gather_if(l_pos.begin(), l_pos.end(), l_pos.begin(), dl.begin(), l_idx.begin(), non_negative<int>());
+    thrust::gather_if(r_pos.begin(), r_pos.end(), r_pos.begin(), dr.begin(), r_idx.begin(), non_negative<int>());
+
+    EXPECT_THAT(host_vec(l_idx), ElementsAre(-1, -1, 0, 0, 0, 0,  4, 5, 5));
+    EXPECT_THAT(host_vec(r_idx), ElementsAre( 2,  3, 0, 0, 0, 0, -1, 5, 5));
+    EXPECT_THAT(host_vec(l_pos), ElementsAre(-1, -1, 0, 0, 1, 1,  2, 3, 4));
+    EXPECT_THAT(host_vec(r_pos), ElementsAre( 2,  3, 0, 1, 0, 1, -1, 4, 4));
 
     ASSERT_EQ(err, GDF_SUCCESS);
 }
