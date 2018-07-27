@@ -11,13 +11,13 @@ import pandas as pd
 from numba import cuda
 from numba.cuda.cudadrv.devicearray import DeviceNDArray
 
-from . import _gdf, cudautils, formatting, queryutils, applyutils, utils
+from . import cudautils, formatting, queryutils, applyutils, utils, _gdf
 from .index import GenericIndex, EmptyIndex, Index, RangeIndex
+from .buffer import Buffer
 from .series import Series
 from .column import Column
 from .settings import NOTSET, settings
 from .serialize import register_distributed_serializer
-from .buffer import Buffer
 
 
 class DataFrame(object):
@@ -976,6 +976,23 @@ class DataFrame(object):
             raise ValueError('*chunks* must be defined')
         return applyutils.apply_chunks(self, func, incols, outcols, kwargs,
                                        chunks=chunks, tpb=tpb)
+
+    def hash_columns(self, columns=None):
+        """Hash the given *columns* and return a new Series
+
+        Parameters
+        ----------
+        column : sequence of str; optional
+            Sequence of column names. If columns is *None* (unspecified),
+            all columns in the frame are used.
+        """
+        from . import numerical
+
+        if columns is None:
+            columns = self.columns
+
+        cols = [self[k]._column for k in columns]
+        return Series(numerical.column_hash_values(*cols))
 
     def to_pandas(self):
         """Convert to a Pandas DataFrame.

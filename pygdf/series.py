@@ -781,6 +781,15 @@ class Series(object):
         """
         return self._unaryop('floor')
 
+    # Misc
+
+    def hash_values(self):
+        """Compute the hash of values in this column.
+        """
+        from . import numerical
+
+        return Series(numerical.column_hash_values(self._column))
+
 
 register_distributed_serializer(Series)
 
