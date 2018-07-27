@@ -30,6 +30,12 @@ create_gdf_column(thrust::device_vector<int> &d) {
     return c;
 }
 
+gdf_column
+create_gdf_column(mem_t<int> &d) {
+      gdf_column c = {d.data(), nullptr, d.size(), GDF_INT32, TIME_UNIT_NONE};
+          return c;
+}
+
 std::vector<int> host_vec(thrust::device_vector<int> &dev_vec) {
     std::vector<int> data(dev_vec.size());
     thrust::copy(dev_vec.begin(), dev_vec.end(), data.begin());
