@@ -129,10 +129,11 @@ struct AggregationManager
     d_fte_(n_cols_)
   {
     ///TODO: try copying the whole set H to D...
-    ///std::vector<GnctrTypeErased> h_fte;//<-tried: segfaults
+    std::vector<GnctrTypeErased> h_fte(n_cols_);//better collect surrogates on host
+    ///std::vector<FTV> h_functrs(n_cols_, nullptr);//<-or handle functors in group and then cudaMemCpySymbol() in group...
     for(int i=0;i<n_cols_;++i)
     {
-      FTV h_functr = nullptr;
+      FTV h_functr = nullptr;//host surrogate of device function pointer
       switch( v_types[i] )
         {
         case Types::DOUBLE:
@@ -148,10 +149,10 @@ struct AggregationManager
             break;
           }
         }
-      d_fte_[i] = GnctrTypeErased(h_functr, v_types[i]);//PROBLEM: expensive; 
-      ///h_fte[i] =  GnctrTypeErased(h_functr, v_types[i]);//<-tried: segfaults
+      ///d_fte_[i] = GnctrTypeErased(h_functr, v_types[i]);//too expensive; instead, do: 
+      h_fte[i] =  GnctrTypeErased(h_functr, v_types[i]);//better collect surrogates on host...
     }
-    ///d_fte_ = h_fte;//<-tried: segfaults
+    d_fte_ = h_fte;//...and then copy them to device
   }
 
   Vector<GnctrTypeErased>& get_vfctrs(void)
