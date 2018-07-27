@@ -335,7 +335,7 @@ def column_hash_values(column0, *other_columns):
     """Hash all values in the given columns.
     Returns a new NumericalColumn[int32]
     """
-    columns = [column0, *other_columns]
+    columns = [column0] + list(other_columns)
     buf = Buffer(cuda.device_array(len(column0), dtype=np.int32))
     result = NumericalColumn(data=buf, dtype=buf.dtype)
     _gdf.hash_columns(columns, result)
