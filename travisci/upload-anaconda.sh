@@ -1,7 +1,5 @@
 #!/bin/bash
 #
-# Copyright (c) 2018, NVIDIA CORPORATION.
-#
 # Adopted from https://github.com/tmcdonell/travis-scripts/blob/dfaac280ac2082cd6bcaba3217428347899f2975/update-accelerate-buildbot.sh
 export UPLOADFILE=`conda build conda-recipes/pygdf -c defaults -c conda-forge -c numba -c gpuopenanalytics/label/dev --python $PYTHON --output`
 
