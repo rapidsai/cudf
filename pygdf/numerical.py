@@ -118,7 +118,8 @@ class NumericalColumn(columnops.TypedColumnBase):
         if self.has_null_mask:
             raise ValueError('masked array not supported')
         # Clone data buffer as the key
-        col_keys = self.replace(data=self.data.copy())
+        col_keys = self.replace(data=self.data.copy(),
+                                dtype=self._data.dtype)
         # Create new array for the positions
         inds = Buffer(cudautils.arange(len(self)))
         col_inds = self.replace(data=inds, dtype=inds.dtype)
@@ -139,10 +140,10 @@ class NumericalColumn(columnops.TypedColumnBase):
         segs, begins = cudautils.find_segments(sortedvals)
         return segs, sortedvals
 
-    def unique(self, type='sort'):
-        # type variable will indicate what algorithm to use to
+    def unique(self, method='sort'):
+        # method variable will indicate what algorithm to use to
         # calculate unique, not used right now
-        if type is not 'sort':
+        if method is not 'sort':
             msg = 'non sort based unique() not implemented yet'
             raise NotImplementedError(msg)
         segs, sortedvals = self._unique_segments()
@@ -150,15 +151,15 @@ class NumericalColumn(columnops.TypedColumnBase):
         out = cudautils.gather(data=sortedvals, index=segs)
         return self.replace(data=Buffer(out), mask=None)
 
-    def unique_count(self, type='sort'):
-        if type is not 'sort':
+    def unique_count(self, method='sort'):
+        if method is not 'sort':
             msg = 'non sort based unique_count() not implemented yet'
             raise NotImplementedError(msg)
         segs, _ = self._unique_segments()
         return len(segs)
 
-    def value_counts(self, type='sort'):
-        if type is not 'sort':
+    def value_counts(self, method='sort'):
+        if method is not 'sort':
             msg = 'non sort based value_count() not implemented yet'
             raise NotImplementedError(msg)
         segs, sortedvals = self._unique_segments()
@@ -166,7 +167,7 @@ class NumericalColumn(columnops.TypedColumnBase):
         out1 = cudautils.gather(data=sortedvals, index=segs)
         out2 = cudautils.value_count(segs, len(sortedvals))
         out_vals = self.replace(data=Buffer(out1), mask=None)
-        out_counts = self.replace(data=Buffer(out2), mask=None)
+        out_counts = NumericalColumn(data=Buffer(out2), dtype=np.intp)
         return out_vals, out_counts
 
     def all(self):
