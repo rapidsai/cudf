@@ -33,9 +33,9 @@ struct JoinTest : public testing::Test
 protected:
 
   // Extract the types for the input columns 
-  using col0_type = T::col0_type;
-  using col1_type = T::col1_type;
-  using col2_type = T::col2_type;
+  using col0_type = typename T::col0_type;
+  using col1_type = typename T::col1_type;
+  using col2_type = typename T::col2_type;
 
   // Use the first column as the keys
   using key_type = col0_type;
