@@ -244,10 +244,10 @@ class Series(object):
                                  cols=cols, more_rows=more_rows)
 
     def __str__(self):
-        return self.to_string()
+        return self.to_string(nrows=10)
 
     def __repr__(self):
-        return self.to_string()
+        return "<pygdf.Series nrows={} >".format(len(self))
 
     def _binaryop(self, other, fn):
         """
