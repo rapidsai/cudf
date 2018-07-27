@@ -10,6 +10,8 @@ from .serialize import register_distributed_serializer
 class Buffer(object):
     """A 1D gpu buffer.
     """
+    _cached_ipch = None
+
     @classmethod
     def from_empty(cls, mem):
         """From empty device array
@@ -38,12 +40,16 @@ class Buffer(object):
         from .serialize import should_use_ipc
 
         use_ipc = should_use_ipc(context)
-        print("use_ipc {}".format(use_ipc))
         header = {}
         if use_ipc:
-            ipch = self.to_gpu_array().get_ipc_handle()
+            if self._cached_ipch is not None:
+                ipch = self._cached_ipch
+            else:
+                ipch = self.to_gpu_array().get_ipc_handle()
             header['kind'] = 'ipc'
             header['mem'], frames = serialize(ipch)
+            # Keep IPC handle alive
+            self._cached_ipch = ipch
         else:
             header['kind'] = 'normal'
             header['mem'], frames = serialize(self.to_array())
