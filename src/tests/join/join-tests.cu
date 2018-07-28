@@ -87,8 +87,15 @@ struct LeftJoinTest : public testing::Test
   {
     size_t left_index{};
     size_t right_index{};
+
     result_type(size_t _l, size_t _r) : 
       left_index{_l}, right_index{_r} {}
+
+    // Overload comparison so the result vector can be sorted
+    bool operator <(result_type const& rhs){
+      return( std::tie(left_index, right_index) < std::tie(rhs.left_index, rhs.right_index) );
+    }
+
   };
 
   LeftJoinTest()
@@ -181,7 +188,7 @@ struct LeftJoinTest : public testing::Test
     return match;
   }
 
-  void compute_reference_solution(size_t num_columns)
+  std::vector<result_type> compute_reference_solution(size_t num_columns)
   {
     assert(num_columns > 0);
     assert(num_columns <= std::tuple_size<multi_column_t>::value);
@@ -205,6 +212,7 @@ struct LeftJoinTest : public testing::Test
     std::vector<result_type> result;
 
     // Probe hash table with first left column
+    // TODO Make this an outer join!
     std::vector<col0_type> const & probe_column = std::get<0>(left_columns);
     for(size_t left_index = 0; left_index < probe_column.size(); ++left_index)
     {
@@ -219,6 +227,11 @@ struct LeftJoinTest : public testing::Test
           result.emplace_back(left_index, right_index);
       }
     }
+
+    // Sort the result
+    std::sort(result.begin(), result.end());
+
+    return result;
   }
 
   //gdf_error gdf_multi_left_join_generic(int num_cols, gdf_column **leftcol, gdf_column **rightcol, gdf_join_result_type **out_result)
