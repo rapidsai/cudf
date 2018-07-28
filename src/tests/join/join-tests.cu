@@ -25,6 +25,7 @@ struct InputTypes
   using col2_type = T2;
 };
 
+// Creates a gdf_column from a std::vector
 template <typename col_type>
 gdf_column create_gdf_column(std::vector<col_type> host_vector)
 {
@@ -57,8 +58,6 @@ gdf_column create_gdf_column(std::vector<col_type> host_vector)
   return the_column;
 }
 
-
-
 // A new instance of this class will be created for each *TEST(JoinTest, ...)
 // Put all repeated setup and validation stuff here
 template <class T>
@@ -82,6 +81,16 @@ struct LeftJoinTest : public testing::Test
 
   multi_column_t right_columns;
 
+  // Each element of the result will be an index into the left and right columns where
+  // left_columns[left_index] == right_columns[right_index]
+  struct result_type 
+  {
+    size_t left_index{};
+    size_t right_index{};
+    result_type(size_t _l, size_t _r) : 
+      left_index{_l}, right_index{_r} {}
+  };
+
   LeftJoinTest()
   {
     static size_t number_of_instantiations{0};
@@ -92,44 +101,91 @@ struct LeftJoinTest : public testing::Test
 
   }
 
-  multi_column_t create_random_columns(size_t col0_size, size_t col0_range=RAND_MAX,
-                                       size_t col1_size=0, size_t col1_range=RAND_MAX,
-                                       size_t col2_size=0, size_t col2_range=RAND_MAX)
+  multi_column_t create_random_columns(size_t num_columns,
+                                       size_t column_length, size_t column_range)
   {
+    assert(num_columns > 0);
+    assert(num_columns <= std::tuple_size<multi_column_t>::value);
 
     multi_column_t the_columns;
 
     // Allocate storage in each vector 
-    std::get<0>(the_columns).reserve(col0_size);
-    std::get<1>(the_columns).reserve(col1_size);
-    std::get<2>(the_columns).reserve(col2_size);
-
     // Fill each vector with random values
-    std::generate(std::get<0>(the_columns).begin(), std::get<0>(the_columns).end(), [col0_range](){return std::rand() % col0_range;});
-    std::generate(std::get<1>(the_columns).begin(), std::get<1>(the_columns).end(), [col1_range](){return std::rand() % col1_range;});
-    std::generate(std::get<2>(the_columns).begin(), std::get<2>(the_columns).end(), [col2_range](){return std::rand() % col2_range;});
+    if(num_columns >= 1){
+      std::get<0>(the_columns).reserve(column_length);
+      std::generate(std::get<0>(the_columns).begin(), std::get<0>(the_columns).end(), [column_range](){return std::rand() % column_range;});
+    }
+    if(num_columns >= 2){
+      std::get<1>(the_columns).reserve(column_length);
+      std::generate(std::get<1>(the_columns).begin(), std::get<1>(the_columns).end(), [column_range](){return std::rand() % column_range;});
+    }
+    if(num_columns >= 3){
+      std::get<2>(the_columns).reserve(column_length);
+      std::generate(std::get<2>(the_columns).begin(), std::get<2>(the_columns).end(), [column_range](){return std::rand() % column_range;});
+    }
 
     return the_columns;
-
   }
 
   // TODO: Support more than 3 columns
-  void create_input(size_t col0_size, size_t col0_range=RAND_MAX,
-                    size_t col1_size=0, size_t col1_range=RAND_MAX,
-                    size_t col2_size=0, size_t col2_range=RAND_MAX)
+  void create_input(size_t num_columns, 
+                    size_t left_column_length, size_t left_column_range,
+                    size_t right_column_length, size_t right_column_range)
   {
+    assert(num_columns > 0);
+    assert(num_columns <= std::tuple_size<multi_column_t>::value);
 
-    left_columns = create_random_columns(col0_size, col0_range, 
-                                         col1_size, col1_range,
-                                         col2_size, col2_range);
+    left_columns = create_random_columns(num_columns, left_column_length, left_column_range);
 
-    right_columns = create_random_columns(col0_size, col0_range, 
-                                          col1_size, col1_range,
-                                          col2_size, col2_range);
+    right_columns = create_random_columns(num_columns, right_column_length, right_column_range);
   }
 
-  void compute_reference_solution()
+  bool rows_match(size_t num_columns, size_t left_index, size_t right_index){
+    
+    assert(num_columns > 0);
+    assert(num_columns <= std::tuple_size<multi_column_t>::value);
+
+    bool match{false};
+
+    // Technically this is redudant as the hash table already told us the first column matches,
+    // but for completeness, we'll just check again
+    if(num_columns >= 1){
+      auto const & first_left_column = std::get<0>(left_columns);
+      auto const & first_right_column = std::get<0>(right_columns);
+
+      if(first_left_column[left_index] == first_right_column[right_index]){
+        match = true;
+      } 
+    }
+
+    if(num_columns >= 2){
+      auto const & second_left_column = std::get<1>(left_columns);
+      auto const & second_right_column = std::get<1>(right_columns);
+
+      if(second_left_column[left_index] != second_right_column[right_index]){
+        match = false;
+      }
+
+    }
+
+    if(num_columns >= 3){
+      auto const & third_left_column = std::get<2>(left_columns);
+      auto const & third_right_column = std::get<2>(right_columns);
+
+      if(third_left_column[left_index] != third_right_column[right_index])
+      {
+        match = false;
+      }
+    }
+
+    return match;
+  }
+
+  void compute_reference_solution(size_t num_columns)
   {
+    assert(num_columns > 0);
+    assert(num_columns <= std::tuple_size<multi_column_t>::value);
+
     // Use the first column as the keys
     using key_type = col0_type;
     using value_type = size_t;
@@ -138,31 +194,33 @@ struct LeftJoinTest : public testing::Test
     std::multimap<key_type, value_type> the_map;
 
     // Use first right column as the build column
-    std::vector<col0_type> * build_column = std::get<0>(right_columns);
+    std::vector<col0_type> const & build_column = std::get<0>(right_columns);
 
     // Build hash table
-    for(size_t i = 0; i < (*build_column).size(); ++i)
+    for(size_t right_index = 0; right_index < build_column.size(); ++right_index)
     {
-      the_map.insert(std::make_pair((*build_column)[i], i));
+      the_map.insert(std::make_pair(build_column[right_index], right_index));
     }
 
-    // Probe hash table
-    std::vector<col0_type> * probe_column = std::get<0>(left_columns);
-    for(size_t i = 0; i < (*probe_column).size(); ++i)
+    std::vector<result_type> result;
+
+    // Probe hash table with first left column
+    std::vector<col0_type> const & probe_column = std::get<0>(left_columns);
+    for(size_t left_index = 0; left_index < probe_column.size(); ++left_index)
     {
-      auto found = the_map.find((*probe_column)[i]);
+      auto found = the_map.find(probe_column[left_index]);
 
       // First column matches, check the rest
       if(found != the_map.end()){
+        auto right_index = found->second;
 
+        // Check if left_columns[left_index] == right_columns[right_index]
+        if( true == rows_match(num_columns, left_index, right_index))
+          result.emplace_back(left_index, right_index);
       }
-
     }
-
   }
 
   //gdf_error gdf_multi_left_join_generic(int num_cols, gdf_column **leftcol, gdf_column **rightcol, gdf_join_result_type **out_result)
-
-
   
 };
