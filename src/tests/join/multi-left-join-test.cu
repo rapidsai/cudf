@@ -34,37 +34,49 @@ struct non_negative
   }
 };
 
+template <typename T>
+struct EnumType          { static const gdf_dtype type { N_GDF_TYPES }; };
+template <> struct EnumType<int8_t>  { static const gdf_dtype type { GDF_INT8    }; };
+template <> struct EnumType<int16_t> { static const gdf_dtype type { GDF_INT16   }; };
+template <> struct EnumType<int32_t> { static const gdf_dtype type { GDF_INT32   }; };
+template <> struct EnumType<int64_t> { static const gdf_dtype type { GDF_INT64   }; };
+template <> struct EnumType<float>   { static const gdf_dtype type { GDF_FLOAT32 }; };
+template <> struct EnumType<double>  { static const gdf_dtype type { GDF_FLOAT64 }; };
+
+template <typename T>
 gdf_column
-create_gdf_column(thrust::device_vector<int> &d) {
-    gdf_column c = {thrust::raw_pointer_cast(d.data()), nullptr, d.size(), GDF_INT32, TIME_UNIT_NONE};
+create_gdf_column(thrust::device_vector<T> &d) {
+    gdf_column c = {thrust::raw_pointer_cast(d.data()), nullptr, d.size(), EnumType<T>::type, TIME_UNIT_NONE};
     return c;
 }
 
+template <typename T>
 gdf_column
-create_gdf_column(mem_t<int> &d) {
-      gdf_column c = {d.data(), nullptr, d.size(), GDF_INT32, TIME_UNIT_NONE};
+create_gdf_column(mem_t<T> &d) {
+      gdf_column c = {d.data(), nullptr, d.size(), EnumType<T>::type, TIME_UNIT_NONE};
           return c;
 }
 
-std::vector<int> host_vec(thrust::device_vector<int> &dev_vec) {
-    std::vector<int> data(dev_vec.size());
+template <typename T>
+std::vector<T> host_vec(thrust::device_vector<T> &dev_vec) {
+    std::vector<T> data(dev_vec.size());
     thrust::copy(dev_vec.begin(), dev_vec.end(), data.begin());
     return data;
 }
 
+template <typename T>
 gdf_error
 call_gdf_single_column_test(
-        const std::vector<int> &l,
-        const std::vector<int> &r,
-        thrust::device_vector<int> &dl,
-        thrust::device_vector<int> &dr,
+        const std::vector<T> &l,
+        const std::vector<T> &r,
         thrust::device_vector<int> &out_left_pos,
         thrust::device_vector<int> &out_right_pos,
+        thrust::device_vector<T> &l_idx,
+        thrust::device_vector<T> &r_idx,
         const std::function<gdf_error(gdf_column *, gdf_column *,
             gdf_join_result_type **)> &f) {
-    dl.resize(l.size()); dr.resize(r.size());
-    thrust::copy(l.begin(), l.end(), dl.begin());
-    thrust::copy(r.begin(), r.end(), dr.begin());
+    thrust::device_vector<T> dl = l;
+    thrust::device_vector<T> dr = r;
 
     gdf_column gdl = create_gdf_column(dl);
     gdf_column gdr = create_gdf_column(dr);
@@ -83,29 +95,37 @@ call_gdf_single_column_test(
     thrust::copy(out_data.begin(), out_data.begin() + out_left_pos.size(), out_left_pos.begin());
     thrust::copy(out_data.begin() + out_right_pos.size(), out_data.end(), out_right_pos.begin());
 
+    l_idx.resize(out_left_pos.size());
+    r_idx.resize(out_left_pos.size());
+    thrust::fill(l_idx.begin(), l_idx.end(), -1);
+    thrust::fill(r_idx.begin(), r_idx.end(), -1);
+    thrust::gather_if(out_left_pos.begin(), out_left_pos.end(), out_left_pos.begin(), dl.begin(), l_idx.begin(), non_negative<int>());
+    thrust::gather_if(out_right_pos.begin(), out_right_pos.end(), out_right_pos.begin(), dr.begin(), r_idx.begin(), non_negative<int>());
+
     return err;
 }
 
+template <typename T>
 gdf_error
-call_gdf_test(
-        std::array<thrust::device_vector<int>, 3> &l,
-        std::array<thrust::device_vector<int>, 3> &r,
+call_gdf_multi_column_test(
+        std::array<thrust::device_vector<T>, 3> &l,
+        std::array<thrust::device_vector<T>, 3> &r,
         thrust::device_vector<int> &out_left_pos,
         thrust::device_vector<int> &out_right_pos,
         const int index) {
-    std::vector<int> l0{0, 0, 4, 5, 5};
-    std::vector<int> l1{1, 2, 2, 3, 4};
-    std::vector<int> l2{1, 1, 3, 1, 2};
-    std::vector<int> r0{0, 0, 2, 3, 5};
-    std::vector<int> r1{1, 2, 3, 3, 4};
-    std::vector<int> r2{3, 3, 2, 1, 1};
+    std::vector<T> l0{0, 0, 4, 5, 5};
+    std::vector<T> l1{1, 2, 2, 3, 4};
+    std::vector<T> l2{1, 1, 3, 1, 2};
+    std::vector<T> r0{0, 0, 2, 3, 5};
+    std::vector<T> r1{1, 2, 3, 3, 4};
+    std::vector<T> r2{3, 3, 2, 1, 1};
 
-    thrust::device_vector<int> dl0 = l0; thrust::swap(dl0, l[0]);
-    thrust::device_vector<int> dl1 = l1; thrust::swap(dl1, l[1]);
-    thrust::device_vector<int> dl2 = l2; thrust::swap(dl2, l[2]);
-    thrust::device_vector<int> dr0 = r0; thrust::swap(dr0, r[0]);
-    thrust::device_vector<int> dr1 = r1; thrust::swap(dr1, r[1]);
-    thrust::device_vector<int> dr2 = r2; thrust::swap(dr2, r[2]);
+    thrust::device_vector<T> dl0 = l0; thrust::swap(dl0, l[0]);
+    thrust::device_vector<T> dl1 = l1; thrust::swap(dl1, l[1]);
+    thrust::device_vector<T> dl2 = l2; thrust::swap(dl2, l[2]);
+    thrust::device_vector<T> dr0 = r0; thrust::swap(dr0, r[0]);
+    thrust::device_vector<T> dr1 = r1; thrust::swap(dr1, r[1]);
+    thrust::device_vector<T> dr2 = r2; thrust::swap(dr2, r[2]);
 
     gdf_column gdl0 = create_gdf_column(l[0]);
     gdf_column gdl1 = create_gdf_column(l[1]);
@@ -135,13 +155,14 @@ call_gdf_test(
     return err;
 }
 
-TEST(gdf_multi_left_join_TEST, case1) {
-    std::array<thrust::device_vector<int>, 3> l;
-    std::array<thrust::device_vector<int>, 3> r;
+template <typename T>
+void gdf_multi_left_join_test_index1(void) {
+    std::array<thrust::device_vector<T>, 3> l;
+    std::array<thrust::device_vector<T>, 3> r;
     thrust::device_vector<int> l_pos;
     thrust::device_vector<int> r_pos;
-    auto err = call_gdf_test(l, r, l_pos, r_pos, 1);
-    thrust::device_vector<int> map_out(l_pos.size(), -1);
+    auto err = call_gdf_multi_column_test(l, r, l_pos, r_pos, 1);
+    thrust::device_vector<T> map_out(l_pos.size(), -1);
 
     EXPECT_THAT(host_vec(l_pos), ElementsAre(0, 0, 1, 1, 2, 3, 4));
     EXPECT_THAT(host_vec(r_pos), ElementsAre(0, 1, 0, 1, -1, 4, 4));
@@ -153,13 +174,34 @@ TEST(gdf_multi_left_join_TEST, case1) {
     ASSERT_EQ(err, GDF_SUCCESS);
 }
 
-TEST(gdf_multi_left_join_TEST, case2) {
-    std::array<thrust::device_vector<int>, 3> l;
-    std::array<thrust::device_vector<int>, 3> r;
+TEST(gdf_multi_left_join_TEST, i8_index1) {
+    gdf_multi_left_join_test_index1<int8_t>();
+}
+
+TEST(gdf_multi_left_join_TEST, i32_index1) {
+    gdf_multi_left_join_test_index1<int32_t>();
+}
+
+TEST(gdf_multi_left_join_TEST, i64_index1) {
+    gdf_multi_left_join_test_index1<int64_t>();
+}
+
+TEST(gdf_multi_left_join_TEST, f32_index1) {
+    gdf_multi_left_join_test_index1<float>();
+}
+
+TEST(gdf_multi_left_join_TEST, f64_index1) {
+    gdf_multi_left_join_test_index1<double>();
+}
+
+template <typename T>
+void gdf_multi_left_join_test_index2(void) {
+    std::array<thrust::device_vector<T>, 3> l;
+    std::array<thrust::device_vector<T>, 3> r;
     thrust::device_vector<int> l_pos;
     thrust::device_vector<int> r_pos;
-    auto err = call_gdf_test(l, r, l_pos, r_pos, 2);
-    thrust::device_vector<int> map_out(l_pos.size());
+    auto err = call_gdf_multi_column_test(l, r, l_pos, r_pos, 2);
+    thrust::device_vector<T> map_out(l_pos.size());
 
     EXPECT_THAT(host_vec(l_pos), ElementsAre(0, 1, 2, 3, 4));
 
@@ -180,13 +222,34 @@ TEST(gdf_multi_left_join_TEST, case2) {
     ASSERT_EQ(err, GDF_SUCCESS);
 }
 
-TEST(gdf_multi_left_join_TEST, case3) {
-    std::array<thrust::device_vector<int>, 3> l;
-    std::array<thrust::device_vector<int>, 3> r;
+TEST(gdf_multi_left_join_TEST, i8_index2) {
+    gdf_multi_left_join_test_index2<int8_t>();
+}
+
+TEST(gdf_multi_left_join_TEST, i32_index2) {
+    gdf_multi_left_join_test_index2<int32_t>();
+}
+
+TEST(gdf_multi_left_join_TEST, i64_index2) {
+    gdf_multi_left_join_test_index2<int64_t>();
+}
+
+TEST(gdf_multi_left_join_TEST, f32_index2) {
+    gdf_multi_left_join_test_index2<float>();
+}
+
+TEST(gdf_multi_left_join_TEST, f64_index2) {
+    gdf_multi_left_join_test_index2<double>();
+}
+
+template <typename T>
+void gdf_multi_left_join_test_index3(void) {
+    std::array<thrust::device_vector<T>, 3> l;
+    std::array<thrust::device_vector<T>, 3> r;
     thrust::device_vector<int> l_pos;
     thrust::device_vector<int> r_pos;
-    auto err = call_gdf_test(l, r, l_pos, r_pos, 2);
-    thrust::device_vector<int> map_out(l_pos.size());
+    auto err = call_gdf_multi_column_test(l, r, l_pos, r_pos, 3);
+    thrust::device_vector<T> map_out(l_pos.size());
 
     EXPECT_THAT(host_vec(l_pos), ElementsAre(0, 1, 2, 3, 4));
 
@@ -214,17 +277,34 @@ TEST(gdf_multi_left_join_TEST, case3) {
     ASSERT_EQ(err, GDF_SUCCESS);
 }
 
-TEST(join_TEST, gdf_inner_join) {
-    std::vector<int> l{0, 0, 1, 2, 3};
-    std::vector<int> r{0, 1, 2, 2, 3};
-    thrust::device_vector<int> dl, dr, l_pos, r_pos;
+TEST(gdf_multi_left_join_TEST, i8_index3) {
+    gdf_multi_left_join_test_index3<int8_t>();
+}
 
-    auto err = call_gdf_single_column_test(l, r, dl, dr, l_pos, r_pos, gdf_inner_join_generic);
+TEST(gdf_multi_left_join_TEST, i32_index3) {
+    gdf_multi_left_join_test_index3<int32_t>();
+}
 
-    thrust::device_vector<int> l_idx(l_pos.size(), -1);
-    thrust::device_vector<int> r_idx(r_pos.size(), -1);
-    thrust::gather_if(l_pos.begin(), l_pos.end(), l_pos.begin(), dl.begin(), l_idx.begin(), non_negative<int>());
-    thrust::gather_if(r_pos.begin(), r_pos.end(), r_pos.begin(), dr.begin(), r_idx.begin(), non_negative<int>());
+TEST(gdf_multi_left_join_TEST, i64_index3) {
+    gdf_multi_left_join_test_index3<int64_t>();
+}
+
+TEST(gdf_multi_left_join_TEST, f32_index3) {
+    gdf_multi_left_join_test_index3<float>();
+}
+
+TEST(gdf_multi_left_join_TEST, f64_index3) {
+    gdf_multi_left_join_test_index3<double>();
+}
+
+template <typename T>
+void gdf_inner_join_test(void) {
+    std::vector<T> l{0, 0, 1, 2, 3};
+    std::vector<T> r{0, 1, 2, 2, 3};
+    thrust::device_vector<T> l_idx, r_idx;
+    thrust::device_vector<int> l_pos, r_pos;
+
+    auto err = call_gdf_single_column_test(l, r, l_pos, r_pos, l_idx, r_idx, gdf_inner_join_generic);
 
     EXPECT_THAT(host_vec(l_idx), ElementsAreArray(host_vec(r_idx)));
     EXPECT_THAT(host_vec(l_pos), ElementsAre(0, 1, 2, 3, 3, 4));
@@ -233,17 +313,38 @@ TEST(join_TEST, gdf_inner_join) {
     ASSERT_EQ(err, GDF_SUCCESS);
 }
 
-TEST(join_TEST, gdf_left_join) {
-    std::vector<int> l{0, 0, 4, 5, 5};
-    std::vector<int> r{0, 0, 2, 3, 5};
-    thrust::device_vector<int> dl, dr, l_pos, r_pos;
+TEST(join_TEST, gdf_inner_join_i8) {
+    gdf_inner_join_test<int8_t>();
+}
 
-    auto err = call_gdf_single_column_test(l, r, dl, dr, l_pos, r_pos, gdf_left_join_generic);
+//TEST(join_TEST, gdf_inner_join_i16) {
+//    gdf_inner_join_test<int16_t>();
+//}
 
-    thrust::device_vector<int> l_idx(l_pos.size(), -1);
-    thrust::device_vector<int> r_idx(r_pos.size(), -1);
-    thrust::gather_if(l_pos.begin(), l_pos.end(), l_pos.begin(), dl.begin(), l_idx.begin(), non_negative<int>());
-    thrust::gather_if(r_pos.begin(), r_pos.end(), r_pos.begin(), dr.begin(), r_idx.begin(), non_negative<int>());
+TEST(join_TEST, gdf_inner_join_i32) {
+    gdf_inner_join_test<int32_t>();
+}
+
+TEST(join_TEST, gdf_inner_join_i64) {
+    gdf_inner_join_test<int64_t>();
+}
+
+TEST(join_TEST, gdf_inner_join_f32) {
+    gdf_inner_join_test<float>();
+}
+
+TEST(join_TEST, gdf_inner_join_f64) {
+    gdf_inner_join_test<double>();
+}
+
+template <typename T>
+void gdf_left_join_test(void) {
+    std::vector<T> l{0, 0, 4, 5, 5};
+    std::vector<T> r{0, 0, 2, 3, 5};
+    thrust::device_vector<T> l_idx, r_idx;
+    thrust::device_vector<int> l_pos, r_pos;
+
+    auto err = call_gdf_single_column_test(l, r, l_pos, r_pos, l_idx, r_idx, gdf_left_join_generic);
 
     EXPECT_THAT(host_vec(l_idx), ElementsAre(0, 0, 0, 0, 4, 5, 5));
     EXPECT_THAT(host_vec(l_pos), ElementsAre(0, 0, 1, 1, 2, 3, 4));
@@ -252,17 +353,38 @@ TEST(join_TEST, gdf_left_join) {
     ASSERT_EQ(err, GDF_SUCCESS);
 }
 
-TEST(join_TEST, gdf_outer_join) {
-    std::vector<int> l{0, 0, 4, 5, 5};
-    std::vector<int> r{0, 0, 2, 3, 5};
-    thrust::device_vector<int> dl, dr, l_pos, r_pos;
+TEST(join_TEST, gdf_left_join_i8) {
+    gdf_left_join_test<int8_t>();
+}
 
-    auto err = call_gdf_single_column_test(l, r, dl, dr, l_pos, r_pos, gdf_outer_join_generic);
+//TEST(join_TEST, gdf_left_join_i16) {
+//    gdf_left_join_test<int16_t>();
+//}
 
-    thrust::device_vector<int> l_idx(l_pos.size(), -1);
-    thrust::device_vector<int> r_idx(r_pos.size(), -1);
-    thrust::gather_if(l_pos.begin(), l_pos.end(), l_pos.begin(), dl.begin(), l_idx.begin(), non_negative<int>());
-    thrust::gather_if(r_pos.begin(), r_pos.end(), r_pos.begin(), dr.begin(), r_idx.begin(), non_negative<int>());
+TEST(join_TEST, gdf_left_join_i32) {
+    gdf_left_join_test<int32_t>();
+}
+
+TEST(join_TEST, gdf_left_join_i64) {
+    gdf_left_join_test<int64_t>();
+}
+
+TEST(join_TEST, gdf_left_join_f32) {
+    gdf_left_join_test<float>();
+}
+
+TEST(join_TEST, gdf_left_join_f64) {
+    gdf_left_join_test<double>();
+}
+
+template <typename T>
+void gdf_outer_join_test(void) {
+    std::vector<T> l{0, 0, 4, 5, 5};
+    std::vector<T> r{0, 0, 2, 3, 5};
+    thrust::device_vector<T> l_idx, r_idx;
+    thrust::device_vector<int> l_pos, r_pos;
+
+    auto err = call_gdf_single_column_test(l, r, l_pos, r_pos, l_idx, r_idx, gdf_outer_join_generic);
 
     EXPECT_THAT(host_vec(l_idx), ElementsAre(-1, -1, 0, 0, 0, 0,  4, 5, 5));
     EXPECT_THAT(host_vec(r_idx), ElementsAre( 2,  3, 0, 0, 0, 0, -1, 5, 5));
@@ -270,6 +392,30 @@ TEST(join_TEST, gdf_outer_join) {
     EXPECT_THAT(host_vec(r_pos), ElementsAre( 2,  3, 0, 1, 0, 1, -1, 4, 4));
 
     ASSERT_EQ(err, GDF_SUCCESS);
+}
+
+TEST(join_TEST, gdf_outer_join_i8) {
+    gdf_outer_join_test<int8_t>();
+}
+
+//TEST(join_TEST, gdf_outer_join_i16) {
+//    gdf_outer_join_test<int16_t>();
+//}
+
+TEST(join_TEST, gdf_outer_join_i32) {
+    gdf_outer_join_test<int32_t>();
+}
+
+TEST(join_TEST, gdf_outer_join_i64) {
+    gdf_outer_join_test<int64_t>();
+}
+
+TEST(join_TEST, gdf_outer_join_f32) {
+    gdf_outer_join_test<float>();
+}
+
+TEST(join_TEST, gdf_outer_join_f64) {
+    gdf_outer_join_test<double>();
 }
 
 TEST(gdf_foo_sample_TEST, case1) {
