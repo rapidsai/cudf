@@ -1,3 +1,5 @@
+# Copyright (c) 2018, NVIDIA CORPORATION.
+
 """
 Test method that apply GPU kernel to a frame.
 """
@@ -145,4 +147,3 @@ def test_df_apply_custom_chunks_tpb(nelem, tpb):
 
     np.testing.assert_array_almost_equal(got_out1, expect_out1)
     np.testing.assert_array_almost_equal(got_out2, expect_out2)
-

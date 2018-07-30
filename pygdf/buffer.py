@@ -1,4 +1,3 @@
-from __future__ import print_function, division
 
 import numpy as np
 from numba import cuda
@@ -25,9 +24,12 @@ class Buffer(object):
         mem = cuda.device_array(0, dtype=dtype)
         return cls(mem, size=0, capacity=0)
 
-    def __init__(self, mem, size=None, capacity=None):
+    def __init__(self, mem, size=None, capacity=None, categorical=False):
         if size is None:
-            size = mem.size
+            if categorical:
+                size = len(mem)
+            else:
+                size = mem.size
         if capacity is None:
             capacity = size
         self.mem = cudautils.to_device(mem)
@@ -78,10 +80,16 @@ class Buffer(object):
     def __getitem__(self, arg):
         if isinstance(arg, slice):
             sliced = self.to_gpu_array()[arg]
-            return Buffer(sliced)
+            buf = Buffer(sliced)
+            buf.dtype = self.dtype  # for np.datetime64 support
+            return buf
         elif isinstance(arg, int):
             arg = utils.normalize_index(arg, self.size)
-            return self.mem[arg]
+            # the dtype argument is necessary for datetime64 support
+            # because currently we can't pass datetime64 types into
+            # cuda dev arrays, so the type of the cuda dev array is
+            # an i64, and we view it as the dtype on the buffer
+            return self.mem[arg].view(self.dtype)
         else:
             raise NotImplementedError(type(arg))
 

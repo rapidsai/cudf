@@ -1,3 +1,5 @@
+# Copyright (c) 2018, NVIDIA CORPORATION.
+
 """
 A column is data + validity-mask.
 LibGDF operates on column.
@@ -39,7 +41,8 @@ class Column(object):
         for o in objs:
             if not o.is_type_equivalent(head):
                 raise ValueError("All series must be of same type")
-
+        # Filter out inputs that have 0 length
+        objs = [o for o in objs if len(o) > 0]
         newsize = sum(map(len, objs))
         # Concatenate data
         mem = cuda.device_array(shape=newsize, dtype=head.data.dtype)
@@ -127,14 +130,16 @@ class Column(object):
         data_nframe = header['data_frame_count']
         mask_nframe = header['mask_frame_count']
         data = deserialize(header['data_buffer'], frames[:data_nframe])
-        mask = deserialize(header['mask_buffer'], frames[data_nframe:data_nframe + mask_nframe])
+        mask = deserialize(header['mask_buffer'],
+                           frames[data_nframe:data_nframe + mask_nframe])
         return data, mask
 
     def _get_mask_as_column(self):
         from .numerical import NumericalColumn
 
         data = Buffer(cudautils.ones(len(self), dtype=np.bool_))
-        mask = NumericalColumn(data=data, mask=None, null_count=0, dtype=np.bool_)
+        mask = NumericalColumn(data=data, mask=None, null_count=0,
+                               dtype=np.bool_)
         if self._mask is not None:
             mask = mask.set_mask(self._mask).fillna(False)
         return mask
@@ -170,7 +175,8 @@ class Column(object):
         """
         return _gdf.columnview(size=self._data.size,
                                data=self._data,
-                               mask=self._mask)
+                               mask=self._mask,
+                               dtype=self.dtype)
 
     def set_mask(self, mask, null_count=None):
         """Create new Column by setting the mask
@@ -413,4 +419,3 @@ class Column(object):
             newbuf.extend(buf.to_gpu_array())
         # return new column
         return self.replace(data=newbuf)
-

@@ -1,12 +1,11 @@
 import os
 import sys
 try:
-    import distributed
+    import distributed.protocol as _dp
 except ImportError:
     def register_distributed_serializer(cls):
         pass
 else:
-    import distributed.protocol as _dp
     from distributed.utils import has_keyword
 
     def register_distributed_serializer(cls):

@@ -101,6 +101,7 @@ def np_to_gdf_dtype(dtype):
         np.int16:   libgdf.GDF_INT16,
         np.int8:    libgdf.GDF_INT8,
         np.bool_:   libgdf.GDF_INT8,
+        np.datetime64: libgdf.GDF_DATE64,
     }[np.dtype(dtype).type]
 
 
@@ -133,9 +134,10 @@ def apply_sort(col_keys, col_vals, ascending=True):
 
 
 _join_how_api = {
-    'left': libgdf.gdf_left_join_generic,
     'inner': libgdf.gdf_inner_join_generic,
     'outer': libgdf.gdf_outer_join_generic,
+    'left': libgdf.gdf_multi_left_join_generic,
+    'left-compat': libgdf.gdf_left_join_generic,
 }
 
 
@@ -154,10 +156,25 @@ def _as_numba_devarray(intaddr, nelem, dtype):
 def apply_join(col_lhs, col_rhs, how):
     """Returns a tuple of the left and right joined indices as gpu arrays.
     """
+    if(len(col_lhs) != len(col_rhs)):
+        msg = "Unequal #columns in list 'col_lhs' and list 'col_rhs'"
+        raise ValueError(msg)
+
     joiner = _join_how_api[how]
     join_result_ptr = ffi.new("gdf_join_result_type**", None)
-    # Call libgdf
-    joiner(col_lhs.cffi_view, col_rhs.cffi_view, join_result_ptr)
+
+    if(how == 'left'):
+        list_lhs = []
+        list_rhs = []
+        for i in range(len(col_lhs)):
+            list_lhs.append(col_lhs[i].cffi_view)
+            list_rhs.append(col_rhs[i].cffi_view)
+
+        # Call libgdf
+        joiner(len(col_lhs), list_lhs, list_rhs, join_result_ptr)
+    else:
+        joiner(col_lhs[0].cffi_view, col_rhs[0].cffi_view, join_result_ptr)
+
     # Extract result
     join_result = join_result_ptr[0]
     dataptr = libgdf.gdf_join_result_data(join_result)
@@ -249,3 +266,20 @@ class SegmentedRadixortPlan(object):
                                                    segsize,
                                                    unwrap_devary(d_begins[s:]),
                                                    unwrap_devary(d_ends[s:]))
+
+
+def hash_columns(columns, result):
+    """Hash the *columns* and store in *result*.
+    Returns *result*
+    """
+    assert len(columns) > 0
+    assert result.dtype == np.int32
+    # No-op for 0-sized
+    if len(result) == 0:
+        return result
+    col_input = [col.cffi_view for col in columns]
+    col_out = result.cffi_view
+    ncols = len(col_input)
+    hashfn = libgdf.GDF_HASH_MURMUR3
+    libgdf.gdf_hash(ncols, col_input, hashfn, col_out)
+    return result

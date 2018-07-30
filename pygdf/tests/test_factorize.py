@@ -1,9 +1,9 @@
+# Copyright (c) 2018, NVIDIA CORPORATION.
+
 import pytest
 import numpy as np
-import random
-from numba import cuda
-import pygdf
 from pygdf.dataframe import DataFrame, Series
+
 
 @pytest.mark.parametrize('ncats,nelem',
                          [(2, 2), (2, 10), (10, 100)])
@@ -22,4 +22,3 @@ def test_factorize(ncats, nelem):
     encoder = dict((v, i) for i, v in enumerate(labels))
     handcoded = [encoder[v] for v in arr]
     np.testing.assert_array_equal(uvals.to_array(), handcoded)
-

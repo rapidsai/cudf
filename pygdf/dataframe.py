@@ -1,3 +1,5 @@
+# Copyright (c) 2018, NVIDIA CORPORATION.
+
 from __future__ import print_function, division
 
 import inspect
@@ -9,11 +11,11 @@ import pandas as pd
 from numba import cuda
 from numba.cuda.cudadrv.devicearray import DeviceNDArray
 
-from . import cudautils, formatting, queryutils, _gdf, applyutils, utils
+from . import cudautils, formatting, queryutils, applyutils, utils, _gdf
 from .index import GenericIndex, EmptyIndex, Index, RangeIndex
+from .buffer import Buffer
 from .series import Series
 from .column import Column
-from .buffer import Buffer
 from .settings import NOTSET, settings
 from .serialize import register_distributed_serializer
 
@@ -414,7 +416,8 @@ class DataFrame(object):
         if len(set(o.columns for o in objs)) != 1:
             what = set(o.columns for o in objs)
             raise ValueError('columns mismatch: {}'.format(what))
-
+        # Filter out inputs that have 0 length
+        objs = [o for o in objs if len(o) > 0]
         if ignore_index:
             index = RangeIndex(sum(map(len, objs)))
         else:
@@ -499,6 +502,32 @@ class DataFrame(object):
         Returns
         -------
         a new dataframe with new columns append for each category.
+
+        Examples
+        -------
+        >>> import pandas as pd
+        >>> from pygdf.dataframe import DataFrame as gdf
+
+        >>> pet_owner = [1, 2, 3, 4, 5]
+        >>> pet_type = ['fish', 'dog', 'fish', 'bird', 'fish']
+
+        >>> df = pd.DataFrame({'pet_owner': pet_owner, 'pet_type': pet_type})
+        >>> df.pet_type = df.pet_type.astype('category')
+
+        Create a column with numerically encoded category values
+        >>> df['pet_codes'] = df.pet_type.cat.codes
+        >>> my_gdf = gdf.from_pandas(df)
+
+        Create the list of category codes to use in the encoding
+        >>> codes = my_gdf.pet_codes.unique()
+        >>> enc_gdf = my_gdf.one_hot_encoding('pet_codes', 'pet_dummy', codes)
+        >>> enc_gdf.head()
+          pet_owner pet_type pet_codes pet_dummy_0 pet_dummy_1 pet_dummy_2
+          0         1     fish         2         0.0         0.0         1.0
+          1         2      dog         1         0.0         1.0         0.0
+          2         3     fish         2         0.0         0.0         1.0
+          3         4     bird         0         1.0         0.0         0.0
+          4         5     fish         2         0.0         0.0         1.0
         """
         newnames = [prefix_sep.join([prefix, str(cat)]) for cat in cats]
         newcols = self[column].one_hot_encoding(cats=cats, dtype=dtype)
@@ -601,6 +630,104 @@ class DataFrame(object):
                 df[k] = self[k].reset_index().take(new_positions)
         return df.set_index(self.index.take(new_positions))
 
+    def merge(self, other, on=None, how='left', lsuffix='_x', rsuffix='_y',
+              type='sort'):
+        if how != 'left':
+            raise NotImplementedError('{!r} join not implemented yet'
+                                      .format(how))
+
+        same_names = set(self.columns) & set(other.columns)
+        if same_names and not (lsuffix or rsuffix):
+            raise ValueError('there are overlapping columns but '
+                             'lsuffix and rsuffix are not defined')
+
+        lhs = self
+        rhs = other
+        # XXX: Replace this stub
+        # joined_values, joined_indicies = self._stub_merge(
+        #    lhs, rhs, left_on=on, right_on=on, how=how,
+        #    return_joined_indicies=True)
+        joined_values, joined_indicies = self._merge_gdf(
+            lhs, rhs, left_on=on, right_on=on, how=how,
+            return_indices=True)
+
+        # XXX: Prepare output.  same as _join.  code duplication
+        # Perform left, inner and outer join
+        def fix_name(name, suffix):
+            if name in same_names:
+                return "{}{}".format(name, suffix)
+            return name
+
+        def gather_cols(outdf, indf, on, idx, joinidx, suffix):
+            mask = (Series(idx) != -1).as_mask()
+            for k in on:
+                newcol = indf[k].take(idx).set_mask(mask).set_index(joinidx)
+                outdf[fix_name(k, suffix)] = newcol
+
+        def gather_empty(outdf, indf, idx, joinidx, suffix):
+            for k in indf.columns:
+                outdf[fix_name(k, suffix)] = indf[k][:0]
+
+        df = DataFrame()
+        for key, col in zip(on, joined_values):
+            df[key] = col
+
+        left_indices, right_indices = joined_indicies
+        gather_cols(df, lhs, [x for x in lhs.columns if x not in on],
+                    left_indices, df.index, lsuffix)
+        gather_cols(df, rhs, [x for x in rhs.columns if x not in on],
+                    right_indices, df.index, rsuffix)
+
+        return df
+
+    def _merge_gdf(self, left, right, left_on, right_on, how, return_indices):
+
+        from pygdf import cudautils
+
+        assert how == 'left'
+        assert return_indices
+        assert len(left_on) == len(right_on)
+
+        left_cols = []
+        for l in left_on:
+            left_cols.append(left[l]._column)
+
+        right_cols = []
+        for r in right_on:
+            right_cols.append(right[r]._column)
+
+        joined_indices = []
+        with _gdf.apply_join(left_cols, right_cols, how) as (left_indices,
+                                                             right_indices):
+            if left_indices.size > 0:
+                # For each column we joined on, gather the values from each
+                # column using the indices from the join
+                joined_values = []
+
+                for i in range(len(left_on)):
+                    # TODO Instead of calling 'gather_joined_index' for every
+                    # column that we are joining on, we should implement a
+                    # 'multi_gather_joined_index' that can gather a value from
+                    # each column at once
+                    raw_values = cudautils.gather_joined_index(
+                                left_cols[i].to_gpu_array(),
+                                right_cols[i].to_gpu_array(),
+                                left_indices,
+                                right_indices,
+                                )
+                    buffered_values = Buffer(raw_values)
+
+                    joined_values.append(left_cols[i]
+                                         .replace(data=buffered_values))
+
+                joined_indices = (cudautils.copy_array(left_indices),
+                                  cudautils.copy_array(right_indices))
+
+        if return_indices:
+            return joined_values, joined_indices
+        else:
+            return joined_indices
+
     def join(self, other, on=None, how='left', lsuffix='', rsuffix='',
              sort=False):
         """Join columns with other DataFrame on index or on a key column.
@@ -628,10 +755,10 @@ class DataFrame(object):
         - *other* must be a single DataFrame for now.
         - *on* is not supported yet due to lack of multi-index support.
         """
-        if how not in 'left,right,inner,outer':
-            raise ValueError('unsupported {!r} join'.format(how))
+        if how not in ['left', 'right', 'inner', 'outer']:
+            raise NotImplementedError('unsupported {!r} join'.format(how))
         if on is not None:
-            raise ValueError('"on" is not supported yet')
+            raise NotImplementedError('"on" is not supported yet')
 
         same_names = set(self.columns) & set(other.columns)
         if same_names and not (lsuffix or rsuffix):
@@ -807,10 +934,12 @@ class DataFrame(object):
         The loop in the function may look like serial code but it will be
         executed concurrently by multiple threads.
         """
-        return applyutils.apply_rows(self, func, incols, outcols, kwargs, cache_key=cache_key)
+        return applyutils.apply_rows(self, func, incols, outcols, kwargs,
+                                     cache_key=cache_key)
 
     @applyutils.doc_applychunks()
-    def apply_chunks(self, func, incols, outcols, kwargs={}, chunks=None, tpb=1):
+    def apply_chunks(self, func, incols, outcols, kwargs={}, chunks=None,
+                     tpb=1):
         """Transform user-specified chunks using the user-provided function.
 
         Parameters
@@ -826,7 +955,8 @@ class DataFrame(object):
         use ``numba.cuda.threadIdx.x`` and ``numba.cuda.blockDim.x``,
         respectively (See `numba CUDA kernel documentation`_).
 
-        .. _numba CUDA kernel documentation: http://numba.pydata.org/numba-doc/latest/cuda/kernels.html
+        .. _numba CUDA kernel documentation:\
+        http://numba.pydata.org/numba-doc/latest/cuda/kernels.html
 
         In the example below, the *kernel* is invoked concurrently on each
         specified chunk.  The *kernel* computes the corresponding output
@@ -851,6 +981,23 @@ class DataFrame(object):
             raise ValueError('*chunks* must be defined')
         return applyutils.apply_chunks(self, func, incols, outcols, kwargs,
                                        chunks=chunks, tpb=tpb)
+
+    def hash_columns(self, columns=None):
+        """Hash the given *columns* and return a new Series
+
+        Parameters
+        ----------
+        column : sequence of str; optional
+            Sequence of column names. If columns is *None* (unspecified),
+            all columns in the frame are used.
+        """
+        from . import numerical
+
+        if columns is None:
+            columns = self.columns
+
+        cols = [self[k]._column for k in columns]
+        return Series(numerical.column_hash_values(*cols))
 
     def to_pandas(self):
         """Convert to a Pandas DataFrame.

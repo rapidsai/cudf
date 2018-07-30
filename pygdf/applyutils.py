@@ -1,11 +1,12 @@
-from weakref import WeakKeyDictionary
+# Copyright (c) 2018, NVIDIA CORPORATION.
+
 import functools
 
 from numba.utils import pysignature, exec_
 from numba import six
 from numba import cuda
 
-from pygdf.docutils import docfmt, docfmt_partial
+from pygdf.docutils import docfmt_partial
 from pygdf import cudautils
 from pygdf.series import Series
 
@@ -25,10 +26,11 @@ kwargs: dict
 _doc_applychunkparams = """
 chunks : int or Series-like
             If it is an ``int``, it is the chunksize.
-            If it is an array, it contains integer offset for the start of each
-            chunk.  The span of a chunk for chunk i-th is
-            ``data[chunks[i] : chunks[i + 1]]`` for any ``i + 1 < chunks.size``;
-            or, ``data[chunks[i]:]`` for the ``i == len(chunks) - 1``.
+            If it is an array, it contains integer offset for the start of
+            each chunk.  The span of a chunk for chunk i-th is
+            ``data[chunks[i] : chunks[i + 1]]`` for any
+            ``i + 1 < chunks.size``; or, ``data[chunks[i]:]`` for the
+            ``i == len(chunks) - 1``.
 tpb : int; optional
     It is the thread-per-block for the underlying kernel.
     The default uses 1 thread to emulate serial execution for
@@ -69,7 +71,8 @@ def apply_chunks(df, func, incols, outcols, kwargs, chunks, tpb):
     {params}
     {params_chunks}
     """
-    applyrows = ApplyChunksCompiler(func, incols, outcols, kwargs, cache_key=None)
+    applyrows = ApplyChunksCompiler(func, incols, outcols, kwargs,
+                                    cache_key=None)
     return applyrows.run(df, chunks=chunks, tpb=tpb)
 
 
@@ -109,8 +112,8 @@ class ApplyRowsCompiler(ApplyKernelCompilerBase):
 
     def compile(self, func, argnames, extra_argnames):
         # Compile kernel
-        kernel = _load_cache_or_make_row_wise_kernel(self.cache_key, func, argnames,
-                                                     extra_argnames)
+        kernel = _load_cache_or_make_row_wise_kernel(self.cache_key, func,
+                                                     argnames, extra_argnames)
         return kernel
 
     def launch_kernel(self, df, args):
@@ -222,7 +225,9 @@ def chunk_wise_kernel(nrows, chunks, {args}):
     indent = ' ' * 4
 
     body.append(indent + 'start = chunks[curblk]')
-    body.append(indent + 'stop = chunks[curblk + 1] if curblk + 1 < chunks.size else nrows')
+    body.append(indent
+                + 'stop = chunks[curblk + 1]'
+                + ' if curblk + 1 < chunks.size else nrows')
 
     slicedargs = {}
     for a in argnames:
@@ -230,8 +235,8 @@ def chunk_wise_kernel(nrows, chunks, {args}):
             slicedargs[a] = "{}[start:stop]".format(a)
         else:
             slicedargs[a] = str(a)
-    body.append("{}inner({})".format(indent,
-                                     ', '.join(slicedargs[k] for k in argnames)))
+    body.append("{}inner({})".format(
+                    indent, ', '.join(slicedargs[k] for k in argnames)))
 
     indented = ['{}{}'.format(' ' * 4, ln) for ln in body]
     # Finalize source
@@ -245,7 +250,7 @@ def chunk_wise_kernel(nrows, chunks, {args}):
     return kernel
 
 
-_cache = dict() #WeakKeyDictionary()
+_cache = dict()  # WeakKeyDictionary()
 
 
 @functools.wraps(_make_row_wise_kernel)

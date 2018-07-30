@@ -1,3 +1,5 @@
+# Copyright (c) 2018, NVIDIA CORPORATION.
+
 import pytest
 
 import pandas as pd
@@ -26,10 +28,13 @@ def make_frames(index=None):
 @pytest.mark.parametrize('index', [False, 'z', 'y'])
 def test_concat(index):
     df, df2, gdf, gdf2 = make_frames(index)
-
+    # Make empty frame
+    gdf_empty1 = gdf2[:0]
+    assert len(gdf_empty1) == 0
+    df_empty1 = gdf_empty1.to_pandas()
     # DataFrame
-    res = gd.concat([gdf, gdf2, gdf]).to_pandas()
-    sol = pd.concat([df, df2, df])
+    res = gd.concat([gdf, gdf2, gdf, gdf_empty1]).to_pandas()
+    sol = pd.concat([df, df2, df, df_empty1])
     pd.util.testing.assert_frame_equal(res, sol, check_names=False)
 
     # Series

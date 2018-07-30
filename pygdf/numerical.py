@@ -1,10 +1,11 @@
-from __future__ import print_function, division
+# Copyright (c) 2018, NVIDIA CORPORATION.
 
-import numbers
+from __future__ import print_function, division
 
 import numpy as np
 import pandas as pd
 
+from numba import cuda
 from libgdf_cffi import libgdf
 
 from . import _gdf, columnops, utils, cudautils
@@ -118,7 +119,8 @@ class NumericalColumn(columnops.TypedColumnBase):
         if self.has_null_mask:
             raise ValueError('masked array not supported')
         # Clone data buffer as the key
-        col_keys = self.replace(data=self.data.copy())
+        col_keys = self.replace(data=self.data.copy(),
+                                dtype=self._data.dtype)
         # Create new array for the positions
         inds = Buffer(cudautils.arange(len(self)))
         col_inds = self.replace(data=inds, dtype=inds.dtype)
@@ -128,17 +130,46 @@ class NumericalColumn(columnops.TypedColumnBase):
     def to_pandas(self, index=None):
         return pd.Series(self.to_array(fillna='pandas'), index=index)
 
-    def unique(self):
+    def _unique_segments(self):
+        """ Common code for unique, unique_count and value_counts"""
         # make dense column
         densecol = self.replace(data=self.to_dense_buffer(), mask=None)
         # sort the column
         sortcol, _ = densecol.sort_by_values(ascending=True)
         # find segments
         sortedvals = sortcol.to_gpu_array()
-        segs, _ = cudautils.find_segments(sortedvals)
+        segs, begins = cudautils.find_segments(sortedvals)
+        return segs, sortedvals
+
+    def unique(self, method='sort'):
+        # method variable will indicate what algorithm to use to
+        # calculate unique, not used right now
+        if method is not 'sort':
+            msg = 'non sort based unique() not implemented yet'
+            raise NotImplementedError(msg)
+        segs, sortedvals = self._unique_segments()
         # gather result
         out = cudautils.gather(data=sortedvals, index=segs)
         return self.replace(data=Buffer(out), mask=None)
+
+    def unique_count(self, method='sort'):
+        if method is not 'sort':
+            msg = 'non sort based unique_count() not implemented yet'
+            raise NotImplementedError(msg)
+        segs, _ = self._unique_segments()
+        return len(segs)
+
+    def value_counts(self, method='sort'):
+        if method is not 'sort':
+            msg = 'non sort based value_count() not implemented yet'
+            raise NotImplementedError(msg)
+        segs, sortedvals = self._unique_segments()
+        # Return both values and their counts
+        out1 = cudautils.gather(data=sortedvals, index=segs)
+        out2 = cudautils.value_count(segs, len(sortedvals))
+        out_vals = self.replace(data=Buffer(out1), mask=None)
+        out_counts = NumericalColumn(data=Buffer(out2), dtype=np.intp)
+        return out_vals, out_counts
 
     def all(self):
         return bool(self.min())
@@ -201,9 +232,29 @@ class NumericalColumn(columnops.TypedColumnBase):
         elif dkind in 'iu':
             return -1
         else:
-            raise TypeError("numeric column of {} has no NaN value".format(self.dtype))
+            raise TypeError(
+                "numeric column of {} has no NaN value".format(self.dtype))
 
-    def join(self, other, how='left', return_indexers=False):
+    def join(self, other, how='left', return_indexers=False, type='sort'):
+
+        # Single column join using sort-based implementation
+        if type == 'sort':
+            return self._sortjoin(other=other, how=how,
+                                  return_indexers=return_indexers)
+        elif type == 'hash':
+            # Get list of columns from self with left_on and
+            # from other with right_on
+            return self._hashjoin(other=other, how=how,
+                                  return_indexers=return_indexers)
+        else:
+            raise ValueError('Unsupported join type')
+
+    def _hashjoin(self, other, how='left', return_indexers=False):
+        msg = "Hash based join on index not implemented yet."
+        raise NotImplementedError(msg)
+        return
+
+    def _sortjoin(self, other, how='left', return_indexers=False):
         """Join with another column.
 
         When the column is a index, set *return_indexers* to obtain
@@ -216,14 +267,16 @@ class NumericalColumn(columnops.TypedColumnBase):
 
         lkey, largsort = self.sort_by_values(True)
         rkey, rargsort = other.sort_by_values(True)
-        with _gdf.apply_join(lkey, rkey, how=how) as (lidx, ridx):
+        if how == 'left':
+            how = 'left-compat'
+        with _gdf.apply_join([lkey], [rkey], how=how) as (lidx, ridx):
             if lidx.size > 0:
                 raw_index = cudautils.gather_joined_index(
-                    lkey.to_gpu_array(),
-                    rkey.to_gpu_array(),
-                    lidx,
-                    ridx,
-                )
+                        lkey.to_gpu_array(),
+                        rkey.to_gpu_array(),
+                        lidx,
+                        ridx,
+                        )
                 buf_index = Buffer(raw_index)
             else:
                 buf_index = Buffer.null(dtype=self.dtype)
@@ -237,14 +290,14 @@ class NumericalColumn(columnops.TypedColumnBase):
 
                 if len(joined_index) > 0:
                     indexers = (
-                        gather(Series(largsort), lidx),
-                        gather(Series(rargsort), ridx),
-                    )
+                            gather(Series(largsort), lidx),
+                            gather(Series(rargsort), ridx),
+                            )
                 else:
                     indexers = (
-                        Series(Buffer.null(dtype=np.intp)),
-                        Series(Buffer.null(dtype=np.intp))
-                    )
+                            Series(Buffer.null(dtype=np.intp)),
+                            Series(Buffer.null(dtype=np.intp))
+                            )
                 return joined_index, indexers
             else:
                 return joined_index
@@ -277,6 +330,17 @@ def numeric_normalize_types(*args):
     """
     dtype = np.result_type(*[a.dtype for a in args])
     return [a.astype(dtype) for a in args]
+
+
+def column_hash_values(column0, *other_columns):
+    """Hash all values in the given columns.
+    Returns a new NumericalColumn[int32]
+    """
+    columns = [column0] + list(other_columns)
+    buf = Buffer(cuda.device_array(len(column0), dtype=np.int32))
+    result = NumericalColumn(data=buf, dtype=buf.dtype)
+    _gdf.hash_columns(columns, result)
+    return result
 
 
 register_distributed_serializer(NumericalColumn)

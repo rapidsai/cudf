@@ -1,3 +1,5 @@
+# Copyright (c) 2018, NVIDIA CORPORATION.
+
 import pytest
 
 import numpy as np
@@ -173,9 +175,11 @@ def test_dataframe_astype():
 def test_dataframe_slicing():
     df = DataFrame()
     size = 123
-    df['a'] = ha = np.random.randint(low=0, high=100, size=size).astype(np.int32)
+    df['a'] = ha = np.random.randint(low=0, high=100, size=size)\
+        .astype(np.int32)
     df['b'] = hb = np.random.random(size).astype(np.float32)
-    df['c'] = hc = np.random.randint(low=0, high=100, size=size).astype(np.int64)
+    df['c'] = hc = np.random.randint(low=0, high=100, size=size)\
+        .astype(np.int64)
     df['d'] = hd = np.random.random(size).astype(np.float64)
 
     # Row slice first 10
@@ -214,9 +218,11 @@ def test_dataframe_slicing():
 def test_dataframe_loc():
     df = DataFrame()
     size = 123
-    df['a'] = ha = np.random.randint(low=0, high=100, size=size).astype(np.int32)
-    df['b'] = hb = np.random.random(size).astype(np.float32)
-    df['c'] = hc = np.random.randint(low=0, high=100, size=size).astype(np.int64)
+    df['a'] = ha = np.random.randint(low=0, high=100, size=size)\
+        .astype(np.int32)
+    df['b'] = hb = np.random.random(size).astype(np.float32)  # noqa: F841
+    df['c'] = hc = np.random.randint(low=0, high=100, size=size)\
+        .astype(np.int64)
     df['d'] = hd = np.random.random(size).astype(np.float64)
 
     # Full slice
@@ -423,6 +429,7 @@ def test_dataframe_take(ntake):
     check()
     check(ignore_index=True)
 
+
 def test_dataframe_append_empty():
     pdf = pd.DataFrame({
         "key": [1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 4],
@@ -456,3 +463,30 @@ def test_dataframe_setitem_index_len1():
     gdf['b'] = gdf.index.as_column()
 
     np.testing.assert_equal(gdf.b.to_array(), [0])
+
+
+@pytest.mark.parametrize('nrows', [1, 8, 100, 1000])
+def test_dataframe_hash_columns(nrows):
+    gdf = DataFrame()
+    data = np.asarray(range(nrows))
+    data[0] = data[-1]  # make first and last the same
+    gdf['a'] = data
+    gdf['b'] = gdf.a + 100
+    out = gdf.hash_columns(['a', 'b'])
+    assert isinstance(out, Series)
+    assert len(out) == nrows
+    assert out.dtype == np.int32
+
+    # Check default
+    out_all = gdf.hash_columns()
+    np.testing.assert_array_equal(out.to_array(), out_all.to_array())
+
+    # Check single column
+    out_one = gdf.hash_columns(['a']).to_array()
+    # First matches last
+    assert out_one[0] == out_one[-1]
+    # Equivalent to the Series.hash_values()
+    np.testing.assert_array_equal(
+        gdf.a.hash_values().to_array(),
+        out_one,
+        )

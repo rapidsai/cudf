@@ -1,10 +1,11 @@
+# Copyright (c) 2018, NVIDIA CORPORATION.
+
 from collections import OrderedDict, defaultdict, namedtuple
 
 from itertools import chain
 import numpy as np
 
 from numba import cuda
-from numba.numpy_support import from_dtype
 
 from .dataframe import DataFrame, Series
 from .multi import concat
@@ -62,7 +63,6 @@ def group_max(data, segments, output):
         for j in range(s + 1, e):
             tmp = max(tmp, data[j])
         output[i] = tmp
-
 
 
 @cuda.jit
@@ -259,7 +259,8 @@ class Groupby(object):
         col_order = list(levels)
 
         # Perform grouping
-        df, segs, markers = self._group_first_level(col_order[0], rowid_column, df)
+        df, segs, markers = self._group_first_level(col_order[0],
+                                                    rowid_column, df)
         rowidcol = df[rowid_column]
         sorted_keys = [Series(df.index.as_column())]
         del df

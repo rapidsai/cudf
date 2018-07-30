@@ -1,3 +1,5 @@
+# Copyright (c) 2018, NVIDIA CORPORATION.
+
 from __future__ import print_function, division
 
 import inspect
@@ -119,4 +121,3 @@ def test_query_splitted_combine():
     # Should equal to just querying the original GDF
     expect = gdf.query(expr).to_pandas()
     assert_frame_equal(got, expect)
-

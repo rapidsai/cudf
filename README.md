@@ -1,6 +1,6 @@
 # PyGDF
 
-[![Documentation Status](https://readthedocs.org/projects/pygdf/badge/?version=latest)](http://pygdf.readthedocs.io/en/latest/?badge=latest)
+[![Build Status](http://18.191.94.64/buildStatus/icon?job=pygdf-master)](http://18.191.94.64/job/pygdf-master/)&nbsp;&nbsp;[![Documentation Status](https://readthedocs.org/projects/pygdf/badge/?version=latest)](http://pygdf.readthedocs.io/en/latest/?badge=latest)
 
 PyGDF implements the Python interface to access and manipulate the GPU DataFrame of [GPU Open Analytics Initiative (GoAi)](http://gpuopenanalytics.com/).  We aim to provide a simple interface that is similar to the Pandas DataFrame and hide the details of GPU programming. 
 
@@ -34,7 +34,33 @@ git clone https://github.com/gpuopenanalytics/pygdf.git
 python setup.py install
 ```
 
-Note: This will not install dependencies automatically, so it is recommended to use the conda environment.
+**Note**: This assumes dependencies including [libgdf](https://github.com/gpuopenanalytics/libgdf) are already installed, so it is recommended to use the conda environment.
+
+A Dockerfile is provided for building and installing LibGDF and PyGDF from their respective master branches.
+
+**Notes**:
+* We test with and recommended installing [nvidia-docker2](https://github.com/nvidia/nvidia-docker/wiki/Installation-(version-2.0))
+* Host's installed nvidia driver must support >= the specified CUDA version (9.2 by default).
+* Alternative CUDA_VERSION should be specified via Docker [build-arg](https://docs.docker.com/engine/reference/commandline/build/#set-build-time-variables---build-arg)
+* Alternate branches for libgdf and pygdf may be specified as Docker build-args LIBGDF_REPO and PYGDF_REPO. See Dockerfile for example.
+* Ubuntu 16.04 is the default OS for this container. Alternate OSes may be specified as Docker build-arg LINUX_VERSION. See list of [available images](https://hub.docker.com/r/nvidia/cuda/).
+* Python 3.6 is default, but other versions may be specified via PYTHON_VERSION build-arg
+* GCC & G++ 5.x are default compiler versions, but other versions (which are supplied by the OS package manager) may be specified via CC and CXX build-args respectively
+* numba (0.40.0), numpy (1.14.3), and pandas (0.20.3) versions are also configurable as build-args
+
+From pygdf project root, to build with defaults:
+```
+docker build -t pygdf .
+...
+ ---> ec65aaa3d4b1
+ Successfully built ec65aaa3d4b1
+ Successfully tagged pygdf:latest
+
+docker run --runtime=nvidia -it pygdf bash
+/# source activate gdf
+(gdf) root@3f689ba9c842:/# python -c "import pygdf"
+(gdf) root@3f689ba9c842:/# 
+```
 
 ### Pip
 
