@@ -243,7 +243,9 @@ class DataFrame(object):
                                  more_rows=more_rows)
 
     def __str__(self):
-        return self.to_string(nrows=10)
+        nrows = settings.formatting.get('nrows') or 10
+        ncols = settings.formatting.get('ncols') or 8
+        return self.to_string(nrows=nrows, ncols=ncols)
 
     def __repr__(self):
         return "<pygdf.DataFrame ncols={} nrows={} >".format(
