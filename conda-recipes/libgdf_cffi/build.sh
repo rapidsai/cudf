@@ -15,7 +15,7 @@ cd build
 # configure
 cmake ..
 # build
-make copy_python
+make -j$CPU_COUNT copy_python
 # install
 python setup.py install --single-version-externally-managed --record=record.txt
 
