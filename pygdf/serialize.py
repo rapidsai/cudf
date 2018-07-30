@@ -28,12 +28,7 @@ else:
             header['reconstructor'] = do_serialize(meth_deserial)
             return header, frames
 
-        try:
-            return _serialize_imp(df, context=context)
-        except:
-            import traceback
-            traceback.print_exc()
-            raise
+        return _serialize_imp(df, context=context)
 
     def _deserialize(header, frames):
         reconstructor = _dp.deserialize(*header['reconstructor'])
@@ -69,4 +64,3 @@ def should_use_ipc(context):
         return False
     same_node, same_process = _parse_transfer_context(context)
     return bool(same_node)
-
