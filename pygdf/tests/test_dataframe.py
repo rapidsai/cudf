@@ -355,8 +355,8 @@ def test_dataframe_dir_and_getattr():
         df.not_a_column
 
 
-@pytest.mark.parametrize('format', ['row','column'])
-def test_dataframe_as_gpu_matrix(format):
+@pytest.mark.parametrize('order', ['C', 'F'])
+def test_dataframe_as_gpu_matrix(order):
     df = DataFrame()
 
     nelem = 123
@@ -364,13 +364,13 @@ def test_dataframe_as_gpu_matrix(format):
         df[k] = np.random.random(nelem)
 
     # Check all columns
-    mat = df.as_gpu_matrix(format=format, ).copy_to_host()
+    mat = df.as_gpu_matrix(order=order).copy_to_host()
     assert mat.shape == (nelem, 4)
     for i, k in enumerate(df.columns):
         np.testing.assert_array_equal(df[k].to_array(), mat[:, i])
 
     # Check column subset
-    mat = df.as_gpu_matrix(format=format, columns=['a', 'c']).copy_to_host()
+    mat = df.as_gpu_matrix(order=order, columns=['a', 'c']).copy_to_host()
     assert mat.shape == (nelem, 2)
 
     for i, k in enumerate('ac'):

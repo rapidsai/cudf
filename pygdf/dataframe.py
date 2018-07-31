@@ -423,7 +423,7 @@ class DataFrame(object):
         out._index = index
         return out
 
-    def as_gpu_matrix(self, columns=None, format='column'):
+    def as_gpu_matrix(self, columns=None, order='F'):
         """Convert to a matrix in device memory.
 
         Parameters
@@ -451,21 +451,25 @@ class DataFrame(object):
             raise ValueError("require at least 1 row")
         dtype = cols[0].dtype
         if any(dtype != c.dtype for c in cols):
-            raise ValueError('all column must have the same dtype')
+            raise ValueError('all columns must have the same dtype')
         for k, c in self._cols.items():
             if c.has_null_mask:
                 errmsg = ("column {!r} has null values"
                           "hint: use .fillna() to replace null values")
                 raise ValueError(errmsg.format(k))
 
-        if format == 'column':
+        if order == 'F':
             matrix = cuda.device_array(shape=(nrow, ncol), dtype=dtype,
-                                       order='F')
+                                       order=order)
             for colidx, inpcol in enumerate(cols):
                 dense = inpcol.to_gpu_array(fillna='pandas')
                 matrix[:, colidx].copy_to_device(dense)
-        elif format == 'row':
+        elif order == 'C':
             matrix = cudautils.row_matrix(cols, nrow, ncol, dtype)
+        else:
+            errmsg = ("order parameter should be 'C' for row major or 'F' for"
+                      "column major GPU matrix")
+            raise ValueError(errmsg.format(k))
         return matrix
 
     def as_matrix(self, columns=None):
