@@ -115,6 +115,8 @@ gives the number of int pairs in the output array.
 
 gdf_error gdf_inner_join_i8(gdf_column *leftcol, gdf_column *rightcol,
                              gdf_join_result_type **out_result);
+gdf_error gdf_inner_join_i16(gdf_column *leftcol, gdf_column *rightcol,
+                             gdf_join_result_type **out_result);
 gdf_error gdf_inner_join_i32(gdf_column *leftcol, gdf_column *rightcol,
                              gdf_join_result_type **out_result);
 gdf_error gdf_inner_join_i64(gdf_column *leftcol, gdf_column *rightcol,
@@ -127,6 +129,8 @@ gdf_error gdf_inner_join_generic(gdf_column *leftcol, gdf_column *rightcol,
                                  gdf_join_result_type **out_result);
 
 gdf_error gdf_left_join_i8(gdf_column *leftcol, gdf_column *rightcol,
+                            gdf_join_result_type **out_result);
+gdf_error gdf_left_join_i16(gdf_column *leftcol, gdf_column *rightcol,
                             gdf_join_result_type **out_result);
 gdf_error gdf_left_join_i32(gdf_column *leftcol, gdf_column *rightcol,
                             gdf_join_result_type **out_result);
@@ -143,6 +147,8 @@ gdf_error gdf_multi_left_join_generic(int num_cols, gdf_column **leftcol,
 							gdf_column **rightcol, gdf_join_result_type **out_result);
 
 gdf_error gdf_outer_join_i8(gdf_column *leftcol, gdf_column *rightcol,
+                             gdf_join_result_type **out_result);
+gdf_error gdf_outer_join_i16(gdf_column *leftcol, gdf_column *rightcol,
                              gdf_join_result_type **out_result);
 gdf_error gdf_outer_join_i32(gdf_column *leftcol, gdf_column *rightcol,
                              gdf_join_result_type **out_result);

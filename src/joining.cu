@@ -99,6 +99,7 @@ gdf_error gdf_##Fn##_generic(gdf_column *leftcol, gdf_column * rightcol,    \
                                  gdf_join_result_type **out_result) {       \
     switch ( leftcol->dtype ){                                              \
     case GDF_INT8:  return gdf_##Fn##_i8(leftcol, rightcol, out_result);    \
+    case GDF_INT16: return gdf_##Fn##_i16(leftcol, rightcol, out_result);   \
     case GDF_INT32: return gdf_##Fn##_i32(leftcol, rightcol, out_result);   \
     case GDF_INT64: return gdf_##Fn##_i64(leftcol, rightcol, out_result);   \
     case GDF_FLOAT32: return gdf_##Fn##_f32(leftcol, rightcol, out_result); \
@@ -213,6 +214,7 @@ DEF_INNER_JOIN(f64, int64_t)
 #endif
 DEF_JOIN_DISP(left_join)
 DEF_LEFT_JOIN(i8,  int8_t)
+DEF_LEFT_JOIN(i16, int16_t)
 DEF_LEFT_JOIN(i32, int32_t)
 DEF_LEFT_JOIN(i64, int64_t)
 DEF_LEFT_JOIN(f32, int32_t)
@@ -222,6 +224,7 @@ DEF_LEFT_JOIN(f64, int64_t)
 #define DEF_OUTER_JOIN(Fn, T) DEF_JOIN(outer_join_ ## Fn, T, outer_join)
 DEF_JOIN_DISP(outer_join)
 DEF_OUTER_JOIN(i8,  int8_t)
+DEF_OUTER_JOIN(i16, int16_t)
 DEF_OUTER_JOIN(i32, int32_t)
 DEF_OUTER_JOIN(i64, int64_t)
 DEF_OUTER_JOIN(f32, int32_t)

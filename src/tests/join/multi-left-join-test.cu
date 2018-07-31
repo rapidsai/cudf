@@ -317,9 +317,9 @@ TEST(join_TEST, gdf_inner_join_i8) {
     gdf_inner_join_test<int8_t>();
 }
 
-//TEST(join_TEST, gdf_inner_join_i16) {
-//    gdf_inner_join_test<int16_t>();
-//}
+TEST(join_TEST, gdf_inner_join_i16) {
+    gdf_inner_join_test<int16_t>();
+}
 
 TEST(join_TEST, gdf_inner_join_i32) {
     gdf_inner_join_test<int32_t>();
@@ -357,9 +357,9 @@ TEST(join_TEST, gdf_left_join_i8) {
     gdf_left_join_test<int8_t>();
 }
 
-//TEST(join_TEST, gdf_left_join_i16) {
-//    gdf_left_join_test<int16_t>();
-//}
+TEST(join_TEST, gdf_left_join_i16) {
+    gdf_left_join_test<int16_t>();
+}
 
 TEST(join_TEST, gdf_left_join_i32) {
     gdf_left_join_test<int32_t>();
@@ -398,9 +398,9 @@ TEST(join_TEST, gdf_outer_join_i8) {
     gdf_outer_join_test<int8_t>();
 }
 
-//TEST(join_TEST, gdf_outer_join_i16) {
-//    gdf_outer_join_test<int16_t>();
-//}
+TEST(join_TEST, gdf_outer_join_i16) {
+    gdf_outer_join_test<int16_t>();
+}
 
 TEST(join_TEST, gdf_outer_join_i32) {
     gdf_outer_join_test<int32_t>();
