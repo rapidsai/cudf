@@ -75,6 +75,7 @@ call_gdf_single_column_test(
         thrust::device_vector<T> &r_idx,
         const std::function<gdf_error(gdf_column *, gdf_column *,
             gdf_join_result_type **)> &f) {
+
     thrust::device_vector<T> dl = l;
     thrust::device_vector<T> dr = r;
 
@@ -298,13 +299,17 @@ TEST(gdf_multi_left_join_TEST, f64_index3) {
 }
 
 template <typename T>
-void gdf_inner_join_test(void) {
+void gdf_inner_join_test(gdf_method join_method) {
     std::vector<T> l{0, 0, 1, 2, 3};
     std::vector<T> r{0, 1, 2, 2, 3};
     thrust::device_vector<T> l_idx, r_idx;
     thrust::device_vector<int> l_pos, r_pos;
 
-    auto err = call_gdf_single_column_test(l, r, l_pos, r_pos, l_idx, r_idx, gdf_inner_join_generic);
+    gdf_context ctxt {0, join_method, 1};
+    auto bounded_function = std::bind(gdf_inner_join_generic,
+            std::placeholders::_1, std::placeholders::_2, std::placeholders::_3,
+            &ctxt);
+    auto err = call_gdf_single_column_test(l, r, l_pos, r_pos, l_idx, r_idx, bounded_function);
 
     EXPECT_THAT(host_vec(l_idx), ElementsAreArray(host_vec(r_idx)));
     EXPECT_THAT(host_vec(l_pos), ElementsAre(0, 1, 2, 3, 3, 4));
@@ -313,38 +318,66 @@ void gdf_inner_join_test(void) {
     ASSERT_EQ(err, GDF_SUCCESS);
 }
 
-TEST(join_TEST, gdf_inner_join_i8) {
-    gdf_inner_join_test<int8_t>();
+TEST(join_TEST, gdf_inner_join_i8_hash) {
+    gdf_inner_join_test<int8_t>(GDF_HASH);
 }
 
-//TEST(join_TEST, gdf_inner_join_i16) {
-//    gdf_inner_join_test<int16_t>();
-//}
-
-TEST(join_TEST, gdf_inner_join_i32) {
-    gdf_inner_join_test<int32_t>();
+TEST(join_TEST, gdf_inner_join_i16_hash) {
+    gdf_inner_join_test<int16_t>(GDF_HASH);
 }
 
-TEST(join_TEST, gdf_inner_join_i64) {
-    gdf_inner_join_test<int64_t>();
+TEST(join_TEST, gdf_inner_join_i32_hash) {
+    gdf_inner_join_test<int32_t>(GDF_HASH);
 }
 
-TEST(join_TEST, gdf_inner_join_f32) {
-    gdf_inner_join_test<float>();
+TEST(join_TEST, gdf_inner_join_i64_hash) {
+    gdf_inner_join_test<int64_t>(GDF_HASH);
 }
 
-TEST(join_TEST, gdf_inner_join_f64) {
-    gdf_inner_join_test<double>();
+TEST(join_TEST, gdf_inner_join_f32_hash) {
+    gdf_inner_join_test<float>(GDF_HASH);
+}
+
+TEST(join_TEST, gdf_inner_join_f64_hash) {
+    gdf_inner_join_test<double>(GDF_HASH);
+}
+
+TEST(join_TEST, gdf_inner_join_i8_sort) {
+    gdf_inner_join_test<int8_t>(GDF_SORT);
+}
+
+TEST(join_TEST, gdf_inner_join_i16_sort) {
+    gdf_inner_join_test<int16_t>(GDF_SORT);
+}
+
+TEST(join_TEST, gdf_inner_join_i32_sort) {
+    gdf_inner_join_test<int32_t>(GDF_SORT);
+}
+
+TEST(join_TEST, gdf_inner_join_i64_sort) {
+    gdf_inner_join_test<int64_t>(GDF_SORT);
+}
+
+TEST(join_TEST, gdf_inner_join_f32_sort) {
+    gdf_inner_join_test<float>(GDF_SORT);
+}
+
+TEST(join_TEST, gdf_inner_join_f64_sort) {
+    gdf_inner_join_test<double>(GDF_SORT);
 }
 
 template <typename T>
-void gdf_left_join_test(void) {
+void gdf_left_join_test(gdf_method join_method) {
     std::vector<T> l{0, 0, 4, 5, 5};
     std::vector<T> r{0, 0, 2, 3, 5};
     thrust::device_vector<T> l_idx, r_idx;
     thrust::device_vector<int> l_pos, r_pos;
 
-    auto err = call_gdf_single_column_test(l, r, l_pos, r_pos, l_idx, r_idx, gdf_left_join_generic);
+    gdf_context ctxt {0, join_method, 1};
+    auto bounded_function = std::bind(gdf_left_join_generic,
+            std::placeholders::_1, std::placeholders::_2, std::placeholders::_3,
+            &ctxt);
+    auto err = call_gdf_single_column_test(l, r, l_pos, r_pos, l_idx, r_idx, bounded_function);
 
     EXPECT_THAT(host_vec(l_idx), ElementsAre(0, 0, 0, 0, 4, 5, 5));
     EXPECT_THAT(host_vec(l_pos), ElementsAre(0, 0, 1, 1, 2, 3, 4));
@@ -353,28 +386,52 @@ void gdf_left_join_test(void) {
     ASSERT_EQ(err, GDF_SUCCESS);
 }
 
-TEST(join_TEST, gdf_left_join_i8) {
-    gdf_left_join_test<int8_t>();
+TEST(join_TEST, gdf_left_join_i8_hash) {
+    gdf_left_join_test<int8_t>(GDF_HASH);
 }
 
-//TEST(join_TEST, gdf_left_join_i16) {
-//    gdf_left_join_test<int16_t>();
-//}
-
-TEST(join_TEST, gdf_left_join_i32) {
-    gdf_left_join_test<int32_t>();
+TEST(join_TEST, gdf_left_join_i16_hash) {
+    gdf_left_join_test<int16_t>(GDF_HASH);
 }
 
-TEST(join_TEST, gdf_left_join_i64) {
-    gdf_left_join_test<int64_t>();
+TEST(join_TEST, gdf_left_join_i32_hash) {
+    gdf_left_join_test<int32_t>(GDF_HASH);
 }
 
-TEST(join_TEST, gdf_left_join_f32) {
-    gdf_left_join_test<float>();
+TEST(join_TEST, gdf_left_join_i64_hash) {
+    gdf_left_join_test<int64_t>(GDF_HASH);
 }
 
-TEST(join_TEST, gdf_left_join_f64) {
-    gdf_left_join_test<double>();
+TEST(join_TEST, gdf_left_join_f32_hash) {
+    gdf_left_join_test<float>(GDF_HASH);
+}
+
+TEST(join_TEST, gdf_left_join_f64_hash) {
+    gdf_left_join_test<double>(GDF_HASH);
+}
+
+TEST(join_TEST, gdf_left_join_i8_sort) {
+    gdf_left_join_test<int8_t>(GDF_SORT);
+}
+
+TEST(join_TEST, gdf_left_join_i16_sort) {
+    gdf_left_join_test<int16_t>(GDF_SORT);
+}
+
+TEST(join_TEST, gdf_left_join_i32_sort) {
+    gdf_left_join_test<int32_t>(GDF_SORT);
+}
+
+TEST(join_TEST, gdf_left_join_i64_sort) {
+    gdf_left_join_test<int64_t>(GDF_SORT);
+}
+
+TEST(join_TEST, gdf_left_join_f32_sort) {
+    gdf_left_join_test<float>(GDF_SORT);
+}
+
+TEST(join_TEST, gdf_left_join_f64_sort) {
+    gdf_left_join_test<double>(GDF_SORT);
 }
 
 template <typename T>
@@ -398,9 +455,9 @@ TEST(join_TEST, gdf_outer_join_i8) {
     gdf_outer_join_test<int8_t>();
 }
 
-//TEST(join_TEST, gdf_outer_join_i16) {
-//    gdf_outer_join_test<int16_t>();
-//}
+TEST(join_TEST, gdf_outer_join_i16) {
+    gdf_outer_join_test<int16_t>();
+}
 
 TEST(join_TEST, gdf_outer_join_i32) {
     gdf_outer_join_test<int32_t>();
