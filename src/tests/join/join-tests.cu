@@ -58,10 +58,36 @@ gdf_column create_gdf_column(std::vector<col_type> host_vector)
   return the_column;
 }
 
+// Each element of the result will be an index into the left and right columns where
+// left_columns[left_index] == right_columns[right_index]
+struct result_type 
+{
+  size_t left_index{};
+  size_t right_index{};
+
+  result_type(size_t _l, size_t _r) : 
+    left_index{_l}, right_index{_r} {}
+
+  // Overload comparison so the result vector can be sorted
+  bool operator <(result_type const& rhs){
+    return( std::tie(left_index, right_index) < std::tie(rhs.left_index, rhs.right_index) );
+  }
+
+  friend std::ostream& operator<<(std::ostream& os, const result_type& result);
+
+};
+
+// Overload the stream operator to make it easier to print a result 
+std::ostream& operator<<(std::ostream& os, const result_type& result)
+{
+  os << result.left_index << ", " << result.right_index << std::endl;
+  return os;
+}
+
 // A new instance of this class will be created for each *TEST(JoinTest, ...)
 // Put all repeated setup and validation stuff here
 template <class T>
-struct LeftJoinTest : public testing::Test
+struct InnerJoinTest : public testing::Test
 {
 
   // Extract the types for the input columns 
@@ -81,24 +107,8 @@ struct LeftJoinTest : public testing::Test
 
   multi_column_t right_columns;
 
-  // Each element of the result will be an index into the left and right columns where
-  // left_columns[left_index] == right_columns[right_index]
-  struct result_type 
-  {
-    size_t left_index{};
-    size_t right_index{};
 
-    result_type(size_t _l, size_t _r) : 
-      left_index{_l}, right_index{_r} {}
-
-    // Overload comparison so the result vector can be sorted
-    bool operator <(result_type const& rhs){
-      return( std::tie(left_index, right_index) < std::tie(rhs.left_index, rhs.right_index) );
-    }
-
-  };
-
-  LeftJoinTest()
+  InnerJoinTest()
   {
     static size_t number_of_instantiations{0};
 
@@ -119,15 +129,15 @@ struct LeftJoinTest : public testing::Test
     // Allocate storage in each vector 
     // Fill each vector with random values
     if(num_columns >= 1){
-      std::get<0>(the_columns).reserve(column_length);
+      std::get<0>(the_columns).resize(column_length);
       std::generate(std::get<0>(the_columns).begin(), std::get<0>(the_columns).end(), [column_range](){return std::rand() % column_range;});
     }
     if(num_columns >= 2){
-      std::get<1>(the_columns).reserve(column_length);
+      std::get<1>(the_columns).resize(column_length);
       std::generate(std::get<1>(the_columns).begin(), std::get<1>(the_columns).end(), [column_range](){return std::rand() % column_range;});
     }
     if(num_columns >= 3){
-      std::get<2>(the_columns).reserve(column_length);
+      std::get<2>(the_columns).resize(column_length);
       std::generate(std::get<2>(the_columns).begin(), std::get<2>(the_columns).end(), [column_range](){return std::rand() % column_range;});
     }
 
@@ -137,14 +147,36 @@ struct LeftJoinTest : public testing::Test
   // TODO: Support more than 3 columns
   void create_input(size_t num_columns, 
                     size_t left_column_length, size_t left_column_range,
-                    size_t right_column_length, size_t right_column_range)
+                    size_t right_column_length, size_t right_column_range,
+                    bool print = false)
   {
     assert(num_columns > 0);
     assert(num_columns <= std::tuple_size<multi_column_t>::value);
 
     left_columns = create_random_columns(num_columns, left_column_length, left_column_range);
 
+
     right_columns = create_random_columns(num_columns, right_column_length, right_column_range);
+
+
+    if(print)
+    {
+      std::cout << "Left column(s) created. Size: " << std::get<0>(left_columns).size() << std::endl;
+      std::copy(std::get<0>(left_columns).begin(), std::get<0>(left_columns).end(), std::ostream_iterator<col0_type>(std::cout, ", "));
+      std::cout << "\n";
+      std::copy(std::get<1>(left_columns).begin(), std::get<1>(left_columns).end(), std::ostream_iterator<col1_type>(std::cout, ", "));
+      std::cout << "\n";
+      std::copy(std::get<2>(left_columns).begin(), std::get<2>(left_columns).end(), std::ostream_iterator<col2_type>(std::cout, ", "));
+      std::cout << "\n";
+
+      std::cout << "Right column(s) created. Size: " << std::get<0>(right_columns).size() << std::endl;
+      std::copy(std::get<0>(right_columns).begin(), std::get<0>(right_columns).end(), std::ostream_iterator<col0_type>(std::cout, ", "));
+      std::cout << "\n";
+      std::copy(std::get<1>(right_columns).begin(), std::get<1>(right_columns).end(), std::ostream_iterator<col1_type>(std::cout, ", "));
+      std::cout << "\n";
+      std::copy(std::get<2>(right_columns).begin(), std::get<2>(right_columns).end(), std::ostream_iterator<col2_type>(std::cout, ", "));
+      std::cout << "\n";
+    }
   }
 
   bool rows_match(size_t num_columns, size_t left_index, size_t right_index){
@@ -159,7 +191,6 @@ struct LeftJoinTest : public testing::Test
     if(num_columns >= 1){
       auto const & first_left_column = std::get<0>(left_columns);
       auto const & first_right_column = std::get<0>(right_columns);
-
       if(first_left_column[left_index] == first_right_column[right_index]){
         match = true;
       } 
@@ -168,17 +199,14 @@ struct LeftJoinTest : public testing::Test
     if(num_columns >= 2){
       auto const & second_left_column = std::get<1>(left_columns);
       auto const & second_right_column = std::get<1>(right_columns);
-
       if(second_left_column[left_index] != second_right_column[right_index]){
         match = false;
       }
-
     }
 
     if(num_columns >= 3){
       auto const & third_left_column = std::get<2>(left_columns);
       auto const & third_right_column = std::get<2>(right_columns);
-
       if(third_left_column[left_index] != third_right_column[right_index])
       {
         match = false;
@@ -188,7 +216,7 @@ struct LeftJoinTest : public testing::Test
     return match;
   }
 
-  std::vector<result_type> compute_reference_solution(size_t num_columns)
+  std::vector<result_type> compute_reference_solution(size_t num_columns, bool print = false, bool sort = true)
   {
     assert(num_columns > 0);
     assert(num_columns <= std::tuple_size<multi_column_t>::value);
@@ -203,7 +231,7 @@ struct LeftJoinTest : public testing::Test
     // Use first right column as the build column
     std::vector<col0_type> const & build_column = std::get<0>(right_columns);
 
-    // Build hash table
+    // Build hash table that maps a value to its index in the column
     for(size_t right_index = 0; right_index < build_column.size(); ++right_index)
     {
       the_map.insert(std::make_pair(build_column[right_index], right_index));
@@ -212,28 +240,53 @@ struct LeftJoinTest : public testing::Test
     std::vector<result_type> result;
 
     // Probe hash table with first left column
-    // TODO Make this an outer join!
     std::vector<col0_type> const & probe_column = std::get<0>(left_columns);
     for(size_t left_index = 0; left_index < probe_column.size(); ++left_index)
     {
-      auto found = the_map.find(probe_column[left_index]);
 
-      // First column matches, check the rest
-      if(found != the_map.end()){
-        auto right_index = found->second;
+      // Find all keys that match probe_key
+      const auto probe_key = probe_column[left_index];
+      auto range = the_map.equal_range(probe_key);
 
-        // Check if left_columns[left_index] == right_columns[right_index]
+      // Every element in the range identifies a row in the right columns where
+      // the first column matches. Need to check if all other columns also match
+      for(auto i =  range.first; i != range.second; ++i)
+      {
+        const auto right_index = i->second;
+
+        // If all of the columns in right_columns[right_index] == all of the columns in left_columns[left_index]
+        // Then this index pair is added to the result as a matching pair of row indices
         if( true == rows_match(num_columns, left_index, right_index))
           result.emplace_back(left_index, right_index);
       }
     }
 
     // Sort the result
-    std::sort(result.begin(), result.end());
+    if(sort)
+    {
+      std::sort(result.begin(), result.end());
+    }
+
+    if(print)
+    {
+      std::cout << "Result size: " << result.size() << std::endl;
+      std::cout << "left index, right index" << std::endl;
+      std::copy(result.begin(), result.end(), std::ostream_iterator<result_type>(std::cout, ""));
+      std::cout << "\n";
+    }
 
     return result;
   }
-
   //gdf_error gdf_multi_left_join_generic(int num_cols, gdf_column **leftcol, gdf_column **rightcol, gdf_join_result_type **out_result)
-  
 };
+
+
+typedef ::testing::Types<InputTypes<int,int,int>> Implementations;
+
+TYPED_TEST_CASE(InnerJoinTest, Implementations);
+
+TYPED_TEST(InnerJoinTest, debug)
+{
+  this->create_input(3,5,2,5,2, true);
+  std::vector<result_type> result = this->compute_reference_solution(3, true);
+}
