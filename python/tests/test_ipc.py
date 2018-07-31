@@ -76,15 +76,13 @@ def test_ipc_new():
     ipch = libgdf.gdf_ipc_parser_open(schema_ptr, cpu_data.size)
 
     if libgdf.gdf_ipc_parser_failed(ipch):
-        print('FAILURE:', libgdf.gdf_ipc_parser_get_error(ipch))
+        print('FAILURE:',ffi.string(libgdf.gdf_ipc_parser_get_error(ipch)))
         assert 0
     jsonraw = libgdf.gdf_ipc_parser_get_schema_json(ipch)
     jsontext = ffi.string(jsonraw).decode()
     json_schema = json.loads(jsontext)
     print('json_schema:')
-    pprint(json_schema)    
-
-
+    pprint(json_schema)
 
     rb_cpu_data = np.ndarray(shape=len(recordbatches_bytes), dtype=np.byte,
                              buffer=bytearray(recordbatches_bytes))
@@ -96,7 +94,7 @@ def test_ipc_new():
     libgdf.gdf_ipc_parser_open_recordbatches(ipch, devptr, rb_gpu_data.size)
 
     if libgdf.gdf_ipc_parser_failed(ipch):
-        print(libgdf.gdf_ipc_parser_get_error(ipch))
+        print('FAILURE:',ffi.string(libgdf.gdf_ipc_parser_get_error(ipch)))
         assert 0
 
     jsonraw = libgdf.gdf_ipc_parser_get_layout_json(ipch)
