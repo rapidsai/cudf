@@ -423,7 +423,7 @@ class DataFrame(object):
         out._index = index
         return out
 
-    def as_gpu_matrix(self, columns=None):
+    def as_gpu_matrix(self, columns=None, format='column'):
         """Convert to a matrix in device memory.
 
         Parameters
@@ -431,6 +431,9 @@ class DataFrame(object):
         columns: sequence of str
             List of a column names to be extracted.  The order is preserved.
             If None is specified, all columns are used.
+        format: 'column' or 'row'
+            Optional argument to determine whether to return a column major
+            (Fortran) matrix or a row major (C) matrix.
 
         Returns
         -------
@@ -455,11 +458,14 @@ class DataFrame(object):
                           "hint: use .fillna() to replace null values")
                 raise ValueError(errmsg.format(k))
 
-        matrix = cuda.device_array(shape=(nrow, ncol), dtype=dtype, order="F")
-        for colidx, inpcol in enumerate(cols):
-            dense = inpcol.to_gpu_array(fillna='pandas')
-            matrix[:, colidx].copy_to_device(dense)
-
+        if format == 'column':
+            matrix = cuda.device_array(shape=(nrow, ncol), dtype=dtype,
+                                       order='F')
+            for colidx, inpcol in enumerate(cols):
+                dense = inpcol.to_gpu_array(fillna='pandas')
+                matrix[:, colidx].copy_to_device(dense)
+        elif format == 'row':
+            matrix = cudautils.row_matrix(cols, nrow, ncol, dtype)
         return matrix
 
     def as_matrix(self, columns=None):
