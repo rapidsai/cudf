@@ -40,7 +40,7 @@ def arith_op_test(dtype, ulp, expect_fn, test_fn, nelem=128,
     np.testing.assert_array_max_ulp(expect, got, maxulp=ulp)
 
 
-def logical_op_test(dtype, expect_fn, test_fn, nelem=128):
+def logical_op_test(dtype, expect_fn, test_fn, nelem=128, gdf_dtype=None):
     h_lhs = gen_rand(dtype, nelem)
     h_rhs = gen_rand(dtype, nelem)
     d_lhs = cuda.to_device(h_lhs)
@@ -50,7 +50,7 @@ def logical_op_test(dtype, expect_fn, test_fn, nelem=128):
     col_lhs = new_column()
     col_rhs = new_column()
     col_result = new_column()
-    gdf_dtype = get_dtype(dtype)
+    gdf_dtype = get_dtype(dtype) if gdf_dtype is None else gdf_dtype
 
     libgdf.gdf_column_view(col_lhs, unwrap_devary(d_lhs), ffi.NULL, nelem,
                            gdf_dtype)
@@ -108,37 +108,45 @@ def test_div(dtype, ulp):
 # logical
 
 params_logical_types = [
-    np.float64,
-    np.float32,
-    np.int32,
-    np.int64,
-    np.bool,
+    (np.float64, None),
+    (np.float32, None),
+    (np.int32, None),
+    (np.int64, None),
+    (np.bool, None),
+    (np.int32, libgdf.GDF_DATE32),
+    (np.int64, libgdf.GDF_DATE64),
+    (np.int64, libgdf.GDF_TIMESTAMP),
 ]
 
-@pytest.mark.parametrize('dtype', params_logical_types)
-def test_gt(dtype):
-    logical_op_test(dtype, np.greater, libgdf.gdf_gt_generic)
+@pytest.mark.parametrize('dtype, gdf_dtype', params_logical_types)
+def test_gt(dtype, gdf_dtype):
+    logical_op_test(dtype, np.greater, libgdf.gdf_gt_generic,
+                    gdf_dtype=gdf_dtype)
 
-@pytest.mark.parametrize('dtype', params_logical_types)
-def test_ge(dtype):
-    logical_op_test(dtype, np.greater_equal, libgdf.gdf_ge_generic)
+@pytest.mark.parametrize('dtype, gdf_dtype', params_logical_types)
+def test_ge(dtype, gdf_dtype):
+    logical_op_test(dtype, np.greater_equal, libgdf.gdf_ge_generic,
+                    gdf_dtype=gdf_dtype)
 
-@pytest.mark.parametrize('dtype', params_logical_types)
-def test_lt(dtype):
-    logical_op_test(dtype, np.less, libgdf.gdf_lt_generic)
+@pytest.mark.parametrize('dtype, gdf_dtype', params_logical_types)
+def test_lt(dtype, gdf_dtype):
+    logical_op_test(dtype, np.less, libgdf.gdf_lt_generic,
+                    gdf_dtype=gdf_dtype)
 
-@pytest.mark.parametrize('dtype', params_logical_types)
-def test_le(dtype):
-    logical_op_test(dtype, np.less_equal, libgdf.gdf_le_generic)
+@pytest.mark.parametrize('dtype, gdf_dtype', params_logical_types)
+def test_le(dtype, gdf_dtype):
+    logical_op_test(dtype, np.less_equal, libgdf.gdf_le_generic,
+                    gdf_dtype=gdf_dtype)
 
+@pytest.mark.parametrize('dtype, gdf_dtype', params_logical_types)
+def test_eq(dtype, gdf_dtype):
+    logical_op_test(dtype, np.equal, libgdf.gdf_eq_generic,
+                    gdf_dtype=gdf_dtype)
 
-@pytest.mark.parametrize('dtype', params_logical_types)
-def test_eq(dtype):
-    logical_op_test(dtype, np.equal, libgdf.gdf_eq_generic)
-
-@pytest.mark.parametrize('dtype', params_logical_types)
-def test_ne(dtype):
-    logical_op_test(dtype, np.not_equal, libgdf.gdf_ne_generic)
+@pytest.mark.parametrize('dtype, gdf_dtype', params_logical_types)
+def test_ne(dtype, gdf_dtype):
+    logical_op_test(dtype, np.not_equal, libgdf.gdf_ne_generic,
+                    gdf_dtype=gdf_dtype)
 
 
 # bitwise
@@ -263,4 +271,3 @@ def test_output_dtype_mismatch():
 
 if __name__ == '__main__':
     test_add()
-
