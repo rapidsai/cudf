@@ -35,17 +35,18 @@ class DataFrame(object):
         df = DataFrame()
         df['key'] = [0, 1, 2, 3, 4]
         df['val'] = [float(i + 10) for i in range(5)]  # insert column
+        df
 
-        >>> df
+    Output:
+
+    .. code-block:: python
+
           key val
         0 0   10.0
         1 1   11.0
         2 2   12.0
         3 3   13.0
         4 4   14.0
-
-        >>> len(df)
-        5
 
     Build dataframe with initializer:
 
@@ -57,8 +58,12 @@ class DataFrame(object):
         ('a', np.arange(5)),
         ('b', np.random.random(5))
       ])
+      df
 
-      >>> df
+    Output:
+
+    .. code-block:: python
+
         a b
       0 0 0.777831724018
       1 1 0.604480034669
@@ -572,7 +577,7 @@ class DataFrame(object):
             df = pd.DataFrame({'pet_owner': pet_owner, 'pet_type': pet_type})
             df.pet_type = df.pet_type.astype('category')
 
-            # Create a GPU DataFrame and create a column of numerically encoded category values
+            # Create GPU DataFrame and column of encoded category values
             from pygdf.dataframe import DataFrame as gdf
             my_gdf = gdf.from_pandas(df)
             my_gdf['pet_codes'] = my_gdf.pet_type.cat.codes
@@ -971,8 +976,8 @@ class DataFrame(object):
             'in2': [3, 4, 5],
             'in3': [6, 7, 8]
           ])
-          
-          # Define vars as respective columns, giving the user function access to type information
+
+          # Define vars as columns, gives user function type information
           in1 = df['in1']
           in2 = df['in2']
           in3 = df['in3']
