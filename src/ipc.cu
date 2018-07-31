@@ -35,8 +35,6 @@ static std::string GetBufferTypeName(BufferType type) {
   }
   return "UNKNOWN";
 }
-#else
-  #warning "not implemented for this arrow version"
 #endif
 
 static std::string GetTypeName(Type::type id) {
@@ -88,6 +86,7 @@ public:
         const void *header;
         int64_t body_length;
         flatbuf::MessageHeader type;
+        flatbuf::MetadataVersion version;
     };
 
     struct LayoutDesc {
@@ -192,11 +191,9 @@ public:
             arrow::ipc::JsonWriter::Open(_schema, &json_writer);
             json_writer->Finish(&_json_schema_output);
 #else
-	    std::cout << "not impl get_schema_json" << std::endl;
 	    std::unique_ptr<arrow::ipc::internal::json::JsonWriter> json_writer;
             arrow::ipc::internal::json::JsonWriter::Open(_schema, &json_writer);
             json_writer->Finish(&_json_schema_output);
-  #warning "not implemented for this arrow version"
 #endif
         }
         return _json_schema_output;
@@ -266,7 +263,6 @@ protected:
 #endif
         auto status = ipc::RecordBatchStreamReader::Open(buffer, &reader);
         if ( !status.ok() ) {
-	  std::cout << "read_schema:" << status.message() << std::endl;
 	  throw ParseError(status.message());
 	}
         _schema = reader->schema();
@@ -282,6 +278,15 @@ protected:
         auto header_buf = read_bytes(size);
         auto header = parse_msg_header(header_buf);
 
+#if ARROW_VERSION < 800
+	if ( header.version != flatbuf::MetadataVersion_V3 )
+	  throw ParseError("unsupported metadata version, expected V3 got "\
+			   + std::string(flatbuf::EnumNameMetadataVersion(header.version)));
+#else
+	if ( header.version != flatbuf::MetadataVersion_V4 )
+	  throw ParseError("unsupported metadata version, expected V4 got "\
+			   + std::string(flatbuf::EnumNameMetadataVersion(header.version)));
+#endif
         if ( header.body_length <= 0) {
             throw ParseError("recordbatch should have a body");
         }
@@ -297,6 +302,7 @@ protected:
         mi.header = msg->header();
         mi.body_length = msg->bodyLength();
         mi.type = msg->header_type();
+        mi.version = msg->version();
         return mi;
     }
 
@@ -321,9 +327,6 @@ protected:
                 layout_desc.vectortype = GetBufferTypeName(layout.type());
                 out_field.layouts.push_back(layout_desc);
             }
-#else
-	    std::cout << "not impl parse_schema" << std::endl;
-#warning "not implemented for this arrow version"
 #endif
         }
     }
@@ -332,9 +335,7 @@ protected:
         if ( msg.type != flatbuf::MessageHeader_RecordBatch ) {
             throw ParseError("expecting recordbatch type");
         }
-
         auto rb = static_cast<const flatbuf::RecordBatch*>(msg.header);
-
         int node_ct = rb->nodes()->Length();
         int buffer_ct = rb->buffers()->Length();
 
@@ -357,16 +358,13 @@ protected:
                 if ( buf->page() != -1 ) {
                     std::cerr << "buf.Page() != -1; metadata format changed!\n";
                 }
-#else
-		std::cout << "not impl parse_record_batch" << std::endl;
-#warning "not implemented for this arrow version"
 #endif
-                const auto &layout = fd.layouts[j];
-
                 BufferDesc bufdesc;
                 bufdesc.offset = buf->offset();
                 bufdesc.length = buf->length();
-
+		
+#if ARROW_VERSION < 800
+		const auto &layout = fd.layouts[j];
                 if ( layout.vectortype == "DATA" ) {
                     out_node.data_buffer = bufdesc;
                     out_node.dtype.name = fd.type;
@@ -376,6 +374,12 @@ protected:
                 } else {
                     throw ParseError("unsupported vector type");
                 }
+#else
+                out_node.data_buffer = bufdesc;
+		//out_node.null_buffer = bufdesc; // how to tell when buffer contains data or not?
+		out_node.dtype.name = fd.type;
+		//out_node.dtype.bitwidth = ??; // arrow-0.8+: bitwidth is defined in schema
+#endif
             }
 
             out_node.name = fd.name;
@@ -439,7 +443,6 @@ IpcParser* cffi_unwrap(gdf_ipc_parser_type* hdl){
 }
 
 gdf_ipc_parser_type* gdf_ipc_parser_open(const uint8_t *schema, size_t length) {
-      std::cout << "IN gdf_ipc_parser_open\n" << std::endl;
     IpcParser *parser = new IpcParser;
     
 
