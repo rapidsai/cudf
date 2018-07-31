@@ -46,13 +46,12 @@ mgpu::mem_t<size_type> join_hash(col1_it a, size_type a_count,
 	comp_t comp, mgpu::context_t& context)
 {
   // here follows the custom code for hash-joins
-  cudaError_t error = cudaSuccess;
 
   mgpu::mem_t<size_type> joined_output;
   // using the new low-level API for hash-join
   switch (join_type) {
-	case INNER_JOIN: error = InnerJoinHash(context, joined_output, a, a_count, b, b_count, a2, b2, a3, b3); break;
-	case LEFT_JOIN: error = LeftJoinHash(context, joined_output, a, a_count, b, b_count, a2, b2, a3, b3); break;
+      case JoinType::INNER_JOIN: InnerJoinHash(context, joined_output, a, a_count, b, b_count, a2, b2, a3, b3); break;
+      case JoinType::LEFT_JOIN: LeftJoinHash(context, joined_output, a, a_count, b, b_count, a2, b2, a3, b3); break;
   }
 
   return joined_output;
