@@ -28,7 +28,7 @@ cd libgdf
 git submodule update --init --recursive
 ```
 
-Since cmake will download and build Apache Arrow (version 0.7.1) you may need to install Boost C++ (version 1.58) before run cmake:
+Since cmake will download and build Apache Arrow (version 0.7.1 or 0.8+) you may need to install Boost C++ (version 1.58) before run cmake:
 
 ```bash
 # Install Boost C++ 1.58 for Ubuntu 16.04
@@ -36,6 +36,19 @@ $ sudo apt-get install libboost-all-dev
 # Install Boost C++ 1.58 for Conda (you will need a Python 3.3 environment)
 $ conda install -c omnia boost=1.58.0=py33_0
 ```
+
+Libgdf supports Apache Arrow versions 0.7.1 (default) and 0.8+ that
+use different metadata versions. So, it is important to specify which
+Apache arrow version will be used during building libgdf.  To select
+required Apache Arrow version, define the following environment
+variables (using Arrow version 0.9.0 as an example):
+```bash
+$ export ARROW_VERSION=0.9.0
+$ export PARQUET_ARROW_VERSION=apache-arrow-$ARROW_VERSION
+```
+where the latter is used by libgdf cmake configuration files. Note
+that when using libgdf, defining the above environment variables is
+not necessary.
 
 You can install Boost C++ 1.58 from sources as well: https://www.boost.org/doc/libs/1_58_0/more/getting_started/unix-variants.html
 
@@ -46,8 +59,8 @@ To run the python tests it is recommended to setup a conda environment for the d
 $ conda env create --name libgdf_dev --file ../conda_environments/dev_py35.yml
 # activate the environment
 $ source activate libgdf_dev
-$ conda install arrow-cpp=0.7.1 -c conda-forge
-$ conda install pyarrow=0.7.1 -c conda-forge
+$ conda install arrow-cpp=$ARROW_VERSION -c conda-forge
+$ conda install pyarrow=$ARROW_VERSION -c conda-forge
 ```
 
 This installs the required `cmake` and `pyarrow` into the `libgdf_dev` conda
@@ -70,9 +83,14 @@ This project uses cmake for building the C/C++ library. To configure cmake,
 run:
 
 ```bash
-mkdir build   # create build directory for out-of-source build
-cd build      # enter the build directory
-cmake ..      # configure cmake (will download and build Apache Arrow and Google Test)
+$ mkdir build   # create build directory for out-of-source build
+$ cd build      # enter the build directory
+$ cmake ..      # configure cmake (will download and build Apache Arrow and Google Test)
+```
+
+If installing libgdf to conda environment is desired, then replace the last command with
+```bash
+$ cmake -DCMAKE_INSTALL_PREFIX=$CONDA_PREFIX ..
 ```
 
 To build the C/C++ code, run `make`.  This should produce a shared library
@@ -98,5 +116,5 @@ available to trigger the test execution.  In the build directory (and with the
 conda environment activated), run below to exceute test:
 
 ```bash
-make pytest   # this auto trigger target "copy_python"
+$ make pytest   # this auto trigger target "copy_python"
 ```
