@@ -18,6 +18,12 @@
 // See this header for all of the recursive handling of tuples of vectors
 #include "tuple_vectors.h"
 
+enum struct join_kind
+{
+  INNER,
+  LEFT
+};
+
 // Creates a gdf_column from a std::vector
 template <typename col_type>
 gdf_column create_gdf_column(std::vector<col_type> host_vector)
@@ -78,7 +84,7 @@ std::ostream& operator<<(std::ostream& os, const result_type& result)
   return os;
 }
 
-// A new instance of this class will be created for each *TEST(JoinTest, ...)
+// A new instance of this class will be created for each *TEST(InnerJoinTest, ...)
 // Put all repeated setup and validation stuff here
 template <typename multi_column_t>
 struct InnerJoinTest : public testing::Test
@@ -115,7 +121,7 @@ struct InnerJoinTest : public testing::Test
     }
   }
 
-  std::vector<result_type> compute_reference_solution(bool print = false, bool sort = true)
+  std::vector<result_type> compute_reference_solution(join_kind join_method, bool print = false, bool sort = true)
   {
 
     // Use the type of the first vector as the key_type
@@ -147,14 +153,23 @@ struct InnerJoinTest : public testing::Test
 
       // Every element in the range identifies a row in the right columns where
       // the first column matches. Need to check if all other columns also match
-      for(auto i =  range.first; i != range.second; ++i)
+      bool match{false};
+      for(auto i = range.first; i != range.second; ++i)
       {
         const auto right_index = i->second;
 
         // If all of the columns in right_columns[right_index] == all of the columns in left_columns[left_index]
         // Then this index pair is added to the result as a matching pair of row indices
-        if( true == rows_equal(left_columns, right_columns, left_index, right_index))
+        if( true == rows_equal(left_columns, right_columns, left_index, right_index)){
           result.emplace_back(left_index, right_index);
+          match = true;
+        }
+      }
+
+      // For left joins, insert a NULL if no match is found
+      if((false == match) && (join_method == join_kind::LEFT)){
+        constexpr int JoinNullValue{-1};
+        result.emplace_back(left_index, JoinNullValue);
       }
     }
 
@@ -187,5 +202,5 @@ TYPED_TEST_CASE(InnerJoinTest, Implementations);
 TYPED_TEST(InnerJoinTest, debug)
 {
   this->create_input(5,2,5,2,true);
-  std::vector<result_type> result = this->compute_reference_solution(true);
+  std::vector<result_type> result = this->compute_reference_solution(join_kind::LEFT, true);
 }
