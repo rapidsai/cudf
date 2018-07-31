@@ -3,6 +3,11 @@
 //
 //nvcc -c -w -std=c++14 --expt-extended-lambda dbl_dispatcher.cu
 //nvcc -w -std=c++14 --expt-extended-lambda dbl_dispatcher.cu -o dbl_dispatcher.exe
+//
+//Re-design: no need for C++14:
+//
+//nvcc -I/$HOME/Development/Cuda_Thrust -c -w -std=c++11 --expt-extended-lambda dbl_dispatcher.cu
+//nvcc -I/$HOME/Development/Cuda_Thrust -w -std=c++11 --expt-extended-lambda dbl_dispatcher.cu -o dbl_dispatcher.exe
 
 #include <thrust/device_vector.h>
 #include <thrust/tuple.h>
@@ -27,29 +32,27 @@
 #include <cassert>
 #include <iterator>
 
-#include "visitor_set.hpp"
+#include "visitor_typed_v.hpp"
 
 int main(void)
 {
-  std::vector<short> v_types{Types::DOUBLE, Types::INT, Types::DOUBLE};
-  std::vector<short> v_ops{OpTypes::SUM, OpTypes::MAX, OpTypes::MIN};
+  std::vector<int> v_types{GDF_FLOAT32, GDF_INT32, GDF_FLOAT64};
+  std::vector<int> v_ops{GDF_SUM, GDF_MAX, GDF_MIN};
   
   size_t ncols = v_ops.size();
-  
-  AggregationManager man(v_types, v_ops);
-  Vector<GnctrTypeErased>& d_fte = man.get_vfctrs();
 
   using IndexT = int;
   size_t nrows = 6;
   
-  std::vector<IndexT> h_keys{0,0,1,1,2,2};
-  std::vector<double> hc1{1.13, 2.87, -1.01, 5.01, 2.17, 1.83};//SUM
-  std::vector<int>    hc2{-1, 1, -3, 2, 0, 3};                 //MAX
-  std::vector<double> hc3{1.13, 0.87, -1.01, 5.01, 2.17, 0.83};//MIN
+  std::vector<IndexT>  h_keys{0,0,1,1,2,2};
+  
+  std::vector<float>   hc1{1.13, 2.87, -1.01, 5.01, 2.17, 1.83};//SUM
+  std::vector<int32_t> hc2{-1, 1, -3, 2, 0, 3};                 //MAX
+  std::vector<double>  hc3{1.13, 0.87, -1.01, 5.01, 2.17, 0.83};//MIN
 
   //type ids:
   //
-  Vector<short> d_types = v_types;
+  Vector<int> d_types = v_types;
 
   //keys in:
   //
@@ -57,20 +60,20 @@ int main(void)
 
   //agg in:
   //
-  Vector<double> dc1 = hc1;
-  Vector<int>    dc2 = hc2;
-  Vector<double> dc3 = hc3;
-  Vector<void*>  d_cols(ncols, nullptr);
+  Vector<float>   dc1 = hc1;
+  Vector<int32_t> dc2 = hc2;
+  Vector<double>  dc3 = hc3;
+  Vector<void*>   d_cols(ncols, nullptr);
   d_cols[0] = dc1.data().get();
   d_cols[1] = dc2.data().get();
   d_cols[2] = dc3.data().get();
 
   //agg out:
   //
-  Vector<double> dagg1(nrows,0);
-  Vector<int>    dagg2(nrows, 0);
-  Vector<double> dagg3(nrows, 0);
-  Vector<void*>  dvout(ncols, nullptr);
+  Vector<float>   dagg1(nrows,0);
+  Vector<int32_t> dagg2(nrows, 0);
+  Vector<double>  dagg3(nrows, 0);
+  Vector<void*>   dvout(ncols, nullptr);
   dvout[0] = dagg1.data().get();
   dvout[1] = dagg2.data().get();
   dvout[2] = dagg3.data().get();
@@ -87,12 +90,18 @@ int main(void)
 
   //make the reduction visitor machinery on device
   //
-  ReductionFactory<IndexT> rf(nrows, d_fte, d_keys, d_cols, dkout, dvout, d_types);
+  ///ReductionFactory<IndexT> rf(nrows, d_fte, d_keys, d_cols, dkout, dvout, d_types);
+  VectorFactory vecf(nrows, d_cols, d_types);
+  using TupleArgs = thrust::tuple<IndexT*, void**, IndexT**>;
+  TupleArgs t_args{d_keys.data().get(), dvout.data().get(), dkout.data().get()};
+  VisitorFactory<IndexT, TupleArgs> visitf(ncols, t_args, v_ops); 
                       
   //captures:
   //
-  BaseVisitor** p_ptr_visitors       = rf.get_visitors().data().get();
-  BaseVector**  p_ptr_typed_columns  = rf.get_columns().data().get();
+  BaseVector**  p_ptr_typed_columns  = vecf.get_columns().data().get();
+  
+  BaseVisitor** p_ptr_visitors       = visitf.get_visitors().data().get();
+  
 
   //Apply Visitors to TypedVectors:
   //
