@@ -431,7 +431,7 @@ class DataFrame(object):
         columns: sequence of str
             List of a column names to be extracted.  The order is preserved.
             If None is specified, all columns are used.
-        format: 'column' or 'row'
+        order: 'F' or 'C'
             Optional argument to determine whether to return a column major
             (Fortran) matrix or a row major (C) matrix.
 
