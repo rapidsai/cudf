@@ -3,6 +3,7 @@
 #include <vector>
 #include <map>
 #include <type_traits>
+#include <memory>
 
 #include <thrust/device_vector.h>
 #include <thrust/sort.h>
@@ -26,7 +27,7 @@ enum struct join_kind
 
 // Creates a gdf_column from a std::vector
 template <typename col_type>
-gdf_column create_gdf_column(std::vector<col_type> const & host_vector)
+std::unique_ptr<gdf_column> create_gdf_column(std::vector<col_type> const & host_vector)
 {
   // Copy host vector to device
   thrust::device_vector<col_type> device_vector(host_vector);
@@ -45,14 +46,14 @@ gdf_column create_gdf_column(std::vector<col_type> const & host_vector)
   else if(std::is_same<col_type,double>::value) gdf_col_type = GDF_FLOAT64;
 
   // Fill gdf_column structure
-  gdf_column the_column;
-  the_column.data = device_vector.data().get();
-  the_column.valid = nullptr;
-  the_column.size = device_vector.size();
-  the_column.dtype = gdf_col_type;
+  std::unique_ptr<gdf_column> the_column{new gdf_column};
+  the_column->data = device_vector.data().get();
+  the_column->valid = nullptr;
+  the_column->size = device_vector.size();
+  the_column->dtype = gdf_col_type;
   gdf_dtype_extra_info extra_info;
   extra_info.time_unit = TIME_UNIT_NONE;
-  the_column.dtype_info = extra_info;
+  the_column->dtype_info = extra_info;
 
   return the_column;
 }
@@ -89,30 +90,36 @@ std::ostream& operator<<(std::ostream& os, const result_type& result)
 template <class test_parameters>
 struct InnerJoinTest : public testing::Test
 {
-  join_kind join_method = test_parameters::join_method;
+  const join_kind join_method = test_parameters::join_method;
 
+  // multi_column_t is a tuple of vectors. The number of vectors in the tuple
+  // determines the number of columns to be joined, and the value_type of each
+  // vector determiens the data type of the column
   using multi_column_t = typename test_parameters::multi_column_t;
-
   multi_column_t left_columns;
-
   multi_column_t right_columns;
+
+  // Containers for the gdf_columns that will be used in the gdf_join functions
+  std::vector<std::unique_ptr<gdf_column>> gdf_left_columns;
+  std::vector<std::unique_ptr<gdf_column>> gdf_right_columns;
 
   InnerJoinTest()
   {
-    static size_t number_of_instantiations{0};
-
     // Use constant seed so the psuedo-random order is the same each time
     // Each time the class is constructed a new constant seed is used
+    static size_t number_of_instantiations{0};
     std::srand(number_of_instantiations++);
+  }
+
+  ~InnerJoinTest()
+  {
   }
 
   void create_input( size_t left_column_length, size_t left_column_range,
                      size_t right_column_length, size_t right_column_range,
                      bool print = false)
   {
-
     initialize_tuple(left_columns, left_column_length, left_column_range); 
-
     initialize_tuple(right_columns, right_column_length, right_column_range); 
 
     if(print)
@@ -135,10 +142,8 @@ struct InnerJoinTest : public testing::Test
     // Multimap used to compute the reference solution
     std::multimap<key_type, value_type> the_map;
 
-    // Use first right column as the build column
+    // Build hash table that maps the first right columns' values to their row index in the column
     std::vector<key_type> const & build_column = std::get<0>(right_columns);
-
-    // Build hash table that maps a value to its index in the column
     for(size_t right_index = 0; right_index < build_column.size(); ++right_index)
     {
       the_map.insert(std::make_pair(build_column[right_index], right_index));
@@ -148,15 +153,14 @@ struct InnerJoinTest : public testing::Test
 
     // Probe hash table with first left column
     std::vector<key_type> const & probe_column = std::get<0>(left_columns);
-
     for(size_t left_index = 0; left_index < probe_column.size(); ++left_index)
     {
       // Find all keys that match probe_key
       const auto probe_key = probe_column[left_index];
       auto range = the_map.equal_range(probe_key);
 
-      // Every element in the range identifies a row in the right columns where
-      // the first column matches. Need to check if all other columns also match
+      // Every element in the returned range identifies a row in the first right column that
+      // matches the probe_key. Need to check if all other columns also match
       bool match{false};
       for(auto i = range.first; i != range.second; ++i)
       {
@@ -198,10 +202,15 @@ struct InnerJoinTest : public testing::Test
   //gdf_error gdf_multi_left_join_generic(int num_cols, gdf_column **leftcol, gdf_column **rightcol, gdf_join_result_type **out_result)
 };
 
+// This structure is used to nest the join method and number/types of columns
+// for use with Google Test type-parameterized tests
 template<join_kind join_type, typename tuple_type>
 struct TestParameters
 {
+  // The method to use for the join
   const static join_kind join_method{join_type};
+
+  // The tuple of vectors that determines the number and types of the columns to join
   using multi_column_t = tuple_type;
 };
 
