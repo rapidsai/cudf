@@ -7,6 +7,8 @@ gdf_size_type gdf_column_sizeof();
 gdf_error gdf_column_view(gdf_column *column, void *data, gdf_valid_type *valid,
                           gdf_size_type size, gdf_dtype dtype);
 
+gdf_error gdf_column_view_augmented(gdf_column *column, void *data, gdf_valid_type *valid,
+                          gdf_size_type size, gdf_dtype dtype, gdf_size_type null_count);
 /* error handling */
 
 const char * gdf_error_get_name(gdf_error errcode);
@@ -409,6 +411,11 @@ gdf_error gdf_bitwise_or_i8(gdf_column *lhs, gdf_column *rhs, gdf_column *output
 gdf_error gdf_bitwise_or_i32(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
 gdf_error gdf_bitwise_or_i64(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
 
+
+/*
+ * Filtering and comparison operators
+ */
+
 gdf_error gdf_bitwise_xor_generic(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
 gdf_error gdf_bitwise_xor_i8(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
 gdf_error gdf_bitwise_xor_i32(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
@@ -459,6 +466,43 @@ gdf_error gdf_max_f32(gdf_column *col, float *dev_result, gdf_size_type dev_resu
 gdf_error gdf_max_i64(gdf_column *col, int64_t *dev_result, gdf_size_type dev_result_size);
 gdf_error gdf_max_i32(gdf_column *col, int32_t *dev_result, gdf_size_type dev_result_size);
 gdf_error gdf_max_i8(gdf_column *col, int8_t *dev_result, gdf_size_type dev_result_size);
+
+
+
+
+/*
+ * Filtering and comparison operators
+ */
+
+
+//These compare every value on the left hand side to a static value and return a stencil in output which will have 1 when the comparison operation returns 1 and 0 otherwise
+gdf_error gpu_comparison_static_i8(gdf_column *lhs, int8_t value, gdf_column *output,gdf_comparison_operator operation);
+gdf_error gpu_comparison_static_i16(gdf_column *lhs, int16_t value, gdf_column *output,gdf_comparison_operator operation);
+gdf_error gpu_comparison_static_i32(gdf_column *lhs, int32_t value, gdf_column *output,gdf_comparison_operator operation);
+gdf_error gpu_comparison_static_i64(gdf_column *lhs, int64_t value, gdf_column *output,gdf_comparison_operator operation);
+gdf_error gpu_comparison_static_f32(gdf_column *lhs, float value, gdf_column *output,gdf_comparison_operator operation);
+gdf_error gpu_comparison_static_f64(gdf_column *lhs, double value, gdf_column *output,gdf_comparison_operator operation);
+
+//allows you two compare two columns against each other using a comparison operation, retunrs a stencil like functions above
+gdf_error gpu_comparison(gdf_column *lhs, gdf_column *rhs, gdf_column *output,gdf_comparison_operator operation);
+
+//takes a stencil and uses it to compact a colum e.g. remove all values for which the stencil = 0
+gdf_error gpu_apply_stencil(gdf_column *lhs, gdf_column * stencil, gdf_column * output);
+
+gdf_error gpu_concat(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
+
+/*
+ * Hashing
+ */
+//class cudaStream_t;
+
+gdf_error gpu_hash_columns(gdf_column ** columns_to_hash, int num_columns, gdf_column * output_column, void * stream);
+
+/*
+ * gdf introspection utlities
+ */
+
+gdf_error get_column_byte_width(gdf_column * col, int * width);
 
 /* 
  Multi-Column SQL ops:
