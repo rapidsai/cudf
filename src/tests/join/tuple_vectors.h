@@ -38,7 +38,7 @@ initialize_tuple(std::tuple<std::vector<Tp>...>& t, size_t column_length, size_t
 template<typename T>
 void print_vector(std::vector<T>& v)
 {
- std::copy(v.begin(), v.end(), std::ostream_iterator<int>(std::cout, ", "));
+ std::copy(v.begin(), v.end(), std::ostream_iterator<T>(std::cout, ", "));
 }
 
 template<std::size_t I = 0, typename... Tp>
