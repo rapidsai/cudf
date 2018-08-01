@@ -660,3 +660,19 @@ def recode(data, recode_table, na_value):
     blkct = min(16, max(1, data.size // blksz))
     gpu_recode[blkct, blksz](newdata, data, recode_table, na_value)
     return newdata
+
+
+@cuda.jit
+def gpu_row_matrix(rowmatrix, col, nrow, ncol):
+    i = cuda.grid(1)
+    if i < rowmatrix.size:
+        rowmatrix[i] = col[i]
+
+
+def row_matrix(cols, nrow, ncol, dtype):
+    matrix = cuda.device_array(shape=(nrow, ncol), dtype=dtype, order='C')
+    for colidx, col in enumerate(cols):
+        gpu_row_matrix.forall(matrix[:, colidx].size)(matrix[:, colidx],
+                                                      col.to_gpu_array(),
+                                                      nrow, ncol)
+    return matrix
