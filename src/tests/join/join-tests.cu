@@ -26,7 +26,7 @@ enum struct join_kind
 
 // Creates a gdf_column from a std::vector
 template <typename col_type>
-gdf_column create_gdf_column(std::vector<col_type> host_vector)
+gdf_column create_gdf_column(std::vector<col_type> const & host_vector)
 {
   // Copy host vector to device
   thrust::device_vector<col_type> device_vector(host_vector);
@@ -86,9 +86,13 @@ std::ostream& operator<<(std::ostream& os, const result_type& result)
 
 // A new instance of this class will be created for each *TEST(InnerJoinTest, ...)
 // Put all repeated setup and validation stuff here
-template <typename multi_column_t>
+template <class test_parameters>
 struct InnerJoinTest : public testing::Test
 {
+  join_kind join_method = test_parameters::join_method;
+
+  using multi_column_t = typename test_parameters::multi_column_t;
+
   multi_column_t left_columns;
 
   multi_column_t right_columns;
@@ -121,7 +125,7 @@ struct InnerJoinTest : public testing::Test
     }
   }
 
-  std::vector<result_type> compute_reference_solution(join_kind join_method, bool print = false, bool sort = true)
+  std::vector<result_type> compute_reference_solution(bool print = false, bool sort = true)
   {
 
     // Use the type of the first vector as the key_type
@@ -189,18 +193,28 @@ struct InnerJoinTest : public testing::Test
 
     return result;
   }
+
+
   //gdf_error gdf_multi_left_join_generic(int num_cols, gdf_column **leftcol, gdf_column **rightcol, gdf_join_result_type **out_result)
 };
 
+template<join_kind join_type, typename tuple_type>
+struct TestParameters
+{
+  const static join_kind join_method{join_type};
+  using multi_column_t = tuple_type;
+};
 
-typedef ::testing::Types< std::tuple< std::vector<int> >,
-                          std::tuple< std::vector<int>, std::vector<double>, std::vector<float>, std::vector<long long int> >
+
+typedef ::testing::Types< TestParameters< join_kind::INNER, std::tuple<std::vector<int>> >,
+                          TestParameters< join_kind::LEFT, std::tuple<std::vector<int>, std::vector<int>> >
                           > Implementations;
 
 TYPED_TEST_CASE(InnerJoinTest, Implementations);
 
 TYPED_TEST(InnerJoinTest, debug)
 {
-  this->create_input(5,2,5,2,true);
-  std::vector<result_type> result = this->compute_reference_solution(join_kind::LEFT, true);
+  this->create_input(5,2,3,2,true);
+
+  std::vector<result_type> result = this->compute_reference_solution(true);
 }
