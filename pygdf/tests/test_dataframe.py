@@ -148,6 +148,16 @@ def test_dataframe_basic():
     np.testing.assert_equal(mat, expect)
 
 
+def test_dataframe_column_name_indexing():
+    df = DataFrame()
+    data = np.asarray(range(10), dtype=np.int32)
+    ser = Series(data)
+    df['a'] = data
+    assert df['a'] == ser
+    df[1] = data
+    assert df[1] == ser
+
+
 def test_dataframe_column_add_drop():
     df = DataFrame()
     data = np.asarray(range(10))
