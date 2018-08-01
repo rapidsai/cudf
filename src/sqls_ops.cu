@@ -195,6 +195,7 @@ namespace{ //annonymus
       default:
         assert( false );//type not handled
       }
+      return 0;
   }
 
 #ifdef DEBUG_
@@ -1272,7 +1273,7 @@ gdf_error gdf_group_by_count(int ncols,                    // # columns
                              gdf_context* ctxt)            //struct with additional info: bool is_sorted, flag_sort_or_hash, bool flag_count_distinct
 {
   if( ctxt->flag_distinct )
-    gdf_group_by_single(ncols, cols, col_agg, out_col_indices, out_col_values, out_col_agg, ctxt, GDF_COUNT_DISTINCT);
+    return gdf_group_by_single(ncols, cols, col_agg, out_col_indices, out_col_values, out_col_agg, ctxt, GDF_COUNT_DISTINCT);
   else
     return gdf_group_by_single(ncols, cols, col_agg, out_col_indices, out_col_values, out_col_agg, ctxt, GDF_COUNT);
 }
