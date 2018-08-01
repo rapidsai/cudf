@@ -152,9 +152,11 @@ def test_dataframe_column_name_indexing():
     df = DataFrame()
     data = np.asarray(range(10), dtype=np.int32)
     df['a'] = data
-    assert df['a'] == np.asarray(range(10), dtype=np.int32)
     df[1] = data
-    assert df[1] == np.asarray(range(10), dtype=np.int32)
+    np.testing.assert_equal(df['a'].to_array(),
+                            np.asarray(range(10), dtype=np.int32))
+    np.testing.assert_equal(df[1].to_array(),
+                            np.asarray(range(10), dtype=np.int32))
 
 
 def test_dataframe_column_add_drop():
