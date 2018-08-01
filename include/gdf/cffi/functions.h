@@ -7,6 +7,11 @@ gdf_size_type gdf_column_sizeof();
 gdf_error gdf_column_view(gdf_column *column, void *data, gdf_valid_type *valid,
                           gdf_size_type size, gdf_dtype dtype);
 
+/* context operations */
+
+gdf_error gdf_context_view(gdf_context *context, int flag_sorted, gdf_method flag_method,
+                           int flag_distinct);
+
 /* error handling */
 
 const char * gdf_error_get_name(gdf_error errcode);
