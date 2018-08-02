@@ -1,8 +1,10 @@
 #include <gdf/gdf.h>
 
 #define GETNAME(x) case x: return #x;
+
 const char * gdf_error_get_name(gdf_error errcode) {
     switch (errcode) {
+    // There must be one entry per enum values in gdf_error.
     GETNAME(GDF_SUCCESS)
     GETNAME(GDF_CUDA_ERROR)
     GETNAME(GDF_UNSUPPORTED_DTYPE)
@@ -12,5 +14,8 @@ const char * gdf_error_get_name(gdf_error errcode) {
     GETNAME(GDF_VALIDITY_UNSUPPORTED)
     GETNAME(GDF_JOIN_DTYPE_MISMATCH)
     GETNAME(GDF_JOIN_TOO_MANY_COLUMNS)
+    default:
+        // This means we are missing an entry above for a gdf_error value.
+        return "Internal error. Unknown error code.";
     }
 }
