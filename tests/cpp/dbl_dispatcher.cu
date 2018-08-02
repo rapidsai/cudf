@@ -88,10 +88,12 @@ int main(void)
   dkout[1] = dk2.data().get();
   dkout[2] = dk3.data().get();
 
+  //make the Typed Vectors machinery on device:
+  //
+  VectorFactory vecf(nrows, d_cols, d_types);
+
   //make the reduction visitor machinery on device
   //
-  ///ReductionFactory<IndexT> rf(nrows, d_fte, d_keys, d_cols, dkout, dvout, d_types);
-  VectorFactory vecf(nrows, d_cols, d_types);
   using TupleArgs = thrust::tuple<IndexT*, void**, IndexT**>;
   TupleArgs t_args{d_keys.data().get(), dvout.data().get(), dkout.data().get()};
   VisitorFactory<IndexT, TupleArgs> visitf(ncols, t_args, v_ops); 

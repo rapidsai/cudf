@@ -365,8 +365,10 @@ void MaxVisitor<IndexT>::action(DataType* d_out, VectorT<DataType>& dv)
                         r);
 }
 
-template<typename IndexT,
-         typename TupleArgs>
+template<typename IndexT,     //type used for indexing rows
+         typename TupleArgs>  //type used for passing additional arguments to Visitor constructors
+                              //(variadic pack would be better, but nvcc issues with var-packs in device code (?),
+                              // plus need to std::forward() args, which would not compile in device code);
 struct VisitorFactory
 {
   VisitorFactory(size_t ncols,
