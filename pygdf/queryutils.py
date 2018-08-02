@@ -1,7 +1,8 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
 
 import ast
-
+import datetime as dt
+import time
 import six
 import numpy as np
 
@@ -202,6 +203,15 @@ def query_execute(df, expr, callenv):
         name = name[len(ENVREF_PREFIX):]
         try:
             val = envdict[name]
+            if isinstance(val, dt.datetime):
+                # TODO right now we can't
+                # pass datetimes into numba so coerce to ms as int
+                # this is a todo because what if we want nanos?
+                val = int(time.mktime(val.timetuple()) * 1e3)
+            elif isinstance(val, np.datetime64):
+                from .datetime import DatetimeColumn
+                val = val.astype(DatetimeColumn._npdatetime64_dtype)
+                val = val.astype(DatetimeColumn._int_dtype)
         except KeyError:
             msg = '{!r} not defined in the calling environment'
             raise NameError(msg.format(name))
