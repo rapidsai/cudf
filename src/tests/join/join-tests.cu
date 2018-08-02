@@ -26,37 +26,19 @@ enum struct join_kind
   LEFT
 };
 
-// TODO Can probably just replace this with a std::pair
 // Each element of the result will be an index into the left and right columns where
 // left_columns[left_index] == right_columns[right_index]
-struct result_type 
-{
-  size_t left_index{};
-  size_t right_index{};
+using result_type = typename std::pair<int, int>;
 
-  result_type() {}
-
-  result_type(size_t _l, size_t _r) : 
-    left_index{_l}, right_index{_r} {}
-
-  // Overload comparison so the result vector can be sorted
-  bool operator <(result_type const& rhs){
-    return( std::tie(left_index, right_index) < std::tie(rhs.left_index, rhs.right_index) );
+// Define stream operator for a std::pair for conveinience of printing results.
+// Needs to be in the std namespace to work with std::copy
+namespace std{
+  template <typename first_t, typename second_t>
+  std::ostream& operator<<(std::ostream& os, std::pair<first_t, second_t> const & p)
+  {
+    os << p.first << ", " << p.second;
+    return os;
   }
-
-  bool operator ==(result_type const& rhs) const{
-    return ( std::tie(left_index, right_index) == std::tie(rhs.left_index, rhs.right_index) );
-  }
-
-  friend std::ostream& operator<<(std::ostream& os, const result_type& result);
-
-};
-
-// Overload the stream operator to make it easier to print a result 
-std::ostream& operator<<(std::ostream& os, const result_type& result)
-{
-  os << result.left_index << ", " << result.right_index << std::endl;
-  return os;
 }
 
 // A new instance of this class will be created for each *TEST(JoinTest, ...)
@@ -303,7 +285,7 @@ struct JoinTest : public testing::Test
    * @Param sort Option to sort the result. This is required to compare the result against the reference solution
    */
   /* ----------------------------------------------------------------------------*/
-  void compute_gdf_result(std::vector<result_type> & gdf_result, bool print = false, bool sort = true)
+  std::vector<result_type> compute_gdf_result(bool print = false, bool sort = true)
   {
     const int num_columns = std::tuple_size<multi_column_t>::value;
 
@@ -333,7 +315,7 @@ struct JoinTest : public testing::Test
           }
         default:
           std::cout << "Invalid join method" << std::endl;
-          ASSERT_TRUE(false);
+          EXPECT_TRUE(false);
       }
 
     }
@@ -359,51 +341,55 @@ struct JoinTest : public testing::Test
             //                                             right_gdf_columns, 
             //                                             &gdf_join_result);
             std::cout << "Multi column *inner* joins not supported yet\n";
-            ASSERT_TRUE(false);
+            EXPECT_TRUE(false);
             break;
           }
         default:
           std::cout << "Invalid join method" << std::endl;
-          ASSERT_TRUE(false);
+          EXPECT_TRUE(false);
       }
     }
-    ASSERT_EQ(GDF_SUCCESS, result_error) << "The gdf join function did not complete successfully";
+    EXPECT_EQ(GDF_SUCCESS, result_error) << "The gdf join function did not complete successfully";
 
     // The output is an array of size `n` where the first n/2 elements are the 
     // left_indices and the last n/2 elements are the right indices
     size_t output_size = gdf_join_result_size(gdf_join_result);
     size_t total_pairs = output_size/2;
 
-    // Copy join result to a Thrust vector
     int * join_output = static_cast<int*>(gdf_join_result_data(gdf_join_result));
-    thrust::device_vector<int> d_output(join_output, join_output + output_size);
+
+    // Host vector to hold gdf join output
+    std::vector<int> host_result(output_size);
+
+    // Copy result of gdf join to the host
+    cudaMemcpy(host_result.data(), join_output, output_size * sizeof(int), cudaMemcpyDeviceToHost);
 
     // Free the original join result
     gdf_join_result_free(gdf_join_result);
+    join_output = nullptr;
 
-    // Copy the left and right indices into their own arrays for convenience 
-    thrust::device_vector<int> left_indices(d_output.begin(), d_output.begin() + total_pairs);
-    thrust::device_vector<int> right_indices(d_output.begin() + total_pairs, d_output.end());
+    // Host vector of result_type pairs to hold final result for comparison to reference solution
+    std::vector<result_type> host_pair_result(total_pairs);
 
-    gdf_result.resize(total_pairs);
-
-    // Copy the gdf results list of matching {left, right} indices into the host vector
+    // Copy raw output into corresponding result_type pair
     for(size_t i = 0; i < total_pairs; ++i){
-      gdf_result[i].left_index = left_indices[i];
-      gdf_result[i].right_index = right_indices[i];
+      host_pair_result[i].first = host_result[i];
+      host_pair_result[i].second = host_result[i + total_pairs];
     }
 
     // Sort the output for comparison to reference solution
     if(sort){
-      std::sort(gdf_result.begin(), gdf_result.end());
+      std::sort(host_pair_result.begin(), host_pair_result.end());
     }
 
     if(print){
-      std::cout << "GDF result size: " << gdf_result.size() << std::endl;
+      std::cout << "GDF result size: " << host_pair_result.size() << std::endl;
       std::cout << "left index, right index" << std::endl;
-      std::copy(gdf_result.begin(), gdf_result.end(), std::ostream_iterator<result_type>(std::cout, ""));
+      std::copy(host_pair_result.begin(), host_pair_result.end(), std::ostream_iterator<result_type>(std::cout, ""));
       std::cout << "\n";
     }
+
+    return host_pair_result;
   }
 };
 
@@ -423,6 +409,10 @@ struct TestParameters
 // Using Google Tests "Type Parameterized Tests"
 // Every test defined as TYPED_TEST(JoinTest, *) will be run once for every instance of
 // TestParameters defined below
+// The kind of join is determined by the first template argument to TestParameters
+// The number and types of columns used in both the left and right sets of columns are 
+// determined by the number and types of vectors in the std::tuple<...> that is the second
+// template argument to TestParameters
 typedef ::testing::Types< 
                           // Single column inner join tests for all types
                           TestParameters< join_kind::INNER, std::tuple<std::vector<int32_t>> >,
@@ -455,13 +445,12 @@ TYPED_TEST_CASE(JoinTest, Implementations);
 
 TYPED_TEST(JoinTest, ExampleTest)
 {
-  this->create_input(100,10,
-                     100,10);
+  this->create_input(10000,100,
+                     10000,100);
 
   std::vector<result_type> reference_result = this->compute_reference_solution();
 
-  std::vector<result_type> gdf_result{};
-  this->compute_gdf_result(gdf_result);
+  std::vector<result_type> gdf_result = this->compute_gdf_result();
 
   ASSERT_EQ(reference_result.size(), gdf_result.size()) << "Size of gdf result does not match reference result\n";
 
