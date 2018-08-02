@@ -64,6 +64,7 @@ std::ostream& operator<<(std::ostream& os, const result_type& result)
 template <class test_parameters>
 struct JoinTest : public testing::Test
 {
+  // The join type is passed via a member of the template argument class
   const join_kind join_method = test_parameters::join_method;
 
   // multi_column_t is a tuple of vectors. The number of vectors in the tuple
@@ -244,7 +245,7 @@ struct JoinTest : public testing::Test
       the_map.insert(std::make_pair(build_column[right_index], right_index));
     }
 
-    std::vector<result_type> result;
+    std::vector<result_type> reference_result;
 
     // Probe hash table with first left column
     std::vector<key_type> const & probe_column = std::get<0>(left_columns);
@@ -264,7 +265,7 @@ struct JoinTest : public testing::Test
         // If all of the columns in right_columns[right_index] == all of the columns in left_columns[left_index]
         // Then this index pair is added to the result as a matching pair of row indices
         if( true == rows_equal(left_columns, right_columns, left_index, right_index)){
-          result.emplace_back(left_index, right_index);
+          reference_result.emplace_back(left_index, right_index);
           match = true;
         }
       }
@@ -272,25 +273,25 @@ struct JoinTest : public testing::Test
       // For left joins, insert a NULL if no match is found
       if((false == match) && (join_method == join_kind::LEFT)){
         constexpr int JoinNullValue{-1};
-        result.emplace_back(left_index, JoinNullValue);
+        reference_result.emplace_back(left_index, JoinNullValue);
       }
     }
 
     // Sort the result
     if(sort)
     {
-      std::sort(result.begin(), result.end());
+      std::sort(reference_result.begin(), reference_result.end());
     }
 
     if(print)
     {
-      std::cout << "Reference result size: " << result.size() << std::endl;
+      std::cout << "Reference result size: " << reference_result.size() << std::endl;
       std::cout << "left index, right index" << std::endl;
-      std::copy(result.begin(), result.end(), std::ostream_iterator<result_type>(std::cout, ""));
+      std::copy(reference_result.begin(), reference_result.end(), std::ostream_iterator<result_type>(std::cout, ""));
       std::cout << "\n";
     }
 
-    return result;
+    return reference_result;
   }
 
   /* --------------------------------------------------------------------------*/
@@ -304,10 +305,8 @@ struct JoinTest : public testing::Test
   /* ----------------------------------------------------------------------------*/
   void compute_gdf_result(std::vector<result_type> & gdf_result, bool print = false, bool sort = true)
   {
-
     const int num_columns = std::tuple_size<multi_column_t>::value;
 
-    // TODO Don't forget to free the result!
     gdf_join_result_type * gdf_join_result;
 
     gdf_error result_error{GDF_SUCCESS};
@@ -382,11 +381,13 @@ struct JoinTest : public testing::Test
     // Free the original join result
     gdf_join_result_free(gdf_join_result);
 
+    // Copy the left and right indices into their own arrays for convenience 
     thrust::device_vector<int> left_indices(d_output.begin(), d_output.begin() + total_pairs);
     thrust::device_vector<int> right_indices(d_output.begin() + total_pairs, d_output.end());
 
     gdf_result.resize(total_pairs);
 
+    // Copy the gdf results list of matching {left, right} indices into the host vector
     for(size_t i = 0; i < total_pairs; ++i){
       gdf_result[i].left_index = left_indices[i];
       gdf_result[i].right_index = right_indices[i];
@@ -404,9 +405,6 @@ struct JoinTest : public testing::Test
       std::cout << "\n";
     }
   }
-
-
-  //gdf_error gdf_multi_left_join_generic(int num_cols, gdf_column **leftcol, gdf_column **rightcol, gdf_join_result_type **out_result)
 };
 
 // This structure is used to nest the join method and number/types of columns
@@ -422,6 +420,7 @@ struct TestParameters
 };
 
 
+// Using Google Tests "Type Parameterized Tests"
 // Every test defined as TYPED_TEST(JoinTest, *) will be run once for every instance of
 // TestParameters defined below
 typedef ::testing::Types< 
@@ -456,9 +455,8 @@ TYPED_TEST_CASE(JoinTest, Implementations);
 
 TYPED_TEST(JoinTest, ExampleTest)
 {
-
-  this->create_input(1000,10,
-                     1000,10);
+  this->create_input(100,10,
+                     100,10);
 
   std::vector<result_type> reference_result = this->compute_reference_solution();
 
@@ -467,6 +465,7 @@ TYPED_TEST(JoinTest, ExampleTest)
 
   ASSERT_EQ(reference_result.size(), gdf_result.size()) << "Size of gdf result does not match reference result\n";
 
+  // Compare the GDF and reference solutions
   for(size_t i = 0; i < reference_result.size(); ++i){
     EXPECT_EQ(reference_result[i], gdf_result[i]);
   }
