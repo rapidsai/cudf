@@ -4,7 +4,7 @@
 
 libgdf is a C library for implementing common functionality for a GPU Data Frame.  For more project details, see [the wiki](https://github.com/gpuopenanalytics/libgdf/wiki/Home).
 
-# Development Setup
+## Development Setup
 
 The following instructions are tested on Linux and OSX systems.
 
@@ -13,7 +13,13 @@ Compiler requirement:
 * g++-4.8 or
 * g++-5.4
 
-## Get dependencies
+CUDA requirement:
+
+* CUDA 9.0+
+
+You can obtain CUDA from [https://developer.nvidia.com/cuda-downloads](https://developer.nvidia.com/cuda-downloads).
+
+### Get dependencies
 
 **Note**: This repo uses submodules. Make sure you cloned recursively:
 
@@ -33,6 +39,11 @@ Since cmake will download and build Apache Arrow (version 0.7.1) you may need to
 ```bash
 # Install Boost C++ 1.58 for Ubuntu 16.04
 $ sudo apt-get install libboost-all-dev
+```
+
+or
+
+```bash
 # Install Boost C++ 1.58 for Conda (you will need a Python 3.3 environment)
 $ conda install -c omnia boost=1.58.0=py33_0
 ```
@@ -61,10 +72,10 @@ The environment can be updated from `../conda_environments/dev_py35.yml` as
 development includes/changes the depedencies.  To do so, run:
 
 ```bash
-$ conda env update --name libgdf_dev --file ../conda_environments/dev_py35.yml
+conda env update --name libgdf_dev --file ../conda_environments/dev_py35.yml
 ```
 
-## Configure and build
+### Configure and build
 
 This project uses cmake for building the C/C++ library. To configure cmake,
 run:
@@ -79,19 +90,21 @@ To build the C/C++ code, run `make`.  This should produce a shared library
 named `libgdf.so` or `libgdf.dylib`.
 
 If you run into compile errors about missing header files:
-```
+
+```bash
 cub/device/device_segmented_radix_sort.cuh: No such file or directory
 ```
+
 See the note about submodules in the Get dependencies section above.
 
-## Link python files into the build directory
+### Link python files into the build directory
 
 To make development and testing more seamless, the python files and tests
 can be symlinked into the build directory by running `make copy_python`.
 With that, any changes to the python files are reflected in the build
 directory.  To rebuild the libgdf, run `make` again.
 
-## Run tests
+### Run tests
 
 Currently, all tests are written in python with `py.test`.  A make target is
 available to trigger the test execution.  In the build directory (and with the
