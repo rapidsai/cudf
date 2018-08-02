@@ -17,6 +17,7 @@
 #ifndef CONCURRENT_UNORDERED_MULTIMAP_CUH
 #define CONCURRENT_UNORDERED_MULTIMAP_CUH
 
+#include <iostream>
 #include <iterator>
 #include <type_traits>
 #include <cassert>

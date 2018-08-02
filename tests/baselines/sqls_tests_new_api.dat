@@ -1,0 +1,72 @@
+multisort order:
+2,1,0,
+multi-column group-by experiments:
+aggregate = count on column:
+12,13,13,17,17,17,
+selected rows:
+1,1,1,1,
+0,1,3,5,
+17,12,13,17,
+multi-col count group-by:
+indices of grouped-by, new keys end position: 4;
+indices of grouped-by, new vals end position: 4;
+grouped-by keys:
+5,0,2,4,
+grouped-by vals:
+1,1,2,2,
+aggregate = sum on column:
+12,13,13,17,17,17,
+selected rows:
+1,1,1,1,
+0,1,3,5,
+17,12,13,17,
+multi-col generic group-by (sum):
+indices of grouped-by, new keys end position: 4;
+indices of grouped-by, new vals end position: 4;
+grouped-by keys:
+5,0,2,4,
+grouped-by vals:
+17,12,26,34,
+aggregate = avg on column:
+12,13,13,17,17,17,
+selected rows:
+1,1,1,1,
+0,1,3,5,
+17,12,13,17,
+multi-col generic group-by (average):
+indices of grouped-by, new keys end position: 4;
+indices of grouped-by, new vals end position: 4;
+grouped-by keys:
+5,0,2,4,
+grouped-by vals:
+17,12,13,17,
+aggregate = min on column:
+2,4,5,7,11,3,
+selected rows:
+1,1,1,1,
+0,1,3,5,
+17,12,13,17,
+multi-col generic group-by (min):
+indices of grouped-by, new keys end position: 4;
+indices of grouped-by, new vals end position: 4;
+grouped-by keys:
+5,0,2,4,
+grouped-by vals:
+3,2,4,7,
+aggregate = max on column:
+2,4,5,7,11,3,
+selected rows:
+1,1,1,1,
+0,1,3,5,
+17,12,13,17,
+multi-col generic group-by (max):
+indices of grouped-by, new keys end position: 4;
+indices of grouped-by, new vals end position: 4;
+grouped-by keys:
+5,0,2,4,
+grouped-by vals:
+3,2,5,11,
+Filtering experiments:
+filtered size: 2; filtered indices:
+1,2,
+Done!

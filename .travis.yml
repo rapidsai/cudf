@@ -1,3 +1,5 @@
+# Copyright (c) 2018, NVIDIA CORPORATION.
+
 dist: trusty
 sudo: required
 language: cpp
@@ -11,12 +13,12 @@ env:
 
 matrix:
   include:
-    - env: CUDA=8.0.61-1
     - env: CUDA=9.0.176_384.81
     - env: CUDA=9.1.85_387.26
-    - env: CUDA=8.0.61-1 BUILD_CFFI=1 PYTHON=3.6
-    - env: CUDA=8.0.61-1 BUILD_CFFI=1 PYTHON=3.5
-    - env: CUDA=8.0.61-1 BUILD_CFFI=1 PYTHON=2.7
+    - env: CUDA=9.1.85_387.26 BUILD_CFFI=1 PYTHON=3.6
+    - env: CUDA=9.0.176_384.81 BUILD_CFFI=1 PYTHON=3.6
+    - env: CUDA=9.0.176_384.81 BUILD_CFFI=1 PYTHON=3.5
+    - env: CUDA=9.0.176_384.81 BUILD_CFFI=1 PYTHON=2.7
 
 before_install:
   - source ./travisci/install-cuda-trusty.sh
@@ -31,7 +33,7 @@ install:
   - nvcc --version
   - conda --version
   # install conda build
-  - conda install conda-build anaconda-client --yes
+  - conda install conda-build anaconda-client conda-verify --yes
   # install libboost
   - sudo apt-get install libboost-all-dev
 

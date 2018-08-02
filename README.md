@@ -1,5 +1,7 @@
 # libgdf: GPU Dataframes
 
+[![Build Status](http://18.191.94.64/buildStatus/icon?job=libgdf-master)](http://18.191.94.64/job/libgdf-master/)
+
 libgdf is a C library for implementing common functionality for a GPU Data Frame.  For more project details, see [the wiki](https://github.com/gpuopenanalytics/libgdf/wiki/Home).
 
 # Development Setup
@@ -26,11 +28,16 @@ cd libgdf
 git submodule update --init --recursive
 ```
 
-Since cmake will download and build Apache Arrow you may need to install Boost C++:
+Since cmake will download and build Apache Arrow (version 0.7.1) you may need to install Boost C++ (version 1.58) before run cmake:
 
 ```bash
+# Install Boost C++ 1.58 for Ubuntu 16.04
 $ sudo apt-get install libboost-all-dev
+# Install Boost C++ 1.58 for Conda (you will need a Python 3.3 environment)
+$ conda install -c omnia boost=1.58.0=py33_0
 ```
+
+You can install Boost C++ 1.58 from sources as well: https://www.boost.org/doc/libs/1_58_0/more/getting_started/unix-variants.html
 
 To run the python tests it is recommended to setup a conda environment for the dependencies.
 

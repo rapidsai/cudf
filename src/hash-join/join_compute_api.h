@@ -68,7 +68,9 @@ cudaError_t InnerJoinHash(mgpu::context_t &compute_ctx, void **out, size_type *o
 #else
   typedef concurrent_unordered_multimap<key_type, size_type, std::numeric_limits<key_type>::max(), std::numeric_limits<size_type>::max()> multimap_type;
 #endif
-  size_type hash_tbl_size = (size_type)(b_count * 100 / DEFAULT_HASH_TBL_OCCUPANCY);
+
+  size_type hash_tbl_size = (size_type)((size_t) b_count * 100 / DEFAULT_HASH_TBL_OCCUPANCY);
+
   std::unique_ptr<multimap_type> hash_tbl(new multimap_type(hash_tbl_size));
   hash_tbl->prefetch(0);  // FIXME: use GPU device id from the context? but moderngpu only provides cudaDeviceProp (although should be possible once we move to Arrow)
   error = cudaGetLastError();
@@ -125,7 +127,7 @@ cudaError_t LeftJoinHash(mgpu::context_t &compute_ctx, void **out, size_type *ou
 #else
   typedef concurrent_unordered_multimap<key_type, size_type, std::numeric_limits<key_type>::max(), std::numeric_limits<size_type>::max()> multimap_type;
 #endif
-  size_type hash_tbl_size = (size_type)(b_count * 100 / DEFAULT_HASH_TBL_OCCUPANCY);
+  size_type hash_tbl_size = (size_type)((size_t) b_count * 100 / DEFAULT_HASH_TBL_OCCUPANCY);
   std::unique_ptr<multimap_type> hash_tbl(new multimap_type(hash_tbl_size));
   hash_tbl->prefetch(0);  // FIXME: use GPU device id from the context? but moderngpu only provides cudaDeviceProp (although should be possible once we move to Arrow)
   error = cudaGetLastError();

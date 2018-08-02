@@ -15,7 +15,6 @@
  * limitations under the License.
  */
 
-
 #include <gdf/gdf.h>
 #include <gdf/utils.h>
 #include <gdf/errorutils.h>
@@ -56,7 +55,6 @@ civil_from_days(Int z) noexcept
     const unsigned m = mp + (mp < 10 ? 3 : -9);                            // [1, 12]
     return std::tuple<Int, unsigned, unsigned>(y + (m <= 2), m, d);
 }
-
 ******************************************************************************************
  */
 
@@ -124,7 +122,6 @@ struct gdf_extract_month_from_unixtime_op : public thrust::unary_function<int64_
 		const unsigned doy = doe - (365*yoe + yoe/4 - yoe/100);
 		const unsigned mp = (5*doy + 2)/153;
 		return mp + (mp < 10 ? 3 : -9);
-
 	}
 };
 
@@ -287,6 +284,7 @@ struct gdf_extract_month_from_date32_op : public thrust::unary_function<int32_t,
 		const unsigned yoe = (doe - doe/1460 + doe/36524 - doe/146096) / 365;
 		const unsigned doy = doe - (365*yoe + yoe/4 - yoe/100);
 		const unsigned mp = (5*doy + 2)/153;
+
 		return mp + (mp < 10 ? 3 : -9);
 	}
 };

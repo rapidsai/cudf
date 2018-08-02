@@ -21,13 +21,14 @@
 #    $ cmake ..          # configure build system
 #    $ make              # make libgdf
 #    $ make pytest       # trigger test
+#    $ make pytest-ci    # trigger test with jUnit.xml output
+#    $ make install      # install libgdf
 
 PROJECT(libgdf)
 
 cmake_minimum_required(VERSION 2.8)  # not sure about version required
 
 set(CMAKE_CXX_STANDARD 11)
-message(STATUS "Using C++ compiler: ${CMAKE_CXX_COMPILER}")
 message(STATUS "Using C++ standard: c++${CMAKE_CXX_STANDARD}")
 
 set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/Modules/" ${CMAKE_MODULE_PATH})
@@ -92,13 +93,11 @@ IF(CMAKE_BUILD_TYPE MATCHES DEBUG)
 ENDIF(CMAKE_BUILD_TYPE MATCHES DEBUG)
 
 # switch between hash-join and sort-join
-option(HASH_JOIN "hash-based join" OFF)
+option(HASH_JOIN "hash-based join" ON)
 if(HASH_JOIN)
   message("-- Using the hash-based join implementation")
   set(CUDA_NVCC_FLAGS  ${CUDA_NVCC_FLAGS};-DHASH_JOIN)
 endif()
-
-find_package(CUDA)
 
 # switch between cudaMalloc and cudaMallocManaged for hash tables
 option(HT_LEGACY_ALLOCATOR "legacy allocator for hash tables" ON)
@@ -110,17 +109,24 @@ endif()
 
 cuda_add_library(gdf SHARED
     src/binaryops.cu
+    src/bitmaskops.cu
     src/column.cpp
-    src/errorhandling.cpp
-    src/unaryops.cu
-    src/ipc.cu
-    src/reductions.cu
-    src/sorting.cu
-    src/joining.cu
-    src/scan.cu
-    src/segmented_sorting.cu
     src/cudautils.cu
     src/datetimeops.cu
+    src/errorhandling.cpp
+    src/filterops.cu
+    src/hashing.cu
+    src/hashops.cu
+    src/ipc.cu
+    src/joining.cu
+    src/reductions.cu
+    src/scan.cu
+    src/segmented_sorting.cu
+    src/sorting.cu
+    src/sqls_ops.cu
+    src/streamcompactionops.cu
+    src/unaryops.cu
+    #src/windowedops.cu
 )
 
 
@@ -151,7 +157,13 @@ add_custom_target(   # target to link the python files and trigger cffi
 add_custom_target(pytest DEPENDS copy_python)
 add_custom_command(TARGET pytest POST_BUILD
                    COMMAND ${CMAKE_COMMAND} -E env LD_LIBRARY_PATH=$LD_LIBRARY_PATH:${CMAKE_BINARY_DIR} py.test -v
-                   WORKING_DIRECTORY tests)
+                   WORKING_DIRECTORY --cache-clear tests)
+
+# The test CI target with junit.xml output
+add_custom_target(pytest-ci DEPENDS copy_python)
+add_custom_command(TARGET pytest POST_BUILD
+                   COMMAND ${CMAKE_COMMAND} -E env LD_LIBRARY_PATH=$LD_LIBRARY_PATH:${CMAKE_BINARY_DIR} py.test -v
+                   WORKING_DIRECTORY --cache-clear --junitxml=junit.xml tests)
 
 # The install target
 install(TARGETS gdf LIBRARY DESTINATION lib)
