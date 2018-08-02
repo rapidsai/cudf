@@ -113,6 +113,7 @@ cuda_add_library(gdf SHARED
     src/column.cpp
     src/cudautils.cu
     src/datetimeops.cu
+    src/context.cpp
     src/errorhandling.cpp
     src/filterops.cu
     src/hashing.cu
