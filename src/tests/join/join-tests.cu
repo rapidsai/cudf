@@ -438,7 +438,7 @@ typedef ::testing::Types<
                           TestParameters< join_kind::LEFT, std::tuple<std::vector<int32_t>, std::vector<uint32_t>, std::vector<float>> >,
                           TestParameters< join_kind::LEFT, std::tuple<std::vector<uint64_t>, std::vector<uint32_t>, std::vector<float>> >,
                           TestParameters< join_kind::LEFT, std::tuple<std::vector<float>, std::vector<double>, std::vector<float>> >,
-                          TestParameters< join_kind::LEFT, std::tuple<std::vector<double>, std::vector<uint32_t>, std::vector<int64_t>> >,
+                          TestParameters< join_kind::LEFT, std::tuple<std::vector<double>, std::vector<uint32_t>, std::vector<int64_t>> >
                           // Four column test will fail because gdf_join is limited to 3 columns
                           //TestParameters< join_kind::LEFT, std::tuple<std::vector<double>, std::vector<uint32_t>, std::vector<int64_t>, std::vector<int32_t>> >
                           > Implementations;
