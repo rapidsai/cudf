@@ -395,14 +395,14 @@ struct JoinTest : public testing::Test
 
 // This structure is used to nest the join method and number/types of columns
 // for use with Google Test type-parameterized tests
-template<join_kind join_type, typename tuple_type>
+template<join_kind join_type, typename tuple_of_vectors>
 struct TestParameters
 {
   // The method to use for the join
   const static join_kind join_method{join_type};
 
   // The tuple of vectors that determines the number and types of the columns to join
-  using multi_column_t = tuple_type;
+  using multi_column_t = tuple_of_vectors;
 };
 
 
@@ -438,7 +438,9 @@ typedef ::testing::Types<
                           TestParameters< join_kind::LEFT, std::tuple<std::vector<int32_t>, std::vector<uint32_t>, std::vector<float>> >,
                           TestParameters< join_kind::LEFT, std::tuple<std::vector<uint64_t>, std::vector<uint32_t>, std::vector<float>> >,
                           TestParameters< join_kind::LEFT, std::tuple<std::vector<float>, std::vector<double>, std::vector<float>> >,
-                          TestParameters< join_kind::LEFT, std::tuple<std::vector<double>, std::vector<uint32_t>, std::vector<int64_t>> >
+                          TestParameters< join_kind::LEFT, std::tuple<std::vector<double>, std::vector<uint32_t>, std::vector<int64_t>> >,
+                          // Four column test will fail because gdf_join is limited to 3 columns
+                          //TestParameters< join_kind::LEFT, std::tuple<std::vector<double>, std::vector<uint32_t>, std::vector<int64_t>, std::vector<int32_t>> >
                           > Implementations;
 
 TYPED_TEST_CASE(JoinTest, Implementations);
@@ -447,6 +449,74 @@ TYPED_TEST(JoinTest, ExampleTest)
 {
   this->create_input(10000,100,
                      10000,100);
+
+  std::vector<result_type> reference_result = this->compute_reference_solution();
+
+  std::vector<result_type> gdf_result = this->compute_gdf_result();
+
+  ASSERT_EQ(reference_result.size(), gdf_result.size()) << "Size of gdf result does not match reference result\n";
+
+  // Compare the GDF and reference solutions
+  for(size_t i = 0; i < reference_result.size(); ++i){
+    EXPECT_EQ(reference_result[i], gdf_result[i]);
+  }
+}
+
+TYPED_TEST(JoinTest, EqualValues)
+{
+  this->create_input(1000,1,
+                     1000,1);
+
+  std::vector<result_type> reference_result = this->compute_reference_solution();
+
+  std::vector<result_type> gdf_result = this->compute_gdf_result();
+
+  ASSERT_EQ(reference_result.size(), gdf_result.size()) << "Size of gdf result does not match reference result\n";
+
+  // Compare the GDF and reference solutions
+  for(size_t i = 0; i < reference_result.size(); ++i){
+    EXPECT_EQ(reference_result[i], gdf_result[i]);
+  }
+}
+
+TYPED_TEST(JoinTest, MaxRandomValues)
+{
+  this->create_input(1000,RAND_MAX,
+                     1000,RAND_MAX);
+
+  std::vector<result_type> reference_result = this->compute_reference_solution();
+
+  std::vector<result_type> gdf_result = this->compute_gdf_result();
+
+  ASSERT_EQ(reference_result.size(), gdf_result.size()) << "Size of gdf result does not match reference result\n";
+
+  // Compare the GDF and reference solutions
+  for(size_t i = 0; i < reference_result.size(); ++i){
+    EXPECT_EQ(reference_result[i], gdf_result[i]);
+  }
+}
+
+TYPED_TEST(JoinTest, LeftColumnsBigger)
+{
+  this->create_input(1000,100,
+                     10,100);
+
+  std::vector<result_type> reference_result = this->compute_reference_solution();
+
+  std::vector<result_type> gdf_result = this->compute_gdf_result();
+
+  ASSERT_EQ(reference_result.size(), gdf_result.size()) << "Size of gdf result does not match reference result\n";
+
+  // Compare the GDF and reference solutions
+  for(size_t i = 0; i < reference_result.size(); ++i){
+    EXPECT_EQ(reference_result[i], gdf_result[i]);
+  }
+}
+
+TYPED_TEST(JoinTest, RightColumnsBigger)
+{
+  this->create_input(10,100,
+                     1000,100);
 
   std::vector<result_type> reference_result = this->compute_reference_solution();
 
