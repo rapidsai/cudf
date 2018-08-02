@@ -26,6 +26,7 @@ enum struct join_kind
   LEFT
 };
 
+// TODO Can probably just replace this with a std::pair
 // Each element of the result will be an index into the left and right columns where
 // left_columns[left_index] == right_columns[right_index]
 struct result_type 
@@ -99,7 +100,15 @@ struct JoinTest : public testing::Test
   {
   }
 
-  // Creates a gdf_column from a std::vector
+    /* --------------------------------------------------------------------------*/
+    /** 
+     * @Synopsis  Creates a unique_ptr that wraps a gdf_column structure intialized with a host vector
+     * 
+     * @Param host_vector The host vector whose data is used to initialize the gdf_column
+     * 
+     * @Returns A unique_ptr wrapping the new gdf_column
+     */
+    /* ----------------------------------------------------------------------------*/
   template <typename col_type>
   gdf_col_pointer create_gdf_column(std::vector<col_type> const & host_vector)
   {
@@ -166,6 +175,17 @@ struct JoinTest : public testing::Test
     return gdf_columns;
   }
 
+  /* --------------------------------------------------------------------------*/
+  /** 
+   * @Synopsis  Initializes two sets of columns, left and right, with random values for the join operation.
+   * 
+   * @Param left_column_length The length of the left set of columns
+   * @Param left_column_range The upper bound of random values for the left columns. Values are [0, left_column_range)
+   * @Param right_column_length The length of the right set of columns
+   * @Param right_column_range The upper bound of random values for the right columns. Values are [0, right_column_range)
+   * @Param print Optionally print the left and right set of columns for debug
+   */
+  /* ----------------------------------------------------------------------------*/
   void create_input( size_t left_column_length, size_t left_column_range,
                      size_t right_column_length, size_t right_column_range,
                      bool print = false)
@@ -195,6 +215,18 @@ struct JoinTest : public testing::Test
     }
   }
 
+  
+  /* --------------------------------------------------------------------------*/
+  /** 
+   * @Synopsis  Computes a reference solution for joining the left and right sets of columns
+   * 
+   * @Param print Option to print the solution for debug
+   * @Param sort Option to sort the solution. This is necessary for comparison against the gdf solution
+   * 
+   * @Returns A vector of 'result_type' where result_type is a structure with a left_index, right_index
+   * where left_columns[left_index] == right_columns[right_index]
+   */
+  /* ----------------------------------------------------------------------------*/
   std::vector<result_type> compute_reference_solution(bool print = false, bool sort = true)
   {
 
@@ -261,6 +293,15 @@ struct JoinTest : public testing::Test
     return result;
   }
 
+  /* --------------------------------------------------------------------------*/
+  /** 
+   * @Synopsis  Computes the result of joining the left and right sets of columns with the libgdf functions
+   * 
+   * @Param gdf_result A vector of result_type that holds the result of the libgdf join function
+   * @Param print Option to print the result computed by the libgdf function
+   * @Param sort Option to sort the result. This is required to compare the result against the reference solution
+   */
+  /* ----------------------------------------------------------------------------*/
   void compute_gdf_result(std::vector<result_type> & gdf_result, bool print = false, bool sort = true)
   {
 
