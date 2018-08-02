@@ -108,6 +108,7 @@ endif()
 cuda_add_library(gdf SHARED
     src/binaryops.cu
     src/column.cpp
+    src/context.cpp
     src/errorhandling.cpp
     src/unaryops.cu
     src/ipc.cu

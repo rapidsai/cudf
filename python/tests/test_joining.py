@@ -103,6 +103,10 @@ def _call_join_multi(api, ncols, col_left, col_right):
     return joined_idx
 
 
+def join_wrapper(gdf_context, api, left_col, right_col, result_ptr):
+    api(left_col, right_col, result_ptr, gdf_context)
+
+
 params_jtypes = [libgdf.GDF_SORT, libgdf.GDF_HASH]
 params_dtypes = [np.int8, np.int32, np.int64, np.float32, np.float64]
 multi_params_dtypes = [np.int32, np.int64]
@@ -117,8 +121,8 @@ def test_innerjoin(dtype, join_type):
 #    right = np.array([5, 41, 35, 0, 31, 5, 30, 0, 49, 36, 34, 48, 29, 3, 34, 42, 13, 48, 39, 21, 9, 0, 10, 43, 23, 2, 34, 35, 30, 3, 18, 46, 35, 20, 17, 27, 14, 41, 1, 36, 10, 22, 43, 40, 11, 2, 16, 32, 0, 38, 19, 46, 42, 40, 13, 30, 24, 2, 3, 30, 34, 43, 13, 48, 40, 8, 19, 31, 8, 26, 2, 3, 44, 14, 32, 4, 3, 45, 11, 22, 13, 45, 11, 16, 24, 29, 21, 46, 25, 16, 19, 33, 40, 32, 36, 6, 21, 31, 13, 7], dtype=dtype)
 
     gdf_ctxt = new_context()
-    libgdf.gdf_context_view(ctxt, 0, join_type, 0)
-    api = partial(libgdf.gdf_inner_join_generic, ctxt = gdf_ctxt);
+    libgdf.gdf_context_view(gdf_ctxt, 0, join_type, 0)
+    api = partial(join_wrapper, gdf_ctxt, libgdf.gdf_inner_join_generic)
     with _make_input(left, right) as (col_left, col_right):
         # Join
         joined_idx = _call_join(api, col_left,
@@ -160,8 +164,8 @@ def test_leftjoin(dtype, join_type):
     left = np.array([0, 0, 4, 5, 5], dtype=dtype)
     right = np.array([0, 0, 2, 3, 5], dtype=dtype)
     gdf_ctxt = new_context()
-    libgdf.gdf_context_view(ctxt, 0, join_type, 0)
-    api = partial(libgdf.gdf_left_join_generic, ctxt = gdf_ctxt);
+    libgdf.gdf_context_view(gdf_ctxt, 0, join_type, 0)
+    api = partial(join_wrapper, gdf_ctxt, libgdf.gdf_left_join_generic)
     with _make_input(left, right) as (col_left, col_right):
         # Join
         joined_idx = _call_join(api, col_left,
