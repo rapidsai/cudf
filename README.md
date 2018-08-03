@@ -10,8 +10,8 @@ The following instructions are tested on Linux and OSX systems.
 
 Compiler requirement:
 
-* g++-4.8 or
-* g++-5.4
+* `g++` 4.8 or 5.4
+* `cmake` 3.12+
 
 CUDA requirement:
 
