@@ -34,7 +34,8 @@ cd libgdf
 git submodule update --init --recursive
 ```
 
-Since cmake will download and build Apache Arrow (version 0.7.1) you may need to install Boost C++ (version 1.58) before run cmake:
+Since `cmake` will download and build Apache Arrow (version 0.7.1) you may 
+need to install Boost C++ (version 1.58) before running `cmake`:
 
 ```bash
 # Install Boost C++ 1.58 for Ubuntu 16.04
@@ -50,7 +51,8 @@ $ conda install -c omnia boost=1.58.0=py33_0
 
 You can install Boost C++ 1.58 from sources as well: https://www.boost.org/doc/libs/1_58_0/more/getting_started/unix-variants.html
 
-To run the python tests it is recommended to setup a conda environment for the dependencies.
+To run the python tests it is recommended to setup a conda environment for 
+the dependencies.
 
 ```bash
 # create the conda environment (assuming in build directory)
