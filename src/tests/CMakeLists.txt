@@ -47,5 +47,6 @@ add_subdirectory(hash_map)
 add_subdirectory(groupby)
 add_subdirectory(unaryops)
 add_subdirectory(filterops_numeric)
+add_subdirectory(quantiles)
 
 message(STATUS "******** Tests are ready ********")
