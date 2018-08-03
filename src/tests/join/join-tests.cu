@@ -24,6 +24,7 @@ enum struct join_kind
 {
   INNER,
   LEFT
+  // TODO Add OUTER join (need to implement computing reference solution to outer join)
 };
 
 // Each element of the result will be an index into the left and right columns where
@@ -37,6 +38,7 @@ namespace std{
   std::ostream& operator<<(std::ostream& os, std::pair<first_t, second_t> const & p)
   {
     os << p.first << ", " << p.second;
+    std::cout << "\n";
     return os;
   }
 }
@@ -77,7 +79,6 @@ struct JoinTest : public testing::Test
     static size_t number_of_instantiations{0};
     std::srand(number_of_instantiations++);
   }
-
 
   ~JoinTest()
   {
@@ -257,6 +258,8 @@ struct JoinTest : public testing::Test
         constexpr int JoinNullValue{-1};
         reference_result.emplace_back(left_index, JoinNullValue);
       }
+      
+      // TODO Need to add ability to compute reference solution for OUTER join
     }
 
     // Sort the result
@@ -415,30 +418,30 @@ struct TestParameters
 // template argument to TestParameters
 typedef ::testing::Types< 
                           // Single column inner join tests for all types
-                          TestParameters< join_kind::INNER, std::tuple<std::vector<int32_t>> >,
-                          TestParameters< join_kind::INNER, std::tuple<std::vector<int64_t>> >,
-                          TestParameters< join_kind::INNER, std::tuple<std::vector<float>> >,
-                          TestParameters< join_kind::INNER, std::tuple<std::vector<double>> >,
-                          TestParameters< join_kind::INNER, std::tuple<std::vector<uint32_t>> >,
-                          TestParameters< join_kind::INNER, std::tuple<std::vector<uint64_t>> >,
-                          // Single column left join tests for all types
-                          TestParameters< join_kind::LEFT, std::tuple<std::vector<int32_t>> >,
-                          TestParameters< join_kind::LEFT, std::tuple<std::vector<int64_t>> >,
-                          TestParameters< join_kind::LEFT, std::tuple<std::vector<float>> >,
-                          TestParameters< join_kind::LEFT, std::tuple<std::vector<double>> >,
-                          TestParameters< join_kind::LEFT, std::tuple<std::vector<uint32_t>> >,
-                          TestParameters< join_kind::LEFT, std::tuple<std::vector<uint64_t>> >,
-                          // Two Column Left Join tests for some combination of types
-                          TestParameters< join_kind::LEFT, std::tuple<std::vector<int32_t>, std::vector<int32_t>> >,
-                          TestParameters< join_kind::LEFT, std::tuple<std::vector<int64_t>, std::vector<int32_t>> >,
-                          TestParameters< join_kind::LEFT, std::tuple<std::vector<float>, std::vector<double>> >,
-                          TestParameters< join_kind::LEFT, std::tuple<std::vector<double>, std::vector<int64_t>> >,
-                          TestParameters< join_kind::LEFT, std::tuple<std::vector<uint32_t>, std::vector<int32_t>> >,
-                          // Three Column Left Join tests for some combination of types
-                          TestParameters< join_kind::LEFT, std::tuple<std::vector<int32_t>, std::vector<uint32_t>, std::vector<float>> >,
-                          TestParameters< join_kind::LEFT, std::tuple<std::vector<uint64_t>, std::vector<uint32_t>, std::vector<float>> >,
-                          TestParameters< join_kind::LEFT, std::tuple<std::vector<float>, std::vector<double>, std::vector<float>> >,
-                          TestParameters< join_kind::LEFT, std::tuple<std::vector<double>, std::vector<uint32_t>, std::vector<int64_t>> >
+                          TestParameters< join_kind::INNER, std::tuple<std::vector<int32_t>> >
+                          //TestParameters< join_kind::INNER, std::tuple<std::vector<int64_t>> >,
+                          //TestParameters< join_kind::INNER, std::tuple<std::vector<float>> >,
+                          //TestParameters< join_kind::INNER, std::tuple<std::vector<double>> >,
+                          //TestParameters< join_kind::INNER, std::tuple<std::vector<uint32_t>> >,
+                          //TestParameters< join_kind::INNER, std::tuple<std::vector<uint64_t>> >,
+                          //// Single column left join tests for all types
+                          //TestParameters< join_kind::LEFT, std::tuple<std::vector<int32_t>> >,
+                          //TestParameters< join_kind::LEFT, std::tuple<std::vector<int64_t>> >,
+                          //TestParameters< join_kind::LEFT, std::tuple<std::vector<float>> >,
+                          //TestParameters< join_kind::LEFT, std::tuple<std::vector<double>> >,
+                          //TestParameters< join_kind::LEFT, std::tuple<std::vector<uint32_t>> >,
+                          //TestParameters< join_kind::LEFT, std::tuple<std::vector<uint64_t>> >,
+                          //// Two Column Left Join tests for some combination of types
+                          //TestParameters< join_kind::LEFT, std::tuple<std::vector<int32_t>, std::vector<int32_t>> >,
+                          //TestParameters< join_kind::LEFT, std::tuple<std::vector<int64_t>, std::vector<int32_t>> >,
+                          //TestParameters< join_kind::LEFT, std::tuple<std::vector<float>, std::vector<double>> >,
+                          //TestParameters< join_kind::LEFT, std::tuple<std::vector<double>, std::vector<int64_t>> >,
+                          //TestParameters< join_kind::LEFT, std::tuple<std::vector<uint32_t>, std::vector<int32_t>> >,
+                          //// Three Column Left Join tests for some combination of types
+                          //TestParameters< join_kind::LEFT, std::tuple<std::vector<int32_t>, std::vector<uint32_t>, std::vector<float>> >,
+                          //TestParameters< join_kind::LEFT, std::tuple<std::vector<uint64_t>, std::vector<uint32_t>, std::vector<float>> >,
+                          //TestParameters< join_kind::LEFT, std::tuple<std::vector<float>, std::vector<double>, std::vector<float>> >,
+                          //TestParameters< join_kind::LEFT, std::tuple<std::vector<double>, std::vector<uint32_t>, std::vector<int64_t>> >
                           // Four column test will fail because gdf_join is limited to 3 columns
                           //TestParameters< join_kind::LEFT, std::tuple<std::vector<double>, std::vector<uint32_t>, std::vector<int64_t>, std::vector<int32_t>> >
                           > Implementations;
@@ -447,12 +450,13 @@ TYPED_TEST_CASE(JoinTest, Implementations);
 
 TYPED_TEST(JoinTest, ExampleTest)
 {
-  this->create_input(10000,100,
-                     10000,100);
+  this->create_input(10,2,
+                     10,2,
+                     true);
 
-  std::vector<result_type> reference_result = this->compute_reference_solution();
+  std::vector<result_type> reference_result = this->compute_reference_solution(true);
 
-  std::vector<result_type> gdf_result = this->compute_gdf_result();
+  std::vector<result_type> gdf_result = this->compute_gdf_result(true);
 
   ASSERT_EQ(reference_result.size(), gdf_result.size()) << "Size of gdf result does not match reference result\n";
 
@@ -461,6 +465,8 @@ TYPED_TEST(JoinTest, ExampleTest)
     EXPECT_EQ(reference_result[i], gdf_result[i]);
   }
 }
+
+/*
 
 TYPED_TEST(JoinTest, EqualValues)
 {
@@ -529,3 +535,4 @@ TYPED_TEST(JoinTest, RightColumnsBigger)
     EXPECT_EQ(reference_result[i], gdf_result[i]);
   }
 }
+*/
