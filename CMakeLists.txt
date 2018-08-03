@@ -131,6 +131,7 @@ cuda_add_library(gdf SHARED
     src/streamcompactionops.cu
     src/unaryops.cu
     #src/windowedops.cu
+    src/quantiles.cu
 )
 
 if (ARROW_NUMERIC_VERSION EQUAL 900)
