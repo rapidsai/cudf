@@ -408,6 +408,9 @@ public:
      * @Returns An iterator to the newly inserted key,value pair
      */
     /* ----------------------------------------------------------------------------*/
+    // This pragma is to prevent a warning about the aggregation functor caused by being
+    // instantiated both on the host and device
+    #pragma hd_warning_disable
     template<typename aggregation_type>
     __forceinline__
     __host__ __device__ iterator insert(const value_type& x, aggregation_type op)
