@@ -51,7 +51,7 @@ cudaError_t GroupbyHash(const groupby_type * const in_groupby_column,
                                             aggregation_type, 
                                             std::numeric_limits<groupby_type>::max(), 
                                             default_hash<groupby_type>, 
-                                            equal_to<aggregation_type>, 
+                                            equal_to<groupby_type>, 
                                             legacy_allocator<thrust::pair<groupby_type, aggregation_type> > >;
 
   cudaError_t error{cudaSuccess};
