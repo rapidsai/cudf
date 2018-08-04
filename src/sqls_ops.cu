@@ -1176,6 +1176,24 @@ gdf_error gdf_group_by_single(int ncols,                    // # columns
                                              sort_result);
             break;
           }
+        case GDF_SUM:
+          {
+            return gdf_group_by_hash<sum_op>(ncols,
+                                             cols,
+                                             col_agg,
+                                             out_col_values,
+                                             out_col_agg,
+                                             sort_result);
+          }
+        case GDF_COUNT:
+          {
+            return gdf_group_by_hash<count_op>(ncols,
+                                               cols,
+                                               col_agg,
+                                               out_col_values,
+                                               out_col_agg,
+                                               sort_result);
+          }
         default:
           std::cout << "Unsupported aggregation method for hash-based groupby." << std::endl;
           return GDF_UNSUPPORTED_METHOD;

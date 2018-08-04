@@ -59,8 +59,14 @@ struct GroupByTest : public testing::Test
   {
   }
 
+  ~GroupByTest()
+  {
+    cudaFree(d_groupby_result);
+    cudaFree(d_aggregation_result);
+  }
+
   std::pair<key_type*, value_type*>
-  create_input(const int num_keys, const int num_values_per_key, const int ratio = 1, const int max_key = RAND_MAX, const int max_value = RAND_MAX)
+  create_input(const int num_keys, const int num_values_per_key, const int ratio = 1, const int max_key = RAND_MAX, const int max_value = RAND_MAX, bool print = false)
   {
 
     input_size = num_keys * num_values_per_key;
@@ -107,13 +113,24 @@ struct GroupByTest : public testing::Test
         // Key doesn't exist yet, insert it
         if(found == expected_values.end())
         {
-          expected_values.insert(std::make_pair(current_key,current_value));
+          // To support operations like `count`, on the first insert, perform the
+          // operation on the new value and the operation's identity value and store the result
+          op_type op;
+          current_value = op(current_value, op_type::IDENTITY);
+
+          expected_values.insert(std::make_pair(current_key,current_value)); 
+
+          if(print)
+            std::cout << "First Insert of Key: " << current_key << " value: " << current_value << std::endl;
         }
         // Key exists, update the value with the operator
         else
         {
           op_type op;
-          value_type new_value = op(found->second, current_value);
+          value_type new_value = op(current_value, found->second);
+          if(print)
+            std::cout << "Insert of Key: " << current_key << " inserting value: " << current_value 
+                      << " storing: " << new_value << std::endl;
           found->second = new_value;
         }
       }
@@ -155,7 +172,18 @@ struct GroupByTest : public testing::Test
 
       value_type test_value = found->second;
 
-      EXPECT_EQ(expected_value, test_value) << "Key is: " << test_key;
+      if(std::is_integral<value_type>::value){
+        EXPECT_EQ(expected_value, test_value) << "Key is: " << test_key;
+      }
+      else if(std::is_same<value_type, float>::value){
+        EXPECT_FLOAT_EQ(expected_value, test_value) << "Key is: " << test_key;
+      }
+      else if(std::is_same<value_type, double>::value){
+        EXPECT_DOUBLE_EQ(expected_value, test_value) << "Key is: " << test_key;
+      }
+      else{
+        std::cout << "Unhandled value type.\n";
+      }
     }
   }
 
@@ -208,7 +236,19 @@ struct GroupByTest : public testing::Test
       ASSERT_NE(expected_values.end(), found) << "key: " << groupby_key;
 
       EXPECT_EQ(found->first, groupby_key) << "index: " << i;
-      EXPECT_EQ(found->second, aggregation_value) << "key: " << groupby_key << " index: " << i << " of " << result_size;
+
+      if(std::is_integral<value_type>::value){
+        EXPECT_EQ(found->second, aggregation_value) << "key: " << groupby_key << " index: " << i << " of " << result_size;
+      }
+      else if(std::is_same<value_type, float>::value){
+        EXPECT_FLOAT_EQ(found->second, aggregation_value) << "key: " << groupby_key << " index: " << i << " of " << result_size;
+      }
+      else if(std::is_same<value_type, double>::value){
+        EXPECT_DOUBLE_EQ(found->second, aggregation_value) << "key: " << groupby_key << " index: " << i << " of " << result_size;
+      }
+      else{
+        std::cout << "Unhandled value type.\n";
+      }
     }
 
   }
@@ -235,11 +275,6 @@ struct GroupByTest : public testing::Test
     return result_size;
   }
 
-
-  ~GroupByTest(){
-  }
-
-
 };
 
 // Google Test can only do a parameterized typed-test over a single type, so we have
@@ -265,12 +300,32 @@ typedef ::testing::Types< KeyValueTypes<int, int, max_op>,
                           KeyValueTypes<unsigned long long int, float, min_op>,
                           KeyValueTypes<unsigned long long int, double, min_op>,
                           KeyValueTypes<unsigned long long int, long long int, min_op>,
-                          KeyValueTypes<unsigned long long int, unsigned long long int, min_op>
+                          KeyValueTypes<unsigned long long int, unsigned long long int, min_op>,
+                          KeyValueTypes<int, int, count_op>,
+                          KeyValueTypes<int, float, count_op>,
+                          KeyValueTypes<int, double, count_op>,
+                          KeyValueTypes<int, long long int, count_op>,
+                          KeyValueTypes<int, unsigned long long int, count_op>,
+                          KeyValueTypes<unsigned long long int, int, count_op>,
+                          KeyValueTypes<unsigned long long int, float, count_op>,
+                          KeyValueTypes<unsigned long long int, double, count_op>,
+                          KeyValueTypes<unsigned long long int, long long int, count_op>,
+                          KeyValueTypes<unsigned long long int, unsigned long long int, count_op>,
+                          KeyValueTypes<int, int, sum_op>,
+                          KeyValueTypes<unsigned int, unsigned int, sum_op>,
+                          //KeyValueTypes<int, float, sum_op>, // TODO: single precision floats don't current work due to numerical stability issues
+                          KeyValueTypes<int, double, sum_op>,
+                          KeyValueTypes<int, long long int, sum_op>,
+                          KeyValueTypes<int, unsigned long long int, sum_op>,
+                          KeyValueTypes<unsigned long long int, double, sum_op>,
+                          KeyValueTypes<unsigned long long int, double, sum_op>,
+                          KeyValueTypes<unsigned long long int, long long int, sum_op>,
+                          KeyValueTypes<unsigned long long int, unsigned long long int, sum_op>
                           > Implementations;
 
 TYPED_TEST_CASE(GroupByTest, Implementations);
 
-TYPED_TEST(GroupByTest, AggregationTestHost)
+TYPED_TEST(GroupByTest, DISABLED_AggregationTestHost)
 {
   using key_type = typename TypeParam::key_type;
   using value_type = typename TypeParam::value_type;
@@ -318,7 +373,7 @@ TYPED_TEST(GroupByTest, AggregationTestDeviceAllSame)
 {
   const int num_keys = 1;
   const int num_values_per_key = 1<<16;
-  auto input = this->create_input(num_keys, num_values_per_key);
+  auto input = this->create_input(num_keys, num_values_per_key, 10, 10);
   this->build_aggregation_table_device(input);
   this->verify_aggregation_table();
   unsigned int result_size = this->extract_groupby_result_device();
@@ -332,11 +387,12 @@ TYPED_TEST(GroupByTest, AggregationTestDeviceAllSame)
   EXPECT_EQ(unique_count, result_size);
 }
 
+// TODO Update the create_input function to ensure all keys are actually unique
 TYPED_TEST(GroupByTest, AggregationTestDeviceAllUnique)
 {
   const int num_keys = 1<<16;
   const int num_values_per_key = 1;
-  auto input = this->create_input(num_keys, num_values_per_key);
+  auto input = this->create_input(num_keys, num_values_per_key, 1000, 1000);
   this->build_aggregation_table_device(input);
   this->verify_aggregation_table();
   unsigned int result_size = this->extract_groupby_result_device();
@@ -354,7 +410,7 @@ TYPED_TEST(GroupByTest, AggregationTestDeviceWarpSame)
 {
   const int num_keys = 1<<15;
   const int num_values_per_key = 32;
-  auto input = this->create_input(num_keys, num_values_per_key);
+  auto input = this->create_input(num_keys, num_values_per_key, 1000, 1000);
   this->build_aggregation_table_device(input);
   this->verify_aggregation_table();
   unsigned int result_size = this->extract_groupby_result_device();
@@ -372,7 +428,7 @@ TYPED_TEST(GroupByTest, AggregationTestDeviceBlockSame)
 {
   const int num_keys = 1<<12;
   const int num_values_per_key = this->THREAD_BLOCK_SIZE;
-  auto input = this->create_input(num_keys, num_values_per_key);
+  auto input = this->create_input(num_keys, num_values_per_key, 1000, 1000);
   this->build_aggregation_table_device(input);
   this->verify_aggregation_table();
   unsigned int result_size = this->extract_groupby_result_device();
@@ -390,7 +446,7 @@ TYPED_TEST(GroupByTest, GroupBy)
 {
   const int num_keys = 1<<16;
   const int num_values_per_key = 1;
-  auto input = this->create_input(num_keys, num_values_per_key);
+  auto input = this->create_input(num_keys, num_values_per_key, 1000, 1000);
   const unsigned int result_size = this->groupby(input.first, input.second);
   this->verify_groupby_result(result_size);
 
