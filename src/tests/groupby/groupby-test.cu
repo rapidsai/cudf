@@ -226,6 +226,11 @@ struct GroupByTest : public testing::Test
     ASSERT_NE(nullptr, d_groupby_result);
     ASSERT_NE(nullptr, d_aggregation_result);
 
+    // Prefetch groupby and aggregation result to host to improve performance
+    cudaMemPrefetchAsync(d_groupby_result, input_size * sizeof(key_type), cudaCpuDeviceId);
+    cudaMemPrefetchAsync(d_aggregation_result, input_size * sizeof(value_type), cudaCpuDeviceId);
+
+
     for(size_type i = 0; i < result_size; ++i)
     {
       key_type groupby_key = d_groupby_result[i];
