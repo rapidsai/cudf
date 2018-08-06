@@ -630,6 +630,9 @@ TEST_F(gdf_extract_from_datetime_test, date64Tests) {
 		inputCol.valid = thrust::raw_pointer_cast(inputValidDev.data());
 
 		test_all_extract_functions(inputCol);
+
+        inputCol.valid = NULL;
+        test_all_extract_functions(inputCol);
 	}
 
 	// extract from microseconds
@@ -678,6 +681,9 @@ TEST_F(gdf_extract_from_datetime_test, date64Tests) {
 		inputCol.valid = thrust::raw_pointer_cast(inputValidDev.data());
 
 		test_all_extract_functions(inputCol);
+
+        inputCol.valid = NULL;
+        test_all_extract_functions(inputCol);
 	}
 
 	// extract from nanoseconds
@@ -726,6 +732,9 @@ TEST_F(gdf_extract_from_datetime_test, date64Tests) {
 		inputCol.valid = thrust::raw_pointer_cast(inputValidDev.data());
 
 		test_all_extract_functions(inputCol);
+
+        inputCol.valid = NULL;
+        test_all_extract_functions(inputCol);
 	}
 }
 
