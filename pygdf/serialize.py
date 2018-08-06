@@ -4,31 +4,32 @@ try:
     import distributed.protocol as _dp
 except ImportError:
     def register_distributed_serializer(cls):
+        """Dummy no-op function.
+        """
         pass
 else:
     from distributed.utils import has_keyword
 
     def register_distributed_serializer(cls):
+        """Register serialization methods for dask.distributed.
+        """
         _dp.register_serialization(cls, _serialize, _deserialize)
 
     def _serialize(df, context=None):
-        def _serialize_imp(df, context=None):
-            def do_serialize(x):
-                return _dp.serialize(x, context=context)
+        def do_serialize(x):
+            return _dp.serialize(x, context=context)
 
-            def call_with_context(meth, x, *args):
-                if has_keyword(meth, 'context'):
-                    return meth(x, context=context)
-                else:
-                    return meth(x)
+        def call_with_context(meth, x, *args):
+            if has_keyword(meth, 'context'):
+                return meth(x, context=context)
+            else:
+                return meth(x)
 
-            header, frames = call_with_context(df.serialize, do_serialize)
-            assert 'reconstructor' not in header
-            meth_deserial = getattr(type(df), 'deserialize')
-            header['reconstructor'] = do_serialize(meth_deserial)
-            return header, frames
-
-        return _serialize_imp(df, context=context)
+        header, frames = call_with_context(df.serialize, do_serialize)
+        assert 'reconstructor' not in header
+        meth_deserial = getattr(type(df), 'deserialize')
+        header['reconstructor'] = do_serialize(meth_deserial)
+        return header, frames
 
     def _deserialize(header, frames):
         reconstructor = _dp.deserialize(*header['reconstructor'])
@@ -56,11 +57,29 @@ _CONFIG_USE_IPC = bool(int(os.environ.get("DASK_GDF_USE_IPC", "1")))
 
 
 def should_use_ipc(context):
+    """Use destination context info to determine if we should use CUDA-IPC.
+
+    Parameters
+    ----------
+    context : dict or None
+        If not ``None``, it contains information about the destination.
+        See custom serialization in dask.distributed.
+
+    Returns
+    -------
+    return_value : bool
+        ``True`` if it is possible to perform CUDA IPC transfer to the
+        destination.
+    """
+    # User opt-out
     if not _CONFIG_USE_IPC:
         return False
+    # CUDA IPC is only supported on Linux
     if not sys.platform.startswith('linux'):
         return False
+    # *context* is not given.
     if context is None:
         return False
+    # Check if destination on the same
     same_node, same_process = _parse_transfer_context(context)
     return bool(same_node)

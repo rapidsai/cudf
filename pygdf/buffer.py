@@ -39,32 +39,79 @@ class Buffer(object):
         self.dtype = self.mem.dtype
 
     def serialize(self, serialize, context=None):
+        """Called when dask.distributed is performing a serialization on this
+        object.
+
+        Do not use this directly.  It is invoked by dask.distributed.
+
+        Parameters
+        ----------
+
+        serialize : callable
+             Used to serialize data that needs serialization .
+        context : dict; optional
+            If not ``None``, it contains information about the destination.
+
+        Returns
+        -------
+        (header, frames)
+            See custom serialization documentation in dask.distributed.
+        """
         from .serialize import should_use_ipc
 
+        # Use destination info to determine if we should do IPC.
         use_ipc = should_use_ipc(context)
         header = {}
+        # Should use IPC transfer
         if use_ipc:
+            # Reuse IPC handle from previous call?
             if self._cached_ipch is not None:
                 ipch = self._cached_ipch
             else:
+                # Get new IPC handle
                 ipch = self.to_gpu_array().get_ipc_handle()
             header['kind'] = 'ipc'
             header['mem'], frames = serialize(ipch)
             # Keep IPC handle alive
             self._cached_ipch = ipch
+        # Not using IPC transfer
         else:
             header['kind'] = 'normal'
+            # Serialize the buffer as a numpy array
             header['mem'], frames = serialize(self.to_array())
         return header, frames
 
     @classmethod
     def deserialize(cls, deserialize, header, frames):
+        """Called when dask.distributed is performing a deserialization for
+        data of this class.
+
+        Do not use this directly.  It is invoked by dask.distributed.
+
+        Parameters
+        ----------
+
+        deserialize : callable
+             Used to deserialize data that needs further deserialization .
+        header, frames : dict
+            See custom serialization documentation in dask.distributed.
+
+        Returns
+        -------
+        obj : Buffer
+            Returns an instance of Buffer.
+        """
+        # Using IPC?
         if header['kind'] == 'ipc':
             ipch = deserialize(header['mem'], frames)
+            # Open IPC handle
             with ipch as data:
+                # Copy remote data over
                 mem = cuda.device_array_like(data)
                 mem.copy_to_device(data)
+        # Not using IPC
         else:
+            # Deserialize the numpy array
             mem = deserialize(header['mem'], frames)
             mem.flags['WRITEABLE'] = True  # XXX: hack for numba to work
         return Buffer(mem)
