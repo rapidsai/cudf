@@ -483,7 +483,6 @@ gdf_error gpu_concat(gdf_column *lhs, gdf_column *rhs, gdf_column *output)
 			size_t curr_len = get_right_byte_length(rhs->size, right_num_chars - 1,  prev_len);
 			last_byte[0] = last_byte[0] << curr_len;
 			last_byte[0] = last_byte[0] >> curr_len;
-			//size_t last_right_byte_length = rhs->size - GDF_VALID_BITSIZE * (right_num_chars - 1);
 			thrust::copy( last_byte.begin(), last_byte.begin() + 1, output_device_bits + output_num_chars - 1);
 		}
 	}
