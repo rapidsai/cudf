@@ -434,7 +434,7 @@ gdf_error gpu_concat(gdf_column *lhs, gdf_column *rhs, gdf_column *output)
 				auto too_many_bits = last_with_too_many_bits(rhs->size, right_num_chars, prev_len);
 				size_t last_byte_length = get_last_byte_length(rhs->size);
 
-				if (last_byte_length - (GDF_VALID_BITSIZE - shift_bits) >= 0) { //  
+				if (last_byte_length >= (GDF_VALID_BITSIZE - shift_bits)) { //  
 					thrust::host_vector<gdf_valid_type> last_byte (right_device_bits + right_num_chars - 1, right_device_bits + right_num_chars);
 					last_byte[0] = last_byte[0] << GDF_VALID_BITSIZE - last_byte_length;
 					thrust::copy( last_byte.begin(), last_byte.begin() + 1, right_device_bits + right_num_chars - 1);
@@ -462,7 +462,7 @@ gdf_error gpu_concat(gdf_column *lhs, gdf_column *rhs, gdf_column *output)
 				//because one of the iterators is + 1 we dont want to read the last char here since it could be past the end of our allocation
 				thrust::copy( ored_offset_iter, ored_offset_iter + right_num_chars - 1, output_device_bits + left_num_chars);
 
-				if (last_byte_length - (GDF_VALID_BITSIZE - shift_bits) >= 0) { //  
+				if (last_byte_length >= (GDF_VALID_BITSIZE - shift_bits)) { //  
 					thrust::host_vector<gdf_valid_type> last_byte (right_device_bits + right_num_chars - 1, right_device_bits + right_num_chars);
 					last_byte[0] = last_byte[0] >> GDF_VALID_BITSIZE - last_byte_length;
 					thrust::copy( last_byte.begin(), last_byte.begin() + 1, right_device_bits + right_num_chars - 1);
@@ -482,8 +482,8 @@ gdf_error gpu_concat(gdf_column *lhs, gdf_column *rhs, gdf_column *output)
 			size_t prev_len = get_last_byte_length(lhs->size);
 			size_t curr_len = get_right_byte_length(rhs->size, right_num_chars - 1,  prev_len);
 			last_byte[0] = last_byte[0] << curr_len;
-            last_byte[0] = last_byte[0] >> curr_len;
-			size_t last_right_byte_length = rhs->size - GDF_VALID_BITSIZE * (right_num_chars - 1);
+			last_byte[0] = last_byte[0] >> curr_len;
+			//size_t last_right_byte_length = rhs->size - GDF_VALID_BITSIZE * (right_num_chars - 1);
 			thrust::copy( last_byte.begin(), last_byte.begin() + 1, output_device_bits + output_num_chars - 1);
 		}
 	}
