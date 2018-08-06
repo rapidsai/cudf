@@ -38,7 +38,7 @@ Before submitting a bug report please ensure that you can check off these boxes:
 - [ ] I have included the following environment details:
       Linux Distro, Linux Kernel, GPU Model
 - [ ] I have included the following version information for:
-      Arrow, CUDA, Numpy, Pandas, Python
+      Arrow, CUDA, GCC/GC++, CMake, Python
 - [ ] I have included below a minimal working reproducer (if you are unsure how
  to write one see http://matthewrocklin.com/blog/work/2018/02/28/minimal-bug-reports).
 
