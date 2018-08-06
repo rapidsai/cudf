@@ -166,7 +166,7 @@ class DataFrame(object):
         18   18   18   18
         19   19   19   19
         """
-        if isinstance(arg, str):
+        if isinstance(arg, str) or isinstance(arg, int):
             return self._cols[arg]
         elif isinstance(arg, slice):
             df = DataFrame()

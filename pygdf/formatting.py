@@ -42,7 +42,10 @@ def format(index, cols, show_headers=True, more_cols=0, more_rows=0,
     # compute column widths
     widths = {}
     for k, vs in cols.items():
-        widths[k] = max(len(k), max(map(len, vs), default=0), min_width)
+        if isinstance(k, int):
+            widths[k] = min_width
+        else:
+            widths[k] = max(len(k), max(map(len, vs), default=0), min_width)
     # format table
     out = []
     widthkey = len(str(nrows))
