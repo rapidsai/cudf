@@ -1194,6 +1194,14 @@ gdf_error gdf_group_by_single(int ncols,                    // # columns
                                                out_col_agg,
                                                sort_result);
           }
+        case GDF_AVG:
+          {
+            return gdf_group_by_hash_avg(ncols,
+                                         cols,
+                                         col_agg,
+                                         out_col_values,
+                                         out_col_agg);
+          }
         default:
           std::cout << "Unsupported aggregation method for hash-based groupby." << std::endl;
           return GDF_UNSUPPORTED_METHOD;
