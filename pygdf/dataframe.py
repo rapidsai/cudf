@@ -245,10 +245,15 @@ class DataFrame(object):
                                  more_rows=more_rows)
 
     def __str__(self):
-        return self.to_string()
+        nrows = settings.formatting.get('nrows') or 10
+        ncols = settings.formatting.get('ncols') or 8
+        return self.to_string(nrows=nrows, ncols=ncols)
 
     def __repr__(self):
-        return self.to_string()
+        return "<pygdf.DataFrame ncols={} nrows={} >".format(
+            len(self.columns),
+            len(self),
+            )
 
     @property
     def loc(self):
@@ -750,7 +755,7 @@ class DataFrame(object):
 
         Returns
         -------
-        joined : DataFrame
+        joined : DataFrame
 
         Notes
         -----
