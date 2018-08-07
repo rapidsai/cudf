@@ -1,13 +1,16 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
 
+import sys
+import multiprocessing as mp
+
 import numpy as np
 import pandas as pd
+from numba import cuda
 try:
     from distributed.protocol import serialize, deserialize
     _have_distributed = True
 except ImportError:
     _have_distributed = False
-
 import pytest
 import pygdf
 from . import utils
@@ -15,6 +18,11 @@ from . import utils
 
 require_distributed = pytest.mark.skipif(not _have_distributed,
                                          reason='no distributed')
+support_ipc = sys.platform.startswith('linux') and hasattr(mp, 'get_context')
+require_ipc = pytest.mark.skipIf(
+    support_ipc,
+    reason='only on linux and multiprocess has .get_context',
+    )
 
 
 @require_distributed
@@ -85,3 +93,44 @@ def test_serialize_groupby():
     got = gb.mean()
     expect = outgb.mean()
     pd.util.testing.assert_frame_equal(got.to_pandas(), expect.to_pandas())
+
+
+@require_distributed
+@require_ipc
+def test_serialize_ipc():
+    sr = pygdf.Series(np.arange(10))
+    # Non-IPC
+    header, frames = serialize(sr)
+    assert header['column']['data_buffer']['kind'] == 'normal'
+    # IPC
+    hostport = 'tcp://0.0.0.0:8888'
+    fake_context = {
+        'recipient': hostport,
+        'sender': hostport,
+    }
+
+    assert sr._column.data._cached_ipch is None
+    header, frames = serialize(sr, context=fake_context)
+    assert header['column']['data_buffer']['kind'] == 'ipc'
+    # Check that _cached_ipch is set on the buffer
+    assert isinstance(sr._column.data._cached_ipch,
+                      cuda.cudadrv.devicearray.IpcArrayHandle)
+
+    # Spawn a new process to test the IPC handle deserialization
+    mpctx = mp.get_context('spawn')
+    result_queue = mpctx.Queue()
+
+    proc = mpctx.Process(target=_load_ipc, args=(header, frames, result_queue))
+    proc.start()
+    out = result_queue.get()
+    proc.join(3)
+    # Verify that the output array matches the source
+    np.testing.assert_array_equal(out.to_array(), sr.to_array())
+
+
+def _load_ipc(header, frames, result_queue):
+    try:
+        out = deserialize(header, frames)
+        result_queue.put(out)
+    except Exception as e:
+        result_queue.put(e)
