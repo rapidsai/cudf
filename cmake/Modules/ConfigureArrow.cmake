@@ -46,7 +46,7 @@ endif()
 set(ARROW_ROOT ${ARROW_DOWNLOAD_BINARY_DIR}/arrow-prefix/src/arrow-install/usr/local/)
 
 # Need ARROW_VERSION for setting correct ARROW_GENERATED_IPC_DIR
-set(ARROW_VERSION "apache-arrow-0.7.1")
+set(ARROW_VERSION "apache-arrow-0.10.0")
 if (NOT "$ENV{PARQUET_ARROW_VERSION}" STREQUAL "")
     set(ARROW_VERSION "$ENV{PARQUET_ARROW_VERSION}")
 endif()
