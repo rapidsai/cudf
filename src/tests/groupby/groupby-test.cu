@@ -52,7 +52,6 @@ struct GroupByTest : public testing::Test
   key_type *d_groupby_result{nullptr};
   value_type *d_aggregation_result{nullptr};
 
-  std::unordered_map<key_type, value_type> expected_values;
 
   GroupByTest(const size_type _hash_table_size = 10000)
     : hash_table_size(_hash_table_size), the_map(new map_type(_hash_table_size, op_type::IDENTITY))
@@ -117,8 +116,11 @@ struct GroupByTest : public testing::Test
                           thrust::raw_pointer_cast(d_aggregation_column.data()));
   }
 
-  void compute_reference_solution(bool print = false)
+  std::map<key_type, value_type> compute_reference_solution(bool print = false)
   {
+
+    std::map<key_type, value_type> expected_values;
+
     for(size_t i = 0; i < groupby_column.size(); ++i){
 
       key_type current_key = groupby_column[i];
@@ -151,6 +153,8 @@ struct GroupByTest : public testing::Test
         found->second = new_value;
       }
     }
+
+    return expected_values;
   }
 
   void build_aggregation_table_device(std::pair<key_type*, value_type*> input)
@@ -168,9 +172,9 @@ struct GroupByTest : public testing::Test
 
   }
 
-  void verify_aggregation_table(){
+  void verify_aggregation_table(std::map<key_type, value_type> const & expected_values){
 
-    for(auto const &expected : this->expected_values)
+    for(auto const &expected : expected_values)
     {
       key_type test_key = expected.first;
 
@@ -230,7 +234,7 @@ struct GroupByTest : public testing::Test
 
   }
 
-  void verify_groupby_result(const unsigned int result_size) const
+  void verify_groupby_result(std::map<key_type, value_type> const & expected_values ) const
   {
 
     ASSERT_NE(nullptr, d_groupby_result);
@@ -241,7 +245,7 @@ struct GroupByTest : public testing::Test
     cudaMemPrefetchAsync(d_aggregation_result, input_size * sizeof(value_type), cudaCpuDeviceId);
 
 
-    for(size_type i = 0; i < result_size; ++i)
+    for(size_type i = 0; i < expected_values.size(); ++i)
     {
       key_type groupby_key = d_groupby_result[i];
       value_type aggregation_value = d_aggregation_result[i];
@@ -253,13 +257,13 @@ struct GroupByTest : public testing::Test
       EXPECT_EQ(found->first, groupby_key) << "index: " << i;
 
       if(std::is_integral<value_type>::value){
-        EXPECT_EQ(found->second, aggregation_value) << "key: " << groupby_key << " index: " << i << " of " << result_size;
+        EXPECT_EQ(found->second, aggregation_value) << "key: " << groupby_key << " index: " << i;
       }
       else if(std::is_same<value_type, float>::value){
-        EXPECT_FLOAT_EQ(found->second, aggregation_value) << "key: " << groupby_key << " index: " << i << " of " << result_size;
+        EXPECT_FLOAT_EQ(found->second, aggregation_value) << "key: " << groupby_key << " index: " << i;
       }
       else if(std::is_same<value_type, double>::value){
-        EXPECT_DOUBLE_EQ(found->second, aggregation_value) << "key: " << groupby_key << " index: " << i << " of " << result_size;
+        EXPECT_DOUBLE_EQ(found->second, aggregation_value) << "key: " << groupby_key << " index: " << i;
       }
       else{
         std::cout << "Unhandled value type.\n";
@@ -395,11 +399,11 @@ TYPED_TEST(GroupByTest, AggregationTestDeviceAllSame)
   const int num_keys = 1;
   const int num_values_per_key = 1<<12;
   auto input = this->create_input(num_keys, num_values_per_key, 10, 10);
-  this->compute_reference_solution();
+  auto expected_values = this->compute_reference_solution();
   this->build_aggregation_table_device(input);
-  this->verify_aggregation_table();
+  this->verify_aggregation_table(expected_values);
   unsigned int result_size = this->extract_groupby_result_device();
-  this->verify_groupby_result(result_size);
+  this->verify_groupby_result(expected_values);
 
   // The size of the result should be equal to the number of unique keys
   auto begin = this->d_groupby_column.begin();
@@ -415,11 +419,11 @@ TYPED_TEST(GroupByTest, AggregationTestDeviceAllUnique)
   const int num_keys = 1<<12;
   const int num_values_per_key = 1;
   auto input = this->create_input(num_keys, num_values_per_key, 1000, 1000);
-  this->compute_reference_solution();
+  auto expected_values = this->compute_reference_solution();
   this->build_aggregation_table_device(input);
-  this->verify_aggregation_table();
+  this->verify_aggregation_table(expected_values);
   unsigned int result_size = this->extract_groupby_result_device();
-  this->verify_groupby_result(result_size);
+  this->verify_groupby_result(expected_values);
 
   // The size of the result should be equal to the number of unique keys
   auto begin = this->d_groupby_column.begin();
@@ -434,11 +438,11 @@ TYPED_TEST(GroupByTest, AggregationTestDeviceWarpSame)
   const int num_keys = 1<<12;
   const int num_values_per_key = 32;
   auto input = this->create_input(num_keys, num_values_per_key, 1000, 1000);
-  this->compute_reference_solution();
+  auto expected_values = this->compute_reference_solution();
   this->build_aggregation_table_device(input);
-  this->verify_aggregation_table();
+  this->verify_aggregation_table(expected_values);
   unsigned int result_size = this->extract_groupby_result_device();
-  this->verify_groupby_result(result_size);
+  this->verify_groupby_result(expected_values);
 
   // The size of the result should be equal to the number of unique keys
   auto begin = this->d_groupby_column.begin();
@@ -453,11 +457,11 @@ TYPED_TEST(GroupByTest, AggregationTestDeviceBlockSame)
   const int num_keys = 1<<8;
   const int num_values_per_key = this->THREAD_BLOCK_SIZE;
   auto input = this->create_input(num_keys, num_values_per_key, 1000, 1000);
-  this->compute_reference_solution();
+  auto expected_values = this->compute_reference_solution();
   this->build_aggregation_table_device(input);
-  this->verify_aggregation_table();
+  this->verify_aggregation_table(expected_values);
   unsigned int result_size = this->extract_groupby_result_device();
-  this->verify_groupby_result(result_size);
+  this->verify_groupby_result(expected_values);
 
   // The size of the result should be equal to the number of unique keys
   auto begin = this->d_groupby_column.begin();
@@ -472,10 +476,10 @@ TYPED_TEST(GroupByTest, GroupBy)
   const int num_keys = 1<<12;
   const int num_values_per_key = 1;
   auto input = this->create_input(num_keys, num_values_per_key, 1000, 1000);
-  this->compute_reference_solution();
+  auto expected_values = this->compute_reference_solution();
 
   const unsigned int result_size = this->groupby(input.first, input.second);
-  this->verify_groupby_result(result_size);
+  this->verify_groupby_result(expected_values);
 
   // The size of the result should be equal to the number of unique keys
   auto begin = this->d_groupby_column.begin();
