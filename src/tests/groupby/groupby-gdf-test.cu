@@ -515,7 +515,86 @@ TYPED_TEST(GroupByTest, GroupByHash)
 }
 
 
-int main(int argc, char * argv[]){
-  testing::InitGoogleTest(&argc, argv);
-  return RUN_ALL_TESTS();
-}
+//TEST(HashGroupByTest, max)
+//{
+//
+//  std::vector<int64_t> groupby_column{ 2, 2, 1, 1, 4, 3, 3, 42, 42  };
+//  std::vector<double>  aggregation_column{5., 2., 2., 3., 7., 6., 6., 42., 51. };
+//
+//  const size_t size = groupby_column.size();
+//
+//  thrust::device_vector<int64_t> d_groupby_column(groupby_column);
+//  thrust::device_vector<double> d_aggregation_column(aggregation_column);
+//
+//  gdf_column gdf_groupby_column;
+//  gdf_groupby_column.data = static_cast<void*>(d_groupby_column.data().get());
+//  gdf_groupby_column.size = size;
+//  gdf_groupby_column.dtype = GDF_INT64;
+//
+//  gdf_column gdf_aggregation_column;
+//  gdf_aggregation_column.data = static_cast<void*>(d_aggregation_column.data().get());
+//  gdf_aggregation_column.size = size;
+//  gdf_aggregation_column.dtype = GDF_FLOAT64;
+//
+//  thrust::device_vector<int64_t> groupby_result{size};
+//  thrust::device_vector<double> aggregation_result{size};
+//
+//  gdf_column gdf_groupby_result;
+//  gdf_groupby_result.data = static_cast<void*>(groupby_result.data().get());
+//  gdf_groupby_result.size = size;
+//  gdf_groupby_result.dtype = GDF_INT64;
+//
+//  gdf_column gdf_aggregation_result;
+//  gdf_aggregation_result.data = static_cast<void*>(aggregation_result.data().get());
+//  gdf_aggregation_result.size = size;
+//  gdf_aggregation_result.dtype = GDF_FLOAT64;
+//
+//  // Determines if the final result is sorted
+//  int flag_sort_result = 1;
+//
+//  gdf_context context{0, GDF_HASH, 0, flag_sort_result};
+//
+//  gdf_column * p_gdf_groupby_column = &gdf_groupby_column;
+//
+//  gdf_column * p_gdf_groupby_result = &gdf_groupby_result;
+//
+//  gdf_group_by_max((int) 1,      
+//                   &p_gdf_groupby_column,
+//                   &gdf_aggregation_column,
+//                   nullptr,         
+//                   &p_gdf_groupby_result,
+//                   &gdf_aggregation_result,
+//                   &context);
+//
+//  print_v(groupby_result, std::cout);
+//  print_v(aggregation_result, std::cout);
+//
+//  // Make sure results are sorted
+//  if(1 == flag_sort_result){
+//    std::map<int64_t, double> expected_results { {1,3.}, {2,5.}, {3,6.}, {4,7.}, {42, 51.} };
+//    ASSERT_EQ(expected_results.size(), gdf_groupby_result.size);
+//    ASSERT_EQ(expected_results.size(), gdf_aggregation_result.size);
+//
+//    int i = 0;
+//    for(auto kv : expected_results){
+//      EXPECT_EQ(kv.first, groupby_result[i]) << "index: " << i;
+//      EXPECT_EQ(kv.second, aggregation_result[i++]) << "index: " << i;
+//    }
+//  }
+//  else
+//  {
+//    std::unordered_map<int64_t, double> expected_results { {1,3.}, {2,5.}, {3,6.}, {4,7.} };
+//    ASSERT_EQ(expected_results.size(), gdf_groupby_result.size);
+//    ASSERT_EQ(expected_results.size(), gdf_aggregation_result.size);
+//
+//    for(int i = 0; i < gdf_aggregation_result.size; ++i){
+//      const int64_t key = groupby_result[i];
+//      const double value = aggregation_result[i];
+//      auto found = expected_results.find(groupby_result[i]);
+//      EXPECT_EQ(found->first, key);
+//      EXPECT_EQ(found->second, value);
+//    }
+//  }
+//}
+
+
