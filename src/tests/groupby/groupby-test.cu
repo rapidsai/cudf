@@ -286,49 +286,55 @@ struct GroupByTest : public testing::Test
 // to nest multiple types inside of the KeyValueTypes struct above
 // KeyValueTypes<type1, type2> implies key_type = type1, value_type = type2
 // This list is the types across which Google Test will run our tests
-typedef ::testing::Types< KeyValueTypes<int, int, max_op>,
-                          KeyValueTypes<int, float, max_op>,
-                          KeyValueTypes<int, double, max_op>,
-                          KeyValueTypes<int, long long int, max_op>,
-                          KeyValueTypes<int, unsigned long long int, max_op>,
-                          KeyValueTypes<unsigned long long int, int, max_op>,
-                          KeyValueTypes<unsigned long long int, float, max_op>,
-                          KeyValueTypes<unsigned long long int, double, max_op>,
-                          KeyValueTypes<unsigned long long int, long long int, max_op>,
-                          KeyValueTypes<unsigned long long int, unsigned long long int, max_op>,
-                          KeyValueTypes<int, int, min_op>,
-                          KeyValueTypes<int, float, min_op>,
-                          KeyValueTypes<int, double, min_op>,
-                          KeyValueTypes<int, long long int, min_op>,
-                          KeyValueTypes<int, unsigned long long int, min_op>,
-                          KeyValueTypes<unsigned long long int, int, min_op>,
-                          KeyValueTypes<unsigned long long int, float, min_op>,
-                          KeyValueTypes<unsigned long long int, double, min_op>,
-                          KeyValueTypes<unsigned long long int, long long int, min_op>,
-                          KeyValueTypes<unsigned long long int, unsigned long long int, min_op>,
-                          KeyValueTypes<int, int, count_op>,
-                          KeyValueTypes<int, float, count_op>,
-                          KeyValueTypes<int, double, count_op>,
-                          KeyValueTypes<int, long long int, count_op>,
-                          KeyValueTypes<int, unsigned long long int, count_op>,
-                          KeyValueTypes<unsigned long long int, int, count_op>,
-                          KeyValueTypes<unsigned long long int, float, count_op>,
-                          KeyValueTypes<unsigned long long int, double, count_op>,
-                          KeyValueTypes<unsigned long long int, long long int, count_op>,
-                          KeyValueTypes<unsigned long long int, unsigned long long int, count_op>,
-                          KeyValueTypes<int, int, sum_op>,
-                          KeyValueTypes<unsigned int, unsigned int, sum_op>,
-                          //KeyValueTypes<int, float, sum_op>, // TODO: single precision floats don't current work due to numerical stability issues
-                          KeyValueTypes<int, double, sum_op>,
-                          KeyValueTypes<int, long long int, sum_op>,
-                          KeyValueTypes<int, unsigned long long int, sum_op>,
-                          KeyValueTypes<unsigned long long int, double, sum_op>,
-                          KeyValueTypes<unsigned long long int, double, sum_op>,
-                          KeyValueTypes<unsigned long long int, long long int, sum_op>,
-                          KeyValueTypes<unsigned long long int, unsigned long long int, sum_op>
-                          > Implementations;
+typedef ::testing::Types< 
+                            KeyValueTypes<int32_t, int32_t, max_op>,
+                            KeyValueTypes<int32_t, float, max_op>,
+                            KeyValueTypes<int32_t, double, max_op>,
+                            KeyValueTypes<int32_t, int64_t, max_op>,
+                            KeyValueTypes<int32_t, uint64_t, max_op>,
+                            KeyValueTypes<int64_t, int32_t, max_op>,
+                            KeyValueTypes<int64_t, float, max_op>,
+                            KeyValueTypes<int64_t, double, max_op>,
+                            KeyValueTypes<int64_t, int64_t, max_op>,
+                            KeyValueTypes<int64_t, uint64_t, max_op>,
+                            KeyValueTypes<uint64_t, int32_t, max_op>,
+                            KeyValueTypes<uint64_t, float, max_op>,
+                            KeyValueTypes<uint64_t, double, max_op>,
+                            KeyValueTypes<uint64_t, int64_t, max_op>,
+                            KeyValueTypes<uint64_t, uint64_t, max_op>,
+                            KeyValueTypes<int32_t, int32_t, min_op>,
+                            KeyValueTypes<int32_t, float, min_op>,
+                            KeyValueTypes<int32_t, double, min_op>,
+                            KeyValueTypes<int32_t, int64_t, min_op>,
+                            KeyValueTypes<int32_t, uint64_t, min_op>,
+                            KeyValueTypes<uint64_t, int32_t, min_op>,
+                            KeyValueTypes<uint64_t, float, min_op>,
+                            KeyValueTypes<uint64_t, double, min_op>,
+                            KeyValueTypes<uint64_t, int64_t, min_op>,
+                            KeyValueTypes<uint64_t, uint64_t, min_op>,
+                            KeyValueTypes<int32_t, int32_t, count_op>,
+                            KeyValueTypes<int32_t, float, count_op>,
+                            KeyValueTypes<int32_t, double, count_op>,
+                            KeyValueTypes<int32_t, int64_t, count_op>,
+                            KeyValueTypes<int32_t, uint64_t, count_op>,
+                            KeyValueTypes<uint64_t, int32_t, count_op>,
+                            KeyValueTypes<uint64_t, float, count_op>,
+                            KeyValueTypes<uint64_t, double, count_op>,
+                            KeyValueTypes<uint64_t, int64_t, count_op>,
+                            KeyValueTypes<uint64_t, uint64_t, count_op>,
+                            KeyValueTypes<int32_t, int32_t, sum_op>,
+                            KeyValueTypes<unsigned int32_t, unsigned int32_t, sum_op>,
+                            //KeyValueTypes<int32_t, float, sum_op>, // TODO: single precision floats don't current work due to numerical stability issues
+                            KeyValueTypes<int32_t, double, sum_op>,
+                            KeyValueTypes<int32_t, int64_t, sum_op>,
+                            KeyValueTypes<int32_t, uint64_t, sum_op>,
+                            KeyValueTypes<uint64_t, double, sum_op>,
+                            KeyValueTypes<uint64_t, double, sum_op>,
+                            KeyValueTypes<uint64_t, int64_t, sum_op>,
+                            KeyValueTypes<uint64_t, uint64_t, sum_op>
+                            > Implementations;
 
-TYPED_TEST_CASE(GroupByTest, Implementations);
+  TYPED_TEST_CASE(GroupByTest, Implementations);
 
 TYPED_TEST(GroupByTest, DISABLED_AggregationTestHost)
 {
@@ -377,7 +383,7 @@ TYPED_TEST(GroupByTest, DISABLED_AggregationTestHost)
 TYPED_TEST(GroupByTest, AggregationTestDeviceAllSame)
 {
   const int num_keys = 1;
-  const int num_values_per_key = 1<<16;
+  const int num_values_per_key = 1<<12;
   auto input = this->create_input(num_keys, num_values_per_key, 10, 10);
   this->build_aggregation_table_device(input);
   this->verify_aggregation_table();
@@ -395,7 +401,7 @@ TYPED_TEST(GroupByTest, AggregationTestDeviceAllSame)
 // TODO Update the create_input function to ensure all keys are actually unique
 TYPED_TEST(GroupByTest, AggregationTestDeviceAllUnique)
 {
-  const int num_keys = 1<<16;
+  const int num_keys = 1<<12;
   const int num_values_per_key = 1;
   auto input = this->create_input(num_keys, num_values_per_key, 1000, 1000);
   this->build_aggregation_table_device(input);
@@ -413,7 +419,7 @@ TYPED_TEST(GroupByTest, AggregationTestDeviceAllUnique)
 
 TYPED_TEST(GroupByTest, AggregationTestDeviceWarpSame)
 {
-  const int num_keys = 1<<15;
+  const int num_keys = 1<<12;
   const int num_values_per_key = 32;
   auto input = this->create_input(num_keys, num_values_per_key, 1000, 1000);
   this->build_aggregation_table_device(input);
@@ -431,7 +437,7 @@ TYPED_TEST(GroupByTest, AggregationTestDeviceWarpSame)
 
 TYPED_TEST(GroupByTest, AggregationTestDeviceBlockSame)
 {
-  const int num_keys = 1<<12;
+  const int num_keys = 1<<8;
   const int num_values_per_key = this->THREAD_BLOCK_SIZE;
   auto input = this->create_input(num_keys, num_values_per_key, 1000, 1000);
   this->build_aggregation_table_device(input);
@@ -449,7 +455,7 @@ TYPED_TEST(GroupByTest, AggregationTestDeviceBlockSame)
 
 TYPED_TEST(GroupByTest, GroupBy)
 {
-  const int num_keys = 1<<16;
+  const int num_keys = 1<<12;
   const int num_values_per_key = 1;
   auto input = this->create_input(num_keys, num_values_per_key, 1000, 1000);
   const unsigned int result_size = this->groupby(input.first, input.second);
