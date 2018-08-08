@@ -70,18 +70,19 @@ else()
     add_library(arrow STATIC IMPORTED)
     set_target_properties(arrow PROPERTIES IMPORTED_LOCATION "${ARROW_STATIC_LIB}")
 
-    # Using pkgconfig to determine arrow version information for CPP macros
-    set( ENV{PKG_CONFIG_PATH} "$ENV{PKG_CONFIG_PATH}:${ARROW_ROOT}/lib/pkgconfig" )
-    find_package(PkgConfig)
-    pkg_search_module(_ARROW REQUIRED arrow) # using only version information
-    STRING(REGEX REPLACE "^([0-9]+)\\.[0-9]+\\.[0-9]+" "\\1" ARROW_VERSION_MAJOR "${_ARROW_VERSION}")
-    STRING(REGEX REPLACE "^[0-9]+\\.([0-9]+)\\.[0-9]+" "\\1" ARROW_VERSION_MINOR "${_ARROW_VERSION}")
-    STRING(REGEX REPLACE "^[0-9]+\\.[0-9]+\\.([0-9]+)" "\\1" ARROW_VERSION_PATCH "${_ARROW_VERSION}")
-    math(EXPR ARROW_NUMERIC_VERSION "${ARROW_VERSION_MAJOR} * 10000 + ${ARROW_VERSION_MINOR} * 100 + ${ARROW_VERSION_PATCH}")
+    # Determine arrow version information for CPP macros
+    file(STRINGS ${ARROW_ROOT}/lib/pkgconfig/arrow.pc _ARROW_VERSION REGEX "^Version: ([0-9]+\\.[0-9]+\\.[0-9]+)")
+    STRING(REGEX REPLACE "^Version: ([0-9]+)\\.[0-9]+\\.[0-9]+" "\\1" ARROW_VERSION_MAJOR "${_ARROW_VERSION}")
+    STRING(REGEX REPLACE "^Version: [0-9]+\\.([0-9]+)\\.[0-9]+" "\\1" ARROW_VERSION_MINOR "${_ARROW_VERSION}")
+    STRING(REGEX REPLACE "^Version: [0-9]+\\.[0-9]+\\.([0-9]+)" "\\1" ARROW_VERSION_PATCH "${_ARROW_VERSION}")
+    math(EXPR ARROW_NUMERIC_VERSION "(${ARROW_VERSION_MAJOR}+0) * 10000 + (${ARROW_VERSION_MINOR}+0) * 100 + (${ARROW_VERSION_PATCH}+0)")
     message(STATUS "ARROW_NUMERIC_VERSION=${ARROW_NUMERIC_VERSION}")
     ADD_DEFINITIONS(-DARROW_VERSION=${ARROW_NUMERIC_VERSION})
+
     # see arrow/ipc/message.h
-    if (ARROW_NUMERIC_VERSION LESS 200)
+    if (ARROW_NUMERIC_VERSION EQUAL 0)
+      message(FATAL_ERROR "Apache Arrow version indetermined. Check for any error messages above.")
+    elseif (ARROW_NUMERIC_VERSION LESS 200)
       ADD_DEFINITIONS(-DARROW_METADATA_V1)
     elseif (ARROW_NUMERIC_VERSION LESS 300)
       ADD_DEFINITIONS(-DARROW_METADATA_V2)
