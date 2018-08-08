@@ -116,41 +116,68 @@ struct GroupByTest : public testing::Test
                           thrust::raw_pointer_cast(d_aggregation_column.data()));
   }
 
+  template <class aggregation_operation>
   std::map<key_type, value_type> compute_reference_solution(bool print = false)
   {
 
     std::map<key_type, value_type> expected_values;
 
-    for(size_t i = 0; i < groupby_column.size(); ++i){
+    // Computing the reference solution for AVG has to be handled uniquely
+    if(std::is_same<aggregation_operation, avg_op<value_type>>::value)
+    {
 
-      key_type current_key = groupby_column[i];
-      value_type current_value = aggregation_column[i];
-
-      // Use a STL map to keep track of the aggregation for each key
-      auto found = expected_values.find(current_key);
-
-      // Key doesn't exist yet, insert it
-      if(found == expected_values.end())
+      // For each key, compute the SUM and COUNT aggregation
+      std::map<key_type, value_type> counts = compute_reference_solution<count_op<value_type>>();
+      std::map<key_type, value_type> sums = compute_reference_solution<sum_op<value_type>>();
+      
+      // For each key, compute it's AVG as SUM / COUNT
+      for(auto & sum: sums)
       {
-        // To support operations like `count`, on the first insert, perform the
-        // operation on the new value and the operation's identity value and store the result
-        op_type op;
-        current_value = op(current_value, op_type::IDENTITY);
+        const auto current_key = sum.first;
+    
+        auto count = counts.find(current_key);
 
-        expected_values.insert(std::make_pair(current_key,current_value)); 
+        EXPECT_NE(count, counts.end()) << "Failed to find match for key " << current_key << " from the SUM solution in the COUNT solution";
 
-        if(print)
-          std::cout << "First Insert of Key: " << current_key << " value: " << current_value << std::endl;
+        // Compute the AVG in place on the SUM map
+        sum.second = sum.second / count->second;
       }
-      // Key exists, update the value with the operator
-      else
-      {
-        op_type op;
-        value_type new_value = op(current_value, found->second);
-        if(print)
-          std::cout << "Insert of Key: " << current_key << " inserting value: " << current_value 
-            << " storing: " << new_value << std::endl;
-        found->second = new_value;
+
+      expected_values = sums;
+    }
+    else
+    {
+      aggregation_operation op;
+
+      for(size_t i = 0; i < groupby_column.size(); ++i){
+
+        key_type current_key = groupby_column[i];
+        value_type current_value = aggregation_column[i];
+
+        // Use a STL map to keep track of the aggregation for each key
+        auto found = expected_values.find(current_key);
+
+        // Key doesn't exist yet, insert it
+        if(found == expected_values.end())
+        {
+          // To support operations like `count`, on the first insert, perform the
+          // operation on the new value and the operation's identity value and store the result
+          current_value = op(current_value, aggregation_operation::IDENTITY);
+
+          expected_values.insert(std::make_pair(current_key,current_value)); 
+
+          if(print)
+            std::cout << "First Insert of Key: " << current_key << " value: " << current_value << std::endl;
+        }
+        // Key exists, update the value with the operator
+        else
+        {
+          value_type new_value = op(current_value, found->second);
+          if(print)
+            std::cout << "Insert of Key: " << current_key << " inserting value: " << current_value 
+              << " storing: " << new_value << std::endl;
+          found->second = new_value;
+        }
       }
     }
 
@@ -245,12 +272,13 @@ struct GroupByTest : public testing::Test
     const auto end = this->d_groupby_column.end();
     thrust::sort(begin, end);
     size_t unique_count = thrust::unique(begin, end) - begin;
-    EXPECT_EQ(unique_count, computed_result_size);
+    ASSERT_EQ(unique_count, computed_result_size);
 
     // Prefetch groupby and aggregation result to host to improve performance
     cudaMemPrefetchAsync(d_groupby_result, input_size * sizeof(key_type), cudaCpuDeviceId);
     cudaMemPrefetchAsync(d_aggregation_result, input_size * sizeof(value_type), cudaCpuDeviceId);
 
+    // Verify that every <key,value> in the computed result is present in the reference solution
     for(size_type i = 0; i < expected_values.size(); ++i)
     {
       key_type groupby_key = d_groupby_result[i];
@@ -343,8 +371,7 @@ typedef ::testing::Types<
                             KeyValueTypes<uint64_t, int64_t, count_op>,
                             KeyValueTypes<uint64_t, uint64_t, count_op>,
                             KeyValueTypes<int32_t, int32_t, sum_op>,
-                            KeyValueTypes<unsigned int32_t, unsigned int32_t, sum_op>,
-                            //KeyValueTypes<int32_t, float, sum_op>, // TODO: single precision floats don't current work due to numerical stability issues
+                            //KeyValueTypes<int32_t, float, sum_op>, // TODO: Tests for SUM on single precision floats currently fail due to numerical stability issues
                             KeyValueTypes<int32_t, double, sum_op>,
                             KeyValueTypes<int32_t, int64_t, sum_op>,
                             KeyValueTypes<int32_t, uint64_t, sum_op>,
@@ -406,14 +433,17 @@ TYPED_TEST(GroupByTest, AggregationTestDeviceAllSame)
   const int num_values_per_key = 1<<12;
 
   auto input = this->create_input(num_keys, num_values_per_key);
-  auto expected_values = this->compute_reference_solution();
+
+  // When you have a templated member function of a templated class, the preceeding 'template' keyword is required
+  // See: https://stackoverflow.com/questions/16508743/error-expected-expression-in-this-template-code
+  using aggregation_op = typename GroupByTest<TypeParam>::op_type;
+  auto expected_values = this->template compute_reference_solution<aggregation_op>();
 
   this->build_aggregation_table_device(input);
   this->verify_aggregation_table(expected_values);
 
   size_t computed_result_size = this->extract_groupby_result_device();
   this->verify_groupby_result(computed_result_size, expected_values);
-
 }
 
 // TODO Update the create_input function to ensure all keys are actually unique
@@ -422,7 +452,10 @@ TYPED_TEST(GroupByTest, AggregationTestDeviceAllUnique)
   const int num_keys = 1<<12;
   const int num_values_per_key = 1;
   auto input = this->create_input(num_keys, num_values_per_key);
-  auto expected_values = this->compute_reference_solution();
+  // When you have a templated member function of a templated class, the preceeding 'template' keyword is required
+  // See: https://stackoverflow.com/questions/16508743/error-expected-expression-in-this-template-code
+  using aggregation_op = typename GroupByTest<TypeParam>::op_type;
+  auto expected_values = this->template compute_reference_solution<aggregation_op>();
 
   this->build_aggregation_table_device(input);
   this->verify_aggregation_table(expected_values);
@@ -437,7 +470,10 @@ TYPED_TEST(GroupByTest, AggregationTestDeviceWarpSame)
   const int num_values_per_key = 32;
 
   auto input = this->create_input(num_keys, num_values_per_key);
-  auto expected_values = this->compute_reference_solution();
+  // When you have a templated member function of a templated class, the preceeding 'template' keyword is required
+  // See: https://stackoverflow.com/questions/16508743/error-expected-expression-in-this-template-code
+  using aggregation_op = typename GroupByTest<TypeParam>::op_type;
+  auto expected_values = this->template compute_reference_solution<aggregation_op>();
 
   this->build_aggregation_table_device(input);
   this->verify_aggregation_table(expected_values);
@@ -451,7 +487,10 @@ TYPED_TEST(GroupByTest, AggregationTestDeviceBlockSame)
   const int num_keys = 1<<8;
   const int num_values_per_key = this->THREAD_BLOCK_SIZE;
   auto input = this->create_input(num_keys, num_values_per_key);
-  auto expected_values = this->compute_reference_solution();
+  // When you have a templated member function of a templated class, the preceeding 'template' keyword is required
+  // See: https://stackoverflow.com/questions/16508743/error-expected-expression-in-this-template-code
+  using aggregation_op = typename GroupByTest<TypeParam>::op_type;
+  auto expected_values = this->template compute_reference_solution<aggregation_op>();
 
   this->build_aggregation_table_device(input);
   this->verify_aggregation_table(expected_values);
@@ -466,7 +505,10 @@ TYPED_TEST(GroupByTest, GroupByHash)
   const int num_values_per_key = 1;
 
   auto input = this->create_input(num_keys, num_values_per_key);
-  auto expected_values = this->compute_reference_solution();
+  // When you have a templated member function of a templated class, the preceeding 'template' keyword is required
+  // See: https://stackoverflow.com/questions/16508743/error-expected-expression-in-this-template-code
+  using aggregation_op = typename GroupByTest<TypeParam>::op_type;
+  auto expected_values = this->template compute_reference_solution<aggregation_op>();
 
   const size_t computed_result_size = this->groupby(input.first, input.second);
   this->verify_groupby_result(computed_result_size,expected_values);
