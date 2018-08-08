@@ -57,4 +57,15 @@ struct sum_op
   }
 };
 
+// Functor for AVG is empty. Used only for template specialization
+template<typename value_type>
+struct avg_op
+{
+  constexpr static value_type IDENTITY{};
+  __host__ __device__ value_type operator()(value_type new_value, value_type old_value)
+  {
+    return 0;
+  }
+};
+
 #endif
