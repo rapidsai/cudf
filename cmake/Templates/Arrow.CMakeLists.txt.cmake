@@ -23,7 +23,7 @@ project(arrow-download NONE)
 
 include(ExternalProject)
 
-set(ARROW_VERSION "apache-arrow-0.7.1")
+set(ARROW_VERSION "apache-arrow-0.10.0")
 
 if (NOT "$ENV{PARQUET_ARROW_VERSION}" STREQUAL "")
     set(ARROW_VERSION "$ENV{PARQUET_ARROW_VERSION}")
