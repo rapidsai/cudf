@@ -65,7 +65,7 @@ struct GroupByTest : public testing::Test
   }
 
   std::pair<key_type*, value_type*>
-  create_input(const int num_keys, const int num_values_per_key, const int ratio = 1, const int max_key = RAND_MAX, const int max_value = RAND_MAX, bool print = false)
+  create_input(const int num_keys, const int num_values_per_key, const int max_key = RAND_MAX, const int max_value = RAND_MAX, bool print = false, const int ratio = 1) 
   {
 
     input_size = num_keys * num_values_per_key;
@@ -201,7 +201,7 @@ struct GroupByTest : public testing::Test
     }
   }
 
-  unsigned int extract_groupby_result_device()
+  size_t extract_groupby_result_device()
   {
 
     const dim3 grid_size ((this->hash_table_size + this->THREAD_BLOCK_SIZE - 1) / this->THREAD_BLOCK_SIZE, 1, 1);
@@ -227,23 +227,29 @@ struct GroupByTest : public testing::Test
                                                       global_write_index );
     cudaDeviceSynchronize();
 
-    unsigned int result_size = *global_write_index;
+    size_t result_size = *global_write_index;
 
     // Return the actual size of the result
     return result_size;
 
   }
 
-  void verify_groupby_result(std::map<key_type, value_type> const & expected_values ) const
+  void verify_groupby_result(size_t computed_result_size, std::map<key_type, value_type> const & expected_values )
   {
 
     ASSERT_NE(nullptr, d_groupby_result);
     ASSERT_NE(nullptr, d_aggregation_result);
 
+    // The size of the result should be equal to the number of unique keys
+    const auto begin = this->d_groupby_column.begin();
+    const auto end = this->d_groupby_column.end();
+    thrust::sort(begin, end);
+    size_t unique_count = thrust::unique(begin, end) - begin;
+    EXPECT_EQ(unique_count, computed_result_size);
+
     // Prefetch groupby and aggregation result to host to improve performance
     cudaMemPrefetchAsync(d_groupby_result, input_size * sizeof(key_type), cudaCpuDeviceId);
     cudaMemPrefetchAsync(d_aggregation_result, input_size * sizeof(value_type), cudaCpuDeviceId);
-
 
     for(size_type i = 0; i < expected_values.size(); ++i)
     {
@@ -398,19 +404,16 @@ TYPED_TEST(GroupByTest, AggregationTestDeviceAllSame)
 {
   const int num_keys = 1;
   const int num_values_per_key = 1<<12;
-  auto input = this->create_input(num_keys, num_values_per_key, 10, 10);
+
+  auto input = this->create_input(num_keys, num_values_per_key);
   auto expected_values = this->compute_reference_solution();
+
   this->build_aggregation_table_device(input);
   this->verify_aggregation_table(expected_values);
-  unsigned int result_size = this->extract_groupby_result_device();
-  this->verify_groupby_result(expected_values);
 
-  // The size of the result should be equal to the number of unique keys
-  auto begin = this->d_groupby_column.begin();
-  auto end = this->d_groupby_column.end();
-  thrust::sort(begin, end);
-  unsigned int unique_count = thrust::unique(begin, end) - begin;
-  EXPECT_EQ(unique_count, result_size);
+  size_t computed_result_size = this->extract_groupby_result_device();
+  this->verify_groupby_result(computed_result_size, expected_values);
+
 }
 
 // TODO Update the create_input function to ensure all keys are actually unique
@@ -418,75 +421,55 @@ TYPED_TEST(GroupByTest, AggregationTestDeviceAllUnique)
 {
   const int num_keys = 1<<12;
   const int num_values_per_key = 1;
-  auto input = this->create_input(num_keys, num_values_per_key, 1000, 1000);
+  auto input = this->create_input(num_keys, num_values_per_key);
   auto expected_values = this->compute_reference_solution();
+
   this->build_aggregation_table_device(input);
   this->verify_aggregation_table(expected_values);
-  unsigned int result_size = this->extract_groupby_result_device();
-  this->verify_groupby_result(expected_values);
 
-  // The size of the result should be equal to the number of unique keys
-  auto begin = this->d_groupby_column.begin();
-  auto end = this->d_groupby_column.end();
-  thrust::sort(begin, end);
-  unsigned int unique_count = thrust::unique(begin, end) - begin;
-  EXPECT_EQ(unique_count, result_size);
+  size_t computed_result_size = this->extract_groupby_result_device();
+  this->verify_groupby_result(computed_result_size,expected_values);
 }
 
 TYPED_TEST(GroupByTest, AggregationTestDeviceWarpSame)
 {
   const int num_keys = 1<<12;
   const int num_values_per_key = 32;
-  auto input = this->create_input(num_keys, num_values_per_key, 1000, 1000);
+
+  auto input = this->create_input(num_keys, num_values_per_key);
   auto expected_values = this->compute_reference_solution();
+
   this->build_aggregation_table_device(input);
   this->verify_aggregation_table(expected_values);
-  unsigned int result_size = this->extract_groupby_result_device();
-  this->verify_groupby_result(expected_values);
 
-  // The size of the result should be equal to the number of unique keys
-  auto begin = this->d_groupby_column.begin();
-  auto end = this->d_groupby_column.end();
-  thrust::sort(begin, end);
-  unsigned int unique_count = thrust::unique(begin, end) - begin;
-  EXPECT_EQ(unique_count, result_size);
+  size_t computed_result_size = this->extract_groupby_result_device();
+  this->verify_groupby_result(computed_result_size,expected_values);
 }
 
 TYPED_TEST(GroupByTest, AggregationTestDeviceBlockSame)
 {
   const int num_keys = 1<<8;
   const int num_values_per_key = this->THREAD_BLOCK_SIZE;
-  auto input = this->create_input(num_keys, num_values_per_key, 1000, 1000);
+  auto input = this->create_input(num_keys, num_values_per_key);
   auto expected_values = this->compute_reference_solution();
+
   this->build_aggregation_table_device(input);
   this->verify_aggregation_table(expected_values);
-  unsigned int result_size = this->extract_groupby_result_device();
-  this->verify_groupby_result(expected_values);
 
-  // The size of the result should be equal to the number of unique keys
-  auto begin = this->d_groupby_column.begin();
-  auto end = this->d_groupby_column.end();
-  thrust::sort(begin, end);
-  unsigned int unique_count = thrust::unique(begin, end) - begin;
-  EXPECT_EQ(unique_count, result_size);
+  size_t computed_result_size = this->extract_groupby_result_device();
+  this->verify_groupby_result(computed_result_size, expected_values);
 }
 
-TYPED_TEST(GroupByTest, GroupBy)
+TYPED_TEST(GroupByTest, GroupByHash)
 {
   const int num_keys = 1<<12;
   const int num_values_per_key = 1;
-  auto input = this->create_input(num_keys, num_values_per_key, 1000, 1000);
+
+  auto input = this->create_input(num_keys, num_values_per_key);
   auto expected_values = this->compute_reference_solution();
 
-  const unsigned int result_size = this->groupby(input.first, input.second);
-  this->verify_groupby_result(expected_values);
-
-  // The size of the result should be equal to the number of unique keys
-  auto begin = this->d_groupby_column.begin();
-  auto end = this->d_groupby_column.end();
-  thrust::sort(begin, end);
-  unsigned int unique_count = thrust::unique(begin, end) - begin;
-  EXPECT_EQ(unique_count, result_size);
+  const size_t computed_result_size = this->groupby(input.first, input.second);
+  this->verify_groupby_result(computed_result_size,expected_values);
 }
 
 
