@@ -14,7 +14,7 @@
 #include <../../src/groupby/hash/aggregation_operations.cuh>
 
 // This is necessary to do a parametrized typed-test over multiple template arguments
-template <typename Key, typename Value, template <typename> typename Aggregation_Operator>
+template <typename Key, typename Value, template <typename T> class Aggregation_Operator>
 struct KeyValueTypes
 {
   using key_type = Key;
@@ -107,32 +107,6 @@ struct GroupByTest : public testing::Test
         groupby_column.push_back(current_key);
         aggregation_column.push_back(current_value);
 
-        // Use a STL map to keep track of the aggregation for each key
-        auto found = expected_values.find(current_key);
-
-        // Key doesn't exist yet, insert it
-        if(found == expected_values.end())
-        {
-          // To support operations like `count`, on the first insert, perform the
-          // operation on the new value and the operation's identity value and store the result
-          op_type op;
-          current_value = op(current_value, op_type::IDENTITY);
-
-          expected_values.insert(std::make_pair(current_key,current_value)); 
-
-          if(print)
-            std::cout << "First Insert of Key: " << current_key << " value: " << current_value << std::endl;
-        }
-        // Key exists, update the value with the operator
-        else
-        {
-          op_type op;
-          value_type new_value = op(current_value, found->second);
-          if(print)
-            std::cout << "Insert of Key: " << current_key << " inserting value: " << current_value 
-                      << " storing: " << new_value << std::endl;
-          found->second = new_value;
-        }
       }
     }
 
@@ -141,6 +115,42 @@ struct GroupByTest : public testing::Test
 
     return std::make_pair(thrust::raw_pointer_cast(d_groupby_column.data()), 
                           thrust::raw_pointer_cast(d_aggregation_column.data()));
+  }
+
+  void compute_reference_solution(bool print = false)
+  {
+    for(size_t i = 0; i < groupby_column.size(); ++i){
+
+      key_type current_key = groupby_column[i];
+      value_type current_value = aggregation_column[i];
+
+      // Use a STL map to keep track of the aggregation for each key
+      auto found = expected_values.find(current_key);
+
+      // Key doesn't exist yet, insert it
+      if(found == expected_values.end())
+      {
+        // To support operations like `count`, on the first insert, perform the
+        // operation on the new value and the operation's identity value and store the result
+        op_type op;
+        current_value = op(current_value, op_type::IDENTITY);
+
+        expected_values.insert(std::make_pair(current_key,current_value)); 
+
+        if(print)
+          std::cout << "First Insert of Key: " << current_key << " value: " << current_value << std::endl;
+      }
+      // Key exists, update the value with the operator
+      else
+      {
+        op_type op;
+        value_type new_value = op(current_value, found->second);
+        if(print)
+          std::cout << "Insert of Key: " << current_key << " inserting value: " << current_value 
+            << " storing: " << new_value << std::endl;
+        found->second = new_value;
+      }
+    }
   }
 
   void build_aggregation_table_device(std::pair<key_type*, value_type*> input)
@@ -160,11 +170,11 @@ struct GroupByTest : public testing::Test
 
   void verify_aggregation_table(){
 
-    for(auto const &k : this->expected_values)
+    for(auto const &expected : this->expected_values)
     {
-      key_type test_key = k.first;
+      key_type test_key = expected.first;
 
-      value_type expected_value = k.second;
+      value_type expected_value = expected.second;
 
       auto found = this->the_map->find(test_key);
 
@@ -385,6 +395,7 @@ TYPED_TEST(GroupByTest, AggregationTestDeviceAllSame)
   const int num_keys = 1;
   const int num_values_per_key = 1<<12;
   auto input = this->create_input(num_keys, num_values_per_key, 10, 10);
+  this->compute_reference_solution();
   this->build_aggregation_table_device(input);
   this->verify_aggregation_table();
   unsigned int result_size = this->extract_groupby_result_device();
@@ -404,6 +415,7 @@ TYPED_TEST(GroupByTest, AggregationTestDeviceAllUnique)
   const int num_keys = 1<<12;
   const int num_values_per_key = 1;
   auto input = this->create_input(num_keys, num_values_per_key, 1000, 1000);
+  this->compute_reference_solution();
   this->build_aggregation_table_device(input);
   this->verify_aggregation_table();
   unsigned int result_size = this->extract_groupby_result_device();
@@ -422,6 +434,7 @@ TYPED_TEST(GroupByTest, AggregationTestDeviceWarpSame)
   const int num_keys = 1<<12;
   const int num_values_per_key = 32;
   auto input = this->create_input(num_keys, num_values_per_key, 1000, 1000);
+  this->compute_reference_solution();
   this->build_aggregation_table_device(input);
   this->verify_aggregation_table();
   unsigned int result_size = this->extract_groupby_result_device();
@@ -440,6 +453,7 @@ TYPED_TEST(GroupByTest, AggregationTestDeviceBlockSame)
   const int num_keys = 1<<8;
   const int num_values_per_key = this->THREAD_BLOCK_SIZE;
   auto input = this->create_input(num_keys, num_values_per_key, 1000, 1000);
+  this->compute_reference_solution();
   this->build_aggregation_table_device(input);
   this->verify_aggregation_table();
   unsigned int result_size = this->extract_groupby_result_device();
@@ -458,6 +472,8 @@ TYPED_TEST(GroupByTest, GroupBy)
   const int num_keys = 1<<12;
   const int num_values_per_key = 1;
   auto input = this->create_input(num_keys, num_values_per_key, 1000, 1000);
+  this->compute_reference_solution();
+
   const unsigned int result_size = this->groupby(input.first, input.second);
   this->verify_groupby_result(result_size);
 
