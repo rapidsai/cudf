@@ -56,8 +56,11 @@ def get_expected_values():
 def make_batch():
     indices, names, weights = zip(*get_expected_values())
     d_index = pa.array(indices).cast(pa.int32())
-    d_name = pa.DictionaryArray.from_arrays(d_index, np.array(names, dtype=object))
-    # TODO: in the original test data len(d_name)==4, here we have len(d_name)==30.
+    unique_names = list(set(names))
+    names_map = list(map(unique_names.index, names))
+    d_names_map = pa.array(names_map).cast(pa.int32())
+    d_names = pa.array(unique_names)
+    d_name = pa.DictionaryArray.from_arrays(d_names_map, d_names)
     d_weight = pa.array(weights)
     batch = pa.RecordBatch.from_arrays([d_index, d_name, d_weight], ['idx', 'name', 'weight'])
     return batch
