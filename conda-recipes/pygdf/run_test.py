@@ -8,6 +8,6 @@ if __name__ == '__main__':
         exitcode = pytest.main('--pyargs pygdf.tests'.split())
     else:
         print("CUDA GPU unavailable")
-        exitcode = 1 if os.environ['PYGDF_BUILD_NO_GPU_TEST'] else 0
+        exitcode = 0 if os.environ['PYGDF_BUILD_NO_GPU_TEST'] else 1
 
     sys.exit(exitcode)
