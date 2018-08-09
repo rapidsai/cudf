@@ -1,14 +1,20 @@
 import os
 import sys
+
+# A flag to allow dask_gdf to detect and warn if
+# IPC serialization is unavailable
+CUSTOM_SERIALIZATION_AVAILABLE = False
+
 try:
     import distributed.protocol as _dp
+    from distributed.utils import has_keyword
 except ImportError:
     def register_distributed_serializer(cls):
         """Dummy no-op function.
         """
         pass
 else:
-    from distributed.utils import has_keyword
+    CUSTOM_SERIALIZATION_AVAILABLE = True
 
     def register_distributed_serializer(cls):
         """Register serialization methods for dask.distributed.
