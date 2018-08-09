@@ -23,7 +23,11 @@
 
 #pragma once
 
-#include "cuda_runtime_api.h"
+#ifdef __cplusplus
+extern "c" {
+#endif
+
+typedef struct CUstream_st *cudaStream_t;
 
 /// Result codes returned by the memory manager
 typedef enum
@@ -53,3 +57,7 @@ rmmError_t rmmFree(void *ptr, cudaStream_t stream);
 
 /// Get amounts of free and total memory managed by a manager associated with the stream.
 rmmError_t rmmGetInfo(size_t *freeSize, size_t *totalSize, cudaStream_t stream);
+
+#ifdef __cplusplus
+}
+#endif
