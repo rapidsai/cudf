@@ -50,13 +50,14 @@ or
 $ conda install -c omnia boost=1.58.0=py33_0
 ```
 
-Libgdf supports Apache Arrow versions 0.7.1 (default) and 0.8+ that
-use different metadata versions. So, it is important to specify which
-Apache arrow version will be used during building libgdf.  To select
-required Apache Arrow version, define the following environment
-variables (using Arrow version 0.9.0 as an example):
+Libgdf supports Apache Arrow versions 0.7.1 and 0.8+ (0.10.0 is
+currently default) that use different metadata versions in IPC. So, it
+is important to specify which Apache arrow version will be used during
+building libgdf.  To select required Apache Arrow version, define the
+following environment variables (using Arrow version 0.10.0 as an
+example):
 ```bash
-$ export ARROW_VERSION=0.9.0
+$ export ARROW_VERSION=0.10.0
 $ export PARQUET_ARROW_VERSION=apache-arrow-$ARROW_VERSION
 ```
 where the latter is used by libgdf cmake configuration files. Note
