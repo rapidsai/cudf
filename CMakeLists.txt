@@ -129,8 +129,12 @@ cuda_add_library(gdf SHARED
     #src/windowedops.cu
 )
 
-# boost_regex may be necessary only when arrow==0.9.0
-target_link_libraries(gdf arrow boost_regex)
+if (ARROW_NUMERIC_VERSION EQUAL 900)
+  # arrow-0.9 requires boost_regex
+  target_link_libraries(gdf arrow boost_regex)
+else()
+  target_link_libraries(gdf arrow)
+endif()
 
 # Command to symlink files into the build directory
 add_custom_command(  # link the include directory
