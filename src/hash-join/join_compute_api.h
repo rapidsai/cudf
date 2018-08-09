@@ -119,7 +119,7 @@ cudaError_t LeftJoinHash(mgpu::context_t &compute_ctx, void **out, size_type *ou
   typedef join_pair<size_type> joined_type;
 
   // step 0: check if the output is provided or we need to allocate it
-  if (*out == NULL) return cudaErrorNotSupported;
+  //if (*out == NULL) return cudaErrorNotSupported;
 
   // step 1: initialize a HT for table B (right)
 #ifdef HT_LEGACY_ALLOCATOR
@@ -140,6 +140,9 @@ cudaError_t LeftJoinHash(mgpu::context_t &compute_ctx, void **out, size_type *ou
   error = cudaGetLastError();
   if (error != cudaSuccess)
     return error;
+
+
+  // step 3ab: scan table A (left), probe the HT without outputting the joined indices. Only get number of outputted elements.
   size_type* d_actualFound;
   cudaMalloc(&d_actualFound, sizeof(size_type));
   cudaMemset(d_actualFound, 0, sizeof(size_type));
@@ -147,20 +150,30 @@ cudaError_t LeftJoinHash(mgpu::context_t &compute_ctx, void **out, size_type *ou
                  <<<(a_count + block_size-1) / block_size, block_size>>>
                   (hash_tbl.get(), a, a_count, a2, b2, a3, b3,
        static_cast<joined_type*>(*out), out_count, max_out_count,d_actualFound);
- 
-  // step 3: scan table A (left), probe the HT and output the joined indices - doing left join here
+   if (error != cudaSuccess)
+    return error;
+
+  size_type scanSize=0;
+  cudaMemcpy(&scanSize, d_actualFound, sizeof(size_type), cudaMemcpyDeviceToHost);
+  printf ("\nSCAN: %d \n", scanSize);
+  int dev_ordinal;
+  joined_type* temp=NULL;
+  CUDA_RT_CALL( cudaGetDevice(&dev_ordinal));
+  CUDA_RT_CALL( cudaMallocManaged   ( &temp, sizeof(joined_type)*scanSize));
+  CUDA_RT_CALL( cudaMemPrefetchAsync( temp , sizeof(joined_type)*scanSize, dev_ordinal));
+  *out=temp;
+  
+  
+  // step 3b: scan table A (left), probe the HT and output the joined indices - doing left join here
   probe_hash_tbl<LEFT_JOIN, multimap_type, key_type, key_type2, key_type3, size_type, joined_type, block_size, DEFAULT_CUDA_CACHE_SIZE>
                  <<<(a_count + block_size-1) / block_size, block_size>>>
                   (hash_tbl.get(), a, a_count, a2, b2, a3, b3,
 		   static_cast<joined_type*>(*out), out_count, max_out_count);
   error = cudaDeviceSynchronize();
 
-  size_type sanityScan=0, sanityProbe=0;
-  cudaMemcpy(&sanityScan, d_actualFound, sizeof(size_type), cudaMemcpyDeviceToHost);
-  cudaMemcpy(&sanityProbe,out_count, sizeof(size_type), cudaMemcpyDeviceToHost);
-  
-  printf ("\nSCAN: %d  : Actual :  %d       Equal == %s\n", sanityScan,sanityProbe, (sanityProbe==sanityScan ? "True" : "False"));
+  //cudaFree(d_actualFound);
 
-  cudaFree(d_actualFound);
-  return error;
+return error;
 }
+
+
