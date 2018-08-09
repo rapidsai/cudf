@@ -2,6 +2,7 @@
 #define GROUPBY_KERNELS_H
 
 #include "../../hashmap/concurrent_unordered_map.cuh"
+#include "aggregation_operations.cuh"
 
 /* --------------------------------------------------------------------------*/
 /** 
@@ -36,10 +37,27 @@ __global__ void build_aggregation_table(map_type * const __restrict__ the_map,
     the_map->insert(thrust::make_pair(groupby_column[i], aggregation_column[i]), op);
     i += blockDim.x * gridDim.x;
   }
-
 }
 
+// Specialization for COUNT operation
 template<typename map_type>
+__global__ void build_aggregation_table(map_type * const __restrict__ the_map,
+                                        const typename map_type::key_type * const __restrict__ groupby_column,
+                                        const typename map_type::mapped_type * const __restrict__ aggregation_column,
+                                        const typename map_type::size_type column_size,
+                                        count_op<typename map_type::mapped_type> op)
+{
+  using size_type = typename map_type::size_type;
+
+  size_type i = threadIdx.x + blockIdx.x * blockDim.x;
+
+  while( i < column_size ){
+    // When the aggregator is COUNT, ignore the aggregation column and just insert '0'
+    the_map->insert(thrust::make_pair(groupby_column[i], static_cast<typename map_type::mapped_type>(0)), op);
+    i += blockDim.x * gridDim.x;
+  }
+}
+
 
 /* --------------------------------------------------------------------------*/
 /** 
@@ -56,6 +74,7 @@ template<typename map_type>
  * @Returns   
  */
 /* ----------------------------------------------------------------------------*/
+template<typename map_type>
 __global__ void extract_groupby_result(const map_type * const __restrict__ the_map,
                                        const typename map_type::size_type map_size,
                                        typename map_type::key_type * const __restrict__ groupby_out_column,
