@@ -95,3 +95,4 @@ rmmError_t rmmGetInfo(size_t *freeSize, size_t *totalSize, cudaStream_t stream)
 	RMM_CHECK_CUDA(cudaMemGetInfo(freeSize, totalSize));
 	return RMM_SUCCESS;
 }
+
