@@ -13,6 +13,17 @@
 #include <../../src/groupby/hash/groupby_compute_api.h>
 #include <../../src/groupby/hash/aggregation_operations.cuh>
 
+
+
+/* --------------------------------------------------------------------------*/
+/** 
+ * @Synopsis  This file is for unit testing all functions and kernels that are below the
+ * public libgdf groupby API.
+ */
+/* ----------------------------------------------------------------------------*/
+
+
+
 // This is necessary to do a parametrized typed-test over multiple template arguments
 template <typename Key, typename Value, template <typename T> class Aggregation_Operator>
 struct KeyValueTypes
@@ -119,65 +130,38 @@ struct GroupByTest : public testing::Test
   template <class aggregation_operation>
   std::map<key_type, value_type> compute_reference_solution(bool print = false)
   {
-
     std::map<key_type, value_type> expected_values;
 
-    // Computing the reference solution for AVG has to be handled uniquely
-    if(std::is_same<aggregation_operation, avg_op<value_type>>::value)
-    {
+    aggregation_operation op;
 
-      // For each key, compute the SUM and COUNT aggregation
-      std::map<key_type, value_type> counts = compute_reference_solution<count_op<value_type>>();
-      std::map<key_type, value_type> sums = compute_reference_solution<sum_op<value_type>>();
-      
-      // For each key, compute it's AVG as SUM / COUNT
-      for(auto & sum: sums)
+    for(size_t i = 0; i < groupby_column.size(); ++i){
+
+      key_type current_key = groupby_column[i];
+      value_type current_value = aggregation_column[i];
+
+      // Use a STL map to keep track of the aggregation for each key
+      auto found = expected_values.find(current_key);
+
+      // Key doesn't exist yet, insert it
+      if(found == expected_values.end())
       {
-        const auto current_key = sum.first;
-    
-        auto count = counts.find(current_key);
+        // To support operations like `count`, on the first insert, perform the
+        // operation on the new value and the operation's identity value and store the result
+        current_value = op(current_value, aggregation_operation::IDENTITY);
 
-        EXPECT_NE(count, counts.end()) << "Failed to find match for key " << current_key << " from the SUM solution in the COUNT solution";
+        expected_values.insert(std::make_pair(current_key,current_value)); 
 
-        // Compute the AVG in place on the SUM map
-        sum.second = sum.second / count->second;
+        if(print)
+          std::cout << "First Insert of Key: " << current_key << " value: " << current_value << std::endl;
       }
-
-      expected_values = sums;
-    }
-    else
-    {
-      aggregation_operation op;
-
-      for(size_t i = 0; i < groupby_column.size(); ++i){
-
-        key_type current_key = groupby_column[i];
-        value_type current_value = aggregation_column[i];
-
-        // Use a STL map to keep track of the aggregation for each key
-        auto found = expected_values.find(current_key);
-
-        // Key doesn't exist yet, insert it
-        if(found == expected_values.end())
-        {
-          // To support operations like `count`, on the first insert, perform the
-          // operation on the new value and the operation's identity value and store the result
-          current_value = op(current_value, aggregation_operation::IDENTITY);
-
-          expected_values.insert(std::make_pair(current_key,current_value)); 
-
-          if(print)
-            std::cout << "First Insert of Key: " << current_key << " value: " << current_value << std::endl;
-        }
-        // Key exists, update the value with the operator
-        else
-        {
-          value_type new_value = op(current_value, found->second);
-          if(print)
-            std::cout << "Insert of Key: " << current_key << " inserting value: " << current_value 
-              << " storing: " << new_value << std::endl;
-          found->second = new_value;
-        }
+      // Key exists, update the value with the operator
+      else
+      {
+        value_type new_value = op(current_value, found->second);
+        if(print)
+          std::cout << "Insert of Key: " << current_key << " inserting value: " << current_value 
+            << " storing: " << new_value << std::endl;
+        found->second = new_value;
       }
     }
 

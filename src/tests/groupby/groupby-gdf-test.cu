@@ -3,82 +3,117 @@
 #include <vector>
 #include <unordered_map>
 #include <random>
-
-#include <thrust/device_vector.h>
-#include <thrust/unique.h>
-#include <thrust/sort.h>
+#include <limits>
 
 #include "gtest/gtest.h"
-#include <../../src/groupby/hash/groupby_kernels.cuh>
-#include <../../src/groupby/hash/groupby_compute_api.h>
+#include "gmock/gmock.h"
+#include <gdf/gdf.h>
+#include <gdf/cffi/functions.h>
 #include <../../src/groupby/hash/aggregation_operations.cuh>
 
-// This is necessary to do a parametrized typed-test over multiple template arguments
-template <typename Key, typename Value, template <typename T> class Aggregation_Operator>
-struct KeyValueTypes
+/* --------------------------------------------------------------------------*/
+/** 
+ * @Synopsis  This file is for unit testing the top level libgdf hash based groupby API
+ */
+/* ----------------------------------------------------------------------------*/
+
+//gdf_error gdf_group_by_sum(int ncols,                    // # columns
+//                           gdf_column** cols,            //input cols
+//                           gdf_column* col_agg,          //column to aggregate on
+//                           gdf_column* out_col_indices,  //if not null return indices of re-ordered rows
+//                           gdf_column** out_col_values,  //if not null return the grouped-by columns
+//                                                         //(multi-gather based on indices, which are needed anyway)
+//                           gdf_column* out_col_agg,      //aggregation result
+//                           gdf_context* ctxt);           //struct with additional info: bool is_sorted, flag_sort_or_hash, bool flag_count_distinct
+//
+//gdf_error gdf_group_by_min(int ncols,                    // # columns
+//                           gdf_column** cols,            //input cols
+//                           gdf_column* col_agg,          //column to aggregate on
+//                           gdf_column* out_col_indices,  //if not null return indices of re-ordered rows
+//                           gdf_column** out_col_values,  //if not null return the grouped-by columns
+//                                                         //(multi-gather based on indices, which are needed anyway)
+//                           gdf_column* out_col_agg,      //aggregation result
+//                           gdf_context* ctxt);            //struct with additional info: bool is_sorted, flag_sort_or_hash, bool flag_count_distinct
+//
+//
+//gdf_error gdf_group_by_max(int ncols,                    // # columns
+//                           gdf_column** cols,            //input cols
+//                           gdf_column* col_agg,          //column to aggregate on
+//                           gdf_column* out_col_indices,  //if not null return indices of re-ordered rows
+//                           gdf_column** out_col_values,  //if not null return the grouped-by columns
+//                                                         //(multi-gather based on indices, which are needed anyway)
+//                           gdf_column* out_col_agg,      //aggregation result
+//                           gdf_context* ctxt);            //struct with additional info: bool is_sorted, flag_sort_or_hash, bool flag_count_distinct
+//
+//
+//gdf_error gdf_group_by_avg(int ncols,                    // # columns
+//                           gdf_column** cols,            //input cols
+//                           gdf_column* col_agg,          //column to aggregate on
+//                           gdf_column* out_col_indices,  //if not null return indices of re-ordered rows
+//                           gdf_column** out_col_values,  //if not null return the grouped-by columns
+//                                                         //(multi-gather based on indices, which are needed anyway)
+//                           gdf_column* out_col_agg,      //aggregation result
+//                           gdf_context* ctxt);            //struct with additional info: bool is_sorted, flag_sort_or_hash, bool flag_count_distinct
+//
+//gdf_error gdf_group_by_count(int ncols,                    // # columns
+//                             gdf_column** cols,            //input cols
+//                             gdf_column* col_agg,          //column to aggregate on
+//                             gdf_column* out_col_indices,  //if not null return indices of re-ordered rows
+//                             gdf_column** out_col_values,  //if not null return the grouped-by columns
+//                                                         //(multi-gather based on indices, which are needed anyway)
+//                             gdf_column* out_col_agg,      //aggregation result
+//                             gdf_context* ctxt);            //struct with additional info: bool is_sorted, flag_sort_or_hash, bool flag_count_distinct
+
+enum struct agg_op
 {
-  using key_type = Key;
-  using value_type = Value;
-  using op_type = Aggregation_Operator<value_type>;
+  MIN,
+  MAX,
+  SUM,
+  COUNT,
+  AVG
 };
 
 // A new instance of this class will be created for each *TEST(GroupByTest, ...)
 // Put all repeated stuff for each test here
-template <class T>
-struct GroupByTest : public testing::Test 
+template <typename test_parameters>
+struct GDFGroupByTest : public testing::Test 
 {
-  using key_type = typename T::key_type;
-  using value_type = typename T::value_type;
-  using op_type = typename T::op_type;
-  using map_type = concurrent_unordered_map<key_type, value_type, std::numeric_limits<key_type>::max()>;
-  using size_type = typename map_type::size_type;
+  using key_type = typename test_parameters::key_type;
+  using value_type = typename test_parameters::value_type;
 
-  std::unique_ptr<map_type> the_map;
+  const agg_op aggregation_operation{test_parameters::the_aggregator};
 
-  const key_type unused_key = std::numeric_limits<key_type>::max();
-  const value_type unused_value = op_type::IDENTITY;
+  const key_type unused_key{std::numeric_limits<key_type>::max()};
+  const value_type unused_value{std::numeric_limits<value_type>::max()};
 
-  size_type hash_table_size;
-  size_type input_size;
+  // unique_ptr wrappers for gdf_columns that will free their data
+  std::function<void(gdf_column*)> gdf_col_deleter = [](gdf_column* col){col->size = 0; cudaFree(col->data);};
+  using gdf_col_pointer = typename std::unique_ptr<gdf_column, decltype(gdf_col_deleter)>;
 
-  const int THREAD_BLOCK_SIZE{256};
-
-  std::vector<key_type> groupby_column;
-  std::vector<value_type> aggregation_column;
-
-  thrust::device_vector<key_type> d_groupby_column;
-  thrust::device_vector<value_type> d_aggregation_column;
-
-  key_type *d_groupby_result{nullptr};
-  value_type *d_aggregation_result{nullptr};
-
-
-  GroupByTest(const size_type _hash_table_size = 10000)
-    : hash_table_size(_hash_table_size), the_map(new map_type(_hash_table_size, op_type::IDENTITY))
+  // Result columns from gdf groupby
+  gdf_col_pointer groupby_result{new gdf_column, gdf_col_deleter};
+  gdf_col_pointer aggregation_result{new gdf_column, gdf_col_deleter};
+  
+  GDFGroupByTest() 
   {
+    // Use constant seed so the psuedo-random order is the same each time
+    // Each time the class is constructed a new constant seed is used
+    static size_t number_of_instantiations{0};
+    std::srand(number_of_instantiations++);
   }
 
-  ~GroupByTest()
+  ~GDFGroupByTest() {} 
+
+  std::pair<std::vector<key_type>, std::vector<value_type>>
+  create_reference_input(const size_t num_keys, const size_t num_values_per_key, const int max_key = RAND_MAX, const int max_value = RAND_MAX, bool print = false) 
   {
-    cudaFree(d_groupby_result);
-    cudaFree(d_aggregation_result);
-  }
+    const size_t input_size = num_keys * num_values_per_key;
 
-  std::pair<key_type*, value_type*>
-  create_input(const int num_keys, const int num_values_per_key, const int max_key = RAND_MAX, const int max_value = RAND_MAX, bool print = false, const int ratio = 1) 
-  {
-
-    input_size = num_keys * num_values_per_key;
-
-    hash_table_size = ratio * input_size;
-
-    this->the_map.reset(new map_type(hash_table_size, unused_value));
+    std::vector<key_type> groupby_column;
+    std::vector<value_type> aggregation_column;
 
     groupby_column.reserve(input_size);
     aggregation_column.reserve(input_size);
-
-    // Always use the same seed so the random sequence is the same each time
-    std::srand(0);
 
     for(int i = 0; i < num_keys; ++i )
     {
@@ -105,32 +140,77 @@ struct GroupByTest : public testing::Test
         // Store current key and value
         groupby_column.push_back(current_key);
         aggregation_column.push_back(current_value);
-
       }
     }
 
-    d_groupby_column = groupby_column;
-    d_aggregation_column = aggregation_column;
+    if(print)
+    {
+      std::cout << "Number of unique keys: " << num_keys 
+                << " Values per key: " << num_values_per_key << "\n";
 
-    return std::make_pair(thrust::raw_pointer_cast(d_groupby_column.data()), 
-                          thrust::raw_pointer_cast(d_aggregation_column.data()));
+      std::cout << "Group By Column. Size: " << groupby_column.size() << " \n";
+      std::copy(groupby_column.begin(), groupby_column.end(), std::ostream_iterator<key_type>(std::cout, " "));
+      std::cout << "\n";
+
+      std::cout << "Aggregation Column. Size: " << aggregation_column.size() << "\n";
+      std::copy(aggregation_column.begin(), aggregation_column.end(), std::ostream_iterator<value_type>(std::cout, " "));
+      std::cout << "\n";
+    }
+
+    return std::make_pair(groupby_column, aggregation_column);
+  }
+
+  // Creates a gdf_column from a std::vector
+  template <typename col_type>
+  gdf_col_pointer create_gdf_column(std::vector<col_type> const & host_vector)
+  {
+
+    // Create a new instance of a gdf_column with a custom deleter that will free
+    // the associated device memory when it eventually goes out of scope
+    gdf_col_pointer the_column{new gdf_column, gdf_col_deleter};
+    // Allocate device storage for gdf_column and copy contents from host_vector
+    cudaMalloc(&(the_column->data), host_vector.size() * sizeof(col_type));
+    cudaMemcpy(the_column->data, host_vector.data(), host_vector.size() * sizeof(col_type), cudaMemcpyHostToDevice);
+
+    // Deduce the type and set the gdf_dtype accordingly
+    gdf_dtype gdf_col_type;
+    if(std::is_same<col_type,int8_t>::value) gdf_col_type = GDF_INT8;
+    else if(std::is_same<col_type,uint8_t>::value) gdf_col_type = GDF_INT8;
+    else if(std::is_same<col_type,int16_t>::value) gdf_col_type = GDF_INT16;
+    else if(std::is_same<col_type,uint16_t>::value) gdf_col_type = GDF_INT16;
+    else if(std::is_same<col_type,int32_t>::value) gdf_col_type = GDF_INT32;
+    else if(std::is_same<col_type,uint32_t>::value) gdf_col_type = GDF_INT32;
+    else if(std::is_same<col_type,int64_t>::value) gdf_col_type = GDF_INT64;
+    else if(std::is_same<col_type,uint64_t>::value) gdf_col_type = GDF_INT64;
+    else if(std::is_same<col_type,float>::value) gdf_col_type = GDF_FLOAT32;
+    else if(std::is_same<col_type,double>::value) gdf_col_type = GDF_FLOAT64;
+    // Fill the gdf_column members
+    the_column->valid = nullptr;
+    the_column->size = host_vector.size();
+    the_column->dtype = gdf_col_type;
+    gdf_dtype_extra_info extra_info;
+    extra_info.time_unit = TIME_UNIT_NONE;
+    the_column->dtype_info = extra_info;
+    return the_column;
   }
 
   template <class aggregation_operation>
-  std::map<key_type, value_type> compute_reference_solution(bool print = false)
+  std::map<key_type, value_type> 
+  compute_reference_solution(std::vector<key_type> const & groupby_column,
+                             std::vector<value_type> const & aggregation_column,
+                             bool print = false)
   {
-
     std::map<key_type, value_type> expected_values;
 
     // Computing the reference solution for AVG has to be handled uniquely
     if(std::is_same<aggregation_operation, avg_op<value_type>>::value)
     {
 
-      // For each key, compute the SUM and COUNT aggregation
-      std::map<key_type, value_type> counts = compute_reference_solution<count_op<value_type>>();
-      std::map<key_type, value_type> sums = compute_reference_solution<sum_op<value_type>>();
+      // For each unique key, compute the SUM and COUNT aggregation
+      std::map<key_type, value_type> counts = compute_reference_solution<count_op<value_type>>(groupby_column, aggregation_column);
+      std::map<key_type, value_type> sums = compute_reference_solution<sum_op<value_type>>(groupby_column, aggregation_column);
       
-      // For each key, compute it's AVG as SUM / COUNT
+      // For each unique key, compute it's AVG as SUM / COUNT
       for(auto & sum: sums)
       {
         const auto current_key = sum.first;
@@ -181,338 +261,114 @@ struct GroupByTest : public testing::Test
       }
     }
 
+    if(print)
+    {
+      for(auto const & a : expected_values)
+      {
+        std::cout << a.first << ", " << a.second << std::endl;
+      }
+    }
+
+
     return expected_values;
   }
 
-  void build_aggregation_table_device(std::pair<key_type*, value_type*> input)
+  // Dispatches computing the reference solution based on which aggregation is to be performed
+  // determined by the test_parameters class template argument
+  std::map<key_type, value_type> 
+  compute_reference_solution(std::vector<key_type> const & groupby_column, 
+                             std::vector<value_type> const & aggregation_column,
+                             bool print = false)
   {
-
-    const dim3 grid_size ((this->input_size + this->THREAD_BLOCK_SIZE - 1) / this->THREAD_BLOCK_SIZE, 1, 1);
-    const dim3 block_size (this->THREAD_BLOCK_SIZE, 1, 1);
-
-    key_type * d_group = input.first;
-    value_type * d_agg = input.second;
-
-    cudaDeviceSynchronize();
-    build_aggregation_table<<<grid_size, block_size>>>((this->the_map).get(), d_group, d_agg, this->input_size, op_type());
-    cudaDeviceSynchronize(); 
-
-  }
-
-  void verify_aggregation_table(std::map<key_type, value_type> const & expected_values){
-
-    for(auto const &expected : expected_values)
+    switch(test_parameters::the_aggregator)
     {
-      key_type test_key = expected.first;
-
-      value_type expected_value = expected.second;
-
-      auto found = this->the_map->find(test_key);
-
-      ASSERT_NE(this->the_map->end(), found) << "Key is: " << test_key;
-
-      value_type test_value = found->second;
-
-      if(std::is_integral<value_type>::value){
-        EXPECT_EQ(expected_value, test_value) << "Key is: " << test_key;
-      }
-      else if(std::is_same<value_type, float>::value){
-        EXPECT_FLOAT_EQ(expected_value, test_value) << "Key is: " << test_key;
-      }
-      else if(std::is_same<value_type, double>::value){
-        EXPECT_DOUBLE_EQ(expected_value, test_value) << "Key is: " << test_key;
-      }
-      else{
-        std::cout << "Unhandled value type.\n";
-      }
-    }
-  }
-
-  size_t extract_groupby_result_device()
-  {
-
-    const dim3 grid_size ((this->hash_table_size + this->THREAD_BLOCK_SIZE - 1) / this->THREAD_BLOCK_SIZE, 1, 1);
-    const dim3 block_size (this->THREAD_BLOCK_SIZE, 1, 1);
-
-    // TODO: Find a more efficient way to size the output buffer.
-    // In general, input_size is going to be larger than the actual
-    // size of the result.
-    cudaMallocManaged(&d_groupby_result, input_size * sizeof(key_type));
-    cudaMallocManaged(&d_aggregation_result, input_size * sizeof(value_type));
-
-    // This variable is used by the threads to coordinate where they should write 
-    // to the output buffers
-    unsigned int * global_write_index{nullptr}; 
-    cudaMallocManaged(&global_write_index, sizeof(unsigned int));
-    *global_write_index = 0;
-
-    cudaDeviceSynchronize();
-    extract_groupby_result<<<grid_size, block_size>>>((this->the_map).get(), 
-                                                      (this->the_map)->size(), 
-                                                      d_groupby_result, 
-                                                      d_aggregation_result, 
-                                                      global_write_index );
-    cudaDeviceSynchronize();
-
-    size_t result_size = *global_write_index;
-
-    // Return the actual size of the result
-    return result_size;
-
-  }
-
-  void verify_groupby_result(size_t computed_result_size, std::map<key_type, value_type> const & expected_values )
-  {
-
-    ASSERT_NE(nullptr, d_groupby_result);
-    ASSERT_NE(nullptr, d_aggregation_result);
-
-    // The size of the result should be equal to the number of unique keys
-    const auto begin = this->d_groupby_column.begin();
-    const auto end = this->d_groupby_column.end();
-    thrust::sort(begin, end);
-    size_t unique_count = thrust::unique(begin, end) - begin;
-    ASSERT_EQ(unique_count, computed_result_size);
-
-    // Prefetch groupby and aggregation result to host to improve performance
-    cudaMemPrefetchAsync(d_groupby_result, input_size * sizeof(key_type), cudaCpuDeviceId);
-    cudaMemPrefetchAsync(d_aggregation_result, input_size * sizeof(value_type), cudaCpuDeviceId);
-
-    // Verify that every <key,value> in the computed result is present in the reference solution
-    for(size_type i = 0; i < expected_values.size(); ++i)
-    {
-      key_type groupby_key = d_groupby_result[i];
-      value_type aggregation_value = d_aggregation_result[i];
-
-      auto found = expected_values.find(groupby_key);
-
-      ASSERT_NE(expected_values.end(), found) << "key: " << groupby_key;
-
-      EXPECT_EQ(found->first, groupby_key) << "index: " << i;
-
-      if(std::is_integral<value_type>::value){
-        EXPECT_EQ(found->second, aggregation_value) << "key: " << groupby_key << " index: " << i;
-      }
-      else if(std::is_same<value_type, float>::value){
-        EXPECT_FLOAT_EQ(found->second, aggregation_value) << "key: " << groupby_key << " index: " << i;
-      }
-      else if(std::is_same<value_type, double>::value){
-        EXPECT_DOUBLE_EQ(found->second, aggregation_value) << "key: " << groupby_key << " index: " << i;
-      }
-      else{
-        std::cout << "Unhandled value type.\n";
-      }
+      // FIXME May need to use this->template compute_reference_solution<...>(...);
+      case agg_op::MIN:  return compute_reference_solution<min_op<value_type>>(groupby_column,aggregation_column, print);
+      case agg_op::MAX:  return compute_reference_solution<max_op<value_type>>(groupby_column,aggregation_column, print);
+      case agg_op::SUM:  return compute_reference_solution<sum_op<value_type>>(groupby_column,aggregation_column, print);
+      case agg_op::COUNT:return compute_reference_solution<count_op<value_type>>(groupby_column,aggregation_column, print);
+      case agg_op::AVG:  return compute_reference_solution<avg_op<value_type>>(groupby_column,aggregation_column, print);
+      default: std::cout << "Invalid aggregation operation.\n";
     }
 
+    return std::map<key_type, value_type>();
   }
-
-  unsigned int groupby(const key_type * const groupby_column, const value_type * const aggregation_column)
-  {
-
-    // TODO: Find a more efficient way to size the output buffer.
-    // In general, input_size is going to be larger than the actual
-    // size of the result.
-    cudaMallocManaged(&d_groupby_result, input_size * sizeof(key_type));
-    cudaMallocManaged(&d_aggregation_result, input_size * sizeof(value_type));
-
-    size_type result_size{0};
-
-    GroupbyHash(groupby_column,
-                aggregation_column,
-                input_size,
-                d_groupby_result,
-                d_aggregation_result,
-                &result_size,
-                op_type());
-
-    return result_size;
-  }
-
 };
 
 // Google Test can only do a parameterized typed-test over a single type, so we have
-// to nest multiple types inside of the KeyValueTypes struct above
-// KeyValueTypes<type1, type2> implies key_type = type1, value_type = type2
-// This list is the types across which Google Test will run our tests
-typedef ::testing::Types< 
-                            KeyValueTypes<int32_t, int32_t, max_op>,
-                            KeyValueTypes<int32_t, float, max_op>,
-                            KeyValueTypes<int32_t, double, max_op>,
-                            KeyValueTypes<int32_t, int64_t, max_op>,
-                            KeyValueTypes<int32_t, uint64_t, max_op>,
-                            KeyValueTypes<int64_t, int32_t, max_op>,
-                            KeyValueTypes<int64_t, float, max_op>,
-                            KeyValueTypes<int64_t, double, max_op>,
-                            KeyValueTypes<int64_t, int64_t, max_op>,
-                            KeyValueTypes<int64_t, uint64_t, max_op>,
-                            KeyValueTypes<uint64_t, int32_t, max_op>,
-                            KeyValueTypes<uint64_t, float, max_op>,
-                            KeyValueTypes<uint64_t, double, max_op>,
-                            KeyValueTypes<uint64_t, int64_t, max_op>,
-                            KeyValueTypes<uint64_t, uint64_t, max_op>,
-                            KeyValueTypes<int32_t, int32_t, min_op>,
-                            KeyValueTypes<int32_t, float, min_op>,
-                            KeyValueTypes<int32_t, double, min_op>,
-                            KeyValueTypes<int32_t, int64_t, min_op>,
-                            KeyValueTypes<int32_t, uint64_t, min_op>,
-                            KeyValueTypes<uint64_t, int32_t, min_op>,
-                            KeyValueTypes<uint64_t, float, min_op>,
-                            KeyValueTypes<uint64_t, double, min_op>,
-                            KeyValueTypes<uint64_t, int64_t, min_op>,
-                            KeyValueTypes<uint64_t, uint64_t, min_op>,
-                            KeyValueTypes<int32_t, int32_t, count_op>,
-                            KeyValueTypes<int32_t, float, count_op>,
-                            KeyValueTypes<int32_t, double, count_op>,
-                            KeyValueTypes<int32_t, int64_t, count_op>,
-                            KeyValueTypes<int32_t, uint64_t, count_op>,
-                            KeyValueTypes<uint64_t, int32_t, count_op>,
-                            KeyValueTypes<uint64_t, float, count_op>,
-                            KeyValueTypes<uint64_t, double, count_op>,
-                            KeyValueTypes<uint64_t, int64_t, count_op>,
-                            KeyValueTypes<uint64_t, uint64_t, count_op>,
-                            KeyValueTypes<int32_t, int32_t, sum_op>,
-                            //KeyValueTypes<int32_t, float, sum_op>, // TODO: Tests for SUM on single precision floats currently fail due to numerical stability issues
-                            KeyValueTypes<int32_t, double, sum_op>,
-                            KeyValueTypes<int32_t, int64_t, sum_op>,
-                            KeyValueTypes<int32_t, uint64_t, sum_op>,
-                            KeyValueTypes<uint64_t, double, sum_op>,
-                            KeyValueTypes<uint64_t, double, sum_op>,
-                            KeyValueTypes<uint64_t, int64_t, sum_op>,
-                            KeyValueTypes<uint64_t, uint64_t, sum_op>
-                            > Implementations;
-
-  TYPED_TEST_CASE(GroupByTest, Implementations);
-
-TYPED_TEST(GroupByTest, DISABLED_AggregationTestHost)
+// to nest multiple types inside of the TestParameters struct
+template <typename groupby_type, typename aggregation_type, agg_op the_agg>
+struct TestParameters
 {
-  using key_type = typename TypeParam::key_type;
-  using value_type = typename TypeParam::value_type;
+  using key_type = groupby_type;
+  using value_type = aggregation_type;
+  const static agg_op the_aggregator{the_agg};
+};
+using TestCases = ::testing::Types< TestParameters<int32_t, int32_t, agg_op::MAX>,
+                                    //TestParameters<int32_t, float, agg_op::MAX>,
+                                    //TestParameters<int32_t, double, agg_op::MAX>,
+                                    //TestParameters<int32_t, int64_t, agg_op::MAX>,
+                                    //TestParameters<int32_t, uint64_t, agg_op::MAX>,
+                                    //TestParameters<int64_t, int32_t, agg_op::MAX>,
+                                    //TestParameters<int64_t, float, agg_op::MAX>,
+                                    //TestParameters<int64_t, double, agg_op::MAX>,
+                                    //TestParameters<int64_t, int64_t, agg_op::MAX>,
+                                    //TestParameters<int64_t, uint64_t, agg_op::MAX>,
+                                    //TestParameters<uint64_t, int32_t, agg_op::MAX>,
+                                    //TestParameters<uint64_t, float, agg_op::MAX>,
+                                    //TestParameters<uint64_t, double, agg_op::MAX>,
+                                    //TestParameters<uint64_t, int64_t, agg_op::MAX>,
+                                    //TestParameters<uint64_t, uint64_t, agg_op::MAX>,
+                                    TestParameters<int32_t, int32_t, agg_op::MIN>,
+                                    //TestParameters<int32_t, float, agg_op::MIN>,
+                                    //TestParameters<int32_t, double, agg_op::MIN>,
+                                    //TestParameters<int32_t, int64_t, agg_op::MIN>,
+                                    //TestParameters<int32_t, uint64_t, agg_op::MIN>,
+                                    //TestParameters<uint64_t, int32_t, agg_op::MIN>,
+                                    //TestParameters<uint64_t, float, agg_op::MIN>,
+                                    //TestParameters<uint64_t, double, agg_op::MIN>,
+                                    //TestParameters<uint64_t, int64_t, agg_op::MIN>,
+                                    //TestParameters<uint64_t, uint64_t, agg_op::MIN>,
+                                    TestParameters<int32_t, int32_t, agg_op::COUNT>,
+                                    //TestParameters<int32_t, float, agg_op::COUNT>,
+                                    //TestParameters<int32_t, double, agg_op::COUNT>,
+                                    //TestParameters<int32_t, int64_t, agg_op::COUNT>,
+                                    //TestParameters<int32_t, uint64_t, agg_op::COUNT>,
+                                    //TestParameters<uint64_t, int32_t, agg_op::COUNT>,
+                                    //TestParameters<uint64_t, float, agg_op::COUNT>,
+                                    //TestParameters<uint64_t, double, agg_op::COUNT>,
+                                    //TestParameters<uint64_t, int64_t, agg_op::COUNT>,
+                                    //TestParameters<uint64_t, uint64_t, agg_op::COUNT>,
+                                    TestParameters<int32_t, int32_t, agg_op::SUM>,
+                                    //// TODO: Tests for SUM on single precision floats currently fail due to numerical stability issues
+                                    ////TestParameters<int32_t, float, agg_op::SUM>, 
+                                    //TestParameters<int32_t, double, agg_op::SUM>,
+                                    //TestParameters<int32_t, int64_t, agg_op::SUM>,
+                                    //TestParameters<int32_t, uint64_t, agg_op::SUM>,
+                                    //TestParameters<uint64_t, double, agg_op::SUM>,
+                                    //TestParameters<uint64_t, double, agg_op::SUM>,
+                                    //TestParameters<uint64_t, int64_t, agg_op::SUM>,
+                                    //TestParameters<uint64_t, uint64_t, agg_op::SUM>
+                                    TestParameters<int32_t, float, agg_op::AVG>
+                                    >;
 
-  thrust::pair<key_type, value_type> first_pair{0,0};
-  thrust::pair<key_type, value_type> second_pair{0,10};
-  thrust::pair<key_type, value_type> third_pair{0,5};
-
-  auto max = [](value_type a, value_type b) { return (a >= b ? a : b); };
-
-  this->the_map->insert(first_pair, max);
-  auto found = this->the_map->find(0);
-  EXPECT_EQ(0, found->second);
-
-  this->the_map->insert(second_pair, max);
-  found = this->the_map->find(0);
-  EXPECT_EQ(10, found->second);
-
-  this->the_map->insert(third_pair, max);
-  found = this->the_map->find(0);
-  EXPECT_EQ(10, found->second);
-
-  this->the_map->insert(thrust::make_pair(0,11), max);
-  found = this->the_map->find(0);
-  EXPECT_EQ(11, found->second);
-
-  this->the_map->insert(thrust::make_pair(7, 42), max);
-  found = this->the_map->find(7);
-  EXPECT_EQ(42, found->second);
-
-  this->the_map->insert(thrust::make_pair(7, 62), max);
-  found = this->the_map->find(7);
-  EXPECT_EQ(62, found->second);
-
-  this->the_map->insert(thrust::make_pair(7, 42), max);
-  found = this->the_map->find(7);
-  EXPECT_EQ(62, found->second);
-
-  found = this->the_map->find(0);
-  EXPECT_EQ(11, found->second);
-}
-
-
-TYPED_TEST(GroupByTest, AggregationTestDeviceAllSame)
-{
-  const int num_keys = 1;
-  const int num_values_per_key = 1<<12;
-
-  auto input = this->create_input(num_keys, num_values_per_key);
-
-  // When you have a templated member function of a templated class, the preceeding 'template' keyword is required
-  // See: https://stackoverflow.com/questions/16508743/error-expected-expression-in-this-template-code
-  using aggregation_op = typename GroupByTest<TypeParam>::op_type;
-  auto expected_values = this->template compute_reference_solution<aggregation_op>();
-
-  this->build_aggregation_table_device(input);
-  this->verify_aggregation_table(expected_values);
-
-  size_t computed_result_size = this->extract_groupby_result_device();
-  this->verify_groupby_result(computed_result_size, expected_values);
-}
+  TYPED_TEST_CASE(GDFGroupByTest, TestCases);
 
 // TODO Update the create_input function to ensure all keys are actually unique
-TYPED_TEST(GroupByTest, AggregationTestDeviceAllUnique)
+TYPED_TEST(GDFGroupByTest, AggregationTestDeviceAllUnique)
 {
-  const int num_keys = 1<<12;
+  const int num_keys = 10;
   const int num_values_per_key = 1;
-  auto input = this->create_input(num_keys, num_values_per_key);
-  // When you have a templated member function of a templated class, the preceeding 'template' keyword is required
-  // See: https://stackoverflow.com/questions/16508743/error-expected-expression-in-this-template-code
-  using aggregation_op = typename GroupByTest<TypeParam>::op_type;
-  auto expected_values = this->template compute_reference_solution<aggregation_op>();
-
-  this->build_aggregation_table_device(input);
-  this->verify_aggregation_table(expected_values);
-
-  size_t computed_result_size = this->extract_groupby_result_device();
-  this->verify_groupby_result(computed_result_size,expected_values);
+  auto input = this->create_reference_input(num_keys, num_values_per_key, 5, 5, true);
+  auto expected_values = this->compute_reference_solution(input.first, input.second, true);
+//
+//  this->build_aggregation_table_device(input);
+//  this->verify_aggregation_table(expected_values);
+//
+//  size_t computed_result_size = this->extract_groupby_result_device();
+//  this->verify_groupby_result(computed_result_size,expected_values);
 }
 
-TYPED_TEST(GroupByTest, AggregationTestDeviceWarpSame)
-{
-  const int num_keys = 1<<12;
-  const int num_values_per_key = 32;
-
-  auto input = this->create_input(num_keys, num_values_per_key);
-  // When you have a templated member function of a templated class, the preceeding 'template' keyword is required
-  // See: https://stackoverflow.com/questions/16508743/error-expected-expression-in-this-template-code
-  using aggregation_op = typename GroupByTest<TypeParam>::op_type;
-  auto expected_values = this->template compute_reference_solution<aggregation_op>();
-
-  this->build_aggregation_table_device(input);
-  this->verify_aggregation_table(expected_values);
-
-  size_t computed_result_size = this->extract_groupby_result_device();
-  this->verify_groupby_result(computed_result_size,expected_values);
-}
-
-TYPED_TEST(GroupByTest, AggregationTestDeviceBlockSame)
-{
-  const int num_keys = 1<<8;
-  const int num_values_per_key = this->THREAD_BLOCK_SIZE;
-  auto input = this->create_input(num_keys, num_values_per_key);
-  // When you have a templated member function of a templated class, the preceeding 'template' keyword is required
-  // See: https://stackoverflow.com/questions/16508743/error-expected-expression-in-this-template-code
-  using aggregation_op = typename GroupByTest<TypeParam>::op_type;
-  auto expected_values = this->template compute_reference_solution<aggregation_op>();
-
-  this->build_aggregation_table_device(input);
-  this->verify_aggregation_table(expected_values);
-
-  size_t computed_result_size = this->extract_groupby_result_device();
-  this->verify_groupby_result(computed_result_size, expected_values);
-}
-
-TYPED_TEST(GroupByTest, GroupByHash)
-{
-  const int num_keys = 1<<12;
-  const int num_values_per_key = 1;
-
-  auto input = this->create_input(num_keys, num_values_per_key);
-  // When you have a templated member function of a templated class, the preceeding 'template' keyword is required
-  // See: https://stackoverflow.com/questions/16508743/error-expected-expression-in-this-template-code
-  using aggregation_op = typename GroupByTest<TypeParam>::op_type;
-  auto expected_values = this->template compute_reference_solution<aggregation_op>();
-
-  const size_t computed_result_size = this->groupby(input.first, input.second);
-  this->verify_groupby_result(computed_result_size,expected_values);
-}
 
 
 //TEST(HashGroupByTest, max)
