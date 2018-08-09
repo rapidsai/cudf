@@ -1,16 +1,16 @@
-from __future__ import print_function, division
 
 import numpy as np
 from numba import cuda
 
 from . import cudautils, utils
 from .serialize import register_distributed_serializer
-from .gpu_ipc_broker import serialize_gpu_data, rebuild_gpu_data, is_using_ipc
 
 
 class Buffer(object):
     """A 1D gpu buffer.
     """
+    _cached_ipch = None
+
     @classmethod
     def from_empty(cls, mem):
         """From empty device array
@@ -24,9 +24,12 @@ class Buffer(object):
         mem = cuda.device_array(0, dtype=dtype)
         return cls(mem, size=0, capacity=0)
 
-    def __init__(self, mem, size=None, capacity=None):
+    def __init__(self, mem, size=None, capacity=None, categorical=False):
         if size is None:
-            size = mem.size
+            if categorical:
+                size = len(mem)
+            else:
+                size = mem.size
         if capacity is None:
             capacity = size
         self.mem = cudautils.to_device(mem)
@@ -35,19 +38,80 @@ class Buffer(object):
         self.capacity = capacity
         self.dtype = self.mem.dtype
 
-    def serialize(self, serialize):
+    def serialize(self, serialize, context=None):
+        """Called when dask.distributed is performing a serialization on this
+        object.
+
+        Do not use this directly.  It is invoked by dask.distributed.
+
+        Parameters
+        ----------
+
+        serialize : callable
+             Used to serialize data that needs serialization .
+        context : dict; optional
+            If not ``None``, it contains information about the destination.
+
+        Returns
+        -------
+        (header, frames)
+            See custom serialization documentation in dask.distributed.
+        """
+        from .serialize import should_use_ipc
+
+        # Use destination info to determine if we should do IPC.
+        use_ipc = should_use_ipc(context)
         header = {}
-        if is_using_ipc():
-            header['mem'], frames = serialize_gpu_data(self.to_gpu_array())
+        # Should use IPC transfer
+        if use_ipc:
+            # Reuse IPC handle from previous call?
+            if self._cached_ipch is not None:
+                ipch = self._cached_ipch
+            else:
+                # Get new IPC handle
+                ipch = self.to_gpu_array().get_ipc_handle()
+            header['kind'] = 'ipc'
+            header['mem'], frames = serialize(ipch)
+            # Keep IPC handle alive
+            self._cached_ipch = ipch
+        # Not using IPC transfer
         else:
+            header['kind'] = 'normal'
+            # Serialize the buffer as a numpy array
             header['mem'], frames = serialize(self.to_array())
         return header, frames
 
     @classmethod
     def deserialize(cls, deserialize, header, frames):
-        if is_using_ipc():
-            mem = rebuild_gpu_data(**header['mem'])
+        """Called when dask.distributed is performing a deserialization for
+        data of this class.
+
+        Do not use this directly.  It is invoked by dask.distributed.
+
+        Parameters
+        ----------
+
+        deserialize : callable
+             Used to deserialize data that needs further deserialization .
+        header, frames : dict
+            See custom serialization documentation in dask.distributed.
+
+        Returns
+        -------
+        obj : Buffer
+            Returns an instance of Buffer.
+        """
+        # Using IPC?
+        if header['kind'] == 'ipc':
+            ipch = deserialize(header['mem'], frames)
+            # Open IPC handle
+            with ipch as data:
+                # Copy remote data over
+                mem = cuda.device_array_like(data)
+                mem.copy_to_device(data)
+        # Not using IPC
         else:
+            # Deserialize the numpy array
             mem = deserialize(header['mem'], frames)
             mem.flags['WRITEABLE'] = True  # XXX: hack for numba to work
         return Buffer(mem)
@@ -63,10 +127,16 @@ class Buffer(object):
     def __getitem__(self, arg):
         if isinstance(arg, slice):
             sliced = self.to_gpu_array()[arg]
-            return Buffer(sliced)
+            buf = Buffer(sliced)
+            buf.dtype = self.dtype  # for np.datetime64 support
+            return buf
         elif isinstance(arg, int):
             arg = utils.normalize_index(arg, self.size)
-            return self.mem[arg]
+            # the dtype argument is necessary for datetime64 support
+            # because currently we can't pass datetime64 types into
+            # cuda dev arrays, so the type of the cuda dev array is
+            # an i64, and we view it as the dtype on the buffer
+            return self.mem[arg].view(self.dtype)
         else:
             raise NotImplementedError(type(arg))
 

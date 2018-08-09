@@ -7,3 +7,4 @@ build/
 .vscode/
 docs/_build
 **.pytest_cache/
+*.swp

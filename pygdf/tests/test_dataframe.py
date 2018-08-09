@@ -12,6 +12,8 @@ from pygdf.dataframe import Series, DataFrame
 from pygdf.buffer import Buffer
 from pygdf.settings import set_options
 
+from itertools import combinations
+
 from . import utils
 
 
@@ -146,6 +148,28 @@ def test_dataframe_basic():
     print(expect)
     print(mat)
     np.testing.assert_equal(mat, expect)
+
+
+def test_dataframe_column_name_indexing():
+    df = DataFrame()
+    data = np.asarray(range(10), dtype=np.int32)
+    df['a'] = data
+    df[1] = data
+    np.testing.assert_equal(df['a'].to_array(),
+                            np.asarray(range(10), dtype=np.int32))
+    np.testing.assert_equal(df[1].to_array(),
+                            np.asarray(range(10), dtype=np.int32))
+
+    pdf = pd.DataFrame()
+    nelem = 10
+    pdf['key1'] = np.random.randint(0, 5, nelem)
+    pdf['key2'] = np.random.randint(0, 3, nelem)
+    pdf[1] = np.arange(1, 1 + nelem)
+    pdf[2] = np.random.random(nelem)
+    df = DataFrame.from_pandas(pdf)
+    for i in range(1, len(pdf.columns)+1):
+        for idx in combinations(pdf.columns, i):
+            assert(pdf[list(idx)].equals(df[list(idx)].to_pandas()))
 
 
 def test_dataframe_column_add_drop():
@@ -355,7 +379,8 @@ def test_dataframe_dir_and_getattr():
         df.not_a_column
 
 
-def test_dataframe_as_gpu_matrix():
+@pytest.mark.parametrize('order', ['C', 'F'])
+def test_dataframe_as_gpu_matrix(order):
     df = DataFrame()
 
     nelem = 123
@@ -363,13 +388,13 @@ def test_dataframe_as_gpu_matrix():
         df[k] = np.random.random(nelem)
 
     # Check all columns
-    mat = df.as_gpu_matrix().copy_to_host()
+    mat = df.as_gpu_matrix(order=order).copy_to_host()
     assert mat.shape == (nelem, 4)
     for i, k in enumerate(df.columns):
         np.testing.assert_array_equal(df[k].to_array(), mat[:, i])
 
     # Check column subset
-    mat = df.as_gpu_matrix(columns=['a', 'c']).copy_to_host()
+    mat = df.as_gpu_matrix(order=order, columns=['a', 'c']).copy_to_host()
     assert mat.shape == (nelem, 2)
 
     for i, k in enumerate('ac'):
@@ -463,3 +488,30 @@ def test_dataframe_setitem_index_len1():
     gdf['b'] = gdf.index.as_column()
 
     np.testing.assert_equal(gdf.b.to_array(), [0])
+
+
+@pytest.mark.parametrize('nrows', [1, 8, 100, 1000])
+def test_dataframe_hash_columns(nrows):
+    gdf = DataFrame()
+    data = np.asarray(range(nrows))
+    data[0] = data[-1]  # make first and last the same
+    gdf['a'] = data
+    gdf['b'] = gdf.a + 100
+    out = gdf.hash_columns(['a', 'b'])
+    assert isinstance(out, Series)
+    assert len(out) == nrows
+    assert out.dtype == np.int32
+
+    # Check default
+    out_all = gdf.hash_columns()
+    np.testing.assert_array_equal(out.to_array(), out_all.to_array())
+
+    # Check single column
+    out_one = gdf.hash_columns(['a']).to_array()
+    # First matches last
+    assert out_one[0] == out_one[-1]
+    # Equivalent to the Series.hash_values()
+    np.testing.assert_array_equal(
+        gdf.a.hash_values().to_array(),
+        out_one,
+        )

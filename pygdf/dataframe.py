@@ -11,13 +11,13 @@ import pandas as pd
 from numba import cuda
 from numba.cuda.cudadrv.devicearray import DeviceNDArray
 
-from . import _gdf, cudautils, formatting, queryutils, applyutils, utils
+from . import cudautils, formatting, queryutils, applyutils, utils, _gdf
 from .index import GenericIndex, EmptyIndex, Index, RangeIndex
+from .buffer import Buffer
 from .series import Series
 from .column import Column
 from .settings import NOTSET, settings
 from .serialize import register_distributed_serializer
-from .buffer import Buffer
 
 
 class DataFrame(object):
@@ -146,6 +146,9 @@ class DataFrame(object):
         If *arg* is a ``str``, return the column Series.
         If *arg* is a ``slice``, return a new DataFrame with all columns
         sliced to the specified range.
+        If *arg* is an ``array`` containing column names, return a new
+        DataFrame with the corresponding columns.
+
 
         Examples
         --------
@@ -165,13 +168,24 @@ class DataFrame(object):
         17   17   17   17
         18   18   18   18
         19   19   19   19
+        >>>df[['a','c']] # get columns a and c
+             a    c
+        0    0    0
+        1    1    1
+        2    2    2
+        3    3    3
         """
-        if isinstance(arg, str):
+        if isinstance(arg, str) or isinstance(arg, int):
             return self._cols[arg]
         elif isinstance(arg, slice):
             df = DataFrame()
             for k, col in self._cols.items():
                 df[k] = col[arg]
+            return df
+        elif isinstance(arg, (list,)):
+            df = DataFrame()
+            for col in arg:
+                df[col] = self[col]
             return df
         else:
             msg = "__getitem__ on type {!r} is not supported"
@@ -245,10 +259,15 @@ class DataFrame(object):
                                  more_rows=more_rows)
 
     def __str__(self):
-        return self.to_string()
+        nrows = settings.formatting.get('nrows') or 10
+        ncols = settings.formatting.get('ncols') or 8
+        return self.to_string(nrows=nrows, ncols=ncols)
 
     def __repr__(self):
-        return self.to_string()
+        return "<pygdf.DataFrame ncols={} nrows={} >".format(
+            len(self.columns),
+            len(self),
+            )
 
     @property
     def loc(self):
@@ -423,7 +442,7 @@ class DataFrame(object):
         out._index = index
         return out
 
-    def as_gpu_matrix(self, columns=None):
+    def as_gpu_matrix(self, columns=None, order='F'):
         """Convert to a matrix in device memory.
 
         Parameters
@@ -431,6 +450,9 @@ class DataFrame(object):
         columns: sequence of str
             List of a column names to be extracted.  The order is preserved.
             If None is specified, all columns are used.
+        order: 'F' or 'C'
+            Optional argument to determine whether to return a column major
+            (Fortran) matrix or a row major (C) matrix.
 
         Returns
         -------
@@ -448,18 +470,25 @@ class DataFrame(object):
             raise ValueError("require at least 1 row")
         dtype = cols[0].dtype
         if any(dtype != c.dtype for c in cols):
-            raise ValueError('all column must have the same dtype')
+            raise ValueError('all columns must have the same dtype')
         for k, c in self._cols.items():
             if c.has_null_mask:
                 errmsg = ("column {!r} has null values"
                           "hint: use .fillna() to replace null values")
                 raise ValueError(errmsg.format(k))
 
-        matrix = cuda.device_array(shape=(nrow, ncol), dtype=dtype, order="F")
-        for colidx, inpcol in enumerate(cols):
-            dense = inpcol.to_gpu_array(fillna='pandas')
-            matrix[:, colidx].copy_to_device(dense)
-
+        if order == 'F':
+            matrix = cuda.device_array(shape=(nrow, ncol), dtype=dtype,
+                                       order=order)
+            for colidx, inpcol in enumerate(cols):
+                dense = inpcol.to_gpu_array(fillna='pandas')
+                matrix[:, colidx].copy_to_device(dense)
+        elif order == 'C':
+            matrix = cudautils.row_matrix(cols, nrow, ncol, dtype)
+        else:
+            errmsg = ("order parameter should be 'C' for row major or 'F' for"
+                      "column major GPU matrix")
+            raise ValueError(errmsg.format(k))
         return matrix
 
     def as_matrix(self, columns=None):
@@ -643,8 +672,8 @@ class DataFrame(object):
         #    lhs, rhs, left_on=on, right_on=on, how=how,
         #    return_joined_indicies=True)
         joined_values, joined_indicies = self._merge_gdf(
-            lhs, rhs, left_on=on, right_on=on, how=how, return_indices=True
-        )
+            lhs, rhs, left_on=on, right_on=on, how=how,
+            return_indices=True)
 
         # XXX: Prepare output.  same as _join.  code duplication
         # Perform left, inner and outer join
@@ -986,6 +1015,23 @@ class DataFrame(object):
             raise ValueError('*chunks* must be defined')
         return applyutils.apply_chunks(self, func, incols, outcols, kwargs,
                                        chunks=chunks, tpb=tpb)
+
+    def hash_columns(self, columns=None):
+        """Hash the given *columns* and return a new Series
+
+        Parameters
+        ----------
+        column : sequence of str; optional
+            Sequence of column names. If columns is *None* (unspecified),
+            all columns in the frame are used.
+        """
+        from . import numerical
+
+        if columns is None:
+            columns = self.columns
+
+        cols = [self[k]._column for k in columns]
+        return Series(numerical.column_hash_values(*cols))
 
     def to_pandas(self):
         """Convert to a Pandas DataFrame.
