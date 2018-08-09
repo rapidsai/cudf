@@ -74,7 +74,6 @@ the dependencies.
 $ conda env create --name libgdf_dev --file ../conda_environments/dev_py35.yml
 # activate the environment
 $ source activate libgdf_dev
-$ conda install arrow-cpp=$ARROW_VERSION -c conda-forge
 $ conda install pyarrow=$ARROW_VERSION -c conda-forge
 ```
 
@@ -91,6 +90,9 @@ development includes/changes the depedencies.  To do so, run:
 ```bash
 conda env update --name libgdf_dev --file ../conda_environments/dev_py35.yml
 ```
+Note that `dev_py35.yml` uses the latest version of pyarrow.
+Reinstall pyarrow if needed using `conda install
+pyarrow=$ARROW_VERSION -c conda-forge`.
 
 ### Configure and build
 

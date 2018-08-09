@@ -24,7 +24,7 @@ requirements:
     - cmake
 
   run:
-    - arrow 0.10.*
+    - pyarrow 0.10.*
 
 test:
   commands:
