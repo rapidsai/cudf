@@ -78,23 +78,24 @@ mgpu::mem_t<size_type> join_hash(col1_it a, size_type a_count,
 
   cudaError_t error;
   bool cont = true;
-  while (cont) {
+//  while (cont) {
     // allocate an output buffer to store pairs, prefetch the estimated output size
-    CUDA_RT_CALL( cudaMallocManaged(&joined, sizeof(joined_type) * joined_size) );
-    CUDA_RT_CALL( cudaMemPrefetchAsync(joined, sizeof(joined_type) * joined_size, dev_ordinal) );
+//    CUDA_RT_CALL( cudaMallocManaged(&joined, sizeof(joined_type) * joined_size) );
+//    CUDA_RT_CALL( cudaMemPrefetchAsync(joined, sizeof(joined_type) * joined_size, dev_ordinal) );
+
 
     // reset the counter
     CUDA_RT_CALL( cudaMemsetAsync(d_joined_idx, 0, sizeof(size_type), 0) );
 
     // using the new low-level API for hash-joins
     switch (join_type) {
-    case INNER_JOIN: error = InnerJoinHash(context, (void**)&joined, d_joined_idx, joined_size, a, a_count, b, b_count, a2, b2, a3, b3); break;
+    case INNER_JOIN: error = InnerJoinHash(context, (void**)&joined, d_joined_idx, joined_size, a, a_count, b, b_count, a2, b2, a3, b3); printf("Inner\n");break;
     case LEFT_JOIN: error = LeftJoinHash(context, (void**)&joined, d_joined_idx, joined_size, a, a_count, b, b_count, a2, b2, a3, b3); break;
     }
 
     // copy the counter to the cpu
     CUDA_RT_CALL( cudaMemcpy(h_joined_idx, d_joined_idx, sizeof(size_type), cudaMemcpyDefault) );
-
+    /*
     if (error != cudaSuccess || (*h_joined_idx) > joined_size) {
       cudaGetLastError();			// clear any errors
       CUDA_RT_CALL( cudaFree(joined) );		// free allocated memory
@@ -103,7 +104,13 @@ mgpu::mem_t<size_type> join_hash(col1_it a, size_type a_count,
     else {
       cont = false; // found the right output size!
     }
-  }
+	*/
+    if (error != cudaSuccess ) {
+	  printf("ERRROR %d\n", error);fflush(stdout);
+      cudaGetLastError();			// clear any errors
+    }
+//      cont = false; // found the right output size!
+//  }
 
   // TODO: can we avoid this transformation?
   mgpu::mem_t<size_type> output(2 * (*h_joined_idx), context);
