@@ -27,6 +27,7 @@
 #include "managed_allocator.cuh"
 #include "managed.cuh"
 #include "hash_functions.cuh"
+#include "../groupby/hash/aggregation_operations.cuh"
 
 // TODO: replace this with CUDA_TRY and propagate the error
 #ifndef CUDA_RT_CALL
@@ -405,6 +406,58 @@ public:
         return unused_key;
     }
 
+    // Generic update of a hash table value for any aggregator
+    template <typename aggregation_type>
+    __forceinline__ __host__ __device__
+    void update_existing_value(mapped_type & existing_value, value_type const & insert_pair, aggregation_type op)
+    {
+      const mapped_type insert_value = insert_pair.second;
+
+      mapped_type old_value = existing_value;
+
+      mapped_type expected{old_value};
+
+      // Attempt to perform the aggregation with existing_value and
+      // store the result atomically
+      do 
+      {
+        expected = old_value;
+
+        const mapped_type new_value = op(insert_value, old_value);
+
+        old_value = atomicCAS(&existing_value, expected, new_value);
+      }
+      // Guard against another thread's update to existing_value
+      while( expected != old_value );
+    }
+
+    // TODO Overload atomicAdd for 1 byte and 2 byte types, until then, overload specifically for the types
+    // where atomicAdd already has an overload. Otherwise the generic update_existing_value will be used.
+    // Specialization for COUNT aggregator
+    __forceinline__ __host__ __device__
+    void update_existing_value(mapped_type & existing_value, value_type const & insert_pair, count_op<int32_t> op)
+    {
+      atomicAdd(&existing_value, 1);
+    }
+    // Specialization for COUNT aggregator
+    __forceinline__ __host__ __device__
+    void update_existing_value(mapped_type & existing_value, value_type const & insert_pair, count_op<int64_t> op)
+    {
+      atomicAdd(&existing_value, 1);
+    }
+    // Specialization for COUNT aggregator
+    __forceinline__ __host__ __device__
+    void update_existing_value(mapped_type & existing_value, value_type const & insert_pair, count_op<float> op)
+    {
+      atomicAdd(&existing_value, 1);
+    }
+    // Specialization for COUNT aggregator
+    __forceinline__ __host__ __device__
+    void update_existing_value(mapped_type & existing_value, value_type const & insert_pair, count_op<double> op)
+    {
+      atomicAdd(&existing_value, 1);
+    }
+
     /* --------------------------------------------------------------------------*/
     /** 
      * @Synopsis  Inserts a new (key, value) pair. If the key already exists in the map
@@ -432,7 +485,6 @@ public:
         value_type *current_hash_bucket = &(hashtbl_values[current_index]);
 
         const key_type insert_key = x.first;
-        const mapped_type insert_value = x.second;
         
         bool insert_success = false;
         
@@ -457,32 +509,16 @@ public:
           // TODO: How to handle data types less than 32 bits?
           if ( m_equal( unused_key, old_key ) || m_equal(insert_key, old_key) ) {
 
-            mapped_type old_value = existing_value;
-
-            mapped_type expected;
-
-            // Attempt to perform the aggregation with existing_value and
-            // store the result atomically
-            do 
-            {
-              expected = old_value;
-
-              const mapped_type new_value = op(insert_value, old_value);
-
-              old_value = atomicCAS(&existing_value, expected, new_value);
-            }
-            // Guard against another thread's update to existing_value
-            while( expected != old_value );
+            update_existing_value(existing_value, x, op);
 
             insert_success = true;
           }
-
-
 
 #else
 
 #pragma omp critical
           {
+            const mapped_type insert_value = x.second;
             // Empty bucket, insert key and value
             if ( m_equal( unused_key, existing_key) ) 
             {
