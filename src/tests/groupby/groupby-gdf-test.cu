@@ -73,21 +73,32 @@ enum struct agg_op
   AVG
 };
 
-// unique_ptr wrappers for gdf_columns that will free their data
-std::function<void(gdf_column*)> gdf_col_deleter = [](gdf_column* col){col->size = 0; cudaFree(col->data);};
+// unique_ptr wrappers for gdf_columns that will free their data/
+#ifndef CUDA_RT_CALL
+#define CUDA_RT_CALL( call ) 									   \
+{                                                                                                  \
+    cudaError_t cudaStatus = call;                                                                 \
+    if ( cudaSuccess != cudaStatus ) {                                                             \
+        fprintf(stderr, "ERROR: CUDA RT call \"%s\" in line %d of file %s failed with %s (%d).\n", \
+                        #call, __LINE__, __FILE__, cudaGetErrorString(cudaStatus), cudaStatus);    \
+        exit(1);										   \
+    }												   \
+}
+#endif
+std::function<void(gdf_column*)> gdf_col_deleter = [](gdf_column* col){col->size = 0; CUDA_RT_CALL(cudaFree(col->data));};
 using gdf_col_pointer = typename std::unique_ptr<gdf_column, decltype(gdf_col_deleter)>;
 
 // Creates a gdf_column from a std::vector
 template <typename col_type>
 gdf_col_pointer create_gdf_column(std::vector<col_type> const & host_vector)
 {
-
   // Create a new instance of a gdf_column with a custom deleter that will free
   // the associated device memory when it eventually goes out of scope
   gdf_col_pointer the_column{new gdf_column, gdf_col_deleter};
   // Allocate device storage for gdf_column and copy contents from host_vector
-  cudaMalloc(&(the_column->data), host_vector.size() * sizeof(col_type));
-  cudaMemcpy(the_column->data, host_vector.data(), host_vector.size() * sizeof(col_type), cudaMemcpyHostToDevice);
+  const size_t input_size_bytes = host_vector.size() * sizeof(col_type);
+  cudaMallocManaged(&(the_column->data), input_size_bytes);
+  cudaMemcpy(the_column->data, host_vector.data(), input_size_bytes, cudaMemcpyHostToDevice);
 
   // Deduce the type and set the gdf_dtype accordingly
   gdf_dtype gdf_col_type;
@@ -118,16 +129,12 @@ struct GDFGroupByTest : public testing::Test
 {
   using key_type = typename test_parameters::key_type;
   using value_type = typename test_parameters::value_type;
+  using agg_output_type = typename test_parameters::agg_output_type;
 
   const agg_op aggregation_operation{test_parameters::the_aggregator};
 
   const key_type unused_key{std::numeric_limits<key_type>::max()};
   const value_type unused_value{std::numeric_limits<value_type>::max()};
-
-
-  // Result columns from gdf groupby
-  gdf_col_pointer groupby_result{new gdf_column, gdf_col_deleter};
-  gdf_col_pointer aggregation_result{new gdf_column, gdf_col_deleter};
 
   GDFGroupByTest() 
   {
@@ -197,10 +204,10 @@ struct GDFGroupByTest : public testing::Test
 
 
   template <class aggregation_operation>
-    std::map<key_type, value_type> 
-    compute_reference_solution(std::vector<key_type> const & groupby_column,
-        std::vector<value_type> const & aggregation_column,
-        bool print = false)
+  std::map<key_type, value_type> 
+  compute_reference_solution(std::vector<key_type> const & groupby_column,
+                             std::vector<value_type> const & aggregation_column,
+                             bool print = false)
     {
       std::map<key_type, value_type> expected_values;
 
@@ -248,16 +255,11 @@ struct GDFGroupByTest : public testing::Test
 
             expected_values.insert(std::make_pair(current_key,current_value)); 
 
-            if(print)
-              std::cout << "First Insert of Key: " << current_key << " value: " << current_value << std::endl;
           }
           // Key exists, update the value with the operator
           else
           {
             value_type new_value = op(current_value, found->second);
-            if(print)
-              std::cout << "Insert of Key: " << current_key << " inserting value: " << current_value 
-                << " storing: " << new_value << std::endl;
             found->second = new_value;
           }
         }
@@ -265,22 +267,21 @@ struct GDFGroupByTest : public testing::Test
 
       if(print)
       {
+        std::cout << "Reference solution. Size: " << expected_values.size() << std::endl;
         for(auto const & a : expected_values)
         {
           std::cout << a.first << ", " << a.second << std::endl;
         }
       }
-
-
       return expected_values;
     }
 
   // Dispatches computing the reference solution based on which aggregation is to be performed
   // determined by the test_parameters class template argument
   std::map<key_type, value_type> 
-    compute_reference_solution(std::vector<key_type> const & groupby_column, 
-        std::vector<value_type> const & aggregation_column,
-        bool print = false)
+  compute_reference_solution(std::vector<key_type> const & groupby_column, 
+                             std::vector<value_type> const & aggregation_column,
+                             bool print = false)
     {
       switch(test_parameters::the_aggregator)
       {
@@ -296,25 +297,114 @@ struct GDFGroupByTest : public testing::Test
       return std::map<key_type, value_type>();
     }
 
-  void compute_gdf_result(gdf_column * groupby_column, 
-      gdf_column * aggregation_column, 
-      bool print = false, 
-      bool sort = true)
+  gdf_error compute_gdf_result(gdf_column * groupby_input, 
+                               gdf_column * aggregation_input, 
+                               gdf_column * groupby_output,
+                               gdf_column * aggregation_output,
+                               bool print = false)
   {
+    gdf_error error{GDF_SUCCESS};
 
+    gdf_context the_context{0, GDF_HASH, 0, 1};
+
+    switch(aggregation_operation)
+    {
+      case agg_op::MIN:
+        {
+          error = gdf_group_by_min(1,
+                                   &groupby_input,
+                                   aggregation_input,
+                                   nullptr,
+                                   &groupby_output,
+                                   aggregation_output,
+                                   &the_context);
+          break;
+        }
+      case agg_op::MAX:
+        {
+          error = gdf_group_by_max(1,
+                                   &groupby_input,
+                                   aggregation_input,
+                                   nullptr,
+                                   &groupby_output,
+                                   aggregation_output,
+                                   &the_context);
+          break;
+        }
+      case agg_op::SUM:
+        {
+          error = gdf_group_by_sum(1,
+                                   &groupby_input,
+                                   aggregation_input,
+                                   nullptr,
+                                   &groupby_output,
+                                   aggregation_output,
+                                   &the_context);
+          break;
+        }
+      case agg_op::COUNT:
+        {
+          error = gdf_group_by_count(1,
+                                     &groupby_input,
+                                     aggregation_input,
+                                     nullptr,
+                                     &groupby_output,
+                                     aggregation_output,
+                                     &the_context);
+          break;
+        }
+      case agg_op::AVG:
+        {
+          error = gdf_group_by_avg(1,
+                                   &groupby_input,
+                                   aggregation_input,
+                                   nullptr,
+                                   &groupby_output,
+                                   aggregation_output,
+                                   &the_context);
+          break;
+        }
+      default:
+        error = GDF_INVALID_AGGREGATOR;
+    }
+
+    if(print)
+    {
+      const size_t output_size = groupby_output->size;
+      std::cout << "GDF Output. Size: " << output_size << "\n";
+      for(size_t i = 0; i < output_size; ++i)
+      {
+        std::cout << static_cast<key_type*>(groupby_output->data)[i] << ", " 
+                  << static_cast<agg_output_type*>(aggregation_output->data)[i]
+                  << std::endl;
+      }
+    }
+
+    EXPECT_EQ(error, GDF_SUCCESS) << "GDF GroupBy Failed!\n";
+
+    return error;
   }
 
 };
 
-
-
-// Google Test can only do a parameterized typed-test over a single type, so we have
-// to nest multiple types inside of the TestParameters struct
-template <typename groupby_type, typename aggregation_type, agg_op the_agg>
+/* --------------------------------------------------------------------------*/
+/** 
+ * @Synopsis  Google Test can only do a parameterized typed-test over a single type, 
+ * so we have to nest multiple types inside of the TestParameters struct.
+ * @tparam groupby_type The type used for the single group by column
+ * @tparam aggregation_type The type used for the single aggregation column
+ * @tparam the_agg An enum that specifies which aggregation is to be performed
+ * @tparam accumulation_type The type that is used for the aggregation output. 
+ * This defaults to the same type as the aggregation input type. e.g., for AVG with an
+ * input of ints, you probably want to use floating point outputs.
+ */
+/* ----------------------------------------------------------------------------*/
+template <typename groupby_type, typename aggregation_type, agg_op the_agg, typename accumulation_type = aggregation_type>
 struct TestParameters
 {
   using key_type = groupby_type;
   using value_type = aggregation_type;
+  using agg_output_type = accumulation_type;
   const static agg_op the_aggregator{the_agg};
 };
 using TestCases = ::testing::Types< TestParameters<int32_t, int32_t, agg_op::MAX>,
@@ -352,7 +442,7 @@ using TestCases = ::testing::Types< TestParameters<int32_t, int32_t, agg_op::MAX
                                     //TestParameters<uint64_t, double, agg_op::COUNT>,
                                     //TestParameters<uint64_t, int64_t, agg_op::COUNT>,
                                     //TestParameters<uint64_t, uint64_t, agg_op::COUNT>,
-                                    TestParameters<int32_t, int32_t, agg_op::SUM>,
+                                    TestParameters<int32_t, int32_t, agg_op::SUM>
                                     //// TODO: Tests for SUM on single precision floats currently fail due to numerical stability issues
                                     ////TestParameters<int32_t, float, agg_op::SUM>, 
                                     //TestParameters<int32_t, double, agg_op::SUM>,
@@ -362,14 +452,14 @@ using TestCases = ::testing::Types< TestParameters<int32_t, int32_t, agg_op::MAX
                                     //TestParameters<uint64_t, double, agg_op::SUM>,
                                     //TestParameters<uint64_t, int64_t, agg_op::SUM>,
                                     //TestParameters<uint64_t, uint64_t, agg_op::SUM>
-                                    TestParameters<int32_t, float, agg_op::AVG>
+                                    //TestParameters<int32_t, int32_t, agg_op::AVG, float>
                                     >;
 
-  TYPED_TEST_CASE(GDFGroupByTest, TestCases);
+TYPED_TEST_CASE(GDFGroupByTest, TestCases);
 
 TYPED_TEST(GDFGroupByTest, ExampleTest)
 {
-  const int num_keys = 10;
+  const int num_keys = 5;
   const int num_values_per_key = 1;
   auto input = this->create_reference_input(num_keys, num_values_per_key, 5, 5, true);
   auto expected_values = this->compute_reference_solution(input.first, input.second, true);
@@ -377,97 +467,31 @@ TYPED_TEST(GDFGroupByTest, ExampleTest)
   gdf_col_pointer gdf_groupby_column = create_gdf_column(input.first);
   gdf_col_pointer gdf_aggregation_column = create_gdf_column(input.second);
 
+  // Allocate buffers for output
+  const size_t output_size = gdf_groupby_column->size;
+  std::vector<typename TestFixture::key_type> groupby_output(output_size);
+  gdf_col_pointer gdf_groupby_output = create_gdf_column(groupby_output);
 
-//
-//  this->build_aggregation_table_device(input);
-//  this->verify_aggregation_table(expected_values);
-//
-//  size_t computed_result_size = this->extract_groupby_result_device();
-//  this->verify_groupby_result(computed_result_size,expected_values);
+  std::vector<typename TestFixture::agg_output_type> agg_output(output_size);
+  gdf_col_pointer gdf_agg_output = create_gdf_column(agg_output);
+
+  this->compute_gdf_result(gdf_groupby_column.get(), 
+                           gdf_aggregation_column.get(), 
+                           gdf_groupby_output.get(),
+                           gdf_agg_output.get(),
+                           true);
+
+  ASSERT_EQ(expected_values.size(), gdf_groupby_output->size) << "Size of GDF Group By output does not match reference solution";
+  ASSERT_EQ(expected_values.size(), gdf_agg_output->size) << "Size of GDF Aggregation output does not match reference solution";
+
+  size_t i{0};
+  typename TestFixture::key_type * p_gdf_groupby_output = static_cast<typename TestFixture::key_type*>(gdf_groupby_output->data);
+  typename TestFixture::value_type * p_gdf_aggregation_output = static_cast<typename TestFixture::value_type*>(gdf_agg_output->data);
+  for(auto const & expected : expected_values)
+  {
+    EXPECT_EQ(expected.first, p_gdf_groupby_output[i]);
+    EXPECT_EQ(expected.second, p_gdf_aggregation_output[i]);
+    ++i;
+  }
 }
-
-
-
-//TEST(HashGroupByTest, max)
-//{
-//
-//  std::vector<int64_t> groupby_column{ 2, 2, 1, 1, 4, 3, 3, 42, 42  };
-//  std::vector<double>  aggregation_column{5., 2., 2., 3., 7., 6., 6., 42., 51. };
-//
-//  const size_t size = groupby_column.size();
-//
-//  thrust::device_vector<int64_t> d_groupby_column(groupby_column);
-//  thrust::device_vector<double> d_aggregation_column(aggregation_column);
-//
-//  gdf_column gdf_groupby_column;
-//  gdf_groupby_column.data = static_cast<void*>(d_groupby_column.data().get());
-//  gdf_groupby_column.size = size;
-//  gdf_groupby_column.dtype = GDF_INT64;
-//
-//  gdf_column gdf_aggregation_column;
-//  gdf_aggregation_column.data = static_cast<void*>(d_aggregation_column.data().get());
-//  gdf_aggregation_column.size = size;
-//  gdf_aggregation_column.dtype = GDF_FLOAT64;
-//
-//  thrust::device_vector<int64_t> groupby_result{size};
-//  thrust::device_vector<double> aggregation_result{size};
-//
-//  gdf_column gdf_groupby_result;
-//  gdf_groupby_result.data = static_cast<void*>(groupby_result.data().get());
-//  gdf_groupby_result.size = size;
-//  gdf_groupby_result.dtype = GDF_INT64;
-//
-//  gdf_column gdf_aggregation_result;
-//  gdf_aggregation_result.data = static_cast<void*>(aggregation_result.data().get());
-//  gdf_aggregation_result.size = size;
-//  gdf_aggregation_result.dtype = GDF_FLOAT64;
-//
-//  // Determines if the final result is sorted
-//  int flag_sort_result = 1;
-//
-//  gdf_context context{0, GDF_HASH, 0, flag_sort_result};
-//
-//  gdf_column * p_gdf_groupby_column = &gdf_groupby_column;
-//
-//  gdf_column * p_gdf_groupby_result = &gdf_groupby_result;
-//
-//  gdf_group_by_max((int) 1,      
-//                   &p_gdf_groupby_column,
-//                   &gdf_aggregation_column,
-//                   nullptr,         
-//                   &p_gdf_groupby_result,
-//                   &gdf_aggregation_result,
-//                   &context);
-//
-//  print_v(groupby_result, std::cout);
-//  print_v(aggregation_result, std::cout);
-//
-//  // Make sure results are sorted
-//  if(1 == flag_sort_result){
-//    std::map<int64_t, double> expected_results { {1,3.}, {2,5.}, {3,6.}, {4,7.}, {42, 51.} };
-//    ASSERT_EQ(expected_results.size(), gdf_groupby_result.size);
-//    ASSERT_EQ(expected_results.size(), gdf_aggregation_result.size);
-//
-//    int i = 0;
-//    for(auto kv : expected_results){
-//      EXPECT_EQ(kv.first, groupby_result[i]) << "index: " << i;
-//      EXPECT_EQ(kv.second, aggregation_result[i++]) << "index: " << i;
-//    }
-//  }
-//  else
-//  {
-//    std::unordered_map<int64_t, double> expected_results { {1,3.}, {2,5.}, {3,6.}, {4,7.} };
-//    ASSERT_EQ(expected_results.size(), gdf_groupby_result.size);
-//    ASSERT_EQ(expected_results.size(), gdf_aggregation_result.size);
-//
-//    for(int i = 0; i < gdf_aggregation_result.size; ++i){
-//      const int64_t key = groupby_result[i];
-//      const double value = aggregation_result[i];
-//      auto found = expected_results.find(groupby_result[i]);
-//      EXPECT_EQ(found->first, key);
-//      EXPECT_EQ(found->second, value);
-//    }
-//  }
-//}
-
 
