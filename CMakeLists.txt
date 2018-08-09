@@ -124,6 +124,7 @@ cuda_add_library(rmm SHARED
 )
 
 cuda_add_library(gdf SHARED
+    src/memory/memory.cpp
     src/binaryops.cu
     src/bitmaskops.cu
     src/column.cpp
