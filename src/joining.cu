@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2017, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -99,6 +99,7 @@ gdf_error gdf_##Fn##_generic(gdf_column *leftcol, gdf_column * rightcol,    \
                                  gdf_join_result_type **out_result) {       \
     switch ( leftcol->dtype ){                                              \
     case GDF_INT8:  return gdf_##Fn##_i8(leftcol, rightcol, out_result);    \
+    case GDF_INT16: return gdf_##Fn##_i16(leftcol, rightcol, out_result);   \
     case GDF_INT32: return gdf_##Fn##_i32(leftcol, rightcol, out_result);   \
     case GDF_INT64: return gdf_##Fn##_i64(leftcol, rightcol, out_result);   \
     case GDF_FLOAT32: return gdf_##Fn##_f32(leftcol, rightcol, out_result); \
@@ -116,22 +117,37 @@ gdf_error gdf_##Fn##_generic(gdf_column *leftcol, gdf_column * rightcol,    \
                                 less_t<int64_t>(), result_ptr->context);
 
 #define JOIN_HASH_T3(T1, l1, r1, T2, l2, r2, T3, l3, r3) \
-  if (T3 == GDF_INT8)  { JOIN_HASH_TYPES(T1, l1, r1, T2, l2, r2, int8_t, l3, r3) } \
-  if (T3 == GDF_INT16) { JOIN_HASH_TYPES(T1, l1, r1, T2, l2, r2, int16_t, l3, r3) } \
-  if (T3 == GDF_INT32) { JOIN_HASH_TYPES(T1, l1, r1, T2, l2, r2, int32_t, l3, r3) } \
-  if (T3 == GDF_INT64) { JOIN_HASH_TYPES(T1, l1, r1, T2, l2, r2, int64_t, l3, r3) }
+  if (T3 == GDF_INT8)      { JOIN_HASH_TYPES(T1, l1, r1, T2, l2, r2,  int8_t, l3, r3) } \
+  if (T3 == GDF_INT16)     { JOIN_HASH_TYPES(T1, l1, r1, T2, l2, r2, int16_t, l3, r3) } \
+  if (T3 == GDF_INT32)     { JOIN_HASH_TYPES(T1, l1, r1, T2, l2, r2, int32_t, l3, r3) } \
+  if (T3 == GDF_INT64)     { JOIN_HASH_TYPES(T1, l1, r1, T2, l2, r2, int64_t, l3, r3) } \
+  if (T3 == GDF_FLOAT32)   { JOIN_HASH_TYPES(T1, l1, r1, T2, l2, r2, int32_t, l3, r3) } \
+  if (T3 == GDF_FLOAT64)   { JOIN_HASH_TYPES(T1, l1, r1, T2, l2, r2, int64_t, l3, r3) } \
+  if (T3 == GDF_DATE32)    { JOIN_HASH_TYPES(T1, l1, r1, T2, l2, r2, int32_t, l3, r3) } \
+  if (T3 == GDF_DATE64)    { JOIN_HASH_TYPES(T1, l1, r1, T2, l2, r2, int64_t, l3, r3) } \
+  if (T3 == GDF_TIMESTAMP) { JOIN_HASH_TYPES(T1, l1, r1, T2, l2, r2, int64_t, l3, r3) }
 
 #define JOIN_HASH_T2(T1, l1, r1, T2, l2, r2, T3, l3, r3) \
-  if (T2 == GDF_INT8)  { JOIN_HASH_T3(T1, l1, r1, int8_t, l2, r2, T3, l3, r3) } \
-  if (T2 == GDF_INT16) { JOIN_HASH_T3(T1, l1, r1, int16_t, l2, r2, T3, l3, r3) } \
-  if (T2 == GDF_INT32) { JOIN_HASH_T3(T1, l1, r1, int32_t, l2, r2, T3, l3, r3) } \
-  if (T2 == GDF_INT64) { JOIN_HASH_T3(T1, l1, r1, int64_t, l2, r2, T3, l3, r3) }
+  if (T2 == GDF_INT8)       { JOIN_HASH_T3(T1, l1, r1,  int8_t, l2, r2, T3, l3, r3) } \
+  if (T2 == GDF_INT16)      { JOIN_HASH_T3(T1, l1, r1, int16_t, l2, r2, T3, l3, r3) } \
+  if (T2 == GDF_INT32)      { JOIN_HASH_T3(T1, l1, r1, int32_t, l2, r2, T3, l3, r3) } \
+  if (T2 == GDF_INT64)      { JOIN_HASH_T3(T1, l1, r1, int64_t, l2, r2, T3, l3, r3) } \
+  if (T2 == GDF_FLOAT32)    { JOIN_HASH_T3(T1, l1, r1, int32_t, l2, r2, T3, l3, r3) } \
+  if (T2 == GDF_FLOAT64)    { JOIN_HASH_T3(T1, l1, r1, int64_t, l2, r2, T3, l3, r3) } \
+  if (T2 == GDF_DATE32)     { JOIN_HASH_T3(T1, l1, r1, int32_t, l2, r2, T3, l3, r3) } \
+  if (T2 == GDF_DATE64)     { JOIN_HASH_T3(T1, l1, r1, int64_t, l2, r2, T3, l3, r3) } \
+  if (T2 == GDF_TIMESTAMP)  { JOIN_HASH_T3(T1, l1, r1, int64_t, l2, r2, T3, l3, r3) }
 
 #define JOIN_HASH_T1(T1, l1, r1, T2, l2, r2, T3, l3, r3) \
-  if (T1 == GDF_INT8)  { JOIN_HASH_T2(int8_t, l1, r1, T2, l2, r2, T3, l3, r3) } \
-  if (T1 == GDF_INT16) { JOIN_HASH_T2(int16_t, l1, r1, T2, l2, r2, T3, l3, r3) } \
-  if (T1 == GDF_INT32) { JOIN_HASH_T2(int32_t, l1, r1, T2, l2, r2, T3, l3, r3) } \
-  if (T1 == GDF_INT64) { JOIN_HASH_T2(int64_t, l1, r1, T2, l2, r2, T3, l3, r3) }
+  if (T1 == GDF_INT8)      { JOIN_HASH_T2( int8_t, l1, r1, T2, l2, r2, T3, l3, r3) } \
+  if (T1 == GDF_INT16)     { JOIN_HASH_T2(int16_t, l1, r1, T2, l2, r2, T3, l3, r3) } \
+  if (T1 == GDF_INT32)     { JOIN_HASH_T2(int32_t, l1, r1, T2, l2, r2, T3, l3, r3) } \
+  if (T1 == GDF_INT64)     { JOIN_HASH_T2(int64_t, l1, r1, T2, l2, r2, T3, l3, r3) } \
+  if (T1 == GDF_FLOAT32)   { JOIN_HASH_T2(int32_t, l1, r1, T2, l2, r2, T3, l3, r3) } \
+  if (T1 == GDF_FLOAT64)   { JOIN_HASH_T2(int64_t, l1, r1, T2, l2, r2, T3, l3, r3) } \
+  if (T1 == GDF_DATE32)    { JOIN_HASH_T2(int32_t, l1, r1, T2, l2, r2, T3, l3, r3) } \
+  if (T1 == GDF_DATE64)    { JOIN_HASH_T2(int64_t, l1, r1, T2, l2, r2, T3, l3, r3) } \
+  if (T1 == GDF_TIMESTAMP) { JOIN_HASH_T2(int64_t, l1, r1, T2, l2, r2, T3, l3, r3) }
 
 // multi-column join function
 gdf_error gdf_multi_left_join_generic(int num_cols, gdf_column **leftcol, gdf_column **rightcol, gdf_join_result_type **out_result)
@@ -143,13 +159,10 @@ gdf_error gdf_multi_left_join_generic(int num_cols, gdf_column **leftcol, gdf_co
     if (i > 0 && rightcol[i]->size != rightcol[i-1]->size) return GDF_COLUMN_SIZE_MISMATCH;
   }
 
-  // TODO: currently support up to 3 columns, and only int32 and int64 types
+  // TODO: currently support up to 3 columns
   if (num_cols > 3) return GDF_JOIN_TOO_MANY_COLUMNS;
   for (int i = 0; i < num_cols; i++) {
-    if (leftcol[i]->dtype != GDF_INT8 &&
-        leftcol[i]->dtype != GDF_INT16 &&
-        leftcol[i]->dtype != GDF_INT32 &&
-	leftcol[i]->dtype != GDF_INT64) return GDF_UNSUPPORTED_DTYPE;
+    if (leftcol[i]->dtype == N_GDF_TYPES ) return GDF_UNSUPPORTED_DTYPE;
   }
 
   std::unique_ptr<join_result<int> > result_ptr(new join_result<int>);
@@ -188,8 +201,8 @@ DEF_INNER_JOIN(i8,  int8_t)
 DEF_INNER_JOIN(i16, int16_t)
 DEF_INNER_JOIN(i32, int32_t)
 DEF_INNER_JOIN(i64, int64_t)
-DEF_INNER_JOIN_FP(f32, float)
-DEF_INNER_JOIN_FP(f64, double)
+DEF_INNER_JOIN(f32, int32_t)
+DEF_INNER_JOIN(f64, int64_t)
 
 
 #ifdef HASH_JOIN
@@ -201,17 +214,19 @@ DEF_INNER_JOIN_FP(f64, double)
 #endif
 DEF_JOIN_DISP(left_join)
 DEF_LEFT_JOIN(i8,  int8_t)
+DEF_LEFT_JOIN(i16, int16_t)
 DEF_LEFT_JOIN(i32, int32_t)
 DEF_LEFT_JOIN(i64, int64_t)
-DEF_LEFT_JOIN_FP(f32, float)
-DEF_LEFT_JOIN_FP(f64, double)
+DEF_LEFT_JOIN(f32, int32_t)
+DEF_LEFT_JOIN(f64, int64_t)
 
 
 #define DEF_OUTER_JOIN(Fn, T) DEF_JOIN(outer_join_ ## Fn, T, outer_join)
 DEF_JOIN_DISP(outer_join)
 DEF_OUTER_JOIN(i8,  int8_t)
+DEF_OUTER_JOIN(i16, int16_t)
 DEF_OUTER_JOIN(i32, int32_t)
 DEF_OUTER_JOIN(i64, int64_t)
-DEF_OUTER_JOIN(f32, float)
-DEF_OUTER_JOIN(f64, double)
+DEF_OUTER_JOIN(f32, int32_t)
+DEF_OUTER_JOIN(f64, int64_t)
 
