@@ -21,8 +21,6 @@
  Author: Mark Harris
  */
 
-#pragma once
-
 #include "cuda_runtime_api.h"
 
 /// Result codes returned by the memory manager
