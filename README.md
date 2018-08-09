@@ -51,8 +51,8 @@ $ conda install -c omnia boost=1.58.0=py33_0
 ```
 
 Libgdf supports Apache Arrow versions 0.7.1 and 0.8+ (0.10.0 is
-currently default) that use different metadata versions in IPC. So, it
-is important to specify which Apache arrow version will be used during
+default) that use different metadata versions in IPC. So, it is
+important to specify which Apache arrow version will be used during
 building libgdf.  To select required Apache Arrow version, define the
 following environment variables (using Arrow version 0.10.0 as an
 example):
@@ -74,6 +74,7 @@ the dependencies.
 $ conda env create --name libgdf_dev --file ../conda_environments/dev_py35.yml
 # activate the environment
 $ source activate libgdf_dev
+# when not using default arrow version 0.10.0, run
 $ conda install pyarrow=$ARROW_VERSION -c conda-forge
 ```
 
