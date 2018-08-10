@@ -2,12 +2,69 @@
 import pytest
 import logging
 
+try:
+    import pyarrow as pa
+    arrow_version = pa.__version__
+except ImportError as msg:
+    print('Failed to import pyarrow: {}'.format(msg))
+    pa = None
+    arrow_version = None
+
 import numpy as np
 from numba import cuda
 
 from pygdf.gpuarrow import GpuArrowReader
 
-@pytest.mark.skip(reason='segfaults, arrow 0.9.0 support not implemented in libgdf')
+def make_gpu_parse_arrow_data_batch():
+    lat = np.array([39.297604, 41.785984, 29.533695, 41.785984, 39.297604, 39.1754  ,
+                    29.645418, 36.124477, 29.533695, 32.847115, 29.533695, 32.847115,
+                    41.785984, 38.17439 , 40.491467, 41.785984, 33.66364 , 30.194532,
+                    41.785984, 36.124477, 28.428888, 41.785984, 29.533695],
+                   dtype=np.float32)
+    lon = np.array([ -94.713905,  -87.752426,  -98.46978 ,  -87.752426,  -94.713905,
+                     -76.6682  ,  -95.27889 ,  -86.678185,  -98.46978 ,  -96.85177 ,
+                     -98.46978 ,  -96.85177 ,  -87.752426,  -85.736   ,  -80.23287 ,
+                     -87.752426, -101.82278 ,  -97.66987 ,  -87.752426,  -86.678185,
+                     -81.316025,  -87.752426,  -98.46978 ], dtype=np.float32)
+    dest_lat = pa.array(lat)
+    dest_lon = pa.array(lon)
+    if arrow_version=='0.7.1':
+        dest_lat = dest_lat.cast(pa.float32())
+        dest_lon = dest_lon.cast(pa.float32())
+    batch = pa.RecordBatch.from_arrays([dest_lat, dest_lon], ['dest_lat', 'dest_lon'])
+    return batch
+
+@pytest.mark.skipif(arrow_version is None, reason = 'need compatible pyarrow to generate test data')
+def test_gpu_parse_arrow_data_new():
+    batch = make_gpu_parse_arrow_data_batch()
+    schema_data = batch.schema.serialize().to_pybytes()
+    recbatch_data = batch.serialize().to_pybytes()
+    cpu_schema = np.ndarray(shape=len(schema_data), dtype=np.byte,
+                            buffer=bytearray(schema_data))
+    cpu_data = np.ndarray(shape=len(recbatch_data), dtype=np.byte,
+                          buffer=bytearray(recbatch_data))
+    gpu_data = cuda.to_device(cpu_data)
+    del cpu_data
+
+    # test reader
+    reader = GpuArrowReader(cpu_schema, gpu_data)
+    assert reader[0].name == 'dest_lat'
+    assert reader[1].name == 'dest_lon'
+
+    lat = reader[0].data.copy_to_host()
+    lon = reader[1].data.copy_to_host()
+    assert lat.size == 23
+    assert lon.size == 23
+    np.testing.assert_array_less(lat, 42)
+    np.testing.assert_array_less(27, lat)
+    np.testing.assert_array_less(lon, -76)
+    np.testing.assert_array_less(-105, lon)
+
+    dct = reader.to_dict()
+    np.testing.assert_array_equal(lat, dct['dest_lat'].to_array())
+    np.testing.assert_array_equal(lon, dct['dest_lon'].to_array())
+
+@pytest.mark.skipif(arrow_version != '0.7.1', reason = 'requires arrow 0.7.1, got {}'.format(arrow_version))
 def test_gpu_parse_arrow_data():
     # make gpu array
     schema_data = b"""\x00\x01\x00\x00\x10\x00\x00\x00\x0c\x00\x0e\x00\x06\x00\x05\x00\x08\x00\x00\x00\x0c\x00\x00\x00\x00\x01\x02\x00\x10\x00\x00\x00\x00\x00\n\x00\x08\x00\x00\x00\x04\x00\x00\x00\n\x00\x00\x00\x04\x00\x00\x00\x02\x00\x00\x00l\x00\x00\x00\x04\x00\x00\x00\xb0\xff\xff\xff\x00\x00\x01\x038\x00\x00\x00\x1c\x00\x00\x00\x14\x00\x00\x00\x04\x00\x00\x00\x02\x00\x00\x00\x1c\x00\x00\x00\x10\x00\x00\x00\x00\x00\x00\x00\x9a\xff\xff\xff\x00\x00\x01\x00\x8c\xff\xff\xff \x00\x01\x00\x94\xff\xff\xff\x01\x00\x02\x00\x08\x00\x00\x00dest_lon\x00\x00\x00\x00\x14\x00\x18\x00\x08\x00\x06\x00\x07\x00\x0c\x00\x00\x00\x10\x00\x14\x00\x00\x00\x14\x00\x00\x00\x00\x00\x01\x03H\x00\x00\x00$\x00\x00\x00\x14\x00\x00\x00\x04\x00\x00\x00\x02\x00\x00\x00,\x00\x00\x00\x18\x00\x00\x00\x00\x00\x00\x00\x00\x00\x06\x00\x08\x00\x06\x00\x06\x00\x00\x00\x00\x00\x01\x00\xf8\xff\xff\xff \x00\x01\x00\x08\x00\x08\x00\x04\x00\x06\x00\x08\x00\x00\x00\x01\x00\x02\x00\x08\x00\x00\x00dest_lat\x00\x00\x00\x00\x00\x00\x00\x00"""  # noqa: E501
@@ -78,7 +135,54 @@ def get_expected_values():
     return [(int(idx), name, float(weight))
             for idx, name, weight in rows]
 
-@pytest.mark.skip(reason='segfaults, arrow 0.9.0 support not implemented in libgdf')
+def make_gpu_parse_arrow_cats_batch():
+    indices, names, weights = zip(*get_expected_values())
+    d_index = pa.array(indices).cast(pa.int32())
+    unique_names = list(set(names))
+    names_map = list(map(unique_names.index, names))
+    d_names_map = pa.array(names_map).cast(pa.int32())
+    d_names = pa.array(unique_names)
+    d_name = pa.DictionaryArray.from_arrays(d_names_map, d_names)
+    d_weight = pa.array(weights)
+    batch = pa.RecordBatch.from_arrays([d_index, d_name, d_weight], ['idx', 'name', 'weight'])
+    return batch
+
+@pytest.mark.skipif(arrow_version is None, reason = 'need compatible pyarrow to generate test data')
+def test_gpu_parse_arrow_cats_new():
+    batch = make_gpu_parse_arrow_cats_batch()
+    schema_bytes = batch.schema.serialize().to_pybytes()
+    recordbatches_bytes = batch.serialize().to_pybytes()
+    schema = np.ndarray(shape=len(schema_bytes), dtype=np.byte,
+                        buffer=bytearray(schema_bytes))
+    rb_cpu_data = np.ndarray(shape=len(recordbatches_bytes), dtype=np.byte,
+                             buffer=bytearray(recordbatches_bytes))
+    rb_gpu_data = cuda.to_device(rb_cpu_data)
+
+    gar = GpuArrowReader(schema, rb_gpu_data)
+    columns = gar.to_dict()
+    sr_idx = columns['idx']
+    sr_name = columns['name']
+    sr_weight = columns['weight']
+
+    assert sr_idx.dtype == np.int32
+    assert sr_name.dtype == 'category'
+    assert sr_weight.dtype == np.double
+    assert set(sr_name) == {'apple', 'pear', 'orange', 'grape'}
+
+    expected = get_expected_values()
+    for i in range(len(sr_idx)):
+        got_idx = sr_idx[i]
+        got_name = sr_name[i]
+        got_weight = sr_weight[i]
+
+        # the serialized data is not of order
+        exp_idx, exp_name, exp_weight = expected[got_idx]
+
+        assert got_idx == exp_idx
+        assert got_name == exp_name
+        np.testing.assert_almost_equal(got_weight, exp_weight)
+
+@pytest.mark.skipif(arrow_version != '0.7.1', reason = 'requires arrow 0.7.1, got {}'.format(arrow_version))
 def test_gpu_parse_arrow_cats():
     schema_bytes = b"""\xa8\x01\x00\x00\x10\x00\x00\x00\x0c\x00\x0e\x00\x06\x00\x05\x00\x08\x00\x00\x00\x0c\x00\x00\x00\x00\x01\x02\x00\x10\x00\x00\x00\x00\x00\n\x00\x08\x00\x00\x00\x04\x00\x00\x00\n\x00\x00\x00\x04\x00\x00\x00\x03\x00\x00\x00\x18\x01\x00\x00p\x00\x00\x00\x04\x00\x00\x00\x08\xff\xff\xff\x00\x00\x01\x03@\x00\x00\x00$\x00\x00\x00\x14\x00\x00\x00\x04\x00\x00\x00\x02\x00\x00\x00$\x00\x00\x00\x18\x00\x00\x00\x00\x00\x00\x00\x00\x00\x06\x00\x08\x00\x06\x00\x06\x00\x00\x00\x00\x00\x02\x00\xe8\xfe\xff\xff@\x00\x01\x00\xf0\xfe\xff\xff\x01\x00\x02\x00\x06\x00\x00\x00weight\x00\x00\x14\x00\x1e\x00\x08\x00\x06\x00\x07\x00\x0c\x00\x10\x00\x14\x00\x18\x00\x00\x00\x14\x00\x00\x00\x00\x00\x01\x05|\x00\x00\x00T\x00\x00\x00\x18\x00\x00\x00D\x00\x00\x000\x00\x00\x00\x00\x00\n\x00\x14\x00\x08\x00\x04\x00\x00\x00\n\x00\x00\x00\x10\x00\x00\x00\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00p\xff\xff\xff\x00\x00\x00\x01 \x00\x00\x00\x03\x00\x00\x000\x00\x00\x00$\x00\x00\x00\x10\x00\x00\x00\x00\x00\x00\x00\x04\x00\x04\x00\x04\x00\x00\x00|\xff\xff\xff\x08\x00\x01\x00\x08\x00\x08\x00\x06\x00\x00\x00\x08\x00\x00\x00\x00\x00 \x00\x94\xff\xff\xff\x01\x00\x02\x00\x04\x00\x00\x00name\x00\x00\x00\x00\x14\x00\x18\x00\x08\x00\x06\x00\x07\x00\x0c\x00\x00\x00\x10\x00\x14\x00\x00\x00\x14\x00\x00\x00\x00\x00\x01\x02L\x00\x00\x00$\x00\x00\x00\x14\x00\x00\x00\x04\x00\x00\x00\x02\x00\x00\x000\x00\x00\x00\x1c\x00\x00\x00\x00\x00\x00\x00\x08\x00\x0c\x00\x08\x00\x07\x00\x08\x00\x00\x00\x00\x00\x00\x01 \x00\x00\x00\xf8\xff\xff\xff \x00\x01\x00\x08\x00\x08\x00\x04\x00\x06\x00\x08\x00\x00\x00\x01\x00\x02\x00\x03\x00\x00\x00idx\x00\xc8\x00\x00\x00\x14\x00\x00\x00\x00\x00\x00\x00\x0c\x00\x14\x00\x06\x00\x05\x00\x08\x00\x0c\x00\x0c\x00\x00\x00\x00\x02\x02\x00\x14\x00\x00\x00\x80\x00\x00\x00\x00\x00\x00\x00\x08\x00\x12\x00\x08\x00\x04\x00\x08\x00\x00\x00\x18\x00\x00\x00\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\n\x00\x18\x00\x0c\x00\x04\x00\x08\x00\n\x00\x00\x00d\x00\x00\x00\x10\x00\x00\x00\x04\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x03\x00\x00\x00\xff\xff\xff\xff\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\xff\xff\xff\xff\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00@\x00\x00\x00\x00\x00\x00\x00\xff\xff\xff\xff\x00\x00\x00\x00@\x00\x00\x00\x00\x00\x00\x00@\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x01\x00\x00\x00\x04\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x06\x00\x00\x00\x0b\x00\x00\x00\x0f\x00\x00\x00\x14\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00orangeapplepeargrape\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"""  # noqa: E501
     schema = np.ndarray(shape=len(schema_bytes), dtype=np.byte,
@@ -114,7 +218,37 @@ def test_gpu_parse_arrow_cats():
         assert got_name == exp_name
         np.testing.assert_almost_equal(got_weight, exp_weight)
 
-@pytest.mark.skip(reason='segfaults, arrow 0.9.0 support not implemented in libgdf')
+def make_gpu_parse_arrow_int16_batch():
+    depdelay = np.array([ 0,  0, -3, -2, 11,  6, -7, -4,  4, -3], dtype=np.int16)
+    arrdelay = np.array([  5,  -3,   1,  -2,  22,  11, -12,  -5,   4,  -9], dtype=np.int16)
+    d_depdelay = pa.array(depdelay)
+    d_arrdelay = pa.array(arrdelay)
+    if arrow_version=='0.7.1':
+        d_depdelay = d_depdelay.cast(pa.int16())
+        d_arrdelay = d_arrdelay.cast(pa.int16())
+    batch = pa.RecordBatch.from_arrays([d_depdelay, d_arrdelay], ['depdelay', 'arrdelay'])
+    return batch
+
+@pytest.mark.skipif(arrow_version is None, reason = 'need compatible pyarrow to generate test data')
+def test_gpu_parse_arrow_int16_new():
+    batch = make_gpu_parse_arrow_int16_batch()
+    schema_bytes = batch.schema.serialize().to_pybytes()
+    recordbatches_bytes = batch.serialize().to_pybytes()
+
+    schema = np.ndarray(shape=len(schema_bytes), dtype=np.byte,
+                        buffer=bytearray(schema_bytes))
+
+    rb_cpu_data = np.ndarray(shape=len(recordbatches_bytes), dtype=np.byte,
+                             buffer=bytearray(recordbatches_bytes))
+
+    rb_gpu_data = cuda.to_device(rb_cpu_data)
+    gar = GpuArrowReader(schema, rb_gpu_data)
+    columns = gar.to_dict()
+    assert columns['depdelay'].dtype == np.int16
+    assert set(columns) == {"depdelay", "arrdelay"}
+    assert list(columns['depdelay']) == [0, 0, -3, -2, 11, 6, -7, -4, 4, -3]
+
+@pytest.mark.skipif(arrow_version != '0.7.1', reason = 'requires arrow 0.7.1, got {}'.format(arrow_version))
 def test_gpu_parse_arrow_int16():
     schema_bytes = b'\x08\x01\x00\x00\x10\x00\x00\x00\x0c\x00\x0e\x00\x06\x00\x05\x00\x08\x00\x00\x00\x0c\x00\x00\x00\x00\x01\x02\x00\x10\x00\x00\x00\x00\x00\n\x00\x08\x00\x00\x00\x04\x00\x00\x00\n\x00\x00\x00\x04\x00\x00\x00\x02\x00\x00\x00p\x00\x00\x00\x04\x00\x00\x00\xac\xff\xff\xff\x00\x00\x01\x02<\x00\x00\x00\x1c\x00\x00\x00\x14\x00\x00\x00\x04\x00\x00\x00\x02\x00\x00\x00 \x00\x00\x00\x14\x00\x00\x00\x00\x00\x00\x00\x98\xff\xff\xff\x00\x00\x00\x01\x10\x00\x00\x00\x88\xff\xff\xff\x10\x00\x01\x00\x90\xff\xff\xff\x01\x00\x02\x00\x08\x00\x00\x00arrdelay\x00\x00\x00\x00\x14\x00\x18\x00\x08\x00\x06\x00\x07\x00\x0c\x00\x00\x00\x10\x00\x14\x00\x00\x00\x14\x00\x00\x00\x00\x00\x01\x02L\x00\x00\x00$\x00\x00\x00\x14\x00\x00\x00\x04\x00\x00\x00\x02\x00\x00\x000\x00\x00\x00\x1c\x00\x00\x00\x00\x00\x00\x00\x08\x00\x0c\x00\x08\x00\x07\x00\x08\x00\x00\x00\x00\x00\x00\x01\x10\x00\x00\x00\xf8\xff\xff\xff\x10\x00\x01\x00\x08\x00\x08\x00\x04\x00\x06\x00\x08\x00\x00\x00\x01\x00\x02\x00\x08\x00\x00\x00depdelay\x00\x00\x00\x00\x00\x00\x00\x00'  # noqa
 
@@ -132,7 +266,6 @@ def test_gpu_parse_arrow_int16():
     assert columns['depdelay'].dtype == np.int16
     assert set(columns) == {"depdelay", "arrdelay"}
     assert list(columns['depdelay']) == [0, 0, -3, -2, 11, 6, -7, -4, 4, -3]
-
 
 if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO)
