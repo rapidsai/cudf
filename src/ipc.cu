@@ -351,7 +351,7 @@ protected:
 
             _nodes.push_back(NodeDesc());
             auto &out_node = _nodes.back();
-
+	    
             for ( int j=0; j < buffer_per_node; ++j ) {
                 auto buf = rb->buffers()->Get(i * buffer_per_node + j);
 #if ARROW_VERSION < 800
@@ -362,9 +362,9 @@ protected:
                 BufferDesc bufdesc;
                 bufdesc.offset = buf->offset();
                 bufdesc.length = buf->length();
-		
+
 #if ARROW_VERSION < 800
-		const auto &layout = fd.layouts[j];
+                const auto &layout = fd.layouts[j];
                 if ( layout.vectortype == "DATA" ) {
                     out_node.data_buffer = bufdesc;
                     out_node.dtype.name = fd.type;
@@ -375,12 +375,17 @@ protected:
                     throw ParseError("unsupported vector type");
                 }
 #else
-                out_node.data_buffer = bufdesc;
-		//out_node.null_buffer = bufdesc; // how to tell when buffer contains data or not?
-		out_node.dtype.name = fd.type;
-		//out_node.dtype.bitwidth = ??; // arrow-0.8+: bitwidth is defined in schema
+		if (j==0) // assuming first buffer is null bitmap
+                    out_node.null_buffer = bufdesc;
+                else {
+                    out_node.data_buffer = bufdesc;
+                    out_node.dtype.name = fd.type;
+                    out_node.dtype.bitwidth = (bufdesc.length / node->length()) * 8;
+		}
 #endif
             }
+
+	    assert(out_node.null_buffer.length <= out_node.data_buffer.length); // check the null bitmap assumption
 
             out_node.name = fd.name;
             out_node.length = node->length();
