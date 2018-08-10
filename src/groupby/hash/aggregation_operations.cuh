@@ -13,7 +13,7 @@
 template<typename value_type>
 struct max_op{
 
-  constexpr static value_type IDENTITY{std::numeric_limits<value_type>::min()};
+  constexpr static value_type IDENTITY{std::numeric_limits<value_type>::lowest()};
 
   __host__ __device__ value_type operator()(value_type new_value, value_type old_value)
   {

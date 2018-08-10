@@ -96,12 +96,12 @@ gdf_error dispatch_aggregation_type(int ncols,
       }
     case GDF_FLOAT32:
       { 
-        return dispatched_groupby<groupby_type, double, op>(ncols, in_groupby_columns, in_aggregation_column, 
+        return dispatched_groupby<groupby_type, float, op>(ncols, in_groupby_columns, in_aggregation_column, 
                                                             out_groupby_columns, out_aggregation_column, sort_result);
       }
     case GDF_FLOAT64:
       { 
-        return dispatched_groupby<groupby_type, float, op>(ncols, in_groupby_columns, in_aggregation_column, 
+        return dispatched_groupby<groupby_type, double, op>(ncols, in_groupby_columns, in_aggregation_column, 
                                                            out_groupby_columns, out_aggregation_column, sort_result);
       }
     default:
@@ -143,6 +143,7 @@ gdf_error dispatch_groupby_type(int ncols,
         return dispatch_aggregation_type<int64_t, op>(ncols, in_groupby_columns, in_aggregation_column, 
                                                       out_groupby_columns, out_aggregation_column, sort_result);
       }
+    // For floating point groupby column types, cast to an integral type
     case GDF_FLOAT32:
       {
         return dispatch_aggregation_type<int32_t, op>(ncols, in_groupby_columns, in_aggregation_column, 
