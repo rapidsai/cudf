@@ -3,6 +3,14 @@ import pytest
 import os.path
 import pickle
 
+try:
+    import pyarrow as pa
+    arrow_version = pa.__version__
+except ImportError as msg:
+    print('Failed to import pyarrow: {}'.format(msg))
+    pa = None
+    arrow_version = None
+
 import numpy as np
 from numba import cuda
 
@@ -10,7 +18,7 @@ from pygdf.gpuarrow import GpuArrowReader
 from pygdf.dataframe import Series, DataFrame
 
 
-def read_data():
+def _read_data(): # not used, kept here to record ipums.pkl creation 
     basedir = os.path.dirname(__file__)
     # load schema
     schemapath = os.path.join(basedir, 'data', 'schema_ipums.pickle')
@@ -23,7 +31,26 @@ def read_data():
     darr = cuda.to_device(data)
     return schema, darr
 
-@pytest.mark.skip(reason='segfaults, arrow 0.9.0 support not implemented in libgdf')
+def read_data():
+    import pandas as pd
+    basedir = os.path.dirname(__file__)
+    datapath = os.path.join(basedir, 'data', 'ipums.pkl')
+    df = pd.read_pickle(datapath)
+    names = []
+    arrays = []
+    for k in df.columns:
+        arrays.append(pa.Array.from_pandas(df[k]))
+        names.append(k)
+    batch = pa.RecordBatch.from_arrays(arrays, names)
+    schema = batch.schema.serialize().to_pybytes()
+    schema = np.ndarray(shape=len(schema), dtype=np.byte,
+                        buffer=bytearray(schema))
+    data = batch.serialize().to_pybytes()
+    data = np.ndarray(shape=len(data), dtype=np.byte,
+                      buffer=bytearray(data))
+    darr = cuda.to_device(data)
+    return schema, darr
+
 def test_fillna():
     schema, darr = read_data()
     gar = GpuArrowReader(schema, darr)
@@ -49,12 +76,18 @@ def test_to_dense_array():
     assert dense.size < filled.size
     assert filled.size == len(sr)
 
-@pytest.mark.skip(reason='segfaults, arrow 0.9.0 support not implemented in libgdf')
 def test_reading_arrow_sparse_data():
     schema, darr = read_data()
     gar = GpuArrowReader(schema, darr)
 
     df = DataFrame(gar.to_dict().items())
+
+    if 0:
+        # read ipums arrow 0.7.1 specific binary data and save it as pickled pandas data frame.
+        # only used once, kept here as the instruction how to create ipums.pkl
+        import pandas as pd
+        pdf = pd.DataFrame.from_dict(dict([(k, v.to_pandas()) for k,v in gar.to_dict().items()]))
+        pdf.to_pickle(os.path.join(os.path.dirname(__file__), 'data', 'ipums.pkl'))
 
     # preprocessing
     num_cols = set()
