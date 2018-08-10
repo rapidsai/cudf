@@ -15,26 +15,34 @@ from numba import cuda
 
 from pygdf.gpuarrow import GpuArrowReader
 
+
 def make_gpu_parse_arrow_data_batch():
-    lat = np.array([39.297604, 41.785984, 29.533695, 41.785984, 39.297604, 39.1754  ,
-                    29.645418, 36.124477, 29.533695, 32.847115, 29.533695, 32.847115,
-                    41.785984, 38.17439 , 40.491467, 41.785984, 33.66364 , 30.194532,
-                    41.785984, 36.124477, 28.428888, 41.785984, 29.533695],
+    lat = np.array([39.297604, 41.785984, 29.533695, 41.785984,
+                    39.297604, 39.1754, 29.645418, 36.124477,
+                    29.533695, 32.847115, 29.533695, 32.847115,
+                    41.785984, 38.17439, 40.491467, 41.785984,
+                    33.66364, 30.194532, 41.785984, 36.124477,
+                    28.428888, 41.785984, 29.533695],
                    dtype=np.float32)
-    lon = np.array([ -94.713905,  -87.752426,  -98.46978 ,  -87.752426,  -94.713905,
-                     -76.6682  ,  -95.27889 ,  -86.678185,  -98.46978 ,  -96.85177 ,
-                     -98.46978 ,  -96.85177 ,  -87.752426,  -85.736   ,  -80.23287 ,
-                     -87.752426, -101.82278 ,  -97.66987 ,  -87.752426,  -86.678185,
-                     -81.316025,  -87.752426,  -98.46978 ], dtype=np.float32)
+    lon = np.array([-94.713905, -87.752426, -98.46978, -87.752426,
+                    -94.713905, -76.6682, -95.27889, -86.678185,
+                    -98.46978, -96.85177,
+                    -98.46978, -96.85177, -87.752426, -85.736,
+                    -80.23287, -87.752426,
+                    -101.82278, -97.66987, -87.752426, -86.678185, -81.316025,
+                    -87.752426, -98.46978], dtype=np.float32)
     dest_lat = pa.array(lat)
     dest_lon = pa.array(lon)
-    if arrow_version=='0.7.1':
+    if arrow_version == '0.7.1':
         dest_lat = dest_lat.cast(pa.float32())
         dest_lon = dest_lon.cast(pa.float32())
-    batch = pa.RecordBatch.from_arrays([dest_lat, dest_lon], ['dest_lat', 'dest_lon'])
+    batch = pa.RecordBatch.from_arrays([dest_lat, dest_lon],
+                                       ['dest_lat', 'dest_lon'])
     return batch
 
-@pytest.mark.skipif(arrow_version is None, reason = 'need compatible pyarrow to generate test data')
+
+@pytest.mark.skipif(arrow_version is None,
+                    reason='need compatible pyarrow to generate test data')
 def test_gpu_parse_arrow_data_new():
     batch = make_gpu_parse_arrow_data_batch()
     schema_data = batch.schema.serialize().to_pybytes()
@@ -64,7 +72,10 @@ def test_gpu_parse_arrow_data_new():
     np.testing.assert_array_equal(lat, dct['dest_lat'].to_array())
     np.testing.assert_array_equal(lon, dct['dest_lon'].to_array())
 
-@pytest.mark.skipif(arrow_version != '0.7.1', reason = 'requires arrow 0.7.1, got {}'.format(arrow_version))
+
+@pytest.mark.skipif(arrow_version != '0.7.1',
+                    reason='requires arrow 0.7.1, got {}'
+                    .format(arrow_version))
 def test_gpu_parse_arrow_data():
     # make gpu array
     schema_data = b"""\x00\x01\x00\x00\x10\x00\x00\x00\x0c\x00\x0e\x00\x06\x00\x05\x00\x08\x00\x00\x00\x0c\x00\x00\x00\x00\x01\x02\x00\x10\x00\x00\x00\x00\x00\n\x00\x08\x00\x00\x00\x04\x00\x00\x00\n\x00\x00\x00\x04\x00\x00\x00\x02\x00\x00\x00l\x00\x00\x00\x04\x00\x00\x00\xb0\xff\xff\xff\x00\x00\x01\x038\x00\x00\x00\x1c\x00\x00\x00\x14\x00\x00\x00\x04\x00\x00\x00\x02\x00\x00\x00\x1c\x00\x00\x00\x10\x00\x00\x00\x00\x00\x00\x00\x9a\xff\xff\xff\x00\x00\x01\x00\x8c\xff\xff\xff \x00\x01\x00\x94\xff\xff\xff\x01\x00\x02\x00\x08\x00\x00\x00dest_lon\x00\x00\x00\x00\x14\x00\x18\x00\x08\x00\x06\x00\x07\x00\x0c\x00\x00\x00\x10\x00\x14\x00\x00\x00\x14\x00\x00\x00\x00\x00\x01\x03H\x00\x00\x00$\x00\x00\x00\x14\x00\x00\x00\x04\x00\x00\x00\x02\x00\x00\x00,\x00\x00\x00\x18\x00\x00\x00\x00\x00\x00\x00\x00\x00\x06\x00\x08\x00\x06\x00\x06\x00\x00\x00\x00\x00\x01\x00\xf8\xff\xff\xff \x00\x01\x00\x08\x00\x08\x00\x04\x00\x06\x00\x08\x00\x00\x00\x01\x00\x02\x00\x08\x00\x00\x00dest_lat\x00\x00\x00\x00\x00\x00\x00\x00"""  # noqa: E501
@@ -135,6 +146,7 @@ def get_expected_values():
     return [(int(idx), name, float(weight))
             for idx, name, weight in rows]
 
+
 def make_gpu_parse_arrow_cats_batch():
     indices, names, weights = zip(*get_expected_values())
     d_index = pa.array(indices).cast(pa.int32())
@@ -144,10 +156,13 @@ def make_gpu_parse_arrow_cats_batch():
     d_names = pa.array(unique_names)
     d_name = pa.DictionaryArray.from_arrays(d_names_map, d_names)
     d_weight = pa.array(weights)
-    batch = pa.RecordBatch.from_arrays([d_index, d_name, d_weight], ['idx', 'name', 'weight'])
+    batch = pa.RecordBatch.from_arrays([d_index, d_name, d_weight],
+                                       ['idx', 'name', 'weight'])
     return batch
 
-@pytest.mark.skipif(arrow_version is None, reason = 'need compatible pyarrow to generate test data')
+
+@pytest.mark.skipif(arrow_version is None,
+                    reason='need compatible pyarrow to generate test data')
 def test_gpu_parse_arrow_cats_new():
     batch = make_gpu_parse_arrow_cats_batch()
     schema_bytes = batch.schema.serialize().to_pybytes()
@@ -182,7 +197,10 @@ def test_gpu_parse_arrow_cats_new():
         assert got_name == exp_name
         np.testing.assert_almost_equal(got_weight, exp_weight)
 
-@pytest.mark.skipif(arrow_version != '0.7.1', reason = 'requires arrow 0.7.1, got {}'.format(arrow_version))
+
+@pytest.mark.skipif(arrow_version != '0.7.1',
+                    reason='requires arrow 0.7.1, got {}'
+                    .format(arrow_version))
 def test_gpu_parse_arrow_cats():
     schema_bytes = b"""\xa8\x01\x00\x00\x10\x00\x00\x00\x0c\x00\x0e\x00\x06\x00\x05\x00\x08\x00\x00\x00\x0c\x00\x00\x00\x00\x01\x02\x00\x10\x00\x00\x00\x00\x00\n\x00\x08\x00\x00\x00\x04\x00\x00\x00\n\x00\x00\x00\x04\x00\x00\x00\x03\x00\x00\x00\x18\x01\x00\x00p\x00\x00\x00\x04\x00\x00\x00\x08\xff\xff\xff\x00\x00\x01\x03@\x00\x00\x00$\x00\x00\x00\x14\x00\x00\x00\x04\x00\x00\x00\x02\x00\x00\x00$\x00\x00\x00\x18\x00\x00\x00\x00\x00\x00\x00\x00\x00\x06\x00\x08\x00\x06\x00\x06\x00\x00\x00\x00\x00\x02\x00\xe8\xfe\xff\xff@\x00\x01\x00\xf0\xfe\xff\xff\x01\x00\x02\x00\x06\x00\x00\x00weight\x00\x00\x14\x00\x1e\x00\x08\x00\x06\x00\x07\x00\x0c\x00\x10\x00\x14\x00\x18\x00\x00\x00\x14\x00\x00\x00\x00\x00\x01\x05|\x00\x00\x00T\x00\x00\x00\x18\x00\x00\x00D\x00\x00\x000\x00\x00\x00\x00\x00\n\x00\x14\x00\x08\x00\x04\x00\x00\x00\n\x00\x00\x00\x10\x00\x00\x00\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00p\xff\xff\xff\x00\x00\x00\x01 \x00\x00\x00\x03\x00\x00\x000\x00\x00\x00$\x00\x00\x00\x10\x00\x00\x00\x00\x00\x00\x00\x04\x00\x04\x00\x04\x00\x00\x00|\xff\xff\xff\x08\x00\x01\x00\x08\x00\x08\x00\x06\x00\x00\x00\x08\x00\x00\x00\x00\x00 \x00\x94\xff\xff\xff\x01\x00\x02\x00\x04\x00\x00\x00name\x00\x00\x00\x00\x14\x00\x18\x00\x08\x00\x06\x00\x07\x00\x0c\x00\x00\x00\x10\x00\x14\x00\x00\x00\x14\x00\x00\x00\x00\x00\x01\x02L\x00\x00\x00$\x00\x00\x00\x14\x00\x00\x00\x04\x00\x00\x00\x02\x00\x00\x000\x00\x00\x00\x1c\x00\x00\x00\x00\x00\x00\x00\x08\x00\x0c\x00\x08\x00\x07\x00\x08\x00\x00\x00\x00\x00\x00\x01 \x00\x00\x00\xf8\xff\xff\xff \x00\x01\x00\x08\x00\x08\x00\x04\x00\x06\x00\x08\x00\x00\x00\x01\x00\x02\x00\x03\x00\x00\x00idx\x00\xc8\x00\x00\x00\x14\x00\x00\x00\x00\x00\x00\x00\x0c\x00\x14\x00\x06\x00\x05\x00\x08\x00\x0c\x00\x0c\x00\x00\x00\x00\x02\x02\x00\x14\x00\x00\x00\x80\x00\x00\x00\x00\x00\x00\x00\x08\x00\x12\x00\x08\x00\x04\x00\x08\x00\x00\x00\x18\x00\x00\x00\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\n\x00\x18\x00\x0c\x00\x04\x00\x08\x00\n\x00\x00\x00d\x00\x00\x00\x10\x00\x00\x00\x04\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x03\x00\x00\x00\xff\xff\xff\xff\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\xff\xff\xff\xff\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00@\x00\x00\x00\x00\x00\x00\x00\xff\xff\xff\xff\x00\x00\x00\x00@\x00\x00\x00\x00\x00\x00\x00@\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x01\x00\x00\x00\x04\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x06\x00\x00\x00\x0b\x00\x00\x00\x0f\x00\x00\x00\x14\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00orangeapplepeargrape\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"""  # noqa: E501
     schema = np.ndarray(shape=len(schema_bytes), dtype=np.byte,
@@ -218,18 +236,22 @@ def test_gpu_parse_arrow_cats():
         assert got_name == exp_name
         np.testing.assert_almost_equal(got_weight, exp_weight)
 
+
 def make_gpu_parse_arrow_int16_batch():
-    depdelay = np.array([ 0,  0, -3, -2, 11,  6, -7, -4,  4, -3], dtype=np.int16)
-    arrdelay = np.array([  5,  -3,   1,  -2,  22,  11, -12,  -5,   4,  -9], dtype=np.int16)
+    depdelay = np.array([0, 0, -3, -2, 11, 6, -7, -4, 4, -3], dtype=np.int16)
+    arrdelay = np.array([5, -3, 1, -2, 22, 11, -12, -5, 4, -9], dtype=np.int16)
     d_depdelay = pa.array(depdelay)
     d_arrdelay = pa.array(arrdelay)
-    if arrow_version=='0.7.1':
+    if arrow_version == '0.7.1':
         d_depdelay = d_depdelay.cast(pa.int16())
         d_arrdelay = d_arrdelay.cast(pa.int16())
-    batch = pa.RecordBatch.from_arrays([d_depdelay, d_arrdelay], ['depdelay', 'arrdelay'])
+    batch = pa.RecordBatch.from_arrays([d_depdelay, d_arrdelay],
+                                       ['depdelay', 'arrdelay'])
     return batch
 
-@pytest.mark.skipif(arrow_version is None, reason = 'need compatible pyarrow to generate test data')
+
+@pytest.mark.skipif(arrow_version is None,
+                    reason='need compatible pyarrow to generate test data')
 def test_gpu_parse_arrow_int16_new():
     batch = make_gpu_parse_arrow_int16_batch()
     schema_bytes = batch.schema.serialize().to_pybytes()
@@ -248,7 +270,10 @@ def test_gpu_parse_arrow_int16_new():
     assert set(columns) == {"depdelay", "arrdelay"}
     assert list(columns['depdelay']) == [0, 0, -3, -2, 11, 6, -7, -4, 4, -3]
 
-@pytest.mark.skipif(arrow_version != '0.7.1', reason = 'requires arrow 0.7.1, got {}'.format(arrow_version))
+
+@pytest.mark.skipif(arrow_version != '0.7.1',
+                    reason='requires arrow 0.7.1, got {}'
+                    .format(arrow_version))
 def test_gpu_parse_arrow_int16():
     schema_bytes = b'\x08\x01\x00\x00\x10\x00\x00\x00\x0c\x00\x0e\x00\x06\x00\x05\x00\x08\x00\x00\x00\x0c\x00\x00\x00\x00\x01\x02\x00\x10\x00\x00\x00\x00\x00\n\x00\x08\x00\x00\x00\x04\x00\x00\x00\n\x00\x00\x00\x04\x00\x00\x00\x02\x00\x00\x00p\x00\x00\x00\x04\x00\x00\x00\xac\xff\xff\xff\x00\x00\x01\x02<\x00\x00\x00\x1c\x00\x00\x00\x14\x00\x00\x00\x04\x00\x00\x00\x02\x00\x00\x00 \x00\x00\x00\x14\x00\x00\x00\x00\x00\x00\x00\x98\xff\xff\xff\x00\x00\x00\x01\x10\x00\x00\x00\x88\xff\xff\xff\x10\x00\x01\x00\x90\xff\xff\xff\x01\x00\x02\x00\x08\x00\x00\x00arrdelay\x00\x00\x00\x00\x14\x00\x18\x00\x08\x00\x06\x00\x07\x00\x0c\x00\x00\x00\x10\x00\x14\x00\x00\x00\x14\x00\x00\x00\x00\x00\x01\x02L\x00\x00\x00$\x00\x00\x00\x14\x00\x00\x00\x04\x00\x00\x00\x02\x00\x00\x000\x00\x00\x00\x1c\x00\x00\x00\x00\x00\x00\x00\x08\x00\x0c\x00\x08\x00\x07\x00\x08\x00\x00\x00\x00\x00\x00\x01\x10\x00\x00\x00\xf8\xff\xff\xff\x10\x00\x01\x00\x08\x00\x08\x00\x04\x00\x06\x00\x08\x00\x00\x00\x01\x00\x02\x00\x08\x00\x00\x00depdelay\x00\x00\x00\x00\x00\x00\x00\x00'  # noqa
 
@@ -266,6 +291,7 @@ def test_gpu_parse_arrow_int16():
     assert columns['depdelay'].dtype == np.int16
     assert set(columns) == {"depdelay", "arrdelay"}
     assert list(columns['depdelay']) == [0, 0, -3, -2, 11, 6, -7, -4, 4, -3]
+
 
 if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO)
