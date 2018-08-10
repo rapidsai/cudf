@@ -17,53 +17,6 @@
  */
 /* ----------------------------------------------------------------------------*/
 
-//gdf_error gdf_group_by_sum(int ncols,                    // # columns
-//                           gdf_column** cols,            //input cols
-//                           gdf_column* col_agg,          //column to aggregate on
-//                           gdf_column* out_col_indices,  //if not null return indices of re-ordered rows
-//                           gdf_column** out_col_values,  //if not null return the grouped-by columns
-//                                                         //(multi-gather based on indices, which are needed anyway)
-//                           gdf_column* out_col_agg,      //aggregation result
-//                           gdf_context* ctxt);           //struct with additional info: bool is_sorted, flag_sort_or_hash, bool flag_count_distinct
-//
-//gdf_error gdf_group_by_min(int ncols,                    // # columns
-//                           gdf_column** cols,            //input cols
-//                           gdf_column* col_agg,          //column to aggregate on
-//                           gdf_column* out_col_indices,  //if not null return indices of re-ordered rows
-//                           gdf_column** out_col_values,  //if not null return the grouped-by columns
-//                                                         //(multi-gather based on indices, which are needed anyway)
-//                           gdf_column* out_col_agg,      //aggregation result
-//                           gdf_context* ctxt);            //struct with additional info: bool is_sorted, flag_sort_or_hash, bool flag_count_distinct
-//
-//
-//gdf_error gdf_group_by_max(int ncols,                    // # columns
-//                           gdf_column** cols,            //input cols
-//                           gdf_column* col_agg,          //column to aggregate on
-//                           gdf_column* out_col_indices,  //if not null return indices of re-ordered rows
-//                           gdf_column** out_col_values,  //if not null return the grouped-by columns
-//                                                         //(multi-gather based on indices, which are needed anyway)
-//                           gdf_column* out_col_agg,      //aggregation result
-//                           gdf_context* ctxt);            //struct with additional info: bool is_sorted, flag_sort_or_hash, bool flag_count_distinct
-//
-//
-//gdf_error gdf_group_by_avg(int ncols,                    // # columns
-//                           gdf_column** cols,            //input cols
-//                           gdf_column* col_agg,          //column to aggregate on
-//                           gdf_column* out_col_indices,  //if not null return indices of re-ordered rows
-//                           gdf_column** out_col_values,  //if not null return the grouped-by columns
-//                                                         //(multi-gather based on indices, which are needed anyway)
-//                           gdf_column* out_col_agg,      //aggregation result
-//                           gdf_context* ctxt);            //struct with additional info: bool is_sorted, flag_sort_or_hash, bool flag_count_distinct
-//
-//gdf_error gdf_group_by_count(int ncols,                    // # columns
-//                             gdf_column** cols,            //input cols
-//                             gdf_column* col_agg,          //column to aggregate on
-//                             gdf_column* out_col_indices,  //if not null return indices of re-ordered rows
-//                             gdf_column** out_col_values,  //if not null return the grouped-by columns
-//                                                         //(multi-gather based on indices, which are needed anyway)
-//                             gdf_column* out_col_agg,      //aggregation result
-//                             gdf_context* ctxt);            //struct with additional info: bool is_sorted, flag_sort_or_hash, bool flag_count_distinct
-
 enum struct agg_op
 {
   MIN,
@@ -136,6 +89,14 @@ struct GDFGroupByTest : public testing::Test
   const key_type unused_key{std::numeric_limits<key_type>::max()};
   const value_type unused_value{std::numeric_limits<value_type>::max()};
 
+  std::vector<key_type> groupby_column;
+  std::vector<value_type> aggregation_column;
+
+  gdf_col_pointer gdf_groupby_column;
+  gdf_col_pointer gdf_aggregation_column; 
+  gdf_col_pointer gdf_groupby_output;
+  gdf_col_pointer gdf_agg_output;
+
   GDFGroupByTest() 
   {
     // Use constant seed so the psuedo-random order is the same each time
@@ -203,24 +164,24 @@ struct GDFGroupByTest : public testing::Test
     }
 
 
-  template <class aggregation_operation>
-  std::map<key_type, value_type> 
-  compute_reference_solution(std::vector<key_type> const & groupby_column,
-                             std::vector<value_type> const & aggregation_column,
-                             bool print = false)
+  template <class aggregation_operation, typename accumulation_type = agg_output_type>
+  std::map<key_type, accumulation_type> 
+  dispatch_reference_solution(std::vector<key_type> const & groupby_column,
+                              std::vector<value_type> const & aggregation_column,
+                              bool print = false)
     {
-      std::map<key_type, value_type> expected_values;
+      std::map<key_type, accumulation_type> expected_values;
 
       // Computing the reference solution for AVG has to be handled uniquely
       if(std::is_same<aggregation_operation, avg_op<value_type>>::value)
       {
 
         // For each unique key, compute the SUM and COUNT aggregation
-        std::map<key_type, value_type> counts = compute_reference_solution<count_op<value_type>>(groupby_column, aggregation_column);
-        std::map<key_type, value_type> sums = compute_reference_solution<sum_op<value_type>>(groupby_column, aggregation_column);
+        std::map<key_type, size_t> counts = dispatch_reference_solution<count_op<size_t>, size_t>(groupby_column, aggregation_column);
+        std::map<key_type, accumulation_type> sums = dispatch_reference_solution<sum_op<accumulation_type>, accumulation_type>(groupby_column, aggregation_column);
 
         // For each unique key, compute it's AVG as SUM / COUNT
-        for(auto & sum: sums)
+        for(auto const & sum: sums)
         {
           const auto current_key = sum.first;
 
@@ -228,14 +189,14 @@ struct GDFGroupByTest : public testing::Test
 
           EXPECT_NE(count, counts.end()) << "Failed to find match for key " << current_key << " from the SUM solution in the COUNT solution";
 
-          // Compute the AVG in place on the SUM map
-          sum.second = sum.second / count->second;
+          // Store the average for the current key into expected_values map
+          expected_values.insert(std::make_pair(current_key, sum.second / static_cast<accumulation_type>(count->second)));
         }
 
-        expected_values = sums;
       }
       else
       {
+
         aggregation_operation op;
 
         for(size_t i = 0; i < groupby_column.size(); ++i){
@@ -251,15 +212,20 @@ struct GDFGroupByTest : public testing::Test
           {
             // To support operations like `count`, on the first insert, perform the
             // operation on the new value and the operation's identity value and store the result
-            current_value = op(current_value, aggregation_operation::IDENTITY);
+            const value_type new_value = op(current_value, aggregation_operation::IDENTITY);
 
-            expected_values.insert(std::make_pair(current_key,current_value)); 
+            std::cout << "key: " << current_key << " insert value: " << current_value << " new value: " << new_value << std::endl;
+
+            expected_values.insert(std::make_pair(current_key,new_value)); 
 
           }
           // Key exists, update the value with the operator
           else
           {
-            value_type new_value = op(current_value, found->second);
+            const value_type new_value = op(current_value, found->second);
+
+            std::cout << "key: " << current_key << " insert value: " << current_value << " new value: " << new_value << std::endl;
+
             found->second = new_value;
           }
         }
@@ -278,23 +244,48 @@ struct GDFGroupByTest : public testing::Test
 
   // Dispatches computing the reference solution based on which aggregation is to be performed
   // determined by the test_parameters class template argument
-  std::map<key_type, value_type> 
+  std::map<key_type, agg_output_type> 
   compute_reference_solution(std::vector<key_type> const & groupby_column, 
                              std::vector<value_type> const & aggregation_column,
                              bool print = false)
     {
+
+      std::map<key_type, agg_output_type> reference_solution{};
       switch(test_parameters::the_aggregator)
       {
-        // FIXME May need to use this->template compute_reference_solution<...>(...);
-        case agg_op::MIN:  return compute_reference_solution<min_op<value_type>>(groupby_column,aggregation_column, print);
-        case agg_op::MAX:  return compute_reference_solution<max_op<value_type>>(groupby_column,aggregation_column, print);
-        case agg_op::SUM:  return compute_reference_solution<sum_op<value_type>>(groupby_column,aggregation_column, print);
-        case agg_op::COUNT:return compute_reference_solution<count_op<value_type>>(groupby_column,aggregation_column, print);
-        case agg_op::AVG:  return compute_reference_solution<avg_op<value_type>>(groupby_column,aggregation_column, print);
-        default: std::cout << "Invalid aggregation operation.\n";
+        case agg_op::MIN:   
+          {
+            reference_solution = dispatch_reference_solution<min_op<value_type>>(groupby_column,aggregation_column, print);
+            break;
+          }
+        case agg_op::MAX:   
+          {
+            reference_solution = dispatch_reference_solution<max_op<agg_output_type>>(groupby_column,aggregation_column, print);
+            break;
+          }
+        case agg_op::SUM:   
+          {
+            reference_solution = dispatch_reference_solution<sum_op<value_type>>(groupby_column,aggregation_column, print);
+            break;
+          }
+        case agg_op::COUNT: 
+          {
+            reference_solution = dispatch_reference_solution<count_op<value_type>>(groupby_column,aggregation_column, print);
+            break;
+          }
+        case agg_op::AVG:
+          {
+            reference_solution = dispatch_reference_solution<avg_op<value_type>>(groupby_column,aggregation_column, print);
+            break;
+          }
+        default: 
+          {
+            std::cout << "Invalid aggregation operation.\n";
+            break;
+          }
       }
 
-      return std::map<key_type, value_type>();
+      return reference_solution;
     }
 
   gdf_error compute_gdf_result(gdf_column * groupby_input, 
@@ -408,7 +399,7 @@ struct TestParameters
   const static agg_op the_aggregator{the_agg};
 };
 using TestCases = ::testing::Types< TestParameters<int32_t, int32_t, agg_op::MAX>,
-                                    //TestParameters<int32_t, float, agg_op::MAX>,
+                                    TestParameters<int32_t, float, agg_op::MAX>
                                     //TestParameters<int32_t, double, agg_op::MAX>,
                                     //TestParameters<int32_t, int64_t, agg_op::MAX>,
                                     //TestParameters<int32_t, uint64_t, agg_op::MAX>,
@@ -422,7 +413,7 @@ using TestCases = ::testing::Types< TestParameters<int32_t, int32_t, agg_op::MAX
                                     //TestParameters<uint64_t, double, agg_op::MAX>,
                                     //TestParameters<uint64_t, int64_t, agg_op::MAX>,
                                     //TestParameters<uint64_t, uint64_t, agg_op::MAX>,
-                                    TestParameters<int32_t, int32_t, agg_op::MIN>,
+                                    //TestParameters<int32_t, int32_t, agg_op::MIN>,
                                     //TestParameters<int32_t, float, agg_op::MIN>,
                                     //TestParameters<int32_t, double, agg_op::MIN>,
                                     //TestParameters<int32_t, int64_t, agg_op::MIN>,
@@ -432,7 +423,7 @@ using TestCases = ::testing::Types< TestParameters<int32_t, int32_t, agg_op::MAX
                                     //TestParameters<uint64_t, double, agg_op::MIN>,
                                     //TestParameters<uint64_t, int64_t, agg_op::MIN>,
                                     //TestParameters<uint64_t, uint64_t, agg_op::MIN>,
-                                    TestParameters<int32_t, int32_t, agg_op::COUNT>,
+                                    //TestParameters<int32_t, int32_t, agg_op::COUNT>,
                                     //TestParameters<int32_t, float, agg_op::COUNT>,
                                     //TestParameters<int32_t, double, agg_op::COUNT>,
                                     //TestParameters<int32_t, int64_t, agg_op::COUNT>,
@@ -442,17 +433,17 @@ using TestCases = ::testing::Types< TestParameters<int32_t, int32_t, agg_op::MAX
                                     //TestParameters<uint64_t, double, agg_op::COUNT>,
                                     //TestParameters<uint64_t, int64_t, agg_op::COUNT>,
                                     //TestParameters<uint64_t, uint64_t, agg_op::COUNT>,
-                                    TestParameters<int32_t, int32_t, agg_op::SUM>
+                                    //TestParameters<int32_t, int32_t, agg_op::SUM>,
                                     //// TODO: Tests for SUM on single precision floats currently fail due to numerical stability issues
-                                    ////TestParameters<int32_t, float, agg_op::SUM>, 
+                                    //TestParameters<int32_t, float, agg_op::SUM>, 
                                     //TestParameters<int32_t, double, agg_op::SUM>,
                                     //TestParameters<int32_t, int64_t, agg_op::SUM>,
                                     //TestParameters<int32_t, uint64_t, agg_op::SUM>,
                                     //TestParameters<uint64_t, double, agg_op::SUM>,
                                     //TestParameters<uint64_t, double, agg_op::SUM>,
                                     //TestParameters<uint64_t, int64_t, agg_op::SUM>,
-                                    //TestParameters<uint64_t, uint64_t, agg_op::SUM>
-                                    //TestParameters<int32_t, int32_t, agg_op::AVG, float>
+                                    //TestParameters<uint64_t, uint64_t, agg_op::SUM>,
+                                    //TestParameters<int32_t, int32_t, agg_op::AVG, double>
                                     >;
 
 TYPED_TEST_CASE(GDFGroupByTest, TestCases);
@@ -461,32 +452,36 @@ TYPED_TEST(GDFGroupByTest, ExampleTest)
 {
   const int num_keys = 5;
   const int num_values_per_key = 1;
-  auto input = this->create_reference_input(num_keys, num_values_per_key, 5, 5, true);
-  auto expected_values = this->compute_reference_solution(input.first, input.second, true);
+  std::tie(this->groupby_column, 
+           this->aggregation_column) = this->create_reference_input(num_keys, 
+                                                                    num_values_per_key, 
+                                                                    5, 5,
+                                                                    true);
 
-  gdf_col_pointer gdf_groupby_column = create_gdf_column(input.first);
-  gdf_col_pointer gdf_aggregation_column = create_gdf_column(input.second);
+  auto expected_values = this->compute_reference_solution(this->groupby_column, 
+                                                          this->aggregation_column,
+                                                          true);
+
+  this->gdf_groupby_column = create_gdf_column(this->groupby_column);
+  this->gdf_aggregation_column = create_gdf_column(this->aggregation_column);
 
   // Allocate buffers for output
-  const size_t output_size = gdf_groupby_column->size;
-  std::vector<typename TestFixture::key_type> groupby_output(output_size);
-  gdf_col_pointer gdf_groupby_output = create_gdf_column(groupby_output);
+  const size_t output_size = this->gdf_groupby_column->size;
+  this->gdf_groupby_output = create_gdf_column(std::vector<typename TestFixture::key_type>(output_size));
+  this->gdf_agg_output = create_gdf_column(std::vector<typename TestFixture::agg_output_type>(output_size));
 
-  std::vector<typename TestFixture::agg_output_type> agg_output(output_size);
-  gdf_col_pointer gdf_agg_output = create_gdf_column(agg_output);
-
-  this->compute_gdf_result(gdf_groupby_column.get(), 
-                           gdf_aggregation_column.get(), 
-                           gdf_groupby_output.get(),
-                           gdf_agg_output.get(),
+  this->compute_gdf_result(this->gdf_groupby_column.get(), 
+                           this->gdf_aggregation_column.get(), 
+                           this->gdf_groupby_output.get(),
+                           this->gdf_agg_output.get(),
                            true);
 
-  ASSERT_EQ(expected_values.size(), gdf_groupby_output->size) << "Size of GDF Group By output does not match reference solution";
-  ASSERT_EQ(expected_values.size(), gdf_agg_output->size) << "Size of GDF Aggregation output does not match reference solution";
+  ASSERT_EQ(expected_values.size(), this->gdf_groupby_output->size) << "Size of GDF Group By output does not match reference solution";
+  ASSERT_EQ(expected_values.size(), this->gdf_agg_output->size) << "Size of GDF Aggregation output does not match reference solution";
 
   size_t i{0};
-  typename TestFixture::key_type * p_gdf_groupby_output = static_cast<typename TestFixture::key_type*>(gdf_groupby_output->data);
-  typename TestFixture::value_type * p_gdf_aggregation_output = static_cast<typename TestFixture::value_type*>(gdf_agg_output->data);
+  typename TestFixture::key_type * p_gdf_groupby_output = static_cast<typename TestFixture::key_type*>(this->gdf_groupby_output->data);
+  typename TestFixture::agg_output_type * p_gdf_aggregation_output = static_cast<typename TestFixture::agg_output_type*>(this->gdf_agg_output->data);
   for(auto const & expected : expected_values)
   {
     EXPECT_EQ(expected.first, p_gdf_groupby_output[i]);
