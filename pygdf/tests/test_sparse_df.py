@@ -1,6 +1,6 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
+import pytest
 import os.path
-import pickle
 
 try:
     import pyarrow as pa
@@ -15,20 +15,6 @@ from numba import cuda
 
 from pygdf.gpuarrow import GpuArrowReader
 from pygdf.dataframe import Series, DataFrame
-
-
-def _read_data():  # not used, kept here to record ipums.pkl creation
-    basedir = os.path.dirname(__file__)
-    # load schema
-    schemapath = os.path.join(basedir, 'data', 'schema_ipums.pickle')
-    with open(schemapath, 'rb') as fin:
-        schema = pickle.load(fin)
-    # load data
-    datapath = os.path.join(basedir, 'data', 'data_ipums.pickle')
-    with open(datapath, 'rb') as fin:
-        data = pickle.load(fin)
-    darr = cuda.to_device(data)
-    return schema, darr
 
 
 def read_data():
@@ -52,6 +38,8 @@ def read_data():
     return schema, darr
 
 
+@pytest.mark.skipif(arrow_version is None,
+                    reason='need compatible pyarrow to generate test data')
 def test_fillna():
     schema, darr = read_data()
     gar = GpuArrowReader(schema, darr)
@@ -78,21 +66,13 @@ def test_to_dense_array():
     assert filled.size == len(sr)
 
 
+@pytest.mark.skipif(arrow_version is None,
+                    reason='need compatible pyarrow to generate test data')
 def test_reading_arrow_sparse_data():
     schema, darr = read_data()
     gar = GpuArrowReader(schema, darr)
 
     df = DataFrame(gar.to_dict().items())
-
-    if 0:
-        # read ipums arrow 0.7.1 specific binary data and save it as
-        # pickled pandas data frame.  only used once, kept here as the
-        # instruction how to create ipums.pkl
-        import pandas as pd
-        pdf = pd.DataFrame.from_dict(dict([(k, v.to_pandas())
-                                           for k, v in gar.to_dict().items()]))
-        pdf.to_pickle(os.path.join(os.path.dirname(__file__),
-                                   'data', 'ipums.pkl'))
 
     # preprocessing
     num_cols = set()
