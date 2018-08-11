@@ -121,15 +121,6 @@ cudaError_t InnerJoinHash(mgpu::context_t &compute_ctx, void **out, size_type *o
 /// \param[in] a first column to join (left)
 /// \param[in] b second column to join (right)
 /// \param[in] additional columns to join (default = NULL)
-/*template<typename input_it,
-	 typename input2_it,
-	 typename input3_it,
-	 typename size_type>
-cudaError_t LeftJoinHash(mgpu::context_t &compute_ctx, void **out, size_type *out_count, 
-                          const input_it a, const size_type a_count, const input_it b, const size_type b_count,
-			  const input2_it a2 = (int*)NULL, const input2_it b2 = (int*)NULL,
-			  const input3_it a3 = (int*)NULL, const input3_it b3 = (int*)NULL)
-*/
 template<JoinType join_type,
 	 typename input_it,
 	 typename input2_it,
