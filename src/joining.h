@@ -48,46 +48,30 @@ mgpu::mem_t<size_type> join_hash(col1_it a, size_type a_count,
 	col1_it b, size_type b_count,
 	col2_it a2, col2_it b2,
 	col3_it a3, col3_it b3,
-	comp_t comp, mgpu::context_t& context,
-	size_type estimated_join_count = 0, bool flip_indices = false)
+	comp_t comp, mgpu::context_t& context)
+//	size_type estimated_join_count = 0, bool flip_indices = false)
 {
   // here follows the custom code for hash-joins
-  typedef join_pair<size_type> joined_type;
 
   if (join_type == INNER_JOIN) {
 	// swap buffers if we're doing inner join & b_count > a_count to use the smaller table for build
 	if (b_count > a_count)
-	  return join_hash<join_type>(b, b_count, a, a_count, b2, a2, b3, a3, comp, context, estimated_join_count, true);
+	  printf("still need to flip");
+//	  return join_hash<join_type>(b, b_count, a, a_count, b2, a2, b3, a3, comp, context, estimated_join_count, true);
   }
-
-  // get device id
-//  int dev_ordinal;
-//  CUDA_RT_CALL( cudaGetDevice(&dev_ordinal) );
-
-  // allocate a counter
-  size_type h_joined_idx;
-  //size_type *d_joined_idx, *h_joined_idx;
-  //CUDA_RT_CALL( cudaMalloc(&d_joined_idx, sizeof(size_type)) );
-  //CUDA_RT_CALL( cudaMallocHost(&h_joined_idx, sizeof(size_type)) );
-
-  // output buffer
-  joined_type* joined = NULL;
-
-  cudaError_t error;
-
-  // reset the counter
-  //CUDA_RT_CALL( cudaMemsetAsync(d_joined_idx, 0, sizeof(size_type), 0) );
+  
+  cudaError_t error = cudaSuccess;
 
   mgpu::mem_t<size_type> joined_output;
   // using the new low-level API for hash-join
   switch (join_type) {
 	//case INNER_JOIN: error = InnerJoinHash(context, (void**)&joined, d_joined_idx, a, a_count, b, b_count, a2, b2, a3, b3); printf("Inner\n");break;
-	case INNER_JOIN: printf("Inner\n");break;
-	case LEFT_JOIN: error = LeftJoinHash<LEFT_JOIN>(context, joined_output, (void**)&joined, &h_joined_idx , a, a_count, b, b_count, a2, b2, a3, b3); break;
+	//case INNER_JOIN: printf("Inner\n");break;
+	case INNER_JOIN: error = LeftJoinHash<INNER_JOIN>(context, joined_output, a, a_count, b, b_count, a2, b2, a3, b3); break;
+	case LEFT_JOIN: error = LeftJoinHash<LEFT_JOIN>(context, joined_output, a, a_count, b, b_count, a2, b2, a3, b3); break;
   }
 
-  // copy the counter to the cpu
-  //CUDA_RT_CALL( cudaMemcpy(h_joined_idx, d_joined_idx, sizeof(size_type), cudaMemcpyDefault) );
+
 
   if (error != cudaSuccess ) {
 	printf("ERRROR %d\n", error);fflush(stdout);
@@ -95,20 +79,6 @@ mgpu::mem_t<size_type> join_hash(col1_it a, size_type a_count,
   }
 
   printf ("\nSCAN: %d \n", joined_output.size());
-  // TODO: can we avoid this transformation?
-//  mgpu::mem_t<size_type> output(2 * (h_joined_idx), context);
-//  pairs_to_decoupled(output, (h_joined_idx), joined, context, flip_indices);
-
-  // free memory used for the counters
-  //CUDA_RT_CALL( cudaFree(d_joined_idx) );
-  //CUDA_RT_CALL( cudaFreeHost(h_joined_idx) );
-
-  // free memory used for the join output
-  CUDA_RT_CALL( cudaFree(joined) );
-
-  //printf("Return correct value\n");
-  //mgpu::mem_t<size_type> output(2 * (h_joined_idx), context);
-  //return output;
   return joined_output;
 }
 

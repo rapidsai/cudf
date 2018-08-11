@@ -135,7 +135,7 @@ template<JoinType join_type,
 	 typename input2_it,
 	 typename input3_it,
 	 typename size_type>
-cudaError_t LeftJoinHash(mgpu::context_t &compute_ctx, mgpu::mem_t<size_type>& joined_output, void **out, size_type *out_count, 
+cudaError_t LeftJoinHash(mgpu::context_t &compute_ctx, mgpu::mem_t<size_type>& joined_output, 
                           const input_it a, const size_type a_count, const input_it b, const size_type b_count,
 			  const input2_it a2 = (int*)NULL, const input2_it b2 = (int*)NULL,
 			  const input3_it a3 = (int*)NULL, const input3_it b3 = (int*)NULL)
@@ -180,45 +180,44 @@ cudaError_t LeftJoinHash(mgpu::context_t &compute_ctx, mgpu::mem_t<size_type>& j
   size_type* d_actualFound;
   cudaMalloc(&d_actualFound, sizeof(size_type));
   cudaMemset(d_actualFound, 0, sizeof(size_type));
-  probe_hash_tbl_no_add<LEFT_JOIN, multimap_type, key_type, key_type2, key_type3, size_type, joined_type, block_size, DEFAULT_CUDA_CACHE_SIZE>
+  probe_hash_tbl_no_add<join_type, multimap_type, key_type, key_type2, key_type3, size_type, block_size, DEFAULT_CUDA_CACHE_SIZE>
                  <<<(a_count + block_size-1) / block_size, block_size>>>
-                  (hash_tbl.get(), a, a_count, a2, b2, a3, b3,
-       static_cast<joined_type*>(*out), d_joined_idx, 0,d_actualFound);
+                  (hash_tbl.get(), a, a_count, a2, b2, a3, b3,d_actualFound);
    if (error != cudaSuccess)
     return error;
 
   size_type scanSize=0;
   CUDA_RT_CALL( cudaMemcpy(&scanSize, d_actualFound, sizeof(size_type), cudaMemcpyDeviceToHost));
+  printf("Post scan : %d %d\n", scanSize, join_type);
+  
   int dev_ordinal;
-  joined_type* temp=NULL;
+  joined_type* tempOut=NULL;
   CUDA_RT_CALL( cudaGetDevice(&dev_ordinal));
-  CUDA_RT_CALL( cudaMallocManaged   ( &temp, sizeof(joined_type)*scanSize));
-  CUDA_RT_CALL( cudaMemPrefetchAsync( temp , sizeof(joined_type)*scanSize, dev_ordinal));
-  *out=temp;
-  *out_count  = scanSize;
+  CUDA_RT_CALL( cudaMallocManaged   ( &tempOut, sizeof(joined_type)*scanSize));
+  CUDA_RT_CALL( cudaMemPrefetchAsync( tempOut , sizeof(joined_type)*scanSize, dev_ordinal));
   
   // copy the counter to the cpu
   //CUDA_RT_CALL( cudaMemcpy(out_count, d_joined_idx, sizeof(size_type), cudaMemcpyDefault) );
                                                           
   CUDA_RT_CALL( cudaMemset(d_joined_idx, 0, sizeof(size_type)) );
   // step 3b: scan table A (left), probe the HT and output the joined indices - doing left join here
-  probe_hash_tbl<LEFT_JOIN, multimap_type, key_type, key_type2, key_type3, size_type, joined_type, block_size, DEFAULT_CUDA_CACHE_SIZE>
+/*  probe_hash_tbl<join_type, multimap_type, key_type, key_type2, key_type3, size_type, joined_type, block_size, DEFAULT_CUDA_CACHE_SIZE>
                  <<<(a_count + block_size-1) / block_size, block_size>>>
                   (hash_tbl.get(), a, a_count, a2, b2, a3, b3,
-		   static_cast<joined_type*>(*out), d_joined_idx, scanSize);
+		   static_cast<joined_type*>(tempOut), d_joined_idx, scanSize);
   error = cudaDeviceSynchronize();
-
+*/
   //cudaFree(d_actualFound);
    // free memory used for the counters
   CUDA_RT_CALL( cudaFree(d_joined_idx) );
   CUDA_RT_CALL( cudaFree(d_actualFound) ); 
 
-  //mgpu::mem_t<size_type> output(2 * (*out_count), compute_ctx);
-  joined_output = mgpu::mem_t<size_type> (2 * (*out_count), compute_ctx);
+  joined_output = mgpu::mem_t<size_type> (2 * (scanSize), compute_ctx);
 
   printf("Flip indices");
-  pairs_to_decoupled(joined_output, (*out_count), (joined_type*) *out, compute_ctx, false);
+  pairs_to_decoupled(joined_output, scanSize, tempOut, compute_ctx, false);
  
+  CUDA_RT_CALL( cudaFree(tempOut) );
   printf ("\nSCAN: %d %d\n", joined_output.size(),scanSize);
   return error;
 }
