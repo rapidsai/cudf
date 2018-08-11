@@ -59,7 +59,6 @@ JoinType join_type,
 		 typename key2_type,
 		 typename key3_type,
 		 typename size_type,
-		 typename joined_type,
 		 int block_size,
   int output_cache_size>
 __global__ void probe_hash_tbl_no_add(
@@ -68,16 +67,12 @@ __global__ void probe_hash_tbl_no_add(
 	const size_type probe_tbl_size,
 	const key2_type* probe_col2, const key2_type* build_col2,
 	const key3_type* probe_col3, const key3_type* build_col3,
-	joined_type * const joined,
-	size_type* const current_idx,
-	const size_type max_size,
     size_type* globalCounterFound
     )
 {
  
     typedef typename multimap_type::key_equal key_compare_type;
     __shared__ int current_idx_shared[block_size/warp_size];
-    __shared__ joined_type joined_shared[block_size/warp_size][output_cache_size];
 
     const int warp_id = threadIdx.x/warp_size;
     const int lane_id = threadIdx.x%warp_size;
@@ -129,8 +124,7 @@ __global__ void probe_hash_tbl_no_add(
                     running = (end != it);
                 }
                 else {
-                    // add_pair_to_cache(offset+i, it->second, current_idx_shared, warp_id, joined_shared[warp_id]);
-                    atomicAdd(&countFound,1) ;
+					atomicAdd(&countFound,1) ;
                     ++it;
                     running = (end != it);
                     found_match = true;
@@ -138,7 +132,6 @@ __global__ void probe_hash_tbl_no_add(
 
                 if ((join_type == LEFT_JOIN) && (!running) && (!found_match)) {
                     atomicAdd(&countFound,1);
-                    // add_pair_to_cache(offset+i, JoinNoneValue, current_idx_shared, warp_id, joined_shared[warp_id]);
                 }
 		  }
 	   }
