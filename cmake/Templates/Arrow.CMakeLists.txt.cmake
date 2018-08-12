@@ -23,7 +23,7 @@ project(arrow-download NONE)
 
 include(ExternalProject)
 
-set(ARROW_VERSION "apache-arrow-0.7.1")
+set(ARROW_VERSION "apache-arrow-0.10.0")
 
 if (NOT "$ENV{PARQUET_ARROW_VERSION}" STREQUAL "")
     set(ARROW_VERSION "$ENV{PARQUET_ARROW_VERSION}")
@@ -54,10 +54,16 @@ set(ARROW_CMAKE_ARGS
     -DARROW_COMPUTE=OFF
     -DARROW_GPU=OFF
     -DARROW_JEMALLOC=OFF
-    -DARROW_HDFS=OFF
     -DARROW_BOOST_VENDORED=OFF
     -DARROW_PYTHON=OFF
 )
+
+if (${ARROW_VERSION} STREQUAL "apache-arrow-0.9.0")
+  # Keep ARROW_HDFS=ON to workaround arrow-0.9 bug that disables
+  # boost_regex. See https://issues.apache.org/jira/browse/ARROW-2903
+else ()
+  set(ARROW_CMAKE_ARGS ${ARROW_CMAKE_ARGS} -DARROW_HDFS=OFF)
+endif()
 
 ExternalProject_Add(arrow
     URL                ${ARROW_URL}

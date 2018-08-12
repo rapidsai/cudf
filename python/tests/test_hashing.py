@@ -69,7 +69,7 @@ def _call_hash_multi(api, ncols, col_input, magic, nrows):
 
     return hashed_result
 
-
+@pytest.mark.skip(reason='Fails randomly, see JIRA issue RAPETL-47')
 def test_hashing():
     # Make data
     nrows = 8
