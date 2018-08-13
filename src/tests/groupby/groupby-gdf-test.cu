@@ -100,9 +100,7 @@ struct GDFGroupByTest : public testing::Test
   GDFGroupByTest() 
   {
     // Use constant seed so the psuedo-random order is the same each time
-    // Each time the class is constructed a new constant seed is used
-    static size_t number_of_instantiations{0};
-    std::srand(number_of_instantiations++);
+    std::srand(0);
   }
 
   ~GDFGroupByTest() {} 
@@ -214,7 +212,8 @@ struct GDFGroupByTest : public testing::Test
             // operation on the new value and the operation's identity value and store the result
             const value_type new_value = op(current_value, aggregation_operation::IDENTITY);
 
-            std::cout << "key: " << current_key << " insert value: " << current_value << " new value: " << new_value << std::endl;
+            if(print)
+              std::cout << "key: " << current_key << " insert value: " << current_value << " new value: " << new_value << std::endl;
 
             expected_values.insert(std::make_pair(current_key,new_value)); 
 
@@ -224,7 +223,8 @@ struct GDFGroupByTest : public testing::Test
           {
             const value_type new_value = op(current_value, found->second);
 
-            std::cout << "key: " << current_key << " insert value: " << current_value << " new value: " << new_value << std::endl;
+            if(print)
+              std::cout << "key: " << current_key << " insert value: " << current_value << " new value: " << new_value << std::endl;
 
             found->second = new_value;
           }
@@ -398,69 +398,82 @@ struct TestParameters
   using agg_output_type = accumulation_type;
   const static agg_op the_aggregator{the_agg};
 };
-using TestCases = ::testing::Types< TestParameters<int32_t, int32_t, agg_op::MAX>,
-                                    TestParameters<int32_t, float, agg_op::MAX>
-                                    //TestParameters<int32_t, double, agg_op::MAX>,
-                                    //TestParameters<int32_t, int64_t, agg_op::MAX>,
-                                    //TestParameters<int32_t, uint64_t, agg_op::MAX>,
-                                    //TestParameters<int64_t, int32_t, agg_op::MAX>,
-                                    //TestParameters<int64_t, float, agg_op::MAX>,
-                                    //TestParameters<int64_t, double, agg_op::MAX>,
-                                    //TestParameters<int64_t, int64_t, agg_op::MAX>,
-                                    //TestParameters<int64_t, uint64_t, agg_op::MAX>,
-                                    //TestParameters<uint64_t, int32_t, agg_op::MAX>,
-                                    //TestParameters<uint64_t, float, agg_op::MAX>,
-                                    //TestParameters<uint64_t, double, agg_op::MAX>,
-                                    //TestParameters<uint64_t, int64_t, agg_op::MAX>,
-                                    //TestParameters<uint64_t, uint64_t, agg_op::MAX>,
-                                    //TestParameters<int32_t, int32_t, agg_op::MIN>,
-                                    //TestParameters<int32_t, float, agg_op::MIN>,
-                                    //TestParameters<int32_t, double, agg_op::MIN>,
-                                    //TestParameters<int32_t, int64_t, agg_op::MIN>,
-                                    //TestParameters<int32_t, uint64_t, agg_op::MIN>,
-                                    //TestParameters<uint64_t, int32_t, agg_op::MIN>,
-                                    //TestParameters<uint64_t, float, agg_op::MIN>,
-                                    //TestParameters<uint64_t, double, agg_op::MIN>,
-                                    //TestParameters<uint64_t, int64_t, agg_op::MIN>,
-                                    //TestParameters<uint64_t, uint64_t, agg_op::MIN>,
-                                    //TestParameters<int32_t, int32_t, agg_op::COUNT>,
-                                    //TestParameters<int32_t, float, agg_op::COUNT>,
-                                    //TestParameters<int32_t, double, agg_op::COUNT>,
-                                    //TestParameters<int32_t, int64_t, agg_op::COUNT>,
-                                    //TestParameters<int32_t, uint64_t, agg_op::COUNT>,
-                                    //TestParameters<uint64_t, int32_t, agg_op::COUNT>,
-                                    //TestParameters<uint64_t, float, agg_op::COUNT>,
-                                    //TestParameters<uint64_t, double, agg_op::COUNT>,
-                                    //TestParameters<uint64_t, int64_t, agg_op::COUNT>,
-                                    //TestParameters<uint64_t, uint64_t, agg_op::COUNT>,
-                                    //TestParameters<int32_t, int32_t, agg_op::SUM>,
+using TestCases = ::testing::Types< 
+                                    //Tests for MAX
+                                    TestParameters<int32_t, int32_t, agg_op::MAX>,
+                                    TestParameters<int32_t, float, agg_op::MAX>,
+                                    TestParameters<int32_t, double, agg_op::MAX>,
+                                    TestParameters<int32_t, int64_t, agg_op::MAX>,
+                                    TestParameters<int64_t, int32_t, agg_op::MAX>,
+                                    TestParameters<int64_t, float, agg_op::MAX>,
+                                    TestParameters<int64_t, double, agg_op::MAX>,
+                                    TestParameters<int64_t, uint64_t, agg_op::MAX>,
+                                    TestParameters<uint64_t, int32_t, agg_op::MAX>,
+                                    TestParameters<uint64_t, float, agg_op::MAX>,
+                                    TestParameters<uint64_t, double, agg_op::MAX>,
+                                    TestParameters<uint64_t, int64_t, agg_op::MAX>,
+                                    TestParameters<float, float, agg_op::MAX>,
+                                    TestParameters<double, uint64_t, agg_op::MAX>,
+                                    // Tests for MIN
+                                    TestParameters<int32_t, int32_t, agg_op::MIN>,
+                                    TestParameters<int32_t, float, agg_op::MIN>,
+                                    TestParameters<int32_t, double, agg_op::MIN>,
+                                    TestParameters<int32_t, int64_t, agg_op::MIN>,
+                                    TestParameters<int32_t, uint64_t, agg_op::MIN>,
+                                    TestParameters<uint64_t, int32_t, agg_op::MIN>,
+                                    TestParameters<uint64_t, float, agg_op::MIN>,
+                                    TestParameters<uint64_t, double, agg_op::MIN>,
+                                    TestParameters<uint64_t, int64_t, agg_op::MIN>,
+                                    TestParameters<uint64_t, uint64_t, agg_op::MIN>,
+                                    // Tests for COUNT
+                                    TestParameters<int32_t, int32_t, agg_op::COUNT>,
+                                    TestParameters<int32_t, float, agg_op::COUNT>,
+                                    TestParameters<int32_t, double, agg_op::COUNT>,
+                                    TestParameters<int32_t, int64_t, agg_op::COUNT>,
+                                    TestParameters<int32_t, uint64_t, agg_op::COUNT>,
+                                    TestParameters<uint64_t, int32_t, agg_op::COUNT>,
+                                    TestParameters<uint64_t, float, agg_op::COUNT>,
+                                    TestParameters<uint64_t, double, agg_op::COUNT>,
+                                    TestParameters<uint64_t, int64_t, agg_op::COUNT>,
+                                    TestParameters<uint64_t, uint64_t, agg_op::COUNT>,
+                                    // Tests for SUM 
                                     //// TODO: Tests for SUM on single precision floats currently fail due to numerical stability issues
-                                    //TestParameters<int32_t, float, agg_op::SUM>, 
-                                    //TestParameters<int32_t, double, agg_op::SUM>,
-                                    //TestParameters<int32_t, int64_t, agg_op::SUM>,
-                                    //TestParameters<int32_t, uint64_t, agg_op::SUM>,
-                                    //TestParameters<uint64_t, double, agg_op::SUM>,
-                                    //TestParameters<uint64_t, double, agg_op::SUM>,
-                                    //TestParameters<uint64_t, int64_t, agg_op::SUM>,
-                                    //TestParameters<uint64_t, uint64_t, agg_op::SUM>,
-                                    //TestParameters<int32_t, int32_t, agg_op::AVG, double>
+                                    //TestParameters<int32_t, int32_t, agg_op::SUM>,
+                                    TestParameters<int32_t, float, agg_op::SUM>, 
+                                    TestParameters<int32_t, double, agg_op::SUM>,
+                                    TestParameters<int32_t, int64_t, agg_op::SUM>,
+                                    TestParameters<int32_t, uint64_t, agg_op::SUM>,
+                                    TestParameters<uint64_t, double, agg_op::SUM>,
+                                    TestParameters<uint64_t, double, agg_op::SUM>,
+                                    TestParameters<uint64_t, int64_t, agg_op::SUM>,
+                                    TestParameters<uint64_t, uint64_t, agg_op::SUM>,
+                                    // Tests for AVG 
+                                    TestParameters<int32_t, int32_t, agg_op::AVG, double>,
+                                    TestParameters<uint32_t, uint32_t, agg_op::AVG, double>,
+                                    TestParameters<uint64_t, int32_t, agg_op::AVG, double>,
+                                    TestParameters<int64_t, int64_t, agg_op::AVG, double>,
+                                    TestParameters<int32_t, float, agg_op::AVG, double>,
+                                    TestParameters<int32_t, double, agg_op::AVG, double>,
+                                    TestParameters<float, double, agg_op::AVG, double>,
+                                    TestParameters<double, double, agg_op::AVG, double>
                                     >;
 
 TYPED_TEST_CASE(GDFGroupByTest, TestCases);
 
 TYPED_TEST(GDFGroupByTest, ExampleTest)
 {
-  const int num_keys = 5;
-  const int num_values_per_key = 1;
+  const int num_keys = 1<<14;
+  const int num_values_per_key = 32;
+
+  // Create reference input columns
+  // Note: If the maximum possible value for the aggregation column is large, it is very likely
+  // you'll overflow an int when doing SUM or AVG
   std::tie(this->groupby_column, 
            this->aggregation_column) = this->create_reference_input(num_keys, 
-                                                                    num_values_per_key, 
-                                                                    5, 5,
-                                                                    true);
+                                                                    num_values_per_key,1000,1000);
 
   auto expected_values = this->compute_reference_solution(this->groupby_column, 
-                                                          this->aggregation_column,
-                                                          true);
+                                                          this->aggregation_column);
 
   this->gdf_groupby_column = create_gdf_column(this->groupby_column);
   this->gdf_aggregation_column = create_gdf_column(this->aggregation_column);
@@ -473,8 +486,7 @@ TYPED_TEST(GDFGroupByTest, ExampleTest)
   this->compute_gdf_result(this->gdf_groupby_column.get(), 
                            this->gdf_aggregation_column.get(), 
                            this->gdf_groupby_output.get(),
-                           this->gdf_agg_output.get(),
-                           true);
+                           this->gdf_agg_output.get());
 
   ASSERT_EQ(expected_values.size(), this->gdf_groupby_output->size) << "Size of GDF Group By output does not match reference solution";
   ASSERT_EQ(expected_values.size(), this->gdf_agg_output->size) << "Size of GDF Aggregation output does not match reference solution";
