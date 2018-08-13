@@ -36,8 +36,8 @@ constexpr int DEFAULT_CUDA_CACHE_SIZE = 128;
 template<typename size_type>
 struct join_pair { size_type first, second; };
 
- // transpose
-template<typename size_type, typename joined_type>
+// transpose
+  template<typename size_type, typename joined_type>
 void pairs_to_decoupled(mgpu::mem_t<size_type> &output, const size_type output_npairs, joined_type *joined, mgpu::context_t &context, bool flip_indices)
 {
   if (output_npairs > 0) {
@@ -49,87 +49,28 @@ void pairs_to_decoupled(mgpu::mem_t<size_type> &output, const size_type output_n
 	mgpu::transform(k, output_npairs, context);
   }
 }
- 
 
-
-/// \brief Performs a hash based inner join of columns a and b, stores only rows that have matching values in columns a2 and b2, etc.
-/// 
-/// \param[in] compute_ctx The CudaComputeContext to shedule this to.
-/// \param[out] out row references into a and b of matching rows
-/// \param[in] maximum size of the allocated output to avoid overflow
-/// \param[in] a first column to join from table1 (larger table)
-/// \param[in] b first column to join from table2 (smaller table)
-/// \param[in] additional columns to join (default = NULL)
-template<typename input_it,
-	 typename input2_it,
-	 typename input3_it,
-	 typename size_type>
-cudaError_t InnerJoinHash(mgpu::context_t &compute_ctx, void **out, size_type *out_count, 
-			  const input_it a, const size_type a_count, const input_it b, const size_type b_count,
-			  const input2_it a2 = (int*)NULL, const input2_it b2 = (int*)NULL,
-			  const input3_it a3 = (int*)NULL, const input3_it b3 = (int*)NULL)
-{
-  cudaError_t error;
-
-  typedef typename std::iterator_traits<input_it>::value_type key_type;
-  typedef typename std::iterator_traits<input2_it>::value_type key_type2;
-  typedef typename std::iterator_traits<input3_it>::value_type key_type3;
-  typedef join_pair<size_type> joined_type;
-
-  // step 0: check if the output is provided or we need to allocate it
-  if (*out == NULL) return cudaErrorNotSupported;
-
-  // step 1: initialize a HT for the smaller table b
-  //TODO: swap a and b if b is larger than a
-#ifdef HT_LEGACY_ALLOCATOR
-  typedef concurrent_unordered_multimap<key_type, size_type, std::numeric_limits<key_type>::max(), std::numeric_limits<size_type>::max(), default_hash<key_type>, equal_to<key_type>, legacy_allocator<thrust::pair<key_type, size_type> > > multimap_type;
-#else
-  typedef concurrent_unordered_multimap<key_type, size_type, std::numeric_limits<key_type>::max(), std::numeric_limits<size_type>::max()> multimap_type;
-#endif
-
-  size_type hash_tbl_size = (size_type)((size_t) b_count * 100 / DEFAULT_HASH_TBL_OCCUPANCY);
-
-  std::unique_ptr<multimap_type> hash_tbl(new multimap_type(hash_tbl_size));
-  hash_tbl->prefetch(0);  // FIXME: use GPU device id from the context? but moderngpu only provides cudaDeviceProp (although should be possible once we move to Arrow)
-  error = cudaGetLastError();
-  if (error != cudaSuccess)
-    return error;
-
-  // step 2: build the HT
-  constexpr int block_size = DEFAULT_CUDA_BLOCK_SIZE;
-  build_hash_tbl<<<(b_count + block_size-1) / block_size, block_size>>>(hash_tbl.get(), b, b_count);
-  error = cudaGetLastError();
-  if (error != cudaSuccess)
-    return error;
-  
-  // step 3: scan a, probe the HT, if matching also check columns a2 and b2, then output the results
-  probe_hash_tbl<INNER_JOIN, multimap_type, key_type, key_type2, key_type3, size_type, joined_type, block_size, DEFAULT_CUDA_CACHE_SIZE>
-                 <<<(a_count + block_size-1) / block_size, block_size>>>
-                  (hash_tbl.get(), a, a_count, a2, b2, a3, b3,
-		   static_cast<joined_type*>(*out), out_count, 0);
-  printf("NEEED TO UPDATE 0 to scan size");
-  error = cudaDeviceSynchronize();
-
-  return error;
-}
 
 /// \brief Performs a hash based left join of columns a and b.
 ///
 /// \param[in] compute_ctx The CudaComputeContext to shedule this to.
 /// \param[out] out row references into a and b of matching rows
-/// \param[in] maximum size of the allocated output to avoid overflow
 /// \param[in] a first column to join (left)
+/// \param[in] Number of element in a column (left)
 /// \param[in] b second column to join (right)
-/// \param[in] additional columns to join (default = NULL)
+/// \param[in] Number of element in b column (right)
+/// \param[in] additional columns to join (default == NULL)
+/// \param[in] Flag used to reorder the left and right column indices found in the join (default = false)
 template<JoinType join_type,
-	 typename input_it,
-	 typename input2_it,
-	 typename input3_it,
-	 typename size_type>
-cudaError_t LeftJoinHash(mgpu::context_t &compute_ctx, mgpu::mem_t<size_type>& joined_output, 
-                          const input_it a, const size_type a_count, const input_it b, const size_type b_count,
-			  const input2_it a2 = (int*)NULL, const input2_it b2 = (int*)NULL,
-			  const input3_it a3 = (int*)NULL, const input3_it b3 = (int*)NULL)
+  typename input_it,
+  typename input2_it,
+  typename input3_it,
+  typename size_type>
+cudaError_t GenericJoinHash(mgpu::context_t &compute_ctx, mgpu::mem_t<size_type>& joined_output, 
+	const input_it a, const size_type a_count, const input_it b, const size_type b_count,
+	const input2_it a2 = (int*)NULL, const input2_it b2 = (int*)NULL,
+	const input3_it a3 = (int*)NULL, const input3_it b3 = (int*)NULL,
+	bool flip_results = false)
 {
   cudaError_t error;
 
@@ -137,12 +78,12 @@ cudaError_t LeftJoinHash(mgpu::context_t &compute_ctx, mgpu::mem_t<size_type>& j
   typedef typename std::iterator_traits<input2_it>::value_type key_type2;
   typedef typename std::iterator_traits<input3_it>::value_type key_type3;
   typedef join_pair<size_type> joined_type;
-  
+
   // allocate a counter and reset
   size_type *d_joined_idx;
   CUDA_RT_CALL( cudaMalloc(&d_joined_idx, sizeof(size_type)) );
   CUDA_RT_CALL( cudaMemsetAsync(d_joined_idx, 0, sizeof(size_type), 0) );
-   
+
   // step 0: check if the output is provided or we need to allocate it
   //if (*out == NULL) return cudaErrorNotSupported;
 
@@ -157,14 +98,14 @@ cudaError_t LeftJoinHash(mgpu::context_t &compute_ctx, mgpu::mem_t<size_type>& j
   hash_tbl->prefetch(0);  // FIXME: use GPU device id from the context? but moderngpu only provides cudaDeviceProp (although should be possible once we move to Arrow)
   error = cudaGetLastError();
   if (error != cudaSuccess)
-    return error;
+	return error;
 
   // step 2: build the HT
   constexpr int block_size = DEFAULT_CUDA_BLOCK_SIZE;
   build_hash_tbl<<<(b_count + block_size-1) / block_size, block_size>>>(hash_tbl.get(), b, b_count);
   error = cudaGetLastError();
   if (error != cudaSuccess)
-    return error;
+	return error;
 
 
   // step 3ab: scan table A (left), probe the HT without outputting the joined indices. Only get number of outputted elements.
@@ -172,50 +113,96 @@ cudaError_t LeftJoinHash(mgpu::context_t &compute_ctx, mgpu::mem_t<size_type>& j
   cudaMalloc(&d_actualFound, sizeof(size_type));
   cudaMemset(d_actualFound, 0, sizeof(size_type));
   probe_hash_tbl_no_add<join_type, multimap_type, key_type, key_type2, key_type3, size_type, block_size, DEFAULT_CUDA_CACHE_SIZE>
-                 <<<(a_count + block_size-1) / block_size, block_size>>>
-                  (hash_tbl.get(), a, a_count, a2, b2, a3, b3,d_actualFound);
-   if (error != cudaSuccess)
-    return error;
+	<<<(a_count + block_size-1) / block_size, block_size>>>
+	(hash_tbl.get(), a, a_count, a2, b2, a3, b3,d_actualFound);
+  if (error != cudaSuccess)
+	return error;
 
   size_type scanSize=0;
   CUDA_RT_CALL( cudaMemcpy(&scanSize, d_actualFound, sizeof(size_type), cudaMemcpyDeviceToHost));
-  printf("Post scan : %d %d\n", scanSize, join_type);
-  
+
   int dev_ordinal;
   joined_type* tempOut=NULL;
   CUDA_RT_CALL( cudaGetDevice(&dev_ordinal));
-  
+
   if(scanSize==0){
 	CUDA_RT_CALL( cudaMallocManaged   ( &tempOut, sizeof(joined_type)*1));
 	CUDA_RT_CALL( cudaMemPrefetchAsync( tempOut , sizeof(joined_type)*1, dev_ordinal));
-   }
+  }
   else{
 	CUDA_RT_CALL( cudaMallocManaged   ( &tempOut, sizeof(joined_type)*scanSize));
 	CUDA_RT_CALL( cudaMemPrefetchAsync( tempOut , sizeof(joined_type)*scanSize, dev_ordinal));
   }
-  // copy the counter to the cpu
-  //CUDA_RT_CALL( cudaMemcpy(out_count, d_joined_idx, sizeof(size_type), cudaMemcpyDefault) );
-                                                          
+
   CUDA_RT_CALL( cudaMemset(d_joined_idx, 0, sizeof(size_type)) );
   // step 3b: scan table A (left), probe the HT and output the joined indices - doing left join here
   probe_hash_tbl<join_type, multimap_type, key_type, key_type2, key_type3, size_type, joined_type, block_size, DEFAULT_CUDA_CACHE_SIZE>
-                 <<<(a_count + block_size-1) / block_size, block_size>>>
-                  (hash_tbl.get(), a, a_count, a2, b2, a3, b3,
-		   static_cast<joined_type*>(tempOut), d_joined_idx, scanSize);
+	<<<(a_count + block_size-1) / block_size, block_size>>>
+	(hash_tbl.get(), a, a_count, a2, b2, a3, b3,
+	 static_cast<joined_type*>(tempOut), d_joined_idx, scanSize);
   error = cudaDeviceSynchronize();
 
-   // free memory used for the counters
+  // free memory used for the counters
   CUDA_RT_CALL( cudaFree(d_joined_idx) );
   CUDA_RT_CALL( cudaFree(d_actualFound) ); 
 
   joined_output = mgpu::mem_t<size_type> (2 * (scanSize), compute_ctx);
 
-  printf("Flip indices");
-  pairs_to_decoupled(joined_output, scanSize, tempOut, compute_ctx, false);
- 
+  pairs_to_decoupled(joined_output, scanSize, tempOut, compute_ctx, flip_results);
+
   CUDA_RT_CALL( cudaFree(tempOut) );
-  printf ("\nSCAN: %d %d\n", joined_output.size(),scanSize);
   return error;
 }
+
+
+/// \brief Performs a hash based left join of columns a and b.
+///
+/// \param[in] compute_ctx The CudaComputeContext to shedule this to.
+/// \param[out] out row references into a and b of matching rows
+/// \param[in] a first column to join (left)
+/// \param[in] Number of element in a column (left)
+/// \param[in] b second column to join (right)
+/// \param[in] Number of element in b column (right)
+/// \param[in] additional columns to join (default == NULL)
+template<JoinType join_type,
+  typename input_it,
+  typename input2_it,
+  typename input3_it,
+  typename size_type>
+  cudaError_t LeftJoinHash(mgpu::context_t &compute_ctx, mgpu::mem_t<size_type>& joined_output, 
+	  const input_it a, const size_type a_count, const input_it b, const size_type b_count,
+	  const input2_it a2 = (int*)NULL, const input2_it b2 = (int*)NULL,
+	  const input3_it a3 = (int*)NULL, const input3_it b3 = (int*)NULL){
+
+
+	return GenericJoinHash<LEFT_JOIN>(compute_ctx, joined_output, a, a_count, b, b_count, a2, b2, a3, b3);
+  }
+
+
+/// \brief Performs a hash based left join of columns a and b.
+///
+/// \param[in] compute_ctx The CudaComputeContext to shedule this to.
+/// \param[out] out row references into a and b of matching rows
+/// \param[in] a first column to join (left)
+/// \param[in] Number of element in a column (left)
+/// \param[in] b second column to join (right)
+/// \param[in] Number of element in b column (right)
+/// \param[in] additional columns to join (default == NULL)
+/// \param[in] Flag used to reorder the left and right column indices found in the join (default = false)
+template<JoinType join_type,
+  typename input_it,
+  typename input2_it,
+  typename input3_it,
+  typename size_type>
+  cudaError_t InnerJoinHash(mgpu::context_t &compute_ctx, mgpu::mem_t<size_type>& joined_output, 
+	  const input_it a, const size_type a_count, const input_it b, const size_type b_count,
+	  const input2_it a2 = (int*)NULL, const input2_it b2 = (int*)NULL,
+	  const input3_it a3 = (int*)NULL, const input3_it b3 = (int*)NULL){
+
+	if (b_count > a_count)
+	  return GenericJoinHash<INNER_JOIN>(compute_ctx, joined_output, b, b_count, a, a_count, b2, a2, b3, a3, true);
+	else
+	  return GenericJoinHash<INNER_JOIN>(compute_ctx, joined_output, a, a_count, b, b_count, a2, b2, a3, b3);
+  }
 
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, NVIDIA CORPORATION.
+ * Copyright (c) 2018, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -49,36 +49,17 @@ mgpu::mem_t<size_type> join_hash(col1_it a, size_type a_count,
 	col2_it a2, col2_it b2,
 	col3_it a3, col3_it b3,
 	comp_t comp, mgpu::context_t& context)
-//	size_type estimated_join_count = 0, bool flip_indices = false)
 {
   // here follows the custom code for hash-joins
-
-  if (join_type == INNER_JOIN) {
-	// swap buffers if we're doing inner join & b_count > a_count to use the smaller table for build
-	if (b_count > a_count)
-	  printf("still need to flip");
-//	  return join_hash<join_type>(b, b_count, a, a_count, b2, a2, b3, a3, comp, context, estimated_join_count, true);
-  }
-  
   cudaError_t error = cudaSuccess;
 
   mgpu::mem_t<size_type> joined_output;
   // using the new low-level API for hash-join
   switch (join_type) {
-	//case INNER_JOIN: error = InnerJoinHash(context, (void**)&joined, d_joined_idx, a, a_count, b, b_count, a2, b2, a3, b3); printf("Inner\n");break;
-	//case INNER_JOIN: printf("Inner\n");break;
-	case INNER_JOIN: error = LeftJoinHash<INNER_JOIN>(context, joined_output, a, a_count, b, b_count, a2, b2, a3, b3); break;
+	case INNER_JOIN: error = InnerJoinHash<INNER_JOIN>(context, joined_output, a, a_count, b, b_count, a2, b2, a3, b3); break;
 	case LEFT_JOIN: error = LeftJoinHash<LEFT_JOIN>(context, joined_output, a, a_count, b, b_count, a2, b2, a3, b3); break;
   }
 
-
-
-  if (error != cudaSuccess ) {
-	printf("ERRROR %d\n", error);fflush(stdout);
-	cudaGetLastError();			// clear any errors
-  }
-
-  printf ("\nSCAN: %d \n", joined_output.size());
   return joined_output;
 }
 
