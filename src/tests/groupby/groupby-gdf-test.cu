@@ -121,6 +121,12 @@ struct GDFGroupByTest : public testing::Test
         // Create random key
         key_type current_key = std::rand() % max_key;
 
+        // Add a decimal to floating point key types
+        if(std::is_floating_point<key_type>::value)
+        {
+          current_key += current_key / std::rand();
+        }
+
         // Don't use unused_key
         while(current_key == this->unused_key)
         {
