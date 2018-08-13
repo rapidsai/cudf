@@ -5,6 +5,24 @@
 #include "hash/groupby_compute_api.h"
 #include "hash/aggregation_operations.cuh"
 
+/* --------------------------------------------------------------------------*/
+/** 
+ * @Synopsis Calls the Hash Based group by compute API to compute the groupby with 
+ * aggregation.
+ * 
+ * @Param ncols The number of input group by columns
+ * @Param in_groupby_columns[] The set of input groupby columns
+ * @Param in_aggregation_column The input aggregation column
+ * @Param out_groupby_columns[] The set of output groupby columns
+ * @Param out_aggregation_column The output aggregation column
+ * @Param sort_result Flag to optionally sort the output
+ * @tparam groupby_type The type of the groupby column
+ * @tparam aggregation_type  The type of the aggregation column
+ * @tparam op A binary functor that implements the aggregation operation
+ * 
+ * @Returns On failure, returns appropriate error code. Otherwise, GDF_SUCCESS
+ */
+/* ----------------------------------------------------------------------------*/
 template <typename groupby_type, typename aggregation_type, template <typename T> class op>
 gdf_error dispatched_groupby(int ncols,               
                              gdf_column* in_groupby_columns[],        
@@ -47,6 +65,13 @@ struct is_same_functor : std::false_type{};
 template <template <typename> class T>
 struct is_same_functor<T,T> : std::true_type{};
 
+/* --------------------------------------------------------------------------*/
+/** 
+ * @Synopsis  Helper function for gdf_groupby_hash. Deduces the type of the aggregation
+ * column and calls another function to perform the group by.
+ * 
+ */
+/* ----------------------------------------------------------------------------*/
 template <typename groupby_type, template <typename T> class op>
 gdf_error dispatch_aggregation_type(int ncols,               
                                     gdf_column* in_groupby_columns[],        
@@ -110,6 +135,14 @@ gdf_error dispatch_aggregation_type(int ncols,
   }
 }
 
+/* --------------------------------------------------------------------------*/
+/** 
+ * @Synopsis  Helper function for gdf_group_by hash. Deduces the type of the input
+ * group by gdf_column and sets a template parameter accordingly to another dispatch
+ * dispatch function.
+ * 
+ */
+/* ----------------------------------------------------------------------------*/
 template <template <typename T> class op>
 gdf_error dispatch_groupby_type(int ncols,               
                                 gdf_column* in_groupby_columns[],        
@@ -196,6 +229,16 @@ gdf_error gdf_group_by_hash(int ncols,
                                                       out_groupby_columns, out_aggregation_column, sort_result);
 }
 
+/* --------------------------------------------------------------------------*/
+/** 
+ * @Synopsis  Creates a gdf_column of a specified size and data type
+ * 
+ * @Param size The number of elements in the gdf_column
+ * @tparam col_type The datatype of the gdf_column
+ * 
+ * @Returns   
+ */
+/* ----------------------------------------------------------------------------*/
 template<typename col_type>
 gdf_column create_gdf_column(const size_t size)
 {
@@ -229,6 +272,18 @@ gdf_column create_gdf_column(const size_t size)
   return the_column;
 }
 
+/* --------------------------------------------------------------------------*/
+/** 
+ * @Synopsis Given a column for the SUM and COUNT aggregations, computes the AVG
+ * aggregation column result as AVG[i] = SUM[i] / COUNT[i].
+ * 
+ * @Param[out] avg_column The output AVG aggregation column
+ * @Param count_column The input COUNT aggregation column
+ * @Param sum_column The input SUM aggregation column
+ * @tparam sum_type The type used for the SUM column
+ * @tparam avg_type The type used for the AVG column
+ */
+/* ----------------------------------------------------------------------------*/
 template <typename sum_type, typename avg_type>
 void compute_average(gdf_column * avg_column, gdf_column const & count_column, gdf_column const & sum_column)
 {
@@ -248,6 +303,21 @@ void compute_average(gdf_column * avg_column, gdf_column const & count_column, g
   avg_column->size = output_size;
 }
 
+/* --------------------------------------------------------------------------*/
+/** 
+ * @Synopsis Computes the SUM and COUNT aggregations for the group by inputs. Calls 
+ * another function to compute the AVG aggregator based on the SUM and COUNT results.
+ * 
+ * @Param ncols The number of input groupby columns
+ * @Param in_groupby_columns[] The groupby input columns
+ * @Param in_aggregation_column The aggregation input column
+ * @Param out_groupby_columns[] The output groupby columns
+ * @Param out_aggregation_column The output aggregation column
+ * @tparam sum_type The type used for the SUM aggregation output column
+ * 
+ * @Returns gdf_error with error code on failure, otherwise GDF_SUCCESS
+ */
+/* ----------------------------------------------------------------------------*/
 template <typename sum_type>
 gdf_error multi_pass_avg(int ncols,               
                          gdf_column* in_groupby_columns[],        
@@ -260,7 +330,6 @@ gdf_error multi_pass_avg(int ncols,
 
   // Make sure the result is sorted so the output is in identical order
   bool sort_result = true;
-
 
   // FIXME Currently, hash based groupby assumes the type of the input aggregation column and 
   // the output aggregation column are the same. This doesn't work for COUNT
@@ -292,6 +361,20 @@ gdf_error multi_pass_avg(int ncols,
   return GDF_SUCCESS;
 }
 
+/* --------------------------------------------------------------------------*/
+/** 
+ * @Synopsis  Computes the AVG aggregation for a hash-based group by. This aggregator
+ * requires its own function as AVG is implemented via the COUNT and SUM aggregators.
+ * 
+ * @Param ncols The number of columns to groupby
+ * @Param in_groupby_columns[] The input groupby columns
+ * @Param in_aggregation_column The input aggregation column
+ * @Param out_groupby_columns[] The output groupby columns
+ * @Param out_aggregation_column The output aggregation column
+ * 
+ * @Returns gdf_error with error code on failure, otherwise GDF_SUCESS
+ */
+/* ----------------------------------------------------------------------------*/
 gdf_error gdf_group_by_hash_avg(int ncols,               
                                 gdf_column* in_groupby_columns[],        
                                 gdf_column* in_aggregation_column,       
