@@ -388,6 +388,32 @@ struct GDFGroupByTest : public testing::Test
     return error;
   }
 
+  void verify_gdf_result(std::map<key_type, agg_output_type> expected_values, 
+                         gdf_column * gdf_groupby_output,
+                         gdf_column * gdf_agg_output)
+  {
+    ASSERT_EQ(expected_values.size(), gdf_groupby_output->size) << "Size of GDF Group By output does not match reference solution";
+    ASSERT_EQ(expected_values.size(), gdf_agg_output->size) << "Size of GDF Aggregation output does not match reference solution";
+
+    size_t i{0};
+    key_type * p_gdf_groupby_output = static_cast<key_type*>(gdf_groupby_output->data);
+    agg_output_type * p_gdf_aggregation_output = static_cast<agg_output_type*>(gdf_agg_output->data);
+    for(auto const & expected : expected_values)
+    {
+      if(std::is_floating_point<value_type>::value)
+      {
+        EXPECT_FLOAT_EQ(expected.first, p_gdf_groupby_output[i]);
+        EXPECT_FLOAT_EQ(expected.second, p_gdf_aggregation_output[i]);
+      }
+      else
+      {
+        EXPECT_EQ(expected.first, p_gdf_groupby_output[i]);
+        EXPECT_EQ(expected.second, p_gdf_aggregation_output[i]);
+      }
+      ++i;
+    }
+  }
+
 };
 
 /* --------------------------------------------------------------------------*/
@@ -487,6 +513,7 @@ TYPED_TEST(GDFGroupByTest, ExampleTest)
   auto expected_values = this->compute_reference_solution(this->groupby_column, 
                                                           this->aggregation_column);
 
+  // Create gdf_columns with same data as the reference input
   this->gdf_groupby_column = create_gdf_column(this->groupby_column);
   this->gdf_aggregation_column = create_gdf_column(this->aggregation_column);
 
@@ -499,26 +526,10 @@ TYPED_TEST(GDFGroupByTest, ExampleTest)
                            this->gdf_aggregation_column.get(), 
                            this->gdf_groupby_output.get(),
                            this->gdf_agg_output.get());
+  
+  this->verify_gdf_result(expected_values, 
+                          this->gdf_groupby_output.get(),
+                          this->gdf_agg_output.get());
 
-  ASSERT_EQ(expected_values.size(), this->gdf_groupby_output->size) << "Size of GDF Group By output does not match reference solution";
-  ASSERT_EQ(expected_values.size(), this->gdf_agg_output->size) << "Size of GDF Aggregation output does not match reference solution";
-
-  size_t i{0};
-  typename TestFixture::key_type * p_gdf_groupby_output = static_cast<typename TestFixture::key_type*>(this->gdf_groupby_output->data);
-  typename TestFixture::agg_output_type * p_gdf_aggregation_output = static_cast<typename TestFixture::agg_output_type*>(this->gdf_agg_output->data);
-  for(auto const & expected : expected_values)
-  {
-    if(std::is_floating_point<typename TestFixture::value_type>::value)
-    {
-      EXPECT_FLOAT_EQ(expected.first, p_gdf_groupby_output[i]);
-      EXPECT_FLOAT_EQ(expected.second, p_gdf_aggregation_output[i]);
-    }
-    else
-    {
-      EXPECT_EQ(expected.first, p_gdf_groupby_output[i]);
-      EXPECT_EQ(expected.second, p_gdf_aggregation_output[i]);
-    }
-    ++i;
-  }
 }
 
