@@ -132,6 +132,12 @@ struct GDFGroupByTest : public testing::Test
         {
           value_type current_value = std::rand() % max_value;
 
+          // Add a decimal to floating point aggregation types
+          if(std::is_floating_point<value_type>::value)
+          {
+            current_value += current_value / std::rand();
+          }
+
           // Don't use unused_value
           while(current_value == this->unused_value)
           {
@@ -496,8 +502,16 @@ TYPED_TEST(GDFGroupByTest, ExampleTest)
   typename TestFixture::agg_output_type * p_gdf_aggregation_output = static_cast<typename TestFixture::agg_output_type*>(this->gdf_agg_output->data);
   for(auto const & expected : expected_values)
   {
-    EXPECT_EQ(expected.first, p_gdf_groupby_output[i]);
-    EXPECT_EQ(expected.second, p_gdf_aggregation_output[i]);
+    if(std::is_floating_point<typename TestFixture::value_type>::value)
+    {
+      EXPECT_FLOAT_EQ(expected.first, p_gdf_groupby_output[i]);
+      EXPECT_FLOAT_EQ(expected.second, p_gdf_aggregation_output[i]);
+    }
+    else
+    {
+      EXPECT_EQ(expected.first, p_gdf_groupby_output[i]);
+      EXPECT_EQ(expected.second, p_gdf_aggregation_output[i]);
+    }
     ++i;
   }
 }
