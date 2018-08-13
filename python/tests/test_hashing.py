@@ -76,7 +76,6 @@ def test_hashing():
     nrows = 8
     dtypes = [np.int8, np.int16, np.int32, np.int64, np.float32, np.float64]  # dtypes as number of columns
 
-    np.random.seed(None)
     hash_input = []
     for dt in dtypes:
         if(dt == np.float32):
@@ -87,10 +86,6 @@ def test_hashing():
             hi = np.array(np.random.randint(np.iinfo(dt).min, np.iinfo(dt).max, nrows), dtype=dt)
         hi[-1] = hi[0]
         hash_input.append(hi)
-
-    print("True Input:")
-    for i in range(len(hash_input)):
-        print(hash_input[i])
 
     ncols = len(hash_input)
     magic = libgdf.GDF_HASH_MURMUR3
