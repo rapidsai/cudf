@@ -151,7 +151,7 @@ struct LesserRTTI
 		     IndexT row,
 		     const void* const * columns)
   {
-    return (static_cast<const ColType* const>(columns[col_index]))[row];
+    return (static_cast<const ColType*>(columns[col_index]))[row];
   }
   
 private:
@@ -262,7 +262,7 @@ private:
 		      const void* const * columns,
 		      ColType )
     {
-      const ColType* const d_in = static_cast<const ColType* const>(columns[col_index]);
+      const ColType* const d_in = static_cast<const ColType*>(columns[col_index]);
       ColType* d_out = static_cast<ColType*>(d_cols_out_[col_index]);
       thrust::gather(thrust::device,
 		     d_indices_, d_indices_ + nrows_new_, //map of indices
@@ -287,42 +287,42 @@ private:
 	{
 	  using ColType = int8_t;//char;
 	  
-	  ColType dummy;
+	  ColType dummy=0;
 	  return pred(col_index, columns_, dummy);
 	}
       case GDF_INT16:
 	{
 	  using ColType = int16_t;//short;
 
-	  ColType dummy;
+	  ColType dummy=0;
 	  return pred(col_index, columns_, dummy);
 	}
       case GDF_INT32:
 	{
 	  using ColType = int32_t;//int;
 
-	  ColType dummy;
+	  ColType dummy=0;
 	  return pred(col_index, columns_, dummy);
 	}
       case GDF_INT64:
 	{
 	  using ColType = int64_t;//long;
 
-	  ColType dummy;
+	  ColType dummy=0;
 	  return pred(col_index, columns_, dummy);
 	}
       case GDF_FLOAT32:
 	{
 	  using ColType = float;
 
-	  ColType dummy;
+	  ColType dummy=0;
 	  return pred(col_index, columns_, dummy);
 	}
       case GDF_FLOAT64:
 	{
 	  using ColType = double;
 
-	  ColType dummy;
+	  ColType dummy=0;
 	  return pred(col_index, columns_, dummy);
 	}
 

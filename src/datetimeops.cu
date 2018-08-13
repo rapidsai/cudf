@@ -316,9 +316,10 @@ gdf_error gdf_extract_datetime_year(gdf_column *input, gdf_column *output) {
 
 	cudaStream_t stream;
 	cudaStreamCreate(&stream);
-
-	gdf_size_type num_chars_bitmask = ( ( input->size +( GDF_VALID_BITSIZE - 1)) / GDF_VALID_BITSIZE );
-	thrust::copy(thrust::cuda::par.on(stream), input->valid, input->valid + num_chars_bitmask, output->valid); // copy over valid bitmask
+    if (input->valid){
+      gdf_size_type num_chars_bitmask = ( ( input->size +( GDF_VALID_BITSIZE - 1)) / GDF_VALID_BITSIZE );
+      thrust::copy(thrust::cuda::par.on(stream), input->valid, input->valid + num_chars_bitmask, output->valid); // copy over valid bitmask
+    }
 
 	if ( input->dtype == GDF_DATE64 ) {
 		thrust::device_ptr<int64_t> input_ptr((int64_t *) input->data);
@@ -358,9 +359,10 @@ gdf_error gdf_extract_datetime_month(gdf_column *input, gdf_column *output) {
 
 	cudaStream_t stream;
 	cudaStreamCreate(&stream);
-
-	gdf_size_type num_chars_bitmask = ( ( input->size +( GDF_VALID_BITSIZE - 1)) / GDF_VALID_BITSIZE );
-	thrust::copy(thrust::cuda::par.on(stream), input->valid, input->valid + num_chars_bitmask, output->valid); // copy over valid bitmask
+    if (input->valid){
+      gdf_size_type num_chars_bitmask = ( ( input->size +( GDF_VALID_BITSIZE - 1)) / GDF_VALID_BITSIZE );
+      thrust::copy(thrust::cuda::par.on(stream), input->valid, input->valid + num_chars_bitmask, output->valid); // copy over valid bitmask
+    }
 
 	if ( input->dtype == GDF_DATE64 ) {
 		thrust::device_ptr<int64_t> input_ptr((int64_t *) input->data);
@@ -400,10 +402,10 @@ gdf_error gdf_extract_datetime_day(gdf_column *input, gdf_column *output) {
 
 	cudaStream_t stream;
 	cudaStreamCreate(&stream);
-
-	gdf_size_type num_chars_bitmask = ( ( input->size +( GDF_VALID_BITSIZE - 1)) / GDF_VALID_BITSIZE );
-	thrust::copy(thrust::cuda::par.on(stream), input->valid, input->valid + num_chars_bitmask, output->valid); // copy over valid bitmask
-
+    if (input->valid){
+      gdf_size_type num_chars_bitmask = ( ( input->size +( GDF_VALID_BITSIZE - 1)) / GDF_VALID_BITSIZE );
+      thrust::copy(thrust::cuda::par.on(stream), input->valid, input->valid + num_chars_bitmask, output->valid); // copy over valid bitmask
+    }
 	if ( input->dtype == GDF_DATE64 ) {
 		thrust::device_ptr<int64_t> input_ptr((int64_t *) input->data);
 		thrust::device_ptr<int16_t> output_ptr((int16_t *) output->data);
@@ -443,9 +445,10 @@ gdf_error gdf_extract_datetime_hour(gdf_column *input, gdf_column *output) {
 
 	cudaStream_t stream;
 	cudaStreamCreate(&stream);
-
-	gdf_size_type num_chars_bitmask = ( ( input->size +( GDF_VALID_BITSIZE - 1)) / GDF_VALID_BITSIZE );
-	thrust::copy(thrust::cuda::par.on(stream), input->valid, input->valid + num_chars_bitmask, output->valid); // copy over valid bitmask
+    if (input->valid){
+      gdf_size_type num_chars_bitmask = ( ( input->size +( GDF_VALID_BITSIZE - 1)) / GDF_VALID_BITSIZE );
+      thrust::copy(thrust::cuda::par.on(stream), input->valid, input->valid + num_chars_bitmask, output->valid); // copy over valid bitmask
+    }
 
 	if ( input->dtype == GDF_DATE64 ) {
 		thrust::device_ptr<int64_t> input_ptr((int64_t *) input->data);
@@ -479,10 +482,10 @@ gdf_error gdf_extract_datetime_minute(gdf_column *input, gdf_column *output) {
 
 	cudaStream_t stream;
 	cudaStreamCreate(&stream);
-
-	gdf_size_type num_chars_bitmask = ( ( input->size +( GDF_VALID_BITSIZE - 1)) / GDF_VALID_BITSIZE );
-	thrust::copy(thrust::cuda::par.on(stream), input->valid, input->valid + num_chars_bitmask, output->valid); // copy over valid bitmask
-
+    if (input->valid){
+      gdf_size_type num_chars_bitmask = ( ( input->size +( GDF_VALID_BITSIZE - 1)) / GDF_VALID_BITSIZE );
+      thrust::copy(thrust::cuda::par.on(stream), input->valid, input->valid + num_chars_bitmask, output->valid); // copy over valid bitmask
+    }
 	if ( input->dtype == GDF_DATE64 ) {
 		thrust::device_ptr<int64_t> input_ptr((int64_t *) input->data);
 		thrust::device_ptr<int16_t> output_ptr((int16_t *) output->data);
@@ -515,10 +518,10 @@ gdf_error gdf_extract_datetime_second(gdf_column *input, gdf_column *output) {
 
 	cudaStream_t stream;
 	cudaStreamCreate(&stream);
-
-	gdf_size_type num_chars_bitmask = ( ( input->size +( GDF_VALID_BITSIZE - 1)) / GDF_VALID_BITSIZE );
-	thrust::copy(thrust::cuda::par.on(stream), input->valid, input->valid + num_chars_bitmask, output->valid); // copy over valid bitmask
-
+    if (input->valid){
+      gdf_size_type num_chars_bitmask = ( ( input->size +( GDF_VALID_BITSIZE - 1)) / GDF_VALID_BITSIZE );
+      thrust::copy(thrust::cuda::par.on(stream), input->valid, input->valid + num_chars_bitmask, output->valid); // copy over valid bitmask
+    }
 	if ( input->dtype == GDF_DATE64 ) {
 		thrust::device_ptr<int64_t> input_ptr((int64_t *) input->data);
 		thrust::device_ptr<int16_t> output_ptr((int16_t *) output->data);
@@ -542,6 +545,3 @@ gdf_error gdf_extract_datetime_second(gdf_column *input, gdf_column *output) {
 
 	return GDF_SUCCESS;
 }
-
-
-

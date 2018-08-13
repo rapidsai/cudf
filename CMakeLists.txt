@@ -21,6 +21,8 @@
 #    $ cmake ..          # configure build system
 #    $ make              # make libgdf
 #    $ make pytest       # trigger test
+#    $ make pytest-ci    # trigger test with jUnit.xml output
+#    $ make install      # install libgdf
 
 PROJECT(libgdf)
 
@@ -107,22 +109,33 @@ endif()
 
 cuda_add_library(gdf SHARED
     src/binaryops.cu
+    src/bitmaskops.cu
     src/column.cpp
     src/context.cpp
+    src/cudautils.cu
+    src/datetimeops.cu
     src/errorhandling.cpp
-    src/unaryops.cu
-    src/ipc.cu
-    src/reductions.cu
-    src/sorting.cu
-    src/joining.cu
+    src/filterops.cu
     src/hashing.cu
+    src/hashops.cu
+    src/ipc.cu
+    src/joining.cu
+    src/reductions.cu
     src/scan.cu
     src/segmented_sorting.cu
-    src/datetimeops.cu
+    src/sorting.cu
     src/sqls_ops.cu
+    src/streamcompactionops.cu
+    src/unaryops.cu
+    #src/windowedops.cu
 )
 
-target_link_libraries(gdf arrow)
+if (ARROW_NUMERIC_VERSION EQUAL 900)
+  # arrow-0.9 requires boost_regex
+  target_link_libraries(gdf arrow boost_regex)
+else()
+  target_link_libraries(gdf arrow)
+endif()
 
 # Command to symlink files into the build directory
 add_custom_command(  # link the include directory
@@ -148,8 +161,14 @@ add_custom_target(   # target to link the python files and trigger cffi
 # The test target
 add_custom_target(pytest DEPENDS copy_python)
 add_custom_command(TARGET pytest POST_BUILD
-                   COMMAND ${CMAKE_COMMAND} -E env LD_LIBRARY_PATH=$LD_LIBRARY_PATH:${CMAKE_BINARY_DIR} py.test -v
-                   WORKING_DIRECTORY tests)
+                   COMMAND ${CMAKE_COMMAND} -E env LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:${CMAKE_BINARY_DIR} py.test -v
+                   WORKING_DIRECTORY --cache-clear tests)
+
+# The test CI target with junit.xml output
+add_custom_target(pytest-ci DEPENDS copy_python)
+add_custom_command(TARGET pytest POST_BUILD
+                   COMMAND ${CMAKE_COMMAND} -E env LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:${CMAKE_BINARY_DIR} py.test -v
+                   WORKING_DIRECTORY --cache-clear --junitxml=junit.xml tests)
 
 # The install target
 install(TARGETS gdf LIBRARY DESTINATION lib)
