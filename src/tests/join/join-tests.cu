@@ -29,7 +29,7 @@
 #include <gdf/gdf.h>
 #include <gdf/cffi/functions.h>
 
-#include "../../joining.h"
+#include "../../join/joining.h"
 
 // See this header for all of the recursive handling of tuples of vectors
 #include "tuple_vectors.h"
