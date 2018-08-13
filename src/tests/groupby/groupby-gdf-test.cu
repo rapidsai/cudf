@@ -388,9 +388,9 @@ struct GDFGroupByTest : public testing::Test
     return error;
   }
 
-  void verify_gdf_result(std::map<key_type, agg_output_type> expected_values, 
-                         gdf_column * gdf_groupby_output,
-                         gdf_column * gdf_agg_output)
+  void verify_gdf_result(std::map<key_type, agg_output_type> const & expected_values, 
+                         gdf_column const * const __restrict__ gdf_groupby_output,
+                         gdf_column const * const __restrict__ gdf_agg_output)
   {
     ASSERT_EQ(expected_values.size(), gdf_groupby_output->size) << "Size of GDF Group By output does not match reference solution";
     ASSERT_EQ(expected_values.size(), gdf_agg_output->size) << "Size of GDF Aggregation output does not match reference solution";
@@ -475,8 +475,6 @@ using TestCases = ::testing::Types<
                                     TestParameters<uint64_t, int64_t, agg_op::COUNT>,
                                     TestParameters<uint64_t, uint64_t, agg_op::COUNT>,
                                     // Tests for SUM 
-                                    //// TODO: Tests for SUM on single precision floats currently fail due to numerical stability issues
-                                    //TestParameters<int32_t, int32_t, agg_op::SUM>,
                                     TestParameters<int32_t, float, agg_op::SUM>, 
                                     TestParameters<int32_t, double, agg_op::SUM>,
                                     TestParameters<int32_t, int64_t, agg_op::SUM>,
@@ -502,13 +500,172 @@ TYPED_TEST(GDFGroupByTest, ExampleTest)
 {
   const int num_keys = 1<<14;
   const int num_values_per_key = 32;
+  const int max_key = 1000;
+  const int max_value = 1000;
 
   // Create reference input columns
   // Note: If the maximum possible value for the aggregation column is large, it is very likely
   // you'll overflow an int when doing SUM or AVG
   std::tie(this->groupby_column, 
            this->aggregation_column) = this->create_reference_input(num_keys, 
-                                                                    num_values_per_key,1000,1000);
+                                                                    num_values_per_key,max_key,max_value);
+
+  auto expected_values = this->compute_reference_solution(this->groupby_column, 
+                                                          this->aggregation_column);
+
+  // Create gdf_columns with same data as the reference input
+  this->gdf_groupby_column = create_gdf_column(this->groupby_column);
+  this->gdf_aggregation_column = create_gdf_column(this->aggregation_column);
+
+  // Allocate buffers for output
+  const size_t output_size = this->gdf_groupby_column->size;
+  this->gdf_groupby_output = create_gdf_column(std::vector<typename TestFixture::key_type>(output_size));
+  this->gdf_agg_output = create_gdf_column(std::vector<typename TestFixture::agg_output_type>(output_size));
+
+  this->compute_gdf_result(this->gdf_groupby_column.get(), 
+                           this->gdf_aggregation_column.get(), 
+                           this->gdf_groupby_output.get(),
+                           this->gdf_agg_output.get());
+  
+  this->verify_gdf_result(expected_values, 
+                          this->gdf_groupby_output.get(),
+                          this->gdf_agg_output.get());
+
+}
+
+TYPED_TEST(GDFGroupByTest, AllKeysSame)
+{
+  const int num_keys = 1;
+  const int num_values_per_key = 1<<14;
+  // Note: If the maximum possible value for the aggregation column is large, it is very likely
+  // you'll overflow an int when doing SUM or AVG
+  const int max_key = 1000;
+  const int max_value = 1000;
+
+  // Create reference input columns
+  std::tie(this->groupby_column, 
+           this->aggregation_column) = this->create_reference_input(num_keys, 
+                                                                    num_values_per_key,
+                                                                    max_key,
+                                                                    max_value);
+
+  auto expected_values = this->compute_reference_solution(this->groupby_column, 
+                                                          this->aggregation_column);
+
+  // Create gdf_columns with same data as the reference input
+  this->gdf_groupby_column = create_gdf_column(this->groupby_column);
+  this->gdf_aggregation_column = create_gdf_column(this->aggregation_column);
+
+  // Allocate buffers for output
+  const size_t output_size = this->gdf_groupby_column->size;
+  this->gdf_groupby_output = create_gdf_column(std::vector<typename TestFixture::key_type>(output_size));
+  this->gdf_agg_output = create_gdf_column(std::vector<typename TestFixture::agg_output_type>(output_size));
+
+  this->compute_gdf_result(this->gdf_groupby_column.get(), 
+                           this->gdf_aggregation_column.get(), 
+                           this->gdf_groupby_output.get(),
+                           this->gdf_agg_output.get());
+  
+  this->verify_gdf_result(expected_values, 
+                          this->gdf_groupby_output.get(),
+                          this->gdf_agg_output.get());
+
+}
+
+// TODO Update so that all the keys are guaranteed to be unique
+TYPED_TEST(GDFGroupByTest, AllKeysDifferent)
+{
+  const int num_keys = 1;
+  const int num_values_per_key = 1<<14;
+  // Note: If the maximum possible value for the aggregation column is large, it is very likely
+  // you'll overflow an int when doing SUM or AVG
+  const int max_key = 1000;
+  const int max_value = 1000;
+
+  // Create reference input columns
+  std::tie(this->groupby_column, 
+           this->aggregation_column) = this->create_reference_input(num_keys, 
+                                                                    num_values_per_key,
+                                                                    max_key,
+                                                                    max_value);
+
+  auto expected_values = this->compute_reference_solution(this->groupby_column, 
+                                                          this->aggregation_column);
+
+  // Create gdf_columns with same data as the reference input
+  this->gdf_groupby_column = create_gdf_column(this->groupby_column);
+  this->gdf_aggregation_column = create_gdf_column(this->aggregation_column);
+
+  // Allocate buffers for output
+  const size_t output_size = this->gdf_groupby_column->size;
+  this->gdf_groupby_output = create_gdf_column(std::vector<typename TestFixture::key_type>(output_size));
+  this->gdf_agg_output = create_gdf_column(std::vector<typename TestFixture::agg_output_type>(output_size));
+
+  this->compute_gdf_result(this->gdf_groupby_column.get(), 
+                           this->gdf_aggregation_column.get(), 
+                           this->gdf_groupby_output.get(),
+                           this->gdf_agg_output.get());
+  
+  this->verify_gdf_result(expected_values, 
+                          this->gdf_groupby_output.get(),
+                          this->gdf_agg_output.get());
+
+}
+
+TYPED_TEST(GDFGroupByTest, WarpKeysSame)
+{
+  const int num_keys = 1<<12;
+  const int num_values_per_key = 32;
+  // Note: If the maximum possible value for the aggregation column is large, it is very likely
+  // you'll overflow an int when doing SUM or AVG
+  const int max_key = 1000;
+  const int max_value = 1000;
+
+  // Create reference input columns
+  std::tie(this->groupby_column, 
+           this->aggregation_column) = this->create_reference_input(num_keys, 
+                                                                    num_values_per_key,
+                                                                    max_key,
+                                                                    max_value);
+
+  auto expected_values = this->compute_reference_solution(this->groupby_column, 
+                                                          this->aggregation_column);
+
+  // Create gdf_columns with same data as the reference input
+  this->gdf_groupby_column = create_gdf_column(this->groupby_column);
+  this->gdf_aggregation_column = create_gdf_column(this->aggregation_column);
+
+  // Allocate buffers for output
+  const size_t output_size = this->gdf_groupby_column->size;
+  this->gdf_groupby_output = create_gdf_column(std::vector<typename TestFixture::key_type>(output_size));
+  this->gdf_agg_output = create_gdf_column(std::vector<typename TestFixture::agg_output_type>(output_size));
+
+  this->compute_gdf_result(this->gdf_groupby_column.get(), 
+                           this->gdf_aggregation_column.get(), 
+                           this->gdf_groupby_output.get(),
+                           this->gdf_agg_output.get());
+  
+  this->verify_gdf_result(expected_values, 
+                          this->gdf_groupby_output.get(),
+                          this->gdf_agg_output.get());
+
+}
+
+TYPED_TEST(GDFGroupByTest, BlockKeysSame)
+{
+  const int num_keys = 1<<10;
+  const int num_values_per_key = 256;
+  // Note: If the maximum possible value for the aggregation column is large, it is very likely
+  // you'll overflow an int when doing SUM or AVG
+  const int max_key = 1000;
+  const int max_value = 1000;
+
+  // Create reference input columns
+  std::tie(this->groupby_column, 
+           this->aggregation_column) = this->create_reference_input(num_keys, 
+                                                                    num_values_per_key,
+                                                                    max_key,
+                                                                    max_value);
 
   auto expected_values = this->compute_reference_solution(this->groupby_column, 
                                                           this->aggregation_column);
