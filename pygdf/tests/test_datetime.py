@@ -1,6 +1,5 @@
 import pytest
 
-import time
 import datetime as dt
 import numpy as np
 import pandas as pd
@@ -67,7 +66,7 @@ def test_issue_165():
     start_date = dt.datetime.strptime("2000-10-21", '%Y-%m-%d')
     data = [(start_date + dt.timedelta(days=x)) for x in range(6)]
     df_pandas["dates"] = data
-    df_pandas["num"] = [1,2,3,4,5,6]
+    df_pandas["num"] = [1, 2, 3, 4, 5, 6]
     df_pygdf = DataFrame.from_pandas(df_pandas)
 
     base = df_pandas.query("dates==@start_date")
@@ -86,7 +85,6 @@ def test_issue_165():
     mask = df_pygdf.dates == start_date_ts
     base_mask = df_pandas.dates == start_date_ts
     assert_series_equal(mask.to_pandas(), base_mask, check_names=False)
-
 
     start_date_np = np.datetime64(start_date_ts, 'ns')
     test = df_pygdf.query("dates==@start_date_np")

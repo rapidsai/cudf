@@ -5,9 +5,7 @@ import numpy as np
 import pandas as pd
 
 from . import columnops, _gdf, utils
-from . import numerical
 from .buffer import Buffer
-from .cudautils import compact_mask_bytes
 from libgdf_cffi import libgdf
 
 
@@ -144,7 +142,6 @@ class DatetimeColumn(columnops.TypedColumnBase):
 
     def to_pandas(self, index):
         return pd.Series(self.to_array().astype(self.dtype), index=index)
-
 
 
 def binop(lhs, rhs, op, out_dtype):
