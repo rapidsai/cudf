@@ -146,6 +146,9 @@ class DataFrame(object):
         If *arg* is a ``str``, return the column Series.
         If *arg* is a ``slice``, return a new DataFrame with all columns
         sliced to the specified range.
+        If *arg* is an ``array`` containing column names, return a new
+        DataFrame with the corresponding columns.
+
 
         Examples
         --------
@@ -165,6 +168,12 @@ class DataFrame(object):
         17   17   17   17
         18   18   18   18
         19   19   19   19
+        >>>df[['a','c']] # get columns a and c
+             a    c
+        0    0    0
+        1    1    1
+        2    2    2
+        3    3    3
         """
         if isinstance(arg, str) or isinstance(arg, int):
             return self._cols[arg]
@@ -172,6 +181,11 @@ class DataFrame(object):
             df = DataFrame()
             for k, col in self._cols.items():
                 df[k] = col[arg]
+            return df
+        elif isinstance(arg, (list,)):
+            df = DataFrame()
+            for col in arg:
+                df[col] = self[col]
             return df
         else:
             msg = "__getitem__ on type {!r} is not supported"
@@ -245,10 +259,15 @@ class DataFrame(object):
                                  more_rows=more_rows)
 
     def __str__(self):
-        return self.to_string()
+        nrows = settings.formatting.get('nrows') or 10
+        ncols = settings.formatting.get('ncols') or 8
+        return self.to_string(nrows=nrows, ncols=ncols)
 
     def __repr__(self):
-        return self.to_string()
+        return "<pygdf.DataFrame ncols={} nrows={} >".format(
+            len(self.columns),
+            len(self),
+            )
 
     @property
     def loc(self):
@@ -750,7 +769,7 @@ class DataFrame(object):
 
         Returns
         -------
-        joined : DataFrame
+        joined : DataFrame
 
         Notes
         -----

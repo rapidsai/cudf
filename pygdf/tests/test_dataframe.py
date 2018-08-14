@@ -12,6 +12,8 @@ from pygdf.dataframe import Series, DataFrame
 from pygdf.buffer import Buffer
 from pygdf.settings import set_options
 
+from itertools import combinations
+
 from . import utils
 
 
@@ -157,6 +159,17 @@ def test_dataframe_column_name_indexing():
                             np.asarray(range(10), dtype=np.int32))
     np.testing.assert_equal(df[1].to_array(),
                             np.asarray(range(10), dtype=np.int32))
+
+    pdf = pd.DataFrame()
+    nelem = 10
+    pdf['key1'] = np.random.randint(0, 5, nelem)
+    pdf['key2'] = np.random.randint(0, 3, nelem)
+    pdf[1] = np.arange(1, 1 + nelem)
+    pdf[2] = np.random.random(nelem)
+    df = DataFrame.from_pandas(pdf)
+    for i in range(1, len(pdf.columns)+1):
+        for idx in combinations(pdf.columns, i):
+            assert(pdf[list(idx)].equals(df[list(idx)].to_pandas()))
 
 
 def test_dataframe_column_add_drop():

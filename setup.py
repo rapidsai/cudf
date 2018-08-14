@@ -25,6 +25,9 @@ setup(name='pygdf',
       # Include the separately-compiled shared library
       author="Continuum Analytics, Inc.",
       packages=packages,
+      package_data={
+        'pygdf.tests': ['data/*.pickle'],
+      },
       install_requires=install_requires,
       license="BSD",
       cmdclass=versioneer.get_cmdclass(),

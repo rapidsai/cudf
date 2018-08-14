@@ -1,7 +1,14 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
-
+import pytest
 import os.path
-import pickle
+
+try:
+    import pyarrow as pa
+    arrow_version = pa.__version__
+except ImportError as msg:
+    print('Failed to import pyarrow: {}'.format(msg))
+    pa = None
+    arrow_version = None
 
 import numpy as np
 from numba import cuda
@@ -11,19 +18,28 @@ from pygdf.dataframe import Series, DataFrame
 
 
 def read_data():
+    import pandas as pd
     basedir = os.path.dirname(__file__)
-    # load schema
-    schemapath = os.path.join(basedir, 'data', 'schema_ipums.pickle')
-    with open(schemapath, 'rb') as fin:
-        schema = pickle.load(fin)
-    # load data
-    datapath = os.path.join(basedir, 'data', 'data_ipums.pickle')
-    with open(datapath, 'rb') as fin:
-        data = pickle.load(fin)
+    datapath = os.path.join(basedir, 'data', 'ipums.pkl')
+    df = pd.read_pickle(datapath)
+    names = []
+    arrays = []
+    for k in df.columns:
+        arrays.append(pa.Array.from_pandas(df[k]))
+        names.append(k)
+    batch = pa.RecordBatch.from_arrays(arrays, names)
+    schema = batch.schema.serialize().to_pybytes()
+    schema = np.ndarray(shape=len(schema), dtype=np.byte,
+                        buffer=bytearray(schema))
+    data = batch.serialize().to_pybytes()
+    data = np.ndarray(shape=len(data), dtype=np.byte,
+                      buffer=bytearray(data))
     darr = cuda.to_device(data)
     return schema, darr
 
 
+@pytest.mark.skipif(arrow_version is None,
+                    reason='need compatible pyarrow to generate test data')
 def test_fillna():
     schema, darr = read_data()
     gar = GpuArrowReader(schema, darr)
@@ -50,6 +66,8 @@ def test_to_dense_array():
     assert filled.size == len(sr)
 
 
+@pytest.mark.skipif(arrow_version is None,
+                    reason='need compatible pyarrow to generate test data')
 def test_reading_arrow_sparse_data():
     schema, darr = read_data()
     gar = GpuArrowReader(schema, darr)
