@@ -38,6 +38,8 @@ enable_testing()
 # -------------------
 message(STATUS "******** Configuring tests ********")
 
+include_directories(${CMAKE_CURRENT_SOURCE_DIR})
+
 add_subdirectory(foo-sample)
 add_subdirectory(datetime)
 add_subdirectory(hashing)

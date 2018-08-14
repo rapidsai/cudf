@@ -32,6 +32,8 @@
 #include "../../join/joining.h"
 #include "../../util/bit_util.cuh"
 
+#include "memory.h"
+
 // See this header for all of the recursive handling of tuples of vectors
 #include "tuple_vectors.h"
 
@@ -136,16 +138,16 @@ struct JoinTest : public testing::Test
 
     // Create a new instance of a gdf_column with a custom deleter that will free
     // the associated device memory when it eventually goes out of scope
-    auto deleter = [](gdf_column* col){col->size = 0; cudaFree(col->data); cudaFree(col->valid); };
+    auto deleter = [](gdf_column* col){col->size = 0; rmmFree(col->data, 0); rmmFree(col->valid, 0); };
     gdf_col_pointer the_column{new gdf_column, deleter};
 
     // Allocate device storage for gdf_column and copy contents from host_vector
-    cudaMalloc(&(the_column->data), host_vector.size() * sizeof(col_type));
+    rmmAlloc(&(the_column->data), host_vector.size() * sizeof(col_type), 0);
     cudaMemcpy(the_column->data, host_vector.data(), host_vector.size() * sizeof(col_type), cudaMemcpyHostToDevice);
 
     // Allocate device storage for gdf_column.valid
     int valid_size = gdf_get_num_chars_bitmask(host_vector.size());
-    cudaMalloc(&(the_column->valid), valid_size);
+    rmmAlloc((void**)&(the_column->valid), valid_size, 0);
     cudaMemcpy(the_column->valid, host_valid, valid_size, cudaMemcpyHostToDevice);
  
     // Fill the gdf_column members

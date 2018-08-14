@@ -27,6 +27,7 @@
 #include <thrust/iterator/constant_iterator.h>
 #include <thrust/reduce.h>
 #include <thrust/functional.h>
+#include "thrust_rmm_allocator.h"
 
 #include <iostream>
 #include <vector>
@@ -52,7 +53,7 @@
 #include "sqls_rtti_comp.hpp"
 
 template<typename T>
-using Vector = thrust::device_vector<T>;
+using Vector = thrust::device_vector<T, rmm_allocator<T>>;
 
 ///using IndexT = int;//okay...
 using IndexT = size_t;
@@ -602,7 +603,7 @@ TEST(gdf_group_by_min, UsageTestMin)
   //int flag_sorted = 0;
 
   std::vector<double> v_col{2., 4., 5., 7., 11., 3.};
-  thrust::device_vector<double> d_col = v_col;
+  Vector<double> d_col = v_col;
 
   std::cout<<"aggregate = min on column:\n";
   print_v(d_col, std::cout);
@@ -753,7 +754,7 @@ TEST(gdf_group_by_max, UsageTestMax)
   //int flag_sorted = 0;
 
   std::vector<double> v_col{2., 4., 5., 7., 11., 3.};
-  thrust::device_vector<double> d_col = v_col;
+  Vector<double> d_col = v_col;
 
   std::cout<<"aggregate = max on column:\n";
   print_v(d_col, std::cout);
