@@ -190,7 +190,7 @@ gdf_error gdf_##Fn(gdf_column *leftcol, gdf_column *rightcol,                   
     std::unique_ptr<join_result<int> > result_ptr(new join_result<int>);                \
     if (N_GDF_METHODS == ctxt->flag_method) {                                           \
     err = GDF_UNSUPPORTED_METHOD;                                                       \
-    } else if (GDF_SORT == ctxt->flag_method) {                                         \
+    } else if ((GDF_SORT == ctxt->flag_method) && ctxt->flag_sorted) {                  \
     result_ptr->result = SortJoin((T*)leftcol->data, leftcol->size,                     \
                                 (T*)rightcol->data, rightcol->size,                     \
                                 less_t<T>(), result_ptr->context);                      \
