@@ -34,6 +34,8 @@
 
 #include "memory.h"
 
+#include "memory.h"
+
 // See this header for all of the recursive handling of tuples of vectors
 #include "tuple_vectors.h"
 
