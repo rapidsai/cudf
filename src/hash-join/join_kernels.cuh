@@ -61,7 +61,7 @@ JoinType join_type,
 		 typename size_type,
 		 int block_size,
   int output_cache_size>
-__global__ void probe_hash_tbl_no_add(
+__global__ void probe_hash_tbl_count_common(
 	multimap_type * multi_map,
 	const key_type* probe_tbl,
 	const size_type probe_tbl_size,

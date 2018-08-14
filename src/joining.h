@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2018, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,22 +22,17 @@
 #include "hash-join/join_compute_api.h"
 #include "sort-join.cuh"
 
-// transpose
-/*
-  template<typename size_type, typename joined_type>
-void pairs_to_decoupled(mgpu::mem_t<size_type> &output, const size_type output_npairs, joined_type *joined, mgpu::context_t &context, bool flip_indices)
-{
-  if (output_npairs > 0) {
-	size_type* output_data = output.data();
-	auto k = [=] MGPU_DEVICE(size_type index) {
-	  output_data[index] = flip_indices ? joined[index].second : joined[index].first;
-	  output_data[index + output_npairs] = flip_indices ? joined[index].first : joined[index].second;
-	};
-	mgpu::transform(k, output_npairs, context);
-  }
-}
-*/
 // N-column join (N up to 3 currently)
+// \brief Performs a hash based join of columns a and b.
+///
+/// \param[in] a first column to join (left)
+/// \param[in] Number of element in a column (left)
+/// \param[in] b second column to join (right)
+/// \param[in] Number of element in b column (right)
+/// \param[in] additional columns to join (default == NULL)
+/// \param[in] Flag used to reorder the left and right column indices found in the join (default = false)
+/// \param[in] compute_ctx The CudaComputeContext to shedule this to.
+/// \return	   Array of matching rows
 template<JoinType join_type,
   typename size_type,
   typename col1_it,

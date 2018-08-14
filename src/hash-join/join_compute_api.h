@@ -36,8 +36,15 @@ constexpr int DEFAULT_CUDA_CACHE_SIZE = 128;
 template<typename size_type>
 struct join_pair { size_type first, second; };
 
-// transpose
-  template<typename size_type, typename joined_type>
+/// \brief Transforms the data from an array of structurs to two column.
+///
+/// \param[out] out An array with the indices of the common values. Stored in a 1D array with the indices of A appearing before those of B.
+/// \param[in] Number of common values found)                                                                                      
+/// \param[in] Common indices stored an in array of structure.
+///
+/// \param[in] compute_ctx The CudaComputeContext to shedule this to.
+/// \param[in] Flag signifying if the order of the indices for A and B need to be swapped. This flag is used when the order of A and B are swapped to build the hash table for the smalle column.
+template<typename size_type, typename joined_type>
 void pairs_to_decoupled(mgpu::mem_t<size_type> &output, const size_type output_npairs, joined_type *joined, mgpu::context_t &context, bool flip_indices)
 {
   if (output_npairs > 0) {
@@ -51,7 +58,7 @@ void pairs_to_decoupled(mgpu::mem_t<size_type> &output, const size_type output_n
 }
 
 
-/// \brief Performs a hash based left join of columns a and b.
+/// \brief Performs a generic hash based join of columns a and b. Works for both inner and left joins.
 ///
 /// \param[in] compute_ctx The CudaComputeContext to shedule this to.
 /// \param[out] out row references into a and b of matching rows
@@ -112,7 +119,7 @@ cudaError_t GenericJoinHash(mgpu::context_t &compute_ctx, mgpu::mem_t<size_type>
   size_type* d_actualFound;
   cudaMalloc(&d_actualFound, sizeof(size_type));
   cudaMemset(d_actualFound, 0, sizeof(size_type));
-  probe_hash_tbl_no_add<join_type, multimap_type, key_type, key_type2, key_type3, size_type, block_size, DEFAULT_CUDA_CACHE_SIZE>
+  probe_hash_tbl_count_common<join_type, multimap_type, key_type, key_type2, key_type3, size_type, block_size, DEFAULT_CUDA_CACHE_SIZE>
 	<<<(a_count + block_size-1) / block_size, block_size>>>
 	(hash_tbl.get(), a, a_count, a2, b2, a3, b3,d_actualFound);
   if (error != cudaSuccess)
@@ -124,15 +131,15 @@ cudaError_t GenericJoinHash(mgpu::context_t &compute_ctx, mgpu::mem_t<size_type>
   int dev_ordinal;
   joined_type* tempOut=NULL;
   CUDA_RT_CALL( cudaGetDevice(&dev_ordinal));
+  joined_output = mgpu::mem_t<size_type> (2 * (scanSize), compute_ctx);
 
+  // Checking if any common elements exists. If not, then there is no point scanning again.
   if(scanSize==0){
-	CUDA_RT_CALL( cudaMallocManaged   ( &tempOut, sizeof(joined_type)*1));
-	CUDA_RT_CALL( cudaMemPrefetchAsync( tempOut , sizeof(joined_type)*1, dev_ordinal));
+	return error;
   }
-  else{
-	CUDA_RT_CALL( cudaMallocManaged   ( &tempOut, sizeof(joined_type)*scanSize));
-	CUDA_RT_CALL( cudaMemPrefetchAsync( tempOut , sizeof(joined_type)*scanSize, dev_ordinal));
-  }
+
+  CUDA_RT_CALL( cudaMallocManaged   ( &tempOut, sizeof(joined_type)*scanSize));
+  CUDA_RT_CALL( cudaMemPrefetchAsync( tempOut , sizeof(joined_type)*scanSize, dev_ordinal));
 
   CUDA_RT_CALL( cudaMemset(d_joined_idx, 0, sizeof(size_type)) );
   // step 3b: scan table A (left), probe the HT and output the joined indices - doing left join here
@@ -146,7 +153,6 @@ cudaError_t GenericJoinHash(mgpu::context_t &compute_ctx, mgpu::mem_t<size_type>
   CUDA_RT_CALL( cudaFree(d_joined_idx) );
   CUDA_RT_CALL( cudaFree(d_actualFound) ); 
 
-  joined_output = mgpu::mem_t<size_type> (2 * (scanSize), compute_ctx);
 
   pairs_to_decoupled(joined_output, scanSize, tempOut, compute_ctx, flip_results);
 
@@ -179,7 +185,7 @@ template<JoinType join_type,
   }
 
 
-/// \brief Performs a hash based left join of columns a and b.
+/// \brief Performs a hash based inner join of columns a and b.
 ///
 /// \param[in] compute_ctx The CudaComputeContext to shedule this to.
 /// \param[out] out row references into a and b of matching rows
