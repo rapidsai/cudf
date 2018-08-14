@@ -111,6 +111,7 @@ cuda_add_library(gdf SHARED
     src/binaryops.cu
     src/bitmaskops.cu
     src/column.cpp
+    src/context.cpp
     src/cudautils.cu
     src/datetimeops.cu
     src/context.cpp

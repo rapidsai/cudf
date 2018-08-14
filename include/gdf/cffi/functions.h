@@ -7,6 +7,11 @@ gdf_size_type gdf_column_sizeof();
 gdf_error gdf_column_view(gdf_column *column, void *data, gdf_valid_type *valid,
                           gdf_size_type size, gdf_dtype dtype);
 
+/* context operations */
+
+gdf_error gdf_context_view(gdf_context *context, int flag_sorted, gdf_method flag_method,
+                           int flag_distinct);
+
 gdf_error gdf_column_view_augmented(gdf_column *column, void *data, gdf_valid_type *valid,
                           gdf_size_type size, gdf_dtype dtype, gdf_size_type null_count);
 /* context operations */
@@ -136,22 +141,22 @@ gdf_error gdf_inner_join_f32(gdf_column *leftcol, gdf_column *rightcol,
 gdf_error gdf_inner_join_f64(gdf_column *leftcol, gdf_column *rightcol,
                              gdf_join_result_type **out_result, gdf_context *ctxt);
 gdf_error gdf_inner_join_generic(gdf_column *leftcol, gdf_column *rightcol,
-                                 gdf_join_result_type **out_result, gdf_context *ctxt);
+                             gdf_join_result_type **out_result, gdf_context *ctxt);
 
 gdf_error gdf_left_join_i8(gdf_column *leftcol, gdf_column *rightcol,
-                            gdf_join_result_type **out_result, gdf_context *ctxt);
+                             gdf_join_result_type **out_result, gdf_context *ctxt);
 gdf_error gdf_left_join_i16(gdf_column *leftcol, gdf_column *rightcol,
-                            gdf_join_result_type **out_result, gdf_context *ctxt);
+                             gdf_join_result_type **out_result, gdf_context *ctxt);
 gdf_error gdf_left_join_i32(gdf_column *leftcol, gdf_column *rightcol,
-                            gdf_join_result_type **out_result, gdf_context *ctxt);
+                             gdf_join_result_type **out_result, gdf_context *ctxt);
 gdf_error gdf_left_join_i64(gdf_column *leftcol, gdf_column *rightcol,
-                            gdf_join_result_type **out_result, gdf_context *ctxt);
+                             gdf_join_result_type **out_result, gdf_context *ctxt);
 gdf_error gdf_left_join_f32(gdf_column *leftcol, gdf_column *rightcol,
-                            gdf_join_result_type **out_result, gdf_context *ctxt);
+                             gdf_join_result_type **out_result, gdf_context *ctxt);
 gdf_error gdf_left_join_f64(gdf_column *leftcol, gdf_column *rightcol,
-                            gdf_join_result_type **out_result, gdf_context *ctxt);
+                             gdf_join_result_type **out_result, gdf_context *ctxt);
 gdf_error gdf_left_join_generic(gdf_column *leftcol, gdf_column *rightcol,
-                                gdf_join_result_type **out_result, gdf_context *ctxt);
+                             gdf_join_result_type **out_result, gdf_context *ctxt);
 
 gdf_error gdf_multi_left_join_generic(int num_cols, gdf_column **leftcol,
 							gdf_column **rightcol, gdf_join_result_type **out_result, gdf_context *ctxt);
