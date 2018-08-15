@@ -55,7 +55,7 @@ def test_groupby_mean_3level(nelem):
     np.testing.assert_array_almost_equal(expect, got)
 
 
-@pytest.mark.parametrize('nelem', [2, 100])
+@pytest.mark.parametrize('nelem', [2, 3, 100, 1000])
 def test_groupby_agg_mean_min(nelem):
     # gdf (Note: lack of multindex)
     got_df = make_frame(DataFrame, nelem=nelem).groupby(
@@ -72,7 +72,7 @@ def test_groupby_agg_mean_min(nelem):
     np.testing.assert_array_almost_equal(expect_min, got_min)
 
 
-@pytest.mark.parametrize('nelem', [2, 100])
+@pytest.mark.parametrize('nelem', [2, 3, 100, 1000])
 def test_groupby_agg_min_max_dictargs(nelem):
     # gdf (Note: lack of multindex)
     got_df = make_frame(DataFrame, nelem=nelem, extra_vals='ab').groupby(
@@ -89,7 +89,31 @@ def test_groupby_agg_min_max_dictargs(nelem):
     np.testing.assert_array_almost_equal(expect_max, got_max)
 
 
-@pytest.mark.parametrize('nelem', [100, 500])
+@pytest.mark.parametrize('nelem', [2, 3, 100, 1000])
+def test_groupby_agg_min_max_dictlist(nelem):
+    # gdf (Note: lack of multindex)
+    got_df = make_frame(DataFrame, nelem=nelem, extra_vals='ab').groupby(
+        ('x', 'y'), method="GDF_SORT").agg({'a': ['min', 'max'],
+                                            'b': ['min', 'max']})
+    got_min_a = np.sort(got_df['min_a'].to_array())
+    got_max_a = np.sort(got_df['max_a'].to_array())
+    got_min_b = np.sort(got_df['min_b'].to_array())
+    got_max_b = np.sort(got_df['max_b'].to_array())
+    # pandas
+    expect_df = make_frame(pd.DataFrame, nelem=nelem, extra_vals='ab').groupby(
+        ('x', 'y')).agg({'a': ['min', 'max'], 'b': ['min', 'max']})
+    expect_min_a = np.sort(expect_df['a']['min'].values)
+    expect_max_a = np.sort(expect_df['a']['max'].values)
+    expect_min_b = np.sort(expect_df['b']['min'].values)
+    expect_max_b = np.sort(expect_df['b']['max'].values)
+    # verify
+    np.testing.assert_array_almost_equal(expect_min_a, got_min_a)
+    np.testing.assert_array_almost_equal(expect_max_a, got_max_a)
+    np.testing.assert_array_almost_equal(expect_min_b, got_min_b)
+    np.testing.assert_array_almost_equal(expect_max_b, got_max_b)
+
+
+@pytest.mark.parametrize('nelem', [2, 3, 100, 1000])
 @pytest.mark.parametrize('func', ['mean', 'min', 'max', 'count', 'sum'])
 def test_groupby_2keys_agg(nelem, func):
     # gdf (Note: lack of multindex)
