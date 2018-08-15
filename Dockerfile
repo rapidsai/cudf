@@ -15,8 +15,7 @@ RUN apt update -y --fix-missing && \
       git \
       gcc-${CC} \
       g++-${CXX} \
-      libboost-dev \
-      cmake
+      libboost-dev
 
 # Install conda
 ADD https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh /miniconda.sh
@@ -36,7 +35,8 @@ ARG PANDAS_VERSION=0.20.3
 RUN conda install -n gdf -y -c numba -c conda-forge -c defaults \
       numba=${NUMBA_VERSION} \
       numpy=${NUMPY_VERSION} \
-      pandas=${PANDAS_VERSION}
+      pandas=${PANDAS_VERSION} \
+      cmake
 
 # LibGDF build/install
 ARG LIBGDF_REPO=https://github.com/gpuopenanalytics/libgdf
