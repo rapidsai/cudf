@@ -26,9 +26,11 @@ class LibGdfGroupby(object):
         Parameters
         ----------
         df : DataFrame
-        by : str of list of str
-            Column(s) that grouping is based on.
-            It can be a single or list of column names.
+        by : str, list
+            - str
+                The column name to group on.
+            - list
+                List of *str* of the column names to group on.
         """
 
         self._df = df
@@ -41,28 +43,42 @@ class LibGdfGroupby(object):
             self._method = libgdf.GDF_HASH
 
     def _apply_agg(self, agg_type, result, add_col_values,
-                   ctx, val_columns, val_columns_out=None):
-
+                   ctx, val_columns, val_columns_out):
+        """
+        Parameters
+        ----------
+        agg_type : str
+            The aggregation function to run.
+        result : DataFrame
+            The DataFrame to store the result of the aggregation into.
+        add_col_values : bool
+            Boolean to indicate whether this is the first aggregation being
+            run and should add the additional columns' values.
+        ctx : gdf_context cffi object
+            Context object to pass information such as if the dataframe
+            is sorted and/or which method to use for grouping.
+        val_columns : list of *str*
+            The list of column names that the aggregation should be performed
+            on.
+        val_columns_out : list of *str*
+            The list of columns names that the aggregation results should be
+            output into.
+        """
         if (self._method == libgdf.GDF_HASH):
             ctx.flag_sort_result = 1
-
-        if (val_columns_out is None):
-            val_columns_out = val_columns
 
         ncols = len(self._by)
         cols = [self._df[thisBy]._column.cffi_view for thisBy in self._by]
 
         first_run = add_col_values
         need_to_index = False
-#        need_to_index = len(
-#            self._val_columns) > 0 and self._method == libgdf.GDF_HASH
 
         col_count = 0
         for val_col in val_columns:
             col_agg = self._df[val_col]._column.cffi_view
 
-# assuming here that if there are multiple aggregations that the
-# aggregated results will be in the same order for GDF_SORT method
+            # assuming here that if there are multiple aggregations that the
+            # aggregated results will be in the same order for GDF_SORT method
             if need_to_index:
                 out_col_indices_series = Series(
                     Buffer(cuda.device_array(col_agg.size, dtype=np.int32)))
@@ -117,11 +133,6 @@ class LibGdfGroupby(object):
             out_col_agg_series.data.size = num_row_results
             out_col_agg_series = out_col_agg_series.reset_index()
 
-#            if need_to_index:
-#                out_col_indices_series.data.size = num_row_results
-#                out_col_indices_series = out_col_indices_series.reset_index()
-            # TODO do something with the indices to align data
-
             result[val_columns_out[col_count]
                    ] = out_col_agg_series[:num_row_results]
 
@@ -134,6 +145,12 @@ class LibGdfGroupby(object):
         return result
 
     def _apply_basic_agg(self, agg_type):
+        """
+        Parameters
+        ----------
+        agg_type : str
+            The aggregation function to run.
+        """
         result = DataFrame()
         add_col_values = True
 
@@ -165,7 +182,28 @@ class LibGdfGroupby(object):
         return self._apply_basic_agg("mean")
 
     def agg(self, args):
+        """Invoke aggregation functions on the groups.
 
+        Parameters
+        ----------
+        args: dict, list, str, callable
+            - str
+                The aggregate function name.
+            - list
+                List of *str* of the aggregate function.
+            - dict
+                key-value pairs of source column name and list of
+                aggregate functions as *str*.
+
+        Returns
+        -------
+        result : DataFrame
+
+        Notes
+        -----
+        Since multi-indexes aren't supported aggregation results are returned
+        in columns using the naming scheme of `aggregation_columnname`.
+        """
         result = DataFrame()
         add_col_values = True
 
