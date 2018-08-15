@@ -30,7 +30,7 @@ def test_groupby_mean(nelem):
     # gdf
     got_df = make_frame(DataFrame, nelem=nelem).groupby(
         ('x', 'y'), method="GDF_SORT").mean()
-    got = np.sort(got_df['val'].to_array())
+    got = np.sort(got_df['mean_val'].to_array())
     # pandas
     expect_df = make_frame(pd.DataFrame,
                            nelem=nelem).groupby(('x', 'y')).mean()
@@ -45,8 +45,8 @@ def test_groupby_mean_3level(nelem):
     bys = list('xyz')
     # gdf
     got_df = make_frame(DataFrame, nelem=nelem, extra_levels=lvls)\
-                            .groupby(bys, method="GDF_SORT").mean()
-    got = np.sort(got_df['val'].to_array())
+        .groupby(bys, method="GDF_SORT").mean()
+    got = np.sort(got_df['mean_val'].to_array())
     # pandas
     expect_df = make_frame(pd.DataFrame, nelem=nelem,
                            extra_levels=lvls).groupby(bys).mean()
@@ -58,10 +58,10 @@ def test_groupby_mean_3level(nelem):
 @pytest.mark.parametrize('nelem', [2, 100])
 def test_groupby_agg_mean_min(nelem):
     # gdf (Note: lack of multindex)
-    got_df = make_frame(DataFrame, nelem=nelem).groupby(('x', 'y'), \
-                                method="GDF_SORT").agg(['mean', 'min'])
-    got_mean = np.sort(got_df['val_mean'].to_array())
-    got_min = np.sort(got_df['val_min'].to_array())
+    got_df = make_frame(DataFrame, nelem=nelem).groupby(
+        ('x', 'y'), method="GDF_SORT").agg(['mean', 'min'])
+    got_mean = np.sort(got_df['mean_val'].to_array())
+    got_min = np.sort(got_df['min_val'].to_array())
     # pandas
     expect_df = make_frame(pd.DataFrame, nelem=nelem).groupby(('x', 'y'))\
                                                      .agg(['mean', 'min'])
@@ -77,8 +77,8 @@ def test_groupby_agg_min_max_dictargs(nelem):
     # gdf (Note: lack of multindex)
     got_df = make_frame(DataFrame, nelem=nelem, extra_vals='ab').groupby(
         ('x', 'y'), method="GDF_SORT").agg({'a': 'min', 'b': 'max'})
-    got_min = np.sort(got_df['a'].to_array())
-    got_max = np.sort(got_df['b'].to_array())
+    got_min = np.sort(got_df['min_a'].to_array())
+    got_max = np.sort(got_df['max_b'].to_array())
     # pandas
     expect_df = make_frame(pd.DataFrame, nelem=nelem, extra_vals='ab').groupby(
         ('x', 'y')).agg({'a': 'min', 'b': 'max'})
@@ -96,7 +96,7 @@ def test_groupby_2keys_agg(nelem, func):
     got_df = make_frame(DataFrame, nelem=nelem)\
         .groupby(('x', 'y'), method="GDF_SORT").agg(func)
 
-    got_agg = np.sort(got_df['val'].to_array())
+    got_agg = np.sort(got_df[func + '_val'].to_array())
     # pandas
     expect_df = make_frame(pd.DataFrame, nelem=nelem)\
         .groupby(('x', 'y')).agg(func)

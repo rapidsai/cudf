@@ -7,7 +7,7 @@ from numba import cuda
 from .dataframe import DataFrame, Series
 from .buffer import Buffer
 
-from libgdf_cffi import ffi, libgdf, GDFError
+from libgdf_cffi import ffi, libgdf
 
 
 class LibGdfGroupby(object):
@@ -72,9 +72,12 @@ class LibGdfGroupby(object):
 
             if first_run or self._method == libgdf.GDF_HASH:
                 out_col_values_series = [Series(Buffer(cuda.device_array(
-                    col_agg.size, dtype=self._df[self._by[i]]._column.data.dtype))) for i in range(0, ncols)]
+                    col_agg.size,
+                    dtype=self._df[self._by[i]]._column.data.dtype)))
+                    for i in range(0, ncols)]
                 out_col_values = [
-                    out_col_values_series[i]._column.cffi_view for i in range(0, ncols)]
+                    out_col_values_series[i]._column.cffi_view
+                    for i in range(0, ncols)]
             else:
                 out_col_values = ffi.NULL
 
@@ -108,7 +111,8 @@ class LibGdfGroupby(object):
 
             if first_run:
                 for i in range(0, ncols):
-                    result[self._by[i]] = out_col_values_series[i][:num_row_results]
+                    result[self._by[i]] = out_col_values_series[i][
+                        :num_row_results]
 
             out_col_agg_series.data.size = num_row_results
             out_col_agg_series = out_col_agg_series.reset_index()
@@ -139,9 +143,11 @@ class LibGdfGroupby(object):
         ctx.flag_distinct = 0
 
         val_columns = self._val_columns
+        val_columns_out = [agg_type + "_" + column for column in val_columns]
 
         return self._apply_agg(
-            agg_type, result, add_col_values, ctx, val_columns)
+            agg_type, result, add_col_values, ctx, val_columns,
+            val_columns_out)
 
     def min(self):
         return self._apply_basic_agg("min")
@@ -172,25 +178,30 @@ class LibGdfGroupby(object):
                 args, collections.abc.Sequence):
             for agg_type in args:
 
-                # we don't need to change the output column names
-                #                val_columns_out = [val + '_' +
-                # agg_type for val in self._val_columns]
-                val_columns_out = self._val_columns
+                val_columns_out = [agg_type + '_' +
+                                   val for val in self._val_columns]
 
                 result = self._apply_agg(
-                    agg_type, result, add_col_values, ctx, self._val_columns, val_columns_out)
+                    agg_type, result, add_col_values, ctx, self._val_columns,
+                    val_columns_out)
 
                 add_col_values = False  # we only want to add them once
 
         elif isinstance(args, collections.abc.Mapping):
             for val, agg_type in args.items():
 
-                # we don't need to change the output column names
-                #                val_columns_out = [val + '_' + agg_type]
-                val_columns_out = [val]
-
-                result = self._apply_agg(agg_type, result, add_col_values, ctx, [
-                                         val], val_columns_out)
+                if not isinstance(agg_type, str) and \
+                       isinstance(agg_type, collections.abc.Sequence):
+                    for sub_agg_type in agg_type:
+                        val_columns_out = [sub_agg_type + '_' + val]
+                        result = self._apply_agg(sub_agg_type, result,
+                                                 add_col_values, ctx, [val],
+                                                 val_columns_out)
+                elif isinstance(agg_type, str):
+                    val_columns_out = [agg_type + '_' + val]
+                    result = self._apply_agg(agg_type, result,
+                                             add_col_values, ctx, [val],
+                                             val_columns_out)
 
                 add_col_values = False  # we only want to add them once
 
