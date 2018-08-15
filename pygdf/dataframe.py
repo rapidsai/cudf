@@ -879,14 +879,16 @@ class DataFrame(object):
         if (method == "pygdf"):
             from .groupby import Groupby
             if as_index:
-                msg = "as_index==True not supported due to the lack of multi-index"
+                msg = "as_index==True not supported due to the lack of\
+                    multi-index"
                 raise NotImplementedError(msg)
             return Groupby(self, by=by)
         else:
             from .libgdf_groupby import LibGdfGroupby
 
             if as_index:
-                msg = "as_index==True not supported due to the lack of multi-index"
+                msg = "as_index==True not supported due to the lack of\
+                    multi-index"
                 raise NotImplementedError(msg)
             return LibGdfGroupby(self, by=by, method=method)
 
