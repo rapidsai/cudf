@@ -35,6 +35,10 @@ elif [ ${CUDA:0:3} == '9.2']; then
     travis_retry wget --progress=dot:mega https://developer.nvidia.com/compute/cuda/${CUDA:0:3}/Prod2/local_installers/cuda_${CUDA}_linux
     chmod +x cuda_*_linux
     sudo ./cuda_*_linux --silent --toolkit
+else
+    # Didn't match one of the expected CUDA builds, exit
+    echo "CUDA version not specified or invalid version specified!"
+    exit 1
 fi
 export CUDA_HOME=/usr/local/cuda-${CUDA:0:3}
 export LD_LIBRARY_PATH=${CUDA_HOME}/lib64:${LD_LIBRARY_PATH}
