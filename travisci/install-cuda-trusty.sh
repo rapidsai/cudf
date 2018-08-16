@@ -27,13 +27,13 @@ then
     travis_retry wget --progress=dot:mega https://developer.nvidia.com/compute/cuda/${CUDA:0:3}/Prod/local_installers/cuda_${CUDA}_linux-run
     chmod +x cuda_*_linux-run
     sudo ./cuda_*_linux-run --silent --toolkit
-elif [ ${CUDA:0:3} == '9.1']
+elif [ ${CUDA:0:3} == '9.1' ]
 then
     # CUDA 9.1 has a different filename pattern
     travis_retry wget --progress=dot:mega https://developer.nvidia.com/compute/cuda/${CUDA:0:3}/Prod/local_installers/cuda_${CUDA}_linux
     chmod +x cuda_*_linux
     sudo ./cuda_*_linux --silent --toolkit
-elif [ ${CUDA:0:3} == '9.2']
+elif [ ${CUDA:0:3} == '9.2' ]
 then
     # Cuda 9.2 has a different url pattern
     travis_retry wget --progress=dot:mega https://developer.nvidia.com/compute/cuda/${CUDA:0:3}/Prod2/local_installers/cuda_${CUDA}_linux
