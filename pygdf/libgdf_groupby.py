@@ -192,7 +192,7 @@ class LibGdfGroupby(object):
 
         Parameters
         ----------
-        args: dict, list, str, callable
+        args : dict, list, str, callable
             - str
                 The aggregate function name.
             - list

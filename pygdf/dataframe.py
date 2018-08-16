@@ -307,10 +307,10 @@ class DataFrame(object):
 
         Parameters
         ----------
-        index : Index, Series-convertible or str
-            Index: the new index.
-            Series-convertible: values for the new index.
-            str: name of column to be used as series
+        index : Index, Series-convertible, or str
+            Index : the new index.
+            Series-convertible : values for the new index.
+            str : name of column to be used as series
         """
         # When index is a column name
         if isinstance(index, str):
@@ -447,10 +447,10 @@ class DataFrame(object):
 
         Parameters
         ----------
-        columns: sequence of str
+        columns : sequence of str
             List of a column names to be extracted.  The order is preserved.
             If None is specified, all columns are used.
-        order: 'F' or 'C'
+        order : 'F' or 'C'
             Optional argument to determine whether to return a column major
             (Fortran) matrix or a row major (C) matrix.
 
@@ -496,7 +496,7 @@ class DataFrame(object):
 
         Parameters
         ----------
-        columns: sequence of str
+        columns : sequence of str
             List of a column names to be extracted.  The order is preserved.
             If None is specified, all columns are used.
 
@@ -855,7 +855,7 @@ class DataFrame(object):
         as_index : bool; defaults to False
             Must be False.  Provided to be API compatible with pandas.
             The keys are always left as regular columns in the result.
-        method: str, optional
+        method : str, optional
             A string indicating the method to use to perform the group by.
             Valid values are "sort", "hash", or "pygdf".
             "pygdf" method may be deprecated in the future, but is currently
