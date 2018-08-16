@@ -842,9 +842,7 @@ class DataFrame(object):
             return df.sort_index()
         return df
 
-
-# method can be  "pygdf", "GDF_SORT", "GDF_HASH"
-    def groupby(self, by, sort=False, as_index=False, method="GDF_SORT"):
+    def groupby(self, by, sort=False, as_index=False, method="sort"):
         """Groupby
 
         Parameters
@@ -854,10 +852,14 @@ class DataFrame(object):
         sort : bool
             Force sorting group keys.
             Depends on the underlying algorithm.
-            Current algorithm always sort.
         as_index : bool; defaults to False
             Must be False.  Provided to be API compatible with pandas.
             The keys are always left as regular columns in the result.
+        method: str, optional
+            A string indicating the method to use to perform the group by.
+            Valid values are "sort", "hash", or "pygdf".
+            "pygdf" method may be deprecated in the future, but is currently
+            the only method supporting group UDFs via the `apply` function.
 
         Returns
         -------
@@ -872,7 +874,6 @@ class DataFrame(object):
         Only a minimal number of operations is implemented so far.
 
         - Only *by* argument is supported.
-        - The output is always sorted according to the *by* columns.
         - Since we don't support multiindex, the *by* columns are stored
           as regular columns.
         """

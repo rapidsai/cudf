@@ -21,7 +21,7 @@ class LibGdfGroupby(object):
                         'sum': libgdf.gdf_group_by_sum,
                         }
 
-    def __init__(self, df, by, method="GDF_SORT"):
+    def __init__(self, df, by, method="sort"):
         """
         Parameters
         ----------
@@ -31,16 +31,22 @@ class LibGdfGroupby(object):
                 The column name to group on.
             - list
                 List of *str* of the column names to group on.
+        method : str, optional
+            A string indicating the libgdf method to use to perform the
+            group by. Valid values are "sort", or "hash".
         """
 
         self._df = df
         self._by = [by] if isinstance(by, str) else list(by)
         self._val_columns = [idx for idx in self._df.columns
                              if idx not in self._by]
-        if (method == "GDF_SORT"):
+        if (method == "sort"):
             self._method = libgdf.GDF_SORT
-        else:
+        elif (method == "hash"):
             self._method = libgdf.GDF_HASH
+        else:
+            msg = "Method {!r} is not a supported group by method"
+            raise NotImplementedError(msg.format(method))
 
     def _apply_agg(self, agg_type, result, add_col_values,
                    ctx, val_columns, val_columns_out):
