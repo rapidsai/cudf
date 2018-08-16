@@ -1,3 +1,5 @@
+# Copyright (c) 2018, NVIDIA CORPORATION.
+
 """
 This file provide binding to the libgdf library.
 """
