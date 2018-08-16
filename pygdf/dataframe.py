@@ -753,7 +753,7 @@ class DataFrame(object):
             return joined_indices
 
     def join(self, other, on=None, how='left', lsuffix='', rsuffix='',
-             sort=False):
+             sort=False, method='hash'):
         """Join columns with other DataFrame on index or on a key column.
 
         Parameters
@@ -790,10 +790,11 @@ class DataFrame(object):
                              'lsuffix and rsuffix are not defined')
 
         return self._join(other=other, how=how, lsuffix=lsuffix,
-                          rsuffix=rsuffix, sort=sort, same_names=same_names)
+                          rsuffix=rsuffix, sort=sort, same_names=same_names,
+                          method=method)
 
     def _join(self, other, how, lsuffix, rsuffix, sort, same_names,
-              rightjoin=False):
+              method='hash', rightjoin=False):
         if how == 'right':
             # libgdf doesn't support right join directly, we will swap the
             # dfs and use left join
@@ -823,7 +824,8 @@ class DataFrame(object):
         df = DataFrame()
 
         joined_index, indexers = lhs.index.join(rhs.index, how=how,
-                                                return_indexers=True)
+                                                return_indexers=True,
+                                                method=method)
         gather_fn = (gather_cols if len(joined_index) else gather_empty)
         lidx = indexers[0].to_gpu_array()
         ridx = indexers[1].to_gpu_array()

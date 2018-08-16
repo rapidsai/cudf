@@ -134,10 +134,14 @@ def apply_sort(col_keys, col_vals, ascending=True):
 
 
 _join_how_api = {
-    'inner': libgdf.gdf_inner_join_generic,
+    'inner': libgdf.gdf_inner_join,
     'outer': libgdf.gdf_outer_join_generic,
-    'left': libgdf.gdf_multi_left_join_generic,
-    'left-compat': libgdf.gdf_left_join_generic,
+    'left': libgdf.gdf_left_join,
+}
+
+_join_method_api = {
+    'sort': libgdf.GDF_SORT,
+    'hash': libgdf.GDF_HASH
 }
 
 
@@ -153,7 +157,7 @@ def _as_numba_devarray(intaddr, nelem, dtype):
 
 
 @contextlib.contextmanager
-def apply_join(col_lhs, col_rhs, how):
+def apply_join(col_lhs, col_rhs, how, method='hash'):
     """Returns a tuple of the left and right joined indices as gpu arrays.
     """
     if(len(col_lhs) != len(col_rhs)):
@@ -162,8 +166,18 @@ def apply_join(col_lhs, col_rhs, how):
 
     joiner = _join_how_api[how]
     join_result_ptr = ffi.new("gdf_join_result_type**", None)
+    method_api = _join_method_api[method]
+    gdf_context = ffi.new('gdf_context*')
 
-    if(how == 'left'):
+    if method == 'hash':
+        libgdf.gdf_context_view(gdf_context, 0, method_api, 0)
+    elif method == 'sort':
+        libgdf.gdf_context_view(gdf_context, 1, method_api, 0)
+    else:
+        msg = "method not supported"
+        raise ValueError(msg)
+
+    if(how in ['left', 'inner']):
         list_lhs = []
         list_rhs = []
         for i in range(len(col_lhs)):
@@ -171,7 +185,8 @@ def apply_join(col_lhs, col_rhs, how):
             list_rhs.append(col_rhs[i].cffi_view)
 
         # Call libgdf
-        joiner(len(col_lhs), list_lhs, list_rhs, join_result_ptr)
+
+        joiner(len(col_lhs), list_lhs, list_rhs, join_result_ptr, gdf_context)
     else:
         joiner(col_lhs[0].cffi_view, col_rhs[0].cffi_view, join_result_ptr)
 

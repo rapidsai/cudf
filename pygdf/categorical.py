@@ -208,7 +208,8 @@ class CategoricalColumn(columnops.TypedColumnBase):
     def default_na_value(self):
         return -1
 
-    def join(self, other, how='left', return_indexers=False):
+    def join(self, other, how='left', return_indexers=False,
+             method='hash'):
         if not isinstance(other, CategoricalColumn):
             raise TypeError('*other* is not a categorical column')
         if self._ordered != other._ordered or self._ordered:
@@ -235,7 +236,8 @@ class CategoricalColumn(columnops.TypedColumnBase):
         # Do join as numeric column
         join_result = self.as_numerical.join(
             other.as_numerical, how=how,
-            return_indexers=return_indexers)
+            return_indexers=return_indexers,
+            method=method)
 
         if return_indexers:
             joined_index, indexers = join_result
