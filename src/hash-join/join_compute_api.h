@@ -79,7 +79,7 @@ cudaError_t GenericJoinHash(mgpu::context_t &compute_ctx, mgpu::mem_t<size_type>
 	const input3_it a3 = (int*)NULL, const input3_it b3 = (int*)NULL,
 	bool flip_results = false)
 {
-  cudaError_t error;
+  cudaError_t error(cudaSuccess);
 
   typedef typename std::iterator_traits<input_it>::value_type key_type;
   typedef typename std::iterator_traits<input2_it>::value_type key_type2;
@@ -92,7 +92,6 @@ cudaError_t GenericJoinHash(mgpu::context_t &compute_ctx, mgpu::mem_t<size_type>
   CUDA_RT_CALL( cudaMemsetAsync(d_joined_idx, 0, sizeof(size_type), 0) );
 
   // step 0: check if the output is provided or we need to allocate it
-  //if (*out == NULL) return cudaErrorNotSupported;
 
   // step 1: initialize a HT for table B (right)
 #ifdef HT_LEGACY_ALLOCATOR
@@ -170,8 +169,7 @@ cudaError_t GenericJoinHash(mgpu::context_t &compute_ctx, mgpu::mem_t<size_type>
 /// \param[in] b second column to join (right)
 /// \param[in] Number of element in b column (right)
 /// \param[in] additional columns to join (default == NULL)
-template<JoinType join_type,
-  typename input_it,
+template<typename input_it,
   typename input2_it,
   typename input3_it,
   typename size_type>
@@ -195,8 +193,7 @@ template<JoinType join_type,
 /// \param[in] Number of element in b column (right)
 /// \param[in] additional columns to join (default == NULL)
 /// \param[in] Flag used to reorder the left and right column indices found in the join (default = false)
-template<JoinType join_type,
-  typename input_it,
+template<typename input_it,
   typename input2_it,
   typename input3_it,
   typename size_type>
