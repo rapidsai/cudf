@@ -411,8 +411,6 @@ gdf_error gdf_group_by_hash_avg(int ncols,
     case GDF_FLOAT64:{ return multi_pass_avg<double>(ncols, in_groupby_columns, in_aggregation_column, out_groupby_columns, out_aggregation_column);}
     default: return GDF_UNSUPPORTED_DTYPE;
   }
-
-  return GDF_SUCCESS;
 }
 
 

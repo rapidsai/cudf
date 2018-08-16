@@ -51,7 +51,31 @@ struct MurmurHash3_32
         h ^= h >> 16;
         return h;
     }
+
     
+    /* --------------------------------------------------------------------------*/
+    /** 
+     * @Synopsis  Combines two hash values into a new single hash value. Called 
+     * repeatedly to create a hash value from several variables.
+     * Taken from the Boost hash_combine function 
+     * https://www.boost.org/doc/libs/1_35_0/doc/html/boost/hash_combine_id241013.html
+     * 
+     * @Param lhs The first hash value to combine
+     * @Param rhs The second hash value to combine
+     * 
+     * @Returns A hash value that intelligently combines the lhs and rhs hash values
+     */
+    /* ----------------------------------------------------------------------------*/
+    __host__ __device__ result_type hash_combine(result_type lhs, result_type rhs)
+    {
+      result_type combined{lhs};
+
+      combined ^= rhs + 0x9e3779b9 + (combined << 6) + (combined >> 2);
+
+      return combined;
+    }
+
+  
     __forceinline__ 
     __host__ __device__ result_type operator()(const Key& key) const
     {
