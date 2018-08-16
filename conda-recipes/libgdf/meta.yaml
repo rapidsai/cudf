@@ -22,11 +22,9 @@ requirements:
   #   - conda-forge
   build:
     - cmake
-    - flatbuffers
-    - arrow-cpp 0.7.*
 
   run:
-    - arrow-cpp 0.7.*
+    - pyarrow 0.10.*
 
 test:
   commands:

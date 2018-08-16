@@ -129,8 +129,12 @@ cuda_add_library(gdf SHARED
     #src/windowedops.cu
 )
 
-
-target_link_libraries(gdf arrow)
+if (ARROW_NUMERIC_VERSION EQUAL 900)
+  # arrow-0.9 requires boost_regex
+  target_link_libraries(gdf arrow boost_regex)
+else()
+  target_link_libraries(gdf arrow)
+endif()
 
 # Command to symlink files into the build directory
 add_custom_command(  # link the include directory
@@ -156,13 +160,13 @@ add_custom_target(   # target to link the python files and trigger cffi
 # The test target
 add_custom_target(pytest DEPENDS copy_python)
 add_custom_command(TARGET pytest POST_BUILD
-                   COMMAND ${CMAKE_COMMAND} -E env LD_LIBRARY_PATH=$LD_LIBRARY_PATH:${CMAKE_BINARY_DIR} py.test -v
+                   COMMAND ${CMAKE_COMMAND} -E env LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:${CMAKE_BINARY_DIR} py.test -v
                    WORKING_DIRECTORY --cache-clear tests)
 
 # The test CI target with junit.xml output
 add_custom_target(pytest-ci DEPENDS copy_python)
 add_custom_command(TARGET pytest POST_BUILD
-                   COMMAND ${CMAKE_COMMAND} -E env LD_LIBRARY_PATH=$LD_LIBRARY_PATH:${CMAKE_BINARY_DIR} py.test -v
+                   COMMAND ${CMAKE_COMMAND} -E env LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:${CMAKE_BINARY_DIR} py.test -v
                    WORKING_DIRECTORY --cache-clear --junitxml=junit.xml tests)
 
 # The install target

@@ -19,6 +19,7 @@ namespace {
 
 using namespace arrow;
 
+#if ARROW_VERSION < 800
 static std::string GetBufferTypeName(BufferType type) {
   switch (type) {
     case BufferType::DATA:
@@ -34,7 +35,7 @@ static std::string GetBufferTypeName(BufferType type) {
   }
   return "UNKNOWN";
 }
-
+#endif
 
 static std::string GetTypeName(Type::type id) {
     switch (id) {
@@ -85,6 +86,7 @@ public:
         const void *header;
         int64_t body_length;
         flatbuf::MessageHeader type;
+        flatbuf::MetadataVersion version;
     };
 
     struct LayoutDesc {
@@ -184,9 +186,15 @@ public:
     const std::string& get_schema_json() {
         if ( _json_schema_output.size() == 0 ) {
             // To JSON
-            std::unique_ptr<arrow::ipc::JsonWriter> json_writer;
+#if ARROW_VERSION < 800
+	    std::unique_ptr<arrow::ipc::JsonWriter> json_writer;	    
             arrow::ipc::JsonWriter::Open(_schema, &json_writer);
             json_writer->Finish(&_json_schema_output);
+#else
+	    std::unique_ptr<arrow::ipc::internal::json::JsonWriter> json_writer;
+            arrow::ipc::internal::json::JsonWriter::Open(_schema, &json_writer);
+            json_writer->Finish(&_json_schema_output);
+#endif
         }
         return _json_schema_output;
     }
@@ -245,13 +253,18 @@ protected:
         if (_fields.size() || _nodes.size()) {
             throw ParseError("cannot open more than once");
         }
-
         // Use Arrow to load the schema
         const auto payload = std::make_shared<arrow::Buffer>(schema_buf, length);
         auto buffer = std::make_shared<io::BufferReader>(payload);
-        std::shared_ptr<ipc::RecordBatchStreamReader> reader;
+#if ARROW_VERSION < 800
+	std::shared_ptr<ipc::RecordBatchStreamReader> reader;
+#else
+        std::shared_ptr<ipc::RecordBatchReader> reader;
+#endif
         auto status = ipc::RecordBatchStreamReader::Open(buffer, &reader);
-        if ( !status.ok() ) throw ParseError(status.message());
+        if ( !status.ok() ) {
+	  throw ParseError(status.message());
+	}
         _schema = reader->schema();
         if (!_schema) throw ParseError("failed to parse schema");
         // Parse the schema
@@ -265,6 +278,15 @@ protected:
         auto header_buf = read_bytes(size);
         auto header = parse_msg_header(header_buf);
 
+#if ARROW_VERSION < 800
+	if ( header.version != flatbuf::MetadataVersion_V3 )
+	  throw ParseError("unsupported metadata version, expected V3 got "\
+			   + std::string(flatbuf::EnumNameMetadataVersion(header.version)));
+#else
+	if ( header.version != flatbuf::MetadataVersion_V4 )
+	  throw ParseError("unsupported metadata version, expected V4 got "\
+			   + std::string(flatbuf::EnumNameMetadataVersion(header.version)));
+#endif
         if ( header.body_length <= 0) {
             throw ParseError("recordbatch should have a body");
         }
@@ -280,6 +302,7 @@ protected:
         mi.header = msg->header();
         mi.body_length = msg->bodyLength();
         mi.type = msg->header_type();
+        mi.version = msg->version();
         return mi;
     }
 
@@ -295,16 +318,16 @@ protected:
 
             out_field.name = field->name();
             out_field.type = GetTypeName(field->type()->id());
-
+#if ARROW_VERSION < 800
             auto layouts = field->type()->GetBufferLayout();
             for ( int j=0; j < layouts.size(); ++j ) {
                 auto layout = layouts[j];
                 LayoutDesc layout_desc;
                 layout_desc.bitwidth = layout.bit_width();
-
                 layout_desc.vectortype = GetBufferTypeName(layout.type());
                 out_field.layouts.push_back(layout_desc);
             }
+#endif
         }
     }
 
@@ -312,9 +335,7 @@ protected:
         if ( msg.type != flatbuf::MessageHeader_RecordBatch ) {
             throw ParseError("expecting recordbatch type");
         }
-
         auto rb = static_cast<const flatbuf::RecordBatch*>(msg.header);
-
         int node_ct = rb->nodes()->Length();
         int buffer_ct = rb->buffers()->Length();
 
@@ -330,19 +351,20 @@ protected:
 
             _nodes.push_back(NodeDesc());
             auto &out_node = _nodes.back();
-
+	    
             for ( int j=0; j < buffer_per_node; ++j ) {
                 auto buf = rb->buffers()->Get(i * buffer_per_node + j);
+#if ARROW_VERSION < 800
                 if ( buf->page() != -1 ) {
                     std::cerr << "buf.Page() != -1; metadata format changed!\n";
                 }
-
-                const auto &layout = fd.layouts[j];
-
+#endif
                 BufferDesc bufdesc;
                 bufdesc.offset = buf->offset();
                 bufdesc.length = buf->length();
 
+#if ARROW_VERSION < 800
+                const auto &layout = fd.layouts[j];
                 if ( layout.vectortype == "DATA" ) {
                     out_node.data_buffer = bufdesc;
                     out_node.dtype.name = fd.type;
@@ -352,7 +374,18 @@ protected:
                 } else {
                     throw ParseError("unsupported vector type");
                 }
+#else
+		if (j==0) // assuming first buffer is null bitmap
+                    out_node.null_buffer = bufdesc;
+                else {
+                    out_node.data_buffer = bufdesc;
+                    out_node.dtype.name = fd.type;
+                    out_node.dtype.bitwidth = (bufdesc.length / node->length()) * 8;
+		}
+#endif
             }
+
+	    assert(out_node.null_buffer.length <= out_node.data_buffer.length); // check the null bitmap assumption
 
             out_node.name = fd.name;
             out_node.length = node->length();
@@ -416,6 +449,8 @@ IpcParser* cffi_unwrap(gdf_ipc_parser_type* hdl){
 
 gdf_ipc_parser_type* gdf_ipc_parser_open(const uint8_t *schema, size_t length) {
     IpcParser *parser = new IpcParser;
+    
+
     parser->open(schema, length);
 
     return cffi_wrap(parser);
