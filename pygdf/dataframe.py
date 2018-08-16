@@ -307,10 +307,10 @@ class DataFrame(object):
 
         Parameters
         ----------
-        index : Index, Series-convertible or str
-            Index: the new index.
-            Series-convertible: values for the new index.
-            str: name of column to be used as series
+        index : Index, Series-convertible, or str
+            Index : the new index.
+            Series-convertible : values for the new index.
+            str : name of column to be used as series
         """
         # When index is a column name
         if isinstance(index, str):
@@ -447,10 +447,10 @@ class DataFrame(object):
 
         Parameters
         ----------
-        columns: sequence of str
+        columns : sequence of str
             List of a column names to be extracted.  The order is preserved.
             If None is specified, all columns are used.
-        order: 'F' or 'C'
+        order : 'F' or 'C'
             Optional argument to determine whether to return a column major
             (Fortran) matrix or a row major (C) matrix.
 
@@ -496,7 +496,7 @@ class DataFrame(object):
 
         Parameters
         ----------
-        columns: sequence of str
+        columns : sequence of str
             List of a column names to be extracted.  The order is preserved.
             If None is specified, all columns are used.
 
@@ -734,11 +734,11 @@ class DataFrame(object):
                     # 'multi_gather_joined_index' that can gather a value from
                     # each column at once
                     raw_values = cudautils.gather_joined_index(
-                                left_cols[i].to_gpu_array(),
-                                right_cols[i].to_gpu_array(),
-                                left_indices,
-                                right_indices,
-                                )
+                        left_cols[i].to_gpu_array(),
+                        right_cols[i].to_gpu_array(),
+                        left_indices,
+                        right_indices,
+                    )
                     buffered_values = Buffer(raw_values)
 
                     joined_values.append(left_cols[i]
@@ -842,7 +842,7 @@ class DataFrame(object):
             return df.sort_index()
         return df
 
-    def groupby(self, by, sort=False, as_index=False):
+    def groupby(self, by, sort=False, as_index=False, method="sort"):
         """Groupby
 
         Parameters
@@ -852,10 +852,14 @@ class DataFrame(object):
         sort : bool
             Force sorting group keys.
             Depends on the underlying algorithm.
-            Current algorithm always sort.
         as_index : bool; defaults to False
             Must be False.  Provided to be API compatible with pandas.
             The keys are always left as regular columns in the result.
+        method : str, optional
+            A string indicating the method to use to perform the group by.
+            Valid values are "sort", "hash", or "pygdf".
+            "pygdf" method may be deprecated in the future, but is currently
+            the only method supporting group UDFs via the `apply` function.
 
         Returns
         -------
@@ -870,15 +874,24 @@ class DataFrame(object):
         Only a minimal number of operations is implemented so far.
 
         - Only *by* argument is supported.
-        - The output is always sorted according to the *by* columns.
         - Since we don't support multiindex, the *by* columns are stored
           as regular columns.
         """
-        from .groupby import Groupby
-        if as_index:
-            msg = "as_index==True not supported due to the lack of multi-index"
-            raise NotImplementedError(msg)
-        return Groupby(self, by=by)
+        if (method == "pygdf"):
+            from .groupby import Groupby
+            if as_index:
+                msg = "as_index==True not supported due to the lack of\
+                    multi-index"
+                raise NotImplementedError(msg)
+            return Groupby(self, by=by)
+        else:
+            from .libgdf_groupby import LibGdfGroupby
+
+            if as_index:
+                msg = "as_index==True not supported due to the lack of\
+                    multi-index"
+                raise NotImplementedError(msg)
+            return LibGdfGroupby(self, by=by, method=method)
 
     def query(self, expr):
         """Query with a boolean expression using Numba to compile a GPU kernel.
