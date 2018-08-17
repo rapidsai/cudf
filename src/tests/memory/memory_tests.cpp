@@ -1,6 +1,5 @@
 #include "gtest/gtest.h"
-#include <cuda_runtime_api.h>
-#include "memory.h"
+#include "rmm.h"
 
 // Helper macros to simplify testing for success or failure
 #define ASSERT_SUCCESS(res) ASSERT_EQ(RMM_SUCCESS, (res));
