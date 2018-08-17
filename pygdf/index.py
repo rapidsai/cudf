@@ -85,9 +85,10 @@ class Index(object):
         res = lhs.unordered_compare('eq', rhs).all()
         return res
 
-    def join(self, other, how='left', return_indexers=False):
+    def join(self, other, method, how='left', return_indexers=False):
         column_join_res = self.as_column().join(
-            other.as_column(), how=how, return_indexers=return_indexers)
+            other.as_column(), how=how, return_indexers=return_indexers,
+            method=method)
         if return_indexers:
             joined_col, indexers = column_join_res
             joined_index = GenericIndex(joined_col)
