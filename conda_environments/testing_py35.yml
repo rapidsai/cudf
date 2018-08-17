@@ -7,9 +7,8 @@ channels:
 dependencies:
 - python=3.5.*
 - pytest
-- cudatoolkit=8.0
-- libgdf=0.1.0a2.dev
-- libgdf_cffi=0.1.0a2.dev
+- libgdf=0.1.0a3.*
+- libgdf_cffi=0.1.0a3.*
 - numba>=0.35.0
 - pandas=0.20.3
 - notebook>=0.5.0
