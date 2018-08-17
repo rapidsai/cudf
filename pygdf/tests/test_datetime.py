@@ -72,25 +72,32 @@ def test_issue_165():
     base = df_pandas.query("dates==@start_date")
     test = df_pygdf.query("dates==@start_date")
     assert_frame_equal(base, test.to_pandas())
+    assert len(test) > 0
+
 
     mask = df_pygdf.dates == start_date
     base_mask = df_pandas.dates == start_date
     assert_series_equal(mask.to_pandas(), base_mask, check_names=False)
+    assert mask.to_pandas().sum() > 0
 
     start_date_ts = pd.Timestamp(start_date)
     test = df_pygdf.query("dates==@start_date_ts")
     base = df_pandas.query("dates==@start_date_ts")
     assert_frame_equal(base, test.to_pandas())
+    assert len(test) > 0
 
     mask = df_pygdf.dates == start_date_ts
     base_mask = df_pandas.dates == start_date_ts
     assert_series_equal(mask.to_pandas(), base_mask, check_names=False)
+    assert mask.to_pandas().sum() > 0
 
     start_date_np = np.datetime64(start_date_ts, 'ns')
     test = df_pygdf.query("dates==@start_date_np")
     base = df_pandas.query("dates==@start_date_np")
     assert_frame_equal(base, test.to_pandas())
+    assert len(test) > 0
 
     mask = df_pygdf.dates == start_date_np
     base_mask = df_pandas.dates == start_date_np
     assert_series_equal(mask.to_pandas(), base_mask, check_names=False)
+    assert mask.to_pandas().sum() > 0

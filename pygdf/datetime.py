@@ -32,7 +32,6 @@ class DatetimeColumn(columnops.TypedColumnBase):
     # hack we currently do everything as numpy ints since
     # numba doesn't understand datetime64
 
-    _int_dtype = np.int64
     _npdatetime64_dtype = np.dtype('datetime64[ms]')
 
     def __init__(self, data, mask=None, null_count=None, dtype=None):
@@ -47,12 +46,9 @@ class DatetimeColumn(columnops.TypedColumnBase):
 
     @classmethod
     def from_numpy(cls, array):
-        # hack, coerce to int, then set the dtype
         array = array.astype(cls._npdatetime64_dtype)
-        dtype = np.int64
         assert array.dtype.itemsize == 8
-        buf = Buffer(array.astype(dtype, copy=False))
-        buf.dtype = array.dtype
+        buf = Buffer(array)
         return cls(data=buf, dtype=buf.dtype)
 
     @property
@@ -98,20 +94,20 @@ class DatetimeColumn(columnops.TypedColumnBase):
             ary = utils.scalar_broadcast_to(
                 int(other * self._inverse_precision),
                 shape=len(self),
-                dtype=self._int_dtype
+                dtype=self._npdatetime64_dtype
             )
         elif isinstance(other, pd.Timestamp):
             ary = utils.scalar_broadcast_to(
                 other.value * self._pandas_conversion_factor,
                 shape=len(self),
-                dtype=self._int_dtype
+                dtype=self._npdatetime64_dtype
             )
         elif isinstance(other, np.datetime64):
             other = other.astype(self._npdatetime64_dtype)
             ary = utils.scalar_broadcast_to(
                 other,
                 shape=len(self),
-                dtype=self._int_dtype
+                dtype=self._npdatetime64_dtype
             )
         # elif isinstance(other, (int, float)):
         #     ary = utils.scalar_broadcast_to(
