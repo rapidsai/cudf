@@ -14,7 +14,6 @@ env:
 
 matrix:
   include:
-    - env: PYTHON=3.7
     - env: PYTHON=3.6
     - env: PYTHON=3.5
 
