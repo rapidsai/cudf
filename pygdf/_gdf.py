@@ -1,5 +1,6 @@
+# Copyright (c) 2018, NVIDIA CORPORATION.
 """
-This file provide binding to the libgdf library.
+This file provides binding to the libgdf library.
 """
 import ctypes
 import contextlib
@@ -167,11 +168,19 @@ def apply_join(col_lhs, col_rhs, how):
         list_lhs = []
         list_rhs = []
         for i in range(len(col_lhs)):
-            list_lhs.append(col_lhs[i].cffi_view)
-            list_rhs.append(col_rhs[i].cffi_view)
+            # treat categorical as numerical for libgdf join
+            if hasattr(col_lhs[i], 'cat'):
+                cats = col_lhs[i].cat().categories
+                other = col_rhs[i].cat().set_categories(cats).fillna(-1)
+                list_lhs.append(col_lhs[i].as_numerical.cffi_view)
+                list_rhs.append(other.as_numerical.cffi_view)
+            else:
+                list_lhs.append(col_lhs[i].cffi_view)
+                list_rhs.append(col_rhs[i].cffi_view)
 
         # Call libgdf
         joiner(len(col_lhs), list_lhs, list_rhs, join_result_ptr)
+
     else:
         joiner(col_lhs[0].cffi_view, col_rhs[0].cffi_view, join_result_ptr)
 
