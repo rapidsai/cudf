@@ -15,7 +15,7 @@ RUN apt update -y --fix-missing && \
       git \
       gcc-${CC} \
       g++-${CXX} \
-      libboost-dev
+      libboost-all-dev
 
 # Install conda
 ADD https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh /miniconda.sh
