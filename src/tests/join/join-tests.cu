@@ -335,32 +335,34 @@ struct JoinTest : public testing::Test
 
     gdf_error result_error{GDF_SUCCESS};
 
+    gdf_column ** left_gdf_columns = gdf_raw_left_columns.data();
+    gdf_column ** right_gdf_columns = gdf_raw_right_columns.data();
     // Use single column join when there's only a single column
     if(num_columns == 1){
-      gdf_column * left_gdf_column = gdf_raw_left_columns[0];
-      gdf_column * right_gdf_column = gdf_raw_right_columns[0];
       switch(op)
       {
         case join_op::LEFT:
           {
-            result_error = gdf_left_join_generic(left_gdf_column,
-                                                 right_gdf_column,
-                                                 &gdf_join_result,
-                                                 &ctxt);
+            result_error = gdf_left_join(num_columns,
+                                         left_gdf_columns,
+                                         right_gdf_columns,
+                                         &gdf_join_result,
+                                         &ctxt);
             break;
           }
         case join_op::INNER:
           {
-            result_error = gdf_inner_join_generic(left_gdf_column,
-                                                  right_gdf_column,
-                                                  &gdf_join_result,
-                                                  &ctxt);
+            result_error = gdf_inner_join(num_columns,
+                                         left_gdf_columns,
+                                         right_gdf_columns,
+                                         &gdf_join_result,
+                                         &ctxt);
             break;
           }
         case join_op::OUTER:
           {
-            result_error = gdf_outer_join_generic(left_gdf_column,
-                                                  right_gdf_column,
+            result_error = gdf_outer_join_generic(gdf_raw_left_columns[0],
+                                                  gdf_raw_right_columns[0],
                                                   &gdf_join_result);
             break;
           }
@@ -379,20 +381,22 @@ struct JoinTest : public testing::Test
       {
         case join_op::LEFT:
           {
-            result_error = gdf_multi_left_join_generic(num_columns,
-                                                       left_gdf_columns,
-                                                       right_gdf_columns,
-                                                       &gdf_join_result);
+            result_error = gdf_left_join(num_columns,
+                                         left_gdf_columns,
+                                         right_gdf_columns,
+                                         &gdf_join_result,
+                                         &ctxt);
             break;
           }
         case join_op::INNER:
           {
-            //result_error =  gdf_multi_inner_join_generic(num_columns,
-            //                                             left_gdf_columns,
-            //                                             right_gdf_columns,
-            //                                             &gdf_join_result);
-            std::cout << "Multi column *inner* joins not supported yet\n";
-            EXPECT_TRUE(false);
+            result_error =  gdf_inner_join(num_columns,
+                                           left_gdf_columns,
+                                           right_gdf_columns,
+                                           &gdf_join_result,
+                                           &ctxt);
+            //std::cout << "Multi column *inner* joins not supported yet\n";
+            //EXPECT_TRUE(false);
             break;
           }
         default:
@@ -444,8 +448,11 @@ struct JoinTest : public testing::Test
   }
 };
 
-// This structure is used to nest the join method and number/types of columns
-// for use with Google Test type-parameterized tests
+// This structure is used to nest the join operations, join method and
+// number/types of columns for use with Google Test type-parameterized
+// tests .Here join_operation refers to the type of join eg. INNER,
+// LEFT, OUTER and join_method refers to the underlying join algorithm
+//that performs it eg. GDF_HASH or GDF_SORT.
 template<join_op join_operation, gdf_method join_method, typename tuple_of_vectors>
 struct TestParameters
 {
@@ -516,7 +523,18 @@ typedef ::testing::Types<
                           TestParameters< join_op::LEFT,  HASH, VTuple<int32_t , uint32_t, float  > >,
                           TestParameters< join_op::LEFT,  HASH, VTuple<uint64_t, uint32_t, float  > >,
                           TestParameters< join_op::LEFT,  HASH, VTuple<float   , double  , float  > >,
-                          TestParameters< join_op::LEFT,  HASH, VTuple<double  , uint32_t, int64_t> >
+                          TestParameters< join_op::LEFT,  HASH, VTuple<double  , uint32_t, int64_t> >,
+                          // Two Column Inner Join tests for some combination of types
+                          TestParameters< join_op::INNER, HASH, VTuple<int32_t , int32_t> >,
+                          TestParameters< join_op::INNER, HASH, VTuple<int64_t , int32_t> >,
+                          TestParameters< join_op::INNER, HASH, VTuple<float   , double > >,
+                          TestParameters< join_op::INNER, HASH, VTuple<double  , int64_t> >,
+                          TestParameters< join_op::INNER, HASH, VTuple<uint32_t, int32_t> >,
+                          // Three Column Inner Join tests for some combination of types
+                          TestParameters< join_op::INNER, HASH, VTuple<int32_t , uint32_t, float  > >,
+                          TestParameters< join_op::INNER, HASH, VTuple<uint64_t, uint32_t, float  > >,
+                          TestParameters< join_op::INNER, HASH, VTuple<float   , double  , float  > >,
+                          TestParameters< join_op::INNER, HASH, VTuple<double  , uint32_t, int64_t> >
                           // Four column test will fail because gdf_join is limited to 3 columns
                           //TestParameters< join_op::LEFT, HASH, VTuple<double, kint32_t, int64_t, int32_t> >
                           > Implementations;
