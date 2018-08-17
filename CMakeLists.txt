@@ -119,9 +119,11 @@ if(HT_LEGACY_ALLOCATOR)
   set(CUDA_NVCC_FLAGS  ${CUDA_NVCC_FLAGS};-DHT_LEGACY_ALLOCATOR)
 endif()
 
+cuda_add_library(rmm SHARED
+    src/memory/memory.cpp
+)
 
 cuda_add_library(gdf SHARED
-    src/memory/memory.cpp
     src/binaryops.cu
     src/bitmaskops.cu
     src/column.cpp
@@ -150,9 +152,9 @@ cuda_add_library(gdf SHARED
 
 if (ARROW_NUMERIC_VERSION EQUAL 900)
   # arrow-0.9 requires boost_regex
-  target_link_libraries(gdf arrow boost_regex)
+  target_link_libraries(gdf arrow boost_regex rmm)
 else()
-  target_link_libraries(gdf arrow)
+  target_link_libraries(gdf arrow rmm)
 endif()
 
 # Command to symlink files into the build directory
@@ -162,19 +164,20 @@ add_custom_command(  # link the include directory
     DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/include)
 
 add_custom_command(  # link the python directory
-    OUTPUT libgdf_cffi setup.py tests
+    OUTPUT libgdf_cffi librmm_cffi setup.py tests
     COMMAND ${CMAKE_COMMAND} -E create_symlink ${CMAKE_CURRENT_SOURCE_DIR}/python/libgdf_cffi libgdf_cffi
+    COMMAND ${CMAKE_COMMAND} -E create_symlink ${CMAKE_CURRENT_SOURCE_DIR}/python/librmm_cffi librmm_cffi
     COMMAND ${CMAKE_COMMAND} -E create_symlink ${CMAKE_CURRENT_SOURCE_DIR}/python/tests tests
     COMMAND ${CMAKE_COMMAND} -E create_symlink ${CMAKE_CURRENT_SOURCE_DIR}/python/setup.py setup.py)
 
-add_custom_command(  # trigger cffi to build the wrapper
-    OUTPUT libgdf_cffi/libgdf_cffi.py
+add_custom_command(  # trigger cffi to build the wrappers
+    OUTPUT libgdf_cffi/libgdf_cffi.py librmm_cffi/librmm_cffi.py
     COMMAND python setup.py build_ext --inplace
-    DEPENDS setup.py libgdf_cffi include)
+    DEPENDS setup.py libgdf_cffi librmm_cffi include)
 
 add_custom_target(   # target to link the python files and trigger cffi
     copy_python
-    DEPENDS libgdf_cffi/libgdf_cffi.py)
+    DEPENDS libgdf_cffi/libgdf_cffi.py librmm_cffi/librmm_cffi.py)
 
 # The test target
 add_custom_target(pytest DEPENDS copy_python)

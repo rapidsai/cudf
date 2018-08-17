@@ -59,5 +59,5 @@ rmmError_t rmmFree(void *ptr, cudaStream_t stream);
 rmmError_t rmmGetInfo(size_t *freeSize, size_t *totalSize, cudaStream_t stream);
 
 #ifdef __cplusplus
-}
+} // extern "C"
 #endif

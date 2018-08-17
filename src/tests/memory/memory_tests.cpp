@@ -1,4 +1,5 @@
 #include "gtest/gtest.h"
+#include <cuda_runtime_api.h>
 #include "memory.h"
 
 // Helper macros to simplify testing for success or failure

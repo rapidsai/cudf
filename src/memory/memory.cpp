@@ -21,6 +21,8 @@
  Author: Mark Harris
  */
 
+#include <cuda_runtime_api.h>
+
 #include "memory.h"
 
 #define RMM_CHECK_CUDA(call) do { \
@@ -44,7 +46,7 @@ rmmError_t rmmInitialize()
 /// Shutdown memory manager.
 rmmError_t rmmFinalize()
 {
-
+    return RMM_SUCCESS;
 }
 
 /// Allocate memory and initialize a pointer to device memory.
@@ -65,8 +67,6 @@ rmmError_t rmmAlloc(void **ptr, size_t size, cudaStream_t stream)
 
     return RMM_SUCCESS;
 }
-
-#include <cstdio>
 
 /// Reallocate device memory block to new size and recycle any remaining memory as a new block.
 rmmError_t rmmRealloc(void **ptr, size_t new_size, cudaStream_t stream)
