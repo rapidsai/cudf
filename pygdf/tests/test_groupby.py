@@ -8,7 +8,7 @@ import pandas as pd
 from pygdf.dataframe import DataFrame
 
 
-def make_frame(dataframe_class, nelem, seed=0, extra_levels=()):
+def make_frame(dataframe_class, nelem, seed=0, extra_levels=(), extra_vals=()):
     np.random.seed(seed)
 
     df = dataframe_class()
@@ -19,6 +19,8 @@ def make_frame(dataframe_class, nelem, seed=0, extra_levels=()):
         df[lvl] = np.random.randint(0, 2, nelem)
 
     df['val'] = np.random.random(nelem)
+    for val in extra_vals:
+        df[val] = np.random.random(nelem)
 
     return df
 
@@ -26,7 +28,8 @@ def make_frame(dataframe_class, nelem, seed=0, extra_levels=()):
 @pytest.mark.parametrize('nelem', [2, 3, 100, 1000])
 def test_groupby_mean(nelem):
     # gdf
-    got_df = make_frame(DataFrame, nelem=nelem).groupby(('x', 'y')).mean()
+    got_df = make_frame(DataFrame, nelem=nelem).groupby(
+        ('x', 'y'), method="pygdf").mean()
     got = np.sort(got_df['val'].to_array())
     # pandas
     expect_df = make_frame(pd.DataFrame,
@@ -42,7 +45,7 @@ def test_groupby_mean_3level(nelem):
     bys = list('xyz')
     # gdf
     got_df = make_frame(DataFrame, nelem=nelem,
-                        extra_levels=lvls).groupby(bys).mean()
+                        extra_levels=lvls).groupby(bys, method="pygdf").mean()
     got = np.sort(got_df['val'].to_array())
     # pandas
     expect_df = make_frame(pd.DataFrame, nelem=nelem,
@@ -55,18 +58,35 @@ def test_groupby_mean_3level(nelem):
 @pytest.mark.parametrize('nelem', [2, 100])
 def test_groupby_agg_mean_min(nelem):
     # gdf (Note: lack of multindex)
-    got_df = make_frame(DataFrame, nelem=nelem).groupby(('x', 'y'))\
-                                               .agg(['mean', 'min'])
+    got_df = make_frame(DataFrame, nelem=nelem).groupby(
+        ('x', 'y'), method="pygdf").agg(['mean', 'min'])
     got_mean = np.sort(got_df['val_mean'].to_array())
     got_min = np.sort(got_df['val_min'].to_array())
     # pandas
-    expect_df = make_frame(pd.DataFrame, nelem=nelem).groupby(('x', 'y'))\
-                                                     .agg(['mean', 'min'])
+    expect_df = make_frame(pd.DataFrame, nelem=nelem).groupby(
+        ('x', 'y')).agg(['mean', 'min'])
     expect_mean = np.sort(expect_df['val', 'mean'].values)
     expect_min = np.sort(expect_df['val', 'min'].values)
     # verify
     np.testing.assert_array_almost_equal(expect_mean, got_mean)
     np.testing.assert_array_almost_equal(expect_min, got_min)
+
+
+@pytest.mark.parametrize('nelem', [2, 100])
+def test_groupby_agg_min_max_dictargs(nelem):
+    # gdf (Note: lack of multindex)
+    got_df = make_frame(DataFrame, nelem=nelem, extra_vals='ab').groupby(
+        ('x', 'y'), method="pygdf").agg({'a': 'min', 'b': 'max'})
+    got_min = np.sort(got_df['a'].to_array())
+    got_max = np.sort(got_df['b'].to_array())
+    # pandas
+    expect_df = make_frame(pd.DataFrame, nelem=nelem, extra_vals='ab').groupby(
+        ('x', 'y')).agg({'a': 'min', 'b': 'max'})
+    expect_min = np.sort(expect_df['a'].values)
+    expect_max = np.sort(expect_df['b'].values)
+    # verify
+    np.testing.assert_array_almost_equal(expect_min, got_min)
+    np.testing.assert_array_almost_equal(expect_max, got_max)
 
 
 def test_groupby_cats():
@@ -77,7 +97,7 @@ def test_groupby_cats():
     cats = np.asarray(list(df['cats']))
     vals = df['vals'].to_array()
 
-    grouped = df.groupby(['cats']).mean()
+    grouped = df.groupby(['cats'], method="pygdf").mean()
 
     got_vals = grouped['vals']
     got_cats = grouped['cats']
@@ -100,7 +120,7 @@ def test_groupby_iterate_groups():
     def assert_values_equal(arr):
         np.testing.assert_array_equal(arr[0], arr)
 
-    for grp in df.groupby(['key1', 'key2']):
+    for grp in df.groupby(['key1', 'key2'], method="pygdf"):
         pddf = grp.to_pandas()
         for k in 'key1,key2'.split(','):
             assert_values_equal(pddf[k].values)
@@ -118,7 +138,7 @@ def test_groupby_as_df():
     def assert_values_equal(arr):
         np.testing.assert_array_equal(arr[0], arr)
 
-    df, segs = df.groupby(['key1', 'key2']).as_df()
+    df, segs = df.groupby(['key1', 'key2'], method="pygdf").as_df()
     for s, e in zip(segs, list(segs[1:]) + [None]):
         grp = df[s:e]
         pddf = grp.to_pandas()
@@ -137,7 +157,7 @@ def test_groupby_apply():
 
     expect_grpby = df.to_pandas().groupby(['key1', 'key2'],
                                           as_index=False)
-    got_grpby = df.groupby(['key1', 'key2'])
+    got_grpby = df.groupby(['key1', 'key2'], method="pygdf")
 
     def foo(df):
         df['out'] = df['val1'] + df['val2']
@@ -162,7 +182,7 @@ def test_groupby_apply_grouped():
     df['val2'] = np.random.random(nelem)
 
     expect_grpby = df.to_pandas().groupby(['key1', 'key2'], as_index=False)
-    got_grpby = df.groupby(['key1', 'key2'])
+    got_grpby = df.groupby(['key1', 'key2'], method="pygdf")
 
     def foo(key1, val1, com1, com2):
         for i in range(cuda.threadIdx.x, len(key1), cuda.blockDim.x):
@@ -194,7 +214,7 @@ def test_groupby_apply_grouped():
 def test_groupby_2keys_agg(nelem, func):
     # gdf (Note: lack of multindex)
     got_df = make_frame(DataFrame, nelem=nelem)\
-        .groupby(('x', 'y')).agg(func)
+        .groupby(('x', 'y'), method="pygdf").agg(func)
 
     got_agg = np.sort(got_df['val'].to_array())
     # pandas
