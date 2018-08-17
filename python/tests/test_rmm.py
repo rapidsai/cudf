@@ -5,15 +5,34 @@ from itertools import product
 import numpy as np
 from numba import cuda
 
-from librmm_cffi import librmm as rmm
+from libgdf_cffi import libgdf
+from librmm_cffi import ffi, librmm
 
-from .utils import gen_rand
+from .utils import new_column, unwrap_devary, get_dtype, gen_rand, fix_zeros
+from .utils import buffer_as_bits
+
 
 _dtypes = [np.int32]
-_nelems = [1, 2, 7, 8, 9, 32, 128]
+_nelems = [128]
+
+@pytest.fixture(scope="module")
+def rmm():
+    print("initialize librmm")
+    assert librmm.initialize() == librmm.RMM_SUCCESS
+    yield librmm
+    print("finalize librmm")
+    assert librmm.finalize() == librmm.RMM_SUCCESS
+
 
 @pytest.mark.parametrize('dtype,nelem', list(product(_dtypes, _nelems)))
-def test_rmm_alloc(dtype, nelem):
+def test_rmm_alloc(dtype, nelem, rmm):
+
+    expect_fn = np.add
+    test_fn = libgdf.gdf_add_generic
+
+    #import cffi
+    #ffi = cffi.FFI()
+
     # data
     h_in = gen_rand(dtype, nelem)
     h_result = gen_rand(dtype, nelem)
@@ -31,3 +50,5 @@ def test_rmm_alloc(dtype, nelem):
 
     np.testing.assert_array_equal(h_result, h_in)
 
+    assert rmm.free_device_array_memory(d_in) == rmm.RMM_SUCCESS
+    assert rmm.free_device_array_memory(d_result) == rmm.RMM_SUCCESS
