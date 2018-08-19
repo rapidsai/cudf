@@ -111,7 +111,7 @@ def column_select_by_boolmask(column, boolmask):
                                             dtype=selected_index.dtype)
 
 
-def as_column(arbitrary, masked=True):
+def as_column(arbitrary):
     """Create a Column from an arbitrary object
 
     Currently support inputs are:
@@ -140,7 +140,7 @@ def as_column(arbitrary, masked=True):
 
     elif isinstance(arbitrary, pd.Categorical):
         data = categorical.pandas_categorical_as_column(arbitrary)
-        mask = ~np.isnan(arbitrary)
+        mask = ~pd.isnull(arbitrary)
         data = data.set_mask(cudautils.compact_mask_bytes(mask))
 
     elif isinstance(arbitrary, Buffer):
@@ -148,8 +148,9 @@ def as_column(arbitrary, masked=True):
 
     elif cuda.devicearray.is_cuda_ndarray(arbitrary):
         data = as_column(Buffer(arbitrary))
-        mask = cudautils.mask_from_devary(arbitrary)
-        data = data.set_mask(mask)
+        if data.dtype != np.bool:
+            mask = cudautils.mask_from_devary(arbitrary)
+            data = data.set_mask(mask)
 
     elif isinstance(arbitrary, np.ndarray):
         if arbitrary.dtype.kind == 'M':

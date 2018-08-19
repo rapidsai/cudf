@@ -101,7 +101,7 @@ def test_label_encode_float_output():
                             cats=cats, dtype=np.float32,
                             na_sentinel=np.nan)
 
-    got = df2['cats_labels'].to_array()
+    got = df2['cats_labels'].to_array(fillna='pandas')
 
     handcoded = np.array([encoder.get(v, np.nan) for v in arr])
     np.testing.assert_equal(got, handcoded)
