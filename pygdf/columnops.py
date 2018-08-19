@@ -111,7 +111,7 @@ def column_select_by_boolmask(column, boolmask):
                                             dtype=selected_index.dtype)
 
 
-def as_column(arbitrary):
+def as_column(arbitrary, masked=True):
     """Create a Column from an arbitrary object
 
     Currently support inputs are:
@@ -133,24 +133,38 @@ def as_column(arbitrary):
     if isinstance(arbitrary, Column):
         if not isinstance(arbitrary, TypedColumnBase):
             # interpret as numeric
-            return arbitrary.view(numerical.NumericalColumn,
+            data = arbitrary.view(numerical.NumericalColumn,
                                   dtype=arbitrary.dtype)
         else:
-            return arbitrary
+            data = arbitrary
+
     elif isinstance(arbitrary, pd.Categorical):
-        return categorical.pandas_categorical_as_column(arbitrary)
+        data = categorical.pandas_categorical_as_column(arbitrary)
+        mask = ~np.isnan(arbitrary)
+        data = data.set_mask(cudautils.compact_mask_bytes(mask))
+
     elif isinstance(arbitrary, Buffer):
-        return numerical.NumericalColumn(data=arbitrary, dtype=arbitrary.dtype)
+        data = numerical.NumericalColumn(data=arbitrary, dtype=arbitrary.dtype)
+
     elif cuda.devicearray.is_cuda_ndarray(arbitrary):
-        return as_column(Buffer(arbitrary))
+        data = as_column(Buffer(arbitrary))
+        mask = cudautils.mask_from_devary(arbitrary)
+        data = data.set_mask(mask)
+
     elif isinstance(arbitrary, np.ndarray):
         if arbitrary.dtype.kind == 'M':
             # hack, coerce to int, then set the dtype
-            return datetime.DatetimeColumn.from_numpy(arbitrary)
+            data = datetime.DatetimeColumn.from_numpy(arbitrary)
         else:
-            return as_column(Buffer(arbitrary))
+            data = as_column(Buffer(arbitrary))
+            if np.count_nonzero(np.isnan(arbitrary)) > 0:
+                mask = ~np.isnan(arbitrary)
+                data = data.set_mask(cudautils.compact_mask_bytes(mask))
+
     else:
-        return as_column(np.asarray(arbitrary))
+        data = as_column(np.asarray(arbitrary))
+
+    return data
 
 
 def column_applymap(udf, column, out_dtype):
