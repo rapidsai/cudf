@@ -247,7 +247,7 @@ def test_categorical_unique(num_elements):
     np.random.seed(12)
     pd_cat = pd.Categorical(
         pd.Series(np.random.choice(list(string.ascii_letters), num_elements), 
-            dtype="category")
+            dtype='category')
         )
 
     # gdf
@@ -272,7 +272,7 @@ def test_categorical_value_counts(num_elements):
     np.random.seed(12)
     pd_cat = pd.Categorical(
         pd.Series(np.random.choice(list(string.ascii_letters), num_elements), 
-            dtype="category")
+            dtype='category')
         )
 
     # gdf
