@@ -288,16 +288,6 @@ def gpu_mask_from_devary_int(ary, bits):
         if not isnan(float(ary[i])):
             mask_set(bits, i)
 
-# @cuda.jit
-# def gpu_mask_from_devary_bool(ary, bits):
-#     tid = cuda.grid(1)
-#     base = tid * mask_bitsize
-#     for i in range(base, base + mask_bitsize):
-#         if i >= len(ary):
-#             break
-#         if not ary[i]:
-#             mask_set(bits, i)
-
 
 def mask_from_devary(ary):
     bits = make_mask(len(ary))
