@@ -74,7 +74,6 @@ def test_issue_165():
     assert_frame_equal(base, test.to_pandas())
     assert len(test) > 0
 
-
     mask = df_pygdf.dates == start_date
     base_mask = df_pandas.dates == start_date
     assert_series_equal(mask.to_pandas(), base_mask, check_names=False)
