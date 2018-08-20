@@ -67,6 +67,7 @@ static std::string GetTypeName(Type::type id) {
     SHOW_TYPE_NAME(STRUCT)
     SHOW_TYPE_NAME(UNION)
     SHOW_TYPE_NAME(DICTIONARY)
+    SHOW_TYPE_NAME(MAP)
     #undef SHOW_TYPE_NAME
   }
   return "UNKNOWN";
@@ -310,9 +311,8 @@ protected:
         auto fields = schema->fields();
 
         _fields.reserve(fields.size());
-        for ( int i=0; i < fields.size(); ++i ){
-            auto field = fields[i];
-
+        
+        for (auto field : fields) {
             _fields.push_back(FieldDesc());
             auto & out_field = _fields.back();
 

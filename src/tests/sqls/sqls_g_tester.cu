@@ -169,7 +169,7 @@ TEST(gdf_group_by_sum, UsageTestSum)
   //{
   gdf_context ctxt{0, GDF_SORT, 0, 0};
   std::vector<gdf_column*> v_pcols(ncols);
-  for(int i = 0; i < ncols; ++i)
+  for(size_t i = 0; i < ncols; ++i)
     {
       v_pcols[i] = &v_gdf_cols[i];
     }
@@ -196,7 +196,7 @@ TEST(gdf_group_by_sum, UsageTestSum)
   v_gdf_cols_out[2].size = nrows;
 
   std::vector<gdf_column*> h_cols_out(ncols);
-  for(int i=0; i<ncols; ++i)
+  for(size_t i=0; i<ncols; ++i)
     h_cols_out[i] = &v_gdf_cols_out[i];//
   
   gdf_column** cols_out = &h_cols_out[0];//pointer semantics (2)
@@ -317,7 +317,7 @@ TEST(gdf_group_by_count, UsageTestCount)
   //{
   gdf_context ctxt{0, GDF_SORT, 0, 0};
   std::vector<gdf_column*> v_pcols(ncols);
-  for(int i = 0; i < ncols; ++i)
+  for(size_t i = 0; i < ncols; ++i)
     {
       v_pcols[i] = &v_gdf_cols[i];
     }
@@ -344,7 +344,7 @@ TEST(gdf_group_by_count, UsageTestCount)
   v_gdf_cols_out[2].size = nrows;
 
   std::vector<gdf_column*> h_cols_out(ncols);
-  for(int i=0; i<ncols; ++i)
+  for(size_t i=0; i<ncols; ++i)
     h_cols_out[i] = &v_gdf_cols_out[i];//
   
   gdf_column** cols_out = &h_cols_out[0];//pointer semantics (2)
@@ -463,7 +463,7 @@ TEST(gdf_group_by_avg, UsageTestAvg)
   //{
   gdf_context ctxt{0, GDF_SORT, 0, 0};
   std::vector<gdf_column*> v_pcols(ncols);
-  for(int i = 0; i < ncols; ++i)
+  for(size_t i = 0; i < ncols; ++i)
     {
       v_pcols[i] = &v_gdf_cols[i];
     }
@@ -490,7 +490,7 @@ TEST(gdf_group_by_avg, UsageTestAvg)
   v_gdf_cols_out[2].size = nrows;
 
   std::vector<gdf_column*> h_cols_out(ncols);
-  for(int i=0; i<ncols; ++i)
+  for(size_t i=0; i<ncols; ++i)
     h_cols_out[i] = &v_gdf_cols_out[i];//
   
   gdf_column** cols_out = &h_cols_out[0];//pointer semantics (2)
@@ -614,7 +614,7 @@ TEST(gdf_group_by_min, UsageTestMin)
   //{
   gdf_context ctxt{0, GDF_SORT, 0, 0};
   std::vector<gdf_column*> v_pcols(ncols);
-  for(int i = 0; i < ncols; ++i)
+  for(size_t i = 0; i < ncols; ++i)
     {
       v_pcols[i] = &v_gdf_cols[i];
     }
@@ -641,7 +641,7 @@ TEST(gdf_group_by_min, UsageTestMin)
   v_gdf_cols_out[2].size = nrows;
 
   std::vector<gdf_column*> h_cols_out(ncols);
-  for(int i=0; i<ncols; ++i)
+  for(size_t i=0; i<ncols; ++i)
     h_cols_out[i] = &v_gdf_cols_out[i];//
   
   gdf_column** cols_out = &h_cols_out[0];//pointer semantics (2)
@@ -765,7 +765,7 @@ TEST(gdf_group_by_max, UsageTestMax)
   //{
   gdf_context ctxt{0, GDF_SORT, 0, 0};
   std::vector<gdf_column*> v_pcols(ncols);
-  for(int i = 0; i < ncols; ++i)
+  for(size_t i = 0; i < ncols; ++i)
     {
       v_pcols[i] = &v_gdf_cols[i];
     }
@@ -792,7 +792,7 @@ TEST(gdf_group_by_max, UsageTestMax)
   v_gdf_cols_out[2].size = nrows;
 
   std::vector<gdf_column*> h_cols_out(ncols);
-  for(int i=0; i<ncols; ++i)
+  for(size_t i=0; i<ncols; ++i)
     h_cols_out[i] = &v_gdf_cols_out[i];//
   
   gdf_column** cols_out = &h_cols_out[0];//pointer semantics (2)

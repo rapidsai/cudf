@@ -33,6 +33,9 @@ message(STATUS "Using C++ standard: c++${CMAKE_CXX_STANDARD}")
 set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/Modules/" ${CMAKE_MODULE_PATH})
 message(STATUS "CMAKE_MODULE_PATH:" "${CMAKE_MODULE_PATH}")
 
+IF(CMAKE_COMPILER_IS_GNUCXX)
+    SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Werror")
+ENDIF(CMAKE_COMPILER_IS_GNUCXX)
 
 # Include CMake modules
 include(FeatureSummary)
@@ -53,7 +56,15 @@ set_package_properties(
 if(CUDA_FOUND)
     message(STATUS "CUDA ${CUDA_VERSION} found in ${CUDA_TOOLKIT_ROOT_DIR}")
 
-    set(CUDA_NVCC_FLAGS ${CUDA_NVCC_FLAGS};-std=c++11;--expt-extended-lambda)
+    set(CUDA_NVCC_FLAGS ${CUDA_NVCC_FLAGS};-std=c++11;--expt-extended-lambda;)
+    # Suppress SHFL warnings caused by modern GPU.
+    # TODO: remove this when modern GPU is removed or fixed to use shfl_sync
+    set(CUDA_NVCC_FLAGS ${CUDA_NVCC_FLAGS};
+        -Wno-deprecated-declarations;
+        -Xptxas --disable-warnings)
+    # set warnings as errors
+    set(CUDA_NVCC_FLAGS ${CUDA_NVCC_FLAGS};-Xcompiler -Wall,-Werror)
+
     message(STATUS "CUDA_NVCC_FLAGS: ${CUDA_NVCC_FLAGS}")
 else()
     message(FATAL_ERROR "CUDA not found, please check your settings.")
