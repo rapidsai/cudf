@@ -14,39 +14,56 @@ def make_params():
     np.random.seed(0)
 
     hows = 'left,inner,outer,right'.split(',')
+    methods = 'hash,sort'.split(',')
 
     # Test specific cases (1)
     aa = [0, 0, 4, 5, 5]
     bb = [0, 0, 2, 3, 5]
     for how in hows:
-        yield (aa, bb, how)
+        if how in ['left', 'inner', 'right']:
+            for method in methods:
+                yield (aa, bb, how, method)
+        else:
+            yield(aa, bb, how, 'sort')
 
     # Test specific cases (2)
     aa = [0, 0, 1, 2, 3]
     bb = [0, 1, 2, 2, 3]
     for how in hows:
-        yield (aa, bb, how)
+        if how in ['left', 'inner', 'right']:
+            for method in methods:
+                yield (aa, bb, how, method)
+        else:
+            yield(aa, bb, how, 'sort')
 
     # Test large random integer inputs
     aa = np.random.randint(0, 50, 100)
     bb = np.random.randint(0, 50, 100)
     for how in hows:
-        yield (aa, bb, how)
+        if how in ['left', 'inner', 'right']:
+            for method in methods:
+                yield (aa, bb, how, method)
+        else:
+            yield(aa, bb, how, 'sort')
 
     # Test floating point inputs
     aa = np.random.random(50)
     bb = np.random.random(50)
     for how in hows:
-        yield (aa, bb, how)
+        if how in ['left', 'inner', 'right']:
+            for method in methods:
+                yield (aa, bb, how, method)
+        else:
+            yield(aa, bb, how, 'sort')
 
 
-@pytest.mark.parametrize('aa,bb,how', make_params())
-def test_dataframe_join_how(aa, bb, how):
+@pytest.mark.parametrize('aa,bb,how,method', make_params())
+def test_dataframe_join_how(aa, bb, how, method):
     df = DataFrame()
     df['a'] = aa
     df['b'] = bb
 
-    def work(df):
+    def work_pandas(df):
         ts = timer()
         df1 = df.set_index('a')
         df2 = df.set_index('b')
@@ -55,8 +72,17 @@ def test_dataframe_join_how(aa, bb, how):
         print('timing', type(df), te - ts)
         return joined
 
-    expect = work(df.to_pandas())
-    got = work(df)
+    def work_gdf(df):
+        ts = timer()
+        df1 = df.set_index('a')
+        df2 = df.set_index('b')
+        joined = df1.join(df2, how=how, sort=True, method=method)
+        te = timer()
+        print('timing', type(df), te - ts)
+        return joined
+
+    expect = work_pandas(df.to_pandas())
+    got = work_gdf(df)
     expecto = expect.copy()
     goto = got.copy()
 

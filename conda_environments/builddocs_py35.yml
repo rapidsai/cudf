@@ -7,11 +7,10 @@ channels:
 dependencies:
 - python=3.5.*
 - pytest
-- cudatoolkit=8.0
-- libgdf=0.1.0a2.dev
-- libgdf_cffi=0.1.0a2.dev
+- libgdf=0.1.0a3.*
+- libgdf_cffi=0.1.0a3.*
 - numba>=0.40.0dev
-- pandas=0.21.*
+- pandas=0.20.*
 - pip:
   - numpydoc
   - sphinx
