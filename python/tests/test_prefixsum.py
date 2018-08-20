@@ -7,6 +7,7 @@ import numpy as np
 from numba import cuda
 
 from libgdf_cffi import ffi, libgdf
+from librmm_cffi import librmm as rmm
 
 from .utils import (new_column, unwrap_devary, get_dtype, gen_rand,
                     buffer_as_bits)
@@ -36,8 +37,8 @@ def test_prefixsum(dtype, nelem):
         data = gen_rand(dtype, nelem, low=-2, high=2)
     else:
         data = gen_rand(dtype, nelem)
-    d_data = cuda.to_device(data)
-    d_result = cuda.device_array(d_data.size, dtype=d_data.dtype)
+    d_data = rmm.to_device(data)
+    d_result = rmm.device_array(d_data.size, dtype=d_data.dtype)
 
     col_data = new_column()
     gdf_dtype = get_dtype(dtype)

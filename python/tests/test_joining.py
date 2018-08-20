@@ -10,18 +10,19 @@ import numpy as np
 from numba import cuda
 
 from libgdf_cffi import ffi, libgdf
+from librmm_cffi import librmm as rmm
 
 from .utils import new_column, new_context, unwrap_devary, get_dtype
 
 
 @contextmanager
 def _make_input(left, right):
-    d_left = cuda.to_device(left)
+    d_left = rmm.to_device(left)
     col_left = new_column()
     libgdf.gdf_column_view(col_left, unwrap_devary(d_left), ffi.NULL,
                            left.size, get_dtype(d_left.dtype))
 
-    d_right = cuda.to_device(right)
+    d_right = rmm.to_device(right)
     col_right = new_column()
     libgdf.gdf_column_view(col_right, unwrap_devary(d_right), ffi.NULL,
                            right.size, get_dtype(d_right.dtype))
@@ -34,13 +35,13 @@ def _make_input_multi(left, right, ncols):
     cr = []
 
     for i in range(ncols):
-        d_left = cuda.to_device(left[i])
+        d_left = rmm.to_device(left[i])
         col_left = new_column()
         libgdf.gdf_column_view(col_left, unwrap_devary(d_left), ffi.NULL,
                             left[i].size, get_dtype(d_left.dtype))
         cl.append(col_left)
 
-        d_right = cuda.to_device(right[i])
+        d_right = rmm.to_device(right[i])
         col_right = new_column()
         libgdf.gdf_column_view(col_right, unwrap_devary(d_right), ffi.NULL,
                             right[i].size, get_dtype(d_right.dtype))
@@ -52,11 +53,7 @@ def _copy_int_col_to_arr(col):
     dataptr = col.data
     datasize = col.size
     addr = ctypes.c_uint64(int(ffi.cast("uintptr_t", dataptr)))
-    memptr = cuda.driver.MemoryPointer(context=cuda.current_context(),
-                                       pointer=addr, size=4 * datasize)
-    ary = cuda.devicearray.DeviceNDArray(shape=(datasize,), strides=(4,),
-                                         dtype=np.dtype(np.int32),
-                                         gpu_data=memptr)
+    ary = rmm.device_array_from_ptr(dataptr, datasize, np.dtype(np.int32))
     return ary.copy_to_host()
 
 

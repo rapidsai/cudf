@@ -60,27 +60,102 @@ class _librmm_wrapper(object):
     def finalize(self):
         return self.rmmFinalize()
 
+    def device_array_from_ptr(self, ptr, size, dtype=np.float):
+        """device_array_from_ptr(self, ptr, size, dtype=np.float, stream=0)
+
+        Create a Numba device array from a ptr, size, and dtype.
+        """
+        shape, strides, dtype = cuda.api._prepare_shape_strides_dtype(size, (), dtype, 'C')
+        bytesize = cuda.driver.memory_size_from_info(shape, strides, dtype.itemsize)
+
+        ctx = cuda.current_context()
+        ptr = cuda.driver.drvapi.cu_device_ptr(self._ffi.cast("uintptr_t", ptr))
+        mem = cuda.driver.MemoryPointer(ctx, ptr, bytesize) # note no finalizer -- freed externally!
+        return cuda.cudadrv.devicearray.DeviceNDArray(shape, strides, dtype, gpu_data=mem)
+
+    def device_array(self, shape, dtype=np.float, strides=None, order='C', stream=0):
+        """device_array(self, shape, dtype=np.float, strides=None, order='C', stream=0)
+
+        Allocate an empty Numba device array. Clone of Numba `cuda.device_array`, but 
+        uses RMM for device memory management.
+        """
+        shape, strides, dtype = cuda.api._prepare_shape_strides_dtype(shape, strides, dtype, order)
+        bytesize = cuda.driver.memory_size_from_info(shape, strides, dtype.itemsize)
+
+
+        cptr = self._ffi.new("void **")
+        self._api.rmmAlloc(cptr, bytesize, self._ffi.cast("cudaStream_t", stream))
+
+        ctx = cuda.current_context()
+        ptr = cuda.driver.drvapi.cu_device_ptr(self._ffi.cast("uintptr_t*", cptr)[0])
+        mem = cuda.driver.MemoryPointer(ctx, ptr, bytesize, finalizer=self._make_finalizer(ptr, stream))
+        return cuda.cudadrv.devicearray.DeviceNDArray(shape, strides, dtype, gpu_data=mem)
+
+
     def device_array_like(self, ary, stream=0):
+        """device_array_like(self, ary, stream=0)
+
+        Call rmmlib.device_array with information from `ary`. Clone of Numba `cuda.device_array_like`,
+        but uses RMM for device memory management.
+        """
         if isinstance(ary, np.ndarray):
             size = ary.nbytes
         else:
             size = ary.gpu_data.size
 
-        cptr = self._ffi.new("void **")
-        self._api.rmmAlloc(cptr, size, self._ffi.cast("cudaStream_t", stream))
+        return self.device_array(ary.shape, ary.dtype, ary.strides, stream=stream)
 
-        ctx = cuda.current_context()
-        ptr = cuda.driver.drvapi.cu_device_ptr(self._ffi.cast("size_t*", cptr)[0])
-        mem = cuda.driver.MemoryPointer(ctx, ptr, size)
-        d_ary = cuda.cudadrv.devicearray.DeviceNDArray(ary.shape, ary.strides, ary.dtype, gpu_data=mem)
-        return d_ary
+    def to_device(self, ary, stream=0, copy=True, to=None):
+        """to_device(self, ary, stream=0, copy=True, to=None)
+
+        Allocate and transfer a numpy ndarray or structured scalar to the device.
+
+        Clone of Numba `cuda.to_device`, but uses RMM for device memory management.
+        """
+        if to is None:
+            to = self.device_array_like(ary, stream=stream)
+            to.copy_to_device(ary, stream=stream)
+            return to
+        if copy:
+            to.copy_to_device(ary, stream=stream)
+        return to
+
+    def _prepare_shape_strides_dtype(self, shape, strides, dtype, order):
+        dtype = np.dtype(dtype)
+        if isinstance(shape, (int, long)):
+            shape = (shape,)
+        if isinstance(strides, (int, long)):
+            strides = (strides,)
+        else:
+            if shape == ():
+                shape = (1,)
+            strides = strides or self._fill_stride_by_order(shape, dtype, order)
+        return shape, strides, dtype
 
 
-    def to_device(self, ary, stream=0):
-        d_ary = self.device_array_like(ary, stream)
-        d_ary.copy_to_device(ary, stream)
-        return d_ary
+    def _fill_stride_by_order(self, shape, dtype, order):
+        nd = len(shape)
+        strides = [0] * nd
+        if order == 'C':
+            strides[-1] = dtype.itemsize
+            for d in reversed(range(nd - 1)):
+                strides[d] = strides[d + 1] * shape[d + 1]
+        elif order == 'F':
+            strides[0] = dtype.itemsize
+            for d in range(1, nd):
+                strides[d] = strides[d - 1] * shape[d - 1]
+        else:
+            raise ValueError('must be either C/F order')
+        return tuple(strides)
 
-    def free_device_array_memory(self, ary, stream=0):
-        cptr = self._ffi.cast("void*", ary.gpu_data.device_pointer.value)
-        return self._api.rmmFree(cptr, self._ffi.cast("cudaStream_t", stream))
+    def _make_finalizer(self, handle, stream):
+            """Factory to make the finalizer function.
+            We need to bind *handle* and *stream* into the actual finalizer,
+            which takes no arg
+            """
+            def finalizer():
+                """Invoked when the MemoryPointer is freed
+                """
+                cptr = self._ffi.cast("void*", handle.value)
+                return self._api.rmmFree(cptr, self._ffi.cast("cudaStream_t", stream))
+            return finalizer

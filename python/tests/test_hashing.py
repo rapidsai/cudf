@@ -22,6 +22,7 @@ import numpy as np
 from numba import cuda
 
 from libgdf_cffi import ffi, libgdf
+from librmm_cffi import librmm as rmm
 
 from .utils import new_column, unwrap_devary, get_dtype
 
@@ -31,7 +32,7 @@ def _make_hash_input(hash_input, ncols):
     ci = []
     di = []
     for i in range(ncols):
-        di.append(cuda.to_device(hash_input[i]))
+        di.append(rmm.to_device(hash_input[i]))
 
     for i in range(ncols):
         col_input = new_column()
@@ -44,28 +45,14 @@ def _make_hash_input(hash_input, ncols):
 
 def _call_hash_multi(api, ncols, col_input, magic, nrows):
     out_ary = np.zeros(nrows, dtype=np.int32)
-    d_out = cuda.to_device(out_ary)
+    d_out = rmm.to_device(out_ary)
     col_out = new_column()
     libgdf.gdf_column_view(col_out, unwrap_devary(d_out), ffi.NULL,
                            out_ary.size, get_dtype(d_out.dtype))
 
     api(ncols, col_input, magic, col_out)
 
-    dataptr = col_out.data
-    print(dataptr)
-    datasize = col_out.size
-    print(datasize)
-
-    addr = ctypes.c_uint64(int(ffi.cast("uintptr_t", dataptr)))
-    print(hex(addr.value))
-    memptr = cuda.driver.MemoryPointer(context=cuda.current_context(),
-                                       pointer=addr, size=4 * datasize)
-    print(memptr)
-    ary = cuda.devicearray.DeviceNDArray(shape=(datasize,), strides=(4,),
-                                         dtype=np.dtype(np.int32),
-                                         gpu_data=memptr)
-
-    hashed_result = ary.copy_to_host()
+    hashed_result = d_out.copy_to_host()
     print(hashed_result)
 
     return hashed_result

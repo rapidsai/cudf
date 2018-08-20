@@ -6,6 +6,7 @@ import numpy as np
 from numba import cuda
 import libgdf_cffi
 from libgdf_cffi import ffi, libgdf
+from librmm_cffi import librmm as rmm
 
 pa_missing_reason = None
 try:
@@ -71,7 +72,7 @@ def test_ipc():
 
     rb_cpu_data = np.ndarray(shape=len(recordbatches_bytes), dtype=np.byte,
                              buffer=bytearray(recordbatches_bytes))
-    rb_gpu_data = cuda.to_device(rb_cpu_data)
+    rb_gpu_data = rmm.to_device(rb_cpu_data)
     del cpu_data
 
     devptr = ffi.cast("void*", rb_gpu_data.device_ctypes_pointer.value)
