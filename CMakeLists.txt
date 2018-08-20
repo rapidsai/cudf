@@ -186,7 +186,7 @@ add_custom_command(TARGET pytest POST_BUILD
                    WORKING_DIRECTORY --cache-clear tests)
 
 # The install target
-install(TARGETS gdf LIBRARY DESTINATION lib)
+install(TARGETS gdf rmm LIBRARY DESTINATION lib)
 install(DIRECTORY include/gdf DESTINATION include)
 
 # Configure the C++ tests
