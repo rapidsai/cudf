@@ -21,13 +21,7 @@
  Author: Mark Harris
  */
 
-#include <cuda_runtime_api.h>
-
-#ifdef __cplusplus
-extern "C" {
-#include "memory.h"
-}
-#endif
+#include "rmm.h"
 
 #define RMM_CHECK_CUDA(call) do { \
     cudaError_t cudaError = (call); \
