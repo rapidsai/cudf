@@ -237,3 +237,56 @@ def test_cat_series_binop_error():
     with pytest.raises(TypeError) as raises:
         dfb + dfa
     raises.match("'add' operator not supported")
+
+
+@pytest.mark.parametrize('num_elements', [10, 100, 1000])
+def test_categorical_unique(num_elements):
+    import string
+        
+    # create categorical series
+    np.random.seed(12)
+    pd_cat = pd.Categorical(
+        pd.Series(np.random.choice(list(string.ascii_letters), num_elements), 
+            dtype="category")
+        )
+
+    # gdf
+    gdf = DataFrame()
+    gdf['a'] = Series.from_categorical(pd_cat)
+    gdf_unique_sorted = np.sort(gdf['a'].unique())
+    
+    # pandas
+    pdf = pd.DataFrame()
+    pdf['a'] = pd_cat
+    pdf_unique_sorted = np.sort(pdf['a'].unique())
+    
+    # verify
+    np.testing.assert_array_equal(pdf_unique_sorted, gdf_unique_sorted)
+
+
+@pytest.mark.parametrize('num_elements', [10, 100, 1000])
+def test_categorical_value_counts(num_elements):
+    import string
+    
+    # create categorical series
+    np.random.seed(12)
+    pd_cat = pd.Categorical(
+        pd.Series(np.random.choice(list(string.ascii_letters), num_elements), 
+            dtype="category")
+        )
+
+    # gdf
+    gdf = DataFrame()
+    gdf['a'] = Series.from_categorical(pd_cat)
+    gdf_value_counts = gdf['a'].value_counts()
+    
+    # pandas
+    pdf = pd.DataFrame()
+    pdf['a'] = pd_cat
+    pdf_value_counts = pdf['a'].value_counts()
+    
+    # verify
+    pandas_dict = pdf_value_counts.to_dict()
+    gdf_dict = gdf_value_counts.to_pandas().to_dict()
+    
+    assert pandas_dict == gdf_dict
