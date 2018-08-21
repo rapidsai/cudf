@@ -288,8 +288,8 @@ class Series(object):
         return self._binaryop(other, 'sub')
 
     def __rsub__(self, other):
-        # return self.__sub__(other)
-        return other - self
+        print(self, other)
+        return self.__sub__(other)
 
     def __mul__(self, other):
         return self._binaryop(other, 'mul')
