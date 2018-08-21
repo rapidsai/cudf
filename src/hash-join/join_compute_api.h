@@ -44,7 +44,7 @@ struct join_pair { size_type first, second; };
 ///
 /// \param[in] compute_ctx The CudaComputeContext to shedule this to.
 /// \param[in] Flag signifying if the order of the indices for A and B need to be swapped. This flag is used when the order of A and B are swapped to build the hash table for the smalle column.
-template<typename size_type, typename joined_type>
+  template<typename size_type, typename joined_type>
 void pairs_to_decoupled(mgpu::mem_t<size_type> &output, const size_type output_npairs, joined_type *joined, mgpu::context_t &context, bool flip_indices)
 {
   if (output_npairs > 0) {
@@ -113,52 +113,88 @@ cudaError_t GenericJoinHash(mgpu::context_t &compute_ctx, mgpu::mem_t<size_type>
   if (error != cudaSuccess)
 	return error;
 
+  size_type a_sample_size=a_count;
+  size_type size_ratio = 1;
+  if (a_count > 5*b_count){
+	a_sample_size=b_count;	
+	size_ratio = a_count/b_count   +  1;
+  }
 
+  size_type scanSize=0;
+  do{
+  if(a_sample_size>a_count)
+	a_sample_size=a_count;
   // step 3ab: scan table A (left), probe the HT without outputting the joined indices. Only get number of outputted elements.
-  size_type* d_actualFound;
-  cudaMalloc(&d_actualFound, sizeof(size_type));
-  cudaMemset(d_actualFound, 0, sizeof(size_type));
+  size_type* d_common_probe;
+  cudaMalloc(&d_common_probe, sizeof(size_type));
+  cudaMemset(d_common_probe, 0, sizeof(size_type));
   probe_hash_tbl_count_common<join_type, multimap_type, key_type, key_type2, key_type3, size_type, block_size, DEFAULT_CUDA_CACHE_SIZE>
 	<<<(a_count + block_size-1) / block_size, block_size>>>
-	(hash_tbl.get(), a, a_count, a2, b2, a3, b3,d_actualFound);
+	//(hash_tbl.get(), a, a_count, a2, b2, a3, b3,d_common_probe);
+	(hash_tbl.get(), a, a_sample_size, a2, b2, a3, b3,d_common_probe);
   if (error != cudaSuccess)
 	return error;
 
-  size_type scanSize=0;
-  CUDA_RT_CALL( cudaMemcpy(&scanSize, d_actualFound, sizeof(size_type), cudaMemcpyDeviceToHost));
+  CUDA_RT_CALL( cudaMemcpy(&scanSize, d_common_probe, sizeof(size_type), cudaMemcpyDeviceToHost));
+  scanSize = scanSize * size_ratio;
 
-  int dev_ordinal;
-  joined_type* tempOut=NULL;
-  CUDA_RT_CALL( cudaGetDevice(&dev_ordinal));
-  joined_output = mgpu::mem_t<size_type> (2 * (scanSize), compute_ctx);
-
+  CUDA_RT_CALL( cudaFree(d_common_probe) ); 
+    if(scanSize>0 || a_sample_size == a_count)
+	  break;
+	if(scanSize==0){
+	  a_sample_size*=2;
+	  size_ratio /=2;
+	  if(size_ratio==0)
+		size_ratio=1;
+	}
+  } while(true);
+  
   // Checking if any common elements exists. If not, then there is no point scanning again.
   if(scanSize==0){
 	return error;
   }
+ 
+  bool cont = true;
+  int dev_ordinal;
 
-  CUDA_RT_CALL( cudaMallocManaged   ( &tempOut, sizeof(joined_type)*scanSize));
-  CUDA_RT_CALL( cudaMemPrefetchAsync( tempOut , sizeof(joined_type)*scanSize, dev_ordinal));
+  size_type h_actual_found;
+  joined_type* tempOut=NULL;
+  while(cont){
 
-  CUDA_RT_CALL( cudaMemset(d_joined_idx, 0, sizeof(size_type)) );
-  // step 3b: scan table A (left), probe the HT and output the joined indices - doing left join here
-  probe_hash_tbl<join_type, multimap_type, key_type, key_type2, key_type3, size_type, joined_type, block_size, DEFAULT_CUDA_CACHE_SIZE>
-	<<<(a_count + block_size-1) / block_size, block_size>>>
-	(hash_tbl.get(), a, a_count, a2, b2, a3, b3,
-	 static_cast<joined_type*>(tempOut), d_joined_idx, scanSize);
-  error = cudaDeviceSynchronize();
+
+	tempOut=NULL;
+	CUDA_RT_CALL( cudaGetDevice(&dev_ordinal));
+
+
+	CUDA_RT_CALL( cudaMallocManaged   ( &tempOut, sizeof(joined_type)*scanSize));
+	CUDA_RT_CALL( cudaMemPrefetchAsync( tempOut , sizeof(joined_type)*scanSize, dev_ordinal));
+
+	CUDA_RT_CALL( cudaMemset(d_joined_idx, 0, sizeof(size_type)) );
+	// step 3b: scan table A (left), probe the HT and output the joined indices - doing left join here
+	probe_hash_tbl<join_type, multimap_type, key_type, key_type2, key_type3, size_type, joined_type, block_size, DEFAULT_CUDA_CACHE_SIZE>
+	  <<<(a_count + block_size-1) / block_size, block_size>>>
+	  (hash_tbl.get(), a, a_count, a2, b2, a3, b3,
+	   static_cast<joined_type*>(tempOut), d_joined_idx, scanSize);
+	error = cudaDeviceSynchronize();
+
+	CUDA_RT_CALL( cudaMemcpy(&h_actual_found, d_joined_idx, sizeof(size_type), cudaMemcpyDeviceToHost));
+	cont=false;   
+	if(scanSize < h_actual_found){
+	  cont=true;
+	  scanSize = scanSize*2;
+	  CUDA_RT_CALL( cudaFree(tempOut) );
+	}
+
+  }
+  joined_output = mgpu::mem_t<size_type> (2 * (h_actual_found), compute_ctx);
+  pairs_to_decoupled(joined_output, h_actual_found, tempOut, compute_ctx, flip_results);
 
   // free memory used for the counters
   CUDA_RT_CALL( cudaFree(d_joined_idx) );
-  CUDA_RT_CALL( cudaFree(d_actualFound) ); 
-
-
-  pairs_to_decoupled(joined_output, scanSize, tempOut, compute_ctx, flip_results);
-
-  CUDA_RT_CALL( cudaFree(tempOut) );
   return error;
-}
+  CUDA_RT_CALL( cudaFree(tempOut) );
 
+}
 
 /// \brief Performs a hash based left join of columns a and b.
 ///
