@@ -46,7 +46,8 @@ public:
 
   concurrent_unordered_multimap<key_type, 
                                 value_type, 
-                                std::numeric_limits<key_type>::max() > the_map;
+                                std::numeric_limits<key_type>::max()
+                                std::numeric_limits<value_type> > the_map;
 
   const key_type unused_key = std::numeric_limits<key_type>::max();
   const value_type unused_value = std::numeric_limits<value_type>::max();
