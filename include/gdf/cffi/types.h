@@ -55,9 +55,9 @@ typedef enum {
     GDF_PARTITION_DTYPE_MISMATCH,     /**< Datatype mismatch between columns of input/output in the hash partition function */
     GDF_HASH_TABLE_INSERT_FAILURE,    /**< Failed to insert to hash table, likely because its full */
     GDF_UNSUPPORTED_JOIN_TYPE,        /**< The type of join requested is unsupported */
-    GDF_C_ERROR,				         	    /**< C error not related to CUDA */
-    GDF_FILE_ERROR,   				        /**< error processing sepcified file */      
-
+    GDF_C_ERROR,                      /**< C error not related to CUDA */
+    GDF_FILE_ERROR,                   /**< error processing sepcified file */      
+    GDF_MEMORYMANAGER_ERROR           /**< Memory manager error (see memory.h) */
 } gdf_error;
 
 typedef enum {

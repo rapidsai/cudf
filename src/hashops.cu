@@ -13,6 +13,7 @@
 #include <thrust/iterator/counting_iterator.h>
 
 #include "bitmaskops.h"
+#include "rmm.h"
 
 #include <cstring>
 
@@ -92,22 +93,22 @@ gdf_error gpu_hash_columns(gdf_column ** columns_to_hash, int num_columns, gdf_c
 
 	//copy widths into device memory
 	int * widths;
-	cudaMalloc(&widths,sizeof(int) * num_columns);
+	RMM_TRY( rmmAlloc((void**)&widths,sizeof(int) * num_columns, 0) ); // TODO: non-default stream
 	int * host_widths = new int[num_columns];
 	for(int i = 0; i <  num_columns; i++){
 		get_column_byte_width(columns_to_hash[i], &host_widths[i]);
 	}
-	cudaMemcpyAsync(widths,host_widths,sizeof(int) * num_columns,cudaMemcpyHostToDevice,*stream);
+	CUDA_TRY( cudaMemcpyAsync(widths,host_widths,sizeof(int) * num_columns,cudaMemcpyHostToDevice,*stream) );
 
 
 	//copy addresses into device memory
 	void ** pointers;
-	cudaMalloc(&pointers,sizeof(void *) * num_columns);
+	RMM_TRY( rmmAlloc((void**)&pointers,sizeof(void *) * num_columns, 0) ); // TODO: non-default stream
 	void ** data_holder = new void *[num_columns];
 	for(int i = 0; i <  num_columns; i++){
 		data_holder[i] = columns_to_hash[i]->data;
 	}
-	cudaMemcpyAsync(pointers,data_holder,sizeof(void *) * num_columns,cudaMemcpyHostToDevice,*stream);
+	CUDA_TRY( cudaMemcpyAsync(pointers,data_holder,sizeof(void *) * num_columns,cudaMemcpyHostToDevice,*stream) );
 
 
 	hash_fnv_array_op op(num_columns,pointers,widths);
@@ -137,8 +138,8 @@ gdf_error gpu_hash_columns(gdf_column ** columns_to_hash, int num_columns, gdf_c
 		cudaStreamSynchronize(temp_stream);
 		cudaStreamDestroy(temp_stream);
 	}
-	cudaFree(widths);
-	cudaFree(pointers);
+	RMM_TRY( rmmFree(widths, 0) ); // TODO: non-default stream
+	RMM_TRY( rmmFree(pointers, 0) );
 	delete[] host_widths;
 	delete[] data_holder;
 

@@ -23,6 +23,7 @@
 #include "gdf_table.cuh"
 #include "hashmap/hash_functions.cuh"
 #include "int_fastdiv.h"
+#include "rmm.h"
 
 constexpr int BLOCK_SIZE = 256;
 constexpr int ROWS_PER_THREAD = 1;
@@ -400,7 +401,6 @@ gdf_error hash_partition_gdf_table(gdf_table<size_type> const & input_table,
                                    gdf_table<size_type> & partitioned_output)
 {
 
-
   const size_type num_rows = table_to_hash.get_column_length();
 
   constexpr int rows_per_block = BLOCK_SIZE * ROWS_PER_THREAD;
@@ -408,19 +408,19 @@ gdf_error hash_partition_gdf_table(gdf_table<size_type> const & input_table,
 
   // Allocate array to hold which partition each row belongs to
   size_type * row_partition_numbers{nullptr};
-  CUDA_TRY( cudaMalloc(&row_partition_numbers, num_rows * sizeof(hash_value_type)) );
-
+  RMM_TRY( rmmAlloc((void**)&row_partition_numbers, num_rows * sizeof(hash_value_type), 0) ); // TODO: non-default stream?
+  
   // Array to hold the size of each partition computed by each block
   //  i.e., { {block0 partition0 size, block1 partition0 size, ...}, 
   //          {block0 partition1 size, block1 partition1 size, ...},
   //          ...
   //          {block0 partition(num_partitions-1) size, block1 partition(num_partitions -1) size, ...} }
   size_type * block_partition_sizes{nullptr};
-  CUDA_TRY(cudaMalloc(&block_partition_sizes, (grid_size * num_partitions) * sizeof(size_type)));
+  RMM_TRY(rmmAlloc((void**)&block_partition_sizes, (grid_size * num_partitions) * sizeof(size_type), 0) );
 
   // Holds the total number of rows in each partition
   size_type * global_partition_sizes{nullptr};
-  CUDA_TRY( cudaMalloc(&global_partition_sizes, num_partitions * sizeof(size_type)) );
+  RMM_TRY( rmmAlloc((void**)&global_partition_sizes, num_partitions * sizeof(size_type), 0) );
   CUDA_TRY( cudaMemsetAsync(global_partition_sizes, 0, num_partitions * sizeof(size_type)) );
 
   // If the number of partitions is a power of two, we can compute the partition 
@@ -516,12 +516,12 @@ gdf_error hash_partition_gdf_table(gdf_table<size_type> const & input_table,
 
   CUDA_CHECK_LAST();
 
-  CUDA_TRY(cudaFree(row_partition_numbers));
-  CUDA_TRY(cudaFree(block_partition_sizes));
+  RMM_TRY(rmmFree(row_partition_numbers, 0));
+  RMM_TRY(rmmFree(block_partition_sizes, 0));
 
   cudaStreamSynchronize(s1);
   cudaStreamDestroy(s1);
-  CUDA_TRY(cudaFree(global_partition_sizes));
+  RMM_TRY(rmmFree(global_partition_sizes, 0));
 
   return GDF_SUCCESS;
 }

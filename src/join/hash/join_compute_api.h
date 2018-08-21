@@ -18,6 +18,9 @@
 #include <future>
 #include <gdf/errorutils.h>
 
+#include "rmm.h"
+#include "gdf/errorutils.h"
+
 #include "join_kernels.cuh"
 #include "../../gdf_table.cuh"
 
@@ -270,11 +273,18 @@ gdf_error compute_hash_join(mgpu::context_t & compute_ctx,
     CUDA_TRY( cudaDeviceSynchronize() );
   }
 
+<<<<<<< 6fd0208852d30b47508e996b7fbcee3b38f39ecd
   // Check error code from the kernel
   gdf_error_code = *d_gdf_error_code;
   if(GDF_SUCCESS != gdf_error_code){
     return gdf_error_code;
   }
+=======
+  // Allocate storage for the counter used to get the size of the join output
+  size_type * d_join_output_size;
+  RMM_TRY_CUDAERROR( rmmAlloc((void**)&d_join_output_size, sizeof(size_type), 0) ); // TODO: non-default stream
+  CUDA_RT_CALL( cudaMemset(d_join_output_size, 0, sizeof(size_type)) );
+>>>>>>> Converted libGDF calls to cudaMalloc/cudaFree to calls to rmmAlloc, rmmFree
 
 
   size_type estimated_join_output_size{0};
@@ -300,6 +310,7 @@ gdf_error compute_hash_join(mgpu::context_t & compute_ctx,
 
   // Allocate device global counter used by threads to determine output write location
   size_type *d_global_write_index{nullptr};
+<<<<<<< 6fd0208852d30b47508e996b7fbcee3b38f39ecd
   CUDA_TRY( cudaMalloc(&d_global_write_index, sizeof(size_type)) );
  
   // Because we only have an estimate of the output size, we may need to probe the
@@ -352,6 +363,35 @@ gdf_error compute_hash_join(mgpu::context_t & compute_ctx,
 
   // free memory used for the counters
   CUDA_TRY( cudaFree(d_global_write_index) );
+=======
+  RMM_TRY_CUDAERROR( rmmAlloc((void**)&d_global_write_index, sizeof(size_type), 0) );
+  CUDA_RT_CALL( cudaMemsetAsync(d_global_write_index, 0, sizeof(size_type), 0) );
+
+  // Do the probe of the hash table with the probe table and generate the output for the join
+  probe_hash_table<join_type, 
+                   multimap_type, 
+                   key_type, 
+                   size_type, 
+                   index_type, 
+                   block_size, 
+                   DEFAULT_CUDA_CACHE_SIZE>
+	<<<probe_grid_size, block_size>>> (hash_table.get(), 
+                                     build_table, 
+                                     probe_table, 
+                                     probe_column, 
+                                     probe_table.get_column_length(), 
+                                     output_l_ptr,
+                                     output_r_ptr,
+                                     d_global_write_index, 
+                                     h_join_output_size,
+                                     flip_results);
+
+  CUDA_RT_CALL(cudaDeviceSynchronize());
+
+  // free memory used for the counters
+  RMM_TRY_CUDAERROR( rmmFree(d_global_write_index, 0) );
+  RMM_TRY_CUDAERROR( rmmFree(d_join_output_size, 0) ); 
+>>>>>>> Converted libGDF calls to cudaMalloc/cudaFree to calls to rmmAlloc, rmmFree
 
   // If the estimated join output size was larger than the actual output size,
   // then the buffers are larger than necessary. Allocate buffers of the actual 

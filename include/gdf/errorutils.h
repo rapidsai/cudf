@@ -19,6 +19,10 @@
     }												                                          \
 }                                                                                                  
 
+#define RMM_TRY(x)  if ((x)!=RMM_SUCCESS) return GDF_MEMORYMANAGER_ERROR;
+
+#define RMM_TRY_CUDAERROR(x)  if ((x)!=RMM_SUCCESS) return cudaPeekAtLastError();
+
 #define CUDA_CHECK_LAST() CUDA_TRY(cudaPeekAtLastError())
 
 

@@ -18,6 +18,7 @@
 #define MANAGED_ALLOCATOR_CUH
 
 #include <new>
+#include "rmm.h"
 
 template <class T>
 struct managed_allocator {
@@ -60,7 +61,7 @@ struct legacy_allocator {
 
       T* allocate(std::size_t n) const {
           T* ptr = 0;
-          cudaError_t result = cudaMalloc( &ptr, n*sizeof(T) );
+          cudaError_t result = rmmAlloc( &ptr, n*sizeof(T), 0 ); // TODO non-default stream?
           if( cudaSuccess != result || nullptr == ptr ) 
           {
             std::cerr << "ERROR: CUDA Runtime call in line " << __LINE__ << "of file " 
@@ -73,7 +74,8 @@ struct legacy_allocator {
           return ptr;
       }
       void deallocate(T* p, std::size_t) const noexcept {
-        cudaFree(p);
+          rmmError_t result = rmmFree(p, 0); // TODO: non-default stream
+          if ( RMM_SUCCESS != result) throw std::runtime_error("legacy_allocator: RMM Memory Manager Error");
       }
 };
 
