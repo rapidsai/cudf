@@ -228,7 +228,7 @@ template<typename input_it,
 	  const input3_it a3 = (int*)NULL, const input3_it b3 = (int*)NULL){
 
 
-	return GenericJoinHash<LEFT_JOIN>(compute_ctx, joined_output, a, a_count, b, b_count, a2, b2, a3, b3);
+	return GenericJoinHash<JoinType::LEFT_JOIN>(compute_ctx, joined_output, a, a_count, b, b_count, a2, b2, a3, b3);
   }
 
 
@@ -252,9 +252,7 @@ template<typename input_it,
 	  const input3_it a3 = (int*)NULL, const input3_it b3 = (int*)NULL){
 
 	if (b_count > a_count)
-	  return GenericJoinHash<INNER_JOIN>(compute_ctx, joined_output, b, b_count, a, a_count, b2, a2, b3, a3, true);
+	  return GenericJoinHash<JoinType::INNER_JOIN>(compute_ctx, joined_output, b, b_count, a, a_count, b2, a2, b3, a3, true);
 	else
-	  return GenericJoinHash<INNER_JOIN>(compute_ctx, joined_output, a, a_count, b, b_count, a2, b2, a3, b3);
+	  return GenericJoinHash<JoinType::INNER_JOIN>(compute_ctx, joined_output, a, a_count, b, b_count, a2, b2, a3, b3);
   }
-
-

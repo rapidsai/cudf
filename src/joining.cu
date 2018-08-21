@@ -75,41 +75,31 @@ gdf_error gdf_##Fn(gdf_column *leftcol, gdf_column *rightcol,               \
     return GDF_SUCCESS;                                                     \
 }
 
-//TODO: DEF_JOIN_HASH can be merged with DEF_JOIN conce inner_join is using gdf_size_type
-#define DEF_JOIN_HASH(Fn, T, Joiner, JoinType)                              \
-gdf_error gdf_##Fn(gdf_column *leftcol, gdf_column *rightcol,               \
-                   gdf_join_result_type **out_result) {                     \
-    using namespace mgpu;                                                   \
-    if ( leftcol->dtype != rightcol->dtype) return GDF_UNSUPPORTED_DTYPE;   \
-    if ( leftcol->size >= MAX_JOIN_SIZE ) return GDF_COLUMN_SIZE_TOO_BIG;   \
-    if ( rightcol->size >= MAX_JOIN_SIZE ) return GDF_COLUMN_SIZE_TOO_BIG;  \
-    std::unique_ptr<join_result<int> > result_ptr(new join_result<int>);    \
-    result_ptr->result = Joiner<JoinType>((T*)leftcol->data, (int)leftcol->size,      \
-                                (T*)rightcol->data, (int)rightcol->size,    \
-				(int32_t*)NULL, (int32_t*)NULL,		    \
-				(int32_t*)NULL, (int32_t*)NULL,		    \
-                                less_t<T>(), result_ptr->context);          \
-    CUDA_CHECK_LAST();                                                      \
-    *out_result = cffi_wrap(result_ptr.release());                          \
-    return GDF_SUCCESS;                                                     \
+#define DEF_JOIN_GENERIC(Fn)                                               \
+gdf_error gdf_##Fn##_generic(gdf_column *leftcol, gdf_column * rightcol,   \
+                                 gdf_join_result_type **out_result) {      \
+    switch ( leftcol->dtype ){                                             \
+    case GDF_INT8:    return gdf_##Fn##_i8 (leftcol, rightcol, out_result);\
+    case GDF_INT16:   return gdf_##Fn##_i16(leftcol, rightcol, out_result);\
+    case GDF_INT32:   return gdf_##Fn##_i32(leftcol, rightcol, out_result);\
+    case GDF_INT64:   return gdf_##Fn##_i64(leftcol, rightcol, out_result);\
+    case GDF_FLOAT32: return gdf_##Fn##_f32(leftcol, rightcol, out_result);\
+    case GDF_FLOAT64: return gdf_##Fn##_f64(leftcol, rightcol, out_result);\
+    default: return GDF_UNSUPPORTED_DTYPE;                                 \
+    }                                                                      \
 }
 
-#define DEF_JOIN_DISP(Fn)                                                   \
-gdf_error gdf_##Fn##_generic(gdf_column *leftcol, gdf_column * rightcol,    \
-                                 gdf_join_result_type **out_result) {       \
-    switch ( leftcol->dtype ){                                              \
-    case GDF_INT8:  return gdf_##Fn##_i8(leftcol, rightcol, out_result);    \
-    case GDF_INT16: return gdf_##Fn##_i16(leftcol, rightcol, out_result);   \
-    case GDF_INT32: return gdf_##Fn##_i32(leftcol, rightcol, out_result);   \
-    case GDF_INT64: return gdf_##Fn##_i64(leftcol, rightcol, out_result);   \
-    case GDF_FLOAT32: return gdf_##Fn##_f32(leftcol, rightcol, out_result); \
-    case GDF_FLOAT64: return gdf_##Fn##_f64(leftcol, rightcol, out_result); \
-    default: return GDF_UNSUPPORTED_DTYPE;                                  \
-    }                                                                       \
-}
+#define DEF_OUTER_JOIN(Fn, T) DEF_JOIN(outer_join_ ## Fn, T, outer_join)
+DEF_JOIN_GENERIC(outer_join)
+DEF_OUTER_JOIN(i8,  int8_t)
+DEF_OUTER_JOIN(i16, int16_t)
+DEF_OUTER_JOIN(i32, int32_t)
+DEF_OUTER_JOIN(i64, int64_t)
+DEF_OUTER_JOIN(f32, int32_t)
+DEF_OUTER_JOIN(f64, int64_t)
 
 #define JOIN_HASH_TYPES(T1, l1, r1, T2, l2, r2, T3, l3, r3) \
-  result_ptr->result = join_hash<LEFT_JOIN>( \
+  result_ptr->result = join_hash<join_type>( \
 				(T1*)l1, (int)leftcol[0]->size, \
                                 (T1*)r1, (int)rightcol[0]->size, \
                                 (T2*)l2, (T2*)r2, \
@@ -150,7 +140,8 @@ gdf_error gdf_##Fn##_generic(gdf_column *leftcol, gdf_column * rightcol,    \
   if (T1 == GDF_TIMESTAMP) { JOIN_HASH_T2(int64_t, l1, r1, T2, l2, r2, T3, l3, r3) }
 
 // multi-column join function
-gdf_error gdf_multi_left_join_generic(int num_cols, gdf_column **leftcol, gdf_column **rightcol, gdf_join_result_type **out_result)
+template <JoinType join_type>
+gdf_error multi_column_join(int num_cols, gdf_column **leftcol, gdf_column **rightcol, gdf_join_result_type **out_result)
 {
   // check that the columns have matching types and the same number of rows
   for (int i = 0; i < num_cols; i++) {
@@ -189,44 +180,110 @@ gdf_error gdf_multi_left_join_generic(int num_cols, gdf_column **leftcol, gdf_co
   return GDF_SUCCESS;
 }
 
-#ifdef HASH_JOIN
-#define DEF_INNER_JOIN(Fn, T) DEF_JOIN_HASH(inner_join_ ## Fn, T, join_hash, INNER_JOIN)
-#define DEF_INNER_JOIN_FP(Fn, T) DEF_JOIN(inner_join_ ## Fn, T, inner_join)
-#else
-#define DEF_INNER_JOIN(Fn, T) DEF_JOIN(inner_join_ ## Fn, T, inner_join)
-#define DEF_INNER_JOIN_FP(Fn, T) DEF_JOIN(inner_join_ ## Fn, T, inner_join)
-#endif
-DEF_JOIN_DISP(inner_join)
-DEF_INNER_JOIN(i8,  int8_t)
-DEF_INNER_JOIN(i16, int16_t)
-DEF_INNER_JOIN(i32, int32_t)
-DEF_INNER_JOIN(i64, int64_t)
-DEF_INNER_JOIN(f32, int32_t)
-DEF_INNER_JOIN(f64, int64_t)
+template <JoinType join_type>
+struct SortJoin {
+template<typename launch_arg_t = mgpu::empty_t,
+  typename a_it, typename b_it, typename comp_t>
+    mgpu::mem_t<int> operator()(a_it a, int a_count, b_it b, int b_count,
+                       comp_t comp, context_t& context) {
+        return mem_t<int>();
+    }
+};
 
+template <>
+struct SortJoin<JoinType::INNER_JOIN> {
+template<typename launch_arg_t = mgpu::empty_t,
+  typename a_it, typename b_it, typename comp_t>
+    mgpu::mem_t<int> operator()(a_it a, int a_count, b_it b, int b_count,
+                       comp_t comp, context_t& context) {
+        return inner_join(a, a_count, b, b_count, comp, context);
+    }
+};
 
-#ifdef HASH_JOIN
-#define DEF_LEFT_JOIN(Fn, T) DEF_JOIN_HASH(left_join_ ## Fn, T, join_hash, LEFT_JOIN)
-#define DEF_LEFT_JOIN_FP(Fn, T) DEF_JOIN(left_join_ ## Fn, T, left_join)
-#else
-#define DEF_LEFT_JOIN(Fn, T) DEF_JOIN(left_join_ ## Fn, T, left_join)
-#define DEF_LEFT_JOIN_FP(Fn, T) DEF_JOIN(left_join_ ## Fn, T, left_join)
-#endif
-DEF_JOIN_DISP(left_join)
-DEF_LEFT_JOIN(i8,  int8_t)
-DEF_LEFT_JOIN(i16, int16_t)
-DEF_LEFT_JOIN(i32, int32_t)
-DEF_LEFT_JOIN(i64, int64_t)
-DEF_LEFT_JOIN(f32, int32_t)
-DEF_LEFT_JOIN(f64, int64_t)
+template <>
+struct SortJoin<JoinType::LEFT_JOIN> {
+template<typename launch_arg_t = mgpu::empty_t,
+  typename a_it, typename b_it, typename comp_t>
+    mgpu::mem_t<int> operator()(a_it a, int a_count, b_it b, int b_count,
+                       comp_t comp, context_t& context) {
+        return left_join(a, a_count, b, b_count, comp, context);
+    }
+};
 
+template <JoinType join_type, typename T>
+gdf_error single_column_join_typed(gdf_column *leftcol, gdf_column *rightcol,
+                             gdf_join_result_type **out_result, gdf_context *ctxt) {
+    using namespace mgpu;
+    gdf_error err = GDF_SUCCESS;
+    if ( leftcol->dtype != rightcol->dtype) return GDF_UNSUPPORTED_DTYPE;
+    if ( leftcol->size >= MAX_JOIN_SIZE ) return GDF_COLUMN_SIZE_TOO_BIG;
+    if ( rightcol->size >= MAX_JOIN_SIZE ) return GDF_COLUMN_SIZE_TOO_BIG;
+    std::unique_ptr<join_result<int> > result_ptr(new join_result<int>);
+    if (N_GDF_METHODS == ctxt->flag_method) {
+    err = GDF_UNSUPPORTED_METHOD;
+    } else if (GDF_SORT == ctxt->flag_method) {
+    SortJoin<join_type> join;
+    result_ptr->result = join((T*)leftcol->data, leftcol->size,
+                                (T*)rightcol->data, rightcol->size,
+                                less_t<T>(), result_ptr->context);
+    CUDA_CHECK_LAST();
+    *out_result = cffi_wrap(result_ptr.release());
+    } else if (GDF_HASH == ctxt->flag_method) {
+    result_ptr->result = join_hash<join_type>((T*)leftcol->data, (int)leftcol->size,
+                                (T*)rightcol->data, (int)rightcol->size,
+				(int32_t*)NULL, (int32_t*)NULL,
+				(int32_t*)NULL, (int32_t*)NULL,
+                                less_t<T>(), result_ptr->context);
+    CUDA_CHECK_LAST();
+    *out_result = cffi_wrap(result_ptr.release());
+    }
+    return err;
+}
 
-#define DEF_OUTER_JOIN(Fn, T) DEF_JOIN(outer_join_ ## Fn, T, outer_join)
-DEF_JOIN_DISP(outer_join)
-DEF_OUTER_JOIN(i8,  int8_t)
-DEF_OUTER_JOIN(i16, int16_t)
-DEF_OUTER_JOIN(i32, int32_t)
-DEF_OUTER_JOIN(i64, int64_t)
-DEF_OUTER_JOIN(f32, int32_t)
-DEF_OUTER_JOIN(f64, int64_t)
+template <JoinType join_type>
+gdf_error single_column_join(gdf_column *leftcol, gdf_column *rightcol,
+                             gdf_join_result_type **out_result, gdf_context *ctxt) {
+    switch ( leftcol->dtype ){
+    case GDF_INT8:    return single_column_join_typed<join_type, int8_t>(leftcol, rightcol, out_result, ctxt);
+    case GDF_INT16:   return single_column_join_typed<join_type,int16_t>(leftcol, rightcol, out_result, ctxt);
+    case GDF_INT32:   return single_column_join_typed<join_type,int32_t>(leftcol, rightcol, out_result, ctxt);
+    case GDF_INT64:   return single_column_join_typed<join_type,int64_t>(leftcol, rightcol, out_result, ctxt);
+    case GDF_FLOAT32: return single_column_join_typed<join_type,int32_t>(leftcol, rightcol, out_result, ctxt);
+    case GDF_FLOAT64: return single_column_join_typed<join_type,int64_t>(leftcol, rightcol, out_result, ctxt);
+    default: return GDF_UNSUPPORTED_DTYPE;
+    }
+}
 
+template
+gdf_error single_column_join<JoinType::INNER_JOIN>(gdf_column *leftcol, gdf_column *rightcol,
+                             gdf_join_result_type **out_result, gdf_context *ctxt);
+template
+gdf_error single_column_join<JoinType::LEFT_JOIN>(gdf_column *leftcol, gdf_column *rightcol,
+                             gdf_join_result_type **out_result, gdf_context *ctxt);
+
+template <JoinType join_type>
+gdf_error join_call(
+        int num_cols, gdf_column **leftcol, gdf_column **rightcol,
+                                 gdf_join_result_type **out_result, gdf_context *ctxt) {
+    if (num_cols > 1) {
+        if (GDF_HASH != ctxt->flag_method) {
+            return GDF_UNSUPPORTED_DTYPE;
+        } else {
+            return multi_column_join<join_type>(num_cols, leftcol, rightcol, out_result);
+        }
+    } else if (num_cols == 1) {
+        return single_column_join<join_type>(leftcol[0], rightcol[0], out_result, ctxt);
+    } else {
+        return GDF_UNSUPPORTED_METHOD;
+    }
+}
+
+gdf_error gdf_left_join(int num_cols, gdf_column **leftcol, gdf_column **rightcol,
+                                gdf_join_result_type **out_result, gdf_context *ctxt) {
+    return join_call<JoinType::LEFT_JOIN>(num_cols, leftcol, rightcol, out_result, ctxt);
+}
+
+gdf_error gdf_inner_join(int num_cols, gdf_column **leftcol, gdf_column **rightcol,
+                                gdf_join_result_type **out_result, gdf_context *ctxt) {
+    return join_call<JoinType::INNER_JOIN>(num_cols, leftcol, rightcol, out_result, ctxt);
+}
