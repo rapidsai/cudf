@@ -297,7 +297,7 @@ def test_categorical_value_counts(num_elements):
 
 
 @pytest.mark.parametrize('nelem', [20, 50, 100])
-def test_categorical_unique_counts(nelem):
+def test_categorical_unique_count(nelem):
     import string
 
     # create categorical series
@@ -305,7 +305,7 @@ def test_categorical_unique_counts(nelem):
     pd_cat = pd.Categorical(
         pd.Series(
             np.random.choice(list(string.ascii_letters + string.digits), nelem),
-            dtype="category"
+            dtype='category'
             )
         )
 
