@@ -289,8 +289,9 @@ class Series(object):
 
     def __rsub__(self, other):
         """test"""
-        print(self, other)
-        return self.__sub__(other)
+
+        # return self.__sub__(other)
+        return other - self
 
     def __mul__(self, other):
         return self._binaryop(other, 'mul')
