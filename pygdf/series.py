@@ -291,7 +291,9 @@ class Series(object):
         """test"""
 
         # return self.__sub__(other)
-        return other - self
+        if isinstance(other, (int)):
+            other = Series(other)
+        return other.__sub__(self)
 
     def __mul__(self, other):
         return self._binaryop(other, 'mul')
