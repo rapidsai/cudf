@@ -294,3 +294,30 @@ def test_categorical_value_counts(num_elements):
     gdf_dict = gdf_value_counts.to_pandas().to_dict()
 
     assert pandas_dict == gdf_dict
+
+
+@pytest.mark.parametrize('nelem', [20, 50, 100])
+def test_categorical_unique_counts(nelem):
+    import string
+
+    # create categorical series
+    np.random.seed(12)
+    pd_cat = pd.Categorical(
+        pd.Series(
+            np.random.choice(list(string.ascii_letters + string.digits), nelem),
+            dtype="category"
+            )
+        )
+
+    # gdf
+    gdf = DataFrame()
+    gdf['a'] = Series.from_categorical(pd_cat)
+    gdf_unique_count = gdf['a'].unique_count()
+
+    # pandas
+    pdf = pd.DataFrame()
+    pdf['a'] = pd_cat
+    pdf_unique = pdf['a'].unique()
+
+    # verify
+    assert gdf_unique_count == len(pdf_unique)
