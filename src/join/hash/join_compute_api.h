@@ -64,9 +64,9 @@ cudaError_t InnerJoinHash(mgpu::context_t &compute_ctx, void **out, size_type *o
   // step 1: initialize a HT for the smaller table b
   //TODO: swap a and b if b is larger than a
 #ifdef HT_LEGACY_ALLOCATOR
-  typedef concurrent_unordered_multimap<key_type, size_type, std::numeric_limits<key_type>::max(), default_hash<key_type>, equal_to<key_type>, legacy_allocator<thrust::pair<key_type, size_type> > > multimap_type;
+  typedef concurrent_unordered_multimap<key_type, size_type, std::numeric_limits<key_type>::max(), std::numeric_limits<size_type>::max(), default_hash<key_type>, equal_to<key_type>, legacy_allocator<thrust::pair<key_type, size_type> > > multimap_type;
 #else
-  typedef concurrent_unordered_multimap<key_type, size_type, std::numeric_limits<key_type>::max() >::max()> multimap_type;
+  typedef concurrent_unordered_multimap<key_type, size_type, std::numeric_limits<key_type>::max(), std::numeric_limits<size_type>::max()> multimap_type;
 #endif
 
   size_type hash_tbl_size = (size_type)((size_t) b_count * 100 / DEFAULT_HASH_TBL_OCCUPANCY);
@@ -123,9 +123,9 @@ cudaError_t LeftJoinHash(mgpu::context_t &compute_ctx, void **out, size_type *ou
 
   // step 1: initialize a HT for table B (right)
 #ifdef HT_LEGACY_ALLOCATOR
-  typedef concurrent_unordered_multimap<key_type, size_type, std::numeric_limits<key_type>::max(), default_hash<key_type>, equal_to<key_type>, legacy_allocator<thrust::pair<key_type, size_type> > > multimap_type;
+  typedef concurrent_unordered_multimap<key_type, size_type, std::numeric_limits<key_type>::max(), std::numeric_limits<size_type>::max(), default_hash<key_type>, equal_to<key_type>, legacy_allocator<thrust::pair<key_type, size_type> > > multimap_type;
 #else
-  typedef concurrent_unordered_multimap<key_type, size_type, std::numeric_limits<key_type>::max() >::max()> multimap_type;
+  typedef concurrent_unordered_multimap<key_type, size_type, std::numeric_limits<key_type>::max(), std::numeric_limits<size_type>::max()> multimap_type;
 #endif
   size_type hash_tbl_size = (size_type)((size_t) b_count * 100 / DEFAULT_HASH_TBL_OCCUPANCY);
   std::unique_ptr<multimap_type> hash_tbl(new multimap_type(hash_tbl_size));
