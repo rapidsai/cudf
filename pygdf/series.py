@@ -287,8 +287,14 @@ class Series(object):
     def __sub__(self, other):
         return self._binaryop(other, 'sub')
 
+    def __rsub__(self, other):
+        return self.__sub__(other)
+
     def __mul__(self, other):
         return self._binaryop(other, 'mul')
+
+    def __rmul__(self, other):
+        return self.__mul__(other)
 
     def __floordiv__(self, other):
         return self._binaryop(other, 'floordiv')
