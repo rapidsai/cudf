@@ -15,7 +15,6 @@ _unordered_impl = {
 }
 
 
-# class DatetimeColumn(numerical.NumericalColumn):
 class DatetimeColumn(columnops.TypedColumnBase):
     # TODO - we only support milliseconds (date64)
     # we should support date32 and timestamp, but perhaps
