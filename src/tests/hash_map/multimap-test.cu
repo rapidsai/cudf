@@ -46,8 +46,8 @@ public:
 
   concurrent_unordered_multimap<key_type, 
                                 value_type, 
-                                std::numeric_limits<key_type>::max()
-                                std::numeric_limits<value_type> > the_map;
+                                std::numeric_limits<key_type>::max(),
+                                std::numeric_limits<value_type>::max() > the_map;
 
   const key_type unused_key = std::numeric_limits<key_type>::max();
   const value_type unused_value = std::numeric_limits<value_type>::max();
@@ -73,13 +73,9 @@ public:
 // KeyValueTypes<type1, type2> implies key_type = type1, value_type = type2
 // This list is the types across which Google Test will run our tests
 typedef ::testing::Types< KeyValueTypes<int,int>, 
-                          KeyValueTypes<int,float>, 
-                          KeyValueTypes<int,double>,
                           KeyValueTypes<int,long long int>,
                           KeyValueTypes<int,unsigned long long int>,
                           KeyValueTypes<unsigned long long int, int>,
-                          KeyValueTypes<unsigned long long int, float>,
-                          KeyValueTypes<unsigned long long int, double>,
                           KeyValueTypes<unsigned long long int, long long int>,
                           KeyValueTypes<unsigned long long int, unsigned long long int>
                           > Implementations;
