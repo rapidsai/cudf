@@ -21,7 +21,6 @@
 #    $ cmake ..          # configure build system
 #    $ make              # make libgdf
 #    $ make pytest       # trigger test
-#    $ make pytest-ci    # trigger test with jUnit.xml output
 #    $ make install      # install libgdf
 
 PROJECT(libgdf)
@@ -166,13 +165,6 @@ add_custom_target(pytest DEPENDS copy_python)
 add_custom_command(TARGET pytest POST_BUILD
                    COMMAND ${CMAKE_COMMAND} -E env LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:${CMAKE_BINARY_DIR} py.test -v
                    WORKING_DIRECTORY --cache-clear tests)
-
-# The test CI target with junit.xml output
-add_custom_target(pytest-ci DEPENDS copy_python)
-add_custom_command(TARGET pytest POST_BUILD
-                   COMMAND ${CMAKE_COMMAND} -E env LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:${CMAKE_BINARY_DIR} py.test -v
-                   WORKING_DIRECTORY --cache-clear --junitxml=junit.xml tests)
-
 
 # The install target
 install(TARGETS gdf LIBRARY DESTINATION lib)
