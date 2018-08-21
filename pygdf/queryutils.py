@@ -204,7 +204,6 @@ def query_execute(df, expr, callenv):
         try:
             val = envdict[name]
             if isinstance(val, dt.datetime):
-                # val = np.datetime64(val, 'ms')
                 val = np.datetime64(val)
         except KeyError:
             msg = '{!r} not defined in the calling environment'

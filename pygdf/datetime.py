@@ -17,7 +17,7 @@ _unordered_impl = {
 
 # class DatetimeColumn(numerical.NumericalColumn):
 class DatetimeColumn(columnops.TypedColumnBase):
-    # TODO - we only support nanoseconds (date64)
+    # TODO - we only support milliseconds (date64)
     # we should support date32 and timestamp, but perhaps
     # only after we move to arrow
     # we also need to support other formats besides Date64
@@ -29,9 +29,6 @@ class DatetimeColumn(columnops.TypedColumnBase):
         'minute': libgdf.gdf_extract_datetime_minute,
         'second': libgdf.gdf_extract_datetime_second,
     }
-    # hack we currently do everything as numpy ints since
-    # numba doesn't understand datetime64
-
     _npdatetime64_dtype = np.dtype('datetime64[ms]')
 
     def __init__(self, data, mask=None, null_count=None, dtype=None):
@@ -80,8 +77,6 @@ class DatetimeColumn(columnops.TypedColumnBase):
             self,
             dtype=np.int16
         )
-        # force mask again
-        # out._mask = self.mask
         _gdf.apply_unaryop(self.funcs[field],
                            self,
                            out)
@@ -109,12 +104,6 @@ class DatetimeColumn(columnops.TypedColumnBase):
                 shape=len(self),
                 dtype=self._npdatetime64_dtype
             )
-        # elif isinstance(other, (int, float)):
-        #     ary = utils.scalar_broadcast_to(
-        #         int(other * self._inverse_precision),
-        #         shape=len(self),
-        #         dtype=self.dtype)
-        #     return ary
         else:
             raise TypeError('cannot broadcast {}'.format(type(other)))
 
@@ -129,12 +118,6 @@ class DatetimeColumn(columnops.TypedColumnBase):
             op=_unordered_impl[cmpop],
             out_dtype=np.bool
         )
-
-    def replace(self, **kwargs):
-        # hack to ensure dtype stays consistent
-        if 'data' in kwargs:
-            kwargs['data'].dtype = self.dtype
-        return super(DatetimeColumn, self).replace(**kwargs)
 
     def to_pandas(self, index):
         return pd.Series(self.to_array().astype(self.dtype), index=index)
