@@ -299,8 +299,14 @@ class Series(object):
     def __floordiv__(self, other):
         return self._binaryop(other, 'floordiv')
 
+    def __rfloordiv__(self, other):
+        return self.__floordiv__(other)
+
     def __truediv__(self, other):
         return self._binaryop(other, 'truediv')
+
+    def __rtruediv__(self, other):
+        return self.__truediv__(other)
 
     __div__ = __truediv__
 
