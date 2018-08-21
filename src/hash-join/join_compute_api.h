@@ -113,6 +113,12 @@ cudaError_t GenericJoinHash(mgpu::context_t &compute_ctx, mgpu::mem_t<size_type>
   if (error != cudaSuccess)
 	return error;
 
+
+  // To avoid a situation where the entire probing column, column_a, is probed into the build table we use the following approximation technique.
+  // First of all we check the ratios of the sizes between A and B. Only if A is much bigger than B does this optimization make sense.
+  // We define much bigger to be 5 times bigger as for smaller ratios, the following optimization might lose its benefit.
+  // When the ratio is big enough, we will take a subset of A equal in length to B and probe (without writing outputs). We will then approximate
+  // the number of joined elements as the number of found elements times the ratio.
   size_type a_sample_size=a_count;
   size_type size_ratio = 1;
   if (a_count > 5*b_count){
@@ -120,26 +126,28 @@ cudaError_t GenericJoinHash(mgpu::context_t &compute_ctx, mgpu::mem_t<size_type>
 	size_ratio = a_count/b_count   +  1;
   }
 
+  // A situation can arise such that the number of elements found in the probing phase is equal to zero. This would lead us to approximating 
+  // the number of joined elements to be zero. As such we need to increase the subset and continue probing to get a bettter approximation value.
   size_type scanSize=0;
   do{
-  if(a_sample_size>a_count)
-	a_sample_size=a_count;
-  // step 3ab: scan table A (left), probe the HT without outputting the joined indices. Only get number of outputted elements.
-  size_type* d_common_probe;
-  cudaMalloc(&d_common_probe, sizeof(size_type));
-  cudaMemset(d_common_probe, 0, sizeof(size_type));
-  probe_hash_tbl_count_common<join_type, multimap_type, key_type, key_type2, key_type3, size_type, block_size, DEFAULT_CUDA_CACHE_SIZE>
-	<<<(a_count + block_size-1) / block_size, block_size>>>
-	//(hash_tbl.get(), a, a_count, a2, b2, a3, b3,d_common_probe);
-	(hash_tbl.get(), a, a_sample_size, a2, b2, a3, b3,d_common_probe);
-  if (error != cudaSuccess)
-	return error;
+	if(a_sample_size>a_count)
+	  a_sample_size=a_count;
+	// step 3ab: scan table A (left), probe the HT without outputting the joined indices. Only get number of outputted elements.
+	size_type* d_common_probe;
+	cudaMalloc(&d_common_probe, sizeof(size_type));
+	cudaMemset(d_common_probe, 0, sizeof(size_type));
+	probe_hash_tbl_count_common<join_type, multimap_type, key_type, key_type2, key_type3, size_type, block_size, DEFAULT_CUDA_CACHE_SIZE>
+	  <<<(a_count + block_size-1) / block_size, block_size>>>
+	  //(hash_tbl.get(), a, a_count, a2, b2, a3, b3,d_common_probe);
+	  (hash_tbl.get(), a, a_sample_size, a2, b2, a3, b3,d_common_probe);
+	if (error != cudaSuccess)
+	  return error;
 
-  CUDA_RT_CALL( cudaMemcpy(&scanSize, d_common_probe, sizeof(size_type), cudaMemcpyDeviceToHost));
-  scanSize = scanSize * size_ratio;
+	CUDA_RT_CALL( cudaMemcpy(&scanSize, d_common_probe, sizeof(size_type), cudaMemcpyDeviceToHost));
+	scanSize = scanSize * size_ratio;
 
-  CUDA_RT_CALL( cudaFree(d_common_probe) ); 
-    if(scanSize>0 || a_sample_size == a_count)
+	CUDA_RT_CALL( cudaFree(d_common_probe) ); 
+	if(scanSize>0 || a_sample_size == a_count)
 	  break;
 	if(scanSize==0){
 	  a_sample_size*=2;
@@ -148,14 +156,17 @@ cudaError_t GenericJoinHash(mgpu::context_t &compute_ctx, mgpu::mem_t<size_type>
 		size_ratio=1;
 	}
   } while(true);
-  
+
   // Checking if any common elements exists. If not, then there is no point scanning again.
   if(scanSize==0){
 	return error;
   }
- 
+
   bool cont = true;
   int dev_ordinal;
+  
+  // As we are now approximating the number of joined elements, our approximation might be incorrect and we might have underestimated the
+  // number of joined elements. As such we will need to de-allocate memory and re-allocate memory to ensure that the final output is correct.
 
   size_type h_actual_found;
   joined_type* tempOut=NULL;
@@ -178,8 +189,10 @@ cudaError_t GenericJoinHash(mgpu::context_t &compute_ctx, mgpu::mem_t<size_type>
 	error = cudaDeviceSynchronize();
 
 	CUDA_RT_CALL( cudaMemcpy(&h_actual_found, d_joined_idx, sizeof(size_type), cudaMemcpyDeviceToHost));
-	cont=false;   
+	cont=false; 
+	
 	if(scanSize < h_actual_found){
+	  // Not enough memory. Double memory footprint and try again
 	  cont=true;
 	  scanSize = scanSize*2;
 	  CUDA_RT_CALL( cudaFree(tempOut) );
