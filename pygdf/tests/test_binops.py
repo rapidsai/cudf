@@ -138,3 +138,39 @@ def test_series_cmpop_mixed_dtype(cmpop, lhs_dtype, rhs_dtype):
 
     np.testing.assert_array_equal(cmpop(Series(lhs), Series(rhs)).to_array(),
                                   cmpop(lhs, rhs))
+
+
+_commut_ops = [
+    lambda x: 1 + x,
+    lambda x: 1 * x,
+]
+
+_noncommut_ops = [
+    lambda x: 1 - x,
+    lambda x: 1 / x,
+    lambda x: 1 // x,
+]
+
+
+@pytest.mark.parametrize('func, dtype', list(product(_commut_ops, _dtypes)))
+def test_commutative_reflected_op_scalar(func, dtype):
+    import pandas as pd
+
+    # create categorical series
+    np.random.seed(12)
+    random_series = pd.Series(np.random.sample(100), dtype=dtype)
+
+    # gpu series
+    gs = Series(random_series)
+    gs_result = func(gs)
+
+    # pandas
+    ps_result = func(random_series)
+
+    # verify
+    np.testing.assert_array_equal(ps_result, gs_result)
+
+
+@pytest.mark.parametrize('func, dtype', list(product(_noncommut_ops, _dtypes)))
+def test_noncommutative_reflected_ops(func, dtype):
+    pass
