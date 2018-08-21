@@ -16,7 +16,7 @@
 
 constexpr int JoinNoneValue = -1;
 
-enum JoinType {
+enum class JoinType {
   INNER_JOIN,
   LEFT_JOIN,
 };
@@ -54,6 +54,92 @@ __inline__ __device__ void add_pair_to_cache(const size_type first, const size_t
   // its guaranteed to fit into the shared cache
   joined_shared[my_current_idx] = joined_val;
 }
+
+template<
+JoinType join_type,
+		 typename multimap_type,
+		 typename key_type,
+		 typename key2_type,
+		 typename key3_type,
+		 typename size_type,
+		 int block_size,
+  int output_cache_size>
+__global__ void probe_hash_tbl_count_common(
+	multimap_type * multi_map,
+	const key_type* probe_tbl,
+	const size_type probe_tbl_size,
+	const key2_type* probe_col2, const key2_type* build_col2,
+	const key3_type* probe_col3, const key3_type* build_col3,
+    size_type* globalCounterFound
+    )
+{
+ 
+    typedef typename multimap_type::key_equal key_compare_type;
+
+    __shared__ int countFound;
+    countFound=0;
+    __syncthreads();
+
+    key_compare_type key_compare;
+
+#if defined(CUDA_VERSION) && CUDA_VERSION >= 9000
+    __syncwarp();
+#endif
+
+    size_type i = threadIdx.x + blockIdx.x * blockDim.x;
+
+#if defined(CUDA_VERSION) && CUDA_VERSION >= 9000
+    const unsigned int activemask = __ballot_sync(0xffffffff, i < probe_tbl_size);
+#endif
+    if ( i < probe_tbl_size ) {
+    	const auto unused_key = multi_map->get_unused_key();
+    	const auto end = multi_map->end();
+    	const key_type probe_key = probe_tbl[i];
+    	auto it = multi_map->find(probe_key);
+
+    	bool running = (join_type == JoinType::LEFT_JOIN) || (end != it); // for left-joins we always need to add an output
+    	bool found_match = false;
+#if defined(CUDA_VERSION) && CUDA_VERSION >= 9000
+        while ( __any_sync( activemask, running ) )
+#else
+        while ( __any( running ) )
+#endif
+        {
+    		if ( running )
+    		{
+                if (join_type == JoinType::LEFT_JOIN && (end == it)) {
+                    running = false;    // add once on the first iteration
+                }
+                else if ( key_compare( unused_key, it->first ) ) {
+                    running = false;
+                }
+                else if (!key_compare( probe_key, it->first ) ||
+                    ((probe_col2 != NULL) && (probe_col2[i] != build_col2[it->second])) ||
+                    ((probe_col3 != NULL) && (probe_col3[i] != build_col3[it->second]))) {
+                    ++it;
+                    running = (end != it);
+                }
+                else {
+					atomicAdd(&countFound,1) ;
+                    ++it;
+                    running = (end != it);
+                    found_match = true;
+                }
+
+                if ((join_type == JoinType::LEFT_JOIN) && (!running) && (!found_match)) {
+                    atomicAdd(&countFound,1);
+                }
+		  }
+	   }
+    }
+    __syncthreads();
+    if (threadIdx.x==0)
+        atomicAdd(globalCounterFound,countFound);
+
+
+}
+
+
 
 template<
     JoinType join_type,
@@ -104,7 +190,7 @@ __global__ void probe_hash_tbl(
         const key_type probe_key = probe_tbl[i];
         auto it = multi_map->find(probe_key);
 
-        bool running = (join_type == LEFT_JOIN) || (end != it);	// for left-joins we always need to add an output
+        bool running = (join_type == JoinType::LEFT_JOIN) || (end != it);	// for left-joins we always need to add an output
 	bool found_match = false;
 #if defined(CUDA_VERSION) && CUDA_VERSION >= 9000
         while ( __any_sync( activemask, running ) )
@@ -114,7 +200,7 @@ __global__ void probe_hash_tbl(
         {
             if ( running )
             {
-		if (join_type == LEFT_JOIN && (end == it)) {
+		if (join_type == JoinType::LEFT_JOIN && (end == it)) {
 		    running = false;	// add once on the first iteration
 		}
 		else if ( key_compare( unused_key, it->first ) ) {
@@ -133,7 +219,7 @@ __global__ void probe_hash_tbl(
                     running = (end != it);
 		    found_match = true;
                 }
-		if ((join_type == LEFT_JOIN) && (!running) && (!found_match)) {
+		if ((join_type == JoinType::LEFT_JOIN) && (!running) && (!found_match)) {
 		  add_pair_to_cache(offset+i, JoinNoneValue, current_idx_shared, warp_id, joined_shared[warp_id]);
 		}
             }
