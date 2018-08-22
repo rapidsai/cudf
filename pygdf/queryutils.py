@@ -1,7 +1,8 @@
+
 # Copyright (c) 2018, NVIDIA CORPORATION.
 
 import ast
-
+import datetime as dt
 import six
 import numpy as np
 
@@ -202,6 +203,8 @@ def query_execute(df, expr, callenv):
         name = name[len(ENVREF_PREFIX):]
         try:
             val = envdict[name]
+            if isinstance(val, dt.datetime):
+                val = np.datetime64(val)
         except KeyError:
             msg = '{!r} not defined in the calling environment'
             raise NameError(msg.format(name))

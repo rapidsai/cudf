@@ -1,11 +1,25 @@
+import datetime as dt
+import time
+
 import numpy as np
-from . import columnops, _gdf
+import pandas as pd
+
+from . import columnops, _gdf, utils
 from .buffer import Buffer
-from .cudautils import compact_mask_bytes
 from libgdf_cffi import libgdf
 
 
+_unordered_impl = {
+    'eq': libgdf.gdf_eq_generic,
+    'ne': libgdf.gdf_ne_generic,
+}
+
+
 class DatetimeColumn(columnops.TypedColumnBase):
+    # TODO - we only support milliseconds (date64)
+    # we should support date32 and timestamp, but perhaps
+    # only after we move to arrow
+    # we also need to support other formats besides Date64
     funcs = {
         'year': libgdf.gdf_extract_datetime_year,
         'month': libgdf.gdf_extract_datetime_month,
@@ -14,29 +28,23 @@ class DatetimeColumn(columnops.TypedColumnBase):
         'minute': libgdf.gdf_extract_datetime_minute,
         'second': libgdf.gdf_extract_datetime_second,
     }
+    _npdatetime64_dtype = np.dtype('datetime64[ms]')
 
     def __init__(self, data, mask=None, null_count=None, dtype=None):
-        # currently libgdf datetime kernels fail if mask is null
-        if mask is None:
-            mask = np.ones(data.mem.size, dtype=np.bool)
-            mask = compact_mask_bytes(mask)
-            mask = Buffer(mask)
         super(DatetimeColumn, self).__init__(data=data,
                                              mask=mask,
                                              null_count=null_count,
                                              dtype=dtype
                                              )
-        # the column constructor removes mask if it's all true
-        self._mask = mask
+        self._precision = 1e-3
+        self._inverse_precision = 1e3
+        self._pandas_conversion_factor = 1e9 * self._precision
 
     @classmethod
     def from_numpy(cls, array):
-        # hack, coerce to int, then set the dtype
-        array = array.astype('datetime64[ms]')
-        dtype = np.int64
+        array = array.astype(cls._npdatetime64_dtype)
         assert array.dtype.itemsize == 8
-        buf = Buffer(array.astype(dtype, copy=False))
-        buf.dtype = array.dtype
+        buf = Buffer(array)
         return cls(data=buf, dtype=buf.dtype)
 
     @property
@@ -68,9 +76,55 @@ class DatetimeColumn(columnops.TypedColumnBase):
             self,
             dtype=np.int16
         )
-        # force mask again
-        out._mask = self.mask
         _gdf.apply_unaryop(self.funcs[field],
                            self,
                            out)
         return out
+
+    def normalize_binop_value(self, other):
+
+        if isinstance(other, dt.datetime):
+            other = time.mktime(other.timetuple())
+            ary = utils.scalar_broadcast_to(
+                int(other * self._inverse_precision),
+                shape=len(self),
+                dtype=self._npdatetime64_dtype
+            )
+        elif isinstance(other, pd.Timestamp):
+            ary = utils.scalar_broadcast_to(
+                other.value * self._pandas_conversion_factor,
+                shape=len(self),
+                dtype=self._npdatetime64_dtype
+            )
+        elif isinstance(other, np.datetime64):
+            other = other.astype(self._npdatetime64_dtype)
+            ary = utils.scalar_broadcast_to(
+                other,
+                shape=len(self),
+                dtype=self._npdatetime64_dtype
+            )
+        else:
+            raise TypeError('cannot broadcast {}'.format(type(other)))
+
+        buf = Buffer(ary)
+        result = self.replace(data=buf, dtype=self.dtype)
+        return result
+
+    def unordered_compare(self, cmpop, rhs):
+        lhs, rhs = self, rhs
+        return binop(
+            lhs, rhs,
+            op=_unordered_impl[cmpop],
+            out_dtype=np.bool
+        )
+
+    def to_pandas(self, index):
+        return pd.Series(self.to_array().astype(self.dtype), index=index)
+
+
+def binop(lhs, rhs, op, out_dtype):
+    masked = lhs.has_null_mask or rhs.has_null_mask
+    out = columnops.column_empty_like(lhs, dtype=out_dtype, masked=masked)
+    null_count = _gdf.apply_binaryop(op, lhs, rhs, out)
+    out = out.replace(null_count=null_count)
+    return out

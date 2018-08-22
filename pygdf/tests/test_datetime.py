@@ -1,7 +1,12 @@
 import pytest
+
+import datetime as dt
 import numpy as np
 import pandas as pd
-from pandas.util.testing import assert_index_equal, assert_series_equal
+from pandas.util.testing import (
+    assert_index_equal, assert_series_equal,
+    assert_frame_equal
+)
 from pygdf.dataframe import Series, DataFrame
 from pygdf.index import DatetimeIndex
 
@@ -18,8 +23,6 @@ def data2():
 
 fields = ['year', 'month', 'day',
           'hour', 'minute', 'second']
-
-# fields = ['year']
 
 
 @pytest.mark.parametrize('data', [data1(), data2()])
@@ -56,3 +59,44 @@ def test_setitem_datetime():
     a = DataFrame()
     a['a'] = pd.date_range('20010101', '20010105').values
     # TODO check some stuff
+
+
+def test_issue_165():
+    df_pandas = pd.DataFrame()
+    start_date = dt.datetime.strptime("2000-10-21", '%Y-%m-%d')
+    data = [(start_date + dt.timedelta(days=x)) for x in range(6)]
+    df_pandas["dates"] = data
+    df_pandas["num"] = [1, 2, 3, 4, 5, 6]
+    df_pygdf = DataFrame.from_pandas(df_pandas)
+
+    base = df_pandas.query("dates==@start_date")
+    test = df_pygdf.query("dates==@start_date")
+    assert_frame_equal(base, test.to_pandas())
+    assert len(test) > 0
+
+    mask = df_pygdf.dates == start_date
+    base_mask = df_pandas.dates == start_date
+    assert_series_equal(mask.to_pandas(), base_mask, check_names=False)
+    assert mask.to_pandas().sum() > 0
+
+    start_date_ts = pd.Timestamp(start_date)
+    test = df_pygdf.query("dates==@start_date_ts")
+    base = df_pandas.query("dates==@start_date_ts")
+    assert_frame_equal(base, test.to_pandas())
+    assert len(test) > 0
+
+    mask = df_pygdf.dates == start_date_ts
+    base_mask = df_pandas.dates == start_date_ts
+    assert_series_equal(mask.to_pandas(), base_mask, check_names=False)
+    assert mask.to_pandas().sum() > 0
+
+    start_date_np = np.datetime64(start_date_ts, 'ns')
+    test = df_pygdf.query("dates==@start_date_np")
+    base = df_pandas.query("dates==@start_date_np")
+    assert_frame_equal(base, test.to_pandas())
+    assert len(test) > 0
+
+    mask = df_pygdf.dates == start_date_np
+    base_mask = df_pandas.dates == start_date_np
+    assert_series_equal(mask.to_pandas(), base_mask, check_names=False)
+    assert mask.to_pandas().sum() > 0
