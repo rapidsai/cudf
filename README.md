@@ -15,7 +15,7 @@ You can get a minimal conda installation with [Miniconda](https://conda.io/minic
 You can install and update PyGDF using the conda command:
 
 ```bash
-conda install -c numba -c conda-forge -c gpuopenanalytics/label/dev -c defaults pygdf=0.1.0a2
+conda install -c numba -c conda-forge -c gpuopenanalytics/label/dev -c defaults pygdf=0.1.0a3
 ```
 
 You can create and activate a development environment using the conda command:
