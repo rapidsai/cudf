@@ -17,7 +17,6 @@
 #include <gdf/gdf.h>
 #include <gdf/errorutils.h>
 #include <cuda_runtime.h>
-//#include "groupby.h"
 #include "hash/groupby_compute_api.h"
 #include "hash/aggregation_operations.cuh"
 

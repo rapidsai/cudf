@@ -109,7 +109,6 @@ cudaError_t GroupbyHash(const groupby_type * const in_groupby_column,
   // Initialize the hash table with the aggregation operation functor's identity value
   the_map.reset(new map_type(hash_table_size, aggregation_operation::IDENTITY));
 
-  //the_map->prefetch(0);
 
   CUDA_RT_CALL(cudaGetLastError());
 
@@ -201,10 +200,3 @@ cudaError_t GroupbyHash(const groupby_type * const in_groupby_column,
   return error;
 }
 #endif
-
-
-
-
-
-
-
