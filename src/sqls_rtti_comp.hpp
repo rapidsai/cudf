@@ -8,7 +8,6 @@
 #include <cassert>
 #include <iterator>
 
-#include <thrust/device_vector.h>
 #include <thrust/tuple.h>
 #include <thrust/execution_policy.h>
 #include <thrust/system/cuda/execution_policy.h>

@@ -10,7 +10,6 @@
 #include <thrust/functional.h>
 #include <thrust/execution_policy.h>
 #include <thrust/iterator/iterator_adaptor.h>
-#include <thrust/device_vector.h>
 #include "bitmaskops.h"
 
 

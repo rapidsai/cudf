@@ -5,10 +5,8 @@
 
 #include <cuda_runtime.h>
 #include <vector>
-#include <thrust/device_vector.h>
 #include <thrust/transform.h>
 #include <thrust/functional.h>
-#include <thrust/device_ptr.h>
 #include <thrust/execution_policy.h>
 #include <thrust/iterator/counting_iterator.h>
 

@@ -20,10 +20,6 @@
 #include <type_traits>
 #include <memory>
 
-#include <thrust/device_vector.h>
-#include <thrust/sort.h>
-#include <thrust/gather.h>
-
 #include "gtest/gtest.h"
 #include "gmock/gmock.h"
 #include <gdf/gdf.h>

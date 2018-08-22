@@ -22,6 +22,7 @@
 
 #pragma once
 
+#include <thrust/device_malloc_allocator.h>
 #include <thrust/system_error.h>
 #include <thrust/system/cuda/error.h>
 

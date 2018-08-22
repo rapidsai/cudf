@@ -6,6 +6,8 @@
 #include <gdf/utils.h>
 #include <gdf/errorutils.h>
 
+#include "thrust_rmm_allocator.h"
+
 ///#include "../include/sqls_rtti_comp.hpp" -- CORRECT: put me back
 #include "sqls_rtti_comp.hpp"
 #include "groupby/groupby.cuh"
@@ -37,8 +39,9 @@ namespace{ //annonymus
     cudaMemcpy(d_types, h_types, ncols*sizeof(int), cudaMemcpyHostToDevice);//TODO: add streams
   }
 
+  // thrust::device_vector set to use rmmAlloc and rmmFree.
   template<typename T>
-    using Vector = thrust::device_vector<T>;
+  using Vector = thrust::device_vector<T, rmm_allocator<T>>;
 
   void type_dispatcher(gdf_dtype col_type,
                        int col_index,

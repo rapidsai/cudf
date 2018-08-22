@@ -26,7 +26,6 @@
 #include <thrust/functional.h>
 #include <thrust/execution_policy.h>
 #include <thrust/iterator/iterator_adaptor.h>
-#include <thrust/device_vector.h>
 
 /*  Portions of the code below is borrowed from a paper by Howard Hinnant dated 2013-09-07  http://howardhinnant.github.io/date_algorithms.html  as seen on July 2nd, 2018
  The piece of code borrowed and modified is:

@@ -23,14 +23,16 @@
 #include <thrust/distance.h>
 #include <thrust/advance.h>
 #include <thrust/gather.h>
+#include "thrust_rmm_allocator.h"
 
 //Potential PROBLEM: thrust::tuple limited to 10 type args
 //
 template<typename ...Ts>
 using Tuple = thrust::tuple<Ts...>;
 
-template<typename T>
-using Vector = thrust::device_vector<T>;
+// thrust::device_vector set to use rmmAlloc and rmmFree.
+template <typename T>
+using Vector = thrust::device_vector<T, rmm_allocator<T>>;
 
 
 template<typename T, typename Allocator, template<typename, typename> class Vector>
