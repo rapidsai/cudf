@@ -142,10 +142,10 @@ def test_series_cmpop_mixed_dtype(cmpop, lhs_dtype, rhs_dtype):
 
 _reflected_ops = [
     lambda x: 1 + x,
-    lambda x: 1 * x,
-    lambda x: 1 - x,
-    lambda x: 1 / x,
-    lambda x: 1 // x,
+    lambda x: 2 * x,
+    lambda x: 2 - x,
+    lambda x: 2 / x,
+    lambda x: 2 // x,
 ]
 
 
