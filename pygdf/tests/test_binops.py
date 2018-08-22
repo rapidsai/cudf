@@ -140,7 +140,7 @@ def test_series_cmpop_mixed_dtype(cmpop, lhs_dtype, rhs_dtype):
                                   cmpop(lhs, rhs))
 
 
-reflected_ops = [
+_reflected_ops = [
     lambda x: 1 + x,
     lambda x: 1 * x,
     lambda x: 1 - x,
@@ -149,7 +149,7 @@ reflected_ops = [
 ]
 
 
-@pytest.mark.parametrize('func, dtype', list(product(reflected_ops, _dtypes)))
+@pytest.mark.parametrize('func, dtype', list(product(_reflected_ops, _dtypes)))
 def test_reflected_ops_scalar(func, dtype):
     import pandas as pd
 
