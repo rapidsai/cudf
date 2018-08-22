@@ -288,7 +288,13 @@ class Series(object):
         return self._binaryop(other, 'sub')
 
     def __rsub__(self, other):
-        return self.__sub__(other)
+        if isinstance(other, (int, float,
+                              np.int32, np.int64,
+                              np.float32, np.float64)):
+            empty = np.empty(len(self))
+            empty.fill(other)
+            other = Series(empty)
+        return other.__sub__(self)
 
     def __mul__(self, other):
         return self._binaryop(other, 'mul')
@@ -300,13 +306,25 @@ class Series(object):
         return self._binaryop(other, 'floordiv')
 
     def __rfloordiv__(self, other):
-        return self.__floordiv__(other)
+        if isinstance(other, (int, float,
+                              np.int32, np.int64,
+                              np.float32, np.float64)):
+            empty = np.empty(len(self))
+            empty.fill(other)
+            other = Series(empty)
+        return other.__floordiv__(self)
 
     def __truediv__(self, other):
         return self._binaryop(other, 'truediv')
 
     def __rtruediv__(self, other):
-        return self.__truediv__(other)
+        if isinstance(other, (int, float,
+                              np.int32, np.int64,
+                              np.float32, np.float64)):
+            empty = np.empty(len(self))
+            empty.fill(other)
+            other = Series(empty)
+        return other.__truediv__(self)
 
     __div__ = __truediv__
 
