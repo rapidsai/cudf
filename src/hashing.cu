@@ -17,7 +17,7 @@
 #include <gdf/gdf.h>
 #include <gdf/errorutils.h>
 
-#include "joining.h"
+#include "join/joining.h"
 
 constexpr int HASH_KERNEL_BLOCK_SIZE = 256;
 constexpr int HASH_KERNEL_ROWS_PER_THREAD = 1;

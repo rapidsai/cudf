@@ -1,4 +1,19 @@
-/* Copyright 2018 NVIDIA Corporation.  All rights reserved. */
+/*
+ * Copyright (c) 2018, NVIDIA CORPORATION.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 
 #include <thrust/device_vector.h>
 #include <thrust/tuple.h>
@@ -19,6 +34,7 @@
 #include <iterator>
 #include <type_traits>
 #include <numeric>
+#include <unordered_map>
 //
 
 #include <cassert>
@@ -90,6 +106,7 @@ bool compare(const Vector<T>& d_v, const std::vector<T>& baseline, T eps)
 			    });
 }
 
+
 TEST(gdf_group_by_sum, UsageTestSum)
 {
   std::vector<int> vc1{1,1,1,1,1,1};
@@ -150,7 +167,7 @@ TEST(gdf_group_by_sum, UsageTestSum)
 
   //input
   //{
-  gdf_context ctxt{0, GDF_SORT, 0};
+  gdf_context ctxt{0, GDF_SORT, 0, 0};
   std::vector<gdf_column*> v_pcols(ncols);
   for(int i = 0; i < ncols; ++i)
     {
@@ -298,7 +315,7 @@ TEST(gdf_group_by_count, UsageTestCount)
 
   //input
   //{
-  gdf_context ctxt{0, GDF_SORT, 0};
+  gdf_context ctxt{0, GDF_SORT, 0, 0};
   std::vector<gdf_column*> v_pcols(ncols);
   for(int i = 0; i < ncols; ++i)
     {
@@ -444,7 +461,7 @@ TEST(gdf_group_by_avg, UsageTestAvg)
 
   //input
   //{
-  gdf_context ctxt{0, GDF_SORT, 0};
+  gdf_context ctxt{0, GDF_SORT, 0, 0};
   std::vector<gdf_column*> v_pcols(ncols);
   for(int i = 0; i < ncols; ++i)
     {
@@ -595,7 +612,7 @@ TEST(gdf_group_by_min, UsageTestMin)
 
   //input
   //{
-  gdf_context ctxt{0, GDF_SORT, 0};
+  gdf_context ctxt{0, GDF_SORT, 0, 0};
   std::vector<gdf_column*> v_pcols(ncols);
   for(int i = 0; i < ncols; ++i)
     {
@@ -746,7 +763,7 @@ TEST(gdf_group_by_max, UsageTestMax)
 
   //input
   //{
-  gdf_context ctxt{0, GDF_SORT, 0};
+  gdf_context ctxt{0, GDF_SORT, 0, 0};
   std::vector<gdf_column*> v_pcols(ncols);
   for(int i = 0; i < ncols; ++i)
     {

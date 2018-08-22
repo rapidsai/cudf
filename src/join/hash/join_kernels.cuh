@@ -21,7 +21,7 @@ enum class JoinType {
   LEFT_JOIN,
 };
 
-#include "concurrent_unordered_multimap.cuh"
+#include "../../hashmap/concurrent_unordered_multimap.cuh"
 #include <cub/cub.cuh>
 
 constexpr int warp_size = 32;
@@ -32,9 +32,12 @@ __global__ void build_hash_tbl(
     const typename multimap_type::key_type* const build_tbl,
     const typename multimap_type::size_type build_tbl_size)
 {
-    const typename multimap_type::mapped_type i = threadIdx.x + blockIdx.x * blockDim.x;
+
+    using mapped_type = typename multimap_type::mapped_type;
+    
+    const typename multimap_type::size_type i = threadIdx.x + blockIdx.x * blockDim.x;
     if ( i < build_tbl_size ) {
-      multi_map->insert( thrust::make_pair( build_tbl[i], i ) );
+      multi_map->insert( thrust::make_pair( build_tbl[i], (mapped_type) i ) );
     }
 }
 

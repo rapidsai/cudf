@@ -19,8 +19,8 @@
 #include <limits>
 #include <memory>
 
-#include "hash-join/join_compute_api.h"
-#include "sort-join.cuh"
+#include "hash/join_compute_api.h"
+#include "sort/sort-join.cuh"
 
 // N-column join (N up to 3 currently)
 // \brief Performs a hash based join of columns a and b.

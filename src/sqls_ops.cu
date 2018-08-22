@@ -8,6 +8,8 @@
 
 ///#include "../include/sqls_rtti_comp.hpp" -- CORRECT: put me back
 #include "sqls_rtti_comp.hpp"
+#include "groupby/groupby.cuh"
+#include "groupby/hash/aggregation_operations.cuh"
 
 //using IndexT = int;//okay...
 using IndexT = size_t;
@@ -1145,8 +1147,65 @@ gdf_error gdf_group_by_single(int ncols,                    // # columns
     }
   else if( ctxt->flag_method == GDF_HASH )
     {
-      //TODO:
-      //HASH-based
+
+      bool sort_result = false;
+
+      if(1 == ctxt->flag_sort_result){
+        sort_result = true;
+      }
+
+      switch(op)
+      {
+        case GDF_MAX:
+          {
+            return gdf_group_by_hash<max_op>(ncols,
+                                             cols,
+                                             col_agg,
+                                             out_col_values,
+                                             out_col_agg,
+                                             sort_result);
+            break;
+          }
+        case GDF_MIN:
+          {
+            return gdf_group_by_hash<min_op>(ncols,
+                                             cols,
+                                             col_agg,
+                                             out_col_values,
+                                             out_col_agg,
+                                             sort_result);
+            break;
+          }
+        case GDF_SUM:
+          {
+            return gdf_group_by_hash<sum_op>(ncols,
+                                             cols,
+                                             col_agg,
+                                             out_col_values,
+                                             out_col_agg,
+                                             sort_result);
+          }
+        case GDF_COUNT:
+          {
+            return gdf_group_by_hash<count_op>(ncols,
+                                               cols,
+                                               col_agg,
+                                               out_col_values,
+                                               out_col_agg,
+                                               sort_result);
+          }
+        case GDF_AVG:
+          {
+            return gdf_group_by_hash_avg(ncols,
+                                         cols,
+                                         col_agg,
+                                         out_col_values,
+                                         out_col_agg);
+          }
+        default:
+          std::cerr << "Unsupported aggregation method for hash-based groupby." << std::endl;
+          return GDF_UNSUPPORTED_METHOD;
+      }
     }
   else
     {

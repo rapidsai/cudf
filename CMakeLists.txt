@@ -34,6 +34,7 @@ message(STATUS "Using C++ standard: c++${CMAKE_CXX_STANDARD}")
 set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/Modules/" ${CMAKE_MODULE_PATH})
 message(STATUS "CMAKE_MODULE_PATH:" "${CMAKE_MODULE_PATH}")
 
+
 # Include CMake modules
 include(FeatureSummary)
 include(CheckIncludeFiles)
@@ -89,7 +90,7 @@ IF(CUDA_VERSION_MAJOR GREATER 8)
 ENDIF(CUDA_VERSION_MAJOR GREATER 8)
 
 IF(CMAKE_BUILD_TYPE MATCHES DEBUG)
-    set(CUDA_NVCC_FLAGS ${CUDA_NVCC_FLAGS};-g;-G)
+    set(CUDA_NVCC_FLAGS ${CUDA_NVCC_FLAGS};-g;-G;-lineinfo)
 ENDIF(CMAKE_BUILD_TYPE MATCHES DEBUG)
 
 # switch between hash-join and sort-join
@@ -98,6 +99,8 @@ if(HASH_JOIN)
   message("-- Using the hash-based join implementation")
   set(CUDA_NVCC_FLAGS  ${CUDA_NVCC_FLAGS};-DHASH_JOIN)
 endif()
+
+
 
 # switch between cudaMalloc and cudaMallocManaged for hash tables
 option(HT_LEGACY_ALLOCATOR "legacy allocator for hash tables" ON)
@@ -116,11 +119,11 @@ cuda_add_library(gdf SHARED
     src/datetimeops.cu
     src/errorhandling.cpp
     src/filterops.cu
-    src/hashing.cu
     src/hashops.cu
     src/ipc.cu
-    src/joining.cu
     src/reductions.cu
+    src/join/joining.cu
+    src/hashing.cu
     src/scan.cu
     src/segmented_sorting.cu
     src/sorting.cu
@@ -170,6 +173,7 @@ add_custom_command(TARGET pytest POST_BUILD
                    COMMAND ${CMAKE_COMMAND} -E env LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:${CMAKE_BINARY_DIR} py.test -v
                    WORKING_DIRECTORY --cache-clear --junitxml=junit.xml tests)
 
+
 # The install target
 install(TARGETS gdf LIBRARY DESTINATION lib)
 install(DIRECTORY include/gdf DESTINATION include)
@@ -187,6 +191,5 @@ if(GTEST_FOUND)
 else()
     message(AUTHOR_WARNING "Google C++ Testing Framework (Google Test) not found: automated tests are disabled.")
 endif()
-
 # Print the project summary
 feature_summary(WHAT ALL INCLUDE_QUIET_PACKAGES FATAL_ON_MISSING_REQUIRED_PACKAGES)

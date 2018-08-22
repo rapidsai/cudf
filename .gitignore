@@ -5,6 +5,8 @@ __pycache__
 *.dylib
 .cache
 .vscode
+*.swp
+*.pytest_cache
 build
 /thirdparty/googletest/
 /include/gdf/ipc/File_generated.h
