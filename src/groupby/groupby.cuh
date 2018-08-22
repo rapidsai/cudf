@@ -237,7 +237,8 @@ gdf_error gdf_group_by_hash(int ncols,
 
   // TODO Currently only supports a single groupby column
   if(ncols > 1) {
-    assert( false && "Can only support a single groupby column at this time.");
+    std::cerr << "Can only support a single groupby column at this time.\n";
+    return GDF_GROUPBY_TOO_MANY_COLUMNS;
   }
 
   return dispatch_groupby_type<aggregation_operation>(ncols, in_groupby_columns, in_aggregation_column, 
