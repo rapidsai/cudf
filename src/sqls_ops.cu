@@ -1203,7 +1203,7 @@ gdf_error gdf_group_by_single(int ncols,                    // # columns
                                          out_col_agg);
           }
         default:
-          std::cout << "Unsupported aggregation method for hash-based groupby." << std::endl;
+          std::cerr << "Unsupported aggregation method for hash-based groupby." << std::endl;
           return GDF_UNSUPPORTED_METHOD;
       }
     }
