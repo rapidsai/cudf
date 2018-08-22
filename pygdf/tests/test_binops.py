@@ -156,7 +156,7 @@ _noncommut_ops = [
 def test_commutative_reflected_op_scalar(func, dtype):
     import pandas as pd
 
-    # create categorical series
+    # create random series
     np.random.seed(12)
     random_series = pd.Series(np.random.sample(100), dtype=dtype)
 
