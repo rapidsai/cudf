@@ -61,7 +61,7 @@ rmmError_t rmmAlloc(void **ptr, size_t size, cudaStream_t stream)
     if (!ptr) 
     	return RMM_ERROR_INVALID_ARGUMENT;
 
-    RMM_CHECK_CUDA(cudaMallocManaged(ptr, size));
+    RMM_CHECK_CUDA(cudaMalloc(ptr, size));
 
     return RMM_SUCCESS;
 }
@@ -77,7 +77,7 @@ rmmError_t rmmRealloc(void **ptr, size_t new_size, cudaStream_t stream)
     	return RMM_ERROR_INVALID_ARGUMENT;
 
 	RMM_CHECK_CUDA(cudaFree(*ptr));
-	RMM_CHECK_CUDA(cudaMallocManaged(ptr, new_size));
+	RMM_CHECK_CUDA(cudaMalloc(ptr, new_size));
 
     return RMM_SUCCESS;
 }

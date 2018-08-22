@@ -98,8 +98,18 @@ TEST_F(MemoryManagerTest, AllocateGB) {
 
 TEST_F(MemoryManagerTest, AllocateTB) {
 	char *a = 0;
-	rmmError_t res = rmmAlloc((void**)&a, size_tb, stream);
+	size_t freeBefore = 0, totalBefore = 0;
+	rmmError_t res = rmmGetInfo(&freeBefore, &totalBefore, stream);
 	ASSERT_SUCCESS(res);
+	res = rmmAlloc((void**)&a, size_tb, stream);
+
+	if (size_tb > freeBefore) {
+		ASSERT_FAILURE(res);
+	}
+	else {
+		ASSERT_SUCCESS(res);
+	}
+	
 	res = rmmFree(a, stream);
 	ASSERT_SUCCESS(res);
 }
