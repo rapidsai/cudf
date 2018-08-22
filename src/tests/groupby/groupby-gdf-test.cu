@@ -20,6 +20,8 @@
 #include <unordered_map>
 #include <random>
 #include <limits>
+#include <memory>
+#include <functional>
 
 #include "gtest/gtest.h"
 #include "gmock/gmock.h"
