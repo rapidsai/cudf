@@ -274,31 +274,16 @@ def gpu_mask_from_devary(ary, bits):
     for i in range(base, base + mask_bitsize):
         if i >= len(ary):
             break
-        if not isnan(ary[i]):
-            mask_set(bits, i)
-
-
-@cuda.jit
-def gpu_mask_from_devary_int(ary, bits):
-    tid = cuda.grid(1)
-    base = tid * mask_bitsize
-    for i in range(base, base + mask_bitsize):
-        if i >= len(ary):
-            break
-        if not isnan(float(ary[i])):
+        # NOTE: nan checking functions just work for float values, using
+        # property of nan != nan to check instead.
+        if ary[i] == ary[i]:
             mask_set(bits, i)
 
 
 def mask_from_devary(ary):
     bits = make_mask(len(ary))
     gpu_fill_value.forall(bits.size)(bits, 0)
-    # NOTE: Numba does not accept isnan(a) when a is int, due to unimplemented
-    # int64 isnan, so need to cast to float for all int dtypes
-    if ary.dtype in [np.int8, np.int16, np.int32, np.int32, np.int64,
-                     np.uint8, np.uint16, np.uint32, np.uint32, np.uint64]:
-        gpu_mask_from_devary_int.forall(bits.size)(ary, bits)
-    else:
-        gpu_mask_from_devary.forall(bits.size)(ary, bits)
+    gpu_mask_from_devary.forall(bits.size)(ary, bits)
     return bits
 
 #

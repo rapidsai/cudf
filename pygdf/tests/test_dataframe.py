@@ -470,7 +470,7 @@ def test_dataframe_append_empty():
     pd.testing.assert_frame_equal(gdf.to_pandas(), pdf)
 
 
-def test_masked_setitem_from_object():
+def test_dataframe_setitem_from_masked_object():
     ary = np.random.randn(100)
     mask = np.zeros(100, dtype=bool)
     mask[:20] = True
