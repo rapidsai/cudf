@@ -155,7 +155,7 @@ def test_reflected_ops_scalar(func, dtype):
 
     # create random series
     np.random.seed(12)
-    random_series = pd.Series(np.random.sample(100), dtype=dtype)
+    random_series = pd.Series(np.random.sample(100) + 10, dtype=dtype)
 
     # gpu series
     gs = Series(random_series)
