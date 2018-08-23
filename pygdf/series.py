@@ -288,13 +288,9 @@ class Series(object):
         return self._binaryop(other, 'sub')
 
     def __rsub__(self, other):
-        if isinstance(other, (int, float,
-                              np.int32, np.int64,
-                              np.float32, np.float64)):
-            empty = np.empty(len(self))
-            empty.fill(other)
-            other = Series(empty)
-        return other.__sub__(self)
+        other = self._normalize_binop_value(other)
+        outcol = other._column.binary_operator('sub', self._column)
+        return self._copy_construct(data=outcol)
 
     def __mul__(self, other):
         return self._binaryop(other, 'mul')
@@ -306,25 +302,17 @@ class Series(object):
         return self._binaryop(other, 'floordiv')
 
     def __rfloordiv__(self, other):
-        if isinstance(other, (int, float,
-                              np.int32, np.int64,
-                              np.float32, np.float64)):
-            empty = np.empty(len(self))
-            empty.fill(other)
-            other = Series(empty)
-        return other.__floordiv__(self)
+        other = self._normalize_binop_value(other)
+        outcol = other._column.binary_operator('floordiv', self._column)
+        return self._copy_construct(data=outcol)
 
     def __truediv__(self, other):
         return self._binaryop(other, 'truediv')
 
     def __rtruediv__(self, other):
-        if isinstance(other, (int, float,
-                              np.int32, np.int64,
-                              np.float32, np.float64)):
-            empty = np.empty(len(self))
-            empty.fill(other)
-            other = Series(empty)
-        return other.__truediv__(self)
+        other = self._normalize_binop_value(other)
+        outcol = other._column.binary_operator('truediv', self._column)
+        return self._copy_construct(data=outcol)
 
     __div__ = __truediv__
 
