@@ -269,6 +269,16 @@ class Series(object):
         outcol = self._column.binary_operator(fn, other._column)
         return self._copy_construct(data=outcol)
 
+    def _rbinaryop(self, other, fn):
+        """
+        Internal util to call a binary operator *fn* on operands *self*
+        and *other* for reflected operations.  Return the output Series.
+        The output dtype is determined by the input operands.
+        """
+        other = self._normalize_binop_value(other)
+        outcol = other._column.binary_operator(fn, self._column)
+        return self._copy_construct(data=outcol)
+
     def _unaryop(self, fn):
         """
         Internal util to call a unary operator *fn* on operands *self*.
@@ -282,37 +292,31 @@ class Series(object):
         return self._binaryop(other, 'add')
 
     def __radd__(self, other):
-        return self.__add__(other)
+        return self._rbinaryop(other, 'add')
 
     def __sub__(self, other):
         return self._binaryop(other, 'sub')
 
     def __rsub__(self, other):
-        other = self._normalize_binop_value(other)
-        outcol = other._column.binary_operator('sub', self._column)
-        return self._copy_construct(data=outcol)
+        return self._rbinaryop(other, 'sub')
 
     def __mul__(self, other):
         return self._binaryop(other, 'mul')
 
     def __rmul__(self, other):
-        return self.__mul__(other)
+        return self._rbinaryop(other, 'mul')
 
     def __floordiv__(self, other):
         return self._binaryop(other, 'floordiv')
 
     def __rfloordiv__(self, other):
-        other = self._normalize_binop_value(other)
-        outcol = other._column.binary_operator('floordiv', self._column)
-        return self._copy_construct(data=outcol)
+        return self._rbinaryop(other, 'floordiv')
 
     def __truediv__(self, other):
         return self._binaryop(other, 'truediv')
 
     def __rtruediv__(self, other):
-        other = self._normalize_binop_value(other)
-        outcol = other._column.binary_operator('truediv', self._column)
-        return self._copy_construct(data=outcol)
+        return self._rbinaryop(other, 'truediv')
 
     __div__ = __truediv__
 
