@@ -50,6 +50,10 @@ namespace{ //annonymus
                        IndexT* d_indices,
                        size_t nrows_new)
   {
+    cudaStream_t stream = 0; // TODO: non-default stream
+    rmm_temp_allocator allocator(stream); 
+    auto exec = thrust::cuda::par(allocator).on(stream);
+
     switch( col_type )
       {
       case GDF_INT8:
@@ -58,7 +62,7 @@ namespace{ //annonymus
 
           ColType* d_in  = static_cast<ColType*>(h_cols_in[col_index]->data);//pointer semantics (2)
           ColType* d_out = static_cast<ColType*>(h_cols_out[col_index]->data);
-          thrust::gather(thrust::device,
+          thrust::gather(exec,
                          d_indices, d_indices + nrows_new, //map of indices
                          d_in,                             //source
                          d_out);                           //=source[map]
@@ -70,7 +74,7 @@ namespace{ //annonymus
 
           ColType* d_in  = static_cast<ColType*>(h_cols_in[col_index]->data);
           ColType* d_out = static_cast<ColType*>(h_cols_out[col_index]->data);
-          thrust::gather(thrust::device,
+          thrust::gather(exec,
                          d_indices, d_indices + nrows_new, //map of indices
                          d_in,                             //source
                          d_out);                           //=source[map]
@@ -82,7 +86,7 @@ namespace{ //annonymus
 
           ColType* d_in  = static_cast<ColType*>(h_cols_in[col_index]->data);
           ColType* d_out = static_cast<ColType*>(h_cols_out[col_index]->data);
-          thrust::gather(thrust::device,
+          thrust::gather(exec,
                          d_indices, d_indices + nrows_new, //map of indices
                          d_in,                             //source
                          d_out);                           //=source[map]
@@ -94,7 +98,7 @@ namespace{ //annonymus
 
           ColType* d_in  = static_cast<ColType*>(h_cols_in[col_index]->data);
           ColType* d_out = static_cast<ColType*>(h_cols_out[col_index]->data);
-          thrust::gather(thrust::device,
+          thrust::gather(exec,
                          d_indices, d_indices + nrows_new, //map of indices
                          d_in,                             //source
                          d_out);                           //=source[map]
@@ -106,7 +110,7 @@ namespace{ //annonymus
 
           ColType* d_in  = static_cast<ColType*>(h_cols_in[col_index]->data);
           ColType* d_out = static_cast<ColType*>(h_cols_out[col_index]->data);
-          thrust::gather(thrust::device,
+          thrust::gather(exec,
                          d_indices, d_indices + nrows_new, //map of indices
                          d_in,                             //source
                          d_out);                           //=source[map]
@@ -118,7 +122,7 @@ namespace{ //annonymus
 
           ColType* d_in  = static_cast<ColType*>(h_cols_in[col_index]->data);
           ColType* d_out = static_cast<ColType*>(h_cols_out[col_index]->data);
-          thrust::gather(thrust::device,
+          thrust::gather(exec,
                          d_indices, d_indices + nrows_new, //map of indices
                          d_in,                             //source
                          d_out);                           //=source[map]

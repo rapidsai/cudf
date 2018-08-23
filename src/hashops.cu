@@ -10,6 +10,8 @@
 #include <thrust/execution_policy.h>
 #include <thrust/iterator/counting_iterator.h>
 
+#include "thrust_rmm_allocator.h"
+
 #include "bitmaskops.h"
 #include "rmm.h"
 
@@ -91,7 +93,7 @@ gdf_error gpu_hash_columns(gdf_column ** columns_to_hash, int num_columns, gdf_c
 
 	//copy widths into device memory
 	int * widths;
-	RMM_TRY( rmmAlloc((void**)&widths,sizeof(int) * num_columns, 0) ); // TODO: non-default stream
+	RMM_TRY( rmmAlloc((void**)&widths,sizeof(int) * num_columns, *stream) ); 
 	int * host_widths = new int[num_columns];
 	for(int i = 0; i <  num_columns; i++){
 		get_column_byte_width(columns_to_hash[i], &host_widths[i]);
@@ -101,7 +103,7 @@ gdf_error gpu_hash_columns(gdf_column ** columns_to_hash, int num_columns, gdf_c
 
 	//copy addresses into device memory
 	void ** pointers;
-	RMM_TRY( rmmAlloc((void**)&pointers,sizeof(void *) * num_columns, 0) ); // TODO: non-default stream
+	RMM_TRY( rmmAlloc((void**)&pointers,sizeof(void *) * num_columns, *stream) ); 
 	void ** data_holder = new void *[num_columns];
 	for(int i = 0; i <  num_columns; i++){
 		data_holder[i] = columns_to_hash[i]->data;
@@ -109,11 +111,13 @@ gdf_error gpu_hash_columns(gdf_column ** columns_to_hash, int num_columns, gdf_c
 	CUDA_TRY( cudaMemcpyAsync(pointers,data_holder,sizeof(void *) * num_columns,cudaMemcpyHostToDevice,*stream) );
 
 
+	rmm_temp_allocator allocator(*stream);
+
 	hash_fnv_array_op op(num_columns,pointers,widths);
 	auto begin = thrust::make_counting_iterator<gdf_size_type>(0);
 	auto end = thrust::make_counting_iterator<gdf_size_type>(0) + columns_to_hash[0]->size;
 	auto pointer_wrapper = thrust::device_pointer_cast((unsigned long long *) output_column->data);
-	thrust::transform(thrust::cuda::par.on(*stream),
+	thrust::transform(thrust::cuda::par(allocator).on(*stream),
 			begin,
 			end,
 			thrust::detail::make_normal_iterator(pointer_wrapper),
@@ -132,14 +136,16 @@ gdf_error gpu_hash_columns(gdf_column ** columns_to_hash, int num_columns, gdf_c
 	}
 
 
+	
+	RMM_TRY( rmmFree(widths, *stream) ); 
+	RMM_TRY( rmmFree(pointers, *stream) );
+	delete[] host_widths;
+	delete[] data_holder;
+
 	if(created_stream){
 		cudaStreamSynchronize(temp_stream);
 		cudaStreamDestroy(temp_stream);
 	}
-	RMM_TRY( rmmFree(widths, 0) ); // TODO: non-default stream
-	RMM_TRY( rmmFree(pointers, 0) );
-	delete[] host_widths;
-	delete[] data_holder;
 
 	return GDF_SUCCESS;
 }

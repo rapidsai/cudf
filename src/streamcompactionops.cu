@@ -220,6 +220,9 @@ gdf_error gpu_apply_stencil(gdf_column *lhs, gdf_column * stencil, gdf_column * 
 	cudaStream_t stream;
 	cudaStreamCreate(&stream);
 
+	rmm_temp_allocator allocator(stream);
+	auto exec = thrust::cuda::par(allocator).on(stream);
+
 	size_t n_bytes = get_number_of_bytes_for_valid(stencil->size);
 
 	bit_position_iterator bit_position_iter(thrust::make_counting_iterator<gdf_size_type>(0), modulus_bit_width(n_bytes, stencil->size));
@@ -249,7 +252,7 @@ gdf_error gpu_apply_stencil(gdf_column *lhs, gdf_column * stencil, gdf_column * 
 		thrust::detail::normal_iterator<thrust::device_ptr<int8_t> > output_start =
 				thrust::detail::make_normal_iterator(thrust::device_pointer_cast((int8_t *) output->data));
 		thrust::detail::normal_iterator<thrust::device_ptr<int8_t> > output_end =
-				thrust::copy_if(thrust::cuda::par.on(stream),input_start,input_start + lhs->size,zipped_stencil_iter,output_start,is_stencil_true<thrust::detail::normal_iterator<thrust::device_ptr<int8_t> >::value_type >());
+				thrust::copy_if(exec,input_start,input_start + lhs->size,zipped_stencil_iter,output_start,is_stencil_true<thrust::detail::normal_iterator<thrust::device_ptr<int8_t> >::value_type >());
 		output->size = output_end - output_start;
 	}else if(width == 2){
 		thrust::detail::normal_iterator<thrust::device_ptr<int16_t> > input_start =
@@ -257,7 +260,7 @@ gdf_error gpu_apply_stencil(gdf_column *lhs, gdf_column * stencil, gdf_column * 
 		thrust::detail::normal_iterator<thrust::device_ptr<int16_t> > output_start =
 				thrust::detail::make_normal_iterator(thrust::device_pointer_cast((int16_t *) output->data));
 		thrust::detail::normal_iterator<thrust::device_ptr<int16_t> > output_end =
-				thrust::copy_if(thrust::cuda::par.on(stream),input_start,input_start + lhs->size,zipped_stencil_iter,output_start,is_stencil_true<thrust::detail::normal_iterator<thrust::device_ptr<int8_t> >::value_type >());
+				thrust::copy_if(exec,input_start,input_start + lhs->size,zipped_stencil_iter,output_start,is_stencil_true<thrust::detail::normal_iterator<thrust::device_ptr<int8_t> >::value_type >());
 		output->size = output_end - output_start;
 	}else if(width == 4){
 		thrust::detail::normal_iterator<thrust::device_ptr<int32_t> > input_start =
@@ -265,7 +268,7 @@ gdf_error gpu_apply_stencil(gdf_column *lhs, gdf_column * stencil, gdf_column * 
 		thrust::detail::normal_iterator<thrust::device_ptr<int32_t> > output_start =
 				thrust::detail::make_normal_iterator(thrust::device_pointer_cast((int32_t *) output->data));
 		thrust::detail::normal_iterator<thrust::device_ptr<int32_t> > output_end =
-				thrust::copy_if(thrust::cuda::par.on(stream),input_start,input_start + lhs->size,zipped_stencil_iter,output_start,is_stencil_true<thrust::detail::normal_iterator<thrust::device_ptr<int8_t> >::value_type >());
+				thrust::copy_if(exec,input_start,input_start + lhs->size,zipped_stencil_iter,output_start,is_stencil_true<thrust::detail::normal_iterator<thrust::device_ptr<int8_t> >::value_type >());
 		output->size = output_end - output_start;
 	}else if(width == 8){
 		thrust::detail::normal_iterator<thrust::device_ptr<int64_t> > input_start =
@@ -273,7 +276,7 @@ gdf_error gpu_apply_stencil(gdf_column *lhs, gdf_column * stencil, gdf_column * 
 		thrust::detail::normal_iterator<thrust::device_ptr<int64_t> > output_start =
 				thrust::detail::make_normal_iterator(thrust::device_pointer_cast((int64_t *) output->data));
 		thrust::detail::normal_iterator<thrust::device_ptr<int64_t> > output_end =
-				thrust::copy_if(thrust::cuda::par.on(stream),input_start,input_start + lhs->size,zipped_stencil_iter,output_start,is_stencil_true<thrust::detail::normal_iterator<thrust::device_ptr<int8_t> >::value_type >());
+				thrust::copy_if(exec,input_start,input_start + lhs->size,zipped_stencil_iter,output_start,is_stencil_true<thrust::detail::normal_iterator<thrust::device_ptr<int8_t> >::value_type >());
 		output->size = output_end - output_start;
 	}
 
@@ -310,10 +313,10 @@ gdf_error gpu_apply_stencil(gdf_column *lhs, gdf_column * stencil, gdf_column * 
 	);
 
 	//copy the bitmask to device_vector of int8
-	thrust::copy(thrust::cuda::par.on(stream), bit_set_iter, bit_set_iter + num_values, valid_bit_mask.begin());
+	thrust::copy(exec, bit_set_iter, bit_set_iter + num_values, valid_bit_mask.begin());
 
 	//remove the values that don't pass the stencil
-	thrust::remove_if(thrust::cuda::par.on(stream),valid_bit_mask.begin(), valid_bit_mask.begin() + num_values,zipped_stencil_iter, is_stencil_true<thrust::detail::normal_iterator<thrust::device_ptr<int8_t> >::value_type >());
+	thrust::remove_if(exec,valid_bit_mask.begin(), valid_bit_mask.begin() + num_values,zipped_stencil_iter, is_stencil_true<thrust::detail::normal_iterator<thrust::device_ptr<int8_t> >::value_type >());
 
 	//recompact the values and store them in the output bitmask
 	//we can group them into pieces of 8 because we aligned this earlier on when we made the device_vector
@@ -323,7 +326,7 @@ gdf_error gpu_apply_stencil(gdf_column *lhs, gdf_column * stencil, gdf_column * 
 
 	//you may notice that we can write out more bytes than our valid_num_bytes, this only happens when we are not aligned to  GDF_VALID_BITSIZE bytes, becasue the
 	//arrow standard requires 64 byte alignment, this is a safe assumption to make
-	thrust::transform(thrust::cuda::par.on(stream), valid_bit_mask_group_8_iter, valid_bit_mask_group_8_iter + ((num_values + GDF_VALID_BITSIZE - 1) / GDF_VALID_BITSIZE),
+	thrust::transform(exec, valid_bit_mask_group_8_iter, valid_bit_mask_group_8_iter + ((num_values + GDF_VALID_BITSIZE - 1) / GDF_VALID_BITSIZE),
 			thrust::detail::make_normal_iterator(thrust::device_pointer_cast(output->valid)),bit_mask_pack_op());
 
 	cudaStreamSynchronize(stream);
