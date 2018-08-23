@@ -138,3 +138,30 @@ def test_series_cmpop_mixed_dtype(cmpop, lhs_dtype, rhs_dtype):
 
     np.testing.assert_array_equal(cmpop(Series(lhs), Series(rhs)).to_array(),
                                   cmpop(lhs, rhs))
+
+
+_reflected_ops = [
+    lambda x: 1 + x,
+    lambda x: 2 * x,
+    lambda x: 2 - x,
+    lambda x: 2 // x,
+]
+
+
+@pytest.mark.parametrize('func, dtype', list(product(_reflected_ops, _dtypes)))
+def test_reflected_ops_scalar(func, dtype):
+    import pandas as pd
+
+    # create random series
+    np.random.seed(12)
+    random_series = pd.Series(np.random.sample(100) + 10, dtype=dtype)
+
+    # gpu series
+    gs = Series(random_series)
+    gs_result = func(gs)
+
+    # pandas
+    ps_result = func(random_series)
+
+    # verify
+    np.testing.assert_allclose(ps_result, gs_result)
