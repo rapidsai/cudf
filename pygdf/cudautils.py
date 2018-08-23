@@ -274,9 +274,7 @@ def gpu_mask_from_devary(ary, bits):
     for i in range(base, base + mask_bitsize):
         if i >= len(ary):
             break
-        # NOTE: nan checking functions just work for float values, using
-        # property of nan != nan to check instead.
-        if ary[i] == ary[i]:
+        if not isnan(ary[i]):
             mask_set(bits, i)
 
 
