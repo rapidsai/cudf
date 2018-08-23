@@ -61,7 +61,7 @@ struct legacy_allocator {
 
       T* allocate(std::size_t n) const {
           T* ptr = 0;
-          cudaError_t result = rmmAlloc( &ptr, n*sizeof(T), 0 ); // TODO non-default stream?
+          cudaError_t result = rmmAlloc( (void**)&ptr, n*sizeof(T), 0 ); // TODO non-default stream?
           if( cudaSuccess != result || nullptr == ptr ) 
           {
             std::cerr << "ERROR: CUDA Runtime call in line " << __LINE__ << "of file " 
