@@ -382,7 +382,6 @@ gdf_error gpu_concat(gdf_column *lhs, gdf_column *rhs, gdf_column *output)
 	cudaStream_t stream;
 	cudaStreamCreate(&stream);
 
-	//@todo: check if  lsh->dtype is NOT GDF_invalid
 	int type_width = column_type_width[ lhs->dtype ];
 
 	cudaMemcpyAsync(output->data, lhs->data, type_width * lhs->size, cudaMemcpyDeviceToDevice, stream);
@@ -462,11 +461,9 @@ gdf_error gpu_concat(gdf_column *lhs, gdf_column *rhs, gdf_column *output)
 				//because one of the iterators is + 1 we dont want to read the last char here since it could be past the end of our allocation
 				thrust::copy( ored_offset_iter, ored_offset_iter + right_num_chars - 1, output_device_bits + left_num_chars);
 
-				if (last_byte_length >= (GDF_VALID_BITSIZE - shift_bits)) { //  
-					thrust::host_vector<gdf_valid_type> last_byte (right_device_bits + right_num_chars - 1, right_device_bits + right_num_chars);
-					last_byte[0] = last_byte[0] >> GDF_VALID_BITSIZE - last_byte_length;
-					thrust::copy( last_byte.begin(), last_byte.begin() + 1, right_device_bits + right_num_chars - 1);
-				}				
+				thrust::host_vector<gdf_valid_type> last_byte (right_device_bits + right_num_chars - 1, right_device_bits + right_num_chars);
+				last_byte[0] = last_byte[0] >> GDF_VALID_BITSIZE - last_byte_length;
+				thrust::copy( last_byte.begin(), last_byte.begin() + 1, right_device_bits + right_num_chars - 1);
 
 				if ( !too_many_bits ) {
 					thrust::host_vector<gdf_valid_type> last_byte (2);
