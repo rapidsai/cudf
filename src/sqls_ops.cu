@@ -1164,7 +1164,6 @@ gdf_error gdf_group_by_single(int ncols,                    // # columns
                                              out_col_values,
                                              out_col_agg,
                                              sort_result);
-            break;
           }
         case GDF_MIN:
           {
@@ -1174,7 +1173,6 @@ gdf_error gdf_group_by_single(int ncols,                    // # columns
                                              out_col_values,
                                              out_col_agg,
                                              sort_result);
-            break;
           }
         case GDF_SUM:
           {

@@ -176,9 +176,9 @@ __global__ void init_hashtbl(
 template <typename T>
 struct equal_to
 {
-    typedef bool result_type;
-    typedef T first_argument_type;
-    typedef T second_argument_type;
+    using result_type = bool;
+    using first_argument_type = T;
+    using second_argument_type = T;
     __forceinline__
     __host__ __device__ constexpr bool operator()(const first_argument_type &lhs, const second_argument_type &rhs) const 
     {
@@ -189,11 +189,11 @@ struct equal_to
 template<typename Iterator>
 class cycle_iterator_adapter {
 public:
-    typedef typename std::iterator_traits<Iterator>::value_type         value_type; 
-    typedef typename std::iterator_traits<Iterator>::difference_type    difference_type;
-    typedef typename std::iterator_traits<Iterator>::pointer            pointer;
-    typedef typename std::iterator_traits<Iterator>::reference          reference;
-    typedef Iterator                                                    iterator_type;
+    using value_type = typename std::iterator_traits<Iterator>::value_type; 
+    using difference_type = typename std::iterator_traits<Iterator>::difference_type;
+    using pointer = typename std::iterator_traits<Iterator>::pointer;
+    using reference = typename std::iterator_traits<Iterator>::reference;
+    using iterator_type = Iterator;
     
     cycle_iterator_adapter() = delete;
     
@@ -291,6 +291,7 @@ __host__ __device__ bool operator!=(const cycle_iterator_adapter<T>& lhs, const 
  */
 template <typename Key,
           typename Element,
+          typename size_type,
           Key unused_key,
           Element unused_element,
           typename Hasher = default_hash<Key>,
@@ -301,15 +302,14 @@ class concurrent_unordered_multimap : public managed
 {
 
 public:
-    typedef size_t                                          size_type;
-    typedef Hasher                                          hasher;
-    typedef Equality                                        key_equal;
-    typedef Allocator                                       allocator_type;
-    typedef Key                                             key_type;
-    typedef thrust::pair<Key, Element>                      value_type;
-    typedef Element                                         mapped_type;
-    typedef cycle_iterator_adapter<value_type*>             iterator;
-    typedef const cycle_iterator_adapter<value_type*>       const_iterator;
+    using hasher = Hasher;
+    using key_equal = Equality;
+    using allocator_type = Allocator;
+    using key_type = Key;
+    using value_type = thrust::pair<Key, Element>;
+    using mapped_type = Element;
+    using iterator = cycle_iterator_adapter<value_type*>;
+    using const_iterator = const cycle_iterator_adapter<value_type*>;
 
 private:
     union pair2longlong
@@ -377,7 +377,7 @@ public:
     {
         const size_type hashtbl_size    = m_hashtbl_size;
         value_type* hashtbl_values      = m_hashtbl_values;
-        const size_type key_hash        = m_hf( x.first );
+        const auto key_hash        = m_hf( x.first );
         size_type hash_tbl_idx          = key_hash%hashtbl_size;
         
         value_type* it = 0;
@@ -431,7 +431,7 @@ public:
     __forceinline__
     __host__ __device__ const_iterator find(const key_type& k ) const
     {
-        size_type key_hash = m_hf( k );
+        const auto key_hash = m_hf( k );
         size_type hash_tbl_idx = key_hash%m_hashtbl_size;
         
         value_type* begin_ptr = 0;

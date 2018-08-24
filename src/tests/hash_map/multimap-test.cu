@@ -17,6 +17,7 @@
 #include <cstdlib>
 #include <iostream>
 #include <vector>
+#include <limits>
 
 #include <thrust/device_vector.h>
 
@@ -42,20 +43,22 @@ class MultimapTest : public testing::Test
 public:
   using key_type = typename T::key_type;
   using value_type = typename T::value_type;
+  using size_type = int;
 
 
   concurrent_unordered_multimap<key_type, 
                                 value_type, 
+                                size_type,
                                 std::numeric_limits<key_type>::max(),
                                 std::numeric_limits<value_type>::max() > the_map;
 
   const key_type unused_key = std::numeric_limits<key_type>::max();
   const value_type unused_value = std::numeric_limits<value_type>::max();
 
-  const int size;
+  const size_type size;
 
 
-  MultimapTest(const int hash_table_size = 100)
+  MultimapTest(const size_type hash_table_size = 100)
     : the_map(hash_table_size), size(hash_table_size)
   {
 

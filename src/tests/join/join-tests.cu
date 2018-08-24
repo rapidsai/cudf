@@ -453,7 +453,10 @@ struct JoinTest : public testing::Test
 // tests .Here join_operation refers to the type of join eg. INNER,
 // LEFT, OUTER and join_method refers to the underlying join algorithm
 //that performs it eg. GDF_HASH or GDF_SORT.
-template<join_op join_operation, gdf_method join_method, typename tuple_of_vectors>
+template<join_op join_operation, 
+         gdf_method join_method, 
+         typename tuple_of_vectors,
+         bool keys_are_unique = false>
 struct TestParameters
 {
   // The method to use for the join
@@ -464,6 +467,8 @@ struct TestParameters
 
   // The tuple of vectors that determines the number and types of the columns to join
   using multi_column_t = tuple_of_vectors;
+
+  const static bool unique_keys{keys_are_unique};
 };
 
 const static gdf_method HASH = gdf_method::GDF_HASH;
@@ -534,17 +539,25 @@ typedef ::testing::Types<
                           TestParameters< join_op::INNER, HASH, VTuple<int32_t , uint32_t, float  > >,
                           TestParameters< join_op::INNER, HASH, VTuple<uint64_t, uint32_t, float  > >,
                           TestParameters< join_op::INNER, HASH, VTuple<float   , double  , float  > >,
-                          TestParameters< join_op::INNER, HASH, VTuple<double  , uint32_t, int64_t> >
-                          // Four column test will fail because gdf_join is limited to 3 columns
-                          //TestParameters< join_op::LEFT, HASH, VTuple<double, kint32_t, int64_t, int32_t> >
+                          TestParameters< join_op::INNER, HASH, VTuple<double  , uint32_t, int64_t> >,
+                          // Four column test for Left Joins
+                          TestParameters< join_op::LEFT, HASH, VTuple<double, int32_t, int64_t, int32_t> >,
+                          TestParameters< join_op::LEFT, HASH, VTuple<float, uint32_t, double, int32_t> >,
+                          // Four column test for Inner Joins
+                          TestParameters< join_op::INNER, HASH, VTuple<uint32_t, float, int64_t, int32_t> >,
+                          TestParameters< join_op::INNER, HASH, VTuple<double, float, int64_t, double> >,
+                          // Five column test for Left Joins
+                          TestParameters< join_op::LEFT, HASH, VTuple<double, int32_t, int64_t, int32_t, int32_t> >,
+                          // Five column test for Inner Joins
+                          TestParameters< join_op::INNER, HASH, VTuple<uint32_t, float, int64_t, int32_t, float> >
                           > Implementations;
 
 TYPED_TEST_CASE(JoinTest, Implementations);
 
 TYPED_TEST(JoinTest, ExampleTest)
 {
-  this->create_input(10000, 100,
-                     10000, 100);
+  this->create_input(10, 2,
+                     10, 2);
 
   std::vector<result_type> reference_result = this->compute_reference_solution();
 
@@ -560,8 +573,8 @@ TYPED_TEST(JoinTest, ExampleTest)
 
 TYPED_TEST(JoinTest, EqualValues)
 {
-  this->create_input(1000,1,
-                     1000,1);
+  this->create_input(100,1,
+                     100,1);
 
   std::vector<result_type> reference_result = this->compute_reference_solution();
 
@@ -577,8 +590,8 @@ TYPED_TEST(JoinTest, EqualValues)
 
 TYPED_TEST(JoinTest, MaxRandomValues)
 {
-  this->create_input(1000,RAND_MAX,
-                     1000,RAND_MAX);
+  this->create_input(10000,RAND_MAX,
+                     10000,RAND_MAX);
 
   std::vector<result_type> reference_result = this->compute_reference_solution();
 
@@ -594,8 +607,8 @@ TYPED_TEST(JoinTest, MaxRandomValues)
 
 TYPED_TEST(JoinTest, LeftColumnsBigger)
 {
-  this->create_input(1000,100,
-                     10,100);
+  this->create_input(10000,100,
+                     100,100);
 
   std::vector<result_type> reference_result = this->compute_reference_solution();
 
@@ -611,8 +624,8 @@ TYPED_TEST(JoinTest, LeftColumnsBigger)
 
 TYPED_TEST(JoinTest, RightColumnsBigger)
 {
-  this->create_input(10,100,
-                     1000,100);
+  this->create_input(100,100,
+                     10000,100);
 
   std::vector<result_type> reference_result = this->compute_reference_solution();
 

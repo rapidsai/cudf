@@ -21,37 +21,96 @@
 
 #include "hash/join_compute_api.h"
 #include "sort/sort-join.cuh"
+#include "../gdf_table.cuh"
 
-// N-column join (N up to 3 currently)
-// \brief Performs a hash based join of columns a and b.
-///
-/// \param[in] a first column to join (left)
-/// \param[in] Number of element in a column (left)
-/// \param[in] b second column to join (right)
-/// \param[in] Number of element in b column (right)
-/// \param[in] additional columns to join (default == NULL)
-/// \param[in] Flag used to reorder the left and right column indices found in the join (default = false)
-/// \param[in] compute_ctx The CudaComputeContext to shedule this to.
-/// \return	   Array of matching rows
-template<JoinType join_type,
-  typename size_type,
-  typename col1_it,
-  typename col2_it,
-  typename col3_it,
-  typename comp_t>
-mgpu::mem_t<size_type> join_hash(col1_it a, size_type a_count,
-	col1_it b, size_type b_count,
-	col2_it a2, col2_it b2,
-	col3_it a3, col3_it b3,
-	comp_t comp, mgpu::context_t& context)
+ /* --------------------------------------------------------------------------*/
+ /** 
+  * @Synopsis  Computes the hash-based join between two sets of gdf_tables.
+  * 
+  * @Param left_table The left table to be joined
+  * @Param right_table The right table to be joined
+  * @Param context Modern GPU context
+  * @Param flip_indices Flag that indicates whether the left and right tables have been
+  * flipped, meaning the output indices should also be flipped.
+  * @tparam join_type The type of join to be performed
+  * @tparam output_type The datatype used for the output indices
+  * 
+  * @Returns   
+  */
+ /* ----------------------------------------------------------------------------*/
+template<JoinType join_type, 
+         typename output_type,
+         typename size_type>
+mgpu::mem_t<output_type> join_hash(gdf_table<size_type> const & left_table, 
+                                   gdf_table<size_type> const & right_table, 
+                                   mgpu::context_t & context,
+                                   bool flip_indices = false) 
 {
-  // here follows the custom code for hash-joins
 
-  mgpu::mem_t<size_type> joined_output;
-  // using the new low-level API for hash-join
-  switch (join_type) {
-      case JoinType::INNER_JOIN: InnerJoinHash(context, joined_output, a, a_count, b, b_count, a2, b2, a3, b3); break;
-      case JoinType::LEFT_JOIN: LeftJoinHash(context, joined_output, a, a_count, b, b_count, a2, b2, a3, b3); break;
+  // Hash table is built on the right table. 
+  // For inner joins, doesn't matter which table is build/probe, so we want 
+  // to build the hash table on the smaller table.
+  if((join_type == JoinType::INNER_JOIN) && 
+     (right_table.get_column_length() > left_table.get_column_length()))
+  {
+    return join_hash<join_type, output_type>(right_table, left_table, context, true);
+  }
+
+
+  mgpu::mem_t<output_type> joined_output;
+
+  const gdf_dtype key_type = left_table.get_build_column_type();
+
+  switch(key_type)
+  {
+    case GDF_INT8:    
+      {
+        compute_hash_join<join_type, int8_t, output_type>(context, joined_output, left_table, right_table, flip_indices); 
+        break;
+      }
+    case GDF_INT16:   
+      {
+        compute_hash_join<join_type, int16_t, output_type>(context, joined_output, left_table, right_table, flip_indices); 
+        break;
+      }
+    case GDF_INT32:   
+      {
+        compute_hash_join<join_type, int32_t, output_type>(context, joined_output, left_table, right_table, flip_indices); 
+        break;
+      }
+    case GDF_INT64:   
+      {
+        compute_hash_join<join_type, int64_t, output_type>(context, joined_output, left_table, right_table, flip_indices);                    
+        break;
+      }
+    // For floating point types build column, treat as an integral type
+    case GDF_FLOAT32: 
+      {
+        compute_hash_join<join_type, int32_t, output_type>(context, joined_output, left_table, right_table, flip_indices);
+        break;
+      }
+    case GDF_FLOAT64: 
+      {
+        compute_hash_join<join_type, int64_t, output_type>(context, joined_output, left_table, right_table, flip_indices);
+        break;
+      }
+    case GDF_DATE32:   
+      {
+        compute_hash_join<join_type, int32_t, output_type>(context, joined_output, left_table, right_table, flip_indices); 
+        break;
+      }
+    case GDF_DATE64:   
+      {
+        compute_hash_join<join_type, int64_t, output_type>(context, joined_output, left_table, right_table, flip_indices);                    
+        break;
+      }
+    case GDF_TIMESTAMP:   
+      {
+        compute_hash_join<join_type, int64_t, output_type>(context, joined_output, left_table, right_table, flip_indices);                    
+        break;
+      }
+    default:
+      assert(false && "Invalid build column datatype.");
   }
 
   return joined_output;
@@ -70,9 +129,9 @@ struct join_result : public join_result_base {
 
   join_result() : context(false) {}
   virtual void* data() {
-	return result.data();
+    return result.data();
   }
   virtual size_t size() {
-	return result.size();
+    return result.size();
   }
 };
