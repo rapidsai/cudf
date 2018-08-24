@@ -91,7 +91,6 @@ cudaError_t compute_hash_join(mgpu::context_t & compute_ctx,
                               gdf_table<size_type> const & right_table,
                               bool flip_results = false)
 {
-
   cudaError_t error(cudaSuccess);
 
   // Data type used for join output results. Stored as a pair of indices
@@ -141,7 +140,6 @@ cudaError_t compute_hash_join(mgpu::context_t & compute_ctx,
                                                     build_column_length);
 
   CUDA_RT_CALL( cudaGetLastError() );
-
 
   // To avoid a situation where the entire probing column, left_Table, is probed into the build table (right_table) we use the following approximation technique.
   // First of all we check the ratios of the sizes between A (left) and B(right). Only if A is much bigger than B does this optimization make sense.
@@ -200,7 +198,6 @@ cudaError_t compute_hash_join(mgpu::context_t & compute_ctx,
   	  return error;
 
     CUDA_RT_CALL( cudaMemcpy(&h_join_output_size, d_join_output_size, sizeof(size_type), cudaMemcpyDeviceToHost));
-
   	h_join_output_size = h_join_output_size * size_ratio;
 
   	if(h_join_output_size>0 || leftSampleSize >= leftSize)
@@ -222,7 +219,6 @@ cudaError_t compute_hash_join(mgpu::context_t & compute_ctx,
 
   // As we are now approximating the number of joined elements, our approximation might be incorrect and we might have underestimated the
   // number of joined elements. As such we will need to de-allocate memory and re-allocate memory to ensure that the final output is correct.
-
   size_type h_actual_found;
   join_output_pair* tempOut=NULL;
   bool cont = true;
@@ -244,7 +240,7 @@ cudaError_t compute_hash_join(mgpu::context_t & compute_ctx,
 
 	const size_type probe_grid_size{(leftSize + block_size -1)/block_size};
     // Do the probe of the hash table with the probe table and generate the output for the join
-	probe_hash_table<join_type, 
+	probe_hash_table<join_type,
 					 multimap_type,
                      key_type,
                      size_type,
@@ -264,16 +260,13 @@ cudaError_t compute_hash_join(mgpu::context_t & compute_ctx,
 
   	CUDA_RT_CALL( cudaMemcpy(&h_actual_found, d_global_write_index, sizeof(size_type), cudaMemcpyDeviceToHost));
   	cont=false;
-  // printf("Memory estimation %d   Actually Found %d\n", h_join_output_size, h_actual_size);
   	if(h_join_output_size < h_actual_found){
   	  // Not enough memory. Double memory footprint and try again
 	  cont=true;
   	  h_join_output_size = h_join_output_size*2;
   	  CUDA_RT_CALL( cudaFree(tempOut) );
   	}
-
   }
-
 
   // Allocate modern GPU storage for the join output
   joined_output = mgpu::mem_t<size_type> (2 * (h_actual_found), compute_ctx);
