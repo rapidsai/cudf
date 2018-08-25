@@ -1,3 +1,4 @@
+#pragma once
 
 typedef size_t gdf_size_type;
 typedef gdf_size_type gdf_index_type;
