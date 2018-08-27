@@ -61,6 +61,13 @@ public:
     return column_length;
   }
 
+  /* --------------------------------------------------------------------------*/
+  /** 
+   * @Synopsis  Updates the length of the gdf_columns in the table
+   * 
+   * @Param new_length The new length
+   */
+  /* ----------------------------------------------------------------------------*/
   void set_column_length(const size_type new_length)
   {
     column_length = new_length;
@@ -85,11 +92,6 @@ public:
   {
     return host_columns[build_column_index]->data;
   }
-
-
-
-
-
 
   __host__ 
   void print_row(const size_type row_index, char * msg = "") const
@@ -158,6 +160,15 @@ public:
 
   }
 
+    /* --------------------------------------------------------------------------*/
+    /** 
+     * @Synopsis  Copies a row from another table to a row in this table
+     * 
+     * @Param other The other table from which the row is copied
+     * @Param my_row_index The index of the row in this table that will be written to
+     * @Param other_row_index The index of the row from the other table that will be copied from
+     */
+    /* ----------------------------------------------------------------------------*/
   __device__ 
   void copy_row(gdf_table const & other,
                 const size_type my_row_index,
