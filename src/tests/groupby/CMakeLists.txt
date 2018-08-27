@@ -1,5 +1,4 @@
 set(groupby_test_SRCS
-    groupby-kernels-test.cu
     groupby-gdf-test.cu
 )
 
