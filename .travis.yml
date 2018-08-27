@@ -28,7 +28,7 @@ before_install:
   - ./miniconda.sh -b
   - export PATH=$HOME/miniconda3/bin:$PATH
   # install libboost
-  - sudo apt-get udpate
+  - sudo apt-get update
   - sudo apt-get install -y libboost-all-dev
 
 install:
