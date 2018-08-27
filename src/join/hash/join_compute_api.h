@@ -146,14 +146,14 @@ cudaError_t compute_hash_join(mgpu::context_t & compute_ctx,
   // We define much bigger to be 5 times bigger as for smaller ratios, the following optimization might lose its benefit.
   // When the ratio is big enough, we will take a subset of A equal in length to B and probe (without writing outputs). We will then approximate
   // the number of joined elements as the number of found elements times the ratio.
-  size_type leftSize = left_table.get_column_length();
+  size_type leftSize  = left_table.get_column_length();
   size_type rightSize = right_table.get_column_length();
 
   size_type leftSampleSize=leftSize;
   size_type size_ratio = 1;
   if (leftSize > 5*rightSize){
-  	leftSampleSize=rightSize;
-  	size_ratio = leftSize/rightSize + 1;
+  	leftSampleSize	= rightSize;
+  	size_ratio		= leftSize/rightSize + 1;
   }
 
   // Allocate storage for the counter used to get the size of the join output
@@ -203,8 +203,8 @@ cudaError_t compute_hash_join(mgpu::context_t & compute_ctx,
   	if(h_join_output_size>0 || leftSampleSize >= leftSize)
   	  break;
   	if(h_join_output_size==0){
-  	  leftSampleSize*=2;
-  	  size_ratio /=2;
+  	  leftSampleSize  *= 2;
+  	  size_ratio	  /= 2;
   	  if(size_ratio==0)
   		  size_ratio=1;
   	}
@@ -262,8 +262,8 @@ cudaError_t compute_hash_join(mgpu::context_t & compute_ctx,
   	cont=false;
   	if(h_join_output_size < h_actual_found){
   	  // Not enough memory. Double memory footprint and try again
-	  cont=true;
-  	  h_join_output_size = h_join_output_size*2;
+	  cont				  = true;
+  	  h_join_output_size  = h_join_output_size*2;
   	  CUDA_RT_CALL( cudaFree(tempOut) );
   	}
   }
