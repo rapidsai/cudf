@@ -89,6 +89,8 @@ public:
 
 
 
+
+
   __host__ 
   void print_row(const size_type row_index, char * msg = "") const
   {
@@ -153,6 +155,105 @@ public:
     sprintf(row,")\n");
 
     printf("%s %s", msg, row);
+
+  }
+
+  __device__ 
+  void copy_row(gdf_table const & other,
+                const size_type my_row_index,
+                const size_type other_row_index)
+  {
+
+    for(size_type i = 0; i < num_columns; ++i)
+    {
+      const gdf_dtype my_col_type = d_columns_types[i];
+      const gdf_dtype other_col_type = other.d_columns_types[i];
+    
+      if(my_col_type != other_col_type)
+      {
+        printf("Attempted to copy columns of different types.\n");
+        return;
+      }
+
+      switch(my_col_type)
+      {
+        case GDF_INT8:
+          {
+            using col_type = int8_t;
+            col_type & my_elem = static_cast<col_type*>(d_columns_data[i])[my_row_index];
+            const col_type other_elem = static_cast<col_type*>(other.d_columns_data[i])[other_row_index];
+            my_elem = other_elem;
+            break;
+          }
+        case GDF_INT16:
+          {
+            using col_type = int16_t;
+            col_type & my_elem = static_cast<col_type*>(d_columns_data[i])[my_row_index];
+            const col_type other_elem = static_cast<col_type*>(other.d_columns_data[i])[other_row_index];
+            my_elem = other_elem;
+            break;
+          }
+        case GDF_INT32:
+          {
+            using col_type = int32_t;
+            col_type & my_elem = static_cast<col_type*>(d_columns_data[i])[my_row_index];
+            const col_type other_elem = static_cast<col_type*>(other.d_columns_data[i])[other_row_index];
+            my_elem = other_elem;
+            break;
+          }
+        case GDF_INT64:
+          {
+            using col_type = int64_t;
+            col_type & my_elem = static_cast<col_type*>(d_columns_data[i])[my_row_index];
+            const col_type other_elem = static_cast<col_type*>(other.d_columns_data[i])[other_row_index];
+            my_elem = other_elem;
+            break;
+          }
+        case GDF_FLOAT32:
+          {
+            using col_type = float;
+            col_type & my_elem = static_cast<col_type*>(d_columns_data[i])[my_row_index];
+            const col_type other_elem = static_cast<col_type*>(other.d_columns_data[i])[other_row_index];
+            my_elem = other_elem;
+            break;
+          }
+        case GDF_FLOAT64:
+          {
+            using col_type = double;
+            col_type & my_elem = static_cast<col_type*>(d_columns_data[i])[my_row_index];
+            const col_type other_elem = static_cast<col_type*>(other.d_columns_data[i])[other_row_index];
+            my_elem = other_elem;
+            break;
+          }
+        case GDF_DATE32:
+          {
+            using col_type = int32_t;
+            col_type & my_elem = static_cast<col_type*>(d_columns_data[i])[my_row_index];
+            const col_type other_elem = static_cast<col_type*>(other.d_columns_data[i])[other_row_index];
+            my_elem = other_elem;
+            break;
+          }
+        case GDF_DATE64:
+          {
+            using col_type = int64_t;
+            col_type & my_elem = static_cast<col_type*>(d_columns_data[i])[my_row_index];
+            const col_type other_elem = static_cast<col_type*>(other.d_columns_data[i])[other_row_index];
+            my_elem = other_elem;
+            break;
+          }
+        case GDF_TIMESTAMP:
+          {
+            using col_type = int64_t;
+            col_type & my_elem = static_cast<col_type*>(d_columns_data[i])[my_row_index];
+            const col_type other_elem = static_cast<col_type*>(other.d_columns_data[i])[other_row_index];
+            my_elem = other_elem;
+            break;
+          }
+        default:
+          printf("Attempted to copy column of unsupported GDF datatype\n");
+          return;
+      }
+    }
 
   }
 
