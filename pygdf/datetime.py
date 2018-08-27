@@ -1,5 +1,4 @@
 import datetime as dt
-import time
 
 import numpy as np
 import pandas as pd
@@ -82,15 +81,10 @@ class DatetimeColumn(columnops.TypedColumnBase):
         return out
 
     def normalize_binop_value(self, other):
-
         if isinstance(other, dt.datetime):
-            other = time.mktime(other.timetuple())
-            ary = utils.scalar_broadcast_to(
-                int(other * self._inverse_precision),
-                shape=len(self),
-                dtype=self._npdatetime64_dtype
-            )
-        elif isinstance(other, pd.Timestamp):
+            other = np.datetime64(other)
+
+        if isinstance(other, pd.Timestamp):
             ary = utils.scalar_broadcast_to(
                 other.value * self._pandas_conversion_factor,
                 shape=len(self),
