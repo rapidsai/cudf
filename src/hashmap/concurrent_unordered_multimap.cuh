@@ -397,7 +397,6 @@ public:
                                bool precomputed_hash = false,
                                hash_value_type precomputed_hash_value = 0,
                                comparison_type keys_are_equal = key_equal())
-
     {
         const size_type hashtbl_size    = m_hashtbl_size;
         value_type* hashtbl_values      = m_hashtbl_values;

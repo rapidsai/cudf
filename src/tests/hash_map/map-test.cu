@@ -205,7 +205,6 @@ TYPED_TEST(MapTest, CheckUnusedValues){
 }
 
 
-
 template<typename map_type, typename Aggregation_Operator>
 __global__ void build_table(map_type * const the_map,
                             const typename map_type::value_type * const input_pairs,

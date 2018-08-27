@@ -408,7 +408,7 @@ public:
 
     // Generic update of a hash table value for any aggregator
     template <typename aggregation_type>
-    __forceinline__ __host__ __device__
+    __forceinline__  __device__
     void update_existing_value(mapped_type & existing_value, value_type const & insert_pair, aggregation_type op)
     {
       const mapped_type insert_value = insert_pair.second;
@@ -473,10 +473,10 @@ public:
     /* ----------------------------------------------------------------------------*/
     // This pragma is to prevent a warning about the aggregation functor caused by being
     // instantiated both on the host and device
-    #pragma hd_warning_disable
+    //#pragma hd_warning_disable
     template<typename aggregation_type>
     __forceinline__
-    __host__ __device__ iterator insert(const value_type& x, aggregation_type op)
+    __device__ iterator insert(const value_type& x, aggregation_type op)
     {
         const size_type hashtbl_size    = m_hashtbl_size;
         value_type* hashtbl_values      = m_hashtbl_values;
@@ -492,8 +492,6 @@ public:
 
           key_type& existing_key = current_hash_bucket->first;
           mapped_type& existing_value = current_hash_bucket->second;
-
-#ifdef __CUDA_ARCH__
 
           // Try and set the existing_key for the current hash bucket to insert_key
           const key_type old_key = atomicCAS( &existing_key, unused_key, insert_key);
@@ -514,28 +512,6 @@ public:
             insert_success = true;
           }
 
-#else
-
-#ifdef _OPENMP
-#pragma omp critical
-#endif
-          {
-            const mapped_type insert_value = x.second;
-            // Empty bucket, insert key and value
-            if ( m_equal( unused_key, existing_key) ) 
-            {
-              hashtbl_values[current_index] = thrust::make_pair( insert_key, insert_value);
-              insert_success = true;
-            }
-            // This key has been inserted before, perform aggregation on value
-            else if( m_equal(insert_key, existing_key) )
-            {
-              const Element new_value = op(insert_value, existing_value);
-              existing_value = new_value;
-              insert_success = true;
-            }
-          }
-#endif
           current_index = (current_index+1)%hashtbl_size;
           current_hash_bucket = &(hashtbl_values[current_index]);
         }

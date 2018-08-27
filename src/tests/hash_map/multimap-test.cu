@@ -104,6 +104,3 @@ TYPED_TEST(MultimapTest, CheckUnusedValues){
   EXPECT_EQ(begin->first, this->unused_key);
   EXPECT_EQ(begin->second, this->unused_value);
 }
-
-
-
