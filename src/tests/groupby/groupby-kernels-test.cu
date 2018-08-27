@@ -384,8 +384,6 @@ typedef ::testing::Types<
   TYPED_TEST_CASE(GroupByTest, Implementations);
 
 
-
-
 TYPED_TEST(GroupByTest, AggregationTestDeviceAllSame)
 {
   const int num_keys = 1;
