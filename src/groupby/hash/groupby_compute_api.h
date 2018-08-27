@@ -20,9 +20,10 @@
 #include <cuda_runtime.h>
 #include <limits>
 #include <memory>
-#include "groupby_kernels.cuh"
 #include <cub/util_allocator.cuh>
 #include <cub/device/device_radix_sort.cuh>
+#include "groupby_kernels.cuh"
+#include "../../gdf_table.cuh"
 
 // TODO: replace this with CUDA_TRY and propagate the error
 #ifndef CUDA_RT_CALL
@@ -43,6 +44,46 @@ constexpr unsigned int DEFAULT_HASH_TABLE_OCCUPANCY{50};
 
 constexpr unsigned int THREAD_BLOCK_SIZE{256};
 
+template <typename map_type,
+          typename size_type>
+struct row_comparator
+{
+  using key_type = typename map_type::key_type;
+  using map_key_comparator = typename map_type::key_equal;
+
+  row_comparator(map_type const & map,
+                 gdf_table<size_type> const & l_table,
+                 gdf_table<size_type> const & r_table) 
+                : the_map{map}, 
+                  left_table{l_table}, 
+                  right_table{r_table},
+                  unused_key{map.get_unused_key()},
+                  default_comparator{map_key_comparator()}
+  {
+  
+  }
+
+  __device__ bool operator()(key_type const & left_index, 
+                             key_type const & right_index) const
+  {
+
+    // The unused key is not a valid row index in the gdf_tables.
+    // Therefore, if comparing against the unused key, use the map's default
+    // comparison function
+    if((unused_key == left_index) || (unused_key == right_index))
+      return default_comparator(left_index, right_index);
+
+    // Check for equality between the two rows of the two tables
+    return left_table.rows_equal(right_table, left_index, right_index);
+  }
+
+  const map_key_comparator default_comparator;
+  const key_type unused_key;
+  map_type const & the_map;
+  gdf_table<size_type> const & left_table;
+  gdf_table<size_type> const & right_table;
+};
+
 /* --------------------------------------------------------------------------*/
 /** 
 * @Synopsis Performs the groupby operation for a *SINGLE* 'groupby' column and
@@ -62,55 +103,50 @@ constexpr unsigned int THREAD_BLOCK_SIZE{256};
 * @Returns   
 */
 /* ----------------------------------------------------------------------------*/
-template<typename groupby_type,
-         typename aggregation_type,
-         typename size_type,
-         typename aggregation_operation>
-cudaError_t GroupbyHash(const groupby_type * const in_groupby_column,
+template< typename aggregation_type,
+          typename size_type,
+          typename aggregation_operation>
+cudaError_t GroupbyHash(gdf_table<size_type> const & groupby_input_table,
                         const aggregation_type * const in_aggregation_column,
-                        const size_type in_column_size,
-                        groupby_type * out_groupby_column,
+                        gdf_table<size_type> & groupby_output_table,
                         aggregation_type * out_aggregation_column,
                         size_type * out_size,
                         aggregation_operation aggregation_op,
                         bool sort_result = false)
 {
-
-  using map_type = concurrent_unordered_map<groupby_type, 
-                                            aggregation_type, 
-                                            std::numeric_limits<groupby_type>::max(), 
-                                            default_hash<groupby_type>, 
-                                            equal_to<groupby_type>, 
-                                            legacy_allocator<thrust::pair<groupby_type, aggregation_type> > >;
-
   cudaError_t error{cudaSuccess};
 
-  // Inputs cannot be null
-  if(in_groupby_column == nullptr || in_aggregation_column == nullptr)
-    return cudaErrorNotPermitted;
+  const size_type input_num_rows = groupby_input_table.get_column_length();
 
-  // Input size cannot be 0 or negative
-  if(in_column_size <= 0)
-    return cudaErrorNotPermitted;
 
-  // Output buffers must already be allocated
-  if(out_groupby_column == nullptr || out_aggregation_column == nullptr)
-    return cudaErrorNotPermitted;
 
-  std::unique_ptr<map_type> the_map;
+  // The map will store (row index, aggregation value)
+  // Where row index is the row number of the first row to be successfully inserted
+  // for a given unique 'key' where the 'key' is the set of values in the row.
+  using map_type = concurrent_unordered_map<size_type, 
+                                            aggregation_type, 
+                                            std::numeric_limits<size_type>::max(), 
+                                            default_hash<size_type>, 
+                                            equal_to<size_type>, // TODO Can I pass a clever functor here for the equality comparison using the gdf_table and the row index?
+                                            legacy_allocator<thrust::pair<size_type, aggregation_type> > >;
 
   // The hash table occupancy and the input size determines the size of the hash table
   // e.g., for a 50% occupancy, the size of the hash table is twice that of the input
-  const size_type hash_table_size = static_cast<size_type>((static_cast<size_t>(in_column_size) * 100 / DEFAULT_HASH_TABLE_OCCUPANCY));
+  const size_type hash_table_size = static_cast<size_type>((static_cast<uint64_t>(input_num_rows) * 100 / DEFAULT_HASH_TABLE_OCCUPANCY));
+  //
+  // Initialize the hash table with the aggregation operation functor's identity value
+  std::unique_ptr<map_type> the_map(new map_type(hash_table_size, aggregation_operation::IDENTITY));
 
-  const dim3 build_grid_size ((in_column_size + THREAD_BLOCK_SIZE - 1) / THREAD_BLOCK_SIZE, 1, 1);
+  // Functor that will be used by the hash table's insert/find functions to check for equality 
+  // between two rows of the groupby_input_table
+  row_comparator<map_type,size_type> the_comparator(*the_map, groupby_input_table, groupby_input_table);
+
+  const dim3 build_grid_size ((input_num_rows + THREAD_BLOCK_SIZE - 1) / THREAD_BLOCK_SIZE, 1, 1);
   const dim3 block_size (THREAD_BLOCK_SIZE, 1, 1);
 
-  // Initialize the hash table with the aggregation operation functor's identity value
-  the_map.reset(new map_type(hash_table_size, aggregation_operation::IDENTITY));
-
-
   CUDA_RT_CALL(cudaGetLastError());
+
+  /*
 
   // Inserts (groupby_column[i], aggregation_column[i]) as a key-value pair into the
   // hash table. When a given key already exists in the table, the aggregation operation
@@ -118,7 +154,7 @@ cudaError_t GroupbyHash(const groupby_type * const in_groupby_column,
   build_aggregation_table<<<build_grid_size, block_size>>>(the_map.get(), 
                                                            in_groupby_column, 
                                                            in_aggregation_column,
-                                                           in_column_size,
+                                                           input_num_rows,
                                                            aggregation_op);
   CUDA_RT_CALL(cudaGetLastError());
 
@@ -197,6 +233,7 @@ cudaError_t GroupbyHash(const groupby_type * const in_groupby_column,
     CUDA_RT_CALL(cudaFree(aggregation_result_alt));
   }
 
+  */
   return error;
 }
 #endif
