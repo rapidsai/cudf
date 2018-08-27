@@ -19,6 +19,7 @@
 
 #include "../../hashmap/concurrent_unordered_map.cuh"
 #include "aggregation_operations.cuh"
+#include "../../gdf_table.cuh"
 
 /* --------------------------------------------------------------------------*/
 /** 
@@ -38,19 +39,23 @@
  * @Returns   
  */
 /* ----------------------------------------------------------------------------*/
-template<typename map_type, typename aggregation_type>
+template<typename map_type, 
+         typename aggregation_operation,
+         typename size_type,
+         typename row_comparator>
 __global__ void build_aggregation_table(map_type * const __restrict__ the_map,
-                                        const typename map_type::key_type * const __restrict__ groupby_column,
+                                        gdf_table<size_type> const & groupby_input_table,
                                         const typename map_type::mapped_type * const __restrict__ aggregation_column,
-                                        const typename map_type::size_type column_size,
-                                        aggregation_type op)
+                                        size_type column_size,
+                                        aggregation_operation op,
+                                        row_comparator the_comparator)
 {
-  using size_type = typename map_type::size_type;
-
   size_type i = threadIdx.x + blockIdx.x * blockDim.x;
 
   while( i < column_size ){
-    the_map->insert(thrust::make_pair(groupby_column[i], aggregation_column[i]), op);
+    the_map->insert(thrust::make_pair(i, aggregation_column[i]), 
+                    op,
+                    the_comparator);
     i += blockDim.x * gridDim.x;
   }
 }

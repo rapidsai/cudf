@@ -146,18 +146,19 @@ cudaError_t GroupbyHash(gdf_table<size_type> const & groupby_input_table,
 
   CUDA_RT_CALL(cudaGetLastError());
 
-  /*
 
   // Inserts (groupby_column[i], aggregation_column[i]) as a key-value pair into the
   // hash table. When a given key already exists in the table, the aggregation operation
   // is computed between the new and existing value, and the result is stored back.
   build_aggregation_table<<<build_grid_size, block_size>>>(the_map.get(), 
-                                                           in_groupby_column, 
+                                                           groupby_input_table, 
                                                            in_aggregation_column,
                                                            input_num_rows,
-                                                           aggregation_op);
+                                                           aggregation_op,
+                                                           the_comparator);
   CUDA_RT_CALL(cudaGetLastError());
 
+  /*
   // Used by threads to coordinate where to write their results
   unsigned int * global_write_index{nullptr};
   CUDA_RT_CALL(cudaMallocManaged(&global_write_index, sizeof(unsigned int)));
