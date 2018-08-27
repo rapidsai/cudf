@@ -202,9 +202,9 @@ __global__ void init_hashtbl(
 template <typename T>
 struct equal_to
 {
-    typedef bool result_type;
-    typedef T first_argument_type;
-    typedef T second_argument_type;
+    using result_type = bool;
+    using first_argument_type = T;
+    using second_argument_type = T;
     __forceinline__
     __host__ __device__ constexpr bool operator()(const first_argument_type &lhs, const second_argument_type &rhs) const 
     {
@@ -215,11 +215,11 @@ struct equal_to
 template<typename Iterator>
 class cycle_iterator_adapter {
 public:
-    typedef typename std::iterator_traits<Iterator>::value_type         value_type; 
-    typedef typename std::iterator_traits<Iterator>::difference_type    difference_type;
-    typedef typename std::iterator_traits<Iterator>::pointer            pointer;
-    typedef typename std::iterator_traits<Iterator>::reference          reference;
-    typedef Iterator                                                    iterator_type;
+    using value_type = typename std::iterator_traits<Iterator>::value_type; 
+    using difference_type = typename std::iterator_traits<Iterator>::difference_type;
+    using pointer = typename std::iterator_traits<Iterator>::pointer;
+    using reference = typename std::iterator_traits<Iterator>::reference;
+    using iterator_type = Iterator;
     
     cycle_iterator_adapter() = delete;
     
@@ -326,15 +326,15 @@ class concurrent_unordered_map : public managed
 {
 
 public:
-    typedef size_t                                          size_type;
-    typedef Hasher                                          hasher;
-    typedef Equality                                        key_equal;
-    typedef Allocator                                       allocator_type;
-    typedef Key                                             key_type;
-    typedef thrust::pair<Key, Element>                      value_type;
-    typedef Element                                         mapped_type;
-    typedef cycle_iterator_adapter<value_type*>             iterator;
-    typedef const cycle_iterator_adapter<value_type*>       const_iterator;
+    using size_type = size_t;
+    using hasher = Hasher;
+    using key_equal = Equality;
+    using allocator_type = Allocator;
+    using key_type = Key;
+    using value_type = thrust::pair<Key, Element>;
+    using mapped_type = Element;
+    using iterator = cycle_iterator_adapter<value_type*>;
+    using const_iterator = const cycle_iterator_adapter<value_type*>;
 
 private:
     union pair2longlong
@@ -467,14 +467,19 @@ public:
      * 
      * @Param x The new (key, value) pair to insert
      * @Param op The aggregation operation to perform
+     * @Param keys_equal An optional functor for comparing two keys 
+     * @tparam aggregation_type A functor for a binary operation that performs the aggregation
+     * @tparam comparison_type A functor for comparing two keys
      * 
      * @Returns An iterator to the newly inserted key,value pair
      */
     /* ----------------------------------------------------------------------------*/
-    template<typename aggregation_type>
+    template<typename aggregation_type,
+             class comparison_type = key_equal>
     __forceinline__
     __device__ iterator insert(const value_type& x, 
-                               aggregation_type op)
+                               aggregation_type op,
+                               comparison_type keys_equal = key_equal() )
     {
         const size_type hashtbl_size    = m_hashtbl_size;
         value_type* hashtbl_values      = m_hashtbl_values;
@@ -503,7 +508,7 @@ public:
           // has its initial value
           // TODO: Use template specialization to make use of native atomic functions
           // TODO: How to handle data types less than 32 bits?
-          if ( m_equal( unused_key, old_key ) || m_equal(insert_key, old_key) ) {
+          if ( keys_equal( unused_key, old_key ) || keys_equal(insert_key, old_key) ) {
 
             update_existing_value(existing_value, x, op);
 
