@@ -1,5 +1,6 @@
 import numpy as np
 from numba import cuda 
+import ctypes
 
 class RMMError(Exception):
     def __init__(self, errcode, msg):
@@ -60,18 +61,28 @@ class _librmm_wrapper(object):
     def finalize(self):
         return self.rmmFinalize()
 
-    def device_array_from_ptr(self, ptr, size, dtype=np.float):
+    def _array_helper(self, addr, datasize, shape, strides, dtype, finalizer=None):
+        ctx = cuda.current_context()
+        ptr = ctypes.c_uint64(int(addr))
+    
+        #print("creating ", hex(ptr.value))
+        mem = cuda.driver.MemoryPointer(ctx, ptr, datasize, finalizer=finalizer)
+        if finalizer:
+            mem = cuda.driver.OwnedPointer(mem)
+        return cuda.cudadrv.devicearray.DeviceNDArray(shape, strides, dtype, gpu_data=mem)
+
+    def device_array_from_ptr(self, ptr, nelem, dtype=np.float):
         """device_array_from_ptr(self, ptr, size, dtype=np.float, stream=0)
 
         Create a Numba device array from a ptr, size, and dtype.
         """
-        shape, strides, dtype = cuda.api._prepare_shape_strides_dtype(size, (), dtype, 'C')
-        bytesize = cuda.driver.memory_size_from_info(shape, strides, dtype.itemsize)
-
-        ctx = cuda.current_context()
-        ptr = cuda.driver.drvapi.cu_device_ptr(self._ffi.cast("uintptr_t", ptr))
-        mem = cuda.driver.MemoryPointer(ctx, ptr, bytesize) # note no finalizer -- freed externally!
-        return cuda.cudadrv.devicearray.DeviceNDArray(shape, strides, dtype, gpu_data=mem)
+        dtype = np.dtype(dtype)
+        elemsize = dtype.itemsize
+        datasize = elemsize * nelem
+        addr = self._ffi.cast("uintptr_t", ptr)
+        # note no finalizer -- freed externally!
+        return self._array_helper(addr=addr, datasize=datasize, 
+                                  shape=(nelem,), strides=(elemsize,), dtype=dtype)
 
     def device_array(self, shape, dtype=np.float, strides=None, order='C', stream=0):
         """device_array(self, shape, dtype=np.float, strides=None, order='C', stream=0)
@@ -80,17 +91,15 @@ class _librmm_wrapper(object):
         uses RMM for device memory management.
         """
         shape, strides, dtype = cuda.api._prepare_shape_strides_dtype(shape, strides, dtype, order)
-        bytesize = cuda.driver.memory_size_from_info(shape, strides, dtype.itemsize)
+        datasize = cuda.driver.memory_size_from_info(shape, strides, dtype.itemsize)
 
-
-        cptr = self._ffi.new("void **")
-        self._api.rmmAlloc(cptr, bytesize, self._ffi.cast("cudaStream_t", stream))
-
-        ctx = cuda.current_context()
-        ptr = cuda.driver.drvapi.cu_device_ptr(self._ffi.cast("uintptr_t*", cptr)[0])
-        mem = cuda.driver.MemoryPointer(ctx, ptr, bytesize, finalizer=self._make_finalizer(ptr, stream))
-        return cuda.cudadrv.devicearray.DeviceNDArray(shape, strides, dtype, gpu_data=mem)
-
+        ptr = self._ffi.new("void **")
+        self._api.rmmAlloc(ptr, datasize, self._ffi.cast("cudaStream_t", stream))
+        addr = self._ffi.cast("uintptr_t*", ptr)[0]
+        # Note Numba will call the finalizer to free the device memory allocated above 
+        return self._array_helper(addr=addr, datasize=datasize, 
+                                  shape=shape, strides=strides, dtype=dtype,
+                                  finalizer=self._make_finalizer(addr, stream)) 
 
     def device_array_like(self, ary, stream=0):
         """device_array_like(self, ary, stream=0)
@@ -98,6 +107,9 @@ class _librmm_wrapper(object):
         Call rmmlib.device_array with information from `ary`. Clone of Numba `cuda.device_array_like`,
         but uses RMM for device memory management.
         """
+        if ary.ndim == 0:
+            ary = ary.reshape(1)
+
         if isinstance(ary, np.ndarray):
             size = ary.nbytes
         else:
@@ -109,7 +121,6 @@ class _librmm_wrapper(object):
         """to_device(self, ary, stream=0, copy=True, to=None)
 
         Allocate and transfer a numpy ndarray or structured scalar to the device.
-
         Clone of Numba `cuda.to_device`, but uses RMM for device memory management.
         """
         if to is None:
@@ -120,33 +131,29 @@ class _librmm_wrapper(object):
             to.copy_to_device(ary, stream=stream)
         return to
 
-    def _prepare_shape_strides_dtype(self, shape, strides, dtype, order):
-        dtype = np.dtype(dtype)
-        if isinstance(shape, (int, long)):
-            shape = (shape,)
-        if isinstance(strides, (int, long)):
-            strides = (strides,)
-        else:
-            if shape == ():
-                shape = (1,)
-            strides = strides or self._fill_stride_by_order(shape, dtype, order)
-        return shape, strides, dtype
 
-
-    def _fill_stride_by_order(self, shape, dtype, order):
-        nd = len(shape)
-        strides = [0] * nd
-        if order == 'C':
-            strides[-1] = dtype.itemsize
-            for d in reversed(range(nd - 1)):
-                strides[d] = strides[d + 1] * shape[d + 1]
-        elif order == 'F':
-            strides[0] = dtype.itemsize
-            for d in range(1, nd):
-                strides[d] = strides[d - 1] * shape[d - 1]
+    def auto_device(self, obj, stream=0, copy=True):
+        """
+        Create a DeviceRecord or DeviceArray like obj and optionally copy data from
+        host to device. If obj already represents device memory, it is returned and
+        no copy is made. Uses RMM for device memory allocation if necessary.
+        """
+        if cuda.driver.is_device_memory(obj):
+            return obj, False
         else:
-            raise ValueError('must be either C/F order')
-        return tuple(strides)
+            if isinstance(obj, np.void):
+                #raise NotImplementedError("DeviceRecord type not supported by RMM")
+                devobj = cuda.devicearray.from_record_like(obj, stream=stream)
+
+            else:
+                if not isinstance(obj, np.ndarray):
+                    obj = np.asarray(obj)
+                cuda.devicearray.sentry_contiguous(obj)
+                devobj = self.device_array_like(obj, stream=stream)
+            
+            if copy:
+                devobj.copy_to_device(obj, stream=stream)
+            return devobj, True
 
     def _make_finalizer(self, handle, stream):
             """Factory to make the finalizer function.
@@ -156,6 +163,7 @@ class _librmm_wrapper(object):
             def finalizer():
                 """Invoked when the MemoryPointer is freed
                 """
-                cptr = self._ffi.cast("void*", handle.value)
+                cptr = self._ffi.cast("void*", handle)
+                #print("Finalizer: freeing ", hex(handle.value))
                 return self._api.rmmFree(cptr, self._ffi.cast("cudaStream_t", stream))
             return finalizer

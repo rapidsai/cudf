@@ -2,6 +2,7 @@ from __future__ import absolute_import
 
 import os
 import sys
+import atexit
 
 from .wrapper import _librmm_wrapper
 from .wrapper import RMMError           # re-exported
@@ -30,4 +31,9 @@ else:
     librmm_api = ffi.dlopen(_get_lib_name())
     librmm = _librmm_wrapper(ffi, librmm_api)
 
+    # initialize memory manager and register an exit handler to finalize it
+    librmm.initialize()
+    atexit.register(librmm.finalize)
+
     del _librmm_wrapper
+
