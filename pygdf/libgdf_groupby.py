@@ -8,6 +8,7 @@ from .dataframe import DataFrame, Series
 from .buffer import Buffer
 
 from libgdf_cffi import ffi, libgdf
+from librmm_cffi import librmm as rmm
 
 
 class LibGdfGroupby(object):
@@ -87,13 +88,13 @@ class LibGdfGroupby(object):
             # aggregated results will be in the same order for GDF_SORT method
             if need_to_index:
                 out_col_indices_series = Series(
-                    Buffer(cuda.device_array(col_agg.size, dtype=np.int32)))
+                    Buffer(rmm.device_array(col_agg.size, dtype=np.int32)))
                 out_col_indices = out_col_indices_series._column.cffi_view
             else:
                 out_col_indices = ffi.NULL
 
             if first_run or self._method == libgdf.GDF_HASH:
-                out_col_values_series = [Series(Buffer(cuda.device_array(
+                out_col_values_series = [Series(Buffer(rmm.device_array(
                     col_agg.size,
                     dtype=self._df[self._by[i]]._column.data.dtype)))
                     for i in range(0, ncols)]
@@ -105,9 +106,9 @@ class LibGdfGroupby(object):
 
             if agg_type == "count":
                 out_col_agg_series = Series(
-                    Buffer(cuda.device_array(col_agg.size, dtype=np.int64)))
+                    Buffer(rmm.device_array(col_agg.size, dtype=np.int64)))
             else:
-                out_col_agg_series = Series(Buffer(cuda.device_array(
+                out_col_agg_series = Series(Buffer(rmm.device_array(
                     col_agg.size, dtype=self._df[val_col]._column.data.dtype)))
 
             out_col_agg = out_col_agg_series._column.cffi_view

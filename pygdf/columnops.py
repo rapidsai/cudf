@@ -9,6 +9,8 @@ import pyarrow as pa
 
 from numba import cuda, njit
 
+from librmm_cffi import librmm as rmm
+
 from .buffer import Buffer
 from . import utils, cudautils, _gdf
 from .column import Column
@@ -70,7 +72,7 @@ class TypedColumnBase(Column):
 def column_empty_like(column, dtype, masked):
     """Allocate a new column like the given *column*
     """
-    data = cuda.device_array(shape=len(column), dtype=dtype)
+    data = rmm.device_array(shape=len(column), dtype=dtype)
     params = dict(data=Buffer(data))
     if masked:
         mask = utils.make_mask(data.size)
@@ -86,7 +88,7 @@ def column_empty_like_same_mask(column, dtype):
     dtype : np.dtype like
         The dtype of the data buffer.
     """
-    data = cuda.device_array(shape=len(column), dtype=dtype)
+    data = rmm.device_array(shape=len(column), dtype=dtype)
     params = dict(data=Buffer(data))
     if column.has_null_mask:
         params.update(mask=column.nullmask)
@@ -271,7 +273,7 @@ def column_applymap(udf, column, out_dtype):
     result : Buffer
     """
     core = njit(udf)
-    results = cuda.device_array(shape=len(column), dtype=out_dtype)
+    results = rmm.device_array(shape=len(column), dtype=out_dtype)
     values = column.data.to_gpu_array()
     if column.mask:
         # For masked columns

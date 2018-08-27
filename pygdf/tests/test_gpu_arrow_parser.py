@@ -13,6 +13,8 @@ except ImportError as msg:
 import numpy as np
 from numba import cuda
 
+from librmm_cffi import librmm as rmm
+
 from pygdf.gpuarrow import GpuArrowReader
 
 
@@ -42,7 +44,7 @@ def test_gpu_parse_arrow_data():
                             buffer=bytearray(schema_data))
     cpu_data = np.ndarray(shape=len(recbatch_data), dtype=np.byte,
                           buffer=bytearray(recbatch_data))
-    gpu_data = cuda.to_device(cpu_data)
+    gpu_data = rmm.to_device(cpu_data)
     del cpu_data
 
     # test reader
@@ -129,7 +131,7 @@ def test_gpu_parse_arrow_cats():
                         buffer=bytearray(schema_bytes))
     rb_cpu_data = np.ndarray(shape=len(recordbatches_bytes), dtype=np.byte,
                              buffer=bytearray(recordbatches_bytes))
-    rb_gpu_data = cuda.to_device(rb_cpu_data)
+    rb_gpu_data = rmm.to_device(rb_cpu_data)
 
     gar = GpuArrowReader(schema, rb_gpu_data)
     columns = gar.to_dict()
@@ -183,7 +185,7 @@ def test_gpu_parse_arrow_int16():
     rb_cpu_data = np.ndarray(shape=len(recordbatches_bytes), dtype=np.byte,
                              buffer=bytearray(recordbatches_bytes))
 
-    rb_gpu_data = cuda.to_device(rb_cpu_data)
+    rb_gpu_data = rmm.to_device(rb_cpu_data)
     gar = GpuArrowReader(schema, rb_gpu_data)
     columns = gar.to_dict()
     assert columns['depdelay'].dtype == np.int16

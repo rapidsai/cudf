@@ -13,6 +13,8 @@ import pyarrow as pa
 from numba import cuda
 
 from libgdf_cffi import ffi, libgdf
+from librmm_cffi import librmm as rmm
+
 from . import cudautils
 from .utils import mask_bitsize
 
@@ -151,7 +153,7 @@ def np_to_pa_dtype(dtype):
 def apply_reduce(fn, inp):
     # allocate output+temp array
     outsz = libgdf.gdf_reduce_optimal_output_size()
-    out = cuda.device_array(outsz, dtype=inp.dtype)
+    out = rmm.device_array(outsz, dtype=inp.dtype)
     # call reduction
     fn(inp.cffi_view, unwrap_devary(out), outsz)
     # return 1st element
@@ -186,17 +188,6 @@ _join_method_api = {
     'sort': libgdf.GDF_SORT,
     'hash': libgdf.GDF_HASH
 }
-
-
-def _as_numba_devarray(intaddr, nelem, dtype):
-    dtype = np.dtype(dtype)
-    addr = ctypes.c_uint64(intaddr)
-    elemsize = dtype.itemsize
-    datasize = elemsize * nelem
-    memptr = cuda.driver.MemoryPointer(context=cuda.current_context(),
-                                       pointer=addr, size=datasize)
-    return cuda.devicearray.DeviceNDArray(shape=(nelem,), strides=(elemsize,),
-                                          dtype=dtype, gpu_data=memptr)
 
 
 @contextlib.contextmanager
@@ -314,7 +305,7 @@ class SegmentedRadixortPlan(object):
         seg_dtype = np.uint32
         segsize_limit = 2 ** 16 - 1
 
-        d_fullsegs = cuda.device_array(segments.size + 1, dtype=seg_dtype)
+        d_fullsegs = rmm.device_array(segments.size + 1, dtype=seg_dtype)
         d_begins = d_fullsegs[:-1]
         d_ends = d_fullsegs[1:]
 

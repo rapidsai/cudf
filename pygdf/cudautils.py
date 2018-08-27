@@ -5,6 +5,8 @@ import numpy as np
 from numba import cuda, int32, numpy_support
 from math import isnan
 
+from librmm_cffi import librmm as rmm
+
 from .utils import mask_bitsize, mask_get, mask_set, make_mask
 
 
@@ -13,9 +15,8 @@ def optimal_block_count(minblkct):
     """
     return min(16, max(1, minblkct))
 
-
 def to_device(ary):
-    dary, _ = cuda._auto_device(ary)
+    dary, _ = rmm.auto_device(ary)
     return dary
 
 
@@ -36,7 +37,7 @@ def arange(start, stop=None, step=1, dtype=np.int64):
         msgfmt = "size={size} in arange({start}, {stop}, {step}, {dtype})"
         raise ValueError(msgfmt.format(size=size, start=start, stop=stop,
                                        step=step, dtype=dtype))
-    out = cuda.device_array(size, dtype=dtype)
+    out = rmm.device_array(size, dtype=dtype)
     gpu_arange.forall(size)(start, size, step, out)
     return out
 
@@ -49,7 +50,7 @@ def gpu_arange_reversed(size, out):
 
 
 def arange_reversed(size, dtype=np.int64):
-    out = cuda.device_array(size, dtype=dtype)
+    out = rmm.device_array(size, dtype=dtype)
     gpu_arange_reversed.forall(size)(size, out)
     return out
 
@@ -62,7 +63,7 @@ def gpu_ones(size, out):
 
 
 def ones(size, dtype):
-    out = cuda.device_array(size, dtype=dtype)
+    out = rmm.device_array(size, dtype=dtype)
     gpu_ones.forall(size)(size, out)
     return out
 
@@ -75,7 +76,7 @@ def gpu_zeros(size, out):
 
 
 def zeros(size, dtype):
-    out = cuda.device_array(size, dtype=dtype)
+    out = rmm.device_array(size, dtype=dtype)
     gpu_zeros.forall(size)(size, out)
     return out
 
@@ -96,7 +97,7 @@ def astype(ary, dtype):
     elif ary.size == 0:
         return cuda.device_array(shape=ary.shape, dtype=dtype)
     else:
-        out = cuda.device_array(shape=ary.shape, dtype=dtype)
+        out = rmm.device_array(shape=ary.shape, dtype=dtype)
         configured = gpu_copy.forall(out.size)
         configured(ary, out)
         return out
@@ -104,7 +105,7 @@ def astype(ary, dtype):
 
 def copy_array(arr, out=None):
     if out is None:
-        out = cuda.device_array_like(arr)
+        out = rmm.device_array_like(arr)
     assert out.size == arr.size
     if arr.is_c_contiguous() and out.is_c_contiguous():
         out.copy_to_device(arr)
@@ -115,7 +116,7 @@ def copy_array(arr, out=None):
 
 def as_contiguous(arr):
     assert arr.ndim == 1
-    out = cuda.device_array(shape=arr.shape, dtype=arr.dtype)
+    out = rmm.device_array(shape=arr.shape, dtype=arr.dtype)
     return copy_array(arr, out=out)
 
 
@@ -200,7 +201,7 @@ def expand_mask_bits(size, bits):
 def mask_assign_slot(size, mask):
     # expand bits into bytes
     dtype = (np.int32 if size < 2 ** 31 else np.int64)
-    expanded_mask = cuda.device_array(size, dtype=dtype)
+    expanded_mask = rmm.device_array(size, dtype=dtype)
     numtasks = min(64 * 128, expanded_mask.size)
     if numtasks > 0:
         gpu_expand_mask_bits.forall(numtasks)(mask, expanded_mask)
@@ -220,8 +221,8 @@ def prefixsum(vals):
     from . import _gdf
 
     # Allocate output
-    slots = cuda.device_array(shape=vals.size + 1,
-                              dtype=vals.dtype)
+    slots = rmm.device_array(shape=vals.size + 1,
+                             dtype=vals.dtype)
     # Fill 0 to slot[0]
     gpu_fill_value[1, 1](slots[:1], 0)
 
@@ -247,7 +248,7 @@ def copy_to_dense(data, mask, out=None):
         # output buffer is not provided
         # allocate one
         alloc_shape = sz
-        out = cuda.device_array(shape=alloc_shape, dtype=data.dtype)
+        out = rmm.device_array(shape=alloc_shape, dtype=data.dtype)
     else:
         # output buffer is provided
         # check it
@@ -317,7 +318,7 @@ def gather(data, index, out=None):
     """Perform ``out = data[index]`` on the GPU
     """
     if out is None:
-        out = cuda.device_array(shape=index.size, dtype=data.dtype)
+        out = rmm.device_array(shape=index.size, dtype=data.dtype)
     gpu_gather.forall(index.size)(data, index, out)
     return out
 
@@ -339,7 +340,7 @@ def gpu_gather_joined_index(lkeys, rkeys, lidx, ridx, out):
 
 def gather_joined_index(lkeys, rkeys, lidx, ridx):
     assert lidx.size == ridx.size
-    out = cuda.device_array(lidx.size, dtype=lkeys.dtype)
+    out = rmm.device_array(lidx.size, dtype=lkeys.dtype)
     gpu_gather_joined_index.forall(lidx.size)(lkeys, rkeys, lidx, ridx, out)
     return out
 
@@ -365,7 +366,7 @@ def gpu_fill_masked(value, validity, out):
 
 
 def fillna(data, mask, value):
-    out = cuda.device_array_like(data)
+    out = rmm.device_array_like(data)
     out.copy_to_device(data)
     configured = gpu_fill_masked.forall(data.size)
     configured(value, mask, out)
@@ -409,7 +410,7 @@ def apply_equal_constant(arr, mask, val, dtype):
     -------
     result : device array
     """
-    out = cuda.device_array(shape=arr.size, dtype=dtype)
+    out = rmm.device_array(shape=arr.size, dtype=dtype)
     if mask is not None:
         configured = gpu_equal_constant_masked.forall(out.size)
         configured(arr, mask, val, out)
@@ -428,7 +429,7 @@ def gpu_scale(arr, vmin, vmax, out):
 
 
 def compute_scale(arr, vmin, vmax):
-    out = cuda.device_array(shape=arr.size, dtype=np.float64)
+    out = rmm.device_array(shape=arr.size, dtype=np.float64)
     configured = gpu_scale.forall(out.size)
     configured(arr, vmin, vmax, out)
     return out
@@ -465,7 +466,7 @@ def apply_label(arr, cats, dtype, na_sentinel):
     """
     encs = np.asarray(list(range(cats.size)))
     d_encs = to_device(encs)
-    out = cuda.device_array(shape=arr.size, dtype=dtype)
+    out = rmm.device_array(shape=arr.size, dtype=dtype)
     configured = gpu_label.forall(out.size)
     configured(arr, cats, d_encs, na_sentinel, out)
     return out
@@ -578,8 +579,8 @@ class UniqueK(object):
         if k >= MAX_FAST_UNIQUE_K:
             raise NotImplementedError('k >= {}'.format(MAX_FAST_UNIQUE_K))
         # setup mem
-        outsz_ptr = cuda.device_array(shape=1, dtype=np.intp)
-        out = cuda.device_array_like(arr)
+        outsz_ptr = rmm.device_array(shape=1, dtype=np.intp)
+        out = rmm.device_array_like(arr)
         # kernel
         self._kernel[1, 64](arr, k, out, outsz_ptr)
         # copy to host
@@ -652,7 +653,7 @@ def find_segments(arr, segs=None, markers=None):
     ct = slots[slots.size - 1]
     scanned = slots[:-1]
     # Compact segments
-    begins = cuda.device_array(shape=int(ct), dtype=np.intp)
+    begins = rmm.device_array(shape=int(ct), dtype=np.intp)
     gpu_scatter_segment_begins.forall(markers.size)(markers, scanned, begins)
     return begins, markers
 
@@ -667,7 +668,7 @@ def gpu_value_counts(arr, counts, total_size):
 
 
 def value_count(arr, total_size):
-    counts = cuda.device_array(shape=len(arr), dtype=np.intp)
+    counts = rmm.device_array(shape=len(arr), dtype=np.intp)
     gpu_value_counts.forall(arr.size)(arr, counts, total_size)
     return counts
 
@@ -686,7 +687,7 @@ def recode(data, recode_table, na_value):
     """Recode data with the given recode table.
     And setting out-of-range values to *na_value*
     """
-    newdata = cuda.device_array_like(data)
+    newdata = rmm.device_array_like(data)
     recode_table = to_device(recode_table)
     blksz = 32 * 4
     blkct = min(16, max(1, data.size // blksz))
@@ -702,7 +703,7 @@ def gpu_row_matrix(rowmatrix, col, nrow, ncol):
 
 
 def row_matrix(cols, nrow, ncol, dtype):
-    matrix = cuda.device_array(shape=(nrow, ncol), dtype=dtype, order='C')
+    matrix = rmm.device_array(shape=(nrow, ncol), dtype=dtype, order='C')
     for colidx, col in enumerate(cols):
         gpu_row_matrix.forall(matrix[:, colidx].size)(matrix[:, colidx],
                                                       col.to_gpu_array(),

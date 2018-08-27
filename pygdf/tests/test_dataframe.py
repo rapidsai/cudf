@@ -8,6 +8,8 @@ import pyarrow as pa
 
 from numba import cuda
 
+from librmm_cffi import librmm as rmm
+
 import pygdf as gd
 from pygdf.dataframe import Series, DataFrame
 from pygdf.buffer import Buffer
@@ -115,7 +117,7 @@ def test_dataframe_basic():
     df = DataFrame()
 
     # Populate with cuda memory
-    df['keys'] = cuda.to_device(np.arange(10, dtype=np.float64))
+    df['keys'] = rmm.to_device(np.arange(10, dtype=np.float64))
     np.testing.assert_equal(df['keys'].to_array(), np.arange(10))
     assert len(df) == 10
 
