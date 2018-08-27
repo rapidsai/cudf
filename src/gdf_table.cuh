@@ -61,6 +61,16 @@ public:
     return column_length;
   }
 
+  void set_column_length(const size_type new_length)
+  {
+    column_length = new_length;
+
+    for(size_type i = 0; i < num_columns; ++i)
+    {
+      host_columns[i]->size = this->column_length;
+    }
+  }
+
   gdf_dtype get_build_column_type() const
   {
     return host_columns[build_column_index]->dtype;
@@ -75,6 +85,9 @@ public:
   {
     return host_columns[build_column_index]->data;
   }
+
+
+
 
   __host__ 
   void print_row(const size_type row_index, char * msg = "") const
