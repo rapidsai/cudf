@@ -41,11 +41,12 @@
 /* ----------------------------------------------------------------------------*/
 template<typename map_type, 
          typename aggregation_operation,
+         typename aggregation_type,
          typename size_type,
          typename row_comparator>
 __global__ void build_aggregation_table(map_type * const __restrict__ the_map,
                                         gdf_table<size_type> const & groupby_input_table,
-                                        const typename map_type::mapped_type * const __restrict__ aggregation_column,
+                                        const aggregation_type * const __restrict__ aggregation_column,
                                         size_type column_size,
                                         aggregation_operation op,
                                         row_comparator the_comparator)
@@ -60,25 +61,28 @@ __global__ void build_aggregation_table(map_type * const __restrict__ the_map,
   }
 }
 
-// Specialization for COUNT operation
-template<typename map_type>
+// Specialization for COUNT operation that ignores the values of the input aggregation column
+template<typename map_type,
+         typename aggregation_type,
+         typename size_type,
+         typename row_comparator>
 __global__ void build_aggregation_table(map_type * const __restrict__ the_map,
-                                        const typename map_type::key_type * const __restrict__ groupby_column,
-                                        const typename map_type::mapped_type * const __restrict__ aggregation_column,
-                                        const typename map_type::size_type column_size,
-                                        count_op<typename map_type::mapped_type> op)
+                                        gdf_table<size_type> const & groupby_input_table,
+                                        const aggregation_type * const __restrict__ aggregation_column,
+                                        size_type column_size,
+                                        count_op<typename map_type::mapped_type> op,
+                                        row_comparator the_comparator)
 {
-  using size_type = typename map_type::size_type;
-
   size_type i = threadIdx.x + blockIdx.x * blockDim.x;
 
   while( i < column_size ){
     // When the aggregator is COUNT, ignore the aggregation column and just insert '0'
-    the_map->insert(thrust::make_pair(groupby_column[i], static_cast<typename map_type::mapped_type>(0)), op);
+    the_map->insert(thrust::make_pair(i, static_cast<typename map_type::mapped_type>(0)), 
+                    op,
+                    the_comparator);
     i += blockDim.x * gridDim.x;
   }
 }
-
 
 /* --------------------------------------------------------------------------*/
 /** 
@@ -95,31 +99,37 @@ __global__ void build_aggregation_table(map_type * const __restrict__ the_map,
  * @Returns   
  */
 /* ----------------------------------------------------------------------------*/
-template<typename map_type>
+template<typename map_type,
+         typename size_type,
+         typename aggregation_type>
 __global__ void extract_groupby_result(const map_type * const __restrict__ the_map,
-                                       const typename map_type::size_type map_size,
-                                       typename map_type::key_type * const __restrict__ groupby_out_column,
-                                       typename map_type::mapped_type * const __restrict__ aggregation_out_column,
-                                       unsigned int * const global_write_index)
+                                       const size_type map_size,
+                                       gdf_table<size_type> & groupby_output_table,
+                                       gdf_table<size_type> const & groupby_input_table,
+                                       aggregation_type * const __restrict__ aggregation_out_column,
+                                       size_type * const global_write_index)
 {
-  using size_type = typename map_type::size_type;
-  using key_type = typename map_type::key_type;
-  
-  //const size_type map_size = the_map->get_size();
-
   size_type i = threadIdx.x + blockIdx.x * blockDim.x;
 
-  constexpr key_type unused_key{map_type::get_unused_key()};
+  constexpr typename map_type::key_type unused_key{map_type::get_unused_key()};
 
   const typename map_type::value_type * const __restrict__ hashtabl_values = the_map->data();
 
   // TODO: Use _shared_ thread block cache for writing temporary ouputs and then
   // write to the global output
   while(i < map_size){
-    const key_type current_key = hashtabl_values[i].first;
+
+    const typename map_type::key_type current_key = hashtabl_values[i].first;
+
     if( current_key != unused_key){
       const size_type thread_write_index = atomicAdd(global_write_index, 1);
-      groupby_out_column[thread_write_index] = current_key;
+
+      // Copy the row at current_key from the input table to the row at
+      // thread_write_index in the output table
+      groupby_output_table.copy_row(groupby_input_table, 
+                                    thread_write_index,
+                                    current_key);
+
       aggregation_out_column[thread_write_index] = hashtabl_values[i].second;
     }
     i += gridDim.x * blockDim.x;

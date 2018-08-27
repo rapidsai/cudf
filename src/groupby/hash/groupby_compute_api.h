@@ -167,22 +167,23 @@ cudaError_t GroupbyHash(gdf_table<size_type> const & groupby_input_table,
 
   // Extracts every non-empty key and value into separate contiguous arrays,
   // which provides the result of the groupby operation
-  //extract_groupby_result<<<extract_grid_size, block_size>>>(the_map.get(),
-  //                                                          the_map->size(),
-  //                                                          out_groupby_column,
-  //                                                          out_aggregation_column,
-  //                                                          global_write_index);
+  extract_groupby_result<<<extract_grid_size, block_size>>>(the_map.get(),
+                                                            hash_table_size,
+                                                            groupby_output_table,
+                                                            groupby_input_table,
+                                                            out_aggregation_column,
+                                                            global_write_index);
   
   // FIXME Work around for above kernel failing to launch for some instantiations of the_map template class
-  map_type * map = the_map.get();
-  const size_type map_size = hash_table_size;
-  //void *args[] = { &map, &map_size, &out_groupby_column, &out_aggregation_column, &global_write_index};
+  //map_type * map = the_map.get();
+  //const size_type map_size = hash_table_size;
+  //void *args[] = { &map, &map_size, &groupby_output_table, &out_aggregation_column, &global_write_index};
 
   //void (*func)(const map_type * const, 
-  //             const typename map_type::size_type, 
-  //             typename map_type::key_type * const, 
-  //             typename map_type::mapped_type * const,
-  //             unsigned int * const ) = &(extract_groupby_result<map_type>);
+  //             const size_type, 
+  //             gdf_table<size_type> * const, 
+  //             aggregation_type * const,
+  //             size_type * const ) = &(extract_groupby_result<map_type,size_type,aggregation_type>);
 
   //CUDA_RT_CALL(cudaLaunchKernel((const void*) func, extract_grid_size, block_size, args, 0, 0));
   // FIXME End work around
