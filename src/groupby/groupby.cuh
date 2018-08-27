@@ -221,6 +221,22 @@ gdf_error gdf_group_by_hash(size_type ncols,
                             bool sort_result = false)
 {
 
+
+  // Make sure the inputs are not empty
+  if( (0 == ncols) 
+      || (nullptr == in_groupby_columns) 
+      || (nullptr == in_aggregation_column))
+  {
+    return GDF_DATASET_EMPTY;
+  }
+
+  // Make sure the output buffers have already been allocated
+  if( (nullptr == out_groupby_columns) 
+      || (nullptr == out_aggregation_column))
+  {
+    return GDF_DATASET_EMPTY;
+  }
+
   // Wrap the groupby input and output columns in a gdf_table
   std::unique_ptr< const gdf_table<size_type> > groupby_input_table{new gdf_table<size_type>(ncols, in_groupby_columns)};
   std::unique_ptr< gdf_table<size_type> > groupby_output_table{new gdf_table<size_type>(ncols, out_groupby_columns)};
