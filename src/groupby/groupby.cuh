@@ -19,6 +19,7 @@
 #include <cuda_runtime.h>
 #include "hash/groupby_compute_api.h"
 #include "hash/aggregation_operations.cuh"
+#include "../gdf_table.cuh"
 
 /* --------------------------------------------------------------------------*/
 /** 
@@ -38,38 +39,39 @@
  * @Returns On failure, returns appropriate error code. Otherwise, GDF_SUCCESS
  */
 /* ----------------------------------------------------------------------------*/
-template <typename groupby_type, typename aggregation_type, template <typename T> class op>
-gdf_error dispatched_groupby(int ncols,               
-                             gdf_column* in_groupby_columns[],        
-                             gdf_column* in_aggregation_column,       
-                             gdf_column* out_groupby_columns[],
-                             gdf_column* out_aggregation_column,
-                             bool sort_result = false)
+template <typename aggregation_type, 
+          template <typename T> class op,
+          typename size_type>
+gdf_error typed_groupby(gdf_table<size_type> const & groupby_input_table,
+                        gdf_column* in_aggregation_column,       
+                        gdf_table<size_type> & groupby_output_table,
+                        gdf_column* out_aggregation_column,
+                        bool sort_result = false)
 {
-
   // Template the functor on the type of the aggregation column
   using op_type = op<aggregation_type>;
 
   // Cast the void* data to the appropriate type
-  groupby_type * in_group_col = static_cast<groupby_type *>(in_groupby_columns[0]->data);
   aggregation_type * in_agg_col = static_cast<aggregation_type *>(in_aggregation_column->data);
-  groupby_type * out_group_col = static_cast<groupby_type *>(out_groupby_columns[0]->data);
-
   // TODO Need to allow for the aggregation output type to be different from the aggregation input type
   aggregation_type * out_agg_col = static_cast<aggregation_type *>(out_aggregation_column->data);
 
-  const gdf_size_type in_size = in_groupby_columns[0]->size;
-  gdf_size_type out_size{0};
+  size_type output_size{0};
 
-  if(cudaSuccess != GroupbyHash(in_group_col, in_agg_col, in_size, 
-                                out_group_col, out_agg_col, &out_size, op_type(), sort_result))
+  if(cudaSuccess != GroupbyHash(groupby_input_table, 
+                                in_agg_col, 
+                                groupby_output_table, 
+                                out_agg_col, 
+                                &output_size, 
+                                op_type(), 
+                                sort_result))
   {
     return GDF_CUDA_ERROR;
   }
 
   // Update the size of the result
-  out_groupby_columns[0]->size = out_size;
-  out_aggregation_column->size = out_size;
+  groupby_output_table.set_column_length(output_size);
+  out_aggregation_column->size = output_size;
 
   return GDF_SUCCESS;
 }
@@ -87,11 +89,11 @@ struct is_same_functor<T,T> : std::true_type{};
  * 
  */
 /* ----------------------------------------------------------------------------*/
-template <typename groupby_type, template <typename T> class op>
-gdf_error dispatch_aggregation_type(int ncols,               
-                                    gdf_column* in_groupby_columns[],        
+template <template <typename T> class op,
+          typename size_type>
+gdf_error dispatch_aggregation_type(gdf_table<size_type> const & groupby_input_table,        
                                     gdf_column* in_aggregation_column,       
-                                    gdf_column* out_groupby_columns[],
+                                    gdf_table<size_type> & groupby_output_table,
                                     gdf_column* out_aggregation_column,
                                     bool sort_result = false)
 {
@@ -102,6 +104,7 @@ gdf_error dispatch_aggregation_type(int ncols,
   // FIXME When the aggregation type is COUNT, use the type of the OUTPUT column
   // as the type of the aggregation column. This is required as there is a limitation 
   // hash based groupby implementation where it's assumed the aggregation input column
+  // and output column are the same type
   if(is_same_functor<count_op, op>::value)
   {
     aggregation_column_type = out_aggregation_column->dtype;
@@ -116,100 +119,82 @@ gdf_error dispatch_aggregation_type(int ncols,
   {
     case GDF_INT8:   
       { 
-        return dispatched_groupby<groupby_type, int8_t, op>(ncols, in_groupby_columns, in_aggregation_column, 
-                                                            out_groupby_columns, out_aggregation_column, sort_result);
+        return typed_groupby<int8_t, op>(groupby_input_table, 
+                                         in_aggregation_column, 
+                                         groupby_output_table, 
+                                         out_aggregation_column, 
+                                         sort_result);
       }
     case GDF_INT16:  
       { 
-        return dispatched_groupby<groupby_type, int16_t, op>(ncols, in_groupby_columns, in_aggregation_column, 
-                                                             out_groupby_columns, out_aggregation_column, sort_result);
+        return typed_groupby<int16_t, op>(groupby_input_table, 
+                                          in_aggregation_column, 
+                                          groupby_output_table, 
+                                          out_aggregation_column, 
+                                          sort_result);
       }
     case GDF_INT32:  
       { 
-        return dispatched_groupby<groupby_type, int32_t, op>(ncols, in_groupby_columns, in_aggregation_column, 
-                                                             out_groupby_columns, out_aggregation_column, sort_result);
+        return typed_groupby<int32_t, op>(groupby_input_table, 
+                                          in_aggregation_column, 
+                                          groupby_output_table, 
+                                          out_aggregation_column, 
+                                          sort_result);
       }
     case GDF_INT64:  
       { 
-        return dispatched_groupby<groupby_type, int64_t, op>(ncols, in_groupby_columns, in_aggregation_column, 
-                                                             out_groupby_columns, out_aggregation_column, sort_result);
+        return typed_groupby<int64_t, op>(groupby_input_table, 
+                                          in_aggregation_column, 
+                                          groupby_output_table, 
+                                          out_aggregation_column, 
+                                          sort_result);
       }
     case GDF_FLOAT32:
       { 
-        return dispatched_groupby<groupby_type, float, op>(ncols, in_groupby_columns, in_aggregation_column, 
-                                                            out_groupby_columns, out_aggregation_column, sort_result);
+        return typed_groupby<float, op>(groupby_input_table, 
+                                        in_aggregation_column, 
+                                        groupby_output_table, 
+                                        out_aggregation_column, 
+                                        sort_result);
       }
     case GDF_FLOAT64:
       { 
-        return dispatched_groupby<groupby_type, double, op>(ncols, in_groupby_columns, in_aggregation_column, 
-                                                           out_groupby_columns, out_aggregation_column, sort_result);
+        return typed_groupby<double, op>(groupby_input_table, 
+                                         in_aggregation_column, 
+                                         groupby_output_table, 
+                                         out_aggregation_column, 
+                                         sort_result);
+      }
+    case GDF_DATE32:    
+      {
+        return typed_groupby<int32_t, op>(groupby_input_table, 
+                                          in_aggregation_column, 
+                                          groupby_output_table, 
+                                          out_aggregation_column, 
+                                          sort_result);
+      }
+    case GDF_DATE64:   
+      {
+        return typed_groupby<int64_t, op>(groupby_input_table, 
+                                          in_aggregation_column, 
+                                          groupby_output_table, 
+                                          out_aggregation_column, 
+                                          sort_result);
+      }
+    case GDF_TIMESTAMP:
+      {
+        return typed_groupby<int64_t, op>(groupby_input_table, 
+                                          in_aggregation_column, 
+                                          groupby_output_table, 
+                                          out_aggregation_column, 
+                                          sort_result);
       }
     default:
-      std::cout << "Unsupported aggregation column type: " << aggregation_column_type << std::endl;
+      std::cerr << "Unsupported aggregation column type: " << aggregation_column_type << std::endl;
       return GDF_UNSUPPORTED_DTYPE;
   }
 }
 
-/* --------------------------------------------------------------------------*/
-/** 
- * @Synopsis  Helper function for gdf_group_by hash. Deduces the type of the input
- * group by gdf_column and sets a template parameter accordingly to another dispatch
- * dispatch function.
- * 
- */
-/* ----------------------------------------------------------------------------*/
-template <template <typename T> class op>
-gdf_error dispatch_groupby_type(int ncols,               
-                                gdf_column* in_groupby_columns[],        
-                                gdf_column* in_aggregation_column,       
-                                gdf_column* out_groupby_columns[],
-                                gdf_column* out_aggregation_column,
-                                bool sort_result = false)
-{
-  gdf_dtype groupby_column_type = in_groupby_columns[0]->dtype;
-
-  // Deduce the type of the groupby column and call function to deduce the aggregation column type
-  switch(groupby_column_type)
-  {
-    case GDF_INT8:   
-      {
-        return dispatch_aggregation_type<int8_t, op>(ncols, in_groupby_columns, in_aggregation_column, 
-                                                     out_groupby_columns, out_aggregation_column, sort_result);
-      }
-    case GDF_INT16:  
-      { 
-        return dispatch_aggregation_type<int16_t, op>(ncols, in_groupby_columns, in_aggregation_column, 
-                                                      out_groupby_columns, out_aggregation_column, sort_result);
-      }
-    case GDF_INT32:  
-      { 
-        return dispatch_aggregation_type<int32_t, op>(ncols, in_groupby_columns, in_aggregation_column, 
-                                                      out_groupby_columns, out_aggregation_column, sort_result);
-      }
-    case GDF_INT64:  
-      { 
-        return dispatch_aggregation_type<int64_t, op>(ncols, in_groupby_columns, in_aggregation_column, 
-                                                      out_groupby_columns, out_aggregation_column, sort_result);
-      }
-    // For floating point groupby column types, cast to an integral type
-    case GDF_FLOAT32:
-      {
-        return dispatch_aggregation_type<int32_t, op>(ncols, in_groupby_columns, in_aggregation_column, 
-                                                      out_groupby_columns, out_aggregation_column, sort_result);
-      }
-    case GDF_FLOAT64:
-      { 
-        return dispatch_aggregation_type<int64_t, op>(ncols, in_groupby_columns, in_aggregation_column, 
-                                                      out_groupby_columns, out_aggregation_column, sort_result);
-      }
-    default:
-     {
-       std::cout << "Unsupported groupby column type:" << groupby_column_type << std::endl;
-       return GDF_UNSUPPORTED_DTYPE;
-     }
-  }
-
-}
 
 /* --------------------------------------------------------------------------*/
 /** 
@@ -226,8 +211,9 @@ gdf_error dispatch_groupby_type(int ncols,
  * @Returns gdf_error
  */
 /* ----------------------------------------------------------------------------*/
-template <template <typename aggregation_type> class aggregation_operation>
-gdf_error gdf_group_by_hash(int ncols,               
+template <template <typename aggregation_type> class aggregation_operation,
+          typename size_type>
+gdf_error gdf_group_by_hash(size_type ncols,               
                             gdf_column* in_groupby_columns[],        
                             gdf_column* in_aggregation_column,       
                             gdf_column* out_groupby_columns[],
@@ -235,14 +221,15 @@ gdf_error gdf_group_by_hash(int ncols,
                             bool sort_result = false)
 {
 
-  // TODO Currently only supports a single groupby column
-  if(ncols > 1) {
-    std::cerr << "Can only support a single groupby column at this time.\n";
-    return GDF_GROUPBY_TOO_MANY_COLUMNS;
-  }
+  // Wrap the groupby input and output columns in a gdf_table
+  std::unique_ptr< const gdf_table<size_type> > groupby_input_table{new gdf_table<size_type>(ncols, in_groupby_columns)};
+  std::unique_ptr< gdf_table<size_type> > groupby_output_table{new gdf_table<size_type>(ncols, out_groupby_columns)};
 
-  return dispatch_groupby_type<aggregation_operation>(ncols, in_groupby_columns, in_aggregation_column, 
-                                                      out_groupby_columns, out_aggregation_column, sort_result);
+  return dispatch_aggregation_type<aggregation_operation>(*groupby_input_table, 
+                                                          in_aggregation_column, 
+                                                          *groupby_output_table, 
+                                                          out_aggregation_column, 
+                                                          sort_result);
 }
 
 /* --------------------------------------------------------------------------*/
