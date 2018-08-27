@@ -1,4 +1,21 @@
-/* Copyright 2018 NVIDIA Corporation.  All rights reserved. */
+/*
+ * Copyright (c) 2018, NVIDIA CORPORATION.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+//Quantile (percentile) testing
+
 
 #include <thrust/device_vector.h>
 #include <thrust/copy.h>
@@ -6,12 +23,9 @@
 #include <iostream>
 #include <vector>
 #include <string>
-//
 
 #include <cassert>
 #include <cmath>
-
-//
 
 #include <gdf/gdf.h>
 #include <gdf/utils.h>
@@ -51,16 +65,14 @@ void f_quantile_tester(gdf_column* col_in, std::vector<VType>& v_out_exact, std:
       gdf_error ret = gdf_quantile_aprrox(col_in, q, &res, &ctxt);
       v_out_exact[j] = res;
       EXPECT_EQ( ret, GDF_SUCCESS) << "approx " << " returns unexpected failure\n";
-      ///assert( ret == GDF_SUCCESS );
-      ///std::cout<<"q: "<<q<<"; exact res: "<<res<<"\n";
+      
       for(auto i = 0;i<n_methods;++i)
         {
           double rt = 0;
           ret = gdf_quantile_exact(col_in, static_cast<gdf_quantile_method>(i), q, &rt, &ctxt);
           v_out_m[j][i] = rt;
-          ///assert( ret == GDF_SUCCESS );
+          
           EXPECT_EQ( ret, GDF_SUCCESS) << "exact " << methods[i] << " returns unexpected failure\n";
-          ///std::cout<<"q: "<<q<<"; method: "<<methods[i]<<"; rt: "<<rt<<"\n";
         }
     }
 }
