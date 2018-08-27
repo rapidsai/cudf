@@ -22,6 +22,7 @@
 #include <memory>
 #include <cub/util_allocator.cuh>
 #include <cub/device/device_radix_sort.cuh>
+#include "../../hashmap/managed.cuh"
 #include "groupby_kernels.cuh"
 #include "../../gdf_table.cuh"
 
@@ -46,7 +47,7 @@ constexpr unsigned int THREAD_BLOCK_SIZE{256};
 
 template <typename map_type,
           typename size_type>
-struct row_comparator
+struct row_comparator : public managed
 {
   using key_type = typename map_type::key_type;
   using map_key_comparator = typename map_type::key_equal;
@@ -118,8 +119,6 @@ cudaError_t GroupbyHash(gdf_table<size_type> const & groupby_input_table,
 
   const size_type input_num_rows = groupby_input_table.get_column_length();
 
-
-
   // The map will store (row index, aggregation value)
   // Where row index is the row number of the first row to be successfully inserted
   // for a given unique 'key' where the 'key' is the set of values in the row.
@@ -127,19 +126,19 @@ cudaError_t GroupbyHash(gdf_table<size_type> const & groupby_input_table,
                                             aggregation_type, 
                                             std::numeric_limits<size_type>::max(), 
                                             default_hash<size_type>, 
-                                            equal_to<size_type>, // TODO Can I pass a clever functor here for the equality comparison using the gdf_table and the row index?
+                                            equal_to<size_type>,
                                             legacy_allocator<thrust::pair<size_type, aggregation_type> > >;
 
   // The hash table occupancy and the input size determines the size of the hash table
   // e.g., for a 50% occupancy, the size of the hash table is twice that of the input
   const size_type hash_table_size = static_cast<size_type>((static_cast<uint64_t>(input_num_rows) * 100 / DEFAULT_HASH_TABLE_OCCUPANCY));
-  //
+  
   // Initialize the hash table with the aggregation operation functor's identity value
   std::unique_ptr<map_type> the_map(new map_type(hash_table_size, aggregation_operation::IDENTITY));
 
-  // Functor that will be used by the hash table's insert/find functions to check for equality 
+  // Functor that will be used by the hash table's insert function to check for equality 
   // between two rows of the groupby_input_table
-  row_comparator<map_type,size_type> the_comparator(*the_map, groupby_input_table, groupby_input_table);
+  std::unique_ptr<row_comparator<map_type,size_type>> the_comparator{new row_comparator<map_type, size_type>(*the_map, groupby_input_table, groupby_input_table)};
 
   const dim3 build_grid_size ((input_num_rows + THREAD_BLOCK_SIZE - 1) / THREAD_BLOCK_SIZE, 1, 1);
   const dim3 block_size (THREAD_BLOCK_SIZE, 1, 1);
@@ -147,7 +146,7 @@ cudaError_t GroupbyHash(gdf_table<size_type> const & groupby_input_table,
   CUDA_RT_CALL(cudaGetLastError());
 
 
-  // Inserts (groupby_column[i], aggregation_column[i]) as a key-value pair into the
+  // Inserts (i, aggregation_column[i]) as a key-value pair into the
   // hash table. When a given key already exists in the table, the aggregation operation
   // is computed between the new and existing value, and the result is stored back.
   build_aggregation_table<<<build_grid_size, block_size>>>(the_map.get(), 
@@ -155,7 +154,7 @@ cudaError_t GroupbyHash(gdf_table<size_type> const & groupby_input_table,
                                                            in_aggregation_column,
                                                            input_num_rows,
                                                            aggregation_op,
-                                                           the_comparator);
+                                                           *the_comparator);
   CUDA_RT_CALL(cudaGetLastError());
 
   // Used by threads to coordinate where to write their results
@@ -195,6 +194,7 @@ cudaError_t GroupbyHash(gdf_table<size_type> const & groupby_input_table,
   cudaMemcpy(out_size, global_write_index, sizeof(size_type), cudaMemcpyDeviceToHost);
   CUDA_RT_CALL(cudaFree(global_write_index));
 
+  // TODO Need to sort rows of a gdf_table
   /*
   // Optionally sort the groupby/aggregation result columns
   if(true == sort_result)
