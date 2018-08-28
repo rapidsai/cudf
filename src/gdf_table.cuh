@@ -24,12 +24,13 @@
 #include "hashmap/managed.cuh"
 
 // TODO Inherit from managed class to allocate with managed memory?
-template <typename T>
+template <typename T, typename byte_t = unsigned char>
 class gdf_table : public managed
 {
 public:
 
   using size_type = T;
+  using byte_type = byte_t;
 
   gdf_table(size_type num_cols, gdf_column ** gdf_columns) 
     : num_columns(num_cols), host_columns(gdf_columns)
@@ -41,6 +42,7 @@ public:
     // as contiguous arrays
     device_columns.reserve(num_cols);
     device_types.reserve(num_cols);
+    column_byte_widths.reserve(num_cols);
     for(size_type i = 0; i < num_cols; ++i)
     {
       gdf_column * const current_column = host_columns[i];
@@ -54,16 +56,20 @@ public:
       if(GDF_SUCCESS == get_column_byte_width(current_column, &column_width_bytes))
       {
         row_size_bytes += column_width_bytes;
+
+        // Store the byte width of each column in a device array
+        column_byte_widths.push_back(static_cast<byte_type>(row_size_bytes));
       }
       else
       {
         std::cerr << "Attempted to get column byte width of unsupported GDF datatype.\n";
+        column_byte_widths.push_back(0);
       }
-
     }
 
     d_columns_data = device_columns.data().get();
     d_columns_types = device_types.data().get();
+    d_column_byte_widths = column_byte_widths.data().get();
   }
 
   ~gdf_table(){}
@@ -91,22 +97,129 @@ public:
     }
   }
 
+
+  /* --------------------------------------------------------------------------*/
+  /** 
+   * @Synopsis  Gets the GDF data type of the column to be used for building the hash table
+   * 
+   * @Returns The GDF data type of the build column
+   */
+  /* ----------------------------------------------------------------------------*/
   gdf_dtype get_build_column_type() const
   {
     return host_columns[build_column_index]->dtype;
   }
 
+  /* --------------------------------------------------------------------------*/
+  /** 
+   * @Synopsis  Gets a pointer to the data of the column to be used for building the hash table
+   * 
+   * @Returns Pointer to data of the build column
+   */
+  /* ----------------------------------------------------------------------------*/
   void * get_build_column_data() const
   {
     return host_columns[build_column_index]->data;
   }
 
+
+  /* --------------------------------------------------------------------------*/
+  /** 
+   * @Synopsis  Gets a pointer to the data of the column to be used for probing the hash table
+   * 
+   * @Returns  Pointer to data of the probe column
+   */
+  /* ----------------------------------------------------------------------------*/
   void * get_probe_column_data() const
   {
-    return host_columns[build_column_index]->data;
+    return host_columns[probe_column_index]->data;
   }
 
+  /* --------------------------------------------------------------------------*/
+  /** 
+   * @Synopsis  Gets the size in bytes of a row in the gdf_table, i.e., the sum of 
+   * the byte widths of all columns in the table
+   * 
+   * @Returns The size in bytes of the row in the table
+   */
+  /* ----------------------------------------------------------------------------*/
+  byte_type get_row_size_bytes() const
+  {
+    return row_size_bytes;
+  }
 
+  /* --------------------------------------------------------------------------*/
+  /** 
+   * @Synopsis  Copies the elements of a row in the table into a dense byte vector
+   * 
+   * @Param index The row of the table to return
+   * @Param row_byte_buffer A pointer to a preallocated buffer large enough to hold a 
+      row of the table 
+   * 
+   */
+  /* ----------------------------------------------------------------------------*/
+  // TODO Is there a less hacky way to do this? 
+  __device__
+  void get_dense_row(size_type row_index, byte_type * row_byte_buffer)
+  {
+    if(nullptr == row_byte_buffer)
+    {
+      printf("The buffer to store the row must be preallocated!\n");
+      return;
+    }
+
+    byte_type * write_pointer{row_byte_buffer};
+
+    // Pack the element from each column in the row into the buffer
+    for(size_type i = 0; i < num_columns; ++i)
+    {
+      const byte_type current_column_byte_width = d_column_byte_widths[i];
+      switch(current_column_byte_width)
+      {
+        case 1:
+          {
+            using col_type = int8_t;
+            const col_type * const current_row_element = static_cast<col_type *>(d_columns_data[i])[row_index];
+            col_type * write_location = static_cast<col_type*>(write_pointer);
+            *write_location = *current_row_element;
+            write_pointer += sizeof(col_type);
+            break;
+          }
+        case 2:
+          {
+            using col_type = int16_t;
+            const col_type * const current_row_element = static_cast<col_type *>(d_columns_data[i])[row_index];
+            col_type * write_location = static_cast<col_type*>(write_pointer);
+            *write_location = *current_row_element;
+            write_pointer += sizeof(col_type);
+            break;
+          }
+        case 4:
+          {
+            using col_type = int32_t;
+            const col_type * const current_row_element = static_cast<col_type *>(d_columns_data[i])[row_index];
+            col_type * write_location = static_cast<col_type*>(write_pointer);
+            *write_location = *current_row_element;
+            write_pointer += sizeof(col_type);
+            break;
+          }
+        case 8:
+          {
+            using col_type = int64_t;
+            const col_type * const current_row_element = static_cast<col_type *>(d_columns_data[i])[row_index];
+            col_type * write_location = static_cast<col_type*>(write_pointer);
+            *write_location = *current_row_element;
+            write_pointer += sizeof(col_type);
+            break;
+          }
+        default:
+          {
+            printf("Illegal column byte width.\n");
+            return;
+          }
+      }
+    }
+  }
 
   __host__ 
   void print_row(const size_type row_index, char * msg = "") const
@@ -172,7 +285,6 @@ public:
     sprintf(row,")\n");
 
     printf("%s %s", msg, row);
-
   }
 
     /* --------------------------------------------------------------------------*/
@@ -547,6 +659,8 @@ private:
   size_type column_length{0};
 
   size_type row_size_bytes{0};
+  thrust::device_vector<byte_type> column_byte_widths;
+  byte_type * d_column_byte_widths{nullptr};
 
   // Just use the first column as the build/probe column for now
   const size_type build_column_index{0};
