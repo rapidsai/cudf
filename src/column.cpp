@@ -69,6 +69,9 @@ gdf_error get_column_byte_width(gdf_column * col, int * width){
 	case GDF_DATE64 :
 		*width = 8;
 		break;
+	case GDF_TIMESTAMP :
+		*width = 8;
+		break;
 	default :
 		*width = -1;
 		return GDF_UNSUPPORTED_DTYPE;
