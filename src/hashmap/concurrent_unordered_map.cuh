@@ -465,9 +465,12 @@ public:
                   E.g., if the aggregation operation is 'max', then the maximum is computed
                   between the new value and existing value and the result is stored in the map.
      * 
-     * @Param x The new (key, value) pair to insert
-     * @Param op The aggregation operation to perform
-     * @Param keys_equal An optional functor for comparing two keys 
+     * @Param[in] x The new (key, value) pair to insert
+     * @Param[in] op The aggregation operation to perform
+     * @Param[in] keys_equal An optional functor for comparing two keys 
+     * @Param[in] precomputed_hash Indicates if a precomputed hash value is being passed in to use
+     * to determine the write location of the new key
+     * @Param[in] precomputed_hash_value The precomputed hash value
      * @tparam aggregation_type A functor for a binary operation that performs the aggregation
      * @tparam comparison_type A functor for comparing two keys
      * 
@@ -475,16 +478,33 @@ public:
      */
     /* ----------------------------------------------------------------------------*/
     template<typename aggregation_type,
-             class comparison_type = key_equal>
+             class comparison_type = key_equal,
+             typename hash_value_type = typename Hasher::result_type>
     __forceinline__
     __device__ iterator insert(const value_type& x, 
                                aggregation_type op,
-                               comparison_type keys_equal = key_equal() )
+                               comparison_type keys_equal = key_equal(),
+                               bool precomputed_hash = false,
+                               hash_value_type precomputed_hash_value = 0)
     {
         const size_type hashtbl_size    = m_hashtbl_size;
         value_type* hashtbl_values      = m_hashtbl_values;
-        const size_type key_hash        = m_hf( x.first );
-        size_type current_index         = key_hash % hashtbl_size;
+
+        hash_value_type hash_value{0};
+
+        // If a precomputed hash value has been passed in, then use it to determine
+        // the write location of the new key
+        if(true == precomputed_hash)
+        {
+          hash_value = precomputed_hash_value;
+        }
+        // Otherwise, compute the hash value from the new key
+        else
+        {
+          hash_value = m_hf(x.first);
+        }
+
+        size_type current_index         = hash_value % hashtbl_size;
         value_type *current_hash_bucket = &(hashtbl_values[current_index]);
 
         const key_type insert_key = x.first;
