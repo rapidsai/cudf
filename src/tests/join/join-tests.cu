@@ -331,7 +331,8 @@ struct JoinTest : public testing::Test
   {
     const int num_columns = std::tuple_size<multi_column_t>::value;
 
-    gdf_join_result_type * gdf_join_result;
+    gdf_column left_result;
+    gdf_column right_result;
 
     gdf_error result_error{GDF_SUCCESS};
 
@@ -346,7 +347,7 @@ struct JoinTest : public testing::Test
             result_error = gdf_left_join(num_columns,
                                          left_gdf_columns,
                                          right_gdf_columns,
-                                         &gdf_join_result,
+                                         &left_result, &right_result,
                                          &ctxt);
             break;
           }
@@ -355,7 +356,7 @@ struct JoinTest : public testing::Test
             result_error = gdf_inner_join(num_columns,
                                          left_gdf_columns,
                                          right_gdf_columns,
-                                         &gdf_join_result,
+                                         &left_result, &right_result,
                                          &ctxt);
             break;
           }
@@ -363,7 +364,7 @@ struct JoinTest : public testing::Test
           {
             result_error = gdf_outer_join_generic(gdf_raw_left_columns[0],
                                                   gdf_raw_right_columns[0],
-                                                  &gdf_join_result);
+                                                  &left_result, &right_result);
             break;
           }
         default:
@@ -384,7 +385,7 @@ struct JoinTest : public testing::Test
             result_error = gdf_left_join(num_columns,
                                          left_gdf_columns,
                                          right_gdf_columns,
-                                         &gdf_join_result,
+                                         &left_result, &right_result,
                                          &ctxt);
             break;
           }
@@ -393,7 +394,7 @@ struct JoinTest : public testing::Test
             result_error =  gdf_inner_join(num_columns,
                                            left_gdf_columns,
                                            right_gdf_columns,
-                                           &gdf_join_result,
+                                           &left_result, &right_result,
                                            &ctxt);
             //std::cout << "Multi column *inner* joins not supported yet\n";
             //EXPECT_TRUE(false);
@@ -406,22 +407,27 @@ struct JoinTest : public testing::Test
     }
     EXPECT_EQ(GDF_SUCCESS, result_error) << "The gdf join function did not complete successfully";
 
+    EXPECT_EQ(left_result.size, right_result.size) << "Join output size mismatch";
     // The output is an array of size `n` where the first n/2 elements are the
     // left_indices and the last n/2 elements are the right indices
-    size_t output_size = gdf_join_result_size(gdf_join_result);
-    size_t total_pairs = output_size/2;
+    size_t total_pairs = left_result.size;
+    size_t output_size = total_pairs*2;
 
-    int * join_output = static_cast<int*>(gdf_join_result_data(gdf_join_result));
+    int * l_join_output = static_cast<int*>(left_result.data);
+    int * r_join_output = static_cast<int*>(right_result.data);
 
     // Host vector to hold gdf join output
     std::vector<int> host_result(output_size);
 
     // Copy result of gdf join to the host
-    cudaMemcpy(host_result.data(), join_output, output_size * sizeof(int), cudaMemcpyDeviceToHost);
+    cudaMemcpy(host_result.data(),
+            l_join_output, total_pairs * sizeof(int), cudaMemcpyDeviceToHost);
+    cudaMemcpy(host_result.data() + total_pairs,
+            r_join_output, total_pairs * sizeof(int), cudaMemcpyDeviceToHost);
 
     // Free the original join result
-    gdf_join_result_free(gdf_join_result);
-    join_output = nullptr;
+    gdf_column_free(&left_result);
+    gdf_column_free(&right_result);
 
     // Host vector of result_type pairs to hold final result for comparison to reference solution
     std::vector<result_type> host_pair_result(total_pairs);
