@@ -150,7 +150,7 @@ public:
 
   /* --------------------------------------------------------------------------*/
   /** 
-   * @Synopsis  Copies the elements of a row in the table into a dense byte vector
+   * @Synopsis  Packs the elements of a specified row into a contiguous, dense buffer
    * 
    * @Param index The row of the table to return
    * @Param row_byte_buffer A pointer to a preallocated buffer large enough to hold a 
