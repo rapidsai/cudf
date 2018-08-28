@@ -72,6 +72,15 @@ typedef enum {
 } gdf_method;
 
 typedef enum {
+  GDF_QUANT_LINEAR =0,
+  GDF_QUANT_LOWER,
+  GDF_QUANT_HIGHER,
+  GDF_QUANT_MIDPOINT,
+  GDF_QUANT_NEAREST,
+  N_GDF_QUANT_METHODS,
+} gdf_quantile_method;
+
+typedef enum {
   GDF_SUM = 0,
   GDF_MIN,
   GDF_MAX,
@@ -87,6 +96,7 @@ typedef struct gdf_context_{
   gdf_method flag_method; /* what method is used */
   int flag_distinct;      /* for COUNT: DISTINCT = 1, else = 0 */
   int flag_sort_result;   /* When method is GDF_HASH, 0 = result is not sorted, 1 = result is sorted */
+  int flag_sort_inplace;  /* 0 = No sort in place allowed, 1 = else */
 } gdf_context;
 
 struct _OpaqueIpcParser;
