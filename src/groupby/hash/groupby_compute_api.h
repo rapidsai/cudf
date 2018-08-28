@@ -45,6 +45,18 @@ constexpr unsigned int DEFAULT_HASH_TABLE_OCCUPANCY{50};
 
 constexpr unsigned int THREAD_BLOCK_SIZE{256};
 
+/* --------------------------------------------------------------------------*/
+/** 
+ * @Synopsis  This functor is used inside the hash table's insert function to 
+ * compare equality between two keys in the hash table. 
+ * 
+ * If comparing a key to the map's unused key, simply performs the 
+ * default key comparison defined in the map class. 
+ *
+ * Otherwise, the hash table keys refer to row indices in gdf_tables and the 
+ * functor checks for equality between the two rows.
+ */
+/* ----------------------------------------------------------------------------*/
 template <typename map_type,
           typename size_type>
 struct row_comparator : public managed
@@ -52,6 +64,16 @@ struct row_comparator : public managed
   using key_type = typename map_type::key_type;
   using map_key_comparator = typename map_type::key_equal;
 
+  /* --------------------------------------------------------------------------*/
+  /** 
+   * @Synopsis  Constructs a row_comparator functor to check for equality between
+   * keys in the hash table.
+   * 
+   * @Param map The hash table
+   * @Param l_table The left gdf_table
+   * @Param r_table The right gdf_table
+   */
+  /* ----------------------------------------------------------------------------*/
   row_comparator(map_type const & map,
                  gdf_table<size_type> const & l_table,
                  gdf_table<size_type> const & r_table) 
@@ -64,6 +86,24 @@ struct row_comparator : public managed
   
   }
 
+  /* --------------------------------------------------------------------------*/
+  /** 
+   * @Synopsis Used in the hash table's insert function to check for equality between
+   * two keys. Two cases are possible:
+   *
+   * 1. If left_index OR right_index is equal to the map's unused_key, then the functor
+   * is being used to compare against an empty key. In this case, perform the default
+   * key comparison defined in the map class.
+   *
+   * 2. Else, the functor is being used to compare two rows of gdf_tables. In this case,
+   * the gdf_table rows_equal function is used to check if the two rows are equal.
+   * 
+   * @Param left_index The left table index to compare
+   * @Param right_index The right table index to compare
+   * 
+   * @Returns   
+   */
+  /* ----------------------------------------------------------------------------*/
   __device__ bool operator()(key_type const & left_index, 
                              key_type const & right_index) const
   {
@@ -87,19 +127,19 @@ struct row_comparator : public managed
 
 /* --------------------------------------------------------------------------*/
 /** 
-* @Synopsis Performs the groupby operation for a *SINGLE* 'groupby' column and
+* @Synopsis Performs the groupby operation for an arbtirary number of groupby columns and
 * and a single aggregation column.
 * 
-* @Param[in] in_groupby_column The column to groupby. These act as keys into the hash table
+* @Param[in] groupby_input_table The set of columns to groupby
 * @Param[in] in_aggregation_column The column to perform the aggregation on. These act as the hash table values
-* @Param[in] in_column_size The size of the groupby and aggregation columns
-* @Param[out] out_groupby_column Preallocated output buffer that will hold every unique value from the input
-*                                groupby column
+* @Param[out] groupby_output_table Preallocated buffer(s) for the groupby column result. This will hold a single
+* entry for every unique row in the input table.
 * @Param[out] out_aggregation_column Preallocated output buffer for the resultant aggregation column that 
 *                                     corresponds to the out_groupby_column where entry 'i' is the aggregation 
 *                                     for the group out_groupby_column[i] 
 * @Param out_size The size of the output
 * @Param aggregation_op The aggregation operation to perform 
+* @Param sort_result Flag to optionally sort the output table
 * 
 * @Returns   
 */
@@ -121,7 +161,7 @@ cudaError_t GroupbyHash(gdf_table<size_type> const & groupby_input_table,
 
   // The map will store (row index, aggregation value)
   // Where row index is the row number of the first row to be successfully inserted
-  // for a given unique 'key' where the 'key' is the set of values in the row.
+  // for a given unique row
   using map_type = concurrent_unordered_map<size_type, 
                                             aggregation_type, 
                                             std::numeric_limits<size_type>::max(), 
@@ -144,7 +184,6 @@ cudaError_t GroupbyHash(gdf_table<size_type> const & groupby_input_table,
   const dim3 block_size (THREAD_BLOCK_SIZE, 1, 1);
 
   CUDA_RT_CALL(cudaGetLastError());
-
 
   // Inserts (i, aggregation_column[i]) as a key-value pair into the
   // hash table. When a given key already exists in the table, the aggregation operation
@@ -194,7 +233,7 @@ cudaError_t GroupbyHash(gdf_table<size_type> const & groupby_input_table,
   cudaMemcpy(out_size, global_write_index, sizeof(size_type), cudaMemcpyDeviceToHost);
   CUDA_RT_CALL(cudaFree(global_write_index));
 
-  // TODO Need to sort rows of a gdf_table
+  // TODO Need to define comparator to allow sorting rows of a gdf_table
   /*
   // Optionally sort the groupby/aggregation result columns
   if(true == sort_result)
