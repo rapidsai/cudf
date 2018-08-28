@@ -43,10 +43,23 @@ public:
     device_types.reserve(num_cols);
     for(size_type i = 0; i < num_cols; ++i)
     {
-      assert(column_length == host_columns[i]->size);
+      gdf_column * const current_column = host_columns[i];
+      assert(column_length == current_column->size);
 
-      device_columns.push_back(host_columns[i]->data);
-      device_types.push_back(host_columns[i]->dtype);
+      device_columns.push_back(current_column->data);
+      device_types.push_back(current_column->dtype);
+
+      // Compute the size of a row in the table in bytes
+      int column_width_bytes{0};
+      if(GDF_SUCCESS == get_column_byte_width(current_column, &column_width_bytes))
+      {
+        row_size_bytes += column_width_bytes;
+      }
+      else
+      {
+        std::cerr << "Attempted to get column byte width of unsupported GDF datatype.\n";
+      }
+
     }
 
     d_columns_data = device_columns.data().get();
@@ -92,6 +105,8 @@ public:
   {
     return host_columns[build_column_index]->data;
   }
+
+
 
   __host__ 
   void print_row(const size_type row_index, char * msg = "") const
@@ -527,9 +542,11 @@ private:
   thrust::device_vector<void*> device_columns;
   thrust::device_vector<gdf_dtype> device_types;
 
-  gdf_column ** host_columns;
+  gdf_column ** host_columns{nullptr};
   const size_type num_columns;
-  size_type column_length;
+  size_type column_length{0};
+
+  size_type row_size_bytes{0};
 
   // Just use the first column as the build/probe column for now
   const size_type build_column_index{0};
