@@ -26,13 +26,11 @@
  * @Synopsis Calls the Hash Based group by compute API to compute the groupby with 
  * aggregation.
  * 
- * @Param ncols The number of input group by columns
- * @Param in_groupby_columns[] The set of input groupby columns
+ * @Param groupby_input_table The input groupby table
  * @Param in_aggregation_column The input aggregation column
- * @Param out_groupby_columns[] The set of output groupby columns
+ * @Param groupby_output_table The output groupby table
  * @Param out_aggregation_column The output aggregation column
  * @Param sort_result Flag to optionally sort the output
- * @tparam groupby_type The type of the groupby column
  * @tparam aggregation_type  The type of the aggregation column
  * @tparam op A binary functor that implements the aggregation operation
  * 
