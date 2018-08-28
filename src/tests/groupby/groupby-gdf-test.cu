@@ -529,7 +529,8 @@ using TestCases = ::testing::Types<
 
 TYPED_TEST_CASE(GDFGroupByTest, TestCases);
 
-TYPED_TEST(GDFGroupByTest, ExampleTest)
+// Remove 'DISABLED_' in order to enable this test where extra debug printing is enabled
+TYPED_TEST(GDFGroupByTest, DISABLED_DebugTest)
 {
   const int num_keys = 5;
   const int num_values_per_key = 2;
@@ -543,8 +544,7 @@ TYPED_TEST(GDFGroupByTest, ExampleTest)
            this->aggregation_column) = this->create_reference_input(num_keys, 
                                                                     num_values_per_key,
                                                                     max_key,
-                                                                    max_value,
-                                                                    true);
+                                                                    max_value, true);
 
   auto expected_values = this->compute_reference_solution(this->groupby_column, 
                                                           this->aggregation_column,
@@ -570,7 +570,6 @@ TYPED_TEST(GDFGroupByTest, ExampleTest)
                           this->gdf_agg_output.get());
 
 }
-/*
 
 TYPED_TEST(GDFGroupByTest, AllKeysSame)
 {
@@ -728,5 +727,4 @@ TYPED_TEST(GDFGroupByTest, BlockKeysSame)
                           this->gdf_agg_output.get());
 
 }
-*/
 
