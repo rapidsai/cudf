@@ -444,23 +444,40 @@ public:
         return iterator( m_hashtbl_values,m_hashtbl_values+hashtbl_size,it);
     }
     
+    template < typename hash_value_type = typename Hasher::result_type,
+               typename comparison_type = key_equal>
     __forceinline__
-    __host__ __device__ const_iterator find(const key_type& k ) const
+    __host__ __device__ const_iterator find(const key_type& the_key,
+                                            bool precomputed_hash = false,
+                                            hash_value_type precomputed_hash_value = 0,
+                                            comparison_type keys_are_equal = key_equal()) const
     {
-        const auto key_hash = m_hf( k );
-        size_type hash_tbl_idx = key_hash%m_hashtbl_size;
+        hash_value_type hash_value{0};
+
+        // If a precomputed hash value has been passed in, then use it to determine
+        // the location of the key 
+        if(true == precomputed_hash) {
+          hash_value = precomputed_hash_value;
+        }
+        // Otherwise, compute the hash value from the key
+        else {
+          hash_value = m_hf(the_key);
+        }
+
+        size_type hash_tbl_idx = hash_value % m_hashtbl_size;
         
         value_type* begin_ptr = 0;
         
         size_type counter = 0;
-        while ( 0 == begin_ptr ) {
+        while ( 0 == begin_ptr ) 
+        {
             value_type* tmp_ptr = m_hashtbl_values + hash_tbl_idx;
             const key_type tmp_val = tmp_ptr->first;
-            if ( m_equal( k, tmp_val ) ) {
+            if ( keys_are_equal( the_key, tmp_val ) ) {
                 begin_ptr = tmp_ptr;
                 break;
             }
-            if ( m_equal( unused_key , tmp_val ) || counter > m_hashtbl_size ) {
+            if ( keys_are_equal( unused_key , tmp_val ) || counter > m_hashtbl_size ) {
                 begin_ptr = m_hashtbl_values + m_hashtbl_size;
                 break;
             }
