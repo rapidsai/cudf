@@ -53,5 +53,6 @@ add_subdirectory(filterops_numeric)
 add_subdirectory(quantiles)
 add_subdirectory(validops)
 add_subdirectory(memory)
+add_subdirectory(gdf)
 
 message(STATUS "******** Tests are ready ********")
