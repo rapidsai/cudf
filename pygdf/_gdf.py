@@ -232,13 +232,21 @@ def apply_join(col_lhs, col_rhs, how, method='hash'):
 
     # yield ((ary[0], ary[1]) if datasize > 0 else (ary, ary))
 
-    left = _as_numba_devarray(intaddr=int(ffi.cast("uintptr_t",
-                                                   col_result_l.data)),
-                              nelem=col_result_l.size, dtype=np.int32)
+    # left = _as_numba_devarray(intaddr=int(ffi.cast("uintptr_t",
+    #                                                col_result_l.data)),
+    #                           nelem=col_result_l.size, dtype=np.int32)
 
-    right = _as_numba_devarray(intaddr=int(ffi.cast("uintptr_t",
-                                                    col_result_r.data)),
-                               nelem=col_result_r.size, dtype=np.int32)
+    # right = _as_numba_devarray(intaddr=int(ffi.cast("uintptr_t",
+    #                                                 col_result_r.data)),
+    #                            nelem=col_result_r.size, dtype=np.int32)
+
+    left = rmm.device_array_from_ptr(ptr = col_result_l.data,
+                                     nelem=col_result_l.size, 
+                                     dtype=np.int32)
+
+    right = rmm.device_array_from_ptr(ptr = col_result_r.data,
+                                      nelem=col_result_r.size, 
+                                      dtype=np.int32)
 
     yield(left, right)
 
