@@ -167,7 +167,6 @@ def apply_join(col_lhs, col_rhs, how, method='hash'):
         raise ValueError(msg)
 
     joiner = _join_how_api[how]
-    join_result_ptr = ffi.new("gdf_join_result_type**", None)
     method_api = _join_method_api[method]
     gdf_context = ffi.new('gdf_context*')
 
@@ -179,6 +178,9 @@ def apply_join(col_lhs, col_rhs, how, method='hash'):
         msg = "method not supported"
         raise ValueError(msg)
 
+    col_result_l = columnview(0, None, dtype=np.int32)
+    col_result_r = columnview(0, None, dtype=np.int32)
+
     if(how in ['left', 'inner']):
         list_lhs = []
         list_rhs = []
@@ -188,19 +190,28 @@ def apply_join(col_lhs, col_rhs, how, method='hash'):
 
         # Call libgdf
 
-        joiner(len(col_lhs), list_lhs, list_rhs, join_result_ptr, gdf_context)
+        joiner(len(col_lhs), list_lhs, list_rhs, col_result_l,
+               col_result_r, gdf_context)
     else:
-        joiner(col_lhs[0].cffi_view, col_rhs[0].cffi_view, join_result_ptr)
+        joiner(col_lhs[0].cffi_view, col_rhs[0].cffi_view, col_result_l,
+               col_result_r)
 
     # Extract result
-    join_result = join_result_ptr[0]
-    dataptr = libgdf.gdf_join_result_data(join_result)
-    datasize = libgdf.gdf_join_result_size(join_result)
-    ary = _as_numba_devarray(intaddr=int(ffi.cast("uintptr_t", dataptr)),
-                             nelem=datasize, dtype=np.int32)
-    ary = ary.reshape(2, datasize // 2)
-    yield ((ary[0], ary[1]) if datasize > 0 else (ary, ary))
-    libgdf.gdf_join_result_free(join_result)
+
+    # yield ((ary[0], ary[1]) if datasize > 0 else (ary, ary))
+
+    left = _as_numba_devarray(intaddr=int(ffi.cast("uintptr_t",
+                                                   col_result_l.data)),
+                              nelem=col_result_l.size, dtype=np.int32)
+
+    right = _as_numba_devarray(intaddr=int(ffi.cast("uintptr_t",
+                                                    col_result_r.data)),
+                               nelem=col_result_r.size, dtype=np.int32)
+
+    yield(left, right)
+
+    libgdf.gdf_column_free(col_result_l)
+    libgdf.gdf_column_free(col_result_r)
 
 
 def apply_prefixsum(col_inp, col_out, inclusive):
