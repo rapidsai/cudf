@@ -15,14 +15,18 @@
  */
 
 /**
- Device Memory Manager implementation. Efficient allocation, deallocation and
- tracking of GPU memory.
-
- Author: Mark Harris
+ * @brief Device Memory Manager implementation. 
+ *
+ * Efficient allocation, deallocation and tracking of GPU memory.
+ *
  */
 
 #include "rmm.h"
 
+/**
+ * @brief Macro wrapper for RMM API calls to return appropriate RMM errors.
+ * 
+ */
 #define RMM_CHECK_CUDA(call) do { \
     cudaError_t cudaError = (call); \
     if( cudaError == cudaErrorMemoryAllocation ) { \
@@ -33,21 +37,20 @@
     } \
 } while(0)
 
-
-/// Initialize memory manager state and storage.
+// Initialize memory manager state and storage.
 rmmError_t rmmInitialize()
 {
     RMM_CHECK_CUDA(cudaFree(0));
     return RMM_SUCCESS;
 }
 
-/// Shutdown memory manager.
+// Shutdown memory manager.
 rmmError_t rmmFinalize()
 {
     return RMM_SUCCESS;
 }
-
-/// Allocate memory and initialize a pointer to device memory.
+ 
+// Allocate memory and return a pointer to device memory. 
 rmmError_t rmmAlloc(void **ptr, size_t size, cudaStream_t stream)
 {
 	if (!ptr && !size) {
@@ -66,7 +69,7 @@ rmmError_t rmmAlloc(void **ptr, size_t size, cudaStream_t stream)
     return RMM_SUCCESS;
 }
 
-/// Reallocate device memory block to new size and recycle any remaining memory as a new block.
+/// Reallocate device memory block to new size and recycle any remaining memory.
 rmmError_t rmmRealloc(void **ptr, size_t new_size, cudaStream_t stream)
 {
 	if (!ptr && !new_size) {
@@ -82,7 +85,7 @@ rmmError_t rmmRealloc(void **ptr, size_t new_size, cudaStream_t stream)
     return RMM_SUCCESS;
 }
 
-/// Release device memory and recycle the associated memory block.
+/// Release device memory and recycle the associated memory.
 rmmError_t rmmFree(void *ptr, cudaStream_t stream)
 {
 	RMM_CHECK_CUDA(cudaFree(ptr));
