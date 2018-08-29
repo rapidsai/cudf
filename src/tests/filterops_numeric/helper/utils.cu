@@ -20,9 +20,9 @@ std::string gdf_valid_to_str(gdf_valid_type *valid, size_t column_size)
 {
     size_t n_bytes = get_number_of_bytes_for_valid(column_size);
     std::string response;
-    for (int i = 0; i < n_bytes; i++)
+    for (size_t i = 0; i < n_bytes; i++)
     {
-        int length = n_bytes != i + 1 ? GDF_VALID_BITSIZE : column_size - GDF_VALID_BITSIZE * (n_bytes - 1);
+        size_t length = (n_bytes != i + 1) ? GDF_VALID_BITSIZE : (column_size - GDF_VALID_BITSIZE * (n_bytes - 1));
         auto result = chartobin(valid[i], length);
         response += std::string(result);
     }
@@ -40,7 +40,7 @@ gdf_valid_type* gen_gdf_valid(size_t column_size, size_t init_value)
     {
         size_t n_bytes = get_number_of_bytes_for_valid (column_size);
         valid = new gdf_valid_type[n_bytes];
-        int i;
+        size_t i;
         for (i = 0; i < n_bytes - 1; ++i)
         {
             valid[i] = (init_value % 256);
@@ -62,7 +62,7 @@ gdf_size_type count_zero_bits(gdf_valid_type *valid, size_t column_size)
     size_t numbits = 0;
     auto bin = gdf_valid_to_str(valid, column_size);
 
-    for(int i = 0; i < bin.length(); i++) {
+    for(size_t i = 0; i < bin.length(); i++) {
         if ( bin [i] == '0')
             numbits++;
     }

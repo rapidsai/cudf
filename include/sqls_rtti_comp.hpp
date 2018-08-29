@@ -70,63 +70,63 @@ struct LesserRTTI
   __host__ __device__
   bool equal(IndexT row1, IndexT row2) const
   {
-    for(int col_index = 0; col_index < sz_; ++col_index)
-      {
-	gdf_dtype col_type = static_cast<gdf_dtype>(rtti_[col_index]);
+    for(size_t col_index = 0; col_index < sz_; ++col_index)
+    {
+      gdf_dtype col_type = static_cast<gdf_dtype>(rtti_[col_index]);
 
-	OpEqual eq(row1, row2);
-	switch( type_dispatcher(eq, col_type, col_index) )
-	  {
-	  case State::False:
-	    return false;
-	    
-	  case State::True:
-	  case State::Undecided:
-	    break;
-	  }
+      OpEqual eq(row1, row2);
+      switch( type_dispatcher(eq, col_type, col_index) )
+      {
+      case State::False:
+        return false;
+
+      case State::True:
+      case State::Undecided:
+        break;
       }
+    }
     return true;
   }
 
   __host__ __device__
   bool equal_v(size_t row1) const
   {
-    for(int col_index = 0; col_index < sz_; ++col_index)
-      {
-	gdf_dtype col_type = static_cast<gdf_dtype>(rtti_[col_index]);
+    for(size_t col_index = 0; col_index < sz_; ++col_index)
+    {
+      gdf_dtype col_type = static_cast<gdf_dtype>(rtti_[col_index]);
 
-	OpEqualV eq(vals_, row1);
-	switch( type_dispatcher(eq, col_type, col_index) )
-	  {
-	  case State::False:
-	    return false;
-	    
-	  case State::True:
-	  case State::Undecided:
-	    break;
-	  }
+      OpEqualV eq(vals_, row1);
+      switch( type_dispatcher(eq, col_type, col_index) )
+      {
+      case State::False:
+        return false;
+
+      case State::True:
+      case State::Undecided:
+        break;
       }
+    }
     return true;
   }
 
   __host__ __device__
   bool less(IndexT row1, IndexT row2) const
   {
-    for(int col_index = 0; col_index < sz_; ++col_index)
-      {
-	gdf_dtype col_type = static_cast<gdf_dtype>(rtti_[col_index]);
+    for(size_t col_index = 0; col_index < sz_; ++col_index)
+    {
+      gdf_dtype col_type = static_cast<gdf_dtype>(rtti_[col_index]);
 
-	OpLess less(row1, row2);
-	switch( type_dispatcher(less, col_type, col_index) )
-	  {
-	  case State::False:
-	    return false;
-	  case State::True:
-	    return true;
-	  case State::Undecided:
-	    break;
-	  }
+      OpLess less(row1, row2);
+      switch( type_dispatcher(less, col_type, col_index) )
+      {
+      case State::False:
+        return false;
+      case State::True:
+        return true;
+      case State::Undecided:
+        break;
       }
+    }
     return false;
   }
 

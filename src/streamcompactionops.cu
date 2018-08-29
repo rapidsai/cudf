@@ -73,7 +73,7 @@ private:
 
 typedef repeat_iterator<thrust::detail::normal_iterator<thrust::device_ptr<gdf_valid_type> > > gdf_valid_iterator;
 
-size_t get_number_of_bytes_for_valid (size_t column_size) {
+gdf_size_type get_number_of_bytes_for_valid (gdf_size_type column_size) {
     return sizeof(gdf_valid_type) * (column_size + GDF_VALID_BITSIZE - 1) / GDF_VALID_BITSIZE;
 }
 
@@ -81,18 +81,18 @@ size_t get_number_of_bytes_for_valid (size_t column_size) {
 // note: functor inherits from unary_function
 struct modulus_bit_width : public thrust::unary_function<gdf_size_type,gdf_size_type>
 {
-	size_t n_bytes;
-	size_t column_size;
+	gdf_size_type n_bytes;
+	gdf_size_type column_size;
 	
-	modulus_bit_width (size_t b_nytes, size_t column_size) {
+	modulus_bit_width (gdf_size_type b_nytes, gdf_size_type column_size) {
 		this->n_bytes = n_bytes;
 		this->column_size = column_size;
 	}
 	__host__ __device__
 	gdf_size_type operator()(gdf_size_type x) const
 	{
-		int col_position = x / 8;	
-        int length_col = n_bytes != col_position+1 ? GDF_VALID_BITSIZE : column_size - GDF_VALID_BITSIZE * (n_bytes - 1);
+		gdf_size_type col_position = x / 8;	
+        gdf_size_type length_col = n_bytes != col_position+1 ? GDF_VALID_BITSIZE : column_size - GDF_VALID_BITSIZE * (n_bytes - 1);
 		//return x % GDF_VALID_BITSIZE;
 		return (length_col - 1) - (x % 8);
 		// x << 
@@ -181,7 +181,7 @@ struct bit_mask_pack_op : public thrust::unary_function<int64_t,gdf_valid_type>
 		gdf_valid_type operator()(const int64_t expanded)
 		{
 			gdf_valid_type result = 0;
-			for(int i = 0; i < GDF_VALID_BITSIZE; i++){
+			for(unsigned int i = 0; i < GDF_VALID_BITSIZE; i++){
 				// 0, 8, 16, ....,48,  56
 				unsigned char byte = (expanded >> ( (GDF_VALID_BITSIZE - 1 - i )  * 8));
 				result |= (byte & 1) << i;

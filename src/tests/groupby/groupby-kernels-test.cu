@@ -392,38 +392,40 @@ TYPED_TEST(GroupByTest, DISABLED_AggregationTestHost)
   thrust::pair<key_type, value_type> second_pair{0,10};
   thrust::pair<key_type, value_type> third_pair{0,5};
 
-  auto max = [](value_type a, value_type b) { return (a >= b ? a : b); };
+  struct {
+    __device__ value_type operator()(value_type a, value_type b) { return (a >= b ? a : b); };
+  } maxop;
 
-  this->the_map->insert(first_pair, max);
+  this->the_map->insert(first_pair, maxop);
   auto found = this->the_map->find(0);
-  EXPECT_EQ(0, found->second);
+  EXPECT_EQ(value_type(0), found->second);
 
-  this->the_map->insert(second_pair, max);
+  this->the_map->insert(second_pair, maxop);
   found = this->the_map->find(0);
-  EXPECT_EQ(10, found->second);
+  EXPECT_EQ(value_type(10), found->second);
 
-  this->the_map->insert(third_pair, max);
+  this->the_map->insert(third_pair, maxop);
   found = this->the_map->find(0);
-  EXPECT_EQ(10, found->second);
+  EXPECT_EQ(value_type(10), found->second);
 
-  this->the_map->insert(thrust::make_pair(0,11), max);
+  this->the_map->insert(thrust::make_pair(0,11), maxop);
   found = this->the_map->find(0);
-  EXPECT_EQ(11, found->second);
+  EXPECT_EQ(value_type(11), found->second);
 
-  this->the_map->insert(thrust::make_pair(7, 42), max);
+  this->the_map->insert(thrust::make_pair(7, 42), maxop);
   found = this->the_map->find(7);
-  EXPECT_EQ(42, found->second);
+  EXPECT_EQ(value_type(42), found->second);
 
-  this->the_map->insert(thrust::make_pair(7, 62), max);
+  this->the_map->insert(thrust::make_pair(7, 62), maxop);
   found = this->the_map->find(7);
-  EXPECT_EQ(62, found->second);
+  EXPECT_EQ(value_type(62), found->second);
 
-  this->the_map->insert(thrust::make_pair(7, 42), max);
+  this->the_map->insert(thrust::make_pair(7, 42), maxop);
   found = this->the_map->find(7);
-  EXPECT_EQ(62, found->second);
+  EXPECT_EQ(value_type(62), found->second);
 
   found = this->the_map->find(0);
-  EXPECT_EQ(11, found->second);
+  EXPECT_EQ(value_type(11), found->second);
 }
 
 

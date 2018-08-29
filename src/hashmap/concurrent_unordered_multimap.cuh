@@ -413,8 +413,9 @@ public:
                 }
             }
 #else
-            
+#ifdef _OPENMP
             #pragma omp critical
+#endif
             {
                 if ( m_equal( unused_key, tmp_it->first ) ) {
                     hashtbl_values[hash_tbl_idx] = thrust::make_pair( x.first, x.second );

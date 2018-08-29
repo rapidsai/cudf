@@ -43,12 +43,10 @@ TEST(Example, Equals)
 	cudaError_t cuda_error = cudaMalloc((void **)&data_left, sizeof(int8_t) * num_elements);
 	cuda_error = cudaMalloc((void **)&data_right, sizeof(int8_t) * num_elements);
 	cuda_error = cudaMalloc((void **)&data_out, sizeof(int8_t) * num_elements);
+	ASSERT_EQ(cuda_error, cudaSuccess);
 
-	thrust::device_ptr<int8_t> left_ptr = thrust::device_pointer_cast((int8_t *)data_left);
 	int8_t int8_value = 2;
-
 	thrust::device_ptr<int8_t> right_ptr = thrust::device_pointer_cast((int8_t *)data_right);
-	int8_value = 2;
 	thrust::fill(thrust::detail::make_normal_iterator(right_ptr), thrust::detail::make_normal_iterator(right_ptr + num_elements), int8_value);
 
 	//for this simple test we will send in only 8 values
@@ -67,7 +65,7 @@ TEST(Example, Equals)
 	error = gdf_column_view_augmented(&rhs, (void *)data_right, valid_device, num_elements, GDF_INT8, 0);
 	gdf_column output;
 	error = gdf_column_view_augmented(&output, (void *)data_out, valid_out, num_elements, GDF_INT8, 0);
-
+	ASSERT_EQ(error, GDF_SUCCESS);
 
 	std::cout << "Left" << std::endl;
 	print_column(&lhs);
@@ -78,6 +76,7 @@ TEST(Example, Equals)
 	print_column(&output);
 
 	error = gpu_comparison_static_i8(&lhs, 3, &output, GDF_EQUALS);
+	ASSERT_EQ(error, GDF_SUCCESS);
  
 	std::cout << "Output static_i8" << std::endl;
 	print_column(&output);
