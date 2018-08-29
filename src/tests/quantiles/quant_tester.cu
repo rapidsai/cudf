@@ -58,7 +58,7 @@ void f_quantile_tester(gdf_column* col_in, std::vector<VType>& v_out_exact, std:
   assert( n_methods == methods.size() );
   gdf_context ctxt{0, static_cast<gdf_method>(0), 0, 1};
   
-  for(auto j = 0; j<n_qs; ++j)
+  for(size_t j = 0; j<n_qs; ++j)
     {
       VType res = 0;
       auto q = qvals[j];
@@ -66,7 +66,7 @@ void f_quantile_tester(gdf_column* col_in, std::vector<VType>& v_out_exact, std:
       v_out_exact[j] = res;
       EXPECT_EQ( ret, GDF_SUCCESS) << "approx " << " returns unexpected failure\n";
       
-      for(auto i = 0;i<n_methods;++i)
+      for(size_t i = 0;i<n_methods;++i)
         {
           double rt = 0;
           ret = gdf_quantile_exact(col_in, static_cast<gdf_quantile_method>(i), q, &rt, &ctxt);
@@ -105,16 +105,16 @@ TEST(gdf_quantile_d, DoubleVector)
 
   f_quantile_tester<VType>(&col_in, v_out_approx, v_out_exact);
 
-  for(int i=0; i<n_qs;++i)
+  for(size_t i=0; i<n_qs;++i)
     {
       double delta = std::abs(static_cast<double>(v_baseline_approx[i] - v_out_approx[i]));
       bool flag = delta < 1.0e-8;
       EXPECT_EQ( flag, true ) << i <<"-th quantile deviates from baseline by: " << delta;
     }
 
-  for(int i=0; i<n_qs;++i)
+  for(size_t i=0; i<n_qs;++i)
     {
-      for(int j=0; j < n_methods; ++j)
+      for(size_t j=0; j < n_methods; ++j)
         {
           double delta = std::abs(static_cast<double>(v_baseline_exact[i][j] - v_out_exact[i][j]));
           bool flag = delta < 1.0e-8;
@@ -150,16 +150,16 @@ TEST(gdf_quantile_i, IntegerVector)
 
   f_quantile_tester<VType>(&col_in, v_out_approx, v_out_exact);
 
-  for(int i=0; i<n_qs;++i)
+  for(size_t i=0; i<n_qs;++i)
     {
       double delta = std::abs(static_cast<double>(v_baseline_approx[i] - v_out_approx[i]));
       bool flag = delta < 1.0e-8;
       EXPECT_EQ( flag, true ) << i <<"-th quantile deviates from baseline by: " << delta;
     }
 
-  for(int i=0; i<n_qs;++i)
+  for(size_t i=0; i<n_qs;++i)
     {
-      for(int j=0; j < n_methods; ++j)
+      for(size_t j=0; j < n_methods; ++j)
         {
           double delta = std::abs(static_cast<double>(v_baseline_exact[i][j] - v_out_exact[i][j]));
           bool flag = delta < 1.0e-8;

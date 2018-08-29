@@ -97,7 +97,7 @@ template <typename ValueType = int8_t>
 std::string gdf_data_to_str(void *data, size_t column_size)
 {
     std::string response;
-    for (int i = 0; i < column_size; i++)
+    for (size_t i = 0; i < column_size; i++)
     {
         auto result = std::to_string(*((ValueType*)(data) + i));
         response += std::string(result);
@@ -250,10 +250,10 @@ void check_column_for_comparison_operation(gdf_column *lhs, gdf_column *rhs, gdf
 
         EXPECT_EQ(lhs->size, rhs->size); 
         
-        for(int i = 0; i < output->size; i++) {
-            int col_position =  i / 8;
-            int length_col = n_bytes != col_position+1 ? GDF_VALID_BITSIZE : output->size - GDF_VALID_BITSIZE * (n_bytes - 1);
-            int bit_offset =  (length_col - 1) - (i % 8);
+        for(size_t i = 0; i < output->size; i++) {
+            size_t col_position =  i / 8;
+            size_t length_col = n_bytes != col_position+1 ? GDF_VALID_BITSIZE : output->size - GDF_VALID_BITSIZE * (n_bytes - 1);
+            size_t bit_offset =  (length_col - 1) - (i % 8);
             
             EXPECT_EQ( ((lhs_valid[col_position] >> bit_offset ) & 1) & ((rhs_valid[col_position] >> bit_offset ) & 1),
             ((output_valid[col_position] >> bit_offset ) & 1) );

@@ -367,6 +367,17 @@ TEST(gdf_cast_test, usage_example) {
 	}
 }
 
+// Use partial template specialization to choose the uniform_real_distribution type without 
+// warnings for unused code paths.
+// Generic case for all combinations where one is not a double
+template <typename TOUT, typename TFROM> struct DisType { typedef float value_type; };
+
+// Specialization for both doubles
+template <> struct DisType<double, double> { typedef double value_type; };
+// Specializations for one type is double
+template <typename TOUT> struct DisType<TOUT, double> { typedef double value_type; };
+template <typename TFROM> struct DisType<double, TFROM> { typedef double value_type; };
+
 // Generates random values between 0 and the maximum possible value of the data type with the minimum max() value
 template<typename TOUT, typename TFROM>
 void fill_with_random_values(std::vector<TFROM>& input, size_t size)
@@ -374,27 +385,16 @@ void fill_with_random_values(std::vector<TFROM>& input, size_t size)
 	std::random_device rd;
 	std::default_random_engine eng(rd());
 
-	if (sizeof(TOUT) > 8 || sizeof(TFROM) > 8){
-		std::uniform_real_distribution<double> floating_dis;
-		if( std::numeric_limits<TFROM>::max() < std::numeric_limits<TOUT>::max() )
-			floating_dis = std::uniform_real_distribution<double>(std::numeric_limits<TFROM>::min(), std::numeric_limits<TFROM>::max());
-		else
-			floating_dis = std::uniform_real_distribution<double>(std::numeric_limits<TOUT>::min(), std::numeric_limits<TOUT>::max());
+	using T = typename DisType<TOUT, TFROM>::value_type;
+	std::uniform_real_distribution<T> floating_dis;
+	if( std::numeric_limits<TFROM>::max() < std::numeric_limits<TOUT>::max() )
+		floating_dis = std::uniform_real_distribution<T>(std::numeric_limits<TFROM>::min(), std::numeric_limits<TFROM>::max());
+	else
+		floating_dis = std::uniform_real_distribution<T>(std::numeric_limits<TOUT>::min(), std::numeric_limits<TOUT>::max());
 
-		std::generate(input.begin(), input.end(), [floating_dis, eng]() mutable {
-			return static_cast<TFROM>(floating_dis(eng));
-		});
-	} else {
-		std::uniform_real_distribution<float> floating_dis;
-		if( std::numeric_limits<TFROM>::max() < std::numeric_limits<TOUT>::max() )
-			floating_dis = std::uniform_real_distribution<float>(std::numeric_limits<TFROM>::min(), std::numeric_limits<TFROM>::max());
-		else
-			floating_dis = std::uniform_real_distribution<float>(std::numeric_limits<TOUT>::min(), std::numeric_limits<TOUT>::max());
-
-		std::generate(input.begin(), input.end(), [floating_dis, eng]() mutable {
-			return static_cast<TFROM>(floating_dis(eng));
-		});
-	}
+	std::generate(input.begin(), input.end(), [floating_dis, eng]() mutable {
+		return static_cast<TFROM>(floating_dis(eng));
+	});
 }
 
 // Generates random bitmaps

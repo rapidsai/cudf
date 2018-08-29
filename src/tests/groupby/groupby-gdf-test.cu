@@ -134,7 +134,7 @@ struct GDFGroupByTest : public testing::Test
       groupby_column.reserve(input_size);
       aggregation_column.reserve(input_size);
 
-      for(int i = 0; i < num_keys; ++i )
+      for(size_t i = 0; i < num_keys; ++i )
       {
         // Create random key
         key_type current_key = std::rand() % max_key;
@@ -152,7 +152,7 @@ struct GDFGroupByTest : public testing::Test
         }
 
         // For the current key, generate random values
-        for(int j = 0; j < num_values_per_key; ++j)
+        for(size_t j = 0; j < num_values_per_key; ++j)
         {
           value_type current_value = std::rand() % max_value;
 

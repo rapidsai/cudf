@@ -115,7 +115,11 @@ TYPED_TEST(MultimapTest, Insert)
   // Generate a list of pairs (key, value) to insert into map
   std::vector<thrust::pair<key_type, value_type>> pairs(NUM_PAIRS);
   std::generate(pairs.begin(), pairs.end(), 
-                [] () {static int i = 0; return thrust::make_pair(i,(i++)*10);});
+                [] () {
+                  static int i = 0; 
+                  auto p = thrust::make_pair(i, i*10);
+                  i++;
+                  return p;});
 
   // Insert every pair into the map
   for(const auto& it : pairs){

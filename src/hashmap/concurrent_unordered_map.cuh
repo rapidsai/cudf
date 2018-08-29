@@ -516,7 +516,9 @@ public:
 
 #else
 
+#ifdef _OPENMP
 #pragma omp critical
+#endif
           {
             const mapped_type insert_value = x.second;
             // Empty bucket, insert key and value
