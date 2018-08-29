@@ -37,13 +37,13 @@
   * @Param flip_indices Flag that indicates whether the left and right tables have been
   * flipped, meaning the output indices should also be flipped.
   * @tparam join_type The type of join to be performed
-  * @tparam output_type The datatype used for the output indices
+  * @tparam output_index_type The datatype used for the output indices
   *
   * @Returns
   */
  /* ----------------------------------------------------------------------------*/
 template<JoinType join_type,
-         typename output_type,
+         typename output_index_type,
          typename size_type>
 std::pair<gdf_column, gdf_column>
 join_hash(gdf_table<size_type> const & left_table,
@@ -58,64 +58,12 @@ join_hash(gdf_table<size_type> const & left_table,
   if((join_type == JoinType::INNER_JOIN) &&
      (right_table.get_column_length() > left_table.get_column_length()))
   {
-    return join_hash<join_type, output_type>(right_table, left_table, context, true);
+    return join_hash<join_type, output_index_type>(right_table, left_table, context, true);
   }
 
-
-  const gdf_dtype key_type = left_table.get_build_column_type();
   gdf_column output_l, output_r;
 
-  switch(key_type)
-  {
-    case GDF_INT8:
-      {
-        compute_hash_join<join_type, int8_t, output_type>(context, output_l, output_r, left_table, right_table, flip_indices);
-        break;
-      }
-    case GDF_INT16:
-      {
-        compute_hash_join<join_type, int16_t, output_type>(context, output_l, output_r, left_table, right_table, flip_indices);
-        break;
-      }
-    case GDF_INT32:
-      {
-        compute_hash_join<join_type, int32_t, output_type>(context, output_l, output_r, left_table, right_table, flip_indices);
-        break;
-      }
-    case GDF_INT64:
-      {
-        compute_hash_join<join_type, int64_t, output_type>(context, output_l, output_r, left_table, right_table, flip_indices);
-        break;
-      }
-    // For floating point types build column, treat as an integral type
-    case GDF_FLOAT32:
-      {
-        compute_hash_join<join_type, int32_t, output_type>(context, output_l, output_r, left_table, right_table, flip_indices);
-        break;
-      }
-    case GDF_FLOAT64:
-      {
-        compute_hash_join<join_type, int64_t, output_type>(context, output_l, output_r, left_table, right_table, flip_indices);
-        break;
-      }
-    case GDF_DATE32:
-      {
-        compute_hash_join<join_type, int32_t, output_type>(context, output_l, output_r, left_table, right_table, flip_indices);
-        break;
-      }
-    case GDF_DATE64:
-      {
-        compute_hash_join<join_type, int64_t, output_type>(context, output_l, output_r, left_table, right_table, flip_indices);
-        break;
-      }
-    case GDF_TIMESTAMP:
-      {
-        compute_hash_join<join_type, int64_t, output_type>(context, output_l, output_r, left_table, right_table, flip_indices);
-        break;
-      }
-    default:
-      assert(false && "Invalid build column datatype.");
-  }
+  compute_hash_join<join_type, output_index_type>(context, output_l, output_r, left_table, right_table, flip_indices);
 
   return std::make_pair(output_l, output_r);
 }
