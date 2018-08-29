@@ -477,7 +477,7 @@ public:
                 begin_ptr = tmp_ptr;
                 break;
             }
-            if ( keys_are_equal( unused_key , tmp_val ) || counter > m_hashtbl_size ) {
+            if ( keys_are_equal( unused_key , tmp_val ) || (counter > m_hashtbl_size) ) {
                 begin_ptr = m_hashtbl_values + m_hashtbl_size;
                 break;
             }
