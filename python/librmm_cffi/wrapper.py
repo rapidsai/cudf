@@ -67,8 +67,6 @@ class _librmm_wrapper(object):
     
         #print("creating ", hex(ptr.value))
         mem = cuda.driver.MemoryPointer(ctx, ptr, datasize, finalizer=finalizer)
-        if finalizer:
-            mem = cuda.driver.OwnedPointer(mem)
         return cuda.cudadrv.devicearray.DeviceNDArray(shape, strides, dtype, gpu_data=mem)
 
     def device_array_from_ptr(self, ptr, nelem, dtype=np.float):
