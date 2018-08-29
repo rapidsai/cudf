@@ -66,8 +66,8 @@ size_t gdf_join_result_size(gdf_join_result_type *result) {
 
 // Size limit due to use of int32 as join output.
 // FIXME: upgrade to 64-bit
-using output_type = int;
-constexpr output_type MAX_JOIN_SIZE{std::numeric_limits<output_type>::max()};
+using output_index_type = int;
+constexpr output_index_type MAX_JOIN_SIZE{std::numeric_limits<output_index_type>::max()};
 
 // TODO This macro stuff will go away once Outer join is implemented
 #define DEF_JOIN(Fn, T, Joiner)                                             \
@@ -138,7 +138,7 @@ gdf_error hash_join(size_type num_cols, gdf_column **leftcol, gdf_column **right
 
   standard_context_t context(false);
 
-  auto output = join_hash<join_type, output_type>(*left_table, *right_table, context);
+  auto output = join_hash<join_type, output_index_type>(*left_table, *right_table, context);
 
   *l_result = output.first;
   *r_result = output.second;
