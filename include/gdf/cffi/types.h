@@ -38,6 +38,7 @@ typedef enum {
     GDF_GROUPBY_TOO_MANY_COLUMNS,
     GDF_UNSUPPORTED_METHOD,
     GDF_INVALID_AGGREGATOR,
+    GDF_INVALID_HASH_FUNCTION,
 } gdf_error;
 
 typedef enum {
