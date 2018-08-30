@@ -181,7 +181,9 @@ void hash_rows_count_partition_sizes(gdf_table<size_type> const & the_table,
   // the counter for that partition
   while( row_number < num_rows)
   {
-    const hash_value_t row_hash_value = the_table.hash_row(row_number);
+    // See here why template disambiguator is required: 
+    // https://stackoverflow.com/questions/4077110/template-disambiguator
+    const hash_value_t row_hash_value = the_table.template hash_row<hash_function>(row_number);
 
     row_hash_values[row_number] = row_hash_value;
 
@@ -268,6 +270,7 @@ void hash_partition_gdf_table(gdf_table<size_type> const & input_table,
                   num_partitions * sizeof(size_type),
                   cudaMemcpyDeviceToDevice);
 
+  
 
 
 
