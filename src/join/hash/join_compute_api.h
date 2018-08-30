@@ -19,6 +19,7 @@
 
 #include "join_kernels.cuh"
 #include "../../gdf_table.cuh"
+#include "../../hashmap/hash_functions.cuh"
 
 // TODO for Arrow integration:
 //   1) replace mgpu::context_t with a new CudaComputeContext class (see the design doc)
@@ -49,8 +50,8 @@ struct join_pair
 ///
 /// \param[in] compute_ctx The CudaComputeContext to shedule this to.
 /// \param[in] Flag signifying if the order of the indices for A and B need to be swapped. This flag is used when the order of A and B are swapped to build the hash table for the smalle column.
-template<typename size_type, typename index_type>
-void pairs_to_decoupled(size_type *const output_l, size_type *const output_r, const size_type output_npairs, index_type *joined_l, index_type *joined_r, mgpu::context_t &context, bool flip_indices)
+template<typename size_type, typename output_index_type>
+void pairs_to_decoupled(size_type *const output_l, size_type *const output_r, const size_type output_npairs, output_index_type *joined_l, output_index_type *joined_r, mgpu::context_t &context, bool flip_indices)
 {
   if (output_npairs > 0) {
     auto k = [=] MGPU_DEVICE(size_type index) {
@@ -74,16 +75,14 @@ void pairs_to_decoupled(size_type *const output_l, size_type *const output_r, co
 * @Param flip_results Flag that indicates whether the left and right tables have been 
 * switched, indicating that the output indices should also be flipped
 * @tparam join_type The type of join to be performed
-* @tparam key_type The data type to be used for the Keys in the hash table
-* @tparam index_type The data type to be used for the output indices
+* @tparam output_index_type The data type to be used for the output indices
 * 
 * @Returns  cudaSuccess upon successful completion of the join. Otherwise returns
 * the appropriate CUDA error code
 */
 /* ----------------------------------------------------------------------------*/
 template<JoinType join_type, 
-         typename key_type, 
-         typename index_type,
+         typename output_index_type,
          typename size_type>
 cudaError_t compute_hash_join(mgpu::context_t & compute_ctx, 
                               gdf_column &output_l, gdf_column &output_r,
@@ -98,34 +97,35 @@ cudaError_t compute_hash_join(mgpu::context_t & compute_ctx,
 
   // Data type used for join output results. Stored as a pair of indices 
   // (left index, right index) where left_table[left index] == right_table[right index]
-  using join_output_pair = join_pair<index_type>;
-  
+  using join_output_pair = join_pair<output_index_type>;
+
   // The LEGACY allocator allocates the hash table array with normal cudaMalloc,
   // the non-legacy allocator uses managed memory
 #ifdef HT_LEGACY_ALLOCATOR
-  using multimap_type = concurrent_unordered_multimap<key_type, 
-                                                      index_type, 
+  using multimap_type = concurrent_unordered_multimap<hash_value_type, 
+                                                      output_index_type, 
                                                       size_type,
-                                                      std::numeric_limits<key_type>::max(), 
-                                                      std::numeric_limits<index_type>::max(), 
-                                                      default_hash<key_type>,
-                                                      equal_to<key_type>,
-                                                      legacy_allocator< thrust::pair<key_type, index_type> > >;
+                                                      std::numeric_limits<hash_value_type>::max(), 
+                                                      std::numeric_limits<output_index_type>::max(), 
+                                                      default_hash<hash_value_type>,
+                                                      equal_to<hash_value_type>,
+                                                      legacy_allocator< thrust::pair<hash_value_type, output_index_type> > >;
 #else
-  using multimap_type = concurrent_unordered_multimap<key_type, 
-                                                      index_type, 
+  using multimap_type = concurrent_unordered_multimap<hash_value_type, 
+                                                      output_index_type, 
                                                       size_type,
-                                                      std::numeric_limits<key_type>::max(), 
+                                                      std::numeric_limits<hash_value_type>::max(), 
                                                       std::numeric_limits<size_type>::max()>;
 #endif
 
+
   // Hash table will be built on the right table
   gdf_table<size_type> const & build_table{right_table};
-  const size_type build_column_length{build_table.get_column_length()};
-  const key_type * const build_column{static_cast<key_type*>(build_table.get_build_column_data())};
-
-  // Allocate the hash table
-  const size_type hash_table_size = (static_cast<size_type>(build_column_length) * 100 / DEFAULT_HASH_TABLE_OCCUPANCY);
+  const size_type build_table_num_rows{build_table.get_column_length()};
+  
+  // Calculate size of hash map based on the desired occupancy
+  const size_type hash_table_size{static_cast<size_type>((static_cast<uint64_t>(build_table_num_rows) * 100) / DEFAULT_HASH_TABLE_OCCUPANCY)};
+  // Allocate hash map
   std::unique_ptr<multimap_type> hash_table(new multimap_type(hash_table_size));
   
   // FIXME: use GPU device id from the context? 
@@ -135,12 +135,12 @@ cudaError_t compute_hash_join(mgpu::context_t & compute_ctx,
   
   CUDA_RT_CALL( cudaDeviceSynchronize() );
 
-  // build the hash table
-  constexpr int block_size = DEFAULT_CUDA_BLOCK_SIZE;
-  const size_type build_grid_size{(build_column_length + block_size - 1)/block_size};
+  // Fill the hash map by inserting every row of the build table into the map
+  constexpr int block_size{DEFAULT_CUDA_BLOCK_SIZE};
+  const size_type build_grid_size{(build_table_num_rows + block_size - 1)/block_size};
   build_hash_table<<<build_grid_size, block_size>>>(hash_table.get(), 
-                                                    build_column, 
-                                                    build_column_length);
+                                                    build_table, 
+                                                    build_table_num_rows);
   
   CUDA_RT_CALL( cudaGetLastError() );
 
@@ -151,23 +151,21 @@ cudaError_t compute_hash_join(mgpu::context_t & compute_ctx,
 
   // Probe with the left table
   gdf_table<size_type> const & probe_table{left_table};
-  const size_type probe_column_length{probe_table.get_column_length()};
-  const key_type * const probe_column{static_cast<key_type*>(probe_table.get_probe_column_data())};
-  const size_type probe_grid_size{(probe_column_length + block_size -1)/block_size};
+  const size_type probe_table_num_rows{probe_table.get_column_length()};
+  const size_type probe_grid_size{(probe_table_num_rows + block_size -1)/block_size};
 
-  // Probe the hash table without actually building the output to simply
-  // find what the size of the output will be.
+  // Probe the hash map to count all matches between the build table and 
+  // probe table without actually building the output to simply find what 
+  // the size of the output will be.
   compute_join_output_size<join_type, 
                            multimap_type, 
-                           key_type, 
                            size_type,
                            block_size, 
                            DEFAULT_CUDA_CACHE_SIZE>
 	<<<probe_grid_size, block_size>>>(hash_table.get(), 
                                     build_table, 
                                     probe_table, 
-                                    probe_column,
-                                    probe_table.get_column_length(),
+                                    probe_table_num_rows,
                                     d_join_output_size);
 
   CUDA_RT_CALL( cudaGetLastError() );
@@ -181,25 +179,27 @@ cudaError_t compute_hash_join(mgpu::context_t & compute_ctx,
     return error;
   }
 
-  // Allocate modern GPU storage for the join output
+  // Allocate storage for the join output
   int dev_ordinal{0};
   CUDA_RT_CALL( cudaGetDevice(&dev_ordinal));
-  index_type *output_l_ptr{nullptr};
-  index_type *output_r_ptr{nullptr};
-  CUDA_RT_CALL( cudaMalloc(&output_l_ptr, h_join_output_size*sizeof(index_type)) );
-  CUDA_RT_CALL( cudaMalloc(&output_r_ptr, h_join_output_size*sizeof(index_type)) );
+  output_index_type *output_l_ptr{nullptr};
+  output_index_type *output_r_ptr{nullptr};
+  CUDA_RT_CALL( cudaMalloc(&output_l_ptr, h_join_output_size*sizeof(output_index_type)) );
+  CUDA_RT_CALL( cudaMalloc(&output_r_ptr, h_join_output_size*sizeof(output_index_type)) );
 
   // Allocate device global counter used by threads to determine output write location
   size_type *d_global_write_index{nullptr};
   CUDA_RT_CALL( cudaMalloc(&d_global_write_index, sizeof(size_type)) );
   CUDA_RT_CALL( cudaMemsetAsync(d_global_write_index, 0, sizeof(size_type), 0) );
 
-  // Do the probe of the hash table with the probe table and generate the output for the join
+  /*
+  // Do the probe of the hash map to find all matches between the build table and
+  // probe table and store the indices of the matching rows in the output
   probe_hash_table<join_type, 
                    multimap_type, 
-                   key_type, 
+                   hash_value_type, 
                    size_type, 
-                   index_type, 
+                   output_index_type, 
                    block_size, 
                    DEFAULT_CUDA_CACHE_SIZE>
 	<<<probe_grid_size, block_size>>> (hash_table.get(), 
@@ -220,7 +220,7 @@ cudaError_t compute_hash_join(mgpu::context_t & compute_ctx,
   CUDA_RT_CALL( cudaFree(d_join_output_size) ); 
 
   gdf_dtype dtype;
-  switch(sizeof(index_type)) {
+  switch(sizeof(output_index_type)) {
     case 1 : dtype = GDF_INT8;  break;
     case 2 : dtype = GDF_INT16; break;
     case 4 : dtype = GDF_INT32; break;
@@ -228,6 +228,7 @@ cudaError_t compute_hash_join(mgpu::context_t & compute_ctx,
   }
   gdf_column_view(&output_l, output_l_ptr, nullptr, h_join_output_size, dtype);
   gdf_column_view(&output_r, output_r_ptr, nullptr, h_join_output_size, dtype);
+  */
 
   return error;
 }
