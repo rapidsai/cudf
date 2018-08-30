@@ -373,6 +373,23 @@ public:
     }
     
 
+    /* --------------------------------------------------------------------------*/
+    /** 
+     * @Synopsis  Inserts a (key, value) pair into the hash map
+     * 
+     * @Param[in] x The (key, value) pair to insert
+     * @Param[in] precomputed_hash A flag indicating whether or not a precomputed 
+     * hash value is passed in
+     * @Param[in] precomputed_hash_value A precomputed hash value to use for determing
+     * the write location of the key into the hash map instead of computing the
+     * the hash value directly from the key
+     * @Param[in] keys_are_equal An optional functor for comparing if two keys are equal
+     * @tparam hash_value_type The datatype of the hash value
+     * @tparam comparison_type The type of the key comparison functor
+     * 
+     * @Returns An iterator to the newly inserted (key, value) pair
+     */
+    /* ----------------------------------------------------------------------------*/
     template < typename hash_value_type = typename Hasher::result_type,
                typename comparison_type = key_equal>
     __forceinline__
@@ -444,6 +461,24 @@ public:
         return iterator( m_hashtbl_values,m_hashtbl_values+hashtbl_size,it);
     }
     
+    /* --------------------------------------------------------------------------*/
+    /** 
+     * @Synopsis Searches for a key in the hash map and returns an iterator to the first
+     * instance of the key in the map.
+     * 
+     * @Param[in] the_key The key to search for
+     * @Param[in] precomputed_hash A flag indicating whether or not a precomputed 
+     * hash value is passed in
+     * @Param[in] precomputed_hash_value A precomputed hash value to use for determing
+     * the write location of the key into the hash map instead of computing the
+     * the hash value directly from the key
+     * @Param[in] keys_are_equal An optional functor for comparing if two keys are equal
+     * @tparam hash_value_type The datatype of the hash value
+     * @tparam comparison_type The type of the key comparison functor
+     * 
+     * @Returns   An iterator to the first instance of the key in the map
+     */
+    /* ----------------------------------------------------------------------------*/
     template < typename hash_value_type = typename Hasher::result_type,
                typename comparison_type = key_equal>
     __forceinline__
