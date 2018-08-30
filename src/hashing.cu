@@ -18,6 +18,7 @@
 #include <gdf/errorutils.h>
 
 #include "join/joining.h"
+#include "gdf_table.cuh"
 
 constexpr int HASH_KERNEL_BLOCK_SIZE = 256;
 constexpr int HASH_KERNEL_ROWS_PER_THREAD = 1;
@@ -120,29 +121,89 @@ gdf_error gdf_hash(int num_cols, gdf_column **input, gdf_hash_func hash, gdf_col
   return GDF_SUCCESS;
 
 }
+
+
+template <typename size_type>
+void partition_gdf_table(gdf_table<size_type> const & input_table,
+                         gdf_table<size_type> & partitioned_output,
+                         const size_type num_partitions)
+{
+
+}
+
 /* --------------------------------------------------------------------------*/
-/** 
- * @brief Computes the hash values of each row in the input columns and bins 
- * the hash values into the desired number of partitions. Rearranges the input 
+/**
+ * @brief Computes the hash values of the specified rows in the input columns and
+ * bins the hash values into the desired number of partitions. Rearranges the input
  * columns such that rows with hash values in the same bin are contiguous.
- * 
- * @Param[in] num_cols The number of columns in the input columns
+ *
+ * @Param[in] num_input_cols The number of columns in the input columns
  * @Param[in] input[] The input set of columns
- * @Param[in] num_partitions The number of desired paritions
- * @Param[out] partitioned_output The rearrangement of the input columns into
- * the desired number of partitions
+ * @Param[in] columns_to_hash[] Indices of the columns in the input set to hash
+ * @Param[in] num_cols_to_hash The number of columns to hash
+ * @Param[in] num_partitions The number of partitions to rearrange the input rows into
+ * @Param[out] partitioned_output Preallocated gdf_columns to hold the rearrangement
+ * of the input columns into the desired number of partitions
+ * @Param[out] partition_offsets Preallocated array the size of the number of 
+ * partitions. Where partition_offsets[i] indicates the starting position 
+ * of partition 'i'
  * @Param[in] hash The hash function to use
- * 
+ *
  * @Returns  If the operation was successful, returns GDF_SUCCESS
  */
 /* ----------------------------------------------------------------------------*/
-gdf_error gdf_hash_partition(int num_cols, 
-                             gdf_column * input[], 
-                             int num_partitions, 
+gdf_error gdf_hash_partition(int num_input_cols,
+                             gdf_column * input[],
+                             int columns_to_hash[],
+                             int num_cols_to_hash,
+                             int num_partitions,
                              gdf_column * partitioned_output[],
+                             int partition_offsets[],
                              gdf_hash_func hash)
 {
 
+  // Ensure all the inputs are non-zero and not null
+  if((0 == num_input_cols) 
+      || (0 == num_cols_to_hash)
+      || (0 == num_partitions)
+      || (nullptr == input) 
+      || (nullptr == partitioned_output)
+      || (nullptr == columns_to_hash)
+      || (nullptr == partition_offsets))
+  {
+    return GDF_INVALID_API_CALL;
+  }
+
+  // check that the columns data are not null, have matching types,
+  // and the same number of rows
+  for (int i = 0; i < num_input_cols; i++) {
+    if( (nullptr == input[i]->data) 
+        || (nullptr == partitioned_output[i]->data))
+      return GDF_DATASET_EMPTY;
+
+    if(input[i]->dtype != partitioned_output[i]->dtype) 
+      return GDF_PARTITION_DTYPE_MISMATCH;
+
+    if((input[0]->size != input[i]->size) 
+        || (input[0]->size != partitioned_output[i]->size))
+      return GDF_COLUMN_SIZE_MISMATCH;
+  }
+
+  using size_type = size_t;
+  std::unique_ptr< const gdf_table<size_type> > input_table{new gdf_table<size_type>(num_input_cols, input)};
+  std::unique_ptr< gdf_table<size_type> > output_table{new gdf_table<size_type>(num_input_cols, partitioned_output)};
+  size_type number_of_partitions{static_cast<size_type>(num_partitions)};
+
+  switch(hash)
+  {
+    case GDF_HASH_MURMUR3:
+      {
+        partition_gdf_table(*input_table, *output_table, number_of_partitions);
+        break;
+      }
+    default:
+      return GDF_INVALID_HASH_FUNCTION;
+  }
 
   return GDF_SUCCESS;
 }
