@@ -175,7 +175,7 @@ gdf_error gdf_hash_partition(int num_cols,
                              gdf_column * input[], 
                              int num_partitions, 
                              gdf_column * partitioned_output[],
-                             gdf_hash_func hash)
+                             gdf_hash_func hash);
 
 /* prefixsum */
 
