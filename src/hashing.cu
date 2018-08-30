@@ -220,7 +220,7 @@ template < template <typename> class hash_function,
 void hash_partition_gdf_table(gdf_table<size_type> const & input_table,
                               gdf_table<size_type> const & table_to_hash,
                               const size_type num_partitions,
-                              size_type partition_offsets[],
+                              size_type * partition_offsets,
                               gdf_table<size_type> & partitioned_output)
 {
 
@@ -233,24 +233,46 @@ void hash_partition_gdf_table(gdf_table<size_type> const & input_table,
   //thrust::tabulate(row_hash_values.begin(), 
   //                 row_hash_values.end(), 
   //                 the_hasher);
-
-  thrust::device_vector<hash_value_type> row_hash_values(table_to_hash.get_column_length());
-  thrust::device_vector<size_type> partition_sizes(num_partitions,0);
-
   const size_type num_rows = table_to_hash.get_column_length();
+
+
+  hash_value_type * row_hash_values{nullptr};
+  cudaMalloc(&row_hash_values, num_rows * sizeof(hash_value_type));
+
+  size_type * partition_sizes{nullptr};
+  cudaMalloc(&partition_sizes, num_partitions * sizeof(size_type));
+  cudaMemsetAsync(partition_sizes, 0, num_partitions * sizeof(size_type));
 
   constexpr int rows_per_block = HASH_KERNEL_BLOCK_SIZE * HASH_KERNEL_ROWS_PER_THREAD;
   const int grid_size = (num_rows + rows_per_block - 1) / rows_per_block;
 
 
+  // Computes the hash value of every row as well as the size of each partition
   hash_rows_count_partition_sizes<hash_function>
   <<<grid_size, HASH_KERNEL_BLOCK_SIZE>>>(table_to_hash, 
                                           num_rows,
                                           num_partitions,
                                           partitioner_type(),
-                                          row_hash_values.data().get(),
-                                          partition_sizes.data().get());
+                                          row_hash_values,
+                                          partition_sizes);
 
+  // Compute exclusive scan of the partition sizes in-place to determine 
+  // the starting point for each partition in the output
+  thrust::exclusive_scan(partition_sizes, 
+                         partition_sizes + num_partitions, 
+                         partition_sizes);
+
+  // Copy the result of the exlusive scan to the output offests array
+  cudaMemcpyAsync(partition_offsets, 
+                  partition_sizes, 
+                  num_partitions * sizeof(size_type),
+                  cudaMemcpyDeviceToDevice);
+
+
+
+
+  cudaFree(row_hash_values);
+  cudaFree(partition_sizes);
 }
 
 /* --------------------------------------------------------------------------*/
