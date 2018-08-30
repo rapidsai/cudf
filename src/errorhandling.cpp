@@ -20,6 +20,7 @@ const char * gdf_error_get_name(gdf_error errcode) {
     GETNAME(GDF_UNSUPPORTED_METHOD)
     GETNAME(GDF_INVALID_AGGREGATOR)
     GETNAME(GDF_INVALID_HASH_FUNCTION)
+    GETNAME(GDF_PARTITION_DTYPE_MISMATCH)
     default:
         // This means we are missing an entry above for a gdf_error value.
         return "Internal error. Unknown error code.";
