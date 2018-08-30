@@ -5,6 +5,8 @@ view of Columns.
 
 import numpy as np
 import pandas as pd
+from numbers import Number
+import warnings
 
 from numba import cuda, njit
 
@@ -161,6 +163,21 @@ def as_column(arbitrary):
             if np.count_nonzero(np.isnan(arbitrary)) > 0:
                 mask = ~np.isnan(arbitrary)
                 data = data.set_mask(cudautils.compact_mask_bytes(mask))
+
+    elif isinstance(arbitrary, (list,)):
+        if any(x is None for x in arbitrary):
+            if all((isinstance(x, Number) or x is None) for x in arbitrary):
+                data = as_column(np.array(arbitrary, dtype=np.float))
+                mask = np.array([x is not None for x in arbitrary])
+                data = data.set_mask(cudautils.compact_mask_bytes(mask))
+                warn_string = "Numeric lists with `None` elements always" \
+                              "get automatically converted to float."
+                warnings.warn(warn_string)
+            else:
+                raise TypeError("Non numeric lists with `None` elements"
+                                "not supported.")
+        else:
+            data = as_column(np.asarray(arbitrary))
 
     else:
         data = as_column(np.asarray(arbitrary))

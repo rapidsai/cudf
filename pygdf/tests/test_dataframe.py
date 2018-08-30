@@ -490,6 +490,12 @@ def test_dataframe_setitem_from_masked_object():
     assert(test3.has_null_mask)
     assert(test3.null_count == 20)
 
+    test4 = DataFrame()
+    lst = [1, 2, None, 4, 5, 6, None, 8, 9]
+    test4['lst'] = lst
+    assert(test4['lst'].has_null_mask)
+    assert(test4['lst'].null_count == 2)
+
 
 def test_dataframe_append_to_empty():
     pdf = pd.DataFrame()
