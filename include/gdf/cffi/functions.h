@@ -163,9 +163,12 @@ size_t gdf_join_result_size(gdf_join_result_type *result);
  * 
  * @Param[in] num_cols The number of columns in the input columns
  * @Param[in] input[] The input set of columns
- * @Param[in] num_partitions The number of desired paritions
+ * @Param[in] columns_to_hash[] Indices of the columns in the input set to hash
+ * @Param[in] num_partitions The number paritions to rearrange the input rows into
  * @Param[out] partitioned_output The rearrangement of the input columns into
  * the desired number of partitions
+ * @Param[out] partition_offsets An array the size of the number of partitions. Where
+ * partition_offsets[i] indicates the starting position of partition 'i'
  * @Param[in] hash The hash function to use
  * 
  * @Returns  If the operation was successful, returns GDF_SUCCESS
@@ -173,8 +176,10 @@ size_t gdf_join_result_size(gdf_join_result_type *result);
 /* ----------------------------------------------------------------------------*/
 gdf_error gdf_hash_partition(int num_cols, 
                              gdf_column * input[], 
+                             int columns_to_hash[],
                              int num_partitions, 
                              gdf_column * partitioned_output[],
+                             int partition_offsets[],
                              gdf_hash_func hash);
 
 /* prefixsum */
