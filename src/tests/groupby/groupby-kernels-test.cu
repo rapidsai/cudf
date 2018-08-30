@@ -393,7 +393,7 @@ TYPED_TEST(GroupByTest, DISABLED_AggregationTestHost)
   thrust::pair<key_type, value_type> third_pair{0,5};
 
   struct {
-    __device__ value_type operator()(value_type a, value_type b) { return (a >= b ? a : b); };
+    __host__ __device__ value_type operator()(value_type a, value_type b) { return (a >= b ? a : b); };
   } maxop;
 
   this->the_map->insert(first_pair, maxop);

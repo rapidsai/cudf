@@ -63,7 +63,7 @@ if(CUDA_FOUND)
         -Wno-deprecated-declarations;
         -Xptxas --disable-warnings)
     # set warnings as errors
-    set(CUDA_NVCC_FLAGS ${CUDA_NVCC_FLAGS};-Xcompiler -Wall,-Werror)
+    set(CUDA_NVCC_FLAGS ${CUDA_NVCC_FLAGS};-Werror cross-execution-space-call;-Xcompiler -Wall,-Werror)
 
     message(STATUS "CUDA_NVCC_FLAGS: ${CUDA_NVCC_FLAGS}")
 else()
