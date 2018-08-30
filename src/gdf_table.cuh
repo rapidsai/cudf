@@ -282,14 +282,11 @@ public:
    * @Returns The hash value of the row
    */
   /* ----------------------------------------------------------------------------*/
-  template <template <typename> class hash_function = default_hash,
-            typename dummy = int>
+  template <template <typename> class hash_function = default_hash>
   __device__ 
-  typename hash_function<dummy>::result_type hash_row(size_type row_index, 
-                                                      size_type num_columns_to_hash = 0) const
+  hash_value_type hash_row(size_type row_index, size_type num_columns_to_hash = 0) const
   {
-    using hash_value_t = typename hash_function<dummy>::result_type;
-    hash_value_t hash_value{0};
+    hash_value_type hash_value{0};
 
     // If num_columns_to_hash is zero, hash all columns
     if(0 == num_columns_to_hash)
@@ -307,7 +304,7 @@ public:
             hash_function<col_type> hasher;
             const col_type * current_column = static_cast<col_type*>(d_columns_data[i]);
             const col_type current_value = current_column[row_index];
-            hash_value_t key_hash = hasher(current_value);
+            hash_value_type key_hash = hasher(current_value);
             hash_value = hasher.hash_combine(hash_value, key_hash);
             break;
           }
@@ -317,7 +314,7 @@ public:
             hash_function<col_type> hasher;
             const col_type * current_column = static_cast<col_type*>(d_columns_data[i]);
             const col_type current_value = current_column[row_index];
-            hash_value_t key_hash = hasher(current_value);
+            hash_value_type key_hash = hasher(current_value);
             hash_value = hasher.hash_combine(hash_value, key_hash);
             break;
           }
@@ -327,7 +324,7 @@ public:
             hash_function<col_type> hasher;
             const col_type * current_column = static_cast<col_type*>(d_columns_data[i]);
             const col_type current_value = current_column[row_index];
-            hash_value_t key_hash = hasher(current_value);
+            hash_value_type key_hash = hasher(current_value);
             hash_value = hasher.hash_combine(hash_value, key_hash);
             break;
           }
@@ -337,7 +334,7 @@ public:
             hash_function<col_type> hasher;
             const col_type * current_column = static_cast<col_type*>(d_columns_data[i]);
             const col_type current_value = current_column[row_index];
-            hash_value_t key_hash = hasher(current_value);
+            hash_value_type key_hash = hasher(current_value);
             hash_value = hasher.hash_combine(hash_value, key_hash);
             break;
           }
@@ -347,7 +344,7 @@ public:
             hash_function<col_type> hasher;
             const col_type * current_column = static_cast<col_type*>(d_columns_data[i]);
             const col_type current_value = current_column[row_index];
-            hash_value_t key_hash = hasher(current_value);
+            hash_value_type key_hash = hasher(current_value);
             hash_value = hasher.hash_combine(hash_value, key_hash);
             break;
           }
@@ -357,7 +354,7 @@ public:
             hash_function<col_type> hasher;
             const col_type * current_column = static_cast<col_type*>(d_columns_data[i]);
             const col_type current_value = current_column[row_index];
-            hash_value_t key_hash = hasher(current_value);
+            hash_value_type key_hash = hasher(current_value);
             hash_value = hasher.hash_combine(hash_value, key_hash);
             break;
           }
@@ -367,7 +364,7 @@ public:
             hash_function<col_type> hasher;
             const col_type * current_column = static_cast<col_type*>(d_columns_data[i]);
             const col_type current_value = current_column[row_index];
-            hash_value_t key_hash = hasher(current_value);
+            hash_value_type key_hash = hasher(current_value);
             hash_value = hasher.hash_combine(hash_value, key_hash);
             break;
           }
@@ -377,7 +374,7 @@ public:
             hash_function<col_type> hasher;
             const col_type * current_column = static_cast<col_type*>(d_columns_data[i]);
             const col_type current_value = current_column[row_index];
-            hash_value_t key_hash = hasher(current_value);
+            hash_value_type key_hash = hasher(current_value);
             hash_value = hasher.hash_combine(hash_value, key_hash);
             break;
           }
@@ -387,7 +384,7 @@ public:
             hash_function<col_type> hasher;
             const col_type * current_column = static_cast<col_type*>(d_columns_data[i]);
             const col_type current_value = current_column[row_index];
-            hash_value_t key_hash = hasher(current_value);
+            hash_value_type key_hash = hasher(current_value);
             hash_value = hasher.hash_combine(hash_value, key_hash);
             break;
           }
