@@ -153,6 +153,30 @@ gdf_error gdf_join_result_free(gdf_join_result_type *result);
 void* gdf_join_result_data(gdf_join_result_type *result);
 size_t gdf_join_result_size(gdf_join_result_type *result);
 
+/* partioning */
+
+/* --------------------------------------------------------------------------*/
+/** 
+ * @brief Computes the hash values of each row in the input columns and bins 
+ * the hash values into the desired number of partitions. Rearranges the input 
+ * columns such that rows with hash values in the same bin are contiguous.
+ * 
+ * @Param[in] num_cols The number of columns in the input columns
+ * @Param[in] input[] The input set of columns
+ * @Param[in] num_partitions The number of desired paritions
+ * @Param[out] partitioned_output The rearrangement of the input columns into
+ * the desired number of partitions
+ * @Param[in] hash The hash function to use
+ * 
+ * @Returns  If the operation was successful, returns GDF_SUCCESS
+ */
+/* ----------------------------------------------------------------------------*/
+gdf_error gdf_hash_partition(int num_cols, 
+                             gdf_column * input[], 
+                             int num_partitions, 
+                             gdf_column * partitioned_output[],
+                             gdf_hash_func hash)
+
 /* prefixsum */
 
 gdf_error gdf_prefixsum_generic(gdf_column *inp, gdf_column *out, int inclusive);
