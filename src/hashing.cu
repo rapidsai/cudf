@@ -16,6 +16,8 @@
 
 #include <gdf/gdf.h>
 #include <gdf/errorutils.h>
+#include <thrust/tabulate.h>
+#include <thrust/device_vector.h>
 
 #include "join/joining.h"
 #include "gdf_table.cuh"
@@ -124,6 +126,95 @@ gdf_error gdf_hash(int num_cols, gdf_column **input, gdf_hash_func hash, gdf_col
 }
 
 
+template <template <typename> class hash_function,
+          typename size_type>
+struct table_row_hasher
+{
+  table_row_hasher(gdf_table<size_type> const & table_to_hash) 
+    : the_table{table_to_hash}
+  {}
+  
+  __device__
+  hash_value_type operator()(size_type row_index) const
+  {
+    return the_table.template hash_row<hash_function>(row_index);
+  }
+
+  gdf_table<size_type> const & the_table;
+};
+
+
+/* --------------------------------------------------------------------------*/
+/** 
+ * @Synopsis  Functor to map a hash value to a particular 'bin' or partition number
+ * that uses the modulo operation.
+ */
+/* ----------------------------------------------------------------------------*/
+template <typename hash_value_t,
+          typename size_type,
+          typename output_type>
+struct modulo_partitioner
+{
+  __device__
+  output_type operator()(hash_value_t hash_value, size_type num_partitions) const
+  {
+    return hash_value % num_partitions;
+  }
+};
+
+template <template <typename> class hash_function,
+          typename partitioner_type,
+          typename hash_value_t,
+          typename size_type>
+__global__ 
+void hash_rows_count_partition_sizes(gdf_table<size_type> const & the_table, 
+                                     const size_type num_rows,
+                                     const size_type num_partitions,
+                                     const partitioner_type the_partitioner,
+                                     hash_value_t * row_hash_values,
+                                     size_type * partition_sizes)
+{
+  size_type row_number = threadIdx.x + blockIdx.x * blockDim.x;
+
+  // Compute the hash value for each row, store it to the array of hash values
+  // and compute the partition to which the hash value belongs and increment
+  // the counter for that partition
+  while( row_number < num_rows)
+  {
+    const hash_value_t row_hash_value = the_table.hash_row(row_number);
+
+    row_hash_values[row_number] = row_hash_value;
+
+    const size_type partition_number = the_partitioner(row_hash_value, num_partitions);
+
+    atomicAdd(&(partition_sizes[partition_number]), size_type(1));
+
+    row_number += blockDim.x * gridDim.x;
+  }
+}
+
+
+
+/* --------------------------------------------------------------------------*/
+/** 
+ * @brief Partitions an input gdf_table into a specified number of partitions.
+ * A hash value is computed for each row in a sub-set of the columns of the 
+ * input table. Each hash value is placed in a bin from [0, number of partitions).
+ * A copy of the input table is created where the rows are rearranged such that
+ * rows with hash values in the same bin are contiguous.
+ * 
+ * @Param[in] input_table The table to partition
+ * @Param[in] table_to_hash Sub-table of the input table with only the columns 
+ * that will be hashed
+ * @Param[in] num_partitions The number of partitions that table will be rearranged into
+ * @Param[out] partition_offsets Preallocated array the size of the number of 
+ * partitions. Where partition_offsets[i] indicates the starting position 
+ * of partition 'i'
+ * @Param[out] partitioned_output Preallocated gdf_columns to hold the rearrangement
+ * of the input columns into the desired number of partitions
+ * @tparam hash_function The hash function that will be used to hash the rows
+ */
+/* ----------------------------------------------------------------------------*/
 template < template <typename> class hash_function,
            typename size_type>
 void hash_partition_gdf_table(gdf_table<size_type> const & input_table,
@@ -132,6 +223,33 @@ void hash_partition_gdf_table(gdf_table<size_type> const & input_table,
                               size_type partition_offsets[],
                               gdf_table<size_type> & partitioned_output)
 {
+
+  
+  // Determines how the mapping between hash value and partition number is computed
+  using partitioner_type = modulo_partitioner<hash_value_type, size_type, size_type>;
+
+  // Compute the hash value for all the rows in the table to hash
+  //table_row_hasher<hash_function, size_type> the_hasher(table_to_hash);
+  //thrust::tabulate(row_hash_values.begin(), 
+  //                 row_hash_values.end(), 
+  //                 the_hasher);
+
+  thrust::device_vector<hash_value_type> row_hash_values(table_to_hash.get_column_length());
+  thrust::device_vector<size_type> partition_sizes(num_partitions,0);
+
+  const size_type num_rows = table_to_hash.get_column_length();
+
+  constexpr int rows_per_block = HASH_KERNEL_BLOCK_SIZE * HASH_KERNEL_ROWS_PER_THREAD;
+  const int grid_size = (num_rows + rows_per_block - 1) / rows_per_block;
+
+
+  hash_rows_count_partition_sizes<hash_function>
+  <<<grid_size, HASH_KERNEL_BLOCK_SIZE>>>(table_to_hash, 
+                                          num_rows,
+                                          num_partitions,
+                                          partitioner_type(),
+                                          row_hash_values.data().get(),
+                                          partition_sizes.data().get());
 
 }
 
