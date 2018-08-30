@@ -396,8 +396,6 @@ struct JoinTest : public testing::Test
                                            right_gdf_columns,
                                            &left_result, &right_result,
                                            &ctxt);
-            //std::cout << "Multi column *inner* joins not supported yet\n";
-            //EXPECT_TRUE(false);
             break;
           }
         default:
@@ -560,14 +558,15 @@ typedef ::testing::Types<
 
 TYPED_TEST_CASE(JoinTest, Implementations);
 
-TYPED_TEST(JoinTest, ExampleTest)
+TYPED_TEST(JoinTest, DISABLED_DebugTest)
 {
-  this->create_input(10, 2,
-                     10, 2);
+  this->create_input(5, 2,
+                     5, 2,
+                     true);
 
-  std::vector<result_type> reference_result = this->compute_reference_solution();
+  std::vector<result_type> reference_result = this->compute_reference_solution(true);
 
-  std::vector<result_type> gdf_result = this->compute_gdf_result();
+  std::vector<result_type> gdf_result = this->compute_gdf_result(true);
 
   ASSERT_EQ(reference_result.size(), gdf_result.size()) << "Size of gdf result does not match reference result\n";
 
@@ -576,6 +575,7 @@ TYPED_TEST(JoinTest, ExampleTest)
     EXPECT_EQ(reference_result[i], gdf_result[i]);
   }
 }
+
 
 TYPED_TEST(JoinTest, EqualValues)
 {

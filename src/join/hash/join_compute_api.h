@@ -192,7 +192,6 @@ cudaError_t compute_hash_join(mgpu::context_t & compute_ctx,
   CUDA_RT_CALL( cudaMalloc(&d_global_write_index, sizeof(size_type)) );
   CUDA_RT_CALL( cudaMemsetAsync(d_global_write_index, 0, sizeof(size_type), 0) );
 
-  /*
   // Do the probe of the hash map to find all matches between the build table and
   // probe table and store the indices of the matching rows in the output
   probe_hash_table<join_type, 
@@ -205,7 +204,6 @@ cudaError_t compute_hash_join(mgpu::context_t & compute_ctx,
 	<<<probe_grid_size, block_size>>> (hash_table.get(), 
                                      build_table, 
                                      probe_table, 
-                                     probe_column, 
                                      probe_table.get_column_length(), 
                                      output_l_ptr,
                                      output_r_ptr,
@@ -228,7 +226,6 @@ cudaError_t compute_hash_join(mgpu::context_t & compute_ctx,
   }
   gdf_column_view(&output_l, output_l_ptr, nullptr, h_join_output_size, dtype);
   gdf_column_view(&output_r, output_r_ptr, nullptr, h_join_output_size, dtype);
-  */
 
   return error;
 }
