@@ -55,6 +55,12 @@ public:
 
   ~gdf_table(){}
 
+  __host__ 
+  gdf_column * get_column(size_type column_index) const
+  {
+    return host_columns[column_index];
+  }
+
   __host__ __device__
   size_type get_column_length() const
   {
