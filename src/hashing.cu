@@ -19,6 +19,7 @@
 
 #include "join/joining.h"
 #include "gdf_table.cuh"
+#include "hashmap/hash_functions.cuh"
 
 constexpr int HASH_KERNEL_BLOCK_SIZE = 256;
 constexpr int HASH_KERNEL_ROWS_PER_THREAD = 1;
@@ -123,10 +124,13 @@ gdf_error gdf_hash(int num_cols, gdf_column **input, gdf_hash_func hash, gdf_col
 }
 
 
-template <typename size_type>
-void partition_gdf_table(gdf_table<size_type> const & input_table,
-                         gdf_table<size_type> & partitioned_output,
-                         const size_type num_partitions)
+template < template <typename> class hash_function,
+           typename size_type>
+void hash_partition_gdf_table(gdf_table<size_type> const & input_table,
+                              gdf_table<size_type> const & table_to_hash,
+                              const size_type num_partitions,
+                              size_type partition_offsets[],
+                              gdf_table<size_type> & partitioned_output)
 {
 
 }
@@ -161,6 +165,9 @@ gdf_error gdf_hash_partition(int num_input_cols,
                              int partition_offsets[],
                              gdf_hash_func hash)
 {
+  // Use int until gdf API is updated to use something other than int
+  // for ordinal variables
+  using size_type = int;
 
   // Ensure all the inputs are non-zero and not null
   if((0 == num_input_cols) 
@@ -176,7 +183,7 @@ gdf_error gdf_hash_partition(int num_input_cols,
 
   // check that the columns data are not null, have matching types,
   // and the same number of rows
-  for (int i = 0; i < num_input_cols; i++) {
+  for (size_type i = 0; i < num_input_cols; i++) {
     if( (nullptr == input[i]->data) 
         || (nullptr == partitioned_output[i]->data))
       return GDF_DATASET_EMPTY;
@@ -189,16 +196,28 @@ gdf_error gdf_hash_partition(int num_input_cols,
       return GDF_COLUMN_SIZE_MISMATCH;
   }
 
-  using size_type = size_t;
+  // Wrap input and output columns in gdf_table
   std::unique_ptr< const gdf_table<size_type> > input_table{new gdf_table<size_type>(num_input_cols, input)};
   std::unique_ptr< gdf_table<size_type> > output_table{new gdf_table<size_type>(num_input_cols, partitioned_output)};
-  size_type number_of_partitions{static_cast<size_type>(num_partitions)};
 
+  // Create vector of pointers to columns that will be hashed
+  std::vector<gdf_column *> gdf_columns_to_hash(num_cols_to_hash);
+  for(size_type i = 0; i < num_cols_to_hash; ++i)
+  {
+    gdf_columns_to_hash[i] = input[columns_to_hash[i]];
+  }
+  // Create a separate table of the columns to be hashed
+  std::unique_ptr< const gdf_table<size_type> > table_to_hash {new gdf_table<size_type>(num_cols_to_hash, 
+                                                                                        gdf_columns_to_hash.data())};
   switch(hash)
   {
     case GDF_HASH_MURMUR3:
       {
-        partition_gdf_table(*input_table, *output_table, number_of_partitions);
+        hash_partition_gdf_table<MurmurHash3_32>(*input_table, 
+                                                 *table_to_hash,
+                                                 num_partitions,
+                                                 partition_offsets,
+                                                 *output_table);
         break;
       }
     default:
