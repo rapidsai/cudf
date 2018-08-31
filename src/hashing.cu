@@ -250,9 +250,9 @@ gdf_error scatter_gdf_table(gdf_table<size_type> const & input_table,
   // Scatter columns one by one
   for(size_type i = 0; i < num_columns; ++i)
   {
-    gdf_column * current_input_column = input_table.get_column(i);
+    gdf_column const * current_input_column = input_table.get_column(i);
     gdf_column * current_output_column = partitioned_output_table.get_column(i);
-    const size_type column_width_bytes{0};
+    size_type column_width_bytes{0};
     gdf_status = get_column_byte_width(current_input_column, &column_width_bytes);
 
     if(GDF_SUCCESS != gdf_status)
@@ -264,7 +264,7 @@ gdf_error scatter_gdf_table(gdf_table<size_type> const & input_table,
       case 1:
         {
           using column_type = int8_t;
-          column_type * input = static_cast<column_type*>(current_input_column->data);
+          column_type const * const input = static_cast<column_type*>(current_input_column->data);
           column_type * output = static_cast<column_type*>(current_output_column->data);
           gdf_status = scatter_column<column_type>(input, 
                                                    num_rows,
@@ -373,15 +373,14 @@ gdf_error hash_partition_gdf_table(gdf_table<size_type> const & input_table,
                                           row_partition_numbers,
                                           partition_sizes);
 
-  CUDA_TRY(cudaGetLastError());
+  CUDA_CHECK_LAST();
 
   // Compute exclusive scan of the partition sizes in-place to determine 
   // the starting point for each partition in the output
   thrust::exclusive_scan(partition_sizes, 
                          partition_sizes + num_partitions, 
                          partition_sizes);
-
-  CUDA_TRY(cudaGetLastError());
+  CUDA_CHECK_LAST();
 
   // Copy the result of the exlusive scan to the output offsets array
   // to indicate the starting point for each partition in the output
@@ -399,7 +398,12 @@ gdf_error hash_partition_gdf_table(gdf_table<size_type> const & input_table,
                     compute_row_output_location<size_type>(partition_sizes));
 
 
-  CUDA_TRY(cudaGetLastError());
+  CUDA_CHECK_LAST();
+
+  scatter_gdf_table(input_table, 
+                    row_partition_numbers, 
+                    partitioned_output);
+  CUDA_CHECK_LAST();
 
   CUDA_TRY(cudaFree(row_partition_numbers));
   CUDA_TRY(cudaFree(partition_sizes));
