@@ -217,28 +217,103 @@ struct compute_row_output_location
   size_type * const __restrict__ partition_offsets;
 };
 
-template <typename size_type>
-__global__
-void compute_output_locations( size_type const * const __restrict__ row_partition_numbers,
-                               const size_type num_rows,
-                               const size_type num_partitions,
-                               size_type * __restrict__ partition_offsets)
+template <typename column_type,
+          typename size_type>
+gdf_error scatter_column(column_type const * const __restrict__ input_column,
+                         size_type const num_rows,
+                         size_type const * const __restrict__ row_output_locations,
+                         column_type * const __restrict__ partitioned_output_column)
 {
 
-  size_type row_number = threadIdx.x + blockIdx.x * blockDim.x;
+  gdf_error gdf_status{GDF_SUCCESS};
 
-  while( row_number < num_rows )
-  {
-    const size_type row_partition_number = row_partition_numbers[row_number];
+  thrust::scatter(input_column,
+                  input_column + num_rows,
+                  row_output_locations,
+                  partitioned_output_column);
 
-    const size_type output_location = atomicAdd(&partition_offsets[row_partition_number], size_type(1));
+  CUDA_CHECK_LAST();
 
-    row_partition_numbers[row_number] = output_location;
-
-    row_number += blockDim.x * gridDim.x;
-  }
+  return gdf_status;
 }
 
+template <typename size_type>
+gdf_error scatter_gdf_table(gdf_table<size_type> const & input_table,
+                            size_type const * const row_output_locations,
+                            gdf_table<size_type> & partitioned_output_table)
+{
+  gdf_error gdf_status{GDF_SUCCESS};
+
+  const size_type num_columns = input_table.get_num_columns();
+  const size_type num_rows = input_table.get_column_length();
+
+  // Scatter columns one by one
+  for(size_type i = 0; i < num_columns; ++i)
+  {
+    gdf_column * current_input_column = input_table.get_column(i);
+    gdf_column * current_output_column = partitioned_output_table.get_column(i);
+    const size_type column_width_bytes{0};
+    gdf_status = get_column_byte_width(current_input_column, &column_width_bytes);
+
+    if(GDF_SUCCESS != gdf_status)
+      return gdf_status;
+
+    // Scatter each column based on it's byte width
+    switch(column_width_bytes)
+    {
+      case 1:
+        {
+          using column_type = int8_t;
+          column_type * input = static_cast<column_type*>(current_input_column->data);
+          column_type * output = static_cast<column_type*>(current_output_column->data);
+          gdf_status = scatter_column<column_type>(input, 
+                                                   num_rows,
+                                                   row_output_locations, 
+                                                   output);
+          break;
+        }
+      case 2:
+        {
+          using column_type = int16_t;
+          column_type * input = static_cast<column_type*>(current_input_column->data);
+          column_type * output = static_cast<column_type*>(current_output_column->data);
+          gdf_status = scatter_column<column_type>(input, 
+                                                   num_rows,
+                                                   row_output_locations, 
+                                                   output);
+          break;
+        }
+      case 4:
+        {
+          using column_type = int32_t;
+          column_type * input = static_cast<column_type*>(current_input_column->data);
+          column_type * output = static_cast<column_type*>(current_output_column->data);
+          gdf_status = scatter_column<column_type>(input, 
+                                                   num_rows,
+                                                   row_output_locations, 
+                                                   output);
+          break;
+        }
+      case 8:
+        {
+          using column_type = int64_t;
+          column_type * input = static_cast<column_type*>(current_input_column->data);
+          column_type * output = static_cast<column_type*>(current_output_column->data);
+          gdf_status = scatter_column<column_type>(input, 
+                                                   num_rows,
+                                                   row_output_locations, 
+                                                   output);
+          break;
+        }
+      default:
+        gdf_status = GDF_UNSUPPORTED_DTYPE;
+    }
+
+    if(GDF_SUCCESS != gdf_status)
+      return gdf_status;
+  }
+  return gdf_status;
+}
 
 
 /* --------------------------------------------------------------------------*/
