@@ -157,9 +157,10 @@ size_t gdf_join_result_size(gdf_join_result_type *result);
 
 /* --------------------------------------------------------------------------*/
 /** 
- * @brief Computes the hash values of the specified rows in the input columns and 
- * bins the hash values into the desired number of partitions. Rearranges the input 
- * columns such that rows with hash values in the same bin are contiguous.
+ * @brief Computes the hash values of the rows in the specified columns of the 
+ * input columns and bins the hash values into the desired number of partitions. 
+ * Rearranges the input columns such that rows with hash values in the same bin 
+ * are contiguous.
  * 
  * @Param[in] num_input_cols The number of columns in the input columns
  * @Param[in] input[] The input set of columns
