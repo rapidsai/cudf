@@ -164,14 +164,13 @@ struct modulo_partitioner
 
 template <template <typename> class hash_function,
           typename partitioner_type,
-          typename hash_value_t,
           typename size_type>
 __global__ 
-void hash_rows_count_partition_sizes(gdf_table<size_type> const & the_table, 
+void compute_row_partition_numbers(gdf_table<size_type> const & the_table, 
                                      const size_type num_rows,
                                      const size_type num_partitions,
                                      const partitioner_type the_partitioner,
-                                     hash_value_t * row_hash_values,
+                                     size_type * row_partition_numbers,
                                      size_type * partition_sizes)
 {
   size_type row_number = threadIdx.x + blockIdx.x * blockDim.x;
@@ -183,16 +182,25 @@ void hash_rows_count_partition_sizes(gdf_table<size_type> const & the_table,
   {
     // See here why template disambiguator is required: 
     // https://stackoverflow.com/questions/4077110/template-disambiguator
-    const hash_value_t row_hash_value = the_table.template hash_row<hash_function>(row_number);
-
-    row_hash_values[row_number] = row_hash_value;
+    const hash_value_type row_hash_value = the_table.template hash_row<hash_function>(row_number);
 
     const size_type partition_number = the_partitioner(row_hash_value, num_partitions);
+
+    row_partition_numbers[row_number] = partition_number;
 
     atomicAdd(&(partition_sizes[partition_number]), size_type(1));
 
     row_number += blockDim.x * gridDim.x;
   }
+}
+
+template <typename size_type>
+__global__
+void compute_output_locations( size_type * row_partition_numbers,
+                               size_type num_partitions,
+                               size_type * output_locations)
+{
+
 }
 
 
@@ -232,14 +240,14 @@ void hash_partition_gdf_table(gdf_table<size_type> const & input_table,
 
   // Compute the hash value for all the rows in the table to hash
   //table_row_hasher<hash_function, size_type> the_hasher(table_to_hash);
-  //thrust::tabulate(row_hash_values.begin(), 
-  //                 row_hash_values.end(), 
+  //thrust::tabulate(row_partition_numbers.begin(), 
+  //                 row_partition_numbers.end(), 
   //                 the_hasher);
   const size_type num_rows = table_to_hash.get_column_length();
 
 
-  hash_value_type * row_hash_values{nullptr};
-  cudaMalloc(&row_hash_values, num_rows * sizeof(hash_value_type));
+  size_type * row_partition_numbers{nullptr};
+  cudaMalloc(&row_partition_numbers, num_rows * sizeof(hash_value_type));
 
   size_type * partition_sizes{nullptr};
   cudaMalloc(&partition_sizes, num_partitions * sizeof(size_type));
@@ -249,13 +257,15 @@ void hash_partition_gdf_table(gdf_table<size_type> const & input_table,
   const int grid_size = (num_rows + rows_per_block - 1) / rows_per_block;
 
 
-  // Computes the hash value of every row as well as the size of each partition
-  hash_rows_count_partition_sizes<hash_function>
+  // Computes which partition each row belongs to by hashing the row and performing
+  // a partitioning operator on the hash value. Also computes the number of
+  // rows in each partition
+  compute_row_partition_numbers<hash_function>
   <<<grid_size, HASH_KERNEL_BLOCK_SIZE>>>(table_to_hash, 
                                           num_rows,
                                           num_partitions,
                                           partitioner_type(),
-                                          row_hash_values,
+                                          row_partition_numbers,
                                           partition_sizes);
 
   // Compute exclusive scan of the partition sizes in-place to determine 
@@ -264,17 +274,18 @@ void hash_partition_gdf_table(gdf_table<size_type> const & input_table,
                          partition_sizes + num_partitions, 
                          partition_sizes);
 
-  // Copy the result of the exlusive scan to the output offests array
+  // Copy the result of the exlusive scan to the output offsets array
+  // to indicate the starting point for each partition in the output
   cudaMemcpyAsync(partition_offsets, 
                   partition_sizes, 
                   num_partitions * sizeof(size_type),
-                  cudaMemcpyDeviceToDevice);
+                  cudaMemcpyDeviceToHost);
 
   
 
 
 
-  cudaFree(row_hash_values);
+  cudaFree(row_partition_numbers);
   cudaFree(partition_sizes);
 }
 
