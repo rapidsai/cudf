@@ -61,6 +61,12 @@ class _librmm_wrapper(object):
     def finalize(self):
         return self.rmmFinalize()
 
+    def csv_log(self):
+        logsize = self.rmmLogSize()
+        buf = self._ffi.new("char[]", logsize)
+        self.rmmGetLog(buf, logsize)
+        return self._ffi.string(buf).decode('utf-8')
+
     def _array_helper(self, addr, datasize, shape, strides, dtype, finalizer=None):
         ctx = cuda.current_context()
         ptr = ctypes.c_uint64(int(addr))
@@ -128,7 +134,6 @@ class _librmm_wrapper(object):
         if copy:
             to.copy_to_device(ary, stream=stream)
         return to
-
 
     def auto_device(self, obj, stream=0, copy=True):
         """

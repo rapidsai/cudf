@@ -23,7 +23,7 @@
 
 #include <vector>
 #include <chrono>
-#include <string>
+#include <iostream>
 #include "memory.h"
 
 typedef struct CUstream_st *cudaStream_t;
@@ -45,11 +45,11 @@ namespace rmm
 
         /// Record a memory manager event in the log.
         void record(MemEvent_t event, int deviceId, void* ptr,
-                    TimePt start, TimePt finish, 
+                    TimePt start, TimePt end, 
                     size_t size=0, cudaStream_t stream=0);
         
         /// Write the log to comma-separated value file
-        void to_csv(const std::string &filename);
+        void to_csv(std::ostream &csv);
     private:
         struct MemoryEvent {
             MemEvent_t event;

@@ -15,8 +15,6 @@
  */
 
 #include "memory_manager.h"
-#include <fstream>
-#include <iostream>
 
 namespace rmm
 {
@@ -39,11 +37,9 @@ namespace rmm
         events.push_back({event, deviceId, ptr, size, stream, start, end});
     }
 
-    void Logger::to_csv(const std::string &filename)
+    void Logger::to_csv(std::ostream &csv)
     {
-        std::ofstream csv;
-        csv.open (filename);
-        csv << "Device ID, Address, Size (bytes), Stream, Event Type, Start, End, Elapsed\n";
+        csv << "Event Type,Device ID,Address,Size (bytes),Stream,Start,End,Elapsed\n";
 
         for (auto& e : events)
         {

@@ -39,7 +39,9 @@ typedef enum
   RMM_ERROR_INVALID_ARGUMENT, //< An invalid argument was passed (e.g.null pointer)
   RMM_ERROR_NOT_INITIALIZED,  //< RMM API called before rmmInitialize()
   RMM_ERROR_OUT_OF_MEMORY,    //< The memory manager was unable to allocate more memory
-  RMM_ERROR_UNKNOWN           //< An unknown error occurred
+  RMM_ERROR_UNKNOWN,          //< An unknown error occurred
+  RMM_ERROR_IO,               //< Stats output error
+  N_RMM_ERROR                 //< Count of error types
 } rmmError_t;
 
 /** ---------------------------------------------------------------------------*
@@ -106,3 +108,16 @@ rmmError_t rmmFree(void *ptr, cudaStream_t stream);
  *                    been called, or RMM_ERROR_CUDA_ERROR on any CUDA error
  * ---------------------------------------------------------------------------**/
 rmmError_t rmmGetInfo(size_t *freeSize, size_t *totalSize, cudaStream_t stream);
+
+/** ---------------------------------------------------------------------------*
+ * @brief Write the memory event stats log to specified path/filename
+ * 
+ * Note: will overwrite the specified file.
+ * 
+ * @param filename The full path and filename to write.
+ * @return rmmError_t RMM_SUCCESS or RMM_ERROR_IO on output failure.
+ * ---------------------------------------------------------------------------**/
+rmmError_t rmmWriteLog(const char* filename);
+
+size_t rmmLogSize();
+rmmError_t rmmGetLog(char* buffer, size_t buffer_size);
