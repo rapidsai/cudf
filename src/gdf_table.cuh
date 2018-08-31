@@ -56,6 +56,12 @@ public:
   ~gdf_table(){}
 
   __host__ 
+  size_type get_num_columns() const
+  {
+    return num_columns;
+  }
+
+  __host__ 
   gdf_column * get_column(size_type column_index) const
   {
     return host_columns[column_index];
