@@ -250,7 +250,7 @@ gdf_error scatter_gdf_table(gdf_table<size_type> const & input_table,
   // Scatter columns one by one
   for(size_type i = 0; i < num_columns; ++i)
   {
-    gdf_column const * current_input_column = input_table.get_column(i);
+    gdf_column * current_input_column = input_table.get_column(i);
     gdf_column * current_output_column = partitioned_output_table.get_column(i);
     size_type column_width_bytes{0};
     gdf_status = get_column_byte_width(current_input_column, &column_width_bytes);
