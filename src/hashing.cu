@@ -196,11 +196,25 @@ void compute_row_partition_numbers(gdf_table<size_type> const & the_table,
 
 template <typename size_type>
 __global__
-void compute_output_locations( size_type * row_partition_numbers,
-                               size_type num_partitions,
-                               size_type * output_locations)
+void compute_output_locations( size_type const * const __restrict__ row_partition_numbers,
+                               const size_type num_rows,
+                               const size_type num_partitions,
+                               size_type * __restrict__ partition_offsets,
+                               size_type * __restrict__ output_locations)
 {
 
+  size_type row_number = threadIdx.x + blockIdx.x * blockDim.x;
+
+  while( row_number < num_rows )
+  {
+    const size_type row_partition_number = row_partition_numbers[row_number];
+
+    const size_type output_location = atomicAdd(&partition_offsets[row_partition_number], size_type(1));
+
+    output_locations[row_number] = output_location;
+
+    row_number += blockDim.x * gridDim.x;
+  }
 }
 
 
@@ -281,12 +295,18 @@ void hash_partition_gdf_table(gdf_table<size_type> const & input_table,
                   num_partitions * sizeof(size_type),
                   cudaMemcpyDeviceToHost);
 
-  
+  size_type * row_output_locations{nullptr};
+  cudaMalloc(&row_output_locations, num_rows * sizeof(size_type));
 
-
+  compute_output_locations<<<grid_size, HASH_KERNEL_BLOCK_SIZE>>>(row_partition_numbers,
+                                                                  num_rows,
+                                                                  num_partitions,
+                                                                  partition_sizes,
+                                                                  row_output_locations);
 
   cudaFree(row_partition_numbers);
   cudaFree(partition_sizes);
+  cudaFree(row_output_locations);
 }
 
 /* --------------------------------------------------------------------------*/
