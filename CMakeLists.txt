@@ -60,6 +60,7 @@ if(CUDA_FOUND)
     # Suppress SHFL warnings caused by modern GPU.
     # TODO: remove this when modern GPU is removed or fixed to use shfl_sync
     set(CUDA_NVCC_FLAGS ${CUDA_NVCC_FLAGS};
+        -Werror cross-execution-space-call;
         -Wno-deprecated-declarations;
         -Xptxas --disable-warnings)
     # set warnings as errors
@@ -121,6 +122,7 @@ endif()
 
 cuda_add_library(rmm SHARED
     src/memory/memory.cpp
+    src/memory/memory_manager.cpp
 )
 
 cuda_add_library(gdf SHARED

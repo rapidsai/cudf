@@ -22,11 +22,11 @@
  */
 
 #include "rmm.h"
+#include "memory_manager.h"
 
-/**
+/** ---------------------------------------------------------------------------*
  * @brief Macro wrapper for RMM API calls to return appropriate RMM errors.
- * 
- */
+ * ---------------------------------------------------------------------------**/
 #define RMM_CHECK_CUDA(call) do { \
     cudaError_t cudaError = (call); \
     if( cudaError == cudaErrorMemoryAllocation ) { \
@@ -36,6 +36,46 @@
         return RMM_ERROR_CUDA_ERROR; \
     } \
 } while(0)
+
+// Global instance of the log
+rmm::Logger theLog;
+
+// RAII logger class
+class LogIt
+{
+public:
+    LogIt(rmm::Logger::MemEvent_t event, size_t size, cudaStream_t stream) 
+    : event(event), device(0), ptr(0), size(size), stream(stream)
+    {
+        cudaGetDevice(&device);
+        start = std::chrono::system_clock::now();
+    }
+
+    LogIt(rmm::Logger::MemEvent_t event, void* ptr, size_t size, cudaStream_t stream) 
+    : event(event), device(0), ptr(ptr), size(size), stream(stream)
+    {
+        cudaGetDevice(&device);
+        start = std::chrono::system_clock::now();
+    }
+
+    /// Sometimes you need to start logging before the pointer address is known
+    void setPointer(void* p) { ptr = p; }
+
+    ~LogIt() 
+    {
+        auto end = std::chrono::system_clock::now();
+        theLog.record(event, device, ptr, start, end, size, stream); 
+    }
+
+private:
+    rmm::Logger::MemEvent_t event;
+    int device;
+    void* ptr;
+    size_t size;
+    cudaStream_t stream;
+    rmm::Logger::TimePt start;
+};
+
 
 // Initialize memory manager state and storage.
 rmmError_t rmmInitialize()
@@ -47,12 +87,14 @@ rmmError_t rmmInitialize()
 // Shutdown memory manager.
 rmmError_t rmmFinalize()
 {
+    theLog.to_csv("memory_log.txt");
     return RMM_SUCCESS;
 }
  
 // Allocate memory and return a pointer to device memory. 
 rmmError_t rmmAlloc(void **ptr, size_t size, cudaStream_t stream)
 {
+    LogIt log(rmm::Logger::Alloc, size, stream);
 	if (!ptr && !size) {
         return RMM_SUCCESS;
     }
@@ -65,6 +107,7 @@ rmmError_t rmmAlloc(void **ptr, size_t size, cudaStream_t stream)
     	return RMM_ERROR_INVALID_ARGUMENT;
 
     RMM_CHECK_CUDA(cudaMalloc(ptr, size));
+    log.setPointer(*ptr);
 
     return RMM_SUCCESS;
 }
@@ -72,6 +115,7 @@ rmmError_t rmmAlloc(void **ptr, size_t size, cudaStream_t stream)
 /// Reallocate device memory block to new size and recycle any remaining memory.
 rmmError_t rmmRealloc(void **ptr, size_t new_size, cudaStream_t stream)
 {
+    LogIt log(rmm::Logger::Realloc, new_size, stream);
 	if (!ptr && !new_size) {
         return RMM_SUCCESS;
     }
@@ -81,6 +125,7 @@ rmmError_t rmmRealloc(void **ptr, size_t new_size, cudaStream_t stream)
 
 	RMM_CHECK_CUDA(cudaFree(*ptr));
 	RMM_CHECK_CUDA(cudaMalloc(ptr, new_size));
+    log.setPointer(ptr);
 
     return RMM_SUCCESS;
 }
@@ -88,6 +133,7 @@ rmmError_t rmmRealloc(void **ptr, size_t new_size, cudaStream_t stream)
 /// Release device memory and recycle the associated memory.
 rmmError_t rmmFree(void *ptr, cudaStream_t stream)
 {
+    LogIt log(rmm::Logger::Free, ptr, 0, stream);
 	RMM_CHECK_CUDA(cudaFree(ptr));
 	return RMM_SUCCESS;
 }
