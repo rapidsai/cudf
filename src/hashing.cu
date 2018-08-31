@@ -264,7 +264,7 @@ gdf_error scatter_gdf_table(gdf_table<size_type> const & input_table,
       case 1:
         {
           using column_type = int8_t;
-          column_type const * const input = static_cast<column_type*>(current_input_column->data);
+          column_type * input = static_cast<column_type*>(current_input_column->data);
           column_type * output = static_cast<column_type*>(current_output_column->data);
           gdf_status = scatter_column<column_type>(input, 
                                                    num_rows,
@@ -377,32 +377,38 @@ gdf_error hash_partition_gdf_table(gdf_table<size_type> const & input_table,
 
   // Compute exclusive scan of the partition sizes in-place to determine 
   // the starting point for each partition in the output
+  size_type * scanned_partition_sizes{partition_sizes};
   thrust::exclusive_scan(partition_sizes, 
                          partition_sizes + num_partitions, 
-                         partition_sizes);
+                         scanned_partition_sizes);
   CUDA_CHECK_LAST();
 
   // Copy the result of the exlusive scan to the output offsets array
   // to indicate the starting point for each partition in the output
   CUDA_TRY(cudaMemcpyAsync(partition_offsets, 
-                           partition_sizes, 
+                           scanned_partition_sizes, 
                            num_partitions * sizeof(size_type),
                            cudaMemcpyDeviceToHost));
 
 
   // Compute the output location for each row in-place based on it's 
   // partition number such that each partition will be contiguous in memory
+  size_type * row_output_locations{row_partition_numbers};
   thrust::transform(row_partition_numbers,
                     row_partition_numbers + num_rows,
-                    row_partition_numbers,
+                    row_output_locations,
                     compute_row_output_location<size_type>(partition_sizes));
 
 
   CUDA_CHECK_LAST();
 
+  // Creates the partitioned output table by scattering the rows of
+  // the input table to rows of the output table based on each rows
+  // output location
   scatter_gdf_table(input_table, 
-                    row_partition_numbers, 
+                    row_output_locations, 
                     partitioned_output);
+
   CUDA_CHECK_LAST();
 
   CUDA_TRY(cudaFree(row_partition_numbers));
