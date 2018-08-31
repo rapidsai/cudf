@@ -126,24 +126,6 @@ gdf_error gdf_hash(int num_cols, gdf_column **input, gdf_hash_func hash, gdf_col
 }
 
 
-template <template <typename> class hash_function,
-          typename size_type>
-struct table_row_hasher
-{
-  table_row_hasher(gdf_table<size_type> const & table_to_hash) 
-    : the_table{table_to_hash}
-  {}
-  
-  __device__
-  hash_value_type operator()(size_type row_index) const
-  {
-    return the_table.template hash_row<hash_function>(row_index);
-  }
-
-  gdf_table<size_type> const & the_table;
-};
-
-
 /* --------------------------------------------------------------------------*/
 /** 
  * @Synopsis  Functor to map a hash value to a particular 'bin' or partition number
@@ -162,6 +144,20 @@ struct modulo_partitioner
   }
 };
 
+/* --------------------------------------------------------------------------*/
+/** 
+ * @brief Computes which partition each row of a gdf_table will belong to based
+   on hashing each row, and applying a partition function to the hash value. 
+   Also computes the number of rows that belong to each partition.
+ * 
+ * @Param[in] the_table The table whose rows will be partitioned
+ * @Param[in] num_rows The number of rows in the table
+ * @Param[in] num_partitions The number of partitions to divide the rows into
+ * @Param[in] the_partitioner The functor that maps a rows hash value to a partition number
+ * @Param[out] row_partition_numbers Array that holds which partition each row belongs to
+ * @Param[out] partition_sizes The number of rows in each partition.
+ */
+/* ----------------------------------------------------------------------------*/
 template <template <typename> class hash_function,
           typename partitioner_type,
           typename size_type>
@@ -217,12 +213,28 @@ struct compute_row_output_location
   size_type * const __restrict__ partition_offsets;
 };
 
+/* --------------------------------------------------------------------------*/
+/** 
+ * @brief Scatters the values of a column into a new column based on a map that
+   maps rows in the input column to rows in the output column. input_column[i]
+   will be scattered to output_column[ row_output_locations[i] ]
+ * 
+ * @Param[in] input_column The input column whose rows will be scattered
+ * @Param[in] num_rows The number of rows in the input and output columns
+ * @Param[in] row_output_locations An array that maps rows in the input column
+   to rows in the output column
+ * @Param[out] output_column The rearrangement of the input column 
+   based on the mapping determined by the row_output_locations array
+ * 
+ * @Returns   
+ */
+/* ----------------------------------------------------------------------------*/
 template <typename column_type,
           typename size_type>
 gdf_error scatter_column(column_type const * const __restrict__ input_column,
                          size_type const num_rows,
                          size_type const * const __restrict__ row_output_locations,
-                         column_type * const __restrict__ partitioned_output_column)
+                         column_type * const __restrict__ output_column)
 {
 
   gdf_error gdf_status{GDF_SUCCESS};
@@ -230,13 +242,29 @@ gdf_error scatter_column(column_type const * const __restrict__ input_column,
   thrust::scatter(input_column,
                   input_column + num_rows,
                   row_output_locations,
-                  partitioned_output_column);
+                  output_column);
 
   CUDA_CHECK_LAST();
 
   return gdf_status;
 }
 
+/* --------------------------------------------------------------------------*/
+/** 
+ * @brief  Creates the partitioned output table by scattering the rows of the 
+   input table to rows of the output table based on each rows output location.
+   I.e., input_table[i] will be scattered to 
+   partitioned_output_table[row_output_locations[i]]
+ * 
+ * @Param[in] input_table The input table to scatter
+ * @Param[in] row_output_locations The mapping from input row locations to output row
+   locations
+ * @Param[out] partitioned_output_table The rearrangement of the input table based 
+   on the mappings from the row_output_locations array
+ * 
+ * @Returns   
+ */
+/* ----------------------------------------------------------------------------*/
 template <typename size_type>
 gdf_error scatter_gdf_table(gdf_table<size_type> const & input_table,
                             size_type const * const row_output_locations,
@@ -493,6 +521,7 @@ gdf_error gdf_hash_partition(int num_input_cols,
                                                                                         gdf_columns_to_hash.data())};
 
   gdf_error gdf_status{GDF_SUCCESS};
+
   switch(hash)
   {
     case GDF_HASH_MURMUR3:
