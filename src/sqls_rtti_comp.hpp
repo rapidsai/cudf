@@ -41,7 +41,7 @@ struct LesserRTTI
   //   assert( types.size() == sz_ );
   // }
 
-  __host__ __device__
+  __device__
   LesserRTTI(void* const* cols,
 	     int* const types,
 	     size_t sz):
@@ -52,7 +52,7 @@ struct LesserRTTI
   {
   }
 
-  __host__ __device__
+  __device__
   LesserRTTI(void* const* cols,
 	     int* const types,
 	     size_t sz,
@@ -66,7 +66,7 @@ struct LesserRTTI
 
   
 
-  __host__ __device__
+  __device__
   bool equal(IndexT row1, IndexT row2) const
   {
     for(size_t col_index = 0; col_index < sz_; ++col_index)
@@ -87,7 +87,7 @@ struct LesserRTTI
     return true;
   }
 
-  __host__ __device__
+  __device__
   bool equal_v(size_t row1) const
   {
     for(size_t col_index = 0; col_index < sz_; ++col_index)
@@ -108,7 +108,7 @@ struct LesserRTTI
     return true;
   }
 
-  __host__ __device__
+  __device__
   bool less(IndexT row1, IndexT row2) const
   {
     for(size_t col_index = 0; col_index < sz_; ++col_index)
@@ -129,7 +129,7 @@ struct LesserRTTI
     return false;
   }
 
-  __host__ __device__
+  __device__
   void gather(void** d_ppcols_out, size_t* d_indices, size_t nrows_new) const
   {
      Gatherer g(d_ppcols_out,
@@ -145,7 +145,7 @@ struct LesserRTTI
   }
 
   template<typename ColType>
-  __host__ __device__
+  __device__
    static ColType at(int col_index,
 		     IndexT row,
 		     const void* const * columns)
@@ -158,7 +158,7 @@ private:
 
   struct OpLess
   {
-     __host__ __device__
+     __device__
      OpLess(IndexT row1, IndexT row2):
        row1_(row1),
        row2_(row2)
@@ -166,7 +166,7 @@ private:
     }
     
      template<typename ColType>
-     __host__ __device__
+     __device__
      State operator() (int col_index,
 		       const void* const * columns,
 		       ColType )
@@ -188,7 +188,7 @@ private:
 
   struct OpEqual
   {
-     __host__ __device__
+     __device__
      OpEqual(IndexT row1, IndexT row2):
        row1_(row1),
        row2_(row2)
@@ -196,7 +196,7 @@ private:
     }
     
      template<typename ColType>
-     __host__ __device__
+     __device__
      State operator() (int col_index,
 		       const void* const * columns,
 		       ColType )
@@ -216,7 +216,7 @@ private:
 
   struct OpEqualV
   {
-     __host__ __device__
+     __device__
      OpEqualV(const void* const * vals, IndexT row):
        target_vals_(vals),
        row_(row)
@@ -224,7 +224,7 @@ private:
     }
     
      template<typename ColType>
-     __host__ __device__
+     __device__
      State operator() (int col_index,
 		       const void* const * columns,
 		       ColType )
@@ -245,7 +245,7 @@ private:
 
   struct Gatherer
   {
-    __host__ __device__
+    __device__
     Gatherer(void** d_cols_out,
 	     size_t* d_indices,
 	     size_t nrows_new):
@@ -256,7 +256,7 @@ private:
     }
 
     template<typename ColType>
-    __host__ __device__
+    __device__
     State operator() (int col_index,
 		      const void* const * columns,
 		      ColType )
@@ -279,7 +279,7 @@ private:
   };
 
   template<typename Predicate>
-  __host__ __device__
+  __device__
   State type_dispatcher(Predicate pred, gdf_dtype col_type, int col_index) const
   {
     switch( col_type )
@@ -358,7 +358,6 @@ private:
 // d_indx   = vector of indices re-ordered after sorting;
 //
 template<typename IndexT>
-__host__ __device__
 void multi_col_order_by(size_t nrows,
 			size_t ncols,
 			void* const* d_cols,
@@ -376,7 +375,7 @@ void multi_col_order_by(size_t nrows,
   
   thrust::sort(thrust::cuda::par(allocator).on(stream),
 		 d_indx, d_indx+nrows,
-		 [f] __host__ __device__ (IndexT i1, IndexT i2){
+		 [f] __device__ (IndexT i1, IndexT i2){
 		         return f.less(i1, i2);
 		 });
 }
@@ -403,7 +402,6 @@ void multi_col_order_by(size_t nrows,
 // new_sz     = new #rows after filtering;
 //
 template<typename IndexT>
-__host__ __device__
 size_t multi_col_filter(size_t nrows,
 			size_t ncols,
 			void* const* d_cols,
@@ -422,7 +420,7 @@ size_t multi_col_filter(size_t nrows,
     thrust::copy_if(thrust::cuda::par(allocator).on(stream),
 		    thrust::make_counting_iterator<size_t>(0), thrust::make_counting_iterator<size_t>(nrows),
 		    ptr_d_flt_indx,
-		    [f] __host__ __device__ (size_t indx){
+		    [f] __device__ (size_t indx){
 		      return f.equal_v(indx);
 		    });
 
@@ -457,7 +455,6 @@ size_t multi_col_filter(size_t nrows,
 // ret      = # rows after aggregation;
 //
 template<typename IndexT>
-__host__ __device__
 size_t
 multi_col_group_by_count_sort(size_t         nrows,
 			      size_t         ncols,
@@ -482,7 +479,7 @@ multi_col_group_by_count_sort(size_t         nrows,
 			  thrust::make_constant_iterator(1),
 			  ptr_d_kout,
 			  ptr_d_vout,
-			  [f] __host__ __device__(int key1, int key2){
+			  [f] __device__(int key1, int key2){
 			         return f.equal(key1, key2);
 			  });
 
@@ -521,7 +518,6 @@ multi_col_group_by_count_sort(size_t         nrows,
 template<typename ValsT,
 	 typename IndexT,
 	 typename Reducer>
-__host__ __device__
 size_t multi_col_group_by_sort(size_t         nrows,
 			       size_t         ncols,
 			       void* const*   d_cols,
@@ -553,7 +549,7 @@ size_t multi_col_group_by_sort(size_t         nrows,
   			    ptr_d_agg_p,
   			    ptr_d_kout,
   			    ptr_d_vout,
-  			    [f] __host__ __device__(int key1, int key2){
+  			    [f] __device__(int key1, int key2){
 			          return f.equal(key1, key2);
   			    },
   			    fctr);
@@ -564,7 +560,6 @@ size_t multi_col_group_by_sort(size_t         nrows,
 
 template<typename ValsT,
 	 typename IndexT>
-__host__ __device__
 size_t multi_col_group_by_sum_sort(size_t         nrows,
 				   size_t         ncols,
 				   void* const*   d_cols,
@@ -577,7 +572,7 @@ size_t multi_col_group_by_sum_sort(size_t         nrows,
 				   bool           sorted = false,
 				   cudaStream_t   stream = NULL)
 {
-  auto lamb = [] __host__ __device__ (ValsT x, ValsT y){
+  auto lamb = [] __device__ (ValsT x, ValsT y){
 			      return x+y;
   };
 
@@ -599,7 +594,6 @@ size_t multi_col_group_by_sum_sort(size_t         nrows,
 
 template<typename ValsT,
 	 typename IndexT>
-__host__ __device__
 size_t multi_col_group_by_min_sort(size_t         nrows,
 				   size_t         ncols,
 				   void* const*   d_cols,
@@ -612,7 +606,7 @@ size_t multi_col_group_by_min_sort(size_t         nrows,
 				   bool           sorted = false,
 				   cudaStream_t   stream = NULL)
 {
-  auto lamb = [] __host__ __device__ (ValsT x, ValsT y){
+  auto lamb = [] __device__ (ValsT x, ValsT y){
     return (x<y?x:y);
   };
 
@@ -634,7 +628,6 @@ size_t multi_col_group_by_min_sort(size_t         nrows,
 
 template<typename ValsT,
 	 typename IndexT>
-__host__ __device__
 size_t multi_col_group_by_max_sort(size_t         nrows,
 				   size_t         ncols,
 				   void* const*   d_cols,
@@ -647,7 +640,7 @@ size_t multi_col_group_by_max_sort(size_t         nrows,
 				   bool           sorted = false,
 				   cudaStream_t   stream = NULL)
 {
-  auto lamb = [] __host__ __device__ (ValsT x, ValsT y){
+  auto lamb = [] __device__ (ValsT x, ValsT y){
     return (x>y?x:y);
   };
 
@@ -670,7 +663,6 @@ size_t multi_col_group_by_max_sort(size_t         nrows,
 
 template<typename ValsT,
 	 typename IndexT>
-__host__ __device__
 size_t multi_col_group_by_avg_sort(size_t         nrows,
 				   size_t         ncols,
 				   void* const*   d_cols,
@@ -712,7 +704,7 @@ size_t multi_col_group_by_avg_sort(size_t         nrows,
 		    ptr_d_cout, ptr_d_cout + nrows,
 		    ptr_d_vout,
 		    ptr_d_vout,
-		    [] __host__ __device__ (IndexT n, ValsT sum){
+		    [] __device__ (IndexT n, ValsT sum){
 		      return sum/static_cast<ValsT>(n);
 		    });
 
