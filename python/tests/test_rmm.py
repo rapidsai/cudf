@@ -49,4 +49,4 @@ def test_rmm_csv_log():
 
     print(csv[:100])
 
-    assert(csv.find("Device ID, Address, Size (bytes), Stream, Event Type, Start, End, Elapsed") >= 0)
+    assert(csv.find("Event Type,Device ID,Address,Size (bytes),Stream,Start,End,Elapsed") >= 0)
