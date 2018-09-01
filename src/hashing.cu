@@ -163,11 +163,11 @@ template <template <typename> class hash_function,
           typename size_type>
 __global__ 
 void compute_row_partition_numbers(gdf_table<size_type> const & the_table, 
-                                     const size_type num_rows,
-                                     const size_type num_partitions,
-                                     const partitioner_type the_partitioner,
-                                     size_type * row_partition_numbers,
-                                     size_type * partition_sizes)
+                                   const size_type num_rows,
+                                   const size_type num_partitions,
+                                   const partitioner_type the_partitioner,
+                                   size_type * row_partition_numbers,
+                                   size_type * partition_sizes)
 {
   size_type row_number = threadIdx.x + blockIdx.x * blockDim.x;
 
@@ -185,6 +185,7 @@ void compute_row_partition_numbers(gdf_table<size_type> const & the_table,
     row_partition_numbers[row_number] = partition_number;
 
     atomicAdd(&(partition_sizes[partition_number]), size_type(1));
+
 
     row_number += blockDim.x * gridDim.x;
   }
@@ -239,7 +240,8 @@ gdf_error scatter_column(column_type const * const __restrict__ input_column,
 
   gdf_error gdf_status{GDF_SUCCESS};
 
-  thrust::scatter(input_column,
+  thrust::scatter(thrust::cuda::par,
+                  input_column,
                   input_column + num_rows,
                   row_output_locations,
                   output_column);
@@ -390,6 +392,8 @@ gdf_error hash_partition_gdf_table(gdf_table<size_type> const & input_table,
   constexpr int rows_per_block = HASH_KERNEL_BLOCK_SIZE * HASH_KERNEL_ROWS_PER_THREAD;
   const int grid_size = (num_rows + rows_per_block - 1) / rows_per_block;
 
+
+
   // Computes which partition each row belongs to by hashing the row and performing
   // a partitioning operator on the hash value. Also computes the number of
   // rows in each partition
@@ -401,12 +405,17 @@ gdf_error hash_partition_gdf_table(gdf_table<size_type> const & input_table,
                                           row_partition_numbers,
                                           partition_sizes);
 
+
+
+  
+
   CUDA_CHECK_LAST();
 
   // Compute exclusive scan of the partition sizes in-place to determine 
   // the starting point for each partition in the output
   size_type * scanned_partition_sizes{partition_sizes};
-  thrust::exclusive_scan(partition_sizes, 
+  thrust::exclusive_scan(thrust::cuda::par,
+                         partition_sizes, 
                          partition_sizes + num_partitions, 
                          scanned_partition_sizes);
   CUDA_CHECK_LAST();
@@ -422,7 +431,8 @@ gdf_error hash_partition_gdf_table(gdf_table<size_type> const & input_table,
   // Compute the output location for each row in-place based on it's 
   // partition number such that each partition will be contiguous in memory
   size_type * row_output_locations{row_partition_numbers};
-  thrust::transform(row_partition_numbers,
+  thrust::transform(thrust::cuda::par,
+                    row_partition_numbers,
                     row_partition_numbers + num_rows,
                     row_output_locations,
                     compute_row_output_location<size_type>(partition_sizes));
