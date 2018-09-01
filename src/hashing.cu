@@ -235,12 +235,13 @@ template <typename column_type,
 gdf_error scatter_column(column_type const * const __restrict__ input_column,
                          size_type const num_rows,
                          size_type const * const __restrict__ row_output_locations,
-                         column_type * const __restrict__ output_column)
+                         column_type * const __restrict__ output_column,
+                         cudaStream_t stream = 0)
 {
 
   gdf_error gdf_status{GDF_SUCCESS};
 
-  thrust::scatter(thrust::cuda::par,
+  thrust::scatter(thrust::cuda::par.on(stream),
                   input_column,
                   input_column + num_rows,
                   row_output_locations,
@@ -277,6 +278,15 @@ gdf_error scatter_gdf_table(gdf_table<size_type> const & input_table,
   const size_type num_columns = input_table.get_num_columns();
   const size_type num_rows = input_table.get_column_length();
 
+  // Each column can be scattered in parallel, therefore create a 
+  // separate stream for every column
+  std::vector<cudaStream_t> column_streams(num_columns);
+  for(auto & s : column_streams)
+  {
+    cudaStreamCreate(&s);
+  }
+
+
   // Scatter columns one by one
   for(size_type i = 0; i < num_columns; ++i)
   {
@@ -299,7 +309,8 @@ gdf_error scatter_gdf_table(gdf_table<size_type> const & input_table,
           gdf_status = scatter_column<column_type>(input, 
                                                    num_rows,
                                                    row_output_locations, 
-                                                   output);
+                                                   output,
+                                                   column_streams[i]);
           break;
         }
       case 2:
@@ -310,7 +321,8 @@ gdf_error scatter_gdf_table(gdf_table<size_type> const & input_table,
           gdf_status = scatter_column<column_type>(input, 
                                                    num_rows,
                                                    row_output_locations, 
-                                                   output);
+                                                   output,
+                                                   column_streams[i]);
           break;
         }
       case 4:
@@ -321,7 +333,8 @@ gdf_error scatter_gdf_table(gdf_table<size_type> const & input_table,
           gdf_status = scatter_column<column_type>(input, 
                                                    num_rows,
                                                    row_output_locations, 
-                                                   output);
+                                                   output,
+                                                   column_streams[i]);
           break;
         }
       case 8:
@@ -332,7 +345,8 @@ gdf_error scatter_gdf_table(gdf_table<size_type> const & input_table,
           gdf_status = scatter_column<column_type>(input, 
                                                    num_rows,
                                                    row_output_locations, 
-                                                   output);
+                                                   output,
+                                                   column_streams[i]);
           break;
         }
       default:
@@ -342,6 +356,16 @@ gdf_error scatter_gdf_table(gdf_table<size_type> const & input_table,
     if(GDF_SUCCESS != gdf_status)
       return gdf_status;
   }
+
+  // Synchronize all the streams
+  CUDA_TRY( cudaDeviceSynchronize() );
+
+  // Destroy all streams
+  for(auto & s : column_streams)
+  {
+    cudaStreamDestroy(s);
+  }
+
   return gdf_status;
 }
 
