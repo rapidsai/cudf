@@ -170,6 +170,13 @@ struct HashPartitionTest : public testing::Test
                      row_partition_numbers.end(),
                      row_partition_mapper<MurmurHash3_32,int>(*table_to_hash,num_partitions));
 
+    std::vector<int> host_row_partition_numbers(table_to_hash->get_column_length());
+
+    cudaMemcpy(host_row_partition_numbers.data(), 
+               row_partition_numbers.data().get(),
+               table_to_hash->get_column_length() * sizeof(int),
+               cudaMemcpyDeviceToHost);
+
     // Check that the partition number for every row is correct
     for(int partition_number = 0; partition_number < num_partitions; ++partition_number)
     {
@@ -190,7 +197,7 @@ struct HashPartitionTest : public testing::Test
       // number
       for(int i = partition_start; i < partition_stop; ++i)
       {
-        EXPECT_EQ(partition_number, row_partition_numbers[i]);
+        EXPECT_EQ(partition_number, host_row_partition_numbers[i]);
       }
     }
   }
@@ -235,6 +242,7 @@ typedef ::testing::Types< TestParameters< VTuple<int32_t>, 0 >,
 
 TYPED_TEST_CASE(HashPartitionTest, Implementations);
 
+
 TYPED_TEST(HashPartitionTest, ExampleTest)
 {
   const int num_partitions = 1;
@@ -257,11 +265,12 @@ TYPED_TEST(HashPartitionTest, OnePartition)
   this->verify_gdf_result(num_partitions, partition_offsets);
 }
 
+
 TYPED_TEST(HashPartitionTest, TenPartitions)
 {
   const int num_partitions = 10;
 
-  this->create_input(100000, 1000);
+  this->create_input(1000000, 1000);
 
   std::vector<int> partition_offsets = this->compute_gdf_result(num_partitions, true);
 
