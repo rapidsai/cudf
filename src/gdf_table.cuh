@@ -35,7 +35,14 @@ public:
     : num_columns(num_cols), host_columns(gdf_columns)
   {
 
+    assert(num_cols > 0);
+    assert(nullptr != host_columns[0]);
     column_length = host_columns[0]->size;
+
+    if(column_length > 0)
+    {
+      assert(nullptr != host_columns[0]->data);
+    }
 
     // Copy the pointers to the column's data and types to the device 
     // as contiguous arrays
@@ -43,11 +50,16 @@ public:
     device_types.reserve(num_cols);
     for(size_type i = 0; i < num_cols; ++i)
     {
+      assert(nullptr != host_columns[i]);
       assert(column_length == host_columns[i]->size);
-
+      if(column_length > 0)
+      {
+        assert(nullptr != host_columns[i]->data);
+      }
       device_columns.push_back(host_columns[i]->data);
       device_types.push_back(host_columns[i]->dtype);
     }
+
 
     d_columns_data = device_columns.data().get();
     d_columns_types = device_types.data().get();
@@ -282,8 +294,6 @@ public:
    * @Param row_index The row of the table to compute the hash value for
    * @Param num_columns_to_hash The number of columns in the row to hash. If 0, hashes all columns
    * @tparam hash_function The hash function that is used for each element in the row
-   * @tparam dummy Used only to be able to resolve the result_type from the hash_function.
-                   The actual type of dummy doesn't matter.
    * 
    * @Returns The hash value of the row
    */
@@ -296,7 +306,9 @@ public:
 
     // If num_columns_to_hash is zero, hash all columns
     if(0 == num_columns_to_hash)
+    {
       num_columns_to_hash = this->num_columns;
+    }
 
     for(size_type i = 0; i < num_columns_to_hash; ++i)
     {
