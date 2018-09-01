@@ -247,8 +247,6 @@ gdf_error scatter_column(column_type const * const __restrict__ input_column,
                   row_output_locations,
                   output_column);
 
-  CUDA_CHECK_LAST();
-
   return gdf_status;
 }
 
