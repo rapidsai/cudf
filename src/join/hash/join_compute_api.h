@@ -169,7 +169,6 @@ gdf_error estimate_join_output_size(gdf_table<size_type> const & build_table,
 
   return GDF_SUCCESS;
 }
-
 /* --------------------------------------------------------------------------*/
 /**
 * @Synopsis  Performs a hash-based join between two sets of gdf_tables.

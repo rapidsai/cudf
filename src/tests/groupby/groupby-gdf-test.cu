@@ -125,7 +125,7 @@ struct GDFGroupByTest : public testing::Test
   ~GDFGroupByTest() {} 
 
   std::pair<std::vector<key_type>, std::vector<value_type>>
-    create_reference_input(const size_t num_keys, const size_t num_values_per_key, const int max_key = RAND_MAX, const int max_value = RAND_MAX, bool print = false) 
+    create_input(const size_t num_keys, const size_t num_values_per_key, const int max_key = RAND_MAX, const int max_value = RAND_MAX, bool print = false) 
     {
       const size_t input_size = num_keys * num_values_per_key;
 
@@ -541,7 +541,7 @@ TYPED_TEST(GDFGroupByTest, DISABLED_DebugTest)
   // Note: If the maximum possible value for the aggregation column is large, it is very likely
   // you'll overflow an int when doing SUM or AVG
   std::tie(this->groupby_column, 
-           this->aggregation_column) = this->create_reference_input(num_keys, 
+           this->aggregation_column) = this->create_input(num_keys, 
                                                                     num_values_per_key,
                                                                     max_key,
                                                                     max_value, true);
@@ -582,7 +582,7 @@ TYPED_TEST(GDFGroupByTest, AllKeysSame)
 
   // Create reference input columns
   std::tie(this->groupby_column, 
-           this->aggregation_column) = this->create_reference_input(num_keys, 
+           this->aggregation_column) = this->create_input(num_keys, 
                                                                     num_values_per_key,
                                                                     max_key,
                                                                     max_value);
@@ -622,7 +622,7 @@ TYPED_TEST(GDFGroupByTest, AllKeysDifferent)
 
   // Create reference input columns
   std::tie(this->groupby_column, 
-           this->aggregation_column) = this->create_reference_input(num_keys, 
+           this->aggregation_column) = this->create_input(num_keys, 
                                                                     num_values_per_key,
                                                                     max_key,
                                                                     max_value);
@@ -661,7 +661,7 @@ TYPED_TEST(GDFGroupByTest, WarpKeysSame)
 
   // Create reference input columns
   std::tie(this->groupby_column, 
-           this->aggregation_column) = this->create_reference_input(num_keys, 
+           this->aggregation_column) = this->create_input(num_keys, 
                                                                     num_values_per_key,
                                                                     max_key,
                                                                     max_value);
@@ -700,7 +700,7 @@ TYPED_TEST(GDFGroupByTest, BlockKeysSame)
 
   // Create reference input columns
   std::tie(this->groupby_column, 
-           this->aggregation_column) = this->create_reference_input(num_keys, 
+           this->aggregation_column) = this->create_input(num_keys, 
                                                                     num_values_per_key,
                                                                     max_key,
                                                                     max_value);
