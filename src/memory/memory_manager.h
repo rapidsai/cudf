@@ -46,6 +46,7 @@ namespace rmm
         /// Record a memory manager event in the log.
         void record(MemEvent_t event, int deviceId, void* ptr,
                     TimePt start, TimePt end, 
+                    size_t freeMem, size_t totalMem,
                     size_t size=0, cudaStream_t stream=0);
         
         /// Write the log to comma-separated value file
@@ -57,6 +58,8 @@ namespace rmm
             void* ptr;
             size_t size;
             cudaStream_t stream;
+            size_t freeMem;
+            size_t totalMem;
             TimePt start;
             TimePt end;
         };

@@ -66,7 +66,9 @@ public:
     ~LogIt() 
     {
         auto end = std::chrono::system_clock::now();
-        theLog.record(event, device, ptr, start, end, size, stream); 
+        size_t freeMem, totalMem;
+        rmmGetInfo(&freeMem, &totalMem, stream);
+        theLog.record(event, device, ptr, start, end, freeMem, totalMem, size, stream); 
     }
 
 private:
