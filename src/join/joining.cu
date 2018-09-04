@@ -138,12 +138,11 @@ gdf_error hash_join(size_type num_cols, gdf_column **leftcol, gdf_column **right
 
   standard_context_t context(false);
 
-  auto output = join_hash<join_type, output_index_type>(*left_table, *right_table, context);
-
-  *l_result = output.first;
-  *r_result = output.second;
-  CUDA_CHECK_LAST();
-  return GDF_SUCCESS;
+  return join_hash<join_type, output_index_type>(*left_table, 
+                                                        *right_table, 
+                                                        context, 
+                                                        l_result, 
+                                                        r_result);
 }
 
 template <JoinType join_type>

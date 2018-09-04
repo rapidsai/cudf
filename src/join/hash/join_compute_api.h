@@ -16,6 +16,7 @@
 
 #include <cuda_runtime.h>
 #include <future>
+#include <gdf/errorutils.h>
 
 #include "join_kernels.cuh"
 #include "../../gdf_table.cuh"
@@ -62,16 +63,17 @@ struct join_pair
 template<JoinType join_type,
          typename output_index_type,
          typename size_type>
-cudaError_t compute_hash_join(mgpu::context_t & compute_ctx,
-                              gdf_column &output_l, gdf_column &output_r,
-                              gdf_table<size_type> const & left_table,
-                              gdf_table<size_type> const & right_table,
-                              bool flip_results = false)
+gdf_error compute_hash_join(mgpu::context_t & compute_ctx,
+                            gdf_column * const output_l, 
+                            gdf_column * const output_r,
+                            gdf_table<size_type> const & left_table,
+                            gdf_table<size_type> const & right_table,
+                            bool flip_results = false)
 {
-  cudaError_t error(cudaSuccess);
+  gdf_error error{GDF_SUCCESS};
 
-  gdf_column_view(&output_l, nullptr, nullptr, 0, N_GDF_TYPES);
-  gdf_column_view(&output_r, nullptr, nullptr, 0, N_GDF_TYPES);
+  gdf_column_view(output_l, nullptr, nullptr, 0, N_GDF_TYPES);
+  gdf_column_view(output_r, nullptr, nullptr, 0, N_GDF_TYPES);
 
   // The LEGACY allocator allocates the hash table array with normal cudaMalloc,
   // the non-legacy allocator uses managed memory
@@ -106,7 +108,7 @@ cudaError_t compute_hash_join(mgpu::context_t & compute_ctx,
   // (although should be possible once we move to Arrow)
   hash_table->prefetch(0);
 
-  CUDA_RT_CALL( cudaDeviceSynchronize() );
+  CUDA_TRY( cudaDeviceSynchronize() );
 
   // build the hash table
   constexpr int block_size{DEFAULT_CUDA_BLOCK_SIZE};
@@ -115,7 +117,7 @@ cudaError_t compute_hash_join(mgpu::context_t & compute_ctx,
                                                     build_table,
                                                     build_table_num_rows);
 
-  CUDA_RT_CALL( cudaGetLastError() );
+  CUDA_TRY( cudaGetLastError() );
 
   // To avoid a situation where the entire probing column, left_Table, is probed into the build table (right_table) we use the following approximation technique.
   // First of all we check the ratios of the sizes between A (left) and B(right). Only if A is much bigger than B does this optimization make sense.
@@ -136,14 +138,14 @@ cudaError_t compute_hash_join(mgpu::context_t & compute_ctx,
   size_type * d_join_output_size;
   size_type h_join_output_size{0};
 
-  CUDA_RT_CALL(cudaMalloc(&d_join_output_size, sizeof(size_type)));
-  CUDA_RT_CALL(cudaMemset(d_join_output_size, 0, sizeof(size_type)));
+  CUDA_TRY(cudaMalloc(&d_join_output_size, sizeof(size_type)));
+  CUDA_TRY(cudaMemset(d_join_output_size, 0, sizeof(size_type)));
 
   // Probe with the left table
   gdf_table<size_type> const & probe_table{left_table};
   //const size_type probe_grid_size{(probe_column_length + block_size -1)/block_size};
 
-  CUDA_RT_CALL( cudaGetLastError() );
+  CUDA_TRY( cudaGetLastError() );
 
   // A situation can arise such that the number of elements found in the probing phase is equal to zero. This would lead us to approximating
   // the number of joined elements to be zero. As such we need to increase the subset and continue probing to get a bettter approximation value.
@@ -151,7 +153,7 @@ cudaError_t compute_hash_join(mgpu::context_t & compute_ctx,
     if(leftSampleSize>leftSize)
       leftSampleSize=leftSize;
     // step 3ab: scan table A (left), probe the HT without outputting the joined indices. Only get number of outputted elements.
-    CUDA_RT_CALL(cudaMemset(d_join_output_size, 0, sizeof(size_type)));
+    CUDA_TRY(cudaMemset(d_join_output_size, 0, sizeof(size_type)));
 
     const size_type probe_grid_size{(leftSampleSize + block_size -1)/block_size};
     // Probe the hash table without actually building the output to simply
@@ -167,9 +169,9 @@ cudaError_t compute_hash_join(mgpu::context_t & compute_ctx,
                                       leftSampleSize,
                                       d_join_output_size);
 
-    CUDA_RT_CALL( cudaGetLastError() );
+    CUDA_TRY( cudaGetLastError() );
 
-    CUDA_RT_CALL( cudaMemcpy(&h_join_output_size, d_join_output_size, sizeof(size_type), cudaMemcpyDeviceToHost));
+    CUDA_TRY( cudaMemcpy(&h_join_output_size, d_join_output_size, sizeof(size_type), cudaMemcpyDeviceToHost));
 
     h_join_output_size = h_join_output_size * size_ratio;
 
@@ -183,7 +185,7 @@ cudaError_t compute_hash_join(mgpu::context_t & compute_ctx,
     }
   } while(true);
 
-  CUDA_RT_CALL( cudaFree(d_join_output_size) );
+  CUDA_TRY( cudaFree(d_join_output_size) );
 
   // If the output size is zero, return immediately
   if(0 == h_join_output_size){
@@ -199,29 +201,29 @@ cudaError_t compute_hash_join(mgpu::context_t & compute_ctx,
 
   // Allocate device global counter used by threads to determine output write location
   size_type *d_global_write_index{nullptr};
-  CUDA_RT_CALL( cudaMalloc(&d_global_write_index, sizeof(size_type)) );
+  CUDA_TRY( cudaMalloc(&d_global_write_index, sizeof(size_type)) );
   int dev_ordinal{0};
-  CUDA_RT_CALL( cudaGetDevice(&dev_ordinal));
+  CUDA_TRY( cudaGetDevice(&dev_ordinal));
  
   while(cont){
     output_l_ptr = nullptr;
     output_r_ptr = nullptr;
-  	CUDA_RT_CALL( cudaGetDevice(&dev_ordinal));
+  	CUDA_TRY( cudaGetDevice(&dev_ordinal));
 
     // Allocate temporary device buffer for join output
-    CUDA_RT_CALL( cudaMalloc(&output_l_ptr, h_join_output_size*sizeof(output_index_type)) );
-    CUDA_RT_CALL( cudaMalloc(&output_r_ptr, h_join_output_size*sizeof(output_index_type)) );
-    CUDA_RT_CALL( cudaMemsetAsync(d_global_write_index, 0, sizeof(size_type), 0) );
+    CUDA_TRY( cudaMalloc(&output_l_ptr, h_join_output_size*sizeof(output_index_type)) );
+    CUDA_TRY( cudaMalloc(&output_r_ptr, h_join_output_size*sizeof(output_index_type)) );
+    CUDA_TRY( cudaMemsetAsync(d_global_write_index, 0, sizeof(size_type), 0) );
 
 	const size_type probe_grid_size{(leftSize + block_size -1)/block_size};
     // Do the probe of the hash table with the probe table and generate the output for the join
 	probe_hash_table<join_type,
-					 multimap_type,
-                     hash_value_type,
-                     size_type,
-                     output_index_type,
-                     block_size,
-                     DEFAULT_CUDA_CACHE_SIZE>
+                   multimap_type,
+                   hash_value_type,
+                   size_type,
+                   output_index_type,
+                   block_size,
+                   DEFAULT_CUDA_CACHE_SIZE>
   	<<<probe_grid_size, block_size>>> (hash_table.get(),
                                        build_table,
                                        probe_table,
@@ -232,9 +234,9 @@ cudaError_t compute_hash_join(mgpu::context_t & compute_ctx,
                                        h_join_output_size,
                                        flip_results);
 
-    CUDA_RT_CALL(cudaDeviceSynchronize());
+    CUDA_TRY(cudaDeviceSynchronize());
 
-  	CUDA_RT_CALL( cudaMemcpy(&h_actual_found, d_global_write_index, sizeof(size_type), cudaMemcpyDeviceToHost));
+  	CUDA_TRY( cudaMemcpy(&h_actual_found, d_global_write_index, sizeof(size_type), cudaMemcpyDeviceToHost));
   	cont=false;
   	if(h_join_output_size < h_actual_found){
   	  // Not enough memory. Double memory footprint and try again
@@ -244,29 +246,32 @@ cudaError_t compute_hash_join(mgpu::context_t & compute_ctx,
   }
 
   // free memory used for the counters
-  CUDA_RT_CALL( cudaFree(d_global_write_index) );
+  CUDA_TRY( cudaFree(d_global_write_index) );
 
   gdf_dtype dtype;
-  switch(sizeof(output_index_type)) {
+  switch(sizeof(output_index_type)) 
+  {
     case 1 : dtype = GDF_INT8;  break;
     case 2 : dtype = GDF_INT16; break;
     case 4 : dtype = GDF_INT32; break;
     case 8 : dtype = GDF_INT64; break;
   }
+
   if (h_join_output_size > h_actual_found) {
       output_index_type *copy_output_l_ptr{nullptr};
       output_index_type *copy_output_r_ptr{nullptr};
-      CUDA_RT_CALL( cudaMalloc(&copy_output_l_ptr, h_actual_found*sizeof(output_index_type)) );
-      CUDA_RT_CALL( cudaMalloc(&copy_output_r_ptr, h_actual_found*sizeof(output_index_type)) );
-      CUDA_RT_CALL (cudaMemcpy(copy_output_l_ptr, output_l_ptr, h_actual_found*sizeof(output_index_type), cudaMemcpyDeviceToDevice) );
-      CUDA_RT_CALL (cudaMemcpy(copy_output_r_ptr, output_r_ptr, h_actual_found*sizeof(output_index_type), cudaMemcpyDeviceToDevice) );
-      CUDA_RT_CALL( cudaFree(output_l_ptr) );
-      CUDA_RT_CALL( cudaFree(output_r_ptr) );
+      CUDA_TRY( cudaMalloc(&copy_output_l_ptr, h_actual_found*sizeof(output_index_type)) );
+      CUDA_TRY( cudaMalloc(&copy_output_r_ptr, h_actual_found*sizeof(output_index_type)) );
+      CUDA_TRY( cudaMemcpy(copy_output_l_ptr, output_l_ptr, h_actual_found*sizeof(output_index_type), cudaMemcpyDeviceToDevice) );
+      CUDA_TRY( cudaMemcpy(copy_output_r_ptr, output_r_ptr, h_actual_found*sizeof(output_index_type), cudaMemcpyDeviceToDevice) );
+      CUDA_TRY( cudaFree(output_l_ptr) );
+      CUDA_TRY( cudaFree(output_r_ptr) );
       output_l_ptr = copy_output_l_ptr;
       output_r_ptr = copy_output_r_ptr;
   }
-  gdf_column_view(&output_l, output_l_ptr, nullptr, h_actual_found, dtype);
-  gdf_column_view(&output_r, output_r_ptr, nullptr, h_actual_found, dtype);
+
+  gdf_column_view(output_l, output_l_ptr, nullptr, h_actual_found, dtype);
+  gdf_column_view(output_r, output_r_ptr, nullptr, h_actual_found, dtype);
 
   return error;
 }

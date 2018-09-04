@@ -45,11 +45,12 @@
 template<JoinType join_type,
          typename output_index_type,
          typename size_type>
-std::pair<gdf_column, gdf_column>
-join_hash(gdf_table<size_type> const & left_table,
-          gdf_table<size_type> const & right_table,
-          mgpu::context_t & context,
-          bool flip_indices = false)
+gdf_error join_hash(gdf_table<size_type> const & left_table,
+                    gdf_table<size_type> const & right_table,
+                    mgpu::context_t & context,
+                    gdf_column * const output_l,
+                    gdf_column * const output_r,
+                    bool flip_indices = false)
 {
 
   // Hash table is built on the right table.
@@ -58,14 +59,20 @@ join_hash(gdf_table<size_type> const & left_table,
   if((join_type == JoinType::INNER_JOIN) &&
      (right_table.get_column_length() > left_table.get_column_length()))
   {
-    return join_hash<join_type, output_index_type>(right_table, left_table, context, true);
+    return join_hash<join_type, output_index_type>(right_table, 
+                                                   left_table, 
+                                                   context, 
+                                                   output_l, 
+                                                   output_r, 
+                                                   true);
   }
 
-  gdf_column output_l, output_r;
-
-  compute_hash_join<join_type, output_index_type>(context, output_l, output_r, left_table, right_table, flip_indices);
-
-  return std::make_pair(output_l, output_r);
+  return compute_hash_join<join_type, output_index_type>(context, 
+                                                         output_l, 
+                                                         output_r, 
+                                                         left_table, 
+                                                         right_table, 
+                                                         flip_indices);
 }
 
 struct join_result_base {
