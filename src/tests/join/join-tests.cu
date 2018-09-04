@@ -558,6 +558,8 @@ typedef ::testing::Types<
 
 TYPED_TEST_CASE(JoinTest, Implementations);
 
+// This test is used for debugging purposes and is disabled by default.
+// The input sizes are small and has a large amount of debug printing enabled.
 TYPED_TEST(JoinTest, DISABLED_DebugTest)
 {
   this->create_input(5, 2,
