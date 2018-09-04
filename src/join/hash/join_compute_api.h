@@ -30,7 +30,7 @@
 
 #include <moderngpu/kernel_scan.hxx>
 
-constexpr int DEFAULT_HASH_TABLE_OCCUPANCY = 50;
+constexpr int64_t DEFAULT_HASH_TABLE_OCCUPANCY = 50;
 constexpr int DEFAULT_CUDA_BLOCK_SIZE = 128;
 constexpr int DEFAULT_CUDA_CACHE_SIZE = 128;
 
@@ -97,7 +97,8 @@ cudaError_t compute_hash_join(mgpu::context_t & compute_ctx,
   const size_type build_table_num_rows{build_table.get_column_length()};
 
   // Calculate size of hash map based on the desired occupancy
-  const size_type hash_table_size{static_cast<size_type>(build_table_num_rows) * 100 / DEFAULT_HASH_TABLE_OCCUPANCY};
+  const size_type hash_table_size{(build_table_num_rows * 100) / DEFAULT_HASH_TABLE_OCCUPANCY};
+ 
   std::unique_ptr<multimap_type> hash_table(new multimap_type(hash_table_size));
 
   // FIXME: use GPU device id from the context?
@@ -135,8 +136,8 @@ cudaError_t compute_hash_join(mgpu::context_t & compute_ctx,
   size_type * d_join_output_size;
   size_type h_join_output_size{0};
 
-  cudaMalloc(&d_join_output_size, sizeof(size_type));
-  cudaMemset(d_join_output_size, 0, sizeof(size_type));
+  CUDA_RT_CALL(cudaMalloc(&d_join_output_size, sizeof(size_type)));
+  CUDA_RT_CALL(cudaMemset(d_join_output_size, 0, sizeof(size_type)));
 
   // Probe with the left table
   gdf_table<size_type> const & probe_table{left_table};
@@ -147,12 +148,12 @@ cudaError_t compute_hash_join(mgpu::context_t & compute_ctx,
   // A situation can arise such that the number of elements found in the probing phase is equal to zero. This would lead us to approximating
   // the number of joined elements to be zero. As such we need to increase the subset and continue probing to get a bettter approximation value.
   do{
-  	if(leftSampleSize>leftSize)
-  	  leftSampleSize=leftSize;
-  	// step 3ab: scan table A (left), probe the HT without outputting the joined indices. Only get number of outputted elements.
-    cudaMemset(d_join_output_size, 0, sizeof(size_type));
+    if(leftSampleSize>leftSize)
+      leftSampleSize=leftSize;
+    // step 3ab: scan table A (left), probe the HT without outputting the joined indices. Only get number of outputted elements.
+    CUDA_RT_CALL(cudaMemset(d_join_output_size, 0, sizeof(size_type)));
 
-	const size_type probe_grid_size{(leftSampleSize + block_size -1)/block_size};
+    const size_type probe_grid_size{(leftSampleSize + block_size -1)/block_size};
     // Probe the hash table without actually building the output to simply
     // find what the size of the output will be.
     compute_join_output_size<join_type,
@@ -160,7 +161,7 @@ cudaError_t compute_hash_join(mgpu::context_t & compute_ctx,
                              size_type,
                              block_size,
                              DEFAULT_CUDA_CACHE_SIZE>
-  	<<<probe_grid_size, block_size>>>(hash_table.get(),
+    <<<probe_grid_size, block_size>>>(hash_table.get(),
                                       build_table,
                                       probe_table,
                                       leftSampleSize,
@@ -169,16 +170,17 @@ cudaError_t compute_hash_join(mgpu::context_t & compute_ctx,
     CUDA_RT_CALL( cudaGetLastError() );
 
     CUDA_RT_CALL( cudaMemcpy(&h_join_output_size, d_join_output_size, sizeof(size_type), cudaMemcpyDeviceToHost));
-  	h_join_output_size = h_join_output_size * size_ratio;
 
-  	if(h_join_output_size>0 || leftSampleSize >= leftSize)
-  	  break;
-  	if(h_join_output_size==0){
-  	  leftSampleSize  *= 2;
-  	  size_ratio	  /= 2;
-  	  if(size_ratio==0)
-  		  size_ratio=1;
-  	}
+    h_join_output_size = h_join_output_size * size_ratio;
+
+    if(h_join_output_size>0 || leftSampleSize >= leftSize)
+      break;
+    if(h_join_output_size==0){
+      leftSampleSize  *= 2;
+      size_ratio	  /= 2;
+      if(size_ratio==0)
+        size_ratio=1;
+    }
   } while(true);
 
   CUDA_RT_CALL( cudaFree(d_join_output_size) );
