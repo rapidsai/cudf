@@ -34,35 +34,12 @@ void dump_mem(const char name[], const mem_t<T> & mem) {
     std::cout << "\n";
 }
 
-gdf_join_result_type* cffi_wrap(join_result_base *obj) {
-    return reinterpret_cast<gdf_join_result_type*>(obj);
-}
-
-join_result_base* cffi_unwrap(gdf_join_result_type* hdl) {
-    return reinterpret_cast<join_result_base*>(hdl);
-}
-
-gdf_error gdf_join_result_free(gdf_join_result_type *result) {
-    delete cffi_unwrap(result);
-    CUDA_CHECK_LAST();
-    return GDF_SUCCESS;
-}
-
 gdf_error gdf_column_free(gdf_column *column) {
     CUDA_RT_CALL( cudaFree(column->data)  );
     CUDA_RT_CALL( cudaFree(column->valid) );
     CUDA_CHECK_LAST();
     return GDF_SUCCESS;
 }
-
-void* gdf_join_result_data(gdf_join_result_type *result) {
-    return cffi_unwrap(result)->data();
-}
-
-size_t gdf_join_result_size(gdf_join_result_type *result) {
-    return cffi_unwrap(result)->size();
-}
-
 
 // Size limit due to use of int32 as join output.
 // FIXME: upgrade to 64-bit

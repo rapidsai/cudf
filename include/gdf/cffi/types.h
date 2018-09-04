@@ -112,8 +112,6 @@ struct _OpaqueSegmentedRadixsortPlan;
 typedef struct _OpaqueSegmentedRadixsortPlan gdf_segmented_radixsort_plan_type;
 
 
-struct _OpaqueJoinResult;
-typedef struct _OpaqueJoinResult gdf_join_result_type;
 
 
 typedef enum{

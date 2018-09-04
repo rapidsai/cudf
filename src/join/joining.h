@@ -75,22 +75,3 @@ gdf_error join_hash(gdf_table<size_type> const & left_table,
                                                          flip_indices);
 }
 
-struct join_result_base {
-  virtual ~join_result_base() {}
-  virtual void* data() = 0;
-  virtual size_t size() = 0;
-};
-
-template <typename T>
-struct join_result : public join_result_base {
-  mgpu::standard_context_t context;
-  mgpu::mem_t<T> result;
-
-  join_result() : context(false) {}
-  virtual void* data() {
-    return result.data();
-  }
-  virtual size_t size() {
-    return result.size();
-  }
-};
