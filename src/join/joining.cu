@@ -296,7 +296,7 @@ gdf_error join_call( int num_cols, gdf_column **leftcol, gdf_column **rightcol,
   {
     case GDF_HASH:
       {
-        return hash_join<join_type>(num_cols, leftcol, rightcol, left_result, right_result);
+        return hash_join<join_type, int64_t>(num_cols, leftcol, rightcol, left_result, right_result);
       }
     case GDF_SORT:
       {

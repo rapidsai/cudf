@@ -80,14 +80,14 @@ memory cache the pair will be written
 /* ----------------------------------------------------------------------------*/
 template<typename size_type,
          typename output_index_type>
-__inline__ __device__ void add_pair_to_cache(const size_type first, 
-                                             const size_type second, 
-                                             int *current_idx_shared, 
+__inline__ __device__ void add_pair_to_cache(const output_index_type first, 
+                                             const output_index_type second, 
+                                             size_type *current_idx_shared, 
                                              const int warp_id, 
                                              output_index_type *joined_shared_l,
                                              output_index_type *joined_shared_r)
 {
-  int my_current_idx = atomicAdd(current_idx_shared + warp_id, 1);
+  size_type my_current_idx{atomicAdd(current_idx_shared + warp_id, size_type(1))};
 
   // its guaranteed to fit into the shared cache
   joined_shared_l[my_current_idx] = first;
@@ -178,7 +178,7 @@ __global__ void compute_join_output_size( multimap_type const * const multi_map,
             {
               // If the rows are equal, then we have found a true match
               found_match = true;
-              atomicAdd(&block_counter,static_cast<size_type>(1)) ;
+              atomicAdd(&block_counter,size_type(1)) ;
             }
             // Continue searching for matching rows until you hit an empty hash map entry
             ++found;
@@ -202,7 +202,7 @@ __global__ void compute_join_output_size( multimap_type const * const multi_map,
           }
 
           if ((join_type == JoinType::LEFT_JOIN) && (!running) && (!found_match)) {
-            atomicAdd(&block_counter,static_cast<size_type>(1));
+            atomicAdd(&block_counter,size_type(1));
           }
         }
       }
@@ -254,10 +254,10 @@ __global__ void probe_hash_table( multimap_type const * const multi_map,
                                   size_type* current_idx,
                                   const size_type max_size,
                                   bool flip_results,
-                                  const size_type offset = 0)
+                                  const output_index_type offset = 0)
 {
   constexpr int num_warps = block_size/warp_size;
-  __shared__ int current_idx_shared[num_warps];
+  __shared__ size_type current_idx_shared[num_warps];
   __shared__ output_index_type join_shared_l[num_warps][output_cache_size];
   __shared__ output_index_type join_shared_r[num_warps][output_cache_size];
   output_index_type *output_l = join_output_l, *output_r = join_output_r;
@@ -279,7 +279,7 @@ __global__ void probe_hash_table( multimap_type const * const multi_map,
   __syncwarp();
 #endif
 
-  size_type probe_row_index = threadIdx.x + blockIdx.x * blockDim.x;
+  output_index_type probe_row_index = threadIdx.x + blockIdx.x * blockDim.x;
 
 
 #if defined(CUDA_VERSION) && CUDA_VERSION >= 9000
@@ -323,7 +323,8 @@ __global__ void probe_hash_table( multimap_type const * const multi_map,
             {
               // If the rows are equal, then we have found a true match
               found_match = true;
-              add_pair_to_cache(offset + probe_row_index, found->second, current_idx_shared, warp_id, join_shared_l[warp_id], join_shared_r[warp_id]);
+              const output_index_type probe_index{offset + probe_row_index};
+              add_pair_to_cache(probe_index, found->second, current_idx_shared, warp_id, join_shared_l[warp_id], join_shared_r[warp_id]);
             }
             // Continue searching for matching rows until you hit an empty hash map entry
             ++found;
@@ -348,7 +349,8 @@ __global__ void probe_hash_table( multimap_type const * const multi_map,
 
           // If performing a LEFT join and no match was found, insert a Null into the output
           if ((join_type == JoinType::LEFT_JOIN) && (!running) && (!found_match)) {
-            add_pair_to_cache(offset + probe_row_index, JoinNoneValue, current_idx_shared, warp_id, join_shared_l[warp_id], join_shared_r[warp_id]);
+            const output_index_type probe_index{offset + probe_row_index};
+            add_pair_to_cache(probe_index, static_cast<output_index_type>(JoinNoneValue), current_idx_shared, warp_id, join_shared_l[warp_id], join_shared_r[warp_id]);
           }
         }
 
@@ -363,7 +365,7 @@ __global__ void probe_hash_table( multimap_type const * const multi_map,
           const unsigned int activemask = __ballot(1);
 #endif
           int num_threads = __popc(activemask);
-          unsigned long long int output_offset = 0;
+          size_type output_offset = 0;
 
           if ( 0 == lane_id )
           {
@@ -399,7 +401,7 @@ __global__ void probe_hash_table( multimap_type const * const multi_map,
       const unsigned int activemask = __ballot(1);
 #endif
       int num_threads = __popc(activemask);
-      unsigned long long int output_offset = 0;
+      size_type output_offset = 0;
       if ( 0 == lane_id )
       {
         output_offset = atomicAdd( current_idx, current_idx_shared[warp_id] );
