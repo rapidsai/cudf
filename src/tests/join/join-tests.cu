@@ -338,71 +338,31 @@ struct JoinTest : public testing::Test
 
     gdf_column ** left_gdf_columns = gdf_raw_left_columns.data();
     gdf_column ** right_gdf_columns = gdf_raw_right_columns.data();
-    // Use single column join when there's only a single column
-    if(num_columns == 1){
-      switch(op)
-      {
-        case join_op::LEFT:
-          {
-            result_error = gdf_left_join(num_columns,
-                                         left_gdf_columns,
-                                         right_gdf_columns,
-                                         &left_result, &right_result,
-                                         &ctxt);
-            break;
-          }
-        case join_op::INNER:
-          {
-            result_error = gdf_inner_join(num_columns,
-                                         left_gdf_columns,
-                                         right_gdf_columns,
-                                         &left_result, &right_result,
-                                         &ctxt);
-            break;
-          }
-        case join_op::OUTER:
-          {
-            result_error = gdf_outer_join_generic(gdf_raw_left_columns[0],
-                                                  gdf_raw_right_columns[0],
-                                                  &left_result, &right_result);
-            break;
-          }
-        default:
-          std::cout << "Invalid join method" << std::endl;
-          EXPECT_TRUE(false);
-      }
-
-    }
-    // Otherwise use the multicolumn join
-    else
+    switch(op)
     {
-      gdf_column ** left_gdf_columns = gdf_raw_left_columns.data();
-      gdf_column ** right_gdf_columns = gdf_raw_right_columns.data();
-      switch(op)
-      {
-        case join_op::LEFT:
-          {
-            result_error = gdf_left_join(num_columns,
+      case join_op::LEFT:
+        {
+          result_error = gdf_left_join(num_columns,
+                                       left_gdf_columns,
+                                       right_gdf_columns,
+                                       &left_result, &right_result,
+                                       &ctxt);
+          break;
+        }
+      case join_op::INNER:
+        {
+          result_error =  gdf_inner_join(num_columns,
                                          left_gdf_columns,
                                          right_gdf_columns,
                                          &left_result, &right_result,
                                          &ctxt);
-            break;
-          }
-        case join_op::INNER:
-          {
-            result_error =  gdf_inner_join(num_columns,
-                                           left_gdf_columns,
-                                           right_gdf_columns,
-                                           &left_result, &right_result,
-                                           &ctxt);
-            break;
-          }
-        default:
-          std::cout << "Invalid join method" << std::endl;
-          EXPECT_TRUE(false);
-      }
+          break;
+        }
+      default:
+        std::cout << "Invalid join method" << std::endl;
+        EXPECT_TRUE(false);
     }
+   
     EXPECT_EQ(GDF_SUCCESS, result_error) << "The gdf join function did not complete successfully";
 
     EXPECT_EQ(left_result.size, right_result.size) << "Join output size mismatch";
@@ -645,4 +605,22 @@ TYPED_TEST(JoinTest, RightColumnsBigger)
   for(size_t i = 0; i < reference_result.size(); ++i){
     EXPECT_EQ(reference_result[i], gdf_result[i]);
   }
+}
+
+TYPED_TEST(JoinTest, MaxJoinSize)
+{
+  const size_t right_table_size{std::numeric_limits<int>::max() - 1};
+  this->create_input(100, RAND_MAX,
+                     right_table_size, RAND_MAX);
+
+  //std::vector<result_type> reference_result = this->compute_reference_solution();
+
+  std::vector<result_type> gdf_result = this->compute_gdf_result();
+
+  //ASSERT_EQ(reference_result.size(), gdf_result.size()) << "Size of gdf result does not match reference result\n";
+
+  // Compare the GDF and reference solutions
+  //for(size_t i = 0; i < reference_result.size(); ++i){
+  //  EXPECT_EQ(reference_result[i], gdf_result[i]);
+  //}
 }
