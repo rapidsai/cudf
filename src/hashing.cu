@@ -523,6 +523,14 @@ gdf_error gdf_hash_partition(int num_input_cols,
     return GDF_INVALID_API_CALL;
   }
 
+  const size_t num_rows{input[0]->size};
+
+  // If the input is empty, return immediately
+  if(0 == num_rows)
+  {
+    return GDF_SUCCESS;
+  }
+
   // check that the columns data are not null, have matching types,
   // and the same number of rows
   for (size_type i = 0; i < num_input_cols; i++) {
@@ -533,8 +541,8 @@ gdf_error gdf_hash_partition(int num_input_cols,
     if(input[i]->dtype != partitioned_output[i]->dtype) 
       return GDF_PARTITION_DTYPE_MISMATCH;
 
-    if((input[0]->size != input[i]->size) 
-        || (input[0]->size != partitioned_output[i]->size))
+    if((num_rows != input[i]->size) 
+        || (num_rows != partitioned_output[i]->size))
       return GDF_COLUMN_SIZE_MISMATCH;
   }
 
