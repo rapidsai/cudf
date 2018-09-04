@@ -327,7 +327,7 @@ struct JoinTest : public testing::Test
    * @Param sort Option to sort the result. This is required to compare the result against the reference solution
    */
   /* ----------------------------------------------------------------------------*/
-  std::vector<result_type> compute_gdf_result(bool print = false, bool sort = true)
+  std::vector<result_type> compute_gdf_result(bool print = false, bool sort = true, gdf_error expected_result=GDF_SUCCESS)
   {
     const int num_columns = std::tuple_size<multi_column_t>::value;
 
@@ -363,7 +363,14 @@ struct JoinTest : public testing::Test
         EXPECT_TRUE(false);
     }
    
-    EXPECT_EQ(GDF_SUCCESS, result_error) << "The gdf join function did not complete successfully";
+    EXPECT_EQ(expected_result, result_error) << "The gdf join function did not complete successfully";
+
+    // If the expected result was not GDF_SUCCESS, then this test was testing for a
+    // specific error condition, in which case we return imediately and do not do
+    // any further work on the output
+    if(GDF_SUCCESS != expected_result){
+      return std::vector<result_type>();
+    }
 
     EXPECT_EQ(left_result.size, right_result.size) << "Join output size mismatch";
     // The output is an array of size `n` where the first n/2 elements are the
@@ -607,20 +614,48 @@ TYPED_TEST(JoinTest, RightColumnsBigger)
   }
 }
 
-TYPED_TEST(JoinTest, MaxJoinSize)
+// TODO Add test for inputs with zero rows
+
+
+// The below tests are for testing inputs that are at or above the maximum input size possible
+
+
+// Create a new derived class from JoinTest so we can do a new Typed Test set of tests
+template <class test_parameters>
+struct MaxJoinTest : public JoinTest<test_parameters>
+{ };
+
+// Only test for single column inputs for Inner and Left joins because these tests take a long time
+using MaxImplementations = testing::Types< TestParameters< join_op::INNER, HASH, VTuple<int32_t >>,
+                                           TestParameters< join_op::LEFT, HASH, VTuple<int32_t >> >;
+
+TYPED_TEST_CASE(MaxJoinTest, MaxImplementations);
+
+TYPED_TEST(MaxJoinTest, HugeJoinSize)
 {
-  const size_t right_table_size{std::numeric_limits<int>::max() - 1};
+  // FIXME The maximum input join size should be std::numeric_limits<int>::max() - 1, 
+  // however, this will currently cause OOM on a GV100 as it will attempt to allocate 
+  // a 34GB hash table. Therefore, use a 2^30 input to make sure we can handle big 
+  // inputs until we can better handle OOM errors
+  const size_t right_table_size{1<<30};
   this->create_input(100, RAND_MAX,
                      right_table_size, RAND_MAX);
-
-  //std::vector<result_type> reference_result = this->compute_reference_solution();
-
   std::vector<result_type> gdf_result = this->compute_gdf_result();
+}
 
-  //ASSERT_EQ(reference_result.size(), gdf_result.size()) << "Size of gdf result does not match reference result\n";
+TYPED_TEST(MaxJoinTest, InputTooLarge)
+{
+    const size_t right_table_size{std::numeric_limits<int>::max()};
+    this->create_input(100, RAND_MAX,
+                       right_table_size, RAND_MAX);
 
-  // Compare the GDF and reference solutions
-  //for(size_t i = 0; i < reference_result.size(); ++i){
-  //  EXPECT_EQ(reference_result[i], gdf_result[i]);
-  //}
+    const bool print_result{false};
+    const bool sort_result{false};
+
+    // We expect the function to fail when the input is this large
+    const gdf_error expected_error{GDF_COLUMN_SIZE_TOO_BIG};
+
+    std::vector<result_type> gdf_result = this->compute_gdf_result(print_result, 
+                                                                   sort_result, 
+                                                                   expected_error);
 }
