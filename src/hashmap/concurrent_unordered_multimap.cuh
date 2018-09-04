@@ -419,6 +419,8 @@ public:
         size_type hash_tbl_idx = hash_value % hashtbl_size;
         
         value_type* it = 0;
+
+        size_type attempt_counter{0};
         
         while (0 == it) {
             value_type* tmp_it = hashtbl_values + hash_tbl_idx;
@@ -456,6 +458,13 @@ public:
             }
 
             hash_tbl_idx = (hash_tbl_idx+1)%hashtbl_size;
+
+            attempt_counter++;
+            if( attempt_counter > hashtbl_size)
+            {
+              printf("Attempted to insert to multimap but the map is full!\n");
+              return this->end();
+            }
         }
         
         return iterator( m_hashtbl_values,m_hashtbl_values+hashtbl_size,it);
