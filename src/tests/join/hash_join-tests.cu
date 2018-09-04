@@ -588,7 +588,7 @@ typedef ::testing::Types<
                           TestParameters< join_op::LEFT, HASH, VTuple<double, int32_t, int64_t, int32_t, int32_t> >,
                           // Five column test for Inner Joins
                           TestParameters< join_op::INNER, HASH, VTuple<uint32_t, float, int64_t, int32_t, float> >
-                          > Implementations;
+                          > Implementations
 
 TYPED_TEST_CASE(JoinTest, Implementations);
 

@@ -24,6 +24,7 @@ enum class JoinType {
 #include "../../gdf_table.cuh"
 #include "../../hashmap/concurrent_unordered_multimap.cuh"
 #include <cub/cub.cuh>
+#include "../../util/bit_util.cuh"
 
 constexpr int warp_size = 32;
 
@@ -45,12 +46,15 @@ template<typename multimap_type,
          typename size_type = typename multimap_type::size_type>
 __global__ void build_hash_table( multimap_type * const multi_map,
                                   const key_type * const build_column,
+                                  const gdf_valid_type * const build_valid,
                                   const size_type build_column_size)
 {
     const size_type i = threadIdx.x + blockIdx.x * blockDim.x;
 
     if ( i < build_column_size ) {
-      multi_map->insert( thrust::make_pair( build_column[i], i ) );
+      if (gdf::util::get_bit(build_valid, i)) {
+        multi_map->insert( thrust::make_pair( build_column[i], i ) );
+      }
     }
 }
 
@@ -111,6 +115,7 @@ __global__ void compute_join_output_size( multimap_type const * const multi_map,
                                           gdf_table<size_type> const & build_table,
                                           gdf_table<size_type> const & probe_table,
                                           key_type const * const probe_column,
+                                          const gdf_valid_type * const probe_valid,
                                           const size_type probe_table_size,
                                           size_type* output_size)
 {
@@ -128,7 +133,7 @@ __global__ void compute_join_output_size( multimap_type const * const multi_map,
 #if defined(CUDA_VERSION) && CUDA_VERSION >= 9000
   const unsigned int activemask = __ballot_sync(0xffffffff, probe_row_index < probe_table_size);
 #endif
-  if ( probe_row_index < probe_table_size ) {
+  if ( probe_row_index < probe_table_size /*&& gdf::util::get_bit(probe_valid, probe_row_index)*/) {
     const auto unused_key = multi_map->get_unused_key();
     const auto end = multi_map->end();
     const key_type probe_key = probe_column[probe_row_index];
@@ -176,7 +181,7 @@ __global__ void compute_join_output_size( multimap_type const * const multi_map,
               running = false;
           }
 
-          if ((join_type == JoinType::LEFT_JOIN) && (!running) && (!found_match)) {
+          if ((join_type == JoinType::LEFT_JOIN) && (!running) && (!found_match) && gdf::util::get_bit(probe_valid, probe_row_index)) {
             atomicAdd(&block_counter,static_cast<size_type>(1));
           }
         }
@@ -226,6 +231,7 @@ __global__ void probe_hash_table( multimap_type const * const multi_map,
                                   gdf_table<size_type> const & build_table,
                                   gdf_table<size_type> const & probe_table,
                                   key_type const * const probe_column,
+                                  const gdf_valid_type * const probe_valid,
                                   const size_type probe_table_size,
                                   index_type * join_output_l,
                                   index_type * join_output_r,
@@ -263,7 +269,7 @@ __global__ void probe_hash_table( multimap_type const * const multi_map,
 #if defined(CUDA_VERSION) && CUDA_VERSION >= 9000
   const unsigned int activemask = __ballot_sync(0xffffffff, probe_row_index < probe_table_size);
 #endif
-  if ( probe_row_index < probe_table_size ) {
+  if ( probe_row_index < probe_table_size /*&& gdf::util::get_bit(probe_valid, probe_row_index)*/) {
     const auto unused_key = multi_map->get_unused_key();
     const auto end = multi_map->end();
     const key_type probe_key = probe_column[probe_row_index];
@@ -309,8 +315,10 @@ __global__ void probe_hash_table( multimap_type const * const multi_map,
             if(unused_key == found->first)
               running = false;
           }
-          if ((join_type == JoinType::LEFT_JOIN) && (!running) && (!found_match)) {
-            add_pair_to_cache(offset + probe_row_index, JoinNoneValue, current_idx_shared, warp_id, join_shared_l[warp_id], join_shared_r[warp_id]);
+          if (gdf::util::get_bit(probe_valid, offset + probe_row_index)) {
+            if ((join_type == JoinType::LEFT_JOIN) && (!running) && (!found_match)) {
+              add_pair_to_cache(offset + probe_row_index, JoinNoneValue, current_idx_shared, warp_id, join_shared_l[warp_id], join_shared_r[warp_id]);
+            }
           }
         }
 

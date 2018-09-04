@@ -123,6 +123,7 @@ cudaError_t compute_hash_join(mgpu::context_t & compute_ctx,
   gdf_table<size_type> const & build_table{right_table};
   const size_type build_column_length{build_table.get_column_length()};
   const key_type * const build_column{static_cast<key_type*>(build_table.get_build_column_data())};
+  const gdf_valid_type * const build_valid{build_table.get_build_valid_data()}; 
 
   // Allocate the hash table
   const size_type hash_table_size = (static_cast<size_type>(build_column_length) * 100 / DEFAULT_HASH_TABLE_OCCUPANCY);
@@ -140,6 +141,7 @@ cudaError_t compute_hash_join(mgpu::context_t & compute_ctx,
   const size_type build_grid_size{(build_column_length + block_size - 1)/block_size};
   build_hash_table<<<build_grid_size, block_size>>>(hash_table.get(), 
                                                     build_column, 
+                                                    build_valid,
                                                     build_column_length);
   
   CUDA_RT_CALL( cudaGetLastError() );
@@ -153,6 +155,7 @@ cudaError_t compute_hash_join(mgpu::context_t & compute_ctx,
   gdf_table<size_type> const & probe_table{left_table};
   const size_type probe_column_length{probe_table.get_column_length()};
   const key_type * const probe_column{static_cast<key_type*>(probe_table.get_probe_column_data())};
+  const gdf_valid_type * const probe_valid {probe_table.get_probe_valid_data()};
   const size_type probe_grid_size{(probe_column_length + block_size -1)/block_size};
 
   // Probe the hash table without actually building the output to simply
@@ -167,6 +170,7 @@ cudaError_t compute_hash_join(mgpu::context_t & compute_ctx,
                                     build_table, 
                                     probe_table, 
                                     probe_column,
+                                    probe_valid,
                                     probe_table.get_column_length(),
                                     d_join_output_size);
 
@@ -205,7 +209,8 @@ cudaError_t compute_hash_join(mgpu::context_t & compute_ctx,
 	<<<probe_grid_size, block_size>>> (hash_table.get(), 
                                      build_table, 
                                      probe_table, 
-                                     probe_column, 
+                                     probe_column,
+                                     probe_valid, 
                                      probe_table.get_column_length(), 
                                      output_l_ptr,
                                      output_r_ptr,
