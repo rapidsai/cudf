@@ -635,9 +635,10 @@ TYPED_TEST(MaxJoinTest, HugeJoinSize)
 {
   // FIXME The maximum input join size should be std::numeric_limits<int>::max() - 1, 
   // however, this will currently cause OOM on a GV100 as it will attempt to allocate 
-  // a 34GB hash table. Therefore, use a 2^30 input to make sure we can handle big 
+  // a 34GB hash table. Therefore, use a 2^29 input to make sure we can handle big 
   // inputs until we can better handle OOM errors
-  const size_t right_table_size{1<<30};
+  // The CI Server only has a 16GB GPU, therefore need to use 2^29 input size
+  const size_t right_table_size{1<<29};
   this->create_input(100, RAND_MAX,
                      right_table_size, RAND_MAX);
   std::vector<result_type> gdf_result = this->compute_gdf_result();
