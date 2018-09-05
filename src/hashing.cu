@@ -22,6 +22,7 @@
 #include "join/joining.h"
 #include "gdf_table.cuh"
 #include "hashmap/hash_functions.cuh"
+#include "int_fastdiv.h"
 
 constexpr int HASH_KERNEL_BLOCK_SIZE = 256;
 constexpr int HASH_KERNEL_ROWS_PER_THREAD = 1;
@@ -137,11 +138,13 @@ template <typename hash_value_t,
           typename output_type>
 struct modulo_partitioner
 {
+
   __device__
-  output_type operator()(hash_value_t hash_value, size_type num_partitions) const
+  output_type operator()(hash_value_t hash_value, int_fastdiv const & num_partitions) const
   {
     return hash_value % num_partitions;
   }
+
 };
 
 /* --------------------------------------------------------------------------*/
@@ -164,7 +167,7 @@ template <template <typename> class hash_function,
 __global__ 
 void compute_row_partition_numbers(gdf_table<size_type> const & the_table, 
                                    const size_type num_rows,
-                                   const size_type num_partitions,
+                                   const int_fastdiv num_partitions,
                                    const partitioner_type the_partitioner,
                                    size_type * row_partition_numbers,
                                    size_type * partition_sizes)
