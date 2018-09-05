@@ -323,7 +323,11 @@ public:
             const col_type * current_column = static_cast<col_type*>(d_columns_data[i]);
             const col_type current_value = current_column[row_index];
             hash_value_type key_hash = hasher(current_value);
-            hash_value = hasher.hash_combine(hash_value, key_hash);
+            // Only combine hash values after the first column
+            if(i > 0)
+              hash_value = hasher.hash_combine(hash_value, key_hash);
+            else
+              hash_value = key_hash;
             break;
           }
         case GDF_INT16:
@@ -333,7 +337,11 @@ public:
             const col_type * current_column = static_cast<col_type*>(d_columns_data[i]);
             const col_type current_value = current_column[row_index];
             hash_value_type key_hash = hasher(current_value);
-            hash_value = hasher.hash_combine(hash_value, key_hash);
+            // Only combine hash values after the first column
+            if(i > 0)
+              hash_value = hasher.hash_combine(hash_value, key_hash);
+            else
+              hash_value = key_hash;
             break;
           }
         case GDF_INT32:
@@ -343,7 +351,11 @@ public:
             const col_type * current_column = static_cast<col_type*>(d_columns_data[i]);
             const col_type current_value = current_column[row_index];
             hash_value_type key_hash = hasher(current_value);
-            hash_value = hasher.hash_combine(hash_value, key_hash);
+            // Only combine hash values after the first column
+            if(i > 0)
+              hash_value = hasher.hash_combine(hash_value, key_hash);
+            else
+              hash_value = key_hash;
             break;
           }
         case GDF_INT64:
@@ -353,7 +365,11 @@ public:
             const col_type * current_column = static_cast<col_type*>(d_columns_data[i]);
             const col_type current_value = current_column[row_index];
             hash_value_type key_hash = hasher(current_value);
-            hash_value = hasher.hash_combine(hash_value, key_hash);
+            // Only combine hash values after the first column
+            if(i > 0)
+              hash_value = hasher.hash_combine(hash_value, key_hash);
+            else
+              hash_value = key_hash;
             break;
           }
         case GDF_FLOAT32:
@@ -363,7 +379,11 @@ public:
             const col_type * current_column = static_cast<col_type*>(d_columns_data[i]);
             const col_type current_value = current_column[row_index];
             hash_value_type key_hash = hasher(current_value);
-            hash_value = hasher.hash_combine(hash_value, key_hash);
+            // Only combine hash values after the first column
+            if(i > 0)
+              hash_value = hasher.hash_combine(hash_value, key_hash);
+            else
+              hash_value = key_hash;
             break;
           }
         case GDF_FLOAT64:
@@ -373,7 +393,11 @@ public:
             const col_type * current_column = static_cast<col_type*>(d_columns_data[i]);
             const col_type current_value = current_column[row_index];
             hash_value_type key_hash = hasher(current_value);
-            hash_value = hasher.hash_combine(hash_value, key_hash);
+            // Only combine hash values after the first column
+            if(i > 0)
+              hash_value = hasher.hash_combine(hash_value, key_hash);
+            else
+              hash_value = key_hash;
             break;
           }
         case GDF_DATE32:
@@ -383,7 +407,11 @@ public:
             const col_type * current_column = static_cast<col_type*>(d_columns_data[i]);
             const col_type current_value = current_column[row_index];
             hash_value_type key_hash = hasher(current_value);
-            hash_value = hasher.hash_combine(hash_value, key_hash);
+            // Only combine hash values after the first column
+            if(i > 0)
+              hash_value = hasher.hash_combine(hash_value, key_hash);
+            else
+              hash_value = key_hash;
             break;
           }
         case GDF_DATE64:
@@ -393,7 +421,11 @@ public:
             const col_type * current_column = static_cast<col_type*>(d_columns_data[i]);
             const col_type current_value = current_column[row_index];
             hash_value_type key_hash = hasher(current_value);
-            hash_value = hasher.hash_combine(hash_value, key_hash);
+            // Only combine hash values after the first column
+            if(i > 0)
+              hash_value = hasher.hash_combine(hash_value, key_hash);
+            else
+              hash_value = key_hash;
             break;
           }
         case GDF_TIMESTAMP:
@@ -403,7 +435,11 @@ public:
             const col_type * current_column = static_cast<col_type*>(d_columns_data[i]);
             const col_type current_value = current_column[row_index];
             hash_value_type key_hash = hasher(current_value);
-            hash_value = hasher.hash_combine(hash_value, key_hash);
+            // Only combine hash values after the first column
+            if(i > 0)
+              hash_value = hasher.hash_combine(hash_value, key_hash);
+            else
+              hash_value = key_hash;
             break;
           }
         default:
