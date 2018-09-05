@@ -21,6 +21,7 @@ enum class JoinType {
   LEFT_JOIN,
 };
 
+#include <gdf/gdf.h>
 #include "../../gdf_table.cuh"
 #include "../../hashmap/concurrent_unordered_multimap.cuh"
 #include "../../hashmap/hash_functions.cuh"
@@ -44,7 +45,8 @@ template<typename multimap_type,
          typename size_type>
 __global__ void build_hash_table( multimap_type * const multi_map,
                                   gdf_table<size_type> const & build_table,
-                                  const size_type build_table_num_rows)
+                                  const size_type build_table_num_rows,
+                                  gdf_error * gdf_error_code)
 {
     size_type i = threadIdx.x + blockIdx.x * blockDim.x;
 
@@ -56,9 +58,14 @@ __global__ void build_hash_table( multimap_type * const multi_map,
       // Insert the (row hash value, row index) into the map
       // using the row hash value to determine the location in the 
       // hash map where the new pair should be inserted
-      multi_map->insert( thrust::make_pair( row_hash_value, i ),
-                         true,
-                         row_hash_value );
+      const auto insert_location = multi_map->insert( thrust::make_pair( row_hash_value, i ),
+                                                      true,
+                                                      row_hash_value );
+
+      // If the insert failed, set the error code accordingly
+      if(multi_map->end() == insert_location){
+        *gdf_error_code = GDF_HASH_TABLE_INSERT_FAILURE;
+      }
 
       i += blockDim.x * gridDim.x;
     }

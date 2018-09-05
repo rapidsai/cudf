@@ -171,7 +171,7 @@ gdf_error compute_hash_join(mgpu::context_t & compute_ctx,
                             gdf_table<size_type> const & right_table,
                             bool flip_results = false)
 {
-  gdf_error error{GDF_SUCCESS};
+  gdf_error gdf_error_code{GDF_SUCCESS};
 
   gdf_column_view(output_l, nullptr, nullptr, 0, N_GDF_TYPES);
   gdf_column_view(output_r, nullptr, nullptr, 0, N_GDF_TYPES);
@@ -215,24 +215,41 @@ gdf_error compute_hash_join(mgpu::context_t & compute_ctx,
 
   CUDA_TRY( cudaDeviceSynchronize() );
 
+  gdf_error * d_gdf_error_code{nullptr};
+
+  // Allocate a gdf_error buffer for the device to hold error code returned from
+  // the build kernel and intialize with GDF_SUCCESS
+  CUDA_TRY( cudaMalloc(&d_gdf_error_code, sizeof(gdf_error)) );
+  const gdf_error gdf_success{GDF_SUCCESS};
+  CUDA_TRY( cudaMemcpyAsync(d_gdf_error_code, &gdf_success, sizeof(gdf_error), cudaMemcpyHostToDevice) );
+
   // build the hash table
   constexpr int block_size{DEFAULT_CUDA_BLOCK_SIZE};
   const size_type build_grid_size{(build_table_num_rows + block_size - 1)/block_size};
   build_hash_table<<<build_grid_size, block_size>>>(hash_table.get(),
                                                     build_table,
-                                                    build_table_num_rows);
+                                                    build_table_num_rows,
+                                                    d_gdf_error_code);
 
   CUDA_TRY( cudaGetLastError() );
 
-  size_type estimated_join_output_size{0};
-  error = estimate_join_output_size<join_type, multimap_type>(build_table, probe_table, *hash_table, &estimated_join_output_size);
+  // Copy error code back from device to host
+  CUDA_TRY( cudaMemcpy(&gdf_error_code, d_gdf_error_code, sizeof(gdf_error), cudaMemcpyDeviceToHost) );
 
-  if(GDF_SUCCESS != error)
-    return error;
+  if(GDF_SUCCESS != gdf_error_code){
+    return gdf_error_code;
+  }
+
+  size_type estimated_join_output_size{0};
+  gdf_error_code = estimate_join_output_size<join_type, multimap_type>(build_table, probe_table, *hash_table, &estimated_join_output_size);
+
+  if(GDF_SUCCESS != gdf_error_code){
+    return gdf_error_code;
+  }
 
   // If the estimated output size is zero, return immediately
   if(0 == estimated_join_output_size){
-    return error;
+    return GDF_SUCCESS;
   }
 
   // Because we are approximating the number of joined elements, our approximation 
@@ -331,5 +348,5 @@ gdf_error compute_hash_join(mgpu::context_t & compute_ctx,
   gdf_column_view(output_l, output_l_ptr, nullptr, h_actual_found, dtype);
   gdf_column_view(output_r, output_r_ptr, nullptr, h_actual_found, dtype);
 
-  return error;
+  return gdf_error_code;
 }
