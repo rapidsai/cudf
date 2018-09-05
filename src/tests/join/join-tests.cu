@@ -638,7 +638,7 @@ TYPED_TEST(MaxJoinTest, HugeJoinSize)
   // a 34GB hash table. Therefore, use a 2^29 input to make sure we can handle big 
   // inputs until we can better handle OOM errors
   // The CI Server only has a 16GB GPU, therefore need to use 2^29 input size
-  const size_t right_table_size{static_cast<size_t>(1<<29)};
+  const size_t right_table_size{static_cast<size_t>(1)<<29};
   this->create_input(100, RAND_MAX,
                      right_table_size, RAND_MAX);
   std::vector<result_type> gdf_result = this->compute_gdf_result();
