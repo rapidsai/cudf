@@ -646,7 +646,7 @@ TYPED_TEST(MaxJoinTest, HugeJoinSize)
 
 TYPED_TEST(MaxJoinTest, InputTooLarge)
 {
-    const size_t right_table_size{static_cast<size_t>(std::numeric_limits<int>::max())};
+    const size_t right_table_size = static_cast<size_t>(std::numeric_limits<int>::max());
     this->create_input(100, RAND_MAX,
                        right_table_size, RAND_MAX);
 
