@@ -549,7 +549,7 @@ TYPED_TEST(JoinTest, DISABLED_DebugTest)
 TYPED_TEST(JoinTest, EqualValues)
 {
   this->create_input(100,1,
-                     100,1);
+                     1000,1);
 
   std::vector<result_type> reference_result = this->compute_reference_solution();
 

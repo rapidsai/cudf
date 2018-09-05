@@ -35,12 +35,110 @@ constexpr int64_t DEFAULT_HASH_TABLE_OCCUPANCY = 50;
 constexpr int DEFAULT_CUDA_BLOCK_SIZE = 128;
 constexpr int DEFAULT_CUDA_CACHE_SIZE = 128;
 
-template<typename size_type>
-struct join_pair 
-{ 
-  size_type first; 
-  size_type second; 
-};
+/* --------------------------------------------------------------------------*/
+/** 
+ * @Synopsis  Gives an estimate of the size of the join output produced when
+ * joining two tables together. If the two tables are of relatively equal size,
+ * then the returned output size will be the exact output size. However, if the
+ * probe table is significantly larger than the build table, then we attempt
+ * to estimate the output size by using only a subset of the rows in the probe table.
+ * 
+ * @Param build_table The right hand table
+ * @Param probe_table The left hand table
+ * @Param hash_table A hash table built on the build table that maps the index
+ * of every row to the hash value of that row.
+ * 
+ * @Returns An estimate of the size of the output of the join operation
+ */
+/* ----------------------------------------------------------------------------*/
+template <JoinType join_type,
+          typename multimap_type,
+          typename size_type>
+size_type estimate_join_output_size(gdf_table<size_type> const & build_table,
+                                    gdf_table<size_type> const & probe_table,
+                                    multimap_type const & hash_table)
+{
+  const size_type build_table_num_rows{build_table.get_column_length()};
+  const size_type probe_table_num_rows{probe_table.get_column_length()};
+  
+  // If the probe table is significantly larger (5x) than the build table, 
+  // then we attempt to only use a subset of the probe table rows to compute an
+  // estimate of the join output size.
+  size_type probe_to_build_ratio{static_cast<size_type>(std::ceil(static_cast<float>(probe_table_num_rows)/build_table_num_rows))};
+  size_type sample_probe_num_rows{probe_table_num_rows};
+  constexpr size_type MAX_RATIO{5};
+  if(probe_to_build_ratio > MAX_RATIO)
+  {
+    sample_probe_num_rows = build_table_num_rows;
+  }
+
+  // Allocate storage for the counter used to get the size of the join output
+  size_type * d_size_estimate{nullptr};
+  size_type h_size_estimate{0};
+
+  CUDA_TRY(cudaMalloc(&d_size_estimate, sizeof(size_type)));
+  CUDA_TRY(cudaMemsetAsync(d_size_estimate, 0, sizeof(size_type)));
+
+  CUDA_TRY( cudaGetLastError() );
+
+  // Continue probing with a subset of the probe table until either:
+  // a non-zero output size estimate is found OR
+  // all of the rows in the probe table have been sampled
+  do{
+
+    sample_probe_num_rows = std::min(sample_probe_num_rows, probe_table_num_rows);
+
+    CUDA_TRY(cudaMemsetAsync(d_size_estimate, 0, sizeof(size_type)));
+
+    constexpr int block_size{DEFAULT_CUDA_BLOCK_SIZE};
+    const size_type probe_grid_size{(sample_probe_num_rows + block_size -1)/block_size};
+    
+    // Probe the hash table without actually building the output to simply
+    // find what the size of the output will be.
+    compute_join_output_size<join_type,
+                             multimap_type,
+                             size_type,
+                             block_size,
+                             DEFAULT_CUDA_CACHE_SIZE>
+    <<<probe_grid_size, block_size>>>(&hash_table,
+                                      build_table,
+                                      probe_table,
+                                      sample_probe_num_rows,
+                                      d_size_estimate);
+
+    CUDA_TRY( cudaGetLastError() );
+
+    CUDA_TRY( cudaMemcpyAsync(&h_size_estimate, d_size_estimate, sizeof(size_type), cudaMemcpyDeviceToHost));
+
+    // Increase the estimated output size by a factor of the ratio between the
+    // probe and build tables
+    h_size_estimate = h_size_estimate * probe_to_build_ratio;
+
+    // If the size estimate is non-zero, then we have a valid estimate and can break
+    // If sample_probe_num_rows >= probe_table_num_rows, then we've sampled the entire
+    // probe table, in which case the estimate is exact and we can break 
+    if((h_size_estimate > 0) 
+       || (sample_probe_num_rows >= probe_table_num_rows))
+    {
+      break;
+    }
+
+    // If the size estimate is zero, then double the number of sampled rows in the probe
+    // table. Reduce the ratio of the number of probe rows sampled to the 
+    // number of rows in the build table by the same factor
+    if(0 == h_size_estimate)
+    {
+      constexpr size_type GROW_RATIO{2};
+      sample_probe_num_rows *= GROW_RATIO;
+      probe_to_build_ratio = static_cast<size_type>(std::ceil(static_cast<float>(probe_to_build_ratio)/GROW_RATIO));
+    }
+
+  } while(true);
+
+  CUDA_TRY( cudaFree(d_size_estimate) );
+
+  return h_size_estimate;
+}
 
 /* --------------------------------------------------------------------------*/
 /**
@@ -97,6 +195,10 @@ gdf_error compute_hash_join(mgpu::context_t & compute_ctx,
   // Hash table will be built on the right table
   gdf_table<size_type> const & build_table{right_table};
   const size_type build_table_num_rows{build_table.get_column_length()};
+  
+  // Probe with the left table
+  gdf_table<size_type> const & probe_table{left_table};
+  const size_type probe_table_num_rows{probe_table.get_column_length()};
 
   // Calculate size of hash map based on the desired occupancy
   const size_type hash_table_size{(build_table_num_rows * 100) / DEFAULT_HASH_TABLE_OCCUPANCY};
@@ -119,82 +221,19 @@ gdf_error compute_hash_join(mgpu::context_t & compute_ctx,
 
   CUDA_TRY( cudaGetLastError() );
 
-  // To avoid a situation where the entire probing column, left_Table, is probed into the build table (right_table) we use the following approximation technique.
-  // First of all we check the ratios of the sizes between A (left) and B(right). Only if A is much bigger than B does this optimization make sense.
-  // We define much bigger to be 5 times bigger as for smaller ratios, the following optimization might lose its benefit.
-  // When the ratio is big enough, we will take a subset of A equal in length to B and probe (without writing outputs). We will then approximate
-  // the number of joined elements as the number of found elements times the ratio.
-  size_type leftSize  = left_table.get_column_length();
-  size_type rightSize = right_table.get_column_length();
-
-  size_type leftSampleSize=leftSize;
-  size_type size_ratio = 1;
-  if (leftSize > 5*rightSize){
-  	leftSampleSize	= rightSize;
-  	size_ratio		= leftSize/rightSize + 1;
-  }
-
-  // Allocate storage for the counter used to get the size of the join output
-  size_type * d_join_output_size;
-  size_type h_join_output_size{0};
-
-  CUDA_TRY(cudaMalloc(&d_join_output_size, sizeof(size_type)));
-  CUDA_TRY(cudaMemset(d_join_output_size, 0, sizeof(size_type)));
-
-  // Probe with the left table
-  gdf_table<size_type> const & probe_table{left_table};
-  //const size_type probe_grid_size{(probe_column_length + block_size -1)/block_size};
-
-  CUDA_TRY( cudaGetLastError() );
-
-  // A situation can arise such that the number of elements found in the probing phase is equal to zero. This would lead us to approximating
-  // the number of joined elements to be zero. As such we need to increase the subset and continue probing to get a bettter approximation value.
-  do{
-    if(leftSampleSize>leftSize)
-      leftSampleSize=leftSize;
-    // step 3ab: scan table A (left), probe the HT without outputting the joined indices. Only get number of outputted elements.
-    CUDA_TRY(cudaMemset(d_join_output_size, 0, sizeof(size_type)));
-
-    const size_type probe_grid_size{(leftSampleSize + block_size -1)/block_size};
-    // Probe the hash table without actually building the output to simply
-    // find what the size of the output will be.
-    compute_join_output_size<join_type,
-                             multimap_type,
-                             size_type,
-                             block_size,
-                             DEFAULT_CUDA_CACHE_SIZE>
-    <<<probe_grid_size, block_size>>>(hash_table.get(),
-                                      build_table,
-                                      probe_table,
-                                      leftSampleSize,
-                                      d_join_output_size);
-
-    CUDA_TRY( cudaGetLastError() );
-
-    CUDA_TRY( cudaMemcpy(&h_join_output_size, d_join_output_size, sizeof(size_type), cudaMemcpyDeviceToHost));
-
-    h_join_output_size = h_join_output_size * size_ratio;
-
-    if(h_join_output_size>0 || leftSampleSize >= leftSize)
-      break;
-    if(h_join_output_size==0){
-      leftSampleSize  *= 2;
-      size_ratio	  /= 2;
-      if(size_ratio==0)
-        size_ratio=1;
-    }
-  } while(true);
-
-  CUDA_TRY( cudaFree(d_join_output_size) );
-
-  // If the output size is zero, return immediately
-  if(0 == h_join_output_size){
+  size_type estimated_join_output_size{estimate_join_output_size<join_type, multimap_type>(build_table, 
+                                                                                           probe_table, 
+                                                                                           *hash_table)};
+  // If the estimated output size is zero, return immediately
+  if(0 == estimated_join_output_size){
     return error;
   }
 
-  // As we are now approximating the number of joined elements, our approximation might be incorrect and we might have underestimated the
-  // number of joined elements. As such we will need to de-allocate memory and re-allocate memory to ensure that the final output is correct.
-  size_type h_actual_found;
+  // Because we are approximating the number of joined elements, our approximation 
+  // might be incorrect and we might have underestimated the number of joined elements. 
+  // As such we will need to de-allocate memory and re-allocate memory to ensure 
+  // that the final output is correct.
+  size_type h_actual_found{0};
   output_index_type *output_l_ptr{nullptr};
   output_index_type *output_r_ptr{nullptr};
   bool cont = true;
@@ -202,62 +241,65 @@ gdf_error compute_hash_join(mgpu::context_t & compute_ctx,
   // Allocate device global counter used by threads to determine output write location
   size_type *d_global_write_index{nullptr};
   CUDA_TRY( cudaMalloc(&d_global_write_index, sizeof(size_type)) );
-  int dev_ordinal{0};
-  CUDA_TRY( cudaGetDevice(&dev_ordinal));
  
-  while(cont){
+  // Because we only have an estimate of the output size, we may need to probe the
+  // hash table multiple times until we've found an output buffer size that is large enough
+  // to hold the output
+  while(cont)
+  {
     output_l_ptr = nullptr;
     output_r_ptr = nullptr;
-  	CUDA_TRY( cudaGetDevice(&dev_ordinal));
 
     // Allocate temporary device buffer for join output
-    CUDA_TRY( cudaMalloc(&output_l_ptr, h_join_output_size*sizeof(output_index_type)) );
-    CUDA_TRY( cudaMalloc(&output_r_ptr, h_join_output_size*sizeof(output_index_type)) );
+    CUDA_TRY( cudaMalloc(&output_l_ptr, estimated_join_output_size*sizeof(output_index_type)) );
+    CUDA_TRY( cudaMalloc(&output_r_ptr, estimated_join_output_size*sizeof(output_index_type)) );
     CUDA_TRY( cudaMemsetAsync(d_global_write_index, 0, sizeof(size_type), 0) );
 
-	const size_type probe_grid_size{(leftSize + block_size -1)/block_size};
+    const size_type probe_grid_size{(probe_table_num_rows + block_size -1)/block_size};
+    
     // Do the probe of the hash table with the probe table and generate the output for the join
-	probe_hash_table<join_type,
-                   multimap_type,
-                   hash_value_type,
-                   size_type,
-                   output_index_type,
-                   block_size,
-                   DEFAULT_CUDA_CACHE_SIZE>
-  	<<<probe_grid_size, block_size>>> (hash_table.get(),
+    probe_hash_table<join_type,
+                     multimap_type,
+                     hash_value_type,
+                     size_type,
+                     output_index_type,
+                     block_size,
+                     DEFAULT_CUDA_CACHE_SIZE>
+    <<<probe_grid_size, block_size>>> (hash_table.get(),
                                        build_table,
                                        probe_table,
                                        probe_table.get_column_length(),
                                        output_l_ptr,
                                        output_r_ptr,
                                        d_global_write_index,
-                                       h_join_output_size,
+                                       estimated_join_output_size,
                                        flip_results);
 
-    CUDA_TRY(cudaDeviceSynchronize());
+    CUDA_TRY( cudaGetLastError() );
 
-  	CUDA_TRY( cudaMemcpy(&h_actual_found, d_global_write_index, sizeof(size_type), cudaMemcpyDeviceToHost));
-  	cont=false;
-  	if(h_join_output_size < h_actual_found){
-  	  // Not enough memory. Double memory footprint and try again
-	  cont				  = true;
-  	  h_join_output_size  = h_join_output_size*2;
-  	}
+    CUDA_TRY( cudaMemcpy(&h_actual_found, d_global_write_index, sizeof(size_type), cudaMemcpyDeviceToHost));
+
+    // The estimate was too small. Double the estimate and try again
+    if(estimated_join_output_size < h_actual_found){
+      cont = true;
+      estimated_join_output_size *= 2;
+    }
+    else
+    {
+      cont = false;
+    }
   }
 
   // free memory used for the counters
   CUDA_TRY( cudaFree(d_global_write_index) );
 
-  gdf_dtype dtype;
-  switch(sizeof(output_index_type)) 
-  {
-    case 1 : dtype = GDF_INT8;  break;
-    case 2 : dtype = GDF_INT16; break;
-    case 4 : dtype = GDF_INT32; break;
-    case 8 : dtype = GDF_INT64; break;
-  }
 
-  if (h_join_output_size > h_actual_found) {
+  // If the estimated join output size was larger than the actual output size,
+  // then the buffers are larger than necessary. Allocate buffers of the actual 
+  // output size and copy the results to the buffers of the correct size
+  // FIXME Is this really necessary? It's probably okay to have the buffers be oversized
+  // and avoid the extra allocation/memcopy
+  if (estimated_join_output_size > h_actual_found) {
       output_index_type *copy_output_l_ptr{nullptr};
       output_index_type *copy_output_r_ptr{nullptr};
       CUDA_TRY( cudaMalloc(&copy_output_l_ptr, h_actual_found*sizeof(output_index_type)) );
@@ -268,6 +310,16 @@ gdf_error compute_hash_join(mgpu::context_t & compute_ctx,
       CUDA_TRY( cudaFree(output_r_ptr) );
       output_l_ptr = copy_output_l_ptr;
       output_r_ptr = copy_output_r_ptr;
+  }
+  
+  // Deduce the type of the output gdf_columns
+  gdf_dtype dtype;
+  switch(sizeof(output_index_type)) 
+  {
+    case 1 : dtype = GDF_INT8;  break;
+    case 2 : dtype = GDF_INT16; break;
+    case 4 : dtype = GDF_INT32; break;
+    case 8 : dtype = GDF_INT64; break;
   }
 
   gdf_column_view(output_l, output_l_ptr, nullptr, h_actual_found, dtype);
