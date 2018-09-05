@@ -54,9 +54,10 @@ constexpr int DEFAULT_CUDA_CACHE_SIZE = 128;
 template <JoinType join_type,
           typename multimap_type,
           typename size_type>
-size_type estimate_join_output_size(gdf_table<size_type> const & build_table,
+gdf_error estimate_join_output_size(gdf_table<size_type> const & build_table,
                                     gdf_table<size_type> const & probe_table,
-                                    multimap_type const & hash_table)
+                                    multimap_type const & hash_table,
+                                    size_type * join_output_size_estimate)
 {
   const size_type build_table_num_rows{build_table.get_column_length()};
   const size_type probe_table_num_rows{probe_table.get_column_length()};
@@ -137,7 +138,9 @@ size_type estimate_join_output_size(gdf_table<size_type> const & build_table,
 
   CUDA_TRY( cudaFree(d_size_estimate) );
 
-  return h_size_estimate;
+  *join_output_size_estimate = h_size_estimate;
+
+  return GDF_SUCCESS;
 }
 
 /* --------------------------------------------------------------------------*/
@@ -221,9 +224,12 @@ gdf_error compute_hash_join(mgpu::context_t & compute_ctx,
 
   CUDA_TRY( cudaGetLastError() );
 
-  size_type estimated_join_output_size{estimate_join_output_size<join_type, multimap_type>(build_table, 
-                                                                                           probe_table, 
-                                                                                           *hash_table)};
+  size_type estimated_join_output_size{0};
+  error = estimate_join_output_size<join_type, multimap_type>(build_table, probe_table, *hash_table, &estimated_join_output_size);
+
+  if(GDF_SUCCESS != error)
+    return error;
+
   // If the estimated output size is zero, return immediately
   if(0 == estimated_join_output_size){
     return error;
