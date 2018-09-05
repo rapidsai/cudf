@@ -133,7 +133,7 @@ __global__ void compute_join_output_size( multimap_type const * const multi_map,
 #if defined(CUDA_VERSION) && CUDA_VERSION >= 9000
   const unsigned int activemask = __ballot_sync(0xffffffff, probe_row_index < probe_table_size);
 #endif
-  if ( probe_row_index < probe_table_size /*&& gdf::util::get_bit(probe_valid, probe_row_index)*/) {
+  if ( probe_row_index < probe_table_size) {
     const auto unused_key = multi_map->get_unused_key();
     const auto end = multi_map->end();
     const key_type probe_key = probe_column[probe_row_index];
@@ -269,7 +269,7 @@ __global__ void probe_hash_table( multimap_type const * const multi_map,
 #if defined(CUDA_VERSION) && CUDA_VERSION >= 9000
   const unsigned int activemask = __ballot_sync(0xffffffff, probe_row_index < probe_table_size);
 #endif
-  if ( probe_row_index < probe_table_size /*&& gdf::util::get_bit(probe_valid, probe_row_index)*/) {
+  if ( probe_row_index < probe_table_size) {
     const auto unused_key = multi_map->get_unused_key();
     const auto end = multi_map->end();
     const key_type probe_key = probe_column[probe_row_index];
