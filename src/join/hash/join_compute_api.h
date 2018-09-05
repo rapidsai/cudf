@@ -215,13 +215,12 @@ gdf_error compute_hash_join(mgpu::context_t & compute_ctx,
 
   CUDA_TRY( cudaDeviceSynchronize() );
 
-  gdf_error * d_gdf_error_code{nullptr};
-
-  // Allocate a gdf_error buffer for the device to hold error code returned from
+  // Allocate a gdf_error for the device to hold error code returned from
   // the build kernel and intialize with GDF_SUCCESS
-  CUDA_TRY( cudaMalloc(&d_gdf_error_code, sizeof(gdf_error)) );
-  const gdf_error gdf_success{GDF_SUCCESS};
-  CUDA_TRY( cudaMemcpyAsync(d_gdf_error_code, &gdf_success, sizeof(gdf_error), cudaMemcpyHostToDevice) );
+  // Use Page Locked memory to avoid overhead of memcpys
+  gdf_error * d_gdf_error_code{nullptr};
+  CUDA_TRY( cudaMallocHost(&d_gdf_error_code, sizeof(gdf_error)) );
+  *d_gdf_error_code = GDF_SUCCESS;
 
   // build the hash table
   constexpr int block_size{DEFAULT_CUDA_BLOCK_SIZE};
@@ -233,12 +232,12 @@ gdf_error compute_hash_join(mgpu::context_t & compute_ctx,
 
   CUDA_TRY( cudaGetLastError() );
 
-  // Copy error code back from device to host
-  CUDA_TRY( cudaMemcpy(&gdf_error_code, d_gdf_error_code, sizeof(gdf_error), cudaMemcpyDeviceToHost) );
-
+  // Check error code from the kernel
+  gdf_error_code = *d_gdf_error_code;
   if(GDF_SUCCESS != gdf_error_code){
     return gdf_error_code;
   }
+
 
   size_type estimated_join_output_size{0};
   gdf_error_code = estimate_join_output_size<join_type, multimap_type>(build_table, probe_table, *hash_table, &estimated_join_output_size);
@@ -316,7 +315,6 @@ gdf_error compute_hash_join(mgpu::context_t & compute_ctx,
   // free memory used for the counters
   CUDA_TRY( cudaFree(d_global_write_index) );
 
-
   // If the estimated join output size was larger than the actual output size,
   // then the buffers are larger than necessary. Allocate buffers of the actual 
   // output size and copy the results to the buffers of the correct size
@@ -334,6 +332,9 @@ gdf_error compute_hash_join(mgpu::context_t & compute_ctx,
       output_l_ptr = copy_output_l_ptr;
       output_r_ptr = copy_output_r_ptr;
   }
+  
+  // Free the device error code 
+  CUDA_TRY( cudaFreeHost(d_gdf_error_code) );
   
   // Deduce the type of the output gdf_columns
   gdf_dtype dtype;
