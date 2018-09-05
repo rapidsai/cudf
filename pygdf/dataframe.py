@@ -1038,6 +1038,36 @@ class DataFrame(object):
         cols = [self[k]._column for k in columns]
         return Series(numerical.column_hash_values(*cols))
 
+    def partition_by_hash(self, columns, nparts):
+        """Partition the dataframe by the hashed value of data in *columns*.
+
+        Parameters
+        ----------
+        columns : sequence of str
+            The names of the columns to be hashed.
+            Must have at least one name.
+        nparts : int
+            Number of output partitions
+
+        Returns
+        -------
+        partitioned: list of DataFrame
+        """
+        cols = [col._column for col in self._cols.values()]
+        names = list(self._cols.keys())
+        key_indices = [names.index(k) for k in columns]
+        # Allocate output buffers
+        outputs = [col.copy_data() for col in cols]
+        # Call hash_partition
+        offsets = _gdf.hash_partition(cols, key_indices, nparts, outputs)
+        # Re-construct output partitions
+        outdf = DataFrame()
+        for k, col in zip(self._cols, outputs):
+            outdf[k] = col
+        # Slice into partition
+        return [outdf[s:e] for s, e in zip(offsets, offsets[1:] + [None])]
+
+
     def to_pandas(self):
         """Convert to a Pandas DataFrame.
         """
