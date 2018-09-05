@@ -573,6 +573,15 @@ gdf_error gdf_hash_partition(int num_input_cols,
                                                               *output_table);
         break;
       }
+    case GDF_HASH_IDENTITY:
+      {
+        gdf_status = hash_partition_gdf_table<IdentityHash>(*input_table, 
+                                                            *table_to_hash,
+                                                            num_partitions,
+                                                            partition_offsets,
+                                                            *output_table);
+        break;
+      }
     default:
       gdf_status = GDF_INVALID_HASH_FUNCTION;
   }

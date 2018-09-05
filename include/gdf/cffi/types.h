@@ -44,6 +44,7 @@ typedef enum {
 
 typedef enum {
     GDF_HASH_MURMUR3=0,
+    GDF_HASH_IDENTITY, // Identity hash simply returns the value to hash
 } gdf_hash_func;
 
 typedef enum {
