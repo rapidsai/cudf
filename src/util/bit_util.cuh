@@ -33,7 +33,7 @@ __host__ __device__ __forceinline__
 
 __host__ __device__ __forceinline__ bool get_bit(const gdf_valid_type* const bits, size_t i)
 {
-  return bits[i / 8] & (1 << (i % 8));
+  return  bits == nullptr? true :  bits[i / 8] & (1 << (i % 8));
 }
 
 __host__ __device__ __forceinline__
