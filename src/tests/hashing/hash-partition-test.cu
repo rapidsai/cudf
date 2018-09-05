@@ -32,6 +32,7 @@
 #include "gdf_test_utils.cuh"
 #include "../../gdf_table.cuh"
 #include "../../hashmap/hash_functions.cuh"
+#include "../../int_fastdiv.h"
 
 template <template <typename> class hash_function,
          typename size_type>
@@ -45,11 +46,14 @@ struct row_partition_mapper
   __device__
   hash_value_type operator()(size_type row_index) const
   {
-    return the_table.template hash_row<hash_function>(row_index) % num_partitions;
+    return std::abs(the_table.template hash_row<hash_function>(row_index) % num_partitions);
   }
 
   gdf_table<size_type> const & the_table;
-  const size_type num_partitions;
+
+  // Using int_fastdiv can return results different from using the normal modulus
+  // operation, therefore we need to use it in result verfication as well
+  int_fastdiv num_partitions;
 };
 
 // Put all repeated setup and validation stuff here
@@ -261,6 +265,7 @@ struct TestParameters
 // TestParameters defined below
 // The number and types of columns determined by the number and types of vectors 
 // in the VTuple<...> 
+// The hash function to be used is determined by the gdf_hash_func enum
 // The columns to be hashed to determine the partition assignment are the last N integer template
 // arguments, where N <= the number of columns specified in the VTuple
 typedef ::testing::Types< TestParameters< VTuple<int32_t>, GDF_HASH_IDENTITY, 0 >,
@@ -280,13 +285,13 @@ TYPED_TEST_CASE(HashPartitionTest, Implementations);
 
 TYPED_TEST(HashPartitionTest, ExampleTest)
 {
-  const int num_partitions = 3;
+  const int num_partitions = 5;
 
-  this->create_input(10, 100, true);
+  this->create_input(100, 100);
 
-  std::vector<int> partition_offsets = this->compute_gdf_result(num_partitions, true);
+  std::vector<int> partition_offsets = this->compute_gdf_result(num_partitions);
 
-  this->verify_gdf_result(num_partitions, partition_offsets, true);
+  this->verify_gdf_result(num_partitions, partition_offsets);
 }
 
 

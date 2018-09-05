@@ -139,12 +139,21 @@ template <typename hash_value_t,
 struct modulo_partitioner
 {
 
-  __device__
-  output_type operator()(hash_value_t hash_value, int_fastdiv const & num_partitions) const
+  modulo_partitioner(int num_partitions) : fast_divisor{num_partitions}{}
+
+  __host__ __device__
+  output_type operator()(hash_value_t hash_value) const
   {
-    return hash_value % num_partitions;
+    // Using int_fastdiv casts 'hash_value' to an int, which can 
+    // result in negative modulos, requiring taking the absolute value
+    // Because of the casting it can also return results that are not
+    // the same as using the normal % operator
+    output_type partition_number = std::abs(hash_value % fast_divisor);
+
+    return partition_number;
   }
 
+  int_fastdiv fast_divisor;
 };
 
 /* --------------------------------------------------------------------------*/
@@ -183,7 +192,7 @@ void compute_row_partition_numbers(gdf_table<size_type> const & the_table,
     // https://stackoverflow.com/questions/4077110/template-disambiguator
     const hash_value_type row_hash_value = the_table.template hash_row<hash_function>(row_number);
 
-    const size_type partition_number = the_partitioner(row_hash_value, num_partitions);
+    const size_type partition_number = the_partitioner(row_hash_value);
 
     row_partition_numbers[row_number] = partition_number;
 
@@ -426,7 +435,7 @@ gdf_error hash_partition_gdf_table(gdf_table<size_type> const & input_table,
   <<<grid_size, HASH_KERNEL_BLOCK_SIZE>>>(table_to_hash, 
                                           num_rows,
                                           num_partitions,
-                                          partitioner_type(),
+                                          partitioner_type(static_cast<int>(num_partitions)),
                                           row_partition_numbers,
                                           partition_sizes);
 
