@@ -373,6 +373,7 @@ class DataFrame(object):
             return Series(arr)
         elif len(self) > 0 and len(sind) != len(index):
             raise ValueError('Length of values does not match index length')
+        return col
 
     def _prepare_series_for_add(self, col, forceindex=False):
         """Prepare a series to be added to the DataFrame.
@@ -387,7 +388,7 @@ class DataFrame(object):
         The prepared Series object.
         """
         self._sanitize_columns(col)
-        self._sanitize_values(col)
+        col = self._sanitize_values(col)
 
         empty_index = isinstance(self._index, EmptyIndex)
         series = Series(col)
