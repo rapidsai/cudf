@@ -104,8 +104,8 @@ gdf_error estimate_join_output_size(gdf_table<size_type> const & build_table,
   size_type * d_size_estimate{nullptr};
   size_type h_size_estimate{0};
 
-  CUDA_TRY(cudaMalloc(&d_size_estimate, sizeof(size_type)));
-  CUDA_TRY(cudaMemsetAsync(d_size_estimate, 0, sizeof(size_type)));
+  CUDA_TRY(cudaMallocHost(&d_size_estimate, sizeof(size_type)));
+  *d_size_estimate = 0;
 
   CUDA_TRY( cudaGetLastError() );
 
@@ -116,7 +116,7 @@ gdf_error estimate_join_output_size(gdf_table<size_type> const & build_table,
 
     sample_probe_num_rows = std::min(sample_probe_num_rows, probe_table_num_rows);
 
-    CUDA_TRY(cudaMemsetAsync(d_size_estimate, 0, sizeof(size_type)));
+    *d_size_estimate = 0;
 
     constexpr int block_size{DEFAULT_CUDA_BLOCK_SIZE};
     const size_type probe_grid_size{(sample_probe_num_rows + block_size -1)/block_size};
@@ -134,13 +134,13 @@ gdf_error estimate_join_output_size(gdf_table<size_type> const & build_table,
                                       sample_probe_num_rows,
                                       d_size_estimate);
 
-    CUDA_TRY( cudaGetLastError() );
-
-    CUDA_TRY( cudaMemcpyAsync(&h_size_estimate, d_size_estimate, sizeof(size_type), cudaMemcpyDeviceToHost));
-
+    // Device sync is required to ensure d_size_estimate is updated
+    CUDA_TRY( cudaDeviceSynchronize() );
+    
+    	
     // Increase the estimated output size by a factor of the ratio between the
     // probe and build tables
-    h_size_estimate = h_size_estimate * probe_to_build_ratio;
+    h_size_estimate = *d_size_estimate * probe_to_build_ratio;
 
     // If the size estimate is non-zero, then we have a valid estimate and can break
     // If sample_probe_num_rows >= probe_table_num_rows, then we've sampled the entire
@@ -163,7 +163,7 @@ gdf_error estimate_join_output_size(gdf_table<size_type> const & build_table,
 
   } while(true);
 
-  CUDA_TRY( cudaFree(d_size_estimate) );
+  CUDA_TRY( cudaFreeHost(d_size_estimate) );
 
   *join_output_size_estimate = h_size_estimate;
 
@@ -263,9 +263,11 @@ gdf_error compute_hash_join(mgpu::context_t & compute_ctx,
                                                       build_table,
                                                       build_table_num_rows,
                                                       d_gdf_error_code);
+    
+    // Device synch is required to ensure d_gdf_error_code 
+    // has been written
+    CUDA_TRY( cudaDeviceSynchronize() );
   }
-
-  CUDA_TRY( cudaGetLastError() );
 
   // Check error code from the kernel
   gdf_error_code = *d_gdf_error_code;
