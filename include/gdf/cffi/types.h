@@ -39,6 +39,7 @@ typedef enum {
     GDF_UNSUPPORTED_METHOD,
     GDF_INVALID_AGGREGATOR,
     GDF_HASH_TABLE_INSERT_FAILURE,
+    GDF_UNSUPPORTED_JOIN_TYPE,
 } gdf_error;
 
 typedef enum {
