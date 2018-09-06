@@ -25,6 +25,8 @@
 #include "../../hashmap/managed.cuh"
 #include "groupby_kernels.cuh"
 #include "../../gdf_table.cuh"
+#include "sqls_rtti_comp.hpp"
+
 
 // TODO: replace this with CUDA_TRY and propagate the error
 #ifndef CUDA_RT_CALL
@@ -46,7 +48,7 @@ constexpr unsigned int DEFAULT_HASH_TABLE_OCCUPANCY{50};
 constexpr unsigned int THREAD_BLOCK_SIZE{256};
 
 /* --------------------------------------------------------------------------*/
-/** 
+/**
  * @Synopsis  This functor is used inside the hash table's insert function to 
  * compare equality between two keys in the hash table. 
  * 
@@ -233,46 +235,22 @@ cudaError_t GroupbyHash(gdf_table<size_type> const & groupby_input_table,
   cudaMemcpy(out_size, global_write_index, sizeof(size_type), cudaMemcpyDeviceToHost);
   CUDA_RT_CALL(cudaFree(global_write_index));
 
-  // TODO Need to define comparator to allow sorting rows of a gdf_table
-  /*
   // Optionally sort the groupby/aggregation result columns
-  if(true == sort_result)
-  {
-    // Allocate double buffers needed for the cub Radix Sort
-    groupby_type * groupby_result_alt;
-    CUDA_RT_CALL(cudaMalloc(&groupby_result_alt, *out_size * sizeof(groupby_type)));
-
-    aggregation_type * aggregation_result_alt;
-    CUDA_RT_CALL(cudaMalloc(&aggregation_result_alt, *out_size * sizeof(aggregation_type)));
-
-    cub::DoubleBuffer<groupby_type>     d_keys(out_groupby_column, groupby_result_alt);
-    cub::DoubleBuffer<aggregation_type> d_vals(out_aggregation_column, aggregation_result_alt);
-
-    // When called with temp_storage == nullptr, simply returns the required allocation size in
-    // temp_storage_bytes
-    void *d_temp_storage = nullptr;
-    size_t temp_storage_bytes = 0;
-    CUDA_RT_CALL(cub::DeviceRadixSort::SortPairs(d_temp_storage, temp_storage_bytes, d_keys, d_vals, *out_size));
-    
-    // allocate temp storage here and call sort again to actually sort arrays
-    CUDA_RT_CALL(cudaMalloc(&d_temp_storage, temp_storage_bytes));
-    CUDA_RT_CALL(cub::DeviceRadixSort::SortPairs(d_temp_storage, temp_storage_bytes, d_keys, d_vals, *out_size));
-
-    CUDA_RT_CALL(cudaDeviceSynchronize());
-
-    // Update output pointers with sorted result
-    // TODO Find a better way to do this. 
-    // Sorted output may be in a different buffer than what was originally passed in... need to copy it 
-    CUDA_RT_CALL(cudaMemcpy(out_groupby_column, d_keys.Current(), *out_size * sizeof(groupby_type), cudaMemcpyDefault));
-    CUDA_RT_CALL(cudaMemcpy(out_aggregation_column, d_vals.Current(), *out_size * sizeof(aggregation_type), cudaMemcpyDefault));
-
-    // Free work buffers
-    CUDA_RT_CALL(cudaFree(d_temp_storage));
-    CUDA_RT_CALL(cudaFree(groupby_result_alt));
-    CUDA_RT_CALL(cudaFree(aggregation_result_alt));
+  if(true == sort_result) {
+      cudaStream_t stream = NULL;
+      LesserRTTI<size_type> comparator(
+              groupby_output_table.data_ptr(),
+              groupby_output_table.dtype_ptr(),
+              groupby_output_table.ncols());
+      thrust::device_vector<size_type> indices(*out_size);
+      thrust::sequence(thrust::cuda::par.on(stream), indices.begin(), indices.end());
+      thrust::sort(thrust::cuda::par.on(stream),
+              indices.begin(), indices.end(),
+              [comparator] __host__ __device__ (size_type i1, size_type i2) {
+              return comparator.less(i1, i2);
+              });
   }
 
-  */
   return error;
 }
 #endif

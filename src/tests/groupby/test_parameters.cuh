@@ -157,12 +157,12 @@ typedef ::testing::Types<
     TestParameters< agg_op::MAX, HASH, VTuple<uint64_t, uint32_t>, uint64_t>,
     TestParameters< agg_op::CNT, HASH, VTuple<uint32_t, int32_t >, int32_t >,
     TestParameters< agg_op::CNT, HASH, VTuple<uint64_t, uint32_t>, uint64_t>,
-    TestParameters< agg_op::SUM, HASH, VTuple<int32_t , int32_t , float   >, int64_t >,
-    TestParameters< agg_op::SUM, HASH, VTuple<int64_t , int32_t , int32_t >, uint32_t>,
-    TestParameters< agg_op::MIN, HASH, VTuple<float   , double  , uint64_t>, double  >,
-    TestParameters< agg_op::MIN, HASH, VTuple<double  , int64_t , int32_t >, float   >,
-    TestParameters< agg_op::MAX, HASH, VTuple<uint32_t, int32_t , uint64_t>, int32_t >,
-    TestParameters< agg_op::MAX, HASH, VTuple<uint64_t, uint32_t, double  >, uint64_t>,
-    TestParameters< agg_op::CNT, HASH, VTuple<uint32_t, int32_t , int64_t >, int32_t >,
-    TestParameters< agg_op::CNT, HASH, VTuple<uint64_t, uint32_t, int32_t >, uint64_t>
+    TestParameters< agg_op::MIN, HASH, VTuple<int32_t , int32_t , float   >, int64_t >,
+    TestParameters< agg_op::MAX, HASH, VTuple<int64_t , int32_t , int32_t >, uint32_t>,
+    TestParameters< agg_op::SUM, HASH, VTuple<float   , double  , uint64_t>, double  >,
+    TestParameters< agg_op::CNT, HASH, VTuple<double  , int64_t , int32_t >, float   >,
+    TestParameters< agg_op::SUM, HASH, VTuple<uint32_t, int32_t , uint64_t>, int32_t >,
+    TestParameters< agg_op::SUM, HASH, VTuple<uint64_t, uint32_t, double  >, uint64_t>,
+    TestParameters< agg_op::AVG, HASH, VTuple<uint32_t, int32_t , int64_t >, int32_t >,
+    TestParameters< agg_op::AVG, HASH, VTuple<uint64_t, uint32_t, int32_t >, uint64_t>
   > Implementations;

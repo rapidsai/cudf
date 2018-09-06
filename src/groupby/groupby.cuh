@@ -398,9 +398,6 @@ gdf_error gdf_group_by_hash_avg(int ncols,
                                 gdf_column* out_groupby_columns[],
                                 gdf_column* out_aggregation_column)
 {
-
-  assert( (ncols == 1 ) && "Hash-based groupby only supports a single input column at this time." );
-
   // Deduce the type used for the SUM aggregation, assuming we use the same type as the aggregation column
   const gdf_dtype gdf_sum_type = in_aggregation_column->dtype;
   switch(gdf_sum_type){

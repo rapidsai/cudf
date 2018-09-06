@@ -580,6 +580,17 @@ public:
     return hash_value;
   }
 
+  void** data_ptr(void) {
+      return d_columns_data;
+  }
+
+  int* dtype_ptr(void) {
+      return reinterpret_cast<int*>(d_columns_types);
+  }
+
+  size_type ncols(void) {
+      return num_columns;
+  }
 
 private:
 
