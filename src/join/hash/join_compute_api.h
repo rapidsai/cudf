@@ -65,7 +65,34 @@ gdf_error estimate_join_output_size(gdf_table<size_type> const & build_table,
   // If the probe table is significantly larger (5x) than the build table, 
   // then we attempt to only use a subset of the probe table rows to compute an
   // estimate of the join output size.
-  size_type probe_to_build_ratio{static_cast<size_type>(std::ceil(static_cast<float>(probe_table_num_rows)/build_table_num_rows))};
+  size_type probe_to_build_ratio{0};
+  if(build_table_num_rows > 0) {
+    probe_to_build_ratio = static_cast<size_type>(std::ceil(static_cast<float>(probe_table_num_rows)/build_table_num_rows));
+  }
+  else {
+    // If the build table is empty, we know exactly how large the output
+    // will be for the different types of joins and can return immediately
+    switch(join_type)
+    {
+      case JoinType::INNER_JOIN:
+        {
+          // Inner join with an empty table will have no output
+          *join_output_size_estimate = 0;
+          break;
+        }
+      case JoinType::LEFT_JOIN:
+        {
+          // Left join with an empty table will have an output of NULL rows
+          // equal to the number of rows in the probe table
+          *join_output_size_estimate = probe_table_num_rows;
+          break;
+        }
+      default:
+        return GDF_UNSUPPORTED_JOIN_TYPE;
+    }
+    return GDF_SUCCESS;
+  }
+
   size_type sample_probe_num_rows{probe_table_num_rows};
   constexpr size_type MAX_RATIO{5};
   if(probe_to_build_ratio > MAX_RATIO)
@@ -204,7 +231,11 @@ gdf_error compute_hash_join(mgpu::context_t & compute_ctx,
   const size_type probe_table_num_rows{probe_table.get_column_length()};
 
   // Calculate size of hash map based on the desired occupancy
-  const size_type hash_table_size{(build_table_num_rows * 100) / DEFAULT_HASH_TABLE_OCCUPANCY};
+  size_type hash_table_size{(build_table_num_rows * 100) / DEFAULT_HASH_TABLE_OCCUPANCY};
+
+  // It's possible that the hash table size will be zero, in which case
+  // we still need to allocate something.
+  hash_table_size = std::max(hash_table_size, size_type(1));
  
   std::unique_ptr<multimap_type> hash_table(new multimap_type(hash_table_size));
 
@@ -222,13 +253,17 @@ gdf_error compute_hash_join(mgpu::context_t & compute_ctx,
   CUDA_TRY( cudaMallocHost(&d_gdf_error_code, sizeof(gdf_error)) );
   *d_gdf_error_code = GDF_SUCCESS;
 
-  // build the hash table
   constexpr int block_size{DEFAULT_CUDA_BLOCK_SIZE};
-  const size_type build_grid_size{(build_table_num_rows + block_size - 1)/block_size};
-  build_hash_table<<<build_grid_size, block_size>>>(hash_table.get(),
-                                                    build_table,
-                                                    build_table_num_rows,
-                                                    d_gdf_error_code);
+
+  // build the hash table
+  if(build_table_num_rows > 0)
+  {
+    const size_type build_grid_size{(build_table_num_rows + block_size - 1)/block_size};
+    build_hash_table<<<build_grid_size, block_size>>>(hash_table.get(),
+                                                      build_table,
+                                                      build_table_num_rows,
+                                                      d_gdf_error_code);
+  }
 
   CUDA_TRY( cudaGetLastError() );
 

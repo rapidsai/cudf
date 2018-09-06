@@ -34,12 +34,6 @@ void dump_mem(const char name[], const mem_t<T> & mem) {
     std::cout << "\n";
 }
 
-gdf_error gdf_column_free(gdf_column *column) {
-    CUDA_RT_CALL( cudaFree(column->data)  );
-    CUDA_RT_CALL( cudaFree(column->valid) );
-    CUDA_CHECK_LAST();
-    return GDF_SUCCESS;
-}
 
 // Size limit due to use of int32 as join output.
 // FIXME: upgrade to 64-bit
@@ -250,17 +244,38 @@ gdf_error join_call( int num_cols, gdf_column **leftcol, gdf_column **rightcol,
   if(nullptr == join_context)
     return GDF_INVALID_API_CALL;
 
-  // check that the columns data are not null, have matching types, 
-  // and the same number of rows
   const auto left_col_size = leftcol[0]->size;
   const auto right_col_size = rightcol[0]->size;
   
+  // Check that the number of rows does not exceed the maximum
   if(left_col_size >= MAX_JOIN_SIZE) return GDF_COLUMN_SIZE_TOO_BIG;
   if(right_col_size >= MAX_JOIN_SIZE) return GDF_COLUMN_SIZE_TOO_BIG;
 
+  // If both frames are empty, return immediately
+  if((0 == left_col_size ) && (0 == right_col_size)) {
+    return GDF_SUCCESS;
+  }
+
+  // If left join and the left table is empty, return immediately
+  if( (JoinType::LEFT_JOIN == join_type) && (0 == left_col_size)){
+    return GDF_SUCCESS;
+  }
+
+  // If Inner Join and either table is empty, return immediately
+  if( (JoinType::INNER_JOIN == join_type) && 
+      ((0 == left_col_size) || (0 == right_col_size)) ){
+    return GDF_SUCCESS;
+  }
+
+  // check that the columns data are not null, have matching types, 
+  // and the same number of rows
   for (int i = 0; i < num_cols; i++) {
-    if(nullptr == rightcol[i]->data) return GDF_DATASET_EMPTY;
-    if(nullptr == leftcol[i]->data) return GDF_DATASET_EMPTY;
+    if((right_col_size > 0) && (nullptr == rightcol[i]->data)){
+     return GDF_DATASET_EMPTY;
+    } 
+    if((left_col_size > 0) && (nullptr == leftcol[i]->data)){
+     return GDF_DATASET_EMPTY;
+    } 
     if(rightcol[i]->dtype != leftcol[i]->dtype) return GDF_JOIN_DTYPE_MISMATCH;
     if(left_col_size != leftcol[i]->size) return GDF_COLUMN_SIZE_MISMATCH;
     if(right_col_size != rightcol[i]->size) return GDF_COLUMN_SIZE_MISMATCH;

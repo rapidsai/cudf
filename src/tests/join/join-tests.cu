@@ -333,6 +333,8 @@ struct JoinTest : public testing::Test
 
     gdf_column left_result;
     gdf_column right_result;
+    left_result.size = 0;
+    right_result.size = 0;
 
     gdf_error result_error{GDF_SUCCESS};
 
@@ -386,13 +388,15 @@ struct JoinTest : public testing::Test
 
     // Copy result of gdf join to the host
     cudaMemcpy(host_result.data(),
-            l_join_output, total_pairs * sizeof(int), cudaMemcpyDeviceToHost);
+               l_join_output, total_pairs * sizeof(int), cudaMemcpyDeviceToHost);
     cudaMemcpy(host_result.data() + total_pairs,
-            r_join_output, total_pairs * sizeof(int), cudaMemcpyDeviceToHost);
+               r_join_output, total_pairs * sizeof(int), cudaMemcpyDeviceToHost);
 
     // Free the original join result
-    gdf_column_free(&left_result);
-    gdf_column_free(&right_result);
+    if(output_size > 0){
+      gdf_column_free(&left_result);
+      gdf_column_free(&right_result);
+    }
 
     // Host vector of result_type pairs to hold final result for comparison to reference solution
     std::vector<result_type> host_pair_result(total_pairs);
@@ -614,7 +618,57 @@ TYPED_TEST(JoinTest, RightColumnsBigger)
   }
 }
 
-// TODO Add test for inputs with zero rows
+TYPED_TEST(JoinTest, EmptyLeftFrame)
+{
+  this->create_input(0,100,
+                     1000,100);
+
+  std::vector<result_type> reference_result = this->compute_reference_solution();
+
+  std::vector<result_type> gdf_result = this->compute_gdf_result();
+
+  ASSERT_EQ(reference_result.size(), gdf_result.size()) << "Size of gdf result does not match reference result\n";
+
+  // Compare the GDF and reference solutions
+  for(size_t i = 0; i < reference_result.size(); ++i){
+    EXPECT_EQ(reference_result[i], gdf_result[i]);
+  }
+}
+
+TYPED_TEST(JoinTest, EmptyRightFrame)
+{
+  this->create_input(1000,100,
+                     0,100);
+
+  std::vector<result_type> reference_result = this->compute_reference_solution();
+
+  std::vector<result_type> gdf_result = this->compute_gdf_result();
+
+  ASSERT_EQ(reference_result.size(), gdf_result.size()) << "Size of gdf result does not match reference result\n";
+
+  // Compare the GDF and reference solutions
+  for(size_t i = 0; i < reference_result.size(); ++i){
+    EXPECT_EQ(reference_result[i], gdf_result[i]);
+  }
+}
+
+TYPED_TEST(JoinTest, BothFramesEmpty)
+{
+  this->create_input(0,100,
+                     0,100);
+
+  std::vector<result_type> reference_result = this->compute_reference_solution();
+
+  std::vector<result_type> gdf_result = this->compute_gdf_result();
+
+  ASSERT_EQ(reference_result.size(), gdf_result.size()) << "Size of gdf result does not match reference result\n";
+
+  // Compare the GDF and reference solutions
+  for(size_t i = 0; i < reference_result.size(); ++i){
+    EXPECT_EQ(reference_result[i], gdf_result[i]);
+  }
+}
+
 
 
 // The below tests are for testing inputs that are at or above the maximum input size possible
