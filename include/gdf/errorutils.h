@@ -1,15 +1,22 @@
 #ifndef GDF_ERRORUTILS_H
 #define GDF_ERRORUTILS_H
 
-#define CUDA_TRY( call ) 									                                                         \
-{                                                                                                  \
-    cudaError_t cudaStatus = call;                                                                 \
-    if ( cudaSuccess != cudaStatus )                                                               \
-    {                                                                                              \
-        fprintf(stderr, "ERROR: CUDA RT call \"%s\" in line %d of file %s failed with %s (%d).\n", \
-                        #call, __LINE__, __FILE__, cudaGetErrorString(cudaStatus), cudaStatus);    \
-        return GDF_CUDA_ERROR;                          										                       \
-    }												                                                                       \
+#include <iostream>
+#include <cuda.h>
+#include <cuda_runtime_api.h>
+
+#define CUDA_TRY( call ) 									                            \
+{                                                                     \
+    cudaError_t cudaStatus = call;                                    \
+    if ( cudaSuccess != cudaStatus )                                  \
+    {                                                                 \
+        std::cerr << "ERROR: CUDA Runtime call " << #call             \
+                  << "in line" << __LINE__                            \
+                  << "of file" << __FILE__                            \
+                  << "failed with" << cudaGetErrorString(cudaStatus)  \
+                  << "(" << cudaStatus << ").\n";                     \
+        return GDF_CUDA_ERROR;                          							\
+    }												                                          \
 }                                                                                                  
 
 #define CUDA_CHECK_LAST() CUDA_TRY(cudaPeekAtLastError())
