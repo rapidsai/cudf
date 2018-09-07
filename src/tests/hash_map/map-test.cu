@@ -204,53 +204,6 @@ TYPED_TEST(MapTest, CheckUnusedValues){
   EXPECT_EQ(begin->second, this->unused_value);
 }
 
-TYPED_TEST(MapTest, AggregationTestHost)
-{
-
-  using key_type = typename TypeParam::key_type;
-  using value_type = typename TypeParam::value_type;
-
-  thrust::pair<key_type, value_type> first_pair{0,0};
-  thrust::pair<key_type, value_type> second_pair{0,10};
-  thrust::pair<key_type, value_type> third_pair{0,5};
-
-  // can't use a host-device lambda due to nvcc restrictions...
-  struct {
-    __host__ __device__ value_type operator()(value_type a, value_type b) { return (a >= b ? a : b); }
-  } maxop;
-  
-  this->the_map->insert(first_pair, maxop);
-  auto found = this->the_map->find(0);
-  EXPECT_EQ(value_type(0), found->second);
-
-  this->the_map->insert(second_pair, maxop);
-  found = this->the_map->find(0);
-  EXPECT_EQ(value_type(10), found->second);
-
-  this->the_map->insert(third_pair, maxop);
-  found = this->the_map->find(0);
-  EXPECT_EQ(value_type(10), found->second);
-
-  this->the_map->insert(thrust::make_pair(0,11), maxop);
-  found = this->the_map->find(0);
-  EXPECT_EQ(value_type(11), found->second);
-
-  this->the_map->insert(thrust::make_pair(7, 42), maxop);
-  found = this->the_map->find(7);
-  EXPECT_EQ(value_type(42), found->second);
-
-  this->the_map->insert(thrust::make_pair(7, 62), maxop);
-  found = this->the_map->find(7);
-  EXPECT_EQ(value_type(62), found->second);
-
-  this->the_map->insert(thrust::make_pair(7, 42), maxop);
-  found = this->the_map->find(7);
-  EXPECT_EQ(value_type(62), found->second);
-
-  found = this->the_map->find(0);
-  EXPECT_EQ(value_type(11), found->second);
-
-}
 
 
 template<typename map_type, typename Aggregation_Operator>

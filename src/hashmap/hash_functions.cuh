@@ -54,7 +54,6 @@ struct MurmurHash3_32
         h ^= h >> 16;
         return h;
     }
-
     
     /* --------------------------------------------------------------------------*/
     /** 
@@ -77,7 +76,6 @@ struct MurmurHash3_32
 
       return combined;
     }
-
   
     __forceinline__ 
     __host__ __device__ result_type operator()(const Key& key) const
