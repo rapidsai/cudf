@@ -38,21 +38,32 @@ struct GroupTest : public testing::Test {
   // The aggregation type is passed via a member of the template argument class
   const agg_op op = test_parameters::op;
 
-  gdf_context ctxt = {test_parameters::group_type == gdf_method::GDF_SORT,
-      test_parameters::group_type, 0};
+  gdf_context ctxt = {0, test_parameters::group_type, 0};
 
   // multi_column_t is a tuple of vectors. The number of vectors in the tuple
   // determines the number of columns to be grouped, and the value_type of each
   // vector determiens the data type of the column
   using multi_column_t = typename test_parameters::multi_column_t;
+
+  //output_t is the output type of the aggregation column
   using output_t = typename test_parameters::output_type;
+
+  //map_t is used for reference solution
   using map_t = typename test_parameters::ref_map_type;
+
+  //tuple_t is tuple of datatypes associated with each column to be grouped
   using tuple_t = typename test_parameters::tuple_t;
 
+  //contains input generated for gdf calculation and reference solution
   multi_column_t input_key;
+
+  //contains the input aggregation column
   std::vector<output_t> input_value;
 
+  //contains grouped by column output of the gdf groupby call
   multi_column_t output_key;
+
+  //contains the aggregated output column
   std::vector<output_t> output_value;
 
   // Type for a unique_ptr to a gdf_column with a custom deleter
@@ -134,13 +145,13 @@ struct GroupTest : public testing::Test {
 
   /* --------------------------------------------------------------------------*/
   /**
-   * @Synopsis  Initializes two sets of columns, left and right, with random values for the join operation.
+   * @Synopsis  Initializes key columns and aggregation column for gdf group by call
    *
-   * @Param left_column_length The length of the left set of columns
-   * @Param left_column_range The upper bound of random values for the left columns. Values are [0, left_column_range)
-   * @Param right_column_length The length of the right set of columns
-   * @Param right_column_range The upper bound of random values for the right columns. Values are [0, right_column_range)
-   * @Param print Optionally print the left and right set of columns for debug
+   * @Param key_count The number of unique keys
+   * @Param value_per_key The number of times a random aggregation value is generated for a key
+   * @Param max_key The maximum value of the key columns
+   * @Param max_val The maximum value of aggregation column
+   * @Param print Optionally print the keys and aggregation columns for debugging
    */
   /* ----------------------------------------------------------------------------*/
   void create_input(const size_t key_count, const size_t value_per_key,
@@ -249,14 +260,10 @@ struct GroupTest : public testing::Test {
 
   /* --------------------------------------------------------------------------*/
   /**
-   * @Synopsis  Computes the result of joining the left and right sets of columns with the libgdf functions
-   *
-   * @Param gdf_result A vector of result_type that holds the result of the libgdf join function
-   * @Param print Option to print the result computed by the libgdf function
-   * @Param sort Option to sort the result. This is required to compare the result against the reference solution
+   * @Synopsis  Computes the gdf result of grouping the input_keys and input_value
    */
   /* ----------------------------------------------------------------------------*/
-  void compute_gdf_result(bool print = false, bool sort = true)
+  void compute_gdf_result(void)
   {
     const int num_columns = std::tuple_size<multi_column_t>::value;
 
@@ -342,12 +349,14 @@ struct GroupTest : public testing::Test {
           "Mismatch between aggregation and group by column size.";
       for (size_t i = 0; i < output_value.size(); ++i) {
           auto sch = reference_map.find(extractKey(output_key, i));
+          bool found = (sch != reference_map.end());
+          EXPECT_EQ(found, true);
+          if (!found) { continue; }
           if (std::is_integral<output_t>::value) {
               EXPECT_EQ(sch->second, output_value[i]);
           } else {
               EXPECT_NEAR(sch->second, output_value[i], sch->second/100.0);
           }
-          EXPECT_NE(sch, reference_map.end());
           //ensure no duplicates in gdf output
           reference_map.erase(sch);
       }

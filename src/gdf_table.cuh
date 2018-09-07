@@ -22,6 +22,7 @@
 #include <cassert>
 #include "hashmap/hash_functions.cuh"
 #include "hashmap/managed.cuh"
+#include "sqls_rtti_comp.hpp"
 
 // TODO Inherit from managed class to allocate with managed memory?
 template <typename T, typename byte_t = unsigned char>
@@ -580,16 +581,19 @@ public:
     return hash_value;
   }
 
-  void** data_ptr(void) {
-      return d_columns_data;
-  }
-
-  int* dtype_ptr(void) {
-      return reinterpret_cast<int*>(d_columns_types);
-  }
-
-  size_type ncols(void) {
-      return num_columns;
+  void sort(void) {
+      cudaStream_t stream = NULL;
+      LesserRTTI<size_type> comparator(d_columns_data,
+              reinterpret_cast<int*>(d_columns_types),
+              num_columns);
+      thrust::device_vector<size_type> indices(column_length);
+      thrust::sequence(thrust::cuda::par.on(stream),
+              indices.begin(), indices.end());
+      thrust::sort(thrust::cuda::par.on(stream),
+              indices.begin(), indices.end(),
+              [comparator] __host__ __device__ (size_type i1, size_type i2) {
+              return comparator.less(i1, i2);
+              });
   }
 
 private:

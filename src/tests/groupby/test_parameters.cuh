@@ -79,22 +79,6 @@ struct AggOp<agg_op::CNT> {
     }
 };
 
-template<>
-struct AggOp<agg_op::AVG> {
-    size_t count{0};
-    template <typename T>
-    T operator()(const T a, const T b) {
-        T new_avg = (a*count + b)/(count+1);
-        ++count;
-        return new_avg;
-    }
-    template <typename T>
-    T operator()(const T a) {
-        count++;
-        return a;
-    }
-};
-
 template <typename... T>
 using VTuple = std::tuple<std::vector<T>...>;
 
@@ -109,7 +93,9 @@ TestParameters {};
 // number/types of columns for use with Google Test type-parameterized
 // tests. Here agg_operation refers to the type of aggregation eg. min,
 // max etc. and group_method refers to the underlying group algorithm
-//that performs it eg. GDF_HASH or GDF_SORT.
+//that performs it eg. GDF_HASH or GDF_SORT. VTuple<K...> expects a
+//tuple of datatypes that specify the column types to be tested.
+//AggOutput specifies the output type of the aggregated column.
 template<agg_op agg_operation, 
          gdf_method group_method, 
          typename... K,

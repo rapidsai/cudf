@@ -25,7 +25,6 @@
 #include "../../hashmap/managed.cuh"
 #include "groupby_kernels.cuh"
 #include "../../gdf_table.cuh"
-#include "sqls_rtti_comp.hpp"
 
 
 // TODO: replace this with CUDA_TRY and propagate the error
@@ -234,21 +233,11 @@ cudaError_t GroupbyHash(gdf_table<size_type> const & groupby_input_table,
   // the size of the output. Update the output size.
   cudaMemcpy(out_size, global_write_index, sizeof(size_type), cudaMemcpyDeviceToHost);
   CUDA_RT_CALL(cudaFree(global_write_index));
+  groupby_output_table.set_column_length(*out_size);
 
   // Optionally sort the groupby/aggregation result columns
   if(true == sort_result) {
-      cudaStream_t stream = NULL;
-      LesserRTTI<size_type> comparator(
-              groupby_output_table.data_ptr(),
-              groupby_output_table.dtype_ptr(),
-              groupby_output_table.ncols());
-      thrust::device_vector<size_type> indices(*out_size);
-      thrust::sequence(thrust::cuda::par.on(stream), indices.begin(), indices.end());
-      thrust::sort(thrust::cuda::par.on(stream),
-              indices.begin(), indices.end(),
-              [comparator] __host__ __device__ (size_type i1, size_type i2) {
-              return comparator.less(i1, i2);
-              });
+      groupby_output_table.sort();
   }
 
   return error;

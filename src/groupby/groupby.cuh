@@ -68,7 +68,6 @@ gdf_error typed_groupby(gdf_table<size_type> const & groupby_input_table,
   }
 
   // Update the size of the result
-  groupby_output_table.set_column_length(output_size);
   out_aggregation_column->size = output_size;
 
   return GDF_SUCCESS;
