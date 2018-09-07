@@ -154,7 +154,7 @@ struct fast_modulo_partitioner
     return partition_number;
   }
 
-  int_fastdiv fast_divisor;
+  const int_fastdiv fast_divisor;
 };
 
 /* --------------------------------------------------------------------------*/
@@ -176,7 +176,51 @@ struct modulo_partitioner
     return hash_value % divisor;
   }
 
-  size_type divisor;
+  const size_type divisor;
+};
+
+/* --------------------------------------------------------------------------*/
+/** 
+ * @Synopsis  This function determines if a number is a power of 2.
+ * 
+ * @Param number The number to check.
+ * 
+ * @Returns True if the number is a power of 2.
+ */
+/* ----------------------------------------------------------------------------*/
+template <typename T>
+bool is_power_two( T number )
+{
+  return (0 == (number & (number - 1)));
+}
+
+/* --------------------------------------------------------------------------*/
+/** 
+ * @Synopsis  Functor to map a hash value to a particular 'bin' or partition number
+ * that uses bitshifts. Only works when num_partitions is a power of 2.
+ *
+ * For n % d, if d is a power of two, then it can be computed more efficiently via 
+ * a single bitwise AND as:
+ * n & (d - 1)
+ */
+/* ----------------------------------------------------------------------------*/
+template <typename hash_value_t,
+          typename size_type,
+          typename output_type>
+struct bitwise_partitioner
+{
+  bitwise_partitioner(size_type num_partitions) : divisor{(num_partitions - 1)}
+  {
+    assert( is_power_two(num_partitions) );
+  }
+
+  __host__ __device__
+  output_type operator()(hash_value_t hash_value) const 
+  {
+    return hash_value & (divisor);
+  }
+
+  const size_type divisor;
 };
 
 /* --------------------------------------------------------------------------*/
@@ -199,7 +243,6 @@ template <template <typename> class hash_function,
 __global__ 
 void compute_row_partition_numbers(gdf_table<size_type> const & the_table, 
                                    const size_type num_rows,
-                                   const int_fastdiv num_partitions,
                                    const partitioner_type the_partitioner,
                                    size_type * row_partition_numbers,
                                    size_type * partition_sizes)
@@ -220,7 +263,6 @@ void compute_row_partition_numbers(gdf_table<size_type> const & the_table,
     row_partition_numbers[row_number] = partition_number;
 
     atomicAdd(&(partition_sizes[partition_number]), size_type(1));
-
 
     row_number += blockDim.x * gridDim.x;
   }
@@ -432,8 +474,6 @@ gdf_error hash_partition_gdf_table(gdf_table<size_type> const & input_table,
                                    gdf_table<size_type> & partitioned_output)
 {
 
-  // Determines how the mapping between hash value and partition number is computed
-  using partitioner_type = modulo_partitioner<hash_value_type, size_type, size_type>;
 
   const size_type num_rows = table_to_hash.get_column_length();
 
@@ -454,13 +494,35 @@ gdf_error hash_partition_gdf_table(gdf_table<size_type> const & input_table,
   // Computes which partition each row belongs to by hashing the row and performing
   // a partitioning operator on the hash value. Also computes the number of
   // rows in each partition
-  compute_row_partition_numbers<hash_function>
-  <<<grid_size, HASH_KERNEL_BLOCK_SIZE>>>(table_to_hash, 
-                                          num_rows,
-                                          num_partitions,
-                                          partitioner_type(static_cast<int>(num_partitions)),
-                                          row_partition_numbers,
-                                          partition_sizes);
+
+
+  // If the number of partitions is a power of two, we can compute the partition 
+  // number of each row more efficiently with bitwise operations
+  if( true == is_power_two(num_partitions) )
+  {
+    // Determines how the mapping between hash value and partition number is computed
+    using partitioner_type = bitwise_partitioner<hash_value_type, size_type, size_type>;
+
+    compute_row_partition_numbers<hash_function>
+    <<<grid_size, HASH_KERNEL_BLOCK_SIZE>>>(table_to_hash, 
+                                            num_rows,
+                                            partitioner_type(static_cast<int>(num_partitions)),
+                                            row_partition_numbers,
+                                            partition_sizes);
+
+  }
+  else
+  {
+    // Determines how the mapping between hash value and partition number is computed
+    using partitioner_type = modulo_partitioner<hash_value_type, size_type, size_type>;
+
+    compute_row_partition_numbers<hash_function>
+    <<<grid_size, HASH_KERNEL_BLOCK_SIZE>>>(table_to_hash, 
+                                            num_rows,
+                                            partitioner_type(static_cast<int>(num_partitions)),
+                                            row_partition_numbers,
+                                            partition_sizes);
+  }
 
 
 
