@@ -46,14 +46,14 @@ struct row_partition_mapper
   __device__
   hash_value_type operator()(size_type row_index) const
   {
-    return std::abs(the_table.template hash_row<hash_function>(row_index) % num_partitions);
+    return the_table.template hash_row<hash_function>(row_index) % num_partitions;
   }
 
   gdf_table<size_type> const & the_table;
 
   // Using int_fastdiv can return results different from using the normal modulus
   // operation, therefore we need to use it in result verfication as well
-  int_fastdiv num_partitions;
+  size_type num_partitions;
 };
 
 // Put all repeated setup and validation stuff here

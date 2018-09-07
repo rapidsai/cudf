@@ -130,16 +130,17 @@ gdf_error gdf_hash(int num_cols, gdf_column **input, gdf_hash_func hash, gdf_col
 /* --------------------------------------------------------------------------*/
 /** 
  * @Synopsis  Functor to map a hash value to a particular 'bin' or partition number
- * that uses the modulo operation.
+ * that uses the FAST modulo operation implemented in int_fastdiv from here:
+ * https://github.com/milakov/int_fastdiv
  */
 /* ----------------------------------------------------------------------------*/
 template <typename hash_value_t,
           typename size_type,
           typename output_type>
-struct modulo_partitioner
+struct fast_modulo_partitioner
 {
 
-  modulo_partitioner(int num_partitions) : fast_divisor{num_partitions}{}
+  fast_modulo_partitioner(int num_partitions) : fast_divisor{num_partitions}{}
 
   __host__ __device__
   output_type operator()(hash_value_t hash_value) const
@@ -154,6 +155,28 @@ struct modulo_partitioner
   }
 
   int_fastdiv fast_divisor;
+};
+
+/* --------------------------------------------------------------------------*/
+/** 
+ * @Synopsis  Functor to map a hash value to a particular 'bin' or partition number
+ * that uses the modulo operation.
+ */
+/* ----------------------------------------------------------------------------*/
+template <typename hash_value_t,
+          typename size_type,
+          typename output_type>
+struct modulo_partitioner
+{
+  modulo_partitioner(size_type num_partitions) : divisor{num_partitions}{}
+
+  __host__ __device__
+  output_type operator()(hash_value_t hash_value) const 
+  {
+    return hash_value % divisor;
+  }
+
+  size_type divisor;
 };
 
 /* --------------------------------------------------------------------------*/
