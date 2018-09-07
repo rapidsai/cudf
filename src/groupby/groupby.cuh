@@ -220,7 +220,7 @@ gdf_error gdf_group_by_hash(size_type ncols,
 {
 
 
-  // Make sure the inputs are not empty
+  // Make sure the inputs are not null
   if( (0 == ncols) 
       || (nullptr == in_groupby_columns) 
       || (nullptr == in_aggregation_column))
@@ -233,6 +233,13 @@ gdf_error gdf_group_by_hash(size_type ncols,
       || (nullptr == out_aggregation_column))
   {
     return GDF_DATASET_EMPTY;
+  }
+
+  // If there are no rows in the input, return successfully
+  if ((0 == in_groupby_columns[0]->size) 
+      || (0 == in_aggregation_column->size) )
+  {
+    return GDF_SUCCESS;
   }
 
   // Wrap the groupby input and output columns in a gdf_table
