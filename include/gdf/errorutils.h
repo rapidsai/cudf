@@ -1,7 +1,23 @@
 #ifndef GDF_ERRORUTILS_H
 #define GDF_ERRORUTILS_H
 
-#define CUDA_TRY(x) if ((x)!=cudaSuccess) return GDF_CUDA_ERROR;
+#include <iostream>
+#include <cuda.h>
+#include <cuda_runtime_api.h>
+
+#define CUDA_TRY( call ) 									                            \
+{                                                                     \
+    cudaError_t cudaStatus = call;                                    \
+    if ( cudaSuccess != cudaStatus )                                  \
+    {                                                                 \
+        std::cerr << "ERROR: CUDA Runtime call " << #call             \
+                  << "in line" << __LINE__                            \
+                  << "of file" << __FILE__                            \
+                  << "failed with" << cudaGetErrorString(cudaStatus)  \
+                  << "(" << cudaStatus << ").\n";                     \
+        return GDF_CUDA_ERROR;                          							\
+    }												                                          \
+}                                                                                                  
 
 #define CUDA_CHECK_LAST() CUDA_TRY(cudaPeekAtLastError())
 
