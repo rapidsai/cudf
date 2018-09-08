@@ -243,11 +243,25 @@ template <template <typename> class hash_function,
 __global__ 
 void compute_row_partition_numbers(gdf_table<size_type> const & the_table, 
                                    const size_type num_rows,
+                                   const size_type num_partitions,
                                    const partitioner_type the_partitioner,
                                    size_type * row_partition_numbers,
                                    size_type * partition_sizes)
 {
+  // Accumulate histogram of the size of each partition in shared memory
+  extern __shared__ size_type shared_partition_sizes[];
+
   size_type row_number = threadIdx.x + blockIdx.x * blockDim.x;
+
+  // Initialize local histogram
+  size_type i = threadIdx.x;
+  while(i < num_partitions)
+  {
+    shared_partition_sizes[i] = 0;
+    i += blockDim.x;
+  }
+
+  __syncthreads();
 
   // Compute the hash value for each row, store it to the array of hash values
   // and compute the partition to which the hash value belongs and increment
@@ -262,9 +276,19 @@ void compute_row_partition_numbers(gdf_table<size_type> const & the_table,
 
     row_partition_numbers[row_number] = partition_number;
 
-    atomicAdd(&(partition_sizes[partition_number]), size_type(1));
+    atomicAdd(&(shared_partition_sizes[partition_number]), size_type(1));
 
     row_number += blockDim.x * gridDim.x;
+  }
+
+  __syncthreads();
+
+  // Flush shared memory histogram to global memory
+  i = threadIdx.x;
+  while(i < num_partitions)
+  {
+    size_type old = atomicAdd(&(partition_sizes[i]), shared_partition_sizes[i]);
+    i += blockDim.x;
   }
 }
 
@@ -491,9 +515,6 @@ gdf_error hash_partition_gdf_table(gdf_table<size_type> const & input_table,
 
 
 
-  // Computes which partition each row belongs to by hashing the row and performing
-  // a partitioning operator on the hash value. Also computes the number of
-  // rows in each partition
 
 
   // If the number of partitions is a power of two, we can compute the partition 
@@ -503,12 +524,16 @@ gdf_error hash_partition_gdf_table(gdf_table<size_type> const & input_table,
     // Determines how the mapping between hash value and partition number is computed
     using partitioner_type = bitwise_partitioner<hash_value_type, size_type, size_type>;
 
+    // Computes which partition each row belongs to by hashing the row and performing
+    // a partitioning operator on the hash value. Also computes the number of
+    // rows in each partition
     compute_row_partition_numbers<hash_function>
-    <<<grid_size, HASH_KERNEL_BLOCK_SIZE>>>(table_to_hash, 
-                                            num_rows,
-                                            partitioner_type(static_cast<int>(num_partitions)),
-                                            row_partition_numbers,
-                                            partition_sizes);
+    <<<grid_size, HASH_KERNEL_BLOCK_SIZE, num_partitions * sizeof(size_type)>>>(table_to_hash, 
+                                                                                num_rows,
+                                                                                num_partitions,
+                                                                                partitioner_type(num_partitions),
+                                                                                row_partition_numbers,
+                                                                                partition_sizes);
 
   }
   else
@@ -516,17 +541,18 @@ gdf_error hash_partition_gdf_table(gdf_table<size_type> const & input_table,
     // Determines how the mapping between hash value and partition number is computed
     using partitioner_type = modulo_partitioner<hash_value_type, size_type, size_type>;
 
+    // Computes which partition each row belongs to by hashing the row and performing
+    // a partitioning operator on the hash value. Also computes the number of
+    // rows in each partition
     compute_row_partition_numbers<hash_function>
-    <<<grid_size, HASH_KERNEL_BLOCK_SIZE>>>(table_to_hash, 
-                                            num_rows,
-                                            partitioner_type(static_cast<int>(num_partitions)),
-                                            row_partition_numbers,
-                                            partition_sizes);
+    <<<grid_size, HASH_KERNEL_BLOCK_SIZE, num_partitions * sizeof(size_type)>>>(table_to_hash, 
+                                                                                num_rows,
+                                                                                num_partitions,
+                                                                                partitioner_type(num_partitions),
+                                                                                row_partition_numbers,
+                                                                                partition_sizes);
   }
 
-
-
-  
 
   CUDA_CHECK_LAST();
 
