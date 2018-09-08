@@ -27,19 +27,6 @@
 #include "../../gdf_table.cuh"
 
 
-// TODO: replace this with CUDA_TRY and propagate the error
-#ifndef CUDA_RT_CALL
-#define CUDA_RT_CALL( call ) 									   \
-{                                                                                                  \
-    cudaError_t cudaStatus = call;                                                                 \
-    if ( cudaSuccess != cudaStatus ) {                                                             \
-        fprintf(stderr, "ERROR: CUDA RT call \"%s\" in line %d of file %s failed with %s (%d).\n", \
-                        #call, __LINE__, __FILE__, cudaGetErrorString(cudaStatus), cudaStatus);    \
-        exit(1);										   \
-    }												   \
-}
-#endif
-
 // The occupancy of the hash table determines it's capacity. A value of 50 implies
 // 50% occupancy, i.e., hash_table_size == 2 * input_size
 constexpr unsigned int DEFAULT_HASH_TABLE_OCCUPANCY{50};
@@ -148,7 +135,7 @@ struct row_comparator : public managed
 template< typename aggregation_type,
           typename size_type,
           typename aggregation_operation>
-cudaError_t GroupbyHash(gdf_table<size_type> const & groupby_input_table,
+gdf_error GroupbyHash(gdf_table<size_type> const & groupby_input_table,
                         const aggregation_type * const in_aggregation_column,
                         gdf_table<size_type> & groupby_output_table,
                         aggregation_type * out_aggregation_column,
@@ -156,8 +143,6 @@ cudaError_t GroupbyHash(gdf_table<size_type> const & groupby_input_table,
                         aggregation_operation aggregation_op,
                         bool sort_result = false)
 {
-  cudaError_t error{cudaSuccess};
-
   const size_type input_num_rows = groupby_input_table.get_column_length();
 
   // The map will store (row index, aggregation value)
@@ -184,7 +169,7 @@ cudaError_t GroupbyHash(gdf_table<size_type> const & groupby_input_table,
   const dim3 build_grid_size ((input_num_rows + THREAD_BLOCK_SIZE - 1) / THREAD_BLOCK_SIZE, 1, 1);
   const dim3 block_size (THREAD_BLOCK_SIZE, 1, 1);
 
-  CUDA_RT_CALL(cudaGetLastError());
+  CUDA_TRY(cudaGetLastError());
 
   // Inserts (i, aggregation_column[i]) as a key-value pair into the
   // hash table. When a given key already exists in the table, the aggregation operation
@@ -195,12 +180,12 @@ cudaError_t GroupbyHash(gdf_table<size_type> const & groupby_input_table,
                                                            input_num_rows,
                                                            aggregation_op,
                                                            *the_comparator);
-  CUDA_RT_CALL(cudaGetLastError());
+  CUDA_TRY(cudaGetLastError());
 
   // Used by threads to coordinate where to write their results
   size_type * global_write_index{nullptr};
-  CUDA_RT_CALL(cudaMalloc(&global_write_index, sizeof(size_type)));
-  CUDA_RT_CALL(cudaMemset(global_write_index, 0, sizeof(size_type)));
+  CUDA_TRY(cudaMalloc(&global_write_index, sizeof(size_type)));
+  CUDA_TRY(cudaMemset(global_write_index, 0, sizeof(size_type)));
 
   const dim3 extract_grid_size ((hash_table_size + THREAD_BLOCK_SIZE - 1) / THREAD_BLOCK_SIZE, 1, 1);
 
@@ -224,15 +209,15 @@ cudaError_t GroupbyHash(gdf_table<size_type> const & groupby_input_table,
   //             aggregation_type * const,
   //             size_type * const ) = &(extract_groupby_result<map_type,size_type,aggregation_type>);
 
-  //CUDA_RT_CALL(cudaLaunchKernel((const void*) func, extract_grid_size, block_size, args, 0, 0));
+  //CUDA_TRY(cudaLaunchKernel((const void*) func, extract_grid_size, block_size, args, 0, 0));
   // FIXME End work around
 
-  CUDA_RT_CALL(cudaDeviceSynchronize());
+  CUDA_TRY(cudaDeviceSynchronize());
 
   // At the end of the extraction kernel, the global write index will be equal to
   // the size of the output. Update the output size.
-  cudaMemcpy(out_size, global_write_index, sizeof(size_type), cudaMemcpyDeviceToHost);
-  CUDA_RT_CALL(cudaFree(global_write_index));
+  CUDA_TRY( cudaMemcpy(out_size, global_write_index, sizeof(size_type), cudaMemcpyDeviceToHost) );
+  CUDA_TRY( cudaFree(global_write_index) );
   groupby_output_table.set_column_length(*out_size);
 
   // Optionally sort the groupby/aggregation result columns
@@ -240,6 +225,6 @@ cudaError_t GroupbyHash(gdf_table<size_type> const & groupby_input_table,
       groupby_output_table.sort();
   }
 
-  return error;
+  return GDF_SUCCESS;
 }
 #endif

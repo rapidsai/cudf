@@ -56,21 +56,18 @@ gdf_error typed_groupby(gdf_table<size_type> const & groupby_input_table,
 
   size_type output_size{0};
 
-  if(cudaSuccess != GroupbyHash(groupby_input_table, 
-                                in_agg_col, 
-                                groupby_output_table, 
-                                out_agg_col, 
-                                &output_size, 
-                                op_type(), 
-                                sort_result))
-  {
-    return GDF_CUDA_ERROR;
-  }
+  gdf_error gdf_error_code = GroupbyHash(groupby_input_table, 
+                                         in_agg_col, 
+                                         groupby_output_table, 
+                                         out_agg_col, 
+                                         &output_size, 
+                                         op_type(), 
+                                         sort_result);
 
-  // Update the size of the result
   out_aggregation_column->size = output_size;
 
-  return GDF_SUCCESS;
+  return gdf_error_code;
+
 }
 
 template <template <typename> class, template<typename> class>
@@ -364,6 +361,8 @@ gdf_error multi_pass_avg(int ncols,
   // Compute the sum for each key. Should be okay to reuse the groupby column output
   gdf_column sum_output = create_gdf_column<sum_type>(output_size);
   gdf_group_by_hash<sum_op>(ncols, in_groupby_columns, in_aggregation_column, out_groupby_columns, &sum_output, sort_result); 
+
+  std::cout << "avg\n";
 
   // Compute the average from the Sum and Count columns and store into the passed in aggregation output buffer
   const gdf_dtype gdf_output_type = out_aggregation_column->dtype;
