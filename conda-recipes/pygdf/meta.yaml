@@ -22,7 +22,7 @@ requirements:
     - setuptools
     - libgdf 0.1.0a3.*
     - libgdf_cffi 0.1.0a3.*
-    - pandas>=0.23.4
+    - pandas>=0.20.3
     - numba>=0.40.0dev
 
 test:
