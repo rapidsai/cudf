@@ -302,7 +302,7 @@ TYPED_TEST(HashPartitionTest, OnePartition)
 
   this->create_input(100000, 1000);
 
-  std::vector<int> partition_offsets = this->compute_gdf_result(num_partitions, true);
+  std::vector<int> partition_offsets = this->compute_gdf_result(num_partitions);
 
   this->verify_gdf_result(num_partitions, partition_offsets);
 }
@@ -314,7 +314,29 @@ TYPED_TEST(HashPartitionTest, TenPartitions)
 
   this->create_input(1000000, 1000);
 
-  std::vector<int> partition_offsets = this->compute_gdf_result(num_partitions, true);
+  std::vector<int> partition_offsets = this->compute_gdf_result(num_partitions);
+
+  this->verify_gdf_result(num_partitions, partition_offsets);
+}
+
+TYPED_TEST(HashPartitionTest, EightPartitions)
+{
+  const int num_partitions = 8;
+
+  this->create_input(1000000, 1000);
+
+  std::vector<int> partition_offsets = this->compute_gdf_result(num_partitions);
+
+  this->verify_gdf_result(num_partitions, partition_offsets);
+}
+
+TYPED_TEST(HashPartitionTest, 257Partitions)
+{
+  const int num_partitions = 257;
+
+  this->create_input(1000000, 1000);
+
+  std::vector<int> partition_offsets = this->compute_gdf_result(num_partitions);
 
   this->verify_gdf_result(num_partitions, partition_offsets);
 }
