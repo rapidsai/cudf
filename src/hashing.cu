@@ -27,103 +27,123 @@
 constexpr int HASH_KERNEL_BLOCK_SIZE = 256;
 constexpr int HASH_KERNEL_ROWS_PER_THREAD = 1;
 
-// convert to int dtype with the same size
-gdf_dtype to_int_dtype(gdf_dtype type)
+/* --------------------------------------------------------------------------*/
+/** 
+ * @Synopsis  This function determines if a number is a power of 2.
+ * 
+ * @Param number The number to check.
+ * 
+ * @Returns True if the number is a power of 2.
+ */
+/* ----------------------------------------------------------------------------*/
+template <typename T>
+bool is_power_two( T number )
 {
-  switch (type) {
-    case GDF_INT8:
-    case GDF_INT16:
-    case GDF_INT32:
-    case GDF_INT64:
-      return type;
-    case GDF_FLOAT32:
-      return GDF_INT32;
-    case GDF_FLOAT64:
-      return GDF_INT64;
-    default:
-      return GDF_invalid;
+  return (0 == (number & (number - 1)));
+}
+
+/* --------------------------------------------------------------------------*/
+/** 
+ * @Synopsis  This functor is used to compute the hash value for the rows
+ * of a gdf_table
+ */
+/* ----------------------------------------------------------------------------*/
+template <template <typename> class hash_function,
+         typename size_type>
+struct row_hasher
+{
+  row_hasher(gdf_table<size_type> const & table_to_hash)
+    : the_table{table_to_hash}
+  {}
+
+  __device__
+  hash_value_type operator()(size_type row_index) const
+  {
+    return the_table.template hash_row<hash_function>(row_index);
   }
-}
 
-__device__ __inline__
-uint32_t hashed(void *ptr, int int_dtype, int index)
-{
-  // TODO: add switch to select the right hash class, currently we only support Murmur3 anyways
-  switch (int_dtype) {
-  case GDF_INT8:  { default_hash<int8_t> hasher; return hasher(((int8_t*)ptr)[index]); }
-  case GDF_INT16: { default_hash<int16_t> hasher; return hasher(((int16_t*)ptr)[index]); }
-  case GDF_INT32: { default_hash<int32_t> hasher; return hasher(((int32_t*)ptr)[index]); }
-  case GDF_INT64: { default_hash<int64_t> hasher; return hasher(((int64_t*)ptr)[index]); }
-  default:
-    return 0;
-  }
-}
+  gdf_table<size_type> const & the_table;
+};
 
-template<typename size_type>
-__device__ __inline__
-void hash_combine(size_type &seed, const uint32_t hash_val)
-{
-  seed ^= hash_val + 0x9e3779b9 + (seed<<6) + (seed>>2);
-}
 
-// one thread handles multiple rows
-// d_col_data[i]: column's data (on device)
-// d_col_int_dtype[i]: column's dtype (converted to int) 
-__global__ void hash_cols(int num_rows, int num_cols, void **d_col_data, gdf_dtype *d_col_int_dtype, int *d_output)
-{
-  for (int row = threadIdx.x + blockIdx.x * blockDim.x; row < num_rows; row += blockDim.x * gridDim.x) {
-    uint32_t seed = 0;
-    for (int col = 0; col < num_cols; col++) {
-      uint32_t hash_val = hashed(d_col_data[col], d_col_int_dtype[col], row);
-      hash_combine(seed, hash_val);
-    }
-    d_output[row] = seed;
-  }
-}
 
+/* --------------------------------------------------------------------------*/
+/** 
+ * @Synopsis  Computes the hash value of each row in the input set of columns.
+ * 
+ * @Param num_cols The number of columns in the input set
+ * @Param input The list of columns whose rows will be hashed
+ * @Param hash The hash function to use
+ * @Param output The hash value of each row of the input
+ * 
+ * @Returns   
+ */
+/* ----------------------------------------------------------------------------*/
 gdf_error gdf_hash(int num_cols, gdf_column **input, gdf_hash_func hash, gdf_column *output)
 {
-  // check that all columns have the same size
-  for (int i = 0; i < num_cols; i++)
-    if (i > 0 && input[i]->size != input[i-1]->size) return GDF_COLUMN_SIZE_MISMATCH;
+  // Ensure inputs aren't null
+  if((0 == num_cols)
+     || (nullptr == input)
+     || (nullptr == output))
+  {
+    return GDF_DATASET_EMPTY;
+  }
+
   // check that the output dtype is int32
   // TODO: do we need to support int64 as well?
-  if (output->dtype != GDF_INT32) return GDF_UNSUPPORTED_DTYPE;
-  int64_t num_rows = input[0]->size;
+  if (output->dtype != GDF_INT32) 
+  {
+    return GDF_UNSUPPORTED_DTYPE;
+  }
 
-  // copy data pointers to device
-  void **d_col_data, **h_col_data;
-  cudaMalloc(&d_col_data, num_cols * sizeof(void*));
-  cudaMallocHost(&h_col_data, num_cols * sizeof(void*));
-  for (int i = 0; i < num_cols; i++)
-    h_col_data[i] = input[i]->data;
-  cudaMemcpy(d_col_data, h_col_data, num_cols * sizeof(void*), cudaMemcpyDefault);
+  // Return immediately for empty input/output
+  if(nullptr != input[0]) {
+    if(0 == input[0]->size){
+      return GDF_SUCCESS;
+    }
+  }
+  if(0 == output->size) {
+    return GDF_SUCCESS;
+  }
+  else if(nullptr == output->data) {
+    return GDF_DATASET_EMPTY;
+  }
 
-  // copy dtype (converted to int) to device
-  gdf_dtype *d_col_int_dtype, *h_col_int_dtype;
-  cudaMalloc(&d_col_int_dtype, num_cols * sizeof(gdf_dtype));
-  cudaMallocHost(&h_col_int_dtype, num_cols * sizeof(gdf_dtype));
-  for (int i = 0; i < num_cols; i++)
-    h_col_int_dtype[i] = to_int_dtype(input[i]->dtype);
-  cudaMemcpy(d_col_int_dtype, h_col_int_dtype, num_cols * sizeof(gdf_dtype), cudaMemcpyDefault);
+  using size_type = int64_t;
 
-  // launch a kernel
-  const int rows_per_block = HASH_KERNEL_BLOCK_SIZE * HASH_KERNEL_ROWS_PER_THREAD;
-  const int64_t grid = (num_rows + rows_per_block-1) / rows_per_block;
-  hash_cols<<<grid, HASH_KERNEL_BLOCK_SIZE>>>(num_rows, num_cols, d_col_data, d_col_int_dtype, (int32_t*)output->data);
+  // Wrap input columns in gdf_table
+  std::unique_ptr< gdf_table<size_type> > input_table{new gdf_table<size_type>(num_cols, input)};
 
-  // TODO: do we need to synchronize here
-  cudaDeviceSynchronize();
+  const size_type num_rows = input_table->get_column_length();
+
+  // Wrap output buffer in Thrust device_ptr
+  hash_value_type * p_output = static_cast<hash_value_type*>(output->data);
+  thrust::device_ptr<hash_value_type> row_hash_values = thrust::device_pointer_cast(p_output);
+
+  // Compute the hash value for each row depending on the specified hash function
+  switch(hash)
+  {
+    case GDF_HASH_MURMUR3:
+      {
+        thrust::tabulate(row_hash_values, 
+                         row_hash_values + num_rows, 
+                         row_hasher<MurmurHash3_32,size_type>(*input_table));
+        break;
+      }
+    case GDF_HASH_IDENTITY:
+      {
+        thrust::tabulate(row_hash_values, 
+                         row_hash_values + num_rows, 
+                         row_hasher<IdentityHash,size_type>(*input_table));
+        break;
+      }
+    default:
+      return GDF_INVALID_HASH_FUNCTION;
+  }
+
   CUDA_CHECK_LAST();
 
-  // free temp memory
-  cudaFree(d_col_data);
-  cudaFreeHost(h_col_data);
-  cudaFree(d_col_int_dtype);
-  cudaFreeHost(h_col_int_dtype);
-
   return GDF_SUCCESS;
-
 }
 
 
@@ -179,20 +199,6 @@ struct modulo_partitioner
   const size_type divisor;
 };
 
-/* --------------------------------------------------------------------------*/
-/** 
- * @Synopsis  This function determines if a number is a power of 2.
- * 
- * @Param number The number to check.
- * 
- * @Returns True if the number is a power of 2.
- */
-/* ----------------------------------------------------------------------------*/
-template <typename T>
-bool is_power_two( T number )
-{
-  return (0 == (number & (number - 1)));
-}
 
 /* --------------------------------------------------------------------------*/
 /** 
@@ -328,7 +334,7 @@ struct compute_row_output_location
  * @Param[out] output_column The rearrangement of the input column 
    based on the mapping determined by the row_output_locations array
  * 
- * @Returns   
+ * @Returns GDF_SUCCESS upon successful computation
  */
 /* ----------------------------------------------------------------------------*/
 template <typename column_type,
