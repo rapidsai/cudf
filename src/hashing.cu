@@ -233,14 +233,20 @@ struct bitwise_partitioner
 /** 
  * @brief Computes which partition each row of a gdf_table will belong to based
    on hashing each row, and applying a partition function to the hash value. 
-   Also computes the number of rows that belong to each partition.
+   Records the size of each partition for each thread block as well as the global
+   size of each partition across all thread blocks.
  * 
  * @Param[in] the_table The table whose rows will be partitioned
  * @Param[in] num_rows The number of rows in the table
  * @Param[in] num_partitions The number of partitions to divide the rows into
  * @Param[in] the_partitioner The functor that maps a rows hash value to a partition number
  * @Param[out] row_partition_numbers Array that holds which partition each row belongs to
- * @Param[out] partition_sizes The number of rows in each partition.
+ * @Param[out] block_partition_sizes Array that holds the size of each partition for each block,
+ * i.e., { {block0 partition0 size, block1 partition0 size, ...}, 
+         {block0 partition1 size, block1 partition1 size, ...},
+         ...
+         {block0 partition(num_partitions-1) size, block1 partition(num_partitions -1) size, ...} }
+ * @Param[out] global_partition_sizes The number of rows in each partition.
  */
 /* ----------------------------------------------------------------------------*/
 template <template <typename> class hash_function,
@@ -272,7 +278,7 @@ void compute_row_partition_numbers(gdf_table<size_type> const & the_table,
 
   // Compute the hash value for each row, store it to the array of hash values
   // and compute the partition to which the hash value belongs and increment
-  // the counter for that partition
+  // the shared memory counter for that partition
   while( row_number < num_rows)
   {
     // See here why template disambiguator is required: 
@@ -306,6 +312,22 @@ void compute_row_partition_numbers(gdf_table<size_type> const & the_table,
   }
 }
 
+/* --------------------------------------------------------------------------*/
+/** 
+ * @Synopsis  Given an array of partition numbers, computes the final output location
+   for each element in the output such that all rows with the same partition are 
+   contiguous in memory.
+ * 
+ * @Param row_partition_numbers The array that records the partition number for each row
+ * @Param num_rows The number of rows
+ * @Param num_partitions THe number of partitions
+ * @Param[out] block_partition_offsets Array that holds the offset of each partition for each thread block,
+ * i.e., { {block0 partition0 offset, block1 partition0 offset, ...}, 
+         {block0 partition1 offset, block1 partition1 offset, ...},
+         ...
+         {block0 partition(num_partitions-1) offset, block1 partition(num_partitions -1) offset, ...} }
+ */
+/* ----------------------------------------------------------------------------*/
 template <typename size_type>
 __global__ 
 void compute_row_output_locations(size_type * row_partition_numbers, 
@@ -330,42 +352,22 @@ void compute_row_output_locations(size_type * row_partition_numbers,
 
   // Get each row's partition number, and get it's output location by 
   // incrementing block's offset counter for that partition number
+  // and store the row's output location in-place
   while( row_number < num_rows )
   {
+    // Get partition number of this row
     const size_type partition_number = row_partition_numbers[row_number];
 
+    // Get output location based on partition number by incrementing the corresponding
+    // partition offset for this block
     const size_type row_output_location = atomicAdd(&(shared_partition_offsets[partition_number]), size_type(1));
 
+    // Store the row's output location in-place
     row_partition_numbers[row_number] = row_output_location;
 
     row_number += blockDim.x * gridDim.x;
   }
 }
-
-
-
-/* --------------------------------------------------------------------------*/
-/** 
- * @Synopsis  Functor used to map a row's partition number to it's final output location
- */
-/* ----------------------------------------------------------------------------*/
-template <typename size_type>
-struct compute_row_output_location
-{
-  compute_row_output_location(size_type * const offsets) 
-    : partition_offsets{offsets}{};
-
-  __device__
-  size_type operator()(size_type partition_number)
-  {
-    const size_type output_location = atomicAdd(&(partition_offsets[partition_number]), size_type(1));
-    return output_location;
-  }
-
-  size_type * const __restrict__ partition_offsets;
-};
-
-
 
 /* --------------------------------------------------------------------------*/
 /** 
@@ -561,13 +563,17 @@ gdf_error hash_partition_gdf_table(gdf_table<size_type> const & input_table,
   CUDA_TRY( cudaMalloc(&row_partition_numbers, num_rows * sizeof(hash_value_type)) );
 
   // Array to hold the size of each partition computed by each block
+  //  i.e., { {block0 partition0 size, block1 partition0 size, ...}, 
+  //          {block0 partition1 size, block1 partition1 size, ...},
+  //          ...
+  //          {block0 partition(num_partitions-1) size, block1 partition(num_partitions -1) size, ...} }
   size_type * block_partition_sizes{nullptr};
   CUDA_TRY(cudaMalloc(&block_partition_sizes, (grid_size * num_partitions) * sizeof(size_type)));
 
-  // Holds the total size of each partition
-  size_type * partition_sizes{nullptr};
-  CUDA_TRY( cudaMalloc(&partition_sizes, num_partitions * sizeof(size_type)) );
-  CUDA_TRY( cudaMemsetAsync(partition_sizes, 0, num_partitions * sizeof(size_type)) );
+  // Holds the total number of rows in each partition
+  size_type * global_partition_sizes{nullptr};
+  CUDA_TRY( cudaMalloc(&global_partition_sizes, num_partitions * sizeof(size_type)) );
+  CUDA_TRY( cudaMemsetAsync(global_partition_sizes, 0, num_partitions * sizeof(size_type)) );
 
   // If the number of partitions is a power of two, we can compute the partition 
   // number of each row more efficiently with bitwise operations
@@ -578,7 +584,7 @@ gdf_error hash_partition_gdf_table(gdf_table<size_type> const & input_table,
 
     // Computes which partition each row belongs to by hashing the row and performing
     // a partitioning operator on the hash value. Also computes the number of
-    // rows in each partition
+    // rows in each partition both for each thread block as well as across all blocks
     compute_row_partition_numbers<hash_function>
     <<<grid_size, BLOCK_SIZE, num_partitions * sizeof(size_type)>>>(table_to_hash, 
                                                                     num_rows,
@@ -586,7 +592,7 @@ gdf_error hash_partition_gdf_table(gdf_table<size_type> const & input_table,
                                                                     partitioner_type(num_partitions),
                                                                     row_partition_numbers,
                                                                     block_partition_sizes,
-                                                                    partition_sizes);
+                                                                    global_partition_sizes);
 
   }
   else
@@ -596,7 +602,7 @@ gdf_error hash_partition_gdf_table(gdf_table<size_type> const & input_table,
 
     // Computes which partition each row belongs to by hashing the row and performing
     // a partitioning operator on the hash value. Also computes the number of
-    // rows in each partition
+    // rows in each partition both for each thread block as well as across all blocks
     compute_row_partition_numbers<hash_function>
     <<<grid_size, BLOCK_SIZE, num_partitions * sizeof(size_type)>>>(table_to_hash, 
                                                                     num_rows,
@@ -604,7 +610,7 @@ gdf_error hash_partition_gdf_table(gdf_table<size_type> const & input_table,
                                                                     partitioner_type(num_partitions),
                                                                     row_partition_numbers,
                                                                     block_partition_sizes,
-                                                                    partition_sizes);
+                                                                    global_partition_sizes);
   }
 
 
@@ -624,17 +630,17 @@ gdf_error hash_partition_gdf_table(gdf_table<size_type> const & input_table,
   // of each partition in final output. This can be done independently on a separate stream
   cudaStream_t s1{};
   cudaStreamCreate(&s1);
-  size_type * scanned_partition_sizes{partition_sizes};
+  size_type * scanned_global_partition_sizes{global_partition_sizes};
   thrust::exclusive_scan(thrust::cuda::par.on(s1),
-                         partition_sizes, 
-                         partition_sizes + num_partitions,
-                         scanned_partition_sizes);
+                         global_partition_sizes, 
+                         global_partition_sizes + num_partitions,
+                         scanned_global_partition_sizes);
   CUDA_CHECK_LAST();
 
   // Copy the result of the exlusive scan to the output offsets array
   // to indicate the starting point for each partition in the output
   CUDA_TRY(cudaMemcpyAsync(partition_offsets, 
-                           scanned_partition_sizes, 
+                           scanned_global_partition_sizes, 
                            num_partitions * sizeof(size_type),
                            cudaMemcpyDeviceToHost,
                            s1));
@@ -664,7 +670,7 @@ gdf_error hash_partition_gdf_table(gdf_table<size_type> const & input_table,
 
   cudaStreamSynchronize(s1);
   cudaStreamDestroy(s1);
-  CUDA_TRY(cudaFree(partition_sizes));
+  CUDA_TRY(cudaFree(global_partition_sizes));
 
   return GDF_SUCCESS;
 }
