@@ -20,6 +20,7 @@
 #include <gdf/gdf.h>
 #include <thrust/device_vector.h>
 #include <cassert>
+#include <gdf/errorutils.h>
 #include "hashmap/hash_functions.cuh"
 #include "hashmap/managed.cuh"
 
@@ -83,21 +84,6 @@ public:
   size_type get_column_length() const
   {
     return column_length;
-  }
-
-  gdf_dtype get_build_column_type() const
-  {
-    return host_columns[build_column_index]->dtype;
-  }
-
-  void * get_build_column_data() const
-  {
-    return host_columns[build_column_index]->data;
-  }
-
-  void * get_probe_column_data() const
-  {
-    return host_columns[build_column_index]->data;
   }
 
   __host__ 
@@ -450,8 +436,157 @@ public:
     return hash_value;
   }
 
+/* --------------------------------------------------------------------------*/
+/** 
+ * @brief  Creates a rearrangement of the table into another table by scattering
+   the rows of this table to rows of the output table based on a scatter map that
+   maps every row of this table to a corresponding row in the output table.
+ * 
+ * @Param[out] scattered_output_table The rearrangement of the input table based 
+   on the mappings from the row_scatter_map array
+ * @Param[in] row_scatter_map The mapping from input row locations to output row
+   locations, i.e., Row 'i' of this table will be scattered to 
+   scattered_output_table[row_scatter_map[i]]
+ * 
+ * @Returns   
+ */
+/* ----------------------------------------------------------------------------*/
+template <typename size_type>
+gdf_error scatter( gdf_table<size_type> & scattered_output_table,
+                   size_type const * const row_scatter_map) const
+{
+  gdf_error gdf_status{GDF_SUCCESS};
+
+  // Each column can be scattered in parallel, therefore create a 
+  // separate stream for every column
+  std::vector<cudaStream_t> column_streams(num_columns);
+  for(auto & s : column_streams)
+  {
+    cudaStreamCreate(&s);
+  }
+
+  // Scatter columns one by one
+  for(size_type i = 0; i < num_columns; ++i)
+  {
+    gdf_column * const current_input_column = this->get_column(i);
+    gdf_column * const current_output_column = scattered_output_table.get_column(i);
+    size_type column_width_bytes{0};
+    gdf_status = get_column_byte_width(current_input_column, &column_width_bytes);
+
+    if(GDF_SUCCESS != gdf_status)
+      return gdf_status;
+
+    // Scatter each column based on it's byte width
+    switch(column_width_bytes)
+    {
+      case 1:
+        {
+          using column_type = int8_t;
+          column_type * input = static_cast<column_type*>(current_input_column->data);
+          column_type * output = static_cast<column_type*>(current_output_column->data);
+          gdf_status = scatter_column<column_type>(input, 
+                                                   column_length,
+                                                   row_scatter_map, 
+                                                   output,
+                                                   column_streams[i]);
+          break;
+        }
+      case 2:
+        {
+          using column_type = int16_t;
+          column_type * input = static_cast<column_type*>(current_input_column->data);
+          column_type * output = static_cast<column_type*>(current_output_column->data);
+          gdf_status = scatter_column<column_type>(input, 
+                                                   column_length,
+                                                   row_scatter_map, 
+                                                   output,
+                                                   column_streams[i]);
+          break;
+        }
+      case 4:
+        {
+          using column_type = int32_t;
+          column_type * input = static_cast<column_type*>(current_input_column->data);
+          column_type * output = static_cast<column_type*>(current_output_column->data);
+          gdf_status = scatter_column<column_type>(input, 
+                                                   column_length,
+                                                   row_scatter_map, 
+                                                   output,
+                                                   column_streams[i]);
+          break;
+        }
+      case 8:
+        {
+          using column_type = int64_t;
+          column_type * input = static_cast<column_type*>(current_input_column->data);
+          column_type * output = static_cast<column_type*>(current_output_column->data);
+          gdf_status = scatter_column<column_type>(input, 
+                                                   column_length,
+                                                   row_scatter_map, 
+                                                   output,
+                                                   column_streams[i]);
+          break;
+        }
+      default:
+        gdf_status = GDF_UNSUPPORTED_DTYPE;
+    }
+
+    if(GDF_SUCCESS != gdf_status)
+      return gdf_status;
+  }
+
+  // Synchronize all the streams
+  CUDA_TRY( cudaDeviceSynchronize() );
+
+  // Destroy all streams
+  for(auto & s : column_streams)
+  {
+    cudaStreamDestroy(s);
+  }
+
+  return gdf_status;
+}
+
 
 private:
+
+/* --------------------------------------------------------------------------*/
+/** 
+ * @brief Scatters the values of a column into a new column based on a map that
+   maps rows in the input column to rows in the output column. input_column[i]
+   will be scattered to output_column[ row_scatter_map[i] ]
+ * 
+ * @Param[in] input_column The input column whose rows will be scattered
+ * @Param[in] num_rows The number of rows in the input and output columns
+ * @Param[in] row_scatter_map An array that maps rows in the input column
+   to rows in the output column
+ * @Param[out] output_column The rearrangement of the input column 
+   based on the mapping determined by the row_scatter_map array
+ * 
+ * @Returns GDF_SUCCESS upon successful computation
+ */
+/* ----------------------------------------------------------------------------*/
+template <typename column_type,
+          typename size_type>
+gdf_error scatter_column(column_type const * const __restrict__ input_column,
+                         size_type const num_rows,
+                         size_type const * const __restrict__ row_scatter_map,
+                         column_type * const __restrict__ output_column,
+                         cudaStream_t stream = 0) const
+{
+
+  gdf_error gdf_status{GDF_SUCCESS};
+
+  thrust::scatter(thrust::cuda::par.on(stream),
+                  input_column,
+                  input_column + num_rows,
+                  row_scatter_map,
+                  output_column);
+
+  CUDA_CHECK_LAST();
+
+  return gdf_status;
+}
 
   void ** d_columns_data{nullptr};
   gdf_dtype * d_columns_types{nullptr};
@@ -462,11 +597,6 @@ private:
   gdf_column ** host_columns;
   const size_type num_columns;
   size_type column_length;
-
-  // Just use the first column as the build/probe column for now
-  const size_type build_column_index{0};
-  const size_type probe_column_index{0};
-
 };
 
 #endif

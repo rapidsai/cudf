@@ -369,158 +369,6 @@ void compute_row_output_locations(size_type * row_partition_numbers,
   }
 }
 
-/* --------------------------------------------------------------------------*/
-/** 
- * @brief Scatters the values of a column into a new column based on a map that
-   maps rows in the input column to rows in the output column. input_column[i]
-   will be scattered to output_column[ row_output_locations[i] ]
- * 
- * @Param[in] input_column The input column whose rows will be scattered
- * @Param[in] num_rows The number of rows in the input and output columns
- * @Param[in] row_output_locations An array that maps rows in the input column
-   to rows in the output column
- * @Param[out] output_column The rearrangement of the input column 
-   based on the mapping determined by the row_output_locations array
- * 
- * @Returns GDF_SUCCESS upon successful computation
- */
-/* ----------------------------------------------------------------------------*/
-template <typename column_type,
-          typename size_type>
-gdf_error scatter_column(column_type const * const __restrict__ input_column,
-                         size_type const num_rows,
-                         size_type const * const __restrict__ row_output_locations,
-                         column_type * const __restrict__ output_column,
-                         cudaStream_t stream = 0)
-{
-
-  gdf_error gdf_status{GDF_SUCCESS};
-
-  thrust::scatter(thrust::cuda::par.on(stream),
-                  input_column,
-                  input_column + num_rows,
-                  row_output_locations,
-                  output_column);
-
-  return gdf_status;
-}
-
-/* --------------------------------------------------------------------------*/
-/** 
- * @brief  Creates the partitioned output table by scattering the rows of the 
-   input table to rows of the output table based on each rows output location.
-   I.e., input_table[i] will be scattered to 
-   partitioned_output_table[row_output_locations[i]]
- * 
- * @Param[in] input_table The input table to scatter
- * @Param[in] row_output_locations The mapping from input row locations to output row
-   locations
- * @Param[out] partitioned_output_table The rearrangement of the input table based 
-   on the mappings from the row_output_locations array
- * 
- * @Returns   
- */
-/* ----------------------------------------------------------------------------*/
-template <typename size_type>
-gdf_error scatter_gdf_table(gdf_table<size_type> const & input_table,
-                            size_type const * const row_output_locations,
-                            gdf_table<size_type> & partitioned_output_table)
-{
-  gdf_error gdf_status{GDF_SUCCESS};
-
-  const size_type num_columns = input_table.get_num_columns();
-  const size_type num_rows = input_table.get_column_length();
-
-  // Each column can be scattered in parallel, therefore create a 
-  // separate stream for every column
-  std::vector<cudaStream_t> column_streams(num_columns);
-  for(auto & s : column_streams)
-  {
-    cudaStreamCreate(&s);
-  }
-
-
-  // Scatter columns one by one
-  for(size_type i = 0; i < num_columns; ++i)
-  {
-    gdf_column * current_input_column = input_table.get_column(i);
-    gdf_column * current_output_column = partitioned_output_table.get_column(i);
-    size_type column_width_bytes{0};
-    gdf_status = get_column_byte_width(current_input_column, &column_width_bytes);
-
-    if(GDF_SUCCESS != gdf_status)
-      return gdf_status;
-
-    // Scatter each column based on it's byte width
-    switch(column_width_bytes)
-    {
-      case 1:
-        {
-          using column_type = int8_t;
-          column_type * input = static_cast<column_type*>(current_input_column->data);
-          column_type * output = static_cast<column_type*>(current_output_column->data);
-          gdf_status = scatter_column<column_type>(input, 
-                                                   num_rows,
-                                                   row_output_locations, 
-                                                   output,
-                                                   column_streams[i]);
-          break;
-        }
-      case 2:
-        {
-          using column_type = int16_t;
-          column_type * input = static_cast<column_type*>(current_input_column->data);
-          column_type * output = static_cast<column_type*>(current_output_column->data);
-          gdf_status = scatter_column<column_type>(input, 
-                                                   num_rows,
-                                                   row_output_locations, 
-                                                   output,
-                                                   column_streams[i]);
-          break;
-        }
-      case 4:
-        {
-          using column_type = int32_t;
-          column_type * input = static_cast<column_type*>(current_input_column->data);
-          column_type * output = static_cast<column_type*>(current_output_column->data);
-          gdf_status = scatter_column<column_type>(input, 
-                                                   num_rows,
-                                                   row_output_locations, 
-                                                   output,
-                                                   column_streams[i]);
-          break;
-        }
-      case 8:
-        {
-          using column_type = int64_t;
-          column_type * input = static_cast<column_type*>(current_input_column->data);
-          column_type * output = static_cast<column_type*>(current_output_column->data);
-          gdf_status = scatter_column<column_type>(input, 
-                                                   num_rows,
-                                                   row_output_locations, 
-                                                   output,
-                                                   column_streams[i]);
-          break;
-        }
-      default:
-        gdf_status = GDF_UNSUPPORTED_DTYPE;
-    }
-
-    if(GDF_SUCCESS != gdf_status)
-      return gdf_status;
-  }
-
-  // Synchronize all the streams
-  CUDA_TRY( cudaDeviceSynchronize() );
-
-  // Destroy all streams
-  for(auto & s : column_streams)
-  {
-    cudaStreamDestroy(s);
-  }
-
-  return gdf_status;
-}
 
 
 /* --------------------------------------------------------------------------*/
@@ -659,9 +507,12 @@ gdf_error hash_partition_gdf_table(gdf_table<size_type> const & input_table,
   // Creates the partitioned output table by scattering the rows of
   // the input table to rows of the output table based on each rows
   // output location
-  scatter_gdf_table(input_table, 
-                    row_output_locations, 
-                    partitioned_output);
+  gdf_error gdf_error_code = input_table.scatter(partitioned_output,
+                                                 row_output_locations);
+
+  if(GDF_SUCCESS != gdf_error_code){
+    return gdf_error_code;
+  }
 
   CUDA_CHECK_LAST();
 
