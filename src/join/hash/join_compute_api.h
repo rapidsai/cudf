@@ -219,7 +219,7 @@ gdf_error compute_hash_join(mgpu::context_t & compute_ctx,
                                                       output_index_type,
                                                       size_type,
                                                       std::numeric_limits<hash_value_type>::max(),
-                                                      std::numeric_limits<size_type>::max()>;
+                                                      std::numeric_limits<output_index_type>::max()>;
 #endif
 
   // Hash table will be built on the right table
