@@ -383,50 +383,7 @@ typedef ::testing::Types<
 
   TYPED_TEST_CASE(GroupByTest, Implementations);
 
-TYPED_TEST(GroupByTest, DISABLED_AggregationTestHost)
-{
-  using key_type = typename TypeParam::key_type;
-  using value_type = typename TypeParam::value_type;
 
-  thrust::pair<key_type, value_type> first_pair{0,0};
-  thrust::pair<key_type, value_type> second_pair{0,10};
-  thrust::pair<key_type, value_type> third_pair{0,5};
-
-  struct {
-    __host__ __device__ value_type operator()(value_type a, value_type b) { return (a >= b ? a : b); };
-  } maxop;
-
-  this->the_map->insert(first_pair, maxop);
-  auto found = this->the_map->find(0);
-  EXPECT_EQ(value_type(0), found->second);
-
-  this->the_map->insert(second_pair, maxop);
-  found = this->the_map->find(0);
-  EXPECT_EQ(value_type(10), found->second);
-
-  this->the_map->insert(third_pair, maxop);
-  found = this->the_map->find(0);
-  EXPECT_EQ(value_type(10), found->second);
-
-  this->the_map->insert(thrust::make_pair(0,11), maxop);
-  found = this->the_map->find(0);
-  EXPECT_EQ(value_type(11), found->second);
-
-  this->the_map->insert(thrust::make_pair(7, 42), maxop);
-  found = this->the_map->find(7);
-  EXPECT_EQ(value_type(42), found->second);
-
-  this->the_map->insert(thrust::make_pair(7, 62), maxop);
-  found = this->the_map->find(7);
-  EXPECT_EQ(value_type(62), found->second);
-
-  this->the_map->insert(thrust::make_pair(7, 42), maxop);
-  found = this->the_map->find(7);
-  EXPECT_EQ(value_type(62), found->second);
-
-  found = this->the_map->find(0);
-  EXPECT_EQ(value_type(11), found->second);
-}
 
 
 TYPED_TEST(GroupByTest, AggregationTestDeviceAllSame)

@@ -372,19 +372,59 @@ public:
         return unused_key;
     }
     
+
+    /* --------------------------------------------------------------------------*/
+    /** 
+     * @Synopsis  Inserts a (key, value) pair into the hash map
+     * 
+     * @Param[in] x The (key, value) pair to insert
+     * @Param[in] precomputed_hash A flag indicating whether or not a precomputed 
+     * hash value is passed in
+     * @Param[in] precomputed_hash_value A precomputed hash value to use for determing
+     * the write location of the key into the hash map instead of computing the
+     * the hash value directly from the key
+     * @Param[in] keys_are_equal An optional functor for comparing if two keys are equal
+     * @tparam hash_value_type The datatype of the hash value
+     * @tparam comparison_type The type of the key comparison functor
+     * 
+     * @Returns An iterator to the newly inserted (key, value) pair
+     */
+    /* ----------------------------------------------------------------------------*/
+    template < typename hash_value_type = typename Hasher::result_type,
+               typename comparison_type = key_equal>
     __forceinline__
-    __host__ __device__ iterator insert(const value_type& x)
+    __device__ iterator insert(const value_type& x,
+                               bool precomputed_hash = false,
+                               hash_value_type precomputed_hash_value = 0,
+                               comparison_type keys_are_equal = key_equal())
+
     {
         const size_type hashtbl_size    = m_hashtbl_size;
         value_type* hashtbl_values      = m_hashtbl_values;
-        const auto key_hash        = m_hf( x.first );
-        size_type hash_tbl_idx          = key_hash%hashtbl_size;
+
+        hash_value_type hash_value{0};
+
+        // If a precomputed hash value has been passed in, then use it to determine
+        // the write location of the new key
+        if(true == precomputed_hash)
+        {
+          hash_value = precomputed_hash_value;
+        }
+        // Otherwise, compute the hash value from the new key
+        else
+        {
+          hash_value = m_hf(x.first);
+        }
+
+        size_type hash_tbl_idx = hash_value % hashtbl_size;
         
         value_type* it = 0;
+
+        size_type attempt_counter{0};
         
         while (0 == it) {
             value_type* tmp_it = hashtbl_values + hash_tbl_idx;
-#ifdef __CUDA_ARCH__
+
             if ( std::numeric_limits<key_type>::is_integer && std::numeric_limits<mapped_type>::is_integer &&
                  sizeof(unsigned long long int) == sizeof(value_type) )
             {
@@ -401,9 +441,13 @@ public:
                 {
                     atomicAdd( &m_collisions, 1 );
                 }
-            } else {
+            } 
+            else 
+            {
                 const key_type old_key = atomicCAS( &(tmp_it->first), unused_key, x.first );
-                if ( m_equal( unused_key, old_key ) ) {
+
+                if ( keys_are_equal( unused_key, old_key ) ) 
+                {
                     (m_hashtbl_values+hash_tbl_idx)->second = x.second;
                     it = tmp_it;
                 }
@@ -412,40 +456,72 @@ public:
                     atomicAdd( &m_collisions, 1 );
                 }
             }
-#else
-#ifdef _OPENMP
-            #pragma omp critical
-#endif
-            {
-                if ( m_equal( unused_key, tmp_it->first ) ) {
-                    hashtbl_values[hash_tbl_idx] = thrust::make_pair( x.first, x.second );
-                    it = tmp_it;
-                }
-            }
-#endif
+
             hash_tbl_idx = (hash_tbl_idx+1)%hashtbl_size;
+
+            attempt_counter++;
+            if( attempt_counter > hashtbl_size)
+            {
+              printf("Attempted to insert to multimap but the map is full!\n");
+              return this->end();
+            }
         }
         
         return iterator( m_hashtbl_values,m_hashtbl_values+hashtbl_size,it);
     }
     
+    /* --------------------------------------------------------------------------*/
+    /** 
+     * @Synopsis Searches for a key in the hash map and returns an iterator to the first
+     * instance of the key in the map.
+     * 
+     * @Param[in] the_key The key to search for
+     * @Param[in] precomputed_hash A flag indicating whether or not a precomputed 
+     * hash value is passed in
+     * @Param[in] precomputed_hash_value A precomputed hash value to use for determing
+     * the write location of the key into the hash map instead of computing the
+     * the hash value directly from the key
+     * @Param[in] keys_are_equal An optional functor for comparing if two keys are equal
+     * @tparam hash_value_type The datatype of the hash value
+     * @tparam comparison_type The type of the key comparison functor
+     * 
+     * @Returns   An iterator to the first instance of the key in the map
+     */
+    /* ----------------------------------------------------------------------------*/
+    template < typename hash_value_type = typename Hasher::result_type,
+               typename comparison_type = key_equal>
     __forceinline__
-    __host__ __device__ const_iterator find(const key_type& k ) const
+    __host__ __device__ const_iterator find(const key_type& the_key,
+                                            bool precomputed_hash = false,
+                                            hash_value_type precomputed_hash_value = 0,
+                                            comparison_type keys_are_equal = key_equal()) const
     {
-        const auto key_hash = m_hf( k );
-        size_type hash_tbl_idx = key_hash%m_hashtbl_size;
+        hash_value_type hash_value{0};
+
+        // If a precomputed hash value has been passed in, then use it to determine
+        // the location of the key 
+        if(true == precomputed_hash) {
+          hash_value = precomputed_hash_value;
+        }
+        // Otherwise, compute the hash value from the key
+        else {
+          hash_value = m_hf(the_key);
+        }
+
+        size_type hash_tbl_idx = hash_value % m_hashtbl_size;
         
         value_type* begin_ptr = 0;
         
         size_type counter = 0;
-        while ( 0 == begin_ptr ) {
+        while ( 0 == begin_ptr ) 
+        {
             value_type* tmp_ptr = m_hashtbl_values + hash_tbl_idx;
             const key_type tmp_val = tmp_ptr->first;
-            if ( m_equal( k, tmp_val ) ) {
+            if ( keys_are_equal( the_key, tmp_val ) ) {
                 begin_ptr = tmp_ptr;
                 break;
             }
-            if ( m_equal( unused_key , tmp_val ) || counter > m_hashtbl_size ) {
+            if ( keys_are_equal( unused_key , tmp_val ) || (counter > m_hashtbl_size) ) {
                 begin_ptr = m_hashtbl_values + m_hashtbl_size;
                 break;
             }

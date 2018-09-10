@@ -113,18 +113,8 @@ gdf_error gdf_segmented_radixsort_generic(gdf_segmented_radixsort_plan_type *hdl
                                      unsigned *d_begin_offsets,
                                      unsigned *d_end_offsets);
 
-/* joining
+// joins
 
-These functions return the result in *out_result*.
-Use the *gdf_join_result_* functions to extract data and deallocate.
-The result is a sequence of indices for the left (L) and then the right (R)
-keys in the form of
-
-    L0, L1, L2, ..., Ln-1, R0, R1, R2, ..., Rn-1
-
-where n/2 is the size returned from *gdf_join_result_size()*, which
-gives the number of int pairs in the output array.
-*/
 
 gdf_error gdf_inner_join(int num_cols, gdf_column **leftcol, gdf_column **rightcol,
                          gdf_column *left_result, gdf_column *right_result,
@@ -149,9 +139,6 @@ gdf_error gdf_outer_join_f64(gdf_column *leftcol, gdf_column *rightcol,
 gdf_error gdf_outer_join_generic(gdf_column *leftcol, gdf_column *rightcol,
                                  gdf_column *l_result, gdf_column *r_result);
 
-gdf_error gdf_join_result_free(gdf_join_result_type *result);
-void* gdf_join_result_data(gdf_join_result_type *result);
-size_t gdf_join_result_size(gdf_join_result_type *result);
 
 /* prefixsum */
 

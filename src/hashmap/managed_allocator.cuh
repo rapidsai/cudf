@@ -30,7 +30,14 @@ struct managed_allocator {
       T* allocate(std::size_t n) const {
           T* ptr = 0;
           cudaError_t result = cudaMallocManaged( &ptr, n*sizeof(T) );
-          if( cudaSuccess != result || 0 == ptr ) throw std::bad_alloc();
+          if( cudaSuccess != result || nullptr == ptr )
+          {
+            std::cerr << "ERROR: CUDA Runtime call in line " << __LINE__ << "of file " 
+                      << __FILE__ << " failed with " << cudaGetErrorString(result) 
+                      << " (" << result << ") "
+                      << " Attempted to allocate: " << n * sizeof(T) << " bytes.\n";
+            throw std::bad_alloc();
+          } 
           return ptr;
       }
       void deallocate(T* p, std::size_t) const noexcept {
@@ -54,7 +61,15 @@ struct legacy_allocator {
       T* allocate(std::size_t n) const {
           T* ptr = 0;
           cudaError_t result = cudaMalloc( &ptr, n*sizeof(T) );
-          if( cudaSuccess != result || 0 == ptr ) throw std::bad_alloc();
+          if( cudaSuccess != result || nullptr == ptr ) 
+          {
+            std::cerr << "ERROR: CUDA Runtime call in line " << __LINE__ << "of file " 
+                      << __FILE__ << " failed with " << cudaGetErrorString(result) 
+                      << " (" << result << ") "
+                      << " Attempted to allocate: " << n * sizeof(T) << " bytes.\n";
+            throw std::bad_alloc();
+          }
+
           return ptr;
       }
       void deallocate(T* p, std::size_t) const noexcept {

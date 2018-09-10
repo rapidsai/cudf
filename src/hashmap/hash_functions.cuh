@@ -17,6 +17,8 @@
 #ifndef HASH_FUNCTIONS_CUH
 #define HASH_FUNCTIONS_CUH
 
+using hash_value_type = uint32_t;
+
 //MurmurHash3_32 implementation from https://github.com/aappleby/smhasher/blob/master/src/MurmurHash3.cpp 
 //-----------------------------------------------------------------------------
 // MurmurHash3 was written by Austin Appleby, and is placed in the public
@@ -28,8 +30,8 @@
 template <typename Key>
 struct MurmurHash3_32
 {
-    typedef Key         argument_type;
-    typedef uint32_t    result_type;
+    using argument_type = Key;
+    using result_type = hash_value_type;
     
     __forceinline__ 
     __host__ __device__ 
@@ -51,7 +53,6 @@ struct MurmurHash3_32
         h ^= h >> 16;
         return h;
     }
-
     
     /* --------------------------------------------------------------------------*/
     /** 
@@ -74,7 +75,6 @@ struct MurmurHash3_32
 
       return combined;
     }
-
   
     __forceinline__ 
     __host__ __device__ result_type operator()(const Key& key) const

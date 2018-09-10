@@ -34,40 +34,11 @@ void dump_mem(const char name[], const mem_t<T> & mem) {
     std::cout << "\n";
 }
 
-gdf_join_result_type* cffi_wrap(join_result_base *obj) {
-    return reinterpret_cast<gdf_join_result_type*>(obj);
-}
-
-join_result_base* cffi_unwrap(gdf_join_result_type* hdl) {
-    return reinterpret_cast<join_result_base*>(hdl);
-}
-
-gdf_error gdf_join_result_free(gdf_join_result_type *result) {
-    delete cffi_unwrap(result);
-    CUDA_CHECK_LAST();
-    return GDF_SUCCESS;
-}
-
-gdf_error gdf_column_free(gdf_column *column) {
-    CUDA_RT_CALL( cudaFree(column->data)  );
-    CUDA_RT_CALL( cudaFree(column->valid) );
-    CUDA_CHECK_LAST();
-    return GDF_SUCCESS;
-}
-
-void* gdf_join_result_data(gdf_join_result_type *result) {
-    return cffi_unwrap(result)->data();
-}
-
-size_t gdf_join_result_size(gdf_join_result_type *result) {
-    return cffi_unwrap(result)->size();
-}
-
 
 // Size limit due to use of int32 as join output.
 // FIXME: upgrade to 64-bit
-using output_type = int;
-constexpr output_type MAX_JOIN_SIZE{std::numeric_limits<output_type>::max()};
+using output_index_type = int;
+constexpr output_index_type MAX_JOIN_SIZE{std::numeric_limits<output_index_type>::max()};
 
 // TODO This macro stuff will go away once Outer join is implemented
 #define DEF_JOIN(Fn, T, Joiner)                                             \
@@ -138,12 +109,11 @@ gdf_error hash_join(size_type num_cols, gdf_column **leftcol, gdf_column **right
 
   standard_context_t context(false);
 
-  auto output = join_hash<join_type, output_type>(*left_table, *right_table, context);
-
-  *l_result = output.first;
-  *r_result = output.second;
-  CUDA_CHECK_LAST();
-  return GDF_SUCCESS;
+  return join_hash<join_type, output_index_type>(*left_table, 
+                                                        *right_table, 
+                                                        context, 
+                                                        l_result, 
+                                                        r_result);
 }
 
 template <JoinType join_type>
@@ -274,17 +244,38 @@ gdf_error join_call( int num_cols, gdf_column **leftcol, gdf_column **rightcol,
   if(nullptr == join_context)
     return GDF_INVALID_API_CALL;
 
-  // check that the columns data are not null, have matching types, 
-  // and the same number of rows
   const auto left_col_size = leftcol[0]->size;
   const auto right_col_size = rightcol[0]->size;
   
+  // Check that the number of rows does not exceed the maximum
   if(left_col_size >= MAX_JOIN_SIZE) return GDF_COLUMN_SIZE_TOO_BIG;
   if(right_col_size >= MAX_JOIN_SIZE) return GDF_COLUMN_SIZE_TOO_BIG;
 
+  // If both frames are empty, return immediately
+  if((0 == left_col_size ) && (0 == right_col_size)) {
+    return GDF_SUCCESS;
+  }
+
+  // If left join and the left table is empty, return immediately
+  if( (JoinType::LEFT_JOIN == join_type) && (0 == left_col_size)){
+    return GDF_SUCCESS;
+  }
+
+  // If Inner Join and either table is empty, return immediately
+  if( (JoinType::INNER_JOIN == join_type) && 
+      ((0 == left_col_size) || (0 == right_col_size)) ){
+    return GDF_SUCCESS;
+  }
+
+  // check that the columns data are not null, have matching types, 
+  // and the same number of rows
   for (int i = 0; i < num_cols; i++) {
-    if(nullptr == rightcol[i]->data) return GDF_DATASET_EMPTY;
-    if(nullptr == leftcol[i]->data) return GDF_DATASET_EMPTY;
+    if((right_col_size > 0) && (nullptr == rightcol[i]->data)){
+     return GDF_DATASET_EMPTY;
+    } 
+    if((left_col_size > 0) && (nullptr == leftcol[i]->data)){
+     return GDF_DATASET_EMPTY;
+    } 
     if(rightcol[i]->dtype != leftcol[i]->dtype) return GDF_JOIN_DTYPE_MISMATCH;
     if(left_col_size != leftcol[i]->size) return GDF_COLUMN_SIZE_MISMATCH;
     if(right_col_size != rightcol[i]->size) return GDF_COLUMN_SIZE_MISMATCH;
@@ -296,7 +287,7 @@ gdf_error join_call( int num_cols, gdf_column **leftcol, gdf_column **rightcol,
   {
     case GDF_HASH:
       {
-        return hash_join<join_type>(num_cols, leftcol, rightcol, left_result, right_result);
+        return hash_join<join_type, int64_t>(num_cols, leftcol, rightcol, left_result, right_result);
       }
     case GDF_SORT:
       {

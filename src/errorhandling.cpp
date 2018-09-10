@@ -19,6 +19,8 @@ const char * gdf_error_get_name(gdf_error errcode) {
     GETNAME(GDF_GROUPBY_TOO_MANY_COLUMNS)
     GETNAME(GDF_UNSUPPORTED_METHOD)
     GETNAME(GDF_INVALID_AGGREGATOR)
+    GETNAME(GDF_HASH_TABLE_INSERT_FAILURE)
+    GETNAME(GDF_UNSUPPORTED_JOIN_TYPE)
     default:
         // This means we are missing an entry above for a gdf_error value.
         return "Internal error. Unknown error code.";

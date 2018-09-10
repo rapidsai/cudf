@@ -75,9 +75,9 @@ public:
     return host_columns[build_column_index]->data;
   }
 
-  gdf_valid_type* get_build_valid_data() const
+  __device__ gdf_valid_type* get_build_valid_data() const
   {
-    return host_columns[build_column_index]->valid;
+    return d_valids_data[build_column_index];
   }
 
   void * get_probe_column_data() const
@@ -85,9 +85,9 @@ public:
     return host_columns[build_column_index]->data;
   }
 
-  gdf_valid_type* get_probe_valid_data() const
+  __device__ gdf_valid_type* get_probe_valid_data() const
   {
-    return host_columns[build_column_index]->valid;
+    return d_valids_data[build_column_index];
   }
 
   __host__ 
@@ -319,6 +319,7 @@ public:
             const col_type current_value = current_column[row_index];
             hash_value_t key_hash = hasher(current_value);
             hash_value = hasher.hash_combine(hash_value, key_hash);
+            break;
           }
         case GDF_INT16:
           {
@@ -328,6 +329,7 @@ public:
             const col_type current_value = current_column[row_index];
             hash_value_t key_hash = hasher(current_value);
             hash_value = hasher.hash_combine(hash_value, key_hash);
+            break;
           }
         case GDF_INT32:
           {
@@ -337,6 +339,7 @@ public:
             const col_type current_value = current_column[row_index];
             hash_value_t key_hash = hasher(current_value);
             hash_value = hasher.hash_combine(hash_value, key_hash);
+            break;
           }
         case GDF_INT64:
           {
@@ -346,6 +349,7 @@ public:
             const col_type current_value = current_column[row_index];
             hash_value_t key_hash = hasher(current_value);
             hash_value = hasher.hash_combine(hash_value, key_hash);
+            break;
           }
         case GDF_FLOAT32:
           {
@@ -355,6 +359,7 @@ public:
             const col_type current_value = current_column[row_index];
             hash_value_t key_hash = hasher(current_value);
             hash_value = hasher.hash_combine(hash_value, key_hash);
+            break;
           }
         case GDF_FLOAT64:
           {
@@ -364,6 +369,7 @@ public:
             const col_type current_value = current_column[row_index];
             hash_value_t key_hash = hasher(current_value);
             hash_value = hasher.hash_combine(hash_value, key_hash);
+            break;
           }
         case GDF_DATE32:
           {
@@ -373,6 +379,7 @@ public:
             const col_type current_value = current_column[row_index];
             hash_value_t key_hash = hasher(current_value);
             hash_value = hasher.hash_combine(hash_value, key_hash);
+            break;
           }
         case GDF_DATE64:
           {
@@ -382,6 +389,7 @@ public:
             const col_type current_value = current_column[row_index];
             hash_value_t key_hash = hasher(current_value);
             hash_value = hasher.hash_combine(hash_value, key_hash);
+            break;
           }
         case GDF_TIMESTAMP:
           {
@@ -391,6 +399,7 @@ public:
             const col_type current_value = current_column[row_index];
             hash_value_t key_hash = hasher(current_value);
             hash_value = hasher.hash_combine(hash_value, key_hash);
+            break;
           }
         default:
           assert(false && "Attempted to hash unsupported GDF datatype");
