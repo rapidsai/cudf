@@ -358,9 +358,6 @@ class DataFrame(object):
             self._index = series.index
             self._size = len(series)
 
-        col = self._sanitize_values(col)
-        return col
-
     def _sanitize_values(self, col):
         """Sanitize col values before
            being added
@@ -390,7 +387,9 @@ class DataFrame(object):
         -------
         The prepared Series object.
         """
-        col = self._sanitize_columns(col)
+        self._sanitize_columns(col)
+        col = self._sanitize_values(col)
+
         empty_index = isinstance(self._index, EmptyIndex)
         series = Series(col)
         if forceindex or empty_index or self._index == series.index:
