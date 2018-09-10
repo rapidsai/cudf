@@ -980,8 +980,36 @@ gdf_error gdf_group_by_single(int ncols,                    // # columns
                               gdf_context* ctxt,            //struct with additional info: bool is_sorted, flag_sort_or_hash, bool flag_count_distinct
                               gdf_agg_op op)                //aggregation operation
 {
-  if( ncols == 0 )
+  if((0 == ncols)
+     || (nullptr == cols)
+     || (nullptr == col_agg)
+     || (nullptr == out_col_agg)
+     || (nullptr == ctxt))
+  {
     return GDF_DATASET_EMPTY;
+  }
+
+  // If there are no rows in the input, set the output rows to 0 
+  // and return immediately with success
+  if( (0 == cols[0]->size )
+      || (0 == col_agg->size))
+  {
+    if( (nullptr != out_col_agg) ){
+      out_col_agg->size = 0;
+    }
+    if(nullptr != out_col_indices ) {
+        out_col_indices->size = 0;
+    }
+
+    for(int col = 0; col < ncols; ++col){
+      if(nullptr != out_col_values){
+        if( nullptr != out_col_values[col] ){
+          out_col_values[col]->size = 0;
+        }
+      }
+    }
+    return GDF_SUCCESS;
+  }
   
   if( ctxt->flag_method == GDF_SORT )
     {
@@ -994,9 +1022,6 @@ gdf_error gdf_group_by_single(int ncols,                    // # columns
       gdf_column* h_columns = &v_cols[0];
       size_t nrows = h_columns[0].size;
 
-      if( nrows == 0 )
-        return GDF_DATASET_EMPTY;
-      
       size_t n_group = 0;
 
       Vector<IndexT> d_indx;//allocate only if necessary (see below)
