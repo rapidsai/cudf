@@ -273,7 +273,7 @@ TEST(gdf_group_by_count, UsageTestCount)
  
   Vector<IndexT> d_indx(sz, 0);
   Vector<IndexT> d_keys(sz, 0);
-  Vector<IndexT> d_vals(sz, 0);
+  Vector<int32_t> d_vals(sz, 0);
 
   size_t ncols = 3;
   size_t& nrows = sz;
@@ -393,12 +393,12 @@ TEST(gdf_group_by_count, UsageTestCount)
   //d_vals: 1,1,2,2,
 
   std::vector<IndexT> vk{5,0,2,4};
-  std::vector<IndexT> vals{1,1,2,2};
+  std::vector<int32_t> vals{1,1,2,2};
 
   flag = compare(d_keys, vk, szeps);
   EXPECT_EQ( flag, true ) << "GROUP-BY row indices return unexpected result";
 
-  flag = compare(d_vals, vals, szeps);
+  flag = compare(d_vals, vals, ieps);
   EXPECT_EQ( flag, true ) << "GROUP-BY COUNT aggregation returns unexpected result";
 }
 
