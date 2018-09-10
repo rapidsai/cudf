@@ -60,6 +60,10 @@ struct RandomValues {
     RandomValues(const K _min, const K _max) :
         min(_min), max(_max), gen(rd()), dis(min, max) {}
 
+    //Constructor to set minimum and maximum values of the distribution
+    RandomValues(const K _min, const K _max, size_t seed) :
+        min(_min), max(_max), gen(seed), dis(min, max) {}
+
     //Operator to generate random value (const variant)
     K operator()(void) const { return dis(gen); }
 
@@ -78,13 +82,15 @@ void createUniqueKeys(
         const size_t key_count,
         const size_t value_per_key,
         const size_t column_range,
-        typename std::enable_if<std::is_integral<T>::value, std::vector<T>>::type& v) {
+        typename std::enable_if<std::is_integral<T>::value, std::vector<T>>::type& v,
+        const size_t shuffle_seed = 0) {
     T ratio = static_cast<T>(column_range)/static_cast<T>(key_count);
     RandomValues<T> r(1, ratio);
+    RandomValues<size_t> key_l(1, value_per_key, shuffle_seed);
     T rand_key{0};
     for (size_t i = 0; i < key_count; ++i) {
         rand_key += r();
-        for (size_t j = 0; j < value_per_key; ++j) { v.push_back(rand_key); }
+        for (size_t j = 0; j < key_l(); ++j) { v.push_back(rand_key); }
     }
 }
 
@@ -99,13 +105,15 @@ void createUniqueKeys(
         const size_t key_count,
         const size_t value_per_key,
         const size_t column_range,
-        typename std::enable_if<!std::is_integral<T>::value, std::vector<T>>::type& v) {
+        typename std::enable_if<!std::is_integral<T>::value, std::vector<T>>::type& v,
+        const size_t shuffle_seed = 0) {
     T ratio = static_cast<T>(column_range)/static_cast<T>(key_count);
     RandomValues<T> r(std::numeric_limits<T>::epsilon()*4, ratio);
+    RandomValues<size_t> key_l(1, value_per_key, shuffle_seed);
     T rand_key{0};
     for (size_t i = 0; i < key_count; ++i) {
         rand_key += r();
-        for (size_t j = 0; j < value_per_key; ++j) { v.push_back(rand_key); }
+        for (size_t j = 0; j < key_l(); ++j) { v.push_back(rand_key); }
     }
 }
 
@@ -123,7 +131,7 @@ void initialize_key_vector(std::vector<K>& k,
     k.reserve(key_count*value_per_key);
     if (unique) {
         assert((column_range > key_count));
-        createUniqueKeys<K>(key_count, value_per_key, column_range, k);
+        createUniqueKeys<K>(key_count, value_per_key, column_range, k, shuffle_seed);
     } else {
         RandomValues<K> r(0, static_cast<K>(column_range));
         for (size_t i = 0; i < key_count; ++i) {
@@ -143,8 +151,10 @@ void initialize_values(std::vector<V>& v,
         const size_t column_range, const size_t shuffle_seed) {
     v.reserve(key_count*value_per_key);
     RandomValues<V> r(0, static_cast<V>(column_range));
-    for (size_t i = 0; i < key_count * value_per_key; ++i) {
-        v.push_back(r());
+    RandomValues<size_t> key_l(1, value_per_key, shuffle_seed);
+    for (size_t i = 0; i < key_count; ++i) {
+        auto val = r();
+        for (size_t j = 0; j < key_l(); ++j) { v.push_back(val); }
     }
     //Shuffle current vector
     std::mt19937 g(shuffle_seed);
@@ -250,13 +260,22 @@ print_tuple_vector(std::tuple<std::vector<Tp>...>& t)
 //print a tuple recursively. Terminating empty call.
 template<std::size_t I = 0, typename... Tp>
 inline typename std::enable_if<I == sizeof...(Tp), void>::type
-print_tuple(std::tuple<Tp...>& t) { }
+print_tuple(std::tuple<Tp...> t) { std::cout<<"\n"; }
 
 //print a tuple recursively. Recursive call.
 template<std::size_t I = 0, typename... Tp>
 inline typename std::enable_if<I < sizeof...(Tp), void>::type
-print_tuple(std::tuple<Tp...>& t) {
-    if (I == 0) {std::cout<<"\n";}
+print_tuple(std::tuple<Tp...> t) {
     std::cout<<std::get<I>(t)<<"\t";
     print_tuple<I+1, Tp...>(t);
+}
+//compile time recursion to print a tuple of vectors
+template<typename... Tp>
+void
+print_tuple_vector_row_major(std::tuple<std::vector<Tp>...>& t)
+{
+    std::cout<<"\n";
+    for (size_t i = 0; i < std::get<0>(t).size(); ++i) {
+        print_tuple(extractKey(t, i));
+    }
 }

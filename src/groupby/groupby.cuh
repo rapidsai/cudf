@@ -362,8 +362,6 @@ gdf_error multi_pass_avg(int ncols,
   gdf_column sum_output = create_gdf_column<sum_type>(output_size);
   gdf_group_by_hash<sum_op>(ncols, in_groupby_columns, in_aggregation_column, out_groupby_columns, &sum_output, sort_result); 
 
-  std::cout << "avg\n";
-
   // Compute the average from the Sum and Count columns and store into the passed in aggregation output buffer
   const gdf_dtype gdf_output_type = out_aggregation_column->dtype;
   switch(gdf_output_type){

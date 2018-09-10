@@ -25,6 +25,9 @@
 #include "../../hashmap/managed.cuh"
 #include "groupby_kernels.cuh"
 #include "../../gdf_table.cuh"
+#include <thrust/device_vector.h>
+#include <thrust/gather.h>
+#include <thrust/copy.h>
 
 
 // The occupancy of the hash table determines it's capacity. A value of 50 implies
@@ -222,7 +225,13 @@ gdf_error GroupbyHash(gdf_table<size_type> const & groupby_input_table,
 
   // Optionally sort the groupby/aggregation result columns
   if(true == sort_result) {
-      groupby_output_table.sort();
+      auto sorted_indices = groupby_output_table.sort();
+      thrust::device_vector<aggregation_type> agg(*out_size);
+      thrust::gather(thrust::device,
+              sorted_indices.begin(), sorted_indices.end(),
+              out_aggregation_column,
+              agg.begin());
+      thrust::copy(agg.begin(), agg.end(), out_aggregation_column);
   }
 
   return GDF_SUCCESS;
