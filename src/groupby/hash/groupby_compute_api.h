@@ -50,7 +50,7 @@ constexpr unsigned int THREAD_BLOCK_SIZE{256};
 /* ----------------------------------------------------------------------------*/
 template <typename map_type,
           typename size_type>
-struct row_comparator : public managed
+struct row_comparator
 {
   using key_type = typename map_type::key_type;
   using map_key_comparator = typename map_type::key_equal;
@@ -165,10 +165,6 @@ gdf_error GroupbyHash(gdf_table<size_type> const & groupby_input_table,
   // Initialize the hash table with the aggregation operation functor's identity value
   std::unique_ptr<map_type> the_map(new map_type(hash_table_size, aggregation_operation::IDENTITY));
 
-  // Functor that will be used by the hash table's insert function to check for equality 
-  // between two rows of the groupby_input_table
-  std::unique_ptr<row_comparator<map_type,size_type>> the_comparator{new row_comparator<map_type, size_type>(*the_map, groupby_input_table, groupby_input_table)};
-
   const dim3 build_grid_size ((input_num_rows + THREAD_BLOCK_SIZE - 1) / THREAD_BLOCK_SIZE, 1, 1);
   const dim3 block_size (THREAD_BLOCK_SIZE, 1, 1);
 
@@ -182,7 +178,7 @@ gdf_error GroupbyHash(gdf_table<size_type> const & groupby_input_table,
                                                            in_aggregation_column,
                                                            input_num_rows,
                                                            aggregation_op,
-                                                           *the_comparator);
+                                                           row_comparator<map_type, size_type>(*the_map, groupby_input_table, groupby_input_table));
   CUDA_TRY(cudaGetLastError());
 
   // Used by threads to coordinate where to write their results
