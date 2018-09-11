@@ -6,6 +6,7 @@ import pandas as pd
 from . import columnops, _gdf, utils
 from .buffer import Buffer
 from libgdf_cffi import libgdf
+from .serialize import register_distributed_serializer
 
 
 _unordered_impl = {
@@ -38,6 +39,19 @@ class DatetimeColumn(columnops.TypedColumnBase):
         self._precision = 1e-3
         self._inverse_precision = 1e3
         self._pandas_conversion_factor = 1e9 * self._precision
+
+    def serialize(self, serialize):
+        header, frames = super(DatetimeColumn, self).serialize(serialize)
+        assert 'dtype' not in header
+        header['dtype'] = serialize(self._dtype)
+        return header, frames
+
+    @classmethod
+    def deserialize(cls, deserialize, header, frames):
+        data, mask = cls._deserialize_data_mask(deserialize, header, frames)
+        col = cls(data=data, mask=mask, null_count=header['null_count'],
+                  dtype=deserialize(*header['dtype']))
+        return col
 
     @classmethod
     def from_numpy(cls, array):
@@ -122,3 +136,6 @@ def binop(lhs, rhs, op, out_dtype):
     null_count = _gdf.apply_binaryop(op, lhs, rhs, out)
     out = out.replace(null_count=null_count)
     return out
+
+
+register_distributed_serializer(DatetimeColumn)
