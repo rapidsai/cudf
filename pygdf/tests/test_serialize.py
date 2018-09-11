@@ -134,3 +134,16 @@ def _load_ipc(header, frames, result_queue):
         result_queue.put(out)
     except Exception as e:
         result_queue.put(e)
+
+
+@require_distributed
+def test_serialize_datetime():
+    df = pd.DataFrame({'x': np.random.randint(0, 5, size=20),
+                       'y': np.random.normal(size=20)})
+    ts = np.arange(0, len(df), dtype=np.dtype('datetime64[ns]'))
+    df['timestamp'] = ts
+    out = pygdf.DataFrame.from_pandas(df)
+
+    recreated = deserialize(*serialize(out))
+    pd.util.testing.assert_frame_equal(recreated.to_pandas(), df)
+
