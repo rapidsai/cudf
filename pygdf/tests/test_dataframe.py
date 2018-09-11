@@ -186,9 +186,10 @@ def test_dataframe_column_add_drop():
     assert df.columns == ('b', 'c', 'a')
 
 
-def test_dataframe_astype():
+@pytest.mark.parametrize('nelem', [0, 3, 100, 1000])
+def test_dataframe_astype(nelem):
     df = DataFrame()
-    data = np.asarray(range(10), dtype=np.int32)
+    data = np.asarray(range(nelem), dtype=np.int32)
     df['a'] = data
     assert df['a'].dtype is np.dtype(np.int32)
     df['b'] = df['a'].astype(np.float32)
