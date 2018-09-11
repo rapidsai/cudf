@@ -75,19 +75,21 @@ public:
     return host_columns[build_column_index]->data;
   }
 
-  __device__ gdf_valid_type* get_build_valid_data() const
-  {
-    return d_valids_data[build_column_index];
-  }
-
   void * get_probe_column_data() const
   {
     return host_columns[build_column_index]->data;
   }
 
-  __device__ gdf_valid_type* get_probe_valid_data() const
+  __device__ bool is_row_valid(size_type row_index) const
   {
-    return d_valids_data[build_column_index];
+    uint32_t bool_value{true};
+    size_t num_columns_to_hash = this->num_columns;
+    for(size_type i = 0; i < num_columns_to_hash; ++i)
+    {
+      const gdf_valid_type * current_valid = d_valids_data[i];
+      bool_value += gdf::util::get_bit(current_valid, row_index);
+    }
+    return bool_value;    
   }
 
   __host__ 

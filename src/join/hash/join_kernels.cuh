@@ -51,23 +51,23 @@ __global__ void build_hash_table( multimap_type * const multi_map,
 {
     size_type i = threadIdx.x + blockIdx.x * blockDim.x;
 
-    while( i < build_table_num_rows && gdf::util::get_bit(build_table.get_build_valid_data(), i)) {
+    while( i < build_table_num_rows) {
+      if (build_table.is_row_valid(i)) {
+        // Compute the hash value of this row
+        const hash_value_type row_hash_value{build_table.hash_row(i)};
 
-      // Compute the hash value of this row
-      const hash_value_type row_hash_value{build_table.hash_row(i)};
+        // Insert the (row hash value, row index) into the map
+        // using the row hash value to determine the location in the 
+        // hash map where the new pair should be inserted
+        const auto insert_location = multi_map->insert( thrust::make_pair( row_hash_value, i ),
+                                                        true,
+                                                        row_hash_value );
 
-      // Insert the (row hash value, row index) into the map
-      // using the row hash value to determine the location in the 
-      // hash map where the new pair should be inserted
-      const auto insert_location = multi_map->insert( thrust::make_pair( row_hash_value, i ),
-                                                      true,
-                                                      row_hash_value );
-
-      // If the insert failed, set the error code accordingly
-      if(multi_map->end() == insert_location){
-        *gdf_error_code = GDF_HASH_TABLE_INSERT_FAILURE;
+        // If the insert failed, set the error code accordingly
+        if(multi_map->end() == insert_location){
+          *gdf_error_code = GDF_HASH_TABLE_INSERT_FAILURE;
+        }
       }
-
       i += blockDim.x * gridDim.x;
     }
 }
@@ -209,7 +209,7 @@ __global__ void compute_join_output_size( multimap_type const * const multi_map,
               running = false;
           }
 
-          if ((join_type == JoinType::LEFT_JOIN) && (!running) && (!found_match) && gdf::util::get_bit(probe_table.get_probe_valid_data(), probe_row_index)) {
+          if ((join_type == JoinType::LEFT_JOIN) && (!running) && (!found_match)) {
             atomicAdd(&block_counter,size_type(1));
           }
         }
@@ -358,9 +358,7 @@ __global__ void probe_hash_table( multimap_type const * const multi_map,
           // If performing a LEFT join and no match was found, insert a Null into the output
           if ((join_type == JoinType::LEFT_JOIN) && (!running) && (!found_match)) {
             const output_index_type probe_index{offset + probe_row_index};
-            if (gdf::util::get_bit(probe_table.get_probe_valid_data(), probe_index)) {
-              add_pair_to_cache(probe_index, static_cast<output_index_type>(JoinNoneValue), current_idx_shared, warp_id, join_shared_l[warp_id], join_shared_r[warp_id]);
-            }
+            add_pair_to_cache(probe_index, static_cast<output_index_type>(JoinNoneValue), current_idx_shared, warp_id, join_shared_l[warp_id], join_shared_r[warp_id]);
           }
         }
 

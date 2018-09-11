@@ -278,6 +278,7 @@ struct JoinTest : public testing::Test
 
     for(size_t left_index = 0; left_index < probe_column.size(); ++left_index)
     {
+      bool match{false};
       if (gdf::util::get_bit(probe_valid, left_index)) {
         // Find all keys that match probe_key
         const auto probe_key = probe_column[left_index];
@@ -285,7 +286,6 @@ struct JoinTest : public testing::Test
 
         // Every element in the returned range identifies a row in the first right column that
         // matches the probe_key. Need to check if all other columns also match
-        bool match{false};
         for(auto i = range.first; i != range.second; ++i)
         {
           const auto right_index = i->second;
@@ -297,13 +297,12 @@ struct JoinTest : public testing::Test
             match = true;
           }
         }
-
-        // For left joins, insert a NULL if no match is found
-        if((false == match) &&
-                ((op == join_op::LEFT) || (op == join_op::OUTER))){
-          constexpr int JoinNullValue{-1};
-          reference_result.emplace_back(left_index, JoinNullValue);
-        }
+      }
+      // For left joins, insert a NULL if no match is found
+      if((false == match) &&
+              ((op == join_op::LEFT) || (op == join_op::OUTER))){
+        constexpr int JoinNullValue{-1};
+        reference_result.emplace_back(left_index, JoinNullValue);
       }
     }
 
@@ -313,22 +312,18 @@ struct JoinTest : public testing::Test
         // Build hash table that maps the first left columns' values to their row index in the column
         for(size_t left_index = 0; left_index < probe_column.size(); ++left_index)
         {
-          if (gdf::util::get_bit(probe_valid, left_index)) {
-            the_map.insert(std::make_pair(probe_column[left_index], left_index));
-          }
+          the_map.insert(std::make_pair(probe_column[left_index], left_index));
         }
         // Probe the hash table with first right column
         // Add rows where a match for the right column does not exist
         for(size_t right_index = 0; right_index < build_column.size(); ++right_index)
         {
-          if (gdf::util::get_bit(build_valid, right_index)) {
-            const auto probe_key = build_column[right_index];
-            auto search = the_map.find(probe_key);
-            if (search == the_map.end())
-            {
-                constexpr int JoinNullValue{-1};
-                reference_result.emplace_back(JoinNullValue, right_index);
-            }
+          const auto probe_key = build_column[right_index];
+          auto search = the_map.find(probe_key);
+          if (search == the_map.end())
+          {
+              constexpr int JoinNullValue{-1};
+              reference_result.emplace_back(JoinNullValue, right_index);
           }
         }
     }
