@@ -71,8 +71,7 @@ struct row_comparator
                 : the_map{map}, 
                   left_table{l_table}, 
                   right_table{r_table},
-                  unused_key{map.get_unused_key()},
-                  default_comparator{map_key_comparator()}
+                  unused_key{map.get_unused_key()}
   {
   
   }
@@ -98,7 +97,6 @@ struct row_comparator
   __device__ bool operator()(key_type const & left_index, 
                              key_type const & right_index) const
   {
-
     // The unused key is not a valid row index in the gdf_tables.
     // Therefore, if comparing against the unused key, use the map's default
     // comparison function
