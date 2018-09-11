@@ -128,6 +128,7 @@ template <typename K>
 void initialize_key_vector(std::vector<K>& k,
         const size_t key_count, const size_t value_per_key,
         const size_t column_range, const size_t shuffle_seed, bool unique = false) {
+    if (key_count*value_per_key == 0) { return; }
     k.reserve(key_count*value_per_key);
     if (unique) {
         assert((column_range >= key_count));
@@ -149,6 +150,7 @@ template <typename V>
 void initialize_values(std::vector<V>& v,
         const size_t key_count, const size_t value_per_key,
         const size_t column_range, const size_t shuffle_seed) {
+    if (key_count*value_per_key == 0) { return; }
     v.reserve(key_count*value_per_key);
     RandomValues<V> r(0, static_cast<V>(column_range));
     RandomValues<size_t> key_l(1, value_per_key, shuffle_seed);
