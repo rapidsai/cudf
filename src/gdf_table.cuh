@@ -167,12 +167,10 @@ public:
   /* ----------------------------------------------------------------------------*/
   // TODO Is there a less hacky way to do this? 
   __device__
-  void get_dense_row(size_type row_index, byte_type * row_byte_buffer)
+  gdf_error get_dense_row(size_type row_index, byte_type * row_byte_buffer)
   {
-    if(nullptr == row_byte_buffer)
-    {
-      printf("The buffer to store the row must be preallocated!\n");
-      return;
+    if(nullptr == row_byte_buffer) {
+      return GDF_DATASET_EMPTY;
     }
 
     byte_type * write_pointer{row_byte_buffer};
@@ -221,8 +219,7 @@ public:
           }
         default:
           {
-            printf("Illegal column byte width.\n");
-            return;
+            return GDF_UNSUPPORTED_DTYPE;
           }
       }
     }
@@ -239,7 +236,7 @@ public:
      */
     /* ----------------------------------------------------------------------------*/
   __device__ 
-  void copy_row(gdf_table const & other,
+  gdf_error copy_row(gdf_table const & other,
                 const size_type my_row_index,
                 const size_type other_row_index)
   {
@@ -249,10 +246,8 @@ public:
       const gdf_dtype my_col_type = d_columns_types[i];
       const gdf_dtype other_col_type = other.d_columns_types[i];
     
-      if(my_col_type != other_col_type)
-      {
-        printf("Attempted to copy columns of different types.\n");
-        return;
+      if(my_col_type != other_col_type){
+        return GDF_DTYPE_MISMATCH;
       }
 
       switch(my_col_type)
@@ -330,8 +325,7 @@ public:
             break;
           }
         default:
-          printf("Attempted to copy column of unsupported GDF datatype\n");
-          return;
+          return GDF_UNSUPPORTED_DTYPE;
       }
     }
 
@@ -361,7 +355,6 @@ public:
     
       if(my_col_type != other_col_type)
       {
-        printf("Attempted to compare columns of different types.\n");
         return false;
       }
 
@@ -449,7 +442,6 @@ public:
             break;
           }
         default:
-          printf("Attempted to compare columns of unsupported GDF datatype\n");
           return false;
       }
     }
