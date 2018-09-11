@@ -22,6 +22,7 @@
 
 #include "gtest/gtest.h"
 #include "gmock/gmock.h"
+#include "gdf_test_fixtures.h"
 #include <gdf/gdf.h>
 #include <gdf/cffi/functions.h>
 
@@ -63,7 +64,7 @@ namespace std{
 // A new instance of this class will be created for each *TEST(JoinTest, ...)
 // Put all repeated setup and validation stuff here
 template <class test_parameters>
-struct JoinTest : public testing::Test
+struct JoinTest : public GdfTest
 {
   // The join type is passed via a member of the template argument class
   const join_op op = test_parameters::op;

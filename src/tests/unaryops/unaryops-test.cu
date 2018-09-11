@@ -31,6 +31,7 @@
  #include "thrust_rmm_allocator.h"
 
 #include "gtest/gtest.h"
+#include "gdf_test_fixtures.h"
 #include <gdf/gdf.h>
 #include <gdf/utils.h>
 #include <gdf/cffi/functions.h>
@@ -39,8 +40,9 @@
 template <typename T>
 using Vector = thrust::device_vector<T, rmm_allocator<T>>;
 
+struct gdf_cast_test : public GdfTest {};
 
-TEST(gdf_cast_test, usage_example) {
+TEST_F(gdf_cast_test, usage_example) {
 
 	// gdf_column input examples for int32, int64, float32, float64, date32, date64 and timestamp (in milliseconds)
 
@@ -420,6 +422,8 @@ void fill_random_bitmap(std::vector<gdf_valid_type>& valid_input, size_t size)
 
 // CPU casting
 
+struct gdf_cast_CPU_VS_GPU_TEST : public GdfTest {};
+
 template<typename T, typename Tout>
 struct HostUnaryOp {
     static
@@ -440,7 +444,7 @@ gdf_error gdf_host_cast_##VFROM##_to_##VTO(gdf_column *input, gdf_column *output
 
 // Comparing CPU and GPU casting results
 #define DEF_CAST_IMPL_TEST(VFROM, VTO, VVFROM, VVTO, TFROM, TTO)				\
-	TEST(gdf_cast_CPU_VS_GPU_TEST, VFROM##_to_##VTO) {							\
+	TEST_F(gdf_cast_CPU_VS_GPU_TEST, VFROM##_to_##VTO) {							\
 	{																			\
 		int colSize = 1024;														\
 		gdf_column inputCol;													\
@@ -512,9 +516,11 @@ DEF_CAST_TYPE_TEST(i64, GDF_INT64, int64_t)
 DEF_CAST_TYPE_TEST(f32, GDF_FLOAT32, float)
 DEF_CAST_TYPE_TEST(f64, GDF_FLOAT64, double)
 
+struct gdf_cast_swap_TEST : public GdfTest {};
+
 // Casting from T1 to T2, and then casting from T2 to T1 results in the same value 
 #define DEF_CAST_SWAP_TEST(VFROM, VTO, VVFROM, VVTO, TFROM, TTO)				\
-	TEST(gdf_cast_swap_TEST, VFROM##_to_##VTO) {								\
+	TEST_F(gdf_cast_swap_TEST, VFROM##_to_##VTO) {								\
 	{																			\
 		int colSize = 1024;														\
 		gdf_column inputCol;													\
@@ -560,7 +566,7 @@ DEF_CAST_TYPE_TEST(f64, GDF_FLOAT64, double)
 
 // Casting from T1 to T2, and then casting from T2 to T1 results in the same value
 #define DEF_CAST_SWAP_TEST_TO_TIMESTAMP(VFROM, VVFROM, TFROM)				\
-	TEST(gdf_cast_swap_TEST, VFROM##_to_timestamp) {								\
+	TEST_F(gdf_cast_swap_TEST, VFROM##_to_timestamp) {								\
 	{																			\
 		int colSize = 1024;														\
 		gdf_column inputCol;													\
@@ -632,7 +638,9 @@ struct generateValidRandom
     }
 };
 
-TEST(gdf_unaryops_output_valid_TEST, checkingValidAndDtype) {
+struct gdf_unaryops_output_valid_TEST : public GdfTest {};
+
+TEST_F(gdf_unaryops_output_valid_TEST, checkingValidAndDtype) {
 
 	//The output datatype is set by the casting function
 	{
@@ -742,7 +750,9 @@ TEST(gdf_unaryops_output_valid_TEST, checkingValidAndDtype) {
 	}
 }
 
-TEST(gdf_date_casting_TEST, date32_to_date64) {
+struct gdf_date_casting_TEST : public GdfTest {};
+
+TEST_F(gdf_date_casting_TEST, date32_to_date64) {
 
 	//date32 to date64
 	{
@@ -914,7 +924,7 @@ TEST(gdf_date_casting_TEST, date32_to_date64) {
 	}
 }
 
-TEST(gdf_date_casting_TEST, date32_to_date64_over_valid_bitmask) {
+TEST_F(gdf_date_casting_TEST, date32_to_date64_over_valid_bitmask) {
 
 	//date32 to date64 over valid bitmask
 	{
@@ -977,7 +987,7 @@ TEST(gdf_date_casting_TEST, date32_to_date64_over_valid_bitmask) {
 	}
 }
 
-TEST(gdf_date_casting_TEST, date32_to_timestamp) {
+TEST_F(gdf_date_casting_TEST, date32_to_timestamp) {
 
 	//date32 to timestamp s
 	{
@@ -1468,7 +1478,7 @@ TEST(gdf_date_casting_TEST, date32_to_timestamp) {
 	}
 }
 
-TEST(gdf_date_casting_TEST, date64_to_timestamp) {
+TEST_F(gdf_date_casting_TEST, date64_to_timestamp) {
 
 	// date64 to timestamp ms, internally the output is equal to the input
 	{
@@ -1995,7 +2005,9 @@ TEST(gdf_date_casting_TEST, date64_to_timestamp) {
 	}
 }
 
-TEST(gdf_timestamp_casting_TEST, timestamp_to_timestamp) {
+struct gdf_timestamp_casting_TEST : public GdfTest {};
+
+TEST_F(gdf_timestamp_casting_TEST, timestamp_to_timestamp) {
 
 	//timestamp to timestamp from s to ms
 	{

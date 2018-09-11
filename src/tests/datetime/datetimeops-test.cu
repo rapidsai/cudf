@@ -23,7 +23,7 @@
 #include <thrust/device_vector.h>
 #include "thrust_rmm_allocator.h"
 
-#include "gtest/gtest.h"
+#include "gdf_test_fixtures.h"
 #include <gdf/gdf.h>
 #include <gdf/cffi/functions.h>
 
@@ -31,7 +31,9 @@
 template <typename T>
 using Vector = thrust::device_vector<T, rmm_allocator<T>>;
 
-TEST(gdf_extract_from_datetime_example_test, usage_example) {
+struct gdf_extract_from_datetime_example_test : public GdfTest {};
+
+TEST_F(gdf_extract_from_datetime_example_test, usage_example) {
 
 	// gdf_column input examples for date32, date64 and timestamp (in seconds)
 
@@ -289,7 +291,7 @@ TEST(gdf_extract_from_datetime_example_test, usage_example) {
 }
 
 
-struct gdf_extract_from_datetime_test : public ::testing::Test {
+struct gdf_extract_from_datetime_test : public GdfTest {
 
 	void SetUp() {
 
@@ -472,7 +474,6 @@ struct gdf_extract_from_datetime_test : public ::testing::Test {
 	}
 
 	void TearDown() {
-
 	}
 
 	void validate_output(gdf_error gdfError, std::vector<int16_t> & correct_result) {
@@ -742,7 +743,9 @@ TEST_F(gdf_extract_from_datetime_test, date64Tests) {
 	}
 }
 
-TEST(gdf_extract_datetime_TEST, date32Tests) {
+struct gdf_extract_datetime_TEST : public GdfTest {};
+
+TEST_F(gdf_extract_datetime_TEST, date32Tests) {
 
 	int colSize = 8;
 
@@ -827,7 +830,7 @@ TEST(gdf_extract_datetime_TEST, date32Tests) {
 	}
 }
 
-TEST(gdf_extract_datetime_TEST, testErrors) {
+TEST_F(gdf_extract_datetime_TEST, testErrors) {
 
 	// WRONG SIZE OF OUTPUT
 	{

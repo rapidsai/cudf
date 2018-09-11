@@ -22,6 +22,7 @@
  #include "thrust_rmm_allocator.h"
  
  #include "gtest/gtest.h"
+ #include "gdf_test_fixtures.h"
  #include <gdf/gdf.h>
  #include <gdf/cffi/functions.h>
  
@@ -29,14 +30,9 @@
  template <typename T>
  using Vector = thrust::device_vector<T, rmm_allocator<T>>;
 
- struct gdf_hashing_test : public ::testing::Test {
+ struct gdf_hashing_test : public GdfTest {};
  
-	 void TearDown() {
- 
-	 }
- };
- 
- TEST(gdf_hashing_test, allDtypesTest) {
+ TEST_F(gdf_hashing_test, allDtypesTest) {
  
 	 int nrows = 5;
 	 int ncols = 6;
