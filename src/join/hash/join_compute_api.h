@@ -169,6 +169,7 @@ gdf_error estimate_join_output_size(gdf_table<size_type> const & build_table,
 
   return GDF_SUCCESS;
 }
+
 /* --------------------------------------------------------------------------*/
 /**
 * @Synopsis  Performs a hash-based join between two sets of gdf_tables.
@@ -326,7 +327,6 @@ gdf_error compute_hash_join(mgpu::context_t & compute_ctx,
     <<<probe_grid_size, block_size>>> (hash_table.get(),
                                        build_table,
                                        probe_table,
-
                                        probe_table.get_column_length(),
                                        output_l_ptr,
                                        output_r_ptr,
@@ -382,7 +382,6 @@ gdf_error compute_hash_join(mgpu::context_t & compute_ctx,
     case 4 : dtype = GDF_INT32; break;
     case 8 : dtype = GDF_INT64; break;
   }
-
 
   gdf_column_view(output_l, output_l_ptr, nullptr, h_actual_found, dtype);
   gdf_column_view(output_r, output_r_ptr, nullptr, h_actual_found, dtype);
