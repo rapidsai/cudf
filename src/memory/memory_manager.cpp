@@ -35,12 +35,16 @@ namespace rmm
                         size_t size, cudaStream_t stream)
                         
     {
-        events.push_back({event, deviceId, ptr, size, stream, freeMem, totalMem, start, end});
+        if (Alloc == event)
+            current_allocations.insert(ptr);
+        else if (Free == event)
+            current_allocations.erase(ptr);
+        events.push_back({event, deviceId, ptr, size, stream, freeMem, totalMem, current_allocations.size(), start, end});
     }
 
     void Logger::to_csv(std::ostream &csv)
     {
-        csv << "Event Type,Device ID,Address,Stream,Size (bytes),Free Memory,Total Memory,Start,End,Elapsed\n";
+        csv << "Event Type,Device ID,Address,Stream,Size (bytes),Free Memory,Total Memory,Current Allocs,Start,End,Elapsed\n";
 
         for (auto& e : events)
         {
@@ -51,10 +55,10 @@ namespace rmm
             std::chrono::duration<double> elapsed = e.end-e.start;
             
             csv << event_str << "," << e.deviceId << "," << e.ptr << ","  << e.stream << ","
-                << e.size << "," << e.freeMem << "," << e.totalMem 
-                << std::chrono::duration<double>(e.start-base_time).count() << "," 
-                << std::chrono::duration<double>(e.end-base_time).count() 
-                << "," << elapsed.count() << std::endl;
+                << e.size << "," << e.freeMem << "," << e.totalMem << "," << e.currentAllocations << ","
+                << std::chrono::duration<double>(e.start-base_time).count() << ","
+                << std::chrono::duration<double>(e.end-base_time).count() << ","
+                << elapsed.count() << std::endl;
         }
     }
 }

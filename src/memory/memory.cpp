@@ -27,20 +27,27 @@
 #include <sstream>
 
 /** ---------------------------------------------------------------------------*
+ * @brief Macro wrapper to check for error in RMM API calls.
+ * ---------------------------------------------------------------------------**/
+#define RMM_CHECK(call) do { \
+    rmmError_t error = (call); \
+    if( error != RMM_SUCCESS ) return error; \
+} while(0)
+
+/** ---------------------------------------------------------------------------*
  * @brief Macro wrapper for RMM API calls to return appropriate RMM errors.
  * ---------------------------------------------------------------------------**/
 #define RMM_CHECK_CUDA(call) do { \
     cudaError_t cudaError = (call); \
-    if( cudaError == cudaErrorMemoryAllocation ) { \
+    if( cudaError == cudaErrorMemoryAllocation ) \
         return RMM_ERROR_OUT_OF_MEMORY; \
-    } \
-    else if( cudaError != cudaSuccess ) { \
+    else if( cudaError != cudaSuccess ) \
         return RMM_ERROR_CUDA_ERROR; \
-    } \
 } while(0)
 
 // Global instance of the log
 rmm::Logger theLog;
+rmm::Manager *theManager;
 
 // RAII logger class
 class LogIt
@@ -65,7 +72,7 @@ public:
 
     ~LogIt() 
     {
-        auto end = std::chrono::system_clock::now();
+        rmm::Logger::TimePt end = std::chrono::system_clock::now();
         size_t freeMem, totalMem;
         rmmGetInfo(&freeMem, &totalMem, stream);
         theLog.record(event, device, ptr, start, end, freeMem, totalMem, size, stream); 
@@ -84,13 +91,27 @@ private:
 // Initialize memory manager state and storage.
 rmmError_t rmmInitialize()
 {
-    RMM_CHECK_CUDA(cudaFree(0));
+    theManager = new rmm::Manager;
+#ifndef RMM_USE_CUDAMALLOC
+    cnmemDevice_t dev;
+    RMM_CHECK_CUDA( cudaGetDevice(&(dev.device)) );
+    dev.size = 16800000000;
+    dev.numStreams = 1;
+    cudaStream_t streams[1]; streams[0] = 0;
+    dev.streams = streams;
+    dev.streamSizes = 0;
+    RMM_CHECK_CNMEM( cnmemInit(1, &dev, 0) );    
+#endif
     return RMM_SUCCESS;
 }
 
 // Shutdown memory manager.
 rmmError_t rmmFinalize()
 {
+#ifndef RMM_USE_CUDAMALLOC
+    RMM_CHECK_CNMEM( cnmemFinalize() );
+#endif
+    delete theManager;
     return RMM_SUCCESS;
 }
  
@@ -98,20 +119,21 @@ rmmError_t rmmFinalize()
 rmmError_t rmmAlloc(void **ptr, size_t size, cudaStream_t stream)
 {
     LogIt log(rmm::Logger::Alloc, size, stream);
-	if (!ptr && !size) {
-        return RMM_SUCCESS;
-    }
-    else if (!size) {
-        ptr[0] = NULL;
-        return RMM_SUCCESS;
-    }
 
+    if (!ptr && !size) {
+        return RMM_SUCCESS;
+    }
+    
     if (!ptr) 
-    	return RMM_ERROR_INVALID_ARGUMENT;
+        return RMM_ERROR_INVALID_ARGUMENT;
 
+#ifdef RMM_USE_CUDAMALLOC
     RMM_CHECK_CUDA(cudaMalloc(ptr, size));
+#else
+    RMM_CHECK( theManager->registerStream(stream) );
+    RMM_CHECK_CNMEM( cnmemMalloc(ptr, size, stream) );
+#endif
     log.setPointer(*ptr);
-
     return RMM_SUCCESS;
 }
 
@@ -119,6 +141,7 @@ rmmError_t rmmAlloc(void **ptr, size_t size, cudaStream_t stream)
 rmmError_t rmmRealloc(void **ptr, size_t new_size, cudaStream_t stream)
 {
     LogIt log(rmm::Logger::Realloc, new_size, stream);
+
 	if (!ptr && !new_size) {
         return RMM_SUCCESS;
     }
@@ -126,10 +149,14 @@ rmmError_t rmmRealloc(void **ptr, size_t new_size, cudaStream_t stream)
     if (!ptr) 
     	return RMM_ERROR_INVALID_ARGUMENT;
 
-	RMM_CHECK_CUDA(cudaFree(*ptr));
+#ifdef RMM_USE_CUDAMALLOC
+    RMM_CHECK_CUDA(cudaFree(*ptr));
 	RMM_CHECK_CUDA(cudaMalloc(ptr, new_size));
-    log.setPointer(ptr);
-
+#else
+    RMM_CHECK( theManager->registerStream(stream) );
+    RMM_CHECK_CNMEM( cnmemFree(*ptr, stream) );
+    RMM_CHECK_CNMEM( cnmemMalloc(ptr, new_size, stream) );
+#endif
     return RMM_SUCCESS;
 }
 
@@ -137,14 +164,23 @@ rmmError_t rmmRealloc(void **ptr, size_t new_size, cudaStream_t stream)
 rmmError_t rmmFree(void *ptr, cudaStream_t stream)
 {
     LogIt log(rmm::Logger::Free, ptr, 0, stream);
+#ifdef RMM_USE_CUDAMALLOC
 	RMM_CHECK_CUDA(cudaFree(ptr));
+#else
+    RMM_CHECK_CNMEM( cnmemFree(ptr, stream) );
+#endif
 	return RMM_SUCCESS;
 }
 
 // Get amounts of free and total memory managed by a manager associated with the stream.
 rmmError_t rmmGetInfo(size_t *freeSize, size_t *totalSize, cudaStream_t stream)
 {
-	RMM_CHECK_CUDA(cudaMemGetInfo(freeSize, totalSize));
+#ifdef RMM_USE_CUDAMALLOC
+    RMM_CHECK_CUDA(cudaMemGetInfo(freeSize, totalSize));
+#else
+    RMM_CHECK( theManager->registerStream(stream) );
+    RMM_CHECK_CNMEM( cnmemMemGetInfo(freeSize, totalSize, stream) );
+#endif
 	return RMM_SUCCESS;
 }
 
