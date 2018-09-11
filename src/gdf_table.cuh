@@ -698,30 +698,59 @@ public:
     return gdf_status;
   }
 
+  /* --------------------------------------------------------------------------*/
+  /** 
+   * @Synopsis  An in-place gather operation that permutes the rows of the table
+   * according to a map. permuted_table[i] = original_table[ row_gather_map[i] ]
+   * 
+   * @Param row_gather_map The map the determines the reordering of rows in the 
+   table 
+   * 
+   * @Returns   
+   */
+  /* ----------------------------------------------------------------------------*/
   template <typename size_type>
   gdf_error gather(thrust::device_vector<size_type> const & row_gather_map) {
       return gather(row_gather_map, *this);
   }
 
+  /* --------------------------------------------------------------------------*/
+  /** 
+   * @Synopsis  Lexicographically sorts the rows of the gdf_table in-place
+   * 
+   * @Returns A permutation vector of the new ordering of the rows, e.g.,
+   * sorted_table[i] == unsorted_table[ permuted_indices[i] ]
+   */
+  /* ----------------------------------------------------------------------------*/
   thrust::device_vector<size_type> sort(void) {
+
       cudaStream_t stream = NULL;
+
+      // Functor that defines a `less` operator between rows of a set of
+      // gdf_columns
       LesserRTTI<size_type> comparator(d_columns_data,
               reinterpret_cast<int*>(d_columns_types),
               num_columns);
-      thrust::device_vector<size_type> indices(column_length);
+
+      // Vector that will store the permutation of the rows after the sort
+      thrust::device_vector<size_type> permuted_indices(column_length);
       thrust::sequence(thrust::cuda::par.on(stream),
-              indices.begin(), indices.end());
+              permuted_indices.begin(), permuted_indices.end());
+
+      // Use the LesserRTTI functor to sort the rows of the table and the
+      // permutation vector
       thrust::sort(thrust::cuda::par.on(stream),
-              indices.begin(), indices.end(),
+              permuted_indices.begin(), permuted_indices.end(),
               [comparator] __host__ __device__ (size_type i1, size_type i2) {
               return comparator.less(i1, i2);
               });
-      thrust::host_vector<void*> host_columns = device_columns;
-      thrust::host_vector<gdf_dtype> host_types = device_types;
 
-      gather(indices);
+      //thrust::host_vector<void*> host_columns = device_columns;
+      //thrust::host_vector<gdf_dtype> host_types = device_types;
 
-      return indices;
+      gather(permuted_indices);
+
+      return permuted_indices;
   }
 
 private:
@@ -753,13 +782,16 @@ private:
   
     gdf_error gdf_status{GDF_SUCCESS};
 
+    // Gathering from one table to another
     if (input_column != output_column) {
       thrust::gather(thrust::cuda::par.on(stream),
                      row_gather_map.begin(),
                      row_gather_map.end(),
                      input_column,
                      output_column);
-    } else {
+    } 
+    // Gather is in-place
+    else {
         thrust::device_vector<column_type> remapped_copy(num_rows);
         thrust::gather(thrust::cuda::par.on(stream),
                        row_gather_map.begin(),
