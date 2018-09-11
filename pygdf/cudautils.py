@@ -90,6 +90,8 @@ def gpu_copy(inp, out):
 
 
 def astype(ary, dtype):
+    if ary.size == 0:
+        return cuda.device_array(shape=ary.shape, dtype=dtype)
     if ary.dtype == np.dtype(dtype):
         return ary
     else:
