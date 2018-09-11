@@ -107,7 +107,7 @@ struct row_comparator
     return left_table.rows_equal(right_table, left_index, right_index);
   }
 
-  const map_key_comparator default_comparator;
+  const map_key_comparator default_comparator{};
   const key_type unused_key;
   map_type const & the_map;
   gdf_table<size_type> const & left_table;

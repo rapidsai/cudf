@@ -328,7 +328,7 @@ public:
           return GDF_UNSUPPORTED_DTYPE;
       }
     }
-
+    return GDF_SUCCESS;
   }
 
     /* --------------------------------------------------------------------------*/
