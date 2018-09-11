@@ -429,3 +429,16 @@ TYPED_TEST(GroupTest, BlockKeysSame)
     this->compute_gdf_result();
     this->compare_gdf_result(reference_map);
 }
+
+TYPED_TEST(GroupTest, EmptyInput)
+{
+    const size_t num_keys = 0;
+    const size_t num_values_per_key = 0;
+    const size_t max_key = 0;
+    const size_t max_val = 0;
+    this->create_input(num_keys, num_values_per_key, max_key, max_val);
+    auto reference_map = this->compute_reference_solution();
+    this->create_gdf_output_buffers(num_keys, num_values_per_key);
+    this->compute_gdf_result();
+    this->compare_gdf_result(reference_map);
+}

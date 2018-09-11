@@ -130,7 +130,7 @@ void initialize_key_vector(std::vector<K>& k,
         const size_t column_range, const size_t shuffle_seed, bool unique = false) {
     k.reserve(key_count*value_per_key);
     if (unique) {
-        assert((column_range > key_count));
+        assert((column_range >= key_count));
         createUniqueKeys<K>(key_count, value_per_key, column_range, k, shuffle_seed);
     } else {
         RandomValues<K> r(0, static_cast<K>(column_range));
