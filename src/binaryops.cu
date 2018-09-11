@@ -33,6 +33,12 @@ template<typename T, typename Tout, typename F>
 struct BinaryOp {
     static
     gdf_error launch(gdf_column *lhs, gdf_column *rhs, gdf_column *output) {
+
+        // Return successully right away for empty inputs
+        if((0 == lhs->size) || (0 == rhs->size)){
+          return GDF_SUCCESS;
+        }
+
         GDF_REQUIRE(lhs->size == rhs->size, GDF_COLUMN_SIZE_MISMATCH);
         GDF_REQUIRE(lhs->size == output->size, GDF_COLUMN_SIZE_MISMATCH);
         GDF_REQUIRE(lhs->dtype == rhs->dtype, GDF_UNSUPPORTED_DTYPE);
