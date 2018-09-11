@@ -90,10 +90,10 @@ def gpu_copy(inp, out):
 
 
 def astype(ary, dtype):
-    if ary.size == 0:
-        return cuda.device_array(shape=ary.shape, dtype=dtype)
     if ary.dtype == np.dtype(dtype):
         return ary
+    elif ary.size == 0:
+        return cuda.device_array(shape=ary.shape, dtype=dtype)
     else:
         out = cuda.device_array(shape=ary.shape, dtype=dtype)
         configured = gpu_copy.forall(out.size)
