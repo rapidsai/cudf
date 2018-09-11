@@ -515,3 +515,35 @@ def test_dataframe_hash_columns(nrows):
         gdf.a.hash_values().to_array(),
         out_one,
         )
+
+
+@pytest.mark.parametrize('nrows', [3, 10, 100, 1000])
+@pytest.mark.parametrize('nparts', [1, 2, 8, 13])
+@pytest.mark.parametrize('nkeys', [1, 2])
+def test_dataframe_hash_partition(nrows, nparts, nkeys):
+    np.random.seed(123)
+    gdf = DataFrame()
+    keycols = []
+    for i in range(nkeys):
+        keyname = 'key{}'.format(i)
+        gdf[keyname] = np.random.randint(0, 7 - i, nrows)
+        keycols.append(keyname)
+    gdf['val1'] = np.random.randint(0, nrows * 2, nrows)
+
+    got = gdf.partition_by_hash(keycols, nparts=nparts)
+    # Must return a list
+    assert isinstance(got, list)
+    # Must have correct number of partitions
+    assert len(got) == nparts
+    # All partitions must be DataFrame type
+    assert all(isinstance(p, DataFrame) for p in got)
+    # Check that all partitions have unique keys
+    part_unique_keys = set()
+    for p in got:
+        if len(p):
+            # Take rows of the keycolums and build a set of the key-values
+            unique_keys = set(map(tuple, p.as_matrix(columns=keycols)))
+            # Ensure that none of the key-values have occurred in other groups
+            assert not (unique_keys & part_unique_keys)
+            part_unique_keys |= unique_keys
+    assert len(part_unique_keys)
