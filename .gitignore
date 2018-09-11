@@ -8,6 +8,7 @@ __pycache__
 *.swp
 *.pytest_cache
 build
+Debug
 /thirdparty/googletest/
 /include/gdf/ipc/File_generated.h
 /include/gdf/ipc/Message_generated.h
