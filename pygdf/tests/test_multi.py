@@ -79,3 +79,14 @@ def test_concat_errors():
     # Mismatched columns
     with pytest.raises(ValueError):
         gd.concat([gdf, gdf2])
+
+
+def test_concat_misordered_columns():
+    df, df2, gdf, gdf2 = make_frames(False)
+    gdf2 = gdf2[['z', 'x', 'y']]
+    df2 = df2[['z', 'x', 'y']]
+
+    res = gd.concat([gd, gdf2]).to_pandas()
+    sol = pd.concat([df, df2])
+
+    pd.util.testing.assert_frame_equal(res, sol, check_names=False)
