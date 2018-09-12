@@ -117,10 +117,7 @@ class RangeIndex(Index):
                                               self._start, self._stop)
 
     def __len__(self):
-        length = self._stop - self._start
-        if length < 0:
-            return 0
-        return length
+        return max(0, self._stop - self._start)
 
     def __getitem__(self, index):
         if isinstance(index, slice):
