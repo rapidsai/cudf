@@ -426,8 +426,8 @@ class DataFrame(object):
 
     @classmethod
     def _concat(cls, objs, ignore_index=False):
-        if len(set([tuple(set(o.columns)) for o in objs])) != 1:
-            what = set([tuple(set(o.columns)) for o in objs])
+        if len(set(sorted(o.columns) for o in objs)) != 1:
+            what = set(sorted(o.columns) for o in objs)
             raise ValueError('columns mismatch: {}'.format(what))
         objs = [o for o in objs]
         if ignore_index:
