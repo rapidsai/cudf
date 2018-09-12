@@ -681,36 +681,51 @@ class DataFrame(object):
             raise ValueError('there are overlapping columns but '
                              'lsuffix and rsuffix are not defined')
 
+        return self._merge_gdf(other=other, left_on=on, right_on=on, how=how,
+                               lsuffix=lsuffix, rsuffix=rsuffix,
+                               same_names=same_names, method=method)
+
+    def _merge_gdf(self, other, left_on, right_on, how, lsuffix, rsuffix,
+                   same_names, method, rightjoin=False):
+
+        from pygdf import cudautils
+
         if how == 'right':
             # libgdf doesn't support right join directly, we will swap the
             # dfs and use left join
-            return other.merge(other=self, on=on, how='left', lsuffix=rsuffix,
-                               rsuffix=lsuffix, method=method)
+            return other._merge_gdf(other=self, left_on=right_on,
+                                    right_on=left_on, how='left',
+                                    lsuffix=rsuffix, rsuffix=lsuffix,
+                                    method=method, rightjoin=True)
 
         lhs = self
         rhs = other
 
-        joined_values, joined_indicies = self._merge_gdf(
-            lhs, rhs, left_on=on, right_on=on, how=how, method=method,
-            return_indices=True)
-
-        return df
-
-    def _merge_gdf(self, left, right, left_on, right_on, how, method,
-                   return_indices):
-
-        from pygdf import cudautils
-
-        assert return_indices
         assert len(left_on) == len(right_on)
+
+        # XXX: Prepare output.  same as _join.  code duplication
+        def fix_name(name, suffix):
+            if name in same_names:
+                return "{}{}".format(name, suffix)
+            return name
+
+        def gather_cols(outdf, indf, on, idx, joinidx, suffix):
+            mask = (Series(idx) != -1).as_mask()
+            for k in on:
+                newcol = indf[k].take(idx).set_mask(mask).set_index(joinidx)
+                outdf[fix_name(k, suffix)] = newcol
+
+        def gather_empty(outdf, indf, idx, joinidx, suffix):
+            for k in indf.columns:
+                outdf[fix_name(k, suffix)] = indf[k][:0]
 
         left_cols = []
         for l in left_on:
-            left_cols.append(left[l]._column)
+            left_cols.append(lhs[l]._column)
 
         right_cols = []
         for r in right_on:
-            right_cols.append(right[r]._column)
+            right_cols.append(rhs[r]._column)
 
         joined_indices = []
         with _gdf.apply_join(left_cols, right_cols, how, method) \
@@ -739,36 +754,17 @@ class DataFrame(object):
                 joined_indices = (cudautils.copy_array(left_indices),
                                   cudautils.copy_array(right_indices))
 
-        # XXX: Prepare output.  same as _join.  code duplication
-        def fix_name(name, suffix):
-            if name in same_names:
-                return "{}{}".format(name, suffix)
-            return name
-
-        def gather_cols(outdf, indf, on, idx, joinidx, suffix):
-            mask = (Series(idx) != -1).as_mask()
-            for k in on:
-                newcol = indf[k].take(idx).set_mask(mask).set_index(joinidx)
-                outdf[fix_name(k, suffix)] = newcol
-
-        def gather_empty(outdf, indf, idx, joinidx, suffix):
-            for k in indf.columns:
-                outdf[fix_name(k, suffix)] = indf[k][:0]
-
         df = DataFrame()
-        for key, col in zip(on, joined_values):
+        for key, col in zip(left_on, joined_values):
             df[key] = col
 
-        left_indices, right_indices = joined_indicies
-        gather_cols(df, lhs, [x for x in lhs.columns if x not in on],
+        left_indices, right_indices = joined_indices
+        gather_cols(df, lhs, [x for x in lhs.columns if x not in left_on],
                     left_indices, df.index, lsuffix)
-        gather_cols(df, rhs, [x for x in rhs.columns if x not in on],
+        gather_cols(df, rhs, [x for x in rhs.columns if x not in right_on],
                     right_indices, df.index, rsuffix)
 
-        if return_indices:
-            return joined_values, joined_indices
-        else:
-            return joined_indices
+        return df
 
     def join(self, other, on=None, how='left', lsuffix='', rsuffix='',
              sort=False, method='hash'):
