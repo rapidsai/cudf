@@ -86,7 +86,7 @@ def test_concat_misordered_columns():
     gdf2 = gdf2[['z', 'x', 'y']]
     df2 = df2[['z', 'x', 'y']]
 
-    res = gd.concat([gd, gdf2]).to_pandas()
+    res = gd.concat([gdf, gdf2]).to_pandas()
     sol = pd.concat([df, df2])
 
     pd.util.testing.assert_frame_equal(res, sol, check_names=False)
