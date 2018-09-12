@@ -653,15 +653,39 @@ class DataFrame(object):
         return df.set_index(self.index.take(new_positions))
 
     def merge(self, other, on=None, how='left', lsuffix='_x', rsuffix='_y',
-              type='sort'):
-        if how != 'left':
-            raise NotImplementedError('{!r} join not implemented yet'
-                                      .format(how))
+              method='hash'):
+        """Merge a DataFrame object with another DataFrame by performing a
+        database-style join operation on columns.
+
+        Parameters
+        ----------
+        other : DataFrame
+        how : str
+            Only accepts "left", "right", "inner", "outer"
+        lsuffix, rsuffix : str
+            The suffices to add to the left (*lsuffix*) and right (*rsuffix*)
+            column names when avoiding conflicts.
+        method: str, optional
+            A string indicating the method to use to perform the merge.
+            Valid values are "sort" or "hash"
+
+        Returns
+        -------
+        The merged dataframe
+        """
+        if how not in ['left', 'right', 'inner', 'outer']:
+            raise NotImplementedError('unsupported {!r} join'.format(how))
 
         same_names = set(self.columns) & set(other.columns)
         if same_names and not (lsuffix or rsuffix):
             raise ValueError('there are overlapping columns but '
                              'lsuffix and rsuffix are not defined')
+
+        if how == 'right':
+            # libgdf doesn't support right join directly, we will swap the
+            # dfs and use left join
+            return other.merge(other=self, on=on, how='left', lsuffix=rsuffix,
+                               rsuffix=lsuffix, method=method)
 
         lhs = self
         rhs = other
@@ -670,11 +694,55 @@ class DataFrame(object):
         #    lhs, rhs, left_on=on, right_on=on, how=how,
         #    return_joined_indicies=True)
         joined_values, joined_indicies = self._merge_gdf(
-            lhs, rhs, left_on=on, right_on=on, how=how,
+            lhs, rhs, left_on=on, right_on=on, how=how, method=method,
             return_indices=True)
 
+        return df
+
+    def _merge_gdf(self, left, right, left_on, right_on, how, method,
+                   return_indices):
+
+        from pygdf import cudautils
+
+        assert return_indices
+        assert len(left_on) == len(right_on)
+
+        left_cols = []
+        for l in left_on:
+            left_cols.append(left[l]._column)
+
+        right_cols = []
+        for r in right_on:
+            right_cols.append(right[r]._column)
+
+        joined_indices = []
+        with _gdf.apply_join(left_cols, right_cols, how, method) \
+                as (left_indices, right_indices):
+            if left_indices.size > 0:
+                # For each column we joined on, gather the values from each
+                # column using the indices from the join
+                joined_values = []
+
+                for i in range(len(left_on)):
+                    # TODO Instead of calling 'gather_joined_index' for every
+                    # column that we are joining on, we should implement a
+                    # 'multi_gather_joined_index' that can gather a value from
+                    # each column at once
+                    raw_values = cudautils.gather_joined_index(
+                        left_cols[i].to_gpu_array(),
+                        right_cols[i].to_gpu_array(),
+                        left_indices,
+                        right_indices,
+                    )
+                    buffered_values = Buffer(raw_values)
+
+                    joined_values.append(left_cols[i]
+                                         .replace(data=buffered_values))
+
+                joined_indices = (cudautils.copy_array(left_indices),
+                                  cudautils.copy_array(right_indices))
+
         # XXX: Prepare output.  same as _join.  code duplication
-        # Perform left, inner and outer join
         def fix_name(name, suffix):
             if name in same_names:
                 return "{}{}".format(name, suffix)
@@ -699,51 +767,6 @@ class DataFrame(object):
                     left_indices, df.index, lsuffix)
         gather_cols(df, rhs, [x for x in rhs.columns if x not in on],
                     right_indices, df.index, rsuffix)
-
-        return df
-
-    def _merge_gdf(self, left, right, left_on, right_on, how, return_indices):
-
-        from pygdf import cudautils
-
-        assert how == 'left'
-        assert return_indices
-        assert len(left_on) == len(right_on)
-
-        left_cols = []
-        for l in left_on:
-            left_cols.append(left[l]._column)
-
-        right_cols = []
-        for r in right_on:
-            right_cols.append(right[r]._column)
-
-        joined_indices = []
-        with _gdf.apply_join(left_cols, right_cols, how) as (left_indices,
-                                                             right_indices):
-            if left_indices.size > 0:
-                # For each column we joined on, gather the values from each
-                # column using the indices from the join
-                joined_values = []
-
-                for i in range(len(left_on)):
-                    # TODO Instead of calling 'gather_joined_index' for every
-                    # column that we are joining on, we should implement a
-                    # 'multi_gather_joined_index' that can gather a value from
-                    # each column at once
-                    raw_values = cudautils.gather_joined_index(
-                        left_cols[i].to_gpu_array(),
-                        right_cols[i].to_gpu_array(),
-                        left_indices,
-                        right_indices,
-                    )
-                    buffered_values = Buffer(raw_values)
-
-                    joined_values.append(left_cols[i]
-                                         .replace(data=buffered_values))
-
-                joined_indices = (cudautils.copy_array(left_indices),
-                                  cudautils.copy_array(right_indices))
 
         if return_indices:
             return joined_values, joined_indices
