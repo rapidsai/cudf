@@ -42,7 +42,7 @@ struct LesserRTTI
   //   assert( types.size() == sz_ );
   // }
 
-   __device__
+  // __device__
   LesserRTTI(void* const* cols,
 	     int* const types,
 	     size_t sz):
@@ -53,7 +53,7 @@ struct LesserRTTI
   {
   }
 
-   __device__
+  // __device__
   LesserRTTI(void* const* cols,
 	     int* const types,
 	     size_t sz,
