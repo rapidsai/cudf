@@ -97,34 +97,6 @@ class Index(object):
             return column_join_res
 
 
-class EmptyIndex(Index):
-    """
-    A singleton class to represent an empty index when a DataFrame is created
-    without any initializer.
-    """
-    _singleton = None
-
-    def __new__(cls):
-        if cls._singleton is None:
-            cls._singleton = object.__new__(EmptyIndex)
-        return cls._singleton
-
-    def __getitem__(self, index):
-        if isinstance(index, slice):
-            return self
-        raise IndexError
-
-    def __len__(self):
-        return 0
-
-    def as_column(self):
-        buf = Buffer(np.empty(0, dtype=np.int64))
-        return NumericalColumn(data=buf, dtype=buf.dtype)
-
-    def find_label_range(self, first, last):
-        return None, None
-
-
 class RangeIndex(Index):
     """Basic start..stop
     """
@@ -164,9 +136,7 @@ class RangeIndex(Index):
             raise ValueError(index)
 
     def __eq__(self, other):
-        if isinstance(other, EmptyIndex):
-            return len(self) == 0
-        elif isinstance(other, RangeIndex):
+        if isinstance(other, RangeIndex):
             return (self._start == other._start and self._stop == other._stop)
         else:
             return super(RangeIndex, self).__eq__(other)
@@ -227,11 +197,6 @@ class GenericIndex(Index):
         assert isinstance(values, columnops.TypedColumnBase), type(values)
         assert values.null_count == 0
 
-        # # return the index instance
-        # if len(values) == 0:
-        #     # for empty index, return a EmptyIndex instead
-        #     return EmptyIndex()
-        # else:
         # Make GenericIndex object
         res = Index.__new__(GenericIndex)
         res._values = values

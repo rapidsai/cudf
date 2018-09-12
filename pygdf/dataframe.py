@@ -12,7 +12,7 @@ from numba import cuda
 from numba.cuda.cudadrv.devicearray import DeviceNDArray
 
 from . import cudautils, formatting, queryutils, applyutils, utils, _gdf
-from .index import GenericIndex, EmptyIndex, Index, RangeIndex
+from .index import GenericIndex, Index, RangeIndex
 from .buffer import Buffer
 from .series import Series
 from .column import Column
@@ -80,7 +80,7 @@ class DataFrame(object):
 
     def __init__(self, name_series=None, index=None):
         if index is None:
-            index = EmptyIndex()
+            index = RangeIndex(start=0)
         self._index = index
         self._size = len(index)
         self._cols = OrderedDict()
@@ -390,7 +390,7 @@ class DataFrame(object):
         self._sanitize_columns(col)
         col = self._sanitize_values(col)
 
-        empty_index = isinstance(self._index, EmptyIndex)
+        empty_index = len(self._index) == 0
         series = Series(col)
         if forceindex or empty_index or self._index == series.index:
             if empty_index:
