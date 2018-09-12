@@ -227,15 +227,15 @@ class GenericIndex(Index):
         assert isinstance(values, columnops.TypedColumnBase), type(values)
         assert values.null_count == 0
 
-        # return the index instance
-        if len(values) == 0:
-            # for empty index, return a EmptyIndex instead
-            return EmptyIndex()
-        else:
-            # Make GenericIndex object
-            res = Index.__new__(GenericIndex)
-            res._values = values
-            return res
+        # # return the index instance
+        # if len(values) == 0:
+        #     # for empty index, return a EmptyIndex instead
+        #     return EmptyIndex()
+        # else:
+        # Make GenericIndex object
+        res = Index.__new__(GenericIndex)
+        res._values = values
+        return res
 
     def serialize(self, serialize):
         header = {}
