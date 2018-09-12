@@ -516,3 +516,15 @@ def test_dataframe_hash_columns(nrows):
         gdf.a.hash_values().to_array(),
         out_one,
         )
+
+
+def test_dataframe_empty_concat():
+    gdf1 = DataFrame()
+    gdf1['a'] = []
+    gdf1['b'] = []
+
+    gdf2 = gdf1.copy()
+
+    gdf3 = gd.concat([gdf1, gdf2])
+    assert len(gdf3) == 0
+    assert len(gdf3.columns) == 2
