@@ -689,10 +689,7 @@ class DataFrame(object):
 
         lhs = self
         rhs = other
-        # XXX: Replace this stub
-        # joined_values, joined_indicies = self._stub_merge(
-        #    lhs, rhs, left_on=on, right_on=on, how=how,
-        #    return_joined_indicies=True)
+
         joined_values, joined_indicies = self._merge_gdf(
             lhs, rhs, left_on=on, right_on=on, how=how, method=method,
             return_indices=True)
