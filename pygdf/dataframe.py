@@ -430,7 +430,7 @@ class DataFrame(object):
             what = set(o.columns for o in objs)
             raise ValueError('columns mismatch: {}'.format(what))
         # Filter out inputs that have 0 length
-        objs = [o for o in objs if len(o) > 0]
+        objs = [o for o in objs]
         if ignore_index:
             index = RangeIndex(sum(map(len, objs)))
         else:
