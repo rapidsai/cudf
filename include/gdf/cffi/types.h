@@ -43,6 +43,7 @@ typedef enum {
     GDF_INVALID_API_CALL,             /**< The arguments passed into the function were invalid */   
     GDF_JOIN_DTYPE_MISMATCH,          /**< Datatype mismatch between corresponding columns in  left/right tables in the Join function */   
     GDF_JOIN_TOO_MANY_COLUMNS,        /**< Too many columns were passed in for the requested join operation*/       
+    GDF_GROUPBY_TOO_MANY_COLUMNS,
     GDF_UNSUPPORTED_METHOD,           /**< The method requested to perform an operation was invalid or unsupported (e.g., hash vs. sort)*/ 
     GDF_INVALID_AGGREGATOR,           /**< Invalid aggregator was specified for a groupby*/
     GDF_INVALID_HASH_FUNCTION,        /**< Invalid hash function was selected */
