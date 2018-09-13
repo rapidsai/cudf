@@ -471,6 +471,33 @@ def test_dataframe_append_empty():
     pd.testing.assert_frame_equal(gdf.to_pandas(), pdf)
 
 
+def test_dataframe_setitem_from_masked_object():
+    ary = np.random.randn(100)
+    mask = np.zeros(100, dtype=bool)
+    mask[:20] = True
+    np.random.shuffle(mask)
+    ary[mask] = np.nan
+
+    test1 = Series(ary)
+    assert(test1.has_null_mask)
+    assert(test1.null_count == 20)
+
+    test2 = DataFrame.from_pandas(pd.DataFrame({'a': ary}))
+    assert(test2['a'].has_null_mask)
+    assert(test2['a'].null_count == 20)
+
+    gpu_ary = cuda.to_device(ary)
+    test3 = Series(gpu_ary)
+    assert(test3.has_null_mask)
+    assert(test3.null_count == 20)
+
+    test4 = DataFrame()
+    lst = [1, 2, None, 4, 5, 6, None, 8, 9]
+    test4['lst'] = lst
+    assert(test4['lst'].has_null_mask)
+    assert(test4['lst'].null_count == 2)
+
+
 def test_dataframe_append_to_empty():
     pdf = pd.DataFrame()
     pdf['a'] = []

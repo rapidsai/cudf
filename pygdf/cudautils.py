@@ -3,6 +3,7 @@
 import numpy as np
 
 from numba import cuda, int32, numpy_support
+from math import isnan
 
 from .utils import mask_bitsize, mask_get, mask_set, make_mask
 
@@ -273,6 +274,23 @@ def compact_mask_bytes(boolbytes):
     gpu_compact_mask_bytes.forall(bits.size)(boolbytes, bits)
     return bits
 
+
+@cuda.jit
+def gpu_mask_from_devary(ary, bits):
+    tid = cuda.grid(1)
+    base = tid * mask_bitsize
+    for i in range(base, base + mask_bitsize):
+        if i >= len(ary):
+            break
+        if not isnan(ary[i]):
+            mask_set(bits, i)
+
+
+def mask_from_devary(ary):
+    bits = make_mask(len(ary))
+    gpu_fill_value.forall(bits.size)(bits, 0)
+    gpu_mask_from_devary.forall(bits.size)(ary, bits)
+    return bits
 
 #
 # Gather
