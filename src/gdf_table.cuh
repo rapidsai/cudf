@@ -23,6 +23,7 @@
 #include <gdf/errorutils.h>
 #include "hashmap/hash_functions.cuh"
 #include "hashmap/managed.cuh"
+#include "util/bit_util.cuh"
 
 // TODO Inherit from managed class to allocate with managed memory?
 template <typename T>
@@ -48,6 +49,7 @@ public:
     // Copy the pointers to the column's data and types to the device 
     // as contiguous arrays
     device_columns.reserve(num_cols);
+    device_valids.reserve(num_cols);
     device_types.reserve(num_cols);
     for(size_type i = 0; i < num_cols; ++i)
     {
@@ -58,11 +60,13 @@ public:
         assert(nullptr != host_columns[i]->data);
       }
       device_columns.push_back(host_columns[i]->data);
+      device_valids.push_back(host_columns[i]->valid);
       device_types.push_back(host_columns[i]->dtype);
     }
 
 
     d_columns_data = device_columns.data().get();
+    d_valids_data = device_valids.data().get();
     d_columns_types = device_types.data().get();
   }
 
@@ -84,6 +88,18 @@ public:
   size_type get_column_length() const
   {
     return column_length;
+  }
+
+  __device__ bool is_row_valid(size_type row_index) const
+  {
+    bool bool_value{true};
+    size_t num_columns_to_hash = this->num_columns;
+    for(size_type i = 0; i < num_columns_to_hash; ++i)
+    {
+      const gdf_valid_type * current_valid = d_valids_data[i];
+      bool_value = bool_value && gdf::util::get_bit(current_valid, row_index);
+    }
+    return bool_value;    
   }
 
   __host__ 
@@ -169,7 +185,6 @@ public:
                   const size_type my_row_index, 
                   const size_type other_row_index) const
   {
-
     for(size_type i = 0; i < num_columns; ++i)
     {
       const gdf_dtype my_col_type = d_columns_types[i];
@@ -180,7 +195,10 @@ public:
         printf("Attempted to compare columns of different types.\n");
         return false;
       }
-
+      bool valid = gdf::util::get_bit(d_valids_data[i], my_row_index) && gdf::util::get_bit(other.d_valids_data[i], other_row_index);
+      if (valid == false) {
+        return false;
+      }
       switch(my_col_type)
       {
         case GDF_INT8:
@@ -589,9 +607,11 @@ gdf_error scatter_column(column_type const * const __restrict__ input_column,
 }
 
   void ** d_columns_data{nullptr};
+  gdf_valid_type** d_valids_data{nullptr}; 
   gdf_dtype * d_columns_types{nullptr};
 
   thrust::device_vector<void*> device_columns;
+  thrust::device_vector<gdf_valid_type*> device_valids; 
   thrust::device_vector<gdf_dtype> device_types;
 
   gdf_column ** host_columns;

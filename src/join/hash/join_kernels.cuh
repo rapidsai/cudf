@@ -26,6 +26,7 @@ enum class JoinType {
 #include "../../hashmap/concurrent_unordered_multimap.cuh"
 #include "../../hashmap/hash_functions.cuh"
 #include <cub/cub.cuh>
+#include "../../util/bit_util.cuh"
 
 constexpr int warp_size = 32;
 
@@ -50,23 +51,23 @@ __global__ void build_hash_table( multimap_type * const multi_map,
 {
     size_type i = threadIdx.x + blockIdx.x * blockDim.x;
 
-    while( i < build_table_num_rows ) {
+    while( i < build_table_num_rows) {
+      if (build_table.is_row_valid(i)) {
+        // Compute the hash value of this row
+        const hash_value_type row_hash_value{build_table.hash_row(i)};
 
-      // Compute the hash value of this row
-      const hash_value_type row_hash_value{build_table.hash_row(i)};
+        // Insert the (row hash value, row index) into the map
+        // using the row hash value to determine the location in the 
+        // hash map where the new pair should be inserted
+        const auto insert_location = multi_map->insert( thrust::make_pair( row_hash_value, i ),
+                                                        true,
+                                                        row_hash_value );
 
-      // Insert the (row hash value, row index) into the map
-      // using the row hash value to determine the location in the 
-      // hash map where the new pair should be inserted
-      const auto insert_location = multi_map->insert( thrust::make_pair( row_hash_value, i ),
-                                                      true,
-                                                      row_hash_value );
-
-      // If the insert failed, set the error code accordingly
-      if(multi_map->end() == insert_location){
-        *gdf_error_code = GDF_HASH_TABLE_INSERT_FAILURE;
+        // If the insert failed, set the error code accordingly
+        if(multi_map->end() == insert_location){
+          *gdf_error_code = GDF_HASH_TABLE_INSERT_FAILURE;
+        }
       }
-
       i += blockDim.x * gridDim.x;
     }
 }
