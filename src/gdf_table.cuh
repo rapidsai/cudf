@@ -25,7 +25,6 @@
 #include "hashmap/managed.cuh"
 #include "util/bit_util.cuh"
 
-// TODO Inherit from managed class to allocate with managed memory?
 template <typename T>
 class gdf_table : public managed
 {
@@ -46,11 +45,11 @@ public:
       assert(nullptr != host_columns[0]->data);
     }
 
-    // Copy the pointers to the column's data and types to the device 
-    // as contiguous arrays
-    device_columns.reserve(num_cols);
-    device_valids.reserve(num_cols);
-    device_types.reserve(num_cols);
+    // Copy pointers to each column's data, types, and validity bitmasks 
+    // to the device  as contiguous arrays
+    device_columns_data.reserve(num_cols);
+    device_columns_valids.reserve(num_cols);
+    device_columns_types.reserve(num_cols);
     for(size_type i = 0; i < num_cols; ++i)
     {
       assert(nullptr != host_columns[i]);
@@ -59,15 +58,15 @@ public:
       {
         assert(nullptr != host_columns[i]->data);
       }
-      device_columns.push_back(host_columns[i]->data);
-      device_valids.push_back(host_columns[i]->valid);
-      device_types.push_back(host_columns[i]->dtype);
+      device_columns_data.push_back(host_columns[i]->data);
+      device_columns_valids.push_back(host_columns[i]->valid);
+      device_columns_types.push_back(host_columns[i]->dtype);
     }
 
 
-    d_columns_data = device_columns.data().get();
-    d_valids_data = device_valids.data().get();
-    d_columns_types = device_types.data().get();
+    d_columns_data = device_columns_data.data().get();
+    d_columns_valids = device_columns_valids.data().get();
+    d_columns_types = device_columns_types.data().get();
   }
 
   ~gdf_table(){}
@@ -96,7 +95,7 @@ public:
     size_t num_columns_to_hash = this->num_columns;
     for(size_type i = 0; i < num_columns_to_hash; ++i)
     {
-      const gdf_valid_type * current_valid = d_valids_data[i];
+      const gdf_valid_type * current_valid = d_columns_valids[i];
       bool_value = bool_value && gdf::util::get_bit(current_valid, row_index);
     }
     return bool_value;    
@@ -185,6 +184,14 @@ public:
                   const size_type my_row_index, 
                   const size_type other_row_index) const
   {
+
+    // If either row contains a NULL, then by definition, because NULL != x for all x,
+    // the two rows are not equal
+    bool valid = this->is_row_valid(my_row_index) && other.is_row_valid(other_row_index);
+    if (false == valid) {
+      return false;
+    }
+
     for(size_type i = 0; i < num_columns; ++i)
     {
       const gdf_dtype my_col_type = d_columns_types[i];
@@ -193,10 +200,6 @@ public:
       if(my_col_type != other_col_type)
       {
         printf("Attempted to compare columns of different types.\n");
-        return false;
-      }
-      bool valid = gdf::util::get_bit(d_valids_data[i], my_row_index) && gdf::util::get_bit(other.d_valids_data[i], other_row_index);
-      if (valid == false) {
         return false;
       }
       switch(my_col_type)
@@ -606,17 +609,20 @@ gdf_error scatter_column(column_type const * const __restrict__ input_column,
   return gdf_status;
 }
 
-  void ** d_columns_data{nullptr};
-  gdf_valid_type** d_valids_data{nullptr}; 
-  gdf_dtype * d_columns_types{nullptr};
+  const size_type num_columns; /** The number of columns in the table */
+  size_type column_length;     /** The number of rows in the table */
 
-  thrust::device_vector<void*> device_columns;
-  thrust::device_vector<gdf_valid_type*> device_valids; 
-  thrust::device_vector<gdf_dtype> device_types;
+  gdf_column ** host_columns;  /** The set of gdf_columns that this table wraps */
 
-  gdf_column ** host_columns;
-  const size_type num_columns;
-  size_type column_length;
+  thrust::device_vector<void*> device_columns_data; /** Device array of pointers to each columns data */
+  void ** d_columns_data{nullptr};                  /** Raw pointer to the device array's data */
+
+  thrust::device_vector<gdf_valid_type*> device_columns_valids;  /** Device array of pointers to each columns validity bitmask*/
+  gdf_valid_type** d_columns_valids{nullptr};                   /** Raw pointer to the device array's data */
+
+  thrust::device_vector<gdf_dtype> device_columns_types; /** Device array of each columns data type */
+  gdf_dtype * d_columns_types{nullptr};                 /** Raw pointer to the device array's data */
+
 };
 
 #endif
