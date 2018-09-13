@@ -30,6 +30,7 @@ using hash_value_type = uint32_t;
 template <typename Key>
 struct MurmurHash3_32
 {
+
     using argument_type = Key;
     using result_type = hash_value_type;
     
@@ -117,6 +118,46 @@ struct MurmurHash3_32
     }
 private:
     const uint32_t m_seed;
+};
+
+/* --------------------------------------------------------------------------*/
+/** 
+ * @Synopsis  This hash function simply returns the value that is asked to be hash
+ reinterpreted as the result_type of the functor.
+ */
+/* ----------------------------------------------------------------------------*/
+template <typename Key>
+struct IdentityHash
+{
+    using result_type = hash_value_type;
+
+    /* --------------------------------------------------------------------------*/
+    /** 
+     * @Synopsis  Combines two hash values into a new single hash value. Called 
+     * repeatedly to create a hash value from several variables.
+     * Taken from the Boost hash_combine function 
+     * https://www.boost.org/doc/libs/1_35_0/doc/html/boost/hash_combine_id241013.html
+     * 
+     * @Param lhs The first hash value to combine
+     * @Param rhs The second hash value to combine
+     * 
+     * @Returns A hash value that intelligently combines the lhs and rhs hash values
+     */
+    /* ----------------------------------------------------------------------------*/
+    __host__ __device__ result_type hash_combine(result_type lhs, result_type rhs) const
+    {
+      result_type combined{lhs};
+
+      combined ^= rhs + 0x9e3779b9 + (combined << 6) + (combined >> 2);
+
+      return combined;
+    }
+
+    __forceinline__ 
+    __host__ __device__ result_type operator()(const Key& key) const
+    {
+      return static_cast<result_type>(key);
+    }
 };
 
 template <typename Key>
