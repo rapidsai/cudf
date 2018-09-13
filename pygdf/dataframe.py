@@ -426,8 +426,8 @@ class DataFrame(object):
 
     @classmethod
     def _concat(cls, objs, ignore_index=False):
-        if len(set(frozenset(o.columns) for o in objs)) != 1:
-            what = set(frozenset(o.columns) for o in objs)
+        if len(set(o.columns for o in objs)) != 1:
+            what = set(o.columns for o in objs)
             raise ValueError('columns mismatch: {}'.format(what))
         objs = [o for o in objs]
         if ignore_index:
@@ -652,14 +652,20 @@ class DataFrame(object):
                 df[k] = self[k].reset_index().take(new_positions)
         return df.set_index(self.index.take(new_positions))
 
-    def merge(self, other, on=None, how='left', lsuffix='_x', rsuffix='_y',
-              method='hash'):
+    def merge(self, other, on=None, left_on=None, right_on=None, how='left',
+              lsuffix='_x', rsuffix='_y', method='hash'):
         """Merge a DataFrame object with another DataFrame by performing a
         database-style join operation on columns.
 
         Parameters
         ----------
         other : DataFrame
+        on: list-of-str
+            Column names to join on. These must be found in both DataFrames.
+        left_on: list-of-str
+            Column names to join on in the left DataFrame
+        right_on: list-of-str
+            Column names to join on in the left DataFrame
         how : str
             Only accepts "left", "right", "inner", "outer"
         lsuffix, rsuffix : str
@@ -672,6 +678,12 @@ class DataFrame(object):
         Returns
         -------
         The merged dataframe
+
+        Notes
+        -----
+        Difference from pandas:
+        - Output DataFrame does not have multi-index.
+        - Order of columns in the output might be different.
         """
         if how not in ['left', 'right', 'inner', 'outer']:
             raise NotImplementedError('unsupported {!r} join'.format(how))
@@ -681,8 +693,20 @@ class DataFrame(object):
             raise ValueError('there are overlapping columns but '
                              'lsuffix and rsuffix are not defined')
 
-        return self._merge_gdf(other=other, left_on=on, right_on=on, how=how,
-                               lsuffix=lsuffix, rsuffix=rsuffix,
+        if on is not None and (left_on is not None or right_on is not None):
+            raise ValueError('Can only pass argument "on" OR "left_on" '
+                             'and "right_on", not a combination of both.')
+
+        if left_on is None and right_on is None:
+            left_on = right_on = on
+        elif not left_on or not right_on:
+            raise ValueError('Only one of "left_on" or "right_on" was passed.'
+                             ' Did you mean to use "on" instead?')
+        elif len(left_on) != len(right_on):
+            raise ValueError('len(left_on) must equal len(left_on)')
+
+        return self._merge_gdf(other=other, left_on=left_on, right_on=right_on,
+                               how=how, lsuffix=lsuffix, rsuffix=rsuffix,
                                same_names=same_names, method=method)
 
     def _merge_gdf(self, other, left_on, right_on, how, lsuffix, rsuffix,
@@ -713,7 +737,13 @@ class DataFrame(object):
         def gather_cols(outdf, indf, on, idx, joinidx, suffix):
             mask = (Series(idx) != -1).as_mask()
             for k in on:
-                newcol = indf[k].take(idx).set_mask(mask).set_index(joinidx)
+                newcol = indf[k].take(idx).set_mask(mask)
+                # For the case where the input dataframe is empty so far
+                if len(joinidx):
+                    newcol = newcol.set_index(joinidx)
+                else:
+                    newcol = newcol.reset_index()
+
                 outdf[fix_name(k, suffix)] = newcol
 
         def gather_empty(outdf, indf, idx, joinidx, suffix):
@@ -737,33 +767,42 @@ class DataFrame(object):
                 joined_values = []
 
                 for i in range(len(left_on)):
-                    # TODO Instead of calling 'gather_joined_index' for every
-                    # column that we are joining on, we should implement a
-                    # 'multi_gather_joined_index' that can gather a value from
-                    # each column at once
-                    raw_values = cudautils.gather_joined_index(
-                        left_cols[i].to_gpu_array(),
-                        right_cols[i].to_gpu_array(),
-                        left_indices,
-                        right_indices,
-                    )
-                    buffered_values = Buffer(raw_values)
+                    # NOTE Since 'left_on' and 'right_on' might have different
+                    # column names we only add those columns to joined values
+                    # where the column name being joined on is the same in both
+                    # dataframes.
+                    if left_on[i] == right_on[i]:
+                        # TODO Instead of calling 'gather_joined_index' for
+                        # every column that we are joining on, we should
+                        # implement a 'multi_gather_joined_index' that can
+                        # gather a value from each column at once
+                        raw_values = cudautils.gather_joined_index(
+                            left_cols[i].to_gpu_array(),
+                            right_cols[i].to_gpu_array(),
+                            left_indices,
+                            right_indices,
+                        )
+                        buffered_values = Buffer(raw_values)
 
-                    joined_values.append(left_cols[i]
-                                         .replace(data=buffered_values))
+                        joined_values.append(left_cols[i]
+                                             .replace(data=buffered_values))
 
                 joined_indices = (cudautils.copy_array(left_indices),
                                   cudautils.copy_array(right_indices))
 
         df = DataFrame()
-        for key, col in zip(left_on, joined_values):
+        common_cols = [lcol for lcol, rcol in zip(left_on, right_on)
+                       if lcol == rcol]
+
+        for key, col in zip(common_cols, joined_values):
             df[key] = col
 
         left_indices, right_indices = joined_indices
 
-        left_args = (df, lhs, [x for x in lhs.columns if x not in left_on],
+        left_args = (df, lhs, [x for x in lhs.columns if x not in common_cols],
                      left_indices, df.index, lsuffix)
-        right_args = (df, rhs, [x for x in rhs.columns if x not in right_on],
+        right_args = (df, rhs,
+                      [x for x in rhs.columns if x not in common_cols],
                       right_indices, df.index, rsuffix)
         args_order = ((right_args, left_args)
                       if rightjoin
