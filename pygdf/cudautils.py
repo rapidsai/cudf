@@ -170,6 +170,12 @@ def gpu_fill_value(data, value):
         data[tid] = value
 
 
+def fill_value(arr, value):
+    """Fill *arr* with value
+    """
+    gpu_fill_value.forall(arr.size)(arr, value)
+
+
 @cuda.jit
 def gpu_expand_mask_bits(bits, out):
     """Expand each bits in bitmask *bits* into an element in out.
