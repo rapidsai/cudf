@@ -62,7 +62,7 @@ __host__ __device__ __forceinline__ void turn_bit_off(uint8_t* const bits, size_
   bits[i / 8] &= flipped_bitmask(i % 8);
 }
 
-static inline size_t last_byte_index(size_t column_size)
+__host__ __device__ __forceinline__ size_t last_byte_index(size_t column_size)
 {
   return (column_size + 8 - 1) / 8;
 }

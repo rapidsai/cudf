@@ -18,32 +18,11 @@
 #define GDF_TABLE_H
 
 #include <gdf/gdf.h>
-#include <cuda_runtime.h>
 #include <thrust/device_vector.h>
-#include <thrust/iterator/counting_iterator.h>
-#include <thrust/iterator/discard_iterator.h>
-#include <thrust/transform.h>
 #include <cassert>
 #include "hashmap/hash_functions.cuh"
 #include "hashmap/managed.cuh"
 #include "util/bit_util.cuh"
-
-static inline void bitmasks_all_columns(gdf_valid_type* d_valid_data, gdf_valid_type** d_valid_columns, size_t num_cols, size_t column_length) {
-    auto transform_op = [d_valid_data, d_valid_columns, num_cols] __device__ (size_t index) {
-          d_valid_data[index] = 255; 
-          for (size_t k = 0; k < num_cols; k++) {
-            d_valid_data[index] &= d_valid_columns[k][index];
-          }
-          return 0;
-		    };
-
-    thrust::transform(thrust::device, 
-      thrust::counting_iterator<size_t>(0), 
-      thrust::counting_iterator<size_t>(gdf::util::valid_size(column_length)), 
-      thrust::make_discard_iterator(),
-      transform_op
-      );
-}
 
 // TODO Inherit from managed class to allocate with managed memory?
 template <typename T>
@@ -58,29 +37,24 @@ public:
   {
 
     column_length = host_columns[0]->size;
-    thrust::device_vector<gdf_valid_type*> device_valid_columns;
 
     // Copy the pointers to the column's data and types to the device 
     // as contiguous arrays
     device_columns.reserve(num_cols);
+    device_valids.reserve(num_cols);
     device_types.reserve(num_cols);
-    device_valid_columns.reserve(num_cols);
     for(size_type i = 0; i < num_cols; ++i)
     {
       assert(column_length == host_columns[i]->size);
+
       device_columns.push_back(host_columns[i]->data);
+      device_valids.push_back(host_columns[i]->valid);
       device_types.push_back(host_columns[i]->dtype);
-      device_valid_columns.push_back(host_columns[i]->valid);
     }
-    
+
     d_columns_data = device_columns.data().get();
+    d_valids_data = device_valids.data().get();
     d_columns_types = device_types.data().get();
-    auto d_valid_columns = device_valid_columns.data().get();
-    
-    device_valid.resize(gdf::util::valid_size(column_length));
-    d_valid_data = device_valid.data().get();
-    
-    bitmasks_all_columns(d_valid_data, d_valid_columns, num_cols, column_length);
   }
 
   ~gdf_table(){}
@@ -108,7 +82,14 @@ public:
 
   __device__ bool is_row_valid(size_type row_index) const
   {
-    return gdf::util::get_bit(d_valid_data, row_index);
+    bool bool_value{true};
+    size_t num_columns_to_hash = this->num_columns;
+    for(size_type i = 0; i < num_columns_to_hash; ++i)
+    {
+      const gdf_valid_type * current_valid = d_valids_data[i];
+      bool_value = bool_value && gdf::util::get_bit(current_valid, row_index);
+    }
+    return bool_value;    
   }
 
   __host__ 
@@ -204,7 +185,7 @@ public:
         printf("Attempted to compare columns of different types.\n");
         return false;
       }
-      bool valid = this->is_row_valid(my_row_index) && other.is_row_valid(other_row_index);
+      bool valid = gdf::util::get_bit(d_valids_data[i], my_row_index) && gdf::util::get_bit(other.d_valids_data[i], other_row_index);
       if (valid == false) {
         return false;
       }
@@ -434,12 +415,11 @@ public:
 private:
 
   void ** d_columns_data{nullptr};
-  gdf_valid_type* d_valid_data{nullptr}; 
+  gdf_valid_type** d_valids_data{nullptr}; 
   gdf_dtype * d_columns_types{nullptr};
 
-
   thrust::device_vector<void*> device_columns;
-  thrust::device_vector<gdf_valid_type> device_valid; 
+  thrust::device_vector<gdf_valid_type*> device_valids; 
   thrust::device_vector<gdf_dtype> device_types;
 
   gdf_column ** host_columns;
