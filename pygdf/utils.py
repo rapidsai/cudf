@@ -48,12 +48,13 @@ def require_writeable_array(arr):
 
 
 def scalar_broadcast_to(scalar, shape, dtype):
+    from .cudautils import fill_value
+
     if not isinstance(shape, tuple):
         shape = (shape,)
-    arr = np.broadcast_to(np.asarray(scalar, dtype=dtype), shape=shape)
-    # FIXME: this is wasteful, but numba can't slice 0-strided array
-    arr = np.ascontiguousarray(np.asarray(arr))
-    return cuda.to_device(require_writeable_array(arr))
+    da = cuda.device_array(shape, dtype=dtype)
+    fill_value(da, scalar)
+    return da
 
 
 def normalize_index(index, size, doraise=True):
