@@ -185,10 +185,19 @@ gdf_error gdf_prefixsum_i64(gdf_column *inp, gdf_column *out, int inclusive);
 
 /* hashing */
 
-// num_cols: the number of columns
-// input: a list of the column pointers
-// hash: the hashing function to use
-// output: the output column, allocated by the caller, must have GDF_INT32 dtype
+/* --------------------------------------------------------------------------*/
+/** 
+ * @Synopsis  Computes the hash value of each row in the input set of columns.
+ * 
+ * @Param num_cols The number of columns in the input set
+ * @Param input The list of columns whose rows will be hashed
+ * @Param hash The hash function to use
+ * @Param output The hash value of each row of the input
+ * 
+ * @Returns   GDF_SUCCESS if the operation was successful, otherwise an appropriate
+ * error code
+ */
+/* ----------------------------------------------------------------------------*/
 gdf_error gdf_hash(int num_cols, gdf_column **input, gdf_hash_func hash, gdf_column *output);
 
 /* trig */
