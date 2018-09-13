@@ -696,7 +696,8 @@ class DataFrame(object):
             return other._merge_gdf(other=self, left_on=right_on,
                                     right_on=left_on, how='left',
                                     lsuffix=rsuffix, rsuffix=lsuffix,
-                                    method=method, rightjoin=True)
+                                    same_names=same_names, method=method,
+                                    rightjoin=True)
 
         lhs = self
         rhs = other
@@ -759,10 +760,17 @@ class DataFrame(object):
             df[key] = col
 
         left_indices, right_indices = joined_indices
-        gather_cols(df, lhs, [x for x in lhs.columns if x not in left_on],
-                    left_indices, df.index, lsuffix)
-        gather_cols(df, rhs, [x for x in rhs.columns if x not in right_on],
-                    right_indices, df.index, rsuffix)
+
+        left_args = (df, lhs, [x for x in lhs.columns if x not in left_on],
+                     left_indices, df.index, lsuffix)
+        right_args = (df, rhs, [x for x in rhs.columns if x not in right_on],
+                      right_indices, df.index, rsuffix)
+        args_order = ((right_args, left_args)
+                      if rightjoin
+                      else (left_args, right_args))
+
+        for args in args_order:
+            gather_cols(*args)
 
         return df
 
