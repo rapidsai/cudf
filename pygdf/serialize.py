@@ -1,5 +1,6 @@
 import os
 import sys
+from types import MethodType
 
 # A flag to allow dask_gdf to detect and warn if
 # IPC serialization is unavailable
@@ -21,12 +22,18 @@ else:
         """
         _dp.register_serialization(cls, _serialize, _deserialize)
 
+    def has_context_keyword(meth):
+        if isinstance(meth, MethodType):
+            return has_keyword(meth.__func__, 'context')
+        else:
+            return has_keyword(meth, 'context')
+
     def _serialize(df, context=None):
         def do_serialize(x):
             return _dp.serialize(x, context=context)
 
-        def call_with_context(meth, x, *args):
-            if has_keyword(meth, 'context'):
+        def call_with_context(meth, x):
+            if has_context_keyword(meth):
                 return meth(x, context=context)
             else:
                 return meth(x)

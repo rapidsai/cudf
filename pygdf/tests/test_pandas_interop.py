@@ -47,10 +47,10 @@ def test_from_pandas_ex1():
 
     assert tuple(df.columns) == tuple(pdf.columns)
     assert np.all(df['a'].to_array() == pdf['a'])
-    matches = df['b'].to_array() == pdf['b']
+    matches = df['b'].to_array(fillna='pandas') == pdf['b']
     # the 3d element is False due to (nan == nan) == False
     assert np.all(matches == [True, True, False, True])
-    assert np.isnan(df['b'].to_array()[2])
+    assert np.isnan(df['b'].to_array(fillna='pandas')[2])
     assert np.isnan(pdf['b'][2])
 
 
@@ -61,8 +61,8 @@ def test_from_pandas_with_index():
     df = DataFrame.from_pandas(pdf)
 
     # Check columns
-    np.testing.assert_array_equal(df.a.to_array(), pdf.a)
-    np.testing.assert_array_equal(df.b.to_array(), pdf.b)
+    np.testing.assert_array_equal(df.a.to_array(fillna='pandas'), pdf.a)
+    np.testing.assert_array_equal(df.b.to_array(fillna='pandas'), pdf.b)
     # Check index
     np.testing.assert_array_equal(df.index.values, pdf.index.values)
     # Check again using pandas testing tool on frames

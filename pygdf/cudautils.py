@@ -3,6 +3,7 @@
 import numpy as np
 
 from numba import cuda, int32, numpy_support
+from math import isnan
 
 from .utils import mask_bitsize, mask_get, mask_set, make_mask
 
@@ -92,6 +93,8 @@ def gpu_copy(inp, out):
 def astype(ary, dtype):
     if ary.dtype == np.dtype(dtype):
         return ary
+    elif ary.size == 0:
+        return cuda.device_array(shape=ary.shape, dtype=dtype)
     else:
         out = cuda.device_array(shape=ary.shape, dtype=dtype)
         configured = gpu_copy.forall(out.size)
@@ -166,6 +169,12 @@ def gpu_fill_value(data, value):
     tid = cuda.grid(1)
     if tid < data.size:
         data[tid] = value
+
+
+def fill_value(arr, value):
+    """Fill *arr* with value
+    """
+    gpu_fill_value.forall(arr.size)(arr, value)
 
 
 @cuda.jit
@@ -265,6 +274,23 @@ def compact_mask_bytes(boolbytes):
     gpu_compact_mask_bytes.forall(bits.size)(boolbytes, bits)
     return bits
 
+
+@cuda.jit
+def gpu_mask_from_devary(ary, bits):
+    tid = cuda.grid(1)
+    base = tid * mask_bitsize
+    for i in range(base, base + mask_bitsize):
+        if i >= len(ary):
+            break
+        if not isnan(ary[i]):
+            mask_set(bits, i)
+
+
+def mask_from_devary(ary):
+    bits = make_mask(len(ary))
+    gpu_fill_value.forall(bits.size)(bits, 0)
+    gpu_mask_from_devary.forall(bits.size)(ary, bits)
+    return bits
 
 #
 # Gather

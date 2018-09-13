@@ -186,9 +186,10 @@ def test_dataframe_column_add_drop():
     assert df.columns == ('b', 'c', 'a')
 
 
-def test_dataframe_astype():
+@pytest.mark.parametrize('nelem', [0, 3, 100, 1000])
+def test_dataframe_astype(nelem):
     df = DataFrame()
-    data = np.asarray(range(10), dtype=np.int32)
+    data = np.asarray(range(nelem), dtype=np.int32)
     df['a'] = data
     assert df['a'].dtype is np.dtype(np.int32)
     df['b'] = df['a'].astype(np.float32)
@@ -470,6 +471,33 @@ def test_dataframe_append_empty():
     pd.testing.assert_frame_equal(gdf.to_pandas(), pdf)
 
 
+def test_dataframe_setitem_from_masked_object():
+    ary = np.random.randn(100)
+    mask = np.zeros(100, dtype=bool)
+    mask[:20] = True
+    np.random.shuffle(mask)
+    ary[mask] = np.nan
+
+    test1 = Series(ary)
+    assert(test1.has_null_mask)
+    assert(test1.null_count == 20)
+
+    test2 = DataFrame.from_pandas(pd.DataFrame({'a': ary}))
+    assert(test2['a'].has_null_mask)
+    assert(test2['a'].null_count == 20)
+
+    gpu_ary = cuda.to_device(ary)
+    test3 = Series(gpu_ary)
+    assert(test3.has_null_mask)
+    assert(test3.null_count == 20)
+
+    test4 = DataFrame()
+    lst = [1, 2, None, 4, 5, 6, None, 8, 9]
+    test4['lst'] = lst
+    assert(test4['lst'].has_null_mask)
+    assert(test4['lst'].null_count == 2)
+
+
 def test_dataframe_append_to_empty():
     pdf = pd.DataFrame()
     pdf['a'] = []
@@ -547,3 +575,16 @@ def test_dataframe_hash_partition(nrows, nparts, nkeys):
             assert not (unique_keys & part_unique_keys)
             part_unique_keys |= unique_keys
     assert len(part_unique_keys)
+
+    
+def test_dataframe_empty_concat():
+    gdf1 = DataFrame()
+    gdf1['a'] = []
+    gdf1['b'] = []
+
+    gdf2 = gdf1.copy()
+
+    gdf3 = gd.concat([gdf1, gdf2])
+    assert len(gdf3) == 0
+    assert len(gdf3.columns) == 2
+

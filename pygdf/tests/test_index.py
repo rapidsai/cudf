@@ -8,7 +8,7 @@ import pytest
 import numpy as np
 
 from pygdf.dataframe import DataFrame
-from pygdf.index import EmptyIndex, GenericIndex, RangeIndex
+from pygdf.index import GenericIndex, RangeIndex
 
 
 def test_df_set_index_from_series():
@@ -43,8 +43,8 @@ def test_df_set_index_from_name():
 
 def test_df_slice_empty_index():
     df = DataFrame()
-    assert isinstance(df.index, EmptyIndex)
-    assert isinstance(df.index[:1], EmptyIndex)
+    assert isinstance(df.index, RangeIndex)
+    assert isinstance(df.index[:1], RangeIndex)
     with pytest.raises(IndexError):
         df.index[1]
 
@@ -71,5 +71,3 @@ def test_index_comparision():
     assert gi == rg
     assert rg[:-1] != gi
     assert rg[:-1] == gi[:-1]
-    assert EmptyIndex() != rg
-    assert EmptyIndex() != gi
