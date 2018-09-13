@@ -80,6 +80,21 @@ class LibGdfGroupby(object):
         need_to_index = False
 
         col_count = 0
+
+        if not val_columns:
+            if first_run:
+                out_col_values_series = [None] * ncols
+                out_col_values = [None] * ncols
+                for i in range(0, ncols):
+                    col_by = self._df[self._by[i]]._column.cffi_view
+                    out_col_values_series[i] = Series(Buffer(cuda.device_array(
+                        col_by.size,
+                        dtype=self._df[self._by[i]]._column.data.dtype)))
+                    out_col_values[i] = out_col_values_series[i]\
+                        ._column.cffi_view
+                    result[self._by[i]] = out_col_values_series[i]
+            first_run = False
+
         for val_col in val_columns:
             col_agg = self._df[val_col]._column.cffi_view
 
@@ -112,22 +127,23 @@ class LibGdfGroupby(object):
 
             out_col_agg = out_col_agg_series._column.cffi_view
 
-            agg_func = self._NAMED_FUNCTIONS.get(agg_type, None)
-            if agg_func is None:
-                raise RuntimeError(
-                    "ERROR: this aggregator has not been implemented yet")
-            err = agg_func(
-                ncols,
-                cols,
-                col_agg,
-                out_col_indices,
-                out_col_values,
-                out_col_agg,
-                ctx)
+            if out_col_agg.size > 0:
+                agg_func = self._NAMED_FUNCTIONS.get(agg_type, None)
+                if agg_func is None:
+                    raise RuntimeError(
+                        "ERROR: this aggregator has not been implemented yet")
+                err = agg_func(
+                    ncols,
+                    cols,
+                    col_agg,
+                    out_col_indices,
+                    out_col_values,
+                    out_col_agg,
+                    ctx)
 
-            if (err is not None):
-                print(err)
-                raise RuntimeError(err)
+                if (err is not None):
+                    print(err)
+                    raise RuntimeError(err)
 
             num_row_results = out_col_agg.size
 
