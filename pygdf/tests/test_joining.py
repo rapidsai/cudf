@@ -222,7 +222,8 @@ def test_dataframe_join_mismatch_cats(how):
     assert list(got.index) == list(expect.index)
 
 
-def test_dataframe_multi_column_join():
+@pytest.mark.parametrize('how', ['left', 'right', 'inner', 'outer'])
+def test_dataframe_multi_column_join(how):
     np.random.seed(0)
 
     # Make GDF
@@ -245,22 +246,28 @@ def test_dataframe_multi_column_join():
     # print(pddf_right)
 
     # Expected result
-    pddf_joined = pddf_left.merge(pddf_right, on=['key1', 'key2'], how='left',
-                                  sort=True)
+    expect = pddf_left.merge(pddf_right, on=['key1', 'key2'], how=how,
+                             sort=True)
     # print(pddf_joined)
 
     # Test (doesn't check for ordering)
-    join_result = df_left.merge(df_right, on=['key1', 'key2'], how='left')
+    join_result = df_left.merge(df_right, on=['key1', 'key2'], how=how)
 
-    for col in list(pddf_joined.columns):
-        if(col.count('_y') > 0):
+    for col in list(expect.columns):
+        if join_result[col].null_count > 0:
             join_result[col] = (join_result[col]
                                 .astype(np.float64)
                                 .fillna(np.nan))
 
-    pd.util.testing.assert_frame_equal(
-        join_result
-        .to_pandas()
-        .sort_values(list(pddf_joined.columns))
-        .reset_index(drop=True),
-        pddf_joined)
+    join_result = join_result.to_pandas()
+    got = pd.DataFrame()
+    # Reorder "got" columns to be the same order as "expect" columns
+    for col in list(expect.columns):
+        got[col] = join_result[col]
+
+    if how != 'outer':
+        pd.util.testing.assert_frame_equal(
+            got.sort_values(list(got.columns))
+            .reset_index(drop=True),
+            expect.sort_values(list(expect.columns))
+            .reset_index(drop=True))
