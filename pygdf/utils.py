@@ -53,7 +53,8 @@ def scalar_broadcast_to(scalar, shape, dtype):
     if not isinstance(shape, tuple):
         shape = (shape,)
     da = cuda.device_array(shape, dtype=dtype)
-    fill_value(da, scalar)
+    if da.size != 0:
+        fill_value(da, scalar)
     return da
 
 
