@@ -30,7 +30,8 @@ RUN conda create -n gdf python=${PYTHON_VERSION}
 
 ARG NUMBA_VERSION=0.40.0
 ARG NUMPY_VERSION=1.14.3
-ARG PANDAS_VERSION=0.23.4
+# Locked to Pandas 0.20.3 by https://github.com/gpuopenanalytics/pygdf/issues/118
+ARG PANDAS_VERSION=0.20.3
 RUN conda install -n gdf -y -c numba -c conda-forge -c defaults \
       numba=${NUMBA_VERSION} \
       numpy=${NUMPY_VERSION} \
