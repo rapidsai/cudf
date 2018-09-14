@@ -72,6 +72,20 @@ struct row_masker
   gdf_valid_type ** column_valid_masks;
 };
 
+
+
+
+/* --------------------------------------------------------------------------*/
+/** 
+ * @Synopsis A class provides useful functionality for operating on a set of gdf_columns. 
+
+    The gdf_table class is meant to wrap a set of gdf_columns and provide functions
+    for operating across all of the columns. It can be thought of as a `matrix`
+    whose columns can be of different data types. Thinking of it as a matrix,
+    many row-wise operations are defined, such as checking if two rows in a table
+    are equivalent.
+ */
+/* ----------------------------------------------------------------------------*/
 template <typename T>
 class gdf_table : public managed
 {
