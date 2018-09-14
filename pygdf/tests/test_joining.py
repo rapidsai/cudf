@@ -57,6 +57,39 @@ def make_params():
             yield(aa, bb, how, 'sort')
 
 
+def make_params2():
+    np.random.seed(0)
+
+    # TODO Add support for 'outer' with method 'hash' when issue is fixed
+    hows = 'left,inner,right,outer'.split(',')
+    methods = 'hash,sort'.split(',')
+
+    for how in hows:
+        for method in methods:
+            if method == 'hash' and how == 'outer':
+                continue
+            for num_cols_join in range(1, 6):
+                # Test joining on 1 to 5 columns
+                # Make GDF
+                df_left = DataFrame()
+                nelem = 500
+                for col in range(num_cols_join):
+                    df_left['key' + str(col+1)] = np.random.randint(0, 30,
+                                                                    nelem)
+                df_left['val1'] = np.arange(nelem)
+
+                df_right = DataFrame()
+                nelem = 500
+                for col in range(num_cols_join):
+                    df_right['key' + str(col+1)] = np.random.randint(0, 30,
+                                                                     nelem)
+                df_right['val1'] = np.arange(nelem)
+
+                on = ['key' + str(col+1) for col in range(num_cols_join)]
+
+                yield(df_left, df_right, on, how, method)
+
+
 @pytest.mark.parametrize('aa,bb,how,method', make_params())
 def test_dataframe_join_how(aa, bb, how, method):
     df = DataFrame()
@@ -222,22 +255,9 @@ def test_dataframe_join_mismatch_cats(how):
     assert list(got.index) == list(expect.index)
 
 
-@pytest.mark.parametrize('how', ['left', 'right', 'inner', 'outer'])
-def test_dataframe_multi_column_join(how):
+@pytest.mark.parametrize('df_left,df_right,on,how,method', make_params2())
+def test_dataframe_multi_column_join(df_left, df_right, on, how, method):
     np.random.seed(0)
-
-    # Make GDF
-    df_left = DataFrame()
-    nelem = 500
-    df_left['key1'] = np.random.randint(0, 30, nelem)
-    df_left['key2'] = np.random.randint(0, 50, nelem)
-    df_left['val1'] = np.arange(nelem)
-
-    df_right = DataFrame()
-    nelem = 500
-    df_right['key1'] = np.random.randint(0, 30, nelem)
-    df_right['key2'] = np.random.randint(0, 50, nelem)
-    df_right['val1'] = np.arange(nelem)
 
     # Make pandas DF
     pddf_left = df_left.to_pandas()
@@ -246,12 +266,12 @@ def test_dataframe_multi_column_join(how):
     # print(pddf_right)
 
     # Expected result
-    expect = pddf_left.merge(pddf_right, on=['key1', 'key2'], how=how,
+    expect = pddf_left.merge(pddf_right, on=on, how=how,
                              sort=True)
     # print(pddf_joined)
 
     # Test (doesn't check for ordering)
-    join_result = df_left.merge(df_right, on=['key1', 'key2'], how=how)
+    join_result = df_left.merge(df_right, on=on, how=how, method=method)
 
     for col in list(expect.columns):
         if join_result[col].null_count > 0:
@@ -265,9 +285,8 @@ def test_dataframe_multi_column_join(how):
     for col in list(expect.columns):
         got[col] = join_result[col]
 
-    if how != 'outer':
-        pd.util.testing.assert_frame_equal(
-            got.sort_values(list(got.columns))
-            .reset_index(drop=True),
-            expect.sort_values(list(expect.columns))
-            .reset_index(drop=True))
+    pd.util.testing.assert_frame_equal(
+        got.sort_values(list(got.columns))
+        .reset_index(drop=True),
+        expect.sort_values(list(expect.columns))
+        .reset_index(drop=True))
