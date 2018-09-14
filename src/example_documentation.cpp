@@ -17,6 +17,9 @@
 
 
 // DESCRIPTION: A brief description of the overall purpose and contents of this file
+// DESCRIPTION: The text on the same line as the @brief will show up in lists and 
+// summaries, whereas the detailed text following on the next line is the detailed
+// description.
 /** ---------------------------------------------------------------------------*
 * @brief Example code documentation for libgdf.
 *
@@ -29,6 +32,9 @@
 /* --------------------------------------------------------------------------*/
 /** 
  * @brief  This class serves as an example of how classes in libgdf should 
+ * be documented.
+ *
+ * In detail, this class shows how member functions and member variables should
  * be documented.
  */
 /* ----------------------------------------------------------------------------*/
@@ -52,6 +58,9 @@ class example_class
   /* --------------------------------------------------------------------------*/
   /** 
    * @brief This is a complicated function that requires more detailed documentation.
+   *
+   * Here is the more detailed description of what this function does and what its
+   * logic is.
    * 
    * @Param[in] first_parameter  This parameter is an input parameter to the function
    * @Param[in,out] second_parameter This parameter is used both as an input and output
@@ -66,10 +75,11 @@ class example_class
   {
     // DESCRIPTION: Notice the use of *human readable* variable names. Human readable 
     // variable names are vastly prefered to short, hard to read names. E.g.,
-    // use 'first_parameter' instead of 'fp'. When in doubt, opt for the longer, easier
-    // to read name that conveys the meaning and purpose of the variable. As developers,
-    // we usually spend more time reading code than writing code, so the easier you make it to
-    // read your code, the more efficient we will all be.
+    // use 'first_parameter' or `firstParameter` instead of 'fp'. When in doubt, opt for 
+    // the longer, easier to read name that conveys the meaning and purpose of the variable. 
+    // Well named variables are self-documenting. As developers, we usually spend more time 
+    // reading code than writing code, so the easier you make it to read your code, 
+    // the more efficient we will all be.
     
    
     // DESCRIPTION: In-line comments that describe the logic inside of your functions
@@ -88,7 +98,7 @@ private:
 // the purpose of the template parameters.
 /* --------------------------------------------------------------------------*/
 /** 
- * @Synopsis  An example of a free function (non-class member). This function
+ * @brief  An example of a free function (non-class member). This function
  * calls a functor on an input argument and returns the result.
  * 
  * @Param[in] functor The functor to be called on the input argument
@@ -116,7 +126,7 @@ return_type free_function(functor_type functor,
 // the purpose of the enums, as well as a description of each enum member.
 /* --------------------------------------------------------------------------*/
 /** 
- * @Synopsis  The purpose of these enumerations is to provide an example
+ * @brief  The purpose of these enumerations is to provide an example
  * of how enumerations should be documented.
  */
 /* ----------------------------------------------------------------------------*/
