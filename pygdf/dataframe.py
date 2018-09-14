@@ -1065,7 +1065,6 @@ class DataFrame(object):
         # Slice into partition
         return [outdf[s:e] for s, e in zip(offsets, offsets[1:] + [None])]
 
-
     def to_pandas(self):
         """Convert to a Pandas DataFrame.
         """

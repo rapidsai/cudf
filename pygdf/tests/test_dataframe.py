@@ -576,7 +576,7 @@ def test_dataframe_hash_partition(nrows, nparts, nkeys):
             part_unique_keys |= unique_keys
     assert len(part_unique_keys)
 
-    
+
 def test_dataframe_empty_concat():
     gdf1 = DataFrame()
     gdf1['a'] = []
@@ -587,4 +587,3 @@ def test_dataframe_empty_concat():
     gdf3 = gd.concat([gdf1, gdf2])
     assert len(gdf3) == 0
     assert len(gdf3.columns) == 2
-
