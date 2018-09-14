@@ -311,3 +311,44 @@ def hash_columns(columns, result):
     hashfn = libgdf.GDF_HASH_MURMUR3
     libgdf.gdf_hash(ncols, col_input, hashfn, col_out)
     return result
+
+
+def hash_partition(input_columns, key_indices, nparts, output_columns):
+    """Partition the input_columns by the hash values on the keys.
+
+    Parameters
+    ----------
+    input_columns : sequence of Column
+    key_indices : sequence of int
+        Indices into `input_columns` that indicates the key columns.
+    nparts : int
+        number of partitions
+
+    Returns
+    -------
+    partition_offsets : list of int
+        Each index indicates the start of a partition.
+    """
+    assert len(input_columns) == len(output_columns)
+    for col in input_columns:
+        if col.null_count != 0:
+            raise ValueError('cannot handle masked column')
+
+    col_inputs = [col.cffi_view for col in input_columns]
+    col_outputs = [col.cffi_view for col in output_columns]
+    offsets = ffi.new('int[]', nparts)
+    hashfn = libgdf.GDF_HASH_MURMUR3
+
+    libgdf.gdf_hash_partition(
+        len(col_inputs),
+        col_inputs,
+        key_indices,
+        len(key_indices),
+        nparts,
+        col_outputs,
+        offsets,
+        hashfn
+    )
+
+    offsets = list(offsets)
+    return offsets
