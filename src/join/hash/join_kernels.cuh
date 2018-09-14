@@ -145,21 +145,29 @@ __global__ void compute_join_output_size( multimap_type const * const multi_map,
 
   size_type probe_row_index = threadIdx.x + blockIdx.x * blockDim.x;
 
+ const bool predicate = (JoinType::LEFT_JOIN || probe_table.is_row_valid(probe_row_index)) 
+                         && (probe_row_index < probe_table_num_rows);             
+
 #if defined(CUDA_VERSION) && CUDA_VERSION >= 9000
-  const unsigned int activemask = __ballot_sync(0xffffffff, probe_row_index < probe_table_num_rows);
+  const unsigned int activemask = __ballot_sync(0xffffffff, predicate );
 #endif
-  if ( probe_row_index < probe_table_num_rows ) {
+  if ( predicate ) {
     const auto unused_key = multi_map->get_unused_key();
     const auto end = multi_map->end();
 
-    // Compute the hash value of the probe row
-    const hash_value_type probe_row_hash_value{probe_table.hash_row(probe_row_index)};
-
     // Search the hash map for the hash value of the probe row using the row's
     // hash value to determine the location where to search for the row in the hash map
-    auto found = multi_map->find(probe_row_hash_value,
-                                 true,
-                                 probe_row_hash_value);
+    // Only probe the hash table if the row is valid
+    hash_value_type probe_row_hash_value{0};
+    auto found = multi_map->end();
+    if(probe_table.is_row_valid(probe_row_index))
+    {
+      // Search the hash map for the hash value of the probe row
+      probe_row_hash_value = probe_table.hash_row(probe_row_index)};
+      found = multi_map->find(probe_row_hash_value,
+                                   true,
+                                   probe_row_hash_value);
+    }
 
     // for left-joins we always need to add an output
     bool running = (join_type == JoinType::LEFT_JOIN) || (end != found); 
@@ -293,19 +301,29 @@ __global__ void probe_hash_table( multimap_type const * const multi_map,
 
   output_index_type probe_row_index = threadIdx.x + blockIdx.x * blockDim.x;
 
+// For left-joins, always add an output even if the probe row is Null
+const bool predicate = (JoinType::LEFT_JOIN || probe_table.is_row_valid(probe_row_index)) 
+                        && (probe_row_index < probe_table_num_rows);             
 
 #if defined(CUDA_VERSION) && CUDA_VERSION >= 9000
-  const unsigned int activemask = __ballot_sync(0xffffffff, probe_row_index < probe_table_num_rows);
+  const unsigned int activemask = __ballot_sync(0xffffffff, predicate );
 #endif
-  if ( probe_row_index < probe_table_num_rows ) {
+  if ( predicate ) {
+        
     const auto unused_key = multi_map->get_unused_key();
-    const auto end = multi_map->end();
+    const auto end = multi_map->end();  
+    auto found = multi_map->end();    
+    // Only probe the hash table if the row is valid
+    hash_value_type probe_row_hash_value{0};
+    if(probe_table.is_row_valid(probe_row_index))
+    {
+      // Search the hash map for the hash value of the probe row
+      probe_row_hash_value = probe_table.hash_row(probe_row_index)};
+      found = multi_map->find(probe_row_hash_value,
+                                   true,
+                                   probe_row_hash_value);
+    }
 
-    // Search the hash map for the hash value of the probe row
-    const hash_value_type probe_row_hash_value{probe_table.hash_row(probe_row_index)};
-    auto found = multi_map->find(probe_row_hash_value,
-                                 true,
-                                 probe_row_hash_value);
 
     bool running = (join_type == JoinType::LEFT_JOIN) || (end != found);	// for left-joins we always need to add an output
     bool found_match = false;
