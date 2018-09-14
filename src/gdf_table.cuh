@@ -18,12 +18,12 @@
 #define GDF_TABLE_H
 
 #include <gdf/gdf.h>
+#include <gdf/utils.h>
 #include <thrust/device_vector.h>
 #include <cassert>
 #include <gdf/errorutils.h>
 #include "hashmap/hash_functions.cuh"
 #include "hashmap/managed.cuh"
-#include "util/bit_util.cuh"
 
 /* --------------------------------------------------------------------------*/
 /** 
@@ -130,7 +130,7 @@ public:
 
     // Allocate storage sufficient to hold a validity bit for every row
     // in the table
-    const size_type mask_size = gdf::util::valid_size(column_length);
+    const size_type mask_size = gdf_get_num_chars_bitmask(column_length);
     device_row_valid.resize(mask_size);
 
     // If a row contains a single NULL value, then the entire row is considered
@@ -166,7 +166,7 @@ public:
 
   __device__ bool is_row_valid(size_type row_index) const
   {
-    const bool row_valid = gdf::util::get_bit(d_row_valid, row_index);
+    const bool row_valid = gdf_is_valid(d_row_valid, row_index);
 
     return row_valid;
   }
