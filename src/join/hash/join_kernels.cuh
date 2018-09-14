@@ -52,7 +52,11 @@ __global__ void build_hash_table( multimap_type * const multi_map,
     size_type i = threadIdx.x + blockIdx.x * blockDim.x;
 
     while( i < build_table_num_rows) {
+
+      // It is impossible for a row with a NULL value to match any other row,
+      // therefore, do not insert it into the hash table
       if (build_table.is_row_valid(i)) {
+
         // Compute the hash value of this row
         const hash_value_type row_hash_value{build_table.hash_row(i)};
 

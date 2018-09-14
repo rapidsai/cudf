@@ -25,6 +25,53 @@
 #include "hashmap/managed.cuh"
 #include "util/bit_util.cuh"
 
+/* --------------------------------------------------------------------------*/
+/** 
+ * @Synopsis  Computes the validity mask for the rows in the gdf_table.
+
+   If a single value in a row of the table is NULL, then the entire row is 
+   considered to be NULL. Therefore, we can AND all of the bitmasks of each
+   column together to get a bitmask for the validity of each row.
+ */
+/* ----------------------------------------------------------------------------*/
+template <typename size_type>
+struct row_masker
+{
+  row_masker(gdf_valid_type ** column_masks, const size_type num_cols)
+    : column_valid_masks{column_masks}, num_columns(num_cols)
+    { }
+   
+  /* --------------------------------------------------------------------------*/
+  /** 
+   * @Synopsis Computes the bit-wise AND across all columns for the specified mask
+   * 
+   * @Param mask_number The index of the mask to compute the bit-wise AND across all columns
+   * 
+   * @Returns The bit-wise AND across all columns for the specified mask number
+   */
+  /* ----------------------------------------------------------------------------*/
+  __device__ gdf_valid_type operator()(const size_type mask_number)
+  {
+    // Intialize row validity mask with all bits set to 1
+    gdf_valid_type row_valid_mask{0};
+    row_valid_mask = ~(row_valid_mask);
+
+    for(size_type i = 0; i < num_columns; ++i) 
+    {
+      const gdf_valid_type * current_column_mask = column_valid_masks[i];
+
+      // The column validity mask is optional and can be nullptr
+      if(nullptr != current_column_mask){
+        row_valid_mask &= current_column_mask[mask_number];
+      }
+    }
+    return row_valid_mask;
+  }
+
+  const size_type num_columns;
+  gdf_valid_type ** column_valid_masks;
+};
+
 template <typename T>
 class gdf_table : public managed
 {
@@ -35,7 +82,6 @@ public:
   gdf_table(size_type num_cols, gdf_column ** gdf_columns) 
     : num_columns(num_cols), host_columns(gdf_columns)
   {
-
     assert(num_cols > 0);
     assert(nullptr != host_columns[0]);
     column_length = host_columns[0]->size;
@@ -44,6 +90,7 @@ public:
     {
       assert(nullptr != host_columns[0]->data);
     }
+
 
     // Copy pointers to each column's data, types, and validity bitmasks 
     // to the device  as contiguous arrays
@@ -63,10 +110,24 @@ public:
       device_columns_types.push_back(host_columns[i]->dtype);
     }
 
-
     d_columns_data = device_columns_data.data().get();
     d_columns_valids = device_columns_valids.data().get();
     d_columns_types = device_columns_types.data().get();
+
+    // Allocate storage sufficient to hold a validity bit for every row
+    // in the table
+    const size_type mask_size = gdf::util::valid_size(column_length);
+    device_row_valid.resize(mask_size);
+
+    // If a row contains a single NULL value, then the entire row is considered
+    // to be NULL, therefore initialize the row-validity mask with the 
+    // bit-wise AND of the validity mask of all the columns
+    thrust::tabulate(device_row_valid.begin(),
+                     device_row_valid.end(),
+                     row_masker<size_type>(d_columns_valids, num_cols));
+
+    d_row_valid = device_row_valid.data().get();
+
   }
 
   ~gdf_table(){}
@@ -91,14 +152,9 @@ public:
 
   __device__ bool is_row_valid(size_type row_index) const
   {
-    bool bool_value{true};
-    size_t num_columns_to_hash = this->num_columns;
-    for(size_type i = 0; i < num_columns_to_hash; ++i)
-    {
-      const gdf_valid_type * current_valid = d_columns_valids[i];
-      bool_value = bool_value && gdf::util::get_bit(current_valid, row_index);
-    }
-    return bool_value;    
+    const bool row_valid = gdf::util::get_bit(d_row_valid, row_index);
+
+    return row_valid;
   }
 
   __host__ 
@@ -619,6 +675,9 @@ gdf_error scatter_column(column_type const * const __restrict__ input_column,
 
   thrust::device_vector<gdf_valid_type*> device_columns_valids;  /** Device array of pointers to each columns validity bitmask*/
   gdf_valid_type** d_columns_valids{nullptr};                   /** Raw pointer to the device array's data */
+
+  thrust::device_vector<gdf_valid_type> device_row_valid;  /** Device array of bitmask for the validity of each row. */
+  gdf_valid_type * d_row_valid{nullptr};                   /** Raw pointer to device array's data */
 
   thrust::device_vector<gdf_dtype> device_columns_types; /** Device array of each columns data type */
   gdf_dtype * d_columns_types{nullptr};                 /** Raw pointer to the device array's data */
