@@ -144,7 +144,7 @@ struct JoinTest : public testing::Test
     cudaMemcpy(the_column->data, host_vector.data(), host_vector.size() * sizeof(col_type), cudaMemcpyHostToDevice);
 
     // Allocate device storage for gdf_column.valid
-    int valid_size = gdf::util::valid_size(host_vector.size());
+    int valid_size = gdf_get_num_chars_bitmask(host_vector.size());
     cudaMalloc(&(the_column->valid), valid_size);
     cudaMemcpy(the_column->valid, host_valid, valid_size, cudaMemcpyHostToDevice);
  
@@ -265,7 +265,7 @@ struct JoinTest : public testing::Test
 
     for(size_t right_index = 0; right_index < build_column.size(); ++right_index)
     {
-      if (gdf::util::get_bit(build_valid, right_index)) {
+      if (gdf_is_valid(build_valid, right_index)) {
         the_map.insert(std::make_pair(build_column[right_index], right_index));
       }
     }
@@ -279,7 +279,7 @@ struct JoinTest : public testing::Test
     for(size_t left_index = 0; left_index < probe_column.size(); ++left_index)
     {
       bool match{false};
-      if (gdf::util::get_bit(probe_valid, left_index)) {
+      if (gdf_is_valid(probe_valid, left_index)) {
         // Find all keys that match probe_key
         const auto probe_key = probe_column[left_index];
         auto range = the_map.equal_range(probe_key);

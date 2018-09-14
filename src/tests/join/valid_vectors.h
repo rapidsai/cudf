@@ -21,6 +21,7 @@
 #include <functional>
 #include <memory>
 #include <string>
+#include <gdf/utils.h>
 
 #include "../../util/bit_util.cuh"
 
@@ -31,7 +32,7 @@ using host_valid_pointer = typename std::unique_ptr<gdf_valid_type, std::functio
 host_valid_pointer create_and_init_valid(size_t length, bool all_bits_on = false)
 {
   auto deleter = [](gdf_valid_type* valid) { delete[] valid; };
-  auto n_bytes = gdf::util::valid_size(length);
+  auto n_bytes = gdf_get_num_chars_bitmask(length);
   auto valid_bits = new gdf_valid_type[n_bytes];
 
   for (size_t i = 0; i < length; ++i) {
@@ -61,7 +62,7 @@ template <typename T>
 void print_vector_and_valid(std::vector<T>& v, gdf_valid_type* valid)
 {
   auto functor = [&valid, &v](int index) -> std::string {
-    if (gdf::util::get_bit(valid, index))
+    if (gdf_is_valid(valid, index))
       return std::to_string((int)v[index]);
     return std::string("@");
   };
@@ -108,7 +109,7 @@ template <std::size_t I = 0, typename... Tp>
 {
   auto l_valid = left_valid[I].get();
   auto r_valid = right_valid[I].get();
-  if (gdf::util::get_bit(l_valid, left_index) && gdf::util::get_bit(r_valid, right_index) && std::get<I>(left)[left_index] == std::get<I>(right)[right_index]) {
+  if (gdf_is_valid(l_valid, left_index) && gdf_is_valid(r_valid, right_index) && std::get<I>(left)[left_index] == std::get<I>(right)[right_index]) {
     return rows_equal_using_valids<I + 1, Tp...>(left, right, left_valid, right_valid, left_index, right_index);
   } else {
     return false;

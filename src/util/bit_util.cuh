@@ -23,18 +23,21 @@ namespace util {
 static constexpr int ValidSize = 32;
 using ValidType = uint32_t;
 
-__host__ __device__ __forceinline__
-  size_t
-  valid_size(size_t column_length)
-{
-  const size_t n_ints = (column_length / ValidSize) + ((column_length % ValidSize) ? 1 : 0);
-  return n_ints * sizeof(ValidType);
-}
 
-__host__ __device__ __forceinline__ bool get_bit(const gdf_valid_type* const bits, size_t i)
-{
-  return  bits == nullptr? true :  bits[i >> size_t(3)] & (1 << (i & size_t(7)));
-}
+// Instead of this function, use gdf_get_num_chars_bitmask from gdf/utils.h
+//__host__ __device__ __forceinline__
+//  size_t
+//  valid_size(size_t column_length)
+//{
+//  const size_t n_ints = (column_length / ValidSize) + ((column_length % ValidSize) ? 1 : 0);
+//  return n_ints * sizeof(ValidType);
+//}
+
+// Instead of this function, use gdf_is_valid from gdf/utils.h
+///__host__ __device__ __forceinline__ bool get_bit(const gdf_valid_type* const bits, size_t i)
+///{
+///  return  bits == nullptr? true :  bits[i >> size_t(3)] & (1 << (i & size_t(7)));
+///}
 
 __host__ __device__ __forceinline__
   uint8_t
