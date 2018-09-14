@@ -746,8 +746,8 @@ class DataFrame(object):
 
                 outdf[fix_name(k, suffix)] = newcol
 
-        def gather_empty(outdf, indf, idx, joinidx, suffix):
-            for k in indf.columns:
+        def gather_empty(outdf, indf, on, idx, joinidx, suffix):
+            for k in on:
                 outdf[fix_name(k, suffix)] = indf[k][:0]
 
         left_cols = []
@@ -793,11 +793,17 @@ class DataFrame(object):
         df = DataFrame()
         common_cols = [lcol for lcol, rcol in zip(left_on, right_on)
                        if lcol == rcol]
+        left_indices = right_indices = None
 
-        for key, col in zip(common_cols, joined_values):
-            df[key] = col
+        if joined_indices:
+            left_indices, right_indices = joined_indices
 
-        left_indices, right_indices = joined_indices
+            for key, col in zip(common_cols, joined_values):
+                df[key] = col
+        else:
+            for key in common_cols:
+                # Do this to preseve input dtype but not take any elements
+                df[key] = lhs[key][:0]
 
         left_args = (df, lhs, [x for x in lhs.columns if x not in common_cols],
                      left_indices, df.index, lsuffix)
@@ -808,8 +814,9 @@ class DataFrame(object):
                       if rightjoin
                       else (left_args, right_args))
 
+        gather_fn = (gather_cols if joined_indices else gather_empty)
         for args in args_order:
-            gather_cols(*args)
+            gather_fn(*args)
 
         return df
 

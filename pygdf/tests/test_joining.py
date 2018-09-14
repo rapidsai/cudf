@@ -57,7 +57,7 @@ def make_params():
             yield(aa, bb, how, 'sort')
 
 
-def make_params2():
+def make_params_multi_col_join(left_right_on=False):
     np.random.seed(0)
 
     # TODO Add support for 'outer' with method 'hash' when issue is fixed
@@ -70,6 +70,10 @@ def make_params2():
                 continue
             for num_cols_join in range(1, 6):
                 # Test joining on 1 to 5 columns
+                # Sort only supports join on one column
+                if num_cols_join > 1 and method == 'sort':
+                    continue
+
                 # Make GDF
                 df_left = DataFrame()
                 nelem = 500
@@ -85,9 +89,15 @@ def make_params2():
                                                                      nelem)
                 df_right['val1'] = np.arange(nelem)
 
-                on = ['key' + str(col+1) for col in range(num_cols_join)]
-
-                yield(df_left, df_right, on, how, method)
+                if left_right_on:
+                    left_on = ['key' + str(col+1)
+                               for col in range(num_cols_join)]
+                    right_on = ['key' + str(col)
+                                for col in range(num_cols_join, 0, -1)]
+                    yield(df_left, df_right, left_on, right_on, how, method)
+                else:
+                    on = ['key' + str(col+1) for col in range(num_cols_join)]
+                    yield(df_left, df_right, on, how, method)
 
 
 @pytest.mark.parametrize('aa,bb,how,method', make_params())
@@ -255,7 +265,8 @@ def test_dataframe_join_mismatch_cats(how):
     assert list(got.index) == list(expect.index)
 
 
-@pytest.mark.parametrize('df_left,df_right,on,how,method', make_params2())
+@pytest.mark.parametrize('df_left,df_right,on,how,method',
+                         make_params_multi_col_join())
 def test_dataframe_multi_column_join(df_left, df_right, on, how, method):
     np.random.seed(0)
 
@@ -272,6 +283,46 @@ def test_dataframe_multi_column_join(df_left, df_right, on, how, method):
 
     # Test (doesn't check for ordering)
     join_result = df_left.merge(df_right, on=on, how=how, method=method)
+
+    for col in list(expect.columns):
+        if join_result[col].null_count > 0:
+            join_result[col] = (join_result[col]
+                                .astype(np.float64)
+                                .fillna(np.nan))
+
+    join_result = join_result.to_pandas()
+    got = pd.DataFrame()
+    # Reorder "got" columns to be the same order as "expect" columns
+    for col in list(expect.columns):
+        got[col] = join_result[col]
+
+    pd.util.testing.assert_frame_equal(
+        got.sort_values(list(got.columns))
+        .reset_index(drop=True),
+        expect.sort_values(list(expect.columns))
+        .reset_index(drop=True))
+
+
+@pytest.mark.parametrize('df_left,df_right,left_on,right_on,how,method',
+                         make_params_multi_col_join(left_right_on=True))
+def test_dataframe_multi_column_join_left_right(df_left, df_right, left_on,
+                                                right_on, how, method):
+    np.random.seed(0)
+
+    # Make pandas DF
+    pddf_left = df_left.to_pandas()
+    pddf_right = df_right.to_pandas()
+    # print(pddf_left)
+    # print(pddf_right)
+
+    # Expected result
+    expect = pddf_left.merge(pddf_right, left_on=left_on, right_on=right_on,
+                             how=how, sort=True)
+    # print(pddf_joined)
+
+    # Test (doesn't check for ordering)
+    join_result = df_left.merge(df_right, left_on=left_on, right_on=right_on,
+                                how=how, method=method)
 
     for col in list(expect.columns):
         if join_result[col].null_count > 0:
