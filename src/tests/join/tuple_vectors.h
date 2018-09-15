@@ -21,6 +21,9 @@
 #include <iostream>
 #include <cstdlib>
 
+template <typename... T>
+using VTuple = std::tuple<std::vector<T>...>;
+
 // Initialize a vector with random data
 template<typename T>
 void initialize_vector(std::vector<T>& v, const size_t column_length, const size_t column_range, bool sorted = false)

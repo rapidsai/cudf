@@ -20,6 +20,7 @@
 #include <gdf/gdf.h>
 #include <thrust/device_vector.h>
 #include <cassert>
+#include <gdf/errorutils.h>
 #include "hashmap/hash_functions.cuh"
 #include "hashmap/managed.cuh"
 #include "sqls_rtti_comp.hpp"
@@ -37,7 +38,14 @@ public:
     : num_columns(num_cols), host_columns(gdf_columns)
   {
 
+    assert(num_cols > 0);
+    assert(nullptr != host_columns[0]);
     column_length = host_columns[0]->size;
+
+    if(column_length > 0)
+    {
+      assert(nullptr != host_columns[0]->data);
+    }
 
     // Copy the pointers to the column's data and types to the device 
     // as contiguous arrays
@@ -48,9 +56,12 @@ public:
     {
       gdf_column * const current_column = host_columns[i];
       assert(column_length == current_column->size);
-
-      device_columns.push_back(current_column->data);
-      device_types.push_back(current_column->dtype);
+      assert(nullptr != current_column);
+      assert(column_length == current_column->size);
+      if(column_length > 0)
+      {
+        assert(nullptr != current_column->data);
+      }
 
       // Compute the size of a row in the table in bytes
       int column_width_bytes{0};
@@ -66,7 +77,11 @@ public:
         std::cerr << "Attempted to get column byte width of unsupported GDF datatype.\n";
         column_byte_widths.push_back(0);
       }
+      device_columns.push_back(current_column->data);
+      device_types.push_back(current_column->dtype);
+
     }
+
 
     d_columns_data = device_columns.data().get();
     d_columns_types = device_types.data().get();
@@ -75,17 +90,6 @@ public:
 
   ~gdf_table(){}
 
-  __host__ 
-  gdf_column * get_column(size_type column_index) const
-  {
-    return host_columns[column_index];
-  }
-
-  __host__ __device__
-  size_type get_column_length() const
-  {
-    return column_length;
-  }
 
   /* --------------------------------------------------------------------------*/
   /** 
@@ -105,41 +109,22 @@ public:
   }
 
 
-  /* --------------------------------------------------------------------------*/
-  /** 
-   * @Synopsis  Gets the GDF data type of the column to be used for building the hash table
-   * 
-   * @Returns The GDF data type of the build column
-   */
-  /* ----------------------------------------------------------------------------*/
-  gdf_dtype get_build_column_type() const
+  size_type get_num_columns() const
   {
-    return host_columns[build_column_index]->dtype;
-  }
-
-  /* --------------------------------------------------------------------------*/
-  /** 
-   * @Synopsis  Gets a pointer to the data of the column to be used for building the hash table
-   * 
-   * @Returns Pointer to data of the build column
-   */
-  /* ----------------------------------------------------------------------------*/
-  void * get_build_column_data() const
-  {
-    return host_columns[build_column_index]->data;
+    return num_columns;
   }
 
 
-  /* --------------------------------------------------------------------------*/
-  /** 
-   * @Synopsis  Gets a pointer to the data of the column to be used for probing the hash table
-   * 
-   * @Returns  Pointer to data of the probe column
-   */
-  /* ----------------------------------------------------------------------------*/
-  void * get_probe_column_data() const
+  __host__ 
+  gdf_column * get_column(size_type column_index) const
   {
-    return host_columns[probe_column_index]->data;
+    return host_columns[column_index];
+  }
+
+  __host__ __device__
+  size_type get_column_length() const
+  {
+    return column_length;
   }
 
   /* --------------------------------------------------------------------------*/
@@ -456,24 +441,21 @@ public:
    * @Param row_index The row of the table to compute the hash value for
    * @Param num_columns_to_hash The number of columns in the row to hash. If 0, hashes all columns
    * @tparam hash_function The hash function that is used for each element in the row
-   * @tparam dummy Used only to be able to resolve the result_type from the hash_function.
-                   The actual type of dummy doesn't matter.
    * 
    * @Returns The hash value of the row
    */
   /* ----------------------------------------------------------------------------*/
-  template <template <typename> class hash_function = default_hash,
-            typename dummy = int>
+  template <template <typename> class hash_function = default_hash>
   __device__ 
-  typename hash_function<dummy>::result_type hash_row(size_type row_index, 
-                                                      size_type num_columns_to_hash = 0) const
+  hash_value_type hash_row(size_type row_index, size_type num_columns_to_hash = 0) const
   {
-    using hash_value_t = typename hash_function<dummy>::result_type;
-    hash_value_t hash_value{0};
+    hash_value_type hash_value{0};
 
     // If num_columns_to_hash is zero, hash all columns
     if(0 == num_columns_to_hash)
+    {
       num_columns_to_hash = this->num_columns;
+    }
 
     for(size_type i = 0; i < num_columns_to_hash; ++i)
     {
@@ -487,8 +469,12 @@ public:
             hash_function<col_type> hasher;
             const col_type * current_column = static_cast<col_type*>(d_columns_data[i]);
             const col_type current_value = current_column[row_index];
-            hash_value_t key_hash = hasher(current_value);
-            hash_value = hasher.hash_combine(hash_value, key_hash);
+            hash_value_type key_hash = hasher(current_value);
+            // Only combine hash values after the first column
+            if(i > 0)
+              hash_value = hasher.hash_combine(hash_value, key_hash);
+            else
+              hash_value = key_hash;
             break;
           }
         case GDF_INT16:
@@ -497,8 +483,12 @@ public:
             hash_function<col_type> hasher;
             const col_type * current_column = static_cast<col_type*>(d_columns_data[i]);
             const col_type current_value = current_column[row_index];
-            hash_value_t key_hash = hasher(current_value);
-            hash_value = hasher.hash_combine(hash_value, key_hash);
+            hash_value_type key_hash = hasher(current_value);
+            // Only combine hash values after the first column
+            if(i > 0)
+              hash_value = hasher.hash_combine(hash_value, key_hash);
+            else
+              hash_value = key_hash;
             break;
           }
         case GDF_INT32:
@@ -507,8 +497,12 @@ public:
             hash_function<col_type> hasher;
             const col_type * current_column = static_cast<col_type*>(d_columns_data[i]);
             const col_type current_value = current_column[row_index];
-            hash_value_t key_hash = hasher(current_value);
-            hash_value = hasher.hash_combine(hash_value, key_hash);
+            hash_value_type key_hash = hasher(current_value);
+            // Only combine hash values after the first column
+            if(i > 0)
+              hash_value = hasher.hash_combine(hash_value, key_hash);
+            else
+              hash_value = key_hash;
             break;
           }
         case GDF_INT64:
@@ -517,8 +511,12 @@ public:
             hash_function<col_type> hasher;
             const col_type * current_column = static_cast<col_type*>(d_columns_data[i]);
             const col_type current_value = current_column[row_index];
-            hash_value_t key_hash = hasher(current_value);
-            hash_value = hasher.hash_combine(hash_value, key_hash);
+            hash_value_type key_hash = hasher(current_value);
+            // Only combine hash values after the first column
+            if(i > 0)
+              hash_value = hasher.hash_combine(hash_value, key_hash);
+            else
+              hash_value = key_hash;
             break;
           }
         case GDF_FLOAT32:
@@ -527,8 +525,12 @@ public:
             hash_function<col_type> hasher;
             const col_type * current_column = static_cast<col_type*>(d_columns_data[i]);
             const col_type current_value = current_column[row_index];
-            hash_value_t key_hash = hasher(current_value);
-            hash_value = hasher.hash_combine(hash_value, key_hash);
+            hash_value_type key_hash = hasher(current_value);
+            // Only combine hash values after the first column
+            if(i > 0)
+              hash_value = hasher.hash_combine(hash_value, key_hash);
+            else
+              hash_value = key_hash;
             break;
           }
         case GDF_FLOAT64:
@@ -537,8 +539,12 @@ public:
             hash_function<col_type> hasher;
             const col_type * current_column = static_cast<col_type*>(d_columns_data[i]);
             const col_type current_value = current_column[row_index];
-            hash_value_t key_hash = hasher(current_value);
-            hash_value = hasher.hash_combine(hash_value, key_hash);
+            hash_value_type key_hash = hasher(current_value);
+            // Only combine hash values after the first column
+            if(i > 0)
+              hash_value = hasher.hash_combine(hash_value, key_hash);
+            else
+              hash_value = key_hash;
             break;
           }
         case GDF_DATE32:
@@ -547,8 +553,12 @@ public:
             hash_function<col_type> hasher;
             const col_type * current_column = static_cast<col_type*>(d_columns_data[i]);
             const col_type current_value = current_column[row_index];
-            hash_value_t key_hash = hasher(current_value);
-            hash_value = hasher.hash_combine(hash_value, key_hash);
+            hash_value_type key_hash = hasher(current_value);
+            // Only combine hash values after the first column
+            if(i > 0)
+              hash_value = hasher.hash_combine(hash_value, key_hash);
+            else
+              hash_value = key_hash;
             break;
           }
         case GDF_DATE64:
@@ -557,8 +567,12 @@ public:
             hash_function<col_type> hasher;
             const col_type * current_column = static_cast<col_type*>(d_columns_data[i]);
             const col_type current_value = current_column[row_index];
-            hash_value_t key_hash = hasher(current_value);
-            hash_value = hasher.hash_combine(hash_value, key_hash);
+            hash_value_type key_hash = hasher(current_value);
+            // Only combine hash values after the first column
+            if(i > 0)
+              hash_value = hasher.hash_combine(hash_value, key_hash);
+            else
+              hash_value = key_hash;
             break;
           }
         case GDF_TIMESTAMP:
@@ -567,8 +581,12 @@ public:
             hash_function<col_type> hasher;
             const col_type * current_column = static_cast<col_type*>(d_columns_data[i]);
             const col_type current_value = current_column[row_index];
-            hash_value_t key_hash = hasher(current_value);
-            hash_value = hasher.hash_combine(hash_value, key_hash);
+            hash_value_type key_hash = hasher(current_value);
+            // Only combine hash values after the first column
+            if(i > 0)
+              hash_value = hasher.hash_combine(hash_value, key_hash);
+            else
+              hash_value = key_hash;
             break;
           }
         default:
@@ -578,6 +596,7 @@ public:
 
     return hash_value;
   }
+
 
   /* --------------------------------------------------------------------------*/
   /** 
@@ -745,9 +764,123 @@ public:
       return permuted_indices;
   }
 
-private:
 
-  /* --------------------------------------------------------------------------*/
+
+  
+/* --------------------------------------------------------------------------*/
+/** 
+ * @brief  Creates a rearrangement of the table into another table by scattering
+   the rows of this table to rows of the output table based on a scatter map that
+   maps every row of this table to a corresponding row in the output table.
+ * 
+ * @Param[out] scattered_output_table The rearrangement of the input table based 
+   on the mappings from the row_scatter_map array
+ * @Param[in] row_scatter_map The mapping from input row locations to output row
+   locations, i.e., Row 'i' of this table will be scattered to 
+   scattered_output_table[row_scatter_map[i]]
+ * 
+ * @Returns   
+ */
+/* ----------------------------------------------------------------------------*/
+template <typename size_type>
+gdf_error scatter( gdf_table<size_type> & scattered_output_table,
+                   size_type const * const row_scatter_map) const
+{
+  gdf_error gdf_status{GDF_SUCCESS};
+
+  // Each column can be scattered in parallel, therefore create a 
+  // separate stream for every column
+  std::vector<cudaStream_t> column_streams(num_columns);
+  for(auto & s : column_streams)
+  {
+    cudaStreamCreate(&s);
+  }
+
+  // Scatter columns one by one
+  for(size_type i = 0; i < num_columns; ++i)
+  {
+    gdf_column * const current_input_column = this->get_column(i);
+    gdf_column * const current_output_column = scattered_output_table.get_column(i);
+    size_type column_width_bytes{0};
+    gdf_status = get_column_byte_width(current_input_column, &column_width_bytes);
+
+    if(GDF_SUCCESS != gdf_status)
+      return gdf_status;
+
+    // Scatter each column based on it's byte width
+    switch(column_width_bytes)
+    {
+      case 1:
+        {
+          using column_type = int8_t;
+          column_type * input = static_cast<column_type*>(current_input_column->data);
+          column_type * output = static_cast<column_type*>(current_output_column->data);
+          gdf_status = scatter_column<column_type>(input, 
+                                                   column_length,
+                                                   row_scatter_map, 
+                                                   output,
+                                                   column_streams[i]);
+          break;
+        }
+      case 2:
+        {
+          using column_type = int16_t;
+          column_type * input = static_cast<column_type*>(current_input_column->data);
+          column_type * output = static_cast<column_type*>(current_output_column->data);
+          gdf_status = scatter_column<column_type>(input, 
+                                                   column_length,
+                                                   row_scatter_map, 
+                                                   output,
+                                                   column_streams[i]);
+          break;
+        }
+      case 4:
+        {
+          using column_type = int32_t;
+          column_type * input = static_cast<column_type*>(current_input_column->data);
+          column_type * output = static_cast<column_type*>(current_output_column->data);
+          gdf_status = scatter_column<column_type>(input, 
+                                                   column_length,
+                                                   row_scatter_map, 
+                                                   output,
+                                                   column_streams[i]);
+          break;
+        }
+      case 8:
+        {
+          using column_type = int64_t;
+          column_type * input = static_cast<column_type*>(current_input_column->data);
+          column_type * output = static_cast<column_type*>(current_output_column->data);
+          gdf_status = scatter_column<column_type>(input, 
+                                                   column_length,
+                                                   row_scatter_map, 
+                                                   output,
+                                                   column_streams[i]);
+          break;
+        }
+      default:
+        gdf_status = GDF_UNSUPPORTED_DTYPE;
+    }
+
+    if(GDF_SUCCESS != gdf_status)
+      return gdf_status;
+  }
+
+  // Synchronize all the streams
+  CUDA_TRY( cudaDeviceSynchronize() );
+
+  // Destroy all streams
+  for(auto & s : column_streams)
+  {
+    cudaStreamDestroy(s);
+  }
+
+  return gdf_status;
+}
+
+
+private:
+/* --------------------------------------------------------------------------*/
   /** 
    * @brief Gathers the values of a column into a new column based on a map that
      maps rows in the input column to rows in the output column.
@@ -801,6 +934,46 @@ private:
     return gdf_status;
   }
 
+
+/* --------------------------------------------------------------------------*/
+/** 
+ * @brief Scatters the values of a column into a new column based on a map that
+   maps rows in the input column to rows in the output column. input_column[i]
+   will be scattered to output_column[ row_scatter_map[i] ]
+ * 
+ * @Param[in] input_column The input column whose rows will be scattered
+ * @Param[in] num_rows The number of rows in the input and output columns
+ * @Param[in] row_scatter_map An array that maps rows in the input column
+   to rows in the output column
+ * @Param[out] output_column The rearrangement of the input column 
+   based on the mapping determined by the row_scatter_map array
+ * 
+ * @Returns GDF_SUCCESS upon successful computation
+ */
+/* ----------------------------------------------------------------------------*/
+template <typename column_type,
+          typename size_type>
+gdf_error scatter_column(column_type const * const __restrict__ input_column,
+                         size_type const num_rows,
+                         size_type const * const __restrict__ row_scatter_map,
+                         column_type * const __restrict__ output_column,
+                         cudaStream_t stream = 0) const
+{
+
+  gdf_error gdf_status{GDF_SUCCESS};
+
+  thrust::scatter(thrust::cuda::par.on(stream),
+                  input_column,
+                  input_column + num_rows,
+                  row_scatter_map,
+                  output_column);
+
+  CUDA_CHECK_LAST();
+
+  return gdf_status;
+}
+
+
   void ** d_columns_data{nullptr};
   gdf_dtype * d_columns_types{nullptr};
 
@@ -809,15 +982,13 @@ private:
 
   gdf_column ** host_columns{nullptr};
   const size_type num_columns;
+
   size_type column_length{0};
 
   size_type row_size_bytes{0};
   thrust::device_vector<byte_type> column_byte_widths;
   byte_type * d_column_byte_widths{nullptr};
 
-  // Just use the first column as the build/probe column for now
-  const size_type build_column_index{0};
-  const size_type probe_column_index{0};
 
 };
 

@@ -56,7 +56,7 @@ set_package_properties(
 if(CUDA_FOUND)
     message(STATUS "CUDA ${CUDA_VERSION} found in ${CUDA_TOOLKIT_ROOT_DIR}")
 
-    set(CUDA_NVCC_FLAGS ${CUDA_NVCC_FLAGS};-std=c++11;--expt-extended-lambda;)
+    set(CUDA_NVCC_FLAGS ${CUDA_NVCC_FLAGS};-std=c++11;--expt-extended-lambda;--expt-relaxed-constexpr;)
     # Suppress SHFL warnings caused by modern GPU.
     # TODO: remove this when modern GPU is removed or fixed to use shfl_sync
     set(CUDA_NVCC_FLAGS ${CUDA_NVCC_FLAGS};
@@ -100,7 +100,7 @@ IF(CUDA_VERSION_MAJOR GREATER 8)
 ENDIF(CUDA_VERSION_MAJOR GREATER 8)
 
 IF(CMAKE_BUILD_TYPE MATCHES DEBUG)
-    set(CUDA_NVCC_FLAGS ${CUDA_NVCC_FLAGS};-g;-G;-lineinfo)
+    set(CUDA_NVCC_FLAGS ${CUDA_NVCC_FLAGS};-g;-G;)
 ENDIF(CMAKE_BUILD_TYPE MATCHES DEBUG)
 
 # switch between hash-join and sort-join

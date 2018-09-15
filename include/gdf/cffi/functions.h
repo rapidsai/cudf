@@ -140,6 +140,39 @@ gdf_error gdf_outer_join_generic(gdf_column *leftcol, gdf_column *rightcol,
                                  gdf_column *l_result, gdf_column *r_result);
 
 
+/* partioning */
+
+/* --------------------------------------------------------------------------*/
+/** 
+ * @brief Computes the hash values of the rows in the specified columns of the 
+ * input columns and bins the hash values into the desired number of partitions. 
+ * Rearranges the input columns such that rows with hash values in the same bin 
+ * are contiguous.
+ * 
+ * @Param[in] num_input_cols The number of columns in the input columns
+ * @Param[in] input[] The input set of columns
+ * @Param[in] columns_to_hash[] Indices of the columns in the input set to hash
+ * @Param[in] num_cols_to_hash The number of columns to hash
+ * @Param[in] num_partitions The number of partitions to rearrange the input rows into
+ * @Param[out] partitioned_output Preallocated gdf_columns to hold the rearrangement 
+ * of the input columns into the desired number of partitions
+ * @Param[out] partition_offsets Preallocated array the size of the number of
+ * partitions. Where partition_offsets[i] indicates the starting position
+ * of partition 'i'
+ * @Param[in] hash The hash function to use
+ * 
+ * @Returns  If the operation was successful, returns GDF_SUCCESS
+ */
+/* ----------------------------------------------------------------------------*/
+gdf_error gdf_hash_partition(int num_input_cols, 
+                             gdf_column * input[], 
+                             int columns_to_hash[],
+                             int num_cols_to_hash,
+                             int num_partitions, 
+                             gdf_column * partitioned_output[],
+                             int partition_offsets[],
+                             gdf_hash_func hash);
+
 /* prefixsum */
 
 gdf_error gdf_prefixsum_generic(gdf_column *inp, gdf_column *out, int inclusive);
@@ -152,10 +185,19 @@ gdf_error gdf_prefixsum_i64(gdf_column *inp, gdf_column *out, int inclusive);
 
 /* hashing */
 
-// num_cols: the number of columns
-// input: a list of the column pointers
-// hash: the hashing function to use
-// output: the output column, allocated by the caller, must have GDF_INT32 dtype
+/* --------------------------------------------------------------------------*/
+/** 
+ * @Synopsis  Computes the hash value of each row in the input set of columns.
+ * 
+ * @Param num_cols The number of columns in the input set
+ * @Param input The list of columns whose rows will be hashed
+ * @Param hash The hash function to use
+ * @Param output The hash value of each row of the input
+ * 
+ * @Returns   GDF_SUCCESS if the operation was successful, otherwise an appropriate
+ * error code
+ */
+/* ----------------------------------------------------------------------------*/
 gdf_error gdf_hash(int num_cols, gdf_column **input, gdf_hash_func hash, gdf_column *output);
 
 /* trig */
