@@ -55,19 +55,23 @@ __global__ void build_aggregation_table(map_type * const __restrict__ the_map,
 
   while( i < column_size ){
 
-    // Hash the current row of the input table
-    const auto row_hash = groupby_input_table.hash_row(i);
+    // Only insert into the hash table if the row is valid
+    if( groupby_input_table.is_row_valid(i) )
+    {
+      // Hash the current row of the input table
+      const auto row_hash = groupby_input_table.hash_row(i);
 
-    // Attempt to insert the current row's index.  
-    // The hash value of the row will determine the write location.
-    // The rows at the current row index and the existing row index 
-    // will be compared for equality. If they are equal, the aggregation
-    // operation is performed.
-    the_map->insert(thrust::make_pair(i, aggregation_column[i]), 
-                    op,
-                    the_comparator,
-                    true,
-                    row_hash);
+      // Attempt to insert the current row's index.  
+      // The hash value of the row will determine the write location.
+      // The rows at the current row index and the existing row index 
+      // will be compared for equality. If they are equal, the aggregation
+      // operation is performed.
+      the_map->insert(thrust::make_pair(i, aggregation_column[i]), 
+          op,
+          the_comparator,
+          true,
+          row_hash);
+    }
 
     i += blockDim.x * gridDim.x;
   }
@@ -87,22 +91,26 @@ __global__ void build_aggregation_table(map_type * const __restrict__ the_map,
 {
   size_type i = threadIdx.x + blockIdx.x * blockDim.x;
 
-  // Hash the current row of the input table
-  const auto row_hash = groupby_input_table.hash_row(i);
-
   while( i < column_size ){
 
-    // When the aggregator is COUNT, ignore the aggregation column and just insert '0'
-    // Attempt to insert the current row's index.  
-    // The hash value of the row will determine the write location.
-    // The rows at the current row index and the existing row index 
-    // will be compared for equality. If they are equal, the aggregation
-    // operation is performed.
-    the_map->insert(thrust::make_pair(i, static_cast<typename map_type::mapped_type>(0)), 
-                    op,
-                    the_comparator,
-                    true,
-                    row_hash);
+    // Only insert into the hash table if the the row is valid
+    if(groupby_input_table.is_row_valid(i))
+    {
+      // Hash the current row of the input table
+      const auto row_hash = groupby_input_table.hash_row(i);
+
+      // When the aggregator is COUNT, ignore the aggregation column and just insert '0'
+      // Attempt to insert the current row's index.  
+      // The hash value of the row will determine the write location.
+      // The rows at the current row index and the existing row index 
+      // will be compared for equality. If they are equal, the aggregation
+      // operation is performed.
+      the_map->insert(thrust::make_pair(i, static_cast<typename map_type::mapped_type>(0)), 
+          op,
+          the_comparator,
+          true,
+          row_hash);
+    }
     i += blockDim.x * gridDim.x;
   }
 }
