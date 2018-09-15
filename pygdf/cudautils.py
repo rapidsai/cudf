@@ -192,7 +192,8 @@ def mask_assign_slot(size, mask):
     dtype = (np.int32 if size < 2 ** 31 else np.int64)
     expanded_mask = cuda.device_array(size, dtype=dtype)
     numtasks = min(64 * 128, expanded_mask.size)
-    gpu_expand_mask_bits.forall(numtasks)(mask, expanded_mask)
+    if numtasks > 0:
+        gpu_expand_mask_bits.forall(numtasks)(mask, expanded_mask)
 
     # compute prefixsum
     slots = prefixsum(expanded_mask)
@@ -268,10 +269,11 @@ def compact_mask_bytes(boolbytes):
     """Convert booleans (in bytes) to a bitmask
     """
     bits = make_mask(boolbytes.size)
-    # Fill zero
-    gpu_fill_value.forall(bits.size)(bits, 0)
-    # Compact
-    gpu_compact_mask_bytes.forall(bits.size)(boolbytes, bits)
+    if bits.size > 0:
+        # Fill zero
+        gpu_fill_value.forall(bits.size)(bits, 0)
+        # Compact
+        gpu_compact_mask_bytes.forall(bits.size)(boolbytes, bits)
     return bits
 
 
