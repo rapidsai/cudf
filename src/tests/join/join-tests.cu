@@ -30,9 +30,13 @@
 #include <gdf/cffi/functions.h>
 
 #include "../../join/joining.h"
+#include "../../util/bit_util.cuh"
 
 // See this header for all of the recursive handling of tuples of vectors
 #include "tuple_vectors.h"
+
+// See this header for all of the handling of valids' vectors 
+#include "valid_vectors.h"
 
 // Selects the kind of join operation that is performed
 enum struct join_op
@@ -75,6 +79,10 @@ struct JoinTest : public testing::Test
   multi_column_t left_columns;
   multi_column_t right_columns;
 
+  // valids for multi_columns
+  std::vector<host_valid_pointer> left_valids;
+  std::vector<host_valid_pointer> right_valids;
+
   // Type for a unique_ptr to a gdf_column with a custom deleter
   // Custom deleter is defined at construction
   using gdf_col_pointer = typename std::unique_ptr<gdf_column, std::function<void(gdf_column*)>>;
@@ -111,7 +119,7 @@ struct JoinTest : public testing::Test
      */
     /* ----------------------------------------------------------------------------*/
   template <typename col_type>
-  gdf_col_pointer create_gdf_column(std::vector<col_type> const & host_vector)
+  gdf_col_pointer create_gdf_column(std::vector<col_type> const & host_vector, gdf_valid_type* host_valid)
   {
     // Deduce the type and set the gdf_dtype accordingly
     gdf_dtype gdf_col_type;
@@ -128,15 +136,19 @@ struct JoinTest : public testing::Test
 
     // Create a new instance of a gdf_column with a custom deleter that will free
     // the associated device memory when it eventually goes out of scope
-    auto deleter = [](gdf_column* col){col->size = 0; cudaFree(col->data);};
+    auto deleter = [](gdf_column* col){col->size = 0; cudaFree(col->data); cudaFree(col->valid); };
     gdf_col_pointer the_column{new gdf_column, deleter};
 
     // Allocate device storage for gdf_column and copy contents from host_vector
     cudaMalloc(&(the_column->data), host_vector.size() * sizeof(col_type));
     cudaMemcpy(the_column->data, host_vector.data(), host_vector.size() * sizeof(col_type), cudaMemcpyHostToDevice);
 
+    // Allocate device storage for gdf_column.valid
+    int valid_size = gdf_get_num_chars_bitmask(host_vector.size());
+    cudaMalloc(&(the_column->valid), valid_size);
+    cudaMemcpy(the_column->valid, host_valid, valid_size, cudaMemcpyHostToDevice);
+ 
     // Fill the gdf_column members
-    the_column->valid = nullptr;
     the_column->size = host_vector.size();
     the_column->dtype = gdf_col_type;
     gdf_dtype_extra_info extra_info;
@@ -150,29 +162,29 @@ struct JoinTest : public testing::Test
   // a gdf_column and append it to a vector of gdf_columns
   template<std::size_t I = 0, typename... Tp>
   inline typename std::enable_if<I == sizeof...(Tp), void>::type
-  convert_tuple_to_gdf_columns(std::vector<gdf_col_pointer> &gdf_columns,std::tuple<std::vector<Tp>...>& t)
+  convert_tuple_to_gdf_columns(std::vector<gdf_col_pointer> &gdf_columns,std::tuple<std::vector<Tp>...>& t, std::vector<host_valid_pointer>& valids)
   {
     //bottom of compile-time recursion
     //purposely empty...
   }
   template<std::size_t I = 0, typename... Tp>
   inline typename std::enable_if<I < sizeof...(Tp), void>::type
-  convert_tuple_to_gdf_columns(std::vector<gdf_col_pointer> &gdf_columns,std::tuple<std::vector<Tp>...>& t)
+  convert_tuple_to_gdf_columns(std::vector<gdf_col_pointer> &gdf_columns,std::tuple<std::vector<Tp>...>& t, std::vector<host_valid_pointer>& valids)
   {
     // Creates a gdf_column for the current vector and pushes it onto
     // the vector of gdf_columns
-    gdf_columns.push_back(create_gdf_column(std::get<I>(t)));
+    gdf_columns.push_back(create_gdf_column(std::get<I>(t), valids[I].get()));
 
     //recurse to next vector in tuple
-    convert_tuple_to_gdf_columns<I + 1, Tp...>(gdf_columns, t);
+    convert_tuple_to_gdf_columns<I + 1, Tp...>(gdf_columns, t, valids);
   }
 
   // Converts a tuple of host vectors into a vector of gdf_columns
   std::vector<gdf_col_pointer>
-  initialize_gdf_columns(multi_column_t host_columns)
+  initialize_gdf_columns(multi_column_t host_columns, std::vector<host_valid_pointer>& valids)
   {
     std::vector<gdf_col_pointer> gdf_columns;
-    convert_tuple_to_gdf_columns(gdf_columns, host_columns);
+    convert_tuple_to_gdf_columns(gdf_columns, host_columns, valids);
     return gdf_columns;
   }
 
@@ -194,8 +206,17 @@ struct JoinTest : public testing::Test
     initialize_tuple(left_columns, left_column_length, left_column_range, ctxt.flag_sorted);
     initialize_tuple(right_columns, right_column_length, right_column_range, ctxt.flag_sorted);
 
-    gdf_left_columns = initialize_gdf_columns(left_columns);
-    gdf_right_columns = initialize_gdf_columns(right_columns);
+    auto n_columns = std::tuple_size<multi_column_t>::value;
+    if(ctxt.flag_method == gdf_method::GDF_SORT) {
+      initialize_valids(left_valids, n_columns, left_column_length, true);
+      initialize_valids(right_valids, n_columns, right_column_length, true);
+    } else {
+      initialize_valids(left_valids, n_columns, left_column_length);
+      initialize_valids(right_valids, n_columns, right_column_length);
+    }
+
+    gdf_left_columns = initialize_gdf_columns(left_columns, left_valids);
+    gdf_right_columns = initialize_gdf_columns(right_columns, right_valids);
 
     // Fill vector of raw pointers to gdf_columns
     for(auto const& c : gdf_left_columns){
@@ -209,10 +230,10 @@ struct JoinTest : public testing::Test
     if(print)
     {
       std::cout << "Left column(s) created. Size: " << std::get<0>(left_columns).size() << std::endl;
-      print_tuple(left_columns);
+      print_tuples_and_valids(left_columns, left_valids);
 
       std::cout << "Right column(s) created. Size: " << std::get<0>(right_columns).size() << std::endl;
-      print_tuple(right_columns);
+      print_tuples_and_valids(right_columns, right_valids);
     }
   }
 
@@ -240,43 +261,49 @@ struct JoinTest : public testing::Test
 
     // Build hash table that maps the first right columns' values to their row index in the column
     std::vector<key_type> const & build_column = std::get<0>(right_columns);
+    auto build_valid = right_valids[0].get();
+
     for(size_t right_index = 0; right_index < build_column.size(); ++right_index)
     {
-      the_map.insert(std::make_pair(build_column[right_index], right_index));
+      if (gdf_is_valid(build_valid, right_index)) {
+        the_map.insert(std::make_pair(build_column[right_index], right_index));
+      }
     }
 
     std::vector<result_type> reference_result;
 
     // Probe hash table with first left column
     std::vector<key_type> const & probe_column = std::get<0>(left_columns);
+    auto probe_valid = left_valids[0].get();
+
     for(size_t left_index = 0; left_index < probe_column.size(); ++left_index)
     {
-      // Find all keys that match probe_key
-      const auto probe_key = probe_column[left_index];
-      auto range = the_map.equal_range(probe_key);
-
-      // Every element in the returned range identifies a row in the first right column that
-      // matches the probe_key. Need to check if all other columns also match
       bool match{false};
-      for(auto i = range.first; i != range.second; ++i)
-      {
-        const auto right_index = i->second;
+      if (gdf_is_valid(probe_valid, left_index)) {
+        // Find all keys that match probe_key
+        const auto probe_key = probe_column[left_index];
+        auto range = the_map.equal_range(probe_key);
 
-        // If all of the columns in right_columns[right_index] == all of the columns in left_columns[left_index]
-        // Then this index pair is added to the result as a matching pair of row indices
-        if( true == rows_equal(left_columns, right_columns, left_index, right_index)){
-          reference_result.emplace_back(left_index, right_index);
-          match = true;
+        // Every element in the returned range identifies a row in the first right column that
+        // matches the probe_key. Need to check if all other columns also match
+        for(auto i = range.first; i != range.second; ++i)
+        {
+          const auto right_index = i->second;
+
+          // If all of the columns in right_columns[right_index] == all of the columns in left_columns[left_index]
+          // Then this index pair is added to the result as a matching pair of row indices
+          if( true == rows_equal_using_valids(left_columns, right_columns, left_valids, right_valids, left_index, right_index)){
+            reference_result.emplace_back(left_index, right_index);
+            match = true;
+          }
         }
       }
-
       // For left joins, insert a NULL if no match is found
       if((false == match) &&
               ((op == join_op::LEFT) || (op == join_op::OUTER))){
         constexpr int JoinNullValue{-1};
         reference_result.emplace_back(left_index, JoinNullValue);
       }
-
     }
 
     if (op == join_op::OUTER)
@@ -285,19 +312,19 @@ struct JoinTest : public testing::Test
         // Build hash table that maps the first left columns' values to their row index in the column
         for(size_t left_index = 0; left_index < probe_column.size(); ++left_index)
         {
-              the_map.insert(std::make_pair(build_column[left_index], left_index));
+          the_map.insert(std::make_pair(probe_column[left_index], left_index));
         }
         // Probe the hash table with first right column
         // Add rows where a match for the right column does not exist
         for(size_t right_index = 0; right_index < build_column.size(); ++right_index)
         {
-            const auto probe_key = build_column[right_index];
-            auto search = the_map.find(probe_key);
-            if (search == the_map.end())
-            {
-                constexpr int JoinNullValue{-1};
-                reference_result.emplace_back(JoinNullValue, right_index);
-            }
+          const auto probe_key = build_column[right_index];
+          auto search = the_map.find(probe_key);
+          if (search == the_map.end())
+          {
+              constexpr int JoinNullValue{-1};
+              reference_result.emplace_back(JoinNullValue, right_index);
+          }
         }
     }
 
