@@ -11,10 +11,10 @@
     if ( cudaSuccess != cudaStatus )                                  \
     {                                                                 \
         std::cerr << "ERROR: CUDA Runtime call " << #call             \
-                  << "in line" << __LINE__                            \
-                  << "of file" << __FILE__                            \
-                  << "failed with" << cudaGetErrorString(cudaStatus)  \
-                  << "(" << cudaStatus << ").\n";                     \
+                  << " in line " << __LINE__                            \
+                  << " of file " << __FILE__                            \
+                  << " failed with " << cudaGetErrorString(cudaStatus)  \
+                  << " (" << cudaStatus << ").\n";                     \
         return GDF_CUDA_ERROR;                          							\
     }												                                          \
 }                                                                                                  
