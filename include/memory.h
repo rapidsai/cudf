@@ -60,6 +60,14 @@ rmmError_t rmmInitialize();
 rmmError_t rmmFinalize(); 
 
 /** ---------------------------------------------------------------------------*
+ * @brief Stringify RMM error code.
+ * 
+ * @param errcode The error returned by an RMM function
+ * @return const char* The input error code in string form
+ * ---------------------------------------------------------------------------**/
+const char * rmmGetErrorString(rmmError_t errcode);
+
+/** ---------------------------------------------------------------------------*
  * @brief Allocate memory and return a pointer to device memory. 
  * 
  * @param[out] ptr Returned pointer
@@ -98,7 +106,7 @@ rmmError_t rmmFree(void *ptr, cudaStream_t stream);
 /** ---------------------------------------------------------------------------*
  * @brief Get amounts of free and total memory managed by a manager associated with the stream.
  * 
- * Returns in *free and *total respectively, the free and total amount of memory available 
+ * Returns in *free and *total, respectively, the free and total amount of memory available 
  * for allocation by the device in bytes.
  * 
  * @param[out] freeSize The free memory in bytes available to the manager associated with stream

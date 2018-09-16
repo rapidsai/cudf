@@ -87,6 +87,26 @@ private:
     rmm::Logger::TimePt start;
 };
 
+#ifndef GETNAME
+#define GETNAME(x) case x: return #x;
+#endif
+
+// Stringify RMM error code.
+const char * rmmGetErrorString(rmmError_t errcode) {
+  switch (errcode) {
+    // There must be one entry per enum values in gdf_error.
+    GETNAME(RMM_SUCCESS)
+    GETNAME(RMM_ERROR_CUDA_ERROR)
+    GETNAME(RMM_ERROR_INVALID_ARGUMENT)
+    GETNAME(RMM_ERROR_NOT_INITIALIZED)
+    GETNAME(RMM_ERROR_OUT_OF_MEMORY)
+    GETNAME(RMM_ERROR_UNKNOWN)
+    GETNAME(RMM_ERROR_IO)
+    default:
+        // This means we are missing an entry above for a rmmError_t value.
+        return "Internal error. Unknown error code.";
+  }
+}
 
 // Initialize memory manager state and storage.
 rmmError_t rmmInitialize()

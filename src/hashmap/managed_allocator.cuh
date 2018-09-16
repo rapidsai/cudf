@@ -61,11 +61,11 @@ struct legacy_allocator {
 
       T* allocate(std::size_t n) const {
           T* ptr = 0;
-          cudaError_t result = rmmAlloc( (void**)&ptr, n*sizeof(T), 0 ); // TODO non-default stream?
-          if( cudaSuccess != result || nullptr == ptr ) 
+          rmmError_t result = rmmAlloc( (void**)&ptr, n*sizeof(T), 0 ); // TODO non-default stream?
+          if( RMM_SUCCESS != result || nullptr == ptr ) 
           {
-            std::cerr << "ERROR: CUDA Runtime call in line " << __LINE__ << "of file " 
-                      << __FILE__ << " failed with " << cudaGetErrorString(result) 
+            std::cerr << "ERROR: RMM call in line " << __LINE__ << "of file " 
+                      << __FILE__ << " failed with result " << rmmGetErrorString(result) 
                       << " (" << result << ") "
                       << " Attempted to allocate: " << n * sizeof(T) << " bytes.\n";
             throw std::bad_alloc();

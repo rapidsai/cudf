@@ -48,7 +48,7 @@ gdf_error gdf_##Fn(gdf_column *leftcol, gdf_column *rightcol,               \
     if ( leftcol->dtype != rightcol->dtype) return GDF_UNSUPPORTED_DTYPE;   \
     if ( leftcol->size >= MAX_JOIN_SIZE ) return GDF_COLUMN_SIZE_TOO_BIG;   \
     if ( rightcol->size >= MAX_JOIN_SIZE ) return GDF_COLUMN_SIZE_TOO_BIG;  \
-    standard_context_t context;                                             \
+    rmm_mgpu_context_t context;                                             \
     auto output = Joiner((T*)leftcol->data, leftcol->size,                  \
                                 (T*)rightcol->data, rightcol->size,         \
                                 less_t<T>(), context);                      \
@@ -107,7 +107,7 @@ gdf_error hash_join(size_type num_cols, gdf_column **leftcol, gdf_column **right
   std::unique_ptr< gdf_table<size_type> > left_table(new gdf_table<size_type>(num_cols, leftcol));
   std::unique_ptr< gdf_table<size_type> > right_table(new gdf_table<size_type>(num_cols, rightcol));
 
-  standard_context_t context(false);
+  rmm_mgpu_context_t context(false);
 
   return join_hash<join_type, output_index_type>(*left_table, 
                                                         *right_table, 
@@ -157,7 +157,7 @@ gdf_error sort_join_typed(gdf_column *leftcol, gdf_column *rightcol,
   using namespace mgpu;
   gdf_error err = GDF_SUCCESS;
 
-  standard_context_t context(false);
+  rmm_mgpu_context_t context(false);
   SortJoin<join_type> sort_based_join;
   auto output = sort_based_join(static_cast<T*>(leftcol->data), leftcol->size,
                                        static_cast<T*>(rightcol->data), rightcol->size,

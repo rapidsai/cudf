@@ -1,6 +1,7 @@
-#include <gdf/gdf.h>
-#include <gdf/errorutils.h>
-#include <cuda_runtime_api.h>
+#include "gdf/gdf.h"
+#include "gdf/errorutils.h"
+#include "cuda_runtime_api.h"
+#include "rmm.h"
 
 gdf_size_type gdf_column_sizeof() {
 	return sizeof(gdf_column);
@@ -31,11 +32,11 @@ gdf_error gdf_column_free(gdf_column *column) {
 
   if(nullptr != column->data)
   {
-    CUDA_TRY( cudaFree(column->data)  );
+    RMM_TRY( rmmFree(column->data, 0)  );
   }
   if(nullptr != column->valid)
   {
-    CUDA_TRY( cudaFree(column->valid) );
+    RMM_TRY( rmmFree(column->valid, 0) );
   }
   return GDF_SUCCESS;
 }

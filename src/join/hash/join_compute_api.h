@@ -303,7 +303,7 @@ gdf_error compute_hash_join(mgpu::context_t & compute_ctx,
 
   // Allocate device global counter used by threads to determine output write location
   size_type *d_global_write_index{nullptr};
-  RMM_TRY_CUDAERROR( rmmAlloc(&d_global_write_index, sizeof(size_type), 0) ); // TODO non-default stream?
+  RMM_TRY( rmmAlloc((void**)&d_global_write_index, sizeof(size_type), 0) ); // TODO non-default stream?
  
   // Because we only have an estimate of the output size, we may need to probe the
   // hash table multiple times until we've found an output buffer size that is large enough
@@ -314,8 +314,8 @@ gdf_error compute_hash_join(mgpu::context_t & compute_ctx,
     output_r_ptr = nullptr;
 
     // Allocate temporary device buffer for join output
-    RMM_TRY_CUDAERROR( rmmAlloc(&output_l_ptr, estimated_join_output_size*sizeof(output_index_type), 0) );
-    RMM_TRY_CUDAERROR( rmmAlloc(&output_r_ptr, estimated_join_output_size*sizeof(output_index_type), 0) );
+    RMM_TRY( rmmAlloc((void**)&output_l_ptr, estimated_join_output_size*sizeof(output_index_type), 0) );
+    RMM_TRY( rmmAlloc((void**)&output_r_ptr, estimated_join_output_size*sizeof(output_index_type), 0) );
     CUDA_TRY( cudaMemsetAsync(d_global_write_index, 0, sizeof(size_type), 0) );
 
     const size_type probe_grid_size{(probe_table_num_rows + block_size -1)/block_size};
@@ -354,7 +354,7 @@ gdf_error compute_hash_join(mgpu::context_t & compute_ctx,
   }
 
   // free memory used for the counters
-  RMM_TRY_CUDAERROR( rmmFree(d_global_write_index, 0) );
+  RMM_TRY( rmmFree(d_global_write_index, 0) );
 
   // If the estimated join output size was larger than the actual output size,
   // then the buffers are larger than necessary. Allocate buffers of the actual 
@@ -364,12 +364,12 @@ gdf_error compute_hash_join(mgpu::context_t & compute_ctx,
   if (estimated_join_output_size > h_actual_found) {
       output_index_type *copy_output_l_ptr{nullptr};
       output_index_type *copy_output_r_ptr{nullptr};
-      CUDA_TRY( cudaMalloc(&copy_output_l_ptr, h_actual_found*sizeof(output_index_type)) );
-      CUDA_TRY( cudaMalloc(&copy_output_r_ptr, h_actual_found*sizeof(output_index_type)) );
+      RMM_TRY( rmmAlloc((void**)&copy_output_l_ptr, h_actual_found*sizeof(output_index_type), 0) ); // TODO non-default stream?
+      RMM_TRY( rmmAlloc((void**)&copy_output_r_ptr, h_actual_found*sizeof(output_index_type), 0) );
       CUDA_TRY( cudaMemcpy(copy_output_l_ptr, output_l_ptr, h_actual_found*sizeof(output_index_type), cudaMemcpyDeviceToDevice) );
       CUDA_TRY( cudaMemcpy(copy_output_r_ptr, output_r_ptr, h_actual_found*sizeof(output_index_type), cudaMemcpyDeviceToDevice) );
-      CUDA_TRY( cudaFree(output_l_ptr) );
-      CUDA_TRY( cudaFree(output_r_ptr) );
+      RMM_TRY( rmmFree(output_l_ptr, 0) );
+      RMM_TRY( rmmFree(output_r_ptr, 0) );
       output_l_ptr = copy_output_l_ptr;
       output_r_ptr = copy_output_r_ptr;
   }
