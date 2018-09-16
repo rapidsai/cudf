@@ -321,3 +321,18 @@ def test_categorical_unique_count(nelem):
 
     # verify
     assert gdf_unique_count == len(pdf_unique)
+
+
+def test_categorical_empty():
+    cat = pd.Categorical([])
+    pdsr = pd.Series(cat)
+    sr = Series(cat)
+    np.testing.assert_array_equal(cat.codes, sr.to_array())
+    assert sr.dtype == pdsr.dtype
+
+    # Test attributes
+    assert tuple(pdsr.cat.categories) == tuple(sr.cat.categories)
+    assert pdsr.cat.ordered == sr.cat.ordered
+
+    np.testing.assert_array_equal(pdsr.cat.codes.data, sr.cat.codes.to_array())
+    np.testing.assert_array_equal(pdsr.cat.codes.dtype, sr.cat.codes.dtype)
