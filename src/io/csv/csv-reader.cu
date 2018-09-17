@@ -156,15 +156,6 @@ __device__ void setBit(gdf_valid_type* address, int bit) {
 }
 
 
-//
-//---------------Debug stuff (can be deleted) ---------------------------------------------
-//
-void printCheck(raw_csv_t * csvData, int start_idx, int num_blocks, const char * text);
-void printGdfCheck(gdf_column * gdf, int start_data_idx, int num_records, const char * text);
-void printResults(gdf_column ** data, int num_col, int start_data_idx, int num_records);
-void printInfoCheck(fields_info_t *info, int num_records, const char * text, int start_idx = 0);
-void printStartPositions(raw_csv_t * csvData, int num_records);
-
 
 /**
  * main entry point
@@ -179,10 +170,6 @@ gdf_error read_csv(csv_read_arg *args)
 	raw_csv_t * raw_csv = new raw_csv_t;
 	error = parseArguments(args, raw_csv);
 	checkError(error, "Call to parseArguments");
-
-	// cout << "Num Column = " << args->num_cols << std::endl;
-	// cout << "Delimiter  = " << raw_csv->delimiter << std::endl;
-	// cout << "Terminator = " << raw_csv->terminator << std::endl;
 
 	//-----------------------------------------------------------------------------
 	// memory map in the data
@@ -201,12 +188,6 @@ gdf_error read_csv(csv_read_arg *args)
 
     if (map_data == MAP_FAILED) { close(fd); checkError(GDF_C_ERROR, "Error mapping file"); }
 
-	// cout << "Num Column = " << args->num_cols << std::endl;
-	// cout << "Bytes Read = " << raw_csv->num_bytes << std::endl;
-
-	// if ( raw_csv->num_bytes < 500)  cout << "Data = \n"     << ((const char *)map_data) << endl;
-
-
 	//-----------------------------------------------------------------------------
 	//---  create a structure to hold variables used to parse the CSV data
 	error = updateRawCsv( (const char *)map_data, (long)raw_csv->num_bytes, raw_csv );
@@ -217,14 +198,11 @@ gdf_error read_csv(csv_read_arg *args)
 	close(fd);
 	munmap(map_data, raw_csv->num_bytes);
 
-
 	//-----------------------------------------------------------------------------
 	// find the record and fields points (in bitmaps)
 	cudaDeviceSynchronize();
 	error = launch_countRecords(raw_csv);
 	checkError(error, "call to record counter");
-
-	// cout << "The number of rows detected was " << raw_csv->num_records << endl;
 
 	//-----------------------------------------------------------------------------
 	//-- Allocate space to hold the record starting point
@@ -302,7 +280,6 @@ gdf_error read_csv(csv_read_arg *args)
 
 	for (int col = 0; col < stringColCount; col++) {
 		//  TO-DO:  get a string class
-		// d_data[col] = (void*) new Strings(str_cols[col],size_t(raw_csv->num_records));
 	}
 
 	cudaFree(d_data);
@@ -310,8 +287,6 @@ gdf_error read_csv(csv_read_arg *args)
 	error = freeCsvData(raw_csv->data);
 	checkError(error, "call to cudaFree(raw_csv->data)" );
 	delete raw_csv;
-
-	//printResults(cols, raw_csv->num_cols, (raw_csv->num_records - 101), 100);
 
 	args->data 			= cols;
 	args->num_cols_out	= raw_csv->num_cols;
@@ -813,19 +788,14 @@ __global__ void convertCsvToGdfNew(
 			pos++;
 		}
 
-		// if(threadIdx.x==0&&blockIdx.x==0){
-		// 	// printf("^^^^ %d %ld %ld \n", col, start, pos);	
-		// }
+
 		long tempPos=pos-1;
 
-		// if(blockIdx.x == 0 && threadIdx.x==0){
-			if(dtype[col] != gdf_dtype::GDF_CATEGORY && dtype[col] != gdf_dtype::GDF_STRING){
-				removePrePostWhiteSpaces2(raw_csv, &start, &tempPos);
-			}
-		// }
+		if(dtype[col] != gdf_dtype::GDF_CATEGORY && dtype[col] != gdf_dtype::GDF_STRING){
+			removePrePostWhiteSpaces2(raw_csv, &start, &tempPos);
+		}
 
 
-		// if((start<=(pos-1) && dtype[col]!=gdf_dtype::GDF_STRING) || (start==pos && dtype[col]==gdf_dtype::GDF_STRING)) { // Empty strings are consider legal values
 		if(start<=(tempPos)) { // Empty strings are not legal values
 
 			switch(dtype[col]) {
@@ -886,13 +856,11 @@ __global__ void convertCsvToGdfNew(
 					break;
 			}
 
-			// if (dtype[col]!=gdf_dtype::GDF_STRING){		
 				// set the valid bitmap - all bits were set to 0 to start
 				int bitmapIdx 	= whichBitmap(rec_id + col);  	// which bitmap
 				int bitIdx		= whichBit(rec_id + col);		// which bit - over an 8-bit index
 				setBit(valid[col]+bitmapIdx, bitIdx);		// This is done with atomics
 
-			// }
 		}
 		else if(dtype[col]==gdf_dtype::GDF_STRING){
 			str_cols[stringCol][rec_id].first 	= NULL;
@@ -961,272 +929,5 @@ __device__ int findSetBit(int tid, long num_bits, uint64_t *r_bits, int x) {
 
 	return offset;
 }
-
-
-
-
-
-//---------------------------------------------------------------------------------------------------------------
-//
-//			Debug functions below this point
-//
-//---------------------------------------------------------------------------------------------------------------
-
-void printCheck(raw_csv_t * csvData, int start_data_idx, int num_blocks, const char * text) {
-
-	cudaDeviceSynchronize();
-
-	std::cout << "\n--------------------------------\n";
-	std::cout << "Checking (dependent on Unified Memory) - " 		<< text << std::endl;
-	std::cout << "\tNumber of Bytes   - " << csvData->num_bytes 	<< std::endl;
-	std::cout << "\tNumber of Bitmaps - " << csvData->num_bits  	<< std::endl;
-	std::cout << "\tNumber of Records - " << csvData->num_records  	<< std::endl;
-
-
-	char * data = csvData->data;
-
-	int data_idx 	= start_data_idx;
-
-	if ( data_idx != 0)
-		while ( data_idx % 64 != 0 )
-			data_idx++;
-
-	std::cout << "\tStarting Index specified - " << start_data_idx << "  adjusted to " << data_idx << std::endl;
-
-	int bitmap_idx  = data_idx / 64;
-
-	std::cout << "\tStarting Bitmap Index - " << bitmap_idx  << std::endl;
-	std::cout << "[data, bit] =>                 64 bytes of data                 \t rec_bit   field_bits    Record counts"  << std::endl;
-
-
-	for ( int loop = 0; loop < num_blocks; loop++) {
-		std::cout << "[" << std::setw(6) << data_idx << " ,  " << std::setw(6) << bitmap_idx << "] =>  ";
-
-		 for ( int x = 0; x < 64; x++) {
-
-			if ( data_idx < csvData->num_bytes) {
-				if (data[data_idx] == '\n')
-					std::cout << "\033[1m\033[31mNL\033[0m ";
-				else
-					std::cout << data[data_idx] << " ";
-			}
-
-			++data_idx;
-		 }
-
-		std::cout << " =>  " << std::setw(25) << csvData->rec_bits[bitmap_idx];
-		std::cout << "\t" << std::setw(25) << csvData->field_bits[bitmap_idx];
-		std::cout << "\t" << std::setw(2) << csvData->recPerChunck[bitmap_idx];
-		std::cout << "\t" << std::setw(2) << csvData->offsets[bitmap_idx];
-		std::cout << std::endl;
-
-		++bitmap_idx;
-	}
-
-	std::cout << "--------------------------------\n\n";
-
-}
-
-
-void printGdfCheck(gdf_column * gdf, int start_data_idx, int num_records, const char * text) {
-
-	cudaDeviceSynchronize();
-
-	std::cout << "\n--------------------------------\n";
-	std::cout << "Checking (dependent on Unified Memory) - " << text << std::endl;
-	std::cout << "\tCol: " << gdf->col_name  <<  " and data type of " << gdf->dtype << std::endl;
-
-	for ( int x = 0; x < num_records; x++) {
-		switch(gdf->dtype) {
-			case gdf_dtype::GDF_INT8:
-			{
-				int8_t *gdf_out = (int8_t *)gdf->data;
-				std::cout << "\tRec[ " << x << "] is "<< gdf_out[x] << std::endl;
-			}
-				break;
-			case gdf_dtype::GDF_INT16: {
-				int16_t *gdf_out = (int16_t *)gdf->data;
-				std::cout << "\tRec[ " << x << "] is "<< gdf_out[x] << std::endl;
-			}
-				break;
-			case gdf_dtype::GDF_INT32:
-			{
-				int32_t *gdf_out = (int32_t *)gdf->data;
-				std::cout << "\tRec[ " << x << "] is "<< gdf_out[x] << std::endl;
-			}
-				break;
-			case gdf_dtype::GDF_INT64:
-			{
-				int64_t *gdf_out = (int64_t *)gdf->data;
-				std::cout << "\tRec[ " << x << "] is "<< gdf_out[x] << std::endl;
-			}
-				break;
-			case gdf_dtype::GDF_FLOAT32:
-			{
-				float *gdf_out = (float *)gdf->data;
-				std::cout << "\tRec[ " << x << "] is "<< gdf_out[x] << std::endl;
-			}
-				break;
-			case gdf_dtype::GDF_FLOAT64:
-			{
-				double *gdf_out = (double *)gdf->data;
-				std::cout << "\tRec[ " << x << "] is "<< gdf_out[x] << std::endl;
-			}
-				break;
-			case gdf_dtype::GDF_DATE64:
-				break;
-			case gdf_dtype::GDF_CATEGORY:
-				break;
-			case gdf_dtype::GDF_STRING:
-				break;
-			default:
-				break;
-		}
-	}
-
-	std::cout << "--------------------------------\n\n";
-
-}
-
-
-void printResults(gdf_column ** data, int num_col, int start_data_idx, int num_records) {
-
-	cudaDeviceSynchronize();
-
-	std::cout << "\n--------------------------------\n";
-	std::cout << "Printing Results (dependent on Unified Memory) " << std::endl;
-
-	for ( int c = 0;  c < num_col; c++)
-	{
-		gdf_column *gdf = data[c];
-
-		std::cout << std::setw(2) << c << " =>  " << std::setw(50) << gdf->col_name << "\t" << gdf->dtype << "\t" << gdf->size << "\t" << gdf->null_count << std::endl;
-	}
-	std::cout << std::endl;
-
-	long x = 0;
-	for ( int i = 0; i < num_records; i++) {
-		x = start_data_idx + i;
-
-		std::cout << "\tRec[ " << x << "] is:  ";
-
-
-		for ( int c = 0;  c < num_col; c++)
-		{
-			gdf_column *gdf = data[c];
-
-
-			switch(gdf->dtype) {
-				case gdf_dtype::GDF_INT8:
-				{
-					int8_t *gdf_out = (int8_t *)gdf->data;
-					std::cout << "\t"  << gdf_out[x];
-				}
-					break;
-				case gdf_dtype::GDF_INT16: {
-					int16_t *gdf_out = (int16_t *)gdf->data;
-					std::cout << "\t" << gdf_out[x];
-				}
-					break;
-				case gdf_dtype::GDF_INT32:
-				{
-					int32_t *gdf_out = (int32_t *)gdf->data;
-					std::cout << "\t" << gdf_out[x];
-				}
-					break;
-				case gdf_dtype::GDF_INT64:
-				{
-					int64_t *gdf_out = (int64_t *)gdf->data;
-					std::cout << "\t" << gdf_out[x];
-				}
-					break;
-				case gdf_dtype::GDF_FLOAT32:
-				{
-					float *gdf_out = (float *)gdf->data;
-					std::cout << "\t" << gdf_out[x];
-				}
-					break;
-				case gdf_dtype::GDF_FLOAT64:
-				{
-					double *gdf_out = (double *)gdf->data;
-					std::cout << "\t" << gdf_out[x];
-				}
-					break;
-				case gdf_dtype::GDF_DATE64:
-				{
-					int64_t *gdf_out = (int64_t *)gdf->data;
-					std::cout << "\t" << gdf_out[x];
-				}
-				break;
-				case gdf_dtype::GDF_CATEGORY:
-				{
-					int32_t *gdf_out = (int32_t *)gdf->data;
-					std::cout << "\t" << gdf_out[x];
-				}
-					break;
-				case gdf_dtype::GDF_STRING:
-					break;
-				default:
-					break;
-			}
-		}
-		std::cout << std::endl;
-	}
-
-	std::cout << "--------------------------------\n\n";
-
-}
-
-
-
-void printInfoCheck(fields_info_t *info, int num_records, const char * text, int start_idx) {
-
-	cudaDeviceSynchronize();
-
-	std::cout << "\n--------------------------------\n";
-	std::cout << "Checking (dependent on Unified Memory) - " << text << std::endl;
-
-	std::cout << "\tRec Id\tCol Id\tStart Idx\tEnd Idx" << std::endl;
-
-	for ( int x = start_idx; x < num_records; x++) {
-		std::cout << "\t" << info->rec_id[x] << "\t" << info->col_id[x] << "\t" << info->start_idx[x] << "\t" << info->end_idx[x]   << std::endl;
-	}
-
-}
-
-
-void printStartPositions(raw_csv_t * raw_csv, int num_records)
-{
-	cudaDeviceSynchronize();
-
-	std::cout << "\n--------------------------------\n";
-	std::cout << "Print Start Indexes (dependent on Unified Memory) " << std::endl;
-
-	for ( int x = 0; x < num_records; x++) {
-		std::cout << "\t" <<  raw_csv->recStart[x] << std::endl;
-	}
-
-
-
-
-}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 

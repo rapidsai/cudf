@@ -5,7 +5,6 @@
 
 #include <math_functions.h>
 
-
 __device__
 void removePrePostWhiteSpaces(char *data, long* start_idx, long* end_idx) {
 	while(data[*start_idx] == ' ' && *start_idx < *end_idx)
@@ -134,9 +133,6 @@ int64_t convertStrtoDate(char *data, long start_idx, long end_idx) {
 
 	static unsigned short days[12] = {0,  31,  60,  91, 121, 152, 182, 213, 244, 274, 305, 335};
 
-	//int second	= 0;
-	//int minute	= 0;
-	//int hour	= 0;
 	int day 	= 01;
 	int month 	= 01;
 	int year 	= 1970;
@@ -291,8 +287,6 @@ int32_t convertStrtoHash(const char * key, long start_idx, long end_idx, uint32_
     h1 = fmix32(h1);
     return h1;
 }
-
-
 
 
 
