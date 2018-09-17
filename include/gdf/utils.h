@@ -3,7 +3,7 @@
 
 #include <gdf/gdf.h>
 
-__device__
+__host__ __device__
 static
 bool gdf_is_valid(const gdf_valid_type *valid, gdf_index_type pos) {
 	if ( valid )
