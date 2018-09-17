@@ -104,7 +104,7 @@ void scatter_valid_mask( gdf_valid_type const * const input_mask,
   while(row_number < num_rows)
   {
     // Get the bit corresponding to the row
-    const mask_type input_bit = input_mask32[row_number/BITS_PER_MASK] & (gdf_valid_type(1) << (row_number % BITS_PER_MASK));
+    const mask_type input_bit = input_mask32[row_number/BITS_PER_MASK] & (mask_type(1) << (row_number % BITS_PER_MASK));
 
     // Find the mask in the output that will hold the bit for the scattered row
     const size_type output_location = scatter_map[row_number] / BITS_PER_MASK;
