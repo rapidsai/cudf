@@ -287,8 +287,9 @@ gdf_column create_gdf_column(const size_t size)
   the_column.dtype_info = extra_info;
 
   // Allocate the buffer for the column
-  cudaMalloc(&the_column.data, the_column.size * sizeof(col_type));
-
+  // TODO error checking?
+  rmmAlloc((void**)&the_column.data, the_column.size * sizeof(col_type), 0); // TODO: non-default stream?
+  
   return the_column;
 }
 
@@ -375,9 +376,9 @@ gdf_error multi_pass_avg(int ncols,
   }
 
   // Free intermediate storage
-  cudaFree(count_output.data);
-  cudaFree(sum_output.data);
-
+  RMM_TRY( rmmFree(count_output.data, 0) );
+  RMM_TRY( rmmFree(sum_output.data, 0) );
+  
   return GDF_SUCCESS;
 }
 

@@ -112,9 +112,10 @@ compute_joined_indices(const _join_bounds &bounds,
     // for outer join: allocate extra space for appending the right indices
     int output_npairs = join_count + append_count;
     int *output_l_ptr, *output_r_ptr;
-    CUDA_RT_CALL( cudaMalloc(&output_l_ptr, output_npairs*sizeof(int)) );
-    CUDA_RT_CALL( cudaMalloc(&output_r_ptr, output_npairs*sizeof(int)) );
-
+    // TODO: error checking?
+    rmmAlloc((void**)&output_l_ptr, output_npairs*sizeof(int), 0); // TODO non-default stream?
+    rmmAlloc((void**)&output_r_ptr, output_npairs*sizeof(int), 0);
+    
     if (isInner){
         // Use load-balancing search on the segments. The output is a pair with
         // a_index = seg and b_index = lower_data[seg] + rank.

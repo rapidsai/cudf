@@ -20,6 +20,11 @@
 #include <cuda_runtime.h>
 #include <limits>
 #include <memory>
+<<<<<<< 9a95b7d95635293254ce717b8fdee4f2a9bd5968
+=======
+#include "groupby_kernels.cuh"
+#include "gdf/errorutils.h"
+>>>>>>> Converted more cudaMalloc/cudaFree calls to rmmAlloc/rmmFree
 #include <cub/util_allocator.cuh>
 #include <cub/device/device_radix_sort.cuh>
 #include "../../hashmap/managed.cuh"
@@ -204,6 +209,7 @@ gdf_error GroupbyHash(gdf_table<size_type> const & groupby_input_table,
   groupby_output_table.set_column_length(*out_size);
 
   // Optionally sort the groupby/aggregation result columns
+<<<<<<< 9a95b7d95635293254ce717b8fdee4f2a9bd5968
   if(true == sort_result) {
       auto sorted_indices = groupby_output_table.sort();
       thrust::device_vector<aggregation_type> agg(*out_size);
@@ -212,6 +218,42 @@ gdf_error GroupbyHash(gdf_table<size_type> const & groupby_input_table,
               out_aggregation_column,
               agg.begin());
       thrust::copy(agg.begin(), agg.end(), out_aggregation_column);
+=======
+  if(true == sort_result)
+  {
+    // Allocate double buffers needed for the cub Radix Sort
+    groupby_type * groupby_result_alt;
+    RMM_TRY_CUDAERROR( rmmAlloc((void**)&groupby_result_alt, *out_size * sizeof(groupby_type), 0) ); // TODO: non-default stream?
+    
+    aggregation_type * aggregation_result_alt;
+    RMM_TRY_CUDAERROR( rmmAlloc((void**)&aggregation_result_alt, *out_size * sizeof(aggregation_type), 0) );
+    
+    cub::DoubleBuffer<groupby_type>     d_keys(out_groupby_column, groupby_result_alt);
+    cub::DoubleBuffer<aggregation_type> d_vals(out_aggregation_column, aggregation_result_alt);
+
+    // When called with temp_storage == nullptr, simply returns the required allocation size in
+    // temp_storage_bytes
+    void *d_temp_storage = nullptr;
+    size_t temp_storage_bytes = 0;
+    CUDA_RT_CALL(cub::DeviceRadixSort::SortPairs(d_temp_storage, temp_storage_bytes, d_keys, d_vals, *out_size));
+    
+    // allocate temp storage here and call sort again to actually sort arrays
+    RMM_TRY_CUDAERROR( rmmAlloc((void**)&d_temp_storage, temp_storage_bytes, 0) );
+    CUDA_RT_CALL(cub::DeviceRadixSort::SortPairs(d_temp_storage, temp_storage_bytes, d_keys, d_vals, *out_size));
+
+    CUDA_RT_CALL(cudaDeviceSynchronize());
+
+    // Update output pointers with sorted result
+    // TODO Find a better way to do this. 
+    // Sorted output may be in a different buffer than what was originally passed in... need to copy it 
+    CUDA_RT_CALL(cudaMemcpy(out_groupby_column, d_keys.Current(), *out_size * sizeof(groupby_type), cudaMemcpyDefault));
+    CUDA_RT_CALL(cudaMemcpy(out_aggregation_column, d_vals.Current(), *out_size * sizeof(aggregation_type), cudaMemcpyDefault));
+
+    // Free work buffers
+    RMM_TRY_CUDAERROR( rmmFree(d_temp_storage, 0) );
+    RMM_TRY_CUDAERROR( rmmFree(groupby_result_alt, 0) );
+    RMM_TRY_CUDAERROR( rmmFree(aggregation_result_alt, 0) );
+>>>>>>> Converted more cudaMalloc/cudaFree calls to rmmAlloc/rmmFree
   }
 
   return GDF_SUCCESS;
