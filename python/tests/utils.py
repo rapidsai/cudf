@@ -8,6 +8,10 @@ def new_column():
     return ffi.new('gdf_column*')
 
 
+def new_context():
+    return ffi.new('gdf_context*')
+
+
 def unwrap_devary(devary):
     return ffi.cast('void*', devary.device_ctypes_pointer.value)
 

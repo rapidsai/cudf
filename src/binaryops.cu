@@ -33,6 +33,12 @@ template<typename T, typename Tout, typename F>
 struct BinaryOp {
     static
     gdf_error launch(gdf_column *lhs, gdf_column *rhs, gdf_column *output) {
+
+        // Return successully right away for empty inputs
+        if((0 == lhs->size) || (0 == rhs->size)){
+          return GDF_SUCCESS;
+        }
+
         GDF_REQUIRE(lhs->size == rhs->size, GDF_COLUMN_SIZE_MISMATCH);
         GDF_REQUIRE(lhs->size == output->size, GDF_COLUMN_SIZE_MISMATCH);
         GDF_REQUIRE(lhs->dtype == rhs->dtype, GDF_UNSUPPORTED_DTYPE);
@@ -241,11 +247,14 @@ gdf_error gdf_div_f64(gdf_column *lhs, gdf_column *rhs, gdf_column *output) {
 #define DEF_LOGICAL_OP_NUM(F)                                                 \
 gdf_error F##_generic(gdf_column *lhs, gdf_column *rhs, gdf_column *output) { \
     switch ( lhs->dtype ) {                                                   \
-    case GDF_INT8:    return F##_i8(lhs, rhs, output);                        \
-    case GDF_INT32:   return F##_i32(lhs, rhs, output);                       \
-    case GDF_INT64:   return F##_i64(lhs, rhs, output);                       \
-    case GDF_FLOAT32: return F##_f32(lhs, rhs, output);                       \
-    case GDF_FLOAT64: return F##_f64(lhs, rhs, output);                       \
+    case GDF_INT8:      return F##_i8(lhs, rhs, output);                      \
+    case GDF_INT32:     return F##_i32(lhs, rhs, output);                     \
+    case GDF_INT64:     return F##_i64(lhs, rhs, output);                     \
+    case GDF_FLOAT32:   return F##_f32(lhs, rhs, output);                     \
+    case GDF_FLOAT64:   return F##_f64(lhs, rhs, output);                     \
+    case GDF_DATE32:    return F##_i32(lhs, rhs, output);                     \
+    case GDF_DATE64:    return F##_i64(lhs, rhs, output);                     \
+    case GDF_TIMESTAMP: return F##_i64(lhs, rhs, output);                     \
     default: return GDF_UNSUPPORTED_DTYPE;                                    \
     }                                                                         \
 }

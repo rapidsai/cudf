@@ -7,10 +7,23 @@ gdf_size_type gdf_column_sizeof();
 gdf_error gdf_column_view(gdf_column *column, void *data, gdf_valid_type *valid,
                           gdf_size_type size, gdf_dtype dtype);
 
+gdf_error gdf_column_view_augmented(gdf_column *column, void *data, gdf_valid_type *valid,
+                          gdf_size_type size, gdf_dtype dtype, gdf_size_type null_count);
+
+gdf_error gdf_column_free(gdf_column *column);
+
+/* context operations */
+
+gdf_error gdf_context_view(gdf_context *context, int flag_sorted, gdf_method flag_method,
+                           int flag_distinct);
+
 /* error handling */
 
 const char * gdf_error_get_name(gdf_error errcode);
 
+int gdf_cuda_last_error();
+const char * gdf_cuda_error_string(int cuda_error);
+const char * gdf_cuda_error_name(int cuda_error);
 
 /* ipc */
 
@@ -100,64 +113,65 @@ gdf_error gdf_segmented_radixsort_generic(gdf_segmented_radixsort_plan_type *hdl
                                      unsigned *d_begin_offsets,
                                      unsigned *d_end_offsets);
 
-/* joining
+// joins
 
-These functions return the result in *out_result*.
-Use the *gdf_join_result_* functions to extract data and deallocate.
-The result is a sequence of indices for the left (L) and then the right (R)
-keys in the form of
 
-    L0, L1, L2, ..., Ln-1, R0, R1, R2, ..., Rn-1
+gdf_error gdf_inner_join(int num_cols, gdf_column **leftcol, gdf_column **rightcol,
+                         gdf_column *left_result, gdf_column *right_result,
+                         gdf_context *join_context);
 
-where n/2 is the size returned from *gdf_join_result_size()*, which
-gives the number of int pairs in the output array.
-*/
-
-gdf_error gdf_inner_join_i8(gdf_column *leftcol, gdf_column *rightcol,
-                             gdf_join_result_type **out_result);
-gdf_error gdf_inner_join_i32(gdf_column *leftcol, gdf_column *rightcol,
-                             gdf_join_result_type **out_result);
-gdf_error gdf_inner_join_i64(gdf_column *leftcol, gdf_column *rightcol,
-                             gdf_join_result_type **out_result);
-gdf_error gdf_inner_join_f32(gdf_column *leftcol, gdf_column *rightcol,
-                             gdf_join_result_type **out_result);
-gdf_error gdf_inner_join_f64(gdf_column *leftcol, gdf_column *rightcol,
-                             gdf_join_result_type **out_result);
-gdf_error gdf_inner_join_generic(gdf_column *leftcol, gdf_column *rightcol,
-                                 gdf_join_result_type **out_result);
-
-gdf_error gdf_left_join_i8(gdf_column *leftcol, gdf_column *rightcol,
-                            gdf_join_result_type **out_result);
-gdf_error gdf_left_join_i32(gdf_column *leftcol, gdf_column *rightcol,
-                            gdf_join_result_type **out_result);
-gdf_error gdf_left_join_i64(gdf_column *leftcol, gdf_column *rightcol,
-                            gdf_join_result_type **out_result);
-gdf_error gdf_left_join_f32(gdf_column *leftcol, gdf_column *rightcol,
-                            gdf_join_result_type **out_result);
-gdf_error gdf_left_join_f64(gdf_column *leftcol, gdf_column *rightcol,
-                            gdf_join_result_type **out_result);
-gdf_error gdf_left_join_generic(gdf_column *leftcol, gdf_column *rightcol,
-                                gdf_join_result_type **out_result);
-
-gdf_error gdf_multi_left_join_generic(int num_cols, gdf_column **leftcol,
-							gdf_column **rightcol, gdf_join_result_type **out_result);
+gdf_error gdf_left_join(int num_cols, gdf_column **leftcol, gdf_column **rightcol,
+                        gdf_column *left_result, gdf_column *right_result,
+                        gdf_context *join_context);
 
 gdf_error gdf_outer_join_i8(gdf_column *leftcol, gdf_column *rightcol,
-                             gdf_join_result_type **out_result);
+                            gdf_column *l_result, gdf_column *r_result);
+gdf_error gdf_outer_join_i16(gdf_column *leftcol, gdf_column *rightcol,
+                            gdf_column *l_result, gdf_column *r_result);
 gdf_error gdf_outer_join_i32(gdf_column *leftcol, gdf_column *rightcol,
-                             gdf_join_result_type **out_result);
+                            gdf_column *l_result, gdf_column *r_result);
 gdf_error gdf_outer_join_i64(gdf_column *leftcol, gdf_column *rightcol,
-                             gdf_join_result_type **out_result);
+                            gdf_column *l_result, gdf_column *r_result);
 gdf_error gdf_outer_join_f32(gdf_column *leftcol, gdf_column *rightcol,
-                             gdf_join_result_type **out_result);
+                            gdf_column *l_result, gdf_column *r_result);
 gdf_error gdf_outer_join_f64(gdf_column *leftcol, gdf_column *rightcol,
-                             gdf_join_result_type **out_result);
+                            gdf_column *l_result, gdf_column *r_result);
 gdf_error gdf_outer_join_generic(gdf_column *leftcol, gdf_column *rightcol,
-                                 gdf_join_result_type **out_result);
+                                 gdf_column *l_result, gdf_column *r_result);
 
-gdf_error gdf_join_result_free(gdf_join_result_type *result);
-void* gdf_join_result_data(gdf_join_result_type *result);
-size_t gdf_join_result_size(gdf_join_result_type *result);
+
+/* partioning */
+
+/* --------------------------------------------------------------------------*/
+/** 
+ * @brief Computes the hash values of the rows in the specified columns of the 
+ * input columns and bins the hash values into the desired number of partitions. 
+ * Rearranges the input columns such that rows with hash values in the same bin 
+ * are contiguous.
+ * 
+ * @Param[in] num_input_cols The number of columns in the input columns
+ * @Param[in] input[] The input set of columns
+ * @Param[in] columns_to_hash[] Indices of the columns in the input set to hash
+ * @Param[in] num_cols_to_hash The number of columns to hash
+ * @Param[in] num_partitions The number of partitions to rearrange the input rows into
+ * @Param[out] partitioned_output Preallocated gdf_columns to hold the rearrangement 
+ * of the input columns into the desired number of partitions
+ * @Param[out] partition_offsets Preallocated array the size of the number of
+ * partitions. Where partition_offsets[i] indicates the starting position
+ * of partition 'i'
+ * @Param[in] hash The hash function to use
+ * 
+ * @Returns  If the operation was successful, returns GDF_SUCCESS
+ */
+/* ----------------------------------------------------------------------------*/
+gdf_error gdf_hash_partition(int num_input_cols, 
+                             gdf_column * input[], 
+                             int columns_to_hash[],
+                             int num_cols_to_hash,
+                             int num_partitions, 
+                             gdf_column * partitioned_output[],
+                             int partition_offsets[],
+                             gdf_hash_func hash);
 
 /* prefixsum */
 
@@ -171,10 +185,19 @@ gdf_error gdf_prefixsum_i64(gdf_column *inp, gdf_column *out, int inclusive);
 
 /* hashing */
 
-// num_cols: the number of columns
-// input: a list of the column pointers
-// hash: the hashing function to use
-// output: the output column, allocated by the caller, must have GDF_INT32 dtype
+/* --------------------------------------------------------------------------*/
+/** 
+ * @Synopsis  Computes the hash value of each row in the input set of columns.
+ * 
+ * @Param num_cols The number of columns in the input set
+ * @Param input The list of columns whose rows will be hashed
+ * @Param hash The hash function to use
+ * @Param output The hash value of each row of the input
+ * 
+ * @Returns   GDF_SUCCESS if the operation was successful, otherwise an appropriate
+ * error code
+ */
+/* ----------------------------------------------------------------------------*/
 gdf_error gdf_hash(int num_cols, gdf_column **input, gdf_hash_func hash, gdf_column *output);
 
 /* trig */
@@ -409,6 +432,11 @@ gdf_error gdf_bitwise_or_i8(gdf_column *lhs, gdf_column *rhs, gdf_column *output
 gdf_error gdf_bitwise_or_i32(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
 gdf_error gdf_bitwise_or_i64(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
 
+
+/*
+ * Filtering and comparison operators
+ */
+
 gdf_error gdf_bitwise_xor_generic(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
 gdf_error gdf_bitwise_xor_i8(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
 gdf_error gdf_bitwise_xor_i32(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
@@ -459,6 +487,43 @@ gdf_error gdf_max_f32(gdf_column *col, float *dev_result, gdf_size_type dev_resu
 gdf_error gdf_max_i64(gdf_column *col, int64_t *dev_result, gdf_size_type dev_result_size);
 gdf_error gdf_max_i32(gdf_column *col, int32_t *dev_result, gdf_size_type dev_result_size);
 gdf_error gdf_max_i8(gdf_column *col, int8_t *dev_result, gdf_size_type dev_result_size);
+
+
+
+
+/*
+ * Filtering and comparison operators
+ */
+
+
+//These compare every value on the left hand side to a static value and return a stencil in output which will have 1 when the comparison operation returns 1 and 0 otherwise
+gdf_error gpu_comparison_static_i8(gdf_column *lhs, int8_t value, gdf_column *output,gdf_comparison_operator operation);
+gdf_error gpu_comparison_static_i16(gdf_column *lhs, int16_t value, gdf_column *output,gdf_comparison_operator operation);
+gdf_error gpu_comparison_static_i32(gdf_column *lhs, int32_t value, gdf_column *output,gdf_comparison_operator operation);
+gdf_error gpu_comparison_static_i64(gdf_column *lhs, int64_t value, gdf_column *output,gdf_comparison_operator operation);
+gdf_error gpu_comparison_static_f32(gdf_column *lhs, float value, gdf_column *output,gdf_comparison_operator operation);
+gdf_error gpu_comparison_static_f64(gdf_column *lhs, double value, gdf_column *output,gdf_comparison_operator operation);
+
+//allows you two compare two columns against each other using a comparison operation, retunrs a stencil like functions above
+gdf_error gpu_comparison(gdf_column *lhs, gdf_column *rhs, gdf_column *output,gdf_comparison_operator operation);
+
+//takes a stencil and uses it to compact a colum e.g. remove all values for which the stencil = 0
+gdf_error gpu_apply_stencil(gdf_column *lhs, gdf_column * stencil, gdf_column * output);
+
+gdf_error gpu_concat(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
+
+/*
+ * Hashing
+ */
+//class cudaStream_t;
+
+gdf_error gpu_hash_columns(gdf_column ** columns_to_hash, int num_columns, gdf_column * output_column, void * stream);
+
+/*
+ * gdf introspection utlities
+ */
+
+gdf_error get_column_byte_width(gdf_column * col, int * width);
 
 /* 
  Multi-Column SQL ops:
@@ -528,3 +593,16 @@ gdf_error gdf_group_by_count(int ncols,                    // # columns
                                                          //(multi-gather based on indices, which are needed anyway)
                              gdf_column* out_col_agg,      //aggregation result
                              gdf_context* ctxt);            //struct with additional info: bool is_sorted, flag_sort_or_hash, bool flag_count_distinct
+
+gdf_error gdf_quantile_exact(	gdf_column*         col_in,       //input column;
+                                gdf_quantile_method prec,         //precision: type of quantile method calculation
+                                double              q,            //requested quantile in [0,1]
+                                void*               t_erased_res, //result; for <exact> should probably be double*; it's void* because
+                                                                  //(1) for uniformity of interface with <approx>;
+                                                                  //(2) for possible types bigger than double, in the future;
+                                gdf_context*        ctxt);        //context info
+
+gdf_error gdf_quantile_aprrox(	gdf_column*  col_in,       //input column;
+                                double       q,            //requested quantile in [0,1]
+                                void*        t_erased_res, //type-erased result of same type as column;
+                                gdf_context* ctxt);        //context info

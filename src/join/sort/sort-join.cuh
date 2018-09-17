@@ -32,6 +32,9 @@ which has the following license:
 
 /* Sort-based join using moderngpu */
 
+#include <utility>
+#include <gdf/cffi/functions.h>
+#include <gdf/cffi/types.h>
 #include <moderngpu/kernel_sortedsearch.hxx>
 #include <moderngpu/kernel_scan.hxx>
 #include <moderngpu/kernel_load_balance.hxx>
@@ -95,29 +98,29 @@ mem_t<int> scan_join_bounds(const _join_bounds &bounds, int a_count, int b_count
 }
 
 template<typename launch_arg_t = empty_t>
-mem_t<int> compute_joined_indices(const _join_bounds &bounds,
-                                   const mem_t<int> &scanned_sizes,
-                                   int a_count, int join_count,
-                                   context_t &context,
-                                   bool isInner, int append_count=0)
+std::pair<gdf_column, gdf_column>
+compute_joined_indices(const _join_bounds &bounds,
+                       const mem_t<int> &scanned_sizes,
+                       int a_count, int join_count,
+                       context_t &context,
+                       bool isInner, int append_count=0)
 {
-    // Allocate an int output array and use load-balancing search to compute
-    // the join.
 
     const int* lower_data = bounds.lower.data();
     const int* upper_data = bounds.upper.data();
 
     // for outer join: allocate extra space for appending the right indices
     int output_npairs = join_count + append_count;
-    mem_t<int> output(2 * output_npairs, context);
-    int* output_data = output.data();
+    int *output_l_ptr, *output_r_ptr;
+    CUDA_RT_CALL( cudaMalloc(&output_l_ptr, output_npairs*sizeof(int)) );
+    CUDA_RT_CALL( cudaMalloc(&output_r_ptr, output_npairs*sizeof(int)) );
 
     if (isInner){
         // Use load-balancing search on the segments. The output is a pair with
         // a_index = seg and b_index = lower_data[seg] + rank.
         auto k = [=]MGPU_DEVICE(int index, int seg, int rank, const int *lower) {
-            output_data[index] = seg;
-            output_data[index + output_npairs] = lower[seg] + rank;
+            output_l_ptr[index] = seg;
+            output_r_ptr[index] = lower[seg] + rank;
         };
 
         transform_lbs<launch_arg_t>(k, join_count, scanned_sizes.data(), a_count,
@@ -132,24 +135,27 @@ mem_t<int> compute_joined_indices(const _join_bounds &bounds,
             auto upper = get<1>(lower_upper);
             auto result = lower + rank;
             if ( lower == upper ) result = -1;
-            output_data[index] = seg;
-            output_data[index + output_npairs] = result;
+            output_l_ptr[index] = seg;
+            output_r_ptr[index] = result;
         };
         transform_lbs<launch_arg_t>(k, join_count, scanned_sizes.data(), a_count,
                                     make_tuple(lower_data, upper_data), context);
     }
-    return output;
+    gdf_column output_l, output_r;
+    gdf_column_view(&output_l, output_l_ptr, nullptr, output_npairs, GDF_INT32);
+    gdf_column_view(&output_r, output_r_ptr, nullptr, output_npairs, GDF_INT32);
+    return std::make_pair(output_l, output_r);
 }
 
 template<typename launch_arg_t = empty_t, typename T>
-void outer_join_append_right(T *output_data,
+void outer_join_append_right(T *output_l_data,
+                             T *output_r_data,
                              const mem_t<int> &matches,
                              int append_count, int join_count,
                              context_t &context) {
-    int output_npairs = join_count + append_count;
     auto appender = [=]MGPU_DEVICE(int index, int seg, int rank) {
-        output_data[index + join_count] = -1;
-        output_data[index + join_count + output_npairs] = seg;
+        output_l_data[index + join_count] = -1;
+        output_r_data[index + join_count] = seg;
     };
     transform_lbs<launch_arg_t>(appender, append_count, matches.data(),
                                 matches.size(), context);
@@ -186,36 +192,39 @@ mem_t<int> outer_join_count_matches(a_it a, int a_count, b_it b, int b_count,
 
 template<typename launch_arg_t = empty_t,
          typename a_it, typename b_it, typename comp_t>
-mem_t<int> inner_join(a_it a, int a_count, b_it b, int b_count,
-                       comp_t comp, context_t& context)
+std::pair<gdf_column, gdf_column>
+inner_join(a_it a, int a_count, b_it b, int b_count,
+           comp_t comp, context_t& context)
 {
     _join_bounds bounds = compute_join_bounds(a, a_count, b, b_count, comp, context);
     int join_count;
     mem_t<int> scanned_sizes = scan_join_bounds(bounds, a_count, b_count, context, true,
                                                 join_count);
-    mem_t<int> output = compute_joined_indices(bounds, scanned_sizes, a_count,
+    auto output = compute_joined_indices(bounds, scanned_sizes, a_count,
                                                join_count, context, true);
     return output;
 }
 
 template<typename launch_arg_t = empty_t,
          typename a_it, typename b_it, typename comp_t>
-mem_t<int> left_join(a_it a, int a_count, b_it b, int b_count,
-                      comp_t comp, context_t& context)
+std::pair<gdf_column, gdf_column>
+left_join(a_it a, int a_count, b_it b, int b_count,
+          comp_t comp, context_t& context)
 {
     _join_bounds bounds = compute_join_bounds(a, a_count, b, b_count, comp, context);
     int join_count;
     mem_t<int> scanned_sizes = scan_join_bounds(bounds, a_count, b_count, context, false,
                                                 join_count);
-    mem_t<int> output = compute_joined_indices(bounds, scanned_sizes, a_count,
+    auto output = compute_joined_indices(bounds, scanned_sizes, a_count,
                                                join_count, context, false, 0);
     return output;
 }
 
 template<typename launch_arg_t = empty_t,
   typename a_it, typename b_it, typename comp_t>
-mem_t<int> outer_join(a_it a, int a_count, b_it b, int b_count,
-                       comp_t comp, context_t& context)
+std::pair<gdf_column, gdf_column>
+outer_join(a_it a, int a_count, b_it b, int b_count,
+           comp_t comp, context_t& context)
 {
     _join_bounds bounds = compute_join_bounds(a, a_count, b, b_count, comp,
                                               context);
@@ -225,10 +234,12 @@ mem_t<int> outer_join(a_it a, int a_count, b_it b, int b_count,
     int append_count;
     mem_t<int> matches = outer_join_count_matches(a, a_count, b, b_count,
                                                   comp, context, append_count );
-    mem_t<int> output = compute_joined_indices(bounds, scanned_sizes, a_count,
+    auto output = compute_joined_indices(bounds, scanned_sizes, a_count,
                                                join_count, context, false, append_count);
-    outer_join_append_right(output.data(), matches, append_count, join_count,
-                            context);
+    outer_join_append_right(
+            static_cast<int*>(output.first.data),
+            static_cast<int*>(output.second.data),
+            matches, append_count, join_count, context);
     return output;
 }
 

@@ -38,7 +38,7 @@
  
 	 gdf_column **inputCol;
 	 inputCol = (gdf_column**) malloc(sizeof(gdf_column*)* ncols);
-	 for(size_t i=0;i<ncols;i++)
+	 for(int i=0;i<ncols;i++)
 		 inputCol[i] = (gdf_column*) malloc(sizeof(gdf_column));
  
 	 gdf_column *outputCol;
