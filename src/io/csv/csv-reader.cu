@@ -526,7 +526,7 @@ gdf_error launch_determineRecAndFields(raw_csv_t * csvData) {
 __global__ void determineRecAndFields(char *data, uint64_t * r_bits, uint64_t *f_bits, const char delim, long num_bytes, long num_bits, int * rec_count) {
 
 	// thread IDs range per block, so also need the block id
-	int tid = threadIdx.x + (blockDim.x * blockIdx.x);
+	long tid = threadIdx.x + (blockDim.x * blockIdx.x);
 
 	if ( tid >= num_bits)
 		return;
@@ -611,7 +611,7 @@ gdf_error launch_countRecords(raw_csv_t * csvData) {
 __global__ void countRecords(char *data, const char delim, const char terminator, long num_bytes, long num_bits, long* num_records) {
 
 	// thread IDs range per block, so also need the block id
-	int tid = threadIdx.x + (blockDim.x * blockIdx.x);
+	long tid = threadIdx.x + (blockDim.x * blockIdx.x);
 
 	if ( tid >= num_bits)
 		return;
@@ -671,7 +671,7 @@ gdf_error launch_storeRecordStart(raw_csv_t * csvData) {
 __global__ void storeRecordStart(char *data, const char delim, const char terminator, long num_bytes, long num_bits, long* num_records,long* recStart) {
 
 	// thread IDs range per block, so also need the block id
-	int tid = threadIdx.x + (blockDim.x * blockIdx.x);
+	long tid = threadIdx.x + (blockDim.x * blockIdx.x);
 
 	if ( tid >= num_bits)
 		return;
