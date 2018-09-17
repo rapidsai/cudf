@@ -194,22 +194,8 @@ gdf_error GroupbyHash(gdf_table<size_type> const & groupby_input_table,
                                                             groupby_input_table,
                                                             out_aggregation_column,
                                                             global_write_index);
-  
-  // FIXME Work around for above kernel failing to launch for some instantiations of the_map template class
-  //map_type * map = the_map.get();
-  //const size_type map_size = hash_table_size;
-  //void *args[] = { &map, &map_size, &groupby_output_table, &out_aggregation_column, &global_write_index};
-
-  //void (*func)(const map_type * const, 
-  //             const size_type, 
-  //             gdf_table<size_type> * const, 
-  //             aggregation_type * const,
-  //             size_type * const ) = &(extract_groupby_result<map_type,size_type,aggregation_type>);
-
-  //CUDA_TRY(cudaLaunchKernel((const void*) func, extract_grid_size, block_size, args, 0, 0));
-  // FIXME End work around
-
-  CUDA_TRY(cudaDeviceSynchronize());
+ 
+  CUDA_TRY(cudaGetLastError());
 
   // At the end of the extraction kernel, the global write index will be equal to
   // the size of the output. Update the output size.

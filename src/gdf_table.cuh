@@ -26,6 +26,7 @@
 #include "hashmap/managed.cuh"
 #include "sqls_rtti_comp.hpp"
 
+
 /* --------------------------------------------------------------------------*/
 /** 
  * @Synopsis  Computes the validity mask for the rows in the gdf_table.
@@ -73,6 +74,52 @@ struct row_masker
   gdf_valid_type ** column_valid_masks;
 };
 
+
+/* --------------------------------------------------------------------------*/
+/** 
+ * @Synopsis  Scatters a validity bitmask.
+ * 
+ * This kernel is used in order to scatter the validity bit mask for a gdf_column.
+ * 
+ * @Param input_mask The mask that will be scattered.
+ * @Param output_mask The output after scattering the input
+ * @Param scatter_map The map that indicates where elements from the input
+   will be scattered to in the output. output_bit[ scatter_map [i] ] = input_bit[i]
+ * @Param num_rows The number of bits in the masks
+ */
+/* ----------------------------------------------------------------------------*/
+template <typename size_type>
+__global__ 
+void scatter_valid_mask( gdf_valid_type const * const input_mask,
+                         gdf_valid_type * const output_mask,
+                         size_type const * const __restrict__ scatter_map,
+                         size_type const num_rows)
+{
+  using mask_type = uint32_t;
+  constexpr int BITS_PER_MASK = 8 * sizeof(mask_type);
+
+  // Cast the validity type to a type where atomicOr is natively supported
+  const mask_type * __restrict__ input_mask32 = reinterpret_cast<mask_type const *>(input_mask);
+  mask_type * const __restrict__ output_mask32 = reinterpret_cast<mask_type * >(output_mask);
+
+  size_type row_number = threadIdx.x + blockIdx.x * blockDim.x;
+
+  while(row_number < num_rows)
+  {
+    // Get the bit corresponding to the row
+    const mask_type input_bit = input_mask32[row_number/BITS_PER_MASK] & (mask_type(1) << (row_number % BITS_PER_MASK));
+
+    // Find the mask in the output that will hold the bit for the scattered row
+    const size_type output_location = scatter_map[row_number] / BITS_PER_MASK;
+
+    // Bitwise OR to set the scattered row's bit
+    atomicOr(&output_mask32[output_location], input_bit);
+
+    row_number += blockDim.x * gridDim.x;
+  }
+}
+
+
 /* --------------------------------------------------------------------------*/
 /** 
  * @Synopsis A class provides useful functionality for operating on a set of gdf_columns. 
@@ -115,7 +162,6 @@ public:
     for(size_type i = 0; i < num_cols; ++i)
     {
       gdf_column * const current_column = host_columns[i];
-      assert(column_length == current_column->size);
       assert(nullptr != current_column);
       assert(column_length == current_column->size);
       if(column_length > 0)
@@ -203,6 +249,7 @@ public:
     return column_length;
   }
 
+
   /* --------------------------------------------------------------------------*/
   /** 
    * @Synopsis  Gets the size in bytes of a row in the gdf_table, i.e., the sum of 
@@ -216,6 +263,7 @@ public:
     return row_size_bytes;
   }
 
+
   
   __device__ bool is_row_valid(size_type row_index) const
   {
@@ -225,9 +273,13 @@ public:
   }
 
 
- /* --------------------------------------------------------------------------*/
+  /* --------------------------------------------------------------------------*/
   /** 
-   * @Synopsis  Packs the elements of a specified row into a contiguous, dense buffer
+   * @Synopsis  Packs the elements of a specified row into a contiguous byte-buffer
+   *
+   * This function is called by a single thread, and the thread will copy each element
+   * of the row into a single contiguous buffer. TODO: This could be done by multiple threads
+   * by passing in a cooperative group. 
    * 
    * @Param index The row of the table to return
    * @Param row_byte_buffer A pointer to a preallocated buffer large enough to hold a 
@@ -237,8 +289,8 @@ public:
   /* ----------------------------------------------------------------------------*/
   // TODO Is there a less hacky way to do this? 
   __device__
-  gdf_error get_dense_row(size_type row_index, byte_type * row_byte_buffer) 
-{
+  gdf_error get_packed_row_values(size_type row_index, byte_type * row_byte_buffer)
+  {
     if(nullptr == row_byte_buffer) {
       return GDF_DATASET_EMPTY;
     }
@@ -299,6 +351,10 @@ public:
     /* --------------------------------------------------------------------------*/
     /** 
      * @Synopsis  Copies a row from another table to a row in this table
+     *  
+     * This device function should be called by a single thread and the thread will copy all of 
+     * the elements in the row from one table to the other. TODO: In the future, this could be done
+     * by multiple threads by passing in a cooperative group.
      * 
      * @Param other The other table from which the row is copied
      * @Param my_row_index The index of the row in this table that will be written to
@@ -882,8 +938,14 @@ gdf_error scatter( gdf_table<size_type> & scattered_output_table,
   // Each column can be scattered in parallel, therefore create a 
   // separate stream for every column
   std::vector<cudaStream_t> column_streams(num_columns);
-  for(auto & s : column_streams)
-  {
+  for(auto & s : column_streams){
+    cudaStreamCreate(&s);
+  }
+
+  // Each columns validity bit mask can be scattered in parallel,
+  // therefore create a separate stream for each column
+  std::vector<cudaStream_t> valid_streams(num_columns);
+  for(auto & s : valid_streams){
     cudaStreamCreate(&s);
   }
 
@@ -897,6 +959,23 @@ gdf_error scatter( gdf_table<size_type> & scattered_output_table,
 
     if(GDF_SUCCESS != gdf_status)
       return gdf_status;
+
+    // If this column has a validity mask, scatter the mask
+    if((nullptr != current_input_column->valid)
+        && (nullptr != current_output_column->valid))
+    {
+      // Ensure the output bitmask is initialized to zero
+      const size_type num_masks = gdf_get_num_chars_bitmask(column_length);
+      cudaMemsetAsync(current_output_column->valid, 0,  num_masks * sizeof(gdf_valid_type), valid_streams[i]);
+
+      // Scatter the validity bits from the input column to output column
+      constexpr int BLOCK_SIZE = 256;
+      const int grid_size = (column_length + BLOCK_SIZE - 1)/BLOCK_SIZE;
+      scatter_valid_mask<<<grid_size, BLOCK_SIZE, 0, valid_streams[i]>>>(current_input_column->valid, 
+                                                                         current_output_column->valid,
+                                                                         row_scatter_map,
+                                                                         column_length);
+    }
 
     // Scatter each column based on it's byte width
     switch(column_width_bytes)
@@ -962,6 +1041,11 @@ gdf_error scatter( gdf_table<size_type> & scattered_output_table,
 
   // Destroy all streams
   for(auto & s : column_streams)
+  {
+    cudaStreamDestroy(s);
+  }
+  // Destroy all streams
+  for(auto & s : valid_streams)
   {
     cudaStreamDestroy(s);
   }
@@ -1065,7 +1149,9 @@ gdf_error scatter_column(column_type const * const __restrict__ input_column,
 }
 
 
+
   const size_type num_columns;    /** The number of columns in the table */
+
   size_type column_length{0};     /** The number of rows in the table */
 
   gdf_column ** host_columns{nullptr};  /** The set of gdf_columns that this table wraps */
