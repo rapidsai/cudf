@@ -239,7 +239,7 @@ public:
   /* ----------------------------------------------------------------------------*/
   // TODO Is there a less hacky way to do this? 
   __device__
-  gdf_error get_dense_row(size_type row_index, byte_type * row_byte_buffer)
+  gdf_error get_packed_row_values(size_type row_index, byte_type * row_byte_buffer)
   {
     if(nullptr == row_byte_buffer) {
       return GDF_DATASET_EMPTY;
