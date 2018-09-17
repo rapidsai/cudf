@@ -74,8 +74,49 @@ struct row_masker
   gdf_valid_type ** column_valid_masks;
 };
 
+/* --------------------------------------------------------------------------*/
+/** 
+ * @Synopsis  Scatters a validity bitmask.
+ * 
+ * This kernel is used in order to scatter the validity bit mask for a gdf_column.
+ * 
+ * @Param input_mask The mask that will be scattered.
+ * @Param output_mask The output after scattering the input
+ * @Param scatter_map The map that indicates where elements from the input
+   will be scattered to in the output. output_bit[ scatter_map [i] ] = input_bit[i]
+ * @Param num_rows The number of bits in the masks
+ */
+/* ----------------------------------------------------------------------------*/
+template <typename size_type>
+__global__ 
+void scatter_valid_mask( gdf_valid_type const * const input_mask,
+                         gdf_valid_type * const output_mask,
+                         size_type const * const __restrict__ scatter_map,
+                         size_type const num_rows)
+{
+  using mask_type = uint32_t;
+  constexpr int BITS_PER_MASK = 8 * sizeof(mask_type);
 
+  // Cast the validity type to a type where atomicOr is natively supported
+  const mask_type * __restrict__ input_mask32 = reinterpret_cast<mask_type const *>(input_mask);
+  mask_type * const __restrict__ output_mask32 = reinterpret_cast<mask_type * >(output_mask);
 
+  size_type row_number = threadIdx.x + blockIdx.x * blockDim.x;
+
+  while(row_number < num_rows)
+  {
+    // Get the bit corresponding to the row
+    const mask_type input_bit = input_mask32[row_number/BITS_PER_MASK] & (mask_type(1) << (row_number % BITS_PER_MASK));
+
+    // Find the mask in the output that will hold the bit for the scattered row
+    const size_type output_location = scatter_map[row_number] / BITS_PER_MASK;
+
+    // Bitwise OR to set the scattered row's bit
+    atomicOr(&output_mask32[output_location], input_bit);
+
+    row_number += blockDim.x * gridDim.x;
+  }
+}
 
 /* --------------------------------------------------------------------------*/
 /** 
@@ -892,8 +933,14 @@ gdf_error scatter( gdf_table<size_type> & scattered_output_table,
   // Each column can be scattered in parallel, therefore create a 
   // separate stream for every column
   std::vector<cudaStream_t> column_streams(num_columns);
-  for(auto & s : column_streams)
-  {
+  for(auto & s : column_streams){
+    cudaStreamCreate(&s);
+  }
+
+  // Each columns validity bit mask can be scattered in parallel,
+  // therefore create a separate stream for each column
+  std::vector<cudaStream_t> valid_streams(num_columns);
+  for(auto & s : valid_streams){
     cudaStreamCreate(&s);
   }
 
@@ -907,6 +954,23 @@ gdf_error scatter( gdf_table<size_type> & scattered_output_table,
 
     if(GDF_SUCCESS != gdf_status)
       return gdf_status;
+
+    // If this column has a validity mask, scatter the mask
+    if((nullptr != current_input_column->valid)
+        && (nullptr != current_output_column->valid))
+    {
+      // Ensure the output bitmask is initialized to zero
+      const size_type num_masks = gdf_get_num_chars_bitmask(column_length);
+      cudaMemsetAsync(current_output_column->valid, 0,  num_masks * sizeof(gdf_valid_type), valid_streams[i]);
+
+      // Scatter the validity bits from the input column to output column
+      constexpr int BLOCK_SIZE = 256;
+      const int grid_size = (column_length + BLOCK_SIZE - 1)/BLOCK_SIZE;
+      scatter_valid_mask<<<grid_size, BLOCK_SIZE, 0, valid_streams[i]>>>(current_input_column->valid, 
+                                                                         current_output_column->valid,
+                                                                         row_scatter_map,
+                                                                         column_length);
+    }
 
     // Scatter each column based on it's byte width
     switch(column_width_bytes)
@@ -972,6 +1036,11 @@ gdf_error scatter( gdf_table<size_type> & scattered_output_table,
 
   // Destroy all streams
   for(auto & s : column_streams)
+  {
+    cudaStreamDestroy(s);
+  }
+  // Destroy all streams
+  for(auto & s : valid_streams)
   {
     cudaStreamDestroy(s);
   }
