@@ -229,7 +229,11 @@ public:
 
   /* --------------------------------------------------------------------------*/
   /** 
-   * @Synopsis  Packs the elements of a specified row into a contiguous, dense buffer
+   * @Synopsis  Packs the elements of a specified row into a contiguous byte-buffer
+   *
+   * This function is called by a single thread, and the thread will copy each element
+   * of the row into a single contiguous buffer. TODO: This could be done by multiple threads
+   * by passing in a cooperative group. 
    * 
    * @Param index The row of the table to return
    * @Param row_byte_buffer A pointer to a preallocated buffer large enough to hold a 
@@ -301,6 +305,10 @@ public:
     /* --------------------------------------------------------------------------*/
     /** 
      * @Synopsis  Copies a row from another table to a row in this table
+     *  
+     * This device function should be called by a single thread and the thread will copy all of 
+     * the elements in the row from one table to the other. TODO: In the future, this could be done
+     * by multiple threads by passing in a cooperative group.
      * 
      * @Param other The other table from which the row is copied
      * @Param my_row_index The index of the row in this table that will be written to
