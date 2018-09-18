@@ -187,6 +187,16 @@ def gpu_expand_mask_bits(bits, out):
         out[i] = mask_get(bits, i)
 
 
+def expand_mask_bits(size, bits):
+    """Expand bit-mask into byte-mask
+    """
+    expanded_mask = cuda.device_array(size, dtype=np.int32)
+    numtasks = min(1024, expanded_mask.size)
+    if numtasks > 0:
+        gpu_expand_mask_bits.forall(numtasks)(bits, expanded_mask)
+    return expanded_mask
+
+
 def mask_assign_slot(size, mask):
     # expand bits into bytes
     dtype = (np.int32 if size < 2 ** 31 else np.int64)

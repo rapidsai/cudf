@@ -352,9 +352,14 @@ class Column(object):
                 if arg.step is not None and arg.step != 1:
                     raise NotImplementedError(arg)
 
-                # slicing
+                # slicing data
                 subdata = self.data[arg]
-                submask = self.mask[arg]
+                # slicing mask
+                bytemask = cudautils.expand_mask_bits(
+                    self.data.size,
+                    self.mask.to_gpu_array(),
+                    )
+                submask = Buffer(cudautils.compact_mask_bytes(bytemask[arg]))
                 col = self.replace(data=subdata, mask=submask)
                 return col
             else:

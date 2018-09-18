@@ -587,3 +587,22 @@ def test_dataframe_empty_concat():
     gdf3 = gd.concat([gdf1, gdf2])
     assert len(gdf3) == 0
     assert len(gdf3.columns) == 2
+
+
+@pytest.mark.parametrize('nelem', [0, 1, 5, 20, 100])
+@pytest.mark.parametrize('slice_start', [None, 0, 1, 3, 10])
+@pytest.mark.parametrize('slice_end', [None, 0, 1, 30, 50, -1])
+def test_dataframe_masked_slicing(nelem, slice_start, slice_end):
+    gdf = DataFrame()
+    gdf['a'] = list(range(nelem))
+    gdf['b'] = list(range(nelem, 2 * nelem))
+    gdf['a'] = gdf['a'].set_mask(utils.random_bitmask(nelem))
+    gdf['b'] = gdf['b'].set_mask(utils.random_bitmask(nelem))
+
+    def do_slice(x):
+        return x[slice_start: slice_end]
+
+    expect = do_slice(gdf.to_pandas())
+    got = do_slice(gdf).to_pandas()
+
+    pd.testing.assert_frame_equal(expect, got)
