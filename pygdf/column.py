@@ -176,7 +176,8 @@ class Column(object):
         return _gdf.columnview(size=self._data.size,
                                data=self._data,
                                mask=self._mask,
-                               dtype=self.dtype)
+                               dtype=self.dtype,
+                               null_count=self._null_count)
 
     def set_mask(self, mask, null_count=None):
         """Create new Column by setting the mask

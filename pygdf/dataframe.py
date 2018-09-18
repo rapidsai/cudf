@@ -471,7 +471,7 @@ class DataFrame(object):
             raise ValueError('all columns must have the same dtype')
         for k, c in self._cols.items():
             if c.has_null_mask:
-                errmsg = ("column {!r} has null values"
+                errmsg = ("column {!r} has null values. "
                           "hint: use .fillna() to replace null values")
                 raise ValueError(errmsg.format(k))
 
