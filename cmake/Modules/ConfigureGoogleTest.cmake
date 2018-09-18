@@ -1,4 +1,3 @@
-
 #=============================================================================
 # Copyright 2018 BlazingDB, Inc.
 #     Copyright 2018 Percy Camilo Triveño Aucahuasi <percy@blazingdb.com>
@@ -15,7 +14,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #=============================================================================
-
 # Download and unpack googletest at configure time
 configure_file(${CMAKE_SOURCE_DIR}/cmake/Templates/GoogleTest.CMakeLists.txt.cmake ${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/thirdparty/googletest-download/CMakeLists.txt)
 

@@ -1,3 +1,5 @@
+# Copyright (c) 2018, NVIDIA CORPORATION.
+
 # Usage:
 #   conda build -c defaults -c conda-forge .
 package:
@@ -10,7 +12,6 @@ source:
 
 build:
   number: {{ environ.get('GIT_DESCRIBE_NUMBER', 0) }}
-  string: 'cuda{{ environ['CUDA'][0:3] }}_{{ environ.get('GIT_DESCRIBE_NUMBER', 0) }}'
   script_env:
     - CC
     - CXX
@@ -21,13 +22,9 @@ requirements:
   #   - conda-forge
   build:
     - cmake
-    - flatbuffers
-    - arrow-cpp 0.7.*
 
   run:
-    - arrow-cpp 0.7.*
-    # Not strictly needed for libgdf, but needed to match the CUDA version of other libs in environment
-    - cudatoolkit {{ environ['CUDA'][0:3] }}*
+    - pyarrow 0.10.*
 
 test:
   commands:

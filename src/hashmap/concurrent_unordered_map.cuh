@@ -14,19 +14,20 @@
  * limitations under the License.
  */
 
-#ifndef CONCURRENT_UNORDERED_MULTIMAP_CUH
-#define CONCURRENT_UNORDERED_MULTIMAP_CUH
+#ifndef CONCURRENT_UNORDERED_MAP_CUH
+#define CONCURRENT_UNORDERED_MAP_CUH
 
-#include <iostream>
 #include <iterator>
 #include <type_traits>
 #include <cassert>
+#include <iostream>
 
 #include <thrust/pair.h>
 
 #include "managed_allocator.cuh"
 #include "managed.cuh"
 #include "hash_functions.cuh"
+#include "../groupby/hash/aggregation_operations.cuh"
 
 // TODO: replace this with CUDA_TRY and propagate the error
 #ifndef CUDA_RT_CALL
@@ -64,9 +65,34 @@ __inline__ __device__ int64_t atomicCAS(int64_t* address, int64_t compare, int64
   return (int64_t)atomicCAS((unsigned long long*)address, (unsigned long long)compare, (unsigned long long)val);
 }
 
+__inline__ __device__ uint64_t atomicCAS(uint64_t* address, uint64_t compare, uint64_t val)
+{
+  return (uint64_t)atomicCAS((unsigned long long*)address, (unsigned long long)compare, (unsigned long long)val);
+}
+
+__inline__ __device__ long long int atomicCAS(long long int* address, long long int compare, long long int val)
+{
+  return (long long int)atomicCAS((unsigned long long*)address, (unsigned long long)compare, (unsigned long long)val);
+}
+
+__inline__ __device__ double atomicCAS(double* address, double compare, double val)
+{
+  return __longlong_as_double(atomicCAS((unsigned long long int*)address, __double_as_longlong(compare), __double_as_longlong(val)));
+}
+
+__inline__ __device__ float atomicCAS(float* address, float compare, float val)
+{
+  return __int_as_float(atomicCAS((int*)address, __float_as_int(compare), __float_as_int(val)));
+}
+
 __inline__ __device__ int64_t atomicAdd(int64_t* address, int64_t val)
 {
-  return (int64_t)atomicAdd((unsigned long long*)address, (unsigned long long)val);
+  return (int64_t) atomicAdd((unsigned long long*)address, (unsigned long long)val);
+}
+
+__inline__ __device__ uint64_t atomicAdd(uint64_t* address, uint64_t val)
+{
+  return (uint64_t) atomicAdd((unsigned long long*)address, (unsigned long long)val);
 }
 
 template<typename pair_type>
@@ -176,9 +202,9 @@ __global__ void init_hashtbl(
 template <typename T>
 struct equal_to
 {
-    typedef bool result_type;
-    typedef T first_argument_type;
-    typedef T second_argument_type;
+    using result_type = bool;
+    using first_argument_type = T;
+    using second_argument_type = T;
     __forceinline__
     __host__ __device__ constexpr bool operator()(const first_argument_type &lhs, const second_argument_type &rhs) const 
     {
@@ -189,11 +215,11 @@ struct equal_to
 template<typename Iterator>
 class cycle_iterator_adapter {
 public:
-    typedef typename std::iterator_traits<Iterator>::value_type         value_type; 
-    typedef typename std::iterator_traits<Iterator>::difference_type    difference_type;
-    typedef typename std::iterator_traits<Iterator>::pointer            pointer;
-    typedef typename std::iterator_traits<Iterator>::reference          reference;
-    typedef Iterator                                                    iterator_type;
+    using value_type = typename std::iterator_traits<Iterator>::value_type; 
+    using difference_type = typename std::iterator_traits<Iterator>::difference_type;
+    using pointer = typename std::iterator_traits<Iterator>::pointer;
+    using reference = typename std::iterator_traits<Iterator>::reference;
+    using iterator_type = Iterator;
     
     cycle_iterator_adapter() = delete;
     
@@ -292,24 +318,23 @@ __host__ __device__ bool operator!=(const cycle_iterator_adapter<T>& lhs, const 
 template <typename Key,
           typename Element,
           Key unused_key,
-          Element unused_element,
           typename Hasher = default_hash<Key>,
           typename Equality = equal_to<Key>,
           typename Allocator = managed_allocator<thrust::pair<Key, Element> >,
           bool count_collisions = false>
-class concurrent_unordered_multimap : public managed
+class concurrent_unordered_map : public managed
 {
 
 public:
-    typedef size_t                                          size_type;
-    typedef Hasher                                          hasher;
-    typedef Equality                                        key_equal;
-    typedef Allocator                                       allocator_type;
-    typedef Key                                             key_type;
-    typedef thrust::pair<Key, Element>                      value_type;
-    typedef Element                                         mapped_type;
-    typedef cycle_iterator_adapter<value_type*>             iterator;
-    typedef const cycle_iterator_adapter<value_type*>       const_iterator;
+    using size_type = size_t;
+    using hasher = Hasher;
+    using key_equal = Equality;
+    using allocator_type = Allocator;
+    using key_type = Key;
+    using value_type = thrust::pair<Key, Element>;
+    using mapped_type = Element;
+    using iterator = cycle_iterator_adapter<value_type*>;
+    using const_iterator = const cycle_iterator_adapter<value_type*>;
 
 private:
     union pair2longlong
@@ -320,11 +345,12 @@ private:
     
 public:
 
-    explicit concurrent_unordered_multimap(size_type n,
-                                           const Hasher& hf = hasher(),
-                                           const Equality& eql = key_equal(),
-                                           const allocator_type& a = allocator_type())
-        : m_hf(hf), m_equal(eql), m_allocator(a), m_hashtbl_size(n), m_hashtbl_capacity(n), m_collisions(0)
+    explicit concurrent_unordered_map(size_type n,
+                                      const mapped_type unused_element,
+                                      const Hasher& hf = hasher(),
+                                      const Equality& eql = key_equal(),
+                                      const allocator_type& a = allocator_type())
+        : m_hf(hf), m_equal(eql), m_allocator(a), m_hashtbl_size(n), m_hashtbl_capacity(n), m_collisions(0), m_unused_element(unused_element)
     {
         m_hashtbl_values = m_allocator.allocate( m_hashtbl_capacity );
         constexpr int block_size = 128;
@@ -339,12 +365,12 @@ public:
             }
         }
         
-        init_hashtbl<<<((m_hashtbl_size-1)/block_size)+1,block_size>>>( m_hashtbl_values, m_hashtbl_size, unused_key, unused_element );
+        init_hashtbl<<<((m_hashtbl_size-1)/block_size)+1,block_size>>>( m_hashtbl_values, m_hashtbl_size, unused_key, m_unused_element );
         CUDA_RT_CALL( cudaGetLastError() );
         CUDA_RT_CALL( cudaStreamSynchronize(0) );
     }
     
-    ~concurrent_unordered_multimap()
+    ~concurrent_unordered_map()
     {
         m_allocator.deallocate( m_hashtbl_values, m_hashtbl_capacity );
     }
@@ -365,13 +391,158 @@ public:
     {
         return const_iterator( m_hashtbl_values,m_hashtbl_values+m_hashtbl_size,m_hashtbl_values+m_hashtbl_size );
     }
+    __host__ __device__ size_type size() const
+    {
+        return m_hashtbl_size;
+    }
+    __host__ __device__ value_type* data() const
+    {
+      return m_hashtbl_values;
+    }
     
     __forceinline__
     static constexpr __host__ __device__ key_type get_unused_key()
     {
         return unused_key;
     }
+
+    // Generic update of a hash table value for any aggregator
+    template <typename aggregation_type>
+    __forceinline__  __device__
+    void update_existing_value(mapped_type & existing_value, value_type const & insert_pair, aggregation_type op)
+    {
+      const mapped_type insert_value = insert_pair.second;
+
+      mapped_type old_value = existing_value;
+
+      mapped_type expected{old_value};
+
+      // Attempt to perform the aggregation with existing_value and
+      // store the result atomically
+      do 
+      {
+        expected = old_value;
+
+        const mapped_type new_value = op(insert_value, old_value);
+
+        old_value = atomicCAS(&existing_value, expected, new_value);
+      }
+      // Guard against another thread's update to existing_value
+      while( expected != old_value );
+    }
+
+    // TODO Overload atomicAdd for 1 byte and 2 byte types, until then, overload specifically for the types
+    // where atomicAdd already has an overload. Otherwise the generic update_existing_value will be used.
+    // Specialization for COUNT aggregator
+    __forceinline__ __host__ __device__
+    void update_existing_value(mapped_type & existing_value, value_type const & insert_pair, count_op<int32_t> op)
+    {
+      atomicAdd(&existing_value, 1);
+    }
+    // Specialization for COUNT aggregator
+    __forceinline__ __host__ __device__
+    void update_existing_value(mapped_type & existing_value, value_type const & insert_pair, count_op<int64_t> op)
+    {
+      atomicAdd(&existing_value, 1);
+    }
+    // Specialization for COUNT aggregator
+    __forceinline__ __host__ __device__
+    void update_existing_value(mapped_type & existing_value, value_type const & insert_pair, count_op<float> op)
+    {
+      atomicAdd(&existing_value, 1);
+    }
+    // Specialization for COUNT aggregator
+    __forceinline__ __host__ __device__
+    void update_existing_value(mapped_type & existing_value, value_type const & insert_pair, count_op<double> op)
+    {
+      atomicAdd(&existing_value, 1);
+    }
+
+    /* --------------------------------------------------------------------------*/
+    /** 
+     * @Synopsis  Inserts a new (key, value) pair. If the key already exists in the map
+                  an aggregation operation is performed with the new value and existing value.
+                  E.g., if the aggregation operation is 'max', then the maximum is computed
+                  between the new value and existing value and the result is stored in the map.
+     * 
+     * @Param[in] x The new (key, value) pair to insert
+     * @Param[in] op The aggregation operation to perform
+     * @Param[in] keys_equal An optional functor for comparing two keys 
+     * @Param[in] precomputed_hash Indicates if a precomputed hash value is being passed in to use
+     * to determine the write location of the new key
+     * @Param[in] precomputed_hash_value The precomputed hash value
+     * @tparam aggregation_type A functor for a binary operation that performs the aggregation
+     * @tparam comparison_type A functor for comparing two keys
+     * 
+     * @Returns An iterator to the newly inserted key,value pair
+     */
+    /* ----------------------------------------------------------------------------*/
+    template<typename aggregation_type,
+             class comparison_type = key_equal,
+             typename hash_value_type = typename Hasher::result_type>
+    __forceinline__
+    __device__ iterator insert(const value_type& x, 
+                               aggregation_type op,
+                               comparison_type keys_equal = key_equal(),
+                               bool precomputed_hash = false,
+                               hash_value_type precomputed_hash_value = 0)
+    {
+        const size_type hashtbl_size    = m_hashtbl_size;
+        value_type* hashtbl_values      = m_hashtbl_values;
+
+        hash_value_type hash_value{0};
+
+        // If a precomputed hash value has been passed in, then use it to determine
+        // the write location of the new key
+        if(true == precomputed_hash)
+        {
+          hash_value = precomputed_hash_value;
+        }
+        // Otherwise, compute the hash value from the new key
+        else
+        {
+          hash_value = m_hf(x.first);
+        }
+
+        size_type current_index         = hash_value % hashtbl_size;
+        value_type *current_hash_bucket = &(hashtbl_values[current_index]);
+
+        const key_type insert_key = x.first;
+        
+        bool insert_success = false;
+        
+        while (false == insert_success) {
+
+          key_type& existing_key = current_hash_bucket->first;
+          mapped_type& existing_value = current_hash_bucket->second;
+
+          // Try and set the existing_key for the current hash bucket to insert_key
+          const key_type old_key = atomicCAS( &existing_key, unused_key, insert_key);
+
+          // If old_key == unused_key, the current hash bucket was empty
+          // and existing_key was updated to insert_key by the atomicCAS. 
+          // If old_key == insert_key, this key has already been inserted. 
+          // In either case, perform the atomic aggregation of existing_value and insert_value
+          // Because the hash table is initialized with the identity value of the aggregation
+          // operation, it is safe to perform the operation when the existing_value still 
+          // has its initial value
+          // TODO: Use template specialization to make use of native atomic functions
+          // TODO: How to handle data types less than 32 bits?
+          if ( keys_equal( unused_key, old_key ) || keys_equal(insert_key, old_key) ) {
+
+            update_existing_value(existing_value, x, op);
+
+            insert_success = true;
+          }
+
+          current_index = (current_index+1)%hashtbl_size;
+          current_hash_bucket = &(hashtbl_values[current_index]);
+        }
+        
+        return iterator( m_hashtbl_values,m_hashtbl_values+hashtbl_size, current_hash_bucket);
+    }
     
+    /* This function is not currently implemented
     __forceinline__
     __host__ __device__ iterator insert(const value_type& x)
     {
@@ -389,7 +560,7 @@ public:
                  sizeof(unsigned long long int) == sizeof(value_type) )
             {
                 pair2longlong converter = {0ull};
-                converter.pair = thrust::make_pair( unused_key, unused_element );
+                converter.pair = thrust::make_pair( unused_key, m_unused_element );
                 const unsigned long long int unused = converter.longlong;
                 converter.pair = x;
                 const unsigned long long int value = converter.longlong;
@@ -427,6 +598,7 @@ public:
         
         return iterator( m_hashtbl_values,m_hashtbl_values+hashtbl_size,it);
     }
+    */
     
     __forceinline__
     __host__ __device__ const_iterator find(const key_type& k ) const
@@ -455,7 +627,7 @@ public:
         return const_iterator( m_hashtbl_values,m_hashtbl_values+m_hashtbl_size,begin_ptr);
     }
     
-    void assign_async( const concurrent_unordered_multimap& other, cudaStream_t stream = 0 )
+    void assign_async( const concurrent_unordered_map& other, cudaStream_t stream = 0 )
     {
         m_collisions = other.m_collisions;
         if ( other.m_hashtbl_size <= m_hashtbl_capacity ) {
@@ -473,7 +645,7 @@ public:
     void clear_async( cudaStream_t stream = 0 ) 
     {
         constexpr int block_size = 128;
-        init_hashtbl<<<((m_hashtbl_size-1)/block_size)+1,block_size,0,stream>>>( m_hashtbl_values, m_hashtbl_size, unused_key, unused_element );
+        init_hashtbl<<<((m_hashtbl_size-1)/block_size)+1,block_size,0,stream>>>( m_hashtbl_values, m_hashtbl_size, unused_key, m_unused_element );
         if ( count_collisions )
             m_collisions = 0;
     }
@@ -505,6 +677,8 @@ public:
 private:
     const hasher            m_hf;
     const key_equal         m_equal;
+
+    const mapped_type       m_unused_element;
     
     allocator_type              m_allocator;
     
@@ -515,4 +689,4 @@ private:
     unsigned long long m_collisions;
 };
 
-#endif //CONCURRENT_UNORDERED_MULTIMAP_CUH
+#endif //CONCURRENT_UNORDERED_MAP_CUH

@@ -1,4 +1,19 @@
-/* Copyright 2018 NVIDIA Corporation.  All rights reserved. */
+/*
+ * Copyright (c) 2018, NVIDIA CORPORATION.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 
 #include <thrust/device_vector.h>
 #include <thrust/tuple.h>
@@ -19,6 +34,7 @@
 #include <iterator>
 #include <type_traits>
 #include <numeric>
+#include <unordered_map>
 //
 
 #include <cassert>
@@ -42,7 +58,7 @@ using Vector = thrust::device_vector<T>;
 using IndexT = size_t;
 
 template<typename T, typename Allocator, template<typename, typename> class Vector>
-__host__ __device__
+__host__ 
 void print_v(const Vector<T, Allocator>& v, std::ostream& os)
 {
   thrust::copy(v.begin(), v.end(), std::ostream_iterator<T>(os,","));
@@ -52,7 +68,7 @@ void print_v(const Vector<T, Allocator>& v, std::ostream& os)
 template<typename T,
 	 typename Allocator,
 	 template<typename, typename> class Vector>
-__host__ __device__
+__host__
 void print_v(const Vector<T, Allocator>& v, typename Vector<T, Allocator>::const_iterator pos, std::ostream& os)
 { 
   thrust::copy(v.begin(), pos, std::ostream_iterator<T>(os,","));//okay
@@ -62,7 +78,7 @@ void print_v(const Vector<T, Allocator>& v, typename Vector<T, Allocator>::const
 template<typename T,
 	 typename Allocator,
 	 template<typename, typename> class Vector>
-__host__ __device__
+__host__
 void print_v(const Vector<T, Allocator>& v, size_t n, std::ostream& os)
 { 
   thrust::copy_n(v.begin(), n, std::ostream_iterator<T>(os,","));//okay
@@ -89,6 +105,7 @@ bool compare(const Vector<T>& d_v, const std::vector<T>& baseline, T eps)
 			      return (std::abs(v1-v2) < eps);
 			    });
 }
+
 
 TEST(gdf_group_by_sum, UsageTestSum)
 {
@@ -143,16 +160,16 @@ TEST(gdf_group_by_sum, UsageTestSum)
   c_vout.size = nrows;
 
   size_t n_group = 0;
-  int flag_sorted = 0;
+  //int flag_sorted = 0;
 
   std::cout<<"aggregate = sum on column:\n";
   print_v(dd1, std::cout);
 
   //input
   //{
-  gdf_context ctxt{0, GDF_SORT, 0};
+  gdf_context ctxt{0, GDF_SORT, 0, 0};
   std::vector<gdf_column*> v_pcols(ncols);
-  for(int i = 0; i < ncols; ++i)
+  for(size_t i = 0; i < ncols; ++i)
     {
       v_pcols[i] = &v_gdf_cols[i];
     }
@@ -179,7 +196,7 @@ TEST(gdf_group_by_sum, UsageTestSum)
   v_gdf_cols_out[2].size = nrows;
 
   std::vector<gdf_column*> h_cols_out(ncols);
-  for(int i=0; i<ncols; ++i)
+  for(size_t i=0; i<ncols; ++i)
     h_cols_out[i] = &v_gdf_cols_out[i];//
   
   gdf_column** cols_out = &h_cols_out[0];//pointer semantics (2)
@@ -291,16 +308,16 @@ TEST(gdf_group_by_count, UsageTestCount)
   c_vout.size = nrows;
 
   size_t n_group = 0;
-  int flag_sorted = 0;
+  //int flag_sorted = 0;
 
   std::cout<<"aggregate = count on column:\n";
   print_v(dd1, std::cout);
 
   //input
   //{
-  gdf_context ctxt{0, GDF_SORT, 0};
+  gdf_context ctxt{0, GDF_SORT, 0, 0};
   std::vector<gdf_column*> v_pcols(ncols);
-  for(int i = 0; i < ncols; ++i)
+  for(size_t i = 0; i < ncols; ++i)
     {
       v_pcols[i] = &v_gdf_cols[i];
     }
@@ -327,7 +344,7 @@ TEST(gdf_group_by_count, UsageTestCount)
   v_gdf_cols_out[2].size = nrows;
 
   std::vector<gdf_column*> h_cols_out(ncols);
-  for(int i=0; i<ncols; ++i)
+  for(size_t i=0; i<ncols; ++i)
     h_cols_out[i] = &v_gdf_cols_out[i];//
   
   gdf_column** cols_out = &h_cols_out[0];//pointer semantics (2)
@@ -437,16 +454,16 @@ TEST(gdf_group_by_avg, UsageTestAvg)
   c_vout.size = nrows;
 
   size_t n_group = 0;
-  int flag_sorted = 0;
+  //int flag_sorted = 0;
 
   std::cout<<"aggregate = avg on column:\n";
   print_v(dd1, std::cout);
 
   //input
   //{
-  gdf_context ctxt{0, GDF_SORT, 0};
+  gdf_context ctxt{0, GDF_SORT, 0, 0};
   std::vector<gdf_column*> v_pcols(ncols);
-  for(int i = 0; i < ncols; ++i)
+  for(size_t i = 0; i < ncols; ++i)
     {
       v_pcols[i] = &v_gdf_cols[i];
     }
@@ -473,7 +490,7 @@ TEST(gdf_group_by_avg, UsageTestAvg)
   v_gdf_cols_out[2].size = nrows;
 
   std::vector<gdf_column*> h_cols_out(ncols);
-  for(int i=0; i<ncols; ++i)
+  for(size_t i=0; i<ncols; ++i)
     h_cols_out[i] = &v_gdf_cols_out[i];//
   
   gdf_column** cols_out = &h_cols_out[0];//pointer semantics (2)
@@ -582,7 +599,7 @@ TEST(gdf_group_by_min, UsageTestMin)
   c_vout.size = nrows;
 
   size_t n_group = 0;
-  int flag_sorted = 0;
+  //int flag_sorted = 0;
 
   std::vector<double> v_col{2., 4., 5., 7., 11., 3.};
   thrust::device_vector<double> d_col = v_col;
@@ -595,9 +612,9 @@ TEST(gdf_group_by_min, UsageTestMin)
 
   //input
   //{
-  gdf_context ctxt{0, GDF_SORT, 0};
+  gdf_context ctxt{0, GDF_SORT, 0, 0};
   std::vector<gdf_column*> v_pcols(ncols);
-  for(int i = 0; i < ncols; ++i)
+  for(size_t i = 0; i < ncols; ++i)
     {
       v_pcols[i] = &v_gdf_cols[i];
     }
@@ -624,7 +641,7 @@ TEST(gdf_group_by_min, UsageTestMin)
   v_gdf_cols_out[2].size = nrows;
 
   std::vector<gdf_column*> h_cols_out(ncols);
-  for(int i=0; i<ncols; ++i)
+  for(size_t i=0; i<ncols; ++i)
     h_cols_out[i] = &v_gdf_cols_out[i];//
   
   gdf_column** cols_out = &h_cols_out[0];//pointer semantics (2)
@@ -733,7 +750,7 @@ TEST(gdf_group_by_max, UsageTestMax)
   c_vout.size = nrows;
 
   size_t n_group = 0;
-  int flag_sorted = 0;
+  //int flag_sorted = 0;
 
   std::vector<double> v_col{2., 4., 5., 7., 11., 3.};
   thrust::device_vector<double> d_col = v_col;
@@ -746,9 +763,9 @@ TEST(gdf_group_by_max, UsageTestMax)
 
   //input
   //{
-  gdf_context ctxt{0, GDF_SORT, 0};
+  gdf_context ctxt{0, GDF_SORT, 0, 0};
   std::vector<gdf_column*> v_pcols(ncols);
-  for(int i = 0; i < ncols; ++i)
+  for(size_t i = 0; i < ncols; ++i)
     {
       v_pcols[i] = &v_gdf_cols[i];
     }
@@ -775,7 +792,7 @@ TEST(gdf_group_by_max, UsageTestMax)
   v_gdf_cols_out[2].size = nrows;
 
   std::vector<gdf_column*> h_cols_out(ncols);
-  for(int i=0; i<ncols; ++i)
+  for(size_t i=0; i<ncols; ++i)
     h_cols_out[i] = &v_gdf_cols_out[i];//
   
   gdf_column** cols_out = &h_cols_out[0];//pointer semantics (2)

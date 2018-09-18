@@ -569,11 +569,19 @@ TEST_F(gdf_extract_from_datetime_test, date64Tests) {
 
 		test_all_extract_functions(inputCol);
 
+		inputCol.valid = NULL;
+        test_all_extract_functions(inputCol);
+        inputCol.valid = thrust::raw_pointer_cast(inputValidDev.data());
+
 		// TIMESTAMP in ms should be the same as DATE64
 		inputCol.dtype = GDF_TIMESTAMP;
 		inputCol.dtype_info.time_unit = TIME_UNIT_ms;
 
 		test_all_extract_functions(inputCol);
+
+        inputCol.valid = NULL;
+        test_all_extract_functions(inputCol);
+
 	}
 
 	// extract from seconds
@@ -622,6 +630,9 @@ TEST_F(gdf_extract_from_datetime_test, date64Tests) {
 		inputCol.valid = thrust::raw_pointer_cast(inputValidDev.data());
 
 		test_all_extract_functions(inputCol);
+
+        inputCol.valid = NULL;
+        test_all_extract_functions(inputCol);
 	}
 
 	// extract from microseconds
@@ -670,6 +681,9 @@ TEST_F(gdf_extract_from_datetime_test, date64Tests) {
 		inputCol.valid = thrust::raw_pointer_cast(inputValidDev.data());
 
 		test_all_extract_functions(inputCol);
+
+        inputCol.valid = NULL;
+        test_all_extract_functions(inputCol);
 	}
 
 	// extract from nanoseconds
@@ -718,6 +732,9 @@ TEST_F(gdf_extract_from_datetime_test, date64Tests) {
 		inputCol.valid = thrust::raw_pointer_cast(inputValidDev.data());
 
 		test_all_extract_functions(inputCol);
+
+        inputCol.valid = NULL;
+        test_all_extract_functions(inputCol);
 	}
 }
 

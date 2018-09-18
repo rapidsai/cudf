@@ -45,8 +45,19 @@ endif()
 #   -DARROW_ROOT:PATH=/path/to/arrow_install_dir
 set(ARROW_ROOT ${ARROW_DOWNLOAD_BINARY_DIR}/arrow-prefix/src/arrow-install/usr/local/)
 
+# Need ARROW_VERSION for setting correct ARROW_GENERATED_IPC_DIR
+set(ARROW_VERSION "apache-arrow-0.10.0")
+if (NOT "$ENV{PARQUET_ARROW_VERSION}" STREQUAL "")
+    set(ARROW_VERSION "$ENV{PARQUET_ARROW_VERSION}")
+endif()
+message(STATUS "C: ARROW_VERSION=${ARROW_VERSION}")
+
 # Copy the arrow-format flatbuffer headers to include/ipc using configure_file (will sync if input file changes)
-set(ARROW_GENERATED_IPC_DIR ${ARROW_DOWNLOAD_BINARY_DIR}/arrow-prefix/src/arrow/cpp/src/arrow/ipc/)
+if ("${ARROW_VERSION}" STREQUAL "apache-arrow-0.7.1")
+  set(ARROW_GENERATED_IPC_DIR ${ARROW_DOWNLOAD_BINARY_DIR}/arrow-prefix/src/arrow/cpp/src/arrow/ipc/)
+else()
+  set(ARROW_GENERATED_IPC_DIR ${ARROW_DOWNLOAD_BINARY_DIR}/arrow-prefix/src/arrow-build/src/arrow/ipc/)
+endif()
 
 configure_file(${ARROW_GENERATED_IPC_DIR}/File_generated.h ${CMAKE_SOURCE_DIR}/include/gdf/ipc/File_generated.h COPYONLY)
 configure_file(${ARROW_GENERATED_IPC_DIR}/Message_generated.h ${CMAKE_SOURCE_DIR}/include/gdf/ipc/Message_generated.h COPYONLY)
