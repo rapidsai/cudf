@@ -35,21 +35,21 @@ typedef struct {
 	/*
 	 * Input arguments - all data is in the host
 	 */
-	char		*file_path			= NULL;			// file location to read from	- if the file is compressed, it needs proper file extensions {.gz}
-	char		*buffer				= NULL;			// process data from a buffer,  pointer to Host memory
-	char 		*object				= NULL;			// this is a URL path
+	char		*file_path;				// file location to read from	- if the file is compressed, it needs proper file extensions {.gz}
+	char		*buffer;				// process data from a buffer,  pointer to Host memory
+	char 		*object;				// this is a URL path
 
-	char		lineterminator		= '\n';			// can change the end of line character
-	char		delimiter			= ',';			// also called 'sep'  this is the field separator
-	bool 		delim_whitespace	= false;		// use white space as the delimiter
-	bool		skipinitialspace	= false;		// Skip spaces after delimiter
+	char		lineterminator;			// can change the end of line character
+	char		delimiter;				// also called 'sep'  this is the field separator
+	bool 		delim_whitespace;		// use white space as the delimiter
+	bool		skipinitialspace;		// Skip spaces after delimiter
 
-	int			num_cols			= -1;			// number of columns (array sizes)
-	const char	**names				= NULL;			// array of char *  Ordered List of column names to use.   names cannot be used with header
-	const char	**dtype				= NULL;			// array of char *	Ordered List of data types as strings
+	int			num_cols;				// number of columns (array sizes)
+	const char	**names;				// array of char *  Ordered List of column names to use.   names cannot be used with header
+	const char	**dtype;				// array of char *	Ordered List of data types as strings
 
-	int			skiprows			= 0;			// number of rows at the start of the files to skip
-	int			skipfooter			= 0;			// number of rows at the bottom of the file to skip - counting is backwards from end, 0 = last line
+	int			skiprows;				// number of rows at the start of the files to skip
+	int			skipfooter;				// number of rows at the bottom of the file to skip - counting is backwards from end, 0 = last line
 
 } csv_read_arg;
 
