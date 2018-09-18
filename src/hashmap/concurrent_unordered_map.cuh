@@ -202,9 +202,9 @@ __global__ void init_hashtbl(
 template <typename T>
 struct equal_to
 {
-    typedef bool result_type;
-    typedef T first_argument_type;
-    typedef T second_argument_type;
+    using result_type = bool;
+    using first_argument_type = T;
+    using second_argument_type = T;
     __forceinline__
     __host__ __device__ constexpr bool operator()(const first_argument_type &lhs, const second_argument_type &rhs) const 
     {
@@ -215,11 +215,11 @@ struct equal_to
 template<typename Iterator>
 class cycle_iterator_adapter {
 public:
-    typedef typename std::iterator_traits<Iterator>::value_type         value_type; 
-    typedef typename std::iterator_traits<Iterator>::difference_type    difference_type;
-    typedef typename std::iterator_traits<Iterator>::pointer            pointer;
-    typedef typename std::iterator_traits<Iterator>::reference          reference;
-    typedef Iterator                                                    iterator_type;
+    using value_type = typename std::iterator_traits<Iterator>::value_type; 
+    using difference_type = typename std::iterator_traits<Iterator>::difference_type;
+    using pointer = typename std::iterator_traits<Iterator>::pointer;
+    using reference = typename std::iterator_traits<Iterator>::reference;
+    using iterator_type = Iterator;
     
     cycle_iterator_adapter() = delete;
     
@@ -326,15 +326,15 @@ class concurrent_unordered_map : public managed
 {
 
 public:
-    typedef size_t                                          size_type;
-    typedef Hasher                                          hasher;
-    typedef Equality                                        key_equal;
-    typedef Allocator                                       allocator_type;
-    typedef Key                                             key_type;
-    typedef thrust::pair<Key, Element>                      value_type;
-    typedef Element                                         mapped_type;
-    typedef cycle_iterator_adapter<value_type*>             iterator;
-    typedef const cycle_iterator_adapter<value_type*>       const_iterator;
+    using size_type = size_t;
+    using hasher = Hasher;
+    using key_equal = Equality;
+    using allocator_type = Allocator;
+    using key_type = Key;
+    using value_type = thrust::pair<Key, Element>;
+    using mapped_type = Element;
+    using iterator = cycle_iterator_adapter<value_type*>;
+    using const_iterator = const cycle_iterator_adapter<value_type*>;
 
 private:
     union pair2longlong
@@ -408,7 +408,7 @@ public:
 
     // Generic update of a hash table value for any aggregator
     template <typename aggregation_type>
-    __forceinline__ __host__ __device__
+    __forceinline__  __device__
     void update_existing_value(mapped_type & existing_value, value_type const & insert_pair, aggregation_type op)
     {
       const mapped_type insert_value = insert_pair.second;
@@ -465,23 +465,46 @@ public:
                   E.g., if the aggregation operation is 'max', then the maximum is computed
                   between the new value and existing value and the result is stored in the map.
      * 
-     * @Param x The new (key, value) pair to insert
-     * @Param op The aggregation operation to perform
+     * @Param[in] x The new (key, value) pair to insert
+     * @Param[in] op The aggregation operation to perform
+     * @Param[in] keys_equal An optional functor for comparing two keys 
+     * @Param[in] precomputed_hash Indicates if a precomputed hash value is being passed in to use
+     * to determine the write location of the new key
+     * @Param[in] precomputed_hash_value The precomputed hash value
+     * @tparam aggregation_type A functor for a binary operation that performs the aggregation
+     * @tparam comparison_type A functor for comparing two keys
      * 
      * @Returns An iterator to the newly inserted key,value pair
      */
     /* ----------------------------------------------------------------------------*/
-    // This pragma is to prevent a warning about the aggregation functor caused by being
-    // instantiated both on the host and device
-    #pragma hd_warning_disable
-    template<typename aggregation_type>
+    template<typename aggregation_type,
+             class comparison_type = key_equal,
+             typename hash_value_type = typename Hasher::result_type>
     __forceinline__
-    __host__ __device__ iterator insert(const value_type& x, aggregation_type op)
+    __device__ iterator insert(const value_type& x, 
+                               aggregation_type op,
+                               comparison_type keys_equal = key_equal(),
+                               bool precomputed_hash = false,
+                               hash_value_type precomputed_hash_value = 0)
     {
         const size_type hashtbl_size    = m_hashtbl_size;
         value_type* hashtbl_values      = m_hashtbl_values;
-        const size_type key_hash        = m_hf( x.first );
-        size_type current_index         = key_hash % hashtbl_size;
+
+        hash_value_type hash_value{0};
+
+        // If a precomputed hash value has been passed in, then use it to determine
+        // the write location of the new key
+        if(true == precomputed_hash)
+        {
+          hash_value = precomputed_hash_value;
+        }
+        // Otherwise, compute the hash value from the new key
+        else
+        {
+          hash_value = m_hf(x.first);
+        }
+
+        size_type current_index         = hash_value % hashtbl_size;
         value_type *current_hash_bucket = &(hashtbl_values[current_index]);
 
         const key_type insert_key = x.first;
@@ -492,8 +515,6 @@ public:
 
           key_type& existing_key = current_hash_bucket->first;
           mapped_type& existing_value = current_hash_bucket->second;
-
-#ifdef __CUDA_ARCH__
 
           // Try and set the existing_key for the current hash bucket to insert_key
           const key_type old_key = atomicCAS( &existing_key, unused_key, insert_key);
@@ -507,35 +528,13 @@ public:
           // has its initial value
           // TODO: Use template specialization to make use of native atomic functions
           // TODO: How to handle data types less than 32 bits?
-          if ( m_equal( unused_key, old_key ) || m_equal(insert_key, old_key) ) {
+          if ( keys_equal( unused_key, old_key ) || keys_equal(insert_key, old_key) ) {
 
             update_existing_value(existing_value, x, op);
 
             insert_success = true;
           }
 
-#else
-
-#ifdef _OPENMP
-#pragma omp critical
-#endif
-          {
-            const mapped_type insert_value = x.second;
-            // Empty bucket, insert key and value
-            if ( m_equal( unused_key, existing_key) ) 
-            {
-              hashtbl_values[current_index] = thrust::make_pair( insert_key, insert_value);
-              insert_success = true;
-            }
-            // This key has been inserted before, perform aggregation on value
-            else if( m_equal(insert_key, existing_key) )
-            {
-              const Element new_value = op(insert_value, existing_value);
-              existing_value = new_value;
-              insert_success = true;
-            }
-          }
-#endif
           current_index = (current_index+1)%hashtbl_size;
           current_hash_bucket = &(hashtbl_values[current_index]);
         }

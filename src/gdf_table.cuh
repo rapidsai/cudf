@@ -24,6 +24,8 @@
 #include <gdf/errorutils.h>
 #include "hashmap/hash_functions.cuh"
 #include "hashmap/managed.cuh"
+#include "sqls_rtti_comp.hpp"
+
 
 /* --------------------------------------------------------------------------*/
 /** 
@@ -127,12 +129,13 @@ void scatter_valid_mask( gdf_valid_type const * const input_mask,
     are equivalent.
  */
 /* ----------------------------------------------------------------------------*/
-template <typename T>
+template <typename T, typename byte_t = unsigned char>
 class gdf_table : public managed
 {
 public:
 
   using size_type = T;
+  using byte_type = byte_t;
 
   gdf_table(size_type num_cols, gdf_column ** gdf_columns) 
     : num_columns(num_cols), host_columns(gdf_columns)
@@ -152,14 +155,32 @@ public:
     device_columns_data.reserve(num_cols);
     device_columns_valids.reserve(num_cols);
     device_columns_types.reserve(num_cols);
+    column_byte_widths.reserve(num_cols);
     for(size_type i = 0; i < num_cols; ++i)
     {
-      assert(nullptr != host_columns[i]);
-      assert(column_length == host_columns[i]->size);
+      gdf_column * const current_column = host_columns[i];
+      assert(nullptr != current_column);
+      assert(column_length == current_column->size);
       if(column_length > 0)
       {
-        assert(nullptr != host_columns[i]->data);
+        assert(nullptr != current_column->data);
       }
+	
+      // Compute the size of a row in the table in bytes
+      int column_width_bytes{0};
+      if(GDF_SUCCESS == get_column_byte_width(current_column, &column_width_bytes))
+      {
+        row_size_bytes += column_width_bytes;
+
+        // Store the byte width of each column in a device array
+        column_byte_widths.push_back(static_cast<byte_type>(row_size_bytes));
+      }
+      else
+      {
+        std::cerr << "Attempted to get column byte width of unsupported GDF datatype.\n";
+        column_byte_widths.push_back(0);
+      }
+
       device_columns_data.push_back(host_columns[i]->data);
       device_columns_valids.push_back(host_columns[i]->valid);
       device_columns_types.push_back(host_columns[i]->dtype);
@@ -168,6 +189,7 @@ public:
     d_columns_data = device_columns_data.data().get();
     d_columns_valids = device_columns_valids.data().get();
     d_columns_types = device_columns_types.data().get();
+    d_column_byte_widths = column_byte_widths.data().get();
 
     // Allocate storage sufficient to hold a validity bit for every row
     // in the table
@@ -187,11 +209,30 @@ public:
 
   ~gdf_table(){}
 
-  __host__ 
+
+  /* --------------------------------------------------------------------------*/
+  /** 
+   * @Synopsis  Updates the length of the gdf_columns in the table
+   * 
+   * @Param new_length The new length
+   */
+  /* ----------------------------------------------------------------------------*/
+  void set_column_length(const size_type new_length)
+  {
+    column_length = new_length;
+
+    for(size_type i = 0; i < num_columns; ++i)
+    {
+      host_columns[i]->size = this->column_length;
+    }
+  }
+
+
   size_type get_num_columns() const
   {
     return num_columns;
   }
+
 
   __host__ 
   gdf_column * get_column(size_type column_index) const
@@ -212,71 +253,203 @@ public:
     return row_valid;
   }
 
-  __host__ 
-  void print_row(const size_type row_index, char * msg = "") const
+
+  /* --------------------------------------------------------------------------*/
+  /** 
+   * @Synopsis  Gets the size in bytes of a row in the gdf_table, i.e., the sum of 
+   * the byte widths of all columns in the table
+   * 
+   * @Returns The size in bytes of the row in the table
+   */
+  /* ----------------------------------------------------------------------------*/
+  byte_type get_row_size_bytes() const
   {
-    char row[256];
-    sprintf(row,"(");
+    return row_size_bytes;
+  }
+
+
+  /* --------------------------------------------------------------------------*/
+  /** 
+   * @Synopsis  Packs the elements of a specified row into a contiguous byte-buffer
+   *
+   * This function is called by a single thread, and the thread will copy each element
+   * of the row into a single contiguous buffer. TODO: This could be done by multiple threads
+   * by passing in a cooperative group. 
+   * 
+   * @Param index The row of the table to return
+   * @Param row_byte_buffer A pointer to a preallocated buffer large enough to hold a 
+      row of the table 
+   * 
+   */
+  /* ----------------------------------------------------------------------------*/
+  // TODO Is there a less hacky way to do this? 
+  __device__
+  gdf_error get_packed_row_values(size_type row_index, byte_type * row_byte_buffer)
+  {
+    if(nullptr == row_byte_buffer) {
+      return GDF_DATASET_EMPTY;
+    }
+
+    byte_type * write_pointer{row_byte_buffer};
+
+    // Pack the element from each column in the row into the buffer
     for(size_type i = 0; i < num_columns; ++i)
     {
-      const gdf_dtype col_type = d_columns_types[i];
+      const byte_type current_column_byte_width = d_column_byte_widths[i];
+      switch(current_column_byte_width)
+      {
+        case 1:
+          {
+            using col_type = int8_t;
+            const col_type * const current_row_element = static_cast<col_type *>(d_columns_data[i])[row_index];
+            col_type * write_location = static_cast<col_type*>(write_pointer);
+            *write_location = *current_row_element;
+            write_pointer += sizeof(col_type);
+            break;
+          }
+        case 2:
+          {
+            using col_type = int16_t;
+            const col_type * const current_row_element = static_cast<col_type *>(d_columns_data[i])[row_index];
+            col_type * write_location = static_cast<col_type*>(write_pointer);
+            *write_location = *current_row_element;
+            write_pointer += sizeof(col_type);
+            break;
+          }
+        case 4:
+          {
+            using col_type = int32_t;
+            const col_type * const current_row_element = static_cast<col_type *>(d_columns_data[i])[row_index];
+            col_type * write_location = static_cast<col_type*>(write_pointer);
+            *write_location = *current_row_element;
+            write_pointer += sizeof(col_type);
+            break;
+          }
+        case 8:
+          {
+            using col_type = int64_t;
+            const col_type * const current_row_element = static_cast<col_type *>(d_columns_data[i])[row_index];
+            col_type * write_location = static_cast<col_type*>(write_pointer);
+            *write_location = *current_row_element;
+            write_pointer += sizeof(col_type);
+            break;
+          }
+        default:
+          {
+            return GDF_UNSUPPORTED_DTYPE;
+          }
+      }
+    }
+  }
 
-      switch(col_type)
+
+    /* --------------------------------------------------------------------------*/
+    /** 
+     * @Synopsis  Copies a row from another table to a row in this table
+     *  
+     * This device function should be called by a single thread and the thread will copy all of 
+     * the elements in the row from one table to the other. TODO: In the future, this could be done
+     * by multiple threads by passing in a cooperative group.
+     * 
+     * @Param other The other table from which the row is copied
+     * @Param my_row_index The index of the row in this table that will be written to
+     * @Param other_row_index The index of the row from the other table that will be copied from
+     */
+    /* ----------------------------------------------------------------------------*/
+  __device__ 
+  gdf_error copy_row(gdf_table const & other,
+                const size_type my_row_index,
+                const size_type other_row_index)
+  {
+
+    for(size_type i = 0; i < num_columns; ++i)
+    {
+      const gdf_dtype my_col_type = d_columns_types[i];
+      const gdf_dtype other_col_type = other.d_columns_types[i];
+    
+      if(my_col_type != other_col_type){
+        return GDF_DTYPE_MISMATCH;
+      }
+
+      switch(my_col_type)
       {
         case GDF_INT8:
           {
-            sprintf(row,"%d", static_cast<int8_t*>(d_columns_data[i])[row_index]);
+            using col_type = int8_t;
+            col_type & my_elem = static_cast<col_type*>(d_columns_data[i])[my_row_index];
+            const col_type other_elem = static_cast<col_type*>(other.d_columns_data[i])[other_row_index];
+            my_elem = other_elem;
             break;
           }
         case GDF_INT16:
           {
-            sprintf(row,"%d", static_cast<int16_t*>(d_columns_data[i])[row_index]);
+            using col_type = int16_t;
+            col_type & my_elem = static_cast<col_type*>(d_columns_data[i])[my_row_index];
+            const col_type other_elem = static_cast<col_type*>(other.d_columns_data[i])[other_row_index];
+            my_elem = other_elem;
             break;
           }
         case GDF_INT32:
           {
-            sprintf(row,"%d", static_cast<int32_t*>(d_columns_data[i])[row_index]);
+            using col_type = int32_t;
+            col_type & my_elem = static_cast<col_type*>(d_columns_data[i])[my_row_index];
+            const col_type other_elem = static_cast<col_type*>(other.d_columns_data[i])[other_row_index];
+            my_elem = other_elem;
             break;
           }
         case GDF_INT64:
           {
-            sprintf(row,"%ld", static_cast<int64_t*>(d_columns_data[i])[row_index]);
+            using col_type = int64_t;
+            col_type & my_elem = static_cast<col_type*>(d_columns_data[i])[my_row_index];
+            const col_type other_elem = static_cast<col_type*>(other.d_columns_data[i])[other_row_index];
+            my_elem = other_elem;
             break;
           }
         case GDF_FLOAT32:
           {
-            sprintf(row,"%f", static_cast<float*>(d_columns_data[i])[row_index]);
+            using col_type = float;
+            col_type & my_elem = static_cast<col_type*>(d_columns_data[i])[my_row_index];
+            const col_type other_elem = static_cast<col_type*>(other.d_columns_data[i])[other_row_index];
+            my_elem = other_elem;
             break;
           }
         case GDF_FLOAT64:
           {
-            sprintf(row,"%f", static_cast<double*>(d_columns_data[i])[row_index]);
+            using col_type = double;
+            col_type & my_elem = static_cast<col_type*>(d_columns_data[i])[my_row_index];
+            const col_type other_elem = static_cast<col_type*>(other.d_columns_data[i])[other_row_index];
+            my_elem = other_elem;
             break;
           }
         case GDF_DATE32:
           {
-            sprintf(row,"%d", static_cast<int32_t*>(d_columns_data[i])[row_index]);
+            using col_type = int32_t;
+            col_type & my_elem = static_cast<col_type*>(d_columns_data[i])[my_row_index];
+            const col_type other_elem = static_cast<col_type*>(other.d_columns_data[i])[other_row_index];
+            my_elem = other_elem;
             break;
           }
         case GDF_DATE64:
           {
-            sprintf(row,"%ld", static_cast<int64_t*>(d_columns_data[i])[row_index]);
+            using col_type = int64_t;
+            col_type & my_elem = static_cast<col_type*>(d_columns_data[i])[my_row_index];
+            const col_type other_elem = static_cast<col_type*>(other.d_columns_data[i])[other_row_index];
+            my_elem = other_elem;
             break;
           }
         case GDF_TIMESTAMP:
           {
-            sprintf(row,"%ld", static_cast<int64_t*>(d_columns_data[i])[row_index]);
+            using col_type = int64_t;
+            col_type & my_elem = static_cast<col_type*>(d_columns_data[i])[my_row_index];
+            const col_type other_elem = static_cast<col_type*>(other.d_columns_data[i])[other_row_index];
+            my_elem = other_elem;
             break;
           }
         default:
-          assert(false && "Attempted to compare unsupported GDF datatype");
+          return GDF_UNSUPPORTED_DTYPE;
       }
-      sprintf(row,", ");
     }
-    sprintf(row,")\n");
-
-    printf("%s %s", msg, row);
-
+    return GDF_SUCCESS;
   }
 
     /* --------------------------------------------------------------------------*/
@@ -310,7 +483,6 @@ public:
     
       if(my_col_type != other_col_type)
       {
-        printf("Attempted to compare columns of different types.\n");
         return false;
       }
       switch(my_col_type)
@@ -397,7 +569,6 @@ public:
             break;
           }
         default:
-          printf("Attempted to compare columns of unsupported GDF datatype\n");
           return false;
       }
     }
@@ -569,7 +740,175 @@ public:
   }
 
 
+  /* --------------------------------------------------------------------------*/
+  /** 
+   * @brief  Creates a rearrangement of the table from another table by gathering
+     the rows of the input table to rows of this table based on a gather map that
+     maps every row of the input table to a corresponding row in this table.
+   * 
+   * @Param[in] row_gather_map The mapping from input row locations to output row
+     locations, i.e., Row 'row_gather_map[i]' of this table will be gathered to 
+     gather_output_table[i]
+   * @Param[in] gather_output_table The output table to which the rows of this table
+     will be mapped
+   * 
+   * @Returns   
+   */
+  /* ----------------------------------------------------------------------------*/
+  template <typename size_type>
+  gdf_error gather(thrust::device_vector<size_type> const & row_gather_map,
+          gdf_table<size_type> & gather_output_table)
+  {
+    gdf_error gdf_status{GDF_SUCCESS};
+  
+    // Each column can be gathered in parallel, therefore create a 
+    // separate stream for every column
+    std::vector<cudaStream_t> column_streams(num_columns);
+    for(auto & s : column_streams)
+    {
+      cudaStreamCreate(&s);
+    }
+  
+    // Scatter columns one by one
+    for(size_type i = 0; i < num_columns; ++i)
+    {
+      gdf_column * const current_input_column = this->get_column(i);
+      gdf_column * const current_output_column = gather_output_table.get_column(i);
+      size_type column_width_bytes{0};
+      gdf_status = get_column_byte_width(current_input_column, &column_width_bytes);
+  
+      if(GDF_SUCCESS != gdf_status)
+        return gdf_status;
+  
+      // Scatter each column based on it's byte width
+      switch(column_width_bytes)
+      {
+        case 1:
+          {
+            using column_type = int8_t;
+            column_type * const input = static_cast<column_type*>(current_input_column->data);
+            column_type * const output = static_cast<column_type*>(current_output_column->data);
+            gdf_status = gather_column<column_type, size_type>(input, 
+                                                     column_length,
+                                                     row_gather_map, 
+                                                     output,
+                                                     column_streams[i]);
+            break;
+          }
+        case 2:
+          {
+            using column_type = int16_t;
+            column_type * input = static_cast<column_type*>(current_input_column->data);
+            column_type * output = static_cast<column_type*>(current_output_column->data);
+            gdf_status = gather_column<column_type, size_type>(input, 
+                                                     column_length,
+                                                     row_gather_map, 
+                                                     output,
+                                                     column_streams[i]);
+            break;
+          }
+        case 4:
+          {
+            using column_type = int32_t;
+            column_type * input = static_cast<column_type*>(current_input_column->data);
+            column_type * output = static_cast<column_type*>(current_output_column->data);
+            gdf_status = gather_column<column_type, size_type>(input, 
+                                                     column_length,
+                                                     row_gather_map, 
+                                                     output,
+                                                     column_streams[i]);
+            break;
+          }
+        case 8:
+          {
+            using column_type = int64_t;
+            column_type * input = static_cast<column_type*>(current_input_column->data);
+            column_type * output = static_cast<column_type*>(current_output_column->data);
+            gdf_status = gather_column<column_type, size_type>(input, 
+                                                     column_length,
+                                                     row_gather_map, 
+                                                     output,
+                                                     column_streams[i]);
+            break;
+          }
+        default:
+          gdf_status = GDF_UNSUPPORTED_DTYPE;
+      }
+  
+      if(GDF_SUCCESS != gdf_status)
+        return gdf_status;
+    }
+  
+    // Synchronize all the streams
+    CUDA_TRY( cudaDeviceSynchronize() );
+  
+    // Destroy all streams
+    for(auto & s : column_streams)
+    {
+      cudaStreamDestroy(s);
+    }
+  
+    return gdf_status;
+  }
 
+  /* --------------------------------------------------------------------------*/
+  /** 
+   * @Synopsis  An in-place gather operation that permutes the rows of the table
+   * according to a map. permuted_table[i] = original_table[ row_gather_map[i] ]
+   * 
+   * @Param row_gather_map The map the determines the reordering of rows in the 
+   table 
+   * 
+   * @Returns   
+   */
+  /* ----------------------------------------------------------------------------*/
+  template <typename size_type>
+  gdf_error gather(thrust::device_vector<size_type> const & row_gather_map) {
+      return gather(row_gather_map, *this);
+  }
+
+  /* --------------------------------------------------------------------------*/
+  /** 
+   * @Synopsis  Lexicographically sorts the rows of the gdf_table in-place
+   * 
+   * @Returns A permutation vector of the new ordering of the rows, e.g.,
+   * sorted_table[i] == unsorted_table[ permuted_indices[i] ]
+   */
+  /* ----------------------------------------------------------------------------*/
+  thrust::device_vector<size_type> sort(void) {
+
+      cudaStream_t stream = NULL;
+
+      // Functor that defines a `less` operator between rows of a set of
+      // gdf_columns
+      LesserRTTI<size_type> comparator(d_columns_data,
+              reinterpret_cast<int*>(d_columns_types),
+              num_columns);
+
+      // Vector that will store the permutation of the rows after the sort
+      thrust::device_vector<size_type> permuted_indices(column_length);
+      thrust::sequence(thrust::cuda::par.on(stream),
+              permuted_indices.begin(), permuted_indices.end());
+
+      // Use the LesserRTTI functor to sort the rows of the table and the
+      // permutation vector
+      thrust::sort(thrust::cuda::par.on(stream),
+              permuted_indices.begin(), permuted_indices.end(),
+              [comparator] __host__ __device__ (size_type i1, size_type i2) {
+              return comparator.less(i1, i2);
+              });
+
+      //thrust::host_vector<void*> host_columns = device_columns;
+      //thrust::host_vector<gdf_dtype> host_types = device_types;
+
+      gather(permuted_indices);
+
+      return permuted_indices;
+  }
+
+
+
+  
 /* --------------------------------------------------------------------------*/
 /** 
  * @brief  Creates a rearrangement of the table into another table by scattering
@@ -711,6 +1050,60 @@ gdf_error scatter( gdf_table<size_type> & scattered_output_table,
 
 
 private:
+/* --------------------------------------------------------------------------*/
+  /** 
+   * @brief Gathers the values of a column into a new column based on a map that
+     maps rows in the input column to rows in the output column.
+     input_column[row_gather_map[i]] will be assigned to output_column[i]
+   * 
+   * @Param[in] input_column The input column whose rows will be gathered
+   * @Param[in] num_rows The number of rows in the input and output columns
+   * @Param[in] row_gather_map An array that maps rows in the input column
+     to rows in the output column
+   * @Param[out] output_column The rearrangement of the input column 
+     based on the mapping determined by the row_gather_map array
+   * 
+   * @Returns GDF_SUCCESS upon successful computation
+   */
+  /* ----------------------------------------------------------------------------*/
+  template <typename column_type,
+            typename size_type>
+  gdf_error gather_column(column_type * const __restrict__ input_column,
+                           size_type const num_rows,
+                           thrust::device_vector<size_type> const & row_gather_map,
+                           column_type * const __restrict__ output_column,
+                           cudaStream_t stream = 0) const
+  {
+  
+    gdf_error gdf_status{GDF_SUCCESS};
+
+    // Gathering from one table to another
+    if (input_column != output_column) {
+      thrust::gather(thrust::cuda::par.on(stream),
+                     row_gather_map.begin(),
+                     row_gather_map.end(),
+                     input_column,
+                     output_column);
+    } 
+    // Gather is in-place
+    else {
+        thrust::device_vector<column_type> remapped_copy(num_rows);
+        thrust::gather(thrust::cuda::par.on(stream),
+                       row_gather_map.begin(),
+                       row_gather_map.end(),
+                       input_column,
+                       remapped_copy.begin());
+        thrust::copy(thrust::cuda::par.on(stream),
+                remapped_copy.begin(),
+                remapped_copy.end(),
+                output_column);
+    }
+  
+    CUDA_CHECK_LAST();
+  
+    return gdf_status;
+  }
+
 
 /* --------------------------------------------------------------------------*/
 /** 
@@ -752,9 +1145,9 @@ gdf_error scatter_column(column_type const * const __restrict__ input_column,
 
 
   const size_type num_columns; /** The number of columns in the table */
-  size_type column_length;     /** The number of rows in the table */
+  size_type column_length{0};     /** The number of rows in the table */
 
-  gdf_column ** host_columns;  /** The set of gdf_columns that this table wraps */
+  gdf_column ** host_columns{nullptr};  /** The set of gdf_columns that this table wraps */
 
   thrust::device_vector<void*> device_columns_data; /** Device array of pointers to each columns data */
   void ** d_columns_data{nullptr};                  /** Raw pointer to the device array's data */
@@ -767,6 +1160,10 @@ gdf_error scatter_column(column_type const * const __restrict__ input_column,
 
   thrust::device_vector<gdf_dtype> device_columns_types; /** Device array of each columns data type */
   gdf_dtype * d_columns_types{nullptr};                 /** Raw pointer to the device array's data */
+
+  size_type row_size_bytes{0};
+  thrust::device_vector<byte_type> column_byte_widths;
+  byte_type * d_column_byte_widths{nullptr};
 
 };
 
