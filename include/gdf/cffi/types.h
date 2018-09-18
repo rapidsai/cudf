@@ -8,7 +8,7 @@ typedef	int32_t	gdf_date32;
 typedef	int32_t	gdf_category;
 
 /* --------------------------------------------------------------------------*/
- *
+ /**
  * @Synopsis  These enums indicate the possible data types for a gdf_column
  */
 /* ----------------------------------------------------------------------------*/
