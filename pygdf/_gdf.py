@@ -348,9 +348,6 @@ def hash_partition(input_columns, key_indices, nparts, output_columns):
         Each index indicates the start of a partition.
     """
     assert len(input_columns) == len(output_columns)
-    for col in input_columns:
-        if col.null_count != 0:
-            raise ValueError('cannot handle masked column')
 
     col_inputs = [col.cffi_view for col in input_columns]
     col_outputs = [col.cffi_view for col in output_columns]

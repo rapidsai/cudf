@@ -576,6 +576,60 @@ def test_dataframe_hash_partition(nrows, nparts, nkeys):
             part_unique_keys |= unique_keys
     assert len(part_unique_keys)
 
+# @pytest.mark.parametrize('nrows', [3, 10, 100, 1000])
+def test_dataframe_hash_partition_masked_value(nrows=20):
+    gdf = DataFrame()
+    gdf['key'] = np.arange(nrows)
+    gdf['val'] = np.arange(nrows) + 100
+    bitmask = utils.random_bitmask(nrows)
+    bytemask = utils.expand_bits_to_bytes(bitmask)
+    gdf['val'] = gdf['val'].set_mask(bitmask)
+    print(gdf.to_pandas())
+    parted = gdf.partition_by_hash(['key'], nparts=3)
+    # Verify that the valid mask is correct
+
+    for p in parted:
+        df = p.to_pandas()
+        print(df)
+    print('=======')
+    for p in parted:
+        df = p.to_pandas()
+        print(df)
+        for row in df.itertuples():
+            valid = bool(bytemask[row.key])
+            expected_value = row.key + 100 if valid else -1
+            got_value = row.val
+            print(bytemask)
+            print(row)
+            assert expected_value == got_value
+
+# @pytest.mark.parametrize('nrows', [3, 10, 100, 1000])
+def test_dataframe_hash_partition_masked_keys(nrows=20):
+    gdf = DataFrame()
+    gdf['key'] = np.arange(nrows)
+    gdf['val'] = np.arange(nrows) + 100
+    bitmask = utils.random_bitmask(nrows)
+    bytemask = utils.expand_bits_to_bytes(bitmask)
+    gdf['key'] = gdf['key'].set_mask(bitmask)
+    print(gdf.to_pandas())
+    parted = gdf.partition_by_hash(['key'], nparts=3)
+    # Verify that the valid mask is correct
+
+    for p in parted:
+        df = p.to_pandas()
+        print(df)
+    print('=======')
+    for p in parted:
+        df = p.to_pandas()
+        print(df)
+        for row in df.itertuples():
+            valid = bool(bytemask[row.key])
+            expected_value = row.key + 100 if valid else -1
+            got_value = row.val
+            print(bytemask)
+            print(row)
+            assert expected_value == got_value
+
 
 def test_dataframe_empty_concat():
     gdf1 = DataFrame()
