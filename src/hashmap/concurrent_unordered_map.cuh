@@ -437,25 +437,25 @@ public:
     __forceinline__ __host__ __device__
     void update_existing_value(mapped_type & existing_value, value_type const & insert_pair, count_op<int32_t> op)
     {
-      atomicAdd(&existing_value, 1);
+      atomicAdd(&existing_value, static_cast<int32_t>(1));
     }
     // Specialization for COUNT aggregator
     __forceinline__ __host__ __device__
     void update_existing_value(mapped_type & existing_value, value_type const & insert_pair, count_op<int64_t> op)
     {
-      atomicAdd(&existing_value, 1);
+      atomicAdd(&existing_value, static_cast<int64_t>(1));
     }
     // Specialization for COUNT aggregator
     __forceinline__ __host__ __device__
     void update_existing_value(mapped_type & existing_value, value_type const & insert_pair, count_op<float> op)
     {
-      atomicAdd(&existing_value, 1);
+      atomicAdd(&existing_value, static_cast<float>(1));
     }
     // Specialization for COUNT aggregator
     __forceinline__ __host__ __device__
     void update_existing_value(mapped_type & existing_value, value_type const & insert_pair, count_op<double> op)
     {
-      atomicAdd(&existing_value, 1);
+      atomicAdd(&existing_value, static_cast<double>(1));
     }
 
     /* --------------------------------------------------------------------------*/
