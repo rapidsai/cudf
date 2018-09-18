@@ -1055,7 +1055,7 @@ class DataFrame(object):
         names = list(self._cols.keys())
         key_indices = [names.index(k) for k in columns]
         # Allocate output buffers
-        outputs = [col.copy_data() for col in cols]
+        outputs = [col.copy() for col in cols]
         # Call hash_partition
         offsets = _gdf.hash_partition(cols, key_indices, nparts, outputs)
         # Re-construct output partitions

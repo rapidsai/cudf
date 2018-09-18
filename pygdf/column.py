@@ -203,6 +203,17 @@ class Column(object):
             raise ValueError(msg)
         return self.replace(mask=mask, null_count=null_count)
 
+    def allocate_mask(self, all_valid=True):
+        """Return a new Column with a newly allocated mask buffer.
+        If ``all_valid`` is True, the new mask is set to all valid.
+        If ``all_valid`` is False, the new mask is set to all null.
+        """
+        nelem = len(self)
+        mask_sz = utils.calc_chunk_size(nelem, utils.mask_bitsize)
+        mask = cuda.device_array(mask_sz, dtype=utils.mask_dtype)
+        cudautils.fill_value(mask, 0xff if all_valid else 0)
+        return self.set_mask(mask=mask, null_count=0 if all_valid else nelem)
+
     def to_gpu_array(self, fillna=None):
         """Get a dense numba device array for the data.
 
@@ -270,7 +281,20 @@ class Column(object):
         return params
 
     def copy_data(self):
+        """Copy the column with a new allocation of the data but not the mask,
+        which is shared by the new column.
+        """
         return self.replace(data=self.data.copy())
+
+    def copy(self):
+        """Copy the column with a new allocation of the data and mask.
+        """
+        copied = self.copy_data()
+        if self.has_null_mask:
+            return copied.set_mask(mask=self.mask.copy(),
+                                   null_count=self.null_count)
+        else:
+            return copied.allocate_mask()
 
     def replace(self, **kwargs):
         """Replace attibutes of the class and return a new Column.
