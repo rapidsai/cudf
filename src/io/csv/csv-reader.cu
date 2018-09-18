@@ -52,6 +52,7 @@
 #include "gdf/gdf_io.h"
 
 
+
 constexpr int32_t HASH_SEED = 33;
 
 using namespace std;
@@ -59,11 +60,6 @@ using namespace std;
 //-- define the structure for raw data handling - for internal use
 typedef struct raw_csv_ {
     char *				data;			// on-device: the raw unprocessed CSV data - loaded as a large char * array
-    uint64_t *			rec_bits;		// on-device: bitmap indicator of there a record break is located
-    uint64_t *			field_bits;		// on-device: bitmap of where a field break is located (delimiter)
-    int	*				recPerChunck;	// on-device: Number of records per bitmap chunks
-    long * 				offsets;		// on-device: index of record - for multiple records per chunks it is starting index
-
     long*				d_num_records;	// on-device: Number of records.
     long*				recStart;		// on-device: Starting position of the records.
 
@@ -114,10 +110,6 @@ gdf_error allocateTypeN(void *gpu, long N);
 //
 //---------------CUDA Kernel ---------------------------------------------
 //
-gdf_error launch_determineRecAndFields(raw_csv_t * data);  // breaks out fields and computed blocks - make main code cleaner
-
-__global__ void determineRecAndFields(char *data, uint64_t * r_bits, uint64_t *f_bits, const char delim, long num_bytes, long num_bits, int * rec_count);
-
 
 __device__ int findSetBit(int tid, long num_bits, uint64_t *f_bits, int x);
 
@@ -144,8 +136,9 @@ __device__ int whichBit(int bit) { return (bit % 8);  }
 
 __inline__ __device__ void validAtomicOR(gdf_valid_type* address, gdf_valid_type val)
 {
-	int32_t *base_address = (int32_t*)((gdf_valid_type*)address - ((size_t)address & 3));	
+	int32_t *base_address = (int32_t*)((gdf_valid_type*)address - ((int32_t)address & 3));
 	int32_t int_val = (int32_t)val << (((size_t) address & 3) * 8);
+
 	atomicOr(base_address, int_val);
 }
 
@@ -207,7 +200,9 @@ gdf_error read_csv(csv_read_arg *args)
 	//-----------------------------------------------------------------------------
 	//-- Allocate space to hold the record starting point
 
+
 	CUDA_TRY( cudaMallocManaged ((void**)&raw_csv->recStart,(sizeof(long) * (raw_csv->num_records + 1))) );
+
 	CUDA_TRY( cudaMemset(raw_csv->recStart, 		0, 		(sizeof(long) * (raw_csv->num_records + 1))) );
 	CUDA_TRY( cudaMemset(raw_csv->d_num_records,	0, 		(sizeof(long) )) ) ;
 
@@ -283,6 +278,8 @@ gdf_error read_csv(csv_read_arg *args)
 	}
 
 	cudaFree(d_data);
+	cudaFree(d_valid);
+	cudaFree(str_cols);
 
 	error = freeCsvData(raw_csv->data);
 	checkError(error, "call to cudaFree(raw_csv->data)" );
@@ -390,19 +387,10 @@ gdf_error updateRawCsv( const char * data, long num_bytes, raw_csv_t * raw ) {
 	int num_bits = (num_bytes + 63) / 64;
 
 	CUDA_TRY(cudaMallocManaged ((void**)&raw->data, 		(sizeof(char)		* num_bytes)));
-	CUDA_TRY(cudaMallocManaged ((void**)&raw->rec_bits, 	(sizeof(uint64_t)	* num_bits)));
-	CUDA_TRY(cudaMallocManaged ((void**)&raw->field_bits, 	(sizeof(uint64_t)	* num_bits)));
-	CUDA_TRY(cudaMallocManaged ((void**)&raw->recPerChunck,	(sizeof(int) 		* num_bits)) );
-	CUDA_TRY(cudaMallocManaged ((void**)&raw->offsets, 		((sizeof(long)		* num_bits) + 2)) );
 
 	CUDA_TRY(cudaMallocManaged ((void**)&raw->d_num_records, sizeof(long)) );
 
 	CUDA_TRY(cudaMemcpy(raw->data, data, num_bytes, cudaMemcpyHostToDevice));
-	
-	CUDA_TRY( cudaMemset(raw->rec_bits, 	0, (sizeof(uint64_t) 	* num_bits)) );
-	CUDA_TRY( cudaMemset(raw->field_bits, 	0, (sizeof(uint64_t) 	* num_bits)) );
-	CUDA_TRY( cudaMemset(raw->recPerChunck, 0, (sizeof(int) 		* num_bits)) );
-	CUDA_TRY( cudaMemset(raw->offsets, 		0, ((sizeof(long) 		* num_bits) + 2)) );
 
 	CUDA_TRY( cudaMemset(raw->d_num_records,0, ((sizeof(long)) )) );
 
@@ -418,7 +406,7 @@ gdf_error updateRawCsv( const char * data, long num_bytes, raw_csv_t * raw ) {
 gdf_error allocateGdfDataSpace(gdf_column *gdf) {
 
 	long N = gdf->size;
-	int num_bitmaps = (N + 7) / 8;			// 8 bytes per bitmap
+	long num_bitmaps = (N + 31) / 8;			// 8 bytes per bitmap
 
 	//--- allocate space for the valid bitmaps
 	CUDA_TRY(cudaMallocManaged(&gdf->valid, (sizeof(gdf_valid_type) 	* num_bitmaps)));
@@ -471,10 +459,8 @@ gdf_error allocateGdfDataSpace(gdf_column *gdf) {
 
 gdf_error freeCSVSpace(raw_csv_t * raw_csv)
 {
-	CUDA_TRY(cudaFree(raw_csv->rec_bits));
-	CUDA_TRY(cudaFree(raw_csv->field_bits));
-	CUDA_TRY(cudaFree(raw_csv->recPerChunck));
-	CUDA_TRY(cudaFree(raw_csv->offsets));
+
+	CUDA_TRY(cudaFree(raw_csv->d_num_records));
 
 	return gdf_error::GDF_SUCCESS;
 }
@@ -493,86 +479,7 @@ gdf_error freeCsvData(char *data)
 //----------------------------------------------------------------------------------------------------------------
 
 //----------------------------------------------------------------------------------------------------------------
-gdf_error launch_determineRecAndFields(raw_csv_t * csvData) {
 
-	char 		*data 		= csvData->data;
-	uint64_t 	*r_bits		= csvData->rec_bits;
-	uint64_t 	*f_bits		= csvData->field_bits;
-	long 		num_bytes	= csvData->num_bytes;
-	int			*rec_count	= csvData->recPerChunck;
-	long 		numBitmaps 	= csvData->num_bits;
-	char		delim		= csvData->delimiter;
-
-
-	/*
-	 * Each bi map is for a 64-byte chunk, and technically we could do a thread per 64-bytes.
-	 * However, that doesn't seem efficient.
-
-	 *      Note: could do one thread per byte, but that would require a lock on the bit map
-	 *
-	 */
-	int threads 	= 1024;
-
-	// Using the number of bitmaps as the size - data index is bitmap ID * 64
-	int blocks = (numBitmaps + (threads -1)) / threads ;
-
-	determineRecAndFields <<< blocks, threads >>> (data, r_bits, f_bits, delim, num_bytes, numBitmaps, rec_count);
-
-	CUDA_TRY(cudaGetLastError());
-	return GDF_SUCCESS;
-}
-
-
-__global__ void determineRecAndFields(char *data, uint64_t * r_bits, uint64_t *f_bits, const char delim, long num_bytes, long num_bits, int * rec_count) {
-
-	// thread IDs range per block, so also need the block id
-	long tid = threadIdx.x + (blockDim.x * blockIdx.x);
-
-	if ( tid >= num_bits)
-		return;
-
-	// data ID - multiple of 64
-	long did = tid * 64;
-
-	char *raw = (data + did);
-
-	int byteToProcess = ((did + 64) < num_bytes) ? 64 : (num_bytes - did);
-	uint64_t r_bits_local = 0;
-
-	// process the data
-	int x = 0;
-	for (x = 0; x < byteToProcess; x++) {
-
-		// fields
-		if (raw[x] == delim) {
-			f_bits[tid] |= 1UL << x;
-		} else {
-			// records
-			if (raw[x] == '\n') {
-				r_bits_local |= 1UL << x;
-
-			}	else if (raw[x] == '\r' && raw[x +1] == '\n') {
-				x++;
-				r_bits_local |= 1UL << x;
-			}
-		}
-	}
-
-	// save the number of records detected within this block
-	uint64_t bitmap = r_bits_local;
-	int rec_count_local = 0;
-	while (bitmap)
-	{
-		rec_count_local += bitmap & 1;
-		bitmap >>= 1;
-	 }
-
-	if ( tid == 0 )
-		++rec_count_local;
-
-	rec_count[tid] = rec_count_local;
-	r_bits[tid] = r_bits_local;
-}
 
 gdf_error launch_countRecords(raw_csv_t * csvData) {
 
@@ -602,6 +509,7 @@ gdf_error launch_countRecords(raw_csv_t * csvData) {
 	CUDA_TRY(cudaMemcpy(&recs, d_num_records, sizeof(long), cudaMemcpyDeviceToHost));
 	csvData->num_records=recs;
 
+
 	CUDA_TRY(cudaGetLastError());
 
 	return GDF_SUCCESS;
@@ -617,14 +525,14 @@ __global__ void countRecords(char *data, const char delim, const char terminator
 		return;
 
 	// data ID is a multiple of 64
-	long did = tid * 64;
+	long did = tid * 64L;
 
 	char *raw = (data + did);
 
-	int byteToProcess = ((did + 64) < num_bytes) ? 64 : (num_bytes - did);
+	long byteToProcess = ((did + 64L) < num_bytes) ? 64L : (num_bytes - did);
 
 	// process the data
-	int x = 0;
+	long x = 0;
 	long newLinesFound=0;
 	for (x = 0; x < byteToProcess; x++) {
 
@@ -656,10 +564,10 @@ gdf_error launch_storeRecordStart(raw_csv_t * csvData) {
 	 * Each bitmap is for a 64-byte chunk
 	 *  Note: could do one thread per byte, but that would require a lock on the bit map
 	 */
-	int threads 	= 1024;
+	long threads 	= 1024;
 
 	// Using the number of bitmaps as the size - data index is bitmap ID * 64
-	int blocks = (numBitmaps + (threads -1)) / threads ;
+	long blocks = (numBitmaps + (threads -1)) / threads ;
 
 	storeRecordStart <<< blocks, threads >>> (data, delim, terminator, num_bytes, numBitmaps,d_num_records,recStart);
 
@@ -677,11 +585,11 @@ __global__ void storeRecordStart(char *data, const char delim, const char termin
 		return;
 
 	// data ID - multiple of 64
-	long did = tid * 64;
+	long did = tid * 64L;
 
 	char *raw = (data + did);
 
-	int byteToProcess = ((did + 64) < num_bytes) ? 64 : (num_bytes - did);
+	long byteToProcess = ((did + 64L) < num_bytes) ? 64L : (num_bytes - did);
 
 	if(tid==0){
 		long pos = atomicAdd((unsigned long long int*)num_records,(unsigned long long int)1);
@@ -689,7 +597,7 @@ __global__ void storeRecordStart(char *data, const char delim, const char termin
 	}
 
 	// process the data
-	int x = 0;
+	long x = 0;
 	for (x = 0; x < byteToProcess; x++) {
 
 		// records
@@ -856,9 +764,13 @@ __global__ void convertCsvToGdfNew(
 					break;
 			}
 
-				// set the valid bitmap - all bits were set to 0 to start
-				int bitmapIdx 	= whichBitmap(rec_id + col);  	// which bitmap
-				int bitIdx		= whichBit(rec_id + col);		// which bit - over an 8-bit index
+				// // set the valid bitmap - all bits were set to 0 to start
+				// int bitmapIdx 	= whichBitmap(rec_id + col);  	// which bitmap
+				// int bitIdx		= whichBit(rec_id + col);		// which bit - over an 8-bit index
+				// // setBit(valid[col]+bitmapIdx, bitIdx);		// This is done with atomics
+
+				int bitmapIdx 	= whichBitmap(rec_id);  	// which bitmap
+				int bitIdx		= whichBit(rec_id);		// which bit - over an 8-bit index
 				setBit(valid[col]+bitmapIdx, bitIdx);		// This is done with atomics
 
 		}
@@ -866,10 +778,6 @@ __global__ void convertCsvToGdfNew(
 			str_cols[stringCol][rec_id].first 	= NULL;
 			str_cols[stringCol][rec_id].second 	= 0;
 			stringCol++;
-			if(threadIdx.x==0&&blockIdx.x==0){
-				printf("^^^^ %d %ld 0 \n", col, start);	
-			}
-
 		}
 
 		pos++;
