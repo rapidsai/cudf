@@ -30,6 +30,8 @@
 #include <gdf/cffi/functions.h>
 
 #include "gdf_test_utils.cuh"
+#include "gdf_test_fixtures.h"
+
 #include "../../gdf_table.cuh"
 #include "../../hashmap/hash_functions.cuh"
 #include "../../int_fastdiv.h"
@@ -58,7 +60,7 @@ struct row_partition_mapper
 
 // Put all repeated setup and validation stuff here
 template <class test_parameters>
-struct HashPartitionTest : public testing::Test
+struct HashPartitionTest : public GdfTest
 {
 
   constexpr static gdf_hash_func gdf_hash_function = test_parameters::gdf_hash_function;

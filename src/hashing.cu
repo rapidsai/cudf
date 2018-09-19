@@ -17,7 +17,6 @@
 #include <gdf/gdf.h>
 #include <gdf/errorutils.h>
 #include <thrust/tabulate.h>
-#include <thrust/device_vector.h>
 
 #include "join/joining.h"
 #include "gdf_table.cuh"

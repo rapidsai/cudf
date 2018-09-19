@@ -34,6 +34,8 @@
 
 #include "gtest/gtest.h"
 
+#include "gdf_test_fixtures.h"
+
 #include "quantiles.hpp"
 
 template<typename T, typename Allocator, template<typename, typename> class Vector>
@@ -77,8 +79,9 @@ void f_quantile_tester(gdf_column* col_in, std::vector<VType>& v_out_exact, std:
     }
 }
 
+struct gdf_quantile : public GdfTest {};
 
-TEST(gdf_quantile_d, DoubleVector)
+TEST_F(gdf_quantile, DoubleVector)
 {
   using VType = double;
   std::vector<VType> v{6.8, 0.15, 3.4, 4.17, 2.13, 1.11, -1.01, 0.8, 5.7};
@@ -123,7 +126,7 @@ TEST(gdf_quantile_d, DoubleVector)
     }
 }
 
-TEST(gdf_quantile_i, IntegerVector)
+TEST_F(gdf_quantile, IntegerVector)
 {
   using VType = int32_t;
   std::vector<VType> v{7, 0, 3, 4, 2, 1, -1, 1, 6};;

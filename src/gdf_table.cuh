@@ -27,6 +27,12 @@
 #include "sqls_rtti_comp.hpp"
 
 
+#include "thrust_rmm_allocator.h"
+
+// Vector set to use rmmAlloc and rmmFree.
+template <typename T>
+using Vector = thrust::device_vector<T, rmm_allocator<T>>;
+
 /* --------------------------------------------------------------------------*/
 /** 
  * @Synopsis  Computes the validity mask for the rows in the gdf_table.
@@ -204,10 +210,14 @@ public:
     const size_type mask_size = gdf_get_num_chars_bitmask(column_length);
     device_row_valid.resize(mask_size);
 
+    rmm_temp_allocator allocator(0); // todo: non-default stream?
+	  auto exec = thrust::cuda::par(allocator).on(0);
+
     // If a row contains a single NULL value, then the entire row is considered
     // to be NULL, therefore initialize the row-validity mask with the 
     // bit-wise AND of the validity mask of all the columns
-    thrust::tabulate(device_row_valid.begin(),
+    thrust::tabulate(exec,
+                     device_row_valid.begin(),
                      device_row_valid.end(),
                      row_masker<size_type>(d_columns_valids, num_cols));
 
@@ -1140,7 +1150,10 @@ gdf_error scatter_column(column_type const * const __restrict__ input_column,
 
   gdf_error gdf_status{GDF_SUCCESS};
 
-  thrust::scatter(thrust::cuda::par.on(stream),
+  rmm_temp_allocator allocator(stream);
+	auto exec = thrust::cuda::par(allocator).on(stream);
+
+  thrust::scatter(exec,
                   input_column,
                   input_column + num_rows,
                   row_scatter_map,
@@ -1157,16 +1170,16 @@ gdf_error scatter_column(column_type const * const __restrict__ input_column,
 
   gdf_column ** host_columns{nullptr};  /** The set of gdf_columns that this table wraps */
 
-  thrust::device_vector<void*> device_columns_data; /** Device array of pointers to each columns data */
+  Vector<void*> device_columns_data; /** Device array of pointers to each columns data */
   void ** d_columns_data{nullptr};                  /** Raw pointer to the device array's data */
 
-  thrust::device_vector<gdf_valid_type*> device_columns_valids;  /** Device array of pointers to each columns validity bitmask*/
+  Vector<gdf_valid_type*> device_columns_valids;  /** Device array of pointers to each columns validity bitmask*/
   gdf_valid_type** d_columns_valids{nullptr};                   /** Raw pointer to the device array's data */
 
-  thrust::device_vector<gdf_valid_type> device_row_valid;  /** Device array of bitmask for the validity of each row. */
+  Vector<gdf_valid_type> device_row_valid;  /** Device array of bitmask for the validity of each row. */
   gdf_valid_type * d_row_valid{nullptr};                   /** Raw pointer to device array's data */
 
-  thrust::device_vector<gdf_dtype> device_columns_types; /** Device array of each columns data type */
+  Vector<gdf_dtype> device_columns_types; /** Device array of each columns data type */
   gdf_dtype * d_columns_types{nullptr};                 /** Raw pointer to the device array's data */
 
   size_type row_size_bytes{0};

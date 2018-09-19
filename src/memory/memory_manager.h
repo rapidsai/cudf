@@ -68,7 +68,7 @@ namespace rmm
          *                    if the stream is invalid.
          * ---------------------------------------------------------------------------**/
         rmmError_t registerStream(cudaStream_t stream) { 
-            if (0 == registered_streams.count(stream)) {
+            if (registered_streams.empty() || 0 == registered_streams.count(stream)) {
                 registered_streams.insert(stream);
                 if (stream) // don't register the null stream with CNMem
                     RMM_CHECK_CNMEM( cnmemRegisterStream(stream) );
