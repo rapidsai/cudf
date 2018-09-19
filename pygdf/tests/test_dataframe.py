@@ -585,7 +585,6 @@ def test_dataframe_hash_partition_masked_value(nrows):
     bitmask = utils.random_bitmask(nrows)
     bytemask = utils.expand_bits_to_bytes(bitmask)
     gdf['val'] = gdf['val'].set_mask(bitmask)
-    print(gdf.to_pandas())
     parted = gdf.partition_by_hash(['key'], nparts=3)
     # Verify that the valid mask is correct
     for p in parted:
@@ -605,7 +604,6 @@ def test_dataframe_hash_partition_masked_keys(nrows):
     bitmask = utils.random_bitmask(nrows)
     bytemask = utils.expand_bits_to_bytes(bitmask)
     gdf['key'] = gdf['key'].set_mask(bitmask)
-    print(gdf.to_pandas())
     parted = gdf.partition_by_hash(['key'], nparts=3)
     # Verify that the valid mask is correct
     for p in parted:
