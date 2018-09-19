@@ -1057,15 +1057,11 @@ class DataFrame(object):
         # Allocate output buffers
         outputs = [col.copy() for col in cols]
         # Call hash_partition
-        for out in outputs:
-            print('out', out.cffi_view.valid)
         offsets = _gdf.hash_partition(cols, key_indices, nparts, outputs)
         # Re-construct output partitions
         outdf = DataFrame()
         for k, col in zip(self._cols, outputs):
             outdf[k] = col
-        print('innenrns')
-        print(outdf.to_pandas())
         # Slice into partition
         return [outdf[s:e] for s, e in zip(offsets, offsets[1:] + [None])]
 
