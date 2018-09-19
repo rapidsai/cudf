@@ -398,7 +398,7 @@ class DataFrame(object):
             self._size = len(series)
             return series
         else:
-            raise NotImplementedError("join needed")
+            return series.set_index(self._index)
 
     def add_column(self, name, data, forceindex=False):
         """Add a column

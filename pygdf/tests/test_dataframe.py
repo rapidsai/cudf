@@ -628,6 +628,22 @@ def test_dataframe_empty_concat():
     assert len(gdf3.columns) == 2
 
 
+@pytest.mark.parametrize('nrows', [0, 3, 10, 100, 1000])
+def test_nonmatching_index_setitem(nrows):
+    np.random.seed(0)
+
+    gdf = DataFrame()
+    gdf['a'] = np.random.randint(2147483647, size=nrows)
+    gdf['b'] = np.random.randint(2147483647, size=nrows)
+    gdf = gdf.set_index('b')
+
+    test_values = np.random.randint(2147483647, size=nrows)
+    gdf['c'] = test_values
+    assert(len(test_values) == len(gdf['c']))
+    assert(gdf['c'].to_pandas().equals(
+        Series(test_values).set_index(gdf._index).to_pandas()))
+
+
 @pytest.mark.parametrize('nelem', [0, 1, 5, 20, 100])
 @pytest.mark.parametrize('slice_start', [None, 0, 1, 3, 10])
 @pytest.mark.parametrize('slice_end', [None, 0, 1, 30, 50, -1])
