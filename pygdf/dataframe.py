@@ -471,7 +471,7 @@ class DataFrame(object):
             raise ValueError('all columns must have the same dtype')
         for k, c in self._cols.items():
             if c.has_null_mask:
-                errmsg = ("column {!r} has null values"
+                errmsg = ("column {!r} has null values. "
                           "hint: use .fillna() to replace null values")
                 raise ValueError(errmsg.format(k))
 
@@ -1055,7 +1055,7 @@ class DataFrame(object):
         names = list(self._cols.keys())
         key_indices = [names.index(k) for k in columns]
         # Allocate output buffers
-        outputs = [col.copy_data() for col in cols]
+        outputs = [col.copy() for col in cols]
         # Call hash_partition
         offsets = _gdf.hash_partition(cols, key_indices, nparts, outputs)
         # Re-construct output partitions
