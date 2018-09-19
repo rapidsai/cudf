@@ -23,17 +23,33 @@ def unwrap_devary(devary):
 
 def columnview_from_devary(devary, dtype=None):
     return _columnview(size=devary.size,  data=unwrap_devary(devary),
-                       mask=ffi.NULL, dtype=dtype or devary.dtype)
+                       mask=ffi.NULL, dtype=dtype or devary.dtype,
+                       null_count=0)
 
 
-def _columnview(size, data, mask, dtype):
+def _columnview(size, data, mask, dtype, null_count):
     colview = ffi.new('gdf_column*')
-    libgdf.gdf_column_view(colview, data, mask, size,
-                           np_to_gdf_dtype(dtype))
+    if null_count is None:
+        libgdf.gdf_column_view(
+            colview,
+            data,
+            mask,
+            size,
+            np_to_gdf_dtype(dtype),
+            )
+    else:
+        libgdf.gdf_column_view_augmented(
+            colview,
+            data,
+            mask,
+            size,
+            np_to_gdf_dtype(dtype),
+            null_count,
+            )
     return colview
 
 
-def columnview(size, data, mask=None, dtype=None):
+def columnview(size, data, mask=None, dtype=None, null_count=None):
     """
     Make a column view.
 
@@ -55,9 +71,11 @@ def columnview(size, data, mask=None, dtype=None):
         devary = buffer.to_gpu_array()
         return unwrap_devary(devary)
 
+    if mask is not None:
+        assert null_count is not None
     dtype = dtype or data.dtype
     return _columnview(size=size, data=unwrap(data), mask=unwrap(mask),
-                       dtype=dtype)
+                       dtype=dtype, null_count=null_count)
 
 
 def apply_binaryop(binop, lhs, rhs, out):
@@ -330,9 +348,6 @@ def hash_partition(input_columns, key_indices, nparts, output_columns):
         Each index indicates the start of a partition.
     """
     assert len(input_columns) == len(output_columns)
-    for col in input_columns:
-        if col.null_count != 0:
-            raise ValueError('cannot handle masked column')
 
     col_inputs = [col.cffi_view for col in input_columns]
     col_outputs = [col.cffi_view for col in output_columns]

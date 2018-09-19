@@ -577,6 +577,45 @@ def test_dataframe_hash_partition(nrows, nparts, nkeys):
     assert len(part_unique_keys)
 
 
+@pytest.mark.parametrize('nrows', [3, 10, 50])
+def test_dataframe_hash_partition_masked_value(nrows):
+    gdf = DataFrame()
+    gdf['key'] = np.arange(nrows)
+    gdf['val'] = np.arange(nrows) + 100
+    bitmask = utils.random_bitmask(nrows)
+    bytemask = utils.expand_bits_to_bytes(bitmask)
+    gdf['val'] = gdf['val'].set_mask(bitmask)
+    parted = gdf.partition_by_hash(['key'], nparts=3)
+    # Verify that the valid mask is correct
+    for p in parted:
+        df = p.to_pandas()
+        for row in df.itertuples():
+            valid = bool(bytemask[row.key])
+            expected_value = row.key + 100 if valid else -1
+            got_value = row.val
+            assert expected_value == got_value
+
+
+@pytest.mark.parametrize('nrows', [3, 10, 50])
+def test_dataframe_hash_partition_masked_keys(nrows):
+    gdf = DataFrame()
+    gdf['key'] = np.arange(nrows)
+    gdf['val'] = np.arange(nrows) + 100
+    bitmask = utils.random_bitmask(nrows)
+    bytemask = utils.expand_bits_to_bytes(bitmask)
+    gdf['key'] = gdf['key'].set_mask(bitmask)
+    parted = gdf.partition_by_hash(['key'], nparts=3)
+    # Verify that the valid mask is correct
+    for p in parted:
+        df = p.to_pandas()
+        for row in df.itertuples():
+            valid = bool(bytemask[row.val - 100])
+            # val is key + 100
+            expected_value = row.val - 100 if valid else -1
+            got_value = row.key
+            assert expected_value == got_value
+
+
 def test_dataframe_empty_concat():
     gdf1 = DataFrame()
     gdf1['a'] = []
@@ -587,3 +626,22 @@ def test_dataframe_empty_concat():
     gdf3 = gd.concat([gdf1, gdf2])
     assert len(gdf3) == 0
     assert len(gdf3.columns) == 2
+
+
+@pytest.mark.parametrize('nelem', [0, 1, 5, 20, 100])
+@pytest.mark.parametrize('slice_start', [None, 0, 1, 3, 10])
+@pytest.mark.parametrize('slice_end', [None, 0, 1, 30, 50, -1])
+def test_dataframe_masked_slicing(nelem, slice_start, slice_end):
+    gdf = DataFrame()
+    gdf['a'] = list(range(nelem))
+    gdf['b'] = list(range(nelem, 2 * nelem))
+    gdf['a'] = gdf['a'].set_mask(utils.random_bitmask(nelem))
+    gdf['b'] = gdf['b'].set_mask(utils.random_bitmask(nelem))
+
+    def do_slice(x):
+        return x[slice_start: slice_end]
+
+    expect = do_slice(gdf.to_pandas())
+    got = do_slice(gdf).to_pandas()
+
+    pd.testing.assert_frame_equal(expect, got)
