@@ -111,11 +111,12 @@ void scatter_valid_mask( gdf_valid_type const * const input_mask,
     // Only scatter the input bit if it is valid
     if(input_bit > 0)
     {
+      const size_type output_row = scatter_map[row_number];
       // Set the according output bit
-      const mask_type output_bit = static_cast<mask_type>(1) << (scatter_map[row_number] % BITS_PER_MASK);
+      const mask_type output_bit = static_cast<mask_type>(1) << (output_row % BITS_PER_MASK);
 
       // Find the mask in the output that will hold the bit for the scattered row
-      const size_type output_location = scatter_map[row_number] / BITS_PER_MASK;
+      const size_type output_location = output_row / BITS_PER_MASK;
 
       // Bitwise OR to set the scattered row's bit
       atomicOr(&output_mask32[output_location], output_bit);
