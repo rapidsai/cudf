@@ -17,9 +17,11 @@
 #ifndef GROUPBY_KERNELS_H
 #define GROUPBY_KERNELS_H
 
+#include <gdf/utils.h>
 #include "../../hashmap/concurrent_unordered_map.cuh"
 #include "aggregation_operations.cuh"
 #include "../../gdf_table.cuh"
+
 
 /* --------------------------------------------------------------------------*/
 /** 
@@ -47,6 +49,7 @@ template<typename map_type,
 __global__ void build_aggregation_table(map_type * const __restrict__ the_map,
                                         gdf_table<size_type> const & groupby_input_table,
                                         const aggregation_type * const __restrict__ aggregation_column,
+                                        gdf_valid_type const * const __restrict__ aggregation_validitity_mask,
                                         size_type column_size,
                                         aggregation_operation op,
                                         row_comparator the_comparator)
@@ -56,7 +59,7 @@ __global__ void build_aggregation_table(map_type * const __restrict__ the_map,
   while( i < column_size ){
 
     // Only insert into the hash table if the row is valid
-    if( groupby_input_table.is_row_valid(i) )
+    if( groupby_input_table.is_row_valid(i)  && gdf_is_valid(aggregation_validitity_mask,i))
     {
       // Hash the current row of the input table
       const auto row_hash = groupby_input_table.hash_row(i);
@@ -85,6 +88,7 @@ template<typename map_type,
 __global__ void build_aggregation_table(map_type * const __restrict__ the_map,
                                         gdf_table<size_type> const & groupby_input_table,
                                         const aggregation_type * const __restrict__ aggregation_column,
+                                        gdf_valid_type const * const __restrict__ aggregation_validitity_mask,
                                         size_type column_size,
                                         count_op<typename map_type::mapped_type> op,
                                         row_comparator the_comparator)
@@ -94,7 +98,7 @@ __global__ void build_aggregation_table(map_type * const __restrict__ the_map,
   while( i < column_size ){
 
     // Only insert into the hash table if the the row is valid
-    if(groupby_input_table.is_row_valid(i))
+    if(groupby_input_table.is_row_valid(i) && gdf_is_valid(aggregation_validitity_mask, i))
     {
       // Hash the current row of the input table
       const auto row_hash = groupby_input_table.hash_row(i);

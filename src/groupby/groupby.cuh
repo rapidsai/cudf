@@ -58,6 +58,7 @@ gdf_error typed_groupby(gdf_table<size_type> const & groupby_input_table,
 
   gdf_error gdf_error_code = GroupbyHash(groupby_input_table, 
                                          in_agg_col, 
+                                         in_aggregation_column->valid,
                                          groupby_output_table, 
                                          out_agg_col, 
                                          &output_size, 
