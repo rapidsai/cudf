@@ -95,7 +95,7 @@ void scatter_valid_mask( gdf_valid_type const * const input_mask,
                          size_type const num_rows)
 {
   using mask_type = uint32_t;
-  constexpr int BITS_PER_MASK = 8 * sizeof(mask_type);
+  constexpr uint32_t BITS_PER_MASK = 8 * sizeof(mask_type);
 
   // Cast the validity type to a type where atomicOr is natively supported
   const mask_type * __restrict__ input_mask32 = reinterpret_cast<mask_type const *>(input_mask);
@@ -106,13 +106,21 @@ void scatter_valid_mask( gdf_valid_type const * const input_mask,
   while(row_number < num_rows)
   {
     // Get the bit corresponding to the row
-    const mask_type input_bit = input_mask32[row_number/BITS_PER_MASK] & (mask_type(1) << (row_number % BITS_PER_MASK));
+    const mask_type input_bit = input_mask32[row_number/BITS_PER_MASK] & (static_cast<mask_type>(1) << (row_number % BITS_PER_MASK));
 
-    // Find the mask in the output that will hold the bit for the scattered row
-    const size_type output_location = scatter_map[row_number] / BITS_PER_MASK;
+    // Only scatter the input bit if it is valid
+    if(input_bit > 0)
+    {
+      const size_type output_row = scatter_map[row_number];
+      // Set the according output bit
+      const mask_type output_bit = static_cast<mask_type>(1) << (output_row % BITS_PER_MASK);
 
-    // Bitwise OR to set the scattered row's bit
-    atomicOr(&output_mask32[output_location], input_bit);
+      // Find the mask in the output that will hold the bit for the scattered row
+      const size_type output_location = output_row / BITS_PER_MASK;
+
+      // Bitwise OR to set the scattered row's bit
+      atomicOr(&output_mask32[output_location], output_bit);
+    }
 
     row_number += blockDim.x * gridDim.x;
   }
