@@ -60,7 +60,7 @@ def test_groupby_mean(method, nelem):
 @pytest.mark.parametrize('nelem', [0, 2, 3, 100, 1000])
 @pytest.mark.parametrize('lvls', [['z'], ['null_z'], ['allnull']])
 def test_groupby_mean_3level(method, nelem, lvls):
-    bys = ['x', 'y'] + [lvls]
+    bys = ['x', 'y'] + lvls
     # gdf
     got_df = make_frame(DataFrame, nelem=nelem,
                         extra_levels=lvls).groupby(bys, method=method).mean()
@@ -242,7 +242,7 @@ def test_groupby_pygdf_apply_grouped():
     pytest.param('var', marks=pytest.mark.xfail(reason="not implemented yet"))
 ])
 def test_groupby_2keys_agg(method, nelem, func, lvls, vals):
-    bys = ['x', 'y'] + [lvls]
+    bys = ['x', 'y'] + lvls
     # gdf (Note: lack of multindex)
     got_df = make_frame(DataFrame, nelem=nelem,
                         extra_levels=lvls, extra_vals=vals)\
