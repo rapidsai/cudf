@@ -14,9 +14,12 @@
  * limitations under the License.
  */
 
-/*
- * The code  uses the Thrust library
+/**
+ * @file csv-reader.cu  code to read csv data
+ *
+ * CSV Reader
  */
+
 
 #include <cuda_runtime.h>
 
@@ -50,8 +53,6 @@
 #include <gdf/errorutils.h>
  
 #include "gdf/gdf_io.h"
-
-
 
 constexpr int32_t HASH_SEED = 33;
 
@@ -96,16 +97,8 @@ gdf_error allocateGdfDataSpace(gdf_column *);
 
 gdf_dtype convertStringToDtype(std::string &dtype);
 
-
-gdf_error freeCSVSpace(raw_csv_t * raw_csv);
-
-gdf_error freeCsvData(char *data);
-
 #define checkError(error, txt)  if ( error != GDF_SUCCESS) { cerr << "ERROR:  " << error <<  "  in "  << txt << endl;  return error; }
 
-
-template<typename T> 
-gdf_error allocateTypeN(void *gpu, long N);
 
 //
 //---------------CUDA Kernel ---------------------------------------------
@@ -113,12 +106,10 @@ gdf_error allocateTypeN(void *gpu, long N);
 
 __device__ int findSetBit(int tid, long num_bits, uint64_t *f_bits, int x);
 
-
 gdf_error launch_countRecords(raw_csv_t * csvData);
 gdf_error launch_storeRecordStart(raw_csv_t * csvData);
 
 gdf_error launch_dataConvertColumnsNew(raw_csv_t * raw_csv, void** d_gdf,  gdf_valid_type** valid, gdf_dtype* d_dtypes, string_pair	**str_cols, int row_offset);
-
 
 __global__ void countRecords(char *data, const char delim, const char terminator, long num_bytes, long num_bits, long* num_records);
 __global__ void storeRecordStart(char *data, const char delim, const char terminator, long num_bytes, long num_bits, long* num_records,long* recStart) ;
@@ -132,7 +123,6 @@ __device__ void removePrePostWhiteSpaces2(char *data, long* start_idx, long* end
 //
 __device__ int whichBitmap(int record) { return (record/8);  }
 __device__ int whichBit(int bit) { return (bit % 8);  }
-
 
 __inline__ __device__ void validAtomicOR(gdf_valid_type* address, gdf_valid_type val)
 {
@@ -151,7 +141,12 @@ __device__ void setBit(gdf_valid_type* address, int bit) {
 
 
 /**
- * main entry point
+ * @brief read in a CSV file
+ *
+ * Read in a CSV file and return a GDF (array of gdf_columns)
+ *
+ * @param args the input arguments, but this also contains the returned data
+ *
  */
 gdf_error read_csv(csv_read_arg *args)
 {
@@ -199,11 +194,7 @@ gdf_error read_csv(csv_read_arg *args)
 
 	//-----------------------------------------------------------------------------
 	//-- Allocate space to hold the record starting point
-
-
 	CUDA_TRY( cudaMallocManaged ((void**)&raw_csv->recStart,(sizeof(long) * (raw_csv->num_records + 1))) );
-
-	CUDA_TRY( cudaMemset(raw_csv->recStart, 		0, 		(sizeof(long) * (raw_csv->num_records + 1))) );
 	CUDA_TRY( cudaMemset(raw_csv->d_num_records,	0, 		(sizeof(long) )) ) ;
 
 	//-----------------------------------------------------------------------------
@@ -218,10 +209,6 @@ gdf_error read_csv(csv_read_arg *args)
 	raw_csv->num_records -= (args->skiprows + args->skipfooter); 
 
 	//-----------------------------------------------------------------------------
-	// free up space that is no longer needed
-	error = freeCSVSpace(raw_csv);
-	checkError(error, "freeing raw_csv_t space");
-
 	//--- allocate space for the results
 	gdf_column **cols = (gdf_column **)malloc( sizeof(gdf_column *) * raw_csv->num_cols);
 
@@ -270,19 +257,22 @@ gdf_error read_csv(csv_read_arg *args)
 		d_valid[col] 	= gdf->valid;
 	}
 
-
 	launch_dataConvertColumnsNew(raw_csv,d_data, d_valid, d_dtypes,str_cols, args->skiprows);
 
 	for (int col = 0; col < stringColCount; col++) {
 		//  TO-DO:  get a string class
+		CUDA_TRY( cudaFree (str_cols [col] ) );
+
 	}
 
-	cudaFree(d_data);
-	cudaFree(d_valid);
-	cudaFree(str_cols);
+	// free up space that is no longer needed
+	CUDA_TRY(cudaFree(raw_csv->d_num_records));
+	CUDA_TRY( cudaFree (str_cols) );
+	CUDA_TRY( cudaFree (d_valid) );
+	CUDA_TRY( cudaFree (d_data) );
+	CUDA_TRY( cudaFree (raw_csv->recStart));
+	CUDA_TRY( cudaFree (raw_csv->data));
 
-	error = freeCsvData(raw_csv->data);
-	checkError(error, "call to cudaFree(raw_csv->data)" );
 	delete raw_csv;
 
 	args->data 			= cols;
@@ -296,7 +286,7 @@ gdf_error read_csv(csv_read_arg *args)
 
 
 
-/**
+/*
  * This creates the basic gdf_coulmn structure
  *
  */
@@ -416,35 +406,27 @@ gdf_error allocateGdfDataSpace(gdf_column *gdf) {
 	switch(gdf->dtype) {
 		case gdf_dtype::GDF_INT8:
 			CUDA_TRY(cudaMallocManaged(&gdf->data, (sizeof(int8_t) * N)));
-			CUDA_TRY(cudaMemset(gdf->data, 0, (sizeof(int8_t) 	* N)) );
 			break;
 		case gdf_dtype::GDF_INT16:
 			CUDA_TRY(cudaMallocManaged(&gdf->data, (sizeof(int16_t) * N)));
-			CUDA_TRY(cudaMemset(gdf->data, 0, (sizeof(int16_t) 	* N)) );
 			break;
 		case gdf_dtype::GDF_INT32:
 			CUDA_TRY(cudaMallocManaged(&gdf->data, (sizeof(int32_t) * N)));
-			CUDA_TRY(cudaMemset(gdf->data, 0, (sizeof(int32_t) 	* N)) );
 			break;
 		case gdf_dtype::GDF_INT64:
 			CUDA_TRY(cudaMallocManaged(&gdf->data, (sizeof(int64_t) * N)));
-			CUDA_TRY(cudaMemset(gdf->data, 0, (sizeof(int64_t) 	* N)) );
 			break;
 		case gdf_dtype::GDF_FLOAT32:
 			CUDA_TRY(cudaMallocManaged(&gdf->data, (sizeof(float) * N)));
-			CUDA_TRY(cudaMemset(gdf->data, 0, (sizeof(float) 	* N)) );
 			break;
 		case gdf_dtype::GDF_FLOAT64:
 			CUDA_TRY(cudaMallocManaged(&gdf->data, (sizeof(double) * N)));
-			CUDA_TRY(cudaMemset(gdf->data, 0, (sizeof(double) 	* N)) );
 			break;
 		case gdf_dtype::GDF_DATE64:
 			CUDA_TRY(cudaMallocManaged(&gdf->data, (sizeof(gdf_date64) * N)));
-			CUDA_TRY(cudaMemset(gdf->data, 0, (sizeof(gdf_date64) 	* N)) );
 			break;
 		case gdf_dtype::GDF_CATEGORY:
 			CUDA_TRY(cudaMallocManaged(&gdf->data, (sizeof(gdf_category) * N)));
-			CUDA_TRY(cudaMemset(gdf->data, 0, (sizeof(gdf_category) 	* N)) );
 			break;
 		case gdf_dtype::GDF_STRING:
 			// Memory for gdf->data allocated by string class eventually
@@ -457,27 +439,8 @@ gdf_error allocateGdfDataSpace(gdf_column *gdf) {
 }
 
 
-gdf_error freeCSVSpace(raw_csv_t * raw_csv)
-{
-
-	CUDA_TRY(cudaFree(raw_csv->d_num_records));
-
-	return gdf_error::GDF_SUCCESS;
-}
-
-
-gdf_error freeCsvData(char *data)
-{
-	CUDA_TRY(cudaFree(data));
-
-	return gdf_error::GDF_SUCCESS;
-
-}
-
 //----------------------------------------------------------------------------------------------------------------
 //				CUDA Kernels
-//----------------------------------------------------------------------------------------------------------------
-
 //----------------------------------------------------------------------------------------------------------------
 
 
@@ -765,10 +728,6 @@ __global__ void convertCsvToGdfNew(
 			}
 
 				// // set the valid bitmap - all bits were set to 0 to start
-				// int bitmapIdx 	= whichBitmap(rec_id + col);  	// which bitmap
-				// int bitIdx		= whichBit(rec_id + col);		// which bit - over an 8-bit index
-				// // setBit(valid[col]+bitmapIdx, bitIdx);		// This is done with atomics
-
 				int bitmapIdx 	= whichBitmap(rec_id);  	// which bitmap
 				int bitIdx		= whichBit(rec_id);		// which bit - over an 8-bit index
 				setBit(valid[col]+bitmapIdx, bitIdx);		// This is done with atomics

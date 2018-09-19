@@ -14,9 +14,11 @@
  * limitations under the License.
  */
 
-/*
- * NOTE:  This code is not meant for converting Graph COO data into CSR
+/**
+ * @file gdf-csr.cu  code to convert a GDF matrix into a CSR
+ *
  */
+
 #include <gdf/gdf.h>
 #include <gdf/errorutils.h>
 #include "gdf/gdf_io.h"
@@ -57,6 +59,17 @@ __device__ int checkBitCSR(gdf_valid_type data, int bit) {
  * Convert a Dense GDF into a CSR GDF
  *
  * Restrictions:  All columns need to be of the same length
+ */
+/**
+ * @brief convert a GDF into a CSR
+ *
+ * Take a matrix in GDF format and convert it into a CSR.  The column major matrix needs to have every column defined.
+ * Passing in a COO datset will be treated as a two column matrix
+ *
+ * @param gdfData the ordered list of columns
+ * @param numCol the number of columns in the gdfData array
+ * @param csrReturn a pointer to the returned data structure
+ *
  */
 gdf_error gdf_to_csr(gdf_column **gdfData, int numCol, csr_gdf *csrReturn) {
 
@@ -108,10 +121,8 @@ gdf_error gdf_to_csr(gdf_column **gdfData, int numCol, csr_gdf *csrReturn) {
     // get the number of elements - NNZ, this is the last item in the array
     CUDA_TRY( cudaMemcpy((void *)&nnz, (void *)&offsets[numRows], sizeof(int64_t), cudaMemcpyDeviceToHost) );
 
-	if ( nnz == 0) {
-		cudaFree(offsets);
+	if ( nnz == 0)
 		return GDF_CUDA_ERROR;
-	}
 
 	//--------------------------------------------------------------------------------------
 	// now start creating output data
@@ -119,9 +130,9 @@ gdf_error gdf_to_csr(gdf_column **gdfData, int numCol, csr_gdf *csrReturn) {
     CUDA_TRY(cudaMallocManaged(&IA, (numRows + 2) * sizeof(gdf_size_type)));
     CUDA_TRY(cudaMemcpy(IA, offsets, ( sizeof(gdf_size_type) * (numRows + 2) ), cudaMemcpyDeviceToDevice) );
 
-    int64_t * JA;
+    int64_t * 	JA;
     CUDA_TRY( cudaMallocManaged(&JA, (sizeof(int64_t) * nnz)));
-	CUDA_TRY( cudaMemset(JA, -1, (sizeof(int64_t) * nnz)) );
+	//CUDA_TRY( cudaMemset(JA, -1, (sizeof(int64_t) * nnz)) );
 
     //----------------------------------------------------------------------------------
     // Now just missing A and the moving of data
@@ -155,11 +166,6 @@ gdf_error gdf_to_csr(gdf_column **gdfData, int numCol, csr_gdf *csrReturn) {
     	case gdf_dtype::GDF_FLOAT64:
     		status = runConverter<double>(gdfData, csrReturn, offsets);
     	    break;
-    	default:
-    		cudaFree(offsets);
-    		cudaFree(IA);
-    		cudaFree(JA);
-    		return gdf_error::GDF_UNSUPPORTED_DTYPE;
     }
 
     cudaFree(offsets);
@@ -194,7 +200,7 @@ gdf_error runConverter(gdf_column **gdfData, csr_gdf *csrReturn, int64_t * offse
 	CUDA_TRY(cudaMemset(A, 0, (sizeof(T) * csrReturn->nnz)));
 
     // Now start moving the data and creating the CSR
-	for ( gdf_size_type colId = 0; colId < numCols; colId++ ) {
+	for ( int colId = 0; colId < numCols; colId++ ) {
 		gdf_column *gdf = gdfData[colId];
 
 		cudaCreateCSR<T><<<blocks, threads>>>(gdf->data, gdf->valid, gdf->dtype, colId, A, csrReturn->JA, offsets, numRows);
