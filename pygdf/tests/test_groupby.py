@@ -16,21 +16,38 @@ def make_frame(dataframe_class, nelem, seed=0, extra_levels=(), extra_vals=()):
     df['x'] = np.random.randint(0, 5, nelem)
     df['y'] = np.random.randint(0, 3, nelem)
     for lvl in extra_levels:
-        df[lvl] = np.random.randint(0, 2, nelem)
+        if lvl == 'allnull':
+            df[lvl] = np.full(nelem, None, dtype="float64")
+        elif lvl.startswith('null'):
+            indices = np.random.randint(0, nelem, nelem)
+            fill_value = np.random.random(nelem)
+            fill_value[indices] = np.nan
+            df[lvl] = fill_value
+        else:
+            df[lvl] = np.random.randint(0, 2, nelem)
 
     df['val'] = np.random.random(nelem)
     for val in extra_vals:
-        df[val] = np.random.random(nelem)
+        if val == 'allnull':
+            df[val] = np.full(nelem, None, dtype="float64")
+        elif val.startswith('null'):
+            indices = np.random.randint(0, nelem, nelem)
+            fill_value = np.random.random(nelem)
+            fill_value[indices] = np.nan
+            df[val] = fill_value
+        else:
+            df[val] = np.random.random(nelem)
 
     return df
 
 
-@pytest.mark.parametrize('nelem', [2, 3, 100, 1000])
-def test_groupby_mean(nelem):
+@pytest.mark.parametrize('method', ['hash', 'sort'])
+@pytest.mark.parametrize('nelem', [0, 2, 3, 100, 1000])
+def test_groupby_mean(method, nelem):
     # gdf
     got_df = make_frame(DataFrame, nelem=nelem).groupby(
-        ('x', 'y'), method="pygdf").mean()
-    got = np.sort(got_df['val'].to_array())
+        ('x', 'y'), method=method).mean()
+    got = np.sort(got_df['mean_val'].to_array())
     # pandas
     expect_df = make_frame(pd.DataFrame,
                            nelem=nelem).groupby(('x', 'y')).mean()
@@ -39,14 +56,20 @@ def test_groupby_mean(nelem):
     np.testing.assert_array_almost_equal(expect, got)
 
 
-@pytest.mark.parametrize('nelem', [2, 3, 100, 1000])
-def test_groupby_mean_3level(nelem):
-    lvls = 'z'
-    bys = list('xyz')
+@pytest.mark.parametrize('method', ['hash', 'sort'])
+@pytest.mark.parametrize('nelem', [0, 2, 3, 100, 1000])
+@pytest.mark.parametrize('lvls', [['z'], ['null_z'], ['allnull']])
+def test_groupby_mean_3level(method, nelem, lvls):
+    if method == 'sort' and lvls in [
+        ['null_z'],
+        ['allnull']
+    ]:
+        pytest.skip("Sort based groupby can't handle nulls yet")
+    bys = ['x', 'y'] + lvls
     # gdf
     got_df = make_frame(DataFrame, nelem=nelem,
-                        extra_levels=lvls).groupby(bys, method="pygdf").mean()
-    got = np.sort(got_df['val'].to_array())
+                        extra_levels=lvls).groupby(bys, method=method).mean()
+    got = np.sort(got_df['mean_val'].to_array())
     # pandas
     expect_df = make_frame(pd.DataFrame, nelem=nelem,
                            extra_levels=lvls).groupby(bys).mean()
@@ -55,13 +78,14 @@ def test_groupby_mean_3level(nelem):
     np.testing.assert_array_almost_equal(expect, got)
 
 
-@pytest.mark.parametrize('nelem', [2, 100])
-def test_groupby_agg_mean_min(nelem):
+@pytest.mark.parametrize('method', ['hash', 'sort'])
+@pytest.mark.parametrize('nelem', [0, 2, 100])
+def test_groupby_agg_mean_min(method, nelem):
     # gdf (Note: lack of multindex)
     got_df = make_frame(DataFrame, nelem=nelem).groupby(
-        ('x', 'y'), method="pygdf").agg(['mean', 'min'])
-    got_mean = np.sort(got_df['val_mean'].to_array())
-    got_min = np.sort(got_df['val_min'].to_array())
+        ('x', 'y'), method=method).agg(['mean', 'min'])
+    got_mean = np.sort(got_df['mean_val'].to_array())
+    got_min = np.sort(got_df['min_val'].to_array())
     # pandas
     expect_df = make_frame(pd.DataFrame, nelem=nelem).groupby(
         ('x', 'y')).agg(['mean', 'min'])
@@ -72,24 +96,34 @@ def test_groupby_agg_mean_min(nelem):
     np.testing.assert_array_almost_equal(expect_min, got_min)
 
 
-@pytest.mark.parametrize('nelem', [2, 100])
-def test_groupby_agg_min_max_dictargs(nelem):
+@pytest.mark.parametrize('method', ['hash', 'sort'])
+@pytest.mark.parametrize('nelem', [0, 2, 100])
+@pytest.mark.parametrize('vals', [['a', 'b'], ['a', 'null_z'],
+                                  ['a', 'allnull'], ['null_z', 'allnull']])
+def test_groupby_agg_min_max_dictargs(method, nelem, vals):
+    if method == 'sort' and vals in [
+        ['a', 'null_z'],
+        ['a', 'allnull'],
+        ['null_z', 'allnull']
+    ]:
+        pytest.skip("Sort based groupby can't handle nulls yet")
     # gdf (Note: lack of multindex)
-    got_df = make_frame(DataFrame, nelem=nelem, extra_vals='ab').groupby(
-        ('x', 'y'), method="pygdf").agg({'a': 'min', 'b': 'max'})
-    got_min = np.sort(got_df['a'].to_array())
-    got_max = np.sort(got_df['b'].to_array())
+    got_df = make_frame(DataFrame, nelem=nelem, extra_vals=vals).groupby(
+        ('x', 'y'), method=method).agg({vals[0]: 'min', vals[1]: 'max'})
+    got_min = np.sort(got_df['min_' + vals[0]].to_array())
+    got_max = np.sort(got_df['max_' + vals[1]].to_array())
     # pandas
-    expect_df = make_frame(pd.DataFrame, nelem=nelem, extra_vals='ab').groupby(
-        ('x', 'y')).agg({'a': 'min', 'b': 'max'})
-    expect_min = np.sort(expect_df['a'].values)
-    expect_max = np.sort(expect_df['b'].values)
+    expect_df = make_frame(pd.DataFrame, nelem=nelem, extra_vals=vals).groupby(
+        ('x', 'y')).agg({vals[0]: 'min', vals[1]: 'max'})
+    expect_min = np.sort(expect_df[vals[0]].values)
+    expect_max = np.sort(expect_df[vals[1]].values)
     # verify
     np.testing.assert_array_almost_equal(expect_min, got_min)
     np.testing.assert_array_almost_equal(expect_max, got_max)
 
 
-def test_groupby_cats():
+@pytest.mark.parametrize('method', ['hash', 'sort'])
+def test_groupby_cats(method):
     df = DataFrame()
     df['cats'] = pd.Categorical(list('aabaacaab'))
     df['vals'] = np.random.random(len(df))
@@ -97,7 +131,7 @@ def test_groupby_cats():
     cats = np.asarray(list(df['cats']))
     vals = df['vals'].to_array()
 
-    grouped = df.groupby(['cats'], method="pygdf").mean()
+    grouped = df.groupby(['cats'], method=method).mean()
 
     got_vals = grouped['vals']
     got_cats = grouped['cats']
@@ -108,7 +142,7 @@ def test_groupby_cats():
         np.testing.assert_almost_equal(v, expect)
 
 
-def test_groupby_iterate_groups():
+def test_groupby_pygdf_iterate_groups():
     np.random.seed(0)
     df = DataFrame()
     nelem = 20
@@ -126,7 +160,7 @@ def test_groupby_iterate_groups():
             assert_values_equal(pddf[k].values)
 
 
-def test_groupby_as_df():
+def test_groupby_pygdf_as_df():
     np.random.seed(0)
     df = DataFrame()
     nelem = 20
@@ -146,7 +180,7 @@ def test_groupby_as_df():
             assert_values_equal(pddf[k].values)
 
 
-def test_groupby_apply():
+def test_groupby_pygdf_apply():
     np.random.seed(0)
     df = DataFrame()
     nelem = 20
@@ -170,7 +204,7 @@ def test_groupby_apply():
     pd.util.testing.assert_frame_equal(expect, got)
 
 
-def test_groupby_apply_grouped():
+def test_groupby_pygdf_apply_grouped():
     from numba import cuda
 
     np.random.seed(0)
@@ -208,19 +242,51 @@ def test_groupby_apply_grouped():
     pd.util.testing.assert_frame_equal(expect, got)
 
 
-@pytest.mark.parametrize('nelem', [100, 500])
-@pytest.mark.parametrize('func', ['mean', 'std', 'var', 'min',
-                                  'max', 'count', 'sum'])
-def test_groupby_2keys_agg(nelem, func):
+@pytest.mark.parametrize('method', ['hash', 'sort'])
+@pytest.mark.parametrize('nelem', [0, 100, 500])
+@pytest.mark.parametrize('vals', [[], ['a', 'b'], ['a', 'null_z'],
+                                  ['a', 'allnull'], ['null_z', 'allnull']])
+@pytest.mark.parametrize('func', [
+    'mean', 'min', 'max', 'count', 'sum',
+    pytest.param('std', marks=pytest.mark.xfail(reason="not implemented yet")),
+    pytest.param('var', marks=pytest.mark.xfail(reason="not implemented yet"))
+])
+def test_groupby_2keys_agg(method, nelem, func, vals):
+    if method == 'sort' and vals in [
+        ['a', 'b'],
+        ['a', 'null_z'],
+        ['a', 'allnull'],
+        ['null_z', 'allnull']
+    ]:
+        pytest.skip("Sort based groupby can't handle nulls yet")
+    bys = ['x', 'y']
     # gdf (Note: lack of multindex)
-    got_df = make_frame(DataFrame, nelem=nelem)\
-        .groupby(('x', 'y'), method="pygdf").agg(func)
+    got_df = make_frame(DataFrame, nelem=nelem,
+                        extra_vals=vals)\
+        .groupby(bys, method=method).agg(func)
 
-    got_agg = np.sort(got_df['val'].to_array())
+    got_agg = np.sort(got_df[func + '_val'].to_array())
+    got_agg_extra_vals = []
+    for item in vals:
+        got_agg_extra_vals.append(
+            np.sort(got_df[func + '_' + item].to_array())
+        )
     # pandas
-    expect_df = make_frame(pd.DataFrame, nelem=nelem)\
-        .groupby(('x', 'y')).agg(func)
+    expect_df = make_frame(pd.DataFrame, nelem=nelem,
+                           extra_vals=vals)\
+        .groupby(bys).agg(func)
 
     expect_agg = np.sort(expect_df['val'].values)
+    expect_agg_extra_vals = []
+    for item in vals:
+        expect_agg_extra_vals.append(
+            np.sort(expect_df[item].values)
+        )
     # verify
     np.testing.assert_array_almost_equal(expect_agg, got_agg)
+    assert len(expect_agg_extra_vals) == len(got_agg_extra_vals)
+    for i in range(len(expect_agg_extra_vals)):
+        np.testing.assert_array_almost_equal(
+            expect_agg_extra_vals[i],
+            got_agg_extra_vals[i]
+        )
