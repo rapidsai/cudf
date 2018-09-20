@@ -25,17 +25,18 @@ def make_frame(dataframe_class, nelem, seed=0, extra_levels=(), extra_vals=()):
     return df
 
 
-def make_params():
-    np.random.seed(0)
-    nelems = [2, 3, 1000]
-    methods = ['pygdf', 'hash', 'sort']
-
-    for nelem in nelems:
-        for method in methods:
-            yield(nelem, method)
+def get_methods():
+    for method in ['pygdf', 'hash', 'sort']:
+        yield method
 
 
-@pytest.mark.parametrize('nelem,method', make_params())
+def get_nelem():
+    for elem in [2, 3, 1000]:
+        yield elem
+
+
+@pytest.mark.parametrize('nelem', get_nelem())
+@pytest.mark.parametrize('method', get_methods())
 def test_groupby_mean(nelem, method):
     # gdf
     got_df = make_frame(DataFrame, nelem=nelem).groupby(
@@ -52,7 +53,8 @@ def test_groupby_mean(nelem, method):
     np.testing.assert_array_almost_equal(expect, got)
 
 
-@pytest.mark.parametrize('nelem,method', make_params())
+@pytest.mark.parametrize('nelem', get_nelem())
+@pytest.mark.parametrize('method', get_methods())
 def test_groupby_mean_3level(nelem, method):
     lvls = 'z'
     bys = list('xyz')
@@ -71,7 +73,8 @@ def test_groupby_mean_3level(nelem, method):
     np.testing.assert_array_almost_equal(expect, got)
 
 
-@pytest.mark.parametrize('nelem,method', make_params())
+@pytest.mark.parametrize('nelem', get_nelem())
+@pytest.mark.parametrize('method', get_methods())
 def test_groupby_agg_mean_min(nelem, method):
     # gdf (Note: lack of multindex)
     got_df = make_frame(DataFrame, nelem=nelem).groupby(
@@ -92,7 +95,8 @@ def test_groupby_agg_mean_min(nelem, method):
     np.testing.assert_array_almost_equal(expect_min, got_min)
 
 
-@pytest.mark.parametrize('nelem,method', make_params())
+@pytest.mark.parametrize('nelem', get_nelem())
+@pytest.mark.parametrize('method', get_methods())
 def test_groupby_agg_min_max_dictargs(nelem, method):
     # gdf (Note: lack of multindex)
     got_df = make_frame(DataFrame, nelem=nelem, extra_vals='ab').groupby(
@@ -235,7 +239,7 @@ def test_groupby_apply_grouped():
 @pytest.mark.parametrize('nelem', [100, 500])
 @pytest.mark.parametrize('func', ['mean', 'std', 'var', 'min',
                                   'max', 'count', 'sum'])
-@pytest.mark.parametrize('method', ['pygdf', 'hash', 'sort'])
+@pytest.mark.parametrize('method', get_methods())
 def test_groupby_pygdf_2keys_agg(nelem, func, method):
     # gdf (Note: lack of multindex)
 
