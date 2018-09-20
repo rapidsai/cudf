@@ -144,13 +144,14 @@ __global__ void build_aggregation_table(map_type * const __restrict__ the_map,
       // Hash the current row of the input table
       const auto row_hash = groupby_input_table.hash_row(i);
 
+      size_type insert_location{0};
       if(false == gdf_is_valid(aggregation_validitity_mask,i))
       {
         // For COUNT, the aggregation result value can never be NULL, i.e., counting an
         // aggregation column of all NULL should return 0. Therefore, insert the key 
         // only and set the state to VALID. Since the payload is initialized with 0,
         // it will return 0 for a column of all nulls as expected
-        const size_type insert_location = the_map->insert_key(i, the_comparator, true, row_hash);
+       insert_location = the_map->insert_key(i, the_comparator, true, row_hash);
       }
       else
       {
@@ -160,7 +161,7 @@ __global__ void build_aggregation_table(map_type * const __restrict__ the_map,
         // The rows at the current row index and the existing row index 
         // will be compared for equality. If they are equal, the aggregation
         // operation is performed.
-        const size_type insert_location = the_map->insert(thrust::make_pair(i, static_cast<typename map_type::mapped_type>(0)), 
+        insert_location = the_map->insert(thrust::make_pair(i, static_cast<typename map_type::mapped_type>(0)), 
                                                            op,
                                                            the_comparator,
                                                            true,
