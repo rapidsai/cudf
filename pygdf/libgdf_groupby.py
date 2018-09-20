@@ -9,6 +9,8 @@ from .buffer import Buffer
 
 from libgdf_cffi import ffi, libgdf
 
+from ..utils import make_mask
+
 
 class LibGdfGroupby(object):
     """Groupby object returned by pygdf.DataFrame.groupby().
@@ -104,11 +106,18 @@ class LibGdfGroupby(object):
                 out_col_values = ffi.NULL
 
             if agg_type == "count":
-                out_col_agg_series = Series(
-                    Buffer(cuda.device_array(col_agg.size, dtype=np.int64)))
+                out_col_agg_series = Series.from_masked_array(
+                    data=cuda.device_array(col_agg.size, dtype=np.int64),
+                    mask=make_mask(col_agg.size)
+                )
             else:
-                out_col_agg_series = Series(Buffer(cuda.device_array(
-                    col_agg.size, dtype=self._df[val_col]._column.data.dtype)))
+                out_col_agg_series = Series.from_masked_array(
+                    data=cuda.device_array(
+                        col_agg.size,
+                        dtype=self._df[val_col]._column.data.dtype
+                    ),
+                    mask=make_mask(col_agg.size)
+                )
 
             out_col_agg = out_col_agg_series._column.cffi_view
 
