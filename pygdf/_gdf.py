@@ -92,6 +92,23 @@ def apply_mask_and(col, mask, out):
     return len(out) - nnz
 
 
+def gdf_to_np_dtype(dtype):
+    """Util to convert gdf dtype to numpy dtype.
+    """
+    return np.dtype({
+         libgdf.GDF_FLOAT64: np.float64,
+         libgdf.GDF_FLOAT32: np.float32,
+         libgdf.GDF_INT64: np.int64,
+         libgdf.GDF_INT32: np.int32,
+         libgdf.GDF_INT16: np.int16,
+         libgdf.GDF_INT8: np.int8,
+         libgdf.GDF_INT8: np.bool_,
+         libgdf.GDF_DATE64: np.datetime64,
+         libgdf.N_GDF_TYPES: np.int32,
+         libgdf.GDF_CATEGORY: np.int32,
+     }[dtype])
+
+
 def np_to_gdf_dtype(dtype):
     """Util to convert numpy dtype to gdf dtype.
     """
@@ -147,15 +164,49 @@ _join_method_api = {
 }
 
 
-def _as_numba_devarray(intaddr, nelem, dtype):
-    dtype = np.dtype(dtype)
+def _make_mem_finalizer(dtor, bytesize):
+    """Make memory finalizer for externally allocated memory
+    """
+    def mem_finalize(context, handle):
+        deallocations = context.deallocations
+
+        def core():
+            deallocations.add_item(dtor, handle, size=bytesize)
+
+        return core
+
+    return mem_finalize
+
+
+def _as_numba_devarray(intaddr, nelem, dtype, cb_dtor=None):
+    # Handle Datetime Column
+    if dtype == np.datetime64:
+        dtype = np.dtype('datetime64[s]')
+    else:
+        dtype = np.dtype(dtype)
     addr = ctypes.c_uint64(intaddr)
     elemsize = dtype.itemsize
     datasize = elemsize * nelem
-    memptr = cuda.driver.MemoryPointer(context=cuda.current_context(),
-                                       pointer=addr, size=datasize)
+    finalizer = (_make_mem_finalizer(cb_dtor, datasize))
+    ctx = cuda.current_context()
+    if cb_dtor is None:
+        memptr = cuda.driver.MemoryPointer(context=ctx,
+                                           pointer=addr, size=datasize,
+                                           )
+    else:
+        memptr = cuda.driver.MemoryPointer(context=ctx,
+                                           pointer=addr, size=datasize,
+                                           finalizer=finalizer(ctx, addr)
+                                           )
     return cuda.devicearray.DeviceNDArray(shape=(nelem,), strides=(elemsize,),
                                           dtype=dtype, gpu_data=memptr)
+
+
+def wrap_libgdf_pointer(intaddr, nelem, dtype):
+    """Wrap libgdf defined pointer for refcounting.
+    """
+    return _as_numba_devarray(intaddr, nelem, dtype,
+                              cb_dtor=cuda.driver.driver.cuMemFree)
 
 
 @contextlib.contextmanager
