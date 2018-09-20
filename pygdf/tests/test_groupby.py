@@ -244,7 +244,6 @@ def test_groupby_pygdf_apply_grouped():
 
 @pytest.mark.parametrize('method', ['hash', 'sort'])
 @pytest.mark.parametrize('nelem', [0, 100, 500])
-@pytest.mark.parametrize('lvls', [[], ['z'], ['null_z'], ['allnull']])
 @pytest.mark.parametrize('vals', [[], ['a', 'b'], ['a', 'null_z'],
                                   ['a', 'allnull'], ['null_z', 'allnull']])
 @pytest.mark.parametrize('func', [
@@ -252,29 +251,42 @@ def test_groupby_pygdf_apply_grouped():
     pytest.param('std', marks=pytest.mark.xfail(reason="not implemented yet")),
     pytest.param('var', marks=pytest.mark.xfail(reason="not implemented yet"))
 ])
-def test_groupby_2keys_agg(method, nelem, func, lvls, vals):
-    if method == 'sort' and (lvls in [
-        ['null_z'],
-        ['allnull']
-    ] or vals in [
+def test_groupby_2keys_agg(method, nelem, func, vals):
+    if method == 'sort' and vals in [
         ['a', 'b'],
         ['a', 'null_z'],
         ['a', 'allnull'],
         ['null_z', 'allnull']
-    ]):
+    ]:
         pytest.skip("Sort based groupby can't handle nulls yet")
-    bys = ['x', 'y'] + lvls
+    bys = ['x', 'y']
     # gdf (Note: lack of multindex)
     got_df = make_frame(DataFrame, nelem=nelem,
-                        extra_levels=lvls, extra_vals=vals)\
+                        extra_vals=vals)\
         .groupby(bys, method=method).agg(func)
 
-    got_agg = np.sort(got_df[str(func) + '_val'].to_array())
+    got_agg = np.sort(got_df[func + '_val'].to_array())
+    got_agg_extra_vals = []
+    for item in vals:
+        got_agg_extra_vals.append(
+            np.sort(got_df[func + '_' + item].to_array())
+        )
     # pandas
     expect_df = make_frame(pd.DataFrame, nelem=nelem,
-                           extra_levels=lvls, extra_vals=vals)\
+                           extra_vals=vals)\
         .groupby(bys).agg(func)
 
     expect_agg = np.sort(expect_df['val'].values)
+    expect_agg_extra_vals = []
+    for item in vals:
+        expect_agg_extra_vals.append(
+            np.sort(expect_df[item].values)
+        )
     # verify
     np.testing.assert_array_almost_equal(expect_agg, got_agg)
+    assert len(expect_agg_extra_vals) == len(got_agg_extra_vals)
+    for i in range(len(expect_agg_extra_vals)):
+        np.testing.assert_array_almost_equal(
+            expect_agg_extra_vals[i],
+            got_agg_extra_vals[i]
+        )
