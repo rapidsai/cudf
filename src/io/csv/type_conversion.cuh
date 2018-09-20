@@ -5,22 +5,16 @@
 
 #include <math_functions.h>
 
-__device__
-void removePrePostWhiteSpaces(char *data, long* start_idx, long* end_idx) {
-	while(data[*start_idx] == ' ' && *start_idx < *end_idx)
-		*start_idx=*start_idx+1;
-	while(data[*end_idx] == ' ' && *start_idx < *end_idx)
-		*end_idx=*end_idx-1;
-}
+
 
 
 template<typename T>
-__device__
+__host__ __device__
 T convertStrtoInt(char *data, long start_idx, long end_idx) {
 
 	T answer = (T)0;
 
-	removePrePostWhiteSpaces(data, &start_idx, &end_idx);
+	// removePrePostWhiteSpaces(data, &start_idx, &end_idx);
 
 	// if the start and end indexs are the same, then it is a single digit value
 	if (start_idx == end_idx) {
@@ -50,11 +44,11 @@ T convertStrtoInt(char *data, long start_idx, long end_idx) {
 
 
 template<typename T>
-__device__
+__host__ __device__
 T convertStrtoFloat(char *data, long start_idx, long end_idx) {
 
 	T answer = (T)0.0;
-	removePrePostWhiteSpaces(data, &start_idx, &end_idx);
+	// removePrePostWhiteSpaces(data, &start_idx, &end_idx);
 
 
 	// check for single digit conversions
@@ -125,11 +119,10 @@ T convertStrtoFloat(char *data, long start_idx, long end_idx) {
 /**
  * Convert a date (MM/YYYY or DD/MM/YYYY) into a date64
  */
-__device__
+__host__ __device__
 int64_t convertStrtoDate(char *data, long start_idx, long end_idx) {
 
-	removePrePostWhiteSpaces(data, &start_idx, &end_idx);
-
+	// removePrePostWhiteSpaces(data, &start_idx, &end_idx);
 
 	static unsigned short days[12] = {0,  31,  60,  91, 121, 152, 182, 213, 244, 274, 305, 335};
 
@@ -157,15 +150,14 @@ int64_t convertStrtoDate(char *data, long start_idx, long end_idx) {
 		while (data[slash_idx] !='/' && slash_idx < end_idx)
 			++slash_idx;
 
-		day = convertStrtoInt<int>(data, start_idx, (slash_idx - 1));
-
 		long slash_2_idx = slash_idx + 1;
 
 		while (data[slash_2_idx] !='/' && slash_2_idx < end_idx)
 			++slash_2_idx;
 
-		month  = convertStrtoInt<int>(data, (slash_idx + 1), (slash_2_idx));
-		year  = convertStrtoInt<int>(data, (slash_2_idx + 1), end_idx);
+		day 	= convertStrtoInt<int>(data, start_idx, 		(slash_idx  - 1));
+		month  	= convertStrtoInt<int>(data, (slash_idx + 1), 	(slash_2_idx - 1));
+		year  	= convertStrtoInt<int>(data, (slash_2_idx + 1), end_idx);
 	}
 
 	// years since epoch
@@ -287,6 +279,8 @@ int32_t convertStrtoHash(const char * key, long start_idx, long end_idx, uint32_
     h1 = fmix32(h1);
     return h1;
 }
+
+
 
 
 

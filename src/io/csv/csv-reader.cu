@@ -75,13 +75,6 @@ typedef struct raw_csv_ {
     vector<string>		col_names;		// host: array of column names
 } raw_csv_t;
 
-//-- define the fields
-typedef struct fields_info_ {
-	int *				rec_id;			// on-device: the record index
-	int *				col_id;			// on-device: the column index
-	int *				start_idx;		// on-device: the starting bytes of the field
-	int *				end_idx;		// on-device: the ending byte of the field - this could be the delimiter or eol
-}  fields_info_t;
 
 using string_pair = std::pair<const char*,size_t>;
 
@@ -89,16 +82,12 @@ using string_pair = std::pair<const char*,size_t>;
 //---------------create and process ---------------------------------------------
 //
 gdf_error parseArguments(csv_read_arg *args, raw_csv_t *csv);
-
 gdf_error getColNamesAndTypes(const char **col_names, const  char **dtypes, raw_csv_t *d);
-
 gdf_error updateRawCsv( const char * data, long num_bytes, raw_csv_t * csvData );
 gdf_error allocateGdfDataSpace(gdf_column *);
-
 gdf_dtype convertStringToDtype(std::string &dtype);
 
 #define checkError(error, txt)  if ( error != GDF_SUCCESS) { cerr << "ERROR:  " << error <<  "  in "  << txt << endl;  return error; }
-
 
 //
 //---------------CUDA Kernel ---------------------------------------------
@@ -108,14 +97,11 @@ __device__ int findSetBit(int tid, long num_bits, uint64_t *f_bits, int x);
 
 gdf_error launch_countRecords(raw_csv_t * csvData);
 gdf_error launch_storeRecordStart(raw_csv_t * csvData);
-
 gdf_error launch_dataConvertColumnsNew(raw_csv_t * raw_csv, void** d_gdf,  gdf_valid_type** valid, gdf_dtype* d_dtypes, string_pair	**str_cols, int row_offset);
 
 __global__ void countRecords(char *data, const char delim, const char terminator, long num_bytes, long num_bits, long* num_records);
 __global__ void storeRecordStart(char *data, const char delim, const char terminator, long num_bytes, long num_bits, long* num_records,long* recStart) ;
-
 __global__ void convertCsvToGdfNew(char * raw_csv,char delim,long  num_records, int  num_columns,long* recStart,gdf_dtype* dtype,void** gdf_data,gdf_valid_type **valid,string_pair	**str_cols,int row_offset);
-
 __device__ void removePrePostWhiteSpaces2(char *data, long* start_idx, long* end_idx);
 
 //
@@ -131,7 +117,6 @@ __inline__ __device__ void validAtomicOR(gdf_valid_type* address, gdf_valid_type
 
 	atomicOr(base_address, int_val);
 }
-
 
 __device__ void setBit(gdf_valid_type* address, int bit) {
 	gdf_valid_type bitMask[8] 		= {1, 2, 4, 8, 16, 32, 64, 128};
@@ -214,11 +199,11 @@ gdf_error read_csv(csv_read_arg *args)
 
 	void **d_data;
 	gdf_valid_type **d_valid;
-	CUDA_TRY( cudaMallocManaged ((void**)&d_data, 		(sizeof(void *)		* raw_csv->num_cols)) );
-	CUDA_TRY( cudaMallocManaged ((void**)&d_valid, 		(sizeof(gdf_valid_type *)		* raw_csv->num_cols)) );
+	CUDA_TRY( cudaMallocManaged ((void**)&d_data, 		(sizeof(void *)				* raw_csv->num_cols)) );
+	CUDA_TRY( cudaMallocManaged ((void**)&d_valid, 		(sizeof(gdf_valid_type *)	* raw_csv->num_cols)) );
 
 	gdf_dtype* d_dtypes;
-	CUDA_TRY( cudaMallocManaged ((void**)&d_dtypes, sizeof(gdf_dtype) * (raw_csv->num_cols)) );
+	CUDA_TRY( cudaMallocManaged ((void**)&d_dtypes, 	sizeof(gdf_dtype) 			* (raw_csv->num_cols)) );
 
 	int stringColCount=0;
 	for (int col = 0; col < raw_csv->num_cols; col++) {
@@ -226,14 +211,15 @@ gdf_error read_csv(csv_read_arg *args)
 			stringColCount++;
 	}
 
+	string_pair** str_cols = NULL;
 
-	string_pair** str_cols ;
-	cudaMallocManaged ((void**)&str_cols, 		(sizeof(string_pair *)		* stringColCount));
+	if (stringColCount > 0 ) {
+		CUDA_TRY( cudaMallocManaged ((void**)&str_cols, 	(sizeof(string_pair *)		* stringColCount)) );
 
-	for (int col = 0; col < stringColCount; col++) {
-		cudaMallocManaged ((void**)(str_cols + col), sizeof(string_pair) * (raw_csv->num_records));
+		for (int col = 0; col < stringColCount; col++) {
+			CUDA_TRY( cudaMallocManaged ((void**)(str_cols + col), sizeof(string_pair) * (raw_csv->num_records)) );
+		}
 	}
-
 
 	for (int col = 0; col < raw_csv->num_cols; col++) {
 
@@ -267,12 +253,14 @@ gdf_error read_csv(csv_read_arg *args)
 	}
 
 	// free up space that is no longer needed
-	CUDA_TRY(cudaFree(raw_csv->d_num_records));
-	CUDA_TRY( cudaFree (str_cols) );
+	if (str_cols != NULL)
+		CUDA_TRY( cudaFree (str_cols) );
+
 	CUDA_TRY( cudaFree (d_valid) );
 	CUDA_TRY( cudaFree (d_data) );
 	CUDA_TRY( cudaFree (raw_csv->recStart));
 	CUDA_TRY( cudaFree (raw_csv->data));
+	CUDA_TRY(cudaFree(raw_csv->d_num_records));
 
 	delete raw_csv;
 
