@@ -49,7 +49,7 @@ class LibGdfGroupby(object):
             raise NotImplementedError(msg.format(method))
 
     def _apply_agg(self, agg_type, result, add_col_values,
-                   ctx, val_columns, val_columns_out):
+                   ctx, val_columns, val_columns_out, sort_result=True):
         """
         Parameters
         ----------
@@ -70,7 +70,7 @@ class LibGdfGroupby(object):
             The list of columns names that the aggregation results should be
             output into.
         """
-        if (self._method == libgdf.GDF_HASH):
+        if (self._method == libgdf.GDF_HASH and sort_result):
             ctx.flag_sort_result = 1
 
         ncols = len(self._by)
@@ -170,7 +170,7 @@ class LibGdfGroupby(object):
 
         return self._apply_agg(
             agg_type, result, add_col_values, ctx, val_columns,
-            val_columns_out)
+            val_columns_out, sort_result=False)
 
     def min(self):
         return self._apply_basic_agg("min")
@@ -218,6 +218,8 @@ class LibGdfGroupby(object):
         ctx.flag_method = self._method
         ctx.flag_distinct = 0
 
+        sort_result = (len(args) == 1)
+
         if not isinstance(args, str) and isinstance(
                 args, collections.abc.Sequence):
             for agg_type in args:
@@ -227,7 +229,7 @@ class LibGdfGroupby(object):
 
                 result = self._apply_agg(
                     agg_type, result, add_col_values, ctx, self._val_columns,
-                    val_columns_out)
+                    val_columns_out, sort_result=sort_result)
 
                 add_col_values = False  # we only want to add them once
 
@@ -240,12 +242,14 @@ class LibGdfGroupby(object):
                         val_columns_out = [sub_agg_type + '_' + val]
                         result = self._apply_agg(sub_agg_type, result,
                                                  add_col_values, ctx, [val],
-                                                 val_columns_out)
+                                                 val_columns_out,
+                                                 sort_result=sort_result)
                 elif isinstance(agg_type, str):
                     val_columns_out = [agg_type + '_' + val]
                     result = self._apply_agg(agg_type, result,
                                              add_col_values, ctx, [val],
-                                             val_columns_out)
+                                             val_columns_out,
+                                             sort_result=sort_result)
 
                 add_col_values = False  # we only want to add them once
 
