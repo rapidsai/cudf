@@ -166,8 +166,11 @@ gdf_error gdf_to_csr(gdf_column **gdfData, int numCol, csr_gdf *csrReturn) {
     	case gdf_dtype::GDF_FLOAT64:
     		status = runConverter<double>(gdfData, csrReturn, offsets);
     	    break;
-    	case default:
-    		break;
+    	default:
+    		cudaFree(IA);
+    		cudaFree(JA);
+    		cudaFree(offsets);
+    		return GDF_UNSUPPORTED_DTYPE;
     }
 
     cudaFree(offsets);
