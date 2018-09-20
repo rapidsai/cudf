@@ -174,7 +174,8 @@ def gpu_fill_value(data, value):
 def fill_value(arr, value):
     """Fill *arr* with value
     """
-    gpu_fill_value.forall(arr.size)(arr, value)
+    if arr.size > 0:
+        gpu_fill_value.forall(arr.size)(arr, value)
 
 
 @cuda.jit
