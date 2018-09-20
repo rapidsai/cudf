@@ -144,19 +144,13 @@ __global__ void build_aggregation_table(map_type * const __restrict__ the_map,
       // Hash the current row of the input table
       const auto row_hash = groupby_input_table.hash_row(i);
 
-
       if(false == gdf_is_valid(aggregation_validitity_mask,i))
       {
-        // If the aggregation value is NULL, and the hash bucket is empty,
-        // then set the state of the bucket to show that there is a NULL value for this key
-        // The casts are required to cast the enum type to a type supported by 
-        // atomicCAS
-        // TODO Use a bitmask instead of a 32 bit flag for every bucket
+        // For COUNT, the aggregation result value can never be NULL, i.e., counting an
+        // aggregation column of all NULL should return 0. Therefore, insert the key 
+        // only and set the state to VALID. Since the payload is initialized with 0,
+        // it will return 0 for a column of all nulls as expected
         const size_type insert_location = the_map->insert_key(i, the_comparator, true, row_hash);
-
-        atomicCAS(reinterpret_cast<state_t*>(&hash_bucket_states[insert_location]), 
-                  static_cast<state_t>(bucket_state::EMPTY), 
-                  static_cast<state_t>(bucket_state::NULL_VALUE));
       }
       else
       {
@@ -171,12 +165,10 @@ __global__ void build_aggregation_table(map_type * const __restrict__ the_map,
                                                            the_comparator,
                                                            true,
                                                            row_hash);
-
-        // If it's not NULL, indicate that there is a valid value 
-        // in this bucket
-        atomicExch(reinterpret_cast<state_t*>(&hash_bucket_states[insert_location]),
-                                              static_cast<state_t>(bucket_state::VALID_VALUE));
       }
+
+      atomicExch(reinterpret_cast<state_t*>(&hash_bucket_states[insert_location]),
+                                            static_cast<state_t>(bucket_state::VALID_VALUE));
     }
     i += blockDim.x * gridDim.x;
   }

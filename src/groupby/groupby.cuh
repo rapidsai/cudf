@@ -319,6 +319,8 @@ void compute_average(gdf_column * avg_column, gdf_column const & count_column, g
   thrust::device_ptr<size_t> d_counts = thrust::device_pointer_cast(static_cast<size_t*>(count_column.data));
   thrust::device_ptr<avg_type> d_avg  = thrust::device_pointer_cast(static_cast<avg_type*>(avg_column->data));
 
+  // TODO Should probably make sure the value in the Count column is valid
+  // otherwise we could end up with a divide by 0
   auto average_op =  [] __device__ (sum_type sum, size_t count)->avg_type { return (sum / static_cast<avg_type>(count)); };
 
   // Computes the average into the passed in output buffer for the average column
