@@ -1174,11 +1174,6 @@ gdf_error gdf_group_by_single(int ncols,                    // # columns
     }
   else if( ctxt->flag_method == GDF_HASH )
     {
-      if(nullptr == out_col_agg->valid)
-      {
-        return GDF_DATASET_EMPTY;
-      }
-
       bool sort_result = false;
 
       if(1 == ctxt->flag_sort_result){
