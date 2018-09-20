@@ -25,12 +25,25 @@ def make_frame(dataframe_class, nelem, seed=0, extra_levels=(), extra_vals=()):
     return df
 
 
-@pytest.mark.parametrize('nelem', [2, 3, 100, 1000])
-def test_groupby_mean(nelem):
+def make_params():
+    np.random.seed(0)
+    nelems = [2, 3, 1000]
+    methods = ['pygdf', 'hash', 'sort']
+
+    for nelem in nelems:
+        for method in methods:
+            yield(nelem, method)
+
+
+@pytest.mark.parametrize('nelem,method', make_params())
+def test_groupby_mean(nelem, method):
     # gdf
     got_df = make_frame(DataFrame, nelem=nelem).groupby(
-        ('x', 'y'), method="pygdf").mean()
-    got = np.sort(got_df['val'].to_array())
+        ('x', 'y'), method=method).mean()
+    if method == 'pygdf':
+        got = np.sort(got_df['val'].to_array())
+    else:
+        got = np.sort(got_df['mean_val'].to_array())
     # pandas
     expect_df = make_frame(pd.DataFrame,
                            nelem=nelem).groupby(('x', 'y')).mean()
@@ -39,14 +52,17 @@ def test_groupby_mean(nelem):
     np.testing.assert_array_almost_equal(expect, got)
 
 
-@pytest.mark.parametrize('nelem', [2, 3, 100, 1000])
-def test_groupby_mean_3level(nelem):
+@pytest.mark.parametrize('nelem,method', make_params())
+def test_groupby_mean_3level(nelem, method):
     lvls = 'z'
     bys = list('xyz')
     # gdf
     got_df = make_frame(DataFrame, nelem=nelem,
-                        extra_levels=lvls).groupby(bys, method="pygdf").mean()
-    got = np.sort(got_df['val'].to_array())
+                        extra_levels=lvls).groupby(bys, method=method).mean()
+    if method == "pygdf":
+        got = np.sort(got_df['val'].to_array())
+    else:
+        got = np.sort(got_df['mean_val'].to_array())
     # pandas
     expect_df = make_frame(pd.DataFrame, nelem=nelem,
                            extra_levels=lvls).groupby(bys).mean()
@@ -55,13 +71,17 @@ def test_groupby_mean_3level(nelem):
     np.testing.assert_array_almost_equal(expect, got)
 
 
-@pytest.mark.parametrize('nelem', [2, 100])
-def test_groupby_agg_mean_min(nelem):
+@pytest.mark.parametrize('nelem,method', make_params())
+def test_groupby_agg_mean_min(nelem, method):
     # gdf (Note: lack of multindex)
     got_df = make_frame(DataFrame, nelem=nelem).groupby(
-        ('x', 'y'), method="pygdf").agg(['mean', 'min'])
-    got_mean = np.sort(got_df['val_mean'].to_array())
-    got_min = np.sort(got_df['val_min'].to_array())
+        ('x', 'y'), method=method).agg(['mean', 'min'])
+    if method == "pygdf":
+        got_mean = np.sort(got_df['val_mean'].to_array())
+        got_min = np.sort(got_df['val_min'].to_array())
+    else:
+        got_mean = np.sort(got_df['mean_val'].to_array())
+        got_min = np.sort(got_df['min_val'].to_array())
     # pandas
     expect_df = make_frame(pd.DataFrame, nelem=nelem).groupby(
         ('x', 'y')).agg(['mean', 'min'])
@@ -72,13 +92,17 @@ def test_groupby_agg_mean_min(nelem):
     np.testing.assert_array_almost_equal(expect_min, got_min)
 
 
-@pytest.mark.parametrize('nelem', [2, 100])
-def test_groupby_agg_min_max_dictargs(nelem):
+@pytest.mark.parametrize('nelem,method', make_params())
+def test_groupby_agg_min_max_dictargs(nelem, method):
     # gdf (Note: lack of multindex)
     got_df = make_frame(DataFrame, nelem=nelem, extra_vals='ab').groupby(
-        ('x', 'y'), method="pygdf").agg({'a': 'min', 'b': 'max'})
-    got_min = np.sort(got_df['a'].to_array())
-    got_max = np.sort(got_df['b'].to_array())
+        ('x', 'y'), method=method).agg({'a': 'min', 'b': 'max'})
+    if method == "pygdf":
+        got_min = np.sort(got_df['a'].to_array())
+        got_max = np.sort(got_df['b'].to_array())
+    else:
+        got_min = np.sort(got_df['min_a'].to_array())
+        got_max = np.sort(got_df['max_b'].to_array())
     # pandas
     expect_df = make_frame(pd.DataFrame, nelem=nelem, extra_vals='ab').groupby(
         ('x', 'y')).agg({'a': 'min', 'b': 'max'})
@@ -211,12 +235,22 @@ def test_groupby_apply_grouped():
 @pytest.mark.parametrize('nelem', [100, 500])
 @pytest.mark.parametrize('func', ['mean', 'std', 'var', 'min',
                                   'max', 'count', 'sum'])
-def test_groupby_2keys_agg(nelem, func):
+@pytest.mark.parametrize('method', ['pygdf', 'hash', 'sort'])
+def test_groupby_pygdf_2keys_agg(nelem, func, method):
     # gdf (Note: lack of multindex)
-    got_df = make_frame(DataFrame, nelem=nelem)\
-        .groupby(('x', 'y'), method="pygdf").agg(func)
 
-    got_agg = np.sort(got_df['val'].to_array())
+    # skip unimplemented aggs:
+    if func in ['var', 'std']:
+        if method in ['hash', 'sort']:
+            pytest.skip()
+
+    got_df = make_frame(DataFrame, nelem=nelem)\
+        .groupby(('x', 'y'), method=method).agg(func)
+
+    if method == "pygdf":
+        got_agg = np.sort(got_df['val'].to_array())
+    else:
+        got_agg = np.sort(got_df[func + '_val'].to_array())
     # pandas
     expect_df = make_frame(pd.DataFrame, nelem=nelem)\
         .groupby(('x', 'y')).agg(func)
