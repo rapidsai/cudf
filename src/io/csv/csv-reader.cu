@@ -226,6 +226,7 @@ gdf_error read_csv(csv_read_arg *args)
 			stringColCount++;
 	}
 
+
 	string_pair** str_cols ;
 	cudaMallocManaged ((void**)&str_cols, 		(sizeof(string_pair *)		* stringColCount));
 
