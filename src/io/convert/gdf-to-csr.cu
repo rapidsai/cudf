@@ -205,7 +205,7 @@ gdf_error runConverter(gdf_column **gdfData, csr_gdf *csrReturn, int64_t * offse
 	CUDA_TRY(cudaMemset(A, 0, (sizeof(T) * csrReturn->nnz)));
 
     // Now start moving the data and creating the CSR
-	for ( int colId = 0; colId < numCols; colId++ ) {
+	for ( gdf_size_type colId = 0; colId < numCols; colId++ ) {
 		gdf_column *gdf = gdfData[colId];
 
 		cudaCreateCSR<T><<<blocks, threads>>>(gdf->data, gdf->valid, gdf->dtype, colId, A, csrReturn->JA, offsets, numRows);
