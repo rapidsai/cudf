@@ -374,9 +374,10 @@ def gpu_fill_masked(value, validity, out):
 
 def fillna(data, mask, value):
     out = cuda.device_array_like(data)
-    out.copy_to_device(data)
-    configured = gpu_fill_masked.forall(data.size)
-    configured(value, mask, out)
+    if out.size > 0:
+        out.copy_to_device(data)
+        configured = gpu_fill_masked.forall(data.size)
+        configured(value, mask, out)
     return out
 
 
