@@ -206,7 +206,7 @@ __global__ void extract_groupby_result(const map_type * const __restrict__ the_m
                                        gdf_table<size_type> & groupby_output_table,
                                        gdf_table<size_type> const & groupby_input_table,
                                        aggregation_type * const __restrict__ aggregation_out_column,
-                                       gdf_valid_type * const __restrict__ aggregation_out_valid_mask,
+                                       gdf_valid_type * aggregation_out_valid_mask,
                                        size_type * const global_write_index)
 {
   size_type i = threadIdx.x + blockIdx.x * blockDim.x;
@@ -236,7 +236,16 @@ __global__ void extract_groupby_result(const map_type * const __restrict__ the_m
       if( bucket_state::NULL_VALUE != current_state )
       {
         aggregation_out_column[thread_write_index] = hashtabl_values[i].second;
-        turn_bit_on(aggregation_out_valid_mask, i);
+        
+        // Set the valid bit for this row. Need to cast the valid mask type
+        // to a 32 bit type where atomics are supported
+        if(nullptr != aggregation_out_valid_mask)
+        {
+          uint32_t * valid_mask32 = reinterpret_cast<uint32_t*>(aggregation_out_valid_mask);
+          const uint32_t output_bit32 = (uint32_t(1) << (i % uint32_t(32)));
+          uint32_t * output_mask32 = &(valid_mask32[(i / uint32_t(32))]);
+          atomicOr(output_mask32, output_bit32);
+        }
       }
     }
 
