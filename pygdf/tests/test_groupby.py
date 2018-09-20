@@ -41,7 +41,7 @@ def make_frame(dataframe_class, nelem, seed=0, extra_levels=(), extra_vals=()):
     return df
 
 
-@pytest.mark.parametrize('method', ['hash', 'sort'])
+@pytest.mark.parametrize('method', ['hash'])
 @pytest.mark.parametrize('nelem', [0, 2, 3, 100, 1000])
 def test_groupby_mean(method, nelem):
     # gdf
@@ -56,7 +56,7 @@ def test_groupby_mean(method, nelem):
     np.testing.assert_array_almost_equal(expect, got)
 
 
-@pytest.mark.parametrize('method', ['hash', 'sort'])
+@pytest.mark.parametrize('method', ['hash'])
 @pytest.mark.parametrize('nelem', [0, 2, 3, 100, 1000])
 @pytest.mark.parametrize('lvls', [['z'], ['null_z'], ['allnull']])
 def test_groupby_mean_3level(method, nelem, lvls):
@@ -73,7 +73,7 @@ def test_groupby_mean_3level(method, nelem, lvls):
     np.testing.assert_array_almost_equal(expect, got)
 
 
-@pytest.mark.parametrize('method', ['hash', 'sort'])
+@pytest.mark.parametrize('method', ['hash'])
 @pytest.mark.parametrize('nelem', [0, 2, 100])
 def test_groupby_agg_mean_min(method, nelem):
     # gdf (Note: lack of multindex)
@@ -91,7 +91,7 @@ def test_groupby_agg_mean_min(method, nelem):
     np.testing.assert_array_almost_equal(expect_min, got_min)
 
 
-@pytest.mark.parametrize('method', ['hash', 'sort'])
+@pytest.mark.parametrize('method', ['hash'])
 @pytest.mark.parametrize('nelem', [0, 2, 100])
 @pytest.mark.parametrize('vals', [['a', 'b'], ['a', 'null_z'],
                                   ['a', 'allnull'], ['null_z', 'allnull']])
@@ -111,7 +111,7 @@ def test_groupby_agg_min_max_dictargs(method, nelem, vals):
     np.testing.assert_array_almost_equal(expect_max, got_max)
 
 
-@pytest.mark.parametrize('method', ['hash', 'sort'])
+@pytest.mark.parametrize('method', ['hash'])
 def test_groupby_cats(method):
     df = DataFrame()
     df['cats'] = pd.Categorical(list('aabaacaab'))
@@ -231,7 +231,7 @@ def test_groupby_pygdf_apply_grouped():
     pd.util.testing.assert_frame_equal(expect, got)
 
 
-@pytest.mark.parametrize('method', ['hash', 'sort'])
+@pytest.mark.parametrize('method', ['hash'])
 @pytest.mark.parametrize('nelem', [0, 100, 500])
 @pytest.mark.parametrize('lvls', [[], ['z'], ['null_z'], ['allnull']])
 @pytest.mark.parametrize('vals', [[], ['a', 'b'], ['a', 'null_z'],
