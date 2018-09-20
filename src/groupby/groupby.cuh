@@ -280,6 +280,9 @@ gdf_column create_gdf_column(const size_t size)
   else if(std::is_same<col_type,double>::value) gdf_col_type = GDF_FLOAT64;
   else assert(false && "Invalid type passed to create_gdf_column");
 
+  const size_t num_masks = gdf_get_num_chars_bitmask(size);
+  cudaMalloc(&the_column.valid, num_masks * sizeof(gdf_valid_type));
+
   // Fill the gdf_column struct
   the_column.size = size;
   the_column.dtype = gdf_col_type;
@@ -376,9 +379,19 @@ gdf_error multi_pass_avg(int ncols,
     default: return GDF_UNSUPPORTED_DTYPE;
   }
 
+  // Set the validity mask for the AVG output column, the validity
+  // mask will be the same as both the Count and Sum output validity masks
+  if(nullptr != out_aggregation_column->valid)
+  {
+    const size_t num_masks = gdf_get_num_chars_bitmask(sum_output.size);
+    CUDA_TRY(cudaMemcpy(out_aggregation_column->valid, sum_output.valid, num_masks * sizeof(gdf_valid_type), cudaMemcpyDeviceToDevice));
+  }
+
   // Free intermediate storage
-  cudaFree(count_output.data);
-  cudaFree(sum_output.data);
+  CUDA_TRY(cudaFree(count_output.data));
+  CUDA_TRY(cudaFree(count_output.valid));
+  CUDA_TRY(cudaFree(sum_output.data));
+  CUDA_TRY(cudaFree(sum_output.valid));
 
   return GDF_SUCCESS;
 }
