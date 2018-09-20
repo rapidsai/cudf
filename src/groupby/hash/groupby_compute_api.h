@@ -224,7 +224,7 @@ gdf_error GroupbyHash(gdf_table<size_type> const & groupby_input_table,
   groupby_output_table.set_column_length(*out_size);
 
   // Optionally sort the groupby/aggregation result columns
-  if(true == sort_result) {
+  if((*out_size > 0) && (true == sort_result)) {
       auto sorted_indices = groupby_output_table.sort();
       thrust::device_vector<aggregation_type> agg(*out_size);
       thrust::gather(thrust::device,
