@@ -98,15 +98,10 @@ class Column(object):
                 nnz = cudautils.count_nonzero_mask(self._mask.mem,
                                                    size=len(self))
                 null_count = len(self) - nnz
-                if null_count == 0:
-                    self._mask = None
             else:
                 null_count = 0
 
         assert 0 <= null_count <= len(self)
-        if null_count == 0:
-            # Remove mask if null_count is zero
-            self._mask = None
 
         self._null_count = null_count
 
