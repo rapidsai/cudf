@@ -226,6 +226,12 @@ public:
     __host__ __device__ explicit cycle_iterator_adapter( const iterator_type& begin, const iterator_type& end, const iterator_type& current )
         : m_begin( begin ), m_end( end ), m_current( current )
     {}
+
+
+    template <class T>
+    __device__ 
+    friend size_t operator-(const cycle_iterator_adapter<T>& lhs, const cycle_iterator_adapter<T>& rhs);
+    
     
     __host__ __device__ cycle_iterator_adapter& operator++()
     {
@@ -306,6 +312,13 @@ template <class T>
 __host__ __device__ bool operator!=(const cycle_iterator_adapter<T>& lhs, const cycle_iterator_adapter<T>& rhs)
 {
     return !lhs.equal(rhs);
+}
+
+template <class T>
+__device__ 
+size_t operator-(const cycle_iterator_adapter<T>& lhs, const cycle_iterator_adapter<T>& rhs)
+{
+  return lhs.m_current - rhs.m_current;
 }
 
 /**
@@ -481,7 +494,7 @@ public:
              class comparison_type = key_equal,
              typename hash_value_type = typename Hasher::result_type>
     __forceinline__
-    __device__ iterator insert(const value_type& x, 
+    __device__ size_type insert(const value_type& x, 
                                aggregation_type op,
                                comparison_type keys_equal = key_equal(),
                                bool precomputed_hash = false,
@@ -510,6 +523,7 @@ public:
         const key_type insert_key = x.first;
         
         bool insert_success = false;
+        size_type insert_location{0};
         
         while (false == insert_success) {
 
@@ -533,13 +547,69 @@ public:
             update_existing_value(existing_value, x, op);
 
             insert_success = true;
+            insert_location = current_index;
           }
 
           current_index = (current_index+1)%hashtbl_size;
           current_hash_bucket = &(hashtbl_values[current_index]);
         }
         
-        return iterator( m_hashtbl_values,m_hashtbl_values+hashtbl_size, current_hash_bucket);
+        //return iterator( m_hashtbl_values,m_hashtbl_values+hashtbl_size, current_hash_bucket);
+        return insert_location;
+    }
+
+    template<class comparison_type = key_equal,
+             typename hash_value_type = typename Hasher::result_type>
+    __forceinline__
+    __device__ size_type insert_key(const key_type & insert_key, 
+                                   comparison_type keys_equal = key_equal(),
+                                   bool precomputed_hash = false,
+                                   hash_value_type precomputed_hash_value = 0)
+    {
+        const size_type hashtbl_size    = m_hashtbl_size;
+        value_type* hashtbl_values      = m_hashtbl_values;
+
+        hash_value_type hash_value{0};
+
+        // If a precomputed hash value has been passed in, then use it to determine
+        // the write location of the new key
+        if(true == precomputed_hash)
+        {
+          hash_value = precomputed_hash_value;
+        }
+        // Otherwise, compute the hash value from the new key
+        else
+        {
+          hash_value = m_hf(insert_key);
+        }
+
+        size_type current_index         = hash_value % hashtbl_size;
+        value_type *current_hash_bucket = &(hashtbl_values[current_index]);
+
+        bool insert_success = false;
+        size_type insert_location{0};
+        
+        while (false == insert_success) {
+          key_type& existing_key = current_hash_bucket->first;
+
+          // Try and set the existing_key for the current hash bucket to insert_key
+          const key_type old_key = atomicCAS( &existing_key, unused_key, insert_key);
+
+          // If old_key == unused_key, the current hash bucket was empty
+          // and existing_key was updated to insert_key by the atomicCAS. 
+          // If old_key == insert_key, this key has already been inserted. 
+          if ( keys_equal( unused_key, old_key ) || keys_equal(insert_key, old_key) ) {
+            insert_success = true;
+            insert_location = current_index;
+          }
+
+          current_index = (current_index+1)%hashtbl_size;
+          current_hash_bucket = &(hashtbl_values[current_index]);
+        }
+        
+        //return iterator( m_hashtbl_values,m_hashtbl_values+hashtbl_size, current_hash_bucket);
+        // Return the index where the insert occured
+        return insert_location;
     }
     
     /* This function is not currently implemented

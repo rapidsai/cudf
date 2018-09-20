@@ -25,6 +25,19 @@
 
 /* --------------------------------------------------------------------------*/
 /** 
+ * @Synopsis  Indicates the state of a hash bucket in the hash table.
+ */
+/* ----------------------------------------------------------------------------*/
+enum bucket_state : int
+{
+  EMPTY = 0,        /** Indicates that the hash bucket is empty */
+  NULL_VALUE,       /** Indicates that the bucket contains a NULL value */
+  VALID_VALUE       /** Indicates that the bucket contains a valid value */
+};
+using state_t = std::underlying_type<bucket_state>::type;
+
+/* --------------------------------------------------------------------------*/
+/** 
  * @Synopsis Takes in two columns of equal length. One column to groupby and the
  * other to aggregate with a provided aggregation operation. The pair
  * (groupby[i], aggregation[i]) are inserted as a key-value pair into a hash table.
@@ -50,30 +63,55 @@ __global__ void build_aggregation_table(map_type * const __restrict__ the_map,
                                         gdf_table<size_type> const & groupby_input_table,
                                         const aggregation_type * const __restrict__ aggregation_column,
                                         gdf_valid_type const * const __restrict__ aggregation_validitity_mask,
+                                        bucket_state * const __restrict__ hash_bucket_states,
                                         size_type column_size,
                                         aggregation_operation op,
                                         row_comparator the_comparator)
 {
   size_type i = threadIdx.x + blockIdx.x * blockDim.x;
 
+  const auto map_start = the_map->begin();
+
   while( i < column_size ){
 
     // Only insert into the hash table if the row is valid
-    if( groupby_input_table.is_row_valid(i)  && gdf_is_valid(aggregation_validitity_mask,i))
+    if( true == groupby_input_table.is_row_valid(i) )
     {
+
       // Hash the current row of the input table
       const auto row_hash = groupby_input_table.hash_row(i);
 
-      // Attempt to insert the current row's index.  
-      // The hash value of the row will determine the write location.
-      // The rows at the current row index and the existing row index 
-      // will be compared for equality. If they are equal, the aggregation
-      // operation is performed.
-      the_map->insert(thrust::make_pair(i, aggregation_column[i]), 
-          op,
-          the_comparator,
-          true,
-          row_hash);
+      if(false == gdf_is_valid(aggregation_validitity_mask,i))
+      {
+        const size_type insert_location = the_map->insert_key(i, the_comparator, true, row_hash);
+
+        // If the aggregation value is NULL, and the hash bucket is empty,
+        // then set the state of the bucket to show that there is a NULL value for this key
+        // The casts are required to cast the enum type to a type supported by 
+        // atomicCAS
+        // TODO Use a bitmask instead of a 32 bit flag for every bucket
+        atomicCAS(reinterpret_cast<state_t*>(&hash_bucket_states[insert_location]), 
+                  static_cast<state_t>(bucket_state::EMPTY), 
+                  static_cast<state_t>(bucket_state::NULL_VALUE));
+      }
+      else
+      {
+
+        // Attempt to insert the current row's index.  
+        // The hash value of the row will determine the write location.
+        // The rows at the current row index and the existing row index 
+        // will be compared for equality. If they are equal, the aggregation
+        // operation is performed.
+        const size_type insert_location = the_map->insert(thrust::make_pair(i, aggregation_column[i]), 
+                                                           op,
+                                                           the_comparator,
+                                                           true,
+                                                           row_hash);
+        // If it's not NULL, indicate that there is a valid value 
+        // in this bucket
+        atomicExch(reinterpret_cast<state_t*>(&hash_bucket_states[insert_location]),
+                                              static_cast<state_t>(bucket_state::VALID_VALUE));
+      }
     }
 
     i += blockDim.x * gridDim.x;
@@ -89,31 +127,56 @@ __global__ void build_aggregation_table(map_type * const __restrict__ the_map,
                                         gdf_table<size_type> const & groupby_input_table,
                                         const aggregation_type * const __restrict__ aggregation_column,
                                         gdf_valid_type const * const __restrict__ aggregation_validitity_mask,
+                                        bucket_state * const __restrict__ hash_bucket_states,
                                         size_type column_size,
                                         count_op<typename map_type::mapped_type> op,
                                         row_comparator the_comparator)
 {
+
+  auto map_start = the_map->begin();
   size_type i = threadIdx.x + blockIdx.x * blockDim.x;
 
   while( i < column_size ){
 
     // Only insert into the hash table if the the row is valid
-    if(groupby_input_table.is_row_valid(i) && gdf_is_valid(aggregation_validitity_mask, i))
+    if(groupby_input_table.is_row_valid(i) )
     {
       // Hash the current row of the input table
       const auto row_hash = groupby_input_table.hash_row(i);
 
-      // When the aggregator is COUNT, ignore the aggregation column and just insert '0'
-      // Attempt to insert the current row's index.  
-      // The hash value of the row will determine the write location.
-      // The rows at the current row index and the existing row index 
-      // will be compared for equality. If they are equal, the aggregation
-      // operation is performed.
-      the_map->insert(thrust::make_pair(i, static_cast<typename map_type::mapped_type>(0)), 
-          op,
-          the_comparator,
-          true,
-          row_hash);
+
+      if(false == gdf_is_valid(aggregation_validitity_mask,i))
+      {
+        // If the aggregation value is NULL, and the hash bucket is empty,
+        // then set the state of the bucket to show that there is a NULL value for this key
+        // The casts are required to cast the enum type to a type supported by 
+        // atomicCAS
+        // TODO Use a bitmask instead of a 32 bit flag for every bucket
+        const size_type insert_location = the_map->insert_key(i, the_comparator, true, row_hash);
+
+        atomicCAS(reinterpret_cast<state_t*>(&hash_bucket_states[insert_location]), 
+                  static_cast<state_t>(bucket_state::EMPTY), 
+                  static_cast<state_t>(bucket_state::NULL_VALUE));
+      }
+      else
+      {
+        // When the aggregator is COUNT, ignore the aggregation column and just insert '0'
+        // Attempt to insert the current row's index.  
+        // The hash value of the row will determine the write location.
+        // The rows at the current row index and the existing row index 
+        // will be compared for equality. If they are equal, the aggregation
+        // operation is performed.
+        const size_type insert_location = the_map->insert(thrust::make_pair(i, static_cast<typename map_type::mapped_type>(0)), 
+                                                           op,
+                                                           the_comparator,
+                                                           true,
+                                                           row_hash);
+
+        // If it's not NULL, indicate that there is a valid value 
+        // in this bucket
+        atomicExch(reinterpret_cast<state_t*>(&hash_bucket_states[insert_location]),
+                                              static_cast<state_t>(bucket_state::VALID_VALUE));
+      }
     }
     i += blockDim.x * gridDim.x;
   }
@@ -139,14 +202,14 @@ template<typename map_type,
          typename aggregation_type>
 __global__ void extract_groupby_result(const map_type * const __restrict__ the_map,
                                        const size_type map_size,
+                                       const bucket_state * const __restrict__ hash_bucket_states,
                                        gdf_table<size_type> & groupby_output_table,
                                        gdf_table<size_type> const & groupby_input_table,
                                        aggregation_type * const __restrict__ aggregation_out_column,
+                                       gdf_valid_type * const __restrict__ aggregation_out_valid_mask,
                                        size_type * const global_write_index)
 {
   size_type i = threadIdx.x + blockIdx.x * blockDim.x;
-
-  constexpr typename map_type::key_type unused_key{map_type::get_unused_key()};
 
   const typename map_type::value_type * const __restrict__ hashtabl_values = the_map->data();
 
@@ -154,19 +217,29 @@ __global__ void extract_groupby_result(const map_type * const __restrict__ the_m
   // write to the global output
   while(i < map_size){
 
-    const typename map_type::key_type current_key = hashtabl_values[i].first;
+    const bucket_state current_state = hash_bucket_states[i];
 
-    if( current_key != unused_key){
+    // If the hash bucket isn't empty, then we need to add it to the output
+    if(bucket_state::EMPTY != current_state)
+    {
+      const typename map_type::key_type output_row = hashtabl_values[i].first;
       const size_type thread_write_index = atomicAdd(global_write_index, 1);
 
-      // Copy the row at current_key from the input table to the row at
+      // Copy the row from the input table to the row at
       // thread_write_index in the output table
       groupby_output_table.copy_row(groupby_input_table, 
                                     thread_write_index,
-                                    current_key);
+                                    output_row);
 
-      aggregation_out_column[thread_write_index] = hashtabl_values[i].second;
+      // If this bucket hold's a valid aggregation value, copy it to the
+      // aggregation output and set it's validity bit
+      if( bucket_state::NULL_VALUE != current_state )
+      {
+        aggregation_out_column[thread_write_index] = hashtabl_values[i].second;
+        turn_bit_on(aggregation_out_valid_mask, i);
+      }
     }
+
     i += gridDim.x * blockDim.x;
   }
 }

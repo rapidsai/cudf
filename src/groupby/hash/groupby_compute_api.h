@@ -138,9 +138,10 @@ template< typename aggregation_type,
           typename aggregation_operation>
 gdf_error GroupbyHash(gdf_table<size_type> const & groupby_input_table,
                         const aggregation_type * const in_aggregation_column,
-                        gdf_valid_type const * const aggregation_validity_mask,
+                        gdf_valid_type const * const in_aggregation_validity_mask,
                         gdf_table<size_type> & groupby_output_table,
                         aggregation_type * out_aggregation_column,
+                        gdf_valid_type * const out_aggregation_validity_mask,
                         size_type * out_size,
                         aggregation_operation aggregation_op,
                         bool sort_result = false)
@@ -169,13 +170,20 @@ gdf_error GroupbyHash(gdf_table<size_type> const & groupby_input_table,
 
   CUDA_TRY(cudaGetLastError());
 
+
+  // Allocate an array to indicate the state of each bucket in the hash table
+  bucket_state * hash_bucket_states{nullptr};
+  CUDA_TRY( cudaMalloc(&hash_bucket_states, hash_table_size * sizeof(bucket_state)) );
+  CUDA_TRY( cudaMemset(hash_bucket_states, bucket_state::EMPTY, hash_table_size * sizeof(bucket_state)) );
+
   // Inserts (i, aggregation_column[i]) as a key-value pair into the
   // hash table. When a given key already exists in the table, the aggregation operation
   // is computed between the new and existing value, and the result is stored back.
   build_aggregation_table<<<build_grid_size, block_size>>>(the_map.get(), 
                                                            groupby_input_table, 
                                                            in_aggregation_column,
-                                                           aggregation_validity_mask,
+                                                           in_aggregation_validity_mask,
+                                                           hash_bucket_states,
                                                            input_num_rows,
                                                            aggregation_op,
                                                            row_comparator<map_type, size_type>(*the_map, groupby_input_table, groupby_input_table));
@@ -188,13 +196,22 @@ gdf_error GroupbyHash(gdf_table<size_type> const & groupby_input_table,
 
   const dim3 extract_grid_size ((hash_table_size + THREAD_BLOCK_SIZE - 1) / THREAD_BLOCK_SIZE, 1, 1);
 
+  // Initialize output aggregation column's validity mask
+  if(nullptr != out_aggregation_validity_mask)
+  {
+    const size_type num_masks = gdf_get_num_chars_bitmask(input_num_rows);
+    CUDA_TRY( cudaMemset(out_aggregation_validity_mask, 0, num_masks * sizeof(gdf_valid_type)) );
+  }
+
   // Extracts every non-empty key and value into separate contiguous arrays,
   // which provides the result of the groupby operation
   extract_groupby_result<<<extract_grid_size, block_size>>>(the_map.get(),
                                                             hash_table_size,
+                                                            hash_bucket_states,
                                                             groupby_output_table,
                                                             groupby_input_table,
                                                             out_aggregation_column,
+                                                            out_aggregation_validity_mask,
                                                             global_write_index);
  
   CUDA_TRY(cudaGetLastError());
@@ -215,6 +232,8 @@ gdf_error GroupbyHash(gdf_table<size_type> const & groupby_input_table,
               agg.begin());
       thrust::copy(agg.begin(), agg.end(), out_aggregation_column);
   }
+
+  CUDA_TRY( cudaFree(hash_bucket_states) );
 
   return GDF_SUCCESS;
 }
