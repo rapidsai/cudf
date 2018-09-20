@@ -9,7 +9,7 @@ from .buffer import Buffer
 
 from libgdf_cffi import ffi, libgdf
 
-from ..utils import make_mask
+from .utils import make_mask
 
 
 class LibGdfGroupby(object):
