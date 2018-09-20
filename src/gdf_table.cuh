@@ -127,6 +127,59 @@ void scatter_valid_mask( gdf_valid_type const * const input_mask,
   }
 }
 
+/* --------------------------------------------------------------------------*/
+/** 
+ * @Synopsis  Gathers a validity bitmask.
+ * 
+ * This kernel is used in order to gather the validity bit mask for a gdf_column.
+ * 
+ * @Param input_mask The mask that will be gathered.
+ * @Param output_mask The output after gathering the input
+ * @Param gather_map The map that indicates where elements from the input
+   will be gathered to in the output. output_bit[ gather_map [i] ] = input_bit[i]
+ * @Param num_rows The number of bits in the masks
+ */
+/* ----------------------------------------------------------------------------*/
+template <typename size_type>
+__global__ 
+void gather_valid_mask( gdf_valid_type const * const input_mask,
+                        gdf_valid_type * const output_mask,
+                        size_type const * const __restrict__ gather_map,
+                        size_type const num_rows)
+{
+  using mask_type = uint32_t;
+  constexpr uint32_t BITS_PER_MASK = 8 * sizeof(mask_type);
+
+  // Cast the validity type to a type where atomicOr is natively supported
+  const mask_type * __restrict__ input_mask32 = reinterpret_cast<mask_type const *>(input_mask);
+  mask_type * const __restrict__ output_mask32 = reinterpret_cast<mask_type * >(output_mask);
+
+  size_type row_number = threadIdx.x + blockIdx.x * blockDim.x;
+
+  while(row_number < num_rows)
+  {
+    const size_type gather_location = gather_map[row_number];
+
+    // Get the bit corresponding from the gathered row
+    const mask_type input_bit = input_mask32[gather_location/BITS_PER_MASK] & (static_cast<mask_type>(1) << (gather_location % BITS_PER_MASK));
+
+    // Only set the output bit if the input is valid
+    if(input_bit > 0)
+    {
+      // Construct the mask that sets the bit for the output row
+      const mask_type output_bit = static_cast<mask_type>(1) << (row_number % BITS_PER_MASK);
+
+      // Find the mask in the output that will hold the bit for output row
+      const size_type output_location = row_number / BITS_PER_MASK;
+
+      // Bitwise OR to set the gathered row's bit
+      atomicOr(&output_mask32[output_location], output_bit);
+    }
+
+    row_number += blockDim.x * gridDim.x;
+  }
+}
+
 
 /* --------------------------------------------------------------------------*/
 /** 
@@ -772,6 +825,8 @@ public:
   gdf_error gather(thrust::device_vector<size_type> const & row_gather_map,
           gdf_table<size_type> & gather_output_table)
   {
+
+    // TODO Gather the bit validity masks for each column
     gdf_error gdf_status{GDF_SUCCESS};
   
     // Each column can be gathered in parallel, therefore create a 
