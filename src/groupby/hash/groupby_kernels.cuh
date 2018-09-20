@@ -242,8 +242,8 @@ __global__ void extract_groupby_result(const map_type * const __restrict__ the_m
         if(nullptr != aggregation_out_valid_mask)
         {
           uint32_t * valid_mask32 = reinterpret_cast<uint32_t*>(aggregation_out_valid_mask);
-          const uint32_t output_bit32 = (uint32_t(1) << (i % uint32_t(32)));
-          uint32_t * output_mask32 = &(valid_mask32[(i / uint32_t(32))]);
+          const uint32_t output_bit32 = (uint32_t(1) << (thread_write_index % uint32_t(32)));
+          uint32_t * output_mask32 = &(valid_mask32[(thread_write_index / uint32_t(32))]);
           atomicOr(output_mask32, output_bit32);
         }
       }
