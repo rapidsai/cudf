@@ -28,6 +28,21 @@ gdf_error gdf_column_view_augmented(gdf_column *column, void *data, gdf_valid_ty
 
 gdf_error gdf_column_free(gdf_column *column);
 
+/* --------------------------------------------------------------------------*/
+/** 
+ * @Synopsis  Concatenates the gdf_columns into a single, contiguous column,
+ * including the validity bitmasks
+ * 
+ * @Param[in] columns_to_conat[] The columns to concatenate
+ * @Param[in] num_columns The number of columns to concatenate
+ * @Param[out] output_column A column whose buffers are already allocated that will 
+ * contain the concatenation of the input columns
+ * 
+ * @Returns GDF_SUCCESS upon successful completion
+ */
+/* ----------------------------------------------------------------------------*/
+gdf_error gdf_column_concat(gdf_column * columns_to_conat[], int num_columns, gdf_column * output_column);
+
 /* context operations */
 
 gdf_error gdf_context_view(gdf_context *context, int flag_sorted, gdf_method flag_method,
