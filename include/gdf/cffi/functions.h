@@ -41,7 +41,7 @@ gdf_error gdf_column_free(gdf_column *column);
  * @Returns GDF_SUCCESS upon successful completion
  */
 /* ----------------------------------------------------------------------------*/
-gdf_error gdf_column_concat(gdf_column * columns_to_conat[], int num_columns, gdf_column * output_column);
+gdf_error gdf_column_concat(gdf_column * columns_to_concat[], int num_columns, gdf_column * output_column);
 
 /* context operations */
 

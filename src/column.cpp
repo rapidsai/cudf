@@ -7,7 +7,7 @@
  * @Synopsis  Concatenates the gdf_columns into a single, contiguous column,
  * including the validity bitmasks
  * 
- * @Param[in] columns_to_conat[] The columns to concatenate
+ * @Param[in] columns_to_concat[] The columns to concatenate
  * @Param[in] num_columns The number of columns to concatenate
  * @Param[out] output_column A column whose buffers are already allocated that will 
  * contain the concatenation of the input columns
@@ -15,8 +15,50 @@
  * @Returns GDF_SUCCESS upon successful completion
  */
 /* ----------------------------------------------------------------------------*/
-gdf_error gdf_column_concat(gdf_column * columns_to_conat[], int num_columns, gdf_column * output_column)
+gdf_error gdf_column_concat(gdf_column * columns_to_concat[], int num_columns, gdf_column * output_column)
 {
+
+  if(nullptr == columns_to_concat){
+    return GDF_DATASET_EMPTY;
+  }
+
+  if((nullptr == columns_to_concat[0])
+      || (nullptr == output_column)){
+    return GDF_DATASET_EMPTY;
+  }
+
+  const gdf_dtype column_type = columns_to_concat[0]->dtype;
+
+  if(column_type != output_column->dtype){
+    return GDF_DTYPE_MISMATCH;
+  }
+
+  // Ensure all the columns are properly allocated
+  // and have matching types
+  for(int i = 0; i < num_columns; ++i){
+    gdf_column * current_column = columns_to_concat[i];
+    if(nullptr == current_column){
+      return GDF_DATASET_EMPTY;
+    }
+    if(current_column->size > 0){
+      if((nullptr == current_column->data)
+          || (nullptr == current_column->valid))
+      {
+        return GDF_DATASET_EMPTY;
+      }
+    }
+    if(column_type != current_column->dtype){
+      return GDF_DTYPE_MISMATCH;
+    }
+  }
+
+
+  // Will the size of the output column already be set? If so, we should probably
+  // make sure that the sum of the sizes of the input columns matches the size
+  // of the output column
+
+
+
   // NOTE: You need to take into account the fact that the validity buffers 
   // for each column need to be concated into a single, contiguous validity 
   // buffer, but you cannot just concat them as is. This is because the number
