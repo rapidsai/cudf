@@ -6,14 +6,14 @@
  * @Synopsis  Counts the number of valid bits in the mask that corresponds to
  * the specified number of rows.
  * 
- * @Param[in] mask The bit validity mask.
+ * @Param[in] masks The bit validity masks.
  * @Param[in] num_rows The number of rows represented in the bit-validity mask.
  * @Param[out] count The number of valid rows in the mask
  * 
  * @Returns  GDF_SUCCESS upon successful completion. 
  */
 /* ----------------------------------------------------------------------------*/
-gdf_error gdf_count_nonzero_mask(gdf_valid_type * mask, int num_rows, int count);
+gdf_error gdf_count_nonzero_mask(gdf_valid_type * masks, int num_rows, int * count);
 
 /* column operations */
 
