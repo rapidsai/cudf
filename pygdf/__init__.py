@@ -2,7 +2,7 @@
 from .dataframe import DataFrame
 from .series import Series
 from .multi import concat
-
+from .io import read_csv
 from .settings import set_options
 
 
@@ -15,5 +15,6 @@ __all__ = [
     DataFrame,
     Series,
     concat,
+    read_csv,
     set_options,
 ]
