@@ -9,6 +9,7 @@ gdf_error gdf_count_nonzero_mask(gdf_valid_type * masks, int num_rows, int * cou
   // Number of masks in the array of bitmasks
   const size_t num_masks = gdf_get_num_chars_bitmask(num_rows);
 
+  // Device lambda to count the number of valid bits in each mask
   auto mask_bit_counter = [masks, num_masks, num_rows] __device__ (int index)
   {
 

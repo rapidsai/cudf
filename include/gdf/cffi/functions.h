@@ -6,7 +6,8 @@
  * @Synopsis  Counts the number of valid bits in the mask that corresponds to
  * the specified number of rows.
  * 
- * @Param[in] masks The bit validity masks.
+ * @Param[in] masks Array of gdf_valid_types with enough bits to represent
+ * num_rows number of rows
  * @Param[in] num_rows The number of rows represented in the bit-validity mask.
  * @Param[out] count The number of valid rows in the mask
  * 
