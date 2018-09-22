@@ -17,7 +17,7 @@ gdf_error gdf_count_nonzero_mask(gdf_valid_type * masks, int num_rows, int * cou
 
     gdf_valid_type count = 0;
     gdf_valid_type mask = masks[index];
-    if(index < num_masks)
+    if(index < num_masks - 1)
     {
       // FIXME: If gdf_valid_type was 32 bits, we could use __popc
       while( mask > 0 )
@@ -28,7 +28,7 @@ gdf_error gdf_count_nonzero_mask(gdf_valid_type * masks, int num_rows, int * cou
     }
     // Not all bits in the last mask correspond to rows,
     // only count the ones that correspond to rows
-    else if(index == num_masks)
+    else if(index == num_masks - 1)
     {
       const int num_rows_last_mask = num_rows % BITS_PER_MASK;
       for(int i = 0; i < num_rows_last_mask; ++i)
