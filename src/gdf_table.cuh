@@ -107,11 +107,13 @@ void scatter_valid_mask( gdf_valid_type const * const input_mask,
   while(row_number < num_rows)
   {
     // Get the bit corresponding to the row
+    // FIXME Replace with a standard `get_bit` function
     const mask_type input_bit = input_mask32[row_number/BITS_PER_MASK] & (static_cast<mask_type>(1) << (row_number % BITS_PER_MASK));
 
     // Only scatter the input bit if it is valid
     if(input_bit > 0)
     {
+      // FIXME Replace with a standard `get_bit` function
       const size_type output_row = scatter_map[row_number];
       // Set the according output bit
       const mask_type output_bit = static_cast<mask_type>(1) << (output_row % BITS_PER_MASK);
@@ -161,11 +163,13 @@ void gather_valid_mask( gdf_valid_type const * const input_mask,
     const size_type gather_location = gather_map[row_number];
 
     // Get the bit corresponding from the gathered row
+    // FIXME Replace with a standard `get_bit` function
     const mask_type input_bit = input_mask32[gather_location/BITS_PER_MASK] & (static_cast<mask_type>(1) << (gather_location % BITS_PER_MASK));
 
     // Only set the output bit if the input is valid
     if(input_bit > 0)
     {
+      // FIXME Replace with a standard `set_bit` function
       // Construct the mask that sets the bit for the output row
       const mask_type output_bit = static_cast<mask_type>(1) << (row_number % BITS_PER_MASK);
 
