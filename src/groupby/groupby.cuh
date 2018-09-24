@@ -314,17 +314,23 @@ void compute_average(gdf_column * avg_column, gdf_column const & count_column, g
 {
   const size_t output_size = count_column.size;
 
-  // Wrap raw device pointers in thrust device ptrs to enable usage of thrust::transform
-  thrust::device_ptr<sum_type> d_sums = thrust::device_pointer_cast(static_cast<sum_type*>(sum_column.data));
-  thrust::device_ptr<size_t> d_counts = thrust::device_pointer_cast(static_cast<size_t*>(count_column.data));
-  thrust::device_ptr<avg_type> d_avg  = thrust::device_pointer_cast(static_cast<avg_type*>(avg_column->data));
+  sum_type * d_sums = static_cast<sum_type*>(sum_column.data);
+  size_t * d_counts = static_cast<size_t*>(count_column.data);
+  gdf_valid_type * count_valids = count_column.valid;
 
-  // TODO Should probably make sure the value in the Count column is valid
-  // otherwise we could end up with a divide by 0
-  auto average_op =  [] __device__ (sum_type sum, size_t count)->avg_type { return (sum / static_cast<avg_type>(count)); };
+  auto average_op =  [d_sums, d_counts, count_valids] __device__ (size_t index)->avg_type 
+  { 
+    if(false == gdf_is_valid(count_valids, index)){
+      return static_cast<avg_type>(0);
+    }
+    else{
+      return static_cast<avg_type>( d_sums[index] / d_counts[index] ); 
+    }
+  };
 
   // Computes the average into the passed in output buffer for the average column
-  thrust::transform(d_sums, d_sums + output_size, d_counts, d_avg, average_op);
+  thrust::device_ptr<avg_type>  d_avg = thrust::device_pointer_cast(static_cast<avg_type*>(avg_column->data));
+  thrust::tabulate(d_avg, d_avg + output_size, average_op);
 
   // Update the size of the average column
   avg_column->size = output_size;
@@ -369,6 +375,14 @@ gdf_error multi_pass_avg(int ncols,
   gdf_column sum_output = create_gdf_column<sum_type>(output_size);
   gdf_group_by_hash<sum_op>(ncols, in_groupby_columns, in_aggregation_column, out_groupby_columns, &sum_output, sort_result); 
 
+  // Set the validity mask for the AVG output column, the validity
+  // mask will be the same as both the Count and Sum output validity masks
+  if(nullptr != out_aggregation_column->valid)
+  {
+    const size_t num_masks = gdf_get_num_chars_bitmask(count_output.size);
+    CUDA_TRY(cudaMemcpy(out_aggregation_column->valid, count_output.valid, num_masks * sizeof(gdf_valid_type), cudaMemcpyDeviceToDevice));
+  }
+
   // Compute the average from the Sum and Count columns and store into the passed in aggregation output buffer
   const gdf_dtype gdf_output_type = out_aggregation_column->dtype;
   switch(gdf_output_type){
@@ -381,13 +395,6 @@ gdf_error multi_pass_avg(int ncols,
     default: return GDF_UNSUPPORTED_DTYPE;
   }
 
-  // Set the validity mask for the AVG output column, the validity
-  // mask will be the same as both the Count and Sum output validity masks
-  if(nullptr != out_aggregation_column->valid)
-  {
-    const size_t num_masks = gdf_get_num_chars_bitmask(sum_output.size);
-    CUDA_TRY(cudaMemcpy(out_aggregation_column->valid, sum_output.valid, num_masks * sizeof(gdf_valid_type), cudaMemcpyDeviceToDevice));
-  }
 
   // Free intermediate storage
   CUDA_TRY(cudaFree(count_output.data));
