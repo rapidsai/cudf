@@ -31,8 +31,8 @@
 enum bucket_state : int
 {
   EMPTY = 0,        /** Indicates that the hash bucket is empty */
-  NULL_VALUE,       /** Indicates that the bucket contains a NULL value */
-  VALID_VALUE       /** Indicates that the bucket contains a valid value */
+  NULL_VALUE,       /** Indicates that the bucket's payload contains a NULL value */
+  VALID_VALUE       /** Indicates that the bucket's payload contains a valid value */
 };
 using state_t = std::underlying_type<bucket_state>::type;
 
@@ -83,6 +83,8 @@ __global__ void build_aggregation_table(map_type * const __restrict__ the_map,
 
       if(false == gdf_is_valid(aggregation_validitity_mask,i))
       {
+        // If the value in the aggregation column is NULL, only insert
+        // the key without a payload 
         const size_type insert_location = the_map->insert_key(i, the_comparator, true, row_hash);
 
         // If the aggregation value is NULL, and the hash bucket is empty,
@@ -107,8 +109,8 @@ __global__ void build_aggregation_table(map_type * const __restrict__ the_map,
                                                            the_comparator,
                                                            true,
                                                            row_hash);
-        // If it's not NULL, indicate that there is a valid value 
-        // in this bucket
+
+        // Indicate that the payload for this hash bucket is valid
         atomicExch(reinterpret_cast<state_t*>(&hash_bucket_states[insert_location]),
                                               static_cast<state_t>(bucket_state::VALID_VALUE));
       }
@@ -168,6 +170,7 @@ __global__ void build_aggregation_table(map_type * const __restrict__ the_map,
                                                            row_hash);
       }
 
+      // Indicate that the payload for this hash bucket is valid
       atomicExch(reinterpret_cast<state_t*>(&hash_bucket_states[insert_location]),
                                             static_cast<state_t>(bucket_state::VALID_VALUE));
     }
@@ -187,7 +190,6 @@ __global__ void build_aggregation_table(map_type * const __restrict__ the_map,
  * @Param global_write_index A variable in device global memory used to coordinate
  * where threads write their output
  * 
- * @Returns   
  */
 /* ----------------------------------------------------------------------------*/
 template<typename map_type,
@@ -224,7 +226,7 @@ __global__ void extract_groupby_result(const map_type * const __restrict__ the_m
                                     thread_write_index,
                                     output_row);
 
-      // If this bucket hold's a valid aggregation value, copy it to the
+      // If this bucket holds a valid aggregation value, copy it to the
       // aggregation output and set it's validity bit
       if( bucket_state::NULL_VALUE != current_state )
       {

@@ -170,8 +170,11 @@ gdf_error GroupbyHash(gdf_table<size_type> const & groupby_input_table,
 
   CUDA_TRY(cudaGetLastError());
 
-
   // Allocate an array to indicate the state of each bucket in the hash table
+  // There are 3 possible states:
+  // EMPTY: The bucket's payload is empty
+  // NULL_VALUD: The bucket's payload is a NULL
+  // VALID_VALUE: The bucket's payload is a valid value
   bucket_state * hash_bucket_states{nullptr};
   CUDA_TRY( cudaMalloc(&hash_bucket_states, hash_table_size * sizeof(bucket_state)) );
   CUDA_TRY( cudaMemset(hash_bucket_states, bucket_state::EMPTY, hash_table_size * sizeof(bucket_state)) );
