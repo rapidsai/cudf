@@ -236,6 +236,7 @@ __global__ void extract_groupby_result(const map_type * const __restrict__ the_m
         // to a 32 bit type where atomics are supported
         if(nullptr != aggregation_out_valid_mask)
         {
+          // FIXME Replace with a standard `set_bit` function
           uint32_t * valid_mask32 = reinterpret_cast<uint32_t*>(aggregation_out_valid_mask);
           const uint32_t output_bit32 = (uint32_t(1) << (thread_write_index % uint32_t(32)));
           uint32_t * output_mask32 = &(valid_mask32[(thread_write_index / uint32_t(32))]);
