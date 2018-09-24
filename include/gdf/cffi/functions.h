@@ -14,7 +14,7 @@
  * @Returns  GDF_SUCCESS upon successful completion. 
  */
 /* ----------------------------------------------------------------------------*/
-gdf_error gdf_count_nonzero_mask(gdf_valid_type * masks, int num_rows, int * count);
+gdf_error gdf_count_nonzero_mask(gdf_valid_type const * masks, int num_rows, int * count);
 
 /* column operations */
 
