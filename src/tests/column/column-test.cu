@@ -63,15 +63,13 @@ TEST(gdf_column_concat_test, test1)
     int32_t *d_concat_data;
     gdf_valid_type *d_concat_valid;
     cudaMallocManaged(&d_concat_data, sizeof(int32_t)*total_size);
-    cudaMallocManaged(&d_concat_valid, sizeof(gdf_valid_type)*total_size / GDF_VALID_BITSIZE);
+    cudaMallocManaged(&d_concat_valid, sizeof(gdf_valid_type)*gdf_get_num_chars_bitmask(total_size));
 
     gdf_column_view(&output_column, d_concat_data, d_concat_valid, total_size, GDF_INT32);
 
     cudaDeviceSynchronize();
     printf("Concatenating %d columns\n", num_columns);        
-    EXPECT_EQ(GDF_SUCCESS, gdf_column_concat(input_columns, num_columns, &output_column));
-
-    
+    EXPECT_EQ(GDF_SUCCESS, gdf_column_concat(&output_column, input_columns, num_columns));
 
     for (int i = 0; i < total_size; i++)
         printf("%d ", d_concat_data[i]);
