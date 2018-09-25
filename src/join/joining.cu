@@ -17,6 +17,8 @@
 #include <gdf/gdf.h>
 #include <gdf/errorutils.h>
 #include <limits>
+#include <set>
+#include <vector>
 
 #include "joining.h"
 #include "../gdf_table.cuh"
@@ -307,16 +309,218 @@ gdf_error join_call( int num_cols, gdf_column **leftcol, gdf_column **rightcol,
 
 }
 
-gdf_error gdf_left_join(int num_cols, gdf_column **leftcol, gdf_column **rightcol,
-                        gdf_column *left_result, gdf_column *right_result,
-                        gdf_context *join_context)
-{
-  return join_call<JoinType::LEFT_JOIN>(num_cols, leftcol, rightcol, left_result, right_result, join_context);
+template <JoinType join_type, typename size_type, typename index_type>
+gdf_error construct_join_output_df(
+        std::vector<gdf_column*>& ljoincol,
+        std::vector<gdf_column*>& rjoincol,
+        gdf_column **left_cols, 
+        int num_left_cols,
+        int left_join_cols[],
+        gdf_column **right_cols,
+        int num_right_cols,
+        int right_join_cols[],
+        int num_cols_to_join,
+        int result_num_cols,
+        gdf_column ** result_cols,
+        gdf_column * left_indices,
+        gdf_column * right_indices) {
+    //create left and right input table with columns not joined on
+    std::vector<gdf_column*> lnonjoincol;
+    std::vector<gdf_column*> rnonjoincol;
+    std::set<int> l_join_indices, r_join_indices;
+    for (int i = 0; i < num_cols_to_join; ++i) {
+        l_join_indices.insert(left_join_cols[i]);
+        r_join_indices.insert(right_join_cols[i]);
+    }
+    for (int i = 0; i < num_left_cols; ++i) {
+        if (l_join_indices.find(i) == l_join_indices.end()) {
+            lnonjoincol.push_back(left_cols[i]);
+        }
+    }
+    for (int i = 0; i < num_right_cols; ++i) {
+        if (r_join_indices.find(i) == r_join_indices.end()) {
+            rnonjoincol.push_back(right_cols[i]);
+        }
+    }
+    //TODO : Invalid api
+
+    size_t join_size = left_indices->size;
+    int left_table_end = num_left_cols - num_cols_to_join;
+    int right_table_begin = num_left_cols;
+
+    //create left and right output column data buffers
+    for (int i = 0; i < left_table_end; ++i) {
+        gdf_column_view(result_cols[i], nullptr, nullptr, join_size, lnonjoincol[i]->dtype);
+        int col_width; get_column_byte_width(result_cols[i], &col_width);
+        cudaMalloc(&(result_cols[i]->data), col_width * join_size);
+        cudaMalloc(&(result_cols[i]->valid), sizeof(gdf_valid_type)*gdf_get_num_chars_bitmask(join_size));
+        cudaMemset(result_cols[i]->valid, 0, sizeof(gdf_valid_type)*gdf_get_num_chars_bitmask(join_size));
+    }
+    for (int i = right_table_begin; i < result_num_cols; ++i) {
+        gdf_column_view(result_cols[i], nullptr, nullptr, join_size, rnonjoincol[i - right_table_begin]->dtype);
+        int col_width; get_column_byte_width(result_cols[i], &col_width);
+        cudaMalloc(&(result_cols[i]->data), col_width * join_size);
+        cudaMalloc(&(result_cols[i]->valid), sizeof(gdf_valid_type)*gdf_get_num_chars_bitmask(join_size));
+        cudaMemset(result_cols[i]->valid, 0, sizeof(gdf_valid_type)*gdf_get_num_chars_bitmask(join_size));
+    }
+    //create joined output column data buffers
+    {
+        int i = left_table_end;
+        for (auto &join_index : l_join_indices) {
+            gdf_column_view(result_cols[i], nullptr, nullptr, join_size, left_cols[join_index]->dtype);
+            int col_width; get_column_byte_width(result_cols[i], &col_width);
+            cudaMalloc(&(result_cols[i]->data), col_width * join_size);
+            cudaMalloc(&(result_cols[i]->valid), sizeof(gdf_valid_type)*gdf_get_num_chars_bitmask(join_size));
+            cudaMemset(result_cols[i]->valid, 0, sizeof(gdf_valid_type)*gdf_get_num_chars_bitmask(join_size));
+            ++i;
+        }
+    }
+
+    gdf_table<size_type> l_i_table(lnonjoincol.size(), lnonjoincol.data());
+    gdf_table<size_type> r_i_table(rnonjoincol.size(), rnonjoincol.data());
+    gdf_table<size_type> j_i_table(ljoincol.size(), ljoincol.data());
+
+    gdf_table<size_type> l_table(num_left_cols - num_cols_to_join, result_cols);
+    gdf_table<size_type> r_table(num_right_cols - num_cols_to_join, result_cols + right_table_begin);
+    gdf_table<size_type> j_table(num_cols_to_join, result_cols + left_table_end);
+
+    gdf_error err{GDF_SUCCESS};
+    err = l_i_table.gather(static_cast<index_type*>(left_indices->data),
+            l_table, join_type != JoinType::INNER_JOIN);
+    if (err != GDF_SUCCESS) { return err; }
+    err = r_i_table.gather(static_cast<index_type*>(right_indices->data),
+            r_table, join_type != JoinType::INNER_JOIN);
+    if (err != GDF_SUCCESS) { return err; }
+    err = j_i_table.gather(static_cast<index_type*>(left_indices->data),
+            j_table, join_type != JoinType::INNER_JOIN);
+    return err;
 }
 
-gdf_error gdf_inner_join(int num_cols, gdf_column **leftcol, gdf_column **rightcol,
-                         gdf_column *left_result, gdf_column *right_result,
-                         gdf_context *join_context)
-{
-  return join_call<JoinType::INNER_JOIN>(num_cols, leftcol, rightcol, left_result, right_result, join_context);
+template <JoinType join_type, typename size_type, typename index_type>
+gdf_error join_call_compute_df(
+                         gdf_column **left_cols, 
+                         int num_left_cols,
+                         int left_join_cols[],
+                         gdf_column **right_cols,
+                         int num_right_cols,
+                         int right_join_cols[],
+                         int num_cols_to_join,
+                         int result_num_cols,
+                         gdf_column **result_cols,
+                         gdf_column * left_indices,
+                         gdf_column * right_indices,
+                         gdf_context *join_context) {
+    //return error if the inputs are invalid
+    if ((left_cols == nullptr)  ||
+        (right_cols == nullptr)) { return GDF_DATASET_EMPTY; }
+
+    //check if combined join output is expected
+    bool compute_df = (result_cols != nullptr);
+
+    //return error if no output pointers are valid
+    if ( ((left_indices == nullptr)||(right_indices == nullptr)) &&
+         (!compute_df) ) { return GDF_DATASET_EMPTY; }
+
+    //If index outputs are not requested, create columns to store them
+    //for computing combined join output
+    gdf_column * left_index_out = left_indices;
+    gdf_column * right_index_out = right_indices;
+
+    using gdf_col_pointer = typename std::unique_ptr<gdf_column, std::function<void(gdf_column*)>>;
+    auto gdf_col_deleter = [](gdf_column* col){
+        col->size = 0;
+        if (col->data) { cudaFree(col->data); }
+        if (col->valid) { cudaFree(col->valid); }
+    };
+    gdf_col_pointer l_index_temp, r_index_temp;
+
+    if (nullptr == left_indices) {
+        l_index_temp = {new gdf_column, gdf_col_deleter};
+        left_index_out = l_index_temp.get();
+    }
+
+    if (nullptr == right_indices) {
+        r_index_temp = {new gdf_column, gdf_col_deleter};
+        right_index_out = r_index_temp.get();
+    }
+
+    //get column pointers to join on
+    std::vector<gdf_column*> ljoincol;
+    std::vector<gdf_column*> rjoincol;
+    for (int i = 0; i < num_cols_to_join; ++i) {
+        ljoincol.push_back(left_cols[ left_join_cols[i] ]);
+        rjoincol.push_back(right_cols[ right_join_cols[i] ]);
+    }
+    gdf_error join_err = join_call<join_type>(num_cols_to_join,
+            ljoincol.data(), rjoincol.data(),
+            left_index_out, right_index_out,
+            join_context);
+    //If compute_df is false then left_index_out or right_index_out
+    //was not dynamically allocated.
+    if ((!compute_df) || (GDF_SUCCESS != join_err)) {
+        return join_err;
+    }
+
+    return construct_join_output_df<join_type, size_type, index_type>(
+            ljoincol, rjoincol,
+            left_cols, num_left_cols, left_join_cols,
+            right_cols, num_right_cols, right_join_cols,
+            num_cols_to_join, result_num_cols, result_cols,
+            left_index_out, right_index_out);
+}
+
+gdf_error gdf_left_join(
+                         gdf_column **left_cols, 
+                         int num_left_cols,
+                         int left_join_cols[],
+                         gdf_column **right_cols,
+                         int num_right_cols,
+                         int right_join_cols[],
+                         int num_cols_to_join,
+                         int result_num_cols,
+                         gdf_column **result_cols,
+                         gdf_column * left_indices,
+                         gdf_column * right_indices,
+                         gdf_context *join_context) {
+    return join_call_compute_df<JoinType::LEFT_JOIN, int64_t, output_index_type>(
+                     left_cols, 
+                     num_left_cols,
+                     left_join_cols,
+                     right_cols,
+                     num_right_cols,
+                     right_join_cols,
+                     num_cols_to_join,
+                     result_num_cols,
+                     result_cols,
+                     left_indices,
+                     right_indices,
+                     join_context);
+}
+
+gdf_error gdf_inner_join(
+                         gdf_column **left_cols, 
+                         int num_left_cols,
+                         int left_join_cols[],
+                         gdf_column **right_cols,
+                         int num_right_cols,
+                         int right_join_cols[],
+                         int num_cols_to_join,
+                         int result_num_cols,
+                         gdf_column **result_cols,
+                         gdf_column * left_indices,
+                         gdf_column * right_indices,
+                         gdf_context *join_context) {
+    return join_call_compute_df<JoinType::INNER_JOIN, int64_t, output_index_type>(
+                     left_cols, 
+                     num_left_cols,
+                     left_join_cols,
+                     right_cols,
+                     num_right_cols,
+                     right_join_cols,
+                     num_cols_to_join,
+                     result_num_cols,
+                     result_cols,
+                     left_indices,
+                     right_indices,
+                     join_context);
 }

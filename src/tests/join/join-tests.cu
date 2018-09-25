@@ -367,22 +367,28 @@ struct JoinTest : public testing::Test
 
     gdf_column ** left_gdf_columns = gdf_raw_left_columns.data();
     gdf_column ** right_gdf_columns = gdf_raw_right_columns.data();
+    std::vector<int> range;
+    for (int i = 0; i < num_columns; ++i) {range.push_back(i);}
     switch(op)
     {
       case join_op::LEFT:
         {
-          result_error = gdf_left_join(num_columns,
-                                       left_gdf_columns,
-                                       right_gdf_columns,
+          result_error = gdf_left_join(
+                                       left_gdf_columns, num_columns, range.data(),
+                                       right_gdf_columns, num_columns, range.data(),
+                                       num_columns,
+                                       0, nullptr,
                                        &left_result, &right_result,
                                        &ctxt);
           break;
         }
       case join_op::INNER:
         {
-          result_error =  gdf_inner_join(num_columns,
-                                         left_gdf_columns,
-                                         right_gdf_columns,
+          result_error =  gdf_inner_join(
+                                         left_gdf_columns, num_columns, range.data(),
+                                         right_gdf_columns, num_columns, range.data(),
+                                         num_columns,
+                                         0, nullptr,
                                          &left_result, &right_result,
                                          &ctxt);
           break;

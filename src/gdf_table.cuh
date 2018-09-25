@@ -26,6 +26,22 @@
 #include "hashmap/managed.cuh"
 #include "sqls_rtti_comp.hpp"
 
+template <typename size_type>
+struct ValidRange {
+    size_type start, stop;
+    __host__ __device__
+    ValidRange(
+            const size_type begin,
+            const size_type end) :
+        start(begin), stop(end) {}
+
+    __host__ __device__
+    bool operator()(const size_type index)
+    {
+        return ((index >= start) && (index < stop));
+    }
+};
+
 
 /* --------------------------------------------------------------------------*/
 /** 
@@ -124,6 +140,81 @@ void scatter_valid_mask( gdf_valid_type const * const input_mask,
 
     row_number += blockDim.x * gridDim.x;
   }
+}
+
+/* --------------------------------------------------------------------------*/
+/** 
+ * @Synopsis  Gathers a validity bitmask.
+ * 
+ * This kernel is used in order to gather the validity bit mask for a gdf_column.
+ * 
+ * @Param input_mask The mask that will be gathered.
+ * @Param output_mask The output after gathering the input
+ * @Param gather_map The map that indicates where elements from the input
+   will be gathered to in the output. output_bit[ gather_map [i] ] = input_bit[i]
+ * @Param num_rows The number of bits in the masks
+ */
+/* ----------------------------------------------------------------------------*/
+template <typename index_type>
+__global__ 
+void gather_valid_mask( gdf_valid_type const * const input_mask,
+                        gdf_valid_type * const output_mask,
+                        index_type const * const __restrict__ gather_map,
+                        index_type const num_rows)
+{
+  using mask_type = uint32_t;
+  constexpr uint32_t BITS_PER_MASK = 8 * sizeof(mask_type);
+
+  // Cast the validity type to a type where atomicOr is natively supported
+  const mask_type * __restrict__ input_mask32 = reinterpret_cast<mask_type const *>(input_mask);
+  mask_type * const __restrict__ output_mask32 = reinterpret_cast<mask_type * >(output_mask);
+
+  index_type row_number = threadIdx.x + blockIdx.x * blockDim.x;
+
+  ValidRange<index_type> valid(0, num_rows);
+  while(row_number < num_rows)
+  {
+    const index_type gather_location = gather_map[row_number];
+    if (!valid(gather_location)) {
+        row_number += blockDim.x * gridDim.x; continue;
+    }
+
+    // Get the bit corresponding from the gathered row
+    // FIXME Replace with a standard `get_bit` function
+    mask_type input_bit = (static_cast<mask_type>(1) << (gather_location % BITS_PER_MASK));
+    if (nullptr != input_mask) {
+        input_bit = input_bit & input_mask32[gather_location/BITS_PER_MASK];
+    }
+
+    // Only set the output bit if the input is valid
+    if(input_bit > 0)
+    {
+      // FIXME Replace with a standard `set_bit` function
+      // Construct the mask that sets the bit for the output row
+      const mask_type output_bit = static_cast<mask_type>(1) << (row_number % BITS_PER_MASK);
+
+      // Find the mask in the output that will hold the bit for output row
+      const index_type output_location = row_number / BITS_PER_MASK;
+
+      // Bitwise OR to set the gathered row's bit
+      atomicOr(&output_mask32[output_location], output_bit);
+    }
+
+    row_number += blockDim.x * gridDim.x;
+  }
+}
+
+//Wrapper around gather_valid_mask
+template <typename index_type>
+void gather_valid( gdf_valid_type const * const input_mask,
+                   gdf_valid_type * const output_mask,
+                   index_type const * const __restrict__ gather_map,
+                   index_type const num_rows,
+                   cudaStream_t stream = 0) {
+    const index_type BLOCK_SIZE = 256;
+    const index_type gather_grid_size = (num_rows + BLOCK_SIZE - 1)/BLOCK_SIZE;
+    gather_valid_mask<<<gather_grid_size, BLOCK_SIZE, 0, stream>>>(
+            input_mask, output_mask, gather_map, num_rows);
 }
 
 /* --------------------------------------------------------------------------*/
@@ -759,13 +850,14 @@ public:
      gather_output_table[i]
    * @Param[in] gather_output_table The output table to which the rows of this table
      will be mapped
+   * @Param[in] range_check Flag to check if row_gather_map has valid values
    * 
    * @Returns   
    */
   /* ----------------------------------------------------------------------------*/
-  template <typename size_type>
-  gdf_error gather(thrust::device_vector<size_type> const & row_gather_map,
-          gdf_table<size_type> & gather_output_table)
+  template <typename index_type>
+  gdf_error gather(index_type const * const row_gather_map,
+          gdf_table<size_type> & gather_output_table, bool range_check = false)
   {
     gdf_error gdf_status{GDF_SUCCESS};
   
@@ -782,7 +874,7 @@ public:
     {
       gdf_column * const current_input_column = this->get_column(i);
       gdf_column * const current_output_column = gather_output_table.get_column(i);
-      size_type column_width_bytes{0};
+      int column_width_bytes{0};
       gdf_status = get_column_byte_width(current_input_column, &column_width_bytes);
   
       if(GDF_SUCCESS != gdf_status)
@@ -794,48 +886,44 @@ public:
         case 1:
           {
             using column_type = int8_t;
-            column_type * const input = static_cast<column_type*>(current_input_column->data);
-            column_type * const output = static_cast<column_type*>(current_output_column->data);
-            gdf_status = gather_column<column_type, size_type>(input, 
-                                                     column_length,
+            gdf_status = gather_column<column_type, index_type>(
+                                                     current_input_column, 
                                                      row_gather_map, 
-                                                     output,
+                                                     current_output_column,
+                                                     range_check,
                                                      column_streams[i]);
             break;
           }
         case 2:
           {
             using column_type = int16_t;
-            column_type * input = static_cast<column_type*>(current_input_column->data);
-            column_type * output = static_cast<column_type*>(current_output_column->data);
-            gdf_status = gather_column<column_type, size_type>(input, 
-                                                     column_length,
+            gdf_status = gather_column<column_type, index_type>(
+                                                     current_input_column, 
                                                      row_gather_map, 
-                                                     output,
+                                                     current_output_column,
+                                                     range_check,
                                                      column_streams[i]);
             break;
           }
         case 4:
           {
             using column_type = int32_t;
-            column_type * input = static_cast<column_type*>(current_input_column->data);
-            column_type * output = static_cast<column_type*>(current_output_column->data);
-            gdf_status = gather_column<column_type, size_type>(input, 
-                                                     column_length,
+            gdf_status = gather_column<column_type, index_type>(
+                                                     current_input_column, 
                                                      row_gather_map, 
-                                                     output,
+                                                     current_output_column,
+                                                     range_check,
                                                      column_streams[i]);
             break;
           }
         case 8:
           {
             using column_type = int64_t;
-            column_type * input = static_cast<column_type*>(current_input_column->data);
-            column_type * output = static_cast<column_type*>(current_output_column->data);
-            gdf_status = gather_column<column_type, size_type>(input, 
-                                                     column_length,
+            gdf_status = gather_column<column_type, index_type>(
+                                                     current_input_column, 
                                                      row_gather_map, 
-                                                     output,
+                                                     current_output_column,
+                                                     range_check,
                                                      column_streams[i]);
             break;
           }
@@ -859,6 +947,21 @@ public:
     return gdf_status;
   }
 
+  template <typename index_type>
+  gdf_error gather(thrust::device_vector<index_type> const & row_gather_map,
+          gdf_table<size_type> & gather_output_table, bool range_check = false)
+  {
+      return gather(row_gather_map.data().get(), gather_output_table, range_check);
+  }
+
+  template <typename index_type>
+  gdf_error gather(gdf_column * row_gather_map,
+          gdf_table<size_type> & gather_output_table, bool range_check = false)
+  {
+      auto ptr = static_cast<index_type*>(row_gather_map->data);
+      return gather(ptr, gather_output_table, range_check);
+  }
+
   /* --------------------------------------------------------------------------*/
   /** 
    * @Synopsis  An in-place gather operation that permutes the rows of the table
@@ -867,12 +970,28 @@ public:
    * @Param row_gather_map The map the determines the reordering of rows in the 
    table 
    * 
+   * @Param range_check Flag to check if row_gather_map has valid values
+   table 
+   * 
    * @Returns   
    */
   /* ----------------------------------------------------------------------------*/
   template <typename size_type>
-  gdf_error gather(thrust::device_vector<size_type> const & row_gather_map) {
-      return gather(row_gather_map, *this);
+  gdf_error gather(size_type const * const row_gather_map,
+          bool range_check = false) {
+      return gather(row_gather_map, *this, range_check);
+  }
+
+  template <typename size_type>
+  gdf_error gather(thrust::device_vector<size_type> const & row_gather_map,
+          bool range_check = false) {
+      return gather(row_gather_map, *this, range_check);
+  }
+
+  template <typename size_type>
+  gdf_error gather(gdf_column * row_gather_map,
+          bool range_check = false) {
+      return gather(row_gather_map, *this, range_check);
   }
 
   /* --------------------------------------------------------------------------*/
@@ -909,7 +1028,7 @@ public:
       //thrust::host_vector<void*> host_columns = device_columns;
       //thrust::host_vector<gdf_dtype> host_types = device_types;
 
-      gather(permuted_indices);
+      gather<size_type>(permuted_indices);
 
       return permuted_indices;
   }
@@ -957,7 +1076,7 @@ gdf_error scatter( gdf_table<size_type> & scattered_output_table,
   {
     gdf_column * const current_input_column = this->get_column(i);
     gdf_column * const current_output_column = scattered_output_table.get_column(i);
-    size_type column_width_bytes{0};
+    int column_width_bytes{0};
     gdf_status = get_column_byte_width(current_input_column, &column_width_bytes);
 
     if(GDF_SUCCESS != gdf_status)
@@ -1070,41 +1189,87 @@ private:
      to rows in the output column
    * @Param[out] output_column The rearrangement of the input column 
      based on the mapping determined by the row_gather_map array
+   * @Param[in] range_check Flag to check validity of the values in row_gather_map
    * 
    * @Returns GDF_SUCCESS upon successful computation
    */
   /* ----------------------------------------------------------------------------*/
   template <typename column_type,
-            typename size_type>
-  gdf_error gather_column(column_type * const __restrict__ input_column,
-                           size_type const num_rows,
-                           thrust::device_vector<size_type> const & row_gather_map,
-                           column_type * const __restrict__ output_column,
-                           cudaStream_t stream = 0) const
+            typename index_type>
+  gdf_error gather_column(gdf_column * input_column,
+                          index_type const * const row_gather_map,
+                          gdf_column * output_column,
+                          const bool range_check,
+                          cudaStream_t stream = 0) const
   {
+    column_type * const i_data = static_cast<column_type*>(input_column->data);
+    column_type * const o_data = static_cast<column_type*>(output_column->data);
+    index_type num_rows = output_column->size;
   
     gdf_error gdf_status{GDF_SUCCESS};
 
     // Gathering from one table to another
-    if (input_column != output_column) {
-      thrust::gather(thrust::cuda::par.on(stream),
-                     row_gather_map.begin(),
-                     row_gather_map.end(),
-                     input_column,
-                     output_column);
+    if (i_data != o_data) {
+        if (range_check) {
+            thrust::gather_if(thrust::cuda::par.on(stream),
+                    row_gather_map,
+                    row_gather_map + num_rows,
+                    row_gather_map,
+                    i_data,
+                    o_data,
+                    ValidRange<index_type>(0, num_rows));
+
+        } else {
+            thrust::gather(thrust::cuda::par.on(stream),
+                    row_gather_map,
+                    row_gather_map + num_rows,
+                    i_data,
+                    o_data);
+        }
     } 
     // Gather is in-place
     else {
         thrust::device_vector<column_type> remapped_copy(num_rows);
-        thrust::gather(thrust::cuda::par.on(stream),
-                       row_gather_map.begin(),
-                       row_gather_map.end(),
-                       input_column,
-                       remapped_copy.begin());
+        if (range_check) {
+            thrust::gather_if(thrust::cuda::par.on(stream),
+                           row_gather_map,
+                           row_gather_map + num_rows,
+                           row_gather_map,
+                           i_data,
+                           remapped_copy.begin(),
+                           ValidRange<index_type>(0, num_rows));
+        } else {
+            thrust::gather(thrust::cuda::par.on(stream),
+                           row_gather_map,
+                           row_gather_map + num_rows,
+                           i_data,
+                           remapped_copy.begin());
+        }
         thrust::copy(thrust::cuda::par.on(stream),
                 remapped_copy.begin(),
                 remapped_copy.end(),
-                output_column);
+                o_data);
+    }
+    //If gather is in-place
+    if ((input_column->valid == output_column->valid) &&
+            (input_column->valid != nullptr)) {
+        thrust::device_vector<gdf_valid_type> remapped_valid_copy(gdf_get_num_chars_bitmask(num_rows));
+        gather_valid<index_type>(
+                input_column->valid,
+                remapped_valid_copy.data().get(),
+                row_gather_map, 
+                num_rows, stream);
+        thrust::copy(thrust::cuda::par.on(stream),
+                remapped_valid_copy.begin(),
+                remapped_valid_copy.end(), output_column->valid);
+    }
+    //If both input and output columns have a non null valid pointer
+    else if (nullptr != output_column->valid) {
+        gather_valid<index_type>(
+                input_column->valid,
+                output_column->valid,
+                row_gather_map, 
+                num_rows, stream);
     }
   
     CUDA_CHECK_LAST();
