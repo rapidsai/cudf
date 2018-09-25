@@ -149,5 +149,55 @@ gdf_error gdf_count_nonzero_mask(gdf_valid_type const * masks, int num_rows, int
   return GDF_SUCCESS;
 }
 
+gdf_error gdf_mask_concat(gdf_valid_type *masks_to_concat[], 
+                          gdf_valid_type *output_mask,
+                          gdf_size_type *column_lengths, 
+                          gdf_size_type output_column_length,            
+                          gdf_size_type num_columns)
+{
+    gdf_size_type *prefix_length = new gdf_size_type[num_columns+1];
+    int sum = 0;
+    for (gdf_size_type i = 0; i < num_columns; ++i)
+    {
+      prefix_length[i] = sum;
+      sum += column_lengths[i];
+    }
+    prefix_length[num_columns] = sum;
+
+    gdf_valid_type output_m = 0;
+
+    for (gdf_size_type output_index = 0; 
+         output_index < GDF_VALID_BITSIZE * gdf_get_num_chars_bitmask(output_column_length); 
+         ++output_index)
+    {
+      int cur_mask_index = num_columns-1;
+
+      // find mask index to read from for this output
+      // linear search, but assuming num_columns is small
+      for (gdf_size_type i = 0; i < num_columns; ++i) {
+        if (output_index < prefix_length[i+1]) {
+          cur_mask_index = i;
+          break;
+        }
+      }
+
+      gdf_valid_type bit = output_index % GDF_VALID_BITSIZE;
+      gdf_size_type index = output_index - prefix_length[cur_mask_index];
+      
+      if ( (index < column_lengths[cur_mask_index]) && 
+           gdf_is_valid(masks_to_concat[cur_mask_index], index) ) {
+        output_m |= (1 << bit);     
+      }
+
+      if (bit == GDF_VALID_BITSIZE-1) {
+        output_mask[output_index / GDF_VALID_BITSIZE] = output_m;
+        output_m = 0;
+      }
+    }
+
+    delete [] prefix_length;
+    
+    return GDF_SUCCESS;
+}
 
 

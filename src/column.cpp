@@ -1,6 +1,13 @@
 #include <gdf/gdf.h>
+#include <gdf/utils.h>
 #include <gdf/errorutils.h>
 #include <cuda_runtime_api.h>
+
+gdf_error gdf_mask_concat(gdf_valid_type *masks_to_concat[], 
+                          gdf_valid_type *output_mask,
+                          gdf_size_type *column_lengths, 
+                          gdf_size_type output_column_length,            
+                          gdf_size_type num_columns);
 
 /* --------------------------------------------------------------------------*/
 /** 
@@ -17,47 +24,68 @@
 /* ----------------------------------------------------------------------------*/
 gdf_error gdf_column_concat(gdf_column * columns_to_concat[], int num_columns, gdf_column * output_column)
 {
-
-  if(nullptr == columns_to_concat){
+  
+  if (nullptr == columns_to_concat){
     return GDF_DATASET_EMPTY;
   }
 
-  if((nullptr == columns_to_concat[0])
+  if ((nullptr == columns_to_concat[0])
       || (nullptr == output_column)){
     return GDF_DATASET_EMPTY;
   }
 
   const gdf_dtype column_type = columns_to_concat[0]->dtype;
 
-  if(column_type != output_column->dtype){
+  if (column_type != output_column->dtype){
     return GDF_DTYPE_MISMATCH;
   }
 
+  gdf_size_type total_size = 0;
+
   // Ensure all the columns are properly allocated
   // and have matching types
-  for(int i = 0; i < num_columns; ++i){
-    gdf_column * current_column = columns_to_concat[i];
-    if(nullptr == current_column){
+  for (int i = 0; i < num_columns; ++i) {
+    gdf_column* current_column = columns_to_concat[i];
+    if (nullptr == current_column) {
       return GDF_DATASET_EMPTY;
     }
-    if(current_column->size > 0){
-      if((nullptr == current_column->data)
+    if (current_column->size > 0) {
+      if ((nullptr == current_column->data)
           || (nullptr == current_column->valid))
       {
         return GDF_DATASET_EMPTY;
       }
     }
-    if(column_type != current_column->dtype){
+    if (column_type != current_column->dtype) {
       return GDF_DTYPE_MISMATCH;
     }
+
+    total_size += current_column->size;
   }
 
+  // sum of the sizes of the input columns must equal output column size
+  if (output_column->size != total_size) {
+    return GDF_COLUMN_SIZE_MISMATCH;
+  }
 
-  // Will the size of the output column already be set? If so, we should probably
-  // make sure that the sum of the sizes of the input columns matches the size
-  // of the output column
+  gdf_valid_type** masks = new gdf_valid_type*[num_columns];
+  gdf_size_type* column_sizes = new gdf_size_type[num_columns];
+  gdf_size_type offset = 0;
 
+  // copy data
+  for (int i = 0; i < num_columns; ++i) {
+    int8_t* target = (int8_t*)(output_column->data) + offset;
+    gdf_size_type bytes = sizeof(column_type) * columns_to_concat[i]->size;
+    cudaMemcpy(target, columns_to_concat[i]->data, bytes, cudaMemcpyDeviceToDevice);
 
+    offset += bytes;
+    masks[i] = new gdf_valid_type[gdf_get_num_chars_bitmask(columns_to_concat[i]->size)];
+    cudaMemcpy(masks[i], columns_to_concat[i]->valid, 
+               gdf_get_num_chars_bitmask(columns_to_concat[i]->size)*sizeof(gdf_valid_type), 
+               cudaMemcpyDeviceToHost);
+    //masks[i] = columns_to_concat[i]->valid;
+    column_sizes[i] = columns_to_concat[i]->size;
+  }
 
   // NOTE: You need to take into account the fact that the validity buffers 
   // for each column need to be concated into a single, contiguous validity 
@@ -66,6 +94,11 @@ gdf_error gdf_column_concat(gdf_column * columns_to_concat[], int num_columns, g
   // validity bitmask. Therefore, you must copy only the bits [0, col->size)
   // from each column's validity mask. E.g., the concatted bitmask will look like:
   // { col0->valid_bits[0, col0->size), col1->valid_bits[0, col1->size) ... }
+  gdf_mask_concat(masks, output_column->valid, column_sizes, output_column->size, num_columns);
+
+  
+  delete [] masks;
+  delete [] column_sizes;
 
   return GDF_SUCCESS;
 }
