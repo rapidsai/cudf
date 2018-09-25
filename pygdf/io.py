@@ -1,3 +1,5 @@
+# Copyright (c) 2018, NVIDIA CORPORATION.
+
 from __future__ import print_function, division
 
 from libgdf_cffi import libgdf, ffi
@@ -19,6 +21,52 @@ def read_csv(filepath, lineterminator='\n',
              delimiter=',', sep=None, delim_whitespace=False,
              skipinitialspace=False, names=None, dtype=None,
              skipfooter=0, skiprows=0):
+
+    """
+    Read CSV data into dataframe.
+
+    Parameters
+    ----------
+    filepath : str
+        Path of file to be read.
+    delimiter : char, default ','
+        Delimiter to be used.
+    delim_whitespace : bool, default False
+        Determines whether to use whitespace as delimiter.
+    lineterminator : char, default '\n'
+        Character to indicate end of line.
+    skipinitialspace : bool, default False
+        Skip spaces after delimiter.
+    names : list of str, default None
+        List of column names to be used.
+    dtype : list of str, default None
+        List of data types for columns.
+    skiprows : int, default 0
+        Number of rows to be skipped from the start of file.
+    skipfooter : int, default 0
+        Number of rows to be skipped at the bottom of file.
+
+    Returns
+    -------
+    GPU ``DataFrame`` object.
+
+    Example
+    -------
+
+    foo.txt : ::
+
+        50,50|40,60|30,70|20,80|
+
+    >>> import pygdf
+    >>> df = pygdf.read_csv('foo.txt', delimiter=',', lineterminator='|',
+    ...                     names=['col1', 'col2'], dtype=['int64', 'int64'],
+    ...                     skiprows=1, skipfooter=1)
+    >>> df
+      col1 col2
+    0 40   60
+    1 30   70
+
+    """
 
     csv_reader = ffi.new('csv_read_arg*')
 
