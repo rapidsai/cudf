@@ -381,8 +381,8 @@ def count_nonzero_mask(mask, size):
     nnz = ffi.new('int*')
     nnz[0] = 0
     mask_ptr, addr = unwrap_mask(mask)
+
     if addr != ffi.NULL:
         libgdf.gdf_count_nonzero_mask(mask_ptr, size, nnz)
-    else:
-        nnz[0] = 0
+
     return nnz[0]
