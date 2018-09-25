@@ -30,7 +30,6 @@ size_t count_valid_bits_host(std::vector<gdf_valid_type> const & masks, const in
     return 0;
   }
 
-
   size_t count{0};
 
   // Count the valid bits for all masks except the last one
@@ -48,7 +47,10 @@ size_t count_valid_bits_host(std::vector<gdf_valid_type> const & masks, const in
   constexpr int BITS_PER_MASK = sizeof(gdf_valid_type) * 8;
 
   // Only count the bits in the last mask that correspond to rows
-  const int num_rows_last_mask = num_rows % BITS_PER_MASK;
+  int num_rows_last_mask = num_rows % BITS_PER_MASK;
+
+  if(num_rows_last_mask == 0)
+    num_rows_last_mask = BITS_PER_MASK;
 
   gdf_valid_type last_mask = *(masks.end() - 1);
   for(int i = 0; (i < num_rows_last_mask) && (last_mask > 0); ++i)
