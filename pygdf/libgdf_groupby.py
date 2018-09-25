@@ -218,10 +218,12 @@ class LibGdfGroupby(object):
         ctx.flag_method = self._method
         ctx.flag_distinct = 0
 
-        sort_result = (len(args) == 1)
+        sort_result = True
 
         if not isinstance(args, str) and isinstance(
                 args, collections.abc.Sequence):
+            if (len(args) == 1 and len(self._val_columns) == 1):
+                sort_result = False
             for agg_type in args:
 
                 val_columns_out = [agg_type + '_' +
@@ -234,6 +236,9 @@ class LibGdfGroupby(object):
                 add_col_values = False  # we only want to add them once
 
         elif isinstance(args, collections.abc.Mapping):
+            if (len(args.keys()) == 1):
+                if(len(list(args.values())[0]) == 1):
+                    sort_result = False
             for val, agg_type in args.items():
 
                 if not isinstance(agg_type, str) and \
