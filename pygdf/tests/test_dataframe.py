@@ -670,3 +670,23 @@ def test_dataframe_masked_slicing(nelem, slice_start, slice_end):
     got = do_slice(gdf).to_pandas()
 
     pd.testing.assert_frame_equal(expect, got)
+
+
+def test_from_pandas():
+    df = pd.DataFrame({'x': [1, 2, 3]}, index=[4., 5., 6.])
+    gdf = gd.DataFrame.from_pandas(df)
+    assert isinstance(gdf, gd.DataFrame)
+
+    pd.testing.assert_frame_equal(df, gdf.to_pandas())
+
+    s = df.x
+    gs = gd.Series.from_pandas(s)
+    assert isinstance(gs, gd.Series)
+
+    pd.testing.assert_series_equal(s, gs.to_pandas())
+
+
+def test_series_name():
+    df = pd.DataFrame({'x': [1, 2, 3]}, index=[4., 5., 6.])
+    gdf = gd.DataFrame.from_pandas(df)
+    assert gdf['x'].name == 'x'
