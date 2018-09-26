@@ -104,7 +104,7 @@ def column_select_by_boolmask(column, boolmask):
     _, selvals = cudautils.copy_to_dense(column.data.to_gpu_array(),
                                          mask=boolbits)
 
-    assert not column.has_null_mask   # the nullmask needs to be recomputed
+    assert column.null_count == 0   # the nullmask needs to be recomputed
 
     selected_values = column.replace(data=Buffer(selvals))
     selected_index = Buffer(selinds)
