@@ -183,6 +183,7 @@ gdf_error estimate_join_output_size(gdf_table<size_type> const & build_table,
 * @tparam join_type The type of join to be performed
 * @tparam hash_value_type The data type to be used for the Keys in the hash table
 * @tparam output_index_type The data type to be used for the output indices
+* @tparam size_type The data type used for size calculations, e.g. size of hash table
 *
 * @Returns  cudaSuccess upon successful completion of the join. Otherwise returns
 * the appropriate CUDA error code
@@ -219,7 +220,7 @@ gdf_error compute_hash_join(mgpu::context_t & compute_ctx,
                                                       output_index_type,
                                                       size_type,
                                                       std::numeric_limits<hash_value_type>::max(),
-                                                      std::numeric_limits<size_type>::max()>;
+                                                      std::numeric_limits<output_index_type>::max()>;
 #endif
 
   // Hash table will be built on the right table

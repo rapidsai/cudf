@@ -1,3 +1,7 @@
+#!/bin/bash
+#
+# Copyright (c) 2018, NVIDIA CORPORATION.
+
 set -e
 
 if [ $BUILD_CFFI == 1 ]; then

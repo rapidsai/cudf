@@ -26,6 +26,7 @@ enum class JoinType {
 #include "../../hashmap/concurrent_unordered_multimap.cuh"
 #include "../../hashmap/hash_functions.cuh"
 #include <cub/cub.cuh>
+#include "../../util/bit_util.cuh"
 
 constexpr int warp_size = 32;
 
@@ -50,23 +51,27 @@ __global__ void build_hash_table( multimap_type * const multi_map,
 {
     size_type i = threadIdx.x + blockIdx.x * blockDim.x;
 
-    while( i < build_table_num_rows ) {
+    while( i < build_table_num_rows) {
 
-      // Compute the hash value of this row
-      const hash_value_type row_hash_value{build_table.hash_row(i)};
+      // It is impossible for a row with a NULL value to match any other row,
+      // therefore, do not insert it into the hash table
+      if (build_table.is_row_valid(i)) {
 
-      // Insert the (row hash value, row index) into the map
-      // using the row hash value to determine the location in the 
-      // hash map where the new pair should be inserted
-      const auto insert_location = multi_map->insert( thrust::make_pair( row_hash_value, i ),
-                                                      true,
-                                                      row_hash_value );
+        // Compute the hash value of this row
+        const hash_value_type row_hash_value{build_table.hash_row(i)};
 
-      // If the insert failed, set the error code accordingly
-      if(multi_map->end() == insert_location){
-        *gdf_error_code = GDF_HASH_TABLE_INSERT_FAILURE;
+        // Insert the (row hash value, row index) into the map
+        // using the row hash value to determine the location in the 
+        // hash map where the new pair should be inserted
+        const auto insert_location = multi_map->insert( thrust::make_pair( row_hash_value, i ),
+                                                        true,
+                                                        row_hash_value );
+
+        // If the insert failed, set the error code accordingly
+        if(multi_map->end() == insert_location){
+          *gdf_error_code = GDF_HASH_TABLE_INSERT_FAILURE;
+        }
       }
-
       i += blockDim.x * gridDim.x;
     }
 }
@@ -146,15 +151,20 @@ __global__ void compute_join_output_size( multimap_type const * const multi_map,
   if ( probe_row_index < probe_table_num_rows ) {
     const auto unused_key = multi_map->get_unused_key();
     const auto end = multi_map->end();
-
-    // Compute the hash value of the probe row
-    const hash_value_type probe_row_hash_value{probe_table.hash_row(probe_row_index)};
+    auto found = end;
 
     // Search the hash map for the hash value of the probe row using the row's
     // hash value to determine the location where to search for the row in the hash map
-    auto found = multi_map->find(probe_row_hash_value,
-                                 true,
-                                 probe_row_hash_value);
+    // Only probe the hash table if the probe row is valid
+    hash_value_type probe_row_hash_value{0};
+    if(probe_table.is_row_valid(probe_row_index))
+    {
+      // Search the hash map for the hash value of the probe row
+      probe_row_hash_value = probe_table.hash_row(probe_row_index);
+      found = multi_map->find(probe_row_hash_value,
+                              true,
+                              probe_row_hash_value);
+    }
 
     // for left-joins we always need to add an output
     bool running = (join_type == JoinType::LEFT_JOIN) || (end != found); 
@@ -288,117 +298,131 @@ __global__ void probe_hash_table( multimap_type const * const multi_map,
 
   output_index_type probe_row_index = threadIdx.x + blockIdx.x * blockDim.x;
 
-
 #if defined(CUDA_VERSION) && CUDA_VERSION >= 9000
   const unsigned int activemask = __ballot_sync(0xffffffff, probe_row_index < probe_table_num_rows);
 #endif
   if ( probe_row_index < probe_table_num_rows ) {
-    const auto unused_key = multi_map->get_unused_key();
-    const auto end = multi_map->end();
 
-    // Search the hash map for the hash value of the probe row
-    const hash_value_type probe_row_hash_value{probe_table.hash_row(probe_row_index)};
-    auto found = multi_map->find(probe_row_hash_value,
-                                 true,
-                                 probe_row_hash_value);
+    const auto unused_key = multi_map->get_unused_key();
+    const auto end = multi_map->end();  
+    auto found = end;    
+
+    // Search the hash map for the hash value of the probe row using the row's
+    // hash value to determine the location where to search for the row in the hash map
+
+    // Only probe the hash table if the probe row is valid
+    hash_value_type probe_row_hash_value{0};
+    if(probe_table.is_row_valid(probe_row_index))
+    {
+      // Search the hash map for the hash value of the probe row
+      probe_row_hash_value = probe_table.hash_row(probe_row_index);
+      found = multi_map->find(probe_row_hash_value,
+                                   true,
+                                   probe_row_hash_value);
+    }
+
 
     bool running = (join_type == JoinType::LEFT_JOIN) || (end != found);	// for left-joins we always need to add an output
     bool found_match = false;
 #if defined(CUDA_VERSION) && CUDA_VERSION >= 9000
     while ( __any_sync( activemask, running ) )
 #else
-      while ( __any( running ) )
+    while ( __any( running ) )
 #endif
+    {
+      if ( running )
       {
-        if ( running )
+        // TODO Simplify this logic...
+
+        // Left joins always have an entry in the output
+        if (join_type == JoinType::LEFT_JOIN && (end == found)) {
+          running = false;    
+        }
+        // Stop searching after encountering an empty hash table entry
+        else if ( unused_key == found->first ) {
+          running = false;
+        }
+        // First check that the hash values of the two rows match
+        else if (found->first == probe_row_hash_value)
         {
-          // TODO Simplify this logic...
-
-          // Left joins always have an entry in the output
-          if (join_type == JoinType::LEFT_JOIN && (end == found)) {
-            running = false;    
-          }
-          // Stop searching after encountering an empty hash table entry
-          else if ( unused_key == found->first ) {
-            running = false;
-          }
-          // First check that the hash values of the two rows match
-          else if (found->first == probe_row_hash_value)
+          // If the hash values are equal, check that the rows are equal
+          if( true == probe_table.rows_equal(build_table, probe_row_index, found->second) )
           {
-            // If the hash values are equal, check that the rows are equal
-            if( true == probe_table.rows_equal(build_table, probe_row_index, found->second) )
-            {
-              // If the rows are equal, then we have found a true match
-              found_match = true;
-              const output_index_type probe_index{offset + probe_row_index};
-              add_pair_to_cache(probe_index, found->second, current_idx_shared, warp_id, join_shared_l[warp_id], join_shared_r[warp_id]);
-            }
-            // Continue searching for matching rows until you hit an empty hash map entry
-            ++found;
-            // If you hit the end of the hash map, wrap around to the beginning
-            if(end == found)
-              found = multi_map->begin();
-            // Next entry is empty, stop searching
-            if(unused_key == found->first)
-              running = false;
-          }
-          else 
-          {
-            // Continue searching for matching rows until you hit an empty hash table entry
-            ++found;
-            // If you hit the end of the hash map, wrap around to the beginning
-            if(end == found)
-              found = multi_map->begin();
-            // Next entry is empty, stop searching
-            if(unused_key == found->first)
-              running = false;
-          }
 
-          // If performing a LEFT join and no match was found, insert a Null into the output
-          if ((join_type == JoinType::LEFT_JOIN) && (!running) && (!found_match)) {
+            // If the rows are equal, then we have found a true match
+            found_match = true;
             const output_index_type probe_index{offset + probe_row_index};
-            add_pair_to_cache(probe_index, static_cast<output_index_type>(JoinNoneValue), current_idx_shared, warp_id, join_shared_l[warp_id], join_shared_r[warp_id]);
+            add_pair_to_cache(probe_index, found->second, current_idx_shared, warp_id, join_shared_l[warp_id], join_shared_r[warp_id]);
           }
+          // Continue searching for matching rows until you hit an empty hash map entry
+          ++found;
+          // If you hit the end of the hash map, wrap around to the beginning
+          if(end == found)
+            found = multi_map->begin();
+          // Next entry is empty, stop searching
+          if(unused_key == found->first)
+            running = false;
+        }
+        else 
+        {
+          // Continue searching for matching rows until you hit an empty hash table entry
+          ++found;
+          // If you hit the end of the hash map, wrap around to the beginning
+          if(end == found)
+            found = multi_map->begin();
+          // Next entry is empty, stop searching
+          if(unused_key == found->first)
+            running = false;
         }
 
+        // If performing a LEFT join and no match was found, insert a Null into the output
+        if ((join_type == JoinType::LEFT_JOIN) && (!running) && (!found_match)) {
+          const output_index_type probe_index{offset + probe_row_index};
+          add_pair_to_cache(probe_index, static_cast<output_index_type>(JoinNoneValue), current_idx_shared, warp_id, join_shared_l[warp_id], join_shared_r[warp_id]);
+        }
+      }
+
+#if defined(CUDA_VERSION) && CUDA_VERSION >= 9000
+      __syncwarp(activemask);
+#endif
+      //flush output cache if next iteration does not fit
+      if ( current_idx_shared[warp_id] + warp_size >= output_cache_size ) 
+      {
+
+        // count how many active threads participating here which could be less than warp_size
+#if defined(CUDA_VERSION) && CUDA_VERSION < 9000
+        const unsigned int activemask = __ballot(1);
+#endif
+        int num_threads = __popc(activemask);
+        size_type output_offset = 0;
+
+        if ( 0 == lane_id )
+        {
+          output_offset = atomicAdd( current_idx, current_idx_shared[warp_id] );
+        }
+
+        output_offset = cub::ShuffleIndex(output_offset, 0, warp_size, activemask);
+
+        for ( int shared_out_idx = lane_id; shared_out_idx<current_idx_shared[warp_id]; shared_out_idx+=num_threads ) 
+        {
+          size_type thread_offset = output_offset + shared_out_idx;
+          if (thread_offset < max_size) {
+            output_l[thread_offset] = join_shared_l[warp_id][shared_out_idx];
+            output_r[thread_offset] = join_shared_r[warp_id][shared_out_idx];
+          }
+        }
 #if defined(CUDA_VERSION) && CUDA_VERSION >= 9000
         __syncwarp(activemask);
 #endif
-        //flush output cache if next iteration does not fit
-        if ( current_idx_shared[warp_id] + warp_size >= output_cache_size ) {
-
-          // count how many active threads participating here which could be less than warp_size
-#if defined(CUDA_VERSION) && CUDA_VERSION < 9000
-          const unsigned int activemask = __ballot(1);
-#endif
-          int num_threads = __popc(activemask);
-          size_type output_offset = 0;
-
-          if ( 0 == lane_id )
-          {
-            output_offset = atomicAdd( current_idx, current_idx_shared[warp_id] );
-          }
-
-          output_offset = cub::ShuffleIndex(output_offset, 0, warp_size, activemask);
-
-          for ( int shared_out_idx = lane_id; shared_out_idx<current_idx_shared[warp_id]; shared_out_idx+=num_threads ) 
-          {
-            size_type thread_offset = output_offset + shared_out_idx;
-            if (thread_offset < max_size) {
-              output_l[thread_offset] = join_shared_l[warp_id][shared_out_idx];
-              output_r[thread_offset] = join_shared_r[warp_id][shared_out_idx];
-            }
-          }
-#if defined(CUDA_VERSION) && CUDA_VERSION >= 9000
-          __syncwarp(activemask);
-#endif
-          if ( 0 == lane_id )
-            current_idx_shared[warp_id] = 0;
-#if defined(CUDA_VERSION) && CUDA_VERSION >= 9000
-          __syncwarp(activemask);
-#endif
+        if ( 0 == lane_id )
+        {
+          current_idx_shared[warp_id] = 0;
         }
+#if defined(CUDA_VERSION) && CUDA_VERSION >= 9000
+        __syncwarp(activemask);
+#endif
       }
+    }
 
     //final flush of output cache
     if ( current_idx_shared[warp_id] > 0 ) 
@@ -416,9 +440,11 @@ __global__ void probe_hash_table( multimap_type const * const multi_map,
         
       output_offset = cub::ShuffleIndex(output_offset, 0, warp_size, activemask);
 
-      for ( int shared_out_idx = lane_id; shared_out_idx<current_idx_shared[warp_id]; shared_out_idx+=num_threads ) {
+      for ( int shared_out_idx = lane_id; shared_out_idx<current_idx_shared[warp_id]; shared_out_idx+=num_threads ) 
+      {
         size_type thread_offset = output_offset + shared_out_idx;
-        if (thread_offset < max_size) {
+        if (thread_offset < max_size) 
+        {
           output_l[thread_offset] = join_shared_l[warp_id][shared_out_idx];
           output_r[thread_offset] = join_shared_r[warp_id][shared_out_idx];
         }

@@ -21,35 +21,36 @@
 #include <iostream>
 #include <cstdlib>
 
-template <typename... T>
-using VTuple = std::tuple<std::vector<T>...>;
-
 // Initialize a vector with random data
-template<typename T>
-void initialize_vector(std::vector<T>& v, const size_t column_length, const size_t column_range, bool sorted = false)
+template<typename K>
+void initialize_vector(std::vector<K>& k, const size_t key_count, const size_t value_per_key, size_t column_range)
 {
+    //Ensure uniqueness
+    if (key_count < column_range) {
+
+    }
  v.resize(column_length);
  std::generate(v.begin(), v.end(), [column_range](){return std::rand() % column_range;});
- if (sorted) { std::sort(v.begin(), v.end()); }
+ if (unique) { std::sort(v.begin(), v.end()); }
 }
 
 //compile time recursion to initialize a tuple of vectors
 template<std::size_t I = 0, typename... Tp>
 inline typename std::enable_if<I == sizeof...(Tp), void>::type
-initialize_tuple(std::tuple<std::vector<Tp>...>& t, size_t column_length, size_t column_range, bool sorted = false)
+initialize_tuple(std::tuple<std::vector<Tp>...>& t, size_t key_count, size_t value_per_key, size_t column_range)
 {
  //bottom of compile-time recursion
  //purposely empty...
 }
 template<std::size_t I = 0, typename... Tp>
 inline typename std::enable_if<I < sizeof...(Tp), void>::type
-initialize_tuple(std::tuple<std::vector<Tp>...>& t, size_t column_length, size_t column_range, bool sorted = false)
+initialize_tuple(std::tuple<std::vector<Tp>...>& t, size_t key_count, size_t value_per_key, size_t column_range)
 {
   // Initialize the current vector
- initialize_vector(std::get<I>(t), column_length, column_range, sorted);
+ initialize_vector(std::get<I>(t), key_count, value_per_key, column_range);
 
  //recurse to next vector in tuple
- initialize_tuple<I + 1, Tp...>(t, column_length, column_range, sorted);
+ initialize_tuple<I + 1, Tp...>(t, key_count, value_per_key, column_range);
 }
 
 

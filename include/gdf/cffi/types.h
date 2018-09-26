@@ -4,6 +4,11 @@ typedef size_t gdf_size_type;
 typedef gdf_size_type gdf_index_type;
 typedef unsigned char gdf_valid_type;
 
+/* --------------------------------------------------------------------------*/
+/** 
+ * @Synopsis  These enums indicate the possible data types for a gdf_column
+ */
+/* ----------------------------------------------------------------------------*/
 typedef enum {
     GDF_invalid=0,
     GDF_INT8,
@@ -19,31 +24,39 @@ typedef enum {
 } gdf_dtype;
 
 
-/*
- * GDF error enum type.
- * Any changes here should be reflected in `gdf_error_get_name` as well.
+/* --------------------------------------------------------------------------*/
+/** 
+ * @Synopsis  These are all possible gdf error codes that can be returned from 
+ * a libgdf function. ANY NEW ERROR CODE MUST ALSO BE ADDED TO `gdf_error_get_name` 
+ * AS WELL
  */
+/* ----------------------------------------------------------------------------*/
 typedef enum {
-    GDF_SUCCESS=0,
-    GDF_CUDA_ERROR,
-    GDF_UNSUPPORTED_DTYPE,
-    GDF_COLUMN_SIZE_MISMATCH,
-    GDF_COLUMN_SIZE_TOO_BIG,
-    GDF_DATASET_EMPTY,
-    GDF_VALIDITY_MISSING,
-    GDF_VALIDITY_UNSUPPORTED,
-    GDF_INVALID_API_CALL,
-    GDF_JOIN_DTYPE_MISMATCH,
-    GDF_JOIN_TOO_MANY_COLUMNS,
+    GDF_SUCCESS=0,                
+    GDF_CUDA_ERROR,                   /**< Error occured in a CUDA call */ 
+    GDF_UNSUPPORTED_DTYPE,            /**< The datatype of the gdf_column is unsupported */ 
+    GDF_COLUMN_SIZE_MISMATCH,         /**< Two columns that should be the same size aren't the same size*/        
+    GDF_COLUMN_SIZE_TOO_BIG,          /**< Size of column is larger than the max supported size */      
+    GDF_DATASET_EMPTY,                /**< Input dataset is either null or has size 0 when it shouldn't */   
+    GDF_VALIDITY_MISSING,             /**< gdf_column's validity bitmask is null */  
+    GDF_VALIDITY_UNSUPPORTED,         
+    GDF_INVALID_API_CALL,             /**< The arguments passed into the function were invalid */   
+    GDF_JOIN_DTYPE_MISMATCH,          /**< Datatype mismatch between corresponding columns in  left/right tables in the Join function */   
+    GDF_JOIN_TOO_MANY_COLUMNS,        /**< Too many columns were passed in for the requested join operation*/       
     GDF_GROUPBY_TOO_MANY_COLUMNS,
-    GDF_UNSUPPORTED_METHOD,
-    GDF_INVALID_AGGREGATOR,
-    GDF_HASH_TABLE_INSERT_FAILURE,
-    GDF_UNSUPPORTED_JOIN_TYPE,
+    GDF_DTYPE_MISMATCH,               /**< Type mismatch between columns that should be the same type */
+    GDF_UNSUPPORTED_METHOD,           /**< The method requested to perform an operation was invalid or unsupported (e.g., hash vs. sort)*/ 
+    GDF_INVALID_AGGREGATOR,           /**< Invalid aggregator was specified for a groupby*/
+    GDF_INVALID_HASH_FUNCTION,        /**< Invalid hash function was selected */
+    GDF_PARTITION_DTYPE_MISMATCH,     /**< Datatype mismatch between columns of input/output in the hash partition function */
+    GDF_HASH_TABLE_INSERT_FAILURE,    /**< Failed to insert to hash table, likely because its full */
+    GDF_UNSUPPORTED_JOIN_TYPE,        /**< The type of join requested is unsupported */
+
 } gdf_error;
 
 typedef enum {
-    GDF_HASH_MURMUR3=0,
+    GDF_HASH_MURMUR3=0, /**< Murmur3 hash function */
+    GDF_HASH_IDENTITY,  /**< Identity hash function that simply returns the key to be hashed */
 } gdf_hash_func;
 
 typedef enum {
@@ -60,17 +73,24 @@ typedef struct {
 } gdf_dtype_extra_info;
 
 typedef struct gdf_column_{
-    void *data;
-    gdf_valid_type *valid;
-    gdf_size_type size;
-    gdf_dtype dtype;
-    gdf_size_type null_count;
-    gdf_dtype_extra_info dtype_info;
+    void *data;                       /**< Pointer to the columns data */ 
+    gdf_valid_type *valid;            /**< Pointer to the columns validity bit mask where the 'i'th bit indicates if the 'i'th row is NULL */
+    gdf_size_type size;               /**< Number of data elements in the columns data buffer*/
+    gdf_dtype dtype;                  /**< The datatype of the column's data */
+    gdf_size_type null_count;         /**< The number of NULL values in the column's data */
+    gdf_dtype_extra_info dtype_info;  
 } gdf_column;
 
+/* --------------------------------------------------------------------------*/
+/** 
+ * @Synopsis  These enums indicate which method is to be used for an operation.
+ * For example, it is used to select between the hash-based vs. sort-based implementations
+ * of the Join operation.
+ */
+/* ----------------------------------------------------------------------------*/
 typedef enum {
-  GDF_SORT = 0,
-  GDF_HASH,
+  GDF_SORT = 0,   /**< Indicates that the sort-based implementation of the function will be used */
+  GDF_HASH,       /**< Indicates that the hash-based implementation of the function will be used */
   N_GDF_METHODS,  /* additional methods should go BEFORE N_GDF_METHODS */
 } gdf_method;
 
@@ -83,23 +103,35 @@ typedef enum {
   N_GDF_QUANT_METHODS,
 } gdf_quantile_method;
 
+
+/* --------------------------------------------------------------------------*/
+/** 
+ * @Synopsis These enums indicate the supported aggregation operations that can be
+ * performed on a set of aggregation columns as part of a GroupBy operation
+ */
+/* ----------------------------------------------------------------------------*/
 typedef enum {
-  GDF_SUM = 0,
-  GDF_MIN,
-  GDF_MAX,
-  GDF_AVG,
-  GDF_COUNT,
-  GDF_COUNT_DISTINCT,
-  N_GDF_AGG_OPS, /* additional aggregation ops should go BEFORE N_GDF_... */
+  GDF_SUM = 0,        /**< Computes the sum of all values in the aggregation column*/
+  GDF_MIN,            /**< Computes minimum value in the aggregation column */
+  GDF_MAX,            /**< Computes maximum value in the aggregation column */
+  GDF_AVG,            /**< Computes arithmetic mean of all values in the aggregation column */
+  GDF_COUNT,          /**< Computes histogram of the occurance of each key in the GroupBy Columns */
+  GDF_COUNT_DISTINCT, /**< Counts the number of distinct keys in the GroupBy columns */
+  N_GDF_AGG_OPS,      /**< The total number of aggregation operations. ALL NEW OPERATIONS SHOULD BE ADDED ABOVE THIS LINE*/
 } gdf_agg_op;
 
-/* additonal flags */
+/* --------------------------------------------------------------------------*/
+/** 
+ * @Synopsis  This struct holds various information about how an operation should be 
+ * performed as well as additional information about the input data.
+ */
+/* ----------------------------------------------------------------------------*/
 typedef struct gdf_context_{
-  int flag_sorted;        /* 0 = No, 1 = yes */
-  gdf_method flag_method; /* what method is used */
-  int flag_distinct;      /* for COUNT: DISTINCT = 1, else = 0 */
-  int flag_sort_result;   /* When method is GDF_HASH, 0 = result is not sorted, 1 = result is sorted */
-  int flag_sort_inplace;  /* 0 = No sort in place allowed, 1 = else */
+  int flag_sorted;        /**< Indicates if the input data is sorted. 0 = No, 1 = yes */
+  gdf_method flag_method; /**< The method to be used for the operation (e.g., sort vs hash) */
+  int flag_distinct;      /**< for COUNT: DISTINCT = 1, else = 0 */
+  int flag_sort_result;   /**< When method is GDF_HASH, 0 = result is not sorted, 1 = result is sorted */
+  int flag_sort_inplace;  /**< 0 = No sort in place allowed, 1 = else */
 } gdf_context;
 
 struct _OpaqueIpcParser;
