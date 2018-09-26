@@ -6,8 +6,13 @@ set -e
 
 SOURCE_BRANCH=master
 
-export EXTRALABEL="dev_${CUDA:0:3}"
-echo "EXTRALABEL=${EXTRALABEL}"
+
+if [ ${CUDA:0:3} == '9.0' ]; then
+  export LABEL_OPTION="-l dev -l cuda${CUDA:0:3}"
+else
+  export LABEL_OPTION="-l cuda${CUDA:0:3}"
+fi
+echo "LABEL_OPTION=${LABEL_OPTION}"
 
 # Pull requests or commits to other branches shouldn't upload
 if [ ${TRAVIS_PULL_REQUEST} != false -o ${TRAVIS_BRANCH} != ${SOURCE_BRANCH} ]; then
@@ -22,9 +27,4 @@ fi
 
 echo "Upload"
 echo ${UPLOADFILE}
-if [ ${CUDA:0:3} == '9.0' ]; then
-  anaconda -t ${MY_UPLOAD_KEY} upload -u gpuopenanalytics -l dev --force ${UPLOADFILE}
-else
-  anaconda -t ${MY_UPLOAD_KEY} upload -u gpuopenanalytics -l ${EXTRALABEL} --force ${UPLOADFILE}
-fi
-
+anaconda -t ${MY_UPLOAD_KEY} upload -u gpuopenanalytics ${LABEL_OPTION} --force ${UPLOADFILE}
