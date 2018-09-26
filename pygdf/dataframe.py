@@ -86,6 +86,8 @@ class DataFrame(object):
         self._cols = OrderedDict()
         # has initializer?
         if name_series is not None:
+            if isinstance(name_series, dict):
+                name_series = name_series.items()
             for k, series in name_series:
                 self.add_column(k, series, forceindex=index is not None)
 

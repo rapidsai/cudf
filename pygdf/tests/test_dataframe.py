@@ -521,8 +521,8 @@ def test_dataframe_setitem_index_len1():
 def test_assign():
     gdf = DataFrame({'x': [1, 2, 3]})
     gdf2 = gdf.assign(y=gdf.x + 1)
-    assert gdf.columns == ['x']
-    assert gdf2.columns == ['x', 'y']
+    assert list(gdf.columns) == ['x']
+    assert list(gdf2.columns) == ['x', 'y']
 
     np.testing.assert_equal(gdf2.y.to_array(), [2, 3, 4])
 
