@@ -33,15 +33,15 @@ gdf_error gdf_column_free(gdf_column *column);
  * @Synopsis  Concatenates the gdf_columns into a single, contiguous column,
  * including the validity bitmasks
  * 
+ * @Param[out] output A column whose buffers are already allocated that will 
  * @Param[in] columns_to_conat[] The columns to concatenate
  * @Param[in] num_columns The number of columns to concatenate
- * @Param[out] output_column A column whose buffers are already allocated that will 
- * contain the concatenation of the input columns
+  * contain the concatenation of the input columns
  * 
  * @Returns GDF_SUCCESS upon successful completion
  */
 /* ----------------------------------------------------------------------------*/
-gdf_error gdf_column_concat(gdf_column * output_column, gdf_column * columns_to_concat[], int num_columns);
+gdf_error gdf_column_concat(gdf_column *output, gdf_column *columns_to_concat[], int num_columns);
 
 /* context operations */
 

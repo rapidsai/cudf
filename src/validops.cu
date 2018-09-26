@@ -149,10 +149,10 @@ gdf_error gdf_count_nonzero_mask(gdf_valid_type const * masks, int num_rows, int
   return GDF_SUCCESS;
 }
 
-gdf_error gdf_mask_concat(gdf_valid_type *masks_to_concat[], 
-                          gdf_valid_type *output_mask,
-                          gdf_size_type *column_lengths, 
+gdf_error gdf_mask_concat(gdf_valid_type *output_mask,
                           gdf_size_type output_column_length,            
+                          gdf_valid_type *masks_to_concat[], 
+                          gdf_size_type *column_lengths, 
                           gdf_size_type num_columns)
 {
     auto mask_concatenator = [=] __device__ (gdf_size_type mask_index) {
@@ -165,16 +165,18 @@ gdf_error gdf_mask_concat(gdf_valid_type *masks_to_concat[],
       for (int bit = 0; bit < GDF_VALID_BITSIZE; ++bit) 
       { 
         gdf_size_type output_index = mask_index * GDF_VALID_BITSIZE + bit;
+
+        if (output_index >= output_column_length) break;
         
-        // jump to the next column's mask when we have moved to the end of the previous one
-        if ( (cur_mask_start + cur_mask_len < output_index) && (cur_mask_index < num_columns - 1) )
+        // find the next column's mask
+        while ( (cur_mask_start + cur_mask_len < output_index) && (cur_mask_index < num_columns - 1) )
         {
           cur_mask_start += cur_mask_len;
           cur_mask_len = column_lengths[++cur_mask_index];           
         }
         
         gdf_size_type index = output_index - cur_mask_start;
-        if ( (index < cur_mask_len) && gdf_is_valid(masks_to_concat[cur_mask_index], index) ) 
+        if ( (index > cur_mask_len) || gdf_is_valid(masks_to_concat[cur_mask_index], index) ) 
         {
           output_m |= (1 << bit);     
         }
@@ -183,12 +185,14 @@ gdf_error gdf_mask_concat(gdf_valid_type *masks_to_concat[],
       return output_m;
     };
 
-    thrust::device_ptr<gdf_valid_type> valid_concat = thrust::device_pointer_cast(output_mask);
+    //thrust::device_ptr<gdf_valid_type> valid_concat = thrust::device_pointer_cast(output_mask);
 
     thrust::tabulate(thrust::cuda::par,
-                     valid_concat,
-                     valid_concat + gdf_get_num_chars_bitmask(output_column_length),
+                     output_mask,
+                     output_mask + gdf_get_num_chars_bitmask(output_column_length),
                      mask_concatenator);
+
+    CUDA_TRY( cudaGetLastError() );
         
     return GDF_SUCCESS;
 }

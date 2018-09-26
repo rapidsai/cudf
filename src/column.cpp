@@ -3,10 +3,11 @@
 #include <gdf/errorutils.h>
 #include <cuda_runtime_api.h>
 
-gdf_error gdf_mask_concat(gdf_valid_type *masks_to_concat[], 
-                          gdf_valid_type *output_mask,
-                          gdf_size_type *column_lengths, 
+// forward decl -- see validops.cu
+gdf_error gdf_mask_concat(gdf_valid_type *output_mask,
                           gdf_size_type output_column_length,            
+                          gdf_valid_type *masks_to_concat[], 
+                          gdf_size_type *column_lengths, 
                           gdf_size_type num_columns);
 
 /* --------------------------------------------------------------------------*/
@@ -41,6 +42,7 @@ gdf_error gdf_column_concat(gdf_column *output_column, gdf_column *columns_to_co
   }
 
   gdf_size_type total_size = 0;
+  bool at_least_one_mask_present = false;
 
   // Ensure all the columns are properly allocated
   // and have matching types
@@ -49,18 +51,16 @@ gdf_error gdf_column_concat(gdf_column *output_column, gdf_column *columns_to_co
     if (nullptr == current_column) {
       return GDF_DATASET_EMPTY;
     }
-    if (current_column->size > 0) {
-      if ((nullptr == current_column->data)
-          || (nullptr == current_column->valid))
-      {
-        return GDF_DATASET_EMPTY;
-      }
+    if ((current_column->size > 0) && (nullptr == current_column->data))
+    {
+      return GDF_DATASET_EMPTY;
     }
     if (column_type != current_column->dtype) {
       return GDF_DTYPE_MISMATCH;
     }
 
     total_size += current_column->size;
+    at_least_one_mask_present |= (columns_to_concat[i]->valid != 0);
   }
 
   // sum of the sizes of the input columns must equal output column size
@@ -68,35 +68,47 @@ gdf_error gdf_column_concat(gdf_column *output_column, gdf_column *columns_to_co
     return GDF_COLUMN_SIZE_MISMATCH;
   }
 
-  gdf_valid_type** masks;
-  gdf_size_type* column_lengths;
-  cudaMallocManaged((void**)&masks, sizeof(gdf_valid_type*)*num_columns);
-  cudaMallocManaged((void**)&column_lengths, sizeof(gdf_size_type)*num_columns);
-  gdf_size_type offset = 0;
+  int8_t* target = (int8_t*)(output_column->data);
+  output_column->null_count = 0;
 
   // copy data
-  for (int i = 0; i < num_columns; ++i) {
-    int8_t* target = (int8_t*)(output_column->data) + offset;
+  for (int i = 0; i < num_columns; ++i) {   
     gdf_size_type bytes = sizeof(column_type) * columns_to_concat[i]->size;
     cudaMemcpy(target, columns_to_concat[i]->data, bytes, cudaMemcpyDeviceToDevice);
+    target += bytes;
 
-    offset += bytes;
-    masks[i] = columns_to_concat[i]->valid;
-    column_lengths[i] = columns_to_concat[i]->size;
+    output_column->null_count += columns_to_concat[i]->null_count;
   }
 
-  // NOTE: You need to take into account the fact that the validity buffers 
-  // for each column need to be concated into a single, contiguous validity 
-  // buffer, but you cannot just concat them as is. This is because the number
-  // of rows in the column may be less than the number of bits in the column's 
-  // validity bitmask. Therefore, you must copy only the bits [0, col->size)
-  // from each column's validity mask. E.g., the concatted bitmask will look like:
-  // { col0->valid_bits[0, col0->size), col1->valid_bits[0, col1->size) ... }
-  gdf_mask_concat(masks, output_column->valid, column_lengths, output_column->size, num_columns);
+  if (at_least_one_mask_present) {
+    gdf_valid_type** masks;
+    gdf_size_type* column_lengths;
+    cudaMallocManaged((void**)&masks, sizeof(gdf_valid_type*)*num_columns);
+    cudaMallocManaged((void**)&column_lengths, sizeof(gdf_size_type)*num_columns);
 
-  cudaFree(masks);
-  cudaFree(column_lengths);
+    for (int i = 0; i < num_columns; ++i) {   
+      masks[i] = columns_to_concat[i]->valid;
+      column_lengths[i] = columns_to_concat[i]->size;
+    }
+  
+    // NOTE: You need to take into account the fact that the validity buffers 
+    // for each column need to be concated into a single, contiguous validity 
+    // buffer, but you cannot just concat them as is. This is because the number
+    // of rows in the column may be less than the number of bits in the column's 
+    // validity bitmask. Therefore, you must copy only the bits [0, col->size)
+    // from each column's validity mask. E.g., the concatted bitmask will look like:
+    // { col0->valid_bits[0, col0->size), col1->valid_bits[0, col1->size) ... }
+    gdf_mask_concat(output_column->valid, output_column->size, masks, column_lengths, num_columns);
 
+    cudaFree(masks);
+    cudaFree(column_lengths);
+  }
+  else {
+    // no masks, so just fill output valid mask with all 1 bits
+    // TODO: async
+    cudaMemset(output_column->valid, 0xff, gdf_get_num_chars_bitmask(total_size) * sizeof(gdf_valid_type));
+  }
+  
   return GDF_SUCCESS;
 }
 

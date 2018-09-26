@@ -22,6 +22,7 @@
 #include <gdf/cffi/functions.h>
 #include <gdf/utils.h>
 #include "../../util/bit_util.cuh"
+#include <bitset>
 
 // Type for a unique_ptr to a gdf_column with a custom deleter
 // Custom deleter is defined at construction
@@ -157,7 +158,6 @@ gdf_col_pointer create_gdf_column(std::vector<col_type> const & host_vector,
   cudaMalloc(&(the_column->data), host_vector.size() * sizeof(col_type));
   cudaMemcpy(the_column->data, host_vector.data(), host_vector.size() * sizeof(col_type), cudaMemcpyHostToDevice);
 
-
   // If a validity bitmask vector was passed in, allocate device storage 
   // and copy its contents from the host vector
   if(valid_vector.size() > 0)
@@ -176,6 +176,17 @@ gdf_col_pointer create_gdf_column(std::vector<col_type> const & host_vector,
   gdf_dtype_extra_info extra_info;
   extra_info.time_unit = TIME_UNIT_NONE;
   the_column->dtype_info = extra_info;
+  // count in all but last element in case it is not full
+  the_column->null_count = std::accumulate(valid_vector.begin(), valid_vector.end() - 1, 0,
+    [](gdf_size_type s, gdf_valid_type x) { 
+      return s + std::bitset<GDF_VALID_BITSIZE>(x).flip().count(); 
+    });
+  
+  int unused_bits = GDF_VALID_BITSIZE - the_column->size % GDF_VALID_BITSIZE;
+  if (GDF_VALID_BITSIZE == unused_bits) unused_bits = 0;
+  auto last_mask = std::bitset<GDF_VALID_BITSIZE>(*(valid_vector.end()-1)).flip();
+  last_mask = (last_mask << unused_bits) >> unused_bits;
+  the_column->null_count += last_mask.count();
 
   return the_column;
 }
@@ -236,6 +247,34 @@ std::vector<gdf_col_pointer> initialize_gdf_columns(std::tuple<std::vector<Tp>..
 {
   return initialize_gdf_columns(host_columns, 
                                 [](const size_t row, const size_t col){return true;});
+}
+
+// compare two gdf_columns
+template <typename T>
+bool gdf_equal_columns(gdf_column* left, gdf_column* right)
+{
+  if (left->size != right->size) return false;
+  if (left->dtype != right->dtype) return false;
+  if (left->null_count != right->null_count) return false;
+  if (left->dtype_info.time_unit != right->dtype_info.time_unit) return false;
+  
+  if (!(left->data && right->data)) return false; // if one is null but not both
+  
+  if (!thrust::equal(thrust::cuda::par, 
+                     reinterpret_cast<T*>(left->data), 
+                     reinterpret_cast<T*>(left->data) + left->size, 
+                     reinterpret_cast<T*>(right->data)) ) 
+    return false;
+  
+  if (!(left->valid && right->valid)) return false; // if one is null but not both
+  
+  if (!thrust::equal(thrust::cuda::par, 
+                     left->valid, 
+                     left->valid + gdf_get_num_chars_bitmask(left->size), 
+                     right->valid))
+    return false;
+  
+  return true;
 }
 
 
