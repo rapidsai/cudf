@@ -33,16 +33,6 @@
 template<typename IndexT>
 struct LesserRTTI
 {
-  // LesserRTTI(const thrust::device_vector<void*>& cols,
-  // 	     const thrust::device_vector<int>& types):
-  //   columns_(cols.data().get()),
-  //   rtti_(types.data().get()),
-  //   sz_(cols.size())
-  // {
-  //   assert( types.size() == sz_ );
-  // }
-
-  // __device__
   LesserRTTI(void* const* cols,
 	     int* const types,
 	     size_t sz):
@@ -53,7 +43,6 @@ struct LesserRTTI
   {
   }
 
-  // __device__
   LesserRTTI(void* const* cols,
 	     int* const types,
 	     size_t sz,
