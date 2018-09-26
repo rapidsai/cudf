@@ -166,7 +166,7 @@ class Buffer(object):
             return Buffer(cudautils.astype(self.mem, dtype=dtype))
 
     def to_array(self):
-        return self.mem.copy_to_host()
+        return self.to_gpu_array().copy_to_host()
 
     def to_gpu_array(self):
         return self.mem[:self.size]
