@@ -2,6 +2,7 @@
 
 # Usage:
 #   conda build -c defaults -c conda-forge .
+{% set cuda_version='.'.join(environ.get('CUDA', 'unknown').split('.')[:2]) %}
 package:
   name: libgdf
   version: {{ environ.get('GIT_DESCRIBE_TAG', '0.0.0.dev').lstrip('v') }}
@@ -12,6 +13,7 @@ source:
 
 build:
   number: {{ environ.get('GIT_DESCRIBE_NUMBER', 0) }}
+  string: cuda_{{ cuda_version }}
   script_env:
     - CC
     - CXX
