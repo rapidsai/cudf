@@ -696,35 +696,42 @@ class Series(object):
     #
     def count(self, axis=None, skipna=True):
         """The number of non-null values"""
+        assert axis in (None, 0) and skipna is True
         return self.valid_count
 
     def min(self, axis=None, skipna=True):
         """Compute the min of the series
         """
+        assert axis in (None, 0) and skipna is True
         return self._column.min()
 
     def max(self, axis=None, skipna=True):
         """Compute the max of the series
         """
+        assert axis in (None, 0) and skipna is True
         return self._column.max()
 
     def sum(self, axis=None, skipna=True):
         """Compute the sum of the series"""
+        assert axis in (None, 0) and skipna is True
         return self._column.sum()
 
     def mean(self, axis=None, skipna=True):
         """Compute the mean of the series
         """
+        assert axis in (None, 0) and skipna is True
         return self._column.mean()
 
     def std(self, ddof=1, axis=None, skipna=True):
         """Compute the standard deviation of the series
         """
+        assert axis in (None, 0) and skipna is True
         return np.sqrt(self.var(ddof=ddof))
 
     def var(self, ddof=1, axis=None, skipna=True):
         """Compute the variance of the series
         """
+        assert axis in (None, 0) and skipna is True
         mu, var = self.mean_var(ddof=ddof)
         return var
 
