@@ -398,7 +398,7 @@ class Column(object):
         if fillna not in {None, 'pandas'}:
             raise ValueError('invalid for fillna')
 
-        if self.has_null_mask:
+        if self.null_count > 0:
             if fillna == 'pandas':
                 na_value = self.default_na_value()
                 # fill nan
