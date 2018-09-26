@@ -423,6 +423,7 @@ class DataFrame(object):
             raise NameError('duplicated column name {!r}'.format(name))
 
         series = self._prepare_series_for_add(data, forceindex=forceindex)
+        series.name = name
         self._cols[name] = series
 
     def drop_column(self, name):

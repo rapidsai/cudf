@@ -6,6 +6,7 @@ from collections import OrderedDict
 from numbers import Number
 
 import numpy as np
+import pandas as pd
 
 from . import cudautils, formatting
 from .buffer import Buffer
@@ -59,9 +60,20 @@ class Series(object):
         return cls(data=col)
 
     def __init__(self, data, index=None):
+        name = None
+        if isinstance(data, pd.Series):
+            from .dataframe import DataFrame
+            name = data.name
+            data = data.to_frame()
+            data.columns = ['x']
+            data = DataFrame.from_pandas(data)
+            data = data['x']
+            data.name = name
         if isinstance(data, Series):
             index = data._index
+            name = data.name
             data = data._column
+
         if not isinstance(data, columnops.TypedColumnBase):
             data = columnops.as_column(data)
 
@@ -71,6 +83,11 @@ class Series(object):
         assert isinstance(data, columnops.TypedColumnBase)
         self._column = data
         self._index = RangeIndex(len(data)) if index is None else index
+        self.name = name
+
+    @classmethod
+    def from_pandas(cls, s):
+        return cls(s)
 
     def serialize(self, serialize):
         header = {}
@@ -448,7 +465,9 @@ class Series(object):
     def to_pandas(self, index=True):
         if index is True:
             index = self.index.to_pandas()
-        return self._column.to_pandas(index=index)
+        s = self._column.to_pandas(index=index)
+        s.name = self.name
+        return s
 
     @property
     def data(self):
