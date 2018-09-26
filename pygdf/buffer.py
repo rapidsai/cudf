@@ -126,7 +126,7 @@ class Buffer(object):
 
     def __getitem__(self, arg):
         if isinstance(arg, slice):
-            sliced = self.to_gpu_array()[arg]
+            sliced = self.mem[arg]
             buf = Buffer(sliced)
             buf.dtype = self.dtype  # for np.datetime64 support
             return buf
@@ -166,7 +166,7 @@ class Buffer(object):
             return Buffer(cudautils.astype(self.mem, dtype=dtype))
 
     def to_array(self):
-        return self.to_gpu_array().copy_to_host()
+        return self.mem.copy_to_host()
 
     def to_gpu_array(self):
         return self.mem[:self.size]
