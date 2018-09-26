@@ -518,6 +518,15 @@ def test_dataframe_setitem_index_len1():
     np.testing.assert_equal(gdf.b.to_array(), [0])
 
 
+def test_assign():
+    gdf = DataFrame({'x': [1, 2, 3]})
+    gdf2 = gdf.assign(y=gdf.x + 1)
+    assert gdf.columns == ['x']
+    assert gdf2.columns == ['x', 'y']
+
+    np.testing.assert_equal(gdf2.y.to_array(), [2, 3, 4])
+
+
 @pytest.mark.parametrize('nrows', [1, 8, 100, 1000])
 def test_dataframe_hash_columns(nrows):
     gdf = DataFrame()

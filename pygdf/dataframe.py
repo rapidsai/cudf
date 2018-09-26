@@ -213,6 +213,12 @@ class DataFrame(object):
         """
         return self._size
 
+    def assign(self, **kwargs):
+        new = self.copy()
+        for k, v in kwargs.items():
+            new[k] = v
+        return new
+
     def head(self, n=5):
         return self[:n]
 
