@@ -670,9 +670,9 @@ class DataFrame(object):
 
         Parameters
         ----------
-        other: DataFrame
+        other : DataFrame
 
-        on: label or list; defaults to None
+        on : label or list; defaults to None
             Column or index level names to join on. These must be found in
             both DataFrames. If on is None and not merging on indexes then
             this defaults to the intersection of the columns
@@ -684,20 +684,20 @@ class DataFrame(object):
               - left: use only keys from left frame, similar to
                a SQL left outer join; preserve key order
 
-        lsuffix: str, defaults to '_x'
+        lsuffix : str, defaults to '_x'
                  The suffix to apply to overlapping column names
                  in the left side
 
-        rsuffix: str, defaults to '_y'
+        rsuffix : str, defaults to '_y'
                  The suffix to apply to overlapping column names
                  in the right side
 
-        type: str, defaults to 'sort'
+        type : str, defaults to 'sort'
 
 
         Returns
         -------
-        merged: DataFrame
+        merged : DataFrame
 
         """
 
