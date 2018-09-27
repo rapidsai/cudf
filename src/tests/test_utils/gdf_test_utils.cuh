@@ -21,6 +21,7 @@
 #include <gdf/gdf.h>
 #include <gdf/cffi/functions.h>
 #include <gdf/utils.h>
+#include <memory>
 #include "../../util/bit_util.cuh"
 
 // Type for a unique_ptr to a gdf_column with a custom deleter
