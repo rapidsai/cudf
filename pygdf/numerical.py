@@ -116,8 +116,8 @@ class NumericalColumn(columnops.TypedColumnBase):
             return col
 
     def sort_by_values(self, ascending):
-        if self.has_null_mask:
-            raise ValueError('masked array not supported')
+        if self.null_count > 0:
+            raise ValueError('nulls not yet supported')
         # Clone data buffer as the key
         col_keys = self.replace(data=self.data.copy(),
                                 dtype=self._data.dtype)

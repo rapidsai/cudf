@@ -50,7 +50,7 @@ def test_fillna():
     dense = sr.fillna(123)
     np.testing.assert_equal(123, dense.to_array())
     assert len(dense) == len(sr)
-    assert not dense.has_null_mask
+    assert dense.null_count == 0
 
 
 def test_to_dense_array():

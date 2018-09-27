@@ -393,7 +393,7 @@ class Column(object):
         if fillna not in {None, 'pandas'}:
             raise ValueError('invalid for fillna')
 
-        if self.has_null_mask:
+        if self.null_count > 0:
             if fillna == 'pandas':
                 na_value = self.default_na_value()
                 # fill nan
@@ -433,8 +433,9 @@ class Column(object):
     def append(self, other):
         """Append another column
         """
-        if self.has_null_mask or other.has_null_mask:
-            raise NotImplementedError("append masked column is not supported")
+        if self.null_count > 0 or other.null_count > 0:
+            raise NotImplementedError("Appending columns with nulls is not "
+                                      "yet supported")
         newsize = len(self) + len(other)
         # allocate memory
         mem = cuda.device_array(shape=newsize, dtype=self.data.dtype)
