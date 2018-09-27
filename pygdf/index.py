@@ -53,6 +53,15 @@ class Index(object):
     def gpu_values(self):
         return self.as_column().to_gpu_array()
 
+    def min(self):
+        return self.as_column().min()
+
+    def max(self):
+        return self.as_column().max()
+
+    def sum(self):
+        return self.as_column().sum()
+
     def find_segments(self):
         """Return the beginning index for segments
 
@@ -100,7 +109,7 @@ class Index(object):
 class RangeIndex(Index):
     """Basic start..stop
     """
-    def __init__(self, start, stop=None):
+    def __init__(self, start, stop=None, name=None):
         """RangeIndex(size), RangeIndex(start, stop)
 
         Parameters
@@ -111,6 +120,7 @@ class RangeIndex(Index):
             start, stop = 0, start
         self._start = int(start)
         self._stop = int(stop)
+        self.name = name
 
     def __repr__(self):
         return "{}(start={}, stop={})".format(self.__class__.__name__,
@@ -183,7 +193,7 @@ def index_from_range(start, stop=None, step=None):
 
 
 class GenericIndex(Index):
-    def __new__(self, values):
+    def __new__(self, values, name=None):
         from .series import Series
 
         # normalize the input
@@ -200,6 +210,7 @@ class GenericIndex(Index):
         # Make GenericIndex object
         res = Index.__new__(GenericIndex)
         res._values = values
+        res.name = name
         return res
 
     def serialize(self, serialize):
@@ -271,7 +282,7 @@ register_distributed_serializer(GenericIndex)
 class DatetimeIndex(GenericIndex):
     # TODO this constructor should take a timezone or something to be
     # consistent with pandas
-    def __new__(self, values):
+    def __new__(self, values, name=None):
         # we should be more strict on what we accept here but
         # we'd have to go and figure out all the semantics around
         # pandas dtindex creation first which.  For now
@@ -285,6 +296,7 @@ class DatetimeIndex(GenericIndex):
         # override __new__ properly
         res = Index.__new__(DatetimeIndex)
         res._values = values
+        res.name = name
         return res
 
     @property

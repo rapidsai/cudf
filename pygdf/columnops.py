@@ -97,14 +97,12 @@ def column_select_by_boolmask(column, boolmask):
     Returns (selected_column, selected_positions)
     """
     from .numerical import NumericalColumn
-    assert not column.has_null_mask
+    assert column.null_count == 0  # We don't properly handle the boolmask yet
     boolbits = cudautils.compact_mask_bytes(boolmask.to_gpu_array())
     indices = cudautils.arange(len(boolmask))
     _, selinds = cudautils.copy_to_dense(indices, mask=boolbits)
     _, selvals = cudautils.copy_to_dense(column.data.to_gpu_array(),
                                          mask=boolbits)
-
-    assert not column.has_null_mask   # the nullmask needs to be recomputed
 
     selected_values = column.replace(data=Buffer(selvals))
     selected_index = Buffer(selinds)
