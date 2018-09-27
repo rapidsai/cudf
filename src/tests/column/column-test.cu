@@ -3,6 +3,7 @@
 #include <cstdlib>
 #include <iostream>
 #include <vector>
+#include <chrono>
 
 #include <thrust/device_vector.h>
 
@@ -12,6 +13,9 @@
 #include <gdf/cffi/functions.h>
 
 #include "../test_utils/gdf_test_utils.cuh"
+
+// uncomment to enable benchmarking gdf_column_concat
+//#define ENABLE_CONCAT_BENCHMARK 
 
 template <typename T>
 struct print {
@@ -84,6 +88,53 @@ struct ColumnConcatTest : public testing::Test
 
     //print_valid_data(ref_valid.data(), total_size); printf("\n");
     //print_valid_data(output_gdf_col->valid, total_size);
+  }
+
+  template <typename T, typename data_initializer_t, typename null_initializer_t>
+  void multicolumn_bench(std::vector<size_t> column_sizes, 
+                         data_initializer_t data_init, 
+                         null_initializer_t null_init)
+  {
+    std::vector< std::vector<T> > the_columns(column_sizes.size());
+
+    for (size_t i = 0; i < column_sizes.size(); ++i)
+      initialize_vector(the_columns[i], column_sizes[i], data_init);
+
+    std::vector<gdf_col_pointer> gdf_columns = initialize_gdf_columns(the_columns, null_init);
+
+    std::vector<gdf_column*> raw_gdf_columns;
+
+    for(auto const & c : gdf_columns) {
+      raw_gdf_columns.push_back(c.get());
+    }
+
+    gdf_column **columns_to_concat = raw_gdf_columns.data();
+
+    int num_columns = raw_gdf_columns.size();
+    gdf_size_type total_size = 0;
+    for (auto sz : column_sizes) total_size += sz;
+
+    std::vector<int32_t> output_data(total_size);
+    std::vector<gdf_valid_type> output_valid(gdf_get_num_chars_bitmask(total_size));
+    
+    auto output_gdf_col = create_gdf_column(output_data, output_valid);
+    
+    auto start = std::chrono::high_resolution_clock::now();
+    
+    EXPECT_EQ( GDF_SUCCESS, gdf_column_concat(output_gdf_col.get(), 
+                                              columns_to_concat, 
+                                              num_columns) );
+
+    int num = 100;
+    for (int i = 0; i < num; ++i) {
+      gdf_column_concat(output_gdf_col.get(), columns_to_concat, num_columns);
+    }
+    cudaDeviceSynchronize();
+    auto end = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double> diff = end-start;
+    std::cout << "Time for " << num << " concats of " << num_columns << " columns of " 
+              << total_size  << " total elements:\n";
+    std::cout << diff.count() << " s\n";
   }
 };
 
@@ -190,3 +241,21 @@ TEST_F(ColumnConcatTest, MoreComplicatedColumns) {
                         [](int index){ return std::rand(); },
                         bit_setter);
 }
+
+#ifdef ENABLE_CONCAT_BENCHMARK
+TEST_F(ColumnConcatTest, Benchmark) {   
+   
+  size_t n = 42000000;
+  std::vector<size_t> column_sizes{n, n, n, n};
+
+  gdf_size_type null_interval = 17;
+
+  auto bit_setter = [null_interval](gdf_size_type row, gdf_size_type col) { 
+    return (row % null_interval) != 0; 
+  };
+
+  multicolumn_bench<int>(column_sizes, 
+                        [](int index){ return std::rand(); },
+                        bit_setter);
+}
+#endif // ENABLE_CONCAT_BENCHMARK
