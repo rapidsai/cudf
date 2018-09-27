@@ -97,6 +97,15 @@ gdf_error gdf_column_concat(gdf_column *output_column, gdf_column *columns_to_co
   int8_t* target = (int8_t*)(output_column->data);
   output_column->null_count = 0;
 
+  // TODO optimizations if needed
+  // 1. Either 
+  //    a) use cudaMemcpyAsync to copy the data and overlap copies with gdf_mask_concat
+  //       (this will require getting rid of the allocations below because they will
+  //       implicitly sync the device), or
+  //    b) use a kernel to copy the data from all columns in one go. This will likely not
+  //       overlap with the gdf_mask_concat
+  // 2. Detect a zero total null count and skip gdf_mask_concat -- use cudaMemsetAsync
+
   // copy data
   for (int i = 0; i < num_columns; ++i) {   
     gdf_size_type bytes = sizeof(column_type) * columns_to_concat[i]->size;
@@ -105,7 +114,7 @@ gdf_error gdf_column_concat(gdf_column *output_column, gdf_column *columns_to_co
 
     output_column->null_count += columns_to_concat[i]->null_count;
   }
-
+  
   if (at_least_one_mask_present) {
     gdf_valid_type** masks;
     gdf_size_type* column_lengths;
