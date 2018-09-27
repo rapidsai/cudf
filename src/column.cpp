@@ -112,7 +112,7 @@ gdf_error gdf_column_concat(gdf_column *output_column, gdf_column *columns_to_co
   // copy data
   for (int i = 0; i < num_columns; ++i) {   
     gdf_size_type bytes = column_byte_width * columns_to_concat[i]->size;
-    cudaMemcpy(target, columns_to_concat[i]->data, bytes, cudaMemcpyDeviceToDevice);
+    CUDA_TRY( cudaMemcpy(target, columns_to_concat[i]->data, bytes, cudaMemcpyDeviceToDevice) );
     target += bytes;
 
     output_column->null_count += columns_to_concat[i]->null_count;
@@ -121,23 +121,31 @@ gdf_error gdf_column_concat(gdf_column *output_column, gdf_column *columns_to_co
   if (at_least_one_mask_present) {
     gdf_valid_type** masks;
     gdf_size_type* column_lengths;
-    cudaMallocManaged((void**)&masks, sizeof(gdf_valid_type*)*num_columns);
-    cudaMallocManaged((void**)&column_lengths, sizeof(gdf_size_type)*num_columns);
+    CUDA_TRY( cudaMallocManaged((void**)&masks, sizeof(gdf_valid_type*)*num_columns) );
+    CUDA_TRY( cudaMallocManaged((void**)&column_lengths, sizeof(gdf_size_type)*num_columns) );
 
     for (int i = 0; i < num_columns; ++i) {   
       masks[i] = columns_to_concat[i]->valid;
       column_lengths[i] = columns_to_concat[i]->size;
     }
   
-    gdf_mask_concat(output_column->valid, output_column->size, masks, column_lengths, num_columns);
+    result = gdf_mask_concat(output_column->valid, 
+                             output_column->size, 
+                             masks, 
+                             column_lengths, 
+                             num_columns);
 
-    cudaFree(masks);
-    cudaFree(column_lengths);
+    CUDA_TRY( cudaFree(masks) );
+    CUDA_TRY( cudaFree(column_lengths) );
+
+    return result;
   }
   else if (nullptr != output_column->valid) {
     // no masks, so just fill output valid mask with all 1 bits
     // TODO: async
-    cudaMemset(output_column->valid, 0xff, gdf_get_num_chars_bitmask(total_size) * sizeof(gdf_valid_type));
+    CUDA_TRY( cudaMemset(output_column->valid, 
+                         0xff, 
+                         gdf_get_num_chars_bitmask(total_size) * sizeof(gdf_valid_type)) );
   }
   
   return GDF_SUCCESS;
