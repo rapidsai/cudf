@@ -63,7 +63,6 @@ class Series(object):
         name = None
         if isinstance(data, pd.Series):
             from .dataframe import DataFrame
-            inp = data
             name = data.name
             data = data.to_frame()
             data.columns = ['x']
