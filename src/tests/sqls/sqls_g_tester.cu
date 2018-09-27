@@ -102,7 +102,8 @@ bool compare(const Vector<T>& d_v, const std::vector<T>& baseline, T eps)
 			      return b1 && b2;
 			    },
 			    [eps](T v1, T v2){
-			      return (std::abs(v1-v2) < eps);
+            auto diff = (v1 <= v2) ? v2-v1 : v1-v2; // can't use std::abse due to type ambiguity
+			      return (diff < eps);
 			    });
 }
 
