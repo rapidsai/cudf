@@ -23,6 +23,7 @@
 #include <gdf/utils.h>
 #include "../../util/bit_util.cuh"
 #include <bitset>
+#include <numeric> // for std::accumulate
 
 // Type for a unique_ptr to a gdf_column with a custom deleter
 // Custom deleter is defined at construction

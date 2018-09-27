@@ -86,16 +86,13 @@ gdf_error gdf_column_concat(gdf_column *output_column, gdf_column *columns_to_co
     }
 
     total_size += current_column->size;
-    at_least_one_mask_present |= (columns_to_concat[i]->valid != 0);
+    at_least_one_mask_present |= (nullptr != columns_to_concat[i]->valid);
   }
 
   // sum of the sizes of the input columns must equal output column size
   if (output_column->size != total_size) {
     return GDF_COLUMN_SIZE_MISMATCH;
   }
-
-  int8_t* target = (int8_t*)(output_column->data);
-  output_column->null_count = 0;
 
   // TODO optimizations if needed
   // 1. Either 
@@ -106,9 +103,15 @@ gdf_error gdf_column_concat(gdf_column *output_column, gdf_column *columns_to_co
   //       overlap with the gdf_mask_concat
   // 2. Detect a zero total null count and skip gdf_mask_concat -- use cudaMemsetAsync
 
+  int8_t* target = (int8_t*)(output_column->data);
+  output_column->null_count = 0;
+  int column_byte_width = 0;
+  gdf_error result = get_column_byte_width(output_column, &column_byte_width);
+  if (GDF_SUCCESS != result) return result;  
+
   // copy data
   for (int i = 0; i < num_columns; ++i) {   
-    gdf_size_type bytes = sizeof(column_type) * columns_to_concat[i]->size;
+    gdf_size_type bytes = column_byte_width * columns_to_concat[i]->size;
     cudaMemcpy(target, columns_to_concat[i]->data, bytes, cudaMemcpyDeviceToDevice);
     target += bytes;
 
@@ -131,7 +134,7 @@ gdf_error gdf_column_concat(gdf_column *output_column, gdf_column *columns_to_co
     cudaFree(masks);
     cudaFree(column_lengths);
   }
-  else {
+  else if (nullptr != output_column->valid) {
     // no masks, so just fill output valid mask with all 1 bits
     // TODO: async
     cudaMemset(output_column->valid, 0xff, gdf_get_num_chars_bitmask(total_size) * sizeof(gdf_valid_type));

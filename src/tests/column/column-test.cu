@@ -57,7 +57,7 @@ struct ColumnConcatTest : public testing::Test
     gdf_size_type total_size = 0;
     for (auto sz : column_sizes) total_size += sz;
 
-    std::vector<int32_t> output_data(total_size);
+    std::vector<T> output_data(total_size);
     std::vector<gdf_valid_type> output_valid(gdf_get_num_chars_bitmask(total_size));
     
     auto output_gdf_col = create_gdf_column(output_data, output_valid);
@@ -67,7 +67,7 @@ struct ColumnConcatTest : public testing::Test
                                               num_columns) );
 
     // make a concatenated reference
-    std::vector<int32_t> ref_data;
+    std::vector<T> ref_data;
     for (size_t i = 0; i < the_columns.size(); ++i)
       std::copy(the_columns[i].begin(), the_columns[i].end(), std::back_inserter(ref_data));
       
@@ -196,7 +196,9 @@ TEST_F(ColumnConcatTest, RandomData) {
 
   multicolumn_test<int>(column_sizes, 
                         [](int index){ return std::rand(); },
-                        [null_interval](gdf_size_type row, gdf_size_type col) { return (row % null_interval) != 0; });
+                        [null_interval](gdf_size_type row, gdf_size_type col) { 
+                          return (row % null_interval) != 0; 
+                        });
 }
   
 TEST_F(ColumnConcatTest, DifferentLengthColumns) {
@@ -206,13 +208,17 @@ TEST_F(ColumnConcatTest, DifferentLengthColumns) {
 
   multicolumn_test<int>(column_sizes, 
                         [](int index){ return std::rand(); },
-                        [null_interval](gdf_size_type row, gdf_size_type col) { return (row % null_interval) != 0; });
+                        [null_interval](gdf_size_type row, gdf_size_type col) { 
+                          return (row % null_interval) != 0; 
+                        });
 }
 
 TEST_F(ColumnConcatTest, DifferentLengthColumnsLimitedBits) {   
   std::vector<size_t> column_sizes{13, 3, 5};
 
-  auto limited_bits = [column_sizes](gdf_size_type row, gdf_size_type col){ return row < column_sizes[col]; };
+  auto limited_bits = [column_sizes](gdf_size_type row, gdf_size_type col){ 
+    return row < column_sizes[col]; 
+  };
 
   multicolumn_test<int>(column_sizes, 
                         [](int index){ return std::rand(); },
@@ -241,6 +247,20 @@ TEST_F(ColumnConcatTest, MoreComplicatedColumns) {
                         [](int index){ return std::rand(); },
                         bit_setter);
 }
+
+
+TEST_F(ColumnConcatTest, EightByteColumns) {   
+  std::vector<size_t> column_sizes{13, 3, 5};
+
+  auto limited_bits = [column_sizes](gdf_size_type row, gdf_size_type col){ 
+    return row < column_sizes[col]; 
+  };
+
+  multicolumn_test<int64_t>(column_sizes, 
+                            [](int index){ return std::rand(); },
+                            limited_bits);
+}
+
 
 #ifdef ENABLE_CONCAT_BENCHMARK
 TEST_F(ColumnConcatTest, Benchmark) {   
