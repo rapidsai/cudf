@@ -64,7 +64,7 @@ def test_onehot_masked():
     out = df.one_hot_encoding('a', cats=list(range(high)),
                               prefix='a', dtype=np.int32)
 
-    assert out.columns == tuple(['a', 'a_0', 'a_1', 'a_2', 'a_3', 'a_4'])
+    assert tuple(out.columns) == ('a', 'a_0', 'a_1', 'a_2', 'a_3', 'a_4')
     np.testing.assert_array_equal(out['a_0'] == 1, arr == 0)
     np.testing.assert_array_equal(out['a_1'] == 1, arr == 1)
     np.testing.assert_array_equal(out['a_2'] == 1, arr == 2)

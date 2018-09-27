@@ -86,6 +86,8 @@ class DataFrame(object):
         self._cols = OrderedDict()
         # has initializer?
         if name_series is not None:
+            if isinstance(name_series, dict):
+                name_series = name_series.items()
             for k, series in name_series:
                 self.add_column(k, series, forceindex=index is not None)
 
@@ -176,7 +178,9 @@ class DataFrame(object):
         3    3    3
         """
         if isinstance(arg, str) or isinstance(arg, int):
-            return self._cols[arg]
+            s = self._cols[arg]
+            s.name = arg
+            return s
         elif isinstance(arg, slice):
             df = DataFrame()
             for k, col in self._cols.items():
@@ -212,6 +216,12 @@ class DataFrame(object):
         """Returns the number of rows
         """
         return self._size
+
+    def assign(self, **kwargs):
+        new = self.copy()
+        for k, v in kwargs.items():
+            new[k] = v
+        return new
 
     def head(self, n=5):
         return self[:n]
@@ -294,7 +304,7 @@ class DataFrame(object):
     def columns(self):
         """Returns a tuple of columns
         """
-        return tuple(self._cols)
+        return pd.Index(self._cols)
 
     @property
     def index(self):
@@ -415,6 +425,7 @@ class DataFrame(object):
             raise NameError('duplicated column name {!r}'.format(name))
 
         series = self._prepare_series_for_add(data, forceindex=forceindex)
+        series.name = name
         self._cols[name] = series
 
     def drop_column(self, name):
