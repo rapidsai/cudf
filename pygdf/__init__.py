@@ -1,5 +1,6 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
 from .dataframe import DataFrame
+from .index import Index
 from .series import Series
 from .multi import concat
 
