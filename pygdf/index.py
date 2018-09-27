@@ -53,6 +53,15 @@ class Index(object):
     def gpu_values(self):
         return self.as_column().to_gpu_array()
 
+    def min(self):
+        return self.as_column().min()
+
+    def max(self):
+        return self.as_column().max()
+
+    def sum(self):
+        return self.as_column().sum()
+
     def find_segments(self):
         """Return the beginning index for segments
 

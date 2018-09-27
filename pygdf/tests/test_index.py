@@ -71,3 +71,15 @@ def test_index_comparision():
     assert gi == rg
     assert rg[:-1] != gi
     assert rg[:-1] == gi[:-1]
+
+
+@pytest.mark.parametrize('func', [
+    lambda x: x.min(),
+    lambda x: x.max(),
+    lambda x: x.sum(),
+])
+def test_index_find_label_range(func):
+    x = np.asarray([4, 5, 6, 10])
+    idx = GenericIndex(np.asarray([4, 5, 6, 10]))
+
+    assert func(x) == func(idx)
