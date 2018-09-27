@@ -62,13 +62,8 @@ class Series(object):
     def __init__(self, data, index=None):
         name = None
         if isinstance(data, pd.Series):
-            from .dataframe import DataFrame
             name = data.name
-            data = data.to_frame()
-            data.columns = ['x']
-            data = DataFrame.from_pandas(data)
-            data = data['x']
-            data.name = name
+            index = GenericIndex(data.index)
         if isinstance(data, Series):
             index = data._index
             name = data.name
