@@ -119,7 +119,12 @@ void print_gdf_column(gdf_column const * the_column)
   }
 }
 
-// prints validity data from either a host or device pointer
+/** ---------------------------------------------------------------------------*
+ * @brief prints validity data from either a host or device pointer
+ * 
+ * @param validity_mask The validity bitmask to print
+ * @param num_rows The length of the column (not the bitmask) in rows
+ * ---------------------------------------------------------------------------**/
 void print_valid_data(const gdf_valid_type *validity_mask, 
                       const size_t num_rows)
 {
@@ -203,12 +208,13 @@ gdf_col_pointer create_gdf_column(std::vector<col_type> const & host_vector,
   extra_info.time_unit = TIME_UNIT_NONE;
   the_column->dtype_info = extra_info;
 
+  // Count the number of null bits
   // count in all but last element in case it is not full
   the_column->null_count = std::accumulate(valid_vector.begin(), valid_vector.end() - 1, 0,
     [](gdf_size_type s, gdf_valid_type x) { 
       return s + std::bitset<GDF_VALID_BITSIZE>(x).flip().count(); 
     });
-  
+  // Now count the bits in the last mask
   int unused_bits = GDF_VALID_BITSIZE - the_column->size % GDF_VALID_BITSIZE;
   if (GDF_VALID_BITSIZE == unused_bits) unused_bits = 0;
   auto last_mask = std::bitset<GDF_VALID_BITSIZE>(*(valid_vector.end()-1)).flip();
@@ -218,6 +224,8 @@ gdf_col_pointer create_gdf_column(std::vector<col_type> const & host_vector,
   return the_column;
 }
 
+// This helper generates the validity mask and creates the GDF column
+// Used by the various initializers below.
 template <typename T, typename valid_initializer_t>
 gdf_col_pointer init_gdf_column(std::vector<T> data, size_t col_index, valid_initializer_t bit_initializer)
 {
@@ -282,6 +290,8 @@ std::vector<gdf_col_pointer> initialize_gdf_columns(std::tuple<std::vector<Tp>..
                                 [](const size_t row, const size_t col){return true;});
 }
 
+// This version of initialize_gdf_columns assumes takes a vector of same-typed column data as input
+// and a validity mask initializer function
 template<typename T, typename valid_initializer_t>
 std::vector<gdf_col_pointer> initialize_gdf_columns(std::vector< std::vector<T> > columns, valid_initializer_t bit_initializer)
 {
@@ -299,7 +309,15 @@ std::vector<gdf_col_pointer> initialize_gdf_columns(std::vector< std::vector<T> 
   return gdf_columns;
 }
 
-// compare two gdf_columns
+/** ---------------------------------------------------------------------------*
+ * @brief Compare two gdf_columns on all fields, including pairwise comparison of 
+ * data and valid arrays
+ * 
+ * @tparam T The type of columns to compare
+ * @param left The left column
+ * @param right The right column
+ * @return bool Whether or not the columns are equal
+ * ---------------------------------------------------------------------------**/
 template <typename T>
 bool gdf_equal_columns(gdf_column* left, gdf_column* right)
 {
