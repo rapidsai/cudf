@@ -123,7 +123,7 @@ def test_dataframe_basic():
     df['vals'] = rnd_vals
     np.testing.assert_equal(df['vals'].to_array(), rnd_vals)
     assert len(df) == 10
-    assert df.columns == ('keys', 'vals')
+    assert tuple(df.columns) == ('keys', 'vals')
 
     # Make another dataframe
     df2 = DataFrame()
@@ -177,13 +177,13 @@ def test_dataframe_column_add_drop():
     data = np.asarray(range(10))
     df['a'] = data
     df['b'] = data
-    assert df.columns == ('a', 'b')
+    assert tuple(df.columns) == ('a', 'b')
     del df['a']
-    assert df.columns == ('b',)
+    assert tuple(df.columns) == ('b',)
     df['c'] = data
-    assert df.columns == ('b', 'c')
+    assert tuple(df.columns) == ('b', 'c')
     df['a'] = data
-    assert df.columns == ('b', 'c', 'a')
+    assert tuple(df.columns) == ('b', 'c', 'a')
 
 
 @pytest.mark.parametrize('nelem', [0, 3, 100, 1000])
@@ -210,7 +210,7 @@ def test_dataframe_slicing():
     # Row slice first 10
     first_10 = df[:10]
     assert len(first_10) == 10
-    assert first_10.columns == tuple(['a', 'b', 'c', 'd'])
+    assert tuple(first_10.columns) == ('a', 'b', 'c', 'd')
     np.testing.assert_equal(first_10['a'].to_array(), ha[:10])
     np.testing.assert_equal(first_10['b'].to_array(), hb[:10])
     np.testing.assert_equal(first_10['c'].to_array(), hc[:10])
@@ -220,7 +220,7 @@ def test_dataframe_slicing():
     # Row slice last 10
     last_10 = df[-10:]
     assert len(last_10) == 10
-    assert last_10.columns == tuple(['a', 'b', 'c', 'd'])
+    assert tuple(last_10.columns) == ('a', 'b', 'c', 'd')
     np.testing.assert_equal(last_10['a'].to_array(), ha[-10:])
     np.testing.assert_equal(last_10['b'].to_array(), hb[-10:])
     np.testing.assert_equal(last_10['c'].to_array(), hc[-10:])
@@ -232,7 +232,7 @@ def test_dataframe_slicing():
     end = 121
     subrange = df[begin:end]
     assert len(subrange) == end - begin
-    assert subrange.columns == tuple(['a', 'b', 'c', 'd'])
+    assert tuple(subrange.columns) == ('a', 'b', 'c', 'd')
     np.testing.assert_equal(subrange['a'].to_array(), ha[begin:end])
     np.testing.assert_equal(subrange['b'].to_array(), hb[begin:end])
     np.testing.assert_equal(subrange['c'].to_array(), hc[begin:end])
@@ -252,14 +252,14 @@ def test_dataframe_loc():
 
     # Full slice
     full = df.loc[:, ['c']]
-    assert full.columns == tuple(['c'])
+    assert tuple(full.columns) == ('c',)
     np.testing.assert_equal(full['c'].to_array(), hc)
 
     begin = 117
     end = 122
     fewer = df.loc[begin:end, ['c', 'd', 'a']]
     assert len(fewer) == end - begin + 1
-    assert fewer.columns == tuple(['c', 'd', 'a'])
+    assert tuple(fewer.columns) == ('c', 'd', 'a')
     np.testing.assert_equal(fewer['a'].to_array(), ha[begin:end + 1])
     np.testing.assert_equal(fewer['c'].to_array(), hc[begin:end + 1])
     np.testing.assert_equal(fewer['d'].to_array(), hd[begin:end + 1])
@@ -272,7 +272,7 @@ def test_dataframe_loc():
     end = 122
     fewer = df2.loc[begin:end, ['c', 'd', 'a']]
     assert len(fewer) == end - begin + 1
-    assert fewer.columns == tuple(['c', 'd', 'a'])
+    assert tuple(fewer.columns) == ('c', 'd', 'a')
     np.testing.assert_equal(fewer['a'].to_array(), ha[begin:end + 1])
     np.testing.assert_equal(fewer['c'].to_array(), hc[begin:end + 1])
     np.testing.assert_equal(fewer['d'].to_array(), hd[begin:end + 1])

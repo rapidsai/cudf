@@ -304,7 +304,7 @@ class DataFrame(object):
     def columns(self):
         """Returns a tuple of columns
         """
-        return tuple(self._cols)
+        return pd.Index(self._cols)
 
     @property
     def index(self):
