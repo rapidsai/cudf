@@ -92,6 +92,13 @@ def test_series_basic():
     a4 = np.hstack([a1, a2, a3])
     np.testing.assert_equal(series.to_array(), a4)
 
+    # Make series from pandas.Series
+    sr = pd.Series(data=np.arange(5), index=np.arange(1, 6))
+    series = Series.from_pandas(sr)
+    assert len(series) == 5
+    np.testing.assert_equal(series.to_array(), np.arange(5))
+    np.testing.assert_equal(series.index, np.arange(1, 6))
+
 
 def test_series_indexing():
     a1 = np.arange(20)
