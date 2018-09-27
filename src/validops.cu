@@ -21,6 +21,7 @@
 #include <gdf/gdf.h>
 #include <gdf/errorutils.h>
 #include <gdf/utils.h>
+#include <vector>
 #include <thrust/device_ptr.h>
 #include <thrust/transform_reduce.h>
 #include <thrust/functional.h>
