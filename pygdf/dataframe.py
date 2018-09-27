@@ -277,7 +277,7 @@ class DataFrame(object):
         return "<pygdf.DataFrame ncols={} nrows={} >".format(
             len(self.columns),
             len(self),
-            )
+        )
 
     @property
     def loc(self):
@@ -665,6 +665,42 @@ class DataFrame(object):
 
     def merge(self, other, on=None, how='left', lsuffix='_x', rsuffix='_y',
               type='sort'):
+        """Merge GPU DataFrame objects by performing a database-style join operation
+        by columns or indexes.
+
+        Parameters
+        ----------
+        other : DataFrame
+
+        on : label or list; defaults to None
+            Column or index level names to join on. These must be found in
+            both DataFrames. If on is None and not merging on indexes then
+            this defaults to the intersection of the columns
+            in both DataFrames.
+
+
+        how : str; defaults to 'left'
+              Only accepts "left"
+              - left: use only keys from left frame, similar to
+               a SQL left outer join; preserve key order
+
+        lsuffix : str, defaults to '_x'
+                 The suffix to apply to overlapping column names
+                 in the left side
+
+        rsuffix : str, defaults to '_y'
+                 The suffix to apply to overlapping column names
+                 in the right side
+
+        type : str, defaults to 'sort'
+
+
+        Returns
+        -------
+        merged : DataFrame
+
+        """
+
         if how != 'left':
             raise NotImplementedError('{!r} join not implemented yet'
                                       .format(how))
