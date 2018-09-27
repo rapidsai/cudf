@@ -119,6 +119,32 @@ void print_gdf_column(gdf_column const * the_column)
   }
 }
 
+// prints validity data from either a host or device pointer
+void print_valid_data(const gdf_valid_type *validity_mask, 
+                      const size_t num_rows)
+{
+  cudaError_t error;
+  cudaPointerAttributes attrib;
+  cudaPointerGetAttributes(&attrib, validity_mask);
+  error = cudaGetLastError();
+
+  const size_t num_masks = gdf_get_num_chars_bitmask(num_rows);
+  std::vector<gdf_valid_type> h_mask(num_masks);
+  if (error != cudaErrorInvalidValue && attrib.memoryType == cudaMemoryTypeDevice)
+    cudaMemcpy(h_mask.data(), validity_mask, num_masks * sizeof(gdf_valid_type), cudaMemcpyDeviceToHost);
+  else
+    memcpy(h_mask.data(), validity_mask, num_masks * sizeof(gdf_valid_type));
+
+  std::transform(h_mask.begin(), h_mask.end(), std::ostream_iterator<std::string>(std::cout, " "), 
+                 [](gdf_valid_type x){ 
+                   auto bits = std::bitset<GDF_VALID_BITSIZE>(x).to_string('@'); 
+                   return std::string(bits.rbegin(), bits.rend());  
+                 });
+  std::cout << std::endl;
+}
+
+
+
 /* --------------------------------------------------------------------------*/
 /**
  * @Synopsis  Creates a unique_ptr that wraps a gdf_column structure intialized with a host vector
@@ -176,6 +202,7 @@ gdf_col_pointer create_gdf_column(std::vector<col_type> const & host_vector,
   gdf_dtype_extra_info extra_info;
   extra_info.time_unit = TIME_UNIT_NONE;
   the_column->dtype_info = extra_info;
+
   // count in all but last element in case it is not full
   the_column->null_count = std::accumulate(valid_vector.begin(), valid_vector.end() - 1, 0,
     [](gdf_size_type s, gdf_valid_type x) { 
@@ -189,6 +216,24 @@ gdf_col_pointer create_gdf_column(std::vector<col_type> const & host_vector,
   the_column->null_count += last_mask.count();
 
   return the_column;
+}
+
+template <typename T, typename valid_initializer_t>
+gdf_col_pointer init_gdf_column(std::vector<T> data, size_t col_index, valid_initializer_t bit_initializer)
+{
+  const size_t num_rows = data.size();
+  const size_t num_masks = gdf_get_num_chars_bitmask(num_rows);
+
+  // Initialize the valid mask for this column using the initializer
+  std::vector<gdf_valid_type> valid_masks(num_masks,0);
+  for(size_t row = 0; row < num_rows; ++row){
+    if(true == bit_initializer(row, col_index))
+    {
+      gdf::util::turn_bit_on(valid_masks.data(), row);
+    }
+  }
+
+  return create_gdf_column(data, valid_masks);
 }
 
 // Compile time recursion to convert each vector in a tuple of vectors into
@@ -206,23 +251,11 @@ template<typename valid_initializer_t, std::size_t I = 0, typename... Tp>
 convert_tuple_to_gdf_columns(std::vector<gdf_col_pointer> &gdf_columns,std::tuple<std::vector<Tp>...>& t,
                              valid_initializer_t bit_initializer)
 {
-
-  const size_t num_rows = std::get<I>(t).size();
-  const size_t num_masks = gdf_get_num_chars_bitmask(num_rows);
-
-  // Initialize the valid mask for this column using the initializer
-  std::vector<gdf_valid_type> valid_masks(num_masks,0);
   const size_t column = I;
-  for(size_t row = 0; row < num_rows; ++row){
-    if(true == bit_initializer(row, column))
-    {
-      gdf::util::turn_bit_on(valid_masks.data(), row);
-    }
-  }
 
   // Creates a gdf_column for the current vector and pushes it onto
   // the vector of gdf_columns
-  gdf_columns.push_back(create_gdf_column(std::get<I>(t), valid_masks));
+  gdf_columns.push_back(init_gdf_column(std::get<I>(t), column, bit_initializer));
 
   //recurse to next vector in tuple
   convert_tuple_to_gdf_columns<valid_initializer_t,I + 1, Tp...>(gdf_columns, t, bit_initializer);
@@ -247,6 +280,23 @@ std::vector<gdf_col_pointer> initialize_gdf_columns(std::tuple<std::vector<Tp>..
 {
   return initialize_gdf_columns(host_columns, 
                                 [](const size_t row, const size_t col){return true;});
+}
+
+template<typename T, typename valid_initializer_t>
+std::vector<gdf_col_pointer> initialize_gdf_columns(std::vector< std::vector<T> > columns, valid_initializer_t bit_initializer)
+{
+  std::vector<gdf_col_pointer> gdf_columns;
+
+  size_t col = 0;
+  
+  for (auto column : columns)
+  {
+    // Creates a gdf_column for the current vector and pushes it onto
+    // the vector of gdf_columns
+    gdf_columns.push_back(init_gdf_column(column, col++, bit_initializer));
+  }
+
+  return gdf_columns;
 }
 
 // compare two gdf_columns

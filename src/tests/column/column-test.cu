@@ -13,24 +13,82 @@
 
 #include "../test_utils/gdf_test_utils.cuh"
 
-#define BYTE_TO_BINARY_PATTERN "%c%c%c%c%c%c%c%c"
-#define BYTE_TO_BINARY(byte)  \
-(byte & 0x01 ? '1' : '0'), \
-(byte & 0x02 ? '1' : '0'), \
-(byte & 0x04 ? '1' : '0'), \
-(byte & 0x08 ? '1' : '0'), \
-(byte & 0x10 ? '1' : '0'), \
-(byte & 0x20 ? '1' : '0'), \
-(byte & 0x40 ? '1' : '0'), \
-(byte & 0x80 ? '1' : '0') 
-
 template <typename T>
-struct anon {
+struct print {
   __device__ void operator()(T x) { printf("%x ", x); }
 };
 
+struct ColumnConcatTest : public testing::Test
+{
+  ColumnConcatTest() {}
+  ~ColumnConcatTest() {}
+  
+  template <typename T, typename data_initializer_t, typename null_initializer_t>
+  void multicolumn_test(std::vector<size_t> column_sizes, 
+                        data_initializer_t data_init, 
+                        null_initializer_t null_init)
+  { 
+    std::vector< std::vector<T> > the_columns(column_sizes.size());
+
+    for (size_t i = 0; i < column_sizes.size(); ++i)
+      initialize_vector(the_columns[i], column_sizes[i], data_init);
+    
+    // This is just an alias to a gdf_column with a custom deleter that will free 
+    // the data and valid fields when the unique_ptr goes out of scope
+    using gdf_col_pointer = typename std::unique_ptr<gdf_column, std::function<void(gdf_column*)>>; 
+
+    // Copies the random data from each host vector in the_columns to the device in a gdf_column. 
+    // Each gdf_column's validity bit i will be initialized with the lambda
+    std::vector<gdf_col_pointer> gdf_columns = initialize_gdf_columns(the_columns, null_init);
+
+    std::vector<gdf_column*> raw_gdf_columns;
+
+    for(auto const & c : gdf_columns) {
+      raw_gdf_columns.push_back(c.get());
+    }
+
+    gdf_column **columns_to_concat = raw_gdf_columns.data();
+
+    int num_columns = raw_gdf_columns.size();
+    gdf_size_type total_size = 0;
+    for (auto sz : column_sizes) total_size += sz;
+
+    std::vector<int32_t> output_data(total_size);
+    std::vector<gdf_valid_type> output_valid(gdf_get_num_chars_bitmask(total_size));
+    
+    auto output_gdf_col = create_gdf_column(output_data, output_valid);
+
+    EXPECT_EQ( GDF_SUCCESS, gdf_column_concat(output_gdf_col.get(), 
+                                              columns_to_concat, 
+                                              num_columns) );
+
+    // make a concatenated reference
+    std::vector<int32_t> ref_data;
+    for (size_t i = 0; i < the_columns.size(); ++i)
+      std::copy(the_columns[i].begin(), the_columns[i].end(), std::back_inserter(ref_data));
+      
+    gdf_size_type ref_null_count = 0;
+    std::vector<gdf_valid_type> ref_valid(gdf_get_num_chars_bitmask(total_size));
+    for (gdf_size_type index = 0, col = 0, row = 0; index < total_size; ++index)
+    {
+      if (null_init(row, col)) gdf::util::turn_bit_on(ref_valid.data(), index);
+      else ref_null_count++;
+      
+      if (++row >= column_sizes[col]) { row = 0; col++; }
+    }   
+    auto ref_gdf_col = create_gdf_column(ref_data, ref_valid);
+
+    EXPECT_EQ(ref_null_count, ref_gdf_col->null_count);
+
+    EXPECT_TRUE(gdf_equal_columns<int>(ref_gdf_col.get(), output_gdf_col.get()));
+
+    //print_valid_data(ref_valid.data(), total_size); printf("\n");
+    //print_valid_data(output_gdf_col->valid, total_size);
+  }
+};
+
 // Test various cases with null pointers or empty columns
-TEST(ColumnConcatTest, EmptyData)
+TEST_F(ColumnConcatTest, ErrorConditions)
 {
   constexpr int num_columns = 4;
 
@@ -79,69 +137,56 @@ TEST(ColumnConcatTest, EmptyData)
   EXPECT_EQ(GDF_COLUMN_SIZE_MISMATCH, gdf_column_concat(output_gdf_col.get(), input_columns, num_columns));
 }
 
-TEST(ColumnConcatTest, RandomData) {
-  // VTuple is a parameter pack for a std::tuple of vectors, 
-  // this is the only way I could come up with for having a container of vectors of different types
-  using multi_col_t = VTuple<int, int, int>; 
-
-  // the_columns is now the same as a tuple<vector<int>, vector<int>, vector<int> >
-  multi_col_t the_columns; 
+TEST_F(ColumnConcatTest, RandomData) {
   gdf_size_type column_size = 1005;
-  gdf_size_type null_every = 17;
-  
-  // Initializes each vector to length 1000 with random data
-  initialize_tuple(the_columns, column_size, [](int index){ return std::rand(); }); 
-
-  // This is just an alias to a gdf_column with a custom deleter that will free 
-  // the data and valid fields when the unique_ptr goes out of scope
-  using gdf_col_pointer = typename std::unique_ptr<gdf_column, std::function<void(gdf_column*)>>; 
-
-   // Copies the random data from each host vector in the_columns to the device in a gdf_column. 
-   // Each gdf_column's validity bit i will be initialized with the lambda
-  std::vector<gdf_col_pointer> gdf_columns = initialize_gdf_columns(the_columns, 
-                                                                    [null_every](gdf_size_type index, size_t){ return ((index % null_every) != 0); });
-
-  std::vector<gdf_column*> raw_gdf_columns;
-
-  for(auto const & c : gdf_columns) {
-    raw_gdf_columns.push_back(c.get());
-  }
-
-  gdf_column **columns_to_concat = raw_gdf_columns.data();
-
-  int num_columns = raw_gdf_columns.size();
-  gdf_size_type total_size = column_size * num_columns;
-
-  std::vector<int32_t> output_data(total_size);
-  std::vector<gdf_valid_type> output_valid(gdf_get_num_chars_bitmask(total_size));
-  
-  auto output_gdf_col = create_gdf_column(output_data, output_valid);
-
-  EXPECT_EQ( GDF_SUCCESS, gdf_column_concat(output_gdf_col.get(), 
-                                            columns_to_concat, 
-                                            num_columns) );
-
-  // make a concatenated reference
-  std::vector<int32_t> ref_data;  
-  std::copy(std::get<0>(the_columns).begin(), std::get<0>(the_columns).end(), std::back_inserter(ref_data));
-  std::copy(std::get<1>(the_columns).begin(), std::get<1>(the_columns).end(), std::back_inserter(ref_data));
-  std::copy(std::get<2>(the_columns).begin(), std::get<2>(the_columns).end(), std::back_inserter(ref_data));
+  gdf_size_type null_interval = 17;
     
-  std::vector<gdf_valid_type> ref_valid(gdf_get_num_chars_bitmask(total_size));
-  for (gdf_size_type index = 0, row = 0; index < total_size; ++index)
-  {
-    if (row % null_every) gdf::util::turn_bit_on(ref_valid.data(), index);
-    if (++row >= column_size) row = 0;
-  }   
-  auto ref_gdf_col = create_gdf_column(ref_data, ref_valid);
+  std::vector<size_t> column_sizes{column_size, column_size, column_size};
 
-  EXPECT_EQ(num_columns * ((column_size + null_every-1) / null_every), ref_gdf_col->null_count);
-
-  EXPECT_TRUE(gdf_equal_columns<int>(ref_gdf_col.get(), output_gdf_col.get()));
-
-  //std::for_each(ref_valid.begin(), ref_valid.end(), [] (gdf_valid_type x) { printf("%x ", x);}); printf("\n");
-  //thrust::for_each(thrust::cuda::par, output_gdf_col->valid, output_gdf_col->valid + ref_valid.size(), anon<gdf_valid_type>()); printf("\n");
-  // cudaDeviceSynchronize();
-
+  multicolumn_test<int>(column_sizes, 
+                        [](int index){ return std::rand(); },
+                        [null_interval](gdf_size_type row, gdf_size_type col) { return (row % null_interval) != 0; });
 }
   
+TEST_F(ColumnConcatTest, DifferentLengthColumns) {
+  gdf_size_type null_interval = 2;
+    
+  std::vector<size_t> column_sizes{13, 3, 5};
+
+  multicolumn_test<int>(column_sizes, 
+                        [](int index){ return std::rand(); },
+                        [null_interval](gdf_size_type row, gdf_size_type col) { return (row % null_interval) != 0; });
+}
+
+TEST_F(ColumnConcatTest, DifferentLengthColumnsLimitedBits) {   
+  std::vector<size_t> column_sizes{13, 3, 5};
+
+  auto limited_bits = [column_sizes](gdf_size_type row, gdf_size_type col){ return row < column_sizes[col]; };
+
+  multicolumn_test<int>(column_sizes, 
+                        [](int index){ return std::rand(); },
+                        limited_bits);
+}
+
+TEST_F(ColumnConcatTest, MoreComplicatedColumns) {   
+   
+  std::vector<size_t> column_sizes{5, 1003, 17, 117};
+
+  auto bit_setter = [column_sizes](gdf_size_type row, gdf_size_type col) { 
+    switch (col) {
+    case 0: 
+      return (row % 2) != 0; // column 0 has odd bits set
+    case 1:
+      return row < column_sizes[col];
+    case 2:
+      return (row % 17) != 0; 
+    case 3:
+      return row < 3;
+    }
+    return true;
+  };
+
+  multicolumn_test<int>(column_sizes, 
+                        [](int index){ return std::rand(); },
+                        bit_setter);
+}

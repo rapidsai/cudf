@@ -169,14 +169,14 @@ gdf_error gdf_mask_concat(gdf_valid_type *output_mask,
         if (output_index >= output_column_length) break;
         
         // find the next column's mask
-        while ( (cur_mask_start + cur_mask_len < output_index) && (cur_mask_index < num_columns - 1) )
+        while ( (cur_mask_start + cur_mask_len <= output_index) && (cur_mask_index < num_columns - 1) )
         {
           cur_mask_start += cur_mask_len;
           cur_mask_len = column_lengths[++cur_mask_index];           
         }
         
         gdf_size_type index = output_index - cur_mask_start;
-        if ( (index > cur_mask_len) || gdf_is_valid(masks_to_concat[cur_mask_index], index) ) 
+        if ( gdf_is_valid(masks_to_concat[cur_mask_index], index) ) 
         {
           output_m |= (1 << bit);     
         }
@@ -184,8 +184,6 @@ gdf_error gdf_mask_concat(gdf_valid_type *output_mask,
 
       return output_m;
     };
-
-    //thrust::device_ptr<gdf_valid_type> valid_concat = thrust::device_pointer_cast(output_mask);
 
     thrust::tabulate(thrust::cuda::par,
                      output_mask,
