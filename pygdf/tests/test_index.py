@@ -83,3 +83,10 @@ def test_index_find_label_range(func):
     idx = GenericIndex(np.asarray([4, 5, 6, 10]))
 
     assert func(x) == func(idx)
+
+
+def test_name():
+    x = np.asarray([4, 5, 6, 10])
+    idx = GenericIndex(np.asarray([4, 5, 6, 10]), name='foo')
+    assert idx.name == 'foo'
+
