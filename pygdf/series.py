@@ -59,8 +59,7 @@ class Series(object):
         col = columnops.as_column(data).set_mask(mask, null_count=null_count)
         return cls(data=col)
 
-    def __init__(self, data, index=None):
-        name = None
+    def __init__(self, data, index=None, name=None):
         if isinstance(data, pd.Series):
             name = data.name
             index = GenericIndex(data.index)
@@ -116,6 +115,7 @@ class Series(object):
         return dict(
             data=self._column,
             index=self._index,
+            name=self.name,
         )
 
     def _copy_construct(self, **kwargs):
@@ -388,8 +388,13 @@ class Series(object):
         if index is True:
             index = Index._concat([o.index for o in objs])
 
+        names = {obj.name for obj in objs}
+        if len(names) == 1:
+            [name] = names
+        else:
+            name = None
         col = Column._concat([o._column for o in objs])
-        return cls(data=col, index=index)
+        return cls(data=col, index=index, name=name)
 
     def append(self, arbitrary):
         """Append values from another ``Series`` or array-like object.

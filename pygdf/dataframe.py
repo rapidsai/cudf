@@ -178,7 +178,9 @@ class DataFrame(object):
         3    3    3
         """
         if isinstance(arg, str) or isinstance(arg, int):
-            return self._cols[arg]
+            s = self._cols[arg]
+            assert s.name == arg
+            return s
         elif isinstance(arg, slice):
             df = DataFrame()
             for k, col in self._cols.items():
