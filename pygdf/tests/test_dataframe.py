@@ -98,14 +98,14 @@ def test_series_indexing():
     series = Series(a1)
     # Indexing
     sr1 = series[:12]
-    assert not sr1.has_null_mask
+    assert sr1.null_count == 0
     np.testing.assert_equal(sr1.to_array(), a1[:12])
     sr2 = sr1[3:]
-    assert not sr2.has_null_mask
+    assert sr2.null_count == 0
     np.testing.assert_equal(sr2.to_array(), a1[3:12])
     # Index with stride
     sr3 = sr2[::2]
-    assert not sr3.has_null_mask
+    assert sr3.null_count == 0
     np.testing.assert_equal(sr3.to_array(), a1[3:12:2])
 
 
