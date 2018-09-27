@@ -690,3 +690,12 @@ def test_series_name():
     df = pd.DataFrame({'x': [1, 2, 3]}, index=[4., 5., 6.])
     gdf = gd.DataFrame.from_pandas(df)
     assert gdf['x'].name == 'x'
+
+
+@pytest.mark.xfail(reason="constructor does not coerce index inputs")
+def test_index_in_dataframe_constructor():
+    a = pd.DataFrame({'x': [1, 2, 3]}, index=[4., 5., 6.])
+    b = gd.DataFrame({'x': [1, 2, 3]}, index=[4., 5., 6.])
+
+    pd.testing.assert_frame_equal(a, b.to_pandas())
+    assert pd.testing.assert_frame_equal(a.loc[4:], b.loc[4:].to_pandas())
