@@ -179,7 +179,7 @@ class DataFrame(object):
         """
         if isinstance(arg, str) or isinstance(arg, int):
             s = self._cols[arg]
-            assert s.name == arg
+            s.name = arg
             return s
         elif isinstance(arg, slice):
             df = DataFrame()
