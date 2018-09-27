@@ -58,6 +58,13 @@ class Series(object):
         col = columnops.as_column(data).set_mask(mask, null_count=null_count)
         return cls(data=col)
 
+    @classmethod
+    def from_pandas(cls, series):
+        """Create a Series from a Pandas.Series."""
+        s = cls(data=series.data)
+        s = s.set_index(series.index)
+        return s
+
     def __init__(self, data, index=None):
         if isinstance(data, Series):
             index = data._index
