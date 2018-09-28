@@ -110,19 +110,23 @@ def apply_mask_and(col, mask, out):
     return len(out) - nnz
 
 
+np_gdf_dict = {np.float64: libgdf.GDF_FLOAT64,
+               np.float32: libgdf.GDF_FLOAT32,
+               np.int64:   libgdf.GDF_INT64,
+               np.int32:   libgdf.GDF_INT32,
+               np.int16:   libgdf.GDF_INT16,
+               np.int8:    libgdf.GDF_INT8,
+               np.bool_:   libgdf.GDF_INT8,
+               np.datetime64: libgdf.GDF_DATE64}
+
+
 def np_to_gdf_dtype(dtype):
     """Util to convert numpy dtype to gdf dtype.
     """
-    return {
-        np.float64: libgdf.GDF_FLOAT64,
-        np.float32: libgdf.GDF_FLOAT32,
-        np.int64:   libgdf.GDF_INT64,
-        np.int32:   libgdf.GDF_INT32,
-        np.int16:   libgdf.GDF_INT16,
-        np.int8:    libgdf.GDF_INT8,
-        np.bool_:   libgdf.GDF_INT8,
-        np.datetime64: libgdf.GDF_DATE64,
-    }[np.dtype(dtype).type]
+    if str(dtype) == 'category':
+        return libgdf.GDF_INT8
+    else:
+        return np_gdf_dict[np.dtype(dtype).type]
 
 
 def apply_reduce(fn, inp):
@@ -367,3 +371,9 @@ def hash_partition(input_columns, key_indices, nparts, output_columns):
 
     offsets = list(offsets)
     return offsets
+
+
+def column_concat(cols_to_concat, output_col):
+    col_inputs = [col.cffi_view for col in cols_to_concat]
+    libgdf.gdf_column_concat(output_col.cffi_view, col_inputs, len(col_inputs))
+    return output_col

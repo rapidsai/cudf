@@ -23,6 +23,14 @@ class Series(object):
 
     ``Series`` objects are used as columns of ``DataFrame``.
     """
+
+    @classmethod
+    def from_pandas(cls, series):
+        """Create a Series from a Pandas.Series."""
+        s = cls(data=series.data)
+        s = s.set_index(series.index)
+        return s
+
     @classmethod
     def from_categorical(cls, categorical, codes=None):
         """Creates from a pandas.Categorical

@@ -13,6 +13,7 @@ from . import _gdf
 from . import cudautils
 from . import utils
 from .buffer import Buffer
+from . import columnops
 
 
 class Column(object):
@@ -46,25 +47,13 @@ class Column(object):
         newsize = sum(map(len, objs))
         # Concatenate data
         mem = cuda.device_array(shape=newsize, dtype=head.data.dtype)
-        data = Buffer.from_empty(mem)
-        for o in objs:
-            data.extend(o.data.to_gpu_array())
+        data = Buffer.from_empty(mem, size=newsize)
 
-        # Concatenate mask if present
-        if any(o.has_null_mask for o in objs):
-            # FIXME: Inefficient
-            mem = cuda.device_array(shape=newsize, dtype=np.bool)
-            mask = Buffer.from_empty(mem)
-            null_count = 0
-            for o in objs:
-                mask.extend(o._get_mask_as_column().to_gpu_array())
-                null_count += o._null_count
-            mask = Buffer(cudautils.compact_mask_bytes(mask.to_gpu_array()))
-        else:
-            mask = None
-            null_count = 0
+        col = head.replace(data=data, mask=None, null_count=0)
 
-        col = head.replace(data=data, mask=mask, null_count=null_count)
+        if newsize > 0:
+            col = _gdf.column_concat(objs, col)
+
         return col
 
     def __init__(self, data, mask=None, null_count=None):
