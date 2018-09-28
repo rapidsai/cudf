@@ -654,7 +654,7 @@ class DataFrame(object):
 
     def merge(self, other, on=None, how='left', lsuffix='_x', rsuffix='_y',
               type='sort'):
-        if how != 'left':
+        if how not in ['left', 'inner']:
             raise NotImplementedError('{!r} join not implemented yet'
                                       .format(how))
 
@@ -665,40 +665,39 @@ class DataFrame(object):
 
         lhs = self
         rhs = other
-        # XXX: Replace this stub
-        # joined_values, joined_indicies = self._stub_merge(
-        #    lhs, rhs, left_on=on, right_on=on, how=how,
-        #    return_joined_indicies=True)
-        joined_values, joined_indicies = self._merge_gdf(
-            lhs, rhs, left_on=on, right_on=on, how=how,
-            return_indices=True)
 
-        # XXX: Prepare output.  same as _join.  code duplication
-        # Perform left, inner and outer join
+        cols = _gdf.libgdf_join(lhs._cols, rhs._cols, on, how)
+
+        df = DataFrame()
+
         def fix_name(name, suffix):
             if name in same_names:
                 return "{}{}".format(name, suffix)
             return name
 
-        def gather_cols(outdf, indf, on, idx, joinidx, suffix):
-            mask = (Series(idx) != -1).as_mask()
-            for k in on:
-                newcol = indf[k].take(idx).set_mask(mask).set_index(joinidx)
-                outdf[fix_name(k, suffix)] = newcol
+        # Columns are returned in order left - on - right fromm libgdf
+        # Creating dataframe with ordering as pandas:
 
-        def gather_empty(outdf, indf, idx, joinidx, suffix):
-            for k in indf.columns:
-                outdf[fix_name(k, suffix)] = indf[k][:0]
+        gap = len(self.columns) - len(on)
+        for idx in range(len(on)):
+            df[on[idx]] = cols[idx + gap]
+            print(idx)
 
-        df = DataFrame()
-        for key, col in zip(on, joined_values):
-            df[key] = col
+        idx = 0
 
-        left_indices, right_indices = joined_indicies
-        gather_cols(df, lhs, [x for x in lhs.columns if x not in on],
-                    left_indices, df.index, lsuffix)
-        gather_cols(df, rhs, [x for x in rhs.columns if x not in on],
-                    right_indices, df.index, rsuffix)
+        for name in self.columns:
+            if name not in on:
+                df[fix_name(name, lsuffix)] = cols[idx]
+                idx = idx + 1
+                print(idx)
+
+        idx = len(self.columns)
+
+        for name in other.columns:
+            if name not in on:
+                df[fix_name(name, rsuffix)] = cols[idx]
+                idx = idx + 1
+                print(idx)
 
         return df
 

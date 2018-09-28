@@ -125,6 +125,22 @@ def np_to_gdf_dtype(dtype):
     }[np.dtype(dtype).type]
 
 
+def gdf_to_np_dtype(dtype):
+    """Util to convert gdf dtype to numpy dtype.
+    """
+    return np.dtype({
+         libgdf.GDF_FLOAT64: np.float64,
+         libgdf.GDF_FLOAT32: np.float32,
+         libgdf.GDF_INT64: np.int64,
+         libgdf.GDF_INT32: np.int32,
+         libgdf.GDF_INT16: np.int16,
+         libgdf.GDF_INT8: np.int8,
+         libgdf.GDF_INT8: np.bool_,
+         libgdf.GDF_DATE64: np.datetime64,
+         libgdf.N_GDF_TYPES: np.int32,
+     }[dtype])
+
+
 def apply_reduce(fn, inp):
     # allocate output+temp array
     outsz = libgdf.gdf_reduce_optimal_output_size()
@@ -230,6 +246,96 @@ def apply_join(col_lhs, col_rhs, how, method='hash'):
 
     libgdf.gdf_column_free(col_result_l)
     libgdf.gdf_column_free(col_result_r)
+
+
+def libgdf_join(col_lhs, col_rhs, on, how, method='hash'):
+
+    if(len(col_lhs) != len(col_rhs)):
+        msg = "Unequal #columns in list 'col_lhs' and list 'col_rhs'"
+        raise ValueError(msg)
+
+    if(len(col_lhs) != len(col_rhs)):
+        msg = "Unequal #columns in list 'col_lhs' and list 'col_rhs'"
+        raise ValueError(msg)
+
+    joiner = _join_how_api[how]
+    method_api = _join_method_api[method]
+    gdf_context = ffi.new('gdf_context*')
+
+    if method == 'hash':
+        libgdf.gdf_context_view(gdf_context, 0, method_api, 0)
+    elif method == 'sort':
+        libgdf.gdf_context_view(gdf_context, 1, method_api, 0)
+    else:
+        msg = "method not supported"
+        raise ValueError(msg)
+
+    if(how not in ['left', 'inner']):
+        msg = "new join api must be left or inner"
+        raise ValueError(msg)
+
+    list_lhs = []
+    list_rhs = []
+    result_cols = []
+
+    result_col_names = []
+
+    left_idx = []
+    idx = 0
+    for name, col in col_lhs.items():
+
+        list_lhs.append(col._column.cffi_view)
+        if name not in on:
+            result_cols.append(columnview(0, None, dtype=col._column.dtype))
+            result_col_names.append(name)
+        else:
+            left_idx.append(idx)
+        idx = idx + 1
+
+    for name in on:
+        result_cols.append(columnview(0, None, dtype=col_lhs[name]._column.dtype))
+        result_col_names.append(name)
+
+    # right_idx = ffi.new('int[' + str(len(on)) + ']')
+    right_idx = []
+    idx = 0
+    for name, col in col_rhs.items():
+        list_rhs.append(col._column.cffi_view)
+
+        if name not in on:
+            result_cols.append(columnview(0, None, dtype=col._column.dtype))
+            result_col_names.append(name)
+        else:
+            right_idx.append(idx)
+        idx = idx + 1
+
+    num_cols_to_join = len(on)
+    result_num_cols = len(list_lhs) + len(list_rhs) - num_cols_to_join
+
+
+    joiner(list_lhs,
+           len(list_lhs),
+           left_idx,
+           list_rhs,
+           len(list_rhs),
+           right_idx,
+           num_cols_to_join,
+           result_num_cols,
+           result_cols,
+           ffi.NULL,
+           ffi.NULL,
+           gdf_context)
+
+    res = []
+
+    for col in result_cols:
+        res.append(_as_numba_devarray(intaddr=int(ffi.cast("uintptr_t",
+                                                           col.data)),
+                                      nelem=col.size,
+                                      dtype=gdf_to_np_dtype(col.dtype)))
+
+    return res
+
 
 
 def apply_prefixsum(col_inp, col_out, inclusive):
