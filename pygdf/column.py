@@ -13,7 +13,6 @@ from . import _gdf
 from . import cudautils
 from . import utils
 from .buffer import Buffer
-from . import columnops
 
 
 class Column(object):
@@ -52,7 +51,7 @@ class Column(object):
         col = head.replace(data=data, mask=None, null_count=0)
 
         if newsize > 0:
-            col = _gdf.column_concat(objs, col)
+            col = _gdf._column_concat(objs, col)
 
         return col
 

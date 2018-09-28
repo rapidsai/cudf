@@ -8,6 +8,7 @@ import contextlib
 import itertools
 
 import numpy as np
+import pandas as pd
 
 from numba import cuda
 
@@ -130,7 +131,7 @@ np_gdf_dict = {np.float64: libgdf.GDF_FLOAT64,
 def np_to_gdf_dtype(dtype):
     """Util to convert numpy dtype to gdf dtype.
     """
-    if str(dtype) == 'category':
+    if pd.core.common.is_categorical_dtype(dtype):
         return libgdf.GDF_INT8
     else:
         return np_gdf_dict[np.dtype(dtype).type]
@@ -380,12 +381,12 @@ def hash_partition(input_columns, key_indices, nparts, output_columns):
     return offsets
 
 
-def column_concat(cols_to_concat, output_col):
+def _column_concat(cols_to_concat, output_col):
     col_inputs = [col.cffi_view for col in cols_to_concat]
     libgdf.gdf_column_concat(output_col.cffi_view, col_inputs, len(col_inputs))
     return output_col
 
-  
+
 def count_nonzero_mask(mask, size):
     assert mask.size * mask_bitsize >= size
     nnz = ffi.new('int*')
@@ -396,4 +397,3 @@ def count_nonzero_mask(mask, size):
         libgdf.gdf_count_nonzero_mask(mask_ptr, size, nnz)
 
     return nnz[0]
-
