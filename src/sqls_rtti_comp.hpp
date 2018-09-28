@@ -22,6 +22,7 @@
 #include <thrust/distance.h>
 #include <thrust/advance.h>
 #include <thrust/gather.h>
+#include "thrust_rmm_allocator.h"
 
 //for int<n>_t:
 //

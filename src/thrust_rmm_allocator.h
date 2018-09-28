@@ -29,58 +29,21 @@
 
 #include "rmm.h"
 
-class rmm_temp_allocator
-{
-  public:
-    // just allocate bytes
-    typedef char value_type;
-
-    rmm_temp_allocator(cudaStream_t stream) : stream(stream) {}
-    ~rmm_temp_allocator() {}
-
-    value_type* allocate(std::ptrdiff_t n)
-    {
-      value_type* result = nullptr;
-  
-      rmmError_t error = rmmAlloc((void**)&result, n*sizeof(value_type), stream);
-
-      if (error != RMM_SUCCESS)
-      {
-        throw thrust::system_error(error, thrust::cuda_category(), "rmm_temp_allocator::allocate(): rmmAlloc");
-      }
-
-      return result;
-    }
-
-    void deallocate(value_type *ptr, size_t n)
-    {
-      rmmError_t error = rmmFree(ptr, stream);
-
-      if (error != RMM_SUCCESS)
-      {
-        throw thrust::system_error(error, thrust::cuda_category(), "rmm_temp_allocator::deallocate(): rmmFree");
-      }
-    }
-
-  private:
-    cudaStream_t stream;
-};
-
 template<class T>
 class rmm_allocator : public thrust::device_malloc_allocator<T>
 {
   public:
     using value_type = T;
 
-    // TODO: make stream part of the state rather than using NULL stream
-    //rmm_allocator(cudaStream_t stream) : stream(stream) {}
+    rmm_allocator(cudaStream_t stream = 0) : stream(stream) {}
+    ~rmm_allocator() {}
 
-    typedef thrust::device_ptr<T>  pointer;
+    typedef thrust::device_ptr<value_type>  pointer;
     inline pointer allocate(size_t n)
     {
       value_type* result = nullptr;
   
-      rmmError_t error = rmmAlloc((void**)&result, n*sizeof(T), 0); //stream);
+      rmmError_t error = rmmAlloc((void**)&result, n*sizeof(value_type), stream);
      
       if(error != RMM_SUCCESS)
       {
@@ -92,7 +55,7 @@ class rmm_allocator : public thrust::device_malloc_allocator<T>
   
     inline void deallocate(pointer ptr, size_t)
     {
-      rmmError_t error = rmmFree(thrust::raw_pointer_cast(ptr), 0);//stream);
+      rmmError_t error = rmmFree(thrust::raw_pointer_cast(ptr), stream);
   
       if(error != RMM_SUCCESS)
       {
@@ -100,6 +63,8 @@ class rmm_allocator : public thrust::device_malloc_allocator<T>
       }
     }
 
-  //private:
-  	//cudaStream_t stream;
+  private:
+  	cudaStream_t stream;
 };
+
+typedef rmm_allocator<char> rmm_temp_allocator; // Use this alias for thrust::cuda::par(rmm_temp_allocator(stream)).on(stream)

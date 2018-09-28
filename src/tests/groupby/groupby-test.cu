@@ -24,6 +24,7 @@
 
 #include "gtest/gtest.h"
 #include "gmock/gmock.h"
+#include "gdf_test_fixtures.h"
 #include <gdf/gdf.h>
 #include <gdf/cffi/functions.h>
 
@@ -34,7 +35,7 @@
 // A new instance of this class will be created for each *TEST(GroupTest, ...)
 // Put all repeated setup and validation stuff here
 template <class test_parameters>
-struct GroupTest : public testing::Test {
+struct GroupTest : public GdfTest {
   // The aggregation type is passed via a member of the template argument class
   const agg_op op = test_parameters::op;
 
