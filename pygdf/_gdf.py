@@ -13,6 +13,7 @@ from numba import cuda
 
 from libgdf_cffi import ffi, libgdf
 from . import cudautils
+from .utils import mask_bitsize
 
 mask_dtype = np.dtype(np.uint8)
 
@@ -21,6 +22,12 @@ def unwrap_devary(devary):
     ptrval = devary.device_ctypes_pointer.value
     ptrval = ptrval or ffi.NULL   # replace None with NULL
     return ffi.cast('void*', ptrval)
+
+
+def unwrap_mask(devary):
+    ptrval = devary.device_ctypes_pointer.value
+    ptrval = ptrval or ffi.NULL   # replace None with NULL
+    return ffi.cast('gdf_valid_type*', ptrval), ptrval
 
 
 def columnview_from_devary(devary, dtype=None):
@@ -108,7 +115,7 @@ def apply_unaryop(unaop, inp, out):
 def apply_mask_and(col, mask, out):
     args = (col.cffi_view, mask.cffi_view, out.cffi_view)
     libgdf.gdf_validity_and(*args)
-    nnz = cudautils.count_nonzero_mask(out.mask.mem, size=len(out))
+    nnz = count_nonzero_mask(out.mask.mem, size=len(out))
     return len(out) - nnz
 
 
@@ -480,3 +487,15 @@ def hash_partition(input_columns, key_indices, nparts, output_columns):
 
     offsets = list(offsets)
     return offsets
+
+
+def count_nonzero_mask(mask, size):
+    assert mask.size * mask_bitsize >= size
+    nnz = ffi.new('int*')
+    nnz[0] = 0
+    mask_ptr, addr = unwrap_mask(mask)
+
+    if addr != ffi.NULL:
+        libgdf.gdf_count_nonzero_mask(mask_ptr, size, nnz)
+
+    return nnz[0]

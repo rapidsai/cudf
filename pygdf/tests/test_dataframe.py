@@ -98,14 +98,14 @@ def test_series_indexing():
     series = Series(a1)
     # Indexing
     sr1 = series[:12]
-    assert not sr1.has_null_mask
+    assert sr1.null_count == 0
     np.testing.assert_equal(sr1.to_array(), a1[:12])
     sr2 = sr1[3:]
-    assert not sr2.has_null_mask
+    assert sr2.null_count == 0
     np.testing.assert_equal(sr2.to_array(), a1[3:12])
     # Index with stride
     sr3 = sr2[::2]
-    assert not sr3.has_null_mask
+    assert sr3.null_count == 0
     np.testing.assert_equal(sr3.to_array(), a1[3:12:2])
 
 
@@ -123,7 +123,7 @@ def test_dataframe_basic():
     df['vals'] = rnd_vals
     np.testing.assert_equal(df['vals'].to_array(), rnd_vals)
     assert len(df) == 10
-    assert df.columns == ('keys', 'vals')
+    assert tuple(df.columns) == ('keys', 'vals')
 
     # Make another dataframe
     df2 = DataFrame()
@@ -177,13 +177,13 @@ def test_dataframe_column_add_drop():
     data = np.asarray(range(10))
     df['a'] = data
     df['b'] = data
-    assert df.columns == ('a', 'b')
+    assert tuple(df.columns) == ('a', 'b')
     del df['a']
-    assert df.columns == ('b',)
+    assert tuple(df.columns) == ('b',)
     df['c'] = data
-    assert df.columns == ('b', 'c')
+    assert tuple(df.columns) == ('b', 'c')
     df['a'] = data
-    assert df.columns == ('b', 'c', 'a')
+    assert tuple(df.columns) == ('b', 'c', 'a')
 
 
 @pytest.mark.parametrize('nelem', [0, 3, 100, 1000])
@@ -210,7 +210,7 @@ def test_dataframe_slicing():
     # Row slice first 10
     first_10 = df[:10]
     assert len(first_10) == 10
-    assert first_10.columns == tuple(['a', 'b', 'c', 'd'])
+    assert tuple(first_10.columns) == ('a', 'b', 'c', 'd')
     np.testing.assert_equal(first_10['a'].to_array(), ha[:10])
     np.testing.assert_equal(first_10['b'].to_array(), hb[:10])
     np.testing.assert_equal(first_10['c'].to_array(), hc[:10])
@@ -220,7 +220,7 @@ def test_dataframe_slicing():
     # Row slice last 10
     last_10 = df[-10:]
     assert len(last_10) == 10
-    assert last_10.columns == tuple(['a', 'b', 'c', 'd'])
+    assert tuple(last_10.columns) == ('a', 'b', 'c', 'd')
     np.testing.assert_equal(last_10['a'].to_array(), ha[-10:])
     np.testing.assert_equal(last_10['b'].to_array(), hb[-10:])
     np.testing.assert_equal(last_10['c'].to_array(), hc[-10:])
@@ -232,7 +232,7 @@ def test_dataframe_slicing():
     end = 121
     subrange = df[begin:end]
     assert len(subrange) == end - begin
-    assert subrange.columns == tuple(['a', 'b', 'c', 'd'])
+    assert tuple(subrange.columns) == ('a', 'b', 'c', 'd')
     np.testing.assert_equal(subrange['a'].to_array(), ha[begin:end])
     np.testing.assert_equal(subrange['b'].to_array(), hb[begin:end])
     np.testing.assert_equal(subrange['c'].to_array(), hc[begin:end])
@@ -252,14 +252,14 @@ def test_dataframe_loc():
 
     # Full slice
     full = df.loc[:, ['c']]
-    assert full.columns == tuple(['c'])
+    assert tuple(full.columns) == ('c',)
     np.testing.assert_equal(full['c'].to_array(), hc)
 
     begin = 117
     end = 122
     fewer = df.loc[begin:end, ['c', 'd', 'a']]
     assert len(fewer) == end - begin + 1
-    assert fewer.columns == tuple(['c', 'd', 'a'])
+    assert tuple(fewer.columns) == ('c', 'd', 'a')
     np.testing.assert_equal(fewer['a'].to_array(), ha[begin:end + 1])
     np.testing.assert_equal(fewer['c'].to_array(), hc[begin:end + 1])
     np.testing.assert_equal(fewer['d'].to_array(), hd[begin:end + 1])
@@ -272,7 +272,7 @@ def test_dataframe_loc():
     end = 122
     fewer = df2.loc[begin:end, ['c', 'd', 'a']]
     assert len(fewer) == end - begin + 1
-    assert fewer.columns == tuple(['c', 'd', 'a'])
+    assert tuple(fewer.columns) == ('c', 'd', 'a')
     np.testing.assert_equal(fewer['a'].to_array(), ha[begin:end + 1])
     np.testing.assert_equal(fewer['c'].to_array(), hc[begin:end + 1])
     np.testing.assert_equal(fewer['d'].to_array(), hd[begin:end + 1])
@@ -518,6 +518,15 @@ def test_dataframe_setitem_index_len1():
     np.testing.assert_equal(gdf.b.to_array(), [0])
 
 
+def test_assign():
+    gdf = DataFrame({'x': [1, 2, 3]})
+    gdf2 = gdf.assign(y=gdf.x + 1)
+    assert list(gdf.columns) == ['x']
+    assert list(gdf2.columns) == ['x', 'y']
+
+    np.testing.assert_equal(gdf2.y.to_array(), [2, 3, 4])
+
+
 @pytest.mark.parametrize('nrows', [1, 8, 100, 1000])
 def test_dataframe_hash_columns(nrows):
     gdf = DataFrame()
@@ -661,3 +670,26 @@ def test_dataframe_masked_slicing(nelem, slice_start, slice_end):
     got = do_slice(gdf).to_pandas()
 
     pd.testing.assert_frame_equal(expect, got)
+
+
+def test_from_pandas():
+    df = pd.DataFrame({'x': [1, 2, 3]}, index=[4., 5., 6.])
+    gdf = gd.DataFrame.from_pandas(df)
+    assert isinstance(gdf, gd.DataFrame)
+
+    pd.testing.assert_frame_equal(df, gdf.to_pandas())
+
+    s = df.x
+    gs = gd.Series.from_pandas(s)
+    assert isinstance(gs, gd.Series)
+
+    pd.testing.assert_series_equal(s, gs.to_pandas())
+
+
+@pytest.mark.xfail(reason="constructor does not coerce index inputs")
+def test_index_in_dataframe_constructor():
+    a = pd.DataFrame({'x': [1, 2, 3]}, index=[4., 5., 6.])
+    b = gd.DataFrame({'x': [1, 2, 3]}, index=[4., 5., 6.])
+
+    pd.testing.assert_frame_equal(a, b.to_pandas())
+    assert pd.testing.assert_frame_equal(a.loc[4:], b.loc[4:].to_pandas())
