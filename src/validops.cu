@@ -70,16 +70,16 @@ void count_valid_bits(valid32_t const * const __restrict__ masks32,
                       const int num_rows, 
                       int * const __restrict__ global_count)
 {
+
+  const int cur_mask = threadIdx.x + blockIdx.x * blockDim.x;
+
   typedef cub::BlockReduce<int, block_size> BlockReduce;
   __shared__ typename BlockReduce::TempStorage temp_storage;
-
-  int cur_mask = threadIdx.x + blockIdx.x * gridDim.x;
 
   int my_count = 0;
   while(cur_mask < (num_masks32 - 1))
   {
     my_count += __popc(masks32[cur_mask]);
-
     cur_mask += blockDim.x * gridDim.x;
   }
 
@@ -97,11 +97,12 @@ void count_valid_bits(valid32_t const * const __restrict__ masks32,
     }
   }
 
-
   int block_count = BlockReduce(temp_storage).Sum(my_count);
 
   if(threadIdx.x == 0)
+  {
     atomicAdd(global_count, block_count);
+  }
 }
 
 /* --------------------------------------------------------------------------*/
@@ -137,8 +138,8 @@ gdf_error gdf_count_nonzero_mask(gdf_valid_type const * masks, int num_rows, int
   if(num_masks32 > 0)
   {
     cudaStream_t count_stream;
-    int * d_count;
     CUDA_TRY(cudaStreamCreate(&count_stream));
+    int * d_count;
     // Cast validity buffer to 4 byte type
     valid32_t const * masks32 = reinterpret_cast<valid32_t const *>(masks);
 
@@ -146,6 +147,7 @@ gdf_error gdf_count_nonzero_mask(gdf_valid_type const * masks, int num_rows, int
     CUDA_TRY(cudaMemsetAsync(d_count, 0, sizeof(int),count_stream));
 
     const int grid_size = (num_masks32 + block_size - 1)/block_size;
+
     count_valid_bits<<<grid_size, block_size,0,count_stream>>>(masks32, num_masks32, num_rows, d_count);
 
     CUDA_TRY( cudaGetLastError() );
@@ -155,8 +157,9 @@ gdf_error gdf_count_nonzero_mask(gdf_valid_type const * masks, int num_rows, int
     CUDA_TRY(cudaStreamDestroy(count_stream));
   }
 
-  // The final count of valid bits is the sum of the result from the
-  // transform_reduce and the remainder masks
+  assert(h_count >= 0);
+  assert(h_count <= num_rows);
+
   *count = h_count;
 
   return GDF_SUCCESS;
