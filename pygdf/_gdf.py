@@ -259,14 +259,6 @@ def apply_join(col_lhs, col_rhs, how, method='hash'):
 
 def libgdf_join(col_lhs, col_rhs, on, how, method='hash'):
 
-    if(len(col_lhs) != len(col_rhs)):
-        msg = "Unequal #columns in list 'col_lhs' and list 'col_rhs'"
-        raise ValueError(msg)
-
-    if(len(col_lhs) != len(col_rhs)):
-        msg = "Unequal #columns in list 'col_lhs' and list 'col_rhs'"
-        raise ValueError(msg)
-
     joiner = _join_how_api[how]
     method_api = _join_method_api[method]
     gdf_context = ffi.new('gdf_context*')
