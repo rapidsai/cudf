@@ -6,6 +6,7 @@ from collections import OrderedDict
 from numbers import Number
 
 import numpy as np
+import pandas as pd
 
 from . import cudautils, formatting
 from .buffer import Buffer
@@ -66,10 +67,15 @@ class Series(object):
         col = columnops.as_column(data).set_mask(mask, null_count=null_count)
         return cls(data=col)
 
-    def __init__(self, data, index=None):
+    def __init__(self, data, index=None, name=None):
+        if isinstance(data, pd.Series):
+            name = data.name
+            index = GenericIndex(data.index)
         if isinstance(data, Series):
             index = data._index
+            name = data.name
             data = data._column
+
         if not isinstance(data, columnops.TypedColumnBase):
             data = columnops.as_column(data)
 
@@ -79,6 +85,11 @@ class Series(object):
         assert isinstance(data, columnops.TypedColumnBase)
         self._column = data
         self._index = RangeIndex(len(data)) if index is None else index
+        self.name = name
+
+    @classmethod
+    def from_pandas(cls, s):
+        return cls(s)
 
     def serialize(self, serialize):
         header = {}
@@ -112,6 +123,7 @@ class Series(object):
         return dict(
             data=self._column,
             index=self._index,
+            name=self.name,
         )
 
     def _copy_construct(self, **kwargs):
@@ -314,6 +326,12 @@ class Series(object):
     def __rmul__(self, other):
         return self._rbinaryop(other, 'mul')
 
+    def __pow__(self, other):
+        if other == 2:
+            return self * self
+        else:
+            return NotImplemented
+
     def __floordiv__(self, other):
         return self._binaryop(other, 'floordiv')
 
@@ -378,8 +396,13 @@ class Series(object):
         if index is True:
             index = Index._concat([o.index for o in objs])
 
+        names = {obj.name for obj in objs}
+        if len(names) == 1:
+            [name] = names
+        else:
+            name = None
         col = Column._concat([o._column for o in objs])
-        return cls(data=col, index=index)
+        return cls(data=col, index=index, name=name)
 
     def append(self, arbitrary):
         """Append values from another ``Series`` or array-like object.
@@ -450,7 +473,9 @@ class Series(object):
     def to_pandas(self, index=True):
         if index is True:
             index = self.index.to_pandas()
-        return self._column.to_pandas(index=index)
+        s = self._column.to_pandas(index=index)
+        s.name = self.name
+        return s
 
     @property
     def data(self):
@@ -696,37 +721,44 @@ class Series(object):
     #
     # Stats
     #
-    def count(self):
+    def count(self, axis=None, skipna=True):
         """The number of non-null values"""
+        assert axis in (None, 0) and skipna is True
         return self.valid_count
 
-    def min(self):
+    def min(self, axis=None, skipna=True):
         """Compute the min of the series
         """
+        assert axis in (None, 0) and skipna is True
         return self._column.min()
 
-    def max(self):
+    def max(self, axis=None, skipna=True):
         """Compute the max of the series
         """
+        assert axis in (None, 0) and skipna is True
         return self._column.max()
 
-    def sum(self):
+    def sum(self, axis=None, skipna=True):
         """Compute the sum of the series"""
+        assert axis in (None, 0) and skipna is True
         return self._column.sum()
 
-    def mean(self):
+    def mean(self, axis=None, skipna=True):
         """Compute the mean of the series
         """
+        assert axis in (None, 0) and skipna is True
         return self._column.mean()
 
-    def std(self, ddof=1):
+    def std(self, ddof=1, axis=None, skipna=True):
         """Compute the standard deviation of the series
         """
+        assert axis in (None, 0) and skipna is True
         return np.sqrt(self.var(ddof=ddof))
 
-    def var(self, ddof=1):
+    def var(self, ddof=1, axis=None, skipna=True):
         """Compute the variance of the series
         """
+        assert axis in (None, 0) and skipna is True
         mu, var = self.mean_var(ddof=ddof)
         return var
 

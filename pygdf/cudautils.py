@@ -233,13 +233,6 @@ def prefixsum(vals):
     return slots
 
 
-def count_nonzero_mask(mask, size):
-    assert mask.size * mask_bitsize >= size
-    # TODO: this needs optimization
-    _, nnz = mask_assign_slot(size, mask)
-    return nnz
-
-
 def copy_to_dense(data, mask, out=None):
     """Copy *data* with validity bits in *mask* into *out*.
 
