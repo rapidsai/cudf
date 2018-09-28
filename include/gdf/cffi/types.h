@@ -39,11 +39,10 @@ typedef enum {
     GDF_COLUMN_SIZE_TOO_BIG,          /**< Size of column is larger than the max supported size */      
     GDF_DATASET_EMPTY,                /**< Input dataset is either null or has size 0 when it shouldn't */   
     GDF_VALIDITY_MISSING,             /**< gdf_column's validity bitmask is null */  
-    GDF_VALIDITY_UNSUPPORTED,         
+    GDF_VALIDITY_UNSUPPORTED,         /**< The requested gdf operation does not support validity bitmask handling, and one of the input columns has the valid bits enabled */
     GDF_INVALID_API_CALL,             /**< The arguments passed into the function were invalid */   
     GDF_JOIN_DTYPE_MISMATCH,          /**< Datatype mismatch between corresponding columns in  left/right tables in the Join function */   
     GDF_JOIN_TOO_MANY_COLUMNS,        /**< Too many columns were passed in for the requested join operation*/       
-    GDF_GROUPBY_TOO_MANY_COLUMNS,
     GDF_DTYPE_MISMATCH,               /**< Type mismatch between columns that should be the same type */
     GDF_UNSUPPORTED_METHOD,           /**< The method requested to perform an operation was invalid or unsupported (e.g., hash vs. sort)*/ 
     GDF_INVALID_AGGREGATOR,           /**< Invalid aggregator was specified for a groupby*/

@@ -21,9 +21,10 @@
 #include <gdf/gdf.h>
 #include <gdf/cffi/functions.h>
 #include <gdf/utils.h>
-#include "../../util/bit_util.cuh"
 #include <bitset>
 #include <numeric> // for std::accumulate
+#include <memory>
+#include "../../util/bit_util.cuh"
 
 // Type for a unique_ptr to a gdf_column with a custom deleter
 // Custom deleter is defined at construction
@@ -148,8 +149,6 @@ void print_valid_data(const gdf_valid_type *validity_mask,
                  });
   std::cout << std::endl;
 }
-
-
 
 /* --------------------------------------------------------------------------*/
 /**
