@@ -71,7 +71,7 @@ void count_valid_bits(valid32_t const * const __restrict__ masks32,
                       int * const __restrict__ global_count)
 {
 
-  const int cur_mask = threadIdx.x + blockIdx.x * blockDim.x;
+  int cur_mask = threadIdx.x + blockIdx.x * blockDim.x;
 
   typedef cub::BlockReduce<int, block_size> BlockReduce;
   __shared__ typename BlockReduce::TempStorage temp_storage;
