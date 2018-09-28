@@ -655,7 +655,7 @@ class DataFrame(object):
     def merge(self, other, on=None, how='left', lsuffix='_x', rsuffix='_y',
               type='sort'):
         if how not in ['left', 'inner']:
-            raise NotImplementedError('{!r} join not implemented yet'
+            raise NotImplementedError('{!r} join not supported yet'
                                       .format(how))
 
         same_names = set(self.columns) & set(other.columns)
@@ -666,7 +666,7 @@ class DataFrame(object):
         lhs = self
         rhs = other
 
-        cols = _gdf.libgdf_join(lhs._cols, rhs._cols, on, how)
+        cols, valids = _gdf.libgdf_join(lhs._cols, rhs._cols, on, how)
 
         df = DataFrame()
 
@@ -675,29 +675,29 @@ class DataFrame(object):
                 return "{}{}".format(name, suffix)
             return name
 
-        # Columns are returned in order left - on - right fromm libgdf
+        # Columns are returned in order left - on - right from libgdf
         # Creating dataframe with ordering as pandas:
 
         gap = len(self.columns) - len(on)
         for idx in range(len(on)):
             df[on[idx]] = cols[idx + gap]
-            print(idx)
+            df[on[idx]] = df[on[idx]].set_mask(valids[idx])
 
         idx = 0
 
         for name in self.columns:
             if name not in on:
                 df[fix_name(name, lsuffix)] = cols[idx]
+                df[fix_name(name, lsuffix)] = df[fix_name(name, lsuffix)].set_mask(valids[idx])
                 idx = idx + 1
-                print(idx)
 
         idx = len(self.columns)
 
         for name in other.columns:
             if name not in on:
                 df[fix_name(name, rsuffix)] = cols[idx]
+                df[fix_name(name, rsuffix)] = df[fix_name(name, rsuffix)].set_mask(valids[idx])
                 idx = idx + 1
-                print(idx)
 
         return df
 
@@ -785,6 +785,8 @@ class DataFrame(object):
         if same_names and not (lsuffix or rsuffix):
             raise ValueError('there are overlapping columns but '
                              'lsuffix and rsuffix are not defined')
+
+        # call libgdf new for how in left and inner, joining on index
 
         return self._join(other=other, how=how, lsuffix=lsuffix,
                           rsuffix=rsuffix, sort=sort, same_names=same_names,

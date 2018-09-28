@@ -14,6 +14,8 @@ from numba import cuda
 from libgdf_cffi import ffi, libgdf
 from . import cudautils
 
+mask_dtype = np.dtype(np.uint8)
+
 
 def unwrap_devary(devary):
     ptrval = devary.device_ctypes_pointer.value
@@ -136,7 +138,7 @@ def gdf_to_np_dtype(dtype):
          libgdf.GDF_INT16: np.int16,
          libgdf.GDF_INT8: np.int8,
          libgdf.GDF_INT8: np.bool_,
-         libgdf.GDF_DATE64: np.datetime64,
+         libgdf.GDF_DATE64: np.dtype('datetime64[ms]'),
          libgdf.N_GDF_TYPES: np.int32,
      }[dtype])
 
@@ -271,7 +273,7 @@ def libgdf_join(col_lhs, col_rhs, on, how, method='hash'):
         raise ValueError(msg)
 
     if(how not in ['left', 'inner']):
-        msg = "new join api must be left or inner"
+        msg = "new join api only supports left or inner"
         raise ValueError(msg)
 
     list_lhs = []
@@ -293,7 +295,8 @@ def libgdf_join(col_lhs, col_rhs, on, how, method='hash'):
         idx = idx + 1
 
     for name in on:
-        result_cols.append(columnview(0, None, dtype=col_lhs[name]._column.dtype))
+        result_cols.append(columnview(0, None,
+                                      dtype=col_lhs[name]._column.dtype))
         result_col_names.append(name)
 
     # right_idx = ffi.new('int[' + str(len(on)) + ']')
@@ -312,7 +315,6 @@ def libgdf_join(col_lhs, col_rhs, on, how, method='hash'):
     num_cols_to_join = len(on)
     result_num_cols = len(list_lhs) + len(list_rhs) - num_cols_to_join
 
-
     joiner(list_lhs,
            len(list_lhs),
            left_idx,
@@ -327,15 +329,20 @@ def libgdf_join(col_lhs, col_rhs, on, how, method='hash'):
            gdf_context)
 
     res = []
+    valids = []
 
     for col in result_cols:
+        print(col.valid)
         res.append(_as_numba_devarray(intaddr=int(ffi.cast("uintptr_t",
                                                            col.data)),
                                       nelem=col.size,
                                       dtype=gdf_to_np_dtype(col.dtype)))
+        valids.append(_as_numba_devarray(intaddr=int(ffi.cast("uintptr_t",
+                                                              col.valid)),
+                                         nelem=col.size,
+                                         dtype=mask_dtype))
 
-    return res
-
+    return res, valids
 
 
 def apply_prefixsum(col_inp, col_out, inclusive):
