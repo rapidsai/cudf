@@ -48,6 +48,7 @@
 #include <thrust/host_vector.h>
 
 #include "type_conversion.cuh"
+#include "date-time-parser.cuh"
 
 #include <gdf/gdf.h>
 #include <gdf/errorutils.h>
@@ -73,6 +74,8 @@ typedef struct raw_csv_ {
 	int					num_cols;		// host: number of columns
     vector<gdf_dtype>	dtypes;			// host: array of dtypes (since gdf_columns are not created until end)
     vector<string>		col_names;		// host: array of column names
+
+    bool				dayfirst;
 } raw_csv_t;
 
 
@@ -97,12 +100,12 @@ __device__ int findSetBit(int tid, long num_bits, uint64_t *f_bits, int x);
 
 gdf_error launch_countRecords(raw_csv_t * csvData);
 gdf_error launch_storeRecordStart(raw_csv_t * csvData);
-gdf_error launch_dataConvertColumnsNew(raw_csv_t * raw_csv, void** d_gdf,  gdf_valid_type** valid, gdf_dtype* d_dtypes, string_pair	**str_cols, int row_offset);
+gdf_error launch_dataConvertColumns(raw_csv_t * raw_csv, void** d_gdf,  gdf_valid_type** valid, gdf_dtype* d_dtypes, string_pair	**str_cols, int row_offset);
 
 __global__ void countRecords(char *data, const char delim, const char terminator, long num_bytes, long num_bits, long* num_records);
 __global__ void storeRecordStart(char *data, const char delim, const char terminator, long num_bytes, long num_bits, long* num_records,long* recStart) ;
-__global__ void convertCsvToGdfNew(char * raw_csv,char delim,long  num_records, int  num_columns,long* recStart,gdf_dtype* dtype,void** gdf_data,gdf_valid_type **valid,string_pair	**str_cols,int row_offset);
-__device__ void removePrePostWhiteSpaces2(char *data, long* start_idx, long* end_idx);
+
+__global__ void convertCsvToGdf(char *csv,char delim, long num_records, int num_columns,long* recStart,gdf_dtype* dtype,void** gdf_data,gdf_valid_type **valid,string_pair **str_cols, int row_offset, bool);
 
 //
 //---------------CUDA Valid (8 blocks of 8-bits) Bitmap Kernels ---------------------------------------------
@@ -128,9 +131,11 @@ __device__ void setBit(gdf_valid_type* address, int bit) {
 /**
  * @brief read in a CSV file
  *
- * Read in a CSV file and return a GDF (array of gdf_columns)
+ * Read in a CSV file, extract all fields, and return a GDF (array of gdf_columns)
  *
- * @param args the input arguments, but this also contains the returned data
+ * @param[in and out] args the input arguments, but this also contains the returned data
+ *
+ * @return gdf_error
  *
  */
 gdf_error read_csv(csv_read_arg *args)
@@ -244,7 +249,7 @@ gdf_error read_csv(csv_read_arg *args)
 		d_valid[col] 	= gdf->valid;
 	}
 
-	launch_dataConvertColumnsNew(raw_csv,d_data, d_valid, d_dtypes,str_cols, args->skiprows);
+	launch_dataConvertColumns(raw_csv,d_data, d_valid, d_dtypes,str_cols, args->skiprows);
 
 	for (int col = 0; col < stringColCount; col++) {
 		//  TO-DO:  get a string class
@@ -306,7 +311,6 @@ gdf_error parseArguments(csv_read_arg *args, raw_csv_t *csv)
 	csv->num_cols		= args->num_cols;
 	csv->num_records	= 0;
 
-
 	//----- Delimiter
 	if ( args->delim_whitespace == true) {
 		csv->delimiter = ' ';
@@ -316,7 +320,6 @@ gdf_error parseArguments(csv_read_arg *args, raw_csv_t *csv)
 
 	//----- Line Delimiter
 	csv->terminator = args->lineterminator;
-
 
 	//--- Now look at column name and
 	for ( int x = 0; x < csv->num_cols; x++) {
@@ -332,6 +335,8 @@ gdf_error parseArguments(csv_read_arg *args, raw_csv_t *csv)
 		csv->col_names.push_back(col_name);
 	}
 
+	csv->dayfirst = args->dayfirst;
+
 	return gdf_error::GDF_SUCCESS;
 }
 
@@ -343,6 +348,9 @@ gdf_dtype convertStringToDtype(std::string &dtype) {
 
 	if (dtype.compare( "str") == 0) 		return GDF_CATEGORY;
 	if (dtype.compare( "date") == 0) 		return GDF_DATE64;
+	if (dtype.compare( "date32") == 0) 		return GDF_DATE32;
+	if (dtype.compare( "date64") == 0) 		return GDF_DATE64;
+	if (dtype.compare( "timestamp") == 0)	return GDF_TIMESTAMP;
 	if (dtype.compare( "category") == 0) 	return GDF_CATEGORY;
 	if (dtype.compare( "float") == 0)		return GDF_FLOAT32;
 	if (dtype.compare( "float32") == 0)		return GDF_FLOAT32;
@@ -411,8 +419,14 @@ gdf_error allocateGdfDataSpace(gdf_column *gdf) {
 		case gdf_dtype::GDF_FLOAT64:
 			CUDA_TRY(cudaMallocManaged(&gdf->data, (sizeof(double) * N)));
 			break;
+		case gdf_dtype::GDF_DATE32:
+			CUDA_TRY(cudaMallocManaged(&gdf->data, (sizeof(gdf_date32) * N)));
+			break;
 		case gdf_dtype::GDF_DATE64:
 			CUDA_TRY(cudaMallocManaged(&gdf->data, (sizeof(gdf_date64) * N)));
+			break;
+		case gdf_dtype::GDF_TIMESTAMP:
+			CUDA_TRY(cudaMallocManaged(&gdf->data, (sizeof(int64_t) * N)));
 			break;
 		case gdf_dtype::GDF_CATEGORY:
 			CUDA_TRY(cudaMallocManaged(&gdf->data, (sizeof(gdf_category) * N)));
@@ -460,7 +474,6 @@ gdf_error launch_countRecords(raw_csv_t * csvData) {
 	long recs=-1;
 	CUDA_TRY(cudaMemcpy(&recs, d_num_records, sizeof(long), cudaMemcpyDeviceToHost));
 	csvData->num_records=recs;
-
 
 	CUDA_TRY(cudaGetLastError());
 
@@ -573,13 +586,13 @@ __global__ void storeRecordStart(char *data, const char delim, const char termin
 
 
 
-gdf_error launch_dataConvertColumnsNew(raw_csv_t * raw_csv, void **gdf, gdf_valid_type** valid, gdf_dtype* d_dtypes,string_pair	**str_cols, int row_offset) {
+gdf_error launch_dataConvertColumns(raw_csv_t * raw_csv, void **gdf, gdf_valid_type** valid, gdf_dtype* d_dtypes,string_pair **str_cols, int row_offset) {
 
 	int64_t threads 	= 1024;
 	int64_t blocks 		= (  raw_csv->num_records + (threads -1)) / threads ;
 
 
-	convertCsvToGdfNew <<< blocks, threads >>>(
+	convertCsvToGdf <<< blocks, threads >>>(
 		raw_csv->data,
 		raw_csv->delimiter,
 		raw_csv->num_records,
@@ -589,7 +602,8 @@ gdf_error launch_dataConvertColumnsNew(raw_csv_t * raw_csv, void **gdf, gdf_vali
 		gdf,
 		valid,
 		str_cols,
-		row_offset
+		row_offset,
+		raw_csv->dayfirst
 	);
 
 
@@ -607,7 +621,7 @@ gdf_error launch_dataConvertColumnsNew(raw_csv_t * raw_csv, void **gdf, gdf_vali
  * offset = record index (starting if more that 1)
  *
  */
-__global__ void convertCsvToGdfNew(
+__global__ void convertCsvToGdf(
 		char 			*raw_csv,
 		char 			delim,
 		long  			num_records,
@@ -616,8 +630,10 @@ __global__ void convertCsvToGdfNew(
 		gdf_dtype 		*dtype,
 		void			**gdf_data,
 		gdf_valid_type 	**valid,
-		string_pair	**str_cols,
-		int row_offset)
+		string_pair		**str_cols,
+		int 			row_offset,
+		bool			dayfirst
+		)
 {
 
 
@@ -694,12 +710,24 @@ __global__ void convertCsvToGdfNew(
 					gdf_out[rec_id] = convertStrtoFloat<double>(raw_csv, start, tempPos);
 				}
 					break;
+				case gdf_dtype::GDF_DATE32:
+				{
+					gdf_date32 *gdf_out = (gdf_date32 *)gdf_data[col];
+					gdf_out[rec_id] = parseDateFormat(raw_csv, start, tempPos, dayfirst);
+				}
+					break;
 				case gdf_dtype::GDF_DATE64:
 				{
 					gdf_date64 *gdf_out = (gdf_date64 *)gdf_data[col];
-					gdf_out[rec_id] = convertStrtoDate(raw_csv, start, tempPos);
+					gdf_out[rec_id] = parseDateTimeFormat(raw_csv, start, tempPos, dayfirst);
 				}
 					break;
+				case gdf_dtype::GDF_TIMESTAMP:
+				{
+					int64_t *gdf_out = (int64_t *)gdf_data[col];
+					gdf_out[rec_id] = convertStrtoInt<int64_t>(raw_csv, start, tempPos);
+				}
+				break;
 				case gdf_dtype::GDF_CATEGORY:
 				{
 					gdf_category *gdf_out = (gdf_category *)gdf_data[col];
@@ -734,13 +762,7 @@ __global__ void convertCsvToGdfNew(
 	}
 }
 
-__device__
-void removePrePostWhiteSpaces2(char *data, long* start_idx, long* end_idx) {
-	while(*start_idx < *end_idx && data[*start_idx] == ' ')
-		*start_idx=*start_idx+1;
-	while(*start_idx < *end_idx && data[*end_idx] == ' ')
-		*end_idx=*end_idx-1;
-}
+
 
 
 /*

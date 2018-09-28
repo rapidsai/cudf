@@ -7,6 +7,42 @@
 
 
 
+//---------------------------------------------------------------------------
+//				Helper functions
+//---------------------------------------------------------------------------
+
+__host__ __device__
+bool isDigit(char data) {
+	if ( data < '0' ) return false;
+	if ( data > '9' ) return false;
+
+	return true;
+}
+
+
+__host__ __device__
+long firstOcurance(char *data, long stx, long endx, char c) {
+
+	for ( long x = stx; x < endx +1; x++) {
+		if (data[x] == c)
+			return x;
+	}
+
+	return -1;
+}
+
+
+__host__ __device__
+void removePrePostWhiteSpaces2(char *data, long* start_idx, long* end_idx) {
+	while(*start_idx < *end_idx && data[*start_idx] == ' ')
+		*start_idx=*start_idx+1;
+	while(*start_idx < *end_idx && data[*end_idx] == ' ')
+		*end_idx=*end_idx-1;
+}
+
+//---------------------------------------------------------------------------
+
+
 
 template<typename T>
 __host__ __device__
@@ -119,6 +155,7 @@ T convertStrtoFloat(char *data, long start_idx, long end_idx) {
 /**
  * Convert a date (MM/YYYY or DD/MM/YYYY) into a date64
  */
+/*
 __host__ __device__
 int64_t convertStrtoDate(char *data, long start_idx, long end_idx) {
 
@@ -165,6 +202,7 @@ int64_t convertStrtoDate(char *data, long start_idx, long end_idx) {
 
 	// 1972 was a leap year, so how many between date and 1972?
 	int lpy = (year - 1972)/4 + 1;
+
 	// compute days since epoch
 	int64_t days_e = ((ye - lpy) * 365) + (lpy * 366);
 
@@ -189,6 +227,7 @@ int64_t convertStrtoDate(char *data, long start_idx, long end_idx) {
 
 	return t;
 }
+*/
 
 __forceinline__
 __host__ __device__ uint32_t rotl32( uint32_t x, int8_t r )
