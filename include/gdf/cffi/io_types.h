@@ -36,8 +36,6 @@ typedef struct {
 	 * Input arguments - all data is in the host
 	 */
 	char		*file_path;				// file location to read from	- if the file is compressed, it needs proper file extensions {.gz}
-	char		*buffer;				// process data from a buffer,  pointer to Host memory
-	char 		*object;				// this is a URL path
 
 	char		lineterminator;			// can change the end of line character
 	char		delimiter;				// also called 'sep'  this is the field separator
@@ -50,6 +48,9 @@ typedef struct {
 
 	int			skiprows;				// number of rows at the start of the files to skip
 	int			skipfooter;				// number of rows at the bottom of the file to skip - counting is backwards from end, 0 = last line
+
+	bool		dayfirst;				// is the first value the day?  DD/MM  versus MM/DD
+
 
 } csv_read_arg;
 
