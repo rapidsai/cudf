@@ -30,14 +30,14 @@ using namespace std;
 
 //--- all the private functions
 template<typename T>
-gdf_error runConverter(gdf_column **gdfData, csr_gdf *csrReturn, int64_t * offsets);
+gdf_error runConverter(gdf_column **gdfData, csr_gdf *csrReturn, gdf_size_type * offsets);
 
 
 //--- private CUDA functions / kernels
 template<typename T>
-__global__ void cudaCreateCSR(void *data, gdf_valid_type *valid, gdf_dtype dtype, int colID, T *A, int64_t *JA, int64_t *offsets, gdf_size_type numRows);
+__global__ void cudaCreateCSR(void *data, gdf_valid_type *valid, gdf_dtype dtype, int colID, T *A, int64_t *JA, gdf_size_type *offsets, gdf_size_type numRows);
 
-__global__ void determineValidRecCount(gdf_valid_type *validArray, gdf_size_type numRows, gdf_size_type numCol, int64_t * offset);
+__global__ void determineValidRecCount(gdf_valid_type *validArray, gdf_size_type numRows, gdf_size_type numCol, gdf_size_type * offset);
 
 template<typename T>
 __device__ T convertDataElement(gdf_column *gdf, int idx, gdf_dtype dtype);
@@ -66,10 +66,12 @@ __device__ int checkBitCSR(gdf_valid_type data, int bit) {
  * Take a matrix in GDF format and convert it into a CSR.  The column major matrix needs to have every column defined.
  * Passing in a COO datset will be treated as a two column matrix
  *
- * @param gdfData the ordered list of columns
- * @param numCol the number of columns in the gdfData array
- * @param csrReturn a pointer to the returned data structure
+ * @param[in] gdfData the ordered list of columns
+ * @param[in] numCol the number of columns in the gdfData array
  *
+ * @param[out] csrReturn a pointer to the returned data structure
+ *
+ * @return gdf_error code
  */
 gdf_error gdf_to_csr(gdf_column **gdfData, int numCol, csr_gdf *csrReturn) {
 
@@ -100,8 +102,8 @@ gdf_error gdf_to_csr(gdf_column **gdfData, int numCol, csr_gdf *csrReturn) {
 	nnz = (numRows * numCol) - numNull;
 
 	// Allocate space for the offset - this will eventually be IA - dtype is long since the sum of all column elements could be larger than int32
-    long * offsets;
-    CUDA_TRY(cudaMallocManaged(&offsets, (numRows + 2) * sizeof(int64_t)));
+	gdf_size_type * offsets;
+    CUDA_TRY(cudaMalloc(&offsets, (numRows + 2) * sizeof(int64_t)));
     CUDA_TRY(cudaMemset(offsets, 0, ( sizeof(int64_t) * (numRows + 2) ) ));
 
     // do a pass over each columns, and have each column updates the row count
@@ -111,7 +113,6 @@ gdf_error gdf_to_csr(gdf_column **gdfData, int numCol, csr_gdf *csrReturn) {
 	for ( int x = 0; x < numCol; x++ ) {
 		determineValidRecCount<<<blocks, threads>>>(gdfData[x]->valid, numRows, numCol, offsets);
 	}
-
 
 	//--------------------------------------------------------------------------------------
 	// Now do an exclusive scan to compute the offsets for where to write data
@@ -127,12 +128,11 @@ gdf_error gdf_to_csr(gdf_column **gdfData, int numCol, csr_gdf *csrReturn) {
 	//--------------------------------------------------------------------------------------
 	// now start creating output data
     size_t * IA;
-    CUDA_TRY(cudaMallocManaged(&IA, (numRows + 2) * sizeof(gdf_size_type)));
+    CUDA_TRY(cudaMalloc(&IA, (numRows + 2) * sizeof(gdf_size_type)));
     CUDA_TRY(cudaMemcpy(IA, offsets, ( sizeof(gdf_size_type) * (numRows + 2) ), cudaMemcpyDeviceToDevice) );
 
     int64_t * 	JA;
-    CUDA_TRY( cudaMallocManaged(&JA, (sizeof(int64_t) * nnz)));
-	//CUDA_TRY( cudaMemset(JA, -1, (sizeof(int64_t) * nnz)) );
+    CUDA_TRY( cudaMalloc(&JA, (sizeof(int64_t) * nnz)));
 
     //----------------------------------------------------------------------------------
     // Now just missing A and the moving of data
@@ -147,6 +147,7 @@ gdf_error gdf_to_csr(gdf_column **gdfData, int numCol, csr_gdf *csrReturn) {
 
     // Start processing based on data type
 	gdf_error status = GDF_SUCCESS;
+
     switch(dType) {
     	case gdf_dtype::GDF_INT8:
     		status = runConverter<int8_t>(gdfData, csrReturn, offsets);
@@ -180,7 +181,7 @@ gdf_error gdf_to_csr(gdf_column **gdfData, int numCol, csr_gdf *csrReturn) {
 
 
 template<typename T>
-gdf_error runConverter(gdf_column **gdfData, csr_gdf *csrReturn, int64_t * offsets) {
+gdf_error runConverter(gdf_column **gdfData, csr_gdf *csrReturn, gdf_size_type * offsets) {
 
 	gdf_size_type	numCols		= csrReturn->cols;
 	gdf_size_type	numRows		= csrReturn->rows;
@@ -225,7 +226,7 @@ gdf_error runConverter(gdf_column **gdfData, csr_gdf *csrReturn, int64_t * offse
 template<typename T>
 __global__ void cudaCreateCSR(
 		void *data, gdf_valid_type *valid, gdf_dtype dtype, int colId,
-		T *A, int64_t *JA, int64_t *offsets, gdf_size_type numRows)
+		T *A, int64_t *JA, gdf_size_type *offsets, gdf_size_type numRows)
 {
 	int tid = threadIdx.x + (blockDim.x * blockIdx.x);			// get the tread ID which is also the row number
 
@@ -257,7 +258,7 @@ __global__ void cudaCreateCSR(
  * the number of elements a valid array is actually ceil(numRows / 8) since it is a bitmap.  the total number of bits checked is equal to numRows
  *
  */
-__global__ void determineValidRecCount(gdf_valid_type *valid, gdf_size_type numRows, gdf_size_type numCol, int64_t * offset) {
+__global__ void determineValidRecCount(gdf_valid_type *valid, gdf_size_type numRows, gdf_size_type numCol, gdf_size_type * offset) {
 
 	int tid = threadIdx.x + (blockDim.x * blockIdx.x);				// get the tread ID which is also the row number
 
