@@ -144,7 +144,6 @@ def gdf_to_np_dtype(dtype):
          libgdf.GDF_INT32: np.int32,
          libgdf.GDF_INT16: np.int16,
          libgdf.GDF_INT8: np.int8,
-         libgdf.GDF_INT8: np.bool_,
          libgdf.GDF_DATE64: np.dtype('datetime64[ms]'),
          libgdf.N_GDF_TYPES: np.int32,
      }[dtype])
@@ -331,7 +330,6 @@ def libgdf_join(col_lhs, col_rhs, on, how, method='hash'):
     valids = []
 
     for col in result_cols:
-        print(col.valid)
         res.append(_as_numba_devarray(intaddr=int(ffi.cast("uintptr_t",
                                                            col.data)),
                                       nelem=col.size,
