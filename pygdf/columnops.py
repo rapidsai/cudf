@@ -159,8 +159,17 @@ def as_column(arbitrary):
     elif isinstance(arbitrary, pa.Array):
         if isinstance(arbitrary.type, pa.StringArray):
             raise NotImplementedError("Strings are not yet supported")
-        pamask = np.array(arbitrary.buffers()[0])
-        if isinstance(arbitrary.type, pa.DictionaryArray):
+        elif isinstance(arbitrary.type, pa.NullArray):
+            pamask = np.empty(0, dtype='int8')
+            padata = np.empty(0, dtype=arbitrary.type.to_pandas_dtype())
+            data = numerical.NumericalColumn(
+                data=Buffer(padata),
+                mask=Buffer(pamask),
+                null_count=0,
+                dtype=arbitrary.type.to_pandas_dtype()
+            )
+        elif isinstance(arbitrary.type, pa.DictionaryArray):
+            pamask = np.array(arbitrary.buffers()[0])
             padata = np.array(arbitrary.buffers()[1]).view(
                 arbitrary.indices.type.to_pandas_dtype()
             )
@@ -172,6 +181,7 @@ def as_column(arbitrary):
                 ordered=True
             )
         else:
+            pamask = np.array(arbitrary.buffers()[0])
             padata = np.array(arbitrary.buffers()[1]).view(
                 arbitrary.type.to_pandas_dtype()
             )
