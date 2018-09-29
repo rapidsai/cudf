@@ -160,34 +160,42 @@ def as_column(arbitrary):
         if isinstance(arbitrary.type, pa.StringArray):
             raise NotImplementedError("Strings are not yet supported")
         elif isinstance(arbitrary.type, pa.NullArray):
-            pamask = np.empty(0, dtype='int8')
-            padata = np.empty(0, dtype=arbitrary.type.to_pandas_dtype())
+            pamask = Buffer(np.empty(0, dtype='int8'))
+            padata = Buffer(
+                np.empty(0, dtype=arbitrary.type.to_pandas_dtype())
+            )
             data = numerical.NumericalColumn(
-                data=Buffer(padata),
-                mask=Buffer(pamask),
+                data=padata,
+                mask=pamask,
                 null_count=0,
                 dtype=arbitrary.type.to_pandas_dtype()
             )
         elif isinstance(arbitrary.type, pa.DictionaryArray):
-            pamask = np.array(arbitrary.buffers()[0])
-            padata = np.array(arbitrary.buffers()[1]).view(
+            if arbitrary.buffers()[0]:
+                pamask = Buffer(np.array(arbitrary.buffers()[0]))
+            else:
+                pamask = None
+            padata = Buffer(np.array(arbitrary.buffers()[1]).view(
                 arbitrary.indices.type.to_pandas_dtype()
-            )
+            ))
             data = categorical.CategoricalColumn(
-                data=Buffer(padata),
-                mask=Buffer(pamask),
+                data=padata,
+                mask=pamask,
                 null_count=arbitrary.null_count,
                 categories=arbitrary.dictionary.to_pylist(),
                 ordered=True
             )
         else:
-            pamask = np.array(arbitrary.buffers()[0])
-            padata = np.array(arbitrary.buffers()[1]).view(
+            if arbitrary.buffers()[0]:
+                pamask = Buffer(np.array(arbitrary.buffers()[0]))
+            else:
+                pamask = None
+            padata = Buffer(np.array(arbitrary.buffers()[1]).view(
                 arbitrary.type.to_pandas_dtype()
-            )
+            ))
             data = numerical.NumericalColumn(
-                data=Buffer(padata),
-                mask=Buffer(pamask),
+                data=padata,
+                mask=pamask,
                 null_count=arbitrary.null_count,
                 dtype=arbitrary.type.to_pandas_dtype()
             )
