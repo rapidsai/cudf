@@ -4,6 +4,7 @@ view of Columns.
 """
 
 import numpy as np
+import pandas as pd
 import pyarrow as pa
 
 from numba import cuda, njit
@@ -183,7 +184,8 @@ def as_column(arbitrary):
                 mask=pamask,
                 null_count=arbitrary.null_count,
                 categories=arbitrary.dictionary.to_pylist(),
-                ordered=True
+                ordered=True,
+                dtype=pd.api.types.CategoricalDtype
             )
         else:
             if arbitrary.buffers()[0]:
