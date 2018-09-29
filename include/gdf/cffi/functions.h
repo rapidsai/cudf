@@ -1,5 +1,21 @@
 #pragma once
 
+
+/* --------------------------------------------------------------------------*/
+/** 
+ * @Synopsis  Counts the number of valid bits in the mask that corresponds to
+ * the specified number of rows.
+ * 
+ * @Param[in] masks Array of gdf_valid_types with enough bits to represent
+ * num_rows number of rows
+ * @Param[in] num_rows The number of rows represented in the bit-validity mask.
+ * @Param[out] count The number of valid rows in the mask
+ * 
+ * @Returns  GDF_SUCCESS upon successful completion. 
+ */
+/* ----------------------------------------------------------------------------*/
+gdf_error gdf_count_nonzero_mask(gdf_valid_type const * masks, int num_rows, int * count);
+
 /* column operations */
 
 gdf_size_type gdf_column_sizeof();

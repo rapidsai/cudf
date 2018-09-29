@@ -144,6 +144,7 @@ cuda_add_library(gdf SHARED
     src/quantiles.cu
     src/io/csv/csv-reader.cu
     src/io/convert/gdf-to-csr.cu      
+    src/validops.cu
 )
 
 if (ARROW_NUMERIC_VERSION EQUAL 900)
