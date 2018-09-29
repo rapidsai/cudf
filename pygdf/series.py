@@ -83,6 +83,10 @@ class Series(object):
     def from_pandas(cls, s):
         return cls(s)
 
+    @classmethod
+    def from_arrow(cls, s):
+        return cls(s)
+
     def serialize(self, serialize):
         header = {}
         frames = []

@@ -4,7 +4,6 @@ view of Columns.
 """
 
 import numpy as np
-import pandas as pd
 import pyarrow as pa
 
 from numba import cuda, njit
@@ -137,11 +136,6 @@ def as_column(arbitrary):
         else:
             data = arbitrary
 
-    elif isinstance(arbitrary, pd.Categorical):
-        data = categorical.pandas_categorical_as_column(arbitrary)
-        mask = ~pd.isnull(arbitrary)
-        data = data.set_mask(cudautils.compact_mask_bytes(mask))
-
     elif isinstance(arbitrary, Buffer):
         data = numerical.NumericalColumn(data=arbitrary, dtype=arbitrary.dtype)
 
@@ -158,25 +152,38 @@ def as_column(arbitrary):
         else:
             data = as_column(Buffer(arbitrary))
             if np.count_nonzero(np.isnan(arbitrary)) > 0:
+                # PyArrow treats NaN different than nulls, should we?
                 mask = ~np.isnan(arbitrary)
                 data = data.set_mask(cudautils.compact_mask_bytes(mask))
 
-    elif isinstance(arbitrary, (list,)):
-        data = as_column(pa.array(arbitrary))
-
     elif isinstance(arbitrary, pa.Array):
-        padata = np.array(arbitrary.buffers()[1]).view(
-            arbitrary.type.to_pandas_dtype()
-        )
+        if isinstance(arbitrary.type, pa.StringArray):
+            raise NotImplementedError("Strings are not yet supported")
         pamask = np.array(arbitrary.buffers()[0])
-        data = numerical.NumericalColumn(
-            data=Buffer(padata),
-            mask=Buffer(pamask),
-            dtype=arbitrary.type.to_pandas_dtype()
-        )
+        if isinstance(arbitrary.type, pa.DictionaryArray):
+            padata = np.array(arbitrary.buffers()[1]).view(
+                arbitrary.indices.type.to_pandas_dtype()
+            )
+            data = categorical.CategoricalColumn(
+                data=Buffer(padata),
+                mask=Buffer(pamask),
+                null_count=arbitrary.null_count,
+                categories=arbitrary.dictionary.to_pylist(),
+                ordered=True
+            )
+        else:
+            padata = np.array(arbitrary.buffers()[1]).view(
+                arbitrary.type.to_pandas_dtype()
+            )
+            data = numerical.NumericalColumn(
+                data=Buffer(padata),
+                mask=Buffer(pamask),
+                null_count=arbitrary.null_count,
+                dtype=arbitrary.type.to_pandas_dtype()
+            )
 
     else:
-        data = as_column(np.asarray(arbitrary))
+        data = as_column(pa.array(arbitrary))
 
     return data
 
