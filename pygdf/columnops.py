@@ -157,9 +157,9 @@ def as_column(arbitrary):
                 data = data.set_mask(cudautils.compact_mask_bytes(mask))
 
     elif isinstance(arbitrary, pa.Array):
-        if isinstance(arbitrary.type, pa.StringArray):
+        if isinstance(arbitrary, pa.StringArray):
             raise NotImplementedError("Strings are not yet supported")
-        elif isinstance(arbitrary.type, pa.NullArray):
+        elif isinstance(arbitrary, pa.NullArray):
             pamask = Buffer(np.empty(0, dtype='int8'))
             padata = Buffer(
                 np.empty(0, dtype=arbitrary.type.to_pandas_dtype())
@@ -170,7 +170,7 @@ def as_column(arbitrary):
                 null_count=0,
                 dtype=arbitrary.type.to_pandas_dtype()
             )
-        elif isinstance(arbitrary.type, pa.DictionaryArray):
+        elif isinstance(arbitrary, pa.DictionaryArray):
             if arbitrary.buffers()[0]:
                 pamask = Buffer(np.array(arbitrary.buffers()[0]))
             else:
