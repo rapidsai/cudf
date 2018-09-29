@@ -163,20 +163,26 @@ def as_column(arbitrary):
 
     elif isinstance(arbitrary, (list,)):
         if any(x is None for x in arbitrary):
-            if all((isinstance(x, int) or x is None) for x in arbitrary):
-                padata = pa.array(arbitrary)
-                npdata = np.asarray(padata.buffers()[1]).view(np.int64)
-                data = as_column(npdata)
-                mask = np.asarray(padata.buffers()[0])
-                data = data.set_mask(mask)
-            elif all((isinstance(x, ) or x is None) for x in arbitrary):
-                padata = pa.array(arbitrary)
-                npdata = np.asarray(padata.buffers()[1]).view(np.float64)
-                data = as_column(npdata)
-                mask = np.asarray(padata.buffers()[0])
-                data = data.set_mask(mask)
+            padata = pa.array(arbitrary)
+            npdata = np.array(padata.buffers()[1]).view(
+                padata.type.to_pandas_dtype()
+            )
+            data = as_column(npdata)
+            mask = np.array(padata.buffers()[0])
+            data = data.set_mask(mask)
         else:
             data = as_column(np.asarray(arbitrary))
+
+    elif isinstance(arbitrary, pa.Array):
+        padata = np.array(arbitrary.buffers()[1]).view(
+            padata.type.to_pandas_dtype()
+        )
+        pamask = np.array(arbitrary.buffers()[0])
+        data = numerical.NumericalColumn(
+            data=Buffer(padata),
+            mask=Buffer(pamask),
+            dtype=arbitrary.type.to_pandas_dtype()
+        )
 
     else:
         data = as_column(np.asarray(arbitrary))
