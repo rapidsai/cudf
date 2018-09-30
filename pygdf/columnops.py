@@ -147,14 +147,9 @@ def as_column(arbitrary):
 
     elif isinstance(arbitrary, np.ndarray):
         if arbitrary.dtype.kind == 'M':
-            # hack, coerce to int, then set the dtype
             data = datetime.DatetimeColumn.from_numpy(arbitrary)
         else:
-            data = as_column(Buffer(arbitrary))
-            if np.count_nonzero(np.isnan(arbitrary)) > 0:
-                # PyArrow treats NaN different than nulls, should we?
-                mask = ~np.isnan(arbitrary)
-                data = data.set_mask(cudautils.compact_mask_bytes(mask))
+            data = cuda.to_device(data)
 
     elif isinstance(arbitrary, pa.Array):
         if isinstance(arbitrary, pa.StringArray):
