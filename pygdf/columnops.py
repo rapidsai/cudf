@@ -187,6 +187,21 @@ def as_column(arbitrary):
                 ordered=True,
                 dtype=pd.api.types.CategoricalDtype
             )
+        elif isinstance(arbitrary, pa.TimestampArray):
+            arbitrary = arbitrary.cast(pa.timestamp('ms'))
+            if arbitrary.buffers()[0]:
+                pamask = Buffer(np.array(arbitrary.buffers()[0]))
+            else:
+                pamask = None
+            padata = Buffer(np.array(arbitrary.buffers()[1]).view(
+                np.dtype('M8[ms]')
+            ))
+            data = datetime.DatetimeColumn(
+                data=padata,
+                mask=pamask,
+                null_count=arbitrary.null_count,
+                dtype=np.dtype('M8[ms]')
+            )
         else:
             if arbitrary.buffers()[0]:
                 pamask = Buffer(np.array(arbitrary.buffers()[0]))
