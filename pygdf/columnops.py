@@ -178,7 +178,7 @@ def as_column(arbitrary):
                 mask=pamask,
                 null_count=arbitrary.null_count,
                 categories=arbitrary.dictionary.to_pylist(),
-                ordered=False,
+                ordered=arbitrary.type.ordered,
                 dtype="category"  # What's the correct way to specify this?
             )
         elif isinstance(arbitrary, pa.TimestampArray):
