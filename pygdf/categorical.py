@@ -165,15 +165,9 @@ class CategoricalColumn(columnops.TypedColumnBase):
         if self.has_null_mask:
             mask = self.nullmask.mem.copy_to_host()
         ordered = self.cat()._ordered
-        try:
-            pa_dict = pa.DictionaryArray.from_arrays(
-                indices, dictionary, mask=mask, ordered=ordered
-            )
-        except pa.ArrowInvalid:
-            raise NotImplementedError("Creating a PyArrow Dictionary Array "
-                                      "with missing values is not yet "
-                                      "supported")
-        return pa_dict
+        return pa.DictionaryArray.from_arrays(
+            indices, dictionary, mask=mask, ordered=ordered
+        )
 
     def _unique_segments(self):
         """ Common code for unique, unique_count and value_counts"""

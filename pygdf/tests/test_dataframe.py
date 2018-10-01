@@ -753,3 +753,12 @@ def test_to_arrow_categorical():
 
     assert isinstance(pa_gs, pa.Array)
     assert pa.Array.equals(pa_s, pa_gs)
+
+
+def test_from_to_arrow_missing_categorical():
+    pd_cat = pd.Categorical(['a', 'b', 'c'], categories=['a', 'b'])
+    pa_cat = pa.array(pd_cat, from_pandas=True)
+    gd_cat = gd.Series(pa_cat)
+
+    assert isinstance(gd_cat, gd.Series)
+    assert pa.Array.equals(pa_cat, gd_cat.to_arrow())
