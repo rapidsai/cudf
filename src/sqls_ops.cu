@@ -10,6 +10,7 @@
 #include "sqls_rtti_comp.hpp"
 #include "groupby/groupby.cuh"
 #include "groupby/hash/aggregation_operations.cuh"
+#include "nvtx_utils.h"
 
 //using IndexT = int;//okay...
 using IndexT = size_t;
@@ -1010,6 +1011,10 @@ gdf_error gdf_group_by_single(int ncols,                    // # columns
     }
     return GDF_SUCCESS;
   }
+
+  gdf_error gdf_error_code{GDF_SUCCESS};
+  
+  PUSH_RANGE("LIBGDF_GROUPBY", GROUPBY_COLOR);
   
   if( ctxt->flag_method == GDF_SORT )
     {
@@ -1158,7 +1163,7 @@ gdf_error gdf_group_by_single(int ncols,                    // # columns
           }
           break;
         default: // To eliminate error for unhandled enumerant N_GDF_AGG_OPS
-          return GDF_INVALID_API_CALL;
+          gdf_error_code = GDF_INVALID_API_CALL;
         }
 
       if( out_col_values )
@@ -1185,59 +1190,66 @@ gdf_error gdf_group_by_single(int ncols,                    // # columns
       {
         case GDF_MAX:
           {
-            return gdf_group_by_hash<max_op>(ncols,
+            gdf_error_code = gdf_group_by_hash<max_op>(ncols,
                                              cols,
                                              col_agg,
                                              out_col_values,
                                              out_col_agg,
                                              sort_result);
+            break;
           }
         case GDF_MIN:
           {
-            return gdf_group_by_hash<min_op>(ncols,
+            gdf_error_code = gdf_group_by_hash<min_op>(ncols,
                                              cols,
                                              col_agg,
                                              out_col_values,
                                              out_col_agg,
                                              sort_result);
+            break;
           }
         case GDF_SUM:
           {
-            return gdf_group_by_hash<sum_op>(ncols,
+            gdf_error_code = gdf_group_by_hash<sum_op>(ncols,
                                              cols,
                                              col_agg,
                                              out_col_values,
                                              out_col_agg,
                                              sort_result);
+            break;
           }
         case GDF_COUNT:
           {
-            return gdf_group_by_hash<count_op>(ncols,
+            gdf_error_code = gdf_group_by_hash<count_op>(ncols,
                                                cols,
                                                col_agg,
                                                out_col_values,
                                                out_col_agg,
                                                sort_result);
+            break;
           }
         case GDF_AVG:
           {
-            return gdf_group_by_hash_avg(ncols,
+            gdf_error_code = gdf_group_by_hash_avg(ncols,
                                          cols,
                                          col_agg,
                                          out_col_values,
                                          out_col_agg);
+            break;
           }
         default:
           std::cerr << "Unsupported aggregation method for hash-based groupby." << std::endl;
-          return GDF_UNSUPPORTED_METHOD;
+          gdf_error_code = GDF_UNSUPPORTED_METHOD;
       }
     }
   else
     {
-      return GDF_UNSUPPORTED_METHOD;
+      gdf_error_code = GDF_UNSUPPORTED_METHOD;
     }
+
+  POP_RANGE();
   
-  return GDF_SUCCESS;
+  return gdf_error_code;
 }
 }//end unknown namespace
 
