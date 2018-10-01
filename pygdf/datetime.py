@@ -2,6 +2,7 @@ import datetime as dt
 
 import numpy as np
 import pandas as pd
+import pyarrow as pa
 
 from . import columnops, _gdf, utils
 from .buffer import Buffer
@@ -128,6 +129,12 @@ class DatetimeColumn(columnops.TypedColumnBase):
 
     def to_pandas(self, index):
         return pd.Series(self.to_array().astype(self.dtype), index=index)
+
+    def to_arrow(self):
+        mask = None
+        if self.has_null_mask:
+            mask = self.nullmask.mem.copy_to_host()
+        return pa.array(self.data.mem.copy_to_host(), mask=mask)
 
 
 def binop(lhs, rhs, op, out_dtype):
