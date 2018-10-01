@@ -160,7 +160,8 @@ __global__
 void gather_valid_mask( gdf_valid_type const * const input_mask,
                         gdf_valid_type * const output_mask,
                         index_type const * const __restrict__ gather_map,
-                        index_type const num_rows)
+                        index_type const num_rows,
+                        index_type const input_mask_length)
 {
   using mask_type = uint32_t;
   constexpr uint32_t BITS_PER_MASK = 8 * sizeof(mask_type);
@@ -171,7 +172,7 @@ void gather_valid_mask( gdf_valid_type const * const input_mask,
 
   index_type row_number = threadIdx.x + blockIdx.x * blockDim.x;
 
-  ValidRange<index_type> valid(0, num_rows);
+  ValidRange<index_type> valid(0, input_mask_length);
   while(row_number < num_rows)
   {
     const index_type gather_location = gather_map[row_number];
@@ -210,11 +211,12 @@ void gather_valid( gdf_valid_type const * const input_mask,
                    gdf_valid_type * const output_mask,
                    index_type const * const __restrict__ gather_map,
                    index_type const num_rows,
+                   index_type const input_mask_length,
                    cudaStream_t stream = 0) {
     const index_type BLOCK_SIZE = 256;
     const index_type gather_grid_size = (num_rows + BLOCK_SIZE - 1)/BLOCK_SIZE;
     gather_valid_mask<<<gather_grid_size, BLOCK_SIZE, 0, stream>>>(
-            input_mask, output_mask, gather_map, num_rows);
+            input_mask, output_mask, gather_map, num_rows, input_mask_length);
 }
 
 /* --------------------------------------------------------------------------*/
@@ -1258,7 +1260,7 @@ private:
                 input_column->valid,
                 remapped_valid_copy.data().get(),
                 row_gather_map, 
-                num_rows, stream);
+                num_rows, input_column->size, stream);
         thrust::copy(thrust::cuda::par.on(stream),
                 remapped_valid_copy.begin(),
                 remapped_valid_copy.end(), output_column->valid);
@@ -1269,7 +1271,7 @@ private:
                 input_column->valid,
                 output_column->valid,
                 row_gather_map, 
-                num_rows, stream);
+                num_rows, input_column->size, stream);
     }
   
     CUDA_CHECK_LAST();
