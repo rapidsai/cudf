@@ -4,6 +4,7 @@ import pytest
 
 import numpy as np
 import pandas as pd
+import pyarrow as pa
 
 from numba import cuda
 
@@ -693,3 +694,41 @@ def test_index_in_dataframe_constructor():
 
     pd.testing.assert_frame_equal(a, b.to_pandas())
     assert pd.testing.assert_frame_equal(a.loc[4:], b.loc[4:].to_pandas())
+
+
+def test_from_arrow():
+    df = pd.DataFrame({'a': [1, 2, 3], 'b': [4, 5, 6]})
+    padf = pa.Table.from_pandas(df, preserve_index=False)
+    gdf = gd.DataFrame.from_arrow(padf)
+    assert isinstance(gdf, gd.DataFrame)
+
+    pd.testing.assert_frame_equal(df, gdf.to_pandas())
+
+    s = pa.Array.from_pandas(df.a)
+    gs = gd.Series.from_arrow(s)
+    assert isinstance(gs, gd.Series)
+
+    pd.testing.assert_series_equal(s, gs.to_pandas())
+
+
+def test_to_arrow():
+    df = pd.DataFrame({'a': [1, 2, 3], 'b': [4, 5, 6]})
+    gdf = gd.DataFrame.from_pandas(df)
+
+    pa_df = pa.Table.from_pandas(df, preserve_index=False)
+    pa_gdf = gdf.to_arrow(index=False)
+
+    assert isinstance(pa_gdf, pa.Table)
+    assert pa.Table.equals(pa_df, pa_gdf)
+
+    pa_s = pa.Array.from_pandas(df.a)
+    pa_gs = gdf['a'].to_arrow()
+
+    assert isinstance(pa_gs, pa.Array)
+    assert pa.Array.equals(pa_s, pa_gs)
+
+    pa_i = pa.Array.from_pandas(df.index)
+    pa_gi = gdf.index.to_arrow()
+
+    assert isinstance(pa_gi, pa.Array)
+    assert pa.Array.equals(pa_i, pa_gi)
