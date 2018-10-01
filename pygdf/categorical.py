@@ -171,7 +171,7 @@ class CategoricalColumn(columnops.TypedColumnBase):
             )
         indices = pa.array(self.cat().codes.data.mem.copy_to_host())
         ordered = self.cat()._ordered
-        dictionary = pa.array(self.cat().categories())
+        dictionary = pa.array(self.cat().categories)
         return pa.DictionaryArray.from_arrays(
             indices=indices,
             dictionary=dictionary,
