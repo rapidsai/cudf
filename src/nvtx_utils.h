@@ -1,6 +1,8 @@
 #ifndef NVTX_UTILS_H
 #define NVTX_UTILS_H
 
+#define USE_NVTX
+
 #ifdef USE_NVTX
 #include "nvToolsExt.h"
 #endif
