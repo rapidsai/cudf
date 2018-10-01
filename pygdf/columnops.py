@@ -149,7 +149,7 @@ def as_column(arbitrary):
         if arbitrary.dtype.kind == 'M':
             data = datetime.DatetimeColumn.from_numpy(arbitrary)
         else:
-            data = cuda.to_device(data)
+            data = cuda.to_device(arbitrary)
 
     elif isinstance(arbitrary, pa.Array):
         if isinstance(arbitrary, pa.StringArray):
