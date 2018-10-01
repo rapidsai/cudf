@@ -159,11 +159,11 @@ class CategoricalColumn(columnops.TypedColumnBase):
         return pd.Series(data, index=index)
 
     def to_arrow(self):
-        indices = pa.array(self.cat().codes.data.mem.copy_to_host())
-        dictionary = pa.array(self.cat().categories)
         mask = None
         if self.has_null_mask:
-            mask = pa.array(self.nullmask.mem.copy_to_host())
+            mask = pa.py_buffer(self.nullmask.mem.copy_to_host())
+        indices = pa.py_buffer(self.cat().codes.data.mem.copy_to_host())
+        dictionary = pa.py_buffer(self.cat().categories)
         ordered = self.cat()._ordered
         return pa.DictionaryArray.from_arrays(
             indices, dictionary, mask=mask, ordered=ordered

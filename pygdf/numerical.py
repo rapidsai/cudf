@@ -134,8 +134,18 @@ class NumericalColumn(columnops.TypedColumnBase):
     def to_arrow(self):
         mask = None
         if self.has_null_mask:
-            mask = self.nullmask.mem.copy_to_host()
-        return pa.array(self.data.mem.copy_to_host(), mask=mask)
+            mask = pa.py_buffer(self.nullmask.mem.copy_to_host())
+        data = pa.py_buffer(self.data.mem.copy_to_host())
+        new_dtype = _gdf.np_to_pa_dtype(self.dtype)
+        return pa.Array.from_buffers(
+            type=new_dtype,
+            length=len(self),
+            buffers=[
+                mask,
+                data
+            ],
+            null_count=self.null_count
+        )
 
     def _unique_segments(self):
         """ Common code for unique, unique_count and value_counts"""
