@@ -761,7 +761,10 @@ def test_from_arrow_missing_categorical():
     gd_cat = gd.Series(pa_cat)
 
     assert isinstance(gd_cat, gd.Series)
-    pd.testing.assert_series_equal(pa_cat.to_pandas(), gd_cat.to_pandas())
+    pd.testing.assert_series_equal(
+        pd.Series(pa_cat.to_pandas()),  # PyArrow returns a pd.Categorical
+        gd_cat.to_pandas()
+    )
 
 
 @pytest.mark.xfail(
