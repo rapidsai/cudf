@@ -160,7 +160,7 @@ class CategoricalColumn(columnops.TypedColumnBase):
 
     def to_arrow(self):
         indices = pa.array(self.cat().codes.data.mem.copy_to_host())
-        dictionary = pa.array(self.cat().dictionary)
+        dictionary = pa.array(self.cat().categories)
         mask = None
         if self.has_null_mask:
             mask = self.nullmask.mem.copy_to_host()
