@@ -110,7 +110,13 @@ if(HASH_JOIN)
   set(CUDA_NVCC_FLAGS  ${CUDA_NVCC_FLAGS};-DHASH_JOIN)
 endif()
 
-
+# Switch to enable NVTX ranges for profiling
+option(USE_NVTX "Build with NVTX" ON)
+if(USE_NVTX EQUAL ON)
+  message("-- Using NVTX ranges")
+  target_link_libraries(gdf nvToolsExt)
+  set(CUDA_NVCC_FLAGS  ${CUDA_NVCC_FLAGS};-DUSE_NVTX)
+endif(USE_NVTX)
 
 # switch between cudaMalloc and cudaMallocManaged for hash tables
 option(HT_LEGACY_ALLOCATOR "legacy allocator for hash tables" ON)
