@@ -738,12 +738,19 @@ def test_to_arrow(nelem, data_type):
 
     pa_df = pa.Table.from_pandas(df, preserve_index=False)\
         .replace_schema_metadata(None)
+    # Pandas uses ns so need to cast columns to ms
+    pa_df = pa_df\
+        .add_column(0, pa_df.column(1).cast(pa.timestamp('ms')))\
+        .add_column(0, pa_df.column(0).cast(pa.timestamp('ms')))\
+        .remove_column(2).remove_column(2)
     pa_gdf = gdf.to_arrow(index=False)
 
     assert isinstance(pa_gdf, pa.Table)
     assert pa.Table.equals(pa_df, pa_gdf)
 
     pa_s = pa.Array.from_pandas(df.a)
+    # Pandas uses ns so need to cast columns to ms
+    pa_s = pa_s.cast(pa.timestamp('ms'))
     pa_gs = gdf['a'].to_arrow()
 
     assert isinstance(pa_gs, pa.Array)
@@ -761,6 +768,8 @@ def test_to_arrow(nelem, data_type):
     ['int8', 'int16', 'int32', 'int64', 'float32', 'float64', 'datetime64[ms]']
 )
 def test_to_from_arrow_nulls(data_type):
+    if data_type == 'datetime64[ms]':
+        data_type = pa.timestamp('ms')
     s1 = pa.array([1, None, 3, None, 5], type=data_type)
     gs1 = gd.Series.from_arrow(s1)
     assert isinstance(gs1, gd.Series)
@@ -811,10 +820,6 @@ def test_from_arrow_missing_categorical():
     )
 
 
-@pytest.mark.xfail(
-    raises=NotImplementedError,
-    reason="PyArrow does not yet support specifying mask using from_arrays"
-)
 def test_to_arrow_missing_categorical():
 
     pd_cat = pd.Categorical(['a', 'b', 'c'], categories=['a', 'b'])
