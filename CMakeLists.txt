@@ -142,6 +142,8 @@ cuda_add_library(gdf SHARED
     src/unaryops.cu
     #src/windowedops.cu
     src/quantiles.cu
+    src/io/csv/csv-reader.cu
+    src/io/convert/gdf-to-csr.cu      
     src/validops.cu
 )
 
