@@ -708,14 +708,15 @@ def test_from_arrow():
     gs = gd.Series.from_arrow(s)
     assert isinstance(gs, gd.Series)
 
-    pd.testing.assert_series_equal(s, gs.to_pandas())
+    pd.testing.assert_series_equal(s.to_pandas(), gs.to_pandas())
 
 
 def test_to_arrow():
     df = pd.DataFrame({'a': [1, 2, 3], 'b': [4, 5, 6]})
     gdf = gd.DataFrame.from_pandas(df)
 
-    pa_df = pa.Table.from_pandas(df, preserve_index=False)
+    pa_df = pa.Table.from_pandas(df, preserve_index=False)\
+        .replace_schema_metadata(None)
     pa_gdf = gdf.to_arrow(index=False)
 
     assert isinstance(pa_gdf, pa.Table)
