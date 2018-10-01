@@ -291,7 +291,7 @@ gdf_error join_call( int num_cols, gdf_column **leftcol, gdf_column **rightcol,
 
   gdf_error gdf_error_code{GDF_SUCCESS};
 
-  PUSH_RANGE("LIBGDF_JOIN", COLOR::CYAN);
+  PUSH_RANGE("LIBGDF_JOIN", JOIN_COLOR);
 
   switch(join_method)
   {
