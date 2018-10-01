@@ -4,6 +4,7 @@ view of Columns.
 """
 
 import numpy as np
+import pandas as pd
 import pyarrow as pa
 
 from numba import cuda, njit
@@ -210,6 +211,18 @@ def as_column(arbitrary):
                 null_count=arbitrary.null_count,
                 dtype=np.dtype(arbitrary.type.to_pandas_dtype())
             )
+
+    elif isinstance(arbitrary, pd.Categorical):
+        # Necessary because of ARROW-3324
+        from .categorical import pandas_categorical_as_column
+        data = pandas_categorical_as_column(arbitrary)
+
+    elif isinstance(arbitrary, pd.Series):
+        # Necessary because of ARROW-3324
+        if pd.core.common.is_categorical_dtype(arbitrary.dtype):
+            data = as_column(pd.Categorical(arbitrary))
+        else:
+            data = as_column(pa.array(data))
 
     elif np.isscalar(arbitrary):
             data = as_column(pa.array([arbitrary]))
