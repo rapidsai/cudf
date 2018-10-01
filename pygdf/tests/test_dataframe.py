@@ -696,8 +696,18 @@ def test_index_in_dataframe_constructor():
     assert pd.testing.assert_frame_equal(a.loc[4:], b.loc[4:].to_pandas())
 
 
-def test_from_arrow():
-    df = pd.DataFrame({'a': [1, 2, 3], 'b': [4, 5, 6]})
+@pytest.mark.parametrize('nelem', [0, 2, 3, 100, 1000])
+@pytest.mark.parametrize(
+    'data_type',
+    ['int8', 'int16', 'int32', 'int64', 'float32', 'float64', 'datetime64[ms]']
+)
+def test_from_arrow(nelem, data_type):
+    df = pd.DataFrame(
+        {
+            'a': np.random.randint(0, 1000, nelem).astype(data_type),
+            'b': np.random.randint(0, 1000, nelem).astype(data_type)
+        }
+    )
     padf = pa.Table.from_pandas(df, preserve_index=False)\
         .replace_schema_metadata(None)
     gdf = gd.DataFrame.from_arrow(padf)
@@ -712,8 +722,18 @@ def test_from_arrow():
     np.testing.assert_array_equal(s.to_numpy(), gs.to_array())
 
 
-def test_to_arrow():
-    df = pd.DataFrame({'a': [1, 2, 3], 'b': [4, 5, 6]})
+@pytest.mark.parametrize('nelem', [0, 2, 3, 100, 1000])
+@pytest.mark.parametrize(
+    'data_type',
+    ['int8', 'int16', 'int32', 'int64', 'float32', 'float64', 'datetime64[ms]']
+)
+def test_to_arrow(nelem, data_type):
+    df = pd.DataFrame(
+        {
+            'a': np.random.randint(0, 1000, nelem).astype(data_type),
+            'b': np.random.randint(0, 1000, nelem).astype(data_type)
+        }
+    )
     gdf = gd.DataFrame.from_pandas(df)
 
     pa_df = pa.Table.from_pandas(df, preserve_index=False)\
@@ -734,6 +754,30 @@ def test_to_arrow():
 
     assert isinstance(pa_gi, pa.Array)
     assert pa.Array.equals(pa_i, pa_gi)
+
+
+@pytest.mark.parametrize(
+    'data_type',
+    ['int8', 'int16', 'int32', 'int64', 'float32', 'float64', 'datetime64[ms]']
+)
+def test_to_from_arrow_nulls(data_type):
+    s1 = pa.array([1, None, 3, None, 5], type=data_type)
+    gs1 = gd.Series.from_arrow(s1)
+    assert isinstance(gs1, gd.Series)
+    np.testing.assert_array_equal(
+        np.array(s1.buffers()[0]),
+        gs1.nullmask.to_array()
+    )
+    assert pa.Array.equals(s1, gs1.to_arrow())
+
+    s2 = pa.array([None, None, None, None, None], type=data_type)
+    gs2 = gd.Series.from_arrow(s2)
+    assert isinstance(gs2, gd.Series)
+    np.testing.assert_array_equal(
+        np.array(s2.buffers()[0]),
+        gs2.nullmask.to_array()
+    )
+    assert pa.Array.equals(s2, gs2.to_arrow())
 
 
 def test_to_arrow_categorical():
