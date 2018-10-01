@@ -196,8 +196,6 @@ def as_column(arbitrary):
                 null_count=arbitrary.null_count,
                 dtype=np.dtype('M8[ms]')
             )
-        elif np.isscalar(arbitrary):
-            data = as_column(pa.array([arbitrary]))
         else:
             if arbitrary.buffers()[0]:
                 pamask = Buffer(np.array(arbitrary.buffers()[0]))
@@ -212,6 +210,9 @@ def as_column(arbitrary):
                 null_count=arbitrary.null_count,
                 dtype=np.dtype(arbitrary.type.to_pandas_dtype())
             )
+
+    elif np.isscalar(arbitrary):
+            data = as_column(pa.array([arbitrary]))
 
     else:
         data = as_column(pa.array(arbitrary))
