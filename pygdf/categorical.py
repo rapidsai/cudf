@@ -2,6 +2,7 @@
 
 import pandas as pd
 import numpy as np
+import pyarrow as pa
 
 from .dataframe import Series
 from . import numerical, utils, columnops
@@ -156,6 +157,23 @@ class CategoricalColumn(columnops.TypedColumnBase):
                                          categories=self._categories,
                                          ordered=self._ordered)
         return pd.Series(data, index=index)
+
+    def to_arrow(self):
+        indices = pa.array(self.cat().codes.data.mem.copy_to_host())
+        dictionary = pa.array(self.cat().dictionary)
+        mask = None
+        if self.has_null_mask:
+            mask = self.nullmask.mem.copy_to_host()
+        ordered = self.cat()._ordered
+        try:
+            pa_dict = pa.DictionaryArray.from_arrays(
+                indices, dictionary, mask=mask, ordered=ordered
+            )
+        except pa.ArrowInvalid:
+            raise NotImplementedError("Creating a PyArrow Dictionary Array "
+                                      "with missing values is not yet "
+                                      "supported")
+        return pa_dict
 
     def _unique_segments(self):
         """ Common code for unique, unique_count and value_counts"""

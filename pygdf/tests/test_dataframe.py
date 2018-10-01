@@ -709,7 +709,7 @@ def test_from_arrow():
     gs = gd.Series.from_arrow(s)
     assert isinstance(gs, gd.Series)
 
-    pd.testing.assert_series_equal(s.to_numpy(), gs.to_array())
+    np.testing.assert_array_equal(s.to_numpy(), gs.to_array())
 
 
 def test_to_arrow():
@@ -734,3 +734,22 @@ def test_to_arrow():
 
     assert isinstance(pa_gi, pa.Array)
     assert pa.Array.equals(pa_i, pa_gi)
+
+
+def test_to_arrow_categorical():
+    df = pd.DataFrame()
+    df['a'] = pd.Series(['a', 'b', 'c'], dtype="category")
+    gdf = gd.DataFrame.from_pandas(df)
+
+    pa_df = pa.Table.from_pandas(df, preserve_index=False)\
+        .replace_schema_metadata(None)
+    pa_gdf = gdf.to_arrow(index=False)
+
+    assert isinstance(pa_gdf, pa.Table)
+    assert pa.Table.equals(pa_df, pa_gdf)
+
+    pa_s = pa.Array.from_pandas(df.a)
+    pa_gs = gdf['a'].to_arrow()
+
+    assert isinstance(pa_gs, pa.Array)
+    assert pa.Array.equals(pa_s, pa_gs)
