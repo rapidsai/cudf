@@ -822,6 +822,11 @@ def test_from_arrow_missing_categorical():
     )
 
 
+@pytest.mark.xfail(
+    raises=NotImplementedError,
+    reason="PyArrow does not yet support validity masks in creating "
+           "DictionaryArray objects"
+)
 def test_to_arrow_missing_categorical():
 
     pd_cat = pd.Categorical(['a', 'b', 'c'], categories=['a', 'b'])

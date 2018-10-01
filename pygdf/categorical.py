@@ -160,8 +160,10 @@ class CategoricalColumn(columnops.TypedColumnBase):
     def to_arrow(self):
         mask = None
         if self.has_null_mask:
-            # Why does expand_mask_bits return as int32?
+            # Necessary because PyArrow doesn't support from_buffers for
+            # DictionaryArray yet
             mask = pa.array(
+                # Why does expand_mask_bits return as int32?
                 cudautils.expand_mask_bits(
                     len(self),
                     self.nullmask.mem
