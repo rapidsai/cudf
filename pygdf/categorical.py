@@ -163,7 +163,7 @@ class CategoricalColumn(columnops.TypedColumnBase):
         dictionary = pa.array(self.cat().categories)
         mask = None
         if self.has_null_mask:
-            mask = self.nullmask.mem.copy_to_host()
+            mask = pa.array(self.nullmask.mem.copy_to_host())
         ordered = self.cat()._ordered
         return pa.DictionaryArray.from_arrays(
             indices, dictionary, mask=mask, ordered=ordered

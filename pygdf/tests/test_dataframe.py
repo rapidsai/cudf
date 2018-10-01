@@ -755,7 +755,21 @@ def test_to_arrow_categorical():
     assert pa.Array.equals(pa_s, pa_gs)
 
 
-def test_from_to_arrow_missing_categorical():
+def test_from_arrow_missing_categorical():
+    pd_cat = pd.Categorical(['a', 'b', 'c'], categories=['a', 'b'])
+    pa_cat = pa.array(pd_cat, from_pandas=True)
+    gd_cat = gd.Series(pa_cat)
+
+    assert isinstance(gd_cat, gd.Series)
+    pd.testing.assert_series_equal(pa_cat.to_pandas(), gd_cat.to_pandas())
+
+
+@pytest.mark.xfail(
+    raises=NotImplementedError,
+    reason="PyArrow does not yet support specifying mask using from_arrays"
+)
+def test_to_arrow_missing_categorical():
+
     pd_cat = pd.Categorical(['a', 'b', 'c'], categories=['a', 'b'])
     pa_cat = pa.array(pd_cat, from_pandas=True)
     gd_cat = gd.Series(pa_cat)
