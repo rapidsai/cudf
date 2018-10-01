@@ -134,10 +134,10 @@ class DatetimeColumn(columnops.TypedColumnBase):
         mask = None
         if self.has_null_mask:
             mask = pa.py_buffer(self.nullmask.mem.copy_to_host())
-        data = pa.py_buffer(self.data.mem.copy_to_host())
-        new_dtype = _gdf.np_to_pa_dtype(self.dtype)
+        data = pa.py_buffer(self.data.mem.copy_to_host().view('int64'))
+        pa_dtype = _gdf.np_to_pa_dtype(self.dtype)
         return pa.Array.from_buffers(
-            type=new_dtype,
+            type=pa_dtype,
             length=len(self),
             buffers=[
                 mask,

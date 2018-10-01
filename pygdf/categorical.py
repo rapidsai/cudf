@@ -5,9 +5,8 @@ import numpy as np
 import pyarrow as pa
 
 from .dataframe import Series
-from . import numerical, utils, columnops
+from . import numerical, utils, columnops, cudautils, _gdf
 from .buffer import Buffer
-from . import cudautils
 from .serialize import register_distributed_serializer
 
 
@@ -163,10 +162,20 @@ class CategoricalColumn(columnops.TypedColumnBase):
         if self.has_null_mask:
             mask = pa.py_buffer(self.nullmask.mem.copy_to_host())
         indices = pa.py_buffer(self.cat().codes.data.mem.copy_to_host())
-        dictionary = pa.py_buffer(self.cat().categories)
         ordered = self.cat()._ordered
-        return pa.DictionaryArray.from_arrays(
-            indices, dictionary, mask=mask, ordered=ordered
+        dictionary = pa.dictionary(
+            _gdf.np_to_pa_dtype(self.cat().codes.dtype),
+            pa.array(self.cat().categories),
+            ordered=ordered
+        )
+        return pa.Array.from_buffers(
+            type=dictionary,
+            length=len(self),
+            buffers=[
+                mask,
+                indices
+            ],
+            null_count=self.null_count
         )
 
     def _unique_segments(self):
