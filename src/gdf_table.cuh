@@ -152,7 +152,8 @@ void scatter_valid_mask( gdf_valid_type const * const input_mask,
  * @Param output_mask The output after gathering the input
  * @Param gather_map The map that indicates where elements from the input
    will be gathered to in the output. output_bit[ gather_map [i] ] = input_bit[i]
- * @Param num_rows The number of bits in the masks
+ * @Param num_rows The number of bits expected in the output masks
+ * @Param input_mask_length The number of bits in the input mask
  */
 /* ----------------------------------------------------------------------------*/
 template <typename index_type>
