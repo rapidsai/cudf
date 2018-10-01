@@ -4,6 +4,7 @@ from __future__ import print_function, division
 
 import numpy as np
 import pandas as pd
+import pyarrow as pa
 
 from numba import cuda
 from libgdf_cffi import libgdf
@@ -129,6 +130,12 @@ class NumericalColumn(columnops.TypedColumnBase):
 
     def to_pandas(self, index=None):
         return pd.Series(self.to_array(fillna='pandas'), index=index)
+
+    def to_arrow(self):
+        mask = None
+        if self.has_null_mask:
+            mask = self.nullmask.mem.copy_to_host()
+        return pa.array(self.data.mem.copy_to_host(), mask=mask)
 
     def _unique_segments(self):
         """ Common code for unique, unique_count and value_counts"""

@@ -7,7 +7,6 @@ from numbers import Number
 
 import numpy as np
 import pandas as pd
-import pyarrow as pa
 
 from . import cudautils, formatting
 from .buffer import Buffer
@@ -475,10 +474,7 @@ class Series(object):
         return s
 
     def to_arrow(self):
-        mask = None
-        if self.has_null_mask:
-            mask = self.nullmask.mem.copy_to_host()
-        return pa.array(self.data.mem.copy_to_host(), mask=mask)
+        return self._column.to_arrow()
 
     @property
     def data(self):

@@ -698,7 +698,8 @@ def test_index_in_dataframe_constructor():
 
 def test_from_arrow():
     df = pd.DataFrame({'a': [1, 2, 3], 'b': [4, 5, 6]})
-    padf = pa.Table.from_pandas(df, preserve_index=False)
+    padf = pa.Table.from_pandas(df, preserve_index=False)\
+        .replace_schema_metadata(None)
     gdf = gd.DataFrame.from_arrow(padf)
     assert isinstance(gdf, gd.DataFrame)
 
@@ -708,7 +709,7 @@ def test_from_arrow():
     gs = gd.Series.from_arrow(s)
     assert isinstance(gs, gd.Series)
 
-    pd.testing.assert_series_equal(s.to_pandas(), gs.to_pandas())
+    pd.testing.assert_series_equal(s.to_numpy(), gs.to_array())
 
 
 def test_to_arrow():
