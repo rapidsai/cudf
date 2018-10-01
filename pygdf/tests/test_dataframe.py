@@ -739,10 +739,11 @@ def test_to_arrow(nelem, data_type):
     pa_df = pa.Table.from_pandas(df, preserve_index=False)\
         .replace_schema_metadata(None)
     # Pandas uses ns so need to cast columns to ms
-    pa_df = pa_df\
-        .add_column(0, pa_df.column(1).cast(pa.timestamp('ms')))\
-        .add_column(0, pa_df.column(0).cast(pa.timestamp('ms')))\
-        .remove_column(2).remove_column(2)
+    if data_type == 'datetime64[ms]':
+        pa_df = pa_df\
+            .add_column(0, pa_df.column(1).cast(pa.timestamp('ms')))\
+            .add_column(0, pa_df.column(0).cast(pa.timestamp('ms')))\
+            .remove_column(2).remove_column(2)
     pa_gdf = gdf.to_arrow(index=False)
 
     assert isinstance(pa_gdf, pa.Table)
