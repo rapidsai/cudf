@@ -5,7 +5,7 @@ import numpy as np
 import pyarrow as pa
 
 from .dataframe import Series
-from . import numerical, utils, columnops, cudautils, _gdf
+from . import numerical, utils, columnops, cudautils
 from .buffer import Buffer
 from .serialize import register_distributed_serializer
 
@@ -160,22 +160,24 @@ class CategoricalColumn(columnops.TypedColumnBase):
     def to_arrow(self):
         mask = None
         if self.has_null_mask:
-            mask = pa.py_buffer(self.nullmask.mem.copy_to_host())
-        indices = pa.py_buffer(self.cat().codes.data.mem.copy_to_host())
+            # Why does expand_mask_bits return as int32?
+            mask = pa.array(
+                cudautils.expand_mask_bits(
+                    len(self),
+                    self.nullmask.mem
+                )
+                .copy_to_host()
+                .astype('int8')
+            )
+        indices = pa.array(self.cat().codes.data.mem.copy_to_host())
         ordered = self.cat()._ordered
-        dictionary = pa.dictionary(
-            _gdf.np_to_pa_dtype(self.cat().codes.dtype),
-            pa.array(self.cat().categories),
+        dictionary = pa.array(self.cat().categories())
+        return pa.DictionaryArray.from_arrays(
+            indices=indices,
+            dictionary=dictionary,
+            mask=mask,
+            from_pandas=True,
             ordered=ordered
-        )
-        return pa.Array.from_buffers(
-            type=dictionary,
-            length=len(self),
-            buffers=[
-                mask,
-                indices
-            ],
-            null_count=self.null_count
         )
 
     def _unique_segments(self):
