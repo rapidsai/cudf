@@ -352,16 +352,16 @@ gdf_error construct_join_output_df(
     for (int i = 0; i < left_table_end; ++i) {
         gdf_column_view(result_cols[i], nullptr, nullptr, join_size, lnonjoincol[i]->dtype);
         int col_width; get_column_byte_width(result_cols[i], &col_width);
-        cudaMalloc(&(result_cols[i]->data), col_width * join_size);
-        cudaMalloc(&(result_cols[i]->valid), sizeof(gdf_valid_type)*gdf_get_num_chars_bitmask(join_size));
-        cudaMemset(result_cols[i]->valid, 0, sizeof(gdf_valid_type)*gdf_get_num_chars_bitmask(join_size));
+        CUDA_TRY( cudaMalloc(&(result_cols[i]->data), col_width * join_size) );
+        CUDA_TRY( cudaMalloc(&(result_cols[i]->valid), sizeof(gdf_valid_type)*gdf_get_num_chars_bitmask(join_size)) );
+        CUDA_TRY( cudaMemset(result_cols[i]->valid, 0, sizeof(gdf_valid_type)*gdf_get_num_chars_bitmask(join_size)) );
     }
     for (int i = right_table_begin; i < result_num_cols; ++i) {
         gdf_column_view(result_cols[i], nullptr, nullptr, join_size, rnonjoincol[i - right_table_begin]->dtype);
         int col_width; get_column_byte_width(result_cols[i], &col_width);
-        cudaMalloc(&(result_cols[i]->data), col_width * join_size);
-        cudaMalloc(&(result_cols[i]->valid), sizeof(gdf_valid_type)*gdf_get_num_chars_bitmask(join_size));
-        cudaMemset(result_cols[i]->valid, 0, sizeof(gdf_valid_type)*gdf_get_num_chars_bitmask(join_size));
+        CUDA_TRY( cudaMalloc(&(result_cols[i]->data), col_width * join_size) );
+        CUDA_TRY( cudaMalloc(&(result_cols[i]->valid), sizeof(gdf_valid_type)*gdf_get_num_chars_bitmask(join_size)) );
+        CUDA_TRY( cudaMemset(result_cols[i]->valid, 0, sizeof(gdf_valid_type)*gdf_get_num_chars_bitmask(join_size)) );
     }
     //create joined output column data buffers
     {
@@ -369,9 +369,9 @@ gdf_error construct_join_output_df(
         for (auto &join_index : l_join_indices) {
             gdf_column_view(result_cols[i], nullptr, nullptr, join_size, left_cols[join_index]->dtype);
             int col_width; get_column_byte_width(result_cols[i], &col_width);
-            cudaMalloc(&(result_cols[i]->data), col_width * join_size);
-            cudaMalloc(&(result_cols[i]->valid), sizeof(gdf_valid_type)*gdf_get_num_chars_bitmask(join_size));
-            cudaMemset(result_cols[i]->valid, 0, sizeof(gdf_valid_type)*gdf_get_num_chars_bitmask(join_size));
+            CUDA_TRY( cudaMalloc(&(result_cols[i]->data), col_width * join_size) );
+            CUDA_TRY( cudaMalloc(&(result_cols[i]->valid), sizeof(gdf_valid_type)*gdf_get_num_chars_bitmask(join_size)) );
+            CUDA_TRY( cudaMemset(result_cols[i]->valid, 0, sizeof(gdf_valid_type)*gdf_get_num_chars_bitmask(join_size)) );
             ++i;
         }
     }
@@ -429,7 +429,7 @@ gdf_error join_call_compute_df(
     using gdf_col_pointer = typename std::unique_ptr<gdf_column, std::function<void(gdf_column*)>>;
     auto gdf_col_deleter = [](gdf_column* col){
         col->size = 0;
-        if (col->data) { cudaFree(col->data); }
+        if (col->data)  { cudaFree(col->data);  }
         if (col->valid) { cudaFree(col->valid); }
     };
     gdf_col_pointer l_index_temp, r_index_temp;
@@ -451,6 +451,8 @@ gdf_error join_call_compute_df(
         ljoincol.push_back(left_cols[ left_join_cols[i] ]);
         rjoincol.push_back(right_cols[ right_join_cols[i] ]);
     }
+
+
     gdf_error join_err = join_call<join_type>(num_cols_to_join,
             ljoincol.data(), rjoincol.data(),
             left_index_out, right_index_out,
@@ -461,12 +463,20 @@ gdf_error join_call_compute_df(
         return join_err;
     }
 
-    return construct_join_output_df<join_type, size_type, index_type>(
+    gdf_error df_err =
+        construct_join_output_df<join_type, size_type, index_type>(
             ljoincol, rjoincol,
             left_cols, num_left_cols, left_join_cols,
             right_cols, num_right_cols, right_join_cols,
             num_cols_to_join, result_num_cols, result_cols,
             left_index_out, right_index_out);
+
+    l_index_temp.reset(nullptr);
+    r_index_temp.reset(nullptr);
+
+    CUDA_CHECK_LAST();
+
+    return df_err;
 }
 
 gdf_error gdf_left_join(
