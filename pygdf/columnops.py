@@ -222,7 +222,7 @@ def as_column(arbitrary):
         if pd.core.common.is_categorical_dtype(arbitrary.dtype):
             data = as_column(pd.Categorical(arbitrary))
         else:
-            data = as_column(pa.array(data))
+            data = as_column(pa.array(arbitrary))
 
     elif np.isscalar(arbitrary):
             data = as_column(pa.array([arbitrary]))
