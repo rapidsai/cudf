@@ -148,8 +148,9 @@ cuda_add_library(gdf SHARED
 option(USE_NVTX "Build with NVTX" ON)
 if(USE_NVTX)
   message("-- Using NVTX ranges")
-  target_link_libraries(gdf nvToolsExt)
-  set(CUDA_NVCC_FLAGS  ${CUDA_NVCC_FLAGS};-DUSE_NVTX)
+  find_library(NVTX_LIBRARY nvToolsExt HINTS /usr/local/cuda/lib64)
+  target_link_libraries(gdf ${NVTX_LIBRARY})
+  set(CUDA_NVCC_FLAGS  ${CUDA_NVCC_FLAGS}; -DUSE_NVTX)
 endif(USE_NVTX)
 
 if (ARROW_NUMERIC_VERSION EQUAL 900)
