@@ -28,49 +28,36 @@ typedef struct {
 	/*
 	 * Output Arguments - space created in reader.
 	 */
-	int				num_cols_out;							// Out: number of columns
-	int				num_rows_out;							// Out: number of rows
-	gdf_column		**data;								// Out: array of *gdf_columns
+
+
+	int				num_cols_out;			/**< Out: return the number of columns read in	*/
+	int				num_rows_out;			/**< Out: return the number of rows read in 	*/
+	gdf_column		**data;					/**< Out: return the array of *gdf_columns 		*/
 
 	/*
 	 * Input arguments - all data is in the host
 	 */
-	char		*file_path;				// file location to read from	- if the file is compressed, it needs proper file extensions {.gz}
+	char		*file_path;					/**< file location to read from	- currently the file cannot be compressed 							*/
 
-	char		lineterminator;			// can change the end of line character
-	char		delimiter;				// also called 'sep'  this is the field separator
-	bool 		delim_whitespace;		// use white space as the delimiter
-	bool		skipinitialspace;		// Skip spaces after delimiter
+	char		lineterminator;				/**< define the line terminator character.  Default is  '\n'  										*/
+	char		delimiter;					/**< define the field separator, default is ','   This argument is also called 'sep'  				*/
+	bool 		delim_whitespace;			/**< use white space as the delimiter - default is false.  This overrides the delimiter argument 	*/
+	bool		skipinitialspace;			/**< skip white spaces after the delimiter - default is false  										*/
 
-	int			num_cols;				// number of columns (array sizes)
-	const char	**names;				// array of char *  Ordered List of column names to use.   names cannot be used with header
-	const char	**dtype;				// array of char *	Ordered List of data types as strings
+	int			num_cols;					/**< number of columns in the names and dtype arrays												*/
+	const char	**names;					/**< ordered List of column names, this is a required field 										*/
+	const char	**dtype;					/**< ordered List of data types, this is required													*/
 
-	int			skiprows;				// number of rows at the start of the files to skip
-	int			skipfooter;				// number of rows at the bottom of the file to skip - counting is backwards from end, 0 = last line
+	int			skiprows;					/**< number of rows at the start of the files to skip, default is 0									*/
+	int			skipfooter;					/**< number of rows at the bottom of the file to skip - default is 0								*/
 
-	bool		dayfirst;				// is the first value the day?  DD/MM  versus MM/DD
+	bool		dayfirst;					/**< is the first value the day?  DD/MM  versus MM/DD, default is false								*/
+
 
 
 } csv_read_arg;
 
 
-
-/*
- * NOT USED
- *
- * squeeze			- data is always returned as a gdf_column array
- * engine			- this is the only engine
- * keep_default_na  - this has no meaning since the field is marked invalid and the value not seen
- * na_filter		- empty fields are automatically tagged as invalid
- * verbose
- * keep_date_col	- will not maintain raw data
- * date_parser		- there is only this parser
- * float_precision	- there is only one converter that will cover all specified values
- * quoting			- this is for out
- * dialect			- not used
- *
- */
 
 
 
