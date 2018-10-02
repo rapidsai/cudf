@@ -740,10 +740,19 @@ def test_to_arrow(nelem, data_type):
         .replace_schema_metadata(None)
     # Pandas uses ns so need to cast columns to ms
     if data_type == 'datetime64[ms]':
-        pa_df = pa_df\
-            .add_column(0, pa_df.column(1).cast(pa.timestamp('ms')))\
-            .add_column(0, pa_df.column(0).cast(pa.timestamp('ms')))\
-            .remove_column(2).remove_column(2)
+        pa_df = pa_df.add_column(
+                    0,
+                    pa_df.column(1)
+                    .cast(pa.timestamp('ms'))
+                    .cast(pa.int64())
+                    .cast(pa.date64())
+                ).add_column(
+                    0,
+                    pa_df.column(0)
+                    .cast(pa.timestamp('ms'))
+                    .cast(pa.int64())
+                    .cast(pa.date64())
+                ).remove_column(2).remove_column(2)
     pa_gdf = gdf.to_arrow(index=False)
 
     assert isinstance(pa_gdf, pa.Table)
@@ -851,4 +860,4 @@ def test_from_scalar_typing(data_type):
     gdf['a'] = [1, 2, 3, 4, 5]
     gdf['b'] = scalar
     assert(gdf['b'].dtype == np.dtype(data_type))
-    assert(len(gdf['b'] == len(gdf['a'])))
+    assert(len(gdf['b']) == len(gdf['a']))
