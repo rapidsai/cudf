@@ -236,6 +236,10 @@ def as_column(arbitrary):
     elif np.isscalar(arbitrary):
         if hasattr(arbitrary, 'dtype'):
             data_type = _gdf.np_to_pa_dtype(arbitrary.dtype)
+            if data_type in (pa.date64(), pa.date32()):
+                # PyArrow can't construct date64 or date32 arrays from np
+                # datetime types
+                arbitrary = arbitrary.astype('int64')
             data = as_column(pa.array([arbitrary], type=data_type))
         else:
             data = as_column(pa.array([arbitrary]))
