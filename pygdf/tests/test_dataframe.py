@@ -4,6 +4,7 @@ import pytest
 
 import numpy as np
 import pandas as pd
+import pyarrow as pa
 
 from numba import cuda
 
@@ -693,3 +694,144 @@ def test_index_in_dataframe_constructor():
 
     pd.testing.assert_frame_equal(a, b.to_pandas())
     assert pd.testing.assert_frame_equal(a.loc[4:], b.loc[4:].to_pandas())
+
+
+@pytest.mark.parametrize('nelem', [0, 2, 3, 100, 1000])
+@pytest.mark.parametrize(
+    'data_type',
+    ['int8', 'int16', 'int32', 'int64', 'float32', 'float64', 'datetime64[ms]']
+)
+def test_from_arrow(nelem, data_type):
+    df = pd.DataFrame(
+        {
+            'a': np.random.randint(0, 1000, nelem).astype(data_type),
+            'b': np.random.randint(0, 1000, nelem).astype(data_type)
+        }
+    )
+    padf = pa.Table.from_pandas(df, preserve_index=False)\
+        .replace_schema_metadata(None)
+    gdf = gd.DataFrame.from_arrow(padf)
+    assert isinstance(gdf, gd.DataFrame)
+
+    pd.testing.assert_frame_equal(df, gdf.to_pandas())
+
+    s = pa.Array.from_pandas(df.a)
+    gs = gd.Series.from_arrow(s)
+    assert isinstance(gs, gd.Series)
+
+    np.testing.assert_array_equal(s.to_numpy(), gs.to_array())
+
+
+@pytest.mark.parametrize('nelem', [0, 2, 3, 100, 1000])
+@pytest.mark.parametrize(
+    'data_type',
+    ['int8', 'int16', 'int32', 'int64', 'float32', 'float64', 'datetime64[ms]']
+)
+def test_to_arrow(nelem, data_type):
+    df = pd.DataFrame(
+        {
+            'a': np.random.randint(0, 1000, nelem).astype(data_type),
+            'b': np.random.randint(0, 1000, nelem).astype(data_type)
+        }
+    )
+    gdf = gd.DataFrame.from_pandas(df)
+
+    pa_df = pa.Table.from_pandas(df, preserve_index=False)\
+        .replace_schema_metadata(None)
+    # Pandas uses ns so need to cast columns to ms
+    if data_type == 'datetime64[ms]':
+        pa_df = pa_df\
+            .add_column(0, pa_df.column(1).cast(pa.timestamp('ms')))\
+            .add_column(0, pa_df.column(0).cast(pa.timestamp('ms')))\
+            .remove_column(2).remove_column(2)
+    pa_gdf = gdf.to_arrow(index=False)
+
+    assert isinstance(pa_gdf, pa.Table)
+    assert pa.Table.equals(pa_df, pa_gdf)
+
+    pa_s = pa.Array.from_pandas(df.a)
+    # Pandas uses ns so need to cast columns to ms
+    if data_type == 'datetime64[ms]':
+        pa_s = pa_s.cast(pa.timestamp('ms'))
+    pa_gs = gdf['a'].to_arrow()
+
+    assert isinstance(pa_gs, pa.Array)
+    assert pa.Array.equals(pa_s, pa_gs)
+
+    pa_i = pa.Array.from_pandas(df.index)
+    pa_gi = gdf.index.to_arrow()
+
+    assert isinstance(pa_gi, pa.Array)
+    assert pa.Array.equals(pa_i, pa_gi)
+
+
+@pytest.mark.parametrize(
+    'data_type',
+    ['int8', 'int16', 'int32', 'int64', 'float32', 'float64', 'datetime64[ms]']
+)
+def test_to_from_arrow_nulls(data_type):
+    if data_type == 'datetime64[ms]':
+        data_type = pa.timestamp('ms')
+    s1 = pa.array([1, None, 3, None, 5], type=data_type)
+    gs1 = gd.Series.from_arrow(s1)
+    assert isinstance(gs1, gd.Series)
+    np.testing.assert_array_equal(
+        np.array(s1.buffers()[0]),
+        gs1.nullmask.to_array()
+    )
+    assert pa.Array.equals(s1, gs1.to_arrow())
+
+    s2 = pa.array([None, None, None, None, None], type=data_type)
+    gs2 = gd.Series.from_arrow(s2)
+    assert isinstance(gs2, gd.Series)
+    np.testing.assert_array_equal(
+        np.array(s2.buffers()[0]),
+        gs2.nullmask.to_array()
+    )
+    assert pa.Array.equals(s2, gs2.to_arrow())
+
+
+def test_to_arrow_categorical():
+    df = pd.DataFrame()
+    df['a'] = pd.Series(['a', 'b', 'c'], dtype="category")
+    gdf = gd.DataFrame.from_pandas(df)
+
+    pa_df = pa.Table.from_pandas(df, preserve_index=False)\
+        .replace_schema_metadata(None)
+    pa_gdf = gdf.to_arrow(index=False)
+
+    assert isinstance(pa_gdf, pa.Table)
+    assert pa.Table.equals(pa_df, pa_gdf)
+
+    pa_s = pa.Array.from_pandas(df.a)
+    pa_gs = gdf['a'].to_arrow()
+
+    assert isinstance(pa_gs, pa.Array)
+    assert pa.Array.equals(pa_s, pa_gs)
+
+
+def test_from_arrow_missing_categorical():
+    pd_cat = pd.Categorical(['a', 'b', 'c'], categories=['a', 'b'])
+    pa_cat = pa.array(pd_cat, from_pandas=True)
+    gd_cat = gd.Series(pa_cat)
+
+    assert isinstance(gd_cat, gd.Series)
+    pd.testing.assert_series_equal(
+        pd.Series(pa_cat.to_pandas()),  # PyArrow returns a pd.Categorical
+        gd_cat.to_pandas()
+    )
+
+
+@pytest.mark.xfail(
+    raises=NotImplementedError,
+    reason="PyArrow does not yet support validity masks in creating "
+           "DictionaryArray objects"
+)
+def test_to_arrow_missing_categorical():
+
+    pd_cat = pd.Categorical(['a', 'b', 'c'], categories=['a', 'b'])
+    pa_cat = pa.array(pd_cat, from_pandas=True)
+    gd_cat = gd.Series(pa_cat)
+
+    assert isinstance(gd_cat, gd.Series)
+    assert pa.Array.equals(pa_cat, gd_cat.to_arrow())

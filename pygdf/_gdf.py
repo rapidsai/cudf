@@ -8,6 +8,7 @@ import contextlib
 import itertools
 
 import numpy as np
+import pyarrow as pa
 
 from numba import cuda
 
@@ -129,6 +130,21 @@ def np_to_gdf_dtype(dtype):
         np.int8:    libgdf.GDF_INT8,
         np.bool_:   libgdf.GDF_INT8,
         np.datetime64: libgdf.GDF_DATE64,
+    }[np.dtype(dtype).type]
+
+
+def np_to_pa_dtype(dtype):
+    """Util to convert numpy dtype to PyArrow dtype.
+    """
+    return {
+        np.float64: pa.float64(),
+        np.float32: pa.float32(),
+        np.int64:   pa.int64(),
+        np.int32:   pa.int32(),
+        np.int16:   pa.int16(),
+        np.int8:    pa.int8(),
+        np.bool_:   pa.int8(),
+        np.datetime64: pa.timestamp('ms'),
     }[np.dtype(dtype).type]
 
 
