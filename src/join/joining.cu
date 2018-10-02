@@ -361,16 +361,13 @@ gdf_error construct_join_output_df(
         CUDA_TRY( cudaMemset(result_cols[i]->valid, 0, sizeof(gdf_valid_type)*gdf_get_num_chars_bitmask(join_size)) );
     }
     //create joined output column data buffers
-    {
-        int i = left_table_end;
-        for (auto &join_index : l_join_indices) {
-            gdf_column_view(result_cols[i], nullptr, nullptr, join_size, left_cols[join_index]->dtype);
-            int col_width; get_column_byte_width(result_cols[i], &col_width);
-            CUDA_TRY( cudaMalloc(&(result_cols[i]->data), col_width * join_size) );
-            CUDA_TRY( cudaMalloc(&(result_cols[i]->valid), sizeof(gdf_valid_type)*gdf_get_num_chars_bitmask(join_size)) );
-            CUDA_TRY( cudaMemset(result_cols[i]->valid, 0, sizeof(gdf_valid_type)*gdf_get_num_chars_bitmask(join_size)) );
-            ++i;
-        }
+    for (int join_index = 0; join_index < num_cols_to_join; ++join_index) {
+        int i = left_table_end + join_index;
+        gdf_column_view(result_cols[i], nullptr, nullptr, join_size, left_cols[left_join_cols[join_index]]->dtype);
+        int col_width; get_column_byte_width(result_cols[i], &col_width);
+        CUDA_TRY( cudaMalloc(&(result_cols[i]->data), col_width * join_size) );
+        CUDA_TRY( cudaMalloc(&(result_cols[i]->valid), sizeof(gdf_valid_type)*gdf_get_num_chars_bitmask(join_size)) );
+        CUDA_TRY( cudaMemset(result_cols[i]->valid, 0, sizeof(gdf_valid_type)*gdf_get_num_chars_bitmask(join_size)) );
     }
 
     gdf_table<size_type> l_i_table(lnonjoincol.size(), lnonjoincol.data());
