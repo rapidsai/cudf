@@ -19,15 +19,16 @@
 
 #include <gdf/gdf.h>
 #include <gdf/utils.h>
+#include <thrust/tabulate.h>
+#include <thrust/execution_policy.h>
 #include <thrust/device_vector.h>
+#include "thrust_rmm_allocator.h"
 #include <cassert>
 #include <gdf/errorutils.h>
 #include "hashmap/hash_functions.cuh"
 #include "hashmap/managed.cuh"
 #include "sqls_rtti_comp.hpp"
 
-
-#include "thrust_rmm_allocator.h"
 
 // Vector set to use rmmAlloc and rmmFree.
 template <typename T>
@@ -210,13 +211,14 @@ public:
     const size_type mask_size = gdf_get_num_chars_bitmask(column_length);
     device_row_valid.resize(mask_size);
 
-    rmm_temp_allocator allocator(0); // todo: non-default stream?
-	  auto exec = thrust::cuda::par(allocator).on(0);
+       
+    cudaStream_t stream = 0; // TODO: non-default stream?
+    rmm_temp_allocator allocator(stream);   
 
     // If a row contains a single NULL value, then the entire row is considered
     // to be NULL, therefore initialize the row-validity mask with the 
     // bit-wise AND of the validity mask of all the columns
-    thrust::tabulate(exec,
+    thrust::tabulate(thrust::cuda::par(allocator).on(stream),
                      device_row_valid.begin(),
                      device_row_valid.end(),
                      row_masker<size_type>(d_columns_valids, num_cols));
@@ -774,7 +776,7 @@ public:
    */
   /* ----------------------------------------------------------------------------*/
   template <typename size_type>
-  gdf_error gather(thrust::device_vector<size_type> const & row_gather_map,
+  gdf_error gather(Vector<size_type> const & row_gather_map,
           gdf_table<size_type> & gather_output_table)
   {
     gdf_error gdf_status{GDF_SUCCESS};
@@ -881,7 +883,7 @@ public:
    */
   /* ----------------------------------------------------------------------------*/
   template <typename size_type>
-  gdf_error gather(thrust::device_vector<size_type> const & row_gather_map) {
+  gdf_error gather(Vector<size_type> const & row_gather_map) {
       return gather(row_gather_map, *this);
   }
 
@@ -893,7 +895,7 @@ public:
    * sorted_table[i] == unsorted_table[ permuted_indices[i] ]
    */
   /* ----------------------------------------------------------------------------*/
-  thrust::device_vector<size_type> sort(void) {
+  Vector<size_type> sort(void) {
 
       cudaStream_t stream = NULL;
 
@@ -903,15 +905,16 @@ public:
               reinterpret_cast<int*>(d_columns_types),
               num_columns);
 
+      rmm_temp_allocator allocator(stream);
+	    auto exec = thrust::cuda::par(allocator).on(stream);
+
       // Vector that will store the permutation of the rows after the sort
-      thrust::device_vector<size_type> permuted_indices(column_length);
-      thrust::sequence(thrust::cuda::par.on(stream),
-              permuted_indices.begin(), permuted_indices.end());
+      Vector<size_type> permuted_indices(column_length);
+      thrust::sequence(exec, permuted_indices.begin(), permuted_indices.end());
 
       // Use the LesserRTTI functor to sort the rows of the table and the
       // permutation vector
-      thrust::sort(thrust::cuda::par.on(stream),
-              permuted_indices.begin(), permuted_indices.end(),
+      thrust::sort(exec, permuted_indices.begin(), permuted_indices.end(),
               [comparator] __host__ __device__ (size_type i1, size_type i2) {
               return comparator.less(i1, i2);
               });
@@ -1088,16 +1091,19 @@ private:
             typename size_type>
   gdf_error gather_column(column_type * const __restrict__ input_column,
                            size_type const num_rows,
-                           thrust::device_vector<size_type> const & row_gather_map,
+                           Vector<size_type> const & row_gather_map,
                            column_type * const __restrict__ output_column,
                            cudaStream_t stream = 0) const
   {
   
     gdf_error gdf_status{GDF_SUCCESS};
 
+    rmm_temp_allocator allocator(stream);
+	  auto exec = thrust::cuda::par(allocator).on(stream);
+
     // Gathering from one table to another
     if (input_column != output_column) {
-      thrust::gather(thrust::cuda::par.on(stream),
+      thrust::gather(exec,
                      row_gather_map.begin(),
                      row_gather_map.end(),
                      input_column,
@@ -1105,13 +1111,13 @@ private:
     } 
     // Gather is in-place
     else {
-        thrust::device_vector<column_type> remapped_copy(num_rows);
-        thrust::gather(thrust::cuda::par.on(stream),
+        Vector<column_type> remapped_copy(num_rows);
+        thrust::gather(exec,
                        row_gather_map.begin(),
                        row_gather_map.end(),
                        input_column,
                        remapped_copy.begin());
-        thrust::copy(thrust::cuda::par.on(stream),
+        thrust::copy(exec,
                 remapped_copy.begin(),
                 remapped_copy.end(),
                 output_column);
@@ -1183,7 +1189,7 @@ gdf_error scatter_column(column_type const * const __restrict__ input_column,
   gdf_dtype * d_columns_types{nullptr};                 /** Raw pointer to the device array's data */
 
   size_type row_size_bytes{0};
-  thrust::device_vector<byte_type> column_byte_widths;
+  Vector<byte_type> column_byte_widths;
   byte_type * d_column_byte_widths{nullptr};
 
 };

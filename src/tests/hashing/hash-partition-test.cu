@@ -23,6 +23,7 @@
 #include <thrust/device_vector.h>
 #include <thrust/sort.h>
 #include <thrust/gather.h>
+#include "thrust_rmm_allocator.h"
 
 #include "gtest/gtest.h"
 #include "gmock/gmock.h"
@@ -35,6 +36,11 @@
 #include "../../gdf_table.cuh"
 #include "../../hashmap/hash_functions.cuh"
 #include "../../int_fastdiv.h"
+
+// Vector set to use rmmAlloc and rmmFree.
+template <typename T>
+using Vector = thrust::device_vector<T, rmm_allocator<T>>;
+
 
 template <template <typename> class hash_function,
          typename size_type>
@@ -171,7 +177,7 @@ struct HashPartitionTest : public GdfTest
     // Create a table from the gdf output of only the columns that were hashed
     std::unique_ptr< gdf_table<int> > table_to_hash{new gdf_table<int>(num_cols_to_hash, gdf_cols_to_hash.data())};
 
-    thrust::device_vector<int> row_partition_numbers(table_to_hash->get_column_length());
+    Vector<int> row_partition_numbers(table_to_hash->get_column_length());
 
     // Compute the partition number for every row in the result
     switch(gdf_hash_function)

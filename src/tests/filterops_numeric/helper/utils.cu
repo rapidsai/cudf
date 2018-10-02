@@ -53,8 +53,8 @@ gdf_valid_type* gen_gdf_valid(size_t column_size, size_t init_value)
 
 
 void delete_gdf_column(gdf_column * column){
-    cudaFree(column->data);
-    cudaFree(column->valid);
+    rmmFree(column->data, 0);
+    rmmFree(column->valid, 0);
 }
 
 gdf_size_type count_zero_bits(gdf_valid_type *valid, size_t column_size)

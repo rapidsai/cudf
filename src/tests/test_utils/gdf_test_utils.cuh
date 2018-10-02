@@ -23,6 +23,7 @@
 #include <gdf/utils.h>
 #include <memory>
 #include "../../util/bit_util.cuh"
+#include "rmm.h"
 
 // Type for a unique_ptr to a gdf_column with a custom deleter
 // Custom deleter is defined at construction
@@ -149,13 +150,13 @@ gdf_col_pointer create_gdf_column(std::vector<col_type> const & host_vector,
   // the associated device memory when it eventually goes out of scope
   auto deleter = [](gdf_column* col){
                                       col->size = 0; 
-                                      if(nullptr != col->data){cudaFree(col->data);} 
-                                      if(nullptr != col->valid){cudaFree(col->valid);}
+                                      if(nullptr != col->data){rmmFree(col->data, 0);} 
+                                      if(nullptr != col->valid){rmmFree(col->valid, 0);}
                                     };
   gdf_col_pointer the_column{new gdf_column, deleter};
 
   // Allocate device storage for gdf_column and copy contents from host_vector
-  cudaMalloc(&(the_column->data), host_vector.size() * sizeof(col_type));
+  rmmAlloc(&(the_column->data), host_vector.size() * sizeof(col_type), 0);
   cudaMemcpy(the_column->data, host_vector.data(), host_vector.size() * sizeof(col_type), cudaMemcpyHostToDevice);
 
 
@@ -163,7 +164,7 @@ gdf_col_pointer create_gdf_column(std::vector<col_type> const & host_vector,
   // and copy its contents from the host vector
   if(valid_vector.size() > 0)
   {
-    cudaMalloc(&(the_column->valid), valid_vector.size() * sizeof(gdf_valid_type));
+    rmmAlloc((void**)&(the_column->valid), valid_vector.size() * sizeof(gdf_valid_type), 0);
     cudaMemcpy(the_column->valid, valid_vector.data(), valid_vector.size() * sizeof(gdf_valid_type), cudaMemcpyHostToDevice);
   }
   else

@@ -21,6 +21,7 @@
 #include <random>
 
 #include <thrust/device_vector.h>
+#include "thrust_rmm_allocator.h"
 
 #include "gtest/gtest.h"
 #include <gdf/gdf.h>
@@ -28,6 +29,9 @@
 #include <../../src/hashmap/concurrent_unordered_map.cuh>
 #include "../../src/groupby/hash/aggregation_operations.cuh"
 
+// Vector set to use rmmAlloc and rmmFree.
+template <typename T>
+using Vector = thrust::device_vector<T, rmm_allocator<T>>;
 
 // This is necessary to do a parametrized typed-test over multiple template arguments
 template <typename Key, typename Value, template <typename> typename Aggregation_Operator>
@@ -60,7 +64,7 @@ struct MapTest : public testing::Test
 
   std::vector<std::pair<key_type,value_type>> pairs;
 
-  thrust::device_vector<pair_type> d_pairs;
+  Vector<pair_type> d_pairs;
 
   std::unordered_map<key_type, value_type> expected_values;
 

@@ -2,8 +2,15 @@
 #include <gdf/errorutils.h>
 #include <gdf/utils.h>
 #include <vector>
+<<<<<<< ee0ac4bc8c6769661b6cff139346917da6ad410b
 #include <cassert>
 #include <cub/cub.cuh>
+=======
+#include <thrust/device_ptr.h>
+#include <thrust/transform_reduce.h>
+#include <thrust/functional.h>
+#include "thrust_rmm_allocator.h"
+>>>>>>> Modified new allocations / thrust calls to use RMM
 
 
 using valid32_t = uint32_t;
