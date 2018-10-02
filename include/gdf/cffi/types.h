@@ -1,5 +1,4 @@
 #pragma once
-#include <cstddef> // size_t
 
 typedef size_t gdf_size_type;
 typedef gdf_size_type gdf_index_type;

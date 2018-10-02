@@ -1,5 +1,7 @@
 #ifndef NVTX_UTILS_H
 #define NVTX_UTILS_H
+
+#include <cstddef> // size_t
 #include <gdf/cffi/types.h>
 #include <cassert>
 #include <string>
