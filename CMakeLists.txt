@@ -21,6 +21,7 @@
 #    $ cmake ..          # configure build system
 #    $ make              # make libgdf
 #    $ make pytest       # trigger test
+#    $ make install      # install libgdf
 
 PROJECT(libgdf)
 
@@ -31,6 +32,10 @@ message(STATUS "Using C++ standard: c++${CMAKE_CXX_STANDARD}")
 
 set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/Modules/" ${CMAKE_MODULE_PATH})
 message(STATUS "CMAKE_MODULE_PATH:" "${CMAKE_MODULE_PATH}")
+
+IF(CMAKE_COMPILER_IS_GNUCXX)
+    SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Werror")
+ENDIF(CMAKE_COMPILER_IS_GNUCXX)
 
 # Include CMake modules
 include(FeatureSummary)
@@ -51,7 +56,15 @@ set_package_properties(
 if(CUDA_FOUND)
     message(STATUS "CUDA ${CUDA_VERSION} found in ${CUDA_TOOLKIT_ROOT_DIR}")
 
-    set(CUDA_NVCC_FLAGS ${CUDA_NVCC_FLAGS};-std=c++11;--expt-extended-lambda)
+    set(CUDA_NVCC_FLAGS ${CUDA_NVCC_FLAGS};-std=c++11;--expt-extended-lambda;--expt-relaxed-constexpr;)
+    # Suppress SHFL warnings caused by modern GPU.
+    # TODO: remove this when modern GPU is removed or fixed to use shfl_sync
+    set(CUDA_NVCC_FLAGS ${CUDA_NVCC_FLAGS};
+        -Wno-deprecated-declarations;
+        -Xptxas --disable-warnings)
+    # set warnings as errors
+    set(CUDA_NVCC_FLAGS ${CUDA_NVCC_FLAGS};-Werror cross-execution-space-call;-Xcompiler -Wall,-Werror)
+
     message(STATUS "CUDA_NVCC_FLAGS: ${CUDA_NVCC_FLAGS}")
 else()
     message(FATAL_ERROR "CUDA not found, please check your settings.")
@@ -87,7 +100,7 @@ IF(CUDA_VERSION_MAJOR GREATER 8)
 ENDIF(CUDA_VERSION_MAJOR GREATER 8)
 
 IF(CMAKE_BUILD_TYPE MATCHES DEBUG)
-    set(CUDA_NVCC_FLAGS ${CUDA_NVCC_FLAGS};-g;-G)
+    set(CUDA_NVCC_FLAGS ${CUDA_NVCC_FLAGS};-g;-G;)
 ENDIF(CMAKE_BUILD_TYPE MATCHES DEBUG)
 
 # switch between hash-join and sort-join
@@ -96,6 +109,8 @@ if(HASH_JOIN)
   message("-- Using the hash-based join implementation")
   set(CUDA_NVCC_FLAGS  ${CUDA_NVCC_FLAGS};-DHASH_JOIN)
 endif()
+
+
 
 # switch between cudaMalloc and cudaMallocManaged for hash tables
 option(HT_LEGACY_ALLOCATOR "legacy allocator for hash tables" ON)
@@ -107,21 +122,37 @@ endif()
 
 cuda_add_library(gdf SHARED
     src/binaryops.cu
+    src/bitmaskops.cu
     src/column.cpp
+    src/context.cpp
+    src/cudautils.cu
+    src/datetimeops.cu
     src/errorhandling.cpp
-    src/unaryops.cu
+    src/filterops.cu
+    src/hashops.cu
     src/ipc.cu
     src/reductions.cu
-    src/sorting.cu
-    src/joining.cu
+    src/join/joining.cu
     src/hashing.cu
     src/scan.cu
     src/segmented_sorting.cu
-    src/datetimeops.cu
+    src/sorting.cu
     src/sqls_ops.cu
+    src/streamcompactionops.cu
+    src/unaryops.cu
+    #src/windowedops.cu
+    src/quantiles.cu
+    src/io/csv/csv-reader.cu
+    src/io/convert/gdf-to-csr.cu      
+    src/validops.cu
 )
 
-target_link_libraries(gdf arrow)
+if (ARROW_NUMERIC_VERSION EQUAL 900)
+  # arrow-0.9 requires boost_regex
+  target_link_libraries(gdf arrow boost_regex)
+else()
+  target_link_libraries(gdf arrow)
+endif()
 
 # Command to symlink files into the build directory
 add_custom_command(  # link the include directory
@@ -147,8 +178,8 @@ add_custom_target(   # target to link the python files and trigger cffi
 # The test target
 add_custom_target(pytest DEPENDS copy_python)
 add_custom_command(TARGET pytest POST_BUILD
-                   COMMAND ${CMAKE_COMMAND} -E env LD_LIBRARY_PATH=$LD_LIBRARY_PATH:${CMAKE_BINARY_DIR} py.test -v
-                   WORKING_DIRECTORY tests)
+                   COMMAND ${CMAKE_COMMAND} -E env LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:${CMAKE_BINARY_DIR} py.test -v
+                   WORKING_DIRECTORY --cache-clear tests)
 
 # The install target
 install(TARGETS gdf LIBRARY DESTINATION lib)
@@ -167,6 +198,5 @@ if(GTEST_FOUND)
 else()
     message(AUTHOR_WARNING "Google C++ Testing Framework (Google Test) not found: automated tests are disabled.")
 endif()
-
 # Print the project summary
 feature_summary(WHAT ALL INCLUDE_QUIET_PACKAGES FATAL_ON_MISSING_REQUIRED_PACKAGES)

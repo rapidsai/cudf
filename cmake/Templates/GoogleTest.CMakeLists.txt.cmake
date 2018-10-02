@@ -1,4 +1,3 @@
-
 #=============================================================================
 # Copyright 2018 BlazingDB, Inc.
 #     Copyright 2018 Percy Camilo Triveño Aucahuasi <percy@blazingdb.com>
@@ -15,7 +14,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #=============================================================================
-
 cmake_minimum_required(VERSION 2.8.12)
 
 cmake_policy(SET CMP0048 NEW)
@@ -26,7 +24,7 @@ include(ExternalProject)
 
 ExternalProject_Add(googletest
     GIT_REPOSITORY    https://github.com/google/googletest.git
-    GIT_TAG           master
+    GIT_TAG           release-1.8.1
     SOURCE_DIR        "${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/thirdparty/googletest-src"
     BINARY_DIR        "${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/thirdparty/googletest-build"
     INSTALL_DIR       "${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/thirdparty/googletest-install"

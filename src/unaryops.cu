@@ -42,6 +42,13 @@ template<typename T, typename Tout, typename F>
 struct UnaryOp {
     static
     gdf_error launch(gdf_column *input, gdf_column *output) {
+
+        // Return immediately for empty inputs
+        if((0==input->size))
+        {
+          return GDF_SUCCESS;
+        }
+
         /* check for size of the columns */
         if (input->size != output->size) {
             return GDF_COLUMN_SIZE_MISMATCH;

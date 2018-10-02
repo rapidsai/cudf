@@ -1,5 +1,9 @@
+# Copyright (c) 2018, NVIDIA CORPORATION.
+
 # Usage:
 #   conda build -c defaults -c conda-forge .
+{% set cuda_version='.'.join(environ.get('CUDA', 'unknown').split('.')[:2]) %}
+{% set git_revision_count=environ.get('GIT_DESCRIBE_NUMBER', 0) %}
 package:
   name: libgdf
   version: {{ environ.get('GIT_DESCRIBE_TAG', '0.0.0.dev').lstrip('v') }}
@@ -9,8 +13,8 @@ source:
   path: ../..
 
 build:
-  number: {{ environ.get('GIT_DESCRIBE_NUMBER', 0) }}
-  string: 'cuda{{ environ['CUDA'][0:3] }}_{{ environ.get('GIT_DESCRIBE_NUMBER', 0) }}'
+  number: {{ git_revision_count }}
+  string: cuda_{{ cuda_version }}_{{ git_revision_count }}
   script_env:
     - CC
     - CXX
@@ -21,13 +25,9 @@ requirements:
   #   - conda-forge
   build:
     - cmake
-    - flatbuffers
-    - arrow-cpp 0.7.*
 
   run:
-    - arrow-cpp 0.7.*
-    # Not strictly needed for libgdf, but needed to match the CUDA version of other libs in environment
-    - cudatoolkit {{ environ['CUDA'][0:3] }}*
+    - pyarrow 0.10.*
 
 test:
   commands:
