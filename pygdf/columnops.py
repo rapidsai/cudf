@@ -10,7 +10,7 @@ import pyarrow as pa
 from numba import cuda, njit
 
 from .buffer import Buffer
-from . import utils, cudautils
+from . import utils, cudautils, _gdf
 from .column import Column
 
 
@@ -197,6 +197,24 @@ def as_column(arbitrary):
                 null_count=arbitrary.null_count,
                 dtype=np.dtype('M8[ms]')
             )
+        elif isinstance(arbitrary, pa.Date64Array):
+            if arbitrary.buffers()[0]:
+                pamask = Buffer(np.array(arbitrary.buffers()[0]))
+            else:
+                pamask = None
+            padata = Buffer(np.array(arbitrary.buffers()[1]).view(
+                np.dtype('M8[ms]')
+            ))
+            data = datetime.DatetimeColumn(
+                data=padata,
+                mask=pamask,
+                null_count=arbitrary.null_count,
+                dtype=np.dtype('M8[ms]')
+            )
+        elif isinstance(arbitrary, pa.Date32Array):
+            # No equivalent np dtype and not yet supported
+            arbitrary = arbitrary.cast(pa.date64())
+            data = as_column(arbitrary)
         else:
             if arbitrary.buffers()[0]:
                 pamask = Buffer(np.array(arbitrary.buffers()[0]))
@@ -216,6 +234,10 @@ def as_column(arbitrary):
         data = as_column(pa.array(arbitrary, from_pandas=True))
 
     elif np.isscalar(arbitrary):
+        if hasattr(arbitrary, 'dtype'):
+            data_type = _gdf.np_to_pa_dtype(arbitrary.dtype)
+            data = as_column(pa.array([arbitrary], type=data_type))
+        else:
             data = as_column(pa.array([arbitrary]))
 
     else:
