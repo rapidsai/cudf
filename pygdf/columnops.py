@@ -13,6 +13,8 @@ from .buffer import Buffer
 from . import utils, cudautils, _gdf
 from .column import Column
 
+import warnings
+
 
 class TypedColumnBase(Column):
     """Base class for all typed column
@@ -213,6 +215,8 @@ def as_column(arbitrary):
             )
         elif isinstance(arbitrary, pa.Date32Array):
             # No equivalent np dtype and not yet supported
+            warnings.warn("Date32 values are not yet supported so this will "
+                          "be typecast to a Date64 value", UserWarning)
             arbitrary = arbitrary.cast(pa.date64())
             data = as_column(arbitrary)
         else:
