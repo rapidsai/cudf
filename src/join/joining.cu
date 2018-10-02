@@ -109,11 +109,8 @@ gdf_error hash_join(size_type num_cols, gdf_column **leftcol, gdf_column **right
   std::unique_ptr< gdf_table<size_type> > left_table(new gdf_table<size_type>(num_cols, leftcol));
   std::unique_ptr< gdf_table<size_type> > right_table(new gdf_table<size_type>(num_cols, rightcol));
 
-  standard_context_t context(false);
-
   return join_hash<join_type, output_index_type>(*left_table, 
                                                         *right_table, 
-                                                        context, 
                                                         l_result, 
                                                         r_result);
 }
