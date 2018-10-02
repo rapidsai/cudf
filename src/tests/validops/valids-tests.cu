@@ -21,8 +21,13 @@
 #include "../test_utils/gdf_test_utils.cuh"
 #include "cuda_profiler_api.h"
 
+#include "gdf_test_fixtures.h"
+
 #include <chrono>
-TEST(ValidsTest, FirstRowValid)
+
+struct ValidsTest : public GdfTest {};
+
+TEST_F(ValidsTest, FirstRowValid)
 {
   std::vector<int> data(4);
   std::vector<gdf_valid_type> valid{0x1};
@@ -37,7 +42,7 @@ TEST(ValidsTest, FirstRowValid)
   EXPECT_EQ(1, count);
 }
 
-TEST(ValidsTest, EightRowsValid)
+TEST_F(ValidsTest, EightRowsValid)
 {
   std::vector<int> data(8);
   std::vector<gdf_valid_type> valid{0xFF};
@@ -52,7 +57,7 @@ TEST(ValidsTest, EightRowsValid)
   EXPECT_EQ(8, count);
 }
 
-TEST(ValidsTest, EveryOtherBit)
+TEST_F(ValidsTest, EveryOtherBit)
 {
   std::vector<int> data(8);
   std::vector<gdf_valid_type> valid{0xAA};
@@ -67,7 +72,7 @@ TEST(ValidsTest, EveryOtherBit)
   EXPECT_EQ(4, count);
 }
 
-TEST(ValidsTest, OtherEveryOtherBit)
+TEST_F(ValidsTest, OtherEveryOtherBit)
 {
   std::vector<int> data(8);
   std::vector<gdf_valid_type> valid{0x55};
@@ -82,7 +87,7 @@ TEST(ValidsTest, OtherEveryOtherBit)
   EXPECT_EQ(4, count);
 }
 
-TEST(ValidsTest, 15rows)
+TEST_F(ValidsTest, 15rows)
 {
   const int num_rows = 15;
   std::vector<int> data(num_rows);
@@ -99,7 +104,7 @@ TEST(ValidsTest, 15rows)
   EXPECT_EQ(2, count);
 }
 
-TEST(ValidsTest, 5rows)
+TEST_F(ValidsTest, 5rows)
 {
   const int num_rows = 5;
   std::vector<int> data(num_rows);
@@ -116,7 +121,7 @@ TEST(ValidsTest, 5rows)
   EXPECT_EQ(1, count);
 }
 
-TEST(ValidsTest, MultipleOfEight)
+TEST_F(ValidsTest, MultipleOfEight)
 {
   const int num_rows = 1024;
   std::vector<int> data(num_rows);
@@ -134,7 +139,7 @@ TEST(ValidsTest, MultipleOfEight)
   EXPECT_EQ(128, count);
 }
 
-TEST(ValidsTest, NotMultipleOfEight)
+TEST_F(ValidsTest, NotMultipleOfEight)
 {
   const int num_rows = 1023;
   std::vector<int> data(num_rows);
@@ -152,7 +157,7 @@ TEST(ValidsTest, NotMultipleOfEight)
   EXPECT_EQ(127, count);
 }
 
-TEST(ValidsTest, TenThousandRows)
+TEST_F(ValidsTest, TenThousandRows)
 {
   const int num_rows = 10000;
   std::vector<int> data(num_rows);
@@ -170,7 +175,7 @@ TEST(ValidsTest, TenThousandRows)
   EXPECT_EQ(10000, count);
 }
 
-TEST(ValidsTest, PerformanceTest)
+TEST_F(ValidsTest, PerformanceTest)
 {
   const int num_rows = 100000000;
   std::vector<int> data(num_rows);

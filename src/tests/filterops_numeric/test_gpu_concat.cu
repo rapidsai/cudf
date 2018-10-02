@@ -28,14 +28,18 @@
 #include <cuda_runtime.h>
 #include "helper/utils.cuh"
 
+#include "gdf_test_fixtures.h"
+
 using ValueType = int16_t;
+
+struct GdfConcat : public GdfTest {};
 
 /*
  ============================================================================
  Description : Compute concat of gdf_columns using Thrust on GPU
  ============================================================================
  */
-TEST(GdfConcat, usage_example) {
+TEST_F(GdfConcat, usage_example) {
     const size_t lhs_size = 10;
     const size_t rhs_size = 20;
     gdf_column lhs = gen_gdb_column<ValueType>(lhs_size, 2);
@@ -62,7 +66,7 @@ TEST(GdfConcat, usage_example) {
     delete_gdf_column(&output);
 }
 
-TEST(GdfConcat, CaseWithZeroLeft)
+TEST_F(GdfConcat, CaseWithZeroLeft)
 {
     //  0 + 2
     //  2
@@ -84,7 +88,7 @@ TEST(GdfConcat, CaseWithZeroLeft)
     delete_gdf_column(&output);
 }
 
-TEST(GdfConcat, CaseWithZeroRight)
+TEST_F(GdfConcat, CaseWithZeroRight)
 {
     //  2 + 0
     //  2
@@ -106,7 +110,7 @@ TEST(GdfConcat, CaseWithZeroRight)
     delete_gdf_column(&output);
 }
 
-TEST(GdfConcat, CaseWithOutputOfOneByte)
+TEST_F(GdfConcat, CaseWithOutputOfOneByte)
 {
     //  3 + 4
     //  3|4
@@ -128,7 +132,7 @@ TEST(GdfConcat, CaseWithOutputOfOneByte)
     delete_gdf_column(&output);
 }
 
-TEST(GdfConcat, CaseWithOutputOfTwoBytes)
+TEST_F(GdfConcat, CaseWithOutputOfTwoBytes)
 {
     //  3 + 7  // caso especial
     //  3|5, 3
@@ -150,7 +154,7 @@ TEST(GdfConcat, CaseWithOutputOfTwoBytes)
     delete_gdf_column(&output);
 }
 
-TEST(GdfConcat, CaseWithInput_2_2_Output3)
+TEST_F(GdfConcat, CaseWithInput_2_2_Output3)
 {
     //  8, 3 + 8, 1
     //  8, 3|5, 3|1
@@ -175,7 +179,7 @@ TEST(GdfConcat, CaseWithInput_2_2_Output3)
     delete_gdf_column(&output);
 }
 
-TEST(GdfConcat, CaseWithInput_2_5_Output5)
+TEST_F(GdfConcat, CaseWithInput_2_5_Output5)
 {
     //  8, 2 + 8, 8, 8, 8, 5
     //  8, 2|6, 2|6, 2|6, 2|5
@@ -194,7 +198,7 @@ TEST(GdfConcat, CaseWithInput_2_5_Output5)
     delete_gdf_column(&output);
 }
 
-TEST(GdfConcat, CaseWithInput_1_4_Output5)
+TEST_F(GdfConcat, CaseWithInput_1_4_Output5)
 {
     //  3 + 8, 8, 8, 7      // caso especial
     //  3|5, 3|5, 3|5, 3|5, 2
@@ -235,7 +239,7 @@ TEST(GdfConcat, CaseWithInput_1_4_Output5)
 }
 
 
-TEST(GdfConcat, CaseWithInput_0_9_Output2)
+TEST_F(GdfConcat, CaseWithInput_0_9_Output2)
 {
     //  3 + 8, 8, 8, 7      // caso especial
     //  3|5, 3|5, 3|5, 3|5, 2
@@ -269,7 +273,7 @@ TEST(GdfConcat, CaseWithInput_0_9_Output2)
     delete_gdf_column(&output);
 }
 
-TEST(GdfConcat, CaseWithInput_5_11_Output22)
+TEST_F(GdfConcat, CaseWithInput_5_11_Output22)
 {
     //  3 + 8, 8, 8, 7      // caso especial
     //  3|5, 3|5, 3|5, 3|5, 2
@@ -308,7 +312,7 @@ TEST(GdfConcat, CaseWithInput_5_11_Output22)
 }
 
 
-TEST(GpuConcatTest, WithDifferentColumnSizes)
+TEST_F(GdfConcat, WithDifferentColumnSizes)
 {
     using ValueType = int16_t;
     //0, ..., 100,

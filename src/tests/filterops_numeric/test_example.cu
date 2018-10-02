@@ -27,13 +27,15 @@
 #include <cuda_runtime.h>
 #include "helper/utils.cuh"
 
+#include "gdf_test_fixtures.h"
+struct Example : public GdfTest {};
 
 /*
  ============================================================================
  Description : Compute sum of reciprocals using STL on CPU and Thrust on GPU
  ============================================================================
  */
-TEST(Example, Equals)
+TEST_F(Example, Equals)
 {
 	gdf_size_type num_elements = 8;
 

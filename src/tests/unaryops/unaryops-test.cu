@@ -28,7 +28,7 @@
 #include <thrust/transform.h>
 #include <thrust/iterator/counting_iterator.h>
 
- #include "thrust_rmm_allocator.h"
+#include "thrust_rmm_allocator.h"
 
 #include "gtest/gtest.h"
 #include "gdf_test_fixtures.h"
