@@ -145,7 +145,7 @@ gdf_date64 parseDateTimeFormat(char *data, long start_idx, long end_idx, bool da
 		if ( (end_idx - start_idx) < 11 ) {
 			// only have a date portion, no time
 			extractDate(data, start_idx, end_idx, dayfirst, &year, &month, &day);
-			answer = secondsFromEpoch(year, month, day, 12, 0, 0);
+			answer = secondsFromEpoch(year, month, day, 0, 0, 0);
 		} else {
 			answer = -1;
 		}
