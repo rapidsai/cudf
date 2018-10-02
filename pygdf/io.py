@@ -20,7 +20,7 @@ def _wrap_string(text):
 def read_csv(filepath, lineterminator='\n',
              delimiter=',', sep=None, delim_whitespace=False,
              skipinitialspace=False, names=None, dtype=None,
-             skipfooter=0, skiprows=0):
+             skipfooter=0, skiprows=0, dayfirst=False):
 
     """
     Read CSV data into dataframe.
@@ -73,10 +73,6 @@ def read_csv(filepath, lineterminator='\n',
     # Populate csv_reader struct
     file_path = _wrap_string(filepath)
     csv_reader.file_path = file_path
-    buffer = _wrap_string(filepath)
-    csv_reader.buffer = buffer
-    obj = _wrap_string(filepath)
-    csv_reader.object = obj
 
     arr_names = []
     for i, col_name in enumerate(names):
@@ -94,6 +90,7 @@ def read_csv(filepath, lineterminator='\n',
     csv_reader.lineterminator = lineterminator.encode()
     csv_reader.delim_whitespace = delim_whitespace
     csv_reader.skipinitialspace = skipinitialspace
+    csv_reader.dayfirst = dayfirst
     x = len(names)
     csv_reader.num_cols = x
     csv_reader.skiprows = skiprows

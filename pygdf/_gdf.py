@@ -181,7 +181,7 @@ def _make_mem_finalizer(dtor, bytesize):
 def _as_numba_devarray(intaddr, nelem, dtype, cb_dtor=None):
     # Handle Datetime Column
     if dtype == np.datetime64:
-        dtype = np.dtype('datetime64[s]')
+        dtype = np.dtype('datetime64[ms]')
     else:
         dtype = np.dtype(dtype)
     addr = ctypes.c_uint64(intaddr)

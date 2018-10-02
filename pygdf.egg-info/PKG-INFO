@@ -1,0 +1,13 @@
+Metadata-Version: 1.1
+Name: pygdf
+Version: 0.1.0a3+103.g90b7160.dirty
+Summary: GPU Dataframe
+Home-page: UNKNOWN
+Author: Continuum Analytics, Inc.
+Author-email: UNKNOWN
+License: BSD
+Description: UNKNOWN
+Platform: UNKNOWN
+Classifier: Intended Audience :: Developers
+Classifier: Programming Language :: Python
+Classifier: Programming Language :: Python :: 3.5
