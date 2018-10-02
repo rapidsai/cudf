@@ -489,7 +489,7 @@ def test_dataframe_setitem_from_masked_object():
     assert(test2['a'].has_null_mask)
     assert(test2['a'].null_count == 20)
 
-    gpu_ary = cuda.to_device(ary)
+    gpu_ary = rmm.to_device(ary)
     test3 = Series(gpu_ary)
     assert(test3.has_null_mask)
     assert(test3.null_count == 20)

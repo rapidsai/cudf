@@ -95,7 +95,7 @@ def astype(ary, dtype):
     if ary.dtype == np.dtype(dtype):
         return ary
     elif ary.size == 0:
-        return cuda.device_array(shape=ary.shape, dtype=dtype)
+        return rmm.device_array(shape=ary.shape, dtype=dtype)
     else:
         out = rmm.device_array(shape=ary.shape, dtype=dtype)
         configured = gpu_copy.forall(out.size)
@@ -191,7 +191,7 @@ def gpu_expand_mask_bits(bits, out):
 def expand_mask_bits(size, bits):
     """Expand bit-mask into byte-mask
     """
-    expanded_mask = cuda.device_array(size, dtype=np.int32)
+    expanded_mask = rmm.device_array(size, dtype=np.int32)
     numtasks = min(1024, expanded_mask.size)
     if numtasks > 0:
         gpu_expand_mask_bits.forall(numtasks)(bits, expanded_mask)
