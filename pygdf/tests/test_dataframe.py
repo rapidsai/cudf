@@ -740,10 +740,19 @@ def test_to_arrow(nelem, data_type):
         .replace_schema_metadata(None)
     # Pandas uses ns so need to cast columns to ms
     if data_type == 'datetime64[ms]':
-        pa_df = pa_df\
-            .add_column(0, pa_df.column(1).cast(pa.timestamp('ms')))\
-            .add_column(0, pa_df.column(0).cast(pa.timestamp('ms')))\
-            .remove_column(2).remove_column(2)
+        pa_df = pa_df.add_column(
+                    0,
+                    pa_df.column(1)
+                    .cast(pa.timestamp('ms'))
+                    .cast(pa.int64())
+                    .cast(pa.date64())
+                ).add_column(
+                    0,
+                    pa_df.column(0)
+                    .cast(pa.timestamp('ms'))
+                    .cast(pa.int64())
+                    .cast(pa.date64())
+                ).remove_column(2).remove_column(2)
     pa_gdf = gdf.to_arrow(index=False)
 
     assert isinstance(pa_gdf, pa.Table)
@@ -752,7 +761,7 @@ def test_to_arrow(nelem, data_type):
     pa_s = pa.Array.from_pandas(df.a)
     # Pandas uses ns so need to cast columns to ms
     if data_type == 'datetime64[ms]':
-        pa_s = pa_s.cast(pa.timestamp('ms'))
+        pa_s = pa_s.cast(pa.timestamp('ms')).cast(pa.int64()).cast(pa.date64())
     pa_gs = gdf['a'].to_arrow()
 
     assert isinstance(pa_gs, pa.Array)
@@ -771,7 +780,7 @@ def test_to_arrow(nelem, data_type):
 )
 def test_to_from_arrow_nulls(data_type):
     if data_type == 'datetime64[ms]':
-        data_type = pa.timestamp('ms')
+        data_type = pa.date64()
     s1 = pa.array([1, None, 3, None, 5], type=data_type)
     gs1 = gd.Series.from_arrow(s1)
     assert isinstance(gs1, gd.Series)
@@ -828,10 +837,27 @@ def test_from_arrow_missing_categorical():
            "DictionaryArray objects"
 )
 def test_to_arrow_missing_categorical():
-
     pd_cat = pd.Categorical(['a', 'b', 'c'], categories=['a', 'b'])
     pa_cat = pa.array(pd_cat, from_pandas=True)
     gd_cat = gd.Series(pa_cat)
 
     assert isinstance(gd_cat, gd.Series)
     assert pa.Array.equals(pa_cat, gd_cat.to_arrow())
+
+
+@pytest.mark.parametrize(
+    'data_type',
+    ['int8', 'int16', 'int32', 'int64', 'float32', 'float64', 'datetime64[ms]']
+)
+def test_from_scalar_typing(data_type):
+    if data_type == 'datetime64[ms]':
+        scalar = np.dtype('int64').type(np.random.randint(0, 5))\
+            .astype('datetime64[ms]')
+    else:
+        scalar = np.dtype(data_type).type(np.random.randint(0, 5))
+
+    gdf = gd.DataFrame()
+    gdf['a'] = [1, 2, 3, 4, 5]
+    gdf['b'] = scalar
+    assert(gdf['b'].dtype == np.dtype(data_type))
+    assert(len(gdf['b']) == len(gdf['a']))
