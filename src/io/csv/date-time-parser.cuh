@@ -323,7 +323,7 @@ bool extractTime(char *data, int sIdx, int eIdx, int *hour, int *minute, int *se
 __host__ __device__
 gdf_date32 daysSinceEpoch(int year, int month, int day)  {
 
-	static unsigned short days[12] = {0,  31,  60,  91, 121, 152, 182, 213, 244, 274, 305, 335};
+	static unsigned short days[12] = {0,  31,  59,  90, 120, 151, 181, 212, 243, 273, 304, 334};
 
 	// years since epoch
 	int ye = year - 1970;
@@ -345,7 +345,7 @@ gdf_date32 daysSinceEpoch(int year, int month, int day)  {
 	days_e += days[me];
 
 	// now just add days, but not current full days since this one is not over
-	days_e +=  day - 1;
+	days_e +=  day;
 
 	return days_e;
 }
