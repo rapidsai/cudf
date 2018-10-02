@@ -135,6 +135,32 @@ __device__ void setBit(gdf_valid_type* address, int bit) {
  *
  * @param[in and out] args the input arguments, but this also contains the returned data
  *
+ * Arguments:
+ *
+ *  Required Arguments
+ * 		file_path			- 	file location to read from	- currently the file cannot be compressed
+ * 		num_cols			-	number of columns in the names and dtype arrays
+ * 		names				-	ordered List of column names, this is a required field
+ * 		dtype				- 	ordered List of data types, this is required
+ *
+ * 	Optional
+ * 		lineterminator		-	define the line terminator character.  Default is  '\n'
+ * 		delimiter			-	define the field separator, default is ','   This argument is also called 'sep'
+ * 		delim_whitespace	-	use white space as the delimiter - default is false.  This overrides the delimiter argument
+ * 		skipinitialspace	-	skip white spaces after the delimiter - default is false
+ *
+ * 		skiprows			-	number of rows at the start of the files to skip, default is 0
+ * 		skipfooter			-	number of rows at the bottom of the file to skip - default is 0
+ *
+ * 		dayfirst			-	is the first value the day?  DD/MM  versus MM/DD
+ *
+ *
+ *  Output
+ *  	num_cols_out		-	Out: return the number of columns read in
+ *  	num_rows_out		- 	Out: return the number of rows read in
+ *  	gdf_column		**data	-  Out: return the array of *gdf_columns
+ *
+ *
  * @return gdf_error
  *
  */
