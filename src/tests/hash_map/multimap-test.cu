@@ -26,6 +26,8 @@
 #include <gdf/cffi/functions.h>
 #include <../../src/hashmap/concurrent_unordered_multimap.cuh>
 
+#include "gdf_test_fixtures.h"
+
 // This is necessary to do a parametrized typed-test over multiple template arguments
 template <typename Key, typename Value>
 struct KeyValueTypes
