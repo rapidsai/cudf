@@ -26,7 +26,7 @@
 
 #include <thrust/scan.h>
 #include <thrust/execution_policy.h>
-#include "thrust_rmm_allocator.h"
+#include "../../thrust_rmm_allocator.h"
 
 using namespace std;
 
@@ -206,7 +206,7 @@ gdf_error runConverter(gdf_column **gdfData, csr_gdf *csrReturn, gdf_size_type *
     int blocks  = (numRows + threads - 1) / threads;
 
 	T *			A;
-	RMM_TRY(rmmAlloc(&A, (sizeof(T) * csrReturn->nnz), 0));
+	RMM_TRY(rmmAlloc((void**)&A, (sizeof(T) * csrReturn->nnz), 0));
 	CUDA_TRY(cudaMemset(A, 0, (sizeof(T) * csrReturn->nnz)));
 
     // Now start moving the data and creating the CSR
