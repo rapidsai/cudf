@@ -3,7 +3,7 @@ import cffi
 ffibuilder = cffi.FFI()
 ffibuilder.set_source("libgdf_cffi.libgdf_cffi", None)
 
-for fname in ['types.h', 'functions.h']:
+for fname in ['types.h', 'functions.h', 'io_types.h', 'io_functions.h', 'convert_types.h']:
     with open('include/gdf/cffi/{}'.format(fname), 'r') as fin:
         ffibuilder.cdef(fin.read())
 
