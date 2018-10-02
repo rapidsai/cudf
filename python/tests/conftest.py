@@ -21,8 +21,4 @@ def rand_seed():
 # and after tests.
 @pytest.fixture(scope="session", autouse=True)
 def rmm():
-    print("initialize librmm")
-    assert librmm.initialize() == librmm.RMM_SUCCESS
-    yield librmm
-    print("finalize librmm")
-    assert librmm.finalize() == librmm.RMM_SUCCESS
+    yield librmm # librmm is initialized on import, finalized on exit
