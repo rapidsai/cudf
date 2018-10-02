@@ -18,15 +18,18 @@ def make_numeric_dataframe(nrows, dtype):
 
 def make_datetime_dataframe():
     df = pd.DataFrame()
-    df['col1'] = np.array(['31/10/2010', '05/03/2001', '20/10/1994', '18/10/1990'])
-    df['col2'] = np.array(['18/04/1995', '14/07/1994', '07/06/2006', '16/09/2005'])
+    df['col1'] = np.array(['31/10/2010', '05/03/2001', '20/10/1994',
+                          '18/10/1990'])
+    df['col2'] = np.array(['18/04/1995', '14/07/1994', '07/06/2006',
+                          '16/09/2005'])
     return df
 
 
 def make_mixed_dataframe():
     df = pd.DataFrame()
     df['Integer'] = np.array([2345, 11987, 9027, 53916])
-    df['Date'] = np.array(['18/04/1995', '14/07/1994', '07/06/2006', '16/09/2005'])
+    df['Date'] = np.array(['18/04/1995', '14/07/1994', '07/06/2006',
+                          '16/09/2005'])
     df['Float'] = np.array([9.001, 8.343, 6, 2.781])
     df['Category'] = np.array(['M', 'F', 'F', 'F'])
     return df
@@ -97,8 +100,8 @@ def test_csv_reader_skiprows_skipfooter():
     df_out = pd.read_csv(fname, names=['1', '2', '3'], parse_dates=[1],
                          dayfirst=True, skiprows=1, skipfooter=1)
     out = read_csv(fname, names=['1', '2', '3'],
-                   dtype=['int64', 'date', 'float64'], skiprows=1, skipfooter=1,
-                   dayfirst=True)
+                   dtype=['int64', 'date', 'float64'], skiprows=1,
+                   skipfooter=1, dayfirst=True)
 
     assert len(out.columns) == len(df_out.columns)
     assert len(out) == len(df_out)
