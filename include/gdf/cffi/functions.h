@@ -1,5 +1,35 @@
 #pragma once
 
+/* --------------------------------------------------------------------------*/
+/** 
+ * @Synopsis  Start an NVTX range.
+ *
+ * This function is useful only for profiling with nvvp or Nsight Systems. It
+ * demarcates the begining of a user-defined range with a specified name and
+ * color that will show up in the timeline view of nvvp/Nsight Systems. Can be
+ * nested within other ranges.
+ * 
+ * @Param name The name of the NVTX range
+ * @Param color The color to use for the range
+ * 
+ * @Returns   
+ */
+/* ----------------------------------------------------------------------------*/
+gdf_error gdf_nvtx_range_push(char const * const name, gdf_color color );
+
+
+/* --------------------------------------------------------------------------*/
+/** 
+ * @Synopsis Ends the inner-most NVTX range.
+ *
+ * This function is useful only for profiling with nvvp or Nsight Systems. It
+ * will demarcate the end of the inner-most range, i.e., the most recent call to
+ * gdf_nvtx_range_push.
+ * 
+ * @Returns   
+ */
+/* ----------------------------------------------------------------------------*/
+gdf_error gdf_nvtx_range_pop();
 
 /* --------------------------------------------------------------------------*/
 /** 

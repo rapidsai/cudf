@@ -142,6 +142,7 @@ cuda_add_library(gdf SHARED
     #src/windowedops.cu
     src/quantiles.cu
     src/validops.cu
+    src/nvtx_utils.cpp
 )
 
 # Switch to enable NVTX ranges for profiling
