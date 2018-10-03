@@ -75,13 +75,6 @@ class _librmm_wrapper(object):
         mem = cuda.driver.MemoryPointer(ctx, ptr, datasize, finalizer=finalizer)
         return cuda.cudadrv.devicearray.DeviceNDArray(shape, strides, dtype, gpu_data=mem)
 
-    def get_ipc_handle(self, ary, stream=0):
-        ipch = ary.get_ipc_handle()
-        # replace offset with RMM's offset
-        offset = self._ffi.new("offset_t*")
-        self._api.rmmGetAllocationOffset(offset, ary.mem, self._ffi.cast("cudaStream_t", stream))
-        # TODO replace offset with RMM's offset
-
     def device_array_from_ptr(self, ptr, nelem, dtype=np.float):
         """device_array_from_ptr(self, ptr, size, dtype=np.float, stream=0)
 
@@ -164,6 +157,21 @@ class _librmm_wrapper(object):
             if copy:
                 devobj.copy_to_device(obj, stream=stream)
             return devobj, True
+
+    def get_ipc_handle(self, ary, stream=0):
+        """
+        Get an IPC handle from the DeviceArray ary with offset modified by 
+        the RMM memory pool.
+        """
+        ipch = cuda.devices.get_context().get_ipc_handle(ary.gpu_data)
+        offset = self._ffi.new("offset_t*")
+        ptr = self._ffi.cast("void*", ary.device_ctypes_pointer.value)        
+        self._api.rmmGetAllocationOffset(offset, ptr, self._ffi.cast("cudaStream_t", stream))
+        # replace offset with RMM's offset
+        ipch.offset = offset[0]
+        desc = dict(shape=ary.shape, strides=ary.strides, dtype=ary.dtype)
+        return cuda.cudadrv.devicearray.IpcArrayHandle(ipc_handle=ipch, array_desc=desc)
+
 
     def _make_finalizer(self, handle, stream):
             """Factory to make the finalizer function.
