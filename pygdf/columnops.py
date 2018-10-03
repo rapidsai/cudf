@@ -147,7 +147,8 @@ def as_column(arbitrary):
 
     elif cuda.devicearray.is_cuda_ndarray(arbitrary):
         data = as_column(Buffer(arbitrary))
-        if data.dtype in [np.float16, np.float32, np.float64]:
+        if (data.dtype in [np.float16, np.float32, np.float64]
+                and arbitrary.size > 0):
             mask = cudautils.mask_from_devary(arbitrary)
             data = data.set_mask(mask)
 

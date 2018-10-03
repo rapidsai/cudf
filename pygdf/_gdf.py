@@ -8,14 +8,13 @@ import contextlib
 import itertools
 
 import numpy as np
+import pandas as pd
 
 from numba import cuda
 
 from libgdf_cffi import ffi, libgdf
 from . import cudautils
-from .utils import mask_bitsize
-
-mask_dtype = np.dtype(np.uint8)
+from .utils import calc_chunk_size, mask_dtype, mask_bitsize
 
 
 def unwrap_devary(devary):
@@ -119,19 +118,23 @@ def apply_mask_and(col, mask, out):
     return len(out) - nnz
 
 
+np_gdf_dict = {np.float64: libgdf.GDF_FLOAT64,
+               np.float32: libgdf.GDF_FLOAT32,
+               np.int64:   libgdf.GDF_INT64,
+               np.int32:   libgdf.GDF_INT32,
+               np.int16:   libgdf.GDF_INT16,
+               np.int8:    libgdf.GDF_INT8,
+               np.bool_:   libgdf.GDF_INT8,
+               np.datetime64: libgdf.GDF_DATE64}
+
+
 def np_to_gdf_dtype(dtype):
     """Util to convert numpy dtype to gdf dtype.
     """
-    return {
-        np.float64: libgdf.GDF_FLOAT64,
-        np.float32: libgdf.GDF_FLOAT32,
-        np.int64:   libgdf.GDF_INT64,
-        np.int32:   libgdf.GDF_INT32,
-        np.int16:   libgdf.GDF_INT16,
-        np.int8:    libgdf.GDF_INT8,
-        np.bool_:   libgdf.GDF_INT8,
-        np.datetime64: libgdf.GDF_DATE64,
-    }[np.dtype(dtype).type]
+    if pd.core.common.is_categorical_dtype(dtype):
+        return libgdf.GDF_INT8
+    else:
+        return np_gdf_dict[np.dtype(dtype).type]
 
 
 def gdf_to_np_dtype(dtype):
@@ -256,8 +259,7 @@ def apply_join(col_lhs, col_rhs, how, method='hash'):
     libgdf.gdf_column_free(col_result_r)
 
 
-def libgdf_join(col_lhs, col_rhs, on, how, method='hash'):
-
+def libgdf_join(col_lhs, col_rhs, on, how, method='sort'):
     joiner = _join_how_api[how]
     method_api = _join_method_api[method]
     gdf_context = ffi.new('gdf_context*')
@@ -281,34 +283,26 @@ def libgdf_join(col_lhs, col_rhs, on, how, method='hash'):
     result_col_names = []
 
     left_idx = []
-    idx = 0
+    right_idx = []
+    # idx = 0
     for name, col in col_lhs.items():
-
         list_lhs.append(col._column.cffi_view)
         if name not in on:
             result_cols.append(columnview(0, None, dtype=col._column.dtype))
             result_col_names.append(name)
-        else:
-            left_idx.append(idx)
-        idx = idx + 1
 
     for name in on:
         result_cols.append(columnview(0, None,
                                       dtype=col_lhs[name]._column.dtype))
         result_col_names.append(name)
+        left_idx.append(list(col_lhs.keys()).index(name))
+        right_idx.append(list(col_rhs.keys()).index(name))
 
-    # right_idx = ffi.new('int[' + str(len(on)) + ']')
-    right_idx = []
-    idx = 0
     for name, col in col_rhs.items():
         list_rhs.append(col._column.cffi_view)
-
         if name not in on:
             result_cols.append(columnview(0, None, dtype=col._column.dtype))
             result_col_names.append(name)
-        else:
-            right_idx.append(idx)
-        idx = idx + 1
 
     num_cols_to_join = len(on)
     result_num_cols = len(list_lhs) + len(list_rhs) - num_cols_to_join
@@ -336,7 +330,8 @@ def libgdf_join(col_lhs, col_rhs, on, how, method='hash'):
                                       dtype=gdf_to_np_dtype(col.dtype)))
         valids.append(_as_numba_devarray(intaddr=int(ffi.cast("uintptr_t",
                                                               col.valid)),
-                                         nelem=col.size,
+                                         nelem=calc_chunk_size(col.size,
+                                                               mask_bitsize),
                                          dtype=mask_dtype))
 
     return res, valids
