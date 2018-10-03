@@ -13,6 +13,7 @@ from numba import cuda
 
 from libgdf_cffi import ffi, libgdf
 from . import cudautils
+from .utils import calc_chunk_size, mask_dtype, mask_bitsize
 
 
 def unwrap_devary(devary):
@@ -202,11 +203,22 @@ def _as_numba_devarray(intaddr, nelem, dtype, cb_dtor=None):
                                           dtype=dtype, gpu_data=memptr)
 
 
-def wrap_libgdf_pointer(intaddr, nelem, dtype):
-    """Wrap libgdf defined pointer for refcounting.
-    """
-    return _as_numba_devarray(intaddr, nelem, dtype,
-                              cb_dtor=cuda.driver.driver.cuMemFree)
+def cffi_view_to_column_mem(cffi_view):
+    data = _as_numba_devarray(intaddr=int(ffi.cast("uintptr_t",
+                                                   cffi_view.data)),
+                              nelem=cffi_view.size,
+                              dtype=gdf_to_np_dtype(cffi_view.dtype))
+
+    if cffi_view.valid:
+        mask = _as_numba_devarray(intaddr=int(ffi.cast("uintptr_t",
+                                              cffi_view.valid)),
+                                  nelem=calc_chunk_size(cffi_view.size,
+                                                        mask_bitsize),
+                                  dtype=mask_dtype)
+    else:
+        mask = None
+
+    return data, mask
 
 
 @contextlib.contextmanager

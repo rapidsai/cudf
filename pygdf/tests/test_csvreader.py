@@ -25,7 +25,7 @@ def make_datetime_dataframe():
     return df
 
 
-def make_mixed_dataframe():
+def make_numpy_mixed_dataframe():
     df = pd.DataFrame()
     df['Integer'] = np.array([2345, 11987, 9027, 53916])
     df['Date'] = np.array(['18/04/1995', '14/07/1994', '07/06/2006',
@@ -35,15 +35,34 @@ def make_mixed_dataframe():
     return df
 
 
-_dtypes = [np.int32, np.int64, np.float32, np.float64]
+def make_all_numeric_dtypes_dataframe():
+    df = pd.DataFrame()
+
+    gdf_dtypes = ["float", "float32", "float64", "double", "short", "int",
+                  "int32", "int64", "long"]
+
+    np_dtypes = [np.float32, np.float32, np.float64, np.float64, np.int16,
+                 np.int32, np.int32, np.int64, np.int64]
+
+    for i in range(len(gdf_dtypes)):
+        df[gdf_dtypes[i]] = np.arange(10, dtype=np_dtypes[i])
+
+    return df, dict(zip(gdf_dtypes, gdf_dtypes)), dict(zip(gdf_dtypes,
+                                                           np_dtypes))
 
 
-@pytest.mark.parametrize('dtype', _dtypes)
-def test_csv_reader_numericdata(dtype):
+dtypes = [np.float64, np.float32, np.int64, np.int32]
+dtypes_dict = {'1': np.float64, '2': np.float32, '3': np.int64, '4': np.int32}
+nelem = [5, 25, 100]
 
-    fname = os.path.abspath('tmp_csvreader_file.csv')
 
-    df = make_numeric_dataframe(100, dtype)
+@pytest.mark.parametrize('dtype', dtypes)
+@pytest.mark.parametrize('nelem', nelem)
+def test_csv_reader_numeric_data(dtype, nelem):
+
+    fname = os.path.abspath('pygdf/tests/data/tmp_csvreader_file.csv')
+
+    df = make_numeric_dataframe(nelem, dtype)
     df.to_csv(fname, index=False, header=False)
 
     dtypes = [df[k].dtype for k in df.columns]
@@ -53,9 +72,9 @@ def test_csv_reader_numericdata(dtype):
     pd.util.testing.assert_frame_equal(df, out.to_pandas())
 
 
-def test_csv_reader_datetimedata():
+def test_csv_reader_datetime_data():
 
-    fname = os.path.abspath('tmp_csvreader_file.csv')
+    fname = os.path.abspath('pygdf/tests/data/tmp_csvreader_file.csv')
 
     df = make_datetime_dataframe()
     df.to_csv(fname, index=False, header=False)
@@ -70,11 +89,11 @@ def test_csv_reader_datetimedata():
     pd.util.testing.assert_frame_equal(df_out, out.to_pandas())
 
 
-def test_csv_reader_mixeddata_delimiter():
+def test_csv_reader_mixed_data_delimiter():
 
-    fname = os.path.abspath('tmp_csvreader_file.csv')
+    fname = os.path.abspath('pygdf/tests/data/tmp_csvreader_file.csv')
 
-    df = make_mixed_dataframe()
+    df = make_numpy_mixed_dataframe()
     df.to_csv(fname, sep='|', index=False, header=False)
 
     out = read_csv(fname, delimiter='|', names=['1', '2', '3', '4'],
@@ -83,22 +102,37 @@ def test_csv_reader_mixeddata_delimiter():
     df_out = pd.read_csv(fname, delimiter='|', names=['1', '2', '3', '4'],
                          parse_dates=[1], dayfirst=True)
 
-    print(out.to_pandas())
-    print(df_out)
     assert len(out.columns) == len(df_out.columns)
-    assert len(out) == len(df_out)
+
+
+def test_csv_reader_all_numeric_dtypes():
+
+    fname = os.path.abspath('pygdf/tests/data/tmp_csvreader_file.csv')
+
+    df, gdf_dict, pd_dict = make_all_numeric_dtypes_dataframe()
+    df.to_csv(fname, sep=',', index=False, header=False)
+
+    out = read_csv(fname, delimiter=',', names=list(gdf_dict.keys()),
+                   dtype=gdf_dict)
+    df_out = pd.read_csv(fname, delimiter=',', names=list(pd_dict.keys()),
+                         dtype=pd_dict, dayfirst=True)
+
+    assert len(out.columns) == len(df_out.columns)
+    pd.util.testing.assert_frame_equal(df_out, out.to_pandas())
 
 
 def test_csv_reader_skiprows_skipfooter():
 
-    fname = os.path.abspath('tmp_csvreader_file.csv')
+    fname = os.path.abspath('pygdf/tests/data/tmp_csvreader_file.csv')
 
-    df = make_mixed_dataframe()
+    df = make_numpy_mixed_dataframe()
     df.to_csv(fname, columns=['Integer', 'Date', 'Float'], index=False,
               header=False)
 
+    # Using engine='python' to eliminate pandas warning of using python engine.
     df_out = pd.read_csv(fname, names=['1', '2', '3'], parse_dates=[1],
-                         dayfirst=True, skiprows=1, skipfooter=1)
+                         dayfirst=True, skiprows=1, skipfooter=1,
+                         engine='python')
     out = read_csv(fname, names=['1', '2', '3'],
                    dtype=['int64', 'date', 'float64'], skiprows=1,
                    skipfooter=1, dayfirst=True)

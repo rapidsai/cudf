@@ -1,7 +1,5 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
 
-from __future__ import print_function, division
-
 from libgdf_cffi import libgdf, ffi
 
 from .column import Column
@@ -39,8 +37,9 @@ def read_csv(filepath, lineterminator='\n',
         Skip spaces after delimiter.
     names : list of str, default None
         List of column names to be used.
-    dtype : list of str, default None
-        List of data types for columns.
+    dtype : list of str or dict of {col: dtype}, default None
+        List of data types in the same order of the column names
+        or a dictionary with column_name:dtype (pandas style).
     skiprows : int, default 0
         Number of rows to be skipped from the start of file.
     skipfooter : int, default 0
@@ -68,6 +67,27 @@ def read_csv(filepath, lineterminator='\n',
 
     """
 
+# def read_csv(filepath, lineterminator='\n',
+#              delimiter=',', sep=None, delim_whitespace=False,
+#              skipinitialspace=False, names=None, dtype=None,
+#              skipfooter=0, skiprows=0, dayfirst=False):
+
+    if names is None or dtype is None:
+        msg = '''Automatic dtype detection not implemented:
+        Column names and dtypes must be specified.'''
+        raise TypeError(msg)
+
+    if isinstance(dtype, dict):
+        dtype_dict = True
+    elif isinstance(dtype, list):
+        dtype_dict = False
+        if len(dtype) != len(names):
+            msg = '''All column dtypes must be specified.'''
+            raise TypeError(msg)
+    else:
+        msg = '''dtype must be 'list' or 'dict' '''
+        raise TypeError(msg)
+
     csv_reader = ffi.new('csv_read_arg*')
 
     # Populate csv_reader struct
@@ -75,14 +95,17 @@ def read_csv(filepath, lineterminator='\n',
     csv_reader.file_path = file_path
 
     arr_names = []
-    for i, col_name in enumerate(names):
+    arr_dtypes = []
+    for col_name in names:
         arr_names.append(_wrap_string(col_name))
+        if dtype_dict:
+            arr_dtypes.append(_wrap_string(str(dtype[col_name])))
     names_ptr = ffi.new('char*[]', arr_names)
     csv_reader.names = names_ptr
 
-    arr_dtypes = []
-    for i, col_dtype in enumerate(dtype):
-        arr_dtypes.append(_wrap_string(str(col_dtype)))
+    if not dtype_dict:
+        for col_dtype in dtype:
+            arr_dtypes.append(_wrap_string(str(col_dtype)))
     dtype_ptr = ffi.new('char*[]', arr_dtypes)
     csv_reader.dtype = dtype_ptr
 
@@ -91,8 +114,7 @@ def read_csv(filepath, lineterminator='\n',
     csv_reader.delim_whitespace = delim_whitespace
     csv_reader.skipinitialspace = skipinitialspace
     csv_reader.dayfirst = dayfirst
-    x = len(names)
-    csv_reader.num_cols = x
+    csv_reader.num_cols = len(names)
     csv_reader.skiprows = skiprows
     csv_reader.skipfooter = skipfooter
 
