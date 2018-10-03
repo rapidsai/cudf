@@ -17,7 +17,6 @@ from . import cudautils
 from .utils import calc_chunk_size, mask_dtype, mask_bitsize
 
 
-
 def unwrap_devary(devary):
     ptrval = devary.device_ctypes_pointer.value
     ptrval = ptrval or ffi.NULL   # replace None with NULL
@@ -248,14 +247,16 @@ def cffi_view_to_column_mem(cffi_view):
     data = _as_numba_devarray(intaddr=int(ffi.cast("uintptr_t",
                                                    cffi_view.data)),
                               nelem=cffi_view.size,
-                              dtype=gdf_to_np_dtype(cffi_view.dtype))
+                              dtype=gdf_to_np_dtype(cffi_view.dtype),
+                              cb_dtor=cuda.driver.driver.cuMemFree)
 
     if cffi_view.valid:
         mask = _as_numba_devarray(intaddr=int(ffi.cast("uintptr_t",
                                               cffi_view.valid)),
                                   nelem=calc_chunk_size(cffi_view.size,
                                                         mask_bitsize),
-                                  dtype=mask_dtype)
+                                  dtype=mask_dtype,
+                                  cb_dtor=cuda.driver.driver.cuMemFree)
     else:
         mask = None
 
