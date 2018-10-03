@@ -25,6 +25,7 @@
 #include "memory_manager.h"
 #include <fstream>
 #include <sstream>
+#include <cstddef>
 
 /** ---------------------------------------------------------------------------*
  * @brief Macro wrapper to check for error in RMM API calls.
@@ -192,6 +193,13 @@ rmmError_t rmmFree(void *ptr, cudaStream_t stream)
 	return RMM_SUCCESS;
 }
 
+// Get the offset of ptr from its base allocation
+rmmError_t rmmGetAllocationOffset(ptrdiff_t *offset, void *ptr, cudaStream_t stream)
+{
+    RMM_CHECK_CNMEM( cnmemAllocationOffset(offset, ptr, stream) );
+    return RMM_SUCCESS;
+}
+
 // Get amounts of free and total memory managed by a manager associated with the stream.
 rmmError_t rmmGetInfo(size_t *freeSize, size_t *totalSize, cudaStream_t stream)
 {
@@ -219,6 +227,7 @@ rmmError_t rmmWriteLog(const char* filename)
     return RMM_SUCCESS;
 }
 
+// Get the size opf the CSV log
 size_t rmmLogSize()
 {
     std::ostringstream csv; 
@@ -226,6 +235,7 @@ size_t rmmLogSize()
     return csv.str().size();
 }
 
+// Get the CSV log as a string
 rmmError_t rmmGetLog(char *buffer, size_t buffer_size)
 {
     try 

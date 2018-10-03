@@ -6,4 +6,5 @@
 	url = https://github.com/moderngpu/moderngpu.git
 [submodule "thirdparty/cnmem"]
 	path = thirdparty/cnmem
-	url = https://github.com/NVIDIA/cnmem.git
+	url = https://github.com/harrism/cnmem.git
+	branch = fea-ext-allocation-offset

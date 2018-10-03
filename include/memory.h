@@ -23,6 +23,8 @@
 #pragma once
 
 typedef struct CUstream_st *cudaStream_t;
+typedef long int offset_t; // would prefer ptrdiff_t but can't #include <stddef.h>
+                           // due to CFFI limitations
 
 /**
  * @brief 
@@ -104,6 +106,23 @@ rmmError_t rmmRealloc(void **ptr, size_t new_size, cudaStream_t stream);
 rmmError_t rmmFree(void *ptr, cudaStream_t stream);
 
 /** ---------------------------------------------------------------------------*
+ * @brief Get the offset of ptr from its base allocation.
+ * 
+ * This offset is the difference between the address stored in ptr and the 
+ * base device memory allocation that it is a sub-allocation of within the pool. 
+ * This is useful for, e.g. IPC, where cudaIpcOpenMemHandle() returns a pointer 
+ * to the base  * allocation, so the user needs the offset of the sub-allocation
+ * in order to correctly access its data.
+ * 
+ * @param[out] offset The difference between ptr and the base allocation that ptr
+ *                    is sub-allocated from.
+ * @param[in] ptr The ptr to find the base allocation of.
+ * @param[in] stream The stream originally passed to rmmAlloc or rmmRealloc for ptr.
+ * @return rmmError_t RMM_SUCCESS if all goes well
+ * ---------------------------------------------------------------------------**/
+rmmError_t rmmGetAllocationOffset(offset_t *offset, void *ptr, cudaStream_t stream);
+
+/** ---------------------------------------------------------------------------*
  * @brief Get amounts of free and total memory managed by a manager associated with the stream.
  * 
  * Returns in *free and *total, respectively, the free and total amount of memory available 
@@ -127,5 +146,18 @@ rmmError_t rmmGetInfo(size_t *freeSize, size_t *totalSize, cudaStream_t stream);
  * ---------------------------------------------------------------------------**/
 rmmError_t rmmWriteLog(const char* filename);
 
+/** ---------------------------------------------------------------------------*
+ * @brief Get the size of the CSV log string in memory.
+ * 
+ * @return size_t The size of the log (as a C string) in memory.
+ * ---------------------------------------------------------------------------**/
 size_t rmmLogSize();
+
+/** ---------------------------------------------------------------------------*
+ * @brief Get the RMM log as CSV in a C string.
+ * 
+ * @param[out] buffer The buffer into which to store the CSV log string.
+ * @param[in] buffer_size The size allocated for buffer.
+ * @return rmmError_t RMM_SUCCESS, or RMM_IO_ERROR on any failure.
+ * ---------------------------------------------------------------------------**/
 rmmError_t rmmGetLog(char* buffer, size_t buffer_size);

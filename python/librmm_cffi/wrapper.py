@@ -75,6 +75,13 @@ class _librmm_wrapper(object):
         mem = cuda.driver.MemoryPointer(ctx, ptr, datasize, finalizer=finalizer)
         return cuda.cudadrv.devicearray.DeviceNDArray(shape, strides, dtype, gpu_data=mem)
 
+    def get_ipc_handle(self, ary, stream=0):
+        ipch = ary.get_ipc_handle()
+        # replace offset with RMM's offset
+        offset = self._ffi.new("offset_t*")
+        self._api.rmmGetAllocationOffset(offset, ary.mem, self._ffi.cast("cudaStream_t", stream))
+        # TODO replace offset with RMM's offset
+
     def device_array_from_ptr(self, ptr, nelem, dtype=np.float):
         """device_array_from_ptr(self, ptr, size, dtype=np.float, stream=0)
 

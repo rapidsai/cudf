@@ -174,3 +174,19 @@ TEST_F(MemoryManagerTest, GetInfo) {
 
     ASSERT_SUCCESS( rmmFree(a, stream) );
 }
+
+TEST_F(MemoryManagerTest, AllocationOffset) {
+    char *a = nullptr, *b = nullptr;
+    ptrdiff_t offset = -1;
+    ASSERT_SUCCESS( rmmAlloc((void**)&a, size_kb, stream) );
+    ASSERT_SUCCESS( rmmAlloc((void**)&b, size_kb, stream) );
+
+    ASSERT_SUCCESS( rmmGetAllocationOffset(&offset, a, stream) );
+    ASSERT_GE(offset, 0);
+
+    ASSERT_SUCCESS( rmmGetAllocationOffset(&offset, b, stream) );
+    ASSERT_GE(offset, 0);
+
+    ASSERT_SUCCESS( rmmFree(a, stream) );
+    ASSERT_SUCCESS( rmmFree(b, stream) );
+}
