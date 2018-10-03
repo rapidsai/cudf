@@ -4,6 +4,7 @@ import pytest
 
 import numpy as np
 import pandas as pd
+import pyarrow as pa
 
 from numba import cuda
 
@@ -98,14 +99,14 @@ def test_series_indexing():
     series = Series(a1)
     # Indexing
     sr1 = series[:12]
-    assert not sr1.has_null_mask
+    assert sr1.null_count == 0
     np.testing.assert_equal(sr1.to_array(), a1[:12])
     sr2 = sr1[3:]
-    assert not sr2.has_null_mask
+    assert sr2.null_count == 0
     np.testing.assert_equal(sr2.to_array(), a1[3:12])
     # Index with stride
     sr3 = sr2[::2]
-    assert not sr3.has_null_mask
+    assert sr3.null_count == 0
     np.testing.assert_equal(sr3.to_array(), a1[3:12:2])
 
 
@@ -123,7 +124,7 @@ def test_dataframe_basic():
     df['vals'] = rnd_vals
     np.testing.assert_equal(df['vals'].to_array(), rnd_vals)
     assert len(df) == 10
-    assert df.columns == ('keys', 'vals')
+    assert tuple(df.columns) == ('keys', 'vals')
 
     # Make another dataframe
     df2 = DataFrame()
@@ -177,13 +178,13 @@ def test_dataframe_column_add_drop():
     data = np.asarray(range(10))
     df['a'] = data
     df['b'] = data
-    assert df.columns == ('a', 'b')
+    assert tuple(df.columns) == ('a', 'b')
     del df['a']
-    assert df.columns == ('b',)
+    assert tuple(df.columns) == ('b',)
     df['c'] = data
-    assert df.columns == ('b', 'c')
+    assert tuple(df.columns) == ('b', 'c')
     df['a'] = data
-    assert df.columns == ('b', 'c', 'a')
+    assert tuple(df.columns) == ('b', 'c', 'a')
 
 
 @pytest.mark.parametrize('nelem', [0, 3, 100, 1000])
@@ -210,7 +211,7 @@ def test_dataframe_slicing():
     # Row slice first 10
     first_10 = df[:10]
     assert len(first_10) == 10
-    assert first_10.columns == tuple(['a', 'b', 'c', 'd'])
+    assert tuple(first_10.columns) == ('a', 'b', 'c', 'd')
     np.testing.assert_equal(first_10['a'].to_array(), ha[:10])
     np.testing.assert_equal(first_10['b'].to_array(), hb[:10])
     np.testing.assert_equal(first_10['c'].to_array(), hc[:10])
@@ -220,7 +221,7 @@ def test_dataframe_slicing():
     # Row slice last 10
     last_10 = df[-10:]
     assert len(last_10) == 10
-    assert last_10.columns == tuple(['a', 'b', 'c', 'd'])
+    assert tuple(last_10.columns) == ('a', 'b', 'c', 'd')
     np.testing.assert_equal(last_10['a'].to_array(), ha[-10:])
     np.testing.assert_equal(last_10['b'].to_array(), hb[-10:])
     np.testing.assert_equal(last_10['c'].to_array(), hc[-10:])
@@ -232,7 +233,7 @@ def test_dataframe_slicing():
     end = 121
     subrange = df[begin:end]
     assert len(subrange) == end - begin
-    assert subrange.columns == tuple(['a', 'b', 'c', 'd'])
+    assert tuple(subrange.columns) == ('a', 'b', 'c', 'd')
     np.testing.assert_equal(subrange['a'].to_array(), ha[begin:end])
     np.testing.assert_equal(subrange['b'].to_array(), hb[begin:end])
     np.testing.assert_equal(subrange['c'].to_array(), hc[begin:end])
@@ -252,14 +253,14 @@ def test_dataframe_loc():
 
     # Full slice
     full = df.loc[:, ['c']]
-    assert full.columns == tuple(['c'])
+    assert tuple(full.columns) == ('c',)
     np.testing.assert_equal(full['c'].to_array(), hc)
 
     begin = 117
     end = 122
     fewer = df.loc[begin:end, ['c', 'd', 'a']]
     assert len(fewer) == end - begin + 1
-    assert fewer.columns == tuple(['c', 'd', 'a'])
+    assert tuple(fewer.columns) == ('c', 'd', 'a')
     np.testing.assert_equal(fewer['a'].to_array(), ha[begin:end + 1])
     np.testing.assert_equal(fewer['c'].to_array(), hc[begin:end + 1])
     np.testing.assert_equal(fewer['d'].to_array(), hd[begin:end + 1])
@@ -272,7 +273,7 @@ def test_dataframe_loc():
     end = 122
     fewer = df2.loc[begin:end, ['c', 'd', 'a']]
     assert len(fewer) == end - begin + 1
-    assert fewer.columns == tuple(['c', 'd', 'a'])
+    assert tuple(fewer.columns) == ('c', 'd', 'a')
     np.testing.assert_equal(fewer['a'].to_array(), ha[begin:end + 1])
     np.testing.assert_equal(fewer['c'].to_array(), hc[begin:end + 1])
     np.testing.assert_equal(fewer['d'].to_array(), hd[begin:end + 1])
@@ -518,6 +519,15 @@ def test_dataframe_setitem_index_len1():
     np.testing.assert_equal(gdf.b.to_array(), [0])
 
 
+def test_assign():
+    gdf = DataFrame({'x': [1, 2, 3]})
+    gdf2 = gdf.assign(y=gdf.x + 1)
+    assert list(gdf.columns) == ['x']
+    assert list(gdf2.columns) == ['x', 'y']
+
+    np.testing.assert_equal(gdf2.y.to_array(), [2, 3, 4])
+
+
 @pytest.mark.parametrize('nrows', [1, 8, 100, 1000])
 def test_dataframe_hash_columns(nrows):
     gdf = DataFrame()
@@ -577,6 +587,45 @@ def test_dataframe_hash_partition(nrows, nparts, nkeys):
     assert len(part_unique_keys)
 
 
+@pytest.mark.parametrize('nrows', [3, 10, 50])
+def test_dataframe_hash_partition_masked_value(nrows):
+    gdf = DataFrame()
+    gdf['key'] = np.arange(nrows)
+    gdf['val'] = np.arange(nrows) + 100
+    bitmask = utils.random_bitmask(nrows)
+    bytemask = utils.expand_bits_to_bytes(bitmask)
+    gdf['val'] = gdf['val'].set_mask(bitmask)
+    parted = gdf.partition_by_hash(['key'], nparts=3)
+    # Verify that the valid mask is correct
+    for p in parted:
+        df = p.to_pandas()
+        for row in df.itertuples():
+            valid = bool(bytemask[row.key])
+            expected_value = row.key + 100 if valid else -1
+            got_value = row.val
+            assert expected_value == got_value
+
+
+@pytest.mark.parametrize('nrows', [3, 10, 50])
+def test_dataframe_hash_partition_masked_keys(nrows):
+    gdf = DataFrame()
+    gdf['key'] = np.arange(nrows)
+    gdf['val'] = np.arange(nrows) + 100
+    bitmask = utils.random_bitmask(nrows)
+    bytemask = utils.expand_bits_to_bytes(bitmask)
+    gdf['key'] = gdf['key'].set_mask(bitmask)
+    parted = gdf.partition_by_hash(['key'], nparts=3)
+    # Verify that the valid mask is correct
+    for p in parted:
+        df = p.to_pandas()
+        for row in df.itertuples():
+            valid = bool(bytemask[row.val - 100])
+            # val is key + 100
+            expected_value = row.val - 100 if valid else -1
+            got_value = row.key
+            assert expected_value == got_value
+
+
 def test_dataframe_empty_concat():
     gdf1 = DataFrame()
     gdf1['a'] = []
@@ -587,3 +636,228 @@ def test_dataframe_empty_concat():
     gdf3 = gd.concat([gdf1, gdf2])
     assert len(gdf3) == 0
     assert len(gdf3.columns) == 2
+
+
+@pytest.mark.parametrize('nrows', [0, 3, 10, 100, 1000])
+def test_nonmatching_index_setitem(nrows):
+    np.random.seed(0)
+
+    gdf = DataFrame()
+    gdf['a'] = np.random.randint(2147483647, size=nrows)
+    gdf['b'] = np.random.randint(2147483647, size=nrows)
+    gdf = gdf.set_index('b')
+
+    test_values = np.random.randint(2147483647, size=nrows)
+    gdf['c'] = test_values
+    assert(len(test_values) == len(gdf['c']))
+    assert(gdf['c'].to_pandas().equals(
+        Series(test_values).set_index(gdf._index).to_pandas()))
+
+
+@pytest.mark.parametrize('nelem', [0, 1, 5, 20, 100])
+@pytest.mark.parametrize('slice_start', [None, 0, 1, 3, 10])
+@pytest.mark.parametrize('slice_end', [None, 0, 1, 30, 50, -1])
+def test_dataframe_masked_slicing(nelem, slice_start, slice_end):
+    gdf = DataFrame()
+    gdf['a'] = list(range(nelem))
+    gdf['b'] = list(range(nelem, 2 * nelem))
+    gdf['a'] = gdf['a'].set_mask(utils.random_bitmask(nelem))
+    gdf['b'] = gdf['b'].set_mask(utils.random_bitmask(nelem))
+
+    def do_slice(x):
+        return x[slice_start: slice_end]
+
+    expect = do_slice(gdf.to_pandas())
+    got = do_slice(gdf).to_pandas()
+
+    pd.testing.assert_frame_equal(expect, got)
+
+
+def test_from_pandas():
+    df = pd.DataFrame({'x': [1, 2, 3]}, index=[4., 5., 6.])
+    gdf = gd.DataFrame.from_pandas(df)
+    assert isinstance(gdf, gd.DataFrame)
+
+    pd.testing.assert_frame_equal(df, gdf.to_pandas())
+
+    s = df.x
+    gs = gd.Series.from_pandas(s)
+    assert isinstance(gs, gd.Series)
+
+    pd.testing.assert_series_equal(s, gs.to_pandas())
+
+
+@pytest.mark.xfail(reason="constructor does not coerce index inputs")
+def test_index_in_dataframe_constructor():
+    a = pd.DataFrame({'x': [1, 2, 3]}, index=[4., 5., 6.])
+    b = gd.DataFrame({'x': [1, 2, 3]}, index=[4., 5., 6.])
+
+    pd.testing.assert_frame_equal(a, b.to_pandas())
+    assert pd.testing.assert_frame_equal(a.loc[4:], b.loc[4:].to_pandas())
+
+
+@pytest.mark.parametrize('nelem', [0, 2, 3, 100, 1000])
+@pytest.mark.parametrize(
+    'data_type',
+    ['int8', 'int16', 'int32', 'int64', 'float32', 'float64', 'datetime64[ms]']
+)
+def test_from_arrow(nelem, data_type):
+    df = pd.DataFrame(
+        {
+            'a': np.random.randint(0, 1000, nelem).astype(data_type),
+            'b': np.random.randint(0, 1000, nelem).astype(data_type)
+        }
+    )
+    padf = pa.Table.from_pandas(df, preserve_index=False)\
+        .replace_schema_metadata(None)
+    gdf = gd.DataFrame.from_arrow(padf)
+    assert isinstance(gdf, gd.DataFrame)
+
+    pd.testing.assert_frame_equal(df, gdf.to_pandas())
+
+    s = pa.Array.from_pandas(df.a)
+    gs = gd.Series.from_arrow(s)
+    assert isinstance(gs, gd.Series)
+
+    np.testing.assert_array_equal(s.to_numpy(), gs.to_array())
+
+
+@pytest.mark.parametrize('nelem', [0, 2, 3, 100, 1000])
+@pytest.mark.parametrize(
+    'data_type',
+    ['int8', 'int16', 'int32', 'int64', 'float32', 'float64', 'datetime64[ms]']
+)
+def test_to_arrow(nelem, data_type):
+    df = pd.DataFrame(
+        {
+            'a': np.random.randint(0, 1000, nelem).astype(data_type),
+            'b': np.random.randint(0, 1000, nelem).astype(data_type)
+        }
+    )
+    gdf = gd.DataFrame.from_pandas(df)
+
+    pa_df = pa.Table.from_pandas(df, preserve_index=False)\
+        .replace_schema_metadata(None)
+    # Pandas uses ns so need to cast columns to ms
+    if data_type == 'datetime64[ms]':
+        pa_df = pa_df.add_column(
+                    0,
+                    pa_df.column(1)
+                    .cast(pa.timestamp('ms'))
+                    .cast(pa.int64())
+                    .cast(pa.date64())
+                ).add_column(
+                    0,
+                    pa_df.column(0)
+                    .cast(pa.timestamp('ms'))
+                    .cast(pa.int64())
+                    .cast(pa.date64())
+                ).remove_column(2).remove_column(2)
+    pa_gdf = gdf.to_arrow(index=False)
+
+    assert isinstance(pa_gdf, pa.Table)
+    assert pa.Table.equals(pa_df, pa_gdf)
+
+    pa_s = pa.Array.from_pandas(df.a)
+    # Pandas uses ns so need to cast columns to ms
+    if data_type == 'datetime64[ms]':
+        pa_s = pa_s.cast(pa.timestamp('ms')).cast(pa.int64()).cast(pa.date64())
+    pa_gs = gdf['a'].to_arrow()
+
+    assert isinstance(pa_gs, pa.Array)
+    assert pa.Array.equals(pa_s, pa_gs)
+
+    pa_i = pa.Array.from_pandas(df.index)
+    pa_gi = gdf.index.to_arrow()
+
+    assert isinstance(pa_gi, pa.Array)
+    assert pa.Array.equals(pa_i, pa_gi)
+
+
+@pytest.mark.parametrize(
+    'data_type',
+    ['int8', 'int16', 'int32', 'int64', 'float32', 'float64', 'datetime64[ms]']
+)
+def test_to_from_arrow_nulls(data_type):
+    if data_type == 'datetime64[ms]':
+        data_type = pa.date64()
+    s1 = pa.array([1, None, 3, None, 5], type=data_type)
+    gs1 = gd.Series.from_arrow(s1)
+    assert isinstance(gs1, gd.Series)
+    np.testing.assert_array_equal(
+        np.array(s1.buffers()[0]),
+        gs1.nullmask.to_array()
+    )
+    assert pa.Array.equals(s1, gs1.to_arrow())
+
+    s2 = pa.array([None, None, None, None, None], type=data_type)
+    gs2 = gd.Series.from_arrow(s2)
+    assert isinstance(gs2, gd.Series)
+    np.testing.assert_array_equal(
+        np.array(s2.buffers()[0]),
+        gs2.nullmask.to_array()
+    )
+    assert pa.Array.equals(s2, gs2.to_arrow())
+
+
+def test_to_arrow_categorical():
+    df = pd.DataFrame()
+    df['a'] = pd.Series(['a', 'b', 'c'], dtype="category")
+    gdf = gd.DataFrame.from_pandas(df)
+
+    pa_df = pa.Table.from_pandas(df, preserve_index=False)\
+        .replace_schema_metadata(None)
+    pa_gdf = gdf.to_arrow(index=False)
+
+    assert isinstance(pa_gdf, pa.Table)
+    assert pa.Table.equals(pa_df, pa_gdf)
+
+    pa_s = pa.Array.from_pandas(df.a)
+    pa_gs = gdf['a'].to_arrow()
+
+    assert isinstance(pa_gs, pa.Array)
+    assert pa.Array.equals(pa_s, pa_gs)
+
+
+def test_from_arrow_missing_categorical():
+    pd_cat = pd.Categorical(['a', 'b', 'c'], categories=['a', 'b'])
+    pa_cat = pa.array(pd_cat, from_pandas=True)
+    gd_cat = gd.Series(pa_cat)
+
+    assert isinstance(gd_cat, gd.Series)
+    pd.testing.assert_series_equal(
+        pd.Series(pa_cat.to_pandas()),  # PyArrow returns a pd.Categorical
+        gd_cat.to_pandas()
+    )
+
+
+@pytest.mark.xfail(
+    raises=NotImplementedError,
+    reason="PyArrow does not yet support validity masks in creating "
+           "DictionaryArray objects"
+)
+def test_to_arrow_missing_categorical():
+    pd_cat = pd.Categorical(['a', 'b', 'c'], categories=['a', 'b'])
+    pa_cat = pa.array(pd_cat, from_pandas=True)
+    gd_cat = gd.Series(pa_cat)
+
+    assert isinstance(gd_cat, gd.Series)
+    assert pa.Array.equals(pa_cat, gd_cat.to_arrow())
+
+
+@pytest.mark.parametrize(
+    'data_type',
+    ['int8', 'int16', 'int32', 'int64', 'float32', 'float64', 'datetime64[ms]']
+)
+def test_from_scalar_typing(data_type):
+    if data_type == 'datetime64[ms]':
+        scalar = np.dtype('int64').type(np.random.randint(0, 5))\
+            .astype('datetime64[ms]')
+    else:
+        scalar = np.dtype(data_type).type(np.random.randint(0, 5))
+
+    gdf = gd.DataFrame()
+    gdf['a'] = [1, 2, 3, 4, 5]
+    gdf['b'] = scalar
+    assert(gdf['b'].dtype == np.dtype(data_type))
+    assert(len(gdf['b']) == len(gdf['a']))

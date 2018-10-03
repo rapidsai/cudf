@@ -107,8 +107,8 @@ class Column(object):
         assert null_count is None or null_count >= 0
         if null_count is None:
             if self._mask is not None:
-                nnz = cudautils.count_nonzero_mask(self._mask.mem,
-                                                   size=len(self))
+                nnz = _gdf.count_nonzero_mask(self._mask.mem,
+                                              size=len(self))
                 null_count = len(self) - nnz
                 if null_count == 0:
                     self._mask = None
@@ -188,7 +188,8 @@ class Column(object):
         return _gdf.columnview(size=self._data.size,
                                data=self._data,
                                mask=self._mask,
-                               dtype=self.dtype)
+                               dtype=self.dtype,
+                               null_count=self._null_count)
 
     def set_mask(self, mask, null_count=None):
         """Create new Column by setting the mask
@@ -214,6 +215,17 @@ class Column(object):
             msg = 'mask must be of byte; but got {}'.format(mask.dtype)
             raise ValueError(msg)
         return self.replace(mask=mask, null_count=null_count)
+
+    def allocate_mask(self, all_valid=True):
+        """Return a new Column with a newly allocated mask buffer.
+        If ``all_valid`` is True, the new mask is set to all valid.
+        If ``all_valid`` is False, the new mask is set to all null.
+        """
+        nelem = len(self)
+        mask_sz = utils.calc_chunk_size(nelem, utils.mask_bitsize)
+        mask = cuda.device_array(mask_sz, dtype=utils.mask_dtype)
+        cudautils.fill_value(mask, 0xff if all_valid else 0)
+        return self.set_mask(mask=mask, null_count=0 if all_valid else nelem)
 
     def to_gpu_array(self, fillna=None):
         """Get a dense numba device array for the data.
@@ -282,7 +294,20 @@ class Column(object):
         return params
 
     def copy_data(self):
+        """Copy the column with a new allocation of the data but not the mask,
+        which is shared by the new column.
+        """
         return self.replace(data=self.data.copy())
+
+    def copy(self):
+        """Copy the column with a new allocation of the data and mask.
+        """
+        copied = self.copy_data()
+        if self.has_null_mask:
+            return copied.set_mask(mask=self.mask.copy(),
+                                   null_count=self.null_count)
+        else:
+            return copied.allocate_mask()
 
     def replace(self, **kwargs):
         """Replace attibutes of the class and return a new Column.
@@ -340,9 +365,14 @@ class Column(object):
                 if arg.step is not None and arg.step != 1:
                     raise NotImplementedError(arg)
 
-                # slicing
+                # slicing data
                 subdata = self.data[arg]
-                submask = self.mask[arg]
+                # slicing mask
+                bytemask = cudautils.expand_mask_bits(
+                    self.data.size,
+                    self.mask.to_gpu_array(),
+                    )
+                submask = Buffer(cudautils.compact_mask_bytes(bytemask[arg]))
                 col = self.replace(data=subdata, mask=submask)
                 return col
             else:
@@ -380,7 +410,7 @@ class Column(object):
         if fillna not in {None, 'pandas'}:
             raise ValueError('invalid for fillna')
 
-        if self.has_null_mask:
+        if self.null_count > 0:
             if fillna == 'pandas':
                 na_value = self.default_na_value()
                 # fill nan
@@ -420,8 +450,9 @@ class Column(object):
     def append(self, other):
         """Append another column
         """
-        if self.has_null_mask or other.has_null_mask:
-            raise NotImplementedError("append masked column is not supported")
+        if self.null_count > 0 or other.null_count > 0:
+            raise NotImplementedError("Appending columns with nulls is not "
+                                      "yet supported")
         newsize = len(self) + len(other)
         # allocate memory
         mem = cuda.device_array(shape=newsize, dtype=self.data.dtype)

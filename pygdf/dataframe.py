@@ -7,6 +7,7 @@ from collections import OrderedDict
 
 import numpy as np
 import pandas as pd
+import pyarrow as pa
 
 from numba import cuda
 from numba.cuda.cudadrv.devicearray import DeviceNDArray
@@ -86,6 +87,8 @@ class DataFrame(object):
         self._cols = OrderedDict()
         # has initializer?
         if name_series is not None:
+            if isinstance(name_series, dict):
+                name_series = name_series.items()
             for k, series in name_series:
                 self.add_column(k, series, forceindex=index is not None)
 
@@ -176,7 +179,9 @@ class DataFrame(object):
         3    3    3
         """
         if isinstance(arg, str) or isinstance(arg, int):
-            return self._cols[arg]
+            s = self._cols[arg]
+            s.name = arg
+            return s
         elif isinstance(arg, slice):
             df = DataFrame()
             for k, col in self._cols.items():
@@ -212,6 +217,12 @@ class DataFrame(object):
         """Returns the number of rows
         """
         return self._size
+
+    def assign(self, **kwargs):
+        new = self.copy()
+        for k, v in kwargs.items():
+            new[k] = v
+        return new
 
     def head(self, n=5):
         return self[:n]
@@ -267,7 +278,7 @@ class DataFrame(object):
         return "<pygdf.DataFrame ncols={} nrows={} >".format(
             len(self.columns),
             len(self),
-            )
+        )
 
     @property
     def loc(self):
@@ -294,7 +305,7 @@ class DataFrame(object):
     def columns(self):
         """Returns a tuple of columns
         """
-        return tuple(self._cols)
+        return pd.Index(self._cols)
 
     @property
     def index(self):
@@ -398,7 +409,7 @@ class DataFrame(object):
             self._size = len(series)
             return series
         else:
-            raise NotImplementedError("join needed")
+            return series.set_index(self._index)
 
     def add_column(self, name, data, forceindex=False):
         """Add a column
@@ -415,6 +426,7 @@ class DataFrame(object):
             raise NameError('duplicated column name {!r}'.format(name))
 
         series = self._prepare_series_for_add(data, forceindex=forceindex)
+        series.name = name
         self._cols[name] = series
 
     def drop_column(self, name):
@@ -470,8 +482,8 @@ class DataFrame(object):
         if any(dtype != c.dtype for c in cols):
             raise ValueError('all columns must have the same dtype')
         for k, c in self._cols.items():
-            if c.has_null_mask:
-                errmsg = ("column {!r} has null values"
+            if c.null_count > 0:
+                errmsg = ("column {!r} has null values. "
                           "hint: use .fillna() to replace null values")
                 raise ValueError(errmsg.format(k))
 
@@ -654,6 +666,42 @@ class DataFrame(object):
 
     def merge(self, other, on=None, how='left', lsuffix='_x', rsuffix='_y',
               type='sort'):
+        """Merge GPU DataFrame objects by performing a database-style join operation
+        by columns or indexes.
+
+        Parameters
+        ----------
+        other : DataFrame
+
+        on : label or list; defaults to None
+            Column or index level names to join on. These must be found in
+            both DataFrames. If on is None and not merging on indexes then
+            this defaults to the intersection of the columns
+            in both DataFrames.
+
+
+        how : str; defaults to 'left'
+              Only accepts "left"
+              - left: use only keys from left frame, similar to
+               a SQL left outer join; preserve key order
+
+        lsuffix : str, defaults to '_x'
+                 The suffix to apply to overlapping column names
+                 in the left side
+
+        rsuffix : str, defaults to '_y'
+                 The suffix to apply to overlapping column names
+                 in the right side
+
+        type : str, defaults to 'sort'
+
+
+        Returns
+        -------
+        merged : DataFrame
+
+        """
+
         if how != 'left':
             raise NotImplementedError('{!r} join not implemented yet'
                                       .format(how))
@@ -1055,7 +1103,7 @@ class DataFrame(object):
         names = list(self._cols.keys())
         key_indices = [names.index(k) for k in columns]
         # Allocate output buffers
-        outputs = [col.copy_data() for col in cols]
+        outputs = [col.copy() for col in cols]
         # Call hash_partition
         offsets = _gdf.hash_partition(cols, key_indices, nparts, outputs)
         # Re-construct output partitions
@@ -1089,6 +1137,44 @@ class DataFrame(object):
             df[colk] = dataframe[colk].values
         # Set index
         return df.set_index(dataframe.index.values)
+
+    def to_arrow(self, index=True):
+        """Convert to a PyArrow Table.
+        """
+        arrays = []
+        names = []
+        if index:
+            names.append(self.index.name)
+            arrays.append(self.index.to_arrow())
+        for name, column in self._cols.items():
+            names.append(name)
+            arrays.append(column.to_arrow())
+        return pa.Table.from_arrays(arrays, names=names)
+
+    @classmethod
+    def from_arrow(cls, table):
+        """Convert from a PyArrow Table.
+
+        Raises
+        ------
+        TypeError for invalid input type.
+
+        **Notes**
+
+        Does not support automatically setting index column(s) similar to how
+        ``to_pandas`` works for PyArrow Tables.
+        """
+        if not isinstance(table, pa.Table):
+            raise TypeError('not a pyarrow.Table')
+
+        df = cls()
+        for col in table.columns:
+            if len(col.data.chunks) != 1:
+                raise NotImplementedError("Importing from PyArrow Tables "
+                                          "with multiple chunks is not yet "
+                                          "supported")
+            df[col.name] = col.data.chunk(0)
+        return df
 
     def to_records(self, index=True):
         """Convert to a numpy recarray

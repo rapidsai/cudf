@@ -2,11 +2,11 @@
 
 import pandas as pd
 import numpy as np
+import pyarrow as pa
 
 from .dataframe import Series
-from . import numerical, utils, columnops
+from . import numerical, utils, columnops, cudautils
 from .buffer import Buffer
-from . import cudautils
 from .serialize import register_distributed_serializer
 
 
@@ -156,6 +156,31 @@ class CategoricalColumn(columnops.TypedColumnBase):
                                          categories=self._categories,
                                          ordered=self._ordered)
         return pd.Series(data, index=index)
+
+    def to_arrow(self):
+        mask = None
+        if self.has_null_mask:
+            # Necessary because PyArrow doesn't support from_buffers for
+            # DictionaryArray yet
+            mask = pa.array(
+                # Why does expand_mask_bits return as int32?
+                cudautils.expand_mask_bits(
+                    len(self),
+                    self.nullmask.mem
+                )
+                .copy_to_host()
+                .astype('int8')
+            )
+        indices = pa.array(self.cat().codes.data.mem.copy_to_host())
+        ordered = self.cat()._ordered
+        dictionary = pa.array(self.cat().categories)
+        return pa.DictionaryArray.from_arrays(
+            indices=indices,
+            dictionary=dictionary,
+            mask=mask,
+            from_pandas=True,
+            ordered=ordered
+        )
 
     def _unique_segments(self):
         """ Common code for unique, unique_count and value_counts"""

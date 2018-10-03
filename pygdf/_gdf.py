@@ -8,6 +8,7 @@ import contextlib
 import itertools
 
 import numpy as np
+import pyarrow as pa
 
 from numba import cuda
 
@@ -16,25 +17,48 @@ from . import cudautils
 from .utils import calc_chunk_size, mask_dtype, mask_bitsize
 
 
+
 def unwrap_devary(devary):
     ptrval = devary.device_ctypes_pointer.value
     ptrval = ptrval or ffi.NULL   # replace None with NULL
     return ffi.cast('void*', ptrval)
 
 
+def unwrap_mask(devary):
+    ptrval = devary.device_ctypes_pointer.value
+    ptrval = ptrval or ffi.NULL   # replace None with NULL
+    return ffi.cast('gdf_valid_type*', ptrval), ptrval
+
+
 def columnview_from_devary(devary, dtype=None):
     return _columnview(size=devary.size,  data=unwrap_devary(devary),
-                       mask=ffi.NULL, dtype=dtype or devary.dtype)
+                       mask=ffi.NULL, dtype=dtype or devary.dtype,
+                       null_count=0)
 
 
-def _columnview(size, data, mask, dtype):
+def _columnview(size, data, mask, dtype, null_count):
     colview = ffi.new('gdf_column*')
-    libgdf.gdf_column_view(colview, data, mask, size,
-                           np_to_gdf_dtype(dtype))
+    if null_count is None:
+        libgdf.gdf_column_view(
+            colview,
+            data,
+            mask,
+            size,
+            np_to_gdf_dtype(dtype),
+            )
+    else:
+        libgdf.gdf_column_view_augmented(
+            colview,
+            data,
+            mask,
+            size,
+            np_to_gdf_dtype(dtype),
+            null_count,
+            )
     return colview
 
 
-def columnview(size, data, mask=None, dtype=None):
+def columnview(size, data, mask=None, dtype=None, null_count=None):
     """
     Make a column view.
 
@@ -56,9 +80,11 @@ def columnview(size, data, mask=None, dtype=None):
         devary = buffer.to_gpu_array()
         return unwrap_devary(devary)
 
+    if mask is not None:
+        assert null_count is not None
     dtype = dtype or data.dtype
     return _columnview(size=size, data=unwrap(data), mask=unwrap(mask),
-                       dtype=dtype)
+                       dtype=dtype, null_count=null_count)
 
 
 def apply_binaryop(binop, lhs, rhs, out):
@@ -89,7 +115,7 @@ def apply_unaryop(unaop, inp, out):
 def apply_mask_and(col, mask, out):
     args = (col.cffi_view, mask.cffi_view, out.cffi_view)
     libgdf.gdf_validity_and(*args)
-    nnz = cudautils.count_nonzero_mask(out.mask.mem, size=len(out))
+    nnz = count_nonzero_mask(out.mask.mem, size=len(out))
     return len(out) - nnz
 
 
@@ -122,6 +148,21 @@ def np_to_gdf_dtype(dtype):
         np.int8:    libgdf.GDF_INT8,
         np.bool_:   libgdf.GDF_INT8,
         np.datetime64: libgdf.GDF_DATE64,
+    }[np.dtype(dtype).type]
+
+
+def np_to_pa_dtype(dtype):
+    """Util to convert numpy dtype to PyArrow dtype.
+    """
+    return {
+        np.float64:     pa.float64(),
+        np.float32:     pa.float32(),
+        np.int64:       pa.int64(),
+        np.int32:       pa.int32(),
+        np.int16:       pa.int16(),
+        np.int8:        pa.int8(),
+        np.bool_:       pa.int8(),
+        np.datetime64:  pa.date64(),
     }[np.dtype(dtype).type]
 
 
@@ -393,9 +434,6 @@ def hash_partition(input_columns, key_indices, nparts, output_columns):
         Each index indicates the start of a partition.
     """
     assert len(input_columns) == len(output_columns)
-    for col in input_columns:
-        if col.null_count != 0:
-            raise ValueError('cannot handle masked column')
 
     col_inputs = [col.cffi_view for col in input_columns]
     col_outputs = [col.cffi_view for col in output_columns]
@@ -415,3 +453,15 @@ def hash_partition(input_columns, key_indices, nparts, output_columns):
 
     offsets = list(offsets)
     return offsets
+
+
+def count_nonzero_mask(mask, size):
+    assert mask.size * mask_bitsize >= size
+    nnz = ffi.new('int*')
+    nnz[0] = 0
+    mask_ptr, addr = unwrap_mask(mask)
+
+    if addr != ffi.NULL:
+        libgdf.gdf_count_nonzero_mask(mask_ptr, size, nnz)
+
+    return nnz[0]
