@@ -71,7 +71,11 @@ class Buffer(object):
                 ipch = self._cached_ipch
             else:
                 # Get new IPC handle
-                ipch = self.to_gpu_array().get_ipc_handle()
+                # Old:
+                #ipch = self.to_gpu_array().get_ipc_handle()
+                # New:
+                ipch = rmm.get_ipc_handle(self.to_gpu_array())
+
             header['kind'] = 'ipc'
             header['mem'], frames = serialize(ipch)
             # Keep IPC handle alive
