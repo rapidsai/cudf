@@ -115,7 +115,7 @@ __device__ int whichBit(int bit) { return (bit % 8);  }
 
 __inline__ __device__ void validAtomicOR(gdf_valid_type* address, gdf_valid_type val)
 {
-	int32_t *base_address = (int32_t*)((gdf_valid_type*)address - ((int32_t)address & 3));
+	int32_t *base_address = (int32_t*)((gdf_valid_type*)address - ((size_t)address & 3));
 	int32_t int_val = (int32_t)val << (((size_t) address & 3) * 8);
 
 	atomicOr(base_address, int_val);
