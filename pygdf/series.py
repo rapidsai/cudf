@@ -16,6 +16,7 @@ from .column import Column
 from .datetime import DatetimeColumn
 from . import columnops
 from .serialize import register_distributed_serializer
+from ._gdf import nvtx_range_push, nvtx_range_pop
 
 
 class Series(object):
@@ -281,9 +282,12 @@ class Series(object):
         and *other*.  Return the output Series.  The output dtype is
         determined by the input operands.
         """
+        nvtx_range_push("PYGDF_BINARY_OP","orange")
         other = self._normalize_binop_value(other)
         outcol = self._column.binary_operator(fn, other._column)
-        return self._copy_construct(data=outcol)
+        result = self._copy_construct(data=outcol)
+        nvtx_range_pop()
+        return result
 
     def _rbinaryop(self, other, fn):
         """
@@ -291,9 +295,12 @@ class Series(object):
         and *other* for reflected operations.  Return the output Series.
         The output dtype is determined by the input operands.
         """
+        nvtx_range_push("PYGDF_BINARY_OP","orange")
         other = self._normalize_binop_value(other)
         outcol = other._column.binary_operator(fn, self._column)
-        return self._copy_construct(data=outcol)
+        result = self._copy_construct(data=outcol)
+        nvtx_range_pop()
+        return result
 
     def _unaryop(self, fn):
         """

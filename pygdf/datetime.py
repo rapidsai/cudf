@@ -8,7 +8,7 @@ from . import columnops, _gdf, utils
 from .buffer import Buffer
 from libgdf_cffi import libgdf
 from .serialize import register_distributed_serializer
-
+from ._gdf import nvtx_range_push, nvtx_range_pop
 
 _unordered_impl = {
     'eq': libgdf.gdf_eq_generic,
@@ -148,10 +148,12 @@ class DatetimeColumn(columnops.TypedColumnBase):
 
 
 def binop(lhs, rhs, op, out_dtype):
+    nvtx_range_push("PYGDF_BINARY_OP","orange")
     masked = lhs.has_null_mask or rhs.has_null_mask
     out = columnops.column_empty_like(lhs, dtype=out_dtype, masked=masked)
     null_count = _gdf.apply_binaryop(op, lhs, rhs, out)
     out = out.replace(null_count=null_count)
+    nvtx_range_pop()
     return out
 
 

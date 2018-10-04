@@ -702,6 +702,7 @@ class DataFrame(object):
 
         """
 
+        _gdf.nvtx_range_push("PYGDF_JOIN","blue") 
         if how != 'left':
             raise NotImplementedError('{!r} join not implemented yet'
                                       .format(how))
@@ -747,6 +748,8 @@ class DataFrame(object):
                     left_indices, df.index, lsuffix)
         gather_cols(df, rhs, [x for x in rhs.columns if x not in on],
                     right_indices, df.index, rsuffix)
+
+        _gdf.nvtx_range_pop() 
 
         return df
 
@@ -825,6 +828,8 @@ class DataFrame(object):
         - *other* must be a single DataFrame for now.
         - *on* is not supported yet due to lack of multi-index support.
         """
+	
+        _gdf.nvtx_range_push("PYGDF_JOIN","blue") 
         if how not in ['left', 'right', 'inner', 'outer']:
             raise NotImplementedError('unsupported {!r} join'.format(how))
         if on is not None:
@@ -835,9 +840,13 @@ class DataFrame(object):
             raise ValueError('there are overlapping columns but '
                              'lsuffix and rsuffix are not defined')
 
-        return self._join(other=other, how=how, lsuffix=lsuffix,
+        result = self._join(other=other, how=how, lsuffix=lsuffix,
                           rsuffix=rsuffix, sort=sort, same_names=same_names,
                           method=method)
+        _gdf.nvtx_range_pop()
+
+        return result
+
 
     def _join(self, other, how, lsuffix, rsuffix, sort, same_names,
               method='hash', rightjoin=False):
@@ -931,15 +940,19 @@ class DataFrame(object):
                 msg = "as_index==True not supported due to the lack of\
                     multi-index"
                 raise NotImplementedError(msg)
-            return Groupby(self, by=by)
+            result = Groupby(self, by=by)
+            return result
         else:
             from .libgdf_groupby import LibGdfGroupby
 
+            _gdf.nvtx_range_push("PYGDF_GROUPBY","purple")
             if as_index:
                 msg = "as_index==True not supported due to the lack of\
                     multi-index"
                 raise NotImplementedError(msg)
-            return LibGdfGroupby(self, by=by, method=method)
+            # The matching `pop` for this range is inside LibGdfGroupby __apply_agg
+            result = LibGdfGroupby(self, by=by, method=method)
+            return result
 
     def query(self, expr):
         """Query with a boolean expression using Numba to compile a GPU kernel.
