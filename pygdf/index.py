@@ -49,6 +49,9 @@ class Index(object):
     def to_pandas(self):
         return pd.Index(self.as_column().to_pandas())
 
+    def to_arrow(self):
+        return self.as_column().to_arrow()
+
     @property
     def gpu_values(self):
         return self.as_column().to_gpu_array()

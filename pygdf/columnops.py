@@ -10,8 +10,10 @@ import pyarrow as pa
 from numba import cuda, njit
 
 from .buffer import Buffer
-from . import utils, cudautils
+from . import utils, cudautils, _gdf
 from .column import Column
+
+import warnings
 
 
 class TypedColumnBase(Column):
@@ -137,11 +139,6 @@ def as_column(arbitrary):
         else:
             data = arbitrary
 
-    elif isinstance(arbitrary, pd.Categorical):
-        data = categorical.pandas_categorical_as_column(arbitrary)
-        mask = ~pd.isnull(arbitrary)
-        data = data.set_mask(cudautils.compact_mask_bytes(mask))
-
     elif isinstance(arbitrary, Buffer):
         data = numerical.NumericalColumn(data=arbitrary, dtype=arbitrary.dtype)
 
@@ -154,33 +151,106 @@ def as_column(arbitrary):
 
     elif isinstance(arbitrary, np.ndarray):
         if arbitrary.dtype.kind == 'M':
-            # hack, coerce to int, then set the dtype
             data = datetime.DatetimeColumn.from_numpy(arbitrary)
         else:
-            data = as_column(Buffer(arbitrary))
-            if np.count_nonzero(np.isnan(arbitrary)) > 0:
-                mask = ~np.isnan(arbitrary)
-                data = data.set_mask(cudautils.compact_mask_bytes(mask))
+            data = as_column(cuda.to_device(arbitrary))
 
-    elif isinstance(arbitrary, (list,)):
-        if any(x is None for x in arbitrary):
-            if all((isinstance(x, int) or x is None) for x in arbitrary):
-                padata = pa.array(arbitrary)
-                npdata = np.asarray(padata.buffers()[1]).view(np.int64)
-                data = as_column(npdata)
-                mask = np.asarray(padata.buffers()[0])
-                data = data.set_mask(mask)
-            elif all((isinstance(x, ) or x is None) for x in arbitrary):
-                padata = pa.array(arbitrary)
-                npdata = np.asarray(padata.buffers()[1]).view(np.float64)
-                data = as_column(npdata)
-                mask = np.asarray(padata.buffers()[0])
-                data = data.set_mask(mask)
+    elif isinstance(arbitrary, pa.Array):
+        if isinstance(arbitrary, pa.StringArray):
+            raise NotImplementedError("Strings are not yet supported")
+        elif isinstance(arbitrary, pa.NullArray):
+            pamask = Buffer(np.empty(0, dtype='int8'))
+            padata = Buffer(
+                np.empty(0, dtype=arbitrary.type.to_pandas_dtype())
+            )
+            data = numerical.NumericalColumn(
+                data=padata,
+                mask=pamask,
+                null_count=0,
+                dtype=np.dtype(arbitrary.type.to_pandas_dtype())
+            )
+        elif isinstance(arbitrary, pa.DictionaryArray):
+            if arbitrary.buffers()[0]:
+                pamask = Buffer(np.array(arbitrary.buffers()[0]))
+            else:
+                pamask = None
+            padata = Buffer(np.array(arbitrary.buffers()[1]).view(
+                arbitrary.indices.type.to_pandas_dtype()
+            ))
+            data = categorical.CategoricalColumn(
+                data=padata,
+                mask=pamask,
+                null_count=arbitrary.null_count,
+                categories=arbitrary.dictionary.to_pylist(),
+                ordered=arbitrary.type.ordered,
+                dtype="category"  # What's the correct way to specify this?
+            )
+        elif isinstance(arbitrary, pa.TimestampArray):
+            arbitrary = arbitrary.cast(pa.timestamp('ms'))
+            if arbitrary.buffers()[0]:
+                pamask = Buffer(np.array(arbitrary.buffers()[0]))
+            else:
+                pamask = None
+            padata = Buffer(np.array(arbitrary.buffers()[1]).view(
+                np.dtype('M8[ms]')
+            ))
+            data = datetime.DatetimeColumn(
+                data=padata,
+                mask=pamask,
+                null_count=arbitrary.null_count,
+                dtype=np.dtype('M8[ms]')
+            )
+        elif isinstance(arbitrary, pa.Date64Array):
+            if arbitrary.buffers()[0]:
+                pamask = Buffer(np.array(arbitrary.buffers()[0]))
+            else:
+                pamask = None
+            padata = Buffer(np.array(arbitrary.buffers()[1]).view(
+                np.dtype('M8[ms]')
+            ))
+            data = datetime.DatetimeColumn(
+                data=padata,
+                mask=pamask,
+                null_count=arbitrary.null_count,
+                dtype=np.dtype('M8[ms]')
+            )
+        elif isinstance(arbitrary, pa.Date32Array):
+            # No equivalent np dtype and not yet supported
+            warnings.warn("Date32 values are not yet supported so this will "
+                          "be typecast to a Date64 value", UserWarning)
+            arbitrary = arbitrary.cast(pa.date64())
+            data = as_column(arbitrary)
         else:
-            data = as_column(np.asarray(arbitrary))
+            if arbitrary.buffers()[0]:
+                pamask = Buffer(np.array(arbitrary.buffers()[0]))
+            else:
+                pamask = None
+            padata = Buffer(np.array(arbitrary.buffers()[1]).view(
+                np.dtype(arbitrary.type.to_pandas_dtype())
+            ))
+            data = numerical.NumericalColumn(
+                data=padata,
+                mask=pamask,
+                null_count=arbitrary.null_count,
+                dtype=np.dtype(arbitrary.type.to_pandas_dtype())
+            )
+
+    elif isinstance(arbitrary, (pd.Series, pd.Categorical)):
+        data = as_column(pa.array(arbitrary, from_pandas=True))
+
+    elif np.isscalar(arbitrary):
+        if hasattr(arbitrary, 'dtype'):
+            data_type = _gdf.np_to_pa_dtype(arbitrary.dtype)
+            if data_type in (pa.date64(), pa.date32()):
+                # PyArrow can't construct date64 or date32 arrays from np
+                # datetime types
+                arbitrary = arbitrary.astype('int64')
+            data = as_column(pa.array([arbitrary], type=data_type))
+        else:
+            data = as_column(pa.array([arbitrary]))
 
     else:
-        data = as_column(np.asarray(arbitrary))
+        data = as_column(pa.array(arbitrary))
 
     return data
 

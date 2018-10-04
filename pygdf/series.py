@@ -83,6 +83,10 @@ class Series(object):
     def from_pandas(cls, s):
         return cls(s)
 
+    @classmethod
+    def from_arrow(cls, s):
+        return cls(s)
+
     def serialize(self, serialize):
         header = {}
         frames = []
@@ -468,6 +472,9 @@ class Series(object):
         s = self._column.to_pandas(index=index)
         s.name = self.name
         return s
+
+    def to_arrow(self):
+        return self._column.to_arrow()
 
     @property
     def data(self):

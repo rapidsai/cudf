@@ -8,6 +8,7 @@ from collections import OrderedDict
 
 import numpy as np
 import pandas as pd
+import pyarrow as pa
 
 from numba import cuda
 from numba.cuda.cudadrv.devicearray import DeviceNDArray
@@ -1201,6 +1202,44 @@ class DataFrame(object):
             df[colk] = dataframe[colk].values
         # Set index
         return df.set_index(dataframe.index.values)
+
+    def to_arrow(self, index=True):
+        """Convert to a PyArrow Table.
+        """
+        arrays = []
+        names = []
+        if index:
+            names.append(self.index.name)
+            arrays.append(self.index.to_arrow())
+        for name, column in self._cols.items():
+            names.append(name)
+            arrays.append(column.to_arrow())
+        return pa.Table.from_arrays(arrays, names=names)
+
+    @classmethod
+    def from_arrow(cls, table):
+        """Convert from a PyArrow Table.
+
+        Raises
+        ------
+        TypeError for invalid input type.
+
+        **Notes**
+
+        Does not support automatically setting index column(s) similar to how
+        ``to_pandas`` works for PyArrow Tables.
+        """
+        if not isinstance(table, pa.Table):
+            raise TypeError('not a pyarrow.Table')
+
+        df = cls()
+        for col in table.columns:
+            if len(col.data.chunks) != 1:
+                raise NotImplementedError("Importing from PyArrow Tables "
+                                          "with multiple chunks is not yet "
+                                          "supported")
+            df[col.name] = col.data.chunk(0)
+        return df
 
     def to_records(self, index=True):
         """Convert to a numpy recarray

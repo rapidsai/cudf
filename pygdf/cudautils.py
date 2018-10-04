@@ -293,8 +293,9 @@ def gpu_mask_from_devary(ary, bits):
 
 def mask_from_devary(ary):
     bits = make_mask(len(ary))
-    gpu_fill_value.forall(bits.size)(bits, 0)
-    gpu_mask_from_devary.forall(bits.size)(ary, bits)
+    if bits.size > 0:
+        gpu_fill_value.forall(bits.size)(bits, 0)
+        gpu_mask_from_devary.forall(bits.size)(ary, bits)
     return bits
 
 #
