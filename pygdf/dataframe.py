@@ -8,7 +8,6 @@ from collections import OrderedDict
 
 import numpy as np
 import pandas as pd
-import pyarrow as pa
 
 from numba import cuda
 from numba.cuda.cudadrv.devicearray import DeviceNDArray
@@ -20,6 +19,8 @@ from .column import Column
 from .settings import NOTSET, settings
 from .serialize import register_distributed_serializer
 from .categorical import CategoricalColumn
+from .datetime import DatetimeColumn
+from .buffer import Buffer
 
 
 class DataFrame(object):
@@ -730,25 +731,38 @@ class DataFrame(object):
 
         gap = len(self.columns) - len(on)
         for idx in range(len(on)):
-            df[on[idx]] = cols[idx + gap]
+            if (cols[idx].dtype == 'datetime64[ms]'):
+                df[on[idx]] = DatetimeColumn(data=Buffer(cols[idx + gap]),
+                                             dtype=np.dtype('datetime64[ms]'))
+            else:
+                df[on[idx]] = cols[idx + gap]
+            # df[on[idx]] = cols[idx + gap]
             df[on[idx]] = df[on[idx]].set_mask(valids[idx])
 
         idx = 0
 
         for name in self.columns:
             if name not in on:
-                f_name = fix_name(name, lsuffix)
-                df[f_name] = cols[idx]
-                df[f_name] = df[f_name].set_mask(valids[idx])
+                f_n = fix_name(name, lsuffix)
+                if (cols[idx].dtype == 'datetime64[ms]'):
+                    df[f_n] = DatetimeColumn(data=Buffer(cols[idx]),
+                                             dtype=np.dtype('datetime64[ms]'))
+                else:
+                    df[f_n] = cols[idx]
+                df[f_n] = df[f_n].set_mask(valids[idx])
                 idx = idx + 1
 
         idx = len(self.columns)
 
         for name in other.columns:
             if name not in on:
-                f_name = fix_name(name, rsuffix)
-                df[f_name] = cols[idx]
-                df[f_name] = df[f_name].set_mask(valids[idx])
+                f_n = fix_name(name, rsuffix)
+                if (cols[idx].dtype == 'datetime64[ms]'):
+                    df[f_n] = DatetimeColumn(data=Buffer(cols[idx]),
+                                             dtype=np.dtype('datetime64[ms]'))
+                else:
+                    df[f_n] = cols[idx]
+                df[f_n] = df[f_n].set_mask(valids[idx])
                 idx = idx + 1
 
         return df
@@ -784,7 +798,7 @@ class DataFrame(object):
         # Outer joins still use the old implementation
         if how == 'outer':
             return self._py_join(other, on=None, how='outer', lsuffix=lsuffix,
-                                 rsuffix=rsuffix, sort=False, method='hash')
+                                 rsuffix=rsuffix, sort=sort, method=method)
         if how not in ['left', 'right', 'inner']:
             raise NotImplementedError('unsupported {!r} join'.format(how))
         # if on is not None:
@@ -793,65 +807,66 @@ class DataFrame(object):
         if how == 'right':
             # libgdf doesn't support right join directly, we will swap the
             # dfs and use left join
-            return other.join(self, other, how='left', lsuffix=rsuffix,
+            return other.join(self, how='left', lsuffix=rsuffix,
                               rsuffix=lsuffix, sort=sort, method='hash')
 
-        same_names = set(self.columns) & set(other.columns)
+        lhs = self
+        rhs = other
+
+        same_names = set(lhs.columns) & set(rhs.columns)
         if same_names and not (lsuffix or rsuffix):
             raise ValueError('there are overlapping columns but '
                              'lsuffix and rsuffix are not defined')
 
         idx_col_name = str(random.randint(1, 2**63))
 
-        while idx_col_name in self.columns or idx_col_name in other.columns:
+        while idx_col_name in lhs.columns or idx_col_name in rhs.columns:
             idx_col_name = str(random.randint(2**29, 2**31))
 
-        self[idx_col_name] = Series(self.index.as_column()).set_index(self
-                                                                      .index)
-        other[idx_col_name] = Series(other.index.as_column()).set_index(other
-                                                                        .index)
+        lhs[idx_col_name] = Series(lhs.index.as_column()).set_index(lhs.index)
+        rhs[idx_col_name] = Series(rhs.index.as_column()).set_index(rhs.index)
 
-        self = self.reset_index()
-        other = other.reset_index()
+        lhs = lhs.reset_index()
+        rhs = rhs.reset_index()
 
         cat_join = False
 
-        if pd.core.common.is_categorical_dtype(self[idx_col_name]):
+        if pd.core.common.is_categorical_dtype(lhs[idx_col_name]):
             cat_join = True
-            lcats = self[idx_col_name].cat.categories
-            rcats = other[idx_col_name].cat.categories
+            lcats = lhs[idx_col_name].cat.categories
+            rcats = rhs[idx_col_name].cat.categories
             if how == 'left':
                 cats = lcats
-                other[idx_col_name] = (other[idx_col_name].cat
-                                                          .set_categories(cats)
-                                                          .fillna(-1))
+                rhs[idx_col_name] = (rhs[idx_col_name].cat
+                                                      .set_categories(cats)
+                                                      .fillna(-1))
             elif how == 'right':
                 cats = rcats
-                self[idx_col_name] = (self[idx_col_name].cat
-                                                        .set_categories(cats)
-                                                        .fillna(-1))
+                lhs[idx_col_name] = (lhs[idx_col_name].cat
+                                                      .set_categories(cats)
+                                                      .fillna(-1))
             elif how in ['inner', 'outer']:
                 # Do the join using the union of categories from both side.
                 # Adjust for inner joins afterwards
                 cats = sorted(set(lcats) | set(rcats))
 
-                self[idx_col_name] = (self[idx_col_name].cat
-                                                        .set_categories(cats)
-                                                        .fillna(-1))
-                self[idx_col_name] = self[idx_col_name]._column.as_numerical
+                lhs[idx_col_name] = (lhs[idx_col_name].cat
+                                                      .set_categories(cats)
+                                                      .fillna(-1))
+                lhs[idx_col_name] = lhs[idx_col_name]._column.as_numerical
 
-                other[idx_col_name] = (other[idx_col_name].cat
-                                                          .set_categories(cats)
-                                                          .fillna(-1))
-                other[idx_col_name] = other[idx_col_name]._column.as_numerical
+                rhs[idx_col_name] = (rhs[idx_col_name].cat
+                                                      .set_categories(cats)
+                                                      .fillna(-1))
+                rhs[idx_col_name] = rhs[idx_col_name]._column.as_numerical
 
         if lsuffix == '':
             lsuffix = 'l'
         if rsuffix == '':
             rsuffix = 'r'
 
-        df = self.merge(other, on=[idx_col_name], how=how, lsuffix=lsuffix,
-                        rsuffix=rsuffix, method=method)
+        df = lhs.merge(rhs, on=[idx_col_name], how=how, lsuffix=lsuffix,
+                       rsuffix=rsuffix, method=method)
 
         if cat_join:
             df[idx_col_name] = CategoricalColumn(data=df[idx_col_name].data,
@@ -860,15 +875,15 @@ class DataFrame(object):
                                                  ordered=False)
 
         df = df.set_index(idx_col_name)
-        self.set_index(self[idx_col_name])
-        other.set_index(other[idx_col_name])
+        lhs = lhs.set_index(idx_col_name)
+        rhs = rhs.set_index(idx_col_name)
 
         if sort and len(df):
             return df.sort_index()
 
         return df
 
-    def _py_join(self, other, on=None, how='left', lsuffix='', rsuffix='',
+    def _py_join(self, other, on=None, how='outer', lsuffix='', rsuffix='',
                  sort=False, method='hash'):
         """Join columns with other DataFrame on index or on a key column.
         Parameters
@@ -1202,44 +1217,6 @@ class DataFrame(object):
             df[colk] = dataframe[colk].values
         # Set index
         return df.set_index(dataframe.index.values)
-
-    def to_arrow(self, index=True):
-        """Convert to a PyArrow Table.
-        """
-        arrays = []
-        names = []
-        if index:
-            names.append(self.index.name)
-            arrays.append(self.index.to_arrow())
-        for name, column in self._cols.items():
-            names.append(name)
-            arrays.append(column.to_arrow())
-        return pa.Table.from_arrays(arrays, names=names)
-
-    @classmethod
-    def from_arrow(cls, table):
-        """Convert from a PyArrow Table.
-
-        Raises
-        ------
-        TypeError for invalid input type.
-
-        **Notes**
-
-        Does not support automatically setting index column(s) similar to how
-        ``to_pandas`` works for PyArrow Tables.
-        """
-        if not isinstance(table, pa.Table):
-            raise TypeError('not a pyarrow.Table')
-
-        df = cls()
-        for col in table.columns:
-            if len(col.data.chunks) != 1:
-                raise NotImplementedError("Importing from PyArrow Tables "
-                                          "with multiple chunks is not yet "
-                                          "supported")
-            df[col.name] = col.data.chunk(0)
-        return df
 
     def to_records(self, index=True):
         """Convert to a numpy recarray
