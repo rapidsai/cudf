@@ -6,6 +6,7 @@ from .column import Column
 from .numerical import NumericalColumn
 from .dataframe import DataFrame
 from .datetime import DatetimeColumn
+from ._gdf import nvtx_range_push, nvtx_range_pop
 
 
 def _wrap_string(text):
@@ -72,6 +73,7 @@ def read_csv(filepath, lineterminator='\n',
 #              skipinitialspace=False, names=None, dtype=None,
 #              skipfooter=0, skiprows=0, dayfirst=False):
 
+
     if names is None or dtype is None:
         msg = '''Automatic dtype detection not implemented:
         Column names and dtypes must be specified.'''
@@ -87,6 +89,8 @@ def read_csv(filepath, lineterminator='\n',
     else:
         msg = '''dtype must be 'list' or 'dict' '''
         raise TypeError(msg)
+
+    nvtx_range_push("PYGDF_READ_CSV","purple")
 
     csv_reader = ffi.new('csv_read_arg*')
 
@@ -139,5 +143,7 @@ def read_csv(filepath, lineterminator='\n',
     df = DataFrame()
     for k, v in zip(names, outcols):
         df[k] = v
+
+    nvtx_range_pop()
 
     return df
