@@ -3,7 +3,7 @@ from .dataframe import DataFrame
 from .index import Index
 from .series import Series
 from .multi import concat
-
+from .io import read_csv
 from .settings import set_options
 
 

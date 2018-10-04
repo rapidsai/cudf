@@ -67,6 +67,18 @@ class Column(object):
         col = head.replace(data=data, mask=mask, null_count=null_count)
         return col
 
+    @staticmethod
+    def from_cffi_view(cffi_view):
+        """Create a Column object from a cffi struct gdf_column*.
+        """
+        data_mem, mask_mem = _gdf.cffi_view_to_column_mem(cffi_view)
+        data_buf = Buffer(data_mem)
+
+        if mask_mem is not None:
+            mask = Buffer(mask_mem)
+
+        return Column(data=data_buf, mask=mask)
+
     def __init__(self, data, mask=None, null_count=None):
         """
         Parameters
