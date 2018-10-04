@@ -3,9 +3,12 @@
 typedef size_t gdf_size_type;
 typedef gdf_size_type gdf_index_type;
 typedef unsigned char gdf_valid_type;
+typedef	int64_t	gdf_date64;
+typedef	int32_t	gdf_date32;
+typedef	int32_t	gdf_category;
 
 /* --------------------------------------------------------------------------*/
-/** 
+ /**
  * @Synopsis  These enums indicate the possible data types for a gdf_column
  */
 /* ----------------------------------------------------------------------------*/
@@ -17,17 +20,19 @@ typedef enum {
     GDF_INT64,
     GDF_FLOAT32,
     GDF_FLOAT64,
-    GDF_DATE32,   // int32_t days since the UNIX epoch
-    GDF_DATE64,   // int64_t milliseconds since the UNIX epoch
-    GDF_TIMESTAMP,// Exact timestamp encoded with int64 since UNIX epoch (Default unit millisecond)
-    N_GDF_TYPES, /* additional types should go BEFORE N_GDF_TYPES */
+    GDF_DATE32,   	/**< int32_t days since the UNIX epoch */
+    GDF_DATE64,   	/**< int64_t milliseconds since the UNIX epoch */
+    GDF_TIMESTAMP,	/**< Exact timestamp encoded with int64 since UNIX epoch (Default unit millisecond) */
+    GDF_CATEGORY,
+    GDF_STRING,
+    N_GDF_TYPES, 	/* additional types should go BEFORE N_GDF_TYPES */
 } gdf_dtype;
 
 
 /* --------------------------------------------------------------------------*/
-/** 
- * @Synopsis  These are all possible gdf error codes that can be returned from 
- * a libgdf function. ANY NEW ERROR CODE MUST ALSO BE ADDED TO `gdf_error_get_name` 
+/**
+ * @Synopsis  These are all possible gdf error codes that can be returned from
+ * a libgdf function. ANY NEW ERROR CODE MUST ALSO BE ADDED TO `gdf_error_get_name`
  * AS WELL
  */
 /* ----------------------------------------------------------------------------*/
@@ -52,6 +57,8 @@ typedef enum {
     GDF_UNSUPPORTED_JOIN_TYPE,        /**< The type of join requested is unsupported */
     GDF_UNDEFINED_NVTX_COLOR,         /**< The requested color used to define an NVTX range is not defined */
     GDF_NULL_NVTX_NAME,               /**< The requested name for an NVTX range cannot be nullptr */
+    GDF_C_ERROR,				         	    /**< C error not related to CUDA */
+    GDF_FILE_ERROR,   				        /**< error processing sepcified file */      
 } gdf_error;
 
 typedef enum {
@@ -78,7 +85,8 @@ typedef struct gdf_column_{
     gdf_size_type size;               /**< Number of data elements in the columns data buffer*/
     gdf_dtype dtype;                  /**< The datatype of the column's data */
     gdf_size_type null_count;         /**< The number of NULL values in the column's data */
-    gdf_dtype_extra_info dtype_info;  
+    gdf_dtype_extra_info dtype_info;
+    char *			col_name;			// host-side:	null terminated string
 } gdf_column;
 
 /* --------------------------------------------------------------------------*/
