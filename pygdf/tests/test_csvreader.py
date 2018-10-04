@@ -2,6 +2,7 @@
 
 import os
 import pytest
+from collections import OrderedDict
 
 import numpy as np
 import pandas as pd
@@ -47,8 +48,11 @@ def make_all_numeric_dtypes_dataframe():
     for i in range(len(gdf_dtypes)):
         df[gdf_dtypes[i]] = np.arange(10, dtype=np_dtypes[i])
 
-    return df, dict(zip(gdf_dtypes, gdf_dtypes)), dict(zip(gdf_dtypes,
-                                                           np_dtypes))
+    return (
+        df,
+        OrderedDict(zip(gdf_dtypes, gdf_dtypes)),
+        OrderedDict(zip(gdf_dtypes, np_dtypes))
+    )
 
 
 dtypes = [np.float64, np.float32, np.int64, np.int32]
