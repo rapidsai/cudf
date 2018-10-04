@@ -210,7 +210,7 @@ gdf_error read_csv(csv_read_arg *args)
 
 	//-----------------------------------------------------------------------------
 	//-- Allocate space to hold the record starting point
-	CUDA_TRY( cudaMalloc ((void**)&raw_csv->recStart,(sizeof(long) * (raw_csv->num_records + 1))) );
+	CUDA_TRY( cudaMallocManaged ((void**)&raw_csv->recStart,(sizeof(long) * (raw_csv->num_records + 1))) );
 	CUDA_TRY( cudaMemset(raw_csv->d_num_records,	0, 		(sizeof(long) )) ) ;
 
 	//-----------------------------------------------------------------------------
@@ -232,14 +232,14 @@ gdf_error read_csv(csv_read_arg *args)
 	gdf_valid_type **d_valid;
     long	*d_valid_count;
 
-	CUDA_TRY( cudaMalloc ((void**)&d_data, 		(sizeof(void *)				* raw_csv->num_cols)) );
-	CUDA_TRY( cudaMalloc ((void**)&d_valid, 		(sizeof(gdf_valid_type *)	* raw_csv->num_cols)) );
-	CUDA_TRY( cudaMalloc ((void**)&d_valid_count,(sizeof(long) 				* raw_csv->num_cols)) );
+	CUDA_TRY( cudaMallocManaged ((void**)&d_data, 		(sizeof(void *)				* raw_csv->num_cols)) );
+	CUDA_TRY( cudaMallocManaged ((void**)&d_valid, 		(sizeof(gdf_valid_type *)	* raw_csv->num_cols)) );
+	CUDA_TRY( cudaMallocManaged ((void**)&d_valid_count,(sizeof(long) 				* raw_csv->num_cols)) );
 	CUDA_TRY( cudaMemset(d_valid_count,	0, 				(sizeof(long) 				* raw_csv->num_cols)) );
 
 
 	gdf_dtype* d_dtypes;
-	CUDA_TRY( cudaMalloc ((void**)&d_dtypes, 	sizeof(gdf_dtype) 			* (raw_csv->num_cols)) );
+	CUDA_TRY( cudaMallocManaged ((void**)&d_dtypes, 	sizeof(gdf_dtype) 			* (raw_csv->num_cols)) );
 
 	int stringColCount=0;
 	for (int col = 0; col < raw_csv->num_cols; col++) {
@@ -250,10 +250,10 @@ gdf_error read_csv(csv_read_arg *args)
 	string_pair** str_cols = NULL;
 
 	if (stringColCount > 0 ) {
-		CUDA_TRY( cudaMalloc ((void**)&str_cols, 	(sizeof(string_pair *)		* stringColCount)) );
+		CUDA_TRY( cudaMallocManaged ((void**)&str_cols, 	(sizeof(string_pair *)		* stringColCount)) );
 
 		for (int col = 0; col < stringColCount; col++) {
-			CUDA_TRY( cudaMalloc ((void**)(str_cols + col), sizeof(string_pair) * (raw_csv->num_records)) );
+			CUDA_TRY( cudaMallocManaged ((void**)(str_cols + col), sizeof(string_pair) * (raw_csv->num_records)) );
 		}
 	}
 
@@ -414,13 +414,13 @@ gdf_error updateRawCsv( const char * data, long num_bytes, raw_csv_t * raw ) {
 
 	int num_bits = (num_bytes + 63) / 64;
 
-	CUDA_TRY(cudaMalloc ((void**)&raw->data, 		(sizeof(char)		* num_bytes)));
+	CUDA_TRY(cudaMallocManaged ((void**)&raw->data, 		(sizeof(char)		* num_bytes)));
 
-	CUDA_TRY(cudaMalloc ((void**)&raw->d_num_records, sizeof(long)) );
+	CUDA_TRY(cudaMallocManaged ((void**)&raw->d_num_records, sizeof(long)) );
 
 	CUDA_TRY(cudaMemcpy(raw->data, data, num_bytes, cudaMemcpyHostToDevice));
 
-	CUDA_TRY(cudaMemset(raw->d_num_records,0, ((sizeof(long)) )) );
+	CUDA_TRY( cudaMemset(raw->d_num_records,0, ((sizeof(long)) )) );
 
 	raw->num_bits  = num_bits;
 
