@@ -421,9 +421,21 @@ def str_to_gdf_color(s):
 
 
 def nvtx_range_push(name, color='green'):
-    _name = ffi.new("char[]", name.encode())
+    """
+    Demarcate the beginning of a user-defined NVTX range.
+
+    Parameters
+    ----------
+    name : str
+        The name of the NVTX range
+    color : str
+        The color to use for the range.
+    """
+    _name = ffi.new("char[]", name.encode('ascii'))
     libgdf.gdf_nvtx_range_push(_name, str_to_gdf_color(color))
 
 
 def nvtx_range_pop():
+    """ Demarcate the end of the inner-most range.
+    """
     libgdf.gdf_nvtx_range_pop()
