@@ -3,7 +3,7 @@
 #ifndef CONVERSION_FUNCTIONS_CUH
 #define CONVERSION_FUNCTIONS_CUH
 
-#include <math_functions.h>
+#include <cuda_runtime_api.h>
 
 
 

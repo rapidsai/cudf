@@ -343,6 +343,9 @@ gdf_error compute_hash_join(mgpu::context_t & compute_ctx,
     if(estimated_join_output_size < h_actual_found){
       cont = true;
       estimated_join_output_size *= 2;
+      // Free the old buffers to prevent a memory leak on the new allocation
+      CUDA_TRY( cudaFree(output_l_ptr) );
+      CUDA_TRY( cudaFree(output_r_ptr) );
     }
     else
     {
