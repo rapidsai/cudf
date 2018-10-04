@@ -433,7 +433,7 @@ def nvtx_range_push(name, color='green'):
     name_c = ffi.new("char[]", name.encode('ascii'))
 
     try:
-        color = int(color, 16)  # check if hex string
+        color = int(color, 16)  # only works if color is a hex string
     except ValueError:
         color = str_to_gdf_color(color)
 
