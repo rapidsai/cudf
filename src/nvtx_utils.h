@@ -43,7 +43,6 @@ inline
 void PUSH_RANGE(std::string const & name, const uint32_t color) 
 {
 #ifdef USE_NVTX
-    assert(color < GDF_NUM_COLORS);
     nvtxEventAttributes_t eventAttrib = {0}; 
     eventAttrib.version = NVTX_VERSION; 
     eventAttrib.size = NVTX_EVENT_ATTRIB_STRUCT_SIZE; 
