@@ -1,6 +1,6 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
 
-import os.path
+import os
 import pytest
 
 import numpy as np
@@ -58,21 +58,21 @@ nelem = [5, 25, 100]
 
 @pytest.mark.parametrize('dtype', dtypes)
 @pytest.mark.parametrize('nelem', nelem)
-def test_csv_reader_numeric_data(dtype, nelem):
+def test_csv_reader_numeric_data(dtype, nelem, tmpdir):
 
-    fname = os.path.abspath('pygdf/tests/data/tmp_csvreader_file1.csv')
+    fname = tmpdir.mkdir("gdf_csv").join("tmp_csvreader_file1.csv")
 
     df = make_numeric_dataframe(nelem, dtype)
     df.to_csv(fname, index=False, header=False)
 
     dtypes = [df[k].dtype for k in df.columns]
-    out = read_csv(fname, names=list(df.columns.values), dtype=dtypes)
+    out = read_csv(str(fname), names=list(df.columns.values), dtype=dtypes)
 
     assert len(out.columns) == len(df.columns)
     pd.util.testing.assert_frame_equal(df, out.to_pandas())
 
 
-def test_csv_reader_datetime_data():
+def test_csv_reader_datetime_data(tmpdir):
 
     fname = os.path.abspath('pygdf/tests/data/tmp_csvreader_file2.csv')
 
@@ -82,21 +82,21 @@ def test_csv_reader_datetime_data():
     df_out = pd.read_csv(fname, names=['col1', 'col2'], parse_dates=[0, 1],
                          dayfirst=True)
     dtypes = ['date', 'date']
-    out = read_csv(fname, names=list(df.columns.values), dtype=dtypes,
+    out = read_csv(str(fname), names=list(df.columns.values), dtype=dtypes,
                    dayfirst=True)
 
     assert len(out.columns) == len(df_out.columns)
     pd.util.testing.assert_frame_equal(df_out, out.to_pandas())
 
 
-def test_csv_reader_mixed_data_delimiter():
+def test_csv_reader_mixed_data_delimiter(tmpdir):
 
     fname = os.path.abspath('pygdf/tests/data/tmp_csvreader_file3.csv')
 
     df = make_numpy_mixed_dataframe()
     df.to_csv(fname, sep='|', index=False, header=False)
 
-    out = read_csv(fname, delimiter='|', names=['1', '2', '3', '4'],
+    out = read_csv(str(fname), delimiter='|', names=['1', '2', '3', '4'],
                    dtype=['int64', 'date', 'float64', 'category'],
                    dayfirst=True)
     df_out = pd.read_csv(fname, delimiter='|', names=['1', '2', '3', '4'],
@@ -105,14 +105,15 @@ def test_csv_reader_mixed_data_delimiter():
     assert len(out.columns) == len(df_out.columns)
 
 
-def test_csv_reader_all_numeric_dtypes():
+def test_csv_reader_all_numeric_dtypes(tmpdir):
 
-    fname = os.path.abspath('pygdf/tests/data/tmp_csvreader_file4.csv')
+    # fname = os.path.abspath('pygdf/tests/data/tmp_csvreader_file4.csv')
+    fname = tmpdir.mkdir("gdf_csv").join("tmp_csvreader_file4.csv")
 
     df, gdf_dict, pd_dict = make_all_numeric_dtypes_dataframe()
     df.to_csv(fname, sep=',', index=False, header=False)
 
-    out = read_csv(fname, delimiter=',', names=list(gdf_dict.keys()),
+    out = read_csv(str(fname), delimiter=',', names=list(gdf_dict.keys()),
                    dtype=gdf_dict)
     df_out = pd.read_csv(fname, delimiter=',', names=list(pd_dict.keys()),
                          dtype=pd_dict, dayfirst=True)
@@ -121,9 +122,9 @@ def test_csv_reader_all_numeric_dtypes():
     pd.util.testing.assert_frame_equal(df_out, out.to_pandas())
 
 
-def test_csv_reader_skiprows_skipfooter():
+def test_csv_reader_skiprows_skipfooter(tmpdir):
 
-    fname = os.path.abspath('pygdf/tests/data/tmp_csvreader_file5.csv')
+    fname = tmpdir.mkdir("gdf_csv").join("tmp_csvreader_file5.csv")
 
     df = make_numpy_mixed_dataframe()
     df.to_csv(fname, columns=['Integer', 'Date', 'Float'], index=False,
@@ -133,7 +134,7 @@ def test_csv_reader_skiprows_skipfooter():
     df_out = pd.read_csv(fname, names=['1', '2', '3'], parse_dates=[1],
                          dayfirst=True, skiprows=1, skipfooter=1,
                          engine='python')
-    out = read_csv(fname, names=['1', '2', '3'],
+    out = read_csv(str(fname), names=['1', '2', '3'],
                    dtype=['int64', 'date', 'float64'], skiprows=1,
                    skipfooter=1, dayfirst=True)
 
