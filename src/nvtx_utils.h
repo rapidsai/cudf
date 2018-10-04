@@ -38,6 +38,22 @@ void PUSH_RANGE(std::string const & name, const gdf_color color)
 #endif
 }
 
+inline 
+void PUSH_RANGE(std::string const & name, const uint32_t color) 
+{
+#ifdef USE_NVTX
+    assert(color < GDF_NUM_COLORS);
+    nvtxEventAttributes_t eventAttrib = {0}; 
+    eventAttrib.version = NVTX_VERSION; 
+    eventAttrib.size = NVTX_EVENT_ATTRIB_STRUCT_SIZE; 
+    eventAttrib.colorType = NVTX_COLOR_ARGB; 
+    eventAttrib.color = color; 
+    eventAttrib.messageType = NVTX_MESSAGE_TYPE_ASCII; 
+    eventAttrib.message.ascii = name.c_str(); 
+    nvtxRangePushEx(&eventAttrib); 
+#endif
+}
+
 
 inline 
 void POP_RANGE(void)
