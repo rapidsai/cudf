@@ -9,6 +9,7 @@ import itertools
 
 import numpy as np
 import pandas as pd
+import pyarrow as pa
 
 from numba import cuda
 
@@ -152,6 +153,21 @@ def gdf_to_np_dtype(dtype):
      }[dtype])
 
 
+def np_to_pa_dtype(dtype):
+    """Util to convert numpy dtype to PyArrow dtype.
+    """
+    return {
+        np.float64:     pa.float64(),
+        np.float32:     pa.float32(),
+        np.int64:       pa.int64(),
+        np.int32:       pa.int32(),
+        np.int16:       pa.int16(),
+        np.int8:        pa.int8(),
+        np.bool_:       pa.int8(),
+        np.datetime64:  pa.date64(),
+    }[np.dtype(dtype).type]
+
+
 def apply_reduce(fn, inp):
     # allocate output+temp array
     outsz = libgdf.gdf_reduce_optimal_output_size()
@@ -192,15 +208,62 @@ _join_method_api = {
 }
 
 
-def _as_numba_devarray(intaddr, nelem, dtype):
-    dtype = np.dtype(dtype)
+def _make_mem_finalizer(dtor, bytesize):
+    """Make memory finalizer for externally allocated memory
+    """
+    def mem_finalize(context, handle):
+        deallocations = context.deallocations
+
+        def core():
+            deallocations.add_item(dtor, handle, size=bytesize)
+
+        return core
+
+    return mem_finalize
+
+
+def _as_numba_devarray(intaddr, nelem, dtype, cb_dtor=None):
+    # Handle Datetime Column
+    if dtype == np.datetime64:
+        dtype = np.dtype('datetime64[ms]')
+    else:
+        dtype = np.dtype(dtype)
     addr = ctypes.c_uint64(intaddr)
     elemsize = dtype.itemsize
     datasize = elemsize * nelem
-    memptr = cuda.driver.MemoryPointer(context=cuda.current_context(),
-                                       pointer=addr, size=datasize)
+    finalizer = (_make_mem_finalizer(cb_dtor, datasize))
+    ctx = cuda.current_context()
+    if cb_dtor is None:
+        memptr = cuda.driver.MemoryPointer(context=ctx,
+                                           pointer=addr, size=datasize,
+                                           )
+    else:
+        memptr = cuda.driver.MemoryPointer(context=ctx,
+                                           pointer=addr, size=datasize,
+                                           finalizer=finalizer(ctx, addr)
+                                           )
     return cuda.devicearray.DeviceNDArray(shape=(nelem,), strides=(elemsize,),
                                           dtype=dtype, gpu_data=memptr)
+
+
+def cffi_view_to_column_mem(cffi_view):
+    data = _as_numba_devarray(intaddr=int(ffi.cast("uintptr_t",
+                                                   cffi_view.data)),
+                              nelem=cffi_view.size,
+                              dtype=gdf_to_np_dtype(cffi_view.dtype),
+                              cb_dtor=cuda.driver.driver.cuMemFree)
+
+    if cffi_view.valid:
+        mask = _as_numba_devarray(intaddr=int(ffi.cast("uintptr_t",
+                                              cffi_view.valid)),
+                                  nelem=calc_chunk_size(cffi_view.size,
+                                                        mask_bitsize),
+                                  dtype=mask_dtype,
+                                  cb_dtor=cuda.driver.driver.cuMemFree)
+    else:
+        mask = None
+
+    return data, mask
 
 
 @contextlib.contextmanager
@@ -264,7 +327,13 @@ def libgdf_join(col_lhs, col_rhs, on, how, method='sort'):
     method_api = _join_method_api[method]
     gdf_context = ffi.new('gdf_context*')
 
-    libgdf.gdf_context_view(gdf_context, 0, method_api, 0)
+    if method == 'hash':
+        libgdf.gdf_context_view(gdf_context, 0, method_api, 0)
+    elif method == 'sort':
+        libgdf.gdf_context_view(gdf_context, 1, method_api, 0)
+    else:
+        msg = "method not supported"
+        raise ValueError(msg)
 
     if(how not in ['left', 'inner']):
         msg = "new join api only supports left or inner"
