@@ -168,7 +168,7 @@ __device__ void setBit(gdf_valid_type* address, int bit) {
 gdf_error read_csv(csv_read_arg *args)
 {
 
-	PUSH_RANGE("LIBGDF_READ_CSV",0xFF9D4DBB);
+	PUSH_RANGE("LIBGDF_READ_CSV",READ_CSV_COLOR);
 	gdf_error error = gdf_error::GDF_SUCCESS;
 
 	//-----------------------------------------------------------------------------

@@ -21,6 +21,7 @@ const gdf_color JOIN_COLOR = GDF_CYAN;
 const gdf_color GROUPBY_COLOR = GDF_GREEN;
 const gdf_color BINARY_OP_COLOR = GDF_YELLOW;
 const gdf_color PARTITION_COLOR = GDF_PURPLE;
+const gdf_color READ_CSV_COLOR = GDF_PURPLE;
 
 inline 
 void PUSH_RANGE(std::string const & name, const gdf_color color) 
