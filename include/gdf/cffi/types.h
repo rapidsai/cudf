@@ -137,6 +137,8 @@ typedef enum {
   GDF_CYAN,
   GDF_RED,
   GDF_WHITE,
+  GDF_DARK_GREEN,
+  GDF_ORANGE,
   GDF_NUM_COLORS, /** Add new colors above this line */
 } gdf_color;
 

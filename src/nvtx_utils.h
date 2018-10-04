@@ -15,7 +15,7 @@
 
 // TODO: When we switch to a C++ Python interface, switch to using an
 // enum class instead of an enum that indexes into an array like this
-std::array<const uint32_t, GDF_NUM_COLORS> const colors = {0xff00ff00,0xff0000ff,0xffffff00,0xffff00ff,0xff00ffff,0xffff0000,0xffffffff};
+std::array<const uint32_t, GDF_NUM_COLORS> const colors = {0xff00ff00,0xff0000ff,0xffffff00,0xffff00ff,0xff00ffff,0xffff0000,0xffffffff,0xff006600,0xffffa500};
 
 const gdf_color JOIN_COLOR = GDF_CYAN;
 const gdf_color GROUPBY_COLOR = GDF_GREEN;
@@ -37,6 +37,7 @@ void PUSH_RANGE(std::string const & name, const gdf_color color)
     nvtxRangePushEx(&eventAttrib); 
 #endif
 }
+
 
 inline 
 void POP_RANGE(void)
