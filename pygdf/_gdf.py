@@ -415,6 +415,8 @@ def str_to_gdf_color(s):
         'cyan':     libgdf.GDF_CYAN,
         'red':      libgdf.GDF_RED,
         'white':    libgdf.GDF_WHITE,
+	'dark green': libgdf.GDF_DARK_GREEN,
+	'orange':   libgdf.GDF_ORANGE,
     }[s.lower()]
 
 
