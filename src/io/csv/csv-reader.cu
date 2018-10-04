@@ -54,6 +54,7 @@
 #include <gdf/errorutils.h>
  
 #include "gdf/gdf_io.h"
+#include "../../nvtx_utils.h"
 
 constexpr int32_t HASH_SEED = 33;
 
@@ -166,6 +167,8 @@ __device__ void setBit(gdf_valid_type* address, int bit) {
  */
 gdf_error read_csv(csv_read_arg *args)
 {
+
+	PUSH_RANGE("LIBGDF_READ_CSV",0xFF9D4DBB);
 	gdf_error error = gdf_error::GDF_SUCCESS;
 
 	//-----------------------------------------------------------------------------
@@ -299,6 +302,7 @@ gdf_error read_csv(csv_read_arg *args)
 	args->num_cols_out	= raw_csv->num_cols;
 	args->num_rows_out	= raw_csv->num_records;
 
+	POP_RANGE();
 	return error;
 }
 
