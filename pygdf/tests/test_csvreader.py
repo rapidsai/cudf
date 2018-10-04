@@ -60,7 +60,7 @@ nelem = [5, 25, 100]
 @pytest.mark.parametrize('nelem', nelem)
 def test_csv_reader_numeric_data(dtype, nelem):
 
-    fname = os.path.abspath('pygdf/tests/data/tmp_csvreader_file.csv')
+    fname = os.path.abspath('pygdf/tests/data/tmp_csvreader_file1.csv')
 
     df = make_numeric_dataframe(nelem, dtype)
     df.to_csv(fname, index=False, header=False)
@@ -74,7 +74,7 @@ def test_csv_reader_numeric_data(dtype, nelem):
 
 def test_csv_reader_datetime_data():
 
-    fname = os.path.abspath('pygdf/tests/data/tmp_csvreader_file.csv')
+    fname = os.path.abspath('pygdf/tests/data/tmp_csvreader_file2.csv')
 
     df = make_datetime_dataframe()
     df.to_csv(fname, index=False, header=False)
@@ -91,7 +91,7 @@ def test_csv_reader_datetime_data():
 
 def test_csv_reader_mixed_data_delimiter():
 
-    fname = os.path.abspath('pygdf/tests/data/tmp_csvreader_file.csv')
+    fname = os.path.abspath('pygdf/tests/data/tmp_csvreader_file3.csv')
 
     df = make_numpy_mixed_dataframe()
     df.to_csv(fname, sep='|', index=False, header=False)
@@ -107,7 +107,7 @@ def test_csv_reader_mixed_data_delimiter():
 
 def test_csv_reader_all_numeric_dtypes():
 
-    fname = os.path.abspath('pygdf/tests/data/tmp_csvreader_file.csv')
+    fname = os.path.abspath('pygdf/tests/data/tmp_csvreader_file4.csv')
 
     df, gdf_dict, pd_dict = make_all_numeric_dtypes_dataframe()
     df.to_csv(fname, sep=',', index=False, header=False)
@@ -123,7 +123,7 @@ def test_csv_reader_all_numeric_dtypes():
 
 def test_csv_reader_skiprows_skipfooter():
 
-    fname = os.path.abspath('pygdf/tests/data/tmp_csvreader_file.csv')
+    fname = os.path.abspath('pygdf/tests/data/tmp_csvreader_file5.csv')
 
     df = make_numpy_mixed_dataframe()
     df.to_csv(fname, columns=['Integer', 'Date', 'Float'], index=False,
