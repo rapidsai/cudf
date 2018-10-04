@@ -327,13 +327,7 @@ def libgdf_join(col_lhs, col_rhs, on, how, method='sort'):
     method_api = _join_method_api[method]
     gdf_context = ffi.new('gdf_context*')
 
-    if method == 'hash':
-        libgdf.gdf_context_view(gdf_context, 0, method_api, 0)
-    elif method == 'sort':
-        libgdf.gdf_context_view(gdf_context, 1, method_api, 0)
-    else:
-        msg = "method not supported"
-        raise ValueError(msg)
+    libgdf.gdf_context_view(gdf_context, 0, method_api, 0)
 
     if(how not in ['left', 'inner']):
         msg = "new join api only supports left or inner"

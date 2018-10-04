@@ -20,6 +20,8 @@ from .column import Column
 from .settings import NOTSET, settings
 from .serialize import register_distributed_serializer
 from .categorical import CategoricalColumn
+from .datetime import DatetimeColumn
+from .buffer import Buffer
 
 
 class DataFrame(object):
@@ -712,43 +714,107 @@ class DataFrame(object):
             raise ValueError('there are overlapping columns but '
                              'lsuffix and rsuffix are not defined')
 
+        def fix_name(name, suffix):
+            if name in same_names:
+                return "{}{}".format(name, suffix)
+            return name
+
         lhs = self
         rhs = other
+
+        col_cats = {}
+
+        for name in on:
+            if pd.api.types.is_categorical_dtype(self[name]):
+                lcats = self[name].cat.categories
+                rcats = other[name].cat.categories
+                if how == 'left':
+                    cats = lcats
+                    other[name] = (other[name].cat.set_categories(cats)
+                                   .fillna(-1))
+                elif how == 'right':
+                    cats = rcats
+                    self[name] = (self[name].cat.set_categories(cats)
+                                  .fillna(-1))
+                elif how in ['inner', 'outer']:
+                    # Do the join using the union of categories from both side.
+                    # Adjust for inner joins afterwards
+                    cats = sorted(set(lcats) | set(rcats))
+
+                    self[name] = (self[name].cat.set_categories(cats)
+                                  .fillna(-1))
+                    self[name] = self[name]._column.as_numerical
+
+                    other[name] = (other[name].cat.set_categories(cats)
+                                   .fillna(-1))
+                    other[name] = other[name]._column.as_numerical
+
+                col_cats[name] = cats
+
+        for name, col in lhs._cols.items():
+            if pd.api.types.is_categorical_dtype(col) and name not in on:
+                f_n = fix_name(name, lsuffix)
+                col_cats[f_n] = self[name].cat.categories
+
+        for name, col in rhs._cols.items():
+            if pd.api.types.is_categorical_dtype(col) and name not in on:
+                f_n = fix_name(name, rsuffix)
+                col_cats[f_n] = self[name].cat.categories
 
         cols, valids = _gdf.libgdf_join(lhs._cols, rhs._cols, on, how,
                                         method=method)
 
         df = DataFrame()
 
-        def fix_name(name, suffix):
-            if name in same_names:
-                return "{}{}".format(name, suffix)
-            return name
-
         # Columns are returned in order left - on - right from libgdf
         # Creating dataframe with ordering as pandas:
 
         gap = len(self.columns) - len(on)
         for idx in range(len(on)):
-            df[on[idx]] = cols[idx + gap]
+            if (cols[idx].dtype == 'datetime64[ms]'):
+                df[on[idx]] = DatetimeColumn(data=Buffer(cols[idx + gap]),
+                                             dtype=np.dtype('datetime64[ms]'))
+            elif on[idx] in col_cats.keys():
+                df[on[idx]] = CategoricalColumn(data=Buffer(cols[idx + gap]),
+                                                categories=col_cats[on[idx]],
+                                                dtype='categorical',
+                                                ordered=False)
+            else:
+                df[on[idx]] = cols[idx + gap]
             df[on[idx]] = df[on[idx]].set_mask(valids[idx])
 
         idx = 0
 
         for name in self.columns:
             if name not in on:
-                f_name = fix_name(name, lsuffix)
-                df[f_name] = cols[idx]
-                df[f_name] = df[f_name].set_mask(valids[idx])
+                f_n = fix_name(name, lsuffix)
+                if (cols[idx].dtype == 'datetime64[ms]'):
+                    df[f_n] = DatetimeColumn(data=Buffer(cols[idx]),
+                                             dtype=np.dtype('datetime64[ms]'))
+                elif f_n in col_cats.keys():
+                    df[f_n] = CategoricalColumn(data=Buffer(cols[idx]),
+                                                categories=col_cats[f_n],
+                                                dtype='categorical',
+                                                ordered=False)
+                else:
+                    df[f_n] = cols[idx]
                 idx = idx + 1
 
         idx = len(self.columns)
 
         for name in other.columns:
             if name not in on:
-                f_name = fix_name(name, rsuffix)
-                df[f_name] = cols[idx]
-                df[f_name] = df[f_name].set_mask(valids[idx])
+                f_n = fix_name(name, rsuffix)
+                if (cols[idx].dtype == 'datetime64[ms]'):
+                    df[f_n] = DatetimeColumn(data=Buffer(cols[idx]),
+                                             dtype=np.dtype('datetime64[ms]'))
+                elif f_n in col_cats.keys():
+                    df[f_n] = CategoricalColumn(data=Buffer(cols[idx]),
+                                                categories=col_cats[f_n],
+                                                dtype='categorical',
+                                                ordered=False)
+                else:
+                    df[f_n] = cols[idx]
                 idx = idx + 1
 
         return df
