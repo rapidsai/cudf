@@ -17,6 +17,7 @@
 #include <cstdlib>
 #include <iostream>
 #include <vector>
+#include <sys/stat.h>
 
 #include <thrust/device_vector.h>
 
@@ -29,8 +30,19 @@ struct gdf_csv_test : public ::testing::Test {
   }
 };
  
+bool checkFile(const char *fpath) {
+	struct stat     st;
+
+	if (stat(fpath, &st)) {
+		return 0;
+	}
+	return 1;
+}
+
 TEST(gdf_csv_test, CsvSimple)
 {
+	gdf_error error = GDF_SUCCESS;
+
 	csv_read_arg	args;
 
     args.num_cols = 10;
@@ -64,17 +76,18 @@ TEST(gdf_csv_test, CsvSimple)
 
 	args.file_path = (char *)("/tmp/simple.csv");
 
-	args.delimiter 		= ',';
-    args.lineterminator = '\n';
-    args.delim_whitespace = 0;
-    args.skipinitialspace = 0;
-    args.skiprows 		= 0;
-    args.skipfooter 	= 0;
-    args.dayfirst 		= 0;
+	if (  checkFile(args.file_path)) {
 
+		args.delimiter 		= ',';
+		args.lineterminator = '\n';
+		args.delim_whitespace = 0;
+		args.skipinitialspace = 0;
+		args.skiprows 		= 0;
+		args.skipfooter 	= 0;
+		args.dayfirst 		= 0;
 
-
-	gdf_error error = read_csv(&args);
+		error = read_csv(&args);
+	}
 
 	EXPECT_TRUE( error == GDF_SUCCESS );
 }
@@ -83,6 +96,8 @@ TEST(gdf_csv_test, CsvSimple)
 
 TEST(gdf_csv_test, MortPerf)
 {
+	gdf_error error = GDF_SUCCESS;
+
 	csv_read_arg	args;
 	const int num_cols = 31;
 
@@ -160,16 +175,21 @@ TEST(gdf_csv_test, MortPerf)
 
 	args.file_path = (char *)("/tmp/Performance_2000Q1.txt");
 
-	args.delimiter 		= '|';
-    args.lineterminator = '\n';
-    args.delim_whitespace = 0;
-    args.skipinitialspace = 0;
-    args.skiprows 		= 0;
-    args.skipfooter 	= 0;
-    args.dayfirst 		= 0;
+	if (  checkFile(args.file_path))
+	{
+		args.delimiter 		= '|';
+		args.lineterminator = '\n';
+		args.delim_whitespace = 0;
+		args.skipinitialspace = 0;
+		args.skiprows 		= 0;
+		args.skipfooter 	= 0;
+		args.dayfirst 		= 0;
 
-	gdf_error error = read_csv(&args);
+		error = read_csv(&args);
+	}
 
 	EXPECT_TRUE( error == GDF_SUCCESS );
 }
+
+
 
