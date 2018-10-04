@@ -220,7 +220,7 @@ gdf_error read_csv(csv_read_arg *args)
 
 	cudaDeviceSynchronize();
 
-	thrust::sort(raw_csv->recStart, raw_csv->recStart + raw_csv->num_records + 1);
+	thrust::sort(thrust::device, raw_csv->recStart, (raw_csv->recStart + raw_csv->num_records + 1));
 
 	raw_csv->num_records -= (args->skiprows + args->skipfooter); 
 
@@ -631,6 +631,7 @@ gdf_error launch_dataConvertColumns(raw_csv_t * raw_csv, void **gdf, gdf_valid_t
 		row_offset,
 		raw_csv->dayfirst
 	);
+
 
 
 	return GDF_SUCCESS;
