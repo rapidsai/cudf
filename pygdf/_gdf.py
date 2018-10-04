@@ -428,9 +428,19 @@ def nvtx_range_push(name, color='green'):
         The name of the NVTX range
     color : str
         The color to use for the range.
+        Can be named color or hex RGB string.
     """
-    _name = ffi.new("char[]", name.encode('ascii'))
-    libgdf.gdf_nvtx_range_push(_name, str_to_gdf_color(color))
+    name_c = ffi.new("char[]", name.encode('ascii'))
+
+    try:
+        color = int(color, 16) # check if hex string
+    except ValueError:
+        color = str_to_gdf_color(color)
+
+    if isinstance(color, int):
+        libgdf.gdf_nvtx_range_push_hex(name_c, ffi.cast('uint32_t', color))
+    else:
+        libgdf.gdf_nvtx_range_push(name_c, ffi.cast('unsigned int', color))
 
 
 def nvtx_range_pop():
