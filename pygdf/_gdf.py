@@ -429,7 +429,7 @@ def nvtx_range_push(name, color='green'):
     color : str
         The color to use for the range.
     """
-    _name = ffi.new("char[]", name.encode())
+    _name = ffi.new("char[]", name.encode('ascii'))
     libgdf.gdf_nvtx_range_push(_name, str_to_gdf_color(color))
 
 
