@@ -404,18 +404,21 @@ def count_nonzero_mask(mask, size):
     return nnz[0]
 
 
+_GDF_COLORS = {
+    'green':    libgdf.GDF_GREEN,
+    'blue':     libgdf.GDF_BLUE,
+    'yellow':   libgdf.GDF_YELLOW,
+    'purple':   libgdf.GDF_PURPLE,
+    'cyan':     libgdf.GDF_CYAN,
+    'red':      libgdf.GDF_RED,
+    'white':    libgdf.GDF_WHITE,
+}
+
+
 def str_to_gdf_color(s):
     """Util to convert str to gdf_color type.
     """
-    return {
-        'green':    libgdf.GDF_GREEN,
-        'blue':     libgdf.GDF_BLUE,
-        'yellow':   libgdf.GDF_YELLOW,
-        'purple':   libgdf.GDF_PURPLE,
-        'cyan':     libgdf.GDF_CYAN,
-        'red':      libgdf.GDF_RED,
-        'white':    libgdf.GDF_WHITE,
-    }[s.lower()]
+    return _GDF_COLORS[s.lower()]
 
 
 def nvtx_range_push(name, color='green'):
