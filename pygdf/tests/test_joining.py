@@ -118,8 +118,8 @@ def test_dataframe_join_how(aa, bb, how, method):
         #     _sorted_check_series(expect['b'], expect['a'], got['b'],
         #                          got['a'])
         else:
-            _check_series(expecto['b'], goto['b'])
-            _check_series(expecto['a'], goto['a'])
+            _check_series(expecto['b'].fillna(-1), goto['b'].fillna(-1))
+            _check_series(expecto['a'].fillna(-1), goto['a'].fillna(-1))
 
 
 def _check_series(expect, got):
@@ -157,10 +157,9 @@ def test_dataframe_join_suffix():
     assert list(expect.columns) == list(got.columns)
     assert np.all(expect.index.values == got.index.values)
     for k in expect.columns:
-        _check_series(expect[k], got[k])
+        _check_series(expect[k].fillna(-1), got[k].fillna(-1))
 
 
-@pytest.mark.skip(reason="bug regarding shallow copy of categorical columns")
 def test_dataframe_join_cats():
     lhs = DataFrame()
     lhs['a'] = pd.Categorical(list('aababcabbc'), categories=list('abc'))
