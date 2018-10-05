@@ -337,6 +337,8 @@ gdf_error construct_join_output_df(
         gdf_column ** result_cols,
         gdf_column * left_indices,
         gdf_column * right_indices) {
+
+  PUSH_RANGE("LIBGDF_JOIN_OUTPUT", JOIN_COLOR);
     //create left and right input table with columns not joined on
     std::vector<gdf_column*> lnonjoincol;
     std::vector<gdf_column*> rnonjoincol;
@@ -403,6 +405,8 @@ gdf_error construct_join_output_df(
     if (err != GDF_SUCCESS) { return err; }
     err = j_i_table.gather(static_cast<index_type*>(left_indices->data),
             j_table, join_type != JoinType::INNER_JOIN);
+
+	POP_RANGE();
     return err;
 }
 
