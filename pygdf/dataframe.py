@@ -22,6 +22,7 @@ from .settings import NOTSET, settings
 from .serialize import register_distributed_serializer
 from .categorical import CategoricalColumn
 from .datetime import DatetimeColumn
+from .numerical import NumericalColumn
 from .buffer import Buffer
 
 
@@ -781,15 +782,18 @@ class DataFrame(object):
         for idx in range(len(on)):
             if (cols[idx + gap].dtype == 'datetime64[ms]'):
                 df[on[idx]] = DatetimeColumn(data=Buffer(cols[idx + gap]),
-                                             dtype=np.dtype('datetime64[ms]'))
+                                             dtype=np.dtype('datetime64[ms]'),
+                                             mask=Buffer(valids[idx]))
             elif on[idx] in col_cats.keys():
                 df[on[idx]] = CategoricalColumn(data=Buffer(cols[idx + gap]),
                                                 categories=col_cats[on[idx]],
                                                 dtype='category',
-                                                ordered=False)
+                                                ordered=False,
+                                                mask=Buffer(valids[idx]))
             else:
-                df[on[idx]] = cols[idx + gap]
-            df[on[idx]] = df[on[idx]].set_mask(valids[idx])
+                df[on[idx]] = NumericalColumn(data=Buffer(cols[idx + gap]),
+                                              dtype=cols[idx + gap].dtype,
+                                              mask=Buffer(valids[idx]))
 
         idx = 0
 
@@ -798,16 +802,18 @@ class DataFrame(object):
                 f_n = fix_name(name, lsuffix)
                 if (cols[idx].dtype == 'datetime64[ms]'):
                     df[f_n] = DatetimeColumn(data=Buffer(cols[idx]),
-                                             dtype=np.dtype('datetime64[ms]'))
+                                             dtype=np.dtype('datetime64[ms]'),
+                                             mask=Buffer(valids[idx]))
                 elif f_n in col_cats.keys():
                     df[f_n] = CategoricalColumn(data=Buffer(cols[idx]),
                                                 categories=col_cats[f_n],
                                                 dtype='category',
-                                                ordered=False)
+                                                ordered=False,
+                                                mask=Buffer(valids[idx]))
                 else:
-                    df[f_n] = cols[idx]
-
-                df[f_n] = df[f_n].set_mask(valids[idx])
+                    df[f_n] = NumericalColumn(data=Buffer(cols[idx]),
+                                              dtype=cols[idx].dtype,
+                                              mask=Buffer(valids[idx]))
                 idx = idx + 1
 
         idx = len(self.columns)
@@ -817,16 +823,18 @@ class DataFrame(object):
                 f_n = fix_name(name, rsuffix)
                 if (cols[idx].dtype == 'datetime64[ms]'):
                     df[f_n] = DatetimeColumn(data=Buffer(cols[idx]),
-                                             dtype=np.dtype('datetime64[ms]'))
+                                             dtype=np.dtype('datetime64[ms]'),
+                                             mask=valids[idx])
                 elif f_n in col_cats.keys():
                     df[f_n] = CategoricalColumn(data=Buffer(cols[idx]),
                                                 categories=col_cats[f_n],
                                                 dtype='categorical',
-                                                ordered=False)
+                                                ordered=False,
+                                                mask=Buffer(valids[idx]))
                 else:
-                    df[f_n] = cols[idx]
-
-                df[f_n] = df[f_n].set_mask(valids[idx])
+                    df[f_n] = NumericalColumn(data=Buffer(cols[idx]),
+                                              dtype=cols[idx].dtype,
+                                              mask=Buffer(valids[idx]))
                 idx = idx + 1
 
         return df
