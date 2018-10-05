@@ -4,6 +4,9 @@ dist: trusty
 sudo: required
 language: cpp
 
+git:
+  depth: false
+
 branches:
     only:
         - master
@@ -18,7 +21,7 @@ matrix:
     - env: CUDA=9.2.148_396.37
     - env: CUDA=9.0.176_384.81 BUILD_CFFI=1 PYTHON=3.6
     - env: CUDA=9.0.176_384.81 BUILD_CFFI=1 PYTHON=3.5
-    
+
 
 before_install:
   - source ./travisci/install-cuda-trusty.sh
