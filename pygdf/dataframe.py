@@ -798,6 +798,8 @@ class DataFrame(object):
                                                 ordered=False)
                 else:
                     df[f_n] = cols[idx]
+
+                df[f_n] = df[f_n].set_mask(valids[idx])
                 idx = idx + 1
 
         idx = len(self.columns)
@@ -815,6 +817,8 @@ class DataFrame(object):
                                                 ordered=False)
                 else:
                     df[f_n] = cols[idx]
+
+                df[f_n] = df[f_n].set_mask(valids[idx])
                 idx = idx + 1
 
         return df
@@ -867,7 +871,7 @@ class DataFrame(object):
             raise ValueError('there are overlapping columns but '
                              'lsuffix and rsuffix are not defined')
 
-        idx_col_name = str(random.randint(1, 2**63))
+        idx_col_name = str(random.randint(2**29, 2**31))
 
         while idx_col_name in self.columns or idx_col_name in other.columns:
             idx_col_name = str(random.randint(2**29, 2**31))
@@ -882,7 +886,7 @@ class DataFrame(object):
 
         cat_join = False
 
-        if pd.core.common.is_categorical_dtype(self[idx_col_name]):
+        if pd.api.types.is_categorical_dtype(self[idx_col_name]):
             cat_join = True
             lcats = self[idx_col_name].cat.categories
             rcats = other[idx_col_name].cat.categories
