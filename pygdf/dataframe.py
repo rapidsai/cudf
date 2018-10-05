@@ -668,7 +668,7 @@ class DataFrame(object):
         return df.set_index(self.index.take(new_positions))
 
     def merge(self, other, on=None, how='left', lsuffix='_x', rsuffix='_y',
-              type='hash', method='hash'):
+              method='hash'):
         """Merge GPU DataFrame objects by performing a database-style join operation
         by columns or indexes.
 
