@@ -1220,7 +1220,7 @@ private:
                     row_gather_map,
                     i_data,
                     o_data,
-                    ValidRange<index_type>(0, num_rows));
+                    ValidRange<index_type>(0, input_column->size));
 
         } else {
             thrust::gather(thrust::cuda::par.on(stream),
@@ -1240,7 +1240,7 @@ private:
                            row_gather_map,
                            i_data,
                            remapped_copy.begin(),
-                           ValidRange<index_type>(0, num_rows));
+                           ValidRange<index_type>(0, input_column->size));
         } else {
             thrust::gather(thrust::cuda::par.on(stream),
                            row_gather_map,
