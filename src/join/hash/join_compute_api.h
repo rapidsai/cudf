@@ -174,7 +174,6 @@ gdf_error estimate_join_output_size(gdf_table<size_type> const & build_table,
 /**
 * @Synopsis  Performs a hash-based join between two sets of gdf_tables.
 *
-* @Param compute_ctx The Modern GPU context
 * @Param joined_output The output of the join operation
 * @Param left_table The left table to join
 * @Param right_table The right table to join
@@ -192,7 +191,7 @@ gdf_error estimate_join_output_size(gdf_table<size_type> const & build_table,
 template<JoinType join_type,
          typename output_index_type,
          typename size_type>
-gdf_error compute_hash_join(mgpu::context_t & compute_ctx,
+gdf_error compute_hash_join(
                             gdf_column * const output_l, 
                             gdf_column * const output_r,
                             gdf_table<size_type> const & left_table,
