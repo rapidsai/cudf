@@ -871,6 +871,7 @@ class DataFrame(object):
             raise ValueError('there are overlapping columns but '
                              'lsuffix and rsuffix are not defined')
 
+        # Creating unique column name to use libgdf join
         idx_col_name = str(random.randint(2**29, 2**31))
 
         while idx_col_name in self.columns or idx_col_name in other.columns:
