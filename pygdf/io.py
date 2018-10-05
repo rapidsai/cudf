@@ -8,6 +8,8 @@ from .dataframe import DataFrame
 from .datetime import DatetimeColumn
 from ._gdf import nvtx_range_push, nvtx_range_pop
 
+import numpy as np
+
 
 def _wrap_string(text):
     if(text is None):
@@ -134,8 +136,8 @@ def read_csv(filepath, lineterminator='\n',
     outcols = []
     for i in range(csv_reader.num_cols_out):
         newcol = Column.from_cffi_view(out[i])
-        if(newcol.dtype == 'datetime64'):
-            outcols.append(newcol.view(DatetimeColumn, dtype='datetime64[s]'))
+        if(newcol.dtype == np.dtype('datetime64[ms]')):
+            outcols.append(newcol.view(DatetimeColumn, dtype='datetime64[ms]'))
         else:
             outcols.append(newcol.view(NumericalColumn, dtype=newcol.dtype))
 

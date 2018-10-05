@@ -8,6 +8,7 @@ import contextlib
 import itertools
 
 import numpy as np
+import pandas as pd
 import pyarrow as pa
 
 from numba import cuda
@@ -118,6 +119,25 @@ def apply_mask_and(col, mask, out):
     return len(out) - nnz
 
 
+np_gdf_dict = {np.float64: libgdf.GDF_FLOAT64,
+               np.float32: libgdf.GDF_FLOAT32,
+               np.int64:   libgdf.GDF_INT64,
+               np.int32:   libgdf.GDF_INT32,
+               np.int16:   libgdf.GDF_INT16,
+               np.int8:    libgdf.GDF_INT8,
+               np.bool_:   libgdf.GDF_INT8,
+               np.datetime64: libgdf.GDF_DATE64}
+
+
+def np_to_gdf_dtype(dtype):
+    """Util to convert numpy dtype to gdf dtype.
+    """
+    if pd.api.types.is_categorical_dtype(dtype):
+        return libgdf.GDF_INT8
+    else:
+        return np_gdf_dict[np.dtype(dtype).type]
+
+
 def gdf_to_np_dtype(dtype):
     """Util to convert gdf dtype to numpy dtype.
     """
@@ -128,26 +148,10 @@ def gdf_to_np_dtype(dtype):
          libgdf.GDF_INT32: np.int32,
          libgdf.GDF_INT16: np.int16,
          libgdf.GDF_INT8: np.int8,
-         libgdf.GDF_INT8: np.bool_,
          libgdf.GDF_DATE64: np.datetime64,
          libgdf.N_GDF_TYPES: np.int32,
          libgdf.GDF_CATEGORY: np.int32,
      }[dtype])
-
-
-def np_to_gdf_dtype(dtype):
-    """Util to convert numpy dtype to gdf dtype.
-    """
-    return {
-        np.float64: libgdf.GDF_FLOAT64,
-        np.float32: libgdf.GDF_FLOAT32,
-        np.int64:   libgdf.GDF_INT64,
-        np.int32:   libgdf.GDF_INT32,
-        np.int16:   libgdf.GDF_INT16,
-        np.int8:    libgdf.GDF_INT8,
-        np.bool_:   libgdf.GDF_INT8,
-        np.datetime64: libgdf.GDF_DATE64,
-    }[np.dtype(dtype).type]
 
 
 def np_to_pa_dtype(dtype):
@@ -317,6 +321,78 @@ def apply_join(col_lhs, col_rhs, how, method='hash'):
 
     libgdf.gdf_column_free(col_result_l)
     libgdf.gdf_column_free(col_result_r)
+
+
+def libgdf_join(col_lhs, col_rhs, on, how, method='sort'):
+    joiner = _join_how_api[how]
+    method_api = _join_method_api[method]
+    gdf_context = ffi.new('gdf_context*')
+
+    libgdf.gdf_context_view(gdf_context, 0, method_api, 0)
+
+    if how not in ['left', 'inner']:
+        msg = "new join api only supports left or inner"
+        raise ValueError(msg)
+
+    list_lhs = []
+    list_rhs = []
+    result_cols = []
+
+    result_col_names = []
+
+    left_idx = []
+    right_idx = []
+    # idx = 0
+    for name, col in col_lhs.items():
+        list_lhs.append(col._column.cffi_view)
+        if name not in on:
+            result_cols.append(columnview(0, None, dtype=col._column.dtype))
+            result_col_names.append(name)
+
+    for name in on:
+        result_cols.append(columnview(0, None,
+                                      dtype=col_lhs[name]._column.dtype))
+        result_col_names.append(name)
+        left_idx.append(list(col_lhs.keys()).index(name))
+        right_idx.append(list(col_rhs.keys()).index(name))
+
+    for name, col in col_rhs.items():
+        list_rhs.append(col._column.cffi_view)
+        if name not in on:
+            result_cols.append(columnview(0, None, dtype=col._column.dtype))
+            result_col_names.append(name)
+
+    num_cols_to_join = len(on)
+    result_num_cols = len(list_lhs) + len(list_rhs) - num_cols_to_join
+
+    joiner(list_lhs,
+           len(list_lhs),
+           left_idx,
+           list_rhs,
+           len(list_rhs),
+           right_idx,
+           num_cols_to_join,
+           result_num_cols,
+           result_cols,
+           ffi.NULL,
+           ffi.NULL,
+           gdf_context)
+
+    res = []
+    valids = []
+
+    for col in result_cols:
+        res.append(_as_numba_devarray(intaddr=int(ffi.cast("uintptr_t",
+                                                           col.data)),
+                                      nelem=col.size,
+                                      dtype=gdf_to_np_dtype(col.dtype)))
+        valids.append(_as_numba_devarray(intaddr=int(ffi.cast("uintptr_t",
+                                                              col.valid)),
+                                         nelem=calc_chunk_size(col.size,
+                                                               mask_bitsize),
+                                         dtype=mask_dtype))
+
+    return res, valids
 
 
 def apply_prefixsum(col_inp, col_out, inclusive):

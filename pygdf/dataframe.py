@@ -3,7 +3,9 @@
 from __future__ import print_function, division
 
 import inspect
+import random
 from collections import OrderedDict
+import warnings
 
 import numpy as np
 import pandas as pd
@@ -14,11 +16,14 @@ from numba.cuda.cudadrv.devicearray import DeviceNDArray
 
 from . import cudautils, formatting, queryutils, applyutils, utils, _gdf
 from .index import GenericIndex, Index, RangeIndex
-from .buffer import Buffer
 from .series import Series
 from .column import Column
 from .settings import NOTSET, settings
 from .serialize import register_distributed_serializer
+from .categorical import CategoricalColumn
+from .datetime import DatetimeColumn
+from .numerical import NumericalColumn
+from .buffer import Buffer
 
 
 class DataFrame(object):
@@ -665,7 +670,7 @@ class DataFrame(object):
         return df.set_index(self.index.take(new_positions))
 
     def merge(self, other, on=None, how='left', lsuffix='_x', rsuffix='_y',
-              type='sort'):
+              type="", method='hash'):
         """Merge GPU DataFrame objects by performing a database-style join operation
         by columns or indexes.
 
@@ -693,7 +698,7 @@ class DataFrame(object):
                  The suffix to apply to overlapping column names
                  in the right side
 
-        type : str, defaults to 'sort'
+        type : str, defaults to 'hash'
 
 
         Returns
@@ -701,10 +706,17 @@ class DataFrame(object):
         merged : DataFrame
 
         """
-
         _gdf.nvtx_range_push("PYGDF_JOIN","blue") 
-        if how != 'left':
-            raise NotImplementedError('{!r} join not implemented yet'
+        if type != "":
+            warnings.warn(
+                'type="' + type + '" parameter is deprecated.'
+                'Use method="' + type + '" instead.',
+                DeprecationWarning
+            )
+            method = type
+
+        if how not in ['left', 'inner']:
+            raise NotImplementedError('{!r} merge not supported yet'
                                       .format(how))
 
         same_names = set(self.columns) & set(other.columns)
@@ -712,97 +724,126 @@ class DataFrame(object):
             raise ValueError('there are overlapping columns but '
                              'lsuffix and rsuffix are not defined')
 
-        lhs = self
-        rhs = other
-        # XXX: Replace this stub
-        # joined_values, joined_indicies = self._stub_merge(
-        #    lhs, rhs, left_on=on, right_on=on, how=how,
-        #    return_joined_indicies=True)
-        joined_values, joined_indicies = self._merge_gdf(
-            lhs, rhs, left_on=on, right_on=on, how=how,
-            return_indices=True)
-
-        # XXX: Prepare output.  same as _join.  code duplication
-        # Perform left, inner and outer join
         def fix_name(name, suffix):
             if name in same_names:
                 return "{}{}".format(name, suffix)
             return name
 
-        def gather_cols(outdf, indf, on, idx, joinidx, suffix):
-            mask = (Series(idx) != -1).as_mask()
-            for k in on:
-                newcol = indf[k].take(idx).set_mask(mask).set_index(joinidx)
-                outdf[fix_name(k, suffix)] = newcol
+        lhs = self
+        rhs = other
 
-        def gather_empty(outdf, indf, idx, joinidx, suffix):
-            for k in indf.columns:
-                outdf[fix_name(k, suffix)] = indf[k][:0]
+        col_cats = {}
+
+        for name in on:
+            if pd.api.types.is_categorical_dtype(self[name]):
+                lcats = self[name].cat.categories
+                rcats = other[name].cat.categories
+                if how == 'left':
+                    cats = lcats
+                    other[name] = (other[name].cat.set_categories(cats)
+                                   .fillna(-1))
+                elif how == 'right':
+                    cats = rcats
+                    self[name] = (self[name].cat.set_categories(cats)
+                                  .fillna(-1))
+                elif how in ['inner', 'outer']:
+                    # Do the join using the union of categories from both side.
+                    # Adjust for inner joins afterwards
+                    cats = sorted(set(lcats) | set(rcats))
+
+                    self[name] = (self[name].cat.set_categories(cats)
+                                  .fillna(-1))
+                    self[name] = self[name]._column.as_numerical
+
+                    other[name] = (other[name].cat.set_categories(cats)
+                                   .fillna(-1))
+                    other[name] = other[name]._column.as_numerical
+
+                col_cats[name] = cats
+
+        for name, col in lhs._cols.items():
+            if pd.api.types.is_categorical_dtype(col) and name not in on:
+                f_n = fix_name(name, lsuffix)
+                col_cats[f_n] = self[name].cat.categories
+
+        for name, col in rhs._cols.items():
+            if pd.api.types.is_categorical_dtype(col) and name not in on:
+                f_n = fix_name(name, rsuffix)
+                col_cats[f_n] = other[name].cat.categories
+
+        cols, valids = _gdf.libgdf_join(lhs._cols, rhs._cols, on, how,
+                                        method=method)
 
         df = DataFrame()
-        for key, col in zip(on, joined_values):
-            df[key] = col
 
-        left_indices, right_indices = joined_indicies
-        gather_cols(df, lhs, [x for x in lhs.columns if x not in on],
-                    left_indices, df.index, lsuffix)
-        gather_cols(df, rhs, [x for x in rhs.columns if x not in on],
-                    right_indices, df.index, rsuffix)
+        # Columns are returned in order left - on - right from libgdf
+        # Creating dataframe with ordering as pandas:
+
+        gap = len(self.columns) - len(on)
+        for idx in range(len(on)):
+            if (cols[idx + gap].dtype == 'datetime64[ms]'):
+                df[on[idx]] = DatetimeColumn(data=Buffer(cols[idx + gap]),
+                                             dtype=np.dtype('datetime64[ms]'),
+                                             mask=Buffer(valids[idx]))
+            elif on[idx] in col_cats.keys():
+                df[on[idx]] = CategoricalColumn(data=Buffer(cols[idx + gap]),
+                                                categories=col_cats[on[idx]],
+                                                dtype='category',
+                                                ordered=False,
+                                                mask=Buffer(valids[idx]))
+            else:
+                df[on[idx]] = NumericalColumn(data=Buffer(cols[idx + gap]),
+                                              dtype=cols[idx + gap].dtype,
+                                              mask=Buffer(valids[idx]))
+
+        idx = 0
+
+        for name in self.columns:
+            if name not in on:
+                f_n = fix_name(name, lsuffix)
+                if (cols[idx].dtype == 'datetime64[ms]'):
+                    df[f_n] = DatetimeColumn(data=Buffer(cols[idx]),
+                                             dtype=np.dtype('datetime64[ms]'),
+                                             mask=Buffer(valids[idx]))
+                elif f_n in col_cats.keys():
+                    df[f_n] = CategoricalColumn(data=Buffer(cols[idx]),
+                                                categories=col_cats[f_n],
+                                                dtype='category',
+                                                ordered=False,
+                                                mask=Buffer(valids[idx]))
+                else:
+                    df[f_n] = NumericalColumn(data=Buffer(cols[idx]),
+                                              dtype=cols[idx].dtype,
+                                              mask=Buffer(valids[idx]))
+                idx = idx + 1
+
+        idx = len(self.columns)
+
+        for name in other.columns:
+            if name not in on:
+                f_n = fix_name(name, rsuffix)
+                if (cols[idx].dtype == 'datetime64[ms]'):
+                    df[f_n] = DatetimeColumn(data=Buffer(cols[idx]),
+                                             dtype=np.dtype('datetime64[ms]'),
+                                             mask=Buffer(valids[idx]))
+                elif f_n in col_cats.keys():
+                    df[f_n] = CategoricalColumn(data=Buffer(cols[idx]),
+                                                categories=col_cats[f_n],
+                                                dtype='categorical',
+                                                ordered=False,
+                                                mask=Buffer(valids[idx]))
+                else:
+                    df[f_n] = NumericalColumn(data=Buffer(cols[idx]),
+                                              dtype=cols[idx].dtype,
+                                              mask=Buffer(valids[idx]))
+                idx = idx + 1
 
         _gdf.nvtx_range_pop() 
 
         return df
 
-    def _merge_gdf(self, left, right, left_on, right_on, how, return_indices):
-
-        from pygdf import cudautils
-
-        assert how == 'left'
-        assert return_indices
-        assert len(left_on) == len(right_on)
-
-        left_cols = []
-        for l in left_on:
-            left_cols.append(left[l]._column)
-
-        right_cols = []
-        for r in right_on:
-            right_cols.append(right[r]._column)
-
-        joined_indices = []
-        with _gdf.apply_join(left_cols, right_cols, how) as (left_indices,
-                                                             right_indices):
-            if left_indices.size > 0:
-                # For each column we joined on, gather the values from each
-                # column using the indices from the join
-                joined_values = []
-
-                for i in range(len(left_on)):
-                    # TODO Instead of calling 'gather_joined_index' for every
-                    # column that we are joining on, we should implement a
-                    # 'multi_gather_joined_index' that can gather a value from
-                    # each column at once
-                    raw_values = cudautils.gather_joined_index(
-                        left_cols[i].to_gpu_array(),
-                        right_cols[i].to_gpu_array(),
-                        left_indices,
-                        right_indices,
-                    )
-                    buffered_values = Buffer(raw_values)
-
-                    joined_values.append(left_cols[i]
-                                         .replace(data=buffered_values))
-
-                joined_indices = (cudautils.copy_array(left_indices),
-                                  cudautils.copy_array(right_indices))
-
-        if return_indices:
-            return joined_values, joined_indices
-        else:
-            return joined_indices
-
     def join(self, other, on=None, how='left', lsuffix='', rsuffix='',
-             sort=False, method='hash'):
+             sort=False, type="", method='hash'):
         """Join columns with other DataFrame on index or on a key column.
 
         Parameters
@@ -828,8 +869,140 @@ class DataFrame(object):
         - *other* must be a single DataFrame for now.
         - *on* is not supported yet due to lack of multi-index support.
         """
+
 	
         _gdf.nvtx_range_push("PYGDF_JOIN","blue") 
+
+
+        # Outer joins still use the old implementation
+        if type != "":
+            warnings.warn(
+                'type="' + type + '" parameter is deprecated.'
+                'Use method="' + type + '" instead.',
+                DeprecationWarning
+            )
+            method = type
+
+        if how == 'outer':
+            return self._py_join(other, on=None, how='outer', lsuffix=lsuffix,
+                                 rsuffix=rsuffix, sort=sort, method=method)
+        if how not in ['left', 'right', 'inner']:
+            raise NotImplementedError('unsupported {!r} join'.format(how))
+        # if on is not None:
+        #     raise NotImplementedError('"on" is not supported yet')
+
+        if how == 'right':
+            # libgdf doesn't support right join directly, we will swap the
+            # dfs and use left join
+            return other.join(self, other, how='left', lsuffix=rsuffix,
+                              rsuffix=lsuffix, sort=sort, method='hash')
+
+        same_names = set(self.columns) & set(other.columns)
+        if same_names and not (lsuffix or rsuffix):
+            raise ValueError('there are overlapping columns but '
+                             'lsuffix and rsuffix are not defined')
+
+        lhs = DataFrame()
+        rhs = DataFrame()
+
+        # Creating unique column name to use libgdf join
+        idx_col_name = str(random.randint(2**29, 2**31))
+
+        while idx_col_name in self.columns or idx_col_name in other.columns:
+            idx_col_name = str(random.randint(2**29, 2**31))
+
+        lhs[idx_col_name] = Series(self.index.as_column()).set_index(self
+                                                                     .index)
+        rhs[idx_col_name] = Series(other.index.as_column()).set_index(other
+                                                                      .index)
+
+        for name in self.columns:
+            lhs[name] = self[name]
+
+        for name in other.columns:
+            rhs[name] = other[name]
+
+        lhs = lhs.reset_index()
+        rhs = rhs.reset_index()
+
+        cat_join = False
+
+        if pd.api.types.is_categorical_dtype(lhs[idx_col_name]):
+            cat_join = True
+            lcats = lhs[idx_col_name].cat.categories
+            rcats = rhs[idx_col_name].cat.categories
+            if how == 'left':
+                cats = lcats
+                rhs[idx_col_name] = (rhs[idx_col_name].cat
+                                                      .set_categories(cats)
+                                                      .fillna(-1))
+            elif how == 'right':
+                cats = rcats
+                lhs[idx_col_name] = (lhs[idx_col_name].cat
+                                                      .set_categories(cats)
+                                                      .fillna(-1))
+            elif how in ['inner', 'outer']:
+                # Do the join using the union of categories from both side.
+                # Adjust for inner joins afterwards
+                cats = sorted(set(lcats) | set(rcats))
+                print(lhs[idx_col_name].dtype)
+                print(rhs[idx_col_name].dtype)
+                print(cats)
+
+                lhs[idx_col_name] = (lhs[idx_col_name].cat
+                                                      .set_categories(cats)
+                                                      .fillna(-1))
+                lhs[idx_col_name] = lhs[idx_col_name]._column.as_numerical
+
+                rhs[idx_col_name] = (rhs[idx_col_name].cat
+                                                      .set_categories(cats)
+                                                      .fillna(-1))
+                rhs[idx_col_name] = rhs[idx_col_name]._column.as_numerical
+
+        if lsuffix == '':
+            lsuffix = 'l'
+        if rsuffix == '':
+            rsuffix = 'r'
+
+        df = lhs.merge(rhs, on=[idx_col_name], how=how, lsuffix=lsuffix,
+                       rsuffix=rsuffix, method=method)
+
+        if cat_join:
+            df[idx_col_name] = CategoricalColumn(data=df[idx_col_name].data,
+                                                 categories=cats,
+                                                 dtype='categorical',
+                                                 ordered=False)
+
+        df = df.set_index(idx_col_name)
+
+        if sort and len(df):
+            return df.sort_index()
+
+        return df
+
+    def _py_join(self, other, on=None, how='left', lsuffix='', rsuffix='',
+                 sort=False, method='hash'):
+        """Join columns with other DataFrame on index or on a key column.
+        Parameters
+        ----------
+        other : DataFrame
+        how : str
+            Only accepts "left", "right", "inner", "outer"
+        lsuffix, rsuffix : str
+            The suffices to add to the left (*lsuffix*) and right (*rsuffix*)
+            column names when avoiding conflicts.
+        sort : bool
+            Set to True to ensure sorted ordering.
+        Returns
+        -------
+        joined : DataFrame
+        Notes
+        -----
+        Difference from pandas:
+        - *other* must be a single DataFrame for now.
+        - *on* is not supported yet due to lack of multi-index support.
+        """
+
         if how not in ['left', 'right', 'inner', 'outer']:
             raise NotImplementedError('unsupported {!r} join'.format(how))
         if on is not None:
