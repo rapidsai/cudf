@@ -148,8 +148,9 @@ def gdf_to_np_dtype(dtype):
          libgdf.GDF_INT32: np.int32,
          libgdf.GDF_INT16: np.int16,
          libgdf.GDF_INT8: np.int8,
-         libgdf.GDF_DATE64: np.dtype('datetime64[ms]'),
+         libgdf.GDF_DATE64: np.datetime64,
          libgdf.N_GDF_TYPES: np.int32,
+         libgdf.GDF_CATEGORY: np.int32,
      }[dtype])
 
 
