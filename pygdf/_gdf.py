@@ -132,7 +132,7 @@ np_gdf_dict = {np.float64: libgdf.GDF_FLOAT64,
 def np_to_gdf_dtype(dtype):
     """Util to convert numpy dtype to gdf dtype.
     """
-    if pd.core.common.is_categorical_dtype(dtype):
+    if pd.api.types.is_categorical_dtype(dtype):
         return libgdf.GDF_INT8
     else:
         return np_gdf_dict[np.dtype(dtype).type]
