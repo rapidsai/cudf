@@ -24,6 +24,7 @@ from .categorical import CategoricalColumn
 from .datetime import DatetimeColumn
 from .numerical import NumericalColumn
 from .buffer import Buffer
+from ._gdf import nvtx_range_push, nvtx_range_pop
 
 
 class DataFrame(object):
@@ -443,6 +444,7 @@ class DataFrame(object):
 
     @classmethod
     def _concat(cls, objs, ignore_index=False):
+        nvtx_range_push("PYGDF_CONCAT","orange")
         if len(set(frozenset(o.columns) for o in objs)) != 1:
             what = set(frozenset(o.columns) for o in objs)
             raise ValueError('columns mismatch: {}'.format(what))
@@ -455,6 +457,7 @@ class DataFrame(object):
                 for c in objs[0].columns]
         out = cls(data)
         out._index = index
+        nvtx_range_pop()
         return out
 
     def as_gpu_matrix(self, columns=None, order='F'):
@@ -1143,6 +1146,8 @@ class DataFrame(object):
         -------
         filtered :  DataFrame
         """
+
+        _gdf.nvtx_range_push("PYGDF_QUERY","purple")
         # Get calling environment
         callframe = inspect.currentframe().f_back
         callenv = {
@@ -1157,7 +1162,9 @@ class DataFrame(object):
         for col in self.columns:
             newseries = self[col][selected]
             newdf[col] = newseries
-        return newdf
+        result = newdf
+        _gdf.nvtx_range_pop()
+        return result
 
     @applyutils.doc_apply()
     def apply_rows(self, func, incols, outcols, kwargs, cache_key=None):

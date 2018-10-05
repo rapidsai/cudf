@@ -357,14 +357,20 @@ class Series(object):
             return self._copy_construct(data=col)
 
     def _unordered_compare(self, other, cmpops):
+        nvtx_range_push("PYGDF_UNORDERED_COMP","orange")
         other = self._normalize_binop_value(other)
         outcol = self._column.unordered_compare(cmpops, other._column)
-        return self._copy_construct(data=outcol)
+        result = self._copy_construct(data=outcol)
+        nvtx_range_pop()
+        return result
 
     def _ordered_compare(self, other, cmpops):
+        nvtx_range_push("PYGDF_ORDERED_COMP","orange")
         other = self._normalize_binop_value(other)
         outcol = self._column.ordered_compare(cmpops, other._column)
-        return self._copy_construct(data=outcol)
+        result = self._copy_construct(data=outcol)
+        nvtx_range_pop()
+        return result
 
     def __eq__(self, other):
         return self._unordered_compare(other, 'eq')
