@@ -282,7 +282,7 @@ class Series(object):
         and *other*.  Return the output Series.  The output dtype is
         determined by the input operands.
         """
-        nvtx_range_push("PYGDF_BINARY_OP","orange")
+        nvtx_range_push("PYGDF_BINARY_OP", "orange")
         other = self._normalize_binop_value(other)
         outcol = self._column.binary_operator(fn, other._column)
         result = self._copy_construct(data=outcol)
@@ -295,7 +295,7 @@ class Series(object):
         and *other* for reflected operations.  Return the output Series.
         The output dtype is determined by the input operands.
         """
-        nvtx_range_push("PYGDF_BINARY_OP","orange")
+        nvtx_range_push("PYGDF_BINARY_OP", "orange")
         other = self._normalize_binop_value(other)
         outcol = other._column.binary_operator(fn, self._column)
         result = self._copy_construct(data=outcol)
@@ -357,7 +357,7 @@ class Series(object):
             return self._copy_construct(data=col)
 
     def _unordered_compare(self, other, cmpops):
-        nvtx_range_push("PYGDF_UNORDERED_COMP","orange")
+        nvtx_range_push("PYGDF_UNORDERED_COMP", "orange")
         other = self._normalize_binop_value(other)
         outcol = self._column.unordered_compare(cmpops, other._column)
         result = self._copy_construct(data=outcol)
@@ -365,7 +365,7 @@ class Series(object):
         return result
 
     def _ordered_compare(self, other, cmpops):
-        nvtx_range_push("PYGDF_ORDERED_COMP","orange")
+        nvtx_range_push("PYGDF_ORDERED_COMP", "orange")
         other = self._normalize_binop_value(other)
         outcol = self._column.ordered_compare(cmpops, other._column)
         result = self._copy_construct(data=outcol)

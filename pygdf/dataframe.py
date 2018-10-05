@@ -444,7 +444,7 @@ class DataFrame(object):
 
     @classmethod
     def _concat(cls, objs, ignore_index=False):
-        nvtx_range_push("PYGDF_CONCAT","orange")
+        nvtx_range_push("PYGDF_CONCAT", "orange")
         if len(set(frozenset(o.columns) for o in objs)) != 1:
             what = set(frozenset(o.columns) for o in objs)
             raise ValueError('columns mismatch: {}'.format(what))
@@ -709,7 +709,7 @@ class DataFrame(object):
         merged : DataFrame
 
         """
-        _gdf.nvtx_range_push("PYGDF_JOIN","blue") 
+        _gdf.nvtx_range_push("PYGDF_JOIN", "blue")
         if type != "":
             warnings.warn(
                 'type="' + type + '" parameter is deprecated.'
@@ -841,7 +841,7 @@ class DataFrame(object):
                                               mask=Buffer(valids[idx]))
                 idx = idx + 1
 
-        _gdf.nvtx_range_pop() 
+        _gdf.nvtx_range_pop()
 
         return df
 
@@ -873,9 +873,7 @@ class DataFrame(object):
         - *on* is not supported yet due to lack of multi-index support.
         """
 
-	
-        _gdf.nvtx_range_push("PYGDF_JOIN","blue") 
-
+        _gdf.nvtx_range_push("PYGDF_JOIN", "blue")
 
         # Outer joins still use the old implementation
         if type != "":
@@ -1017,12 +1015,11 @@ class DataFrame(object):
                              'lsuffix and rsuffix are not defined')
 
         result = self._join(other=other, how=how, lsuffix=lsuffix,
-                          rsuffix=rsuffix, sort=sort, same_names=same_names,
-                          method=method)
+                            rsuffix=rsuffix, sort=sort, same_names=same_names,
+                            method=method)
         _gdf.nvtx_range_pop()
 
         return result
-
 
     def _join(self, other, how, lsuffix, rsuffix, sort, same_names,
               method='hash', rightjoin=False):
@@ -1121,12 +1118,13 @@ class DataFrame(object):
         else:
             from .libgdf_groupby import LibGdfGroupby
 
-            _gdf.nvtx_range_push("PYGDF_GROUPBY","purple")
+            _gdf.nvtx_range_push("PYGDF_GROUPBY", "purple")
             if as_index:
                 msg = "as_index==True not supported due to the lack of\
                     multi-index"
                 raise NotImplementedError(msg)
-            # The matching `pop` for this range is inside LibGdfGroupby __apply_agg
+            # The matching `pop` for this range is inside LibGdfGroupby
+            # __apply_agg
             result = LibGdfGroupby(self, by=by, method=method)
             return result
 
@@ -1147,7 +1145,7 @@ class DataFrame(object):
         filtered :  DataFrame
         """
 
-        _gdf.nvtx_range_push("PYGDF_QUERY","purple")
+        _gdf.nvtx_range_push("PYGDF_QUERY", "purple")
         # Get calling environment
         callframe = inspect.currentframe().f_back
         callenv = {

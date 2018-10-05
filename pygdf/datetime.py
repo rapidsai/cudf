@@ -148,7 +148,7 @@ class DatetimeColumn(columnops.TypedColumnBase):
 
 
 def binop(lhs, rhs, op, out_dtype):
-    nvtx_range_push("PYGDF_BINARY_OP","orange")
+    nvtx_range_push("PYGDF_BINARY_OP", "orange")
     masked = lhs.has_null_mask or rhs.has_null_mask
     out = columnops.column_empty_like(lhs, dtype=out_dtype, masked=masked)
     null_count = _gdf.apply_binaryop(op, lhs, rhs, out)

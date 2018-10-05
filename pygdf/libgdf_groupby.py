@@ -149,7 +149,6 @@ class LibGdfGroupby(object):
             first_run = False
             col_count = col_count + 1
 
-
         return result
 
     def _apply_basic_agg(self, agg_type):

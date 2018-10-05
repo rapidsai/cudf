@@ -75,7 +75,6 @@ def read_csv(filepath, lineterminator='\n',
 #              skipinitialspace=False, names=None, dtype=None,
 #              skipfooter=0, skiprows=0, dayfirst=False):
 
-
     if names is None or dtype is None:
         msg = '''Automatic dtype detection not implemented:
         Column names and dtypes must be specified.'''
@@ -92,7 +91,7 @@ def read_csv(filepath, lineterminator='\n',
         msg = '''dtype must be 'list' or 'dict' '''
         raise TypeError(msg)
 
-    nvtx_range_push("PYGDF_READ_CSV","purple")
+    nvtx_range_push("PYGDF_READ_CSV", "purple")
 
     csv_reader = ffi.new('csv_read_arg*')
 
