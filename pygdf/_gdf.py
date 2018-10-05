@@ -542,3 +542,48 @@ def count_nonzero_mask(mask, size):
         libgdf.gdf_count_nonzero_mask(mask_ptr, size, nnz)
 
     return nnz[0]
+
+
+_GDF_COLORS = {
+    'green':    libgdf.GDF_GREEN,
+    'blue':     libgdf.GDF_BLUE,
+    'yellow':   libgdf.GDF_YELLOW,
+    'purple':   libgdf.GDF_PURPLE,
+    'cyan':     libgdf.GDF_CYAN,
+    'red':      libgdf.GDF_RED,
+    'white':    libgdf.GDF_WHITE,
+}
+
+
+def str_to_gdf_color(s):
+    """Util to convert str to gdf_color type.
+    """
+    return _GDF_COLORS[s.lower()]
+
+
+def nvtx_range_push(name, color='green'):
+    """
+    Demarcate the beginning of a user-defined NVTX range.
+
+    Parameters
+    ----------
+    name : str
+        The name of the NVTX range
+    color : str
+        The color to use for the range.
+        Can be named color or hex RGB string.
+    """
+    name_c = ffi.new("char[]", name.encode('ascii'))
+
+    try:
+        color = int(color, 16)  # only works if color is a hex string
+        libgdf.gdf_nvtx_range_push_hex(name_c, ffi.cast('unsigned int', color))
+    except ValueError:
+        color = str_to_gdf_color(color)
+        libgdf.gdf_nvtx_range_push(name_c, color)
+
+
+def nvtx_range_pop():
+    """ Demarcate the end of the inner-most range.
+    """
+    libgdf.gdf_nvtx_range_pop()
