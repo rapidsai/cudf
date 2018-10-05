@@ -895,58 +895,70 @@ class DataFrame(object):
             raise ValueError('there are overlapping columns but '
                              'lsuffix and rsuffix are not defined')
 
+        lhs = DataFrame()
+        rhs = DataFrame()
+
         # Creating unique column name to use libgdf join
         idx_col_name = str(random.randint(2**29, 2**31))
 
         while idx_col_name in self.columns or idx_col_name in other.columns:
             idx_col_name = str(random.randint(2**29, 2**31))
 
-        self[idx_col_name] = Series(self.index.as_column()).set_index(self
+        lhs[idx_col_name] = Series(self.index.as_column()).set_index(self
+                                                                     .index)
+        rhs[idx_col_name] = Series(other.index.as_column()).set_index(other
                                                                       .index)
-        other[idx_col_name] = Series(other.index.as_column()).set_index(other
-                                                                        .index)
 
-        self = self.reset_index()
-        other = other.reset_index()
+        for name in self.columns:
+            lhs[name] = self[name]
+
+        for name in other.columns:
+            rhs[name] = other[name]
+
+        lhs = lhs.reset_index()
+        rhs = rhs.reset_index()
 
         cat_join = False
 
-        if pd.api.types.is_categorical_dtype(self[idx_col_name]):
+        if pd.api.types.is_categorical_dtype(lhs[idx_col_name]):
             cat_join = True
-            lcats = self[idx_col_name].cat.categories
-            rcats = other[idx_col_name].cat.categories
+            lcats = lhs[idx_col_name].cat.categories
+            rcats = rhs[idx_col_name].cat.categories
             if how == 'left':
                 cats = lcats
-                other[idx_col_name] = (other[idx_col_name].cat
-                                                          .set_categories(cats)
-                                                          .fillna(-1))
+                rhs[idx_col_name] = (rhs[idx_col_name].cat
+                                                      .set_categories(cats)
+                                                      .fillna(-1))
             elif how == 'right':
                 cats = rcats
-                self[idx_col_name] = (self[idx_col_name].cat
-                                                        .set_categories(cats)
-                                                        .fillna(-1))
+                lhs[idx_col_name] = (lhs[idx_col_name].cat
+                                                      .set_categories(cats)
+                                                      .fillna(-1))
             elif how in ['inner', 'outer']:
                 # Do the join using the union of categories from both side.
                 # Adjust for inner joins afterwards
                 cats = sorted(set(lcats) | set(rcats))
+                print(lhs[idx_col_name].dtype)
+                print(rhs[idx_col_name].dtype)
+                print(cats)
 
-                self[idx_col_name] = (self[idx_col_name].cat
-                                                        .set_categories(cats)
-                                                        .fillna(-1))
-                self[idx_col_name] = self[idx_col_name]._column.as_numerical
+                lhs[idx_col_name] = (lhs[idx_col_name].cat
+                                                      .set_categories(cats)
+                                                      .fillna(-1))
+                lhs[idx_col_name] = lhs[idx_col_name]._column.as_numerical
 
-                other[idx_col_name] = (other[idx_col_name].cat
-                                                          .set_categories(cats)
-                                                          .fillna(-1))
-                other[idx_col_name] = other[idx_col_name]._column.as_numerical
+                rhs[idx_col_name] = (rhs[idx_col_name].cat
+                                                      .set_categories(cats)
+                                                      .fillna(-1))
+                rhs[idx_col_name] = rhs[idx_col_name]._column.as_numerical
 
         if lsuffix == '':
             lsuffix = 'l'
         if rsuffix == '':
             rsuffix = 'r'
 
-        df = self.merge(other, on=[idx_col_name], how=how, lsuffix=lsuffix,
-                        rsuffix=rsuffix, method=method)
+        df = lhs.merge(rhs, on=[idx_col_name], how=how, lsuffix=lsuffix,
+                       rsuffix=rsuffix, method=method)
 
         if cat_join:
             df[idx_col_name] = CategoricalColumn(data=df[idx_col_name].data,
@@ -955,12 +967,6 @@ class DataFrame(object):
                                                  ordered=False)
 
         df = df.set_index(idx_col_name)
-        self.set_index(self[idx_col_name])
-        other.set_index(other[idx_col_name])
-
-        if cat_join:
-            self = self.drop_column(idx_col_name)
-            other = other.drop_column(idx_col_name)
 
         if sort and len(df):
             return df.sort_index()
