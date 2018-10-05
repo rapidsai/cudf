@@ -100,12 +100,12 @@ __device__ int findSetBit(int tid, long num_bits, uint64_t *f_bits, int x);
 
 gdf_error launch_countRecords(raw_csv_t * csvData);
 gdf_error launch_storeRecordStart(raw_csv_t * csvData);
-gdf_error launch_dataConvertColumns(raw_csv_t * raw_csv, void** d_gdf,  gdf_valid_type** valid, gdf_dtype* d_dtypes, string_pair	**str_cols, int row_offset);
+gdf_error launch_dataConvertColumns(raw_csv_t * raw_csv, void** d_gdf,  gdf_valid_type** valid, gdf_dtype* d_dtypes, string_pair	**str_cols, int row_offset, long *);
 
 __global__ void countRecords(char *data, const char delim, const char terminator, long num_bytes, long num_bits, long* num_records);
 __global__ void storeRecordStart(char *data, const char delim, const char terminator, long num_bytes, long num_bits, long* num_records,long* recStart) ;
 
-__global__ void convertCsvToGdf(char *csv,char delim, long num_records, int num_columns,long* recStart,gdf_dtype* dtype,void** gdf_data,gdf_valid_type **valid,string_pair **str_cols, int row_offset, bool);
+__global__ void convertCsvToGdf(char *csv,char delim, long num_records, int num_columns,long* recStart,gdf_dtype* dtype,void** gdf_data,gdf_valid_type **valid,string_pair **str_cols, int row_offset, bool, long *);
 
 //
 //---------------CUDA Valid (8 blocks of 8-bits) Bitmap Kernels ---------------------------------------------
@@ -230,8 +230,13 @@ gdf_error read_csv(csv_read_arg *args)
 
 	void **d_data;
 	gdf_valid_type **d_valid;
+    long	*d_valid_count;
+
 	CUDA_TRY( cudaMallocManaged ((void**)&d_data, 		(sizeof(void *)				* raw_csv->num_cols)) );
 	CUDA_TRY( cudaMallocManaged ((void**)&d_valid, 		(sizeof(gdf_valid_type *)	* raw_csv->num_cols)) );
+	CUDA_TRY( cudaMallocManaged ((void**)&d_valid_count,(sizeof(long) 				* raw_csv->num_cols)) );
+	CUDA_TRY( cudaMemset(d_valid_count,	0, 				(sizeof(long) 				* raw_csv->num_cols)) );
+
 
 	gdf_dtype* d_dtypes;
 	CUDA_TRY( cudaMallocManaged ((void**)&d_dtypes, 	sizeof(gdf_dtype) 			* (raw_csv->num_cols)) );
@@ -275,7 +280,7 @@ gdf_error read_csv(csv_read_arg *args)
 		d_valid[col] 	= gdf->valid;
 	}
 
-	launch_dataConvertColumns(raw_csv,d_data, d_valid, d_dtypes,str_cols, args->skiprows);
+	launch_dataConvertColumns(raw_csv,d_data, d_valid, d_dtypes,str_cols, args->skiprows, d_valid_count);
 
 	for (int col = 0; col < stringColCount; col++) {
 		//  TO-DO:  get a string class
@@ -283,15 +288,25 @@ gdf_error read_csv(csv_read_arg *args)
 
 	}
 
+	//--- set the null count
+	for ( int col = 0; col < raw_csv->num_cols; col++) {
+		long x = 0;
+		CUDA_TRY(cudaMemcpy(&x, &d_valid_count[col], sizeof(long), cudaMemcpyDeviceToHost));
+
+		cols[col]->null_count = raw_csv->num_records - x;
+	}
+
+
 	// free up space that is no longer needed
 	if (str_cols != NULL)
 		CUDA_TRY( cudaFree (str_cols) );
 
-	CUDA_TRY( cudaFree (d_valid) );
-	CUDA_TRY( cudaFree (d_data) );
-	CUDA_TRY( cudaFree (raw_csv->recStart));
-	CUDA_TRY( cudaFree (raw_csv->data));
-	CUDA_TRY(cudaFree(raw_csv->d_num_records));
+	CUDA_TRY( cudaFree(d_valid) );
+	CUDA_TRY( cudaFree(d_data) );
+	CUDA_TRY( cudaFree(d_valid_count) );
+	CUDA_TRY( cudaFree(raw_csv->recStart));
+	CUDA_TRY( cudaFree(raw_csv->data));
+	CUDA_TRY( cudaFree(raw_csv->d_num_records));
 
 	delete raw_csv;
 
@@ -422,40 +437,40 @@ gdf_error allocateGdfDataSpace(gdf_column *gdf) {
 	long num_bitmaps = (N + 31) / 8;			// 8 bytes per bitmap
 
 	//--- allocate space for the valid bitmaps
-	CUDA_TRY(cudaMallocManaged(&gdf->valid, (sizeof(gdf_valid_type) 	* num_bitmaps)));
+	CUDA_TRY(cudaMalloc(&gdf->valid, (sizeof(gdf_valid_type) 	* num_bitmaps)));
 	CUDA_TRY(cudaMemset(gdf->valid, 0, (sizeof(gdf_valid_type) 	* num_bitmaps)) );
 
 	//--- Allocate space for the data
 	switch(gdf->dtype) {
 		case gdf_dtype::GDF_INT8:
-			CUDA_TRY(cudaMallocManaged(&gdf->data, (sizeof(int8_t) * N)));
+			CUDA_TRY(cudaMalloc(&gdf->data, (sizeof(int8_t) * N)));
 			break;
 		case gdf_dtype::GDF_INT16:
-			CUDA_TRY(cudaMallocManaged(&gdf->data, (sizeof(int16_t) * N)));
+			CUDA_TRY(cudaMalloc(&gdf->data, (sizeof(int16_t) * N)));
 			break;
 		case gdf_dtype::GDF_INT32:
-			CUDA_TRY(cudaMallocManaged(&gdf->data, (sizeof(int32_t) * N)));
+			CUDA_TRY(cudaMalloc(&gdf->data, (sizeof(int32_t) * N)));
 			break;
 		case gdf_dtype::GDF_INT64:
-			CUDA_TRY(cudaMallocManaged(&gdf->data, (sizeof(int64_t) * N)));
+			CUDA_TRY(cudaMalloc(&gdf->data, (sizeof(int64_t) * N)));
 			break;
 		case gdf_dtype::GDF_FLOAT32:
-			CUDA_TRY(cudaMallocManaged(&gdf->data, (sizeof(float) * N)));
+			CUDA_TRY(cudaMalloc(&gdf->data, (sizeof(float) * N)));
 			break;
 		case gdf_dtype::GDF_FLOAT64:
-			CUDA_TRY(cudaMallocManaged(&gdf->data, (sizeof(double) * N)));
+			CUDA_TRY(cudaMalloc(&gdf->data, (sizeof(double) * N)));
 			break;
 		case gdf_dtype::GDF_DATE32:
-			CUDA_TRY(cudaMallocManaged(&gdf->data, (sizeof(gdf_date32) * N)));
+			CUDA_TRY(cudaMalloc(&gdf->data, (sizeof(gdf_date32) * N)));
 			break;
 		case gdf_dtype::GDF_DATE64:
-			CUDA_TRY(cudaMallocManaged(&gdf->data, (sizeof(gdf_date64) * N)));
+			CUDA_TRY(cudaMalloc(&gdf->data, (sizeof(gdf_date64) * N)));
 			break;
 		case gdf_dtype::GDF_TIMESTAMP:
-			CUDA_TRY(cudaMallocManaged(&gdf->data, (sizeof(int64_t) * N)));
+			CUDA_TRY(cudaMalloc(&gdf->data, (sizeof(int64_t) * N)));
 			break;
 		case gdf_dtype::GDF_CATEGORY:
-			CUDA_TRY(cudaMallocManaged(&gdf->data, (sizeof(gdf_category) * N)));
+			CUDA_TRY(cudaMalloc(&gdf->data, (sizeof(gdf_category) * N)));
 			break;
 		case gdf_dtype::GDF_STRING:
 			// Memory for gdf->data allocated by string class eventually
@@ -612,7 +627,7 @@ __global__ void storeRecordStart(char *data, const char delim, const char termin
 
 
 
-gdf_error launch_dataConvertColumns(raw_csv_t * raw_csv, void **gdf, gdf_valid_type** valid, gdf_dtype* d_dtypes,string_pair **str_cols, int row_offset) {
+gdf_error launch_dataConvertColumns(raw_csv_t * raw_csv, void **gdf, gdf_valid_type** valid, gdf_dtype* d_dtypes,string_pair **str_cols, int row_offset, long *num_valid) {
 
 	int64_t threads 	= 1024;
 	int64_t blocks 		= (  raw_csv->num_records + (threads -1)) / threads ;
@@ -629,7 +644,8 @@ gdf_error launch_dataConvertColumns(raw_csv_t * raw_csv, void **gdf, gdf_valid_t
 		valid,
 		str_cols,
 		row_offset,
-		raw_csv->dayfirst
+		raw_csv->dayfirst,
+		num_valid
 	);
 
 
@@ -659,7 +675,8 @@ __global__ void convertCsvToGdf(
 		gdf_valid_type 	**valid,
 		string_pair		**str_cols,
 		int 			row_offset,
-		bool			dayfirst
+		bool			dayfirst,
+		long			*num_valid
 		)
 {
 
@@ -771,11 +788,12 @@ __global__ void convertCsvToGdf(
 					break;
 			}
 
-				// // set the valid bitmap - all bits were set to 0 to start
-				int bitmapIdx 	= whichBitmap(rec_id);  	// which bitmap
-				int bitIdx		= whichBit(rec_id);		// which bit - over an 8-bit index
-				setBit(valid[col]+bitmapIdx, bitIdx);		// This is done with atomics
+			// set the valid bitmap - all bits were set to 0 to start
+			int bitmapIdx 	= whichBitmap(rec_id);  	// which bitmap
+			int bitIdx		= whichBit(rec_id);		// which bit - over an 8-bit index
+			setBit(valid[col]+bitmapIdx, bitIdx);		// This is done with atomics
 
+			atomicAdd((unsigned long long int*)&num_valid[col],(unsigned long long int)1);
 		}
 		else if(dtype[col]==gdf_dtype::GDF_STRING){
 			str_cols[stringCol][rec_id].first 	= NULL;
