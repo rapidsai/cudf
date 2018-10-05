@@ -824,7 +824,7 @@ class DataFrame(object):
                 if (cols[idx].dtype == 'datetime64[ms]'):
                     df[f_n] = DatetimeColumn(data=Buffer(cols[idx]),
                                              dtype=np.dtype('datetime64[ms]'),
-                                             mask=valids[idx])
+                                             mask=Buffer(valids[idx]))
                 elif f_n in col_cats.keys():
                     df[f_n] = CategoricalColumn(data=Buffer(cols[idx]),
                                                 categories=col_cats[f_n],
