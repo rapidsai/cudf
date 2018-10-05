@@ -785,7 +785,7 @@ class DataFrame(object):
             elif on[idx] in col_cats.keys():
                 df[on[idx]] = CategoricalColumn(data=Buffer(cols[idx + gap]),
                                                 categories=col_cats[on[idx]],
-                                                dtype='categorical',
+                                                dtype='category',
                                                 ordered=False)
             else:
                 df[on[idx]] = cols[idx + gap]
@@ -802,7 +802,7 @@ class DataFrame(object):
                 elif f_n in col_cats.keys():
                     df[f_n] = CategoricalColumn(data=Buffer(cols[idx]),
                                                 categories=col_cats[f_n],
-                                                dtype='categorical',
+                                                dtype='category',
                                                 ordered=False)
                 else:
                     df[f_n] = cols[idx]
