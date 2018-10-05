@@ -196,7 +196,7 @@ rmmError_t rmmFree(void *ptr, cudaStream_t stream)
 // Get the offset of ptr from its base allocation
 rmmError_t rmmGetAllocationOffset(ptrdiff_t *offset, void *ptr, cudaStream_t stream)
 {
-#ifdef RMM_USE_CUDAMALLOC
+#ifndef RMM_USE_CUDAMALLOC
     RMM_CHECK_CNMEM( cnmemAllocationOffset(offset, ptr, stream) );
 #else
     *offset = 0;
