@@ -544,20 +544,23 @@ def count_nonzero_mask(mask, size):
     return nnz[0]
 
 
+_GDF_COLORS = {
+    'green':    libgdf.GDF_GREEN,
+    'blue':     libgdf.GDF_BLUE,
+    'yellow':   libgdf.GDF_YELLOW,
+    'purple':   libgdf.GDF_PURPLE,
+    'cyan':     libgdf.GDF_CYAN,
+    'red':      libgdf.GDF_RED,
+    'white':    libgdf.GDF_WHITE,
+    'dark green': libgdf.GDF_DARK_GREEN,
+    'orange':   libgdf.GDF_ORANGE,
+}
+
+
 def str_to_gdf_color(s):
     """Util to convert str to gdf_color type.
     """
-    return {
-        'green':    libgdf.GDF_GREEN,
-        'blue':     libgdf.GDF_BLUE,
-        'yellow':   libgdf.GDF_YELLOW,
-        'purple':   libgdf.GDF_PURPLE,
-        'cyan':     libgdf.GDF_CYAN,
-        'red':      libgdf.GDF_RED,
-        'white':    libgdf.GDF_WHITE,
-	'dark green': libgdf.GDF_DARK_GREEN,
-	'orange':   libgdf.GDF_ORANGE,
-    }[s.lower()]
+    return _GDF_COLORS[s.lower()]
 
 
 def nvtx_range_push(name, color='green'):
@@ -576,13 +579,10 @@ def nvtx_range_push(name, color='green'):
 
     try:
         color = int(color, 16)  # only works if color is a hex string
+        libgdf.gdf_nvtx_range_push_hex(name_c, ffi.cast('unsigned int', color))
     except ValueError:
         color = str_to_gdf_color(color)
-
-    if isinstance(color, int):
-        libgdf.gdf_nvtx_range_push_hex(name_c, ffi.cast('uint32_t', color))
-    else:
-        libgdf.gdf_nvtx_range_push(name_c, ffi.cast('unsigned int', color))
+        libgdf.gdf_nvtx_range_push(name_c, color)
 
 
 def nvtx_range_pop():
