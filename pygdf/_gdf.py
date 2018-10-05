@@ -438,9 +438,9 @@ def nvtx_range_push(name, color='green'):
         color = str_to_gdf_color(color)
 
     if isinstance(color, int):
-        libgdf.gdf_nvtx_range_push_hex(name_c, ffi.cast('uint32_t', color))
+        libgdf.gdf_nvtx_range_push_hex(name_c, ffi.cast('unsigned int', color))
     else:
-        libgdf.gdf_nvtx_range_push(name_c, ffi.cast('unsigned int', color))
+        libgdf.gdf_nvtx_range_push(name_c, color)
 
 
 def nvtx_range_pop():
