@@ -111,7 +111,6 @@ if(HASH_JOIN)
 endif()
 
 
-
 # switch between cudaMalloc and cudaMallocManaged for hash tables
 option(HT_LEGACY_ALLOCATOR "legacy allocator for hash tables" ON)
 if(HT_LEGACY_ALLOCATOR)
@@ -145,7 +144,17 @@ cuda_add_library(gdf SHARED
     src/io/csv/csv-reader.cu
     src/io/convert/gdf-to-csr.cu      
     src/validops.cu
+    src/nvtx_utils.cpp
 )
+
+# Switch to enable NVTX ranges for profiling
+option(USE_NVTX "Build with NVTX" ON)
+if(USE_NVTX)
+  message("-- Using NVTX ranges")
+  find_library(NVTX_LIBRARY nvToolsExt HINTS /usr/local/cuda/lib64)
+  target_link_libraries(gdf ${NVTX_LIBRARY})
+  set(CUDA_NVCC_FLAGS  ${CUDA_NVCC_FLAGS}; -DUSE_NVTX)
+endif(USE_NVTX)
 
 if (ARROW_NUMERIC_VERSION EQUAL 900)
   # arrow-0.9 requires boost_regex

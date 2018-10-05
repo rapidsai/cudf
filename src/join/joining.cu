@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+
 #include <gdf/gdf.h>
 #include <gdf/errorutils.h>
 #include <limits>
@@ -22,6 +23,9 @@
 
 #include "joining.h"
 #include "../gdf_table.cuh"
+#include "../nvtx_utils.h"
+
+
 
 using namespace mgpu;
 
@@ -237,6 +241,8 @@ gdf_error join_call( int num_cols, gdf_column **leftcol, gdf_column **rightcol,
                      gdf_context *join_context)
 {
 
+
+
   if( (0 == num_cols) || (nullptr == leftcol) || (nullptr == rightcol))
     return GDF_DATASET_EMPTY;
 
@@ -282,28 +288,38 @@ gdf_error join_call( int num_cols, gdf_column **leftcol, gdf_column **rightcol,
 
   gdf_method join_method = join_context->flag_method; 
 
+  gdf_error gdf_error_code{GDF_SUCCESS};
+
+  PUSH_RANGE("LIBGDF_JOIN", JOIN_COLOR);
+
   switch(join_method)
   {
     case GDF_HASH:
       {
-        return hash_join<join_type, int64_t>(num_cols, leftcol, rightcol, left_result, right_result);
+        gdf_error_code =  hash_join<join_type, int64_t>(num_cols, leftcol, rightcol, left_result, right_result);
+        break;
       }
     case GDF_SORT:
       {
         // Sort based joins only support single column joins
         if(1 == num_cols)
         {
-          return sort_join<join_type>(leftcol[0], rightcol[0], left_result, right_result, join_context);
+          gdf_error_code =  sort_join<join_type>(leftcol[0], rightcol[0], left_result, right_result, join_context);
         }
         else
         {
-          return GDF_JOIN_TOO_MANY_COLUMNS;
+          gdf_error_code =  GDF_JOIN_TOO_MANY_COLUMNS;
         }
+
+        break;
       }
     default:
-      return GDF_UNSUPPORTED_METHOD;
+      gdf_error_code =  GDF_UNSUPPORTED_METHOD;
   }
 
+  POP_RANGE();
+
+  return gdf_error_code;
 }
 
 template <JoinType join_type, typename size_type, typename index_type>
@@ -321,6 +337,8 @@ gdf_error construct_join_output_df(
         gdf_column ** result_cols,
         gdf_column * left_indices,
         gdf_column * right_indices) {
+
+  PUSH_RANGE("LIBGDF_JOIN_OUTPUT", JOIN_COLOR);
     //create left and right input table with columns not joined on
     std::vector<gdf_column*> lnonjoincol;
     std::vector<gdf_column*> rnonjoincol;
@@ -387,6 +405,8 @@ gdf_error construct_join_output_df(
     if (err != GDF_SUCCESS) { return err; }
     err = j_i_table.gather(static_cast<index_type*>(left_indices->data),
             j_table, join_type != JoinType::INNER_JOIN);
+
+	POP_RANGE();
     return err;
 }
 
