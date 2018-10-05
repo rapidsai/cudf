@@ -329,7 +329,7 @@ def libgdf_join(col_lhs, col_rhs, on, how, method='sort'):
 
     libgdf.gdf_context_view(gdf_context, 0, method_api, 0)
 
-    if(how not in ['left', 'inner']):
+    if how not in ['left', 'inner']:
         msg = "new join api only supports left or inner"
         raise ValueError(msg)
 

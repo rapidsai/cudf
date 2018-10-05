@@ -5,6 +5,7 @@ from __future__ import print_function, division
 import inspect
 import random
 from collections import OrderedDict
+import warnings
 
 import numpy as np
 import pandas as pd
@@ -668,7 +669,7 @@ class DataFrame(object):
         return df.set_index(self.index.take(new_positions))
 
     def merge(self, other, on=None, how='left', lsuffix='_x', rsuffix='_y',
-              method='hash'):
+              type="", method='hash'):
         """Merge GPU DataFrame objects by performing a database-style join operation
         by columns or indexes.
 
@@ -704,6 +705,13 @@ class DataFrame(object):
         merged : DataFrame
 
         """
+        if type != "":
+            warnings.warn(
+                'type="' + type + '" parameter is deprecated.'
+                'Use method="' + type + '" instead.',
+                DeprecationWarning
+            )
+            method = type
 
         if how not in ['left', 'inner']:
             raise NotImplementedError('{!r} merge not supported yet'
@@ -759,7 +767,7 @@ class DataFrame(object):
         for name, col in rhs._cols.items():
             if pd.api.types.is_categorical_dtype(col) and name not in on:
                 f_n = fix_name(name, rsuffix)
-                col_cats[f_n] = self[name].cat.categories
+                col_cats[f_n] = other[name].cat.categories
 
         cols, valids = _gdf.libgdf_join(lhs._cols, rhs._cols, on, how,
                                         method=method)
@@ -824,7 +832,7 @@ class DataFrame(object):
         return df
 
     def join(self, other, on=None, how='left', lsuffix='', rsuffix='',
-             sort=False, method='hash'):
+             sort=False, type="", method='hash'):
         """Join columns with other DataFrame on index or on a key column.
 
         Parameters
@@ -852,6 +860,14 @@ class DataFrame(object):
         """
 
         # Outer joins still use the old implementation
+        if type != "":
+            warnings.warn(
+                'type="' + type + '" parameter is deprecated.'
+                'Use method="' + type + '" instead.',
+                DeprecationWarning
+            )
+            method = type
+
         if how == 'outer':
             return self._py_join(other, on=None, how='outer', lsuffix=lsuffix,
                                  rsuffix=rsuffix, sort=sort, method=method)

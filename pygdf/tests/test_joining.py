@@ -215,10 +215,9 @@ def test_dataframe_join_mismatch_cats(how):
     got = join_gdf.to_pandas()
     expect = join_pdf.fillna(-1)  # note: pygdf join doesn't mask NA
 
-    print(got)
+    # pygdf creates the columns in different order than pandas for right join
     if how == 'right':
         got = got[['data_col_left', 'data_col_right']]
-    print(expect)
 
     expect.data_col_right = expect.data_col_right.astype(np.int64)
     expect.data_col_left = expect.data_col_left.astype(np.int64)
