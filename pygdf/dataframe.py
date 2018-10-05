@@ -771,7 +771,7 @@ class DataFrame(object):
 
         gap = len(self.columns) - len(on)
         for idx in range(len(on)):
-            if (cols[idx].dtype == 'datetime64[ms]'):
+            if (cols[idx + gap].dtype == 'datetime64[ms]'):
                 df[on[idx]] = DatetimeColumn(data=Buffer(cols[idx + gap]),
                                              dtype=np.dtype('datetime64[ms]'))
             elif on[idx] in col_cats.keys():
@@ -854,7 +854,7 @@ class DataFrame(object):
         # Outer joins still use the old implementation
         if how == 'outer':
             return self._py_join(other, on=None, how='outer', lsuffix=lsuffix,
-                                 rsuffix=rsuffix, sort=False, method='hash')
+                                 rsuffix=rsuffix, sort=sort, method=method)
         if how not in ['left', 'right', 'inner']:
             raise NotImplementedError('unsupported {!r} join'.format(how))
         # if on is not None:
@@ -932,6 +932,10 @@ class DataFrame(object):
         df = df.set_index(idx_col_name)
         self.set_index(self[idx_col_name])
         other.set_index(other[idx_col_name])
+
+        if cat_join:
+            self = self.drop_column(idx_col_name)
+            other = other.drop_column(idx_col_name)
 
         if sort and len(df):
             return df.sort_index()
