@@ -203,7 +203,8 @@ gdf_error gdf_segmented_radixsort_generic(gdf_segmented_radixsort_plan_type *hdl
  * @Param[in] join_context The context to use to control how the join is performed,e.g.,
  * sort vs hash based implementation
  * 
- * @Returns   
+ * @Returns   GDF_SUCCESS if the join operation was successful, otherwise an appropriate
+ * error code
  */
 /* ----------------------------------------------------------------------------*/
 gdf_error gdf_inner_join(
@@ -241,7 +242,8 @@ gdf_error gdf_inner_join(
  * @Param[in] join_context The context to use to control how the join is performed,e.g.,
  * sort vs hash based implementation
  * 
- * @Returns   
+ * @Returns   GDF_SUCCESS if the join operation was successful, otherwise an appropriate
+ * error code
  */
 /* ----------------------------------------------------------------------------*/
 gdf_error gdf_left_join(
@@ -258,21 +260,44 @@ gdf_error gdf_left_join(
                          gdf_column * right_indices,
                          gdf_context *join_context);
 
-gdf_error gdf_outer_join_i8(gdf_column *leftcol, gdf_column *rightcol,
-                            gdf_column *l_result, gdf_column *r_result);
-gdf_error gdf_outer_join_i16(gdf_column *leftcol, gdf_column *rightcol,
-                            gdf_column *l_result, gdf_column *r_result);
-gdf_error gdf_outer_join_i32(gdf_column *leftcol, gdf_column *rightcol,
-                            gdf_column *l_result, gdf_column *r_result);
-gdf_error gdf_outer_join_i64(gdf_column *leftcol, gdf_column *rightcol,
-                            gdf_column *l_result, gdf_column *r_result);
-gdf_error gdf_outer_join_f32(gdf_column *leftcol, gdf_column *rightcol,
-                            gdf_column *l_result, gdf_column *r_result);
-gdf_error gdf_outer_join_f64(gdf_column *leftcol, gdf_column *rightcol,
-                            gdf_column *l_result, gdf_column *r_result);
-gdf_error gdf_outer_join_generic(gdf_column *leftcol, gdf_column *rightcol,
-                                 gdf_column *l_result, gdf_column *r_result);
-
+/* --------------------------------------------------------------------------*/
+/** 
+ * @Synopsis  Joins two dataframes (left, right) together on the specified columns
+ * 
+ * @Param[in] left_cols[] The columns of the left dataframe
+ * @Param[in] num_left_cols The number of columns in the left dataframe
+ * @Param[in] left_join_cols[] The column indices of columns from the left dataframe
+ * to join on
+ * @Param[in] right_cols[] The columns of the right dataframe
+ * @Param[in] num_right_cols The number of columns in the right dataframe
+ * @Param[in] right_join_cols[] The column indices of columns from the right dataframe
+ * to join on
+ * @Param[in] num_cols_to_join The total number of columns to join on
+ * @Param[in] result_num_cols The number of columns in the resulting dataframe
+ * @Param[out] gdf_column *result_cols[] If not nullptr, the dataframe that results from joining
+ * the left and right tables on the specified columns
+ * @Param[out] gdf_column * left_indices If not nullptr, indices of rows from the left table that match rows in the right table
+ * @Param[out] gdf_column * right_indices If not nullptr, indices of rows from the right table that match rows in the left table
+ * @Param[in] join_context The context to use to control how the join is performed,e.g.,
+ * sort vs hash based implementation
+ * 
+ * @Returns   GDF_SUCCESS if the join operation was successful, otherwise an appropriate
+ * error code
+ */
+/* ----------------------------------------------------------------------------*/
+gdf_error gdf_full_join(
+                         gdf_column **left_cols, 
+                         int num_left_cols,
+                         int left_join_cols[],
+                         gdf_column **right_cols,
+                         int num_right_cols,
+                         int right_join_cols[],
+                         int num_cols_to_join,
+                         int result_num_cols,
+                         gdf_column **result_cols,
+                         gdf_column * left_indices,
+                         gdf_column * right_indices,
+                         gdf_context *join_context);
 
 /* partioning */
 

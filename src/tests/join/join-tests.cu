@@ -43,7 +43,7 @@ enum struct join_op
 {
   INNER,
   LEFT,
-  OUTER
+  FULL
 };
 
 // Each element of the result will be an index into the left and right columns where
@@ -300,19 +300,21 @@ struct JoinTest : public testing::Test
       }
       // For left joins, insert a NULL if no match is found
       if((false == match) &&
-              ((op == join_op::LEFT) || (op == join_op::OUTER))){
+              ((op == join_op::LEFT) || (op == join_op::FULL))){
         constexpr int JoinNullValue{-1};
         reference_result.emplace_back(left_index, JoinNullValue);
       }
     }
 
-    if (op == join_op::OUTER)
+    if (op == join_op::FULL)
     {
         the_map.clear();
         // Build hash table that maps the first left columns' values to their row index in the column
         for(size_t left_index = 0; left_index < probe_column.size(); ++left_index)
         {
-          the_map.insert(std::make_pair(probe_column[left_index], left_index));
+          if (gdf_is_valid(probe_valid, left_index)) {
+            the_map.insert(std::make_pair(probe_column[left_index], left_index));
+          }
         }
         // Probe the hash table with first right column
         // Add rows where a match for the right column does not exist
@@ -320,7 +322,7 @@ struct JoinTest : public testing::Test
         {
           const auto probe_key = build_column[right_index];
           auto search = the_map.find(probe_key);
-          if (search == the_map.end())
+          if ((search == the_map.end()) || (!gdf_is_valid(build_valid, right_index)))
           {
               constexpr int JoinNullValue{-1};
               reference_result.emplace_back(JoinNullValue, right_index);
@@ -385,6 +387,17 @@ struct JoinTest : public testing::Test
       case join_op::INNER:
         {
           result_error =  gdf_inner_join(
+                                         left_gdf_columns, num_columns, range.data(),
+                                         right_gdf_columns, num_columns, range.data(),
+                                         num_columns,
+                                         0, nullptr,
+                                         &left_result, &right_result,
+                                         &ctxt);
+          break;
+        }
+      case join_op::FULL:
+        {
+          result_error =  gdf_full_join(
                                          left_gdf_columns, num_columns, range.data(),
                                          right_gdf_columns, num_columns, range.data(),
                                          num_columns,
@@ -459,7 +472,7 @@ struct JoinTest : public testing::Test
 // This structure is used to nest the join operations, join method and
 // number/types of columns for use with Google Test type-parameterized
 // tests .Here join_operation refers to the type of join eg. INNER,
-// LEFT, OUTER and join_method refers to the underlying join algorithm
+// LEFT, FULL and join_method refers to the underlying join algorithm
 //that performs it eg. GDF_HASH or GDF_SORT.
 template<join_op join_operation, 
          gdf_method join_method, 
@@ -519,34 +532,24 @@ typedef ::testing::Types<
                           TestParameters< join_op::LEFT,  SORT, VTuple<double  > >,
                           TestParameters< join_op::LEFT,  SORT, VTuple<uint32_t> >,
                           TestParameters< join_op::LEFT,  SORT, VTuple<uint64_t> >,
-                          // Single column outer join tests for all types
-                          //TestParameters< join_op::OUTER, SORT, VTuple<int32_t > >,
-                          //TestParameters< join_op::OUTER, SORT, VTuple<int64_t > >,
-                          //TestParameters< join_op::OUTER, SORT, VTuple<float   > >,
-                          //TestParameters< join_op::OUTER, SORT, VTuple<double  > >,
-                          //TestParameters< join_op::OUTER, SORT, VTuple<uint32_t> >,
-                          //TestParameters< join_op::OUTER, SORT, VTuple<uint64_t> >,
+                          // Single column full join tests for all types
+                          TestParameters< join_op::FULL, HASH, VTuple<int32_t > >,
+                          TestParameters< join_op::FULL, HASH, VTuple<int64_t > >,
+                          TestParameters< join_op::FULL, HASH, VTuple<float   > >,
+                          TestParameters< join_op::FULL, HASH, VTuple<double  > >,
+                          TestParameters< join_op::FULL, HASH, VTuple<uint32_t> >,
+                          TestParameters< join_op::FULL, HASH, VTuple<uint64_t> >,
                           // Two Column Left Join tests for some combination of types
                           TestParameters< join_op::LEFT,  HASH, VTuple<int32_t , int32_t> >,
-                          TestParameters< join_op::LEFT,  HASH, VTuple<int64_t , int32_t> >,
-                          TestParameters< join_op::LEFT,  HASH, VTuple<float   , double > >,
-                          TestParameters< join_op::LEFT,  HASH, VTuple<double  , int64_t> >,
                           TestParameters< join_op::LEFT,  HASH, VTuple<uint32_t, int32_t> >,
                           // Three Column Left Join tests for some combination of types
                           TestParameters< join_op::LEFT,  HASH, VTuple<int32_t , uint32_t, float  > >,
-                          TestParameters< join_op::LEFT,  HASH, VTuple<uint64_t, uint32_t, float  > >,
-                          TestParameters< join_op::LEFT,  HASH, VTuple<float   , double  , float  > >,
                           TestParameters< join_op::LEFT,  HASH, VTuple<double  , uint32_t, int64_t> >,
                           // Two Column Inner Join tests for some combination of types
                           TestParameters< join_op::INNER, HASH, VTuple<int32_t , int32_t> >,
-                          TestParameters< join_op::INNER, HASH, VTuple<int64_t , int32_t> >,
-                          TestParameters< join_op::INNER, HASH, VTuple<float   , double > >,
-                          TestParameters< join_op::INNER, HASH, VTuple<double  , int64_t> >,
                           TestParameters< join_op::INNER, HASH, VTuple<uint32_t, int32_t> >,
                           // Three Column Inner Join tests for some combination of types
                           TestParameters< join_op::INNER, HASH, VTuple<int32_t , uint32_t, float  > >,
-                          TestParameters< join_op::INNER, HASH, VTuple<uint64_t, uint32_t, float  > >,
-                          TestParameters< join_op::INNER, HASH, VTuple<float   , double  , float  > >,
                           TestParameters< join_op::INNER, HASH, VTuple<double  , uint32_t, int64_t> >,
                           // Four column test for Left Joins
                           TestParameters< join_op::LEFT, HASH, VTuple<double, int32_t, int64_t, int32_t> >,
