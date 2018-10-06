@@ -346,8 +346,8 @@ gdf_error compute_hash_join(
       cont = true;
       estimated_join_output_size *= 2;
       // Free the old buffers to prevent a memory leak on the new allocation
-      CUDA_TRY( cudaFree(output_l_ptr) );
-      CUDA_TRY( cudaFree(output_r_ptr) );
+      RMM_TRY( rmmFree(output_l_ptr, 0) );
+      RMM_TRY( rmmFree(output_r_ptr, 0) );
     }
     else
     {
