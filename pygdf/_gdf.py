@@ -552,7 +552,7 @@ _GDF_COLORS = {
     'cyan':     libgdf.GDF_CYAN,
     'red':      libgdf.GDF_RED,
     'white':    libgdf.GDF_WHITE,
-    'dark green': libgdf.GDF_DARK_GREEN,
+    'darkgreen': libgdf.GDF_DARK_GREEN,
     'orange':   libgdf.GDF_ORANGE,
 }
 
