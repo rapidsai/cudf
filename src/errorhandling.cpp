@@ -26,6 +26,8 @@ const char * gdf_error_get_name(gdf_error errcode) {
     GETNAME(GDF_C_ERROR)
     GETNAME(GDF_FILE_ERROR)
     GETNAME(GDF_MEMORYMANAGER_ERROR)
+    GETNAME(GDF_UNDEFINED_NVTX_COLOR)
+    GETNAME(GDF_NULL_NVTX_NAME)
     default:
         // This means we are missing an entry above for a gdf_error value.
         return "Internal error. Unknown error code.";

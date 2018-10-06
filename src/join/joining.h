@@ -35,7 +35,6 @@ class rmm_mgpu_context_t; // forward decl
   *
   * @Param left_table The left table to be joined
   * @Param right_table The right table to be joined
-  * @Param context Modern GPU context
   * @Param flip_indices Flag that indicates whether the left and right tables have been
   * flipped, meaning the output indices should also be flipped.
   * @tparam join_type The type of join to be performed
@@ -49,7 +48,6 @@ template<JoinType join_type,
          typename size_type>
 gdf_error join_hash(gdf_table<size_type> const & left_table,
                     gdf_table<size_type> const & right_table,
-                    rmm_mgpu_context_t & context,
                     gdf_column * const output_l,
                     gdf_column * const output_r,
                     bool flip_indices = false)
@@ -63,14 +61,12 @@ gdf_error join_hash(gdf_table<size_type> const & left_table,
   {
     return join_hash<join_type, output_index_type>(right_table, 
                                                    left_table, 
-                                                   context, 
                                                    output_l, 
                                                    output_r, 
                                                    true);
   }
 
-  return compute_hash_join<join_type, output_index_type>(context, 
-                                                         output_l, 
+  return compute_hash_join<join_type, output_index_type>(output_l,
                                                          output_r, 
                                                          left_table, 
                                                          right_table, 

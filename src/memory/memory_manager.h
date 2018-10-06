@@ -126,6 +126,7 @@ namespace rmm
             }
             return RMM_SUCCESS;
         }
+#endif
 
     private:
         Manager()= default;
@@ -136,6 +137,5 @@ namespace rmm
         std::mutex streams_mutex;
         std::set<cudaStream_t> registered_streams;
         Logger logger;
-#endif
     };    
 }

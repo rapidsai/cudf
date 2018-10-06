@@ -23,6 +23,7 @@
 #include "hashmap/hash_functions.cuh"
 #include "int_fastdiv.h"
 #include "rmm.h"
+#include "nvtx_utils.h"
 
 constexpr int BLOCK_SIZE = 256;
 constexpr int ROWS_PER_THREAD = 1;
@@ -605,6 +606,8 @@ gdf_error gdf_hash_partition(int num_input_cols,
       return GDF_COLUMN_SIZE_MISMATCH;
   }
 
+  PUSH_RANGE("LIBGDF_HASH_PARTITION", PARTITION_COLOR);
+
   // Wrap input and output columns in gdf_table
   std::unique_ptr< const gdf_table<size_type> > input_table{new gdf_table<size_type>(num_input_cols, input)};
   std::unique_ptr< gdf_table<size_type> > output_table{new gdf_table<size_type>(num_input_cols, partitioned_output)};
@@ -644,6 +647,8 @@ gdf_error gdf_hash_partition(int num_input_cols,
     default:
       gdf_status = GDF_INVALID_HASH_FUNCTION;
   }
+
+  POP_RANGE();
 
   return gdf_status;
 }

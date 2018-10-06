@@ -1,5 +1,55 @@
 #pragma once
 
+/* --------------------------------------------------------------------------*/
+/** 
+ * @Synopsis  Start a NVTX range with predefined color.
+ *
+ * This function is useful only for profiling with nvvp or Nsight Systems. It
+ * demarcates the begining of a user-defined range with a specified name and
+ * color that will show up in the timeline view of nvvp/Nsight Systems. Can be
+ * nested within other ranges.
+ * 
+ * @Param name The name of the NVTX range
+ * @Param color The predefined gdf_color enum to use to color this range
+ * 
+ * @Returns   
+ */
+/* ----------------------------------------------------------------------------*/
+gdf_error gdf_nvtx_range_push(char const * const name, gdf_color color );
+
+
+
+
+/* --------------------------------------------------------------------------*/
+/** 
+ * @Synopsis  Start a NVTX range with a custom ARGB color code.
+ *
+ * This function is useful only for profiling with nvvp or Nsight Systems. It
+ * demarcates the begining of a user-defined range with a specified name and
+ * color that will show up in the timeline view of nvvp/Nsight Systems. Can be
+ * nested within other ranges.
+ * 
+ * @Param name The name of the NVTX range
+ * @Param color The ARGB hex color code to use to color this range (e.g., 0xFF00FF00)
+ * 
+ * @Returns   
+ */
+/* ----------------------------------------------------------------------------*/
+gdf_error gdf_nvtx_range_push_hex(char const * const name, unsigned int color );
+
+
+/* --------------------------------------------------------------------------*/
+/** 
+ * @Synopsis Ends the inner-most NVTX range.
+ *
+ * This function is useful only for profiling with nvvp or Nsight Systems. It
+ * will demarcate the end of the inner-most range, i.e., the most recent call to
+ * gdf_nvtx_range_push.
+ * 
+ * @Returns   
+ */
+/* ----------------------------------------------------------------------------*/
+gdf_error gdf_nvtx_range_pop();
 
 /* --------------------------------------------------------------------------*/
 /** 
@@ -132,13 +182,81 @@ gdf_error gdf_segmented_radixsort_generic(gdf_segmented_radixsort_plan_type *hdl
 // joins
 
 
-gdf_error gdf_inner_join(int num_cols, gdf_column **leftcol, gdf_column **rightcol,
-                         gdf_column *left_result, gdf_column *right_result,
+/* --------------------------------------------------------------------------*/
+/** 
+ * @Synopsis  Joins two dataframes (left, right) together on the specified columns
+ * 
+ * @Param[in] left_cols[] The columns of the left dataframe
+ * @Param[in] num_left_cols The number of columns in the left dataframe
+ * @Param[in] left_join_cols[] The column indices of columns from the left dataframe
+ * to join on
+ * @Param[in] right_cols[] The columns of the right dataframe
+ * @Param[in] num_right_cols The number of columns in the right dataframe
+ * @Param[in] right_join_cols[] The column indices of columns from the right dataframe
+ * to join on
+ * @Param[in] num_cols_to_join The total number of columns to join on
+ * @Param[in] result_num_cols The number of columns in the resulting dataframe
+ * @Param[out] gdf_column *result_cols[] If not nullptr, the dataframe that results from joining
+ * the left and right tables on the specified columns
+ * @Param[out] gdf_column * left_indices If not nullptr, indices of rows from the left table that match rows in the right table
+ * @Param[out] gdf_column * right_indices If not nullptr, indices of rows from the right table that match rows in the left table
+ * @Param[in] join_context The context to use to control how the join is performed,e.g.,
+ * sort vs hash based implementation
+ * 
+ * @Returns   
+ */
+/* ----------------------------------------------------------------------------*/
+gdf_error gdf_inner_join(
+                         gdf_column **left_cols, 
+                         int num_left_cols,
+                         int left_join_cols[],
+                         gdf_column **right_cols,
+                         int num_right_cols,
+                         int right_join_cols[],
+                         int num_cols_to_join,
+                         int result_num_cols,
+                         gdf_column **result_cols,
+                         gdf_column * left_indices,
+                         gdf_column * right_indices,
                          gdf_context *join_context);
 
-gdf_error gdf_left_join(int num_cols, gdf_column **leftcol, gdf_column **rightcol,
-                        gdf_column *left_result, gdf_column *right_result,
-                        gdf_context *join_context);
+/* --------------------------------------------------------------------------*/
+/** 
+ * @Synopsis  Joins two dataframes (left, right) together on the specified columns
+ * 
+ * @Param[in] left_cols[] The columns of the left dataframe
+ * @Param[in] num_left_cols The number of columns in the left dataframe
+ * @Param[in] left_join_cols[] The column indices of columns from the left dataframe
+ * to join on
+ * @Param[in] right_cols[] The columns of the right dataframe
+ * @Param[in] num_right_cols The number of columns in the right dataframe
+ * @Param[in] right_join_cols[] The column indices of columns from the right dataframe
+ * to join on
+ * @Param[in] num_cols_to_join The total number of columns to join on
+ * @Param[in] result_num_cols The number of columns in the resulting dataframe
+ * @Param[out] gdf_column *result_cols[] If not nullptr, the dataframe that results from joining
+ * the left and right tables on the specified columns
+ * @Param[out] gdf_column * left_indices If not nullptr, indices of rows from the left table that match rows in the right table
+ * @Param[out] gdf_column * right_indices If not nullptr, indices of rows from the right table that match rows in the left table
+ * @Param[in] join_context The context to use to control how the join is performed,e.g.,
+ * sort vs hash based implementation
+ * 
+ * @Returns   
+ */
+/* ----------------------------------------------------------------------------*/
+gdf_error gdf_left_join(
+                         gdf_column **left_cols, 
+                         int num_left_cols,
+                         int left_join_cols[],
+                         gdf_column **right_cols,
+                         int num_right_cols,
+                         int right_join_cols[],
+                         int num_cols_to_join,
+                         int result_num_cols,
+                         gdf_column **result_cols,
+                         gdf_column * left_indices,
+                         gdf_column * right_indices,
+                         gdf_context *join_context);
 
 gdf_error gdf_outer_join_i8(gdf_column *leftcol, gdf_column *rightcol,
                             gdf_column *l_result, gdf_column *r_result);

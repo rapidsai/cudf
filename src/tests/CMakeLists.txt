@@ -54,5 +54,6 @@ add_subdirectory(quantiles)
 add_subdirectory(validops)
 add_subdirectory(memory)
 add_subdirectory(gdf)
+add_subdirectory(csv)
 
 message(STATUS "******** Tests are ready ********")

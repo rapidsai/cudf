@@ -3,6 +3,7 @@
 #include <gdf/gdf.h>
 #include <gdf/utils.h>
 #include <gdf/errorutils.h>
+#include "nvtx_utils.h"
 
 
 template<typename T, typename Tout, typename F>
@@ -42,6 +43,8 @@ struct BinaryOp {
         GDF_REQUIRE(lhs->size == rhs->size, GDF_COLUMN_SIZE_MISMATCH);
         GDF_REQUIRE(lhs->size == output->size, GDF_COLUMN_SIZE_MISMATCH);
         GDF_REQUIRE(lhs->dtype == rhs->dtype, GDF_UNSUPPORTED_DTYPE);
+
+        PUSH_RANGE("LIBGDF_BINARY_OP", BINARY_OP_COLOR);
         // find optimal blocksize
         int mingridsize, blocksize;
         CUDA_TRY(
@@ -63,6 +66,10 @@ struct BinaryOp {
             // action
             functor
         );
+
+        cudaDeviceSynchronize();
+
+        POP_RANGE();
 
         CUDA_CHECK_LAST();
         return GDF_SUCCESS;
