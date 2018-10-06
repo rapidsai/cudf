@@ -26,6 +26,7 @@
 #include <fstream>
 #include <sstream>
 #include <cstddef>
+#include <cuda.h>
 
 /** ---------------------------------------------------------------------------*
  * @brief Macro wrapper to check for error in RMM API calls.
@@ -194,7 +195,11 @@ rmmError_t rmmFree(void *ptr, cudaStream_t stream)
 rmmError_t rmmGetAllocationOffset(ptrdiff_t *offset, void *ptr, cudaStream_t stream)
 {
 #ifndef RMM_USE_CUDAMALLOC
-    RMM_CHECK_CNMEM( cnmemAllocationOffset(offset, ptr, stream) );
+    void *base = (void*)0xffffffff;
+    CUresult res = cuMemGetAddressRange((CUdeviceptr*)&base, nullptr, (CUdeviceptr)ptr);
+    if (res != CUDA_SUCCESS)
+        return RMM_ERROR_INVALID_ARGUMENT;
+    *offset = reinterpret_cast<ptrdiff_t>(ptr) - reinterpret_cast<ptrdiff_t>(base);
 #else
     *offset = 0;
 #endif

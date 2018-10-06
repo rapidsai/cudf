@@ -134,6 +134,7 @@ cuda_add_library(rmm SHARED
     src/memory/memory_manager.cpp
     thirdparty/cnmem/src/cnmem.cpp
 )
+target_link_libraries(rmm cuda)
 
 cuda_add_library(gdf SHARED
     src/binaryops.cu
