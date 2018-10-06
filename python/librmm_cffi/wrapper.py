@@ -75,18 +75,24 @@ class _librmm_wrapper(object):
         mem = cuda.driver.MemoryPointer(ctx, ptr, datasize, finalizer=finalizer)
         return cuda.cudadrv.devicearray.DeviceNDArray(shape, strides, dtype, gpu_data=mem)
 
-    def device_array_from_ptr(self, ptr, nelem, dtype=np.float):
+    def device_array_from_ptr(self, ptr, nelem, dtype=np.float, finalizer=None):
         """device_array_from_ptr(self, ptr, size, dtype=np.float, stream=0)
 
         Create a Numba device array from a ptr, size, and dtype.
         """
-        dtype = np.dtype(dtype)
+        # Handle Datetime Column
+        if dtype == np.datetime64:
+            dtype = np.dtype('datetime64[ms]')
+        else:
+            dtype = np.dtype(dtype)
+
         elemsize = dtype.itemsize
         datasize = elemsize * nelem
         addr = self._ffi.cast("uintptr_t", ptr)
         # note no finalizer -- freed externally!
         return self._array_helper(addr=addr, datasize=datasize, 
-                                  shape=(nelem,), strides=(elemsize,), dtype=dtype)
+                                  shape=(nelem,), strides=(elemsize,), 
+                                  dtype=dtype, finalizer=finalizer)
 
     def device_array(self, shape, dtype=np.float, strides=None, order='C', stream=0):
         """device_array(self, shape, dtype=np.float, strides=None, order='C', stream=0)
