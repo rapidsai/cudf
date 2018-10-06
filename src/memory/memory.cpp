@@ -115,7 +115,7 @@ rmmError_t rmmInitialize()
 #ifndef RMM_USE_CUDAMALLOC
     cnmemDevice_t dev;
     RMM_CHECK_CUDA( cudaGetDevice(&(dev.device)) );
-    dev.size = 16800000000;
+    dev.size = 0;//16800000000;
     dev.numStreams = 1;
     cudaStream_t streams[1]; streams[0] = 0;
     dev.streams = streams;
