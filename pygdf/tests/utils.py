@@ -11,7 +11,7 @@ def random_bitmask(size):
         number of bits
     """
     sz = utils.calc_chunk_size(size, utils.mask_bitsize)
-    data= np.random.randint(0, 255 + 1, size=sz) 
+    data = np.random.randint(0, 255 + 1, size=sz)
     return data.astype(utils.mask_dtype)
 
 

@@ -1,6 +1,5 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
 
-import os
 import pytest
 from collections import OrderedDict
 
