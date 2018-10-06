@@ -35,6 +35,7 @@ namespace rmm
                         size_t size, cudaStream_t stream)
                         
     {
+        std::lock_guard<std::mutex> guard(log_mutex);
         if (Alloc == event)
             current_allocations.insert(ptr);
         else if (Free == event)

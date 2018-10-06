@@ -17,6 +17,7 @@
 /** ---------------------------------------------------------------------------*
  * @brief Memory Manager class
  * 
+ * Note: assumes at least C++11
  * ---------------------------------------------------------------------------**/
 
 #pragma once
@@ -27,6 +28,8 @@
 #include <iomanip>
 #include <iostream>
 #include <set>
+#include <mutex>
+
 #include "memory.h"
 #include "cnmem.h"
 
@@ -51,37 +54,6 @@ typedef struct CUstream_st *cudaStream_t;
 
 namespace rmm 
 {
-    // TODO: not currently thread safe
-    class Manager
-    {
-    public:
-        Manager() {}
-
-#ifndef RMM_USE_CUDAMALLOC
-        /** ---------------------------------------------------------------------------*
-         * @brief Register a new stream into the device memory manager.
-         * 
-         * Also returns success if the stream is already registered.
-         * 
-         * @param stream The stream to register
-         * @return rmmError_t RMM_SUCCESS if all goes well, RMM_ERROR_INVALID_ARGUMENT
-         *                    if the stream is invalid.
-         * ---------------------------------------------------------------------------**/
-        rmmError_t registerStream(cudaStream_t stream) { 
-            if (registered_streams.empty() || 0 == registered_streams.count(stream)) {
-                registered_streams.insert(stream);
-                if (stream) // don't register the null stream with CNMem
-                    RMM_CHECK_CNMEM( cnmemRegisterStream(stream) );
-            }
-            return RMM_SUCCESS;
-        }
-
-    private:
-        std::set<cudaStream_t> registered_streams;
-#endif
-    };
-
-    // TODO: not currently thread safe
     class Logger
     {
     public:        
@@ -121,5 +93,49 @@ namespace rmm
         
         TimePt base_time;
         std::vector<MemoryEvent> events;
+        std::mutex log_mutex;
     };
+    
+    class Manager
+    {
+    public:
+        static Manager& getInstance(){
+            // Myers' singleton. Thread safe and unique in C++11 -- Note, C++11 required!
+            static Manager instance;
+            return instance;
+        }
+
+        static Logger& getLogger() { return getInstance().logger; }
+
+#ifndef RMM_USE_CUDAMALLOC
+        /** ---------------------------------------------------------------------------*
+         * @brief Register a new stream into the device memory manager.
+         * 
+         * Also returns success if the stream is already registered.
+         * 
+         * @param stream The stream to register
+         * @return rmmError_t RMM_SUCCESS if all goes well, RMM_ERROR_INVALID_ARGUMENT
+         *                    if the stream is invalid.
+         * ---------------------------------------------------------------------------**/
+        rmmError_t registerStream(cudaStream_t stream) { 
+            std::lock_guard<std::mutex> guard(streams_mutex);
+            if (registered_streams.empty() || 0 == registered_streams.count(stream)) {
+                registered_streams.insert(stream);
+                if (stream) // don't register the null stream with CNMem
+                    RMM_CHECK_CNMEM( cnmemRegisterStream(stream) );
+            }
+            return RMM_SUCCESS;
+        }
+
+    private:
+        Manager()= default;
+        ~Manager()= default;
+        Manager(const Manager&)= delete;
+        Manager& operator=(const Manager&)= delete;
+  
+        std::mutex streams_mutex;
+        std::set<cudaStream_t> registered_streams;
+        Logger logger;
+#endif
+    };    
 }

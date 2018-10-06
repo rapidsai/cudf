@@ -46,46 +46,45 @@
         return RMM_ERROR_CUDA_ERROR; \
 } while(0)
 
-// Global instance of the log
-rmm::Logger theLog;
-rmm::Manager *theManager;
-
-// RAII logger class
-class LogIt
+namespace rmm 
 {
-public:
-    LogIt(rmm::Logger::MemEvent_t event, size_t size, cudaStream_t stream) 
-    : event(event), device(0), ptr(0), size(size), stream(stream)
+    // RAII logger class
+    class LogIt
     {
-        cudaGetDevice(&device);
-        start = std::chrono::system_clock::now();
-    }
+    public:
+        LogIt(Logger::MemEvent_t event, size_t size, cudaStream_t stream) 
+        : event(event), device(0), ptr(0), size(size), stream(stream)
+        {
+            cudaGetDevice(&device);
+            start = std::chrono::system_clock::now();
+        }
 
-    LogIt(rmm::Logger::MemEvent_t event, void* ptr, size_t size, cudaStream_t stream) 
-    : event(event), device(0), ptr(ptr), size(size), stream(stream)
-    {
-        cudaGetDevice(&device);
-        start = std::chrono::system_clock::now();
-    }
+        LogIt(Logger::MemEvent_t event, void* ptr, size_t size, cudaStream_t stream) 
+        : event(event), device(0), ptr(ptr), size(size), stream(stream)
+        {
+            cudaGetDevice(&device);
+            start = std::chrono::system_clock::now();
+        }
 
-    /// Sometimes you need to start logging before the pointer address is known
-    void setPointer(void* p) { ptr = p; }
+        /// Sometimes you need to start logging before the pointer address is known
+        void setPointer(void* p) { ptr = p; }
 
-    ~LogIt() 
-    {
-        rmm::Logger::TimePt end = std::chrono::system_clock::now();
-        size_t freeMem, totalMem;
-        rmmGetInfo(&freeMem, &totalMem, stream);
-        theLog.record(event, device, ptr, start, end, freeMem, totalMem, size, stream); 
-    }
+        ~LogIt() 
+        {
+            Logger::TimePt end = std::chrono::system_clock::now();
+            size_t freeMem, totalMem;
+            rmmGetInfo(&freeMem, &totalMem, stream);
+            Manager::getLogger().record(event, device, ptr, start, end, freeMem, totalMem, size, stream); 
+        }
 
-private:
-    rmm::Logger::MemEvent_t event;
-    int device;
-    void* ptr;
-    size_t size;
-    cudaStream_t stream;
-    rmm::Logger::TimePt start;
+    private:
+        rmm::Logger::MemEvent_t event;
+        int device;
+        void* ptr;
+        size_t size;
+        cudaStream_t stream;
+        rmm::Logger::TimePt start;
+    };
 };
 
 #ifndef GETNAME
@@ -112,7 +111,6 @@ const char * rmmGetErrorString(rmmError_t errcode) {
 // Initialize memory manager state and storage.
 rmmError_t rmmInitialize()
 {
-    theManager = new rmm::Manager;
 #ifndef RMM_USE_CUDAMALLOC
     cnmemDevice_t dev;
     RMM_CHECK_CUDA( cudaGetDevice(&(dev.device)) );
@@ -132,14 +130,13 @@ rmmError_t rmmFinalize()
 #ifndef RMM_USE_CUDAMALLOC
     RMM_CHECK_CNMEM( cnmemFinalize() );
 #endif
-    delete theManager;
     return RMM_SUCCESS;
 }
  
 // Allocate memory and return a pointer to device memory. 
 rmmError_t rmmAlloc(void **ptr, size_t size, cudaStream_t stream)
 {
-    LogIt log(rmm::Logger::Alloc, size, stream);
+    rmm::LogIt log(rmm::Logger::Alloc, size, stream);
 
     if (!ptr && !size) {
         return RMM_SUCCESS;
@@ -151,7 +148,7 @@ rmmError_t rmmAlloc(void **ptr, size_t size, cudaStream_t stream)
 #ifdef RMM_USE_CUDAMALLOC
     RMM_CHECK_CUDA(cudaMalloc(ptr, size));
 #else
-    RMM_CHECK( theManager->registerStream(stream) );
+    RMM_CHECK( rmm::Manager::getInstance().registerStream(stream) );
     RMM_CHECK_CNMEM( cnmemMalloc(ptr, size, stream) );
 #endif
     log.setPointer(*ptr);
@@ -161,7 +158,7 @@ rmmError_t rmmAlloc(void **ptr, size_t size, cudaStream_t stream)
 // Reallocate device memory block to new size and recycle any remaining memory.
 rmmError_t rmmRealloc(void **ptr, size_t new_size, cudaStream_t stream)
 {
-    LogIt log(rmm::Logger::Realloc, new_size, stream);
+    rmm::LogIt log(rmm::Logger::Realloc, new_size, stream);
 
 	if (!ptr && !new_size) {
         return RMM_SUCCESS;
@@ -174,7 +171,7 @@ rmmError_t rmmRealloc(void **ptr, size_t new_size, cudaStream_t stream)
     RMM_CHECK_CUDA(cudaFree(*ptr));
 	RMM_CHECK_CUDA(cudaMalloc(ptr, new_size));
 #else
-    RMM_CHECK( theManager->registerStream(stream) );
+    RMM_CHECK( rmm::Manager::getInstance().registerStream(stream) );
     RMM_CHECK_CNMEM( cnmemFree(*ptr, stream) );
     RMM_CHECK_CNMEM( cnmemMalloc(ptr, new_size, stream) );
 #endif
@@ -184,7 +181,7 @@ rmmError_t rmmRealloc(void **ptr, size_t new_size, cudaStream_t stream)
 // Release device memory and recycle the associated memory.
 rmmError_t rmmFree(void *ptr, cudaStream_t stream)
 {
-    LogIt log(rmm::Logger::Free, ptr, 0, stream);
+    rmm::LogIt log(rmm::Logger::Free, ptr, 0, stream);
 #ifdef RMM_USE_CUDAMALLOC
 	RMM_CHECK_CUDA(cudaFree(ptr));
 #else
@@ -210,7 +207,7 @@ rmmError_t rmmGetInfo(size_t *freeSize, size_t *totalSize, cudaStream_t stream)
 #ifdef RMM_USE_CUDAMALLOC
     RMM_CHECK_CUDA(cudaMemGetInfo(freeSize, totalSize));
 #else
-    RMM_CHECK( theManager->registerStream(stream) );
+    RMM_CHECK( rmm::Manager::getInstance().registerStream(stream) );
     RMM_CHECK_CNMEM( cnmemMemGetInfo(freeSize, totalSize, stream) );
 #endif
 	return RMM_SUCCESS;
@@ -223,7 +220,7 @@ rmmError_t rmmWriteLog(const char* filename)
     {
         std::ofstream csv;
         csv.open(filename);
-        theLog.to_csv(csv);
+        rmm::Manager::getLogger().to_csv(csv);
     }
     catch (const std::ofstream::failure& e) {
         return RMM_ERROR_IO;
@@ -235,7 +232,7 @@ rmmError_t rmmWriteLog(const char* filename)
 size_t rmmLogSize()
 {
     std::ostringstream csv; 
-    theLog.to_csv(csv);
+    rmm::Manager::getLogger().to_csv(csv);
     return csv.str().size();
 }
 
@@ -245,7 +242,7 @@ rmmError_t rmmGetLog(char *buffer, size_t buffer_size)
     try 
     {
         std::ostringstream csv; 
-        theLog.to_csv(csv);
+        rmm::Manager::getLogger().to_csv(csv);
         csv.str().copy(buffer, std::min(buffer_size, csv.str().size()));
     }
     catch (const std::ofstream::failure& e) {
