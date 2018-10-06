@@ -445,8 +445,8 @@ gdf_error join_call_compute_df(
     using gdf_col_pointer = typename std::unique_ptr<gdf_column, std::function<void(gdf_column*)>>;
     auto gdf_col_deleter = [](gdf_column* col){
         col->size = 0;
-        if (col->data)  { cudaFree(col->data);  }
-        if (col->valid) { cudaFree(col->valid); }
+        if (col->data)  { rmmFree(col->data, 0);  }
+        if (col->valid) { rmmFree(col->valid, 0); }
     };
     gdf_col_pointer l_index_temp, r_index_temp;
 
