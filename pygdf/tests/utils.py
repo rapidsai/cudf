@@ -11,7 +11,7 @@ def random_bitmask(size):
         number of bits
     """
     sz = utils.calc_chunk_size(size, utils.mask_bitsize)
-    data = np.random.random_integers(low=0, high=255, size=sz)
+    data = np.random.randint(0, 256, size=sz)
     return data.astype(utils.mask_dtype)
 
 
@@ -28,3 +28,4 @@ def expand_bits_to_bytes(arr):
 def count_zero(arr):
     arr = np.asarray(arr)
     return np.count_nonzero(arr == 0)
+
