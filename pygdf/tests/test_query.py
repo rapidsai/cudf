@@ -26,7 +26,7 @@ def test_query_parser(text, expect_args):
     info = queryutils.query_parser(text)
     fn = queryutils.query_builder(info, 'myfoo')
     assert callable(fn)
-    argspec = inspect.getargspec(fn)
+    argspec = inspect.getfullargspec(fn)
     assert tuple(argspec.args) == tuple(expect_args)
 
 
