@@ -1,6 +1,5 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
 
-import os
 import pytest
 from collections import OrderedDict
 
@@ -78,7 +77,7 @@ def test_csv_reader_numeric_data(dtype, nelem, tmpdir):
 
 def test_csv_reader_datetime_data(tmpdir):
 
-    fname = os.path.abspath('pygdf/tests/data/tmp_csvreader_file2.csv')
+    fname = tmpdir.mkdir("gdf_csv").join('tmp_csvreader_file2.csv')
 
     df = make_datetime_dataframe()
     df.to_csv(fname, index=False, header=False)
@@ -95,7 +94,7 @@ def test_csv_reader_datetime_data(tmpdir):
 
 def test_csv_reader_mixed_data_delimiter(tmpdir):
 
-    fname = os.path.abspath('pygdf/tests/data/tmp_csvreader_file3.csv')
+    fname = tmpdir.mkdir("gdf_csv").join('tmp_csvreader_file3.csv')
 
     df = make_numpy_mixed_dataframe()
     df.to_csv(fname, sep='|', index=False, header=False)

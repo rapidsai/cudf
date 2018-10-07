@@ -344,15 +344,17 @@ def libgdf_join(col_lhs, col_rhs, on, how, method='sort'):
     valids = []
 
     for col in result_cols:
-        res.append(rmm.device_array_from_ptr(ptr=int(ffi.cast("uintptr_t",
-                                                              col.data)),
+        intaddr = int(ffi.cast("uintptr_t", col.data))
+        res.append(rmm.device_array_from_ptr(ptr=intaddr,
                                              nelem=col.size,
-                                             dtype=gdf_to_np_dtype(col.dtype)))
-        valids.append(rmm.device_array_from_ptr(ptr=int(ffi.cast("uintptr_t",
-                                                                 col.valid)),
+                                             dtype=gdf_to_np_dtype(col.dtype),
+                                             finalizer=rmm._make_finalizer(intaddr, 0)))
+        intaddr = int(ffi.cast("uintptr_t", col.valid))
+        valids.append(rmm.device_array_from_ptr(ptr=intaddr,
                                                 nelem=calc_chunk_size(col.size,
                                                                       mask_bitsize),
-                                                dtype=mask_dtype))
+                                                dtype=mask_dtype,
+                                                finalizer=rmm._make_finalizer(intaddr, 0)))
 
     return res, valids
 
