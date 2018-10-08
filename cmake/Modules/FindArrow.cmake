@@ -72,7 +72,7 @@ else()
 
     # Determine arrow version information for CPP macros
     get_filename_component(ARROW_STATIC_LIB_DIR ${ARROW_STATIC_LIB} DIRECTORY)
-    file(STRINGS ${ARROW_LIB_DIR}/pkgconfig/arrow.pc _ARROW_VERSION REGEX "^Version: ([0-9]+\\.[0-9]+\\.[0-9]+)")
+    file(STRINGS ${ARROW_STATIC_LIB_DIR}/pkgconfig/arrow.pc _ARROW_VERSION REGEX "^Version: ([0-9]+\\.[0-9]+\\.[0-9]+)")
     STRING(REGEX REPLACE "^Version: ([0-9]+)\\.[0-9]+\\.[0-9]+" "\\1" ARROW_VERSION_MAJOR "${_ARROW_VERSION}")
     STRING(REGEX REPLACE "^Version: [0-9]+\\.([0-9]+)\\.[0-9]+" "\\1" ARROW_VERSION_MINOR "${_ARROW_VERSION}")
     STRING(REGEX REPLACE "^Version: [0-9]+\\.[0-9]+\\.([0-9]+)" "\\1" ARROW_VERSION_PATCH "${_ARROW_VERSION}")
