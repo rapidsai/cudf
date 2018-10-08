@@ -62,4 +62,10 @@ namespace rmm
                 << elapsed.count() << std::endl;
         }
     }
+
+    void Logger::clear()
+    {
+        std::lock_guard<std::mutex> guard(log_mutex);
+        events.clear();
+    }
 }

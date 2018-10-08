@@ -110,27 +110,32 @@ const char * rmmGetErrorString(rmmError_t errcode) {
 }
 
 // Initialize memory manager state and storage.
-rmmError_t rmmInitialize()
+rmmError_t rmmInitialize(bool use_cuda_malloc)
 {
-#ifndef RMM_USE_CUDAMALLOC
-    cnmemDevice_t dev;
-    RMM_CHECK_CUDA( cudaGetDevice(&(dev.device)) );
-    dev.size = 0;//16800000000;
-    dev.numStreams = 1;
-    cudaStream_t streams[1]; streams[0] = 0;
-    dev.streams = streams;
-    dev.streamSizes = 0;
-    RMM_CHECK_CNMEM( cnmemInit(1, &dev, 0) );    
-#endif
+    rmm::Manager::setCudaAllocationMode(use_cuda_malloc);
+
+    if (!use_cuda_malloc)
+    {
+        cnmemDevice_t dev;
+        RMM_CHECK_CUDA( cudaGetDevice(&(dev.device)) );
+        dev.size = 0;//16800000000;
+        dev.numStreams = 1;
+        cudaStream_t streams[1]; streams[0] = 0;
+        dev.streams = streams;
+        dev.streamSizes = 0;
+        RMM_CHECK_CNMEM( cnmemInit(1, &dev, 0) );
+    }
     return RMM_SUCCESS;
 }
 
 // Shutdown memory manager.
 rmmError_t rmmFinalize()
 {
-#ifndef RMM_USE_CUDAMALLOC
-    RMM_CHECK_CNMEM( cnmemFinalize() );
-#endif
+    if (!rmm::Manager::getCudaAllocationMode()) // use CUDA
+        RMM_CHECK_CNMEM( cnmemFinalize() );
+    
+    rmm::Manager::getInstance().finalize();
+    
     return RMM_SUCCESS;
 }
  
@@ -146,12 +151,14 @@ rmmError_t rmmAlloc(void **ptr, size_t size, cudaStream_t stream)
     if (!ptr) 
         return RMM_ERROR_INVALID_ARGUMENT;
 
-#ifdef RMM_USE_CUDAMALLOC
-    RMM_CHECK_CUDA(cudaMalloc(ptr, size));
-#else
-    RMM_CHECK( rmm::Manager::getInstance().registerStream(stream) );
-    RMM_CHECK_CNMEM( cnmemMalloc(ptr, size, stream) );
-#endif
+    if (rmm::Manager::getCudaAllocationMode())
+        RMM_CHECK_CUDA(cudaMalloc(ptr, size));
+    else
+    {
+        RMM_CHECK( rmm::Manager::getInstance().registerStream(stream) );
+        RMM_CHECK_CNMEM( cnmemMalloc(ptr, size, stream) );
+    }
+
     log.setPointer(*ptr);
     return RMM_SUCCESS;
 }
@@ -168,14 +175,17 @@ rmmError_t rmmRealloc(void **ptr, size_t new_size, cudaStream_t stream)
     if (!ptr) 
     	return RMM_ERROR_INVALID_ARGUMENT;
 
-#ifdef RMM_USE_CUDAMALLOC
-    RMM_CHECK_CUDA(cudaFree(*ptr));
-	RMM_CHECK_CUDA(cudaMalloc(ptr, new_size));
-#else
-    RMM_CHECK( rmm::Manager::getInstance().registerStream(stream) );
-    RMM_CHECK_CNMEM( cnmemFree(*ptr, stream) );
-    RMM_CHECK_CNMEM( cnmemMalloc(ptr, new_size, stream) );
-#endif
+    if (rmm::Manager::getCudaAllocationMode()) // use CUDA
+    {
+        RMM_CHECK_CUDA(cudaFree(*ptr));
+	    RMM_CHECK_CUDA(cudaMalloc(ptr, new_size));
+    }
+    else
+    {   
+        RMM_CHECK( rmm::Manager::getInstance().registerStream(stream) );
+        RMM_CHECK_CNMEM( cnmemFree(*ptr, stream) );
+        RMM_CHECK_CNMEM( cnmemMalloc(ptr, new_size, stream) );
+    }
     return RMM_SUCCESS;
 }
 
@@ -183,38 +193,39 @@ rmmError_t rmmRealloc(void **ptr, size_t new_size, cudaStream_t stream)
 rmmError_t rmmFree(void *ptr, cudaStream_t stream)
 {
     rmm::LogIt log(rmm::Logger::Free, ptr, 0, stream);
-#ifdef RMM_USE_CUDAMALLOC
-	RMM_CHECK_CUDA(cudaFree(ptr));
-#else
-    RMM_CHECK_CNMEM( cnmemFree(ptr, stream) );
-#endif
+    if (rmm::Manager::getCudaAllocationMode())
+        RMM_CHECK_CUDA(cudaFree(ptr));
+    else
+        RMM_CHECK_CNMEM( cnmemFree(ptr, stream) );
 	return RMM_SUCCESS;
 }
 
 // Get the offset of ptr from its base allocation
 rmmError_t rmmGetAllocationOffset(ptrdiff_t *offset, void *ptr, cudaStream_t stream)
 {
-#ifndef RMM_USE_CUDAMALLOC
-    void *base = (void*)0xffffffff;
-    CUresult res = cuMemGetAddressRange((CUdeviceptr*)&base, nullptr, (CUdeviceptr)ptr);
-    if (res != CUDA_SUCCESS)
-        return RMM_ERROR_INVALID_ARGUMENT;
-    *offset = reinterpret_cast<ptrdiff_t>(ptr) - reinterpret_cast<ptrdiff_t>(base);
-#else
-    *offset = 0;
-#endif
+    if (rmm::Manager::getCudaAllocationMode()) // use CUDA
+        *offset = 0;
+    else
+    {
+        void *base = (void*)0xffffffff;
+        CUresult res = cuMemGetAddressRange((CUdeviceptr*)&base, nullptr, (CUdeviceptr)ptr);
+        if (res != CUDA_SUCCESS)
+            return RMM_ERROR_INVALID_ARGUMENT;
+        *offset = reinterpret_cast<ptrdiff_t>(ptr) - reinterpret_cast<ptrdiff_t>(base);
+    }
     return RMM_SUCCESS;
 }
 
 // Get amounts of free and total memory managed by a manager associated with the stream.
 rmmError_t rmmGetInfo(size_t *freeSize, size_t *totalSize, cudaStream_t stream)
 {
-#ifdef RMM_USE_CUDAMALLOC
-    RMM_CHECK_CUDA(cudaMemGetInfo(freeSize, totalSize));
-#else
-    RMM_CHECK( rmm::Manager::getInstance().registerStream(stream) );
-    RMM_CHECK_CNMEM( cnmemMemGetInfo(freeSize, totalSize, stream) );
-#endif
+    if (rmm::Manager::getCudaAllocationMode()) // use CUDA
+        RMM_CHECK_CUDA(cudaMemGetInfo(freeSize, totalSize));
+    else
+    {
+        RMM_CHECK( rmm::Manager::getInstance().registerStream(stream) );
+        RMM_CHECK_CNMEM( cnmemMemGetInfo(freeSize, totalSize, stream) );
+    }
 	return RMM_SUCCESS;
 }
 

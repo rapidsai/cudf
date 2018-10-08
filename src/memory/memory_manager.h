@@ -72,6 +72,8 @@ namespace rmm
                     TimePt start, TimePt end, 
                     size_t freeMem, size_t totalMem,
                     size_t size=0, cudaStream_t stream=0);
+
+        void clear();
         
         /// Write the log to comma-separated value file
         void to_csv(std::ostream &csv);
@@ -107,6 +109,16 @@ namespace rmm
 
         static Logger& getLogger() { return getInstance().logger; }
 
+        // True means using cudaMalloc rather than CNMem
+        static void setCudaAllocationMode(bool useCuda) { getInstance().usingCudaMalloc = useCuda; }
+        static bool getCudaAllocationMode() { return getInstance().usingCudaMalloc; }
+
+        void finalize() {
+            std::lock_guard<std::mutex> guard(streams_mutex);
+            registered_streams.clear();
+            logger.clear();
+        }
+
 #ifndef RMM_USE_CUDAMALLOC
         /** ---------------------------------------------------------------------------*
          * @brief Register a new stream into the device memory manager.
@@ -129,13 +141,15 @@ namespace rmm
 #endif
 
     private:
-        Manager()= default;
-        ~Manager()= default;
-        Manager(const Manager&)= delete;
-        Manager& operator=(const Manager&)= delete;
+        Manager() : usingCudaMalloc(false) {}
+        ~Manager() = default;
+        Manager(const Manager&) = delete;
+        Manager& operator=(const Manager&) = delete;
   
         std::mutex streams_mutex;
         std::set<cudaStream_t> registered_streams;
         Logger logger;
+
+        bool usingCudaMalloc;
     };    
 }

@@ -17,8 +17,10 @@ def rand_seed():
     utils.seed_rand()
     random.seed(0)
 
-# Setup a fixture for the RMM memory manager to initialize and finalize it before
+# Set up a fixture for the RMM memory manager to initialize and finalize it before
 # and after tests.
 @pytest.fixture(scope="session", autouse=True)
 def rmm():
-    yield librmm # librmm is initialized on import, finalized on exit
+    librmm.initialize()
+    yield librmm 
+    librmm.finalize()

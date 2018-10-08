@@ -49,9 +49,11 @@ typedef enum
 /** ---------------------------------------------------------------------------*
  * @brief Initialize memory manager state and storage.
  * 
+ * @param[in] use_cuda_malloc If true, pass allocations through to cudaMalloc, 
+ *                            (no pool allocator). 
  * @return rmmError_t RMM_SUCCESS or RMM_ERROR_CUDA_ERROR on any CUDA error.
  * ---------------------------------------------------------------------------**/
-rmmError_t rmmInitialize();
+rmmError_t rmmInitialize(bool use_cuda_malloc);
 
 /** ---------------------------------------------------------------------------*
  * @brief Shutdown memory manager.

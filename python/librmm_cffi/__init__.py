@@ -32,8 +32,8 @@ else:
     librmm = _librmm_wrapper(ffi, librmm_api)
 
     # initialize memory manager and register an exit handler to finalize it
-    librmm.initialize()
-    atexit.register(librmm.finalize)
+    #librmm.initialize()
+    #atexit.register(librmm.finalize)
 
     del _librmm_wrapper
 
