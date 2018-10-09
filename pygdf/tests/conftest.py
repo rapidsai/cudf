@@ -8,4 +8,4 @@ from librmm_cffi import librmm
 def rmm():
     librmm.initialize()
     yield librmm 
-    #librmm.finalize()
+    librmm.finalize()

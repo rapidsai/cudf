@@ -551,3 +551,11 @@ def nvtx_range_pop():
     """ Demarcate the end of the inner-most range.
     """
     libgdf.gdf_nvtx_range_pop()
+
+def rmm_initialize(use_cuda_malloc = False):
+    rmm.initialize(use_cuda_malloc)
+    return True
+
+def rmm_finalize():
+    rmm.finalize()
+    return True
