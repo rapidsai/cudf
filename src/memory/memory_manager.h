@@ -119,7 +119,6 @@ namespace rmm
             logger.clear();
         }
 
-#ifndef RMM_USE_CUDAMALLOC
         /** ---------------------------------------------------------------------------*
          * @brief Register a new stream into the device memory manager.
          * 
@@ -133,12 +132,11 @@ namespace rmm
             std::lock_guard<std::mutex> guard(streams_mutex);
             if (registered_streams.empty() || 0 == registered_streams.count(stream)) {
                 registered_streams.insert(stream);
-                if (stream) // don't register the null stream with CNMem
+                if (stream && !usingCudaMalloc) // don't register the null stream with CNMem
                     RMM_CHECK_CNMEM( cnmemRegisterStream(stream) );
             }
             return RMM_SUCCESS;
         }
-#endif
 
     private:
         Manager() : usingCudaMalloc(false) {}

@@ -120,15 +120,6 @@ if(HT_LEGACY_ALLOCATOR)
   set(CUDA_NVCC_FLAGS  ${CUDA_NVCC_FLAGS};-DHT_LEGACY_ALLOCATOR)
 endif()
 
-option(RMM_USE_CNMEM_ALLOCATOR "CNMEM allocator for memory manager" OFF)
-if(RMM_USE_CNMEM_ALLOCATOR)
-    message("-- RMM: Using CNMem for memory allocation")
-else()
-    message("-- RMM: Using cudaMalloc for memory allocation")
-    set(CUDA_NVCC_FLAGS "${CUDA_NVCC_FLAGS};-DRMM_USE_CUDAMALLOC")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DRMM_USE_CUDAMALLOC")
-endif()
-
 cuda_add_library(rmm SHARED
     src/memory/memory.cpp
     src/memory/memory_manager.cpp

@@ -55,8 +55,8 @@ class _librmm_wrapper(object):
             msg = errname
         return errname, msg
 
-    def initialize(self):
-        return self.rmmInitialize()
+    def initialize(self, use_cuda_malloc = False):
+        return self.rmmInitialize(use_cuda_malloc)
 
     def finalize(self):
         return self.rmmFinalize()
