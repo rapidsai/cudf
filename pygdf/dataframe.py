@@ -33,55 +33,76 @@ class DataFrame(object):
     Examples
     --------
 
-    Build dataframe with `__setitem__`
+    Build dataframe with `__setitem__`:
 
-    >>> from pygdf.dataframe import DataFrame
-    >>> df = DataFrame()
-    >>> df['key'] = [0, 1, 2, 3, 4]
-    >>> df['val'] = [float(i + 10) for i in range(5)]  # insert column
-    >>> df
-      key val
-    0 0   10.0
-    1 1   11.0
-    2 2   12.0
-    3 3   13.0
-    4 4   14.0
-    >>> len(df)
-    5
+    .. code-block:: python
 
-    Build dataframe with initializer
+        from pygdf.dataframe import DataFrame
+        df = DataFrame()
+        df['key'] = [0, 1, 2, 3, 4]
+        df['val'] = [float(i + 10) for i in range(5)]  # insert column
+        df
 
-    >>> import numpy as np
-    >>> df2 = DataFrame([('a', np.arange(10)),
-    ...                  ('b', np.random.random(10))])
-    >>> df2
+    Output:
+
+    .. code-block:: python
+
+          key val
+        0 0   10.0
+        1 1   11.0
+        2 2   12.0
+        3 3   13.0
+        4 4   14.0
+
+    Build dataframe with initializer:
+
+    .. code-block:: python
+
+      from pygdf.dataframe import DataFrame
+      import numpy as np
+      df = DataFrame([
+        ('a', np.arange(5)),
+        ('b', np.random.random(5))
+      ])
+      df
+
+    Output:
+
+    .. code-block:: python
+
+        a b
+      0 0 0.777831724018
+      1 1 0.604480034669
+      2 2 0.664111858618
+      3 3 0.887777513028
+      4 4 0.55838311246
+
+    Convert from a Pandas DataFrame:
+
+    .. code-block:: python
+
+      import pandas as pd
+      from pygdf.dataframe import DataFrame
+      pdf = pd.DataFrame({
+        'a': [0, 1, 2, 3],
+        'b': [0.1, 0.2, None, 0.3]
+      })
+
+      >>> pdf
+      a    b
+      0  0  0.1
+      1  1  0.2
+      2  2  NaN
+      3  3  0.3
+
+      df = DataFrame.from_pandas(pdf)
+
+      >>> df
       a b
-    0 0 0.777831724018
-    1 1 0.604480034669
-    2 2 0.664111858618
-    3 3 0.887777513028
-    4 4 0.55838311246
-    [5 more rows]
-
-    Convert from a Pandas DataFrame.
-
-    >>> import pandas as pd
-    >>> from pygdf.dataframe import DataFrame
-    >>> pdf = pd.DataFrame({'a': [0, 1, 2, 3],
-    ...                     'b': [0.1, 0.2, None, 0.3]})
-    >>> pdf
-    a    b
-    0  0  0.1
-    1  1  0.2
-    2  2  NaN
-    3  3  0.3
-    >>> df = DataFrame.from_pandas(pdf)
-    >>> df
-    a b
-    0 0 0.1
-    1 1 0.2
-    2 2 nan
-    3 3 0.3
+      0 0 0.1
+      1 1 0.2
+      2 2 nan
+      3 3 0.3
     """
 
     def __init__(self, name_series=None, index=None):
@@ -400,7 +421,7 @@ class DataFrame(object):
             Values to be added.
 
         Returns
-        -------
+        ----------
         The prepared Series object.
         """
         self._sanitize_columns(col)
@@ -417,7 +438,7 @@ class DataFrame(object):
             return series.set_index(self._index)
 
     def add_column(self, name, data, forceindex=False):
-        """Add a column
+        """Add a new column by modifying an existing DataFrame.
 
         Parameters
         ----------
@@ -425,6 +446,27 @@ class DataFrame(object):
             Name of column to be added.
         data : Series, array-like
             Values to be added.
+
+        Returns
+        ----------
+        None
+
+        Examples
+        ----------
+        .. code-block:: python
+
+          from pygdf.dataframe import DataFrame()
+          df = DataFrame([
+            ('a', np.arange(3)),
+            ('b', np.arange(3))
+          ])
+          df.add_column('c', [3, 4, 5])
+
+          >>> df.head()
+          a    b    c
+          0    0    0    3
+          1    1    1    4
+          2    2    2    5
         """
 
         if name in self._cols:
@@ -435,7 +477,33 @@ class DataFrame(object):
         self._cols[name] = series
 
     def drop_column(self, name):
-        """Drop a column by *name*
+        """Drop a column by *name*, modifying an existing DataFrame
+
+        Parameters
+        ----------
+        name : str
+            Name of column to be dropped.
+
+        Returns
+        ----------
+        None
+
+        Examples
+        ----------
+        .. code-block:: python
+
+          from pygdf.dataframe import DataFrame()
+          df = DataFrame([
+            ('a', np.arange(3)),
+            ('b', np.arange(3))
+          ])
+          df.drop_column('b')
+
+          >>> df.head()
+          a
+          0    0
+          1    1
+          2    2
         """
         if name not in self._cols:
             raise NameError('column {!r} does not exist'.format(name))
@@ -539,35 +607,39 @@ class DataFrame(object):
             the dtype for the outputs; defaults to float64.
 
         Returns
-        -------
-        a new dataframe with new columns append for each category.
+        ----------
+        a new dataframe with new columns appended for each category code.
 
         Examples
-        -------
-        >>> import pandas as pd
-        >>> from pygdf.dataframe import DataFrame as gdf
+        ----------
+        .. code-block:: python
 
-        >>> pet_owner = [1, 2, 3, 4, 5]
-        >>> pet_type = ['fish', 'dog', 'fish', 'bird', 'fish']
+            # Setup a Pandas df with types
+            import pandas as pd
+            pet_owner = [1, 2, 3, 4, 5]
+            pet_type = ['fish', 'dog', 'fish', 'bird', 'fish']
+            df = pd.DataFrame({'pet_owner': pet_owner, 'pet_type': pet_type})
+            df.pet_type = df.pet_type.astype('category')
 
-        >>> df = pd.DataFrame({'pet_owner': pet_owner, 'pet_type': pet_type})
-        >>> df.pet_type = df.pet_type.astype('category')
+            # Create GPU DataFrame and column of encoded category values
+            from pygdf.dataframe import DataFrame as gdf
+            my_gdf = gdf.from_pandas(df)
+            my_gdf['pet_codes'] = my_gdf.pet_type.cat.codes
 
-        Create a column with numerically encoded category values
-        >>> df['pet_codes'] = df.pet_type.cat.codes
-        >>> my_gdf = gdf.from_pandas(df)
+            # Create the list of category codes to use in the encoding
+            codes = my_gdf.pet_codes.unique()
+            enc_gdf = my_gdf.one_hot_encoding('pet_codes', 'pet_dummy', codes)
 
-        Create the list of category codes to use in the encoding
-        >>> codes = my_gdf.pet_codes.unique()
-        >>> enc_gdf = my_gdf.one_hot_encoding('pet_codes', 'pet_dummy', codes)
-        >>> enc_gdf.head()
-          pet_owner pet_type pet_codes pet_dummy_0 pet_dummy_1 pet_dummy_2
-          0         1     fish         2         0.0         0.0         1.0
-          1         2      dog         1         0.0         1.0         0.0
-          2         3     fish         2         0.0         0.0         1.0
-          3         4     bird         0         1.0         0.0         0.0
-          4         5     fish         2         0.0         0.0         1.0
+            >>> enc_gdf.head()
+            pet_owner pet_type pet_codes pet_dummy_0 pet_dummy_1 pet_dummy_2
+            0         1     fish         2         0.0         0.0         1.0
+            1         2      dog         1         0.0         1.0         0.0
+            2         3     fish         2         0.0         0.0         1.0
+            3         4     bird         0         1.0         0.0         0.0
+            4         5     fish         2         0.0         0.0         1.0
+
         """
+
         newnames = [prefix_sep.join([prefix, str(cat)]) for cat in cats]
         newcols = self[column].one_hot_encoding(cats=cats, dtype=dtype)
         outdf = self.copy()
@@ -1156,31 +1228,44 @@ class DataFrame(object):
 
         With a ``DataFrame`` like so:
 
-        >>> df = DataFrame()
-        >>> df['in1'] = in1 = np.arange(nelem)
-        >>> df['in2'] = in2 = np.arange(nelem)
-        >>> df['in3'] = in3 = np.arange(nelem)
+        .. code-block:: python
 
-        Define the user function for ``.apply_rows``:
+          from pygdf.dataframe import DataFrame
+          df = DataFrame([
+            'in1': [0, 1, 2],
+            'in2': [3, 4, 5],
+            'in3': [6, 7, 8]
+          ])
 
-        >>> def kernel(in1, in2, in3, out1, out2, extra1, extra2):
-        ...     for i, (x, y, z) in enumerate(zip(in1, in2, in3)):
-        ...         out1[i] = extra2 * x - extra1 * y
-        ...         out2[i] = y - extra1 * z
+          # Define vars as columns, gives user function type information
+          in1 = df['in1']
+          in2 = df['in2']
+          in3 = df['in3']
 
         The user function should loop over the columns and set the output for
         each row.  Each iteration of the loop **MUST** be independent of each
         other.  The order of the loop execution can be arbitrary.
 
+        .. code-block:: python
+
+          # Define the user function for ``.apply_rows``:
+          def kernel(in1, in2, in3, out1, out2, extra1, extra2):
+               for i, (x, y, z) in enumerate(zip(in1, in2, in3)):
+                   out1[i] = extra2 * x - extra1 * y
+                   out2[i] = y - extra1 * z
+
+
         Call ``.apply_rows`` with the name of the input columns, the name and
         dtype of the output columns, and, optionally, a dict of extra
         arguments.
 
-        >>> outdf = df.apply_rows(kernel,
-        ...                       incols=['in1', 'in2', 'in3'],
-        ...                       outcols=dict(out1=np.float64,
-        ...                                    out2=np.float64),
-        ...                       kwargs=dict(extra1=2.3, extra2=3.4))
+        .. code-block:: python
+
+          outdf = df.apply_rows(kernel,
+                   incols=['in1', 'in2', 'in3'],
+                   outcols=dict(out1=np.float64, out2=np.float64),
+                   kwargs=dict(extra1=2.3, extra2=3.4)
+                 )
 
         **Notes**
 
@@ -1219,13 +1304,15 @@ class DataFrame(object):
         ``range(cuda.threadIdx.x, in1.size, cuda.blockDim.x)``, the *kernel*
         function can be used with any *tpb* in a efficient manner.
 
-        >>> from numba import cuda
-        >>> def kernel(in1, in2, in3, out1):
-        ...     for i in range(cuda.threadIdx.x, in1.size, cuda.blockDim.x):
-        ...         x = in1[i]
-        ...         y = in2[i]
-        ...         z = in3[i]
-        ...         out1[i] = x * y + z
+        .. code-block:: python
+
+          from numba import cuda
+          def kernel(in1, in2, in3, out1):
+               for i in range(cuda.threadIdx.x, in1.size, cuda.blockDim.x):
+                   x = in1[i]
+                   y = in2[i]
+                   z = in3[i]
+                   out1[i] = x * y + z
 
         See also
         --------
