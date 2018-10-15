@@ -677,29 +677,22 @@ class DataFrame(object):
         Parameters
         ----------
         other : DataFrame
-
         on : label or list; defaults to None
             Column or index level names to join on. These must be found in
-            both DataFrames. If on is None and not merging on indexes then
+            both DataFrames.
+
+            If on is None and not merging on indexes then
             this defaults to the intersection of the columns
             in both DataFrames.
-
-
-        how : str; defaults to 'left'
-              Only accepts "left"
-              - left: use only keys from left frame, similar to
-               a SQL left outer join; preserve key order
-
+        how : str, defaults to 'left'
+            Only accepts 'left'
+            left: use only keys from left frame, similar to
+            a SQL left outer join; preserve key order
         lsuffix : str, defaults to '_x'
-                 The suffix to apply to overlapping column names
-                 in the left side
-
+            Suffix applied to overlapping column names on the left side
         rsuffix : str, defaults to '_y'
-                 The suffix to apply to overlapping column names
-                 in the right side
-
+            Suffix applied to overlapping column names on the right side
         type : str, defaults to 'hash'
-
 
         Returns
         -------
