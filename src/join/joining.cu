@@ -183,11 +183,10 @@ void allocValueBuffer(
         const size_type buffer_length,
         const data_type value) {
     cudaMalloc(buffer, buffer_length*sizeof(data_type));
-    thrust::copy(
+    thrust::fill(
             thrust::device,
-			thrust::make_constant_iterator(value),
-			thrust::make_constant_iterator(value) + buffer_length,
-            *buffer);
+            *buffer, *buffer + buffer_length,
+            value);
 }
 
 /* --------------------------------------------------------------------------*/
@@ -206,11 +205,9 @@ void allocSequenceBuffer(
         data_type ** buffer,
         const size_type buffer_length) {
     cudaMalloc(buffer, buffer_length*sizeof(data_type));
-    thrust::copy(
+    thrust::sequence(
             thrust::device,
-			thrust::make_counting_iterator(static_cast<data_type>(0)),
-			thrust::make_counting_iterator(static_cast<data_type>(buffer_length)),
-            *buffer);
+            *buffer, *buffer + buffer_length);
 }
 
 /* --------------------------------------------------------------------------*/

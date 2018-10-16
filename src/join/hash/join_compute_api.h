@@ -164,10 +164,11 @@ gdf_error append_full_join_indices(
     if (GDF_SUCCESS != err) return err;
 
     //Copy JoinNoneValue to l_index_ptr to denote that a match does not exist on the left
-    thrust::copy(thrust::device,
-            thrust::make_constant_iterator(JoinNoneValue),
-            thrust::make_constant_iterator(JoinNoneValue) + mismatch_index_size,
-            *l_index_ptr + *index_size);
+    thrust::fill(
+            thrust::device,
+            *l_index_ptr + *index_size,
+            *l_index_ptr + *index_size + mismatch_index_size,
+            JoinNoneValue);
 
     //Copy unmatched indices to the r_index_ptr
     thrust::copy(thrust::device,
