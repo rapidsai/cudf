@@ -174,7 +174,7 @@ class _librmm_wrapper(object):
         ptr = self._ffi.cast("void*", ary.device_ctypes_pointer.value)        
         self._api.rmmGetAllocationOffset(offset, ptr, self._ffi.cast("cudaStream_t", stream))
         # replace offset with RMM's offset
-        ipch.offset = offset[0]
+        ipch.offset = ipch.offset + offset[0]
         desc = dict(shape=ary.shape, strides=ary.strides, dtype=ary.dtype)
         return cuda.cudadrv.devicearray.IpcArrayHandle(ipc_handle=ipch, array_desc=desc)
 
