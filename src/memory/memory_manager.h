@@ -36,18 +36,23 @@
 /** ---------------------------------------------------------------------------*
  * @brief Macro wrapper for CNMEM API calls to return appropriate RMM errors.
  * ---------------------------------------------------------------------------**/
-#define RMM_CHECK_CNMEM(call) do { \
-    cnmemStatus_t error = (call); \
-    if (CNMEM_STATUS_CUDA_ERROR == error) \
-        return RMM_ERROR_CUDA_ERROR; \
-    else if (CNMEM_STATUS_INVALID_ARGUMENT == error) \
-        return RMM_ERROR_INVALID_ARGUMENT; \
-    else if (CNMEM_STATUS_NOT_INITIALIZED == error) \
-        return RMM_ERROR_NOT_INITIALIZED; \
-    else if (CNMEM_STATUS_OUT_OF_MEMORY == error) \
-        return RMM_ERROR_OUT_OF_MEMORY; \
-    else if (CNMEM_STATUS_UNKNOWN_ERROR == error) \
-        return RMM_ERROR_UNKNOWN; \
+#define RMM_CHECK_CNMEM(call) do {            \
+    cnmemStatus_t error = (call);             \
+    switch (error) {                          \
+    case CNMEM_STATUS_SUCCESS:                \
+        break; /* don't return on success! */ \
+    case CNMEM_STATUS_CUDA_ERROR:             \
+        return RMM_ERROR_CUDA_ERROR;          \
+    case CNMEM_STATUS_INVALID_ARGUMENT:       \
+        return RMM_ERROR_INVALID_ARGUMENT;    \
+    case CNMEM_STATUS_NOT_INITIALIZED:        \
+        return RMM_ERROR_NOT_INITIALIZED;     \
+    case CNMEM_STATUS_OUT_OF_MEMORY:          \
+        return RMM_ERROR_OUT_OF_MEMORY;       \
+    case CNMEM_STATUS_UNKNOWN_ERROR:          \
+    default:                                  \
+        return RMM_ERROR_UNKNOWN;             \
+    }                                         \
 } while(0)
 
 typedef struct CUstream_st *cudaStream_t;
