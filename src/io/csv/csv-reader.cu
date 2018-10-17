@@ -707,7 +707,7 @@ __global__ void convertCsvToGdf(
 			if(raw_csv[pos]==delim){
 				break;
 			}
-            else if(raw_csv[pos] == '\r' ||  (pos < stop && raw_csv[pos+1]=='\n')){
+            else if(raw_csv[pos] == '\r' &&  (pos < stop && raw_csv[pos+1]=='\n')){
             	stop--;
                 break;
             }
