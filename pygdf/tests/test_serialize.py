@@ -125,19 +125,21 @@ def test_serialize_ipc():
     proc.start()
     out = result_queue.get()
     proc.join(3)
+
     # Verify that the output array matches the source
     np.testing.assert_array_equal(out.to_array(), sr.to_array())
 
 
 def _load_ipc(header, frames, result_queue):
     pygdf._gdf.rmm_initialize()
+
     try:   
         out = deserialize(header, frames)
         result_queue.put(out)
     except Exception as e:
         result_queue.put(e)
-    pygdf._gdf.rmm_finalize()
-    
+
+    import atexit; atexit.register(pygdf._gdf.rmm_finalize)
 
 
 @require_distributed
