@@ -82,7 +82,7 @@ def should_use_ipc(context):
         destination.
     """
     _CONFIG_USE_IPC = bool(int(os.environ.get("DASK_GDF_USE_IPC", "1")))
-    
+
     # User opt-out
     if not _CONFIG_USE_IPC:
         return False
