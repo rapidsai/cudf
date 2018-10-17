@@ -4,7 +4,6 @@ import sys
 import pickle
 
 import numpy as np
-from numba import cuda
 import pandas as pd
 
 from librmm_cffi import librmm as rmm

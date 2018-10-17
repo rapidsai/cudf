@@ -1,6 +1,7 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
 
 import sys
+import atexit
 import multiprocessing as mp
 
 import numpy as np
@@ -95,7 +96,6 @@ def test_serialize_groupby():
     pd.util.testing.assert_frame_equal(got.to_pandas(), expect.to_pandas())
 
 
-# TODO: this test currently fails because RMM is not initialized in the spawned process!
 @require_distributed
 @require_ipc
 def test_serialize_ipc():
@@ -133,13 +133,13 @@ def test_serialize_ipc():
 def _load_ipc(header, frames, result_queue):
     pygdf._gdf.rmm_initialize()
 
-    try:   
+    try:
         out = deserialize(header, frames)
         result_queue.put(out)
     except Exception as e:
         result_queue.put(e)
 
-    import atexit; atexit.register(pygdf._gdf.rmm_finalize)
+    atexit.register(pygdf._gdf.rmm_finalize)
 
 
 @require_distributed

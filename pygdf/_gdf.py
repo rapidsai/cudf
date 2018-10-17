@@ -3,15 +3,12 @@
 """
 This file provide binding to the libgdf library.
 """
-import ctypes
 import contextlib
 import itertools
 
 import numpy as np
 import pandas as pd
 import pyarrow as pa
-
-from numba import cuda
 
 from libgdf_cffi import ffi, libgdf
 from librmm_cffi import librmm as rmm
@@ -212,19 +209,20 @@ _join_method_api = {
 
 
 def cffi_view_to_column_mem(cffi_view):
-    intaddr=int(ffi.cast("uintptr_t", cffi_view.data))
+    intaddr = int(ffi.cast("uintptr_t", cffi_view.data))
     data = rmm.device_array_from_ptr(intaddr,
                                      nelem=cffi_view.size,
                                      dtype=gdf_to_np_dtype(cffi_view.dtype),
                                      finalizer=rmm._make_finalizer(intaddr, 0))
 
     if cffi_view.valid:
-        intaddr=int(ffi.cast("uintptr_t", cffi_view.valid))
+        intaddr = int(ffi.cast("uintptr_t", cffi_view.valid))
         mask = rmm.device_array_from_ptr(intaddr,
                                          nelem=calc_chunk_size(cffi_view.size,
                                                                mask_bitsize),
                                          dtype=mask_dtype,
-                                         finalizer=rmm._make_finalizer(intaddr, 0))
+                                         finalizer=rmm._make_finalizer(intaddr,
+                                                                       0))
     else:
         mask = None
 
@@ -271,12 +269,12 @@ def apply_join(col_lhs, col_rhs, how, method='hash'):
 
     # Extract result
 
-    left = rmm.device_array_from_ptr(ptr = col_result_l.data,
-                                     nelem=col_result_l.size, 
+    left = rmm.device_array_from_ptr(ptr=col_result_l.data,
+                                     nelem=col_result_l.size,
                                      dtype=np.int32)
 
-    right = rmm.device_array_from_ptr(ptr = col_result_r.data,
-                                      nelem=col_result_r.size, 
+    right = rmm.device_array_from_ptr(ptr=col_result_r.data,
+                                      nelem=col_result_r.size,
                                       dtype=np.int32)
 
     yield(left, right)
@@ -348,13 +346,15 @@ def libgdf_join(col_lhs, col_rhs, on, how, method='sort'):
         res.append(rmm.device_array_from_ptr(ptr=intaddr,
                                              nelem=col.size,
                                              dtype=gdf_to_np_dtype(col.dtype),
-                                             finalizer=rmm._make_finalizer(intaddr, 0)))
+                                             finalizer=rmm._make_finalizer(
+                                                 intaddr, 0)))
         intaddr = int(ffi.cast("uintptr_t", col.valid))
         valids.append(rmm.device_array_from_ptr(ptr=intaddr,
-                                                nelem=calc_chunk_size(col.size,
-                                                                      mask_bitsize),
+                                                nelem=calc_chunk_size(
+                                                    col.size, mask_bitsize),
                                                 dtype=mask_dtype,
-                                                finalizer=rmm._make_finalizer(intaddr, 0)))
+                                                finalizer=rmm._make_finalizer(
+                                                    intaddr, 0)))
 
     return res, valids
 
@@ -552,9 +552,11 @@ def nvtx_range_pop():
     """
     libgdf.gdf_nvtx_range_pop()
 
-def rmm_initialize(use_cuda_malloc = False):
+
+def rmm_initialize(use_cuda_malloc=False):
     rmm.initialize(use_cuda_malloc)
     return True
+
 
 def rmm_finalize():
     rmm.finalize()

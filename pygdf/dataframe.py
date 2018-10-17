@@ -11,7 +11,6 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 
-from numba import cuda
 from numba.cuda.cudadrv.devicearray import DeviceNDArray
 
 from librmm_cffi import librmm as rmm
@@ -496,7 +495,7 @@ class DataFrame(object):
 
         if order == 'F':
             matrix = rmm.device_array(shape=(nrow, ncol), dtype=dtype,
-                                       order=order)
+                                      order=order)
             for colidx, inpcol in enumerate(cols):
                 dense = inpcol.to_gpu_array(fillna='pandas')
                 matrix[:, colidx].copy_to_device(dense)

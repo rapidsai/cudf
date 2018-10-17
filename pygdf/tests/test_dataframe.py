@@ -6,8 +6,6 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 
-from numba import cuda
-
 from librmm_cffi import librmm as rmm
 
 import pygdf as gd

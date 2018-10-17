@@ -5,7 +5,6 @@ from __future__ import print_function, division
 import pandas as pd
 import numpy as np
 import pickle
-from numba import cuda
 
 from librmm_cffi import librmm as rmm
 

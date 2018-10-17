@@ -1,6 +1,4 @@
-
 import numpy as np
-from numba import cuda
 
 from librmm_cffi import librmm as rmm
 
@@ -71,9 +69,6 @@ class Buffer(object):
                 ipch = self._cached_ipch
             else:
                 # Get new IPC handle
-                # Old:
-                #ipch = self.to_gpu_array().get_ipc_handle()
-                # New:
                 ipch = rmm.get_ipc_handle(self.to_gpu_array())
 
             header['kind'] = 'ipc'

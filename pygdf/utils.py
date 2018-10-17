@@ -2,7 +2,7 @@ from collections import namedtuple
 
 import numpy as np
 
-from numba import njit, cuda
+from numba import njit
 
 from librmm_cffi import librmm as rmm
 
