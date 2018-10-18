@@ -32,7 +32,6 @@ before_install:
   - chmod +x miniconda.sh
   - ./miniconda.sh -b
   - export PATH=$HOME/miniconda3/bin:$PATH
-  - export LD_LIBRARY_PATH=/usr/local/cuda/lib64:/usr/local/cuda/lib64/stubs:/usr/local/lib:$LD_LIBRARY_PATH
   # install libboost
   - sudo apt-get update
   - sudo apt-get install -y libboost-all-dev
