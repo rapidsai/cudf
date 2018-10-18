@@ -23,20 +23,20 @@ matrix:
     - env: CUDA=9.2.148_396.37 BUILD_CFFI=1 PYTHON=3.5
 
 before_install:
+  # install gcc-5 and libboost
   - sudo add-apt-repository ppa:ubuntu-toolchain-r/test -y
   - sudo apt-get update -q
-  - sudo apt-get install gcc-5 -y
-  - export CC=gcc-5
-  - export CXX=g++-5
+  - sudo apt-get install -y gcc-5 libboost-all-dev
+  # set gcc/g++ paths
+  - export CC=/usr/bin/gcc-5
+  - export CXX=/usr/bin/g++-5
+  # install cuda
   - source ./travisci/install-cuda-trusty.sh
   # install miniconda
   - travis_retry wget https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh -O miniconda.sh
   - chmod +x miniconda.sh
   - ./miniconda.sh -b
   - export PATH=$HOME/miniconda3/bin:$PATH
-  # install libboost
-  - sudo apt-get update
-  - sudo apt-get install -y libboost-all-dev
 
 install:
   # check
