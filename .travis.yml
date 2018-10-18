@@ -26,7 +26,7 @@ before_install:
   # install gcc-5 and libboost
   - sudo add-apt-repository ppa:ubuntu-toolchain-r/test -y
   - sudo apt-get update -q
-  - sudo apt-get install -y gcc-5 libboost-all-dev
+  - sudo apt-get install -y gcc-5 g++-5 libboost-all-dev
   # set gcc/g++ paths
   - export CC=/usr/bin/gcc-5
   - export CXX=/usr/bin/g++-5
