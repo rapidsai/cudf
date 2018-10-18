@@ -50,7 +50,7 @@ install:
   - nvcc --version
   - conda --version
   # install conda build and cmake
-  - conda install conda-build anaconda-client conda-verify cmake --yes
+  - conda install conda-build anaconda-client conda-verify cmake=3.12 --yes
 
 script:
   # Activate root environment for cmake
