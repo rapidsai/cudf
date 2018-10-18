@@ -1206,7 +1206,7 @@ class DataFrame(object):
 
         .. code-block:: python
 
-            c
+            datetimes
             1 2018-10-08T00:00:00.000
 
         """
