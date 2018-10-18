@@ -51,7 +51,7 @@ cd /tmp
 travis_retry wget http://developer.download.nvidia.com/compute/cuda/repos/ubuntu1404/x86_64/libcuda1-396_396.44-0ubuntu1_amd64.deb
 ar -x libcuda*.deb
 sudo tar xvf data.tar.xz
-sudo mv usr/lib/x86_64-linux-gnu /usr/lib
+sudo mv usr/lib/x86_64-linux-gnu/* /usr/lib/x86_64-linux-gnu
 cd $WORK_DIR
 
 export CUDA_HOME=/usr/local/cuda-${CUDA:0:3}
