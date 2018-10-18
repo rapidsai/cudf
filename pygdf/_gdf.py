@@ -553,8 +553,8 @@ def nvtx_range_pop():
     libgdf.gdf_nvtx_range_pop()
 
 
-def rmm_initialize(use_cuda_malloc=False):
-    rmm.initialize(use_cuda_malloc)
+def rmm_initialize(use_pool_allocator=False):
+    rmm.initialize(use_pool_allocator)
     return True
 
 
