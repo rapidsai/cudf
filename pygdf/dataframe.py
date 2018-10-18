@@ -33,55 +33,78 @@ class DataFrame(object):
     Examples
     --------
 
-    Build dataframe with `__setitem__`
+    Build dataframe with `__setitem__`:
 
-    >>> from pygdf.dataframe import DataFrame
-    >>> df = DataFrame()
-    >>> df['key'] = [0, 1, 2, 3, 4]
-    >>> df['val'] = [float(i + 10) for i in range(5)]  # insert column
-    >>> df
-      key val
-    0 0   10.0
-    1 1   11.0
-    2 2   12.0
-    3 3   13.0
-    4 4   14.0
-    >>> len(df)
-    5
+    .. code-block:: python
 
-    Build dataframe with initializer
+          from pygdf.dataframe import DataFrame
+          df = DataFrame()
+          df['key'] = [0, 1, 2, 3, 4]
+          df['val'] = [float(i + 10) for i in range(5)]  # insert column
 
-    >>> import numpy as np
-    >>> df2 = DataFrame([('a', np.arange(10)),
-    ...                  ('b', np.random.random(10))])
-    >>> df2
-      a b
-    0 0 0.777831724018
-    1 1 0.604480034669
-    2 2 0.664111858618
-    3 3 0.887777513028
-    4 4 0.55838311246
-    [5 more rows]
+          print(df)
 
-    Convert from a Pandas DataFrame.
+    Output:
 
-    >>> import pandas as pd
-    >>> from pygdf.dataframe import DataFrame
-    >>> pdf = pd.DataFrame({'a': [0, 1, 2, 3],
-    ...                     'b': [0.1, 0.2, None, 0.3]})
-    >>> pdf
-    a    b
-    0  0  0.1
-    1  1  0.2
-    2  2  NaN
-    3  3  0.3
-    >>> df = DataFrame.from_pandas(pdf)
-    >>> df
-    a b
-    0 0 0.1
-    1 1 0.2
-    2 2 nan
-    3 3 0.3
+    .. code-block:: python
+
+          key  val
+          0    0 10.0
+          1    1 11.0
+          2    2 12.0
+          3    3 13.0
+          4    4 14.0
+
+    Build dataframe with initializer:
+
+    .. code-block:: python
+
+          import pygdf
+          import numpy as np
+          import datetime as dt
+
+          ids = np.arange(5)
+          # Create some datetime data
+          t0 = dt.datetime.strptime('2018-10-07 12:00:00', '%Y-%m-%d %H:%M:%S')
+          datetimes = [(t0+ dt.timedelta(seconds=x)) for x in range(5)]
+          dts = np.array(datetimes, dtype='datetime64')
+
+          # Create the GPU DataFrame
+          df = pygdf.DataFrame([('id', ids), ('datetimes', dts)])
+          print(df)
+
+    Output:
+
+    .. code-block:: python
+
+          id               datetimes
+          0    0 2018-10-07T12:00:00.000
+          1    1 2018-10-07T12:00:01.000
+          2    2 2018-10-07T12:00:02.000
+          3    3 2018-10-07T12:00:03.000
+          4    4 2018-10-07T12:00:04.000
+
+    Convert from a Pandas DataFrame:
+
+    .. code-block:: python
+
+          import pandas as pd
+          from pygdf.dataframe import DataFrame
+          pdf = pd.DataFrame({'a': [0, 1, 2, 3],'b': [0.1, 0.2, None, 0.3]})
+
+          df = DataFrame.from_pandas(pdf)
+          print(df)
+
+    Output:
+
+    .. code-block:: python
+
+          a b
+          0 0 0.1
+          1 1 0.2
+          2 2 nan
+          3 3 0.3
+
     """
 
     def __init__(self, name_series=None, index=None):
@@ -542,31 +565,41 @@ class DataFrame(object):
         -------
         a new dataframe with new columns append for each category.
 
+
         Examples
-        -------
-        >>> import pandas as pd
-        >>> from pygdf.dataframe import DataFrame as gdf
+        --------
 
-        >>> pet_owner = [1, 2, 3, 4, 5]
-        >>> pet_type = ['fish', 'dog', 'fish', 'bird', 'fish']
+        .. code-block:: python
 
-        >>> df = pd.DataFrame({'pet_owner': pet_owner, 'pet_type': pet_type})
-        >>> df.pet_type = df.pet_type.astype('category')
+          import pandas as pd
+          from pygdf.dataframe import DataFrame as gdf
 
-        Create a column with numerically encoded category values
-        >>> df['pet_codes'] = df.pet_type.cat.codes
-        >>> my_gdf = gdf.from_pandas(df)
+          pet_owner = [1, 2, 3, 4, 5]
+          pet_type = ['fish', 'dog', 'fish', 'bird', 'fish']
 
-        Create the list of category codes to use in the encoding
-        >>> codes = my_gdf.pet_codes.unique()
-        >>> enc_gdf = my_gdf.one_hot_encoding('pet_codes', 'pet_dummy', codes)
-        >>> enc_gdf.head()
+          df = pd.DataFrame({'pet_owner': pet_owner, 'pet_type': pet_type})
+          df.pet_type = df.pet_type.astype('category')
+
+          # Create a column with numerically encoded category values
+          df['pet_codes'] = df.pet_type.cat.codes
+          my_gdf = gdf.from_pandas(df)
+
+          # Create the list of category codes to use in the encoding
+          codes = my_gdf.pet_codes.unique()
+          enc_gdf = my_gdf.one_hot_encoding('pet_codes', 'pet_dummy', codes)
+          enc_gdf.head()
+
+        Output:
+
+        .. code-block:: python
+
           pet_owner pet_type pet_codes pet_dummy_0 pet_dummy_1 pet_dummy_2
           0         1     fish         2         0.0         0.0         1.0
           1         2      dog         1         0.0         1.0         0.0
           2         3     fish         2         0.0         0.0         1.0
           3         4     bird         0         1.0         0.0         0.0
           4         5     fish         2         0.0         0.0         1.0
+
         """
         newnames = [prefix_sep.join([prefix, str(cat)]) for cat in cats]
         newcols = self[column].one_hot_encoding(cats=cats, dtype=dtype)
@@ -1119,6 +1152,63 @@ class DataFrame(object):
         Returns
         -------
         filtered :  DataFrame
+
+        Examples
+        --------
+
+        .. code-block:: python
+
+              from pygdf.dataframe import DataFrame
+              a = ('a', [1, 2, 2])
+              b = ('b', [3, 4, 5])
+              df = DataFrame([a, b])
+
+              df.query('a == 2')
+
+        Output:
+
+        .. code-block:: python
+
+                   a    b
+              1    2    4
+              2    2    5
+
+        Complex conditionals:
+
+        .. code-block:: python
+
+           expr = '(a == 2 and b == 4) or (b == 3)'
+           df.query(expr)
+
+        Output:
+
+        .. code-block:: python
+
+                a    b
+                0    1    3
+                1    2    4
+
+        DateTime conditionals:
+
+        .. code-block:: python
+
+           from pygdf.dataframe import DataFrame
+           import numpy as np
+
+           df = DataFrame()
+           data = np.array(['2018-10-07', '2018-10-08'], dtype='datetime64')
+           df['datetimes'] = data
+
+           search_date = dt.datetime.strptime('2018-10-08', '%Y-%m-%d')
+           df.query('datetimes==@search_date')
+
+        Output:
+
+        .. code-block:: python
+
+            c
+            1 2018-10-08T00:00:00.000
+
         """
         # Get calling environment
         callframe = inspect.currentframe().f_back
