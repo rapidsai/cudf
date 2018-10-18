@@ -653,15 +653,39 @@ class DataFrame(object):
 
     def sort_values(self, by, ascending=True):
         """
-        Sort by values.
-
-        Difference from pandas:
-        * *by* must be the name of a single column.
-        * Support axis='index' only.
-        * Not supporting: inplace, kind, na_position
-
-        Details:
         Uses parallel radixsort, which is a stable sort.
+
+        Parameters
+        ----------
+        by : str
+            Name of Series to sort by
+        ascending : bool, default True
+            Sort ascending vs. descending.
+
+        Returns
+        -------
+        sorted_obj : PyGDF DataFrame
+
+        Examples
+        --------
+
+        .. code-block:: python
+
+              from pygdf.dataframe import DataFrame
+              a = ('a', [0, 1, 2])
+              b = ('b', [-3, 2, 0])
+              df = DataFrame([a, b])
+              df.sort_values('b')
+
+        Output:
+
+        .. code-block:: python
+
+                    a    b
+               0    0   -3
+               2    2    0
+               1    1    2
+
         """
         # argsort the `by` column
         return self._sort_by(self[by].argsort(ascending=ascending))
