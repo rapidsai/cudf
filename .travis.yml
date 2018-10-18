@@ -16,14 +16,24 @@ env:
 
 matrix:
   include:
-    - env: CUDA=9.0.176_384.81
-    - env: CUDA=9.1.85_387.26
-    - env: CUDA=9.2.148_396.37
-    - env: CUDA=9.0.176_384.81 BUILD_CFFI=1 PYTHON=3.6
-    - env: CUDA=9.0.176_384.81 BUILD_CFFI=1 PYTHON=3.5
+    - os: linux
+      addons:
+        apt:
+          sources:
+            - ubuntu-toolchain-r-test
+          packages:
+            - g++-5
+      env: 
+        - CUDA=9.0.176_384.81
+        - CUDA=9.1.85_387.26
+        - CUDA=9.2.148_396.37
+        - CUDA=9.2.148_396.37 BUILD_CFFI=1 PYTHON=3.6
+        - CUDA=9.2.148_396.37 BUILD_CFFI=1 PYTHON=3.5
 
 
 before_install:
+  - export CC=gcc-5 
+  - export CXX=g++-5
   - source ./travisci/install-cuda-trusty.sh
   # install miniconda
   - travis_retry wget https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh -O miniconda.sh
@@ -36,12 +46,18 @@ before_install:
 
 install:
   # check
+  - gcc --version
+  - g++ --version
   - nvcc --version
   - conda --version
-  # install conda build
-  - conda install conda-build anaconda-client conda-verify --yes
+  # install conda build and cmake
+  - conda install conda-build anaconda-client conda-verify cmake --yes
 
 script:
+  # Activate root environment for cmake
+  - source activate root
+  # check conda versions
+  - conda list
   # build ligdf
   - source ./travisci/build_libgdf.sh
   # build libgdf_cffi
