@@ -27,10 +27,6 @@ PROJECT(libgdf)
 
 cmake_minimum_required(VERSION 3.11)  # not sure about version required
 
-#set(CMAKE_SYSTEM_NAME Linux)
-#set(CMAKE_PLATFORM Linux)
-#set(CMAKE_SYSTEM_VERSION 1)
-
 set(CMAKE_CXX_STANDARD 11)
 message(STATUS "Using C++ standard: c++${CMAKE_CXX_STANDARD}")
 
@@ -40,18 +36,6 @@ message(STATUS "CMAKE_MODULE_PATH:" "${CMAKE_MODULE_PATH}")
 # specify the cross compilers
 set(CMAKE_C_COMPILER $ENV{CC})
 set(CMAKE_CXX_COMPILER $ENV{CXX})
-
-# where is the target environment
-#set(CMAKE_FIND_ROOT_PATH $ENV{PREFIX} $ENV{BUILD_PREFIX}/$ENV{HOST}/sysroot)
-#message(STATUS "CMAKE_ROOT_PATH": "${CMAKE_FIND_ROOT_PATH}")
-
-# search for programs in the build host directories
-#set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)
-# for libraries and headers in the target directories
-#set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY)
-#set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE ONLY)
-
-#set(__CHAR_UNSIGNED___EXITCODE 1)
 
 IF(CMAKE_COMPILER_IS_GNUCXX)
     SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Werror")
