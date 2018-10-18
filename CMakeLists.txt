@@ -25,7 +25,7 @@
 
 PROJECT(libgdf)
 
-cmake_minimum_required(VERSION 3.11)  # not sure about version required
+cmake_minimum_required(VERSION 3.11)
 
 set(CMAKE_CXX_STANDARD 11)
 message(STATUS "Using C++ standard: c++${CMAKE_CXX_STANDARD}")
