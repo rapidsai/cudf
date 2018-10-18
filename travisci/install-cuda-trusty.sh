@@ -50,7 +50,7 @@ WORK_DIR=`pwd`
 cd /tmp
 travis_retry wget http://developer.download.nvidia.com/compute/cuda/repos/ubuntu1404/x86_64/libcuda1-396_396.44-0ubuntu1_amd64.deb
 ar -x libcuda*.deb
-tar xvf data.tar.xz
+sudo tar xvf data.tar.xz
 sudo mv usr/lib/x86_64-linux-gnu /usr/lib
 cd $WORK_DIR
 
