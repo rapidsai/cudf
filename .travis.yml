@@ -23,9 +23,10 @@ matrix:
     - env: CUDA=9.2.148_396.37 BUILD_CFFI=1 PYTHON=3.5
 
 before_install:
-  # install gcc-5 and libboost
+  # install libboost
   - sudo apt-get update -q
-  - sudo apt-get install -y libboost-all-dev 
+  - sudo apt-get install -y libboost-all-dev
+  # install gcc-5
   - echo "deb http://archive.ubuntu.com/ubuntu/ xenial main restricted" | sudo tee -a /etc/apt/sources.list
   - echo "deb http://archive.ubuntu.com/ubuntu/ xenial-updates main restricted" | sudo tee -a /etc/apt/sources.list
   - echo "deb http://security.ubuntu.com/ubuntu/ xenial-security main restricted" | sudo tee -a /etc/apt/sources.list
@@ -44,8 +45,8 @@ before_install:
 
 install:
   # check
-  - gcc --version
-  - g++ --version
+  - $CC --version
+  - $CXX --version
   - nvcc --version
   - conda --version
   # install conda build and cmake
