@@ -114,9 +114,12 @@ namespace rmm
 
         static Logger& getLogger() { return getInstance().logger; }
 
-        // True means using cudaMalloc rather than CNMem
-        static void setCudaAllocationMode(bool useCuda) { getInstance().usingCudaMalloc = useCuda; }
-        static bool getCudaAllocationMode() { return getInstance().usingCudaMalloc; }
+        enum AllocationMode {
+            CudaDefaultAllocation = 0, // use cudaMalloc
+            PoolAllocation
+        };
+        static void setAllocationMode(AllocationMode m) { getInstance().allocation_mode = m; }
+        static bool getAllocationMode() { return getInstance().allocation_mode; }
 
         void finalize() {
             std::lock_guard<std::mutex> guard(streams_mutex);
@@ -137,14 +140,14 @@ namespace rmm
             std::lock_guard<std::mutex> guard(streams_mutex);
             if (registered_streams.empty() || 0 == registered_streams.count(stream)) {
                 registered_streams.insert(stream);
-                if (stream && !usingCudaMalloc) // don't register the null stream with CNMem
+                if (stream && PoolAllocation == allocation_mode) // don't register the null stream with CNMem
                     RMM_CHECK_CNMEM( cnmemRegisterStream(stream) );
             }
             return RMM_SUCCESS;
         }
 
     private:
-        Manager() : usingCudaMalloc(false) {}
+        Manager() : allocation_mode(CudaDefaultAllocation) {}
         ~Manager() = default;
         Manager(const Manager&) = delete;
         Manager& operator=(const Manager&) = delete;
@@ -153,6 +156,6 @@ namespace rmm
         std::set<cudaStream_t> registered_streams;
         Logger logger;
 
-        bool usingCudaMalloc;
+        AllocationMode allocation_mode;
     };    
 }

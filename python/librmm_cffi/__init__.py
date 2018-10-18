@@ -2,10 +2,10 @@ from __future__ import absolute_import
 
 import os
 import sys
-import atexit
+#import atexit
 
-from .wrapper import _librmm_wrapper
-from .wrapper import RMMError           # re-exported
+from .wrapper import _RMMWrapper
+#from .wrapper import RMMError           # re-exported
 
 try:
     from .librmm_cffi import ffi
@@ -29,11 +29,10 @@ else:
             return path
 
     librmm_api = ffi.dlopen(_get_lib_name())
-    librmm = _librmm_wrapper(ffi, librmm_api)
+    librmm = _RMMWrapper(ffi, librmm_api)
 
     # initialize memory manager and register an exit handler to finalize it
-    #librmm.initialize()
-    #atexit.register(librmm.finalize)
+    # librmm.initialize()
+    # atexit.register(librmm.finalize)
 
-    del _librmm_wrapper
-
+    del _RMMWrapper

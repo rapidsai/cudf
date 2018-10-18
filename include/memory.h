@@ -26,11 +26,6 @@ typedef struct CUstream_st *cudaStream_t;
 typedef long int offset_t; // would prefer ptrdiff_t but can't #include <stddef.h>
                            // due to CFFI limitations
 
-/**
- * @brief 
- * 
- */
-
 /** ---------------------------------------------------------------------------*
  * @brief RMM error codes
  * ---------------------------------------------------------------------------**/
@@ -49,17 +44,17 @@ typedef enum
 /** ---------------------------------------------------------------------------*
  * @brief Initialize memory manager state and storage.
  * 
- * @param[in] use_cuda_malloc If true, pass allocations through to cudaMalloc, 
- *                            (no pool allocator). 
+ * @param[in] use_pool_allocator If true, use a pool suballocator, otherwise
+ *                               pass allocations through to cudaMalloc.
  * @return rmmError_t RMM_SUCCESS or RMM_ERROR_CUDA_ERROR on any CUDA error.
  * ---------------------------------------------------------------------------**/
-rmmError_t rmmInitialize(bool use_cuda_malloc);
+rmmError_t rmmInitialize(bool use_pool_allocator);
 
 /** ---------------------------------------------------------------------------*
  * @brief Shutdown memory manager.
  * 
- * @return rmmError_t RMM_SUCCESS, or RMM_NOT_INITIALIZED if rmmInitialize() has not 
- *                    been called, or RMM_ERROR_CUDA_ERROR on any CUDA error.
+ * @return rmmError_t RMM_SUCCESS, or RMM_NOT_INITIALIZED if rmmInitialize() has
+ *                    not been called, or RMM_ERROR_CUDA_ERROR on any CUDA error.
  * ---------------------------------------------------------------------------**/
 rmmError_t rmmFinalize(); 
 
@@ -77,23 +72,25 @@ const char * rmmGetErrorString(rmmError_t errcode);
  * @param[out] ptr Returned pointer
  * @param[in] size The size in bytes of the allocated memory region
  * @param[in] stream The stream in which to synchronize this command
- * @return rmmError_t RMM_SUCCESS, or RMM_ERROR_NOT_INITIALIZED if rmmInitialize has not
- *                    been called, RMM_ERROR_INVALID_ARGUMENT if ptr is null, 
- *                    RMM_ERROR_OUT_OF_MEMORY if unable to allocate the requested size, 
- *                    or RMM_CUDA_ERROR on any other CUDA error.
+ * @return rmmError_t RMM_SUCCESS, or RMM_ERROR_NOT_INITIALIZED if rmmInitialize
+ *                    has not been called, RMM_ERROR_INVALID_ARGUMENT if ptr is
+ *                    null, RMM_ERROR_OUT_OF_MEMORY if unable to allocate the
+ *                    requested size, or RMM_CUDA_ERROR on any other CUDA error.
  * ---------------------------------------------------------------------------**/
 rmmError_t rmmAlloc(void **ptr, size_t size, cudaStream_t stream);
 
 /** ---------------------------------------------------------------------------*
- * @brief Reallocate device memory block to new size and recycle any remaining memory.
+ * @brief Reallocate device memory block to new size and recycle any remaining
+ *        memory.
  * 
  * @param[out] ptr Returned pointer
  * @param[in] new_size The size in bytes of the allocated memory region
  * @param[in] stream The stream in which to synchronize this command
- * @return rmmError_t RMM_SUCCESS, or RMM_ERROR_NOT_INITIALIZED if rmmInitialize has not
- *                    been called, RMM_ERROR_INVALID_ARGUMENT if ptr is null, 
- *                    RMM_ERROR_OUT_OF_MEMORY if unable to allocate the requested size, 
- *                    or RMM_ERROR_CUDA_ERROR on any other CUDA error.
+ * @return rmmError_t RMM_SUCCESS, or RMM_ERROR_NOT_INITIALIZED if rmmInitialize
+ *                    has not been called, RMM_ERROR_INVALID_ARGUMENT if ptr is
+ *                    null, RMM_ERROR_OUT_OF_MEMORY if unable to allocate the
+ *                    requested size, or RMM_ERROR_CUDA_ERROR on any other CUDA
+ *                    error.
  * ---------------------------------------------------------------------------**/
 rmmError_t rmmRealloc(void **ptr, size_t new_size, cudaStream_t stream);
 
@@ -102,39 +99,47 @@ rmmError_t rmmRealloc(void **ptr, size_t new_size, cudaStream_t stream);
  * 
  * @param[in] ptr The pointer to free
  * @param[in] stream The stream in which to synchronize this command
- * @return rmmError_t RMM_SUCCESS, or RMM_ERROR_NOT_INITIALIZED if rmmInitialize has not
- *                    been called,or RMM_ERROR_CUDA_ERROR on any CUDA error.
+ * @return rmmError_t RMM_SUCCESS, or RMM_ERROR_NOT_INITIALIZED if rmmInitialize
+ *                    has not been called,or RMM_ERROR_CUDA_ERROR on any CUDA
+ *                    error.
  * ---------------------------------------------------------------------------**/
 rmmError_t rmmFree(void *ptr, cudaStream_t stream);
 
 /** ---------------------------------------------------------------------------*
  * @brief Get the offset of ptr from its base allocation.
  * 
- * This offset is the difference between the address stored in ptr and the 
- * base device memory allocation that it is a sub-allocation of within the pool. 
- * This is useful for, e.g. IPC, where cudaIpcOpenMemHandle() returns a pointer 
+ * This offset is the difference between the address stored in ptr and the
+ * base device memory allocation that it is a sub-allocation of within the pool.
+ * This is useful for, e.g. IPC, where cudaIpcOpenMemHandle() returns a pointer
  * to the base  * allocation, so the user needs the offset of the sub-allocation
  * in order to correctly access its data.
  * 
  * @param[out] offset The difference between ptr and the base allocation that ptr
  *                    is sub-allocated from.
  * @param[in] ptr The ptr to find the base allocation of.
- * @param[in] stream The stream originally passed to rmmAlloc or rmmRealloc for ptr.
+ * @param[in] stream The stream originally passed to rmmAlloc or rmmRealloc for
+ *                   ptr.
  * @return rmmError_t RMM_SUCCESS if all goes well
  * ---------------------------------------------------------------------------**/
-rmmError_t rmmGetAllocationOffset(offset_t *offset, void *ptr, cudaStream_t stream);
+rmmError_t rmmGetAllocationOffset(offset_t *offset,
+                                  void *ptr,
+                                  cudaStream_t stream);
 
 /** ---------------------------------------------------------------------------*
- * @brief Get amounts of free and total memory managed by a manager associated with the stream.
+ * @brief Get amounts of free and total memory managed by a manager associated
+ *        with the stream.
  * 
- * Returns in *free and *total, respectively, the free and total amount of memory available 
- * for allocation by the device in bytes.
+ * Returns in *free and *total, respectively, the free and total amount of
+ * memory available for allocation by the device in bytes.
  * 
- * @param[out] freeSize The free memory in bytes available to the manager associated with stream
- * @param[out] totalSize The total memory managed by the manager associated with stream
+ * @param[out] freeSize The free memory in bytes available to the manager
+ *                      associated with stream
+ * @param[out] totalSize The total memory managed by the manager associated with
+ *                       stream
  * @param[in] stream 
- * @return rmmError_t RMM_SUCCESS, or RMM_ERROR_NOT_INITIALIZED if rmmInitialize has not
- *                    been called, or RMM_ERROR_CUDA_ERROR on any CUDA error
+ * @return rmmError_t RMM_SUCCESS, or RMM_ERROR_NOT_INITIALIZED if rmmInitialize
+ *                    has not been called, or RMM_ERROR_CUDA_ERROR on any CUDA
+ *                    error
  * ---------------------------------------------------------------------------**/
 rmmError_t rmmGetInfo(size_t *freeSize, size_t *totalSize, cudaStream_t stream);
 
