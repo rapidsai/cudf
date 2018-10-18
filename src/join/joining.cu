@@ -159,6 +159,8 @@ gdf_error sort_join_typed(gdf_column *leftcol, gdf_column *rightcol,
 {
   using namespace mgpu;
   gdf_error err = GDF_SUCCESS;
+  GDF_REQUIRE(!leftcol->valid, GDF_VALIDITY_UNSUPPORTED);
+  GDF_REQUIRE(!rightcol->valid, GDF_VALIDITY_UNSUPPORTED);
 
   standard_context_t context(false);
   SortJoin<join_type> sort_based_join;

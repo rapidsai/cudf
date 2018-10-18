@@ -989,6 +989,10 @@ gdf_error gdf_group_by_single(int ncols,                    // # columns
   {
     return GDF_DATASET_EMPTY;
   }
+  for (int i = 0; i < ncols; ++i) {
+	GDF_REQUIRE(!cols[i]->valid, GDF_VALIDITY_UNSUPPORTED);
+  }
+  GDF_REQUIRE(!col_agg->valid, GDF_VALIDITY_UNSUPPORTED);
 
   // If there are no rows in the input, set the output rows to 0 
   // and return immediately with success
@@ -1269,6 +1273,7 @@ gdf_error gdf_order_by(size_t nrows,     //in: # rows
 {
   //copy H-D:
   //
+  GDF_REQUIRE(!cols->valid, GDF_VALIDITY_UNSUPPORTED);
   soa_col_info(cols, ncols, d_cols, d_types);
   
   multi_col_order_by(nrows,
@@ -1298,6 +1303,7 @@ gdf_error gdf_filter(size_t nrows,     //in: # rows
 {
   //copy H-D:
   //
+  GDF_REQUIRE(!cols->valid, GDF_VALIDITY_UNSUPPORTED);
   soa_col_info(cols, ncols, d_cols, d_types);
 
   *new_sz = multi_col_filter(nrows,
