@@ -24,12 +24,14 @@ matrix:
 
 before_install:
   # install gcc-5 and libboost
-  - sudo add-apt-repository ppa:ubuntu-toolchain-r/test -y
+  - echo "deb http://archive.ubuntu.com/ubuntu/ xenial main restricted" | sudo tee -a /etc/apt/sources.list
+  - echo "deb http://archive.ubuntu.com/ubuntu/ xenial-updates main restricted" | sudo tee -a /etc/apt/sources.list
+  - echo "deb http://security.ubuntu.com/ubuntu/ xenial-security main restricted" | sudo tee -a /etc/apt/sources.list
   - sudo apt-get update -q
-  - sudo apt-get install -y gcc-7 g++-7 libboost-all-dev
+  - sudo apt-get install -y libboost-all-dev gcc-5 g++-5 cpp-5 libisl15 libmpfr4 libstdc++-5-dev libgcc-5-dev libc6-dev
   # set gcc/g++ paths
-  - export CC=/usr/bin/gcc-7
-  - export CXX=/usr/bin/g++-7
+  - export CC=/usr/bin/gcc-5
+  - export CXX=/usr/bin/g++-5
   # install cuda
   - source ./travisci/install-cuda-trusty.sh
   # install miniconda
