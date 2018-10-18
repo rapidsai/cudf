@@ -47,7 +47,8 @@ fi
 
 # Install libcuda
 WORK_DIR=`pwd`
-cd /tmp
+mkdir libcuda
+cd libcuda
 travis_retry wget http://developer.download.nvidia.com/compute/cuda/repos/ubuntu1404/x86_64/libcuda1-396_396.44-0ubuntu1_amd64.deb
 ar -x libcuda*.deb
 sudo tar xvf data.tar.xz
