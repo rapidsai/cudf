@@ -100,3 +100,17 @@ def test_issue_165():
     base_mask = df_pandas.dates == start_date_np
     assert_series_equal(mask.to_pandas(), base_mask, check_names=False)
     assert mask.to_pandas().sum() > 0
+
+
+@pytest.mark.parametrize('data', [data1()])
+@pytest.mark.parametrize('dtype', ['int8', 'int16', 'int32',
+                                   'int64', 'float32', 'float64'])
+def test_typecast(data, dtype):
+    pd_data = pd.Series(data.copy())
+    np_data = np.array(pd_data)
+    gdf_data = Series(pd_data)
+
+    np_casted = np_data.astype(dtype)
+    gdf_casted = gdf_data.astype(dtype)
+
+    np.testing.assert_equal(np_casted, gdf_casted)

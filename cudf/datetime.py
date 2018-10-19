@@ -119,6 +119,14 @@ class DatetimeColumn(columnops.TypedColumnBase):
         result = self.replace(data=buf, dtype=self.dtype)
         return result
 
+    def astype(self, dtype):
+        if self.dtype == dtype:
+            return self
+        else:
+            col = self.replace(data=self.data.astype(dtype),
+                               dtype=np.dtype(dtype))
+            return col
+
     def unordered_compare(self, cmpop, rhs):
         lhs, rhs = self, rhs
         return binop(
