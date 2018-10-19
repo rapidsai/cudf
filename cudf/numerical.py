@@ -9,7 +9,7 @@ import pyarrow as pa
 from libgdf_cffi import libgdf
 from librmm_cffi import librmm as rmm
 
-from . import _gdf, columnops, utils, cudautils
+from . import _gdf, columnops, utils, cudautils, datetime
 from .buffer import Buffer
 from .serialize import register_distributed_serializer
 
@@ -111,6 +111,11 @@ class NumericalColumn(columnops.TypedColumnBase):
     def astype(self, dtype):
         if self.dtype == dtype:
             return self
+        elif np.issubdtype(dtype, np.datetime64):
+            return self.astype('int64').view(
+                datetime.DatetimeColumn,
+                dtype='datetime64[ms]'
+            )
         else:
             col = self.replace(data=self.data.astype(dtype),
                                dtype=np.dtype(dtype))
