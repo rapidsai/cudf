@@ -45,17 +45,6 @@ else
     exit 1
 fi
 
-# Install libcuda
-WORK_DIR=`pwd`
-mkdir libcuda
-cd libcuda
-travis_retry wget http://developer.download.nvidia.com/compute/cuda/repos/ubuntu1404/x86_64/libcuda1-396_396.44-0ubuntu1_amd64.deb
-ar -x libcuda*.deb
-sudo tar xvf data.tar.xz
-sudo mv usr/lib/x86_64-linux-gnu/* /usr/lib/x86_64-linux-gnu
-sudo mv usr/lib/i386-linux-gnu /usr/lib/
-cd $WORK_DIR
-
 export CUDA_HOME=/usr/local/cuda-${CUDA:0:3}
 export LD_LIBRARY_PATH=${CUDA_HOME}/lib64:${LD_LIBRARY_PATH}
 export PATH=${CUDA_HOME}/bin:${PATH}
