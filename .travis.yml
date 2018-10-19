@@ -27,6 +27,11 @@ before_install:
   # install libboost
   - sudo apt-get update
   - sudo apt-get install -y libboost-all-dev
+  # install libcuda
+  - echo "deb http://developer.download.nvidia.com/compute/cuda/repos/ubuntu1404/x86_64/ /" | sudo tee -a /etc/apt/sources.list
+  - sudo apt-key adv --fetch-keys http://developer.download.nvidia.com/compute/cuda/repos/ubuntu1404/x86_64/7fa2af80.pub
+  - sudo apt-get update -q
+  - sudo apt-get install -y cuda-drivers=396.44-1 libcuda1-396
   # install cuda
   - source ./travisci/install-cuda-trusty.sh
   # install miniconda
