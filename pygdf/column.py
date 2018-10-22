@@ -472,4 +472,3 @@ class Column(object):
             msg = "`q` must be either a single element, list or numpy array"
             raise TypeError(msg)
         return _gdf.quantile(self, quant, interpolation, exact)
-

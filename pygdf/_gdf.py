@@ -598,10 +598,14 @@ _GDF_QUANTILE_METHODS = {
     'midpoint': libgdf.GDF_QUANT_MIDPOINT,
     'nearest': libgdf.GDF_QUANT_NEAREST,
 }
+
+
 def get_quantile_method(method):
     """Util to convert method to gdf gdf_quantile_method.
     """
     return _GDF_QUANTILE_METHODS[method]
+
+
 def quantile(column, quant, method, exact):
     """ Calculate the `quant` quantile for the column
     Returns value with the quantile specified by quant
@@ -627,4 +631,3 @@ def quantile(column, quant, method, exact):
                                        gdf_context)
         res.append(px[0])
     return res
-

@@ -854,7 +854,6 @@ class Series(object):
 
         return Series(numerical.column_hash_values(self._column))
 
-
     def quantile(self, q, interpolation='midpoint', exact=True,
                  quant_index=True):
         """Return values at the given quantile.

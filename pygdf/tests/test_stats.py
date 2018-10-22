@@ -86,17 +86,16 @@ def test_series_scale():
     np.testing.assert_equal(sr.scale().to_array(), scaled)
 
 
-
 @pytest.mark.parametrize('int_method', interpolation_methods)
 def test_exact_quantiles(int_method):
     arr = np.asarray([6.8, 0.15, 3.4, 4.17, 2.13, 1.11, -1.01, 0.8, 5.7])
     quant_values = [0.0, 0.25, 0.33, 0.5, 1.0]
-    
+
     gdf_series = Series(arr)
-    
+
     q1 = gdf_series.quantile(quant_values, interpolation=int_method,
                              exact=True)
-    
+
     np.testing.assert_allclose(q1.to_pandas().values,
                                exact_results[int_method], rtol=1e-10)
 
@@ -104,10 +103,10 @@ def test_exact_quantiles(int_method):
 def test_approx_quantiles():
     arr = np.asarray([6.8, 0.15, 3.4, 4.17, 2.13, 1.11, -1.01, 0.8, 5.7])
     quant_values = [0.0, 0.25, 0.33, 0.5, 1.0]
-    
+
     gdf_series = Series(arr)
-    
+
     q1 = gdf_series.quantile(quant_values, exact=False)
-    
+
     np.testing.assert_allclose(q1.to_pandas().values, approx_results,
                                rtol=1e-10)
