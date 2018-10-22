@@ -25,13 +25,17 @@
 
 PROJECT(libgdf)
 
-cmake_minimum_required(VERSION 2.8)  # not sure about version required
+cmake_minimum_required(VERSION 3.11)
 
 set(CMAKE_CXX_STANDARD 11)
 message(STATUS "Using C++ standard: c++${CMAKE_CXX_STANDARD}")
 
 set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/Modules/" ${CMAKE_MODULE_PATH})
 message(STATUS "CMAKE_MODULE_PATH:" "${CMAKE_MODULE_PATH}")
+
+# specify the cross compilers
+set(CMAKE_C_COMPILER $ENV{CC})
+set(CMAKE_CXX_COMPILER $ENV{CXX})
 
 IF(CMAKE_COMPILER_IS_GNUCXX)
     SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Werror")
