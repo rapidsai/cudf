@@ -589,3 +589,42 @@ def nvtx_range_pop():
     """ Demarcate the end of the inner-most range.
     """
     libgdf.gdf_nvtx_range_pop()
+
+
+_GDF_QUANTILE_METHODS = {
+    'linear': libgdf.GDF_QUANT_LINEAR,
+    'lower': libgdf.GDF_QUANT_LOWER,
+    'higher': libgdf.GDF_QUANT_HIGHER,
+    'midpoint': libgdf.GDF_QUANT_MIDPOINT,
+    'nearest': libgdf.GDF_QUANT_NEAREST,
+}
+def get_quantile_method(method):
+    """Util to convert method to gdf gdf_quantile_method.
+    """
+    return _GDF_QUANTILE_METHODS[method]
+def quantile(column, quant, method, exact):
+    """ Calculate the `quant` quantile for the column
+    Returns value with the quantile specified by quant
+    """
+    gdf_context = ffi.new('gdf_context*')
+    method_api = _join_method_api['sort']
+    libgdf.gdf_context_view_augmented(gdf_context, 0, method_api, 0, 0, 0)
+    # libgdf.gdf_context_view(gdf_context, 0, method_api, 0)
+    # px = ffi.new("double *")
+    res = []
+    for q in quant:
+        px = ffi.new("double *")
+        if exact:
+            libgdf.gdf_quantile_exact(column.cffi_view,
+                                      get_quantile_method(method),
+                                      q,
+                                      ffi.cast('void *', px),
+                                      gdf_context)
+        else:
+            libgdf.gdf_quantile_aprrox(column.cffi_view,
+                                       q,
+                                       ffi.cast('void *', px),
+                                       gdf_context)
+        res.append(px[0])
+    return res
+

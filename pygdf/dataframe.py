@@ -1388,6 +1388,31 @@ class DataFrame(object):
             return df.set_index(indices.astype(np.int64))
         return df
 
+    def quantile(self, q, interpolation='linear', exact=False):
+        """Return values at the given quantile.
+        Parameters
+        ----------
+        q : float or array-like
+            0 <= q <= 1, the quantile(s) to compute
+        interpolation : {‘linear’, ‘lower’, ‘higher’, ‘midpoint’, ‘nearest’}
+            This  parameter specifies the interpolation method to use,
+            when the desired quantile lies between two data points i and j.
+            Default 'linear'.
+        columns : list of str
+            List of column names to include.
+        exact : boolean
+            Whether to use approximate or exact quantile algorithm.
+        Returns
+        -------
+        DataFrame
+        """
+        result = DataFrame()
+        result['Quantile'] = q
+        for k, col in self._cols.items():
+            result[k] = col.quantile(q, interpolation, exact,
+                                     quant_index=False)
+        print(result)
+
 
 class Loc(object):
     """
