@@ -83,6 +83,9 @@ gdf_error gdf_column_free(gdf_column *column);
 gdf_error gdf_context_view(gdf_context *context, int flag_sorted, gdf_method flag_method,
                            int flag_distinct);
 
+gdf_error gdf_context_view_augmented(gdf_context *context, int flag_sorted, gdf_method flag_method,
+                           int flag_distinct, int flag_sort_result, int flag_sort_inplace);
+
 /* error handling */
 
 const char * gdf_error_get_name(gdf_error errcode);
