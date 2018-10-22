@@ -28,6 +28,9 @@
 #include <cstddef>
 #include <cuda.h>
 
+// Set true to enable free/total memory logging at each RMM call (expensive)
+#define RMM_USAGE_LOGGING false
+
 /** ---------------------------------------------------------------------------*
  * @brief Macro wrapper to check for error in RMM API calls.
  * ---------------------------------------------------------------------------**/
@@ -53,8 +56,10 @@ namespace rmm
     class LogIt
     {
     public:
-        LogIt(Logger::MemEvent_t event, size_t size, cudaStream_t stream)
-        : event(event), device(0), ptr(0), size(size), stream(stream)
+        LogIt(Logger::MemEvent_t event, size_t size, 
+              cudaStream_t stream, bool usageLogging=RMM_USAGE_LOGGING)
+        : event(event), device(0), ptr(0), size(size), stream(stream), 
+          usageLogging(usageLogging)
         {
             cudaGetDevice(&device);
             start = std::chrono::system_clock::now();
@@ -75,8 +80,8 @@ namespace rmm
         ~LogIt() 
         {
             Logger::TimePt end = std::chrono::system_clock::now();
-            size_t freeMem, totalMem;
-            rmmGetInfo(&freeMem, &totalMem, stream);
+            size_t freeMem = 0, totalMem = 0;
+            if (usageLogging) rmmGetInfo(&freeMem, &totalMem, stream);
             Manager::getLogger().record(event, device, ptr, start, end,
                                         freeMem, totalMem, size, stream);
         }
@@ -88,6 +93,7 @@ namespace rmm
         size_t size;
         cudaStream_t stream;
         rmm::Logger::TimePt start;
+        bool usageLogging;
     };
 
     inline bool usePoolAllocator()
@@ -129,7 +135,7 @@ rmmError_t rmmInitialize(bool use_pool_allocator)
     {
         cnmemDevice_t dev;
         RMM_CHECK_CUDA( cudaGetDevice(&(dev.device)) );
-        dev.size = 1<<30; // One GiB
+        dev.size = 0;//1<<30; // One GiB
         dev.numStreams = 1;
         cudaStream_t streams[1]; streams[0] = 0;
         dev.streams = streams;
