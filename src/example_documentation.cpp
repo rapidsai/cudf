@@ -21,6 +21,7 @@
 // summaries, whereas the detailed text following on the next line is the detailed
 // description.
 /** ---------------------------------------------------------------------------*
+* @file example_documentation.cpp
 * @brief Example code documentation for libgdf.
 *
 * This file provides examples of how source files, classes, functions, and variables
