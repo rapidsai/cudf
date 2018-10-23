@@ -61,29 +61,40 @@ namespace rmm
         : event(event), device(0), ptr(0), size(size), stream(stream), 
           usageLogging(usageLogging)
         {
-            cudaGetDevice(&device);
-            start = std::chrono::system_clock::now();
+            if (Manager::getOptions().enable_logging)
+            {
+                cudaGetDevice(&device);
+                start = std::chrono::system_clock::now();
+            }
         }
 
         LogIt(Logger::MemEvent_t event, void* ptr,
               size_t size, cudaStream_t stream)
         : event(event), device(0), ptr(ptr), size(size), stream(stream)
         {
-            cudaGetDevice(&device);
-            start = std::chrono::system_clock::now();
+            if (Manager::getOptions().enable_logging)
+            {
+                cudaGetDevice(&device);
+                start = std::chrono::system_clock::now();
+            }
         }
 
         /// Sometimes you need to start logging before the pointer address is
         /// known
-        void setPointer(void* p) { ptr = p; }
+        inline void setPointer(void* p) {
+            if (Manager::getOptions().enable_logging) ptr = p;
+        }
 
         ~LogIt() 
         {
-            Logger::TimePt end = std::chrono::system_clock::now();
-            size_t freeMem = 0, totalMem = 0;
-            if (usageLogging) rmmGetInfo(&freeMem, &totalMem, stream);
-            Manager::getLogger().record(event, device, ptr, start, end,
-                                        freeMem, totalMem, size, stream);
+            if (Manager::getOptions().enable_logging)
+            {
+                Logger::TimePt end = std::chrono::system_clock::now();
+                size_t freeMem = 0, totalMem = 0;
+                if (usageLogging) rmmGetInfo(&freeMem, &totalMem, stream);
+                Manager::getLogger().record(event, device, ptr, start, end,
+                                            freeMem, totalMem, size, stream);
+            }
         }
 
     private:
@@ -98,7 +109,7 @@ namespace rmm
 
     inline bool usePoolAllocator()
     {
-        return Manager::getAllocationMode() == Manager::PoolAllocation;
+        return Manager::getOptions().allocation_mode == Manager::PoolAllocation;
     }
 };
 
@@ -124,18 +135,22 @@ const char * rmmGetErrorString(rmmError_t errcode) {
 }
 
 // Initialize memory manager state and storage.
-rmmError_t rmmInitialize(bool use_pool_allocator)
+rmmError_t rmmInitialize(RMMOptions *options)
 {
-    if (use_pool_allocator)
-        rmm::Manager::setAllocationMode(rmm::Manager::PoolAllocation);
-    else
-        rmm::Manager::setAllocationMode(rmm::Manager::CudaDefaultAllocation);
+    if (0 != options)
+    {
+        rmm::Manager::Options opt {
+            options->use_pool_allocator ? rmm::Manager::PoolAllocation : rmm::Manager::CudaDefaultAllocation,
+            options->enable_memory_logging
+            };
+        rmm::Manager::setOptions(opt);
+    }
 
     if (rmm::usePoolAllocator())
     {
         cnmemDevice_t dev;
         RMM_CHECK_CUDA( cudaGetDevice(&(dev.device)) );
-        dev.size = 0;//1<<30; // One GiB
+        dev.size = 0; // defaults to half GPU memory
         dev.numStreams = 1;
         cudaStream_t streams[1]; streams[0] = 0;
         dev.streams = streams;

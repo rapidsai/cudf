@@ -102,7 +102,7 @@ namespace rmm
         std::vector<MemoryEvent> events;
         std::mutex log_mutex;
     };
-    
+
     class Manager
     {
     public:
@@ -118,8 +118,17 @@ namespace rmm
             CudaDefaultAllocation = 0, // use cudaMalloc
             PoolAllocation
         };
-        static void setAllocationMode(AllocationMode m) { getInstance().allocation_mode = m; }
-        static bool getAllocationMode() { return getInstance().allocation_mode; }
+
+        struct Options {
+            AllocationMode allocation_mode;
+            bool           enable_logging;
+        };
+
+        //static void setAllocationMode(AllocationMode m) { getInstance().allocation_mode = m; }
+        //static bool getAllocationMode() { return getInstance().allocation_mode; }
+
+        static void setOptions(Options &options) { getInstance().options = options; }
+        static Options getOptions() { return getInstance().options; }
 
         void finalize() {
             std::lock_guard<std::mutex> guard(streams_mutex);
@@ -140,14 +149,14 @@ namespace rmm
             std::lock_guard<std::mutex> guard(streams_mutex);
             if (registered_streams.empty() || 0 == registered_streams.count(stream)) {
                 registered_streams.insert(stream);
-                if (stream && PoolAllocation == allocation_mode) // don't register the null stream with CNMem
+                if (stream && PoolAllocation == options.allocation_mode) // don't register the null stream with CNMem
                     RMM_CHECK_CNMEM( cnmemRegisterStream(stream) );
             }
             return RMM_SUCCESS;
         }
 
     private:
-        Manager() : allocation_mode(CudaDefaultAllocation) {}
+        Manager() : options({ CudaDefaultAllocation, false }) {}
         ~Manager() = default;
         Manager(const Manager&) = delete;
         Manager& operator=(const Manager&) = delete;
@@ -156,6 +165,6 @@ namespace rmm
         std::set<cudaStream_t> registered_streams;
         Logger logger;
 
-        AllocationMode allocation_mode;
+        Options options;
     };    
 }

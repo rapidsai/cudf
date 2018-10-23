@@ -41,6 +41,13 @@ typedef enum
   N_RMM_ERROR                 //< Count of error types
 } rmmError_t;
 
+typedef struct
+{
+  bool use_pool_allocator; //< Use pool suballocation strategy if true, 
+                           //< default allocation otherwise
+  bool enable_memory_logging; // Enable logging memory manager events
+} RMMOptions;
+
 /** ---------------------------------------------------------------------------*
  * @brief Initialize memory manager state and storage.
  * 
@@ -48,7 +55,7 @@ typedef enum
  *                               pass allocations through to cudaMalloc.
  * @return rmmError_t RMM_SUCCESS or RMM_ERROR_CUDA_ERROR on any CUDA error.
  * ---------------------------------------------------------------------------**/
-rmmError_t rmmInitialize(bool use_pool_allocator);
+rmmError_t rmmInitialize(RMMOptions *options);
 
 /** ---------------------------------------------------------------------------*
  * @brief Shutdown memory manager.

@@ -56,8 +56,10 @@ class _RMMWrapper(object):
             msg = errname
         return errname, msg
 
-    def initialize(self, use_pool_allocator=False):
-        return self.rmmInitialize(use_pool_allocator)
+    def initialize(self, use_pool_allocator=False, enable_logging=False):
+        opts = self._ffi.new("RMMOptions *",
+                             [use_pool_allocator, enable_logging])
+        return self.rmmInitialize(opts)
 
     def finalize(self):
         return self.rmmFinalize()
