@@ -21,6 +21,7 @@
 #include <iterator>
 #include <type_traits>
 #include <cassert>
+#include <gdf/gdf.h>
 
 #include <thrust/pair.h>
 
@@ -531,7 +532,7 @@ public:
         return const_iterator( m_hashtbl_values,m_hashtbl_values+m_hashtbl_size,begin_ptr);
     }
     
-    void assign_async( const concurrent_unordered_multimap& other, cudaStream_t stream = 0 )
+    gdf_error assign_async( const concurrent_unordered_multimap& other, cudaStream_t stream = 0 )
     {
         m_collisions = other.m_collisions;
         if ( other.m_hashtbl_size <= m_hashtbl_capacity ) {
@@ -543,7 +544,9 @@ public:
             
             m_hashtbl_values = m_allocator.allocate( m_hashtbl_capacity );
         }
-        CUDA_RT_CALL( cudaMemcpyAsync( m_hashtbl_values, other.m_hashtbl_values, m_hashtbl_size*sizeof(value_type), cudaMemcpyDefault, stream ) );
+        CUDA_TRY( cudaMemcpyAsync( m_hashtbl_values, other.m_hashtbl_values, m_hashtbl_size*sizeof(value_type), cudaMemcpyDefault, stream ) );
+
+        return GDF_SUCCESS;
     }
     
     void clear_async( cudaStream_t stream = 0 ) 
@@ -567,15 +570,16 @@ public:
         }
     }
     
-    void prefetch( const int dev_id, cudaStream_t stream = 0 )
+    gdf_error prefetch( const int dev_id, cudaStream_t stream = 0 )
     {
         cudaPointerAttributes hashtbl_values_ptr_attributes;
         cudaError_t status = cudaPointerGetAttributes( &hashtbl_values_ptr_attributes, m_hashtbl_values );
         
         if ( cudaSuccess == status && hashtbl_values_ptr_attributes.isManaged ) {
-            CUDA_RT_CALL( cudaMemPrefetchAsync(m_hashtbl_values, m_hashtbl_size*sizeof(value_type), dev_id, stream) );
+            CUDA_TRY( cudaMemPrefetchAsync(m_hashtbl_values, m_hashtbl_size*sizeof(value_type), dev_id, stream) );
         }
-        CUDA_RT_CALL( cudaMemPrefetchAsync(this, sizeof(*this), dev_id, stream) );
+        CUDA_TRY( cudaMemPrefetchAsync(this, sizeof(*this), dev_id, stream) );
+        return GDF_SUCCESS;
     }
     
 private:
