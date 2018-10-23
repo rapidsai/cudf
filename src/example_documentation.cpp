@@ -16,7 +16,8 @@
 */
 
 
-// DESCRIPTION: A brief description of the overall purpose and contents of this file
+// DESCRIPTION: A brief description of the overall purpose and contents of this file.
+// Note the use of the @file for file descriptions
 // DESCRIPTION: The text on the same line as the @brief will show up in lists and 
 // summaries, whereas the detailed text following on the next line is the detailed
 // description.
