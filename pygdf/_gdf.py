@@ -553,8 +553,8 @@ def nvtx_range_pop():
     libgdf.gdf_nvtx_range_pop()
 
 
-def rmm_initialize(use_pool_allocator=False):
-    rmm.initialize(use_pool_allocator)
+def rmm_initialize(use_pool_allocator=False, enable_logging=False):
+    rmm.initialize(use_pool_allocator, enable_logging)
     return True
 
 
