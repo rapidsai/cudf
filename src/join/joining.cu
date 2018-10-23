@@ -431,12 +431,19 @@ gdf_error join_call_compute_df(
     if ((left_cols == nullptr)  ||
         (right_cols == nullptr)) { return GDF_DATASET_EMPTY; }
 
+    if (num_cols_to_join == 0) { return GDF_SUCCESS; }
+    
+    if ((left_join_cols == nullptr)  ||
+        (right_join_cols == nullptr)) { return GDF_DATASET_EMPTY; }
+
     //check if combined join output is expected
     bool compute_df = (result_cols != nullptr);
 
     //return error if no output pointers are valid
     if ( ((left_indices == nullptr)||(right_indices == nullptr)) &&
          (!compute_df) ) { return GDF_DATASET_EMPTY; }
+
+    if (join_context == nullptr) { return GDF_INVALID_API_CALL; }
 
     //If index outputs are not requested, create columns to store them
     //for computing combined join output
