@@ -385,12 +385,15 @@ def libgdf_join(col_lhs, col_rhs, on, how, method='sort'):
         res.append(_as_numba_devarray(intaddr=int(ffi.cast("uintptr_t",
                                                            col.data)),
                                       nelem=col.size,
-                                      dtype=gdf_to_np_dtype(col.dtype)))
+                                      dtype=gdf_to_np_dtype(col.dtype),
+                                      cb_dtor=cuda.driver.driver.cuMemFree))
+
         valids.append(_as_numba_devarray(intaddr=int(ffi.cast("uintptr_t",
                                                               col.valid)),
                                          nelem=calc_chunk_size(col.size,
                                                                mask_bitsize),
-                                         dtype=mask_dtype))
+                                         dtype=mask_dtype,
+                                         cb_dtor=cuda.driver.driver.cuMemFree))
 
     return res, valids
 

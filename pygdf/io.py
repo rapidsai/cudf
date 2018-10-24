@@ -22,9 +22,8 @@ def read_csv(filepath, lineterminator='\n',
              delimiter=',', sep=None, delim_whitespace=False,
              skipinitialspace=False, names=None, dtype=None,
              skipfooter=0, skiprows=0, dayfirst=False):
-
     """
-    Read CSV data into dataframe.
+    Load and parse a CSV file into a DataFrame
 
     Parameters
     ----------
@@ -34,7 +33,7 @@ def read_csv(filepath, lineterminator='\n',
         Delimiter to be used.
     delim_whitespace : bool, default False
         Determines whether to use whitespace as delimiter.
-    lineterminator : char, default '\n'
+    lineterminator : char, default '\\n'
         Character to indicate end of line.
     skipinitialspace : bool, default False
         Skip spaces after delimiter.
@@ -52,9 +51,8 @@ def read_csv(filepath, lineterminator='\n',
     -------
     GPU ``DataFrame`` object.
 
-    Example
-    -------
-
+    Examples
+    --------
     foo.txt : ::
 
         50,50|40,60|30,70|20,80|
@@ -67,13 +65,7 @@ def read_csv(filepath, lineterminator='\n',
       col1 col2
     0 40   60
     1 30   70
-
     """
-
-# def read_csv(filepath, lineterminator='\n',
-#              delimiter=',', sep=None, delim_whitespace=False,
-#              skipinitialspace=False, names=None, dtype=None,
-#              skipfooter=0, skiprows=0, dayfirst=False):
 
     if names is None or dtype is None:
         msg = '''Automatic dtype detection not implemented:
