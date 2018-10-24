@@ -25,13 +25,17 @@
 
 PROJECT(libgdf)
 
-cmake_minimum_required(VERSION 2.8)  # not sure about version required
+cmake_minimum_required(VERSION 3.11)
 
 set(CMAKE_CXX_STANDARD 11)
 message(STATUS "Using C++ standard: c++${CMAKE_CXX_STANDARD}")
 
 set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/Modules/" ${CMAKE_MODULE_PATH})
 message(STATUS "CMAKE_MODULE_PATH:" "${CMAKE_MODULE_PATH}")
+
+# specify the cross compilers
+set(CMAKE_C_COMPILER $ENV{CC})
+set(CMAKE_CXX_COMPILER $ENV{CXX})
 
 IF(CMAKE_COMPILER_IS_GNUCXX)
     SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Werror")
@@ -111,7 +115,6 @@ if(HASH_JOIN)
 endif()
 
 
-
 # switch between cudaMalloc and cudaMallocManaged for hash tables
 option(HT_LEGACY_ALLOCATOR "legacy allocator for hash tables" ON)
 if(HT_LEGACY_ALLOCATOR)
@@ -145,7 +148,17 @@ cuda_add_library(gdf SHARED
     src/io/csv/csv-reader.cu
     src/io/convert/gdf-to-csr.cu      
     src/validops.cu
+    src/nvtx_utils.cpp
 )
+
+# Switch to enable NVTX ranges for profiling
+option(USE_NVTX "Build with NVTX" ON)
+if(USE_NVTX)
+  message("-- Using NVTX ranges")
+  find_library(NVTX_LIBRARY nvToolsExt HINTS /usr/local/cuda/lib64)
+  target_link_libraries(gdf ${NVTX_LIBRARY})
+  set(CUDA_NVCC_FLAGS  ${CUDA_NVCC_FLAGS}; -DUSE_NVTX)
+endif(USE_NVTX)
 
 if (ARROW_NUMERIC_VERSION EQUAL 900)
   # arrow-0.9 requires boost_regex

@@ -3,9 +3,9 @@
 typedef size_t gdf_size_type;
 typedef gdf_size_type gdf_index_type;
 typedef unsigned char gdf_valid_type;
-typedef	int64_t	gdf_date64;
-typedef	int32_t	gdf_date32;
-typedef	int32_t	gdf_category;
+typedef	long	gdf_date64;
+typedef	int		gdf_date32;
+typedef	int		gdf_category;
 
 /* --------------------------------------------------------------------------*/
  /**
@@ -55,9 +55,10 @@ typedef enum {
     GDF_PARTITION_DTYPE_MISMATCH,     /**< Datatype mismatch between columns of input/output in the hash partition function */
     GDF_HASH_TABLE_INSERT_FAILURE,    /**< Failed to insert to hash table, likely because its full */
     GDF_UNSUPPORTED_JOIN_TYPE,        /**< The type of join requested is unsupported */
+    GDF_UNDEFINED_NVTX_COLOR,         /**< The requested color used to define an NVTX range is not defined */
+    GDF_NULL_NVTX_NAME,               /**< The requested name for an NVTX range cannot be nullptr */
     GDF_C_ERROR,				         	    /**< C error not related to CUDA */
     GDF_FILE_ERROR,   				        /**< error processing sepcified file */      
-
 } gdf_error;
 
 typedef enum {
@@ -126,6 +127,28 @@ typedef enum {
   GDF_COUNT_DISTINCT, /**< Counts the number of distinct keys in the GroupBy columns */
   N_GDF_AGG_OPS,      /**< The total number of aggregation operations. ALL NEW OPERATIONS SHOULD BE ADDED ABOVE THIS LINE*/
 } gdf_agg_op;
+
+
+/* --------------------------------------------------------------------------*/
+/** 
+ * @Synopsis  Colors for use with NVTX ranges.
+ *
+ * These enumerations are the available pre-defined colors for use with
+ * user-defined NVTX ranges.
+ */
+/* ----------------------------------------------------------------------------*/
+typedef enum {
+  GDF_GREEN = 0, 
+  GDF_BLUE,
+  GDF_YELLOW,
+  GDF_PURPLE,
+  GDF_CYAN,
+  GDF_RED,
+  GDF_WHITE,
+  GDF_DARK_GREEN,
+  GDF_ORANGE,
+  GDF_NUM_COLORS, /** Add new colors above this line */
+} gdf_color;
 
 /* --------------------------------------------------------------------------*/
 /** 

@@ -26,6 +26,8 @@
 #include <memory>
 #include "../../util/bit_util.cuh"
 
+#include <thrust/equal.h>
+
 // Type for a unique_ptr to a gdf_column with a custom deleter
 // Custom deleter is defined at construction
 using gdf_col_pointer = typename std::unique_ptr<gdf_column, 

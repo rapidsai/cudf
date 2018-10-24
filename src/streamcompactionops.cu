@@ -201,7 +201,8 @@ std::map<gdf_dtype, int16_t> column_type_width = {{GDF_INT8, sizeof(int8_t)}, {G
 gdf_error gpu_apply_stencil(gdf_column *lhs, gdf_column * stencil, gdf_column * output){
 	//OK: add a rquire here that output and lhs are the same size
 	GDF_REQUIRE(output->size == lhs->size, GDF_COLUMN_SIZE_MISMATCH);
-	GDF_REQUIRE(lhs->dtype == output->dtype, GDF_VALIDITY_MISSING);
+	GDF_REQUIRE(lhs->dtype == output->dtype, GDF_DTYPE_MISMATCH);
+	GDF_REQUIRE(!lhs->valid, GDF_VALIDITY_UNSUPPORTED);
 
 	//find the width in bytes of this data type
 	auto searched_item = column_type_width.find(lhs->dtype);

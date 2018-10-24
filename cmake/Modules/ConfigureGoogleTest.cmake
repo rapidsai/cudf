@@ -52,3 +52,5 @@ set(GTEST_ROOT ${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/thirdparty/googletest
 message(STATUS "GTEST_ROOT: " ${GTEST_ROOT})
 
 link_directories(${GTEST_ROOT}/lib/)
+link_directories(${GTEST_ROOT}/lib/x86_64-linux-gnu/)
+link_directories(${GTEST_ROOT}/lib64/)

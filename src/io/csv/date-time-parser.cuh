@@ -145,7 +145,7 @@ gdf_date64 parseDateTimeFormat(char *data, long start_idx, long end_idx, bool da
 		if ( (end_idx - start_idx) < 11 ) {
 			// only have a date portion, no time
 			extractDate(data, start_idx, end_idx, dayfirst, &year, &month, &day);
-			answer = secondsFromEpoch(year, month, day, 12, 0, 0);
+			answer = secondsFromEpoch(year, month, day, 0, 0, 0);
 		} else {
 			answer = -1;
 		}
@@ -323,7 +323,7 @@ bool extractTime(char *data, int sIdx, int eIdx, int *hour, int *minute, int *se
 __host__ __device__
 gdf_date32 daysSinceEpoch(int year, int month, int day)  {
 
-	static unsigned short days[12] = {0,  31,  60,  91, 121, 152, 182, 213, 244, 274, 305, 335};
+	static unsigned short days[12] = {0,  31,  59,  90, 120, 151, 181, 212, 243, 273, 304, 334};
 
 	// years since epoch
 	int ye = year - 1970;
@@ -345,7 +345,7 @@ gdf_date32 daysSinceEpoch(int year, int month, int day)  {
 	days_e += days[me];
 
 	// now just add days, but not current full days since this one is not over
-	days_e +=  day - 1;
+	days_e +=  day;
 
 	return days_e;
 }

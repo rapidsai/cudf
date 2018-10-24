@@ -10,6 +10,7 @@
 #include "sqls_rtti_comp.hpp"
 #include "groupby/groupby.cuh"
 #include "groupby/hash/aggregation_operations.cuh"
+#include "nvtx_utils.h"
 
 //using IndexT = int;//okay...
 using IndexT = size_t;
@@ -269,22 +270,126 @@ gdf_error gdf_group_by_count(size_t nrows,     //in: # rows
                              int* d_types,     //out: pre-allocated device-side array to be filled with gdf_colum::dtype for each column; slicing of gdf_column array (host)
                              IndexT* d_indx,      //out: device-side array of row indices after sorting
                              IndexT* d_kout,      //out: device-side array of rows after gropu-by
-                             IndexT* d_count,     //out: device-side array of aggregated values (COUNT-ed) as a result of group-by;
-                             size_t* new_sz)   //out: host-side # rows of d_count
+                             gdf_column& c_vout,  //out: aggregated column; requires shallow (trivial) copy-construction (see static_assert below);
+                             size_t* new_sz,   //out: host-side # rows of d_count
+                             bool flag_distinct = false)
 {
   //copy H-D:
   //
   soa_col_info(cols, ncols, d_cols, d_types);
 
-  *new_sz = multi_col_group_by_count_sort(nrows,
-                                          ncols,
-                                          d_cols,
-                                          d_types,
-                                          d_indx,
-                                          d_kout,
-                                          d_count,
-                                          flag_sorted);
+  switch( c_vout.dtype )
+    {
+    case GDF_INT8:
+      {
+        using T = char;
 
+        T* d_vout  = static_cast<T*>(c_vout.data);
+        *new_sz = multi_col_group_by_count_sort(nrows,
+                                                ncols,
+                                                d_cols,
+                                                d_types,
+                                                d_indx,
+                                                d_kout,
+                                                d_vout,
+                                                flag_sorted,
+                                                flag_distinct);
+        
+        break;
+      }
+
+    case GDF_INT16:
+      {
+        using T = short;
+
+        T* d_vout  = static_cast<T*>(c_vout.data);
+        *new_sz = multi_col_group_by_count_sort(nrows,
+                                                ncols,
+                                                d_cols,
+                                                d_types,
+                                                d_indx,
+                                                d_kout,
+                                                d_vout,
+                                                flag_sorted,
+                                                flag_distinct);
+        
+        break;
+      }
+    case GDF_INT32:
+      {
+        using T = int;
+
+        T* d_vout  = static_cast<T*>(c_vout.data);
+        *new_sz = multi_col_group_by_count_sort(nrows,
+                                                ncols,
+                                                d_cols,
+                                                d_types,
+                                                d_indx,
+                                                d_kout,
+                                                d_vout,
+                                                flag_sorted,
+                                                flag_distinct);
+	
+        break;
+      }
+
+    case GDF_INT64:
+      {
+        using T = long;
+
+        T* d_vout  = static_cast<T*>(c_vout.data);
+        *new_sz = multi_col_group_by_count_sort(nrows,
+                                                ncols,
+                                                d_cols,
+                                                d_types,
+                                                d_indx,
+                                                d_kout,
+                                                d_vout,
+                                                flag_sorted,
+                                                flag_distinct);
+	
+        break;
+      }
+
+    case GDF_FLOAT32:
+      {
+        using T = float;
+
+        T* d_vout  = static_cast<T*>(c_vout.data);
+        *new_sz = multi_col_group_by_count_sort(nrows,
+                                                ncols,
+                                                d_cols,
+                                                d_types,
+                                                d_indx,
+                                                d_kout,
+                                                d_vout,
+                                                flag_sorted,
+                                                flag_distinct);
+	
+        break;
+      }
+
+    case GDF_FLOAT64:
+      {
+        using T = double;
+
+        T* d_vout  = static_cast<T*>(c_vout.data);
+        *new_sz = multi_col_group_by_count_sort(nrows,
+                                                ncols,
+                                                d_cols,
+                                                d_types,
+                                                d_indx,
+                                                d_kout,
+                                                d_vout,
+                                                flag_sorted,
+                                                flag_distinct);
+	
+        break;
+      }
+
+    default:
+      return GDF_UNSUPPORTED_DTYPE;
+    }
   
   return GDF_SUCCESS;
 }
@@ -988,6 +1093,10 @@ gdf_error gdf_group_by_single(int ncols,                    // # columns
   {
     return GDF_DATASET_EMPTY;
   }
+  for (int i = 0; i < ncols; ++i) {
+	GDF_REQUIRE(!cols[i]->valid, GDF_VALIDITY_UNSUPPORTED);
+  }
+  GDF_REQUIRE(!col_agg->valid, GDF_VALIDITY_UNSUPPORTED);
 
   // If there are no rows in the input, set the output rows to 0 
   // and return immediately with success
@@ -1010,6 +1119,10 @@ gdf_error gdf_group_by_single(int ncols,                    // # columns
     }
     return GDF_SUCCESS;
   }
+
+  gdf_error gdf_error_code{GDF_SUCCESS};
+  
+  PUSH_RANGE("LIBGDF_GROUPBY", GROUPBY_COLOR);
   
   if( ctxt->flag_method == GDF_SORT )
     {
@@ -1046,7 +1159,7 @@ gdf_error gdf_group_by_single(int ncols,                    // # columns
       gdf_column c_agg_p;
       c_agg_p.dtype = col_agg->dtype;
       c_agg_p.size = nrows;
-      Vector<char> d_agg_p(nrows * dtype_size(c_agg_p.dtype));//this might be PROBLEMatic (seems harmless)
+      Vector<char> d_agg_p(nrows * dtype_size(c_agg_p.dtype));//purpose: avoids a switch-case on type;
       c_agg_p.data = d_agg_p.data().get();
 
       switch( op )
@@ -1119,12 +1232,8 @@ gdf_error gdf_group_by_single(int ncols,                    // # columns
         case GDF_COUNT_DISTINCT:
           {
             assert( out_col_agg );
-            //assert( out_col_agg->dtype == GDF_INT64 );//==size_t ?????
             assert( out_col_agg->size >= 1);
 
-            Vector<IndexT> d_counts(nrows, 0);
-            
-            IndexT* ptr_d_vals = d_counts.data().get();
             gdf_group_by_count(nrows,
                                h_columns,
                                static_cast<size_t>(ncols),
@@ -1133,18 +1242,16 @@ gdf_error gdf_group_by_single(int ncols,                    // # columns
                                d_col_types,//allocated
                                ptr_d_sort, //allocated
                                ptr_d_indx, //allocated (or, passed in)
-                               ptr_d_vals, //passed in
-                               &n_group);
-            IndexT* p_out = static_cast<IndexT*>(out_col_agg->data);
-            p_out[0] = static_cast<IndexT>(n_group);
+                               *out_col_agg, //passed in
+                               &n_group,
+                               true);
+            
           }
           break;
         case GDF_COUNT:
           {
             assert( out_col_agg );
-            //assert( out_col_agg->dtype == GDF_INT64 );//==size_t ?????
-            
-            IndexT* ptr_d_vals = static_cast<IndexT*>(out_col_agg->data);
+
             gdf_group_by_count(nrows,
                                h_columns,
                                static_cast<size_t>(ncols),
@@ -1153,12 +1260,13 @@ gdf_error gdf_group_by_single(int ncols,                    // # columns
                                d_col_types,//allocated
                                ptr_d_sort, //allocated
                                ptr_d_indx, //allocated (or, passed in)
-                               ptr_d_vals, //passed in
+                               *out_col_agg, //passed in
                                &n_group);
+            
           }
           break;
         default: // To eliminate error for unhandled enumerant N_GDF_AGG_OPS
-          return GDF_INVALID_API_CALL;
+          gdf_error_code = GDF_INVALID_API_CALL;
         }
 
       if( out_col_values )
@@ -1185,59 +1293,66 @@ gdf_error gdf_group_by_single(int ncols,                    // # columns
       {
         case GDF_MAX:
           {
-            return gdf_group_by_hash<max_op>(ncols,
+            gdf_error_code = gdf_group_by_hash<max_op>(ncols,
                                              cols,
                                              col_agg,
                                              out_col_values,
                                              out_col_agg,
                                              sort_result);
+            break;
           }
         case GDF_MIN:
           {
-            return gdf_group_by_hash<min_op>(ncols,
+            gdf_error_code = gdf_group_by_hash<min_op>(ncols,
                                              cols,
                                              col_agg,
                                              out_col_values,
                                              out_col_agg,
                                              sort_result);
+            break;
           }
         case GDF_SUM:
           {
-            return gdf_group_by_hash<sum_op>(ncols,
+            gdf_error_code = gdf_group_by_hash<sum_op>(ncols,
                                              cols,
                                              col_agg,
                                              out_col_values,
                                              out_col_agg,
                                              sort_result);
+            break;
           }
         case GDF_COUNT:
           {
-            return gdf_group_by_hash<count_op>(ncols,
+            gdf_error_code = gdf_group_by_hash<count_op>(ncols,
                                                cols,
                                                col_agg,
                                                out_col_values,
                                                out_col_agg,
                                                sort_result);
+            break;
           }
         case GDF_AVG:
           {
-            return gdf_group_by_hash_avg(ncols,
+            gdf_error_code = gdf_group_by_hash_avg(ncols,
                                          cols,
                                          col_agg,
                                          out_col_values,
                                          out_col_agg);
+            break;
           }
         default:
           std::cerr << "Unsupported aggregation method for hash-based groupby." << std::endl;
-          return GDF_UNSUPPORTED_METHOD;
+          gdf_error_code = GDF_UNSUPPORTED_METHOD;
       }
     }
   else
     {
-      return GDF_UNSUPPORTED_METHOD;
+      gdf_error_code = GDF_UNSUPPORTED_METHOD;
     }
+
+  POP_RANGE();
   
-  return GDF_SUCCESS;
+  return gdf_error_code;
 }
 }//end unknown namespace
 
@@ -1257,6 +1372,7 @@ gdf_error gdf_order_by(size_t nrows,     //in: # rows
 {
   //copy H-D:
   //
+  GDF_REQUIRE(!cols->valid, GDF_VALIDITY_UNSUPPORTED);
   soa_col_info(cols, ncols, d_cols, d_types);
   
   multi_col_order_by(nrows,
@@ -1286,6 +1402,7 @@ gdf_error gdf_filter(size_t nrows,     //in: # rows
 {
   //copy H-D:
   //
+  GDF_REQUIRE(!cols->valid, GDF_VALIDITY_UNSUPPORTED);
   soa_col_info(cols, ncols, d_cols, d_types);
 
   *new_sz = multi_col_filter(nrows,
