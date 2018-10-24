@@ -19,6 +19,7 @@ constexpr int JoinNoneValue = -1;
 enum class JoinType {
   INNER_JOIN,
   LEFT_JOIN,
+  FULL_JOIN
 };
 
 #include <gdf/gdf.h>
