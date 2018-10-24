@@ -66,8 +66,8 @@ void print_v(const Vector<T, Allocator>& v, std::ostream& os)
 }
 
 template<typename T,
-	 typename Allocator,
-	 template<typename, typename> class Vector>
+   typename Allocator,
+   template<typename, typename> class Vector>
 __host__
 void print_v(const Vector<T, Allocator>& v, typename Vector<T, Allocator>::const_iterator pos, std::ostream& os)
 { 
@@ -76,8 +76,8 @@ void print_v(const Vector<T, Allocator>& v, typename Vector<T, Allocator>::const
 }
 
 template<typename T,
-	 typename Allocator,
-	 template<typename, typename> class Vector>
+   typename Allocator,
+   template<typename, typename> class Vector>
 __host__
 void print_v(const Vector<T, Allocator>& v, size_t n, std::ostream& os)
 { 
@@ -96,14 +96,15 @@ bool compare(const Vector<T>& d_v, const std::vector<T>& baseline, T eps)
   thrust::copy_n(d_v.begin(), n, h_v.begin());//D-H okay...
   
   return std::inner_product(h_v.begin(), h_v.end(),
-			    baseline.begin(),
-			    true,
-			    [](bool b1, bool b2){
-			      return b1 && b2;
-			    },
-			    [eps](T v1, T v2){
-			      return (std::abs(v1-v2) < eps);
-			    });
+          baseline.begin(),
+          true,
+          [](bool b1, bool b2){
+            return b1 && b2;
+          },
+          [eps](T v1, T v2){
+            auto diff = (v1 <= v2) ? v2-v1 : v1-v2; // can't use std::abse due to type ambiguity
+            return (diff < eps);
+          });
 }
 
 
