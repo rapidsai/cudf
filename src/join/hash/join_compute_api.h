@@ -466,22 +466,22 @@ gdf_error compute_hash_join(
     const size_type probe_grid_size{(probe_table_num_rows + block_size -1)/block_size};
     
     // Do the probe of the hash table with the probe table and generate the output for the join
-     probe_hash_table<base_join_type,
-                      multimap_type,
-                      hash_value_type,
-                      size_type,
-                      output_index_type,
-                      block_size,
-                      DEFAULT_CUDA_CACHE_SIZE>
-     <<<probe_grid_size, block_size>>> (hash_table.get(),
-                                        build_table,
-                                        probe_table,
-                                        probe_table.get_column_length(),
-                                        output_l_ptr,
-                                        output_r_ptr,
-                                        d_global_write_index,
-                                        estimated_join_output_size,
-                                        flip_results);
+    probe_hash_table<base_join_type,
+                     multimap_type,
+                     hash_value_type,
+                     size_type,
+                     output_index_type,
+                     block_size,
+                     DEFAULT_CUDA_CACHE_SIZE>
+    <<<probe_grid_size, block_size>>> (hash_table.get(),
+                                       build_table,
+                                       probe_table,
+                                       probe_table.get_column_length(),
+                                       output_l_ptr,
+                                       output_r_ptr,
+                                       d_global_write_index,
+                                       estimated_join_output_size,
+                                       flip_results);
 
     CUDA_TRY( cudaGetLastError() );
 

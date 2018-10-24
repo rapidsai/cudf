@@ -184,7 +184,8 @@ gdf_error gdf_segmented_radixsort_generic(gdf_segmented_radixsort_plan_type *hdl
 
 /* --------------------------------------------------------------------------*/
 /** 
- * @Synopsis  Joins two dataframes (left, right) together on the specified columns
+ * @Synopsis  Performs an inner join on the specified columns of two
+ * dataframes (left, right)
  * 
  * @Param[in] left_cols[] The columns of the left dataframe
  * @Param[in] num_left_cols The number of columns in the left dataframe
@@ -223,7 +224,8 @@ gdf_error gdf_inner_join(
 
 /* --------------------------------------------------------------------------*/
 /** 
- * @Synopsis  Joins two dataframes (left, right) together on the specified columns
+ * @Synopsis  Performs a left join (also known as left outer join) on the
+ * specified columns of two dataframes (left, right)
  * 
  * @Param[in] left_cols[] The columns of the left dataframe
  * @Param[in] num_left_cols The number of columns in the left dataframe
@@ -262,7 +264,8 @@ gdf_error gdf_left_join(
 
 /* --------------------------------------------------------------------------*/
 /** 
- * @Synopsis  Joins two dataframes (left, right) together on the specified columns
+ * @Synopsis  Performs a full join (also known as full outer join) on the
+ * specified columns of two dataframes (left, right)
  * 
  * @Param[in] left_cols[] The columns of the left dataframe
  * @Param[in] num_left_cols The number of columns in the left dataframe
