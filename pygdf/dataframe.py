@@ -707,7 +707,7 @@ class DataFrame(object):
             )
             method = type
 
-        if how not in ['left', 'inner']:
+        if how not in ['left', 'inner', 'outer']:
             raise NotImplementedError('{!r} merge not supported yet'
                                       .format(how))
 
@@ -869,13 +869,8 @@ class DataFrame(object):
             )
             method = type
 
-        if how == 'outer':
-            return self._py_join(other, on=None, how='outer', lsuffix=lsuffix,
-                                 rsuffix=rsuffix, sort=sort, method=method)
-        if how not in ['left', 'right', 'inner']:
+        if how not in ['left', 'right', 'inner', 'outer']:
             raise NotImplementedError('unsupported {!r} join'.format(how))
-        # if on is not None:
-        #     raise NotImplementedError('"on" is not supported yet')
 
         if how == 'right':
             # libgdf doesn't support right join directly, we will swap the
@@ -931,9 +926,6 @@ class DataFrame(object):
                 # Do the join using the union of categories from both side.
                 # Adjust for inner joins afterwards
                 cats = sorted(set(lcats) | set(rcats))
-                print(lhs[idx_col_name].dtype)
-                print(rhs[idx_col_name].dtype)
-                print(cats)
 
                 lhs[idx_col_name] = (lhs[idx_col_name].cat
                                                       .set_categories(cats)
@@ -964,93 +956,6 @@ class DataFrame(object):
         if sort and len(df):
             return df.sort_index()
 
-        return df
-
-    def _py_join(self, other, on=None, how='left', lsuffix='', rsuffix='',
-                 sort=False, method='hash'):
-        """Join columns with other DataFrame on index or on a key column.
-        Parameters
-        ----------
-        other : DataFrame
-        how : str
-            Only accepts "left", "right", "inner", "outer"
-        lsuffix, rsuffix : str
-            The suffices to add to the left (*lsuffix*) and right (*rsuffix*)
-            column names when avoiding conflicts.
-        sort : bool
-            Set to True to ensure sorted ordering.
-        Returns
-        -------
-        joined : DataFrame
-        Notes
-        -----
-        Difference from pandas:
-        - *other* must be a single DataFrame for now.
-        - *on* is not supported yet due to lack of multi-index support.
-        """
-        if how not in ['left', 'right', 'inner', 'outer']:
-            raise NotImplementedError('unsupported {!r} join'.format(how))
-        if on is not None:
-            raise NotImplementedError('"on" is not supported yet')
-
-        same_names = set(self.columns) & set(other.columns)
-        if same_names and not (lsuffix or rsuffix):
-            raise ValueError('there are overlapping columns but '
-                             'lsuffix and rsuffix are not defined')
-
-        return self._join(other=other, how=how, lsuffix=lsuffix,
-                          rsuffix=rsuffix, sort=sort, same_names=same_names,
-                          method=method)
-
-    def _join(self, other, how, lsuffix, rsuffix, sort, same_names,
-              method='hash', rightjoin=False):
-        if how == 'right':
-            # libgdf doesn't support right join directly, we will swap the
-            # dfs and use left join
-            return other._join(other=self, how='left', lsuffix=rsuffix,
-                               rsuffix=lsuffix, sort=sort,
-                               same_names=same_names, rightjoin=True)
-
-        # Perform left, inner and outer join
-        def fix_name(name, suffix):
-            if name in same_names:
-                return "{}{}".format(name, suffix)
-            return name
-
-        def gather_cols(outdf, indf, idx, joinidx, suffix):
-            mask = (Series(idx) != -1).as_mask()
-            for k in indf.columns:
-                newcol = indf[k].take(idx).set_mask(mask).set_index(joinidx)
-                outdf[fix_name(k, suffix)] = newcol
-
-        def gather_empty(outdf, indf, idx, joinidx, suffix):
-            for k in indf.columns:
-                outdf[fix_name(k, suffix)] = indf[k][:0]
-
-        lhs = self
-        rhs = other
-
-        df = DataFrame()
-
-        joined_index, indexers = lhs.index.join(rhs.index, how=how,
-                                                return_indexers=True,
-                                                method=method)
-        gather_fn = (gather_cols if len(joined_index) else gather_empty)
-        lidx = indexers[0].to_gpu_array()
-        ridx = indexers[1].to_gpu_array()
-
-        # Gather columns
-        left_args = (df, lhs, lidx, joined_index, lsuffix)
-        right_args = (df, rhs, ridx, joined_index, rsuffix)
-        args_order = ((right_args, left_args)
-                      if rightjoin
-                      else (left_args, right_args))
-        for args in args_order:
-            gather_fn(*args)
-
-        # User requested a sort?
-        if sort and len(df):
-            return df.sort_index()
         return df
 
     def groupby(self, by, sort=False, as_index=False, method="sort"):

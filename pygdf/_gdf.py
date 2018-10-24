@@ -199,7 +199,7 @@ def apply_sort(col_keys, col_vals, ascending=True):
 
 _join_how_api = {
     'inner': libgdf.gdf_inner_join,
-    'outer': libgdf.gdf_outer_join_generic,
+    'outer': libgdf.gdf_full_join,
     'left': libgdf.gdf_left_join,
 }
 
@@ -330,7 +330,7 @@ def libgdf_join(col_lhs, col_rhs, on, how, method='sort'):
 
     libgdf.gdf_context_view(gdf_context, 0, method_api, 0)
 
-    if how not in ['left', 'inner']:
+    if how not in ['left', 'inner', 'outer']:
         msg = "new join api only supports left or inner"
         raise ValueError(msg)
 
