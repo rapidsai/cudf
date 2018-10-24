@@ -155,7 +155,7 @@ gdf_error gdf_column_concat(gdf_column *output_column, gdf_column *columns_to_co
  * @brief Return the size of the gdf_column data type.
  *
  * @return gdf_size_type Size of the gdf_column data type.
- *b  ---------------------------------------------------------------------------**/
+ *  ---------------------------------------------------------------------------**/
 gdf_size_type gdf_column_sizeof() {
 	return sizeof(gdf_column);
 }
