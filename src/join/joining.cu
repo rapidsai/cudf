@@ -27,70 +27,12 @@
 
 #include "rmm.h"
 
-
-
 using namespace mgpu;
-
-template <typename T>
-void dump_mem(const char name[], const mem_t<T> & mem) {
-
-    auto data = from_mem(mem);
-    std::cout << name << " = " ;
-    for (int i=0; i < data.size(); ++i) {
-        std::cout << data[i] << ", ";
-    }
-    std::cout << "\n";
-}
-
 
 // Size limit due to use of int32 as join output.
 // FIXME: upgrade to 64-bit
 using output_index_type = int;
 constexpr output_index_type MAX_JOIN_SIZE{std::numeric_limits<output_index_type>::max()};
-
-// TODO This macro stuff will go away once Outer join is implemented
-#define DEF_JOIN(Fn, T, Joiner)                                             \
-gdf_error gdf_##Fn(gdf_column *leftcol, gdf_column *rightcol,               \
-                   gdf_column *left_result, gdf_column *right_result) {     \
-    using namespace mgpu;                                                   \
-    if ( leftcol->dtype != rightcol->dtype) return GDF_UNSUPPORTED_DTYPE;   \
-    if ( leftcol->size >= MAX_JOIN_SIZE ) return GDF_COLUMN_SIZE_TOO_BIG;   \
-    if ( rightcol->size >= MAX_JOIN_SIZE ) return GDF_COLUMN_SIZE_TOO_BIG;  \
-    rmm_mgpu_context_t context;                                             \
-    auto output = Joiner((T*)leftcol->data, leftcol->size,                  \
-                                (T*)rightcol->data, rightcol->size,         \
-                                less_t<T>(), context);                      \
-    *left_result = output.first;                                            \
-    *right_result = output.second;                                          \
-    CUDA_CHECK_LAST();                                                      \
-    return GDF_SUCCESS;                                                     \
-}
-
-#define DEF_JOIN_GENERIC(Fn)                                                            \
-gdf_error gdf_##Fn##_generic(gdf_column *leftcol, gdf_column * rightcol,                \
-                             gdf_column *l_result, gdf_column *r_result) {              \
-    switch ( leftcol->dtype ){                                                          \
-    case GDF_INT8:      return gdf_##Fn##_i8 (leftcol, rightcol, l_result, r_result);   \
-    case GDF_INT16:     return gdf_##Fn##_i16(leftcol, rightcol, l_result, r_result);   \
-    case GDF_INT32:     return gdf_##Fn##_i32(leftcol, rightcol, l_result, r_result);   \
-    case GDF_INT64:     return gdf_##Fn##_i64(leftcol, rightcol, l_result, r_result);   \
-    case GDF_FLOAT32:   return gdf_##Fn##_f32(leftcol, rightcol, l_result, r_result);   \
-    case GDF_FLOAT64:   return gdf_##Fn##_f64(leftcol, rightcol, l_result, r_result);   \
-    case GDF_DATE32:    return gdf_##Fn##_i32(leftcol, rightcol, l_result, r_result);   \
-    case GDF_DATE64:    return gdf_##Fn##_i64(leftcol, rightcol, l_result, r_result);   \
-    case GDF_TIMESTAMP: return gdf_##Fn##_i64(leftcol, rightcol, l_result, r_result);   \
-    default: return GDF_UNSUPPORTED_DTYPE;                                              \
-    }                                                                                   \
-}
-
-#define DEF_OUTER_JOIN(Fn, T) DEF_JOIN(outer_join_ ## Fn, T, outer_join)
-DEF_JOIN_GENERIC(outer_join)
-DEF_OUTER_JOIN(i8,  int8_t)
-DEF_OUTER_JOIN(i16, int16_t)
-DEF_OUTER_JOIN(i32, int32_t)
-DEF_OUTER_JOIN(i64, int64_t)
-DEF_OUTER_JOIN(f32, int32_t)
-DEF_OUTER_JOIN(f64, int64_t)
 
 /* --------------------------------------------------------------------------*/
 /** 
@@ -99,9 +41,10 @@ DEF_OUTER_JOIN(f64, int64_t)
  * @Param num_cols The number of columns to join
  * @Param leftcol The left set of columns to join
  * @Param rightcol The right set of columns to join
- * @Param out_result The result of the join operation. The first n/2 elements of the
-   output are the left indices, the last n/2 elements of the output are the right indices.
-   @tparam join_type The type of join to be performed
+ * @Param l_result The join computed indices of the left table
+ * @Param r_result The join computed indices of the right table
+ * @tparam join_type The type of join to be performed
+ * @tparam size_type The data type used for size calculations
  * 
  * @Returns Upon successful computation, returns GDF_SUCCESS. Otherwise returns appropriate error code 
  */
@@ -161,6 +104,8 @@ gdf_error sort_join_typed(gdf_column *leftcol, gdf_column *rightcol,
 {
   using namespace mgpu;
   gdf_error err = GDF_SUCCESS;
+  GDF_REQUIRE(!leftcol->valid, GDF_VALIDITY_UNSUPPORTED);
+  GDF_REQUIRE(!rightcol->valid, GDF_VALIDITY_UNSUPPORTED);
 
   rmm_mgpu_context_t context(false);
   SortJoin<join_type> sort_based_join;
@@ -181,7 +126,8 @@ gdf_error sort_join_typed(gdf_column *leftcol, gdf_column *rightcol,
  * 
  * @Param leftcol The left column to join
  * @Param rightcol The right column to join
- * @Param out_result The output of the join operation
+ * @Param left_result The join computed indices of the left table
+ * @Param right_result The join computed indices of the right table
  * @Param ctxt Structure that determines various run parameters, such as if the inputs
  are already sorted.
    @tparama join_type The type of join to perform
@@ -222,14 +168,113 @@ gdf_error sort_join<JoinType::LEFT_JOIN>(gdf_column *leftcol, gdf_column *rightc
                                          gdf_context *ctxt);
 
 /* --------------------------------------------------------------------------*/
+/**
+* @Synopsis  Allocates a buffer and fills it with a repeated value
+*
+* @Param buffer Address of the buffer to be allocated
+* @Param buffer_length Amount of memory to be allocated
+* @Param value The value to be filled into the buffer
+* @tparam data_type The data type to be used for the buffer
+* @tparam size_type The data type used for size calculations
+*/
+/* ----------------------------------------------------------------------------*/
+template <typename data_type,
+          typename size_type>
+void allocValueBuffer(
+        data_type ** buffer,
+        const size_type buffer_length,
+        const data_type value) {
+    cudaMalloc(buffer, buffer_length*sizeof(data_type));
+    thrust::fill(
+            thrust::device,
+            *buffer, *buffer + buffer_length,
+            value);
+}
+
+/* --------------------------------------------------------------------------*/
+/**
+* @Synopsis  Allocates a buffer and fills it with a sequence
+*
+* @Param buffer Address of the buffer to be allocated
+* @Param buffer_length Amount of memory to be allocated
+* @tparam data_type The data type to be used for the buffer
+* @tparam size_type The data type used for size calculations
+*/
+/* ----------------------------------------------------------------------------*/
+template <typename data_type,
+          typename size_type>
+void allocSequenceBuffer(
+        data_type ** buffer,
+        const size_type buffer_length) {
+    cudaMalloc(buffer, buffer_length*sizeof(data_type));
+    thrust::sequence(
+            thrust::device,
+            *buffer, *buffer + buffer_length);
+}
+
+/* --------------------------------------------------------------------------*/
+/** 
+ * @Synopsis  Trivially computes full join of two tables if one of the tables
+ are empty
+ * 
+ * @Param left_size The size of the left table
+ * @Param right_size The size of the right table
+ * @Param rightcol The right set of columns to join
+ * @Param left_result The join computed indices of the left table
+ * @Param right_result The join computed indices of the right table
+ * @tparam size_type The data type used for size calculations
+ * 
+ * @Returns GDF_SUCCESS upon succesfull compute, otherwise returns appropriate error code
+ */
+/* ----------------------------------------------------------------------------*/
+template<typename size_type>
+gdf_error trivial_full_join(
+        const size_type left_size,
+        const size_type right_size,
+        gdf_column *left_result,
+        gdf_column *right_result) {
+    // Deduce the type of the output gdf_columns
+    gdf_dtype dtype;
+    switch(sizeof(output_index_type))
+    {
+      case 1 : dtype = GDF_INT8;  break;
+      case 2 : dtype = GDF_INT16; break;
+      case 4 : dtype = GDF_INT32; break;
+      case 8 : dtype = GDF_INT64; break;
+    }
+
+    output_index_type *l_ptr{nullptr};
+    output_index_type *r_ptr{nullptr};
+    size_type result_size{0};
+    if ((left_size == 0) && (right_size == 0)) {
+        return GDF_DATASET_EMPTY;
+    }
+    if (left_size == 0) {
+        allocValueBuffer(&l_ptr, right_size,
+                static_cast<output_index_type>(-1));
+        allocSequenceBuffer(&r_ptr, right_size);
+        result_size = right_size;
+    } else if (right_size == 0) {
+        allocValueBuffer(&r_ptr, left_size,
+                static_cast<output_index_type>(-1));
+        allocSequenceBuffer(&l_ptr, left_size);
+        result_size = left_size;
+    }
+    gdf_column_view( left_result, l_ptr, nullptr, result_size, dtype);
+    gdf_column_view(right_result, r_ptr, nullptr, result_size, dtype);
+    CUDA_CHECK_LAST();
+    return GDF_SUCCESS;
+}
+
+/* --------------------------------------------------------------------------*/
 /** 
  * @Synopsis  Computes the join operation between two sets of columns
  * 
  * @Param num_cols The number of columns to join
  * @Param leftcol The left set of columns to join
  * @Param rightcol The right set of columns to join
- * @Param out_result The result of the join operation. The output is structured such that
- * the pair (i, i + output_size/2) is the (left, right) index of matching rows.
+ * @Param left_result The join computed indices of the left table
+ * @Param right_result The join computed indices of the right table
  * @Param join_context A structure that determines various run parameters, such as
    whether to perform a hash or sort based join
  * @tparam join_type The type of join to be performed
@@ -243,7 +288,7 @@ gdf_error join_call( int num_cols, gdf_column **leftcol, gdf_column **rightcol,
                      gdf_context *join_context)
 {
 
-
+  using size_type = int64_t;
 
   if( (0 == num_cols) || (nullptr == leftcol) || (nullptr == rightcol))
     return GDF_DATASET_EMPTY;
@@ -274,6 +319,12 @@ gdf_error join_call( int num_cols, gdf_column **leftcol, gdf_column **rightcol,
     return GDF_SUCCESS;
   }
 
+  // If Inner Join and either table is empty, compute trivial full join
+  if( (JoinType::FULL_JOIN == join_type) && 
+      ((0 == left_col_size) || (0 == right_col_size)) ){
+    return trivial_full_join<size_type>(left_col_size, right_col_size, left_result, right_result);
+  }
+
   // check that the columns data are not null, have matching types, 
   // and the same number of rows
   for (int i = 0; i < num_cols; i++) {
@@ -298,7 +349,7 @@ gdf_error join_call( int num_cols, gdf_column **leftcol, gdf_column **rightcol,
   {
     case GDF_HASH:
       {
-        gdf_error_code =  hash_join<join_type, int64_t>(num_cols, leftcol, rightcol, left_result, right_result);
+        gdf_error_code =  hash_join<join_type, size_type>(num_cols, leftcol, rightcol, left_result, right_result);
         break;
       }
     case GDF_SORT:
@@ -390,21 +441,24 @@ gdf_error construct_join_output_df(
         CUDA_TRY( cudaMemset(result_cols[i]->valid, 0, sizeof(gdf_valid_type)*gdf_get_num_chars_bitmask(join_size)) );
     }
 
-    gdf_table<size_type> l_i_table(lnonjoincol.size(), lnonjoincol.data());
-    gdf_table<size_type> r_i_table(rnonjoincol.size(), rnonjoincol.data());
-    gdf_table<size_type> j_i_table(ljoincol.size(), ljoincol.data());
-
-    gdf_table<size_type> l_table(num_left_cols - num_cols_to_join, result_cols);
-    gdf_table<size_type> r_table(num_right_cols - num_cols_to_join, result_cols + right_table_begin);
-    gdf_table<size_type> j_table(num_cols_to_join, result_cols + left_table_end);
-
     gdf_error err{GDF_SUCCESS};
-    err = l_i_table.gather(static_cast<index_type*>(left_indices->data),
-            l_table, join_type != JoinType::INNER_JOIN);
-    if (err != GDF_SUCCESS) { return err; }
-    err = r_i_table.gather(static_cast<index_type*>(right_indices->data),
-            r_table, join_type != JoinType::INNER_JOIN);
-    if (err != GDF_SUCCESS) { return err; }
+    if (0 != lnonjoincol.size()) {
+        gdf_table<size_type> l_i_table(lnonjoincol.size(), lnonjoincol.data());
+        gdf_table<size_type> l_table(num_left_cols - num_cols_to_join, result_cols);
+        err = l_i_table.gather(static_cast<index_type*>(left_indices->data),
+                l_table, join_type != JoinType::INNER_JOIN);
+        if (err != GDF_SUCCESS) { return err; }
+    }
+    if (0 != rnonjoincol.size()) {
+        gdf_table<size_type> r_i_table(rnonjoincol.size(), rnonjoincol.data());
+        gdf_table<size_type> r_table(num_right_cols - num_cols_to_join, result_cols + right_table_begin);
+        err = r_i_table.gather(static_cast<index_type*>(right_indices->data),
+                r_table, join_type != JoinType::INNER_JOIN);
+        if (err != GDF_SUCCESS) { return err; }
+    }
+
+    gdf_table<size_type> j_i_table(ljoincol.size(), ljoincol.data());
+    gdf_table<size_type> j_table(num_cols_to_join, result_cols + left_table_end);
     err = j_i_table.gather(static_cast<index_type*>(left_indices->data),
             j_table, join_type != JoinType::INNER_JOIN);
 
@@ -430,12 +484,19 @@ gdf_error join_call_compute_df(
     if ((left_cols == nullptr)  ||
         (right_cols == nullptr)) { return GDF_DATASET_EMPTY; }
 
+    if (num_cols_to_join == 0) { return GDF_SUCCESS; }
+    
+    if ((left_join_cols == nullptr)  ||
+        (right_join_cols == nullptr)) { return GDF_DATASET_EMPTY; }
+
     //check if combined join output is expected
     bool compute_df = (result_cols != nullptr);
 
     //return error if no output pointers are valid
     if ( ((left_indices == nullptr)||(right_indices == nullptr)) &&
          (!compute_df) ) { return GDF_DATASET_EMPTY; }
+
+    if (join_context == nullptr) { return GDF_INVALID_API_CALL; }
 
     //If index outputs are not requested, create columns to store them
     //for computing combined join output
@@ -537,6 +598,34 @@ gdf_error gdf_inner_join(
                          gdf_column * right_indices,
                          gdf_context *join_context) {
     return join_call_compute_df<JoinType::INNER_JOIN, int64_t, output_index_type>(
+                     left_cols, 
+                     num_left_cols,
+                     left_join_cols,
+                     right_cols,
+                     num_right_cols,
+                     right_join_cols,
+                     num_cols_to_join,
+                     result_num_cols,
+                     result_cols,
+                     left_indices,
+                     right_indices,
+                     join_context);
+}
+
+gdf_error gdf_full_join(
+                         gdf_column **left_cols, 
+                         int num_left_cols,
+                         int left_join_cols[],
+                         gdf_column **right_cols,
+                         int num_right_cols,
+                         int right_join_cols[],
+                         int num_cols_to_join,
+                         int result_num_cols,
+                         gdf_column **result_cols,
+                         gdf_column * left_indices,
+                         gdf_column * right_indices,
+                         gdf_context *join_context) {
+    return join_call_compute_df<JoinType::FULL_JOIN, int64_t, output_index_type>(
                      left_cols, 
                      num_left_cols,
                      left_join_cols,

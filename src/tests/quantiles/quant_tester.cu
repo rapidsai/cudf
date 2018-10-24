@@ -95,6 +95,7 @@ TEST_F(gdf_quantile, DoubleVector)
   gdf_column col_in;
   col_in.size = d_in.size();
   col_in.data = d_in.data().get();
+  col_in.valid = nullptr;
   col_in.dtype = GDF_FLOAT64;
 
   size_t n_qs = 5;
@@ -140,6 +141,7 @@ TEST_F(gdf_quantile, IntegerVector)
   gdf_column col_in;
   col_in.size = d_in.size();
   col_in.data = d_in.data().get();
+  col_in.valid = nullptr;
   col_in.dtype = GDF_INT32;
 
   size_t n_qs = 5;

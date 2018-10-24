@@ -39,31 +39,31 @@ void initialize_vector(std::vector<T>& v, const size_t column_length, initialize
 //compile time recursion to initialize a tuple of vectors
 template<typename initializer_t, std::size_t I = 0, typename... Tp>
 inline typename std::enable_if<I == sizeof...(Tp), void>::type
-initialize_tuple(std::tuple<std::vector<Tp>...>& t, size_t column_length, initializer_t the_initializer)
+initialize_tuple(std::tuple<std::vector<Tp>...>& t, std::vector<size_t> column_lengths, initializer_t the_initializer)
 {
  //bottom of compile-time recursion
  //purposely empty...
 }
 template<typename initializer_t, std::size_t I = 0, typename... Tp>
 inline typename std::enable_if<I < sizeof...(Tp), void>::type
-initialize_tuple(std::tuple<std::vector<Tp>...>& t, size_t column_length, initializer_t the_initializer)
+initialize_tuple(std::tuple<std::vector<Tp>...>& t, std::vector<size_t> column_lengths, initializer_t the_initializer)
 {
   // Initialize the current vector
- initialize_vector(std::get<I>(t), column_length, the_initializer);
+ initialize_vector(std::get<I>(t), column_lengths[I], the_initializer);
 
  //recurse to next vector in tuple
- initialize_tuple<initializer_t, I + 1, Tp...>(t, column_length, the_initializer);
+ initialize_tuple<initializer_t, I + 1, Tp...>(t, column_lengths, the_initializer);
 }
 
 // Overload for default initialization of vector which initializes each
 // element with its index value
 template<typename... Tp>
-void initialize_tuple(std::tuple<std::vector<Tp>...>& t, size_t column_length)
+void initialize_tuple(std::tuple<std::vector<Tp>...>& t, std::vector<size_t> column_lengths)
 {
 
  auto the_initializer = [](size_t i){return i;};
 
- initialize_tuple(t, column_length, the_initializer);
+ initialize_tuple(t, column_lengths, the_initializer);
 }
 
 

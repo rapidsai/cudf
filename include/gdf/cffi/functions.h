@@ -78,6 +78,21 @@ gdf_error gdf_column_view_augmented(gdf_column *column, void *data, gdf_valid_ty
 
 gdf_error gdf_column_free(gdf_column *column);
 
+/* --------------------------------------------------------------------------*/
+/** 
+ * @Synopsis  Concatenates the gdf_columns into a single, contiguous column,
+ * including the validity bitmasks
+ * 
+ * @Param[out] output A column whose buffers are already allocated that will 
+ * @Param[in] columns_to_conat[] The columns to concatenate
+ * @Param[in] num_columns The number of columns to concatenate
+  * contain the concatenation of the input columns
+ * 
+ * @Returns GDF_SUCCESS upon successful completion
+ */
+/* ----------------------------------------------------------------------------*/
+gdf_error gdf_column_concat(gdf_column *output, gdf_column *columns_to_concat[], int num_columns);
+
 /* context operations */
 
 gdf_error gdf_context_view(gdf_context *context, int flag_sorted, gdf_method flag_method,
@@ -184,7 +199,8 @@ gdf_error gdf_segmented_radixsort_generic(gdf_segmented_radixsort_plan_type *hdl
 
 /* --------------------------------------------------------------------------*/
 /** 
- * @Synopsis  Joins two dataframes (left, right) together on the specified columns
+ * @Synopsis  Performs an inner join on the specified columns of two
+ * dataframes (left, right)
  * 
  * @Param[in] left_cols[] The columns of the left dataframe
  * @Param[in] num_left_cols The number of columns in the left dataframe
@@ -203,7 +219,8 @@ gdf_error gdf_segmented_radixsort_generic(gdf_segmented_radixsort_plan_type *hdl
  * @Param[in] join_context The context to use to control how the join is performed,e.g.,
  * sort vs hash based implementation
  * 
- * @Returns   
+ * @Returns   GDF_SUCCESS if the join operation was successful, otherwise an appropriate
+ * error code
  */
 /* ----------------------------------------------------------------------------*/
 gdf_error gdf_inner_join(
@@ -222,7 +239,8 @@ gdf_error gdf_inner_join(
 
 /* --------------------------------------------------------------------------*/
 /** 
- * @Synopsis  Joins two dataframes (left, right) together on the specified columns
+ * @Synopsis  Performs a left join (also known as left outer join) on the
+ * specified columns of two dataframes (left, right)
  * 
  * @Param[in] left_cols[] The columns of the left dataframe
  * @Param[in] num_left_cols The number of columns in the left dataframe
@@ -241,7 +259,8 @@ gdf_error gdf_inner_join(
  * @Param[in] join_context The context to use to control how the join is performed,e.g.,
  * sort vs hash based implementation
  * 
- * @Returns   
+ * @Returns   GDF_SUCCESS if the join operation was successful, otherwise an appropriate
+ * error code
  */
 /* ----------------------------------------------------------------------------*/
 gdf_error gdf_left_join(
@@ -258,21 +277,45 @@ gdf_error gdf_left_join(
                          gdf_column * right_indices,
                          gdf_context *join_context);
 
-gdf_error gdf_outer_join_i8(gdf_column *leftcol, gdf_column *rightcol,
-                            gdf_column *l_result, gdf_column *r_result);
-gdf_error gdf_outer_join_i16(gdf_column *leftcol, gdf_column *rightcol,
-                            gdf_column *l_result, gdf_column *r_result);
-gdf_error gdf_outer_join_i32(gdf_column *leftcol, gdf_column *rightcol,
-                            gdf_column *l_result, gdf_column *r_result);
-gdf_error gdf_outer_join_i64(gdf_column *leftcol, gdf_column *rightcol,
-                            gdf_column *l_result, gdf_column *r_result);
-gdf_error gdf_outer_join_f32(gdf_column *leftcol, gdf_column *rightcol,
-                            gdf_column *l_result, gdf_column *r_result);
-gdf_error gdf_outer_join_f64(gdf_column *leftcol, gdf_column *rightcol,
-                            gdf_column *l_result, gdf_column *r_result);
-gdf_error gdf_outer_join_generic(gdf_column *leftcol, gdf_column *rightcol,
-                                 gdf_column *l_result, gdf_column *r_result);
-
+/* --------------------------------------------------------------------------*/
+/** 
+ * @Synopsis  Performs a full join (also known as full outer join) on the
+ * specified columns of two dataframes (left, right)
+ * 
+ * @Param[in] left_cols[] The columns of the left dataframe
+ * @Param[in] num_left_cols The number of columns in the left dataframe
+ * @Param[in] left_join_cols[] The column indices of columns from the left dataframe
+ * to join on
+ * @Param[in] right_cols[] The columns of the right dataframe
+ * @Param[in] num_right_cols The number of columns in the right dataframe
+ * @Param[in] right_join_cols[] The column indices of columns from the right dataframe
+ * to join on
+ * @Param[in] num_cols_to_join The total number of columns to join on
+ * @Param[in] result_num_cols The number of columns in the resulting dataframe
+ * @Param[out] gdf_column *result_cols[] If not nullptr, the dataframe that results from joining
+ * the left and right tables on the specified columns
+ * @Param[out] gdf_column * left_indices If not nullptr, indices of rows from the left table that match rows in the right table
+ * @Param[out] gdf_column * right_indices If not nullptr, indices of rows from the right table that match rows in the left table
+ * @Param[in] join_context The context to use to control how the join is performed,e.g.,
+ * sort vs hash based implementation
+ * 
+ * @Returns   GDF_SUCCESS if the join operation was successful, otherwise an appropriate
+ * error code
+ */
+/* ----------------------------------------------------------------------------*/
+gdf_error gdf_full_join(
+                         gdf_column **left_cols, 
+                         int num_left_cols,
+                         int left_join_cols[],
+                         gdf_column **right_cols,
+                         int num_right_cols,
+                         int right_join_cols[],
+                         int num_cols_to_join,
+                         int result_num_cols,
+                         gdf_column **result_cols,
+                         gdf_column * left_indices,
+                         gdf_column * right_indices,
+                         gdf_context *join_context);
 
 /* partioning */
 

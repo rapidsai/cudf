@@ -68,8 +68,8 @@ void print_v(const Vector<T, Allocator>& v, std::ostream& os)
 }
 
 template<typename T,
-	 typename Allocator,
-	 template<typename, typename> class Vector>
+   typename Allocator,
+   template<typename, typename> class Vector>
 __host__
 void print_v(const Vector<T, Allocator>& v, typename Vector<T, Allocator>::const_iterator pos, std::ostream& os)
 { 
@@ -78,8 +78,8 @@ void print_v(const Vector<T, Allocator>& v, typename Vector<T, Allocator>::const
 }
 
 template<typename T,
-	 typename Allocator,
-	 template<typename, typename> class Vector>
+   typename Allocator,
+   template<typename, typename> class Vector>
 __host__
 void print_v(const Vector<T, Allocator>& v, size_t n, std::ostream& os)
 { 
@@ -98,14 +98,15 @@ bool compare(const Vector<T>& d_v, const std::vector<T>& baseline, T eps)
   thrust::copy_n(d_v.begin(), n, h_v.begin());//D-H okay...
   
   return std::inner_product(h_v.begin(), h_v.end(),
-			    baseline.begin(),
-			    true,
-			    [](bool b1, bool b2){
-			      return b1 && b2;
-			    },
-			    [eps](T v1, T v2){
-			      return (std::abs(v1-v2) < eps);
-			    });
+          baseline.begin(),
+          true,
+          [](bool b1, bool b2){
+            return b1 && b2;
+          },
+          [eps](T v1, T v2){
+            auto diff = (v1 <= v2) ? v2-v1 : v1-v2; // can't use std::abse due to type ambiguity
+            return (diff < eps);
+          });
 }
 
 struct gdf_group_by : public GdfTest {};
@@ -156,6 +157,7 @@ TEST_F(gdf_group_by, UsageTestSum)
 
   c_agg.dtype = GDF_FLOAT64;
   c_agg.data = dd1.data().get();
+  c_agg.valid = nullptr;
   c_agg.size = nrows;
 
   c_vout.dtype = GDF_FLOAT64;
@@ -207,6 +209,7 @@ TEST_F(gdf_group_by, UsageTestSum)
   d_keys.assign(nrows, 0);
   gdf_column c_indx;
   c_indx.data = d_keys.data().get();
+  c_indx.valid = nullptr;
   c_indx.size = nrows;
   c_indx.dtype = GDF_INT32;
   //}
@@ -276,7 +279,7 @@ TEST_F(gdf_group_by, UsageTestCount)
  
   Vector<IndexT> d_indx(sz, 0);
   Vector<IndexT> d_keys(sz, 0);
-  Vector<IndexT> d_vals(sz, 0);
+  Vector<int32_t> d_vals(sz, 0);
 
   size_t ncols = 3;
   size_t& nrows = sz;
@@ -304,6 +307,7 @@ TEST_F(gdf_group_by, UsageTestCount)
 
   c_agg.dtype = GDF_FLOAT64;
   c_agg.data = dd1.data().get();
+  c_agg.valid = nullptr;
   c_agg.size = nrows;
 
   c_vout.dtype = GDF_INT32;
@@ -355,6 +359,7 @@ TEST_F(gdf_group_by, UsageTestCount)
   d_keys.assign(nrows, 0);
   gdf_column c_indx;
   c_indx.data = d_keys.data().get();
+  c_indx.valid = nullptr;
   c_indx.size = nrows;
   c_indx.dtype = GDF_INT32;
   //}
@@ -396,12 +401,12 @@ TEST_F(gdf_group_by, UsageTestCount)
   //d_vals: 1,1,2,2,
 
   std::vector<IndexT> vk{5,0,2,4};
-  std::vector<IndexT> vals{1,1,2,2};
+  std::vector<int32_t> vals{1,1,2,2};
 
   flag = compare(d_keys, vk, szeps);
   EXPECT_EQ( flag, true ) << "GROUP-BY row indices return unexpected result";
 
-  flag = compare(d_vals, vals, szeps);
+  flag = compare(d_vals, vals, ieps);
   EXPECT_EQ( flag, true ) << "GROUP-BY COUNT aggregation returns unexpected result";
 }
 
@@ -450,6 +455,7 @@ TEST_F(gdf_group_by, UsageTestAvg)
 
   c_agg.dtype = GDF_FLOAT64;
   c_agg.data = dd1.data().get();
+  c_agg.valid = nullptr;
   c_agg.size = nrows;
 
   c_vout.dtype = GDF_FLOAT64;
@@ -501,6 +507,7 @@ TEST_F(gdf_group_by, UsageTestAvg)
   d_keys.assign(nrows, 0);
   gdf_column c_indx;
   c_indx.data = d_keys.data().get();
+  c_indx.valid = nullptr;
   c_indx.size = nrows;
   c_indx.dtype = GDF_INT32;
   //}
@@ -612,6 +619,7 @@ TEST_F(gdf_group_by, UsageTestMin)
 
   c_agg.dtype = GDF_FLOAT64;
   c_agg.data = d_col.data().get();
+  c_agg.valid = nullptr;
 
   //input
   //{
@@ -652,6 +660,7 @@ TEST_F(gdf_group_by, UsageTestMin)
   d_keys.assign(nrows, 0);
   gdf_column c_indx;
   c_indx.data = d_keys.data().get();
+  c_indx.valid = nullptr;
   c_indx.size = nrows;
   c_indx.dtype = GDF_INT32;
   //}
@@ -763,6 +772,7 @@ TEST_F(gdf_group_by, UsageTestMax)
 
   c_agg.dtype = GDF_FLOAT64;
   c_agg.data = d_col.data().get();
+  c_agg.valid = nullptr;
 
   //input
   //{
@@ -803,6 +813,7 @@ TEST_F(gdf_group_by, UsageTestMax)
   d_keys.assign(nrows, 0);
   gdf_column c_indx;
   c_indx.data = d_keys.data().get();
+  c_indx.valid = nullptr;
   c_indx.size = nrows;
   c_indx.dtype = GDF_INT32;
   //}

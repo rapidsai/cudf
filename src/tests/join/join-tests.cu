@@ -42,7 +42,7 @@ enum struct join_op
 {
   INNER,
   LEFT,
-  OUTER
+  FULL
 };
 
 // Each element of the result will be an index into the left and right columns where
@@ -143,9 +143,13 @@ struct JoinTest : public GdfTest
     cudaMemcpy(the_column->data, host_vector.data(), host_vector.size() * sizeof(col_type), cudaMemcpyHostToDevice);
 
     // Allocate device storage for gdf_column.valid
-    int valid_size = gdf_get_num_chars_bitmask(host_vector.size());
-    rmmAlloc((void**)&(the_column->valid), valid_size, 0);
-    cudaMemcpy(the_column->valid, host_valid, valid_size, cudaMemcpyHostToDevice);
+    if (host_valid != nullptr) {
+      int valid_size = gdf_get_num_chars_bitmask(host_vector.size());
+      rmmAlloc((void**)&(the_column->valid), valid_size, 0);
+      cudaMemcpy(the_column->valid, host_valid, valid_size, cudaMemcpyHostToDevice);
+    } else {
+        the_column->valid = nullptr;
+    }
  
     // Fill the gdf_column members
     the_column->size = host_vector.size();
@@ -172,7 +176,11 @@ struct JoinTest : public GdfTest
   {
     // Creates a gdf_column for the current vector and pushes it onto
     // the vector of gdf_columns
-    gdf_columns.push_back(create_gdf_column(std::get<I>(t), valids[I].get()));
+    if (valids.size() != 0) {
+      gdf_columns.push_back(create_gdf_column(std::get<I>(t), valids[I].get()));
+    } else {
+      gdf_columns.push_back(create_gdf_column(std::get<I>(t), nullptr));
+    }
 
     //recurse to next vector in tuple
     convert_tuple_to_gdf_columns<I + 1, Tp...>(gdf_columns, t, valids);
@@ -206,10 +214,7 @@ struct JoinTest : public GdfTest
     initialize_tuple(right_columns, right_column_length, right_column_range, ctxt.flag_sorted);
 
     auto n_columns = std::tuple_size<multi_column_t>::value;
-    if(ctxt.flag_method == gdf_method::GDF_SORT) {
-      initialize_valids(left_valids, n_columns, left_column_length, true);
-      initialize_valids(right_valids, n_columns, right_column_length, true);
-    } else {
+    if(ctxt.flag_method != gdf_method::GDF_SORT) {
       initialize_valids(left_valids, n_columns, left_column_length);
       initialize_valids(right_valids, n_columns, right_column_length);
     }
@@ -217,6 +222,10 @@ struct JoinTest : public GdfTest
     gdf_left_columns = initialize_gdf_columns(left_columns, left_valids);
     gdf_right_columns = initialize_gdf_columns(right_columns, right_valids);
 
+    if(ctxt.flag_method == gdf_method::GDF_SORT) {
+      initialize_valids(left_valids, n_columns, left_column_length, true);
+      initialize_valids(right_valids, n_columns, right_column_length, true);
+    }
     // Fill vector of raw pointers to gdf_columns
     for(auto const& c : gdf_left_columns){
       gdf_raw_left_columns.push_back(c.get());
@@ -299,19 +308,21 @@ struct JoinTest : public GdfTest
       }
       // For left joins, insert a NULL if no match is found
       if((false == match) &&
-              ((op == join_op::LEFT) || (op == join_op::OUTER))){
+              ((op == join_op::LEFT) || (op == join_op::FULL))){
         constexpr int JoinNullValue{-1};
         reference_result.emplace_back(left_index, JoinNullValue);
       }
     }
 
-    if (op == join_op::OUTER)
+    if (op == join_op::FULL)
     {
         the_map.clear();
         // Build hash table that maps the first left columns' values to their row index in the column
         for(size_t left_index = 0; left_index < probe_column.size(); ++left_index)
         {
-          the_map.insert(std::make_pair(probe_column[left_index], left_index));
+          if (gdf_is_valid(probe_valid, left_index)) {
+            the_map.insert(std::make_pair(probe_column[left_index], left_index));
+          }
         }
         // Probe the hash table with first right column
         // Add rows where a match for the right column does not exist
@@ -319,7 +330,7 @@ struct JoinTest : public GdfTest
         {
           const auto probe_key = build_column[right_index];
           auto search = the_map.find(probe_key);
-          if (search == the_map.end())
+          if ((search == the_map.end()) || (!gdf_is_valid(build_valid, right_index)))
           {
               constexpr int JoinNullValue{-1};
               reference_result.emplace_back(JoinNullValue, right_index);
@@ -384,6 +395,17 @@ struct JoinTest : public GdfTest
       case join_op::INNER:
         {
           result_error =  gdf_inner_join(
+                                         left_gdf_columns, num_columns, range.data(),
+                                         right_gdf_columns, num_columns, range.data(),
+                                         num_columns,
+                                         0, nullptr,
+                                         &left_result, &right_result,
+                                         &ctxt);
+          break;
+        }
+      case join_op::FULL:
+        {
+          result_error =  gdf_full_join(
                                          left_gdf_columns, num_columns, range.data(),
                                          right_gdf_columns, num_columns, range.data(),
                                          num_columns,
@@ -458,7 +480,7 @@ struct JoinTest : public GdfTest
 // This structure is used to nest the join operations, join method and
 // number/types of columns for use with Google Test type-parameterized
 // tests .Here join_operation refers to the type of join eg. INNER,
-// LEFT, OUTER and join_method refers to the underlying join algorithm
+// LEFT, FULL and join_method refers to the underlying join algorithm
 //that performs it eg. GDF_HASH or GDF_SORT.
 template<join_op join_operation, 
          gdf_method join_method, 
@@ -518,34 +540,24 @@ typedef ::testing::Types<
                           TestParameters< join_op::LEFT,  SORT, VTuple<double  > >,
                           TestParameters< join_op::LEFT,  SORT, VTuple<uint32_t> >,
                           TestParameters< join_op::LEFT,  SORT, VTuple<uint64_t> >,
-                          // Single column outer join tests for all types
-                          //TestParameters< join_op::OUTER, SORT, VTuple<int32_t > >,
-                          //TestParameters< join_op::OUTER, SORT, VTuple<int64_t > >,
-                          //TestParameters< join_op::OUTER, SORT, VTuple<float   > >,
-                          //TestParameters< join_op::OUTER, SORT, VTuple<double  > >,
-                          //TestParameters< join_op::OUTER, SORT, VTuple<uint32_t> >,
-                          //TestParameters< join_op::OUTER, SORT, VTuple<uint64_t> >,
+                          // Single column full join tests for all types
+                          TestParameters< join_op::FULL, HASH, VTuple<int32_t > >,
+                          TestParameters< join_op::FULL, HASH, VTuple<int64_t > >,
+                          TestParameters< join_op::FULL, HASH, VTuple<float   > >,
+                          TestParameters< join_op::FULL, HASH, VTuple<double  > >,
+                          TestParameters< join_op::FULL, HASH, VTuple<uint32_t> >,
+                          TestParameters< join_op::FULL, HASH, VTuple<uint64_t> >,
                           // Two Column Left Join tests for some combination of types
                           TestParameters< join_op::LEFT,  HASH, VTuple<int32_t , int32_t> >,
-                          TestParameters< join_op::LEFT,  HASH, VTuple<int64_t , int32_t> >,
-                          TestParameters< join_op::LEFT,  HASH, VTuple<float   , double > >,
-                          TestParameters< join_op::LEFT,  HASH, VTuple<double  , int64_t> >,
                           TestParameters< join_op::LEFT,  HASH, VTuple<uint32_t, int32_t> >,
                           // Three Column Left Join tests for some combination of types
                           TestParameters< join_op::LEFT,  HASH, VTuple<int32_t , uint32_t, float  > >,
-                          TestParameters< join_op::LEFT,  HASH, VTuple<uint64_t, uint32_t, float  > >,
-                          TestParameters< join_op::LEFT,  HASH, VTuple<float   , double  , float  > >,
                           TestParameters< join_op::LEFT,  HASH, VTuple<double  , uint32_t, int64_t> >,
                           // Two Column Inner Join tests for some combination of types
                           TestParameters< join_op::INNER, HASH, VTuple<int32_t , int32_t> >,
-                          TestParameters< join_op::INNER, HASH, VTuple<int64_t , int32_t> >,
-                          TestParameters< join_op::INNER, HASH, VTuple<float   , double > >,
-                          TestParameters< join_op::INNER, HASH, VTuple<double  , int64_t> >,
                           TestParameters< join_op::INNER, HASH, VTuple<uint32_t, int32_t> >,
                           // Three Column Inner Join tests for some combination of types
                           TestParameters< join_op::INNER, HASH, VTuple<int32_t , uint32_t, float  > >,
-                          TestParameters< join_op::INNER, HASH, VTuple<uint64_t, uint32_t, float  > >,
-                          TestParameters< join_op::INNER, HASH, VTuple<float   , double  , float  > >,
                           TestParameters< join_op::INNER, HASH, VTuple<double  , uint32_t, int64_t> >,
                           // Four column test for Left Joins
                           TestParameters< join_op::LEFT, HASH, VTuple<double, int32_t, int64_t, int32_t> >,

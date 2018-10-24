@@ -33,16 +33,6 @@
 template<typename IndexT>
 struct LesserRTTI
 {
-  // LesserRTTI(const thrust::device_vector<void*>& cols,
-  // 	     const thrust::device_vector<int>& types):
-  //   columns_(cols.data().get()),
-  //   rtti_(types.data().get()),
-  //   sz_(cols.size())
-  // {
-  //   assert( types.size() == sz_ );
-  // }
-
-  __device__
   LesserRTTI(void* const* cols,
 	     int* const types,
 	     size_t sz):
@@ -53,7 +43,6 @@ struct LesserRTTI
   {
   }
 
-  __device__
   LesserRTTI(void* const* cols,
 	     int* const types,
 	     size_t sz,
@@ -64,8 +53,6 @@ struct LesserRTTI
     vals_(vals)
   {
   }
-
-  
 
   __device__
   bool equal(IndexT row1, IndexT row2) const
@@ -130,26 +117,11 @@ struct LesserRTTI
     return false;
   }
 
-  __device__
-  void gather(void** d_ppcols_out, size_t* d_indices, size_t nrows_new) const
-  {
-     Gatherer g(d_ppcols_out,
-		d_indices,
-		nrows_new);
-     
-    for(int col_index = 0; col_index < sz_; ++col_index)
-      {
-	gdf_dtype col_type = static_cast<gdf_dtype>(rtti_[col_index]);
-                         
-	type_dispatcher(g, col_type, col_index);
-      }
-  }
-
   template<typename ColType>
   __device__
-   static ColType at(int col_index,
-		     IndexT row,
-		     const void* const * columns)
+  static ColType at(int col_index,
+	                  IndexT row,
+		                const void* const * columns)
   {
     return (static_cast<const ColType*>(columns[col_index]))[row];
   }
@@ -159,26 +131,26 @@ private:
 
   struct OpLess
   {
-     __device__
-     OpLess(IndexT row1, IndexT row2):
-       row1_(row1),
-       row2_(row2)
+    __device__
+    OpLess(IndexT row1, IndexT row2):
+      row1_(row1),
+      row2_(row2)
     {
     }
     
-     template<typename ColType>
-     __device__
-     State operator() (int col_index,
-		       const void* const * columns,
-		       ColType )
+    template<typename ColType>
+    __device__
+    State operator() (int col_index,
+                      const void* const * columns,
+                      ColType)
     {
       ColType res1 = LesserRTTI::at<ColType>(col_index, row1_, columns);
       ColType res2 = LesserRTTI::at<ColType>(col_index, row2_, columns);
       
       if( res1 < res2 )
-	return State::True;
+        return State::True;
       else if( res1 == res2 )
-	return State::Undecided;
+        return State::Undecided;
       else
 	return State::False;
     }
@@ -189,27 +161,28 @@ private:
 
   struct OpEqual
   {
-     __device__
-     OpEqual(IndexT row1, IndexT row2):
-       row1_(row1),
-       row2_(row2)
+    __device__
+    OpEqual(IndexT row1, IndexT row2):
+      row1_(row1),
+      row2_(row2)
     {
     }
     
      template<typename ColType>
-     __device__
-     State operator() (int col_index,
-		       const void* const * columns,
-		       ColType )
+    __device__
+    State operator() (int col_index,
+		      const void* const * columns,
+		      ColType )
     {
       ColType res1 = LesserRTTI::at<ColType>(col_index, row1_, columns);
       ColType res2 = LesserRTTI::at<ColType>(col_index, row2_, columns);
       
       if( res1 != res2 )
-	return State::False;
+        return State::False;
       else
-	return State::Undecided;
+        return State::Undecided;
     }
+    
   private:
     IndexT row1_;
     IndexT row2_;
@@ -217,26 +190,26 @@ private:
 
   struct OpEqualV
   {
-     __device__
-     OpEqualV(const void* const * vals, IndexT row):
-       target_vals_(vals),
-       row_(row)
+    __device__
+    OpEqualV(const void* const * vals, IndexT row):
+      target_vals_(vals),
+      row_(row)
     {
     }
     
-     template<typename ColType>
-     __device__
-     State operator() (int col_index,
-		       const void* const * columns,
-		       ColType )
+    template<typename ColType>
+    __device__
+    State operator() (int col_index,
+		      const void* const * columns,
+		      ColType )
     {
       ColType res1 = LesserRTTI::at<ColType>(col_index, row_, columns);
       ColType res2 = LesserRTTI::at<ColType>(col_index, 0, target_vals_);
       
       if( res1 != res2 )
-	return State::False;
+        return State::False;
       else
-	return State::Undecided;
+        return State::Undecided;
     }
 
   private:
@@ -244,93 +217,58 @@ private:
     IndexT row_;
   };
 
-  struct Gatherer
-  {
-    __device__
-    Gatherer(void** d_cols_out,
-	     size_t* d_indices,
-	     size_t nrows_new):
-      d_cols_out_(d_cols_out),
-      d_indices_(d_indices),
-      nrows_new_(nrows_new)
-    {
-    }
-
-    template<typename ColType>
-    __device__
-    State operator() (int col_index,
-		      const void* const * columns,
-		      ColType )
-    {
-      cudaStream_t stream=0; // TODO: non-default stream
-      rmm_temp_allocator allocator(stream);
-      const ColType* const d_in = static_cast<const ColType*>(columns[col_index]);
-      ColType* d_out = static_cast<ColType*>(d_cols_out_[col_index]);
-      thrust::gather(thrust::cuda::par(allocator).on(stream),
-		     d_indices_, d_indices_ + nrows_new_, //map of indices
-		     d_in,                             //source
-		     d_out);                           //=source[map]
-
-      return State::True;
-    }
-  private:
-    void** d_cols_out_;
-    size_t* d_indices_;
-    size_t nrows_new_;
-  };
-
   template<typename Predicate>
   __device__
   State type_dispatcher(Predicate pred, gdf_dtype col_type, int col_index) const
   {
     switch( col_type )
-      {
+    {
       case GDF_INT8:
-	{
-	  using ColType = int8_t;//char;
-	  
-	  ColType dummy=0;
-	  return pred(col_index, columns_, dummy);
-	}
+      {
+        using ColType = int8_t;//char;
+        
+        ColType dummy=0;
+        return pred(col_index, columns_, dummy);
+      }
       case GDF_INT16:
-	{
-	  using ColType = int16_t;//short;
+      {
+        using ColType = int16_t;//short;
 
-	  ColType dummy=0;
-	  return pred(col_index, columns_, dummy);
-	}
+        ColType dummy=0;
+        return pred(col_index, columns_, dummy);
+      }
       case GDF_INT32:
-	{
-	  using ColType = int32_t;//int;
+      {
+        using ColType = int32_t;//int;
 
-	  ColType dummy=0;
-	  return pred(col_index, columns_, dummy);
-	}
+        ColType dummy=0;
+        return pred(col_index, columns_, dummy);
+      }
       case GDF_INT64:
-	{
-	  using ColType = int64_t;//long;
+      {
+        using ColType = int64_t;//long;
 
-	  ColType dummy=0;
-	  return pred(col_index, columns_, dummy);
-	}
+        ColType dummy=0;
+        return pred(col_index, columns_, dummy);
+      }
       case GDF_FLOAT32:
-	{
-	  using ColType = float;
+      {
+        using ColType = float;
 
-	  ColType dummy=0;
-	  return pred(col_index, columns_, dummy);
-	}
+        ColType dummy=0;
+        return pred(col_index, columns_, dummy);
+      }
       case GDF_FLOAT64:
-	{
-	  using ColType = double;
+      {
+        using ColType = double;
 
-	  ColType dummy=0;
-	  return pred(col_index, columns_, dummy);
-	}
+        ColType dummy=0;
+        return pred(col_index, columns_, dummy);
+      }
 
       default:
-	assert( false );//type not handled
-      }
+	      assert( false );//type not handled
+    }
     return State::Undecided;
   }
   
@@ -375,10 +313,10 @@ void multi_col_order_by(size_t nrows,
   //(2.) that container must be mutable;
   
   thrust::sort(thrust::cuda::par(allocator).on(stream),
-		 d_indx, d_indx+nrows,
-		 [f] __device__ (IndexT i1, IndexT i2){
-		         return f.less(i1, i2);
-		 });
+               d_indx, d_indx+nrows,
+               [f] __device__ (IndexT i1, IndexT i2) {
+                 return f.less(i1, i2);
+               });
 }
 
 //###########################################################################
@@ -419,13 +357,14 @@ size_t multi_col_filter(size_t nrows,
   //
   auto ret_iter_last =
     thrust::copy_if(thrust::cuda::par(allocator).on(stream),
-		    thrust::make_counting_iterator<size_t>(0), thrust::make_counting_iterator<size_t>(nrows),
-		    ptr_d_flt_indx,
-		    [f] __device__ (size_t indx){
-		      return f.equal_v(indx);
-		    });
+                    thrust::make_counting_iterator<size_t>(0), 
+                    thrust::make_counting_iterator<size_t>(nrows),
+                    ptr_d_flt_indx,
+                    [f] __device__ (size_t indx) {
+                      return f.equal_v(indx);
+                    });
 
-  size_t new_sz = thrust::distance(ptr_d_flt_indx,ret_iter_last);
+  size_t new_sz = thrust::distance(ptr_d_flt_indx, ret_iter_last);
   
   return new_sz;
 }
@@ -455,17 +394,19 @@ size_t multi_col_filter(size_t nrows,
 //Return:
 // ret      = # rows after aggregation;
 //
-template<typename IndexT>
+template<typename IndexT,
+         typename CountT = IndexT>
 size_t
 multi_col_group_by_count_sort(size_t         nrows,
-			      size_t         ncols,
-			      void* const*   d_cols,
-			      int* const     d_gdf_t,
-			      IndexT*        ptr_d_indx,
-			      IndexT*        ptr_d_kout,
-			      IndexT*        ptr_d_vout,
-			      bool           sorted = false,
-			      cudaStream_t   stream = NULL)
+                              size_t         ncols,
+                              void* const*   d_cols,
+                              int* const     d_gdf_t,
+                              IndexT*        ptr_d_indx,
+                              IndexT*        ptr_d_kout,
+                              CountT*        ptr_d_vout,
+                              bool           sorted = false,
+                              bool           distinct = false,
+                              cudaStream_t   stream = NULL)
 {
   if( !sorted )
     multi_col_order_by(nrows, ncols, d_cols, d_gdf_t, ptr_d_indx, stream);
@@ -474,20 +415,28 @@ multi_col_group_by_count_sort(size_t         nrows,
 
   rmm_temp_allocator allocator(stream);
 
-  thrust::pair<IndexT*, IndexT*> ret =
+  thrust::pair<IndexT*, CountT*> ret =
     thrust::reduce_by_key(thrust::cuda::par(allocator).on(stream),
-			  ptr_d_indx, ptr_d_indx+nrows,
-			  thrust::make_constant_iterator(1),
-			  ptr_d_kout,
-			  ptr_d_vout,
-			  [f] __device__(int key1, int key2){
-			         return f.equal(key1, key2);
-			  });
+                          ptr_d_indx, ptr_d_indx+nrows,
+                          thrust::make_constant_iterator<CountT>(1),
+                          ptr_d_kout,
+                          ptr_d_vout,
+                          [f] __host__ __device__(IndexT key1, IndexT key2){
+                            return f.equal(key1, key2);
+                          });
+			    
+  size_t new_sz = thrust::distance(ptr_d_vout, ret.second);
 
   //COUNT(*) for each distinct entry gets collected in d_vout;
   //DISTINCT COUNT(*) is just: thrust::distance(d_kout.begin(), ret.first)
-			    
-  size_t new_sz = thrust::distance(ptr_d_vout, ret.second);
+
+  if( distinct )
+  {
+    CountT distinct_count = static_cast<CountT>(new_sz);
+    cudaMemcpy(ptr_d_vout, &distinct_count, sizeof(CountT), cudaMemcpyHostToDevice);
+    new_sz = 1;
+  }
+  
   return new_sz;
 }
 
@@ -517,20 +466,20 @@ multi_col_group_by_count_sort(size_t         nrows,
 //ret       = # rows after aggregation;
 //
 template<typename ValsT,
-	 typename IndexT,
-	 typename Reducer>
+         typename IndexT,
+         typename Reducer>
 size_t multi_col_group_by_sort(size_t         nrows,
-			       size_t         ncols,
-			       void* const*   d_cols,
-			       int* const     d_gdf_t,
-			       const ValsT*   ptr_d_agg,
-			       Reducer        fctr,
-			       IndexT*        ptr_d_indx,
-			       ValsT*         ptr_d_agg_p,
-			       IndexT*        ptr_d_kout,
-			       ValsT*         ptr_d_vout,
-			       bool           sorted = false,
-			       cudaStream_t   stream = NULL)
+                               size_t         ncols,
+                               void* const*   d_cols,
+                               int* const     d_gdf_t,
+                               const ValsT*   ptr_d_agg,
+                               Reducer        fctr,
+                               IndexT*        ptr_d_indx,
+                               ValsT*         ptr_d_agg_p,
+                               IndexT*        ptr_d_kout,
+                               ValsT*         ptr_d_vout,
+                               bool           sorted = false,
+                               cudaStream_t   stream = NULL)
 {
   if( !sorted )
     multi_col_order_by(nrows, ncols, d_cols, d_gdf_t, ptr_d_indx, stream);
@@ -546,168 +495,168 @@ size_t multi_col_group_by_sort(size_t         nrows,
   
   thrust::pair<IndexT*, ValsT*> ret =
     thrust::reduce_by_key(thrust::cuda::par(allocator).on(stream),
-  			    ptr_d_indx, ptr_d_indx + nrows,
-  			    ptr_d_agg_p,
-  			    ptr_d_kout,
-  			    ptr_d_vout,
-  			    [f] __device__(int key1, int key2){
-			          return f.equal(key1, key2);
-  			    },
-  			    fctr);
+                          ptr_d_indx, ptr_d_indx + nrows,
+                          ptr_d_agg_p,
+                          ptr_d_kout,
+                          ptr_d_vout,
+                          [f] __device__(IndexT key1, IndexT key2) {
+                              return f.equal(key1, key2);
+                          },
+                          fctr);
 
   size_t new_sz = thrust::distance(ptr_d_vout, ret.second);
   return new_sz;
 }
 
 template<typename ValsT,
-	 typename IndexT>
+	       typename IndexT>
 size_t multi_col_group_by_sum_sort(size_t         nrows,
-				   size_t         ncols,
-				   void* const*   d_cols,
-				   int* const     d_gdf_t,
-				   const ValsT*   ptr_d_agg,
-				   IndexT*        ptr_d_indx,
-				   ValsT*         ptr_d_agg_p,
-				   IndexT*        ptr_d_kout,
-				   ValsT*         ptr_d_vout,
-				   bool           sorted = false,
-				   cudaStream_t   stream = NULL)
+                                   size_t         ncols,
+                                   void* const*   d_cols,
+                                   int* const     d_gdf_t,
+                                   const ValsT*   ptr_d_agg,
+                                   IndexT*        ptr_d_indx,
+                                   ValsT*         ptr_d_agg_p,
+                                   IndexT*        ptr_d_kout,
+                                   ValsT*         ptr_d_vout,
+                                   bool           sorted = false,
+                                   cudaStream_t   stream = NULL)
 {
-  auto lamb = [] __device__ (ValsT x, ValsT y){
-			      return x+y;
+  auto lamb = [] __device__ (ValsT x, ValsT y) {
+		return x+y;
   };
 
   using ReducerT = decltype(lamb);
 
   return multi_col_group_by_sort(nrows,
-				 ncols,
-				 d_cols,
-				 d_gdf_t,
-				 ptr_d_agg,
-				 lamb,
-				 ptr_d_indx,
-				 ptr_d_agg_p,
-				 ptr_d_kout,
-				 ptr_d_vout,
-				 sorted,
-				 stream);
+                                 ncols,
+                                 d_cols,
+                                 d_gdf_t,
+                                 ptr_d_agg,
+                                 lamb,
+                                 ptr_d_indx,
+                                 ptr_d_agg_p,
+                                 ptr_d_kout,
+                                 ptr_d_vout,
+                                 sorted,
+                                 stream);
 }
 
 template<typename ValsT,
 	 typename IndexT>
 size_t multi_col_group_by_min_sort(size_t         nrows,
-				   size_t         ncols,
-				   void* const*   d_cols,
-				   int* const     d_gdf_t,
-				   const ValsT*   ptr_d_agg,
-				   IndexT*        ptr_d_indx,
-				   ValsT*         ptr_d_agg_p,
-				   IndexT*        ptr_d_kout,
-				   ValsT*         ptr_d_vout,
-				   bool           sorted = false,
-				   cudaStream_t   stream = NULL)
+                                   size_t         ncols,
+                                   void* const*   d_cols,
+                                   int* const     d_gdf_t,
+                                   const ValsT*   ptr_d_agg,
+                                   IndexT*        ptr_d_indx,
+                                   ValsT*         ptr_d_agg_p,
+                                   IndexT*        ptr_d_kout,
+                                   ValsT*         ptr_d_vout,
+                                   bool           sorted = false,
+                                   cudaStream_t   stream = NULL)
 {
-  auto lamb = [] __device__ (ValsT x, ValsT y){
+  auto lamb = [] __device__ (ValsT x, ValsT y) {
     return (x<y?x:y);
   };
 
   using ReducerT = decltype(lamb);
 
   return multi_col_group_by_sort(nrows,
-				 ncols,
-				 d_cols,
-				 d_gdf_t,
-				 ptr_d_agg,
-				 lamb,
-				 ptr_d_indx,
-				 ptr_d_agg_p,
-				 ptr_d_kout,
-				 ptr_d_vout,
-				 sorted,
-				 stream);
+                                 ncols,
+                                 d_cols,
+                                 d_gdf_t,
+                                 ptr_d_agg,
+                                 lamb,
+                                 ptr_d_indx,
+                                 ptr_d_agg_p,
+                                 ptr_d_kout,
+                                 ptr_d_vout,
+                                 sorted,
+                                 stream);
 }
 
 template<typename ValsT,
-	 typename IndexT>
+	       typename IndexT>
 size_t multi_col_group_by_max_sort(size_t         nrows,
-				   size_t         ncols,
-				   void* const*   d_cols,
-				   int* const     d_gdf_t,
-				   const ValsT*   ptr_d_agg,
-				   IndexT*        ptr_d_indx,
-				   ValsT*         ptr_d_agg_p,
-				   IndexT*        ptr_d_kout,
-				   ValsT*         ptr_d_vout,
-				   bool           sorted = false,
-				   cudaStream_t   stream = NULL)
+                                   size_t         ncols,
+                                   void* const*   d_cols,
+                                   int* const     d_gdf_t,
+                                   const ValsT*   ptr_d_agg,
+                                   IndexT*        ptr_d_indx,
+                                   ValsT*         ptr_d_agg_p,
+                                   IndexT*        ptr_d_kout,
+                                   ValsT*         ptr_d_vout,
+                                   bool           sorted = false,
+                                   cudaStream_t   stream = NULL)
 {
-  auto lamb = [] __device__ (ValsT x, ValsT y){
+  auto lamb = [] __device__ (ValsT x, ValsT y) {
     return (x>y?x:y);
   };
 
   using ReducerT = decltype(lamb);
 
   return multi_col_group_by_sort(nrows,
-				 ncols,
-				 d_cols,
-				 d_gdf_t,
-				 ptr_d_agg,
-				 lamb,
-				 ptr_d_indx,
-				 ptr_d_agg_p,
-				 ptr_d_kout,
-				 ptr_d_vout,
-				 sorted,
-				 stream);
+                                 ncols,
+                                 d_cols,
+                                 d_gdf_t,
+                                 ptr_d_agg,
+                                 lamb,
+                                 ptr_d_indx,
+                                 ptr_d_agg_p,
+                                 ptr_d_kout,
+                                 ptr_d_vout,
+                                 sorted,
+                                 stream);
 }
 
 
 template<typename ValsT,
 	 typename IndexT>
 size_t multi_col_group_by_avg_sort(size_t         nrows,
-				   size_t         ncols,
-				   void* const*   d_cols,
-				   int* const     d_gdf_t,
-				   const ValsT*   ptr_d_agg,
-				   IndexT*        ptr_d_indx,
-				   IndexT*        ptr_d_cout,
-				   ValsT*         ptr_d_agg_p,
-				   IndexT*        ptr_d_kout,
-				   ValsT*         ptr_d_vout,
-				   bool           sorted = false,
-				   cudaStream_t   stream = NULL)
+                                   size_t         ncols,
+                                   void* const*   d_cols,
+                                   int* const     d_gdf_t,
+                                   const ValsT*   ptr_d_agg,
+                                   IndexT*        ptr_d_indx,
+                                   IndexT*        ptr_d_cout,
+                                   ValsT*         ptr_d_agg_p,
+                                   IndexT*        ptr_d_kout,
+                                   ValsT*         ptr_d_vout,
+                                   bool           sorted = false,
+                                   cudaStream_t   stream = NULL)
 {
   multi_col_group_by_count_sort(nrows,
-				ncols,
-				d_cols,
-				d_gdf_t,
-				ptr_d_indx,
-				ptr_d_kout,
-				ptr_d_cout,
-				sorted,
-				stream);
+                                ncols,
+                                d_cols,
+                                d_gdf_t,
+                                ptr_d_indx,
+                                ptr_d_kout,
+                                ptr_d_cout,
+                                sorted,
+                                stream);
 
   size_t new_sz =  multi_col_group_by_sum_sort(nrows,
-					       ncols,
-					       d_cols,
-					       d_gdf_t,
-					       ptr_d_agg,
-					       ptr_d_indx,
-					       ptr_d_agg_p,
-					       ptr_d_kout,
-					       ptr_d_vout,
-					       sorted,
-					       stream);
+                                               ncols,
+                                               d_cols,
+                                               d_gdf_t,
+                                               ptr_d_agg,
+                                               ptr_d_indx,
+                                               ptr_d_agg_p,
+                                               ptr_d_kout,
+                                               ptr_d_vout,
+                                               sorted,
+                                               stream);
 
   rmm_temp_allocator allocator(stream);
 
   thrust::transform(thrust::cuda::par(allocator).on(stream),
-		    ptr_d_cout, ptr_d_cout + nrows,
-		    ptr_d_vout,
-		    ptr_d_vout,
-		    [] __device__ (IndexT n, ValsT sum){
-		      return sum/static_cast<ValsT>(n);
-		    });
+                    ptr_d_cout, ptr_d_cout + nrows,
+                    ptr_d_vout,
+                    ptr_d_vout,
+                    [] __device__ (IndexT n, ValsT sum) {
+                      return sum/static_cast<ValsT>(n);
+                    });
 
   return new_sz;
 }
