@@ -441,21 +441,24 @@ gdf_error construct_join_output_df(
         CUDA_TRY( cudaMemset(result_cols[i]->valid, 0, sizeof(gdf_valid_type)*gdf_get_num_chars_bitmask(join_size)) );
     }
 
-    gdf_table<size_type> l_i_table(lnonjoincol.size(), lnonjoincol.data());
-    gdf_table<size_type> r_i_table(rnonjoincol.size(), rnonjoincol.data());
-    gdf_table<size_type> j_i_table(ljoincol.size(), ljoincol.data());
-
-    gdf_table<size_type> l_table(num_left_cols - num_cols_to_join, result_cols);
-    gdf_table<size_type> r_table(num_right_cols - num_cols_to_join, result_cols + right_table_begin);
-    gdf_table<size_type> j_table(num_cols_to_join, result_cols + left_table_end);
-
     gdf_error err{GDF_SUCCESS};
-    err = l_i_table.gather(static_cast<index_type*>(left_indices->data),
-            l_table, join_type != JoinType::INNER_JOIN);
-    if (err != GDF_SUCCESS) { return err; }
-    err = r_i_table.gather(static_cast<index_type*>(right_indices->data),
-            r_table, join_type != JoinType::INNER_JOIN);
-    if (err != GDF_SUCCESS) { return err; }
+    if (0 != lnonjoincol.size()) {
+        gdf_table<size_type> l_i_table(lnonjoincol.size(), lnonjoincol.data());
+        gdf_table<size_type> l_table(num_left_cols - num_cols_to_join, result_cols);
+        err = l_i_table.gather(static_cast<index_type*>(left_indices->data),
+                l_table, join_type != JoinType::INNER_JOIN);
+        if (err != GDF_SUCCESS) { return err; }
+    }
+    if (0 != rnonjoincol.size()) {
+        gdf_table<size_type> r_i_table(rnonjoincol.size(), rnonjoincol.data());
+        gdf_table<size_type> r_table(num_right_cols - num_cols_to_join, result_cols + right_table_begin);
+        err = r_i_table.gather(static_cast<index_type*>(right_indices->data),
+                r_table, join_type != JoinType::INNER_JOIN);
+        if (err != GDF_SUCCESS) { return err; }
+    }
+
+    gdf_table<size_type> j_i_table(ljoincol.size(), ljoincol.data());
+    gdf_table<size_type> j_table(num_cols_to_join, result_cols + left_table_end);
     err = j_i_table.gather(static_cast<index_type*>(left_indices->data),
             j_table, join_type != JoinType::INNER_JOIN);
 
@@ -481,12 +484,19 @@ gdf_error join_call_compute_df(
     if ((left_cols == nullptr)  ||
         (right_cols == nullptr)) { return GDF_DATASET_EMPTY; }
 
+    if (num_cols_to_join == 0) { return GDF_SUCCESS; }
+    
+    if ((left_join_cols == nullptr)  ||
+        (right_join_cols == nullptr)) { return GDF_DATASET_EMPTY; }
+
     //check if combined join output is expected
     bool compute_df = (result_cols != nullptr);
 
     //return error if no output pointers are valid
     if ( ((left_indices == nullptr)||(right_indices == nullptr)) &&
          (!compute_df) ) { return GDF_DATASET_EMPTY; }
+
+    if (join_context == nullptr) { return GDF_INVALID_API_CALL; }
 
     //If index outputs are not requested, create columns to store them
     //for computing combined join output
