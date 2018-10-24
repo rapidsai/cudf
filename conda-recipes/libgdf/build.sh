@@ -9,6 +9,8 @@ fi
 
 # Cleanup local git
 git clean -xdf
+# Change directory for build process
+cd libgdf
 # Use CMake-based build procedure
 mkdir build
 cd build
