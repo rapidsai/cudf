@@ -136,7 +136,7 @@ struct JoinTest : public testing::Test
 
     // Create a new instance of a gdf_column with a custom deleter that will free
     // the associated device memory when it eventually goes out of scope
-    auto deleter = [](gdf_column* col){col->size = 0; cudaFree(col->data); cudaFree(col->valid); };
+    auto deleter = [](gdf_column* col){col->size = 0; if (col->data) cudaFree(col->data); if (col->valid) cudaFree(col->valid); };
     gdf_col_pointer the_column{new gdf_column, deleter};
 
     // Allocate device storage for gdf_column and copy contents from host_vector
@@ -144,9 +144,13 @@ struct JoinTest : public testing::Test
     cudaMemcpy(the_column->data, host_vector.data(), host_vector.size() * sizeof(col_type), cudaMemcpyHostToDevice);
 
     // Allocate device storage for gdf_column.valid
-    int valid_size = gdf_get_num_chars_bitmask(host_vector.size());
-    cudaMalloc(&(the_column->valid), valid_size);
-    cudaMemcpy(the_column->valid, host_valid, valid_size, cudaMemcpyHostToDevice);
+    if (host_valid != nullptr) {
+      int valid_size = gdf_get_num_chars_bitmask(host_vector.size());
+      cudaMalloc(&(the_column->valid), valid_size);
+      cudaMemcpy(the_column->valid, host_valid, valid_size, cudaMemcpyHostToDevice);
+    } else {
+        the_column->valid = nullptr;
+    }
  
     // Fill the gdf_column members
     the_column->size = host_vector.size();
@@ -173,7 +177,11 @@ struct JoinTest : public testing::Test
   {
     // Creates a gdf_column for the current vector and pushes it onto
     // the vector of gdf_columns
-    gdf_columns.push_back(create_gdf_column(std::get<I>(t), valids[I].get()));
+    if (valids.size() != 0) {
+      gdf_columns.push_back(create_gdf_column(std::get<I>(t), valids[I].get()));
+    } else {
+      gdf_columns.push_back(create_gdf_column(std::get<I>(t), nullptr));
+    }
 
     //recurse to next vector in tuple
     convert_tuple_to_gdf_columns<I + 1, Tp...>(gdf_columns, t, valids);
@@ -207,10 +215,7 @@ struct JoinTest : public testing::Test
     initialize_tuple(right_columns, right_column_length, right_column_range, ctxt.flag_sorted);
 
     auto n_columns = std::tuple_size<multi_column_t>::value;
-    if(ctxt.flag_method == gdf_method::GDF_SORT) {
-      initialize_valids(left_valids, n_columns, left_column_length, true);
-      initialize_valids(right_valids, n_columns, right_column_length, true);
-    } else {
+    if(ctxt.flag_method != gdf_method::GDF_SORT) {
       initialize_valids(left_valids, n_columns, left_column_length);
       initialize_valids(right_valids, n_columns, right_column_length);
     }
@@ -218,6 +223,10 @@ struct JoinTest : public testing::Test
     gdf_left_columns = initialize_gdf_columns(left_columns, left_valids);
     gdf_right_columns = initialize_gdf_columns(right_columns, right_valids);
 
+    if(ctxt.flag_method == gdf_method::GDF_SORT) {
+      initialize_valids(left_valids, n_columns, left_column_length, true);
+      initialize_valids(right_valids, n_columns, right_column_length, true);
+    }
     // Fill vector of raw pointers to gdf_columns
     for(auto const& c : gdf_left_columns){
       gdf_raw_left_columns.push_back(c.get());

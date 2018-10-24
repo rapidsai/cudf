@@ -153,6 +153,7 @@ TEST(gdf_group_by_sum, UsageTestSum)
 
   c_agg.dtype = GDF_FLOAT64;
   c_agg.data = dd1.data().get();
+  c_agg.valid = nullptr;
   c_agg.size = nrows;
 
   c_vout.dtype = GDF_FLOAT64;
@@ -204,6 +205,7 @@ TEST(gdf_group_by_sum, UsageTestSum)
   d_keys.assign(nrows, 0);
   gdf_column c_indx;
   c_indx.data = d_keys.data().get();
+  c_indx.valid = nullptr;
   c_indx.size = nrows;
   c_indx.dtype = GDF_INT32;
   //}
@@ -301,6 +303,7 @@ TEST(gdf_group_by_count, UsageTestCount)
 
   c_agg.dtype = GDF_FLOAT64;
   c_agg.data = dd1.data().get();
+  c_agg.valid = nullptr;
   c_agg.size = nrows;
 
   c_vout.dtype = GDF_INT32;
@@ -352,6 +355,7 @@ TEST(gdf_group_by_count, UsageTestCount)
   d_keys.assign(nrows, 0);
   gdf_column c_indx;
   c_indx.data = d_keys.data().get();
+  c_indx.valid = nullptr;
   c_indx.size = nrows;
   c_indx.dtype = GDF_INT32;
   //}
@@ -447,6 +451,7 @@ TEST(gdf_group_by_avg, UsageTestAvg)
 
   c_agg.dtype = GDF_FLOAT64;
   c_agg.data = dd1.data().get();
+  c_agg.valid = nullptr;
   c_agg.size = nrows;
 
   c_vout.dtype = GDF_FLOAT64;
@@ -498,6 +503,7 @@ TEST(gdf_group_by_avg, UsageTestAvg)
   d_keys.assign(nrows, 0);
   gdf_column c_indx;
   c_indx.data = d_keys.data().get();
+  c_indx.valid = nullptr;
   c_indx.size = nrows;
   c_indx.dtype = GDF_INT32;
   //}
@@ -609,6 +615,7 @@ TEST(gdf_group_by_min, UsageTestMin)
 
   c_agg.dtype = GDF_FLOAT64;
   c_agg.data = d_col.data().get();
+  c_agg.valid = nullptr;
 
   //input
   //{
@@ -649,6 +656,7 @@ TEST(gdf_group_by_min, UsageTestMin)
   d_keys.assign(nrows, 0);
   gdf_column c_indx;
   c_indx.data = d_keys.data().get();
+  c_indx.valid = nullptr;
   c_indx.size = nrows;
   c_indx.dtype = GDF_INT32;
   //}
@@ -760,6 +768,7 @@ TEST(gdf_group_by_max, UsageTestMax)
 
   c_agg.dtype = GDF_FLOAT64;
   c_agg.data = d_col.data().get();
+  c_agg.valid = nullptr;
 
   //input
   //{
@@ -800,6 +809,7 @@ TEST(gdf_group_by_max, UsageTestMax)
   d_keys.assign(nrows, 0);
   gdf_column c_indx;
   c_indx.data = d_keys.data().get();
+  c_indx.valid = nullptr;
   c_indx.size = nrows;
   c_indx.dtype = GDF_INT32;
   //}
