@@ -96,7 +96,7 @@ gdf_error gdf_column_concat(gdf_column *output, gdf_column *columns_to_concat[],
 /* context operations */
 
 gdf_error gdf_context_view(gdf_context *context, int flag_sorted, gdf_method flag_method,
-                           int flag_distinct);
+                           int flag_distinct, int flag_sort_result, int flag_sort_inplace);
 
 /* error handling */
 
