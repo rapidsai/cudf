@@ -1,5 +1,7 @@
 # libgdf: GPU Dataframes
 
+### :warning: Repo is frozen until 10/26 for refactoring to cuDF, no new issues or PRs :warning:
+
 [![Build Status](http://18.191.94.64/buildStatus/icon?job=libgdf-master)](http://18.191.94.64/job/libgdf-master/)
 
 libgdf is a C library for implementing common functionality for a GPU Data Frame.  For more project details, see [the wiki](https://github.com/gpuopenanalytics/libgdf/wiki/Home).
