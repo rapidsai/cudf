@@ -464,3 +464,13 @@ class Column(object):
             newbuf.extend(buf.to_gpu_array())
         # return new column
         return self.replace(data=newbuf)
+
+    def quantile(self, q, interpolation, exact):
+        if isinstance(q, Number):
+            quant = [q]
+        elif isinstance(q, list) or isinstance(q, np.ndarray):
+            quant = q
+        else:
+            msg = "`q` must be either a single element, list or numpy array"
+            raise TypeError(msg)
+        return _gdf.quantile(self, quant, interpolation, exact)
