@@ -412,7 +412,7 @@ gdf_error construct_join_output_df(
     }
     //TODO : Invalid api
 
-    size_t join_size = left_indices->size;
+    size_type join_size = left_indices->size;
     int left_table_end = num_left_cols - num_cols_to_join;
     int right_table_begin = num_left_cols;
 
@@ -442,6 +442,8 @@ gdf_error construct_join_output_df(
     }
 
     gdf_error err{GDF_SUCCESS};
+
+    //Construct the left columns
     if (0 != lnonjoincol.size()) {
         gdf_table<size_type> l_i_table(lnonjoincol.size(), lnonjoincol.data());
         gdf_table<size_type> l_table(num_left_cols - num_cols_to_join, result_cols);
@@ -449,6 +451,8 @@ gdf_error construct_join_output_df(
                 l_table, join_type != JoinType::INNER_JOIN);
         if (err != GDF_SUCCESS) { return err; }
     }
+
+    //Construct the right columns
     if (0 != rnonjoincol.size()) {
         gdf_table<size_type> r_i_table(rnonjoincol.size(), rnonjoincol.data());
         gdf_table<size_type> r_table(num_right_cols - num_cols_to_join, result_cols + right_table_begin);
@@ -457,10 +461,21 @@ gdf_error construct_join_output_df(
         if (err != GDF_SUCCESS) { return err; }
     }
 
-    gdf_table<size_type> j_i_table(ljoincol.size(), ljoincol.data());
-    gdf_table<size_type> j_table(num_cols_to_join, result_cols + left_table_end);
-    err = j_i_table.gather(static_cast<index_type*>(left_indices->data),
-            j_table, join_type != JoinType::INNER_JOIN);
+    //Construct the joined columns
+    if (0 != ljoincol.size()) {
+        gdf_table<size_type> j_i_table(ljoincol.size(), ljoincol.data());
+        gdf_table<size_type> j_table(num_cols_to_join, result_cols + left_table_end);
+        //Gather valid rows from the right table
+	// TODO: Revisit this, because it probably can be done more efficiently
+        if (JoinType::FULL_JOIN == join_type) {
+            gdf_table<size_type> j_i_r_table(rjoincol.size(), rjoincol.data());
+            err = j_i_r_table.gather(static_cast<index_type*>(right_indices->data),
+                    j_table, join_type != JoinType::INNER_JOIN);
+            if (err != GDF_SUCCESS) { return err; }
+        }
+        err = j_i_table.gather(static_cast<index_type*>(left_indices->data),
+                j_table, join_type != JoinType::INNER_JOIN);
+    }
 
 	POP_RANGE();
     return err;
