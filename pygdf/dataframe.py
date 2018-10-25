@@ -923,8 +923,6 @@ class DataFrame(object):
                                                       .set_categories(cats)
                                                       .fillna(-1))
             elif how in ['inner', 'outer']:
-                # Do the join using the union of categories from both side.
-                # Adjust for inner joins afterwards
                 cats = sorted(set(lcats) | set(rcats))
 
                 lhs[idx_col_name] = (lhs[idx_col_name].cat
@@ -936,6 +934,10 @@ class DataFrame(object):
                                                       .set_categories(cats)
                                                       .fillna(-1))
                 rhs[idx_col_name] = rhs[idx_col_name]._column.as_numerical
+
+                print(cats)
+                print(lhs[idx_col_name])
+                print(rhs[idx_col_name])
 
         if lsuffix == '':
             lsuffix = 'l'
