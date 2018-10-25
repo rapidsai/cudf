@@ -465,11 +465,12 @@ gdf_error construct_join_output_df(
     if (0 != ljoincol.size()) {
         gdf_table<size_type> j_i_table(ljoincol.size(), ljoincol.data());
         gdf_table<size_type> j_table(num_cols_to_join, result_cols + left_table_end);
-        //Full Join left indices need to be fixed before calling gather
+        //Gather valid rows from the right table
         if (JoinType::FULL_JOIN == join_type) {
             gdf_table<size_type> j_i_r_table(rjoincol.size(), rjoincol.data());
             err = j_i_r_table.gather(static_cast<index_type*>(right_indices->data),
                     j_table, join_type != JoinType::INNER_JOIN);
+            if (err != GDF_SUCCESS) { return err; }
         }
         err = j_i_table.gather(static_cast<index_type*>(left_indices->data),
                 j_table, join_type != JoinType::INNER_JOIN);
