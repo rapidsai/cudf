@@ -24,6 +24,7 @@ class MetadataParsingError(ValueError):
     pass
 
 
+# TODO: can this be replaced with calls to rmm.device_array_from_ptr()?
 def gpu_view_as(arr, dtype, shape=None, strides=None):
     dtype = np.dtype(dtype)
     if strides is None:

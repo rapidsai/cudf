@@ -9,6 +9,8 @@ from numbers import Number
 import numpy as np
 from numba import cuda
 
+from librmm_cffi import librmm as rmm
+
 from . import _gdf
 from . import cudautils
 from . import utils
@@ -45,7 +47,7 @@ class Column(object):
         objs = [o for o in objs if len(o) > 0]
         newsize = sum(map(len, objs))
         # Concatenate data
-        mem = cuda.device_array(shape=newsize, dtype=head.data.dtype)
+        mem = rmm.device_array(shape=newsize, dtype=head.data.dtype)
         data = Buffer.from_empty(mem)
         for o in objs:
             data.extend(o.data.to_gpu_array())
@@ -53,7 +55,7 @@ class Column(object):
         # Concatenate mask if present
         if any(o.has_null_mask for o in objs):
             # FIXME: Inefficient
-            mem = cuda.device_array(shape=newsize, dtype=np.bool)
+            mem = rmm.device_array(shape=newsize, dtype=np.bool)
             mask = Buffer.from_empty(mem)
             null_count = 0
             for o in objs:
@@ -455,7 +457,7 @@ class Column(object):
                                       "yet supported")
         newsize = len(self) + len(other)
         # allocate memory
-        mem = cuda.device_array(shape=newsize, dtype=self.data.dtype)
+        mem = rmm.device_array(shape=newsize, dtype=self.data.dtype)
         newbuf = Buffer.from_empty(mem)
         # copy into new memory
         for buf in [self.data, other.data]:

@@ -1,6 +1,6 @@
-
 import numpy as np
-from numba import cuda
+
+from librmm_cffi import librmm as rmm
 
 from . import cudautils, utils
 from .serialize import register_distributed_serializer
@@ -21,7 +21,7 @@ class Buffer(object):
     def null(cls, dtype):
         """Create a "null" buffer with a zero-sized device array.
         """
-        mem = cuda.device_array(0, dtype=dtype)
+        mem = rmm.device_array(0, dtype=dtype)
         return cls(mem, size=0, capacity=0)
 
     def __init__(self, mem, size=None, capacity=None, categorical=False):
@@ -69,7 +69,8 @@ class Buffer(object):
                 ipch = self._cached_ipch
             else:
                 # Get new IPC handle
-                ipch = self.to_gpu_array().get_ipc_handle()
+                ipch = rmm.get_ipc_handle(self.to_gpu_array())
+
             header['kind'] = 'ipc'
             header['mem'], frames = serialize(ipch)
             # Keep IPC handle alive
@@ -107,7 +108,7 @@ class Buffer(object):
             # Open IPC handle
             with ipch as data:
                 # Copy remote data over
-                mem = cuda.device_array_like(data)
+                mem = rmm.device_array_like(data)
                 mem.copy_to_device(data)
         # Not using IPC
         else:

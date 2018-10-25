@@ -4,8 +4,9 @@ import sys
 import pickle
 
 import numpy as np
-from numba import cuda
 import pandas as pd
+
+from librmm_cffi import librmm as rmm
 
 from pygdf.dataframe import DataFrame, GenericIndex
 from pygdf.buffer import Buffer
@@ -68,7 +69,7 @@ def test_sizeof_dataframe():
 
 def test_pickle_index():
     nelem = 10
-    idx = GenericIndex(cuda.to_device(np.arange(nelem)))
+    idx = GenericIndex(rmm.to_device(np.arange(nelem)))
     pickled = pickle.dumps(idx)
     out = pickle.loads(pickled)
     assert idx == out

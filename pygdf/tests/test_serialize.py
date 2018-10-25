@@ -1,6 +1,7 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
 
 import sys
+import atexit
 import multiprocessing as mp
 
 import numpy as np
@@ -95,10 +96,7 @@ def test_serialize_groupby():
     pd.util.testing.assert_frame_equal(got.to_pandas(), expect.to_pandas())
 
 
-@require_distributed
-@require_ipc
-def test_serialize_ipc():
-    sr = pygdf.Series(np.arange(10))
+def serialize_ipc(sr):
     # Non-IPC
     header, frames = serialize(sr)
     assert header['column']['data_buffer']['kind'] == 'normal'
@@ -124,16 +122,38 @@ def test_serialize_ipc():
     proc.start()
     out = result_queue.get()
     proc.join(3)
+    return out
+
+
+@require_distributed
+@require_ipc
+def test_serialize_ipc():
+    sr = pygdf.Series(np.arange(10))
+    out = serialize_ipc(sr)
     # Verify that the output array matches the source
     np.testing.assert_array_equal(out.to_array(), sr.to_array())
 
 
+@require_distributed
+@require_ipc
+def test_serialize_ipc_slice():
+    sr = pygdf.Series(np.arange(10))
+    # test with a slice to verify internal offset calculations work
+    out = serialize_ipc(sr[1:7])
+    # Verify that the output array matches the source
+    np.testing.assert_array_equal(out.to_array(), sr[1:7].to_array())
+
+
 def _load_ipc(header, frames, result_queue):
+    pygdf._gdf.rmm_initialize()
+
     try:
         out = deserialize(header, frames)
         result_queue.put(out)
     except Exception as e:
         result_queue.put(e)
+
+    atexit.register(pygdf._gdf.rmm_finalize)
 
 
 @require_distributed

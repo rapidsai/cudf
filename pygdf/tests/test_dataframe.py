@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 
-from numba import cuda
+from librmm_cffi import librmm as rmm
 
 import pygdf as gd
 from pygdf.dataframe import Series, DataFrame
@@ -115,7 +115,7 @@ def test_dataframe_basic():
     df = DataFrame()
 
     # Populate with cuda memory
-    df['keys'] = cuda.to_device(np.arange(10, dtype=np.float64))
+    df['keys'] = rmm.to_device(np.arange(10, dtype=np.float64))
     np.testing.assert_equal(df['keys'].to_array(), np.arange(10))
     assert len(df) == 10
 
@@ -487,7 +487,7 @@ def test_dataframe_setitem_from_masked_object():
     assert(test2['a'].has_null_mask)
     assert(test2['a'].null_count == 20)
 
-    gpu_ary = cuda.to_device(ary)
+    gpu_ary = rmm.to_device(ary)
     test3 = Series(gpu_ary)
     assert(test3.has_null_mask)
     assert(test3.null_count == 20)

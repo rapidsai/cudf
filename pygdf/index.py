@@ -5,7 +5,8 @@ from __future__ import print_function, division
 import pandas as pd
 import numpy as np
 import pickle
-from numba import cuda
+
+from librmm_cffi import librmm as rmm
 
 from . import cudautils, utils, columnops
 from .buffer import Buffer
@@ -182,7 +183,7 @@ class RangeIndex(Index):
         if len(self) > 0:
             vals = cudautils.arange(self._start, self._stop, dtype=self.dtype)
         else:
-            vals = cuda.device_array(0, dtype=self.dtype)
+            vals = rmm.device_array(0, dtype=self.dtype)
         return NumericalColumn(data=Buffer(vals), dtype=vals.dtype)
 
     def to_pandas(self):

@@ -11,7 +11,8 @@ except ImportError as msg:
     arrow_version = None
 
 import numpy as np
-from numba import cuda
+
+from librmm_cffi import librmm as rmm
 
 from pygdf.gpuarrow import GpuArrowReader
 from pygdf.dataframe import Series, DataFrame
@@ -34,7 +35,7 @@ def read_data():
     data = batch.serialize().to_pybytes()
     data = np.ndarray(shape=len(data), dtype=np.byte,
                       buffer=bytearray(data))
-    darr = cuda.to_device(data)
+    darr = rmm.to_device(data)
     return schema, darr
 
 

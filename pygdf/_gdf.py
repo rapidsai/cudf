@@ -3,7 +3,6 @@
 """
 This file provide binding to the libgdf library.
 """
-import ctypes
 import contextlib
 import itertools
 
@@ -11,9 +10,9 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 
-from numba import cuda
-
 from libgdf_cffi import ffi, libgdf
+from librmm_cffi import librmm as rmm
+
 from . import cudautils
 from .utils import calc_chunk_size, mask_dtype, mask_bitsize
 
@@ -172,7 +171,7 @@ def np_to_pa_dtype(dtype):
 def apply_reduce(fn, inp):
     # allocate output+temp array
     outsz = libgdf.gdf_reduce_optimal_output_size()
-    out = cuda.device_array(outsz, dtype=inp.dtype)
+    out = rmm.device_array(outsz, dtype=inp.dtype)
     # call reduction
     fn(inp.cffi_view, unwrap_devary(out), outsz)
     # return 1st element
@@ -209,58 +208,21 @@ _join_method_api = {
 }
 
 
-def _make_mem_finalizer(dtor, bytesize):
-    """Make memory finalizer for externally allocated memory
-    """
-    def mem_finalize(context, handle):
-        deallocations = context.deallocations
-
-        def core():
-            deallocations.add_item(dtor, handle, size=bytesize)
-
-        return core
-
-    return mem_finalize
-
-
-def _as_numba_devarray(intaddr, nelem, dtype, cb_dtor=None):
-    # Handle Datetime Column
-    if dtype == np.datetime64:
-        dtype = np.dtype('datetime64[ms]')
-    else:
-        dtype = np.dtype(dtype)
-    addr = ctypes.c_uint64(intaddr)
-    elemsize = dtype.itemsize
-    datasize = elemsize * nelem
-    finalizer = (_make_mem_finalizer(cb_dtor, datasize))
-    ctx = cuda.current_context()
-    if cb_dtor is None:
-        memptr = cuda.driver.MemoryPointer(context=ctx,
-                                           pointer=addr, size=datasize,
-                                           )
-    else:
-        memptr = cuda.driver.MemoryPointer(context=ctx,
-                                           pointer=addr, size=datasize,
-                                           finalizer=finalizer(ctx, addr)
-                                           )
-    return cuda.devicearray.DeviceNDArray(shape=(nelem,), strides=(elemsize,),
-                                          dtype=dtype, gpu_data=memptr)
-
-
 def cffi_view_to_column_mem(cffi_view):
-    data = _as_numba_devarray(intaddr=int(ffi.cast("uintptr_t",
-                                                   cffi_view.data)),
-                              nelem=cffi_view.size,
-                              dtype=gdf_to_np_dtype(cffi_view.dtype),
-                              cb_dtor=cuda.driver.driver.cuMemFree)
+    intaddr = int(ffi.cast("uintptr_t", cffi_view.data))
+    data = rmm.device_array_from_ptr(intaddr,
+                                     nelem=cffi_view.size,
+                                     dtype=gdf_to_np_dtype(cffi_view.dtype),
+                                     finalizer=rmm._make_finalizer(intaddr, 0))
 
     if cffi_view.valid:
-        mask = _as_numba_devarray(intaddr=int(ffi.cast("uintptr_t",
-                                              cffi_view.valid)),
-                                  nelem=calc_chunk_size(cffi_view.size,
-                                                        mask_bitsize),
-                                  dtype=mask_dtype,
-                                  cb_dtor=cuda.driver.driver.cuMemFree)
+        intaddr = int(ffi.cast("uintptr_t", cffi_view.valid))
+        mask = rmm.device_array_from_ptr(intaddr,
+                                         nelem=calc_chunk_size(cffi_view.size,
+                                                               mask_bitsize),
+                                         dtype=mask_dtype,
+                                         finalizer=rmm._make_finalizer(intaddr,
+                                                                       0))
     else:
         mask = None
 
@@ -307,15 +269,13 @@ def apply_join(col_lhs, col_rhs, how, method='hash'):
 
     # Extract result
 
-    # yield ((ary[0], ary[1]) if datasize > 0 else (ary, ary))
+    left = rmm.device_array_from_ptr(ptr=col_result_l.data,
+                                     nelem=col_result_l.size,
+                                     dtype=np.int32)
 
-    left = _as_numba_devarray(intaddr=int(ffi.cast("uintptr_t",
-                                                   col_result_l.data)),
-                              nelem=col_result_l.size, dtype=np.int32)
-
-    right = _as_numba_devarray(intaddr=int(ffi.cast("uintptr_t",
-                                                    col_result_r.data)),
-                               nelem=col_result_r.size, dtype=np.int32)
+    right = rmm.device_array_from_ptr(ptr=col_result_r.data,
+                                      nelem=col_result_r.size,
+                                      dtype=np.int32)
 
     yield(left, right)
 
@@ -382,17 +342,19 @@ def libgdf_join(col_lhs, col_rhs, on, how, method='sort'):
     valids = []
 
     for col in result_cols:
-        res.append(_as_numba_devarray(intaddr=int(ffi.cast("uintptr_t",
-                                                           col.data)),
-                                      nelem=col.size,
-                                      dtype=gdf_to_np_dtype(col.dtype),
-                                      cb_dtor=cuda.driver.driver.cuMemFree))
-        valids.append(_as_numba_devarray(intaddr=int(ffi.cast("uintptr_t",
-                                                              col.valid)),
-                                         nelem=calc_chunk_size(col.size,
-                                                               mask_bitsize),
-                                         dtype=mask_dtype,
-                                         cb_dtor=cuda.driver.driver.cuMemFree))
+        intaddr = int(ffi.cast("uintptr_t", col.data))
+        res.append(rmm.device_array_from_ptr(ptr=intaddr,
+                                             nelem=col.size,
+                                             dtype=gdf_to_np_dtype(col.dtype),
+                                             finalizer=rmm._make_finalizer(
+                                                 intaddr, 0)))
+        intaddr = int(ffi.cast("uintptr_t", col.valid))
+        valids.append(rmm.device_array_from_ptr(ptr=intaddr,
+                                                nelem=calc_chunk_size(
+                                                    col.size, mask_bitsize),
+                                                dtype=mask_dtype,
+                                                finalizer=rmm._make_finalizer(
+                                                    intaddr, 0)))
 
     return res, valids
 
@@ -456,7 +418,7 @@ class SegmentedRadixortPlan(object):
         seg_dtype = np.uint32
         segsize_limit = 2 ** 16 - 1
 
-        d_fullsegs = cuda.device_array(segments.size + 1, dtype=seg_dtype)
+        d_fullsegs = rmm.device_array(segments.size + 1, dtype=seg_dtype)
         d_begins = d_fullsegs[:-1]
         d_ends = d_fullsegs[1:]
 
@@ -589,6 +551,16 @@ def nvtx_range_pop():
     """ Demarcate the end of the inner-most range.
     """
     libgdf.gdf_nvtx_range_pop()
+
+
+def rmm_initialize():
+    rmm.initialize()
+    return True
+
+
+def rmm_finalize():
+    rmm.finalize()
+    return True
 
 
 _GDF_QUANTILE_METHODS = {

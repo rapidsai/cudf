@@ -6,6 +6,8 @@ from numba.utils import pysignature, exec_
 from numba import six
 from numba import cuda
 
+from librmm_cffi import librmm as rmm
+
 from pygdf.docutils import docfmt_partial
 from pygdf import cudautils
 from pygdf.series import Series
@@ -93,7 +95,7 @@ class ApplyKernelCompilerBase(object):
         # Allocate output columns
         outputs = {}
         for k, dt in self.outcols.items():
-            outputs[k] = cuda.device_array(len(df), dtype=dt)
+            outputs[k] = rmm.device_array(len(df), dtype=dt)
         # Bind argument
         args = {}
         for dct in [inputs, outputs, self.kwargs]:

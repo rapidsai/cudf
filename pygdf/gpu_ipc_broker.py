@@ -8,6 +8,8 @@ import socket
 import threading
 
 from numba import cuda
+from librmm_cffi import librmm as rmm
+
 
 try:
     import zmq
@@ -181,7 +183,7 @@ def _request_transfer(key, remoteinfo):
         # Open IPC and copy to local context
 
         with ipch as data:
-            copied = cuda.device_array_like(data)
+            copied = rmm.device_array_like(data)
             copied.copy_to_device(data)
 
         # Release
@@ -192,7 +194,7 @@ def _request_transfer(key, remoteinfo):
         logger.info("request by NET: %s->%s", theiraddr, myaddr)
         socket.send(pickle.dumps(('NET', key)))
         rcv = socket.recv()
-        output = cuda.to_device(pickle.loads(rcv))
+        output = rmm.to_device(pickle.loads(rcv))
         # Release
         _request_drop(socket, key)
         return output
