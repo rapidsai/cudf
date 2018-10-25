@@ -5,6 +5,6 @@
 	path = libgdf/thirdparty/moderngpu
 	url = https://github.com/moderngpu/moderngpu.git
 [submodule "thirdparty/cnmem"]
-	path = thirdparty/cnmem
+	path = libgdf/thirdparty/cnmem
 	url = https://github.com/NVIDIA/cnmem.git
 
