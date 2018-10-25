@@ -117,9 +117,9 @@ gdf_error expand_buffer(
     }
     data_type * new_buffer{nullptr};
     data_type * old_buffer = *buffer;
-    CUDA_TRY( cudaMalloc(&new_buffer, requested_size*sizeof(data_type)) );
+    RMM_TRY( rmmAlloc((void**)&new_buffer, requested_size*sizeof(data_type), 0) );
     CUDA_TRY( cudaMemcpy(new_buffer, old_buffer, buffer_size*sizeof(data_type), cudaMemcpyDeviceToDevice) );
-    CUDA_TRY( cudaFree(old_buffer) );
+    RMM_TRY( rmmFree(old_buffer, 0) );
     *buffer = new_buffer;
     *buffer_capacity = requested_size;
 

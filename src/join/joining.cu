@@ -180,15 +180,13 @@ gdf_error sort_join<JoinType::LEFT_JOIN>(gdf_column *leftcol, gdf_column *rightc
 /* ----------------------------------------------------------------------------*/
 template <typename data_type,
           typename size_type>
-void allocValueBuffer(
-        data_type ** buffer,
-        const size_type buffer_length,
-        const data_type value) {
-    cudaMalloc(buffer, buffer_length*sizeof(data_type));
-    thrust::fill(
-            thrust::device,
-            *buffer, *buffer + buffer_length,
-            value);
+gdf_error allocValueBuffer(data_type ** buffer,
+                           const size_type buffer_length,
+                           const data_type value) 
+{
+    RMM_TRY( rmmAlloc((void**)buffer, buffer_length*sizeof(data_type), 0) );
+    thrust::fill(thrust::device, *buffer, *buffer + buffer_length, value);
+    return GDF_SUCCESS;
 }
 
 /* --------------------------------------------------------------------------*/
@@ -203,13 +201,12 @@ void allocValueBuffer(
 /* ----------------------------------------------------------------------------*/
 template <typename data_type,
           typename size_type>
-void allocSequenceBuffer(
-        data_type ** buffer,
-        const size_type buffer_length) {
-    cudaMalloc(buffer, buffer_length*sizeof(data_type));
-    thrust::sequence(
-            thrust::device,
-            *buffer, *buffer + buffer_length);
+gdf_error allocSequenceBuffer(data_type ** buffer,
+                         const size_type buffer_length) 
+{
+    RMM_TRY( rmmAlloc((void**)buffer, buffer_length*sizeof(data_type), 0) );
+    thrust::sequence(thrust::device, *buffer, *buffer + buffer_length);
+    return GDF_SUCCESS;
 }
 
 /* --------------------------------------------------------------------------*/
@@ -251,12 +248,12 @@ gdf_error trivial_full_join(
     }
     if (left_size == 0) {
         allocValueBuffer(&l_ptr, right_size,
-                static_cast<output_index_type>(-1));
+                         static_cast<output_index_type>(-1));
         allocSequenceBuffer(&r_ptr, right_size);
         result_size = right_size;
     } else if (right_size == 0) {
         allocValueBuffer(&r_ptr, left_size,
-                static_cast<output_index_type>(-1));
+                         static_cast<output_index_type>(-1));
         allocSequenceBuffer(&l_ptr, left_size);
         result_size = left_size;
     }
