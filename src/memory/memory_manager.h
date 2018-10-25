@@ -114,21 +114,8 @@ namespace rmm
 
         static Logger& getLogger() { return getInstance().logger; }
 
-        enum AllocationMode {
-            CudaDefaultAllocation = 0, // use cudaMalloc
-            PoolAllocation
-        };
-
-        struct Options {
-            AllocationMode allocation_mode;
-            bool           enable_logging;
-        };
-
-        //static void setAllocationMode(AllocationMode m) { getInstance().allocation_mode = m; }
-        //static bool getAllocationMode() { return getInstance().allocation_mode; }
-
-        static void setOptions(Options &options) { getInstance().options = options; }
-        static Options getOptions() { return getInstance().options; }
+        static void setOptions(const rmmOptions_t &options) { getInstance().options = options; }
+        static rmmOptions_t getOptions() { return getInstance().options; }
 
         void finalize() {
             std::lock_guard<std::mutex> guard(streams_mutex);
@@ -156,7 +143,7 @@ namespace rmm
         }
 
     private:
-        Manager() : options({ CudaDefaultAllocation, false }) {}
+        Manager() : options({ CudaDefaultAllocation, false, 0 }) {}
         ~Manager() = default;
         Manager(const Manager&) = delete;
         Manager& operator=(const Manager&) = delete;
@@ -165,6 +152,6 @@ namespace rmm
         std::set<cudaStream_t> registered_streams;
         Logger logger;
 
-        Options options;
+        rmmOptions_t options;
     };    
 }

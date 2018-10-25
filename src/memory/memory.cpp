@@ -109,7 +109,7 @@ namespace rmm
 
     inline bool usePoolAllocator()
     {
-        return Manager::getOptions().allocation_mode == Manager::PoolAllocation;
+        return Manager::getOptions().allocation_mode == PoolAllocation;
     }
 };
 
@@ -135,22 +135,19 @@ const char * rmmGetErrorString(rmmError_t errcode) {
 }
 
 // Initialize memory manager state and storage.
-rmmError_t rmmInitialize(RMMOptions *options)
+rmmError_t rmmInitialize(rmmOptions_t *options)
 {
     if (0 != options)
     {
-        rmm::Manager::Options opt {
-            options->use_pool_allocator ? rmm::Manager::PoolAllocation : rmm::Manager::CudaDefaultAllocation,
-            options->enable_memory_logging
-            };
-        rmm::Manager::setOptions(opt);
+        rmm::Manager::setOptions(*options);
     }
 
     if (rmm::usePoolAllocator())
     {
         cnmemDevice_t dev;
         RMM_CHECK_CUDA( cudaGetDevice(&(dev.device)) );
-        dev.size = 0; // defaults to half GPU memory
+        // Note: cnmem defaults to half GPU memory
+        dev.size = rmm::Manager::getOptions().initial_pool_size; 
         dev.numStreams = 1;
         cudaStream_t streams[1]; streams[0] = 0;
         dev.streams = streams;

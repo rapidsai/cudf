@@ -7,8 +7,7 @@
 struct GdfTest : public ::testing::Test
 {
     static void SetUpTestCase() {
-        RMMOptions opts{false, false};
-        ASSERT_EQ( RMM_SUCCESS, rmmInitialize(&opts) );
+        ASSERT_EQ( RMM_SUCCESS, rmmInitialize(nullptr) );
     }
 
     static void TearDownTestCase() {

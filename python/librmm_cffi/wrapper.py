@@ -1,7 +1,21 @@
+# Copyright (c) 2018, NVIDIA CORPORATION.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import numpy as np
 from numba import cuda
 import ctypes
-
+from librmm_cffi import librmm_config as rmm_cfg
 
 class RMMError(Exception):
     def __init__(self, errcode, msg):
@@ -56,15 +70,25 @@ class _RMMWrapper(object):
             msg = errname
         return errname, msg
 
-    def initialize(self, use_pool_allocator=False, enable_logging=False):
-        opts = self._ffi.new("RMMOptions *",
-                             [use_pool_allocator, enable_logging])
+    def initialize(self):
+        """Initializes the RMM library using the options set in the 
+           librmm_config module
+        """
+        opts = self._ffi.new("rmmOptions_t *",
+                             [rmm_cfg.use_pool_allocator, 
+                              rmm_cfg.initial_pool_size, 
+                              rmm_cfg.enable_logging])
         return self.rmmInitialize(opts)
 
     def finalize(self):
+        """Finalizes the RMM library, freeing all allocated memory
+        """
         return self.rmmFinalize()
 
     def csv_log(self):
+        """Returns a CSV log of all events logged by RMM, if logging is 
+           enabled
+        """
         logsize = self.rmmLogSize()
         buf = self._ffi.new("char[]", logsize)
         self.rmmGetLog(buf, logsize)
@@ -195,14 +219,14 @@ class _RMMWrapper(object):
                                                        array_desc=desc)
 
     def _make_finalizer(self, handle, stream):
-            """Factory to make the finalizer function.
-            We need to bind *handle* and *stream* into the actual finalizer,
-            which takes no arg
+        """Factory to make the finalizer function.
+        We need to bind *handle* and *stream* into the actual finalizer,
+        which takes no arg
+        """
+        def finalizer():
+            """Invoked when the MemoryPointer is freed
             """
-            def finalizer():
-                """Invoked when the MemoryPointer is freed
-                """
-                cptr = self._ffi.cast("void*", handle)
-                return self._api.rmmFree(cptr, self._ffi.cast("cudaStream_t",
-                                                              stream))
-            return finalizer
+            cptr = self._ffi.cast("void*", handle)
+            return self._api.rmmFree(cptr, self._ffi.cast("cudaStream_t",
+                                                            stream))
+        return finalizer
