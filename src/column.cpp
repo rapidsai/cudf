@@ -23,6 +23,7 @@
 #include <gdf/utils.h>
 #include <gdf/errorutils.h>
 #include <cuda_runtime_api.h>
+#include <rmm.h>
 
 // forward decl -- see validops.cu
 gdf_error gdf_mask_concat(gdf_valid_type *output_mask,
@@ -220,8 +221,8 @@ gdf_error gdf_column_view_augmented(gdf_column *column,
  * ---------------------------------------------------------------------------**/
 gdf_error gdf_column_free(gdf_column *column) 
 {
-  CUDA_TRY( cudaFree(column->data)  );
-  CUDA_TRY( cudaFree(column->valid) );
+  RMM_TRY( rmmFree(column->data, 0)  );
+  RMM_TRY( rmmFree(column->valid, 0) );
   return GDF_SUCCESS;
 }
 

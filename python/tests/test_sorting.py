@@ -6,6 +6,7 @@ import numpy as np
 from numba import cuda
 
 from libgdf_cffi import ffi, libgdf
+from librmm_cffi import librmm as rmm
 
 from .utils import new_column, unwrap_devary, get_dtype, gen_rand
 
@@ -38,13 +39,13 @@ def test_radixsort(nelem, descending, dtype):
 
     # Make data
     key = gen_rand(dtype, nelem)
-    d_key = cuda.to_device(key)
+    d_key = rmm.to_device(key)
     col_key = new_column()
     libgdf.gdf_column_view(col_key, unwrap_devary(d_key), ffi.NULL, nelem,
                            get_dtype(d_key.dtype))
 
     val = np.arange(nelem, dtype=np.int64)
-    d_val = cuda.to_device(val)
+    d_val = rmm.to_device(val)
     col_val = new_column()
     libgdf.gdf_column_view(col_val, unwrap_devary(d_val), ffi.NULL, nelem,
                            get_dtype(d_val.dtype))

@@ -25,7 +25,7 @@
 #include "../gdf_table.cuh"
 #include "../nvtx_utils.h"
 
-
+#include "rmm.h"
 
 using namespace mgpu;
 
@@ -107,7 +107,7 @@ gdf_error sort_join_typed(gdf_column *leftcol, gdf_column *rightcol,
   GDF_REQUIRE(!leftcol->valid, GDF_VALIDITY_UNSUPPORTED);
   GDF_REQUIRE(!rightcol->valid, GDF_VALIDITY_UNSUPPORTED);
 
-  standard_context_t context(false);
+  rmm_mgpu_context_t context(false);
   SortJoin<join_type> sort_based_join;
   auto output = sort_based_join(static_cast<T*>(leftcol->data), leftcol->size,
                                        static_cast<T*>(rightcol->data), rightcol->size,
@@ -180,15 +180,13 @@ gdf_error sort_join<JoinType::LEFT_JOIN>(gdf_column *leftcol, gdf_column *rightc
 /* ----------------------------------------------------------------------------*/
 template <typename data_type,
           typename size_type>
-void allocValueBuffer(
-        data_type ** buffer,
-        const size_type buffer_length,
-        const data_type value) {
-    cudaMalloc(buffer, buffer_length*sizeof(data_type));
-    thrust::fill(
-            thrust::device,
-            *buffer, *buffer + buffer_length,
-            value);
+gdf_error allocValueBuffer(data_type ** buffer,
+                           const size_type buffer_length,
+                           const data_type value) 
+{
+    RMM_TRY( rmmAlloc((void**)buffer, buffer_length*sizeof(data_type), 0) );
+    thrust::fill(thrust::device, *buffer, *buffer + buffer_length, value);
+    return GDF_SUCCESS;
 }
 
 /* --------------------------------------------------------------------------*/
@@ -203,13 +201,12 @@ void allocValueBuffer(
 /* ----------------------------------------------------------------------------*/
 template <typename data_type,
           typename size_type>
-void allocSequenceBuffer(
-        data_type ** buffer,
-        const size_type buffer_length) {
-    cudaMalloc(buffer, buffer_length*sizeof(data_type));
-    thrust::sequence(
-            thrust::device,
-            *buffer, *buffer + buffer_length);
+gdf_error allocSequenceBuffer(data_type ** buffer,
+                         const size_type buffer_length) 
+{
+    RMM_TRY( rmmAlloc((void**)buffer, buffer_length*sizeof(data_type), 0) );
+    thrust::sequence(thrust::device, *buffer, *buffer + buffer_length);
+    return GDF_SUCCESS;
 }
 
 /* --------------------------------------------------------------------------*/
@@ -251,12 +248,12 @@ gdf_error trivial_full_join(
     }
     if (left_size == 0) {
         allocValueBuffer(&l_ptr, right_size,
-                static_cast<output_index_type>(-1));
+                         static_cast<output_index_type>(-1));
         allocSequenceBuffer(&r_ptr, right_size);
         result_size = right_size;
     } else if (right_size == 0) {
         allocValueBuffer(&r_ptr, left_size,
-                static_cast<output_index_type>(-1));
+                         static_cast<output_index_type>(-1));
         allocSequenceBuffer(&l_ptr, left_size);
         result_size = left_size;
     }
@@ -420,15 +417,15 @@ gdf_error construct_join_output_df(
     for (int i = 0; i < left_table_end; ++i) {
         gdf_column_view(result_cols[i], nullptr, nullptr, join_size, lnonjoincol[i]->dtype);
         int col_width; get_column_byte_width(result_cols[i], &col_width);
-        CUDA_TRY( cudaMalloc(&(result_cols[i]->data), col_width * join_size) );
-        CUDA_TRY( cudaMalloc(&(result_cols[i]->valid), sizeof(gdf_valid_type)*gdf_get_num_chars_bitmask(join_size)) );
+        RMM_TRY( rmmAlloc((void**)&(result_cols[i]->data), col_width * join_size, 0) ); // TODO: non-default stream?
+        RMM_TRY( rmmAlloc((void**)&(result_cols[i]->valid), sizeof(gdf_valid_type)*gdf_get_num_chars_bitmask(join_size), 0) );
         CUDA_TRY( cudaMemset(result_cols[i]->valid, 0, sizeof(gdf_valid_type)*gdf_get_num_chars_bitmask(join_size)) );
     }
     for (int i = right_table_begin; i < result_num_cols; ++i) {
         gdf_column_view(result_cols[i], nullptr, nullptr, join_size, rnonjoincol[i - right_table_begin]->dtype);
         int col_width; get_column_byte_width(result_cols[i], &col_width);
-        CUDA_TRY( cudaMalloc(&(result_cols[i]->data), col_width * join_size) );
-        CUDA_TRY( cudaMalloc(&(result_cols[i]->valid), sizeof(gdf_valid_type)*gdf_get_num_chars_bitmask(join_size)) );
+        RMM_TRY( rmmAlloc((void**)&(result_cols[i]->data), col_width * join_size, 0) ); // TODO: non-default stream?
+        RMM_TRY( rmmAlloc((void**)&(result_cols[i]->valid), sizeof(gdf_valid_type)*gdf_get_num_chars_bitmask(join_size), 0) );
         CUDA_TRY( cudaMemset(result_cols[i]->valid, 0, sizeof(gdf_valid_type)*gdf_get_num_chars_bitmask(join_size)) );
     }
     //create joined output column data buffers
@@ -436,8 +433,8 @@ gdf_error construct_join_output_df(
         int i = left_table_end + join_index;
         gdf_column_view(result_cols[i], nullptr, nullptr, join_size, left_cols[left_join_cols[join_index]]->dtype);
         int col_width; get_column_byte_width(result_cols[i], &col_width);
-        CUDA_TRY( cudaMalloc(&(result_cols[i]->data), col_width * join_size) );
-        CUDA_TRY( cudaMalloc(&(result_cols[i]->valid), sizeof(gdf_valid_type)*gdf_get_num_chars_bitmask(join_size)) );
+        RMM_TRY( rmmAlloc((void**)&(result_cols[i]->data), col_width * join_size, 0) ); // TODO: non-default stream?
+        RMM_TRY( rmmAlloc((void**)&(result_cols[i]->valid), sizeof(gdf_valid_type)*gdf_get_num_chars_bitmask(join_size), 0) );
         CUDA_TRY( cudaMemset(result_cols[i]->valid, 0, sizeof(gdf_valid_type)*gdf_get_num_chars_bitmask(join_size)) );
     }
 
@@ -521,8 +518,8 @@ gdf_error join_call_compute_df(
     using gdf_col_pointer = typename std::unique_ptr<gdf_column, std::function<void(gdf_column*)>>;
     auto gdf_col_deleter = [](gdf_column* col){
         col->size = 0;
-        if (col->data)  { cudaFree(col->data);  }
-        if (col->valid) { cudaFree(col->valid); }
+        if (col->data)  { rmmFree(col->data, 0);  }
+        if (col->valid) { rmmFree(col->valid, 0); }
     };
     gdf_col_pointer l_index_temp, r_index_temp;
 

@@ -19,19 +19,20 @@
  #include <vector>
  
  #include <thrust/device_vector.h>
+ #include "thrust_rmm_allocator.h"
  
  #include "gtest/gtest.h"
+ #include "gdf_test_fixtures.h"
  #include <gdf/gdf.h>
  #include <gdf/cffi/functions.h>
  
- struct gdf_hashing_test : public ::testing::Test {
+ // thrust::device_vector set to use rmmAlloc and rmmFree.
+ template <typename T>
+ using Vector = thrust::device_vector<T, rmm_allocator<T>>;
+
+ struct gdf_hashing_test : public GdfTest {};
  
-	 void TearDown() {
- 
-	 }
- };
- 
- TEST(gdf_hashing_test, allDtypesTest) {
+ TEST_F(gdf_hashing_test, allDtypesTest) {
  
 	 int nrows = 5;
 	 int ncols = 6;
@@ -108,17 +109,17 @@
 	 inputData6[3] = 786.34;
 	 inputData6[4] = 343.01;
  
-	 thrust::device_vector<gdf_valid_type> inputValidDev(1,0);
+	 Vector<gdf_valid_type> inputValidDev(1,0);
  
-	 thrust::device_vector<int8_t> intputDataDev1(inputData1);
-	 thrust::device_vector<int16_t> intputDataDev2(inputData2);
-	 thrust::device_vector<int32_t> intputDataDev3(inputData3);
-	 thrust::device_vector<int64_t> intputDataDev4(inputData4);
-	 thrust::device_vector<float> intputDataDev5(inputData5);
-	 thrust::device_vector<double> intputDataDev6(inputData6);
+	 Vector<int8_t> intputDataDev1(inputData1);
+	 Vector<int16_t> intputDataDev2(inputData2);
+	 Vector<int32_t> intputDataDev3(inputData3);
+	 Vector<int64_t> intputDataDev4(inputData4);
+	 Vector<float> intputDataDev5(inputData5);
+	 Vector<double> intputDataDev6(inputData6);
  
-	 thrust::device_vector<int32_t> outDataDev(nrows);
-	 thrust::device_vector<gdf_valid_type> outputValidDev(1,0);
+	 Vector<int32_t> outDataDev(nrows);
+	 Vector<gdf_valid_type> outputValidDev(1,0);
  
 	 inputCol[0]->data = thrust::raw_pointer_cast(intputDataDev1.data());
 	 inputCol[0]->valid = thrust::raw_pointer_cast(inputValidDev.data());

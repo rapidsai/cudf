@@ -24,6 +24,11 @@ before_install:
   # install libboost
   - sudo apt-get update -q
   - sudo apt-get install -y libboost-all-dev
+  # install libcuda
+  - echo "deb http://developer.download.nvidia.com/compute/cuda/repos/ubuntu1404/x86_64/ /" | sudo tee -a /etc/apt/sources.list.d/cuda.list
+  - sudo apt-key adv --fetch-keys http://developer.download.nvidia.com/compute/cuda/repos/ubuntu1404/x86_64/7fa2af80.pub
+  - sudo apt-get update -q
+  - sudo apt-get install -y --no-install-recommends cuda-drivers=396.44-1 libcuda1-396
   # install gcc-5
   - echo "deb http://archive.ubuntu.com/ubuntu/ xenial main restricted" | sudo tee -a /etc/apt/sources.list
   - echo "deb http://archive.ubuntu.com/ubuntu/ xenial-updates main restricted" | sudo tee -a /etc/apt/sources.list

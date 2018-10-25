@@ -22,9 +22,11 @@
 #include <gdf/gdf.h>
 #include <gdf/errorutils.h>
 #include "gdf/gdf_io.h"
+#include "rmm.h"
 
 #include <thrust/scan.h>
 #include <thrust/execution_policy.h>
+#include "../../thrust_rmm_allocator.h"
 
 using namespace std;
 
@@ -103,7 +105,7 @@ gdf_error gdf_to_csr(gdf_column **gdfData, int numCol, csr_gdf *csrReturn) {
 
 	// Allocate space for the offset - this will eventually be IA - dtype is long since the sum of all column elements could be larger than int32
 	gdf_size_type * offsets;
-    CUDA_TRY(cudaMalloc(&offsets, (numRows + 2) * sizeof(int64_t)));
+    RMM_TRY(rmmAlloc((void**)&offsets, (numRows + 2) * sizeof(int64_t), 0)); // TODO: non-default stream?
     CUDA_TRY(cudaMemset(offsets, 0, ( sizeof(int64_t) * (numRows + 2) ) ));
 
     // do a pass over each columns, and have each column updates the row count
@@ -114,9 +116,11 @@ gdf_error gdf_to_csr(gdf_column **gdfData, int numCol, csr_gdf *csrReturn) {
 		determineValidRecCount<<<blocks, threads>>>(gdfData[x]->valid, numRows, numCol, offsets);
 	}
 
+	rmm_temp_allocator allocator(0); // TODO: non-default stream?
+
 	//--------------------------------------------------------------------------------------
 	// Now do an exclusive scan to compute the offsets for where to write data
-    thrust::exclusive_scan(thrust::device, offsets, (offsets + numRows + 1), offsets);
+    thrust::exclusive_scan(thrust::cuda::par(allocator).on(0), offsets, (offsets + numRows + 1), offsets);
 
 	//--------------------------------------------------------------------------------------
     // get the number of elements - NNZ, this is the last item in the array
@@ -128,11 +132,11 @@ gdf_error gdf_to_csr(gdf_column **gdfData, int numCol, csr_gdf *csrReturn) {
 	//--------------------------------------------------------------------------------------
 	// now start creating output data
     size_t * IA;
-    CUDA_TRY(cudaMalloc(&IA, (numRows + 2) * sizeof(gdf_size_type)));
+    RMM_TRY(rmmAlloc((void**)&IA, (numRows + 2) * sizeof(gdf_size_type), 0));
     CUDA_TRY(cudaMemcpy(IA, offsets, ( sizeof(gdf_size_type) * (numRows + 2) ), cudaMemcpyDeviceToDevice) );
 
     int64_t * 	JA;
-    CUDA_TRY( cudaMalloc(&JA, (sizeof(int64_t) * nnz)));
+    RMM_TRY( rmmAlloc((void**)&JA, (sizeof(int64_t) * nnz), 0));
 
     //----------------------------------------------------------------------------------
     // Now just missing A and the moving of data
@@ -168,13 +172,13 @@ gdf_error gdf_to_csr(gdf_column **gdfData, int numCol, csr_gdf *csrReturn) {
     		status = runConverter<double>(gdfData, csrReturn, offsets);
     	    break;
     	default:
-    		cudaFree(IA);
-    		cudaFree(JA);
-    		cudaFree(offsets);
+    		RMM_TRY(rmmFree(IA, 0));
+    		RMM_TRY(rmmFree(JA, 0));
+    		RMM_TRY(rmmFree(offsets, 0));
     		return GDF_UNSUPPORTED_DTYPE;
     }
 
-    cudaFree(offsets);
+    RMM_TRY(rmmFree(offsets, 0));
 
 	return status;
 }
@@ -202,7 +206,7 @@ gdf_error runConverter(gdf_column **gdfData, csr_gdf *csrReturn, gdf_size_type *
     int blocks  = (numRows + threads - 1) / threads;
 
 	T *			A;
-	CUDA_TRY(cudaMalloc(&A, (sizeof(T) * csrReturn->nnz)));
+	RMM_TRY(rmmAlloc((void**)&A, (sizeof(T) * csrReturn->nnz), 0));
 	CUDA_TRY(cudaMemset(A, 0, (sizeof(T) * csrReturn->nnz)));
 
     // Now start moving the data and creating the CSR

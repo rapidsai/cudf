@@ -20,17 +20,16 @@
 #include <type_traits>
 #include <memory>
 
-#include <thrust/device_vector.h>
-#include <thrust/sort.h>
-#include <thrust/gather.h>
-
 #include "gtest/gtest.h"
 #include "gmock/gmock.h"
+#include "gdf_test_fixtures.h"
 #include <gdf/gdf.h>
 #include <gdf/cffi/functions.h>
 
 #include "../../join/joining.h"
 #include "../../util/bit_util.cuh"
+
+#include "rmm.h"
 
 // See this header for all of the recursive handling of tuples of vectors
 #include "tuple_vectors.h"
@@ -65,7 +64,7 @@ namespace std{
 // A new instance of this class will be created for each *TEST(JoinTest, ...)
 // Put all repeated setup and validation stuff here
 template <class test_parameters>
-struct JoinTest : public testing::Test
+struct JoinTest : public GdfTest
 {
   // The join type is passed via a member of the template argument class
   const join_op op = test_parameters::op;
@@ -136,17 +135,17 @@ struct JoinTest : public testing::Test
 
     // Create a new instance of a gdf_column with a custom deleter that will free
     // the associated device memory when it eventually goes out of scope
-    auto deleter = [](gdf_column* col){col->size = 0; if (col->data) cudaFree(col->data); if (col->valid) cudaFree(col->valid); };
+    auto deleter = [](gdf_column* col){col->size = 0; rmmFree(col->data, 0); rmmFree(col->valid, 0); };
     gdf_col_pointer the_column{new gdf_column, deleter};
 
     // Allocate device storage for gdf_column and copy contents from host_vector
-    cudaMalloc(&(the_column->data), host_vector.size() * sizeof(col_type));
+    rmmAlloc(&(the_column->data), host_vector.size() * sizeof(col_type), 0);
     cudaMemcpy(the_column->data, host_vector.data(), host_vector.size() * sizeof(col_type), cudaMemcpyHostToDevice);
 
     // Allocate device storage for gdf_column.valid
     if (host_valid != nullptr) {
       int valid_size = gdf_get_num_chars_bitmask(host_vector.size());
-      cudaMalloc(&(the_column->valid), valid_size);
+      rmmAlloc((void**)&(the_column->valid), valid_size, 0);
       cudaMemcpy(the_column->valid, host_valid, valid_size, cudaMemcpyHostToDevice);
     } else {
         the_column->valid = nullptr;

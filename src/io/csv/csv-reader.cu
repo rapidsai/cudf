@@ -56,6 +56,8 @@
 #include "gdf/gdf_io.h"
 #include "../../nvtx_utils.h"
 
+#include "rmm.h"
+
 constexpr int32_t HASH_SEED = 33;
 
 using namespace std;
@@ -441,47 +443,21 @@ gdf_error allocateGdfDataSpace(gdf_column *gdf) {
 	long num_bitmaps = (N + 31) / 8;			// 8 bytes per bitmap
 
 	//--- allocate space for the valid bitmaps
-	CUDA_TRY(cudaMalloc(&gdf->valid, (sizeof(gdf_valid_type) 	* num_bitmaps)));
+	RMM_TRY( rmmAlloc((void**)&gdf->valid, (sizeof(gdf_valid_type) 	* num_bitmaps), 0) );
 	CUDA_TRY(cudaMemset(gdf->valid, 0, (sizeof(gdf_valid_type) 	* num_bitmaps)) );
 
 	//--- Allocate space for the data
-	switch(gdf->dtype) {
-		case gdf_dtype::GDF_INT8:
-			CUDA_TRY(cudaMalloc(&gdf->data, (sizeof(int8_t) * N)));
-			break;
-		case gdf_dtype::GDF_INT16:
-			CUDA_TRY(cudaMalloc(&gdf->data, (sizeof(int16_t) * N)));
-			break;
-		case gdf_dtype::GDF_INT32:
-			CUDA_TRY(cudaMalloc(&gdf->data, (sizeof(int32_t) * N)));
-			break;
-		case gdf_dtype::GDF_INT64:
-			CUDA_TRY(cudaMalloc(&gdf->data, (sizeof(int64_t) * N)));
-			break;
-		case gdf_dtype::GDF_FLOAT32:
-			CUDA_TRY(cudaMalloc(&gdf->data, (sizeof(float) * N)));
-			break;
-		case gdf_dtype::GDF_FLOAT64:
-			CUDA_TRY(cudaMalloc(&gdf->data, (sizeof(double) * N)));
-			break;
-		case gdf_dtype::GDF_DATE32:
-			CUDA_TRY(cudaMalloc(&gdf->data, (sizeof(gdf_date32) * N)));
-			break;
-		case gdf_dtype::GDF_DATE64:
-			CUDA_TRY(cudaMalloc(&gdf->data, (sizeof(gdf_date64) * N)));
-			break;
-		case gdf_dtype::GDF_TIMESTAMP:
-			CUDA_TRY(cudaMalloc(&gdf->data, (sizeof(int64_t) * N)));
-			break;
-		case gdf_dtype::GDF_CATEGORY:
-			CUDA_TRY(cudaMalloc(&gdf->data, (sizeof(gdf_category) * N)));
-			break;
-		case gdf_dtype::GDF_STRING:
-			// Memory for gdf->data allocated by string class eventually
-			break;
-		default:
-			return GDF_UNSUPPORTED_DTYPE;
+	int bytes_per_element = -1;
+	gdf_error result = get_column_byte_width(gdf, &bytes_per_element);
+	
+	// TODO replace this once GDF_CATEGORY is added to get_column_byte_width
+	if (GDF_UNSUPPORTED_DTYPE == result) 
+	{ 
+		if (gdf->dtype == GDF_CATEGORY) bytes_per_element = sizeof(gdf_category);
+		else return result;
 	}
+	
+	RMM_TRY( rmmAlloc((void**)&gdf->data, bytes_per_element * N, 0) );
 
 	return gdf_error::GDF_SUCCESS;
 }

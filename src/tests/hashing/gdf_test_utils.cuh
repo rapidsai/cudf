@@ -53,11 +53,11 @@ gdf_col_pointer create_gdf_column(std::vector<col_type> const & host_vector)
 
   // Create a new instance of a gdf_column with a custom deleter that will free
   // the associated device memory when it eventually goes out of scope
-  auto deleter = [](gdf_column* col){col->size = 0; cudaFree(col->data);};
+  auto deleter = [](gdf_column* col){col->size = 0; rmmFree(col->data, 0);};
   gdf_col_pointer the_column{new gdf_column, deleter};
 
   // Allocate device storage for gdf_column and copy contents from host_vector
-  cudaMalloc(&(the_column->data), host_vector.size() * sizeof(col_type));
+  rmmAlloc(&(the_column->data), host_vector.size() * sizeof(col_type), 0);
   cudaMemcpy(the_column->data, host_vector.data(), host_vector.size() * sizeof(col_type), cudaMemcpyHostToDevice);
 
   // Fill the gdf_column members

@@ -12,8 +12,8 @@
 #include <gdf/errorutils.h>
 
 #include <thrust/copy.h>
-#include <thrust/device_vector.h>
 #include <thrust/execution_policy.h>
+#include "thrust_rmm_allocator.h"
 
 template<typename T, typename Tout, typename F>
 __global__
@@ -372,10 +372,13 @@ struct DownCasting {
 gdf_error gdf_cast_##VFROM##_to_##VTO(gdf_column *input, gdf_column *output) {                                  \
     GDF_REQUIRE(input->dtype == LTFROM, GDF_UNSUPPORTED_DTYPE);                                                 \
                                                                                                                 \
+    cudaStream_t stream = 0;                                                                                    \
+    rmm_temp_allocator allocator(stream);                                                                       \
+                                                                                                                \
     output->dtype = LTO;                                                                                        \
     if (input->valid && output->valid) {                                                                        \
         gdf_size_type num_chars_bitmask = gdf_get_num_chars_bitmask(input->size);                               \
-        thrust::copy(thrust::device, input->valid, input->valid + num_chars_bitmask, output->valid);            \
+        thrust::copy(thrust::cuda::par(allocator).on(stream), input->valid, input->valid + num_chars_bitmask, output->valid);            \
     }                                                                                                           \
                                                                                                                 \
     /* Handling datetime logical castings */                                                                    \
@@ -406,11 +409,14 @@ gdf_error gdf_cast_##VFROM##_to_##VTO(gdf_column *input, gdf_column *output) {  
 gdf_error gdf_cast_##VFROM##_to_##VTO(gdf_column *input, gdf_column *output, gdf_time_unit time_unit) { \
     GDF_REQUIRE(input->dtype == LTFROM, GDF_UNSUPPORTED_DTYPE);                                         \
                                                                                                         \
+    cudaStream_t stream = 0;                                                                            \
+    rmm_temp_allocator allocator(stream);                                                               \
+                                                                                                        \
     output->dtype = LTO;                                                                                \
     output->dtype_info.time_unit = time_unit;                                                           \
     if (input->valid && output->valid) {                                                                \
         gdf_size_type num_chars_bitmask = gdf_get_num_chars_bitmask(input->size);                       \
-        thrust::copy(thrust::device, input->valid, input->valid + num_chars_bitmask, output->valid);    \
+        thrust::copy(thrust::cuda::par(allocator).on(stream), input->valid, input->valid + num_chars_bitmask, output->valid);    \
     }                                                                                                   \
                                                                                                         \
     /* Handling datetime logical castings */                                                            \

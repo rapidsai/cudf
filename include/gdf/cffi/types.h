@@ -55,10 +55,12 @@ typedef enum {
     GDF_PARTITION_DTYPE_MISMATCH,     /**< Datatype mismatch between columns of input/output in the hash partition function */
     GDF_HASH_TABLE_INSERT_FAILURE,    /**< Failed to insert to hash table, likely because its full */
     GDF_UNSUPPORTED_JOIN_TYPE,        /**< The type of join requested is unsupported */
+    GDF_C_ERROR,                      /**< C error not related to CUDA */
+    GDF_FILE_ERROR,                   /**< error processing sepcified file */      
+    GDF_MEMORYMANAGER_ERROR,          /**< Memory manager error (see memory.h) */
     GDF_UNDEFINED_NVTX_COLOR,         /**< The requested color used to define an NVTX range is not defined */
     GDF_NULL_NVTX_NAME,               /**< The requested name for an NVTX range cannot be nullptr */
-    GDF_C_ERROR,				         	    /**< C error not related to CUDA */
-    GDF_FILE_ERROR,   				        /**< error processing sepcified file */      
+    N_GDF_ERRORS
 } gdf_error;
 
 typedef enum {

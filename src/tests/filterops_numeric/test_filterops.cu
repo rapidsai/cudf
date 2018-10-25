@@ -26,6 +26,7 @@
 #include <cuda_runtime.h>
 #include <tuple>
 #include "helper/utils.cuh"
+#include "gdf_test_fixtures.h"
 
 /*
  ============================================================================
@@ -33,7 +34,9 @@
  ============================================================================
  */
 
-TEST(FilterOperationsTest, usage_example) {
+struct FilterOperationsTest : public GdfTest {};
+
+TEST_F(FilterOperationsTest, usage_example) {
 
     using LeftValueType = int16_t;
     using RightValueType = int16_t;
@@ -108,7 +111,7 @@ void test_filterops_using_templates(gdf_comparison_operator gdf_operator = GDF_E
     }
 }
 
-TEST(FilterOperationsTest, WithInt8AndOthers)
+TEST_F(FilterOperationsTest, WithInt8AndOthers)
 {
     test_filterops_using_templates<int8_t, int8_t>();
     test_filterops_using_templates<int8_t, int16_t>();
@@ -119,7 +122,7 @@ TEST(FilterOperationsTest, WithInt8AndOthers)
     test_filterops_using_templates<int8_t, double>();
 }
 
-TEST(FilterOperationsTest, WithInt16AndOthers)
+TEST_F(FilterOperationsTest, WithInt16AndOthers)
 {
     test_filterops_using_templates<int16_t, int8_t>();
     test_filterops_using_templates<int16_t, int16_t>();
@@ -130,7 +133,7 @@ TEST(FilterOperationsTest, WithInt16AndOthers)
    
 }
 
-TEST(FilterOperationsTest, WithInt32AndOthers)
+TEST_F(FilterOperationsTest, WithInt32AndOthers)
 {
     test_filterops_using_templates<int32_t, int8_t>();
     test_filterops_using_templates<int32_t, int16_t>();
@@ -141,7 +144,7 @@ TEST(FilterOperationsTest, WithInt32AndOthers)
    
 }
 
-TEST(FilterOperationsTest, WithInt64AndOthers)
+TEST_F(FilterOperationsTest, WithInt64AndOthers)
 {
     test_filterops_using_templates<int64_t, int8_t>();
     test_filterops_using_templates<int64_t, int16_t>();
@@ -152,7 +155,7 @@ TEST(FilterOperationsTest, WithInt64AndOthers)
    
 }
 
-TEST(FilterOperationsTest, WithFloat32AndOthers)
+TEST_F(FilterOperationsTest, WithFloat32AndOthers)
 {
     test_filterops_using_templates<float, int8_t>();
     test_filterops_using_templates<float, int16_t>();
@@ -163,7 +166,7 @@ TEST(FilterOperationsTest, WithFloat32AndOthers)
    
 }
 
-TEST(FilterOperationsTest, WithFloat64AndOthers)
+TEST_F(FilterOperationsTest, WithFloat64AndOthers)
 {
     test_filterops_using_templates<double, int8_t>();
     test_filterops_using_templates<double, int16_t>();

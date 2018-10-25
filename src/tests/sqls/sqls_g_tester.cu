@@ -27,6 +27,7 @@
 #include <thrust/iterator/constant_iterator.h>
 #include <thrust/reduce.h>
 #include <thrust/functional.h>
+#include "thrust_rmm_allocator.h"
 
 #include <iostream>
 #include <vector>
@@ -48,11 +49,12 @@
 #include <gdf/cffi/functions.h>
 
 #include "gtest/gtest.h"
+#include "gdf_test_fixtures.h"
 
 #include "sqls_rtti_comp.hpp"
 
 template<typename T>
-using Vector = thrust::device_vector<T>;
+using Vector = thrust::device_vector<T, rmm_allocator<T>>;
 
 ///using IndexT = int;//okay...
 using IndexT = size_t;
@@ -107,8 +109,9 @@ bool compare(const Vector<T>& d_v, const std::vector<T>& baseline, T eps)
           });
 }
 
+struct gdf_group_by : public GdfTest {};
 
-TEST(gdf_group_by_sum, UsageTestSum)
+TEST_F(gdf_group_by, UsageTestSum)
 {
   std::vector<int> vc1{1,1,1,1,1,1};
   std::vector<int> vi1{1,3,3,5,5,0};
@@ -259,7 +262,7 @@ TEST(gdf_group_by_sum, UsageTestSum)
   EXPECT_EQ( flag, true ) << "GROUP-BY SUM aggregation returns unexpected result";
 }
 
-TEST(gdf_group_by_count, UsageTestCount)
+TEST_F(gdf_group_by, UsageTestCount)
 {
   std::vector<int> vc1{1,1,1,1,1,1};
   std::vector<int> vi1{1,3,3,5,5,0};
@@ -407,7 +410,7 @@ TEST(gdf_group_by_count, UsageTestCount)
   EXPECT_EQ( flag, true ) << "GROUP-BY COUNT aggregation returns unexpected result";
 }
 
-TEST(gdf_group_by_avg, UsageTestAvg)
+TEST_F(gdf_group_by, UsageTestAvg)
 {
   std::vector<int> vc1{1,1,1,1,1,1};
   std::vector<int> vi1{1,3,3,5,5,0};
@@ -555,7 +558,7 @@ TEST(gdf_group_by_avg, UsageTestAvg)
   EXPECT_EQ( flag, true ) << "GROUP-BY AVG aggregation returns unexpected result";
 }
 
-TEST(gdf_group_by_min, UsageTestMin)
+TEST_F(gdf_group_by, UsageTestMin)
 {
   std::vector<int> vc1{1,1,1,1,1,1};
   std::vector<int> vi1{1,3,3,5,5,0};
@@ -609,7 +612,7 @@ TEST(gdf_group_by_min, UsageTestMin)
   //int flag_sorted = 0;
 
   std::vector<double> v_col{2., 4., 5., 7., 11., 3.};
-  thrust::device_vector<double> d_col = v_col;
+  Vector<double> d_col = v_col;
 
   std::cout<<"aggregate = min on column:\n";
   print_v(d_col, std::cout);
@@ -708,7 +711,7 @@ TEST(gdf_group_by_min, UsageTestMin)
   EXPECT_EQ( flag, true ) << "GROUP-BY MIN aggregation returns unexpected result";
 }
 
-TEST(gdf_group_by_max, UsageTestMax)
+TEST_F(gdf_group_by, UsageTestMax)
 {
   std::vector<int> vc1{1,1,1,1,1,1};
   std::vector<int> vi1{1,3,3,5,5,0};
@@ -762,7 +765,7 @@ TEST(gdf_group_by_max, UsageTestMax)
   //int flag_sorted = 0;
 
   std::vector<double> v_col{2., 4., 5., 7., 11., 3.};
-  thrust::device_vector<double> d_col = v_col;
+  Vector<double> d_col = v_col;
 
   std::cout<<"aggregate = max on column:\n";
   print_v(d_col, std::cout);

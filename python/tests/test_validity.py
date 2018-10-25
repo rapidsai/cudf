@@ -6,6 +6,7 @@ import numpy as np
 from numba import cuda
 
 from libgdf_cffi import ffi, libgdf
+from librmm_cffi import librmm as rmm
 
 from .utils import new_column, unwrap_devary, get_dtype, gen_rand, fix_zeros
 from .utils import buffer_as_bits
@@ -23,17 +24,17 @@ def test_validity_add(dtype, nelem):
     # data
     h_lhs = gen_rand(dtype, nelem)
     h_rhs = gen_rand(dtype, nelem)
-    d_lhs = cuda.to_device(h_lhs)
-    d_rhs = cuda.to_device(h_rhs)
-    d_result = cuda.device_array_like(d_lhs)
+    d_lhs = rmm.to_device(h_lhs)
+    d_rhs = rmm.to_device(h_rhs)
+    d_result = rmm.device_array_like(d_lhs)
 
     # valids
     h_lhs_valids = gen_rand(np.int8, (nelem + 8 - 1) // 8)
     h_rhs_valids = gen_rand(np.int8, (nelem + 8 - 1) // 8)
 
-    d_lhs_valids = cuda.to_device(h_lhs_valids)
-    d_rhs_valids = cuda.to_device(h_rhs_valids)
-    d_result_valids = cuda.device_array_like(d_lhs_valids)
+    d_lhs_valids = rmm.to_device(h_lhs_valids)
+    d_rhs_valids = rmm.to_device(h_rhs_valids)
+    d_result_valids = rmm.device_array_like(d_lhs_valids)
 
     # columns
     col_lhs = new_column()

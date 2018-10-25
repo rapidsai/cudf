@@ -17,12 +17,12 @@
 #include <gdf/gdf.h>
 #include <gdf/errorutils.h>
 #include <thrust/tabulate.h>
-#include <thrust/device_vector.h>
 
 #include "join/joining.h"
 #include "gdf_table.cuh"
 #include "hashmap/hash_functions.cuh"
 #include "int_fastdiv.h"
+#include "rmm.h"
 #include "nvtx_utils.h"
 
 constexpr int BLOCK_SIZE = 256;
@@ -121,19 +121,25 @@ gdf_error gdf_hash(int num_cols, gdf_column **input, gdf_hash_func hash, gdf_col
   hash_value_type * p_output = static_cast<hash_value_type*>(output->data);
   thrust::device_ptr<hash_value_type> row_hash_values = thrust::device_pointer_cast(p_output);
 
+  cudaStream_t stream{0};
+  rmm_temp_allocator allocator(stream);
+  auto exec = thrust::cuda::par(allocator).on(stream);
+
   // Compute the hash value for each row depending on the specified hash function
   switch(hash)
   {
     case GDF_HASH_MURMUR3:
       {
-        thrust::tabulate(row_hash_values, 
+        thrust::tabulate(exec,
+                        row_hash_values, 
                          row_hash_values + num_rows, 
                          row_hasher<MurmurHash3_32,size_type>(*input_table));
         break;
       }
     case GDF_HASH_IDENTITY:
       {
-        thrust::tabulate(row_hash_values, 
+        thrust::tabulate(exec,
+                         row_hash_values, 
                          row_hash_values + num_rows, 
                          row_hasher<IdentityHash,size_type>(*input_table));
         break;
@@ -401,7 +407,6 @@ gdf_error hash_partition_gdf_table(gdf_table<size_type> const & input_table,
                                    gdf_table<size_type> & partitioned_output)
 {
 
-
   const size_type num_rows = table_to_hash.get_column_length();
 
   constexpr int rows_per_block = BLOCK_SIZE * ROWS_PER_THREAD;
@@ -409,19 +414,19 @@ gdf_error hash_partition_gdf_table(gdf_table<size_type> const & input_table,
 
   // Allocate array to hold which partition each row belongs to
   size_type * row_partition_numbers{nullptr};
-  CUDA_TRY( cudaMalloc(&row_partition_numbers, num_rows * sizeof(hash_value_type)) );
-
+  RMM_TRY( rmmAlloc((void**)&row_partition_numbers, num_rows * sizeof(hash_value_type), 0) ); // TODO: non-default stream?
+  
   // Array to hold the size of each partition computed by each block
   //  i.e., { {block0 partition0 size, block1 partition0 size, ...}, 
   //          {block0 partition1 size, block1 partition1 size, ...},
   //          ...
   //          {block0 partition(num_partitions-1) size, block1 partition(num_partitions -1) size, ...} }
   size_type * block_partition_sizes{nullptr};
-  CUDA_TRY(cudaMalloc(&block_partition_sizes, (grid_size * num_partitions) * sizeof(size_type)));
+  RMM_TRY(rmmAlloc((void**)&block_partition_sizes, (grid_size * num_partitions) * sizeof(size_type), 0) );
 
   // Holds the total number of rows in each partition
   size_type * global_partition_sizes{nullptr};
-  CUDA_TRY( cudaMalloc(&global_partition_sizes, num_partitions * sizeof(size_type)) );
+  RMM_TRY( rmmAlloc((void**)&global_partition_sizes, num_partitions * sizeof(size_type), 0) );
   CUDA_TRY( cudaMemsetAsync(global_partition_sizes, 0, num_partitions * sizeof(size_type)) );
 
   // If the number of partitions is a power of two, we can compute the partition 
@@ -465,10 +470,13 @@ gdf_error hash_partition_gdf_table(gdf_table<size_type> const & input_table,
 
   CUDA_CHECK_LAST();
 
+  cudaStream_t stream{0}; // TODO: non-default stream?
+  rmm_temp_allocator allocator(stream);
+  
   // Compute exclusive scan of all blocks' partition sizes in-place to determine 
   // the starting point for each blocks portion of each partition in the output
   size_type * scanned_block_partition_sizes{block_partition_sizes};
-  thrust::exclusive_scan(thrust::cuda::par,
+  thrust::exclusive_scan(thrust::cuda::par(allocator).on(stream),
                          block_partition_sizes, 
                          block_partition_sizes + (grid_size * num_partitions), 
                          scanned_block_partition_sizes);
@@ -480,7 +488,7 @@ gdf_error hash_partition_gdf_table(gdf_table<size_type> const & input_table,
   cudaStream_t s1{};
   cudaStreamCreate(&s1);
   size_type * scanned_global_partition_sizes{global_partition_sizes};
-  thrust::exclusive_scan(thrust::cuda::par.on(s1),
+  thrust::exclusive_scan(thrust::cuda::par(allocator).on(s1),
                          global_partition_sizes, 
                          global_partition_sizes + num_partitions,
                          scanned_global_partition_sizes);
@@ -517,12 +525,12 @@ gdf_error hash_partition_gdf_table(gdf_table<size_type> const & input_table,
 
   CUDA_CHECK_LAST();
 
-  CUDA_TRY(cudaFree(row_partition_numbers));
-  CUDA_TRY(cudaFree(block_partition_sizes));
+  RMM_TRY(rmmFree(row_partition_numbers, 0));
+  RMM_TRY(rmmFree(block_partition_sizes, 0));
 
   cudaStreamSynchronize(s1);
   cudaStreamDestroy(s1);
-  CUDA_TRY(cudaFree(global_partition_sizes));
+  RMM_TRY(rmmFree(global_partition_sizes, 0));
 
   return GDF_SUCCESS;
 }

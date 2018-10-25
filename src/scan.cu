@@ -2,6 +2,7 @@
 #include <gdf/utils.h>
 #include <gdf/errorutils.h>
 
+#include "rmm.h"
 
 #include <cub/device/device_scan.cuh>
 
@@ -19,11 +20,11 @@ struct Scan {
         void *temp_storage = NULL;
         size_t temp_storage_bytes = 0;
         scan_function(temp_storage, temp_storage_bytes, inp, out, size);
-        CUDA_TRY( cudaMalloc(&temp_storage, temp_storage_bytes) );
+        RMM_TRY( rmmAlloc(&temp_storage, temp_storage_bytes, 0) ); // TODO: non-default stream
         // Do scan
         scan_function(temp_storage, temp_storage_bytes, inp, out, size);
         // Cleanup
-        CUDA_TRY( cudaFree(temp_storage) );
+        RMM_TRY( rmmFree(temp_storage, 0) ); // TODO: non-default stream
 
         return GDF_SUCCESS;
     }

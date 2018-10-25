@@ -20,14 +20,18 @@
 #include <cuda_runtime.h>
 #include <limits>
 #include <memory>
-#include <cub/util_allocator.cuh>
-#include <cub/device/device_radix_sort.cuh>
 #include "../../hashmap/managed.cuh"
 #include "groupby_kernels.cuh"
 #include "../../gdf_table.cuh"
 #include <thrust/device_vector.h>
 #include <thrust/gather.h>
 #include <thrust/copy.h>
+#include "../../thrust_rmm_allocator.h"
+
+
+// Vector set to use rmmAlloc and rmmFree.
+template <typename T>
+using Vector = thrust::device_vector<T, rmm_allocator<T>>;
 
 
 // The occupancy of the hash table determines it's capacity. A value of 50 implies
@@ -181,7 +185,7 @@ gdf_error GroupbyHash(gdf_table<size_type> const & groupby_input_table,
 
   // Used by threads to coordinate where to write their results
   size_type * global_write_index{nullptr};
-  CUDA_TRY(cudaMalloc(&global_write_index, sizeof(size_type)));
+  RMM_TRY(rmmAlloc((void**)&global_write_index, sizeof(size_type), 0)); // TODO: non-default stream?
   CUDA_TRY(cudaMemset(global_write_index, 0, sizeof(size_type)));
 
   const dim3 extract_grid_size ((hash_table_size + THREAD_BLOCK_SIZE - 1) / THREAD_BLOCK_SIZE, 1, 1);
@@ -200,18 +204,21 @@ gdf_error GroupbyHash(gdf_table<size_type> const & groupby_input_table,
   // At the end of the extraction kernel, the global write index will be equal to
   // the size of the output. Update the output size.
   CUDA_TRY( cudaMemcpy(out_size, global_write_index, sizeof(size_type), cudaMemcpyDeviceToHost) );
-  CUDA_TRY( cudaFree(global_write_index) );
+  RMM_TRY( rmmFree(global_write_index, 0) );
   groupby_output_table.set_column_length(*out_size);
 
   // Optionally sort the groupby/aggregation result columns
   if(true == sort_result) {
+      rmm_temp_allocator allocator(0);
+    	auto exec = thrust::cuda::par(allocator).on(0);
+
       auto sorted_indices = groupby_output_table.sort();
-      thrust::device_vector<aggregation_type> agg(*out_size);
-      thrust::gather(thrust::device,
+      Vector<aggregation_type> agg(*out_size);
+      thrust::gather(exec,
               sorted_indices.begin(), sorted_indices.end(),
               out_aggregation_column,
               agg.begin());
-      thrust::copy(agg.begin(), agg.end(), out_aggregation_column);
+      thrust::copy(exec, agg.begin(), agg.end(), out_aggregation_column);
   }
 
   return GDF_SUCCESS;

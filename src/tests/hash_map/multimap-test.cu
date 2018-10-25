@@ -26,6 +26,8 @@
 #include <gdf/cffi/functions.h>
 #include <../../src/hashmap/concurrent_unordered_multimap.cuh>
 
+#include "gdf_test_fixtures.h"
+
 // This is necessary to do a parametrized typed-test over multiple template arguments
 template <typename Key, typename Value>
 struct KeyValueTypes
@@ -38,7 +40,7 @@ struct KeyValueTypes
 // A new instance of this class will be created for each *TEST(MultimapTest, ...)
 // Put all repeated stuff for each test here
 template <class T>
-class MultimapTest : public testing::Test 
+class MultimapTest : public GdfTest
 {
 public:
   using key_type = typename T::key_type;

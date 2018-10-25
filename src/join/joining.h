@@ -27,6 +27,8 @@
 #include "sort/sort-join.cuh"
 #include "../gdf_table.cuh"
 
+class rmm_mgpu_context_t; // forward decl
+
  /* --------------------------------------------------------------------------*/
  /**
   * @Synopsis  Computes the hash-based join between two sets of gdf_tables.
@@ -71,3 +73,39 @@ gdf_error join_hash(gdf_table<size_type> const & left_table,
                                                          flip_indices);
 }
 
+// Overload Modern GPU memory allocation and free to use RMM
+class rmm_mgpu_context_t : public mgpu::standard_context_t
+{
+public:
+  rmm_mgpu_context_t(bool print_prop = true, cudaStream_t stream_ = 0) :
+    mgpu::standard_context_t(print_prop, stream_) {}
+  ~rmm_mgpu_context_t() {}
+
+  virtual void* alloc(size_t size, memory_space_t space) {
+    void *p = nullptr;
+    if(size) {
+      if (memory_space_device == space) {
+        if (RMM_SUCCESS != rmmAlloc(&p, size, stream()))
+          throw cuda_exception_t(cudaPeekAtLastError());
+      }
+      else {
+        cudaError_t result = cudaMallocHost(&p, size);
+        if (cudaSuccess != result) throw cuda_exception_t(result);
+      }
+    }
+    return p;
+  }
+
+  virtual void free(void* p, memory_space_t space) {
+    if (p) {
+      if (memory_space_device == space) {
+        if (RMM_SUCCESS != rmmFree(p, stream()))
+          throw cuda_exception_t(cudaPeekAtLastError());
+      }
+      else {
+        cudaError_t result = cudaFreeHost(&p);
+        if (cudaSuccess != result) throw cuda_exception_t(result);
+      }
+    }
+  }
+};

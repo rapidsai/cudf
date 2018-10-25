@@ -21,13 +21,19 @@
 #include <vector>
 
 #include <thrust/device_vector.h>
+#include "thrust_rmm_allocator.h"
 
-#include "gtest/gtest.h"
+#include "gdf_test_fixtures.h"
 #include <gdf/gdf.h>
 #include <gdf/cffi/functions.h>
 
+// thrust::device_vector set to use rmmAlloc and rmmFree.
+template <typename T>
+using Vector = thrust::device_vector<T, rmm_allocator<T>>;
 
-TEST(gdf_extract_from_datetime_example_test, usage_example) {
+struct gdf_extract_from_datetime_example_test : public GdfTest {};
+
+TEST_F(gdf_extract_from_datetime_example_test, usage_example) {
 
 	// gdf_column input examples for date32, date64 and timestamp (in seconds)
 
@@ -52,8 +58,8 @@ TEST(gdf_extract_from_datetime_example_test, usage_example) {
 	int colSize = 3;
 
 	// Input column for date32
-	thrust::device_vector<int32_t> intputDate32DataDev(inputDate32Data);
-	thrust::device_vector<gdf_valid_type> inputDate32ValidDev(1,0);
+	Vector<int32_t> intputDate32DataDev(inputDate32Data);
+	Vector<gdf_valid_type> inputDate32ValidDev(1,0);
 
 	gdf_column inputDate32Col;
 	inputDate32Col.dtype = GDF_DATE32;
@@ -63,8 +69,8 @@ TEST(gdf_extract_from_datetime_example_test, usage_example) {
 	inputDate32Col.valid = thrust::raw_pointer_cast(inputDate32ValidDev.data());
 
 	// Input column for date64
-	thrust::device_vector<int64_t> intputDate64DataDev(inputDate64Data);
-	thrust::device_vector<gdf_valid_type> inputDate64ValidDev(1,0);
+	Vector<int64_t> intputDate64DataDev(inputDate64Data);
+	Vector<gdf_valid_type> inputDate64ValidDev(1,0);
 
 	gdf_column inputDate64Col;
 	inputDate64Col.dtype = GDF_DATE64;
@@ -74,8 +80,8 @@ TEST(gdf_extract_from_datetime_example_test, usage_example) {
 	inputDate64Col.valid = thrust::raw_pointer_cast(inputDate64ValidDev.data());
 
 	// Input column for timestamp in seconds
-	thrust::device_vector<int64_t> intputTimestampSecsDataDev(inputTimestampSecsData);
-	thrust::device_vector<gdf_valid_type> inputTimestampSecsValidDev(1,0);
+	Vector<int64_t> intputTimestampSecsDataDev(inputTimestampSecsData);
+	Vector<gdf_valid_type> inputTimestampSecsValidDev(1,0);
 
 	gdf_column inputTimestampSecsCol;
 	inputTimestampSecsCol.dtype = GDF_TIMESTAMP;
@@ -86,8 +92,8 @@ TEST(gdf_extract_from_datetime_example_test, usage_example) {
 	inputTimestampSecsCol.valid = thrust::raw_pointer_cast(inputTimestampSecsValidDev.data());
 
 	// Output column
-	thrust::device_vector<int16_t> outDataDev(colSize);
-	thrust::device_vector<gdf_valid_type> outValidDev(1,0);
+	Vector<int16_t> outDataDev(colSize);
+	Vector<gdf_valid_type> outValidDev(1,0);
 
 	gdf_column outputInt16Col;
 	outputInt16Col.dtype = GDF_INT16;
@@ -285,7 +291,7 @@ TEST(gdf_extract_from_datetime_example_test, usage_example) {
 }
 
 
-struct gdf_extract_from_datetime_test : public ::testing::Test {
+struct gdf_extract_from_datetime_test : public GdfTest {
 
 	void SetUp() {
 
@@ -468,7 +474,6 @@ struct gdf_extract_from_datetime_test : public ::testing::Test {
 	}
 
 	void TearDown() {
-
 	}
 
 	void validate_output(gdf_error gdfError, std::vector<int16_t> & correct_result) {
@@ -514,8 +519,8 @@ struct gdf_extract_from_datetime_test : public ::testing::Test {
 	int colSize;
 
 	gdf_column outputCol;
-	thrust::device_vector<int16_t> outDataDev;
-	thrust::device_vector<gdf_valid_type> outputValidDev;
+	Vector<int16_t> outDataDev;
+	Vector<gdf_valid_type> outputValidDev;
 
 };
 
@@ -558,8 +563,8 @@ TEST_F(gdf_extract_from_datetime_test, date64Tests) {
 				1926203568000 //	2031-01-15 00:32:48
 		};
 
-		thrust::device_vector<int64_t> intputDataDev(inputData);
-		thrust::device_vector<gdf_valid_type> inputValidDev(4,0);
+		Vector<int64_t> intputDataDev(inputData);
+		Vector<gdf_valid_type> inputValidDev(4,0);
 
 		gdf_column inputCol;
 		inputCol.dtype = GDF_DATE64;
@@ -619,8 +624,8 @@ TEST_F(gdf_extract_from_datetime_test, date64Tests) {
 				1926203568 //	2031-01-15 00:32:48
 		};
 
-		thrust::device_vector<int64_t> intputDataDev(inputData);
-		thrust::device_vector<gdf_valid_type> inputValidDev(4,0);
+		Vector<int64_t> intputDataDev(inputData);
+		Vector<gdf_valid_type> inputValidDev(4,0);
 
 		gdf_column inputCol;
 		inputCol.dtype = GDF_TIMESTAMP;
@@ -670,8 +675,8 @@ TEST_F(gdf_extract_from_datetime_test, date64Tests) {
 				1926203568000000 //	2031-01-15 00:32:48
 		};
 
-		thrust::device_vector<int64_t> intputDataDev(inputData);
-		thrust::device_vector<gdf_valid_type> inputValidDev(4,0);
+		Vector<int64_t> intputDataDev(inputData);
+		Vector<gdf_valid_type> inputValidDev(4,0);
 
 		gdf_column inputCol;
 		inputCol.dtype = GDF_TIMESTAMP;
@@ -721,8 +726,8 @@ TEST_F(gdf_extract_from_datetime_test, date64Tests) {
 				1926203568000000000 //	2031-01-15 00:32:48
 		};
 
-		thrust::device_vector<int64_t> intputDataDev(inputData);
-		thrust::device_vector<gdf_valid_type> inputValidDev(4,0);
+		Vector<int64_t> intputDataDev(inputData);
+		Vector<gdf_valid_type> inputValidDev(4,0);
 
 		gdf_column inputCol;
 		inputCol.dtype = GDF_TIMESTAMP;
@@ -738,7 +743,9 @@ TEST_F(gdf_extract_from_datetime_test, date64Tests) {
 	}
 }
 
-TEST(gdf_extract_datetime_TEST, date32Tests) {
+struct gdf_extract_datetime_TEST : public GdfTest {};
+
+TEST_F(gdf_extract_datetime_TEST, date32Tests) {
 
 	int colSize = 8;
 
@@ -760,10 +767,10 @@ TEST(gdf_extract_datetime_TEST, date32Tests) {
 	inputData[6] = 10336;    // '1998-04-20'
 	inputData[7] = -56374;  // '1815-08-28'
 
-	thrust::device_vector<int32_t> intputDataDev(inputData);
-	thrust::device_vector<gdf_valid_type> inputValidDev(1,0);
-	thrust::device_vector<int16_t> outDataDev(colSize);
-	thrust::device_vector<gdf_valid_type> outputValidDev(1,0);
+	Vector<int32_t> intputDataDev(inputData);
+	Vector<gdf_valid_type> inputValidDev(1,0);
+	Vector<int16_t> outDataDev(colSize);
+	Vector<gdf_valid_type> outputValidDev(1,0);
 
 	inputCol.data = thrust::raw_pointer_cast(intputDataDev.data());
 	inputCol.valid = thrust::raw_pointer_cast(inputValidDev.data());
@@ -823,7 +830,7 @@ TEST(gdf_extract_datetime_TEST, date32Tests) {
 	}
 }
 
-TEST(gdf_extract_datetime_TEST, testErrors) {
+TEST_F(gdf_extract_datetime_TEST, testErrors) {
 
 	// WRONG SIZE OF OUTPUT
 	{
@@ -848,10 +855,10 @@ TEST(gdf_extract_datetime_TEST, testErrors) {
 		inputData[7] = -56374;  // '1815-08-287
 
 
-		thrust::device_vector<int32_t> intputDataDev(inputData);
-		thrust::device_vector<gdf_valid_type> inputValidDev(1,0);
-		thrust::device_vector<int16_t> outDataDev(colSize);
-		thrust::device_vector<gdf_valid_type> outputValidDev(1,0);
+		Vector<int32_t> intputDataDev(inputData);
+		Vector<gdf_valid_type> inputValidDev(1,0);
+		Vector<int16_t> outDataDev(colSize);
+		Vector<gdf_valid_type> outputValidDev(1,0);
 
 		inputCol.data = thrust::raw_pointer_cast(intputDataDev.data());
 		inputCol.valid = thrust::raw_pointer_cast(inputValidDev.data());
@@ -883,10 +890,10 @@ TEST(gdf_extract_datetime_TEST, testErrors) {
 		inputData[7] = -56374;  // '1815-08-287
 
 
-		thrust::device_vector<int32_t> intputDataDev(inputData);
-		thrust::device_vector<gdf_valid_type> inputValidDev(1,0);
-		thrust::device_vector<int16_t> outDataDev(colSize + 10);
-		thrust::device_vector<gdf_valid_type> outputValidDev(3,0);
+		Vector<int32_t> intputDataDev(inputData);
+		Vector<gdf_valid_type> inputValidDev(1,0);
+		Vector<int16_t> outDataDev(colSize + 10);
+		Vector<gdf_valid_type> outputValidDev(3,0);
 
 		inputCol.data = thrust::raw_pointer_cast(intputDataDev.data());
 		inputCol.valid = thrust::raw_pointer_cast(inputValidDev.data());

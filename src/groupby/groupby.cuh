@@ -287,8 +287,9 @@ gdf_column create_gdf_column(const size_t size)
   the_column.dtype_info = extra_info;
 
   // Allocate the buffer for the column
-  cudaMalloc(&the_column.data, the_column.size * sizeof(col_type));
-
+  // TODO error checking?
+  rmmAlloc((void**)&the_column.data, the_column.size * sizeof(col_type), 0); // TODO: non-default stream?
+  
   return the_column;
 }
 
@@ -316,8 +317,11 @@ void compute_average(gdf_column * avg_column, gdf_column const & count_column, g
 
   auto average_op =  [] __device__ (sum_type sum, size_t count)->avg_type { return (sum / static_cast<avg_type>(count)); };
 
+  cudaStream_t stream = 0; // TODO: non-default stream?
+  rmm_temp_allocator allocator(stream);
+
   // Computes the average into the passed in output buffer for the average column
-  thrust::transform(d_sums, d_sums + output_size, d_counts, d_avg, average_op);
+  thrust::transform(thrust::cuda::par(allocator).on(stream), d_sums, d_sums + output_size, d_counts, d_avg, average_op);
 
   // Update the size of the average column
   avg_column->size = output_size;
@@ -375,9 +379,9 @@ gdf_error multi_pass_avg(int ncols,
   }
 
   // Free intermediate storage
-  cudaFree(count_output.data);
-  cudaFree(sum_output.data);
-
+  RMM_TRY( rmmFree(count_output.data, 0) );
+  RMM_TRY( rmmFree(sum_output.data, 0) );
+  
   return GDF_SUCCESS;
 }
 

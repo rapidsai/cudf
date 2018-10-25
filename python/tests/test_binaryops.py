@@ -4,6 +4,7 @@ import numpy as np
 from numba import cuda
 
 from libgdf_cffi import ffi, libgdf, GDFError
+from librmm_cffi import librmm as rmm
 
 from .utils import new_column, unwrap_devary, get_dtype, gen_rand, fix_zeros
 
@@ -14,9 +15,9 @@ def arith_op_test(dtype, ulp, expect_fn, test_fn, nelem=128,
     h_rhs = gen_rand(dtype, nelem)
     if non_zero_rhs:
         fix_zeros(h_rhs)
-    d_lhs = cuda.to_device(h_lhs)
-    d_rhs = cuda.to_device(h_rhs)
-    d_result = cuda.device_array_like(d_lhs)
+    d_lhs = rmm.to_device(h_lhs)
+    d_rhs = rmm.to_device(h_rhs)
+    d_result = rmm.device_array_like(d_lhs)
 
     col_lhs = new_column()
     col_rhs = new_column()
@@ -43,9 +44,9 @@ def arith_op_test(dtype, ulp, expect_fn, test_fn, nelem=128,
 def logical_op_test(dtype, expect_fn, test_fn, nelem=128, gdf_dtype=None):
     h_lhs = gen_rand(dtype, nelem)
     h_rhs = gen_rand(dtype, nelem)
-    d_lhs = cuda.to_device(h_lhs)
-    d_rhs = cuda.to_device(h_rhs)
-    d_result = cuda.device_array(d_lhs.size, dtype=np.bool)
+    d_lhs = rmm.to_device(h_lhs)
+    d_rhs = rmm.to_device(h_rhs)
+    d_result = rmm.device_array(d_lhs.size, dtype=np.bool)
 
     col_lhs = new_column()
     col_rhs = new_column()
@@ -161,9 +162,9 @@ def bitwise_op_test(dtype, expect_fn, test_fn, nelem=128):
     h_lhs = gen_rand(dtype, nelem)
     h_rhs = gen_rand(dtype, nelem)
 
-    d_lhs = cuda.to_device(h_lhs)
-    d_rhs = cuda.to_device(h_rhs)
-    d_result = cuda.device_array_like(d_lhs)
+    d_lhs = rmm.to_device(h_lhs)
+    d_rhs = rmm.to_device(h_rhs)
+    d_result = rmm.device_array_like(d_lhs)
 
     col_lhs = new_column()
     col_rhs = new_column()
@@ -206,9 +207,9 @@ def test_lhs_rhs_dtype_mismatch():
     h_lhs = np.arange(nelem, dtype=lhs_dtype)
     h_rhs = np.arange(nelem, dtype=rhs_dtype)
 
-    d_lhs = cuda.to_device(h_lhs)
-    d_rhs = cuda.to_device(h_rhs)
-    d_result = cuda.device_array_like(d_lhs)
+    d_lhs = rmm.to_device(h_lhs)
+    d_rhs = rmm.to_device(h_rhs)
+    d_result = rmm.device_array_like(d_lhs)
 
     col_lhs = new_column()
     col_rhs = new_column()
@@ -241,9 +242,9 @@ def test_output_dtype_mismatch():
     h_lhs = np.arange(nelem, dtype=lhs_dtype)
     h_rhs = np.arange(nelem, dtype=rhs_dtype)
 
-    d_lhs = cuda.to_device(h_lhs)
-    d_rhs = cuda.to_device(h_rhs)
-    d_result = cuda.device_array(d_lhs.size, dtype=np.float32)
+    d_lhs = rmm.to_device(h_lhs)
+    d_rhs = rmm.to_device(h_rhs)
+    d_result = rmm.device_array(d_lhs.size, dtype=np.float32)
 
     col_lhs = new_column()
     col_rhs = new_column()

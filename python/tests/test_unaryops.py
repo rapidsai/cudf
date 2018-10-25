@@ -7,6 +7,7 @@ import numpy as np
 from numba import cuda
 
 from libgdf_cffi import ffi, libgdf, GDFError
+from librmm_cffi import librmm as rmm
 
 from .utils import new_column, unwrap_devary, get_dtype, gen_rand
 
@@ -15,8 +16,8 @@ def math_op_test(dtype, ulp, expect_fn, test_fn, nelem=128, scale=1,
                  positive_only=False):
     randvals = gen_rand(dtype, nelem, positive_only=positive_only)
     h_data = (randvals * scale).astype(dtype)
-    d_data = cuda.to_device(h_data)
-    d_result = cuda.device_array_like(d_data)
+    d_data = rmm.to_device(h_data)
+    d_result = rmm.device_array_like(d_data)
 
     col_data = new_column()
     col_result = new_column()
@@ -43,8 +44,8 @@ def math_op_test(dtype, ulp, expect_fn, test_fn, nelem=128, scale=1,
 
 def cast_op_test(dtype, to_dtype, test_fn, nelem=128):
     h_data = gen_rand(dtype, nelem).astype(dtype)
-    d_data = cuda.to_device(h_data)
-    d_result = cuda.device_array(d_data.size, dtype=to_dtype)
+    d_data = rmm.to_device(h_data)
+    d_result = rmm.device_array(d_data.size, dtype=to_dtype)
 
     assert d_data.dtype == dtype
     assert d_result.dtype == to_dtype
@@ -74,8 +75,8 @@ def cast_op_test(dtype, to_dtype, test_fn, nelem=128):
 def test_col_mismatch_error():
     nelem = 128
     h_data = np.random.random(nelem).astype(np.float32)
-    d_data = cuda.to_device(h_data)
-    d_result = cuda.device_array_like(d_data)
+    d_data = rmm.to_device(h_data)
+    d_result = rmm.device_array_like(d_data)
 
     col_data = new_column()
     col_result = new_column()
@@ -95,8 +96,8 @@ def test_col_mismatch_error():
 def test_unsupported_dtype_error():
     nelem = 128
     h_data = np.random.random(nelem).astype(np.float32)
-    d_data = cuda.to_device(h_data)
-    d_result = cuda.device_array_like(d_data)
+    d_data = rmm.to_device(h_data)
+    d_result = rmm.device_array_like(d_data)
 
     col_data = new_column()
     col_result = new_column()

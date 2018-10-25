@@ -14,6 +14,7 @@
 #include <vector>
 #include <tuple>
 #include "gdf/gdf.h"
+#include "rmm.h"
 
 template <typename gdf_type>
 inline gdf_dtype gdf_enum_type_for()
@@ -79,8 +80,8 @@ template <typename RawType, typename PointerType>
 auto init_device_vector(gdf_size_type num_elements) -> std::tuple<RawType *, thrust::device_ptr<PointerType>>
 {
     RawType *device_pointer;
-    cudaError_t cuda_error = cudaMalloc((void **)&device_pointer, sizeof(PointerType) * num_elements);
-    EXPECT_TRUE(cuda_error == cudaError::cudaSuccess);
+    rmmError_t rmm_error = rmmAlloc((void **)&device_pointer, sizeof(PointerType) * num_elements, 0);
+    EXPECT_TRUE(rmm_error == RMM_SUCCESS);
     thrust::device_ptr<PointerType> device_wrapper = thrust::device_pointer_cast((PointerType *)device_pointer);
     return std::make_tuple(device_pointer, device_wrapper);
 }
@@ -120,7 +121,7 @@ gdf_column convert_to_device_gdf_column (gdf_column *column) {
     size_t n_bytes = get_number_of_bytes_for_valid(column_size);
 
     gdf_valid_type *valid_value_pointer;
-    cudaMalloc((void **)&valid_value_pointer, n_bytes);
+    rmmAlloc((void **)&valid_value_pointer, n_bytes, 0);
     cudaMemcpy(valid_value_pointer, host_valid, n_bytes, cudaMemcpyHostToDevice);
 
     gdf_column output;
@@ -183,7 +184,7 @@ gdf_column gen_gdb_column(size_t column_size, ValueType init_value)
     size_t n_bytes = get_number_of_bytes_for_valid(column_size);
 
     gdf_valid_type *valid_value_pointer;
-    cudaMalloc((void **)&valid_value_pointer, n_bytes);
+    rmmAlloc((void **)&valid_value_pointer, n_bytes, 0);
     cudaMemcpy(valid_value_pointer, host_valid, n_bytes, cudaMemcpyHostToDevice);
    // std::cout << "3. gen_gdb_column\n"; 
     

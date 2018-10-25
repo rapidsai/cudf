@@ -2,6 +2,8 @@
 #include <gdf/utils.h>
 #include <gdf/errorutils.h>
 
+#include "rmm.h"
+
 #include <cub/device/device_segmented_radix_sort.cuh>
 
 
@@ -30,15 +32,15 @@ struct SegmentedRadixSortPlan{
     gdf_error setup(size_t sizeof_key, size_t sizeof_val) {
         back_key_size = num_items * sizeof_key;
         back_val_size = num_items * sizeof_val;
-        CUDA_TRY(cudaMalloc(&back_key, back_key_size));
-        CUDA_TRY(cudaMalloc(&back_val, back_val_size));
+        RMM_TRY( rmmAlloc(&back_key, back_key_size, stream) ); // TODO: non-default stream
+        RMM_TRY( rmmAlloc(&back_val, back_val_size, stream) );
         return GDF_SUCCESS;
     }
 
     gdf_error teardown() {
-        CUDA_TRY(cudaFree(back_key));
-        CUDA_TRY(cudaFree(back_val));
-        CUDA_TRY(cudaFree(storage));
+        RMM_TRY(rmmFree(back_key, stream));
+        RMM_TRY(rmmFree(back_val, stream));
+        RMM_TRY(rmmFree(storage, stream));
         return GDF_SUCCESS;
     }
 };
@@ -140,13 +142,13 @@ struct SegmentedRadixSort {
             // We have operated and the result is not in front buffer
             if (d_key_buf != d_keys.Current()){
                 cudaMemcpyAsync(d_key_buf, d_key_alt_buf, num_items * sizeof(Tk),
-                                cudaMemcpyDeviceToDevice, stream);
+                                          cudaMemcpyDeviceToDevice, stream);
                 CUDA_CHECK_LAST();
             }
         } else {
             // We have not operated.
             // Just checking for temporary storage requirement
-            cudaMalloc(&plan->storage, plan->storage_bytes);
+            RMM_TRY( rmmAlloc(&plan->storage, plan->storage_bytes, plan->stream) ); // TODO: non-default stream
             CUDA_CHECK_LAST();
             // Now that we have allocated, do real work.
             return sort(plan, d_key_buf, d_value_buf, num_segments,

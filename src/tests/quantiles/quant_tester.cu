@@ -19,6 +19,7 @@
 
 #include <thrust/device_vector.h>
 #include <thrust/copy.h>
+#include "thrust_rmm_allocator.h"
 
 #include <iostream>
 #include <vector>
@@ -34,7 +35,14 @@
 
 #include "gtest/gtest.h"
 
+#include "gdf_test_fixtures.h"
+
 #include "quantiles.hpp"
+
+// Vector set to use rmmAlloc and rmmFree.
+template <typename T>
+using Vector = thrust::device_vector<T, rmm_allocator<T>>;
+
 
 template<typename T, typename Allocator, template<typename, typename> class Vector>
 __host__ __device__
@@ -43,7 +51,6 @@ void print_v(const Vector<T, Allocator>& v, std::ostream& os)
   thrust::copy(v.begin(), v.end(), std::ostream_iterator<T>(os,","));
   os<<"\n";
 }
-
 
 
 template<typename VType>
@@ -77,12 +84,13 @@ void f_quantile_tester(gdf_column* col_in, std::vector<VType>& v_out_exact, std:
     }
 }
 
+struct gdf_quantile : public GdfTest {};
 
-TEST(gdf_quantile_d, DoubleVector)
+TEST_F(gdf_quantile, DoubleVector)
 {
   using VType = double;
   std::vector<VType> v{6.8, 0.15, 3.4, 4.17, 2.13, 1.11, -1.01, 0.8, 5.7};
-  thrust::device_vector<VType> d_in = v;
+  Vector<VType> d_in = v;
   
   gdf_column col_in;
   col_in.size = d_in.size();
@@ -124,11 +132,11 @@ TEST(gdf_quantile_d, DoubleVector)
     }
 }
 
-TEST(gdf_quantile_i, IntegerVector)
+TEST_F(gdf_quantile, IntegerVector)
 {
   using VType = int32_t;
   std::vector<VType> v{7, 0, 3, 4, 2, 1, -1, 1, 6};;
-  thrust::device_vector<VType> d_in = v;
+  Vector<VType> d_in = v;
   
   gdf_column col_in;
   col_in.size = d_in.size();

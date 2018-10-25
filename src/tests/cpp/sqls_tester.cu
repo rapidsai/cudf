@@ -19,6 +19,8 @@
 #include <thrust/reduce.h>
 #include <thrust/functional.h>
 
+#include "thrust_rmm_allocator.h"
+
 #include <iostream>
 #include <vector>
 #include <tuple>
@@ -42,8 +44,9 @@ extern gdf_error gdf_filter(size_t nrows,
 		     size_t* d_indx,
 		     size_t* new_sz);
 
-template<typename T>
-using Vector = thrust::device_vector<T>;
+// Vector set to use rmmAlloc and rmmFree.
+template <typename T>
+using Vector = thrust::device_vector<T, rmm_allocator<T>>;
 
 ///using IndexT = int;//okay...
 using IndexT = size_t;
@@ -487,7 +490,7 @@ void test_gb_min_api_2(const std::vector<int>& vc1,
   int flag_sorted = 0;
 
   std::vector<double> v_col{2., 4., 5., 7., 11., 3.};
-  thrust::device_vector<double> d_col = v_col;
+  Vector<double> d_col = v_col;
 
   std::cout<<"aggregate = min on column:\n";
   print_v(d_col, std::cout);
@@ -620,7 +623,7 @@ void test_gb_max_api_2(const std::vector<int>& vc1,
   int flag_sorted = 0;
 
   std::vector<double> v_col{2., 4., 5., 7., 11., 3.};
-  thrust::device_vector<double> d_col = v_col;
+  Vector<double> d_col = v_col;
 
   std::cout<<"aggregate = max on column:\n";
   print_v(d_col, std::cout);

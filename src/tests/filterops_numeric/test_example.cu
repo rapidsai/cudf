@@ -27,23 +27,25 @@
 #include <cuda_runtime.h>
 #include "helper/utils.cuh"
 
+#include "gdf_test_fixtures.h"
+struct Example : public GdfTest {};
 
 /*
  ============================================================================
  Description : Compute sum of reciprocals using STL on CPU and Thrust on GPU
  ============================================================================
  */
-TEST(Example, Equals)
+TEST_F(Example, Equals)
 {
 	gdf_size_type num_elements = 8;
 
 	char *data_left;
 	char *data_right;
 	char *data_out;
-	cudaError_t cuda_error = cudaMalloc((void **)&data_left, sizeof(int8_t) * num_elements);
-	cuda_error = cudaMalloc((void **)&data_right, sizeof(int8_t) * num_elements);
-	cuda_error = cudaMalloc((void **)&data_out, sizeof(int8_t) * num_elements);
-	ASSERT_EQ(cuda_error, cudaSuccess);
+	rmmError_t rmm_error = rmmAlloc((void **)&data_left, sizeof(int8_t) * num_elements, 0);
+	rmm_error = rmmAlloc((void **)&data_right, sizeof(int8_t) * num_elements, 0);
+	rmm_error = rmmAlloc((void **)&data_out, sizeof(int8_t) * num_elements, 0);
+	ASSERT_EQ(rmm_error, RMM_SUCCESS);
 
 	int8_t int8_value = 2;
 	thrust::device_ptr<int8_t> right_ptr = thrust::device_pointer_cast((int8_t *)data_right);
@@ -54,11 +56,11 @@ TEST(Example, Equals)
 
 	*valid = 255;
 	gdf_valid_type *valid_device;
-	cuda_error = cudaMalloc((void **)&valid_device, 1);
+	rmm_error = rmmAlloc((void **)&valid_device, 1, 0);
 	cudaMemcpy(valid_device, valid, sizeof(gdf_valid_type), cudaMemcpyHostToDevice);
 	
 	gdf_valid_type *valid_out;
-	cuda_error = cudaMalloc((void **)&valid_out, 1);
+	rmm_error = rmmAlloc((void **)&valid_out, 1, 0);
 	gdf_column lhs;
 	gdf_error error = gdf_column_view_augmented(&lhs, (void *)data_left, valid_device, num_elements, GDF_INT8, 0);
 	gdf_column rhs;
@@ -81,11 +83,11 @@ TEST(Example, Equals)
 	std::cout << "Output static_i8" << std::endl;
 	print_column(&output);
 
-	cudaFree(data_left);
-	cudaFree(data_right);
-	cudaFree(data_out);
-	cudaFree(valid_device);
-	cudaFree(valid_out); 
+	rmmFree(data_left, 0);
+	rmmFree(data_right, 0);
+	rmmFree(data_out, 0);
+	rmmFree(valid_device, 0);
+	rmmFree(valid_out, 0); 
 	delete valid;
 
 	EXPECT_EQ(1, 1);

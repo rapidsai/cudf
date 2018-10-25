@@ -10,11 +10,9 @@
 #include <thrust/functional.h>
 #include <thrust/execution_policy.h>
 #include <thrust/iterator/iterator_adaptor.h>
-#include <thrust/device_vector.h>
 #include "bitmaskops.h"
 
-
-
+#include "thrust_rmm_allocator.h"
 
 template <typename LeftType,typename RightType,typename ResultType >
 struct gdf_equals_op : public thrust::binary_function< LeftType, RightType, ResultType>
@@ -105,33 +103,34 @@ void gpu_filter_op(IteratorTypeLeft begin_left, IteratorTypeRight begin_right, I
 
 	IteratorTypeLeft end_left = begin_left + num_values;
 
+	rmm_temp_allocator allocator(stream);
 
 	//regardless of nulls we perform the same operation
 	//the nulls we are going to and together
 	if (operation == GDF_EQUALS) {
 
 		gdf_equals_op<LeftType, RightType, ResultType> op;
-		thrust::transform(thrust::cuda::par.on(stream), begin_left, end_left, begin_right, result, op);
+		thrust::transform(thrust::cuda::par(allocator).on(stream), begin_left, end_left, begin_right, result, op);
 
 	} else if (operation == GDF_NOT_EQUALS) {
 		gdf_not_equals_op<LeftType, RightType, ResultType> op;
-		thrust::transform(thrust::cuda::par.on(stream), begin_left, end_left, begin_right, result, op);
+		thrust::transform(thrust::cuda::par(allocator).on(stream), begin_left, end_left, begin_right, result, op);
 
 	} else if (operation == GDF_GREATER_THAN_OR_EQUALS) {
 		gdf_greater_than_or_equals_op<LeftType, RightType, ResultType> op;
-		thrust::transform(thrust::cuda::par.on(stream), begin_left, end_left, begin_right, result, op);
+		thrust::transform(thrust::cuda::par(allocator).on(stream), begin_left, end_left, begin_right, result, op);
 
 	} else if (operation == GDF_GREATER_THAN) {
 		gdf_greater_than_op<LeftType, RightType, ResultType> op;
-		thrust::transform(thrust::cuda::par.on(stream), begin_left, end_left, begin_right, result, op);
+		thrust::transform(thrust::cuda::par(allocator).on(stream), begin_left, end_left, begin_right, result, op);
 
 	} else if (operation == GDF_LESS_THAN) {
 		gdf_less_than_op<LeftType, RightType, ResultType> op;
-		thrust::transform(thrust::cuda::par.on(stream), begin_left, end_left, begin_right, result, op);
+		thrust::transform(thrust::cuda::par(allocator).on(stream), begin_left, end_left, begin_right, result, op);
 
 	} else if (operation == GDF_LESS_THAN_OR_EQUALS) {
 		gdf_less_than_or_equals_op<LeftType, RightType, ResultType> op;
-		thrust::transform(thrust::cuda::par.on(stream),begin_left, end_left, begin_right, result, op);
+		thrust::transform(thrust::cuda::par(allocator).on(stream),begin_left, end_left, begin_right, result, op);
 
 	}
 
