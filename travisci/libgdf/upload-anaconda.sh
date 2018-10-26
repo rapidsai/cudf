@@ -27,4 +27,4 @@ fi
 
 echo "Upload"
 echo ${UPLOADFILE}
-anaconda -t ${MY_UPLOAD_KEY} upload -u gpuopenanalytics ${LABEL_OPTION} --force ${UPLOADFILE}
+anaconda -t ${MY_UPLOAD_KEY} upload -u rapidsai ${LABEL_OPTION} --force ${UPLOADFILE}
