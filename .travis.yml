@@ -33,7 +33,7 @@ install:
   # check
   - conda --version
   # install conda build
-  - conda install conda-build anaconda-client flake8 conda-verify --yes
+  - conda install conda-build anaconda-client flake8 conda-verify cmake=3.12 --yes
 script:
   # build pygdf
   - source ./travisci/build_pygdf.sh
