@@ -22,7 +22,7 @@ if [ $BUILD_LIBGDF == 1 ]; then
     export CC=/usr/bin/gcc-5
     export CXX=/usr/bin/g++-5
     # install cuda
-    source ./install-cuda-trusty.sh
+    source ./travisci/libgdf/install-cuda-trusty.sh
     # check versions
     $CC --version
     $CXX --version
