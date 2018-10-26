@@ -13,7 +13,7 @@ set -e
 # CUDA 8 we can use the repo
 if [ ${CUDA:0:1} == '8' ]
 then
-    travis_retry wget --progress=dot:mega http://developer.download.nvidia.com/compute/cuda/repos/ubuntu1404/x86_64/cuda-repo-ubuntu1404_${CUDA}_amd64.deb
+    travis_retry wget --progress=dot:giga http://developer.download.nvidia.com/compute/cuda/repos/ubuntu1404/x86_64/cuda-repo-ubuntu1404_${CUDA}_amd64.deb
     travis_retry sudo dpkg -i cuda-repo-ubuntu1404_${CUDA}_amd64.deb
     travis_retry sudo apt-get update -qq
     export CUDA_APT=${CUDA:0:3}
@@ -24,19 +24,19 @@ then
 elif [ ${CUDA:0:3} == '9.0' ]
 then
     # CUDA 9 we use the sh installer
-    travis_retry wget --progress=dot:mega https://developer.nvidia.com/compute/cuda/${CUDA:0:3}/Prod/local_installers/cuda_${CUDA}_linux-run
+    travis_retry wget --progress=dot:giga https://developer.nvidia.com/compute/cuda/${CUDA:0:3}/Prod/local_installers/cuda_${CUDA}_linux-run
     chmod +x cuda_*_linux-run
     sudo ./cuda_*_linux-run --silent --toolkit
 elif [ ${CUDA:0:3} == '9.1' ]
 then
     # CUDA 9.1 has a different filename pattern
-    travis_retry wget --progress=dot:mega https://developer.nvidia.com/compute/cuda/${CUDA:0:3}/Prod/local_installers/cuda_${CUDA}_linux
+    travis_retry wget --progress=dot:giga https://developer.nvidia.com/compute/cuda/${CUDA:0:3}/Prod/local_installers/cuda_${CUDA}_linux
     chmod +x cuda_*_linux
     sudo ./cuda_*_linux --silent --toolkit
 elif [ ${CUDA:0:3} == '9.2' ]
 then
     # Cuda 9.2 has a different url pattern
-    travis_retry wget --progress=dot:mega https://developer.nvidia.com/compute/cuda/${CUDA:0:3}/Prod2/local_installers/cuda_${CUDA}_linux
+    travis_retry wget --progress=dot:giga https://developer.nvidia.com/compute/cuda/${CUDA:0:3}/Prod2/local_installers/cuda_${CUDA}_linux
     chmod +x cuda_*_linux
     sudo ./cuda_*_linux --silent --toolkit
 else
