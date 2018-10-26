@@ -29,6 +29,6 @@ test:
 
 about:
   home: http://rapids.ai/
-  license: Apache
+  license: APACHE
   # license_file: LICENSE
   summary: cuDF-libgdf_cffi library
