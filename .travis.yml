@@ -31,10 +31,15 @@ before_install:
 
 install:
   # check
+  - $CC --version
+  - $CXX --version
+  - nvcc --version
   - conda --version
   # install conda build
   - conda install conda-build anaconda-client flake8 conda-verify cmake=3.12 --yes
 script:
+  # check conda versions
+  - conda list
   # build pygdf
   - source ./travisci/build_pygdf.sh
   - flake8
