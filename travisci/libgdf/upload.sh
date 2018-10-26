@@ -4,14 +4,18 @@
 
 set -e
 
-if [ "$BUILD_LIBGDF" == "1" ]; then
-    if [ "$BUILD_CFFI" == "1" ]; then
-        export UPLOADFILE=`conda build conda-recipes/libgdf_cffi -c defaults -c conda-forge --python=${PYTHON} --output`
-    else
-        export UPLOADFILE=`conda build conda-recipes/libgdf -c defaults -c conda-forge --output`
-    fi
-
+function upload() {
     echo "UPLOADFILE = ${UPLOADFILE}"
     test -e ${UPLOADFILE}
     source ./travisci/libgdf/upload-anaconda.sh
+}
+
+if [ "$BUILD_LIBGDF" == "1" ]; then
+    if [ "$BUILD_CFFI" == "1" ]; then
+        export UPLOADFILE=`conda build conda-recipes/libgdf_cffi -c defaults -c conda-forge --python=${PYTHON} --output`
+        upload
+    else
+        export UPLOADFILE=`conda build conda-recipes/libgdf -c defaults -c conda-forge --output`
+        upload
+    fi
 fi
