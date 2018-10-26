@@ -14,11 +14,11 @@ env:
 
 matrix:
   include:
-    - env: PYTHON=3.6
-    - env: PYTHON=3.5
-    - env: CUDA=9.2.148_396.37
-    - env: CUDA=9.2.148_396.37 BUILD_CFFI=1 PYTHON=3.6
-    - env: CUDA=9.2.148_396.37 BUILD_CFFI=1 PYTHON=3.5
+    - env: PYTHON=3.6 BUILD_CUDF=1
+    - env: PYTHON=3.5 BUILD_CUDF=1
+    - env: CUDA=9.2.148_396.37 BUILD_LIBGDF=1
+    - env: CUDA=9.2.148_396.37 BUILD_LIBGDF=1 BUILD_CFFI=1 PYTHON=3.6
+    - env: CUDA=9.2.148_396.37 BUILD_LIBGDF=1 BUILD_CFFI=1 PYTHON=3.5
 
 before_install:
   # install miniconda
