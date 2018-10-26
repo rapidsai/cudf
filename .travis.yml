@@ -39,8 +39,8 @@ script:
   - source activate root
   # check conda versions
   - conda list
-  # build pygdf
-  - source ./travisci/build_pygdf.sh
+  # build cudf
+  - source ./travisci/build_cudf.sh
   # build ligdf
   - source ./travisci/libgdf/build_libgdf.sh
   # build libgdf_cffi
