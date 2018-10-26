@@ -3,7 +3,7 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
 set -e
 
-if [ $BUILD_LIBGDF == 1 ]; then
+if [ $BUILD_LIBGDF == '1' ]; then
     # install libboost
     sudo apt-get update -q
     sudo apt-get install -y libboost-all-dev
