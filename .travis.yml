@@ -44,7 +44,12 @@ script:
   - conda list
   # build pygdf
   - source ./travisci/build_pygdf.sh
-  - flake8
+  # build ligdf
+  - source ./travisci/libgdf/build_libgdf.sh
+  # build libgdf_cffi
+  - source ./travisci/libgdf/build_libgdf_cffi.sh
+  - flake8 --exclude=libgdf/
 
 after_success:
   - source ./travisci/upload-anaconda.sh
+  - source ./travisci/libgdf/upload.sh
