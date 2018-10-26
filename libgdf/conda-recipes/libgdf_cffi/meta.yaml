@@ -28,7 +28,7 @@ test:
     - python -c "import libgdf_cffi"
 
 about:
-  home: http://gpuopenanalytics.com/
+  home: http://rapids.ai/
   license: Apache
   # license_file: LICENSE
-  summary: GPU Dataframe core library
+  summary: cuDF-libgdf_cffi library
