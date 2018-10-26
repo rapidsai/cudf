@@ -5,7 +5,7 @@ import pytest
 import numpy as np
 import pandas as pd
 
-from pygdf.dataframe import Series
+from cudf.dataframe import Series
 
 
 params_dtypes = [np.int32, np.float32, np.float64]

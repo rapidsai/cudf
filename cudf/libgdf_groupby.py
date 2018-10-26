@@ -11,7 +11,7 @@ from librmm_cffi import librmm as rmm
 
 
 class LibGdfGroupby(object):
-    """Groupby object returned by pygdf.DataFrame.groupby().
+    """Groupby object returned by cudf.DataFrame.groupby().
     """
 
     _NAMED_FUNCTIONS = {'mean': libgdf.gdf_group_by_avg,

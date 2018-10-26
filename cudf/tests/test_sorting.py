@@ -7,7 +7,7 @@ import pytest
 import numpy as np
 import pandas as pd
 
-from pygdf.dataframe import DataFrame, Series
+from cudf.dataframe import DataFrame, Series
 
 
 sort_nelem_args = [2, 257]

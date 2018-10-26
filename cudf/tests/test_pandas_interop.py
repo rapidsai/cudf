@@ -3,7 +3,7 @@
 import numpy as np
 import pandas as pd
 
-from pygdf.dataframe import DataFrame
+from cudf.dataframe import DataFrame
 
 
 def test_to_pandas():

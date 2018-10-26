@@ -10,7 +10,7 @@ source:
 build:
   number: {{ environ.get('GIT_DESCRIBE_NUMBER', 0) }}
   script_env:
-    - PYGDF_BUILD_NO_GPU_TEST
+    - CUDF_BUILD_NO_GPU_TEST
 
 requirements:
   build:
@@ -30,7 +30,7 @@ test:
     - distributed >=1.22.1
     - pytest
   imports:
-    - pygdf
+    - cudf
 
 about:
   home: http://rapids.ai/

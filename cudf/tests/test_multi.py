@@ -3,7 +3,7 @@
 import pytest
 
 import pandas as pd
-import pygdf as gd
+import cudf as gd
 
 
 def make_frames(index=None):

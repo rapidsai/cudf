@@ -273,7 +273,7 @@ class Series(object):
         return self.to_string(nrows=10)
 
     def __repr__(self):
-        return "<pygdf.Series nrows={} >".format(len(self))
+        return "<cudf.Series nrows={} >".format(len(self))
 
     def _binaryop(self, other, fn):
         """

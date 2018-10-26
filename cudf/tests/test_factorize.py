@@ -2,7 +2,7 @@
 
 import pytest
 import numpy as np
-from pygdf.dataframe import DataFrame, Series
+from cudf.dataframe import DataFrame, Series
 
 
 @pytest.mark.parametrize('ncats,nelem',

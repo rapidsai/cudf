@@ -1,4 +1,4 @@
-from pygdf.settings import settings, set_options
+from cudf.settings import settings, set_options
 
 
 def test_set_options():

@@ -5,7 +5,7 @@ import pytest
 import numpy as np
 import pandas as pd
 
-from pygdf.dataframe import DataFrame
+from cudf.dataframe import DataFrame
 
 
 def make_frame(dataframe_class, nelem, seed=0, extra_levels=(), extra_vals=()):
@@ -26,7 +26,7 @@ def make_frame(dataframe_class, nelem, seed=0, extra_levels=(), extra_vals=()):
 
 
 def get_methods():
-    for method in ['pygdf', 'hash', 'sort']:
+    for method in ['cudf', 'hash', 'sort']:
         yield method
 
 
@@ -41,7 +41,7 @@ def test_groupby_mean(nelem, method):
     # gdf
     got_df = make_frame(DataFrame, nelem=nelem).groupby(
         ('x', 'y'), method=method).mean()
-    if method == 'pygdf':
+    if method == 'cudf':
         got = np.sort(got_df['val'].to_array())
     else:
         got = np.sort(got_df['mean_val'].to_array())
@@ -61,7 +61,7 @@ def test_groupby_mean_3level(nelem, method):
     # gdf
     got_df = make_frame(DataFrame, nelem=nelem,
                         extra_levels=lvls).groupby(bys, method=method).mean()
-    if method == "pygdf":
+    if method == "cudf":
         got = np.sort(got_df['val'].to_array())
     else:
         got = np.sort(got_df['mean_val'].to_array())
@@ -79,7 +79,7 @@ def test_groupby_agg_mean_min(nelem, method):
     # gdf (Note: lack of multindex)
     got_df = make_frame(DataFrame, nelem=nelem).groupby(
         ('x', 'y'), method=method).agg(['mean', 'min'])
-    if method == "pygdf":
+    if method == "cudf":
         got_mean = np.sort(got_df['val_mean'].to_array())
         got_min = np.sort(got_df['val_min'].to_array())
     else:
@@ -101,7 +101,7 @@ def test_groupby_agg_min_max_dictargs(nelem, method):
     # gdf (Note: lack of multindex)
     got_df = make_frame(DataFrame, nelem=nelem, extra_vals='ab').groupby(
         ('x', 'y'), method=method).agg({'a': 'min', 'b': 'max'})
-    if method == "pygdf":
+    if method == "cudf":
         got_min = np.sort(got_df['a'].to_array())
         got_max = np.sort(got_df['b'].to_array())
     else:
@@ -125,7 +125,7 @@ def test_groupby_cats():
     cats = np.asarray(list(df['cats']))
     vals = df['vals'].to_array()
 
-    grouped = df.groupby(['cats'], method="pygdf").mean()
+    grouped = df.groupby(['cats'], method="cudf").mean()
 
     got_vals = grouped['vals']
     got_cats = grouped['cats']
@@ -148,7 +148,7 @@ def test_groupby_iterate_groups():
     def assert_values_equal(arr):
         np.testing.assert_array_equal(arr[0], arr)
 
-    for grp in df.groupby(['key1', 'key2'], method="pygdf"):
+    for grp in df.groupby(['key1', 'key2'], method="cudf"):
         pddf = grp.to_pandas()
         for k in 'key1,key2'.split(','):
             assert_values_equal(pddf[k].values)
@@ -166,7 +166,7 @@ def test_groupby_as_df():
     def assert_values_equal(arr):
         np.testing.assert_array_equal(arr[0], arr)
 
-    df, segs = df.groupby(['key1', 'key2'], method="pygdf").as_df()
+    df, segs = df.groupby(['key1', 'key2'], method="cudf").as_df()
     for s, e in zip(segs, list(segs[1:]) + [None]):
         grp = df[s:e]
         pddf = grp.to_pandas()
@@ -185,7 +185,7 @@ def test_groupby_apply():
 
     expect_grpby = df.to_pandas().groupby(['key1', 'key2'],
                                           as_index=False)
-    got_grpby = df.groupby(['key1', 'key2'], method="pygdf")
+    got_grpby = df.groupby(['key1', 'key2'], method="cudf")
 
     def foo(df):
         df['out'] = df['val1'] + df['val2']
@@ -210,7 +210,7 @@ def test_groupby_apply_grouped():
     df['val2'] = np.random.random(nelem)
 
     expect_grpby = df.to_pandas().groupby(['key1', 'key2'], as_index=False)
-    got_grpby = df.groupby(['key1', 'key2'], method="pygdf")
+    got_grpby = df.groupby(['key1', 'key2'], method="cudf")
 
     def foo(key1, val1, com1, com2):
         for i in range(cuda.threadIdx.x, len(key1), cuda.blockDim.x):
@@ -240,7 +240,7 @@ def test_groupby_apply_grouped():
 @pytest.mark.parametrize('func', ['mean', 'std', 'var', 'min',
                                   'max', 'count', 'sum'])
 @pytest.mark.parametrize('method', get_methods())
-def test_groupby_pygdf_2keys_agg(nelem, func, method):
+def test_groupby_cudf_2keys_agg(nelem, func, method):
     # gdf (Note: lack of multindex)
 
     # skip unimplemented aggs:
@@ -251,7 +251,7 @@ def test_groupby_pygdf_2keys_agg(nelem, func, method):
     got_df = make_frame(DataFrame, nelem=nelem)\
         .groupby(('x', 'y'), method=method).agg(func)
 
-    if method == "pygdf":
+    if method == "cudf":
         got_agg = np.sort(got_df['val'].to_array())
     else:
         got_agg = np.sort(got_df[func + '_val'].to_array())

@@ -6,7 +6,7 @@ from collections import OrderedDict
 import numpy as np
 import pandas as pd
 
-from pygdf import read_csv
+from cudf import read_csv
 
 
 def make_numeric_dataframe(nrows, dtype):
@@ -110,7 +110,7 @@ def test_csv_reader_mixed_data_delimiter(tmpdir):
 
 def test_csv_reader_all_numeric_dtypes(tmpdir):
 
-    # fname = os.path.abspath('pygdf/tests/data/tmp_csvreader_file4.csv')
+    # fname = os.path.abspath('cudf/tests/data/tmp_csvreader_file4.csv')
     fname = tmpdir.mkdir("gdf_csv").join("tmp_csvreader_file4.csv")
 
     df, gdf_dict, pd_dict = make_all_numeric_dtypes_dataframe()

@@ -5,7 +5,7 @@ import pytest
 import numpy as np
 import pandas as pd
 
-from pygdf.dataframe import Series, DataFrame
+from cudf.dataframe import Series, DataFrame
 
 
 def test_categorical_basic():

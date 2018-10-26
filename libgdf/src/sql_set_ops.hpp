@@ -308,7 +308,7 @@ size_t multi_col_filter(size_t nrows,
 //CAVEAT: all adjacent pairs of
 //        pointers must reside on __device__!
 //
-//(All must be passed by pointers because of type erasure in pygdf
+//(All must be passed by pointers because of type erasure in cudf
 // and, consequently, the NestedIfThenElser expects uniform type erasure)
 //
 template<typename TplPairsPtrs,

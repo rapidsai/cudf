@@ -7,8 +7,8 @@ from pandas.util.testing import (
     assert_index_equal, assert_series_equal,
     assert_frame_equal
 )
-from pygdf.dataframe import Series, DataFrame
-from pygdf.index import DatetimeIndex
+from cudf.dataframe import Series, DataFrame
+from cudf.index import DatetimeIndex
 
 
 def data1():
@@ -67,36 +67,36 @@ def test_issue_165():
     data = [(start_date + dt.timedelta(days=x)) for x in range(6)]
     df_pandas["dates"] = data
     df_pandas["num"] = [1, 2, 3, 4, 5, 6]
-    df_pygdf = DataFrame.from_pandas(df_pandas)
+    df_cudf = DataFrame.from_pandas(df_pandas)
 
     base = df_pandas.query("dates==@start_date")
-    test = df_pygdf.query("dates==@start_date")
+    test = df_cudf.query("dates==@start_date")
     assert_frame_equal(base, test.to_pandas())
     assert len(test) > 0
 
-    mask = df_pygdf.dates == start_date
+    mask = df_cudf.dates == start_date
     base_mask = df_pandas.dates == start_date
     assert_series_equal(mask.to_pandas(), base_mask, check_names=False)
     assert mask.to_pandas().sum() > 0
 
     start_date_ts = pd.Timestamp(start_date)
-    test = df_pygdf.query("dates==@start_date_ts")
+    test = df_cudf.query("dates==@start_date_ts")
     base = df_pandas.query("dates==@start_date_ts")
     assert_frame_equal(base, test.to_pandas())
     assert len(test) > 0
 
-    mask = df_pygdf.dates == start_date_ts
+    mask = df_cudf.dates == start_date_ts
     base_mask = df_pandas.dates == start_date_ts
     assert_series_equal(mask.to_pandas(), base_mask, check_names=False)
     assert mask.to_pandas().sum() > 0
 
     start_date_np = np.datetime64(start_date_ts, 'ns')
-    test = df_pygdf.query("dates==@start_date_np")
+    test = df_cudf.query("dates==@start_date_np")
     base = df_pandas.query("dates==@start_date_np")
     assert_frame_equal(base, test.to_pandas())
     assert len(test) > 0
 
-    mask = df_pygdf.dates == start_date_np
+    mask = df_cudf.dates == start_date_np
     base_mask = df_pandas.dates == start_date_np
     assert_series_equal(mask.to_pandas(), base_mask, check_names=False)
     assert mask.to_pandas().sum() > 0

@@ -8,10 +8,10 @@ import pyarrow as pa
 
 from librmm_cffi import librmm as rmm
 
-import pygdf as gd
-from pygdf.dataframe import Series, DataFrame
-from pygdf.buffer import Buffer
-from pygdf.settings import set_options
+import cudf as gd
+from cudf.dataframe import Series, DataFrame
+from cudf.buffer import Buffer
+from cudf.settings import set_options
 
 from itertools import combinations
 

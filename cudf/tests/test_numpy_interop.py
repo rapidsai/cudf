@@ -2,7 +2,7 @@ import pytest
 
 import numpy as np
 
-from pygdf.dataframe import DataFrame
+from cudf.dataframe import DataFrame
 
 
 def test_to_records_noindex():

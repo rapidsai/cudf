@@ -36,7 +36,7 @@ class DataFrame(object):
 
     Build dataframe with `__setitem__`
 
-    >>> from pygdf.dataframe import DataFrame
+    >>> from cudf.dataframe import DataFrame
     >>> df = DataFrame()
     >>> df['key'] = [0, 1, 2, 3, 4]
     >>> df['val'] = [float(i + 10) for i in range(5)]  # insert column
@@ -67,7 +67,7 @@ class DataFrame(object):
     Convert from a Pandas DataFrame.
 
     >>> import pandas as pd
-    >>> from pygdf.dataframe import DataFrame
+    >>> from cudf.dataframe import DataFrame
     >>> pdf = pd.DataFrame({'a': [0, 1, 2, 3],
     ...                     'b': [0.1, 0.2, None, 0.3]})
     >>> pdf
@@ -281,7 +281,7 @@ class DataFrame(object):
         return self.to_string(nrows=nrows, ncols=ncols)
 
     def __repr__(self):
-        return "<pygdf.DataFrame ncols={} nrows={} >".format(
+        return "<cudf.DataFrame ncols={} nrows={} >".format(
             len(self.columns),
             len(self),
         )
@@ -546,7 +546,7 @@ class DataFrame(object):
         Examples
         -------
         >>> import pandas as pd
-        >>> from pygdf.dataframe import DataFrame as gdf
+        >>> from cudf.dataframe import DataFrame as gdf
 
         >>> pet_owner = [1, 2, 3, 4, 5]
         >>> pet_type = ['fish', 'dog', 'fish', 'bird', 'fish']
@@ -976,8 +976,8 @@ class DataFrame(object):
             The keys are always left as regular columns in the result.
         method : str, optional
             A string indicating the method to use to perform the group by.
-            Valid values are "sort", "hash", or "pygdf".
-            "pygdf" method may be deprecated in the future, but is currently
+            Valid values are "sort", "hash", or "cudf".
+            "cudf" method may be deprecated in the future, but is currently
             the only method supporting group UDFs via the `apply` function.
 
         Returns
@@ -996,7 +996,7 @@ class DataFrame(object):
         - Since we don't support multiindex, the *by* columns are stored
           as regular columns.
         """
-        if (method == "pygdf"):
+        if (method == "cudf"):
             from .groupby import Groupby
             if as_index:
                 msg = "as_index==True not supported due to the lack of\

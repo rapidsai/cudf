@@ -3,16 +3,16 @@ from setuptools import setup
 import versioneer
 
 
-packages = ['pygdf',
-            'pygdf.tests',
+packages = ['cudf',
+            'cudf.tests',
             ]
 
 install_requires = [
     'numba',
 ]
 
-setup(name='pygdf',
-      description="GPU Dataframe",
+setup(name='cudf',
+      description="cuDF - GPU Dataframe",
       version=versioneer.get_version(),
       classifiers=[
         # "Development Status :: 4 - Beta",
@@ -26,7 +26,7 @@ setup(name='pygdf',
       author="Continuum Analytics, Inc.",
       packages=packages,
       package_data={
-        'pygdf.tests': ['data/*.pickle'],
+        'cudf.tests': ['data/*.pickle'],
       },
       install_requires=install_requires,
       license="BSD",

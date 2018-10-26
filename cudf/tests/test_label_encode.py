@@ -6,7 +6,7 @@ from itertools import product
 
 import numpy as np
 
-from pygdf.dataframe import DataFrame
+from cudf.dataframe import DataFrame
 
 
 def _random_float(nelem, dtype):

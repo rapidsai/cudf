@@ -7,7 +7,7 @@ import numpy as np
 
 from . import utils
 
-from pygdf import Series
+from cudf import Series
 from math import floor
 
 

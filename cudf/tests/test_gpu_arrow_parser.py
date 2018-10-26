@@ -14,7 +14,7 @@ import numpy as np
 
 from librmm_cffi import librmm as rmm
 
-from pygdf.gpuarrow import GpuArrowReader
+from cudf.gpuarrow import GpuArrowReader
 
 
 def make_gpu_parse_arrow_data_batch():
@@ -194,6 +194,6 @@ def test_gpu_parse_arrow_int16():
 
 if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO)
-    logging.getLogger('pygdf.gpuarrow').setLevel(logging.DEBUG)
+    logging.getLogger('cudf.gpuarrow').setLevel(logging.DEBUG)
 
     test_gpu_parse_arrow_data()

@@ -13,7 +13,7 @@ try:
 except ImportError:
     _have_distributed = False
 import pytest
-import pygdf
+import cudf
 from . import utils
 
 
@@ -28,7 +28,7 @@ require_ipc = pytest.mark.skipIf(
 
 @require_distributed
 def test_serialize_dataframe():
-    df = pygdf.DataFrame()
+    df = cudf.DataFrame()
     df['a'] = np.arange(100)
     df['b'] = np.arange(100, dtype=np.float32)
     df['c'] = pd.Categorical(['a', 'b', 'c', '_', '_'] * 20,
@@ -39,7 +39,7 @@ def test_serialize_dataframe():
 
 @require_distributed
 def test_serialize_dataframe_with_index():
-    df = pygdf.DataFrame()
+    df = cudf.DataFrame()
     df['a'] = np.arange(100)
     df['b'] = np.random.random(100)
     df['c'] = pd.Categorical(['a', 'b', 'c', '_', '_'] * 20,
@@ -51,21 +51,21 @@ def test_serialize_dataframe_with_index():
 
 @require_distributed
 def test_serialize_series():
-    sr = pygdf.Series(np.arange(100))
+    sr = cudf.Series(np.arange(100))
     outsr = deserialize(*serialize(sr))
     pd.util.testing.assert_series_equal(sr.to_pandas(), outsr.to_pandas())
 
 
 @require_distributed
 def test_serialize_range_index():
-    index = pygdf.index.RangeIndex(10, 20)
+    index = cudf.index.RangeIndex(10, 20)
     outindex = deserialize(*serialize(index))
     assert index == outindex
 
 
 @require_distributed
 def test_serialize_generic_index():
-    index = pygdf.index.GenericIndex(pygdf.Series(np.arange(10)))
+    index = cudf.index.GenericIndex(cudf.Series(np.arange(10)))
     outindex = deserialize(*serialize(index))
     assert index == outindex
 
@@ -78,14 +78,14 @@ def test_serialize_masked_series():
     bitmask = utils.expand_bits_to_bytes(mask)[:nelem]
     null_count = utils.count_zero(bitmask)
     assert null_count >= 0
-    sr = pygdf.Series.from_masked_array(data, mask, null_count=null_count)
+    sr = cudf.Series.from_masked_array(data, mask, null_count=null_count)
     outsr = deserialize(*serialize(sr))
     pd.util.testing.assert_series_equal(sr.to_pandas(), outsr.to_pandas())
 
 
 @require_distributed
 def test_serialize_groupby():
-    df = pygdf.DataFrame()
+    df = cudf.DataFrame()
     df['key'] = np.random.randint(0, 20, 100)
     df['val'] = np.arange(100, dtype=np.float32)
     gb = df.groupby('key')
@@ -128,7 +128,7 @@ def serialize_ipc(sr):
 @require_distributed
 @require_ipc
 def test_serialize_ipc():
-    sr = pygdf.Series(np.arange(10))
+    sr = cudf.Series(np.arange(10))
     out = serialize_ipc(sr)
     # Verify that the output array matches the source
     np.testing.assert_array_equal(out.to_array(), sr.to_array())
@@ -137,7 +137,7 @@ def test_serialize_ipc():
 @require_distributed
 @require_ipc
 def test_serialize_ipc_slice():
-    sr = pygdf.Series(np.arange(10))
+    sr = cudf.Series(np.arange(10))
     # test with a slice to verify internal offset calculations work
     out = serialize_ipc(sr[1:7])
     # Verify that the output array matches the source
@@ -145,7 +145,7 @@ def test_serialize_ipc_slice():
 
 
 def _load_ipc(header, frames, result_queue):
-    pygdf._gdf.rmm_initialize()
+    cudf._gdf.rmm_initialize()
 
     try:
         out = deserialize(header, frames)
@@ -153,7 +153,7 @@ def _load_ipc(header, frames, result_queue):
     except Exception as e:
         result_queue.put(e)
 
-    atexit.register(pygdf._gdf.rmm_finalize)
+    atexit.register(cudf._gdf.rmm_finalize)
 
 
 @require_distributed
@@ -163,7 +163,7 @@ def test_serialize_datetime():
                        'y': np.random.normal(size=20)})
     ts = np.arange(0, len(df), dtype=np.dtype('datetime64[ms]'))
     df['timestamp'] = ts
-    gdf = pygdf.DataFrame.from_pandas(df)
+    gdf = cudf.DataFrame.from_pandas(df)
     # (De)serialize roundtrip
     recreated = deserialize(*serialize(gdf))
     # Check

@@ -18,7 +18,7 @@
     from librmm_cffi import librmm_config as rmm_cfg
     rmm_cf.use_pool_allocator = True
     rmm_cfg.initial_pool_size = 2 ** 30 # one GB
-    import pygdf # When pygdf initializes RMM, these settings will be used
+    import cudf # When cuDF initializes RMM, these settings will be used
 """
 
 # Whether to use a pool allocation strategy. False means to use default cudaMalloc

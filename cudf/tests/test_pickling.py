@@ -8,8 +8,8 @@ import pandas as pd
 
 from librmm_cffi import librmm as rmm
 
-from pygdf.dataframe import DataFrame, GenericIndex
-from pygdf.buffer import Buffer
+from cudf.dataframe import DataFrame, GenericIndex
+from cudf.buffer import Buffer
 
 
 def check_serialization(df):

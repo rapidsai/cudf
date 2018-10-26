@@ -5,7 +5,7 @@ import pytest
 import numpy as np
 import pandas as pd
 
-from pygdf.dataframe import DataFrame
+from cudf.dataframe import DataFrame
 
 
 def make_frame(dataframe_class, nelem, seed=0, extra_levels=(), extra_vals=()):

@@ -42,8 +42,8 @@ def get_config():
     cfg.VCS = "git"
     cfg.style = "pep440"
     cfg.tag_prefix = "v"
-    cfg.parentdir_prefix = "pygdf-"
-    cfg.versionfile_source = "pygdf/_version.py"
+    cfg.parentdir_prefix = "cudf-"
+    cfg.versionfile_source = "cudf/_version.py"
     cfg.verbose = False
     return cfg
 

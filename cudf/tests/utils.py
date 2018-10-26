@@ -1,6 +1,6 @@
 
 import numpy as np
-from pygdf import utils
+from cudf import utils
 
 
 def random_bitmask(size):

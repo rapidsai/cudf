@@ -10,14 +10,14 @@ import pandas as pd
 from pandas.util.testing import assert_frame_equal
 from itertools import product
 
-import pygdf
-from pygdf import queryutils
-from pygdf.dataframe import DataFrame
+import cudf
+from cudf import queryutils
+from cudf.dataframe import DataFrame
 
 
 _params_query_parser = []
-_params_query_parser.append(('a > @b', ('a', '__PYGDF_ENVREF__b')))
-_params_query_parser.append(('(a + b) <= @c', ('a', 'b', '__PYGDF_ENVREF__c')))
+_params_query_parser.append(('a > @b', ('a', '__CUDF_ENVREF__b')))
+_params_query_parser.append(('(a + b) <= @c', ('a', 'b', '__CUDF_ENVREF__c')))
 _params_query_parser.append(('a > b if a > 0 else b > a', ('a', 'b')))
 
 
@@ -116,7 +116,7 @@ def test_query_splitted_combine():
     q1 = s1.query(expr)
     q2 = s2.query(expr)
     # Combine
-    got = pygdf.concat([q1, q2]).to_pandas()
+    got = cudf.concat([q1, q2]).to_pandas()
 
     # Should equal to just querying the original GDF
     expect = gdf.query(expr).to_pandas()

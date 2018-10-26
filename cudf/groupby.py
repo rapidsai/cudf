@@ -85,7 +85,7 @@ _dfsegs_pack = namedtuple('_dfsegs_pack', ['df', 'segs'])
 
 
 class Groupby(object):
-    """Groupby object returned by pygdf.DataFrame.groupby().
+    """Groupby object returned by cudf.DataFrame.groupby().
     """
     _NAMED_FUNCTIONS = {'mean': Series.mean,
                         'std': Series.std,
@@ -254,7 +254,7 @@ class Groupby(object):
         # Prepare dataframe
         orig_df = df.copy()
         df = df.loc[:, levels].reset_index()
-        rowid_column = '__pygdf.groupby.rowid'
+        rowid_column = '__cudf.groupby.rowid'
         df[rowid_column] = df.index.as_column()
 
         col_order = list(levels)

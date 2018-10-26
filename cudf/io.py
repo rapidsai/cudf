@@ -56,8 +56,8 @@ def read_csv(filepath, lineterminator='\n',
 
         50,50|40,60|30,70|20,80|
 
-    >>> import pygdf
-    >>> df = pygdf.read_csv('foo.txt', delimiter=',', lineterminator='|',
+    >>> import cudf
+    >>> df = cudf.read_csv('foo.txt', delimiter=',', lineterminator='|',
     ...                     names=['col1', 'col2'], dtype=['int64', 'int64'],
     ...                     skiprows=1, skipfooter=1)
     >>> df

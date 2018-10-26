@@ -4,7 +4,7 @@ import pytest
 
 import numpy as np
 
-from pygdf.dataframe import Series
+from cudf.dataframe import Series
 
 from . import utils
 

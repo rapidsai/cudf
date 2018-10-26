@@ -14,8 +14,8 @@ import numpy as np
 
 from librmm_cffi import librmm as rmm
 
-from pygdf.gpuarrow import GpuArrowReader
-from pygdf.dataframe import Series, DataFrame
+from cudf.gpuarrow import GpuArrowReader
+from cudf.dataframe import Series, DataFrame
 
 
 def read_data():

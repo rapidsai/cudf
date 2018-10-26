@@ -2,7 +2,7 @@
 
 import numpy as np
 
-from pygdf.dataframe import DataFrame, Series, GenericIndex
+from cudf.dataframe import DataFrame, Series, GenericIndex
 from . import utils
 
 
