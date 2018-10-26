@@ -38,6 +38,8 @@ install:
   # install conda build
   - conda install conda-build anaconda-client flake8 conda-verify cmake=3.12 --yes
 script:
+  # Activate root environment for cmake
+  - source activate root
   # check conda versions
   - conda list
   # build pygdf
