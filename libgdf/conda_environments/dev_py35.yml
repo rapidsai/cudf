@@ -1,0 +1,27 @@
+name: libgdf_dev
+channels:
+- numba
+- conda-forge
+- defaults
+dependencies:
+- flatbuffers=1.6.0=1
+- cffi=1.10.0=py35_0
+- mkl=2017.0.1=0
+- numpy=1.12.1=py35_0
+- openssl=1.0.2k=2
+- pip=9.0.1=py35_1
+- py=1.4.33=py35_0
+- pycparser=2.17=py35_0
+- pytest=3.0.7=py35_0
+- python=3.5.3=1
+- readline=6.2=2
+- setuptools=27.2.0=py35_0
+- sqlite=3.13.0=0
+- tk=8.5.18=0
+- wheel=0.29.0=py35_0
+- xz=5.2.2=1
+- zlib>=1.2.8,<1.3
+- llvmlite=0.18.0=py35_0
+- numba=0.34.0.dev=np112py35_316
+- cmake=3.6.3=0
+- pyarrow=0.10.0

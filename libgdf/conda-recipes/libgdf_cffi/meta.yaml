@@ -1,0 +1,34 @@
+{% set version = environ.get('GIT_DESCRIBE_TAG', '0.0.0.dev').lstrip('v') %}
+package:
+  name: libgdf_cffi
+  version: {{ version }}
+
+source:
+  # git_url: ../..
+  path: ../..
+
+build:
+  number: {{ environ.get('GIT_DESCRIBE_NUMBER', 0) }}
+
+requirements:
+  # use channel:
+  #   - defaults
+  build:
+    - cmake
+    - python x.x
+    - cffi
+    - setuptools
+  run:
+    - libgdf  {{ version }}
+    - python x.x
+    - cffi
+
+test:
+  commands:
+    - python -c "import libgdf_cffi"
+
+about:
+  home: http://gpuopenanalytics.com/
+  license: Apache
+  # license_file: LICENSE
+  summary: GPU Dataframe core library

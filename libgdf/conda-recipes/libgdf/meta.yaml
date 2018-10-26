@@ -1,0 +1,41 @@
+# Copyright (c) 2018, NVIDIA CORPORATION.
+
+# Usage:
+#   conda build -c defaults -c conda-forge .
+{% set cuda_version='.'.join(environ.get('CUDA', 'unknown').split('.')[:2]) %}
+{% set git_revision_count=environ.get('GIT_DESCRIBE_NUMBER', 0) %}
+package:
+  name: libgdf
+  version: {{ environ.get('GIT_DESCRIBE_TAG', '0.0.0.dev').lstrip('v') }}
+
+source:
+  # git_url: ../..
+  path: ../..
+
+build:
+  number: {{ git_revision_count }}
+  string: cuda_{{ cuda_version }}_{{ git_revision_count }}
+  script_env:
+    - CC
+    - CXX
+
+requirements:
+  # use channel:
+  #   - defaults
+  #   - conda-forge
+  build:
+    - cmake
+
+  run:
+    - pyarrow 0.10.*
+
+test:
+  commands:
+    - test -f $PREFIX/include/gdf/gdf.h    # [unix or osx]
+    - test -f $PREFIX/lib/libgdf.dylib     # [osx]
+
+about:
+  home: http://gpuopenanalytics.com/
+  license: Apache
+  # license_file: LICENSE
+  summary: GPU Dataframe core library
