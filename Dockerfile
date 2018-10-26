@@ -25,7 +25,7 @@ ENV PATH=${PATH}:/conda/bin
 SHELL ["/bin/bash", "-c"]
 
 # Build combined libgdf/pygdf conda env
-ARG PYTHON_VERSION=3.6
+ARG PYTHON_VERSION=3.5
 RUN conda create -n gdf python=${PYTHON_VERSION}
 
 ARG NUMBA_VERSION=0.40.0
