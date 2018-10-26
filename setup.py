@@ -29,6 +29,6 @@ setup(name='cudf',
         'cudf.tests': ['data/*.pickle'],
       },
       install_requires=install_requires,
-      license="BSD",
+      license="Apache",
       cmdclass=versioneer.get_cmdclass(),
       )
