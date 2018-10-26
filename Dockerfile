@@ -53,7 +53,7 @@ ARG HASH_JOIN=ON
 RUN source activate gdf && \
     mkdir -p /cudf/libgdf/build && \
     cd /cudf/libgdf/build && \
-    cmake .. -DHASH_JOIN=${HASH_JOIN} && \
+    cmake .. -DHASH_JOIN=${HASH_JOIN} -DCMAKE_INSTALL_PREFIX=${CONDA_PREFIX} && \
     make -j install && \
     make copy_python && \
     python setup.py install
