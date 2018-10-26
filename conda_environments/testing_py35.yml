@@ -2,13 +2,13 @@ name: pycudf_testing_py35
 channels:
 - numba
 - conda-forge
-- gpuopenanalytics/label/dev
+- rapidsai/label/dev
 - defaults
 dependencies:
 - python=3.5.*
 - pytest
-- libgdf=0.1.0a3.*
-- libgdf_cffi=0.1.0a3.*
+- libgdf=0.1.0a4.*
+- libgdf_cffi=0.1.0a4.*
 - numba>=0.40.0dev
 - pandas=0.20.3
 - notebook>=0.5.0
