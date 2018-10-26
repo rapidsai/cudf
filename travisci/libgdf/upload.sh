@@ -13,5 +13,5 @@ if [ "$BUILD_LIBGDF" == "1" ]; then
 
     echo "UPLOADFILE = ${UPLOADFILE}"
     test -e ${UPLOADFILE}
-    source ./travisci/upload-anaconda.sh
+    source ./travisci/libgdf/upload-anaconda.sh
 fi
