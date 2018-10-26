@@ -11,11 +11,11 @@ function upload() {
 }
 
 if [ "$BUILD_LIBGDF" == "1" ]; then
-    if [ "$BUILD_CFFI" == "1" ]; then
-        export UPLOADFILE=`conda build conda-recipes/libgdf_cffi -c defaults -c conda-forge --python=${PYTHON} --output`
-        upload
-    else
-        export UPLOADFILE=`conda build conda-recipes/libgdf -c defaults -c conda-forge --output`
-        upload
-    fi
+    export UPLOADFILE=`conda build conda-recipes/libgdf -c defaults -c conda-forge --output`
+    upload
+fi
+
+if [ "$BUILD_CFFI" == "1" ]; then
+    export UPLOADFILE=`conda build conda-recipes/libgdf_cffi -c defaults -c conda-forge --python=${PYTHON} --output`
+    upload
 fi
