@@ -7,7 +7,7 @@ set -e
 SOURCE_BRANCH=master
 
 
-if [ ${CUDA:0:3} == '9.0' ]; then
+if [ ${CUDA:0:3} == '9.2' ]; then
   export LABEL_OPTION="-l dev -l cuda${CUDA:0:3}"
 else
   export LABEL_OPTION="-l cuda${CUDA:0:3}"
