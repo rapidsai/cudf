@@ -23,7 +23,7 @@ setup(name='cudf',
         "Programming Language :: Python :: 3.5",
       ],
       # Include the separately-compiled shared library
-      author="Continuum Analytics, Inc.",
+      author="NVIDIA Corporation",
       packages=packages,
       package_data={
         'cudf.tests': ['data/*.pickle'],
