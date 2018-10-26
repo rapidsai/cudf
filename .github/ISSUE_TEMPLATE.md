@@ -1,9 +1,9 @@
 <!--
 
-Thanks for opening an issue! To help the PyGDF team handle your information
+Thanks for opening an issue! To help the cuDF team handle your information
 efficiently, please first ensure that there is no other issue present that
 already describes the issue you have
-(search at https://github.com/gpuopenanalytics/pygdf/issues?&q=is%3Aissue).
+(search at https://github.com/rapidsai/cudf/issues?&q=is%3Aissue).
 
 If there is no issue present please jump to a section below and delete the
 irrelevant one depending on whether you are:
@@ -34,7 +34,7 @@ Before submitting a bug report please ensure that you can check off these boxes:
 
 -->
 
-- [ ] I am using the latest version of PyGDF from conda or built from `master`.
+- [ ] I am using the latest version of cuDF from conda or built from `master`.
 - [ ] I have included the following environment details:
       Linux Distro, Linux Kernel, GPU Model
 - [ ] I have included the following version information for:
