@@ -1,4 +1,4 @@
-# An integration test & dev container which builds and installs libgdf & pygdf from master
+# An integration test & dev container which builds and installs cuDF from master
 ARG CUDA_VERSION=9.2
 ARG LINUX_VERSION=ubuntu16.04
 FROM nvidia/cuda:${CUDA_VERSION}-devel-${LINUX_VERSION}
@@ -30,7 +30,7 @@ RUN conda create -n gdf python=${PYTHON_VERSION}
 
 ARG NUMBA_VERSION=0.40.0
 ARG NUMPY_VERSION=1.14.3
-# Locked to Pandas 0.20.3 by https://github.com/gpuopenanalytics/pygdf/issues/118
+# Locked to Pandas 0.20.3 by https://github.com/rapidsai/cudf/issues/118
 ARG PANDAS_VERSION=0.20.3
 ARG PYARROW_VERSION=0.10.0
 RUN conda install -n gdf -y -c numba -c conda-forge -c defaults \
@@ -40,25 +40,25 @@ RUN conda install -n gdf -y -c numba -c conda-forge -c defaults \
       pyarrow=${PYARROW_VERSION} \
       cmake
 
+# cuDF repo clone
+ARG CUDF_REPO=https://github.com/rapidsai/cudf
+# To build container against https://github.com/rapidsai/cudf/pull/138:
+# docker build --build-arg PYGDF_REPO="https://github.com/dantegd/cudf -b enh-ext-unique-value-counts" -t gdf .
+RUN git clone --recurse-submodules ${PYGDF_REPO} /cudf
+
 # LibGDF build/install
-ARG LIBGDF_REPO=https://github.com/gpuopenanalytics/libgdf
-RUN git clone --recurse-submodules ${LIBGDF_REPO} /libgdf
 ENV CC=/usr/bin/gcc-${CC}
 ENV CXX=/usr/bin/g++-${CXX}
 ARG HASH_JOIN=ON
 RUN source activate gdf && \
-    mkdir -p /libgdf/build && \
-    cd /libgdf/build && \
+    mkdir -p /cudf/libgdf/build && \
+    cd /cudf/libgdf/build && \
     cmake .. -DHASH_JOIN=${HASH_JOIN} && \
     make -j install && \
     make copy_python && \
     python setup.py install
 
-# PyGDF build/install
-ARG PYGDF_REPO=https://github.com/gpuopenanalytics/pygdf
-# To build container against https://github.com/gpuopenanalytics/pygdf/pull/138:
-# docker build --build-arg PYGDF_REPO="https://github.com/dantegd/pygdf -b enh-ext-unique-value-counts" -t gdf .
-RUN git clone --recurse-submodules ${PYGDF_REPO} /pygdf
+# cuDF build/install
 RUN source activate gdf && \
-    cd /pygdf && \
+    cd /cudf && \
     python setup.py install
