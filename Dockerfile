@@ -24,7 +24,7 @@ ENV PATH=${PATH}:/conda/bin
 # Enables "source activate conda"
 SHELL ["/bin/bash", "-c"]
 
-# Build combined libgdf/pygdf conda env
+# Build cuDF conda env
 ARG PYTHON_VERSION=3.5
 RUN conda create -n gdf python=${PYTHON_VERSION}
 
@@ -33,14 +33,14 @@ ARG NUMPY_VERSION=1.14.3
 # Locked to Pandas 0.20.3 by https://github.com/rapidsai/cudf/issues/118
 ARG PANDAS_VERSION=0.20.3
 ARG PYARROW_VERSION=0.10.0
-RUN conda install -n gdf -y -c numba -c conda-forge -c defaults \
+RUN conda install -n cudf -y -c numba -c conda-forge -c defaults \
       numba=${NUMBA_VERSION} \
       numpy=${NUMPY_VERSION} \
       pandas=${PANDAS_VERSION} \
       pyarrow=${PYARROW_VERSION} \
       cmake
 
-# cuDF repo clone
+# Clone cuDF repo
 ARG CUDF_REPO=https://github.com/rapidsai/cudf
 # To build container against https://github.com/rapidsai/cudf/pull/138:
 # docker build --build-arg CUDF_REPO="https://github.com/dantegd/cudf -b enh-ext-unique-value-counts" -t gdf .
@@ -50,7 +50,7 @@ RUN git clone --recurse-submodules ${CUDF_REPO} /cudf
 ENV CC=/usr/bin/gcc-${CC}
 ENV CXX=/usr/bin/g++-${CXX}
 ARG HASH_JOIN=ON
-RUN source activate gdf && \
+RUN source activate cudf && \
     mkdir -p /cudf/libgdf/build && \
     cd /cudf/libgdf/build && \
     cmake .. -DHASH_JOIN=${HASH_JOIN} -DCMAKE_INSTALL_PREFIX=${CONDA_PREFIX} && \
@@ -59,6 +59,6 @@ RUN source activate gdf && \
     python setup.py install
 
 # cuDF build/install
-RUN source activate gdf && \
+RUN source activate cudf && \
     cd /cudf && \
     python setup.py install
