@@ -36,14 +36,16 @@ script:
   - source activate root
   # check conda versions
   - conda list
-  # build cudf
-  - source ./travisci/build_cudf.sh
   # build ligdf
   - source ./travisci/libgdf/build_libgdf.sh
   # build libgdf_cffi
   - source ./travisci/libgdf/build_libgdf_cffi.sh
+  # upload libgdf and libgdf_cffi
+  - source ./travisci/libgdf/upload.sh
+  # build cudf
+  - source ./travisci/build_cudf.sh
   - flake8
 
 after_success:
+  # upload cudf
   - source ./travisci/upload-anaconda.sh
-  - source ./travisci/libgdf/upload.sh
