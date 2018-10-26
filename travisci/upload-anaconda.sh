@@ -5,7 +5,7 @@ export UPLOADFILE=`conda build conda-recipes/cudf -c defaults -c conda-forge -c 
 
 set -e
 
-if [ $BUILD_CUDF == '1' ]; then
+if [ "$BUILD_CUDF" == "1" ]; then
   SOURCE_BRANCH=master
 
   test -e ${UPLOADFILE}
