@@ -45,7 +45,7 @@ script:
   - source ./travisci/libgdf/build_libgdf.sh
   # build libgdf_cffi
   - source ./travisci/libgdf/build_libgdf_cffi.sh
-  - flake8 --exclude=libgdf/
+  #- flake8 --exclude=libgdf/,thirdparty/
 
 after_success:
   - source ./travisci/upload-anaconda.sh
