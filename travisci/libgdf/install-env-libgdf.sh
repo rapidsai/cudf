@@ -23,4 +23,8 @@ if [ $BUILD_LIBGDF == 1 ]; then
     export CXX=/usr/bin/g++-5
     # install cuda
     source ./install-cuda-trusty.sh
+    # check versions
+    $CC --version
+    $CXX --version
+    nvcc --version
 fi
