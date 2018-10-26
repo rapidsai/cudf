@@ -11,7 +11,7 @@ from numba import cuda
 from librmm_cffi import librmm as rmm
 
 
-ENVREF_PREFIX = '__PYGDF_ENVREF__'
+ENVREF_PREFIX = '__CUDF_ENVREF__'
 
 
 class QuerySyntaxError(ValueError):
