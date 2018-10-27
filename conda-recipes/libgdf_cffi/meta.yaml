@@ -1,4 +1,10 @@
+# Copyright (c) 2018, NVIDIA CORPORATION.
+
+# Usage:
+#   conda build -c defaults -c conda-forge .
 {% set version = environ.get('GIT_DESCRIBE_TAG', '0.0.0.dev').lstrip('v') %}
+{% set git_revision_count=environ.get('GIT_DESCRIBE_NUMBER', 0) %}
+{% set cuda_version='.'.join(environ.get('CUDA', 'unknown').split('.')[:2]) %}
 package:
   name: libgdf_cffi
   version: {{ version }}
@@ -8,7 +14,8 @@ source:
   path: ../..
 
 build:
-  number: {{ environ.get('GIT_DESCRIBE_NUMBER', 0) }}
+  number: {{ git_revision_count }}
+  string: cuda_{{ cuda_version }}_{{ git_revision_count }}
 
 requirements:
   # use channel:
@@ -19,7 +26,7 @@ requirements:
     - cffi
     - setuptools
   run:
-    - libgdf  {{ version }}
+    - libgdf {{ version }}
     - python x.x
     - cffi
 
