@@ -15,7 +15,7 @@ source:
 
 build:
   number: {{ git_revision_count }}
-  string: cuda_{{ cuda_version }}_{{ git_revision_count }}
+  string: cuda{{ cuda_version }}_{{ git_revision_count }}
   script_env:
     - CC
     - CXX
@@ -25,8 +25,7 @@ requirements:
   #   - defaults
   #   - conda-forge
   build:
-    - cmake
-
+    - cmake 3.12
   run:
     - pyarrow 0.10.*
 
