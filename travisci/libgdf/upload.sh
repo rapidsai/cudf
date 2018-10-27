@@ -10,10 +10,14 @@ function upload() {
     source ./travisci/libgdf/upload-anaconda.sh
 }
 
-# Upload libgdf
-export UPLOADFILE=`conda build conda-recipes/libgdf -c defaults -c conda-forge --output`
-upload
+if [ "$BUILD_LIBGDF" == "1" ]; then
+    # Upload libgdf
+    export UPLOADFILE=`conda build conda-recipes/libgdf -c defaults -c conda-forge --output`
+    upload
+fi
 
-# Upload libgdf_cffi
-export UPLOADFILE=`conda build conda-recipes/libgdf_cffi -c defaults -c conda-forge --python=${PYTHON} --output`
-upload
+if [ "$BUILD_CFFI" == "1" ]; then
+    # Upload libgdf_cffi
+    export UPLOADFILE=`conda build conda-recipes/libgdf_cffi -c defaults -c conda-forge --python=${PYTHON} --output`
+    upload
+fi

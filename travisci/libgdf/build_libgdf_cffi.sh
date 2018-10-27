@@ -7,5 +7,7 @@ if [ ${CUDA:0:4} == '10.0' ]; then
   sed -i.bak 's/add_subdirectory(hash_map)/#add_subdirectory(hash_map)/g' ./libgdf/src/tests/CMakeLists.txt
 fi
 
-echo "Building libgdf_cffi"
-conda build conda-recipes/libgdf_cffi -c defaults -c conda-forge -c numba --python=${PYTHON}
+if [ "$BUILD_CFFI" == '1' ]; then
+  echo "Building libgdf_cffi"
+  conda build conda-recipes/libgdf_cffi -c defaults -c conda-forge -c numba --python=${PYTHON}
+fi

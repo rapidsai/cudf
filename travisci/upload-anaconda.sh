@@ -4,8 +4,10 @@
 
 set -e
 
-export UPLOADFILE=`conda build conda-recipes/cudf -c defaults -c conda-forge -c numba -c rapidsai/label/dev --python=$PYTHON --output`
-SOURCE_BRANCH=master
+if [ "$BUILD_CUDF" == "1" ]; then
+  export UPLOADFILE=`conda build conda-recipes/cudf -c defaults -c conda-forge -c numba -c rapidsai/label/dev --python=$PYTHON --output`
+  SOURCE_BRANCH=master
+fi
 
 test -e ${UPLOADFILE}
 
