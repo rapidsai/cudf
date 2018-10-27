@@ -1,9 +1,8 @@
-# cuDF
+# <div align="left"><img src="img/rapids_logo.png" height="42px"/>&nbsp;&nbsp;cuDF - GPU DataFrames</div>
 
 [![Build Status](http://18.191.94.64/buildStatus/icon?job=cudf-master)](http://18.191.94.64/job/cudf-master/)&nbsp;&nbsp;[![Documentation Status](https://readthedocs.org/projects/pygdf/badge/?version=latest)](http://pygdf.readthedocs.io/en/latest/?badge=latest)
 
-
-The RAPIDS cuDF library is a DataFrame manipulation library based on Apache Arrow that accelerates loading, filtering, and manipulation of data for model training data preparation. The Python bindings of the core-accelerated CUDA DataFrame manipulation primitives mirror the pandas interface for seamless onboarding of pandas users.
+The RAPIDS cuDF library is a GPU DataFrame manipulation library based on Apache Arrow that accelerates loading, filtering, and manipulation of data for model training data preparation. The Python bindings of the core-accelerated CUDA DataFrame manipulation primitives mirror the pandas interface for seamless onboarding of pandas users.
 
 
 ## Setup
@@ -25,24 +24,32 @@ conda env create --name cudf_dev --file conda_environments/testing_py35.yml
 source activate cudf_dev
 ```
 
-### Install from Source
+### Build from Source
 
-To install cuDF from source, clone the repository and run the following commands:
+To install cuDF from source
 
+1. Create the conda environment `cudf` as detailed above
+2. Clone the repository
 ```bash
 git clone --recurse-submodules https://github.com/rapidsai/cudf.git
+```
+3. Build and install `libgdf`
+```bash
 mkdir -p cudf/libgdf/build
 cd cudf/libgdf/build
 cmake .. -DHASH_JOIN=ON -DCMAKE_INSTALL_PREFIX=$CONDA_PREFIX
 make -j install
 make copy_python
 python setup.py install
-
-cd ../../cudf
+```
+4. Build and install `cudf` from the root of the repository
+```bash
 python setup.py install
 ```
+### Build in Docker Container
 
-A Dockerfile is provided for building and installing the cuDF master branch.
+A Dockerfile is provided with a preconfigured conda environment for building and
+installing the cuDF master branch.
 
 **Notes**:
 * We test with and recommended installing [nvidia-docker2](https://github.com/nvidia/nvidia-docker/wiki/Installation-(version-2.0))
@@ -70,13 +77,13 @@ docker run --runtime=nvidia -it cudf bash
 
 ### Pip
 
-Currently, we don't support pip install yet.  Please use conda for the time being.
+Support is coming soon, please use conda for the time being.
 
-### Testing
+### Testing - GPU Required
 
-This project uses [py.test](https://docs.pytest.org/en/latest/).
+This project uses [py.test](https://docs.pytest.org/en/latest/)
 
-In the source root directory and with the development environment activated, run:
+In the source root directory and with the development conda environment activated, run:
 
 ```bash
 py.test
@@ -84,16 +91,14 @@ py.test
 
 ## Getting Started
 
-Please see the [Demo Docker Repository](https://hub.docker.com/r/rapidsai/rapidsai/),  choosing a tag based on the NVIDIA driver version you’re running, for example notebooks on how you can utilize cuDF.
+Please see the [Demo Docker Repository](https://hub.docker.com/r/rapidsai/rapidsai/),  choosing a tag based on the NVIDIA CUDA version you’re running, for example notebooks on how you can utilize cuDF.
 
-## RAPIDS Open GPU Data Science
+## <div align="left"><img src="img/rapids_logo.png" width="220px"/></div> Open GPU Data Science
 
 The RAPIDS suite of open source software libraries aim to enable execution of end-to-end data science and analytics pipelines entirely on GPUs. It relies on NVIDIA® CUDA® primitives for low-level compute optimization, but exposing that GPU parallelism and high-bandwidth memory speed through user-friendly Python interfaces.
 
-<div align="center"><img src="img/rapids_logo.png" width="40%"/></div>
+<p style="text-align:center"><img src="img/rapids_arrow.png" width="80%"/></p>
 
 ### GPU Arrow
 
 The GPU version of Arrow is a common API that enables efficient interchange of tabular data between processes running on the GPU. End-to-end computation on the GPU avoids unnecessary copying and converting of data off the GPU, reducing compute time and cost for high-performance analytics common in artificial intelligence workloads. As the name implies, cuDF uses the [Apache Arrow](https://arrow.apache.org/) columnar data format on the GPU. Currently, a subset of the features in Arrow are supported.
-
-<div align="center"><img src="img/rapids_arrow.png" width="80%"/></div>
