@@ -14,14 +14,14 @@ You can get a minimal conda installation with [Miniconda](https://conda.io/minic
 You can install and update cuDF using the conda command:
 
 ```bash
-conda install -c numba -c conda-forge -c rapidsai/label/dev -c defaults cudf=0.2.0a1
+conda install -c numba -c conda-forge -c rapidsai/label/dev -c defaults cudf=0.2.0
 ```
 
 You can create and activate a development environment using the conda command:
 
 ```bash
-conda env create --name cudf_dev --file conda_environments/testing_py35.yml
-source activate cudf_dev
+conda env create --name cudf --file conda_environments/testing_py35.yml
+source activate cudf
 ```
 
 ### Build from Source
@@ -57,7 +57,7 @@ installing the cuDF master branch.
 * Alternative CUDA_VERSION should be specified via Docker [build-arg](https://docs.docker.com/engine/reference/commandline/build/#set-build-time-variables---build-arg)
 * Alternate branches for cudf may be specified as Docker build-args CUDF_REPO. See Dockerfile for example.
 * Ubuntu 16.04 is the default OS for this container. Alternate OSes may be specified as Docker build-arg LINUX_VERSION. See list of [available images](https://hub.docker.com/r/nvidia/cuda/).
-* Python 3.6 is default, but other versions may be specified via PYTHON_VERSION build-arg
+* Python 3.5 is default, but other versions may be specified via PYTHON_VERSION build-arg
 * GCC & G++ 5.x are default compiler versions, but other versions (which are supplied by the OS package manager) may be specified via CC and CXX build-args respectively
 * numba (0.40.0), numpy (1.14.3), and pandas (0.20.3) versions are also configurable as build-args
 
