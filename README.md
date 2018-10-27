@@ -4,7 +4,11 @@
 
 The RAPIDS cuDF library is a GPU DataFrame manipulation library based on Apache Arrow that accelerates loading, filtering, and manipulation of data for model training data preparation. The Python bindings of the core-accelerated CUDA DataFrame manipulation primitives mirror the pandas interface for seamless onboarding of pandas users.
 
-## Setup
+## Quick Start - Demo Container
+
+Please see the [Demo Docker Repository](https://hub.docker.com/r/rapidsai/rapidsai/), choosing a tag based on the NVIDIA CUDA version you’re running, for example notebooks on how you can utilize cuDF.
+
+## Install cuDF
 
 ### Conda
 
@@ -23,9 +27,46 @@ conda env create --name cudf --file conda_environments/testing_py35.yml
 source activate cudf
 ```
 
+### Pip
+
+Support is coming soon, please use conda for the time being.
+
+## Development Setup for cuDF & libgdf
+
+The following instructions are tested on Linux and OSX systems.
+
+### Get Dependencies for libgdf
+
+Compiler requirement:
+
+* `g++` 5.4
+* `cmake` 3.12
+
+CUDA requirement:
+
+* CUDA 9.2+
+
+You can obtain CUDA from [https://developer.nvidia.com/cuda-downloads](https://developer.nvidia.com/cuda-downloads)
+
+Since `cmake` will download and build Apache Arrow (version 0.7.1 or
+0.8+) you may need to install Boost C++ (version 1.58+) before running
+`cmake`:
+
+```bash
+# Install Boost C++ for Ubuntu 16.04/18.04
+$ sudo apt-get install libboost-all-dev
+```
+
+or
+
+```bash
+# Install Boost C++ for Conda
+$ conda install -c conda-forge boost
+```
+
 ### Build from Source
 
-To install cuDF from source
+To install cuDF from source, ensure the dependencies are met and follow the steps below:
 
 1. Clone the repository
 ```bash
@@ -35,6 +76,7 @@ cd cudf
 2. Create the conda development environment `cudf` as detailed above
 3. Build and install `libgdf`
 ```bash
+source activate cudf
 mkdir -p libgdf/build
 cd libgdf/build
 cmake .. -DHASH_JOIN=ON -DCMAKE_INSTALL_PREFIX=$CONDA_PREFIX
@@ -47,10 +89,10 @@ python setup.py install
 cd ../..
 python setup.py install
 ```
-### Build in Docker Container
 
-A Dockerfile is provided with a preconfigured conda environment for building and
-installing the cuDF master branch.
+## Automated Build in Docker Container
+
+A Dockerfile is provided with a preconfigured conda environment for building and installing the cuDF master branch.
 
 **Notes**:
 * We test with and recommended installing [nvidia-docker2](https://github.com/nvidia/nvidia-docker/wiki/Installation-(version-2.0))
@@ -71,28 +113,38 @@ docker build -t cudf .
  Successfully tagged cudf:latest
 
 docker run --runtime=nvidia -it cudf bash
-/# source activate gdf
+/# source activate cudf
 (gdf) root@3f689ba9c842:/# python -c "import cudf"
 (gdf) root@3f689ba9c842:/#
 ```
 
-### Pip
+## Testing
 
-Support is coming soon, please use conda for the time being.
-
-### Testing - GPU Required
+### cuDF
 
 This project uses [py.test](https://docs.pytest.org/en/latest/)
 
 In the source root directory and with the development conda environment activated, run:
 
 ```bash
-py.test
+py.test --cache-clear --ignore=libgdf
 ```
 
-## Getting Started
+### libgdf
 
-Please see the [Demo Docker Repository](https://hub.docker.com/r/rapidsai/rapidsai/),  choosing a tag based on the NVIDIA CUDA version you’re running, for example notebooks on how you can utilize cuDF.
+The `libgdf` tests require a GPU and CUDA. CUDA can be installed locally or through the conda packages of `numba` & `cudatoolkit`. For more details on the requirements needed to run these tests see the [libgdf README](libgdf/README.md).
+
+`libgdf` has two testing frameworks `py.test` and GoogleTest:
+
+```bash
+# Run py.test command inside the /libgdf folder
+py.test
+
+# Run GoogleTest command inside the /libgdf/build folder after cmake
+make -j test
+```
+
+---
 
 ## <div align="left"><img src="img/rapids_logo.png" width="265px"/></div> Open GPU Data Science
 
