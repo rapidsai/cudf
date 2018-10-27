@@ -1,14 +1,18 @@
+# Copyright (c) 2018, NVIDIA CORPORATION.
+
 # Usage:
 #   conda build -c defaults -c conda-forge .
+{% set version = environ.get('GIT_DESCRIBE_TAG', '0.0.0.dev').lstrip('v') %}
+{% set git_revision_count=environ.get('GIT_DESCRIBE_NUMBER', 0) %}
 package:
   name: cudf
-  version: {{ environ.get('GIT_DESCRIBE_TAG', '0.0.0.dev').lstrip('v') }}
+  version: {{ version }}
 
 source:
   path: ../..
 
 build:
-  number: {{ environ.get('GIT_DESCRIBE_NUMBER', 0) }}
+  number: {{ git_revision_count }}
   script_env:
     - CUDF_BUILD_NO_GPU_TEST
 
@@ -36,4 +40,4 @@ about:
   home: http://rapids.ai/
   license: APACHE
   # license_file: LICENSE
-  summary: cuDF GPU Dataframe core library
+  summary: cuDF GPU DataFrame core library
