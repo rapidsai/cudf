@@ -1,4 +1,4 @@
-# <div align="left"><img src="img/rapids_logo.png" height="32px"/>&nbsp;cuDF - GPU DataFrames</div>
+# <div align="left"><img src="img/rapids_logo.png" width="90px"/>&nbsp;cuDF - GPU DataFrames</div>
 
 [![Build Status](http://18.191.94.64/buildStatus/icon?job=cudf-master)](http://18.191.94.64/job/cudf-master/)&nbsp;&nbsp;[![Documentation Status](https://readthedocs.org/projects/pygdf/badge/?version=latest)](http://pygdf.readthedocs.io/en/latest/?badge=latest)
 
