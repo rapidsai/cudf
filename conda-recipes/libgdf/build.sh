@@ -11,11 +11,6 @@ fi
 git clean -xdf
 # Change directory for build process
 cd libgdf
-# Patch tests for CUDA 10 skipping hash_map
-## See https://github.com/rapidsai/libgdf/pull/149
-if [ ${CUDA:0:4} == '10.0' ]; then
-  sed -i '/hash_map/d' ./src/tests/CMakeLists.txt
-fi
 # Use CMake-based build procedure
 mkdir build
 cd build
