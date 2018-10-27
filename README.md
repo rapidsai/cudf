@@ -27,15 +27,16 @@ source activate cudf
 
 To install cuDF from source
 
-1. Create the conda environment `cudf` as detailed above
-2. Clone the repository
+1. Clone the repository
 ```bash
 git clone --recurse-submodules https://github.com/rapidsai/cudf.git
+cd cudf
 ```
+2. Create the conda development environment `cudf` as detailed above
 3. Build and install `libgdf`
 ```bash
-mkdir -p cudf/libgdf/build
-cd cudf/libgdf/build
+mkdir -p libgdf/build
+cd libgdf/build
 cmake .. -DHASH_JOIN=ON -DCMAKE_INSTALL_PREFIX=$CONDA_PREFIX
 make -j install
 make copy_python
@@ -43,6 +44,7 @@ python setup.py install
 ```
 4. Build and install `cudf` from the root of the repository
 ```bash
+cd ../..
 python setup.py install
 ```
 ### Build in Docker Container
