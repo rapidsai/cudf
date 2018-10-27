@@ -1,6 +1,5 @@
 # cuDF
 
-### :warning: Repo is frozen until 10/26 for refactoring to cuDF, no new issues or PRs :warning:
 
 [![Build Status](http://18.191.94.64/buildStatus/icon?job=pygdf-master)](http://18.191.94.64/job/pygdf-master/)&nbsp;&nbsp;[![Documentation Status](https://readthedocs.org/projects/pygdf/badge/?version=latest)](http://pygdf.readthedocs.io/en/latest/?badge=latest)
 
