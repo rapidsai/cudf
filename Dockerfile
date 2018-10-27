@@ -26,7 +26,7 @@ SHELL ["/bin/bash", "-c"]
 
 # Build cuDF conda env
 ARG PYTHON_VERSION=3.5
-RUN conda create -n gdf python=${PYTHON_VERSION}
+RUN conda create -n cudf python=${PYTHON_VERSION}
 
 ARG NUMBA_VERSION=0.40.0
 ARG NUMPY_VERSION=1.14.3
