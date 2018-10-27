@@ -6,15 +6,14 @@ set -e
 
 SOURCE_BRANCH=master
 CUDA_REL=${CUDA:0:3}
-if [ ${CUDA:0:2} == '10' ]; then
+if [ "${CUDA:0:2}" == '10' ]; then
   # CUDA 10 release
   CUDA_REL=${CUDA:0:4}
 fi
 
-if [ ${CUDA_REL} == '9.2' ]; then
-  export LABEL_OPTION="-l dev -l cuda${CUDA_REL}"
-else
-  export LABEL_OPTION="-l cuda${CUDA_REL}"
+LABEL_OPTION="-l cuda${CUDA_REL}"
+if [ "${LABEL_DEV}" == '1' ]; then
+  LABEL_OPTION="-l dev ${LABEL_OPTION}"
 fi
 echo "LABEL_OPTION=${LABEL_OPTION}"
 
