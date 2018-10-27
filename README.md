@@ -1,9 +1,8 @@
-# <div align="left"><img src="img/rapids_logo.png" height="42px"/>&nbsp;&nbsp;cuDF - GPU DataFrames</div>
+# <div align="left"><img src="img/rapids_logo.png" height="32px"/>&nbsp;cuDF - GPU DataFrames</div>
 
 [![Build Status](http://18.191.94.64/buildStatus/icon?job=cudf-master)](http://18.191.94.64/job/cudf-master/)&nbsp;&nbsp;[![Documentation Status](https://readthedocs.org/projects/pygdf/badge/?version=latest)](http://pygdf.readthedocs.io/en/latest/?badge=latest)
 
 The RAPIDS cuDF library is a GPU DataFrame manipulation library based on Apache Arrow that accelerates loading, filtering, and manipulation of data for model training data preparation. The Python bindings of the core-accelerated CUDA DataFrame manipulation primitives mirror the pandas interface for seamless onboarding of pandas users.
-
 
 ## Setup
 
@@ -93,11 +92,11 @@ py.test
 
 Please see the [Demo Docker Repository](https://hub.docker.com/r/rapidsai/rapidsai/),  choosing a tag based on the NVIDIA CUDA version you’re running, for example notebooks on how you can utilize cuDF.
 
-## <div align="left"><img src="img/rapids_logo.png" width="220px"/></div> Open GPU Data Science
+## <div align="left"><img src="img/rapids_logo.png" width="265px"/></div> Open GPU Data Science
 
 The RAPIDS suite of open source software libraries aim to enable execution of end-to-end data science and analytics pipelines entirely on GPUs. It relies on NVIDIA® CUDA® primitives for low-level compute optimization, but exposing that GPU parallelism and high-bandwidth memory speed through user-friendly Python interfaces.
 
-<p style="text-align:center"><img src="img/rapids_arrow.png" width="80%"/></p>
+<p align="center"><img src="img/rapids_arrow.png" width="80%"/></p>
 
 ### GPU Arrow
 
