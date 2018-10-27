@@ -3,8 +3,8 @@
 Thanks for wanting to contribute to cuDF :)
 
 First, if you need some help or want to chat to the core developers, please
-visit http://gpuopenanalytics.com/#/COMMUNITY for links to Slack and Google
-Groups.
+visit https://rapids.ai/community.html for links to our Google Group and other
+communication channels.
 
 Here's some guidelines to help the review process go smoothly.
 
