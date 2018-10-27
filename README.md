@@ -1,12 +1,11 @@
-# PyGDF
+# cuDF
 
 ### :warning: Repo is frozen until 10/26 for refactoring to cuDF, no new issues or PRs :warning:
 
 [![Build Status](http://18.191.94.64/buildStatus/icon?job=pygdf-master)](http://18.191.94.64/job/pygdf-master/)&nbsp;&nbsp;[![Documentation Status](https://readthedocs.org/projects/pygdf/badge/?version=latest)](http://pygdf.readthedocs.io/en/latest/?badge=latest)
 
-PyGDF implements the Python interface to access and manipulate the GPU DataFrame of [GPU Open Analytics Initiative (GoAi)](http://gpuopenanalytics.com/).  We aim to provide a simple interface that is similar to the Pandas DataFrame and hide the details of GPU programming. 
+The RAPIDS cuDF library is a DataFrame manipulation library based on Apache Arrow that accelerates loading, filtering, and manipulation of data for model training data preparation. The Python bindings of the core-accelerated CUDA DataFrame manipulation primitives mirror the pandas interface for seamless onboarding of pandas users.
 
-[Read more about GoAi and the GDF](#gpu-open-analytics-initiative)
 
 ## Setup
 
@@ -14,54 +13,60 @@ PyGDF implements the Python interface to access and manipulate the GPU DataFrame
 
 You can get a minimal conda installation with [Miniconda](https://conda.io/miniconda.html) or get the full installation with [Anaconda](https://www.anaconda.com/download).
 
-You can install and update PyGDF using the conda command:
+You can install and update cuDF using the conda command:
 
 ```bash
-conda install -c numba -c conda-forge -c gpuopenanalytics/label/dev -c defaults pygdf=0.1.0a3
+conda install -c numba -c conda-forge -c rapidsai/label/dev -c defaults cudf=0.2.0a1
 ```
 
 You can create and activate a development environment using the conda command:
 
 ```bash
-conda env create --name pygdf_dev --file conda_environments/testing_py35.yml
-source activate pygdf_dev
+conda env create --name cudf_dev --file conda_environments/testing_py35.yml
+source activate cudf_dev
 ```
 
 ### Install from Source
 
-To install PyGDF from source, clone the repository and run the python install command:
+To install cuDF from source, clone the repository and run the following commands:
 
 ```bash
-git clone https://github.com/gpuopenanalytics/pygdf.git
+git clone --recurse-submodules https://github.com/rapidsai/cudf.git
+mkdir -p cudf/libgdf/build
+cd cudf/libgdf/build
+cmake .. -DHASH_JOIN=ON -DCMAKE_INSTALL_PREFIX=$CONDA_PREFIX
+make -j install
+make copy_python
+python setup.py install
+
+cd ../../cudf
 python setup.py install
 ```
 
-**Note**: This assumes dependencies including [libgdf](https://github.com/gpuopenanalytics/libgdf) are already installed, so it is recommended to use the conda environment.
-
-A Dockerfile is provided for building and installing LibGDF and PyGDF from their respective master branches.
+A Dockerfile is provided for building and installing the cuDF master branch.
 
 **Notes**:
 * We test with and recommended installing [nvidia-docker2](https://github.com/nvidia/nvidia-docker/wiki/Installation-(version-2.0))
 * Host's installed nvidia driver must support >= the specified CUDA version (9.2 by default).
 * Alternative CUDA_VERSION should be specified via Docker [build-arg](https://docs.docker.com/engine/reference/commandline/build/#set-build-time-variables---build-arg)
-* Alternate branches for libgdf and pygdf may be specified as Docker build-args LIBGDF_REPO and PYGDF_REPO. See Dockerfile for example.
+* Alternate branches for cudf may be specified as Docker build-args CUDF_REPO. See Dockerfile for example.
 * Ubuntu 16.04 is the default OS for this container. Alternate OSes may be specified as Docker build-arg LINUX_VERSION. See list of [available images](https://hub.docker.com/r/nvidia/cuda/).
 * Python 3.6 is default, but other versions may be specified via PYTHON_VERSION build-arg
 * GCC & G++ 5.x are default compiler versions, but other versions (which are supplied by the OS package manager) may be specified via CC and CXX build-args respectively
 * numba (0.40.0), numpy (1.14.3), and pandas (0.20.3) versions are also configurable as build-args
 
-From pygdf project root, to build with defaults:
+From cudf project root, to build with defaults:
 ```
-docker build -t pygdf .
+docker build -t cudf .
 ...
  ---> ec65aaa3d4b1
  Successfully built ec65aaa3d4b1
- Successfully tagged pygdf:latest
+ Successfully tagged cudf:latest
 
-docker run --runtime=nvidia -it pygdf bash
+docker run --runtime=nvidia -it cudf bash
 /# source activate gdf
-(gdf) root@3f689ba9c842:/# python -c "import pygdf"
-(gdf) root@3f689ba9c842:/# 
+(gdf) root@3f689ba9c842:/# python -c "import cudf"
+(gdf) root@3f689ba9c842:/#
 ```
 
 ### Pip
@@ -80,16 +85,16 @@ py.test
 
 ## Getting Started
 
-Please see the [Demo Docker Repository](https://github.com/gpuopenanalytics/demo-docker) for example notebooks on how you can utilize the GPU DataFrame.
+Please see the [Demo Docker Repository](https://hub.docker.com/r/rapidsai/rapidsai/),  choosing a tag based on the NVIDIA driver version you’re running, for example notebooks on how you can utilize cuDF.
 
-## GPU Open Analytics Initiative
+## RAPIDS Open GPU Data Science
 
-The GPU Open Analytics Initiative (GoAi) seeks to foster and develop open collaboration between GPU analytics projects and products to enable data scientists to efficiently combine the best tools for their workflows. The first project of GoAi is the GPU DataFrame (GDF), which enables tabular data to be directly exchanged between libraries and applications on the GPU.
+The RAPIDS suite of open source software libraries aim to enable execution of end-to-end data science and analytics pipelines entirely on GPUs. It relies on NVIDIA® CUDA® primitives for low-level compute optimization, but exposing that GPU parallelism and high-bandwidth memory speed through user-friendly Python interfaces.
 
-<div align="center"><img src="img/goai_logo.png" width="50%"/></div>
+<div align="center"><img src="img/rapids_logo.png" width="40%"/></div>
 
-### GPU DataFrame
+### GPU Arrow
 
-The GPU DataFrame is a common API that enables efficient interchange of tabular data between processes running on the GPU. End-to-end computation on the GPU avoids unnecessary copying and converting of data off the GPU, reducing compute time and cost for high-performance analytics common in artificial intelligence workloads. The GPU DataFrame uses the [Apache Arrow](https://arrow.apache.org/) columnar data format on the GPU. Currently, a subset of the features in Arrow are supported.
+The GPU version of Arrow is a common API that enables efficient interchange of tabular data between processes running on the GPU. End-to-end computation on the GPU avoids unnecessary copying and converting of data off the GPU, reducing compute time and cost for high-performance analytics common in artificial intelligence workloads. As the name implies, cuDF uses the [Apache Arrow](https://arrow.apache.org/) columnar data format on the GPU. Currently, a subset of the features in Arrow are supported.
 
-<div align="center"><img src="img/GDF_community.png" width="50%"/></div>
+<div align="center"><img src="img/rapids_arrow.png" width="80%"/></div>
