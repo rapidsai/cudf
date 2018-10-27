@@ -1,10 +1,6 @@
-# libgdf: GPU Dataframes
+# libgdf: GPU DataFrames
 
-### :warning: Repo is frozen until 10/26 for refactoring to cuDF, no new issues or PRs :warning:
-
-[![Build Status](http://18.191.94.64/buildStatus/icon?job=libgdf-master)](http://18.191.94.64/job/libgdf-master/)
-
-libgdf is a C library for implementing common functionality for a GPU Data Frame.  For more project details, see [the wiki](https://github.com/gpuopenanalytics/libgdf/wiki/Home).
+libgdf is a C library for implementing common functionality for a GPU DataFrame.
 
 ## Development Setup
 
@@ -12,29 +8,16 @@ The following instructions are tested on Linux and OSX systems.
 
 Compiler requirement:
 
-* `g++` 4.8 or 5.4
+* `g++` 5.4
 * `cmake` 3.12+
 
 CUDA requirement:
 
-* CUDA 9.0+
+* CUDA 9.2+
 
-You can obtain CUDA from [https://developer.nvidia.com/cuda-downloads](https://developer.nvidia.com/cuda-downloads).
+You can obtain CUDA from [https://developer.nvidia.com/cuda-downloads](https://developer.nvidia.com/cuda-downloads)
 
 ### Get dependencies
-
-**Note**: This repo uses submodules. Make sure you cloned recursively:
-
-```bash
-git clone --recurse-submodules git@github.com:gpuopenanalytics/libgdf.git
-```
-
-Or, after cloning:
-
-```bash
-cd libgdf
-git submodule update --init --recursive
-```
 
 Since `cmake` will download and build Apache Arrow (version 0.7.1 or
 0.8+) you may need to install Boost C++ (version 1.58) before running
@@ -73,7 +56,7 @@ the dependencies.
 
 ```bash
 # create the conda environment (assuming in build directory)
-$ conda env create --name libgdf_dev --file ../conda_environments/dev_py35.yml
+$ conda env create --name libgdf_dev --file conda_environments/dev_py35.yml
 # activate the environment
 $ source activate libgdf_dev
 # when not using default arrow version 0.10.0, run
@@ -87,11 +70,11 @@ For additional information, the python cffi wrapper code requires `cffi` and
 `pytest`.  The testing code requires `numba` and `cudatoolkit` as an
 additional dependency.  All these are installed from the previous commands.
 
-The environment can be updated from `../conda_environments/dev_py35.yml` as
+The environment can be updated from `conda_environments/dev_py35.yml` as
 development includes/changes the depedencies.  To do so, run:
 
 ```bash
-conda env update --name libgdf_dev --file ../conda_environments/dev_py35.yml
+conda env update --name libgdf_dev --file conda_environments/dev_py35.yml
 ```
 Note that `dev_py35.yml` uses the latest version of pyarrow.
 Reinstall pyarrow if needed using `conda install
