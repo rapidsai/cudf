@@ -2,11 +2,11 @@
 
 [![Build Status](http://18.191.94.64/buildStatus/icon?job=cudf-master)](http://18.191.94.64/job/cudf-master/)&nbsp;&nbsp;[![Documentation Status](https://readthedocs.org/projects/pygdf/badge/?version=latest)](http://pygdf.readthedocs.io/en/latest/?badge=latest)
 
-The RAPIDS cuDF library is a GPU DataFrame manipulation library based on Apache Arrow that accelerates loading, filtering, and manipulation of data for model training data preparation. The Python bindings of the core-accelerated CUDA DataFrame manipulation primitives mirror the pandas interface for seamless onboarding of pandas users.
+The [RAPIDS](https://rapids.ai) cuDF library is a GPU DataFrame manipulation library based on Apache Arrow that accelerates loading, filtering, and manipulation of data for model training data preparation. The Python bindings of the core-accelerated CUDA DataFrame manipulation primitives mirror the pandas interface for seamless onboarding of pandas users.
 
-## Quick Start - Demo Container
+## Quick Start
 
-Please see the [Demo Docker Repository](https://hub.docker.com/r/rapidsai/rapidsai/), choosing a tag based on the NVIDIA CUDA version you’re running, for example notebooks on how you can utilize cuDF.
+Please see the [Demo Docker Repository](https://hub.docker.com/r/rapidsai/rapidsai/), choosing a tag based on the NVIDIA CUDA version you’re running. This provides a ready to run Docker container with example notebooks and data, showcasing how you can utilize cuDF.
 
 ## Install cuDF
 
@@ -31,20 +31,24 @@ source activate cudf
 
 Support is coming soon, please use conda for the time being.
 
-## Development Setup for cuDF & libgdf
+## Development Setup
 
-The following instructions are tested on Linux and OSX systems.
+The following instructions are tested on Linux Ubuntu 16.04 & 18.04, to enable
+from source builds and development. Other operatings systems may be compatible,
+but are not currently supported.
 
-### Get Dependencies for libgdf
+### Get libgdf Dependencies
 
-Compiler requirement:
+Compiler requirements:
 
 * `g++` 5.4
 * `cmake` 3.12
 
-CUDA requirement:
+CUDA/GPU requirements:
 
 * CUDA 9.2+
+* NVIDIA driver 396.44+
+* Pascal architecture or better
 
 You can obtain CUDA from [https://developer.nvidia.com/cuda-downloads](https://developer.nvidia.com/cuda-downloads)
 
@@ -92,31 +96,48 @@ python setup.py install
 
 ## Automated Build in Docker Container
 
-A Dockerfile is provided with a preconfigured conda environment for building and installing the cuDF master branch.
+A Dockerfile is provided with a preconfigured conda environment for building and installing cuDF from source based off of the master branch.
 
-**Notes**:
-* We test with and recommended installing [nvidia-docker2](https://github.com/nvidia/nvidia-docker/wiki/Installation-(version-2.0))
-* Host's installed nvidia driver must support >= the specified CUDA version (9.2 by default).
-* Alternative CUDA_VERSION should be specified via Docker [build-arg](https://docs.docker.com/engine/reference/commandline/build/#set-build-time-variables---build-arg)
-* Alternate branches for cudf may be specified as Docker build-args CUDF_REPO. See Dockerfile for example.
-* Ubuntu 16.04 is the default OS for this container. Alternate OSes may be specified as Docker build-arg LINUX_VERSION. See list of [available images](https://hub.docker.com/r/nvidia/cuda/).
-* Python 3.5 is default, but other versions may be specified via PYTHON_VERSION build-arg
-* GCC & G++ 5.x are default compiler versions, but other versions (which are supplied by the OS package manager) may be specified via CC and CXX build-args respectively
-* numba (0.40.0), numpy (1.14.3), and pandas (0.20.3) versions are also configurable as build-args
+### Prerequisites
 
-From cudf project root, to build with defaults:
-```
+* Install [nvidia-docker2](https://github.com/nvidia/nvidia-docker/wiki/Installation-(version-2.0)) for Docker + GPU support
+* Verify NVIDIA driver is `396.44` or higher
+
+### Usage
+
+From cudf project root run the following, to build with defaults:
+```bash
 docker build -t cudf .
-...
- ---> ec65aaa3d4b1
- Successfully built ec65aaa3d4b1
- Successfully tagged cudf:latest
-
+```
+After the container is built run the container:
+```
 docker run --runtime=nvidia -it cudf bash
-/# source activate cudf
+```
+Activate the conda environment `cudf` to use the newly build cuDF and libgdf libraries
+```
+root@3f689ba9c842:/# source activate cudf
 (gdf) root@3f689ba9c842:/# python -c "import cudf"
 (gdf) root@3f689ba9c842:/#
 ```
+
+### Customizing the Build
+
+Several build arguments are available to customize the build process of the
+container. These are spcified by using the Docker [build-arg](https://docs.docker.com/engine/reference/commandline/build/#set-build-time-variables---build-arg)
+flag. Below is a list of the available arguments and their purpose:
+
+| Build Argument | Default Value | Other Value(s) | Purpose |
+| --- | --- | --- | --- |
+| `CUDA_VERSION` | 9.2 | 10.0 | set CUDA version |
+| `LINUX_VERSION` | ubuntu16.04 | ubuntu18.04 | set Ubuntu version |
+| `CC` & `CXX` | 5 | 7 | set gcc/g++ version; **NOTE:** gcc7 requires Ubuntu 18.04 |
+| `CUDF_REPO` | This repo | Forks of cuDF | set git URL to use for `git clone` |
+| `CUDF_BRANCH` | master | Any branch name | set git branch to checkout of `CUDF_REPO` |
+| `NUMBA_VERSION` | 0.40.0 | Not supported | set numba version |
+| `NUMPY_VERSION` | 1.14.3 | Not supported | set numpy version |
+| `PANDAS_VERSION` | 0.20.3 | Not supported | set pandas version |
+| `PYARROW_VERSION` | 0.10.0 | 0.8.0+ | set pyarrow version |
+| `PYTHON_VERSION` | 3.5 | 3.6 | set python version |
 
 ## Testing
 
