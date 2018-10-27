@@ -16,6 +16,8 @@ matrix:
   include:
     - env: CUDA=9.2.148_396.37 PYTHON=3.5
     - env: CUDA=9.2.148_396.37 PYTHON=3.6
+    - env: CUDA=10.0.130_410.48 PYTHON=3.5
+    - env: CUDA=10.0.130_410.48 PYTHON=3.6
 
 before_install:
   # install build environment for libgdf
