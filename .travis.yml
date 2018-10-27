@@ -23,7 +23,7 @@ before_install:
   # install build environment for libgdf
   - source ./travisci/libgdf/install-env-libgdf.sh
   # install miniconda
-  - travis_retry wget https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh -O miniconda.sh
+  - travis_retry wget --progress=dot:mega https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh -O miniconda.sh
   - chmod +x miniconda.sh
   - ./miniconda.sh -b
   - export PATH=$HOME/miniconda3/bin:$PATH
