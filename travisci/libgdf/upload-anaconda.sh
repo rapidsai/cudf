@@ -11,9 +11,9 @@ if [ "${CUDA:0:2}" == '10' ]; then
   CUDA_REL=${CUDA:0:4}
 fi
 
-LABEL_OPTION="-l dev -l cuda${CUDA_REL}"
+LABEL_OPTION="--label dev --label cuda${CUDA_REL}"
 if [ "${LABEL_MAIN}" == '1' ]; then
-  LABEL_OPTION="-l main -l cuda${CUDA_REL}"
+  LABEL_OPTION="--label main --label cuda${CUDA_REL}"
 fi
 echo "LABEL_OPTION=${LABEL_OPTION}"
 
