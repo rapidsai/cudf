@@ -43,9 +43,7 @@ RUN conda install -n cudf -y -c numba -c conda-forge -c defaults \
 # Clone cuDF repo
 ARG CUDF_REPO=https://github.com/rapidsai/cudf
 ARG CUDF_BRANCH=master
-# To build container against https://github.com/rapidsai/cudf/pull/138:
-# docker build --build-arg CUDF_REPO="https://github.com/dantegd/cudf -b enh-ext-unique-value-counts" -t gdf .
-RUN git clone --recurse-submodules ${CUDF_REPO} /cudf -b ${CUDF_BRANCH}}
+RUN git clone --recurse-submodules -b ${CUDF_BRANCH} ${CUDF_REPO} /cudf
 
 # LibGDF build/install
 ENV CC=/usr/bin/gcc-${CC}
