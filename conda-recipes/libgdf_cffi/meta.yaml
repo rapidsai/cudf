@@ -17,7 +17,7 @@ source:
 
 build:
   number: {{ cuda_number }}{{ git_revision_count }}
-  string: cuda{{ cuda_version }}_py{{ py_version }}_{{ git_revision_count }}
+  string: cuda{{ cuda_version }}_py{{ py_version }}_{{ cuda_number }}{{ git_revision_count }}
   script_env:
     - CC
     - CXX
