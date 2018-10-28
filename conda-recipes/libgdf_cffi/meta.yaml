@@ -5,7 +5,6 @@
 {% set version = environ.get('GIT_DESCRIBE_TAG', '0.0.0.dev').lstrip('v') %}
 {% set git_revision_count=environ.get('GIT_DESCRIBE_NUMBER', 0) %}
 {% set cuda_version='.'.join(environ.get('CUDA', 'unknown').split('.')[:2]) %}
-{% set cuda_number=''.join(environ.get('CUDA', 'unknown').split('.')[:2]) %}
 {% set py_version=environ.get('CONDA_PY', 35) %}
 package:
   name: libgdf_cffi
@@ -16,8 +15,8 @@ source:
   path: ../..
 
 build:
-  number: {{ cuda_number }}{{ git_revision_count }}
-  string: cuda{{ cuda_version }}_py{{ py_version }}_{{ cuda_number }}{{ git_revision_count }}
+  number: {{ git_revision_count }}
+  string: cuda{{ cuda_version }}_py{{ py_version }}_{{ git_revision_count }}
   script_env:
     - CC
     - CXX
