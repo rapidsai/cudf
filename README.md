@@ -117,8 +117,8 @@ docker run --runtime=nvidia -it cudf bash
 Activate the conda environment `cudf` to use the newly build cuDF and libgdf libraries
 ```
 root@3f689ba9c842:/# source activate cudf
-(gdf) root@3f689ba9c842:/# python -c "import cudf"
-(gdf) root@3f689ba9c842:/#
+(cudf) root@3f689ba9c842:/# python -c "import cudf"
+(cudf) root@3f689ba9c842:/#
 ```
 
 ### Customizing the Build
