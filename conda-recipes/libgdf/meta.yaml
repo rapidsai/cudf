@@ -36,6 +36,6 @@ test:
 
 about:
   home: http://rapids.ai/
-  license: APACHE
+  license: Apache-2.0
   # license_file: LICENSE
   summary: cuDF-libgdf library
