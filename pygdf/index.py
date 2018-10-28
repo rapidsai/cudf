@@ -5,7 +5,7 @@ from __future__ import print_function, division
 import pandas as pd
 import numpy as np
 import pickle
-from numba import cuda
+from .backend import cuda
 
 from . import cudautils, utils, columnops
 from .buffer import Buffer

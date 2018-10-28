@@ -7,7 +7,7 @@ LibGDF operates on column.
 from numbers import Number
 
 import numpy as np
-from numba import cuda
+from .backend import cuda
 
 from . import _gdf
 from . import cudautils

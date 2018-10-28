@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 
-from numba import cuda
+from .backend import cuda
 from libgdf_cffi import libgdf
 
 from . import _gdf, columnops, utils, cudautils

@@ -3,7 +3,7 @@
 import numpy as np
 import collections
 
-from numba import cuda
+from .backend import cuda
 from .dataframe import DataFrame, Series
 from .buffer import Buffer
 

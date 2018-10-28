@@ -1,6 +1,6 @@
 
 import numpy as np
-from numba import cuda
+from .backend import cuda
 
 from . import cudautils, utils
 from .serialize import register_distributed_serializer

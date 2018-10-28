@@ -10,7 +10,7 @@ import itertools
 import numpy as np
 import pyarrow as pa
 
-from numba import cuda
+from .backend import cuda
 
 from libgdf_cffi import ffi, libgdf
 from . import cudautils
@@ -317,12 +317,10 @@ class SegmentedRadixortPlan(object):
         d_fullsegs = cuda.device_array(segments.size + 1, dtype=seg_dtype)
         d_begins = d_fullsegs[:-1]
         d_ends = d_fullsegs[1:]
-
         # Note: .astype is required below because .copy_to_device
         #       is just a plain memcpy
         d_begins.copy_to_device(cudautils.astype(segments, dtype=seg_dtype))
         d_ends[-1:].copy_to_device(np.require([self.nelem], dtype=seg_dtype))
-
         # The following is to handle the segument size limit due to
         # max CUDA grid size.
         range0 = range(0, segments.size, segsize_limit)

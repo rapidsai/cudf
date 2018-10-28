@@ -6,8 +6,6 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 
-from numba import cuda
-
 import pygdf as gd
 from pygdf.dataframe import Series, DataFrame
 from pygdf.buffer import Buffer
@@ -16,6 +14,7 @@ from pygdf.settings import set_options
 from itertools import combinations
 
 from . import utils
+from .backends import cuda_backend_test
 
 
 def test_buffer_basic():
@@ -110,7 +109,8 @@ def test_series_indexing():
     np.testing.assert_equal(sr3.to_array(), a1[3:12:2])
 
 
-def test_dataframe_basic():
+@cuda_backend_test
+def test_dataframe_basic(cuda):
     np.random.seed(0)
     df = DataFrame()
 
@@ -472,7 +472,8 @@ def test_dataframe_append_empty():
     pd.testing.assert_frame_equal(gdf.to_pandas(), pdf)
 
 
-def test_dataframe_setitem_from_masked_object():
+@cuda_backend_test
+def test_dataframe_setitem_from_masked_object(cuda):
     ary = np.random.randn(100)
     mask = np.zeros(100, dtype=bool)
     mask[:20] = True

@@ -3,8 +3,8 @@
 import functools
 
 from numba.utils import pysignature, exec_
-from numba import six
-from numba import cuda
+from numba import cuda, six
+from .backend import cuda as cuda_
 
 from pygdf.docutils import docfmt_partial
 from pygdf import cudautils
@@ -93,7 +93,7 @@ class ApplyKernelCompilerBase(object):
         # Allocate output columns
         outputs = {}
         for k, dt in self.outcols.items():
-            outputs[k] = cuda.device_array(len(df), dtype=dt)
+            outputs[k] = cuda_.device_array(len(df), dtype=dt)
         # Bind argument
         args = {}
         for dct in [inputs, outputs, self.kwargs]:

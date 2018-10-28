@@ -9,8 +9,9 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 
-from numba import cuda
+from .backend import cuda
 from numba.cuda.cudadrv.devicearray import DeviceNDArray
+from .cudaarray import CudaNDArray
 
 from . import cudautils, formatting, queryutils, applyutils, utils, _gdf
 from .index import GenericIndex, Index, RangeIndex
@@ -377,7 +378,7 @@ class DataFrame(object):
         series = Series(col)
         sind = series.index
         VALID = isinstance(col, (np.ndarray, DeviceNDArray, list, Series,
-                                 Column))
+                                 Column, CudaNDArray))
         if len(self) > 0 and len(series) == 1 and not VALID:
             arr = cuda.device_array(shape=len(index), dtype=series.dtype)
             cudautils.gpu_fill_value.forall(arr.size)(arr, col)

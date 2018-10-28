@@ -4,7 +4,7 @@ import sys
 import pickle
 
 import numpy as np
-from numba import cuda
+from pygdf.backend import cuda
 import pandas as pd
 
 from pygdf.dataframe import DataFrame, GenericIndex

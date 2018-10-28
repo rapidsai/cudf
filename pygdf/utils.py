@@ -2,7 +2,8 @@ from collections import namedtuple
 
 import numpy as np
 
-from numba import njit, cuda
+from numba import njit
+from .backend import cuda
 
 mask_dtype = np.dtype(np.uint8)
 mask_bitsize = mask_dtype.itemsize * 8

@@ -7,7 +7,7 @@ import collections
 import socket
 import threading
 
-from numba import cuda
+from .backend import cuda
 
 try:
     import zmq
