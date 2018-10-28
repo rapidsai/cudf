@@ -17,6 +17,9 @@ source:
 build:
   number: {{ git_revision_count }}
   string: cuda{{ cuda_version }}_py{{ py_version }}_{{ git_revision_count }}
+  script_env:
+    - CC
+    - CXX
 
 requirements:
   # use channel:
@@ -27,7 +30,7 @@ requirements:
     - cffi
     - setuptools
   run:
-    - libgdf {{ version }}
+    - libgdf {{ version }}.*
     - python x.x
     - cffi
 
