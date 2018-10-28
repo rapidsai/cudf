@@ -1,0 +1,45 @@
+# Copyright (c) 2018, NVIDIA CORPORATION.
+
+# Usage:
+#   conda build -c defaults -c conda-forge .
+{% set version = environ.get('GIT_DESCRIBE_TAG', '0.0.0.dev').lstrip('v') %}
+{% set git_revision_count=environ.get('GIT_DESCRIBE_NUMBER', 0) %}
+{% set cuda_version='.'.join(environ.get('CUDA', 'unknown').split('.')[:2]) %}
+{% set py_version=environ.get('CONDA_PY', 35) %}
+package:
+  name: libgdf_cffi
+  version: {{ version }}
+
+source:
+  # git_url: ../..
+  path: ../..
+
+build:
+  number: {{ git_revision_count }}
+  string: cuda{{ cuda_version }}_py{{ py_version }}_{{ git_revision_count }}
+  script_env:
+    - CC
+    - CXX
+
+requirements:
+  # use channel:
+  #   - defaults
+  build:
+    - cmake
+    - python x.x
+    - cffi
+    - setuptools
+  run:
+    - libgdf {{ version }}.*
+    - python x.x
+    - cffi
+
+test:
+  commands:
+    - python -c "import libgdf_cffi"
+
+about:
+  home: http://rapids.ai/
+  license: Apache-2.0
+  # license_file: LICENSE
+  summary: cuDF-libgdf_cffi library

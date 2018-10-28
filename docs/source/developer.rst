@@ -7,7 +7,7 @@ Code Organization
 This shows the basic code organization.
 
 Currently, the repo is basically flat.  All implementations are directly under
-under the ``pygdf/`` directory.  All tests are in ``pygdf/tests/`` directory.
+under the ``cudf/`` directory.  All tests are in ``cudf/tests/`` directory.
 
 Here's a quick map to decide which file contains which feature:
 
@@ -55,11 +55,11 @@ Code that should move to libgdf
 Code that should be re-implemented in libgdf in CUDA-C for better
 reusability and performance.
 
-- ``pygdf/cudautils.py`` contains a lot of GPU helper functions
+- ``cudf/cudautils.py`` contains a lot of GPU helper functions
   that are jitted by numba with ``@cuda.jit`` into CUDA kernels.
    All CUDA kernels in this file should be moved to libgdf if possible.
 
-- Some logic in ``pygdf/groupby.py`` should be move to libgdf to make
+- Some logic in ``cudf/groupby.py`` should be move to libgdf to make
   groupby operation faster.  Some groupby aggregations are implemented with
   ``@cuda.jit`` here.
 
