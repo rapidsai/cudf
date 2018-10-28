@@ -114,7 +114,7 @@ After the container is built run the container:
 ```
 docker run --runtime=nvidia -it cudf bash
 ```
-Activate the conda environment `cudf` to use the newly build cuDF and libgdf libraries
+Activate the conda environment `cudf` to use the newly built cuDF and libgdf libraries:
 ```
 root@3f689ba9c842:/# source activate cudf
 (cudf) root@3f689ba9c842:/# python -c "import cudf"
@@ -174,6 +174,6 @@ The RAPIDS suite of open source software libraries aim to enable execution of en
 
 <p align="center"><img src="img/rapids_arrow.png" width="80%"/></p>
 
-### GPU Arrow
+### Apache Arrow on GPU
 
-The GPU version of Arrow is a common API that enables efficient interchange of tabular data between processes running on the GPU. End-to-end computation on the GPU avoids unnecessary copying and converting of data off the GPU, reducing compute time and cost for high-performance analytics common in artificial intelligence workloads. As the name implies, cuDF uses the [Apache Arrow](https://arrow.apache.org/) columnar data format on the GPU. Currently, a subset of the features in Arrow are supported.
+The GPU version of [Apache Arrow](https://arrow.apache.org/) is a common API that enables efficient interchange of tabular data between processes running on the GPU. End-to-end computation on the GPU avoids unnecessary copying and converting of data off the GPU, reducing compute time and cost for high-performance analytics common in artificial intelligence workloads. As the name implies, cuDF uses the Apache Arrow columnar data format on the GPU. Currently, a subset of the features in Apache Arrow are supported.
