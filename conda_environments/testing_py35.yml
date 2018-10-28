@@ -2,7 +2,7 @@ name: pycudf_testing_py35
 channels:
 - numba
 - conda-forge
-- rapidsai/label/dev
+- rapidsai
 - defaults
 dependencies:
 - python=3.5.*

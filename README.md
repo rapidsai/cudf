@@ -17,7 +17,7 @@ You can get a minimal conda installation with [Miniconda](https://conda.io/minic
 You can install and update cuDF using the conda command:
 
 ```bash
-conda install -c numba -c conda-forge -c rapidsai/label/dev -c defaults cudf=0.2.0
+conda install -c numba -c conda-forge -c rapidsai -c defaults cudf=0.2.0
 ```
 
 You can create and activate a development environment using the conda command:

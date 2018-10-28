@@ -24,4 +24,4 @@ fi
 
 echo "Upload"
 echo ${UPLOADFILE}
-anaconda -t ${MY_UPLOAD_KEY} upload -u rapidsai -l dev --force ${UPLOADFILE}
+anaconda -t ${MY_UPLOAD_KEY} upload -u rapidsai -l main --force ${UPLOADFILE}

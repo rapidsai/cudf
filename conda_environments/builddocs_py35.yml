@@ -1,6 +1,6 @@
 name: builddocs_py35
 channels:
-- rapidsai/label/dev
+- rapidsai
 - conda-forge
 - numba
 - defaults
