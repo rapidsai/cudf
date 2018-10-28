@@ -102,6 +102,7 @@ A Dockerfile is provided with a preconfigured conda environment for building and
 
 * Install [nvidia-docker2](https://github.com/nvidia/nvidia-docker/wiki/Installation-(version-2.0)) for Docker + GPU support
 * Verify NVIDIA driver is `396.44` or higher
+* Ensure CUDA 9.2+ is installed
 
 ### Usage
 
