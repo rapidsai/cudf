@@ -378,11 +378,10 @@ def test_dataframe_emptycolumns_to_string():
     expect = '''
 Empty DataFrame
 Columns: ['a', 'b']
-Index: []    
+Index: []
 '''
     # values should match despite whitespace difference
     assert got.split() == expect.split()
-
 
 
 def test_dataframe_dtypes():
