@@ -356,6 +356,35 @@ def test_dataframe_to_string_wide():
     assert got.split() == expect.split()
 
 
+def test_dataframe_empty_to_string():
+    # Test for printing empty dataframe
+    df = DataFrame()
+    got = df.to_string()
+    print(got)
+    expect = '''
+Empty DataFrame
+Columns: []
+Index: []
+'''
+    # values should match despite whitespace difference
+    assert got.split() == expect.split()
+
+
+def test_dataframe_emptycolumns_to_string():
+    # Test for printing dataframe having empty columns
+    df = DataFrame({'a': [], 'b': []})
+    got = df.to_string()
+    print(got)
+    expect = '''
+Empty DataFrame
+Columns: ['a', 'b']
+Index: []    
+'''
+    # values should match despite whitespace difference
+    assert got.split() == expect.split()
+
+
+
 def test_dataframe_dtypes():
     dtypes = pd.Series([np.int32, np.float32, np.float64],
                        index=['c', 'a', 'b'])

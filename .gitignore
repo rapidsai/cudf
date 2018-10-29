@@ -11,7 +11,7 @@ __pycache__
 *.pytest_cache
 build
 htmlcov
-
+.idea
 ## libgdf
 Debug
 /libgdf/thirdparty/googletest/

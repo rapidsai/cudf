@@ -31,9 +31,16 @@ def format(index, cols, show_headers=True, more_cols=0, more_rows=0,
     The `str` of the formatted output
     """
     if not cols:
-        return "Empty DataFrame"
+        return "Empty DataFrame\nColumns: {}\nIndex: {}".format(
+            list(cols.keys()),
+            list(index)
+          )
+
     if len(list(cols.values())[0]) == 0:
-        return "Empty DataFrame"
+        return "Empty DataFrame\nColumns: {}\nIndex: {}".format(
+            list(cols.keys()),
+            list(index)
+        )
     # get number of rows from the first column
     nrows = len(next(iter(cols.values())))
     headers = tuple(cols.keys())

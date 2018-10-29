@@ -258,6 +258,8 @@ class DataFrame(object):
 
         if ncols is None:
             ncols = len(self.columns)
+        else:
+            ncols = min(ncols, len(self.columns))  # cap col count
 
         more_cols = len(self.columns) - ncols
         more_rows = len(self) - nrows
@@ -265,7 +267,8 @@ class DataFrame(object):
         # Prepare cells
         cols = OrderedDict()
         use_cols = list(self.columns[:ncols - 1])
-        use_cols.append(self.columns[-1])
+        if ncols > 0:
+            use_cols.append(self.columns[-1])
 
         for h in use_cols:
             cols[h] = self[h].values_to_string(nrows=nrows)
