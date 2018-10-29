@@ -170,9 +170,9 @@ endif(USE_NVTX)
 
 if (ARROW_NUMERIC_VERSION EQUAL 900)
   # arrow-0.9 requires boost_regex
-  target_link_libraries(gdf arrow boost_regex rmm)
+  target_link_libraries(gdf arrow boost_regex rmm )
 else()
-  target_link_libraries(gdf arrow rmm)
+  target_link_libraries(gdf arrow rmm NVStrings NVCategory)
 endif()
 
 # Command to symlink files into the build directory
