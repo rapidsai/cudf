@@ -121,7 +121,11 @@ class DatetimeColumn(columnops.TypedColumnBase):
 
     @property
     def as_numerical(self):
-        return self.view(numerical.NumericalColumn, dtype=self.data.dtype)
+        return self.view(
+            numerical.NumericalColumn,
+            dtype='int64',
+            data=self.data.astype('int64')
+        )
 
     def astype(self, dtype):
         if self.dtype is dtype:

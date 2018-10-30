@@ -114,7 +114,8 @@ class NumericalColumn(columnops.TypedColumnBase):
         elif np.issubdtype(dtype, np.datetime64):
             return self.astype('int64').view(
                 datetime.DatetimeColumn,
-                dtype='datetime64[ms]'
+                dtype=dtype,
+                data=self.data.astype(dtype)
             )
         else:
             col = self.replace(data=self.data.astype(dtype),
