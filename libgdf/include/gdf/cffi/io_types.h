@@ -65,7 +65,7 @@ typedef struct {
 	bool		skip_blank_lines;			// whether or not to ignore blank lines
 
 	char		*prefix;					// if there is no header or names, append this to the column ID as the name
-	bool		mangle_dupe_cols;			// if true: duplicate columns will be specified as ‘X’, ‘X.1’, …’X.N’, rather than ‘X’…’X’
+	bool		mangle_dupe_cols;			// if true: duplicate columns will be specified as (deleted because utf-8 chars kill the build)
 
 	char		**true_values;				// array of char *	what should be considered as True - each char string contains {col ID, true value, ...} - this will allow multiple true values to be specified over multiple columns
 	char		**false_values;				// array of char *	what should be considered as True - each char string contains {col ID, false value, ...} - this will allow multiple false values to be specified over multiple columns

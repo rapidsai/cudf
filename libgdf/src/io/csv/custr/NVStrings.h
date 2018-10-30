@@ -64,7 +64,7 @@ class NVStrings
     NVStrings(unsigned int count);
 
 public:
-    
+
     // Create new strings instance.
     // Parameters are host strings that are copied into device memory.
     NVStrings(const char** strs, unsigned int count);
@@ -79,26 +79,29 @@ public:
     size_t memsize();
     // number of strings managed by this instance
     unsigned int size();
-    
+
     // copy the list of strings back into the provided host memory
     int to_host(char** list, int start, int end);
     // create index for device strings contained in this instance
     // array must hold at least size() elements
     int create_index(std::pair<const char*,size_t>* strs, bool devmem=true );
-    // create bit-array identifying the null strings
-    int create_null_bitarray( unsigned char* bitarray, bool emptyIsNull=false, bool todevice=true );
+    // set bit-array identifying the null strings
+    // returns the number of nulls found
+    unsigned int set_null_bitarray( unsigned char* bitarray, bool emptyIsNull=false, bool todevice=true );
+    // set int array with position of null strings
+    unsigned int get_nulls( unsigned int* pos, bool emptyIsNull=false, bool todevice=true );
 
     // create a new instance containing only the strings at the specified positions
     NVStrings* sublist( unsigned int* pos, unsigned int count );
     // return a new instance without the specified strings
     NVStrings* remove_strings( unsigned int* pos, unsigned int count );
-    
+
     // return the length of each string
     unsigned int len(int* lengths, bool todevice=true);
 
     // compare single arg string to all the strings
     unsigned int compare( const char* str, int* results, bool todevice=true );
-    
+
     unsigned int stoi(int* results, bool todevice=true);   // returns integer values represented by each string
     unsigned int stof(float* results, bool todevice=true); // returns float values represented by each string
 
@@ -106,7 +109,7 @@ public:
     NVStrings* cat( NVStrings* others, const char* separator, const char* narep=0);
     // concatenates all strings into one new string
     NVStrings* join( const char* delimiter, const char* narep=0 );
-    
+
     // each string is split into a list of new strings
     int split( const char* delimiter, int maxsplit, std::vector<NVStrings*>& results);
     int rsplit( const char* delimiter, int maxsplit, std::vector<NVStrings*>& results);
@@ -116,7 +119,8 @@ public:
     int rpartition( const char* delimiter, std::vector<NVStrings*>& results);
 
     // split each string into a new column -- number of columns = string with the most delimiters
-    int split_column( const char* delimiter, int maxsplit, std::vector<NVStrings*>& results);
+    unsigned int split_column( const char* delimiter, int maxsplit, std::vector<NVStrings*>& results);
+    unsigned int rsplit_column( const char* delimiter, int maxsplit, std::vector<NVStrings*>& results);
 
     // return a specific character (as a string) by position for each string
     NVStrings* get(unsigned int pos);
@@ -135,6 +139,7 @@ public:
 
     // returns a substring of each string
     NVStrings* slice( int start=0, int stop=-1, int step=1 );
+    NVStrings* slice_from( int* starts=0, int* stop=0 );
     // inserts the specified string (repl) into each string
     NVStrings* slice_replace( const char* repl, int start=0, int stop=-1 );
     //
@@ -146,7 +151,7 @@ public:
     NVStrings* strip( const char* to_strip );
     // remove specified character if found at the end each string
     NVStrings* rstrip( const char* to_strip );
-    
+
     // return new strings with modified character case
     NVStrings* lower();
     NVStrings* upper();
@@ -159,9 +164,13 @@ public:
     // return value is the number of positive (>=0) results
     unsigned int find( const char* str, int start, int end, int* results, bool todevice=true );
     unsigned int rfind( const char* str, int start, int end, int* results, bool todevice=true );
+    unsigned int find_from( const char* str, int* starts, int* ends, int* results, bool todevice=true );
+    // pass a regex pattern to search for in each string
+    // return value is 1 if match is found or 0 if not
     unsigned int contains( const char* str, bool* results, bool todevice=true );
+    unsigned int contains_re( const char* ptn, bool* results, bool todevice=true );
 
-    //
+    // return unsigned 32-bit hash value for each string
     unsigned int hash(unsigned int* results, bool todevice=true);
 
     // translate characters in each string
