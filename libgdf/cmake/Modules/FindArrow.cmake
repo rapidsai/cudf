@@ -58,6 +58,11 @@ find_library(ARROW_STATIC_LIB NAMES libarrow.a
     NO_DEFAULT_PATH
     DOC "Path to Apache Arrow static library"
 )
+find_library(ARROW_GPU_SHARED_LIB NAMES libarrow_gpu.so
+    PATHS ${ARROW_SEARCH_LIB_PATH}
+    NO_DEFAULT_PATH
+    DOC "Path to Apache Arrow GPU shared library"
+)
 
 if (NOT ARROW_LIBS OR NOT ARROW_STATIC_LIB)
     message(FATAL_ERROR "Apache Arrow includes and libraries NOT found. "
@@ -68,7 +73,9 @@ else()
     set(ARROW_INCLUDEDIR ${ARROW_ROOT}/include/)
     set(ARROW_FOUND TRUE)
     add_library(arrow STATIC IMPORTED)
+    add_library(arrow_gpu SHARED IMPORTED)
     set_target_properties(arrow PROPERTIES IMPORTED_LOCATION "${ARROW_STATIC_LIB}")
+    set_target_properties(arrow_gpu PROPERTIES IMPORTED_LOCATION "${ARROW_GPU_SHARED_LIB}")
 
     # Determine arrow version information for CPP macros
     get_filename_component(ARROW_STATIC_LIB_DIR ${ARROW_STATIC_LIB} DIRECTORY)

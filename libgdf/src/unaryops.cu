@@ -10,6 +10,7 @@
 #include <gdf/gdf.h>
 #include <gdf/utils.h>
 #include <gdf/errorutils.h>
+#include <gdf/arrow.hpp>
 
 #include <thrust/copy.h>
 #include <thrust/execution_policy.h>
@@ -37,6 +38,7 @@ void gpu_unary_op(const T *data, const gdf_valid_type *valid,
         }
     }
 }
+
 
 template<typename T, typename Tout, typename F>
 struct UnaryOp {
@@ -80,11 +82,57 @@ struct UnaryOp {
 };
 
 
-template<typename T, typename F>
-struct MathOp {
+template<typename T, typename Tout, typename F>
+struct UnaryOpArrow {
     static
     gdf_error launch(gdf_column *input, gdf_column *output) {
-        return UnaryOp<T, T, F>::launch(input, output);
+        std::shared_ptr<arrow::PrimitiveArray> input_arrow, output_arrow;
+        input_arrow = gdf_to_arrow(input);
+        output_arrow = gdf_to_arrow(output);
+        // Return immediately for empty inputs
+        if((0==input_arrow->length()))
+        {
+          return GDF_SUCCESS;
+        }
+
+        /* check for size of the columns */
+        if (input_arrow->length() != output_arrow->length()) {
+          return GDF_COLUMN_SIZE_MISMATCH;
+        }
+
+        // find optimal blocksize
+        int mingridsize, blocksize;
+        CUDA_TRY(
+            cudaOccupancyMaxPotentialBlockSize(&mingridsize, &blocksize,
+                                               gpu_unary_op<T, Tout, F>)
+        );
+        // find needed gridsize
+        int neededgridsize = (input_arrow->length() + blocksize - 1) / blocksize;
+        int gridsize = std::min(neededgridsize, mingridsize);
+
+        F functor;
+        gpu_unary_op<<<gridsize, blocksize>>>(
+            // input
+            (const T*)input_arrow->values()->data(),
+            input_arrow->null_bitmap_data(),
+            input_arrow->length(),
+            // output
+            (Tout*)output_arrow->values()->data(),
+            // action
+            functor
+        );
+
+        CUDA_CHECK_LAST();
+        return GDF_SUCCESS;
+    }
+};
+
+
+template<typename T, typename F>
+struct MathOpArrow {
+    static
+    gdf_error launch(gdf_column *input, gdf_column *output) {
+        return UnaryOpArrow<T, T, F>::launch(input, output);
     }
 };
 
@@ -181,61 +229,61 @@ struct DeviceArcTan {
 DEF_UNARY_OP_REAL(gdf_sin)
 
 gdf_error gdf_sin_f32(gdf_column *input, gdf_column *output) {
-    return MathOp<float, DeviceSin<float> >::launch(input, output);
+    return MathOpArrow<float, DeviceSin<float> >::launch(input, output);
 }
 
 gdf_error gdf_sin_f64(gdf_column *input, gdf_column *output) {
-    return MathOp<double, DeviceSin<double> >::launch(input, output);
+    return MathOpArrow<double, DeviceSin<double> >::launch(input, output);
 }
 
 DEF_UNARY_OP_REAL(gdf_cos)
 
 gdf_error gdf_cos_f32(gdf_column *input, gdf_column *output) {
-    return MathOp<float, DeviceCos<float> >::launch(input, output);
+    return MathOpArrow<float, DeviceCos<float> >::launch(input, output);
 }
 
 gdf_error gdf_cos_f64(gdf_column *input, gdf_column *output) {
-    return MathOp<double, DeviceCos<double> >::launch(input, output);
+    return MathOpArrow<double, DeviceCos<double> >::launch(input, output);
 }
 
 DEF_UNARY_OP_REAL(gdf_tan)
 
 gdf_error gdf_tan_f32(gdf_column *input, gdf_column *output) {
-    return MathOp<float, DeviceTan<float> >::launch(input, output);
+    return MathOpArrow<float, DeviceTan<float> >::launch(input, output);
 }
 
 gdf_error gdf_tan_f64(gdf_column *input, gdf_column *output) {
-    return MathOp<double, DeviceTan<double> >::launch(input, output);
+    return MathOpArrow<double, DeviceTan<double> >::launch(input, output);
 }
 
 DEF_UNARY_OP_REAL(gdf_asin)
 
 gdf_error gdf_asin_f32(gdf_column *input, gdf_column *output) {
-    return MathOp<float, DeviceArcSin<float> >::launch(input, output);
+    return MathOpArrow<float, DeviceArcSin<float> >::launch(input, output);
 }
 
 gdf_error gdf_asin_f64(gdf_column *input, gdf_column *output) {
-    return MathOp<double, DeviceArcSin<double> >::launch(input, output);
+    return MathOpArrow<double, DeviceArcSin<double> >::launch(input, output);
 }
 
 DEF_UNARY_OP_REAL(gdf_acos)
 
 gdf_error gdf_acos_f32(gdf_column *input, gdf_column *output) {
-    return MathOp<float, DeviceArcCos<float> >::launch(input, output);
+    return MathOpArrow<float, DeviceArcCos<float> >::launch(input, output);
 }
 
 gdf_error gdf_acos_f64(gdf_column *input, gdf_column *output) {
-    return MathOp<double, DeviceArcCos<double> >::launch(input, output);
+    return MathOpArrow<double, DeviceArcCos<double> >::launch(input, output);
 }
 
 DEF_UNARY_OP_REAL(gdf_atan)
 
 gdf_error gdf_atan_f32(gdf_column *input, gdf_column *output) {
-    return MathOp<float, DeviceArcTan<float> >::launch(input, output);
+    return MathOpArrow<float, DeviceArcTan<float> >::launch(input, output);
 }
 
 gdf_error gdf_atan_f64(gdf_column *input, gdf_column *output) {
-    return MathOp<double, DeviceArcTan<double> >::launch(input, output);
+    return MathOpArrow<double, DeviceArcTan<double> >::launch(input, output);
 }
 
 // exponential functions
@@ -259,21 +307,21 @@ struct DeviceLog {
 DEF_UNARY_OP_REAL(gdf_exp)
 
 gdf_error gdf_exp_f32(gdf_column *input, gdf_column *output) {
-    return MathOp<float, DeviceExp<float> >::launch(input, output);
+    return MathOpArrow<float, DeviceExp<float> >::launch(input, output);
 }
 
 gdf_error gdf_exp_f64(gdf_column *input, gdf_column *output) {
-    return MathOp<double, DeviceExp<double> >::launch(input, output);
+    return MathOpArrow<double, DeviceExp<double> >::launch(input, output);
 }
 
 DEF_UNARY_OP_REAL(gdf_log)
 
 gdf_error gdf_log_f32(gdf_column *input, gdf_column *output) {
-    return MathOp<float, DeviceLog<float> >::launch(input, output);
+    return MathOpArrow<float, DeviceLog<float> >::launch(input, output);
 }
 
 gdf_error gdf_log_f64(gdf_column *input, gdf_column *output) {
-    return MathOp<double, DeviceLog<double> >::launch(input, output);
+    return MathOpArrow<double, DeviceLog<double> >::launch(input, output);
 }
 
 // exponential functions
@@ -289,11 +337,11 @@ struct DeviceSqrt {
 DEF_UNARY_OP_REAL(gdf_sqrt)
 
 gdf_error gdf_sqrt_f32(gdf_column *input, gdf_column *output) {
-    return MathOp<float, DeviceSqrt<float> >::launch(input, output);
+    return MathOpArrow<float, DeviceSqrt<float> >::launch(input, output);
 }
 
 gdf_error gdf_sqrt_f64(gdf_column *input, gdf_column *output) {
-    return MathOp<double, DeviceSqrt<double> >::launch(input, output);
+    return MathOpArrow<double, DeviceSqrt<double> >::launch(input, output);
 }
 
 // rounding functions
@@ -317,21 +365,21 @@ struct DeviceFloor {
 DEF_UNARY_OP_REAL(gdf_ceil)
 
 gdf_error gdf_ceil_f32(gdf_column *input, gdf_column *output) {
-    return MathOp<float, DeviceCeil<float> >::launch(input, output);
+    return MathOpArrow<float, DeviceCeil<float> >::launch(input, output);
 }
 
 gdf_error gdf_ceil_f64(gdf_column *input, gdf_column *output) {
-    return MathOp<double, DeviceCeil<double> >::launch(input, output);
+    return MathOpArrow<double, DeviceCeil<double> >::launch(input, output);
 }
 
 DEF_UNARY_OP_REAL(gdf_floor)
 
 gdf_error gdf_floor_f32(gdf_column *input, gdf_column *output) {
-    return MathOp<float, DeviceFloor<float> >::launch(input, output);
+    return MathOpArrow<float, DeviceFloor<float> >::launch(input, output);
 }
 
 gdf_error gdf_floor_f64(gdf_column *input, gdf_column *output) {
-    return MathOp<double, DeviceFloor<double> >::launch(input, output);
+    return MathOpArrow<double, DeviceFloor<double> >::launch(input, output);
 }
 
 

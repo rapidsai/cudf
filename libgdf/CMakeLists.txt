@@ -132,6 +132,7 @@ cuda_add_library(rmm SHARED
 target_link_libraries(rmm cuda)
 
 cuda_add_library(gdf SHARED
+    src/arrow.cpp
     src/binaryops.cu
     src/bitmaskops.cu
     src/column.cpp
@@ -170,9 +171,9 @@ endif(USE_NVTX)
 
 if (ARROW_NUMERIC_VERSION EQUAL 900)
   # arrow-0.9 requires boost_regex
-  target_link_libraries(gdf arrow boost_regex rmm)
+  target_link_libraries(gdf arrow arrow_gpu boost_regex rmm)
 else()
-  target_link_libraries(gdf arrow rmm)
+  target_link_libraries(gdf arrow arrow_gpu rmm)
 endif()
 
 # Command to symlink files into the build directory

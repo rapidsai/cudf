@@ -19,10 +19,10 @@
 #pass the dependency libraries as optional arguments using ${ARGN}
 #NOTE the order of libraries matter, so try to link first with the most high level lib
 function(configure_test TEST_NAME Tests_SRCS)
-    message(STATUS "${TEST_NAME} will link against: gdf arrow")
+    message(STATUS "${TEST_NAME} will link against: gdf arrow arrow_gpu")
 
     cuda_add_executable(${TEST_NAME} ${Tests_SRCS})
-    target_link_libraries(${TEST_NAME} gmock_main gmock GTest::GTest gdf arrow)
+    target_link_libraries(${TEST_NAME} gmock_main gmock GTest::GTest gdf arrow arrow_gpu)
     set_target_properties(${TEST_NAME} PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/gtests/")
 
@@ -56,5 +56,6 @@ add_subdirectory(validops)
 add_subdirectory(memory)
 add_subdirectory(gdf)
 add_subdirectory(csv)
+add_subdirectory(arrow)
 
 message(STATUS "******** Tests are ready ********")
