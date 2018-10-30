@@ -368,7 +368,9 @@ def test_dataframe_empty_to_string():
 
 def test_dataframe_emptycolumns_to_string():
     # Test for printing dataframe having empty columns
-    df = DataFrame({'a': [], 'b': []})
+    df = DataFrame()
+    df['a'] = []
+    df['b'] = []
     got = df.to_string()
     print(got)
     expect = "Empty DataFrame\nColumns: ['a', 'b']\nIndex: []\n"
