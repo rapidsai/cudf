@@ -111,7 +111,7 @@ def test_issue_165():
                                    'int64', 'float32', 'float64'])
 def test_typecast_from_datetime(data, dtype):
     pd_data = pd.Series(data.copy())
-    np_data = np.array(pd_data)
+    np_data = np.array(pd_data).astype('datetime64[ms]')
     gdf_data = Series(pd_data)
 
     np_casted = np_data.astype(dtype)
