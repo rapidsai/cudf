@@ -31,7 +31,13 @@ endif()
 
 message(STATUS "Using Apache Arrow version: ${ARROW_VERSION}")
 
-set(ARROW_URL "https://github.com/apache/arrow/archive/${ARROW_VERSION}.tar.gz")
+# Enable using arrow forks:
+set(ARROW_GITHUB "https://github.com/apache/arrow")
+if (NOT "$ENV{ARROW_GITHUB}" STREQUAL "")
+    set(ARROW_GITHUB "$ENV{ARROW_GITHUB}")
+endif()
+
+set(ARROW_URL "${ARROW_GITHUB}/archive/${ARROW_VERSION}.tar.gz")
 
 set(ARROW_CMAKE_ARGS
     #Arrow dependencies
