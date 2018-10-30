@@ -224,7 +224,7 @@ gdf_error read_csv(csv_read_arg *args)
 		raw_csv->delimiter = args->delimiter;
 	}
 
-	if(args->windowslinetermiation)
+	if(args->windowslinetermination)
 		raw_csv->terminator = '\n';
 	else
 		raw_csv->terminator = args->lineterminator;
