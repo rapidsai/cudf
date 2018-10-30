@@ -361,11 +361,7 @@ def test_dataframe_empty_to_string():
     df = DataFrame()
     got = df.to_string()
     print(got)
-    expect = '''
-Empty DataFrame
-Columns: []
-Index: []
-'''
+    expect = "Empty DataFrame\nColumns: []\nIndex: []\n"
     # values should match despite whitespace difference
     assert got.split() == expect.split()
 
@@ -375,11 +371,7 @@ def test_dataframe_emptycolumns_to_string():
     df = DataFrame({'a': [], 'b': []})
     got = df.to_string()
     print(got)
-    expect = '''
-Empty DataFrame
-Columns: ['a', 'b']
-Index: []
-'''
+    expect = "Empty DataFrame\nColumns: ['a', 'b']\nIndex: []\n"
     # values should match despite whitespace difference
     assert got.split() == expect.split()
 
