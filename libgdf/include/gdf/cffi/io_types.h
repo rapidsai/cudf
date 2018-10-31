@@ -64,12 +64,11 @@ typedef struct {
 
   bool			skip_blank_lines;			// whether or not to ignore blank lines
 
-  char			*prefix;					// if there is no header or names, append this to the column ID as the name
-  bool			mangle_dupe_cols;			// if true: duplicate columns will be specified as ‘X’, ‘X.1’, ...’X.N’, rather than ‘X'...’X’
-
   char			**true_values;				// array of char *	what should be considered as True - each char string contains {col ID, true value, ...} - this will allow multiple true values to be specified over multiple columns
   char			**false_values;				// array of char *	what should be considered as True - each char string contains {col ID, false value, ...} - this will allow multiple false values to be specified over multiple columns
   char			**na_values;				// array of char *	what should be considered as True - each char string contains {col ID, na value, ...} - this will allow multiple na values to be specified over multiple columns
+  char			*prefix;					// if there is no header or names, append this to the column ID as the name
+  bool			mangle_dupe_cols;			// if true: duplicate columns will be specified as (deleted because utf-8 chars kill the build)
 
   bool			parse_dates;				// parse date field into date32 or date64.  If false then date fields are saved as a string. Specifying a date dtype overrides this
   bool			infer_datetime_format;		// try and determine the date format
