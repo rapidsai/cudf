@@ -449,37 +449,24 @@ gdf_error read_csv(csv_read_arg *args)
 
 
 		for(int col = 0; col < raw_csv->num_active_cols; col++){
+			unsigned long long countInt = d_ColumnData[col].countInt8+d_ColumnData[col].countInt16+
+										  d_ColumnData[col].countInt32+d_ColumnData[col].countInt64;
+
 			if (d_ColumnData[col].countNULL == raw_csv->num_records){
 				d_detectedTypes.push_back(GDF_INT8); // Entire column is NULL. Allocating the smallest amount of memory
 			} else if(d_ColumnData[col].countString>0L){
-				d_detectedTypes.push_back(GDF_STRING);
+				d_detectedTypes.push_back(GDF_CATEGORY); // For auto-detection, we are currently not supporting strings.
 			} else if(d_ColumnData[col].countDateAndTime>0L){
 				d_detectedTypes.push_back(GDF_DATE64);
-			} else if(d_ColumnData[col].countFloat > 0L ){
+			} else if(d_ColumnData[col].countFloat > 0L  ||  
+				(d_ColumnData[col].countFloat==0L && countInt >0L && d_ColumnData[col].countNULL >0L) ) {
+				// The second condition has been added to conform to PANDAS which states that a colum of 
+				// integers with a single NULL record need to be treated as floats.
 				d_detectedTypes.push_back(GDF_FLOAT64);
 			}
 			else { 
 				d_detectedTypes.push_back(GDF_INT64);
 			}
-
-		}
-
-		for(int col = 0; col < raw_csv->num_active_cols; col++){
-
-			cout << std::setw(4) << col ;
-
-			cout << "Detected : " << std::setw(12) << stringType(d_detectedTypes[col]) ;
-			if (args->dtype!=NULL){
-					cout <<	 "  Actual : " << std::setw(12) << args->dtype[col] ;
-					cout <<	 "  Agree?  " << std::setw(3) << (args->dtype[col]== stringType(d_detectedTypes[col]));
-			}
-
-			cout <<	"  Nulls " 			<< std::setw(9) << d_ColumnData[col].countNULL << 
-					"  Strings " 			<< std::setw(9) << d_ColumnData[col].countString << 
-					"  Date64 " << std::setw(9) << d_ColumnData[col].countDateAndTime << 
-					"  Floats " 			<< std::setw(9) << d_ColumnData[col].countFloat << 
-					"  Int " 				<< std::setw(9) << d_ColumnData[col].countInt8 + d_ColumnData[col].countInt16 + d_ColumnData[col].countInt32 + d_ColumnData[col].countInt64; 
-			cout <<	endl;
 		}
 
 		raw_csv->dtypes=d_detectedTypes;
