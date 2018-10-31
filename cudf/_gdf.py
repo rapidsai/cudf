@@ -10,8 +10,11 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 
+from .backend import cuda
+
 from libgdf_cffi import ffi, libgdf
-from librmm_cffi import librmm as rmm
+#from librmm_cffi import librmm as rmm
+rmm = cuda
 
 from . import cudautils
 from .utils import calc_chunk_size, mask_dtype, mask_bitsize
@@ -421,12 +424,10 @@ class SegmentedRadixortPlan(object):
         d_fullsegs = rmm.device_array(segments.size + 1, dtype=seg_dtype)
         d_begins = d_fullsegs[:-1]
         d_ends = d_fullsegs[1:]
-
         # Note: .astype is required below because .copy_to_device
         #       is just a plain memcpy
         d_begins.copy_to_device(cudautils.astype(segments, dtype=seg_dtype))
         d_ends[-1:].copy_to_device(np.require([self.nelem], dtype=seg_dtype))
-
         # The following is to handle the segument size limit due to
         # max CUDA grid size.
         range0 = range(0, segments.size, segsize_limit)

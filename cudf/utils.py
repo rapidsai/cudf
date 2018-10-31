@@ -3,8 +3,9 @@ from collections import namedtuple
 import numpy as np
 
 from numba import njit
-
-from librmm_cffi import librmm as rmm
+#from librmm_cffi import librmm as rmm
+from .backend import cuda
+rmm = cuda
 
 mask_dtype = np.dtype(np.uint8)
 mask_bitsize = mask_dtype.itemsize * 8

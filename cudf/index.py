@@ -6,7 +6,8 @@ import pandas as pd
 import numpy as np
 import pickle
 
-from librmm_cffi import librmm as rmm
+from .backend import cuda
+rmm = cuda
 
 from . import cudautils, utils, columnops
 from .buffer import Buffer

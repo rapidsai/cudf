@@ -7,9 +7,9 @@ import collections
 import socket
 import threading
 
-from numba import cuda
-from librmm_cffi import librmm as rmm
-
+#from librmm_cffi import librmm as rmm
+from .backend import cuda
+rmm = cuda
 
 try:
     import zmq

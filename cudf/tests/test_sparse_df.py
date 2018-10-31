@@ -12,13 +12,15 @@ except ImportError as msg:
 
 import numpy as np
 
-from librmm_cffi import librmm as rmm
-
-from cudf.gpuarrow import GpuArrowReader
+#from librmm_cffi import librmm as rmm
+#from cudf.gpuarrow import GpuArrowReader
 from cudf.dataframe import Series, DataFrame
+from .backends import cuda_backend_test
 
 
-def read_data():
+@cuda_backend_test
+def read_data(cuda):
+    rmm = cuda
     import pandas as pd
     basedir = os.path.dirname(__file__)
     datapath = os.path.join(basedir, 'data', 'ipums.pkl')
@@ -41,9 +43,10 @@ def read_data():
 
 @pytest.mark.skipif(arrow_version is None,
                     reason='need compatible pyarrow to generate test data')
-def test_fillna():
-    schema, darr = read_data()
-    gar = GpuArrowReader(schema, darr)
+@cuda_backend_test
+def test_fillna(cuda):
+    schema, darr = read_data(cuda)
+    gar = cuda.ArrowReader(schema, darr)
     masked_col = gar[8]
     assert masked_col.null_count
     sr = Series.from_masked_array(data=masked_col.data, mask=masked_col.null,
@@ -69,9 +72,10 @@ def test_to_dense_array():
 
 @pytest.mark.skipif(arrow_version is None,
                     reason='need compatible pyarrow to generate test data')
-def test_reading_arrow_sparse_data():
-    schema, darr = read_data()
-    gar = GpuArrowReader(schema, darr)
+@cuda_backend_test
+def test_reading_arrow_sparse_data(cuda):
+    schema, darr = read_data(cuda)
+    gar = cuda.ArrowReader(schema, darr)
 
     df = DataFrame(gar.to_dict().items())
 

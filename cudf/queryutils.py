@@ -7,9 +7,10 @@ import six
 import numpy as np
 
 from numba import cuda
+from .backend import cuda as cuda_
 
-from librmm_cffi import librmm as rmm
-
+#from librmm_cffi import librmm as rmm
+rmm = cuda_
 
 ENVREF_PREFIX = '__CUDF_ENVREF__'
 
@@ -216,7 +217,7 @@ def query_execute(df, expr, callenv):
     colarrays = [df[col].to_gpu_array() for col in compiled['colnames']]
     # allocate output buffer
     nrows = len(df)
-    out = rmm.device_array(nrows, dtype=np.bool_)
+    out = cuda_.device_array(nrows, dtype=np.bool_)
     # run kernel
     args = [out] + colarrays + envargs
     kernel.forall(nrows)(*args)

@@ -1,6 +1,8 @@
 import numpy as np
 
-from librmm_cffi import librmm as rmm
+#from librmm_cffi import librmm as rmm
+from .backend import cuda
+rmm = cuda  # temporary
 
 from . import cudautils, utils
 from .serialize import register_distributed_serializer

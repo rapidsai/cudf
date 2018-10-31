@@ -6,8 +6,10 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 
+from .backend import cuda
 from libgdf_cffi import libgdf
-from librmm_cffi import librmm as rmm
+#from librmm_cffi import librmm as rmm
+rmm = cuda
 
 from . import _gdf, columnops, utils, cudautils
 from .buffer import Buffer

@@ -6,7 +6,9 @@ from itertools import chain
 import numpy as np
 
 from numba import cuda
-from librmm_cffi import librmm as rmm
+#from librmm_cffi import librmm as rmm
+from .backend import cuda as cuda_
+rmm = cuda_
 
 from .dataframe import DataFrame, Series
 from .multi import concat
@@ -192,8 +194,8 @@ class Groupby(object):
             sr = grouped_df[k].reset_index()
             for newk, functor in infos.items():
                 if functor.__name__ == 'mean':
-                    dev_begins = rmm.to_device(np.asarray(begin))
-                    dev_out = rmm.device_array(size, dtype=np.float64)
+                    dev_begins = cuda_.to_device(np.asarray(begin))
+                    dev_out = cuda_.device_array(size, dtype=np.float64)
                     if size > 0:
                         group_mean.forall(size)(sr.to_gpu_array(),
                                                 dev_begins,
@@ -201,8 +203,8 @@ class Groupby(object):
                     values[newk] = dev_out
 
                 elif functor.__name__ == 'max':
-                    dev_begins = rmm.to_device(np.asarray(begin))
-                    dev_out = rmm.device_array(size, dtype=sr.dtype)
+                    dev_begins = cuda_.to_device(np.asarray(begin))
+                    dev_out = cuda_.device_array(size, dtype=sr.dtype)
                     if size > 0:
                         group_max.forall(size)(sr.to_gpu_array(),
                                                dev_begins,
@@ -210,8 +212,8 @@ class Groupby(object):
                     values[newk] = dev_out
 
                 elif functor.__name__ == 'min':
-                    dev_begins = rmm.to_device(np.asarray(begin))
-                    dev_out = rmm.device_array(size, dtype=sr.dtype)
+                    dev_begins = cuda_.to_device(np.asarray(begin))
+                    dev_out = cuda_.device_array(size, dtype=sr.dtype)
                     if size > 0:
                         group_min.forall(size)(sr.to_gpu_array(),
                                                dev_begins,

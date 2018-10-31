@@ -3,12 +3,13 @@
 import numpy as np
 import collections
 
+from .backend import cuda
 from .dataframe import DataFrame, Series
 from .buffer import Buffer
 
 from libgdf_cffi import ffi, libgdf
-from librmm_cffi import librmm as rmm
-
+#from librmm_cffi import librmm as rmm
+rmm = cuda
 
 class LibGdfGroupby(object):
     """Groupby object returned by cudf.DataFrame.groupby().

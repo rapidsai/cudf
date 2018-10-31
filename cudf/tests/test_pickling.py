@@ -4,9 +4,11 @@ import sys
 import pickle
 
 import numpy as np
+from cudf.backend import cuda
 import pandas as pd
 
-from librmm_cffi import librmm as rmm
+#from librmm_cffi import librmm as rmm
+rmm = cuda
 
 from cudf.dataframe import DataFrame, GenericIndex
 from cudf.buffer import Buffer
