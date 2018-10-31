@@ -31,7 +31,12 @@ endif()
 
 message(STATUS "Using Apache Arrow version: ${ARROW_VERSION}")
 
-set(ARROW_URL "https://github.com/apache/arrow/archive/${ARROW_VERSION}.tar.gz")
+# Enable using arrow forks:
+set(ARROW_GITHUB "https://github.com/apache/arrow")
+if (NOT "$ENV{ARROW_GITHUB}" STREQUAL "")
+    set(ARROW_GITHUB "$ENV{ARROW_GITHUB}")
+endif()
+set(ARROW_URL "${ARROW_GITHUB}/archive/${ARROW_VERSION}.tar.gz")
 
 set(ARROW_CMAKE_ARGS
     #Arrow dependencies
@@ -43,7 +48,7 @@ set(ARROW_CMAKE_ARGS
 
     #Build settings
     -DARROW_BUILD_STATIC=ON
-    -DARROW_BUILD_SHARED=OFF
+    -DARROW_BUILD_SHARED=ON
     -DARROW_BOOST_USE_SHARED=ON
     -DARROW_BUILD_TESTS=OFF
     -DARROW_TEST_MEMCHECK=OFF
@@ -51,19 +56,13 @@ set(ARROW_CMAKE_ARGS
 
     #Arrow modules
     -DARROW_IPC=ON
-    -DARROW_COMPUTE=OFF
-    -DARROW_GPU=OFF
+    -DARROW_COMPUTE=ON
+    -DARROW_GPU=ON
     -DARROW_JEMALLOC=OFF
     -DARROW_BOOST_VENDORED=OFF
-    -DARROW_PYTHON=OFF
+    -DARROW_PYTHON=ON
+    -DARROW_HDFS=ON            # required by pyarrow
 )
-
-if (${ARROW_VERSION} STREQUAL "apache-arrow-0.9.0")
-  # Keep ARROW_HDFS=ON to workaround arrow-0.9 bug that disables
-  # boost_regex. See https://issues.apache.org/jira/browse/ARROW-2903
-else ()
-  set(ARROW_CMAKE_ARGS ${ARROW_CMAKE_ARGS} -DARROW_HDFS=OFF)
-endif()
 
 ExternalProject_Add(arrow
     URL                ${ARROW_URL}
