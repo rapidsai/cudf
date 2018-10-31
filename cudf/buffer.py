@@ -163,6 +163,8 @@ class Buffer(object):
     def astype(self, dtype):
         if self.dtype == dtype:
             return self
+        elif self.dtype != 'int64' and np.issubdtype(dtype, np.datetime64):
+            return self.astype('int64').astype(dtype)
         else:
             return Buffer(cudautils.astype(self.mem, dtype=dtype))
 

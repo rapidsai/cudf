@@ -21,6 +21,10 @@ def data2():
                          tz='US/Eastern')
 
 
+def numerical_data():
+    return np.arange(1, 10)
+
+
 fields = ['year', 'month', 'day',
           'hour', 'minute', 'second']
 
@@ -100,3 +104,30 @@ def test_issue_165():
     base_mask = df_pandas.dates == start_date_np
     assert_series_equal(mask.to_pandas(), base_mask, check_names=False)
     assert mask.to_pandas().sum() > 0
+
+
+@pytest.mark.parametrize('data', [data1(), data2()])
+@pytest.mark.parametrize('dtype', ['int8', 'int16', 'int32',
+                                   'int64', 'float32', 'float64'])
+def test_typecast_from_datetime(data, dtype):
+    pd_data = pd.Series(data.copy())
+    np_data = np.array(pd_data).astype('datetime64[ms]')
+    gdf_data = Series(pd_data)
+
+    np_casted = np_data.astype(dtype)
+    gdf_casted = gdf_data.astype(dtype)
+
+    np.testing.assert_equal(np_casted, np.array(gdf_casted))
+
+
+@pytest.mark.parametrize('data', [numerical_data()])
+@pytest.mark.parametrize('dtype', ['int8', 'int16', 'int32',
+                                   'int64', 'float32', 'float64'])
+def test_typecast_to_datetime(data, dtype):
+    np_data = data.astype(dtype)
+    gdf_data = Series(np_data)
+
+    np_casted = np_data.astype('datetime64[ms]')
+    gdf_casted = gdf_data.astype('datetime64[ms]')
+
+    np.testing.assert_equal(np_casted, np.array(gdf_casted))
