@@ -7,8 +7,6 @@ import numpy as np
 import pickle
 
 from .backend import cuda
-rmm = cuda
-
 from . import cudautils, utils, columnops
 from .buffer import Buffer
 from .numerical import NumericalColumn
@@ -184,7 +182,7 @@ class RangeIndex(Index):
         if len(self) > 0:
             vals = cudautils.arange(self._start, self._stop, dtype=self.dtype)
         else:
-            vals = rmm.device_array(0, dtype=self.dtype)
+            vals = cuda.device_array(0, dtype=self.dtype)
         return NumericalColumn(data=Buffer(vals), dtype=vals.dtype)
 
     def to_pandas(self):

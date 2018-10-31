@@ -4,12 +4,9 @@ import sys
 import pickle
 
 import numpy as np
-from cudf.backend import cuda
 import pandas as pd
 
-#from librmm_cffi import librmm as rmm
-rmm = cuda
-
+from cudf.backend import cuda
 from cudf.dataframe import DataFrame, GenericIndex
 from cudf.buffer import Buffer
 
@@ -71,7 +68,7 @@ def test_sizeof_dataframe():
 
 def test_pickle_index():
     nelem = 10
-    idx = GenericIndex(rmm.to_device(np.arange(nelem)))
+    idx = GenericIndex(cuda.to_device(np.arange(nelem)))
     pickled = pickle.dumps(idx)
     out = pickle.loads(pickled)
     assert idx == out

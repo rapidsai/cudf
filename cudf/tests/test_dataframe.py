@@ -6,8 +6,6 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 
-#from librmm_cffi import librmm as rmm
-
 import cudf as gd
 from cudf.dataframe import Series, DataFrame
 from cudf.buffer import Buffer
@@ -113,12 +111,11 @@ def test_series_indexing():
 
 @cuda_backend_test
 def test_dataframe_basic(cuda):
-    rmm = cuda
     np.random.seed(0)
     df = DataFrame()
 
     # Populate with cuda memory
-    df['keys'] = rmm.to_device(np.arange(10, dtype=np.float64))
+    df['keys'] = cuda.to_device(np.arange(10, dtype=np.float64))
     np.testing.assert_equal(df['keys'].to_array(), np.arange(10))
     assert len(df) == 10
 
@@ -497,7 +494,6 @@ def test_dataframe_append_empty():
 
 @cuda_backend_test
 def test_dataframe_setitem_from_masked_object(cuda):
-    rmm = cuda
     ary = np.random.randn(100)
     mask = np.zeros(100, dtype=bool)
     mask[:20] = True
@@ -512,7 +508,7 @@ def test_dataframe_setitem_from_masked_object(cuda):
     assert(test2['a'].has_null_mask)
     assert(test2['a'].null_count == 20)
 
-    gpu_ary = rmm.to_device(ary)
+    gpu_ary = cuda.to_device(ary)
     test3 = Series(gpu_ary)
     assert(test3.has_null_mask)
     assert(test3.null_count == 20)

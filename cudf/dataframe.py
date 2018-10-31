@@ -11,13 +11,10 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 
-from .backend import cuda
 from numba.cuda.cudadrv.devicearray import DeviceNDArray
+
+from .backend import cuda
 from .cudaarray import CudaNDArray
-
-#from librmm_cffi import librmm as rmm
-rmm = cuda
-
 from . import cudautils, formatting, queryutils, applyutils, utils, _gdf
 from .index import GenericIndex, Index, RangeIndex
 from .series import Series
@@ -372,7 +369,7 @@ class DataFrame(object):
         series = Series(col)
         if len(self) == 0 and len(self.columns) > 0 and len(series) > 0:
             ind = series.index
-            arr = rmm.device_array(shape=len(ind), dtype=np.float64)
+            arr = cuda.device_array(shape=len(ind), dtype=np.float64)
             size = utils.calc_chunk_size(arr.size, utils.mask_bitsize)
             mask = cudautils.zeros(size, dtype=utils.mask_dtype)
             val = Series.from_masked_array(arr, mask, null_count=len(ind))
@@ -391,7 +388,7 @@ class DataFrame(object):
         VALID = isinstance(col, (np.ndarray, DeviceNDArray, list, Series,
                                  Column, CudaNDArray))
         if len(self) > 0 and len(series) == 1 and not VALID:
-            arr = rmm.device_array(shape=len(index), dtype=series.dtype)
+            arr = cuda.device_array(shape=len(index), dtype=series.dtype)
             cudautils.gpu_fill_value.forall(arr.size)(arr, col)
             return Series(arr)
         elif len(self) > 0 and len(sind) != len(index):
@@ -500,8 +497,8 @@ class DataFrame(object):
                 raise ValueError(errmsg.format(k))
 
         if order == 'F':
-            matrix = rmm.device_array(shape=(nrow, ncol), dtype=dtype,
-                                      order=order)
+            matrix = cuda.device_array(shape=(nrow, ncol), dtype=dtype,
+                                       order=order)
             for colidx, inpcol in enumerate(cols):
                 dense = inpcol.to_gpu_array(fillna='pandas')
                 matrix[:, colidx].copy_to_device(dense)

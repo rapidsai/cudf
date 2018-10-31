@@ -3,9 +3,8 @@ from collections import namedtuple
 import numpy as np
 
 from numba import njit
-#from librmm_cffi import librmm as rmm
+
 from .backend import cuda
-rmm = cuda
 
 mask_dtype = np.dtype(np.uint8)
 mask_bitsize = mask_dtype.itemsize * 8
@@ -42,7 +41,7 @@ def make_mask(size):
     """Create mask to obtain at least *size* number of bits.
     """
     size = calc_chunk_size(size, mask_bitsize)
-    return rmm.device_array(shape=size, dtype=mask_dtype)
+    return cuda.device_array(shape=size, dtype=mask_dtype)
 
 
 def require_writeable_array(arr):
@@ -55,7 +54,7 @@ def scalar_broadcast_to(scalar, shape, dtype):
 
     if not isinstance(shape, tuple):
         shape = (shape,)
-    da = rmm.device_array(shape, dtype=dtype)
+    da = cuda.device_array(shape, dtype=dtype)
     if da.size != 0:
         fill_value(da, scalar)
     return da

@@ -10,12 +10,10 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 
-from .backend import cuda
-
 from libgdf_cffi import ffi, libgdf
-#from librmm_cffi import librmm as rmm
-rmm = cuda
+from librmm_cffi import librmm as rmm
 
+from .backend import cuda
 from . import cudautils
 from .utils import calc_chunk_size, mask_dtype, mask_bitsize
 
@@ -174,7 +172,7 @@ def np_to_pa_dtype(dtype):
 def apply_reduce(fn, inp):
     # allocate output+temp array
     outsz = libgdf.gdf_reduce_optimal_output_size()
-    out = rmm.device_array(outsz, dtype=inp.dtype)
+    out = cuda.device_array(outsz, dtype=inp.dtype)
     # call reduction
     fn(inp.cffi_view, unwrap_devary(out), outsz)
     # return 1st element
@@ -213,19 +211,20 @@ _join_method_api = {
 
 def cffi_view_to_column_mem(cffi_view):
     intaddr = int(ffi.cast("uintptr_t", cffi_view.data))
-    data = rmm.device_array_from_ptr(intaddr,
-                                     nelem=cffi_view.size,
-                                     dtype=gdf_to_np_dtype(cffi_view.dtype),
-                                     finalizer=rmm._make_finalizer(intaddr, 0))
+    data = cuda.device_array_from_ptr(intaddr,
+                                      nelem=cffi_view.size,
+                                      dtype=gdf_to_np_dtype(cffi_view.dtype),
+                                      finalizer=cuda._make_finalizer(intaddr,
+                                                                     0))
 
     if cffi_view.valid:
         intaddr = int(ffi.cast("uintptr_t", cffi_view.valid))
-        mask = rmm.device_array_from_ptr(intaddr,
-                                         nelem=calc_chunk_size(cffi_view.size,
-                                                               mask_bitsize),
-                                         dtype=mask_dtype,
-                                         finalizer=rmm._make_finalizer(intaddr,
-                                                                       0))
+        mask = cuda.device_array_from_ptr(intaddr,
+                                          nelem=calc_chunk_size(cffi_view.size,
+                                                                mask_bitsize),
+                                          dtype=mask_dtype,
+                                          finalizer=cuda._make_finalizer(
+                                              intaddr, 0))
     else:
         mask = None
 
@@ -272,13 +271,13 @@ def apply_join(col_lhs, col_rhs, how, method='hash'):
 
     # Extract result
 
-    left = rmm.device_array_from_ptr(ptr=col_result_l.data,
-                                     nelem=col_result_l.size,
-                                     dtype=np.int32)
-
-    right = rmm.device_array_from_ptr(ptr=col_result_r.data,
-                                      nelem=col_result_r.size,
+    left = cuda.device_array_from_ptr(ptr=col_result_l.data,
+                                      nelem=col_result_l.size,
                                       dtype=np.int32)
+
+    right = cuda.device_array_from_ptr(ptr=col_result_r.data,
+                                       nelem=col_result_r.size,
+                                       dtype=np.int32)
 
     yield(left, right)
 
@@ -346,18 +345,17 @@ def libgdf_join(col_lhs, col_rhs, on, how, method='sort'):
 
     for col in result_cols:
         intaddr = int(ffi.cast("uintptr_t", col.data))
-        res.append(rmm.device_array_from_ptr(ptr=intaddr,
-                                             nelem=col.size,
-                                             dtype=gdf_to_np_dtype(col.dtype),
-                                             finalizer=rmm._make_finalizer(
-                                                 intaddr, 0)))
+        res.append(cuda.device_array_from_ptr(ptr=intaddr,
+                                              nelem=col.size,
+                                              dtype=gdf_to_np_dtype(col.dtype),
+                                              finalizer=cuda._make_finalizer(
+                                                  intaddr, 0)))
         intaddr = int(ffi.cast("uintptr_t", col.valid))
-        valids.append(rmm.device_array_from_ptr(ptr=intaddr,
-                                                nelem=calc_chunk_size(
-                                                    col.size, mask_bitsize),
-                                                dtype=mask_dtype,
-                                                finalizer=rmm._make_finalizer(
-                                                    intaddr, 0)))
+        valids.append(cuda.device_array_from_ptr(
+            ptr=intaddr,
+            nelem=calc_chunk_size(col.size, mask_bitsize),
+            dtype=mask_dtype,
+            finalizer=cuda._make_finalizer(intaddr, 0)))
 
     return res, valids
 
@@ -421,7 +419,7 @@ class SegmentedRadixortPlan(object):
         seg_dtype = np.uint32
         segsize_limit = 2 ** 16 - 1
 
-        d_fullsegs = rmm.device_array(segments.size + 1, dtype=seg_dtype)
+        d_fullsegs = cuda.device_array(segments.size + 1, dtype=seg_dtype)
         d_begins = d_fullsegs[:-1]
         d_ends = d_fullsegs[1:]
         # Note: .astype is required below because .copy_to_device

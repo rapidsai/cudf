@@ -1,15 +1,13 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
 
 from collections import OrderedDict, defaultdict, namedtuple
-
 from itertools import chain
+
 import numpy as np
 
-from numba import cuda
-#from librmm_cffi import librmm as rmm
-from .backend import cuda as cuda_
-rmm = cuda_
+from numba import cuda as nb_cuda
 
+from .backend import cuda
 from .dataframe import DataFrame, Series
 from .multi import concat
 from . import _gdf, cudautils
@@ -37,9 +35,9 @@ result : DataFrame
         members[k] = fn
 
 
-@cuda.jit
+@nb_cuda.jit
 def group_mean(data, segments, output):
-    i = cuda.grid(1)
+    i = nb_cuda.grid(1)
     if i < segments.size:
         s = segments[i]
         e = (segments[i + 1]
@@ -53,9 +51,9 @@ def group_mean(data, segments, output):
         output[i] = carry / n
 
 
-@cuda.jit
+@nb_cuda.jit
 def group_max(data, segments, output):
-    i = cuda.grid(1)
+    i = nb_cuda.grid(1)
     if i < segments.size:
         s = segments[i]
         e = (segments[i + 1]
@@ -68,9 +66,9 @@ def group_max(data, segments, output):
         output[i] = tmp
 
 
-@cuda.jit
+@nb_cuda.jit
 def group_min(data, segments, output):
-    i = cuda.grid(1)
+    i = nb_cuda.grid(1)
     if i < segments.size:
         s = segments[i]
         e = (segments[i + 1]
@@ -194,8 +192,8 @@ class Groupby(object):
             sr = grouped_df[k].reset_index()
             for newk, functor in infos.items():
                 if functor.__name__ == 'mean':
-                    dev_begins = cuda_.to_device(np.asarray(begin))
-                    dev_out = cuda_.device_array(size, dtype=np.float64)
+                    dev_begins = cuda.to_device(np.asarray(begin))
+                    dev_out = cuda.device_array(size, dtype=np.float64)
                     if size > 0:
                         group_mean.forall(size)(sr.to_gpu_array(),
                                                 dev_begins,
@@ -203,8 +201,8 @@ class Groupby(object):
                     values[newk] = dev_out
 
                 elif functor.__name__ == 'max':
-                    dev_begins = cuda_.to_device(np.asarray(begin))
-                    dev_out = cuda_.device_array(size, dtype=sr.dtype)
+                    dev_begins = cuda.to_device(np.asarray(begin))
+                    dev_out = cuda.device_array(size, dtype=sr.dtype)
                     if size > 0:
                         group_max.forall(size)(sr.to_gpu_array(),
                                                dev_begins,
@@ -212,8 +210,8 @@ class Groupby(object):
                     values[newk] = dev_out
 
                 elif functor.__name__ == 'min':
-                    dev_begins = cuda_.to_device(np.asarray(begin))
-                    dev_out = cuda_.device_array(size, dtype=sr.dtype)
+                    dev_begins = cuda.to_device(np.asarray(begin))
+                    dev_out = cuda.device_array(size, dtype=sr.dtype)
                     if size > 0:
                         group_min.forall(size)(sr.to_gpu_array(),
                                                dev_begins,

@@ -1,20 +1,11 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
 import pytest
 import logging
-
-try:
-    import pyarrow as pa
-    arrow_version = pa.__version__
-except ImportError as msg:
-    print('Failed to import pyarrow: {}'.format(msg))
-    pa = None
-    arrow_version = None
-
 import numpy as np
 
-#from librmm_cffi import librmm as rmm
-#from cudf.gpuarrow import GpuArrowReader
 from .backends import cuda_backend_test
+
+pa = pytest.importorskip("pyarrow")
 
 
 def make_gpu_parse_arrow_data_batch():
@@ -24,7 +15,7 @@ def make_gpu_parse_arrow_data_batch():
 
     dest_lat = pa.array(lat)
     dest_lon = pa.array(lon)
-    if arrow_version == '0.7.1':
+    if pa.__version__ == '0.7.1':
         dest_lat = dest_lat.cast(pa.float32())
         dest_lon = dest_lon.cast(pa.float32())
     batch = pa.RecordBatch.from_arrays([dest_lat, dest_lon],
@@ -32,11 +23,8 @@ def make_gpu_parse_arrow_data_batch():
     return batch
 
 
-@pytest.mark.skipif(arrow_version is None,
-                    reason='need compatible pyarrow to generate test data')
 @cuda_backend_test
 def test_gpu_parse_arrow_data(cuda):
-    rmm = cuda
     batch = make_gpu_parse_arrow_data_batch()
     schema_data = batch.schema.serialize().to_pybytes()
     recbatch_data = batch.serialize().to_pybytes()
@@ -122,11 +110,8 @@ def make_gpu_parse_arrow_cats_batch():
     return batch
 
 
-@pytest.mark.skipif(arrow_version is None,
-                    reason='need compatible pyarrow to generate test data')
 @cuda_backend_test
 def test_gpu_parse_arrow_cats(cuda):
-    rmm = cuda
     batch = make_gpu_parse_arrow_cats_batch()
     schema_bytes = batch.schema.serialize().to_pybytes()
     recordbatches_bytes = batch.serialize().to_pybytes()
@@ -135,7 +120,7 @@ def test_gpu_parse_arrow_cats(cuda):
                         buffer=bytearray(schema_bytes))
     rb_cpu_data = np.ndarray(shape=len(recordbatches_bytes), dtype=np.byte,
                              buffer=bytearray(recordbatches_bytes))
-    rb_gpu_data = rmm.to_device(rb_cpu_data)
+    rb_gpu_data = cuda.to_device(rb_cpu_data)
 
     gar = cuda.ArrowReader(schema, rb_gpu_data)
 
@@ -170,7 +155,7 @@ def make_gpu_parse_arrow_int16_batch():
     arrdelay = np.array([5, -3, 1, -2, 22, 11, -12, -5, 4, -9], dtype=np.int16)
     d_depdelay = pa.array(depdelay)
     d_arrdelay = pa.array(arrdelay)
-    if arrow_version == '0.7.1':
+    if pa.__version__ == '0.7.1':
         d_depdelay = d_depdelay.cast(pa.int16())
         d_arrdelay = d_arrdelay.cast(pa.int16())
     batch = pa.RecordBatch.from_arrays([d_depdelay, d_arrdelay],
@@ -178,8 +163,6 @@ def make_gpu_parse_arrow_int16_batch():
     return batch
 
 
-@pytest.mark.skipif(arrow_version is None,
-                    reason='need compatible pyarrow to generate test data')
 @cuda_backend_test
 def test_gpu_parse_arrow_int16(cuda):
     batch = make_gpu_parse_arrow_int16_batch()

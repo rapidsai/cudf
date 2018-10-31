@@ -2,13 +2,11 @@
 
 import numpy as np
 
-from numba import cuda, int32, numpy_support
-from .backend import cuda as cuda_
+from numba import int32, numpy_support
+from numba import cuda as nb_cuda
 from math import isnan
 
-#from librmm_cffi import librmm as rmm
-rmm = cuda_
-
+from .backend import cuda
 from .utils import mask_bitsize, mask_get, mask_set, make_mask
 
 
@@ -19,15 +17,15 @@ def optimal_block_count(minblkct):
 
 
 def to_device(ary):
-    dary, _ = cuda_._auto_device(ary)
+    dary, _ = cuda._auto_device(ary)
     return dary
 
 
 # GPU array initializer
 
-@cuda.jit
+@nb_cuda.jit
 def gpu_arange(start, size, step, out):
-    i = cuda.grid(1)
+    i = nb_cuda.grid(1)
     if i < size:
         out[i] = i * step + start
 
@@ -40,46 +38,46 @@ def arange(start, stop=None, step=1, dtype=np.int64):
         msgfmt = "size={size} in arange({start}, {stop}, {step}, {dtype})"
         raise ValueError(msgfmt.format(size=size, start=start, stop=stop,
                                        step=step, dtype=dtype))
-    out = cuda_.device_array(size, dtype=dtype)
+    out = cuda.device_array(size, dtype=dtype)
     gpu_arange.forall(size)(start, size, step, out)
     return out
 
 
-@cuda.jit
+@nb_cuda.jit
 def gpu_arange_reversed(size, out):
-    i = cuda.grid(1)
+    i = nb_cuda.grid(1)
     if i < size:
         out[i] = size - i - 1
 
 
 def arange_reversed(size, dtype=np.int64):
-    out = cuda_.device_array(size, dtype=dtype)
+    out = cuda.device_array(size, dtype=dtype)
     gpu_arange_reversed.forall(size)(size, out)
     return out
 
 
-@cuda.jit
+@nb_cuda.jit
 def gpu_ones(size, out):
-    i = cuda.grid(1)
+    i = nb_cuda.grid(1)
     if i < size:
         out[i] = 1
 
 
 def ones(size, dtype):
-    out = cuda_.device_array(size, dtype=dtype)
+    out = cuda.device_array(size, dtype=dtype)
     gpu_ones.forall(size)(size, out)
     return out
 
 
-@cuda.jit
+@nb_cuda.jit
 def gpu_zeros(size, out):
-    i = cuda.grid(1)
+    i = nb_cuda.grid(1)
     if i < size:
         out[i] = 0
 
 
 def zeros(size, dtype):
-    out = cuda_.device_array(size, dtype=dtype)
+    out = cuda.device_array(size, dtype=dtype)
     gpu_zeros.forall(size)(size, out)
     return out
 
@@ -87,9 +85,9 @@ def zeros(size, dtype):
 # GPU array type casting
 
 
-@cuda.jit
+@nb_cuda.jit
 def gpu_copy(inp, out):
-    tid = cuda.grid(1)
+    tid = nb_cuda.grid(1)
     if tid < out.size:
         out[tid] = inp[tid]
 
@@ -98,9 +96,9 @@ def astype(ary, dtype):
     if ary.dtype == np.dtype(dtype):
         return ary
     elif ary.size == 0:
-        return cuda_.device_array(shape=ary.shape, dtype=dtype)
+        return cuda.device_array(shape=ary.shape, dtype=dtype)
     else:
-        out = cuda_.device_array(shape=ary.shape, dtype=dtype)
+        out = cuda.device_array(shape=ary.shape, dtype=dtype)
         configured = gpu_copy.forall(out.size)
         configured(ary, out)
         return out
@@ -108,7 +106,7 @@ def astype(ary, dtype):
 
 def copy_array(arr, out=None):
     if out is None:
-        out = cuda_.device_array_like(arr)
+        out = cuda.device_array_like(arr)
     assert out.size == arr.size
     if arr.is_c_contiguous() and out.is_c_contiguous():
         out.copy_to_device(arr)
@@ -119,15 +117,15 @@ def copy_array(arr, out=None):
 
 def as_contiguous(arr):
     assert arr.ndim == 1
-    out = cuda_.device_array(shape=arr.shape, dtype=arr.dtype)
+    out = cuda.device_array(shape=arr.shape, dtype=arr.dtype)
     return copy_array(arr, out=out)
 
 
 # Copy column into a matrix
 
-@cuda.jit
+@nb_cuda.jit
 def gpu_copy_column(matrix, colidx, colvals):
-    tid = cuda.grid(1)
+    tid = nb_cuda.grid(1)
     if tid < colvals.size:
         matrix[colidx, tid] = colvals[tid]
 
@@ -140,10 +138,10 @@ def copy_column(matrix, colidx, colvals):
 
 # Mask utils
 
-@cuda.jit
+@nb_cuda.jit
 def gpu_set_mask_from_stride(mask, stride):
     bitsize = mask_bitsize
-    tid = cuda.grid(1)
+    tid = nb_cuda.grid(1)
     if tid < mask.size:
         base = tid * bitsize
         val = 0
@@ -160,17 +158,17 @@ def set_mask_from_stride(mask, stride):
     configured(mask, stride)
 
 
-@cuda.jit
+@nb_cuda.jit
 def gpu_copy_to_dense(data, mask, slots, out):
-    tid = cuda.grid(1)
+    tid = nb_cuda.grid(1)
     if tid < data.size and mask_get(mask, tid):
         idx = slots[tid]
         out[idx] = data[tid]
 
 
-@cuda.jit
+@nb_cuda.jit
 def gpu_fill_value(data, value):
-    tid = cuda.grid(1)
+    tid = nb_cuda.grid(1)
     if tid < data.size:
         data[tid] = value
 
@@ -181,20 +179,20 @@ def fill_value(arr, value):
     gpu_fill_value.forall(arr.size)(arr, value)
 
 
-@cuda.jit
+@nb_cuda.jit
 def gpu_expand_mask_bits(bits, out):
     """Expand each bits in bitmask *bits* into an element in out.
     This is a flexible kernel that can be launch with any number of blocks
     and threads.
     """
-    for i in range(cuda.grid(1), out.size, cuda.gridsize(1)):
+    for i in range(nb_cuda.grid(1), out.size, nb_cuda.gridsize(1)):
         out[i] = mask_get(bits, i)
 
 
 def expand_mask_bits(size, bits):
     """Expand bit-mask into byte-mask
     """
-    expanded_mask = cuda_.device_array(size, dtype=np.int32)
+    expanded_mask = cuda.device_array(size, dtype=np.int32)
     numtasks = min(1024, expanded_mask.size)
     if numtasks > 0:
         gpu_expand_mask_bits.forall(numtasks)(bits, expanded_mask)
@@ -204,7 +202,7 @@ def expand_mask_bits(size, bits):
 def mask_assign_slot(size, mask):
     # expand bits into bytes
     dtype = (np.int32 if size < 2 ** 31 else np.int64)
-    expanded_mask = cuda_.device_array(size, dtype=dtype)
+    expanded_mask = cuda.device_array(size, dtype=dtype)
     numtasks = min(64 * 128, expanded_mask.size)
     if numtasks > 0:
         gpu_expand_mask_bits.forall(numtasks)(mask, expanded_mask)
@@ -224,8 +222,8 @@ def prefixsum(vals):
     from . import _gdf
 
     # Allocate output
-    slots = cuda_.device_array(shape=vals.size + 1,
-                               dtype=vals.dtype)
+    slots = cuda.device_array(shape=vals.size + 1,
+                              dtype=vals.dtype)
     # Fill 0 to slot[0]
     gpu_fill_value[1, 1](slots[:1], 0)
 
@@ -251,7 +249,7 @@ def copy_to_dense(data, mask, out=None):
         # output buffer is not provided
         # allocate one
         alloc_shape = sz
-        out = cuda_.device_array(shape=alloc_shape, dtype=data.dtype)
+        out = cuda.device_array(shape=alloc_shape, dtype=data.dtype)
     else:
         # output buffer is provided
         # check it
@@ -261,9 +259,9 @@ def copy_to_dense(data, mask, out=None):
     return (sz, out)
 
 
-@cuda.jit
+@nb_cuda.jit
 def gpu_compact_mask_bytes(bools, bits):
-    tid = cuda.grid(1)
+    tid = nb_cuda.grid(1)
     base = tid * mask_bitsize
     for i in range(base, base + mask_bitsize):
         if i >= bools.size:
@@ -284,9 +282,9 @@ def compact_mask_bytes(boolbytes):
     return bits
 
 
-@cuda.jit
+@nb_cuda.jit
 def gpu_mask_from_devary(ary, bits):
-    tid = cuda.grid(1)
+    tid = nb_cuda.grid(1)
     base = tid * mask_bitsize
     for i in range(base, base + mask_bitsize):
         if i >= len(ary):
@@ -309,9 +307,9 @@ def mask_from_devary(ary):
 #
 
 
-@cuda.jit
+@nb_cuda.jit
 def gpu_gather(data, index, out):
-    i = cuda.grid(1)
+    i = nb_cuda.grid(1)
     if i < index.size:
         idx = index[i]
         # Only do it if the index is in range
@@ -323,14 +321,14 @@ def gather(data, index, out=None):
     """Perform ``out = data[index]`` on the GPU
     """
     if out is None:
-        out = cuda_.device_array(shape=index.size, dtype=data.dtype)
+        out = cuda.device_array(shape=index.size, dtype=data.dtype)
     gpu_gather.forall(index.size)(data, index, out)
     return out
 
 
-@cuda.jit
+@nb_cuda.jit
 def gpu_gather_joined_index(lkeys, rkeys, lidx, ridx, out):
-    gid = cuda.grid(1)
+    gid = nb_cuda.grid(1)
     if gid < lidx.size:
         # Try getting from the left side first
         pos = lidx[gid]
@@ -345,7 +343,7 @@ def gpu_gather_joined_index(lkeys, rkeys, lidx, ridx, out):
 
 def gather_joined_index(lkeys, rkeys, lidx, ridx):
     assert lidx.size == ridx.size
-    out = cuda_.device_array(lidx.size, dtype=lkeys.dtype)
+    out = cuda.device_array(lidx.size, dtype=lkeys.dtype)
     gpu_gather_joined_index.forall(lidx.size)(lkeys, rkeys, lidx, ridx, out)
     return out
 
@@ -361,9 +359,9 @@ def reverse_array(data, out=None):
 #
 
 
-@cuda.jit
+@nb_cuda.jit
 def gpu_fill_masked(value, validity, out):
-    tid = cuda.grid(1)
+    tid = nb_cuda.grid(1)
     if tid < out.size:
         valid = mask_get(validity, tid)
         if not valid:
@@ -371,7 +369,7 @@ def gpu_fill_masked(value, validity, out):
 
 
 def fillna(data, mask, value):
-    out = cuda_.device_array_like(data)
+    out = cuda.device_array_like(data)
     out.copy_to_device(data)
     configured = gpu_fill_masked.forall(data.size)
     configured(value, mask, out)
@@ -382,17 +380,17 @@ def fillna(data, mask, value):
 # Binary kernels
 #
 
-@cuda.jit
+@nb_cuda.jit
 def gpu_equal_constant_masked(arr, mask, val, out):
-    i = cuda.grid(1)
+    i = nb_cuda.grid(1)
     if i < out.size:
         res = (arr[i] == val) if mask_get(mask, i) else False
         out[i] = res
 
 
-@cuda.jit
+@nb_cuda.jit
 def gpu_equal_constant(arr, val, out):
-    i = cuda.grid(1)
+    i = nb_cuda.grid(1)
     if i < out.size:
         out[i] = (arr[i] == val)
 
@@ -415,7 +413,7 @@ def apply_equal_constant(arr, mask, val, dtype):
     -------
     result : device array
     """
-    out = cuda_.device_array(shape=arr.size, dtype=dtype)
+    out = cuda.device_array(shape=arr.size, dtype=dtype)
     if mask is not None:
         configured = gpu_equal_constant_masked.forall(out.size)
         configured(arr, mask, val, out)
@@ -425,24 +423,24 @@ def apply_equal_constant(arr, mask, val, dtype):
     return out
 
 
-@cuda.jit
+@nb_cuda.jit
 def gpu_scale(arr, vmin, vmax, out):
-    i = cuda.grid(1)
+    i = nb_cuda.grid(1)
     if i < out.size:
         val = arr[i]
         out[i] = (val - vmin) / (vmax - vmin)
 
 
 def compute_scale(arr, vmin, vmax):
-    out = cuda_.device_array(shape=arr.size, dtype=np.float64)
+    out = cuda.device_array(shape=arr.size, dtype=np.float64)
     configured = gpu_scale.forall(out.size)
     configured(arr, vmin, vmax, out)
     return out
 
 
-@cuda.jit
+@nb_cuda.jit
 def gpu_label(arr, cats, enc, na_sentinel, out):
-    i = cuda.grid(1)
+    i = nb_cuda.grid(1)
     if i < out.size:
         val = arr[i]
         out[i] = na_sentinel
@@ -471,7 +469,7 @@ def apply_label(arr, cats, dtype, na_sentinel):
     """
     encs = np.asarray(list(range(cats.size)))
     d_encs = to_device(encs)
-    out = cuda_.device_array(shape=arr.size, dtype=dtype)
+    out = cuda.device_array(shape=arr.size, dtype=dtype)
     configured = gpu_label.forall(out.size)
     configured(arr, cats, d_encs, na_sentinel, out)
     return out
@@ -481,7 +479,7 @@ def apply_label(arr, cats, dtype, na_sentinel):
 #
 
 
-@cuda.jit(device=True)
+@nb_cuda.jit(device=True)
 def gpu_unique_set_insert(vset, sz, val):
     """
     Insert *val* into the *vset* of size *sz*.
@@ -526,21 +524,21 @@ class UniqueK(object):
     def _compile(cls, dtype):
         nbtype = numpy_support.from_dtype(dtype)
 
-        @cuda.jit
+        @nb_cuda.jit
         def gpu_unique_k(arr, k, out, outsz_ptr):
             """
             Note: run with small blocks.
             """
-            tid = cuda.threadIdx.x
-            blksz = cuda.blockDim.x
+            tid = nb_cuda.threadIdx.x
+            blksz = nb_cuda.blockDim.x
             base = 0
 
             # shared memory
             vset_size = 0
             sm_mem_size = MAX_FAST_UNIQUE_K
-            vset = cuda.shared.array(sm_mem_size, dtype=nbtype)
-            share_vset_size = cuda.shared.array(1, dtype=int32)
-            share_loaded = cuda.shared.array(sm_mem_size, dtype=nbtype)
+            vset = nb_cuda.shared.array(sm_mem_size, dtype=nbtype)
+            share_vset_size = nb_cuda.shared.array(1, dtype=int32)
+            share_loaded = nb_cuda.shared.array(sm_mem_size, dtype=nbtype)
             sm_mem_size = min(k, sm_mem_size)
 
             while vset_size < sm_mem_size and base < arr.size:
@@ -550,7 +548,7 @@ class UniqueK(object):
                 if tid < valid_load:
                     share_loaded[tid] = arr[pos]
                 # wait for load to complete
-                cuda.syncthreads()
+                nb_cuda.syncthreads()
                 # thread-0 inserts
                 if tid == 0:
                     for i in range(valid_load):
@@ -562,7 +560,7 @@ class UniqueK(object):
                             vset_size = sm_mem_size + 1
                     share_vset_size[0] = vset_size
                 # wait until the insert is done
-                cuda.syncthreads()
+                nb_cuda.syncthreads()
                 vset_size = share_vset_size[0]
                 # increment
                 base += blksz
@@ -584,8 +582,8 @@ class UniqueK(object):
         if k >= MAX_FAST_UNIQUE_K:
             raise NotImplementedError('k >= {}'.format(MAX_FAST_UNIQUE_K))
         # setup mem
-        outsz_ptr = cuda_.device_array(shape=1, dtype=np.intp)
-        out = cuda_.device_array_like(arr)
+        outsz_ptr = cuda.device_array(shape=1, dtype=np.intp)
+        out = cuda.device_array_like(arr)
         # kernel
         self._kernel[1, 64](arr, k, out, outsz_ptr)
         # copy to host
@@ -600,9 +598,9 @@ class UniqueK(object):
 # Find segments
 
 
-@cuda.jit
+@nb_cuda.jit
 def gpu_mark_segment_begins(arr, markers):
-    i = cuda.grid(1)
+    i = nb_cuda.grid(1)
     if i == 0:
         markers[0] = 1
     elif 0 < i < markers.size:
@@ -610,18 +608,18 @@ def gpu_mark_segment_begins(arr, markers):
             markers[i] = arr[i] != arr[i - 1]
 
 
-@cuda.jit
+@nb_cuda.jit
 def gpu_scatter_segment_begins(markers, scanned, begins):
-    i = cuda.grid(1)
+    i = nb_cuda.grid(1)
     if i < markers.size:
         if markers[i]:
             idx = scanned[i]
             begins[idx] = i
 
 
-@cuda.jit
+@nb_cuda.jit
 def gpu_mark_seg_segments(begins, markers):
-    i = cuda.grid(1)
+    i = nb_cuda.grid(1)
     if i < begins.size:
         markers[begins[i]] = 1
 
@@ -658,14 +656,14 @@ def find_segments(arr, segs=None, markers=None):
     ct = slots[slots.size - 1]
     scanned = slots[:-1]
     # Compact segments
-    begins = cuda_.device_array(shape=int(ct), dtype=np.intp)
+    begins = cuda.device_array(shape=int(ct), dtype=np.intp)
     gpu_scatter_segment_begins.forall(markers.size)(markers, scanned, begins)
     return begins, markers
 
 
-@cuda.jit
+@nb_cuda.jit
 def gpu_value_counts(arr, counts, total_size):
-    i = cuda.grid(1)
+    i = nb_cuda.grid(1)
     if 0 <= i < arr.size - 1:
         counts[i] = arr[i+1] - arr[i]
     elif i == arr.size - 1:
@@ -673,14 +671,14 @@ def gpu_value_counts(arr, counts, total_size):
 
 
 def value_count(arr, total_size):
-    counts = cuda_.device_array(shape=len(arr), dtype=np.intp)
+    counts = cuda.device_array(shape=len(arr), dtype=np.intp)
     gpu_value_counts.forall(arr.size)(arr, counts, total_size)
     return counts
 
 
-@cuda.jit
+@nb_cuda.jit
 def gpu_recode(newdata, data, record_table, na_value):
-    for i in range(cuda.threadIdx.x, data.size, cuda.blockDim.x):
+    for i in range(nb_cuda.threadIdx.x, data.size, nb_cuda.blockDim.x):
         val = data[i]
         newval = (record_table[val]
                   if 0 <= val < record_table.size
@@ -692,7 +690,7 @@ def recode(data, recode_table, na_value):
     """Recode data with the given recode table.
     And setting out-of-range values to *na_value*
     """
-    newdata = cuda_.device_array_like(data)
+    newdata = cuda.device_array_like(data)
     recode_table = to_device(recode_table)
     blksz = 32 * 4
     blkct = min(16, max(1, data.size // blksz))
@@ -700,15 +698,15 @@ def recode(data, recode_table, na_value):
     return newdata
 
 
-@cuda.jit
+@nb_cuda.jit
 def gpu_row_matrix(rowmatrix, col, nrow, ncol):
-    i = cuda.grid(1)
+    i = nb_cuda.grid(1)
     if i < rowmatrix.size:
         rowmatrix[i] = col[i]
 
 
 def row_matrix(cols, nrow, ncol, dtype):
-    matrix = cuda_.device_array(shape=(nrow, ncol), dtype=dtype, order='C')
+    matrix = cuda.device_array(shape=(nrow, ncol), dtype=dtype, order='C')
     for colidx, col in enumerate(cols):
         gpu_row_matrix.forall(matrix[:, colidx].size)(matrix[:, colidx],
                                                       col.to_gpu_array(),

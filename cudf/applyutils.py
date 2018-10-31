@@ -3,15 +3,13 @@
 import functools
 
 from numba.utils import pysignature, exec_
-from numba import cuda, six
-from .backend import cuda as cuda_
+from numba import six
+from numba import cuda as nb_cuda
 
-#from librmm_cffi import librmm as rmm
-rmm = cuda_
-
-from cudf.docutils import docfmt_partial
-from cudf import cudautils
-from cudf.series import Series
+from .backend import cuda
+from .docutils import docfmt_partial
+from . import cudautils
+from .series import Series
 
 
 _doc_applyparams = """
@@ -96,7 +94,7 @@ class ApplyKernelCompilerBase(object):
         # Allocate output columns
         outputs = {}
         for k, dt in self.outcols.items():
-            outputs[k] = cuda_.device_array(len(df), dtype=dt)
+            outputs[k] = cuda.device_array(len(df), dtype=dt)
         # Bind argument
         args = {}
         for dct in [inputs, outputs, self.kwargs]:
@@ -186,11 +184,11 @@ def row_wise_kernel({args}):
     # Finalize source
     concrete = source.format(args=args, body='\n'.join(indented))
     # Get bytecode
-    glbs = {'inner': cuda.jit(device=True)(func),
-            'cuda': cuda}
+    glbs = {'inner': nb_cuda.jit(device=True)(func),
+            'cuda': nb_cuda}
     exec_(concrete, glbs)
     # Compile as CUDA kernel
-    kernel = cuda.jit(glbs['row_wise_kernel'])
+    kernel = nb_cuda.jit(glbs['row_wise_kernel'])
     return kernel
 
 
@@ -245,11 +243,11 @@ def chunk_wise_kernel(nrows, chunks, {args}):
     # Finalize source
     concrete = source.format(args=args, body='\n'.join(indented))
     # Get bytecode
-    glbs = {'inner': cuda.jit(device=True)(func),
-            'cuda': cuda}
+    glbs = {'inner': nb_cuda.jit(device=True)(func),
+            'cuda': nb_cuda}
     exec_(concrete, glbs)
     # Compile as CUDA kernel
-    kernel = cuda.jit(glbs['chunk_wise_kernel'])
+    kernel = nb_cuda.jit(glbs['chunk_wise_kernel'])
     return kernel
 
 

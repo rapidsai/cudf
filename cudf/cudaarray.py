@@ -90,8 +90,9 @@ class CudaNDArray(object):
         self.cuda_data = cuda_data  # CudaBuffer
 
     def __repr__(self):
-        return (f'{type(self).__name__}({self.shape}, strides={self.strides},'
-                f'dtype={self.dtype}, cuda_data={self.cuda_data})')
+        return ('{clsname}({shape}, strides={strides}, dtype={dtype},'
+                ' cuda_data={cuda_data})').format_map(
+                    cls_name=type(self).__name__, **self.__dict__)
 
     @classmethod
     def fromarray(cls, arr, ctx=None):

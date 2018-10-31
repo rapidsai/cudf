@@ -57,4 +57,14 @@ if pa_cuda is not None:
             context=pa_cuda.Context
         ))
 
-# Backend: rmm?
+# Backend: librmm
+if nb_cuda is not None and 0:
+    from librmm_cffi import librmm
+    from cudf.gpuarrow import GpuArrowReader
+    cuda_api.append(
+        AttrDict(
+            _name='rmm',
+            to_device=librmm.to_device,
+            context=nb_cuda.current_context,
+            ArrowReader=GpuArrowReader,
+        ))

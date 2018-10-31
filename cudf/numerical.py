@@ -6,11 +6,9 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 
-from .backend import cuda
 from libgdf_cffi import libgdf
-#from librmm_cffi import librmm as rmm
-rmm = cuda
 
+from .backend import cuda
 from . import _gdf, columnops, utils, cudautils
 from .buffer import Buffer
 from .serialize import register_distributed_serializer
@@ -392,7 +390,7 @@ def column_hash_values(column0, *other_columns):
     Returns a new NumericalColumn[int32]
     """
     columns = [column0] + list(other_columns)
-    buf = Buffer(rmm.device_array(len(column0), dtype=np.int32))
+    buf = Buffer(cuda.device_array(len(column0), dtype=np.int32))
     result = NumericalColumn(data=buf, dtype=buf.dtype)
     _gdf.hash_columns(columns, result)
     return result

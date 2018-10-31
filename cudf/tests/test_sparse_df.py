@@ -2,25 +2,16 @@
 import pytest
 import os.path
 
-try:
-    import pyarrow as pa
-    arrow_version = pa.__version__
-except ImportError as msg:
-    print('Failed to import pyarrow: {}'.format(msg))
-    pa = None
-    arrow_version = None
-
 import numpy as np
 
-#from librmm_cffi import librmm as rmm
-#from cudf.gpuarrow import GpuArrowReader
 from cudf.dataframe import Series, DataFrame
 from .backends import cuda_backend_test
+
+pa = pytest.importorskip("pyarrow")
 
 
 @cuda_backend_test
 def read_data(cuda):
-    rmm = cuda
     import pandas as pd
     basedir = os.path.dirname(__file__)
     datapath = os.path.join(basedir, 'data', 'ipums.pkl')
@@ -37,12 +28,10 @@ def read_data(cuda):
     data = batch.serialize().to_pybytes()
     data = np.ndarray(shape=len(data), dtype=np.byte,
                       buffer=bytearray(data))
-    darr = rmm.to_device(data)
+    darr = cuda.to_device(data)
     return schema, darr
 
 
-@pytest.mark.skipif(arrow_version is None,
-                    reason='need compatible pyarrow to generate test data')
 @cuda_backend_test
 def test_fillna(cuda):
     schema, darr = read_data(cuda)
@@ -70,8 +59,6 @@ def test_to_dense_array():
     assert filled.size == len(sr)
 
 
-@pytest.mark.skipif(arrow_version is None,
-                    reason='need compatible pyarrow to generate test data')
 @cuda_backend_test
 def test_reading_arrow_sparse_data(cuda):
     schema, darr = read_data(cuda)

@@ -6,7 +6,7 @@ import multiprocessing as mp
 
 import numpy as np
 import pandas as pd
-from numba import cuda
+from numba import cuda as nb_cuda
 try:
     from distributed.protocol import serialize, deserialize
     _have_distributed = True
@@ -112,7 +112,7 @@ def serialize_ipc(sr):
     assert header['column']['data_buffer']['kind'] == 'ipc'
     # Check that _cached_ipch is set on the buffer
     assert isinstance(sr._column.data._cached_ipch,
-                      cuda.cudadrv.devicearray.IpcArrayHandle)
+                      nb_cuda.cudadrv.devicearray.IpcArrayHandle)
 
     # Spawn a new process to test the IPC handle deserialization
     mpctx = mp.get_context('spawn')

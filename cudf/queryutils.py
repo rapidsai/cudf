@@ -6,11 +6,9 @@ import datetime as dt
 import six
 import numpy as np
 
-from numba import cuda
-from .backend import cuda as cuda_
+from numba import cuda as nb_cuda
 
-#from librmm_cffi import librmm as rmm
-rmm = cuda_
+from .backend import cuda
 
 ENVREF_PREFIX = '__CUDF_ENVREF__'
 
@@ -134,7 +132,7 @@ def query_compile(expr):
         fn = query_builder(info, funcid)
         args = info['args']
         # compile
-        devicefn = cuda.jit(device=True)(fn)
+        devicefn = nb_cuda.jit(device=True)(fn)
 
         kernelid = 'kernel_{}'.format(funcid)
         kernel = _wrap_query_expr(kernelid, devicefn, args)
@@ -169,7 +167,7 @@ def _wrap_query_expr(name, fn, args):
 
     glbls = {
         'queryfn': fn,
-        'cuda': cuda,
+        'cuda': nb_cuda,
     }
     kernargs = map(_add_prefix, args)
     indiced_args = map(_add_prefix, map(_add_idx, args))
@@ -217,7 +215,7 @@ def query_execute(df, expr, callenv):
     colarrays = [df[col].to_gpu_array() for col in compiled['colnames']]
     # allocate output buffer
     nrows = len(df)
-    out = cuda_.device_array(nrows, dtype=np.bool_)
+    out = cuda.device_array(nrows, dtype=np.bool_)
     # run kernel
     args = [out] + colarrays + envargs
     kernel.forall(nrows)(*args)
