@@ -90,9 +90,15 @@ class CudaNDArray(object):
         self.cuda_data = cuda_data  # CudaBuffer
 
     def __repr__(self):
-        return ('{clsname}({shape}, strides={strides}, dtype={dtype},'
-                ' cuda_data={cuda_data})').format_map(
-                    cls_name=type(self).__name__, **self.__dict__)
+        d = dict(
+            name=type(self).__name__,
+            shape=self.shape,
+            strides=self.strides,
+            dtype=self.dtype,
+            cuda_data=self.cuda_data,
+        )
+        return ('{name}({shape}, strides={strides}, dtype={dtype},'
+                ' cuda_data={cuda_data})').format_map(d)
 
     @classmethod
     def fromarray(cls, arr, ctx=None):
@@ -281,3 +287,14 @@ class CudaNDArray(object):
         new_order = 'C' if new.flags.c_contiguous else 'F'
         return type(self)(new.shape, strides=new.strides, dtype=new.dtype,
                           cuda_data=self.cuda_data, order=new_order)
+
+    def view(self, dtype):
+        dtype = np.dtype(dtype)
+        if dtype.itemsize != self.dtype.itemsize:
+            raise TypeError("new dtype itemsize doesn't match")
+        return type(self)(
+            shape=self.shape,
+            strides=self.strides,
+            dtype=dtype,
+            cuda_data=self.cuda_data,
+        )
