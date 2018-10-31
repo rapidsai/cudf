@@ -654,6 +654,11 @@ class DataFrame(object):
     def sort_values(self, by, ascending=True):
         """
         Uses parallel radixsort, which is a stable sort.
+        
+        Difference from pandas:
+        * *by* must be the name of a single column.
+        * Supports axis='index' only.
+        * Parameters not supported: inplace, kind, na_position
 
         Parameters
         ----------
