@@ -27,6 +27,41 @@
 
 struct ValidsTest : public GdfTest {};
 
+TEST_F(ValidsTest, NoValids)
+{
+  const int num_rows = 100;
+  std::vector<int> data(num_rows);
+  const int num_masks = std::ceil(num_rows/static_cast<float>(8));
+  std::vector<gdf_valid_type> valid(num_masks,0x00);
+
+  auto input_gdf_col = create_gdf_column(data, valid);
+
+  int count{-1};
+  gdf_error error_code = gdf_count_nonzero_mask(input_gdf_col->valid, num_rows, &count);
+
+  ASSERT_EQ(GDF_SUCCESS,error_code) << "GDF Operation did not complete successfully.";
+
+  EXPECT_EQ(0, count);
+}
+
+TEST_F(ValidsTest, NullValids)
+{
+  int count{-1};
+  gdf_error error_code = gdf_count_nonzero_mask(nullptr, 1, &count);
+
+  ASSERT_EQ(GDF_DATASET_EMPTY,error_code) << "Expected failure for null input.";
+}
+
+TEST_F(ValidsTest, NullCount)
+{
+  std::vector<int> data(0);
+  std::vector<gdf_valid_type> valid{0x0};
+  auto input_gdf_col = create_gdf_column(data, valid);
+  gdf_error error_code = gdf_count_nonzero_mask(input_gdf_col->valid, 1, nullptr);
+
+  ASSERT_EQ(GDF_DATASET_EMPTY,error_code) << "Expected failure for null input.";
+}
+
 TEST_F(ValidsTest, FirstRowValid)
 {
   std::vector<int> data(4);
