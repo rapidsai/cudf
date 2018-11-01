@@ -16,14 +16,14 @@
 
 //Quantile (percentile) functionality
 
-#include <gdf/gdf.h>
-#include <gdf/utils.h>
-#include <gdf/errorutils.h>
+#include <cudf.h>
+#include <utilities/cudf_utils.h>
+#include <core/error/error_utils.h>
 
 #include <thrust/device_vector.h>
 #include <thrust/copy.h>
 
-#include "thrust_rmm_allocator.h"
+#include "rmm/inc/thrust_rmm_allocator.h"
 
 #include "quantiles.hpp"
 
