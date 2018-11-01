@@ -1,9 +1,9 @@
 #include <algorithm>
 
-#include <gdf/gdf.h>
-#include <gdf/utils.h>
-#include <gdf/errorutils.h>
-#include "nvtx_utils.h"
+#include <cudf.h>
+#include <utilities/cudf_utils.h>
+#include <core/error/error_utils.h>
+#include "utilities/nvtx/nvtx_utils.h"
 
 
 template<typename T, typename Tout, typename F>

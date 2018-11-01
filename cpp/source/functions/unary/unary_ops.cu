@@ -7,13 +7,13 @@
 #include <cmath>
 #include <algorithm>
 
-#include <gdf/gdf.h>
-#include <gdf/utils.h>
-#include <gdf/errorutils.h>
+#include <cudf.h>
+#include <utilities/cudf_utils.h>
+#include <core/error/error_utils.h>
 
 #include <thrust/copy.h>
 #include <thrust/execution_policy.h>
-#include "thrust_rmm_allocator.h"
+#include "rmm/inc/thrust_rmm_allocator.h"
 
 template<typename T, typename Tout, typename F>
 __global__

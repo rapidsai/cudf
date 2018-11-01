@@ -19,14 +19,13 @@
  *
  */
 
-#include <gdf/gdf.h>
-#include <gdf/errorutils.h>
-#include "gdf/gdf_io.h"
-#include "rmm.h"
+#include <cudf.h>
+#include <core/error/error_utils.h>
+#include "rmm/rmm.h"
 
 #include <thrust/scan.h>
 #include <thrust/execution_policy.h>
-#include "../../thrust_rmm_allocator.h"
+#include "rmm/inc/thrust_rmm_allocator.h"
 
 using namespace std;
 

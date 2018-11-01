@@ -2,12 +2,10 @@
 #define NVTX_UTILS_H
 
 #include <cstddef> // size_t
-#include <gdf/cffi/types.h>
+#include <cudf/types.h>
 #include <cassert>
 #include <string>
 #include <array>
-
-#define USE_NVTX
 
 #ifdef USE_NVTX
 #include "nvToolsExt.h"

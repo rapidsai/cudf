@@ -27,7 +27,7 @@
 #include <thrust/system/cuda/error.h>
 #include <thrust/execution_policy.h>
 
-#include "rmm.h"
+#include "rmm/rmm.h"
 
 template<class T>
 class rmm_allocator : public thrust::device_malloc_allocator<T>

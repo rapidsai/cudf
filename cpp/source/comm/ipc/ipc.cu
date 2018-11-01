@@ -1,6 +1,6 @@
-#include <gdf/gdf.h>
-#include <gdf/ipc/Schema_generated.h>
-#include <gdf/ipc/Message_generated.h>
+#include <cudf.h>
+#include <cudf/ipc_generated/Schema_generated.h>
+#include <cudf/ipc_generated/Message_generated.h>
 
 #include <arrow/api.h>
 #include <arrow/io/api.h>

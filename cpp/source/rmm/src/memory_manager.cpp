@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "memory_manager.h"
+#include "../inc/memory_manager.h"
 
 namespace rmm
 {

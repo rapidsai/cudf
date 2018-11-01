@@ -33,8 +33,8 @@ which has the following license:
 /* Sort-based join using moderngpu */
 
 #include <utility>
-#include <gdf/cffi/functions.h>
-#include <gdf/cffi/types.h>
+#include <cudf/functions.h>
+#include <cudf/types.h>
 #include <moderngpu/kernel_sortedsearch.hxx>
 #include <moderngpu/kernel_scan.hxx>
 #include <moderngpu/kernel_load_balance.hxx>

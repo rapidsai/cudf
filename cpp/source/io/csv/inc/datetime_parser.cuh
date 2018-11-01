@@ -62,8 +62,8 @@
 
 #pragma once
 
-#include <gdf/gdf.h>
-#include "type_conversion.cuh"
+#include <cudf.h>
+#include "io/csv/inc/type_conversion.cuh"
 
 __host__ __device__ gdf_date32 parseDateFormat(char *data, long start_idx, long end_idx, bool dayfirst);
 __host__ __device__ gdf_date64 parseDateTimeFormat(char *data, long start_idx, long end_idx, bool dayfirst);

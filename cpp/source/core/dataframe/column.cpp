@@ -19,11 +19,11 @@
  * @file column.cpp
  * ---------------------------------------------------------------------------**/
 
-#include <gdf/gdf.h>
-#include <gdf/utils.h>
-#include <gdf/errorutils.h>
+#include <cudf.h>
+#include <utilities/cudf_utils.h>
+#include <core/error/error_utils.h>
 #include <cuda_runtime_api.h>
-#include <rmm.h>
+#include <rmm/rmm.h>
 
 // forward decl -- see validops.cu
 gdf_error gdf_mask_concat(gdf_valid_type *output_mask,

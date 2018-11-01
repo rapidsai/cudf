@@ -15,9 +15,9 @@
  * limitations under the License.
  */
 
-#include <gdf/gdf.h>
-#include <gdf/utils.h>
-#include <gdf/errorutils.h>
+#include <cudf.h>
+#include <utilities/cudf_utils.h>
+#include <core/error/error_utils.h>
 
 #include <cuda_runtime.h>
 #include <vector>
@@ -26,7 +26,7 @@
 #include <thrust/execution_policy.h>
 #include <thrust/iterator/iterator_adaptor.h>
 
-#include "thrust_rmm_allocator.h"
+#include "rmm/inc/thrust_rmm_allocator.h"
 
 /*  Portions of the code below is borrowed from a paper by Howard Hinnant dated 2013-09-07  http://howardhinnant.github.io/date_algorithms.html  as seen on July 2nd, 2018
  The piece of code borrowed and modified is:

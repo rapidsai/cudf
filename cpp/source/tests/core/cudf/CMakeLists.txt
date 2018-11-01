@@ -1,5 +1,5 @@
-set(gdf_internal_test_SRCS
-    gdf_internal_test.cpp
+set(cudf_internal_test_SRCS
+    cudf_internal_test.cpp
 )
 
-configure_test(gdf_internal_test "${gdf_internal_test_SRCS}")
+configure_test(cudf_internal_test "${cudf_internal_test_SRCS}")

@@ -1,7 +1,7 @@
-#include <gdf/gdf.h>
-#include <gdf/utils.h>
-#include <gdf/errorutils.h>
-#include <gdf/cffi/functions.h>
+#include <cudf.h>
+#include <utilities/cudf_utils.h>
+#include <core/error/error_utils.h>
+#include <cudf/functions.h>
 
 #include <cuda_runtime.h>
 #include <vector>
@@ -10,7 +10,7 @@
 #include <thrust/execution_policy.h>
 #include <thrust/iterator/iterator_adaptor.h>
 #include <thrust/device_vector.h>
-#include "thrust_rmm_allocator.h"
+#include "rmm/inc/thrust_rmm_allocator.h"
 
 // thrust::device_vector set to use rmmAlloc and rmmFree.
 template <typename T>

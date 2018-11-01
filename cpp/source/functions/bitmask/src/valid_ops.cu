@@ -18,13 +18,13 @@
  * 
  * @file column.cpp
  * ---------------------------------------------------------------------------**/
-#include <gdf/gdf.h>
-#include <gdf/errorutils.h>
-#include <gdf/utils.h>
+#include <cudf.h>
+#include <core/error/error_utils.h>
+#include <utilities/cudf_utils.h>
 #include <vector>
 #include <cassert>
 #include <cub/cub.cuh>
-#include "rmm.h"
+#include "rmm/rmm.h"
 
 #include <thrust/tabulate.h>
 

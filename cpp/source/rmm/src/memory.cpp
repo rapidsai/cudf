@@ -21,8 +21,8 @@
  *
  */
 
-#include "rmm.h"
-#include "memory_manager.h"
+#include "../rmm.h"
+#include "../inc/memory_manager.h"
 #include <fstream>
 #include <sstream>
 #include <cstddef>

@@ -2,17 +2,16 @@
 
 //Type-erasure C-style interface for Multi-column Filter, Order-By, and Group-By functionality
 
-#include <gdf/gdf.h>
-#include <gdf/utils.h>
-#include <gdf/errorutils.h>
+#include <cudf.h>
+#include <utilities/cudf_utils.h>
+#include <core/error/error_utils.h>
 
-#include "thrust_rmm_allocator.h"
+#include "rmm/inc/thrust_rmm_allocator.h"
 
-///#include "../include/sqls_rtti_comp.hpp" -- CORRECT: put me back
 #include "sqls_rtti_comp.hpp"
-#include "groupby/groupby.cuh"
-#include "groupby/hash/aggregation_operations.cuh"
-#include "nvtx_utils.h"
+#include "core/groupby/groupby.cuh"
+#include "core/groupby/hash/aggregation_operations.cuh"
+#include "utilities/nvtx/nvtx_utils.h"
 
 //using IndexT = int;//okay...
 using IndexT = size_t;

@@ -1,6 +1,6 @@
-#include <gdf/gdf.h>
-#include <gdf/utils.h>
-#include <gdf/errorutils.h>
+#include <cudf.h>
+#include <utilities/cudf_utils.h>
+#include <core/error/error_utils.h>
 
 #include <cub/block/block_reduce.cuh>
 

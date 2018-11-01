@@ -20,13 +20,13 @@
 #include <cuda_runtime.h>
 #include <limits>
 #include <memory>
-#include "../../hashmap/managed.cuh"
+#include "functions/hash/inc/managed.cuh"
 #include "groupby_kernels.cuh"
-#include "../../gdf_table.cuh"
+#include "core/dataframe/cudf_table.cuh"
 #include <thrust/device_vector.h>
 #include <thrust/gather.h>
 #include <thrust/copy.h>
-#include "../../thrust_rmm_allocator.h"
+#include "rmm/inc/thrust_rmm_allocator.h"
 
 
 // Vector set to use rmmAlloc and rmmFree.

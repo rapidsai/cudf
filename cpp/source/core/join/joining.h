@@ -20,12 +20,12 @@
 #include <memory>
 #include <utility>
 
-#include <gdf/cffi/functions.h>
-#include <gdf/cffi/types.h>
+#include <cudf/functions.h>
+#include <cudf/types.h>
 
 #include "hash/join_compute_api.h"
-#include "sort/sort-join.cuh"
-#include "../gdf_table.cuh"
+#include "sort/sort_join.cuh"
+#include "core/dataframe/cudf_table.cuh"
 
 class rmm_mgpu_context_t; // forward decl
 

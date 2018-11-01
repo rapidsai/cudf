@@ -1,8 +1,8 @@
 
-#include <gdf/gdf.h>
-#include <gdf/utils.h>
-#include <gdf/errorutils.h>
-#include <gdf/cffi/functions.h>
+#include <cudf.h>
+#include <utilities/cudf_utils.h>
+#include <core/error/error_utils.h>
+#include <cudf/functions.h>
 
 #include <cuda_runtime.h>
 #include <vector>
@@ -10,9 +10,9 @@
 #include <thrust/functional.h>
 #include <thrust/execution_policy.h>
 #include <thrust/iterator/iterator_adaptor.h>
-#include "bitmaskops.h"
+#include "functions/bitmask/inc/bitmask_ops.h"
 
-#include "thrust_rmm_allocator.h"
+#include "rmm/inc/thrust_rmm_allocator.h"
 
 template <typename LeftType,typename RightType,typename ResultType >
 struct gdf_equals_op : public thrust::binary_function< LeftType, RightType, ResultType>

@@ -1,5 +1,5 @@
 set(column_test_SRCS
-    column-test.cu
+    column_test.cu
 )
 
-configure_test(column-test "${column_test_SRCS}")
+configure_test(column_test "${column_test_SRCS}")

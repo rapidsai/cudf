@@ -14,12 +14,12 @@
  * limitations under the License.
  */
 
-#include <gdf/gdf.h>
-#include <gdf/errorutils.h>
+#include <cudf.h>
+#include <core/error/error_utils.h>
 #include <cuda_runtime.h>
 #include "hash/groupby_compute_api.h"
 #include "hash/aggregation_operations.cuh"
-#include "../gdf_table.cuh"
+#include "core/dataframe/cudf_table.cuh"
 
 /* --------------------------------------------------------------------------*/
 /** 

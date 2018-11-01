@@ -18,7 +18,7 @@
 #define MANAGED_ALLOCATOR_CUH
 
 #include <new>
-#include "rmm.h"
+#include "rmm/rmm.h"
 
 template <class T>
 struct managed_allocator {

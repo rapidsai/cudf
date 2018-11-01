@@ -1,7 +1,7 @@
 #ifndef GDF_UTILS_H
 #define GDF_UTILS_H
 
-#include <gdf/gdf.h>
+#include <cudf.h>
 
 #ifdef __CUDACC__
 __host__ __device__

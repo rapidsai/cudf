@@ -17,17 +17,17 @@
 #ifndef GDF_TABLE_H
 #define GDF_TABLE_H
 
-#include <gdf/gdf.h>
-#include <gdf/utils.h>
+#include <cudf.h>
+#include <utilities/cudf_utils.h>
 #include <thrust/tabulate.h>
 #include <thrust/execution_policy.h>
 #include <thrust/device_vector.h>
-#include "thrust_rmm_allocator.h"
+#include "rmm/inc/thrust_rmm_allocator.h"
 #include <cassert>
-#include <gdf/errorutils.h>
-#include "hashmap/hash_functions.cuh"
-#include "hashmap/managed.cuh"
-#include "sqls_rtti_comp.hpp"
+#include "core/error/error_utils.h"
+#include "functions/hash/inc/hash_functions.cuh"
+#include "functions/hash/inc/managed.cuh"
+#include "core/sqls/sqls_rtti_comp.hpp"
 
 template <typename size_type>
 struct ValidRange {

@@ -15,17 +15,17 @@
  */
 
 
-#include <gdf/gdf.h>
-#include <gdf/errorutils.h>
+#include <cudf.h>
+#include <core/error/error_utils.h>
 #include <limits>
 #include <set>
 #include <vector>
 
 #include "joining.h"
-#include "../gdf_table.cuh"
-#include "../nvtx_utils.h"
+#include "core/dataframe/cudf_table.cuh"
+#include "utilities/nvtx/nvtx_utils.h"
 
-#include "rmm.h"
+#include "rmm/rmm.h"
 
 using namespace mgpu;
 

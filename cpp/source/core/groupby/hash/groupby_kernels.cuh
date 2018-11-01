@@ -17,9 +17,9 @@
 #ifndef GROUPBY_KERNELS_H
 #define GROUPBY_KERNELS_H
 
-#include "../../hashmap/concurrent_unordered_map.cuh"
+#include "functions/hash/inc/concurrent_unordered_map.cuh"
 #include "aggregation_operations.cuh"
-#include "../../gdf_table.cuh"
+#include "core/dataframe/cudf_table.cuh"
 
 /* --------------------------------------------------------------------------*/
 /** 

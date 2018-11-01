@@ -21,7 +21,7 @@
 #include <iterator>
 #include <type_traits>
 #include <cassert>
-#include <gdf/gdf.h>
+#include <cudf.h>
 
 #include <thrust/pair.h>
 

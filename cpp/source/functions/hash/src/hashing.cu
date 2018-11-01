@@ -14,16 +14,16 @@
  * limitations under the License.
  */
 
-#include <gdf/gdf.h>
-#include <gdf/errorutils.h>
+#include <cudf.h>
+#include <core/error/error_utils.h>
 #include <thrust/tabulate.h>
 
-#include "join/joining.h"
-#include "gdf_table.cuh"
-#include "hashmap/hash_functions.cuh"
-#include "int_fastdiv.h"
-#include "rmm.h"
-#include "nvtx_utils.h"
+#include "core/join/joining.h"
+#include "core/dataframe/cudf_table.cuh"
+#include "functions/hash/inc/hash_functions.cuh"
+#include "utilities/int_fastdiv.h"
+#include "rmm/rmm.h"
+#include "utilities/nvtx/nvtx_utils.h"
 
 constexpr int BLOCK_SIZE = 256;
 constexpr int ROWS_PER_THREAD = 1;

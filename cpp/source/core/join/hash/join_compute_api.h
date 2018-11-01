@@ -16,13 +16,12 @@
 
 #include <cuda_runtime.h>
 #include <future>
-#include <gdf/errorutils.h>
+#include <core/error/error_utils.h>
 
-#include "rmm.h"
-#include "gdf/errorutils.h"
+#include "rmm/rmm.h"
 
 #include "join_kernels.cuh"
-#include "../../gdf_table.cuh"
+#include "core/dataframe/cudf_table.cuh"
 #include <thrust/copy.h>
 #include <thrust/execution_policy.h>
 #include <thrust/functional.h>

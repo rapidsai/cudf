@@ -22,12 +22,12 @@ enum class JoinType {
   FULL_JOIN
 };
 
-#include <gdf/gdf.h>
-#include "../../gdf_table.cuh"
-#include "../../hashmap/concurrent_unordered_multimap.cuh"
-#include "../../hashmap/hash_functions.cuh"
+#include <cudf.h>
+#include "core/dataframe/cudf_table.cuh"
+#include "functions/hash/inc/concurrent_unordered_multimap.cuh"
+#include "functions/hash/inc/hash_functions.cuh"
 #include <cub/cub.cuh>
-#include "../../util/bit_util.cuh"
+#include "utilities/bit_util.cuh"
 
 constexpr int warp_size = 32;
 

@@ -21,14 +21,14 @@
 #include <type_traits>
 #include <cassert>
 #include <iostream>
-#include <gdf/gdf.h>
+#include <cudf.h>
 
 #include <thrust/pair.h>
 
 #include "managed_allocator.cuh"
 #include "managed.cuh"
 #include "hash_functions.cuh"
-#include "../groupby/hash/aggregation_operations.cuh"
+#include "core/groupby/hash/aggregation_operations.cuh"
 
 // TODO: replace this with CUDA_TRY and propagate the error
 #ifndef CUDA_RT_CALL

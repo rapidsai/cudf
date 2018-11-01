@@ -1,5 +1,5 @@
 set(join_test_SRCS
-    join-tests.cu
+    join_tests.cu
 )
 
 configure_test(join_test "${join_test_SRCS}")

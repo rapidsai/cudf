@@ -16,9 +16,9 @@
  * limitations under the License.
  */
 
-#include <gdf/gdf.h>
-#include <gdf/utils.h>
-#include <gdf/errorutils.h>
+#include <cudf.h>
+#include <utilities/cudf_utils.h>
+#include <core/error/error_utils.h>
 
 
 #include <cuda_runtime.h>
@@ -34,7 +34,7 @@
 #include <thrust/iterator/iterator_adaptor.h>
 #include <thrust/iterator/transform_iterator.h>
 
-#include "thrust_rmm_allocator.h"
+#include "rmm/inc/thrust_rmm_allocator.h"
 
 //std lib
 #include <map>
