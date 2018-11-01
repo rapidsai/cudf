@@ -2,17 +2,16 @@ cmake_minimum_required(VERSION 3.12 FATAL_ERROR)
 
 project(CUDA_DATAFRAME LANGUAGES C CXX CUDA)
 
-#############################################################################################
-# - compiler options ------------------------------------------------------------------------
+###################################################################################################
+# - compiler options ------------------------------------------------------------------------------
 
 set(CMAKE_CXX_STANDARD 11)
-set(CMAKE_CUDA_STANDARD 11)
 set(CMAKE_C_COMPILER $ENV{CC})
 set(CMAKE_CXX_COMPILER $ENV{CXX})
-
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_CUDA_STANDARD_REQURIED ON)
 
+set(CMAKE_CUDA_STANDARD 11)
+set(CMAKE_CUDA_STANDARD_REQURIED ON)
 set(CMAKE_CUDA_SEPARABLE_COMPILATION ON)
 
 if(CMAKE_COMPILER_IS_GNUCXX)
@@ -22,8 +21,17 @@ endif(CMAKE_COMPILER_IS_GNUCXX)
 set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -gencode=arch=compute_61,code=sm_61")
 set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -gencode=arch=compute_70,code=sm_70")
 
-#############################################################################################
-# - library targets -------------------------------------------------------------------------
+set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} --expt-extended-lambda --expt-relaxed-constexpr")
+
+# suppress SHFL warnings caused by Modern GPU
+# TODO: remove this when Modern GPU is removed for fixed to use shfl_sync
+set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -Werror cross-execution-space-call -Wno-deprecated-declarations -Xptxas --disable-warnings")
+
+# set warnings as errors
+set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -Werror cross-execution-space-call -Xcompiler -Wall,-Werror")
+
+###################################################################################################
+# - library targets -------------------------------------------------------------------------------
 
 add_library(cudf SHARED
             source/comm/ipc/ipc.cu
@@ -57,8 +65,8 @@ add_library(rmm SHARED
 
 target_link_libraries(rmm cuda)
 
-#############################################################################################
-# - build options ---------------------------------------------------------------------------
+###################################################################################################
+# - build options ---------------------------------------------------------------------------------
 
 option(USE_NVTX "Build with NVTX support" ON)
 if(USE_NVTX)
@@ -78,8 +86,8 @@ if(CMAKE_BUILD_TYPE MATCHES DEBUG)
     set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -g -G")
 endif(CMAKE_BUILD_TYPE MATCHES DEBUG)
 
-#############################################################################################
-# - cmake modules ---------------------------------------------------------------------------
+###################################################################################################
+# - cmake modules ---------------------------------------------------------------------------------
 
 set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/Modules/" ${CMAKE_MODULE_PATH})
 
