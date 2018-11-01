@@ -175,10 +175,9 @@ else()
   target_link_libraries(gdf arrow rmm)
 endif()
 
-message("Hello")
+# message("Hello")
 find_library(NVSTRING_LIBRARY NVStrings HINTS /home/ogreen/work/rapids/cuDF/libgdf/build)
-message(${NVSTRING_LIBRARY})
-
+# message(${NVSTRING_LIBRARY})
 
 target_link_libraries(gdf ${NVSTRING_LIBRARY})
 

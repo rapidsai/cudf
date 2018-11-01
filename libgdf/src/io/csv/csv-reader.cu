@@ -56,6 +56,8 @@
  
 #include <gdf/gdf_io.h>
 
+#include <rmm.h>
+
 #include "custr/NVStrings.h"
 
 constexpr int32_t HASH_SEED = 33;
@@ -471,7 +473,7 @@ gdf_error read_csv(csv_read_arg *args)
 
 		raw_csv->dtypes=d_detectedTypes;
 
-		cudaFree(d_ColumnData);
+		RMM_TRY( rmmFree ( d_ColumnData, 0 ) );
 	}
 	else{
 		for ( int x = 0; x < raw_csv->num_actual_cols; x++) {
@@ -556,7 +558,9 @@ gdf_error read_csv(csv_read_arg *args)
 
 		gdf->data = (void*) new NVStrings(str_cols[stringColCount],size_t(raw_csv->num_records));
 
-		CUDA_TRY( cudaFree (str_cols [stringColCount] ) );
+		// CUDA_TRY( cudaFree (str_cols [stringColCount] ) );
+		RMM_TRY( rmmFree ( str_cols [stringColCount], 0 ) );
+
 		stringColCount++;
 	}
 
@@ -570,16 +574,28 @@ gdf_error read_csv(csv_read_arg *args)
 
 	// free up space that is no longer needed
 	if (str_cols != NULL)
-		CUDA_TRY( cudaFree (str_cols) );
+		// CUDA_TRY( cudaFree (str_cols) );
+		RMM_TRY( rmmFree ( str_cols, 0 ) );
 
-	CUDA_TRY( cudaFree ( d_valid ) );
-	CUDA_TRY( cudaFree ( d_data ) );
-	CUDA_TRY( cudaFree ( d_valid_count ) );
-	CUDA_TRY( cudaFree ( d_dtypes ) );
-	CUDA_TRY( cudaFree ( raw_csv->recStart ) );
-	CUDA_TRY( cudaFree ( raw_csv->data ) );
-	CUDA_TRY( cudaFree ( raw_csv->d_num_records ) );
-	CUDA_TRY( cudaFree ( raw_csv->parseCol ) );
+	// CUDA_TRY( cudaFree ( d_valid ) );
+	// CUDA_TRY( cudaFree ( d_data ) );
+	// CUDA_TRY( cudaFree ( d_valid_count ) );
+	// CUDA_TRY( cudaFree ( d_dtypes ) );
+	// CUDA_TRY( cudaFree ( raw_csv->recStart ) );
+	// CUDA_TRY( cudaFree ( raw_csv->data ) );
+	// CUDA_TRY( cudaFree ( raw_csv->d_num_records ) );
+	// CUDA_TRY( cudaFree ( raw_csv->parseCol ) );
+
+	RMM_TRY( rmmFree ( d_valid, 0 ) );
+	RMM_TRY( rmmFree ( d_data, 0 ) );
+	RMM_TRY( rmmFree ( d_valid_count, 0 ) );
+	RMM_TRY( rmmFree ( d_dtypes, 0 ) );
+	RMM_TRY( rmmFree ( raw_csv->recStart, 0 ) );
+	RMM_TRY( rmmFree ( raw_csv->data, 0 ) );
+	RMM_TRY( rmmFree ( raw_csv->d_num_records, 0 ) );
+	RMM_TRY( rmmFree ( raw_csv->parseCol, 0 ) );
+
+
 
 	delete raw_csv;
 
@@ -589,70 +605,7 @@ gdf_error read_csv(csv_read_arg *args)
 	return error;
 }
 
-//------------------------------------------------------------------------------------------------------------------------------
 
-
-
-// /*
-//  * This creates the basic gdf_coulmn structure
-//  *
-//  */
-// gdf_error getColNamesAndTypes(const char **col_names, const  char **dtypes, raw_csv_t *d)
-// {
-
-// 	// start creating space for each column
-// 	for ( int x = 0; x < d->num_cols; x++) {
-
-// 		std::string col_name 	= col_names[x];
-// 		std::string temp_type 	= dtypes[x];
-// 		gdf_dtype col_dtype		= convertStringToDtype( temp_type );
-
-// 		if (col_dtype == GDF_invalid)
-// 			return GDF_UNSUPPORTED_DTYPE;
-
-// 		d->dtypes.push_back(col_dtype);
-// 		d->col_names.push_back(col_name);
-// 	}
-
-// 	return gdf_error::GDF_SUCCESS;
-// }
-
-
-// gdf_error parseArguments(csv_read_arg *args, raw_csv_t *csv)
-// {
-// 	// //--- For the initial version, the number of columns need to be specified
-// 	csv->num_actual_cols	= args->num_cols;
-// 	csv->num_active_cols	= args->num_cols;
-// 	csv->num_records		= 0;
-
-// 	// //----- Delimiter
-// 	if ( args->delim_whitespace == true) {
-// 		csv->delimiter = ' ';
-// 	} else {
-// 		csv->delimiter = args->delimiter;
-// 	}
-
-// 	// //----- Line Delimiter
-// 	csv->terminator = args->lineterminator;
-
-// 	//--- Now look at column name and
-// 	for ( int x = 0; x < csv->num_actual_cols; x++) {
-
-// 		std::string col_name 	= args->names[x];
-// 		std::string temp_type 	= args->dtype[x];
-// 		gdf_dtype col_dtype		= convertStringToDtype( temp_type );
-
-// 		if (col_dtype == GDF_invalid)
-// 			return GDF_UNSUPPORTED_DTYPE;
-
-// 		csv->dtypes.push_back(col_dtype);
-// 		csv->col_names.push_back(col_name);
-// 	}
-
-// 	csv->dayfirst = args->dayfirst;
-
-// 	return gdf_error::GDF_SUCCESS;
-// }
 
 /*
  * What is passed in is the data type as a string, need to convert that into gdf_dtype enum
@@ -686,12 +639,10 @@ gdf_error updateRawCsv( const char * data, long num_bytes, raw_csv_t * raw ) {
 
 	int num_bits = (num_bytes + 63) / 64;
 
-	CUDA_TRY(cudaMallocManaged ((void**)&raw->data, 		(sizeof(char)		* num_bytes)));
+	CUDA_TRY( cudaMallocManaged ((void**)&raw->data, 		(sizeof(char)		* num_bytes)));
+	CUDA_TRY( cudaMallocManaged ((void**)&raw->d_num_records, sizeof(unsigned long long)) );
 
-	CUDA_TRY(cudaMallocManaged ((void**)&raw->d_num_records, sizeof(unsigned long long)) );
-
-	CUDA_TRY(cudaMemcpy(raw->data, data, num_bytes, cudaMemcpyHostToDevice));
-
+	CUDA_TRY( cudaMemcpy(raw->data, data, num_bytes, cudaMemcpyHostToDevice));
 	CUDA_TRY( cudaMemset(raw->d_num_records,0, ((sizeof(long)) )) );
 
 	raw->num_bits  = num_bits;
@@ -709,47 +660,54 @@ gdf_error allocateGdfDataSpace(gdf_column *gdf) {
 	long num_bitmaps = (N + 31) / 8;			// 8 bytes per bitmap
 
 	//--- allocate space for the valid bitmaps
-	CUDA_TRY(cudaMalloc(&gdf->valid, (sizeof(gdf_valid_type) 	* num_bitmaps)));
+	// CUDA_TRY(cudaMalloc(&gdf->valid, (sizeof(gdf_valid_type) 	* num_bitmaps)));
+ 	RMM_TRY( rmmAlloc((void**)&(gdf->valid), (sizeof(gdf_valid_type) 	* num_bitmaps), 0) ); 
+
 	CUDA_TRY(cudaMemset(gdf->valid, 0, (sizeof(gdf_valid_type) 	* num_bitmaps)) );
 
+	int elementSize=0;
 	//--- Allocate space for the data
 	switch(gdf->dtype) {
 		case gdf_dtype::GDF_INT8:
-			CUDA_TRY(cudaMalloc(&gdf->data, (sizeof(int8_t) * N)));
+			elementSize = sizeof(int8_t);
 			break;
 		case gdf_dtype::GDF_INT16:
-			CUDA_TRY(cudaMalloc(&gdf->data, (sizeof(int16_t) * N)));
+			elementSize = sizeof(int16_t);
 			break;
 		case gdf_dtype::GDF_INT32:
-			CUDA_TRY(cudaMalloc(&gdf->data, (sizeof(int32_t) * N)));
+			elementSize = sizeof(int32_t);
 			break;
 		case gdf_dtype::GDF_INT64:
-			CUDA_TRY(cudaMalloc(&gdf->data, (sizeof(int64_t) * N)));
+			elementSize = sizeof(int64_t);
 			break;
 		case gdf_dtype::GDF_FLOAT32:
-			CUDA_TRY(cudaMalloc(&gdf->data, (sizeof(float) * N)));
+			elementSize = sizeof(float);
 			break;
 		case gdf_dtype::GDF_FLOAT64:
-			CUDA_TRY(cudaMalloc(&gdf->data, (sizeof(double) * N)));
+			elementSize = sizeof(double);
 			break;
 		case gdf_dtype::GDF_DATE32:
-			CUDA_TRY(cudaMalloc(&gdf->data, (sizeof(gdf_date32) * N)));
+			elementSize = sizeof(gdf_date32);
 			break;
 		case gdf_dtype::GDF_DATE64:
-			CUDA_TRY(cudaMalloc(&gdf->data, (sizeof(gdf_date64) * N)));
+			elementSize = sizeof(gdf_date64);
 			break;
 		case gdf_dtype::GDF_TIMESTAMP:
-			CUDA_TRY(cudaMalloc(&gdf->data, (sizeof(int64_t) * N)));
+			elementSize = sizeof(int64_t);
 			break;
 		case gdf_dtype::GDF_CATEGORY:
-			CUDA_TRY(cudaMalloc(&gdf->data, (sizeof(gdf_category) * N)));
+			elementSize = sizeof(gdf_category);
 			break;
 		case gdf_dtype::GDF_STRING:
-			// Memory for gdf->data allocated by string class eventually
+			return gdf_error::GDF_SUCCESS;
 			break;
+			// Memory for gdf->data allocated by string class eventually
 		default:
 			return GDF_UNSUPPORTED_DTYPE;
 	}
+
+	// CUDA_TRY(cudaMalloc(&gdf->data, (elementSize * N)));
+    RMM_TRY( rmmAlloc((void**)&(gdf->data), (elementSize * N), 0) ); 
 
 	return gdf_error::GDF_SUCCESS;
 }
