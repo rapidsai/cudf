@@ -175,14 +175,6 @@ else()
   target_link_libraries(gdf arrow rmm)
 endif()
 
-message("Hello")
-find_library(NVSTRING_LIBRARY NVStrings HINTS /home/ogreen/work/rapids/cuDF/libgdf/build)
-message(${NVSTRING_LIBRARY})
-
-
-target_link_libraries(gdf ${NVSTRING_LIBRARY})
-
-
 # Command to symlink files into the build directory
 add_custom_command(  # link the include directory
     OUTPUT include
