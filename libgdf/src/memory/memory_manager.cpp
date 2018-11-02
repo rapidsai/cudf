@@ -42,11 +42,9 @@ namespace rmm
             current_allocations.insert(ptr);
         else if (Free == event)
             current_allocations.erase(ptr);
-        std::cout << filename << ":" << line << std::endl;
-        /*events.push_back({event, deviceId, ptr, size, stream, 
+        events.push_back({event, deviceId, ptr, size, stream, 
                          freeMem, totalMem, current_allocations.size(), 
-                         start, end, filename, line});*/
-        //std::cout << "after\n";
+                         start, end, filename, line});
     }
 
     /** -----------------------------------------------------------------------*
@@ -58,7 +56,7 @@ namespace rmm
     void Logger::to_csv(std::ostream &csv)
     {
         csv << "Event Type,Device ID,Address,Stream,Size (bytes),Free Memory,"
-            << "Total Memory,Current Allocs,Start,End,Elapsed,File,Line\n";
+            << "Total Memory,Current Allocs,Start,End,Elapsed,Location\n";
 
         for (auto& e : events)
         {

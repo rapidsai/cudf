@@ -66,7 +66,7 @@ namespace rmm
         : event(event), device(0), ptr(ptr), size(size), stream(stream),
           usageLogging(usageLogging), line(line)
         {
-            //if (filename) file = filename;
+            if (filename) file = filename;
             if (Manager::getOptions().enable_logging)
             {
                 cudaGetDevice(&device);
@@ -87,9 +87,9 @@ namespace rmm
                 Logger::TimePt end = std::chrono::system_clock::now();
                 size_t freeMem = 0, totalMem = 0;
                 if (usageLogging) rmmGetInfo(&freeMem, &totalMem, stream);
-                /*Manager::getLogger().record(event, device, ptr, start, end,
+                Manager::getLogger().record(event, device, ptr, start, end,
                                             freeMem, totalMem, size, stream,
-                                            file, line);*/
+                                            file, line);
             }
         }
 

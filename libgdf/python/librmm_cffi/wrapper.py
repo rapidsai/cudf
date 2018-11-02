@@ -107,9 +107,7 @@ class _RMMWrapper(object):
         """Allocates size bytes using the RMM memory manager.
         """ 
         file, line = self._get_caller()
-
-        print("Alloc {} bytes", size, self._ffi.string(file))
-                 
+                
         # Call RMM to allocate
         ptr = self._ffi.new("void **")
         stream = self._ffi.cast("cudaStream_t", stream)
@@ -130,11 +128,7 @@ class _RMMWrapper(object):
     def rmmFree(self, ptr, stream):
         """Deallocates ptr, which was allocated using rmmAlloc
         """
-        #import pdb; pdb.set_trace()
-
         file, line = self._get_caller()
-
-        print("Free", self._ffi.string(file), int(line))
          
         # Call RMM to free
         ptr = self._ffi.cast("void*", ptr)
