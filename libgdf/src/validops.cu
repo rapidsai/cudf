@@ -179,7 +179,7 @@ gdf_error gdf_count_nonzero_mask(gdf_valid_type const * masks, int num_rows, int
   size_t const num_masks{gdf_get_num_chars_bitmask(num_rows)};
 
   // Number of 4 byte types in the validity bit mask 
-  size_t num_masks32{std::ceil(static_cast<float>(num_masks) / RATIO)};
+  size_t num_masks32{static_cast<size_t>(std::ceil(static_cast<float>(num_masks) / RATIO))};
 
   int h_count{0};
   if(num_masks32 > 0)
@@ -195,7 +195,7 @@ gdf_error gdf_count_nonzero_mask(gdf_valid_type const * masks, int num_rows, int
     RMM_TRY(rmmAlloc((void**)&d_count, sizeof(int), count_stream));
     CUDA_TRY(cudaMemsetAsync(d_count, 0, sizeof(int), count_stream));
 
-    int const grid_size{(num_masks32 + block_size - 1)/block_size};
+    size_t const grid_size{(num_masks32 + block_size - 1)/block_size};
 
     count_valid_bits<<<grid_size, block_size,0,count_stream>>>(masks32, num_masks32, num_rows, d_count);
 
