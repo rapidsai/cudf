@@ -93,23 +93,21 @@ gdf_error gpu_hash_columns(gdf_column ** columns_to_hash, int num_columns, gdf_c
 
 	//copy widths into device memory
 	int * widths;
-	RMM_TRY( rmmAlloc((void**)&widths,sizeof(int) * num_columns, *stream) ); 
+	RMM_TRY( RMM_ALLOC((void**)&widths,sizeof(int) * num_columns, *stream) ); 
 	int * host_widths = new int[num_columns];
 	for(int i = 0; i <  num_columns; i++){
 		get_column_byte_width(columns_to_hash[i], &host_widths[i]);
 	}
 	CUDA_TRY( cudaMemcpyAsync(widths,host_widths,sizeof(int) * num_columns,cudaMemcpyHostToDevice,*stream) );
 
-
 	//copy addresses into device memory
 	void ** pointers;
-	RMM_TRY( rmmAlloc((void**)&pointers,sizeof(void *) * num_columns, *stream) ); 
+	RMM_TRY( RMM_ALLOC((void**)&pointers,sizeof(void *) * num_columns, *stream) ); 
 	void ** data_holder = new void *[num_columns];
 	for(int i = 0; i <  num_columns; i++){
 		data_holder[i] = columns_to_hash[i]->data;
 	}
 	CUDA_TRY( cudaMemcpyAsync(pointers,data_holder,sizeof(void *) * num_columns,cudaMemcpyHostToDevice,*stream) );
-
 
 	rmm_temp_allocator allocator(*stream);
 
@@ -134,11 +132,9 @@ gdf_error gpu_hash_columns(gdf_column ** columns_to_hash, int num_columns, gdf_c
 						columns_to_hash[i]->valid, *stream, num_values);
 		}
 	}
-
-
 	
-	RMM_TRY( rmmFree(widths, *stream) ); 
-	RMM_TRY( rmmFree(pointers, *stream) );
+	RMM_TRY( RMM_FREE(widths, *stream) ); 
+	RMM_TRY( RMM_FREE(pointers, *stream) );
 	delete[] host_widths;
 	delete[] data_holder;
 

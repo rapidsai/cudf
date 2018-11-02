@@ -18,7 +18,7 @@
 
 namespace rmm
 {
-    /** ---------------------------------------------------------------------------*
+    /** -----------------------------------------------------------------------*
      * Record a memory manager event in the log.
      * 
      * @param[in] event The type of event (Alloc, Realloc, or Free)
@@ -28,11 +28,13 @@ namespace rmm
      * @param[in] size The size of allocation (only needed for Alloc/Realloc).
      * @param[in] stream The stream on which the allocation is happening 
      *                   (only needed for Alloc/Realloc).
-     * ---------------------------------------------------------------------------**/
+     * ----------------------------------------------------------------------**/
     void Logger::record(MemEvent_t event, int deviceId, void* ptr, 
                         TimePt start, TimePt end,
                         size_t freeMem, size_t totalMem,
-                        size_t size, cudaStream_t stream)
+                        size_t size, cudaStream_t stream,
+                        std::string filename,
+                        unsigned int line)
                         
     {
         std::lock_guard<std::mutex> guard(log_mutex);
@@ -40,12 +42,23 @@ namespace rmm
             current_allocations.insert(ptr);
         else if (Free == event)
             current_allocations.erase(ptr);
-        events.push_back({event, deviceId, ptr, size, stream, freeMem, totalMem, current_allocations.size(), start, end});
+        std::cout << filename << ":" << line << std::endl;
+        /*events.push_back({event, deviceId, ptr, size, stream, 
+                         freeMem, totalMem, current_allocations.size(), 
+                         start, end, filename, line});*/
+        //std::cout << "after\n";
     }
 
+    /** -----------------------------------------------------------------------*
+     * @brief Output a comma-separated value string of the current log to the 
+     *        provided ostream
+     * 
+     * @param[in] csv The output stream to put the CSV log string into. 
+     * ----------------------------------------------------------------------**/
     void Logger::to_csv(std::ostream &csv)
     {
-        csv << "Event Type,Device ID,Address,Stream,Size (bytes),Free Memory,Total Memory,Current Allocs,Start,End,Elapsed\n";
+        csv << "Event Type,Device ID,Address,Stream,Size (bytes),Free Memory,"
+            << "Total Memory,Current Allocs,Start,End,Elapsed,File,Line\n";
 
         for (auto& e : events)
         {
@@ -55,11 +68,13 @@ namespace rmm
 
             std::chrono::duration<double> elapsed = e.end-e.start;
             
-            csv << event_str << "," << e.deviceId << "," << e.ptr << ","  << e.stream << ","
-                << e.size << "," << e.freeMem << "," << e.totalMem << "," << e.currentAllocations << ","
+            csv << event_str << "," << e.deviceId << "," << e.ptr << ","  
+                << e.stream << "," << e.size << "," << e.freeMem << "," 
+                << e.totalMem << "," << e.currentAllocations << ","
                 << std::chrono::duration<double>(e.start-base_time).count() << ","
                 << std::chrono::duration<double>(e.end-base_time).count() << ","
-                << elapsed.count() << std::endl;
+                << elapsed.count() << "," << e.filename << ":" << e.line 
+                << std::endl;
         }
     }
 

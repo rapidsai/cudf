@@ -443,7 +443,7 @@ gdf_error allocateGdfDataSpace(gdf_column *gdf) {
 	long num_bitmaps = (N + 31) / 8;			// 8 bytes per bitmap
 
 	//--- allocate space for the valid bitmaps
-	RMM_TRY( rmmAlloc((void**)&gdf->valid, (sizeof(gdf_valid_type) 	* num_bitmaps), 0) );
+	RMM_TRY( RMM_ALLOC((void**)&gdf->valid, (sizeof(gdf_valid_type) 	* num_bitmaps), 0) );
 	CUDA_TRY(cudaMemset(gdf->valid, 0, (sizeof(gdf_valid_type) 	* num_bitmaps)) );
 
 	//--- Allocate space for the data
@@ -457,7 +457,7 @@ gdf_error allocateGdfDataSpace(gdf_column *gdf) {
 		else return result;
 	}
 	
-	RMM_TRY( rmmAlloc((void**)&gdf->data, bytes_per_element * N, 0) );
+	RMM_TRY( RMM_ALLOC((void**)&gdf->data, bytes_per_element * N, 0) );
 
 	return gdf_error::GDF_SUCCESS;
 }

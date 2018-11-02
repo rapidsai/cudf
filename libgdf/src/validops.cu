@@ -161,7 +161,7 @@ gdf_error gdf_count_nonzero_mask(gdf_valid_type const * masks, int num_rows, int
     // Cast validity buffer to 4 byte type
     valid32_t const * masks32 = reinterpret_cast<valid32_t const *>(masks);
 
-    RMM_TRY(rmmAlloc((void**)&d_count, sizeof(int), count_stream));
+    RMM_TRY(RMM_ALLOC((void**)&d_count, sizeof(int), count_stream));
     CUDA_TRY(cudaMemsetAsync(d_count, 0, sizeof(int), count_stream));
 
     const int grid_size = (num_masks32 + block_size - 1)/block_size;
@@ -171,7 +171,7 @@ gdf_error gdf_count_nonzero_mask(gdf_valid_type const * masks, int num_rows, int
     CUDA_TRY( cudaGetLastError() );
 
     CUDA_TRY(cudaMemcpyAsync(&h_count, d_count, sizeof(int), cudaMemcpyDeviceToHost, count_stream));
-    RMM_TRY(rmmFree(d_count, count_stream));
+    RMM_TRY(RMM_FREE(d_count, count_stream));
     CUDA_TRY(cudaStreamSynchronize(count_stream));
     CUDA_TRY(cudaStreamDestroy(count_stream));
   }

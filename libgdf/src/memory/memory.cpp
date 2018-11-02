@@ -56,22 +56,17 @@ namespace rmm
     class LogIt
     {
     public:
-        LogIt(Logger::MemEvent_t event, size_t size, 
-              cudaStream_t stream, bool usageLogging=RMM_USAGE_LOGGING)
-        : event(event), device(0), ptr(0), size(size), stream(stream), 
-          usageLogging(usageLogging)
+        LogIt(Logger::MemEvent_t event, 
+              void* ptr,
+              size_t size, 
+              cudaStream_t stream,
+              const char* filename,
+              unsigned int line,
+              bool usageLogging=RMM_USAGE_LOGGING)
+        : event(event), device(0), ptr(ptr), size(size), stream(stream),
+          usageLogging(usageLogging), line(line)
         {
-            if (Manager::getOptions().enable_logging)
-            {
-                cudaGetDevice(&device);
-                start = std::chrono::system_clock::now();
-            }
-        }
-
-        LogIt(Logger::MemEvent_t event, void* ptr,
-              size_t size, cudaStream_t stream)
-        : event(event), device(0), ptr(ptr), size(size), stream(stream)
-        {
+            //if (filename) file = filename;
             if (Manager::getOptions().enable_logging)
             {
                 cudaGetDevice(&device);
@@ -92,8 +87,9 @@ namespace rmm
                 Logger::TimePt end = std::chrono::system_clock::now();
                 size_t freeMem = 0, totalMem = 0;
                 if (usageLogging) rmmGetInfo(&freeMem, &totalMem, stream);
-                Manager::getLogger().record(event, device, ptr, start, end,
-                                            freeMem, totalMem, size, stream);
+                /*Manager::getLogger().record(event, device, ptr, start, end,
+                                            freeMem, totalMem, size, stream,
+                                            file, line);*/
             }
         }
 
@@ -104,6 +100,8 @@ namespace rmm
         size_t size;
         cudaStream_t stream;
         rmm::Logger::TimePt start;
+        std::string file;
+        unsigned int line;
         bool usageLogging;
     };
 
@@ -169,9 +167,9 @@ rmmError_t rmmFinalize()
 }
  
 // Allocate memory and return a pointer to device memory. 
-rmmError_t rmmAlloc(void **ptr, size_t size, cudaStream_t stream)
+rmmError_t rmmAlloc(void **ptr, size_t size, cudaStream_t stream, const char* file, unsigned int line)
 {
-    rmm::LogIt log(rmm::Logger::Alloc, size, stream);
+    rmm::LogIt log(rmm::Logger::Alloc, 0, size, stream, file, line);
 
     if (!ptr && !size) {
         return RMM_SUCCESS;
@@ -194,9 +192,9 @@ rmmError_t rmmAlloc(void **ptr, size_t size, cudaStream_t stream)
 }
 
 // Reallocate device memory block to new size and recycle any remaining memory.
-rmmError_t rmmRealloc(void **ptr, size_t new_size, cudaStream_t stream)
+rmmError_t rmmRealloc(void **ptr, size_t new_size, cudaStream_t stream, const char* file, unsigned int line)
 {
-    rmm::LogIt log(rmm::Logger::Realloc, new_size, stream);
+    rmm::LogIt log(rmm::Logger::Realloc, ptr, new_size, stream, file, line);
 
 	if (!ptr && !new_size) {
         return RMM_SUCCESS;
@@ -216,13 +214,14 @@ rmmError_t rmmRealloc(void **ptr, size_t new_size, cudaStream_t stream)
         RMM_CHECK_CUDA(cudaFree(*ptr));
 	    RMM_CHECK_CUDA(cudaMalloc(ptr, new_size));
     }
+    log.setPointer(*ptr);
     return RMM_SUCCESS;
 }
 
 // Release device memory and recycle the associated memory.
-rmmError_t rmmFree(void *ptr, cudaStream_t stream)
+rmmError_t rmmFree(void *ptr, cudaStream_t stream, const char* file, unsigned int line)
 {
-    rmm::LogIt log(rmm::Logger::Free, ptr, 0, stream);
+    rmm::LogIt log(rmm::Logger::Free, ptr, 0, stream, file, line);
     if (rmm::usePoolAllocator())
         RMM_CHECK_CNMEM( cnmemFree(ptr, stream) );
     else

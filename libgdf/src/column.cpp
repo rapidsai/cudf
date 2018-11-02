@@ -221,8 +221,8 @@ gdf_error gdf_column_view_augmented(gdf_column *column,
  * ---------------------------------------------------------------------------**/
 gdf_error gdf_column_free(gdf_column *column) 
 {
-  RMM_TRY( rmmFree(column->data, 0)  );
-  RMM_TRY( rmmFree(column->valid, 0) );
+  RMM_TRY( RMM_FREE(column->data, 0)  );
+  RMM_TRY( RMM_FREE(column->valid, 0) );
   return GDF_SUCCESS;
 }
 
