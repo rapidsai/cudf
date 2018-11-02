@@ -47,7 +47,7 @@ constexpr int block_size = 256;
  * 
  * @Returns  The number of valid bits in [0, num_rows) in the host vector of masks
  * ----------------------------------------------------------------------------*/
-size_t count_valid_bits_host(std::vector<gdf_valid_type> const & masks, const int num_rows)
+size_t count_valid_bits_host(std::vector<gdf_valid_type> const & masks, int const num_rows)
 {
   if((0 == num_rows) || (0 == masks.size())){
     return 0;
@@ -114,7 +114,7 @@ void count_valid_bits(valid32_t const * const masks32,
   // rows need to be handled separtely because not all of its bits correspond
   // to rows
   int last_mask32{0};
-  const int num_rows_last_mask{num_rows % BITS_PER_MASK32};
+  int const num_rows_last_mask{num_rows % BITS_PER_MASK32};
   if(0 == num_rows_last_mask)
     last_mask32 = num_masks32;
   else
@@ -176,7 +176,7 @@ gdf_error gdf_count_nonzero_mask(gdf_valid_type const * masks, int num_rows, int
   assert(sizeof(valid32_t) >= sizeof(gdf_valid_type));
 
   // Number of gdf_valid_types in the validity bitmask
-  const size_t num_masks = gdf_get_num_chars_bitmask(num_rows);
+  size_t const num_masks = gdf_get_num_chars_bitmask(num_rows);
 
   // Number of 4 byte types in the validity bit mask 
   size_t num_masks32 = std::ceil(static_cast<float>(num_masks) / RATIO);
@@ -195,7 +195,7 @@ gdf_error gdf_count_nonzero_mask(gdf_valid_type const * masks, int num_rows, int
     RMM_TRY(rmmAlloc((void**)&d_count, sizeof(int), count_stream));
     CUDA_TRY(cudaMemsetAsync(d_count, 0, sizeof(int), count_stream));
 
-    const int grid_size = (num_masks32 + block_size - 1)/block_size;
+    int const grid_size = (num_masks32 + block_size - 1)/block_size;
 
     count_valid_bits<<<grid_size, block_size,0,count_stream>>>(masks32, num_masks32, num_rows, d_count);
 
