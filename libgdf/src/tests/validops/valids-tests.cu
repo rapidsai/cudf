@@ -156,6 +156,23 @@ TEST_F(ValidsTest, 5rows)
   EXPECT_EQ(1, count);
 }
 
+TEST_F(ValidsTest, 10ValidRows)
+{
+  const int num_rows = 10;
+  std::vector<float> data(num_rows);
+  const int num_masks = std::ceil(num_rows/static_cast<float>(8));
+  std::vector<gdf_valid_type> valid(num_masks,0xFF);
+
+  auto input_gdf_col = create_gdf_column(data, valid);
+
+  int count{-1};
+  gdf_error error_code = gdf_count_nonzero_mask(input_gdf_col->valid, num_rows, &count);
+
+  ASSERT_EQ(GDF_SUCCESS,error_code) << "GDF Operation did not complete successfully.";
+
+  EXPECT_EQ(10, count);
+}
+
 TEST_F(ValidsTest, MultipleOfEight)
 {
   const int num_rows = 1024;
