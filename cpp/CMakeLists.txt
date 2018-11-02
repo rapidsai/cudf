@@ -34,36 +34,37 @@ set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -Werror cross-execution-space-call -Xc
 # - library targets -------------------------------------------------------------------------------
 
 add_library(cudf SHARED
-            source/comm/ipc/ipc.cu
-            source/core/dataframe/column.cpp
-            source/core/dataframe/context.cpp
-            source/core/error/error_handles.cpp
-            source/core/filter/filterops.cu
-            source/core/join/joining.cu
-            source/core/sort/segmented_sorting.cu
-            source/core/sort/sorting.cu
-            source/core/sqls/sqls_ops.cu
-            source/functions/binary/binary_ops.cu
-            source/functions/bitmask/src/bitmask_ops.cu
-            source/functions/bitmask/src/valid_ops.cu
-            source/functions/compaction/stream_compaction_ops.cu
-            source/functions/datetime/datetime_ops.cu
-            source/functions/hash/src/hashing.cu
-            source/functions/hash/src/hash_ops.cu
-            source/functions/reductions/reductions.cu
-            source/functions/unary/unary_ops.cu
-            source/functions/windowed/windowed_ops.cu
-            source/functions/windowed/quantiles/quantiles.cu
-            source/io/convert/csr/cudf_to_csr.cu
-            source/io/csv/src/csv_reader.cu)
+            src/comm/ipc/ipc.cu
+            src/core/dataframe/column.cpp
+            src/core/dataframe/context.cpp
+            src/core/error/error_handles.cpp
+            src/core/filter/filter_ops.cu
+            src/core/join/joining.cu
+            src/core/sort/segmented_sorting.cu
+            src/core/sort/sorting.cu
+            src/core/sqls/sqls_ops.cu
+            src/functions/binary/binary_ops.cu
+            src/functions/bitmask/src/bitmask_ops.cu
+            src/functions/bitmask/src/valid_ops.cu
+            src/functions/compaction/stream_compaction_ops.cu
+            src/functions/datetime/datetime_ops.cu
+            src/functions/hash/hashing.cu
+            src/functions/hash/hash_ops.cu
+            src/functions/quantiles/quantiles.cu
+            src/functions/reductions/reductions.cu
+            src/functions/unary/unary_ops.cu
+            # src/functions/windowed/windowed_ops.cu ... this is broken
+            src/io/convert/csr/cudf_to_csr.cu
+            src/io/csv/csv_reader.cu
+            src/utilities/cuda_utils.cu
+            src/utilities/scan.cu
+            src/utilities/nvtx/nvtx_utils.cpp)
 
 add_library(rmm SHARED
-            source/rmm/src/memory.cpp
-            source/rmm/src/memory_manager.cpp
+            src/rmm/src/memory.cpp
+            src/rmm/src/memory_manager.cpp
             thirdparty/cnmem/src/cnmem.cpp
             )
-
-target_link_libraries(rmm cuda)
 
 ###################################################################################################
 # - build options ---------------------------------------------------------------------------------
@@ -82,22 +83,66 @@ if(HT_LEGACY_ALLOCATOR)
     set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} --define-macro HT_LEGACY_ALLOCATOR")
 endif(HT_LEGACY_ALLOCATOR)
 
-if(CMAKE_BUILD_TYPE MATCHES DEBUG)
+if(CMAKE_BUILD_TYPE MATCHES Debug)
+    message(STATUS "Building with debugging flags")
     set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -g -G")
-endif(CMAKE_BUILD_TYPE MATCHES DEBUG)
+endif(CMAKE_BUILD_TYPE MATCHES Debug)
 
 ###################################################################################################
 # - cmake modules ---------------------------------------------------------------------------------
 
 set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/Modules/" ${CMAKE_MODULE_PATH})
 
-# include(FeatureSummary)
-# include(CheckIncludeFiles)
-# include(CheckLibraryExists)
-# include(CTest)
-# 
-# include(ConfigureGoogleTest)
-# include(ConfigureArrow)
+include(FeatureSummary)
+include(CheckIncludeFiles)
+include(CheckLibraryExists)
+include(CTest)
 
-message(STATUS " " ${CMAKE_CUDA_FLAGS})
+include(ConfigureGoogleTest)
+include(ConfigureArrow)
 
+###################################################################################################
+# - arrow -----------------------------------------------------------------------------------------
+
+# Locate the Apache Arrow package (Requires that you use ConfigureArrow module)
+find_package(Arrow REQUIRED)
+
+message(STATUS "ARROW_ROOT: " ${ARROW_ROOT})
+
+set_package_properties(
+    Arrow PROPERTIES TYPE REQUIRED
+    PURPOSE "Apache Arrow is a cross-language development platform for in-memory data."
+    URL "https://github.com/apache/arrow")
+
+###################################################################################################
+# - gtest -----------------------------------------------------------------------------------------
+
+find_package(GTest)
+set_package_properties(GTest PROPERTIES TYPE OPTIONAL
+    PURPOSE "Google C++ Testing Framework (Google Test)."
+    URL "https://github.com/google/googletest")
+if(GTEST_FOUND)
+    message(STATUS "Google C++ Testing Framework (Google Test) found in ${GTEST_ROOT}")
+    include_directories(${GTEST_INCLUDE_DIRS})
+    add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/src/tests)
+else()
+    message(AUTHOR_WARNING "Google C++ Testing Framework (Google Test) not found: automated tests are disabled.")
+endif(GTEST_FOUND)
+
+
+###################################################################################################
+# - include paths ---------------------------------------------------------------------------------
+
+include_directories("${ARROW_INCLUDEDIR}"
+                    "${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}"
+                    "${CMAKE_CURRENT_SOURCE_DIR}/include"
+                    "${CMAKE_CURRENT_SOURCE_DIR}/src"
+                    "${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/cub"
+                    "${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/moderngpu/src"
+                    "${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/cnmem/include")
+
+###################################################################################################
+# - link libraries --------------------------------------------------------------------------------
+
+target_link_libraries(rmm cuda)
+target_link_libraries(cudf arrow rmm)
