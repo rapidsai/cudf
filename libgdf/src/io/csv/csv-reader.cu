@@ -611,9 +611,6 @@ gdf_error read_csv(csv_read_arg *args)
 
 	free(h_valid_count); 
 
-
-
-
 	// free up space that is no longer needed
 	if (h_str_cols != NULL)
 		free ( h_str_cols);
@@ -621,20 +618,17 @@ gdf_error read_csv(csv_read_arg *args)
 	free(raw_csv->h_parseCol);
 
 	if (d_str_cols != NULL)
-		RMM_TRY( rmmFree ( d_str_cols, 0 ) ); // X
+		RMM_TRY( rmmFree ( d_str_cols, 0 ) ); 
 
 	RMM_TRY( rmmFree ( d_valid, 0 ) );
 	RMM_TRY( rmmFree ( d_valid_count, 0 ) );
 	RMM_TRY( rmmFree ( d_dtypes, 0 ) );
 	RMM_TRY( rmmFree ( d_data, 0 ) ); 
 
-
-
-	RMM_TRY( rmmFree ( raw_csv->recStart, 0 ) ); //X
-	RMM_TRY( rmmFree ( raw_csv->d_parseCol, 0 ) ); // X
-	RMM_TRY( rmmFree ( raw_csv->d_num_records, 0 ) ); //X
+	RMM_TRY( rmmFree ( raw_csv->recStart, 0 ) ); 
+	RMM_TRY( rmmFree ( raw_csv->d_parseCol, 0 ) ); 
+	RMM_TRY( rmmFree ( raw_csv->d_num_records, 0 ) ); 
 	CUDA_TRY( cudaFree ( raw_csv->data) );
-
 
 
 	args->data 			= cols;
@@ -680,6 +674,8 @@ gdf_error updateRawCsv( const char * data, long num_bytes, raw_csv_t * raw ) {
 	int num_bits = (num_bytes + 63) / 64;
 
 	CUDA_TRY( cudaMallocManaged ((void**)&raw->data, 		(sizeof(char)		* num_bytes)));
+	// RMM_TRY( rmmAlloc ((void**)&raw->data, 		(sizeof(char)		* num_bytes),0 ));
+
 	RMM_TRY( rmmAlloc((void**)&raw->d_num_records, sizeof(unsigned long long),0) );
 
 	CUDA_TRY( cudaMemcpy(raw->data, data, num_bytes, cudaMemcpyHostToDevice));
