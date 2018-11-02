@@ -193,29 +193,29 @@ gdf_error gdf_segmented_radixsort_plan_free(gdf_segmented_radixsort_plan_type *h
 
 
 
-#define WRAP(Fn, Tk, Tv)                                                    \
-gdf_error gdf_segmented_radixsort_##Fn(gdf_segmented_radixsort_plan_type *hdl, \
-                             gdf_column *keycol,                            \
-                             gdf_column *valcol,                            \
-                             unsigned num_segments,                         \
-                             unsigned *d_begin_offsets,                     \
-                             unsigned *d_end_offsets)                       \
-{                                                                           \
-    /* validity mask must be empty */                                       \
-    GDF_REQUIRE(!keycol->valid, GDF_VALIDITY_UNSUPPORTED);                  \
-    GDF_REQUIRE(!valcol->valid, GDF_VALIDITY_UNSUPPORTED);                  \
-    /* size of columns must match */                                        \
-    GDF_REQUIRE(keycol->size == valcol->size, GDF_COLUMN_SIZE_MISMATCH);    \
-    SegmentedRadixSortPlan *plan = cffi_unwrap(hdl);                        \
-    /* num_items must match */                                              \
-    GDF_REQUIRE(plan->num_items == keycol->size, GDF_COLUMN_SIZE_MISMATCH); \
-    /* back buffer size must match */                                       \
-    GDF_REQUIRE(sizeof(Tk) * plan->num_items == plan->back_key_size,        \
-                GDF_COLUMN_SIZE_MISMATCH);                                  \
-    GDF_REQUIRE(sizeof(Tv) * plan->num_items == plan->back_val_size,        \
-                GDF_COLUMN_SIZE_MISMATCH);                                  \
-    /* Do sort */                                                           \
-    return SegmentedRadixSort<Tk, Tv>::sort(plan,                           \
+#define WRAP(Fn, Tk, Tv)                                                            \
+gdf_error gdf_segmented_radixsort_##Fn(gdf_segmented_radixsort_plan_type *hdl,      \
+                             gdf_column *keycol,                                    \
+                             gdf_column *valcol,                                    \
+                             unsigned num_segments,                                 \
+                             unsigned *d_begin_offsets,                             \
+                             unsigned *d_end_offsets)                               \
+{                                                                                   \
+    /* validity mask must be empty */                                               \
+    GDF_REQUIRE(!keycol->valid || !keycol->null_count, GDF_VALIDITY_UNSUPPORTED);   \
+    GDF_REQUIRE(!valcol->valid || !valcol->null_count, GDF_VALIDITY_UNSUPPORTED);   \
+    /* size of columns must match */                                                \
+    GDF_REQUIRE(keycol->size == valcol->size, GDF_COLUMN_SIZE_MISMATCH);            \
+    SegmentedRadixSortPlan *plan = cffi_unwrap(hdl);                                \
+    /* num_items must match */                                                      \
+    GDF_REQUIRE(plan->num_items == keycol->size, GDF_COLUMN_SIZE_MISMATCH);         \
+    /* back buffer size must match */                                               \
+    GDF_REQUIRE(sizeof(Tk) * plan->num_items == plan->back_key_size,                \
+                GDF_COLUMN_SIZE_MISMATCH);                                          \
+    GDF_REQUIRE(sizeof(Tv) * plan->num_items == plan->back_val_size,                \
+                GDF_COLUMN_SIZE_MISMATCH);                                          \
+    /* Do sort */                                                                   \
+    return SegmentedRadixSort<Tk, Tv>::sort(plan,                                   \
                                    (Tk*)keycol->data, (Tv*)valcol->data,            \
                                     num_segments, d_begin_offsets, d_end_offsets);  \
 }
