@@ -143,7 +143,7 @@ class NumericalColumn(columnops.TypedColumnBase):
             mask = pa.py_buffer(self.nullmask.mem.copy_to_host())
         data = pa.py_buffer(self.data.mem.copy_to_host())
         pa_dtype = _gdf.np_to_pa_dtype(self.dtype)
-        return pa.Array.from_buffers(
+        out = pa.Array.from_buffers(
             type=pa_dtype,
             length=len(self),
             buffers=[
@@ -152,6 +152,10 @@ class NumericalColumn(columnops.TypedColumnBase):
             ],
             null_count=self.null_count
         )
+        if self.dtype == np.bool:
+            return out.cast(pa.bool_())
+        else:
+            return out
 
     def _unique_segments(self):
         """ Common code for unique, unique_count and value_counts"""
