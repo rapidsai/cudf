@@ -24,7 +24,7 @@ set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -gencode=arch=compute_70,code=sm_70")
 set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} --expt-extended-lambda --expt-relaxed-constexpr")
 
 # suppress SHFL warnings caused by Modern GPU
-# TODO: remove this when Modern GPU is removed for fixed to use shfl_sync
+# TODO: remove this when Modern GPU is removed or fixed to use shfl_sync
 set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -Werror cross-execution-space-call -Wno-deprecated-declarations -Xptxas --disable-warnings")
 
 # set warnings as errors

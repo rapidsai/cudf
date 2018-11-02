@@ -4,7 +4,7 @@
 #include <random>
 #include <type_traits>
 #include <vector>
-#include <gdf/cffi/types.h>
+#include <cudf/types.h>
 
 // Selects the kind of join operation that is performed
 enum struct agg_op

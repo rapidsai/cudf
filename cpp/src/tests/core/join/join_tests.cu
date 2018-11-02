@@ -22,17 +22,17 @@
 
 #include "gtest/gtest.h"
 #include "gmock/gmock.h"
-#include "gdf_test_fixtures.h"
-#include <gdf/gdf.h>
-#include <gdf/cffi/functions.h>
+#include <cudf.h>
+#include <cudf/functions.h>
+#include "tests/rmm/cudf_test_fixtures.h"
 
-#include "../../join/joining.h"
-#include "../../util/bit_util.cuh"
+#include <core/join/joining.h>
+#include <utilities/bit_util.cuh>
 
-#include "rmm.h"
+#include <rmm/rmm.h>
 
 // See this header for all of the recursive handling of tuples of vectors
-#include "tuple_vectors.h"
+#include "tests/utilities/tuple_vectors.h"
 
 // See this header for all of the handling of valids' vectors 
 #include "valid_vectors.h"
@@ -210,8 +210,8 @@ struct JoinTest : public GdfTest
                      size_t right_column_length, size_t right_column_range,
                      bool print = false)
   {
-    initialize_tuple(left_columns, left_column_length, left_column_range, ctxt.flag_sorted);
-    initialize_tuple(right_columns, right_column_length, right_column_range, ctxt.flag_sorted);
+    initialize_tuple(left_columns, left_column_length, left_column_range, static_cast<bool>(ctxt.flag_sorted));
+    initialize_tuple(right_columns, right_column_length, right_column_range, static_cast<bool>(ctxt.flag_sorted));
 
     auto n_columns = std::tuple_size<multi_column_t>::value;
     if(ctxt.flag_method != gdf_method::GDF_SORT) {

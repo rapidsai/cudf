@@ -1,7 +1,7 @@
 #pragma once
 
 #include "gtest/gtest.h"
-#include "rmm.h"
+#include "rmm/rmm.h"
 
 // Base class fixture for GDF google tests that initializes / finalizes the memory manager
 struct GdfTest : public ::testing::Test

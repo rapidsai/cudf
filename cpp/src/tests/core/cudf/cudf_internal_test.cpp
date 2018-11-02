@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 #include "gtest/gtest.h"
-#include "gdf/gdf.h"
+#include "cudf.h"
 #include <cstring>
 
 // If this test fails, it means an error code was added without

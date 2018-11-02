@@ -24,13 +24,13 @@
 
 #include "gtest/gtest.h"
 #include "gmock/gmock.h"
-#include "gdf_test_fixtures.h"
-#include <gdf/gdf.h>
-#include <gdf/cffi/functions.h>
+#include <tests/rmm/cudf_test_fixtures.h>
+#include <cudf.h>
+#include <cudf/functions.h>
 
 // See this header for all of the recursive handling of tuples of vectors
 #include "test_parameters.cuh"
-#include "groupby-test-helpers.cuh"
+#include "groupby_test_helpers.cuh"
 
 // A new instance of this class will be created for each *TEST(GroupTest, ...)
 // Put all repeated setup and validation stuff here

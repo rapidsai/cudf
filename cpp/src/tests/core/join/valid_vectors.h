@@ -21,9 +21,9 @@
 #include <functional>
 #include <memory>
 #include <string>
-#include <gdf/utils.h>
+#include <utilities/cudf_utils.h>
 
-#include "../../util/bit_util.cuh"
+#include <utilities/bit_util.cuh>
 
 // host_valid_pointer is a wrapper for gdf_valid_type* with custom deleter
 using host_valid_pointer = typename std::unique_ptr<gdf_valid_type, std::function<void(gdf_valid_type*)>>;
