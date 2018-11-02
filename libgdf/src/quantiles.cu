@@ -150,7 +150,7 @@ gdf_error gdf_quantile_exact(	gdf_column*         col_in,       //input column;
                                                                   //(2) for possible types bigger than double, in the future;
                                 gdf_context*        ctxt)         //context info
 {
-  GDF_REQUIRE(!col_in->valid, GDF_VALIDITY_UNSUPPORTED);
+  GDF_REQUIRE(!col_in->valid || !col_in->null_count, GDF_VALIDITY_UNSUPPORTED);
   gdf_error ret = GDF_SUCCESS;
   assert( col_in->size > 0 );
   
@@ -214,7 +214,7 @@ gdf_error gdf_quantile_aprrox(	gdf_column*  col_in,       //input column;
                                 void*        t_erased_res, //type-erased result of same type as column;
                                 gdf_context* ctxt)         //context info
 {
-  GDF_REQUIRE(!col_in->valid, GDF_VALIDITY_UNSUPPORTED);
+  GDF_REQUIRE(!col_in->valid || !col_in->null_count, GDF_VALIDITY_UNSUPPORTED);
   gdf_error ret = GDF_SUCCESS;
   assert( col_in->size > 0 );
   
