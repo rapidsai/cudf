@@ -71,6 +71,8 @@ public:
     // Parameter is a list of pointers and lengths to char-arrays in host or device memory.
     NVStrings(std::vector<std::pair<const char*,size_t> >& strs);
     NVStrings(std::pair<const char*,size_t>* strs, unsigned int count, bool devmem=true);
+    // use this call if the instance will eventually be bound to an nvstrings python using nvstrings.bind_cpointer()
+    static NVStrings* create_from_index(std::pair<const char*,size_t>* strs, unsigned int count, bool devmem=true);
 
     // Destroys this instance and frees all of its strings
     ~NVStrings();
@@ -94,7 +96,7 @@ public:
     // create a new instance containing only the strings at the specified positions
     NVStrings* sublist( unsigned int* pos, unsigned int count );
     // return a new instance without the specified strings
-    NVStrings* remove_strings( unsigned int* pos, unsigned int count );
+    NVStrings* remove_strings( unsigned int* pos, unsigned int count, bool devmem=true );
 
     // return the length of each string
     unsigned int len(int* lengths, bool todevice=true);
