@@ -146,8 +146,44 @@ def read_csv_strings(filepath, lineterminator='\n',
     from .series import Series
 
     """
+    **Experimental**: This function provided only as an alpha way of providing
+    a way to use nvstrings alongside cudf.
+    Future versions of cuDF will provide cleaner integration.
+
+    Uses the same arguments as read_csv.
+
     Returns list of Series objects for numeric or date columns and nvstrings objects
     for those columns that are strings (dtype='str').
+
+    Examples
+    --------
+    foo.txt : ::
+
+        50,abc|40,def|30,ghi|20,jkl|
+
+    .. code-block:: python
+
+      import cudf
+      cols = cudf.io.read_csv_strings('foo.txt', delimiter=',', lineterminator='|',
+                           names=['col1', 'col2'], dtype=['int64', 'str'],
+                           skiprows=1, skipfooter=1)
+      type(cols[0])
+      print(cols[0])
+
+      type(cols[1])
+      print(cols[1])
+
+    Output:
+
+    .. code-block:: python
+
+      <class 'cudf.series.Series'>
+      0 40
+      1 30
+
+      <class 'nvstrings.nvstrings'>
+      ['def', 'ghi']
+
     """
 
     if names is None or dtype is None:
