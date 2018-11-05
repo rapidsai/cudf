@@ -409,7 +409,7 @@ def test_dataframe_copy_shallow():
      a
 0    1
 1    2
-2    3    
+2    3
 '''
     # values should match despite whitespace difference
     assert got.split() == expect.split()
