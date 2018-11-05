@@ -354,15 +354,10 @@ class DataFrame(object):
             out[col] = self[col].take(positions, ignore_index=ignore_index)
         return out
 
-    def copy(self, deep=False):
+    def copy(self):
 
         """
-        deep copy this dataframe
-
-        Parameters:
-        ----------
-        deep, default False, Unused
-        decider whether to shallow or deepcopy
+        copy this dataframe
 
         """
         df = DataFrame()
@@ -371,8 +366,8 @@ class DataFrame(object):
         df._cols = self._cols.copy()
         return df
 
-    def __copy__(self, deep=True):
-        return self.copy(deep=deep)
+    def __copy__(self):
+        return self.copy()
 
     def __deepcopy__(self, memo={}):
         """
@@ -383,7 +378,7 @@ class DataFrame(object):
         """
         if memo is None:
             memo = {}
-        return self.copy(deep=True)
+        return self.copy()
 
     def _sanitize_columns(self, col):
         """Sanitize pre-appended

@@ -398,7 +398,7 @@ def test_dataframe_copy():
 
 
 def test_dataframe_copy_shallow():
-    # Test for shallow copy the dataframe
+    # Test for copy dataframe using class method
     df = DataFrame()
     df['a'] = [1, 2, 3]
     df2 = df.copy()
@@ -413,6 +413,7 @@ def test_dataframe_copy_shallow():
 '''
     # values should match despite whitespace difference
     assert got.split() == expect.split()
+
 
 def test_dataframe_dtypes():
     dtypes = pd.Series([np.int32, np.float32, np.float64],
