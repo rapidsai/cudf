@@ -83,7 +83,7 @@ def test_series_scale():
     scaled = (arr - vmin) / (vmax - vmin)
     assert scaled.min() == 0
     assert scaled.max() == 1
-    pd.testing.assert_series_equal(sr.scale(), scaled)
+    pd.testing.assert_series_equal(sr.scale().to_pandas(), scaled)
 
 
 @pytest.mark.parametrize('int_method', interpolation_methods)
