@@ -355,10 +355,8 @@ class DataFrame(object):
         return out
 
     def copy(self):
-
         """
         copy this dataframe
-
         """
         df = DataFrame()
         df._index = self._index
