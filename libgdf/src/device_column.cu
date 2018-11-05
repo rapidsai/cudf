@@ -58,7 +58,7 @@ namespace{
     /* ----------------------------------------------------------------------------*/
     template<typename T>
     __host__
-    DeviceColumn ** operator()(gdf_column const& col){
+    DeviceColumn ** operator()(gdf_column const& col, cudaStream_t stream = 0){
       
       DeviceColumn** p;
 
@@ -72,8 +72,8 @@ namespace{
       cudaEventCreate(&sync);
 
       // Invokes kernel to construct the TypedColumn<T> on the device
-      allocator_kernel<T><<<1,1>>>(p, col);
-      cudaEventRecord(sync);
+      allocator_kernel<T><<<1,1,0,stream>>>(p, col);
+      cudaEventRecord(sync,stream);
 
       // Use events to ensure kernel is complete and object is constructed before
       // returning
