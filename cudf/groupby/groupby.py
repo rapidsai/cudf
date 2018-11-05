@@ -3,14 +3,15 @@
 import numpy as np
 import collections
 
-from .dataframe import DataFrame, Series
-from .buffer import Buffer
+from cudf.dataframe.dataframe import DataFrame
+from cudf.dataframe.series import Series
+from cudf.dataframe.buffer import Buffer
 
 from libgdf_cffi import ffi, libgdf
 from librmm_cffi import librmm as rmm
 
 
-class LibGdfGroupby(object):
+class Groupby(object):
     """Groupby object returned by cudf.DataFrame.groupby().
     """
 

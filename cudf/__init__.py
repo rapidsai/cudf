@@ -1,10 +1,13 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
-from .dataframe import DataFrame
-from .index import Index
-from .series import Series
-from .multi import concat
-from .io import read_csv
-from .settings import set_options
+from cudf import dataframe
+
+
+from cudf.dataframe import DataFrame
+from cudf.dataframe import Index
+from cudf.dataframe import Series
+from cudf.multi import concat
+from cudf.io import read_csv
+from cudf.settings import set_options
 
 
 # Versioneer

@@ -52,7 +52,7 @@ namespace{ //annonymus
                        size_t nrows_new)
   {
     cudaStream_t stream = 0; // TODO: non-default stream
-    rmm_temp_allocator allocator(stream); 
+    rmm_temp_allocator allocator(stream);
     auto exec = thrust::cuda::par(allocator).on(stream);
 
     switch( col_type )
@@ -156,7 +156,7 @@ namespace{ //annonymus
 
         h_cols_out[col_index]->dtype = col_type;
         h_cols_out[col_index]->size = nrows_new;
-        
+
         //TODO: h_cols_out[col_index]->valid
       }
   }
@@ -168,7 +168,7 @@ namespace{ //annonymus
       case GDF_INT8:
         {
           using ColType = int8_t;
-	  
+
           return sizeof(ColType);
         }
       case GDF_INT16:
@@ -256,7 +256,7 @@ namespace{ //annonymus
     std::cout<<"\n";
   }
 #endif
-  
+
 
 
 
@@ -301,7 +301,7 @@ gdf_error gdf_group_by_count(size_t nrows,     //in: # rows
                                                 d_vout,
                                                 flag_sorted,
                                                 flag_distinct);
-        
+
         break;
       }
 
@@ -319,7 +319,7 @@ gdf_error gdf_group_by_count(size_t nrows,     //in: # rows
                                                 d_vout,
                                                 flag_sorted,
                                                 flag_distinct);
-        
+
         break;
       }
     case GDF_INT32:
@@ -336,7 +336,7 @@ gdf_error gdf_group_by_count(size_t nrows,     //in: # rows
                                                 d_vout,
                                                 flag_sorted,
                                                 flag_distinct);
-	
+
         break;
       }
 
@@ -354,7 +354,7 @@ gdf_error gdf_group_by_count(size_t nrows,     //in: # rows
                                                 d_vout,
                                                 flag_sorted,
                                                 flag_distinct);
-	
+
         break;
       }
 
@@ -372,7 +372,7 @@ gdf_error gdf_group_by_count(size_t nrows,     //in: # rows
                                                 d_vout,
                                                 flag_sorted,
                                                 flag_distinct);
-	
+
         break;
       }
 
@@ -390,14 +390,14 @@ gdf_error gdf_group_by_count(size_t nrows,     //in: # rows
                                                 d_vout,
                                                 flag_sorted,
                                                 flag_distinct);
-	
+
         break;
       }
 
     default:
       return GDF_UNSUPPORTED_DTYPE;
     }
-  
+
   return GDF_SUCCESS;
 }
 
@@ -436,7 +436,7 @@ gdf_error gdf_group_by_sum(size_t nrows,     //in: # rows
 
   assert( agg_in.dtype == agg_p.dtype );
   assert( agg_in.dtype == c_vout.dtype );
-  
+
   //copy H-D:
   //
   soa_col_info(cols, ncols, d_cols, d_types);
@@ -460,7 +460,7 @@ gdf_error gdf_group_by_sum(size_t nrows,     //in: # rows
                                               d_kout,
                                               d_vout,
                                               flag_sorted);
-	
+
         break;
       }
 
@@ -501,7 +501,7 @@ gdf_error gdf_group_by_sum(size_t nrows,     //in: # rows
                                               d_kout,
                                               d_vout,
                                               flag_sorted);
-	
+
         break;
       }
 
@@ -522,7 +522,7 @@ gdf_error gdf_group_by_sum(size_t nrows,     //in: # rows
                                               d_kout,
                                               d_vout,
                                               flag_sorted);
-	
+
         break;
       }
 
@@ -543,7 +543,7 @@ gdf_error gdf_group_by_sum(size_t nrows,     //in: # rows
                                               d_kout,
                                               d_vout,
                                               flag_sorted);
-	
+
         break;
       }
 
@@ -564,7 +564,7 @@ gdf_error gdf_group_by_sum(size_t nrows,     //in: # rows
                                               d_kout,
                                               d_vout,
                                               flag_sorted);
-	
+
         break;
       }
 
@@ -603,7 +603,7 @@ gdf_error gdf_group_by_min(size_t nrows,     //in: # rows
 
   assert( agg_in.dtype == agg_p.dtype );
   assert( agg_in.dtype == c_vout.dtype );
-  
+
   //copy H-D:
   //
   soa_col_info(cols, ncols, d_cols, d_types);
@@ -627,7 +627,7 @@ gdf_error gdf_group_by_min(size_t nrows,     //in: # rows
                                               d_kout,
                                               d_vout,
                                               flag_sorted);
-	
+
         break;
       }
 
@@ -668,7 +668,7 @@ gdf_error gdf_group_by_min(size_t nrows,     //in: # rows
                                               d_kout,
                                               d_vout,
                                               flag_sorted);
-	
+
         break;
       }
 
@@ -689,7 +689,7 @@ gdf_error gdf_group_by_min(size_t nrows,     //in: # rows
                                               d_kout,
                                               d_vout,
                                               flag_sorted);
-	
+
         break;
       }
 
@@ -710,7 +710,7 @@ gdf_error gdf_group_by_min(size_t nrows,     //in: # rows
                                               d_kout,
                                               d_vout,
                                               flag_sorted);
-	
+
         break;
       }
 
@@ -731,7 +731,7 @@ gdf_error gdf_group_by_min(size_t nrows,     //in: # rows
                                               d_kout,
                                               d_vout,
                                               flag_sorted);
-	
+
         break;
       }
 
@@ -770,7 +770,7 @@ gdf_error gdf_group_by_max(size_t nrows,     //in: # rows
 
   assert( agg_in.dtype == agg_p.dtype );
   assert( agg_in.dtype == c_vout.dtype );
-  
+
   //copy H-D:
   //
   soa_col_info(cols, ncols, d_cols, d_types);
@@ -794,7 +794,7 @@ gdf_error gdf_group_by_max(size_t nrows,     //in: # rows
                                               d_kout,
                                               d_vout,
                                               flag_sorted);
-	
+
         break;
       }
 
@@ -835,7 +835,7 @@ gdf_error gdf_group_by_max(size_t nrows,     //in: # rows
                                               d_kout,
                                               d_vout,
                                               flag_sorted);
-	
+
         break;
       }
 
@@ -856,7 +856,7 @@ gdf_error gdf_group_by_max(size_t nrows,     //in: # rows
                                               d_kout,
                                               d_vout,
                                               flag_sorted);
-	
+
         break;
       }
 
@@ -877,7 +877,7 @@ gdf_error gdf_group_by_max(size_t nrows,     //in: # rows
                                               d_kout,
                                               d_vout,
                                               flag_sorted);
-	
+
         break;
       }
 
@@ -898,7 +898,7 @@ gdf_error gdf_group_by_max(size_t nrows,     //in: # rows
                                               d_kout,
                                               d_vout,
                                               flag_sorted);
-	
+
         break;
       }
 
@@ -937,7 +937,7 @@ gdf_error gdf_group_by_avg(size_t nrows,     //in: # rows
 
   assert( agg_in.dtype == agg_p.dtype );
   assert( agg_in.dtype == c_vout.dtype );
-  
+
   //copy H-D:
   //
   soa_col_info(cols, ncols, d_cols, d_types);
@@ -962,7 +962,7 @@ gdf_error gdf_group_by_avg(size_t nrows,     //in: # rows
                                               d_kout,
                                               d_vout,
                                               flag_sorted);
-	
+
         break;
       }
 
@@ -1005,7 +1005,7 @@ gdf_error gdf_group_by_avg(size_t nrows,     //in: # rows
                                               d_kout,
                                               d_vout,
                                               flag_sorted);
-	
+
         break;
       }
 
@@ -1027,7 +1027,7 @@ gdf_error gdf_group_by_avg(size_t nrows,     //in: # rows
                                               d_kout,
                                               d_vout,
                                               flag_sorted);
-	
+
         break;
       }
 
@@ -1049,7 +1049,7 @@ gdf_error gdf_group_by_avg(size_t nrows,     //in: # rows
                                               d_kout,
                                               d_vout,
                                               flag_sorted);
-	
+
         break;
       }
 
@@ -1071,7 +1071,7 @@ gdf_error gdf_group_by_avg(size_t nrows,     //in: # rows
                                               d_kout,
                                               d_vout,
                                               flag_sorted);
-	
+
         break;
       }
 
@@ -1105,7 +1105,7 @@ gdf_error gdf_group_by_single(int ncols,                    // # columns
   }
   GDF_REQUIRE(!col_agg->valid, GDF_VALIDITY_UNSUPPORTED);
 
-  // If there are no rows in the input, set the output rows to 0 
+  // If there are no rows in the input, set the output rows to 0
   // and return immediately with success
   if( (0 == cols[0]->size )
       || (0 == col_agg->size))
@@ -1128,9 +1128,9 @@ gdf_error gdf_group_by_single(int ncols,                    // # columns
   }
 
   gdf_error gdf_error_code{GDF_SUCCESS};
-  
+
   PUSH_RANGE("LIBGDF_GROUPBY", GROUPBY_COLOR);
-  
+
   if( ctxt->flag_method == GDF_SORT )
     {
       std::vector<gdf_column> v_cols(ncols);
@@ -1138,7 +1138,7 @@ gdf_error gdf_group_by_single(int ncols,                    // # columns
         {
           v_cols[i] = *(cols[i]);
         }
-      
+
       gdf_column* h_columns = &v_cols[0];
       size_t nrows = h_columns[0].size;
 
@@ -1147,7 +1147,7 @@ gdf_error gdf_group_by_single(int ncols,                    // # columns
       Vector<IndexT> d_indx;//allocate only if necessary (see below)
       Vector<void*> d_cols(ncols, nullptr);
       Vector<int>   d_types(ncols, 0);
-  
+
       void** d_col_data = d_cols.data().get();
       int* d_col_types = d_types.data().get();
 
@@ -1162,7 +1162,7 @@ gdf_error gdf_group_by_single(int ncols,                    // # columns
 
       Vector<IndexT> d_sort(nrows, 0);
       IndexT* ptr_d_sort = d_sort.data().get();
-      
+
       gdf_column c_agg_p;
       c_agg_p.dtype = col_agg->dtype;
       c_agg_p.size = nrows;
@@ -1185,7 +1185,7 @@ gdf_error gdf_group_by_single(int ncols,                    // # columns
                            *out_col_agg,
                            &n_group);
           break;
-          
+
         case GDF_MIN:
           gdf_group_by_min(nrows,
                            h_columns,
@@ -1220,7 +1220,7 @@ gdf_error gdf_group_by_single(int ncols,                    // # columns
           {
             Vector<IndexT> d_cout(nrows, 0);
             IndexT* ptr_d_cout = d_cout.data().get();
-            
+
             gdf_group_by_avg(nrows,
                              h_columns,
                              static_cast<size_t>(ncols),
@@ -1252,7 +1252,7 @@ gdf_error gdf_group_by_single(int ncols,                    // # columns
                                *out_col_agg, //passed in
                                &n_group,
                                true);
-            
+
           }
           break;
         case GDF_COUNT:
@@ -1269,7 +1269,7 @@ gdf_error gdf_group_by_single(int ncols,                    // # columns
                                ptr_d_indx, //allocated (or, passed in)
                                *out_col_agg, //passed in
                                &n_group);
-            
+
           }
           break;
         default: // To eliminate error for unhandled enumerant N_GDF_AGG_OPS
@@ -1358,7 +1358,7 @@ gdf_error gdf_group_by_single(int ncols,                    // # columns
     }
 
   POP_RANGE();
-  
+
   return gdf_error_code;
 }
 }//end unknown namespace
@@ -1381,13 +1381,13 @@ gdf_error gdf_order_by(size_t nrows,     //in: # rows
   //
   GDF_REQUIRE(!cols->valid, GDF_VALIDITY_UNSUPPORTED);
   soa_col_info(cols, ncols, d_cols, d_types);
-  
+
   multi_col_order_by(nrows,
                      ncols,
                      d_cols,
                      d_types,
                      d_indx);
-  
+
   return GDF_SUCCESS;
 }
 
@@ -1419,7 +1419,7 @@ gdf_error gdf_filter(size_t nrows,     //in: # rows
                              d_vals,
                              d_indx);
 
-  
+
   return GDF_SUCCESS;
 }
 
@@ -1431,7 +1431,7 @@ gdf_error gdf_group_by_sum(int ncols,                    // # columns
                                                          //(multi-gather based on indices, which are needed anyway)
                            gdf_column* out_col_agg,      //aggregation result
                            gdf_context* ctxt)            //struct with additional info: bool is_sorted, flag_sort_or_hash, bool flag_count_distinct
-{  
+{
   return gdf_group_by_single(ncols, cols, col_agg, out_col_indices, out_col_values, out_col_agg, ctxt, GDF_SUM);
 }
 
@@ -1443,7 +1443,7 @@ gdf_error gdf_group_by_min(int ncols,                    // # columns
                                                          //(multi-gather based on indices, which are needed anyway)
                            gdf_column* out_col_agg,      //aggregation result
                            gdf_context* ctxt)            //struct with additional info: bool is_sorted, flag_sort_or_hash, bool flag_count_distinct
-{  
+{
   return gdf_group_by_single(ncols, cols, col_agg, out_col_indices, out_col_values, out_col_agg, ctxt, GDF_MIN);
 }
 
@@ -1455,7 +1455,7 @@ gdf_error gdf_group_by_max(int ncols,                    // # columns
                                                          //(multi-gather based on indices, which are needed anyway)
                            gdf_column* out_col_agg,      //aggregation result
                            gdf_context* ctxt)            //struct with additional info: bool is_sorted, flag_sort_or_hash, bool flag_count_distinct
-{  
+{
   return gdf_group_by_single(ncols, cols, col_agg, out_col_indices, out_col_values, out_col_agg, ctxt, GDF_MAX);
 }
 
@@ -1467,7 +1467,7 @@ gdf_error gdf_group_by_avg(int ncols,                    // # columns
                                                          //(multi-gather based on indices, which are needed anyway)
                            gdf_column* out_col_agg,      //aggregation result
                            gdf_context* ctxt)            //struct with additional info: bool is_sorted, flag_sort_or_hash, bool flag_count_distinct
-{  
+{
   return gdf_group_by_single(ncols, cols, col_agg, out_col_indices, out_col_values, out_col_agg, ctxt, GDF_AVG);
 }
 

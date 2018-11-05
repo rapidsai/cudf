@@ -8,7 +8,7 @@ from pandas.util.testing import (
     assert_frame_equal
 )
 from cudf.dataframe import Series, DataFrame
-from cudf.index import DatetimeIndex
+from cudf.dataframe.index import DatetimeIndex
 
 
 def data1():

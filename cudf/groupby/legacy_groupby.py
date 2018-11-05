@@ -8,12 +8,14 @@ import numpy as np
 from numba import cuda
 from librmm_cffi import librmm as rmm
 
-from .dataframe import DataFrame, Series
-from .multi import concat
-from . import _gdf, cudautils
-from .column import Column
-from .buffer import Buffer
-from .serialize import register_distributed_serializer
+from cudf.dataframe.dataframe import DataFrame
+from cudf.dataframe.series import Series
+from cudf.dataframe.column import Column
+from cudf.dataframe.buffer import Buffer
+from cudf.multi import concat
+from cudf import _gdf
+from cudf.utils import cudautils
+from cudf.comm.serialize import register_distributed_serializer
 
 
 def _auto_generate_grouper_agg(members):

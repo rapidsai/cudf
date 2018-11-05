@@ -14,7 +14,7 @@ except ImportError:
     _have_distributed = False
 import pytest
 import cudf
-from . import utils
+from cudf.utils import utils
 
 
 require_distributed = pytest.mark.skipif(not _have_distributed,

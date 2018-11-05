@@ -11,9 +11,8 @@ from numba import cuda
 
 from librmm_cffi import librmm as rmm
 
-from . import _gdf
-from . import cudautils
-from . import utils
+from cudf import _gdf
+from cudf.utils import cudautils, utils
 from .buffer import Buffer
 
 

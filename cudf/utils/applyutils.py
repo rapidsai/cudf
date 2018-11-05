@@ -8,9 +8,9 @@ from numba import cuda
 
 from librmm_cffi import librmm as rmm
 
-from cudf.docutils import docfmt_partial
-from cudf import cudautils
-from cudf.series import Series
+from cudf.utils.docutils import docfmt_partial
+from . import cudautils
+from cudf.dataframe.series import Series
 
 
 _doc_applyparams = """

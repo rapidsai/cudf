@@ -9,8 +9,8 @@ import pyarrow as pa
 from librmm_cffi import librmm as rmm
 
 import cudf as gd
-from cudf.dataframe import Series, DataFrame
-from cudf.buffer import Buffer
+from cudf.dataframe.dataframe import Series, DataFrame
+from cudf.dataframe.buffer import Buffer
 from cudf.settings import set_options
 
 from itertools import combinations

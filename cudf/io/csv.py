@@ -2,10 +2,10 @@
 
 from libgdf_cffi import libgdf, ffi
 
-from .column import Column
-from .numerical import NumericalColumn
-from .dataframe import DataFrame
-from .datetime import DatetimeColumn
+from cudf.dataframe.dataframe import Column
+from cudf.dataframe.numerical import NumericalColumn
+from cudf.dataframe.dataframe import DataFrame
+from cudf.dataframe.datetime import DatetimeColumn
 
 import numpy as np
 

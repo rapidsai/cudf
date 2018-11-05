@@ -8,12 +8,13 @@ import pickle
 
 from librmm_cffi import librmm as rmm
 
-from . import cudautils, utils, columnops
+from . import columnops
+from cudf.utils import cudautils, utils
 from .buffer import Buffer
 from .numerical import NumericalColumn
 from .column import Column
 from .datetime import DatetimeColumn
-from .serialize import register_distributed_serializer
+from cudf.comm.serialize import register_distributed_serializer
 
 
 class Index(object):

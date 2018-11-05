@@ -8,14 +8,15 @@ from numbers import Number
 import numpy as np
 import pandas as pd
 
-from . import cudautils, formatting
+from cudf.utils import cudautils
+from cudf import formatting
 from .buffer import Buffer
 from .index import Index, RangeIndex, GenericIndex
-from .settings import NOTSET, settings
+from cudf.settings import NOTSET, settings
 from .column import Column
 from .datetime import DatetimeColumn
 from . import columnops
-from .serialize import register_distributed_serializer
+from cudf.comm.serialize import register_distributed_serializer
 
 
 class Series(object):

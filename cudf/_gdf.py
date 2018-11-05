@@ -13,8 +13,8 @@ import pyarrow as pa
 from libgdf_cffi import ffi, libgdf
 from librmm_cffi import librmm as rmm
 
-from . import cudautils
-from .utils import calc_chunk_size, mask_dtype, mask_bitsize
+from cudf.utils import cudautils
+from cudf.utils.utils import calc_chunk_size, mask_dtype, mask_bitsize
 
 
 def unwrap_devary(devary):

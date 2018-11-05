@@ -1,14 +1,38 @@
-from setuptools import setup
+from setuptools import setup, find_packages
+from setuptools.extension import Extension
+from Cython.Build import cythonize
+import numpy
 
+import os
 import versioneer
 
 
+
 packages = ['cudf',
-            'cudf.tests',
+            'cudf.bind',
+            'cudf.tests'
             ]
 
 install_requires = [
     'numba',
+]
+
+try:
+    numpy_include = numpy.get_include()
+except AttributeError:
+    numpy_include = numpy.get_numpy_include()
+
+cython_files = ['cudf/bind/*.pyx']
+
+extensions = [
+    Extension("*",
+              sources=cython_files,
+              include_dirs=[numpy_include, '/home/dante/Projects/git/cudf/cython/libgdf/include/gdf'],
+              library_dirs=['/home/dante/miniconda3/envs/cython/lib/'],
+              libraries=['gdf'],
+              language='c++',
+              extra_compile_args=['-std=c++11'],
+              runtime_library_dirs=['/usr/local/lib'])
 ]
 
 setup(name='cudf',
@@ -24,6 +48,8 @@ setup(name='cudf',
       ],
       # Include the separately-compiled shared library
       author="NVIDIA Corporation",
+      setup_requires=['cython'],
+      ext_modules=cythonize(extensions),
       packages=packages,
       package_data={
         'cudf.tests': ['data/*.pickle'],
@@ -31,4 +57,20 @@ setup(name='cudf',
       install_requires=install_requires,
       license="Apache",
       cmdclass=versioneer.get_cmdclass(),
+      zip_safe=False
       )
+
+
+# setup(name=projectName,
+#       version=__version__,
+#       license=__license__,
+#       description=shortDescription,
+#       long_description=longDescription,
+#       author=__author__,
+#       author_email=__email__,
+#       setup_requires=['cython'],
+#       ext_modules=build_extension(),
+#       cmdclass=cmdclass,
+#       packages=find_packages(),
+#       classifiers=classifiers
+#       )

@@ -6,7 +6,7 @@ from collections import OrderedDict
 import numpy as np
 import pandas as pd
 
-from cudf import read_csv
+from cudf.io import read_csv
 
 
 def make_numeric_dataframe(nrows, dtype):

@@ -9,7 +9,7 @@ import numpy as np
 
 from numba import cuda
 
-from cudf import DataFrame
+from cudf.dataframe import DataFrame
 
 
 @pytest.mark.parametrize('nelem', [1, 2, 64, 128, 1000, 5000])

@@ -4,10 +4,12 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 
-from . import columnops, _gdf, utils, numerical
+from . import columnops, numerical
+from cudf import _gdf
+from cudf.utils import utils
 from .buffer import Buffer
 from libgdf_cffi import libgdf
-from .serialize import register_distributed_serializer
+from cudf.comm.serialize import register_distributed_serializer
 
 
 _unordered_impl = {
