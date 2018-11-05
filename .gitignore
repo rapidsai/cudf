@@ -1,10 +1,26 @@
+## common
+__pycache__
 *.pyc
-.cache/
+*.o
+*.so
+*.dylib
+.cache
 .coverage
-htmlcov/
-__pycache__/
-build/
-.vscode/
-docs/_build
-**.pytest_cache/
+.vscode
 *.swp
+*.pytest_cache
+build
+htmlcov
+
+## libgdf
+Debug
+/libgdf/thirdparty/googletest/
+/libgdf/include/gdf/ipc/File_generated.h
+/libgdf/include/gdf/ipc/Message_generated.h
+/libgdf/include/gdf/ipc/Schema_generated.h
+/libgdf/include/gdf/ipc/Tensor_generated.h
+/libgdf/python/libgdf_cffi/libgdf_cffi.py
+/libgdf/python/librmm_cffi/librmm_cffi.py
+
+## eclipse
+.project

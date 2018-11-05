@@ -1,0 +1,69 @@
+# Copyright (c) 2018, NVIDIA CORPORATION.
+
+dist: trusty
+sudo: required
+language: cpp
+
+git:
+  depth: false
+
+branches:
+    only:
+        - master
+env:
+  global:
+     secure: "EHU4ahNqfqSaT+VQ3cc3MRpHgfIg/K+NUXszlsVzbFgDR43LJD61QavtPMzNM73eVZRzvgRD39yYgHjDF6ZhQ4OpSEGzBiNEzAjKLqnl1JWd7V7/L31OiDsJMwweksrWINoKLPzikr2mOecsWGmRJYcLfYeJZcGlf67PuCN6DI2Un/pYXzblKfU2dVg8bP+HdWrnXTT6u4abnjCU+4kwc+kl9NJzLI1Zk5pSDuLkgRbiF90lImofYh8GfjyUhiz1Hnq+TjKOToLNOLxXMuM6NFxAIsdFfNkklXaz/mhQom3ZYfMlkjwWz/vJ0BKk554bq4mfL71yBzgydvprSppI0qfHtEvVIR2OJy9HnPvOiHdh7aL1qOojC00zjj39PyIx8M61ovpOvJOVD0c2/vBr6Et5JGastULJq2ItzHyP6UNn4oZtinmXV061sNSOepVjEstHMLVytP87cmiMMiBeDncFV/Sl3y5w1l7rGFVn4lNr2XDMl0u+WnDbZ9n57qneAweeoYkS0tBDdcVzfhv6+RJd129NNtgJtk4fWkh387kOeAOPz+uqu6GNFgXRT/zmRI8sttMkyjSBQeKLTGkCDrboqlU1DZ2lyORiQ3P2yOdNeBTkDJFvdntYduHM7tzhTFUOoVaOn0aFK+zE+AwLkw1JJEvi4g1tVI+iKuDZd/Y="
+
+matrix:
+  include:
+    - env: CUDA=9.2.148_396.37
+    - env: CUDA=9.2.148_396.37 BUILD_CFFI=1 PYTHON=3.6
+    - env: CUDA=9.2.148_396.37 BUILD_CFFI=1 PYTHON=3.5
+
+before_install:
+  # install libboost
+  - sudo apt-get update -q
+  - sudo apt-get install -y libboost-all-dev
+  # install libcuda
+  - echo "deb http://developer.download.nvidia.com/compute/cuda/repos/ubuntu1404/x86_64/ /" | sudo tee -a /etc/apt/sources.list.d/cuda.list
+  - sudo apt-key adv --fetch-keys http://developer.download.nvidia.com/compute/cuda/repos/ubuntu1404/x86_64/7fa2af80.pub
+  - sudo apt-get update -q
+  - sudo apt-get install -y --no-install-recommends cuda-drivers=396.44-1 libcuda1-396
+  # install gcc-5
+  - echo "deb http://archive.ubuntu.com/ubuntu/ xenial main restricted" | sudo tee -a /etc/apt/sources.list
+  - echo "deb http://archive.ubuntu.com/ubuntu/ xenial-updates main restricted" | sudo tee -a /etc/apt/sources.list
+  - echo "deb http://security.ubuntu.com/ubuntu/ xenial-security main restricted" | sudo tee -a /etc/apt/sources.list
+  - sudo apt-get update -q
+  - sudo apt-get install -y gcc-5 g++-5 cpp-5 libisl15 libmpfr4 libstdc++-5-dev libgcc-5-dev libc6-dev
+  # set gcc/g++ paths
+  - export CC=/usr/bin/gcc-5
+  - export CXX=/usr/bin/g++-5
+  # install cuda
+  - source ./travisci/install-cuda-trusty.sh
+  # install miniconda
+  - travis_retry wget https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh -O miniconda.sh
+  - chmod +x miniconda.sh
+  - ./miniconda.sh -b
+  - export PATH=$HOME/miniconda3/bin:$PATH
+
+install:
+  # check
+  - $CC --version
+  - $CXX --version
+  - nvcc --version
+  - conda --version
+  # install conda build and cmake
+  - conda install conda-build anaconda-client conda-verify cmake=3.12 --yes
+
+script:
+  # Activate root environment for cmake
+  - source activate root
+  # check conda versions
+  - conda list
+  # build ligdf
+  - source ./travisci/build_libgdf.sh
+  # build libgdf_cffi
+  - source ./travisci/build_libgdf_cffi.sh
+
+after_success:
+  - source ./travisci/upload.sh

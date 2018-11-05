@@ -1,0 +1,43 @@
+# Copyright (c) 2018, NVIDIA CORPORATION.
+
+# Usage:
+#   conda build -c defaults -c conda-forge .
+{% set version = environ.get('GIT_DESCRIBE_TAG', '0.0.0.dev').lstrip('v') %}
+{% set git_revision_count=environ.get('GIT_DESCRIBE_NUMBER', 0) %}
+package:
+  name: cudf
+  version: {{ version }}
+
+source:
+  path: ../..
+
+build:
+  number: {{ git_revision_count }}
+  script_env:
+    - CUDF_BUILD_NO_GPU_TEST
+
+requirements:
+  build:
+    - python
+    - setuptools
+    - numba>=0.40.0dev
+  run:
+    - python
+    - setuptools
+    - libgdf 0.2.0.*
+    - libgdf_cffi 0.2.0.*
+    - pandas 0.20.*
+    - numba>=0.40.0dev
+
+test:
+  requires:
+    - distributed >=1.22.1
+    - pytest
+  imports:
+    - cudf
+
+about:
+  home: http://rapids.ai/
+  license: Apache-2.0
+  # license_file: LICENSE
+  summary: cuDF GPU DataFrame core library

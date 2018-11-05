@@ -1,0 +1,10 @@
+[submodule "thirdparty/cub"]
+	path = libgdf/thirdparty/cub
+	url = https://github.com/NVlabs/cub.git
+[submodule "thirdparty/moderngpu"]
+	path = libgdf/thirdparty/moderngpu
+	url = https://github.com/moderngpu/moderngpu.git
+[submodule "thirdparty/cnmem"]
+	path = libgdf/thirdparty/cnmem
+	url = https://github.com/NVIDIA/cnmem.git
+
