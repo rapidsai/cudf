@@ -105,7 +105,7 @@ namespace{
  * is allocated in device memory, it should NOT be dereferenced on the host.
  */
 /* ----------------------------------------------------------------------------*/
-DeviceColumnPointer DeviceColumn::make_device_column(gdf_column col)
+DeviceColumnPointer DeviceColumn::make_device_column(gdf_column col, cudaStream_t stream)
 {
   auto device_column_deleter = [](DeviceColumn ** d_col)
                                  {
@@ -118,7 +118,8 @@ DeviceColumnPointer DeviceColumn::make_device_column(gdf_column col)
   // w/ the correct T corresponding to the gdf_column. 
   DeviceColumn ** new_column = gdf_type_dispatcher(col.dtype, 
                                                    device_column_allocator{}, 
-                                                   col);
+                                                   col,
+                                                   stream);
 
   DeviceColumnPointer p(new_column, device_column_deleter);
 

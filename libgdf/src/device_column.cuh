@@ -34,7 +34,7 @@ using DeviceColumnPointer = std::unique_ptr<DeviceColumn*,
 struct DeviceColumn
 {
   __host__
-  static DeviceColumnPointer make_device_column(gdf_column col);
+  static DeviceColumnPointer make_device_column(gdf_column col, cudaStream_t stream = 0);
 
   __device__
   virtual ~DeviceColumn()
