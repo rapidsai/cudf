@@ -27,8 +27,10 @@ requirements:
   #   - rapidsai
   build:
     - cmake 3.12
+    - nvstrings
   run:
     - pyarrow 0.10.*
+    - nvstrings
 
 test:
   commands:

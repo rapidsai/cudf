@@ -21,6 +21,7 @@ requirements:
     - python
     - setuptools
     - numba>=0.40.0dev
+    - nvstrings
   run:
     - python
     - setuptools
@@ -28,6 +29,7 @@ requirements:
     - libgdf_cffi 0.2.0.*
     - pandas 0.20.*
     - numba>=0.40.0dev
+    - nvstrings
 
 test:
   requires:
