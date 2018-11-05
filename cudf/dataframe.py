@@ -355,12 +355,28 @@ class DataFrame(object):
         return out
 
     def copy(self):
-        "Shallow copy this dataframe"
+        """
+        copy this dataframe
+        """
         df = DataFrame()
         df._index = self._index
         df._size = self._size
         df._cols = self._cols.copy()
         return df
+
+    def __copy__(self):
+        return self.copy()
+
+    def __deepcopy__(self, memo={}):
+        """
+        Parameters
+        ----------
+        memo, default None
+            Standard signature. Unused
+        """
+        if memo is None:
+            memo = {}
+        return self.copy()
 
     def _sanitize_columns(self, col):
         """Sanitize pre-appended
