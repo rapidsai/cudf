@@ -1,4 +1,4 @@
-Welcome to pygdf's documentation!
+Welcome to cuDF's documentation!
 =================================
 
 .. toctree::

@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 
-from . import columnops, _gdf, utils
+from . import columnops, _gdf, utils, numerical
 from .buffer import Buffer
 from libgdf_cffi import libgdf
 from .serialize import register_distributed_serializer
@@ -118,6 +118,19 @@ class DatetimeColumn(columnops.TypedColumnBase):
         buf = Buffer(ary)
         result = self.replace(data=buf, dtype=self.dtype)
         return result
+
+    @property
+    def as_numerical(self):
+        return self.view(
+            numerical.NumericalColumn,
+            dtype='int64',
+            data=self.data.astype('int64')
+        )
+
+    def astype(self, dtype):
+        if self.dtype is dtype:
+            return self
+        return self.as_numerical.astype(dtype)
 
     def unordered_compare(self, cmpop, rhs):
         lhs, rhs = self, rhs

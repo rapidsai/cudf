@@ -1,6 +1,6 @@
 # <div align="left"><img src="img/rapids_logo.png" width="90px"/>&nbsp;cuDF - GPU DataFrames</div>
 
-[![Build Status](http://18.191.94.64/buildStatus/icon?job=cudf-master)](http://18.191.94.64/job/cudf-master/)&nbsp;&nbsp;[![Documentation Status](https://readthedocs.org/projects/cudf/badge/?version=latest)](http://cudf.readthedocs.io/en/latest/?badge=latest)
+[![Build Status](http://18.191.94.64/buildStatus/icon?job=cudf-master)](http://18.191.94.64/job/cudf-master/)&nbsp;&nbsp;[![Documentation Status](https://readthedocs.org/projects/cudf/badge/?version=latest)](https://cudf.readthedocs.io/en/latest/)
 
 The [RAPIDS](https://rapids.ai) cuDF library is a GPU DataFrame manipulation library based on Apache Arrow that accelerates loading, filtering, and manipulation of data for model training data preparation. The RAPIDS GPU DataFrame provides a pandas-like API that will be familiar to data scientists, so they can now build GPU-accelerated workflows more easily.
 
@@ -19,6 +19,8 @@ You can install and update cuDF using the conda command:
 ```bash
 conda install -c numba -c conda-forge -c rapidsai -c defaults cudf=0.2.0
 ```
+
+Note: This conda installation only applies to Linux and Python versions 3.5/3.6.
 
 You can create and activate a development environment using the conda command:
 
