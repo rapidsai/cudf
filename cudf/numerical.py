@@ -12,6 +12,7 @@ from librmm_cffi import librmm as rmm
 from . import _gdf, columnops, utils, cudautils, datetime
 from .buffer import Buffer
 from .serialize import register_distributed_serializer
+from ._gdf import nvtx_range_push, nvtx_range_pop
 
 
 # Operator mappings
@@ -369,13 +370,17 @@ class NumericalColumn(columnops.TypedColumnBase):
 def numeric_column_binop(lhs, rhs, op, out_dtype):
     if lhs.dtype != rhs.dtype:
         raise TypeError('{} != {}'.format(lhs.dtype, rhs.dtype))
+
+    nvtx_range_push("PYGDF_BINARY_OP", "orange")
     # Allocate output
     masked = lhs.has_null_mask or rhs.has_null_mask
     out = columnops.column_empty_like(lhs, dtype=out_dtype, masked=masked)
     # Call and fix null_count
     null_count = _gdf.apply_binaryop(op, lhs, rhs, out)
     out = out.replace(null_count=null_count)
-    return out.view(NumericalColumn, dtype=out_dtype)
+    result = out.view(NumericalColumn, dtype=out_dtype)
+    nvtx_range_pop()
+    return result
 
 
 def numeric_column_unaryop(operand, op, out_dtype):

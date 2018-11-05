@@ -25,6 +25,7 @@ from .categorical import CategoricalColumn
 from .datetime import DatetimeColumn
 from .numerical import NumericalColumn
 from .buffer import Buffer
+from ._gdf import nvtx_range_push, nvtx_range_pop
 
 
 class DataFrame(object):
@@ -463,6 +464,7 @@ class DataFrame(object):
 
     @classmethod
     def _concat(cls, objs, ignore_index=False):
+        nvtx_range_push("PYGDF_CONCAT", "orange")
         if len(set(frozenset(o.columns) for o in objs)) != 1:
             what = set(frozenset(o.columns) for o in objs)
             raise ValueError('columns mismatch: {}'.format(what))
@@ -475,6 +477,7 @@ class DataFrame(object):
                 for c in objs[0].columns]
         out = cls(data)
         out._index = index
+        nvtx_range_pop()
         return out
 
     def as_gpu_matrix(self, columns=None, order='F'):
@@ -719,6 +722,8 @@ class DataFrame(object):
         merged : DataFrame
 
         """
+        _gdf.nvtx_range_push("PYGDF_JOIN", "blue")
+
         if type != "":
             warnings.warn(
                 'type="' + type + '" parameter is deprecated.'
@@ -850,6 +855,8 @@ class DataFrame(object):
                                               mask=Buffer(valids[idx]))
                 idx = idx + 1
 
+        _gdf.nvtx_range_pop()
+
         return df
 
     def join(self, other, on=None, how='left', lsuffix='', rsuffix='',
@@ -879,6 +886,8 @@ class DataFrame(object):
         - *other* must be a single DataFrame for now.
         - *on* is not supported yet due to lack of multi-index support.
         """
+
+        _gdf.nvtx_range_push("PYGDF_JOIN", "blue")
 
         # Outer joins still use the old implementation
         if type != "":
@@ -1021,15 +1030,20 @@ class DataFrame(object):
                 msg = "as_index==True not supported due to the lack of\
                     multi-index"
                 raise NotImplementedError(msg)
-            return Groupby(self, by=by)
+            result = Groupby(self, by=by)
+            return result
         else:
             from .libgdf_groupby import LibGdfGroupby
 
+            _gdf.nvtx_range_push("PYGDF_GROUPBY", "purple")
             if as_index:
                 msg = "as_index==True not supported due to the lack of\
                     multi-index"
                 raise NotImplementedError(msg)
-            return LibGdfGroupby(self, by=by, method=method)
+            # The matching `pop` for this range is inside LibGdfGroupby
+            # __apply_agg
+            result = LibGdfGroupby(self, by=by, method=method)
+            return result
 
     def query(self, expr):
         """Query with a boolean expression using Numba to compile a GPU kernel.
@@ -1047,6 +1061,8 @@ class DataFrame(object):
         -------
         filtered :  DataFrame
         """
+
+        _gdf.nvtx_range_push("PYGDF_QUERY", "purple")
         # Get calling environment
         callframe = inspect.currentframe().f_back
         callenv = {
@@ -1061,7 +1077,9 @@ class DataFrame(object):
         for col in self.columns:
             newseries = self[col][selected]
             newdf[col] = newseries
-        return newdf
+        result = newdf
+        _gdf.nvtx_range_pop()
+        return result
 
     @applyutils.doc_apply()
     def apply_rows(self, func, incols, outcols, kwargs, cache_key=None):
