@@ -125,7 +125,7 @@ def test_categorical_binary_add():
 
     with pytest.raises(TypeError) as raises:
         pdsr + pdsr
-    raises.match('Categorical cannot perform the operation \+')
+    raises.match(r'Categorical cannot perform the operation \+')
 
     with pytest.raises(TypeError) as raises:
         sr + sr
