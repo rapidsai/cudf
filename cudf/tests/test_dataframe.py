@@ -784,7 +784,8 @@ def test_from_arrow(nelem, data_type):
 @pytest.mark.parametrize('nelem', [0, 2, 3, 100, 1000])
 @pytest.mark.parametrize(
     'data_type',
-    ['int8', 'int16', 'int32', 'int64', 'float32', 'float64', 'datetime64[ms]']
+    ['bool', 'int8', 'int16', 'int32', 'int64',
+     'float32', 'float64', 'datetime64[ms]']
 )
 def test_to_arrow(nelem, data_type):
     df = pd.DataFrame(
@@ -835,7 +836,8 @@ def test_to_arrow(nelem, data_type):
 
 @pytest.mark.parametrize(
     'data_type',
-    ['int8', 'int16', 'int32', 'int64', 'float32', 'float64', 'datetime64[ms]']
+    ['bool', 'int8', 'int16', 'int32', 'int64',
+     'float32', 'float64', 'datetime64[ms]']
 )
 def test_to_from_arrow_nulls(data_type):
     if data_type == 'datetime64[ms]':
