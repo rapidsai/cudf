@@ -109,12 +109,18 @@ DeviceColumnPointer DeviceColumn::make_device_column(gdf_column col)
 {
   auto device_column_deleter = [](DeviceColumn ** d_col)
                                  {
+                                   // TODO: Stream?
                                    deallocator_kernel<<<1,1>>>(d_col);
                                    cudaFree(d_col);
                                  };
 
-  DeviceColumnPointer p(gdf_type_dispatcher(col.dtype, device_column_allocator{}, col),
-                        device_column_deleter);
+  // Use the type dispatcher to construct a new TypedDeviceColumn<T> on the device
+  // w/ the correct T corresponding to the gdf_column. 
+  DeviceColumn ** new_column = gdf_type_dispatcher(col.dtype, 
+                                                   device_column_allocator{}, 
+                                                   col);
+
+  DeviceColumnPointer p(new_column, device_column_deleter);
 
   return p;
 }
