@@ -75,7 +75,7 @@ def test_series_unique():
 
 
 def test_series_scale():
-    arr = np.random.randint(low=-10, high=10, size=100)
+    arr = pd.Series(np.random.randint(low=-10, high=10, size=100))
     sr = Series(arr)
 
     vmin = arr.min()
@@ -83,7 +83,7 @@ def test_series_scale():
     scaled = (arr - vmin) / (vmax - vmin)
     assert scaled.min() == 0
     assert scaled.max() == 1
-    np.testing.assert_equal(sr.scale().to_array(), scaled)
+    pd.testing.assert_series_equal(sr.scale(), scaled)
 
 
 @pytest.mark.parametrize('int_method', interpolation_methods)
