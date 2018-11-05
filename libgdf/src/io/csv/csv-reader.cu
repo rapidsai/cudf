@@ -590,7 +590,7 @@ gdf_error read_csv(csv_read_arg *args)
 		if (gdf->dtype != gdf_dtype::GDF_STRING)
 			continue;
 
-		gdf->data = (void*)NVStrings::create_from_index(str_cols[stringColCount],size_t(raw_csv->num_records));
+		gdf->data = (void*)NVStrings::create_from_index(h_str_cols[stringColCount],size_t(raw_csv->num_records));
 
 		RMM_TRY( rmmFree ( h_str_cols [stringColCount], 0 ) );
 
