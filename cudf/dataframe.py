@@ -358,7 +358,6 @@ class DataFrame(object):
 
         """
         copy this dataframe
-
         """
         df = DataFrame()
         df._index = self._index
