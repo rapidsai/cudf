@@ -386,7 +386,7 @@ def test_dataframe_copy():
     df2 = copy(df)
     df2['b'] = [4, 5, 6]
     got = df.to_string()
-    print (got)
+    print(got)
     expect = '''
      a
 0    1
@@ -404,7 +404,7 @@ def test_dataframe_copy_shallow():
     df2 = df.copy()
     df2['b'] = [4, 2, 3]
     got = df.to_string()
-    print (got)
+    print(got)
     expect = '''
      a
 0    1
