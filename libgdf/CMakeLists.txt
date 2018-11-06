@@ -176,9 +176,8 @@ else()
 endif()
 
 # Find libNVStrings.so, provided by rapidsai conda package
-find_library(NVSTRING_LIBRARY NVStrings HINTS ${CONDA_PREFIX}/lib)
-message(${NVSTRING_LIBRARY})
-
+find_library(NVSTRING_LIBRARY NVStrings HINTS $ENV{CONDA_PREFIX}/lib)
+include_directories(BEFORE SYSTEM $ENV{CONDA_PREFIX}/include)
 target_link_libraries(gdf ${NVSTRING_LIBRARY})
 
 # Command to symlink files into the build directory
