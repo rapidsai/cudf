@@ -138,9 +138,9 @@ def read_csv(filepath, lineterminator='\n',
 
 
 def read_csv_strings(filepath, lineterminator='\n',
-             delimiter=',', sep=None, delim_whitespace=False,
-             skipinitialspace=False, names=None, dtype=None,
-             skipfooter=0, skiprows=0, dayfirst=False):
+                     delimiter=',', sep=None, delim_whitespace=False,
+                     skipinitialspace=False, names=None, dtype=None,
+                     skipfooter=0, skiprows=0, dayfirst=False):
 
     import nvstrings
     from .series import Series
@@ -152,8 +152,8 @@ def read_csv_strings(filepath, lineterminator='\n',
 
     Uses the same arguments as read_csv.
 
-    Returns list of Series objects for numeric or date columns and nvstrings objects
-    for those columns that are strings (dtype='str').
+    Returns list of Series objects for numeric or date columns and nvstrings
+    objects for those columns that are strings (dtype='str').
 
     Examples
     --------
@@ -164,7 +164,8 @@ def read_csv_strings(filepath, lineterminator='\n',
     .. code-block:: python
 
       import cudf
-      cols = cudf.io.read_csv_strings('foo.txt', delimiter=',', lineterminator='|',
+      fn = 'foo.txt'
+      cols = cudf.io.read_csv_strings(fn, delimiter=',', lineterminator='|',
                            names=['col1', 'col2'], dtype=['int64', 'str'],
                            skiprows=1, skipfooter=1)
       type(cols[0])
@@ -244,7 +245,7 @@ def read_csv_strings(filepath, lineterminator='\n',
     outcols = []
     for i in range(csv_reader.num_cols_out):
         if out[i].dtype == libgdf.GDF_STRING:
-            ptr = int(ffi.cast("uintptr_t",out[i].data))
+            ptr = int(ffi.cast("uintptr_t", out[i].data))
             outcols.append(nvstrings.bind_cpointer(ptr))
         else:
             newcol = Column.from_cffi_view(out[i])
