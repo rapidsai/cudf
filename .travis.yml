@@ -31,7 +31,7 @@ before_install:
   - conda install conda-build anaconda-client flake8 conda-verify cmake=3.12 --yes
 
 install:
-  # check flak8 before proceeding
+  # check flake8 before proceeding
   - flake8
   # install build environment for libgdf
   - source ./travisci/libgdf/install-env-libgdf.sh
