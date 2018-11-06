@@ -155,6 +155,7 @@ struct JoinTest : public GdfTest
       RMM_ALLOC((void**)&(the_column->valid), valid_size, 0);
     } else {
         the_column->valid = nullptr;
+        the_column->null_count = 0;
     }
 
     // Fill the gdf_column members
@@ -251,13 +252,16 @@ struct JoinTest : public GdfTest
    * -------------------------------------------------------------------------*/
   void create_input( size_t left_column_length, size_t left_column_range,
                      size_t right_column_length, size_t right_column_range,
-                     bool print = false)
+                     bool print = false, bool force_non_null_valid_ptr = false)
   {
     initialize_tuple(left_columns, left_column_length, left_column_range, ctxt.flag_sorted);
     initialize_tuple(right_columns, right_column_length, right_column_range, ctxt.flag_sorted);
 
     auto n_columns = std::tuple_size<multi_column_t>::value;
-    if(ctxt.flag_method != gdf_method::GDF_SORT) {
+    bool cols_have_valid_ptr = (
+            ctxt.flag_method != gdf_method::GDF_SORT ||
+            force_non_null_valid_ptr);
+    if(cols_have_valid_ptr) {
       initialize_valids(left_valids, n_columns, left_column_length);
       initialize_valids(right_valids, n_columns, right_column_length);
     }
@@ -265,11 +269,13 @@ struct JoinTest : public GdfTest
     gdf_left_columns = initialize_gdf_columns(left_columns, left_valids);
     gdf_right_columns = initialize_gdf_columns(right_columns, right_valids);
 
-    if(ctxt.flag_method == gdf_method::GDF_SORT) {
+    if(!cols_have_valid_ptr) {
       initialize_valids(left_valids, n_columns, left_column_length, true);
       initialize_valids(right_valids, n_columns, right_column_length, true);
     }
     // Fill vector of raw pointers to gdf_columns
+    gdf_raw_left_columns.clear();
+    gdf_raw_right_columns.clear();
     for(auto const& c : gdf_left_columns){
       gdf_raw_left_columns.push_back(c.get());
     }
@@ -432,7 +438,7 @@ struct JoinTest : public GdfTest
    * @Param sort Option to sort the result. This is required to compare the result against the reference solution
    */
   /* ----------------------------------------------------------------------------*/
-  std::vector<result_type> compute_gdf_result(bool print = false, bool sort = true, gdf_error expected_result=GDF_SUCCESS)
+  std::vector<result_type> compute_gdf_result(bool print = false, bool sort = true, gdf_error expected_result = GDF_SUCCESS)
   {
     const int num_columns = std::tuple_size<multi_column_t>::value;
 
@@ -781,10 +787,30 @@ TYPED_TEST(JoinTest, BothFramesEmpty)
   }
 }
 
+// The below tests check correct reporting of missing valid pointer
+
+// Create a new derived class from JoinTest so we can do a new Typed Test set of tests
+template <class test_parameters>
+struct JoinValidTest : public JoinTest<test_parameters>
+{ };
+
+using ValidTestImplementation = testing::Types< TestParameters< join_op::INNER, SORT, VTuple<int32_t >>,
+                                                TestParameters< join_op::LEFT , SORT, VTuple<int32_t >>,
+                                                TestParameters< join_op::FULL , SORT, VTuple<int32_t >> >;
+
+TYPED_TEST_CASE(JoinValidTest, ValidTestImplementation);
+
+TYPED_TEST(JoinValidTest, ReportValidMaskError)
+{
+  this->create_input(1000,100,
+                     100,100,
+                     false, true);
+
+  std::vector<result_type> gdf_result = this->compute_gdf_result(false, true, GDF_VALIDITY_UNSUPPORTED);
+}
 
 
 // The below tests are for testing inputs that are at or above the maximum input size possible
-
 
 // Create a new derived class from JoinTest so we can do a new Typed Test set of tests
 template <class test_parameters>
