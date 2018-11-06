@@ -79,9 +79,6 @@ class _RMMWrapper(object):
                              [rmm_cfg.use_pool_allocator, 
                               rmm_cfg.initial_pool_size, 
                               rmm_cfg.enable_logging])
-        print(rmm_cfg.use_pool_allocator)
-        print(rmm_cfg.initial_pool_size)
-        print(rmm_cfg.enable_logging)
         return self.rmmInitialize(opts)
 
     def finalize(self):
