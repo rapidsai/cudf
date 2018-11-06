@@ -9,7 +9,7 @@ __pycache__
 .vscode
 *.swp
 *.pytest_cache
-build
+##build
 htmlcov
 
 ## libgdf
