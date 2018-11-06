@@ -1,8 +1,9 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
 
 import numpy as np
-import pandas as pd
 import collections
+
+from pandas.api.types import is_categorical_dtype
 
 from .dataframe import DataFrame, Series
 from .buffer import Buffer
@@ -138,7 +139,8 @@ class LibGdfGroupby(object):
                 for i, thisBy in enumerate(self._by):
                     result[thisBy] = out_col_values_series[i][
                         :num_row_results]
-                    if pd.api.types.is_categorical_dtype(self._df[thisBy].dtype):
+
+                    if is_categorical_dtype(self._df[thisBy].dtype):
                         result[thisBy] = CategoricalColumn(
                             data=result[thisBy].data,
                             categories=self._df[thisBy].cat.categories,

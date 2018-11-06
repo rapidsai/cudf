@@ -73,7 +73,7 @@ class CategoricalColumn(columnops.TypedColumnBase):
         """
         categories = kwargs.pop('categories')
         ordered = kwargs.pop('ordered')
-        kwargs.update({'dtype' : pd.core.dtypes.dtypes.CategoricalDtype()})
+        kwargs.update({'dtype': pd.core.dtypes.dtypes.CategoricalDtype()})
         super(CategoricalColumn, self).__init__(**kwargs)
         self._categories = tuple(categories)
         self._ordered = bool(ordered)
