@@ -7,7 +7,7 @@ import functools
 import string
 import re
 
-_regex_whitespaces = re.compile('^\s+$')
+_regex_whitespaces = re.compile(r'^\s+$')
 
 
 def _only_spaces(s):

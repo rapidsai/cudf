@@ -378,6 +378,43 @@ def test_dataframe_emptycolumns_to_string():
     assert got.split() == expect.split()
 
 
+def test_dataframe_copy():
+    # Test for copying the dataframe using python copy pkg
+    from copy import copy
+    df = DataFrame()
+    df['a'] = [1, 2, 3]
+    df2 = copy(df)
+    df2['b'] = [4, 5, 6]
+    got = df.to_string()
+    print(got)
+    expect = '''
+     a
+0    1
+1    2
+2    3
+'''
+    # values should match despite whitespace difference
+    assert got.split() == expect.split()
+
+
+def test_dataframe_copy_shallow():
+    # Test for copy dataframe using class method
+    df = DataFrame()
+    df['a'] = [1, 2, 3]
+    df2 = df.copy()
+    df2['b'] = [4, 2, 3]
+    got = df.to_string()
+    print(got)
+    expect = '''
+     a
+0    1
+1    2
+2    3
+'''
+    # values should match despite whitespace difference
+    assert got.split() == expect.split()
+
+
 def test_dataframe_dtypes():
     dtypes = pd.Series([np.int32, np.float32, np.float64],
                        index=['c', 'a', 'b'])
@@ -747,7 +784,8 @@ def test_from_arrow(nelem, data_type):
 @pytest.mark.parametrize('nelem', [0, 2, 3, 100, 1000])
 @pytest.mark.parametrize(
     'data_type',
-    ['int8', 'int16', 'int32', 'int64', 'float32', 'float64', 'datetime64[ms]']
+    ['bool', 'int8', 'int16', 'int32', 'int64',
+     'float32', 'float64', 'datetime64[ms]']
 )
 def test_to_arrow(nelem, data_type):
     df = pd.DataFrame(
@@ -798,7 +836,8 @@ def test_to_arrow(nelem, data_type):
 
 @pytest.mark.parametrize(
     'data_type',
-    ['int8', 'int16', 'int32', 'int64', 'float32', 'float64', 'datetime64[ms]']
+    ['bool', 'int8', 'int16', 'int32', 'int64',
+     'float32', 'float64', 'datetime64[ms]']
 )
 def test_to_from_arrow_nulls(data_type):
     if data_type == 'datetime64[ms]':
