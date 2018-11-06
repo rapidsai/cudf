@@ -20,19 +20,22 @@ matrix:
     - env: CUDA=10.0.130_410.48 PYTHON=3.6 BUILD_CFFI=1
 
 before_install:
-  # install build environment for libgdf
-  - source ./travisci/libgdf/install-env-libgdf.sh
   # install miniconda
   - travis_retry wget --progress=dot:mega https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh -O miniconda.sh
   - chmod +x miniconda.sh
   - ./miniconda.sh -b
   - export PATH=$HOME/miniconda3/bin:$PATH
-
-install:
   # check
   - conda --version
   # install conda build
   - conda install conda-build anaconda-client flake8 conda-verify cmake=3.12 --yes
+
+install:
+  # check flak8 before proceeding
+  - flake8
+  # install build environment for libgdf
+  - source ./travisci/libgdf/install-env-libgdf.sh
+  
 script:
   # Activate root environment for cmake
   - source activate root
@@ -46,7 +49,6 @@ script:
   - source ./travisci/libgdf/upload.sh
   # build cudf
   - source ./travisci/build_cudf.sh
-  - flake8
 
 after_success:
   # upload cudf
