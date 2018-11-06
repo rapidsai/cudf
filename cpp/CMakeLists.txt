@@ -30,6 +30,63 @@ set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -Werror cross-execution-space-call -Wn
 set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -Werror cross-execution-space-call -Xcompiler -Wall,-Werror")
 
 ###################################################################################################
+# - cmake modules ---------------------------------------------------------------------------------
+
+set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/Modules/" ${CMAKE_MODULE_PATH})
+
+include(FeatureSummary)
+include(CheckIncludeFiles)
+include(CheckLibraryExists)
+include(CTest)
+
+include(ConfigureGoogleTest)
+include(ConfigureArrow)
+
+###################################################################################################
+# - arrow -----------------------------------------------------------------------------------------
+
+# Locate the Apache Arrow package (Requires that you use ConfigureArrow module)
+find_package(Arrow REQUIRED)
+
+message(STATUS "ARROW_ROOT: " ${ARROW_ROOT})
+
+set_package_properties(
+    Arrow PROPERTIES TYPE REQUIRED
+    PURPOSE "Apache Arrow is a cross-language development platform for in-memory data."
+    URL "https://github.com/apache/arrow")
+
+###################################################################################################
+# - gtest -----------------------------------------------------------------------------------------
+
+find_package(GTest)
+set_package_properties(GTest PROPERTIES TYPE OPTIONAL
+    PURPOSE "Google C++ Testing Framework (Google Test)."
+    URL "https://github.com/google/googletest")
+if(GTEST_FOUND)
+    message(STATUS "Google C++ Testing Framework (Google Test) found in ${GTEST_ROOT}")
+    include_directories(${GTEST_INCLUDE_DIRS})
+    add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/src/tests)
+else()
+    message(AUTHOR_WARNING "Google C++ Testing Framework (Google Test) not found: automated tests are disabled.")
+endif(GTEST_FOUND)
+
+###################################################################################################
+# - include paths ---------------------------------------------------------------------------------
+
+include_directories("${ARROW_INCLUDEDIR}"
+                    "${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}"
+                    "${CMAKE_CURRENT_SOURCE_DIR}/include"
+                    "${CMAKE_CURRENT_SOURCE_DIR}/src"
+                    "${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/cub"
+                    "${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/moderngpu/src"
+                    "${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/cnmem/include")
+
+###################################################################################################
+# - library paths ---------------------------------------------------------------------------------
+
+link_directories("${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}/../lib")
+
+###################################################################################################
 # - library targets -------------------------------------------------------------------------------
 
 add_library(cudf SHARED
@@ -88,67 +145,10 @@ if(CMAKE_BUILD_TYPE MATCHES Debug)
 endif(CMAKE_BUILD_TYPE MATCHES Debug)
 
 ###################################################################################################
-# - cmake modules ---------------------------------------------------------------------------------
-
-set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/Modules/" ${CMAKE_MODULE_PATH})
-
-include(FeatureSummary)
-include(CheckIncludeFiles)
-include(CheckLibraryExists)
-include(CTest)
-
-include(ConfigureGoogleTest)
-include(ConfigureArrow)
-
-###################################################################################################
-# - arrow -----------------------------------------------------------------------------------------
-
-# Locate the Apache Arrow package (Requires that you use ConfigureArrow module)
-find_package(Arrow REQUIRED)
-
-message(STATUS "ARROW_ROOT: " ${ARROW_ROOT})
-
-set_package_properties(
-    Arrow PROPERTIES TYPE REQUIRED
-    PURPOSE "Apache Arrow is a cross-language development platform for in-memory data."
-    URL "https://github.com/apache/arrow")
-
-###################################################################################################
-# - gtest -----------------------------------------------------------------------------------------
-
-find_package(GTest)
-set_package_properties(GTest PROPERTIES TYPE OPTIONAL
-    PURPOSE "Google C++ Testing Framework (Google Test)."
-    URL "https://github.com/google/googletest")
-if(GTEST_FOUND)
-    message(STATUS "Google C++ Testing Framework (Google Test) found in ${GTEST_ROOT}")
-    include_directories(${GTEST_INCLUDE_DIRS})
-    add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/src/tests)
-else()
-    message(AUTHOR_WARNING "Google C++ Testing Framework (Google Test) not found: automated tests are disabled.")
-endif(GTEST_FOUND)
-
-
-###################################################################################################
-# - include paths ---------------------------------------------------------------------------------
-
-include_directories("${ARROW_INCLUDEDIR}"
-                    "${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}"
-                    "${CMAKE_CURRENT_SOURCE_DIR}/include"
-                    "${CMAKE_CURRENT_SOURCE_DIR}/src"
-                    "${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/cub"
-                    "${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/moderngpu/src"
-                    "${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/cnmem/include")
-
-###################################################################################################
-# - library paths ---------------------------------------------------------------------------------
-
-link_directories("${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}/../lib")
-
-###################################################################################################
 # - link libraries --------------------------------------------------------------------------------
 
-target_link_libraries(rmm cuda)
-target_link_libraries(cudf arrow rmm)
+target_link_libraries(rmm cudart cuda)
+target_link_libraries(cudf rmm)
+
 
 
