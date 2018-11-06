@@ -185,7 +185,6 @@ def as_column(arbitrary):
                 null_count=arbitrary.null_count,
                 categories=arbitrary.dictionary.to_pylist(),
                 ordered=arbitrary.type.ordered,
-                dtype="category"  # What's the correct way to specify this?
             )
         elif isinstance(arbitrary, pa.TimestampArray):
             arbitrary = arbitrary.cast(pa.timestamp('ms'))

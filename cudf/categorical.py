@@ -73,6 +73,7 @@ class CategoricalColumn(columnops.TypedColumnBase):
         """
         categories = kwargs.pop('categories')
         ordered = kwargs.pop('ordered')
+        kwargs.update({'dtype' : pd.core.dtypes.dtypes.CategoricalDtype()})
         super(CategoricalColumn, self).__init__(**kwargs)
         self._categories = tuple(categories)
         self._ordered = bool(ordered)
@@ -198,8 +199,7 @@ class CategoricalColumn(columnops.TypedColumnBase):
             data=Buffer(list(range(0, len(self._categories))),
                         categorical=True),
             categories=self._categories,
-            ordered=self._ordered,
-            dtype=self.dtype)
+            ordered=self._ordered)
 
     def unique_count(self, method='sort'):
         if method is not 'sort':
@@ -301,7 +301,7 @@ def pandas_categorical_as_column(categorical, codes=None):
     #       https://github.com/pandas-dev/pandas/pull/16015
     valid_codes = codes != -1
     buf = Buffer(codes)
-    params = dict(data=buf, dtype=categorical.dtype,
+    params = dict(data=buf,
                   categories=categorical.categories,
                   ordered=categorical.ordered)
     if not np.all(valid_codes):
