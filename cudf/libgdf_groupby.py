@@ -5,6 +5,7 @@ import collections
 
 from .dataframe import DataFrame, Series
 from .buffer import Buffer
+from .categorical import CategoricalColumn
 
 from libgdf_cffi import ffi, libgdf
 from librmm_cffi import librmm as rmm
@@ -132,9 +133,15 @@ class LibGdfGroupby(object):
             num_row_results = out_col_agg.size
 
             if first_run:
-                for i in range(0, ncols):
-                    result[self._by[i]] = out_col_values_series[i][
+                for i, thisBy in enumerate(self._by):
+                    result[thisBy] = out_col_values_series[i][
                         :num_row_results]
+                    if self._df[thisBy].dtype == 'category':
+                        result[thisBy] = CategoricalColumn(
+                            data=result[thisBy].data,
+                            categories=self._df[thisBy].cat.categories,
+                            ordered=self._df[thisBy].cat.ordered,
+                            dtype='category')
 
             out_col_agg_series.data.size = num_row_results
             out_col_agg_series = out_col_agg_series.reset_index()
