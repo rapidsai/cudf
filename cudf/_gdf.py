@@ -342,6 +342,7 @@ def libgdf_join(col_lhs, col_rhs, on, how, method='sort'):
     valids = []
 
     for col in result_cols:
+
         intaddr = int(ffi.cast("uintptr_t", col.data))
         res.append(rmm.device_array_from_ptr(ptr=intaddr,
                                              nelem=col.size,
@@ -516,6 +517,8 @@ _GDF_COLORS = {
     'cyan':     libgdf.GDF_CYAN,
     'red':      libgdf.GDF_RED,
     'white':    libgdf.GDF_WHITE,
+    'darkgreen': libgdf.GDF_DARK_GREEN,
+    'orange':   libgdf.GDF_ORANGE,
 }
 
 

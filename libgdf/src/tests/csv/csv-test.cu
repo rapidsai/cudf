@@ -103,7 +103,7 @@ TEST(gdf_csv_test, MortPerf)
 
     args.num_cols = num_cols;
 
-    args.names = new const char *[num_cols] {
+    const char ** dnames = new const char *[num_cols] {
         "loan_id",
         "monthly_reporting_period",
         "servicer",
@@ -136,8 +136,9 @@ TEST(gdf_csv_test, MortPerf)
         "foreclosure_principal_write_off_amount",
         "servicing_activity_indicator"
     };
+    args.names = dnames;
 
-  args.dtype = new const char *[num_cols] {
+    const char ** dtype = new const char *[num_cols] {
     		"int64",
     		"date",
     		"category",
@@ -171,9 +172,9 @@ TEST(gdf_csv_test, MortPerf)
     		"category"
         };
 
+        args.dtype = dtype;
 
-
-	args.file_path = (char *)("/tmp/Performance_2000Q1.txt");
+    args.file_path = (char *)("/tmp/Performance_2000Q1.txt");
 
 	if (  checkFile(args.file_path))
 	{
@@ -184,6 +185,18 @@ TEST(gdf_csv_test, MortPerf)
 		args.skiprows 		= 0;
 		args.skipfooter 	= 0;
 		args.dayfirst 		= 0;
+        args.mangle_dupe_cols=true;
+        args.num_cols_out=0;
+
+        args.use_cols_int       = NULL;
+        args.use_cols_char      = NULL;
+        args.use_cols_char_len  = 0;
+        args.use_cols_int_len   = 0;
+
+
+        args.names = NULL;
+        args.dtype = NULL;
+
 
 		error = read_csv(&args);
 	}

@@ -222,6 +222,23 @@ def as_column(arbitrary):
                           "be typecast to a Date64 value", UserWarning)
             arbitrary = arbitrary.cast(pa.date64())
             data = as_column(arbitrary)
+        elif isinstance(arbitrary, pa.BooleanArray):
+            # Arrow uses 1 bit per value while we use int8
+            dtype = np.dtype(np.bool)
+            arbitrary = arbitrary.cast(pa.int8())
+            if arbitrary.buffers()[0]:
+                pamask = Buffer(np.array(arbitrary.buffers()[0]))
+            else:
+                pamask = None
+            padata = Buffer(np.array(arbitrary.buffers()[1]).view(
+                dtype
+            ))
+            data = numerical.NumericalColumn(
+                data=padata,
+                mask=pamask,
+                null_count=arbitrary.null_count,
+                dtype=dtype
+            )
         else:
             if arbitrary.buffers()[0]:
                 pamask = Buffer(np.array(arbitrary.buffers()[0]))

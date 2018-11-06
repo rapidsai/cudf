@@ -6,6 +6,7 @@ import collections
 from .dataframe import DataFrame, Series
 from .buffer import Buffer
 from .categorical import CategoricalColumn
+from ._gdf import nvtx_range_pop
 
 from libgdf_cffi import ffi, libgdf
 from librmm_cffi import librmm as rmm
@@ -175,9 +176,11 @@ class LibGdfGroupby(object):
         val_columns = self._val_columns
         val_columns_out = [agg_type + "_" + column for column in val_columns]
 
-        return self._apply_agg(
+        result = self._apply_agg(
             agg_type, result, add_col_values, ctx, val_columns,
             val_columns_out, sort_result=False)
+        nvtx_range_pop()
+        return result
 
     def min(self):
         return self._apply_basic_agg("min")
@@ -268,4 +271,5 @@ class LibGdfGroupby(object):
         else:
             result = self.agg([args])
 
+        nvtx_range_pop()
         return result
