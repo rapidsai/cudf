@@ -29,6 +29,7 @@ requirements:
     - python x.x
     - cffi
     - setuptools
+    - nvstrings
   run:
     - libgdf {{ version }}.*
     - python x.x
