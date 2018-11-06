@@ -1,6 +1,7 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
 
 import numpy as np
+import pandas as pd
 import collections
 
 from .dataframe import DataFrame, Series
@@ -137,12 +138,11 @@ class LibGdfGroupby(object):
                 for i, thisBy in enumerate(self._by):
                     result[thisBy] = out_col_values_series[i][
                         :num_row_results]
-                    if self._df[thisBy].dtype == 'category':
+                    if pd.api.types.is_categorical_dtype(self._df[thisBy].dtype):
                         result[thisBy] = CategoricalColumn(
                             data=result[thisBy].data,
                             categories=self._df[thisBy].cat.categories,
-                            ordered=self._df[thisBy].cat.ordered,
-                            dtype='category')
+                            ordered=self._df[thisBy].cat.ordered)
 
             out_col_agg_series.data.size = num_row_results
             out_col_agg_series = out_col_agg_series.reset_index()
