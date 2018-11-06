@@ -23,19 +23,18 @@
 #include <thrust/device_vector.h>
 #include <thrust/sort.h>
 #include <thrust/gather.h>
-#include "thrust_rmm_allocator.h"
+#include <rmm/src/thrust_rmm_allocator.h>
 
 #include "gtest/gtest.h"
 #include "gmock/gmock.h"
-#include <gdf/gdf.h>
-#include <gdf/cffi/functions.h>
+#include <cudf.h>
+#include <cudf/functions.h>
+#include <core/dataframe/cudf_table.cuh>
+#include <functions/hash/hash_functions.cuh>
+#include <utilities/int_fastdiv.h>
 
-#include "gdf_test_utils.cuh"
-#include "gdf_test_fixtures.h"
-
-#include "../../gdf_table.cuh"
-#include "../../hashmap/hash_functions.cuh"
-#include "../../int_fastdiv.h"
+#include "tests/utilities/cudf_test_utils.cuh"
+#include "tests/rmm/cudf_test_fixtures.h"
 
 // Vector set to use rmmAlloc and rmmFree.
 template <typename T>

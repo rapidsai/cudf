@@ -18,8 +18,8 @@ if(CMAKE_COMPILER_IS_GNUCXX)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Werror")
 endif(CMAKE_COMPILER_IS_GNUCXX)
 
-set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -gencode=arch=compute_61,code=sm_61")
-set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -gencode=arch=compute_70,code=sm_70")
+set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -gencode=arch=compute_60,code=sm_60 -gencode=arch=compute_61,code=sm_61")
+set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -gencode=arch=compute_70,code=sm_70 -gencode=arch=compute_70,code=compute_70")
 
 set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} --expt-extended-lambda --expt-relaxed-constexpr")
 
@@ -85,7 +85,7 @@ endif(HT_LEGACY_ALLOCATOR)
 
 if(CMAKE_BUILD_TYPE MATCHES Debug)
     message(STATUS "Building with debugging flags")
-    set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -g -G")
+    set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -G")
 endif(CMAKE_BUILD_TYPE MATCHES Debug)
 
 ###################################################################################################
@@ -140,6 +140,11 @@ include_directories("${ARROW_INCLUDEDIR}"
                     "${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/cub"
                     "${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/moderngpu/src"
                     "${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/cnmem/include")
+
+###################################################################################################
+# - library paths ---------------------------------------------------------------------------------
+
+link_directories("${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}/../lib")
 
 ###################################################################################################
 # - link libraries --------------------------------------------------------------------------------

@@ -16,12 +16,12 @@
 
 #include "gtest/gtest.h"
 #include "gmock/gmock.h"
-#include <gdf/gdf.h>
-#include <gdf/cffi/functions.h>
-#include "../test_utils/gdf_test_utils.cuh"
+#include <cudf.h>
+#include <cudf/functions.h>
+#include "tests/utilities/cudf_test_utils.cuh"
 #include "cuda_profiler_api.h"
 
-#include "gdf_test_fixtures.h"
+#include "tests/rmm/cudf_test_fixtures.h"
 
 #include <chrono>
 

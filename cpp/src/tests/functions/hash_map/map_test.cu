@@ -21,15 +21,15 @@
 #include <random>
 
 #include <thrust/device_vector.h>
-#include "thrust_rmm_allocator.h"
+#include <rmm/src/thrust_rmm_allocator.h>
 
 #include "gtest/gtest.h"
-#include <gdf/gdf.h>
-#include <gdf/cffi/functions.h>
-#include <../../src/hashmap/concurrent_unordered_map.cuh>
-#include "../../src/groupby/hash/aggregation_operations.cuh"
+#include <cudf.h>
+#include <cudf/functions.h>
+#include <functions/hash/concurrent_unordered_map.cuh>
+#include <core/groupby/hash/aggregation_operations.cuh>
 
-#include "gdf_test_fixtures.h"
+#include "tests/rmm/cudf_test_fixtures.h"
 
 // Vector set to use rmmAlloc and rmmFree.
 template <typename T>

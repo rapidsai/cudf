@@ -18,14 +18,14 @@
 
 // See this header for all of the recursive handling of tuples of vectors
 #include "tuple_vectors.h"
-#include <gdf/gdf.h>
-#include <gdf/cffi/functions.h>
-#include <gdf/utils.h>
+#include <cudf.h>
+#include <rmm/rmm.h>
+#include <cudf/functions.h>
+#include <utilities/cudf_utils.h>
+#include <utilities/bit_util.cuh>
 #include <bitset>
 #include <numeric> // for std::accumulate
 #include <memory>
-#include "../../util/bit_util.cuh"
-#include "rmm.h"
 
 #include <thrust/equal.h>
 

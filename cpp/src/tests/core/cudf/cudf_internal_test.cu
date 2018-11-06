@@ -14,7 +14,9 @@
  * limitations under the License.
  */
 #include "gtest/gtest.h"
-#include "cudf.h"
+#include <cudf.h>
+#include <rmm/rmm.h>
+#include <cuda_runtime_api.h>
 #include <cstring>
 
 // If this test fails, it means an error code was added without

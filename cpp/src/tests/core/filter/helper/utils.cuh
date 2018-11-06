@@ -3,8 +3,8 @@
 #define GDF_TEST_UTILS
 
 #include <iostream>
-#include <gdf/gdf.h>
-#include <gdf/cffi/functions.h>
+#include <cudf.h>
+#include <cudf/functions.h>
 #include <thrust/functional.h>
 #include <thrust/device_ptr.h>
 #include <thrust/iterator/counting_iterator.h>
@@ -13,8 +13,7 @@
 #include <functional>
 #include <vector>
 #include <tuple>
-#include "gdf/gdf.h"
-#include "rmm.h"
+#include <rmm/rmm.h>
 
 template <typename gdf_type>
 inline gdf_dtype gdf_enum_type_for()

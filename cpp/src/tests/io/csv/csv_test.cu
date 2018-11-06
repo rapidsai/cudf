@@ -22,8 +22,8 @@
 #include <thrust/device_vector.h>
 
 #include "gtest/gtest.h"
-#include <gdf/gdf.h>
-#include <gdf/cffi/functions.h>
+#include <cudf.h>
+#include <cudf/functions.h>
  
 struct gdf_csv_test : public ::testing::Test {
   void TearDown() {

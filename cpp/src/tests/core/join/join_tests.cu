@@ -210,8 +210,8 @@ struct JoinTest : public GdfTest
                      size_t right_column_length, size_t right_column_range,
                      bool print = false)
   {
-    initialize_tuple(left_columns, left_column_length, left_column_range, static_cast<bool>(ctxt.flag_sorted));
-    initialize_tuple(right_columns, right_column_length, right_column_range, static_cast<bool>(ctxt.flag_sorted));
+    initialize_tuple(left_columns, left_column_length, left_column_range, static_cast<size_t>(ctxt.flag_sorted));
+    initialize_tuple(right_columns, right_column_length, right_column_range, static_cast<size_t>(ctxt.flag_sorted));
 
     auto n_columns = std::tuple_size<multi_column_t>::value;
     if(ctxt.flag_method != gdf_method::GDF_SORT) {

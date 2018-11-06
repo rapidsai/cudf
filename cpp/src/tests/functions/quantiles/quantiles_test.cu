@@ -19,7 +19,7 @@
 
 #include <thrust/device_vector.h>
 #include <thrust/copy.h>
-#include "thrust_rmm_allocator.h"
+#include <rmm/src/thrust_rmm_allocator.h>
 
 #include <iostream>
 #include <vector>
@@ -28,16 +28,16 @@
 #include <cassert>
 #include <cmath>
 
-#include <gdf/gdf.h>
-#include <gdf/utils.h>
-#include <gdf/errorutils.h>
-#include <gdf/cffi/functions.h>
+#include <cudf.h>
+#include <cudf/functions.h>
+#include <utilities/cudf_utils.h>
+#include <core/error/error_utils.h>
 
 #include "gtest/gtest.h"
 
-#include "gdf_test_fixtures.h"
+#include "tests/rmm/cudf_test_fixtures.h"
 
-#include "quantiles.hpp"
+#include <functions/quantiles/quantiles.h>
 
 // Vector set to use rmmAlloc and rmmFree.
 template <typename T>

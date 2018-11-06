@@ -22,11 +22,11 @@
 #include <thrust/device_vector.h>
 
 #include "gtest/gtest.h"
-#include <gdf/gdf.h>
-#include <gdf/cffi/functions.h>
-#include <../../src/hashmap/concurrent_unordered_multimap.cuh>
+#include <cudf.h>
+#include <cudf/functions.h>
+#include <functions/hash/concurrent_unordered_multimap.cuh>
 
-#include "gdf_test_fixtures.h"
+#include "tests/rmm/cudf_test_fixtures.h"
 
 // This is necessary to do a parametrized typed-test over multiple template arguments
 template <typename Key, typename Value>

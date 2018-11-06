@@ -1091,6 +1091,8 @@ gdf_error gdf_group_by_single(int ncols,                    // # columns
                               gdf_context* ctxt,            //struct with additional info: bool is_sorted, flag_sort_or_hash, bool flag_count_distinct
                               gdf_agg_op op)                //aggregation operation
 {
+  CUDA_TRY(cudaDeviceSynchronize());
+  
   if((0 == ncols)
      || (nullptr == cols)
      || (nullptr == col_agg)

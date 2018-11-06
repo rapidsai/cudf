@@ -8,11 +8,11 @@
 #include <thrust/device_vector.h>
 
 #include "gtest/gtest.h"
-#include <gdf/gdf.h>
-#include <gdf/utils.h>
-#include <gdf/cffi/functions.h>
+#include <cudf.h>
+#include <utilities/cudf_utils.h>
+#include <cudf/functions.h>
 
-#include "../test_utils/gdf_test_utils.cuh"
+#include "tests/utilities/cudf_test_utils.cuh"
 
 // uncomment to enable benchmarking gdf_column_concat
 //#define ENABLE_CONCAT_BENCHMARK 

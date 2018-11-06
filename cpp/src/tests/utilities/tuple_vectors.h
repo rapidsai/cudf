@@ -25,6 +25,15 @@ template <typename... T>
 using VTuple = std::tuple<std::vector<T>...>;
 
 // Initialize a vector with random data
+template<typename T>
+void initialize_vector(std::vector<T>& v, const size_t column_length, const size_t column_range, bool sorted = false)
+{
+ v.resize(column_length);
+ std::generate(v.begin(), v.end(), [column_range](){return std::rand() % column_range;});
+ if (sorted) { std::sort(v.begin(), v.end()); }
+}
+
+// Initialize a vector with random data
 template<typename T, typename initializer_t>
 void initialize_vector(std::vector<T>& v, const size_t column_length, initializer_t the_initializer)
 {
@@ -66,6 +75,24 @@ void initialize_tuple(std::tuple<std::vector<Tp>...>& t, std::vector<size_t> col
  initialize_tuple(t, column_lengths, the_initializer);
 }
 
+//compile time recursion to initialize a tuple of vectors
+template<std::size_t I = 0, typename... Tp>
+inline typename std::enable_if<I == sizeof...(Tp), void>::type
+initialize_tuple(std::tuple<std::vector<Tp>...>& t, size_t column_length, size_t column_range, bool sorted = false)
+{
+ //bottom of compile-time recursion
+ //purposely empty...
+}
+template<std::size_t I = 0, typename... Tp>
+inline typename std::enable_if<I < sizeof...(Tp), void>::type
+initialize_tuple(std::tuple<std::vector<Tp>...>& t, size_t column_length, size_t column_range, bool sorted = false)
+{
+  // Initialize the current vector
+ initialize_vector(std::get<I>(t), column_length, column_range, sorted);
+
+ //recurse to next vector in tuple
+ initialize_tuple<I + 1, Tp...>(t, column_length, column_range, sorted);
+}
 
 // Prints a vector 
 template<typename T>
@@ -94,8 +121,6 @@ print_tuple(std::tuple<std::vector<Tp>...>& t)
  //recurse to next vector in tuple
  print_tuple<I + 1, Tp...>(t);
 }
-
-
 
 // compile time recursion to compute the element wise equality of two rows 
 // in two tuples of vectors

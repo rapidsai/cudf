@@ -18,8 +18,8 @@
 #include "gtest/gtest.h"
 
 #include <iostream>
-#include <gdf/gdf.h>
-#include <gdf/cffi/functions.h>
+#include <cudf.h>
+#include <cudf/functions.h>
 #include <thrust/functional.h>
 #include <thrust/device_ptr.h>
 #include <thrust/iterator/counting_iterator.h>
@@ -28,7 +28,7 @@
 #include <cuda_runtime.h>
 #include "helper/utils.cuh"
 
-#include "gdf_test_fixtures.h"
+#include "tests/rmm/cudf_test_fixtures.h"
 
 using ValueType = int16_t;
 

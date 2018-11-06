@@ -1,5 +1,9 @@
-set(memory_test_SRCS
-    memory_tests.cpp
-)
+###################################################################################################
+# - rmm tests -------------------------------------------------------------------------------------
 
-configure_test(memory_test "${memory_test_SRCS}")
+set(RMM_TEST_SRC
+    "memory_tests.cpp")
+
+ConfigureTest(RMM_TEST "${RMM_TEST_SRC}")
+
+

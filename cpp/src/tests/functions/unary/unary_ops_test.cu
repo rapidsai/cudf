@@ -28,13 +28,14 @@
 #include <thrust/transform.h>
 #include <thrust/iterator/counting_iterator.h>
 
-#include "thrust_rmm_allocator.h"
+#include <rmm/src/thrust_rmm_allocator.h>
 
 #include "gtest/gtest.h"
-#include "gdf_test_fixtures.h"
-#include <gdf/gdf.h>
-#include <gdf/utils.h>
-#include <gdf/cffi/functions.h>
+#include "tests/rmm/cudf_test_fixtures.h"
+
+#include <cudf.h>
+#include <cudf/functions.h>
+#include <utilities/cudf_utils.h>
 
 // Vector set to use rmmAlloc and rmmFree.
 template <typename T>

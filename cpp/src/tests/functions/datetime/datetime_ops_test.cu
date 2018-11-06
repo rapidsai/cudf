@@ -19,13 +19,13 @@
 #include <cstdlib>
 #include <iostream>
 #include <vector>
-
 #include <thrust/device_vector.h>
-#include "thrust_rmm_allocator.h"
 
-#include "gdf_test_fixtures.h"
-#include <gdf/gdf.h>
-#include <gdf/cffi/functions.h>
+#include <cudf.h>
+#include <cudf/functions.h>
+#include <rmm/src/thrust_rmm_allocator.h>
+
+#include "tests/rmm/cudf_test_fixtures.h"
 
 // thrust::device_vector set to use rmmAlloc and rmmFree.
 template <typename T>

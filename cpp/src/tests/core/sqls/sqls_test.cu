@@ -27,7 +27,7 @@
 #include <thrust/iterator/constant_iterator.h>
 #include <thrust/reduce.h>
 #include <thrust/functional.h>
-#include "thrust_rmm_allocator.h"
+#include <rmm/src/thrust_rmm_allocator.h>
 
 #include <iostream>
 #include <vector>
@@ -43,15 +43,15 @@
 
 //
 
-#include <gdf/gdf.h>
-#include <gdf/utils.h>
-#include <gdf/errorutils.h>
-#include <gdf/cffi/functions.h>
+#include <cudf.h>
+#include <utilities/cudf_utils.h>
+#include <core/error/error_utils.h>
+#include <cudf/functions.h>
 
 #include "gtest/gtest.h"
-#include "gdf_test_fixtures.h"
+#include "tests/rmm/cudf_test_fixtures.h"
 
-#include "sqls_rtti_comp.hpp"
+#include <core/sqls/sqls_rtti_comp.h>
 
 template<typename T>
 using Vector = thrust::device_vector<T, rmm_allocator<T>>;

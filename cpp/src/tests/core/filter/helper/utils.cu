@@ -1,7 +1,7 @@
 
 #include <iostream>
-#include <gdf/gdf.h>
-#include <gdf/cffi/functions.h>
+#include <cudf.h>
+#include <cudf/functions.h>
 #include <cuda_runtime.h>
 #include <limits.h>
 #include <gtest/gtest.h>
