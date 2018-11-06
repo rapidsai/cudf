@@ -838,7 +838,7 @@ class Series(object):
         vmax = self.max()
         gpuarr = self.to_gpu_array()
         scaled = cudautils.compute_scale(gpuarr, vmin, vmax)
-        return Series(scaled)
+        return self._copy_construct(data=scaled)
 
     # Rounding
 
