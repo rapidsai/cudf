@@ -28,12 +28,14 @@
 
 #include <thrust/tabulate.h>
 
-using valid32_t = uint32_t;
 
 // To account for if gdf_valid_type is not a 4 byte type,
 // compute the RATIO of the number of bytes in gdf_valid_type
 // to the 4 byte type being used for casting
+using valid32_t = uint32_t;
 constexpr size_t RATIO = sizeof(valid32_t) / sizeof(gdf_valid_type);
+constexpr int BITS_PER_MASK32 = GDF_VALID_BITSIZE * RATIO;
+
 constexpr int block_size = 256;
 
 /** --------------------------------------------------------------------------*
@@ -45,7 +47,7 @@ constexpr int block_size = 256;
  * 
  * @Returns  The number of valid bits in [0, num_rows) in the host vector of masks
  * ----------------------------------------------------------------------------*/
-size_t count_valid_bits_host(std::vector<gdf_valid_type> const & masks, const int num_rows)
+size_t count_valid_bits_host(std::vector<gdf_valid_type> const & masks, int const num_rows)
 {
   if((0 == num_rows) || (0 == masks.size())){
     return 0;
@@ -81,43 +83,71 @@ size_t count_valid_bits_host(std::vector<gdf_valid_type> const & masks, const in
   return count;
 }
 
-constexpr int BITS_PER_MASK32 = GDF_VALID_BITSIZE * RATIO;
 
+/* --------------------------------------------------------------------------*/
+/** 
+ * @brief Kernel to count the number of set bits in a column's validity buffer
+ *
+ * The underlying buffer type may only be a 1B type, but it is casted to a 4B 
+ * type (valid32_t) such that __popc may be used to more efficiently count the 
+ * number of set bits. This requires handling the last 4B element as a special 
+ * case as the buffer may not be a multiple of 4 bytes.
+ * 
+ * @Param[in] masks32 Pointer to buffer (casted as a 4B type) whose bits will be counted
+ * @Param[in] num_masks32 The number of 4B elements in the buffer
+ * @Param[in] num_rows The number of rows in the column, i.e., the number of bits
+ * in the buffer that correspond to rows
+ * @Param[out] global_count The number of set bits in the range of bits [0, num_rows)
+ */
+/* ----------------------------------------------------------------------------*/
+template <typename size_type>
 __global__ 
-void count_valid_bits(valid32_t const * const __restrict__ masks32, 
-                      const int num_masks32, 
-                      const int num_rows, 
-                      int * const __restrict__ global_count)
+void count_valid_bits(valid32_t const * const masks32, 
+                      int const num_masks32, 
+                      int const num_rows, 
+                      size_type * const global_count)
 {
-
-  int cur_mask = threadIdx.x + blockIdx.x * blockDim.x;
-
-  typedef cub::BlockReduce<int, block_size> BlockReduce;
+  using BlockReduce = cub::BlockReduce<size_type, block_size>;
   __shared__ typename BlockReduce::TempStorage temp_storage;
 
-  int my_count = 0;
-  while(cur_mask < (num_masks32 - 1))
+  // If the number of rows is not a multiple of 32, then the remaining 
+  // rows need to be handled separtely because not all of its bits correspond
+  // to rows
+  int last_mask32{0};
+  int const num_rows_last_mask{num_rows % BITS_PER_MASK32};
+  if(0 == num_rows_last_mask)
+    last_mask32 = num_masks32;
+  else
+    last_mask32 = num_masks32 - 1;
+
+  int const idx{static_cast<int>(threadIdx.x + blockIdx.x * blockDim.x)};
+
+  int cur_mask{idx};
+
+  size_type my_count{0};
+
+  // Use popc to count the valid bits for the all of the masks 
+  // where all of the bits correspond to rows
+  while(cur_mask < last_mask32)
   {
     my_count += __popc(masks32[cur_mask]);
     cur_mask += blockDim.x * gridDim.x;
   }
 
-  if(cur_mask == (num_masks32 - 1))
+  // Handle the remainder rows
+  if(idx < num_rows_last_mask)
   {
-    valid32_t last_mask = masks32[num_masks32 - 1];
-    int num_rows_last_mask = num_rows % BITS_PER_MASK32;
-    if(num_rows_last_mask == 0)
-      num_rows_last_mask = BITS_PER_MASK32;
+    gdf_valid_type const * const valids{reinterpret_cast<gdf_valid_type const *>(masks32)};
+    int const my_row{num_rows - idx - 1};
 
-    for(int i = 0; i < num_rows_last_mask; ++i)
-    {
-      my_count += last_mask & gdf_valid_type(1);
-      last_mask >>= 1;
-    }
+    if(true == gdf_is_valid(valids,my_row))
+      ++my_count;
   }
 
-  int block_count = BlockReduce(temp_storage).Sum(my_count);
+  // Reduces the count from each thread in a block into a block count
+  int const block_count{BlockReduce(temp_storage).Sum(my_count)};
 
+  // Store the block count into the global count
   if(threadIdx.x == 0)
   {
     atomicAdd(global_count, block_count);
@@ -138,33 +168,34 @@ void count_valid_bits(valid32_t const * const __restrict__ masks32,
 gdf_error gdf_count_nonzero_mask(gdf_valid_type const * masks, int num_rows, int * count)
 {
 
-  // Why am I getting an unused function warning error if I don't do this?
-  gdf_is_valid(nullptr, 0);
-
   if((nullptr == masks) || (nullptr == count)){return GDF_DATASET_EMPTY;}
   if(0 == num_rows) {return GDF_SUCCESS;}
 
+  // Masks will be proccessed as 4B types, therefore we require that the underlying
+  // type be less than or equal to 4B
   assert(sizeof(valid32_t) >= sizeof(gdf_valid_type));
 
   // Number of gdf_valid_types in the validity bitmask
-  const size_t num_masks = gdf_get_num_chars_bitmask(num_rows);
+  size_t const num_masks{gdf_get_num_chars_bitmask(num_rows)};
 
   // Number of 4 byte types in the validity bit mask 
-  size_t num_masks32 = std::ceil(static_cast<float>(num_masks) / RATIO);
+  size_t num_masks32{static_cast<size_t>(std::ceil(static_cast<float>(num_masks) / RATIO))};
 
   int h_count{0};
   if(num_masks32 > 0)
   {
+    // TODO: Probably shouldn't create/destroy the stream every time
     cudaStream_t count_stream;
     CUDA_TRY(cudaStreamCreate(&count_stream));
-    int * d_count;
+    int * d_count{nullptr};
+
     // Cast validity buffer to 4 byte type
-    valid32_t const * masks32 = reinterpret_cast<valid32_t const *>(masks);
+    valid32_t const * masks32{reinterpret_cast<valid32_t const *>(masks)};
 
     RMM_TRY(rmmAlloc((void**)&d_count, sizeof(int), count_stream));
     CUDA_TRY(cudaMemsetAsync(d_count, 0, sizeof(int), count_stream));
 
-    const int grid_size = (num_masks32 + block_size - 1)/block_size;
+    size_t const grid_size{(num_masks32 + block_size - 1)/block_size};
 
     count_valid_bits<<<grid_size, block_size,0,count_stream>>>(masks32, num_masks32, num_rows, d_count);
 

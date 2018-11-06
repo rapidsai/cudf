@@ -6,6 +6,7 @@ from .column import Column
 from .numerical import NumericalColumn
 from .dataframe import DataFrame
 from .datetime import DatetimeColumn
+from ._gdf import nvtx_range_push, nvtx_range_pop
 
 import numpy as np
 
@@ -82,6 +83,8 @@ def read_csv(filepath, lineterminator='\n',
         msg = '''dtype must be 'list' or 'dict' '''
         raise TypeError(msg)
 
+    nvtx_range_push("PYGDF_READ_CSV", "purple")
+
     csv_reader = ffi.new('csv_read_arg*')
 
     # Populate csv_reader struct
@@ -133,5 +136,7 @@ def read_csv(filepath, lineterminator='\n',
     df = DataFrame()
     for k, v in zip(names, outcols):
         df[k] = v
+
+    nvtx_range_pop()
 
     return df
