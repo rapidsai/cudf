@@ -58,7 +58,7 @@
 
 #include <rmm.h>
 
-#include "custr/NVStrings.h"
+#include "NVStrings.h"
 
 constexpr int32_t HASH_SEED = 33;
 
