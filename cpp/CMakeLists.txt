@@ -148,7 +148,7 @@ endif(CMAKE_BUILD_TYPE MATCHES Debug)
 # - link libraries --------------------------------------------------------------------------------
 
 target_link_libraries(rmm cudart cuda)
-target_link_libraries(cudf rmm)
+target_link_libraries(cudf arrow rmm)
 
 
 
