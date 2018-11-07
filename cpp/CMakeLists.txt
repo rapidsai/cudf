@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.12 FATAL_ERROR)
 
-project(CUDA_DATAFRAME LANGUAGES C CXX CUDA)
+project(CUDA_DATAFRAME VERSION 0.3.0 LANGUAGES C CXX CUDA)
 
 ###################################################################################################
 # - compiler options ------------------------------------------------------------------------------
@@ -149,6 +149,17 @@ endif(CMAKE_BUILD_TYPE MATCHES Debug)
 
 target_link_libraries(rmm cudart cuda)
 target_link_libraries(cudf arrow rmm)
+
+###################################################################################################
+# - python cffi bindings --------------------------------------------------------------------------
+
+add_custom_command(OUTPUT PYTHON_CFFI
+                   WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+                   COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_BINARY_DIR}/../python ${CMAKE_BINARY_DIR}/python
+                   COMMAND ${CMAKE_COMMAND} -E chdir ${CMAKE_BINARY_DIR}/python python setup.py build_ext --inplace
+                   VERBATIM)
+
+add_custom_target(python_cffi DEPENDS PYTHON_CFFI cudf)
 
 
 
