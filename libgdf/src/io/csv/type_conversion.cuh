@@ -59,7 +59,7 @@ T convertStrtoInt(char *data, long start_idx, long end_idx) {
 	bool negative=false;
 	if(data[start_idx]=='-'){
 		negative=true;
-		start_idx--;
+		start_idx++;
 	}
 
 	// the data is in little ending, so the last item of data is the lowest digit
