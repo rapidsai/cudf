@@ -56,5 +56,6 @@ add_subdirectory(validops)
 add_subdirectory(memory)
 add_subdirectory(gdf)
 add_subdirectory(csv)
+add_subdirectory(replace)
 
 message(STATUS "******** Tests are ready ********")
