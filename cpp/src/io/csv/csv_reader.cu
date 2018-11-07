@@ -960,9 +960,17 @@ __global__ void convertCsvToGdf(
 
 		if(start>stop)
 			break;
-
+		bool quotation=false;
+		if(raw_csv[pos]=='\"'){
+		  quotation=true;
+		  pos++;
+		}
+ 
 		while(true){
 			if(raw_csv[pos]==delim){
+			  if(quotation==false)
+				break;
+			  else if ((pos-1) >= start && raw_csv[pos-1]=='\"' )
 				break;
 			}
 			else if (raw_csv[pos] == terminator){
@@ -1149,11 +1157,19 @@ __global__ void dataTypeDetection(
 
 		if(start>stop)
 			break;
-
+ 
+		bool quotation=false;
+		if(raw_csv[pos]=='\"'){
+		  quotation=true;
+		  pos++;
+		}
+ 
 		// Finding the breaking point for each column
 		while(true){
-
 			if(raw_csv[pos]==delim){
+			  if(quotation==false)
+				break;
+			  else if ((pos-1) >= start && raw_csv[pos-1]=='\"' )
 				break;
 			}
 			else if (raw_csv[pos] == terminator){
