@@ -779,7 +779,9 @@ def test_from_arrow(nelem, data_type):
     gs = gd.Series.from_arrow(s)
     assert isinstance(gs, gd.Series)
 
-    np.testing.assert_array_equal(s.to_numpy(), gs.to_array())
+    # For some reason PyArrow to_pandas() converts to numpy array and has
+    # better type compatibility
+    np.testing.assert_array_equal(s.to_pandas(), gs.to_array())
 
 
 @pytest.mark.parametrize('nelem', [0, 2, 3, 100, 1000])
