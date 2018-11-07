@@ -201,11 +201,11 @@ TEST_F(gdf_quantile, ReportValidMaskError)
 
   std::vector<VType> v_baseline_approx{-1, 0, 0, 1, 7};
   std::vector<std::vector<double>> v_baseline_exact{
-    {-1, -1, 0, -0.5, -1},
+      {-1, -1, 0, -0.5, -1},
       {0.25, 0, 1, 0.5, 0},
-        {0.97, 0, 1, 0.5, 1},
-          {1.5, 1, 2, 1.5, 2},
-            {7, 7, 7, 7, 7}};
+      {0.97, 0, 1, 0.5, 1},
+      {1.5, 1, 2, 1.5, 2},
+      {7, 7, 7, 7, 7}};
   
   std::vector<VType> v_out_approx(n_qs, 0);
   std::vector<std::vector<double>> v_out_exact(n_qs, std::vector<double>(n_methods,0.0));

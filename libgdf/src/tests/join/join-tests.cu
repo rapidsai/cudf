@@ -113,16 +113,18 @@ struct JoinTest : public GdfTest
   }
 
   /* --------------------------------------------------------------------------*
-  * @Synopsis Creates a unique_ptr that wraps an empty gdf_column structure 
-  *           allocated to the specified size.
+  * @Synopsis Creates a unique_ptr that wraps a gdf_column structure 
+  *           intialized with a host vector
   *
-  * @Param size The number of rows for the gdf_column
+  * @Param host_vector vector containing data to be transfered to device side column
+  * @Param host_valid  vector containing valid masks associated with the supplied vector
+  * @Param n_count     null_count to be set for the generated column
   *
   * @Returns A unique_ptr wrapping the new gdf_column
   * --------------------------------------------------------------------------*/
   template <typename col_type>
-  gdf_col_pointer create_empty_gdf_column(gdf_size_type const size, 
-                                          bool allocate_valid)
+  gdf_col_pointer create_gdf_column(std::vector<col_type> const & host_vector, gdf_valid_type* host_valid,
+          const gdf_size_type n_count)
   {
     // Deduce the type and set the gdf_dtype accordingly
     gdf_dtype gdf_col_type;
@@ -146,13 +148,16 @@ struct JoinTest : public GdfTest
     };
     gdf_col_pointer the_column{new gdf_column, deleter};
 
-    // Allocate device storage for gdf_column
-    RMM_ALLOC(&(the_column->data), size * sizeof(col_type), 0);
-    
+    // Allocate device storage for gdf_column and copy contents from host_vector
+    EXPECT_EQ(RMM_ALLOC(&(the_column->data), host_vector.size() * sizeof(col_type), 0), RMM_SUCCESS);
+    EXPECT_EQ(cudaMemcpy(the_column->data, host_vector.data(), host_vector.size() * sizeof(col_type), cudaMemcpyHostToDevice), cudaSuccess);
+
     // Allocate device storage for gdf_column.valid
-    if (allocate_valid) {
-      int valid_size = gdf_get_num_chars_bitmask(size);
-      RMM_ALLOC((void**)&(the_column->valid), valid_size, 0);
+    if (host_valid != nullptr) {
+        int valid_size = gdf_get_num_chars_bitmask(host_vector.size());
+        EXPECT_EQ(RMM_ALLOC((void**)&(the_column->valid), valid_size, 0), RMM_SUCCESS);
+        EXPECT_EQ(cudaMemcpy(the_column->valid, host_valid, valid_size, cudaMemcpyHostToDevice), cudaSuccess);
+        the_column->null_count = n_count;
     } else {
         the_column->valid = nullptr;
         the_column->null_count = 0;
@@ -168,73 +173,38 @@ struct JoinTest : public GdfTest
     return the_column;
   }
 
-  /* ------------------------------------------------------------------------*
-    * @Synopsis Creates a unique_ptr that wraps a gdf_column structure 
-    *           intialized with a host vector
-    *
-    * @Param host_vector The host vector whose data is used to initialize the 
-    *                    gdf_column
-    *
-    * @Returns A unique_ptr wrapping the new gdf_column
-    */
-  /* -----------------------------------------------------------------------*/
-  template <typename col_type>
-  gdf_col_pointer create_gdf_column(std::vector<col_type> const & host_vector, 
-                                    gdf_valid_type* host_valid)
-  {
-    gdf_col_pointer the_column = 
-      create_empty_gdf_column<col_type>(host_vector.size(), 
-                                        host_valid != nullptr);
-    
-    // copy contents from host_vector
-    cudaMemcpy(the_column->data, 
-               host_vector.data(), 
-               host_vector.size() * sizeof(col_type), 
-               cudaMemcpyHostToDevice);
-
-    // copy valid data if necessary
-    if (host_valid != nullptr) {
-      int valid_size = gdf_get_num_chars_bitmask(host_vector.size());
-      cudaMemcpy(the_column->valid, 
-                 host_valid, 
-                 valid_size, 
-                 cudaMemcpyHostToDevice);
-    } 
-    
-    return the_column;
-  }
-
   // Compile time recursion to convert each vector in a tuple of vectors into
   // a gdf_column and append it to a vector of gdf_columns
   template<std::size_t I = 0, typename... Tp>
   inline typename std::enable_if<I == sizeof...(Tp), void>::type
-  convert_tuple_to_gdf_columns(std::vector<gdf_col_pointer> &gdf_columns,std::tuple<std::vector<Tp>...>& t, std::vector<host_valid_pointer>& valids)
+  convert_tuple_to_gdf_columns(std::vector<gdf_col_pointer> &gdf_columns,std::tuple<std::vector<Tp>...>& t, std::vector<host_valid_pointer>& valids, const gdf_size_type n_count)
   {
     //bottom of compile-time recursion
     //purposely empty...
   }
   template<std::size_t I = 0, typename... Tp>
   inline typename std::enable_if<I < sizeof...(Tp), void>::type
-  convert_tuple_to_gdf_columns(std::vector<gdf_col_pointer> &gdf_columns,std::tuple<std::vector<Tp>...>& t, std::vector<host_valid_pointer>& valids)
+  convert_tuple_to_gdf_columns(std::vector<gdf_col_pointer> &gdf_columns,std::tuple<std::vector<Tp>...>& t, std::vector<host_valid_pointer>& valids, const gdf_size_type n_count)
   {
     // Creates a gdf_column for the current vector and pushes it onto
     // the vector of gdf_columns
     if (valids.size() != 0) {
-      gdf_columns.push_back(create_gdf_column(std::get<I>(t), valids[I].get()));
+      gdf_columns.push_back(create_gdf_column(std::get<I>(t), valids[I].get(), n_count));
     } else {
-      gdf_columns.push_back(create_gdf_column(std::get<I>(t), nullptr));
+      gdf_columns.push_back(create_gdf_column(std::get<I>(t), nullptr, n_count));
     }
 
     //recurse to next vector in tuple
-    convert_tuple_to_gdf_columns<I + 1, Tp...>(gdf_columns, t, valids);
+    convert_tuple_to_gdf_columns<I + 1, Tp...>(gdf_columns, t, valids, n_count);
   }
 
   // Converts a tuple of host vectors into a vector of gdf_columns
   std::vector<gdf_col_pointer>
-  initialize_gdf_columns(multi_column_t host_columns, std::vector<host_valid_pointer>& valids)
+  initialize_gdf_columns(multi_column_t host_columns, std::vector<host_valid_pointer>& valids,
+          const gdf_size_type n_count)
   {
     std::vector<gdf_col_pointer> gdf_columns;
-    convert_tuple_to_gdf_columns(gdf_columns, host_columns, valids);
+    convert_tuple_to_gdf_columns(gdf_columns, host_columns, valids, n_count);
     return gdf_columns;
   }
 
@@ -252,27 +222,18 @@ struct JoinTest : public GdfTest
    * -------------------------------------------------------------------------*/
   void create_input( size_t left_column_length, size_t left_column_range,
                      size_t right_column_length, size_t right_column_range,
-                     bool print = false, bool force_non_null_valid_ptr = false)
+                     bool print = false, const gdf_size_type n_count = 0)
   {
     initialize_tuple(left_columns, left_column_length, left_column_range, ctxt.flag_sorted);
     initialize_tuple(right_columns, right_column_length, right_column_range, ctxt.flag_sorted);
 
     auto n_columns = std::tuple_size<multi_column_t>::value;
-    bool cols_have_valid_ptr = (
-            ctxt.flag_method != gdf_method::GDF_SORT ||
-            force_non_null_valid_ptr);
-    if(cols_have_valid_ptr) {
-      initialize_valids(left_valids, n_columns, left_column_length);
-      initialize_valids(right_valids, n_columns, right_column_length);
-    }
+    initialize_valids(left_valids, n_columns, left_column_length, true);
+    initialize_valids(right_valids, n_columns, right_column_length, true);
 
-    gdf_left_columns = initialize_gdf_columns(left_columns, left_valids);
-    gdf_right_columns = initialize_gdf_columns(right_columns, right_valids);
+    gdf_left_columns = initialize_gdf_columns(left_columns, left_valids, n_count);
+    gdf_right_columns = initialize_gdf_columns(right_columns, right_valids, n_count);
 
-    if(!cols_have_valid_ptr) {
-      initialize_valids(left_valids, n_columns, left_column_length, true);
-      initialize_valids(right_valids, n_columns, right_column_length, true);
-    }
     // Fill vector of raw pointers to gdf_columns
     gdf_raw_left_columns.clear();
     gdf_raw_right_columns.clear();
@@ -804,7 +765,7 @@ TYPED_TEST(JoinValidTest, ReportValidMaskError)
 {
   this->create_input(1000,100,
                      100,100,
-                     false, true);
+                     false, 1);
 
   std::vector<result_type> gdf_result = this->compute_gdf_result(false, true, GDF_VALIDITY_UNSUPPORTED);
 }
