@@ -9,5 +9,5 @@ fi
 
 if [ "$BUILD_CFFI" == '1' ]; then
   echo "Building libgdf_cffi"
-  travis_retry conda build conda-recipes/libgdf_cffi -c defaults -c conda-forge -c numba -c rapidsai --python=${PYTHON}
+  travis_retry conda build conda-recipes/libgdf_cffi -c defaults -c conda-forge -c numba -c nvidia -c rapidsai --python=${PYTHON}
 fi
