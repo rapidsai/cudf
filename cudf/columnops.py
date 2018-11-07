@@ -268,8 +268,14 @@ def as_column(arbitrary):
         else:
             data = as_column(pa.array([arbitrary]))
 
+    elif isinstance(arbitrary, memoryview):
+        data = as_column(np.array(arbitrary))
+
     else:
-        data = as_column(pa.array(arbitrary))
+        try:
+            data = as_column(memoryview(arbitrary))
+        except TypeError:
+            data = as_column(pa.array(arbitrary))
 
     return data
 

@@ -5,6 +5,7 @@ import pytest
 import numpy as np
 import pandas as pd
 import pyarrow as pa
+import array as arr
 
 from librmm_cffi import librmm as rmm
 
@@ -922,3 +923,17 @@ def test_from_scalar_typing(data_type):
     gdf['b'] = scalar
     assert(gdf['b'].dtype == np.dtype(data_type))
     assert(len(gdf['b']) == len(gdf['a']))
+
+
+@pytest.mark.parametrize(
+    'data_type',
+    ['bool', 'int8', 'int16', 'int32', 'int64', 'float32', 'float64']
+)
+def test_from_python_array(data_type):
+    np_arr = np.random.randint(0, 100, 10).astype(data_type)
+    data = memoryview(np_arr)
+    data = arr.array(data.format, data)
+
+    gs = gd.Series(data)
+
+    np.testing.assert_equal(gs.to_array(), np_arr)
