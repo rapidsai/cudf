@@ -80,7 +80,13 @@ git clone --recurse-submodules https://github.com/rapidsai/cudf.git
 cd cudf
 ```
 2. Create the conda development environment `cudf` as detailed above
-3. Build and install `libgdf`
+
+3. Install requiremenst (nvstirng)
+```bash
+conda install -c rapidsai nvstrings
+```
+
+4. Build and install `libgdf`
 ```bash
 source activate cudf
 mkdir -p libgdf/build
@@ -90,7 +96,7 @@ make -j install
 make copy_python
 python setup.py install
 ```
-4. Build and install `cudf` from the root of the repository
+5. Build and install `cudf` from the root of the repository
 ```bash
 cd ../..
 python setup.py install
