@@ -88,7 +88,7 @@ typedef struct {
 
   char			*encoding;					// the data encoding, NULL = UTF-8
 
-  bool			keepQuotes;					// TRUE: keep the quotes in the text. FALSE: remove the quotes from the strings. Only for quotes starting and ending the strings.
+  bool			quoting;					// TRUE: keep the quotes in the text. FALSE: remove the quotes from the strings. Only for quotes starting and ending the strings.
 
 } csv_read_arg;
 

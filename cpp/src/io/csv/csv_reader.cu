@@ -219,7 +219,7 @@ gdf_error read_csv(csv_read_arg *args)
 	raw_csv->num_actual_cols	= args->num_cols;
 	raw_csv->num_active_cols	= args->num_cols;
 	raw_csv->num_records		= 0;
-	raw_csv->keepQuotes			= args->keepQuotes;
+	raw_csv->keepQuotes			= args->quoting;
 
 
 	if ( args->delim_whitespace == true) {
