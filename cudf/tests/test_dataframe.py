@@ -758,7 +758,8 @@ def test_index_in_dataframe_constructor():
 @pytest.mark.parametrize('nelem', [0, 2, 3, 100, 1000])
 @pytest.mark.parametrize(
     'data_type',
-    ['int8', 'int16', 'int32', 'int64', 'float32', 'float64', 'datetime64[ms]']
+    ['bool', 'int8', 'int16', 'int32', 'int64',
+     'float32', 'float64', 'datetime64[ms]']
 )
 def test_from_arrow(nelem, data_type):
     df = pd.DataFrame(
@@ -842,7 +843,10 @@ def test_to_arrow(nelem, data_type):
 def test_to_from_arrow_nulls(data_type):
     if data_type == 'datetime64[ms]':
         data_type = pa.date64()
-    s1 = pa.array([1, None, 3, None, 5], type=data_type)
+    if data_type == 'bool':
+        s1 = pa.array([True, None, False, None, True], type=data_type)
+    else:
+        s1 = pa.array([1, None, 3, None, 5], type=data_type)
     gs1 = gd.Series.from_arrow(s1)
     assert isinstance(gs1, gd.Series)
     np.testing.assert_array_equal(
