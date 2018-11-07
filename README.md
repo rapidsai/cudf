@@ -81,7 +81,7 @@ cd cudf
 ```
 2. Create the conda development environment `cudf` as detailed above
 
-3. Install requiremenst (nvstirng)
+3. Install requiremenst (nvstrings)
 ```bash
 conda install -c rapidsai nvstrings
 ```
