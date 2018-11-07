@@ -1,7 +1,7 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
 
 # Usage:
-#   conda build -c defaults -c conda-forge -c nvidia -c rapidsai -c numba .
+#   conda build -c rapidsai -c nvidia -c numba -c conda-forge -c defaults .
 {% set version = environ.get('GIT_DESCRIBE_TAG', '0.0.0.dev').lstrip('v') %}
 {% set git_revision_count=environ.get('GIT_DESCRIBE_NUMBER', 0) %}
 package:
