@@ -83,6 +83,7 @@ typedef struct raw_csv_ {
     bool* 				d_parseCol;		// device : array of booleans stating if column should be parsed in reading process: parseCol[x]=false means that the column x needs to be filtered out.
     long 				header_row;		// Row id of the header
     bool				dayfirst;
+	bool				keepQuotes;
 } raw_csv_t;
 
 typedef struct column_data_{
@@ -124,7 +125,7 @@ gdf_error launch_dataTypeDetection(raw_csv_t * raw_csv, long row_offset, column_
 __global__ void countRecords(char *data, const char delim, const char terminator, long num_bytes, long num_bits, unsigned long long* num_records);
 __global__ void storeRecordStart(char *data, const char delim, const char terminator, long num_bytes, long num_bits, unsigned long long* num_records,unsigned long long* recStart) ;
 
-__global__ void convertCsvToGdf(char *csv,char delim, char terminator,	unsigned long long num_records, int num_columns,bool *parseCol,unsigned long long *recStart,gdf_dtype *dtype,void **gdf_data,gdf_valid_type **valid,string_pair **str_cols,unsigned long long row_offset, long header_row,bool dayfirst,unsigned long long *num_valid);
+__global__ void convertCsvToGdf(char *csv,char delim, char terminator,	unsigned long long num_records, int num_columns,bool *parseCol,unsigned long long *recStart,gdf_dtype *dtype,void **gdf_data,gdf_valid_type **valid,string_pair **str_cols,unsigned long long row_offset, long header_row,bool dayfirst,unsigned long long *num_valid, bool keepQuotes);
 
 __global__ void dataTypeDetection( char *raw_csv, char delim, char terminator, unsigned long long  num_records, int  num_columns, bool  *parseCol, unsigned long long *recStart, unsigned long long row_offset, long header_row, column_data_t* d_columnData);
 
@@ -218,6 +219,8 @@ gdf_error read_csv(csv_read_arg *args)
 	raw_csv->num_actual_cols	= args->num_cols;
 	raw_csv->num_active_cols	= args->num_cols;
 	raw_csv->num_records		= 0;
+	raw_csv->keepQuotes			= args->keepQuotes;
+
 
 	if ( args->delim_whitespace == true) {
 		raw_csv->delimiter = ' ';
@@ -903,7 +906,8 @@ gdf_error launch_dataConvertColumns(raw_csv_t * raw_csv, void **gdf, gdf_valid_t
 		row_offset,
 		raw_csv->header_row,
 		raw_csv->dayfirst,
-		num_valid
+		num_valid,
+		raw_csv->keepQuotes
 	);
 
 
@@ -930,7 +934,8 @@ __global__ void convertCsvToGdf(
 		unsigned long long 			row_offset,
 		long 			header_row,
 		bool			dayfirst,
-		unsigned long long			*num_valid
+		unsigned long long			*num_valid,
+		bool			keepQuotes
 		)
 {
 
@@ -1047,7 +1052,7 @@ __global__ void convertCsvToGdf(
 					case gdf_dtype::GDF_TIMESTAMP:
 					{
 						int64_t *gdf_out = (int64_t *)gdf_data[actual_col];
-						gdf_out[rec_id] = convertStrtoInt<int64_t>(raw_csv, start, tempPos);
+     					gdf_out[rec_id] = convertStrtoInt<int64_t>(raw_csv, start, tempPos);
 					}
 					break;
 					case gdf_dtype::GDF_CATEGORY:
@@ -1057,7 +1062,10 @@ __global__ void convertCsvToGdf(
 					}
 						break;
 					case gdf_dtype::GDF_STRING:{
-						str_cols[stringCol][rec_id].first 	= raw_csv+start;
+ 						if (quotation==true && keepQuotes==false){
+						  start++; pos--;
+						}
+    					str_cols[stringCol][rec_id].first 	= raw_csv+start;
 						str_cols[stringCol][rec_id].second 	= size_t(pos-start);
 						stringCol++;
 					}
