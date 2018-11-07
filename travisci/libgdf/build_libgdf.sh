@@ -9,5 +9,5 @@ fi
 
 if [ "$BUILD_LIBGDF" == '1' -o "$BUILD_CFFI" == '1' ]; then
     echo "Building libgdf"
-    travis_retry conda build conda-recipes/libgdf -c defaults -c conda-forge -c numba -c nvidia -c rapidsai
+    travis_retry conda build conda-recipes/libgdf -c rapidsai -c nvidia -c numba -c conda-forge -c defaults
 fi
