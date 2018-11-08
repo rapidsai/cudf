@@ -1,386 +1,217 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
 
-from collections import OrderedDict, defaultdict, namedtuple
-
-from itertools import chain
 import numpy as np
+import collections
 
-from numba import cuda
-from librmm_cffi import librmm as rmm
+from pandas.api.types import is_categorical_dtype
 
 from .dataframe import DataFrame, Series
-from .multi import concat
-from . import _gdf, cudautils
-from .column import Column
 from .buffer import Buffer
-from .serialize import register_distributed_serializer
+from .categorical import CategoricalColumn
+from ._gdf import nvtx_range_pop
+
+from libgdf_cffi import ffi, libgdf
+from librmm_cffi import librmm as rmm
 
 
-def _auto_generate_grouper_agg(members):
-    def make_fun(f):
-        def groupby_agg(self):
-            return self.agg(f)
-        return groupby_agg
-
-    for k, f in members['_NAMED_FUNCTIONS'].items():
-        fn = make_fun(f)
-        fn.__name__ = k
-        fn.__doc__ = """Compute the {} of each group
-
-Returns
--------
-
-result : DataFrame
-""".format(k)
-        members[k] = fn
-
-
-@cuda.jit
-def group_mean(data, segments, output):
-    i = cuda.grid(1)
-    if i < segments.size:
-        s = segments[i]
-        e = (segments[i + 1]
-             if (i + 1) < segments.size
-             else data.size)
-        # mean calculation
-        carry = 0.0
-        n = e - s
-        for j in range(s, e):
-            carry += data[j]
-        output[i] = carry / n
-
-
-@cuda.jit
-def group_max(data, segments, output):
-    i = cuda.grid(1)
-    if i < segments.size:
-        s = segments[i]
-        e = (segments[i + 1]
-             if (i + 1) < segments.size
-             else data.size)
-
-        tmp = data[s]
-        for j in range(s + 1, e):
-            tmp = max(tmp, data[j])
-        output[i] = tmp
-
-
-@cuda.jit
-def group_min(data, segments, output):
-    i = cuda.grid(1)
-    if i < segments.size:
-        s = segments[i]
-        e = (segments[i + 1]
-             if (i + 1) < segments.size
-             else data.size)
-
-        tmp = data[s]
-        for j in range(s + 1, e):
-            tmp = min(tmp, data[j])
-        output[i] = tmp
-
-
-_dfsegs_pack = namedtuple('_dfsegs_pack', ['df', 'segs'])
-
-
-class Groupby(object):
+class LibGdfGroupby(object):
     """Groupby object returned by cudf.DataFrame.groupby().
     """
-    _NAMED_FUNCTIONS = {'mean': Series.mean,
-                        'std': Series.std,
-                        'var': Series.var,
-                        'min': Series.min,
-                        'max': Series.max,
-                        'count': Series.count,
-                        'sum': Series.sum,
-                        'sum_of_squares': Series.sum_of_squares,
+
+    _NAMED_FUNCTIONS = {'mean': libgdf.gdf_group_by_avg,
+                        'min': libgdf.gdf_group_by_min,
+                        'max': libgdf.gdf_group_by_max,
+                        'count': libgdf.gdf_group_by_count,
+                        'sum': libgdf.gdf_group_by_sum,
                         }
 
-    def __init__(self, df, by):
+    def __init__(self, df, by, method="sort"):
         """
         Parameters
         ----------
         df : DataFrame
-        by : str of list of str
-            Column(s) that grouping is based on.
-            It can be a single or list of column names.
+        by : str, list
+            - str
+                The column name to group on.
+            - list
+                List of *str* of the column names to group on.
+        method : str, optional
+            A string indicating the libgdf method to use to perform the
+            group by. Valid values are "sort", or "hash".
         """
+
         self._df = df
         self._by = [by] if isinstance(by, str) else list(by)
         self._val_columns = [idx for idx in self._df.columns
                              if idx not in self._by]
+        if (method == "sort"):
+            self._method = libgdf.GDF_SORT
+        elif (method == "hash"):
+            self._method = libgdf.GDF_HASH
+        else:
+            msg = "Method {!r} is not a supported group by method"
+            raise NotImplementedError(msg.format(method))
 
-    def serialize(self, serialize):
-        header = {
-            'by': self._by,
-        }
-        header['df'], frames = serialize(self._df)
-        return header, frames
-
-    @classmethod
-    def deserialize(cls, deserialize, header, frames):
-        by = header['by']
-        df = deserialize(header['df'], frames)
-        return Groupby(df, by)
-
-    def __iter__(self):
-        return self._group_iterator()
-
-    def _group_iterator(self):
-        """Group iterator
-
-        Returns each group as a DataFrame.
+    def _apply_agg(self, agg_type, result, add_col_values,
+                   ctx, val_columns, val_columns_out, sort_result=True):
         """
-        grouped = self.as_df()
-        segs = grouped.segs.to_array()
-        for begin, end in zip(segs, chain(segs[1:], [len(grouped.df)])):
-            yield grouped.df[begin:end]
-
-    def as_df(self):
-        """Get the intermediate dataframe after shuffling the rows into
-        groups.
-
-        Returns
-        -------
-        (df, segs) : namedtuple
-            - df : DataFrame
-            - segs : Series
-                Beginning offsets of each group.
-        """
-        return self._group_dataframe(self._df, self._by)
-
-    def _agg_groups(self, functors):
-        """Aggregate the groups
-
         Parameters
         ----------
-        functors: dict
-            Contains key for column names and value for list of functors.
-
+        agg_type : str
+            The aggregation function to run.
+        result : DataFrame
+            The DataFrame to store the result of the aggregation into.
+        add_col_values : bool
+            Boolean to indicate whether this is the first aggregation being
+            run and should add the additional columns' values.
+        ctx : gdf_context cffi object
+            Context object to pass information such as if the dataframe
+            is sorted and/or which method to use for grouping.
+        val_columns : list of *str*
+            The list of column names that the aggregation should be performed
+            on.
+        val_columns_out : list of *str*
+            The list of columns names that the aggregation results should be
+            output into.
         """
-        functors_mapping = OrderedDict()
-        # The "value" columns
-        for k, vs in functors.items():
-            if k not in self._df.columns:
-                raise NameError('column {} not found'.format(k))
-            if len(vs) == 1:
-                [functor] = vs
-                functors_mapping[k] = {k: functor}
+        if (self._method == libgdf.GDF_HASH and sort_result):
+            ctx.flag_sort_result = 1
+
+        ncols = len(self._by)
+        cols = [self._df[thisBy]._column.cffi_view for thisBy in self._by]
+
+        first_run = add_col_values
+        need_to_index = False
+
+        col_count = 0
+        for val_col in val_columns:
+            col_agg = self._df[val_col]._column.cffi_view
+
+            # assuming here that if there are multiple aggregations that the
+            # aggregated results will be in the same order for GDF_SORT method
+            if need_to_index:
+                out_col_indices_series = Series(
+                    Buffer(rmm.device_array(col_agg.size, dtype=np.int32)))
+                out_col_indices = out_col_indices_series._column.cffi_view
             else:
-                functors_mapping[k] = cur_fn_mapping = OrderedDict()
-                for functor in vs:
-                    newk = '{}_{}'.format(k, functor.__name__)
-                    cur_fn_mapping[newk] = functor
+                out_col_indices = ffi.NULL
 
-            del functor
-        # Grouping
-        grouped_df, sr_segs = self._group_dataframe(self._df, self._by)
-        # Grouped values
-        outdf = DataFrame()
-        segs = sr_segs.to_array()
+            if first_run or self._method == libgdf.GDF_HASH:
+                out_col_values_series = [Series(Buffer(rmm.device_array(
+                    col_agg.size,
+                    dtype=self._df[self._by[i]]._column.data.dtype)))
+                    for i in range(0, ncols)]
+                out_col_values = [
+                    out_col_values_series[i]._column.cffi_view
+                    for i in range(0, ncols)]
+            else:
+                out_col_values = ffi.NULL
 
-        for k in self._by:
-            outdf[k] = grouped_df[k].take(sr_segs.to_gpu_array()).reset_index()
+            if agg_type == "count":
+                out_col_agg_series = Series(
+                    Buffer(rmm.device_array(col_agg.size, dtype=np.int64)))
+            else:
+                out_col_agg_series = Series(Buffer(rmm.device_array(
+                    col_agg.size, dtype=self._df[val_col]._column.data.dtype)))
 
-        size = len(outdf)
+            out_col_agg = out_col_agg_series._column.cffi_view
 
-        # Append value columns
-        for k, infos in functors_mapping.items():
-            values = defaultdict(lambda: np.zeros(size, dtype=np.float64))
-            begin = segs
-            sr = grouped_df[k].reset_index()
-            for newk, functor in infos.items():
-                if functor.__name__ == 'mean':
-                    dev_begins = rmm.to_device(np.asarray(begin))
-                    dev_out = rmm.device_array(size, dtype=np.float64)
-                    if size > 0:
-                        group_mean.forall(size)(sr.to_gpu_array(),
-                                                dev_begins,
-                                                dev_out)
-                    values[newk] = dev_out
+            agg_func = self._NAMED_FUNCTIONS.get(agg_type, None)
+            if agg_func is None:
+                raise RuntimeError(
+                    "ERROR: this aggregator has not been implemented yet")
+            err = agg_func(
+                ncols,
+                cols,
+                col_agg,
+                out_col_indices,
+                out_col_values,
+                out_col_agg,
+                ctx)
 
-                elif functor.__name__ == 'max':
-                    dev_begins = rmm.to_device(np.asarray(begin))
-                    dev_out = rmm.device_array(size, dtype=sr.dtype)
-                    if size > 0:
-                        group_max.forall(size)(sr.to_gpu_array(),
-                                               dev_begins,
-                                               dev_out)
-                    values[newk] = dev_out
+            if (err is not None):
+                print(err)
+                raise RuntimeError(err)
 
-                elif functor.__name__ == 'min':
-                    dev_begins = rmm.to_device(np.asarray(begin))
-                    dev_out = rmm.device_array(size, dtype=sr.dtype)
-                    if size > 0:
-                        group_min.forall(size)(sr.to_gpu_array(),
-                                               dev_begins,
-                                               dev_out)
-                    values[newk] = dev_out
-                else:
-                    end = chain(segs[1:], [len(grouped_df)])
-                    for i, (s, e) in enumerate(zip(begin, end)):
-                        values[newk][i] = functor(sr[s:e])
-            # Store
-            for k, buf in values.items():
-                outdf[k] = buf
+            num_row_results = out_col_agg.size
 
-        return outdf
+            if first_run:
+                for i, thisBy in enumerate(self._by):
+                    result[thisBy] = out_col_values_series[i][
+                        :num_row_results]
 
-    def _group_dataframe(self, df, levels):
-        """Group dataframe.
+                    if is_categorical_dtype(self._df[thisBy].dtype):
+                        result[thisBy] = CategoricalColumn(
+                            data=result[thisBy].data,
+                            categories=self._df[thisBy].cat.categories,
+                            ordered=self._df[thisBy].cat.ordered)
 
-        The output dataframe has the same number of rows as the input
-        dataframe.  The rows are shuffled so that the groups are moved
-        together in ascending order based on the multi-level index.
+            out_col_agg_series.data.size = num_row_results
+            out_col_agg_series = out_col_agg_series.reset_index()
 
+            result[val_columns_out[col_count]
+                   ] = out_col_agg_series[:num_row_results]
+
+            out_col_agg_series.data.size = num_row_results
+            out_col_agg_series = out_col_agg_series.reset_index()
+
+            first_run = False
+            col_count = col_count + 1
+
+        return result
+
+    def _apply_basic_agg(self, agg_type):
+        """
         Parameters
         ----------
-        df : DataFrame
-        levels : list[str]
-            Column names for the multi-level index.
-
-        Returns
-        -------
-        (df, segs) : namedtuple
-            * df : DataFrame
-                The grouped dataframe.
-            * segs : Series.
-                 Group starting index.
+        agg_type : str
+            The aggregation function to run.
         """
-        if len(df) == 0:
-            # Groupby on empty dataframe
-            return _dfsegs_pack(df=df, segs=Buffer(np.asarray([])))
-        # Prepare dataframe
-        orig_df = df.copy()
-        df = df.loc[:, levels].reset_index()
-        rowid_column = '__cudf.groupby.rowid'
-        df[rowid_column] = df.index.as_column()
+        result = DataFrame()
+        add_col_values = True
 
-        col_order = list(levels)
+        ctx = ffi.new('gdf_context*')
+        ctx.flag_sorted = 0
+        ctx.flag_method = self._method
+        ctx.flag_distinct = 0
 
-        # Perform grouping
-        df, segs, markers = self._group_first_level(col_order[0],
-                                                    rowid_column, df)
-        rowidcol = df[rowid_column]
-        sorted_keys = [Series(df.index.as_column())]
-        del df
+        val_columns = self._val_columns
+        val_columns_out = [agg_type + "_" + column for column in val_columns]
 
-        more_keys, reordering_indices, segs = self._group_inner_levels(
-                                            col_order[1:], rowidcol, segs,
-                                            markers=markers)
-        sorted_keys.extend(more_keys)
-        valcols = [k for k in orig_df.columns if k not in levels]
-        # Prepare output
-        # All key columns are already sorted
-        out_df = DataFrame()
-        for k, sr in zip(levels, sorted_keys):
-            out_df[k] = sr
-        # Shuffle the value columns
-        self._group_shuffle(orig_df.loc[:, valcols],
-                            reordering_indices, out_df)
-        return _dfsegs_pack(df=out_df, segs=segs)
+        result = self._apply_agg(
+            agg_type, result, add_col_values, ctx, val_columns,
+            val_columns_out, sort_result=False)
+        nvtx_range_pop()
+        return result
 
-    def _group_first_level(self, col, rowid_column, df):
-        """Group first level *col* of *df*
+    def min(self):
+        return self._apply_basic_agg("min")
 
-        Parameters
-        ----------
-        col : str
-            Name of the first group key column.
-        df : DataFrame
-            The dataframe being grouped.
+    def max(self):
+        return self._apply_basic_agg("max")
 
-        Returns
-        -------
-        (df, segs)
-            - df : DataFrame
-                Sorted by *col- * index
-            - segs : Series
-                Group begin offsets
-        """
-        df = df.loc[:, [col, rowid_column]]
-        df = df.set_index(col).sort_index()
-        segs, markers = df.index._find_segments()
-        return df, Series(segs), markers
+    def count(self):
+        return self._apply_basic_agg("count")
 
-    def _group_inner_levels(self, columns, rowidcol, segs, markers):
-        """Group the second and onwards level.
+    def sum(self):
+        return self._apply_basic_agg("sum")
 
-        Parameters
-        ----------
-        columns : sequence[str]
-            Group keys.  The order is important.
-        rowid_column : str
-            The name of the special column with the original rowid.
-            It's internally used to determine the shuffling order.
-        df : DataFrame
-            The dataframe being grouped.
-        segs : Series
-            First level group begin offsets.
-
-        Returns
-        -------
-        (sorted_keys, reordering_indices, segments)
-            - sorted_keys : list[Series]
-                List of sorted key columns.
-                Column order is same as arg *columns*.
-            - reordering_indices : device array
-                The indices to gather on to shuffle the dataframe
-                into the grouped seqence.
-            - segments : Series
-                Group begin offsets.
-        """
-        dsegs = segs.astype(dtype=np.uint32).to_gpu_array()
-        sorted_keys = []
-        plan_cache = {}
-        for col in columns:
-            # Shuffle the key column according to the previous groups
-            srkeys = self._df[col].take(rowidcol.to_gpu_array(),
-                                        ignore_index=True)
-            # Segmented sort on the key
-            shuf = Column(Buffer(cudautils.arange(len(srkeys))))
-
-            cache_key = (len(srkeys), srkeys.dtype, shuf.dtype)
-            plan = plan_cache.get(cache_key)
-            plan = _gdf.apply_segsort(srkeys._column, shuf, dsegs, plan=plan)
-            plan_cache[cache_key] = plan
-
-            sorted_keys.append(srkeys)   # keep sorted key cols
-            # Determine segments
-            dsegs, markers = cudautils.find_segments(srkeys.to_gpu_array(),
-                                                     dsegs, markers=markers)
-            # Shuffle
-            rowidcol = rowidcol.take(shuf.to_gpu_array(), ignore_index=True)
-
-        reordering_indices = rowidcol.to_gpu_array()
-        return sorted_keys, reordering_indices, Series(dsegs)
-
-    def _group_shuffle(self, src_df, reordering_indices, out_df):
-        """Shuffle columns in *src_df* with *reordering_indices*
-        and store the new columns into *out_df*
-        """
-        for k in src_df.columns:
-            col = src_df[k].reset_index()
-            newcol = col.take(reordering_indices, ignore_index=True)
-            out_df[k] = newcol
-        return out_df
+    def mean(self):
+        return self._apply_basic_agg("mean")
 
     def agg(self, args):
         """Invoke aggregation functions on the groups.
 
         Parameters
         ----------
-        args: dict, list, str, callable
+        args : dict, list, str, callable
             - str
                 The aggregate function name.
-            - callable
-                The aggregate function.
             - list
-                List of *str* or *callable* of the aggregate function.
+                List of *str* of the aggregate function.
             - dict
                 key-value pairs of source column name and list of
-                aggregate functions as *str* or *callable*.
+                aggregate functions as *str*.
 
         Returns
         -------
@@ -388,47 +219,59 @@ class Groupby(object):
 
         Notes
         -----
+        Since multi-indexes aren't supported aggregation results are returned
+        in columns using the naming scheme of `aggregation_columnname`.
         """
-        def _get_function(x):
-            if isinstance(x, str):
-                return self._NAMED_FUNCTIONS[x]
-            else:
-                return x
+        result = DataFrame()
+        add_col_values = True
 
-        functors = OrderedDict()
-        if isinstance(args, (tuple, list)):
-            for k in self._val_columns:
-                functors[k] = [_get_function(x) for x in args]
+        ctx = ffi.new('gdf_context*')
+        ctx.flag_sorted = 0
+        ctx.flag_method = self._method
+        ctx.flag_distinct = 0
 
-        elif isinstance(args, dict):
-            for k, v in args.items():
-                functors[k] = ([_get_function(v)]
-                               if not isinstance(v, (tuple, list))
-                               else [_get_function(x) for x in v])
+        sort_result = True
+
+        if not isinstance(args, str) and isinstance(
+                args, collections.abc.Sequence):
+            if (len(args) == 1 and len(self._val_columns) == 1):
+                sort_result = False
+            for agg_type in args:
+
+                val_columns_out = [agg_type + '_' +
+                                   val for val in self._val_columns]
+
+                result = self._apply_agg(
+                    agg_type, result, add_col_values, ctx, self._val_columns,
+                    val_columns_out, sort_result=sort_result)
+
+                add_col_values = False  # we only want to add them once
+
+        elif isinstance(args, collections.abc.Mapping):
+            if (len(args.keys()) == 1):
+                if(len(list(args.values())[0]) == 1):
+                    sort_result = False
+            for val, agg_type in args.items():
+
+                if not isinstance(agg_type, str) and \
+                       isinstance(agg_type, collections.abc.Sequence):
+                    for sub_agg_type in agg_type:
+                        val_columns_out = [sub_agg_type + '_' + val]
+                        result = self._apply_agg(sub_agg_type, result,
+                                                 add_col_values, ctx, [val],
+                                                 val_columns_out,
+                                                 sort_result=sort_result)
+                elif isinstance(agg_type, str):
+                    val_columns_out = [agg_type + '_' + val]
+                    result = self._apply_agg(agg_type, result,
+                                             add_col_values, ctx, [val],
+                                             val_columns_out,
+                                             sort_result=sort_result)
+
+                add_col_values = False  # we only want to add them once
+
         else:
-            return self.agg([args])
-        return self._agg_groups(functors)
+            result = self.agg([args])
 
-    _auto_generate_grouper_agg(locals())
-
-    def apply(self, function):
-        """Apply a transformation function over the grouped chunk.
-        """
-        if not callable(function):
-            raise TypeError("type {!r} is not callable", type(function))
-
-        df, segs = self.as_df()
-        ends = chain(segs[1:], [None])
-        chunks = [df[s:e] for s, e in zip(segs, ends)]
-        return concat([function(chk) for chk in chunks])
-
-    def apply_grouped(self, function, **kwargs):
-        if not callable(function):
-            raise TypeError("type {!r} is not callable", type(function))
-
-        df, segs = self.as_df()
-        kwargs.update({'chunks': segs})
-        return df.apply_chunks(function, **kwargs)
-
-
-register_distributed_serializer(Groupby)
+        nvtx_range_pop()
+        return result
