@@ -1,7 +1,7 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
 
 # Usage:
-#   conda build -c defaults -c conda-forge .
+#   conda build -c nvidia -c conda-forge -c defaults .
 {% set version = environ.get('GIT_DESCRIBE_TAG', '0.0.0.dev').lstrip('v') %}
 {% set git_revision_count=environ.get('GIT_DESCRIBE_NUMBER', 0) %}
 {% set cuda_version='.'.join(environ.get('CUDA', 'unknown').split('.')[:2]) %}
