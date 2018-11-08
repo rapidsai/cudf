@@ -1,0 +1,17 @@
+name: pycudf_testing_py35
+channels:
+- rapidsai
+- nvidia
+- numba
+- conda-forge
+- defaults
+dependencies:
+- python=3.5.*
+- pytest
+- numba>=0.40.0dev
+- pandas=0.20.3
+- pyarrow=0.10.0
+- notebook>=0.5.0
+- cmake=3.12.*
+- boost
+- nvstrings

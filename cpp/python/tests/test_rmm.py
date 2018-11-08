@@ -17,7 +17,7 @@ def test_rmm_alloc(dtype, nelem):
     # data
     h_in = gen_rand(dtype, nelem)
     h_result = gen_rand(dtype, nelem)
-    
+
     d_in = rmm.to_device(h_in)
     d_result = rmm.device_array_like(d_in)
 
@@ -38,7 +38,7 @@ def test_rmm_csv_log():
     # data
     h_in = gen_rand(dtype, nelem)
     h_result = gen_rand(dtype, nelem)
-    
+
     d_in = rmm.to_device(h_in)
     d_result = rmm.device_array_like(d_in)
 
