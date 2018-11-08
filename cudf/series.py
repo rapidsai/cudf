@@ -16,6 +16,7 @@ from .column import Column
 from .datetime import DatetimeColumn
 from . import columnops
 from .serialize import register_distributed_serializer
+from ._gdf import nvtx_range_push, nvtx_range_pop
 
 
 class Series(object):
@@ -281,9 +282,12 @@ class Series(object):
         and *other*.  Return the output Series.  The output dtype is
         determined by the input operands.
         """
+        nvtx_range_push("PYGDF_BINARY_OP", "orange")
         other = self._normalize_binop_value(other)
         outcol = self._column.binary_operator(fn, other._column)
-        return self._copy_construct(data=outcol)
+        result = self._copy_construct(data=outcol)
+        nvtx_range_pop()
+        return result
 
     def _rbinaryop(self, other, fn):
         """
@@ -291,9 +295,12 @@ class Series(object):
         and *other* for reflected operations.  Return the output Series.
         The output dtype is determined by the input operands.
         """
+        nvtx_range_push("PYGDF_BINARY_OP", "orange")
         other = self._normalize_binop_value(other)
         outcol = other._column.binary_operator(fn, self._column)
-        return self._copy_construct(data=outcol)
+        result = self._copy_construct(data=outcol)
+        nvtx_range_pop()
+        return result
 
     def _unaryop(self, fn):
         """
@@ -350,14 +357,20 @@ class Series(object):
             return self._copy_construct(data=col)
 
     def _unordered_compare(self, other, cmpops):
+        nvtx_range_push("PYGDF_UNORDERED_COMP", "orange")
         other = self._normalize_binop_value(other)
         outcol = self._column.unordered_compare(cmpops, other._column)
-        return self._copy_construct(data=outcol)
+        result = self._copy_construct(data=outcol)
+        nvtx_range_pop()
+        return result
 
     def _ordered_compare(self, other, cmpops):
+        nvtx_range_push("PYGDF_ORDERED_COMP", "orange")
         other = self._normalize_binop_value(other)
         outcol = self._column.ordered_compare(cmpops, other._column)
-        return self._copy_construct(data=outcol)
+        result = self._copy_construct(data=outcol)
+        nvtx_range_pop()
+        return result
 
     def __eq__(self, other):
         return self._unordered_compare(other, 'eq')
@@ -825,7 +838,7 @@ class Series(object):
         vmax = self.max()
         gpuarr = self.to_gpu_array()
         scaled = cudautils.compute_scale(gpuarr, vmin, vmax)
-        return Series(scaled)
+        return self._copy_construct(data=scaled)
 
     # Rounding
 

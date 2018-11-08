@@ -9,9 +9,10 @@ import pyarrow as pa
 from libgdf_cffi import libgdf
 from librmm_cffi import librmm as rmm
 
-from . import _gdf, columnops, utils, cudautils
+from . import _gdf, columnops, utils, cudautils, datetime
 from .buffer import Buffer
 from .serialize import register_distributed_serializer
+from ._gdf import nvtx_range_push, nvtx_range_pop
 
 
 # Operator mappings
@@ -111,6 +112,12 @@ class NumericalColumn(columnops.TypedColumnBase):
     def astype(self, dtype):
         if self.dtype == dtype:
             return self
+        elif np.issubdtype(dtype, np.datetime64):
+            return self.astype('int64').view(
+                datetime.DatetimeColumn,
+                dtype=dtype,
+                data=self.data.astype(dtype)
+            )
         else:
             col = self.replace(data=self.data.astype(dtype),
                                dtype=np.dtype(dtype))
@@ -137,7 +144,7 @@ class NumericalColumn(columnops.TypedColumnBase):
             mask = pa.py_buffer(self.nullmask.mem.copy_to_host())
         data = pa.py_buffer(self.data.mem.copy_to_host())
         pa_dtype = _gdf.np_to_pa_dtype(self.dtype)
-        return pa.Array.from_buffers(
+        out = pa.Array.from_buffers(
             type=pa_dtype,
             length=len(self),
             buffers=[
@@ -146,6 +153,10 @@ class NumericalColumn(columnops.TypedColumnBase):
             ],
             null_count=self.null_count
         )
+        if self.dtype == np.bool:
+            return out.cast(pa.bool_())
+        else:
+            return out
 
     def _unique_segments(self):
         """ Common code for unique, unique_count and value_counts"""
@@ -359,13 +370,17 @@ class NumericalColumn(columnops.TypedColumnBase):
 def numeric_column_binop(lhs, rhs, op, out_dtype):
     if lhs.dtype != rhs.dtype:
         raise TypeError('{} != {}'.format(lhs.dtype, rhs.dtype))
+
+    nvtx_range_push("PYGDF_BINARY_OP", "orange")
     # Allocate output
     masked = lhs.has_null_mask or rhs.has_null_mask
     out = columnops.column_empty_like(lhs, dtype=out_dtype, masked=masked)
     # Call and fix null_count
     null_count = _gdf.apply_binaryop(op, lhs, rhs, out)
     out = out.replace(null_count=null_count)
-    return out.view(NumericalColumn, dtype=out_dtype)
+    result = out.view(NumericalColumn, dtype=out_dtype)
+    nvtx_range_pop()
+    return result
 
 
 def numeric_column_unaryop(operand, op, out_dtype):

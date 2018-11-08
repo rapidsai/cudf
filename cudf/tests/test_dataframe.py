@@ -356,6 +356,65 @@ def test_dataframe_to_string_wide():
     assert got.split() == expect.split()
 
 
+def test_dataframe_empty_to_string():
+    # Test for printing empty dataframe
+    df = DataFrame()
+    got = df.to_string()
+    print(got)
+    expect = "Empty DataFrame\nColumns: []\nIndex: []\n"
+    # values should match despite whitespace difference
+    assert got.split() == expect.split()
+
+
+def test_dataframe_emptycolumns_to_string():
+    # Test for printing dataframe having empty columns
+    df = DataFrame()
+    df['a'] = []
+    df['b'] = []
+    got = df.to_string()
+    print(got)
+    expect = "Empty DataFrame\nColumns: ['a', 'b']\nIndex: []\n"
+    # values should match despite whitespace difference
+    assert got.split() == expect.split()
+
+
+def test_dataframe_copy():
+    # Test for copying the dataframe using python copy pkg
+    from copy import copy
+    df = DataFrame()
+    df['a'] = [1, 2, 3]
+    df2 = copy(df)
+    df2['b'] = [4, 5, 6]
+    got = df.to_string()
+    print(got)
+    expect = '''
+     a
+0    1
+1    2
+2    3
+'''
+    # values should match despite whitespace difference
+    assert got.split() == expect.split()
+
+
+def test_dataframe_copy_shallow():
+    # Test for copy dataframe using class method
+    df = DataFrame()
+    df['a'] = [1, 2, 3]
+    df2 = df.copy()
+    df2['b'] = [4, 2, 3]
+    got = df.to_string()
+    print(got)
+    expect = '''
+     a
+0    1
+1    2
+2    3
+'''
+    # values should match despite whitespace difference
+    assert got.split() == expect.split()
+
+
 def test_dataframe_dtypes():
     dtypes = pd.Series([np.int32, np.float32, np.float64],
                        index=['c', 'a', 'b'])
@@ -699,7 +758,8 @@ def test_index_in_dataframe_constructor():
 @pytest.mark.parametrize('nelem', [0, 2, 3, 100, 1000])
 @pytest.mark.parametrize(
     'data_type',
-    ['int8', 'int16', 'int32', 'int64', 'float32', 'float64', 'datetime64[ms]']
+    ['bool', 'int8', 'int16', 'int32', 'int64',
+     'float32', 'float64', 'datetime64[ms]']
 )
 def test_from_arrow(nelem, data_type):
     df = pd.DataFrame(
@@ -719,13 +779,16 @@ def test_from_arrow(nelem, data_type):
     gs = gd.Series.from_arrow(s)
     assert isinstance(gs, gd.Series)
 
-    np.testing.assert_array_equal(s.to_numpy(), gs.to_array())
+    # For some reason PyArrow to_pandas() converts to numpy array and has
+    # better type compatibility
+    np.testing.assert_array_equal(s.to_pandas(), gs.to_array())
 
 
 @pytest.mark.parametrize('nelem', [0, 2, 3, 100, 1000])
 @pytest.mark.parametrize(
     'data_type',
-    ['int8', 'int16', 'int32', 'int64', 'float32', 'float64', 'datetime64[ms]']
+    ['bool', 'int8', 'int16', 'int32', 'int64',
+     'float32', 'float64', 'datetime64[ms]']
 )
 def test_to_arrow(nelem, data_type):
     df = pd.DataFrame(
@@ -776,12 +839,16 @@ def test_to_arrow(nelem, data_type):
 
 @pytest.mark.parametrize(
     'data_type',
-    ['int8', 'int16', 'int32', 'int64', 'float32', 'float64', 'datetime64[ms]']
+    ['bool', 'int8', 'int16', 'int32', 'int64',
+     'float32', 'float64', 'datetime64[ms]']
 )
 def test_to_from_arrow_nulls(data_type):
     if data_type == 'datetime64[ms]':
         data_type = pa.date64()
-    s1 = pa.array([1, None, 3, None, 5], type=data_type)
+    if data_type == 'bool':
+        s1 = pa.array([True, None, False, None, True], type=data_type)
+    else:
+        s1 = pa.array([1, None, 3, None, 5], type=data_type)
     gs1 = gd.Series.from_arrow(s1)
     assert isinstance(gs1, gd.Series)
     np.testing.assert_array_equal(

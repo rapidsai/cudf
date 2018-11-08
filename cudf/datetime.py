@@ -4,11 +4,11 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 
-from . import columnops, _gdf, utils
+from . import columnops, _gdf, utils, numerical
 from .buffer import Buffer
 from libgdf_cffi import libgdf
 from .serialize import register_distributed_serializer
-
+from ._gdf import nvtx_range_push, nvtx_range_pop
 
 _unordered_impl = {
     'eq': libgdf.gdf_eq_generic,
@@ -119,6 +119,19 @@ class DatetimeColumn(columnops.TypedColumnBase):
         result = self.replace(data=buf, dtype=self.dtype)
         return result
 
+    @property
+    def as_numerical(self):
+        return self.view(
+            numerical.NumericalColumn,
+            dtype='int64',
+            data=self.data.astype('int64')
+        )
+
+    def astype(self, dtype):
+        if self.dtype is dtype:
+            return self
+        return self.as_numerical.astype(dtype)
+
     def unordered_compare(self, cmpop, rhs):
         lhs, rhs = self, rhs
         return binop(
@@ -148,10 +161,12 @@ class DatetimeColumn(columnops.TypedColumnBase):
 
 
 def binop(lhs, rhs, op, out_dtype):
+    nvtx_range_push("PYGDF_BINARY_OP", "orange")
     masked = lhs.has_null_mask or rhs.has_null_mask
     out = columnops.column_empty_like(lhs, dtype=out_dtype, masked=masked)
     null_count = _gdf.apply_binaryop(op, lhs, rhs, out)
     out = out.replace(null_count=null_count)
+    nvtx_range_pop()
     return out
 
 

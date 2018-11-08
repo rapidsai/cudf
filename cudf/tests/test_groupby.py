@@ -117,7 +117,8 @@ def test_groupby_agg_min_max_dictargs(nelem, method):
     np.testing.assert_array_almost_equal(expect_max, got_max)
 
 
-def test_groupby_cats():
+@pytest.mark.parametrize('method', get_methods())
+def test_groupby_cats(method):
     df = DataFrame()
     df['cats'] = pd.Categorical(list('aabaacaab'))
     df['vals'] = np.random.random(len(df))
@@ -125,9 +126,13 @@ def test_groupby_cats():
     cats = np.asarray(list(df['cats']))
     vals = df['vals'].to_array()
 
-    grouped = df.groupby(['cats'], method="cudf").mean()
+    grouped = df.groupby(['cats'], method=method).mean()
 
-    got_vals = grouped['vals']
+    if method == 'cudf':
+        got_vals = grouped['vals']
+    else:
+        got_vals = grouped['mean_vals']
+
     got_cats = grouped['cats']
 
     for c, v in zip(got_cats, got_vals):

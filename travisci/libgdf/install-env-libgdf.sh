@@ -9,7 +9,7 @@ if [ "$BUILD_LIBGDF" == "1" -o "$BUILD_CFFI" == "1" ]; then
     sudo apt-get install -y libboost-all-dev
     # install libcuda
     echo "deb http://developer.download.nvidia.com/compute/cuda/repos/ubuntu1404/x86_64/ /" | sudo tee -a /etc/apt/sources.list.d/cuda.list
-    sudo apt-key adv --fetch-keys http://developer.download.nvidia.com/compute/cuda/repos/ubuntu1404/x86_64/7fa2af80.pub
+    travis_retry sudo apt-key adv --fetch-keys http://developer.download.nvidia.com/compute/cuda/repos/ubuntu1404/x86_64/7fa2af80.pub
     sudo apt-get update -q
     sudo apt-get install -y --no-install-recommends cuda-drivers=396.44-1 libcuda1-396
     # install gcc-5
