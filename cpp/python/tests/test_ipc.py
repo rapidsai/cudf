@@ -54,7 +54,7 @@ def test_ipc():
     batch = make_batch()
     schema_bytes = batch.schema.serialize().to_pybytes()
     recordbatches_bytes = batch.serialize().to_pybytes()
-    
+
     cpu_data = np.ndarray(shape=len(schema_bytes), dtype=np.byte,
                           buffer=bytearray(schema_bytes))
 
