@@ -57,8 +57,9 @@ class Buffer(object):
         (header, frames)
             See custom serialization documentation in dask.distributed.
         """
-        from .serialize import should_use_ipc
 
+        from cudf.comm.serialize import should_use_ipc
+        
         # Use destination info to determine if we should do IPC.
         use_ipc = should_use_ipc(context)
         header = {}

@@ -58,14 +58,14 @@ def test_serialize_series():
 
 @require_distributed
 def test_serialize_range_index():
-    index = cudf.index.RangeIndex(10, 20)
+    index = cudf.dataframe.index.RangeIndex(10, 20)
     outindex = deserialize(*serialize(index))
     assert index == outindex
 
 
 @require_distributed
 def test_serialize_generic_index():
-    index = cudf.index.GenericIndex(cudf.Series(np.arange(10)))
+    index = cudf.dataframe.index.GenericIndex(cudf.Series(np.arange(10)))
     outindex = deserialize(*serialize(index))
     assert index == outindex
 
