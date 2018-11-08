@@ -805,7 +805,6 @@ class DataFrame(object):
             elif on[idx] in col_cats.keys():
                 df[on[idx]] = CategoricalColumn(data=Buffer(cols[idx + gap]),
                                                 categories=col_cats[on[idx]],
-                                                dtype='category',
                                                 ordered=False,
                                                 mask=Buffer(valids[idx]))
             else:
@@ -825,7 +824,6 @@ class DataFrame(object):
                 elif f_n in col_cats.keys():
                     df[f_n] = CategoricalColumn(data=Buffer(cols[idx]),
                                                 categories=col_cats[f_n],
-                                                dtype='category',
                                                 ordered=False,
                                                 mask=Buffer(valids[idx]))
                 else:
@@ -846,7 +844,6 @@ class DataFrame(object):
                 elif f_n in col_cats.keys():
                     df[f_n] = CategoricalColumn(data=Buffer(cols[idx]),
                                                 categories=col_cats[f_n],
-                                                dtype='categorical',
                                                 ordered=False,
                                                 mask=Buffer(valids[idx]))
                 else:
@@ -979,7 +976,6 @@ class DataFrame(object):
         if cat_join:
             df[idx_col_name] = CategoricalColumn(data=df[idx_col_name].data,
                                                  categories=cats,
-                                                 dtype='categorical',
                                                  ordered=False)
 
         df = df.set_index(idx_col_name)

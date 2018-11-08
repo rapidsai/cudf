@@ -140,3 +140,124 @@ def read_csv(filepath, lineterminator='\n',
     nvtx_range_pop()
 
     return df
+
+
+def read_csv_strings(filepath, lineterminator='\n',
+                     delimiter=',', sep=None, delim_whitespace=False,
+                     skipinitialspace=False, names=None, dtype=None,
+                     skipfooter=0, skiprows=0, dayfirst=False):
+
+    import nvstrings
+    from .series import Series
+
+    """
+    **Experimental**: This function provided only as an alpha way of providing
+    a way to use nvstrings alongside cudf.
+    Future versions of cuDF will provide cleaner integration.
+
+    Uses the same arguments as read_csv.
+
+    Returns list of Series objects for numeric or date columns and nvstrings
+    objects for those columns that are strings (dtype='str').
+
+    Examples
+    --------
+    foo.txt : ::
+
+        50,abc|40,def|30,ghi|20,jkl|
+
+    .. code-block:: python
+
+      import cudf
+      fn = 'foo.txt'
+      cols = cudf.io.read_csv_strings(fn, delimiter=',', lineterminator='|',
+                           names=['col1', 'col2'], dtype=['int64', 'str'],
+                           skiprows=1, skipfooter=1)
+      type(cols[0])
+      print(cols[0])
+
+      type(cols[1])
+      print(cols[1])
+
+    Output:
+
+    .. code-block:: python
+
+      <class 'cudf.series.Series'>
+      0 40
+      1 30
+
+      <class 'nvstrings.nvstrings'>
+      ['def', 'ghi']
+
+    """
+
+    if names is None or dtype is None:
+        msg = '''Automatic dtype detection not implemented:
+        Column names and dtypes must be specified.'''
+        raise TypeError(msg)
+
+    if isinstance(dtype, dict):
+        dtype_dict = True
+    elif isinstance(dtype, list):
+        dtype_dict = False
+        if len(dtype) != len(names):
+            msg = '''All column dtypes must be specified.'''
+            raise TypeError(msg)
+    else:
+        msg = '''dtype must be 'list' or 'dict' '''
+        raise TypeError(msg)
+
+    csv_reader = ffi.new('csv_read_arg*')
+
+    # Populate csv_reader struct
+    file_path = _wrap_string(filepath)
+    csv_reader.file_path = file_path
+
+    arr_names = []
+    arr_dtypes = []
+    for col_name in names:
+        arr_names.append(_wrap_string(col_name))
+        if dtype_dict:
+            arr_dtypes.append(_wrap_string(str(dtype[col_name])))
+    names_ptr = ffi.new('char*[]', arr_names)
+    csv_reader.names = names_ptr
+
+    if not dtype_dict:
+        for col_dtype in dtype:
+            arr_dtypes.append(_wrap_string(str(col_dtype)))
+    dtype_ptr = ffi.new('char*[]', arr_dtypes)
+    csv_reader.dtype = dtype_ptr
+
+    csv_reader.delimiter = delimiter.encode()
+    csv_reader.lineterminator = lineterminator.encode()
+    csv_reader.delim_whitespace = delim_whitespace
+    csv_reader.skipinitialspace = skipinitialspace
+    csv_reader.dayfirst = dayfirst
+    csv_reader.num_cols = len(names)
+    csv_reader.skiprows = skiprows
+    csv_reader.skipfooter = skipfooter
+
+    # Call read_csv
+    libgdf.read_csv(csv_reader)
+
+    out = csv_reader.data
+    if out == ffi.NULL:
+        raise ValueError("Failed to parse CSV")
+
+    # Extract parsed columns
+
+    outcols = []
+    for i in range(csv_reader.num_cols_out):
+        if out[i].dtype == libgdf.GDF_STRING:
+            ptr = int(ffi.cast("uintptr_t", out[i].data))
+            outcols.append(nvstrings.bind_cpointer(ptr))
+        else:
+            newcol = Column.from_cffi_view(out[i])
+            if(newcol.dtype == np.dtype('datetime64[ms]')):
+                col = newcol.view(DatetimeColumn, dtype='datetime64[ms]')
+            else:
+                col = newcol.view(NumericalColumn, dtype=newcol.dtype)
+            outcols.append(Series(col))
+
+    return outcols
