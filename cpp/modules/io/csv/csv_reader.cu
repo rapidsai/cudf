@@ -51,12 +51,12 @@
 #include "type_conversion.cuh"
 #include "datetime_parser.cuh"
 
-#include "NVStrings.h"
-
 #include "cudf.h"
-#include "rmm/rmm.h"
 #include "error/error_utils.h"
-#include "utilities/nvtx/nvtx_utils.h"
+ 
+#include "rmm/rmm.h"
+
+#include "NVStrings.h"
 
 constexpr int32_t HASH_SEED = 33;
 

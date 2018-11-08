@@ -62,7 +62,7 @@
 
 #pragma once
 
-#include <cudf.h>
+#include <gdf/gdf.h>
 #include "type_conversion.cuh"
 
 __host__ __device__ gdf_date32 parseDateFormat(char *data, long start_idx, long end_idx, bool dayfirst);

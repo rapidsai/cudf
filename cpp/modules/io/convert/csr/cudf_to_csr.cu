@@ -19,13 +19,13 @@
  *
  */
 
+#include "cudf.h"
+#include "error/error_utils.h"
+#include "rmm/rmm.h"
+#include "rmm/thrust_rmm_allocator.h"
+
 #include <thrust/scan.h>
 #include <thrust/execution_policy.h>
-
-#include "cudf.h"
-#include "rmm/rmm.h"
-#include "error/error_utils.h"
-#include "rmm/thrust_rmm_allocator.h"
 
 using namespace std;
 
