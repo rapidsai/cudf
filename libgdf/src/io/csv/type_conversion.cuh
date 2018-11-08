@@ -59,7 +59,7 @@ T convertStrtoInt(char *data, long start_idx, long end_idx) {
 	bool negative=false;
 	if(data[start_idx]=='-'){
 		negative=true;
-		start_idx--;
+		start_idx++;
 	}
 
 	// the data is in little ending, so the last item of data is the lowest digit
@@ -103,6 +103,12 @@ T convertStrtoFloat(char *data, long start_idx, long end_idx) {
 
 	if (data[end_idx] == ' ')
 		--end_idx;
+
+	bool negative=false;
+	if(data[start_idx]=='-'){
+		negative=true;
+		start_idx++;
+	}
 
 	// find the decimal point - might not be one
 	long decimal_pt = end_idx;
@@ -150,6 +156,9 @@ T convertStrtoFloat(char *data, long start_idx, long end_idx) {
 			++idx;
 		}
 	}
+
+	if (negative==true)
+		answer *=-1;
 
 
     return answer;
