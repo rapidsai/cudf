@@ -73,14 +73,25 @@ endif(GTEST_FOUND)
 ###################################################################################################
 # - nvstrings -------------------------------------------------------------------------------------
 
-find_library(NVSTRINGS_LIBRARY NVStrings)
+find_file(NVSTRINGS_INCLUDE "NVStrings.h"
+          PATHS "$ENV{CONDA_PREFIX}/include")
+find_library(NVSTRINGS_LIBRARY "NVStrings"
+             PATHS $ENV{CONDA_PREFIX}/lib)
+
+if(NVSTRINGS_INCLUDE AND NVSTRINGS_LIBRARY)
+    execute_process(WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+                    COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/include
+                    COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/lib
+                    COMMAND ${CMAKE_COMMAND} -E chdir ${CMAKE_BINARY_DIR} ln -snf ${NVSTRINGS_INCLUDE} ${CMAKE_BINARY_DIR}/include/NVStrings.h
+                    COMMAND ${CMAKE_COMMAND} -E chdir ${CMAKE_BINARY_DIR} ln -snf ${NVSTRINGS_LIBRARY} ${CMAKE_BINARY_DIR}/lib/libNVStrings.so)
+endif(NVSTRINGS_INCLUDE AND NVSTRINGS_LIBRARY)
 
 ###################################################################################################
 # - include paths ---------------------------------------------------------------------------------
 
 include_directories("${ARROW_INCLUDEDIR}"
                     "${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}"
-                    "$ENV{CONDA_PREFIX}/include"
+                    "${CMAKE_BINARY_DIR}/include"
                     "${CMAKE_SOURCE_DIR}/include"
                     "${CMAKE_SOURCE_DIR}/modules"
                     "${CMAKE_SOURCE_DIR}/thirdparty/cub"
@@ -91,7 +102,7 @@ include_directories("${ARROW_INCLUDEDIR}"
 # - library paths ---------------------------------------------------------------------------------
 
 link_directories("${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}/../lib"
-                 "$ENV{CONDA_PREFIX}/lib")
+                 "${CMAKE_BINARY_DIR}/lib")
 
 ###################################################################################################
 # - library targets -------------------------------------------------------------------------------

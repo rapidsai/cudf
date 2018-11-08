@@ -19,7 +19,7 @@ endfunction(ConfigureTest)
 
 include_directories("${ARROW_INCLUDEDIR}"
                     "${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}"
-                    "$ENV{CONDA_PREFIX}/include"
+                    "${CMAKE_BINARY_DIR}/include"
                     "${CMAKE_SOURCE_DIR}/include"
                     "${CMAKE_SOURCE_DIR}/modules"
                     "${CMAKE_SOURCE_DIR}/thirdparty/cub"
@@ -30,7 +30,7 @@ include_directories("${ARROW_INCLUDEDIR}"
 # - library paths ---------------------------------------------------------------------------------
 
 link_directories("${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}/../lib"
-                 "$ENV{CONDA_PREFIX}/lib")
+                 "${CMAKE_BINARY_DIR}/lib")
 
 ###################################################################################################
 ### test sources ##################################################################################
