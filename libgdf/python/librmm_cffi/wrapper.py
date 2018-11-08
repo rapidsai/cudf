@@ -1,3 +1,4 @@
+#
 # Copyright (c) 2018, NVIDIA CORPORATION.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -90,14 +91,24 @@ class _RMMWrapper(object):
         """Finds the file and line number of the caller (first caller outside
            this file.)
         """
-        stack = inspect.stack()
         # Go up stack to find first caller outside this file (more useful)
-        caller_i = next(x for x in range(len(stack)) 
-                        if 'wrapper.py' not in stack[x][1])
-        caller = stack[caller_i][1:3]
-        file = self._ffi.new("char[]", len(caller[0]))
-        file[0:len(caller[0])] = caller[0].encode()
-        line = self._ffi.cast("int", caller[1])
+        if True == rmm_cfg.enable_logging:
+            frame = inspect.currentframe().f_back
+            while frame:
+                filename = inspect.getfile(frame)
+                if not filename.endswith("wrapper.py"):
+                    break
+                else:
+                    frame = frame.f_back
+            line_number = frame.f_lineno
+            del frame
+        else:
+            filename = ""
+            line_number = 0
+
+        file = self._ffi.new("char[]", filename.encode())
+        line = self._ffi.cast("int", line_number)
+
         return file, line
 
     def rmmAlloc(self, size, stream):
