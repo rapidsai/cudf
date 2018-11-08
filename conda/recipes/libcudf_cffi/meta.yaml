@@ -11,8 +11,8 @@ package:
   version: {{ version }}
 
 source:
-  # git_url: ../..
-  path: ../..
+  # git_url: ../../..
+  path: ../../..
 
 build:
   number: {{ git_revision_count }}
