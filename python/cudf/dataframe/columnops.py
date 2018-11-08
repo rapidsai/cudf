@@ -12,8 +12,9 @@ from numba import cuda, njit
 from librmm_cffi import librmm as rmm
 
 from .buffer import Buffer
-from . import utils, cudautils, _gdf
 from .column import Column
+from cudf.utils import utils, cudautils
+from cudf import _gdf
 
 import warnings
 

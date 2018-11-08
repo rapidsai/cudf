@@ -5,16 +5,17 @@ import collections
 
 from pandas.api.types import is_categorical_dtype
 
-from .dataframe import DataFrame, Series
-from .buffer import Buffer
-from .categorical import CategoricalColumn
-from ._gdf import nvtx_range_pop
+from cudf.dataframe.dataframe import DataFrame
+from cudf.dataframe.series import Series
+from cudf.dataframe.buffer import Buffer
+from cudf.dataframe.categorical import CategoricalColumn
+from cudf._gdf import nvtx_range_pop
 
 from libgdf_cffi import ffi, libgdf
 from librmm_cffi import librmm as rmm
 
 
-class LibGdfGroupby(object):
+class Groupby(object):
     """Groupby object returned by cudf.DataFrame.groupby().
     """
 

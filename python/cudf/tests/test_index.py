@@ -8,7 +8,7 @@ import pytest
 import numpy as np
 
 from cudf.dataframe import DataFrame
-from cudf.index import GenericIndex, RangeIndex
+from cudf.dataframe.index import GenericIndex, RangeIndex
 
 
 def test_df_set_index_from_series():

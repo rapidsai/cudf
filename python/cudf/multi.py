@@ -1,6 +1,6 @@
-from .dataframe import DataFrame
-from .series import Series
-from .index import Index
+from cudf.dataframe.dataframe import DataFrame
+from cudf.dataframe.series import Series
+from cudf.dataframe.index import Index
 
 
 def concat(objs, ignore_index=False):

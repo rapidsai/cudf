@@ -9,11 +9,15 @@ import pyarrow as pa
 from libgdf_cffi import libgdf
 from librmm_cffi import librmm as rmm
 
-from . import _gdf, columnops, utils, cudautils, datetime
+from . import columnops,  datetime
+from cudf.utils import utils, cudautils
+from cudf import _gdf
 from .buffer import Buffer
-from .serialize import register_distributed_serializer
-from ._gdf import nvtx_range_push, nvtx_range_pop
+from cudf.comm.serialize import register_distributed_serializer
+from cudf._gdf import nvtx_range_push, nvtx_range_pop
 
+import cudf.bindings.sort as cpp_sort
+import cudf.bindings.reduce as cpp_reduce
 
 # Operator mappings
 
@@ -132,7 +136,7 @@ class NumericalColumn(columnops.TypedColumnBase):
         # Create new array for the positions
         inds = Buffer(cudautils.arange(len(self)))
         col_inds = self.replace(data=inds, dtype=inds.dtype)
-        _gdf.apply_sort(col_keys, col_inds, ascending=ascending)
+        cpp_sort.apply_sort(col_keys, col_inds, ascending=ascending)
         return col_keys, col_inds
 
     def to_pandas(self, index=None):
@@ -203,15 +207,15 @@ class NumericalColumn(columnops.TypedColumnBase):
         return bool(self.min())
 
     def min(self):
-        return _gdf.apply_reduce(libgdf.gdf_min_generic, self)
+        return cpp_reduce.apply_reduce('min', self)
 
     def max(self):
-        return _gdf.apply_reduce(libgdf.gdf_max_generic, self)
+        return cpp_reduce.apply_reduce('max', self)
 
     def sum(self):
         dt = np.promote_types('i8', self.dtype)
         x = self.astype(dt)
-        return _gdf.apply_reduce(libgdf.gdf_sum_generic, x)
+        return cpp_reduce.apply_reduce('sum', self)
 
     def mean(self):
         return self.sum().astype('f8') / self.valid_count
@@ -227,7 +231,7 @@ class NumericalColumn(columnops.TypedColumnBase):
 
     def sum_of_squares(self):
         x = self.astype('f8')
-        return _gdf.apply_reduce(libgdf.gdf_sum_squared_generic, x)
+        return cpp_reduce.apply_reduce('sum_squared', self)
 
     def applymap(self, udf, out_dtype=None):
         """Apply a elemenwise function to transform the values in the Column.

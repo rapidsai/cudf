@@ -4,10 +4,11 @@ import pandas as pd
 import numpy as np
 import pyarrow as pa
 
-from .dataframe import Series
-from . import numerical, utils, columnops, cudautils
+from . import numerical, columnops
 from .buffer import Buffer
-from .serialize import register_distributed_serializer
+from .series import Series
+from cudf.utils import utils, cudautils
+from cudf.comm.serialize import register_distributed_serializer
 
 
 class CategoricalAccessor(object):

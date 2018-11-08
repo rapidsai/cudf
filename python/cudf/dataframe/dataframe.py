@@ -15,17 +15,20 @@ from numba.cuda.cudadrv.devicearray import DeviceNDArray
 
 from librmm_cffi import librmm as rmm
 
-from . import cudautils, formatting, queryutils, applyutils, utils, _gdf
+from cudf import formatting, _gdf
+from cudf.utils import cudautils, queryutils, applyutils, utils
 from .index import GenericIndex, Index, RangeIndex
 from .series import Series
 from .column import Column
-from .settings import NOTSET, settings
-from .serialize import register_distributed_serializer
+from cudf.settings import NOTSET, settings
+from cudf.comm.serialize import register_distributed_serializer
 from .categorical import CategoricalColumn
 from .datetime import DatetimeColumn
 from .numerical import NumericalColumn
 from .buffer import Buffer
-from ._gdf import nvtx_range_push, nvtx_range_pop
+from cudf._gdf import nvtx_range_push, nvtx_range_pop
+
+import cudf.bindings.join as cpp_join
 
 
 class DataFrame(object):
@@ -788,8 +791,8 @@ class DataFrame(object):
                 f_n = fix_name(name, rsuffix)
                 col_cats[f_n] = other[name].cat.categories
 
-        cols, valids = _gdf.libgdf_join(lhs._cols, rhs._cols, on, how,
-                                        method=method)
+        cols, valids = cpp_join.join(lhs._cols, rhs._cols, on, how,
+                                     method=method)
 
         df = DataFrame()
 
@@ -1021,7 +1024,7 @@ class DataFrame(object):
           as regular columns.
         """
         if (method == "cudf"):
-            from .groupby import Groupby
+            from cudf.groupby.legacy_groupby import Groupby
             if as_index:
                 msg = "as_index==True not supported due to the lack of\
                     multi-index"
@@ -1029,7 +1032,7 @@ class DataFrame(object):
             result = Groupby(self, by=by)
             return result
         else:
-            from .libgdf_groupby import LibGdfGroupby
+            from cudf.groupby.groupby import Groupby
 
             _gdf.nvtx_range_push("PYGDF_GROUPBY", "purple")
             if as_index:
@@ -1038,7 +1041,7 @@ class DataFrame(object):
                 raise NotImplementedError(msg)
             # The matching `pop` for this range is inside LibGdfGroupby
             # __apply_agg
-            result = LibGdfGroupby(self, by=by, method=method)
+            result = Groupby(self, by=by, method=method)
             return result
 
     def query(self, expr):

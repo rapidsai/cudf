@@ -2,11 +2,11 @@
 
 from libgdf_cffi import libgdf, ffi
 
-from .column import Column
-from .numerical import NumericalColumn
-from .dataframe import DataFrame
-from .datetime import DatetimeColumn
-from ._gdf import nvtx_range_push, nvtx_range_pop
+from cudf.dataframe.dataframe import Column
+from cudf.dataframe.numerical import NumericalColumn
+from cudf.dataframe.dataframe import DataFrame
+from cudf.dataframe.datetime import DatetimeColumn
+from cudf._gdf import nvtx_range_push, nvtx_range_pop
 
 import numpy as np
 

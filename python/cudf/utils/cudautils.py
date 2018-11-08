@@ -224,7 +224,7 @@ def prefixsum(vals):
     Given the input of N.  The output size is N + 1.
     The first value is always 0.  The last value is the sum of *vals*.
     """
-    from . import _gdf
+    from cudf import _gdf
 
     # Allocate output
     slots = rmm.device_array(shape=vals.size + 1,

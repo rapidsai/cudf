@@ -7,8 +7,8 @@ import numpy as np
 import pandas as pd
 from numba.cuda.cudadrv.devicearray import DeviceNDArray
 
-from .utils import mask_dtype, mask_bitsize
-from .dataframe import Series
+from cudf.utils.utils import mask_dtype, mask_bitsize
+from cudf.dataframe import Series
 
 
 _logger = logging.getLogger(__name__)
