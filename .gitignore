@@ -9,6 +9,7 @@ __pycache__
 .vscode
 *.swp
 *.pytest_cache
+.DS_Store
 ##build
 htmlcov
 
