@@ -143,6 +143,7 @@ cuda_add_library(gdf SHARED
     src/hashops.cu
     src/ipc.cu
     src/reductions.cu
+    src/replace.cu
     src/join/joining.cu
     src/hashing.cu
     src/scan.cu
