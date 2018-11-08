@@ -43,11 +43,11 @@ class rmm_allocator : public thrust::device_malloc_allocator<T>
     {
       value_type* result = nullptr;
   
-      rmmError_t error = rmmAlloc((void**)&result, n*sizeof(value_type), stream);
+      rmmError_t error = RMM_ALLOC((void**)&result, n*sizeof(value_type), stream);
      
       if(error != RMM_SUCCESS)
       {
-        throw thrust::system_error(error, thrust::cuda_category(), "rmm_allocator::allocate(): rmmAlloc");
+        throw thrust::system_error(error, thrust::cuda_category(), "rmm_allocator::allocate(): RMM_ALLOC");
       }
   
       return thrust::device_pointer_cast(result);
@@ -55,11 +55,11 @@ class rmm_allocator : public thrust::device_malloc_allocator<T>
   
     inline void deallocate(pointer ptr, size_t)
     {
-      rmmError_t error = rmmFree(thrust::raw_pointer_cast(ptr), stream);
+      rmmError_t error = RMM_FREE(thrust::raw_pointer_cast(ptr), stream);
   
       if(error != RMM_SUCCESS)
       {
-        throw thrust::system_error(error, thrust::cuda_category(), "rmm_allocator::deallocate(): rmmFree");
+        throw thrust::system_error(error, thrust::cuda_category(), "rmm_allocator::deallocate(): RMM_FREE");
       }
     }
 

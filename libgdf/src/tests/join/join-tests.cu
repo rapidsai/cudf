@@ -135,17 +135,17 @@ struct JoinTest : public GdfTest
 
     // Create a new instance of a gdf_column with a custom deleter that will free
     // the associated device memory when it eventually goes out of scope
-    auto deleter = [](gdf_column* col){col->size = 0; rmmFree(col->data, 0); rmmFree(col->valid, 0); };
+    auto deleter = [](gdf_column* col){col->size = 0; RMM_FREE(col->data, 0); RMM_FREE(col->valid, 0); };
     gdf_col_pointer the_column{new gdf_column, deleter};
 
     // Allocate device storage for gdf_column and copy contents from host_vector
-    rmmAlloc(&(the_column->data), host_vector.size() * sizeof(col_type), 0);
+    RMM_ALLOC(&(the_column->data), host_vector.size() * sizeof(col_type), 0);
     cudaMemcpy(the_column->data, host_vector.data(), host_vector.size() * sizeof(col_type), cudaMemcpyHostToDevice);
 
     // Allocate device storage for gdf_column.valid
     if (host_valid != nullptr) {
       int valid_size = gdf_get_num_chars_bitmask(host_vector.size());
-      rmmAlloc((void**)&(the_column->valid), valid_size, 0);
+      RMM_ALLOC((void**)&(the_column->valid), valid_size, 0);
       cudaMemcpy(the_column->valid, host_valid, valid_size, cudaMemcpyHostToDevice);
     } else {
         the_column->valid = nullptr;
