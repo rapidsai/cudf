@@ -104,6 +104,12 @@ T convertStrtoFloat(char *data, long start_idx, long end_idx) {
 	if (data[end_idx] == ' ')
 		--end_idx;
 
+	bool negative=false;
+	if(data[start_idx]=='-'){
+		negative=true;
+		start_idx++;
+	}
+
 	// find the decimal point - might not be one
 	long decimal_pt = end_idx;
 	long d_idx = start_idx;
@@ -150,6 +156,9 @@ T convertStrtoFloat(char *data, long start_idx, long end_idx) {
 			++idx;
 		}
 	}
+
+	if (negative==true)
+		answer *=-1;
 
 
     return answer;
