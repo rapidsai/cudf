@@ -927,7 +927,7 @@ def test_from_scalar_typing(data_type):
 
 @pytest.mark.parametrize(
     'data_type',
-    ['bool', 'int8', 'int16', 'int32', 'int64', 'float32', 'float64']
+    ['int8', 'int16', 'int32', 'int64', 'float32', 'float64']
 )
 def test_from_python_array(data_type):
     np_arr = np.random.randint(0, 100, 10).astype(data_type)

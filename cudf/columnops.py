@@ -257,7 +257,7 @@ def as_column(arbitrary):
     elif isinstance(arbitrary, (pd.Series, pd.Categorical)):
         data = as_column(pa.array(arbitrary, from_pandas=True))
 
-    elif np.isscalar(arbitrary):
+    elif np.isscalar(arbitrary) and not isinstance(arbitrary, memoryview):
         if hasattr(arbitrary, 'dtype'):
             data_type = _gdf.np_to_pa_dtype(arbitrary.dtype)
             if data_type in (pa.date64(), pa.date32()):
