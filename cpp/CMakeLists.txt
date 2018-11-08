@@ -159,7 +159,26 @@ add_custom_command(OUTPUT PYTHON_CFFI
                    COMMAND ${CMAKE_COMMAND} -E chdir ${CMAKE_BINARY_DIR}/python python setup.py build_ext --inplace
                    VERBATIM)
 
-add_custom_target(python_cffi DEPENDS PYTHON_CFFI cudf)
+add_custom_target(python_cffi DEPENDS cudf PYTHON_CFFI)
+
+###################################################################################################
+# - install targets -------------------------------------------------------------------------------
+
+install(TARGETS cudf rmm
+        DESTINATION lib)
+
+install(FILES ${CMAKE_BINARY_DIR}/../include/cudf.h
+        DESTINATION include)
+
+install(DIRECTORY ${CMAKE_BINARY_DIR}/../include/cudf 
+        DESTINATION include)
+
+add_custom_command(OUTPUT INSTALL_PYTHON_CFFI
+                   WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+                   COMMAND ${CMAKE_COMMAND} -E chdir ${CMAKE_BINARY_DIR}/python python setup.py install
+                   VERBATIM)
+
+add_custom_target(install_python DEPENDS cudf PYTHON_CFFI INSTALL_PYTHON_CFFI)
 
 
 
