@@ -17,17 +17,20 @@ endfunction(ConfigureTest)
 ###################################################################################################
 # - include paths ---------------------------------------------------------------------------------
 
-include_directories("${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}"
-                    "${CMAKE_CURRENT_SOURCE_DIR}/.."
-                    "${CMAKE_CURRENT_SOURCE_DIR}/../../include"
-                    "${CMAKE_CURRENT_SOURCE_DIR}/../../thirdparty/cub"
-                    "${CMAKE_CURRENT_SOURCE_DIR}/../../thirdparty/moderngpu/src"
-                    "${CMAKE_CURRENT_SOURCE_DIR}/../../thirdparty/cnmem/include")
+include_directories("${ARROW_INCLUDEDIR}"
+                    "${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}"
+                    "$ENV{CONDA_PREFIX}/include"
+                    "${CMAKE_SOURCE_DIR}/include"
+                    "${CMAKE_SOURCE_DIR}/modules"
+                    "${CMAKE_SOURCE_DIR}/thirdparty/cub"
+                    "${CMAKE_SOURCE_DIR}/thirdparty/moderngpu/src"
+                    "${CMAKE_SOURCE_DIR}/thirdparty/cnmem/include")
 
 ###################################################################################################
 # - library paths ---------------------------------------------------------------------------------
 
-link_directories("${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}/../lib")
+link_directories("${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}/../lib"
+                 "$ENV{CONDA_PREFIX}/lib")
 
 ###################################################################################################
 ### test sources ##################################################################################

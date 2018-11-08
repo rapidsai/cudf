@@ -81,11 +81,11 @@ find_library(NVSTRINGS_LIBRARY NVStrings)
 include_directories("${ARROW_INCLUDEDIR}"
                     "${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}"
                     "$ENV{CONDA_PREFIX}/include"
-                    "${CMAKE_CURRENT_SOURCE_DIR}/include"
-                    "${CMAKE_CURRENT_SOURCE_DIR}/modules"
-                    "${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/cub"
-                    "${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/moderngpu/src"
-                    "${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/cnmem/include")
+                    "${CMAKE_SOURCE_DIR}/include"
+                    "${CMAKE_SOURCE_DIR}/modules"
+                    "${CMAKE_SOURCE_DIR}/thirdparty/cub"
+                    "${CMAKE_SOURCE_DIR}/thirdparty/moderngpu/src"
+                    "${CMAKE_SOURCE_DIR}/thirdparty/cnmem/include")
 
 ###################################################################################################
 # - library paths ---------------------------------------------------------------------------------
@@ -154,8 +154,8 @@ endif(CMAKE_BUILD_TYPE MATCHES Debug)
 ###################################################################################################
 # - link libraries --------------------------------------------------------------------------------
 
-target_link_libraries(rmm cudart cuda)
-target_link_libraries(cudf arrow NVStrings rmm)
+target_link_libraries(rmm cudart cuda NVStrings)
+target_link_libraries(cudf arrow rmm)
 
 ###################################################################################################
 # - python cffi bindings --------------------------------------------------------------------------
