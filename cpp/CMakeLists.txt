@@ -71,10 +71,16 @@ else()
 endif(GTEST_FOUND)
 
 ###################################################################################################
+# - nvstrings -------------------------------------------------------------------------------------
+
+find_library(NVSTRINGS_LIBRARY NVStrings)
+
+###################################################################################################
 # - include paths ---------------------------------------------------------------------------------
 
 include_directories("${ARROW_INCLUDEDIR}"
                     "${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}"
+                    "$ENV{CONDA_PREFIX}/include"
                     "${CMAKE_CURRENT_SOURCE_DIR}/include"
                     "${CMAKE_CURRENT_SOURCE_DIR}/modules"
                     "${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/cub"
@@ -148,7 +154,7 @@ endif(CMAKE_BUILD_TYPE MATCHES Debug)
 # - link libraries --------------------------------------------------------------------------------
 
 target_link_libraries(rmm cudart cuda)
-target_link_libraries(cudf arrow rmm)
+target_link_libraries(cudf arrow NVStrings rmm)
 
 ###################################################################################################
 # - python cffi bindings --------------------------------------------------------------------------
