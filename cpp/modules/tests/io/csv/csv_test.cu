@@ -22,6 +22,7 @@
 #include <thrust/device_vector.h>
 
 #include "gtest/gtest.h"
+
 #include <cudf.h>
 #include <cudf/functions.h>
  

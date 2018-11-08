@@ -18,14 +18,15 @@
 #include "gtest/gtest.h"
 
 #include <iostream>
-#include <cudf.h>
-#include <cudf/functions.h>
 #include <thrust/functional.h>
 #include <thrust/device_ptr.h>
 
 #include <thrust/execution_policy.h>
 #include <cuda_runtime.h>
 #include "helper/utils.cuh"
+
+#include <cudf.h>
+#include <cudf/functions.h>
 
 #include "tests/rmm/cudf_test_fixtures.h"
 struct Example : public GdfTest {};

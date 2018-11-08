@@ -8,6 +8,7 @@
 #include <thrust/device_vector.h>
 
 #include "gtest/gtest.h"
+
 #include <cudf.h>
 #include <utilities/cudf_utils.h>
 #include <cudf/functions.h>

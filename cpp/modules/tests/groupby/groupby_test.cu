@@ -24,9 +24,11 @@
 
 #include "gtest/gtest.h"
 #include "gmock/gmock.h"
-#include <tests/rmm/cudf_test_fixtures.h>
+
 #include <cudf.h>
 #include <cudf/functions.h>
+
+#include <tests/rmm/cudf_test_fixtures.h>
 
 // See this header for all of the recursive handling of tuples of vectors
 #include "test_parameters.cuh"

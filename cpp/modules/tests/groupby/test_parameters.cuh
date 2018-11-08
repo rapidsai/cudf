@@ -4,6 +4,7 @@
 #include <random>
 #include <type_traits>
 #include <vector>
+
 #include <cudf/types.h>
 
 // Selects the kind of join operation that is performed
