@@ -1,9 +1,9 @@
 name: pycudf_testing_py35
 channels:
+- rapidsai
 - nvidia
 - numba
 - conda-forge
-- rapidsai
 - defaults
 dependencies:
 - python=3.5.*

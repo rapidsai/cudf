@@ -6,7 +6,7 @@
 {% set git_revision_count=environ.get('GIT_DESCRIBE_NUMBER', 0) %}
 {% set cuda_version='.'.join(environ.get('CUDA', 'unknown').split('.')[:2]) %}
 package:
-  name: libgdf
+  name: libcudf
   version: {{ version }}
 
 source:
@@ -22,9 +22,10 @@ build:
 
 requirements:
   # use channel:
-  #   - defaults
-  #   - conda-forge
   #   - rapidsai
+  #   - nvidia
+  #   - conda-forge
+  #   - defaults
   build:
     - cmake 3.12
     - nvstrings
@@ -34,11 +35,18 @@ requirements:
 
 test:
   commands:
-    - test -f $PREFIX/include/gdf/gdf.h    # [unix or osx]
-    - test -f $PREFIX/lib/libgdf.dylib     # [osx]
+    - test -f $PREFIX/include/cudf.h
+    - test -f $PREFIX/include/cudf/convert_types.h
+    - test -f $PREFIX/include/cudf/functions.h
+    - test -f $PREFIX/include/cudf/io_functions.h
+    - test -f $PREFIX/include/cudf/io_types.h
+    - test -f $PREFIX/include/cudf/types.h
+    - test -f $PREFIX/lib/libcudf.so
+    - test -f $PREFIX/lib/librmm.so
+
 
 about:
   home: http://rapids.ai/
   license: Apache-2.0
   # license_file: LICENSE
-  summary: cuDF-libgdf library
+  summary: libcudf library

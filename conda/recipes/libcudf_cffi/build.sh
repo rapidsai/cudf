@@ -10,14 +10,14 @@
 # Cleanup local git
 git clean -xdf
 # Change directory for build process
-cd libgdf
+cd cpp
 # Use CMake-based build procedure
 mkdir build
 cd build
 # configure
 cmake ..
 # build
-make -j$CPU_COUNT copy_python
+make -j$CPU_COUNT python_cffi
 # install
+cd python
 python setup.py install --single-version-externally-managed --record=record.txt
-

@@ -17,6 +17,12 @@ build:
     - CUDF_BUILD_NO_GPU_TEST
 
 requirements:
+  # use channel:
+  #   - rapidsai
+  #   - nvidia
+  #   - numba
+  #   - conda-forge
+  #   - defaults
   build:
     - python
     - setuptools
@@ -25,8 +31,8 @@ requirements:
   run:
     - python
     - setuptools
-    - libgdf 0.2.0.*
-    - libgdf_cffi 0.2.0.*
+    - libcudf 0.2.0.*
+    - libcudf_cffi 0.2.0.*
     - pandas 0.20.*
     - numba>=0.40.0dev
     - nvstrings

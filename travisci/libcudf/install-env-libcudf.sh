@@ -3,7 +3,7 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
 set -e
 
-if [ "$BUILD_LIBGDF" == "1" -o "$BUILD_CFFI" == "1" ]; then
+if [ "$BUILD_LIBCUDF" == "1" -o "$BUILD_CFFI" == "1" ]; then
     # install libboost
     sudo apt-get update -q
     sudo apt-get install -y libboost-all-dev
@@ -22,7 +22,7 @@ if [ "$BUILD_LIBGDF" == "1" -o "$BUILD_CFFI" == "1" ]; then
     export CC=/usr/bin/gcc-5
     export CXX=/usr/bin/g++-5
     # install cuda
-    source ./travisci/libgdf/install-cuda-trusty.sh
+    source ./travisci/libcudf/install-cuda-trusty.sh
     # check versions
     $CC --version
     $CXX --version

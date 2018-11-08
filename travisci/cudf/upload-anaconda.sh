@@ -5,7 +5,7 @@
 set -e
 
 if [ "$BUILD_CUDF" == "1" ]; then
-  export UPLOADFILE=`conda build conda-recipes/cudf -c defaults -c conda-forge -c numba -c rapidsai/label/dev --python=$PYTHON --output`
+  export UPLOADFILE=`conda build conda/recipes/cudf -c rapidsai -c nvidia -c numba -c conda-forge -c defaults --python=$PYTHON --output`
   SOURCE_BRANCH=master
 
   test -e ${UPLOADFILE}
