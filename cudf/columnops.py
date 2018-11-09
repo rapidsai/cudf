@@ -115,6 +115,10 @@ def column_select_by_boolmask(column, boolmask):
 
 
 def column_select_by_position(column, positions):
+    """Select by a series of dtype int64 indicating positions.
+
+    Returns (selected_column, selected_positions)
+    """
     from .numerical import NumericalColumn
     assert column.null_count == 0
 
