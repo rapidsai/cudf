@@ -14,6 +14,7 @@ import pyarrow as pa
 from numba.cuda.cudadrv.devicearray import DeviceNDArray
 
 from librmm_cffi import librmm as rmm
+from libgdf_cffi import ffi, libgdf
 
 from cudf import formatting, _gdf
 from cudf.utils import cudautils, queryutils, applyutils, utils
@@ -889,6 +890,47 @@ class DataFrame(object):
             else:
                 df[k] = self[k].reset_index().take(new_positions)
         return df.set_index(self.index.take(new_positions))
+
+    def transpose(self):
+        """Transpose index and columns.
+        
+        Returns
+        -------
+        a new (ncol x nrow) dataframe. self is (nrow x ncol)
+
+        Difference from pandas
+        ----------------------
+        Not supporting *copy* because default and only behaviour is copy=True
+        """
+        dtype = self.dtypes[0]
+        if any(t != dtype for t in self.dtypes):
+            raise ValueError('all columns must have the same dtype')
+
+        df = DataFrame()
+
+        ncols = len(self.columns)
+        cols = [self[col]._column.cffi_view for col in self._cols]
+
+        new_nrow = ncols
+        new_ncol = len(self)
+
+        new_col_series = [
+            Series(Buffer(rmm.device_array(shape=new_nrow, dtype=dtype)))
+            for i in range(0, new_ncol)]
+        new_col_ptrs = [
+            new_col_series[i]._column.cffi_view
+            for i in range(0, new_ncol)]
+        
+        # TODO (dm): move to _gdf.py
+        libgdf.gdf_transpose(
+            ncols,
+            cols,
+            new_col_ptrs
+        )
+
+        for i in range(0, new_ncol):
+            df[str(i)] = new_col_series[i]
+        return df
 
     def merge(self, other, on=None, how='left', lsuffix='_x', rsuffix='_y',
               type="", method='hash'):

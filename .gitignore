@@ -13,7 +13,7 @@ __pycache__
 DartConfiguration.tcl
 .DS_Store
 
-##build
+build
 htmlcov
 dist/
 cudf.egg-info/
@@ -24,6 +24,10 @@ python/cudf/bindings/*.cpp
 *.diff
 *.orig
 *.rej
+
+## python distribution / packaging
+dist/
+*.egg-info/
 
 ## libgdf
 CMakeFiles/

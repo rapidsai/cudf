@@ -198,6 +198,12 @@ gdf_error gdf_segmented_radixsort_generic(gdf_segmented_radixsort_plan_type *hdl
                                      unsigned *d_begin_offsets,
                                      unsigned *d_end_offsets);
 
+
+// transpose
+gdf_error gdf_transpose(size_t ncols,
+                        gdf_column** in_cols,
+                        gdf_column** out_cols);
+
 // joins
 
 

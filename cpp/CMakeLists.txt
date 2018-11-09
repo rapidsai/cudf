@@ -154,6 +154,7 @@ add_library(cudf SHARED
             src/quantiles/quantiles.cu
             src/reductions/reductions.cu
             src/reductions/scan.cu
+            src/transpose/transpose.cu
             src/unary/unary_ops.cu
             # src/windowed/windowed_ops.cu ... this is broken
             src/io/convert/csr/cudf_to_csr.cu

@@ -285,7 +285,7 @@ public:
         row_size_bytes += column_width_bytes;
 
         // Store the byte width of each column in a device array
-        column_byte_widths.push_back(static_cast<byte_type>(row_size_bytes));
+        column_byte_widths.push_back(static_cast<byte_type>(column_width_bytes));
       }
       else
       {
@@ -418,8 +418,8 @@ public:
         case 1:
           {
             using col_type = int8_t;
-            const col_type * const current_row_element = static_cast<col_type *>(d_columns_data[i])[row_index];
-            col_type * write_location = static_cast<col_type*>(write_pointer);
+            const col_type * const current_row_element = reinterpret_cast<col_type const *>(d_columns_data[i]) + row_index;
+            col_type * write_location = reinterpret_cast<col_type*>(write_pointer);
             *write_location = *current_row_element;
             write_pointer += sizeof(col_type);
             break;
@@ -427,8 +427,8 @@ public:
         case 2:
           {
             using col_type = int16_t;
-            const col_type * const current_row_element = static_cast<col_type *>(d_columns_data[i])[row_index];
-            col_type * write_location = static_cast<col_type*>(write_pointer);
+            const col_type * const current_row_element = reinterpret_cast<col_type const *>(d_columns_data[i]) + row_index;
+            col_type * write_location = reinterpret_cast<col_type*>(write_pointer);
             *write_location = *current_row_element;
             write_pointer += sizeof(col_type);
             break;
@@ -436,8 +436,8 @@ public:
         case 4:
           {
             using col_type = int32_t;
-            const col_type * const current_row_element = static_cast<col_type *>(d_columns_data[i])[row_index];
-            col_type * write_location = static_cast<col_type*>(write_pointer);
+            const col_type * const current_row_element = reinterpret_cast<col_type const *>(d_columns_data[i]) + row_index;
+            col_type * write_location = reinterpret_cast<col_type*>(write_pointer);
             *write_location = *current_row_element;
             write_pointer += sizeof(col_type);
             break;
@@ -445,8 +445,8 @@ public:
         case 8:
           {
             using col_type = int64_t;
-            const col_type * const current_row_element = static_cast<col_type *>(d_columns_data[i])[row_index];
-            col_type * write_location = static_cast<col_type*>(write_pointer);
+            const col_type * const current_row_element = reinterpret_cast<col_type const *>(d_columns_data[i]) + row_index;
+            col_type * write_location = reinterpret_cast<col_type*>(write_pointer);
             *write_location = *current_row_element;
             write_pointer += sizeof(col_type);
             break;
@@ -457,6 +457,7 @@ public:
           }
       }
     }
+    return GDF_SUCCESS;
   }
 
   struct copy_element{
@@ -472,6 +473,11 @@ public:
 
   };
 
+  __device__
+  void* get_column_device_pointer(size_type column_index)
+  {
+    return d_columns_data[column_index];
+  }
     /* --------------------------------------------------------------------------*/
     /** 
      * @Synopsis  Copies a row from a source table to a target row in this table
