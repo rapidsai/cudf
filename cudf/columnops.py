@@ -114,6 +114,20 @@ def column_select_by_boolmask(column, boolmask):
                                             dtype=selected_index.dtype)
 
 
+def column_select_by_position(column, positions):
+    from .numerical import NumericalColumn
+    assert column.null_count == 0
+
+    selvals = cudautils.gather(column.data.to_gpu_array(),
+                               positions.data.to_gpu_array())
+
+    selected_values = column.replace(data=Buffer(selvals))
+    selected_index = Buffer(positions.data.to_gpu_array())
+
+    return selected_values, NumericalColumn(data=selected_index,
+                                            dtype=selected_index.dtype)
+
+
 def as_column(arbitrary):
     """Create a Column from an arbitrary object
 

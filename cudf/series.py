@@ -181,9 +181,14 @@ class Series(object):
 
     def __getitem__(self, arg):
         if isinstance(arg, Series):
-            selvals, selinds = columnops.column_select_by_boolmask(
+            if arg.dtype == np.int64:
+                selvals, selinds = columnops.column_select_by_position(
                 self._column, arg)
-            index = self.index.take(selinds.to_gpu_array())
+                index = self.index.take(selinds.to_gpu_array())
+            else:
+                selvals, selinds = columnops.column_select_by_boolmask(
+                self._column, arg)
+                index = self.index.take(selinds.to_gpu_array())
             return self._copy_construct(data=selvals, index=index)
 
         elif isinstance(arg, slice):
