@@ -150,6 +150,7 @@ cuda_add_library(gdf SHARED
     src/sorting.cu
     src/sqls_ops.cu
     src/streamcompactionops.cu
+    src/transpose.cu
     src/unaryops.cu
     #src/windowedops.cu
     src/quantiles.cu
