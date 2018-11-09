@@ -41,7 +41,7 @@ struct managed_allocator {
           } 
           return ptr;
       }
-      void deallocate(T* p, std::size_t) const noexcept {
+      void deallocate(T* p, std::size_t) const {
         cudaFree(p);
       }
 };
@@ -73,7 +73,7 @@ struct legacy_allocator {
 
           return ptr;
       }
-      void deallocate(T* p, std::size_t) const noexcept {
+      void deallocate(T* p, std::size_t) const {
           rmmError_t result = RMM_FREE(p, 0); // TODO: non-default stream
           if ( RMM_SUCCESS != result) throw std::runtime_error("legacy_allocator: RMM Memory Manager Error");
       }
