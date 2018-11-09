@@ -185,7 +185,7 @@ class Series(object):
                 selvals, selinds = columnops.column_select_by_position(
                     self._column, arg)
                 index = self.index.take(selinds.to_gpu_array())
-            else:
+            elif arg.dtype in [np.bool, np.bool_]:
                 selvals, selinds = columnops.column_select_by_boolmask(
                     self._column, arg)
                 index = self.index.take(selinds.to_gpu_array())
