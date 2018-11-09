@@ -196,6 +196,14 @@ gdf_error gdf_segmented_radixsort_generic(gdf_segmented_radixsort_plan_type *hdl
 
 
 // transpose
+/**
+ * @brief Transposes the table in_cols and copies to out_cols
+ * 
+ * @param[in] ncols Number of columns in in_cols
+ * @param[in] in_cols[] Input table of (ncols) number of columns each of size (nrows)
+ * @param[out] out_cols[] Preallocated output_table of (nrows) columns each of size (ncols)
+ * @return gdf_error GDF_SUCCESS if successful, else appropriate error code
+ */
 gdf_error gdf_transpose(size_t ncols,
                         gdf_column** in_cols,
                         gdf_column** out_cols);
