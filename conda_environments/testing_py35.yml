@@ -15,3 +15,5 @@ dependencies:
 - cmake=3.12.*
 - boost
 - nvstrings
+- distributed>=1.23.0
+
