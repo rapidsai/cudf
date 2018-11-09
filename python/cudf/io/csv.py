@@ -143,7 +143,7 @@ def read_csv(filepath, lineterminator='\n', quoting = True,
     return df
 
 
-def read_csv_strings(filepath, lineterminator='\n',
+def read_csv_strings(filepath, lineterminator='\n', quoting = True,
                      delimiter=',', sep=None, delim_whitespace=False,
                      skipinitialspace=False, names=None, dtype=None,
                      skipfooter=0, skiprows=0, dayfirst=False):
@@ -238,6 +238,7 @@ def read_csv_strings(filepath, lineterminator='\n',
     csv_reader.num_cols = len(names)
     csv_reader.skiprows = skiprows
     csv_reader.skipfooter = skipfooter
+    csv_reader.quoting = quoting
 
     # Call read_csv
     libgdf.read_csv(csv_reader)
