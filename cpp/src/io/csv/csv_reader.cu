@@ -1062,11 +1062,12 @@ __global__ void convertCsvToGdf(
 					}
 						break;
 					case gdf_dtype::GDF_STRING:{
+						size_t q=0;
  						if (quotation==true && keepQuotes==false){
-						  start++; pos--;
+						  start++; q=1;
 						}
     					str_cols[stringCol][rec_id].first 	= raw_csv+start;
-						str_cols[stringCol][rec_id].second 	= size_t(pos-start);
+						str_cols[stringCol][rec_id].second 	= size_t(pos-start-q);
 						stringCol++;
 					}
 						break;
