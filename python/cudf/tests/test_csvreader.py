@@ -7,6 +7,9 @@ import numpy as np
 import pandas as pd
 
 from cudf import read_csv
+from cudf.io import read_csv_strings
+import cudf
+import nvstrings
 
 
 def make_numeric_dataframe(nrows, dtype):
@@ -167,3 +170,52 @@ def test_csv_reader_negative_vals(tmpdir):
     np.testing.assert_allclose(zero, df['0'])
     np.testing.assert_allclose(one, df['1'])
     np.testing.assert_allclose(two, df['2'])
+
+
+def test_read_csv_strings(tmpdir):
+    fname = "tmp_csvreader_file6.csv"
+
+    names = ['text', 'int']
+    dtypes = ['str', 'int']
+    lines = [','.join(names), 'a,0', 'b,0', 'c,0', 'd,0']
+    with open(fname, 'w') as fp:
+        fp.write('\n'.join(lines)+'\n')
+
+    cols = read_csv_strings(fname, names=names, dtype=dtypes, skiprows=1)
+    assert(len(cols) == 2)
+    assert(type(cols[0]) == nvstrings.nvstrings)
+    assert(type(cols[1]) == cudf.Series)
+    assert(cols[0].sublist([0]).to_host()[0] == 'a')
+    assert(cols[0].sublist([1]).to_host()[0] == 'b')
+    assert(cols[0].sublist([2]).to_host()[0] == 'c')
+    assert(cols[0].sublist([3]).to_host()[0] == 'd')
+
+
+def test_read_csv_strings_quotechars(tmpdir):
+    fname = "tmp_csvreader_file7.csv"
+
+    names = ['text', 'int']
+    dtypes = ['str', 'int']
+    lines = [','.join(names), '"a,",0', '"b",0', 'c,0', '"d,,!.,",0']
+    with open(fname, 'w') as fp:
+        fp.write('\n'.join(lines)+'\n')
+
+    cols = read_csv_strings(fname, names=names, dtype=dtypes, skiprows=1)
+    assert(len(cols) == 2)
+    assert(type(cols[0]) == nvstrings.nvstrings)
+    assert(type(cols[1]) == cudf.Series)
+    assert(cols[0].sublist([0]).to_host()[0] == 'a,')
+    assert(cols[0].sublist([1]).to_host()[0] == 'b')
+    assert(cols[0].sublist([2]).to_host()[0] == 'c')
+    assert(cols[0].sublist([3]).to_host()[0] == 'd,,!.,')
+
+    cols = read_csv_strings(
+                            fname, names=names, dtype=dtypes, skiprows=1,
+                            quoting=True)
+    assert(len(cols) == 2)
+    assert(type(cols[0]) == nvstrings.nvstrings)
+    assert(type(cols[1]) == cudf.Series)
+    assert(cols[0].sublist([0]).to_host()[0] == '"a,"')
+    assert(cols[0].sublist([1]).to_host()[0] == '"b"')
+    assert(cols[0].sublist([2]).to_host()[0] == '"c"')
+    assert(cols[0].sublist([3]).to_host()[0] == '"d,,!.,"')

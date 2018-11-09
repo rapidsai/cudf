@@ -18,7 +18,7 @@ def _wrap_string(text):
         return ffi.new("char[]", text.encode())
 
 
-def read_csv(filepath, lineterminator='\n', quoting = True,
+def read_csv(filepath, lineterminator='\n', quoting=True,
              delimiter=',', sep=None, delim_whitespace=False,
              skipinitialspace=False, names=None, dtype=None,
              skipfooter=0, skiprows=0, dayfirst=False):
@@ -42,6 +42,9 @@ def read_csv(filepath, lineterminator='\n', quoting = True,
     dtype : list of str or dict of {col: dtype}, default None
         List of data types in the same order of the column names
         or a dictionary with column_name:dtype (pandas style).
+    quoting : bool
+        If True, quotes will be removed from start and end of string fields
+        If False, quotes will be included in returned nvstrings entries
     skiprows : int, default 0
         Number of rows to be skipped from the start of file.
     skipfooter : int, default 0
@@ -143,7 +146,7 @@ def read_csv(filepath, lineterminator='\n', quoting = True,
     return df
 
 
-def read_csv_strings(filepath, lineterminator='\n', quoting = True,
+def read_csv_strings(filepath, lineterminator='\n', quoting=True,
                      delimiter=',', sep=None, delim_whitespace=False,
                      skipinitialspace=False, names=None, dtype=None,
                      skipfooter=0, skiprows=0, dayfirst=False):
