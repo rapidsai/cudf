@@ -979,12 +979,22 @@ __global__ void convertCsvToGdf(
 				break;
 			}
 			else if (raw_csv[pos] == terminator){
+ 			  if(quotation==false)
+				break;
+			  else if ((pos-1) >= start && raw_csv[pos-1]=='\"' )
 				break;
 			}
             else if(raw_csv[pos] == '\r' &&  ((pos+1) < stop && raw_csv[pos+1]=='\n')){
-            	stop--;
+  			  if(quotation==false){
+				stop--;
+				break;
+			  }
+			  else if ((pos-1) >= start && raw_csv[pos-1]=='\"' ){
+             	stop--;
                 break;
-            }
+    		  
+			  }
+           }
 			if(pos>=stop)
 				break;
 			pos++;
@@ -1174,7 +1184,7 @@ __global__ void dataTypeDetection(
 		}
  
 		// Finding the breaking point for each column
-		while(true){
+ 		while(true){
 			if(raw_csv[pos]==delim){
 			  if(quotation==false)
 				break;
@@ -1182,17 +1192,27 @@ __global__ void dataTypeDetection(
 				break;
 			}
 			else if (raw_csv[pos] == terminator){
+ 			  if(quotation==false)
+				break;
+			  else if ((pos-1) >= start && raw_csv[pos-1]=='\"' )
 				break;
 			}
             else if(raw_csv[pos] == '\r' &&  ((pos+1) < stop && raw_csv[pos+1]=='\n')){
-            	stop--;
+  			  if(quotation==false){
+				stop--;
+				break;
+			  }
+			  else if ((pos-1) >= start && raw_csv[pos-1]=='\"' ){
+             	stop--;
                 break;
-            }
-			if(pos>stop)
+    		  
+			  }
+           }
+			if(pos>=stop)
 				break;
 			pos++;
 		}
-
+ 
 
 		// Checking if this is a column that the user wants --- user can filter columns
 		if(parseCol[col]==true){
