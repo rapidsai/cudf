@@ -279,13 +279,11 @@ def compact_mask_bytes(boolbytes):
     """Convert booleans (in bytes) to a bitmask
     """
     bits = make_mask(boolbytes.size)
-    # print(bits.copy_to_host())
     if bits.size > 0:
         # Fill zero
         gpu_fill_value.forall(bits.size)(bits, 0)
         # Compact
         gpu_compact_mask_bytes.forall(bits.size)(boolbytes, bits)
-    # print(bits.copy_to_host())
     return bits
 
 
