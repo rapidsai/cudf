@@ -56,25 +56,25 @@ the dependencies.
 
 ```bash
 # create the conda environment (assuming in build directory)
-$ conda env create --name libgdf_dev --file conda_environments/dev_py35.yml
+$ conda env create --name cudf_dev --file ../conda_environments/dev_py35.yml
 # activate the environment
-$ source activate libgdf_dev
+$ source activate cudf_dev
 # when not using default arrow version 0.10.0, run
 $ conda install pyarrow=$ARROW_VERSION -c conda-forge
 ```
 
-This installs the required `cmake` and `pyarrow` into the `libgdf_dev` conda
+This installs the required `cmake` and `pyarrow` into the `cudf_dev` conda
 environment and activates it.
 
 For additional information, the python cffi wrapper code requires `cffi` and
 `pytest`.  The testing code requires `numba` and `cudatoolkit` as an
 additional dependency.  All these are installed from the previous commands.
 
-The environment can be updated from `conda_environments/dev_py35.yml` as
+The environment can be updated from `../conda_environments/dev_py35.yml` as
 development includes/changes the depedencies.  To do so, run:
 
 ```bash
-conda env update --name libgdf_dev --file conda_environments/dev_py35.yml
+conda env update --name cudf_dev --file ../conda_environments/dev_py35.yml
 ```
 Note that `dev_py35.yml` uses the latest version of pyarrow.
 Reinstall pyarrow if needed using `conda install
