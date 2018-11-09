@@ -282,7 +282,6 @@ def compact_mask_bytes(boolbytes):
     # print(bits.copy_to_host())
     if bits.size > 0:
         # Fill zero
-        print("filling zero")
         gpu_fill_value.forall(bits.size)(bits, 0)
         # Compact
         gpu_compact_mask_bytes.forall(bits.size)(boolbytes, bits)
