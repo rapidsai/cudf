@@ -20,7 +20,8 @@
  * Note: assumes at least C++11
  * ---------------------------------------------------------------------------**/
 
-#pragma once
+#ifndef MEMORY_MANAGER_H
+#define MEMORY_MANAGER_H
 
 #include <vector>
 #include <chrono>
@@ -76,7 +77,9 @@ namespace rmm
         void record(MemEvent_t event, int deviceId, void* ptr,
                     TimePt start, TimePt end, 
                     size_t freeMem, size_t totalMem,
-                    size_t size=0, cudaStream_t stream=0);
+                    size_t size, cudaStream_t stream,
+                    std::string filename,
+                    unsigned int line);
 
         void clear();
         
@@ -96,6 +99,8 @@ namespace rmm
             size_t currentAllocations;
             TimePt start;
             TimePt end;
+            std::string filename;
+            unsigned int line;
         };
         
         TimePt base_time;
@@ -107,14 +112,16 @@ namespace rmm
     {
     public:
         static Manager& getInstance(){
-            // Myers' singleton. Thread safe and unique in C++11 -- Note, C++11 required!
+            // Myers' singleton. Thread safe and unique. Note: C++11 required.
             static Manager instance;
             return instance;
         }
 
         static Logger& getLogger() { return getInstance().logger; }
 
-        static void setOptions(const rmmOptions_t &options) { getInstance().options = options; }
+        static void setOptions(const rmmOptions_t &options) { 
+            getInstance().options = options; 
+        }
         static rmmOptions_t getOptions() { return getInstance().options; }
 
         void finalize() {
@@ -155,3 +162,5 @@ namespace rmm
         rmmOptions_t options;
     };    
 }
+
+#endif // MEMORY_MANAGER_H

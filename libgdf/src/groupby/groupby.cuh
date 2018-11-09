@@ -288,7 +288,7 @@ gdf_column create_gdf_column(const size_t size)
 
   // Allocate the buffer for the column
   // TODO error checking?
-  rmmAlloc((void**)&the_column.data, the_column.size * sizeof(col_type), 0); // TODO: non-default stream?
+  RMM_ALLOC((void**)&the_column.data, the_column.size * sizeof(col_type), 0); // TODO: non-default stream?
   
   return the_column;
 }
@@ -379,8 +379,8 @@ gdf_error multi_pass_avg(int ncols,
   }
 
   // Free intermediate storage
-  RMM_TRY( rmmFree(count_output.data, 0) );
-  RMM_TRY( rmmFree(sum_output.data, 0) );
+  RMM_TRY( RMM_FREE(count_output.data, 0) );
+  RMM_TRY( RMM_FREE(sum_output.data, 0) );
   
   return GDF_SUCCESS;
 }

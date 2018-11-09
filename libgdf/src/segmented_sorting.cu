@@ -32,15 +32,15 @@ struct SegmentedRadixSortPlan{
     gdf_error setup(size_t sizeof_key, size_t sizeof_val) {
         back_key_size = num_items * sizeof_key;
         back_val_size = num_items * sizeof_val;
-        RMM_TRY( rmmAlloc(&back_key, back_key_size, stream) ); // TODO: non-default stream
-        RMM_TRY( rmmAlloc(&back_val, back_val_size, stream) );
+        RMM_TRY( RMM_ALLOC(&back_key, back_key_size, stream) ); // TODO: non-default stream
+        RMM_TRY( RMM_ALLOC(&back_val, back_val_size, stream) );
         return GDF_SUCCESS;
     }
 
     gdf_error teardown() {
-        RMM_TRY(rmmFree(back_key, stream));
-        RMM_TRY(rmmFree(back_val, stream));
-        RMM_TRY(rmmFree(storage, stream));
+        RMM_TRY(RMM_FREE(back_key, stream));
+        RMM_TRY(RMM_FREE(back_val, stream));
+        RMM_TRY(RMM_FREE(storage, stream));
         return GDF_SUCCESS;
     }
 };
@@ -148,7 +148,7 @@ struct SegmentedRadixSort {
         } else {
             // We have not operated.
             // Just checking for temporary storage requirement
-            RMM_TRY( rmmAlloc(&plan->storage, plan->storage_bytes, plan->stream) ); // TODO: non-default stream
+            RMM_TRY( RMM_ALLOC(&plan->storage, plan->storage_bytes, plan->stream) ); // TODO: non-default stream
             CUDA_CHECK_LAST();
             // Now that we have allocated, do real work.
             return sort(plan, d_key_buf, d_value_buf, num_segments,

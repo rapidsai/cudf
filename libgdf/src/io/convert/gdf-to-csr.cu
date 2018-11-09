@@ -105,7 +105,7 @@ gdf_error gdf_to_csr(gdf_column **gdfData, int numCol, csr_gdf *csrReturn) {
 
 	// Allocate space for the offset - this will eventually be IA - dtype is long since the sum of all column elements could be larger than int32
 	gdf_size_type * offsets;
-    RMM_TRY(rmmAlloc((void**)&offsets, (numRows + 2) * sizeof(int64_t), 0)); // TODO: non-default stream?
+    RMM_TRY(RMM_ALLOC((void**)&offsets, (numRows + 2) * sizeof(int64_t), 0)); // TODO: non-default stream?
     CUDA_TRY(cudaMemset(offsets, 0, ( sizeof(int64_t) * (numRows + 2) ) ));
 
     // do a pass over each columns, and have each column updates the row count
@@ -132,11 +132,11 @@ gdf_error gdf_to_csr(gdf_column **gdfData, int numCol, csr_gdf *csrReturn) {
 	//--------------------------------------------------------------------------------------
 	// now start creating output data
     size_t * IA;
-    RMM_TRY(rmmAlloc((void**)&IA, (numRows + 2) * sizeof(gdf_size_type), 0));
+    RMM_TRY(RMM_ALLOC((void**)&IA, (numRows + 2) * sizeof(gdf_size_type), 0));
     CUDA_TRY(cudaMemcpy(IA, offsets, ( sizeof(gdf_size_type) * (numRows + 2) ), cudaMemcpyDeviceToDevice) );
 
     int64_t * 	JA;
-    RMM_TRY( rmmAlloc((void**)&JA, (sizeof(int64_t) * nnz), 0));
+    RMM_TRY( RMM_ALLOC((void**)&JA, (sizeof(int64_t) * nnz), 0));
 
     //----------------------------------------------------------------------------------
     // Now just missing A and the moving of data
@@ -172,13 +172,13 @@ gdf_error gdf_to_csr(gdf_column **gdfData, int numCol, csr_gdf *csrReturn) {
     		status = runConverter<double>(gdfData, csrReturn, offsets);
     	    break;
     	default:
-    		RMM_TRY(rmmFree(IA, 0));
-    		RMM_TRY(rmmFree(JA, 0));
-    		RMM_TRY(rmmFree(offsets, 0));
+    		RMM_TRY(RMM_FREE(IA, 0));
+    		RMM_TRY(RMM_FREE(JA, 0));
+    		RMM_TRY(RMM_FREE(offsets, 0));
     		return GDF_UNSUPPORTED_DTYPE;
     }
 
-    RMM_TRY(rmmFree(offsets, 0));
+    RMM_TRY(RMM_FREE(offsets, 0));
 
 	return status;
 }
@@ -206,7 +206,7 @@ gdf_error runConverter(gdf_column **gdfData, csr_gdf *csrReturn, gdf_size_type *
     int blocks  = (numRows + threads - 1) / threads;
 
 	T *			A;
-	RMM_TRY(rmmAlloc((void**)&A, (sizeof(T) * csrReturn->nnz), 0));
+	RMM_TRY(RMM_ALLOC((void**)&A, (sizeof(T) * csrReturn->nnz), 0));
 	CUDA_TRY(cudaMemset(A, 0, (sizeof(T) * csrReturn->nnz)));
 
     // Now start moving the data and creating the CSR
