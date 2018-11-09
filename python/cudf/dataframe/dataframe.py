@@ -14,7 +14,7 @@ import pyarrow as pa
 from numba.cuda.cudadrv.devicearray import DeviceNDArray
 
 from librmm_cffi import librmm as rmm
-from libgdf_cffi import ffi, libgdf
+from libgdf_cffi import libgdf
 
 from cudf import formatting, _gdf
 from cudf.utils import cudautils, queryutils, applyutils, utils
@@ -893,7 +893,7 @@ class DataFrame(object):
 
     def transpose(self):
         """Transpose index and columns.
-        
+
         Returns
         -------
         a new (ncol x nrow) dataframe. self is (nrow x ncol)
@@ -920,7 +920,7 @@ class DataFrame(object):
         new_col_ptrs = [
             new_col_series[i]._column.cffi_view
             for i in range(0, new_ncol)]
-        
+
         # TODO (dm): move to _gdf.py
         libgdf.gdf_transpose(
             ncols,

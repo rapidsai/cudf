@@ -25,15 +25,15 @@ gdf_error gdf_transpose(size_t ncols,
         return GDF_SUCCESS;
     }
 
-    // Wrap the groupby input columns in a gdf_table
+    // Wrap the input columns in a gdf_table
     using size_type = decltype(ncols);
     size_t out_ncols = in_cols[0]->size;
     // TODO (dm): this should be const but the member function in gdf_table.cuh isn't const :(
-    std::unique_ptr< gdf_table<size_type> > input_table {new gdf_table<size_type>(ncols, in_cols)};
+    std::unique_ptr< const gdf_table<size_type> > input_table {new gdf_table<size_type>(ncols, in_cols)};
     std::unique_ptr< gdf_table<size_type> > output_table {new gdf_table<size_type>(out_ncols, out_cols)};
 
     // Workaround because device lambdas cannot currently work with smart pointers
-    // Smart pointers are still used because I don't want to remmeber to free nmemory
+    // Smart pointers are still used because I don't want to remember to free memory
     auto input_table_ptr = &(*input_table);
     auto output_table_ptr = &(*output_table);
     auto copy_to_outcol = [=] __device__ (size_t i)
