@@ -147,22 +147,22 @@ def test_csv_reader_skiprows_skipfooter(tmpdir):
 
 
 def test_csv_reader_negative_vals(tmpdir):
-    fname = 'tmp_csvreader_file8.csv'
+    fname = tmpdir.mkdir("gdf_csv").join("tmp_csvreader_file6.csv")
 
     names = ['0', '1', '2']
-    dtypes = ['float', 'float', 'float']
+    dtypes = ['float32', 'float32', 'float32']
     lines = [','.join(names),
              '-181.5060,-185.37000,-3',
              '-127.6300,-230.54600,-9']
 
-    with open(fname, 'w') as fp:
+    with open(str(fname), 'w') as fp: 
         fp.write('\n'.join(lines) + '\n')
 
     zero = [-181.5060, -127.6300]
     one = [-185.370, -230.54600]
-    two = [-3, -9]
+    two = [-3, -9] 
 
-    df = read_csv(fname, names=names, dtype=dtypes, skiprows=1)
+    df = read_csv(str(fname), names=names, dtype=dtypes, skiprows=1)
 
     np.testing.assert_allclose(zero, df['0'])
     np.testing.assert_allclose(one, df['1'])
