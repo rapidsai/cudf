@@ -155,7 +155,7 @@ def test_csv_reader_negative_vals(tmpdir):
              '-181.5060,-185.37000,-3',
              '-127.6300,-230.54600,-9']
 
-    with open(str(fname), 'w') as fp: 
+    with open(str(fname), 'w') as fp:
         fp.write('\n'.join(lines) + '\n')
 
     zero = [-181.5060, -127.6300]
