@@ -44,7 +44,8 @@ RUN conda install -n cudf -y -c numba -c conda-forge -c rapidsai -c defaults \
 # Clone cuDF repo
 ARG CUDF_REPO=https://github.com/rapidsai/cudf
 ARG CUDF_BRANCH=master
-RUN git clone --recurse-submodules -b ${CUDF_BRANCH} ${CUDF_REPO} /cudf
+ADD libgdf /cudf/libgdf
+#RUN git clone --recurse-submodules -b ${CUDF_BRANCH} ${CUDF_REPO} /cudf
 
 # LibGDF build/install
 ENV CC=/usr/bin/gcc-${CC}
@@ -58,7 +59,24 @@ RUN source activate cudf && \
     make copy_python && \
     python setup.py install
 
+RUN source activate cudf && \
+    conda install pytest
+
+ADD docs /cudf/docs
+RUN source activate cudf && \
+    pip install -r /cudf/docs/requirement.txt
+
 # cuDF build/install
+ADD setup.cfg /cudf/setup.cfg
+ADD setup.py /cudf/setup.py
+ADD versioneer.py /cudf/versioneer.py
+ADD cudf /cudf/cudf
 RUN source activate cudf && \
     cd /cudf && \
     python setup.py install
+
+WORKDIR /cudf/docs
+CMD source activate cudf && \
+    make html && \
+    cd build/html && \
+    python -m http.server 8888

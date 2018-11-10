@@ -35,57 +35,77 @@ class DataFrame(object):
     Examples
     --------
 
-    Build dataframe with `__setitem__`
+    Build dataframe with `__setitem__`:
 
-    >>> from cudf.dataframe import DataFrame
-    >>> df = DataFrame()
-    >>> df['key'] = [0, 1, 2, 3, 4]
-    >>> df['val'] = [float(i + 10) for i in range(5)]  # insert column
-    >>> df
-      key val
-    0 0   10.0
-    1 1   11.0
-    2 2   12.0
-    3 3   13.0
-    4 4   14.0
-    >>> len(df)
-    5
+    .. code-block:: python
 
-    Build dataframe with initializer
+          from cudf.dataframe import DataFrame
+          df = DataFrame()
+          df['key'] = [0, 1, 2, 3, 4]
+          df['val'] = [float(i + 10) for i in range(5)]  # insert column
+          print(df)
 
-    >>> import numpy as np
-    >>> df2 = DataFrame([('a', np.arange(10)),
-    ...                  ('b', np.random.random(10))])
-    >>> df2
-      a b
-    0 0 0.777831724018
-    1 1 0.604480034669
-    2 2 0.664111858618
-    3 3 0.887777513028
-    4 4 0.55838311246
-    [5 more rows]
+    Output:
 
-    Convert from a Pandas DataFrame.
+    .. code-block:: python
 
-    >>> import pandas as pd
-    >>> from cudf.dataframe import DataFrame
-    >>> pdf = pd.DataFrame({'a': [0, 1, 2, 3],
-    ...                     'b': [0.1, 0.2, None, 0.3]})
-    >>> pdf
-    a    b
-    0  0  0.1
-    1  1  0.2
-    2  2  NaN
-    3  3  0.3
-    >>> df = DataFrame.from_pandas(pdf)
-    >>> df
-    a b
-    0 0 0.1
-    1 1 0.2
-    2 2 nan
-    3 3 0.3
+              key  val
+          0    0 10.0
+          1    1 11.0
+          2    2 12.0
+          3    3 13.0
+          4    4 14.0
+
+    Build dataframe with initializer:
+
+    .. code-block:: python
+
+          from cudf.dataframe import DataFrame
+          import numpy as np
+          import datetime as dt
+          ids = np.arange(5)
+
+          # Create some datetime data
+          t0 = dt.datetime.strptime('2018-10-07 12:00:00', '%Y-%m-%d %H:%M:%S')
+          datetimes = [(t0+ dt.timedelta(seconds=x)) for x in range(5)]
+          dts = np.array(datetimes, dtype='datetime64')
+
+          # Create the GPU DataFrame
+          df = DataFrame([('id', ids), ('datetimes', dts)])
+          print(df)
+
+    Output:
+
+    .. code-block:: python
+
+              id               datetimes
+          0    0 2018-10-07T12:00:00.000
+          1    1 2018-10-07T12:00:01.000
+          2    2 2018-10-07T12:00:02.000
+          3    3 2018-10-07T12:00:03.000
+          4    4 2018-10-07T12:00:04.000
+
+    Convert from a Pandas DataFrame:
+
+    .. code-block:: python
+
+          import pandas as pd
+          from pygdf.dataframe import DataFrame
+          pdf = pd.DataFrame({'a': [0, 1, 2, 3],'b': [0.1, 0.2, None, 0.3]})
+          df = DataFrame.from_pandas(pdf)
+          print(df)
+
+    Output:
+
+    .. code-block:: python
+
+            a b
+          0 0 0.1
+          1 1 0.2
+          2 2 nan
+          3 3 0.3
+
     """
-
     def __init__(self, name_series=None, index=None):
         if index is None:
             index = RangeIndex(start=0)
@@ -213,7 +233,8 @@ class DataFrame(object):
             self.add_column(name, col)
 
     def __delitem__(self, name):
-        """Drop the give column by *name*.
+        """
+        Drop the given column by *name*.
         """
         self.drop_column(name)
 
@@ -221,21 +242,68 @@ class DataFrame(object):
         return sum(col.__sizeof__() for col in self._cols.values())
 
     def __len__(self):
-        """Returns the number of rows
+        """
+        Returns the number of rows
         """
         return self._size
 
     def assign(self, **kwargs):
+        """
+        Assign columns to DataFrame from keyword arguments.
+
+        Examples
+        --------
+
+        .. code-block:: python
+
+            df = cudf.dataframe.DataFrame()
+            df = df.assign(a=[0,1,2], b=[3,4,5])
+            print(df)
+
+        Output:
+
+        .. code-block:: python
+
+                  a    b
+             0    0    3
+             1    1    4
+             2    2    5
+
+        """
         new = self.copy()
         for k, v in kwargs.items():
             new[k] = v
         return new
 
     def head(self, n=5):
+        """
+        Returns the first n rows as a new DataFrame
+
+        Examples
+        --------
+
+        .. code-block:: python
+
+            from cudf.dataframe import DataFrame
+            df = DataFrame()
+            df['key'] = [0, 1, 2, 3, 4]
+            df['val'] = [float(i + 10) for i in range(5)]  # insert column
+            print(df.head(2))
+
+        Output
+
+        .. code-block:: python
+
+               key  val
+           0    0 10.0
+           1    1 11.0
+
+        """
         return self[:n]
 
     def to_string(self, nrows=NOTSET, ncols=NOTSET):
-        """Convert to string
+        """
+        Convert to string
 
         Parameters
         ----------
@@ -246,6 +314,24 @@ class DataFrame(object):
         ncols : int
             Maximum number of columns to show.
             If it is None, all columns are shown.
+
+        Examples
+        --------
+
+        .. code-block:: python
+
+            from cudf.dataframe import DataFrame()
+            df = DataFrame()
+            df['key'] = [0, 1, 2]
+            df['val'] = [float(i + 10) for i in range(3)]
+            df.to_string()
+
+        Output:
+
+        .. code-block:: python
+
+          '   key  val\\n0    0 10.0\\n1    1 11.0\\n2    2 12.0'
+
         """
         if nrows is NOTSET:
             nrows = settings.formatting.get('nrows')
@@ -357,7 +443,7 @@ class DataFrame(object):
 
     def copy(self):
         """
-        copy this dataframe
+        Returns a copy of this dataframe
         """
         df = DataFrame()
         df._index = self._index
@@ -546,10 +632,12 @@ class DataFrame(object):
 
     def one_hot_encoding(self, column, prefix, cats, prefix_sep='_',
                          dtype='float64'):
-        """Expand a column with one-hot-encoding.
+        """
+        Expand a column with one-hot-encoding.
 
         Parameters
         ----------
+
         column : str
             the source column with binary encoding for the data.
         prefix : str
@@ -563,33 +651,41 @@ class DataFrame(object):
 
         Returns
         -------
+
         a new dataframe with new columns append for each category.
 
         Examples
-        -------
-        >>> import pandas as pd
-        >>> from cudf.dataframe import DataFrame as gdf
+        --------
 
-        >>> pet_owner = [1, 2, 3, 4, 5]
-        >>> pet_type = ['fish', 'dog', 'fish', 'bird', 'fish']
+        .. code-block:: python
 
-        >>> df = pd.DataFrame({'pet_owner': pet_owner, 'pet_type': pet_type})
-        >>> df.pet_type = df.pet_type.astype('category')
+          import pandas as pd
+          from cudf.dataframe import DataFrame as gdf
+          pet_owner = [1, 2, 3, 4, 5]
+          pet_type = ['fish', 'dog', 'fish', 'bird', 'fish']
+          df = pd.DataFrame({'pet_owner': pet_owner, 'pet_type': pet_type})
+          df.pet_type = df.pet_type.astype('category')
 
-        Create a column with numerically encoded category values
-        >>> df['pet_codes'] = df.pet_type.cat.codes
-        >>> my_gdf = gdf.from_pandas(df)
+          # Create a column with numerically encoded category values
+          df['pet_codes'] = df.pet_type.cat.codes
+          my_gdf = gdf.from_pandas(df)
 
-        Create the list of category codes to use in the encoding
-        >>> codes = my_gdf.pet_codes.unique()
-        >>> enc_gdf = my_gdf.one_hot_encoding('pet_codes', 'pet_dummy', codes)
-        >>> enc_gdf.head()
+          # Create the list of category codes to use in the encoding
+          codes = my_gdf.pet_codes.unique()
+          enc_gdf = my_gdf.one_hot_encoding('pet_codes', 'pet_dummy', codes)
+          enc_gdf.head()
+
+        Output:
+
+        .. code-block:: python
+
           pet_owner pet_type pet_codes pet_dummy_0 pet_dummy_1 pet_dummy_2
           0         1     fish         2         0.0         0.0         1.0
           1         2      dog         1         0.0         1.0         0.0
           2         3     fish         2         0.0         0.0         1.0
           3         4     bird         0         1.0         0.0         0.0
           4         5     fish         2         0.0         0.0         1.0
+
         """
         newnames = [prefix_sep.join([prefix, str(cat)]) for cat in cats]
         newcols = self[column].one_hot_encoding(cats=cats, dtype=dtype)
@@ -643,15 +739,44 @@ class DataFrame(object):
 
     def sort_values(self, by, ascending=True):
         """
-        Sort by values.
+
+        Uses parallel radixsort, which is a stable sort.
+
+        Parameters
+        ----------
+        by : str
+            Name of Series to sort by
+        ascending : bool, default True
+            Sort ascending vs. descending.
+        Returns
+        -------
+        sorted_obj : cuDF DataFrame
 
         Difference from pandas:
-        * *by* must be the name of a single column.
-        * Support axis='index' only.
-        * Not supporting: inplace, kind, na_position
+          * *by* must be the name of a single column.
+          * Support axis='index' only.	        by : str
+          * Not supporting: inplace, kind, na_position
 
-        Details:
-        Uses parallel radixsort, which is a stable sort.
+        Examples
+        --------
+
+        .. code-block:: python
+
+              from cudf.dataframe import DataFrame
+              a = ('a', [0, 1, 2])
+              b = ('b', [-3, 2, 0])
+              df = DataFrame([a, b])
+              df.sort_values('b')
+
+        Output:
+
+        .. code-block:: python
+
+                    a    b
+               0    0   -3
+               2    2    0
+               1    1    2
+
         """
         # argsort the `by` column
         return self._sort_by(self[by].argsort(ascending=ascending))
@@ -1042,20 +1167,78 @@ class DataFrame(object):
             return result
 
     def query(self, expr):
-        """Query with a boolean expression using Numba to compile a GPU kernel.
+        """
+        Query with a boolean expression using Numba to compile a GPU kernel.
 
         See pandas.DataFrame.query.
 
         Parameters
         ----------
+
         expr : str
-            A boolean expression.  Names in the expression refers to the
-            columns.  Any name prefixed with `@` refer to the variables in
-            the calling environment.
+            A boolean expression. Names in expression refer to columns.
+
+            Names starting with `@` refer to Python variables
 
         Returns
         -------
+
         filtered :  DataFrame
+
+        Examples
+        --------
+
+        .. code-block:: python
+
+              from cudf.dataframe import DataFrame
+              a = ('a', [1, 2, 2])
+              b = ('b', [3, 4, 5])
+              df = DataFrame([a, b])
+              df.query('a == 2')
+
+        Output:
+
+        .. code-block:: python
+
+                   a    b
+              1    2    4
+              2    2    5
+
+        Complex conditionals:
+
+        .. code-block:: python
+
+           expr = "(a == 2 and b == 4) or (b == 3)"
+           df.query(expr)
+
+        Output:
+
+        .. code-block:: python
+
+                a    b
+                0    1    3
+                1    2    4
+
+        DateTime conditionals:
+
+        .. code-block:: python
+
+           from cudf.dataframe import DataFrame
+           import numpy as np
+
+           df = DataFrame()
+           data = np.array(['2018-10-07', '2018-10-08'], dtype='datetime64')
+           df['datetimes'] = data
+           search_date = dt.datetime.strptime('2018-10-08', '%Y-%m-%d')
+           df.query('datetimes==@search_date')
+
+        Output:
+
+        .. code-block:: python
+
+                            datetimes
+            1 2018-10-08T00:00:00.000
+
         """
 
         _gdf.nvtx_range_push("PYGDF_QUERY", "purple")
@@ -1079,7 +1262,8 @@ class DataFrame(object):
 
     @applyutils.doc_apply()
     def apply_rows(self, func, incols, outcols, kwargs, cache_key=None):
-        """Transform each row using the user-provided function.
+        """
+        Apply a row-wise user defined function.
 
         Parameters
         ----------
@@ -1088,40 +1272,56 @@ class DataFrame(object):
         Examples
         --------
 
-        With a ``DataFrame`` like so:
-
-        >>> df = DataFrame()
-        >>> df['in1'] = in1 = np.arange(nelem)
-        >>> df['in2'] = in2 = np.arange(nelem)
-        >>> df['in3'] = in3 = np.arange(nelem)
-
-        Define the user function for ``.apply_rows``:
-
-        >>> def kernel(in1, in2, in3, out1, out2, extra1, extra2):
-        ...     for i, (x, y, z) in enumerate(zip(in1, in2, in3)):
-        ...         out1[i] = extra2 * x - extra1 * y
-        ...         out2[i] = y - extra1 * z
-
         The user function should loop over the columns and set the output for
-        each row.  Each iteration of the loop **MUST** be independent of each
-        other.  The order of the loop execution can be arbitrary.
+        each row. Loop execution order is arbitrary, so each iteration of
+        the loop **MUST** be independent of each other.
+
+        When ``func`` is invoked, the array args corresponding to the
+        input/output are strided so as to improve GPU parallelism.
+        The loop in the function resembles serial code, but executes
+        concurrently in multiple threads.
+
+        .. code-block:: python
+
+          import cudf
+          import numpy as np
+
+          df = cudf.dataframe.DataFrame()
+          nelem = 3
+          df['in1'] = np.arange(nelem)
+          df['in2'] = np.arange(nelem)
+          df['in3'] = np.arange(nelem)
+
+          # Define input columns for the kernel
+          in1 = df['in1']
+          in2 = df['in2']
+          in3 = df['in3']
+
+          def kernel(in1, in2, in3, out1, out2, kwarg1, kwarg2):
+              for i, (x, y, z) in enumerate(zip(in1, in2, in3)):
+                 out1[i] = kwarg2 * x - kwarg1 * y
+                 out2[i] = y - kwarg1 * z
 
         Call ``.apply_rows`` with the name of the input columns, the name and
         dtype of the output columns, and, optionally, a dict of extra
         arguments.
 
-        >>> outdf = df.apply_rows(kernel,
-        ...                       incols=['in1', 'in2', 'in3'],
-        ...                       outcols=dict(out1=np.float64,
-        ...                                    out2=np.float64),
-        ...                       kwargs=dict(extra1=2.3, extra2=3.4))
+        .. code-block:: python
 
-        **Notes**
+          df.apply_rows(kernel,
+                        incols=['in1', 'in2', 'in3'],
+                        outcols=dict(out1=np.float64, out2=np.float64),
+                        kwargs=dict(kwarg1=3, kwarg2=4))
 
-        When ``func`` is invoked, the array args corresponding to the
-        input/output are strided in a way that improves parallelism on the GPU.
-        The loop in the function may look like serial code but it will be
-        executed concurrently by multiple threads.
+        Output:
+
+        .. code-block:: python
+
+                 in1  in2  in3 out1 out2
+             0    0    0    0  0.0  0.0
+             1    1    1    1  1.0 -2.0
+             2    2    2    2  2.0 -4.0
+
         """
         return applyutils.apply_rows(self, func, incols, outcols, kwargs,
                                      cache_key=cache_key)
@@ -1129,7 +1329,8 @@ class DataFrame(object):
     @applyutils.doc_applychunks()
     def apply_chunks(self, func, incols, outcols, kwargs={}, chunks=None,
                      tpb=1):
-        """Transform user-specified chunks using the user-provided function.
+        """
+        Transform user-specified chunks using the user-provided function.
 
         Parameters
         ----------
@@ -1148,18 +1349,22 @@ class DataFrame(object):
         http://numba.pydata.org/numba-doc/latest/cuda/kernels.html
 
         In the example below, the *kernel* is invoked concurrently on each
-        specified chunk.  The *kernel* computes the corresponding output
-        for the chunk.  By looping over the range
+        specified chunk. The *kernel* computes the corresponding output
+        for the chunk.
+
+        By looping over the range
         ``range(cuda.threadIdx.x, in1.size, cuda.blockDim.x)``, the *kernel*
         function can be used with any *tpb* in a efficient manner.
 
-        >>> from numba import cuda
-        >>> def kernel(in1, in2, in3, out1):
-        ...     for i in range(cuda.threadIdx.x, in1.size, cuda.blockDim.x):
-        ...         x = in1[i]
-        ...         y = in2[i]
-        ...         z = in3[i]
-        ...         out1[i] = x * y + z
+        .. code-block:: python
+
+          from numba import cuda
+          def kernel(in1, in2, in3, out1):
+               for i in range(cuda.threadIdx.x, in1.size, cuda.blockDim.x):
+                   x = in1[i]
+                   y = in2[i]
+                   z = in3[i]
+                   out1[i] = x * y + z
 
         See also
         --------
@@ -1218,7 +1423,27 @@ class DataFrame(object):
         return [outdf[s:e] for s, e in zip(offsets, offsets[1:] + [None])]
 
     def to_pandas(self):
-        """Convert to a Pandas DataFrame.
+        """
+        Convert to a Pandas DataFrame.
+
+        Examples
+        --------
+
+        .. code-block:: python
+
+          from cudf.dataframe import DataFrame
+          a = ('a', [0, 1, 2])
+          b = ('b', [-3, 2, 0])
+          df = DataFrame([a, b])
+          pdf = df.to_pandas()
+          type(pdf)
+
+        Output:
+
+        .. code-block:: python
+
+           <class 'pandas.core.frame.DataFrame'>
+
         """
         index = self.index.to_pandas()
         data = {c: x.to_pandas(index=index) for c, x in self._cols.items()}
@@ -1226,11 +1451,31 @@ class DataFrame(object):
 
     @classmethod
     def from_pandas(cls, dataframe):
-        """Convert from a Pandas DataFrame.
+        """
+        Convert from a Pandas DataFrame.
 
         Raises
         ------
         TypeError for invalid input type.
+
+        Examples
+        --------
+
+        .. code-block:: python
+
+            import cudf
+            import pandas as pd
+
+            data = [[0,1], [1,2], [3,4]]
+            pdf = pd.DataFrame(data, columns=['a', 'b'], dtype=int)
+            cudf.dataframe.DataFrame.from_pandas(pdf)
+
+        Output:
+
+        .. code-block:: python
+
+            <cudf.DataFrame ncols=2 nrows=3 >
+
         """
         if not isinstance(dataframe, pd.DataFrame):
             raise TypeError('not a pandas.DataFrame')
@@ -1243,7 +1488,30 @@ class DataFrame(object):
         return df.set_index(dataframe.index.values)
 
     def to_arrow(self, index=True):
-        """Convert to a PyArrow Table.
+        """
+        Convert to a PyArrow Table.
+
+        Examples
+        --------
+
+        .. code-block:: python
+
+            from cudf.dataframe import DataFrame
+
+            a = ('a', [0, 1, 2])
+            b = ('b', [-3, 2, 0])
+            df = DataFrame([a, b])
+            df.to_arrow()
+
+        Output:
+
+        .. code-block:: python
+
+           pyarrow.Table
+           None: int64
+           a: int64
+           b: int64
+
         """
         arrays = []
         names = []
@@ -1267,6 +1535,26 @@ class DataFrame(object):
 
         Does not support automatically setting index column(s) similar to how
         ``to_pandas`` works for PyArrow Tables.
+
+        Examples
+        --------
+
+        .. code-block:: python
+
+            import pyarrow as pa
+            from cudf.dataframe import DataFrame
+
+            data = [pa.array([1, 2, 3]), pa.array([4, 5, 6])
+            batch = pa.RecordBatch.from_arrays(data, ['f0', 'f1'])
+            table = pa.Table.from_batches([batch])
+            DataFrame.from_arrow(table)
+
+        Output:
+
+        .. code-block:: python
+
+            <cudf.DataFrame ncols=2 nrows=3 >
+
         """
         if not isinstance(table, pa.Table):
             raise TypeError('not a pyarrow.Table')
@@ -1330,12 +1618,15 @@ class DataFrame(object):
         return df
 
     def quantile(self, q, interpolation='linear', exact=False):
-        """Return values at the given quantile.
+        """
+        Return values at the given quantile.
+
         Parameters
         ----------
+
         q : float or array-like
             0 <= q <= 1, the quantile(s) to compute
-        interpolation : {‘linear’, ‘lower’, ‘higher’, ‘midpoint’, ‘nearest’}
+        interpolation : {`linear`, `lower`, `higher`, `midpoint`, `nearest`}
             This  parameter specifies the interpolation method to use,
             when the desired quantile lies between two data points i and j.
             Default 'linear'.
@@ -1343,10 +1634,14 @@ class DataFrame(object):
             List of column names to include.
         exact : boolean
             Whether to use approximate or exact quantile algorithm.
+
         Returns
         -------
+
         DataFrame
+
         """
+
         result = DataFrame()
         result['Quantile'] = q
         for k, col in self._cols.items():
