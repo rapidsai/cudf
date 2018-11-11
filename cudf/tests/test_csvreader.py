@@ -160,7 +160,7 @@ def test_csv_reader_negative_vals(tmpdir):
 
     zero = [-181.5060, -127.6300]
     one = [-185.370, -230.54600]
-    two = [-3, -9] 
+    two = [-3, -9]
 
     df = read_csv(str(fname), names=names, dtype=dtypes, skiprows=1)
 
