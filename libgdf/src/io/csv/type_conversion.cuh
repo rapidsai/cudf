@@ -127,7 +127,7 @@ T convertStrtoFloat(char *data, long start_idx, long end_idx) {
 	long idx = decimal_pt;
 	int powSize = 0;
 
-	if ( idx != start_idx ) {
+	if ( idx >= start_idx ) {
 		if (data[idx] == '.')
 			--idx;
 
