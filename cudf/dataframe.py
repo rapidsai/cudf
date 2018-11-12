@@ -256,6 +256,8 @@ class DataFrame(object):
 
         .. code-block:: python
 
+            import cudf
+
             df = cudf.dataframe.DataFrame()
             df = df.assign(a=[0,1,2], b=[3,4,5])
             print(df)
@@ -285,6 +287,7 @@ class DataFrame(object):
         .. code-block:: python
 
             from cudf.dataframe import DataFrame
+
             df = DataFrame()
             df['key'] = [0, 1, 2, 3, 4]
             df['val'] = [float(i + 10) for i in range(5)]  # insert column
@@ -661,6 +664,7 @@ class DataFrame(object):
 
           import pandas as pd
           from cudf.dataframe import DataFrame as gdf
+
           pet_owner = [1, 2, 3, 4, 5]
           pet_type = ['fish', 'dog', 'fish', 'bird', 'fish']
           df = pd.DataFrame({'pet_owner': pet_owner, 'pet_type': pet_type})
@@ -845,6 +849,34 @@ class DataFrame(object):
         Returns
         -------
         merged : DataFrame
+
+        Examples
+        --------
+
+        .. code-block:: python
+
+            from cudf.dataframe import DataFrame
+
+            df_a = DataFrame()
+            df['key'] = [0, 1, 2, 3, 4]
+            df['vals_a'] = [float(i + 10) for i in range(5)]
+
+            df_b = DataFrame()
+            df_b['key'] = [1, 2, 4]
+            df_b['vals_b'] = [float(i+10) for i in range(3)]
+            df_merged = df_a.merge(df_b, on=['key'], how='left')
+            print(df_merged.sort_values('key'))
+
+        Output:
+
+        .. code-block:: python
+
+             key  val vals_b
+             3    0 10.0
+             0    1 11.0   10.0
+             1    2 12.0   11.0
+             4    3 13.0
+             2    4 14.0   12.0
 
         """
         _gdf.nvtx_range_push("PYGDF_JOIN", "blue")
@@ -1194,28 +1226,14 @@ class DataFrame(object):
               a = ('a', [1, 2, 2])
               b = ('b', [3, 4, 5])
               df = DataFrame([a, b])
-              df.query('a == 2')
+              expr = "(a == 2 and b == 4) or (b == 3)"
+              df.query(expr)
 
         Output:
 
         .. code-block:: python
 
-                   a    b
-              1    2    4
-              2    2    5
-
-        Complex conditionals:
-
-        .. code-block:: python
-
-           expr = "(a == 2 and b == 4) or (b == 3)"
-           df.query(expr)
-
-        Output:
-
-        .. code-block:: python
-
-                a    b
+                     a    b
                 0    1    3
                 1    2    4
 
