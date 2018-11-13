@@ -19,10 +19,7 @@
 #include <cuda_runtime.h>
 #include "hash/groupby_compute_api.h"
 #include "hash/aggregation_operations.cuh"
-
-// Forward declaration
-template <typename size_type, typename byte_t>
-struct gdf_table;
+#include "../gdf_table.cuh"
 
 /* --------------------------------------------------------------------------*/
 /** 

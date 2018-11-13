@@ -20,16 +20,13 @@
 #include <cuda_runtime.h>
 #include <limits>
 #include <memory>
+#include "../../hashmap/managed.cuh"
+#include "groupby_kernels.cuh"
+#include "../../gdf_table.cuh"
 #include <thrust/device_vector.h>
 #include <thrust/gather.h>
 #include <thrust/copy.h>
-#include "../../hashmap/managed.cuh"
-#include "groupby_kernels.cuh"
 #include "../../thrust_rmm_allocator.h"
-
-// Forward declaration
-template <typename size_type, typename byte_type>
-struct gdf_table;
 
 
 // Vector set to use rmmAlloc and rmmFree.
