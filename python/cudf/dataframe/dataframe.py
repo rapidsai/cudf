@@ -915,7 +915,10 @@ class DataFrame(object):
         new_ncol = len(self)
 
         new_col_series = [
-            Series(Buffer(rmm.device_array(shape=new_nrow, dtype=dtype)))
+            Series.from_masked_array(
+                data=Buffer(rmm.device_array(shape=new_nrow, dtype=dtype)),
+                mask=cudautils.make_empty_mask(size=new_nrow),
+            )
             for i in range(0, new_ncol)]
         new_col_ptrs = [
             new_col_series[i]._column.cffi_view
