@@ -28,6 +28,7 @@
 #include "hashmap/hash_functions.cuh"
 #include "hashmap/managed.cuh"
 #include "sqls_rtti_comp.hpp"
+#include "gdf_type_dispatcher.cuh"
 
 template <typename size_type>
 struct ValidRange {
@@ -708,146 +709,28 @@ public:
     hash_value_type hash_value{0};
 
     // If num_columns_to_hash is zero, hash all columns
-    if(0 == num_columns_to_hash)
-    {
+    if(0 == num_columns_to_hash) {
       num_columns_to_hash = this->num_columns;
     }
 
-    for(size_type i = 0; i < num_columns_to_hash; ++i)
+    auto hash_element = [&hash_value](auto dummy, size_type row_index, size_type col_index, void const * col_data)
     {
-      const gdf_dtype current_column_type = d_columns_types[i];
+      using col_type = decltype(dummy);
+      hash_function<col_type> hasher;
+      col_type const * const current_column{static_cast<col_type const*>(col_data)};
+      col_type const current_value{current_column[row_index]};
+      hash_value_type const key_hash{hasher(current_value)};
 
-      switch(current_column_type)
-      {
-        case GDF_INT8:
-          {
-            using col_type = int8_t;
-            hash_function<col_type> hasher;
-            const col_type * current_column = static_cast<col_type*>(d_columns_data[i]);
-            const col_type current_value = current_column[row_index];
-            hash_value_type key_hash = hasher(current_value);
-            // Only combine hash values after the first column
-            if(i > 0)
-              hash_value = hasher.hash_combine(hash_value, key_hash);
-            else
-              hash_value = key_hash;
-            break;
-          }
-        case GDF_INT16:
-          {
-            using col_type = int16_t;
-            hash_function<col_type> hasher;
-            const col_type * current_column = static_cast<col_type*>(d_columns_data[i]);
-            const col_type current_value = current_column[row_index];
-            hash_value_type key_hash = hasher(current_value);
-            // Only combine hash values after the first column
-            if(i > 0)
-              hash_value = hasher.hash_combine(hash_value, key_hash);
-            else
-              hash_value = key_hash;
-            break;
-          }
-        case GDF_INT32:
-          {
-            using col_type = int32_t;
-            hash_function<col_type> hasher;
-            const col_type * current_column = static_cast<col_type*>(d_columns_data[i]);
-            const col_type current_value = current_column[row_index];
-            hash_value_type key_hash = hasher(current_value);
-            // Only combine hash values after the first column
-            if(i > 0)
-              hash_value = hasher.hash_combine(hash_value, key_hash);
-            else
-              hash_value = key_hash;
-            break;
-          }
-        case GDF_INT64:
-          {
-            using col_type = int64_t;
-            hash_function<col_type> hasher;
-            const col_type * current_column = static_cast<col_type*>(d_columns_data[i]);
-            const col_type current_value = current_column[row_index];
-            hash_value_type key_hash = hasher(current_value);
-            // Only combine hash values after the first column
-            if(i > 0)
-              hash_value = hasher.hash_combine(hash_value, key_hash);
-            else
-              hash_value = key_hash;
-            break;
-          }
-        case GDF_FLOAT32:
-          {
-            using col_type = float;
-            hash_function<col_type> hasher;
-            const col_type * current_column = static_cast<col_type*>(d_columns_data[i]);
-            const col_type current_value = current_column[row_index];
-            hash_value_type key_hash = hasher(current_value);
-            // Only combine hash values after the first column
-            if(i > 0)
-              hash_value = hasher.hash_combine(hash_value, key_hash);
-            else
-              hash_value = key_hash;
-            break;
-          }
-        case GDF_FLOAT64:
-          {
-            using col_type = double;
-            hash_function<col_type> hasher;
-            const col_type * current_column = static_cast<col_type*>(d_columns_data[i]);
-            const col_type current_value = current_column[row_index];
-            hash_value_type key_hash = hasher(current_value);
-            // Only combine hash values after the first column
-            if(i > 0)
-              hash_value = hasher.hash_combine(hash_value, key_hash);
-            else
-              hash_value = key_hash;
-            break;
-          }
-        case GDF_DATE32:
-          {
-            using col_type = int32_t;
-            hash_function<col_type> hasher;
-            const col_type * current_column = static_cast<col_type*>(d_columns_data[i]);
-            const col_type current_value = current_column[row_index];
-            hash_value_type key_hash = hasher(current_value);
-            // Only combine hash values after the first column
-            if(i > 0)
-              hash_value = hasher.hash_combine(hash_value, key_hash);
-            else
-              hash_value = key_hash;
-            break;
-          }
-        case GDF_DATE64:
-          {
-            using col_type = int64_t;
-            hash_function<col_type> hasher;
-            const col_type * current_column = static_cast<col_type*>(d_columns_data[i]);
-            const col_type current_value = current_column[row_index];
-            hash_value_type key_hash = hasher(current_value);
-            // Only combine hash values after the first column
-            if(i > 0)
-              hash_value = hasher.hash_combine(hash_value, key_hash);
-            else
-              hash_value = key_hash;
-            break;
-          }
-        case GDF_TIMESTAMP:
-          {
-            using col_type = int64_t;
-            hash_function<col_type> hasher;
-            const col_type * current_column = static_cast<col_type*>(d_columns_data[i]);
-            const col_type current_value = current_column[row_index];
-            hash_value_type key_hash = hasher(current_value);
-            // Only combine hash values after the first column
-            if(i > 0)
-              hash_value = hasher.hash_combine(hash_value, key_hash);
-            else
-              hash_value = key_hash;
-            break;
-          }
-        default:
-          assert(false && "Attempted to hash unsupported GDF datatype");
-      }
+      //if(0 == col_index)
+      //  hash_value = key_hash;
+      //else
+        hash_value = hasher.hash_combine(hash_value,key_hash);
+    };
+
+    for(size_type i = 0; i < num_columns_to_hash; ++i){
+      gdf_dtype const current_column_type = d_columns_types[i];
+
+      gdf_type_dispatcher(current_column_type, hash_element, 0, row_index, i, d_columns_data[i]);
     }
 
     return hash_value;
