@@ -122,12 +122,12 @@ struct GroupTest : public GdfTest {
     gdf_col_pointer the_column{new gdf_column, deleter};
 
     // Allocate device storage for gdf_column and copy contents from host_vector
-    RMM_ALLOC(&(the_column->data), host_vector.size() * sizeof(col_type), 0);
-    cudaMemcpy(the_column->data, host_vector.data(), host_vector.size() * sizeof(col_type), cudaMemcpyHostToDevice);
+    EXPECT_EQ(RMM_ALLOC(&(the_column->data), host_vector.size() * sizeof(col_type), 0), RMM_SUCCESS);
+    EXPECT_EQ(cudaMemcpy(the_column->data, host_vector.data(), host_vector.size() * sizeof(col_type), cudaMemcpyHostToDevice), cudaSuccess);
 
     int valid_size = gdf_get_num_chars_bitmask(host_vector.size());
-    rmmAlloc((void**)&(the_column->valid), valid_size, 0);
-    cudaMemset(the_column->valid, 0xff, valid_size);
+    EXPECT_EQ(RMM_ALLOC((void**)&(the_column->valid), valid_size, 0), RMM_SUCCESS);
+    EXPECT_EQ(cudaMemset(the_column->valid, 0xff, valid_size), cudaSuccess);
 
     // Fill the gdf_column members
     the_column->null_count = n_count;

@@ -154,17 +154,17 @@ struct JoinTest : public GdfTest
 
     // Allocate device storage for gdf_column.valid
     if (host_valid != nullptr) {
-        int valid_size = gdf_get_num_chars_bitmask(host_vector.size());
-        EXPECT_EQ(RMM_ALLOC((void**)&(the_column->valid), valid_size, 0), RMM_SUCCESS);
-        EXPECT_EQ(cudaMemcpy(the_column->valid, host_valid, valid_size, cudaMemcpyHostToDevice), cudaSuccess);
-        the_column->null_count = n_count;
+      int valid_size = gdf_get_num_chars_bitmask(host_vector.size());
+      EXPECT_EQ(RMM_ALLOC((void**)&(the_column->valid), valid_size, 0), RMM_SUCCESS);
+      EXPECT_EQ(cudaMemcpy(the_column->valid, host_valid, valid_size, cudaMemcpyHostToDevice), cudaSuccess);
+      the_column->null_count = n_count;
     } else {
         the_column->valid = nullptr;
         the_column->null_count = 0;
     }
 
     // Fill the gdf_column members
-    the_column->size = size;
+    the_column->size = host_vector.size();
     the_column->dtype = gdf_col_type;
     gdf_dtype_extra_info extra_info;
     extra_info.time_unit = TIME_UNIT_NONE;
@@ -266,10 +266,10 @@ struct JoinTest : public GdfTest
   {
     using col_type = typename std::tuple_element<0, multi_column_t>::type::value_type;
     
-    gdf_left_columns.push_back(create_empty_gdf_column<col_type>(left_column_length, 
-                                                                 false));
-    gdf_right_columns.push_back(create_empty_gdf_column<col_type>(right_column_length, 
-                                                                 false));
+    std::vector<col_type> dummy_vector_left(left_column_length, static_cast<col_type>(0));
+    std::vector<col_type> dummy_vector_right(right_column_length, static_cast<col_type>(0));
+    gdf_left_columns.push_back(create_gdf_column<col_type>(dummy_vector_left, nullptr, 0));
+    gdf_right_columns.push_back(create_gdf_column<col_type>(dummy_vector_right, nullptr, 0));
     
     // Fill vector of raw pointers to gdf_columns
     for (auto const& c : gdf_left_columns) {
@@ -476,10 +476,10 @@ struct JoinTest : public GdfTest
     std::vector<int> host_result(output_size);
 
     // Copy result of gdf join to the host
-    cudaMemcpy(host_result.data(),
-               l_join_output, total_pairs * sizeof(int), cudaMemcpyDeviceToHost);
-    cudaMemcpy(host_result.data() + total_pairs,
-               r_join_output, total_pairs * sizeof(int), cudaMemcpyDeviceToHost);
+    EXPECT_EQ(cudaMemcpy(host_result.data(),
+               l_join_output, total_pairs * sizeof(int), cudaMemcpyDeviceToHost), cudaSuccess);
+    EXPECT_EQ(cudaMemcpy(host_result.data() + total_pairs,
+               r_join_output, total_pairs * sizeof(int), cudaMemcpyDeviceToHost), cudaSuccess);
 
     // Free the original join result
     if(output_size > 0){
