@@ -721,9 +721,10 @@ public:
       col_type const current_value{current_column[row_index]};
       hash_value_type const key_hash{hasher(current_value)};
 
-      //if(0 == col_index)
-      //  hash_value = key_hash;
-      //else
+      // Only combine hash-values after the first column
+      if(0 == col_index)
+        hash_value = key_hash;
+      else
         hash_value = hasher.hash_combine(hash_value,key_hash);
     };
 
