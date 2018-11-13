@@ -736,13 +736,18 @@ TYPED_TEST(MaxJoinTest, HugeJoinSize)
   // a 34GB hash table. Therefore, use a 2^29 input to make sure we can handle big 
   // inputs until we can better handle OOM errors
   // The CI Server only has a 16GB GPU, therefore need to use 2^29 input size
-  const size_t right_table_size = 1<<29;
+
+  constexpr const double ratio_of_right_table_size_to_available_memory = 0.033;
+  size_t free_mem_in_bytes;
+  auto status = cudaMemGetInfo(&free_mem_in_bytes, nullptr);
+  EXPECT_EQ(status, cudaSuccess);
+  size_t right_table_size = free_mem_in_bytes * ratio_of_right_table_size_to_available_memory;
   this->create_input(100, RAND_MAX,
                      right_table_size, RAND_MAX);
   std::vector<result_type> gdf_result = this->compute_gdf_result();
 }
 
-TYPED_TEST(MaxJoinTest, InputTooLarge)
+TYPED_TEST(MaxJoinTest, DISABLED_InputTooLarge)
 {
     const size_t right_table_size = static_cast<size_t>(std::numeric_limits<int>::max());
     this->create_input(100, RAND_MAX,
