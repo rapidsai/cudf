@@ -28,7 +28,6 @@ gdf_error gdf_transpose(size_t ncols,
     // Wrap the input columns in a gdf_table
     using size_type = decltype(ncols);
     size_t out_ncols = in_cols[0]->size;
-    // TODO (dm): this should be const but the member function in gdf_table.cuh isn't const :(
     std::unique_ptr< const gdf_table<size_type> > input_table {new gdf_table<size_type>(ncols, in_cols)};
     std::unique_ptr< gdf_table<size_type> > output_table {new gdf_table<size_type>(out_ncols, out_cols)};
 
@@ -40,6 +39,8 @@ gdf_error gdf_transpose(size_t ncols,
     {
         input_table_ptr->get_packed_row_values(i, 
             (unsigned char*) output_table_ptr->get_column_device_pointer(i));
+        input_table_ptr->get_row_valids(i, 
+            (unsigned char*) output_table_ptr->get_columns_device_valids_ptr(i));        
     };
 
     thrust::for_each(thrust::counting_iterator<int>(0),

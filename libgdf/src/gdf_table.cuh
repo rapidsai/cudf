@@ -45,6 +45,30 @@ struct ValidRange {
     }
 };
 
+template<typename size_type, typename byte_type>
+__device__
+byte_type get_bit(size_type index, byte_type const * data)
+{
+  constexpr uint32_t BITS_PER_BYTE = (8 * sizeof(byte_type));
+
+  size_type byte_index = index / BITS_PER_BYTE;
+  byte_type bit_offset = index % BITS_PER_BYTE;
+  byte_type mask = static_cast<byte_type>(1) << bit_offset;
+  return (data[byte_index] & mask) >> bit_offset;
+}
+
+template<typename size_type, typename byte_type>
+__device__
+void set_bit(size_type index, byte_type value, byte_type * data)
+{
+  constexpr uint32_t BITS_PER_BYTE = (8 * sizeof(byte_type));
+
+  size_type byte_index = index / BITS_PER_BYTE;
+  byte_type bit_offset = index % BITS_PER_BYTE;
+
+  // value can only be 0 or 1 i.e. 0x00 or 0x01
+  data[byte_index] |= (value << bit_offset);
+}
 
 // Vector set to use rmmAlloc and rmmFree.
 template <typename T>
@@ -461,6 +485,30 @@ public:
   void* get_column_device_pointer(size_type column_index)
   {
     return d_columns_data[column_index];
+  }
+
+  __device__
+  gdf_error get_row_valids(size_type row_index, byte_type * row_valid_byte_buffer) const
+  {
+    if(nullptr == row_valid_byte_buffer) {
+      return GDF_DATASET_EMPTY;
+    }
+    
+    for(size_type i = 0; i < num_columns; i++)
+    {
+      byte_type const * const d_col_valid_ptr = reinterpret_cast<byte_type const*> (d_columns_valids[i]);
+      // get validity of item in column in self
+      byte_type validity = (d_col_valid_ptr == nullptr) ? 0x01 : get_bit(row_index, d_col_valid_ptr);
+      // set validity in output buffer
+      set_bit(i, validity, row_valid_byte_buffer);
+    }
+    return GDF_SUCCESS;
+  }
+
+  __device__
+  gdf_valid_type* get_columns_device_valids_ptr(size_type column_index)
+  {
+    return d_columns_valids[column_index];
   }
     /* --------------------------------------------------------------------------*/
     /** 
