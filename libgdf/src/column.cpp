@@ -24,6 +24,7 @@
 #include <gdf/errorutils.h>
 #include <cuda_runtime_api.h>
 #include <rmm.h>
+#include "gdf_type_dispatcher.cuh"
 
 // forward decl -- see validops.cu
 gdf_error gdf_mask_concat(gdf_valid_type *output_mask,
@@ -237,39 +238,10 @@ gdf_error gdf_column_free(gdf_column *column)
 gdf_error get_column_byte_width(gdf_column * col, 
                                 int * width)
 {
-	switch(col->dtype) {
 
-	case GDF_INT8 :
-		*width = 1;
-		break;
-	case GDF_INT16 :
-		*width = 2;
-		break;
-	case GDF_INT32 :
-		*width = 4;
-		break;
-	case GDF_INT64 :
-		*width = 8;
-		break;
-	case GDF_FLOAT32 :
-		*width = 4;
-		break;
-	case GDF_FLOAT64 :
-		*width = 8;
-		break;
-	case GDF_DATE32 :
-		*width = 4;
-		break;
-	case GDF_DATE64 :
-		*width = 8;
-		break;
-	case GDF_TIMESTAMP :
-		*width = 8;
-		break;
-	default :
-		*width = -1;
-		return GDF_UNSUPPORTED_DTYPE;
-	}
+  auto get_type_size = [](auto dummy){ return sizeof(dummy);};
+
+  *width = gdf_type_dispatcher(col->dtype, get_type_size, 0);
 
 	return GDF_SUCCESS;
 }
