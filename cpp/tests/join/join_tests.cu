@@ -580,9 +580,9 @@ typedef ::testing::Types<
                           TestParameters< join_op::FULL, HASH, VTuple<int32_t > >,
                           TestParameters< join_op::FULL, HASH, VTuple<int64_t > >,
                           TestParameters< join_op::FULL, HASH, VTuple<float   > >,
-                          TestParameters< join_op::FULL, HASH, VTuple<double  > >,
-                          TestParameters< join_op::FULL, HASH, VTuple<uint32_t> >,
-                          TestParameters< join_op::FULL, HASH, VTuple<uint64_t> >,
+                          TestParameters< join_op::FULL, SORT, VTuple<double  > >,
+                          TestParameters< join_op::FULL, SORT, VTuple<uint32_t> >,
+                          TestParameters< join_op::FULL, SORT, VTuple<uint64_t> >,
                           // Two Column Left Join tests for some combination of types
                           TestParameters< join_op::LEFT,  HASH, VTuple<int32_t , int32_t> >,
                           TestParameters< join_op::LEFT,  HASH, VTuple<uint32_t, int32_t> >,

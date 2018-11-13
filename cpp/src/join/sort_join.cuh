@@ -213,17 +213,20 @@ gdf_error compute_sort_join(
         gdf_column * const lcol,
         gdf_column * const rcol,
         bool flip = false) {
-    int column_width_bytes{0};
-    gdf_error gdf_status = get_column_byte_width(lcol, &column_width_bytes);
+    gdf_dtype dtype = lcol->dtype;
 
-    if(GDF_SUCCESS != gdf_status)
-        return gdf_status;
-
-    switch (column_width_bytes) {
-        case 1 : return sort_join_typed<join_type,  int8_t, index_type>(output_l, output_r, lcol, rcol, flip);
-        case 2 : return sort_join_typed<join_type, int16_t, index_type>(output_l, output_r, lcol, rcol, flip);
-        case 4 : return sort_join_typed<join_type, int32_t, index_type>(output_l, output_r, lcol, rcol, flip);
-        case 8 : return sort_join_typed<join_type, int64_t, index_type>(output_l, output_r, lcol, rcol, flip);
-        default: return GDF_UNSUPPORTED_DTYPE;
+    switch(dtype)
+    {
+      case GDF_INT8:      { return sort_join_typed<join_type, int8_t , index_type>(output_l, output_r, lcol, rcol, flip); }
+      case GDF_INT16:     { return sort_join_typed<join_type, int16_t, index_type>(output_l, output_r, lcol, rcol, flip); }
+      case GDF_INT32:     { return sort_join_typed<join_type, int32_t, index_type>(output_l, output_r, lcol, rcol, flip); }
+      case GDF_INT64:     { return sort_join_typed<join_type, int64_t, index_type>(output_l, output_r, lcol, rcol, flip); }
+      case GDF_FLOAT32:   { return sort_join_typed<join_type, float  , index_type>(output_l, output_r, lcol, rcol, flip); }
+      case GDF_FLOAT64:   { return sort_join_typed<join_type, double , index_type>(output_l, output_r, lcol, rcol, flip); }
+      case GDF_DATE32:    { return sort_join_typed<join_type, int32_t, index_type>(output_l, output_r, lcol, rcol, flip); }
+      case GDF_DATE64:    { return sort_join_typed<join_type, int64_t, index_type>(output_l, output_r, lcol, rcol, flip); }
+      case GDF_TIMESTAMP: { return sort_join_typed<join_type, int64_t, index_type>(output_l, output_r, lcol, rcol, flip); }
+      case GDF_CATEGORY:  { return sort_join_typed<join_type, int32_t, index_type>(output_l, output_r, lcol, rcol, flip); }
+      default: return GDF_UNSUPPORTED_DTYPE;
     }
 }

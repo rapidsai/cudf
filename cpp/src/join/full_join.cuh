@@ -19,10 +19,22 @@
 #include <thrust/execution_policy.h>
 #include <thrust/functional.h>
 #include <thrust/iterator/counting_iterator.h>
+/** ---------------------------------------------------------------------------*
+* @file full_join.cuh
+* @brief Implementation of full join.
+*
+* The highest level function in the file append_full_join_indices takes a left
+* join indices output and appends indices to it to perform a full join.
+* Given the number of rows of a column or a table, this function would look for all
+* the rows on the right that have not participated in the left join. These indices
+* are then added to the join indices output to complete the full join.
+* ---------------------------------------------------------------------------**/
 
 /* --------------------------------------------------------------------------*/
 /**
-* @Synopsis  Creates a vector of indices that do not appear in index_ptr
+* @Synopsis  Creates a vector of indices containing values from 0 to
+* max_index_value - 1 provided that they do not appear in the range index_ptr
+* to index_ptr + index_size
 *
 * @Param index_ptr Array of indices
 * @Param max_index_value The maximum value an index can have in index_ptr
@@ -73,7 +85,8 @@ create_missing_indices(
 
 /* --------------------------------------------------------------------------*/
 /**
-* @Synopsis  Expands a buffer's size
+* @Synopsis  Expands a buffer's size if the requested size is greater that its
+* current size.
 *
 * @Param buffer Address of the buffer to expand
 * @Param buffer_capacity Memory allocated for buffer

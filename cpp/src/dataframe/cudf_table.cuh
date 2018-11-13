@@ -1063,8 +1063,12 @@ private:
         GDF_REQUIRE(count_err, GDF_SUCCESS);
         output_column->null_count = null_count;
     }
+    else if (nullptr == input_column->valid) {
+        output_column->null_count = 0;
+    }
     //If both input and output columns have a non null valid pointer
-    else if (nullptr != output_column->valid) {
+    else if ((nullptr != output_column->valid) &&
+            (nullptr != input_column->valid)) {
         gather_valid<index_type>(
                 input_column->valid,
                 output_column->valid,

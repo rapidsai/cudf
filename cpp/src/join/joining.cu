@@ -331,27 +331,42 @@ gdf_error construct_join_output_df(
 
     //create left and right output column data buffers
     for (int i = 0; i < left_table_end; ++i) {
-        gdf_column_view(result_cols[i], nullptr, nullptr, join_size, lnonjoincol[i]->dtype);
+        gdf_column * input_column = lnonjoincol[i];
+        gdf_column_view(result_cols[i], nullptr, nullptr, join_size, input_column->dtype);
         int col_width; get_column_byte_width(result_cols[i], &col_width);
         RMM_TRY( RMM_ALLOC((void**)&(result_cols[i]->data), col_width * join_size, 0) ); // TODO: non-default stream?
-        RMM_TRY( RMM_ALLOC((void**)&(result_cols[i]->valid), sizeof(gdf_valid_type)*gdf_get_num_chars_bitmask(join_size), 0) );
-        CUDA_TRY( cudaMemset(result_cols[i]->valid, 0, sizeof(gdf_valid_type)*gdf_get_num_chars_bitmask(join_size)) );
+        if (nullptr != input_column->valid) {
+            RMM_TRY( RMM_ALLOC((void**)&(result_cols[i]->valid), sizeof(gdf_valid_type)*gdf_get_num_chars_bitmask(join_size), 0) );
+            CUDA_TRY( cudaMemset(result_cols[i]->valid, 0xff, sizeof(gdf_valid_type)*gdf_get_num_chars_bitmask(join_size)) );
+        } else {
+            result_cols[i]->null_count = 0;
+        }
     }
     for (int i = right_table_begin; i < result_num_cols; ++i) {
-        gdf_column_view(result_cols[i], nullptr, nullptr, join_size, rnonjoincol[i - right_table_begin]->dtype);
+        gdf_column * input_column = rnonjoincol[i - right_table_begin];
+        gdf_column_view(result_cols[i], nullptr, nullptr, join_size, input_column->dtype);
         int col_width; get_column_byte_width(result_cols[i], &col_width);
         RMM_TRY( RMM_ALLOC((void**)&(result_cols[i]->data), col_width * join_size, 0) ); // TODO: non-default stream?
-        RMM_TRY( RMM_ALLOC((void**)&(result_cols[i]->valid), sizeof(gdf_valid_type)*gdf_get_num_chars_bitmask(join_size), 0) );
-        CUDA_TRY( cudaMemset(result_cols[i]->valid, 0, sizeof(gdf_valid_type)*gdf_get_num_chars_bitmask(join_size)) );
+        if (nullptr != input_column->valid) {
+            RMM_TRY( RMM_ALLOC((void**)&(result_cols[i]->valid), sizeof(gdf_valid_type)*gdf_get_num_chars_bitmask(join_size), 0) );
+            CUDA_TRY( cudaMemset(result_cols[i]->valid, 0xff, sizeof(gdf_valid_type)*gdf_get_num_chars_bitmask(join_size)) );
+        } else {
+            result_cols[i]->null_count = 0;
+        }
     }
     //create joined output column data buffers
     for (int join_index = 0; join_index < num_cols_to_join; ++join_index) {
         int i = left_table_end + join_index;
-        gdf_column_view(result_cols[i], nullptr, nullptr, join_size, left_cols[left_join_cols[join_index]]->dtype);
+        gdf_column * input_column = left_cols[left_join_cols[join_index]];
+        gdf_column_view(result_cols[i], nullptr, nullptr, join_size, input_column->dtype);
         int col_width; get_column_byte_width(result_cols[i], &col_width);
         RMM_TRY( RMM_ALLOC((void**)&(result_cols[i]->data), col_width * join_size, 0) ); // TODO: non-default stream?
-        RMM_TRY( RMM_ALLOC((void**)&(result_cols[i]->valid), sizeof(gdf_valid_type)*gdf_get_num_chars_bitmask(join_size), 0) );
-        CUDA_TRY( cudaMemset(result_cols[i]->valid, 0, sizeof(gdf_valid_type)*gdf_get_num_chars_bitmask(join_size)) );
+        if (nullptr != input_column->valid) {
+            RMM_TRY( RMM_ALLOC((void**)&(result_cols[i]->valid), sizeof(gdf_valid_type)*gdf_get_num_chars_bitmask(join_size), 0) );
+            CUDA_TRY( cudaMemset(result_cols[i]->valid, 0xff, sizeof(gdf_valid_type)*gdf_get_num_chars_bitmask(join_size)) );
+        } else {
+            result_cols[i]->null_count = 0;
+        }
     }
 
     gdf_error err{GDF_SUCCESS};
