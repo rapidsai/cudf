@@ -25,7 +25,9 @@
 
 #include "hash/join_compute_api.h"
 #include "sort/sort-join.cuh"
-#include "../gdf_table.cuh"
+
+template <typename size_type, typename byte_type>
+struct gdf_table;
 
 class rmm_mgpu_context_t; // forward decl
 

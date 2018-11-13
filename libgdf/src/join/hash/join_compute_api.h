@@ -22,11 +22,13 @@
 #include "gdf/errorutils.h"
 
 #include "join_kernels.cuh"
-#include "../../gdf_table.cuh"
 #include <thrust/copy.h>
 #include <thrust/execution_policy.h>
 #include <thrust/functional.h>
 #include <thrust/iterator/counting_iterator.h>
+
+template <typename size_type, typename byte_type>
+struct gdf_table;
 
 // TODO for Arrow integration:
 //   1) replace mgpu::context_t with a new CudaComputeContext class (see the design doc)

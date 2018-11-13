@@ -22,10 +22,12 @@
 #include <vector>
 
 #include "joining.h"
-#include "../gdf_table.cuh"
 #include "../nvtx_utils.h"
 
 #include "rmm.h"
+
+template <typename size_type, typename byte_type>
+struct gdf_table;
 
 using namespace mgpu;
 
