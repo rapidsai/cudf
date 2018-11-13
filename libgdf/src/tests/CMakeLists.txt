@@ -16,6 +16,13 @@
 # limitations under the License.
 #=============================================================================
 
+set(SKIP_MISBEHAVING_TESTS OFF CACHE bool "Do not run tests which are known to take an extremely long time, thrash a lot, or have other problematic side-effects")
+
+if(SKIP_MISBEHAVING_TESTS)
+	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DSKIP_MISBEHAVING_TESTS")
+	set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -DSKIP_MISBEHAVING_TESTS")
+endif()
+
 #pass the dependency libraries as optional arguments using ${ARGN}
 #NOTE the order of libraries matter, so try to link first with the most high level lib
 function(configure_test TEST_NAME Tests_SRCS)

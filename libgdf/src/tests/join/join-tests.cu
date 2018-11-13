@@ -747,7 +747,11 @@ TYPED_TEST(MaxJoinTest, HugeJoinSize)
   std::vector<result_type> gdf_result = this->compute_gdf_result();
 }
 
+#ifndef SKIP_MISBEHAVING_TESTS
+TYPED_TEST(MaxJoinTest, InputTooLarge)
+#else
 TYPED_TEST(MaxJoinTest, DISABLED_InputTooLarge)
+#endif
 {
     const size_t right_table_size = static_cast<size_t>(std::numeric_limits<int>::max());
     this->create_input(100, RAND_MAX,
