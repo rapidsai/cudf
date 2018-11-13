@@ -157,7 +157,6 @@ cuda_add_library(gdf SHARED
     src/io/convert/gdf-to-csr.cu      
     src/validops.cu
     src/nvtx_utils.cpp
-    src/device_column.cu
 )
 
 # Switch to enable NVTX ranges for profiling
