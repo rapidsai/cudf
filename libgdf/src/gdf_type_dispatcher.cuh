@@ -10,10 +10,10 @@
  * a gdf_dtype enum value.
  *
  * This helper function accepts any *functor* (generic lambdas will also work, but
- * only in host code.) with an "operator()" template. The template may have 1 or more
- * template parameters, but the first parameter must be the type dispatched from the 
- * gdf_dtype enum. The remaining template arguments must be able to be automatically 
- * deduced. 
+ * nvcc does not support generic extended lambdas) with an "operator()" template. 
+ * The template may have 1 or more template parameters, but the first parameter must 
+ * be the type dispatched from the  gdf_dtype enum. The remaining template arguments 
+ * must be able to be automatically deduced. 
  * 
  * @Param dtype The gdf_dtype enum that determines which type will be dispatched
  * @Param f The functor with a templated "operator()" that will be invoked with 
