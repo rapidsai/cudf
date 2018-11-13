@@ -238,11 +238,12 @@ gdf_error gdf_column_free(gdf_column *column)
 gdf_error get_column_byte_width(gdf_column * col, 
                                 int * width)
 {
-
   // NOTE: You cannot have a generic lambda without an argument
   // therefore, pass in a dummy argument whose type will be dispatched
   // according to the column's dtype
   auto get_type_size = [](auto dummy){ return sizeof(dummy);};
+
+  // Need to pass in an argument for the dummy parameter
   *width = gdf_type_dispatcher(col->dtype, get_type_size, 0);
 
 	return GDF_SUCCESS;
