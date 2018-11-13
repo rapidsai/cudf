@@ -112,63 +112,71 @@ struct JoinTest : public GdfTest
   {
   }
 
-    template <typename col_type>
-    gdf_col_pointer create_empty_gdf_column(gdf_size_type const size, 
-                                            bool allocate_valid)
-    {
-      // Deduce the type and set the gdf_dtype accordingly
-      gdf_dtype gdf_col_type;
-      if(std::is_same<col_type,int8_t>::value) gdf_col_type = GDF_INT8;
-      else if(std::is_same<col_type,uint8_t>::value) gdf_col_type = GDF_INT8;
-      else if(std::is_same<col_type,int16_t>::value) gdf_col_type = GDF_INT16;
-      else if(std::is_same<col_type,uint16_t>::value) gdf_col_type = GDF_INT16;
-      else if(std::is_same<col_type,int32_t>::value) gdf_col_type = GDF_INT32;
-      else if(std::is_same<col_type,uint32_t>::value) gdf_col_type = GDF_INT32;
-      else if(std::is_same<col_type,int64_t>::value) gdf_col_type = GDF_INT64;
-      else if(std::is_same<col_type,uint64_t>::value) gdf_col_type = GDF_INT64;
-      else if(std::is_same<col_type,float>::value) gdf_col_type = GDF_FLOAT32;
-      else if(std::is_same<col_type,double>::value) gdf_col_type = GDF_FLOAT64;
+  /* --------------------------------------------------------------------------*
+  * @Synopsis Creates a unique_ptr that wraps an empty gdf_column structure 
+  *           allocated to the specified size.
+  *
+  * @Param size The number of rows for the gdf_column
+  *
+  * @Returns A unique_ptr wrapping the new gdf_column
+  * --------------------------------------------------------------------------*/
+  template <typename col_type>
+  gdf_col_pointer create_empty_gdf_column(gdf_size_type const size, 
+                                          bool allocate_valid)
+  {
+    // Deduce the type and set the gdf_dtype accordingly
+    gdf_dtype gdf_col_type;
+    if(std::is_same<col_type,int8_t>::value) gdf_col_type = GDF_INT8;
+    else if(std::is_same<col_type,uint8_t>::value) gdf_col_type = GDF_INT8;
+    else if(std::is_same<col_type,int16_t>::value) gdf_col_type = GDF_INT16;
+    else if(std::is_same<col_type,uint16_t>::value) gdf_col_type = GDF_INT16;
+    else if(std::is_same<col_type,int32_t>::value) gdf_col_type = GDF_INT32;
+    else if(std::is_same<col_type,uint32_t>::value) gdf_col_type = GDF_INT32;
+    else if(std::is_same<col_type,int64_t>::value) gdf_col_type = GDF_INT64;
+    else if(std::is_same<col_type,uint64_t>::value) gdf_col_type = GDF_INT64;
+    else if(std::is_same<col_type,float>::value) gdf_col_type = GDF_FLOAT32;
+    else if(std::is_same<col_type,double>::value) gdf_col_type = GDF_FLOAT64;
 
-      // Create a new instance of a gdf_column with a custom deleter that will
-      //  free the associated device memory when it eventually goes out of scope
-      auto deleter = [](gdf_column* col) {
-        col->size = 0; 
-        RMM_FREE(col->data, 0); 
-        RMM_FREE(col->valid, 0); 
-      };
-      gdf_col_pointer the_column{new gdf_column, deleter};
+    // Create a new instance of a gdf_column with a custom deleter that will
+    //  free the associated device memory when it eventually goes out of scope
+    auto deleter = [](gdf_column* col) {
+      col->size = 0; 
+      RMM_FREE(col->data, 0); 
+      RMM_FREE(col->valid, 0); 
+    };
+    gdf_col_pointer the_column{new gdf_column, deleter};
 
-      // Allocate device storage for gdf_column
-      RMM_ALLOC(&(the_column->data), size * sizeof(col_type), 0);
-      
-      // Allocate device storage for gdf_column.valid
-      if (allocate_valid) {
-        int valid_size = gdf_get_num_chars_bitmask(size);
-        RMM_ALLOC((void**)&(the_column->valid), valid_size, 0);
-      } else {
-          the_column->valid = nullptr;
-      }
- 
-      // Fill the gdf_column members
-      the_column->size = size;
-      the_column->dtype = gdf_col_type;
-      gdf_dtype_extra_info extra_info;
-      extra_info.time_unit = TIME_UNIT_NONE;
-      the_column->dtype_info = extra_info;
-
-      return the_column;
+    // Allocate device storage for gdf_column
+    RMM_ALLOC(&(the_column->data), size * sizeof(col_type), 0);
+    
+    // Allocate device storage for gdf_column.valid
+    if (allocate_valid) {
+      int valid_size = gdf_get_num_chars_bitmask(size);
+      RMM_ALLOC((void**)&(the_column->valid), valid_size, 0);
+    } else {
+        the_column->valid = nullptr;
     }
 
-    /* ------------------------------------------------------------------------*
-     * @Synopsis Creates a unique_ptr that wraps a gdf_column structure 
-     *           intialized with a host vector
-     *
-     * @Param host_vector The host vector whose data is used to initialize the 
-     *                    gdf_column
-     *
-     * @Returns A unique_ptr wrapping the new gdf_column
-     */
-    /* -----------------------------------------------------------------------*/
+    // Fill the gdf_column members
+    the_column->size = size;
+    the_column->dtype = gdf_col_type;
+    gdf_dtype_extra_info extra_info;
+    extra_info.time_unit = TIME_UNIT_NONE;
+    the_column->dtype_info = extra_info;
+
+    return the_column;
+  }
+
+  /* ------------------------------------------------------------------------*
+    * @Synopsis Creates a unique_ptr that wraps a gdf_column structure 
+    *           intialized with a host vector
+    *
+    * @Param host_vector The host vector whose data is used to initialize the 
+    *                    gdf_column
+    *
+    * @Returns A unique_ptr wrapping the new gdf_column
+    */
+  /* -----------------------------------------------------------------------*/
   template <typename col_type>
   gdf_col_pointer create_gdf_column(std::vector<col_type> const & host_vector, 
                                     gdf_valid_type* host_valid)
@@ -229,17 +237,18 @@ struct JoinTest : public GdfTest
     return gdf_columns;
   }
 
-  /* --------------------------------------------------------------------------*/
-  /**
-   * @Synopsis  Initializes two sets of columns, left and right, with random values for the join operation.
+  /* --------------------------------------------------------------------------*
+   * @Synopsis  Initializes two sets of columns, left and right, with random 
+   *            values for the join operation.
    *
    * @Param left_column_length The length of the left set of columns
-   * @Param left_column_range The upper bound of random values for the left columns. Values are [0, left_column_range)
+   * @Param left_column_range The upper bound of random values for the left 
+   *                          columns. Values are [0, left_column_range)
    * @Param right_column_length The length of the right set of columns
-   * @Param right_column_range The upper bound of random values for the right columns. Values are [0, right_column_range)
+   * @Param right_column_range The upper bound of random values for the right 
+   *                           columns. Values are [0, right_column_range)
    * @Param print Optionally print the left and right set of columns for debug
-   */
-  /* ----------------------------------------------------------------------------*/
+   * -------------------------------------------------------------------------*/
   void create_input( size_t left_column_length, size_t left_column_range,
                      size_t right_column_length, size_t right_column_range,
                      bool print = false)
@@ -279,6 +288,12 @@ struct JoinTest : public GdfTest
     }
   }
 
+  /* --------------------------------------------------------------------------*
+   * @Synopsis  Creates two empty columns, left and right.
+   *
+   * @Param left_column_length The length of the left column
+   * @Param right_column_length The length of the right column
+   * -------------------------------------------------------------------------*/
   void create_dummy_input( gdf_size_type const left_column_length, 
                            gdf_size_type const right_column_length)
   {
