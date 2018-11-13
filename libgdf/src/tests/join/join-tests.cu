@@ -69,8 +69,11 @@ struct JoinTest : public GdfTest
   // The join type is passed via a member of the template argument class
   const join_op op = test_parameters::op;
 
-  gdf_context ctxt = {test_parameters::join_type == gdf_method::GDF_SORT,
-      test_parameters::join_type, 0};
+  gdf_context ctxt = {
+    test_parameters::join_type == gdf_method::GDF_SORT,
+    test_parameters::join_type, 
+    0
+  };
   // multi_column_t is a tuple of vectors. The number of vectors in the tuple
   // determines the number of columns to be joined, and the value_type of each
   // vector determiens the data type of the column
@@ -84,15 +87,16 @@ struct JoinTest : public GdfTest
 
   // Type for a unique_ptr to a gdf_column with a custom deleter
   // Custom deleter is defined at construction
-  using gdf_col_pointer = typename std::unique_ptr<gdf_column, std::function<void(gdf_column*)>>;
+  using gdf_col_pointer = 
+    typename std::unique_ptr<gdf_column, std::function<void(gdf_column*)>>;
 
-  // Containers for unique_ptrs to gdf_columns that will be used in the gdf_join functions
-  // unique_ptrs are used to automate freeing device memory
+  // Containers for unique_ptrs to gdf_columns that will be used in the gdf_join
+  // functions. unique_ptrs are used to automate freeing device memory
   std::vector<gdf_col_pointer> gdf_left_columns;
   std::vector<gdf_col_pointer> gdf_right_columns;
 
-  // Containers for the raw pointers to the gdf_columns that will be used as input
-  // to the gdf_join functions
+  // Containers for the raw pointers to the gdf_columns that will be used as
+  // input to the gdf_join functions
   std::vector<gdf_column*> gdf_raw_left_columns;
   std::vector<gdf_column*> gdf_raw_right_columns;
 
@@ -108,56 +112,86 @@ struct JoinTest : public GdfTest
   {
   }
 
-    /* --------------------------------------------------------------------------*/
-    /**
-     * @Synopsis  Creates a unique_ptr that wraps a gdf_column structure intialized with a host vector
+    template <typename col_type>
+    gdf_col_pointer create_empty_gdf_column(gdf_size_type const size, 
+                                            bool allocate_valid)
+    {
+      // Deduce the type and set the gdf_dtype accordingly
+      gdf_dtype gdf_col_type;
+      if(std::is_same<col_type,int8_t>::value) gdf_col_type = GDF_INT8;
+      else if(std::is_same<col_type,uint8_t>::value) gdf_col_type = GDF_INT8;
+      else if(std::is_same<col_type,int16_t>::value) gdf_col_type = GDF_INT16;
+      else if(std::is_same<col_type,uint16_t>::value) gdf_col_type = GDF_INT16;
+      else if(std::is_same<col_type,int32_t>::value) gdf_col_type = GDF_INT32;
+      else if(std::is_same<col_type,uint32_t>::value) gdf_col_type = GDF_INT32;
+      else if(std::is_same<col_type,int64_t>::value) gdf_col_type = GDF_INT64;
+      else if(std::is_same<col_type,uint64_t>::value) gdf_col_type = GDF_INT64;
+      else if(std::is_same<col_type,float>::value) gdf_col_type = GDF_FLOAT32;
+      else if(std::is_same<col_type,double>::value) gdf_col_type = GDF_FLOAT64;
+
+      // Create a new instance of a gdf_column with a custom deleter that will
+      //  free the associated device memory when it eventually goes out of scope
+      auto deleter = [](gdf_column* col) {
+        col->size = 0; 
+        RMM_FREE(col->data, 0); 
+        RMM_FREE(col->valid, 0); 
+      };
+      gdf_col_pointer the_column{new gdf_column, deleter};
+
+      // Allocate device storage for gdf_column
+      RMM_ALLOC(&(the_column->data), size * sizeof(col_type), 0);
+      
+      // Allocate device storage for gdf_column.valid
+      if (allocate_valid) {
+        int valid_size = gdf_get_num_chars_bitmask(size);
+        RMM_ALLOC((void**)&(the_column->valid), valid_size, 0);
+      } else {
+          the_column->valid = nullptr;
+      }
+ 
+      // Fill the gdf_column members
+      the_column->size = size;
+      the_column->dtype = gdf_col_type;
+      gdf_dtype_extra_info extra_info;
+      extra_info.time_unit = TIME_UNIT_NONE;
+      the_column->dtype_info = extra_info;
+
+      return the_column;
+    }
+
+    /* ------------------------------------------------------------------------*
+     * @Synopsis Creates a unique_ptr that wraps a gdf_column structure 
+     *           intialized with a host vector
      *
-     * @Param host_vector The host vector whose data is used to initialize the gdf_column
+     * @Param host_vector The host vector whose data is used to initialize the 
+     *                    gdf_column
      *
      * @Returns A unique_ptr wrapping the new gdf_column
      */
-    /* ----------------------------------------------------------------------------*/
+    /* -----------------------------------------------------------------------*/
   template <typename col_type>
-  gdf_col_pointer create_gdf_column(std::vector<col_type> const & host_vector, gdf_valid_type* host_valid)
+  gdf_col_pointer create_gdf_column(std::vector<col_type> const & host_vector, 
+                                    gdf_valid_type* host_valid)
   {
-    // Deduce the type and set the gdf_dtype accordingly
-    gdf_dtype gdf_col_type;
-    if(std::is_same<col_type,int8_t>::value) gdf_col_type = GDF_INT8;
-    else if(std::is_same<col_type,uint8_t>::value) gdf_col_type = GDF_INT8;
-    else if(std::is_same<col_type,int16_t>::value) gdf_col_type = GDF_INT16;
-    else if(std::is_same<col_type,uint16_t>::value) gdf_col_type = GDF_INT16;
-    else if(std::is_same<col_type,int32_t>::value) gdf_col_type = GDF_INT32;
-    else if(std::is_same<col_type,uint32_t>::value) gdf_col_type = GDF_INT32;
-    else if(std::is_same<col_type,int64_t>::value) gdf_col_type = GDF_INT64;
-    else if(std::is_same<col_type,uint64_t>::value) gdf_col_type = GDF_INT64;
-    else if(std::is_same<col_type,float>::value) gdf_col_type = GDF_FLOAT32;
-    else if(std::is_same<col_type,double>::value) gdf_col_type = GDF_FLOAT64;
+    gdf_col_pointer the_column = 
+      create_empty_gdf_column<col_type>(host_vector.size(), 
+                                        host_valid != nullptr);
+    
+    // copy contents from host_vector
+    cudaMemcpy(the_column->data, 
+               host_vector.data(), 
+               host_vector.size() * sizeof(col_type), 
+               cudaMemcpyHostToDevice);
 
-    // Create a new instance of a gdf_column with a custom deleter that will free
-    // the associated device memory when it eventually goes out of scope
-    auto deleter = [](gdf_column* col){col->size = 0; RMM_FREE(col->data, 0); RMM_FREE(col->valid, 0); };
-    gdf_col_pointer the_column{new gdf_column, deleter};
-
-    // Allocate device storage for gdf_column and copy contents from host_vector
-    RMM_ALLOC(&(the_column->data), host_vector.size() * sizeof(col_type), 0);
-    cudaMemcpy(the_column->data, host_vector.data(), host_vector.size() * sizeof(col_type), cudaMemcpyHostToDevice);
-
-    // Allocate device storage for gdf_column.valid
+    // copy valid data if necessary
     if (host_valid != nullptr) {
       int valid_size = gdf_get_num_chars_bitmask(host_vector.size());
-      RMM_ALLOC((void**)&(the_column->valid), valid_size, 0);
-      cudaMemcpy(the_column->valid, host_valid, valid_size, cudaMemcpyHostToDevice);
-    } else {
-        the_column->valid = nullptr;
-    }
- 
-    // Fill the gdf_column members
-    the_column->size = host_vector.size();
-    the_column->dtype = gdf_col_type;
-    gdf_dtype_extra_info extra_info;
-    extra_info.time_unit = TIME_UNIT_NONE;
-    the_column->dtype_info = extra_info;
-
+      cudaMemcpy(the_column->valid, 
+                 host_valid, 
+                 valid_size, 
+                 cudaMemcpyHostToDevice);
+    } 
+    
     return the_column;
   }
 
@@ -245,6 +279,25 @@ struct JoinTest : public GdfTest
     }
   }
 
+  void create_dummy_input( gdf_size_type const left_column_length, 
+                           gdf_size_type const right_column_length)
+  {
+    using col_type = typename std::tuple_element<0, multi_column_t>::type::value_type;
+    
+    gdf_left_columns.push_back(create_empty_gdf_column<col_type>(left_column_length, 
+                                                                 false));
+    gdf_right_columns.push_back(create_empty_gdf_column<col_type>(right_column_length, 
+                                                                 false));
+    
+    // Fill vector of raw pointers to gdf_columns
+    for (auto const& c : gdf_left_columns) {
+      gdf_raw_left_columns.push_back(c.get());
+    }
+
+    for (auto const& c : gdf_right_columns) {
+      gdf_raw_right_columns.push_back(c.get());
+    }
+  }
 
   /* --------------------------------------------------------------------------*/
   /**
@@ -743,10 +796,12 @@ TYPED_TEST(MaxJoinTest, HugeJoinSize)
 }
 
 TYPED_TEST(MaxJoinTest, InputTooLarge)
-{
-    const size_t right_table_size = static_cast<size_t>(std::numeric_limits<int>::max());
-    this->create_input(100, RAND_MAX,
-                       right_table_size, RAND_MAX);
+{   
+    const gdf_size_type left_table_size = 100;  
+    const gdf_size_type right_table_size = 
+      static_cast<gdf_size_type>(std::numeric_limits<int>::max());
+
+    this->create_dummy_input(left_table_size, right_table_size);
 
     const bool print_result{false};
     const bool sort_result{false};
