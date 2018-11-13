@@ -1057,6 +1057,11 @@ private:
         thrust::copy(rmm::exec_policy(stream),
                 remapped_valid_copy.begin(),
                 remapped_valid_copy.end(), output_column->valid);
+        int null_count = 0;
+        gdf_error count_err =
+            gdf_count_nonzero_mask(output_column->valid, output_column->size, &null_count);
+        GDF_REQUIRE(count_err, GDF_SUCCESS);
+        output_column->null_count = null_count;
     }
     //If both input and output columns have a non null valid pointer
     else if (nullptr != output_column->valid) {
@@ -1065,6 +1070,11 @@ private:
                 output_column->valid,
                 row_gather_map, 
                 num_rows, input_column->size, stream);
+        int null_count = 0;
+        gdf_error count_err =
+            gdf_count_nonzero_mask(output_column->valid, output_column->size, &null_count);
+        GDF_REQUIRE(count_err, GDF_SUCCESS);
+        output_column->null_count = null_count;
     }
   
     CUDA_CHECK_LAST();

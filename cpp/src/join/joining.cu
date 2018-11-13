@@ -25,9 +25,8 @@
 #include "dataframe/cudf_table.cuh"
 #include "utilities/nvtx/nvtx_utils.h"
 
+#include "join_types.h"
 #include "joining.h"
-
-using namespace mgpu;
 
 // Size limit due to use of int32 as join output.
 // FIXME: upgrade to 64-bit
@@ -64,108 +63,34 @@ gdf_error hash_join(size_type num_cols, gdf_column **leftcol, gdf_column **right
                                                         r_result);
 }
 
-template <JoinType join_type>
-struct SortJoin {
-template<typename launch_arg_t = mgpu::empty_t,
-  typename a_it, typename b_it, typename comp_t>
-    std::pair<gdf_column, gdf_column>
-    operator()(a_it a, int a_count, b_it b, int b_count,
-               comp_t comp, context_t& context) {
-        return std::pair<gdf_column, gdf_column>();
-    }
-};
-
-template <>
-struct SortJoin<JoinType::INNER_JOIN> {
-template<typename launch_arg_t = mgpu::empty_t,
-  typename a_it, typename b_it, typename comp_t>
-    std::pair<gdf_column, gdf_column>
-    operator()(a_it a, int a_count, b_it b, int b_count,
-               comp_t comp, context_t& context) {
-        return inner_join(a, a_count, b, b_count, comp, context);
-    }
-};
-
-template <>
-struct SortJoin<JoinType::LEFT_JOIN> {
-  template<typename launch_arg_t = mgpu::empty_t,
-    typename a_it, typename b_it, typename comp_t>
-    std::pair<gdf_column, gdf_column>
-    operator()(a_it a, int a_count, b_it b, int b_count,
-               comp_t comp, context_t& context) {
-        return left_join(a, a_count, b, b_count, comp, context);
-      }
-};
-
-template <JoinType join_type, typename T>
-gdf_error sort_join_typed(gdf_column *leftcol, gdf_column *rightcol,
-                          gdf_column *left_result, gdf_column *right_result,
-                          gdf_context *ctxt) 
-{
-  using namespace mgpu;
-  gdf_error err = GDF_SUCCESS;
-  GDF_REQUIRE(!leftcol->valid  || !leftcol->null_count , GDF_VALIDITY_UNSUPPORTED);
-  GDF_REQUIRE(!rightcol->valid || !rightcol->null_count, GDF_VALIDITY_UNSUPPORTED);
-
-  rmm_mgpu_context_t context(false);
-  SortJoin<join_type> sort_based_join;
-  auto output = sort_based_join(static_cast<T*>(leftcol->data), leftcol->size,
-                                       static_cast<T*>(rightcol->data), rightcol->size,
-                                       less_t<T>(), context);
-  *left_result = output.first;
-  *right_result = output.second;
-  CUDA_CHECK_LAST();
-
-  return err;
-}
-
 /* --------------------------------------------------------------------------*/
 /** 
- * @Synopsis  Computes the join operation between a single left and single right column
- using the sort based implementation.
+ * @Synopsis Computes the Join result between two tables using the sort-based implementation. 
  * 
- * @Param leftcol The left column to join
- * @Param rightcol The right column to join
- * @Param left_result The join computed indices of the left table
- * @Param right_result The join computed indices of the right table
- * @Param ctxt Structure that determines various run parameters, such as if the inputs
- are already sorted.
-   @tparama join_type The type of join to perform
+ * @Param num_cols The number of columns to join
+ * @Param leftcol The left set of columns to join
+ * @Param rightcol The right set of columns to join
+ * @Param out_result The result of the join operation. The first n/2 elements of the
+   output are the left indices, the last n/2 elements of the output are the right indices.
+   @tparam join_type The type of join to be performed
  * 
- * @Returns GDF_SUCCESS upon succesful completion of the join, otherwise returns 
- appropriate error code.
+ * @Returns Upon successful computation, returns GDF_SUCCESS. Otherwise returns appropriate error code 
  */
 /* ----------------------------------------------------------------------------*/
-template <JoinType join_type>
-gdf_error sort_join(gdf_column *leftcol, gdf_column *rightcol,
-                    gdf_column *l_result, gdf_column *r_result,
-                    gdf_context *ctxt)
+template <JoinType join_type, 
+          typename size_type>
+gdf_error sort_join(size_type num_cols, gdf_column **leftcol, gdf_column **rightcol,
+                    gdf_column *l_result, gdf_column *r_result)
 {
-
-  if(GDF_SORT != ctxt->flag_method) return GDF_INVALID_API_CALL;
-
-  switch ( leftcol->dtype ){
-    case GDF_INT8:      return sort_join_typed<join_type, int8_t>(leftcol, rightcol, l_result, r_result, ctxt);
-    case GDF_INT16:     return sort_join_typed<join_type,int16_t>(leftcol, rightcol, l_result, r_result, ctxt);
-    case GDF_INT32:     return sort_join_typed<join_type,int32_t>(leftcol, rightcol, l_result, r_result, ctxt);
-    case GDF_INT64:     return sort_join_typed<join_type,int64_t>(leftcol, rightcol, l_result, r_result, ctxt);
-    case GDF_FLOAT32:   return sort_join_typed<join_type,int32_t>(leftcol, rightcol, l_result, r_result, ctxt);
-    case GDF_FLOAT64:   return sort_join_typed<join_type,int64_t>(leftcol, rightcol, l_result, r_result, ctxt);
-    case GDF_DATE32:    return sort_join_typed<join_type,int32_t>(leftcol, rightcol, l_result, r_result, ctxt);
-    case GDF_DATE64:    return sort_join_typed<join_type,int64_t>(leftcol, rightcol, l_result, r_result, ctxt);
-    case GDF_TIMESTAMP: return sort_join_typed<join_type,int64_t>(leftcol, rightcol, l_result, r_result, ctxt);
-    default: return GDF_UNSUPPORTED_DTYPE;
+  if (num_cols > 1) {
+    return GDF_JOIN_TOO_MANY_COLUMNS;
+  } else if (num_cols == 0) {
+    return GDF_DATASET_EMPTY;
   }
-}
 
-template
-gdf_error sort_join<JoinType::INNER_JOIN>(gdf_column *leftcol, gdf_column *rightcol,
-                                          gdf_column *l_result, gdf_column *r_result,
-                                          gdf_context *ctxt);
-template
-gdf_error sort_join<JoinType::LEFT_JOIN>(gdf_column *leftcol, gdf_column *rightcol,
-                                         gdf_column *l_result, gdf_column *r_result,
-                                         gdf_context *ctxt);
+  return join_sort<join_type, output_index_type>(
+          leftcol[0], rightcol[0], l_result, r_result);
+}
 
 /* --------------------------------------------------------------------------*/
 /**
@@ -351,16 +276,7 @@ gdf_error join_call( int num_cols, gdf_column **leftcol, gdf_column **rightcol,
       }
     case GDF_SORT:
       {
-        // Sort based joins only support single column joins
-        if(1 == num_cols)
-        {
-          gdf_error_code =  sort_join<join_type>(leftcol[0], rightcol[0], left_result, right_result, join_context);
-        }
-        else
-        {
-          gdf_error_code =  GDF_JOIN_TOO_MANY_COLUMNS;
-        }
-
+        gdf_error_code =  sort_join<join_type, size_type>(num_cols, leftcol, rightcol, left_result, right_result);
         break;
       }
     default:

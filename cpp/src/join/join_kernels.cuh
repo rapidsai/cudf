@@ -13,24 +13,18 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
-constexpr int JoinNoneValue = -1;
-
-enum class JoinType {
-  INNER_JOIN,
-  LEFT_JOIN,
-  FULL_JOIN
-};
+#pragma once
 
 #include "cudf.h"
 #include "dataframe/cudf_table.cuh"
 #include "hash/concurrent_unordered_multimap.cuh"
 #include "hash/hash_functions.cuh"
 #include "utilities/bit_util.cuh"
+#include "join_types.h"
 
 #include <cub/cub.cuh>
 
-// constexpr int warp_size = 32;
+constexpr int warp_size = 32;
 
 /* --------------------------------------------------------------------------*/
 /** 

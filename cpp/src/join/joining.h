@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#pragma once
 
 /* Header-only join C++ API (high-level) */
 
@@ -26,8 +27,7 @@
 
 #include "sort_join.cuh"
 #include "join_compute_api.h"
-
-class rmm_mgpu_context_t; // forward decl
+#include "join_types.h"
 
  /* --------------------------------------------------------------------------*/
  /**
@@ -35,6 +35,8 @@ class rmm_mgpu_context_t; // forward decl
   *
   * @Param left_table The left table to be joined
   * @Param right_table The right table to be joined
+  * @Param output_l The left index output of join
+  * @Param output_r The right index output of join
   * @Param flip_indices Flag that indicates whether the left and right tables have been
   * flipped, meaning the output indices should also be flipped.
   * @tparam join_type The type of join to be performed
@@ -73,39 +75,32 @@ gdf_error join_hash(gdf_table<size_type> const & left_table,
                                                          flip_indices);
 }
 
-// Overload Modern GPU memory allocation and free to use RMM
-class rmm_mgpu_context_t : public mgpu::standard_context_t
+ /* --------------------------------------------------------------------------*/
+ /**
+  * @Synopsis  Computes the sort-based join between two columns.
+  *
+  * @Param leftcol The left column to be joined
+  * @Param rightcol The right column to be joined
+  * @Param output_l The left index output of join
+  * @Param output_r The right index output of join
+  * @Param flip_indices Flag that indicates whether the left and right tables have been
+  * flipped, meaning the output indices should also be flipped.
+  * @tparam join_type The type of join to be performed
+  * @tparam output_index_type The datatype used for the output indices
+  *
+  * @Returns
+  */
+ /* ----------------------------------------------------------------------------*/
+template <JoinType join_type, 
+          typename output_index_type>
+gdf_error join_sort(gdf_column *leftcol, gdf_column *rightcol,
+                    gdf_column * const output_l,
+                    gdf_column * const output_r,
+                    bool flip_indices = false)
 {
-public:
-  rmm_mgpu_context_t(bool print_prop = true, cudaStream_t stream_ = 0) :
-    mgpu::standard_context_t(print_prop, stream_) {}
-  ~rmm_mgpu_context_t() {}
-
-  virtual void* alloc(size_t size, memory_space_t space) {
-    void *p = nullptr;
-    if(size) {
-      if (memory_space_device == space) {
-        if (RMM_SUCCESS != RMM_ALLOC(&p, size, stream()))
-          throw cuda_exception_t(cudaPeekAtLastError());
-      }
-      else {
-        cudaError_t result = cudaMallocHost(&p, size);
-        if (cudaSuccess != result) throw cuda_exception_t(result);
-      }
-    }
-    return p;
-  }
-
-  virtual void free(void* p, memory_space_t space) {
-    if (p) {
-      if (memory_space_device == space) {
-        if (RMM_SUCCESS != RMM_FREE(p, stream()))
-          throw cuda_exception_t(cudaPeekAtLastError());
-      }
-      else {
-        cudaError_t result = cudaFreeHost(&p);
-        if (cudaSuccess != result) throw cuda_exception_t(result);
-      }
-    }
-  }
-};
+  return compute_sort_join<join_type, output_index_type>(output_l,
+                                                         output_r, 
+                                                         leftcol, 
+                                                         rightcol, 
+                                                         flip_indices);
+}
