@@ -591,103 +591,36 @@ public:
       return false;
     }
 
+    auto elements_are_equal = [](auto dummy, void * my_column, size_type my_row_index,
+                                 void * other_column, size_type other_row_index)
+    {
+      using col_type = decltype(dummy);
+      col_type const my_elem = static_cast<col_type*>(my_column)[my_row_index];
+      col_type const other_elem = static_cast<col_type*>(other_column)[other_row_index];
+      return my_elem == other_elem;
+    };
+
     for(size_type i = 0; i < num_columns; ++i)
     {
       const gdf_dtype my_col_type = d_columns_types[i];
       const gdf_dtype other_col_type = other.d_columns_types[i];
     
-      if(my_col_type != other_col_type)
-      {
+      if(my_col_type != other_col_type){
         return false;
       }
-      switch(my_col_type)
-      {
-        case GDF_INT8:
-          {
-            using col_type = int8_t;
-            const col_type my_elem = static_cast<col_type*>(d_columns_data[i])[my_row_index];
-            const col_type other_elem = static_cast<col_type*>(other.d_columns_data[i])[other_row_index];
-            if(my_elem != other_elem)
-              return false;
-            break;
-          }
-        case GDF_INT16:
-          {
-            using col_type = int16_t;
-            const col_type my_elem = static_cast<col_type*>(d_columns_data[i])[my_row_index];
-            const col_type other_elem = static_cast<col_type*>(other.d_columns_data[i])[other_row_index];
-            if(my_elem != other_elem)
-              return false;
-            break;
-          }
-        case GDF_INT32:
-          {
-            using col_type = int32_t;
-            const col_type my_elem = static_cast<col_type*>(d_columns_data[i])[my_row_index];
-            const col_type other_elem = static_cast<col_type*>(other.d_columns_data[i])[other_row_index];
-            if(my_elem != other_elem)
-              return false;
-            break;
-          }
-        case GDF_INT64:
-          {
-            using col_type = int64_t;
-            const col_type my_elem = static_cast<col_type*>(d_columns_data[i])[my_row_index];
-            const col_type other_elem = static_cast<col_type*>(other.d_columns_data[i])[other_row_index];
-            if(my_elem != other_elem)
-              return false;
-            break;
-          }
-        case GDF_FLOAT32:
-          {
-            using col_type = float;
-            const col_type my_elem = static_cast<col_type*>(d_columns_data[i])[my_row_index];
-            const col_type other_elem = static_cast<col_type*>(other.d_columns_data[i])[other_row_index];
-            if(my_elem != other_elem)
-              return false;
-            break;
-          }
-        case GDF_FLOAT64:
-          {
-            using col_type = double;
-            const col_type my_elem = static_cast<col_type*>(d_columns_data[i])[my_row_index];
-            const col_type other_elem = static_cast<col_type*>(other.d_columns_data[i])[other_row_index];
-            if(my_elem != other_elem)
-              return false;
-            break;
-          }
-        case GDF_DATE32:
-          {
-            using col_type = int32_t;
-            const col_type my_elem = static_cast<col_type*>(d_columns_data[i])[my_row_index];
-            const col_type other_elem = static_cast<col_type*>(other.d_columns_data[i])[other_row_index];
-            if(my_elem != other_elem)
-              return false;
-            break;
-          }
-        case GDF_DATE64:
-          {
-            using col_type = int64_t;
-            const col_type my_elem = static_cast<col_type*>(d_columns_data[i])[my_row_index];
-            const col_type other_elem = static_cast<col_type*>(other.d_columns_data[i])[other_row_index];
-            if(my_elem != other_elem)
-              return false;
-            break;
-          }
-        case GDF_TIMESTAMP:
-          {
-            using col_type = int64_t;
-            const col_type my_elem = static_cast<col_type*>(d_columns_data[i])[my_row_index];
-            const col_type other_elem = static_cast<col_type*>(other.d_columns_data[i])[other_row_index];
-            if(my_elem != other_elem)
-              return false;
-            break;
-          }
-        default:
-          return false;
+
+      bool is_equal = gdf_type_dispatcher(my_col_type, 
+                                          elements_are_equal, 
+                                          0, 
+                                          d_columns_data[i], 
+                                          my_row_index, 
+                                          other.d_columns_data[i], 
+                                          other_row_index);
+
+      if(false == is_equal){
+        return false;
       }
     }
-
     return true;
   }
 
@@ -756,7 +689,8 @@ public:
   /* ----------------------------------------------------------------------------*/
   template <typename index_type>
   gdf_error gather(index_type const * const row_gather_map,
-          gdf_table<size_type> & gather_output_table, bool range_check = false)
+                   gdf_table<size_type> & gather_output_table,
+                   bool range_check = false)
   {
     gdf_error gdf_status{GDF_SUCCESS};
   
