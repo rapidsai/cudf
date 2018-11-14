@@ -560,11 +560,15 @@ public:
                                           other.d_columns_data[i], 
                                           other_row_index);
 
+      // If the elements in column `i` do not match, return false
+      // Otherwise, continue to column i+1
       if(false == is_equal){
         return false;
       }
     }
 
+    // If we get through all the columns without returning false,
+    // then the rows are equivalent
     return true;
   }
 
