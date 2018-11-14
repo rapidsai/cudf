@@ -481,7 +481,8 @@ public:
                            void const * other_column, size_type other_row_index)
     {
       using col_type = decltype(dummy);
-      col_type & my_elem = static_cast<col_type*>(my_column)[my_row_index];
+static_cast<col_type*>(my_column)[my_row_index] = 
+  static_cast<col_type const*>(other_column)[other_row_index];
       col_type const other_elem = static_cast<col_type const*>(other_column)[other_row_index];
       my_elem = other_elem;
     };
