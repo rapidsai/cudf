@@ -1100,11 +1100,10 @@ gdf_error gdf_group_by_single(int ncols,                    // # columns
   {
     return GDF_DATASET_EMPTY;
   }
-  // @todo, valid support for sort-based solution in progress
-  // for (int i = 0; i < ncols; ++i) {
-	// GDF_REQUIRE(!cols[i]->valid || !cols[i]->null_count, GDF_VALIDITY_UNSUPPORTED);
-  // }
-  // GDF_REQUIRE(!col_agg->valid || !col_agg->null_count, GDF_VALIDITY_UNSUPPORTED);
+  for (int i = 0; i < ncols; ++i) {
+  	GDF_REQUIRE(!cols[i]->valid || !cols[i]->null_count, GDF_VALIDITY_UNSUPPORTED);
+  }
+  GDF_REQUIRE(!col_agg->valid || !col_agg->null_count, GDF_VALIDITY_UNSUPPORTED);
 
   // If there are no rows in the input, set the output rows to 0 
   // and return immediately with success

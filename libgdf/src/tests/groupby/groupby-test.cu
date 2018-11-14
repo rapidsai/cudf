@@ -554,9 +554,9 @@ struct GroupValidTest : public GroupTest<test_parameters>
    * @Param print Optionally print the keys and aggregation columns for debugging
    */
   /* ----------------------------------------------------------------------------*/
-  void create_input(const size_t key_count, const size_t value_per_key,
+  void create_input_with_nulls(const size_t key_count, const size_t value_per_key,
                     const size_t max_key, const size_t max_val,
-                    bool print = false, const gdf_size_type n_count = 0) {
+                    bool print = false) {
     size_t shuffle_seed = rand();
     initialize_keys(this->input_key, key_count, value_per_key, max_key, shuffle_seed);
     initialize_values(this->input_value, key_count, value_per_key, max_val, shuffle_seed);
@@ -592,7 +592,7 @@ struct GroupValidTest : public GroupTest<test_parameters>
   }
 
 
-  void create_gdf_output_buffers(const size_t key_count, const size_t value_per_key) {
+  void create_gdf_output_buffers_with_nulls(const size_t key_count, const size_t value_per_key) {
       initialize_keys(this->output_key, key_count, value_per_key, 0, 0, false);
       initialize_values(this->output_value, key_count, value_per_key, 0, 0);
 
@@ -683,17 +683,31 @@ struct GroupValidTest : public GroupTest<test_parameters>
 TYPED_TEST_CASE(GroupValidTest, ValidTestImplementations);
 
 TYPED_TEST(GroupValidTest, ReportValidMaskError)
+{
+    const size_t num_keys = 1;
+    const size_t num_values_per_key = 8;
+    const size_t max_key = num_keys*2;
+    const size_t max_val = 1000;
+    this->create_input(num_keys, num_values_per_key, max_key, max_val, true, 0);
+    this->create_gdf_output_buffers(num_keys, num_values_per_key);
+    this->compute_gdf_result(GDF_VALIDITY_UNSUPPORTED);
+}
+
+TYPED_TEST(GroupValidTest, GroupbyValidExampleTest)
 {   
     const size_t num_keys = 4;
     const size_t num_values_per_key = 4;
     const size_t max_key = num_keys * 1;
     const size_t max_val = 10;
 
-    this->create_input(num_keys, num_values_per_key, max_key, max_val, true);
+    this->create_input_with_nulls(num_keys, num_values_per_key, max_key, max_val, true);
     auto reference_map = this->compute_reference_solution_with_nulls();
     this->print_reference_solution(reference_map);
-    this->create_gdf_output_buffers(num_keys, num_values_per_key);
-    this->compute_gdf_result();
+    this->create_gdf_output_buffers_with_nulls(num_keys, num_values_per_key);
+    
+    // @todo: merge with hash-based or sort-based solution with null support 
+    // this->compute_gdf_result();
+
+    // @todo: compare gdf solution  and the reference solution both with possible nulls  
     // this->compare_gdf_result(reference_map);
 }
-
