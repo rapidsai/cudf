@@ -107,7 +107,12 @@ namespace rmm
 
     inline bool usePoolAllocator()
     {
-        return Manager::getOptions().allocation_mode == PoolAllocation;
+        return Manager::getOptions().allocation_mode & PoolAllocation;
+    }
+
+    inline bool useManagedMemory()
+    {
+        return Manager::getOptions().allocation_mode & CudaManagedMemory;
     }
 };
 
@@ -150,6 +155,7 @@ rmmError_t rmmInitialize(rmmOptions_t *options)
         cudaStream_t streams[1]; streams[0] = 0;
         dev.streams = streams;
         dev.streamSizes = 0;
+        unsigned flags = rmm::useManagedMemory() ? CNMEM_FLAGS_MANAGED : 0;
         RMM_CHECK_CNMEM( cnmemInit(1, &dev, 0) );
     }
     return RMM_SUCCESS;
