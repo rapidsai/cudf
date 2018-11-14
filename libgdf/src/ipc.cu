@@ -13,6 +13,9 @@
 #include <vector>
 #include <string>
 
+//TODO fixed 0.11.1 ... delete all uses of older arrow API (< 800)
+#define ARROW_VERSION 11*1000 + 1*100
+
 using namespace org::apache::arrow;
 
 namespace {
@@ -188,7 +191,7 @@ public:
         if ( _json_schema_output.size() == 0 ) {
             // To JSON
 #if ARROW_VERSION < 800
-	    std::unique_ptr<arrow::ipc::JsonWriter> json_writer;	    
+	    std::unique_ptr<arrow::ipc::JsonWriter> json_writer;
             arrow::ipc::JsonWriter::Open(_schema, &json_writer);
             json_writer->Finish(&_json_schema_output);
 #else
@@ -311,7 +314,7 @@ protected:
         auto fields = schema->fields();
 
         _fields.reserve(fields.size());
-        
+
         for (auto field : fields) {
             _fields.push_back(FieldDesc());
             auto & out_field = _fields.back();
@@ -351,7 +354,7 @@ protected:
 
             _nodes.push_back(NodeDesc());
             auto &out_node = _nodes.back();
-	    
+
             for ( int j=0; j < buffer_per_node; ++j ) {
                 auto buf = rb->buffers()->Get(i * buffer_per_node + j);
 #if ARROW_VERSION < 800
@@ -449,7 +452,7 @@ IpcParser* cffi_unwrap(gdf_ipc_parser_type* hdl){
 
 gdf_ipc_parser_type* gdf_ipc_parser_open(const uint8_t *schema, size_t length) {
     IpcParser *parser = new IpcParser;
-    
+
 
     parser->open(schema, length);
 

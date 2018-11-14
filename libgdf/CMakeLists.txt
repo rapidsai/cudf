@@ -75,15 +75,14 @@ else()
     message(FATAL_ERROR "CUDA not found, please check your settings.")
 endif()
 
-# Locate the Apache Arrow package (Requires that you use ConfigureArrow module)
-message(STATUS "ARROW_ROOT: " ${ARROW_ROOT})
+message(STATUS "ARROW_HOME env var: $ENV{ARROW_HOME}")
 find_package(Arrow REQUIRED)
 set_package_properties(Arrow PROPERTIES TYPE REQUIRED
     PURPOSE "Apache Arrow is a cross-language development platform for in-memory data."
     URL "https://github.com/apache/arrow")
 
 if (ARROW_FOUND)
-    message(STATUS "Apache Arrow found in ${ARROW_ROOT}")
+    message(STATUS "Apache Arrow found in $ENV{ARROW_HOME}")
 else()
     message(FATAL_ERROR "Apache Arrow not found, please check your settings.")
 endif()
@@ -94,7 +93,7 @@ include_directories(
     "${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/moderngpu/src"
     "${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/cnmem/include"
     "${CUDA_INCLUDE_DIRS}"
-    "${ARROW_INCLUDEDIR}"
+    "${ARROW_INCLUDE_DIR}"
 )
 
 IF(CUDA_VERSION_MAJOR GREATER 7)
@@ -154,7 +153,7 @@ cuda_add_library(gdf SHARED
     #src/windowedops.cu
     src/quantiles.cu
     src/io/csv/csv-reader.cu
-    src/io/convert/gdf-to-csr.cu      
+    src/io/convert/gdf-to-csr.cu
     src/validops.cu
     src/nvtx_utils.cpp
 )
@@ -170,9 +169,9 @@ endif(USE_NVTX)
 
 if (ARROW_NUMERIC_VERSION EQUAL 900)
   # arrow-0.9 requires boost_regex
-  target_link_libraries(gdf arrow boost_regex rmm)
+  target_link_libraries(gdf ${ARROW_STATIC_LIB} boost_regex rmm)
 else()
-  target_link_libraries(gdf arrow rmm)
+  target_link_libraries(gdf ${ARROW_STATIC_LIB} rmm)
 endif()
 
 find_library(NVSTRINGS_LIBRARY NVStrings HINTS $ENV{NVSTRINGS_ROOT}/lib $ENV{CONDA_PREFIX}/lib)
