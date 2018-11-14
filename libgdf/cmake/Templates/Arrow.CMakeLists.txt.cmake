@@ -27,7 +27,6 @@ ExternalProject_Add(arrow
     CMAKE_ARGS
         -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
         -DCMAKE_INSTALL_PREFIX=${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/thirdparty/arrow-install
-        -DARROW_PARQUET=ON
         -DARROW_IPC=ON
         -DARROW_HDFS=ON
         -DARROW_BOOST_USE_SHARED=OFF
