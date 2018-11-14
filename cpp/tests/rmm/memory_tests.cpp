@@ -23,16 +23,17 @@
 
 cudaStream_t stream;
 
-/// Helper class for similar tests
-struct MemoryManagerTest : public GdfTest {
-
-    static void SetUpTestCase() {
+struct MemoryManagerTest : 
+    public ::testing::TestWithParam<rmmAllocationMode_t> 
+{
+    void SetUp() {
         ASSERT_EQ( cudaSuccess, cudaStreamCreate(&stream) );
-        GdfTest::SetUpTestCase();
+        rmmOptions_t options {GetParam(), 0, false};
+        ASSERT_SUCCESS( rmmInitialize(&options) );
     }
 
-    static void TearDownTestCase() {
-        GdfTest::TearDownTestCase();
+    void TearDown() {
+        ASSERT_SUCCESS( rmmFinalize() );
         ASSERT_EQ( cudaSuccess, cudaStreamDestroy(stream) );
     }
 
@@ -47,28 +48,28 @@ struct MemoryManagerTest : public GdfTest {
 
 // Init / Finalize tests
 
-TEST_F(MemoryManagerTest, Initialize) {
+TEST_P(MemoryManagerTest, Initialize) {
     // Empty because handled in Fixture class.
 }
 
-TEST_F(MemoryManagerTest, Finalize) {
+TEST_P(MemoryManagerTest, Finalize) {
     // Empty because handled in Fixture class.
 }
 
 // zero size tests
 
-TEST_F(MemoryManagerTest, AllocateZeroBytes) {
+TEST_P(MemoryManagerTest, AllocateZeroBytes) {
     char *a = 0;
     ASSERT_SUCCESS(RMM_ALLOC((void**)&a, 0, stream));
 }
 
-TEST_F(MemoryManagerTest, NullPtrAllocateZeroBytes) {
+TEST_P(MemoryManagerTest, NullPtrAllocateZeroBytes) {
     ASSERT_SUCCESS(RMM_ALLOC(0, 0, stream));
 }
 
 // Bad argument tests
 
-TEST_F(MemoryManagerTest, NullPtrInvalidArgument) {
+TEST_P(MemoryManagerTest, NullPtrInvalidArgument) {
     rmmError_t res = RMM_ALLOC(0, 4, stream);
     ASSERT_FAILURE(res);
     ASSERT_EQ(RMM_ERROR_INVALID_ARGUMENT, res);
@@ -76,31 +77,31 @@ TEST_F(MemoryManagerTest, NullPtrInvalidArgument) {
 
 // Simple allocation / free tests
 
-TEST_F(MemoryManagerTest, AllocateWord) {
+TEST_P(MemoryManagerTest, AllocateWord) {
     char *a = 0;
     ASSERT_SUCCESS( RMM_ALLOC((void**)&a, size_word, stream) );
     ASSERT_SUCCESS( RMM_FREE(a, stream) );
 }
 
-TEST_F(MemoryManagerTest, AllocateKB) {
+TEST_P(MemoryManagerTest, AllocateKB) {
     char *a = 0;
     ASSERT_SUCCESS( RMM_ALLOC((void**)&a, size_kb, stream) );
     ASSERT_SUCCESS( RMM_FREE(a, stream) );
 }
 
-TEST_F(MemoryManagerTest, AllocateMB) {
+TEST_P(MemoryManagerTest, AllocateMB) {
     char *a = 0;
     ASSERT_SUCCESS( RMM_ALLOC((void**)&a, size_mb, stream) );
     ASSERT_SUCCESS( RMM_FREE(a, stream) );
 }
 
-TEST_F(MemoryManagerTest, AllocateGB) {
+TEST_P(MemoryManagerTest, AllocateGB) {
     char *a = 0;
     ASSERT_SUCCESS( RMM_ALLOC((void**)&a, size_gb, stream) );
     ASSERT_SUCCESS( RMM_FREE(a, stream) );
 }
 
-TEST_F(MemoryManagerTest, AllocateTB) {
+TEST_P(MemoryManagerTest, AllocateTB) {
     char *a = 0;
     size_t freeBefore = 0, totalBefore = 0;
     ASSERT_SUCCESS( rmmGetInfo(&freeBefore, &totalBefore, stream) );
@@ -116,47 +117,47 @@ TEST_F(MemoryManagerTest, AllocateTB) {
 }
 
 
-TEST_F(MemoryManagerTest, AllocateTooMuch) {
+TEST_P(MemoryManagerTest, AllocateTooMuch) {
     char *a = 0;
     ASSERT_FAILURE( RMM_ALLOC((void**)&a, size_pb, stream) );
     ASSERT_SUCCESS( RMM_FREE(a, stream) );
 }
 
-TEST_F(MemoryManagerTest, FreeZero) {
+TEST_P(MemoryManagerTest, FreeZero) {
     ASSERT_SUCCESS( RMM_FREE(0, stream) );
 }
 
 // Reallocation tests
 
-TEST_F(MemoryManagerTest, ReallocateSmaller) {
+TEST_P(MemoryManagerTest, ReallocateSmaller) {
     char *a = 0;
     ASSERT_SUCCESS( RMM_ALLOC((void**)&a, size_mb, stream) );
     ASSERT_SUCCESS( RMM_REALLOC((void**)&a, size_mb / 2, stream) );
     ASSERT_SUCCESS( RMM_FREE(a, stream) );
 }
 
-TEST_F(MemoryManagerTest, ReallocateMuchSmaller) {
+TEST_P(MemoryManagerTest, ReallocateMuchSmaller) {
     char *a = 0;
     ASSERT_SUCCESS( RMM_ALLOC((void**)&a, size_gb, stream) );
     ASSERT_SUCCESS( RMM_REALLOC((void**)&a, size_kb, stream) );
     ASSERT_SUCCESS( RMM_FREE(a, stream) );
 }
 
-TEST_F(MemoryManagerTest, ReallocateLarger) {
+TEST_P(MemoryManagerTest, ReallocateLarger) {
     char *a = 0;
     ASSERT_SUCCESS( RMM_ALLOC((void**)&a, size_mb, stream) );
     ASSERT_SUCCESS( RMM_REALLOC((void**)&a, size_mb * 2, stream) );
     ASSERT_SUCCESS( RMM_FREE(a, stream) );
 }
 
-TEST_F(MemoryManagerTest, ReallocateMuchLarger) {
+TEST_P(MemoryManagerTest, ReallocateMuchLarger) {
     char *a = 0;
     ASSERT_SUCCESS( RMM_ALLOC((void**)&a, size_kb, stream) );
     ASSERT_SUCCESS( RMM_REALLOC((void**)&a, size_gb, stream) );
     ASSERT_SUCCESS( RMM_FREE(a, stream) );
 }
 
-TEST_F(MemoryManagerTest, GetInfo) {
+TEST_P(MemoryManagerTest, GetInfo) {
     size_t freeBefore = 0, totalBefore = 0;
     ASSERT_SUCCESS( rmmGetInfo(&freeBefore, &totalBefore, stream) );
     ASSERT_GE(freeBefore, 0);
@@ -175,7 +176,7 @@ TEST_F(MemoryManagerTest, GetInfo) {
     ASSERT_SUCCESS( RMM_FREE(a, stream) );
 }
 
-TEST_F(MemoryManagerTest, AllocationOffset) {
+TEST_P(MemoryManagerTest, AllocationOffset) {
     char *a = nullptr, *b = nullptr;
     ptrdiff_t offset = -1;
     ASSERT_SUCCESS( RMM_ALLOC((void**)&a, size_kb, stream) );
@@ -190,3 +191,8 @@ TEST_F(MemoryManagerTest, AllocationOffset) {
     ASSERT_SUCCESS( RMM_FREE(a, stream) );
     ASSERT_SUCCESS( RMM_FREE(b, stream) );
 }
+
+rmmAllocationMode_t modes[]= {CudaDefaultAllocation, 
+                              PoolAllocation, 
+                              static_cast<rmmAllocationMode_t>(PoolAllocation | CudaManagedMemory)};
+INSTANTIATE_TEST_CASE_P(TestAllocationModes, MemoryManagerTest, ::testing::ValuesIn(modes));
