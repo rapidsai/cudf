@@ -30,6 +30,7 @@ ExternalProject_Add(arrow
         -DARROW_PARQUET=ON
         -DARROW_IPC=ON
         -DARROW_HDFS=ON
+        -DARROW_BOOST_USE_SHARED=OFF
     GIT_REPOSITORY    https://github.com/apache/arrow.git
     GIT_TAG           ${ARROW_VERSION}
     UPDATE_COMMAND    ""
