@@ -29,7 +29,6 @@ ExternalProject_Add(arrow
         -DCMAKE_INSTALL_PREFIX=${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/thirdparty/arrow-install
         -DARROW_IPC=ON
         -DARROW_HDFS=ON
-        -DARROW_BOOST_USE_SHARED=OFF
     GIT_REPOSITORY    https://github.com/apache/arrow.git
     GIT_TAG           ${ARROW_VERSION}
     UPDATE_COMMAND    ""
