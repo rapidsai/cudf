@@ -153,5 +153,7 @@ typedef ::testing::Types<
   > Implementations;
 
 typedef ::testing::Types<
-    TestParameters< agg_op::AVG, HASH, VTuple<int32_t >, int32_t>
+    TestParameters< agg_op::AVG, gdf_method::GDF_SORT, VTuple<int32_t >, int32_t>,
+    TestParameters< agg_op::SUM, gdf_method::GDF_SORT, VTuple<int32_t , int32_t >, int64_t >,
+    TestParameters< agg_op::MIN, gdf_method::GDF_SORT, VTuple<int32_t , int32_t , float   >, int64_t >
   > ValidTestImplementations;

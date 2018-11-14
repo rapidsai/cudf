@@ -17,27 +17,9 @@
  */
 #pragma once
 
+#include <gdf/utils.h>
 namespace gdf {
 namespace util {
-
-static constexpr int ValidSize = 32;
-using ValidType = uint32_t;
-
-
-// Instead of this function, use gdf_get_num_chars_bitmask from gdf/utils.h
-//__host__ __device__ __forceinline__
-//  size_t
-//  valid_size(size_t column_length)
-//{
-//  const size_t n_ints = (column_length / ValidSize) + ((column_length % ValidSize) ? 1 : 0);
-//  return n_ints * sizeof(ValidType);
-//}
-
-// Instead of this function, use gdf_is_valid from gdf/utils.h
-///__host__ __device__ __forceinline__ bool get_bit(const gdf_valid_type* const bits, size_t i)
-///{
-///  return  bits == nullptr? true :  bits[i >> size_t(3)] & (1 << (i & size_t(7)));
-///}
 
 __host__ __device__ __forceinline__
   uint8_t
@@ -69,6 +51,19 @@ __host__ __device__ __forceinline__ size_t last_byte_index(size_t column_size)
 {
   return (column_size + 8 - 1) / 8;
 }
+
+
+__host__ __forceinline__ size_t null_count(uint8_t* const bits, size_t column_size)
+{
+  size_t count = 0;
+  for(size_t i = 0; i < column_size; i++)
+  {
+    if (gdf_is_valid(bits, i) == false)
+      count++;
+  }
+  return count;
+}
+
 
 static inline std::string chartobin(gdf_valid_type c, size_t size = 8)
 {

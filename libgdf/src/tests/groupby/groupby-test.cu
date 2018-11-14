@@ -33,6 +33,10 @@
 #include "test_parameters.cuh"
 #include "groupby-test-helpers.cuh"
 
+// See this header for all valid handling 
+#include "valid_vectors.h"
+#include "../../util/bit_util.cuh"
+
 // A new instance of this class will be created for each *TEST(GroupTest, ...)
 // Put all repeated setup and validation stuff here
 template <class test_parameters>
@@ -101,7 +105,7 @@ struct GroupTest : public GdfTest {
 
   template <typename col_type>
   gdf_col_pointer create_gdf_column(std::vector<col_type> const & host_vector,
-          const gdf_size_type n_count = 0)
+          const gdf_size_type n_count = 0, gdf_valid_type* host_valid = nullptr)
   {
     // Deduce the type and set the gdf_dtype accordingly
     gdf_dtype gdf_col_type = N_GDF_TYPES;
@@ -124,10 +128,16 @@ struct GroupTest : public GdfTest {
     // Allocate device storage for gdf_column and copy contents from host_vector
     EXPECT_EQ(RMM_ALLOC(&(the_column->data), host_vector.size() * sizeof(col_type), 0), RMM_SUCCESS);
     EXPECT_EQ(cudaMemcpy(the_column->data, host_vector.data(), host_vector.size() * sizeof(col_type), cudaMemcpyHostToDevice), cudaSuccess);
-
-    int valid_size = gdf_get_num_chars_bitmask(host_vector.size());
-    EXPECT_EQ(RMM_ALLOC((void**)&(the_column->valid), valid_size, 0), RMM_SUCCESS);
-    EXPECT_EQ(cudaMemset(the_column->valid, 0xff, valid_size), cudaSuccess);
+    if(host_valid != nullptr) {
+      auto valid_size = gdf_get_num_chars_bitmask(host_vector.size());
+      EXPECT_EQ(RMM_ALLOC((void**)&(the_column->valid), valid_size, 0), RMM_SUCCESS);
+      EXPECT_EQ(cudaMemcpy(the_column->valid, host_valid, valid_size, cudaMemcpyHostToDevice), cudaSuccess);
+    }
+    else {
+      int valid_size = gdf_get_num_chars_bitmask(host_vector.size());
+      EXPECT_EQ(RMM_ALLOC((void**)&(the_column->valid), valid_size, 0), RMM_SUCCESS);
+      EXPECT_EQ(cudaMemset(the_column->valid, 0xff, valid_size), cudaSuccess);
+    }
 
     // Fill the gdf_column members
     the_column->null_count = n_count;
@@ -455,17 +465,235 @@ TYPED_TEST(GroupTest, EmptyInput)
 // Create a new derived class from JoinTest so we can do a new Typed Test set of tests
 template <class test_parameters>
 struct GroupValidTest : public GroupTest<test_parameters>
-{ };
+{
+
+  // multi_column_t is a tuple of vectors. The number of vectors in the tuple
+  // determines the number of columns to be grouped, and the value_type of each
+  // vector determiens the data type of the column
+  using multi_column_t = typename test_parameters::multi_column_t;
+
+  //output_t is the output type of the aggregation column
+  using output_t = typename test_parameters::output_type;
+
+  //map_t is used for reference solution
+  using map_t = typename test_parameters::ref_map_type;
+
+  //tuple_t is tuple of datatypes associated with each column to be grouped
+  using tuple_t = typename test_parameters::tuple_t;
+
+  using gdf_col_pointer = typename std::unique_ptr<gdf_column, std::function<void(gdf_column*)>>;
+
+  //contains input valid generated for gdf calculation and reference solution
+  std::vector<host_valid_pointer> input_key_valids;
+
+  //contains the input valid aggregation column
+  host_valid_pointer input_value_valid;
+
+  //contains grouped by column valid output of the gdf groupby call
+  std::vector<host_valid_pointer> output_key_valid;
+  
+  //contains the aggregated output column valid
+  host_valid_pointer output_value_valid;
+
+  /* --------------------------------------------------------------------------*/
+    /**
+     * @Synopsis  Creates a unique_ptr that wraps a gdf_column structure intialized with a host vector
+     *
+     * @Param host_vector The host vector whose data is used to initialize the gdf_column
+     *
+     * @Returns A unique_ptr wrapping the new gdf_column
+     */
+    /* ----------------------------------------------------------------------------*/
+  // Compile time recursion to convert each vector in a tuple of vectors into
+  // a gdf_column and append it to a vector of gdf_columns
+  template<std::size_t I = 0, typename... Tp>
+  inline typename std::enable_if<I == sizeof...(Tp), void>::type
+  convert_tuple_to_gdf_columns(std::vector<gdf_col_pointer> &gdf_columns,std::tuple<std::vector<Tp>...>& t, std::vector<host_valid_pointer>& valids)
+  {
+    //bottom of compile-time recursion
+    //purposely empty...
+  }
+
+  template<std::size_t I = 0, typename... Tp>
+  inline typename std::enable_if<I < sizeof...(Tp), void>::type
+  convert_tuple_to_gdf_columns(std::vector<gdf_col_pointer> &gdf_columns,std::tuple<std::vector<Tp>...>& t, std::vector<host_valid_pointer>& valids)
+  {
+    // Creates a gdf_column for the current vector and pushes it onto
+    // the vector of gdf_columns
+    if (valids.size() == 0) {
+      gdf_columns.push_back(this->create_gdf_column(std::get<I>(t)));
+    }
+    else{
+      auto valid = valids[I].get();
+      auto column_size = std::get<I>(t).size();
+      auto null_count = gdf::util::null_count(valid, column_size);
+      gdf_columns.push_back(this->create_gdf_column(std::get<I>(t), null_count, valid));
+    }
+
+    //recurse to next vector in tuple
+    convert_tuple_to_gdf_columns<I + 1, Tp...>(gdf_columns, t, valids);
+  }
+
+  // Converts a tuple of host vectors into a vector of gdf_columns
+  std::vector<gdf_col_pointer>
+  initialize_gdf_columns(multi_column_t host_columns, std::vector<host_valid_pointer>& output_key_valid)
+  {
+    std::vector<gdf_col_pointer> gdf_columns;
+    convert_tuple_to_gdf_columns(gdf_columns, host_columns, output_key_valid);
+    return gdf_columns;
+  }
+  
+  /* --------------------------------------------------------------------------*/
+  /**
+   * @Synopsis  Initializes key columns and aggregation column for gdf group by call
+   *
+   * @Param key_count The number of unique keys
+   * @Param value_per_key The number of times a random aggregation value is generated for a key
+   * @Param max_key The maximum value of the key columns
+   * @Param max_val The maximum value of aggregation column
+   * @Param print Optionally print the keys and aggregation columns for debugging
+   */
+  /* ----------------------------------------------------------------------------*/
+  void create_input(const size_t key_count, const size_t value_per_key,
+                    const size_t max_key, const size_t max_val,
+                    bool print = false, const gdf_size_type n_count = 0) {
+    size_t shuffle_seed = rand();
+    initialize_keys(this->input_key, key_count, value_per_key, max_key, shuffle_seed);
+    initialize_values(this->input_value, key_count, value_per_key, max_val, shuffle_seed);
+
+    // Init valids
+    auto column_length = this->input_value.size();
+    auto n_tuples = std::tuple_size<multi_column_t>::value;
+    for (size_t i = 0; i < n_tuples; i++)
+        input_key_valids.push_back(create_and_init_valid(column_length)); 
+    input_value_valid = create_and_init_valid(column_length);
+
+    this->gdf_input_key_columns = initialize_gdf_columns(this->input_key, input_key_valids);
+    
+    auto null_count = gdf::util::null_count(input_value_valid.get(), column_length);
+    this->gdf_input_value_column = this->create_gdf_column(this->input_value, null_count, input_value_valid.get());
+
+    // Fill vector of raw pointers to gdf_columns
+    for(auto const& c : this->gdf_input_key_columns){
+      this->gdf_raw_input_key_columns.push_back(c.get());
+    }
+    this->gdf_raw_input_val_column = this->gdf_input_value_column.get();
+
+    if(print)
+    {
+      std::cout << "Key column(s) created. Size: " << std::get<0>(this->input_key).size() << std::endl;
+      print_tuple_vector(this->input_key, input_key_valids);
+
+      std::cout << "Value column(s) created. Size: " << this->input_value.size() << std::endl;
+      print_vector(this->input_value, input_value_valid.get());
+      std::cout << std::endl;
+      
+    }
+  }
+
+
+  void create_gdf_output_buffers(const size_t key_count, const size_t value_per_key) {
+      initialize_keys(this->output_key, key_count, value_per_key, 0, 0, false);
+      initialize_values(this->output_value, key_count, value_per_key, 0, 0);
+
+      // Init Valids
+      auto column_length = this->output_value.size();
+      auto n_tuples = std::tuple_size<multi_column_t>::value;
+      for (size_t i = 0; i < n_tuples; i++)
+        output_key_valid.push_back(create_and_init_valid(column_length)); 
+      output_value_valid = create_and_init_valid(column_length);
+    
+      this->gdf_output_key_columns = initialize_gdf_columns(this->output_key, output_key_valid);
+      auto null_count = gdf::util::null_count(output_value_valid.get(), column_length);
+       
+      auto str = gdf::util::gdf_valid_to_str(output_value_valid.get(), column_length);
+      
+      this->gdf_output_value_column = this->create_gdf_column(this->output_value, null_count, output_value_valid.get());
+      for(auto const& c : this->gdf_output_key_columns){
+        this->gdf_raw_output_key_columns.push_back(c.get());
+      }
+      this->gdf_raw_output_val_column = this->gdf_output_value_column.get();
+  }
+
+  map_t
+  compute_reference_solution_with_nulls(void) {
+      map_t key_val_map;
+
+      auto get_input_key_valids = [](std::vector<host_valid_pointer>& valids, int i) {
+        std::basic_string<bool> valid_key;
+        std::for_each(valids.begin(),
+                      valids.end(),
+                      [&i, &valid_key](host_valid_pointer& valid){
+                          bool b1 = gdf_is_valid(valid.get(), i);
+                          valid_key.push_back(b1);
+                      });
+        return valid_key;
+      };             
+
+      if (test_parameters::op != agg_op::AVG) {
+          AggOp<test_parameters::op> agg;
+          for (size_t i = 0; i < this->input_value.size(); ++i) {
+              bool valid_value = gdf_is_valid(this->input_value_valid.get(), i);
+              auto valid_key = get_input_key_valids(this->input_key_valids, i);
+              auto l_key = extractKeyWithNulls(this->input_key, valid_key, i);
+
+              if (valid_value) {
+                auto sch = key_val_map.find(l_key);
+                if (sch != key_val_map.end()) {
+                    key_val_map[l_key] = agg(sch->second, this->input_value[i]);
+                } else {
+                    key_val_map[l_key] = agg(this->input_value[i]);
+                }
+              }
+          }
+      } else {
+          std::map<tuple_t, size_t> counters;
+          AggOp<agg_op::SUM> agg;
+          for (size_t i = 0; i < this->input_value.size(); ++i) {
+              bool valid_value = gdf_is_valid(this->input_value_valid.get(), i);
+              auto valid_key = get_input_key_valids(this->input_key_valids, i);
+              auto l_key = extractKeyWithNulls(this->input_key, valid_key, i);              
+              if(valid_value)
+                counters[l_key]++;
+              if (valid_value) {
+                auto sch = key_val_map.find(l_key);
+                if (sch != key_val_map.end()) {
+                    key_val_map[l_key] = agg(sch->second, this->input_value[i]);
+                } else {
+                    key_val_map[l_key] = agg(this->input_value[i]);
+                }
+              }
+          }
+          for (auto& e : key_val_map) {
+              e.second = e.second/counters[e.first];
+          }
+      }
+      return key_val_map;
+  }
+  void print_reference_solution(map_t & dicc) {
+    std::stringstream ss;
+    for(auto &iter : dicc) {
+        print_tuple_value(ss, iter.first);
+        ss << " => " <<  iter.second << std::endl;
+    }
+    std::cout << ss.str() << std::endl;
+  }
+};
 
 TYPED_TEST_CASE(GroupValidTest, ValidTestImplementations);
 
 TYPED_TEST(GroupValidTest, ReportValidMaskError)
-{
-    const size_t num_keys = 1;
-    const size_t num_values_per_key = 8;
-    const size_t max_key = num_keys*2;
-    const size_t max_val = 1000;
-    this->create_input(num_keys, num_values_per_key, max_key, max_val, false, 1);
-    this->compute_gdf_result(GDF_VALIDITY_UNSUPPORTED);
+{   
+    const size_t num_keys = 4;
+    const size_t num_values_per_key = 4;
+    const size_t max_key = num_keys * 1;
+    const size_t max_val = 10;
+
+    this->create_input(num_keys, num_values_per_key, max_key, max_val, true);
+    auto reference_map = this->compute_reference_solution_with_nulls();
+    this->print_reference_solution(reference_map);
+    this->create_gdf_output_buffers(num_keys, num_values_per_key);
+    this->compute_gdf_result();
+    // this->compare_gdf_result(reference_map);
 }
 
