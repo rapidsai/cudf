@@ -477,12 +477,12 @@ public:
                 const size_type other_row_index)
   {
 
-    auto copy_element = [](auto dummy, void * my_column, size_type my_row_index,
+    auto copy_element = [](auto dispatched_type_var, void * my_column, size_type my_row_index,
                            void const * other_column, size_type other_row_index)
     {
-      using col_type = decltype(dummy);
-static_cast<col_type*>(my_column)[my_row_index] = 
-  static_cast<col_type const*>(other_column)[other_row_index];
+      using col_type = decltype(dispatched_type_var);
+      static_cast<col_type*>(my_column)[my_row_index] = 
+        static_cast<col_type const*>(other_column)[other_row_index];
     };
 
     for(size_type i = 0; i < num_columns; ++i)
@@ -490,7 +490,8 @@ static_cast<col_type*>(my_column)[my_row_index] =
       const gdf_dtype my_col_type = d_columns_types[i];
       const gdf_dtype other_col_type = other.d_columns_types[i];
     
-      if(my_col_type != other_col_type){
+      if(my_col_type != other_col_type)
+      {
         return GDF_DTYPE_MISMATCH;
       }
 
@@ -526,15 +527,16 @@ static_cast<col_type*>(my_column)[my_row_index] =
     // If either row contains a NULL, then by definition, because NULL != x for all x,
     // the two rows are not equal
     bool valid = this->is_row_valid(my_row_index) && other.is_row_valid(other_row_index);
-    if (false == valid) {
+    if (false == valid) 
+    {
       return false;
     }
 
     // Generic lambda to check if two elements are equal between two columns
-    auto elements_are_equal = [](auto dummy, void const * my_column, size_type my_row_index,
+    auto elements_are_equal = [](auto dispatched_type_var, void const * my_column, size_type my_row_index,
                                  void const * other_column, size_type other_row_index)
     {
-      using col_type = decltype(dummy);
+      using col_type = decltype(dispatched_type_var);
       col_type const my_elem = static_cast<col_type const*>(my_column)[my_row_index];
       col_type const other_elem = static_cast<col_type const*>(other_column)[other_row_index];
       return my_elem == other_elem;
@@ -545,7 +547,8 @@ static_cast<col_type*>(my_column)[my_row_index] =
       const gdf_dtype my_col_type = d_columns_types[i];
       const gdf_dtype other_col_type = other.d_columns_types[i];
     
-      if(my_col_type != other_col_type){
+      if(my_col_type != other_col_type)
+      {
         return false;
       }
 
@@ -583,14 +586,17 @@ static_cast<col_type*>(my_column)[my_row_index] =
     hash_value_type hash_value{0};
 
     // If num_columns_to_hash is zero, hash all columns
-    if(0 == num_columns_to_hash) {
+    if(0 == num_columns_to_hash) 
+    {
       num_columns_to_hash = this->num_columns;
     }
 
-    // Generic lambda to hash an element in a column and combine it with the previous hash value
-    auto hash_element = [&hash_value](auto dummy, size_type row_index, size_type col_index, void const * col_data)
+    // Generic lambda to hash an element in a column and combine 
+    // it with the previous hash value
+    auto hash_element = [&hash_value](auto dispatched_type_var, size_type row_index, 
+                                      size_type col_index, void const * col_data)
     {
-      using col_type = decltype(dummy);
+      using col_type = decltype(dispatched_type_var);
       hash_function<col_type> hasher;
       col_type const * const current_column{static_cast<col_type const*>(col_data)};
       col_type const current_value{current_column[row_index]};
@@ -604,7 +610,8 @@ static_cast<col_type*>(my_column)[my_row_index] =
     };
 
     // Iterate all the columns and hash each element, combining the hash values together
-    for(size_type i = 0; i < num_columns_to_hash; ++i){
+    for(size_type i = 0; i < num_columns_to_hash; ++i)
+    {
       gdf_dtype const current_column_type = d_columns_types[i];
 
       gdf_type_dispatcher(current_column_type, hash_element, 0, row_index, i, d_columns_data[i]);
