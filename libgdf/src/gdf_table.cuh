@@ -483,8 +483,6 @@ public:
       using col_type = decltype(dummy);
 static_cast<col_type*>(my_column)[my_row_index] = 
   static_cast<col_type const*>(other_column)[other_row_index];
-      col_type const other_elem = static_cast<col_type const*>(other_column)[other_row_index];
-      my_elem = other_elem;
     };
 
     for(size_type i = 0; i < num_columns; ++i)
