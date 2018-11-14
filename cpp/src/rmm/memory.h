@@ -41,12 +41,25 @@ typedef enum
   N_RMM_ERROR                 //< Count of error types
 } rmmError_t;
 
+/** ---------------------------------------------------------------------------*
+ * @brief RMM allocation mode settings
+ *
+ * These settings can be ORed together. For example to use a pool of managed
+ * memory, use `mode = PoolAlloction | CudaManagedMemory`.
+ * --------------------------------------------------------------------------**/
 typedef enum
 {
   CudaDefaultAllocation = 0,  //< Use cudaMalloc for allocation
-  PoolAllocation,             //< Use pool suballocation strategy
+  PoolAllocation        = 1,  //< Use pool suballocation strategy
+  CudaManagedMemory     = 2,  //< Use cudaMallocManaged rather than cudaMalloc
 } rmmAllocationMode_t;
 
+/** ---------------------------------------------------------------------------*
+ * @brief Options for initializing the memory manager
+ *
+ * If set to zero, initial_pool_size defaults to half of the total GPU memory
+ * for the current device.
+ * --------------------------------------------------------------------------**/
 typedef struct
 {
   rmmAllocationMode_t allocation_mode; //< Allocation strategy to use
