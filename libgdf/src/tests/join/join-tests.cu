@@ -69,8 +69,11 @@ struct JoinTest : public GdfTest
   // The join type is passed via a member of the template argument class
   const join_op op = test_parameters::op;
 
-  gdf_context ctxt = {test_parameters::join_type == gdf_method::GDF_SORT,
-      test_parameters::join_type, 0};
+  gdf_context ctxt = {
+    test_parameters::join_type == gdf_method::GDF_SORT,
+    test_parameters::join_type, 
+    0
+  };
   // multi_column_t is a tuple of vectors. The number of vectors in the tuple
   // determines the number of columns to be joined, and the value_type of each
   // vector determiens the data type of the column
@@ -84,15 +87,16 @@ struct JoinTest : public GdfTest
 
   // Type for a unique_ptr to a gdf_column with a custom deleter
   // Custom deleter is defined at construction
-  using gdf_col_pointer = typename std::unique_ptr<gdf_column, std::function<void(gdf_column*)>>;
+  using gdf_col_pointer = 
+    typename std::unique_ptr<gdf_column, std::function<void(gdf_column*)>>;
 
-  // Containers for unique_ptrs to gdf_columns that will be used in the gdf_join functions
-  // unique_ptrs are used to automate freeing device memory
+  // Containers for unique_ptrs to gdf_columns that will be used in the gdf_join
+  // functions. unique_ptrs are used to automate freeing device memory
   std::vector<gdf_col_pointer> gdf_left_columns;
   std::vector<gdf_col_pointer> gdf_right_columns;
 
-  // Containers for the raw pointers to the gdf_columns that will be used as input
-  // to the gdf_join functions
+  // Containers for the raw pointers to the gdf_columns that will be used as
+  // input to the gdf_join functions
   std::vector<gdf_column*> gdf_raw_left_columns;
   std::vector<gdf_column*> gdf_raw_right_columns;
 
@@ -108,17 +112,19 @@ struct JoinTest : public GdfTest
   {
   }
 
-    /* --------------------------------------------------------------------------*/
-    /**
-     * @Synopsis  Creates a unique_ptr that wraps a gdf_column structure intialized with a host vector
-     *
-     * @Param host_vector The host vector whose data is used to initialize the gdf_column
-     *
-     * @Returns A unique_ptr wrapping the new gdf_column
-     */
-    /* ----------------------------------------------------------------------------*/
+  /* --------------------------------------------------------------------------*
+  * @Synopsis Creates a unique_ptr that wraps a gdf_column structure 
+  *           intialized with a host vector
+  *
+  * @Param host_vector vector containing data to be transfered to device side column
+  * @Param host_valid  vector containing valid masks associated with the supplied vector
+  * @Param n_count     null_count to be set for the generated column
+  *
+  * @Returns A unique_ptr wrapping the new gdf_column
+  * --------------------------------------------------------------------------*/
   template <typename col_type>
-  gdf_col_pointer create_gdf_column(std::vector<col_type> const & host_vector, gdf_valid_type* host_valid)
+  gdf_col_pointer create_gdf_column(std::vector<col_type> const & host_vector, gdf_valid_type* host_valid,
+          const gdf_size_type n_count)
   {
     // Deduce the type and set the gdf_dtype accordingly
     gdf_dtype gdf_col_type;
@@ -133,24 +139,30 @@ struct JoinTest : public GdfTest
     else if(std::is_same<col_type,float>::value) gdf_col_type = GDF_FLOAT32;
     else if(std::is_same<col_type,double>::value) gdf_col_type = GDF_FLOAT64;
 
-    // Create a new instance of a gdf_column with a custom deleter that will free
-    // the associated device memory when it eventually goes out of scope
-    auto deleter = [](gdf_column* col){col->size = 0; RMM_FREE(col->data, 0); RMM_FREE(col->valid, 0); };
+    // Create a new instance of a gdf_column with a custom deleter that will
+    //  free the associated device memory when it eventually goes out of scope
+    auto deleter = [](gdf_column* col) {
+      col->size = 0; 
+      RMM_FREE(col->data, 0); 
+      RMM_FREE(col->valid, 0); 
+    };
     gdf_col_pointer the_column{new gdf_column, deleter};
 
     // Allocate device storage for gdf_column and copy contents from host_vector
-    RMM_ALLOC(&(the_column->data), host_vector.size() * sizeof(col_type), 0);
-    cudaMemcpy(the_column->data, host_vector.data(), host_vector.size() * sizeof(col_type), cudaMemcpyHostToDevice);
+    EXPECT_EQ(RMM_ALLOC(&(the_column->data), host_vector.size() * sizeof(col_type), 0), RMM_SUCCESS);
+    EXPECT_EQ(cudaMemcpy(the_column->data, host_vector.data(), host_vector.size() * sizeof(col_type), cudaMemcpyHostToDevice), cudaSuccess);
 
     // Allocate device storage for gdf_column.valid
     if (host_valid != nullptr) {
       int valid_size = gdf_get_num_chars_bitmask(host_vector.size());
-      RMM_ALLOC((void**)&(the_column->valid), valid_size, 0);
-      cudaMemcpy(the_column->valid, host_valid, valid_size, cudaMemcpyHostToDevice);
+      EXPECT_EQ(RMM_ALLOC((void**)&(the_column->valid), valid_size, 0), RMM_SUCCESS);
+      EXPECT_EQ(cudaMemcpy(the_column->valid, host_valid, valid_size, cudaMemcpyHostToDevice), cudaSuccess);
+      the_column->null_count = n_count;
     } else {
         the_column->valid = nullptr;
+        the_column->null_count = 0;
     }
- 
+
     // Fill the gdf_column members
     the_column->size = host_vector.size();
     the_column->dtype = gdf_col_type;
@@ -165,68 +177,66 @@ struct JoinTest : public GdfTest
   // a gdf_column and append it to a vector of gdf_columns
   template<std::size_t I = 0, typename... Tp>
   inline typename std::enable_if<I == sizeof...(Tp), void>::type
-  convert_tuple_to_gdf_columns(std::vector<gdf_col_pointer> &gdf_columns,std::tuple<std::vector<Tp>...>& t, std::vector<host_valid_pointer>& valids)
+  convert_tuple_to_gdf_columns(std::vector<gdf_col_pointer> &gdf_columns,std::tuple<std::vector<Tp>...>& t, std::vector<host_valid_pointer>& valids, const gdf_size_type n_count)
   {
     //bottom of compile-time recursion
     //purposely empty...
   }
   template<std::size_t I = 0, typename... Tp>
   inline typename std::enable_if<I < sizeof...(Tp), void>::type
-  convert_tuple_to_gdf_columns(std::vector<gdf_col_pointer> &gdf_columns,std::tuple<std::vector<Tp>...>& t, std::vector<host_valid_pointer>& valids)
+  convert_tuple_to_gdf_columns(std::vector<gdf_col_pointer> &gdf_columns,std::tuple<std::vector<Tp>...>& t, std::vector<host_valid_pointer>& valids, const gdf_size_type n_count)
   {
     // Creates a gdf_column for the current vector and pushes it onto
     // the vector of gdf_columns
     if (valids.size() != 0) {
-      gdf_columns.push_back(create_gdf_column(std::get<I>(t), valids[I].get()));
+      gdf_columns.push_back(create_gdf_column(std::get<I>(t), valids[I].get(), n_count));
     } else {
-      gdf_columns.push_back(create_gdf_column(std::get<I>(t), nullptr));
+      gdf_columns.push_back(create_gdf_column(std::get<I>(t), nullptr, n_count));
     }
 
     //recurse to next vector in tuple
-    convert_tuple_to_gdf_columns<I + 1, Tp...>(gdf_columns, t, valids);
+    convert_tuple_to_gdf_columns<I + 1, Tp...>(gdf_columns, t, valids, n_count);
   }
 
   // Converts a tuple of host vectors into a vector of gdf_columns
   std::vector<gdf_col_pointer>
-  initialize_gdf_columns(multi_column_t host_columns, std::vector<host_valid_pointer>& valids)
+  initialize_gdf_columns(multi_column_t host_columns, std::vector<host_valid_pointer>& valids,
+          const gdf_size_type n_count)
   {
     std::vector<gdf_col_pointer> gdf_columns;
-    convert_tuple_to_gdf_columns(gdf_columns, host_columns, valids);
+    convert_tuple_to_gdf_columns(gdf_columns, host_columns, valids, n_count);
     return gdf_columns;
   }
 
-  /* --------------------------------------------------------------------------*/
-  /**
-   * @Synopsis  Initializes two sets of columns, left and right, with random values for the join operation.
+  /* --------------------------------------------------------------------------*
+   * @Synopsis  Initializes two sets of columns, left and right, with random 
+   *            values for the join operation.
    *
    * @Param left_column_length The length of the left set of columns
-   * @Param left_column_range The upper bound of random values for the left columns. Values are [0, left_column_range)
+   * @Param left_column_range The upper bound of random values for the left 
+   *                          columns. Values are [0, left_column_range)
    * @Param right_column_length The length of the right set of columns
-   * @Param right_column_range The upper bound of random values for the right columns. Values are [0, right_column_range)
+   * @Param right_column_range The upper bound of random values for the right 
+   *                           columns. Values are [0, right_column_range)
    * @Param print Optionally print the left and right set of columns for debug
-   */
-  /* ----------------------------------------------------------------------------*/
+   * -------------------------------------------------------------------------*/
   void create_input( size_t left_column_length, size_t left_column_range,
                      size_t right_column_length, size_t right_column_range,
-                     bool print = false)
+                     bool print = false, const gdf_size_type n_count = 0)
   {
     initialize_tuple(left_columns, left_column_length, left_column_range, ctxt.flag_sorted);
     initialize_tuple(right_columns, right_column_length, right_column_range, ctxt.flag_sorted);
 
     auto n_columns = std::tuple_size<multi_column_t>::value;
-    if(ctxt.flag_method != gdf_method::GDF_SORT) {
-      initialize_valids(left_valids, n_columns, left_column_length);
-      initialize_valids(right_valids, n_columns, right_column_length);
-    }
+    initialize_valids(left_valids, n_columns, left_column_length, true);
+    initialize_valids(right_valids, n_columns, right_column_length, true);
 
-    gdf_left_columns = initialize_gdf_columns(left_columns, left_valids);
-    gdf_right_columns = initialize_gdf_columns(right_columns, right_valids);
+    gdf_left_columns = initialize_gdf_columns(left_columns, left_valids, n_count);
+    gdf_right_columns = initialize_gdf_columns(right_columns, right_valids, n_count);
 
-    if(ctxt.flag_method == gdf_method::GDF_SORT) {
-      initialize_valids(left_valids, n_columns, left_column_length, true);
-      initialize_valids(right_valids, n_columns, right_column_length, true);
-    }
     // Fill vector of raw pointers to gdf_columns
+    gdf_raw_left_columns.clear();
+    gdf_raw_right_columns.clear();
     for(auto const& c : gdf_left_columns){
       gdf_raw_left_columns.push_back(c.get());
     }
@@ -245,6 +255,31 @@ struct JoinTest : public GdfTest
     }
   }
 
+  /* --------------------------------------------------------------------------*
+   * @Synopsis  Creates two empty columns, left and right.
+   *
+   * @Param left_column_length The length of the left column
+   * @Param right_column_length The length of the right column
+   * -------------------------------------------------------------------------*/
+  void create_dummy_input( gdf_size_type const left_column_length, 
+                           gdf_size_type const right_column_length)
+  {
+    using col_type = typename std::tuple_element<0, multi_column_t>::type::value_type;
+    
+    std::vector<col_type> dummy_vector_left(left_column_length, static_cast<col_type>(0));
+    std::vector<col_type> dummy_vector_right(right_column_length, static_cast<col_type>(0));
+    gdf_left_columns.push_back(create_gdf_column<col_type>(dummy_vector_left, nullptr, 0));
+    gdf_right_columns.push_back(create_gdf_column<col_type>(dummy_vector_right, nullptr, 0));
+    
+    // Fill vector of raw pointers to gdf_columns
+    for (auto const& c : gdf_left_columns) {
+      gdf_raw_left_columns.push_back(c.get());
+    }
+
+    for (auto const& c : gdf_right_columns) {
+      gdf_raw_right_columns.push_back(c.get());
+    }
+  }
 
   /* --------------------------------------------------------------------------*/
   /**
@@ -364,7 +399,7 @@ struct JoinTest : public GdfTest
    * @Param sort Option to sort the result. This is required to compare the result against the reference solution
    */
   /* ----------------------------------------------------------------------------*/
-  std::vector<result_type> compute_gdf_result(bool print = false, bool sort = true, gdf_error expected_result=GDF_SUCCESS)
+  std::vector<result_type> compute_gdf_result(bool print = false, bool sort = true, gdf_error expected_result = GDF_SUCCESS)
   {
     const int num_columns = std::tuple_size<multi_column_t>::value;
 
@@ -441,10 +476,10 @@ struct JoinTest : public GdfTest
     std::vector<int> host_result(output_size);
 
     // Copy result of gdf join to the host
-    cudaMemcpy(host_result.data(),
-               l_join_output, total_pairs * sizeof(int), cudaMemcpyDeviceToHost);
-    cudaMemcpy(host_result.data() + total_pairs,
-               r_join_output, total_pairs * sizeof(int), cudaMemcpyDeviceToHost);
+    EXPECT_EQ(cudaMemcpy(host_result.data(),
+               l_join_output, total_pairs * sizeof(int), cudaMemcpyDeviceToHost), cudaSuccess);
+    EXPECT_EQ(cudaMemcpy(host_result.data() + total_pairs,
+               r_join_output, total_pairs * sizeof(int), cudaMemcpyDeviceToHost), cudaSuccess);
 
     // Free the original join result
     if(output_size > 0){
@@ -713,10 +748,30 @@ TYPED_TEST(JoinTest, BothFramesEmpty)
   }
 }
 
+// The below tests check correct reporting of missing valid pointer
+
+// Create a new derived class from JoinTest so we can do a new Typed Test set of tests
+template <class test_parameters>
+struct JoinValidTest : public JoinTest<test_parameters>
+{ };
+
+using ValidTestImplementation = testing::Types< TestParameters< join_op::INNER, SORT, VTuple<int32_t >>,
+                                                TestParameters< join_op::LEFT , SORT, VTuple<int32_t >>,
+                                                TestParameters< join_op::FULL , SORT, VTuple<int32_t >> >;
+
+TYPED_TEST_CASE(JoinValidTest, ValidTestImplementation);
+
+TYPED_TEST(JoinValidTest, ReportValidMaskError)
+{
+  this->create_input(1000,100,
+                     100,100,
+                     false, 1);
+
+  std::vector<result_type> gdf_result = this->compute_gdf_result(false, true, GDF_VALIDITY_UNSUPPORTED);
+}
 
 
 // The below tests are for testing inputs that are at or above the maximum input size possible
-
 
 // Create a new derived class from JoinTest so we can do a new Typed Test set of tests
 template <class test_parameters>
@@ -743,10 +798,12 @@ TYPED_TEST(MaxJoinTest, HugeJoinSize)
 }
 
 TYPED_TEST(MaxJoinTest, InputTooLarge)
-{
-    const size_t right_table_size = static_cast<size_t>(std::numeric_limits<int>::max());
-    this->create_input(100, RAND_MAX,
-                       right_table_size, RAND_MAX);
+{   
+    const gdf_size_type left_table_size = 100;  
+    const gdf_size_type right_table_size = 
+      static_cast<gdf_size_type>(std::numeric_limits<int>::max());
+
+    this->create_dummy_input(left_table_size, right_table_size);
 
     const bool print_result{false};
     const bool sort_result{false};

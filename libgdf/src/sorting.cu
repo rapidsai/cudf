@@ -166,27 +166,27 @@ gdf_error gdf_radixsort_plan_free(gdf_radixsort_plan_type *hdl) {
 }
 
 
-#define WRAP(Fn, Tk, Tv)                                                    \
-gdf_error gdf_radixsort_##Fn(gdf_radixsort_plan_type *hdl,                      \
-                             gdf_column *keycol,                            \
-                             gdf_column *valcol)                            \
-{                                                                           \
-    /* validity mask must be empty */                                       \
-    GDF_REQUIRE(!keycol->valid, GDF_VALIDITY_UNSUPPORTED);                  \
-    GDF_REQUIRE(!valcol->valid, GDF_VALIDITY_UNSUPPORTED);                  \
-    /* size of columns must match */                                        \
-    GDF_REQUIRE(keycol->size == valcol->size, GDF_COLUMN_SIZE_MISMATCH);    \
-    RadixSortPlan *plan = cffi_unwrap(hdl);                                 \
-    /* num_items must match */                                              \
-    GDF_REQUIRE(plan->num_items == keycol->size, GDF_COLUMN_SIZE_MISMATCH); \
-    /* back buffer size must match */                                       \
-    GDF_REQUIRE(sizeof(Tk) * plan->num_items == plan->back_key_size,        \
-                GDF_COLUMN_SIZE_MISMATCH);                                  \
-    GDF_REQUIRE(sizeof(Tv) * plan->num_items == plan->back_val_size,        \
-                GDF_COLUMN_SIZE_MISMATCH);                                  \
-    /* Do sort */                                                           \
-    return RadixSort<Tk, Tv>::sort(plan,                                    \
-                                   (Tk*)keycol->data, (Tv*)valcol->data);   \
+#define WRAP(Fn, Tk, Tv)                                                            \
+gdf_error gdf_radixsort_##Fn(gdf_radixsort_plan_type *hdl,                          \
+                             gdf_column *keycol,                                    \
+                             gdf_column *valcol)                                    \
+{                                                                                   \
+    /* validity mask must be empty */                                               \
+    GDF_REQUIRE(!keycol->valid || !keycol->null_count, GDF_VALIDITY_UNSUPPORTED);   \
+    GDF_REQUIRE(!valcol->valid || !valcol->null_count, GDF_VALIDITY_UNSUPPORTED);   \
+    /* size of columns must match */                                                \
+    GDF_REQUIRE(keycol->size == valcol->size, GDF_COLUMN_SIZE_MISMATCH);            \
+    RadixSortPlan *plan = cffi_unwrap(hdl);                                         \
+    /* num_items must match */                                                      \
+    GDF_REQUIRE(plan->num_items == keycol->size, GDF_COLUMN_SIZE_MISMATCH);         \
+    /* back buffer size must match */                                               \
+    GDF_REQUIRE(sizeof(Tk) * plan->num_items == plan->back_key_size,                \
+                GDF_COLUMN_SIZE_MISMATCH);                                          \
+    GDF_REQUIRE(sizeof(Tv) * plan->num_items == plan->back_val_size,                \
+                GDF_COLUMN_SIZE_MISMATCH);                                          \
+    /* Do sort */                                                                   \
+    return RadixSort<Tk, Tv>::sort(plan,                                            \
+                                   (Tk*)keycol->data, (Tv*)valcol->data);           \
 }
 
 
