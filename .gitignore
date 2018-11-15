@@ -11,6 +11,9 @@ __pycache__
 *.swp
 *.pytest_cache
 DartConfiguration.tcl
+.DS_Store
+
+##build
 htmlcov
 dist/
 cudf.egg-info/

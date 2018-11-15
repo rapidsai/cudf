@@ -14,14 +14,14 @@ env:
 
 matrix:
   include:
-    - env: CUDA=9.2.148_396.37 PYTHON=3.5 LABEL_MAIN=1 BUILD_CUDF=1 BUILD_LIBGDF=1 BUILD_CFFI=1
+    - env: CUDA=9.2.148_396.37 PYTHON=3.5 LABEL_MAIN=1 BUILD_CUDF=1 BUILD_LIBCUDF=1 BUILD_CFFI=1
     - env: CUDA=9.2.148_396.37 PYTHON=3.6 LABEL_MAIN=1 BUILD_CUDF=1 BUILD_CFFI=1
-    - env: CUDA=10.0.130_410.48 PYTHON=3.5 BUILD_LIBGDF=1 BUILD_CFFI=1
+    - env: CUDA=10.0.130_410.48 PYTHON=3.5 BUILD_LIBCUDF=1 BUILD_CFFI=1
     - env: CUDA=10.0.130_410.48 PYTHON=3.6 BUILD_CFFI=1
 
 before_install:
-  # install build environment for libgdf
-  - source ./travisci/libgdf/install-env-libgdf.sh
+  # install build environment for libcudf
+  - source ./travisci/libcudf/install-env-libcudf.sh
   # install miniconda
   - travis_retry wget --progress=dot:mega https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh -O miniconda.sh
   - chmod +x miniconda.sh
@@ -39,15 +39,15 @@ script:
   # check conda versions
   - conda list
   # build ligdf
-  - source ./travisci/libgdf/build_libgdf.sh
-  # build libgdf_cffi
-  - source ./travisci/libgdf/build_libgdf_cffi.sh
-  # upload libgdf and libgdf_cffi
-  - source ./travisci/libgdf/upload.sh
+  - source ./travisci/libcudf/build_libcudf.sh
+  # build libcudf_cffi
+  - source ./travisci/libcudf/build_libcudf_cffi.sh
+  # upload libcudf and libcudf_cffi
+  - source ./travisci/libcudf/upload.sh
   # build cudf
-  - source ./travisci/build_cudf.sh
+  - source ./travisci/cudf/build_cudf.sh
   - flake8
 
 after_success:
   # upload cudf
-  - source ./travisci/upload-anaconda.sh
+  - source ./travisci/cudf/upload-anaconda.sh
