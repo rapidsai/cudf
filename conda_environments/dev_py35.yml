@@ -6,6 +6,7 @@ channels:
 - rapidsai
 - defaults
 dependencies:
+- cmake>=3.12
 - python=3.5.*
 - pytest
 - numba>=0.40.0dev
