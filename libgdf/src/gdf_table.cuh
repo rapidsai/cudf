@@ -572,6 +572,29 @@ public:
     return true;
   }
 
+  template < template <typename> typename hash_function >
+  struct hash_element
+  {
+    template <typename col_type>
+    __device__
+    void operator()(hash_value_type& hash_value, 
+                    void const * col_data,
+                    size_type row_index,
+                    size_type col_index)
+    {
+      hash_function<col_type> hasher;
+      col_type const * const current_column{static_cast<col_type const*>(col_data)};
+      col_type const current_value{current_column[row_index]};
+      hash_value_type const key_hash{hasher(current_value)};
+
+      // Only combine hash-values after the first column
+      if(0 == col_index)
+        hash_value = key_hash;
+      else
+        hash_value = hasher.hash_combine(hash_value,key_hash);
+    }
+  };
+
   /* --------------------------------------------------------------------------*/
   /** 
    * @Synopsis  This device function computes a hash value for a given row in the table
@@ -595,30 +618,14 @@ public:
       num_columns_to_hash = this->num_columns;
     }
 
-    // Generic lambda to hash an element in a column and combine 
-    // it with the previous hash value
-    auto hash_element = [&hash_value](auto dispatched_type_var, size_type row_index, 
-                                      size_type col_index, void const * col_data)
-    {
-      using col_type = decltype(dispatched_type_var);
-      hash_function<col_type> hasher;
-      col_type const * const current_column{static_cast<col_type const*>(col_data)};
-      col_type const current_value{current_column[row_index]};
-      hash_value_type const key_hash{hasher(current_value)};
-
-      // Only combine hash-values after the first column
-      if(0 == col_index)
-        hash_value = key_hash;
-      else
-        hash_value = hasher.hash_combine(hash_value,key_hash);
-    };
-
     // Iterate all the columns and hash each element, combining the hash values together
     for(size_type i = 0; i < num_columns_to_hash; ++i)
     {
       gdf_dtype const current_column_type = d_columns_types[i];
 
-      gdf_type_dispatcher(current_column_type, hash_element, 0, row_index, i, d_columns_data[i]);
+      gdf_type_dispatcher(current_column_type, 
+                          hash_element<hash_function>{}, 
+                          hash_value, d_columns_data[i], row_index, i);
     }
 
     return hash_value;
