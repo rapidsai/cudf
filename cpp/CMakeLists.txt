@@ -80,7 +80,7 @@ set_package_properties(GTest PROPERTIES TYPE OPTIONAL
 if(GTEST_FOUND)
     message(STATUS "Google C++ Testing Framework (Google Test) found in ${GTEST_ROOT}")
     include_directories(${GTEST_INCLUDE_DIRS})
-    add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/modules/tests)
+    add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/src/tests)
 else()
     message(AUTHOR_WARNING "Google C++ Testing Framework (Google Test) not found: automated tests are disabled.")
 endif(GTEST_FOUND)
@@ -108,7 +108,7 @@ include_directories("${ARROW_INCLUDEDIR}"
                     "${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}"
                     "${CMAKE_BINARY_DIR}/include"
                     "${CMAKE_SOURCE_DIR}/include"
-                    "${CMAKE_SOURCE_DIR}/modules"
+                    "${CMAKE_SOURCE_DIR}/src"
                     "${CMAKE_SOURCE_DIR}/thirdparty/cub"
                     "${CMAKE_SOURCE_DIR}/thirdparty/moderngpu/src"
                     "${CMAKE_SOURCE_DIR}/thirdparty/cnmem/include")
@@ -124,35 +124,35 @@ link_directories("${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}/../lib"
 # - library targets -------------------------------------------------------------------------------
 
 add_library(cudf SHARED
-            modules/comm/ipc/ipc.cu
-            modules/dataframe/column.cpp
-            modules/dataframe/context.cpp
-            modules/error/error_handles.cpp
-            modules/filter/filter_ops.cu
-            modules/join/joining.cu
-            modules/sort/segmented_sorting.cu
-            modules/sort/sorting.cu
-            modules/sqls/sqls_ops.cu
-            modules/binary/binary_ops.cu
-            modules/bitmask/bitmask_ops.cu
-            modules/bitmask/valid_ops.cu
-            modules/compaction/stream_compaction_ops.cu
-            modules/datetime/datetime_ops.cu
-            modules/hash/hashing.cu
-            modules/hash/hash_ops.cu
-            modules/quantiles/quantiles.cu
-            modules/reductions/reductions.cu
-            modules/unary/unary_ops.cu
-            # modules/windowed/windowed_ops.cu ... this is broken
-            modules/io/convert/csr/cudf_to_csr.cu
-            modules/io/csv/csv_reader.cu
-            modules/utilities/cuda_utils.cu
-            modules/utilities/scan.cu
-            modules/utilities/nvtx/nvtx_utils.cpp)
+            src/comm/ipc/ipc.cu
+            src/dataframe/column.cpp
+            src/dataframe/context.cpp
+            src/error/error_handles.cpp
+            src/filter/filter_ops.cu
+            src/join/joining.cu
+            src/sort/segmented_sorting.cu
+            src/sort/sorting.cu
+            src/sqls/sqls_ops.cu
+            src/binary/binary_ops.cu
+            src/bitmask/bitmask_ops.cu
+            src/bitmask/valid_ops.cu
+            src/compaction/stream_compaction_ops.cu
+            src/datetime/datetime_ops.cu
+            src/hash/hashing.cu
+            src/hash/hash_ops.cu
+            src/quantiles/quantiles.cu
+            src/reductions/reductions.cu
+            src/unary/unary_ops.cu
+            # src/windowed/windowed_ops.cu ... this is broken
+            src/io/convert/csr/cudf_to_csr.cu
+            src/io/csv/csv_reader.cu
+            src/utilities/cuda_utils.cu
+            src/utilities/scan.cu
+            src/utilities/nvtx/nvtx_utils.cpp)
 
 add_library(rmm SHARED
-            modules/rmm/memory.cpp
-            modules/rmm/memory_manager.cpp
+            src/rmm/memory.cpp
+            src/rmm/memory_manager.cpp
             thirdparty/cnmem/src/cnmem.cpp
             )
 
