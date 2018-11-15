@@ -52,6 +52,7 @@ host_valid_pointer create_and_init_valid(size_t length, bool all_bits_on = false
 // Initialize valids
 void initialize_valids(std::vector<host_valid_pointer>& valids, size_t size, size_t length, bool all_bits_on = false)
 {
+  valids.clear();
   for (size_t i = 0; i < size; ++i) {
     valids.push_back(create_and_init_valid(length, all_bits_on));
   }

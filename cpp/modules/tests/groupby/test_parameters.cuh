@@ -152,3 +152,7 @@ typedef ::testing::Types<
     TestParameters< agg_op::AVG, HASH, VTuple<uint32_t, int32_t , int64_t >, int32_t >,
     TestParameters< agg_op::AVG, HASH, VTuple<uint64_t, uint32_t, int32_t >, uint64_t>
   > Implementations;
+
+typedef ::testing::Types<
+    TestParameters< agg_op::AVG, HASH, VTuple<int32_t >, int32_t>
+  > ValidTestImplementations;

@@ -133,6 +133,8 @@ gdf_error gdf_radixsort_plan_free(gdf_radixsort_plan_type *hdl);
 
 /*
  * The following function performs a sort on the key and value columns.
+ * The null_count of the keycol and valcol columns are expected to be 0
+ * otherwise a GDF_VALIDITY_UNSUPPORTED error is returned.
  */
 gdf_error gdf_radixsort_i8(gdf_radixsort_plan_type *hdl,
                            gdf_column *keycol,
@@ -162,6 +164,8 @@ gdf_error gdf_segmented_radixsort_plan_free(gdf_segmented_radixsort_plan_type *h
 
 /*
 * The following function performs a sort on the key and value columns.
+* The null_count of the keycol and valcol columns are expected to be 0
+* otherwise a GDF_VALIDITY_UNSUPPORTED error is returned.
 */
 gdf_error gdf_segmented_radixsort_i8(gdf_segmented_radixsort_plan_type *hdl,
                                      gdf_column *keycol, gdf_column *valcol,
@@ -201,6 +205,9 @@ gdf_error gdf_segmented_radixsort_generic(gdf_segmented_radixsort_plan_type *hdl
 /** 
  * @Synopsis  Performs an inner join on the specified columns of two
  * dataframes (left, right)
+ * If join_context->flag_method is set to GDF_SORT then the null_count of the
+ * columns must be set to 0 otherwise a GDF_VALIDITY_UNSUPPORTED error is
+ * returned.
  * 
  * @Param[in] left_cols[] The columns of the left dataframe
  * @Param[in] num_left_cols The number of columns in the left dataframe
@@ -241,6 +248,9 @@ gdf_error gdf_inner_join(
 /** 
  * @Synopsis  Performs a left join (also known as left outer join) on the
  * specified columns of two dataframes (left, right)
+ * If join_context->flag_method is set to GDF_SORT then the null_count of the
+ * columns must be set to 0 otherwise a GDF_VALIDITY_UNSUPPORTED error is
+ * returned.
  * 
  * @Param[in] left_cols[] The columns of the left dataframe
  * @Param[in] num_left_cols The number of columns in the left dataframe
@@ -281,6 +291,9 @@ gdf_error gdf_left_join(
 /** 
  * @Synopsis  Performs a full join (also known as full outer join) on the
  * specified columns of two dataframes (left, right)
+ * If join_context->flag_method is set to GDF_SORT then the null_count of the
+ * columns must be set to 0 otherwise a GDF_VALIDITY_UNSUPPORTED error is
+ * returned.
  * 
  * @Param[in] left_cols[] The columns of the left dataframe
  * @Param[in] num_left_cols The number of columns in the left dataframe
@@ -352,9 +365,64 @@ gdf_error gdf_hash_partition(int num_input_cols,
 
 /* prefixsum */
 
+/* --------------------------------------------------------------------------*/
+/** 
+ * @Synopsis  Computes the prefix sum of a column
+ * 
+ * @Param inp Input column for prefix sum with null_count = 0
+ * @Param out The output column containing the prefix sum of the input
+ * @Param inclusive Flag for applying an inclusive prefix sum
+ * 
+ * @Returns   GDF_SUCCESS if the operation was successful, otherwise an appropriate
+ * error code. If inp->null_count is not set to 0 GDF_VALIDITY_UNSUPPORTED is
+ * returned.
+ */
+/* ----------------------------------------------------------------------------*/
 gdf_error gdf_prefixsum_generic(gdf_column *inp, gdf_column *out, int inclusive);
+
+/* --------------------------------------------------------------------------*/
+/** 
+ * @Synopsis  Computes the prefix sum of a column
+ * 
+ * @Param inp Input column for prefix sum with null_count = 0
+ * @Param out The output column containing the prefix sum of the input
+ * @Param inclusive Flag for applying an inclusive prefix sum
+ * 
+ * @Returns   GDF_SUCCESS if the operation was successful, otherwise an appropriate
+ * error code. If inp->null_count is not set to 0 GDF_VALIDITY_UNSUPPORTED is
+ * returned.
+ */
+/* ----------------------------------------------------------------------------*/
 gdf_error gdf_prefixsum_i8(gdf_column *inp, gdf_column *out, int inclusive);
+
+/* --------------------------------------------------------------------------*/
+/** 
+ * @Synopsis  Computes the prefix sum of a column
+ * 
+ * @Param inp Input column for prefix sum with null_count = 0
+ * @Param out The output column containing the prefix sum of the input
+ * @Param inclusive Flag for applying an inclusive prefix sum
+ * 
+ * @Returns   GDF_SUCCESS if the operation was successful, otherwise an appropriate
+ * error code. If inp->null_count is not set to 0 GDF_VALIDITY_UNSUPPORTED is
+ * returned.
+ */
+/* ----------------------------------------------------------------------------*/
 gdf_error gdf_prefixsum_i32(gdf_column *inp, gdf_column *out, int inclusive);
+
+/* --------------------------------------------------------------------------*/
+/** 
+ * @Synopsis  Computes the prefix sum of a column
+ * 
+ * @Param inp Input column for prefix sum with null_count = 0
+ * @Param out The output column containing the prefix sum of the input
+ * @Param inclusive Flag for applying an inclusive prefix sum
+ * 
+ * @Returns   GDF_SUCCESS if the operation was successful, otherwise an appropriate
+ * error code. If inp->null_count is not set to 0 GDF_VALIDITY_UNSUPPORTED is
+ * returned.
+ */
+/* ----------------------------------------------------------------------------*/
 gdf_error gdf_prefixsum_i64(gdf_column *inp, gdf_column *out, int inclusive);
 
 
@@ -685,6 +753,7 @@ gdf_error gpu_comparison_static_f64(gdf_column *lhs, double value, gdf_column *o
 gdf_error gpu_comparison(gdf_column *lhs, gdf_column *rhs, gdf_column *output,gdf_comparison_operator operation);
 
 //takes a stencil and uses it to compact a colum e.g. remove all values for which the stencil = 0
+//The lhs column is expected to have 0 null_count otherwise GDF_VALIDITY_UNSUPPORTED is returned
 gdf_error gpu_apply_stencil(gdf_column *lhs, gdf_column * stencil, gdf_column * output);
 
 gdf_error gpu_concat(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
@@ -709,14 +778,14 @@ gdf_error get_column_byte_width(gdf_column * col, int * width);
    GROUP-BY
  */
 gdf_error gdf_order_by(size_t nrows,     //in: # rows
-		       gdf_column* cols, //in: host-side array of gdf_columns
+		       gdf_column* cols, //in: host-side array of gdf_columns with 0 null_count otherwise GDF_VALIDITY_UNSUPPORTED is returned
 		       size_t ncols,     //in: # cols
 		       void** d_cols,    //out: pre-allocated device-side array to be filled with gdf_column::data for each column; slicing of gdf_column array (host)
 		       int* d_types,     //out: pre-allocated device-side array to be filled with gdf_colum::dtype for each column; slicing of gdf_column array (host)
 		       size_t* d_indx);  //out: device-side array of re-rdered row indices
 
 gdf_error gdf_filter(size_t nrows,     //in: # rows
-		     gdf_column* cols, //in: host-side array of gdf_columns
+		     gdf_column* cols, //in: host-side array of gdf_columns with 0 null_count otherwise GDF_VALIDITY_UNSUPPORTED is returned
 		     size_t ncols,     //in: # cols
 		     void** d_cols,    //out: pre-allocated device-side array to be filled with gdf_column::data for each column; slicing of gdf_column array (host)
 		     int* d_types,     //out: pre-allocated device-side array to be filled with gdf_colum::dtype for each column; slicing of gdf_column array (host)
@@ -725,8 +794,8 @@ gdf_error gdf_filter(size_t nrows,     //in: # rows
 		     size_t* new_sz);  //out: host-side # rows that remain after filtering
 
 gdf_error gdf_group_by_sum(int ncols,                    // # columns
-                           gdf_column** cols,            //input cols
-                           gdf_column* col_agg,          //column to aggregate on
+                           gdf_column** cols,            //input cols with 0 null_count otherwise GDF_VALIDITY_UNSUPPORTED is returned
+                           gdf_column* col_agg,          //column to aggregate on with 0 null_count otherwise GDF_VALIDITY_UNSUPPORTED is returned
                            gdf_column* out_col_indices,  //if not null return indices of re-ordered rows
                            gdf_column** out_col_values,  //if not null return the grouped-by columns
                                                          //(multi-gather based on indices, which are needed anyway)
@@ -734,8 +803,8 @@ gdf_error gdf_group_by_sum(int ncols,                    // # columns
                            gdf_context* ctxt);           //struct with additional info: bool is_sorted, flag_sort_or_hash, bool flag_count_distinct
 
 gdf_error gdf_group_by_min(int ncols,                    // # columns
-                           gdf_column** cols,            //input cols
-                           gdf_column* col_agg,          //column to aggregate on
+                           gdf_column** cols,            //input cols with 0 null_count otherwise GDF_VALIDITY_UNSUPPORTED is returned
+                           gdf_column* col_agg,          //column to aggregate on with 0 null_count otherwise GDF_VALIDITY_UNSUPPORTED is returned
                            gdf_column* out_col_indices,  //if not null return indices of re-ordered rows
                            gdf_column** out_col_values,  //if not null return the grouped-by columns
                                                          //(multi-gather based on indices, which are needed anyway)
@@ -744,8 +813,8 @@ gdf_error gdf_group_by_min(int ncols,                    // # columns
 
 
 gdf_error gdf_group_by_max(int ncols,                    // # columns
-                           gdf_column** cols,            //input cols
-                           gdf_column* col_agg,          //column to aggregate on
+                           gdf_column** cols,            //input cols with 0 null_count otherwise GDF_VALIDITY_UNSUPPORTED is returned
+                           gdf_column* col_agg,          //column to aggregate on with 0 null_count otherwise GDF_VALIDITY_UNSUPPORTED is returned
                            gdf_column* out_col_indices,  //if not null return indices of re-ordered rows
                            gdf_column** out_col_values,  //if not null return the grouped-by columns
                                                          //(multi-gather based on indices, which are needed anyway)
@@ -754,8 +823,8 @@ gdf_error gdf_group_by_max(int ncols,                    // # columns
 
 
 gdf_error gdf_group_by_avg(int ncols,                    // # columns
-                           gdf_column** cols,            //input cols
-                           gdf_column* col_agg,          //column to aggregate on
+                           gdf_column** cols,            //input cols with 0 null_count otherwise GDF_VALIDITY_UNSUPPORTED is returned
+                           gdf_column* col_agg,          //column to aggregate on with 0 null_count otherwise GDF_VALIDITY_UNSUPPORTED is returned
                            gdf_column* out_col_indices,  //if not null return indices of re-ordered rows
                            gdf_column** out_col_values,  //if not null return the grouped-by columns
                                                          //(multi-gather based on indices, which are needed anyway)
@@ -763,15 +832,15 @@ gdf_error gdf_group_by_avg(int ncols,                    // # columns
                            gdf_context* ctxt);            //struct with additional info: bool is_sorted, flag_sort_or_hash, bool flag_count_distinct
 
 gdf_error gdf_group_by_count(int ncols,                    // # columns
-                             gdf_column** cols,            //input cols
-                             gdf_column* col_agg,          //column to aggregate on
+                             gdf_column** cols,            //input cols with 0 null_count otherwise GDF_VALIDITY_UNSUPPORTED is returned
+                             gdf_column* col_agg,          //column to aggregate on with 0 null_count otherwise GDF_VALIDITY_UNSUPPORTED is returned
                              gdf_column* out_col_indices,  //if not null return indices of re-ordered rows
                              gdf_column** out_col_values,  //if not null return the grouped-by columns
                                                          //(multi-gather based on indices, which are needed anyway)
                              gdf_column* out_col_agg,      //aggregation result
                              gdf_context* ctxt);            //struct with additional info: bool is_sorted, flag_sort_or_hash, bool flag_count_distinct
 
-gdf_error gdf_quantile_exact(	gdf_column*         col_in,       //input column;
+gdf_error gdf_quantile_exact(	gdf_column*         col_in,       //input column with 0 null_count otherwise GDF_VALIDITY_UNSUPPORTED is returned
                                 gdf_quantile_method prec,         //precision: type of quantile method calculation
                                 double              q,            //requested quantile in [0,1]
                                 void*               t_erased_res, //result; for <exact> should probably be double*; it's void* because
@@ -779,7 +848,7 @@ gdf_error gdf_quantile_exact(	gdf_column*         col_in,       //input column;
                                                                   //(2) for possible types bigger than double, in the future;
                                 gdf_context*        ctxt);        //context info
 
-gdf_error gdf_quantile_aprrox(	gdf_column*  col_in,       //input column;
+gdf_error gdf_quantile_aprrox(	gdf_column*  col_in,       //input column with 0 null_count otherwise GDF_VALIDITY_UNSUPPORTED is returned
                                 double       q,            //requested quantile in [0,1]
                                 void*        t_erased_res, //type-erased result of same type as column;
                                 gdf_context* ctxt);        //context info
