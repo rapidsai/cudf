@@ -116,8 +116,7 @@ include_directories("${ARROW_INCLUDEDIR}"
 ###################################################################################################
 # - library paths ---------------------------------------------------------------------------------
 
-link_directories("${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}/../lib"
-                 "${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}/../lib64"
+link_directories("${CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES}" # CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES is an undocumented/unsupported variable containing the link directories for nvcc
                  "${CMAKE_BINARY_DIR}/lib")
 
 ###################################################################################################
@@ -162,7 +161,7 @@ add_library(rmm SHARED
 option(USE_NVTX "Build with NVTX support" ON)
 if(USE_NVTX)
     message(STATUS "Using Nvidia Tools Extension")
-    find_library(NVTX_LIBRARY nvToolsExt PATH ENV LD_LIBRARY_PATH)
+    find_library(NVTX_LIBRARY nvToolsExt PATH ${CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES})
     target_link_libraries(cudf ${NVTX_LIBRARY})
     set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} --define-macro USE_NVTX")
 endif(USE_NVTX)
