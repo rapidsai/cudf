@@ -21,7 +21,7 @@
 
 #include "dataframe/cudf_table.cuh"
 #include "rmm/rmm.h"
-#include "error/error_utils.h"
+#include "utilities/error_utils.h"
 
 #include <thrust/copy.h>
 #include <thrust/execution_policy.h>

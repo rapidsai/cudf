@@ -127,7 +127,6 @@ add_library(cudf SHARED
             src/comm/ipc/ipc.cu
             src/dataframe/column.cpp
             src/dataframe/context.cpp
-            src/error/error_handles.cpp
             src/filter/filter_ops.cu
             src/join/joining.cu
             src/sort/segmented_sorting.cu
@@ -147,6 +146,7 @@ add_library(cudf SHARED
             src/io/convert/csr/cudf_to_csr.cu
             src/io/csv/csv_reader.cu
             src/utilities/cuda_utils.cu
+            src/utilities/error_utils.cpp
             src/utilities/scan.cu
             src/utilities/nvtx/nvtx_utils.cpp)
 

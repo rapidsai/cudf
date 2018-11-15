@@ -1,6 +1,6 @@
 #include <cudf.h>
 #include <utilities/cudf_utils.h>
-#include <core/error/error_utils.h>
+#include <core/utilities/error_utils.h>
 #include <cudf/functions.h>
 
 #include <cuda_runtime.h>

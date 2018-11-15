@@ -1,6 +1,6 @@
 #include "cudf.h"
 #include "utilities/cudf_utils.h"
-#include "error/error_utils.h"
+#include "utilities/error_utils.h"
 
 #include <cub/block/block_reduce.cuh>
 

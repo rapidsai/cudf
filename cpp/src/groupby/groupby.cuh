@@ -17,7 +17,7 @@
 #include <cuda_runtime.h>
 
 #include "cudf.h"
-#include "error/error_utils.h"
+#include "utilities/error_utils.h"
 #include "dataframe/cudf_table.cuh"
 
 #include "groupby_compute_api.h"

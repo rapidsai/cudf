@@ -21,7 +21,7 @@
 
 #include "cudf.h"
 #include "rmm/rmm.h"
-#include "error/error_utils.h"
+#include "utilities/error_utils.h"
 #include "dataframe/cudf_table.cuh"
 #include "utilities/nvtx/nvtx_utils.h"
 

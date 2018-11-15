@@ -21,7 +21,7 @@
 
 #include "cudf.h"
 #include "utilities/cudf_utils.h"
-#include "error/error_utils.h"
+#include "utilities/error_utils.h"
 #include "rmm/thrust_rmm_allocator.h"
 
 #include "quantiles.h"

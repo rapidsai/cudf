@@ -24,7 +24,7 @@
 
 #include "cudf.h"
 #include "rmm/rmm.h"
-#include "error/error_utils.h"
+#include "utilities/error_utils.h"
 #include "utilities/cudf_utils.h"
 
 #include <thrust/tabulate.h>

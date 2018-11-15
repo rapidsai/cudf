@@ -1,7 +1,7 @@
 #include "cudf.h"
 #include "rmm/rmm.h"
 #include "utilities/cudf_utils.h"
-#include "error/error_utils.h"
+#include "utilities/error_utils.h"
 
 #include <cub/device/device_radix_sort.cuh>
 
