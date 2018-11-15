@@ -123,7 +123,7 @@ link_directories("${CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES}" # CMAKE_CUDA_IMPLICIT
 # - library targets -------------------------------------------------------------------------------
 
 add_library(cudf SHARED
-            src/comm/ipc/ipc.cu
+            src/comms/ipc/ipc.cu
             src/dataframe/column.cpp
             src/dataframe/context.cpp
             src/filter/filter_ops.cu
