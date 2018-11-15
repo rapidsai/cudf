@@ -3,6 +3,7 @@
 
 #include <utility>
 #include <gdf/cffi/types.h>
+#include "gdf_cpptypes.h"
 
 /* --------------------------------------------------------------------------*/
 /** 
@@ -20,6 +21,24 @@ template <> struct default_enum_map<GDF_DATE32>{ using type = gdf_date32; };
 template <> struct default_enum_map<GDF_DATE64>{ using type = gdf_date64; };
 template <> struct default_enum_map<GDF_TIMESTAMP>{ using type = gdf_timestamp; };
 template <> struct default_enum_map<GDF_CATEGORY>{ using type = gdf_category; };
+
+/* --------------------------------------------------------------------------*/
+/** 
+ * @brief  Mapping of gdf_dtype enums such that each enum value maps to a distinct
+ * C++ type.
+ */
+/* ----------------------------------------------------------------------------*/
+template<gdf_dtype t> struct distinct_type_enum_map;
+template <> struct distinct_type_enum_map<GDF_INT8>{ using type = int8_t; };
+template <> struct distinct_type_enum_map<GDF_INT16>{ using type = int16_t; };
+template <> struct distinct_type_enum_map<GDF_INT32>{ using type = int32_t; };
+template <> struct distinct_type_enum_map<GDF_INT64>{ using type = int64_t; };
+template <> struct distinct_type_enum_map<GDF_FLOAT32>{ using type = float; };
+template <> struct distinct_type_enum_map<GDF_FLOAT64>{ using type = double; };
+template <> struct distinct_type_enum_map<GDF_DATE32>{ using type = gdf::date32; };
+template <> struct distinct_type_enum_map<GDF_DATE64>{ using type = gdf::date64; };
+template <> struct distinct_type_enum_map<GDF_TIMESTAMP>{ using type = gdf::timestamp; };
+template <> struct distinct_type_enum_map<GDF_CATEGORY>{ using type = gdf::category; };
 
 /* --------------------------------------------------------------------------*/
 /** 
@@ -76,7 +95,8 @@ template <> struct byte_width_map<GDF_CATEGORY>{ using type = uint32_t; };
  * gdf_type_dispatcher(GDF_INT64, example_lambda); // returns 8
  *
  * NOTE: "template lambdas" can only be declared in namespace scope, i.e., outside
- * the scope of a function.
+ * the scope of a function. Furthermore, they can only be *host* lambdas. As of 
+ * CUDA 10, nvcc does not support templated, extended device lambdas.
  *
  * The return type for all template instantiations of the functor's "operator()" 
  * or the templated lambda must be the same, otherwise there will be a compiler 
