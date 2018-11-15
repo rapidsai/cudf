@@ -34,16 +34,16 @@ template <> struct default_enum_map<GDF_CATEGORY>{ using type = gdf_category; };
  */
 /* ----------------------------------------------------------------------------*/
 template<gdf_dtype t> struct byte_width_map;
-template <> struct default_enum_map<GDF_INT8>{ using type = uint8_t; };
-template <> struct default_enum_map<GDF_INT16>{ using type = uint16_t; };
-template <> struct default_enum_map<GDF_INT32>{ using type = uint32_t; };
-template <> struct default_enum_map<GDF_INT64>{ using type = uint64_t; };
-template <> struct default_enum_map<GDF_FLOAT32>{ using type = uint32_t; };
-template <> struct default_enum_map<GDF_FLOAT64>{ using type = uint64_t; };
-template <> struct default_enum_map<GDF_DATE32>{ using type = uint32_t; };
-template <> struct default_enum_map<GDF_DATE64>{ using type = uint64_t; };
-template <> struct default_enum_map<GDF_TIMESTAMP>{ using type = uint64_t; };
-template <> struct default_enum_map<GDF_CATEGORY>{ using type = uint32_t; };
+template <> struct byte_width_map<GDF_INT8>{ using type = uint8_t; };
+template <> struct byte_width_map<GDF_INT16>{ using type = uint16_t; };
+template <> struct byte_width_map<GDF_INT32>{ using type = uint32_t; };
+template <> struct byte_width_map<GDF_INT64>{ using type = uint64_t; };
+template <> struct byte_width_map<GDF_FLOAT32>{ using type = uint32_t; };
+template <> struct byte_width_map<GDF_FLOAT64>{ using type = uint64_t; };
+template <> struct byte_width_map<GDF_DATE32>{ using type = uint32_t; };
+template <> struct byte_width_map<GDF_DATE64>{ using type = uint64_t; };
+template <> struct byte_width_map<GDF_TIMESTAMP>{ using type = uint64_t; };
+template <> struct byte_width_map<GDF_CATEGORY>{ using type = uint32_t; };
 
 /* --------------------------------------------------------------------------*/
 /** 
