@@ -4,6 +4,7 @@
 #include <utility>
 #include <gdf/cffi/types.h>
 #include "types.hpp"
+#include "NVStrings.h"
 
 /* --------------------------------------------------------------------------*/
 /** 
@@ -21,6 +22,7 @@ template <> struct default_enum_map<GDF_DATE32>{ using type = gdf_date32; };
 template <> struct default_enum_map<GDF_DATE64>{ using type = gdf_date64; };
 template <> struct default_enum_map<GDF_TIMESTAMP>{ using type = gdf_timestamp; };
 template <> struct default_enum_map<GDF_CATEGORY>{ using type = gdf_category; };
+template <> struct default_enum_map<GDF_STRING>{ using type = NVStrings; };
 
 /* --------------------------------------------------------------------------*/
 /** 
@@ -39,30 +41,7 @@ template <> struct distinct_type_enum_map<GDF_DATE32>{ using type = gdf::date32;
 template <> struct distinct_type_enum_map<GDF_DATE64>{ using type = gdf::date64; };
 template <> struct distinct_type_enum_map<GDF_TIMESTAMP>{ using type = gdf::timestamp; };
 template <> struct distinct_type_enum_map<GDF_CATEGORY>{ using type = gdf::category; };
-
-/* --------------------------------------------------------------------------*/
-/** 
- * @brief  Mapping of gdf_dtype enum that can be used when one only cares about
- * using a type with the appropriate byte-width of the underlying C++ datatype.
- *
- * For example, this could be useful if one is simply moving the data in a column
- * and one doesn't care what the underlying datatype really is. This can save on 
- * compile time by reducing the number of template instantiations of the templated
- * functor/lambda that is called by the dispatcher.
- * 
- */
-/* ----------------------------------------------------------------------------*/
-template<gdf_dtype t> struct byte_width_map;
-template <> struct byte_width_map<GDF_INT8>{ using type = uint8_t; };
-template <> struct byte_width_map<GDF_INT16>{ using type = uint16_t; };
-template <> struct byte_width_map<GDF_INT32>{ using type = uint32_t; };
-template <> struct byte_width_map<GDF_INT64>{ using type = uint64_t; };
-template <> struct byte_width_map<GDF_FLOAT32>{ using type = uint32_t; };
-template <> struct byte_width_map<GDF_FLOAT64>{ using type = uint64_t; };
-template <> struct byte_width_map<GDF_DATE32>{ using type = uint32_t; };
-template <> struct byte_width_map<GDF_DATE64>{ using type = uint64_t; };
-template <> struct byte_width_map<GDF_TIMESTAMP>{ using type = uint64_t; };
-template <> struct byte_width_map<GDF_CATEGORY>{ using type = uint32_t; };
+template <> struct distinct_type_enum_map<GDF_STRING>{ using type = NVStrings; };
 
 /* --------------------------------------------------------------------------*/
 /** 
