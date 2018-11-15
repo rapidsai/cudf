@@ -38,7 +38,7 @@ script:
   - source activate root
   # check conda versions
   - conda list
-  # build ligdf
+  # build libcudf
   - source ./travisci/libcudf/build_libcudf.sh
   # build libcudf_cffi
   - source ./travisci/libcudf/build_libcudf_cffi.sh
