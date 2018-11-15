@@ -23,5 +23,5 @@ if [ "$BUILD_CUDF" == "1" ]; then
 
   echo "Upload"
   echo ${UPLOADFILE}
-  anaconda -t ${MY_UPLOAD_KEY} upload -u rapidsai -l main --force ${UPLOADFILE}
+  travis_retry anaconda -t ${MY_UPLOAD_KEY} upload -u rapidsai -l main --force ${UPLOADFILE}
 fi

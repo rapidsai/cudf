@@ -104,8 +104,8 @@ gdf_error sort_join_typed(gdf_column *leftcol, gdf_column *rightcol,
 {
   using namespace mgpu;
   gdf_error err = GDF_SUCCESS;
-  GDF_REQUIRE(!leftcol->valid, GDF_VALIDITY_UNSUPPORTED);
-  GDF_REQUIRE(!rightcol->valid, GDF_VALIDITY_UNSUPPORTED);
+  GDF_REQUIRE(!leftcol->valid  || !leftcol->null_count , GDF_VALIDITY_UNSUPPORTED);
+  GDF_REQUIRE(!rightcol->valid || !rightcol->null_count, GDF_VALIDITY_UNSUPPORTED);
 
   rmm_mgpu_context_t context(false);
   SortJoin<join_type> sort_based_join;
@@ -184,7 +184,7 @@ gdf_error allocValueBuffer(data_type ** buffer,
                            const size_type buffer_length,
                            const data_type value) 
 {
-    RMM_TRY( rmmAlloc((void**)buffer, buffer_length*sizeof(data_type), 0) );
+    RMM_TRY( RMM_ALLOC((void**)buffer, buffer_length*sizeof(data_type), 0) );
     thrust::fill(thrust::device, *buffer, *buffer + buffer_length, value);
     return GDF_SUCCESS;
 }
@@ -204,7 +204,7 @@ template <typename data_type,
 gdf_error allocSequenceBuffer(data_type ** buffer,
                          const size_type buffer_length) 
 {
-    RMM_TRY( rmmAlloc((void**)buffer, buffer_length*sizeof(data_type), 0) );
+    RMM_TRY( RMM_ALLOC((void**)buffer, buffer_length*sizeof(data_type), 0) );
     thrust::sequence(thrust::device, *buffer, *buffer + buffer_length);
     return GDF_SUCCESS;
 }
@@ -417,15 +417,15 @@ gdf_error construct_join_output_df(
     for (int i = 0; i < left_table_end; ++i) {
         gdf_column_view(result_cols[i], nullptr, nullptr, join_size, lnonjoincol[i]->dtype);
         int col_width; get_column_byte_width(result_cols[i], &col_width);
-        RMM_TRY( rmmAlloc((void**)&(result_cols[i]->data), col_width * join_size, 0) ); // TODO: non-default stream?
-        RMM_TRY( rmmAlloc((void**)&(result_cols[i]->valid), sizeof(gdf_valid_type)*gdf_get_num_chars_bitmask(join_size), 0) );
+        RMM_TRY( RMM_ALLOC((void**)&(result_cols[i]->data), col_width * join_size, 0) ); // TODO: non-default stream?
+        RMM_TRY( RMM_ALLOC((void**)&(result_cols[i]->valid), sizeof(gdf_valid_type)*gdf_get_num_chars_bitmask(join_size), 0) );
         CUDA_TRY( cudaMemset(result_cols[i]->valid, 0, sizeof(gdf_valid_type)*gdf_get_num_chars_bitmask(join_size)) );
     }
     for (int i = right_table_begin; i < result_num_cols; ++i) {
         gdf_column_view(result_cols[i], nullptr, nullptr, join_size, rnonjoincol[i - right_table_begin]->dtype);
         int col_width; get_column_byte_width(result_cols[i], &col_width);
-        RMM_TRY( rmmAlloc((void**)&(result_cols[i]->data), col_width * join_size, 0) ); // TODO: non-default stream?
-        RMM_TRY( rmmAlloc((void**)&(result_cols[i]->valid), sizeof(gdf_valid_type)*gdf_get_num_chars_bitmask(join_size), 0) );
+        RMM_TRY( RMM_ALLOC((void**)&(result_cols[i]->data), col_width * join_size, 0) ); // TODO: non-default stream?
+        RMM_TRY( RMM_ALLOC((void**)&(result_cols[i]->valid), sizeof(gdf_valid_type)*gdf_get_num_chars_bitmask(join_size), 0) );
         CUDA_TRY( cudaMemset(result_cols[i]->valid, 0, sizeof(gdf_valid_type)*gdf_get_num_chars_bitmask(join_size)) );
     }
     //create joined output column data buffers
@@ -433,8 +433,8 @@ gdf_error construct_join_output_df(
         int i = left_table_end + join_index;
         gdf_column_view(result_cols[i], nullptr, nullptr, join_size, left_cols[left_join_cols[join_index]]->dtype);
         int col_width; get_column_byte_width(result_cols[i], &col_width);
-        RMM_TRY( rmmAlloc((void**)&(result_cols[i]->data), col_width * join_size, 0) ); // TODO: non-default stream?
-        RMM_TRY( rmmAlloc((void**)&(result_cols[i]->valid), sizeof(gdf_valid_type)*gdf_get_num_chars_bitmask(join_size), 0) );
+        RMM_TRY( RMM_ALLOC((void**)&(result_cols[i]->data), col_width * join_size, 0) ); // TODO: non-default stream?
+        RMM_TRY( RMM_ALLOC((void**)&(result_cols[i]->valid), sizeof(gdf_valid_type)*gdf_get_num_chars_bitmask(join_size), 0) );
         CUDA_TRY( cudaMemset(result_cols[i]->valid, 0, sizeof(gdf_valid_type)*gdf_get_num_chars_bitmask(join_size)) );
     }
 
@@ -518,8 +518,8 @@ gdf_error join_call_compute_df(
     using gdf_col_pointer = typename std::unique_ptr<gdf_column, std::function<void(gdf_column*)>>;
     auto gdf_col_deleter = [](gdf_column* col){
         col->size = 0;
-        if (col->data)  { rmmFree(col->data, 0);  }
-        if (col->valid) { rmmFree(col->valid, 0); }
+        if (col->data)  { RMM_FREE(col->data, 0);  }
+        if (col->valid) { RMM_FREE(col->valid, 0); }
     };
     gdf_col_pointer l_index_temp, r_index_temp;
 

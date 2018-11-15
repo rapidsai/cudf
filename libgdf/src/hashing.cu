@@ -414,7 +414,7 @@ gdf_error hash_partition_gdf_table(gdf_table<size_type> const & input_table,
 
   // Allocate array to hold which partition each row belongs to
   size_type * row_partition_numbers{nullptr};
-  RMM_TRY( rmmAlloc((void**)&row_partition_numbers, num_rows * sizeof(hash_value_type), 0) ); // TODO: non-default stream?
+  RMM_TRY( RMM_ALLOC((void**)&row_partition_numbers, num_rows * sizeof(hash_value_type), 0) ); // TODO: non-default stream?
   
   // Array to hold the size of each partition computed by each block
   //  i.e., { {block0 partition0 size, block1 partition0 size, ...}, 
@@ -422,11 +422,11 @@ gdf_error hash_partition_gdf_table(gdf_table<size_type> const & input_table,
   //          ...
   //          {block0 partition(num_partitions-1) size, block1 partition(num_partitions -1) size, ...} }
   size_type * block_partition_sizes{nullptr};
-  RMM_TRY(rmmAlloc((void**)&block_partition_sizes, (grid_size * num_partitions) * sizeof(size_type), 0) );
+  RMM_TRY(RMM_ALLOC((void**)&block_partition_sizes, (grid_size * num_partitions) * sizeof(size_type), 0) );
 
   // Holds the total number of rows in each partition
   size_type * global_partition_sizes{nullptr};
-  RMM_TRY( rmmAlloc((void**)&global_partition_sizes, num_partitions * sizeof(size_type), 0) );
+  RMM_TRY( RMM_ALLOC((void**)&global_partition_sizes, num_partitions * sizeof(size_type), 0) );
   CUDA_TRY( cudaMemsetAsync(global_partition_sizes, 0, num_partitions * sizeof(size_type)) );
 
   // If the number of partitions is a power of two, we can compute the partition 
@@ -525,12 +525,12 @@ gdf_error hash_partition_gdf_table(gdf_table<size_type> const & input_table,
 
   CUDA_CHECK_LAST();
 
-  RMM_TRY(rmmFree(row_partition_numbers, 0));
-  RMM_TRY(rmmFree(block_partition_sizes, 0));
+  RMM_TRY(RMM_FREE(row_partition_numbers, 0));
+  RMM_TRY(RMM_FREE(block_partition_sizes, 0));
 
   cudaStreamSynchronize(s1);
   cudaStreamDestroy(s1);
-  RMM_TRY(rmmFree(global_partition_sizes, 0));
+  RMM_TRY(RMM_FREE(global_partition_sizes, 0));
 
   return GDF_SUCCESS;
 }

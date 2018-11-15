@@ -49,4 +49,6 @@ def test_rmm_csv_log():
 
     print(csv[:1000])
 
-    assert(csv.find("Event Type,Device ID,Address,Stream,Size (bytes),Free Memory,Total Memory,Current Allocs,Start,End,Elapsed") >= 0)
+    assert(csv.find("Event Type,Device ID,Address,Stream,Size (bytes),"
+                    "Free Memory,Total Memory,Current Allocs,Start,End,Elapsed,"
+                    "Location") >= 0)

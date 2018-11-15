@@ -41,7 +41,7 @@ struct managed_allocator {
           } 
           return ptr;
       }
-      void deallocate(T* p, std::size_t) const noexcept {
+      void deallocate(T* p, std::size_t) const {
         cudaFree(p);
       }
 };
@@ -61,7 +61,7 @@ struct legacy_allocator {
 
       T* allocate(std::size_t n) const {
           T* ptr = 0;
-          rmmError_t result = rmmAlloc( (void**)&ptr, n*sizeof(T), 0 ); // TODO non-default stream?
+          rmmError_t result = RMM_ALLOC( (void**)&ptr, n*sizeof(T), 0 ); // TODO non-default stream?
           if( RMM_SUCCESS != result || nullptr == ptr ) 
           {
             std::cerr << "ERROR: RMM call in line " << __LINE__ << "of file " 
@@ -73,8 +73,8 @@ struct legacy_allocator {
 
           return ptr;
       }
-      void deallocate(T* p, std::size_t) const noexcept {
-          rmmError_t result = rmmFree(p, 0); // TODO: non-default stream
+      void deallocate(T* p, std::size_t) const {
+          rmmError_t result = RMM_FREE(p, 0); // TODO: non-default stream
           if ( RMM_SUCCESS != result) throw std::runtime_error("legacy_allocator: RMM Memory Manager Error");
       }
 };

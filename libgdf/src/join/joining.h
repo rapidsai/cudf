@@ -85,7 +85,7 @@ public:
     void *p = nullptr;
     if(size) {
       if (memory_space_device == space) {
-        if (RMM_SUCCESS != rmmAlloc(&p, size, stream()))
+        if (RMM_SUCCESS != RMM_ALLOC(&p, size, stream()))
           throw cuda_exception_t(cudaPeekAtLastError());
       }
       else {
@@ -99,7 +99,7 @@ public:
   virtual void free(void* p, memory_space_t space) {
     if (p) {
       if (memory_space_device == space) {
-        if (RMM_SUCCESS != rmmFree(p, stream()))
+        if (RMM_SUCCESS != RMM_FREE(p, stream()))
           throw cuda_exception_t(cudaPeekAtLastError());
       }
       else {
