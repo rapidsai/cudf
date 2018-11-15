@@ -30,6 +30,7 @@ include_directories("${ARROW_INCLUDEDIR}"
 # - library paths ---------------------------------------------------------------------------------
 
 link_directories("${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}/../lib"
+                 "${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}/../lib64"
                  "${CMAKE_BINARY_DIR}/lib")
 
 ###################################################################################################
