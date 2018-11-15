@@ -44,6 +44,9 @@ set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -Werror cross-execution-space-call -Wn
 # set warnings as errors
 set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -Werror cross-execution-space-call -Xcompiler -Wall,-Werror")
 
+# set default build type
+set(CMAKE_BUILD_TYPE "Release")
+
 ###################################################################################################
 # - cmake modules ---------------------------------------------------------------------------------
 
