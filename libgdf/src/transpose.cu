@@ -9,7 +9,8 @@
 
 gdf_error gdf_transpose(size_t ncols,
                         gdf_column** in_cols,
-                        gdf_column** out_cols)
+                        gdf_column** out_cols,
+                        bool has_null)
 {
     // Make sure the inputs are not null
     if( (0 == ncols) 
@@ -38,9 +39,12 @@ gdf_error gdf_transpose(size_t ncols,
     auto copy_to_outcol = [=] __device__ (size_t i)
     {
         input_table_ptr->get_packed_row_values(i, 
-            (unsigned char*) output_table_ptr->get_column_device_pointer(i));
-        input_table_ptr->get_row_valids(i, 
-            (unsigned char*) output_table_ptr->get_columns_device_valids_ptr(i));        
+            output_table_ptr->get_column_device_pointer(i));
+        
+        if (has_null) {
+            input_table_ptr->get_row_valids(i, 
+                output_table_ptr->get_columns_device_valids_ptr(i));
+        } 
     };
 
     thrust::for_each(thrust::counting_iterator<int>(0),

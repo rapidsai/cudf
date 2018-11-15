@@ -206,7 +206,8 @@ gdf_error gdf_segmented_radixsort_generic(gdf_segmented_radixsort_plan_type *hdl
  */
 gdf_error gdf_transpose(size_t ncols,
                         gdf_column** in_cols,
-                        gdf_column** out_cols);
+                        gdf_column** out_cols,
+                        bool has_null);
 
 // joins
 

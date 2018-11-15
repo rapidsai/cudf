@@ -707,6 +707,7 @@ class DataFrame(object):
         dtype = self.dtypes[0]
         if any(t != dtype for t in self.dtypes):
             raise ValueError('all columns must have the same dtype')
+        has_null = any(c.has_null_mask for c in self._cols.values())
 
         df = DataFrame()
 
@@ -716,12 +717,19 @@ class DataFrame(object):
         new_nrow = ncols
         new_ncol = len(self)
 
-        new_col_series = [
-            Series.from_masked_array(
-                data=Buffer(rmm.device_array(shape=new_nrow, dtype=dtype)),
-                mask=cudautils.make_empty_mask(size=new_nrow),
-            )
-            for i in range(0, new_ncol)]
+        if has_null:
+            new_col_series = [
+                Series.from_masked_array(
+                    data=Buffer(rmm.device_array(shape=new_nrow, dtype=dtype)),
+                    mask=cudautils.make_empty_mask(size=new_nrow),
+                )
+                for i in range(0, new_ncol)]
+        else:
+            new_col_series = [
+                Series(
+                    data=Buffer(rmm.device_array(shape=new_nrow, dtype=dtype)),
+                )
+                for i in range(0, new_ncol)]
         new_col_ptrs = [
             new_col_series[i]._column.cffi_view
             for i in range(0, new_ncol)]
@@ -730,12 +738,18 @@ class DataFrame(object):
         libgdf.gdf_transpose(
             ncols,
             cols,
-            new_col_ptrs
+            new_col_ptrs,
+            has_null
         )
+
+        for series in new_col_series:
+            series._column._update_null_count()
 
         for i in range(0, new_ncol):
             df[str(i)] = new_col_series[i]
         return df
+
+    T = property(fget=transpose, doc=transpose.__doc__)
 
     def merge(self, other, on=None, how='left', lsuffix='_x', rsuffix='_y',
               type="", method='hash'):

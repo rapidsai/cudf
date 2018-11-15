@@ -6,6 +6,10 @@ import pandas as pd
 
 from cudf.dataframe import DataFrame, Series
 
+def null_count(df):
+    for series in df._cols.values():
+        print(series.null_count)
+
 pdf = pd.DataFrame({'a': [np.nan, 1.0, 2.0, 3.0,1,1,1,1],
                     'b': [4, 5, np.nan, 7,1,1,1,1],
                     'c': [np.nan, 9.0, np.nan, 11.0,1,1,1,1],
@@ -19,9 +23,14 @@ pdf = pd.DataFrame({'a': [np.nan, 1.0, 2.0, 3.0,1,1,1,1],
 
 df = DataFrame.from_pandas(pdf)
 print(df)
+null_count(df)
 
 df2 = df.transpose()
 print(df2)
+null_count(df2)
+
+df3 = df2.T
+print(df3)
 
 print(df['a'])
 pass

@@ -45,31 +45,6 @@ struct ValidRange {
     }
 };
 
-template<typename size_type, typename byte_type>
-__device__
-byte_type get_bit(size_type index, byte_type const * data)
-{
-  constexpr uint32_t BITS_PER_BYTE = (8 * sizeof(byte_type));
-
-  size_type byte_index = index / BITS_PER_BYTE;
-  byte_type bit_offset = index % BITS_PER_BYTE;
-  byte_type mask = static_cast<byte_type>(1) << bit_offset;
-  return (data[byte_index] & mask) >> bit_offset;
-}
-
-template<typename size_type, typename byte_type>
-__device__
-void set_bit(size_type index, byte_type value, byte_type * data)
-{
-  constexpr uint32_t BITS_PER_BYTE = (8 * sizeof(byte_type));
-
-  size_type byte_index = index / BITS_PER_BYTE;
-  byte_type bit_offset = index % BITS_PER_BYTE;
-
-  // value can only be 0 or 1 i.e. 0x00 or 0x01
-  data[byte_index] |= (value << bit_offset);
-}
-
 // Vector set to use rmmAlloc and rmmFree.
 template <typename T>
 using Vector = thrust::device_vector<T, rmm_allocator<T>>;
@@ -422,13 +397,13 @@ public:
   /* ----------------------------------------------------------------------------*/
   // TODO Is there a less hacky way to do this? 
   __device__
-  gdf_error get_packed_row_values(size_type row_index, byte_type * row_byte_buffer) const
+  gdf_error get_packed_row_values(size_type row_index, void * row_byte_buffer) const
   {
     if(nullptr == row_byte_buffer) {
       return GDF_DATASET_EMPTY;
     }
 
-    byte_type * write_pointer{row_byte_buffer};
+    byte_type * write_pointer{reinterpret_cast<byte_type *>(row_byte_buffer)};
 
     // Pack the element from each column in the row into the buffer
     for(size_type i = 0; i < num_columns; ++i)
@@ -488,7 +463,7 @@ public:
   }
 
   __device__
-  gdf_error get_row_valids(size_type row_index, byte_type * row_valid_byte_buffer) const
+  gdf_error get_row_valids(size_type row_index, gdf_valid_type * row_valid_byte_buffer) const
   {
     if(nullptr == row_valid_byte_buffer) {
       return GDF_DATASET_EMPTY;
@@ -496,11 +471,10 @@ public:
     
     for(size_type i = 0; i < num_columns; i++)
     {
-      byte_type const * const d_col_valid_ptr = reinterpret_cast<byte_type const*> (d_columns_valids[i]);
       // get validity of item in column in self
-      byte_type validity = (d_col_valid_ptr == nullptr) ? 0x01 : get_bit(row_index, d_col_valid_ptr);
+      byte_type validity = gdf_is_valid(d_columns_valids[i], row_index);
       // set validity in output buffer
-      set_bit(i, validity, row_valid_byte_buffer);
+      row_valid_byte_buffer[i / GDF_VALID_BITSIZE] |= (validity << (i % GDF_VALID_BITSIZE));
     }
     return GDF_SUCCESS;
   }
