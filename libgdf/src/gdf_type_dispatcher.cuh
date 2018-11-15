@@ -3,7 +3,7 @@
 
 #include <utility>
 #include <gdf/cffi/types.h>
-#include "gdf_cpptypes.h"
+#include "types.hpp"
 
 /* --------------------------------------------------------------------------*/
 /** 
