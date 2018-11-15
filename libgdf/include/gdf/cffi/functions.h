@@ -852,3 +852,9 @@ gdf_error gdf_quantile_aprrox(	gdf_column*  col_in,       //input column with 0 
                                 double       q,            //requested quantile in [0,1]
                                 void*        t_erased_res, //type-erased result of same type as column;
                                 gdf_context* ctxt);        //context info
+
+gdf_error gdf_order_by_asc_desc(
+        gdf_column * input_columns, //pointers to pointers of input columns
+        size_t num_inputs, //number of pointeres in the first parameter (e.g. number of columsn to sort by
+        gdf_column * output_indices, //a gdf_column that is pre allocated for storing sorted indices
+        gdf_valid_type * asc_desc_bitmask); //asc_desc bitmask e.g. 101 would mean sort the first and last oclumns ascending and the second one descending

@@ -29,6 +29,7 @@
 #include <cstdint>
 
 ///#include "gdf/cffi/types.h"
+#include "gdf/utils.h"
 
 template<typename IndexT>
 struct LesserRTTI
@@ -39,7 +40,8 @@ struct LesserRTTI
     columns_(cols),
     rtti_(types),
     sz_(sz),
-    vals_(nullptr)
+    vals_(nullptr),
+    asc_desc_bitmask_(nullptr)
   {
   }
 
@@ -50,9 +52,66 @@ struct LesserRTTI
     columns_(cols),
     rtti_(types),
     sz_(sz),
-    vals_(vals)
+    vals_(vals),
+    asc_desc_bitmask_(nullptr)
   {
   }
+
+  
+  __host__ __device__
+  LesserRTTI(void* const* cols,
+	     int* const types,
+	     size_t sz,
+	     gdf_valid_type* const asc_desc_bitmask):
+    columns_(cols),
+    rtti_(types),
+    sz_(sz),
+    vals_(nullptr),
+    asc_desc_bitmask_(asc_desc_bitmask)
+  {
+  }
+
+/**
+ * Should be used when you want to sort multiple columns using asc / desc flags for each column
+ *
+ *
+ */
+  __host__ __device__
+   bool asc_desc_comparison(IndexT row1, IndexT row2) const
+   {
+     for(size_t col_index = 0; col_index < sz_; ++col_index)
+     {
+       gdf_dtype col_type = static_cast<gdf_dtype>(rtti_[col_index]);
+       bool asc;
+
+       if(asc_desc_bitmask_ == nullptr){
+    	   asc = true;
+       }else{
+    	   asc = gdf_is_valid(asc_desc_bitmask_, col_index);
+       }
+       //if flag == true
+
+       State state;
+       if(asc){
+           OpLess less(row1, row2);
+           state =type_dispatcher(less, col_type, col_index);
+       }else{
+           OpGreater greater(row1, row2);
+           state =type_dispatcher(greater, col_type, col_index);
+       }
+
+       switch( state )
+       {
+       case State::False:
+         return false;
+       case State::True:
+         return true;
+       case State::Undecided:
+         break;
+       }
+     }
+     return false;
+   }
 
   __device__
   bool equal(IndexT row1, IndexT row2) const
@@ -158,6 +217,36 @@ private:
     IndexT row1_;
     IndexT row2_;
   };
+
+  struct OpGreater
+    {
+       __host__ __device__
+       OpGreater(IndexT row1, IndexT row2):
+         row1_(row1),
+         row2_(row2)
+      {
+      }
+
+       template<typename ColType>
+       __host__ __device__
+       State operator() (int col_index,
+  		       const void* const * columns,
+  		       ColType )
+      {
+        ColType res1 = LesserRTTI::at<ColType>(col_index, row1_, columns);
+        ColType res2 = LesserRTTI::at<ColType>(col_index, row2_, columns);
+
+        if( res1 > res2 )
+  	return State::True;
+        else if( res1 == res2 )
+  	return State::Undecided;
+        else
+  	return State::False;
+      }
+    private:
+      IndexT row1_;
+      IndexT row2_;
+    };
 
   struct OpEqual
   {
@@ -276,6 +365,7 @@ private:
   const int* const rtti_;
   size_t sz_;
   const void* const * vals_; //for filtering
+  const gdf_valid_type* asc_desc_bitmask_; //a bitmask that allows us to know whether or not a column should be sorted ascending or descending
 };
 
 //###########################################################################
@@ -659,4 +749,28 @@ size_t multi_col_group_by_avg_sort(size_t         nrows,
                     });
 
   return new_sz;
+}
+
+#include <iostream>
+template<typename IndexT>
+void multi_col_order_by_asc_desc(
+        void* const * d_col_data,
+        int* d_col_types,
+        size_t num_inputs,
+        gdf_valid_type * asc_desc_bitmask,
+        IndexT*      d_indx,
+        size_t nrows,
+        cudaStream_t   stream = NULL){
+
+    LesserRTTI<IndexT> f(d_col_data, d_col_types, num_inputs,asc_desc_bitmask);
+    std::cout<<"about to sequence"<<std::endl;
+    thrust::sequence(thrust::cuda::par.on(stream), d_indx, d_indx+nrows, 0);
+    std::cout<<"sequenced"<<std::endl;
+    thrust::sort(thrust::cuda::par.on(stream),
+            d_indx, d_indx+nrows,
+            [f] __host__ __device__ (IndexT i1, IndexT i2){
+        return f.asc_desc_comparison(i1, i2);
+    });
+
+    std::cout<<"sorted"<<std::endl;
 }
