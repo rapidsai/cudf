@@ -29,6 +29,9 @@ conda env create --name cudf --file conda_environments/testing_py35.yml
 source activate cudf
 ```
 
+For cudf development, use `conda—environments/dev_py35.yml` in the above 
+`conda create` command instead.
+
 ### Pip
 
 Support is coming soon, please use conda for the time being.

@@ -113,8 +113,8 @@ compute_joined_indices(const _join_bounds &bounds,
     int output_npairs = join_count + append_count;
     int *output_l_ptr, *output_r_ptr;
     // TODO: error checking?
-    rmmAlloc((void**)&output_l_ptr, output_npairs*sizeof(int), 0); // TODO non-default stream?
-    rmmAlloc((void**)&output_r_ptr, output_npairs*sizeof(int), 0);
+    RMM_ALLOC((void**)&output_l_ptr, output_npairs*sizeof(int), 0); // TODO non-default stream?
+    RMM_ALLOC((void**)&output_r_ptr, output_npairs*sizeof(int), 0);
     
     if (isInner){
         // Use load-balancing search on the segments. The output is a pair with

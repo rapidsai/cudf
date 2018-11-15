@@ -175,11 +175,10 @@ else()
   target_link_libraries(gdf arrow rmm)
 endif()
 
-# Find libNVStrings.so, provided by rapidsai conda package
-find_library(NVSTRING_LIBRARY NVStrings HINTS ${CONDA_PREFIX}/lib)
-message(${NVSTRING_LIBRARY})
-
-target_link_libraries(gdf ${NVSTRING_LIBRARY})
+find_library(NVSTRINGS_LIBRARY NVStrings HINTS $ENV{NVSTRINGS_ROOT}/lib $ENV{CONDA_PREFIX}/lib)
+find_path(NVSTRINGS_INCLUDE_DIR NVStrings.h HINTS $ENV{NVSTRINGS_ROOT}/include $ENV{CONDA_PREFIX}/include)
+include_directories(BEFORE SYSTEM ${NVSTRINGS_INCLUDE_DIR})
+target_link_libraries(gdf ${NVSTRINGS_LIBRARY})
 
 # Command to symlink files into the build directory
 add_custom_command(  # link the include directory

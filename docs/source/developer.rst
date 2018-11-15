@@ -57,7 +57,7 @@ reusability and performance.
 
 - ``cudf/cudautils.py`` contains a lot of GPU helper functions
   that are jitted by numba with ``@cuda.jit`` into CUDA kernels.
-   All CUDA kernels in this file should be moved to libgdf if possible.
+  All CUDA kernels in this file should be moved to libgdf if possible.
 
 - Some logic in ``cudf/groupby.py`` should be move to libgdf to make
   groupby operation faster.  Some groupby aggregations are implemented with

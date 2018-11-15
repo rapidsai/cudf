@@ -1,3 +1,4 @@
+#
 # Copyright (c) 2018, NVIDIA CORPORATION.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,6 +16,7 @@
 import numpy as np
 from numba import cuda
 import ctypes
+import inspect
 from librmm_cffi import librmm_config as rmm_cfg
 
 class RMMError(Exception):
@@ -85,6 +87,62 @@ class _RMMWrapper(object):
         """
         return self.rmmFinalize()
 
+    def _get_caller(self):
+        """Finds the file and line number of the caller (first caller outside
+           this file.)
+        """
+        # Go up stack to find first caller outside this file (more useful)
+        if True == rmm_cfg.enable_logging:
+            frame = inspect.currentframe().f_back
+            while frame:
+                filename = inspect.getfile(frame)
+                if not filename.endswith("wrapper.py"):
+                    break
+                else:
+                    frame = frame.f_back
+            line_number = frame.f_lineno
+            del frame
+        else:
+            filename = ""
+            line_number = 0
+
+        file = self._ffi.new("char[]", filename.encode())
+        line = self._ffi.cast("int", line_number)
+
+        return file, line
+
+    def rmmAlloc(self, size, stream):
+        """Allocates size bytes using the RMM memory manager.
+        """ 
+        file, line = self._get_caller()
+                
+        # Call RMM to allocate
+        ptr = self._ffi.new("void **")
+        stream = self._ffi.cast("cudaStream_t", stream)
+        self._api.rmmAlloc(ptr, size, stream, file, line)
+        return self._ffi.cast("uintptr_t*", ptr)[0]
+
+    def rmmRealloc(self, new_size, stream): 
+        """Reallocates new_size bytes using the RMM memory manager.
+        """ 
+        file, line = self._get_caller()
+         
+        # Call RMM to reaallocate
+        ptr = self._ffi.new("void **")
+        stream = self._ffi.cast("cudaStream_t", stream)
+        self._api.rmmRealloc(ptr, new_size, stream, file, line)
+        return self._ffi.cast("uintptr_t*", ptr)[0]
+
+    def rmmFree(self, ptr, stream):
+        """Deallocates ptr, which was allocated using rmmAlloc
+        """
+        file, line = self._get_caller()
+         
+        # Call RMM to free
+        ptr = self._ffi.cast("void*", ptr)
+        stream = self._ffi.cast("cudaStream_t", stream)
+        self._api.rmmFree(ptr, stream, file, line)
+
     def csv_log(self):
         """Returns a CSV log of all events logged by RMM, if logging is 
            enabled
@@ -138,10 +196,8 @@ class _RMMWrapper(object):
         datasize = cuda.driver.memory_size_from_info(shape, strides,
                                                      dtype.itemsize)
 
-        ptr = self._ffi.new("void **")
-        self._api.rmmAlloc(ptr, datasize,
-                           self._ffi.cast("cudaStream_t", stream))
-        addr = self._ffi.cast("uintptr_t*", ptr)[0]
+        addr = self.rmmAlloc(datasize, stream)       
+        
         # Note Numba will call the finalizer to free the device memory
         # allocated above
         return self._array_helper(addr=addr, datasize=datasize,
@@ -226,7 +282,5 @@ class _RMMWrapper(object):
         def finalizer():
             """Invoked when the MemoryPointer is freed
             """
-            cptr = self._ffi.cast("void*", handle)
-            return self._api.rmmFree(cptr, self._ffi.cast("cudaStream_t",
-                                                            stream))
+            return self.rmmFree(handle, stream)
         return finalizer

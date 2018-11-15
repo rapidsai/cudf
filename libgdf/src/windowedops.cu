@@ -97,12 +97,12 @@ void multi_col_order_by(size_t nrows,
 			cudaStream_t stream = NULL)*/
 
 	void ** device_order_columns;
-	RMM_TRY( rmmAlloc(&device_order_columns,sizeof(void *) * num_window_order_columns + 1, stream) );
+	RMM_TRY( RMM_ALLOC(&device_order_columns,sizeof(void *) * num_window_order_columns + 1, stream) );
 
 	//copy copy device pointers
 
 	int * device_column_types;
-	RMM_TRY( rmmAlloc((void**)&device_column_types,sizeof(int) * num_window_order_columns + 1, stream) );
+	RMM_TRY( RMM_ALLOC((void**)&device_column_types,sizeof(int) * num_window_order_columns + 1, stream) );
 
 	gdf_column** order_by_cols = new gdf_column*[num_window_order_columns + 1];
 	for(int i = 0; i < num_window_order_columns; i++){
@@ -114,7 +114,7 @@ void multi_col_order_by(size_t nrows,
 				 device_order_columns, device_column_types, stream);
 
 	gdf_size_type * device_index_outputs;
-	RMM_TRY( rmmAlloc((void**)&device_index_outputs, sizeof(gdf_size_type) * num_rows, stream) );
+	RMM_TRY( RMM_ALLOC((void**)&device_index_outputs, sizeof(gdf_size_type) * num_rows, stream) );
 
 	multi_col_order_by(num_rows, num_window_order_columns + 1, device_order_columns,
 			           device_column_types, device_index_outputs, stream);
@@ -123,8 +123,8 @@ void multi_col_order_by(size_t nrows,
 	//process reduction
 
 	delete[] order_by_cols;
-	RMM_TRY( rmmFree(device_order_columns, stream) );
-	RMM_TRY( rmmFree(device_column_types, stream) );
+	RMM_TRY( RMM_FREE(device_order_columns, stream) );
+	RMM_TRY( RMM_FREE(device_column_types, stream) );
 
 	//no stable sort by the hash of the partition column
 

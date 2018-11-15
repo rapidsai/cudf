@@ -26,6 +26,7 @@
 #include "gmock/gmock.h"
 #include "gdf_test_fixtures.h"
 #include <gdf/gdf.h>
+#include <gdf/utils.h>
 #include <gdf/cffi/functions.h>
 
 // See this header for all of the recursive handling of tuples of vectors
@@ -99,7 +100,8 @@ struct GroupTest : public GdfTest {
   }
 
   template <typename col_type>
-  gdf_col_pointer create_gdf_column(std::vector<col_type> const & host_vector)
+  gdf_col_pointer create_gdf_column(std::vector<col_type> const & host_vector,
+          const gdf_size_type n_count = 0)
   {
     // Deduce the type and set the gdf_dtype accordingly
     gdf_dtype gdf_col_type = N_GDF_TYPES;
@@ -116,15 +118,19 @@ struct GroupTest : public GdfTest {
 
     // Create a new instance of a gdf_column with a custom deleter that will free
     // the associated device memory when it eventually goes out of scope
-    auto deleter = [](gdf_column* col){col->size = 0; rmmFree(col->data, 0);};
+    auto deleter = [](gdf_column* col){col->size = 0; RMM_FREE(col->data, 0); RMM_FREE(col->valid, 0); };
     gdf_col_pointer the_column{new gdf_column, deleter};
 
     // Allocate device storage for gdf_column and copy contents from host_vector
-    rmmAlloc(&(the_column->data), host_vector.size() * sizeof(col_type), 0);
-    cudaMemcpy(the_column->data, host_vector.data(), host_vector.size() * sizeof(col_type), cudaMemcpyHostToDevice);
+    EXPECT_EQ(RMM_ALLOC(&(the_column->data), host_vector.size() * sizeof(col_type), 0), RMM_SUCCESS);
+    EXPECT_EQ(cudaMemcpy(the_column->data, host_vector.data(), host_vector.size() * sizeof(col_type), cudaMemcpyHostToDevice), cudaSuccess);
+
+    int valid_size = gdf_get_num_chars_bitmask(host_vector.size());
+    EXPECT_EQ(RMM_ALLOC((void**)&(the_column->valid), valid_size, 0), RMM_SUCCESS);
+    EXPECT_EQ(cudaMemset(the_column->valid, 0xff, valid_size), cudaSuccess);
 
     // Fill the gdf_column members
-    the_column->valid = nullptr;
+    the_column->null_count = n_count;
     the_column->size = host_vector.size();
     the_column->dtype = gdf_col_type;
     gdf_dtype_extra_info extra_info;
@@ -157,13 +163,13 @@ struct GroupTest : public GdfTest {
   /* ----------------------------------------------------------------------------*/
   void create_input(const size_t key_count, const size_t value_per_key,
                     const size_t max_key, const size_t max_val,
-                    bool print = false) {
+                    bool print = false, const gdf_size_type n_count = 0) {
     size_t shuffle_seed = rand();
     initialize_keys(input_key, key_count, value_per_key, max_key, shuffle_seed);
     initialize_values(input_value, key_count, value_per_key, max_val, shuffle_seed);
 
     gdf_input_key_columns = initialize_gdf_columns(input_key);
-    gdf_input_value_column = create_gdf_column(input_value);
+    gdf_input_value_column = create_gdf_column(input_value, n_count);
 
     // Fill vector of raw pointers to gdf_columns
     for(auto const& c : gdf_input_key_columns){
@@ -264,7 +270,7 @@ struct GroupTest : public GdfTest {
    * @Synopsis  Computes the gdf result of grouping the input_keys and input_value
    */
   /* ----------------------------------------------------------------------------*/
-  void compute_gdf_result(void)
+  void compute_gdf_result(const gdf_error expected_error = GDF_SUCCESS)
   {
     const int num_columns = std::tuple_size<multi_column_t>::value;
 
@@ -336,11 +342,13 @@ struct GroupTest : public GdfTest {
       default:
         error = GDF_INVALID_AGGREGATOR;
     }
-    EXPECT_EQ(GDF_SUCCESS, error) << "The gdf group by function did not complete successfully";
+    EXPECT_EQ(expected_error, error) << "The gdf group by function did not complete successfully";
 
-    copy_output(
-            group_by_output_key, output_key,
-            group_by_output_value, output_value);
+    if (GDF_SUCCESS == expected_error) {
+        copy_output(
+                group_by_output_key, output_key,
+                group_by_output_value, output_value);
+    }
   }
 
   void compare_gdf_result(map_t& reference_map) {
@@ -443,3 +451,21 @@ TYPED_TEST(GroupTest, EmptyInput)
     this->compute_gdf_result();
     this->compare_gdf_result(reference_map);
 }
+
+// Create a new derived class from JoinTest so we can do a new Typed Test set of tests
+template <class test_parameters>
+struct GroupValidTest : public GroupTest<test_parameters>
+{ };
+
+TYPED_TEST_CASE(GroupValidTest, ValidTestImplementations);
+
+TYPED_TEST(GroupValidTest, ReportValidMaskError)
+{
+    const size_t num_keys = 1;
+    const size_t num_values_per_key = 8;
+    const size_t max_key = num_keys*2;
+    const size_t max_val = 1000;
+    this->create_input(num_keys, num_values_per_key, max_key, max_val, false, 1);
+    this->compute_gdf_result(GDF_VALIDITY_UNSUPPORTED);
+}
+
