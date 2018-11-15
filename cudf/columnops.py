@@ -144,7 +144,7 @@ def as_column(arbitrary, nan_as_null=False):
     elif isinstance(arbitrary, Buffer):
         data = numerical.NumericalColumn(data=arbitrary, dtype=arbitrary.dtype)
 
-    elif cuda.devicearray.is_cuda_ndarray(arbitrary, nan_as_null=False):
+    elif cuda.devicearray.is_cuda_ndarray(arbitrary):
         data = as_column(Buffer(arbitrary))
         if (data.dtype in [np.float16, np.float32, np.float64]
                 and arbitrary.size > 0):
