@@ -21,11 +21,10 @@ template <> struct default_enum_map<GDF_CATEGORY>{ using type = gdf_category; };
  * @brief  Invokes a templated functor by dispatching the appropriate type from 
  * a gdf_dtype enum value.
  *
- * This helper function accepts any *functor* (generic lambdas will also work, but
- * nvcc does not support generic extended lambdas) with an "operator()" template. 
- * The template may have 1 or more template parameters, but the first parameter must 
- * be of the type dispatched from the  gdf_dtype enum. The remaining template arguments 
- * must be able to be automatically deduced. 
+ * This helper function accepts any functor with an "operator()" template or a 
+ * templated lambda. The template may have 1 or more template parameters, but 
+ * the first parameter must be of the type dispatched from the  gdf_dtype enum. 
+ * The remaining template parameters must be able to be automatically deduced. 
  *
  * Example usage with standalone functor that returns the size of the dispatched type:
  *
@@ -39,32 +38,20 @@ template <> struct default_enum_map<GDF_CATEGORY>{ using type = gdf_category; };
  * gdf_type_dispatcher(GDF_INT8, example_functor);  // returns 1
  * gdf_type_dispatcher(GDF_INT64, example_functor); // returns 8
  *
- * 
- * Example usage with generic lambda that returns size of the dispatched type:
+ * Example usage with a "template lambda" that returns size of the dispatched type:
  *
- * auto example_lambda = [](auto dispatched_type_var){ 
- *   using dispatched_type = decltype(dispatched_type_var);
- *   return sizeof(dispatched_type);
- * };
+ * template <typename T>
+ * auto example_lambda = []{ return sizeof(T); };
  *
- * gdf_type_dispatcher(GDF_INT8, example_lambda, 0);  // returns 1
- * gdf_type_dispatcher(GDF_INT64, example_lambda, 0); // returns 8
+ * gdf_type_dispatcher(GDF_INT8, example_lambda);  // returns 1
+ * gdf_type_dispatcher(GDF_INT64, example_lambda); // returns 8
  *
- * NOTE: A generic lambda can be thought of as if it were the following:
- *
- * struct example_lambda_closure{
- *  template <typename T>
- *  int operator()(T dispatched_type_var){
- *    return sizeof(T);
- * };
- *
- * Therefore, when using a generic lambda and the type_dispatcher, the lambda's first 
- * parameter *must* be of type "auto" and the purpose of this parameter is solely
- * to retrieve the dispatched type.
+ * NOTE: "template lambdas" can only be declared in namespace scope, i.e., outside
+ * the scope of a function.
  *
  * The return type for all template instantiations of the functor's "operator()" 
- * must be the same, otherwise there will be a compiler error as you would be 
- * trying to return different types from the same function.
+ * or the templated lambda must be the same, otherwise there will be a compiler 
+ * error as you would be  trying to return different types from the same function.
  *
  * @Param dtype The gdf_dtype enum that determines which type will be dispatched
  * @Param f The functor with a templated "operator()" that will be invoked with 
