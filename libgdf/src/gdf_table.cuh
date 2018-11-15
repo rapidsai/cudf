@@ -597,11 +597,13 @@ public:
 
   /* --------------------------------------------------------------------------*/
   /** 
-   * @Synopsis  This device function computes a hash value for a given row in the table
+   * @Synopsis  Device function to compute a hash value for a given row in the table
    * 
    * @Param row_index The row of the table to compute the hash value for
-   * @Param num_columns_to_hash The number of columns in the row to hash. If 0, hashes all columns
-   * @tparam hash_function The hash function that is used for each element in the row
+   * @Param num_columns_to_hash The number of columns in the row to hash. If 0, 
+   * hashes all columns
+   * @tparam hash_function The hash function that is used for each element in the row,
+   * as well as combine hash values
    * 
    * @Returns The hash value of the row
    */
