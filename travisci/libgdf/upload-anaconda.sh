@@ -30,4 +30,4 @@ fi
 
 echo "Upload"
 echo ${UPLOADFILE}
-anaconda -t ${MY_UPLOAD_KEY} upload -u rapidsai ${LABEL_OPTION} --force ${UPLOADFILE}
+travis_retry anaconda -t ${MY_UPLOAD_KEY} upload -u rapidsai ${LABEL_OPTION} --force ${UPLOADFILE}

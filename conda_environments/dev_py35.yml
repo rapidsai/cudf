@@ -1,4 +1,4 @@
-name: pycudf_testing_py35
+name: pycudf_dev_py35
 channels:
 - nvidia
 - numba
@@ -15,5 +15,6 @@ dependencies:
 - cmake=3.12.*
 - boost
 - nvstrings
+- cffi>=1.10.0   
 - distributed>=1.23.0
-
+            

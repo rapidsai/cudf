@@ -185,7 +185,7 @@ gdf_error GroupbyHash(gdf_table<size_type> const & groupby_input_table,
 
   // Used by threads to coordinate where to write their results
   size_type * global_write_index{nullptr};
-  RMM_TRY(rmmAlloc((void**)&global_write_index, sizeof(size_type), 0)); // TODO: non-default stream?
+  RMM_TRY(RMM_ALLOC((void**)&global_write_index, sizeof(size_type), 0)); // TODO: non-default stream?
   CUDA_TRY(cudaMemset(global_write_index, 0, sizeof(size_type)));
 
   const dim3 extract_grid_size ((hash_table_size + THREAD_BLOCK_SIZE - 1) / THREAD_BLOCK_SIZE, 1, 1);
@@ -204,7 +204,7 @@ gdf_error GroupbyHash(gdf_table<size_type> const & groupby_input_table,
   // At the end of the extraction kernel, the global write index will be equal to
   // the size of the output. Update the output size.
   CUDA_TRY( cudaMemcpy(out_size, global_write_index, sizeof(size_type), cudaMemcpyDeviceToHost) );
-  RMM_TRY( rmmFree(global_write_index, 0) );
+  RMM_TRY( RMM_FREE(global_write_index, 0) );
   groupby_output_table.set_column_length(*out_size);
 
   // Optionally sort the groupby/aggregation result columns

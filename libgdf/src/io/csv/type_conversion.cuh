@@ -50,20 +50,21 @@ T convertStrtoInt(char *data, long start_idx, long end_idx) {
 
 	T answer = (T)0;
 
-	// removePrePostWhiteSpaces(data, &start_idx, &end_idx);
-
 	// if the start and end indexs are the same, then it is a single digit value
 	if (start_idx == end_idx) {
 		answer = (data[start_idx] -'0');
 		return answer;
 	}
 
+	bool negative=false;
+	if(data[start_idx]=='-'){
+		negative=true;
+		start_idx++;
+	}
+
 	// the data is in little ending, so the last item of data is the lowest digit
 	int powSize = 0;
 	long idx = end_idx;
-
-	if (data[idx] == ' ')
-		--idx;
 
 	while(idx > (start_idx - 1))
 	{
@@ -74,6 +75,9 @@ T convertStrtoInt(char *data, long start_idx, long end_idx) {
 
 		--idx;
 	}
+
+	if (negative==true)
+		answer *=-1;
 
     return answer;
 }
@@ -100,6 +104,12 @@ T convertStrtoFloat(char *data, long start_idx, long end_idx) {
 	if (data[end_idx] == ' ')
 		--end_idx;
 
+	bool negative=false;
+	if(data[start_idx]=='-'){
+		negative=true;
+		start_idx++;
+	}
+
 	// find the decimal point - might not be one
 	long decimal_pt = end_idx;
 	long d_idx = start_idx;
@@ -117,7 +127,7 @@ T convertStrtoFloat(char *data, long start_idx, long end_idx) {
 	long idx = decimal_pt;
 	int powSize = 0;
 
-	if ( idx != start_idx ) {
+	if ( idx >= start_idx ) {
 		if (data[idx] == '.')
 			--idx;
 
@@ -146,6 +156,9 @@ T convertStrtoFloat(char *data, long start_idx, long end_idx) {
 			++idx;
 		}
 	}
+
+	if (negative==true)
+		answer *=-1;
 
 
     return answer;

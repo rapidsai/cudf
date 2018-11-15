@@ -20,11 +20,11 @@ struct Scan {
         void *temp_storage = NULL;
         size_t temp_storage_bytes = 0;
         scan_function(temp_storage, temp_storage_bytes, inp, out, size);
-        RMM_TRY( rmmAlloc(&temp_storage, temp_storage_bytes, 0) ); // TODO: non-default stream
+        RMM_TRY( RMM_ALLOC(&temp_storage, temp_storage_bytes, 0) ); // TODO: non-default stream
         // Do scan
         scan_function(temp_storage, temp_storage_bytes, inp, out, size);
         // Cleanup
-        RMM_TRY( rmmFree(temp_storage, 0) ); // TODO: non-default stream
+        RMM_TRY( RMM_FREE(temp_storage, 0) ); // TODO: non-default stream
 
         return GDF_SUCCESS;
     }
@@ -52,8 +52,8 @@ struct Scan {
 gdf_error gdf_prefixsum_##F(gdf_column *inp, gdf_column *out, int inclusive) {\
     GDF_REQUIRE( inp->size == out->size, GDF_COLUMN_SIZE_MISMATCH );          \
     GDF_REQUIRE( inp->dtype == out->dtype, GDF_UNSUPPORTED_DTYPE );           \
-    GDF_REQUIRE( !inp->valid , GDF_VALIDITY_UNSUPPORTED );                    \
-    GDF_REQUIRE( !out->valid , GDF_VALIDITY_UNSUPPORTED );                    \
+    GDF_REQUIRE( !inp->valid || !inp->null_count, GDF_VALIDITY_UNSUPPORTED ); \
+    GDF_REQUIRE( !out->valid || !out->null_count, GDF_VALIDITY_UNSUPPORTED ); \
     return Scan<T>::call((const T*)inp->data, (T*)out->data, inp->size,       \
                          inclusive);                                          \
 }

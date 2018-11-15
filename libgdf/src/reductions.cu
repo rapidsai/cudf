@@ -44,12 +44,9 @@ void gpu_reduction_op(const T *data, const gdf_valid_type *mask,
         int i = base + tid;
         // load
         T loaded = identity;
-        if (i < size)
+        if (i < size && gdf_is_valid(mask, i))
             loaded = loader(data, i);
-        // set invalid location to identity
-        if ( !gdf_is_valid(mask, i) ) {
-             loaded = identity;
-        }
+            
         // Block reduce
         T temp = BlockReduce(temp_storage).Reduce(loaded, functor);
         // Add current block

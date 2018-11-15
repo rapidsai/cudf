@@ -1,6 +1,7 @@
 ## common
 __pycache__
 *.pyc
+*.a
 *.o
 *.so
 *.dylib
@@ -9,18 +10,29 @@ __pycache__
 .vscode
 *.swp
 *.pytest_cache
-build
+DartConfiguration.tcl
 htmlcov
+dist/
+cudf.egg-info/
+
+## Patching
+*.diff
+*.orig
+*.rej
 
 ## libgdf
+CMakeFiles/
 Debug
-/libgdf/thirdparty/googletest/
-/libgdf/include/gdf/ipc/File_generated.h
-/libgdf/include/gdf/ipc/Message_generated.h
-/libgdf/include/gdf/ipc/Schema_generated.h
-/libgdf/include/gdf/ipc/Tensor_generated.h
-/libgdf/python/libgdf_cffi/libgdf_cffi.py
-/libgdf/python/librmm_cffi/librmm_cffi.py
+libgdf/build/
+libgdf/thirdparty/googletest/
+libgdf/include/gdf/ipc/File_generated.h
+libgdf/include/gdf/ipc/Message_generated.h
+libgdf/include/gdf/ipc/Schema_generated.h
+libgdf/include/gdf/ipc/Tensor_generated.h
+libgdf/python/libgdf_cffi/libgdf_cffi.py
+libgdf/python/librmm_cffi/librmm_cffi.py
 
-## eclipse
+## Eclipse IDE
 .project
+.cproject
+.settings

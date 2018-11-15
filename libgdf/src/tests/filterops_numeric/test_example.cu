@@ -42,9 +42,9 @@ TEST_F(Example, Equals)
 	char *data_left;
 	char *data_right;
 	char *data_out;
-	rmmError_t rmm_error = rmmAlloc((void **)&data_left, sizeof(int8_t) * num_elements, 0);
-	rmm_error = rmmAlloc((void **)&data_right, sizeof(int8_t) * num_elements, 0);
-	rmm_error = rmmAlloc((void **)&data_out, sizeof(int8_t) * num_elements, 0);
+	rmmError_t rmm_error = RMM_ALLOC((void **)&data_left, sizeof(int8_t) * num_elements, 0);
+	rmm_error = RMM_ALLOC((void **)&data_right, sizeof(int8_t) * num_elements, 0);
+	rmm_error = RMM_ALLOC((void **)&data_out, sizeof(int8_t) * num_elements, 0);
 	ASSERT_EQ(rmm_error, RMM_SUCCESS);
 
 	int8_t int8_value = 2;
@@ -56,11 +56,11 @@ TEST_F(Example, Equals)
 
 	*valid = 255;
 	gdf_valid_type *valid_device;
-	rmm_error = rmmAlloc((void **)&valid_device, 1, 0);
+	rmm_error = RMM_ALLOC((void **)&valid_device, 1, 0);
 	cudaMemcpy(valid_device, valid, sizeof(gdf_valid_type), cudaMemcpyHostToDevice);
 	
 	gdf_valid_type *valid_out;
-	rmm_error = rmmAlloc((void **)&valid_out, 1, 0);
+	rmm_error = RMM_ALLOC((void **)&valid_out, 1, 0);
 	gdf_column lhs;
 	gdf_error error = gdf_column_view_augmented(&lhs, (void *)data_left, valid_device, num_elements, GDF_INT8, 0);
 	gdf_column rhs;
@@ -83,11 +83,11 @@ TEST_F(Example, Equals)
 	std::cout << "Output static_i8" << std::endl;
 	print_column(&output);
 
-	rmmFree(data_left, 0);
-	rmmFree(data_right, 0);
-	rmmFree(data_out, 0);
-	rmmFree(valid_device, 0);
-	rmmFree(valid_out, 0); 
+	RMM_FREE(data_left, 0);
+	RMM_FREE(data_right, 0);
+	RMM_FREE(data_out, 0);
+	RMM_FREE(valid_device, 0);
+	RMM_FREE(valid_out, 0); 
 	delete valid;
 
 	EXPECT_EQ(1, 1);
