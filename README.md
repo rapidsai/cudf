@@ -17,7 +17,7 @@ You can get a minimal conda installation with [Miniconda](https://conda.io/minic
 You can install and update cuDF using the conda command:
 
 ```bash
-conda install -c numba -c conda-forge -c rapidsai -c defaults cudf=0.2.0
+conda install -c rapidsai -c nvidia -c numba -c conda-forge -c defaults cudf=0.2.0
 ```
 
 Note: This conda installation only applies to Linux and Python versions 3.5/3.6.
@@ -26,11 +26,11 @@ You can create and activate a development environment using the conda commands:
 
 ```bash
 # create the conda environment (assuming in base `cudf` directory)
-$ conda env create --name cudf_dev --file conda_environments/dev_py35.yml
+$ conda env create --name cudf_dev --file conda/environments/dev_py35.yml
 # activate the environment
 $ source activate cudf_dev
 # when not using default arrow version 0.10.0, run
-$ conda install pyarrow=$ARROW_VERSION -c conda-forge
+$ conda install -c rapidsai -c nvidia -c numba -c conda-forge -c defaults pyarrow=$ARROW_VERSION
 ```
 
 This installs the required `cmake`, `nvstrings`, `pyarrow` and other
