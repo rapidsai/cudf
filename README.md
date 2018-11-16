@@ -145,7 +145,7 @@ After the container is built run the container:
 ```
 docker run --runtime=nvidia -it cudf bash
 ```
-Activate the conda environment `cudf` to use the newly built cuDF and libgdf libraries:
+Activate the conda environment `cudf` to use the newly built cuDF and libcudf libraries:
 ```
 root@3f689ba9c842:/# source activate cudf
 (cudf) root@3f689ba9c842:/# python -c "import cudf"
@@ -180,20 +180,20 @@ This project uses [py.test](https://docs.pytest.org/en/latest/)
 In the source root directory and with the development conda environment activated, run:
 
 ```bash
-py.test --cache-clear --ignore=libgdf
+py.test --cache-clear --ignore=cpp
 ```
 
-### libgdf
+### libcudf
 
-The `libgdf` tests require a GPU and CUDA. CUDA can be installed locally or through the conda packages of `numba` & `cudatoolkit`. For more details on the requirements needed to run these tests see the [libgdf README](libgdf/README.md).
+The `libcudf` tests require a GPU and CUDA. CUDA can be installed locally or through the conda packages of `numba` & `cudatoolkit`. For more details on the requirements needed to run these tests see the [libcudf README](cpp/README.md).
 
-`libgdf` has two testing frameworks `py.test` and GoogleTest:
+`libcudf` has two testing frameworks `py.test` and GoogleTest:
 
 ```bash
-# Run py.test command inside the /libgdf folder
+# Run py.test command inside the /libcudf folder
 py.test
 
-# Run GoogleTest command inside the /libgdf/build folder after cmake
+# Run GoogleTest command inside the /libcudf/build folder after cmake
 make -j test
 ```
 
