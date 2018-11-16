@@ -1,3 +1,5 @@
+# Copyright (c) 2018, NVIDIA CORPORATION.
+
 from setuptools import setup
 from setuptools.extension import Extension
 from Cython.Build import cythonize
@@ -31,8 +33,7 @@ extensions = [
               library_dirs=[get_python_lib()],
               libraries=['cudf'],
               language='c++',
-              extra_compile_args=['-std=c++11'],
-              runtime_library_dirs=['/usr/local/lib'])
+              extra_compile_args=['-std=c++11'])
 ]
 
 setup(name='cudf',
