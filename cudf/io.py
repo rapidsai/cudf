@@ -33,6 +33,8 @@ def read_csv(filepath, lineterminator='\n',
         Delimiter to be used.
     delim_whitespace : bool, default False
         Determines whether to use whitespace as delimiter.
+    sep : char, default None
+        Alternative argument name for delimiter. 
     lineterminator : char, default '\\n'
         Character to indicate end of line.
     skipinitialspace : bool, default False
@@ -105,6 +107,9 @@ def read_csv(filepath, lineterminator='\n',
             arr_dtypes.append(_wrap_string(str(col_dtype)))
     dtype_ptr = ffi.new('char*[]', arr_dtypes)
     csv_reader.dtype = dtype_ptr
+
+    if sep is not None:
+        delimiter = sep
 
     csv_reader.delimiter = delimiter.encode()
     csv_reader.lineterminator = lineterminator.encode()
