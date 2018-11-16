@@ -122,7 +122,7 @@ $ py.test
 Finally, install the python package to your python path:
 
 ```bash
-$python setup.py install
+$ python setup.py install
 ```
 
 ## Automated Build in Docker Container
