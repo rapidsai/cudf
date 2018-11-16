@@ -1,4 +1,4 @@
-name: pycudf_dev_py35
+name: cudf_dev_py35
 channels:
 - nvidia
 - numba

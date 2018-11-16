@@ -41,7 +41,7 @@ We recommend setting up a conda environment for the dependencies using the
 provided configuration file.
 
 ```bash
-# create the conda environment (assuming in build directory)
+# create the conda environment (assuming `pwd` is base `cudf` directory)
 $ conda env create --name cudf_dev --file conda_environments/dev_py35.yml
 # activate the environment
 $ source activate cudf_dev
@@ -60,6 +60,7 @@ The environment can be updated from `conda_environments/dev_py35.yml` as
 development includes/changes the depedencies. To do so, run:
 
 ```bash
+# Update the conda environment (assuming `pwd` is base `cudf` directory)
 conda env update --name cudf_dev --file conda_environments/dev_py35.yml
 ```
 Note that `dev_py35.yml` uses pyarrow 0.10.0. Reinstall pyarrow if 

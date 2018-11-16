@@ -1,4 +1,4 @@
-name: pycudf_testing_py35
+name: cudf_testing_py35
 channels:
 - rapidsai
 - nvidia
