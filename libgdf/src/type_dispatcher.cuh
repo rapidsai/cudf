@@ -3,7 +3,6 @@
 
 #include <utility>
 #include <gdf/cffi/types.h>
-#include "types.hpp"
 #include "NVStrings.h"
 
 /* --------------------------------------------------------------------------*/
@@ -23,25 +22,6 @@ template <> struct default_enum_map<GDF_DATE64>{ using type = gdf_date64; };
 template <> struct default_enum_map<GDF_TIMESTAMP>{ using type = gdf_timestamp; };
 template <> struct default_enum_map<GDF_CATEGORY>{ using type = gdf_category; };
 template <> struct default_enum_map<GDF_STRING>{ using type = NVStrings; };
-
-/* --------------------------------------------------------------------------*/
-/** 
- * @brief  Mapping of gdf_dtype enums such that each enum value maps to a distinct
- * C++ type.
- */
-/* ----------------------------------------------------------------------------*/
-template<gdf_dtype t> struct distinct_type_enum_map;
-template <> struct distinct_type_enum_map<GDF_INT8>{ using type = int8_t; };
-template <> struct distinct_type_enum_map<GDF_INT16>{ using type = int16_t; };
-template <> struct distinct_type_enum_map<GDF_INT32>{ using type = int32_t; };
-template <> struct distinct_type_enum_map<GDF_INT64>{ using type = int64_t; };
-template <> struct distinct_type_enum_map<GDF_FLOAT32>{ using type = float; };
-template <> struct distinct_type_enum_map<GDF_FLOAT64>{ using type = double; };
-template <> struct distinct_type_enum_map<GDF_DATE32>{ using type = gdf::date32; };
-template <> struct distinct_type_enum_map<GDF_DATE64>{ using type = gdf::date64; };
-template <> struct distinct_type_enum_map<GDF_TIMESTAMP>{ using type = gdf::timestamp; };
-template <> struct distinct_type_enum_map<GDF_CATEGORY>{ using type = gdf::category; };
-template <> struct distinct_type_enum_map<GDF_STRING>{ using type = NVStrings; };
 
 /* --------------------------------------------------------------------------*/
 /** 
@@ -94,34 +74,38 @@ template <> struct distinct_type_enum_map<GDF_STRING>{ using type = NVStrings; }
 /* ----------------------------------------------------------------------------*/
 // This pragma disables a compiler warning that complains about the valid usage
 // of calling a __host__ functor from this function which is __host__ __device__
+namespace gdf{
+
 #pragma hd_warning_disable
 template < template <gdf_dtype> typename enum_map = default_enum_map, 
            class functor_t, 
            typename... Ts>
 __host__ __device__ __forceinline__
-decltype(auto) gdf_type_dispatcher(gdf_dtype dtype, 
-                                   functor_t f, 
-                                   Ts&&... args)
+decltype(auto) type_dispatcher(gdf_dtype dtype, 
+                               functor_t f, 
+                               Ts&&... args)
 {
   switch(dtype)
   {
     // The .template is known as a "template disambiguator" 
     // See here for more information: https://stackoverflow.com/questions/3786360/confusing-template-error
-    case GDF_INT8:      { return f.template operator()<typename enum_map<GDF_INT8>::type>(std::forward<Ts>(args)...); }
-    case GDF_INT16:     { return f.template operator()<typename enum_map<GDF_INT16>::type>(std::forward<Ts>(args)...); }
-    case GDF_INT32:     { return f.template operator()<typename enum_map<GDF_INT32>::type>(std::forward<Ts>(args)...); }
-    case GDF_INT64:     { return f.template operator()<typename enum_map<GDF_INT64>::type>(std::forward<Ts>(args)...); }
-    case GDF_FLOAT32:   { return f.template operator()<typename enum_map<GDF_FLOAT32>::type>(std::forward<Ts>(args)...); }
-    case GDF_FLOAT64:   { return f.template operator()<typename enum_map<GDF_FLOAT64>::type>(std::forward<Ts>(args)...); }
-    case GDF_DATE32:    { return f.template operator()<typename enum_map<GDF_DATE32>::type>(std::forward<Ts>(args)...); }
-    case GDF_DATE64:    { return f.template operator()<typename enum_map<GDF_DATE64>::type>(std::forward<Ts>(args)...); }
-    case GDF_TIMESTAMP: { return f.template operator()<typename enum_map<GDF_TIMESTAMP>::type>(std::forward<Ts>(args)...); }
-    case GDF_CATEGORY:  { return f.template operator()<typename enum_map<GDF_CATEGORY>::type>(std::forward<Ts>(args)...); }
+    case GDF_INT8:      { return f.template operator()<enum_map<GDF_INT8>>(std::forward<Ts>(args)...); }
+    case GDF_INT16:     { return f.template operator()<enum_map<GDF_INT16>>(std::forward<Ts>(args)...); }
+    case GDF_INT32:     { return f.template operator()<enum_map<GDF_INT32>>(std::forward<Ts>(args)...); }
+    case GDF_INT64:     { return f.template operator()<enum_map<GDF_INT64>>(std::forward<Ts>(args)...); }
+    case GDF_FLOAT32:   { return f.template operator()<enum_map<GDF_FLOAT32>>(std::forward<Ts>(args)...); }
+    case GDF_FLOAT64:   { return f.template operator()<enum_map<GDF_FLOAT64>>(std::forward<Ts>(args)...); }
+    case GDF_DATE32:    { return f.template operator()<enum_map<GDF_DATE32>>(std::forward<Ts>(args)...); }
+    case GDF_DATE64:    { return f.template operator()<enum_map<GDF_DATE64>>(std::forward<Ts>(args)...); }
+    case GDF_TIMESTAMP: { return f.template operator()<enum_map<GDF_TIMESTAMP>>(std::forward<Ts>(args)...); }
+    case GDF_CATEGORY:  { return f.template operator()<enum_map<GDF_CATEGORY>>(std::forward<Ts>(args)...); }
   }
   // Need to find out what the return type is in order to have a default return value
   // and solve the compiler warning for lack of a default return
-  using return_type = decltype(f.template operator()<typename enum_map<GDF_INT8>::type>(std::forward<Ts>(args)...));
+  using return_type = decltype(f.template operator()<enum_map<GDF_INT8>>(std::forward<Ts>(args)...));
   return return_type();
 }
+
+} // namespace gdf
 
 #endif

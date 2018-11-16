@@ -28,7 +28,7 @@
 #include "hashmap/hash_functions.cuh"
 #include "hashmap/managed.cuh"
 #include "sqls_rtti_comp.hpp"
-#include "gdf_type_dispatcher.cuh"
+#include "type_dispatcher.cuh"
 
 template <typename size_type>
 struct ValidRange {
@@ -39,7 +39,7 @@ struct ValidRange {
             const size_type end) :
         start(begin), stop(end) {}
 
-    __host__ __device__
+    __host__ __device__ __forceinline__
     bool operator()(const size_type index)
     {
         return ((index >= start) && (index < stop));
@@ -76,7 +76,8 @@ struct row_masker
    * @Returns The bit-wise AND across all columns for the specified mask number
    */
   /* ----------------------------------------------------------------------------*/
-  __device__ gdf_valid_type operator()(const size_type mask_number)
+  __device__ __forceinline__
+  gdf_valid_type operator()(const size_type mask_number)
   {
     // Intialize row validity mask with all bits set to 1
     gdf_valid_type row_valid_mask{0};
@@ -457,6 +458,18 @@ public:
     }
   }
 
+  struct copy_element{
+    template <typename type_info>
+    __device__ __forceinline__
+    void operator()(void * my_column, size_type my_row_index,
+                    void const * other_column, size_type other_row_index)
+    {
+      using col_type = typename type_info::type;
+      static_cast<col_type*>(my_column)[my_row_index] = 
+        static_cast<col_type const*>(other_column)[other_row_index];
+    }
+
+  };
 
     /* --------------------------------------------------------------------------*/
     /** 
@@ -476,15 +489,6 @@ public:
                 const size_type my_row_index,
                 const size_type other_row_index)
   {
-
-    auto copy_element = [](auto dispatched_type_var, void * my_column, size_type my_row_index,
-                           void const * other_column, size_type other_row_index)
-    {
-      using col_type = decltype(dispatched_type_var);
-      static_cast<col_type*>(my_column)[my_row_index] = 
-        static_cast<col_type const*>(other_column)[other_row_index];
-    };
-
     for(size_type i = 0; i < num_columns; ++i)
     {
       const gdf_dtype my_col_type = d_columns_types[i];
@@ -495,9 +499,8 @@ public:
         return GDF_DTYPE_MISMATCH;
       }
 
-      gdf_type_dispatcher(my_col_type,
-                          copy_element,
-                          0,
+      gdf::type_dispatcher(my_col_type,
+                          copy_element{},
                           d_columns_data[i],
                           my_row_index,
                           other.d_columns_data[i],
@@ -507,17 +510,31 @@ public:
     return GDF_SUCCESS;
   }
 
-    /* --------------------------------------------------------------------------*/
-    /** 
-     * @Synopsis  Checks for equality between a row in this table and another table.
-     * 
-     * @Param other The other table whose row is compared to this tables
-     * @Param my_row_index The row index of this table to compare
-     * @Param other_row_index The row index of the other table to compare
-     * 
-     * @Returns True if the elements in both rows are equivalent, otherwise False
-     */
-    /* ----------------------------------------------------------------------------*/
+
+  struct elements_are_equal{
+    template <typename type_info>
+    __device__ __forceinline__
+    bool operator()(void const * my_column, size_type my_row_index,
+                    void const * other_column, size_type other_row_index)
+    {
+      using col_type = typename type_info::type;
+      col_type const my_elem = static_cast<col_type const*>(my_column)[my_row_index];
+      col_type const other_elem = static_cast<col_type const*>(other_column)[other_row_index];
+      return my_elem == other_elem;
+    }
+  };
+
+  /* --------------------------------------------------------------------------*/
+  /** 
+   * @Synopsis  Checks for equality between a row in this table and another table.
+   * 
+   * @Param other The other table whose row is compared to this tables
+   * @Param my_row_index The row index of this table to compare
+   * @Param other_row_index The row index of the other table to compare
+   * 
+   * @Returns True if the elements in both rows are equivalent, otherwise False
+   */
+  /* ----------------------------------------------------------------------------*/
   __device__
   bool rows_equal(gdf_table const & other, 
                   const size_type my_row_index, 
@@ -532,16 +549,6 @@ public:
       return false;
     }
 
-    // Generic lambda to check if two elements are equal between two columns
-    auto elements_are_equal = [](auto dispatched_type_var, void const * my_column, size_type my_row_index,
-                                 void const * other_column, size_type other_row_index)
-    {
-      using col_type = decltype(dispatched_type_var);
-      col_type const my_elem = static_cast<col_type const*>(my_column)[my_row_index];
-      col_type const other_elem = static_cast<col_type const*>(other_column)[other_row_index];
-      return my_elem == other_elem;
-    };
-
     for(size_type i = 0; i < num_columns; ++i)
     {
       const gdf_dtype my_col_type = d_columns_types[i];
@@ -552,9 +559,8 @@ public:
         return false;
       }
 
-      bool is_equal = gdf_type_dispatcher(my_col_type, 
-                                          elements_are_equal, 
-                                          0, 
+      bool is_equal = gdf::type_dispatcher(my_col_type, 
+                                          elements_are_equal{}, 
                                           d_columns_data[i], 
                                           my_row_index, 
                                           other.d_columns_data[i], 
@@ -575,13 +581,14 @@ public:
   template < template <typename> typename hash_function >
   struct hash_element
   {
-    template <typename col_type>
-    __device__
+    template <typename type_info>
+    __device__ __forceinline__
     void operator()(hash_value_type& hash_value, 
                     void const * col_data,
                     size_type row_index,
                     size_type col_index)
     {
+      using col_type = typename type_info::type;
       hash_function<col_type> hasher;
       col_type const * const current_column{static_cast<col_type const*>(col_data)};
       col_type const current_value{current_column[row_index]};
@@ -625,7 +632,7 @@ public:
     {
       gdf_dtype const current_column_type = d_columns_types[i];
 
-      gdf_type_dispatcher(current_column_type, 
+      gdf::type_dispatcher(current_column_type, 
                           hash_element<hash_function>{}, 
                           hash_value, d_columns_data[i], row_index, i);
     }

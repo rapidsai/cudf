@@ -24,7 +24,7 @@
 #include <gdf/errorutils.h>
 #include <cuda_runtime_api.h>
 #include <rmm.h>
-#include "gdf_type_dispatcher.cuh"
+#include "type_dispatcher.cuh"
 
 // forward decl -- see validops.cu
 gdf_error gdf_mask_concat(gdf_valid_type *output_mask,
@@ -227,6 +227,16 @@ gdf_error gdf_column_free(gdf_column *column)
   return GDF_SUCCESS;
 }
 
+
+namespace{
+  struct get_type_size{
+    template <typename type_info>
+    auto operator()()
+    {
+      return sizeof(typename type_info::type);
+    }
+  };
+}
 /** ---------------------------------------------------------------------------*
  * @brief Get the byte width of a column
  *
@@ -238,16 +248,6 @@ gdf_error gdf_column_free(gdf_column *column)
 gdf_error get_column_byte_width(gdf_column * col, 
                                 int * width)
 {
-  // NOTE: You cannot have a generic lambda without an argument
-  // therefore, pass in a dummy argument whose type will be dispatched
-  // according to the column's dtype
-  auto get_type_size = [](auto dispatched_type_var)
-  { 
-    return sizeof(dispatched_type_var);
-  };
-
-  // Need to pass in an argument for the dispatched_type_var parameter
-  *width = gdf_type_dispatcher(col->dtype, get_type_size, 0);
-
+  *width = gdf::type_dispatcher(col->dtype, get_type_size{});
 	return GDF_SUCCESS;
 }
