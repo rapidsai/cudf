@@ -174,7 +174,7 @@ def as_column(arbitrary, nan_as_null=False):
         if arbitrary.dtype.kind == 'M':
             data = datetime.DatetimeColumn.from_numpy(arbitrary)
         else:
-            data = as_column(rmm.to_device(arbitrary))
+            data = as_column(rmm.to_device(arbitrary), nan_as_null=nan_as_null)
 
     elif isinstance(arbitrary, pa.Array):
         if isinstance(arbitrary, pa.StringArray):
