@@ -1,125 +1,124 @@
-# libgdf: GPU DataFrames
+# libcudf: The CUDA DataFrame Library
 
-libgdf is a C library for implementing common functionality for a GPU DataFrame.
+libcudf is a C/C++ CUDA library for implementing standard dataframe operations.
 
 ## Development Setup
 
-The following instructions are tested on Linux and OSX systems.
+Currently, only Ubuntu 16.04 is supported for building `libcudf` from source.
 
-Compiler requirement:
+Target build system:
 
-* `g++` 5.4
-* `cmake` 3.12+
+* `gcc`     version 5.4
+* `nvcc`    version 9.2
+* `cmake`   version 3.12
 
-CUDA requirement:
+`libcudf` has been tested with `nvcc` version 9.2, 10.0. More detailed information on the supported version follows:
 
-* CUDA 9.2+
+```bash
+$ gcc --version
+gcc (Ubuntu 5.4.0-6ubuntu1~16.04.10) 5.4.0 20160609
+Copyright (C) 2015 Free Software Foundation, Inc.
+This is free software; see the source for copying conditions.  There is NO
+warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+```
+
+```bash
+$ nvcc --version
+nvcc: NVIDIA (R) Cuda compiler driver
+Copyright (c) 2005-2018 NVIDIA Corporation
+Built on Tue_Jun_12_23:07:04_CDT_2018
+Cuda compilation tools, release 9.2, V9.2.148
+```
 
 You can obtain CUDA from [https://developer.nvidia.com/cuda-downloads](https://developer.nvidia.com/cuda-downloads)
 
-### Get dependencies
+### Dependencies
 
-Since `cmake` will download and build Apache Arrow (version 0.7.1 or
-0.8+) you may need to install Boost C++ (version 1.58) before running
-`cmake`:
+`libcudf` requires the following:
 
-```bash
-# Install Boost C++ 1.58 for Ubuntu 16.04
-$ sudo apt-get install libboost-all-dev
-```
+* Apache Arrow          `0.10.0`
+* Google Test           `1.8.0`
+* Boost C++ Library     `1.58`
 
-or
+#### Optional Python Dependencies
 
-```bash
-# Install Boost C++ 1.58 for Conda (you will need a Python 3.3 environment)
-$ conda install -c omnia boost=1.58.0=py33_0
-```
+Python version `3.6` is recommended.
 
-Libgdf supports Apache Arrow versions 0.7.1 and 0.8+ (0.10.0 is
-default) that use different metadata versions in IPC. So, it is
-important to specify which Apache arrow version will be used during
-building libgdf.  To select required Apache Arrow version, define the
-following environment variables (using Arrow version 0.10.0 as an
-example):
-```bash
-$ export ARROW_VERSION=0.10.0
-$ export PARQUET_ARROW_VERSION=apache-arrow-$ARROW_VERSION
-```
-where the latter is used by libgdf cmake configuration files. Note
-that when using libgdf, defining the above environment variables is
-not necessary.
+* Cython                `0.29`
+* PyArrow               `0.10.0`
+* PyTest                `4.0.0`
 
-You can install Boost C++ 1.58 from sources as well: https://www.boost.org/doc/libs/1_58_0/more/getting_started/unix-variants.html
+### Configure and Build
 
-To run the python tests it is recommended to setup a conda environment for 
-the dependencies.
+Use CMake to configure the build files:
 
 ```bash
-# create the conda environment (assuming in build directory)
-$ conda env create --name cudf_dev --file ../conda_environments/dev_py35.yml
-# activate the environment
-$ source activate cudf_dev
-# when not using default arrow version 0.10.0, run
-$ conda install pyarrow=$ARROW_VERSION -c conda-forge
+$ cd /path/to/cudf/cpp                              # navigate to C/C++ CUDA source root directory
+$ mkdir build                                       # make a build directory
+$ cd build                                          # enter the build directory
+$ cmake .. -DCMAKE_INSTALL_PREFIX=/install/path     # configure cmake ... use $CONDA_PREFIX if you're using Anaconda
+$ make -j                                           # compile the libraries librmm.so, libcudf.so ... '-j' will start a parallel job using the number of physical cores available on your system
+$ make install                                      # install the libraries librmm.so, libcudf.so to '/install/path'
 ```
 
-This installs the required `cmake` and `pyarrow` into the `cudf_dev` conda
-environment and activates it.
-
-For additional information, the python cffi wrapper code requires `cffi` and
-`pytest`.  The testing code requires `numba` and `cudatoolkit` as an
-additional dependency.  All these are installed from the previous commands.
-
-The environment can be updated from `../conda_environments/dev_py35.yml` as
-development includes/changes the depedencies.  To do so, run:
+To run tests, call:
 
 ```bash
-conda env update --name cudf_dev --file ../conda_environments/dev_py35.yml
+$ make test
 ```
-Note that `dev_py35.yml` uses the latest version of pyarrow.
-Reinstall pyarrow if needed using `conda install
-pyarrow=$ARROW_VERSION -c conda-forge`.
 
-### Configure and build
-
-This project uses cmake for building the C/C++ library. To configure cmake,
-run:
+The correct output will be of the following form:
 
 ```bash
-$ mkdir build   # create build directory for out-of-source build
-$ cd build      # enter the build directory
-$ cmake ..      # configure cmake (will download and build Apache Arrow and Google Test)
+$ make test
+Running tests...
+Test project /home/nfs/majones/workspace/github/rapids/cudf/cpp/build
+      Start  1: COLUMN_TEST
+ 1/14 Test  #1: COLUMN_TEST ......................   Passed    1.20 sec
+      Start  2: CUDF_INTERNAL_TEST
+ 2/14 Test  #2: CUDF_INTERNAL_TEST ...............   Passed    0.01 sec
+      Start  3: FILTER_TEST
+ 3/14 Test  #3: FILTER_TEST ......................   Passed   11.85 sec
+      Start  4: GROUPBY_TEST
+ 4/14 Test  #4: GROUPBY_TEST .....................   Passed    2.74 sec
+      Start  5: JOIN_TEST
+ 5/14 Test  #5: JOIN_TEST ........................   Passed   39.39 sec
+      Start  6: SQLS_TEST
+ 6/14 Test  #6: SQLS_TEST ........................   Passed    1.20 sec
+      Start  7: BITMASK_TEST
+ 7/14 Test  #7: BITMASK_TEST .....................   Passed    2.23 sec
+      Start  8: DATETIME_TEST
+ 8/14 Test  #8: DATETIME_TEST ....................   Passed    1.17 sec
+      Start  9: HASHING_TEST
+ 9/14 Test  #9: HASHING_TEST .....................   Passed    5.31 sec
+      Start 10: HASH_MAP_TEST
+10/14 Test #10: HASH_MAP_TEST ....................   Passed    6.03 sec
+      Start 11: QUANTILES_TEST
+11/14 Test #11: QUANTILES_TEST ...................   Passed    1.19 sec
+      Start 12: UNARY_TEST
+12/14 Test #12: UNARY_TEST .......................   Passed    1.28 sec
+      Start 13: CSV_TEST
+13/14 Test #13: CSV_TEST .........................   Passed    0.01 sec
+      Start 14: RMM_TEST
+14/14 Test #14: RMM_TEST .........................   Passed    1.15 sec
+
+100% tests passed, 0 tests failed out of 14
+
+Total Test time (real) =  74.77 sec
 ```
 
-If installing libgdf to conda environment is desired, then replace the last command with
+#### Optional Python Bindings
+
 ```bash
-$ cmake -DCMAKE_INSTALL_PREFIX=$CONDA_PREFIX ..
+make python_cffi                                    # build CFFI bindings for librmm.so, libcudf.so
+make install_python                                 # install python bindings into site-packages
 ```
-
-To build the C/C++ code, run `make`.  This should produce a shared library
-named `libgdf.so` or `libgdf.dylib`.
-
-If you run into compile errors about missing header files:
+#### Optional Python Tests
 
 ```bash
-cub/device/device_segmented_radix_sort.cuh: No such file or directory
+$ cd src/build/python
+$ py.test -v
 ```
 
-See the note about submodules in the Get dependencies section above.
 
-### Link python files into the build directory
 
-To make development and testing more seamless, the python files and tests
-can be symlinked into the build directory by running `make copy_python`.
-With that, any changes to the python files are reflected in the build
-directory.  To rebuild the libgdf, run `make` again.
-
-### Run tests
-
-Currently, all tests are written in python with `py.test`.  A make target is
-available to trigger the test execution.  In the build directory (and with the
-conda environment activated), run below to exceute test:
-
-```bash
-$ make pytest   # this auto trigger target "copy_python"
-```
