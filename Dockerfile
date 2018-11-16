@@ -40,7 +40,7 @@ RUN conda install -n cudf -y -c numba -c conda-forge -c nvidia -c defaults \
       pyarrow=${PYARROW_VERSION} \
       nvstrings \
       cmake \
-      pytes
+      pytest
 
 # Uncomment to clone & build from master instead of local source
 #ARG CUDF_REPO=https://github.com/rapidsai/cudf
