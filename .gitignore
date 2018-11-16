@@ -17,6 +17,8 @@ DartConfiguration.tcl
 htmlcov
 dist/
 cudf.egg-info/
+python/build
+python/cudf/bindings/*.cpp
 
 ## Patching
 *.diff
