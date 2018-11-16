@@ -1,5 +1,8 @@
 #include <cudf.h>
+
+#pragma diag_suppress set_but_not_used
 #include <cudf/ipc_generated/Schema_generated.h>
+#pragma diag_default set_but_not_used
 #include <cudf/ipc_generated/Message_generated.h>
 
 #include <arrow/api.h>
