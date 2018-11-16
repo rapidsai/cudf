@@ -234,6 +234,9 @@ def read_csv_strings(filepath, lineterminator='\n',
     dtype_ptr = ffi.new('char*[]', arr_dtypes)
     csv_reader.dtype = dtype_ptr
 
+    if sep is not None:
+        delimiter = sep
+
     csv_reader.delimiter = delimiter.encode()
     csv_reader.lineterminator = lineterminator.encode()
     csv_reader.delim_whitespace = delim_whitespace
