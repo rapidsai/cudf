@@ -9,6 +9,7 @@ from .datetime import DatetimeColumn
 from ._gdf import nvtx_range_push, nvtx_range_pop
 
 import numpy as np
+import warnings
 
 
 def _wrap_string(text):
@@ -18,18 +19,22 @@ def _wrap_string(text):
         return ffi.new("char[]", text.encode())
 
 
-def read_csv(filepath, lineterminator='\n',
-             delimiter=',', sep=None, delim_whitespace=False,
+def read_csv(filepath, lineterminator='\n', sep=',',
+             delimiter=None, delim_whitespace=False,
              skipinitialspace=False, names=None, dtype=None,
              skipfooter=0, skiprows=0, dayfirst=False):
     """
     Load and parse a CSV file into a DataFrame
 
+    Any columns of type 'string' are hashed into int32 values.
+
+    To work with string data directly, see read_csv_strings
+
     Parameters
     ----------
     filepath : str
         Path of file to be read.
-    delimiter : char, default ','
+    sep : char, default ','
         Delimiter to be used.
     delim_whitespace : bool, default False
         Determines whether to use whitespace as delimiter.
@@ -53,19 +58,52 @@ def read_csv(filepath, lineterminator='\n',
 
     Examples
     --------
-    foo.txt : ::
 
-        50,50|40,60|30,70|20,80|
+    .. code-block:: python
 
-    >>> import cudf
-    >>> df = cudf.read_csv('foo.txt', delimiter=',', lineterminator='|',
-    ...                     names=['col1', 'col2'], dtype=['int64', 'int64'],
-    ...                     skiprows=1, skipfooter=1)
-    >>> df
-      col1 col2
-    0 40   60
-    1 30   70
+      import cudf
+
+      lines = [
+        "num1,datetime,text",
+        "123,2018-11-13T12:00:00,abc",
+        "456,2018-11-14T12:35:01,def",
+        "789,2018-11-15T18:02:59,ghi"
+      ]
+
+      filename = 'foo.csv'
+      with open(filename, 'w') as fp:
+          fp.write('\\n'.join(lines)+'\\n')
+
+      names = ['num1', 'datetime', 'text']
+      # Note 'int' for 3rd column- text will be hashed
+      dtypes = ['int', 'date', 'int']
+      df = cudf.read_csv(filename, sep=',',
+                         names=names, dtype=dtypes,
+                         skiprows=1)
+      print(df)
+
+    Output:
+
+    .. code-block:: python
+
+          num1                datetime text
+        0  123 2018-11-13T12:00:00.000 5451
+        1  456 2018-11-14T12:35:01.000 5784
+        2  789 2018-11-15T18:02:59.000 6117
+
+    See Also
+    --------
+    .read_csv_strings
+
     """
+
+    if delimiter is not None:
+        warnings.warn(
+            'delimiter= parameter is deprecated.'
+            'Use sep="," instead.',
+            DeprecationWarning
+        )
+        sep = delimiter
 
     if names is None or dtype is None:
         msg = '''Automatic dtype detection not implemented:
@@ -106,7 +144,7 @@ def read_csv(filepath, lineterminator='\n',
     dtype_ptr = ffi.new('char*[]', arr_dtypes)
     csv_reader.dtype = dtype_ptr
 
-    csv_reader.delimiter = delimiter.encode()
+    csv_reader.delimiter = sep.encode()
     csv_reader.lineterminator = lineterminator.encode()
     csv_reader.delim_whitespace = delim_whitespace
     csv_reader.skipinitialspace = skipinitialspace
@@ -143,13 +181,9 @@ def read_csv(filepath, lineterminator='\n',
 
 
 def read_csv_strings(filepath, lineterminator='\n',
-                     delimiter=',', sep=None, delim_whitespace=False,
+                     delimiter=None, sep=',', delim_whitespace=False,
                      skipinitialspace=False, names=None, dtype=None,
                      skipfooter=0, skiprows=0, dayfirst=False):
-
-    import nvstrings
-    from .series import Series
-
     """
     **Experimental**: This function provided only as an alpha way of providing
     a way to use nvstrings alongside cudf.
@@ -162,35 +196,61 @@ def read_csv_strings(filepath, lineterminator='\n',
 
     Examples
     --------
-    foo.txt : ::
-
-        50,abc|40,def|30,ghi|20,jkl|
 
     .. code-block:: python
 
       import cudf
-      fn = 'foo.txt'
-      cols = cudf.io.read_csv_strings(fn, delimiter=',', lineterminator='|',
-                           names=['col1', 'col2'], dtype=['int64', 'str'],
-                           skiprows=1, skipfooter=1)
-      type(cols[0])
-      print(cols[0])
 
-      type(cols[1])
-      print(cols[1])
+      lines = [
+        "num1,datetime,text",
+        "123,2018-11-13T12:00:00,abc",
+        "456,2018-11-14T12:35:01,def",
+        "789,2018-11-15T18:02:59,ghi"
+      ]
+
+      filename = 'foo.csv'
+      with open(filename, 'w') as fp:
+          fp.write('\\n'.join(lines)+'\\n')
+
+      names = ['num1', 'datetime', 'text']
+      dtypes = ['int', 'date', 'str']
+      columns = cudf.io.read_csv_strings(filename, sep=',',
+                              names=names, dtype=dtypes,
+                              skiprows=1)
+
+      columns[0]
+      print(columns[0])
+
+      columns[2]
+      print(columns[2])
 
     Output:
 
     .. code-block:: python
 
-      <class 'cudf.series.Series'>
-      0 40
-      1 30
+      <cudf.Series nrows=3 >
+      0  123
+      1  456
+      2  789
 
-      <class 'nvstrings.nvstrings'>
-      ['def', 'ghi']
+      <nvstrings count=3>
+      ['abc', 'def', 'ghi']
+
+    See Also
+    --------
+    .read_csv
 
     """
+    import nvstrings
+    from .series import Series
+
+    if delimiter is not None:
+        warnings.warn(
+            'delimiter= parameter is deprecated.'
+            'Use sep="," instead.',
+            DeprecationWarning
+        )
+        sep = delimiter
 
     if names is None or dtype is None:
         msg = '''Automatic dtype detection not implemented:
@@ -229,7 +289,7 @@ def read_csv_strings(filepath, lineterminator='\n',
     dtype_ptr = ffi.new('char*[]', arr_dtypes)
     csv_reader.dtype = dtype_ptr
 
-    csv_reader.delimiter = delimiter.encode()
+    csv_reader.delimiter = sep.encode()
     csv_reader.lineterminator = lineterminator.encode()
     csv_reader.delim_whitespace = delim_whitespace
     csv_reader.skipinitialspace = skipinitialspace

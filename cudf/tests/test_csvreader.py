@@ -99,10 +99,10 @@ def test_csv_reader_mixed_data_delimiter(tmpdir):
     df = make_numpy_mixed_dataframe()
     df.to_csv(fname, sep='|', index=False, header=False)
 
-    out = read_csv(str(fname), delimiter='|', names=['1', '2', '3', '4'],
+    out = read_csv(str(fname), sep='|', names=['1', '2', '3', '4'],
                    dtype=['int64', 'date', 'float64', 'category'],
                    dayfirst=True)
-    df_out = pd.read_csv(fname, delimiter='|', names=['1', '2', '3', '4'],
+    df_out = pd.read_csv(fname, sep='|', names=['1', '2', '3', '4'],
                          parse_dates=[1], dayfirst=True)
 
     assert len(out.columns) == len(df_out.columns)
@@ -116,9 +116,9 @@ def test_csv_reader_all_numeric_dtypes(tmpdir):
     df, gdf_dict, pd_dict = make_all_numeric_dtypes_dataframe()
     df.to_csv(fname, sep=',', index=False, header=False)
 
-    out = read_csv(str(fname), delimiter=',', names=list(gdf_dict.keys()),
+    out = read_csv(str(fname), sep=',', names=list(gdf_dict.keys()),
                    dtype=gdf_dict)
-    df_out = pd.read_csv(fname, delimiter=',', names=list(pd_dict.keys()),
+    df_out = pd.read_csv(fname, sep=',', names=list(pd_dict.keys()),
                          dtype=pd_dict, dayfirst=True)
 
     assert len(out.columns) == len(df_out.columns)

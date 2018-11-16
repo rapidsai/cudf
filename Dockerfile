@@ -33,7 +33,7 @@ ARG NUMPY_VERSION=1.14.3
 # Locked to Pandas 0.20.3 by https://github.com/rapidsai/cudf/issues/118
 ARG PANDAS_VERSION=0.20.3
 ARG PYARROW_VERSION=0.10.0
-RUN conda install -n cudf -y -c numba -c conda-forge -c rapidsai -c defaults \
+RUN conda install -n cudf -y -c numba -c conda-forge -c nvidia -c defaults \
       numba=${NUMBA_VERSION} \
       numpy=${NUMPY_VERSION} \
       pandas=${PANDAS_VERSION} \
@@ -41,10 +41,12 @@ RUN conda install -n cudf -y -c numba -c conda-forge -c rapidsai -c defaults \
       nvstrings \
       cmake
 
-# Clone cuDF repo
-ARG CUDF_REPO=https://github.com/rapidsai/cudf
-ARG CUDF_BRANCH=master
-RUN git clone --recurse-submodules -b ${CUDF_BRANCH} ${CUDF_REPO} /cudf
+# Uncomment to clone & build from master instead of local source
+#ARG CUDF_REPO=https://github.com/rapidsai/cudf
+#ARG CUDF_BRANCH=master
+#RUN git clone --recurse-submodules -b ${CUDF_BRANCH} ${CUDF_REPO} /cudf
+# Comment if building from master instead of local source
+ADD libgdf /cudf/libgdf
 
 # LibGDF build/install
 ENV CC=/usr/bin/gcc-${CC}
@@ -58,7 +60,20 @@ RUN source activate cudf && \
     make copy_python && \
     python setup.py install
 
-# cuDF build/install
+RUN source activate cudf && \
+    conda install pytest
+
+ADD docs /cudf/docs
+RUN source activate cudf && \
+    pip install -r /cudf/docs/requirement.txt
+
+# Comment this section if building from master instead of local source
+ADD setup.cfg /cudf/setup.cfg
+ADD setup.py /cudf/setup.py
+ADD versioneer.py /cudf/versioneer.py
+ADD cudf /cudf/cudf
+
+# cuDF python bindings build/install
 RUN source activate cudf && \
     cd /cudf && \
     python setup.py install

@@ -40,6 +40,7 @@ class DataFrame(object):
     .. code-block:: python
 
           from cudf.dataframe import DataFrame
+
           df = DataFrame()
           df['key'] = [0, 1, 2, 3, 4]
           df['val'] = [float(i + 10) for i in range(5)]  # insert column
@@ -63,6 +64,7 @@ class DataFrame(object):
           from cudf.dataframe import DataFrame
           import numpy as np
           import datetime as dt
+
           ids = np.arange(5)
 
           # Create some datetime data
@@ -91,6 +93,7 @@ class DataFrame(object):
 
           import pandas as pd
           from pygdf.dataframe import DataFrame
+
           pdf = pd.DataFrame({'a': [0, 1, 2, 3],'b': [0.1, 0.2, None, 0.3]})
           df = DataFrame.from_pandas(pdf)
           print(df)
@@ -279,7 +282,21 @@ class DataFrame(object):
 
     def head(self, n=5):
         """
-        Returns the first n rows as a new DataFrame
+        Return the first n rows.
+
+        This function returns the first n rows for the object based
+        on position. It is useful for quickly testing if your
+        object has the right type of data in it.
+
+        Parameters
+        ----------
+          n : int, default 5
+            Number of rows to select.
+
+        Returns
+        -------
+        obj_head : type of caller
+          The first n rows of the caller object.
 
         Examples
         --------
@@ -387,33 +404,48 @@ class DataFrame(object):
         Examples
         --------
 
-        >>> df = DataFrame([('a', list(range(20))),
-        ...                 ('b', list(range(20))),
-        ...                 ('c', list(range(20)))])
-        # get rows from index 2 to index 5 from 'a' and 'b' columns.
-        >>> df.loc[2:5, ['a', 'b']]
-             a    b
-        2    2    2
-        3    3    3
-        4    4    4
-        5    5    5
+        .. code-block:: python
+
+          from cudf.dataframe import DataFrame
+
+          df = DataFrame([('a', list(range(20))),
+                          ('b', list(range(20))),
+                          ('c', list(range(20)))])
+
+          # get rows from index 2 to index 5 from 'a' and 'b' columns.
+          print(df.loc[2:5, ['a', 'b']])
+
+        Output:
+
+        .. code-block:: python
+
+               a    b
+          2    2    2
+          3    3    3
+          4    4    4
+          5    5    5
+
         """
         return Loc(self)
 
     @property
     def columns(self):
-        """Returns a tuple of columns
+        """
+        The column labels of the DataFrame.
         """
         return pd.Index(self._cols)
 
     @property
     def index(self):
-        """Returns the index of the DataFrame
+        """
+        The index (row labels) of the DataFrame.
         """
         return self._index
 
     def set_index(self, index):
-        """Return a new DataFrame with a new index
+        """
+        Set the DataFrame index (row labels) using one or more existing
+        columns. Yields a new object.
 
         Parameters
         ----------
@@ -858,8 +890,8 @@ class DataFrame(object):
             from cudf.dataframe import DataFrame
 
             df_a = DataFrame()
-            df['key'] = [0, 1, 2, 3, 4]
-            df['vals_a'] = [float(i + 10) for i in range(5)]
+            df_a['key'] = [0, 1, 2, 3, 4]
+            df_a['vals_a'] = [float(i + 10) for i in range(5)]
 
             df_b = DataFrame()
             df_b['key'] = [1, 2, 4]

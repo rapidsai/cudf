@@ -16,6 +16,11 @@ Series
 .. autoclass:: cudf.Series
     :members:
 
+Categorical
+-----------
+.. autoclass:: cudf.categorical.CategoricalAccessor
+    :members:
+
 Groupby
 -------
 .. currentmodule:: cudf.groupby

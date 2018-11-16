@@ -698,7 +698,8 @@ class Series(object):
     # UDF related
 
     def applymap(self, udf, out_dtype=None):
-        """Apply a elemenwise function to transform the values in the Column.
+        """
+        Apply an elemenwise function to transform the values in the Column.
 
         The user function is expected to take one argument and return the
         result, which will be stored to the output Series.  The function
@@ -717,6 +718,34 @@ class Series(object):
         -------
         result : Series
             The mask and index are preserved.
+
+        Examples
+        --------
+
+        .. code-block:: python
+
+           from cudf.dataframe import DataFrame
+
+           df = DataFrame()
+           df['key'] = [0, 1, 2, 3, 4]
+
+           def add_one(num):
+               return num + 1
+
+           df['key+1'] = df.key.applymap(add_one)
+           print(df)
+
+        Output:
+
+        .. code-block:: python
+
+                 key key+1
+             0    0     1
+             1    1     2
+             2    2     3
+             3    3     4
+             4    4     5
+
         """
         res_col = self._column.applymap(udf, out_dtype=out_dtype)
         return self._copy_construct(data=res_col)
@@ -726,12 +755,28 @@ class Series(object):
     def find_first_value(self, value):
         """
         Returns offset of first value that matches
+
+        Raises ValueError: value not found if `value` is not in this Series.
+
+        Parameters
+        ----------
+        value : numeric
+          The value being searched for
+
         """
         return self._column.find_first_value(value)
 
     def find_last_value(self, value):
         """
         Returns offset of last value that matches
+
+        Raises ValueError: value not found if `value` is not in this Series.
+
+        Parameters
+        ----------
+        value : numeric
+          The value being searched for
+
         """
         return self._column.find_last_value(value)
 
@@ -780,12 +825,41 @@ class Series(object):
         return var
 
     def mean_var(self, ddof=1):
-        """Compute mean and variance at the same time.
+        """
+        Compute mean and variance at the same time.
+
+        Parameters
+        ----------
+        ddof : int, default 1
+          Degrees of freedom
+
         """
         mu, var = self._column.mean_var(ddof=ddof)
         return mu, var
 
     def sum_of_squares(self):
+        """
+        Compute the sum of squares for this series
+
+        Examples
+        --------
+
+        .. code-block:: python
+
+          import cudf
+
+          df = cudf.dataframe.DataFrame()
+          df['val'] = [0, 1, 1, 2, 3, 4, 4]
+
+          df.val.sum_of_squares()
+
+        Output:
+
+        .. code-block:: python
+
+          47.0
+
+        """
         return self._column.sum_of_squares()
 
     def unique_k(self, k):
@@ -793,8 +867,32 @@ class Series(object):
         return self.unique()
 
     def unique(self, method='sort', sort=True):
-        """Returns unique values of this Series.
+        """
+        Returns unique values of this Series.
         default='sort' will be changed to 'hash' when implemented.
+
+        Examples
+        --------
+
+        .. code-block:: python
+
+          import cudf
+
+          df = cudf.dataframe.DataFrame()
+          df['val'] = [0, 1, 1, 2, 3, 4, 4]
+
+          print(df.val.value_counts())
+
+        Output:
+
+        .. code-block:: python
+
+          0    0
+          1    1
+          2    2
+          3    3
+          4    4
+
         """
         if method is not 'sort':
             msg = 'non sort based unique() not implemented yet'
@@ -808,7 +906,8 @@ class Series(object):
         return Series(res)
 
     def unique_count(self, method='sort'):
-        """Returns the number of unique valies of the Series: approximate version,
+        """
+        Returns the number of unique valies of the Series: approximate version,
         and exact version to be moved to libgdf
         """
         if method is not 'sort':
@@ -820,7 +919,31 @@ class Series(object):
         # return len(self._column.unique())
 
     def value_counts(self, method='sort', sort=True):
-        """Returns unique values of this Series.
+        """
+        Returns unique values and their frequencies
+
+        Examples
+        --------
+
+        .. code-block:: python
+
+          import cudf
+
+          df = cudf.dataframe.DataFrame()
+          df['val'] = [0, 1, 1, 2, 3, 4, 4]
+
+          print(df.val.value_counts())
+
+        Output:
+
+        .. code-block:: python
+
+          1    2
+          4    2
+          0    1
+          2    1
+          3    1
+
         """
         if method is not 'sort':
             msg = 'non sort based value_count() not implemented yet'
@@ -834,13 +957,39 @@ class Series(object):
         return res
 
     def scale(self):
-        """Scale values to [0, 1] in float64
+        """
+        Scale values to [0, 1] in float64
+
+        Examples
+        --------
+
+        .. code-block:: python
+
+          import cudf
+
+          df = cudf.dataframe.DataFrame()
+          df['val'] = [float(i + 10) for i in range(5)]
+
+          print(df.val.scale())
+
+        Output:
+
+        .. code-block:: python
+
+          0  0.0
+          1 0.25
+          2  0.5
+          3 0.75
+          4  1.0
+
         """
         if self.null_count != 0:
             msg = 'masked series not supported by this operation'
             raise NotImplementedError(msg)
+
         vmin = self.min()
         vmax = self.max()
+
         gpuarr = self.to_gpu_array()
         scaled = cudautils.compute_scale(gpuarr, vmin, vmax)
         return self._copy_construct(data=scaled)
