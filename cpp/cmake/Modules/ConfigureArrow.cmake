@@ -50,7 +50,7 @@ set(ARROW_VERSION "apache-arrow-0.10.0")
 if (NOT "$ENV{PARQUET_ARROW_VERSION}" STREQUAL "")
     set(ARROW_VERSION "$ENV{PARQUET_ARROW_VERSION}")
 endif()
-message(STATUS "C: ARROW_VERSION=${ARROW_VERSION}")
+message(STATUS "ARROW_VERSION " "${ARROW_VERSION}")
 
 # Copy the arrow-format flatbuffer headers to include/ipc using configure_file (will sync if input file changes)
 if ("${ARROW_VERSION}" STREQUAL "apache-arrow-0.7.1")
