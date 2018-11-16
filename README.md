@@ -22,15 +22,19 @@ conda install -c numba -c conda-forge -c rapidsai -c defaults cudf=0.2.0
 
 Note: This conda installation only applies to Linux and Python versions 3.5/3.6.
 
-You can create and activate a development environment using the conda command:
+You can create and activate a development environment using the conda commands:
 
 ```bash
-conda env create --name cudf --file conda_environments/testing_py35.yml
-source activate cudf
+# create the conda environment (assuming in build directory)
+$ conda env create --name cudf_dev --file conda_environments/dev_py35.yml
+# activate the environment
+$ source activate cudf_dev
+# when not using default arrow version 0.10.0, run
+$ conda install pyarrow=$ARROW_VERSION -c conda-forge
 ```
 
-For cudf development, use `conda—environments/dev_py35.yml` in the above 
-`conda create` command instead.
+This installs the required `cmake`, `nvstrings`, `pyarrow` and other
+dependencies into the `cudf_dev` conda environment and activates it.
 
 ### Pip
 
@@ -42,12 +46,13 @@ The following instructions are tested on Linux Ubuntu 16.04 & 18.04, to enable
 from source builds and development. Other operatings systems may be compatible,
 but are not currently supported.
 
-### Get libgdf Dependencies
+### Get libcudf Dependencies
 
 Compiler requirements:
 
-* `g++` 5.4
-* `cmake` 3.12
+* `gcc`     version 5.4
+* `nvcc`    version 9.2
+* `cmake`   version 3.12
 
 CUDA/GPU requirements:
 
@@ -83,20 +88,41 @@ git clone --recurse-submodules https://github.com/rapidsai/cudf.git
 cd cudf
 ```
 2. Create the conda development environment `cudf` as detailed above
-3. Build and install `libgdf`
+3. Build and install `libcudf`
 ```bash
-source activate cudf
-mkdir -p libgdf/build
-cd libgdf/build
-cmake .. -DHASH_JOIN=ON -DCMAKE_INSTALL_PREFIX=$CONDA_PREFIX
-make -j install
-make copy_python
-python setup.py install
+$ cd /path/to/cudf/cpp                              # navigate to C/C++ CUDA source root directory
+$ mkdir build                                       # make a build directory
+$ cd build                                          # enter the build directory
+$ cmake .. -DCMAKE_INSTALL_PREFIX=/install/path     # configure cmake ... use $CONDA_PREFIX if you're using Anaconda
+$ make -j                                           # compile the libraries librmm.so, libcudf.so ... '-j' will start a parallel job using the number of physical cores available on your system
+$ make install                                      # install the libraries librmm.so, libcudf.so to '/install/path'
 ```
-4. Build and install `cudf` from the root of the repository
+To run tests, call:
+
 ```bash
-cd ../..
-python setup.py install
+$ make test
+```
+
+Build and install cffi bindings:
+```bash
+$ make python_cffi                                    # build CFFI bindings for librmm.so, libcudf.so
+$ make install_python                                 # install python bindings into site-packages
+```
+
+4. Build the `cudf` python package, in the `python` folder:
+```bash
+$ cd ../../python
+$ python setup.py build_ext --inplace
+```
+
+Python tests can be run by:
+```bash
+$ py.test
+```
+Finally, install the python package to your python path:
+
+```bash
+$python setup.py install
 ```
 
 ## Automated Build in Docker Container
