@@ -143,13 +143,13 @@ add_library(cudf SHARED
             src/hash/hash_ops.cu
             src/quantiles/quantiles.cu
             src/reductions/reductions.cu
+            src/reductions/scan.cu
             src/unary/unary_ops.cu
             # src/windowed/windowed_ops.cu ... this is broken
             src/io/convert/csr/cudf_to_csr.cu
             src/io/csv/csv_reader.cu
             src/utilities/cuda_utils.cu
             src/utilities/error_utils.cpp
-            src/utilities/scan.cu
             src/utilities/nvtx/nvtx_utils.cpp)
 
 add_library(rmm SHARED
