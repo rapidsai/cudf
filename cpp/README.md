@@ -2,9 +2,10 @@
 
 libcudf is a C/C++ CUDA library for implementing standard dataframe operations.
 
-## Development Setup
+## Tested Development Platform
 
-Currently, only Ubuntu 16.04 is supported for building `libcudf` from source.
+Currently, building `libcudf` from source is only tested on Ubuntu 16.04 Linux
+(64-bit).
 
 Target build system:
 
@@ -12,25 +13,10 @@ Target build system:
 * `nvcc`    version 9.2
 * `cmake`   version 3.12
 
-`libcudf` has been tested with `nvcc` version 9.2, 10.0. More detailed information on the supported version follows:
+`libcudf` has been tested with `nvcc` versions 9.2 and 10.0.
 
-```bash
-$ gcc --version
-gcc (Ubuntu 5.4.0-6ubuntu1~16.04.10) 5.4.0 20160609
-Copyright (C) 2015 Free Software Foundation, Inc.
-This is free software; see the source for copying conditions.  There is NO
-warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
-```
-
-```bash
-$ nvcc --version
-nvcc: NVIDIA (R) Cuda compiler driver
-Copyright (c) 2005-2018 NVIDIA Corporation
-Built on Tue_Jun_12_23:07:04_CDT_2018
-Cuda compilation tools, release 9.2, V9.2.148
-```
-
-You can obtain CUDA from [https://developer.nvidia.com/cuda-downloads](https://developer.nvidia.com/cuda-downloads)
+You can obtain CUDA from 
+[https://developer.nvidia.com/cuda-downloads](https://developer.nvidia.com/cuda-downloads)
 
 ### Dependencies
 
@@ -39,6 +25,7 @@ You can obtain CUDA from [https://developer.nvidia.com/cuda-downloads](https://d
 * Apache Arrow          `0.10.0`
 * Google Test           `1.8.0`
 * Boost C++ Library     `1.58`
+* CMake                 `3.12`
 
 #### Optional Python Dependencies
 
@@ -47,6 +34,36 @@ Python version `3.6` is recommended.
 * Cython                `0.29`
 * PyArrow               `0.10.0`
 * PyTest                `4.0.0`
+
+## Conda Environment Configuration
+
+We recommend setting up a conda environment for the dependencies using the 
+provided configuration file.
+
+```bash
+# create the conda environment (assuming in build directory)
+$ conda env create --name cudf_dev --file conda_environments/dev_py35.yml
+# activate the environment
+$ source activate cudf_dev
+# when not using default arrow version 0.10.0, run
+$ conda install pyarrow=$ARROW_VERSION -c conda-forge
+```
+
+This installs the required `cmake`, `nvstrings`, `pyarrow` and other 
+dependencies into the `cudf_dev` conda environment and activates it.
+
+More information: the python cffi wrapper code requires `cffi` and `pytest`.
+The testing code requires `numba` and `pandas`. IPC testing requires 
+`distributed`. All of these are installed from the previous commands.
+
+The environment can be updated from `conda_environments/dev_py35.yml` as
+development includes/changes the depedencies. To do so, run:
+
+```bash
+conda env update --name cudf_dev --file conda_environments/dev_py35.yml
+```
+Note that `dev_py35.yml` uses pyarrow 0.10.0. Reinstall pyarrow if 
+needed using `conda install pyarrow=$ARROW_VERSION -c conda-forge`.
 
 ### Configure and Build
 
@@ -77,28 +94,9 @@ Test project /home/nfs/majones/workspace/github/rapids/cudf/cpp/build
  1/14 Test  #1: COLUMN_TEST ......................   Passed    1.20 sec
       Start  2: CUDF_INTERNAL_TEST
  2/14 Test  #2: CUDF_INTERNAL_TEST ...............   Passed    0.01 sec
-      Start  3: FILTER_TEST
- 3/14 Test  #3: FILTER_TEST ......................   Passed   11.85 sec
-      Start  4: GROUPBY_TEST
- 4/14 Test  #4: GROUPBY_TEST .....................   Passed    2.74 sec
-      Start  5: JOIN_TEST
- 5/14 Test  #5: JOIN_TEST ........................   Passed   39.39 sec
-      Start  6: SQLS_TEST
- 6/14 Test  #6: SQLS_TEST ........................   Passed    1.20 sec
-      Start  7: BITMASK_TEST
- 7/14 Test  #7: BITMASK_TEST .....................   Passed    2.23 sec
-      Start  8: DATETIME_TEST
- 8/14 Test  #8: DATETIME_TEST ....................   Passed    1.17 sec
-      Start  9: HASHING_TEST
- 9/14 Test  #9: HASHING_TEST .....................   Passed    5.31 sec
-      Start 10: HASH_MAP_TEST
-10/14 Test #10: HASH_MAP_TEST ....................   Passed    6.03 sec
-      Start 11: QUANTILES_TEST
-11/14 Test #11: QUANTILES_TEST ...................   Passed    1.19 sec
-      Start 12: UNARY_TEST
-12/14 Test #12: UNARY_TEST .......................   Passed    1.28 sec
-      Start 13: CSV_TEST
-13/14 Test #13: CSV_TEST .........................   Passed    0.01 sec
+ 
+     ...
+
       Start 14: RMM_TEST
 14/14 Test #14: RMM_TEST .........................   Passed    1.15 sec
 
@@ -119,6 +117,3 @@ make install_python                                 # install python bindings in
 $ cd src/build/python
 $ py.test -v
 ```
-
-
-
