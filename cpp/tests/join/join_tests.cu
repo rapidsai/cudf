@@ -30,7 +30,7 @@
 #include <join/joining.h>
 #include <utilities/bit_util.cuh>
 
-#include "tests/rmm/cudf_test_fixtures.h"
+#include "tests/utilities/cudf_test_fixtures.h"
 
 // See this header for all of the recursive handling of tuples of vectors
 #include "tests/utilities/tuple_vectors.h"

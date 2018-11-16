@@ -36,7 +36,7 @@
 #include <utilities/error_utils.h>
 #include <quantiles/quantiles.h>
 
-#include "tests/rmm/cudf_test_fixtures.h"
+#include "tests/utilities/cudf_test_fixtures.h"
 
 // Vector set to use rmmAlloc and rmmFree.
 template <typename T>

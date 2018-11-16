@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 #include "gtest/gtest.h"
-#include "tests/rmm/cudf_test_fixtures.h"
+#include "tests/utilities/cudf_test_fixtures.h"
 #include <rmm/rmm.h>
 
 // Helper macros to simplify testing for success or failure

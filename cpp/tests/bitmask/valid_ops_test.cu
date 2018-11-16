@@ -23,7 +23,7 @@
 #include "cuda_profiler_api.h"
 
 #include "tests/utilities/cudf_test_utils.cuh"
-#include "tests/rmm/cudf_test_fixtures.h"
+#include "tests/utilities/cudf_test_fixtures.h"
 
 #include <chrono>
 

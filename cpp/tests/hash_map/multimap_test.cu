@@ -27,7 +27,7 @@
 #include <cudf/functions.h>
 #include <hash/concurrent_unordered_multimap.cuh>
 
-#include "tests/rmm/cudf_test_fixtures.h"
+#include "tests/utilities/cudf_test_fixtures.h"
 
 // This is necessary to do a parametrized typed-test over multiple template arguments
 template <typename Key, typename Value>

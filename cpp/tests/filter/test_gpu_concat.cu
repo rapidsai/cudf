@@ -28,7 +28,7 @@
 #include <cuda_runtime.h>
 #include "helper/utils.cuh"
 
-#include "tests/rmm/cudf_test_fixtures.h"
+#include "tests/utilities/cudf_test_fixtures.h"
 
 using ValueType = int16_t;
 

@@ -30,7 +30,7 @@
 
 #include "utilities/cudf_utils.h"
 
-#include <tests/rmm/cudf_test_fixtures.h>
+#include <tests/utilities/cudf_test_fixtures.h>
 
 // See this header for all of the recursive handling of tuples of vectors
 #include "test_parameters.cuh"

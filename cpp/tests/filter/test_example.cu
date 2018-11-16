@@ -28,7 +28,7 @@
 #include <cudf.h>
 #include <cudf/functions.h>
 
-#include "tests/rmm/cudf_test_fixtures.h"
+#include "tests/utilities/cudf_test_fixtures.h"
 struct Example : public GdfTest {};
 
 /*

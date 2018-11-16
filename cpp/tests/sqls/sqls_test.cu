@@ -50,7 +50,7 @@
 #include <sqls/sqls_rtti_comp.h>
 
 #include "gtest/gtest.h"
-#include "tests/rmm/cudf_test_fixtures.h"
+#include "tests/utilities/cudf_test_fixtures.h"
 
 template<typename T>
 using Vector = thrust::device_vector<T, rmm_allocator<T>>;

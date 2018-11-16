@@ -29,7 +29,7 @@
 #include <thrust/iterator/counting_iterator.h>
 
 #include "gtest/gtest.h"
-#include "tests/rmm/cudf_test_fixtures.h"
+#include "tests/utilities/cudf_test_fixtures.h"
 
 #include <cudf.h>
 #include <cudf/functions.h>

@@ -26,7 +26,7 @@
 #include <cuda_runtime.h>
 #include <tuple>
 #include "helper/utils.cuh"
-#include "tests/rmm/cudf_test_fixtures.h"
+#include "tests/utilities/cudf_test_fixtures.h"
 
 /*
  ============================================================================

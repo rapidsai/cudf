@@ -35,7 +35,7 @@
 #include <rmm/thrust_rmm_allocator.h>
 
 #include "tests/utilities/cudf_test_utils.cuh"
-#include "tests/rmm/cudf_test_fixtures.h"
+#include "tests/utilities/cudf_test_fixtures.h"
 
 // Vector set to use rmmAlloc and rmmFree.
 template <typename T>

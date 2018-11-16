@@ -30,7 +30,7 @@
 #include <hash/concurrent_unordered_map.cuh>
 #include <groupby/aggregation_operations.cuh>
 
-#include "tests/rmm/cudf_test_fixtures.h"
+#include "tests/utilities/cudf_test_fixtures.h"
 
 // Vector set to use rmmAlloc and rmmFree.
 template <typename T>
