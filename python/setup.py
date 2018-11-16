@@ -1,6 +1,6 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
 
-from setuptools import setup
+from setuptools import setup, find_packages
 from setuptools.extension import Extension
 from Cython.Build import cythonize
 import numpy
@@ -8,11 +8,6 @@ import numpy
 import versioneer
 from distutils.sysconfig import get_python_lib
 
-
-packages = ['cudf',
-            'cudf.bindings',
-            'cudf.tests'
-            ]
 
 install_requires = [
     'numba',
@@ -51,7 +46,7 @@ setup(name='cudf',
       author="NVIDIA Corporation",
       setup_requires=['cython'],
       ext_modules=cythonize(extensions),
-      packages=packages,
+      packages=find_packages(include=['cudf', 'cudf.*']),
       package_data={
         'cudf.tests': ['data/*.pickle'],
       },
