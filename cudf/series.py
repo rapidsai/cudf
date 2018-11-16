@@ -81,8 +81,8 @@ class Series(object):
         self.name = name
 
     @classmethod
-    def from_pandas(cls, s):
-        return cls(s)
+    def from_pandas(cls, s, nan_as_null=False):
+        return cls(s, nan_as_null=nan_as_null)
 
     @classmethod
     def from_arrow(cls, s):
