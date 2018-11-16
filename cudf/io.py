@@ -9,7 +9,6 @@ from .datetime import DatetimeColumn
 from ._gdf import nvtx_range_push, nvtx_range_pop
 
 import numpy as np
-import warnings
 
 
 def _wrap_string(text):
@@ -34,8 +33,10 @@ def read_csv(filepath, lineterminator='\n', sep=',',
     ----------
     filepath : str
         Path of file to be read.
-    sep : char, default ','
+    sep : str, default ','
         Delimiter to be used.
+    delimiter : str, default None
+        Alternative argument name for sep.
     delim_whitespace : bool, default False
         Determines whether to use whitespace as delimiter.
     lineterminator : char, default '\\n'
@@ -97,13 +98,8 @@ def read_csv(filepath, lineterminator='\n', sep=',',
 
     """
 
-    if delimiter is not None:
-        warnings.warn(
-            'delimiter= parameter is deprecated.'
-            'Use sep="," instead.',
-            DeprecationWarning
-        )
-        sep = delimiter
+    if delimiter is None:
+        delimiter = sep
 
     if names is None or dtype is None:
         msg = '''Automatic dtype detection not implemented:
@@ -144,7 +140,7 @@ def read_csv(filepath, lineterminator='\n', sep=',',
     dtype_ptr = ffi.new('char*[]', arr_dtypes)
     csv_reader.dtype = dtype_ptr
 
-    csv_reader.delimiter = sep.encode()
+    csv_reader.delimiter = delimiter.encode()
     csv_reader.lineterminator = lineterminator.encode()
     csv_reader.delim_whitespace = delim_whitespace
     csv_reader.skipinitialspace = skipinitialspace
@@ -244,13 +240,8 @@ def read_csv_strings(filepath, lineterminator='\n',
     import nvstrings
     from .series import Series
 
-    if delimiter is not None:
-        warnings.warn(
-            'delimiter= parameter is deprecated.'
-            'Use sep="," instead.',
-            DeprecationWarning
-        )
-        sep = delimiter
+    if delimiter is None:
+        delimiter = sep
 
     if names is None or dtype is None:
         msg = '''Automatic dtype detection not implemented:
@@ -289,7 +280,7 @@ def read_csv_strings(filepath, lineterminator='\n',
     dtype_ptr = ffi.new('char*[]', arr_dtypes)
     csv_reader.dtype = dtype_ptr
 
-    csv_reader.delimiter = sep.encode()
+    csv_reader.delimiter = delimiter.encode()
     csv_reader.lineterminator = lineterminator.encode()
     csv_reader.delim_whitespace = delim_whitespace
     csv_reader.skipinitialspace = skipinitialspace
