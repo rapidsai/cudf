@@ -25,7 +25,7 @@ Note: This conda installation only applies to Linux and Python versions 3.5/3.6.
 You can create and activate a development environment using the conda commands:
 
 ```bash
-# create the conda environment (assuming in build directory)
+# create the conda environment (assuming in base `cudf` directory)
 $ conda env create --name cudf_dev --file conda_environments/dev_py35.yml
 # activate the environment
 $ source activate cudf_dev
@@ -97,7 +97,7 @@ $ cmake .. -DCMAKE_INSTALL_PREFIX=/install/path     # configure cmake ... use $C
 $ make -j                                           # compile the libraries librmm.so, libcudf.so ... '-j' will start a parallel job using the number of physical cores available on your system
 $ make install                                      # install the libraries librmm.so, libcudf.so to '/install/path'
 ```
-To run tests, call:
+To run tests (Optional):
 
 ```bash
 $ make test
@@ -115,11 +115,11 @@ $ cd ../../python
 $ python setup.py build_ext --inplace
 ```
 
-Python tests can be run by:
+To run Python tests (Optional):
 ```bash
 $ py.test
 ```
-Finally, install the python package to your python path:
+Finally, install the Python package to your Python path:
 
 ```bash
 $ python setup.py install
