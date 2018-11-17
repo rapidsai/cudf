@@ -1,37 +1,34 @@
 API Reference
 =============
 
-.. currentmodule:: pygdf.dataframe
-
+.. currentmodule:: cudf.dataframe
 
 DataFrame
 ---------
-
 .. autoclass:: DataFrame
     :members:
 
+.. automodule:: cudf.multi
+    :members:
 
 Series
 ------
-
-.. autoclass:: Series
+.. autoclass:: cudf.Series
     :members:
-
-
-
-.. currentmodule:: pygdf.groupby
 
 Groupby
 -------
-
+.. currentmodule:: cudf.groupby
 .. autoclass:: Groupby
     :members:
 
-
-.. currentmodule:: pygdf.gpuarrow
+IO
+--------------
+.. automodule:: cudf.io
+    :members:
 
 GpuArrowReader
 --------------
-
+.. currentmodule:: cudf.gpuarrow
 .. autoclass:: GpuArrowReader
     :members:
