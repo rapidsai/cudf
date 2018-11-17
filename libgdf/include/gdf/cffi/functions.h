@@ -793,52 +793,39 @@ gdf_error gdf_filter(size_t nrows,     //in: # rows
 		     size_t* d_indx,   //out: device-side array of row indices that remain after filtering
 		     size_t* new_sz);  //out: host-side # rows that remain after filtering
 
-gdf_error gdf_group_by_sum(int ncols,                    // # columns
-                           gdf_column** cols,            //input cols with 0 null_count otherwise GDF_VALIDITY_UNSUPPORTED is returned
-                           gdf_column* col_agg,          //column to aggregate on with 0 null_count otherwise GDF_VALIDITY_UNSUPPORTED is returned
-                           gdf_column* out_col_indices,  //if not null return indices of re-ordered rows
-                           gdf_column** out_col_values,  //if not null return the grouped-by columns
-                                                         //(multi-gather based on indices, which are needed anyway)
-                           gdf_column* out_col_agg,      //aggregation result
-                           gdf_context* ctxt);           //struct with additional info: bool is_sorted, flag_sort_or_hash, bool flag_count_distinct
 
-gdf_error gdf_group_by_min(int ncols,                    // # columns
-                           gdf_column** cols,            //input cols with 0 null_count otherwise GDF_VALIDITY_UNSUPPORTED is returned
-                           gdf_column* col_agg,          //column to aggregate on with 0 null_count otherwise GDF_VALIDITY_UNSUPPORTED is returned
-                           gdf_column* out_col_indices,  //if not null return indices of re-ordered rows
-                           gdf_column** out_col_values,  //if not null return the grouped-by columns
-                                                         //(multi-gather based on indices, which are needed anyway)
-                           gdf_column* out_col_agg,      //aggregation result
-                           gdf_context* ctxt);            //struct with additional info: bool is_sorted, flag_sort_or_hash, bool flag_count_distinct
+/* --------------------------------------------------------------------------*/
+/** 
+ * @brief  Groupby operation for an arbitrary number of groupby columns and an
+ * arbitrary number of aggregation columns.
+ * 
+ * @Param[in] in_groupby_columns[] The input columns to groupby
+ * @Param[in] num_groupby_columns The number of input columns to groupby
+ * @Param[in] in_aggregation_columns[] The columns that will be aggregated
+ * @Param[in] num_aggregation_columns The number of columns that will be aggregated
+ * @Param[in] agg_ops[] The aggregation operations to perform. The number of aggregation
+ * operations must be equal to the number of aggregation columns, such that agg_op[i]
+ * will be applied to in_aggregation_columns[i]
+ * @Param[in,out] out_groupby_columns[] Preallocated buffers for the output groupby
+ * columns
+ * @Param[in,out] out_aggregation_columns[] Preallocated buffers for the output 
+ * aggregation columns
+ * @Param[in] context Structure that controls behavior of groupby operation, i.e.,
+ * sort vs. hash-based implementation, whether or not the output will be sorted,
+ * etc. See definition of gdf_context.
+ * 
+ * @Returns GDF_SUCCESS upon succesful completion. Otherwise appropriate error code
+ */
+/* ----------------------------------------------------------------------------*/
+gdf_error gdf_group_by(gdf_column* in_groupby_columns[],
+                       int num_groupby_columns,
+                       gdf_column* in_aggregation_columns[],
+                       int num_aggregation_columns,
+                       gdf_agg_op agg_ops[],
+                       gdf_column* out_groupby_columns[],
+                       gdf_column* out_aggregation_columns[],
+                       gdf_context* context);
 
-
-gdf_error gdf_group_by_max(int ncols,                    // # columns
-                           gdf_column** cols,            //input cols with 0 null_count otherwise GDF_VALIDITY_UNSUPPORTED is returned
-                           gdf_column* col_agg,          //column to aggregate on with 0 null_count otherwise GDF_VALIDITY_UNSUPPORTED is returned
-                           gdf_column* out_col_indices,  //if not null return indices of re-ordered rows
-                           gdf_column** out_col_values,  //if not null return the grouped-by columns
-                                                         //(multi-gather based on indices, which are needed anyway)
-                           gdf_column* out_col_agg,      //aggregation result
-                           gdf_context* ctxt);            //struct with additional info: bool is_sorted, flag_sort_or_hash, bool flag_count_distinct
-
-
-gdf_error gdf_group_by_avg(int ncols,                    // # columns
-                           gdf_column** cols,            //input cols with 0 null_count otherwise GDF_VALIDITY_UNSUPPORTED is returned
-                           gdf_column* col_agg,          //column to aggregate on with 0 null_count otherwise GDF_VALIDITY_UNSUPPORTED is returned
-                           gdf_column* out_col_indices,  //if not null return indices of re-ordered rows
-                           gdf_column** out_col_values,  //if not null return the grouped-by columns
-                                                         //(multi-gather based on indices, which are needed anyway)
-                           gdf_column* out_col_agg,      //aggregation result
-                           gdf_context* ctxt);            //struct with additional info: bool is_sorted, flag_sort_or_hash, bool flag_count_distinct
-
-gdf_error gdf_group_by_count(int ncols,                    // # columns
-                             gdf_column** cols,            //input cols with 0 null_count otherwise GDF_VALIDITY_UNSUPPORTED is returned
-                             gdf_column* col_agg,          //column to aggregate on with 0 null_count otherwise GDF_VALIDITY_UNSUPPORTED is returned
-                             gdf_column* out_col_indices,  //if not null return indices of re-ordered rows
-                             gdf_column** out_col_values,  //if not null return the grouped-by columns
-                                                         //(multi-gather based on indices, which are needed anyway)
-                             gdf_column* out_col_agg,      //aggregation result
-                             gdf_context* ctxt);            //struct with additional info: bool is_sorted, flag_sort_or_hash, bool flag_count_distinct
 
 gdf_error gdf_quantile_exact(	gdf_column*         col_in,       //input column with 0 null_count otherwise GDF_VALIDITY_UNSUPPORTED is returned
                                 gdf_quantile_method prec,         //precision: type of quantile method calculation
