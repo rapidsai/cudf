@@ -29,6 +29,7 @@ requirements:
   build:
     - cmake 3.12
     - nvstrings
+    - arrow-cpp 0.10.*
   run:
     - pyarrow 0.10.*
     - nvstrings
