@@ -56,6 +56,9 @@ set(ARROW_CMAKE_ARGS
     -DARROW_JEMALLOC=OFF
     -DARROW_BOOST_VENDORED=OFF
     -DARROW_PYTHON=OFF
+
+    # Release build
+    -DCMAKE_BUILD_TYPE=Release
 )
 
 if (${ARROW_VERSION} STREQUAL "apache-arrow-0.9.0")
