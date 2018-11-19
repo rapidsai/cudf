@@ -113,8 +113,18 @@ Operations
 Stats
 ~~~~~~~~~~~~~~~~~~~~~
 
-Apply
+Applymap
 ~~~~~~~~~~~~~~~~~~~~~
+
+Applying functions to a `Series`:
+
+.. ipython:: python
+
+    def add_ten(num):
+        return num + 10
+
+    print(df['a'].applymap(add_ten))
+
 
 Histogramming
 ~~~~~~~~~~~~~~~~~~~~~
@@ -166,9 +176,6 @@ Categoricals
 
 Plotting
 ------------
-Coming in a future release.
-
-
 
 
 Getting Data In/Out
