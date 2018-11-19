@@ -20,12 +20,12 @@ Modeled after 10 Minutes to Pandas, this is a short introduction to cuDF, geared
 Object Creation
 ---------------
 
-Creating a `Series`
+Creating a `Series`.
 
 .. ipython:: python
 
-  s = cudf.Series([1,2,3,None,4])
-  print(s)
+    s = cudf.Series([1,2,3,None,4])
+    print(s)
 
 Creating a `Dataframe` from a list of tuples.
 
@@ -48,13 +48,13 @@ Creating a `Dataframe` from a pandas Dataframe.
 Viewing Data
 -------------
 
-Examples of how to view the top rows of the GPU dataframe:
+Viewing the top rows of the GPU dataframe.
 
 .. ipython:: python
 
     print(df.head(2))
 
-Sorting by values:
+Sorting by values.
 
 .. ipython:: python
 
@@ -67,7 +67,7 @@ Selection
 Getting
 ~~~~~~~~~~~~~~
 
-Selecting a single column, which yields a `cudf.Series`, equivalent to `df.a`:
+Selecting a single column, which yields a `cudf.Series`, equivalent to `df.a`.
 
 .. ipython:: python
 
@@ -78,7 +78,7 @@ Selecting a single column, which yields a `cudf.Series`, equivalent to `df.a`:
 Selection by Label
 ~~~~~~~~~~~~~~~~~~~~~
 
-Select rows from index 2 to index 5 from columns 'a' and 'b'.
+Selecting rows from index 2 to index 5 from columns 'a' and 'b'.
 
 .. ipython:: python
 
@@ -87,10 +87,26 @@ Select rows from index 2 to index 5 from columns 'a' and 'b'.
 
 
 Selection by Position
-~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~
 
 Boolean Indexing
 ~~~~~~~~~~~~~~~~~~~~~
+
+Selecting rows in a `Series` by direct boolean indexing, if there are no missing values.
+
+.. ipython:: python
+
+    print(df.b[df.b > 15])
+
+
+Selecting values from a DataFrame where a boolean condition is met, via the `query` API.
+
+.. ipython:: python
+
+    print(df.query("b == 3"))
+
+Supported logical operators include `>`, `<`, `>=`, `<=`, `==`, and `!=`.
+
 
 Setting
 ~~~~~~~~~~~~~~~~~~~~~
@@ -99,17 +115,30 @@ Setting
 Missing Data
 ------------
 
+Missing data can be replaced by using the `fillna` method.
+
+.. ipython:: python
+
+    print(s.fillna(999))
+
 
 Operations
 ------------
 
 Stats
-~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~
+
+Calculating descriptive statistics (operations in general exclude missing data).
+
+.. ipython:: python
+
+    print(s.mean(), s.var(), s.sum_of_squares())
+
 
 Applymap
-~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~
 
-Applying functions to a `Series`:
+Applying functions to a `Series`.
 
 .. ipython:: python
 
@@ -133,11 +162,19 @@ Merge
 Concat
 ~~~~~~~~~~~~~~~~~~~~~
 
+You can concatenate `Series` and `DataFrames` row-wise.
+
+.. ipython:: python
+
+    print(cudf.concat([s, s]))
+
+    print(cudf.concat([df.head(), df.head()], ignore_index=True))
+
 
 Join
 ~~~~~~~~~~~~~~~~~~~~~
 
-SQL style merges, similar to pandas.
+You can also do SQL style merges.
 
 .. ipython:: python
 
@@ -155,6 +192,12 @@ SQL style merges, similar to pandas.
 
 Append
 ~~~~~~~~~~~~~~~~~~~~~
+
+You can append values from another `Series` or array-like object. Appending `Series` with nulls is not yet supported, but can be done using the `concat` method.
+
+.. ipython:: python
+
+    print(df.a.head().append(df.b.head()))
 
 
 Grouping
@@ -187,12 +230,11 @@ Plotting
 
 
 Getting Data In/Out
-------------
+------------------------
 
 
 CSV
 ~~~~
-
 
 We can write to a CSV file by first sending data to a pandas Dataframe on the host.
 
@@ -201,8 +243,7 @@ We can write to a CSV file by first sending data to a pandas Dataframe on the ho
     df.to_pandas().to_csv('foo.txt', index=False)
 
 
-Reading from a csv file. `read_csv` requires explicit types, and can accept different delimiters and line terminators.
-
+Reading from a csv file. 
 
 .. ipython:: python
 
@@ -210,6 +251,7 @@ Reading from a csv file. `read_csv` requires explicit types, and can accept diff
             names=['a', 'b', 'c'], dtype=['int64', 'int64', 'int64'],
             skiprows=1)
     print(df)
+
 
 HDF5
 ~~~~~~~~~
@@ -222,3 +264,4 @@ Excel
 
 Gotchas
 --------
+
