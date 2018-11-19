@@ -71,6 +71,18 @@ set_package_properties(
 
 if(CUDA_FOUND)
     message(STATUS "CUDA ${CUDA_VERSION} found in ${CUDA_TOOLKIT_ROOT_DIR}")
+
+    set(CUDA_NVCC_FLAGS ${CUDA_NVCC_FLAGS};-std=c++11;--expt-extended-lambda;--expt-relaxed-constexpr;)
+    # Suppress SHFL warnings caused by modern GPU.
+    # TODO: remove this when modern GPU is removed or fixed to use shfl_sync
+    set(CUDA_NVCC_FLAGS ${CUDA_NVCC_FLAGS};
+        -Werror cross-execution-space-call;
+        -Wno-deprecated-declarations;
+        -Xptxas --disable-warnings)
+    # set warnings as errors
+    set(CUDA_NVCC_FLAGS ${CUDA_NVCC_FLAGS};-Werror cross-execution-space-call;-Xcompiler -Wall,-Werror)
+
+    message(STATUS "CUDA_NVCC_FLAGS: ${CUDA_NVCC_FLAGS}")
 else()
     message(FATAL_ERROR "CUDA not found, please check your settings.")
 endif()
