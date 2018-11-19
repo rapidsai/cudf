@@ -34,7 +34,7 @@ def read_csv(filepath, lineterminator='\n',
     delim_whitespace : bool, default False
         Determines whether to use whitespace as delimiter.
     sep : char, default None
-        Alternative argument name for delimiter. 
+        Alternative argument name for delimiter.
     lineterminator : char, default '\\n'
         Character to indicate end of line.
     skipinitialspace : bool, default False
