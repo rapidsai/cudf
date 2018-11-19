@@ -12,10 +12,9 @@ Modeled after 10 Minutes to Pandas, this is a short introduction to cuDF, geared
    import cudf
    np.random.seed(12)
 
-   #### portions of this were borrowed from the
-   #### cuDF cheatsheet and existing docs
-   #### created November, 2018
-   #### Nick Becker (NVIDIA), 
+   #### Portions of this were borrowed from the
+   #### cuDF cheatsheet and existing documentation.
+   #### Created November, 2018.
 
 
 Object Creation
