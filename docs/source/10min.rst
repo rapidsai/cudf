@@ -7,8 +7,9 @@ Modeled after 10 Minutes to Pandas, this is a short introduction to cuDF, geared
    :suppress:
 
    import os
-   import cudf
    import numpy as np
+   import pandas as pd
+   import cudf
    np.random.seed(12)
 
    #### portions of this were borrowed from the
@@ -28,19 +29,45 @@ This is a basic example
 Object Creation
 ---------------
 
+Series
+
 .. ipython:: python
 
-    gdf = cudf.DataFrame({
-    'a':[1,2,3],
-    'b':[4,5,6],
-    'c':[7,8,9]
-    })
+  s = cudf.Series([1,2,3,None,4])
+  print(s)
+
+Dataframe from dictionary
+
+.. ipython:: python
+
+    df = cudf.DataFrame([('a', list(range(20))),
+    ('b', list(reversed(range(20)))),
+    ('c', list(range(20)))])
+    print(df)
+
+Dataframe from pandas 
+
+.. ipython:: python
+
+    pdf = pd.DataFrame({'a': [0, 1, 2, 3],'b': [0.1, 0.2, None, 0.3]})
+    gdf = cudf.DataFrame.from_pandas(pdf)
     print(gdf)
 
-test
 
 Viewing Data
 -------------
+
+Examples of how to view the top rows of the GPU dataframe:
+
+.. ipython:: python
+
+    print(df.head(2))
+
+Sorting by values:
+
+.. ipython:: python
+
+    print(df.sort_values(by='a', ascending=False))
 
 
 Selection
@@ -49,8 +76,21 @@ Selection
 Getting
 ~~~~~~~~~~~~~~
 
+Selecting a single column, which yields a `cudf.Series`, equivalent to `df.a`:
+
+.. ipython:: python
+
+    print(df['a'])
+
+
+
 Selection by Label
 ~~~~~~~~~~~~~~~~~~~~~
+.. ipython:: python
+
+    # get rows from index 2 to index 5 from 'a' and 'b' columns.
+    print(df.loc[2:5, ['a', 'b']])
+
 
 
 Selection by Position
