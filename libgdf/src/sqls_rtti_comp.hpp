@@ -38,10 +38,12 @@ struct LesserRTTI
 	     int* const types,
 	     size_t sz):
     columns_(cols),
+	valids_(nullptr),
     rtti_(types),
     sz_(sz),
     vals_(nullptr),
-    asc_desc_bitmask_(nullptr)
+    asc_desc_bitmask_(nullptr),
+	nulls_are_smallest_(false)
   {
   }
 
@@ -50,10 +52,12 @@ struct LesserRTTI
 	     size_t sz,
 	     const void* const * vals):
     columns_(cols),
+	valids_(nullptr),
     rtti_(types),
     sz_(sz),
     vals_(vals),
-    asc_desc_bitmask_(nullptr)
+    asc_desc_bitmask_(nullptr),
+	nulls_are_smallest_(false)
   {
   }
 
@@ -64,12 +68,31 @@ struct LesserRTTI
 	     size_t sz,
 	     gdf_valid_type* const asc_desc_bitmask):
     columns_(cols),
+	valids_(nullptr),
     rtti_(types),
     sz_(sz),
     vals_(nullptr),
-    asc_desc_bitmask_(asc_desc_bitmask)
+    asc_desc_bitmask_(asc_desc_bitmask),
+	nulls_are_smallest_(false)
   {
   }
+
+  __host__ __device__
+    LesserRTTI(void* const* cols,
+		 gdf_valid_type* const* valids,
+  	     int* const types,
+  	     size_t sz,
+  	     gdf_valid_type* const asc_desc_bitmask,
+		 bool nulls_are_smallest):
+      columns_(cols),
+	  valids_(valids),
+      rtti_(types),
+      sz_(sz),
+      vals_(nullptr),
+      asc_desc_bitmask_(asc_desc_bitmask),
+	  nulls_are_smallest_(nulls_are_smallest)
+    {
+    }
 
 /**
  * Should be used when you want to sort multiple columns using asc / desc flags for each column
@@ -98,6 +121,43 @@ struct LesserRTTI
        }else{
            OpGreater greater(row1, row2);
            state =type_dispatcher(greater, col_type, col_index);
+       }
+
+       switch( state )
+       {
+       case State::False:
+         return false;
+       case State::True:
+         return true;
+       case State::Undecided:
+         break;
+       }
+     }
+     return false;
+   }
+
+  __host__ __device__
+   bool asc_desc_comparison_with_nulls(IndexT row1, IndexT row2) const
+   {
+     for(size_t col_index = 0; col_index < sz_; ++col_index)
+     {
+       gdf_dtype col_type = static_cast<gdf_dtype>(rtti_[col_index]);
+       bool asc;
+
+       if(asc_desc_bitmask_ == nullptr){
+    	   asc = true;
+       }else{
+    	   asc = gdf_is_valid(asc_desc_bitmask_, col_index);
+       }
+       //if flag == true
+
+       State state;
+       if(asc){
+    	   OpLess_with_nulls less(row1, row2, nulls_are_smallest_);
+           state =type_dispatcher_with_nulls(less, col_type, col_index);
+       }else{
+           OpGreater_with_nulls greater(row1, row2, nulls_are_smallest_);
+           state =type_dispatcher_with_nulls(greater, col_type, col_index);
        }
 
        switch( state )
@@ -185,6 +245,14 @@ struct LesserRTTI
     return (static_cast<const ColType*>(columns[col_index]))[row];
   }
   
+    __device__
+    static bool is_valid(int col_index,
+  	                  IndexT row,
+					  const gdf_valid_type* const * valids)
+    {
+      return gdf_is_valid(valids[col_index], row);
+    }
+
 private:
   enum class State {False = 0, True = 1, Undecided = 2};
 
@@ -218,6 +286,51 @@ private:
     IndexT row2_;
   };
 
+  struct OpLess_with_nulls
+  {
+	  __device__
+	  OpLess_with_nulls(IndexT row1, IndexT row2, bool nulls_are_smallest):
+	  row1_(row1),
+	  row2_(row2),
+	  nulls_are_smallest_(nulls_are_smallest)
+	  {
+	  }
+
+	  template<typename ColType>
+	  __device__
+	  State operator() (int col_index,
+			  const void* const * columns,
+			  const gdf_valid_type* const * valids,
+			  ColType)
+	  {
+		  ColType res1 = LesserRTTI::at<ColType>(col_index, row1_, columns);
+		  ColType res2 = LesserRTTI::at<ColType>(col_index, row2_, columns);
+		  bool isValid1 = LesserRTTI::is_valid(col_index, row1, valids);
+		  bool isValid2 = LesserRTTI::is_valid(col_index, row2, valids);
+
+		  if (!isValid2 && !isValid1)
+			  return State::Undecided;
+		  else if( isValid1 && isValid2) {
+			  if( res1 < res2 )
+				  return State::True;
+			  else if( res1 == res2 )
+				  return State::Undecided;
+			  else
+				  return State::False;
+		  } else if (!isValid1 && nulls_are_smallest)
+			  return State::True;
+	  	  } else if (!isValid2 && !nulls_are_smallest)
+	  			  return State::True;
+		  else
+			  return State::False;
+
+	  }
+  private:
+	  IndexT row1_;
+	  IndexT row2_;
+	  bool nulls_are_smallest_;
+  };
+
   struct OpGreater
     {
        __host__ __device__
@@ -247,6 +360,51 @@ private:
       IndexT row1_;
       IndexT row2_;
     };
+
+    struct OpGreater_with_nulls
+  {
+	  __device__
+	  OpGreater_with_nulls(IndexT row1, IndexT row2, bool nulls_are_smallest):
+	  row1_(row1),
+	  row2_(row2),
+	  nulls_are_smallest_(nulls_are_smallest)
+	  {
+	  }
+
+	  template<typename ColType>
+	  __device__
+	  State operator() (int col_index,
+			  const void* const * columns,
+			  const gdf_valid_type* const * valids,
+			  ColType)
+	  {
+		  ColType res1 = LesserRTTI::at<ColType>(col_index, row1_, columns);
+		  ColType res2 = LesserRTTI::at<ColType>(col_index, row2_, columns);
+		  bool isValid1 = LesserRTTI::is_valid(col_index, row1, valids);
+		  bool isValid2 = LesserRTTI::is_valid(col_index, row2, valids);
+
+		  if (!isValid2 && !isValid1)
+			  return State::Undecided;
+		  else if( isValid1 && isValid2) {
+			  if( res1 > res2 )
+				  return State::True;
+			  else if( res1 == res2 )
+				  return State::Undecided;
+			  else
+				  return State::False;
+		  } else if (!isValid1 && nulls_are_smallest)
+			  return State::False;
+	  	  } else if (!isValid2 && !nulls_are_smallest)
+	  			  return State::False;
+		  else
+			  return State::True;
+
+	  }
+  private:
+	  IndexT row1_;
+	  IndexT row2_;
+	  bool nulls_are_smallest_;
+  };
 
   struct OpEqual
   {
@@ -361,11 +519,68 @@ private:
     return State::Undecided;
   }
   
+  template<typename Predicate>
+   __device__
+   State type_dispatcher_with_nulls(Predicate pred, gdf_dtype col_type, int col_index) const
+   {
+     switch( col_type )
+     {
+       case GDF_INT8:
+       {
+         using ColType = int8_t;//char;
+
+         ColType dummy=0;
+         return pred(col_index, columns_, valids_, dummy);
+       }
+       case GDF_INT16:
+       {
+         using ColType = int16_t;//short;
+
+         ColType dummy=0;
+         return pred(col_index, columns_, valids_, dummy);
+       }
+       case GDF_INT32:
+       {
+         using ColType = int32_t;//int;
+
+         ColType dummy=0;
+         return pred(col_index, columns_, valids_, dummy);
+       }
+       case GDF_INT64:
+       {
+         using ColType = int64_t;//long;
+
+         ColType dummy=0;
+         return pred(col_index, columns_, valids_, dummy);
+       }
+       case GDF_FLOAT32:
+       {
+         using ColType = float;
+
+         ColType dummy=0;
+         return pred(col_index, columns_, valids_, dummy);
+       }
+       case GDF_FLOAT64:
+       {
+         using ColType = double;
+
+         ColType dummy=0;
+         return pred(col_index, columns_, valids_, dummy);
+       }
+
+       default:
+ 	      assert( false );//type not handled
+     }
+     return State::Undecided;
+   }
+
   const void* const * columns_;
+  const gdf_valid_type* const * valids_;
   const int* const rtti_;
   size_t sz_;
   const void* const * vals_; //for filtering
   const gdf_valid_type* asc_desc_bitmask_; //a bitmask that allows us to know whether or not a column should be sorted ascending or descending
+  bool nulls_are_smallest_;  // when sorting if there are nulls in the data if this is true, then they will be treated as the smallest value, otherwise they will be treated as the largest value
 };
 
 //###########################################################################
@@ -755,22 +970,36 @@ size_t multi_col_group_by_avg_sort(size_t         nrows,
 template<typename IndexT>
 void multi_col_order_by_asc_desc(
         void* const * d_col_data,
+		gdf_valid_type* const * d_valids_data,
         int* d_col_types,
         size_t num_inputs,
         gdf_valid_type * asc_desc_bitmask,
         IndexT*      d_indx,
         size_t nrows,
+		bool nulls_are_smallest = false,
         cudaStream_t   stream = NULL){
 
-    LesserRTTI<IndexT> f(d_col_data, d_col_types, num_inputs,asc_desc_bitmask);
-    std::cout<<"about to sequence"<<std::endl;
-    thrust::sequence(thrust::cuda::par.on(stream), d_indx, d_indx+nrows, 0);
-    std::cout<<"sequenced"<<std::endl;
-    thrust::sort(thrust::cuda::par.on(stream),
-            d_indx, d_indx+nrows,
-            [f] __host__ __device__ (IndexT i1, IndexT i2){
-        return f.asc_desc_comparison(i1, i2);
-    });
+	bool have_nulls = false;
+	for (int i = 0; i < num_inputs; i++){
+		if (d_valids_data[i])
+			have_nulls = true;
+	}
 
-    std::cout<<"sorted"<<std::endl;
+	if (have_nulls){
+		LesserRTTI<IndexT> f(d_col_data, d_valids_data, d_col_types, num_inputs,asc_desc_bitmask, nulls_are_smallest);
+		thrust::sequence(thrust::cuda::par.on(stream), d_indx, d_indx+nrows, 0);
+		thrust::sort(thrust::cuda::par.on(stream),
+				d_indx, d_indx+nrows,
+				[f] __host__ __device__ (IndexT i1, IndexT i2){
+			return f.asc_desc_comparison(i1, i2);
+		});
+	} else {
+		LesserRTTI<IndexT> f(d_col_data, d_valids_data, d_col_types, num_inputs,asc_desc_bitmask, nulls_are_smallest);
+		thrust::sequence(thrust::cuda::par.on(stream), d_indx, d_indx+nrows, 0);
+		thrust::sort(thrust::cuda::par.on(stream),
+				d_indx, d_indx+nrows,
+				[f] __host__ __device__ (IndexT i1, IndexT i2){
+			return f.asc_desc_comparison_with_nulls(i1, i2);
+		});
+	}
 }

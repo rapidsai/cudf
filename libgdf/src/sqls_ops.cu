@@ -40,6 +40,26 @@ namespace{ //annonymus
     cudaMemcpy(d_types, h_types, ncols*sizeof(int), cudaMemcpyHostToDevice);//TODO: add streams
   }
 
+  void soa_col_info(gdf_column* cols, size_t ncols, void** d_cols, gdf_valid_type** d_valids, int* d_types)
+  {
+    std::vector<void*> v_cols(ncols,nullptr);
+    std::vector<gdf_valid_type*> v_valids(ncols,nullptr);
+    std::vector<int>   v_types(ncols, 0);
+    for(size_t i=0;i<ncols;++i)
+      {
+        v_cols[i] = cols[i].data;
+        v_valids[i] = cols[i].valid;
+        v_types[i] = cols[i].dtype;
+      }
+
+    void** h_cols = &v_cols[0];
+    gdf_valid_type** h_valids = &v_valids[0];
+    int* h_types = &v_types[0];
+    cudaMemcpy(d_cols, h_cols, ncols*sizeof(void*), cudaMemcpyHostToDevice);//TODO: add streams
+    cudaMemcpy(d_valids, h_valids, ncols*sizeof(gdf_valid_type*), cudaMemcpyHostToDevice);//TODO: add streams
+    cudaMemcpy(d_types, h_types, ncols*sizeof(int), cudaMemcpyHostToDevice);//TODO: add streams
+  }
+
   // thrust::device_vector set to use rmmAlloc and rmmFree.
   template<typename T>
   using Vector = thrust::device_vector<T, rmm_allocator<T>>;
@@ -1493,27 +1513,26 @@ gdf_error gdf_order_by_asc_desc(
         gdf_column * output_indices,
         gdf_valid_type * asc_desc_bitmask){
 
-    std::cout<<"i mean this is the first fucking line...."<<std::endl;
     //TODO: don't assume type of output is size_t
     typedef size_t IndexT;
     //TODO: make these allocations happen with the new memory manager when we can
     //also we are kind of assuming they will just work, yeesh!
     thrust::device_vector<size_t> test(2);
 
-    std::cout<<"can do basic shit...."<<std::endl;
     thrust::device_vector<void*> d_cols(num_inputs);
+    thrust::device_vector<gdf_valid_type*> d_valids(num_inputs);
     thrust::device_vector<int>   d_types(num_inputs, 0);
 
     void** d_col_data = d_cols.data().get();
+    gdf_valid_type** d_valids_data = d_valids.data().get();
     int* d_col_types = d_types.data().get();
 
-    std::cout<<"about to run soa"<<std::endl;
 
-    soa_col_info(input_columns, num_inputs,  d_col_data, d_col_types);
+    soa_col_info(input_columns, num_inputs,  d_col_data, d_valids_data, d_col_types);
 
-    std::cout<<"about to run mul col order by"<<std::endl;
     multi_col_order_by_asc_desc(
             d_col_data,
+			d_valids_data,
             d_col_types,
             num_inputs,
             asc_desc_bitmask,
