@@ -17,4 +17,4 @@ dependencies:
 - nvstrings
 - cffi>=1.10.0   
 - distributed>=1.23.0
-            
+- cython=0.28.*
