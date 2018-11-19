@@ -27,7 +27,7 @@ Creating a `Series`.
     s = cudf.Series([1,2,3,None,4])
     print(s)
 
-Creating a `Dataframe` from a list of tuples.
+Creating a `DataFrame` by specifying values for each column
 
 .. ipython:: python
 
@@ -35,6 +35,17 @@ Creating a `Dataframe` from a list of tuples.
     ('b', list(reversed(range(20)))),
     ('c', list(range(20)))])
     print(df)
+
+Creating a `DataFrame` by specifying values for each row
+
+.. ipython:: python
+
+    gdf = cudf.DataFrame.from_records(
+    [[4, 7, 10],
+    [5, 8, 11],
+    [6, 9, 12]],
+    index=[1, 2, 3], columns=[‘a’, ‘b’, ‘c’])
+    print(gdf)
 
 Creating a `Dataframe` from a pandas Dataframe. 
 
@@ -151,6 +162,12 @@ Applying functions to a `Series`.
 Histogramming
 ~~~~~~~~~~~~~~~~~~~~~
 
+Counting the number of rows with each unique value of variable
+
+.. ipython:: python
+
+    df.a.value_counts()
+
 
 String Methods
 ~~~~~~~~~~~~~~~~~~~~~
@@ -203,7 +220,16 @@ You can append values from another `Series` or array-like object. Appending `Ser
 Grouping
 ------------
 
+Groupbys involve one or more of the following steps:
 
+    - Splitting the data into groups based on some criteria
+    - Applying a function to each group independently
+    - Combining the results into a data structure
+
+.. ipython:: python
+
+    df['agg_col'] = [1 if x % 2 == 0 else 0 for x in range(len(df))]
+    print(df.groupby('agg_col').sum())
 
 Reshaping
 ------------
