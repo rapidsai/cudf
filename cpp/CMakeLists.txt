@@ -125,7 +125,7 @@ link_directories("${CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES}" # CMAKE_CUDA_IMPLICIT
 ###################################################################################################
 # - library targets -------------------------------------------------------------------------------
 
-add_library(cudf SHARED
+cuda_add_library(cudf SHARED
             src/comms/ipc/ipc.cu
             src/dataframe/column.cpp
             src/dataframe/context.cpp
@@ -152,7 +152,7 @@ add_library(cudf SHARED
             src/utilities/error_utils.cpp
             src/utilities/nvtx/nvtx_utils.cpp)
 
-add_library(rmm SHARED
+cuda_add_library(rmm SHARED
             src/rmm/memory.cpp
             src/rmm/memory_manager.cpp
             thirdparty/cnmem/src/cnmem.cpp
