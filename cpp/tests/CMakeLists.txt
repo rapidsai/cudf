@@ -7,7 +7,7 @@ project(CUDF_TESTS LANGUAGES C CXX CUDA)
 
 function(ConfigureTest CMAKE_TEST_NAME CMAKE_TEST_SRC)
     add_executable(${CMAKE_TEST_NAME} ${CMAKE_TEST_SRC})
-    #set_target_properties(${CMAKE_TEST_NAME} PROPERTIES POSITION_INDEPENDENT_CODE ON)
+    set_target_properties(${CMAKE_TEST_NAME} PROPERTIES POSITION_INDEPENDENT_CODE ON)
     target_link_libraries(${CMAKE_TEST_NAME} gmock_main gmock GTest::GTest cudf arrow)
     set_target_properties(${CMAKE_TEST_NAME} PROPERTIES
                             RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/gtests")
