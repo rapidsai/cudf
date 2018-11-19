@@ -1,56 +1,29 @@
-#=============================================================================
-# Copyright 2018 BlazingDB, Inc.
-#     Copyright 2018 Percy Camilo Triveño Aucahuasi <percy@blazingdb.com>
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-#=============================================================================
-# Download and unpack googletest at configure time
-configure_file(${CMAKE_SOURCE_DIR}/cmake/Templates/GoogleTest.CMakeLists.txt.cmake ${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/thirdparty/googletest-download/CMakeLists.txt)
+set(GTEST_ROOT "${CMAKE_BINARY_DIR}/googletest")
 
-execute_process(
-    COMMAND ${CMAKE_COMMAND} -G "${CMAKE_GENERATOR}" .
-    RESULT_VARIABLE result
-    WORKING_DIRECTORY ${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/thirdparty/googletest-download/
-)
+configure_file("${CMAKE_SOURCE_DIR}/cmake/Templates/GoogleTest.CMakeLists.txt.cmake"
+               "${GTEST_ROOT}/CMakeLists.txt")
 
-if(result)
-    message(FATAL_ERROR "CMake step for googletest failed: ${result}")
-endif()
+file(MAKE_DIRECTORY "${GTEST_ROOT}/build")
+file(MAKE_DIRECTORY "${GTEST_ROOT}/install")
 
-execute_process(
-    COMMAND ${CMAKE_COMMAND} --build --parallel .
-    RESULT_VARIABLE result
-    WORKING_DIRECTORY ${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/thirdparty/googletest-download/
-)
+execute_process(COMMAND ${CMAKE_COMMAND} -G ${CMAKE_GENERATOR} .
+                RESULT_VARIABLE GTEST_CONFIG
+                WORKING_DIRECTORY ${GTEST_ROOT})
 
-if(result)
-    message(FATAL_ERROR "Build step for googletest failed: ${result}")
-endif()
+if(GTEST_CONFIG)
+    message(FATAL_ERROR "Configuring GoogleTest failed: " ${GTEST_CONFIG})
+endif(GTEST_CONFIG)
 
-# Prevent overriding the parent project's compiler/linker
-# settings on Windows
-set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
+execute_process(COMMAND ${CMAKE_COMMAND} --build ..
+                RESULT_VARIABLE GTEST_BUILD
+                WORKING_DIRECTORY ${GTEST_ROOT}/build)
 
-# Prevent overriding the parent project's compiler/linker
-# settings on Windows
-set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
+if(GTEST_BUILD)
+    message(FATAL_ERROR "Building GoogleTest failed: " ${GTEST_BUILD})
+endif(GTEST_BUILD)
 
-# Locate the Google Test package.
-# Requires that you build with:
-#   -DGTEST_ROOT:PATH=/path/to/googletest_install_dir
-set(GTEST_ROOT ${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/thirdparty/googletest-install/)
-message(STATUS "GTEST_ROOT: " ${GTEST_ROOT})
+message(STATUS "GoogleTest Installed here: " ${GTEST_ROOT}/install)
+set(GTEST_LIBRARY_DIR "${GTEST_ROOT}/install/lib")
+set(GTEST_INCLUDE_DIR "${GTEST_ROOT}/install/include")
 
-link_directories(${GTEST_ROOT}/lib/)
-link_directories(${GTEST_ROOT}/lib/x86_64-linux-gnu/)
-link_directories(${GTEST_ROOT}/lib64/)
+

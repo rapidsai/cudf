@@ -74,19 +74,29 @@ set_package_properties(
     URL "https://github.com/apache/arrow")
 
 ###################################################################################################
+# - include paths ---------------------------------------------------------------------------------
+
+include_directories("${GTEST_INCLUDE_DIR}"
+                    "${ARROW_INCLUDEDIR}"
+                    "${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}"
+                    "${CMAKE_BINARY_DIR}/include"
+                    "${CMAKE_SOURCE_DIR}/include"
+                    "${CMAKE_SOURCE_DIR}/src"
+                    "${CMAKE_SOURCE_DIR}/thirdparty/cub"
+                    "${CMAKE_SOURCE_DIR}/thirdparty/moderngpu/src"
+                    "${CMAKE_SOURCE_DIR}/thirdparty/cnmem/include")
+
+###################################################################################################
+# - library paths ---------------------------------------------------------------------------------
+
+link_directories("${CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES}" # CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES is an undocumented/unsupported variable containing the link directories for nvcc
+                 "${CMAKE_BINARY_DIR}/lib"
+                 "${GTEST_LIBRARY_DIR}")
+
+###################################################################################################
 # - gtest -----------------------------------------------------------------------------------------
 
-find_package(GTest)
-set_package_properties(GTest PROPERTIES TYPE OPTIONAL
-    PURPOSE "Google C++ Testing Framework (Google Test)."
-    URL "https://github.com/google/googletest")
-if(GTEST_FOUND)
-    message(STATUS "Google C++ Testing Framework (Google Test) found in ${GTEST_ROOT}")
-    include_directories(${GTEST_INCLUDE_DIRS})
-    add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/tests)
-else()
-    message(AUTHOR_WARNING "Google C++ Testing Framework (Google Test) not found: automated tests are disabled.")
-endif(GTEST_FOUND)
+add_subdirectory(${CMAKE_SOURCE_DIR}/tests)
 
 ###################################################################################################
 # - nvstrings -------------------------------------------------------------------------------------
@@ -103,24 +113,6 @@ if(NVSTRINGS_INCLUDE AND NVSTRINGS_LIBRARY)
                     COMMAND ${CMAKE_COMMAND} -E chdir ${CMAKE_BINARY_DIR} ln -snf ${NVSTRINGS_INCLUDE} ${CMAKE_BINARY_DIR}/include/NVStrings.h
                     COMMAND ${CMAKE_COMMAND} -E chdir ${CMAKE_BINARY_DIR} ln -snf ${NVSTRINGS_LIBRARY} ${CMAKE_BINARY_DIR}/lib/libNVStrings.so)
 endif(NVSTRINGS_INCLUDE AND NVSTRINGS_LIBRARY)
-
-###################################################################################################
-# - include paths ---------------------------------------------------------------------------------
-
-include_directories("${ARROW_INCLUDEDIR}"
-                    "${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}"
-                    "${CMAKE_BINARY_DIR}/include"
-                    "${CMAKE_SOURCE_DIR}/include"
-                    "${CMAKE_SOURCE_DIR}/src"
-                    "${CMAKE_SOURCE_DIR}/thirdparty/cub"
-                    "${CMAKE_SOURCE_DIR}/thirdparty/moderngpu/src"
-                    "${CMAKE_SOURCE_DIR}/thirdparty/cnmem/include")
-
-###################################################################################################
-# - library paths ---------------------------------------------------------------------------------
-
-link_directories("${CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES}" # CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES is an undocumented/unsupported variable containing the link directories for nvcc
-                 "${CMAKE_BINARY_DIR}/lib")
 
 ###################################################################################################
 # - library targets -------------------------------------------------------------------------------
@@ -215,6 +207,5 @@ add_custom_command(OUTPUT INSTALL_PYTHON_CFFI
                    VERBATIM)
 
 add_custom_target(install_python DEPENDS cudf PYTHON_CFFI INSTALL_PYTHON_CFFI)
-
 
 

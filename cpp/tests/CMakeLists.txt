@@ -8,7 +8,7 @@ project(CUDF_TESTS LANGUAGES C CXX CUDA)
 function(ConfigureTest CMAKE_TEST_NAME CMAKE_TEST_SRC)
     add_executable(${CMAKE_TEST_NAME} ${CMAKE_TEST_SRC})
     set_target_properties(${CMAKE_TEST_NAME} PROPERTIES POSITION_INDEPENDENT_CODE ON)
-    target_link_libraries(${CMAKE_TEST_NAME} gmock_main gmock GTest::GTest cudf arrow)
+    target_link_libraries(${CMAKE_TEST_NAME} gmock_main gmock gtest_main gtest pthread cudf arrow)
     set_target_properties(${CMAKE_TEST_NAME} PROPERTIES
                             RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/gtests")
     add_test(NAME ${CMAKE_TEST_NAME} COMMAND ${CMAKE_TEST_NAME})
@@ -17,7 +17,8 @@ endfunction(ConfigureTest)
 ###################################################################################################
 # - include paths ---------------------------------------------------------------------------------
 
-include_directories("${ARROW_INCLUDEDIR}"
+include_directories("${GTEST_INCLUDE_DIR}"
+                    "${ARROW_INCLUDEDIR}"
                     "${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}"
                     "${CMAKE_BINARY_DIR}/include"
                     "${CMAKE_SOURCE_DIR}/include"
@@ -30,9 +31,9 @@ include_directories("${ARROW_INCLUDEDIR}"
 ###################################################################################################
 # - library paths ---------------------------------------------------------------------------------
 
-link_directories("${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}/../lib"
-                 "${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}/../lib64"
-                 "${CMAKE_BINARY_DIR}/lib")
+link_directories("${CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES}" # CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES is an undocumented/unsupported variable containing the link directories for nvcc
+                 "${CMAKE_BINARY_DIR}/lib"
+                 "${GTEST_LIBRARY_DIR}")
 
 ###################################################################################################
 ### test sources ##################################################################################
