@@ -137,6 +137,21 @@ Concat
 Join
 ~~~~~~~~~~~~~~~~~~~~~
 
+SQL style merges, similar to pandas.
+
+.. ipython:: python
+
+    df_a = cudf.DataFrame()
+    df_a['key'] = [0, 1, 2, 3, 4]
+    df_a['vals_a'] = [float(i + 10) for i in range(5)]
+
+    df_b = cudf.DataFrame()
+    df_b['key'] = [1, 2, 4]
+    df_b['vals_b'] = [float(i+10) for i in range(3)]
+
+    df_merged = df_a.merge(df_b, on=['key'], how='left')
+    print(df_merged.sort_values('key'))
+
 
 Append
 ~~~~~~~~~~~~~~~~~~~~~
