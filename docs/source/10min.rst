@@ -21,14 +21,14 @@ Modeled after 10 Minutes to Pandas, this is a short introduction to cuDF, geared
 Object Creation
 ---------------
 
-Series
+Creating a `Series`
 
 .. ipython:: python
 
   s = cudf.Series([1,2,3,None,4])
   print(s)
 
-Dataframe from dictionary
+Creating a `Dataframe` from a list of tuples.
 
 .. ipython:: python
 
@@ -37,7 +37,7 @@ Dataframe from dictionary
     ('c', list(range(20)))])
     print(df)
 
-Dataframe from pandas 
+Creating a `Dataframe` from a pandas Dataframe. 
 
 .. ipython:: python
 
@@ -78,9 +78,11 @@ Selecting a single column, which yields a `cudf.Series`, equivalent to `df.a`:
 
 Selection by Label
 ~~~~~~~~~~~~~~~~~~~~~
+
+Select rows from index 2 to index 5 from columns 'a' and 'b'.
+
 .. ipython:: python
 
-    # get rows from index 2 to index 5 from 'a' and 'b' columns.
     print(df.loc[2:5, ['a', 'b']])
 
 
