@@ -179,6 +179,23 @@ CSV
 ~~~~
 
 
+We can write to a CSV file by first sending data to a pandas Dataframe on the host.
+
+.. ipython:: python
+
+    df.to_pandas().to_csv('foo.txt', index=False)
+
+
+Reading from a csv file. `read_csv` requires explicit types, and can accept different delimiters and line terminators.
+
+
+.. ipython:: python
+
+    df = cudf.read_csv('foo.txt', delimiter=',',
+            names=['a', 'b', 'c'], dtype=['int64', 'int64', 'int64'],
+            skiprows=1)
+    print(df)
+
 HDF5
 ~~~~~~~~~
 
