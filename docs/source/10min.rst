@@ -17,14 +17,6 @@ Modeled after 10 Minutes to Pandas, this is a short introduction to cuDF, geared
    #### created November, 2018
    #### Nick Becker (NVIDIA), 
 
-This is a basic example
-
-
-.. ipython:: python
-
-    x = 2
-    x**3
-
 
 Object Creation
 ---------------
