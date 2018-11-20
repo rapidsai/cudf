@@ -33,6 +33,7 @@ requirements:
     - cffi
     - setuptools
     - nvstrings
+    - pycparser=2.19
   run:
     - libcudf {{ version }}.*
     - python x.x
