@@ -37,7 +37,7 @@ Creating a `DataFrame` by specifying values for each column
     print(df)
 
 
-Creating a `Dataframe` from a pandas Dataframe. 
+Creating a `Dataframe` from a pandas `Dataframe`. 
 
 .. ipython:: python
 
@@ -106,14 +106,14 @@ Selecting elements of a `Series` with direct index access.
 Boolean Indexing
 ~~~~~~~~~~~~~~~~~~~~~
 
-Selecting rows in a `Series` by direct boolean indexing, if there are no missing values.
+Selecting rows in a `Series` by direct Boolean indexing.
 
 .. ipython:: python
 
     print(df.b[df.b > 15])
 
 
-Selecting values from a DataFrame where a boolean condition is met, via the `query` API.
+Selecting values from a `DataFrame` where a Boolean condition is met, via the `query` API.
 
 .. ipython:: python
 
@@ -142,7 +142,7 @@ Operations
 Stats
 ~~~~~~~~~
 
-Calculating descriptive statistics (operations in general exclude missing data).
+Calculating descriptive statistics for a `Series`.
 
 .. ipython:: python
 
@@ -165,7 +165,7 @@ Applying functions to a `Series`.
 Histogramming
 ~~~~~~~~~~~~~~~~~~~~~
 
-Counting the number of rows with each unique value of variable
+Counting the number of occurrences of each unique value of variable.
 
 .. ipython:: python
 
@@ -182,7 +182,7 @@ Merge
 Concat
 ~~~~~~~~~~~~~~~~~~~~~
 
-You can concatenate `Series` and `DataFrames` row-wise.
+Concatenating `Series` and `DataFrames` row-wise.
 
 .. ipython:: python
 
@@ -194,7 +194,7 @@ You can concatenate `Series` and `DataFrames` row-wise.
 Join
 ~~~~~~~~~~~~~~~~~~~~~
 
-You can also do SQL style merges.
+Performing SQL style merges.
 
 .. ipython:: python
 
@@ -213,7 +213,7 @@ You can also do SQL style merges.
 Append
 ~~~~~~~~~~~~~~~~~~~~~
 
-You can append values from another `Series` or array-like object. Appending `Series` with nulls is not yet supported, but can be done using the `concat` method.
+Appending values from another `Series` or array-like object. `Append` does not support `Series` with nulls. This can be done using the `concat` method.
 
 .. ipython:: python
 
@@ -259,14 +259,6 @@ Grouping and applying statistical functions to specific columns, using `agg`.
 Reshaping
 ------------
 
-Stack
-~~~~~~~~~~~~~~~~~~~~~
-
-
-Pivot Tables
-~~~~~~~~~~~~~~~~~~~~~
-
-
 
 Time Series
 ------------
@@ -309,6 +301,7 @@ Accessing the underlying code values of each categorical observation.
 .. ipython:: python
 
     print(gdf.grade.cat.codes)
+
 
 Plotting
 ------------
@@ -360,7 +353,7 @@ Getting Data In/Out
 CSV
 ~~~~
 
-We can write to a CSV file by first sending data to a pandas Dataframe on the host.
+We can write to a CSV file by first sending data to a pandas `Dataframe` on the host.
 
 .. ipython:: python
 
@@ -391,7 +384,7 @@ ORC
 Gotchas
 --------
 
-If you are attempting to perform Boolean indexing or using the `query` API, you might see an exception like:
+If you are attempting to perform Boolean indexing directly or using the `query` API, you might see an exception like:
 
 .. code-block:: python
 
