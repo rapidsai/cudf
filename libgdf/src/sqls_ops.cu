@@ -1511,7 +1511,7 @@ gdf_error gdf_order_by_asc_desc(
         gdf_column * input_columns,
         size_t num_inputs,
         gdf_column * output_indices,
-        gdf_valid_type * asc_desc_bitmask){
+		char * asc_desc_bitmask){
 
     //TODO: don't assume type of output is size_t
     typedef size_t IndexT;

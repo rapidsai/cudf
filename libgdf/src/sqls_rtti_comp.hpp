@@ -66,7 +66,7 @@ struct LesserRTTI
   LesserRTTI(void* const* cols,
 	     int* const types,
 	     size_t sz,
-	     gdf_valid_type* const asc_desc_bitmask):
+		 char* const asc_desc_bitmask):
     columns_(cols),
 	valids_(nullptr),
     rtti_(types),
@@ -82,7 +82,7 @@ struct LesserRTTI
 		 gdf_valid_type* const* valids,
   	     int* const types,
   	     size_t sz,
-  	     gdf_valid_type* const asc_desc_bitmask,
+		 char* const asc_desc_bitmask,
 		 bool nulls_are_smallest):
       columns_(cols),
 	  valids_(valids),
@@ -110,7 +110,7 @@ struct LesserRTTI
        if(asc_desc_bitmask_ == nullptr){
     	   asc = true;
        }else{
-    	   asc = gdf_is_valid(asc_desc_bitmask_, col_index);
+    	   asc = asc_desc_bitmask_[col_index] == 1;
        }
        //if flag == true
 
@@ -147,7 +147,7 @@ struct LesserRTTI
        if(asc_desc_bitmask_ == nullptr){
     	   asc = true;
        }else{
-    	   asc = gdf_is_valid(asc_desc_bitmask_, col_index);
+    	   asc = asc_desc_bitmask_[col_index] == 1;
        }
        //if flag == true
 
@@ -583,7 +583,7 @@ private:
   const int* const rtti_;
   size_t sz_;
   const void* const * vals_; //for filtering
-  const gdf_valid_type* asc_desc_bitmask_; //a bitmask that allows us to know whether or not a column should be sorted ascending or descending
+  const char* asc_desc_bitmask_; //a bitmask that allows us to know whether or not a column should be sorted ascending or descending
   bool nulls_are_smallest_;  // when sorting if there are nulls in the data if this is true, then they will be treated as the smallest value, otherwise they will be treated as the largest value
 };
 
@@ -977,7 +977,7 @@ void multi_col_order_by_asc_desc(
 		gdf_valid_type* const * d_valids_data,
         int* d_col_types,
         size_t num_inputs,
-        gdf_valid_type * asc_desc_bitmask,
+        char * asc_desc_bitmask,
         IndexT*      d_indx,
         size_t nrows,
 		bool nulls_are_smallest = false,
