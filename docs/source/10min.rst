@@ -224,11 +224,7 @@ Appending values from another `Series` or array-like object. `Append` does not s
 Grouping
 ------------
 
-Groupbys involve one or more of the following steps:
-
-    - Splitting the data into groups based on some criteria
-    - Applying a function to each group independently
-    - Combining the results into a data structure
+Like pandas, cuDF supports the Split-Apply-Combine groupby paradigm.
 
 .. ipython:: python
 
@@ -340,7 +336,7 @@ Converting a cuDF `Series` to a numpy `ndarray`.
 Arrow
 ~~~~~~~~
 
-Converting a cuDF `DataFrame` to an PyArrow `Table`.
+Converting a cuDF `DataFrame` to a PyArrow `Table`.
 
 .. ipython:: python
 
@@ -354,7 +350,7 @@ Getting Data In/Out
 CSV
 ~~~~
 
-We can write to a CSV file by first sending data to a pandas `Dataframe` on the host.
+Writing to a CSV file, by first sending data to a pandas `Dataframe` on the host.
 
 .. ipython:: python
 
