@@ -38,6 +38,7 @@ requirements:
     - libcudf {{ version }}.*
     - python x.x
     - cffi
+    - pycparser=2.19
 
 test:
   commands:
