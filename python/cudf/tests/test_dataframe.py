@@ -944,10 +944,11 @@ def test_series_shape_empty():
 
 
 def test_dataframe_shape():
-    pdf = pd.DataFrame({'a': [0, 1, 2, 3],'b': [0.1, 0.2, None, 0.3]})
+    pdf = pd.DataFrame({'a': [0, 1, 2, 3], 'b': [0.1, 0.2, None, 0.3]})
     gdf = DataFrame.from_pandas(pdf)
 
     assert pdf.shape == gdf.shape
+
 
 def test_dataframe_shape_empty():
     pdf = pd.DataFrame()
