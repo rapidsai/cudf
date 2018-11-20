@@ -36,16 +36,6 @@ Creating a `DataFrame` by specifying values for each column
     ('c', list(range(20)))])
     print(df)
 
-Creating a `DataFrame` by specifying values for each row
-
-.. ipython:: python
-
-    gdf = cudf.DataFrame.from_records(
-    [[4, 7, 10],
-    [5, 8, 11],
-    [6, 9, 12]],
-    index=[1, 2, 3], columns=[‘a’, ‘b’, ‘c’])
-    print(gdf)
 
 Creating a `Dataframe` from a pandas Dataframe. 
 
@@ -166,7 +156,7 @@ Counting the number of rows with each unique value of variable
 
 .. ipython:: python
 
-    df.a.value_counts()
+    print(df.a.value_counts())
 
 
 String Methods
@@ -228,8 +218,30 @@ Groupbys involve one or more of the following steps:
 
 .. ipython:: python
 
-    df['agg_col'] = [1 if x % 2 == 0 else 0 for x in range(len(df))]
-    print(df.groupby('agg_col').sum())
+    df['agg_col1'] = [1 if x % 2 == 0 else 0 for x in range(len(df))]
+    df['agg_col2'] = [1 if x % 3 == 0 else 0 for x in range(len(df))]
+
+Grouping and then applying the `sum` function to the resulting groups.
+
+
+.. ipython:: python
+
+    print(df.groupby('agg_col1').sum())
+
+
+Grouping hierarchically then applying the `sum` function to the resulting groups.
+
+.. ipython:: python
+
+    print(df.groupby(['agg_col1', 'agg_col2']).sum())
+
+
+Grouping and applying statistical functions to specific columns, using `agg`.
+
+.. ipython:: python
+
+    print(df.groupby('agg_col1').agg({'a':'max', 'b':'mean', 'c':'sum'}))
+
 
 Reshaping
 ------------
@@ -245,14 +257,49 @@ Pivot Tables
 
 Time Series
 ------------
+cuDF supports `datetime` typed columns, which allow users to interact with and filter data based on specific timestamps.
+
+.. ipython:: python
+
+    import datetime as dt
+
+    date_df = cudf.DataFrame()
+    date_df['date'] = pd.date_range('11/20/2018', periods=72, freq='D')
+    date_df['value'] = np.random.sample(len(date_df))
+
+    search_date = dt.datetime.strptime('2018-11-23', '%Y-%m-%d')
+    print(date_df.query('date <= @search_date'))
 
 
 Categoricals
 ------------
 
+cuDF supports categorical columns.
+
+.. ipython:: python
+
+    pdf = pd.DataFrame({"id":[1,2,3,4,5,6], "grade":['a', 'b', 'b', 'a', 'a', 'e']})
+    pdf["grade"] = pdf["grade"].astype("category")
+
+    gdf = cudf.DataFrame.from_pandas(pdf)
+    print(gdf)
+
+
+Accessing the categories of a column.
+
+.. ipython:: python
+
+    print(gdf.grade.cat.categories)
+
+Accessing the underlying code values of each categorical observation.
+
+.. ipython:: python
+
+    print(gdf.grade.cat.codes)
 
 Plotting
 ------------
+
 
 
 Getting Data In/Out
@@ -279,11 +326,11 @@ Reading from a csv file.
     print(df)
 
 
-HDF5
+Parquet
 ~~~~~~~~~
 
 
-Excel
+ORC
 ~~~~~~~~~
 
 
