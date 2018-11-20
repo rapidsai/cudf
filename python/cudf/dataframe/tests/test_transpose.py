@@ -20,6 +20,7 @@ pdf = pd.DataFrame({'a': [np.nan, 1.0, 2.0, 3.0,1,1,1,1],
                     'h': [4, 5, 6.0, 7, 1, 1, 1, 1],
                     'j': [np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan],
                     'k': [7, 1.0, 2.0, 3.0, 1, 1, 1, 1],})
+print(pdf.transpose())
 
 df = DataFrame.from_pandas(pdf)
 print(df)

@@ -905,7 +905,7 @@ class DataFrame(object):
         dtype = self.dtypes[0]
         if any(t != dtype for t in self.dtypes):
             raise ValueError('all columns must have the same dtype')
-        has_null = any(c.has_null_mask for c in self._cols.values())
+        has_null = any(c.null_count for c in self._cols.values())
 
         df = DataFrame()
 
@@ -947,7 +947,9 @@ class DataFrame(object):
             df[str(i)] = new_col_series[i]
         return df
 
-    T = property(fget=transpose, doc=transpose.__doc__)
+    @property
+    def T(self):
+        return self.tranpose()
 
     def merge(self, other, on=None, how='left', lsuffix='_x', rsuffix='_y',
               type="", method='hash'):
