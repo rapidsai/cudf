@@ -1,4 +1,4 @@
-# CMAKE_COMMON_VARIABLES=" -DCMAKE_INSTALL_PREFIX=$PREFIX -DCMAKE_BUILD_TYPE=Release"
+CMAKE_COMMON_VARIABLES=" -DCMAKE_INSTALL_PREFIX=$PREFIX -DCMAKE_BUILD_TYPE=Release"
 
 
 # if [ -n "$MACOSX_DEPLOYMENT_TARGET" ]; then
@@ -15,7 +15,7 @@ cd cpp
 mkdir build
 cd build
 # configure
-cmake ..
+cmake $CMAKE_COMMON_VARIABLES ..
 # build
 make -j$CPU_COUNT python_cffi
 # install
