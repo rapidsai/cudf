@@ -4,6 +4,7 @@
 #include <cassert>
 #include <utility>
 #include <gdf/cffi/types.h>
+#include "types.hpp"
 #include "NVStrings.h"
 
 namespace {

@@ -25,25 +25,36 @@ namespace gdf
 {
   struct category
   {
-    gdf_category value;
+    using value_type = gdf_category;
+    value_type value;
   };
 
   struct timestamp
   {
-    gdf_timestamp value;
+    using value_type = gdf_timestamp;
+    value_type value;
   };
 
   struct date32
   {
-    gdf_date32 value;
+    using value_type = gdf_date32;
+    value_type value;
   };
 
   struct date64
   {
-    gdf_date64 value;
+    using value_type = gdf_date64;
+    value_type value;
   };
 
   // TODO Add a type for GDF_STRING?
-}
+
+
+  namespace detail
+  {
+    template <typename T>
+    typename T::value_type& unwrap(T const& w) {return w.value;}
+  } // namespace detail
+} // namespace gdf
 
 #endif
