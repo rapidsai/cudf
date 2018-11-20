@@ -90,6 +90,19 @@ Selecting rows from index 2 to index 5 from columns 'a' and 'b'.
 Selection by Position
 ~~~~~~~~~~~~~~~~~~~~~~
 
+Selecting by integer slicing, like numpy/pandas.
+
+.. ipython:: python
+
+    print(df[3:5])
+
+Selecting elements of a `Series` with direct index access.
+
+.. ipython:: python
+
+    print(s[2])
+
+
 Boolean Indexing
 ~~~~~~~~~~~~~~~~~~~~~
 
@@ -110,7 +123,7 @@ Supported logical operators include `>`, `<`, `>=`, `<=`, `==`, and `!=`.
 
 
 Setting
-~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~
 
 
 Missing Data
@@ -302,6 +315,44 @@ Plotting
 
 
 
+Converting Data Representation
+--------------------------------
+
+
+Pandas
+~~~~~~~~
+
+Converting a cuDF `DataFrame` to a pandas `DataFrame`.
+
+.. ipython:: python
+
+    print(df.head().to_pandas())
+
+Numpy
+~~~~~~~~
+
+Converting a cuDF `DataFrame` to a numpy `rec.array`.
+
+.. ipython:: python
+
+    print(df.to_records())
+
+Converting a cuDF `Series` to a numpy `ndarray`.
+
+.. ipython:: python
+
+    print(df['a'].to_array())
+
+Arrow
+~~~~~~~~
+
+Converting a cuDF `DataFrame` to an PyArrow `Table`.
+
+.. ipython:: python
+
+    print(df.to_arrow())
+
+
 Getting Data In/Out
 ------------------------
 
@@ -332,6 +383,7 @@ Parquet
 
 ORC
 ~~~~~~~~~
+
 
 
 
