@@ -291,10 +291,10 @@ TEST(ColumnByteWidth, TestByteWidth)
                                                   {GDF_INT64, sizeof(int64_t)},
                                                   {GDF_FLOAT32, sizeof(float)},
                                                   {GDF_FLOAT64, sizeof(double)},
-                                                  {GDF_DATE32, sizeof(int32_t)},
-                                                  {GDF_DATE64, sizeof(int64_t)},
-                                                  {GDF_TIMESTAMP, sizeof(int64_t)},
-                                                  {GDF_CATEGORY, sizeof(int32_t)}
+                                                  {GDF_DATE32, sizeof(gdf_date32)},
+                                                  {GDF_DATE64, sizeof(gdf_date64)},
+                                                  {GDF_TIMESTAMP, sizeof(gdf_timestamp)},
+                                                  {GDF_CATEGORY, sizeof(gdf_category)}
                                                 };
   for(auto const& pair : enum_to_type_size)
   {
