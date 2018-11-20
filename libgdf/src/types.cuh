@@ -52,8 +52,32 @@ namespace gdf
 
   namespace detail
   {
+
     template <typename T>
-    typename T::value_type& unwrap(T& w) {return w.value;}
+    struct needs_unwrap{ static constexpr bool value{false}; };
+    template <> struct needs_unwrap<category>{static constexpr bool value{true}; };
+    template <> struct needs_unwrap<timestamp>{static constexpr bool value{true}; };
+    template <> struct needs_unwrap<date32>{static constexpr bool value{true}; };
+    template <> struct needs_unwrap<date64>{static constexpr bool value{true}; };
+
+  
+    template <typename T>
+    __host__ __device__ __forceinline__
+    typename std::enable_if< needs_unwrap< typename std::decay<T>::type >::value, 
+                             typename T::value_type>::type& 
+    unwrap(T&& wrapped)
+    {
+      return wrapped.value;
+    }
+
+    template <typename T>
+    __host__ __device__ __forceinline__
+    typename std::enable_if< std::is_fundamental<typename std::decay<T>::type>::value, 
+                             typename T::value_type>::type& 
+    unwrap(T&& value)
+    {
+      return value;
+    }
   } // namespace detail
 } // namespace gdf
 
