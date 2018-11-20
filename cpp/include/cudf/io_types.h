@@ -36,7 +36,7 @@ typedef struct {
   /*
    * Input arguments - all data is in the host
    */
-  char			*file_path;					/**< file location to read from	- currently the file cannot be compressed 							*/
+  const char	*file_path;					/**< file location to read from	- currently the file cannot be compressed 							*/
   char			*buffer	;					// process data from a buffer,  pointer to Host memory
   char			*object	;					// this is a URL path
 
@@ -79,16 +79,15 @@ typedef struct {
 
   char			decimal;					// the decimal point character
 
-  char			*quotechar;					// single character 	character to use as a quote
-  bool			doublequote;				// whether to treat two quotes as a quote in a string or empty
+  char			quotechar;					/**< define the character used to denote start and end of a quoted item								*/
+  bool			quoting;					/**< treat string fields as quoted item and remove the first and last quotechar						*/
+  bool			nodoublequote;				// indicate to not interpret two consecutive quotechar as a single quotechar
 
   char			escapechar;					// single char	- char used as the escape character
 
   char			comment;					// single char	- treat line or remainder of line as an unprocessed comment
 
   char			*encoding;					// the data encoding, NULL = UTF-8
-
-  bool			quoting;					// TRUE: keep the quotes in the text. FALSE: remove the quotes from the strings. Only for quotes starting and ending the strings.
 
 } csv_read_arg;
 

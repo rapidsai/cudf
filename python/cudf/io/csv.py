@@ -18,7 +18,7 @@ def _wrap_string(text):
         return ffi.new("char[]", text.encode())
 
 
-def read_csv(filepath, lineterminator='\n', quoting=True,
+def read_csv(filepath, lineterminator='\n', quotechar='\0', quoting=True,
              delimiter=',', sep=None, delim_whitespace=False,
              skipinitialspace=False, names=None, dtype=None,
              skipfooter=0, skiprows=0, dayfirst=False):
@@ -42,9 +42,11 @@ def read_csv(filepath, lineterminator='\n', quoting=True,
     dtype : list of str or dict of {col: dtype}, default None
         List of data types in the same order of the column names
         or a dictionary with column_name:dtype (pandas style).
-    quoting : bool
-        If True, quotes will be removed from start and end of string fields
-        If False, quotes will be included in returned nvstrings entries
+    quotechar : char, default '\0' (empty)
+        Character to indicate start and end of quote item.
+    quoting : bool, default True
+        If True, start and end quotechar are removed from returned strings
+        If False, start and end quotechar are kept in returned strings
     skiprows : int, default 0
         Number of rows to be skipped from the start of file.
     skipfooter : int, default 0
@@ -111,13 +113,14 @@ def read_csv(filepath, lineterminator='\n', quoting=True,
 
     csv_reader.delimiter = delimiter.encode()
     csv_reader.lineterminator = lineterminator.encode()
+    csv_reader.quotechar = quotechar.encode()
+    csv_reader.quoting = quoting
     csv_reader.delim_whitespace = delim_whitespace
     csv_reader.skipinitialspace = skipinitialspace
     csv_reader.dayfirst = dayfirst
     csv_reader.num_cols = len(names)
     csv_reader.skiprows = skiprows
     csv_reader.skipfooter = skipfooter
-    csv_reader.quoting = quoting
 
     # Call read_csv
     libgdf.read_csv(csv_reader)
@@ -146,7 +149,7 @@ def read_csv(filepath, lineterminator='\n', quoting=True,
     return df
 
 
-def read_csv_strings(filepath, lineterminator='\n', quoting=True,
+def read_csv_strings(filepath, lineterminator='\n', quotechar='\0', quoting=True,
                      delimiter=',', sep=None, delim_whitespace=False,
                      skipinitialspace=False, names=None, dtype=None,
                      skipfooter=0, skiprows=0, dayfirst=False):
@@ -235,13 +238,14 @@ def read_csv_strings(filepath, lineterminator='\n', quoting=True,
 
     csv_reader.delimiter = delimiter.encode()
     csv_reader.lineterminator = lineterminator.encode()
+    csv_reader.quotechar = quotechar.encode()
+    csv_reader.quoting = quoting
     csv_reader.delim_whitespace = delim_whitespace
     csv_reader.skipinitialspace = skipinitialspace
     csv_reader.dayfirst = dayfirst
     csv_reader.num_cols = len(names)
     csv_reader.skiprows = skiprows
     csv_reader.skipfooter = skipfooter
-    csv_reader.quoting = quoting
 
     # Call read_csv
     libgdf.read_csv(csv_reader)

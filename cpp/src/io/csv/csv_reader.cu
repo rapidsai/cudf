@@ -71,6 +71,10 @@ typedef struct raw_csv_ {
     char				delimiter;		// host: the delimiter
     char				terminator;		// host: the line terminator
 
+    char				quotechar;		// host: the quote character
+    bool				keepquotes;		// host: indicates to keep the start and end quotechar
+    bool				nodoublequote;	// host: indicates to not interpret two consecutive quotechar as a single
+
     long				num_bytes;		// host: the number of bytes in the data
     long				num_bits;		// host: the number of 64-bit bitmaps (different than valid)
 	unsigned long long 	num_records;  	// host: number of records (per column)
@@ -83,10 +87,9 @@ typedef struct raw_csv_ {
     bool* 				d_parseCol;		// device : array of booleans stating if column should be parsed in reading process: parseCol[x]=false means that the column x needs to be filtered out.
     long 				header_row;		// Row id of the header
     bool				dayfirst;
-	bool				keepQuotes;
 } raw_csv_t;
 
-typedef struct column_data_{
+typedef struct column_data_ {
 	unsigned long long countFloat;
 	unsigned long long countDateAndTime;
 	unsigned long long countString;
@@ -95,7 +98,14 @@ typedef struct column_data_{
 	unsigned long long countInt32;
 	unsigned long long countInt64;	
 	unsigned long long countNULL;
-}column_data_t;
+} column_data_t;
+
+typedef struct parsing_opts_ {
+	char				delimiter;
+	char				terminator;
+	char				quotechar;
+	bool				keepquotes;
+} parsing_opts_t;
 
 using string_pair = std::pair<const char*,size_t>;
 
@@ -124,10 +134,8 @@ gdf_error launch_dataTypeDetection(raw_csv_t * raw_csv, long row_offset, column_
 
 __global__ void countRecords(char *data, const char delim, const char terminator, long num_bytes, long num_bits, unsigned long long* num_records);
 __global__ void storeRecordStart(char *data, const char delim, const char terminator, long num_bytes, long num_bits, unsigned long long* num_records,unsigned long long* recStart) ;
-
-__global__ void convertCsvToGdf(char *csv,char delim, char terminator,	unsigned long long num_records, int num_columns,bool *parseCol,unsigned long long *recStart,gdf_dtype *dtype,void **gdf_data,gdf_valid_type **valid,string_pair **str_cols,unsigned long long row_offset, long header_row,bool dayfirst,unsigned long long *num_valid, bool keepQuotes);
-
-__global__ void dataTypeDetection( char *raw_csv, char delim, char terminator, unsigned long long  num_records, int  num_columns, bool  *parseCol, unsigned long long *recStart, unsigned long long row_offset, long header_row, column_data_t* d_columnData);
+__global__ void convertCsvToGdf(char *csv, const parsing_opts_t opts, unsigned long long num_records, int num_columns,bool *parseCol,unsigned long long *recStart,gdf_dtype *dtype,void **gdf_data,gdf_valid_type **valid,string_pair **str_cols,unsigned long long row_offset, long header_row,bool dayfirst,unsigned long long *num_valid);
+__global__ void dataTypeDetection(char *raw_csv, const parsing_opts_t opts, unsigned long long num_records, int  num_columns, bool  *parseCol, unsigned long long *recStart, unsigned long long row_offset, long header_row, column_data_t* d_columnData);
 
 //
 //---------------CUDA Valid (8 blocks of 8-bits) Bitmap Kernels ---------------------------------------------
@@ -181,14 +189,19 @@ std::string stringType(gdf_dtype dt){
  * Arguments:
  *
  *  Required Arguments
- * 		file_path			- 	file location to read from	- currently the file cannot be compressed
+ * 		file_path			-	file location to read from	- currently the file cannot be compressed
  * 		num_cols			-	number of columns in the names and dtype arrays
  * 		names				-	ordered List of column names, this is a required field
- * 		dtype				- 	ordered List of data types, this is required
+ * 		dtype				-	ordered List of data types, this is required
  *
  * 	Optional
- * 		lineterminator		-	define the line terminator character.  Default is  '\n'
- * 		delimiter			-	define the field separator, default is ','   This argument is also called 'sep'
+ * 		lineterminator		-	define the line terminator character.  Default is '\n'
+ * 		delimiter			-	define the field separator, default is ','.  This argument is also called 'sep'
+ *
+ * 		quotechar;				define the character used to denote start and end of a quoted item
+ * 		quoting;				treat string fields as quoted item and remove the first and last quotechar
+ * 		nodoublequote;			do not interpret two consecutive quotechar as a single quotechar
+ *
  * 		delim_whitespace	-	use white space as the delimiter - default is false.  This overrides the delimiter argument
  * 		skipinitialspace	-	skip white spaces after the delimiter - default is false
  *
@@ -200,8 +213,8 @@ std::string stringType(gdf_dtype dt){
  *
  *  Output
  *  	num_cols_out		-	Out: return the number of columns read in
- *  	num_rows_out		- 	Out: return the number of rows read in
- *  	gdf_column		**data	-  Out: return the array of *gdf_columns
+ *  	num_rows_out		-	Out: return the number of rows read in
+ *  	gdf_column **data	-	Out: return the array of *gdf_columns
  *
  *
  * @return gdf_error
@@ -219,20 +232,24 @@ gdf_error read_csv(csv_read_arg *args)
 	raw_csv->num_actual_cols	= args->num_cols;
 	raw_csv->num_active_cols	= args->num_cols;
 	raw_csv->num_records		= 0;
-	raw_csv->keepQuotes			= args->quoting;
 
-
-	if ( args->delim_whitespace == true) {
+	if(args->delim_whitespace == true) {
 		raw_csv->delimiter = ' ';
 	} else {
 		raw_csv->delimiter = args->delimiter;
 	}
 
-	if(args->windowslinetermination)
+	if(args->windowslinetermination) {
 		raw_csv->terminator = '\n';
-	else
+	} else {
 		raw_csv->terminator = args->lineterminator;
+	}
 
+	raw_csv->quotechar = args->quotechar;
+	if(raw_csv->quotechar != '\0'){
+		raw_csv->keepquotes = !args->quoting;
+		raw_csv->nodoublequote = args->nodoublequote;
+	}
 
 	raw_csv->dayfirst = args->dayfirst;
 
@@ -312,7 +329,7 @@ gdf_error read_csv(csv_read_arg *args)
 		while(c<stop){
 			if (cmap_data[c]==args->lineterminator){
 				h_num_cols++;
-				break;				
+				break;
 			}
 			else if(cmap_data[c] == '\r' && (c+1L)<(unsigned long long)raw_csv->num_bytes && cmap_data[c+1] == '\n'){
 				h_num_cols++;
@@ -591,7 +608,18 @@ gdf_error read_csv(csv_read_arg *args)
 		if (gdf->dtype != gdf_dtype::GDF_STRING)
 			continue;
 
-		gdf->data = (void*)NVStrings::create_from_index(h_str_cols[stringColCount],size_t(raw_csv->num_records));
+		NVStrings* const stringCol = NVStrings::create_from_index(h_str_cols[stringColCount],size_t(raw_csv->num_records));
+		if ((raw_csv->quotechar != '\0') && (raw_csv->nodoublequote==false)){
+			// In PANDAS, default of enabling doublequote for two consecutive
+			// quotechar in quote fields results in reduction to single
+			std::string quotechar = std::string(&raw_csv->quotechar);
+			std::string doublequotechar = quotechar + raw_csv->quotechar;
+			gdf->data = stringCol->replace(doublequotechar.c_str(), quotechar.c_str());
+			NVStrings::destroy(stringCol);
+		}
+		else {
+			gdf->data = stringCol;
+		}
 
 		RMM_TRY( RMM_FREE( h_str_cols [stringColCount], 0 ) );
 
@@ -885,16 +913,20 @@ __global__ void storeRecordStart(char *data, const char delim, const char termin
 //----------------------------------------------------------------------------------------------------------------
 
 
-gdf_error launch_dataConvertColumns(raw_csv_t * raw_csv, void **gdf, gdf_valid_type** valid, gdf_dtype* d_dtypes,string_pair **str_cols, long row_offset, unsigned long long *num_valid) {
+gdf_error launch_dataConvertColumns(raw_csv_t *raw_csv, void **gdf, gdf_valid_type** valid, gdf_dtype* d_dtypes,string_pair **str_cols, long row_offset, unsigned long long *num_valid) {
 
 	int64_t threads 	= 1024;
 	int64_t blocks 		= (  raw_csv->num_records + (threads -1)) / threads ;
 
+	parsing_opts_t opts;
+	opts.delimiter		= raw_csv->delimiter;
+	opts.terminator		= raw_csv->terminator;
+	opts.quotechar		= raw_csv->quotechar;
+	opts.keepquotes		= raw_csv->keepquotes;
 
 	convertCsvToGdf <<< blocks, threads >>>(
 		raw_csv->data,
-		raw_csv->delimiter,
-		raw_csv->terminator,
+		opts,
 		raw_csv->num_records,
 		raw_csv->num_actual_cols,
 		raw_csv->d_parseCol,
@@ -906,10 +938,8 @@ gdf_error launch_dataConvertColumns(raw_csv_t * raw_csv, void **gdf, gdf_valid_t
 		row_offset,
 		raw_csv->header_row,
 		raw_csv->dayfirst,
-		num_valid,
-		raw_csv->keepQuotes
+		num_valid
 	);
-
 
 	return GDF_SUCCESS;
 }
@@ -921,8 +951,7 @@ gdf_error launch_dataConvertColumns(raw_csv_t * raw_csv, void **gdf, gdf_valid_t
  */
 __global__ void convertCsvToGdf(
 		char 			*raw_csv,
-		char 			delim,
-		char 			terminator,		
+		const parsing_opts_t	 	opts,
 		unsigned long long  num_records,
 		int  			num_columns,
 		bool  			*parseCol,
@@ -934,13 +963,9 @@ __global__ void convertCsvToGdf(
 		unsigned long long 			row_offset,
 		long 			header_row,
 		bool			dayfirst,
-		unsigned long long			*num_valid,
-		bool			keepQuotes
+		unsigned long long			*num_valid
 		)
 {
-
-
-
 	// thread IDs range per block, so also need the block id
 	long	rec_id  = threadIdx.x + (blockDim.x * blockIdx.x);		// this is entry into the field array - tid is an elements within the num_entries array
 
@@ -959,42 +984,32 @@ __global__ void convertCsvToGdf(
 	int  col 		= 0;
 	int  actual_col = 0;
 	int  stringCol 	= 0;
-
+	bool quotation	= false;
 
 	while(col<num_columns){
 
 		if(start>stop)
 			break;
-		bool quotation=false;
-		if(raw_csv[pos]=='\"'){
-		  quotation=true;
-		  pos++;
-		}
- 
+
 		while(true){
-			if(raw_csv[pos]==delim){
-			  if(quotation==false)
-				break;
-			  else if ((pos-1) >= start && raw_csv[pos-1]=='\"' )
-				break;
+			// Use simple logic to ignore control chars between any quote seq
+			// Handles nominal cases including doublequotes within quotes, but
+			// may not output exact failures as PANDAS for malformed fields
+			if(raw_csv[pos] == opts.quotechar){
+				quotation = !quotation;
 			}
-			else if (raw_csv[pos] == terminator){
- 			  if(quotation==false)
-				break;
-			  else if ((pos-1) >= start && raw_csv[pos-1]=='\"' )
-				break;
+			else if(quotation==false){
+				if(raw_csv[pos] == opts.delimiter){
+					break;
+				}
+				else if(raw_csv[pos] == opts.terminator){
+					break;
+				}
+				else if(raw_csv[pos] == '\r' && ((pos+1) < stop && raw_csv[pos+1] == '\n')){
+					stop--;
+					break;
+				}
 			}
-            else if(raw_csv[pos] == '\r' &&  ((pos+1) < stop && raw_csv[pos+1]=='\n')){
-  			  if(quotation==false){
-				stop--;
-				break;
-			  }
-			  else if ((pos-1) >= start && raw_csv[pos-1]=='\"' ){
-             	stop--;
-                break;
-    		  
-			  }
-           }
 			if(pos>=stop)
 				break;
 			pos++;
@@ -1062,7 +1077,7 @@ __global__ void convertCsvToGdf(
 					case gdf_dtype::GDF_TIMESTAMP:
 					{
 						int64_t *gdf_out = (int64_t *)gdf_data[actual_col];
-     					gdf_out[rec_id] = convertStrtoInt<int64_t>(raw_csv, start, tempPos);
+						gdf_out[rec_id] = convertStrtoInt<int64_t>(raw_csv, start, tempPos);
 					}
 					break;
 					case gdf_dtype::GDF_CATEGORY:
@@ -1071,13 +1086,17 @@ __global__ void convertCsvToGdf(
 						gdf_out[rec_id] = convertStrtoHash(raw_csv, start, pos, HASH_SEED);
 					}
 						break;
-					case gdf_dtype::GDF_STRING:{
-						size_t q=0;
- 						if (quotation==true && keepQuotes==false){
-						  start++; q=1;
+					case gdf_dtype::GDF_STRING:
+					{
+						long end = pos;
+						if(opts.keepquotes==false){
+							if((raw_csv[start] == opts.quotechar) && (raw_csv[end-1] == opts.quotechar)){
+								start++;
+								end--;
+							}
 						}
-    					str_cols[stringCol][rec_id].first 	= raw_csv+start;
-						str_cols[stringCol][rec_id].second 	= size_t(pos-start-q);
+						str_cols[stringCol][rec_id].first	= raw_csv+start;
+						str_cols[stringCol][rec_id].second	= size_t(end-start);
 						stringCol++;
 					}
 						break;
@@ -1099,9 +1118,9 @@ __global__ void convertCsvToGdf(
 			}
 			actual_col++;
 		}
-			pos++;
-			start=pos;
-			col++;	
+		pos++;
+		start=pos;
+		col++;
 
 	}
 }
@@ -1119,11 +1138,15 @@ gdf_error launch_dataTypeDetection(
 	int64_t threads 	= 1024;
 	int64_t blocks 		= (  raw_csv->num_records + (threads -1)) / threads ;
 
+	parsing_opts_t opts;
+	opts.delimiter		= raw_csv->delimiter;
+	opts.terminator		= raw_csv->terminator;
+	opts.quotechar		= raw_csv->quotechar;
+	opts.keepquotes		= raw_csv->keepquotes;
 
 	dataTypeDetection <<< blocks, threads >>>(
 		raw_csv->data,
-		raw_csv->delimiter,
-		raw_csv->terminator,
+		opts,
 		raw_csv->num_records,
 		raw_csv->num_actual_cols,
 		raw_csv->d_parseCol,
@@ -1140,8 +1163,7 @@ gdf_error launch_dataTypeDetection(
  */
 __global__ void dataTypeDetection(
 		char 			*raw_csv,
-		char 			delim,
-		char 			terminator,
+		const parsing_opts_t			opts,
 		unsigned long long  			num_records,
 		int  			num_columns,
 		bool  			*parseCol,
@@ -1169,50 +1191,39 @@ __global__ void dataTypeDetection(
 	long pos 		= start;
 	int  col 		= 0;
 	int  actual_col = 0;
-
+	bool quotation	= false;
 
 	// Going through all the columns of a given record
 	while(col<num_columns){
 
 		if(start>stop)
 			break;
- 
-		bool quotation=false;
-		if(raw_csv[pos]=='\"'){
-		  quotation=true;
-		  pos++;
-		}
- 
+
 		// Finding the breaking point for each column
- 		while(true){
-			if(raw_csv[pos]==delim){
-			  if(quotation==false)
-				break;
-			  else if ((pos-1) >= start && raw_csv[pos-1]=='\"' )
-				break;
+		while(true){
+			// Use simple logic to ignore control chars between any quote seq
+			// Handles nominal cases including doublequotes within quotes, but
+			// may not output exact failures as PANDAS for malformed fields
+			if(raw_csv[pos] == opts.quotechar){
+				quotation = !quotation;
 			}
-			else if (raw_csv[pos] == terminator){
- 			  if(quotation==false)
-				break;
-			  else if ((pos-1) >= start && raw_csv[pos-1]=='\"' )
-				break;
+			else if(quotation==false){
+				if(raw_csv[pos] == opts.delimiter){
+					break;
+				}
+				else if(raw_csv[pos] == opts.terminator){
+					break;
+				}
+				else if(raw_csv[pos] == '\r' && ((pos+1) < stop && raw_csv[pos+1] == '\n')){
+					stop--;
+					break;
+				}
 			}
-            else if(raw_csv[pos] == '\r' &&  ((pos+1) < stop && raw_csv[pos+1]=='\n')){
-  			  if(quotation==false){
-				stop--;
-				break;
-			  }
-			  else if ((pos-1) >= start && raw_csv[pos-1]=='\"' ){
-             	stop--;
-                break;
-    		  
-			  }
-           }
 			if(pos>=stop)
 				break;
 			pos++;
 		}
- 
+
 
 		// Checking if this is a column that the user wants --- user can filter columns
 		if(parseCol[col]==true){
