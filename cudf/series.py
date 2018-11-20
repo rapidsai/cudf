@@ -307,16 +307,6 @@ class Series(object):
         nvtx_range_pop()
         return result
 
-    def _rbinaryop(self, other, fn):
-        """
-        Internal util to call a binary operator *fn* on operands *self*
-        and *other* for reflected operations.  Return the output Series.
-        The output dtype is determined by the input operands.
-        """
-        other = self._normalize_binop_value(other)
-        outcol = other._column.binary_operator(fn, self._column)
-        return self._copy_construct(data=outcol)
-
     def _unaryop(self, fn):
         """
         Internal util to call a unary operator *fn* on operands *self*.
