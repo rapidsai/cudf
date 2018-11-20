@@ -305,21 +305,23 @@ private:
 	  {
 		  ColType res1 = LesserRTTI::at<ColType>(col_index, row1_, columns);
 		  ColType res2 = LesserRTTI::at<ColType>(col_index, row2_, columns);
-		  bool isValid1 = LesserRTTI::is_valid(col_index, row1, valids);
-		  bool isValid2 = LesserRTTI::is_valid(col_index, row2, valids);
+		  bool isValid1 = LesserRTTI::is_valid(col_index, row1_, valids);
+		  bool isValid2 = LesserRTTI::is_valid(col_index, row2_, valids);
 
 		  if (!isValid2 && !isValid1)
 			  return State::Undecided;
-		  else if( isValid1 && isValid2) {
+		  else if( isValid1 && isValid2)
+		  {
 			  if( res1 < res2 )
 				  return State::True;
 			  else if( res1 == res2 )
 				  return State::Undecided;
 			  else
 				  return State::False;
-		  } else if (!isValid1 && nulls_are_smallest)
+		  }
+		  else if (!isValid1 && nulls_are_smallest_)
 			  return State::True;
-	  	  } else if (!isValid2 && !nulls_are_smallest)
+	  	  else if (!isValid2 && !nulls_are_smallest_)
 	  			  return State::True;
 		  else
 			  return State::False;
@@ -380,21 +382,23 @@ private:
 	  {
 		  ColType res1 = LesserRTTI::at<ColType>(col_index, row1_, columns);
 		  ColType res2 = LesserRTTI::at<ColType>(col_index, row2_, columns);
-		  bool isValid1 = LesserRTTI::is_valid(col_index, row1, valids);
-		  bool isValid2 = LesserRTTI::is_valid(col_index, row2, valids);
+		  bool isValid1 = LesserRTTI::is_valid(col_index, row1_, valids);
+		  bool isValid2 = LesserRTTI::is_valid(col_index, row2_, valids);
 
 		  if (!isValid2 && !isValid1)
 			  return State::Undecided;
-		  else if( isValid1 && isValid2) {
+		  else if( isValid1 && isValid2)
+		  {
 			  if( res1 > res2 )
 				  return State::True;
 			  else if( res1 == res2 )
 				  return State::Undecided;
 			  else
 				  return State::False;
-		  } else if (!isValid1 && nulls_are_smallest)
+		  }
+		  else if (!isValid1 && nulls_are_smallest_)
 			  return State::False;
-	  	  } else if (!isValid2 && !nulls_are_smallest)
+	  	  else if (!isValid2 && !nulls_are_smallest_)
 	  			  return State::False;
 		  else
 			  return State::True;
@@ -980,7 +984,7 @@ void multi_col_order_by_asc_desc(
         cudaStream_t   stream = NULL){
 
 	bool have_nulls = false;
-	for (int i = 0; i < num_inputs; i++){
+	for (size_t i = 0; i < num_inputs; i++){
 		if (d_valids_data[i])
 			have_nulls = true;
 	}
