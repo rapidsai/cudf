@@ -13,7 +13,8 @@ Modeled after 10 Minutes to Pandas, this is a short introduction to cuDF, geared
    np.random.seed(12)
 
    #### Portions of this were borrowed from the
-   #### cuDF cheatsheet and existing documentation.
+   #### cuDF cheatsheet, existing cuDF documentation,
+   #### and 10 Minutes to Pandas.
    #### Created November, 2018.
 
 
@@ -27,7 +28,7 @@ Creating a `Series`.
     s = cudf.Series([1,2,3,None,4])
     print(s)
 
-Creating a `DataFrame` by specifying values for each column
+Creating a `DataFrame` by specifying values for each column.
 
 .. ipython:: python
 
@@ -213,7 +214,7 @@ Performing SQL style merges.
 Append
 ~~~~~~~~~~~~~~~~~~~~~
 
-Appending values from another `Series` or array-like object. `Append` does not support `Series` with nulls. This can be done using the `concat` method.
+Appending values from another `Series` or array-like object. `Append` does not support `Series` with nulls. For handling null values, use the `concat` method.
 
 .. ipython:: python
 
@@ -234,7 +235,7 @@ Groupbys involve one or more of the following steps:
     df['agg_col1'] = [1 if x % 2 == 0 else 0 for x in range(len(df))]
     df['agg_col2'] = [1 if x % 3 == 0 else 0 for x in range(len(df))]
 
-Grouping and then applying the `sum` function to the resulting groups.
+Grouping and then applying the `sum` function to the grouped data.
 
 
 .. ipython:: python
@@ -242,7 +243,7 @@ Grouping and then applying the `sum` function to the resulting groups.
     print(df.groupby('agg_col1').sum())
 
 
-Grouping hierarchically then applying the `sum` function to the resulting groups.
+Grouping hierarchically then applying the `sum` function to grouped data.
 
 .. ipython:: python
 
