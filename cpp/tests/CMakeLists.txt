@@ -42,10 +42,10 @@ link_directories("${CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES}" # CMAKE_CUDA_IMPLICIT
 ###################################################################################################
 # - column tests ----------------------------------------------------------------------------------
 
-set(COLUMN_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/column/column_test.cu")
-
-ConfigureTest(COLUMN_TEST "${COLUMN_TEST_SRC}")
+# set(COLUMN_TEST_SRC
+#     "${CMAKE_CURRENT_SOURCE_DIR}/column/column_test.cu")
+# 
+# ConfigureTest(COLUMN_TEST "${COLUMN_TEST_SRC}")
 
 ###################################################################################################
 # - cudf tests ------------------------------------------------------------------------------------
@@ -144,10 +144,10 @@ ConfigureTest(UNARY_TEST "${UNARY_TEST_SRC}")
 ###################################################################################################
 # - csv tests -------------------------------------------------------------------------------------
 
-set(CSV_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/io/csv/csv_test.cu")
-
-ConfigureTest(CSV_TEST "${CSV_TEST_SRC}")
+# set(CSV_TEST_SRC
+#     "${CMAKE_CURRENT_SOURCE_DIR}/io/csv/csv_test.cu")
+# 
+# ConfigureTest(CSV_TEST "${CSV_TEST_SRC}")
 
 ###################################################################################################
 # - rmm tests -------------------------------------------------------------------------------------
