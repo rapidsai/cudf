@@ -14,7 +14,7 @@ if(GTEST_CONFIG)
     message(FATAL_ERROR "Configuring GoogleTest failed: " ${GTEST_CONFIG})
 endif(GTEST_CONFIG)
 
-execute_process(COMMAND ${CMAKE_COMMAND} --build ..
+execute_process(COMMAND ${CMAKE_COMMAND} --build --parallel ..
                 RESULT_VARIABLE GTEST_BUILD
                 WORKING_DIRECTORY ${GTEST_ROOT}/build)
 
@@ -22,7 +22,7 @@ if(GTEST_BUILD)
     message(FATAL_ERROR "Building GoogleTest failed: " ${GTEST_BUILD})
 endif(GTEST_BUILD)
 
-message(STATUS "GoogleTest Installed here: " ${GTEST_ROOT}/install)
+message(STATUS "GoogleTest installed here: " ${GTEST_ROOT}/install)
 set(GTEST_LIBRARY_DIR "${GTEST_ROOT}/install/lib")
 set(GTEST_INCLUDE_DIR "${GTEST_ROOT}/install/include")
 

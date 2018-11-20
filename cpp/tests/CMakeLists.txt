@@ -18,7 +18,8 @@ endfunction(ConfigureTest)
 # - include paths ---------------------------------------------------------------------------------
 
 include_directories("${GTEST_INCLUDE_DIR}"
-                    "${ARROW_INCLUDEDIR}"
+                    "${ARROW_INCLUDE_DIR}"
+                    "${FLATBUFFERS_INCLUDE_DIR}"
                     "${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}"
                     "${CMAKE_BINARY_DIR}/include"
                     "${CMAKE_SOURCE_DIR}/include"
@@ -33,6 +34,8 @@ include_directories("${GTEST_INCLUDE_DIR}"
 
 link_directories("${CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES}" # CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES is an undocumented/unsupported variable containing the link directories for nvcc
                  "${CMAKE_BINARY_DIR}/lib"
+                 "${ARROW_LIBRARY_DIR}"
+                 "${FLATBUFFERS_LIBRARY_DIR}"
                  "${GTEST_LIBRARY_DIR}")
 
 ###################################################################################################

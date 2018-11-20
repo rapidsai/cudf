@@ -1,71 +1,49 @@
-#=============================================================================
-# Copyright 2018 BlazingDB, Inc.
-#     Copyright 2018 Percy Camilo Triveño Aucahuasi <percy@blazingdb.com>
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-#=============================================================================
+set(ARROW_ROOT ${CMAKE_BINARY_DIR}/arrow)
 
-set(ARROW_DOWNLOAD_BINARY_DIR ${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/thirdparty/arrow-download/)
+configure_file("${CMAKE_SOURCE_DIR}/cmake/Templates/Arrow.CMakeLists.txt.cmake"
+               "${ARROW_ROOT}/CMakeLists.txt")
 
-# Download and unpack arrow at configure time
-configure_file(${CMAKE_SOURCE_DIR}/cmake/Templates/Arrow.CMakeLists.txt.cmake ${ARROW_DOWNLOAD_BINARY_DIR}/CMakeLists.txt COPYONLY)
+file(MAKE_DIRECTORY "${ARROW_ROOT}/build")
+file(MAKE_DIRECTORY "${ARROW_ROOT}/install")
 
 execute_process(
     COMMAND ${CMAKE_COMMAND} -G "${CMAKE_GENERATOR}" .
-    RESULT_VARIABLE result
-    WORKING_DIRECTORY ${ARROW_DOWNLOAD_BINARY_DIR}
-)
+    RESULT_VARIABLE ARROW_CONFIG
+    WORKING_DIRECTORY ${ARROW_ROOT})
 
-if(result)
-    message(FATAL_ERROR "CMake step for arrow failed: ${result}")
-endif()
+if(ARROW_CONFIG)
+    message(FATAL_ERROR "Configuring Arrow failed: " ${ARROW_CONFIG})
+endif(ARROW_CONFIG)
 
 execute_process(
-    COMMAND ${CMAKE_COMMAND} --build --parallel .
-    RESULT_VARIABLE result
-    WORKING_DIRECTORY ${ARROW_DOWNLOAD_BINARY_DIR}
-)
+    COMMAND ${CMAKE_COMMAND} --build --parallel ..
+    RESULT_VARIABLE ARROW_BUILD
+    WORKING_DIRECTORY ${ARROW_ROOT}/build)
 
-if(result)
-    message(FATAL_ERROR "Build step for arrow failed: ${result}")
-endif()
+if(ARROW_BUILD)
+    message(FATAL_ERROR "Building Arrow failed: " ${ARROW_BUILD})
+endif(ARROW_BUILD)
 
-# Locate the Arrow package.
-# Requires that you build with:
-#   -DARROW_ROOT:PATH=/path/to/arrow_install_dir
-set(ARROW_ROOT ${ARROW_DOWNLOAD_BINARY_DIR}/arrow-prefix/src/arrow-install/usr/local/)
-
-# Need ARROW_VERSION for setting correct ARROW_GENERATED_IPC_DIR
-set(ARROW_VERSION "apache-arrow-0.10.0")
-if (NOT "$ENV{PARQUET_ARROW_VERSION}" STREQUAL "")
-    set(ARROW_VERSION "$ENV{PARQUET_ARROW_VERSION}")
-endif()
-message(STATUS "ARROW_VERSION " "${ARROW_VERSION}")
-
-# Copy the arrow-format flatbuffer headers to include/ipc using configure_file (will sync if input file changes)
-if ("${ARROW_VERSION}" STREQUAL "apache-arrow-0.7.1")
-  set(ARROW_GENERATED_IPC_DIR ${ARROW_DOWNLOAD_BINARY_DIR}/arrow-prefix/src/arrow/cpp/src/arrow/ipc/)
-else()
-  set(ARROW_GENERATED_IPC_DIR ${ARROW_DOWNLOAD_BINARY_DIR}/arrow-prefix/src/arrow-build/src/arrow/ipc/)
-endif()
+set(ARROW_GENERATED_IPC_DIR 
+    "${ARROW_ROOT}/build/src/arrow/ipc")
 
 configure_file(${ARROW_GENERATED_IPC_DIR}/File_generated.h ${CMAKE_SOURCE_DIR}/include/cudf/ipc_generated/File_generated.h COPYONLY)
 configure_file(${ARROW_GENERATED_IPC_DIR}/Message_generated.h ${CMAKE_SOURCE_DIR}/include/cudf/ipc_generated/Message_generated.h COPYONLY)
 configure_file(${ARROW_GENERATED_IPC_DIR}/Schema_generated.h ${CMAKE_SOURCE_DIR}/include/cudf/ipc_generated/Schema_generated.h COPYONLY)
 configure_file(${ARROW_GENERATED_IPC_DIR}/Tensor_generated.h ${CMAKE_SOURCE_DIR}/include/cudf/ipc_generated/Tensor_generated.h COPYONLY)
 
-# Add transitive dependency: Flatbuffers
-set(FLATBUFFERS_ROOT ${ARROW_DOWNLOAD_BINARY_DIR}/arrow-prefix/src/arrow-build/flatbuffers_ep-prefix/src/flatbuffers_ep-install/)
+message(STATUS "Arrow installed here: " ${ARROW_ROOT}/install)
+set(ARROW_LIBRARY_DIR "${ARROW_ROOT}/install/lib")
+set(ARROW_INCLUDE_DIR "${ARROW_ROOT}/install/include")
 
-include_directories(${FLATBUFFERS_ROOT}/include/)
-link_directories(${FLATBUFFERS_ROOT}/lib/)
+set(FLATBUFFERS_ROOT "${ARROW_ROOT}/build/flatbuffers_ep-prefix/src/flatbuffers_ep-install")
+
+message(STATUS "FlatBuffers installed here: " ${FLATBUFFERS_ROOT})
+set(FLATBUFFERS_INCLUDE_DIR "${FLATBUFFERS_ROOT}/include")
+set(FLATBUFFERS_LIBRARY_DIR "${FLATBUFFERS_ROOT}/lib")
+
+add_definitions(-DARROW_METADATA_V4)
+add_definitions(-DARROW_VERSION=1000)
+
+
+

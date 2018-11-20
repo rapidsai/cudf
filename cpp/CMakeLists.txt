@@ -61,23 +61,11 @@ include(ConfigureGoogleTest)
 include(ConfigureArrow)
 
 ###################################################################################################
-# - arrow -----------------------------------------------------------------------------------------
-
-# Locate the Apache Arrow package (Requires that you use ConfigureArrow module)
-find_package(Arrow REQUIRED)
-
-message(STATUS "ARROW_ROOT: " ${ARROW_ROOT})
-
-set_package_properties(
-    Arrow PROPERTIES TYPE REQUIRED
-    PURPOSE "Apache Arrow is a cross-language development platform for in-memory data."
-    URL "https://github.com/apache/arrow")
-
-###################################################################################################
 # - include paths ---------------------------------------------------------------------------------
 
 include_directories("${GTEST_INCLUDE_DIR}"
-                    "${ARROW_INCLUDEDIR}"
+                    "${ARROW_INCLUDE_DIR}"
+                    "${FLATBUFFERS_INCLUDE_DIR}"
                     "${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}"
                     "${CMAKE_BINARY_DIR}/include"
                     "${CMAKE_SOURCE_DIR}/include"
@@ -91,10 +79,12 @@ include_directories("${GTEST_INCLUDE_DIR}"
 
 link_directories("${CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES}" # CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES is an undocumented/unsupported variable containing the link directories for nvcc
                  "${CMAKE_BINARY_DIR}/lib"
+                 "${ARROW_LIBRARY_DIR}"
+                 "${FLATBUFFERS_LIBRARY_DIR}"
                  "${GTEST_LIBRARY_DIR}")
 
 ###################################################################################################
-# - gtest -----------------------------------------------------------------------------------------
+# - add gtest -------------------------------------------------------------------------------------
 
 add_subdirectory(${CMAKE_SOURCE_DIR}/tests)
 
@@ -104,7 +94,7 @@ add_subdirectory(${CMAKE_SOURCE_DIR}/tests)
 find_file(NVSTRINGS_INCLUDE "NVStrings.h"
           HINTS "$ENV{NVSTRINGS_ROOT}/include" "$ENV{CONDA_PREFIX}/include")
 find_library(NVSTRINGS_LIBRARY "NVStrings"
-             HINTS "$ENV{NVSTRINGS_ROOT}/include" "$ENV{CONDA_PREFIX}/lib")
+             HINTS "$ENV{NVSTRINGS_ROOT}/lib" "$ENV{CONDA_PREFIX}/lib")
 
 if(NVSTRINGS_INCLUDE AND NVSTRINGS_LIBRARY)
     execute_process(WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
