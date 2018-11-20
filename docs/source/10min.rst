@@ -372,7 +372,8 @@ Reading from a csv file.
 .. ipython:: python
 
     df = cudf.read_csv('foo.txt', delimiter=',',
-            names=['a', 'b', 'c'], dtype=['int64', 'int64', 'int64'],
+            names=['a', 'b', 'c', 'a1', 'a2'],
+            dtype=['int64', 'int64', 'int64', 'int64', 'int64'],
             skiprows=1)
     print(df)
 
