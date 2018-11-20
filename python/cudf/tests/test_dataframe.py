@@ -928,3 +928,29 @@ def test_from_scalar_typing(data_type):
     gdf['b'] = scalar
     assert(gdf['b'].dtype == np.dtype(data_type))
     assert(len(gdf['b']) == len(gdf['a']))
+
+
+def test_series_shape():
+    ps = pd.Series([1,2,3,4])
+    cs = Series([1,2,3,4])
+
+    assert ps.shape == cs.shape
+
+def test_series_shape_empty():
+    ps = pd.Series()
+    cs = Series([])
+
+    assert ps.shape == cs.shape
+
+
+def test_dataframe_shape():
+    pdf = pd.DataFrame({'a': [0, 1, 2, 3],'b': [0.1, 0.2, None, 0.3]})
+    gdf = DataFrame.from_pandas(pdf)
+
+    assert pdf.shape == gdf.shape
+
+def test_dataframe_shape_empty():
+    pdf = pd.DataFrame()
+    gdf = DataFrame()
+
+    assert pdf.shape == gdf.shape

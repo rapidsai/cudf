@@ -160,6 +160,12 @@ class DataFrame(object):
         return pd.Series([x.dtype for x in self._cols.values()],
                          index=self._cols.keys())
 
+    @property
+    def shape(self):
+        """Returns a tuple representing the dimensionality of the DataFrame.
+        """
+        return len(self._index), len(self._cols)
+
     def __dir__(self):
         o = set(dir(type(self)))
         o.update(self.__dict__)
