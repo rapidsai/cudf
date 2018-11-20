@@ -132,8 +132,8 @@ gdf_error launch_dataConvertColumns(raw_csv_t * raw_csv, void** d_gdf,  gdf_vali
 
 gdf_error launch_dataTypeDetection(raw_csv_t * raw_csv, long row_offset, column_data_t* d_columnData);
 
-__global__ void countRecords(char *data, const char delim, const char terminator, long num_bytes, long num_bits, unsigned long long* num_records);
-__global__ void storeRecordStart(char *data, const char delim, const char terminator, long num_bytes, long num_bits, unsigned long long* num_records,unsigned long long* recStart) ;
+__global__ void countRecords(char *data, const char terminator, const char quotechar, long num_bytes, long num_bits, unsigned long long* num_records);
+__global__ void storeRecordStart(char *data, const char terminator, const char quotechar, long num_bytes, long num_bits, unsigned long long* num_records,unsigned long long* recStart) ;
 __global__ void convertCsvToGdf(char *csv, const parsing_opts_t opts, unsigned long long num_records, int num_columns,bool *parseCol,unsigned long long *recStart,gdf_dtype *dtype,void **gdf_data,gdf_valid_type **valid,string_pair **str_cols,unsigned long long row_offset, long header_row,bool dayfirst,unsigned long long *num_valid);
 __global__ void dataTypeDetection(char *raw_csv, const parsing_opts_t opts, unsigned long long num_records, int  num_columns, bool  *parseCol, unsigned long long *recStart, unsigned long long row_offset, long header_row, column_data_t* d_columnData);
 
@@ -246,7 +246,7 @@ gdf_error read_csv(csv_read_arg *args)
 	}
 
 	raw_csv->quotechar = args->quotechar;
-	if(raw_csv->quotechar != '\0'){
+	if(raw_csv->quotechar != '\0') {
 		raw_csv->keepquotes = !args->quoting;
 		raw_csv->nodoublequote = args->nodoublequote;
 	}
@@ -294,7 +294,36 @@ gdf_error read_csv(csv_read_arg *args)
 
 	cudaDeviceSynchronize();
 
-	thrust::sort(thrust::device,raw_csv->recStart, raw_csv->recStart + raw_csv->num_records + 1);
+	thrust::sort(thrust::device, raw_csv->recStart, raw_csv->recStart + raw_csv->num_records + 1);
+
+	if (raw_csv->quotechar != '\0') {
+		const size_t recTotalSize = sizeof(unsigned long long) * (raw_csv->num_records + 1);
+
+		unsigned long long *h_recStart = (unsigned long long*)malloc(recTotalSize);
+		CUDA_TRY( cudaMemcpy(h_recStart, raw_csv->recStart, recTotalSize, cudaMemcpyDeviceToHost) );
+
+		const char *h_data = (const char *)(map_data);
+		unsigned long long recCount = raw_csv->num_records;
+
+		bool quotation = false;
+		for (size_t i = 1; i < raw_csv->num_records; ++i) {
+			if (h_data[h_recStart[i] - 1] == raw_csv->quotechar) {
+				quotation = !quotation;
+				h_recStart[i] = raw_csv->num_bytes;
+				recCount--;
+			}
+			else if (quotation) {
+				h_recStart[i] = raw_csv->num_bytes;
+				recCount--;
+			}
+		}
+
+		CUDA_TRY( cudaMemcpy(raw_csv->recStart, h_recStart, recTotalSize, cudaMemcpyHostToDevice) );
+		thrust::sort(thrust::device, raw_csv->recStart, raw_csv->recStart + raw_csv->num_records + 1);
+		raw_csv->num_records = recCount;
+		
+		free(h_recStart);
+	}
 
 	//-----------------------------------------------------------------------------
 	//-- Acquire header row of 
@@ -777,12 +806,13 @@ gdf_error allocateGdfDataSpace(gdf_column *gdf) {
 
 gdf_error launch_countRecords(raw_csv_t * csvData) {
 
-	char 		*data 		= csvData->data;
-	long 		num_bytes	= csvData->num_bytes;
-	long 		numBitmaps 	= csvData->num_bits;
-	char		delim		= csvData->delimiter;
+	char *data 		= csvData->data;
+	long num_bytes	= csvData->num_bytes;
+	long numBitmaps	= csvData->num_bits;
+	char terminator	= csvData->terminator;
+	char quotechar  = csvData->quotechar;
+
 	unsigned long long 		*d_num_records = csvData->d_num_records;
-	char		terminator	= csvData->terminator;
 
 	/*
 	 * Each bitmap is for a 64-byte chunk,
@@ -795,7 +825,7 @@ gdf_error launch_countRecords(raw_csv_t * csvData) {
 	// Using the number of bitmaps as the size - data index is bitmap ID * 64
 	int64_t blocks = (numBitmaps + (threads -1)) / threads ;
 
-	countRecords <<< blocks, threads >>> (data, delim, terminator, num_bytes, numBitmaps, d_num_records);
+	countRecords <<< blocks, threads >>> (data, terminator, quotechar, num_bytes, numBitmaps, d_num_records);
 
 	CUDA_TRY(cudaGetLastError());
 
@@ -809,12 +839,12 @@ gdf_error launch_countRecords(raw_csv_t * csvData) {
 }
 
 
-__global__ void countRecords(char *data, const char delim, const char terminator, long num_bytes, long num_bits, unsigned long long* num_records) {
+__global__ void countRecords(char *data, const char terminator, const char quotechar, long num_bytes, long num_bits, unsigned long long* num_records) {
 
 	// thread IDs range per block, so also need the block id
 	long tid = threadIdx.x + (blockDim.x * blockIdx.x);
 
-	if ( tid >= num_bits)
+	if (tid >= num_bits)
 		return;
 
 	// data ID is a multiple of 64
@@ -825,33 +855,34 @@ __global__ void countRecords(char *data, const char delim, const char terminator
 	long byteToProcess = ((did + 64L) < num_bytes) ? 64L : (num_bytes - did);
 
 	// process the data
-	long x = 0;
-	long newLinesFound=0;
-	for (x = 0; x < byteToProcess; x++) {
-
-		// records
-		if (raw[x] == terminator) {
-			newLinesFound++;
-		}	else if (raw[x] == '\r' && (x+1L)<num_bytes && raw[x +1] == '\n') {
+	long tokenCount = 0;
+	for (long x = 0; x < byteToProcess; x++) {
+		
+		// Scan and log records. If quotations are enabled, then also log quotes
+		// for a postprocess ignore, as the chunk here has limited visibility.
+		if ((raw[x] == terminator) || (quotechar != '\0' && raw[x] == quotechar)) {
+			tokenCount++;
+		} else if (raw[x] == '\r' && (x+1L)<num_bytes && raw[x +1] == '\n') {
 			x++;
-			newLinesFound++;
+			tokenCount++;
 		}
 
 	}
-	atomicAdd((unsigned long long int*)num_records,(unsigned long long int)newLinesFound);
+	atomicAdd((unsigned long long int*)num_records,(unsigned long long int)tokenCount);
 }
 
 
 gdf_error launch_storeRecordStart(raw_csv_t * csvData) {
 
-	char 		*data 		= csvData->data;
-	long 		num_bytes	= csvData->num_bytes;
-	long 		numBitmaps 	= csvData->num_bits;
-	char		delim		= csvData->delimiter;
-	char 		terminator	= csvData->terminator;
+	char *data		= csvData->data;
+	long num_bytes	= csvData->num_bytes;
+	long numBitmaps	= csvData->num_bits;
+	char terminator	= csvData->terminator;
+	char quotechar	= csvData->quotechar;
 
-	unsigned long long 	*d_num_records 	= csvData->d_num_records;
-	unsigned long long  *recStart 		= csvData->recStart;
+	unsigned long long *d_num_records 	= csvData->d_num_records;
+	unsigned long long *recStart 		= csvData->recStart;
+
 
 	/*
 	 * Each bitmap is for a 64-byte chunk
@@ -862,14 +893,14 @@ gdf_error launch_storeRecordStart(raw_csv_t * csvData) {
 	// Using the number of bitmaps as the size - data index is bitmap ID * 64
 	long blocks = (numBitmaps + (threads -1)) / threads ;
 
-	storeRecordStart <<< blocks, threads >>> (data, delim, terminator, num_bytes, numBitmaps,d_num_records,recStart);
+	storeRecordStart <<< blocks, threads >>> (data, terminator, quotechar, num_bytes, numBitmaps,d_num_records,recStart);
 
 	CUDA_TRY(cudaGetLastError());
 	return GDF_SUCCESS;
 }
 
 
-__global__ void storeRecordStart(char *data, const char delim, const char terminator, long num_bytes, long num_bits, unsigned long long* num_records,unsigned long long* recStart) {
+__global__ void storeRecordStart(char *data, const char terminator, const char quotechar, long num_bytes, long num_bits, unsigned long long* num_records,unsigned long long* recStart) {
 
 	// thread IDs range per block, so also need the block id
 	long tid = threadIdx.x + (blockDim.x * blockIdx.x);
@@ -890,16 +921,16 @@ __global__ void storeRecordStart(char *data, const char delim, const char termin
 	}
 
 	// process the data
-	long x = 0;
-	for (x = 0; x < byteToProcess; x++) {
+	for (long x = 0; x < byteToProcess; x++) {
 
-		// records
-		if (raw[x] == terminator) {
+		// Scan and log records. If quotations are enabled, then also log quotes
+		// for a postprocess ignore, as the chunk here has limited visibility.
+		if ((raw[x] == terminator) || (quotechar != '\0' && raw[x] == quotechar)) {
 
 			long pos = atomicAdd((unsigned long long int*)num_records,(unsigned long long int)1);
 			recStart[pos]=did+x+1;
 
-		}	else if (raw[x] == '\r' && (x+1L)<num_bytes && raw[x +1] == '\n') {
+		} else if (raw[x] == '\r' && (x+1L)<num_bytes && raw[x +1] == '\n') {
 
 			x++;
 			long pos = atomicAdd((unsigned long long int*)num_records,(unsigned long long int)1);

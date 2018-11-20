@@ -198,7 +198,7 @@ def test_csv_reader_strings_quotechars(tmpdir):
 
     names = ['text', 'int']
     dtypes = ['str', 'int']
-    lines = [','.join(names), '"a,",0', '"b ""c"" d",0', 'e,0', '"f,,!.,",0']
+    lines = [','.join(names), '"a,\n",0', '"b ""c"" d",0', 'e,0', '"f,,!.,",0']
 
     with open(str(fname), 'w') as fp:
         fp.write('\n'.join(lines) + '\n')
@@ -209,7 +209,7 @@ def test_csv_reader_strings_quotechars(tmpdir):
     assert(len(cols) == 2)
     assert(type(cols[0]) == nvstrings.nvstrings)
     assert(type(cols[1]) == cudf.Series)
-    assert(cols[0].sublist([0]).to_host()[0] == 'a,')
+    assert(cols[0].sublist([0]).to_host()[0] == 'a,\n')
     assert(cols[0].sublist([1]).to_host()[0] == 'b "c" d')
     assert(cols[0].sublist([2]).to_host()[0] == 'e')
     assert(cols[0].sublist([3]).to_host()[0] == 'f,,!.,')
