@@ -390,13 +390,7 @@ If you are attempting to perform Boolean indexing directly or using the `query` 
 
     ---------------------------------------------------------------------------
     AssertionError                            Traceback (most recent call last)
-    <ipython-input-8-1123dfd98f02> in <module>()
-    ----> 1 d.query("a > 3")
-
    ...
-
-    /conda/envs/cudf/lib/python3.5/site-packages/cudf/columnops.py in column_select_by_boolmask(column, boolmask)
-        102     """
         103     from .numerical import NumericalColumn
     --> 104     assert column.null_count == 0  # We don't properly handle the boolmask yet
         105     boolbits = cudautils.compact_mask_bytes(boolmask.to_gpu_array())
