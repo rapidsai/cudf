@@ -949,7 +949,7 @@ class DataFrame(object):
 
     @property
     def T(self):
-        return self.tranpose()
+        return self.transpose()
 
     def merge(self, other, on=None, how='left', lsuffix='_x', rsuffix='_y',
               type="", method='hash'):
