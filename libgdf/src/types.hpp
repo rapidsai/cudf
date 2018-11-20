@@ -53,7 +53,7 @@ namespace gdf
   namespace detail
   {
     template <typename T>
-    typename T::value_type& unwrap(T const& w) {return w.value;}
+    typename T::value_type& unwrap(T& w) {return w.value;}
   } // namespace detail
 } // namespace gdf
 
