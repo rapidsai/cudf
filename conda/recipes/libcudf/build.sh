@@ -7,6 +7,8 @@ if [ -n "$MACOSX_DEPLOYMENT_TARGET" ]; then
     export MACOSX_DEPLOYMENT_TARGET=10.11
 fi
 
+# show environment
+printenv
 # Cleanup local git
 git clean -xdf
 # Change directory for build process
