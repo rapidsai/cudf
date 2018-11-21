@@ -16,12 +16,12 @@ endif(GTEST_CONFIG)
 
 # Parallel builds cause Travis to run out of memory
 unset(PARALLEL_CMAKE_BUILD)            
-if (ENV{TRAVIS})
+if (defined ENV{TRAVIS})
     message("Disabling Parallel CMake build on Travis")
 else()
     set(PARALLEL_CMAKE_BUILD --parallel)
     message("Enabling Parallel CMake build")
-endif (ENV{TRAVIS})
+endif (defined ENV{TRAVIS})
 
 execute_process(COMMAND ${CMAKE_COMMAND} --build ${PARALLEL_CMAKE_BUILD} ..
                 RESULT_VARIABLE GTEST_BUILD
