@@ -90,7 +90,7 @@ The correct output will be of the following form:
 ```bash
 $ make test
 Running tests...
-Test project /home/nfs/majones/workspace/github/rapids/cudf/cpp/build
+Test project /rapids/cudf/cpp/build
       Start  1: COLUMN_TEST
  1/14 Test  #1: COLUMN_TEST ......................   Passed    1.20 sec
       Start  2: CUDF_INTERNAL_TEST

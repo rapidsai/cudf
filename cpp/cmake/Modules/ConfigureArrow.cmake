@@ -36,6 +36,14 @@ message(STATUS "Arrow installed here: " ${ARROW_ROOT}/install)
 set(ARROW_LIBRARY_DIR "${ARROW_ROOT}/install/lib")
 set(ARROW_INCLUDE_DIR "${ARROW_ROOT}/install/include")
 
+find_library(ARROW_LIB arrow PATHS
+             $ENV{CONDA_PREFIX}/lib)
+
+if(ARROW_LIB)
+    message(STATUS "Arrow library: " ${ARROW_LIB})
+    set(ARROW_FOUND TRUE)
+endif(ARROW_LIB)
+
 set(FLATBUFFERS_ROOT "${ARROW_ROOT}/build/flatbuffers_ep-prefix/src/flatbuffers_ep-install")
 
 message(STATUS "FlatBuffers installed here: " ${FLATBUFFERS_ROOT})

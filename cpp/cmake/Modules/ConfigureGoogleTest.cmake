@@ -23,7 +23,7 @@ if(GTEST_BUILD)
 endif(GTEST_BUILD)
 
 message(STATUS "GoogleTest installed here: " ${GTEST_ROOT}/install)
-set(GTEST_LIBRARY_DIR "${GTEST_ROOT}/install/lib")
 set(GTEST_INCLUDE_DIR "${GTEST_ROOT}/install/include")
-
+set(GTEST_LIBRARY_DIR "${GTEST_ROOT}/install/lib")
+set(GTEST_FOUND TRUE)
 

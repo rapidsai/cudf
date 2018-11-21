@@ -105,8 +105,9 @@ $ make test
 
 Build and install cffi bindings:
 ```bash
-$ make python_cffi                                    # build CFFI bindings for librmm.so, libcudf.so
-$ make install_python                                 # install python bindings into site-packages
+$ make python_cffi                                  # build CFFI bindings for librmm.so, libcudf.so
+$ make install_python                               # install python bindings into site-packages
+$ cd python && py.test -v                           # optional, run python tests on low-level python bindings
 ```
 
 4. Build the `cudf` python package, in the `python` folder:
@@ -117,12 +118,12 @@ $ python setup.py build_ext --inplace
 
 To run Python tests (Optional):
 ```bash
-$ py.test
+$ py.test -v                                        # run python tests on cudf python bindings
 ```
-Finally, install the Python package to your Python path:
+5. Finally, install the Python package to your Python path:
 
 ```bash
-$ python setup.py install
+$ python setup.py install                           # install cudf python bindings
 ```
 
 ## Automated Build in Docker Container
@@ -139,11 +140,11 @@ A Dockerfile is provided with a preconfigured conda environment for building and
 
 From cudf project root run the following, to build with defaults:
 ```bash
-docker build -t cudf .
+$ docker build --tag cudf .
 ```
 After the container is built run the container:
-```
-docker run --runtime=nvidia -it cudf bash
+```bash
+$ docker run --runtime=nvidia -it cudf bash
 ```
 Activate the conda environment `cudf` to use the newly built cuDF and libcudf libraries:
 ```
@@ -170,32 +171,6 @@ flag. Below is a list of the available arguments and their purpose:
 | `PANDAS_VERSION` | 0.20.3 | Not supported | set pandas version |
 | `PYARROW_VERSION` | 0.10.0 | 0.8.0+ | set pyarrow version |
 | `PYTHON_VERSION` | 3.5 | 3.6 | set python version |
-
-## Testing
-
-### cuDF
-
-This project uses [py.test](https://docs.pytest.org/en/latest/)
-
-In the source root directory and with the development conda environment activated, run:
-
-```bash
-py.test --cache-clear --ignore=cpp
-```
-
-### libcudf
-
-The `libcudf` tests require a GPU and CUDA. CUDA can be installed locally or through the conda packages of `numba` & `cudatoolkit`. For more details on the requirements needed to run these tests see the [libcudf README](cpp/README.md).
-
-`libcudf` has two testing frameworks `py.test` and GoogleTest:
-
-```bash
-# Run py.test command inside the /libcudf folder
-py.test
-
-# Run GoogleTest command inside the /libcudf/build folder after cmake
-make -j test
-```
 
 ---
 

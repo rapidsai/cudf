@@ -45,7 +45,7 @@ set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -Werror cross-execution-space-call -Wn
 set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -Werror cross-execution-space-call -Xcompiler -Wall,-Werror")
 
 # set default build type
-set(CMAKE_BUILD_TYPE "Release")
+# set(CMAKE_BUILD_TYPE "Release")
 
 ###################################################################################################
 # - cmake modules ---------------------------------------------------------------------------------
@@ -59,6 +59,26 @@ include(CTest)
 
 include(ConfigureGoogleTest)
 include(ConfigureArrow)
+
+###################################################################################################
+# - find arrow ------------------------------------------------------------------------------------
+
+if (ARROW_FOUND)
+    message(STATUS "Apache Arrow found in ${ARROW_INCLUDE_DIR}")
+else()
+    message(FATAL_ERROR "Apache Arrow not found, please check your settings.")
+endif()
+
+###################################################################################################
+# - add gtest -------------------------------------------------------------------------------------
+
+if(GTEST_FOUND)
+    message(STATUS "Google C++ Testing Framework (Google Test) found in ${GTEST_ROOT}")
+    include_directories(${GTEST_INCLUDE_DIRS})
+    add_subdirectory(${CMAKE_SOURCE_DIR}/tests)
+else()
+    message(AUTHOR_WARNING "Google C++ Testing Framework (Google Test) not found: automated tests are disabled.")
+endif(GTEST_FOUND)
 
 ###################################################################################################
 # - include paths ---------------------------------------------------------------------------------
@@ -79,14 +99,8 @@ include_directories("${GTEST_INCLUDE_DIR}"
 
 link_directories("${CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES}" # CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES is an undocumented/unsupported variable containing the link directories for nvcc
                  "${CMAKE_BINARY_DIR}/lib"
-                 "${ARROW_LIBRARY_DIR}"
                  "${FLATBUFFERS_LIBRARY_DIR}"
                  "${GTEST_LIBRARY_DIR}")
-
-###################################################################################################
-# - add gtest -------------------------------------------------------------------------------------
-
-add_subdirectory(${CMAKE_SOURCE_DIR}/tests)
 
 ###################################################################################################
 # - nvstrings -------------------------------------------------------------------------------------
@@ -166,7 +180,7 @@ endif(CMAKE_BUILD_TYPE MATCHES Debug)
 # - link libraries --------------------------------------------------------------------------------
 
 target_link_libraries(rmm cudart cuda NVStrings)
-target_link_libraries(cudf arrow rmm)
+target_link_libraries(cudf rmm "${ARROW_LIB}")
 
 ###################################################################################################
 # - python cffi bindings --------------------------------------------------------------------------
