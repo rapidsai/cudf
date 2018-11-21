@@ -1,5 +1,11 @@
 set(GTEST_ROOT "${CMAKE_BINARY_DIR}/googletest")
 
+set(GTEST_CMAKE_ARGS " -Dgtest_build_samples=ON" 
+                     " -DCMAKE_VERBOSE_MAKEFILE=ON"
+                     " -DCMAKE_C_FLAGS=-D_GLIBCXX_USE_CXX11_ABI=0"      # enable old ABI for C/C++
+                     " -DCMAKE_CXX_FLAGS=-D_GLIBCXX_USE_CXX11_ABI=0")   # enable old ABI for C/C++
+
+
 configure_file("${CMAKE_SOURCE_DIR}/cmake/Templates/GoogleTest.CMakeLists.txt.cmake"
                "${GTEST_ROOT}/CMakeLists.txt")
 
@@ -15,13 +21,13 @@ if(GTEST_CONFIG)
 endif(GTEST_CONFIG)
 
 # Parallel builds cause Travis to run out of memory
-unset(PARALLEL_CMAKE_BUILD)            
-if (DEFINED ENV{TRAVIS})
+unset(PARALLEL_CMAKE_BUILD)
+if(DEFINED ENV{TRAVIS})
     message("Disabling Parallel CMake build on Travis")
 else()
     set(PARALLEL_CMAKE_BUILD --parallel)
     message("Enabling Parallel CMake build")
-endif (DEFINED ENV{TRAVIS})
+endif(DEFINED ENV{TRAVIS})
 
 execute_process(COMMAND ${CMAKE_COMMAND} --build ${PARALLEL_CMAKE_BUILD} ..
                 RESULT_VARIABLE GTEST_BUILD

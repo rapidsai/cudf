@@ -32,6 +32,9 @@ if(CMAKE_COMPILER_IS_GNUCXX)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Werror")
 endif(CMAKE_COMPILER_IS_GNUCXX)
 
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -D_GLIBCXX_USE_CXX11_ABI=0")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -D_GLIBCXX_USE_CXX11_ABI=0")
+
 set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -gencode=arch=compute_60,code=sm_60 -gencode=arch=compute_61,code=sm_61")
 set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -gencode=arch=compute_70,code=sm_70 -gencode=arch=compute_70,code=compute_70")
 
@@ -43,6 +46,7 @@ set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -Werror cross-execution-space-call -Wn
 
 # set warnings as errors
 set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -Werror cross-execution-space-call -Xcompiler -Wall,-Werror")
+set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -Xcompiler -D_GLIBCXX_USE_CXX11_ABI=0")
 
 # set default build type
 # set(CMAKE_BUILD_TYPE "Release")
@@ -106,9 +110,11 @@ link_directories("${CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES}" # CMAKE_CUDA_IMPLICIT
 # - nvstrings -------------------------------------------------------------------------------------
 
 find_file(NVSTRINGS_INCLUDE "NVStrings.h"
-          HINTS "$ENV{NVSTRINGS_ROOT}/include" "$ENV{CONDA_PREFIX}/include")
+          HINTS "$ENV{NVSTRINGS_ROOT}/include"
+                "$ENV{CONDA_PREFIX}/include")
 find_library(NVSTRINGS_LIBRARY "NVStrings"
-             HINTS "$ENV{NVSTRINGS_ROOT}/lib" "$ENV{CONDA_PREFIX}/lib")
+             HINTS "$ENV{NVSTRINGS_ROOT}/lib"
+                   "$ENV{CONDA_PREFIX}/lib")
 
 if(NVSTRINGS_INCLUDE AND NVSTRINGS_LIBRARY)
     execute_process(WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
@@ -151,8 +157,7 @@ add_library(cudf SHARED
 add_library(rmm SHARED
             src/rmm/memory.cpp
             src/rmm/memory_manager.cpp
-            thirdparty/cnmem/src/cnmem.cpp
-            )
+            thirdparty/cnmem/src/cnmem.cpp)
 
 ###################################################################################################
 # - build options ---------------------------------------------------------------------------------
@@ -179,6 +184,7 @@ endif(CMAKE_BUILD_TYPE MATCHES Debug)
 ###################################################################################################
 # - link libraries --------------------------------------------------------------------------------
 
+message(STATUS "???? ARROW LIB " ${ARROW_LIB})
 target_link_libraries(rmm cudart cuda NVStrings)
 target_link_libraries(cudf rmm "${ARROW_LIB}")
 
@@ -211,5 +217,9 @@ add_custom_command(OUTPUT INSTALL_PYTHON_CFFI
                    VERBATIM)
 
 add_custom_target(install_python DEPENDS cudf PYTHON_CFFI INSTALL_PYTHON_CFFI)
+
+
+
+
 
 

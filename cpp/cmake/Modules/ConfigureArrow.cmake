@@ -1,5 +1,24 @@
 set(ARROW_ROOT ${CMAKE_BINARY_DIR}/arrow)
 
+set(ARROW_CMAKE_ARGS " -DARROW_WITH_LZ4=OFF"
+                     " -DARROW_WITH_ZSTD=OFF"
+                     " -DARROW_WITH_BROTLI=OFF"
+                     " -DARROW_WITH_SNAPPY=OFF"
+                     " -DARROW_WITH_ZLIB=OFF"
+                     " -DARROW_BUILD_STATIC=ON"
+                     " -DARROW_BUILD_SHARED=OFF"
+                     " -DARROW_BOOST_USE_SHARED=ON"
+                     " -DARROW_BUILD_TESTS=OFF"
+                     " -DARROW_TEST_MEMCHECK=OFF"
+                     " -DARROW_BUILD_BENCHMARKS=OFF"
+                     " -DARROW_IPC=ON"
+                     " -DARROW_COMPUTE=OFF"
+                     " -DARROW_GPU=OFF"
+                     " -DARROW_JEMALLOC=OFF"
+                     " -DARROW_BOOST_VENDORED=OFF"
+                     " -DARROW_PYTHON=OFF"
+                     " -DARROW_TENSORFLOW=ON") # enable old ABI for C/C++
+
 configure_file("${CMAKE_SOURCE_DIR}/cmake/Templates/Arrow.CMakeLists.txt.cmake"
                "${ARROW_ROOT}/CMakeLists.txt")
 
@@ -17,12 +36,12 @@ endif(ARROW_CONFIG)
 
 # Parallel builds cause Travis to run out of memory
 unset(PARALLEL_CMAKE_BUILD)            
-if (DEFINED ENV{TRAVIS})
+if(DEFINED ENV{TRAVIS})
     message("Disabling Parallel CMake build on Travis")
 else()
     set(PARALLEL_CMAKE_BUILD --parallel)
     message("Enabling Parallel CMake build")
-endif (DEFINED ENV{TRAVIS})
+endif(DEFINED ENV{TRAVIS})
 
 
 execute_process(
@@ -46,8 +65,8 @@ message(STATUS "Arrow installed here: " ${ARROW_ROOT}/install)
 set(ARROW_LIBRARY_DIR "${ARROW_ROOT}/install/lib")
 set(ARROW_INCLUDE_DIR "${ARROW_ROOT}/install/include")
 
-find_library(ARROW_LIB arrow PATHS
-             $ENV{CONDA_PREFIX}/lib)
+find_library(ARROW_LIB arrow
+             HINTS "$ENV{CONDA_PREFIX}/lib")
 
 if(ARROW_LIB)
     message(STATUS "Arrow library: " ${ARROW_LIB})
@@ -62,6 +81,9 @@ set(FLATBUFFERS_LIBRARY_DIR "${FLATBUFFERS_ROOT}/lib")
 
 add_definitions(-DARROW_METADATA_V4)
 add_definitions(-DARROW_VERSION=1000)
+
+
+
 
 
 
