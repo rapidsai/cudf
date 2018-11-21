@@ -854,7 +854,10 @@ gdf_error gdf_quantile_aprrox(	gdf_column*  col_in,       //input column with 0 
                                 gdf_context* ctxt);        //context info
 
 gdf_error gdf_order_by_asc_desc(
-        gdf_column * input_columns, //pointers to pointers of input columns
-        size_t num_inputs, //number of pointeres in the first parameter (e.g. number of columsn to sort by
+        gdf_column** input_columns, //input columns
+        size_t num_inputs, //number of columns in the first parameter (e.g. number of columsn to sort by
         gdf_column * output_indices, //a gdf_column that is pre allocated for storing sorted indices
-		char * asc_desc_bitmask); //asc_desc bitmask e.g. 101 would mean sort the first and last oclumns ascending and the second one descending
+		char * asc_desc,             //asc_desc : array of char where 1 is ascending and 0 is descending for each input column
+									//e.g. 101 would mean sort the first and last columns ascending and the second one descending
+		bool nulls_are_smallest);  // bool value to indicate if nulls are to be considered smaller than non-nulls or viceversa
+

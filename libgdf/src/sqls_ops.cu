@@ -40,7 +40,7 @@ namespace{ //annonymus
     cudaMemcpy(d_types, h_types, ncols*sizeof(int), cudaMemcpyHostToDevice);//TODO: add streams
   }
 
-  void soa_col_info(gdf_column* cols, size_t ncols, void** d_cols, gdf_valid_type** d_valids, int* d_types)
+  void soa_col_info(gdf_column** cols, size_t ncols, void** d_cols, gdf_valid_type** d_valids, int* d_types)
   {
     std::vector<void*> v_cols(ncols,nullptr);
     std::vector<gdf_valid_type*> v_valids(ncols,nullptr);
@@ -1508,10 +1508,11 @@ gdf_error gdf_group_by_count(int ncols,                    // # columns
 
 
 gdf_error gdf_order_by_asc_desc(
-        gdf_column * input_columns,
+        gdf_column** input_columns,
         size_t num_inputs,
-        gdf_column * output_indices,
-		char * asc_desc_bitmask){
+        gdf_column* output_indices,
+		char * asc_desc,
+		bool nulls_are_smallest = false){
 
     //TODO: don't assume type of output is size_t
     typedef size_t IndexT;
@@ -1535,9 +1536,10 @@ gdf_error gdf_order_by_asc_desc(
 			d_valids_data,
             d_col_types,
             num_inputs,
-            asc_desc_bitmask,
+            asc_desc,
             (size_t *) output_indices->data,
-            input_columns[0].size);
+            input_columns[0].size,
+			nulls_are_smallest);
 
     return GDF_SUCCESS;
 

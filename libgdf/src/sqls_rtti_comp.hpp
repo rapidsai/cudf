@@ -995,7 +995,7 @@ void multi_col_order_by_asc_desc(
 		thrust::sort(thrust::cuda::par.on(stream),
 				d_indx, d_indx+nrows,
 				[f] __host__ __device__ (IndexT i1, IndexT i2){
-			return f.asc_desc_comparison(i1, i2);
+			return f.asc_desc_comparison_with_nulls(i1, i2);
 		});
 	} else {
 		LesserRTTI<IndexT> f(d_col_data, d_valids_data, d_col_types, num_inputs, asc_desc, nulls_are_smallest);
@@ -1003,7 +1003,7 @@ void multi_col_order_by_asc_desc(
 		thrust::sort(thrust::cuda::par.on(stream),
 				d_indx, d_indx+nrows,
 				[f] __host__ __device__ (IndexT i1, IndexT i2){
-			return f.asc_desc_comparison_with_nulls(i1, i2);
+			return f.asc_desc_comparison(i1, i2);
 		});
 	}
 }
