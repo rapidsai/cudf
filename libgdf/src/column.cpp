@@ -230,10 +230,10 @@ gdf_error gdf_column_free(gdf_column *column)
 
 namespace{
   struct get_type_size{
-    template <typename type_info>
+    template <typename T>
     auto operator()()
     {
-      return sizeof(typename type_info::type);
+      return sizeof(gdf::detail::unwrap(T{}));
     }
   };
 }

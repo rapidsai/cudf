@@ -4,73 +4,72 @@
 #include <cassert>
 #include <utility>
 #include <gdf/cffi/types.h>
-#include "types.hpp"
+#include "types.cuh"
 #include "NVStrings.h"
 
-namespace {
 /* --------------------------------------------------------------------------*/
 /** 
- * @brief  Traits struct that maps a gdf_dtype to the appropriate underlying type.
- */
-/* ----------------------------------------------------------------------------*/
-template<gdf_dtype t> struct default_enum_map;
-template <> struct default_enum_map<GDF_INT8>{ using type = int8_t; };
-template <> struct default_enum_map<GDF_INT16>{ using type = int16_t; };
-template <> struct default_enum_map<GDF_INT32>{ using type = int32_t; };
-template <> struct default_enum_map<GDF_INT64>{ using type = int64_t; };
-template <> struct default_enum_map<GDF_FLOAT32>{ using type = float; };
-template <> struct default_enum_map<GDF_FLOAT64>{ using type = double; };
-template <> struct default_enum_map<GDF_DATE32>{ using type = gdf_date32; };
-template <> struct default_enum_map<GDF_DATE64>{ using type = gdf_date64; };
-template <> struct default_enum_map<GDF_TIMESTAMP>{ using type = gdf_timestamp; };
-template <> struct default_enum_map<GDF_CATEGORY>{ using type = gdf_category; };
-template <> struct default_enum_map<GDF_STRING>{ using type = NVStrings; };
-} // anonymous namespace
-
-/* --------------------------------------------------------------------------*/
-/** 
- * @brief  Invokes an instance of a functor template with a traits struct that
- * can be used within the functor's body to retrieve the appropriate underlying 
- * type corresponding to the passed in gdf_dtype enum.
+ * @brief  Invokes an instance of a functor template with the appropriate type
+ * determined by a gdf_dtype enum value.
  *
  * This helper function accepts any callable object with an "operator()" template,
- * e.g., a functor or a templated lambda. It will invoke an instance of the template
- * by passing in as the template argument a "traits struct" that is templated on 
- * a gdf_dtype. This trait struct has a member type called "type" that defines 
- * what underlying type should be used for the corresponding gdf_dtype.
- * 
- * The template may have 1 or more template parameters, but the first parameter must 
- * be the traits structure dispatched from the gdf_dtype enum.  The remaining template 
- * parameters must be able to be automatically deduced. 
+ * e.g., a functor. It will invoke an instance of the template by passing 
+ * in as the template argument an appropriate type determined by the value of the 
+ * gdf_dtype argument.
  *
- * Example usage with standalone functor that returns the size of the dispatched type:
+ * The template may have 1 or more template parameters, but the first parameter must 
+ * be the type dispatched from the gdf_dtype enum.  The remaining template parameters 
+ * must be able to be automatically deduced. 
+ *
+ * There is a 1-to-1 mapping of gdf_dtype enum values and dispatched types. However,
+ * different gdf_dtype values may have the same underlying type. Therefore, in
+ * order to provide the 1-to-1 mapping, a wrapper struct may be dispatched for certain
+ * gdf_dtype enum values in order to emulate a "strong typedef". 
+ *
+ * A strong typedef  provides a new, concrete type, unlike a normal C++ typedef which
+ * is simply a type alias. These "strong typedef" structs simply wrap a single member
+ * variable of a fundamental type called 'value'. In order to access the underlying 
+ * value, one must use the "unwrap" function which will provide a reference to the 
+ * underlying value.
+ *
+ * See types.cuh for more detail.
+ *
+ * Example usage with a functor that returns the size of the dispatched type:
  *
  * struct example_functor{
- *  template <typename type_info>
+ *  template <typename col_type>
  *  int operator()(){
- *    using T = typename type_info::type; // Retrieve underlying type from type_info
  *    return sizeof(T);
  *  }
  * };
  *
- * gdf_type_dispatcher(GDF_INT8, example_functor);  // returns 1
- * gdf_type_dispatcher(GDF_INT64, example_functor); // returns 8
+ * gdf::type_dispatcher(GDF_INT8, example_functor);  // returns 1
+ * gdf::type_dispatcher(GDF_INT64, example_functor); // returns 8
  *
- * Example usage with a "template lambda" that returns size of the dispatched type:
+ * Example usage of of the "unwrap" function in a functor for checking if element "i" 
+ * in column "lhs" is equal to element "j" in column "rhs":
  *
- * template <typename type_info>
- * auto example_lambda = []{ return sizeof(typename type_info::type); };
+ * struct elements_are_equal{
+ *   template <typename col_type>
+ *   bool operator()(void const * lhs, int i,
+ *                   void const * rhs, int j)
+ *   {
+ *     // Cast the void* data buffer to the dispatched type and retrieve elements 
+ *     // "i" and "j" from the respective columns
+ *     col_type const i_elem = static_cast<col_type const*>(lhs)[i];
+ *     col_type const j_elem = static_cast<col_type const*>(rhs)[j];
  *
- * gdf_type_dispatcher(GDF_INT8, example_lambda);  // returns 1
- * gdf_type_dispatcher(GDF_INT64, example_lambda); // returns 8
- *
- * NOTE: "template lambdas" can only be declared in namespace scope, i.e., outside
- * the scope of a function. Furthermore, they can only be *host* lambdas. As of 
- * CUDA 10, nvcc does not support templated, extended device lambdas.
+ *     // "col_type" may be a wrapper struct. Therefore, use the "unwrap" function
+ *     // to retrieve a reference to the underlying value. If "col_type" is a 
+ *     // fundamental type, "unwrap" simply passes through the same value and
+ *     // is effectively a no-op
+ *     return gdf::detail::unwrap(i_elem) == gdf::detail::unwrap(j_elem);
+ *   }
+ * };
  *
  * The return type for all template instantiations of the functor's "operator()" 
- * or the templated lambda must be the same, otherwise there will be a compiler 
- * error as you would be  trying to return different types from the same function.
+ * lambda must be the same, otherwise there will be a compiler error as you would be
+ * trying to return different types from the same function.
  *
  * @Param dtype The gdf_dtype enum that determines which type will be dispatched
  * @Param f The functor with a templated "operator()" that will be invoked with 
@@ -89,29 +88,27 @@ template <> struct default_enum_map<GDF_STRING>{ using type = NVStrings; };
 namespace gdf{
 
 #pragma hd_warning_disable
-template < template <gdf_dtype> typename enum_map = default_enum_map, 
-           class functor_t, 
+template < class functor_t, 
            typename... Ts>
 __host__ __device__ __forceinline__
 decltype(auto) type_dispatcher(gdf_dtype dtype, 
                                functor_t f, 
                                Ts&&... args)
 {
-
   switch(dtype)
   {
     // The .template is known as a "template disambiguator" 
     // See here for more information: https://stackoverflow.com/questions/3786360/confusing-template-error
-    case GDF_INT8:      { return f.template operator()< enum_map<GDF_INT8> >(std::forward<Ts>(args)...); }
-    case GDF_INT16:     { return f.template operator()< enum_map<GDF_INT16> >(std::forward<Ts>(args)...); }
-    case GDF_INT32:     { return f.template operator()< enum_map<GDF_INT32> >(std::forward<Ts>(args)...); }
-    case GDF_INT64:     { return f.template operator()< enum_map<GDF_INT64> >(std::forward<Ts>(args)...); }
-    case GDF_FLOAT32:   { return f.template operator()< enum_map<GDF_FLOAT32> >(std::forward<Ts>(args)...); }
-    case GDF_FLOAT64:   { return f.template operator()< enum_map<GDF_FLOAT64> >(std::forward<Ts>(args)...); }
-    case GDF_DATE32:    { return f.template operator()< enum_map<GDF_DATE32> >(std::forward<Ts>(args)...); }
-    case GDF_DATE64:    { return f.template operator()< enum_map<GDF_DATE64> >(std::forward<Ts>(args)...); }
-    case GDF_TIMESTAMP: { return f.template operator()< enum_map<GDF_TIMESTAMP> >(std::forward<Ts>(args)...); }
-    case GDF_CATEGORY:  { return f.template operator()< enum_map<GDF_CATEGORY> >(std::forward<Ts>(args)...); }
+    case GDF_INT8:      { return f.template operator()< int8_t >(std::forward<Ts>(args)...); }
+    case GDF_INT16:     { return f.template operator()< int16_t >(std::forward<Ts>(args)...); }
+    case GDF_INT32:     { return f.template operator()< int32_t >(std::forward<Ts>(args)...); }
+    case GDF_INT64:     { return f.template operator()< int64_t >(std::forward<Ts>(args)...); }
+    case GDF_FLOAT32:   { return f.template operator()< float >(std::forward<Ts>(args)...); }
+    case GDF_FLOAT64:   { return f.template operator()< double >(std::forward<Ts>(args)...); }
+    case GDF_DATE32:    { return f.template operator()< date32 >(std::forward<Ts>(args)...); }
+    case GDF_DATE64:    { return f.template operator()< date64 >(std::forward<Ts>(args)...); }
+    case GDF_TIMESTAMP: { return f.template operator()< timestamp >(std::forward<Ts>(args)...); }
+    case GDF_CATEGORY:  { return f.template operator()< category >(std::forward<Ts>(args)...); }
     //case GDF_STRING:    { return f.template operator()< enum_map<GDF_STRING> >(std::forward<Ts>(args)...); }
   }
 
@@ -120,9 +117,8 @@ decltype(auto) type_dispatcher(gdf_dtype dtype,
 
   // Need to find out what the return type is in order to have a default return value
   // and solve the compiler warning for lack of a default return
-  using return_type = decltype(f.template operator()<enum_map<GDF_INT8>>(std::forward<Ts>(args)...));
+  using return_type = decltype(f.template operator()<int8_t>(std::forward<Ts>(args)...));
   return return_type();
-
 }
 
 } // namespace gdf

@@ -459,14 +459,14 @@ public:
   }
 
   struct copy_element{
-    template <typename type_info>
+    template <typename col_type>
     __device__ __forceinline__
     void operator()(void * my_column, size_type my_row_index,
                     void const * other_column, size_type other_row_index)
     {
-      using col_type = typename type_info::type;
-      static_cast<col_type*>(my_column)[my_row_index] = 
-        static_cast<col_type const*>(other_column)[other_row_index];
+      col_type& my_value{static_cast<col_type*>(my_column)[my_row_index]};
+      col_type const& other_value{static_cast<col_type const*>(other_column)[other_row_index]};
+      gdf::detail::unwrap(my_value) = gdf::detail::unwrap(other_value);
     }
 
   };
@@ -512,15 +512,14 @@ public:
 
 
   struct elements_are_equal{
-    template <typename type_info>
+    template <typename col_type>
     __device__ __forceinline__
     bool operator()(void const * my_column, size_type my_row_index,
                     void const * other_column, size_type other_row_index)
     {
-      using col_type = typename type_info::type;
       col_type const my_elem = static_cast<col_type const*>(my_column)[my_row_index];
       col_type const other_elem = static_cast<col_type const*>(other_column)[other_row_index];
-      return my_elem == other_elem;
+      return gdf::detail::unwrap(my_elem) == gdf::detail::unwrap(other_elem);
     }
   };
 
@@ -581,18 +580,18 @@ public:
   template < template <typename> typename hash_function >
   struct hash_element
   {
-    template <typename type_info>
+    template <typename col_type>
     __device__ __forceinline__
     void operator()(hash_value_type& hash_value, 
                     void const * col_data,
                     size_type row_index,
                     size_type col_index)
     {
-      using col_type = typename type_info::type;
-      hash_function<col_type> hasher;
+      using underlying_type = typename std::decay<decltype(gdf::detail::unwrap(col_type{}))>::type;
+      hash_function<underlying_type> hasher;
       col_type const * const current_column{static_cast<col_type const*>(col_data)};
-      col_type const current_value{current_column[row_index]};
-      hash_value_type const key_hash{hasher(current_value)};
+      //underlying_type const current_value{gdf::detail::unwrap(current_column[row_index])};
+      hash_value_type const key_hash{hasher(gdf::detail::unwrap(current_column[row_index]))};
 
       // Only combine hash-values after the first column
       if(0 == col_index)
