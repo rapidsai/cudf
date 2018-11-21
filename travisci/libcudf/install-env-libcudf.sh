@@ -21,6 +21,7 @@ if [ "$BUILD_LIBCUDF" == "1" -o "$BUILD_CFFI" == "1" ]; then
     # set gcc/g++ paths
     export CC=/usr/bin/gcc-5
     export CXX=/usr/bin/g++-5
+    export CUDAHOSTCXX=/usr/bin/g++-5
     # install cuda
     source ./travisci/libcudf/install-cuda-trusty.sh
     # check versions
