@@ -20,6 +20,8 @@ build:
   script_env:
     - CC
     - CXX
+    - CUDAHOSTCXX
+    - TRAVIS
 
 requirements:
   # use channel:
@@ -33,14 +35,16 @@ requirements:
     - cffi
     - setuptools
     - nvstrings
+    - pycparser=2.19
   run:
     - libcudf {{ version }}.*
     - python x.x
     - cffi
+    - pycparser=2.19
 
 test:
   commands:
-    - python -c "import libcudf_cffi"
+    - python -c "import libgdf_cffi"
 
 about:
   home: http://rapids.ai/
