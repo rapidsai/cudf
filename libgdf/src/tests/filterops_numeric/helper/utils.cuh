@@ -2,18 +2,23 @@
 #ifndef GDF_TEST_UTILS
 #define GDF_TEST_UTILS
 
-#include <iostream>
+#include "../../../util/bit_util.cuh"
+#include "../../test_utils/gdf_test_utils.cuh"
+
 #include <gdf/gdf.h>
-#include <gdf/cffi/functions.h>
+#include <gdf/utils.h>
+
 #include <thrust/functional.h>
 #include <thrust/device_ptr.h>
-#include <thrust/iterator/counting_iterator.h>
 
+#include <iostream>
 #include <string>
 #include <functional>
 #include <vector>
 #include <tuple>
-#include "gdf/gdf.h"
+
+using namespace gdf::util;
+
 #include "rmm.h"
 
 template <typename gdf_type>
@@ -58,23 +63,16 @@ inline gdf_dtype gdf_enum_type_for<double>()
     return GDF_FLOAT64;
 }
 
-inline auto get_number_of_bytes_for_valid (size_t column_size) -> size_t {
-    return sizeof(gdf_valid_type) * (column_size + GDF_VALID_BITSIZE - 1) / GDF_VALID_BITSIZE;
-}
-
 auto print_binary(gdf_valid_type n, int size = 8) -> void ;
-
-auto chartobin(gdf_valid_type n, int size = 8) -> std::string;
 
 gdf_size_type count_zero_bits(gdf_valid_type *valid, size_t column_size);
 
-auto delete_gdf_column(gdf_column * column) -> void; 
- 
+auto delete_gdf_column(gdf_column * column) -> void;
+
 auto gen_gdf_valid(size_t column_size, size_t init_value) -> gdf_valid_type *;
 
 gdf_valid_type * get_gdf_valid_from_device(gdf_column* column) ;
 
-std::string gdf_valid_to_str(gdf_valid_type *valid, size_t column_size);
 
 template <typename RawType, typename PointerType>
 auto init_device_vector(gdf_size_type num_elements) -> std::tuple<RawType *, thrust::device_ptr<PointerType>>
@@ -113,12 +111,12 @@ gdf_column convert_to_device_gdf_column (gdf_column *column) {
     char *raw_pointer;
     thrust::device_ptr<ValueType> device_pointer;
     std::tie(raw_pointer, device_pointer) = init_device_vector<char, ValueType>(column_size);
- 
+
     void* host_out = column->data;
     cudaMemcpy(raw_pointer, host_out, sizeof(ValueType) * column->size, cudaMemcpyHostToDevice);
 
     gdf_valid_type *host_valid = column->valid;
-    size_t n_bytes = get_number_of_bytes_for_valid(column_size);
+    size_t n_bytes = gdf_get_num_chars_bitmask(column_size);
 
     gdf_valid_type *valid_value_pointer;
     RMM_ALLOC((void **)&valid_value_pointer, n_bytes, 0);
@@ -181,7 +179,7 @@ gdf_column gen_gdb_column(size_t column_size, ValueType init_value)
     //std::cout << "2. gen_gdb_column\n"; 
     
     gdf_valid_type *host_valid = gen_gdf_valid(column_size, init_value);
-    size_t n_bytes = get_number_of_bytes_for_valid(column_size);
+    size_t n_bytes = gdf_get_num_chars_bitmask(column_size);
 
     gdf_valid_type *valid_value_pointer;
     RMM_ALLOC((void **)&valid_value_pointer, n_bytes, 0);
@@ -196,11 +194,19 @@ gdf_column gen_gdb_column(size_t column_size, ValueType init_value)
                              column_size,
                              gdf_enum_type_value,
                              zero_bits);
-    //std::cout << "4. gen_gdb_column\n"; 
-    
+    //std::cout << "4. gen_gdb_column\n";
+
     delete []host_valid;
     return output;
 }
+
+
+
+static inline void print_column(const gdf_column * col )
+{
+    print_gdf_column(col);
+}
+
 
 template <typename LeftValueType = int8_t, typename RightValueType = int8_t>
 void check_column_for_stencil_operation(gdf_column *column, gdf_column *stencil, gdf_column *output_op) {
@@ -211,7 +217,7 @@ void check_column_for_stencil_operation(gdf_column *column, gdf_column *stencil,
     EXPECT_EQ(host_column.size, host_stencil.size);
     //EXPECT_EQ(host_column.dtype == host_output_op.dtype);  // it must have the same type
 
-    
+
     int  n_bytes =  sizeof(int8_t) * (column->size + GDF_VALID_BITSIZE - 1) / GDF_VALID_BITSIZE;
     std::vector<int> indexes;
     for(size_t i = 0; i < host_stencil.size; i++) {
@@ -223,14 +229,14 @@ void check_column_for_stencil_operation(gdf_column *column, gdf_column *stencil,
              indexes.push_back(i);
          }
     }
-    
-    for(size_t i = 0; i < indexes.size(); i++) 
+
+    for(size_t i = 0; i < indexes.size(); i++)
     {
         int index = indexes[i];
         LeftValueType value = ((LeftValueType *)(host_column.data))[index];
         std::cout << "filtered values: " << index  << "** "  << "\t value: " << (int)value << std::endl;
         EXPECT_EQ( ((RightValueType*)host_output_op.data)[i], value);
-        
+
         int col_position =  i / 8;
         int length_col = n_bytes != col_position+1 ? GDF_VALID_BITSIZE : output_op->size - GDF_VALID_BITSIZE * (n_bytes - 1);
         int bit_offset =  (length_col - 1) - (i % 8);
@@ -246,23 +252,23 @@ void check_column_for_comparison_operation(gdf_column *lhs, gdf_column *rhs, gdf
         auto lhs_valid = get_gdf_valid_from_device(lhs);
         auto rhs_valid = get_gdf_valid_from_device(rhs);
         auto output_valid = get_gdf_valid_from_device(output);
-        
-        size_t n_bytes = get_number_of_bytes_for_valid(output->size);
 
-        EXPECT_EQ(lhs->size, rhs->size); 
-        
+        size_t n_bytes = gdf_get_num_chars_bitmask(output->size);
+
+        EXPECT_EQ(lhs->size, rhs->size);
+
         for(size_t i = 0; i < output->size; i++) {
             size_t col_position =  i / 8;
             size_t length_col = n_bytes != col_position+1 ? GDF_VALID_BITSIZE : output->size - GDF_VALID_BITSIZE * (n_bytes - 1);
             size_t bit_offset =  (length_col - 1) - (i % 8);
-            
+
             EXPECT_EQ( ((lhs_valid[col_position] >> bit_offset ) & 1) & ((rhs_valid[col_position] >> bit_offset ) & 1),
             ((output_valid[col_position] >> bit_offset ) & 1) );
         }
-        
+
         delete[] lhs_valid;
         delete[] rhs_valid;
-        delete[] output_valid;    
+        delete[] output_valid;
     }
 
     {
@@ -270,17 +276,17 @@ void check_column_for_comparison_operation(gdf_column *lhs, gdf_column *rhs, gdf
         auto rhs_data = get_gdf_data_from_device<RightValueType>(rhs);
         auto output_data = get_gdf_data_from_device<int8_t>(output);
 
-        EXPECT_EQ(lhs->size, rhs->size); 
+        EXPECT_EQ(lhs->size, rhs->size);
         for(size_t i = 0; i < lhs->size; i++)
         {
-            EXPECT_EQ(lhs_data[i] == rhs_data[i] ? 1 : 0,  output_data[i]);              
+            EXPECT_EQ(lhs_data[i] == rhs_data[i] ? 1 : 0,  output_data[i]);
         }
-        
+
         delete[] lhs_data;
         delete[] rhs_data;
-        delete[] output_data;    
+        delete[] output_data;
     }
-    
+
 }
 
 template <typename ValueType = int8_t>
@@ -290,16 +296,29 @@ void check_column_for_concat_operation(gdf_column *lhs, gdf_column *rhs, gdf_col
         auto lhs_valid = get_gdf_valid_from_device(lhs);
         auto rhs_valid = get_gdf_valid_from_device(rhs);
         auto output_valid = get_gdf_valid_from_device(output);
-        
-        auto computed = gdf_valid_to_str(output_valid, output->size);
+
+
+        // auto  gdf_valid_to_str = [](gdf_valid_type* valid, size_t column_size)
+        // {
+        //     size_t last_byte = gdf::util::last_byte_index(column_size);
+        //     std::string response;
+        //     for (size_t i = 0; i < last_byte; i++) {
+        //         size_t n_bits = last_byte != i + 1 ? 8 : column_size - 8 * (last_byte - 1);
+        //         auto result = chartobin(valid[i], n_bits);
+        //         response += std::string(result);
+        //     }
+        //     return response;
+        // }
         auto expected = gdf_valid_to_str(lhs_valid, lhs->size) + gdf_valid_to_str(rhs_valid, rhs->size);
+
+        auto computed = gdf_valid_to_str(output_valid, output->size);
 
         //std::cout << "computed: " <<  computed << std::endl;
         //std::cout << "expected: " << expected << std::endl;
 
         delete[] lhs_valid;
         delete[] rhs_valid;
-        delete[] output_valid;    
+        delete[] output_valid;
         EXPECT_EQ(computed, expected);
     }
 
@@ -312,10 +331,10 @@ void check_column_for_concat_operation(gdf_column *lhs, gdf_column *rhs, gdf_col
         auto expected = gdf_data_to_str<ValueType>(lhs_data, lhs->size) + gdf_data_to_str<ValueType>(rhs_data, rhs->size);
         delete[] lhs_data;
         delete[] rhs_data;
-        delete[] output_data;    
-        EXPECT_EQ(computed, expected);    
+        delete[] output_data;
+        EXPECT_EQ(computed, expected);
     }
-    
+
 }
 
 

@@ -754,7 +754,28 @@ gdf_error gpu_comparison(gdf_column *lhs, gdf_column *rhs, gdf_column *output,gd
 
 //takes a stencil and uses it to compact a colum e.g. remove all values for which the stencil = 0
 //The lhs column is expected to have 0 null_count otherwise GDF_VALIDITY_UNSUPPORTED is returned
-gdf_error gpu_apply_stencil(gdf_column *lhs, gdf_column * stencil, gdf_column * output);
+
+/**
+ * @brief Filters data in a column using a second, boolean column to select which elements
+ * are to be used.
+ *
+ * @note This is a stable operator, i.e. the relative order of elements in the output is
+ * the same as their order in the input
+ *
+ * @note For now, this mis-handles NULLs in the following sense: The input column _must_
+ * be nullable (otherwise it will be flat-out rejected); but all NULL values are
+ * dropped, in addition to the values with corresponding stencil bit 0.
+ *
+ * @param[in] col the original, unfiltered column of data. At the moment, this column must
+ * be nullable (i.e. have a validity pseudo-column)
+ * @param[in] stencil A "boolean" column, in the sense that its `0` values are interpreted
+ * as `false` and its non-zero values as `true`; has the same length as @p lhs. Represents
+ * the subset of `{ 0, ... , lhs.size-1 }` which are to be included in the output. Also
+ * known as a mask or a selection.
+ * @param[out] output The elements of @p lhs whose index `i` is in the subset represented
+ * by the stencil (i.e. with `stencil[i] != 0`)
+ */
+gdf_error gpu_apply_stencil(gdf_column *col, gdf_column * stencil, gdf_column *output);
 
 gdf_error gpu_concat(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
 

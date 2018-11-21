@@ -21,7 +21,7 @@
 function(configure_test TEST_NAME Tests_SRCS)
     message(STATUS "${TEST_NAME} will link against: gdf arrow")
 
-    cuda_add_executable(${TEST_NAME} ${Tests_SRCS})
+    cuda_add_executable(${TEST_NAME} ${Tests_SRCS} ../test_utils/gdf_test_utils.cu)
     target_link_libraries(${TEST_NAME} gmock_main gmock GTest::GTest gdf arrow)
     set_target_properties(${TEST_NAME} PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/gtests/")

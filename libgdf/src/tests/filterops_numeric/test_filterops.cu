@@ -1,3 +1,6 @@
+// Note: this file has been dropped from the filter tests sources!
+// Please either restore it there or delete it.
+
 /*
  * Copyright 2018 BlazingDB, Inc.
  *     Copyright 2018 Alexander Ocsa <alexander@blazingdb.com>
@@ -55,13 +58,13 @@ TEST_F(FilterOperationsTest, usage_example) {
     EXPECT_TRUE(error == GDF_SUCCESS);
 
     std::cout << "Left" << std::endl;
-    print_column<LeftValueType>(&lhs);
+    print_column(&lhs);
 
     std::cout << "Right" << std::endl;
-    print_column<RightValueType>(&rhs);
+    print_column(&rhs);
 
     std::cout << "Output" << std::endl;
-    print_column<int8_t>(&output);
+    print_column(&output);
 
     check_column_for_comparison_operation<LeftValueType, RightValueType>(&lhs, &rhs, &output, gdf_operator);
 
