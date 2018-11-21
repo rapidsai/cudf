@@ -26,6 +26,8 @@
 #include <gdf/gdf.h>
 #include <gdf/cffi/functions.h>
 
+#include <thrust/sort.h>
+
 #include "../../util/bit_util.cuh"
 
 #include "rmm.h"
@@ -48,6 +50,8 @@ struct OrderbyTest : public GdfTest
   // vector determines the data type of the column
   using multi_column_t = typename test_parameters::multi_column_t;
   multi_column_t orderby_columns;
+
+  size_t numberOfColumns = std::tuple_size<multi_column_t>::value;
 
   // valids for multi_columns
   std::vector<host_valid_pointer> orderby_valids;
@@ -178,180 +182,89 @@ struct OrderbyTest : public GdfTest
    *            values for the join operation.
    *
    * @Param orderby_column_length The length of the orderby set of columns
-   * @Param orderby_column_range_min The upper bound of random values for the orderby
-   *                          columns.
-   * @Param orderby_column_range_max The upper bound of random values for the orderby
-   *            columns. Values are [orderby_column_range_min, orderby_column_range_max)
+   * @Param orderby_column_range The upper bound of random values for the orderby
+   *                          columns. Values are [0, orderby_column_range)
    * @Param print Optionally print the left and right set of columns for debug
    * -------------------------------------------------------------------------*/
-  void create_input( size_t left_column_length, size_t left_column_range,    // WSM LEFT OFF HERE
-                     size_t right_column_length, size_t right_column_range,
+  void create_input( size_t orderby_column_length, size_t orderby_column_range,
                      bool print = false, const gdf_size_type n_count = 0)
   {
-    initialize_tuple(left_columns, left_column_length, left_column_range, ctxt.flag_sorted);
-    initialize_tuple(right_columns, right_column_length, right_column_range, ctxt.flag_sorted);
+    initialize_tuple(orderby_columns, orderby_column_length, orderby_column_range, ctxt.flag_sorted);
 
     auto n_columns = std::tuple_size<multi_column_t>::value;
-    initialize_valids(left_valids, n_columns, left_column_length, true);
-    initialize_valids(right_valids, n_columns, right_column_length, true);
+    initialize_valids(orderby_valids, n_columns, orderby_column_length, false);
 
-    gdf_left_columns = initialize_gdf_columns(left_columns, left_valids, n_count);
-    gdf_right_columns = initialize_gdf_columns(right_columns, right_valids, n_count);
+    gdf_orderby_columns = initialize_gdf_columns(orderby_columns, orderby_valids, n_count);
 
     // Fill vector of raw pointers to gdf_columns
-    gdf_raw_left_columns.clear();
-    gdf_raw_right_columns.clear();
-    for(auto const& c : gdf_left_columns){
-      gdf_raw_left_columns.push_back(c.get());
-    }
-
-    for(auto const& c : gdf_right_columns){
-      gdf_raw_right_columns.push_back(c.get());
+    gdf_raw_orderby_columns.clear();
+    for(auto const& c : gdf_orderby_columns){
+      gdf_raw_orderby_columns.push_back(c.get());
     }
 
     if(print)
     {
-      std::cout << "Left column(s) created. Size: " << std::get<0>(left_columns).size() << std::endl;
-      print_tuples_and_valids(left_columns, left_valids);
-
-      std::cout << "Right column(s) created. Size: " << std::get<0>(right_columns).size() << std::endl;
-      print_tuples_and_valids(right_columns, right_valids);
+      std::cout << "orderby column(s) created. Size: " << std::get<0>(orderby_columns).size() << std::endl;
+      print_tuples_and_valids(orderby_columns, orderby_valids);
     }
   }
 
   /* --------------------------------------------------------------------------*
-   * @Synopsis  Creates two empty columns, left and right.
+   * @Synopsis  Creates an empty column
    *
-   * @Param left_column_length The length of the left column
-   * @Param right_column_length The length of the right column
+   * @Param orderby_column_length The length of the orderby column
    * -------------------------------------------------------------------------*/
-  void create_dummy_input( gdf_size_type const left_column_length,
-                           gdf_size_type const right_column_length)
+  void create_dummy_input( gdf_size_type const orderby_column_length)
   {
     using col_type = typename std::tuple_element<0, multi_column_t>::type::value_type;
 
-    std::vector<col_type> dummy_vector_left(left_column_length, static_cast<col_type>(0));
-    std::vector<col_type> dummy_vector_right(right_column_length, static_cast<col_type>(0));
-    gdf_left_columns.push_back(create_gdf_column<col_type>(dummy_vector_left, nullptr, 0));
-    gdf_right_columns.push_back(create_gdf_column<col_type>(dummy_vector_right, nullptr, 0));
+    std::vector<col_type> dummy_vector_orderby(orderby_column_length, static_cast<col_type>(0));
+    gdf_orderby_columns.push_back(create_gdf_column<col_type>(dummy_vector_orderby, nullptr, 0));
 
     // Fill vector of raw pointers to gdf_columns
-    for (auto const& c : gdf_left_columns) {
-      gdf_raw_left_columns.push_back(c.get());
+    for (auto const& c : gdf_orderby_columns) {
+      gdf_raw_orderby_columns.push_back(c.get());
     }
 
-    for (auto const& c : gdf_right_columns) {
-      gdf_raw_right_columns.push_back(c.get());
-    }
   }
 
   /* --------------------------------------------------------------------------*/
   /**
-   * @Synopsis  Computes a reference solution for joining the left and right sets of columns
+   * @Synopsis  Computes a reference solution
    *
    * @Param print Option to print the solution for debug
-   * @Param sort Option to sort the solution. This is necessary for comparison against the gdf solution
    *
    * @Returns A vector of 'result_type' where result_type is a structure with a left_index, right_index
    * where left_columns[left_index] == right_columns[right_index]
    */
   /* ----------------------------------------------------------------------------*/
-  std::vector<result_type> compute_reference_solution(bool print = false, bool sort = true)
+  std::vector<result_type> compute_reference_solution(bool print = false)
   {
 
-    // Use the type of the first vector as the key_type
-    using key_type = typename std::tuple_element<0, multi_column_t>::type::value_type;
-    using value_type = size_t;
+	  orderby_columns //multi_column_t
+	  orderby_valids  // host side
 
-    // Multimap used to compute the reference solution
-    std::multimap<key_type, value_type> the_map;
+//	  es buena idea usar gdf_is_valid  y tambien  gdf::util::turn_bit_on  o  gdf::util::turn_bit_off
 
-    // Build hash table that maps the first right columns' values to their row index in the column
-    std::vector<key_type> const & build_column = std::get<0>(right_columns);
-    auto build_valid = right_valids[0].get();
 
-    for(size_t right_index = 0; right_index < build_column.size(); ++right_index)
-    {
-      if (gdf_is_valid(build_valid, right_index)) {
-        the_map.insert(std::make_pair(build_column[right_index], right_index));
-      }
-    }
+//	  colA, colB, colC
+//
+//	  sort colC con el output siendo los indices nuevos
+//	  sorteas los indices sorteado a base de colB
+//	  sorteas los indices sorteado a base de colA
+//
+//	  estos sorts serian en partes:
+//	  1. agarras los indices de los nullos y los no nulos
+//	  2. haces el sort a base de los no nulos
+//	  3. concatenas esos indices sorteados con los indices de los nulos. Los indices de los nulos irian antes o despues de los no nulos dependiendo de nulls_are_smallest
+//
+//
+//	  thrust::stable_sort_by_key (RandomAccessIterator1 keys_first, RandomAccessIterator1 keys_last, RandomAccessIterator2 values_first)
+//	  keys_first = colData,
+//	  keys_last = colData + size
+//	  values_first = indices
 
-    std::vector<result_type> reference_result;
 
-    // Probe hash table with first left column
-    std::vector<key_type> const & probe_column = std::get<0>(left_columns);
-    auto probe_valid = left_valids[0].get();
-
-    for(size_t left_index = 0; left_index < probe_column.size(); ++left_index)
-    {
-      bool match{false};
-      if (gdf_is_valid(probe_valid, left_index)) {
-        // Find all keys that match probe_key
-        const auto probe_key = probe_column[left_index];
-        auto range = the_map.equal_range(probe_key);
-
-        // Every element in the returned range identifies a row in the first right column that
-        // matches the probe_key. Need to check if all other columns also match
-        for(auto i = range.first; i != range.second; ++i)
-        {
-          const auto right_index = i->second;
-
-          // If all of the columns in right_columns[right_index] == all of the columns in left_columns[left_index]
-          // Then this index pair is added to the result as a matching pair of row indices
-          if( true == rows_equal_using_valids(left_columns, right_columns, left_valids, right_valids, left_index, right_index)){
-            reference_result.emplace_back(left_index, right_index);
-            match = true;
-          }
-        }
-      }
-      // For left joins, insert a NULL if no match is found
-      if((false == match) &&
-              ((op == join_op::LEFT) || (op == join_op::FULL))){
-        constexpr int JoinNullValue{-1};
-        reference_result.emplace_back(left_index, JoinNullValue);
-      }
-    }
-
-    if (op == join_op::FULL)
-    {
-        the_map.clear();
-        // Build hash table that maps the first left columns' values to their row index in the column
-        for(size_t left_index = 0; left_index < probe_column.size(); ++left_index)
-        {
-          if (gdf_is_valid(probe_valid, left_index)) {
-            the_map.insert(std::make_pair(probe_column[left_index], left_index));
-          }
-        }
-        // Probe the hash table with first right column
-        // Add rows where a match for the right column does not exist
-        for(size_t right_index = 0; right_index < build_column.size(); ++right_index)
-        {
-          const auto probe_key = build_column[right_index];
-          auto search = the_map.find(probe_key);
-          if ((search == the_map.end()) || (!gdf_is_valid(build_valid, right_index)))
-          {
-              constexpr int JoinNullValue{-1};
-              reference_result.emplace_back(JoinNullValue, right_index);
-          }
-        }
-    }
-
-    // Sort the result
-    if(sort)
-    {
-      std::sort(reference_result.begin(), reference_result.end());
-    }
-
-    if(print)
-    {
-      std::cout << "Reference result size: " << reference_result.size() << std::endl;
-      std::cout << "left index, right index" << std::endl;
-      std::copy(reference_result.begin(), reference_result.end(), std::ostream_iterator<result_type>(std::cout, ""));
-      std::cout << "\n";
-    }
-
-    return reference_result;
   }
 
   /* --------------------------------------------------------------------------*/
@@ -487,16 +400,14 @@ template<join_op join_operation,
          bool keys_are_unique = false>
 struct TestParameters
 {
-  // The method to use for the join
-  const static join_op op{join_operation};
-
-  // The method to use for the join
-  const static gdf_method join_type{join_method};
-
-  // The tuple of vectors that determines the number and types of the columns to join
+   // The tuple of vectors that determines the number and types of the columns to join
   using multi_column_t = tuple_of_vectors;
 
-  const static bool unique_keys{keys_are_unique};
+  // ascending and descending vector
+  std::vector<char> asc_desc;
+
+  // nulls are first
+  bool nulls_are_smallest;
 };
 
 const static gdf_method HASH = gdf_method::GDF_HASH;
@@ -514,7 +425,10 @@ using VTuple = std::tuple<std::vector<T>...>;
 // template argument to TestParameters
 typedef ::testing::Types<
                           // Single column inner join tests for all types
-                          TestParameters< join_op::INNER, HASH, VTuple<int32_t > >,
+                          TestParameters< VTuple<int32_t >, {1}, false >,
+						  TestParameters< VTuple<int32_t >, {0}, false >,
+						  TestParameters< VTuple<int32_t >, {1}, true >,
+						  TestParameters< VTuple<int32_t >, {0}, true >,
                           TestParameters< join_op::INNER, HASH, VTuple<int64_t > >,
                           TestParameters< join_op::INNER, HASH, VTuple<float   > >,
                           TestParameters< join_op::INNER, HASH, VTuple<double  > >,

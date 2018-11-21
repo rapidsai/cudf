@@ -977,7 +977,7 @@ void multi_col_order_by_asc_desc(
 		gdf_valid_type* const * d_valids_data,
         int* d_col_types,
         size_t num_inputs,
-        char * asc_desc_bitmask,
+        char * asc_desc,
         IndexT*      d_indx,
         size_t nrows,
 		bool nulls_are_smallest = false,
@@ -990,7 +990,7 @@ void multi_col_order_by_asc_desc(
 	}
 
 	if (have_nulls){
-		LesserRTTI<IndexT> f(d_col_data, d_valids_data, d_col_types, num_inputs,asc_desc_bitmask, nulls_are_smallest);
+		LesserRTTI<IndexT> f(d_col_data, d_valids_data, d_col_types, num_inputs, asc_desc, nulls_are_smallest);
 		thrust::sequence(thrust::cuda::par.on(stream), d_indx, d_indx+nrows, 0);
 		thrust::sort(thrust::cuda::par.on(stream),
 				d_indx, d_indx+nrows,
@@ -998,7 +998,7 @@ void multi_col_order_by_asc_desc(
 			return f.asc_desc_comparison(i1, i2);
 		});
 	} else {
-		LesserRTTI<IndexT> f(d_col_data, d_valids_data, d_col_types, num_inputs,asc_desc_bitmask, nulls_are_smallest);
+		LesserRTTI<IndexT> f(d_col_data, d_valids_data, d_col_types, num_inputs, asc_desc, nulls_are_smallest);
 		thrust::sequence(thrust::cuda::par.on(stream), d_indx, d_indx+nrows, 0);
 		thrust::sort(thrust::cuda::par.on(stream),
 				d_indx, d_indx+nrows,
