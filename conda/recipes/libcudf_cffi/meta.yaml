@@ -20,6 +20,8 @@ build:
   script_env:
     - CC
     - CXX
+    - CUDAHOSTCXX
+    - TRAVIS
 
 requirements:
   # use channel:
