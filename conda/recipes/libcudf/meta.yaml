@@ -30,6 +30,7 @@ requirements:
   #   - defaults
   build:
     - cmake 3.12
+    - pyarrow 0.10.*
     - nvstrings
   run:
     - pyarrow 0.10.*
