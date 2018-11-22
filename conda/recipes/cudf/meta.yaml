@@ -25,11 +25,13 @@ requirements:
   #   - defaults
   build:
     - python
+    - cython=0.28.*
     - setuptools
     - numba>=0.40.0dev
     - nvstrings
   run:
     - python
+    - cython=0.28.*
     - setuptools
     - libcudf 0.2.0.*
     - libcudf_cffi 0.2.0.*
