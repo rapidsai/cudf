@@ -19,4 +19,4 @@ cd build
 # configure
 cmake $CMAKE_COMMON_VARIABLES ..
 # build
-make -j$CPU_COUNT VERBOSE=1 install
+make -j2 VERBOSE=1 install
