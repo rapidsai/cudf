@@ -49,7 +49,7 @@ else()
 endif($ENV{TRAVIS})
 
 execute_process(
-    COMMAND ${CMAKE_COMMAND} --build ${PARALLEL_CMAKE_BUILD} ..
+    COMMAND ${CMAKE_COMMAND} --build ${PARALLEL_BUILD} ..
     RESULT_VARIABLE ARROW_BUILD
     WORKING_DIRECTORY ${ARROW_ROOT}/build)
 
