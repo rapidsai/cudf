@@ -93,7 +93,7 @@ class _RMMWrapper(object):
            this file.)
         """
         # Go up stack to find first caller outside this file (more useful)
-        if True == rmm_cfg.enable_logging:
+        if rmm_cfg.enable_logging:
             frame = inspect.currentframe().f_back
             while frame:
                 filename = inspect.getfile(frame)
