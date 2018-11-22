@@ -1,13 +1,12 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
-from cudf import dataframe
+from cudf import dataframe             # noqa: F401
 
-
-from cudf.dataframe import DataFrame
-from cudf.dataframe import Index
-from cudf.dataframe import Series
-from cudf.multi import concat
-from cudf.io import read_csv
-from cudf.settings import set_options
+from cudf.dataframe import DataFrame   # noqa: F401
+from cudf.dataframe import Index       # noqa: F401
+from cudf.dataframe import Series      # noqa: F401
+from cudf.multi import concat          # noqa: F401
+from cudf.io import read_csv           # noqa: F401
+from cudf.settings import set_options  # noqa: F401
 
 
 # Versioneer
