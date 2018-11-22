@@ -17,6 +17,6 @@ cd build
 # configure
 cmake $CMAKE_COMMON_VARIABLES ..
 # build
-make -j$CPU_COUNT python_cffi
+make python_cffi
 # install
-make -j$CPU_COUNT install_python
+make install_python
