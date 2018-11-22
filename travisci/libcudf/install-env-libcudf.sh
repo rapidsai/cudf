@@ -22,6 +22,7 @@ if [ "$BUILD_LIBCUDF" = "1" -o "$BUILD_CFFI" = "1" ]; then
     export CC=/usr/bin/gcc-5
     export CXX=/usr/bin/g++-5
     export CUDAHOSTCXX=/usr/bin/g++-5
+    echo "CPU_COUNT: $CPU_COUNT"
     if [ "$TRAVIS" = "true" ]; then
         export CMAKE_BUILD_PARALLEL_LEVEL=$CPU_COUNT
     fi
