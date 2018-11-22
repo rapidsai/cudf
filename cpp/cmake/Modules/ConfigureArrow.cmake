@@ -66,7 +66,8 @@ set(ARROW_LIBRARY_DIR "${ARROW_ROOT}/install/lib")
 set(ARROW_INCLUDE_DIR "${ARROW_ROOT}/install/include")
 
 find_library(ARROW_LIB arrow
-             HINTS "$ENV{CONDA_PREFIX}/lib")
+             NO_DEFAULT_PATH
+             HINTS "${ARROW_LIBRARY_DIR}")
 
 if(ARROW_LIB)
     message(STATUS "Arrow library: " ${ARROW_LIB})

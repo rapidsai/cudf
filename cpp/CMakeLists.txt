@@ -184,7 +184,6 @@ endif(CMAKE_BUILD_TYPE MATCHES Debug)
 ###################################################################################################
 # - link libraries --------------------------------------------------------------------------------
 
-message(STATUS "???? ARROW LIB " ${ARROW_LIB})
 target_link_libraries(rmm cudart cuda NVStrings)
 target_link_libraries(cudf rmm "${ARROW_LIB}")
 
