@@ -212,7 +212,7 @@ install(DIRECTORY ${CMAKE_BINARY_DIR}/../include/cudf
 
 add_custom_command(OUTPUT INSTALL_PYTHON_CFFI
                    WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
-                   COMMAND ${CMAKE_COMMAND} -E chdir ${CMAKE_BINARY_DIR}/python python setup.py install
+                   COMMAND ${CMAKE_COMMAND} -E chdir ${CMAKE_BINARY_DIR}/python python setup.py install --single-version-externally-managed --record=record.txt
                    VERBATIM)
 
 add_custom_target(install_python DEPENDS cudf PYTHON_CFFI INSTALL_PYTHON_CFFI)

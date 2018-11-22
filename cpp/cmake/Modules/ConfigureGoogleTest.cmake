@@ -21,7 +21,7 @@ if(GTEST_CONFIG)
 endif(GTEST_CONFIG)
 
 # Parallel builds cause Travis to run out of memory
-unset(PARALLEL_BUILD)            
+unset(PARALLEL_BUILD)
 if($ENV{TRAVIS})
     if(NOT DEFINED $ENV{CMAKE_BUILD_PARALLEL_LEVEL})
         message(STATUS "Disabling Parallel CMake build on Travis")
