@@ -1,16 +1,13 @@
 from __future__ import division, print_function
 import pytest
-import random
 from itertools import product
 
 import numpy as np
-from numba import cuda
 
 from libgdf_cffi import ffi, libgdf
 from librmm_cffi import librmm as rmm
 
-from .utils import (new_column, unwrap_devary, get_dtype, gen_rand,
-                    buffer_as_bits)
+from .utils import (new_column, unwrap_devary, get_dtype, gen_rand)
 
 
 params_dtype = [
@@ -60,4 +57,3 @@ def test_prefixsum(dtype, nelem):
         got = got[1:]
 
     np.testing.assert_array_equal(expect, got)
-
