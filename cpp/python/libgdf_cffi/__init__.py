@@ -4,7 +4,7 @@ import os
 import sys
 
 from .wrapper import _libgdf_wrapper
-from .wrapper import GDFError           # re-exported
+from .wrapper import GDFError         # noqa: F401  # re-exported
 
 try:
     from .libgdf_cffi import ffi

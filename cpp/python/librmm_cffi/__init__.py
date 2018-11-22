@@ -19,7 +19,7 @@ import sys
 import atexit
 
 from .wrapper import _RMMWrapper
-#from .wrapper import RMMError           # re-exported
+from .wrapper import RMMError     # noqa: F401      # re-exported
 
 try:
     from .librmm_cffi import ffi
