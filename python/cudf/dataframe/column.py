@@ -15,6 +15,7 @@ from cudf import _gdf
 from cudf.utils import cudautils, utils
 from .buffer import Buffer
 
+
 class Column(object):
     """An immutable structure for storing data and mask for a column.
     This should be considered as the physical layer that provides
