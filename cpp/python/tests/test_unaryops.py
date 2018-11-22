@@ -4,7 +4,6 @@ import pytest
 import itertools
 
 import numpy as np
-from numba import cuda
 
 from libgdf_cffi import ffi, libgdf, GDFError
 from librmm_cffi import librmm as rmm
@@ -217,4 +216,3 @@ def test_cast(dtype, to_dtype):
 
 if __name__ == '__main__':
     test_col_mismatch_error()
-

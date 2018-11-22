@@ -1,7 +1,6 @@
 import pytest
 
 import numpy as np
-from numba import cuda
 
 from libgdf_cffi import ffi, libgdf, GDFError
 from librmm_cffi import librmm as rmm
@@ -24,12 +23,12 @@ def arith_op_test(dtype, ulp, expect_fn, test_fn, nelem=128,
     col_result = new_column()
     gdf_dtype = get_dtype(dtype)
 
-    libgdf.gdf_column_view(col_lhs, unwrap_devary(d_lhs), ffi.NULL, nelem,
-                           gdf_dtype)
-    libgdf.gdf_column_view(col_rhs, unwrap_devary(d_rhs), ffi.NULL, nelem,
-                           gdf_dtype)
-    libgdf.gdf_column_view(col_result, unwrap_devary(d_result), ffi.NULL, nelem,
-                           gdf_dtype)
+    libgdf.gdf_column_view(col_lhs, unwrap_devary(d_lhs),
+                           ffi.NULL, nelem, gdf_dtype)
+    libgdf.gdf_column_view(col_rhs, unwrap_devary(d_rhs),
+                           ffi.NULL, nelem, gdf_dtype)
+    libgdf.gdf_column_view(col_result, unwrap_devary(d_result),
+                           ffi.NULL, nelem, gdf_dtype)
 
     expect = expect_fn(h_lhs, h_rhs)
     test_fn(col_lhs, col_rhs, col_result)
@@ -53,12 +52,12 @@ def logical_op_test(dtype, expect_fn, test_fn, nelem=128, gdf_dtype=None):
     col_result = new_column()
     gdf_dtype = get_dtype(dtype) if gdf_dtype is None else gdf_dtype
 
-    libgdf.gdf_column_view(col_lhs, unwrap_devary(d_lhs), ffi.NULL, nelem,
-                           gdf_dtype)
-    libgdf.gdf_column_view(col_rhs, unwrap_devary(d_rhs), ffi.NULL, nelem,
-                           gdf_dtype)
-    libgdf.gdf_column_view(col_result, unwrap_devary(d_result), ffi.NULL, nelem,
-                           libgdf.GDF_INT8)
+    libgdf.gdf_column_view(col_lhs, unwrap_devary(d_lhs),
+                           ffi.NULL, nelem, gdf_dtype)
+    libgdf.gdf_column_view(col_rhs, unwrap_devary(d_rhs),
+                           ffi.NULL, nelem, gdf_dtype)
+    libgdf.gdf_column_view(col_result, unwrap_devary(d_result),
+                           ffi.NULL, nelem, libgdf.GDF_INT8)
 
     expect = expect_fn(h_lhs, h_rhs)
     test_fn(col_lhs, col_rhs, col_result)
@@ -76,6 +75,7 @@ params_arith_types = [
     (np.int32, 0),
     (np.int64, 0),
 ]
+
 
 @pytest.mark.parametrize('dtype,ulp', params_arith_types)
 def test_add(dtype, ulp):
@@ -95,7 +95,7 @@ def test_mul(dtype, ulp):
 @pytest.mark.parametrize('dtype,ulp', params_arith_types)
 def test_floordiv(dtype, ulp):
     arith_op_test(dtype, ulp, np.floor_divide, libgdf.gdf_floordiv_generic,
-                   non_zero_rhs=True)
+                  non_zero_rhs=True)
 
 
 @pytest.mark.parametrize('dtype,ulp', [
@@ -105,6 +105,7 @@ def test_floordiv(dtype, ulp):
 def test_div(dtype, ulp):
     arith_op_test(dtype, ulp, np.divide, libgdf.gdf_div_generic,
                   non_zero_rhs=True)
+
 
 # logical
 
@@ -119,30 +120,36 @@ params_logical_types = [
     (np.int64, libgdf.GDF_TIMESTAMP),
 ]
 
+
 @pytest.mark.parametrize('dtype, gdf_dtype', params_logical_types)
 def test_gt(dtype, gdf_dtype):
     logical_op_test(dtype, np.greater, libgdf.gdf_gt_generic,
                     gdf_dtype=gdf_dtype)
+
 
 @pytest.mark.parametrize('dtype, gdf_dtype', params_logical_types)
 def test_ge(dtype, gdf_dtype):
     logical_op_test(dtype, np.greater_equal, libgdf.gdf_ge_generic,
                     gdf_dtype=gdf_dtype)
 
+
 @pytest.mark.parametrize('dtype, gdf_dtype', params_logical_types)
 def test_lt(dtype, gdf_dtype):
     logical_op_test(dtype, np.less, libgdf.gdf_lt_generic,
                     gdf_dtype=gdf_dtype)
+
 
 @pytest.mark.parametrize('dtype, gdf_dtype', params_logical_types)
 def test_le(dtype, gdf_dtype):
     logical_op_test(dtype, np.less_equal, libgdf.gdf_le_generic,
                     gdf_dtype=gdf_dtype)
 
+
 @pytest.mark.parametrize('dtype, gdf_dtype', params_logical_types)
 def test_eq(dtype, gdf_dtype):
     logical_op_test(dtype, np.equal, libgdf.gdf_eq_generic,
                     gdf_dtype=gdf_dtype)
+
 
 @pytest.mark.parametrize('dtype, gdf_dtype', params_logical_types)
 def test_ne(dtype, gdf_dtype):
@@ -158,6 +165,7 @@ params_bitwise_types = [
     np.int8,
 ]
 
+
 def bitwise_op_test(dtype, expect_fn, test_fn, nelem=128):
     h_lhs = gen_rand(dtype, nelem)
     h_rhs = gen_rand(dtype, nelem)
@@ -171,12 +179,12 @@ def bitwise_op_test(dtype, expect_fn, test_fn, nelem=128):
     col_result = new_column()
     gdf_dtype = get_dtype(dtype)
 
-    libgdf.gdf_column_view(col_lhs, unwrap_devary(d_lhs), ffi.NULL, nelem,
-                           gdf_dtype)
-    libgdf.gdf_column_view(col_rhs, unwrap_devary(d_rhs), ffi.NULL, nelem,
-                           gdf_dtype)
-    libgdf.gdf_column_view(col_result, unwrap_devary(d_result), ffi.NULL, nelem,
-                           gdf_dtype)
+    libgdf.gdf_column_view(col_lhs, unwrap_devary(d_lhs),
+                           ffi.NULL, nelem, gdf_dtype)
+    libgdf.gdf_column_view(col_rhs, unwrap_devary(d_rhs),
+                           ffi.NULL, nelem, gdf_dtype)
+    libgdf.gdf_column_view(col_result, unwrap_devary(d_result),
+                           ffi.NULL, nelem, gdf_dtype)
 
     expect = expect_fn(h_lhs, h_rhs)
     test_fn(col_lhs, col_rhs, col_result)
@@ -187,13 +195,16 @@ def bitwise_op_test(dtype, expect_fn, test_fn, nelem=128):
     print(expect)
     np.testing.assert_array_equal(expect, got)
 
+
 @pytest.mark.parametrize('dtype', params_bitwise_types)
 def test_bitwise_and(dtype):
     bitwise_op_test(dtype, np.bitwise_and, libgdf.gdf_bitwise_and_generic)
 
+
 @pytest.mark.parametrize('dtype', params_bitwise_types)
 def test_bitwise_or(dtype):
     bitwise_op_test(dtype, np.bitwise_or, libgdf.gdf_bitwise_or_generic)
+
 
 @pytest.mark.parametrize('dtype', params_bitwise_types)
 def test_bitwise_xor(dtype):
@@ -215,12 +226,12 @@ def test_lhs_rhs_dtype_mismatch():
     col_rhs = new_column()
     col_result = new_column()
 
-    libgdf.gdf_column_view(col_lhs, unwrap_devary(d_lhs), ffi.NULL, nelem,
-                           get_dtype(lhs_dtype))
-    libgdf.gdf_column_view(col_rhs, unwrap_devary(d_rhs), ffi.NULL, nelem,
-                           get_dtype(rhs_dtype))
-    libgdf.gdf_column_view(col_result, unwrap_devary(d_result), ffi.NULL, nelem,
-                           get_dtype(lhs_dtype))
+    libgdf.gdf_column_view(col_lhs, unwrap_devary(d_lhs),
+                           ffi.NULL, nelem, get_dtype(lhs_dtype))
+    libgdf.gdf_column_view(col_rhs, unwrap_devary(d_rhs),
+                           ffi.NULL, nelem, get_dtype(rhs_dtype))
+    libgdf.gdf_column_view(col_result, unwrap_devary(d_result),
+                           ffi.NULL, nelem, get_dtype(lhs_dtype))
 
     with pytest.raises(GDFError) as raises:
         libgdf.gdf_add_generic(col_lhs, col_rhs, col_result)
@@ -250,12 +261,12 @@ def test_output_dtype_mismatch():
     col_rhs = new_column()
     col_result = new_column()
 
-    libgdf.gdf_column_view(col_lhs, unwrap_devary(d_lhs), ffi.NULL, nelem,
-                           get_dtype(lhs_dtype))
-    libgdf.gdf_column_view(col_rhs, unwrap_devary(d_rhs), ffi.NULL, nelem,
-                           get_dtype(rhs_dtype))
-    libgdf.gdf_column_view(col_result, unwrap_devary(d_result), ffi.NULL, nelem,
-                           get_dtype(d_result.dtype))
+    libgdf.gdf_column_view(col_lhs, unwrap_devary(d_lhs),
+                           ffi.NULL, nelem, get_dtype(lhs_dtype))
+    libgdf.gdf_column_view(col_rhs, unwrap_devary(d_rhs),
+                           ffi.NULL, nelem, get_dtype(rhs_dtype))
+    libgdf.gdf_column_view(col_result, unwrap_devary(d_result),
+                           ffi.NULL, nelem, get_dtype(d_result.dtype))
 
     with pytest.raises(GDFError) as raises:
         libgdf.gdf_add_generic(col_lhs, col_rhs, col_result)

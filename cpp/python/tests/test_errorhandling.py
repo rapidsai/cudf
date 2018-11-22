@@ -1,11 +1,8 @@
-import pytest
-
 import numpy as np
-from numba import cuda
 
-from libgdf_cffi import ffi, libgdf, GDFError
+from libgdf_cffi import ffi, libgdf  # , GDFError
 
-from .utils import new_column, unwrap_devary, get_dtype, gen_rand, fix_zeros
+from .utils import new_column, get_dtype
 
 
 def test_cuda_error():
@@ -16,7 +13,7 @@ def test_cuda_error():
 
     libgdf.gdf_column_view(col, ffi.NULL, ffi.NULL, 0, gdf_dtype)
 
-    #with pytest.raises(GDFError) as raises:
-    #    libgdf.gdf_add_generic(col, col, col)
+    # with pytest.raises(GDFError) as raises:
+    #     libgdf.gdf_add_generic(col, col, col)
 
-    #raises.match("CUDA ERROR.")
+    # raises.match("CUDA ERROR.")

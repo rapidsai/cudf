@@ -4,7 +4,6 @@ import random
 import pytest
 
 import numpy as np
-from numba import cuda
 
 from libgdf_cffi import ffi, libgdf
 from librmm_cffi import librmm as rmm
@@ -47,7 +46,8 @@ def test_segradixsort(nelem, num_segments, descending, dtype):
         sampled = random.sample(list(range(n)), k)
         return list(sorted(sampled))
 
-    begin_offsets = np.asarray(make_segments(nelem, num_segments), dtype=np.uint32)
+    begin_offsets = np.asarray(make_segments(nelem, num_segments),
+                               dtype=np.uint32)
     end_offsets = np.asarray(begin_offsets.tolist()[1:] + [nelem],
                              dtype=begin_offsets.dtype)
 
@@ -73,7 +73,8 @@ def test_segradixsort(nelem, num_segments, descending, dtype):
     end_bit = sizeof_key * 8
 
     # Setup plan
-    plan = libgdf.gdf_segmented_radixsort_plan(nelem, descending, begin_bit, end_bit)
+    plan = libgdf.gdf_segmented_radixsort_plan(nelem, descending,
+                                               begin_bit, end_bit)
     libgdf.gdf_segmented_radixsort_plan_setup(plan, sizeof_key, sizeof_val)
 
     # Sort

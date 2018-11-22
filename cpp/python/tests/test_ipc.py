@@ -3,8 +3,6 @@ import json
 from pprint import pprint
 
 import numpy as np
-from numba import cuda
-import libgdf_cffi
 from libgdf_cffi import ffi, libgdf
 from librmm_cffi import librmm as rmm
 
@@ -31,7 +29,8 @@ def get_expected_values():
     dev = 0.25
     for i in range(30):
         j = np.random.choice(range(4))
-        yield i, names[j], float(np.random.uniform(low=means[j]-dev, high=means[j]+dev))
+        yield i, names[j], float(np.random.uniform(low=means[j]-dev,
+                                                   high=means[j]+dev))
 
 
 def make_batch():
@@ -43,7 +42,8 @@ def make_batch():
     d_names = pa.array(unique_names)
     d_name = pa.DictionaryArray.from_arrays(d_names_map, d_names)
     d_weight = pa.array(weights)
-    batch = pa.RecordBatch.from_arrays([d_index, d_name, d_weight], ['idx', 'name', 'weight'])
+    batch = pa.RecordBatch.from_arrays([d_index, d_name, d_weight],
+                                       ['idx', 'name', 'weight'])
     return batch
 
 

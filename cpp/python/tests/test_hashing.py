@@ -15,11 +15,9 @@
 #
 
 from __future__ import print_function
-import ctypes
 from contextlib import contextmanager
 
 import numpy as np
-from numba import cuda
 
 from libgdf_cffi import ffi, libgdf
 from librmm_cffi import librmm as rmm
@@ -37,7 +35,8 @@ def _make_hash_input(hash_input, ncols):
     for i in range(ncols):
         col_input = new_column()
         libgdf.gdf_column_view(col_input, unwrap_devary(di[i]), ffi.NULL,
-                               hash_input[i].size, get_dtype(hash_input[i].dtype))
+                               hash_input[i].size,
+                               get_dtype(hash_input[i].dtype))
         ci.append(col_input)
 
     yield ci
@@ -61,16 +60,26 @@ def _call_hash_multi(api, ncols, col_input, magic, nrows):
 def test_hashing():
     # Make data
     nrows = 8
-    dtypes = [np.int8, np.int16, np.int32, np.int64, np.float32, np.float64]  # dtypes as number of columns
+    # dtypes as number of columns
+    dtypes = [np.int8, np.int16, np.int32, np.int64, np.float32, np.float64]
 
     hash_input = []
     for dt in dtypes:
         if(dt == np.float32):
-            hi = np.array(np.random.randint(np.iinfo(np.int32).min, np.iinfo(np.int32).max, nrows), dtype=dt)
+            hi = np.array(np.random.randint(np.iinfo(np.int32).min,
+                                            np.iinfo(np.int32).max,
+                                            nrows),
+                          dtype=dt)
         elif(dt == np.float64):
-            hi = np.array(np.random.randint(np.iinfo(np.int64).min, np.iinfo(np.int64).max, nrows), dtype=dt)
+            hi = np.array(np.random.randint(np.iinfo(np.int64).min,
+                                            np.iinfo(np.int64).max,
+                                            nrows),
+                          dtype=dt)
         else:
-            hi = np.array(np.random.randint(np.iinfo(dt).min, np.iinfo(dt).max, nrows), dtype=dt)
+            hi = np.array(np.random.randint(np.iinfo(dt).min,
+                                            np.iinfo(dt).max,
+                                            nrows),
+                          dtype=dt)
         hi[-1] = hi[0]
         hash_input.append(hi)
 
@@ -79,7 +88,8 @@ def test_hashing():
 
     with _make_hash_input(hash_input, ncols) as col_input:
         # Hash
-        hashed_column = _call_hash_multi(libgdf.gdf_hash, ncols, col_input, magic, nrows)
+        hashed_column = _call_hash_multi(libgdf.gdf_hash, ncols,
+                                         col_input, magic, nrows)
 
     # Check if first and last row are equal
     assert tuple([hashed_column[0]]) == tuple([hashed_column[-1]])

@@ -3,7 +3,6 @@ from itertools import product
 import pytest
 
 import numpy as np
-from numba import cuda
 
 from libgdf_cffi import ffi, libgdf
 from librmm_cffi import librmm as rmm

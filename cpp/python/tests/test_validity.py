@@ -1,14 +1,12 @@
 import pytest
-import functools
 from itertools import product
 
 import numpy as np
-from numba import cuda
 
-from libgdf_cffi import ffi, libgdf
+from libgdf_cffi import libgdf
 from librmm_cffi import librmm as rmm
 
-from .utils import new_column, unwrap_devary, get_dtype, gen_rand, fix_zeros
+from .utils import new_column, unwrap_devary, get_dtype, gen_rand
 from .utils import buffer_as_bits
 
 

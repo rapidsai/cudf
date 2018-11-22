@@ -4,7 +4,6 @@ import random
 from itertools import product
 
 import numpy as np
-from numba import cuda
 
 from libgdf_cffi import ffi, libgdf
 from librmm_cffi import librmm as rmm
@@ -31,7 +30,7 @@ def test_sum(dtype, nelem):
     data = gen_rand(dtype, nelem)
     d_data = rmm.to_device(data)
     d_result = rmm.device_array(libgdf.gdf_reduce_optimal_output_size(),
-                                 dtype=d_data.dtype)
+                                dtype=d_data.dtype)
 
     col_data = new_column()
     gdf_dtype = get_dtype(dtype)
@@ -63,7 +62,7 @@ def test_product(dtype, nelem):
     print('max', data.max(), 'min', data.min())
     d_data = rmm.to_device(data)
     d_result = rmm.device_array(libgdf.gdf_reduce_optimal_output_size(),
-                                 dtype=d_data.dtype)
+                                dtype=d_data.dtype)
 
     col_data = new_column()
     gdf_dtype = get_dtype(dtype)
@@ -71,7 +70,8 @@ def test_product(dtype, nelem):
     libgdf.gdf_column_view(col_data, unwrap_devary(d_data), ffi.NULL, nelem,
                            gdf_dtype)
 
-    libgdf.gdf_product_generic(col_data, unwrap_devary(d_result), d_result.size)
+    libgdf.gdf_product_generic(col_data, unwrap_devary(d_result),
+                               d_result.size)
     got = d_result.copy_to_host()[0]
     expect = np.product(data)
 
@@ -90,7 +90,7 @@ def test_sum_masked(nelem):
     d_data = rmm.to_device(data)
     d_mask = rmm.to_device(mask)
     d_result = rmm.device_array(libgdf.gdf_reduce_optimal_output_size(),
-                                 dtype=d_data.dtype)
+                                dtype=d_data.dtype)
 
     col_data = new_column()
     gdf_dtype = get_dtype(dtype)
@@ -118,7 +118,7 @@ def test_sum_squared(dtype, nelem):
     data = gen_rand(dtype, nelem)
     d_data = rmm.to_device(data)
     d_result = rmm.device_array(libgdf.gdf_reduce_optimal_output_size(),
-                                 dtype=d_data.dtype)
+                                dtype=d_data.dtype)
 
     col_data = new_column()
     gdf_dtype = get_dtype(dtype)
@@ -142,7 +142,7 @@ def test_min(dtype, nelem):
     data = gen_rand(dtype, nelem)
     d_data = rmm.to_device(data)
     d_result = rmm.device_array(libgdf.gdf_reduce_optimal_output_size(),
-                                 dtype=d_data.dtype)
+                                dtype=d_data.dtype)
 
     col_data = new_column()
     gdf_dtype = get_dtype(dtype)
@@ -165,7 +165,7 @@ def test_max(dtype, nelem):
     data = gen_rand(dtype, nelem)
     d_data = rmm.to_device(data)
     d_result = rmm.device_array(libgdf.gdf_reduce_optimal_output_size(),
-                                 dtype=d_data.dtype)
+                                dtype=d_data.dtype)
 
     col_data = new_column()
     gdf_dtype = get_dtype(dtype)
