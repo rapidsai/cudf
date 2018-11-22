@@ -19,5 +19,4 @@ cmake $CMAKE_COMMON_VARIABLES ..
 # build
 make -j$CPU_COUNT python_cffi
 # install
-cd python
-python setup.py install --single-version-externally-managed --record=record.txt
+make -j$CPU_COUNT install_python
