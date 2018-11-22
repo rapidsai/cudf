@@ -214,7 +214,6 @@ class NumericalColumn(columnops.TypedColumnBase):
 
     def sum(self):
         dt = np.promote_types('i8', self.dtype)
-        x = self.astype(dt)
         return cpp_reduce.apply_reduce('sum', self)
 
     def mean(self):
@@ -230,7 +229,6 @@ class NumericalColumn(columnops.TypedColumnBase):
         return mu, var
 
     def sum_of_squares(self):
-        x = self.astype('f8')
         return cpp_reduce.apply_reduce('sum_squared', self)
 
     def applymap(self, udf, out_dtype=None):
