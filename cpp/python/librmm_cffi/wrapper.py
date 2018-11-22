@@ -19,6 +19,7 @@ import ctypes
 import inspect
 from librmm_cffi import librmm_config as rmm_cfg
 
+
 class RMMError(Exception):
     def __init__(self, errcode, msg):
         self.errcode = errcode
@@ -73,12 +74,12 @@ class _RMMWrapper(object):
         return errname, msg
 
     def initialize(self):
-        """Initializes the RMM library using the options set in the 
+        """Initializes the RMM library using the options set in the
            librmm_config module
         """
         opts = self._ffi.new("rmmOptions_t *",
-                             [rmm_cfg.use_pool_allocator, 
-                              rmm_cfg.initial_pool_size, 
+                             [rmm_cfg.use_pool_allocator,
+                              rmm_cfg.initial_pool_size,
                               rmm_cfg.enable_logging])
         return self.rmmInitialize(opts)
 
@@ -113,20 +114,20 @@ class _RMMWrapper(object):
 
     def rmmAlloc(self, size, stream):
         """Allocates size bytes using the RMM memory manager.
-        """ 
+        """
         file, line = self._get_caller()
-                
+
         # Call RMM to allocate
         ptr = self._ffi.new("void **")
         stream = self._ffi.cast("cudaStream_t", stream)
         self._api.rmmAlloc(ptr, size, stream, file, line)
         return self._ffi.cast("uintptr_t*", ptr)[0]
 
-    def rmmRealloc(self, new_size, stream): 
+    def rmmRealloc(self, new_size, stream):
         """Reallocates new_size bytes using the RMM memory manager.
-        """ 
+        """
         file, line = self._get_caller()
-         
+
         # Call RMM to reaallocate
         ptr = self._ffi.new("void **")
         stream = self._ffi.cast("cudaStream_t", stream)
@@ -137,14 +138,14 @@ class _RMMWrapper(object):
         """Deallocates ptr, which was allocated using rmmAlloc
         """
         file, line = self._get_caller()
-         
+
         # Call RMM to free
         ptr = self._ffi.cast("void*", ptr)
         stream = self._ffi.cast("cudaStream_t", stream)
         self._api.rmmFree(ptr, stream, file, line)
 
     def csv_log(self):
-        """Returns a CSV log of all events logged by RMM, if logging is 
+        """Returns a CSV log of all events logged by RMM, if logging is
            enabled
         """
         logsize = self.rmmLogSize()
@@ -196,8 +197,8 @@ class _RMMWrapper(object):
         datasize = cuda.driver.memory_size_from_info(shape, strides,
                                                      dtype.itemsize)
 
-        addr = self.rmmAlloc(datasize, stream)       
-        
+        addr = self.rmmAlloc(datasize, stream)
+
         # Note Numba will call the finalizer to free the device memory
         # allocated above
         return self._array_helper(addr=addr, datasize=datasize,

@@ -13,7 +13,7 @@
 # limitations under the License.
 
 """Configuration module for librmm, the RAPIDS Memory Manager python interface.
- 
+
    Usage example:
     from librmm_cffi import librmm_config as rmm_cfg
     rmm_cf.use_pool_allocator = True
@@ -21,11 +21,12 @@
     import cudf # When cuDF initializes RMM, these settings will be used
 """
 
-# Whether to use a pool allocation strategy. False means to use default cudaMalloc
+# Whether to use a pool allocation strategy.
+# False means to use default cudaMalloc
 use_pool_allocator = False
 
 # When `use_pool_allocator` is true, this indicates the initial pool size.
-# Zero is used to indicate the default size, which currently is 1/2 total GPU 
+# Zero is used to indicate the default size, which currently is 1/2 total GPU
 # memory.
 initial_pool_size = 0
 
