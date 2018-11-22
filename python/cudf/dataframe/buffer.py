@@ -59,7 +59,7 @@ class Buffer(object):
         """
 
         from cudf.comm.serialize import should_use_ipc
-        
+
         # Use destination info to determine if we should do IPC.
         use_ipc = should_use_ipc(context)
         header = {}
