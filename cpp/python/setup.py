@@ -15,4 +15,3 @@ setup(name='librmm_cffi',
       cffi_modules=["librmm_cffi/librmm_build.py:ffibuilder"],
       install_requires=["cffi>=1.0.0"],
       )
-
