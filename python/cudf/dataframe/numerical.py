@@ -213,7 +213,6 @@ class NumericalColumn(columnops.TypedColumnBase):
         return cpp_reduce.apply_reduce('max', self)
 
     def sum(self):
-        dt = np.promote_types('i8', self.dtype)
         return cpp_reduce.apply_reduce('sum', self)
 
     def mean(self):
