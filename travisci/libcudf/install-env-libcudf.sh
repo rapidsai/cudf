@@ -24,7 +24,7 @@ if [ "$BUILD_LIBCUDF" = "1" -o "$BUILD_CFFI" = "1" ]; then
     export CUDAHOSTCXX=/usr/bin/g++-5
     echo "CPU_COUNT: $CPU_COUNT"
     if [ "$TRAVIS" = "true" ]; then
-        export CMAKE_BUILD_PARALLEL_LEVEL=$CPU_COUNT
+        export CMAKE_BUILD_PARALLEL_LEVEL=2
     fi
     # install cuda
     source ./travisci/libcudf/install-cuda-trusty.sh
