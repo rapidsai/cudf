@@ -35,15 +35,18 @@ if(ARROW_CONFIG)
 endif(ARROW_CONFIG)
 
 # Parallel builds cause Travis to run out of memory
-unset(PARALLEL_CMAKE_BUILD)            
-if(DEFINED ENV{TRAVIS})
-    set(PARALLEL_CMAKE_BUILD --parallel [$ENV{CPU_COUNT}])
-    message("Enabling Parallel CMake build on Travis with $ENV{CPU_COUNT} CPUs")
+unset(PARALLEL_BUILD)            
+if($ENV{TRAVIS})
+    if (NOT DEFINED ENV{CMAKE_BUILD_PARALLEL_LEVEL})
+        message(STATUS "Disabling Parallel CMake build on Travis")
+    else()
+        set(PARALLEL_BUILD --parallel)
+        message(STATUS "Using $ENV{CMAKE_BUILD_PARALLEL_LEVEL} build jobs on Travis")
+    endif(NOT DEFINED ENV{CMAKE_BUILD_PARALLEL_LEVEL})
 else()
-    set(PARALLEL_CMAKE_BUILD --parallel)
-    message("Enabling Parallel CMake build")
-endif(DEFINED ENV{TRAVIS})
-
+    set(PARALLEL_BUILD --parallel)
+    message("STATUS Enabling Parallel CMake build")
+endif($ENV{TRAVIS})
 
 execute_process(
     COMMAND ${CMAKE_COMMAND} --build ${PARALLEL_CMAKE_BUILD} ..
