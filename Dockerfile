@@ -33,7 +33,7 @@ ARG NUMPY_VERSION=1.14.3
 # Locked to Pandas 0.20.3 by https://github.com/rapidsai/cudf/issues/118
 ARG PANDAS_VERSION=0.20.3
 ARG PYARROW_VERSION=0.10.0
-RUN conda install -n cudf -y -c numba -c conda-forge -c rapidsai -c defaults \
+RUN conda install -n cudf -y -c numba -c conda-forge -c nvidia -c rapidsai -c defaults \
       numba=${NUMBA_VERSION} \
       numpy=${NUMPY_VERSION} \
       pandas=${PANDAS_VERSION} \
