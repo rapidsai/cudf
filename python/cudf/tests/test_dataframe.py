@@ -931,8 +931,8 @@ def test_from_scalar_typing(data_type):
 
 
 def test_series_shape():
-    ps = pd.Series([1,2,3,4])
-    cs = Series([1,2,3,4])
+    ps = pd.Series([1, 2, 3, 4])
+    cs = Series([1, 2, 3, 4])
 
     assert ps.shape == cs.shape
 
