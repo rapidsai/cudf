@@ -936,6 +936,7 @@ def test_series_shape():
 
     assert ps.shape == cs.shape
 
+
 def test_series_shape_empty():
     ps = pd.Series()
     cs = Series([])
