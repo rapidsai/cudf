@@ -39,7 +39,8 @@ RUN conda install -n cudf -y -c numba -c conda-forge -c nvidia -c rapidsai -c de
       pandas=${PANDAS_VERSION} \
       pyarrow=${PYARROW_VERSION} \
       nvstrings \
-      cmake
+      cmake=3.12 \
+      gtest=1.8.0
 
 # Clone cuDF repo
 ARG CUDF_REPO=https://github.com/rapidsai/cudf
