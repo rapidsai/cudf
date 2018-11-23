@@ -164,7 +164,7 @@ class DataFrame(object):
     def shape(self):
         """Returns a tuple representing the dimensionality of the DataFrame.
         """
-        return len(self._index), len(self._cols)
+        return len(self), len(self._cols)
 
     def __dir__(self):
         o = set(dir(type(self)))

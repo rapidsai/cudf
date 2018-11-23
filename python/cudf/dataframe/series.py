@@ -104,7 +104,7 @@ class Series(object):
     def shape(self):
         """Returns a tuple representing the dimensionality of the Series.
         """
-        return len(self._index),
+        return len(self),
 
     @property
     def dt(self):
