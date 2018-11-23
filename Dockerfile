@@ -46,7 +46,7 @@ ARG CUDF_REPO=https://github.com/rapidsai/cudf
 ARG CUDF_BRANCH=master
 RUN git clone --recurse-submodules -b ${CUDF_BRANCH} ${CUDF_REPO} /cudf
 
-# LibGDF build/install
+# libcudf build/install
 ENV CC=/usr/bin/gcc-${CC}
 ENV CXX=/usr/bin/g++-${CXX}
 ARG HASH_JOIN=ON
@@ -54,9 +54,9 @@ RUN source activate cudf && \
     mkdir -p /cudf/libgdf/build && \
     cd /cudf/libgdf/build && \
     cmake .. -DHASH_JOIN=${HASH_JOIN} -DCMAKE_INSTALL_PREFIX=${CONDA_PREFIX} && \
-    make -j install && \
-    make copy_python && \
-    python setup.py install
+    make -j2 install && \
+    make python_cffi && \
+    make install_python
 
 # cuDF build/install
 RUN source activate cudf && \
