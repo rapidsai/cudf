@@ -1,0 +1,20 @@
+name: cudf_dev_py35
+channels:
+- nvidia
+- numba
+- conda-forge
+- rapidsai
+- defaults
+dependencies:
+- cmake>=3.12
+- python=3.5.*
+- pytest
+- numba>=0.40.0dev
+- pandas=0.20.3
+- pyarrow=0.10.0
+- notebook>=0.5.0
+- boost
+- nvstrings
+- cffi>=1.10.0   
+- distributed>=1.23.0
+- cython=0.28.*
