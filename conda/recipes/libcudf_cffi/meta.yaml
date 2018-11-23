@@ -31,7 +31,7 @@ requirements:
   #   - conda-forge
   #   - defaults
   build:
-    - cmake
+    - cmake 3.12
     - python x.x
     - cffi
     - setuptools
