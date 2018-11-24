@@ -19,6 +19,7 @@
 #include <map>
 #include <type_traits>
 #include <memory>
+#include <numeric>
 
 #include "gtest/gtest.h"
 #include "gmock/gmock.h"
@@ -26,24 +27,23 @@
 #include <gdf/gdf.h>
 #include <gdf/cffi/functions.h>
 
-#include <thrust/sort.h>
-
-#include "../../util/bit_util.cuh"
-
 #include "rmm.h"
 
-// See this header for all of the recursive handling of tuples of vectors
 #include "tuple_vectors.h"
-
-// See this header for all of the handling of valids' vectors
 #include "valid_vectors.h"
-
+#include "order_by_type_vectors.h"
 
 // A new instance of this class will be created for each *TEST(OrderbyTest, ...)
 // Put all repeated setup and validation stuff here
 template <class test_parameters>
-struct OrderbyTest : public GdfTest
+struct OrderByTest : public GdfTest
 {
+  const bool nulls_are_smallest = test_parameters::nulls_are_smallest;
+
+  // The sorting order for each column is passed via a member of the template argument class
+  std::vector<char> sort_order_types;
+
+  gdf_context ctxt = {0, static_cast<gdf_method>(0), 0, 0, 0, test_parameters::nulls_are_smallest};
 
   // multi_column_t is a tuple of vectors. The number of vectors in the tuple
   // determines the number of columns to be ordered by, and the value_type of each
@@ -64,12 +64,16 @@ struct OrderbyTest : public GdfTest
   // Containers for unique_ptrs to gdf_columns that will be used in the orderby
   // functions. unique_ptrs are used to automate freeing device memory
   std::vector<gdf_col_pointer> gdf_orderby_columns;
+  gdf_col_pointer gdf_sort_order_types;
+  gdf_col_pointer gdf_output_indices_column;
 
   // Containers for the raw pointers to the gdf_columns that will be used as
   // input to the orderby functions
   std::vector<gdf_column*> gdf_raw_orderby_columns;
+  gdf_column* gdf_raw_sort_order_types;
+  gdf_column* gdf_raw_output_indices_column;
 
-  OrderbyTest()
+  OrderByTest()
   {
     // Use constant seed so the psuedo-random order is the same each time
     // Each time the class is constructed a new constant seed is used
@@ -77,7 +81,7 @@ struct OrderbyTest : public GdfTest
     std::srand(number_of_instantiations++);
   }
 
-  ~OrderbyTest()
+  ~OrderByTest()
   {
   }
 
@@ -96,7 +100,7 @@ struct OrderbyTest : public GdfTest
           const gdf_size_type n_count)
   {
     // Deduce the type and set the gdf_dtype accordingly
-    gdf_dtype gdf_col_type;
+    gdf_dtype gdf_col_type = GDF_INT8;
     if(std::is_same<col_type,int8_t>::value) gdf_col_type = GDF_INT8;
     else if(std::is_same<col_type,uint8_t>::value) gdf_col_type = GDF_INT8;
     else if(std::is_same<col_type,int16_t>::value) gdf_col_type = GDF_INT16;
@@ -184,15 +188,16 @@ struct OrderbyTest : public GdfTest
    * @Param orderby_column_length The length of the orderby set of columns
    * @Param orderby_column_range The upper bound of random values for the orderby
    *                          columns. Values are [0, orderby_column_range)
-   * @Param print Optionally print the left and right set of columns for debug
+   * @Param n_count The null count in the columns
+   * @Param print Optionally print the set of columns for debug
    * -------------------------------------------------------------------------*/
   void create_input( size_t orderby_column_length, size_t orderby_column_range,
-                     bool print = false, const gdf_size_type n_count = 0)
+                     const gdf_size_type n_count = 0, bool print = false)
   {
     initialize_tuple(orderby_columns, orderby_column_length, orderby_column_range, ctxt.flag_sorted);
 
     auto n_columns = std::tuple_size<multi_column_t>::value;
-    initialize_valids(orderby_valids, n_columns, orderby_column_length, false);
+    initialize_valids(orderby_valids, n_columns, orderby_column_length, n_count);
 
     gdf_orderby_columns = initialize_gdf_columns(orderby_columns, orderby_valids, n_count);
 
@@ -202,30 +207,72 @@ struct OrderbyTest : public GdfTest
       gdf_raw_orderby_columns.push_back(c.get());
     }
 
+    initialize_order_by_types(sort_order_types, n_columns);
+    gdf_sort_order_types = create_gdf_column(sort_order_types, nullptr, 0);
+    gdf_raw_sort_order_types = gdf_sort_order_types.get();
+
     if(print)
     {
       std::cout << "orderby column(s) created. Size: " << std::get<0>(orderby_columns).size() << std::endl;
-      print_tuples_and_valids(orderby_columns, orderby_valids);
+      print_tuples_valids_and_order_by_types(orderby_columns, orderby_valids, sort_order_types);
     }
   }
 
-  /* --------------------------------------------------------------------------*
-   * @Synopsis  Creates an empty column
-   *
-   * @Param orderby_column_length The length of the orderby column
-   * -------------------------------------------------------------------------*/
-  void create_dummy_input( gdf_size_type const orderby_column_length)
+  void create_gdf_output_buffers(const size_t orderby_column_length) {
+    std::vector<size_t> temp(orderby_column_length, 0);
+    gdf_output_indices_column = create_gdf_column(temp, nullptr, 0);
+    gdf_raw_output_indices_column = gdf_output_indices_column.get();
+  }
+
+  // Compile time recursion to sort an array of indices by each vector in a tuple of vectors
+  template<std::size_t I = 0, typename... Tp>
+  inline typename std::enable_if<I == sizeof...(Tp), void>::type
+  sort_multi_column(std::tuple<std::vector<Tp>...>& t, std::vector<host_valid_pointer>& valids, std::vector<char>& asc_desc, std::vector<size_t>& indices)
   {
-    using col_type = typename std::tuple_element<0, multi_column_t>::type::value_type;
+    //bottom of compile-time recursion
+    //purposely empty...
+  }
+  template<std::size_t I = 0, typename... Tp>
+  inline typename std::enable_if<I < sizeof...(Tp), void>::type
+  sort_multi_column(std::tuple<std::vector<Tp>...>& t, std::vector<host_valid_pointer>& valids, std::vector<char>& asc_desc, std::vector<size_t>& indices)
+  {
+    const size_t col_index = sizeof...(Tp)-I-1;
+    
+    // First column have higher priority so we sort back to front 
+    auto column = std::get<col_index>(t);
+    auto column_valids = valids[col_index].get();
 
-    std::vector<col_type> dummy_vector_orderby(orderby_column_length, static_cast<col_type>(0));
-    gdf_orderby_columns.push_back(create_gdf_column<col_type>(dummy_vector_orderby, nullptr, 0));
+    // Group the invalid rows together at the beginning or the end
+    bool nulls_at_front = (nulls_are_smallest && asc_desc[col_index] == GDF_ORDER_ASC) || 
+                          (!nulls_are_smallest && asc_desc[col_index] == GDF_ORDER_DESC);
+    size_t invalid_count = 0;
+    for(size_t i = 0; i < column.size(); ++i)
+    {
+      size_t j = (nulls_at_front ? i : column.size()-i-1);
+      if (!gdf_is_valid(column_valids, indices[j])) {
+        if (nulls_at_front) {
+          std::rotate(indices.begin()+invalid_count, indices.begin()+i, indices.begin()+i+1);
+        }
+        else {
+          std::rotate(indices.rbegin()+invalid_count, indices.rbegin()+i, indices.rbegin()+i+1);
+        }
+        ++invalid_count;
+      }
+    }    
 
-    // Fill vector of raw pointers to gdf_columns
-    for (auto const& c : gdf_orderby_columns) {
-      gdf_raw_orderby_columns.push_back(c.get());
+    auto cmp = [&](size_t i1, size_t i2) {
+        return (asc_desc[col_index] == GDF_ORDER_ASC ? column[i1] < column[i2] : column[i1] > column[i2]);
+      };
+
+    if (nulls_at_front) {
+      std::stable_sort(indices.begin() + invalid_count, indices.end(), cmp);
     }
-
+    else {
+      std::stable_sort(indices.begin(), indices.end() - invalid_count, cmp);
+    }
+    
+    //recurse to next vector in tuple
+    sort_multi_column<I + 1, Tp...>(t, valids, asc_desc, indices);
   }
 
   /* --------------------------------------------------------------------------*/
@@ -234,269 +281,141 @@ struct OrderbyTest : public GdfTest
    *
    * @Param print Option to print the solution for debug
    *
-   * @Returns A vector of 'result_type' where result_type is a structure with a left_index, right_index
-   * where left_columns[left_index] == right_columns[right_index]
+   * @Returns A vector of 'size_t' sorted indices
    */
   /* ----------------------------------------------------------------------------*/
-  std::vector<result_type> compute_reference_solution(bool print = false)
+  std::vector<size_t> compute_reference_solution(bool print = false)
   {
+    const size_t colums_size = std::get<0>(orderby_columns).size();
 
-	  orderby_columns //multi_column_t
-	  orderby_valids  // host side
+    std::vector<size_t> reference_result(colums_size);
+    std::iota(std::begin(reference_result), std::end(reference_result), 0);
 
-//	  es buena idea usar gdf_is_valid  y tambien  gdf::util::turn_bit_on  o  gdf::util::turn_bit_off
+    sort_multi_column(orderby_columns, orderby_valids, sort_order_types, reference_result);
 
+    if(print)
+    {
+      std::cout << "Reference result size: " << reference_result.size() << std::endl;
+      std::cout << "Indices:" << std::endl;
+      std::copy(reference_result.begin(), reference_result.end(), std::ostream_iterator<size_t>(std::cout, ", "));
+      std::cout << "\n";
+    }
 
-//	  colA, colB, colC
-//
-//	  sort colC con el output siendo los indices nuevos
-//	  sorteas los indices sorteado a base de colB
-//	  sorteas los indices sorteado a base de colA
-//
-//	  estos sorts serian en partes:
-//	  1. agarras los indices de los nullos y los no nulos
-//	  2. haces el sort a base de los no nulos
-//	  3. concatenas esos indices sorteados con los indices de los nulos. Los indices de los nulos irian antes o despues de los no nulos dependiendo de nulls_are_smallest
-//
-//
-//	  thrust::stable_sort_by_key (RandomAccessIterator1 keys_first, RandomAccessIterator1 keys_last, RandomAccessIterator2 values_first)
-//	  keys_first = colData,
-//	  keys_last = colData + size
-//	  values_first = indices
-
-
+    return reference_result;
   }
 
   /* --------------------------------------------------------------------------*/
   /**
    * @Synopsis  Computes the result of joining the left and right sets of columns with the libgdf functions
    *
-   * @Param gdf_result A vector of result_type that holds the result of the libgdf join function
+   * @Param gdf_result A vector of size_t that holds the result of the libgdf sort function
    * @Param print Option to print the result computed by the libgdf function
-   * @Param sort Option to sort the result. This is required to compare the result against the reference solution
    */
   /* ----------------------------------------------------------------------------*/
-  std::vector<result_type> compute_gdf_result(bool print = false, bool sort = true, gdf_error expected_result = GDF_SUCCESS)
+  std::vector<size_t> compute_gdf_result(bool print = false, gdf_error expected_result = GDF_SUCCESS)
   {
     const int num_columns = std::tuple_size<multi_column_t>::value;
 
-    gdf_column left_result;
-    gdf_column right_result;
-    left_result.size = 0;
-    right_result.size = 0;
-
     gdf_error result_error{GDF_SUCCESS};
 
-    gdf_column ** left_gdf_columns = gdf_raw_left_columns.data();
-    gdf_column ** right_gdf_columns = gdf_raw_right_columns.data();
-    std::vector<int> range;
-    for (int i = 0; i < num_columns; ++i) {range.push_back(i);}
-    switch(op)
-    {
-      case join_op::LEFT:
-        {
-          result_error = gdf_left_join(
-                                       left_gdf_columns, num_columns, range.data(),
-                                       right_gdf_columns, num_columns, range.data(),
-                                       num_columns,
-                                       0, nullptr,
-                                       &left_result, &right_result,
-                                       &ctxt);
-          break;
-        }
-      case join_op::INNER:
-        {
-          result_error =  gdf_inner_join(
-                                         left_gdf_columns, num_columns, range.data(),
-                                         right_gdf_columns, num_columns, range.data(),
-                                         num_columns,
-                                         0, nullptr,
-                                         &left_result, &right_result,
-                                         &ctxt);
-          break;
-        }
-      case join_op::FULL:
-        {
-          result_error =  gdf_full_join(
-                                         left_gdf_columns, num_columns, range.data(),
-                                         right_gdf_columns, num_columns, range.data(),
-                                         num_columns,
-                                         0, nullptr,
-                                         &left_result, &right_result,
-                                         &ctxt);
-          break;
-        }
-      default:
-        std::cout << "Invalid join method" << std::endl;
-        EXPECT_TRUE(false);
-    }
+    gdf_column** columns_to_sort = gdf_raw_orderby_columns.data();
+    gdf_column* sort_order_types = gdf_raw_sort_order_types;
+    gdf_column* sorted_indices_output = gdf_raw_output_indices_column;
 
-    EXPECT_EQ(expected_result, result_error) << "The gdf join function did not complete successfully";
+    result_error = gdf_order_by_asc_desc(columns_to_sort,
+                                         num_columns,
+                                         (char*)sort_order_types->data,
+                                         sorted_indices_output,
+                                         &ctxt);
+
+    EXPECT_EQ(expected_result, result_error) << "The gdf order by function did not complete successfully";
 
     // If the expected result was not GDF_SUCCESS, then this test was testing for a
     // specific error condition, in which case we return imediately and do not do
     // any further work on the output
     if(GDF_SUCCESS != expected_result){
-      return std::vector<result_type>();
+      return std::vector<size_t>();
     }
 
-    EXPECT_EQ(left_result.size, right_result.size) << "Join output size mismatch";
-    // The output is an array of size `n` where the first n/2 elements are the
-    // left_indices and the last n/2 elements are the right indices
-    size_t total_pairs = left_result.size;
-    size_t output_size = total_pairs*2;
+    size_t output_size = sorted_indices_output->size;
+    size_t* device_result = static_cast<size_t*>(sorted_indices_output->data);
 
-    int * l_join_output = static_cast<int*>(left_result.data);
-    int * r_join_output = static_cast<int*>(right_result.data);
+    // Host vector to hold gdf sort output
+    std::vector<size_t> host_result(output_size);
 
-    // Host vector to hold gdf join output
-    std::vector<int> host_result(output_size);
-
-    // Copy result of gdf join to the host
+    // Copy result of gdf sorted_indices_output the host
     EXPECT_EQ(cudaMemcpy(host_result.data(),
-               l_join_output, total_pairs * sizeof(int), cudaMemcpyDeviceToHost), cudaSuccess);
-    EXPECT_EQ(cudaMemcpy(host_result.data() + total_pairs,
-               r_join_output, total_pairs * sizeof(int), cudaMemcpyDeviceToHost), cudaSuccess);
-
-    // Free the original join result
-    if(output_size > 0){
-      gdf_column_free(&left_result);
-      gdf_column_free(&right_result);
-    }
-
-    // Host vector of result_type pairs to hold final result for comparison to reference solution
-    std::vector<result_type> host_pair_result(total_pairs);
-
-    // Copy raw output into corresponding result_type pair
-    for(size_t i = 0; i < total_pairs; ++i){
-      host_pair_result[i].first = host_result[i];
-      host_pair_result[i].second = host_result[i + total_pairs];
-    }
-
-    // Sort the output for comparison to reference solution
-    if(sort){
-      std::sort(host_pair_result.begin(), host_pair_result.end());
-    }
+               device_result, output_size * sizeof(size_t), cudaMemcpyDeviceToHost), cudaSuccess);
 
     if(print){
-      std::cout << "GDF result size: " << host_pair_result.size() << std::endl;
-      std::cout << "left index, right index" << std::endl;
-      std::copy(host_pair_result.begin(), host_pair_result.end(), std::ostream_iterator<result_type>(std::cout, ""));
+      std::cout << "GDF result size: " << host_result.size() << std::endl;
+      std::cout << "Indices:" << std::endl;
+      std::copy(host_result.begin(), host_result.end(), std::ostream_iterator<size_t>(std::cout, ", "));
       std::cout << "\n";
     }
 
-    return host_pair_result;
+    return host_result;
   }
 };
 
-// This structure is used to nest the join operations, join method and
-// number/types of columns for use with Google Test type-parameterized
+// This structure is used to nest the number/types of columns and
+// the nulls_are_smallest flag for use with Google Test type-parameterized
 // tests .Here join_operation refers to the type of join eg. INNER,
 // LEFT, FULL and join_method refers to the underlying join algorithm
 //that performs it eg. GDF_HASH or GDF_SORT.
-template<join_op join_operation,
-         gdf_method join_method,
-         typename tuple_of_vectors,
-         bool keys_are_unique = false>
+template<typename tuple_of_vectors,
+         bool smaller_nulls = true>
 struct TestParameters
 {
-   // The tuple of vectors that determines the number and types of the columns to join
+  // The tuple of vectors that determines the number and types of the columns to sort
   using multi_column_t = tuple_of_vectors;
 
-  // ascending and descending vector
-  std::vector<char> asc_desc;
-
   // nulls are first
-  bool nulls_are_smallest;
+   const static bool nulls_are_smallest{smaller_nulls};
 };
-
-const static gdf_method HASH = gdf_method::GDF_HASH;
-const static gdf_method SORT = gdf_method::GDF_SORT;
 
 template <typename... T>
 using VTuple = std::tuple<std::vector<T>...>;
 
 // Using Google Tests "Type Parameterized Tests"
-// Every test defined as TYPED_TEST(JoinTest, *) will be run once for every instance of
+// Every test defined as TYPED_TEST(OrderByTest, *) will be run once for every instance of
 // TestParameters defined below
 // The kind of join is determined by the first template argument to TestParameters
 // The number and types of columns used in both the left and right sets of columns are
 // determined by the number and types of vectors in the std::tuple<...> that is the second
 // template argument to TestParameters
 typedef ::testing::Types<
-                          // Single column inner join tests for all types
-                          TestParameters< VTuple<int32_t >, {1}, false >,
-						  TestParameters< VTuple<int32_t >, {0}, false >,
-						  TestParameters< VTuple<int32_t >, {1}, true >,
-						  TestParameters< VTuple<int32_t >, {0}, true >,
-                          TestParameters< join_op::INNER, HASH, VTuple<int64_t > >,
-                          TestParameters< join_op::INNER, HASH, VTuple<float   > >,
-                          TestParameters< join_op::INNER, HASH, VTuple<double  > >,
-                          TestParameters< join_op::INNER, HASH, VTuple<uint32_t> >,
-                          TestParameters< join_op::INNER, HASH, VTuple<uint64_t> >,
-                          TestParameters< join_op::INNER, SORT, VTuple<int32_t > >,
-                          TestParameters< join_op::INNER, SORT, VTuple<int64_t > >,
-                          TestParameters< join_op::INNER, SORT, VTuple<float   > >,
-                          TestParameters< join_op::INNER, SORT, VTuple<double  > >,
-                          TestParameters< join_op::INNER, SORT, VTuple<uint32_t> >,
-                          TestParameters< join_op::INNER, SORT, VTuple<uint64_t> >,
-                          // Single column left join tests for all types
-                          TestParameters< join_op::LEFT,  HASH, VTuple<int32_t > >,
-                          TestParameters< join_op::LEFT,  HASH, VTuple<int64_t > >,
-                          TestParameters< join_op::LEFT,  HASH, VTuple<float   > >,
-                          TestParameters< join_op::LEFT,  HASH, VTuple<double  > >,
-                          TestParameters< join_op::LEFT,  HASH, VTuple<uint32_t> >,
-                          TestParameters< join_op::LEFT,  HASH, VTuple<uint64_t> >,
-                          TestParameters< join_op::LEFT,  SORT, VTuple<int32_t > >,
-                          TestParameters< join_op::LEFT,  SORT, VTuple<int64_t > >,
-                          TestParameters< join_op::LEFT,  SORT, VTuple<float   > >,
-                          TestParameters< join_op::LEFT,  SORT, VTuple<double  > >,
-                          TestParameters< join_op::LEFT,  SORT, VTuple<uint32_t> >,
-                          TestParameters< join_op::LEFT,  SORT, VTuple<uint64_t> >,
-                          // Single column full join tests for all types
-                          TestParameters< join_op::FULL, HASH, VTuple<int32_t > >,
-                          TestParameters< join_op::FULL, HASH, VTuple<int64_t > >,
-                          TestParameters< join_op::FULL, HASH, VTuple<float   > >,
-                          TestParameters< join_op::FULL, HASH, VTuple<double  > >,
-                          TestParameters< join_op::FULL, HASH, VTuple<uint32_t> >,
-                          TestParameters< join_op::FULL, HASH, VTuple<uint64_t> >,
-                          // Two Column Left Join tests for some combination of types
-                          TestParameters< join_op::LEFT,  HASH, VTuple<int32_t , int32_t> >,
-                          TestParameters< join_op::LEFT,  HASH, VTuple<uint32_t, int32_t> >,
-                          // Three Column Left Join tests for some combination of types
-                          TestParameters< join_op::LEFT,  HASH, VTuple<int32_t , uint32_t, float  > >,
-                          TestParameters< join_op::LEFT,  HASH, VTuple<double  , uint32_t, int64_t> >,
-                          // Two Column Inner Join tests for some combination of types
-                          TestParameters< join_op::INNER, HASH, VTuple<int32_t , int32_t> >,
-                          TestParameters< join_op::INNER, HASH, VTuple<uint32_t, int32_t> >,
-                          // Three Column Inner Join tests for some combination of types
-                          TestParameters< join_op::INNER, HASH, VTuple<int32_t , uint32_t, float  > >,
-                          TestParameters< join_op::INNER, HASH, VTuple<double  , uint32_t, int64_t> >,
-                          // Four column test for Left Joins
-                          TestParameters< join_op::LEFT, HASH, VTuple<double, int32_t, int64_t, int32_t> >,
-                          TestParameters< join_op::LEFT, HASH, VTuple<float, uint32_t, double, int32_t> >,
-                          // Four column test for Inner Joins
-                          TestParameters< join_op::INNER, HASH, VTuple<uint32_t, float, int64_t, int32_t> >,
-                          TestParameters< join_op::INNER, HASH, VTuple<double, float, int64_t, double> >,
-                          // Five column test for Left Joins
-                          TestParameters< join_op::LEFT, HASH, VTuple<double, int32_t, int64_t, int32_t, int32_t> >,
-                          // Five column test for Inner Joins
-                          TestParameters< join_op::INNER, HASH, VTuple<uint32_t, float, int64_t, int32_t, float> >
+                          // Single column Order by Tests for some types
+                          TestParameters< VTuple<int32_t>, false >,
+                          TestParameters< VTuple<uint64_t>, false >,
+						              TestParameters< VTuple<float>, false >,
+                          TestParameters< VTuple<int64_t>, true >,
+                          TestParameters< VTuple<uint32_t>, true >,
+                          TestParameters< VTuple<double>, true >,
+                          // Two Column Order by Tests for some combination of types
+                          TestParameters< VTuple<int32_t, int32_t>, false >,
+                          TestParameters< VTuple<int64_t, uint32_t>, false >,
+                          TestParameters< VTuple<uint32_t, double>, false >,
+                          TestParameters< VTuple<float, float>, true >,
+						              TestParameters< VTuple<uint64_t, float>, true >,
+                          TestParameters< VTuple<double, int32_t>, true >,
+                          // Three Column Order by Tests for some combination of types
+                          TestParameters< VTuple<int32_t, double, uint32_t>, false >,
+                          TestParameters< VTuple<float, int32_t, float>, true >
                           > Implementations;
 
-TYPED_TEST_CASE(JoinTest, Implementations);
+TYPED_TEST_CASE(OrderByTest, Implementations);
 
 // This test is used for debugging purposes and is disabled by default.
 // The input sizes are small and has a large amount of debug printing enabled.
-TYPED_TEST(JoinTest, DISABLED_DebugTest)
+TYPED_TEST(OrderByTest, DISABLED_DebugTest)
 {
-  this->create_input(5, 2,
-                     5, 2,
-                     true);
+  this->create_input(5, 2, 1, true);
+  this->create_gdf_output_buffers(5);
 
-  std::vector<result_type> reference_result = this->compute_reference_solution(true);
+  std::vector<size_t> reference_result = this->compute_reference_solution(true);
 
-  std::vector<result_type> gdf_result = this->compute_gdf_result(true);
+  std::vector<size_t> gdf_result = this->compute_gdf_result(true);
 
   ASSERT_EQ(reference_result.size(), gdf_result.size()) << "Size of gdf result does not match reference result\n";
 
@@ -507,14 +426,14 @@ TYPED_TEST(JoinTest, DISABLED_DebugTest)
 }
 
 
-TYPED_TEST(JoinTest, EqualValues)
+TYPED_TEST(OrderByTest, EqualValues)
 {
-  this->create_input(100,1,
-                     1000,1);
+  this->create_input(100, 1);
+  this->create_gdf_output_buffers(100);
 
-  std::vector<result_type> reference_result = this->compute_reference_solution();
+  std::vector<size_t> reference_result = this->compute_reference_solution();
 
-  std::vector<result_type> gdf_result = this->compute_gdf_result();
+  std::vector<size_t> gdf_result = this->compute_gdf_result();
 
   ASSERT_EQ(reference_result.size(), gdf_result.size()) << "Size of gdf result does not match reference result\n";
 
@@ -524,14 +443,14 @@ TYPED_TEST(JoinTest, EqualValues)
   }
 }
 
-TYPED_TEST(JoinTest, MaxRandomValues)
+TYPED_TEST(OrderByTest, EqualValuesNull)
 {
-  this->create_input(10000,RAND_MAX,
-                     10000,RAND_MAX);
+  this->create_input(100, 1, 100);
+  this->create_gdf_output_buffers(100);
 
-  std::vector<result_type> reference_result = this->compute_reference_solution();
+  std::vector<size_t> reference_result = this->compute_reference_solution();
 
-  std::vector<result_type> gdf_result = this->compute_gdf_result();
+  std::vector<size_t> gdf_result = this->compute_gdf_result();
 
   ASSERT_EQ(reference_result.size(), gdf_result.size()) << "Size of gdf result does not match reference result\n";
 
@@ -541,14 +460,14 @@ TYPED_TEST(JoinTest, MaxRandomValues)
   }
 }
 
-TYPED_TEST(JoinTest, LeftColumnsBigger)
+TYPED_TEST(OrderByTest, MaxRandomValues)
 {
-  this->create_input(10000,100,
-                     100,100);
+  this->create_input(10000, RAND_MAX);
+  this->create_gdf_output_buffers(10000);
 
-  std::vector<result_type> reference_result = this->compute_reference_solution();
+  std::vector<size_t> reference_result = this->compute_reference_solution();
 
-  std::vector<result_type> gdf_result = this->compute_gdf_result();
+  std::vector<size_t> gdf_result = this->compute_gdf_result();
 
   ASSERT_EQ(reference_result.size(), gdf_result.size()) << "Size of gdf result does not match reference result\n";
 
@@ -558,14 +477,14 @@ TYPED_TEST(JoinTest, LeftColumnsBigger)
   }
 }
 
-TYPED_TEST(JoinTest, RightColumnsBigger)
+TYPED_TEST(OrderByTest, MaxRandomValuesAndNulls)
 {
-  this->create_input(100,100,
-                     10000,100);
+  this->create_input(10000, RAND_MAX, 2000);
+  this->create_gdf_output_buffers(10000);
 
-  std::vector<result_type> reference_result = this->compute_reference_solution();
+  std::vector<size_t> reference_result = this->compute_reference_solution();
 
-  std::vector<result_type> gdf_result = this->compute_gdf_result();
+  std::vector<size_t> gdf_result = this->compute_gdf_result();
 
   ASSERT_EQ(reference_result.size(), gdf_result.size()) << "Size of gdf result does not match reference result\n";
 
@@ -575,14 +494,14 @@ TYPED_TEST(JoinTest, RightColumnsBigger)
   }
 }
 
-TYPED_TEST(JoinTest, EmptyLeftFrame)
+TYPED_TEST(OrderByTest, EmptyColumns)
 {
-  this->create_input(0,100,
-                     1000,100);
+  this->create_input(0,100);
+  this->create_gdf_output_buffers(0);
 
-  std::vector<result_type> reference_result = this->compute_reference_solution();
+  std::vector<size_t> reference_result = this->compute_reference_solution();
 
-  std::vector<result_type> gdf_result = this->compute_gdf_result();
+  std::vector<size_t> gdf_result = this->compute_gdf_result();
 
   ASSERT_EQ(reference_result.size(), gdf_result.size()) << "Size of gdf result does not match reference result\n";
 
@@ -592,109 +511,54 @@ TYPED_TEST(JoinTest, EmptyLeftFrame)
   }
 }
 
-TYPED_TEST(JoinTest, EmptyRightFrame)
-{
-  this->create_input(1000,100,
-                     0,100);
+// // The below tests check correct reporting of missing valid pointer
 
-  std::vector<result_type> reference_result = this->compute_reference_solution();
+// // Create a new derived class from OrderByTest so we can do a new Typed Test set of tests
+// template <class test_parameters>
+// struct JoinValidTest : public OrderByTest<test_parameters>
+// { };
 
-  std::vector<result_type> gdf_result = this->compute_gdf_result();
+// using ValidTestImplementation = testing::Types< TestParameters< join_op::INNER, SORT, VTuple<int32_t >>,
+//                                                 TestParameters< join_op::LEFT , SORT, VTuple<int32_t >>,
+//                                                 TestParameters< join_op::FULL , SORT, VTuple<int32_t >> >;
 
-  ASSERT_EQ(reference_result.size(), gdf_result.size()) << "Size of gdf result does not match reference result\n";
+// TYPED_TEST_CASE(JoinValidTest, ValidTestImplementation);
 
-  // Compare the GDF and reference solutions
-  for(size_t i = 0; i < reference_result.size(); ++i){
-    EXPECT_EQ(reference_result[i], gdf_result[i]);
-  }
-}
+// TYPED_TEST(JoinValidTest, ReportValidMaskError)
+// {
+//   this->create_input(1000,100,
+//                      100,100,
+//                      false, 1);
 
-TYPED_TEST(JoinTest, BothFramesEmpty)
-{
-  this->create_input(0,100,
-                     0,100);
-
-  std::vector<result_type> reference_result = this->compute_reference_solution();
-
-  std::vector<result_type> gdf_result = this->compute_gdf_result();
-
-  ASSERT_EQ(reference_result.size(), gdf_result.size()) << "Size of gdf result does not match reference result\n";
-
-  // Compare the GDF and reference solutions
-  for(size_t i = 0; i < reference_result.size(); ++i){
-    EXPECT_EQ(reference_result[i], gdf_result[i]);
-  }
-}
-
-// The below tests check correct reporting of missing valid pointer
-
-// Create a new derived class from JoinTest so we can do a new Typed Test set of tests
-template <class test_parameters>
-struct JoinValidTest : public JoinTest<test_parameters>
-{ };
-
-using ValidTestImplementation = testing::Types< TestParameters< join_op::INNER, SORT, VTuple<int32_t >>,
-                                                TestParameters< join_op::LEFT , SORT, VTuple<int32_t >>,
-                                                TestParameters< join_op::FULL , SORT, VTuple<int32_t >> >;
-
-TYPED_TEST_CASE(JoinValidTest, ValidTestImplementation);
-
-TYPED_TEST(JoinValidTest, ReportValidMaskError)
-{
-  this->create_input(1000,100,
-                     100,100,
-                     false, 1);
-
-  std::vector<result_type> gdf_result = this->compute_gdf_result(false, true, GDF_VALIDITY_UNSUPPORTED);
-}
+//   std::vector<size_t> gdf_result = this->compute_gdf_result(false, true, GDF_VALIDITY_UNSUPPORTED);
+// }
 
 
-// The below tests are for testing inputs that are at or above the maximum input size possible
+// // The below tests are for testing inputs that are at or above the maximum input size possible
 
-// Create a new derived class from JoinTest so we can do a new Typed Test set of tests
-template <class test_parameters>
-struct MaxJoinTest : public JoinTest<test_parameters>
-{ };
+// // Create a new derived class from OrderByTest so we can do a new Typed Test set of tests
+// template <class test_parameters>
+// struct MaxOrderByTest : public OrderByTest<test_parameters>
+// { };
 
-// Only test for single column inputs for Inner and Left joins because these tests take a long time
-using MaxImplementations = testing::Types< TestParameters< join_op::INNER, HASH, VTuple<int32_t >>,
-                                           TestParameters< join_op::LEFT, HASH, VTuple<int32_t >> >;
+// // Only test for single column inputs for Inner and Left joins because these tests take a long time
+// using MaxImplementations = testing::Types< TestParameters< join_op::INNER, HASH, VTuple<int32_t >>,
+//                                            TestParameters< join_op::LEFT, HASH, VTuple<int32_t >> >;
 
-TYPED_TEST_CASE(MaxJoinTest, MaxImplementations);
+// TYPED_TEST_CASE(MaxOrderByTest, MaxImplementations);
 
-TYPED_TEST(MaxJoinTest, HugeJoinSize)
-{
-  // FIXME The maximum input join size should be std::numeric_limits<int>::max() - 1,
-  // however, this will currently cause OOM on a GV100 as it will attempt to allocate
-  // a 34GB hash table. Therefore, use a 2^29 input to make sure we can handle big
-  // inputs until we can better handle OOM errors
-  // The CI Server only has a 16GB GPU, therefore need to use 2^29 input size
-  const size_t right_table_size = 1<<29;
-  this->create_input(100, RAND_MAX,
-                     right_table_size, RAND_MAX);
-  std::vector<result_type> gdf_result = this->compute_gdf_result();
-}
-
-TYPED_TEST(MaxJoinTest, InputTooLarge)
-{
-    const gdf_size_type left_table_size = 100;
-    const gdf_size_type right_table_size =
-      static_cast<gdf_size_type>(std::numeric_limits<int>::max());
-
-    this->create_dummy_input(left_table_size, right_table_size);
-
-    const bool print_result{false};
-    const bool sort_result{false};
-
-    // We expect the function to fail when the input is this large
-    const gdf_error expected_error{GDF_COLUMN_SIZE_TOO_BIG};
-
-    std::vector<result_type> gdf_result = this->compute_gdf_result(print_result,
-                                                                   sort_result,
-                                                                   expected_error);
-}
-
-
+// TYPED_TEST(MaxOrderByTest, HugeJoinSize)
+// {
+//   // FIXME The maximum input join size should be std::numeric_limits<int>::max() - 1,
+//   // however, this will currently cause OOM on a GV100 as it will attempt to allocate
+//   // a 34GB hash table. Therefore, use a 2^29 input to make sure we can handle big
+//   // inputs until we can better handle OOM errors
+//   // The CI Server only has a 16GB GPU, therefore need to use 2^29 input size
+//   const size_t right_table_size = 1<<29;
+//   this->create_input(100, RAND_MAX,
+//                      right_table_size, RAND_MAX);
+//   std::vector<size_t> gdf_result = this->compute_gdf_result();
+// }
 
 ///*
 // * Copyright 2018 BlazingDB, Inc.
@@ -735,7 +599,7 @@ TYPED_TEST(MaxJoinTest, InputTooLarge)
 //using gdf_col_pointer =
 //		typename std::unique_ptr<gdf_column, std::function<void(gdf_column*)>>;
 //
-//// A new instance of this class will be created for each *TEST(JoinTest, ...)
+//// A new instance of this class will be created for each *TEST(OrderByTest, ...)
 //// Put all repeated setup and validation stuff here
 //template <class test_parameters>
 //struct OrderByTest : public GdfTest

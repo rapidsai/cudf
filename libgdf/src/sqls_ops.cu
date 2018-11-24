@@ -47,9 +47,9 @@ namespace{ //annonymus
     std::vector<int>   v_types(ncols, 0);
     for(size_t i=0;i<ncols;++i)
       {
-        v_cols[i] = cols[i].data;
-        v_valids[i] = cols[i].valid;
-        v_types[i] = cols[i].dtype;
+        v_cols[i] = cols[i]->data;
+        v_valids[i] = cols[i]->valid;
+        v_types[i] = cols[i]->dtype;
       }
 
     void** h_cols = &v_cols[0];
@@ -1506,41 +1506,49 @@ gdf_error gdf_group_by_count(int ncols,                    // # columns
     return gdf_group_by_single(ncols, cols, col_agg, out_col_indices, out_col_values, out_col_agg, ctxt, GDF_COUNT);
 }
 
+// thrust::device_vector set to use rmmAlloc and rmmFree.
+template<typename T>
+using VectorThrust = thrust::device_vector<T, rmm_allocator<T>>;
 
-gdf_error gdf_order_by_asc_desc(
-        gdf_column** input_columns,
-        size_t num_inputs,
-        gdf_column* output_indices,
-		char * asc_desc,
-		bool nulls_are_smallest = false){
-
+gdf_error gdf_order_by_asc_desc(gdf_column** cols,
+                                size_t ncols,
+		                            char* asc_desc,
+                                gdf_column* output_indices,
+		                            gdf_context* ctxt)
+{
     //TODO: don't assume type of output is size_t
-    typedef size_t IndexT;
+    // typedef size_t IndexT;
     //TODO: make these allocations happen with the new memory manager when we can
     //also we are kind of assuming they will just work, yeesh!
-    thrust::device_vector<size_t> test(2);
 
-    thrust::device_vector<void*> d_cols(num_inputs);
-    thrust::device_vector<gdf_valid_type*> d_valids(num_inputs);
-    thrust::device_vector<int>   d_types(num_inputs, 0);
+    //return error if the inputs or no output pointers are invalid
+    if (cols == nullptr || output_indices == nullptr) { return GDF_DATASET_EMPTY; }
+
+    bool have_nulls = false;
+    for (size_t i = 0; i < ncols; i++){
+    	if (cols[i]->null_count > 0)
+    		have_nulls = true;
+    }
+
+    VectorThrust<void*> d_cols(ncols);
+    VectorThrust<gdf_valid_type*> d_valids(ncols);
+    VectorThrust<int> d_types(ncols, 0);
 
     void** d_col_data = d_cols.data().get();
     gdf_valid_type** d_valids_data = d_valids.data().get();
     int* d_col_types = d_types.data().get();
 
+    soa_col_info(cols, ncols, d_col_data, d_valids_data, d_col_types);
 
-    soa_col_info(input_columns, num_inputs,  d_col_data, d_valids_data, d_col_types);
-
-    multi_col_order_by_asc_desc(
-            d_col_data,
-			d_valids_data,
-            d_col_types,
-            num_inputs,
-            asc_desc,
-            (size_t *) output_indices->data,
-            input_columns[0].size,
-			nulls_are_smallest);
+    multi_col_order_by_asc_desc(d_col_data,
+			                          d_valids_data,
+                                d_col_types,
+                                ncols,
+                                asc_desc,
+                                (size_t *) output_indices->data,
+                                cols[0]->size,
+                                have_nulls,
+			                          ctxt->flag_nulls_are_smallest);
 
     return GDF_SUCCESS;
-
 }
