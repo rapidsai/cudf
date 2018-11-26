@@ -11,9 +11,14 @@ __pycache__
 *.swp
 *.pytest_cache
 DartConfiguration.tcl
+.DS_Store
+
+##build
 htmlcov
 dist/
 cudf.egg-info/
+python/build
+python/cudf/bindings/*.cpp
 
 ## Patching
 *.diff
@@ -23,14 +28,11 @@ cudf.egg-info/
 ## libgdf
 CMakeFiles/
 Debug
-libgdf/build/
-libgdf/thirdparty/googletest/
-libgdf/include/gdf/ipc/File_generated.h
-libgdf/include/gdf/ipc/Message_generated.h
-libgdf/include/gdf/ipc/Schema_generated.h
-libgdf/include/gdf/ipc/Tensor_generated.h
-libgdf/python/libgdf_cffi/libgdf_cffi.py
-libgdf/python/librmm_cffi/librmm_cffi.py
+cpp/build/
+cpp/include/cudf/ipc_generated/*.h
+cpp/thirdparty/googletest/
+cpp/python/libgdf_cffi/libgdf_cffi.py
+cpp/python/librmm_cffi/librmm_cffi.py
 
 ## Eclipse IDE
 .project
