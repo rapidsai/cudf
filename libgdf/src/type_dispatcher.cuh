@@ -26,7 +26,7 @@
  * order to provide the 1-to-1 mapping, a wrapper struct may be dispatched for certain
  * gdf_dtype enum values in order to emulate a "strong typedef". 
  *
- * A strong typedef  provides a new, concrete type, unlike a normal C++ typedef which
+ * A strong typedef  provides a new, concrete type unlike a normal C++ typedef which
  * is simply a type alias. These "strong typedef" structs simply wrap a single member
  * variable of a fundamental type called 'value'. In order to access the underlying 
  * value, one must use the "unwrap" function which will provide a reference to the 
@@ -68,7 +68,7 @@
  * };
  *
  * The return type for all template instantiations of the functor's "operator()" 
- * lambda must be the same, otherwise there will be a compiler error as you would be
+ * lambda must be the same, else there will be a compiler error as you would be
  * trying to return different types from the same function.
  *
  * @Param dtype The gdf_dtype enum that determines which type will be dispatched
@@ -76,17 +76,15 @@
  * the dispatched type
  * @Param args A parameter-pack (i.e., arbitrary number of arguments) that will 
  * be perfectly-forwarded as the arguments of the functor's "operator()".
- * @tparam enum_map A traits struct templated on a gdf_dtype value with a member 
- * type called "type" that maps a gdf_dtype to the underlying datatype.
  *
  * @Returns Whatever is returned by the functor's "operator()". 
  *
  */
 /* ----------------------------------------------------------------------------*/
-// This pragma disables a compiler warning that complains about the valid usage
-// of calling a __host__ functor from this function which is __host__ __device__
 namespace gdf{
 
+// This pragma disables a compiler warning that complains about the valid usage
+// of calling a __host__ functor from this function which is __host__ __device__
 #pragma hd_warning_disable
 template < class functor_t, 
            typename... Ts>

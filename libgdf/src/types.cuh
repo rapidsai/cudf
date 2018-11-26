@@ -17,7 +17,8 @@
  * specialization. A normal C++ typedef is simply an alias and does not allow
  * for specializing a template or overloading a function.
  *
- * The purpose of these "strong typedefs" is to allow distinguishing columns with
+ * The purpose of these "strong typedefs" is to provide a one-to-one mapping between
+ * gdf_dtype enum values and concrete C++ types and allow distinguishing columns with
  * different gdf_dtype types, but have the same underlying type. For example,
  * the underlying type of both GDF_DATE32 and GDF_INT32 is int32_t. However, if
  * one wished to specialize a functor invoked with the type_dispatcher to handle
@@ -31,46 +32,30 @@
 /* ----------------------------------------------------------------------------*/
 namespace gdf
 {
-  /* --------------------------------------------------------------------------*/
-  /** 
-   * @brief  Wrapper struct for GDF_CATEGORY
-   */
-  /* ----------------------------------------------------------------------------*/
   struct category
   {
+    static constexpr gdf_dtype element_type_id{GDF_CATEGORY};
     using value_type = gdf_category;
     value_type value;
   };
 
-  /* --------------------------------------------------------------------------*/
-  /** 
-   * @brief  Wrapper struct for GDF_TIMESTAMP
-   */
-  /* ----------------------------------------------------------------------------*/
   struct timestamp
   {
+    static constexpr gdf_dtype element_type_id{GDF_TIMESTAMP};
     using value_type = gdf_timestamp;
     value_type value;
   };
 
-  /* --------------------------------------------------------------------------*/
-  /** 
-   * @brief  Wrapper struct for GDF_DATE32
-   */
-  /* ----------------------------------------------------------------------------*/
   struct date32
   {
+    static constexpr gdf_dtype element_type_id{GDF_DATE32};
     using value_type = gdf_date32;
     value_type value;
   };
 
-  /* --------------------------------------------------------------------------*/
-  /** 
-   * @brief  Wrapper struct for GDF_DATE64
-   */
-  /* ----------------------------------------------------------------------------*/
   struct date64
   {
+    static constexpr gdf_dtype element_type_id{GDF_DATE64};
     using value_type = gdf_date64;
     value_type value;
   };
@@ -128,7 +113,7 @@ namespace gdf
     /* ----------------------------------------------------------------------------*/
     template <typename T>
     __host__ __device__ __forceinline__
-    typename std::enable_if_t< std::is_fundamental<typename std::decay<T>::type>::value, 
+    typename std::enable_if_t< std::is_fundamental< typename std::decay<T>::type >::value, 
                                T>& 
     unwrap(T& value)
     {
@@ -150,7 +135,7 @@ namespace gdf
     /* ----------------------------------------------------------------------------*/
     template <typename T>
     __host__ __device__ __forceinline__
-    typename std::enable_if_t< std::is_fundamental<typename std::decay<T>::type>::value, 
+    typename std::enable_if_t< std::is_fundamental< typename std::decay<T>::type >::value, 
                                T> const& 
     unwrap(T const& value)
     {
