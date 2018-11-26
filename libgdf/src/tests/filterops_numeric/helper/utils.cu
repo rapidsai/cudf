@@ -65,9 +65,6 @@ auto print_binary(gdf_valid_type n, int size) -> void {
     std::cout << chartobin(n) << "\t sz: " <<  size <<  "\tbinary: " << chartobin(n, size) << std::endl;
 }
 
-//=====================================
-// Extracted from valid_vector.h
-
 // Create the valid pointer and init randomly the last half column
 void initialize_valids(host_valid_pointer& valid_ptr, size_t length, bool all_bits_on)
 {
