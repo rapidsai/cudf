@@ -54,6 +54,19 @@ void print_vector_and_valid(T * v,
   std::cout << std::endl;
 }
 
+static constexpr int ValidSize = 32;
+using ValidType = uint32_t;
+
+static size_t  valid_size(size_t column_length)
+{
+  const size_t n_ints = (column_length / ValidSize) + ((column_length % ValidSize) ? 1 : 0);
+  return n_ints * sizeof(ValidType);
+}
+
+static bool get_bit(const gdf_valid_type* const bits, size_t i)
+{
+  return  bits == nullptr? true :  bits[i >> size_t(3)] & (1 << (i & size_t(7)));
+}
 
 template <typename col_type>
 void print_typed_column(col_type * col_data, 
@@ -65,32 +78,29 @@ void print_typed_column(col_type * col_data,
   cudaMemcpy(h_data.data(), col_data, num_rows * sizeof(col_type), cudaMemcpyDeviceToHost);
 
 
-  const size_t num_masks = gdf_get_num_chars_bitmask(num_rows);
-  std::cout << "column :\n";
-
+  const size_t num_masks = valid_size(num_rows);
   std::vector<gdf_valid_type> h_mask(num_masks);
-  cudaMemcpy(h_mask.data(), validity_mask, num_masks * sizeof(gdf_valid_type), cudaMemcpyDeviceToHost);
-  print_vector_and_valid(h_data.data(), h_mask.data(), num_rows);
-
-  std::cout << "\n";
-  if (validity_mask != nullptr) {
-    auto gdf_valid_to_str_lambda = [](gdf_valid_type *valid, size_t column_size)
-    {
-        size_t n_bytes = gdf_get_num_chars_bitmask(column_size);
-        std::string response;
-        for (size_t i = 0; i < n_bytes; i++)
-        {
-            size_t length = n_bytes != i + 1 ? GDF_VALID_BITSIZE : column_size - GDF_VALID_BITSIZE * (n_bytes - 1);
-            auto result = gdf::util::chartobin(valid[i], length);
-            response += std::string(result) + '|';
-        }
-        return response;
-    };
-    auto res = gdf_valid_to_str_lambda(h_mask.data(), num_rows);
-    std::cout << "mask : " << std::endl;
-    std::cout << res << std::endl;
+  if(nullptr != validity_mask)
+  {
+    cudaMemcpy((int *) h_mask.data(), validity_mask, num_masks * sizeof(gdf_valid_type), cudaMemcpyDeviceToHost);
   }
-  std::cout << std::endl;
+
+  if (validity_mask == nullptr) {
+    for(size_t i = 0; i < num_rows; ++i)
+    {
+      if (sizeof(col_type) == 1)
+        std::cout << (int)h_data[i] << " ";
+      else
+        std::cout << h_data[i] << " ";
+    }
+  } 
+  else {
+    for(size_t i = 0; i < num_rows; ++i)
+    {
+        std::cout << "(" << std::to_string(h_data[i]) << "|" << get_bit(h_mask.data(), i) << "), ";
+    }
+  }
+  std::cout << std::endl << std::endl;
 }
 
 void print_gdf_column(gdf_column const * the_column);
