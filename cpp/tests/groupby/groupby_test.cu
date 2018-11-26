@@ -469,6 +469,7 @@ TYPED_TEST(GroupValidTest, ReportValidMaskError)
     const size_t max_key = num_keys*2;
     const size_t max_val = 1000;
     this->create_input(num_keys, num_values_per_key, max_key, max_val, false, 1);
+    this->create_gdf_output_buffers(num_keys, num_values_per_key);
     this->compute_gdf_result(GDF_VALIDITY_UNSUPPORTED);
 }
 
