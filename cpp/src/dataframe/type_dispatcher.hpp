@@ -3,7 +3,7 @@
 
 #include <cassert>
 #include <utility>
-#include <gdf/cffi/types.h>
+#include "cudf/types.h"
 #include "types.hpp"
 #include "NVStrings.h"
 

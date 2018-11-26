@@ -1,7 +1,7 @@
 #ifndef GDF_CPPTYPES_H
 #define GDF_CPPTYPES_H
 
-#include <gdf/cffi/types.h>
+#include "cudf/types.h"
 
 #ifdef __CUDACC__
 #define CUDA_KEYWORDS __host__ __device__ __forceinline__
