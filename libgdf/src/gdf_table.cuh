@@ -28,7 +28,7 @@
 #include "hashmap/hash_functions.cuh"
 #include "hashmap/managed.cuh"
 #include "sqls_rtti_comp.hpp"
-#include "type_dispatcher.cuh"
+#include "type_dispatcher.hpp"
 
 template <typename size_type>
 struct ValidRange {

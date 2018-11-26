@@ -4,7 +4,7 @@
 #include <cassert>
 #include <utility>
 #include <gdf/cffi/types.h>
-#include "types.cuh"
+#include "types.hpp"
 #include "NVStrings.h"
 
 /* --------------------------------------------------------------------------*/
@@ -88,7 +88,7 @@ namespace gdf{
 #pragma hd_warning_disable
 template < class functor_t, 
            typename... Ts>
-__host__ __device__ __forceinline__
+CUDA_KEYWORDS
 decltype(auto) type_dispatcher(gdf_dtype dtype, 
                                functor_t f, 
                                Ts&&... args)

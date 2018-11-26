@@ -3,6 +3,12 @@
 
 #include <gdf/cffi/types.h>
 
+#ifdef __CUDACC__
+#define CUDA_KEYWORDS __host__ __device__ __forceinline__
+#else
+#define CUDA_KEYWORDS
+#endif
+
 /* --------------------------------------------------------------------------*/
 /** 
  * @brief  Wrapper structs for for the non-fundamental gdf_dtype types.
@@ -72,7 +78,7 @@ namespace gdf
      */
     /* ----------------------------------------------------------------------------*/
     template <typename T>
-    __host__ __device__ __forceinline__
+    CUDA_KEYWORDS
     typename std::enable_if_t< not std::is_fundamental<typename std::decay<T>::type>::value, 
                                typename std::decay<T>::type::value_type>& 
     unwrap(T& wrapped)
@@ -90,7 +96,7 @@ namespace gdf
      */
     /* ----------------------------------------------------------------------------*/
     template <typename T>
-    __host__ __device__ __forceinline__
+    CUDA_KEYWORDS
     typename std::enable_if_t< not std::is_fundamental<typename std::decay<T>::type>::value, 
                                typename std::decay<T>::type::value_type> const& 
     unwrap(T const& wrapped)
@@ -112,7 +118,7 @@ namespace gdf
      */
     /* ----------------------------------------------------------------------------*/
     template <typename T>
-    __host__ __device__ __forceinline__
+    CUDA_KEYWORDS
     typename std::enable_if_t< std::is_fundamental< typename std::decay<T>::type >::value, 
                                T>& 
     unwrap(T& value)
@@ -134,7 +140,7 @@ namespace gdf
      */
     /* ----------------------------------------------------------------------------*/
     template <typename T>
-    __host__ __device__ __forceinline__
+    CUDA_KEYWORDS
     typename std::enable_if_t< std::is_fundamental< typename std::decay<T>::type >::value, 
                                T> const& 
     unwrap(T const& value)
