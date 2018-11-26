@@ -1,0 +1,56 @@
+# Copyright (c) 2018, NVIDIA CORPORATION.
+
+# Usage:
+#   conda build -c nvidia -rapidsai -c conda-forge -c defaults .
+{% set version = environ.get('GIT_DESCRIBE_TAG', '0.0.0.dev').lstrip('v') %}
+{% set git_revision_count=environ.get('GIT_DESCRIBE_NUMBER', 0) %}
+{% set cuda_version='.'.join(environ.get('CUDA', 'unknown').split('.')[:2]) %}
+{% set py_version=environ.get('CONDA_PY', 35) %}
+package:
+  name: libcudf_cffi
+  version: {{ version }}
+
+source:
+  # git_url: ../../..
+  path: ../../..
+
+build:
+  number: {{ git_revision_count }}
+  string: cuda{{ cuda_version }}_py{{ py_version }}_{{ git_revision_count }}
+  script_env:
+    - CC
+    - CXX
+    - CUDAHOSTCXX
+    - TRAVIS
+    - CMAKE_BUILD_PARALLEL_LEVEL
+
+requirements:
+  # use channel:
+  #   - nvidia
+  #   - rapidsai
+  #   - conda-forge
+  #   - defaults
+  build:
+    - cmake 3.12
+    - python x.x
+    - cffi
+    - setuptools
+    - nvstrings
+    - pycparser=2.19
+    - pyarrow 0.10.*
+  run:
+    - libcudf {{ version }}.*
+    - python x.x
+    - cffi
+    - pycparser=2.19
+    - pyarrow 0.10.*
+
+test:
+  commands:
+    - python -c "import libgdf_cffi"
+
+about:
+  home: http://rapids.ai/
+  license: Apache-2.0
+  # license_file: LICENSE
+  summary: libcudf_cffi library
