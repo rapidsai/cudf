@@ -233,7 +233,7 @@ namespace{
     template <typename T>
     auto operator()()
     {
-      return sizeof(gdf::detail::unwrap(T{}));
+      return sizeof(cudf::detail::unwrap(T{}));
     }
   };
 }
@@ -248,6 +248,6 @@ namespace{
 gdf_error get_column_byte_width(gdf_column * col, 
                                 int * width)
 {
-  *width = gdf::type_dispatcher(col->dtype, get_type_size{});
+  *width = cudf::type_dispatcher(col->dtype, get_type_size{});
 	return GDF_SUCCESS;
 }

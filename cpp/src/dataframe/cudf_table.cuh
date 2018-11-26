@@ -467,7 +467,7 @@ public:
     {
       col_type& my_value{static_cast<col_type*>(my_column)[my_row_index]};
       col_type const& other_value{static_cast<col_type const*>(other_column)[other_row_index]};
-      gdf::detail::unwrap(my_value) = gdf::detail::unwrap(other_value);
+      cudf::detail::unwrap(my_value) = cudf::detail::unwrap(other_value);
     }
 
   };
@@ -500,7 +500,7 @@ public:
         return GDF_DTYPE_MISMATCH;
       }
 
-      gdf::type_dispatcher(my_col_type,
+      cudf::type_dispatcher(my_col_type,
                           copy_element{},
                           d_columns_data[i],
                           my_row_index,
@@ -520,7 +520,7 @@ public:
     {
       col_type const my_elem = static_cast<col_type const*>(my_column)[my_row_index];
       col_type const other_elem = static_cast<col_type const*>(other_column)[other_row_index];
-      return gdf::detail::unwrap(my_elem) == gdf::detail::unwrap(other_elem);
+      return cudf::detail::unwrap(my_elem) == cudf::detail::unwrap(other_elem);
     }
   };
 
@@ -559,7 +559,7 @@ public:
         return false;
       }
 
-      bool is_equal = gdf::type_dispatcher(my_col_type, 
+      bool is_equal = cudf::type_dispatcher(my_col_type, 
                                           elements_are_equal{}, 
                                           d_columns_data[i], 
                                           my_row_index, 
@@ -588,11 +588,11 @@ public:
                     size_type row_index,
                     size_type col_index)
     {
-      using underlying_type = typename std::decay<decltype(gdf::detail::unwrap(col_type{}))>::type;
+      using underlying_type = typename std::decay<decltype(cudf::detail::unwrap(col_type{}))>::type;
       hash_function<underlying_type> hasher;
       col_type const * const current_column{static_cast<col_type const*>(col_data)};
-      //underlying_type const current_value{gdf::detail::unwrap(current_column[row_index])};
-      hash_value_type const key_hash{hasher(gdf::detail::unwrap(current_column[row_index]))};
+      //underlying_type const current_value{cudf::detail::unwrap(current_column[row_index])};
+      hash_value_type const key_hash{hasher(cudf::detail::unwrap(current_column[row_index]))};
 
       // Only combine hash-values after the first column
       if(0 == col_index)
@@ -632,7 +632,7 @@ public:
     {
       gdf_dtype const current_column_type = d_columns_types[i];
 
-      gdf::type_dispatcher(current_column_type, 
+      cudf::type_dispatcher(current_column_type, 
                           hash_element<hash_function>{}, 
                           hash_value, d_columns_data[i], row_index, i);
     }

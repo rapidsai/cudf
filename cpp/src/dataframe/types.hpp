@@ -36,7 +36,7 @@
  *
  */
 /* ----------------------------------------------------------------------------*/
-namespace gdf
+namespace cudf
 {
   struct category
   {
@@ -148,6 +148,6 @@ namespace gdf
       return value;
     }
   } // namespace detail
-} // namespace gdf
+} // namespace cudf
 
 #endif
