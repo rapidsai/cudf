@@ -47,6 +47,20 @@ struct LesserRTTI
   }
 
   LesserRTTI(void *const *cols,
+            gdf_valid_type *const *valids,
+            int *const types,
+            size_t sz,
+            bool nulls_are_smallest) : columns_(cols),
+                                       valids_(valids),
+                                       rtti_(types),
+                                       sz_(sz),
+                                       vals_(nullptr),
+                                       asc_desc_flags_(nullptr),
+                                       nulls_are_smallest_(nulls_are_smallest)
+  {
+  }
+
+  LesserRTTI(void *const *cols,
              int *const types,
              size_t sz,
              const void *const *vals) : columns_(cols),
@@ -63,12 +77,12 @@ struct LesserRTTI
              int *const types,
              size_t sz,
              char* const asc_desc_flags) : columns_(cols),
-                                                      valids_(nullptr),
-                                                      rtti_(types),
-                                                      sz_(sz),
-                                                      vals_(nullptr),
-                                                      asc_desc_flags_(asc_desc_flags),
-                                                      nulls_are_smallest_(false)
+                                           valids_(nullptr),
+                                           rtti_(types),
+                                           sz_(sz),
+                                           vals_(nullptr),
+                                           asc_desc_flags_(asc_desc_flags),
+                                           nulls_are_smallest_(false)
   {
   }
 
@@ -87,10 +101,10 @@ struct LesserRTTI
   {
   }
 
- /**
-  * Should be used when you want to sort multiple columns using asc/desc flags for each column
-  */
-  __host__ __device__
+  /**
+   * Should be used when you want to sort multiple columns using asc/desc flags for each column
+   */
+  __device__
   bool asc_desc_comparison(IndexT row1, IndexT row2) const
   {
     for(size_t col_index = 0; col_index < sz_; ++col_index)
@@ -124,7 +138,7 @@ struct LesserRTTI
     return false;
   }
 
-  __host__ __device__
+  __device__
   bool asc_desc_comparison_with_nulls(IndexT row1, IndexT row2) const
   {
     for(size_t col_index = 0; col_index < sz_; ++col_index)
@@ -569,47 +583,6 @@ private:
 };
 
 //###########################################################################
-//#                          Multi-column ORDER-BY:                         #
-//###########################################################################
-//Version with array of columns,
-//using type erasure and RTTI at
-//comparison operator level;
-//
-//args:
-//Input:
-// nrows    = # rows;
-// ncols    = # columns;
-// d_cols   = device array to ncols type erased columns;
-// d_gdf_t  = device array to runtime column types;
-// stream   = cudaStream to work in;
-//
-//Output:
-// d_indx   = vector of indices re-ordered after sorting;
-//
-template<typename IndexT>
-void multi_col_order_by(size_t nrows,
-                        size_t ncols,
-                        void* const* d_cols,
-                        int* const  d_gdf_t,
-                        IndexT*      d_indx,
-                        cudaStream_t stream = NULL)
-{
-  LesserRTTI<IndexT> f(d_cols, d_gdf_t, ncols);
-
-  rmm_temp_allocator allocator(stream);
-  thrust::sequence(thrust::cuda::par(allocator).on(stream), d_indx, d_indx+nrows, 0);//cannot use counting_iterator
-  //                                          2 reasons:
-  //(1.) need to return a container result;
-  //(2.) that container must be mutable;
-  
-  thrust::sort(thrust::cuda::par(allocator).on(stream),
-               d_indx, d_indx+nrows,
-               [f] __device__ (IndexT i1, IndexT i2) {
-                 return f.less(i1, i2);
-               });
-}
-
-//###########################################################################
 //#                          Multi-column Filter:                           #
 //###########################################################################
 //Version with array of columns,
@@ -699,7 +672,7 @@ multi_col_group_by_count_sort(size_t         nrows,
                               cudaStream_t   stream = NULL)
 {
   if( !sorted )
-    multi_col_order_by(nrows, ncols, d_cols, d_gdf_t, ptr_d_indx, stream);
+    multi_col_order_by(d_cols, nullptr, d_gdf_t, ncols, ptr_d_indx, nrows, false, false, stream);
 
   LesserRTTI<IndexT> f(d_cols, d_gdf_t, ncols);
 
@@ -772,7 +745,7 @@ size_t multi_col_group_by_sort(size_t         nrows,
                                cudaStream_t   stream = NULL)
 {
   if( !sorted )
-    multi_col_order_by(nrows, ncols, d_cols, d_gdf_t, ptr_d_indx, stream);
+    multi_col_order_by(d_cols, nullptr, d_gdf_t, ncols, ptr_d_indx, nrows, false, false, stream);
 
   rmm_temp_allocator allocator(stream);
   
@@ -951,34 +924,88 @@ size_t multi_col_group_by_avg_sort(size_t         nrows,
   return new_sz;
 }
 
-// #include <iostream>
-template <typename IndexT>
-void multi_col_order_by_asc_desc(void* const * d_col_data,
-                                 gdf_valid_type* const * d_valids_data,
-                                 int* d_col_types,
-                                 size_t num_inputs,
-                                 char* asc_desc,
-                                 IndexT* d_indx,
-                                 size_t nrows,
-                                 bool have_nulls,
-                                 bool nulls_are_smallest = false,
-                                 cudaStream_t stream = NULL)
+
+//###########################################################################
+//#                          Multi-column ORDER-BY:                         #
+//###########################################################################
+//Version with array of columns,
+//using type erasure and RTTI at
+//comparison operator level;
+//
+//args:
+//Input:
+// nrows    = # rows;
+// ncols    = # columns;
+// d_cols   = device array to ncols type erased columns;
+// d_gdf_t  = device array to runtime column types;
+// stream   = cudaStream to work in;
+//
+//Output:
+// d_indx   = vector of indices re-ordered after sorting;
+//
+template<typename IndexT>
+void multi_col_order_by(void* const *           d_col_data,
+                        gdf_valid_type* const * d_valids_data,
+                        int*                    d_col_types,
+                        size_t                  num_inputs,
+                        IndexT*                 d_indx,
+                        size_t                  nrows,
+                        bool                    have_nulls,
+                        bool                    nulls_are_smallest = false,
+                        cudaStream_t            stream = NULL)
 {
-	if (have_nulls){
-		LesserRTTI<IndexT> f(d_col_data, d_valids_data, d_col_types, num_inputs, asc_desc, nulls_are_smallest);
-		thrust::sequence(thrust::cuda::par.on(stream), d_indx, d_indx+nrows, 0);
+  rmm_temp_allocator allocator(stream);
+  thrust::sequence(thrust::cuda::par(allocator).on(stream), d_indx, d_indx+nrows, 0);
+  //cannot use counting_iterator 2 reasons:
+  //(1.) need to return a container result;
+  //(2.) that container must be mutable;
+  
+  if (have_nulls) {
+    LesserRTTI<IndexT> f(d_col_data, d_valids_data, d_col_types, num_inputs, nulls_are_smallest);
 		thrust::sort(thrust::cuda::par.on(stream),
 				         d_indx, d_indx+nrows,
 				         [f] __device__ (IndexT i1, IndexT i2){
-			  return f.asc_desc_comparison_with_nulls(i1, i2);
-		});
-	} else {
-		LesserRTTI<IndexT> f(d_col_data, d_col_types, num_inputs, asc_desc);
-		thrust::sequence(thrust::cuda::par.on(stream), d_indx, d_indx+nrows, 0);
+                    return f.asc_desc_comparison_with_nulls(i1, i2);
+                 });
+  }
+  else {
+    LesserRTTI<IndexT> f(d_col_data, d_col_types, num_inputs);
+    thrust::sort(thrust::cuda::par(allocator).on(stream),
+                d_indx, d_indx+nrows,
+                [f] __device__ (IndexT i1, IndexT i2) {
+                  return f.asc_desc_comparison(i1, i2);
+                });
+  }
+}
+
+template <typename IndexT>
+void multi_col_order_by_asc_desc(void* const *           d_col_data,
+                                 gdf_valid_type* const * d_valids_data,
+                                 int*                    d_col_types,
+                                 size_t                  num_inputs,
+                                 char*                   asc_desc,
+                                 IndexT*                 d_indx,
+                                 size_t                  nrows,
+                                 bool                    have_nulls,
+                                 bool                    nulls_are_smallest = false,
+                                 cudaStream_t            stream = NULL)
+{
+	thrust::sequence(thrust::cuda::par.on(stream), d_indx, d_indx+nrows, 0);
+	
+  if (have_nulls){
+		LesserRTTI<IndexT> f(d_col_data, d_valids_data, d_col_types, num_inputs, asc_desc, nulls_are_smallest);
 		thrust::sort(thrust::cuda::par.on(stream),
 				         d_indx, d_indx+nrows,
-				        [f] __device__ (IndexT i1, IndexT i2){
-			return f.asc_desc_comparison(i1, i2);
-		});
+				         [f] __device__ (IndexT i1, IndexT i2){
+                    return f.asc_desc_comparison_with_nulls(i1, i2);
+                 });
+	}
+  else {
+		LesserRTTI<IndexT> f(d_col_data, d_col_types, num_inputs, asc_desc);
+		thrust::sort(thrust::cuda::par.on(stream),
+				         d_indx, d_indx+nrows,
+				         [f] __device__ (IndexT i1, IndexT i2) {
+                    return f.asc_desc_comparison(i1, i2);
+                 });
 	}
 }

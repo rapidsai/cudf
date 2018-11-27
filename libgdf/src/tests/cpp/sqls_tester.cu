@@ -168,12 +168,12 @@ void f_test_multi_filter(void)
 
 
 
-extern gdf_error gdf_order_by(size_t nrows,     //in: # rows
-                              gdf_column* cols, //in: host-side array of gdf_columns
-                              size_t ncols,     //in: # cols
-                              void** d_cols,    //out: pre-allocated device-side array to be filled with gdf_column::data for each column; slicing of gdf_column array (host)
-                              int* d_types,     //out: pre-allocated device-side array to be filled with gdf_colum::dtype for each column; slicing of gdf_column array (host)
-                              size_t* d_indx);   //out: device-side array of re-rdered row indices
+// extern gdf_error gdf_order_by(size_t nrows,     //in: # rows
+//                               gdf_column* cols, //in: host-side array of gdf_columns
+//                               size_t ncols,     //in: # cols
+//                               void** d_cols,    //out: pre-allocated device-side array to be filled with gdf_column::data for each column; slicing of gdf_column array (host)
+//                               int* d_types,     //out: pre-allocated device-side array to be filled with gdf_colum::dtype for each column; slicing of gdf_column array (host)
+//                               size_t* d_indx);   //out: device-side array of re-rdered row indices
 
 
 extern gdf_error gdf_filter(size_t nrows,     //in: # rows
@@ -833,66 +833,66 @@ void test_gb_avg_api_2(const std::vector<int>& vc1,
 
 int main(void)
 {
-  {
-    //okay:
-    //
-    std::vector<int> vc1{1,1,1};
-    std::vector<int> vi1{1,1,0};
-    std::vector<double> vd1{12., 11., 17.};
+  // {
+  //   //okay:
+  //   //
+  //   std::vector<int> vc1{1,1,1};
+  //   std::vector<int> vi1{1,1,0};
+  //   std::vector<double> vd1{12., 11., 17.};
 
-    Vector<int> dc1 = vc1;
-    Vector<int> di1 = vi1;
-    Vector<double> dd1 = vd1;
+  //   Vector<int> dc1 = vc1;
+  //   Vector<int> di1 = vi1;
+  //   Vector<double> dd1 = vd1;
 
-    size_t nrows = dc1.size();
-    assert( nrows == di1.size() );
-    assert( nrows == dd1.size() );
+  //   size_t nrows = dc1.size();
+  //   assert( nrows == di1.size() );
+  //   assert( nrows == dd1.size() );
     
-    Vector<int> dv(nrows, 0);
-    ///multi_col_order_by(nrows, tv1, dv);//okay
+  //   Vector<int> dv(nrows, 0);
+  //   ///multi_col_order_by(nrows, tv1, dv);//okay
 
-    size_t ncols = 3;
+  //   size_t ncols = 3;
  
-    std::vector<void*> v_cols{static_cast<void*>(dc1.data().get()),
-    	                      static_cast<void*>(di1.data().get()),
-    	                      static_cast<void*>(dd1.data().get())};
-    std::vector<int> v_types{static_cast<int>(GDF_INT32),
-    	                     static_cast<int>(GDF_INT32),
-    	                     static_cast<int>(GDF_FLOAT64)};
+  //   std::vector<void*> v_cols{static_cast<void*>(dc1.data().get()),
+  //   	                      static_cast<void*>(di1.data().get()),
+  //   	                      static_cast<void*>(dd1.data().get())};
+  //   std::vector<int> v_types{static_cast<int>(GDF_INT32),
+  //   	                     static_cast<int>(GDF_INT32),
+  //   	                     static_cast<int>(GDF_FLOAT64)};
 
     
-    Vector<void*> d_cols(ncols, nullptr);
-    Vector<int>   d_types(ncols, 0);
-    Vector<size_t> d_indx(nrows, 0);
+  //   Vector<void*> d_cols(ncols, nullptr);
+  //   Vector<int>   d_types(ncols, 0);
+  //   Vector<size_t> d_indx(nrows, 0);
     
-    std::vector<gdf_column> v_gdf_cols(ncols);
-    v_gdf_cols[0].data = static_cast<void*>(dc1.data().get());
-    v_gdf_cols[0].size = nrows;
-    v_gdf_cols[0].dtype = GDF_INT32;
+  //   std::vector<gdf_column> v_gdf_cols(ncols);
+  //   v_gdf_cols[0].data = static_cast<void*>(dc1.data().get());
+  //   v_gdf_cols[0].size = nrows;
+  //   v_gdf_cols[0].dtype = GDF_INT32;
 
-    v_gdf_cols[1].data = static_cast<void*>(di1.data().get());
-    v_gdf_cols[1].size = nrows;
-    v_gdf_cols[1].dtype = GDF_INT32;
+  //   v_gdf_cols[1].data = static_cast<void*>(di1.data().get());
+  //   v_gdf_cols[1].size = nrows;
+  //   v_gdf_cols[1].dtype = GDF_INT32;
 
-    v_gdf_cols[2].data = static_cast<void*>(dd1.data().get());
-    v_gdf_cols[2].size = nrows;
-    v_gdf_cols[2].dtype = GDF_FLOAT64;
+  //   v_gdf_cols[2].data = static_cast<void*>(dd1.data().get());
+  //   v_gdf_cols[2].size = nrows;
+  //   v_gdf_cols[2].dtype = GDF_FLOAT64;
 
-    gdf_column* h_columns = &v_gdf_cols[0];
-    void** d_col_data = d_cols.data().get();
-    int* d_col_types = d_types.data().get();
-    size_t* ptr_dv = d_indx.data().get();
+  //   gdf_column* h_columns = &v_gdf_cols[0];
+  //   void** d_col_data = d_cols.data().get();
+  //   int* d_col_types = d_types.data().get();
+  //   size_t* ptr_dv = d_indx.data().get();
 
-    gdf_order_by(nrows, h_columns, ncols, d_col_data, d_col_types, ptr_dv);
+  //   gdf_order_by(nrows, h_columns, ncols, d_col_data, d_col_types, ptr_dv);
     
   
-    std::cout<<"multisort order:\n";
-    print_v(d_indx, std::cout);
+  //   std::cout<<"multisort order:\n";
+  //   print_v(d_indx, std::cout);
 
-    //should return:
-    //multisort order:
-    //2,1,0,
-  }
+  //   //should return:
+  //   //multisort order:
+  //   //2,1,0,
+  // }
   {
     //okay:
     //

@@ -1390,34 +1390,6 @@ gdf_error gdf_group_by_single(int ncols,                    // # columns
 //but it's nevessary because the gdf_column array is host
 //(even though its data slice is on device)
 //
-gdf_error gdf_order_by(size_t nrows,     //in: # rows
-                       gdf_column* cols, //in: host-side array of gdf_columns
-                       size_t ncols,     //in: # cols
-                       void** d_cols,    //out: pre-allocated device-side array to be filled with gdf_column::data for each column; slicing of gdf_column array (host)
-                       int* d_types,     //out: pre-allocated device-side array to be filled with gdf_colum::dtype for each column; slicing of gdf_column array (host)
-                       size_t* d_indx)   //out: device-side array of re-rdered row indices
-{
-  //copy H-D:
-  //
-  GDF_REQUIRE(!cols->valid || !cols->null_count, GDF_VALIDITY_UNSUPPORTED);
-  soa_col_info(cols, ncols, d_cols, d_types);
-  
-  multi_col_order_by(nrows,
-                     ncols,
-                     d_cols,
-                     d_types,
-                     d_indx);
-  
-  return GDF_SUCCESS;
-}
-
-//apparent duplication of info between
-//gdf_column array and two arrays:
-//           d_cols = data slice of gdf_column array;
-//           d_types = dtype slice of gdf_column array;
-//but it's nevessary because the gdf_column array is host
-//(even though its data slice is on device)
-//
 gdf_error gdf_filter(size_t nrows,     //in: # rows
                      gdf_column* cols, //in: host-side array of gdf_columns
                      size_t ncols,     //in: # cols
@@ -1509,6 +1481,48 @@ gdf_error gdf_group_by_count(int ncols,                    // # columns
 // thrust::device_vector set to use rmmAlloc and rmmFree.
 template<typename T>
 using VectorThrust = thrust::device_vector<T, rmm_allocator<T>>;
+
+//apparent duplication of info between
+//gdf_column array and two arrays:
+//           d_cols = data slice of gdf_column array;
+//           d_types = dtype slice of gdf_column array;
+//but it's nevessary because the gdf_column array is host
+//(even though its data slice is on device)
+//
+gdf_error gdf_order_by(gdf_column** cols,           //in: host-side array of gdf_columns
+                       size_t ncols,                //in: # cols
+                       gdf_column* output_indices,  //out: pre-allocated device-side gdf_column to be filled with sorted indices
+                       gdf_context* ctxt)           //struct with additional info: bool flag_nulls_are_smallest
+{
+  if (cols == nullptr || output_indices == nullptr) { return GDF_DATASET_EMPTY; }
+
+  bool have_nulls = false;
+  for (size_t i = 0; i < ncols; i++){
+    if (cols[i]->null_count > 0)
+      have_nulls = true;
+  }
+
+  VectorThrust<void*> d_cols(ncols);
+  VectorThrust<gdf_valid_type*> d_valids(ncols);
+  VectorThrust<int> d_types(ncols, 0);
+
+  void** d_col_data = d_cols.data().get();
+  gdf_valid_type** d_valids_data = d_valids.data().get();
+  int* d_col_types = d_types.data().get();
+
+  soa_col_info(cols, ncols, d_col_data, d_valids_data, d_col_types);
+
+  multi_col_order_by(d_col_data,
+                     d_valids_data,
+                     d_col_types,
+                     ncols,
+                     (size_t *) output_indices->data,
+                     cols[0]->size,
+                     have_nulls,
+                     ctxt->flag_nulls_are_smallest);
+  
+  return GDF_SUCCESS;
+}
 
 gdf_error gdf_order_by_asc_desc(gdf_column** cols,
                                 size_t ncols,

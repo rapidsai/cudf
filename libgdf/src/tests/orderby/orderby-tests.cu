@@ -192,7 +192,7 @@ struct OrderByTest : public GdfTest
    * @Param print Optionally print the set of columns for debug
    * -------------------------------------------------------------------------*/
   void create_input( size_t orderby_column_length, size_t orderby_column_range,
-                     const gdf_size_type n_count = 0, bool print = false)
+                     const gdf_size_type n_count = 0, bool random_order_type_values = true, bool print = false)
   {
     initialize_tuple(orderby_columns, orderby_column_length, orderby_column_range, ctxt.flag_sorted);
 
@@ -207,7 +207,7 @@ struct OrderByTest : public GdfTest
       gdf_raw_orderby_columns.push_back(c.get());
     }
 
-    initialize_order_by_types(sort_order_types, n_columns);
+    initialize_order_by_types(sort_order_types, n_columns, random_order_type_values);
     gdf_sort_order_types = create_gdf_column(sort_order_types, nullptr, 0);
     gdf_raw_sort_order_types = gdf_sort_order_types.get();
 
@@ -312,7 +312,7 @@ struct OrderByTest : public GdfTest
    * @Param print Option to print the result computed by the libgdf function
    */
   /* ----------------------------------------------------------------------------*/
-  std::vector<size_t> compute_gdf_result(bool print = false, gdf_error expected_result = GDF_SUCCESS)
+  std::vector<size_t> compute_gdf_result(bool use_default_sort_order_method = false, bool print = false, gdf_error expected_result = GDF_SUCCESS)
   {
     const int num_columns = std::tuple_size<multi_column_t>::value;
 
@@ -322,12 +322,20 @@ struct OrderByTest : public GdfTest
     gdf_column* sort_order_types = gdf_raw_sort_order_types;
     gdf_column* sorted_indices_output = gdf_raw_output_indices_column;
 
-    result_error = gdf_order_by_asc_desc(columns_to_sort,
-                                         num_columns,
-                                         (char*)sort_order_types->data,
-                                         sorted_indices_output,
-                                         &ctxt);
-
+    if (use_default_sort_order_method) {
+      result_error = gdf_order_by(columns_to_sort,
+                                  num_columns,
+                                  sorted_indices_output,
+                                  &ctxt);
+    }
+    else {
+      result_error = gdf_order_by_asc_desc(columns_to_sort,
+                                           num_columns,
+                                           (char*)sort_order_types->data,
+                                           sorted_indices_output,
+                                           &ctxt);
+    }
+    
     EXPECT_EQ(expected_result, result_error) << "The gdf order by function did not complete successfully";
 
     // If the expected result was not GDF_SUCCESS, then this test was testing for a
@@ -410,12 +418,12 @@ TYPED_TEST_CASE(OrderByTest, Implementations);
 // The input sizes are small and has a large amount of debug printing enabled.
 TYPED_TEST(OrderByTest, DISABLED_DebugTest)
 {
-  this->create_input(5, 2, 1, true);
+  this->create_input(5, 2, 1, true, true);
   this->create_gdf_output_buffers(5);
 
   std::vector<size_t> reference_result = this->compute_reference_solution(true);
 
-  std::vector<size_t> gdf_result = this->compute_gdf_result(true);
+  std::vector<size_t> gdf_result = this->compute_gdf_result(false, true);
 
   ASSERT_EQ(reference_result.size(), gdf_result.size()) << "Size of gdf result does not match reference result\n";
 
@@ -511,6 +519,96 @@ TYPED_TEST(OrderByTest, EmptyColumns)
   }
 }
 
+/*
+ * Below group of test are for testing the gdf_order_by method which always
+ * sort in ascendig.
+ **/
+
+TYPED_TEST(OrderByTest, EqualValuesDefaultSort)
+{
+  this->create_input(100, 1, 0, false);
+  this->create_gdf_output_buffers(100);
+
+  std::vector<size_t> reference_result = this->compute_reference_solution();
+
+  std::vector<size_t> gdf_result = this->compute_gdf_result(true);
+
+  ASSERT_EQ(reference_result.size(), gdf_result.size()) << "Size of gdf result does not match reference result\n";
+
+  // Compare the GDF and reference solutions
+  for(size_t i = 0; i < reference_result.size(); ++i){
+    EXPECT_EQ(reference_result[i], gdf_result[i]);
+  }
+}
+
+TYPED_TEST(OrderByTest, EqualValuesNullDefaultSort)
+{
+  this->create_input(100, 1, 100, false);
+  this->create_gdf_output_buffers(100);
+
+  std::vector<size_t> reference_result = this->compute_reference_solution();
+
+  std::vector<size_t> gdf_result = this->compute_gdf_result(true);
+
+  ASSERT_EQ(reference_result.size(), gdf_result.size()) << "Size of gdf result does not match reference result\n";
+
+  // Compare the GDF and reference solutions
+  for(size_t i = 0; i < reference_result.size(); ++i){
+    EXPECT_EQ(reference_result[i], gdf_result[i]);
+  }
+}
+
+TYPED_TEST(OrderByTest, MaxRandomValuesDefaultSort)
+{
+  this->create_input(10000, RAND_MAX, 0, false);
+  this->create_gdf_output_buffers(10000);
+
+  std::vector<size_t> reference_result = this->compute_reference_solution();
+
+  std::vector<size_t> gdf_result = this->compute_gdf_result(true);
+
+  ASSERT_EQ(reference_result.size(), gdf_result.size()) << "Size of gdf result does not match reference result\n";
+
+  // Compare the GDF and reference solutions
+  for(size_t i = 0; i < reference_result.size(); ++i){
+    EXPECT_EQ(reference_result[i], gdf_result[i]);
+  }
+}
+
+TYPED_TEST(OrderByTest, MaxRandomValuesAndNullsDefaultSort)
+{
+  this->create_input(10000, RAND_MAX, 2000, false);
+  this->create_gdf_output_buffers(10000);
+
+  std::vector<size_t> reference_result = this->compute_reference_solution();
+
+  std::vector<size_t> gdf_result = this->compute_gdf_result(true);
+
+  ASSERT_EQ(reference_result.size(), gdf_result.size()) << "Size of gdf result does not match reference result\n";
+
+  // Compare the GDF and reference solutions
+  for(size_t i = 0; i < reference_result.size(); ++i){
+    EXPECT_EQ(reference_result[i], gdf_result[i]);
+  }
+}
+
+TYPED_TEST(OrderByTest, EmptyColumnsDefaultSort)
+{
+  this->create_input(0,100, 0, false);
+  this->create_gdf_output_buffers(0);
+
+  std::vector<size_t> reference_result = this->compute_reference_solution();
+
+  std::vector<size_t> gdf_result = this->compute_gdf_result(true);
+
+  ASSERT_EQ(reference_result.size(), gdf_result.size()) << "Size of gdf result does not match reference result\n";
+
+  // Compare the GDF and reference solutions
+  for(size_t i = 0; i < reference_result.size(); ++i){
+    EXPECT_EQ(reference_result[i], gdf_result[i]);
+  }
+}
+
 // // The below tests check correct reporting of missing valid pointer
 
 // // Create a new derived class from OrderByTest so we can do a new Typed Test set of tests
@@ -559,180 +657,3 @@ TYPED_TEST(OrderByTest, EmptyColumns)
 //                      right_table_size, RAND_MAX);
 //   std::vector<size_t> gdf_result = this->compute_gdf_result();
 // }
-
-///*
-// * Copyright 2018 BlazingDB, Inc.
-// *     Copyright 2018 William Malpica <william@blazingdb.com>
-// *
-// * Licensed under the Apache License, Version 2.0 (the "License");
-// * you may not use this file except in compliance with the License.
-// * You may obtain a copy of the License at
-// *
-// *     http://www.apache.org/licenses/LICENSE-2.0
-// *
-// * Unless required by applicable law or agreed to in writing, software
-// * distributed under the License is distributed on an "AS IS" BASIS,
-// * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// * See the License for the specific language governing permissions and
-// * limitations under the License.
-// */
-//#include <cstdlib>
-//#include <iostream>
-//#include <vector>
-//#include <map>
-//#include <type_traits>
-//#include <memory>
-//
-//#include "gtest/gtest.h"
-//#include "gmock/gmock.h"
-//#include "gdf_test_fixtures.h"
-//#include <gdf/gdf.h>
-//#include <gdf/cffi/functions.h>
-//
-//#include "../../util/bit_util.cuh"
-//
-//#include "rmm.h"
-//
-//
-//// Type for a unique_ptr to a gdf_column with a custom deleter
-//// Custom deleter is defined at construction
-//using gdf_col_pointer =
-//		typename std::unique_ptr<gdf_column, std::function<void(gdf_column*)>>;
-//
-//// A new instance of this class will be created for each *TEST(OrderByTest, ...)
-//// Put all repeated setup and validation stuff here
-//template <class test_parameters>
-//struct OrderByTest : public GdfTest
-//{
-//
-//	OrderByTest()
-//  {
-//
-//  }
-//
-//  ~OrderByTest()
-//  {
-//  }
-//
-//  /* --------------------------------------------------------------------------*
-//  * @Synopsis Creates a unique_ptr that wraps a gdf_column structure
-//  *           intialized with a host vector
-//  *
-//  * @Param host_vector vector containing data to be transfered to device side column
-//  * @Param host_valid  vector containing valid masks associated with the supplied vector
-//  * @Param n_count     null_count to be set for the generated column
-//  *
-//  * @Returns A unique_ptr wrapping the new gdf_column
-//  * --------------------------------------------------------------------------*/
-//  template <typename col_type>
-//  gdf_col_pointer create_gdf_column(std::vector<col_type> const & host_vector, gdf_valid_type* host_valid,
-//          const gdf_size_type n_count)
-//  {
-//    // Deduce the type and set the gdf_dtype accordingly
-//    gdf_dtype gdf_col_type;
-//    if(std::is_same<col_type,int8_t>::value) gdf_col_type = GDF_INT8;
-//    else if(std::is_same<col_type,uint8_t>::value) gdf_col_type = GDF_INT8;
-//    else if(std::is_same<col_type,int16_t>::value) gdf_col_type = GDF_INT16;
-//    else if(std::is_same<col_type,uint16_t>::value) gdf_col_type = GDF_INT16;
-//    else if(std::is_same<col_type,int32_t>::value) gdf_col_type = GDF_INT32;
-//    else if(std::is_same<col_type,uint32_t>::value) gdf_col_type = GDF_INT32;
-//    else if(std::is_same<col_type,int64_t>::value) gdf_col_type = GDF_INT64;
-//    else if(std::is_same<col_type,uint64_t>::value) gdf_col_type = GDF_INT64;
-//    else if(std::is_same<col_type,float>::value) gdf_col_type = GDF_FLOAT32;
-//    else if(std::is_same<col_type,double>::value) gdf_col_type = GDF_FLOAT64;
-//
-//    // Create a new instance of a gdf_column with a custom deleter that will
-//    //  free the associated device memory when it eventually goes out of scope
-//    auto deleter = [](gdf_column* col) {
-//      col->size = 0;
-//      RMM_FREE(col->data, 0);
-//      RMM_FREE(col->valid, 0);
-//    };
-//    gdf_col_pointer the_column{new gdf_column, deleter};
-//
-//    // Allocate device storage for gdf_column and copy contents from host_vector
-//    EXPECT_EQ(RMM_ALLOC(&(the_column->data), host_vector.size() * sizeof(col_type), 0), RMM_SUCCESS);
-//    EXPECT_EQ(cudaMemcpy(the_column->data, host_vector.data(), host_vector.size() * sizeof(col_type), cudaMemcpyHostToDevice), cudaSuccess);
-//
-//    // Allocate device storage for gdf_column.valid
-//    if (host_valid != nullptr) {
-//      int valid_size = gdf_get_num_chars_bitmask(host_vector.size());
-//      EXPECT_EQ(RMM_ALLOC((void**)&(the_column->valid), valid_size, 0), RMM_SUCCESS);
-//      EXPECT_EQ(cudaMemcpy(the_column->valid, host_valid, valid_size, cudaMemcpyHostToDevice), cudaSuccess);
-//      the_column->null_count = n_count;
-//    } else {
-//        the_column->valid = nullptr;
-//        the_column->null_count = 0;
-//    }
-//
-//    // Fill the gdf_column members
-//    the_column->size = host_vector.size();
-//    the_column->dtype = gdf_col_type;
-//    gdf_dtype_extra_info extra_info;
-//    extra_info.time_unit = TIME_UNIT_NONE;
-//    the_column->dtype_info = extra_info;
-//
-//    return the_column;
-//  }
-//};
-//
-//
-//TEST(OrderByTest, SingleCol_ValidsAsNullPtr){
-//	std::vector<int16_t> const col1 = {1, 5, -4, 56, 2, 787, 787, 788, 123, -23, -24, -22};
-//
-//	gdf_col_pointer gdf_col1 = this->create_gdf_column(col1, nullptr, 0);
-//
-//	std::vector<gdf_column> input_columns_v(1);
-//	input_columns_v[0] = gdf_col1.get();
-//	gdf_column * input_columns = &input_columns_v[0];
-//	size_t num_inputs = 1;
-//
-//	// initialize output
-//	std::vector<size_t> const out_indices(col1.size(), 0);
-//	gdf_col_pointer out_indices_col_ptr = this->create_gdf_column(out_indices, nullptr, 0);
-//	gdf_column * output_indices = out_indices_col_ptr.get();
-//
-//
-//	// first lets test ascending
-//	{
-//		std::vector<size_t> ref_sol = {10,	9,	11,	2,	0,	4,	1,	3,	8,	5,	6,	7};
-//
-//		std::vector<char> asc_desc_bitmask_v(1, 1); // ascending
-//		char* asc_desc_bitmask = &asc_desc_bitmask_v[0];
-//
-//		gdf_error error = gdf_order_by_asc_desc( input_columns,  num_inputs,
-//				output_indices, asc_desc_bitmask);
-//
-//		ASSERT_EQ(error, GDF_SUCCESS);
-//
-//		std::vector<size_t> results(ref_sol.size());
-//
-//		EXPECT_EQ(cudaMemcpy(results.data(), output_indices->data, output_indices->size * sizeof(size_t), cudaMemcpyDeviceToHost), cudaSuccess);
-//
-//		for (size_t i = 0; i < ref_sol.size(); i++){
-//			ASSERT_EQ(ref_sol[i], results[i]);
-//		}
-//	}
-//
-//	// first lets test descending
-//	{
-//		std::vector<size_t> ref_sol = {7,	5,	6,	8,	3,	1,	4,	0,	2,	11,	9,	10};
-//
-//		std::vector<char> asc_desc_bitmask_v(1, 0); // ascending
-//		char* asc_desc_bitmask = &asc_desc_bitmask_v[0];
-//
-//		gdf_error error = gdf_order_by_asc_desc( input_columns,  num_inputs,
-//				output_indices, asc_desc_bitmask);
-//
-//		ASSERT_EQ(error, GDF_SUCCESS);
-//
-//		std::vector<size_t> results(ref_sol.size());
-//
-//		EXPECT_EQ(cudaMemcpy(results.data(), output_indices->data, output_indices->size * sizeof(size_t), cudaMemcpyDeviceToHost), cudaSuccess);
-//
-//		for (size_t i = 0; i < ref_sol.size(); i++){
-//			ASSERT_EQ(ref_sol[i], results[i]);
-//		}
-//	}
-//
-//}

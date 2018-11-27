@@ -777,12 +777,6 @@ gdf_error get_column_byte_width(gdf_column * col, int * width);
    ORDER-BY
    GROUP-BY
  */
-gdf_error gdf_order_by(size_t nrows,     //in: # rows
-		       gdf_column* cols, //in: host-side array of gdf_columns with 0 null_count otherwise GDF_VALIDITY_UNSUPPORTED is returned
-		       size_t ncols,     //in: # cols
-		       void** d_cols,    //out: pre-allocated device-side array to be filled with gdf_column::data for each column; slicing of gdf_column array (host)
-		       int* d_types,     //out: pre-allocated device-side array to be filled with gdf_colum::dtype for each column; slicing of gdf_column array (host)
-		       size_t* d_indx);  //out: device-side array of re-rdered row indices
 
 gdf_error gdf_filter(size_t nrows,     //in: # rows
 		     gdf_column* cols, //in: host-side array of gdf_columns with 0 null_count otherwise GDF_VALIDITY_UNSUPPORTED is returned
@@ -853,10 +847,14 @@ gdf_error gdf_quantile_aprrox(	gdf_column*  col_in,       //input column with 0 
                                 void*        t_erased_res, //type-erased result of same type as column;
                                 gdf_context* ctxt);        //context info
 
-gdf_error gdf_order_by_asc_desc(
-        gdf_column** input_columns, //input columns
-        size_t num_inputs,          //number of columns in the first parameter (e.g. number of columsn to sort by
-		char* asc_desc,             //asc_desc : array of chars where 1 is descending order and 0 is ascending order for each input column
-        gdf_column* output_indices, //a gdf_column that is pre allocated for storing sorted indices
-		gdf_context* ctxt);         //context info
+gdf_error gdf_order_by(gdf_column** input_columns,   //input columns
+                       size_t       num_inputs,      //number of columns in the first parameter (e.g. number of columsn to sort by
+                       gdf_column*  output_indices,  //a gdf_column that is pre allocated for storing sorted indices
+                       gdf_context* ctxt);           //struct with additional info: bool flag_nulls_are_smallest
+
+gdf_error gdf_order_by_asc_desc(gdf_column** input_columns,  //input columns
+                                size_t       num_inputs,     //number of columns in the first parameter (e.g. number of columsn to sort by
+                                char*        asc_desc,       //asc_desc : array of chars where 1 is descending order and 0 is ascending order for each input column
+                                gdf_column*  output_indices, //a gdf_column that is pre allocated for storing sorted indices
+                                gdf_context* ctxt);          //context info
 

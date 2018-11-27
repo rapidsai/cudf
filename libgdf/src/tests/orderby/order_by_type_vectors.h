@@ -26,13 +26,18 @@
 #include "valid_vectors.h"
 
 // Initialize valids
-void initialize_order_by_types(std::vector<char>& order_by_types, size_t length)
+void initialize_order_by_types(std::vector<char>& order_by_types, size_t length, bool random_values = true)
 {
   order_by_types.clear();
   order_by_types.reserve(length);
 
   for (size_t i = 0; i < length; ++i) {
-    order_by_types.push_back((char)(std::rand() % 2));
+    if (random_values) {
+      order_by_types.push_back((char)(std::rand() % 2));
+    }
+    else {
+      order_by_types.push_back((char)GDF_ORDER_ASC);
+    }    
   }
 }
 
