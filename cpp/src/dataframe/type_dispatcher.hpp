@@ -87,7 +87,7 @@ namespace cudf{
 // of calling a __host__ functor from this function which is __host__ __device__
 template < class functor_t, 
            typename... Ts>
-CUDA_KEYWORDS
+CUDA_HOST_DEVICE_CALLABLE
 decltype(auto) type_dispatcher(gdf_dtype dtype, 
                                functor_t f, 
                                Ts&&... args)

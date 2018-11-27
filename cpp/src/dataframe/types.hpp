@@ -4,9 +4,9 @@
 #include "cudf/types.h"
 
 #ifdef __CUDACC__
-#define CUDA_KEYWORDS __host__ __device__ __forceinline__
+#define CUDA_HOST_DEVICE_CALLABLE __host__ __device__ __forceinline__
 #else
-#define CUDA_KEYWORDS
+#define CUDA_HOST_DEVICE_CALLABLE
 #endif
 
 /* --------------------------------------------------------------------------*/
@@ -78,7 +78,7 @@ namespace cudf
      */
     /* ----------------------------------------------------------------------------*/
     template <typename T>
-    CUDA_KEYWORDS
+    CUDA_HOST_DEVICE_CALLABLE
     typename std::enable_if_t< not std::is_fundamental<typename std::decay<T>::type>::value, 
                                typename std::decay<T>::type::value_type>& 
     unwrap(T& wrapped)
@@ -96,7 +96,7 @@ namespace cudf
      */
     /* ----------------------------------------------------------------------------*/
     template <typename T>
-    CUDA_KEYWORDS
+    CUDA_HOST_DEVICE_CALLABLE
     typename std::enable_if_t< not std::is_fundamental<typename std::decay<T>::type>::value, 
                                typename std::decay<T>::type::value_type> const& 
     unwrap(T const& wrapped)
@@ -118,7 +118,7 @@ namespace cudf
      */
     /* ----------------------------------------------------------------------------*/
     template <typename T>
-    CUDA_KEYWORDS
+    CUDA_HOST_DEVICE_CALLABLE
     typename std::enable_if_t< std::is_fundamental< typename std::decay<T>::type >::value, 
                                T>& 
     unwrap(T& value)
@@ -140,7 +140,7 @@ namespace cudf
      */
     /* ----------------------------------------------------------------------------*/
     template <typename T>
-    CUDA_KEYWORDS
+    CUDA_HOST_DEVICE_CALLABLE
     typename std::enable_if_t< std::is_fundamental< typename std::decay<T>::type >::value, 
                                T> const& 
     unwrap(T const& value)
