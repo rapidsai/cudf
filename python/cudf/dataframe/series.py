@@ -83,11 +83,8 @@ class Series(object):
         self.name = name
 
     @classmethod
-    def from_pandas(cls, series):
-        """Create a Series from a Pandas.Series."""
-        s = cls(data=series.data)
-        s = s.set_index(series.index)
-        return s
+    def from_pandas(cls, s):
+        return cls(s)
 
     @classmethod
     def from_arrow(cls, s):
