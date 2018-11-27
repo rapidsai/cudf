@@ -1471,7 +1471,7 @@ class DataFrame(object):
         return pd.DataFrame(data, columns=list(self._cols), index=index)
 
     @classmethod
-    def from_pandas(cls, dataframe, nan_as_null=False):
+    def from_pandas(cls, dataframe, nan_as_null=True):
         """
         Convert from a Pandas DataFrame.
 

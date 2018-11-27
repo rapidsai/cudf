@@ -133,7 +133,7 @@ def column_select_by_position(column, positions):
                                             dtype=selected_index.dtype)
 
 
-def as_column(arbitrary, nan_as_null=False):
+def as_column(arbitrary, nan_as_null=True):
     """Create a Column from an arbitrary object
 
     Currently support inputs are:
