@@ -1,2 +1,2 @@
-include versioneer.py
-include pygdf/_version.py
+include python/versioneer.py
+include python/cudf/_version.py
