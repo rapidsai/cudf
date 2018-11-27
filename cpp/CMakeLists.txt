@@ -68,8 +68,14 @@ include(ConfigureArrow)
 ###################################################################################################
 # - find arrow ------------------------------------------------------------------------------------
 
+message(STATUS "ARROW_HOME env var: $ENV{ARROW_HOME}")
+find_package(Arrow REQUIRED)
+set_package_properties(Arrow PROPERTIES TYPE REQUIRED
+    PURPOSE "Apache Arrow is a cross-language development platform for in-memory data."
+    URL "https://github.com/apache/arrow")
+
 if (ARROW_FOUND)
-    message(STATUS "Apache Arrow found in ${ARROW_INCLUDE_DIR}")
+    message(STATUS "Apache Arrow found in $ENV{ARROW_HOME}")
 else()
     message(FATAL_ERROR "Apache Arrow not found, please check your settings.")
 endif()
@@ -80,7 +86,7 @@ endif()
 if(GTEST_FOUND)
     message(STATUS "Google C++ Testing Framework (Google Test) found in ${GTEST_ROOT}")
     include_directories(${GTEST_INCLUDE_DIRS})
-    add_subdirectory(${CMAKE_SOURCE_DIR}/tests)
+    # add_subdirectory(${CMAKE_SOURCE_DIR}/tests)
 else()
     message(AUTHOR_WARNING "Google C++ Testing Framework (Google Test) not found: automated tests are disabled.")
 endif(GTEST_FOUND)
@@ -90,7 +96,7 @@ endif(GTEST_FOUND)
 
 include_directories("${GTEST_INCLUDE_DIR}"
                     "${ARROW_INCLUDE_DIR}"
-                    "${FLATBUFFERS_INCLUDE_DIR}"
+                    "${FLATBUFFERS_ROOT}"
                     "${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}"
                     "${CMAKE_BINARY_DIR}/include"
                     "${CMAKE_SOURCE_DIR}/include"
@@ -186,7 +192,7 @@ endif(CMAKE_BUILD_TYPE MATCHES Debug)
 # - link libraries --------------------------------------------------------------------------------
 
 target_link_libraries(rmm cudart cuda NVStrings)
-target_link_libraries(cudf rmm "${ARROW_LIB}")
+target_link_libraries(cudf rmm "${ARROW_STATIC_LIB}")
 
 ###################################################################################################
 # - python cffi bindings --------------------------------------------------------------------------
