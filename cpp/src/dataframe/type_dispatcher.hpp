@@ -43,8 +43,8 @@
  *  }
  * };
  *
- * gdf::type_dispatcher(GDF_INT8, example_functor);  // returns 1
- * gdf::type_dispatcher(GDF_INT64, example_functor); // returns 8
+ * cudf::type_dispatcher(GDF_INT8, example_functor);  // returns 1
+ * cudf::type_dispatcher(GDF_INT64, example_functor); // returns 8
  *
  * Example usage of of the "unwrap" function in a functor for checking if element "i" 
  * in column "lhs" is equal to element "j" in column "rhs":
@@ -63,7 +63,7 @@
  *     // to retrieve a reference to the underlying value. If "col_type" is a 
  *     // fundamental type, "unwrap" simply passes through the same value and
  *     // is effectively a no-op
- *     return gdf::detail::unwrap(i_elem) == gdf::detail::unwrap(j_elem);
+ *     return (gdf::detail::unwrap(i_elem) == gdf::detail::unwrap(j_elem));
  *   }
  * };
  *
@@ -85,7 +85,6 @@ namespace cudf{
 
 // This pragma disables a compiler warning that complains about the valid usage
 // of calling a __host__ functor from this function which is __host__ __device__
-#pragma hd_warning_disable
 template < class functor_t, 
            typename... Ts>
 CUDA_KEYWORDS
