@@ -951,8 +951,8 @@ def test_from_python_array(data_type):
     gs = gd.Series(data)
 
     np.testing.assert_equal(gs.to_array(), np_arr)
-    
-    
+
+
 def test_series_shape():
     ps = pd.Series([1, 2, 3, 4])
     cs = Series([1, 2, 3, 4])
