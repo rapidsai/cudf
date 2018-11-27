@@ -40,7 +40,8 @@ RUN conda install -n cudf -y -c numba -c conda-forge -c nvidia -c rapidsai -c de
       pyarrow=${PYARROW_VERSION} \
       nvstrings \
       cmake=3.12 \
-      gtest=1.8.0
+      gtest=1.8.0 \
+      cython
 
 # Clone cuDF repo
 ARG CUDF_REPO=https://github.com/rapidsai/cudf
@@ -52,8 +53,8 @@ ENV CC=/usr/bin/gcc-${CC}
 ENV CXX=/usr/bin/g++-${CXX}
 ARG HASH_JOIN=ON
 RUN source activate cudf && \
-    mkdir -p /cudf/libgdf/build && \
-    cd /cudf/libgdf/build && \
+    mkdir -p /cudf/cpp/build && \
+    cd /cudf/cpp/build && \
     cmake .. -DHASH_JOIN=${HASH_JOIN} -DCMAKE_INSTALL_PREFIX=${CONDA_PREFIX} && \
     make -j2 install && \
     make python_cffi && \
@@ -61,5 +62,5 @@ RUN source activate cudf && \
 
 # cuDF build/install
 RUN source activate cudf && \
-    cd /cudf && \
+    cd /cudf/python && \
     python setup.py install
