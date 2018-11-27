@@ -23,12 +23,18 @@ include(ExternalProject)
 
 message(STATUS "Using Apache Arrow version: ${ARROW_VERSION}")
 
+#NOTE
+# libcudf.so` is now built with the old ABI `-D_GLIBCXX_USE_CXX11_ABI=0`
+# If you build Arrow from source, you can fix this by using `-DARROW_TENSORFLOW=ON`.
+# This forces Arrow to use the old ABI.
+
 ExternalProject_Add(arrow
     CMAKE_ARGS
         -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
         -DCMAKE_INSTALL_PREFIX=${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/thirdparty/arrow-install
         -DARROW_IPC=ON
         -DARROW_HDFS=ON
+        -DARROW_TENSORFLOW=ON
     GIT_REPOSITORY    https://github.com/apache/arrow.git
     GIT_TAG           ${ARROW_VERSION}
     UPDATE_COMMAND    ""
