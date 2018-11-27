@@ -1,0 +1,9 @@
+[submodule "cpp/thirdparty/cub"]
+	path = cpp/thirdparty/cub
+	url = https://github.com/NVlabs/cub.git
+[submodule "cpp/thirdparty/moderngpu"]
+	path = cpp/thirdparty/moderngpu
+	url = https://github.com/moderngpu/moderngpu.git
+[submodule "cpp/thirdparty/cnmem"]
+	path = cpp/thirdparty/cnmem
+	url = https://github.com/NVIDIA/cnmem.git
