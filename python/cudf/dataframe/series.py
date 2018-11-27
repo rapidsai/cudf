@@ -28,13 +28,6 @@ class Series(object):
     """
 
     @classmethod
-    def from_pandas(cls, series):
-        """Create a Series from a Pandas.Series."""
-        s = cls(data=series.data)
-        s = s.set_index(series.index)
-        return s
-
-    @classmethod
     def from_categorical(cls, categorical, codes=None):
         """Creates from a pandas.Categorical
 
@@ -88,6 +81,13 @@ class Series(object):
         self._column = data
         self._index = RangeIndex(len(data)) if index is None else index
         self.name = name
+
+    @classmethod
+    def from_pandas(cls, series):
+        """Create a Series from a Pandas.Series."""
+        s = cls(data=series.data)
+        s = s.set_index(series.index)
+        return s
 
     @classmethod
     def from_arrow(cls, s):
