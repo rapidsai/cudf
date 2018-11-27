@@ -298,7 +298,7 @@ TYPED_TEST(GpuApplyStencilTest, both_half_zero_non_multiple_of_32) {
     this->compare_gdf_result();
 }
 
-TYPED_TEST(GpuApplyStencilTest, DISABLED_null_valids_stencil_non_multiple_of_32) {
+TYPED_TEST(GpuApplyStencilTest, null_valids_stencil_non_multiple_of_32) {
     this->create_input(25, 100, valids_t::HALF_BITS, valids_t::NULL_BITS, true);
 
     gdf_error error = this->compute_gdf_result();
@@ -315,7 +315,7 @@ TYPED_TEST(GpuApplyStencilTest, DISABLED_null_valids_stencil_non_multiple_of_32)
     this->compare_gdf_result();
 }
 
-TYPED_TEST(GpuApplyStencilTest, DISABLED_null_valids_col_non_multiple_of_32) {
+TYPED_TEST(GpuApplyStencilTest, null_valids_col_non_multiple_of_32) {
     this->create_input(25, 100, valids_t::NULL_BITS, valids_t::HALF_BITS, true);
 
     gdf_error error = this->compute_gdf_result();
