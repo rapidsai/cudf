@@ -1,4 +1,4 @@
-Welcome to pygdf's documentation!
+Welcome to cuDF's documentation!
 =================================
 
 .. toctree::
@@ -7,6 +7,7 @@ Welcome to pygdf's documentation!
 
    api.rst
    developer.rst
+   10min.rst
 
 Indices and tables
 ==================

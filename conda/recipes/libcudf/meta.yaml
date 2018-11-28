@@ -1,0 +1,55 @@
+# Copyright (c) 2018, NVIDIA CORPORATION.
+
+# Usage:
+#   conda build -c nvidia -c rapidsai -c conda-forge -c defaults .
+{% set version = environ.get('GIT_DESCRIBE_TAG', '0.0.0.dev').lstrip('v') %}
+{% set git_revision_count=environ.get('GIT_DESCRIBE_NUMBER', 0) %}
+{% set cuda_version='.'.join(environ.get('CUDA', 'unknown').split('.')[:2]) %}
+package:
+  name: libcudf
+  version: {{ version }}
+
+source:
+  # git_url: ../../..
+  path: ../../..
+
+build:
+  number: {{ git_revision_count }}
+  string: cuda{{ cuda_version }}_{{ git_revision_count }}
+  script_env:
+    - CC
+    - CXX
+    - CUDAHOSTCXX
+    - TRAVIS
+    - CMAKE_BUILD_PARALLEL_LEVEL
+
+requirements:
+  # use channel:
+  #   - nvidia
+  #   - rapidsai
+  #   - conda-forge
+  #   - defaults
+  build:
+    - cmake 3.12
+    - nvstrings
+  run:
+    - pyarrow 0.10.*
+    - nvstrings
+
+test:
+  commands:
+    - test -f $PREFIX/include/cudf.h
+    - test -f $PREFIX/include/cudf/convert_types.h
+    - test -f $PREFIX/include/cudf/functions.h
+    - test -f $PREFIX/include/cudf/io_functions.h
+    - test -f $PREFIX/include/cudf/io_types.h
+    - test -f $PREFIX/include/cudf/types.h
+    - test -f $PREFIX/lib/libcudf.so
+    - test -f $PREFIX/lib/librmm.so
+
+
+about:
+  home: http://rapids.ai/
+  license: Apache-2.0
+  # license_file: LICENSE
+  summary: libcudf library
