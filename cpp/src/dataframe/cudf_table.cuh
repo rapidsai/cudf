@@ -29,6 +29,7 @@
 #include <thrust/execution_policy.h>
 #include <thrust/device_vector.h>
 #include <cassert>
+#include "type_dispatcher.hpp"
 
 template <typename size_type>
 struct ValidRange {
@@ -39,7 +40,7 @@ struct ValidRange {
             const size_type end) :
         start(begin), stop(end) {}
 
-    __host__ __device__
+    __host__ __device__ __forceinline__
     bool operator()(const size_type index)
     {
         return ((index >= start) && (index < stop));
@@ -76,7 +77,8 @@ struct row_masker
    * @Returns The bit-wise AND across all columns for the specified mask number
    */
   /* ----------------------------------------------------------------------------*/
-  __device__ gdf_valid_type operator()(const size_type mask_number)
+  __device__ __forceinline__
+  gdf_valid_type operator()(const size_type mask_number)
   {
     // Intialize row validity mask with all bits set to 1
     gdf_valid_type row_valid_mask{0};
@@ -457,6 +459,18 @@ public:
     }
   }
 
+  struct copy_element{
+    template <typename col_type>
+    __device__ __forceinline__
+    void operator()(void * my_column, size_type my_row_index,
+                    void const * other_column, size_type other_row_index)
+    {
+      col_type& my_value{static_cast<col_type*>(my_column)[my_row_index]};
+      col_type const& other_value{static_cast<col_type const*>(other_column)[other_row_index]};
+      cudf::detail::unwrap(my_value) = cudf::detail::unwrap(other_value);
+    }
+
+  };
 
     /* --------------------------------------------------------------------------*/
     /** 
@@ -476,108 +490,51 @@ public:
                 const size_type my_row_index,
                 const size_type other_row_index)
   {
-
     for(size_type i = 0; i < num_columns; ++i)
     {
       const gdf_dtype my_col_type = d_columns_types[i];
       const gdf_dtype other_col_type = other.d_columns_types[i];
     
-      if(my_col_type != other_col_type){
+      if(my_col_type != other_col_type)
+      {
         return GDF_DTYPE_MISMATCH;
       }
 
-      switch(my_col_type)
-      {
-        case GDF_INT8:
-          {
-            using col_type = int8_t;
-            col_type & my_elem = static_cast<col_type*>(d_columns_data[i])[my_row_index];
-            const col_type other_elem = static_cast<col_type*>(other.d_columns_data[i])[other_row_index];
-            my_elem = other_elem;
-            break;
-          }
-        case GDF_INT16:
-          {
-            using col_type = int16_t;
-            col_type & my_elem = static_cast<col_type*>(d_columns_data[i])[my_row_index];
-            const col_type other_elem = static_cast<col_type*>(other.d_columns_data[i])[other_row_index];
-            my_elem = other_elem;
-            break;
-          }
-        case GDF_INT32:
-          {
-            using col_type = int32_t;
-            col_type & my_elem = static_cast<col_type*>(d_columns_data[i])[my_row_index];
-            const col_type other_elem = static_cast<col_type*>(other.d_columns_data[i])[other_row_index];
-            my_elem = other_elem;
-            break;
-          }
-        case GDF_INT64:
-          {
-            using col_type = int64_t;
-            col_type & my_elem = static_cast<col_type*>(d_columns_data[i])[my_row_index];
-            const col_type other_elem = static_cast<col_type*>(other.d_columns_data[i])[other_row_index];
-            my_elem = other_elem;
-            break;
-          }
-        case GDF_FLOAT32:
-          {
-            using col_type = float;
-            col_type & my_elem = static_cast<col_type*>(d_columns_data[i])[my_row_index];
-            const col_type other_elem = static_cast<col_type*>(other.d_columns_data[i])[other_row_index];
-            my_elem = other_elem;
-            break;
-          }
-        case GDF_FLOAT64:
-          {
-            using col_type = double;
-            col_type & my_elem = static_cast<col_type*>(d_columns_data[i])[my_row_index];
-            const col_type other_elem = static_cast<col_type*>(other.d_columns_data[i])[other_row_index];
-            my_elem = other_elem;
-            break;
-          }
-        case GDF_DATE32:
-          {
-            using col_type = int32_t;
-            col_type & my_elem = static_cast<col_type*>(d_columns_data[i])[my_row_index];
-            const col_type other_elem = static_cast<col_type*>(other.d_columns_data[i])[other_row_index];
-            my_elem = other_elem;
-            break;
-          }
-        case GDF_DATE64:
-          {
-            using col_type = int64_t;
-            col_type & my_elem = static_cast<col_type*>(d_columns_data[i])[my_row_index];
-            const col_type other_elem = static_cast<col_type*>(other.d_columns_data[i])[other_row_index];
-            my_elem = other_elem;
-            break;
-          }
-        case GDF_TIMESTAMP:
-          {
-            using col_type = int64_t;
-            col_type & my_elem = static_cast<col_type*>(d_columns_data[i])[my_row_index];
-            const col_type other_elem = static_cast<col_type*>(other.d_columns_data[i])[other_row_index];
-            my_elem = other_elem;
-            break;
-          }
-        default:
-          return GDF_UNSUPPORTED_DTYPE;
-      }
+      cudf::type_dispatcher(my_col_type,
+                          copy_element{},
+                          d_columns_data[i],
+                          my_row_index,
+                          other.d_columns_data[i],
+                          other_row_index);
+
     }
     return GDF_SUCCESS;
   }
 
-    /* --------------------------------------------------------------------------*/
-    /** 
-     * @Synopsis  Checks for equality between a row in this table and another table.
-     * 
-     * @Param other The other table whose row is compared to this tables
-     * @Param my_row_index The row index of this table to compare
-     * @Param other_row_index The row index of the other table to compare
-     * 
-     * @Returns True if the elements in both rows are equivalent, otherwise False
-     */
-    /* ----------------------------------------------------------------------------*/
+
+  struct elements_are_equal{
+    template <typename col_type>
+    __device__ __forceinline__
+    bool operator()(void const * my_column, size_type my_row_index,
+                    void const * other_column, size_type other_row_index)
+    {
+      col_type const my_elem = static_cast<col_type const*>(my_column)[my_row_index];
+      col_type const other_elem = static_cast<col_type const*>(other_column)[other_row_index];
+      return cudf::detail::unwrap(my_elem) == cudf::detail::unwrap(other_elem);
+    }
+  };
+
+  /* --------------------------------------------------------------------------*/
+  /** 
+   * @Synopsis  Checks for equality between a row in this table and another table.
+   * 
+   * @Param other The other table whose row is compared to this tables
+   * @Param my_row_index The row index of this table to compare
+   * @Param other_row_index The row index of the other table to compare
+   * 
+   * @Returns True if the elements in both rows are equivalent, otherwise False
+   */
+  /* ----------------------------------------------------------------------------*/
   __device__
   bool rows_equal(gdf_table const & other, 
                   const size_type my_row_index, 
@@ -587,7 +544,8 @@ public:
     // If either row contains a NULL, then by definition, because NULL != x for all x,
     // the two rows are not equal
     bool valid = this->is_row_valid(my_row_index) && other.is_row_valid(other_row_index);
-    if (false == valid) {
+    if (false == valid) 
+    {
       return false;
     }
 
@@ -600,104 +558,59 @@ public:
       {
         return false;
       }
-      switch(my_col_type)
-      {
-        case GDF_INT8:
-          {
-            using col_type = int8_t;
-            const col_type my_elem = static_cast<col_type*>(d_columns_data[i])[my_row_index];
-            const col_type other_elem = static_cast<col_type*>(other.d_columns_data[i])[other_row_index];
-            if(my_elem != other_elem)
-              return false;
-            break;
-          }
-        case GDF_INT16:
-          {
-            using col_type = int16_t;
-            const col_type my_elem = static_cast<col_type*>(d_columns_data[i])[my_row_index];
-            const col_type other_elem = static_cast<col_type*>(other.d_columns_data[i])[other_row_index];
-            if(my_elem != other_elem)
-              return false;
-            break;
-          }
-        case GDF_INT32:
-          {
-            using col_type = int32_t;
-            const col_type my_elem = static_cast<col_type*>(d_columns_data[i])[my_row_index];
-            const col_type other_elem = static_cast<col_type*>(other.d_columns_data[i])[other_row_index];
-            if(my_elem != other_elem)
-              return false;
-            break;
-          }
-        case GDF_INT64:
-          {
-            using col_type = int64_t;
-            const col_type my_elem = static_cast<col_type*>(d_columns_data[i])[my_row_index];
-            const col_type other_elem = static_cast<col_type*>(other.d_columns_data[i])[other_row_index];
-            if(my_elem != other_elem)
-              return false;
-            break;
-          }
-        case GDF_FLOAT32:
-          {
-            using col_type = float;
-            const col_type my_elem = static_cast<col_type*>(d_columns_data[i])[my_row_index];
-            const col_type other_elem = static_cast<col_type*>(other.d_columns_data[i])[other_row_index];
-            if(my_elem != other_elem)
-              return false;
-            break;
-          }
-        case GDF_FLOAT64:
-          {
-            using col_type = double;
-            const col_type my_elem = static_cast<col_type*>(d_columns_data[i])[my_row_index];
-            const col_type other_elem = static_cast<col_type*>(other.d_columns_data[i])[other_row_index];
-            if(my_elem != other_elem)
-              return false;
-            break;
-          }
-        case GDF_DATE32:
-          {
-            using col_type = int32_t;
-            const col_type my_elem = static_cast<col_type*>(d_columns_data[i])[my_row_index];
-            const col_type other_elem = static_cast<col_type*>(other.d_columns_data[i])[other_row_index];
-            if(my_elem != other_elem)
-              return false;
-            break;
-          }
-        case GDF_DATE64:
-          {
-            using col_type = int64_t;
-            const col_type my_elem = static_cast<col_type*>(d_columns_data[i])[my_row_index];
-            const col_type other_elem = static_cast<col_type*>(other.d_columns_data[i])[other_row_index];
-            if(my_elem != other_elem)
-              return false;
-            break;
-          }
-        case GDF_TIMESTAMP:
-          {
-            using col_type = int64_t;
-            const col_type my_elem = static_cast<col_type*>(d_columns_data[i])[my_row_index];
-            const col_type other_elem = static_cast<col_type*>(other.d_columns_data[i])[other_row_index];
-            if(my_elem != other_elem)
-              return false;
-            break;
-          }
-        default:
-          return false;
+
+      bool is_equal = cudf::type_dispatcher(my_col_type, 
+                                          elements_are_equal{}, 
+                                          d_columns_data[i], 
+                                          my_row_index, 
+                                          other.d_columns_data[i], 
+                                          other_row_index);
+
+      // If the elements in column `i` do not match, return false
+      // Otherwise, continue to column i+1
+      if(false == is_equal){
+        return false;
       }
     }
 
+    // If we get through all the columns without returning false,
+    // then the rows are equivalent
     return true;
   }
 
+  template < template <typename> typename hash_function >
+  struct hash_element
+  {
+    template <typename col_type>
+    __device__ __forceinline__
+    void operator()(hash_value_type& hash_value, 
+                    void const * col_data,
+                    size_type row_index,
+                    size_type col_index)
+    {
+      using underlying_type = typename std::decay<decltype(cudf::detail::unwrap(col_type{}))>::type;
+      hash_function<underlying_type> hasher;
+      col_type const * const current_column{static_cast<col_type const*>(col_data)};
+      //underlying_type const current_value{cudf::detail::unwrap(current_column[row_index])};
+      hash_value_type const key_hash{hasher(cudf::detail::unwrap(current_column[row_index]))};
+
+      // Only combine hash-values after the first column
+      if(0 == col_index)
+        hash_value = key_hash;
+      else
+        hash_value = hasher.hash_combine(hash_value,key_hash);
+    }
+  };
+
   /* --------------------------------------------------------------------------*/
   /** 
-   * @Synopsis  This device function computes a hash value for a given row in the table
+   * @Synopsis  Device function to compute a hash value for a given row in the table
    * 
    * @Param row_index The row of the table to compute the hash value for
-   * @Param num_columns_to_hash The number of columns in the row to hash. If 0, hashes all columns
-   * @tparam hash_function The hash function that is used for each element in the row
+   * @Param num_columns_to_hash The number of columns in the row to hash. If 0, 
+   * hashes all columns
+   * @tparam hash_function The hash function that is used for each element in the row,
+   * as well as combine hash values
    * 
    * @Returns The hash value of the row
    */
@@ -709,146 +622,19 @@ public:
     hash_value_type hash_value{0};
 
     // If num_columns_to_hash is zero, hash all columns
-    if(0 == num_columns_to_hash)
+    if(0 == num_columns_to_hash) 
     {
       num_columns_to_hash = this->num_columns;
     }
 
+    // Iterate all the columns and hash each element, combining the hash values together
     for(size_type i = 0; i < num_columns_to_hash; ++i)
     {
-      const gdf_dtype current_column_type = d_columns_types[i];
+      gdf_dtype const current_column_type = d_columns_types[i];
 
-      switch(current_column_type)
-      {
-        case GDF_INT8:
-          {
-            using col_type = int8_t;
-            hash_function<col_type> hasher;
-            const col_type * current_column = static_cast<col_type*>(d_columns_data[i]);
-            const col_type current_value = current_column[row_index];
-            hash_value_type key_hash = hasher(current_value);
-            // Only combine hash values after the first column
-            if(i > 0)
-              hash_value = hasher.hash_combine(hash_value, key_hash);
-            else
-              hash_value = key_hash;
-            break;
-          }
-        case GDF_INT16:
-          {
-            using col_type = int16_t;
-            hash_function<col_type> hasher;
-            const col_type * current_column = static_cast<col_type*>(d_columns_data[i]);
-            const col_type current_value = current_column[row_index];
-            hash_value_type key_hash = hasher(current_value);
-            // Only combine hash values after the first column
-            if(i > 0)
-              hash_value = hasher.hash_combine(hash_value, key_hash);
-            else
-              hash_value = key_hash;
-            break;
-          }
-        case GDF_INT32:
-          {
-            using col_type = int32_t;
-            hash_function<col_type> hasher;
-            const col_type * current_column = static_cast<col_type*>(d_columns_data[i]);
-            const col_type current_value = current_column[row_index];
-            hash_value_type key_hash = hasher(current_value);
-            // Only combine hash values after the first column
-            if(i > 0)
-              hash_value = hasher.hash_combine(hash_value, key_hash);
-            else
-              hash_value = key_hash;
-            break;
-          }
-        case GDF_INT64:
-          {
-            using col_type = int64_t;
-            hash_function<col_type> hasher;
-            const col_type * current_column = static_cast<col_type*>(d_columns_data[i]);
-            const col_type current_value = current_column[row_index];
-            hash_value_type key_hash = hasher(current_value);
-            // Only combine hash values after the first column
-            if(i > 0)
-              hash_value = hasher.hash_combine(hash_value, key_hash);
-            else
-              hash_value = key_hash;
-            break;
-          }
-        case GDF_FLOAT32:
-          {
-            using col_type = float;
-            hash_function<col_type> hasher;
-            const col_type * current_column = static_cast<col_type*>(d_columns_data[i]);
-            const col_type current_value = current_column[row_index];
-            hash_value_type key_hash = hasher(current_value);
-            // Only combine hash values after the first column
-            if(i > 0)
-              hash_value = hasher.hash_combine(hash_value, key_hash);
-            else
-              hash_value = key_hash;
-            break;
-          }
-        case GDF_FLOAT64:
-          {
-            using col_type = double;
-            hash_function<col_type> hasher;
-            const col_type * current_column = static_cast<col_type*>(d_columns_data[i]);
-            const col_type current_value = current_column[row_index];
-            hash_value_type key_hash = hasher(current_value);
-            // Only combine hash values after the first column
-            if(i > 0)
-              hash_value = hasher.hash_combine(hash_value, key_hash);
-            else
-              hash_value = key_hash;
-            break;
-          }
-        case GDF_DATE32:
-          {
-            using col_type = int32_t;
-            hash_function<col_type> hasher;
-            const col_type * current_column = static_cast<col_type*>(d_columns_data[i]);
-            const col_type current_value = current_column[row_index];
-            hash_value_type key_hash = hasher(current_value);
-            // Only combine hash values after the first column
-            if(i > 0)
-              hash_value = hasher.hash_combine(hash_value, key_hash);
-            else
-              hash_value = key_hash;
-            break;
-          }
-        case GDF_DATE64:
-          {
-            using col_type = int64_t;
-            hash_function<col_type> hasher;
-            const col_type * current_column = static_cast<col_type*>(d_columns_data[i]);
-            const col_type current_value = current_column[row_index];
-            hash_value_type key_hash = hasher(current_value);
-            // Only combine hash values after the first column
-            if(i > 0)
-              hash_value = hasher.hash_combine(hash_value, key_hash);
-            else
-              hash_value = key_hash;
-            break;
-          }
-        case GDF_TIMESTAMP:
-          {
-            using col_type = int64_t;
-            hash_function<col_type> hasher;
-            const col_type * current_column = static_cast<col_type*>(d_columns_data[i]);
-            const col_type current_value = current_column[row_index];
-            hash_value_type key_hash = hasher(current_value);
-            // Only combine hash values after the first column
-            if(i > 0)
-              hash_value = hasher.hash_combine(hash_value, key_hash);
-            else
-              hash_value = key_hash;
-            break;
-          }
-        default:
-          assert(false && "Attempted to hash unsupported GDF datatype");
-      }
+      cudf::type_dispatcher(current_column_type, 
+                          hash_element<hash_function>{}, 
+                          hash_value, d_columns_data[i], row_index, i);
     }
 
     return hash_value;
@@ -873,7 +659,8 @@ public:
   /* ----------------------------------------------------------------------------*/
   template <typename index_type>
   gdf_error gather(index_type const * const row_gather_map,
-          gdf_table<size_type> & gather_output_table, bool range_check = false)
+                   gdf_table<size_type> & gather_output_table,
+                   bool range_check = false)
   {
     gdf_error gdf_status{GDF_SUCCESS};
   

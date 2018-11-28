@@ -4,6 +4,7 @@
 #include <iostream>
 #include <vector>
 #include <chrono>
+#include <map>
 
 #include <thrust/device_vector.h>
 
@@ -280,3 +281,28 @@ TEST_F(ColumnConcatTest, Benchmark) {
                         bit_setter);
 }
 #endif // ENABLE_CONCAT_BENCHMARK
+
+
+TEST(ColumnByteWidth, TestByteWidth)
+{
+
+  std::map<gdf_dtype, int> enum_to_type_size { {GDF_INT8, sizeof(int8_t)},
+                                                  {GDF_INT16, sizeof(int16_t)},
+                                                  {GDF_INT32, sizeof(int32_t)},
+                                                  {GDF_INT64, sizeof(int64_t)},
+                                                  {GDF_FLOAT32, sizeof(float)},
+                                                  {GDF_FLOAT64, sizeof(double)},
+                                                  {GDF_DATE32, sizeof(gdf_date32)},
+                                                  {GDF_DATE64, sizeof(gdf_date64)},
+                                                  {GDF_TIMESTAMP, sizeof(gdf_timestamp)},
+                                                  {GDF_CATEGORY, sizeof(gdf_category)}
+                                                };
+  for(auto const& pair : enum_to_type_size)
+  {
+    int byte_width{0};
+    gdf_column col;
+    col.dtype = pair.first;
+    ASSERT_EQ(GDF_SUCCESS, get_column_byte_width(&col, &byte_width));
+    EXPECT_EQ(pair.second, byte_width);
+  }
+}
