@@ -6,7 +6,7 @@
 #include "utilities/cudf_utils.h"
 #include "utilities/error_utils.h"
 #include "rmm/thrust_rmm_allocator.h"
-#include "groupby/groupby.cuh"
+#include "groupby/hash_groupby.cuh"
 #include "groupby/aggregation_operations.cuh"
 #include "utilities/nvtx/nvtx_utils.h"
 
