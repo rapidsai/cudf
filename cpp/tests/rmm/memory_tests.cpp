@@ -46,6 +46,17 @@ struct MemoryManagerTest :
     const size_t size_pb = size_t{1}<<50;
 };
 
+rmmAllocationMode_t modes[] = 
+    {
+        CudaDefaultAllocation, 
+        CudaManagedMemory,
+        PoolAllocation, 
+        static_cast<rmmAllocationMode_t>(PoolAllocation | CudaManagedMemory)
+    };
+INSTANTIATE_TEST_CASE_P(TestAllocationModes, 
+                        MemoryManagerTest, 
+                        ::testing::ValuesIn(modes));
+
 // Init / Finalize tests
 
 TEST_P(MemoryManagerTest, Initialize) {
@@ -191,8 +202,3 @@ TEST_P(MemoryManagerTest, AllocationOffset) {
     ASSERT_SUCCESS( RMM_FREE(a, stream) );
     ASSERT_SUCCESS( RMM_FREE(b, stream) );
 }
-
-rmmAllocationMode_t modes[]= {CudaDefaultAllocation, 
-                              PoolAllocation, 
-                              static_cast<rmmAllocationMode_t>(PoolAllocation | CudaManagedMemory)};
-INSTANTIATE_TEST_CASE_P(TestAllocationModes, MemoryManagerTest, ::testing::ValuesIn(modes));
