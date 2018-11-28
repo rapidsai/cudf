@@ -289,6 +289,7 @@ TEST(gdf_csv_test, QuotedStrings)
 		args.lineterminator = '\n';
 		args.quotechar		= '`';
 		args.quoting		= true;	// strip outermost quotechar
+		args.doublequote	= true;	// replace double quotechar with single
 		args.skiprows		= 1;
 
 		error = read_csv(&args);
@@ -351,7 +352,7 @@ TEST(gdf_csv_test, KeepFullQuotedStrings)
 		args.lineterminator = '\n';
 		args.quotechar		= '\"';
 		args.quoting		= false;	// do not strip outermost quotechar
-		args.nodoublequote	= true;		// do not replace double quotechar with single
+		args.doublequote	= false;	// do not replace double quotechar with single
 		args.skiprows		= 1;
 
 		error = read_csv(&args);

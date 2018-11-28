@@ -18,7 +18,8 @@ def _wrap_string(text):
         return ffi.new("char[]", text.encode())
 
 
-def read_csv(filepath, lineterminator='\n', quotechar='\0', quoting=True,
+def read_csv(filepath, lineterminator='\n',
+             quotechar='\0', quoting=True, doublequote=True,
              delimiter=',', sep=None, delim_whitespace=False,
              skipinitialspace=False, names=None, dtype=None,
              skipfooter=0, skiprows=0, dayfirst=False):
@@ -47,6 +48,9 @@ def read_csv(filepath, lineterminator='\n', quotechar='\0', quoting=True,
     quoting : bool, default True
         If True, start and end quotechar are removed from returned strings
         If False, start and end quotechar are kept in returned strings
+    doublequote : bool, default True
+        When quotechar is specified and quoting is True, indicate whether or not
+        to interpret two consecutive quotechar inside fields as single quotechar
     skiprows : int, default 0
         Number of rows to be skipped from the start of file.
     skipfooter : int, default 0
@@ -115,6 +119,7 @@ def read_csv(filepath, lineterminator='\n', quotechar='\0', quoting=True,
     csv_reader.lineterminator = lineterminator.encode()
     csv_reader.quotechar = quotechar.encode()
     csv_reader.quoting = quoting
+    csv_reader.doublequote = doublequote
     csv_reader.delim_whitespace = delim_whitespace
     csv_reader.skipinitialspace = skipinitialspace
     csv_reader.dayfirst = dayfirst
@@ -149,7 +154,8 @@ def read_csv(filepath, lineterminator='\n', quotechar='\0', quoting=True,
     return df
 
 
-def read_csv_strings(filepath, lineterminator='\n', quotechar='\0', quoting=True,
+def read_csv_strings(filepath, lineterminator='\n',
+                     quotechar='\0', quoting=True, doublequote=True,
                      delimiter=',', sep=None, delim_whitespace=False,
                      skipinitialspace=False, names=None, dtype=None,
                      skipfooter=0, skiprows=0, dayfirst=False):
@@ -240,6 +246,7 @@ def read_csv_strings(filepath, lineterminator='\n', quotechar='\0', quoting=True
     csv_reader.lineterminator = lineterminator.encode()
     csv_reader.quotechar = quotechar.encode()
     csv_reader.quoting = quoting
+    csv_reader.doublequote = doublequote
     csv_reader.delim_whitespace = delim_whitespace
     csv_reader.skipinitialspace = skipinitialspace
     csv_reader.dayfirst = dayfirst

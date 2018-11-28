@@ -81,7 +81,7 @@ typedef struct {
 
   char			quotechar;					/**< define the character used to denote start and end of a quoted item								*/
   bool			quoting;					/**< treat string fields as quoted item and remove the first and last quotechar						*/
-  bool			nodoublequote;				// indicate to not interpret two consecutive quotechar as a single quotechar
+  bool			doublequote;				/**< indicates whether to interpret two consecutive quotechar inside a field as a single quotechar	*/
 
   char			escapechar;					// single char	- char used as the escape character
 
@@ -104,7 +104,6 @@ typedef struct {
  * keep_date_col	- will not maintain raw data
  * date_parser		- there is only this parser
  * float_precision	- there is only one converter that will cover all specified values
- * quoting			- this is for out
  * dialect			- not used
  *
  */

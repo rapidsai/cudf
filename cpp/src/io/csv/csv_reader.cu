@@ -73,7 +73,7 @@ typedef struct raw_csv_ {
 
     char				quotechar;		// host: the quote character
     bool				keepquotes;		// host: indicates to keep the start and end quotechar
-    bool				nodoublequote;	// host: indicates to not interpret two consecutive quotechar as a single
+    bool				doublequote;	// host: indicates to interpret two consecutive quotechar as a single
 
     long				num_bytes;		// host: the number of bytes in the data
     long				num_bits;		// host: the number of 64-bit bitmaps (different than valid)
@@ -248,7 +248,7 @@ gdf_error read_csv(csv_read_arg *args)
 	raw_csv->quotechar = args->quotechar;
 	if(raw_csv->quotechar != '\0') {
 		raw_csv->keepquotes = !args->quoting;
-		raw_csv->nodoublequote = args->nodoublequote;
+		raw_csv->doublequote = args->doublequote;
 	}
 
 	raw_csv->dayfirst = args->dayfirst;
@@ -275,10 +275,8 @@ gdf_error read_csv(csv_read_arg *args)
 	error = updateRawCsv( (const char *)map_data, (long)raw_csv->num_bytes, raw_csv );
 	checkError(error, "call to createRawCsv");
 
-
 	//-----------------------------------------------------------------------------
 	// find the record and fields points (in bitmaps)
-	cudaDeviceSynchronize();
 	error = launch_countRecords(raw_csv);
 	checkError(error, "call to record counter");
 
@@ -292,10 +290,15 @@ gdf_error read_csv(csv_read_arg *args)
 	error = launch_storeRecordStart(raw_csv);
 	checkError(error, "call to record initial position store");
 
-	cudaDeviceSynchronize();
-
+	// Previous kernel stores the record positions as encountered by all threads
+	// Sort the record positions as subsequent processing may require filtering
+	// certain rows or other processing on specific records
 	thrust::sort(thrust::device, raw_csv->recStart, raw_csv->recStart + raw_csv->num_records + 1);
 
+	// Currently, ignoring lineterminations within quotes is handled by recording
+	// the records of both, and then filtering out the records that is a quotechar
+	// or a linetermination within a quotechar pair. The future major refactoring
+	// of csv_reader and its kernels will probably use a different tactic.
 	if (raw_csv->quotechar != '\0') {
 		const size_t recTotalSize = sizeof(unsigned long long) * (raw_csv->num_records + 1);
 
@@ -638,7 +641,7 @@ gdf_error read_csv(csv_read_arg *args)
 			continue;
 
 		NVStrings* const stringCol = NVStrings::create_from_index(h_str_cols[stringColCount],size_t(raw_csv->num_records));
-		if ((raw_csv->quotechar != '\0') && (raw_csv->nodoublequote==false)){
+		if ((raw_csv->quotechar != '\0') && (raw_csv->doublequote==true)) {
 			// In PANDAS, default of enabling doublequote for two consecutive
 			// quotechar in quote fields results in reduction to single
 			std::string quotechar = std::string(&raw_csv->quotechar);
