@@ -17,8 +17,8 @@ dependencies:
 - nvstrings
 - pandas=0.20.*
 - pyarrow=0.10.*
-- pip:
-  - numpydoc
-  - sphinx
-  - sphinx-rtd-theme
-  - sphinxcontrib-websupport
+- ipython
+- numpydoc
+- sphinx
+- sphinx_rtd_theme
+- sphinxcontrib-websupport
