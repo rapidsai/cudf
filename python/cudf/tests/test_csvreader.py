@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 
 from cudf import read_csv
-from cudf.io import read_csv_strings
+from cudf.io.csv import read_csv_strings
 import cudf
 import nvstrings
 

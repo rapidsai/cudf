@@ -155,7 +155,7 @@ def read_csv_strings(filepath, lineterminator='\n', quotechar='\0', quoting=True
                      skipfooter=0, skiprows=0, dayfirst=False):
 
     import nvstrings
-    from .series import Series
+    from cudf.dataframe.series import Series
 
     """
     **Experimental**: This function provided only as an alpha way of providing
