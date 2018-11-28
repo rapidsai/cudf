@@ -26,6 +26,7 @@ class Series(object):
 
     ``Series`` objects are used as columns of ``DataFrame``.
     """
+
     @classmethod
     def from_categorical(cls, categorical, codes=None):
         """Creates from a pandas.Categorical
