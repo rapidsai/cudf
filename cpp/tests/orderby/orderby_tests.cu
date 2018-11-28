@@ -187,13 +187,15 @@ struct OrderByTest : public GdfTest
   }
 
   /* --------------------------------------------------------------------------*
-   * @Synopsis  Initializes two sets of columns, left and right, with random
-   *            values for the join operation.
+   * @Synopsis  Initializes a set of columns with random values for the order by
+   *            operation.
    *
    * @Param orderby_column_length The length of the orderby set of columns
    * @Param orderby_column_range The upper bound of random values for the orderby
    *                          columns. Values are [0, orderby_column_range)
    * @Param n_count The null count in the columns
+   * @Param random_order_type_values Randomly initialize the sort type for each
+   *                                 column.
    * @Param print Optionally print the set of columns for debug
    * -------------------------------------------------------------------------*/
   void create_input( size_t orderby_column_length, size_t orderby_column_range,
@@ -311,9 +313,10 @@ struct OrderByTest : public GdfTest
 
   /* --------------------------------------------------------------------------*/
   /**
-   * @Synopsis  Computes the result of joining the left and right sets of columns with the libgdf functions
+   * @Synopsis  Computes the result of sorting the set of columns with the libgdf functions
    *
-   * @Param gdf_result A vector of size_t that holds the result of the libgdf sort function
+   * @Param use_default_sort_order_method Whether to use gdf_order_by or gdf_order_by_asc_desc
+   *                                      libgdf sort function
    * @Param print Option to print the result computed by the libgdf function
    */
   /* ----------------------------------------------------------------------------*/
@@ -373,9 +376,7 @@ struct OrderByTest : public GdfTest
 
 // This structure is used to nest the number/types of columns and
 // the nulls_are_smallest flag for use with Google Test type-parameterized
-// tests .Here join_operation refers to the type of join eg. INNER,
-// LEFT, FULL and join_method refers to the underlying join algorithm
-//that performs it eg. GDF_HASH or GDF_SORT.
+// tests.
 template<typename tuple_of_vectors,
          bool smaller_nulls = true>
 struct TestParameters
@@ -393,28 +394,24 @@ using VTuple = std::tuple<std::vector<T>...>;
 // Using Google Tests "Type Parameterized Tests"
 // Every test defined as TYPED_TEST(OrderByTest, *) will be run once for every instance of
 // TestParameters defined below
-// The kind of join is determined by the first template argument to TestParameters
-// The number and types of columns used in both the left and right sets of columns are
-// determined by the number and types of vectors in the std::tuple<...> that is the second
-// template argument to TestParameters
 typedef ::testing::Types<
                           // Single column Order by Tests for some types
-                          TestParameters< VTuple<int32_t>, false >
-                          // TestParameters< VTuple<uint64_t>, false >,
-						              // TestParameters< VTuple<float>, false >,
-                          // TestParameters< VTuple<int64_t>, true >,
-                          // TestParameters< VTuple<uint32_t>, true >,
-                          // TestParameters< VTuple<double>, true >,
-                          // // Two Column Order by Tests for some combination of types
-                          // TestParameters< VTuple<int32_t, int32_t>, false >,
-                          // TestParameters< VTuple<int64_t, uint32_t>, false >,
-                          // TestParameters< VTuple<uint32_t, double>, false >,
-                          // TestParameters< VTuple<float, float>, true >,
-						              // TestParameters< VTuple<uint64_t, float>, true >,
-                          // TestParameters< VTuple<double, int32_t>, true >,
-                          // // Three Column Order by Tests for some combination of types
-                          // TestParameters< VTuple<int32_t, double, uint32_t>, false >,
-                          // TestParameters< VTuple<float, int32_t, float>, true >
+                          TestParameters< VTuple<int32_t>, false >,
+                          TestParameters< VTuple<uint64_t>, false >,
+						              TestParameters< VTuple<float>, false >,
+                          TestParameters< VTuple<int64_t>, true >,
+                          TestParameters< VTuple<uint32_t>, true >,
+                          TestParameters< VTuple<double>, true >,
+                          // Two Column Order by Tests for some combination of types
+                          TestParameters< VTuple<int32_t, int32_t>, false >,
+                          TestParameters< VTuple<int64_t, uint32_t>, false >,
+                          TestParameters< VTuple<uint32_t, double>, false >,
+                          TestParameters< VTuple<float, float>, true >,
+						              TestParameters< VTuple<uint64_t, float>, true >,
+                          TestParameters< VTuple<double, int32_t>, true >,
+                          // Three Column Order by Tests for some combination of types
+                          TestParameters< VTuple<int32_t, double, uint32_t>, false >,
+                          TestParameters< VTuple<float, int32_t, float>, true >
                           > Implementations;
 
 TYPED_TEST_CASE(OrderByTest, Implementations);
