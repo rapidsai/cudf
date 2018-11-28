@@ -17,20 +17,24 @@ You can get a minimal conda installation with [Miniconda](https://conda.io/minic
 You can install and update cuDF using the conda command:
 
 ```bash
-conda install -c numba -c conda-forge -c rapidsai -c defaults cudf=0.2.0
+conda install -c nvidia -c rapidsai -c numba -c conda-forge -c defaults cudf=0.3.0
 ```
 
 Note: This conda installation only applies to Linux and Python versions 3.5/3.6.
 
-You can create and activate a development environment using the conda command:
+You can create and activate a development environment using the conda commands:
 
 ```bash
-conda env create --name cudf --file conda_environments/testing_py35.yml
-source activate cudf
+# create the conda environment (assuming in base `cudf` directory)
+$ conda env create --name cudf_dev --file conda/environments/dev_py35.yml
+# activate the environment
+$ source activate cudf_dev
+# when not using default arrow version 0.10.0, run
+$ conda install -c nvidia -c rapidsai -c numba -c conda-forge -c defaults pyarrow=$ARROW_VERSION
 ```
 
-For cudf development, use `conda—environments/dev_py35.yml` in the above 
-`conda create` command instead.
+This installs the required `cmake`, `nvstrings`, `pyarrow` and other
+dependencies into the `cudf_dev` conda environment and activates it.
 
 ### Pip
 
@@ -42,12 +46,13 @@ The following instructions are tested on Linux Ubuntu 16.04 & 18.04, to enable
 from source builds and development. Other operatings systems may be compatible,
 but are not currently supported.
 
-### Get libgdf Dependencies
+### Get libcudf Dependencies
 
 Compiler requirements:
 
-* `g++` 5.4
-* `cmake` 3.12
+* `gcc`     version 5.4
+* `nvcc`    version 9.2
+* `cmake`   version 3.12
 
 CUDA/GPU requirements:
 
@@ -83,20 +88,42 @@ git clone --recurse-submodules https://github.com/rapidsai/cudf.git
 cd cudf
 ```
 2. Create the conda development environment `cudf` as detailed above
-3. Build and install `libgdf`
+3. Build and install `libcudf`
 ```bash
-source activate cudf
-mkdir -p libgdf/build
-cd libgdf/build
-cmake .. -DHASH_JOIN=ON -DCMAKE_INSTALL_PREFIX=$CONDA_PREFIX
-make -j install
-make copy_python
-python setup.py install
+$ cd /path/to/cudf/cpp                              # navigate to C/C++ CUDA source root directory
+$ mkdir build                                       # make a build directory
+$ cd build                                          # enter the build directory
+$ cmake .. -DCMAKE_INSTALL_PREFIX=/install/path     # configure cmake ... use $CONDA_PREFIX if you're using Anaconda
+$ make -j                                           # compile the libraries librmm.so, libcudf.so ... '-j' will start a parallel job using the number of physical cores available on your system
+$ make install                                      # install the libraries librmm.so, libcudf.so to '/install/path'
 ```
-4. Build and install `cudf` from the root of the repository
+To run tests (Optional):
+
 ```bash
-cd ../..
-python setup.py install
+$ make test
+```
+
+Build and install cffi bindings:
+```bash
+$ make python_cffi                                  # build CFFI bindings for librmm.so, libcudf.so
+$ make install_python                               # install python bindings into site-packages
+$ cd python && py.test -v                           # optional, run python tests on low-level python bindings
+```
+
+4. Build the `cudf` python package, in the `python` folder:
+```bash
+$ cd ../../python
+$ python setup.py build_ext --inplace
+```
+
+To run Python tests (Optional):
+```bash
+$ py.test -v                                        # run python tests on cudf python bindings
+```
+5. Finally, install the Python package to your Python path:
+
+```bash
+$ python setup.py install                           # install cudf python bindings
 ```
 
 ## Automated Build in Docker Container
@@ -113,13 +140,13 @@ A Dockerfile is provided with a preconfigured conda environment for building and
 
 From cudf project root run the following, to build with defaults:
 ```bash
-docker build -t cudf .
+$ docker build --tag cudf .
 ```
 After the container is built run the container:
+```bash
+$ docker run --runtime=nvidia -it cudf bash
 ```
-docker run --runtime=nvidia -it cudf bash
-```
-Activate the conda environment `cudf` to use the newly built cuDF and libgdf libraries:
+Activate the conda environment `cudf` to use the newly built cuDF and libcudf libraries:
 ```
 root@3f689ba9c842:/# source activate cudf
 (cudf) root@3f689ba9c842:/# python -c "import cudf"
@@ -144,32 +171,6 @@ flag. Below is a list of the available arguments and their purpose:
 | `PANDAS_VERSION` | 0.20.3 | Not supported | set pandas version |
 | `PYARROW_VERSION` | 0.10.0 | 0.8.0+ | set pyarrow version |
 | `PYTHON_VERSION` | 3.5 | 3.6 | set python version |
-
-## Testing
-
-### cuDF
-
-This project uses [py.test](https://docs.pytest.org/en/latest/)
-
-In the source root directory and with the development conda environment activated, run:
-
-```bash
-py.test --cache-clear --ignore=libgdf
-```
-
-### libgdf
-
-The `libgdf` tests require a GPU and CUDA. CUDA can be installed locally or through the conda packages of `numba` & `cudatoolkit`. For more details on the requirements needed to run these tests see the [libgdf README](libgdf/README.md).
-
-`libgdf` has two testing frameworks `py.test` and GoogleTest:
-
-```bash
-# Run py.test command inside the /libgdf folder
-py.test
-
-# Run GoogleTest command inside the /libgdf/build folder after cmake
-make -j test
-```
 
 ---
 
