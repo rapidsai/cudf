@@ -143,7 +143,8 @@ namespace rmm
             std::lock_guard<std::mutex> guard(streams_mutex);
             if (registered_streams.empty() || 0 == registered_streams.count(stream)) {
                 registered_streams.insert(stream);
-                if (stream && PoolAllocation == options.allocation_mode) // don't register the null stream with CNMem
+                // don't register the null stream with CNMem
+                if (stream && (PoolAllocation | options.allocation_mode)) 
                     RMM_CHECK_CNMEM( cnmemRegisterStream(stream) );
             }
             return RMM_SUCCESS;
