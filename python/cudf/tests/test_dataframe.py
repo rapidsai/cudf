@@ -152,7 +152,6 @@ def test_dataframe_basic():
     np.testing.assert_equal(mat, expect)
 
 
-@pytest.mark.skip(reason="test segfault")
 def test_dataframe_column_name_indexing():
     df = DataFrame()
     data = np.asarray(range(10), dtype=np.int32)
