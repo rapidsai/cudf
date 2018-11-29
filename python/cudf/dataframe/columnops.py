@@ -34,7 +34,7 @@ class TypedColumnBase(Column):
         dtype = kwargs.pop('dtype')
         super(TypedColumnBase, self).__init__(**kwargs)
         # Logical dtype
-        self._dtype = np.dtype(dtype)
+        self._dtype = pd.api.types.pandas_dtype(dtype)
 
     @property
     def dtype(self):
