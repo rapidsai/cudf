@@ -1,3 +1,5 @@
+#ifndef HASH_GROUPBY_H
+#define HASH_GROUPBY_H
 /*
  * Copyright (c) 2018, NVIDIA CORPORATION.
  *
@@ -420,4 +422,4 @@ gdf_error gdf_group_by_hash_avg(int ncols,
   }
 }
 
-
+#endif

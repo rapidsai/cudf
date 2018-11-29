@@ -138,7 +138,7 @@ add_library(cudf SHARED
             src/sort/sorting.cu
             src/sqls/sqls_ops.cu
             src/groupby/groupby.cu
-            src/groupby/new_groupby.cpp
+            src/groupby/new_groupby.cu
             src/binary/binary_ops.cu
             src/bitmask/bitmask_ops.cu
             src/bitmask/valid_ops.cu
