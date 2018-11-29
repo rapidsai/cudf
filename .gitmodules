@@ -6,5 +6,4 @@
 	url = https://github.com/moderngpu/moderngpu.git
 [submodule "cpp/thirdparty/cnmem"]
 	path = cpp/thirdparty/cnmem
-	url = https://github.com/harrism/cnmem.git
-	branch = uvm-pool
+	url = https://github.com/NVIDIA/cnmem.git
