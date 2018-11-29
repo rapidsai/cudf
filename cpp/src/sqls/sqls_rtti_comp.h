@@ -667,7 +667,7 @@ multi_col_group_by_count_sort(size_t         nrows,
                               cudaStream_t   stream = NULL)
 {
   if( !sorted )
-    multi_col_sort(d_cols, nullptr, d_gdf_t, nullptr, ncols, nrows, ptr_d_indx, false, false, stream);
+    multi_col_sort(d_cols, nullptr, d_gdf_t, nullptr, ncols, nrows, false, ptr_d_indx, false, stream);
 
   LesserRTTI<IndexT> f(d_cols, d_gdf_t, ncols);
 
@@ -740,7 +740,7 @@ size_t multi_col_group_by_sort(size_t         nrows,
                                cudaStream_t   stream = NULL)
 {
   if( !sorted )
-    multi_col_sort(d_cols, nullptr, d_gdf_t, nullptr, ncols, nrows, ptr_d_indx, false, false, stream);
+    multi_col_sort(d_cols, nullptr, d_gdf_t, nullptr, ncols, nrows, false, ptr_d_indx, false, stream);
 
   rmm_temp_allocator allocator(stream);
   
@@ -919,28 +919,26 @@ size_t multi_col_group_by_avg_sort(size_t         nrows,
   return new_sz;
 }
 
-
-//###########################################################################
-//#                          Multi-column Sort:                             #
-//###########################################################################
-//Version with array of columns, using type erasure and RTTI at
-//comparison operator level;
-//
-//args:
-//Input:
-// d_cols             = device array to ncols type erased columns;
-// d_valids           = device array to ncols gdf_valid_type columns;
-// d_col_types        = device array to runtime column types;
-// d_asc_desc         = device array to column sort order types;
-// ncols              = # columns;
-// nrows              = # rows;
-// have_nulls         = whether or not any column have null values;
-// nulls_are_smallest = whether or not nulls are smallest;
-// stream             = cudaStream to work in;
-//
-//Output:
-// d_indx             = vector of indices re-ordered after sorting;
-//
+/* --------------------------------------------------------------------------*/
+/** 
+ * @brief Sorts an array of columns, using type erasure and RTTI at
+ * comparison operator level.
+ * 
+ * @Param[in] d_cols Device array to ncols type erased columns
+ * @Param[in] d_valids Device array to ncols gdf_valid_type columns
+ * @Param[in] d_col_types Device array of runtime column types
+ * @Param[in] d_asc_desc Device array of column sort order types
+ * @Param[in] ncols # columns
+ * @Param[in] nrows # rows
+ * @Param[in] have_nulls Whether or not any column have null values
+ * @Param[in] nulls_are_smallest Whether or not nulls are smallest
+ * @Param[in] stream CudaStream to work in
+ * @Param[out] d_indx Device array of re-ordered indices after sorting
+ * @tparam IndexT The type of d_indx array 
+ * 
+ * @Returns
+ */
+/* ----------------------------------------------------------------------------*/
 template<typename IndexT>
 void multi_col_sort(void* const *           d_cols,
                     gdf_valid_type* const * d_valids,
@@ -948,8 +946,8 @@ void multi_col_sort(void* const *           d_cols,
                     char*                   d_asc_desc,
                     size_t                  ncols,
                     size_t                  nrows,
-                    IndexT*                 d_indx,
                     bool                    have_nulls,
+                    IndexT*                 d_indx,
                     bool                    nulls_are_smallest = false,
                     cudaStream_t            stream = NULL)
 {
@@ -959,7 +957,7 @@ void multi_col_sort(void* const *           d_cols,
   rmm_temp_allocator allocator(stream);
   thrust::sequence(thrust::cuda::par(allocator).on(stream), d_indx, d_indx+nrows, 0);
   
-  if (have_nulls) {
+  if (d_valids != nullptr && have_nulls) {
     LesserRTTI<IndexT> comp(d_cols, d_valids, d_col_types, d_asc_desc, ncols, nulls_are_smallest);
 		thrust::sort(thrust::cuda::par.on(stream),
 				         d_indx, d_indx+nrows,

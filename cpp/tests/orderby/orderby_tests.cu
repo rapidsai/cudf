@@ -338,8 +338,8 @@ struct OrderByTest : public GdfTest
     }
     else {
       result_error = gdf_order_by_asc_desc(columns_to_sort,
-                                           num_columns,
                                            (char*)sort_order_types->data,
+                                           num_columns,
                                            sorted_indices_output,
                                            &ctxt);
     }

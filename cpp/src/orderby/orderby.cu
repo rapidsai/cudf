@@ -36,7 +36,7 @@ namespace{ //annonymus
   {
     //TODO: don't assume type of output is size_t
     //TODO: make these allocations happen with the new memory manager when we can
-    //also we are kind of assuming they will just work, yeesh!
+    //      also we are kind of assuming they will just work
 
     // Return error if the inputs or no output pointers are invalid
     if (cols == nullptr || output_indices == nullptr) { return GDF_DATASET_EMPTY; }
@@ -66,29 +66,56 @@ namespace{ //annonymus
                    asc_desc,
                    ncols,
                    cols[0]->size,
-                   (size_t *) output_indices->data,
                    have_nulls,
-                   ctxt->flag_nulls_are_smallest);
+                   (size_t *) output_indices->data,
+                   (ctxt ? ctxt->flag_nulls_are_smallest : false));
 
     return GDF_SUCCESS;
   }
 
 } //end unknown namespace
 
-
-gdf_error gdf_order_by(gdf_column** cols,           //in: host-side array of gdf_columns
-                       size_t ncols,                //in: # cols
-                       gdf_column* output_indices,  //out: pre-allocated device-side gdf_column to be filled with sorted indices
-                       gdf_context* ctxt)           //struct with additional info: bool flag_nulls_are_smallest
+/* --------------------------------------------------------------------------*/
+/** 
+ * @brief Sorts an array of gdf_column.
+ * 
+ * @Param[in] cols Host-side array of gdf_columns
+ * @Param[in] ncols # columns
+ * @Param[in] ctxt Struct with additional info: bool flag_nulls_are_smallest
+ * @Param[out] output_indices Pre-allocated gdf_column to be filled
+ * with sorted indices
+ * 
+ * @Returns GDF_SUCCESS upon successful completion
+ */
+/* ----------------------------------------------------------------------------*/
+gdf_error gdf_order_by(gdf_column** cols,
+                       size_t ncols,
+                       gdf_column* output_indices,
+                       gdf_context* ctxt)
 {
   return multi_col_order_by(cols, ncols, nullptr, output_indices, ctxt);
 }
 
-gdf_error gdf_order_by_asc_desc(gdf_column** cols,          //in: host-side array of gdf_columns
-                                size_t ncols,               //in: array of chars where 0 is ascending order and 1 is descending order and for each input column
-		                            char* asc_desc,             //in: # cols
-                                gdf_column* output_indices, //out: pre-allocated device-side gdf_column to be filled with sorted indices
-		                            gdf_context* ctxt)          //struct with additional info: bool flag_nulls_are_smallest
+/* --------------------------------------------------------------------------*/
+/** 
+ * @brief Sorts an array of gdf_column.
+ * 
+ * @Param[in] cols Array of gdf_columns
+ * @Param[in] asc_desc Device array of sort order types for each column
+ * (0 is ascending order and 1 is descending)
+ * @Param[in] ncols # columns
+ * @Param[in] ctxt Struct with additional info: bool flag_nulls_are_smallest
+ * @Param[out] output_indices Pre-allocated gdf_column to be filled
+ * with sorted indices
+ * 
+ * @Returns GDF_SUCCESS upon successful completion
+ */
+/* ----------------------------------------------------------------------------*/
+gdf_error gdf_order_by_asc_desc(gdf_column** cols,
+		                            char* asc_desc,
+                                size_t ncols,
+                                gdf_column* output_indices,
+		                            gdf_context* ctxt)
 {
   return multi_col_order_by(cols, ncols, asc_desc, output_indices, ctxt);
 }

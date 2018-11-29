@@ -24,9 +24,18 @@ gdf_size_type gdf_get_num_chars_bitmask(gdf_size_type size) {
 	return (( size + ( GDF_VALID_BITSIZE - 1)) / GDF_VALID_BITSIZE ); 
 }
 
-// Flatten AOS info from gdf_columns into SOA:
-// (1) column array pointers and types;
-// (2) column array pointers, valids array pointers and types
+/* --------------------------------------------------------------------------*/
+/** 
+ * @brief Flatten AOS info from gdf_columns into SOA.
+ * 
+ * @Param[in] cols Host-side array of gdf_columns
+ * @Param[in] ncols # columns
+ * @Param[out] d_cols Pointer to device array of columns
+ * @Param[out] d_types Device array of column types
+ * 
+ * @Returns
+ */
+/* ----------------------------------------------------------------------------*/
 inline void soa_col_info(gdf_column* cols, size_t ncols, void** d_cols, int* d_types)
 {
 	std::vector<void*> v_cols(ncols, nullptr);
@@ -43,6 +52,19 @@ inline void soa_col_info(gdf_column* cols, size_t ncols, void** d_cols, int* d_t
 	cudaMemcpy(d_types, h_types, ncols*sizeof(int), cudaMemcpyHostToDevice);//TODO: add streams
 }
 
+/* --------------------------------------------------------------------------*/
+/** 
+ * @brief Flatten AOS info from gdf_columns into SOA.
+ * 
+ * @Param[in] cols Host-side array of pointers to gdf_columns
+ * @Param[in] ncols # columns
+ * @Param[out] d_cols Pointer to device array of columns
+ * @Param[out] d_valids Pointer to device array of gdf_valid_type for each column
+ * @Param[out] d_types Device array of column types
+ * 
+ * @Returns
+ */
+/* ----------------------------------------------------------------------------*/
 inline void soa_col_info(gdf_column** cols, size_t ncols, void** d_cols, gdf_valid_type** d_valids, int* d_types)
 {
 	std::vector<void*> v_cols(ncols, nullptr);
