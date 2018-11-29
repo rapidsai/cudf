@@ -48,8 +48,9 @@ class Column(object):
         # Concatenate data
         mem = rmm.device_array(shape=newsize, dtype=head.data.dtype)
         data = Buffer.from_empty(mem, size=newsize)
+        mask = utils.make_mask(newsize)
 
-        col = head.replace(data=data, mask=None, null_count=0)
+        col = head.replace(data=data, mask=mask, null_count=0)
 
         if newsize > 0:
             col = _gdf._column_concat(objs, col)
