@@ -147,7 +147,7 @@ Calculating descriptive statistics for a `Series`.
 
 .. ipython:: python
 
-    print(s.mean(), s.var(), s.sum_of_squares())
+    print(s.mean(), s.var())
 
 
 Applymap

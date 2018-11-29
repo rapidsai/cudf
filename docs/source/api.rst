@@ -18,7 +18,7 @@ Series
 
 Groupby
 -------
-.. currentmodule:: cudf.groupby
+.. currentmodule:: cudf.groupby.groupby
 .. autoclass:: Groupby
     :members:
 
@@ -29,6 +29,6 @@ IO
 
 GpuArrowReader
 --------------
-.. currentmodule:: cudf.gpuarrow
+.. currentmodule:: cudf.comm.gpuarrow
 .. autoclass:: GpuArrowReader
     :members:
