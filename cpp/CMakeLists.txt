@@ -75,7 +75,7 @@ set_package_properties(Arrow PROPERTIES TYPE REQUIRED
     URL "https://github.com/apache/arrow")
 
 if (ARROW_FOUND)
-    message(STATUS "Apache Arrow found in $ENV{ARROW_HOME}")
+    message(STATUS "Apache Arrow found in $ENV{ARROW_INCLUDE_DIR}")
 else()
     message(FATAL_ERROR "Apache Arrow not found, please check your settings.")
 endif()
@@ -96,7 +96,7 @@ endif(GTEST_FOUND)
 
 include_directories("${GTEST_INCLUDE_DIR}"
                     "${ARROW_INCLUDE_DIR}"
-                    "${FLATBUFFERS_ROOT}"
+                    "${FLATBUFFERS_INCLUDE_DIR}"
                     "${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}"
                     "${CMAKE_BINARY_DIR}/include"
                     "${CMAKE_SOURCE_DIR}/include"
@@ -192,7 +192,7 @@ endif(CMAKE_BUILD_TYPE MATCHES Debug)
 # - link libraries --------------------------------------------------------------------------------
 
 target_link_libraries(rmm cudart cuda NVStrings)
-target_link_libraries(cudf rmm "${ARROW_STATIC_LIB}")
+target_link_libraries(cudf rmm "${ARROW_LIB}")
 
 ###################################################################################################
 # - python cffi bindings --------------------------------------------------------------------------

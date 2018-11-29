@@ -16,9 +16,6 @@
 #include <vector>
 #include <string>
 
-//TODO fixed 0.11.1 ... delete all uses of older arrow API (< 800)
-#define ARROW_VERSION 11*1000 + 1*100
-
 using namespace org::apache::arrow;
 
 namespace {

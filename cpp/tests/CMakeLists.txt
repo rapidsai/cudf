@@ -6,11 +6,11 @@ project(CUDF_TESTS LANGUAGES C CXX CUDA)
 # - compiler function -----------------------------------------------------------------------------
 
 function(ConfigureTest CMAKE_TEST_NAME CMAKE_TEST_SRC)
-    message(STATUS "${TEST_NAME} will link against: gdf  ${ARROW_STATIC_LIB}")
+    message(STATUS "${TEST_NAME} will link against: gdf  ${ARROW_LIB}")
 
     add_executable(${CMAKE_TEST_NAME} ${CMAKE_TEST_SRC})
     set_target_properties(${CMAKE_TEST_NAME} PROPERTIES POSITION_INDEPENDENT_CODE ON)
-    target_link_libraries(${CMAKE_TEST_NAME} gmock gtest gmock_main gtest_main pthread cudf rmm "${ARROW_STATIC_LIB}")
+    target_link_libraries(${CMAKE_TEST_NAME} gmock gtest gmock_main gtest_main pthread cudf rmm "${ARROW_LIB}")
     set_target_properties(${CMAKE_TEST_NAME} PROPERTIES
                             RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/gtests")
     add_test(NAME ${CMAKE_TEST_NAME} COMMAND ${CMAKE_TEST_NAME})

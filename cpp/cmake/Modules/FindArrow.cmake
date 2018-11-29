@@ -23,7 +23,8 @@
 #  ARROW_SHARED_LIB, path to libarrow's shared library
 #  ARROW_SHARED_IMP_LIB, path to libarrow's import library (MSVC only)
 #  ARROW_FOUND, whether arrow has been found
-
+#  ARROW_LIB, is an option to specify if the library is static or dynamic.
+ 
 include(FindPkgConfig)
 include(GNUInstallDirs)
 
@@ -136,6 +137,8 @@ else ()
   set(ARROW_FOUND FALSE)
 endif ()
 
+set (ARROW_LIB  "${ARROW_LIB_PATH}")
+
 if (MSVC)
   mark_as_advanced(
     ARROW_INCLUDE_DIR
@@ -145,6 +148,7 @@ if (MSVC)
     ARROW_PYTHON_STATIC_LIB
     ARROW_PYTHON_SHARED_LIB
     ARROW_PYTHON_SHARED_IMP_LIB
+    ARROW_LIB
   )
 else()
   mark_as_advanced(
@@ -153,5 +157,6 @@ else()
     ARROW_SHARED_LIB
     ARROW_PYTHON_STATIC_LIB
     ARROW_PYTHON_SHARED_LIB
+    ARROW_LIB
   )
 endif()
