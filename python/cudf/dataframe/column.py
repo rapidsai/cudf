@@ -44,14 +44,20 @@ class Column(object):
                 raise ValueError("All series must be of same type")
         # Filter out inputs that have 0 length
         objs = [o for o in objs if len(o) > 0]
+        nulls = any(o.null_count for o in objs)
         newsize = sum(map(len, objs))
-        # Concatenate data
         mem = rmm.device_array(shape=newsize, dtype=head.data.dtype)
         data = Buffer.from_empty(mem, size=newsize)
-        mask = utils.make_mask(newsize)
 
-        col = head.replace(data=data, mask=mask, null_count=0)
+        # Allocate output mask only if there's nulls in the input objects
+        mask = None
+        if nulls:
+            mask = Buffer(utils.make_mask(newsize))
 
+        # Libcudf calculates the null_count so we don't need to set it
+        col = head.replace(data=data, mask=mask)
+
+        # Performance the actual concatenation
         if newsize > 0:
             col = _gdf._column_concat(objs, col)
 
