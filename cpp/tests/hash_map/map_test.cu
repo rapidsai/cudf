@@ -28,7 +28,7 @@
 #include <cudf/functions.h>
 #include <rmm/thrust_rmm_allocator.h>
 #include <hash/concurrent_unordered_map.cuh>
-#include <groupby/aggregation_operations.cuh>
+#include <groupby/aggregation_operations.hpp>
 
 #include "tests/utilities/cudf_test_fixtures.h"
 

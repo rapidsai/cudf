@@ -23,7 +23,7 @@
 #include "dataframe/cudf_table.cuh"
 
 #include "groupby_compute_api.h"
-#include "aggregation_operations.cuh"
+#include "aggregation_operations.hpp"
 
 /* --------------------------------------------------------------------------*/
 /** 
