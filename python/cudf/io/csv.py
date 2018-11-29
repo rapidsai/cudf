@@ -19,7 +19,7 @@ def _wrap_string(text):
 
 
 def read_csv(filepath, lineterminator='\n',
-             quotechar='\0', quoting=True, doublequote=True,
+             quotechar='"', quoting=True, doublequote=True,
              delimiter=',', sep=None, delim_whitespace=False,
              skipinitialspace=False, names=None, dtype=None,
              skipfooter=0, skiprows=0, dayfirst=False):
@@ -43,14 +43,14 @@ def read_csv(filepath, lineterminator='\n',
     dtype : list of str or dict of {col: dtype}, default None
         List of data types in the same order of the column names
         or a dictionary with column_name:dtype (pandas style).
-    quotechar : char, default '\0' (empty)
+    quotechar : char, default '"'
         Character to indicate start and end of quote item.
     quoting : bool, default True
         If True, start and end quotechar are removed from returned strings
         If False, start and end quotechar are kept in returned strings
     doublequote : bool, default True
-        When quotechar is specified and quoting is True, indicate whether or not
-        to interpret two consecutive quotechar inside fields as single quotechar
+        When quotechar is specified and quoting is True, indicates whether to
+        interpret two consecutive quotechar inside fields as single quotechar
     skiprows : int, default 0
         Number of rows to be skipped from the start of file.
     skipfooter : int, default 0
@@ -155,7 +155,7 @@ def read_csv(filepath, lineterminator='\n',
 
 
 def read_csv_strings(filepath, lineterminator='\n',
-                     quotechar='\0', quoting=True, doublequote=True,
+                     quotechar='"', quoting=True, doublequote=True,
                      delimiter=',', sep=None, delim_whitespace=False,
                      skipinitialspace=False, names=None, dtype=None,
                      skipfooter=0, skiprows=0, dayfirst=False):

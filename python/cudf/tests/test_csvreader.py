@@ -204,7 +204,7 @@ def test_csv_reader_strings_quotechars(tmpdir):
         fp.write('\n'.join(lines) + '\n')
 
     cols = read_csv_strings(str(fname), names=names, dtype=dtypes, skiprows=1,
-	                        quotechar='\"', quoting=True)
+                            quotechar='\"', quoting=True)
 
     assert(len(cols) == 2)
     assert(type(cols[0]) == nvstrings.nvstrings)
