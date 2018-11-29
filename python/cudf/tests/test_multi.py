@@ -39,7 +39,7 @@ def make_frames(index=None, nulls='none'):
 @pytest.mark.parametrize('index', [False, 'z', 'y'])
 def test_concat(index, nulls):
     if index == 'y' and nulls in ('some', 'all'):
-        pytest.mark.skip(reason='nulls in columns, dont index')
+        pytest.skip('nulls in columns, dont index')
     df, df2, gdf, gdf2 = make_frames(index, nulls=nulls)
     # Make empty frame
     gdf_empty1 = gdf2[:0]
