@@ -167,3 +167,23 @@ def test_csv_reader_negative_vals(tmpdir):
     np.testing.assert_allclose(zero, df['0'])
     np.testing.assert_allclose(one, df['1'])
     np.testing.assert_allclose(two, df['2'])
+
+def test_csv_reader_num_formats_euro(tmpdir):
+    fname = tmpdir.mkdir("gdf_csv").join("tmp_csvreader_file7.csv")
+
+    names = ['comma', 'dot']
+    dtypes = ['float32', 'float32']
+    lines = [';'.join(names),
+             '1,1;2.2',
+             '3,3;4.4']
+
+    with open(str(fname), 'w') as fp:
+        fp.write('\n'.join(lines) + '\n')
+
+    commas = [1.1, 3.3]
+    dots = [2.2, 4.4]
+
+    df = read_csv(str(fname), names=names, dtype=dtypes, skiprows=1, delimiter=';', decimal=',')
+
+    np.testing.assert_allclose(commas, df['comma'])
+    np.testing.assert_allclose(dots, df['dot'])

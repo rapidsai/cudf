@@ -21,7 +21,7 @@ def _wrap_string(text):
 def read_csv(filepath, lineterminator='\n',
              delimiter=',', sep=None, delim_whitespace=False,
              skipinitialspace=False, names=None, dtype=None,
-             skipfooter=0, skiprows=0, dayfirst=False):
+             skipfooter=0, skiprows=0, dayfirst=False, thousands=None, decimal='.'):
     """
     Load and parse a CSV file into a DataFrame
 
@@ -114,6 +114,8 @@ def read_csv(filepath, lineterminator='\n',
     csv_reader.num_cols = len(names)
     csv_reader.skiprows = skiprows
     csv_reader.skipfooter = skipfooter
+    csv_reader.decimal = decimal.encode()
+    csv_reader.thousands = thousands.encode() if thousands else ffi.NULL;
 
     # Call read_csv
     libgdf.read_csv(csv_reader)

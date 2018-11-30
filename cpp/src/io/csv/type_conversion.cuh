@@ -133,10 +133,10 @@ T convertStrtoFloat(char *data, long start_idx, long end_idx) {
 
 		while(idx > (start_idx - 1))
 		{
-			if (data[idx] != ',') {
+			//if (data[idx] != ',') {
 				answer += (data[idx] -'0') * pow(10, powSize);
 				++powSize;
-			}
+			//}
 			--idx;
 		}
 	}
@@ -148,10 +148,10 @@ T convertStrtoFloat(char *data, long start_idx, long end_idx) {
 
 		while(idx < (end_idx + 1))
 		{
-			if (data[idx] != ',') {
+			//if (data[idx] != ',') {
 				answer += (data[idx] -'0') * pow(10, powSize);
 				--powSize;
-			}
+			//}
 
 			++idx;
 		}
