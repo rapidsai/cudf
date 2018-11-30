@@ -4,15 +4,11 @@ from itertools import product
 import numpy as np
 
 from librmm_cffi import librmm as rmm
+from librmm_cffi import librmm_config as rmm_cfg
 
 from .utils import gen_rand
 
-_dtypes = [np.int32]
-_nelems = [1, 2, 7, 8, 9, 32, 128]
-
-
-@pytest.mark.parametrize('dtype,nelem', list(product(_dtypes, _nelems)))
-def test_rmm_alloc(dtype, nelem):
+def array_tester(dtype, nelem):
     # data
     h_in = gen_rand(dtype, nelem)
     h_result = gen_rand(dtype, nelem)
@@ -29,6 +25,25 @@ def test_rmm_alloc(dtype, nelem):
     print(h_result)
 
     np.testing.assert_array_equal(h_result, h_in)
+
+_dtypes = [np.int32]
+_nelems = [1, 2, 7, 8, 9, 32, 128]
+
+
+@pytest.mark.parametrize('dtype,nelem', list(product(_dtypes, _nelems)))
+def test_rmm_alloc(dtype, nelem):
+    array_tester(dtype, nelem)
+
+
+@pytest.mark.parametrize('managed, pool', 
+                         list(product([False, True], [False, True])))
+def test_rmm_modes(managed, pool):
+    rmm.finalize()
+    rmm_cfg.use_managed_memory = managed
+    rmm_cfg.use_pool_allocator = pool
+    rmm.initialize()
+
+    array_tester(np.int32, 128)
 
 
 def test_rmm_csv_log():

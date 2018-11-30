@@ -25,6 +25,13 @@
 # False means to use default cudaMalloc
 use_pool_allocator = False
 
+# Whether to use managed memory for base allocation
+# True means to use cudaMallocManaged
+# False means to use cudaMalloc
+# Can be combined with use_pool_allocator to 
+# create a managed memory pool allocator
+use_managed_memory = False
+
 # When `use_pool_allocator` is true, this indicates the initial pool size.
 # Zero is used to indicate the default size, which currently is 1/2 total GPU
 # memory.

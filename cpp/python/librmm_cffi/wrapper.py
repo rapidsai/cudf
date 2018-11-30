@@ -77,8 +77,14 @@ class _RMMWrapper(object):
         """Initializes the RMM library using the options set in the
            librmm_config module
         """
+        allocation_mode = 0
+        if rmm_cfg.use_pool_allocator:
+            allocation_mode = allocation_mode | self.PoolAllocation
+        if rmm_cfg.use_managed_memory:
+            allocation_mode = allocation_mode | self.CudaManagedMemory
+        
         opts = self._ffi.new("rmmOptions_t *",
-                             [rmm_cfg.use_pool_allocator,
+                             [allocation_mode,
                               rmm_cfg.initial_pool_size,
                               rmm_cfg.enable_logging])
         return self.rmmInitialize(opts)
