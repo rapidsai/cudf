@@ -174,6 +174,39 @@ def test_dataframe_column_name_indexing():
             assert(pdf[list(idx)].equals(df[list(idx)].to_pandas()))
 
 
+def test_dataframe_drop_method():
+    df = DataFrame()
+    data = np.asarray(range(10))
+    df['a'] = data
+    df['b'] = data
+    df['c'] = data
+
+    # Test drop with inplace=False
+    assert tuple(df.columns) == ('a', 'b', 'c')
+    assert tuple(df.drop('a').columns) == ('b', 'c')
+    assert tuple(df.columns) == ('a', 'b', 'c')
+    assert tuple(df.drop(['a', 'b']).columns) == ('c',)
+    assert tuple(df.columns) == ('a', 'b', 'c')
+
+
+    # Test drop with inplace=True
+    df.drop('a',inplace=True)
+    assert tuple(df.columns) == ('b', 'c')
+    df['a'] = data
+    df.drop(['a', 'c'], inplace=True)
+    assert tuple(df.columns) == ('b',)
+    df['a'] = data
+    df['c'] = data
+
+    # Test drop error
+    with pytest.raises(NameError) as raises:
+        df.drop('d')
+    raises.match("column 'd' does not exist")
+    with pytest.raises(NameError) as raises:
+        df.drop(['a', 'd', 'b'])
+    raises.match("column 'd' does not exist")
+
+
 def test_dataframe_column_add_drop():
     df = DataFrame()
     data = np.asarray(range(10))
