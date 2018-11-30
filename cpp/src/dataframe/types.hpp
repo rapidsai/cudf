@@ -46,6 +46,9 @@ namespace detail
      * @brief Base wrapper structure to emulate "strong typedefs" for gdf_dtype values 
      * that do not correspond to fundamental types.
      * 
+     * Implements operators that allow the wrapper to be used as if it were a fundamental
+     * type.
+     * 
      * @tparam T  The type of the wrapped value
      * @tparam type_id  The wrapped gdf_dtype
      */
