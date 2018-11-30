@@ -10,11 +10,11 @@ Please see the [Demo Docker Repository](https://hub.docker.com/r/rapidsai/rapids
 
 ## Install cuDF
 
-### Conda
+#### Conda
 
-You can get a minimal conda installation with [Miniconda](https://conda.io/miniconda.html) or get the full installation with [Anaconda](https://www.anaconda.com/download).
+It is easy to install cuDF using conda. You can get a minimal conda installation with [Miniconda](https://conda.io/miniconda.html) or get the full installation with [Anaconda](https://www.anaconda.com/download).
 
-You can install and update cuDF using the conda command:
+Install and update cuDF using the conda command:
 
 ```bash
 conda install -c nvidia -c rapidsai -c numba -c conda-forge -c defaults cudf=0.3.0
@@ -22,29 +22,13 @@ conda install -c nvidia -c rapidsai -c numba -c conda-forge -c defaults cudf=0.3
 
 Note: This conda installation only applies to Linux and Python versions 3.5/3.6.
 
-You can create and activate a development environment using the conda commands:
-
-```bash
-# create the conda environment (assuming in base `cudf` directory)
-$ conda env create --name cudf_dev --file conda/environments/dev_py35.yml
-# activate the environment
-$ source activate cudf_dev
-# when not using default arrow version 0.10.0, run
-$ conda install -c nvidia -c rapidsai -c numba -c conda-forge -c defaults pyarrow=$ARROW_VERSION
-```
-
-This installs the required `cmake`, `nvstrings`, `pyarrow` and other
-dependencies into the `cudf_dev` conda environment and activates it.
-
-### Pip
+#### Pip
 
 Support is coming soon, please use conda for the time being.
 
 ## Development Setup
 
-The following instructions are tested on Linux Ubuntu 16.04 & 18.04, to enable
-from source builds and development. Other operatings systems may be compatible,
-but are not currently supported.
+The following instructions are for developers and contributors to cuDF OSS development. These instructions are tested on Linux Ubuntu 16.04 & 18.04. Use these instructions to build cuDF from source and contribute to its development.  Other operatings systems may be compatible, but are not currently supported.
 
 ### Get libcudf Dependencies
 
@@ -62,8 +46,7 @@ CUDA/GPU requirements:
 
 You can obtain CUDA from [https://developer.nvidia.com/cuda-downloads](https://developer.nvidia.com/cuda-downloads)
 
-Since `cmake` will download and build Apache Arrow (version 0.7.1 or
-0.8+) you may need to install Boost C++ (version 1.58+) before running
+Since `cmake` will download and build Apache Arrow (version 0.7.1 or 0.8+) you may need to install Boost C++ (version 1.58+) before running
 `cmake`:
 
 ```bash
@@ -78,6 +61,44 @@ or
 $ conda install -c conda-forge boost
 ```
 
+## Script to build cuDF from source
+
+```
+# environment vars
+export CUDA_HOME=/usr/local/cuda-10.0
+export CONDA_PREFIX=~/anaconda3/envs/cudf_dev
+export CUDACXX=$CUDA_HOME/bin/nvcc
+export NUMBAPRO_NVVM=$CUDA_HOME/nvvm/lib64/libnvvm.so
+export NUMBAPRO_LIBDEVICE=$CUDA_HOME/nvvm/libdevice/
+
+# recursively clone repository
+git clone --recurse-submodules https://github.com/rapidsai/cudf.git
+cd cudf
+# create the conda environment (assuming in base `cudf` directory)
+conda env create --name cudf_dev --file conda/environments/dev_py35.yml
+# activate the environment
+source activate cudf_dev
+# # when not using default arrow version 0.10.0, run
+# conda install -c nvidia -c rapidsai -c numba -c conda-forge -c defaults pyarrow=$ARROW_VERSION
+# Thomson comment above: we don't need special arrow instructions, since arrow will be installed by the installer? We could create a FAQ section to move errata like this.
+cd cpp
+mkdir build
+cd build
+cmake .. -DCMAKE_INSTALL_PREFIX=$CONDA_PREFIX
+make -j
+make install
+make test
+make python_cffi
+make install_python
+cd python && py.test -v
+cd ../../python
+python setup.py build_ext --inplace
+py.test -v
+python setup.py install
+```
+
+Thomson comment: Should we simply place this all into a configuration script for developers? I think that's my preference. Then, updating developer setup is a function of whether or not the script has the intended function. Opinions?
+
 ### Build from Source
 
 To install cuDF from source, ensure the dependencies are met and follow the steps below:
@@ -87,7 +108,7 @@ To install cuDF from source, ensure the dependencies are met and follow the step
 git clone --recurse-submodules https://github.com/rapidsai/cudf.git
 cd cudf
 ```
-2. Create the conda development environment `cudf` as detailed above
+2. Create the conda development environment `cudf_dev` as detailed above
 3. Build and install `libcudf`
 ```bash
 $ cd /path/to/cudf/cpp                              # navigate to C/C++ CUDA source root directory
