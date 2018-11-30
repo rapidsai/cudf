@@ -233,7 +233,7 @@ namespace{
     template <typename T>
     auto operator()()
     {
-      return sizeof(cudf::detail::unwrap(T{}));
+      return sizeof(T);
     }
   };
 }

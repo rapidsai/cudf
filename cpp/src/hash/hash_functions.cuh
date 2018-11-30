@@ -17,6 +17,8 @@
 #ifndef HASH_FUNCTIONS_CUH
 #define HASH_FUNCTIONS_CUH
 
+#include "dataframe/types.hpp"
+
 using hash_value_type = uint32_t;
 
 //MurmurHash3_32 implementation from https://github.com/aappleby/smhasher/blob/master/src/MurmurHash3.cpp 
@@ -156,7 +158,7 @@ struct IdentityHash
     __forceinline__ 
     __host__ __device__ result_type operator()(const Key& key) const
     {
-      return static_cast<result_type>(key);
+      return static_cast<result_type>(cudf::detail::unwrap(key));
     }
 };
 

@@ -40,76 +40,157 @@
 namespace cudf
 {
 
-  namespace detail
-  {
-    /**
+namespace detail
+{
+/**
      * @brief Base wrapper structure to emulate "strong typedefs" for gdf_dtype values 
      * that do not correspond to fundamental types.
      * 
      * @tparam T  The type of the wrapped value
      * @tparam type_id  The wrapped gdf_dtype
      */
-    template <typename T, gdf_dtype type_id>
-    struct wrapper
-    {
-      static constexpr gdf_dtype element_type_id{type_id}; ///< The wrapped gdf_dtype
-      using value_type = T; ///< The underlying fundamental type of the wrapper
-      value_type value; ///< The wrapped value
-    };
-  } // namespace detail
+template <typename T, gdf_dtype type_id>
+struct wrapper
+{
+  static constexpr gdf_dtype element_type_id{type_id}; ///< The wrapped gdf_dtype
+  using value_type = T;                                ///< The underlying fundamental type of the wrapper
+  value_type value;                                    ///< The wrapped value
 
-  struct category : detail::wrapper<gdf_category, GDF_CATEGORY>
-  {
-  };
+  CUDA_HOST_DEVICE_CALLABLE
+  explicit wrapper(T v): value{v} {}
 
-  struct timestamp : detail::wrapper<gdf_timestamp, GDF_TIMESTAMP>
-  {
-  };
+  CUDA_HOST_DEVICE_CALLABLE
+  wrapper(wrapper const& w): value(w.value) {}
 
-  struct date32 : detail::wrapper<gdf_date32, GDF_DATE32>
-  {
-  };
+  CUDA_HOST_DEVICE_CALLABLE
+  wrapper(): value{value_type(0)}{}
 
-  struct date64 : detail::wrapper<gdf_date64, GDF_DATE64>
-  {
-  };
+  CUDA_HOST_DEVICE_CALLABLE
+  explicit operator value_type() const { return this->value; }
 
-  namespace detail
+  CUDA_HOST_DEVICE_CALLABLE
+  wrapper& operator=(wrapper const &w)
   {
-    /* --------------------------------------------------------------------------*/
-    /** 
+    this->value = w.value;
+    return *this;
+  }
+
+  CUDA_HOST_DEVICE_CALLABLE
+  wrapper& operator+=(wrapper const &w)
+  {
+    this->value += w.value;
+    return *this;
+  }
+
+  CUDA_HOST_DEVICE_CALLABLE
+  wrapper& operator-=(wrapper const &w)
+  {
+    this->value -= w.value;
+    return *this;
+  }
+
+  CUDA_HOST_DEVICE_CALLABLE
+  wrapper& operator*=(wrapper const &w)
+  {
+    this->value *= w.value;
+    return *this;
+  }
+
+  CUDA_HOST_DEVICE_CALLABLE
+  wrapper& operator/=(wrapper const &w)
+  {
+    this->value /= w.value;
+    return *this;
+  }
+
+  CUDA_HOST_DEVICE_CALLABLE
+  bool operator==(wrapper const &w) const { return this->value == w.value; }
+
+  CUDA_HOST_DEVICE_CALLABLE
+  bool operator!=(wrapper const &w) const { return this->value != w.value; }
+
+  CUDA_HOST_DEVICE_CALLABLE
+  bool operator<=(wrapper const &w) const { return this->value <= w.value; }
+
+  CUDA_HOST_DEVICE_CALLABLE
+  bool operator>=(wrapper const &w) const { return this->value >= w.value; }
+
+  CUDA_HOST_DEVICE_CALLABLE
+  bool operator<(wrapper const &w) const { return this->value < w.value; }
+
+  CUDA_HOST_DEVICE_CALLABLE
+  wrapper operator+(wrapper const &w) const { return wrapper(this->value + w.value); }
+
+  CUDA_HOST_DEVICE_CALLABLE
+  wrapper operator-(wrapper const &w) const { return wrapper(this->value - w.value); }
+
+  CUDA_HOST_DEVICE_CALLABLE
+  wrapper operator*(wrapper const &w) const { return wrapper(this->value * w.value); }
+
+  CUDA_HOST_DEVICE_CALLABLE
+  wrapper operator/(wrapper const &w) const { return wrapper(this->value / w.value); }
+
+  friend std::ostream &operator<<(std::ostream &os, wrapper<T, type_id> const &w)
+  {
+    return os << w.value;
+  }
+};
+} // namespace detail
+
+struct category : detail::wrapper<gdf_category, GDF_CATEGORY>
+{
+};
+
+struct timestamp : detail::wrapper<gdf_timestamp, GDF_TIMESTAMP>
+{
+};
+
+struct date32 : detail::wrapper<gdf_date32, GDF_DATE32>
+{
+};
+
+struct date64 : detail::wrapper<gdf_date64, GDF_DATE64>
+{
+};
+
+namespace detail
+{
+/* --------------------------------------------------------------------------*/
+/** 
      * @brief  Returns a reference to the underlying "value" member of a wrapper struct
      * 
      * @Param[in] wrapped A non-const reference to the wrapper struct to unwrap
      * 
      * @Returns A reference to the underlying wrapped value  
      */
-    /* ----------------------------------------------------------------------------*/
-    template <typename T, gdf_dtype type_id>
-    CUDA_HOST_DEVICE_CALLABLE
-    typename wrapper<T,type_id>::value_type& unwrap(wrapper<T,type_id>& wrapped)
-    {
-      return wrapped.value;
-    }
+/* ----------------------------------------------------------------------------*/
+template <typename T, gdf_dtype type_id>
+CUDA_HOST_DEVICE_CALLABLE
+    typename wrapper<T, type_id>::value_type &
+    unwrap(wrapper<T, type_id> &wrapped)
+{
+  return wrapped.value;
+}
 
-    /* --------------------------------------------------------------------------*/
-    /** 
+/* --------------------------------------------------------------------------*/
+/** 
      * @brief  Returns a reference to the underlying "value" member of a wrapper struct
      * 
      * @Param[in] wrapped A const reference to the wrapper struct to unwrap
      * 
      * @Returns A const reference to the underlying wrapped value  
      */
-    /* ----------------------------------------------------------------------------*/
-    template <typename T, gdf_dtype type_id>
-    CUDA_HOST_DEVICE_CALLABLE
-    typename wrapper<T,type_id>::value_type const& unwrap(wrapper<T,type_id> const& wrapped)
-    {
-      return wrapped.value;
-    }
+/* ----------------------------------------------------------------------------*/
+template <typename T, gdf_dtype type_id>
+CUDA_HOST_DEVICE_CALLABLE
+    typename wrapper<T, type_id>::value_type const &
+    unwrap(wrapper<T, type_id> const &wrapped)
+{
+  return wrapped.value;
+}
 
-    /* --------------------------------------------------------------------------*/
-    /** 
+/* --------------------------------------------------------------------------*/
+/** 
      * @brief Passthrough function for fundamental types
      *
      * This specialization of "unwrap" is provided such that it can be used in generic
@@ -120,18 +201,18 @@ namespace cudf
      * 
      * @Returns Reference to the value passed in
      */
-    /* ----------------------------------------------------------------------------*/
-    template <typename T>
-    CUDA_HOST_DEVICE_CALLABLE
-    typename std::enable_if_t< std::is_fundamental< typename std::decay<T>::type >::value, 
-                               T>& 
-    unwrap(T& value)
-    {
-      return value;
-    }
+/* ----------------------------------------------------------------------------*/
+template <typename T>
+CUDA_HOST_DEVICE_CALLABLE
+    typename std::enable_if_t<std::is_fundamental<typename std::decay<T>::type>::value,
+                              T> &
+    unwrap(T &value)
+{
+  return value;
+}
 
-    /* --------------------------------------------------------------------------*/
-    /** 
+/* --------------------------------------------------------------------------*/
+/** 
      * @brief Passthrough function for fundamental types
      *
      * This specialization of "unwrap" is provided such that it can be used in generic
@@ -142,16 +223,16 @@ namespace cudf
      * 
      * @Returns const reference to the value passed in
      */
-    /* ----------------------------------------------------------------------------*/
-    template <typename T>
-    CUDA_HOST_DEVICE_CALLABLE
-    typename std::enable_if_t< std::is_fundamental< typename std::decay<T>::type >::value, 
-                               T> const& 
-    unwrap(T const& value)
-    {
-      return value;
-    }
-  } // namespace detail
+/* ----------------------------------------------------------------------------*/
+template <typename T>
+CUDA_HOST_DEVICE_CALLABLE
+    typename std::enable_if_t<std::is_fundamental<typename std::decay<T>::type>::value,
+                              T> const &
+    unwrap(T const &value)
+{
+  return value;
+}
+} // namespace detail
 } // namespace cudf
 
 #endif
