@@ -28,6 +28,7 @@
 #include "sort_join.cuh"
 #include "join_compute_api.h"
 #include "join_types.h"
+#include "../dataframe/type_dispatcher.hpp"
 
  /* --------------------------------------------------------------------------*/
  /**
@@ -98,9 +99,11 @@ gdf_error join_sort(gdf_column *leftcol, gdf_column *rightcol,
                     gdf_column * const output_r,
                     bool flip_indices = false)
 {
-  return compute_sort_join<join_type, output_index_type>(output_l,
-                                                         output_r, 
-                                                         leftcol, 
-                                                         rightcol, 
-                                                         flip_indices);
+  compute_sort_join<join_type, output_index_type> join_call;
+  return cudf::type_dispatcher(
+          leftcol->dtype,
+          join_call,
+          output_l, output_r,
+          leftcol, rightcol,
+          flip_indices);
 }

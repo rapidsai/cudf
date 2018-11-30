@@ -296,7 +296,7 @@ gdf_error sort_join_typed(
 
 /* ----------------------------------------------------------------------------*/
 /**
- * @Synopsis  Wrapper around typed sort based join call
+ * @Synopsis  Struct wrapper around typed sort based join call
  *
  * @Param output_l The left index output of join
  * @Param output_r The right index output of join
@@ -309,29 +309,17 @@ gdf_error sort_join_typed(
  *
  * @Returns Upon successful computation, returns GDF_SUCCESS. Otherwise returns appropriate error code 
  */
-/* ----------------------------------------------------------------------------*/
 template<JoinType join_type,
     typename index_type>
-gdf_error compute_sort_join(
+struct compute_sort_join {
+    template <typename column_type>
+    gdf_error operator()(
         gdf_column * const output_l,
         gdf_column * const output_r,
         gdf_column * const lcol,
         gdf_column * const rcol,
         bool flip = false) {
-    gdf_dtype dtype = lcol->dtype;
-
-    switch(dtype)
-    {
-      case GDF_INT8:      { return sort_join_typed<join_type, int8_t , index_type>(output_l, output_r, lcol, rcol, flip); }
-      case GDF_INT16:     { return sort_join_typed<join_type, int16_t, index_type>(output_l, output_r, lcol, rcol, flip); }
-      case GDF_INT32:     { return sort_join_typed<join_type, int32_t, index_type>(output_l, output_r, lcol, rcol, flip); }
-      case GDF_INT64:     { return sort_join_typed<join_type, int64_t, index_type>(output_l, output_r, lcol, rcol, flip); }
-      case GDF_FLOAT32:   { return sort_join_typed<join_type, float  , index_type>(output_l, output_r, lcol, rcol, flip); }
-      case GDF_FLOAT64:   { return sort_join_typed<join_type, double , index_type>(output_l, output_r, lcol, rcol, flip); }
-      case GDF_DATE32:    { return sort_join_typed<join_type, int32_t, index_type>(output_l, output_r, lcol, rcol, flip); }
-      case GDF_DATE64:    { return sort_join_typed<join_type, int64_t, index_type>(output_l, output_r, lcol, rcol, flip); }
-      case GDF_TIMESTAMP: { return sort_join_typed<join_type, int64_t, index_type>(output_l, output_r, lcol, rcol, flip); }
-      case GDF_CATEGORY:  { return sort_join_typed<join_type, int32_t, index_type>(output_l, output_r, lcol, rcol, flip); }
-      default: return GDF_UNSUPPORTED_DTYPE;
+        using T = typename std::decay<decltype(cudf::detail::unwrap(column_type{}) )>::type;
+        return sort_join_typed<join_type, T, index_type>(output_l, output_r, lcol, rcol, flip);
     }
-}
+};
