@@ -171,37 +171,17 @@ def test_csv_reader_negative_vals(tmpdir):
     np.testing.assert_allclose(one, df['1'])
     np.testing.assert_allclose(two, df['2'])
 
-<<<<<<< HEAD
-def test_csv_reader_num_formats_euro(tmpdir):
-    fname = tmpdir.mkdir("gdf_csv").join("tmp_csvreader_file7.csv")
-
-    names = ['comma', 'dot']
-    dtypes = ['float32', 'float32']
-    lines = [';'.join(names),
-             '1,1;2.2',
-             '3,3;4.4']
-=======
-
 def test_csv_reader_strings(tmpdir):
     fname = tmpdir.mkdir("gdf_csv").join("tmp_csvreader_file7.csv")
 
     names = ['text', 'int']
     dtypes = ['str', 'int']
     lines = [','.join(names), 'a,0', 'b,0', 'c,0', 'd,0']
->>>>>>> dae6026475aa19947fcf46c792cd11a18a32c43b
 
     with open(str(fname), 'w') as fp:
         fp.write('\n'.join(lines) + '\n')
 
-<<<<<<< HEAD
-    commas = [1.1, 3.3]
-    dots = [2.2, 4.4]
 
-    df = read_csv(str(fname), names=names, dtype=dtypes, skiprows=1, delimiter=';', decimal=',')
-
-    np.testing.assert_allclose(commas, df['comma'])
-    np.testing.assert_allclose(dots, df['dot'])
-=======
     cols = read_csv_strings(str(fname), names=names, dtype=dtypes, skiprows=1)
 
     assert(len(cols) == 2)
@@ -211,7 +191,6 @@ def test_csv_reader_strings(tmpdir):
     assert(cols[0].sublist([1]).to_host()[0] == 'b')
     assert(cols[0].sublist([2]).to_host()[0] == 'c')
     assert(cols[0].sublist([3]).to_host()[0] == 'd')
-
 
 def test_csv_reader_strings_quotechars(tmpdir):
     fname = tmpdir.mkdir("gdf_csv").join("tmp_csvreader_file8.csv")
@@ -235,7 +214,7 @@ def test_csv_reader_strings_quotechars(tmpdir):
     assert(cols[0].sublist([3]).to_host()[0] == 'f,,!.,')
 
 def test_csv_reader_num_formats_euro(tmpdir):
-    fname = tmpdir.mkdir("gdf_csv").join("tmp_csvreader_file7.csv")
+    fname = tmpdir.mkdir("gdf_csv").join("tmp_csvreader_file9.csv")
 
     names = ['comma', 'dot']
     dtypes = ['float32', 'float32']
