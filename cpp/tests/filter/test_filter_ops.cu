@@ -116,7 +116,7 @@ struct GpuApplyStencilTest : public GdfTest {
 
     void compute_reference_solution() {
         for (size_t index = 0 ; index < host_vector.size() ; index++) {
-            if (host_stencil_vector[index] == 1 && gdf_is_valid(host_stencil_valid.get(), index) && gdf_is_valid(host_valid.get(), index) ){
+            if (host_stencil_vector[index] == 1 && gdf_is_valid(host_stencil_valid.get(), index) ){
                 reference_vector.push_back(host_vector[index]);
             }
         }
