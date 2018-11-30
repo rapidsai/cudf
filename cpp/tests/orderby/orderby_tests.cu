@@ -48,8 +48,6 @@ struct OrderByTest : public GdfTest
   // The sorting order for each column is passed via a member of the template argument class
   std::vector<char> sort_order_types;
 
-  gdf_context ctxt = {0, static_cast<gdf_method>(0), 0, 0, 0, test_parameters::nulls_are_smallest};
-
   // multi_column_t is a tuple of vectors. The number of vectors in the tuple
   // determines the number of columns to be ordered by, and the value_type of each
   // vector determines the data type of the column
@@ -201,7 +199,7 @@ struct OrderByTest : public GdfTest
   void create_input( size_t orderby_column_length, size_t orderby_column_range,
                      const gdf_size_type n_count = 0, bool random_order_type_values = true, bool print = false)
   {
-    initialize_tuple(orderby_columns, orderby_column_length, orderby_column_range, ctxt.flag_sorted);
+    initialize_tuple(orderby_columns, orderby_column_length, orderby_column_range);
 
     auto n_columns = std::tuple_size<multi_column_t>::value;
     initialize_valids(orderby_valids, n_columns, orderby_column_length, n_count);
@@ -315,12 +313,12 @@ struct OrderByTest : public GdfTest
   /**
    * @Synopsis  Computes the result of sorting the set of columns with the libgdf functions
    *
-   * @Param use_default_sort_order_method Whether to use gdf_order_by or gdf_order_by_asc_desc
+   * @Param use_gdf_order_by_method Whether to use gdf_order_by or gdf_order_by_asc_desc
    *                                      libgdf sort function
    * @Param print Option to print the result computed by the libgdf function
    */
   /* ----------------------------------------------------------------------------*/
-  std::vector<size_t> compute_gdf_result(bool use_default_sort_order_method = false, bool print = false, gdf_error expected_result = GDF_SUCCESS)
+  std::vector<size_t> compute_gdf_result(bool use_gdf_order_by_method = false, bool print = false, gdf_error expected_result = GDF_SUCCESS)
   {
     const int num_columns = std::tuple_size<multi_column_t>::value;
 
@@ -330,18 +328,18 @@ struct OrderByTest : public GdfTest
     gdf_column* sort_order_types = gdf_raw_sort_order_types;
     gdf_column* sorted_indices_output = gdf_raw_output_indices_column;
 
-    if (use_default_sort_order_method) {
+    if (use_gdf_order_by_method) {
       result_error = gdf_order_by(columns_to_sort,
                                   num_columns,
                                   sorted_indices_output,
-                                  &ctxt);
+                                  nulls_are_smallest);
     }
     else {
       result_error = gdf_order_by_asc_desc(columns_to_sort,
-                                           (char*)sort_order_types->data,
+                                           (char*)(sort_order_types->data),
                                            num_columns,
                                            sorted_indices_output,
-                                           &ctxt);
+                                           nulls_are_smallest);
     }
     
     EXPECT_EQ(expected_result, result_error) << "The gdf order by function did not complete successfully";
@@ -610,52 +608,3 @@ TYPED_TEST(OrderByTest, EmptyColumnsDefaultSort)
     EXPECT_EQ(reference_result[i], gdf_result[i]);
   }
 }
-
-// // The below tests check correct reporting of missing valid pointer
-
-// // Create a new derived class from OrderByTest so we can do a new Typed Test set of tests
-// template <class test_parameters>
-// struct JoinValidTest : public OrderByTest<test_parameters>
-// { };
-
-// using ValidTestImplementation = testing::Types< TestParameters< join_op::INNER, SORT, VTuple<int32_t >>,
-//                                                 TestParameters< join_op::LEFT , SORT, VTuple<int32_t >>,
-//                                                 TestParameters< join_op::FULL , SORT, VTuple<int32_t >> >;
-
-// TYPED_TEST_CASE(JoinValidTest, ValidTestImplementation);
-
-// TYPED_TEST(JoinValidTest, ReportValidMaskError)
-// {
-//   this->create_input(1000,100,
-//                      100,100,
-//                      false, 1);
-
-//   std::vector<size_t> gdf_result = this->compute_gdf_result(false, true, GDF_VALIDITY_UNSUPPORTED);
-// }
-
-
-// // The below tests are for testing inputs that are at or above the maximum input size possible
-
-// // Create a new derived class from OrderByTest so we can do a new Typed Test set of tests
-// template <class test_parameters>
-// struct MaxOrderByTest : public OrderByTest<test_parameters>
-// { };
-
-// // Only test for single column inputs for Inner and Left joins because these tests take a long time
-// using MaxImplementations = testing::Types< TestParameters< join_op::INNER, HASH, VTuple<int32_t >>,
-//                                            TestParameters< join_op::LEFT, HASH, VTuple<int32_t >> >;
-
-// TYPED_TEST_CASE(MaxOrderByTest, MaxImplementations);
-
-// TYPED_TEST(MaxOrderByTest, HugeJoinSize)
-// {
-//   // FIXME The maximum input join size should be std::numeric_limits<int>::max() - 1,
-//   // however, this will currently cause OOM on a GV100 as it will attempt to allocate
-//   // a 34GB hash table. Therefore, use a 2^29 input to make sure we can handle big
-//   // inputs until we can better handle OOM errors
-//   // The CI Server only has a 16GB GPU, therefore need to use 2^29 input size
-//   const size_t right_table_size = 1<<29;
-//   this->create_input(100, RAND_MAX,
-//                      right_table_size, RAND_MAX);
-//   std::vector<size_t> gdf_result = this->compute_gdf_result();
-// }

@@ -32,7 +32,7 @@ namespace{ //annonymus
                                size_t ncols,
                                char* asc_desc,
                                gdf_column* output_indices,
-                               gdf_context* ctxt)
+                               bool flag_nulls_are_smallest)
   {
     //TODO: don't assume type of output is size_t
     //TODO: make these allocations happen with the new memory manager when we can
@@ -67,8 +67,8 @@ namespace{ //annonymus
                    ncols,
                    cols[0]->size,
                    have_nulls,
-                   (size_t *) output_indices->data,
-                   (ctxt ? ctxt->flag_nulls_are_smallest : false));
+                   (size_t*)(output_indices->data),
+                   flag_nulls_are_smallest);
 
     return GDF_SUCCESS;
   }
@@ -81,7 +81,8 @@ namespace{ //annonymus
  * 
  * @Param[in] cols Host-side array of gdf_columns
  * @Param[in] ncols # columns
- * @Param[in] ctxt Struct with additional info: bool flag_nulls_are_smallest
+ * @Param[in] flag_nulls_are_smallest Flag to indicate if nulls are to be considered
+ * smaller than non-nulls or viceversa
  * @Param[out] output_indices Pre-allocated gdf_column to be filled
  * with sorted indices
  * 
@@ -91,9 +92,9 @@ namespace{ //annonymus
 gdf_error gdf_order_by(gdf_column** cols,
                        size_t ncols,
                        gdf_column* output_indices,
-                       gdf_context* ctxt)
+                       int flag_nulls_are_smallest)
 {
-  return multi_col_order_by(cols, ncols, nullptr, output_indices, ctxt);
+  return multi_col_order_by(cols, ncols, nullptr, output_indices, flag_nulls_are_smallest);
 }
 
 /* --------------------------------------------------------------------------*/
@@ -104,7 +105,8 @@ gdf_error gdf_order_by(gdf_column** cols,
  * @Param[in] asc_desc Device array of sort order types for each column
  * (0 is ascending order and 1 is descending)
  * @Param[in] ncols # columns
- * @Param[in] ctxt Struct with additional info: bool flag_nulls_are_smallest
+ * @Param[in] flag_nulls_are_smallest Flag to indicate if nulls are to be considered
+ * smaller than non-nulls or viceversa
  * @Param[out] output_indices Pre-allocated gdf_column to be filled
  * with sorted indices
  * 
@@ -112,10 +114,10 @@ gdf_error gdf_order_by(gdf_column** cols,
  */
 /* ----------------------------------------------------------------------------*/
 gdf_error gdf_order_by_asc_desc(gdf_column** cols,
-		                            char* asc_desc,
+                                char* asc_desc,
                                 size_t ncols,
                                 gdf_column* output_indices,
-		                            gdf_context* ctxt)
+                                int flag_nulls_are_smallest)
 {
-  return multi_col_order_by(cols, ncols, asc_desc, output_indices, ctxt);
+  return multi_col_order_by(cols, ncols, asc_desc, output_indices, flag_nulls_are_smallest);
 }

@@ -165,7 +165,6 @@ typedef struct gdf_context_{
   int flag_distinct;            /**< for COUNT: DISTINCT = 1, else = 0 */
   int flag_sort_result;         /**< When method is GDF_HASH, 0 = result is not sorted, 1 = result is sorted */
   int flag_sort_inplace;        /**< 0 = No sort in place allowed, 1 = else */
-  int flag_nulls_are_smallest;  /**< Value to indicate if nulls are to be considered smaller than non-nulls or viceversa */
 } gdf_context;
 
 struct _OpaqueIpcParser;

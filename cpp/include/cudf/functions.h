@@ -847,14 +847,14 @@ gdf_error gdf_quantile_aprrox(	gdf_column*  col_in,       //input column with 0 
                                 void*        t_erased_res, //type-erased result of same type as column;
                                 gdf_context* ctxt);        //context info
 
-gdf_error gdf_order_by(gdf_column** input_columns,   //input columns
-                       size_t       num_inputs,      //number of columns in the first parameter (e.g. number of columsn to sort by)
-                       gdf_column*  output_indices,  //a gdf_column that is pre allocated for storing sorted indices
-                       gdf_context* ctxt);           //struct with additional info: bool flag_nulls_are_smallest
+gdf_error gdf_order_by(gdf_column** input_columns,             //input columns
+                       size_t       num_inputs,                //number of columns in the first parameter (e.g. number of columsn to sort by)
+                       gdf_column*  output_indices,            //a gdf_column that is pre allocated for storing sorted indices
+                       int          flag_nulls_are_smallest);  //flag to indicate if nulls are to be considered smaller than non-nulls or viceversa
 
-gdf_error gdf_order_by_asc_desc(gdf_column** input_columns,  //input columns
-                                char*        asc_desc,       //array of sort order types where 0 is ascending order and 1 is descending order for each input column
-                                size_t       num_inputs,     //number of columns in the first parameter (e.g. number of columsn to sort by)
-                                gdf_column*  output_indices, //a gdf_column that is pre allocated for storing sorted indices
-                                gdf_context* ctxt);          //context info
+gdf_error gdf_order_by_asc_desc(gdf_column** input_columns,             //input columns
+                                char*        asc_desc,                  //array of sort order types where 0 is ascending order and 1 is descending order for each input column
+                                size_t       num_inputs,                //number of columns in the first parameter (e.g. number of columsn to sort by)
+                                gdf_column*  output_indices,            //a gdf_column that is pre allocated for storing sorted indices
+                                int          flag_nulls_are_smallest);  //flag to indicate if nulls are to be considered smaller than non-nulls or viceversa
 
