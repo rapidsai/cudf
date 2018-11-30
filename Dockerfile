@@ -30,12 +30,14 @@ RUN conda create -n cudf python=${PYTHON_VERSION}
 
 ARG NUMBA_VERSION=0.40.0
 ARG NUMPY_VERSION=1.14.3
+ARG CYYHON_VERSION=0.29.1 
 # Locked to Pandas 0.20.3 by https://github.com/rapidsai/cudf/issues/118
 ARG PANDAS_VERSION=0.20.3
 ARG PYARROW_VERSION=0.10.0
 RUN conda install -n cudf -y -c numba -c conda-forge -c nvidia -c rapidsai -c defaults \
       numba=${NUMBA_VERSION} \
       numpy=${NUMPY_VERSION} \
+      cython=${CYYHON_VERSION}\
       pandas=${PANDAS_VERSION} \
       pyarrow=${PYARROW_VERSION} \
       nvstrings \
@@ -61,6 +63,8 @@ RUN source activate cudf && \
     make install_python
 
 # cuDF build/install
-RUN source activate cudf && \
-    cd /cudf/python && \
-    python setup.py install
+#RUN source activate cudf && \
+#    cd /cudf/python && \
+#    python setup.py install
+RUN conda install -c nvidia -c rapidsai -c numba -c conda-forge -c defaults cudf=0.3.0
+
