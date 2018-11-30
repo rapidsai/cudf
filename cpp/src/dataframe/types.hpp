@@ -11,6 +11,7 @@
 
 /* --------------------------------------------------------------------------*/
 /** 
+ * @file types.hpp
  * @brief  Wrapper structs for for the non-fundamental gdf_dtype types.
  *
  * These structs simply wrap a single member variable of a fundamental type 
@@ -38,32 +39,39 @@
 /* ----------------------------------------------------------------------------*/
 namespace cudf
 {
-  struct category
+
+  namespace detail
   {
-    static constexpr gdf_dtype element_type_id{GDF_CATEGORY};
-    using value_type = gdf_category;
-    value_type value;
+    /**
+     * @brief Base wrapper structure to emulate "strong typedefs" for gdf_dtype values 
+     * that do not correspond to fundamental types.
+     * 
+     * @tparam T  The type of the wrapped value
+     * @tparam type_id  The wrapped gdf_dtype
+     */
+    template <typename T, gdf_dtype type_id>
+    struct wrapper
+    {
+      static constexpr gdf_dtype element_type_id{type_id}; ///< The wrapped gdf_dtype
+      using value_type = T; ///< The underlying fundamental type of the wrapper
+      value_type value; ///< The wrapped value
+    };
+  } // namespace detail
+
+  struct category : detail::wrapper<gdf_category, GDF_CATEGORY>
+  {
   };
 
-  struct timestamp
+  struct timestamp : detail::wrapper<gdf_timestamp, GDF_TIMESTAMP>
   {
-    static constexpr gdf_dtype element_type_id{GDF_TIMESTAMP};
-    using value_type = gdf_timestamp;
-    value_type value;
   };
 
-  struct date32
+  struct date32 : detail::wrapper<gdf_date32, GDF_DATE32>
   {
-    static constexpr gdf_dtype element_type_id{GDF_DATE32};
-    using value_type = gdf_date32;
-    value_type value;
   };
 
-  struct date64
+  struct date64 : detail::wrapper<gdf_date64, GDF_DATE64>
   {
-    static constexpr gdf_dtype element_type_id{GDF_DATE64};
-    using value_type = gdf_date64;
-    value_type value;
   };
 
   namespace detail
@@ -77,11 +85,9 @@ namespace cudf
      * @Returns A reference to the underlying wrapped value  
      */
     /* ----------------------------------------------------------------------------*/
-    template <typename T>
+    template <typename T, gdf_dtype type_id>
     CUDA_HOST_DEVICE_CALLABLE
-    typename std::enable_if_t< not std::is_fundamental<typename std::decay<T>::type>::value, 
-                               typename std::decay<T>::type::value_type>& 
-    unwrap(T& wrapped)
+    typename wrapper<T,type_id>::value_type& unwrap(wrapper<T,type_id>& wrapped)
     {
       return wrapped.value;
     }
@@ -95,11 +101,9 @@ namespace cudf
      * @Returns A const reference to the underlying wrapped value  
      */
     /* ----------------------------------------------------------------------------*/
-    template <typename T>
+    template <typename T, gdf_dtype type_id>
     CUDA_HOST_DEVICE_CALLABLE
-    typename std::enable_if_t< not std::is_fundamental<typename std::decay<T>::type>::value, 
-                               typename std::decay<T>::type::value_type> const& 
-    unwrap(T const& wrapped)
+    typename wrapper<T,type_id>::value_type const& unwrap(wrapper<T,type_id> const& wrapped)
     {
       return wrapped.value;
     }
