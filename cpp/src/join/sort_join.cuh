@@ -31,8 +31,22 @@ struct JoinBounds {
     thrust::device_vector<index_type> upper;
 };
 
-//Compute the lower and upper bound
-//Looking for l in r
+/* --------------------------------------------------------------------------*/
+/**
+ * @Synopsis  Computes the lower and upper bound searches of left column values
+ * in the right column
+ *
+ * @Param l The left column to be joined
+ * @Param l_count The size of the left column
+ * @Param r The right column to be joined
+ * @Param r_count The size of the right column
+ * @tparam T Type of column data to be joined
+ * @tparam index_type Output type for the index calculation
+ * @tparam size_type Type for size specification of the columns
+ *
+ * @Returns JoinBounds struct containing the lower and upper bound search results
+ */
+/* ----------------------------------------------------------------------------*/
 template<typename T,
     typename index_type,
     typename size_type>
@@ -58,6 +72,16 @@ compute_join_bounds(
     return bounds;
 }
 
+/* --------------------------------------------------------------------------*/
+/** 
+ * @brief  Functor for computing the difference in a tuple
+ *
+ * If the join_type is inner then the difference in the tuple values are
+ * returned otherwise an extra check ensures that the difference is at least
+ * one.
+ *
+ */
+/* ----------------------------------------------------------------------------*/
 template <typename index_type, JoinType join_type>
 struct Diff {
     __device__ index_type operator()(thrust::tuple<const index_type, const index_type> t) {
@@ -72,6 +96,16 @@ struct Diff<index_type, JoinType::INNER_JOIN> {
     }
 };
 
+/* --------------------------------------------------------------------------*/
+/** 
+ * @brief  Functor for taking care of non inner join index calculations
+ *
+ * If the upper and lower bound index values of the left table are the same
+ * then 'none' is returned otherwise the returned index is the sum of the
+ * lower bound search result and r_ptr
+ *
+ */
+/* ----------------------------------------------------------------------------*/
 template <typename index_type>
 struct JoinConditionalAdd {
     index_type none;
@@ -90,6 +124,17 @@ struct JoinConditionalAdd {
     }
 };
 
+/* --------------------------------------------------------------------------*/
+/**
+ * @Synopsis  Scans the difference between the upper and lower bound search results
+ * from compute_join_bounds call
+ * @Param bounds Struct containing the upper and lower bound search results
+ * @tparam join_type Type of join to be performed (INNER, LEFT, FULL)
+ * @tparam index_type Output type for the index calculation
+ *
+ * @Returns thrust::device_vector containing the scanned differences
+ */
+/* ----------------------------------------------------------------------------*/
 template<JoinType join_type,
     typename index_type>
 thrust::device_vector<index_type>
@@ -105,6 +150,20 @@ scan_join_bounds(const JoinBounds<index_type>& bounds) {
     return scanned_sizes;
 }
 
+/* --------------------------------------------------------------------------*/
+/**
+ * @Synopsis  Creates two outputs segment and rank.
+ * Segment contains values i repeated scanned_sizes[i] times where i ranges from
+ * 0 to the length of scanned_sizes. Rank denotes the repeatition rank of each
+ * element in Segment.
+ * @Param scanned_sizes Array containin the number of time an index has to be repeated
+ * @Param seg Array containing repeated indices
+ * @Param rank Array containing repeation rank of seg
+ * @Param segment_length Last value in scanned_sizes
+ * @tparam index_type Output type for the index calculation
+ *
+ */
+/* ----------------------------------------------------------------------------*/
 template <typename index_type>
 void
 create_load_balanced_tuple(const thrust::device_vector<index_type>& scanned_sizes,
@@ -132,6 +191,19 @@ create_load_balanced_tuple(const thrust::device_vector<index_type>& scanned_size
             thrust::minus<index_type>());
 }
 
+/* --------------------------------------------------------------------------*/
+/**
+ * @Synopsis  Computes the joined indices of the left and right columns
+ * @Param bounds Struct containing the upper and lower bound search results
+ * @Param leftcol The left column to be joined
+ * @Param rightcol The right column to be joined
+ * @Param scanned_sizes The scanned result of the difference between upper and lower bound search results
+ * @tparam join_type Type of join to be performed (INNER, LEFT, FULL)
+ * @tparam index_type Output type for the index calculation
+ *
+ * @Returns Pair of gdf columns containing the join result indices
+ */
+/* ----------------------------------------------------------------------------*/
 template<JoinType join_type,
     typename index_type>
 std::pair<gdf_column, gdf_column>
@@ -179,6 +251,23 @@ compute_joined_indices(const JoinBounds<index_type>& bounds,
     return std::make_pair(output_l, output_r);
 }
 
+/* --------------------------------------------------------------------------*/
+/**
+ * @Synopsis  Sort based join call
+ *
+ * @Param output_l The left index output of join
+ * @Param output_r The right index output of join
+ * @Param leftcol The left column to be joined
+ * @Param rightcol The right column to be joined
+ * @Param flip_indices Flag that indicates whether the left and right tables have been
+ * flipped, meaning the output indices should also be flipped.
+ * @tparam join_type The type of join to be performed
+ * @tparam column_type The datatype of the join input columns
+ * @tparam index_type The datatype used for the output indices
+ *
+ * @Returns Upon successful computation, returns GDF_SUCCESS. Otherwise returns appropriate error code 
+ */
+/* ----------------------------------------------------------------------------*/
 template<JoinType join_type,
     typename column_type,
     typename index_type>
@@ -205,6 +294,22 @@ gdf_error sort_join_typed(
     return GDF_SUCCESS;
 }
 
+/* ----------------------------------------------------------------------------*/
+/**
+ * @Synopsis  Wrapper around typed sort based join call
+ *
+ * @Param output_l The left index output of join
+ * @Param output_r The right index output of join
+ * @Param lcol The left column to be joined
+ * @Param rcol The right column to be joined
+ * @Param flip Flag that indicates whether the left and right tables have been
+ * flipped, meaning the output indices should also be flipped.
+ * @tparam join_type The type of join to be performed
+ * @tparam index_type The datatype used for the output indices
+ *
+ * @Returns Upon successful computation, returns GDF_SUCCESS. Otherwise returns appropriate error code 
+ */
+/* ----------------------------------------------------------------------------*/
 template<JoinType join_type,
     typename index_type>
 gdf_error compute_sort_join(
