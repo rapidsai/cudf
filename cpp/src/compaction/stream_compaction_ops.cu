@@ -214,7 +214,6 @@ struct bit_mask_pack_op : public thrust::unary_function<int64_t,gdf_valid_type>
 //TODO: add a way for the space where we store temp bitmaps for compaction be allocated
 //on the outside
 gdf_error gpu_apply_stencil(gdf_column *col, gdf_column * stencil, gdf_column * output){
-	//OK: add a rquire here that output and col are the same size
 	GDF_REQUIRE(output->size == col->size, GDF_COLUMN_SIZE_MISMATCH);
 	GDF_REQUIRE(col->dtype == output->dtype, GDF_DTYPE_MISMATCH);
 
@@ -232,11 +231,10 @@ gdf_error gpu_apply_stencil(gdf_column *col, gdf_column * stencil, gdf_column * 
 
 	// If both valids are not nulls or if just one of them are nulls
 	if((col->valid != nullptr && stencil->valid != nullptr) || ((col->valid == nullptr || stencil->valid == nullptr) && col->valid != stencil->valid)) {
-	//if(((col->valid == nullptr || stencil->valid == nullptr) && col->valid != stencil->valid)) {
 		bit_position_iterator bit_position_iter(thrust::make_counting_iterator<gdf_size_type>(0), modulus_bit_width());
 
 		gdf_valid_type* valid_ptr;
-		//valid_ptr = stencil->valid;
+
 		if (stencil->valid != nullptr)
 			valid_ptr = stencil->valid;
 		else
@@ -250,16 +248,13 @@ gdf_error gpu_apply_stencil(gdf_column *col, gdf_column * stencil, gdf_column * 
 		typedef thrust::tuple<thrust::detail::normal_iterator<thrust::device_ptr<int8_t> >, gdf_valid_iterator, gdf_valid_iterator, bit_position_iterator > zipped_stencil_tuple;
 		typedef thrust::zip_iterator<zipped_stencil_tuple> zipped_stencil_iterator;
 
-		//what kind of shit is that you might wonder?
 		//well basically we are zipping up an iterator to the stencil, one to the bit masks, and one which lets us get the bit position based on our index
 		zipped_stencil_iterator zipped_stencil_iter(
 			thrust::make_tuple(
 					thrust::detail::make_normal_iterator(thrust::device_pointer_cast((int8_t * )stencil->data)),
 					valid_iterator,
 					valid_col_iterator,
-					thrust::make_transform_iterator<modulus_bit_width, thrust::counting_iterator<gdf_size_type> >(
-							thrust::make_counting_iterator<gdf_size_type>(0),
-							modulus_bit_width())
+					bit_position_iter
 			));
 		
 		typedef thrust::tuple<thrust::detail::normal_iterator<thrust::device_ptr<int8_t> >, gdf_valid_iterator, bit_position_iterator > zipped_stencil_tuple_one;
@@ -269,9 +264,7 @@ gdf_error gpu_apply_stencil(gdf_column *col, gdf_column * stencil, gdf_column * 
 			thrust::make_tuple(
 					thrust::detail::make_normal_iterator(thrust::device_pointer_cast((int8_t * )stencil->data)),
 					valid_iterator,
-					thrust::make_transform_iterator<modulus_bit_width, thrust::counting_iterator<gdf_size_type> >(
-							thrust::make_counting_iterator<gdf_size_type>(0),
-							modulus_bit_width())
+					bit_position_iter
 			));
 
 		//NOTE!!!! the output column is getting set to a specific size  but we are NOT compacting the allocation,
@@ -383,76 +376,68 @@ gdf_error gpu_apply_stencil(gdf_column *col, gdf_column * stencil, gdf_column * 
 			cub::DeviceSelect::Flagged(d_temp_storage, temp_storage_bytes,
 					(data_type *) col->data,
 					(int8_t *) stencil->data,
-					(data_type *) output->data, d_num_selected_out, col->size,stream);
+					(data_type *) output->data, d_num_selected_out, col->size, stream);
 			// Allocate temporary storage
-			cudaError_t err = cudaMalloc(&d_temp_storage, temp_storage_bytes);
-			if(err != cudaSuccess){
-				std::cout<<"couldnt allocate temp space"<<std::endl;
-			}
+			RMM_TRY( RMM_ALLOC(&d_temp_storage, temp_storage_bytes, stream) );
+
 			// Run selection
 			cub::DeviceSelect::Flagged(d_temp_storage, temp_storage_bytes,
 					(data_type *) col->data,
 					(int8_t *) stencil->data,
-					(data_type *) output->data, d_num_selected_out, col->size,stream);
+					(data_type *) output->data, d_num_selected_out, col->size, stream);
 
-			cudaMemcpyAsync(&out_size,d_num_selected_out,sizeof(int),cudaMemcpyDeviceToHost,stream);
+			CUDA_TRY( cudaMemcpyAsync(&out_size,d_num_selected_out,sizeof(int),cudaMemcpyDeviceToHost,stream) );
 			output->size = out_size;
 		}else if(width == 2){
 			typedef int16_t data_type;
 			cub::DeviceSelect::Flagged(d_temp_storage, temp_storage_bytes,
 					(data_type *) col->data,
 					(int8_t *) stencil->data,
-					(data_type *) output->data, d_num_selected_out, col->size,stream);
+					(data_type *) output->data, d_num_selected_out, col->size, stream);
 			// Allocate temporary storage
-			cudaError_t err = cudaMalloc(&d_temp_storage, temp_storage_bytes);
-			if(err != cudaSuccess){
-				std::cout<<"couldnt allocate temp space"<<std::endl;
-			}
+			RMM_TRY( RMM_ALLOC(&d_temp_storage, temp_storage_bytes, stream) );
+
 			// Run selection
 			cub::DeviceSelect::Flagged(d_temp_storage, temp_storage_bytes,
 					(data_type *) col->data,
 					(int8_t *) stencil->data,
-					(data_type *) output->data, d_num_selected_out, col->size,stream);
+					(data_type *) output->data, d_num_selected_out, col->size, stream);
 
-			cudaMemcpyAsync(&out_size,d_num_selected_out,sizeof(int),cudaMemcpyDeviceToHost,stream);
+			CUDA_TRY( cudaMemcpyAsync(&out_size,d_num_selected_out,sizeof(int),cudaMemcpyDeviceToHost,stream) );
 			output->size = out_size;
 		}else if(width == 4){
 			typedef int32_t data_type;
 			cub::DeviceSelect::Flagged(d_temp_storage, temp_storage_bytes,
 					(data_type *) col->data,
 					(int8_t *) stencil->data,
-					(data_type *) output->data, d_num_selected_out, col->size,stream);
+					(data_type *) output->data, d_num_selected_out, col->size, stream);
 			// Allocate temporary storage
-			cudaError_t err = cudaMalloc(&d_temp_storage, temp_storage_bytes);
-			if(err != cudaSuccess){
-				std::cout<<"couldnt allocate temp space"<<std::endl;
-			}
+			RMM_TRY( RMM_ALLOC(&d_temp_storage, temp_storage_bytes, stream) );
+
 			// Run selection
 			cub::DeviceSelect::Flagged(d_temp_storage, temp_storage_bytes,
 					(data_type *) col->data,
 					(int8_t *) stencil->data,
-					(data_type *) output->data, d_num_selected_out, col->size,stream);
+					(data_type *) output->data, d_num_selected_out, col->size, stream);
 
-			cudaMemcpyAsync(&out_size,d_num_selected_out,sizeof(int),cudaMemcpyDeviceToHost,stream);
+			CUDA_TRY( cudaMemcpyAsync(&out_size,d_num_selected_out,sizeof(int),cudaMemcpyDeviceToHost,stream) );
 			output->size = out_size;
 		}else if(width == 8){
 			typedef int64_t data_type;
 			cub::DeviceSelect::Flagged(d_temp_storage, temp_storage_bytes,
 					(data_type *) col->data,
 					(int8_t *) stencil->data,
-					(data_type *) output->data, d_num_selected_out, col->size,stream);
+					(data_type *) output->data, d_num_selected_out, col->size, stream);
 			// Allocate temporary storage
-			cudaError_t err = cudaMalloc(&d_temp_storage, temp_storage_bytes);
-			if(err != cudaSuccess){
-				std::cout<<"couldnt allocate temp space"<<std::endl;
-			}
+			RMM_TRY( RMM_ALLOC(&d_temp_storage, temp_storage_bytes, stream) );
+
 			// Run selection
 			cub::DeviceSelect::Flagged(d_temp_storage, temp_storage_bytes,
 					(data_type *) col->data,
 					(int8_t *) stencil->data,
-					(data_type *) output->data, d_num_selected_out, col->size,stream);
+					(data_type *) output->data, d_num_selected_out, col->size, stream);
 
-			cudaMemcpyAsync(&out_size,d_num_selected_out,sizeof(int),cudaMemcpyDeviceToHost,stream);
+			CUDA_TRY( cudaMemcpyAsync(&out_size,d_num_selected_out,sizeof(int),cudaMemcpyDeviceToHost,stream) );
 			output->size = out_size;
 		}
 	}

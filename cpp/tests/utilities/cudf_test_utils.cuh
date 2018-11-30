@@ -67,7 +67,7 @@ static size_t  valid_size(size_t column_length)
 
 static bool get_bit(const gdf_valid_type* const bits, size_t i)
 {
-  return  bits == nullptr? true :  bits[i >> size_t(3)] & (1 << (i & size_t(7)));
+  return  bits == nullptr? true :  bits[i / GDF_VALID_BITSIZE] & (i % GDF_VALID_BITSIZE);
 }
 
 template <typename col_type>
