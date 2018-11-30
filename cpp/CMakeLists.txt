@@ -1,5 +1,7 @@
 #=============================================================================
 # Copyright (c) 2018, NVIDIA CORPORATION.
+# Copyright (c) 2018, BlazingDB, Inc.
+#     Copyright 2018 Percy Camilo Triveño Aucahuasi <percy@blazingdb.com>
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -35,15 +37,33 @@ endif(CMAKE_COMPILER_IS_GNUCXX)
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -D_GLIBCXX_USE_CXX11_ABI=0")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -D_GLIBCXX_USE_CXX11_ABI=0")
 
-#set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -gencode=arch=compute_60,code=sm_60 -gencode=arch=compute_61,code=sm_61")
-set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -gencode=arch=compute_60,code=sm_60")
-set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -gencode=arch=compute_70,code=sm_70 -gencode=arch=compute_70,code=compute_70")
+# e.g. cmake -DGPU_COMPUTE_CAPABILITY=60 ... to support GPU Compute Capability 6.0
+if(NOT GPU_COMPUTE_CAPABILITY)
+    message(AUTHOR_WARNING "NVIDIA GPU Compute Capability is not defined, using defult NVIDIA GPU compute capability version 7.0")
+    set(GPU_COMPUTE_CAPABILITY "70")
+endif ()
+
+# GPU Compute Capability: virtual architecture (code=compute_X)
+set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -gencode arch=compute_${GPU_COMPUTE_CAPABILITY},code=compute_${GPU_COMPUTE_CAPABILITY}")
+# GPU Compute Capability: real architecture (code=sm_X)
+set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -gencode arch=compute_${GPU_COMPUTE_CAPABILITY},code=sm_${GPU_COMPUTE_CAPABILITY}")
 
 set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} --expt-extended-lambda --expt-relaxed-constexpr")
 
 # suppress SHFL warnings caused by Modern GPU
 # TODO: remove this when Modern GPU is removed or fixed to use shfl_sync
 set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -Werror cross-execution-space-call -Wno-deprecated-declarations -Xptxas --disable-warnings")
+
+# e.g. cmake -DGPU_PTXAS_MAXRREGCOUNT=48 ... to use nvcc ptxas flags: -Xptxas --maxrregcount=48
+if(GPU_PTXAS_MAXRREGCOUNT)
+    message(STATUS "NVIDIA ptxas flags for nvcc: -Xptxas --maxrregcount=${GPU_PTXAS_MAXRREGCOUNT}")
+    set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -Xptxas --maxrregcount=${GPU_PTXAS_MAXRREGCOUNT}")
+else()
+    # unoptimised ptx code
+    set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -Xptxas")
+endif ()
+
+set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} --disable-warnings")
 
 # set warnings as errors
 set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -Werror cross-execution-space-call -Xcompiler -Wall,-Werror")
