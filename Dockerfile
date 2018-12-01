@@ -41,7 +41,8 @@ RUN conda install -n cudf -y -c numba -c conda-forge -c nvidia -c rapidsai -c de
       nvstrings \
       cmake=3.12 \
       gtest=1.8.0 \
-      cython
+      cython \
+      pytest
 
 # Clone cuDF repo
 ARG CUDF_REPO=https://github.com/rapidsai/cudf
@@ -51,14 +52,15 @@ RUN git clone --recurse-submodules -b ${CUDF_BRANCH} ${CUDF_REPO} /cudf
 # libcudf build/install
 ENV CC=/usr/bin/gcc-${CC}
 ENV CXX=/usr/bin/g++-${CXX}
-ARG HASH_JOIN=ON
 RUN source activate cudf && \
     mkdir -p /cudf/cpp/build && \
     cd /cudf/cpp/build && \
-    cmake .. -DHASH_JOIN=${HASH_JOIN} -DCMAKE_INSTALL_PREFIX=${CONDA_PREFIX} && \
-    make -j2 install && \
+    cmake .. -DCMAKE_INSTALL_PREFIX=${CONDA_PREFIX} && \
+    make -j install && \
     make python_cffi && \
-    make install_python
+    make install_python && \
+    cd python && \
+    python setup.py install
 
 # cuDF build/install
 RUN source activate cudf && \
