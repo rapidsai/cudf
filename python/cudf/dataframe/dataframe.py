@@ -245,7 +245,7 @@ class DataFrame(object):
         """
         Drop the given column by *name*.
         """
-        self.drop_column(name)
+        self._drop_column(name)
 
     def __sizeof__(self):
         return sum(col.__sizeof__() for col in self._cols.values())
@@ -434,7 +434,7 @@ class DataFrame(object):
         # When index is a column name
         if isinstance(index, str):
             df = self.copy()
-            df.drop_column(index)
+            df._drop_column(index)
             return df.set_index(self[index])
         # Otherwise
         else:
@@ -566,16 +566,23 @@ class DataFrame(object):
         A dataframe without dropped column(s)
         """
         columns = [labels] if isinstance(labels, str) else list(labels)
-        for c in columns:
-            if c not in self._cols:
-                raise NameError('column {!r} does not exist'.format(c))
         
         outdf = self.copy()
         for c in columns:
-            del outdf._cols[c]
+            outdf._drop_column(c)
         return outdf     
 
     def drop_column(self, name):
+        """Drop a column by *name*
+        """
+        warnings.warn(
+                'The drop_column method is deprecated. '
+                'Use the drop method instead.',
+                DeprecationWarning
+            )
+        self._drop_column(name)
+
+    def _drop_column(self, name):
         """Drop a column by *name*
         """
         if name not in self._cols:
