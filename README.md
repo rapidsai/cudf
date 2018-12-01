@@ -65,9 +65,10 @@ $ conda install -c conda-forge boost
 
 ```
 # environment vars
-export CUDA_HOME=/usr/local/cuda-10.0
-export CONDA_PREFIX=~/anaconda3/envs/cudf_dev
-export CUDACXX=$CUDA_HOME/bin/nvcc
+# Perhaps add warnings if the following three are missing?
+# export CUDA_HOME=/usr/local/cuda-10.0
+# export CONDA_PREFIX=~/anaconda3/envs/cudf_dev
+# export CUDACXX=$CUDA_HOME/bin/nvcc
 export NUMBAPRO_NVVM=$CUDA_HOME/nvvm/lib64/libnvvm.so
 export NUMBAPRO_LIBDEVICE=$CUDA_HOME/nvvm/libdevice/
 
@@ -78,9 +79,7 @@ cd cudf
 conda env create --name cudf_dev --file conda/environments/dev_py35.yml
 # activate the environment
 source activate cudf_dev
-# # when not using default arrow version 0.10.0, run
-# conda install -c nvidia -c rapidsai -c numba -c conda-forge -c defaults pyarrow=$ARROW_VERSION
-# Thomson comment above: we don't need special arrow instructions, since arrow will be installed by the installer? We could create a FAQ section to move errata like this.
+# build libcudf
 cd cpp
 mkdir build
 cd build
@@ -88,6 +87,7 @@ cmake .. -DCMAKE_INSTALL_PREFIX=$CONDA_PREFIX
 make -j
 make install
 make test
+# build python bindings
 make python_cffi
 make install_python
 cd python && py.test -v
