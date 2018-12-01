@@ -83,6 +83,9 @@
 /* ----------------------------------------------------------------------------*/
 namespace cudf{
 
+// This pragma disables a compiler warning that complains about the valid usage	
+// of calling a __host__ functor from this function which is __host__ __device__
+#pragma hd_warning_disable
 template < class functor_t, 
            typename... Ts>
 CUDA_HOST_DEVICE_CALLABLE

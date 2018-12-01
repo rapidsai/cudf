@@ -15,8 +15,12 @@
  * limitations under the License.
  */
 
+#include <type_traits>
+
 #include "cudf.h"
 #include "utilities/cudf_utils.h"
+#include "utilities/error_utils.h"
+#include "dataframe/type_dispatcher.hpp"
 
 #include "rmm/thrust_rmm_allocator.h"
 
@@ -28,18 +32,54 @@ namespace{ //annonymus
   template<typename T>
   using Device_Vector = thrust::device_vector<T, rmm_allocator<T>>;
 
+  struct multi_col_sort_forwarder {
+    template <typename col_type>
+    typename std::enable_if<std::is_integral<col_type>::value>::type
+    operator()(void* const *           d_col_data,
+               gdf_valid_type* const * d_valids_data,
+               int*                    d_col_types,
+               char*                   d_asc_desc,
+               size_t                  ncols,
+               size_t                  nrows,
+               bool                    have_nulls,
+               void*                   output_indices,
+               bool                    nulls_are_smallest)
+    {
+      multi_col_sort(d_col_data,
+                    d_valids_data,
+                    d_col_types,
+                    d_asc_desc,
+                    ncols,
+                    nrows,
+                    have_nulls,
+                    static_cast<col_type*>(output_indices),
+                    nulls_are_smallest);
+    }
+    template <typename col_type>
+    typename std::enable_if<!std::is_integral<col_type>::value>::type 
+    operator()(void* const *           d_col_data,
+               gdf_valid_type* const * d_valids_data,
+               int*                    d_col_types,
+               char*                   d_asc_desc,
+               size_t                  ncols,
+               size_t                  nrows,
+               bool                    have_nulls,
+               void*                   output_indices,
+               bool                    nulls_are_smallest)
+    {
+    }
+ };
+
   gdf_error multi_col_order_by(gdf_column** cols,
                                size_t ncols,
                                char* asc_desc,
                                gdf_column* output_indices,
                                bool flag_nulls_are_smallest)
   {
-    //TODO: don't assume type of output is size_t
-    //TODO: make these allocations happen with the new memory manager when we can
-    //      also we are kind of assuming they will just work
-
     // Return error if the inputs or no output pointers are invalid
     if (cols == nullptr || output_indices == nullptr) { return GDF_DATASET_EMPTY; }
+
+    GDF_REQUIRE(cols[0]->size == output_indices->size, GDF_COLUMN_SIZE_MISMATCH);
 
     // Check for null so we can use a faster sorting comparator 
     bool have_nulls = false;
@@ -60,15 +100,16 @@ namespace{ //annonymus
 
     soa_col_info(cols, ncols, d_col_data, d_valids_data, d_col_types);
 
-    multi_col_sort(d_col_data,
-                   d_valids_data,
-                   d_col_types,
-                   asc_desc,
-                   ncols,
-                   cols[0]->size,
-                   have_nulls,
-                   (size_t*)(output_indices->data),
-                   flag_nulls_are_smallest);
+    cudf::type_dispatcher(output_indices->dtype, multi_col_sort_forwarder{},
+                          d_col_data,
+                          d_valids_data,
+                          d_col_types,
+                          asc_desc,
+                          ncols,
+                          cols[0]->size,
+                          have_nulls,
+                          output_indices->data,
+                          flag_nulls_are_smallest); 
 
     return GDF_SUCCESS;
   }
