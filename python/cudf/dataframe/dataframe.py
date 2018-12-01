@@ -553,19 +553,27 @@ class DataFrame(object):
         series.name = name
         self._cols[name] = series
 
-    def drop(self, labels, inplace=False):
+    def drop(self, labels):
+        """Drop column(s)
+
+        Parameters
+        ----------
+        labels : str or sequence of strings
+            Name of column(s) to be dropped.
+        
+        Returns
+        -------
+        A dataframe without dropped column(s)
+        """
         columns = [labels] if isinstance(labels, str) else list(labels)
         for c in columns:
             if c not in self._cols:
                 raise NameError('column {!r} does not exist'.format(c))
-        if inplace:
-            for c in columns:
-                del self._cols[c]
-        else:
-            outdf = self.copy()
-            for c in columns:
-                del outdf._cols[c]
-            return outdf     
+        
+        outdf = self.copy()
+        for c in columns:
+            del outdf._cols[c]
+        return outdf     
 
     def drop_column(self, name):
         """Drop a column by *name*

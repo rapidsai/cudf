@@ -181,22 +181,11 @@ def test_dataframe_drop_method():
     df['b'] = data
     df['c'] = data
 
-    # Test drop with inplace=False
     assert tuple(df.columns) == ('a', 'b', 'c')
     assert tuple(df.drop('a').columns) == ('b', 'c')
     assert tuple(df.columns) == ('a', 'b', 'c')
     assert tuple(df.drop(['a', 'b']).columns) == ('c',)
     assert tuple(df.columns) == ('a', 'b', 'c')
-
-
-    # Test drop with inplace=True
-    df.drop('a',inplace=True)
-    assert tuple(df.columns) == ('b', 'c')
-    df['a'] = data
-    df.drop(['a', 'c'], inplace=True)
-    assert tuple(df.columns) == ('b',)
-    df['a'] = data
-    df['c'] = data
 
     # Test drop error
     with pytest.raises(NameError) as raises:
