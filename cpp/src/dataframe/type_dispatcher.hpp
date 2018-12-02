@@ -83,6 +83,9 @@
 /* ----------------------------------------------------------------------------*/
 namespace cudf{
 
+// This pragma disables a compiler warning that complains about the valid usage	
+// of calling a __host__ functor from this function which is __host__ __device__
+#pragma hd_warning_disable
 template < class functor_t, 
            typename... Ts>
 CUDA_HOST_DEVICE_CALLABLE
@@ -104,7 +107,7 @@ decltype(auto) type_dispatcher(gdf_dtype dtype,
     case GDF_DATE64:    { return f.template operator()< date64 >(std::forward<Ts>(args)...); }
     case GDF_TIMESTAMP: { return f.template operator()< timestamp >(std::forward<Ts>(args)...); }
     case GDF_CATEGORY:  { return f.template operator()< category >(std::forward<Ts>(args)...); }
-    //case GDF_STRING:    { return f.template operator()< enum_map<GDF_STRING> >(std::forward<Ts>(args)...); }
+    default: { assert(false && "type_dispatcher: invalid gdf_dtype"); }// this will only fire on a Debug build
   }
 
   // This will only fire with a DEBUG build

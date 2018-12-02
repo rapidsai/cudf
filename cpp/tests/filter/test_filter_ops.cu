@@ -65,6 +65,9 @@ struct GpuApplyStencilTest : public GdfTest {
     // contains the filtered column
     std::vector<column_t> reference_vector;
 
+    // contains the valids for the filtered column
+    host_valid_pointer reference_valid = nullptr;
+
     /* --------------------------------------------------------------------------*/
     /**
     * @Synopsis  Initializes input columns
@@ -103,6 +106,8 @@ struct GpuApplyStencilTest : public GdfTest {
 
         output = create_gdf_column(zero_vector, output_valid);
 
+        allocate_reference_valids(reference_valid, length);
+
         if(print) {
             std::cout<<"Input:\n";
             print_gdf_column(col.get());
@@ -114,10 +119,36 @@ struct GpuApplyStencilTest : public GdfTest {
         }
     }
 
+    void print_reference_column() {
+        std::cout<<"Reference Output:\n";
+        for(size_t i = 0; i < reference_vector.size(); i++){
+            std::cout << "(" << std::to_string(reference_vector[i]) << "|" << gdf_is_valid(reference_valid.get(), i) << "), ";
+        }
+        std::cout<<"\n\n";
+    }
+
+    void allocate_reference_valids(host_valid_pointer& valid_ptr, size_t length) {
+        auto deleter = [](gdf_valid_type* valid) { delete[] valid; };
+        auto n_bytes = gdf_get_num_chars_bitmask(length);
+        auto valid_bits = new gdf_valid_type[n_bytes];
+    
+        valid_ptr = host_valid_pointer{ valid_bits, deleter };
+    }
+
     void compute_reference_solution() {
+
+        size_t valid_index=0;
         for (size_t index = 0 ; index < host_vector.size() ; index++) {
             if (host_stencil_vector[index] == 1 && gdf_is_valid(host_stencil_valid.get(), index) ){
                 reference_vector.push_back(host_vector[index]);
+
+                if ( gdf_is_valid(host_valid.get(), index) ) {
+                    gdf::util::turn_bit_on(reference_valid.get(), valid_index);
+                } else {
+                    gdf::util::turn_bit_off(reference_valid.get(), valid_index);
+                }
+
+                valid_index++;
             }
         }
     }
@@ -132,9 +163,7 @@ struct GpuApplyStencilTest : public GdfTest {
         print_gdf_column(output.get());
         std::cout<<"\n";
 
-        std::cout<<"Reference Output:\n";
-        std::copy(reference_vector.begin(), reference_vector.end(), std::ostream_iterator<column_t> (std::cout, " "));
-        std::cout<<"\n";
+        print_reference_column();
     }
 
     void compare_gdf_result() {
@@ -146,6 +175,17 @@ struct GpuApplyStencilTest : public GdfTest {
         // Compare the gpu and reference solutions
         for(size_t i = 0; i < reference_vector.size(); ++i) {
             EXPECT_EQ(reference_vector[i], host_result[i]);
+        }
+
+        auto n_bytes = gdf_get_num_chars_bitmask(col->size);
+        gdf_valid_type* host_ptr = new gdf_valid_type[n_bytes];
+
+        // Copy valids to the host
+        EXPECT_EQ(cudaMemcpy(host_ptr, output.get()->valid, n_bytes, cudaMemcpyDeviceToHost), cudaSuccess);
+
+        // Compare the gpu and reference valid arrays
+        for(size_t i = 0; i < reference_vector.size(); ++i) {
+            EXPECT_EQ( gdf_is_valid(reference_valid.get(), i), gdf_is_valid(host_ptr, i) );
         }
     }
 };

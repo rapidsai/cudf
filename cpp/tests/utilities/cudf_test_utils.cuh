@@ -56,20 +56,6 @@ void print_vector_and_valid(T * v,
   std::cout << std::endl;
 }
 
-static constexpr int ValidSize = 32;
-using ValidType = uint32_t;
-
-static size_t  valid_size(size_t column_length)
-{
-  const size_t n_ints = (column_length / ValidSize) + ((column_length % ValidSize) ? 1 : 0);
-  return n_ints * sizeof(ValidType);
-}
-
-static bool get_bit(const gdf_valid_type* const bits, size_t i)
-{
-  return  bits == nullptr? true :  bits[i / GDF_VALID_BITSIZE] & (i % GDF_VALID_BITSIZE);
-}
-
 template <typename col_type>
 void print_typed_column(col_type * col_data, 
                         gdf_valid_type * validity_mask, 
@@ -80,7 +66,7 @@ void print_typed_column(col_type * col_data,
   cudaMemcpy(h_data.data(), col_data, num_rows * sizeof(col_type), cudaMemcpyDeviceToHost);
 
 
-  const size_t num_masks = valid_size(num_rows);
+  const size_t num_masks = gdf_get_num_chars_bitmask(num_rows);
   std::vector<gdf_valid_type> h_mask(num_masks);
   if(nullptr != validity_mask)
   {
@@ -99,7 +85,7 @@ void print_typed_column(col_type * col_data,
   else {
     for(size_t i = 0; i < num_rows; ++i)
     {
-        std::cout << "(" << std::to_string(h_data[i]) << "|" << get_bit(h_mask.data(), i) << "), ";
+        std::cout << "(" << std::to_string(h_data[i]) << "|" << gdf_is_valid(h_mask.data(), i) << "), ";
     }
   }
   std::cout << std::endl << std::endl;
