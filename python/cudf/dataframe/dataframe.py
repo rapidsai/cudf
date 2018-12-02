@@ -564,6 +564,37 @@ class DataFrame(object):
         Returns
         -------
         A dataframe without dropped column(s)
+    
+    Examples
+    ----------
+    
+    .. code-block:: python
+    
+          from cudf.dataframe.dataframe import DataFrame
+          df = DataFrame()
+          df['key'] = [0, 1, 2, 3, 4]
+          df['val'] = [float(i + 10) for i in range(5)]
+          
+          df_new = df.drop('val')
+          print(df)
+          print(df_new)
+     
+     Output:     
+     .. code-block:: python
+
+             key  val
+          0    0 10.0
+          1    1 11.0
+          2    2 12.0
+          3    3 13.0
+          4    4 14.0
+          
+              key 
+          0    0
+          1    1
+          2    2
+          3    3
+          4    4
         """
         columns = [labels] if isinstance(labels, str) else list(labels)
         
