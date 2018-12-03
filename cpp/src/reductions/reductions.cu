@@ -225,31 +225,44 @@ struct ReduceDispatcher {
 };
 
 
-gdf_error gdf_sum(gdf_column *col, void *dev_result, gdf_size_type dev_result_size)
+gdf_error gdf_sum(gdf_column *col,
+                  void *dev_result,
+                  gdf_size_type dev_result_size)
 {   
-    return cudf::host_type_dispatcher(col->dtype, ReduceDispatcher<DeviceSum>(), col, dev_result, dev_result_size);
+    return cudf::type_dispatcher(col->dtype, ReduceDispatcher<DeviceSum>(),
+                                 col, dev_result, dev_result_size);
 }
 
-
-gdf_error gdf_product(gdf_column *col, void *dev_result, gdf_size_type dev_result_size)
+gdf_error gdf_product(gdf_column *col,
+                      void *dev_result,
+                      gdf_size_type dev_result_size)
 {
-    return cudf::host_type_dispatcher(col->dtype, ReduceDispatcher<DeviceProduct>(), col, dev_result, dev_result_size);
+    return cudf::type_dispatcher(col->dtype, ReduceDispatcher<DeviceProduct>(),
+                                 col, dev_result, dev_result_size);
 }
 
-
-gdf_error gdf_sum_of_squares(gdf_column *col, void *dev_result, gdf_size_type dev_result_size)
+gdf_error gdf_sum_of_squares(gdf_column *col,
+                             void *dev_result,
+                             gdf_size_type dev_result_size)
 {
-    return cudf::host_type_dispatcher(col->dtype, ReduceDispatcher<DeviceSumOfSquares>(), col, dev_result, dev_result_size);
+    return cudf::type_dispatcher(col->dtype, ReduceDispatcher<DeviceSumOfSquares>(),
+                                 col, dev_result, dev_result_size);
 }
 
-gdf_error gdf_min(gdf_column *col, void *dev_result, gdf_size_type dev_result_size)
+gdf_error gdf_min(gdf_column *col,
+                  void *dev_result,
+                  gdf_size_type dev_result_size)
 {
-    return cudf::host_type_dispatcher(col->dtype, ReduceDispatcher<DeviceMin>(), col, dev_result, dev_result_size);
+    return cudf::type_dispatcher(col->dtype, ReduceDispatcher<DeviceMin>(),
+                                 col, dev_result, dev_result_size);
 }
 
-gdf_error gdf_max(gdf_column *col, void *dev_result, gdf_size_type dev_result_size)
+gdf_error gdf_max(gdf_column *col,
+                  void *dev_result,
+                  gdf_size_type dev_result_size)
 {
-    return cudf::host_type_dispatcher(col->dtype, ReduceDispatcher<DeviceMax>(), col, dev_result, dev_result_size);
+    return cudf::type_dispatcher(col->dtype, ReduceDispatcher<DeviceMax>(),
+                                 col, dev_result, dev_result_size);
 }
 
 
