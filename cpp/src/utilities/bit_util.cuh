@@ -39,19 +39,31 @@
 
 #include "rmm/rmm.h"
 #include "utilities/error_utils.h"
+#include <cuda_runtime_api.h>
 
 
 namespace gdf {
 namespace util {
 
-static constexpr int ValidSize = 32;
+static constexpr int RECORDS_PER_BITMAP = 32;
 using ValidType = gdf_valid_type;
 
-/** determine the bitmap that contains a record */
-__device__  int which_bitmap_record(int record_idx) { return (record_idx/ValidSize);  }
+/**
+ * determine the bitmap that contains a record
+ * @param[in]  record_idx    The record index
+ * @return the bitmap index
+ */
+__device__  int which_bitmap_record(int record_idx) { return (record_idx / RECORDS_PER_BITMAP);  }
 
-/** determine which bit in a bitmap for a record */
-__device__ int which_bit(int record_idx) { return (record_idx % ValidSize);  }
+
+/**
+ * determine which bit in a bitmap for a record
+ *
+ * @param[in]  record_idx    The record index
+ * @return which bit within the bitmap
+ */
+__device__ int which_bit(int record_idx) { return (record_idx % RECORDS_PER_BITMAP);  }
+
 
 /**
  * Set the value of a bit to either 0 or 1
@@ -62,8 +74,6 @@ __device__ int which_bit(int record_idx) { return (record_idx % ValidSize);  }
  */
 __device__ gdf_error set_bit_value(gdf_valid_type * valid, int record_idx, unsigned int value) {
 
-	int status = 0;
-
 	if ( value > 1)
 		return GDF_INVALID_API_CALL;
 
@@ -71,11 +81,11 @@ __device__ gdf_error set_bit_value(gdf_valid_type * valid, int record_idx, unsig
 	int bit = which_bit(record_idx);
 
 	if (value == 0)
-		status = atomicAnd( &valid[rec], (value << bit));
+		atomicAnd( &valid[rec], (value << bit));
 	else
-		status = atomicOr( &valid[rec], (value << bit));
+		atomicOr( &valid[rec], (value << bit));
 
-	if ( status == valid[rec])
+	if ( cudaPeekAtLastError() == cudaSuccess)
 		return GDF_SUCCESS;
 	else
 		return GDF_CUDA_ERROR;
@@ -101,17 +111,58 @@ __device__ bool is_valid(gdf_valid_type * valid, int record_idx) {
 }
 
 
+/**
+ * Set a bit
+ *
+ * @param[in] valid         the valid memory array
+ * @param[in] record_idx    the record index
+ *
+ * @return gdf_error - did it work or not
+ */
 __device__ gdf_error set_bit(gdf_valid_type * valid, int record_idx) {
 	return set_bit_value(valid, record_idx, 1U);
 }
 
+
+/**
+ * Clear a bit
+ *
+ * @param[in] valid         the valid memory array
+ * @param[in] record_idx    the record index
+ *
+ * @return gdf_error - did it work or not
+ */
 __device__ gdf_error clear_bit(gdf_valid_type * valid, int record_idx) {
 	return set_bit_value(valid, record_idx, 0U);
 }
 
 
+__device__ gdf_error slice_mask(gdf_valid_type * input_mask, int start, int stop, gdf_valid_type * output_mask) {
+	return GDF_UNSUPPORTED_METHOD;
+}
+
+
+__device__ gdf_error bool_as_mask(gdf_column * bool_array, gdf_valid_type * bitmask ) {
+	return GDF_UNSUPPORTED_METHOD;
+
+}
+
+
+__device__ gdf_error mask_as_bool(gdf_column* output, gdf_valid_type *mask) {
+	return GDF_UNSUPPORTED_METHOD;
+
+}
+
+
+__device__ gdf_error mask_from_float_array(gdf_valid_type *output_mask, float *array) {
+	return GDF_UNSUPPORTED_METHOD;
+
+}
+
+
+
 /**
- * Allocate device space for the valid bitmap.  Memory is padded to a multiple of 64-bytes
+ * Allocate device space for the valid bitmap.
  *
  * @param[out] gdf_valid_type *      pointer to where device memory will be allocated and returned
  * @param[in]  number_of_records     number of records
@@ -119,12 +170,12 @@ __device__ gdf_error clear_bit(gdf_valid_type * valid, int record_idx) {
  */
 gdf_error create_bitmap(gdf_valid_type *valid, int number_of_records, int fill_value = -1) {
 
-	int num_bits_rec = (number_of_records + 63) / ValidSize;
+	int num_bits_rec = (number_of_records + (RECORDS_PER_BITMAP - 1)) / RECORDS_PER_BITMAP;
 
 	RMM_TRY( RMM_ALLOC((void**)&valid, 	sizeof(ValidType) * num_bits_rec, 0) );
 
-	if (fill_value == 0) {      CUDA_TRY( cudaMemset(valid,	0,           sizeof(ValidType) * num_bits_rec));  }
-	else if (fill_value == 1) { CUDA_TRY( cudaMemset(valid,	0xEFFFFFFF, sizeof(ValidType) * num_bits_rec));  }
+	if (fill_value == 0) {      CUDA_TRY( cudaMemset(valid,	0,          sizeof(ValidType) * num_bits_rec));  }
+	else if (fill_value == 1) { CUDA_TRY( cudaMemset(valid,	0xFFFFFFFF, sizeof(ValidType) * num_bits_rec));  }
 
 	return GDF_SUCCESS;
 }
@@ -143,13 +194,13 @@ gdf_error create_bitmap(gdf_valid_type *valid, int number_of_records, int fill_v
 
 
 // Instead of this function, use gdf_get_num_chars_bitmask from gdf/utils.h
-__host__ __device__ __forceinline__
-  size_t
-  valid_size(size_t column_length)
-{
-  const size_t n_ints = (column_length / ValidSize) + ((column_length % ValidSize) ? 1 : 0);
-  return n_ints * sizeof(ValidType);
-}
+//__host__ __device__ __forceinline__
+//  size_t
+//  valid_size(size_t column_length)
+//{
+//  const size_t n_ints = (column_length / ValidSize) + ((column_length % ValidSize) ? 1 : 0);
+//  return n_ints * sizeof(ValidType);
+//}
 
 // Instead of this function, use gdf_is_valid from gdf/utils.h
 ///__host__ __device__ __forceinline__ bool get_bit(const gdf_valid_type* const bits, size_t i)

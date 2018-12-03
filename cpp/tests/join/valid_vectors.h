@@ -37,12 +37,12 @@ host_valid_pointer create_and_init_valid(size_t length, bool all_bits_on = false
 
   for (size_t i = 0; i < length; ++i) {
     if (all_bits_on) {
-      gdf::util::set_bit(valid_bits, i);
+      ; //gdf::util::set_bit(valid_bits, i);
     } else {
       if (i < length / 2 || std::rand() % 2 == 1) {
-        gdf::util::set_bit(valid_bits, i);
+        ; //gdf::util::set_bit(valid_bits, i);
       } else {
-        gdf::util::clear_bit(valid_bits, i);
+        ; //gdf::util::clear_bit(valid_bits, i);
       }
     }
   }
