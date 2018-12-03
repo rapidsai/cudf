@@ -130,13 +130,14 @@ def test_sum_of_squares(dtype, nelem):
     print('expect:', expect)
     print('got:', got)
 
-    if np.dtype(dtype).kind == 'i': 
+    if np.dtype(dtype).kind == 'i':
         if 0 <= expect <= np.iinfo(dtype).max:
             np.testing.assert_array_almost_equal(expect, got)
         else:
             print('overflow, passing')
     else:
-        np.testing.assert_array_almost_equal(expect, got, decimal=accuracy_for_dtype[dtype])
+        np.testing.assert_array_almost_equal(expect, got, 
+                                             decimal=accuracy_for_dtype[dtype])
 
 
 @pytest.mark.parametrize('dtype,nelem', params)
