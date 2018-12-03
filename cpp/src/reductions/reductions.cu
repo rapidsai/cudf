@@ -135,7 +135,7 @@ struct DeviceSum {
     }
 
     template<typename T>
-    static constexpr T identity = static_cast<T>(0);
+    static constexpr T identity() { return T{0}; }
 };
 
 struct DeviceProduct {
@@ -149,7 +149,7 @@ struct DeviceProduct {
     }
 
     template<typename T>
-    static constexpr T identity = static_cast<T>(1);
+    static constexpr T identity() { return T{1}; }
 };
 
 struct DeviceSumOfSquares {
@@ -171,7 +171,7 @@ struct DeviceSumOfSquares {
     }
 
     template<typename T>
-    static constexpr T identity = static_cast<T>(0);
+    static constexpr T identity() { return T{0}; }
 };
 
 struct DeviceMin {
@@ -185,7 +185,7 @@ struct DeviceMin {
     }
 
     template<typename T>
-    static constexpr T identity = std::numeric_limits<T>::max();
+    static constexpr T identity() { return std::numeric_limits<T>::max(); }
 };
 
 struct DeviceMax {
@@ -199,21 +199,27 @@ struct DeviceMax {
     }
 
     template<typename T>
-    static constexpr T identity = std::numeric_limits<T>::lowest();
+    static constexpr T identity() { return std::numeric_limits<T>::lowest(); }
 };
 
 template <typename Op>
 struct ReduceDispatcher {
     template <typename T,
               typename std::enable_if_t<std::is_arithmetic<T>::value>* = nullptr>
-    gdf_error operator()(gdf_column *col, void *dev_result, gdf_size_type dev_result_size) {
-        T identity = Op::template identity<T>;
-        return ReduceOp<T, Op>::launch(col, identity, reinterpret_cast<T*>(dev_result), dev_result_size); 
+    gdf_error operator()(gdf_column *col, 
+                         void *dev_result, 
+                         gdf_size_type dev_result_size) {
+        T identity = Op::template identity<T>();
+        return ReduceOp<T, Op>::launch(col, identity, 
+                                       reinterpret_cast<T*>(dev_result), 
+                                       dev_result_size); 
     }
 
     template <typename T,
               typename std::enable_if_t<!std::is_arithmetic<T>::value, T>* = nullptr>
-    gdf_error operator()(gdf_column *col, void *dev_result, gdf_size_type dev_result_size) {
+    gdf_error operator()(gdf_column *col, 
+                         void *dev_result, 
+                         gdf_size_type dev_result_size) {
         return GDF_UNSUPPORTED_DTYPE;
     }
 };
@@ -224,10 +230,12 @@ gdf_error gdf_sum(gdf_column *col, void *dev_result, gdf_size_type dev_result_si
     return cudf::host_type_dispatcher(col->dtype, ReduceDispatcher<DeviceSum>(), col, dev_result, dev_result_size);
 }
 
+
 gdf_error gdf_product(gdf_column *col, void *dev_result, gdf_size_type dev_result_size)
 {
     return cudf::host_type_dispatcher(col->dtype, ReduceDispatcher<DeviceProduct>(), col, dev_result, dev_result_size);
 }
+
 
 gdf_error gdf_sum_of_squares(gdf_column *col, void *dev_result, gdf_size_type dev_result_size)
 {
