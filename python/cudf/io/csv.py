@@ -115,6 +115,9 @@ def read_csv(filepath, lineterminator='\n',
     dtype_ptr = ffi.new('char*[]', arr_dtypes)
     csv_reader.dtype = dtype_ptr
 
+    if decimal == delimiter:
+        raise ValueError("decimal point cannot be the same as the delimiter")
+
     csv_reader.delimiter = delimiter.encode()
     csv_reader.lineterminator = lineterminator.encode()
     csv_reader.quotechar = quotechar.encode()
@@ -127,7 +130,7 @@ def read_csv(filepath, lineterminator='\n',
     csv_reader.skiprows = skiprows
     csv_reader.skipfooter = skipfooter
     csv_reader.decimal = decimal.encode()
-    csv_reader.thousands = thousands.encode() if thousands else ffi.NULL;
+    csv_reader.thousands = ffi.new('char*', thousands.encode()) if thousands else ffi.NULL;
 
     # Call read_csv
     libgdf.read_csv(csv_reader)
