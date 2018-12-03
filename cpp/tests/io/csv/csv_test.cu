@@ -32,7 +32,7 @@ bool checkFile(const char *fname)
 	return (stat(fname, &st) ? 0 : 1);
 }
 
-TEST(gdf_csv_test, CsvSimple)
+TEST(gdf_csv_test, Simple)
 {
 	const char* fname	= "/tmp/CsvSimpleTest.csv";
 	const char* names[]	= { "A", "B", "C", "D", "E", "F", "G", "H", "I", "J" };
