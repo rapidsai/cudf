@@ -192,6 +192,7 @@ def test_csv_reader_strings(tmpdir):
     assert(cols[0].sublist([2]).to_host()[0] == 'c')
     assert(cols[0].sublist([3]).to_host()[0] == 'd')
 
+
 def test_csv_reader_strings_quotechars(tmpdir):
     fname = tmpdir.mkdir("gdf_csv").join("tmp_csvreader_file8.csv")
 
