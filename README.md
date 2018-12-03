@@ -114,8 +114,6 @@ $ cd python && py.test -v                           # optional, run python tests
 ```bash
 $ cd ../../python
 $ python setup.py build_ext --inplace
-# necessary if your dev work continues outside of cudf/cpp/build/python
-$ python setup.py install
 ```
 
 To run Python tests (Optional):
