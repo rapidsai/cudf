@@ -249,6 +249,9 @@ gdf_error read_csv(csv_read_arg *args)
 	if(raw_csv->quotechar != '\0') {
 		raw_csv->keepquotes = !args->quoting;
 		raw_csv->doublequote = args->doublequote;
+	} else {
+		raw_csv->keepquotes = true;
+		raw_csv->doublequote = false;
 	}
 
 	raw_csv->dayfirst = args->dayfirst;
@@ -823,7 +826,7 @@ gdf_error launch_countRecords(raw_csv_t * csvData) {
 	 *  Note: could do one thread per byte, but that would require a lock on the bit map
 	 *
 	 */
-	int64_t threads 	= 1024;
+	int64_t threads 	= 256;
 
 	// Using the number of bitmaps as the size - data index is bitmap ID * 64
 	int64_t blocks = (numBitmaps + (threads -1)) / threads ;
@@ -891,7 +894,7 @@ gdf_error launch_storeRecordStart(raw_csv_t * csvData) {
 	 * Each bitmap is for a 64-byte chunk
 	 *  Note: could do one thread per byte, but that would require a lock on the bit map
 	 */
-	long threads 	= 1024;
+	long threads 	= 256;
 
 	// Using the number of bitmaps as the size - data index is bitmap ID * 64
 	long blocks = (numBitmaps + (threads -1)) / threads ;
@@ -949,7 +952,7 @@ __global__ void storeRecordStart(char *data, const char terminator, const char q
 
 gdf_error launch_dataConvertColumns(raw_csv_t *raw_csv, void **gdf, gdf_valid_type** valid, gdf_dtype* d_dtypes,string_pair **str_cols, long row_offset, unsigned long long *num_valid) {
 
-	int64_t threads 	= 1024;
+	int64_t threads 	= 256;
 	int64_t blocks 		= (  raw_csv->num_records + (threads -1)) / threads ;
 
 	parsing_opts_t opts;
@@ -1169,7 +1172,7 @@ gdf_error launch_dataTypeDetection(
 	long row_offset,
 	column_data_t* d_columnData) 
 {
-	int64_t threads 	= 1024;
+	int64_t threads 	= 256;
 	int64_t blocks 		= (  raw_csv->num_records + (threads -1)) / threads ;
 
 	parsing_opts_t opts;
