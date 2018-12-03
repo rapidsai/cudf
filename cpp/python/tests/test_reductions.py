@@ -136,7 +136,7 @@ def test_sum_of_squares(dtype, nelem):
         else:
             print('overflow, passing')
     else:
-        np.testing.assert_array_almost_equal(expect, got, 
+        np.testing.assert_array_almost_equal(expect, got,
                                              decimal=accuracy_for_dtype[dtype])
 
 
