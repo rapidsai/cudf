@@ -26,7 +26,7 @@ enum class JoinType {
 #include "dataframe/cudf_table.cuh"
 #include "hash/concurrent_unordered_multimap.cuh"
 #include "hash/hash_functions.cuh"
-#include "utilities/bit_util.cuh"
+//#include "utilities/bit_util.cuh"
 
 #include <cub/cub.cuh>
 

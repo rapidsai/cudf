@@ -242,7 +242,7 @@ gdf_col_pointer init_gdf_column(std::vector<T> data, size_t col_index, valid_ini
   for(size_t row = 0; row < num_rows; ++row){
     if(true == bit_initializer(row, col_index))
     {
-      gdf::util::turn_bit_on(valid_masks.data(), row);
+      //gdf::util::set_bit(valid_masks.data(), row);
     }
   }
 

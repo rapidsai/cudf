@@ -15,7 +15,31 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+/*
+ * Copyright (c) 2018, NVIDIA CORPORATION.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+	 * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+
 #pragma once
+
+#ifndef _BIT_UTIL_H_
+#define _BIT_UTIL_H_
+
+#include "rmm/rmm.h"
+#include "utilities/error_utils.h"
+
 
 namespace gdf {
 namespace util {
@@ -23,10 +47,20 @@ namespace util {
 static constexpr int ValidSize = 32;
 using ValidType = gdf_valid_type;
 
-__device__ int which_bitmap_record(int record_idx) { return (record_idx/ValidSize);  }
+/** determine the bitmap that contains a record */
+__device__  int which_bitmap_record(int record_idx) { return (record_idx/ValidSize);  }
+
+/** determine which bit in a bitmap for a record */
 __device__ int which_bit(int record_idx) { return (record_idx % ValidSize);  }
 
-__device__ gdf_error setBitValue(gdf_valid_type * valid, int record_idx, unsigned int value) {
+/**
+ * Set the value of a bit to either 0 or 1
+ *
+ * @param[in] valid         pointer to the device memory
+ * @param[in] record_idx    the record index
+ * @param[in] value         the value, must be either 0 or 1
+ */
+__device__ gdf_error set_bit_value(gdf_valid_type * valid, int record_idx, unsigned int value) {
 
 	int status = 0;
 
@@ -41,7 +75,6 @@ __device__ gdf_error setBitValue(gdf_valid_type * valid, int record_idx, unsigne
 	else
 		status = atomicOr( &valid[rec], (value << bit));
 
-
 	if ( status == valid[rec])
 		return GDF_SUCCESS;
 	else
@@ -52,27 +85,28 @@ __device__ gdf_error setBitValue(gdf_valid_type * valid, int record_idx, unsigne
 /**
  * Check to see if a record is not NULL (aka valid)
  *
- * @param[out]
- * @param[in]
+ * @param[in] valid        the device memory containing the valid bitmaps
+ * @param[in] record_idx   the record index to check
  *
+ * @return  true/false on if the record is valid
  */
-__device__ bool is_valid(gdf_valid_type * valid_masks, int record_idx) {
+__device__ bool is_valid(gdf_valid_type * valid, int record_idx) {
 
 	int rec = which_bitmap_record(record_idx);
 	int bit = which_bit(record_idx);
 
-	int status = atomicAnd(&valid_masks[rec], (1 << bit));
+	int status = atomicAnd(&valid[rec], (1 << bit));
 
 	return (status == 0) ? false : true;
 }
 
 
 __device__ gdf_error set_bit(gdf_valid_type * valid, int record_idx) {
-	return setBitValue(valid, record_idx, 1U);
+	return set_bit_value(valid, record_idx, 1U);
 }
 
 __device__ gdf_error clear_bit(gdf_valid_type * valid, int record_idx) {
-	return setBitValue(valid, record_idx, 0U);
+	return set_bit_value(valid, record_idx, 0U);
 }
 
 
@@ -109,13 +143,13 @@ gdf_error create_bitmap(gdf_valid_type *valid, int number_of_records, int fill_v
 
 
 // Instead of this function, use gdf_get_num_chars_bitmask from gdf/utils.h
-//__host__ __device__ __forceinline__
-//  size_t
-//  valid_size(size_t column_length)
-//{
-//  const size_t n_ints = (column_length / ValidSize) + ((column_length % ValidSize) ? 1 : 0);
-//  return n_ints * sizeof(ValidType);
-//}
+__host__ __device__ __forceinline__
+  size_t
+  valid_size(size_t column_length)
+{
+  const size_t n_ints = (column_length / ValidSize) + ((column_length % ValidSize) ? 1 : 0);
+  return n_ints * sizeof(ValidType);
+}
 
 // Instead of this function, use gdf_is_valid from gdf/utils.h
 ///__host__ __device__ __forceinline__ bool get_bit(const gdf_valid_type* const bits, size_t i)
@@ -181,3 +215,6 @@ static inline std::string gdf_valid_to_str(gdf_valid_type* valid, size_t column_
 
 } // namespace util
 } // namespace gdf
+
+
+#endif

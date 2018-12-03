@@ -77,7 +77,8 @@ struct ColumnConcatTest : public testing::Test
     std::vector<gdf_valid_type> ref_valid(gdf_get_num_chars_bitmask(total_size));
     for (gdf_size_type index = 0, col = 0, row = 0; index < total_size; ++index)
     {
-      if (null_init(row, col)) gdf::util::turn_bit_on(ref_valid.data(), index);
+      if (null_init(row, col))
+    	 ; //gdf::util::set_bit(ref_valid.data(), index);
       else ref_null_count++;
       
       if (++row >= column_sizes[col]) { row = 0; col++; }
