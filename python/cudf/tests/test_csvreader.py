@@ -171,6 +171,7 @@ def test_csv_reader_negative_vals(tmpdir):
     np.testing.assert_allclose(one, df['1'])
     np.testing.assert_allclose(two, df['2'])
 
+
 def test_csv_reader_strings(tmpdir):
     fname = tmpdir.mkdir("gdf_csv").join("tmp_csvreader_file7.csv")
 
@@ -180,7 +181,6 @@ def test_csv_reader_strings(tmpdir):
 
     with open(str(fname), 'w') as fp:
         fp.write('\n'.join(lines) + '\n')
-
 
     cols = read_csv_strings(str(fname), names=names, dtype=dtypes, skiprows=1)
 
