@@ -116,6 +116,44 @@ decltype(auto) type_dispatcher(gdf_dtype dtype,
   return return_type();
 }
 
-} // namespace gdf
+
+// Only difference is lack of CUDA_HOST_DEVICE_CALLABLE
+template < class functor_t, 
+           typename... Ts>
+decltype(auto) host_type_dispatcher(gdf_dtype dtype, 
+                                    functor_t f, 
+                                    Ts&&... args)
+{
+  switch(dtype)
+  {
+    // The .template is known as a "template disambiguator" 
+    // See here for more information: https://stackoverflow.com/questions/3786360/confusing-template-error
+    case GDF_INT8:      { return f.template operator()< int8_t >(std::forward<Ts>(args)...); }
+    case GDF_INT16:     { return f.template operator()< int16_t >(std::forward<Ts>(args)...); }
+    case GDF_INT32:     { return f.template operator()< int32_t >(std::forward<Ts>(args)...); }
+    case GDF_INT64:     { return f.template operator()< int64_t >(std::forward<Ts>(args)...); }
+    case GDF_FLOAT32:   { return f.template operator()< float >(std::forward<Ts>(args)...); }
+    case GDF_FLOAT64:   { return f.template operator()< double >(std::forward<Ts>(args)...); }
+    case GDF_DATE32:    { return f.template operator()< date32 >(std::forward<Ts>(args)...); }
+    case GDF_DATE64:    { return f.template operator()< date64 >(std::forward<Ts>(args)...); }
+    case GDF_TIMESTAMP: { return f.template operator()< timestamp >(std::forward<Ts>(args)...); }
+    case GDF_CATEGORY:  { return f.template operator()< category >(std::forward<Ts>(args)...); }
+    case GDF_STRING:    // had to add these to avoid host-compiler warnings that aren't there  
+    case GDF_invalid:   // when compiling __host__ __device code for some reason...
+    case N_GDF_TYPES:   // TODO: find a better way than passing void*...
+                        { return f.template operator()< void* >(std::forward<Ts>(args)...); }
+  }
+
+  // This will only fire with a DEBUG build
+  assert(0 && "type_dispatcher: invalid gdf_dtype");
+
+  // Need to find out what the return type is in order to have a default return value
+  // and solve the compiler warning for lack of a default return
+  using return_type = decltype(f.template operator()<int8_t>(std::forward<Ts>(args)...));
+  return return_type();
+}
+
+
+} // namespace cudf
 
 #endif
