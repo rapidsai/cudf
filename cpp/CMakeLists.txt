@@ -194,7 +194,7 @@ target_link_libraries(cudf rmm "${ARROW_LIB}")
 add_custom_command(OUTPUT PYTHON_CFFI
                    WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
                    COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_BINARY_DIR}/../python ${CMAKE_BINARY_DIR}/python
-                   COMMAND ${CMAKE_COMMAND} -E chdir ${CMAKE_BINARY_DIR}/python python setup.py install
+                   COMMAND ${CMAKE_COMMAND} -E chdir ${CMAKE_BINARY_DIR}/python python setup.py build_ext --inplace
                    VERBATIM)
 
 add_custom_target(python_cffi DEPENDS cudf PYTHON_CFFI)
