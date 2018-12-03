@@ -38,7 +38,7 @@ def test_sum(dtype, nelem):
     libgdf.gdf_column_view(col_data, unwrap_devary(d_data), ffi.NULL, nelem,
                            gdf_dtype)
 
-    libgdf.gdf_sum_generic(col_data, unwrap_devary(d_result), d_result.size)
+    libgdf.gdf_sum(col_data, unwrap_devary(d_result), d_result.size)
     got = d_result.copy_to_host()[0]
     expect = dtype(data.sum())
 
@@ -70,8 +70,7 @@ def test_product(dtype, nelem):
     libgdf.gdf_column_view(col_data, unwrap_devary(d_data), ffi.NULL, nelem,
                            gdf_dtype)
 
-    libgdf.gdf_product_generic(col_data, unwrap_devary(d_result),
-                               d_result.size)
+    libgdf.gdf_product(col_data, unwrap_devary(d_result), d_result.size)
     got = d_result.copy_to_host()[0]
     expect = np.product(data)
 
@@ -96,7 +95,7 @@ def test_sum_masked(nelem):
     gdf_dtype = get_dtype(dtype)
     libgdf.gdf_column_view(col_data, unwrap_devary(d_data),
                            unwrap_devary(d_mask), nelem, gdf_dtype)
-    libgdf.gdf_sum_generic(col_data, unwrap_devary(d_result), d_result.size)
+    libgdf.gdf_sum(col_data, unwrap_devary(d_result), d_result.size)
 
     got = d_result.copy_to_host()[0]
     boolmask = buffer_as_bits(mask)[:nelem]
@@ -126,8 +125,7 @@ def test_sum_squared(dtype, nelem):
     libgdf.gdf_column_view(col_data, unwrap_devary(d_data), ffi.NULL, nelem,
                            gdf_dtype)
 
-    libgdf.gdf_sum_squared_generic(col_data, unwrap_devary(d_result),
-                                   d_result.size)
+    libgdf.gdf_sum_of_squares(col_data, unwrap_devary(d_result), d_result.size)
     got = d_result.copy_to_host()[0]
     expect = (data ** 2).sum()
 
@@ -150,7 +148,7 @@ def test_min(dtype, nelem):
     libgdf.gdf_column_view(col_data, unwrap_devary(d_data), ffi.NULL, nelem,
                            gdf_dtype)
 
-    libgdf.gdf_min_generic(col_data, unwrap_devary(d_result), d_result.size)
+    libgdf.gdf_min(col_data, unwrap_devary(d_result), d_result.size)
     got = d_result.copy_to_host()[0]
     expect = data.min()
 
@@ -173,7 +171,7 @@ def test_max(dtype, nelem):
     libgdf.gdf_column_view(col_data, unwrap_devary(d_data), ffi.NULL, nelem,
                            gdf_dtype)
 
-    libgdf.gdf_max_generic(col_data, unwrap_devary(d_result), d_result.size)
+    libgdf.gdf_max(col_data, unwrap_devary(d_result), d_result.size)
     got = d_result.copy_to_host()[0]
     expect = data.max()
 
