@@ -20,7 +20,6 @@
 #include "cudf.h"
 #include "utilities/cudf_utils.h"
 #include "utilities/error_utils.h"
-#include "dataframe/type_dispatcher.hpp"
 
 #include "rmm/thrust_rmm_allocator.h"
 
@@ -31,44 +30,6 @@ namespace{ //annonymus
   // thrust::device_vector set to use rmmAlloc and rmmFree.
   template<typename T>
   using Device_Vector = thrust::device_vector<T, rmm_allocator<T>>;
-
-  struct multi_col_sort_forwarder {
-    template <typename col_type>
-    typename std::enable_if<std::is_integral<col_type>::value>::type
-    operator()(void* const *           d_col_data,
-               gdf_valid_type* const * d_valids_data,
-               int*                    d_col_types,
-               char*                   d_asc_desc,
-               size_t                  ncols,
-               size_t                  nrows,
-               bool                    have_nulls,
-               void*                   output_indices,
-               bool                    nulls_are_smallest)
-    {
-      multi_col_sort(d_col_data,
-                    d_valids_data,
-                    d_col_types,
-                    d_asc_desc,
-                    ncols,
-                    nrows,
-                    have_nulls,
-                    static_cast<col_type*>(output_indices),
-                    nulls_are_smallest);
-    }
-    template <typename col_type>
-    typename std::enable_if<!std::is_integral<col_type>::value>::type 
-    operator()(void* const *           d_col_data,
-               gdf_valid_type* const * d_valids_data,
-               int*                    d_col_types,
-               char*                   d_asc_desc,
-               size_t                  ncols,
-               size_t                  nrows,
-               bool                    have_nulls,
-               void*                   output_indices,
-               bool                    nulls_are_smallest)
-    {
-    }
- };
 
   gdf_error multi_col_order_by(gdf_column** cols,
                                size_t ncols,
@@ -100,16 +61,33 @@ namespace{ //annonymus
 
     soa_col_info(cols, ncols, d_col_data, d_valids_data, d_col_types);
 
-    cudf::type_dispatcher(output_indices->dtype, multi_col_sort_forwarder{},
-                          d_col_data,
-                          d_valids_data,
-                          d_col_types,
-                          asc_desc,
-                          ncols,
-                          cols[0]->size,
-                          have_nulls,
-                          output_indices->data,
-                          flag_nulls_are_smallest); 
+    switch(output_indices->dtype)
+    {
+    /* NOTE: providing support for indexes to be multiple different types explodes compilation time, such that it become infeasible */
+
+//		case GDF_INT8: {
+//			multi_col_sort(d_col_data, d_valids_data, d_col_types, asc_desc, ncols, cols[0]->size,
+//					have_nulls, static_cast<int8_t*>(output_indices->data), flag_nulls_are_smallest);
+//			break;
+//		}
+//		case GDF_INT16: {
+//			multi_col_sort(d_col_data, d_valids_data, d_col_types, asc_desc, ncols, cols[0]->size,
+//					have_nulls, static_cast<int16_t*>(output_indices->data), flag_nulls_are_smallest);
+//			break;
+//		}
+//		case GDF_INT32: {
+//			multi_col_sort(d_col_data, d_valids_data, d_col_types, asc_desc, ncols, cols[0]->size,
+//					have_nulls, static_cast<int32_t*>(output_indices->data), flag_nulls_are_smallest);
+//			break;
+//		}
+		case GDF_INT64: {
+			multi_col_sort(d_col_data, d_valids_data, d_col_types, asc_desc, ncols, cols[0]->size,
+					have_nulls, static_cast<int64_t*>(output_indices->data), flag_nulls_are_smallest);
+			break;
+		}
+		default:
+			return GDF_UNSUPPORTED_DTYPE;
+    }
 
     return GDF_SUCCESS;
   }
