@@ -108,12 +108,10 @@ accuracy_for_dtype = {
     np.float64: 6,
     np.float32: 5
 }
-params_real_only = list(product([np.float64, np.float32], params_sizes))
 
 
-@pytest.mark.parametrize('dtype,nelem', params_real_only)
-def test_sum_squared(dtype, nelem):
-    decimal = accuracy_for_dtype[dtype]
+@pytest.mark.parametrize('dtype,nelem', params)
+def test_sum_of_squares(dtype, nelem):
     data = gen_rand(dtype, nelem)
     d_data = rmm.to_device(data)
     d_result = rmm.device_array(libgdf.gdf_reduce_optimal_output_size(),
@@ -132,7 +130,13 @@ def test_sum_squared(dtype, nelem):
     print('expect:', expect)
     print('got:', got)
 
-    np.testing.assert_array_almost_equal(expect, got, decimal=decimal)
+    if np.dtype(dtype).kind == 'i': 
+        if 0 <= expect <= np.iinfo(dtype).max:
+            np.testing.assert_array_almost_equal(expect, got)
+        else:
+            print('overflow, passing')
+    else:
+        np.testing.assert_array_almost_equal(expect, got, decimal=accuracy_for_dtype[dtype])
 
 
 @pytest.mark.parametrize('dtype,nelem', params)
