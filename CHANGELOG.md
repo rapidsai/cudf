@@ -31,7 +31,7 @@
 
 ## Improvements
  
- - PR #354 source code refactored for better organization. CMake build system overhaul.
+ - PR #354 source code refactored for better organization. CMake build system overhaul. Beginning of transition to Cython bindings.
  - PR #290 Add support for typecasting to/from datetime dtype
  - PR #323 Add handling pyarrow boolean arrays in input/out, add tests
  - PR #325 GDF_VALIDITY_UNSUPPORTED now returned for algorithms that don't support non-empty valid bitmasks
