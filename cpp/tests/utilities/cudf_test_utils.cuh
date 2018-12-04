@@ -38,24 +38,6 @@
 using gdf_col_pointer = typename std::unique_ptr<gdf_column, 
                                                  std::function<void(gdf_column*)>>;
 
-
-// Prints a vector and valids
-template <typename T>
-void print_vector_and_valid(T * v,
-                        gdf_valid_type * valid,
-                        const size_t num_rows)
-{
-  auto functor = [&valid, &v](int index) -> std::string {
-    if (gdf_is_valid(valid, index))
-      return std::to_string((int)v[index]);
-    return std::string("@");
-  };
-  std::vector<int> indexes(num_rows);
-  std::iota(std::begin(indexes), std::end(indexes), 0);
-  std::transform(indexes.begin(), indexes.end(), std::ostream_iterator<std::string>(std::cout, ", "), functor);
-  std::cout << std::endl;
-}
-
 template <typename col_type>
 void print_typed_column(col_type * col_data, 
                         gdf_valid_type * validity_mask, 
@@ -70,14 +52,14 @@ void print_typed_column(col_type * col_data,
   std::vector<gdf_valid_type> h_mask(num_masks);
   if(nullptr != validity_mask)
   {
-    cudaMemcpy((int *) h_mask.data(), validity_mask, num_masks * sizeof(gdf_valid_type), cudaMemcpyDeviceToHost);
+    cudaMemcpy(h_mask.data(), validity_mask, num_masks * sizeof(gdf_valid_type), cudaMemcpyDeviceToHost);
   }
 
   if (validity_mask == nullptr) {
     for(size_t i = 0; i < num_rows; ++i)
     {
       if (sizeof(col_type) == 1)
-        std::cout << (int)h_data[i] << " ";
+        std::cout << static_cast<int>(h_data[i]) << " ";
       else
         std::cout << h_data[i] << " ";
     }
