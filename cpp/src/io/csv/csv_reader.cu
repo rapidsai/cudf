@@ -259,6 +259,9 @@ gdf_error read_csv(csv_read_arg *args)
 	raw_csv->decimal = args->decimal;
 	raw_csv->thousands = args->thousands == nullptr ? '\0' : *args->thousands;
 
+	if (raw_csv->decimal == raw_csv->delimiter){ checkError(GDF_INVALID_API_CALL, "Decimal point cannot be the same as the delimiter"); }
+	if (raw_csv->thousands == raw_csv->delimiter){ checkError(GDF_INVALID_API_CALL, "Thousands separator cannot be the same as the delimiter"); }
+
 	//-----------------------------------------------------------------------------
 	// memory map in the data
 	void * 			map_data = NULL;
