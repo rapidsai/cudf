@@ -247,7 +247,7 @@ namespace test {
 
 
 
-
+namespace tdb {
 //----------------------------------------------------------------------------------------------------------
 //			Device Mask Utility Functions
 //----------------------------------------------------------------------------------------------------------
@@ -262,7 +262,7 @@ namespace test {
  *
  * @return
  */
-__host__ __device__ gdf_error slice_mask(gdf_valid_type * input_mask, int start, int stop, gdf_valid_type * output_mask) {
+__device__ gdf_error slice_mask(gdf_valid_type * input_mask, int start, int stop, gdf_valid_type * output_mask) {
 	return GDF_UNSUPPORTED_METHOD;
 }
 
@@ -295,6 +295,7 @@ __device__ gdf_error mask_as_bool(gdf_column* output, gdf_valid_type *mask) {
 __device__ gdf_error mask_from_float_array(gdf_valid_type *output_mask, float *array) {
 	return GDF_UNSUPPORTED_METHOD;
 
+}
 }
 
 
