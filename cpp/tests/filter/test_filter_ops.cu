@@ -126,7 +126,7 @@ struct GpuApplyStencilTest : public GdfTest {
 
     void allocate_reference_valids(host_valid_pointer& valid_ptr, size_t length) {
         auto deleter = [](gdf_valid_type* valid) { delete[] valid; };
-        auto n_bytes = gdf_get_num_chars_bitmask(length);
+        auto n_bytes = get_number_of_bytes_for_valid(length);
         auto valid_bits = new gdf_valid_type[n_bytes];
     
         valid_ptr = host_valid_pointer{ valid_bits, deleter };
@@ -174,7 +174,7 @@ struct GpuApplyStencilTest : public GdfTest {
             EXPECT_EQ(reference_vector[i], host_result[i]);
         }
 
-        auto n_bytes = gdf_get_num_chars_bitmask(col->size);
+        auto n_bytes = get_number_of_bytes_for_valid(col->size);
         gdf_valid_type* host_ptr = new gdf_valid_type[n_bytes];
 
         // Copy valids to the host

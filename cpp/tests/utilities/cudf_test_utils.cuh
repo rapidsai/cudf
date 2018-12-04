@@ -66,7 +66,7 @@ void print_typed_column(col_type * col_data,
   cudaMemcpy(h_data.data(), col_data, num_rows * sizeof(col_type), cudaMemcpyDeviceToHost);
 
 
-  const size_t num_masks = gdf_get_num_chars_bitmask(num_rows);
+  const size_t num_masks = get_number_of_bytes_for_valid(num_rows);
   std::vector<gdf_valid_type> h_mask(num_masks);
   if(nullptr != validity_mask)
   {
@@ -182,7 +182,7 @@ template <typename T, typename valid_initializer_t>
 gdf_col_pointer init_gdf_column(std::vector<T> data, size_t col_index, valid_initializer_t bit_initializer)
 {
   const size_t num_rows = data.size();
-  const size_t num_masks = gdf_get_num_chars_bitmask(num_rows);
+  const size_t num_masks = get_number_of_bytes_for_valid(num_rows);
 
   // Initialize the valid mask for this column using the initializer
   std::vector<gdf_valid_type> valid_masks(num_masks,0);
@@ -290,7 +290,7 @@ bool gdf_equal_columns(gdf_column* left, gdf_column* right)
   
   if (!thrust::equal(thrust::cuda::par, 
                      left->valid, 
-                     left->valid + gdf_get_num_chars_bitmask(left->size), 
+                     left->valid + get_number_of_bytes_for_valid(left->size), 
                      right->valid))
     return false;
   

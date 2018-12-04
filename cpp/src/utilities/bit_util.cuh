@@ -24,7 +24,7 @@ static constexpr int ValidSize = 32;
 using ValidType = uint32_t;
 
 
-// Instead of this function, use gdf_get_num_chars_bitmask from gdf/utils.h
+// Instead of this function, use get_number_of_bytes_for_valid from gdf/utils.h
 //__host__ __device__ __forceinline__
 //  size_t
 //  valid_size(size_t column_length)
@@ -86,7 +86,7 @@ static inline std::string chartobin(gdf_valid_type c, int size = 8)
 
 static inline std::string gdf_valid_to_str(gdf_valid_type *valid, size_t column_size)
 {
-  size_t n_bytes = gdf_get_num_chars_bitmask(column_size);
+  size_t n_bytes = get_number_of_bytes_for_valid(column_size);
   std::string response;
   for (size_t i = 0; i < n_bytes; i++)
   {

@@ -79,7 +79,7 @@ void print_valid_data(const gdf_valid_type *validity_mask,
   cudaPointerGetAttributes(&attrib, validity_mask);
   error = cudaGetLastError();
 
-  const size_t num_masks = gdf_get_num_chars_bitmask(num_rows);
+  const size_t num_masks = get_number_of_bytes_for_valid(num_rows);
   std::vector<gdf_valid_type> h_mask(num_masks);
   if (error != cudaErrorInvalidValue && attrib.memoryType == cudaMemoryTypeDevice)
     cudaMemcpy(h_mask.data(), validity_mask, num_masks * sizeof(gdf_valid_type), cudaMemcpyDeviceToHost);

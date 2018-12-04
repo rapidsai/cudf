@@ -15,7 +15,7 @@ gdf_valid_type * get_gdf_valid_from_device(gdf_column* column) {
     }
 
     gdf_valid_type * host_valid_out;
-    size_t n_bytes = gdf_get_num_chars_bitmask(column->size);
+    size_t n_bytes = get_number_of_bytes_for_valid(column->size);
     host_valid_out = new gdf_valid_type[n_bytes];
     cudaMemcpy(host_valid_out,column->valid, n_bytes, cudaMemcpyDeviceToHost);
     return host_valid_out;
@@ -30,7 +30,7 @@ gdf_valid_type* gen_gdf_valid(size_t column_size, size_t init_value)
     }
     else
     {
-        size_t n_bytes = gdf_get_num_chars_bitmask (column_size);
+        size_t n_bytes = get_number_of_bytes_for_valid (column_size);
         valid = new gdf_valid_type[n_bytes];
         size_t i;
         for (i = 0; i < n_bytes - 1; ++i)
@@ -69,7 +69,7 @@ auto print_binary(gdf_valid_type n, int size) -> void {
 void initialize_valids(host_valid_pointer& valid_ptr, size_t length, bool all_bits_on)
 {
     auto deleter = [](gdf_valid_type* valid) { delete[] valid; };
-    auto n_bytes = gdf_get_num_chars_bitmask(length);
+    auto n_bytes = get_number_of_bytes_for_valid(length);
     auto valid_bits = new gdf_valid_type[n_bytes];
 
     for (size_t i = 0; i < length; ++i) {

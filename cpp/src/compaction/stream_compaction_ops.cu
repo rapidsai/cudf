@@ -43,20 +43,6 @@
 template <typename T>
 using Vector = thrust::device_vector<T, rmm_allocator<T>>;
 
-/**
- * Calculates the size in bytes of a validity indicator pseudo-column for a given column's size.
- *
- * @note Actually, this is the size in bytes of a column of bits, where the individual
- * bit-container elements are of the same size as `gdf_valid_type`.
- *
- * @param[in] column_size the number of elements, i.e. the number of bits to be available
- * for use, in the column
- * @return the number of bytes necessary to make available for the validity indicator pseudo-column
- */
-gdf_size_type get_number_of_bytes_for_valid(gdf_size_type column_size) {
-    return gdf::util::div_rounding_up_safe(column_size, GDF_VALID_BITSIZE);
-}
-
 struct shift_left: public thrust::unary_function<gdf_valid_type,gdf_valid_type>
 {
 

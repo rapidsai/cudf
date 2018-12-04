@@ -19,6 +19,7 @@
 #define UTIL_MISCELLANY_HPP_
 
 #include <cstdlib> // for std::div
+#include <type_traits> // for std::enable_if
 
 extern "C" {
 #include <cudf/types.h>

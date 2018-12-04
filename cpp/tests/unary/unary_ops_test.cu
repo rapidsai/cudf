@@ -685,7 +685,7 @@ TEST_F(gdf_unaryops_output_valid_TEST, checkingValidAndDtype) {
 		Vector<float> inputDataDev(inputData);
 		Vector<float> outputDataDev(colSize);
 
-		gdf_size_type num_chars_bitmask = gdf_get_num_chars_bitmask(inputCol.size);
+		gdf_size_type num_chars_bitmask = get_number_of_bytes_for_valid(inputCol.size);
 		Vector<gdf_valid_type> inputValidDev(num_chars_bitmask);
 		Vector<gdf_valid_type> outputValidDev(num_chars_bitmask);
 
@@ -722,7 +722,7 @@ TEST_F(gdf_unaryops_output_valid_TEST, checkingValidAndDtype) {
 		Vector<float> inputDataDev(inputData);
 		Vector<float> outputDataDev(colSize);
 
-		gdf_size_type num_chars_bitmask = gdf_get_num_chars_bitmask(inputCol.size);
+		gdf_size_type num_chars_bitmask = get_number_of_bytes_for_valid(inputCol.size);
 		Vector<gdf_valid_type> inputValidDev(num_chars_bitmask);
 		Vector<gdf_valid_type> outputValidDev(num_chars_bitmask);
 

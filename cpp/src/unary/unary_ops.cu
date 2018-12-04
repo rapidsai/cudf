@@ -377,7 +377,7 @@ gdf_error gdf_cast_##VFROM##_to_##VTO(gdf_column *input, gdf_column *output) {  
                                                                                                                 \
     output->dtype = LTO;                                                                                        \
     if (input->valid && output->valid) {                                                                        \
-        gdf_size_type num_chars_bitmask = gdf_get_num_chars_bitmask(input->size);                               \
+        gdf_size_type num_chars_bitmask = get_number_of_bytes_for_valid(input->size);                               \
         thrust::copy(thrust::cuda::par(allocator).on(stream), input->valid, input->valid + num_chars_bitmask, output->valid);            \
     }                                                                                                           \
                                                                                                                 \
@@ -415,7 +415,7 @@ gdf_error gdf_cast_##VFROM##_to_##VTO(gdf_column *input, gdf_column *output, gdf
     output->dtype = LTO;                                                                                \
     output->dtype_info.time_unit = time_unit;                                                           \
     if (input->valid && output->valid) {                                                                \
-        gdf_size_type num_chars_bitmask = gdf_get_num_chars_bitmask(input->size);                       \
+        gdf_size_type num_chars_bitmask = get_number_of_bytes_for_valid(input->size);                       \
         thrust::copy(thrust::cuda::par(allocator).on(stream), input->valid, input->valid + num_chars_bitmask, output->valid);    \
     }                                                                                                   \
                                                                                                         \

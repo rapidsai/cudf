@@ -177,7 +177,7 @@ gdf_error gdf_count_nonzero_mask(gdf_valid_type const * masks, int num_rows, int
   assert(sizeof(valid32_t) >= sizeof(gdf_valid_type));
 
   // Number of gdf_valid_types in the validity bitmask
-  size_t const num_masks{gdf_get_num_chars_bitmask(num_rows)};
+  size_t const num_masks{get_number_of_bytes_for_valid(num_rows)};
 
   // Number of 4 byte types in the validity bit mask 
   size_t num_masks32{static_cast<size_t>(std::ceil(static_cast<float>(num_masks) / RATIO))};
@@ -279,7 +279,7 @@ gdf_error gdf_mask_concat(gdf_valid_type *output_mask,
     // as input
     thrust::tabulate(thrust::cuda::par,
                      output_mask,
-                     output_mask + gdf_get_num_chars_bitmask(output_column_length),
+                     output_mask + get_number_of_bytes_for_valid(output_column_length),
                      mask_concatenator);
 
     CUDA_TRY( cudaGetLastError() );

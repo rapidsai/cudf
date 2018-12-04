@@ -60,7 +60,7 @@ struct ColumnConcatTest : public testing::Test
     for (auto sz : column_sizes) total_size += sz;
 
     std::vector<T> output_data(total_size);
-    std::vector<gdf_valid_type> output_valid(gdf_get_num_chars_bitmask(total_size));
+    std::vector<gdf_valid_type> output_valid(get_number_of_bytes_for_valid(total_size));
     
     auto output_gdf_col = create_gdf_column(output_data, output_valid);
 
@@ -74,7 +74,7 @@ struct ColumnConcatTest : public testing::Test
       std::copy(the_columns[i].begin(), the_columns[i].end(), std::back_inserter(ref_data));
       
     gdf_size_type ref_null_count = 0;
-    std::vector<gdf_valid_type> ref_valid(gdf_get_num_chars_bitmask(total_size));
+    std::vector<gdf_valid_type> ref_valid(get_number_of_bytes_for_valid(total_size));
     for (gdf_size_type index = 0, col = 0, row = 0; index < total_size; ++index)
     {
       if (null_init(row, col)) gdf::util::turn_bit_on(ref_valid.data(), index);
@@ -117,7 +117,7 @@ struct ColumnConcatTest : public testing::Test
     for (auto sz : column_sizes) total_size += sz;
 
     std::vector<int32_t> output_data(total_size);
-    std::vector<gdf_valid_type> output_valid(gdf_get_num_chars_bitmask(total_size));
+    std::vector<gdf_valid_type> output_valid(get_number_of_bytes_for_valid(total_size));
     
     auto output_gdf_col = create_gdf_column(output_data, output_valid);
     
@@ -160,7 +160,7 @@ TEST_F(ColumnConcatTest, ErrorConditions)
   }
 
   std::vector<int32_t> output_data(total_size);
-  std::vector<gdf_valid_type> output_valid(gdf_get_num_chars_bitmask(total_size));
+  std::vector<gdf_valid_type> output_valid(get_number_of_bytes_for_valid(total_size));
   
   auto output_gdf_col = create_gdf_column(output_data, output_valid);
   
@@ -180,7 +180,7 @@ TEST_F(ColumnConcatTest, ErrorConditions)
   for (int i = 0; i < num_columns; ++i) {
     gdf_size_type size = column_sizes[i];
     std::vector<int32_t> data(size);
-    std::vector<gdf_valid_type> valid(gdf_get_num_chars_bitmask(size));
+    std::vector<gdf_valid_type> valid(get_number_of_bytes_for_valid(size));
   
     input_columns[i] = create_gdf_column(data, valid).get();
   }
