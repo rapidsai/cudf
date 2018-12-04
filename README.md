@@ -63,89 +63,68 @@ $ conda install -c conda-forge boost
 
 ## Script to build cuDF from source
 
-```
-# environment vars
-# Perhaps add warnings if the following three are missing?
-# export CUDA_HOME=/usr/local/cuda-10.0
-# export CONDA_PREFIX=~/anaconda3/envs/cudf_dev
-# export CUDACXX=$CUDA_HOME/bin/nvcc
-export NUMBAPRO_NVVM=$CUDA_HOME/nvvm/lib64/libnvvm.so
-export NUMBAPRO_LIBDEVICE=$CUDA_HOME/nvvm/libdevice/
-
-# recursively clone repository
-git clone --recurse-submodules https://github.com/rapidsai/cudf.git
-cd cudf
-# create the conda environment (assuming in base `cudf` directory)
-conda env create --name cudf_dev --file conda/environments/dev_py35.yml
-# activate the environment
-source activate cudf_dev
-# build libcudf
-cd cpp
-mkdir build
-cd build
-cmake .. -DCMAKE_INSTALL_PREFIX=$CONDA_PREFIX
-make -j
-make install
-make test
-# build python bindings
-make python_cffi
-make install_python
-cd python && py.test -v
-cd ../../python
-python setup.py build_ext --inplace
-py.test -v
-python setup.py install
-```
-
-Thomson comment: Should we simply place this all into a configuration script for developers? I think that's my preference. Then, updating developer setup is a function of whether or not the script has the intended function. Opinions?
-
 ### Build from Source
 
 To install cuDF from source, ensure the dependencies are met and follow the steps below:
 
-1. Clone the repository
+- Clone the repository recursively
 ```bash
 git clone --recurse-submodules https://github.com/rapidsai/cudf.git
 cd cudf
 ```
-2. Create the conda development environment `cudf_dev` as detailed above
-3. Build and install `libcudf`
+- Create the conda development environment `cudf_dev`
 ```bash
-$ cd /path/to/cudf/cpp                              # navigate to C/C++ CUDA source root directory
+# create the conda environment (assuming in base `cudf` directory)
+conda env create --name cudf_dev --file conda/environments/dev_py35.yml
+# activate the environment
+source activate cudf_dev
+```
+
+- Build and install `libcudf`. CMake depends on the `nvcc` executable being on your path or defined in `$CUDACXX`.
+```bash
+$ cd cpp                                            # navigate to C/C++ CUDA source root directory
 $ mkdir build                                       # make a build directory
 $ cd build                                          # enter the build directory
 $ cmake .. -DCMAKE_INSTALL_PREFIX=/install/path     # configure cmake ... use $CONDA_PREFIX if you're using Anaconda
 $ make -j                                           # compile the libraries librmm.so, libcudf.so ... '-j' will start a parallel job using the number of physical cores available on your system
 $ make install                                      # install the libraries librmm.so, libcudf.so to '/install/path'
 ```
-To run tests (Optional):
 
+- To run tests (Optional):
 ```bash
 $ make test
 ```
 
-Build and install cffi bindings:
+- Build and install cffi bindings:
 ```bash
 $ make python_cffi                                  # build CFFI bindings for librmm.so, libcudf.so
 $ make install_python                               # install python bindings into site-packages
 $ cd python && py.test -v                           # optional, run python tests on low-level python bindings
 ```
 
-4. Build the `cudf` python package, in the `python` folder:
+- Build the `cudf` python package, in the `python` folder:
 ```bash
 $ cd ../../python
 $ python setup.py build_ext --inplace
 ```
 
-To run Python tests (Optional):
+- You will also need the following environment variables, including `$CUDA_HOME`.
+```bash
+NUMBAPRO_NVVM=$CUDA_HOME/nvvm/lib64/libnvvm.so
+NUMBAPRO_LIBDEVICE=$CUDA_HOME/nvvm/libdevice
+```
+
+- To run Python tests (Optional):
 ```bash
 $ py.test -v                                        # run python tests on cudf python bindings
 ```
-5. Finally, install the Python package to your Python path:
 
+- Finally, install the Python package to your Python path:
 ```bash
 $ python setup.py install                           # install cudf python bindings
 ```
+
+Done! You are ready to develop for the cuDF OSS project.
 
 ## Automated Build in Docker Container
 
