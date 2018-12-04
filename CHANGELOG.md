@@ -15,6 +15,7 @@
  
 ## Bug Fixes
 
+ - PR #444 Fix csv_test CUDA too many resources requested fail. 
  - PR #396 added missing output buffer in validity tests for groupbys.
  - PR #408 Docker file updates for source reorganization
  - PR #417 Fix `map_test` failure with CUDA 10
