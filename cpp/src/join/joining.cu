@@ -86,6 +86,8 @@ gdf_error sort_join(size_type num_cols, gdf_column **leftcol, gdf_column **right
     return GDF_JOIN_TOO_MANY_COLUMNS;
   } else if (num_cols == 0) {
     return GDF_DATASET_EMPTY;
+  } else if ((leftcol[0]->null_count != 0) || (rightcol[0]->null_count != 0)) {
+      return GDF_VALIDITY_UNSUPPORTED;
   }
 
   return join_sort<join_type, output_index_type>(
