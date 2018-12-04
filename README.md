@@ -98,8 +98,8 @@ $ make test
 - Build and install cffi bindings:
 ```bash
 $ make python_cffi                                  # build CFFI bindings for librmm.so, libcudf.so
-$ make install_python                               # install python bindings into site-packages
-$ cd python && py.test -v                           # optional, run python tests on low-level python bindings
+$ make install_python                               # build & install CFFI python bindings. Depends on cffi package from PyPi or Conda
+$ py.test -v                                        # optional, run python tests on low-level python bindings
 ```
 
 - Build the `cudf` python package, in the `python` folder:
