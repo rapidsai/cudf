@@ -200,14 +200,16 @@ TYPED_TEST_CASE(GpuApplyStencilTest, Implementations);
 //TYPED_TEST(GpuApplyStencilTest, usage_example) {
 
 TYPED_TEST(GpuApplyStencilTest, all_bits_on_multiple_32) {
-    this->create_input(32, 100, valids_t::ALL_BITS_ON, valids_t::ALL_BITS_ON, true);
+    const bool print_result{false};
+
+    this->create_input(32, 100, valids_t::ALL_BITS_ON, valids_t::ALL_BITS_ON, print_result);
 
     gdf_error error = this->compute_gdf_result();
     ASSERT_EQ(error, GDF_SUCCESS) << "GPU Apply stencil returned an error code\n";
 
     this->compute_reference_solution();
 
-    if(true) {
+    if(print_result) {
         this->print_debug();
     }
     
@@ -217,14 +219,16 @@ TYPED_TEST(GpuApplyStencilTest, all_bits_on_multiple_32) {
 }
 
 TYPED_TEST(GpuApplyStencilTest, all_bits_on_non_multiple_of_32) {
-    this->create_input(25, 100, valids_t::ALL_BITS_ON, valids_t::ALL_BITS_ON, true);
+    const bool print_result{false};
+
+    this->create_input(25, 100, valids_t::ALL_BITS_ON, valids_t::ALL_BITS_ON, print_result);
 
     gdf_error error = this->compute_gdf_result();
     ASSERT_EQ(error, GDF_SUCCESS) << "GPU Apply stencil returned an error code\n";
 
     this->compute_reference_solution();
 
-    if(true) {
+    if(print_result) {
         this->print_debug();
     }
     
@@ -234,14 +238,16 @@ TYPED_TEST(GpuApplyStencilTest, all_bits_on_non_multiple_of_32) {
 }
 
 TYPED_TEST(GpuApplyStencilTest, half_zero_col_multiple_32) {
-    this->create_input(32, 100, valids_t::HALF_BITS, valids_t::ALL_BITS_ON, true);
+    const bool print_result{false};
+
+    this->create_input(32, 100, valids_t::HALF_BITS, valids_t::ALL_BITS_ON, print_result);
 
     gdf_error error = this->compute_gdf_result();
     ASSERT_EQ(error, GDF_SUCCESS) << "GPU Apply stencil returned an error code\n";
 
     this->compute_reference_solution();
 
-    if(true) {
+    if(print_result) {
         this->print_debug();
     }
     
@@ -251,14 +257,16 @@ TYPED_TEST(GpuApplyStencilTest, half_zero_col_multiple_32) {
 }
 
 TYPED_TEST(GpuApplyStencilTest, half_zero_stencil_multiple_32) {
-    this->create_input(32, 100, valids_t::ALL_BITS_ON, valids_t::HALF_BITS, true);
+    const bool print_result{false};
+
+    this->create_input(32, 100, valids_t::ALL_BITS_ON, valids_t::HALF_BITS, print_result);
 
     gdf_error error = this->compute_gdf_result();
     ASSERT_EQ(error, GDF_SUCCESS) << "GPU Apply stencil returned an error code\n";
 
     this->compute_reference_solution();
 
-    if(true) {
+    if(print_result) {
         this->print_debug();
     }
     
@@ -268,14 +276,16 @@ TYPED_TEST(GpuApplyStencilTest, half_zero_stencil_multiple_32) {
 }
 
 TYPED_TEST(GpuApplyStencilTest, half_zero_col_non_multiple_of_32) {
-    this->create_input(25, 100, valids_t::HALF_BITS, valids_t::ALL_BITS_ON, true);
+    const bool print_result{false};
+
+    this->create_input(25, 100, valids_t::HALF_BITS, valids_t::ALL_BITS_ON, print_result);
 
     gdf_error error = this->compute_gdf_result();
     ASSERT_EQ(error, GDF_SUCCESS) << "GPU Apply stencil returned an error code\n";
 
     this->compute_reference_solution();
 
-    if(true) {
+    if(print_result) {
         this->print_debug();
     }
     
@@ -285,14 +295,16 @@ TYPED_TEST(GpuApplyStencilTest, half_zero_col_non_multiple_of_32) {
 }
 
 TYPED_TEST(GpuApplyStencilTest, half_zero_stencil_non_multiple_of_32) {
-    this->create_input(25, 100, valids_t::ALL_BITS_ON, valids_t::HALF_BITS, true);
+    const bool print_result{false};
+
+    this->create_input(25, 100, valids_t::ALL_BITS_ON, valids_t::HALF_BITS, print_result);
 
     gdf_error error = this->compute_gdf_result();
     ASSERT_EQ(error, GDF_SUCCESS) << "GPU Apply stencil returned an error code\n";
 
     this->compute_reference_solution();
 
-    if(true) {
+    if(print_result) {
         this->print_debug();
     }
     
@@ -302,14 +314,16 @@ TYPED_TEST(GpuApplyStencilTest, half_zero_stencil_non_multiple_of_32) {
 }
 
 TYPED_TEST(GpuApplyStencilTest, both_half_zero_multiple_of_32) {
-    this->create_input(32, 100, valids_t::HALF_BITS, valids_t::HALF_BITS, true);
+    const bool print_result{false};
+
+    this->create_input(32, 100, valids_t::HALF_BITS, valids_t::HALF_BITS, print_result);
 
     gdf_error error = this->compute_gdf_result();
     ASSERT_EQ(error, GDF_SUCCESS) << "GPU Apply stencil returned an error code\n";
 
     this->compute_reference_solution();
 
-    if(true) {
+    if(print_result) {
         this->print_debug();
     }
     
@@ -319,14 +333,16 @@ TYPED_TEST(GpuApplyStencilTest, both_half_zero_multiple_of_32) {
 }
 
 TYPED_TEST(GpuApplyStencilTest, both_half_zero_non_multiple_of_32) {
-    this->create_input(25, 100, valids_t::HALF_BITS, valids_t::HALF_BITS, true);
+    const bool print_result{false};
+
+    this->create_input(25, 100, valids_t::HALF_BITS, valids_t::HALF_BITS, print_result);
 
     gdf_error error = this->compute_gdf_result();
     ASSERT_EQ(error, GDF_SUCCESS) << "GPU Apply stencil returned an error code\n";
 
     this->compute_reference_solution();
 
-    if(true) {
+    if(print_result) {
         this->print_debug();
     }
     
@@ -336,14 +352,16 @@ TYPED_TEST(GpuApplyStencilTest, both_half_zero_non_multiple_of_32) {
 }
 
 TYPED_TEST(GpuApplyStencilTest, null_valids_stencil_non_multiple_of_32) {
-    this->create_input(25, 100, valids_t::HALF_BITS, valids_t::NULL_BITS, true);
+    const bool print_result{false};
+
+    this->create_input(25, 100, valids_t::HALF_BITS, valids_t::NULL_BITS, print_result);
 
     gdf_error error = this->compute_gdf_result();
     ASSERT_EQ(error, GDF_SUCCESS) << "GPU Apply stencil returned an error code\n";
 
     this->compute_reference_solution();
 
-    if(true) {
+    if(print_result) {
         this->print_debug();
     }
     
@@ -353,14 +371,16 @@ TYPED_TEST(GpuApplyStencilTest, null_valids_stencil_non_multiple_of_32) {
 }
 
 TYPED_TEST(GpuApplyStencilTest, null_valids_col_non_multiple_of_32) {
-    this->create_input(25, 100, valids_t::NULL_BITS, valids_t::HALF_BITS, true);
+    const bool print_result{false};
+
+    this->create_input(25, 100, valids_t::NULL_BITS, valids_t::HALF_BITS, print_result);
 
     gdf_error error = this->compute_gdf_result();
     ASSERT_EQ(error, GDF_SUCCESS) << "GPU Apply stencil returned an error code\n";
 
     this->compute_reference_solution();
 
-    if(true) {
+    if(print_result) {
         this->print_debug();
     }
     
@@ -370,14 +390,16 @@ TYPED_TEST(GpuApplyStencilTest, null_valids_col_non_multiple_of_32) {
 }
 
 TYPED_TEST(GpuApplyStencilTest, both_null_valids_non_multiple_of_32) {
-    this->create_input(25, 100, valids_t::NULL_BITS, valids_t::NULL_BITS, true);
+    const bool print_result{false};
+
+    this->create_input(25, 100, valids_t::NULL_BITS, valids_t::NULL_BITS, print_result);
 
     gdf_error error = this->compute_gdf_result();
     ASSERT_EQ(error, GDF_SUCCESS) << "GPU Apply stencil returned an error code\n";
 
     this->compute_reference_solution();
 
-    if(true) {
+    if(print_result) {
         this->print_debug();
     }
     
