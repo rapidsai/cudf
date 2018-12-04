@@ -12,7 +12,7 @@
  * @brief  Invokes an instance of a functor template with the appropriate type
  * determined by a gdf_dtype enum value.
  *
- * This helper function accepts any callable object with an "operator()" template,
+ * This helper function accepts any object with an "operator()" template,
  * e.g., a functor. It will invoke an instance of the template by passing 
  * in as the template argument an appropriate type determined by the value of the 
  * gdf_dtype argument.
@@ -28,20 +28,18 @@
  *
  * A strong typedef  provides a new, concrete type unlike a normal C++ typedef which
  * is simply a type alias. These "strong typedef" structs simply wrap a single member
- * variable of a fundamental type called 'value'. In order to access the underlying 
- * value, one must use the "unwrap" function which will provide a reference to the 
- * underlying value.
+ * variable of a fundamental type called 'value'. 
  *
- * See types.cuh for more detail.
+ * The standard arithmetic operators are defined for the wrapper structs and therefore
+ * the wrapper struct types can be used as if they were fundamental types.
+ *
+ * See types.hpp for more detail.
  *
  * Example usage with a functor that returns the size of the dispatched type:
  *
  * struct example_functor{
- *  template <typename col_type>
+ *  template <typename T>
  *  int operator()(){
- *    // col_type may be a wrapper struct. Therefore, use "unwrap" to access the underlying
- *    // fundamental type. "remove_reference" is necessary because "unwrap" returns a T&
- *    using T = typename std::remove_reference< decltype(cudf::detail::unwrap(col_type{})) >::type
  *    return sizeof(T);
  *  }
  * };
@@ -49,24 +47,23 @@
  * cudf::type_dispatcher(GDF_INT8, example_functor);  // returns 1
  * cudf::type_dispatcher(GDF_INT64, example_functor); // returns 8
  *
- * Example usage of of the "unwrap" function in a functor for checking if element "i" 
- * in column "lhs" is equal to element "j" in column "rhs":
+ * Example usage of a functor for checking if element "i" in column "lhs" is 
+ * equal to element "j" in column "rhs":
  *
  * struct elements_are_equal{
- *   template <typename col_type>
+ *   template <typename ColumnType>
  *   bool operator()(void const * lhs, int i,
  *                   void const * rhs, int j)
  *   {
  *     // Cast the void* data buffer to the dispatched type and retrieve elements 
  *     // "i" and "j" from the respective columns
- *     col_type const i_elem = static_cast<col_type const*>(lhs)[i];
- *     col_type const j_elem = static_cast<col_type const*>(rhs)[j];
+ *     ColumnType const i_elem = static_cast<ColumnType const*>(lhs)[i];
+ *     ColumnType const j_elem = static_cast<ColumnType const*>(rhs)[j];
  *
- *     // "col_type" may be a wrapper struct. Therefore, use the "unwrap" function
- *     // to retrieve a reference to the underlying value. If "col_type" is a 
- *     // fundamental type, "unwrap" simply passes through the same value and
- *     // is effectively a no-op
- *     return (gdf::detail::unwrap(i_elem) == gdf::detail::unwrap(j_elem));
+ *     // operator== is defined for wrapper structs such that it performs the 
+ *     // operator== on the underlying values. Therefore, the wrapper structs
+ *     // can be used as if they were fundamental arithmetic types
+ *     return i_elem == j_elem;
  *   }
  * };
  *

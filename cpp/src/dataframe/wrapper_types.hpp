@@ -11,35 +11,37 @@
 
 /* --------------------------------------------------------------------------*/
 /** 
- * @file types.hpp
+ * @file wrapper_types.hpp
  * @brief  Wrapper structs for for the non-fundamental gdf_dtype types.
  *
  * These structs simply wrap a single member variable of a fundamental type 
- * called "value". In order to access the underlying wrapped value, one can 
- * use the "unwrap" function which will provide a reference to the underlying
- * value.
- *
+ * called "value". 
+ * 
  * These wrapper structures are used in conjunction with the type_dispatcher to
  * emulate "strong typedefs", i.e., provide opaque types that allow template 
  * specialization. A normal C++ typedef is simply an alias and does not allow
  * for specializing a template or overloading a function.
- *
+ * 
  * The purpose of these "strong typedefs" is to provide a one-to-one mapping between
  * gdf_dtype enum values and concrete C++ types and allow distinguishing columns with
  * different gdf_dtype types, but have the same underlying type. For example,
  * the underlying type of both GDF_DATE32 and GDF_INT32 is int32_t. However, if
  * one wished to specialize a functor invoked with the type_dispatcher to handle
  * GDF_DATE32 different from GDF_INT32, that would not be possible with aliases.
- *
- * In the long term, these types should be updated such that they provide appropriate
- * operators/member functions that implement the desired behavior for operating on
- * elements of these types.
+ * 
+ * The standard arithmetic operators are defined for these wrapper structs such
+ * that they can be used as if they were fundamental arithmetic types.
+ * 
+ * In general, interacting with the wrapper structs should be done via the defined 
+ * operators. However, if one needs to directly access the underlying value, the
+ * "unwrap" function may be used. Calling `unwrap` on an instance of a wrapper struct
+ * will return a reference to the underlying value. Calling `unwrap` on an instance
+ * of a fundamental type will return a reference to that instance (effectively a no-op).
  *
  */
 /* ----------------------------------------------------------------------------*/
 namespace cudf
 {
-
 namespace detail
 {
 /**
