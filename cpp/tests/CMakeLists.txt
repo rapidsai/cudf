@@ -163,7 +163,8 @@ ConfigureTest(RMM_TEST "${RMM_TEST_SRC}")
 # - types tests -------------------------------------------------------------------------------------
 
 set(TYPES_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/types/types_test.cpp")
+    "${CMAKE_CURRENT_SOURCE_DIR}/types/types_test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/types/dispatcher_test.cu")
 
 ConfigureTest(TYPES_TEST "${TYPES_TEST_SRC}")
 
