@@ -549,7 +549,8 @@ class DataFrame(object):
         if name in self._cols:
             raise NameError('duplicated column name {!r}'.format(name))
 
-        series = self._prepare_series_for_add(data, forceindex=forceindex)
+        series = Series(data)
+        series = self._prepare_series_for_add(series, forceindex=forceindex)
         series.name = name
         self._cols[name] = series
 
