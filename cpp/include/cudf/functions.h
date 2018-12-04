@@ -759,12 +759,12 @@ gdf_error gpu_comparison(gdf_column *lhs, gdf_column *rhs, gdf_column *output,gd
  * @note This is a stable operator, i.e. the relative order of elements in the output is
  * the same as their order in the input
  *
- * @note For now, this mis-handles NULLs in the following sense: The input column _must_
- * be nullable (otherwise it will be flat-out rejected); but all NULL values are
- * dropped, in addition to the values with corresponding stencil bit 0.
+ * @note If there are nulls in the stencil, they are treated as "false" and those
+ * values in the data don't get copied. If there are nulls in the data itself, then
+ * they are carry to the output if the stencil is set to "true" for that value.
  *
- * @param[in] col the original, unfiltered column of data. At the moment, this column must
- * be nullable (i.e. have a validity pseudo-column)
+ * @param[in] col the original, unfiltered column of data. This column may or not be nullable
+ * (i.e. have a validity pseudo-column)
  * @param[in] stencil A "boolean" column, in the sense that its `0` values are interpreted
  * as `false` and its non-zero values as `true`; has the same length as @p col. Represents
  * the subset of `{ 0, ... , col.size-1 }` which are to be included in the output. Also
