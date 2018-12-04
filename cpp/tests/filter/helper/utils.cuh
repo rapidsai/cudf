@@ -200,13 +200,10 @@ gdf_column gen_gdb_column(size_t column_size, ValueType init_value)
     return output;
 }
 
-
-
 static inline void print_column(const gdf_column * col )
 {
     print_gdf_column(col);
 }
-
 
 template <typename LeftValueType = int8_t, typename RightValueType = int8_t>
 void check_column_for_stencil_operation(gdf_column *column, gdf_column *stencil, gdf_column *output_op) {
@@ -296,19 +293,6 @@ void check_column_for_concat_operation(gdf_column *lhs, gdf_column *rhs, gdf_col
         auto lhs_valid = get_gdf_valid_from_device(lhs);
         auto rhs_valid = get_gdf_valid_from_device(rhs);
         auto output_valid = get_gdf_valid_from_device(output);
-
-
-        // auto  gdf_valid_to_str = [](gdf_valid_type* valid, size_t column_size)
-        // {
-        //     size_t last_byte = gdf::util::last_byte_index(column_size);
-        //     std::string response;
-        //     for (size_t i = 0; i < last_byte; i++) {
-        //         size_t n_bits = last_byte != i + 1 ? 8 : column_size - 8 * (last_byte - 1);
-        //         auto result = chartobin(valid[i], n_bits);
-        //         response += std::string(result);
-        //     }
-        //     return response;
-        // }
 
         auto computed = gdf_valid_to_str(output_valid, output->size);
         auto expected = gdf_valid_to_str(lhs_valid, lhs->size) + gdf_valid_to_str(rhs_valid, rhs->size);

@@ -1,6 +1,3 @@
-// Note: this file has been dropped from the filter tests sources!
-// Please either restore it there or delete it.
-
 /*
  * Copyright 2018 BlazingDB, Inc.
  *     Copyright 2018 Alexander Ocsa <alexander@blazingdb.com>

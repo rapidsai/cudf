@@ -41,7 +41,7 @@ struct GdfConcat : public GdfTest {};
  */
 TEST_F(GdfConcat, usage_example) {
     const size_t lhs_size = 10;
-    const size_t rhs_size = 5; // TODO: This used to be 20. Why the change?
+    const size_t rhs_size = 20;
     gdf_column lhs = gen_gdb_column<ValueType>(lhs_size, 2);
     gdf_column rhs = gen_gdb_column<ValueType>(rhs_size, 3);
     std::cout << "*****left**************\n";
@@ -153,13 +153,6 @@ TEST_F(GdfConcat, CaseWithOutputOfTwoBytes)
     delete_gdf_column(&rhs);
     delete_gdf_column(&output);
 }
-
-/*
-
-// Commented-out due to changes in representation of bit columns - LSB-first
-// rather than MSB-first.
-//
-// TODO: Should these be un-commented and adapted, or dropped?
 
 TEST_F(GdfConcat, CaseWithInput_2_2_Output3)
 {
@@ -346,4 +339,3 @@ TEST_F(GdfConcat, WithDifferentColumnSizes)
         }
     }
 }
-*/

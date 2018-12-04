@@ -70,27 +70,29 @@ __host__ __device__ __forceinline__ size_t last_byte_index(size_t column_size)
   return (column_size + 8 - 1) / 8;
 }
 
-static inline std::string chartobin(gdf_valid_type c, size_t size = 8)
+static inline std::string chartobin(gdf_valid_type c, int size = 8)
 {
   std::string bin;
   bin.resize(size);
   bin[0] = 0;
-  size_t i;
-  for (i = 0; i < size; i++) {
-    bin[i] = (c % 2) + '0';
-    c /= 2;
+  int i;
+  for (i = size - 1; i >= 0; i--)
+  {
+      bin[i] = (c % 2) + '0';
+      c /= 2;
   }
   return bin;
 }
 
-static inline std::string gdf_valid_to_str(gdf_valid_type* valid, size_t column_size)
+static inline std::string gdf_valid_to_str(gdf_valid_type *valid, size_t column_size)
 {
-  size_t last_byte = gdf::util::last_byte_index(column_size);
+  size_t n_bytes = gdf_get_num_chars_bitmask(column_size);
   std::string response;
-  for (size_t i = 0; i < last_byte; i++) {
-    size_t n_bits = last_byte != i + 1 ? 8 : column_size - 8 * (last_byte - 1);
-    auto result = chartobin(valid[i], n_bits);
-    response += std::string(result);
+  for (size_t i = 0; i < n_bytes; i++)
+  {
+      size_t length = (n_bytes != i + 1) ? GDF_VALID_BITSIZE : (column_size - GDF_VALID_BITSIZE * (n_bytes - 1));
+      auto result = chartobin(valid[i], length);
+      response += std::string(result);
   }
   return response;
 }

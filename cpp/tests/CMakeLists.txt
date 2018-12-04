@@ -66,8 +66,8 @@ set(FILTER_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/filter/helper/utils.cuh"
     "${CMAKE_CURRENT_SOURCE_DIR}/filter/helper/utils.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/filter/test_example.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/filter/test_filter_ops.cu")
-#    "${CMAKE_CURRENT_SOURCE_DIR}/filter/test_gpu_concat.cu")
+    "${CMAKE_CURRENT_SOURCE_DIR}/filter/test_filter_ops.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/filter/test_gpu_concat.cu")
 
 ConfigureTest(FILTER_TEST "${FILTER_TEST_SRC}")
 
