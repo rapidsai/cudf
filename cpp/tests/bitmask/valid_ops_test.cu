@@ -29,11 +29,14 @@
 
 struct ValidsTest : public GdfTest {};
 
+static constexpr int BITMAP_SIZE = sizeof(gdf_valid_type) * 8;	// convert bytes to bits
+
+
 TEST_F(ValidsTest, NoValids)
 {
   const int num_rows = 100;
   std::vector<int> data(num_rows);
-  const int num_masks = std::ceil(num_rows/static_cast<float>(8));
+  const int num_masks = std::ceil(num_rows/static_cast<float>(BITMAP_SIZE));
   std::vector<gdf_valid_type> valid(num_masks,0x00);
 
   auto input_gdf_col = create_gdf_column(data, valid);
@@ -46,6 +49,8 @@ TEST_F(ValidsTest, NoValids)
   EXPECT_EQ(0, count);
 }
 
+
+
 TEST_F(ValidsTest, NullValids)
 {
   int count{-1};
@@ -53,6 +58,8 @@ TEST_F(ValidsTest, NullValids)
 
   ASSERT_EQ(GDF_DATASET_EMPTY,error_code) << "Expected failure for null input.";
 }
+
+
 
 TEST_F(ValidsTest, NullCount)
 {
@@ -63,6 +70,8 @@ TEST_F(ValidsTest, NullCount)
 
   ASSERT_EQ(GDF_DATASET_EMPTY,error_code) << "Expected failure for null input.";
 }
+
+
 
 TEST_F(ValidsTest, FirstRowValid)
 {
@@ -79,6 +88,8 @@ TEST_F(ValidsTest, FirstRowValid)
   EXPECT_EQ(1, count);
 }
 
+
+
 TEST_F(ValidsTest, EightRowsValid)
 {
   std::vector<int> data(8);
@@ -93,6 +104,7 @@ TEST_F(ValidsTest, EightRowsValid)
 
   EXPECT_EQ(8, count);
 }
+
 
 TEST_F(ValidsTest, EveryOtherBit)
 {
@@ -109,6 +121,8 @@ TEST_F(ValidsTest, EveryOtherBit)
   EXPECT_EQ(4, count);
 }
 
+
+
 TEST_F(ValidsTest, OtherEveryOtherBit)
 {
   std::vector<int> data(8);
@@ -124,11 +138,13 @@ TEST_F(ValidsTest, OtherEveryOtherBit)
   EXPECT_EQ(4, count);
 }
 
-TEST_F(ValidsTest, 15rows)
+
+
+TEST_F(ValidsTest, 63rows)
 {
-  const int num_rows = 15;
+  const int num_rows = 63;
   std::vector<int> data(num_rows);
-  const int num_masks = std::ceil(num_rows/static_cast<float>(8));
+  const int num_masks = std::ceil(num_rows/static_cast<float>(BITMAP_SIZE));
   std::vector<gdf_valid_type> valid(num_masks,0x01);
 
   auto input_gdf_col = create_gdf_column(data, valid);
@@ -141,11 +157,13 @@ TEST_F(ValidsTest, 15rows)
   EXPECT_EQ(2, count);
 }
 
+
+
 TEST_F(ValidsTest, 5rows)
 {
   const int num_rows = 5;
   std::vector<int> data(num_rows);
-  const int num_masks = std::ceil(num_rows/static_cast<float>(8));
+  const int num_masks = std::ceil(num_rows/static_cast<float>(BITMAP_SIZE));
   std::vector<gdf_valid_type> valid(num_masks,0x01);
 
   auto input_gdf_col = create_gdf_column(data, valid);
@@ -158,12 +176,14 @@ TEST_F(ValidsTest, 5rows)
   EXPECT_EQ(1, count);
 }
 
+
+
 TEST_F(ValidsTest, 10ValidRows)
 {
   const int num_rows = 10;
   std::vector<float> data(num_rows);
-  const int num_masks = std::ceil(num_rows/static_cast<float>(8));
-  std::vector<gdf_valid_type> valid(num_masks,0xFF);
+  const int num_masks = std::ceil(num_rows/static_cast<float>(BITMAP_SIZE));
+  std::vector<gdf_valid_type> valid(num_masks,0x3FF);
 
   auto input_gdf_col = create_gdf_column(data, valid);
 
@@ -175,12 +195,14 @@ TEST_F(ValidsTest, 10ValidRows)
   EXPECT_EQ(10, count);
 }
 
-TEST_F(ValidsTest, MultipleOfEight)
+
+
+TEST_F(ValidsTest, MultipleOfThirtyTwo)
 {
   const int num_rows = 1024;
   std::vector<int> data(num_rows);
 
-  const int num_masks = std::ceil(num_rows/static_cast<float>(8));
+  const int num_masks = std::ceil(num_rows/static_cast<float>(BITMAP_SIZE));
   std::vector<gdf_valid_type> valid(num_masks,0x01);
 
   auto input_gdf_col = create_gdf_column(data, valid);
@@ -190,15 +212,15 @@ TEST_F(ValidsTest, MultipleOfEight)
 
   ASSERT_EQ(GDF_SUCCESS,error_code) << "GDF Operation did not complete successfully.";
 
-  EXPECT_EQ(128, count);
+  EXPECT_EQ(num_masks, count);
 }
 
-TEST_F(ValidsTest, NotMultipleOfEight)
+TEST_F(ValidsTest, NotMultipleOfThirtyTwo)
 {
   const int num_rows = 1023;
   std::vector<int> data(num_rows);
 
-  const int num_masks = std::ceil(num_rows/static_cast<float>(8));
+  const int num_masks = std::ceil(num_rows/static_cast<float>(BITMAP_SIZE));
   std::vector<gdf_valid_type> valid(num_masks, 0x80);
 
   auto input_gdf_col = create_gdf_column(data, valid);
@@ -208,7 +230,7 @@ TEST_F(ValidsTest, NotMultipleOfEight)
 
   ASSERT_EQ(GDF_SUCCESS,error_code) << "GDF Operation did not complete successfully.";
 
-  EXPECT_EQ(127, count);
+  EXPECT_EQ(num_masks, count);
 }
 
 TEST_F(ValidsTest, TenThousandRows)
@@ -216,8 +238,8 @@ TEST_F(ValidsTest, TenThousandRows)
   const int num_rows = 10000;
   std::vector<int> data(num_rows);
 
-  const int num_masks = std::ceil(num_rows/static_cast<float>(8));
-  std::vector<gdf_valid_type> valid(num_masks, 0xFF);
+  const int num_masks = std::ceil(num_rows/static_cast<float>(BITMAP_SIZE));
+  std::vector<gdf_valid_type> valid(num_masks, 0xFFFFFFFF);
 
   auto input_gdf_col = create_gdf_column(data, valid);
 
