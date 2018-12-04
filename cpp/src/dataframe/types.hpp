@@ -49,115 +49,128 @@ namespace detail
      * Implements operators that allow the wrapper to be used as if it were a fundamental
      * type.
      * 
-     * @tparam T  The type of the wrapped value
+     * @tparam T  The type of the wrapped value, i.e., the "underlying type" of the wrapper
      * @tparam type_id  The wrapped gdf_dtype
      */
 template <typename T, gdf_dtype type_id>
 struct wrapper
 {
-  static constexpr gdf_dtype element_type_id{type_id}; ///< The wrapped gdf_dtype
-  using value_type = T;                                ///< The underlying fundamental type of the wrapper
-  value_type value;                                    ///< The wrapped value
+  static constexpr gdf_dtype corresponding_column_type{type_id}; ///< The wrapped gdf_dtype
+  using value_type = T;                                          ///< The underlying fundamental type of the wrapper
+  value_type value;                                              ///< The wrapped value
 
   CUDA_HOST_DEVICE_CALLABLE
-  explicit wrapper(T v): value{v} {}
-
-  CUDA_HOST_DEVICE_CALLABLE
-  wrapper(wrapper const& w): value(w.value) {}
-
-  CUDA_HOST_DEVICE_CALLABLE
-  wrapper(): value{value_type(0)}{}
+  explicit wrapper(T v) : value{v} {}
 
   CUDA_HOST_DEVICE_CALLABLE
   explicit operator value_type() const { return this->value; }
 
-  CUDA_HOST_DEVICE_CALLABLE
-  wrapper& operator=(wrapper const &w)
-  {
-    this->value = w.value;
-    return *this;
-  }
+  wrapper(wrapper const& w) = default;
 
-  CUDA_HOST_DEVICE_CALLABLE
-  wrapper& operator+=(wrapper const &w)
-  {
-    this->value += w.value;
-    return *this;
-  }
-
-  CUDA_HOST_DEVICE_CALLABLE
-  wrapper& operator-=(wrapper const &w)
-  {
-    this->value -= w.value;
-    return *this;
-  }
-
-  CUDA_HOST_DEVICE_CALLABLE
-  wrapper& operator*=(wrapper const &w)
-  {
-    this->value *= w.value;
-    return *this;
-  }
-
-  CUDA_HOST_DEVICE_CALLABLE
-  wrapper& operator/=(wrapper const &w)
-  {
-    this->value /= w.value;
-    return *this;
-  }
-
-  CUDA_HOST_DEVICE_CALLABLE
-  bool operator==(wrapper const &w) const { return this->value == w.value; }
-
-  CUDA_HOST_DEVICE_CALLABLE
-  bool operator!=(wrapper const &w) const { return this->value != w.value; }
-
-  CUDA_HOST_DEVICE_CALLABLE
-  bool operator<=(wrapper const &w) const { return this->value <= w.value; }
-
-  CUDA_HOST_DEVICE_CALLABLE
-  bool operator>=(wrapper const &w) const { return this->value >= w.value; }
-
-  CUDA_HOST_DEVICE_CALLABLE
-  bool operator<(wrapper const &w) const { return this->value < w.value; }
-
-  CUDA_HOST_DEVICE_CALLABLE
-  wrapper operator+(wrapper const &w) const { return wrapper(this->value + w.value); }
-
-  CUDA_HOST_DEVICE_CALLABLE
-  wrapper operator-(wrapper const &w) const { return wrapper(this->value - w.value); }
-
-  CUDA_HOST_DEVICE_CALLABLE
-  wrapper operator*(wrapper const &w) const { return wrapper(this->value * w.value); }
-
-  CUDA_HOST_DEVICE_CALLABLE
-  wrapper operator/(wrapper const &w) const { return wrapper(this->value / w.value); }
-
-  friend std::ostream &operator<<(std::ostream &os, wrapper<T, type_id> const &w)
-  {
-    return os << w.value;
-  }
-};
-} // namespace detail
-
-struct category : detail::wrapper<gdf_category, GDF_CATEGORY>
-{
+  wrapper() = default;
 };
 
-struct timestamp : detail::wrapper<gdf_timestamp, GDF_TIMESTAMP>
+template <typename T, gdf_dtype type_id>
+std::ostream& operator<<(std::ostream& os, wrapper<T, type_id> const& w) 
 {
-};
+  return os << w.value;
+}
 
-struct date32 : detail::wrapper<gdf_date32, GDF_DATE32>
-{
-};
+template <typename T, gdf_dtype type_id>
+CUDA_HOST_DEVICE_CALLABLE
+bool operator==(wrapper<T,type_id> const& lhs, wrapper<T,type_id> const& rhs) 
+{ 
+  return lhs.value == rhs.value; 
+}
 
-struct date64 : detail::wrapper<gdf_date64, GDF_DATE64>
-{
-};
+template <typename T, gdf_dtype type_id>
+CUDA_HOST_DEVICE_CALLABLE
+bool operator!=(wrapper<T,type_id> const& lhs, wrapper<T,type_id> const& rhs) 
+{ 
+  return lhs.value != rhs.value; 
+}
 
-namespace detail
+template <typename T, gdf_dtype type_id>
+CUDA_HOST_DEVICE_CALLABLE
+bool operator<=(wrapper<T,type_id> const& lhs, wrapper<T,type_id> const& rhs) 
+{ 
+  return lhs.value <= rhs.value; 
+}
+
+template <typename T, gdf_dtype type_id>
+CUDA_HOST_DEVICE_CALLABLE
+bool operator>=(wrapper<T,type_id> const& lhs, wrapper<T,type_id> const& rhs)
+{ 
+  return lhs.value >= rhs.value; 
+}
+
+template <typename T, gdf_dtype type_id>
+CUDA_HOST_DEVICE_CALLABLE 
+bool operator<(wrapper<T, type_id> const &lhs, wrapper<T, type_id> const &rhs)
 {
+  return lhs.value < rhs.value;
+}
+
+template <typename T, gdf_dtype type_id>
+CUDA_HOST_DEVICE_CALLABLE
+wrapper<T,type_id>& operator+=(wrapper<T,type_id> & lhs, wrapper<T,type_id> const& rhs)
+{
+  lhs.value += rhs.value;
+  return lhs;
+}
+
+template <typename T, gdf_dtype type_id>
+CUDA_HOST_DEVICE_CALLABLE
+wrapper<T,type_id>& operator-=(wrapper<T,type_id> & lhs, wrapper<T,type_id> const& rhs)
+{
+  lhs.value -= rhs.value;
+  return lhs;
+}
+
+template <typename T, gdf_dtype type_id>
+CUDA_HOST_DEVICE_CALLABLE
+wrapper<T,type_id>& operator*=(wrapper<T,type_id> & lhs, wrapper<T,type_id> const& rhs)
+{
+  lhs.value *= rhs.value;
+  return lhs;
+}
+
+template <typename T, gdf_dtype type_id>
+CUDA_HOST_DEVICE_CALLABLE
+wrapper<T,type_id>& operator/=(wrapper<T,type_id> & lhs, wrapper<T,type_id> const& rhs)
+{
+  lhs.value /= rhs.value;
+  return lhs;
+}
+
+template <typename T, gdf_dtype type_id>
+CUDA_HOST_DEVICE_CALLABLE
+wrapper<T,type_id> operator+(wrapper<T, type_id> const &lhs, wrapper<T, type_id> const &rhs)
+{
+  return wrapper<T, type_id>{lhs.value + rhs.value};
+}
+
+template <typename T, gdf_dtype type_id>
+CUDA_HOST_DEVICE_CALLABLE
+wrapper<T,type_id> operator-(wrapper<T,type_id> const& lhs, wrapper<T,type_id> const& rhs)
+{
+  return wrapper<T, type_id>{lhs.value - rhs.value};
+}
+
+template <typename T, gdf_dtype type_id>
+CUDA_HOST_DEVICE_CALLABLE
+wrapper<T,type_id> operator*(wrapper<T,type_id> const& lhs, wrapper<T,type_id> const& rhs)
+{
+  return wrapper<T, type_id>{lhs.value * rhs.value};
+}
+
+template <typename T, gdf_dtype type_id>
+CUDA_HOST_DEVICE_CALLABLE
+wrapper<T,type_id> operator/(wrapper<T,type_id> const& lhs, wrapper<T,type_id> const& rhs)
+{
+  return wrapper<T, type_id>{lhs.value / rhs.value};
+}
+
 /* --------------------------------------------------------------------------*/
 /** 
      * @brief  Returns a reference to the underlying "value" member of a wrapper struct
@@ -236,6 +249,15 @@ CUDA_HOST_DEVICE_CALLABLE
   return value;
 }
 } // namespace detail
+
+using category = detail::wrapper<gdf_category, GDF_CATEGORY>;
+
+using timestamp = detail::wrapper<gdf_timestamp, GDF_TIMESTAMP>;
+
+using date32 = detail::wrapper<gdf_date32, GDF_DATE32>;
+
+using date64 = detail::wrapper<gdf_date64, GDF_DATE64>;
+
 } // namespace cudf
 
 #endif
