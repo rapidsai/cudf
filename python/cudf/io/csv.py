@@ -118,6 +118,9 @@ def read_csv(filepath, lineterminator='\n',
     if decimal == delimiter:
         raise ValueError("decimal point cannot be the same as the delimiter")
 
+    if thousands == delimiter:
+        raise ValueError("thousands separator cannot be the same as the delimiter")
+
     csv_reader.delimiter = delimiter.encode()
     csv_reader.lineterminator = lineterminator.encode()
     csv_reader.quotechar = quotechar.encode()
