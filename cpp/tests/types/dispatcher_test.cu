@@ -90,6 +90,8 @@ TEST_F(DispatcherTest, DeviceDispatchFunctor)
   }
 }
 
+#ifndef DNDEBUG
+
 // Unsuported gdf_dtypes should cause program to exit
 TEST(DispatcherDeathTest, UnsuportedTypesTest)
 {
@@ -124,3 +126,5 @@ TEST(DispatcherDeathTest, DeviceDispatchFunctor)
     EXPECT_DEATH(call_kernel(t), ""); 
   }
 }
+
+#endif
