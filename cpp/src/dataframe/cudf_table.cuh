@@ -29,7 +29,7 @@
 #include <thrust/execution_policy.h>
 #include <thrust/device_vector.h>
 #include <cassert>
-#include "type_dispatcher.hpp"
+#include "types/type_dispatcher.hpp"
 
 template <typename size_type>
 struct ValidRange {

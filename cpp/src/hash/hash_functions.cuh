@@ -17,7 +17,7 @@
 #ifndef HASH_FUNCTIONS_CUH
 #define HASH_FUNCTIONS_CUH
 
-#include "dataframe/wrapper_types.hpp"
+#include "types/wrapper_types.hpp"
 
 using hash_value_type = uint32_t;
 
