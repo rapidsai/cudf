@@ -115,6 +115,13 @@ bool operator<(wrapper<T, type_id> const &lhs, wrapper<T, type_id> const &rhs)
 }
 
 template <typename T, gdf_dtype type_id>
+CUDA_HOST_DEVICE_CALLABLE 
+bool operator>(wrapper<T, type_id> const &lhs, wrapper<T, type_id> const &rhs)
+{
+  return lhs.value > rhs.value;
+}
+
+template <typename T, gdf_dtype type_id>
 CUDA_HOST_DEVICE_CALLABLE
 wrapper<T,type_id>& operator+=(wrapper<T,type_id> & lhs, wrapper<T,type_id> const& rhs)
 {
