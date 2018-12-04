@@ -2,7 +2,7 @@
 
 typedef size_t gdf_size_type;
 typedef gdf_size_type gdf_index_type;
-typedef unsigned int 	gdf_valid_type;
+typedef uint32_t 	gdf_valid_type;
 typedef	long	gdf_date64;
 typedef	int		gdf_date32;
 typedef	int		gdf_category;
