@@ -90,7 +90,7 @@ TEST_F(DispatcherTest, DeviceDispatchFunctor)
   }
 }
 
-#ifndef DNDEBUG
+#ifndef NDEBUG
 
 // Unsuported gdf_dtypes should cause program to exit
 TEST(DispatcherDeathTest, UnsuportedTypesTest)
