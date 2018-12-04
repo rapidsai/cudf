@@ -2,6 +2,7 @@
 #define GDF_CPPTYPES_H
 
 #include "cudf/types.h"
+#include <iostream>
 
 #ifdef __CUDACC__
 #define CUDA_HOST_DEVICE_CALLABLE __host__ __device__ __forceinline__

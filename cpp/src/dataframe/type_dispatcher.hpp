@@ -4,7 +4,7 @@
 #include <cassert>
 #include <utility>
 #include "cudf/types.h"
-#include "types.hpp"
+#include "wrapper_types.hpp"
 #include "NVStrings.h"
 
 /* --------------------------------------------------------------------------*/
@@ -33,7 +33,7 @@
  * The standard arithmetic operators are defined for the wrapper structs and therefore
  * the wrapper struct types can be used as if they were fundamental types.
  *
- * See types.hpp for more detail.
+ * See wrapper_types.hpp for more detail.
  *
  * Example usage with a functor that returns the size of the dispatched type:
  *
