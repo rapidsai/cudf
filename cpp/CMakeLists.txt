@@ -146,6 +146,7 @@ add_library(cudf SHARED
             src/hash/hash_ops.cu
             src/quantiles/quantiles.cu
             src/reductions/reductions.cu
+            src/replace/replace.cu
             src/reductions/scan.cu
             src/unary/unary_ops.cu
             # src/windowed/windowed_ops.cu ... this is broken

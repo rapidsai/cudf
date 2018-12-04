@@ -853,16 +853,17 @@ gdf_error gdf_quantile_aprrox(	gdf_column*  col_in,       //input column with 0 
                                 void*        t_erased_res, //type-erased result of same type as column;
                                 gdf_context* ctxt);        //context info
 
-
-/* replace */
-
-/// \brief For each value in `to_replace`, find all instances of that value
-///        in `column` and replace it with the corresponding value in `values`.
-/// \param[in/out] column data
-/// \param[in] to_replace contains values of column that will be replaced
-/// \param[in] values contains the replacement values
-///
-/// Note that `to_replace` and `values` are related by the index
-gdf_error gdf_find_and_replace_all(gdf_column *      column,
-                                   const gdf_column *to_replace,
-                                   const gdf_column *values);
+/* --------------------------------------------------------------------------*/
+/** 
+ * @brief Replace elements from col according to the mapping old_values to new_values
+ * 
+ * @Param[in] col gdf_column with the data to be modified
+ * @Param[in] old_values gdf_column with the old values to be replaced
+ * @Param[in] new_values gdf_column with the new values
+ * 
+ * @Returns GDF_SUCCESS upon successful completion
+ */
+/* ----------------------------------------------------------------------------*/
+gdf_error gdf_find_and_replace_all(gdf_column*       col,
+                                   const gdf_column* old_values,
+                                   const gdf_column* new_values);
