@@ -90,6 +90,8 @@ TEST_F(DispatcherTest, DeviceDispatchFunctor)
   }
 }
 
+// These tests excerise the `assert(false)` on unsupported dtypes in the type_dispatcher
+// The assert is only present if the NDEBUG macro isn't defined 
 #ifndef NDEBUG
 
 // Unsuported gdf_dtypes should cause program to exit
