@@ -12,6 +12,7 @@
  - PR #266 use faster CUDA-accelerated DataFrame column/Series concatenation.
  - PR #379 new C++ `type_dispatcher` reduces code complexity in supporting many data types.
  - PR #349 Improve performance for creating columns from memoryview objects
+ - PR #448 Update installation readme
  
 ## Bug Fixes
 
