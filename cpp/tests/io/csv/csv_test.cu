@@ -25,72 +25,38 @@
 #include <cudf.h>
 #include <cudf/functions.h>
 #include <NVStrings.h>
- 
-struct gdf_csv_test : public ::testing::Test {
-  void TearDown() {
-  }
-};
- 
-bool checkFile(const char *fpath) {
-	struct stat     st;
 
-	if (stat(fpath, &st)) {
-		return 0;
-	}
-	return 1;
+bool checkFile(const char *fname)
+{
+	struct stat st;
+	return (stat(fname, &st) ? 0 : 1);
 }
 
-TEST(gdf_csv_test, CsvSimple)
+TEST(gdf_csv_test, Simple)
 {
-	gdf_error error = GDF_SUCCESS;
+	const char* fname	= "/tmp/CsvSimpleTest.csv";
+	const char* names[]	= { "A", "B", "C", "D", "E", "F", "G", "H", "I", "J" };
+	const char* types[]	= { "int32", "int32", "int32", "int32", "int32",
+							"int32", "int32", "int32", "int32", "int32", };
 
-	csv_read_arg	args;
+	std::ofstream outfile(fname, std::ofstream::out);
+	outfile <<	"10,20,30,40,50,60,70,80,90,100\n"\
+				"11,21,31,41,51,61,71,81,91,101\n"\
+				"12,22,32,42,52,62,72,82,92,102\n"\
+				"13,23,33,43,53,63,73,83,93,103";
+	outfile.close();
+	ASSERT_TRUE( checkFile(fname) );
 
-    args.num_cols = 10;
-
-    args.names = new const char*[10] {
-    	"A",
-    	"B",
-    	"C",
-    	"D",
-    	"E",
-    	"F",
-    	"G",
-    	"H",
-    	"I",
-    	"J"
-    };
-
-    args.dtype = new const char *[10]{
-    		"int32",
-    		"int32",
-    		"int32",
-    		"int32",
-    		"int32",
-    		"int32",
-    		"int32",
-    		"int32",
-    		"int32",
-    		"int32"
-    };
-
-
-	args.file_path = (char *)("/tmp/simple.csv");
-
-	if (  checkFile(args.file_path)) {
-
-		args.delimiter 		= ',';
+	{
+		csv_read_arg args{};
+		args.file_path		= fname;
+		args.num_cols		= std::extent<decltype(names)>::value;
+		args.names			= names;
+		args.dtype			= types;
+		args.delimiter		= ',';
 		args.lineterminator = '\n';
-		args.delim_whitespace = 0;
-		args.skipinitialspace = 0;
-		args.skiprows 		= 0;
-		args.skipfooter 	= 0;
-		args.dayfirst 		= 0;
-
-		error = read_csv(&args);
+		EXPECT_EQ( read_csv(&args), GDF_SUCCESS );
 	}
-
-	EXPECT_TRUE( error == GDF_SUCCESS );
 }
 
 TEST(gdf_csv_test, MortPerf)
@@ -205,8 +171,6 @@ TEST(gdf_csv_test, MortPerf)
 
 TEST(gdf_csv_test, Strings)
 {
-	gdf_error error = GDF_SUCCESS;
-
 	const char* fname	= "/tmp/CsvStringsTest.csv";
 	const char* names[]	= { "line", "verse" };
 	const char* types[] = { "int32", "str" };
@@ -217,9 +181,9 @@ TEST(gdf_csv_test, Strings)
 	outfile << "20,\"jkl mno pqr\"" << '\n';
 	outfile << "30,stu \"\"vwx\"\" yz" << '\n';
 	outfile.close();
+	ASSERT_TRUE( checkFile(fname) );
 
-	if (checkFile(fname)) {
-
+	{
 		csv_read_arg args{};
 		args.file_path		= fname;
 		args.num_cols		= std::extent<decltype(names)>::value;
@@ -228,9 +192,7 @@ TEST(gdf_csv_test, Strings)
 		args.delimiter		= ',';
 		args.lineterminator = '\n';
 		args.skiprows		= 1;
-
-		error = read_csv(&args);
-		EXPECT_EQ( error, GDF_SUCCESS );
+		EXPECT_EQ( read_csv(&args), GDF_SUCCESS );
 
 		// No filtering of any columns
 		EXPECT_EQ( args.num_cols_out, args.num_cols );
@@ -259,14 +221,10 @@ TEST(gdf_csv_test, Strings)
 			delete[] strings[i];
 		}
 	}
-
-	EXPECT_EQ( error, GDF_SUCCESS );
 }
 
 TEST(gdf_csv_test, QuotedStrings)
 {
-	gdf_error error = GDF_SUCCESS;
-
 	const char* fname	= "/tmp/CsvQuotedStringsTest.csv";
 	const char* names[]	= { "line", "verse" };
 	const char* types[] = { "int32", "str" };
@@ -277,9 +235,9 @@ TEST(gdf_csv_test, QuotedStrings)
 	outfile << "20,`jkl, ``mno``, pqr`" << '\n';
 	outfile << "30,stu `vwx` yz" << '\n';
 	outfile.close();
+	ASSERT_TRUE( checkFile(fname) );
 
-	if (checkFile(fname)) {
-
+	{
 		csv_read_arg args{};
 		args.file_path		= fname;
 		args.num_cols		= std::extent<decltype(names)>::value;
@@ -291,9 +249,7 @@ TEST(gdf_csv_test, QuotedStrings)
 		args.quoting		= true;	// strip outermost quotechar
 		args.doublequote	= true;	// replace double quotechar with single
 		args.skiprows		= 1;
-
-		error = read_csv(&args);
-		EXPECT_EQ( error, GDF_SUCCESS );
+		EXPECT_EQ( read_csv(&args), GDF_SUCCESS );
 
 		// No filtering of any columns
 		EXPECT_EQ( args.num_cols_out, args.num_cols );
@@ -322,14 +278,10 @@ TEST(gdf_csv_test, QuotedStrings)
 			delete[] strings[i];
 		}
 	}
-
-	EXPECT_EQ( error, GDF_SUCCESS );
 }
 
 TEST(gdf_csv_test, KeepFullQuotedStrings)
 {
-	gdf_error error = GDF_SUCCESS;
-
 	const char* fname	= "/tmp/CsvKeepFullQuotedStringsTest.csv";
 	const char* names[]	= { "line", "verse" };
 	const char* types[] = { "int32", "str" };
@@ -340,9 +292,9 @@ TEST(gdf_csv_test, KeepFullQuotedStrings)
 	outfile << "20,\"jkl, \"\"mno\"\", pqr\"" << '\n';
 	outfile << "30,stu \"vwx\" yz" << '\n';
 	outfile.close();
+	ASSERT_TRUE( checkFile(fname) );
 
-	if (checkFile(fname)) {
-
+	{
 		csv_read_arg args{};
 		args.file_path		= fname;
 		args.num_cols		= std::extent<decltype(names)>::value;
@@ -354,9 +306,7 @@ TEST(gdf_csv_test, KeepFullQuotedStrings)
 		args.quoting		= false;	// do not strip outermost quotechar
 		args.doublequote	= false;	// do not replace double quotechar with single
 		args.skiprows		= 1;
-
-		error = read_csv(&args);
-		EXPECT_EQ( error, GDF_SUCCESS );
+		EXPECT_EQ( read_csv(&args), GDF_SUCCESS );
 
 		// No filtering of any columns
 		EXPECT_EQ( args.num_cols_out, args.num_cols );
@@ -385,6 +335,4 @@ TEST(gdf_csv_test, KeepFullQuotedStrings)
 			delete[] strings[i];
 		}
 	}
-
-	EXPECT_EQ( error, GDF_SUCCESS );
 }
