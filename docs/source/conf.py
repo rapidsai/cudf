@@ -39,7 +39,7 @@ extensions = [
     'numpydoc',
     'IPython.sphinxext.ipython_console_highlighting',
     'IPython.sphinxext.ipython_directive',
-    'nbsphinx'
+    'nbsphinx',
 ]
 ipython_mplbackend = None
 
