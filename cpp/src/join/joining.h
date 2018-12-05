@@ -28,7 +28,7 @@
 #include "sort_join.cuh"
 #include "join_compute_api.h"
 #include "join_types.h"
-#include "../dataframe/type_dispatcher.hpp"
+#include "utilities/type_dispatcher.hpp"
 
  /* --------------------------------------------------------------------------*/
  /**
