@@ -231,7 +231,7 @@ def test_csv_reader_float_decimal(tmpdir):
     round_ref = [12345, 67890]
     decimal_only_ref = [0.123, 0.456]
 
-    df = read_csv(str(fname), names=names, dtype=dtypes, skiprows=1, delimiter=';', decimal=',', thousands=",")
+    df = read_csv(str(fname), names=names, dtype=dtypes, skiprows=1, delimiter=';', decimal=',')
 
     np.testing.assert_allclose(basic_32_ref, df['basic_32'])
     np.testing.assert_allclose(basic_64_ref, df['basic_64'])
