@@ -14,6 +14,7 @@
  - PR #379 new C++ `type_dispatcher` reduces code complexity in supporting many data types.
  - PR #349 Improve performance for creating columns from memoryview objects
  - PR #445 Update reductions to use type_dispatcher. Adds integer types support to sum_of_squares. 
+ - PR #448 Improve installation instructions in README.md
  
 ## Bug Fixes
 
