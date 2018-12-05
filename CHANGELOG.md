@@ -13,12 +13,14 @@
  - PR #266 use faster CUDA-accelerated DataFrame column/Series concatenation.
  - PR #379 new C++ `type_dispatcher` reduces code complexity in supporting many data types.
  - PR #349 Improve performance for creating columns from memoryview objects
+ - PR #445 Update reductions to use type_dispatcher. Adds integer types support to sum_of_squares. 
  
 ## Bug Fixes
 
  - PR #444 Fix csv_test CUDA too many resources requested fail. 
  - PR #396 added missing output buffer in validity tests for groupbys.
- - PR #408 Docker file updates for source reorganization
+ - PR #408 Dockerfile updates for source reorganization
+ - PR #437 Add cffi to Dockerfile conda env, fixes "cannot import name 'librmm'"
  - PR #417 Fix `map_test` failure with CUDA 10
  - PR #414 Fix CMake installation include file paths
  - PR #418 Properly cast string dtypes to programmatic dtypes when instantiating columns
