@@ -186,8 +186,8 @@ def read_csv_strings(filepath, lineterminator='\n',
                      skipinitialspace=False, names=None, dtype=None,
                      skipfooter=0, skiprows=0, dayfirst=False):
     """
-    **Experimental**: This function exists only as a beta way
-    to use nvstrings with cudf.
+    **Experimental**: This function exists only as a beta way to use
+    `nvstrings <https://nvstrings.readthedocs.io/en/latest/>`_. with cudf.
 
     Future versions of cuDF will provide cleaner integration.
 
@@ -198,7 +198,8 @@ def read_csv_strings(filepath, lineterminator='\n',
     columns : ordered list of cudf.dataframe.Series and nvstrings objects
       numeric or date dtyped columns will be Series.
 
-      'str' dtyped columns will be nvstrings
+      'str' dtyped columns will be
+      `nvstrings <https://nvstrings.readthedocs.io/en/latest/>`_.
 
     Examples
     --------
