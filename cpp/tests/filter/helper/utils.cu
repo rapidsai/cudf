@@ -1,5 +1,6 @@
 
 #include <iostream>
+#include <bitset>
 #include <cudf.h>
 #include <cudf/functions.h>
 #include <cuda_runtime.h>
@@ -22,7 +23,9 @@ std::string gdf_valid_to_str(gdf_valid_type *valid, size_t column_size)
     std::string response;
     for (size_t i = 0; i < n_bytes; i++)
     {
-        size_t length = (n_bytes != i + 1) ? GDF_VALID_BITSIZE : (column_size - GDF_VALID_BITSIZE * (n_bytes - 1));
+        //size_t length = (n_bytes != i + 1) ? GDF_VALID_BITSIZE : (column_size - GDF_VALID_BITSIZE * (n_bytes - 1));
+        size_t length = sizeof(gdf_valid_type);
+
         auto result = chartobin(valid[i], length);
         response += std::string(result);
     }
@@ -62,6 +65,8 @@ gdf_size_type count_zero_bits(gdf_valid_type *valid, size_t column_size)
     size_t numbits = 0;
     auto bin = gdf_valid_to_str(valid, column_size);
 
+    //std::cout << "Valid as str "  << valid << "  "  << bin.c_str() << std::endl;
+
     for(size_t i = 0; i < bin.length(); i++) {
         if ( bin [i] == '0')
             numbits++;
@@ -69,8 +74,9 @@ gdf_size_type count_zero_bits(gdf_valid_type *valid, size_t column_size)
     return numbits;
 }
 
-std::string chartobin(gdf_valid_type c, int size/* = 8*/)
+std::string chartobin(gdf_valid_type c, int size/* = 32*/)
 {
+	/*
     std::string bin;
     bin.resize(size);
     bin[0] = 0;
@@ -81,6 +87,9 @@ std::string chartobin(gdf_valid_type c, int size/* = 8*/)
         c /= 2;
     }
     return bin;
+    */
+	std::string bin = std::bitset<sizeof(gdf_valid_type)>(c).to_string();
+	return bin;
 }
 
 auto print_binary(gdf_valid_type n, int size) -> void {

@@ -15,6 +15,8 @@
 #include <tuple>
 #include <rmm/rmm.h>
 
+//#include "bitmask/bitmask_util.cuh"
+
 template <typename gdf_type>
 inline gdf_dtype gdf_enum_type_for()
 {
@@ -58,7 +60,7 @@ inline gdf_dtype gdf_enum_type_for<double>()
 }
 
 inline auto get_number_of_bytes_for_valid (size_t column_size) -> size_t {
-    return sizeof(gdf_valid_type) * (column_size + GDF_VALID_BITSIZE - 1) / GDF_VALID_BITSIZE;
+    return sizeof(gdf_valid_type) * ((column_size + GDF_VALID_BITSIZE - 1) / GDF_VALID_BITSIZE);
 }
 
 auto print_binary(gdf_valid_type n, int size = 8) -> void ;
@@ -121,6 +123,7 @@ gdf_column convert_to_device_gdf_column (gdf_column *column) {
 
     gdf_valid_type *valid_value_pointer;
     RMM_ALLOC((void **)&valid_value_pointer, n_bytes, 0);
+
     cudaMemcpy(valid_value_pointer, host_valid, n_bytes, cudaMemcpyHostToDevice);
 
     gdf_column output;
@@ -165,19 +168,22 @@ auto print_column(gdf_column * column) -> void {
     delete[] host_valid_out;
     std::cout<<std::endl<<std::endl;
 }
+
+
 template <typename ValueType = int8_t>
 gdf_column gen_gdb_column(size_t column_size, ValueType init_value)
 {
     char *raw_pointer;
     auto gdf_enum_type_value =  gdf_enum_type_for<ValueType>();
     thrust::device_ptr<ValueType> device_pointer;
-   // std::cout << "0. gen_gdb_column\n";     
+    //std::cout << "0. gen_gdb_column\n";
+
     std::tie(raw_pointer, device_pointer) = init_device_vector<char, ValueType>(column_size);
-   // std::cout << "1. gen_gdb_column\n"; 
+    //std::cout << "1. gen_gdb_column\n";
     
     using thrust::detail::make_normal_iterator;
     thrust::fill(make_normal_iterator(device_pointer), make_normal_iterator(device_pointer + column_size), init_value);
-    //std::cout << "2. gen_gdb_column\n"; 
+    //std::cout << "2. gen_gdb_column\n";
     
     gdf_valid_type *host_valid = gen_gdf_valid(column_size, init_value);
     size_t n_bytes = get_number_of_bytes_for_valid(column_size);
@@ -185,17 +191,18 @@ gdf_column gen_gdb_column(size_t column_size, ValueType init_value)
     gdf_valid_type *valid_value_pointer;
     RMM_ALLOC((void **)&valid_value_pointer, n_bytes, 0);
     cudaMemcpy(valid_value_pointer, host_valid, n_bytes, cudaMemcpyHostToDevice);
-   // std::cout << "3. gen_gdb_column\n"; 
+    //std::cout << "3. gen_gdb_column\n";
     
     gdf_column output;
     auto zero_bits = output.null_count = count_zero_bits(host_valid, column_size);
 
     gdf_column_view_augmented(&output,
-                             (void *)raw_pointer, valid_value_pointer,
+                             (void *)raw_pointer,
+                             valid_value_pointer,
                              column_size,
                              gdf_enum_type_value,
                              zero_bits);
-    //std::cout << "4. gen_gdb_column\n"; 
+    //std::cout << "4. gen_gdb_column\n";
     
     delete []host_valid;
     return output;

@@ -53,20 +53,15 @@ TEST_F(Example, Equals)
 	thrust::device_ptr<int8_t> right_ptr = thrust::device_pointer_cast((int8_t *)data_right);
 	thrust::fill(thrust::detail::make_normal_iterator(right_ptr), thrust::detail::make_normal_iterator(right_ptr + num_elements), int8_value);
 
-	//for this simple test we will send in only 8 values
-	gdf_valid_type *valid = new gdf_valid_type;
-	*valid = 0xFF;
+	//for this simple test we will send in only 8 values, all valid
+	gdf_valid_type valid = 0xFF;
 
 	gdf_valid_type *valid_device = NULL;
-	//error = gdf::bitutil::host::create_bitmap(valid_device, num_elements, 0);
-
-	rmm_error = RMM_ALLOC((void **)&valid_device, sizeof(gdf_valid_type), 0);
-	cudaMemcpy(valid_device, valid, sizeof(gdf_valid_type), cudaMemcpyHostToDevice);
+	valid_device = bitmask::host::create_bitmap(num_elements);
+	cudaMemcpy(valid_device, &valid, sizeof(gdf_valid_type), cudaMemcpyHostToDevice);
 	
 	gdf_valid_type *valid_out = NULL;
-	//error = gdf::bitutil::host::create_bitmap(valid_out, num_elements, 0);
-	rmm_error = RMM_ALLOC((void **)&valid_out, sizeof(gdf_valid_type), 0);
-
+	valid_out = bitmask::host::create_bitmap(num_elements);
 
 	gdf_column lhs;
 	error = gdf_column_view_augmented(&lhs, (void *)data_left, valid_device, num_elements, GDF_INT8, 0);
@@ -100,7 +95,7 @@ TEST_F(Example, Equals)
 	RMM_FREE(data_out, 0);
 	RMM_FREE(valid_device, 0);
 	RMM_FREE(valid_out, 0); 
-	delete valid;
+	//delete valid;
 
 	EXPECT_EQ(1, 1);
 }

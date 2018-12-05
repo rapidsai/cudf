@@ -14,11 +14,12 @@
  * limitations under the License.
  */
 
+#ifndef _BITMASK_UTIL_H_
+#define _BITMASK_UTIL_H_
 
 #pragma once
 
-#ifndef _BIT_UTIL_H_
-#define _BIT_UTIL_H_
+
 
 #include "cudf.h"
 #include "rmm/rmm.h"
@@ -143,16 +144,21 @@ namespace host {
 	 * @param[in]  fill_value            optional, should the memory be initialized to all 0 or 1s. All other values indicate un-initialized
 	 * @return error status
 	 */
-	gdf_error create_bitmap(gdf_valid_type *valid, int number_of_records, int fill_value = -1) {
+	gdf_valid_type * create_bitmap(int number_of_records, int fill_value = -1) {
 
-		int num_bits_rec = (number_of_records + (GDF_VALID_BITSIZE - 1)) / GDF_VALID_BITSIZE;
+		gdf_valid_type *valid_d;
 
-		RMM_TRY( RMM_ALLOC((void**)&valid, 	sizeof(gdf_valid_type) * num_bits_rec, 0) );
+		int num_bitmasks = (number_of_records + (GDF_VALID_BITSIZE - 1)) / GDF_VALID_BITSIZE;
 
-		if (fill_value == 0) {      CUDA_TRY( cudaMemset(valid,	0,          sizeof(gdf_valid_type) * num_bits_rec));  }
-		else if (fill_value == 1) { CUDA_TRY( cudaMemset(valid,	0xFFFFFFFF, sizeof(gdf_valid_type) * num_bits_rec));  }
+		RMM_ALLOC((void**)&valid_d, 	sizeof(gdf_valid_type) * num_bitmasks, 0);
 
-		return GDF_SUCCESS;
+		if (valid_d == NULL)
+			return valid_d;
+
+		if (fill_value == 0) {      cudaMemset(valid_d,	0,          sizeof(gdf_valid_type) * num_bitmasks);  }
+		else if (fill_value == 1) { cudaMemset(valid_d,	0xFFFFFFFF, sizeof(gdf_valid_type) * num_bitmasks);  }
+
+		return valid_d;
 	}
 
 
@@ -177,6 +183,13 @@ namespace host {
 
 		return ( status == 0) ? false : true;
 
+	}
+
+
+	int num_of_bitmask(int number_of_records) {
+		int num_bitmasks = (number_of_records + (GDF_VALID_BITSIZE - 1)) / GDF_VALID_BITSIZE;
+
+		return num_bitmasks;
 	}
 
 }  // end of host namespace

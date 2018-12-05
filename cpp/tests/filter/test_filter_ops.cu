@@ -46,22 +46,19 @@ TEST_F(FilterOperationsTest, usage_example) {
     gdf_comparison_operator gdf_operator = GDF_EQUALS;
 
     gdf_column lhs = gen_gdb_column<LeftValueType>(column_size, init_value); // 4, 2, 0
-    
-    gdf_column rhs = gen_gdb_column<RightValueType>(column_size, 0.01 + max_size - init_value); // 0, 2, 4
-
-    gdf_column output = gen_gdb_column<int8_t>(column_size, 0);
-
-    gdf_error error = gpu_comparison(&lhs, &rhs, &output, gdf_operator);
-    EXPECT_TRUE(error == GDF_SUCCESS);
-
     std::cout << "Left" << std::endl;
     print_column<LeftValueType>(&lhs);
 
+    gdf_column rhs = gen_gdb_column<RightValueType>(column_size, 0.01 + max_size - init_value); // 0, 2, 4
     std::cout << "Right" << std::endl;
     print_column<RightValueType>(&rhs);
 
+    gdf_column output = gen_gdb_column<int8_t>(column_size, 0);
     std::cout << "Output" << std::endl;
     print_column<int8_t>(&output);
+
+    gdf_error error = gpu_comparison(&lhs, &rhs, &output, gdf_operator);
+    EXPECT_TRUE(error == GDF_SUCCESS);
 
     check_column_for_comparison_operation<LeftValueType, RightValueType>(&lhs, &rhs, &output, gdf_operator);
 
