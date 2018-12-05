@@ -31,10 +31,10 @@ from libcpp.string  cimport string as cstring
 ctypedef gdf_error (*reduce_type)(gdf_column*, void*, gdf_size_type)
 
 cdef cmap[cstring, reduce_type] _REDUCE_FUNCTIONS
-_REDUCE_FUNCTIONS[b'max'] = gdf_max_generic
-_REDUCE_FUNCTIONS[b'min'] = gdf_min_generic
-_REDUCE_FUNCTIONS[b'sum'] = gdf_sum_generic
-_REDUCE_FUNCTIONS[b'sum_squared'] = gdf_sum_squared_generic
+_REDUCE_FUNCTIONS[b'max'] = gdf_max
+_REDUCE_FUNCTIONS[b'min'] = gdf_min
+_REDUCE_FUNCTIONS[b'sum'] = gdf_sum
+_REDUCE_FUNCTIONS[b'sum_of_squares'] = gdf_sum_of_squares
 
 
 def apply_reduce(reduction, col):

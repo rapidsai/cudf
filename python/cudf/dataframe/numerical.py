@@ -228,7 +228,7 @@ class NumericalColumn(columnops.TypedColumnBase):
         return mu, var
 
     def sum_of_squares(self):
-        return cpp_reduce.apply_reduce('sum_squared', self)
+        return cpp_reduce.apply_reduce('sum_of_squares', self)
 
     def applymap(self, udf, out_dtype=None):
         """Apply a elemenwise function to transform the values in the Column.
