@@ -107,7 +107,7 @@ decltype(auto) type_dispatcher(gdf_dtype dtype,
     case GDF_DATE64:    { return f.template operator()< date64 >(std::forward<Ts>(args)...); }
     case GDF_TIMESTAMP: { return f.template operator()< timestamp >(std::forward<Ts>(args)...); }
     case GDF_CATEGORY:  { return f.template operator()< category >(std::forward<Ts>(args)...); }
-    default: { assert(false && "type_dispatcher: invalid gdf_dtype"); }// this will only fire on a Debug build
+    default:            { assert(false && "type_dispatcher: invalid gdf_dtype"); }// this will only fire on a Debug build
   }
   // Need to find out what the return type is in order to have a default return value
   // and solve the compiler warning for lack of a default return
