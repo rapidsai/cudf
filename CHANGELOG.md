@@ -15,6 +15,7 @@
  - PR #349 Improve performance for creating columns from memoryview objects
  - PR #445 Update reductions to use type_dispatcher. Adds integer types support to sum_of_squares. 
  - PR #448 Improve installation instructions in README.md
+ - PR #456 Change default CMake build to Release, add option for disabling compilation of tests
  
 ## Bug Fixes
 
