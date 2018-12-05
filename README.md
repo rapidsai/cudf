@@ -67,7 +67,7 @@ $ conda install -c conda-forge boost
 
 To install cuDF from source, ensure the dependencies are met and follow the steps below:
 
-- Clone the repository recursively
+- Clone the repository and submodules
 ```bash
 git clone --recurse-submodules https://github.com/rapidsai/cudf.git
 cd cudf
