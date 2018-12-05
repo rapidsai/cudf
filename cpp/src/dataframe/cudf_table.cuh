@@ -465,7 +465,7 @@ public:
     void operator()(void * target_column, size_type target_row_index,
                     void const * source_column, size_type source_row_index)
     {
-      ColumnType& target_value{static_cast<ColumnType*>(target_column)[target_row_index]};
+      ColumnType& target_value { static_cast<ColumnType*>(target_column)[target_row_index] };
       ColumnType const& source_value{static_cast<ColumnType const*>(source_column)[source_row_index]};
       target_value = source_value;
     }
