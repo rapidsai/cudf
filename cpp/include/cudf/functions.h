@@ -915,9 +915,11 @@ gdf_error gdf_quantile_aprrox(	gdf_column*  col_in,       //input column with 0 
 
 /* --------------------------------------------------------------------------*/
 /** 
- * @brief Replace elements from col according to the mapping old_values to new_values
+ * @brief Replace elements from `col` according to the mapping `old_values` to
+ *        `new_values`, that is, for each value `old_values[i]` that is present
+ *        in `col`, it will be replaced with `new_values[i]`.
  * 
- * @Param[in] col gdf_column with the data to be modified
+ * @Param[in,out] col gdf_column with the data to be modified
  * @Param[in] old_values gdf_column with the old values to be replaced
  * @Param[in] new_values gdf_column with the new values
  * 

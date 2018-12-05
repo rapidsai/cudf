@@ -21,29 +21,29 @@
 
 #include "cudf.h"
 #include "utilities/error_utils.h"
-#include "dataframe/type_dispatcher.hpp"
+#include "utilities//type_dispatcher.hpp"
 
 namespace{ //anonymous
 
   constexpr int BLOCK_SIZE = 256;
-  
-  template <class T>
-  struct elements_are_equal{
-    __device__
-    elements_are_equal(T el) : element{el}
-    {
-    }
 
-    __device__
-    bool operator()(T other)
-    { 
-      return (cudf::detail::unwrap(other) == cudf::detail::unwrap(element));
-    }
-
-  private:
-    T element;
-  };
-
+  /* --------------------------------------------------------------------------*/
+  /** 
+   * @brief Kernel that replaces elements from `d_col_data` given the following
+   *        rule: for each value `old_values[i]` in [old_values_begin`, `old_values_end`)
+   *        that is present in `d_col_data`, it will be replaced with `d_new_values[i]`.
+   * 
+   * @Param[in,out] d_col_data Device array with the data to be modified
+   * @Param[in] nrows # rows in `d_col_data`
+   * @Param[in] old_values_begin Device pointer to the beginning of the sequence 
+   * of old values to be replaced
+   * @Param[in] old_values_end  Device pointer to the end of the sequence 
+   * of old values to be replaced
+   * @Param[in] d_new_values Device array with the new values
+   * 
+   * @Returns
+   */
+  /* ----------------------------------------------------------------------------*/
   template <class T>
   __global__
   void replace_kernel(T*                          d_col_data,
@@ -55,7 +55,7 @@ namespace{ //anonymous
     size_t i = blockIdx.x * blockDim.x + threadIdx.x;
     while(i < nrows)
     {
-      auto found_ptr = thrust::find_if(thrust::seq, old_values_begin, old_values_end, elements_are_equal<T>(d_col_data[i]));
+      auto found_ptr = thrust::find(thrust::seq, old_values_begin, old_values_end, d_col_data[i]);
 
       if (found_ptr != old_values_end) {
           auto d = thrust::distance(old_values_begin, found_ptr);
@@ -66,6 +66,12 @@ namespace{ //anonymous
     }
   }
 
+  /* --------------------------------------------------------------------------*/
+  /** 
+   * @brief Functor called by the `type_dispatcher` in order to invoke and instanciate
+   *        `replace_kernel` with the apropiate data types.
+   */
+  /* ----------------------------------------------------------------------------*/
   struct replace_kernel_forwarder {
     template <typename col_type>
     void operator()(void*       d_col_data,
@@ -93,7 +99,10 @@ namespace{ //anonymous
     GDF_REQUIRE(col != nullptr && old_values != nullptr && new_values != nullptr, GDF_DATASET_EMPTY);
     GDF_REQUIRE(old_values->size == new_values->size, GDF_COLUMN_SIZE_MISMATCH);
     GDF_REQUIRE(col->dtype == old_values->dtype && col->dtype == new_values->dtype, GDF_DTYPE_MISMATCH);
-    GDF_REQUIRE(col->valid == nullptr && col->null_count == 0, GDF_VALIDITY_UNSUPPORTED);
+    GDF_REQUIRE(col->valid == nullptr || col->null_count == 0, GDF_VALIDITY_UNSUPPORTED);
+    GDF_REQUIRE(old_values->valid == nullptr || old_values->null_count == 0, GDF_VALIDITY_UNSUPPORTED);
+    GDF_REQUIRE(new_values->valid == nullptr || new_values->null_count == 0, GDF_VALIDITY_UNSUPPORTED);
+
     
     cudf::type_dispatcher(col->dtype, replace_kernel_forwarder{},
                           col->data,
@@ -109,9 +118,11 @@ namespace{ //anonymous
 
 /* --------------------------------------------------------------------------*/
 /** 
- * @brief Replace elements from col according to the mapping old_values to new_values
+ * @brief Replace elements from `col` according to the mapping `old_values` to
+ *        `new_values`, that is, for each value `old_values[i]` that is present
+ *        in `col`, it will be replaced with `new_values[i]`.
  * 
- * @Param[in] col gdf_column with the data to be modified
+ * @Param[in,out] col gdf_column with the data to be modified
  * @Param[in] old_values gdf_column with the old values to be replaced
  * @Param[in] new_values gdf_column with the new values
  * 
