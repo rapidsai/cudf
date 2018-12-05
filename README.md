@@ -10,7 +10,7 @@ Please see the [Demo Docker Repository](https://hub.docker.com/r/rapidsai/rapids
 
 ## Install cuDF
 
-#### Conda
+### Conda
 
 It is easy to install cuDF using conda. You can get a minimal conda installation with [Miniconda](https://conda.io/miniconda.html) or get the full installation with [Anaconda](https://www.anaconda.com/download).
 
@@ -22,7 +22,7 @@ conda install -c nvidia -c rapidsai -c numba -c conda-forge -c defaults cudf=0.3
 
 Note: This conda installation only applies to Linux and Python versions 3.5/3.6.
 
-#### Pip
+### Pip
 
 Support is coming soon, please use conda for the time being.
 
