@@ -43,7 +43,7 @@ set(ARROW_CMAKE_ARGS " -DARROW_WITH_LZ4=OFF"
 configure_file(${CMAKE_SOURCE_DIR}/cmake/Templates/Arrow.CMakeLists.txt.cmake ${ARROW_ROOT}/download/CMakeLists.txt)
 
 execute_process(
-    COMMAND ${CMAKE_COMMAND} -F "${CMAKE_GENERATOR}" .
+    COMMAND ${CMAKE_COMMAND} -G "${CMAKE_GENERATOR}" .
     RESULT_VARIABLE ARROW_CONFIG
     WORKING_DIRECTORY ${ARROW_ROOT}/download/
 )
@@ -74,7 +74,7 @@ execute_process(
 
 if(ARROW_BUILD)
     message(FATAL_ERROR "Build step for Arrow failed: ${ARROW_BUILD}")
-endif()
+endif(ARROW_BUILD)
 
 
 # Add transitive dependency: Flatbuffers
