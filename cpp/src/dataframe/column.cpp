@@ -24,7 +24,7 @@
 #include "utilities/error_utils.h"
 #include "rmm/rmm.h"
 #include <cuda_runtime_api.h>
-#include "types/type_dispatcher.hpp"
+#include "utilities/type_dispatcher.hpp"
 
 // forward decl -- see validops.cu
 gdf_error gdf_mask_concat(gdf_valid_type *output_mask,

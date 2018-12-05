@@ -15,7 +15,7 @@
  */
 #include <cstdint>
 #include "gtest/gtest.h"
-#include <types/type_dispatcher.hpp>
+#include <utilities/type_dispatcher.hpp>
 #include <thrust/device_vector.h>
 #include <cudf.h>
 #include "tests/utilities/cudf_test_fixtures.h"
