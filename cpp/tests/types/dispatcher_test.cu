@@ -69,7 +69,9 @@ void dispatch_test_kernel(gdf_dtype type, bool * d_result)
 
 struct DispatcherTest : public GdfTest 
 {
-  std::vector<gdf_dtype> dtype_enums{GDF_INT8, GDF_INT16, GDF_INT32, GDF_INT64, GDF_FLOAT32, GDF_FLOAT64, GDF_DATE32, GDF_DATE64, GDF_TIMESTAMP, GDF_CATEGORY};
+  std::vector<gdf_dtype> dtype_enums{
+    GDF_INT8, GDF_INT16, GDF_INT32, GDF_INT64, GDF_FLOAT32, 
+    GDF_FLOAT64, GDF_DATE32, GDF_DATE64, GDF_TIMESTAMP, GDF_CATEGORY};
 };
 
 TEST_F(DispatcherTest, HostDispatchFunctor)
