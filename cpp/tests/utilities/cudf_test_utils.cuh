@@ -23,7 +23,7 @@
 #include <rmm/rmm.h>
 #include <cudf/functions.h>
 #include <utilities/cudf_utils.h>
-#include <utilities/bit_util.cuh>
+#include <bitmask/bitmask_util.cuh>
 
 #include <bitset>
 #include <numeric> // for std::accumulate
@@ -242,7 +242,7 @@ gdf_col_pointer init_gdf_column(std::vector<T> data, size_t col_index, valid_ini
   for(size_t row = 0; row < num_rows; ++row){
     if(true == bit_initializer(row, col_index))
     {
-      gdf::bitutil::test::set_bit(valid_masks.data(), row);
+    	bitmask::test::set_bit(valid_masks.data(), row);
     }
   }
 

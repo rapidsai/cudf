@@ -24,6 +24,7 @@
 #include <thrust/execution_policy.h>
 #include <cuda_runtime.h>
 #include "helper/utils.cuh"
+#include "bitmask/bitmask_util.cuh"
 
 #include <cudf.h>
 #include <cudf/functions.h>
@@ -39,7 +40,7 @@ struct Example : public GdfTest {};
 TEST_F(Example, Equals)
 {
 	gdf_size_type num_elements = 8;
-
+	gdf_error error;
 	char *data_left;
 	char *data_right;
 	char *data_out;
@@ -54,27 +55,37 @@ TEST_F(Example, Equals)
 
 	//for this simple test we will send in only 8 values
 	gdf_valid_type *valid = new gdf_valid_type;
+	*valid = 0xFF;
 
-	*valid = 255;
-	gdf_valid_type *valid_device;
-	rmm_error = RMM_ALLOC((void **)&valid_device, 1, 0);
+	gdf_valid_type *valid_device = NULL;
+	//error = gdf::bitutil::host::create_bitmap(valid_device, num_elements, 0);
+
+	rmm_error = RMM_ALLOC((void **)&valid_device, sizeof(gdf_valid_type), 0);
 	cudaMemcpy(valid_device, valid, sizeof(gdf_valid_type), cudaMemcpyHostToDevice);
 	
-	gdf_valid_type *valid_out;
-	rmm_error = RMM_ALLOC((void **)&valid_out, 1, 0);
+	gdf_valid_type *valid_out = NULL;
+	//error = gdf::bitutil::host::create_bitmap(valid_out, num_elements, 0);
+	rmm_error = RMM_ALLOC((void **)&valid_out, sizeof(gdf_valid_type), 0);
+
+
 	gdf_column lhs;
-	gdf_error error = gdf_column_view_augmented(&lhs, (void *)data_left, valid_device, num_elements, GDF_INT8, 0);
+	error = gdf_column_view_augmented(&lhs, (void *)data_left, valid_device, num_elements, GDF_INT8, 0);
+
 	gdf_column rhs;
 	error = gdf_column_view_augmented(&rhs, (void *)data_right, valid_device, num_elements, GDF_INT8, 0);
+
 	gdf_column output;
 	error = gdf_column_view_augmented(&output, (void *)data_out, valid_out, num_elements, GDF_INT8, 0);
 	ASSERT_EQ(error, GDF_SUCCESS);
 
 	std::cout << "Left" << std::endl;
 	print_column(&lhs);
+
 	std::cout << "Right" << std::endl;
 	print_column(&rhs);
+
 	error = gpu_comparison(&lhs, &rhs, &output, GDF_EQUALS); // gtest!
+
 	std::cout << "Output" << std::endl;
 	print_column(&output);
 

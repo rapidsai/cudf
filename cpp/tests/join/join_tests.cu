@@ -28,7 +28,7 @@
 #include <rmm/rmm.h>
 #include <cudf/functions.h>
 #include <join/joining.h>
-#include <utilities/bit_util.cuh>
+#include <bitmask/bitmask_util.cuh>
 
 #include "tests/utilities/cudf_test_fixtures.h"
 

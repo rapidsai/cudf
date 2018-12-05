@@ -20,15 +20,13 @@
 #ifndef _BIT_UTIL_H_
 #define _BIT_UTIL_H_
 
+#include "cudf.h"
 #include "rmm/rmm.h"
 #include "utilities/error_utils.h"
 #include <cuda_runtime_api.h>
 
-static constexpr int RECORDS_PER_BITMAP = sizeof(gdf_valid_type) * 8;	// convert bytes to bits
-using ValidType = gdf_valid_type;
 
-namespace gdf {
-namespace bitutil {
+namespace bitmask {
 
 //----------------------------------------------------------------------------------------------------------
 //			Host and Device Utility Functions
@@ -41,7 +39,7 @@ namespace util {
 	 * @return the bitmap index
 	 */
 	__host__ __device__  int which_bitmap_record(int record_idx) {
-		return (record_idx / RECORDS_PER_BITMAP);
+		return (record_idx / GDF_VALID_BITSIZE);
 	}
 
 	/**
@@ -50,7 +48,7 @@ namespace util {
 	 * @return which bit within the bitmap
 	 */
 	__host__ __device__ int which_bit(int record_idx) {
-		return (record_idx % RECORDS_PER_BITMAP);
+		return (record_idx % GDF_VALID_BITSIZE);
 	}
 
 }	// end util namespace
@@ -71,8 +69,8 @@ namespace device {
 	 * @return  true if record is valid, false if record is null
 	 */
 	__device__ bool is_valid(gdf_valid_type * valid, int record_idx) {
-		int rec = gdf::bitutil::util::which_bitmap_record(record_idx);
-		int bit = gdf::bitutil::util::which_bit(record_idx);
+		int rec = bitmask::util::which_bitmap_record(record_idx);
+		int bit = bitmask::util::which_bit(record_idx);
 
 		int status = atomicAnd(&valid[rec], (1U << bit));
 
@@ -90,8 +88,8 @@ namespace device {
 	 * @return gdf_error - did it work or not
 	 */
 	__device__ gdf_error set_bit(gdf_valid_type * valid, int record_idx) {
-		int rec = gdf::bitutil::util::which_bitmap_record(record_idx);
-		int bit = gdf::bitutil::util::which_bit(record_idx);
+		int rec = bitmask::util::which_bitmap_record(record_idx);
+		int bit = bitmask::util::which_bit(record_idx);
 
 		atomicOr( &valid[rec],   (1U << bit));		// set the bit
 
@@ -108,8 +106,8 @@ namespace device {
 	 * @return gdf_error - did it work or not
 	 */
 	__device__ gdf_error clear_bit(gdf_valid_type * valid, int record_idx) {
-		int rec = gdf::bitutil::util::which_bitmap_record(record_idx);
-		int bit = gdf::bitutil::util::which_bit(record_idx);
+		int rec = bitmask::util::which_bitmap_record(record_idx);
+		int bit = bitmask::util::which_bit(record_idx);
 
 		atomicAnd( &valid[rec], ~(1U << bit));		// clear the bit
 
@@ -147,12 +145,12 @@ namespace host {
 	 */
 	gdf_error create_bitmap(gdf_valid_type *valid, int number_of_records, int fill_value = -1) {
 
-		int num_bits_rec = (number_of_records + (RECORDS_PER_BITMAP - 1)) / RECORDS_PER_BITMAP;
+		int num_bits_rec = (number_of_records + (GDF_VALID_BITSIZE - 1)) / GDF_VALID_BITSIZE;
 
-		RMM_TRY( RMM_ALLOC((void**)&valid, 	sizeof(ValidType) * num_bits_rec, 0) );
+		RMM_TRY( RMM_ALLOC((void**)&valid, 	sizeof(gdf_valid_type) * num_bits_rec, 0) );
 
-		if (fill_value == 0) {      CUDA_TRY( cudaMemset(valid,	0,          sizeof(ValidType) * num_bits_rec));  }
-		else if (fill_value == 1) { CUDA_TRY( cudaMemset(valid,	0xFFFFFFFF, sizeof(ValidType) * num_bits_rec));  }
+		if (fill_value == 0) {      CUDA_TRY( cudaMemset(valid,	0,          sizeof(gdf_valid_type) * num_bits_rec));  }
+		else if (fill_value == 1) { CUDA_TRY( cudaMemset(valid,	0xFFFFFFFF, sizeof(gdf_valid_type) * num_bits_rec));  }
 
 		return GDF_SUCCESS;
 	}
@@ -170,8 +168,8 @@ namespace host {
 
 		int h_bitm;
 
-		int rec = gdf::bitutil::util::which_bitmap_record(record_idx);
-		int bit = gdf::bitutil::util::which_bit(record_idx);
+		int rec = bitmask::util::which_bitmap_record(record_idx);
+		int bit = bitmask::util::which_bit(record_idx);
 
 		CUDA_TRY( cudaMemcpy(&h_bitm, &valid[rec], sizeof(h_bitm), cudaMemcpyDeviceToHost) );
 
@@ -192,8 +190,8 @@ namespace test {
 
 	bool is_valid(gdf_valid_type * valid, int record_idx) {
 
-		int rec = gdf::bitutil::util::which_bitmap_record(record_idx);
-		int bit = gdf::bitutil::util::which_bit(record_idx);
+		int rec = bitmask::util::which_bitmap_record(record_idx);
+		int bit = bitmask::util::which_bit(record_idx);
 
 		int status = valid[rec] & (1U << bit);
 
@@ -203,8 +201,8 @@ namespace test {
 
 	gdf_error set_bit(gdf_valid_type * valid, int record_idx) {
 
-		int rec = gdf::bitutil::util::which_bitmap_record(record_idx);
-		int bit = gdf::bitutil::util::which_bit(record_idx);
+		int rec = bitmask::util::which_bitmap_record(record_idx);
+		int bit = bitmask::util::which_bit(record_idx);
 
 		valid[rec] = valid[rec] |  (1U << bit);		// set the bit
 
@@ -222,8 +220,8 @@ namespace test {
 	 */
 	gdf_error clear_bit(gdf_valid_type * valid, int record_idx) {
 
-		int rec = gdf::bitutil::util::which_bitmap_record(record_idx);
-		int bit = gdf::bitutil::util::which_bit(record_idx);
+		int rec = bitmask::util::which_bitmap_record(record_idx);
+		int bit = bitmask::util::which_bit(record_idx);
 
 		valid[rec] = valid[rec] & ~(1U << bit);		// clear the bit
 
@@ -300,7 +298,7 @@ __device__ gdf_error mask_from_float_array(gdf_valid_type *output_mask, float *a
 
 
 } // namespace bitutil
-} // namespace gdf
+
 
 
 #endif

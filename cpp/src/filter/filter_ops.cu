@@ -256,7 +256,7 @@ gdf_error gpu_comparison_static_f64(gdf_column *lhs, double value, gdf_column *o
 
 
 
-gdf_error gpu_comparison(gdf_column *lhs, gdf_column *rhs, gdf_column *output,gdf_comparison_operator operation){
+gdf_error gpu_comparison(gdf_column *lhs, gdf_column *rhs, gdf_column *output, gdf_comparison_operator operation){
 	GDF_REQUIRE(lhs->size == rhs->size, GDF_COLUMN_SIZE_MISMATCH);
 	GDF_REQUIRE(lhs->size == output->size, GDF_COLUMN_SIZE_MISMATCH);
 
@@ -280,15 +280,20 @@ gdf_error gpu_comparison(gdf_column *lhs, gdf_column *rhs, gdf_column *output,gd
 
 	if(lhs->dtype == GDF_INT8){
 		thrust::device_ptr<int8_t> left_ptr((int8_t *) lhs->data);
+
 		if(rhs->dtype == GDF_INT8){
 			thrust::device_ptr<int8_t> right_ptr((int8_t *) rhs->data);
-		 	
-
 			thrust::device_ptr<int8_t> out_ptr((int8_t *) output->data);
+
 			gpu_filter_op(
-					thrust::detail::make_normal_iterator(left_ptr),thrust::detail::make_normal_iterator(right_ptr),
-					thrust::detail::make_normal_iterator(out_ptr),operation,lhs->size,lhs->valid,rhs->valid,output->valid,
-					lhs->null_count,rhs->null_count,output->null_count,stream
+					thrust::detail::make_normal_iterator(left_ptr),
+					thrust::detail::make_normal_iterator(right_ptr),
+					thrust::detail::make_normal_iterator(out_ptr),
+					operation,
+					lhs->size,
+					lhs->valid, rhs->valid, output->valid,
+					lhs->null_count, rhs->null_count, output->null_count,
+					stream
 			);
 			//... 
 
@@ -337,6 +342,8 @@ gdf_error gpu_comparison(gdf_column *lhs, gdf_column *rhs, gdf_column *output,gd
 					lhs->null_count,rhs->null_count,output->null_count,stream
 			);
 		}
+
+
 	}else if(lhs->dtype == GDF_INT16){
 		thrust::device_ptr<int16_t> left_ptr((int16_t *) lhs->data);
 		if(rhs->dtype == GDF_INT8){
