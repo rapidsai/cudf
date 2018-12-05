@@ -222,7 +222,7 @@ def read_csv_strings(filepath, lineterminator='\n',
       # Read the file with cudf
       names = ['num1', 'datetime', 'text']
       dtypes = ['int', 'date', 'str']
-      columns = cudf.io.read_csv_strings(filename, delimiter=',',
+      columns = cudf.io.csv.read_csv_strings(filename, delimiter=',',
                               names=names, dtype=dtypes,
                               skiprows=1)
       # Display results
