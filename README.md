@@ -28,7 +28,7 @@ Support is coming soon, please use conda for the time being.
 
 ## Development Setup
 
-The following instructions are for developers and contributors to cuDF OSS development. These instructions are tested on Linux Ubuntu 16.04 & 18.04. Use these instructions to build cuDF from source and contribute to its development.  Other operatings systems may be compatible, but are not currently supported.
+The following instructions are for developers and contributors to cuDF OSS development. These instructions are tested on Linux Ubuntu 16.04 & 18.04. Use these instructions to build cuDF from source and contribute to its development.  Other operatings systems may be compatible, but are not currently tested.
 
 ### Get libcudf Dependencies
 
