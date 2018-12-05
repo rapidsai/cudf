@@ -12,10 +12,10 @@ class Buffer(object):
     _cached_ipch = None
 
     @classmethod
-    def from_empty(cls, mem):
+    def from_empty(cls, mem, size=0):
         """From empty device array
         """
-        return cls(mem, size=0, capacity=mem.size)
+        return cls(mem, size=size, capacity=mem.size)
 
     @classmethod
     def null(cls, dtype):

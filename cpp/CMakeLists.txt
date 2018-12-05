@@ -206,10 +206,10 @@ add_custom_target(python_cffi DEPENDS cudf PYTHON_CFFI)
 install(TARGETS cudf rmm
         DESTINATION lib)
 
-install(FILES ${CMAKE_BINARY_DIR}/../include/cudf.h
+install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/include/cudf.h
         DESTINATION include)
 
-install(DIRECTORY ${CMAKE_BINARY_DIR}/../include/cudf 
+install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/cudf
         DESTINATION include)
 
 add_custom_command(OUTPUT INSTALL_PYTHON_CFFI

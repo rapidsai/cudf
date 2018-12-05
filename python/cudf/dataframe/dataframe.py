@@ -1477,7 +1477,7 @@ class DataFrame(object):
         return pd.DataFrame(data, columns=list(self._cols), index=index)
 
     @classmethod
-    def from_pandas(cls, dataframe):
+    def from_pandas(cls, dataframe, nan_as_null=True):
         """
         Convert from a Pandas DataFrame.
 
@@ -1510,7 +1510,7 @@ class DataFrame(object):
         df = cls()
         # Set columns
         for colk in dataframe.columns:
-            df[colk] = dataframe[colk].values
+            df[colk] = Series(dataframe[colk].values, nan_as_null=nan_as_null)
         # Set index
         return df.set_index(dataframe.index.values)
 
@@ -1618,7 +1618,7 @@ class DataFrame(object):
         return ret
 
     @classmethod
-    def from_records(self, data, index=None, columns=None):
+    def from_records(self, data, index=None, columns=None, nan_as_null=False):
         """Convert from a numpy recarray or structured array.
 
         Parameters
@@ -1638,7 +1638,8 @@ class DataFrame(object):
         df = DataFrame()
         for k in names:
             # FIXME: unnecessary copy
-            df[k] = np.ascontiguousarray(data[k])
+            df[k] = Series(np.ascontiguousarray(data[k]),
+                           nan_as_null=nan_as_null)
         if index is not None:
             indices = data[index]
             return df.set_index(indices.astype(np.int64))
