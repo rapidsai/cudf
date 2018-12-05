@@ -13,9 +13,11 @@ dependencies:
 - nvdriver=396.44
 - libcudf=0.3.*
 - libcudf_cffi=0.3.*
+- nbsphinx
 - numba>=0.40.0dev
 - nvstrings
 - pandas=0.20.*
+- pandoc
 - pyarrow=0.10.*
 - ipython
 - numpydoc

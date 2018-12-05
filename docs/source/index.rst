@@ -7,7 +7,7 @@ Welcome to cuDF's documentation!
 
    api.rst
    developer.rst
-   10min.rst
+   10minNotebook.ipynb
 
 Indices and tables
 ==================
