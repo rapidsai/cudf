@@ -26,7 +26,7 @@ class Groupby(object):
                         'sum': libgdf.gdf_group_by_sum,
                         }
 
-    def __init__(self, df, by, method="sort"):
+    def __init__(self, df, by, method="hash"):
         """
         Parameters
         ----------
@@ -38,15 +38,13 @@ class Groupby(object):
                 List of *str* of the column names to group on.
         method : str, optional
             A string indicating the libgdf method to use to perform the
-            group by. Valid values are "sort", or "hash".
+            group by. Valid values are "hash".
         """
 
         self._df = df
         self._by = [by] if isinstance(by, str) else list(by)
         self._val_columns = [idx for idx in self._df.columns
                              if idx not in self._by]
-        if (method == "sort"):
-            self._method = libgdf.GDF_SORT
         elif (method == "hash"):
             self._method = libgdf.GDF_HASH
         else:
@@ -75,7 +73,7 @@ class Groupby(object):
             The list of columns names that the aggregation results should be
             output into.
         """
-        if (self._method == libgdf.GDF_HASH and sort_result):
+        if (sort_result):
             ctx.flag_sort_result = 1
 
         ncols = len(self._by)
@@ -97,16 +95,13 @@ class Groupby(object):
             else:
                 out_col_indices = ffi.NULL
 
-            if first_run or self._method == libgdf.GDF_HASH:
-                out_col_values_series = [Series(Buffer(rmm.device_array(
-                    col_agg.size,
-                    dtype=self._df[self._by[i]]._column.data.dtype)))
-                    for i in range(0, ncols)]
-                out_col_values = [
-                    out_col_values_series[i]._column.cffi_view
-                    for i in range(0, ncols)]
-            else:
-                out_col_values = ffi.NULL
+            out_col_values_series = [Series(Buffer(rmm.device_array(
+                col_agg.size,
+                dtype=self._df[self._by[i]]._column.data.dtype)))
+                for i in range(0, ncols)]
+            out_col_values = [
+                out_col_values_series[i]._column.cffi_view
+                for i in range(0, ncols)]
 
             if agg_type == "count":
                 out_col_agg_series = Series(
