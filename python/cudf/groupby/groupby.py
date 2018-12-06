@@ -26,7 +26,7 @@ class Groupby(object):
                         'sum': libgdf.gdf_group_by_sum,
                         }
 
-    def __init__(self, df, by):
+    def __init__(self, df, by, method="sort"):
         """
         Parameters
         ----------
@@ -36,12 +36,22 @@ class Groupby(object):
                 The column name to group on.
             - list
                 List of *str* of the column names to group on.
+        method : str, optional
+            A string indicating the libgdf method to use to perform the
+            group by. Valid values are "sort", or "hash".
         """
 
         self._df = df
         self._by = [by] if isinstance(by, str) else list(by)
         self._val_columns = [idx for idx in self._df.columns
                              if idx not in self._by]
+        if (method == "sort"):
+            self._method = libgdf.GDF_SORT
+        elif (method == "hash"):
+            self._method = libgdf.GDF_HASH
+        else:
+            msg = "Method {!r} is not a supported group by method"
+            raise NotImplementedError(msg.format(method))
 
     def _apply_agg(self, agg_type, result, add_col_values,
                    ctx, val_columns, val_columns_out, sort_result=True):
@@ -57,7 +67,7 @@ class Groupby(object):
             run and should add the additional columns' values.
         ctx : gdf_context cffi object
             Context object to pass information such as if the dataframe
-            is sorted.
+            is sorted and/or which method to use for grouping.
         val_columns : list of *str*
             The list of column names that the aggregation should be performed
             on.
@@ -65,7 +75,7 @@ class Groupby(object):
             The list of columns names that the aggregation results should be
             output into.
         """
-        if (sort_result):
+        if (self._method == libgdf.GDF_HASH and sort_result):
             ctx.flag_sort_result = 1
 
         ncols = len(self._by)
@@ -87,7 +97,7 @@ class Groupby(object):
             else:
                 out_col_indices = ffi.NULL
 
-            if first_run:
+            if first_run or self._method == libgdf.GDF_HASH:
                 out_col_values_series = [Series(Buffer(rmm.device_array(
                     col_agg.size,
                     dtype=self._df[self._by[i]]._column.data.dtype)))
@@ -163,6 +173,7 @@ class Groupby(object):
 
         ctx = ffi.new('gdf_context*')
         ctx.flag_sorted = 0
+        ctx.flag_method = self._method
         ctx.flag_distinct = 0
 
         val_columns = self._val_columns
@@ -217,6 +228,7 @@ class Groupby(object):
 
         ctx = ffi.new('gdf_context*')
         ctx.flag_sorted = 0
+        ctx.flag_method = self._method
         ctx.flag_distinct = 0
 
         sort_result = True
