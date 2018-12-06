@@ -497,6 +497,12 @@ def hash_partition(input_columns, key_indices, nparts, output_columns):
     return offsets
 
 
+def _column_concat(cols_to_concat, output_col):
+    col_inputs = [col.cffi_view for col in cols_to_concat]
+    libgdf.gdf_column_concat(output_col.cffi_view, col_inputs, len(col_inputs))
+    return output_col
+
+
 def count_nonzero_mask(mask, size):
     assert mask.size * mask_bitsize >= size
     nnz = ffi.new('int*')

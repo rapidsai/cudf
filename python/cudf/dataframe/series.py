@@ -26,6 +26,7 @@ class Series(object):
 
     ``Series`` objects are used as columns of ``DataFrame``.
     """
+
     @classmethod
     def from_categorical(cls, categorical, codes=None):
         """Creates from a pandas.Categorical
@@ -61,7 +62,7 @@ class Series(object):
         col = columnops.as_column(data).set_mask(mask, null_count=null_count)
         return cls(data=col)
 
-    def __init__(self, data, index=None, name=None):
+    def __init__(self, data, index=None, name=None, nan_as_null=True):
         if isinstance(data, pd.Series):
             name = data.name
             index = GenericIndex(data.index)
@@ -71,7 +72,7 @@ class Series(object):
             data = data._column
 
         if not isinstance(data, columnops.TypedColumnBase):
-            data = columnops.as_column(data)
+            data = columnops.as_column(data, nan_as_null=nan_as_null)
 
         if index is not None and not isinstance(index, Index):
             raise TypeError('index not a Index type: got {!r}'.format(index))
@@ -82,8 +83,8 @@ class Series(object):
         self.name = name
 
     @classmethod
-    def from_pandas(cls, s):
-        return cls(s)
+    def from_pandas(cls, s, nan_as_null=True):
+        return cls(s, nan_as_null=nan_as_null)
 
     @classmethod
     def from_arrow(cls, s):
