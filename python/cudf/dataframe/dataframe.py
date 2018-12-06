@@ -1151,7 +1151,7 @@ class DataFrame(object):
 
         return df
 
-    def groupby(self, by, sort=False, as_index=False, method="sort"):
+    def groupby(self, by, sort=False, as_index=False, method="hash"):
         """Groupby
 
         Parameters
@@ -1166,7 +1166,7 @@ class DataFrame(object):
             The keys are always left as regular columns in the result.
         method : str, optional
             A string indicating the method to use to perform the group by.
-            Valid values are "sort", "hash", or "cudf".
+            Valid values are "hash" or "cudf".
             "cudf" method may be deprecated in the future, but is currently
             the only method supporting group UDFs via the `apply` function.
 

@@ -45,7 +45,7 @@ class Groupby(object):
         self._by = [by] if isinstance(by, str) else list(by)
         self._val_columns = [idx for idx in self._df.columns
                              if idx not in self._by]
-        elif (method == "hash"):
+        if (method == "hash"):
             self._method = libgdf.GDF_HASH
         else:
             msg = "Method {!r} is not a supported group by method"
