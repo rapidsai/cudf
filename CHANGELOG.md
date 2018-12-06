@@ -15,10 +15,14 @@
 
 ## Improvements
 
+ - PR #436 Improvements for type_dispatcher and wrapper structs
  - PR #429 Add CHANGELOG.md (this file)
  - PR #266 use faster CUDA-accelerated DataFrame column/Series concatenation.
  - PR #379 new C++ `type_dispatcher` reduces code complexity in supporting many data types.
  - PR #349 Improve performance for creating columns from memoryview objects
+ - PR #445 Update reductions to use type_dispatcher. Adds integer types support to sum_of_squares. 
+ - PR #448 Improve installation instructions in README.md
+ - PR #456 Change default CMake build to Release, and added option for disabling compilation of tests
  
 ## Bug Fixes
 

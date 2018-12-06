@@ -1,13 +1,14 @@
 #include "cudf.h"
 #include "utilities/cudf_utils.h"
 #include "utilities/error_utils.h"
+#include "utilities/type_dispatcher.hpp"
 
 #include <cub/block/block_reduce.cuh>
 
 #include <limits>
+#include <type_traits>
 
 #define REDUCTION_BLOCK_SIZE 128
-
 
 struct IdentityLoader{
     template<typename T>
@@ -132,6 +133,9 @@ struct DeviceSum {
     T operator() (const T &lhs, const T &rhs) {
         return lhs + rhs;
     }
+
+    template<typename T>
+    static constexpr T identity() { return T{0}; }
 };
 
 struct DeviceProduct {
@@ -143,12 +147,14 @@ struct DeviceProduct {
     T operator() (const T &lhs, const T &rhs) {
         return lhs * rhs;
     }
+
+    template<typename T>
+    static constexpr T identity() { return T{1}; }
 };
 
-
-struct DeviceSumSquared {
+struct DeviceSumOfSquares {
     struct Loader {
-        template <typename T>
+        template<typename T>
         __device__
         T operator() (const T* ptr, int pos) const {
             T val = ptr[pos];   // load
@@ -163,8 +169,10 @@ struct DeviceSumSquared {
     T operator() (const T &lhs, const T &rhs) const {
         return lhs + rhs;
     }
-};
 
+    template<typename T>
+    static constexpr T identity() { return T{0}; }
+};
 
 struct DeviceMin {
     typedef IdentityLoader Loader;
@@ -175,8 +183,10 @@ struct DeviceMin {
     T operator() (const T &lhs, const T &rhs) {
         return lhs <= rhs? lhs: rhs;
     }
-};
 
+    template<typename T>
+    static constexpr T identity() { return std::numeric_limits<T>::max(); }
+};
 
 struct DeviceMax {
     typedef IdentityLoader Loader;
@@ -187,80 +197,75 @@ struct DeviceMax {
     T operator() (const T &lhs, const T &rhs) {
         return lhs >= rhs? lhs: rhs;
     }
+
+    template<typename T>
+    static constexpr T identity() { return std::numeric_limits<T>::lowest(); }
 };
 
-#define DEF_REDUCE_OP_NUM(F)                                                      \
-gdf_error F##_generic(gdf_column *col, void *dev_result,                          \
-                          gdf_size_type dev_result_size) {                        \
-    switch ( col->dtype ) {                                                       \
-    case GDF_FLOAT64: return F##_f64(col, (double*)dev_result, dev_result_size);  \
-    case GDF_FLOAT32: return F##_f32(col, (float*)dev_result, dev_result_size);   \
-    case GDF_INT64:   return F##_i64(col, (int64_t*)dev_result, dev_result_size); \
-    case GDF_INT32:   return F##_i32(col, (int32_t*)dev_result, dev_result_size); \
-    case GDF_INT8:    return F##_i8(col,  (int8_t*)dev_result, dev_result_size);  \
-    default:          return GDF_UNSUPPORTED_DTYPE;                               \
-    }                                                                             \
+template <typename Op>
+struct ReduceDispatcher {
+    template <typename T,
+              typename std::enable_if_t<std::is_arithmetic<T>::value>* = nullptr>
+    gdf_error operator()(gdf_column *col, 
+                         void *dev_result, 
+                         gdf_size_type dev_result_size) {
+        T identity = Op::template identity<T>();
+        return ReduceOp<T, Op>::launch(col, identity, 
+                                       reinterpret_cast<T*>(dev_result), 
+                                       dev_result_size); 
+    }
+
+    template <typename T,
+              typename std::enable_if_t<!std::is_arithmetic<T>::value, T>* = nullptr>
+    gdf_error operator()(gdf_column *col, 
+                         void *dev_result, 
+                         gdf_size_type dev_result_size) {
+        return GDF_UNSUPPORTED_DTYPE;
+    }
+};
+
+
+gdf_error gdf_sum(gdf_column *col,
+                  void *dev_result,
+                  gdf_size_type dev_result_size)
+{   
+    return cudf::type_dispatcher(col->dtype, ReduceDispatcher<DeviceSum>(),
+                                 col, dev_result, dev_result_size);
 }
 
-#define DEF_REDUCE_OP_REAL(F)                                                     \
-gdf_error F##_generic(gdf_column *col, void *dev_result,                          \
-                          gdf_size_type dev_result_size) {                        \
-    switch ( col->dtype ) {                                                       \
-    case GDF_FLOAT64: return F##_f64(col, (double*)dev_result, dev_result_size);  \
-    case GDF_FLOAT32: return F##_f32(col, (float*)dev_result, dev_result_size);   \
-    default:          return GDF_UNSUPPORTED_DTYPE;                               \
-    }                                                                             \
+gdf_error gdf_product(gdf_column *col,
+                      void *dev_result,
+                      gdf_size_type dev_result_size)
+{
+    return cudf::type_dispatcher(col->dtype, ReduceDispatcher<DeviceProduct>(),
+                                 col, dev_result, dev_result_size);
 }
 
-#define DEF_REDUCE_IMPL(F, OP, T, ID)                                         \
-gdf_error F(gdf_column *col, T *dev_result, gdf_size_type dev_result_size) {  \
-    return ReduceOp<T, OP>::launch(col, ID, dev_result, dev_result_size);     \
+gdf_error gdf_sum_of_squares(gdf_column *col,
+                             void *dev_result,
+                             gdf_size_type dev_result_size)
+{
+    return cudf::type_dispatcher(col->dtype, ReduceDispatcher<DeviceSumOfSquares>(),
+                                 col, dev_result, dev_result_size);
+}
+
+gdf_error gdf_min(gdf_column *col,
+                  void *dev_result,
+                  gdf_size_type dev_result_size)
+{
+    return cudf::type_dispatcher(col->dtype, ReduceDispatcher<DeviceMin>(),
+                                 col, dev_result, dev_result_size);
+}
+
+gdf_error gdf_max(gdf_column *col,
+                  void *dev_result,
+                  gdf_size_type dev_result_size)
+{
+    return cudf::type_dispatcher(col->dtype, ReduceDispatcher<DeviceMax>(),
+                                 col, dev_result, dev_result_size);
 }
 
 
 unsigned int gdf_reduce_optimal_output_size() {
     return REDUCTION_BLOCK_SIZE;
 }
-
-
-/* Sum */
-
-DEF_REDUCE_OP_NUM(gdf_sum)
-DEF_REDUCE_IMPL(gdf_sum_f64, DeviceSum, double, 0)
-DEF_REDUCE_IMPL(gdf_sum_f32, DeviceSum, float, 0)
-DEF_REDUCE_IMPL(gdf_sum_i64, DeviceSum, int64_t, 0)
-DEF_REDUCE_IMPL(gdf_sum_i32, DeviceSum, int32_t, 0)
-DEF_REDUCE_IMPL(gdf_sum_i8,  DeviceSum, int8_t, 0)
-
-/* Product */
-
-DEF_REDUCE_OP_NUM(gdf_product)
-DEF_REDUCE_IMPL(gdf_product_f64, DeviceProduct, double, 1)
-DEF_REDUCE_IMPL(gdf_product_f32, DeviceProduct, float, 1)
-DEF_REDUCE_IMPL(gdf_product_i64, DeviceProduct, int64_t, 1)
-DEF_REDUCE_IMPL(gdf_product_i32, DeviceProduct, int32_t, 1)
-DEF_REDUCE_IMPL(gdf_product_i8,  DeviceProduct, int8_t, 1)
-
-/* Sum Squared */
-
-DEF_REDUCE_OP_REAL(gdf_sum_squared)
-DEF_REDUCE_IMPL(gdf_sum_squared_f64, DeviceSumSquared, double, 0)
-DEF_REDUCE_IMPL(gdf_sum_squared_f32, DeviceSumSquared, float, 0)
-
-/* Min */
-
-DEF_REDUCE_OP_NUM(gdf_min)
-DEF_REDUCE_IMPL(gdf_min_f64, DeviceMin, double, std::numeric_limits<double>::max())
-DEF_REDUCE_IMPL(gdf_min_f32, DeviceMin, float, std::numeric_limits<float>::max())
-DEF_REDUCE_IMPL(gdf_min_i64, DeviceMin, int64_t, std::numeric_limits<int64_t>::max())
-DEF_REDUCE_IMPL(gdf_min_i32, DeviceMin, int32_t, std::numeric_limits<int32_t>::max())
-DEF_REDUCE_IMPL(gdf_min_i8, DeviceMin, int8_t, std::numeric_limits<int8_t>::max())
-
-/* Max */
-
-DEF_REDUCE_OP_NUM(gdf_max)
-DEF_REDUCE_IMPL(gdf_max_f64, DeviceMax, double, std::numeric_limits<double>::lowest())
-DEF_REDUCE_IMPL(gdf_max_f32, DeviceMax, float, std::numeric_limits<float>::lowest())
-DEF_REDUCE_IMPL(gdf_max_i64, DeviceMax, int64_t, std::numeric_limits<int64_t>::lowest())
-DEF_REDUCE_IMPL(gdf_max_i32, DeviceMax, int32_t, std::numeric_limits<int32_t>::lowest())
-DEF_REDUCE_IMPL(gdf_max_i8, DeviceMax, int8_t,  std::numeric_limits<int8_t>::lowest())
