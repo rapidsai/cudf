@@ -181,7 +181,7 @@ gdf_error GroupbyHash(gdf_table<size_type> const & groupby_input_table,
   // NULL_VALUD: The bucket's payload is a NULL
   // VALID_VALUE: The bucket's payload is a valid value
   bucket_state * hash_bucket_states{nullptr};
-  CUDA_TRY( cudaMalloc(&hash_bucket_states, hash_table_size * sizeof(bucket_state)) );
+  RMM_TRY( RMM_ALLOC(&hash_bucket_states, hash_table_size * sizeof(bucket_state), 0) );
   CUDA_TRY( cudaMemset(hash_bucket_states, bucket_state::EMPTY, hash_table_size * sizeof(bucket_state)) );
 
   // Inserts (i, aggregation_column[i]) as a key-value pair into the
@@ -208,7 +208,7 @@ gdf_error GroupbyHash(gdf_table<size_type> const & groupby_input_table,
   const size_type num_masks = gdf_get_num_chars_bitmask(input_num_rows);
   if(nullptr == *out_aggregation_validity_mask)
   {
-    CUDA_TRY( cudaMalloc(out_aggregation_validity_mask, num_masks * sizeof(gdf_valid_type)) );
+    RMM_TRY( RMM_ALLOC(out_aggregation_validity_mask, num_masks * sizeof(gdf_valid_type), 0 ));
   }
   CUDA_TRY( cudaMemset(*out_aggregation_validity_mask, 0, num_masks * sizeof(gdf_valid_type)) );
 
@@ -256,13 +256,14 @@ gdf_error GroupbyHash(gdf_table<size_type> const & groupby_input_table,
         gather_valid_mask<<<gather_grid_size, THREAD_BLOCK_SIZE>>>(*out_aggregation_validity_mask,
                                                                    new_valid_mask.data().get(),
                                                                    sorted_indices.data().get(),
-                                                                   *out_size);
+                                                                   *out_size,
+                                                                   num_masks);
         thrust::copy(new_valid_mask.begin(), new_valid_mask.end(), *out_aggregation_validity_mask);
       }
 
   }
 
-  CUDA_TRY( cudaFree(hash_bucket_states) );
+  RMM_TRY( RMM_FREE(hash_bucket_states, 0) );
 
   return GDF_SUCCESS;
 }

@@ -125,8 +125,8 @@ TestParameters<
 
 const static gdf_method HASH = gdf_method::GDF_HASH;
 typedef ::testing::Types<
-    TestParameters< agg_op::AVG, HASH, VTuple<int32_t >, int32_t>,
-    TestParameters< agg_op::AVG, HASH, VTuple<int64_t >, float>,
+    //TestParameters< agg_op::AVG, HASH, VTuple<int32_t >, int32_t>,
+    //TestParameters< agg_op::AVG, HASH, VTuple<int64_t >, float>,
     TestParameters< agg_op::MIN, HASH, VTuple<float   >, int32_t>,
     TestParameters< agg_op::MIN, HASH, VTuple<double  >, int32_t>,
     TestParameters< agg_op::MAX, HASH, VTuple<uint32_t>, int32_t>,
