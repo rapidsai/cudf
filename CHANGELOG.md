@@ -1,3 +1,11 @@
+# cuDF 0.5.0 (Date TBD)
+
+## New Features
+
+## Improvements
+
+## Bug Fixes
+
 # cuDF 0.4.0 (05 Dec 2018)
 
 ## New Features
