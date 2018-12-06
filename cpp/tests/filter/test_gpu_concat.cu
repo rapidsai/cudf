@@ -26,6 +26,7 @@
 
 #include <thrust/execution_policy.h>
 #include <cuda_runtime.h>
+
 #include "helper/utils.cuh"
 
 #include "tests/utilities/cudf_test_fixtures.h"
@@ -42,19 +43,22 @@ struct GdfConcat : public GdfTest {};
 TEST_F(GdfConcat, usage_example) {
     const size_t lhs_size = 10;
     const size_t rhs_size = 20;
-    gdf_column lhs = gen_gdb_column<ValueType>(lhs_size, 2);
-    gdf_column rhs = gen_gdb_column<ValueType>(rhs_size, 3);
+
+    gdf_column lhs 		= gen_gdb_column<ValueType>(lhs_size, 2);
+    gdf_column rhs 		= gen_gdb_column<ValueType>(rhs_size, 3);
+    gdf_column output 	= gen_gdb_column<ValueType>(lhs_size + rhs_size, 0);
+
     std::cout << "*****left**************\n";
     print_column(&lhs);
+
     std::cout << "*****right**************\n";
     print_column(&rhs);
+
     std::cout << "*******************\n";
     
-    // reserve space for gdf_column output
-    gdf_column output = gen_gdb_column<ValueType>(lhs_size + rhs_size, 0);
-
     //call gpu_concat
     gpu_concat(&lhs, &rhs, &output);
+
     std::cout << "*****output**************\n";
     print_column(&output);
     

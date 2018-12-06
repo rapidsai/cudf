@@ -33,6 +33,7 @@
 #include "utilities/cudf_utils.h"
 #include "utilities/error_utils.h"
 #include "rmm/thrust_rmm_allocator.h"
+#include "bitmask/bitmask_util.cuh"
 
 //std lib
 #include <map>
@@ -79,7 +80,9 @@ private:
 typedef repeat_iterator<thrust::detail::normal_iterator<thrust::device_ptr<gdf_valid_type> > > gdf_valid_iterator;
 
 gdf_size_type get_number_of_bytes_for_valid (gdf_size_type column_size) {
-    return sizeof(gdf_valid_type) * (column_size + GDF_VALID_BITSIZE - 1) / GDF_VALID_BITSIZE;
+
+	return bitmask::host::num_bytes(column_size);
+    //return sizeof(gdf_valid_type) * ((column_size + GDF_VALID_BITSIZE - 1) / GDF_VALID_BITSIZE);
 }
 
 
@@ -407,7 +410,7 @@ gdf_error gpu_concat(gdf_column *lhs, gdf_column *rhs, gdf_column *output)
 	thrust::copy(left_device_bits, left_device_bits + left_num_chars, output_device_bits);
 	
 	gdf_valid_type shift_bits = (GDF_VALID_BITSIZE - (lhs->size % GDF_VALID_BITSIZE));
-	if(shift_bits == 8){
+	if(shift_bits == GDF_VALID_BITSIZE){
 		shift_bits = 0;
 	}
 	if (right_num_chars > 0) {

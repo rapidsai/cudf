@@ -192,6 +192,13 @@ namespace host {
 		return num_bitmasks;
 	}
 
+
+	gdf_size_type num_bytes(int number_of_records) {
+		int num_bitmasks = (number_of_records + (GDF_VALID_BITSIZE - 1)) / GDF_VALID_BITSIZE;
+
+		return sizeof(gdf_valid_type) * num_bitmasks;
+	}
+
 }  // end of host namespace
 
 
