@@ -22,7 +22,7 @@ def read_csv(filepath, lineterminator='\n',
              quotechar='"', quoting=True, doublequote=True,
              delimiter=',', sep=None, delim_whitespace=False,
              skipinitialspace=False, names=None, dtype=None,
-             skipfooter=0, skiprows=0, dayfirst=False, thousands=None, 
+             skipfooter=0, skiprows=0, dayfirst=False, thousands=None,
              decimal='.'):
     """
     Load and parse a CSV file into a DataFrame
