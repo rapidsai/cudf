@@ -214,10 +214,11 @@ def test_csv_reader_strings_quotechars(tmpdir):
     assert(cols[0].sublist([2]).to_host()[0] == 'e')
     assert(cols[0].sublist([3]).to_host()[0] == 'f,,!.,')
 
+
 def test_csv_reader_float_decimal(tmpdir):
     fname = tmpdir.mkdir("gdf_csv").join("tmp_csvreader_file9.csv")
 
-    names = ['basic_32', 'basic_64','round','decimal_only']
+    names = ['basic_32', 'basic_64', 'round', 'decimal_only']
     dtypes = ['float32', 'float64', 'float64', 'float32']
     lines = [';'.join(names),
              '1,2;1234,5678;12345;0,123',
@@ -231,12 +232,14 @@ def test_csv_reader_float_decimal(tmpdir):
     round_ref = [12345, 67890]
     decimal_only_ref = [0.123, 0.456]
 
-    df = read_csv(str(fname), names=names, dtype=dtypes, skiprows=1, delimiter=';', decimal=',')
+    df = read_csv(str(fname), names=names, dtype=dtypes, skiprows=1, 
+                  delimiter=';', decimal=',')
 
     np.testing.assert_allclose(basic_32_ref, df['basic_32'])
     np.testing.assert_allclose(basic_64_ref, df['basic_64'])
     np.testing.assert_allclose(round_ref, df['round'])
     np.testing.assert_allclose(decimal_only_ref, df['decimal_only'])
+
 
 def test_csv_reader_thousands(tmpdir):
     fname = tmpdir.mkdir("gdf_csv").join("tmp_csvreader_file10.csv")
@@ -254,7 +257,8 @@ def test_csv_reader_thousands(tmpdir):
     int32_ref = [1234567, 12345]
     int64_ref = [1234567890, 123456789]
 
-    df = read_csv(str(fname), names=names, dtype=dtypes, skiprows=1, thousands="'")
+    df = read_csv(str(fname), names=names, dtype=dtypes, skiprows=1, 
+                  thousands="'")
 
     np.testing.assert_allclose(f32_ref, df['float32'])
     np.testing.assert_allclose(f64_ref, df['float64'])
