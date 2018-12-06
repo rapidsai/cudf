@@ -10,6 +10,18 @@ Please see the [Demo Docker Repository](https://hub.docker.com/r/rapidsai/rapids
 
 ## Install cuDF
 
+### Prerequisite
+
+* GPU support
+    * Pascal or better
+* CUDA support
+    * 9.2 or better
+    
+Note: If you are installing the CUDA within conda environment: 
+```bash
+conda install -c anaconda cudatoolkit
+```     
+And verify that your ```LD_LIBRARY_PATH``` is set accordingly.
 ### Conda
 
 It is easy to install cuDF using conda. You can get a minimal conda installation with [Miniconda](https://conda.io/miniconda.html) or get the full installation with [Anaconda](https://www.anaconda.com/download).
