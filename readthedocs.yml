@@ -1,0 +1,10 @@
+build:
+   image: latest
+
+python:
+   version: 3.5
+
+conda:
+   file: conda/environments/builddocs_py35.yml
+
+

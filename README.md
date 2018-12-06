@@ -1,140 +1,185 @@
-# libgdf: GPU Dataframes
+# <div align="left"><img src="img/rapids_logo.png" width="90px"/>&nbsp;cuDF - GPU DataFrames</div>
 
-[![Build Status](http://18.191.94.64/buildStatus/icon?job=libgdf-master)](http://18.191.94.64/job/libgdf-master/)
+[![Build Status](http://18.191.94.64/buildStatus/icon?job=cudf-master)](http://18.191.94.64/job/cudf-master/)&nbsp;&nbsp;[![Documentation Status](https://readthedocs.org/projects/cudf/badge/?version=latest)](https://cudf.readthedocs.io/en/latest/)
 
-libgdf is a C library for implementing common functionality for a GPU Data Frame.  For more project details, see [the wiki](https://github.com/gpuopenanalytics/libgdf/wiki/Home).
+The [RAPIDS](https://rapids.ai) cuDF library is a GPU DataFrame manipulation library based on Apache Arrow that accelerates loading, filtering, and manipulation of data for model training data preparation. The RAPIDS GPU DataFrame provides a pandas-like API that will be familiar to data scientists, so they can now build GPU-accelerated workflows more easily.
+
+## Quick Start
+
+Please see the [Demo Docker Repository](https://hub.docker.com/r/rapidsai/rapidsai/), choosing a tag based on the NVIDIA CUDA version you’re running. This provides a ready to run Docker container with example notebooks and data, showcasing how you can utilize cuDF.
+
+## Install cuDF
+
+### Conda
+
+It is easy to install cuDF using conda. You can get a minimal conda installation with [Miniconda](https://conda.io/miniconda.html) or get the full installation with [Anaconda](https://www.anaconda.com/download).
+
+Install and update cuDF using the conda command:
+
+```bash
+conda install -c nvidia -c rapidsai -c numba -c conda-forge -c defaults cudf=0.4.0
+```
+
+Note: This conda installation only applies to Linux and Python versions 3.5/3.6.
+
+### Pip
+
+Support is coming soon, please use conda for the time being.
 
 ## Development Setup
 
-The following instructions are tested on Linux and OSX systems.
+The following instructions are for developers and contributors to cuDF OSS development. These instructions are tested on Linux Ubuntu 16.04 & 18.04. Use these instructions to build cuDF from source and contribute to its development.  Other operatings systems may be compatible, but are not currently tested.
 
-Compiler requirement:
+### Get libcudf Dependencies
 
-* `g++` 4.8 or 5.4
-* `cmake` 3.12+
+Compiler requirements:
 
-CUDA requirement:
+* `gcc`     version 5.4
+* `nvcc`    version 9.2
+* `cmake`   version 3.12
 
-* CUDA 9.0+
+CUDA/GPU requirements:
 
-You can obtain CUDA from [https://developer.nvidia.com/cuda-downloads](https://developer.nvidia.com/cuda-downloads).
+* CUDA 9.2+
+* NVIDIA driver 396.44+
+* Pascal architecture or better
 
-### Get dependencies
+You can obtain CUDA from [https://developer.nvidia.com/cuda-downloads](https://developer.nvidia.com/cuda-downloads)
 
-**Note**: This repo uses submodules. Make sure you cloned recursively:
-
-```bash
-git clone --recurse-submodules git@github.com:gpuopenanalytics/libgdf.git
-```
-
-Or, after cloning:
-
-```bash
-cd libgdf
-git submodule update --init --recursive
-```
-
-Since `cmake` will download and build Apache Arrow (version 0.7.1 or
-0.8+) you may need to install Boost C++ (version 1.58) before running
+Since `cmake` will download and build Apache Arrow (version 0.7.1 or 0.8+) you may need to install Boost C++ (version 1.58+) before running
 `cmake`:
 
 ```bash
-# Install Boost C++ 1.58 for Ubuntu 16.04
+# Install Boost C++ for Ubuntu 16.04/18.04
 $ sudo apt-get install libboost-all-dev
 ```
 
 or
 
 ```bash
-# Install Boost C++ 1.58 for Conda (you will need a Python 3.3 environment)
-$ conda install -c omnia boost=1.58.0=py33_0
+# Install Boost C++ for Conda
+$ conda install -c conda-forge boost
 ```
 
-Libgdf supports Apache Arrow versions 0.7.1 and 0.8+ (0.10.0 is
-default) that use different metadata versions in IPC. So, it is
-important to specify which Apache arrow version will be used during
-building libgdf.  To select required Apache Arrow version, define the
-following environment variables (using Arrow version 0.10.0 as an
-example):
+## Script to build cuDF from source
+
+### Build from Source
+
+To install cuDF from source, ensure the dependencies are met and follow the steps below:
+
+- Clone the repository and submodules
 ```bash
-$ export ARROW_VERSION=0.10.0
-$ export PARQUET_ARROW_VERSION=apache-arrow-$ARROW_VERSION
+git clone --recurse-submodules https://github.com/rapidsai/cudf.git
+cd cudf
 ```
-where the latter is used by libgdf cmake configuration files. Note
-that when using libgdf, defining the above environment variables is
-not necessary.
-
-You can install Boost C++ 1.58 from sources as well: https://www.boost.org/doc/libs/1_58_0/more/getting_started/unix-variants.html
-
-To run the python tests it is recommended to setup a conda environment for 
-the dependencies.
-
+- Create the conda development environment `cudf_dev`
 ```bash
-# create the conda environment (assuming in build directory)
-$ conda env create --name libgdf_dev --file ../conda_environments/dev_py35.yml
+# create the conda environment (assuming in base `cudf` directory)
+conda env create --name cudf_dev --file conda/environments/dev_py35.yml
 # activate the environment
-$ source activate libgdf_dev
-# when not using default arrow version 0.10.0, run
-$ conda install pyarrow=$ARROW_VERSION -c conda-forge
+source activate cudf_dev
 ```
 
-This installs the required `cmake` and `pyarrow` into the `libgdf_dev` conda
-environment and activates it.
-
-For additional information, the python cffi wrapper code requires `cffi` and
-`pytest`.  The testing code requires `numba` and `cudatoolkit` as an
-additional dependency.  All these are installed from the previous commands.
-
-The environment can be updated from `../conda_environments/dev_py35.yml` as
-development includes/changes the depedencies.  To do so, run:
-
+- Build and install `libcudf`. CMake depends on the `nvcc` executable being on your path or defined in `$CUDACXX`.
 ```bash
-conda env update --name libgdf_dev --file ../conda_environments/dev_py35.yml
+$ cd cpp                                            # navigate to C/C++ CUDA source root directory
+$ mkdir build                                       # make a build directory
+$ cd build                                          # enter the build directory
+$ cmake .. -DCMAKE_INSTALL_PREFIX=/install/path     # configure cmake ... use $CONDA_PREFIX if you're using Anaconda
+$ make -j                                           # compile the libraries librmm.so, libcudf.so ... '-j' will start a parallel job using the number of physical cores available on your system
+$ make install                                      # install the libraries librmm.so, libcudf.so to '/install/path'
 ```
-Note that `dev_py35.yml` uses the latest version of pyarrow.
-Reinstall pyarrow if needed using `conda install
-pyarrow=$ARROW_VERSION -c conda-forge`.
 
-### Configure and build
-
-This project uses cmake for building the C/C++ library. To configure cmake,
-run:
-
+- To run tests (Optional):
 ```bash
-$ mkdir build   # create build directory for out-of-source build
-$ cd build      # enter the build directory
-$ cmake ..      # configure cmake (will download and build Apache Arrow and Google Test)
+$ make test
 ```
 
-If installing libgdf to conda environment is desired, then replace the last command with
+- Build and install cffi bindings:
 ```bash
-$ cmake -DCMAKE_INSTALL_PREFIX=$CONDA_PREFIX ..
+$ make python_cffi                                  # build CFFI bindings for librmm.so, libcudf.so
+$ make install_python                               # build & install CFFI python bindings. Depends on cffi package from PyPi or Conda
+$ py.test -v                                        # optional, run python tests on low-level python bindings
 ```
 
-To build the C/C++ code, run `make`.  This should produce a shared library
-named `libgdf.so` or `libgdf.dylib`.
-
-If you run into compile errors about missing header files:
-
+- 4. Build the `cudf` python package, in the `python` folder:
 ```bash
-cub/device/device_segmented_radix_sort.cuh: No such file or directory
+$ cd ../../python
+$ python setup.py build_ext --inplace
 ```
 
-See the note about submodules in the Get dependencies section above.
-
-### Link python files into the build directory
-
-To make development and testing more seamless, the python files and tests
-can be symlinked into the build directory by running `make copy_python`.
-With that, any changes to the python files are reflected in the build
-directory.  To rebuild the libgdf, run `make` again.
-
-### Run tests
-
-Currently, all tests are written in python with `py.test`.  A make target is
-available to trigger the test execution.  In the build directory (and with the
-conda environment activated), run below to exceute test:
-
+- You will also need the following environment variables, including `$CUDA_HOME`.
 ```bash
-$ make pytest   # this auto trigger target "copy_python"
+NUMBAPRO_NVVM=$CUDA_HOME/nvvm/lib64/libnvvm.so
+NUMBAPRO_LIBDEVICE=$CUDA_HOME/nvvm/libdevice
 ```
+
+- To run Python tests (Optional):
+```bash
+$ py.test -v                                        # run python tests on cudf python bindings
+```
+
+- Finally, install the Python package to your Python path:
+```bash
+$ python setup.py install                           # install cudf python bindings
+```
+
+Done! You are ready to develop for the cuDF OSS project.
+
+## Automated Build in Docker Container
+
+A Dockerfile is provided with a preconfigured conda environment for building and installing cuDF from source based off of the master branch.
+
+### Prerequisites
+
+* Install [nvidia-docker2](https://github.com/nvidia/nvidia-docker/wiki/Installation-(version-2.0)) for Docker + GPU support
+* Verify NVIDIA driver is `396.44` or higher
+* Ensure CUDA 9.2+ is installed
+
+### Usage
+
+From cudf project root run the following, to build with defaults:
+```bash
+$ docker build --tag cudf .
+```
+After the container is built run the container:
+```bash
+$ docker run --runtime=nvidia -it cudf bash
+```
+Activate the conda environment `cudf` to use the newly built cuDF and libcudf libraries:
+```
+root@3f689ba9c842:/# source activate cudf
+(cudf) root@3f689ba9c842:/# python -c "import cudf"
+(cudf) root@3f689ba9c842:/#
+```
+
+### Customizing the Build
+
+Several build arguments are available to customize the build process of the
+container. These are spcified by using the Docker [build-arg](https://docs.docker.com/engine/reference/commandline/build/#set-build-time-variables---build-arg)
+flag. Below is a list of the available arguments and their purpose:
+
+| Build Argument | Default Value | Other Value(s) | Purpose |
+| --- | --- | --- | --- |
+| `CUDA_VERSION` | 9.2 | 10.0 | set CUDA version |
+| `LINUX_VERSION` | ubuntu16.04 | ubuntu18.04 | set Ubuntu version |
+| `CC` & `CXX` | 5 | 7 | set gcc/g++ version; **NOTE:** gcc7 requires Ubuntu 18.04 |
+| `CUDF_REPO` | This repo | Forks of cuDF | set git URL to use for `git clone` |
+| `CUDF_BRANCH` | master | Any branch name | set git branch to checkout of `CUDF_REPO` |
+| `NUMBA_VERSION` | 0.40.0 | Not supported | set numba version |
+| `NUMPY_VERSION` | 1.14.3 | Not supported | set numpy version |
+| `PANDAS_VERSION` | 0.20.3 | Not supported | set pandas version |
+| `PYARROW_VERSION` | 0.10.0 | 0.8.0+ | set pyarrow version |
+| `PYTHON_VERSION` | 3.5 | 3.6 | set python version |
+
+---
+
+## <div align="left"><img src="img/rapids_logo.png" width="265px"/></div> Open GPU Data Science
+
+The RAPIDS suite of open source software libraries aim to enable execution of end-to-end data science and analytics pipelines entirely on GPUs. It relies on NVIDIA® CUDA® primitives for low-level compute optimization, but exposing that GPU parallelism and high-bandwidth memory speed through user-friendly Python interfaces.
+
+<p align="center"><img src="img/rapids_arrow.png" width="80%"/></p>
+
+### Apache Arrow on GPU
+
+The GPU version of [Apache Arrow](https://arrow.apache.org/) is a common API that enables efficient interchange of tabular data between processes running on the GPU. End-to-end computation on the GPU avoids unnecessary copying and converting of data off the GPU, reducing compute time and cost for high-performance analytics common in artificial intelligence workloads. As the name implies, cuDF uses the Apache Arrow columnar data format on the GPU. Currently, a subset of the features in Apache Arrow are supported.
