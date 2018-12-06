@@ -110,60 +110,60 @@ namespace rmm
     {
         return Manager::getOptions().allocation_mode == PoolAllocation;
     }
+    // Allocate memory and return a pointer to device memory. 
+    template <typename T>
+    rmmError_t alloc(T **ptr, size_t size, cudaStream_t stream, const char* file, unsigned int line)
+    {
+      rmm::LogIt log(rmm::Logger::Alloc, 0, size, stream, file, line);
+
+      if (!ptr && !size) {
+        return RMM_SUCCESS;
+      }
+
+      if (!ptr) 
+        return RMM_ERROR_INVALID_ARGUMENT;
+
+      if (rmm::usePoolAllocator())
+      {
+        RMM_CHECK( rmm::Manager::getInstance().registerStream(stream) );
+        RMM_CHECK_CNMEM( cnmemMalloc(reinterpret_cast<void**>(ptr), size, stream) );
+      }
+      else
+        RMM_CHECK_CUDA(cudaMalloc(ptr, size));
+
+      log.setPointer(*ptr);
+      return RMM_SUCCESS;
+    }
+
+    template <typename T>
+    rmmError_t realloc(T **ptr, size_t new_size, cudaStream_t stream, const char* file, unsigned int line)
+    {
+      rmm::LogIt log(rmm::Logger::Realloc, ptr, new_size, stream, file, line);
+
+      if (!ptr && !new_size) {
+        return RMM_SUCCESS;
+      }
+
+      if (!ptr) 
+        return RMM_ERROR_INVALID_ARGUMENT;
+
+      if (rmm::usePoolAllocator())
+      {
+        RMM_CHECK( rmm::Manager::getInstance().registerStream(stream) );
+        RMM_CHECK_CNMEM( cnmemFree(*reinterpret_cast<void**>(ptr), stream) );
+        RMM_CHECK_CNMEM( cnmemMalloc(reinterpret_cast<void**>(ptr), new_size, stream) );
+      }
+      else
+      {
+        RMM_CHECK_CUDA(cudaFree(*ptr));
+        RMM_CHECK_CUDA(cudaMalloc(ptr, new_size));
+      }
+      log.setPointer(*ptr);
+      return RMM_SUCCESS;
+    }
 
 }; // namespace rmm
 
-// Allocate memory and return a pointer to device memory. 
-template <typename T>
-rmmError_t rmm_alloc(T **ptr, size_t size, cudaStream_t stream, const char* file, unsigned int line)
-{
-  rmm::LogIt log(rmm::Logger::Alloc, 0, size, stream, file, line);
-
-  if (!ptr && !size) {
-    return RMM_SUCCESS;
-  }
-
-  if (!ptr) 
-    return RMM_ERROR_INVALID_ARGUMENT;
-
-  if (rmm::usePoolAllocator())
-  {
-    RMM_CHECK( rmm::Manager::getInstance().registerStream(stream) );
-    RMM_CHECK_CNMEM( cnmemMalloc(reinterpret_cast<void**>(ptr), size, stream) );
-  }
-  else
-    RMM_CHECK_CUDA(cudaMalloc(ptr, size));
-
-  log.setPointer(*ptr);
-  return RMM_SUCCESS;
-}
-
-template <typename T>
-rmmError_t rmm_realloc(T **ptr, size_t new_size, cudaStream_t stream, const char* file, unsigned int line)
-{
-  rmm::LogIt log(rmm::Logger::Realloc, ptr, new_size, stream, file, line);
-
-  if (!ptr && !new_size) {
-    return RMM_SUCCESS;
-  }
-
-  if (!ptr) 
-    return RMM_ERROR_INVALID_ARGUMENT;
-
-  if (rmm::usePoolAllocator())
-  {
-    RMM_CHECK( rmm::Manager::getInstance().registerStream(stream) );
-    RMM_CHECK_CNMEM( cnmemFree(*reinterpret_cast<void**>(ptr), stream) );
-    RMM_CHECK_CNMEM( cnmemMalloc(reinterpret_cast<void**>(ptr), new_size, stream) );
-  }
-  else
-  {
-    RMM_CHECK_CUDA(cudaFree(*ptr));
-    RMM_CHECK_CUDA(cudaMalloc(ptr, new_size));
-  }
-  log.setPointer(*ptr);
-  return RMM_SUCCESS;
-}
 
 #ifndef GETNAME
 #define GETNAME(x) case x: return #x;
@@ -223,13 +223,13 @@ rmmError_t rmmFinalize()
 // Allocate memory and return a pointer to device memory. 
 rmmError_t rmmAlloc(void **ptr, size_t size, cudaStream_t stream, const char* file, unsigned int line)
 {
-  return rmm_alloc(ptr, size, stream, file, line);
+  return rmm::alloc(ptr, size, stream, file, line);
 }
 
 // Reallocate device memory block to new size and recycle any remaining memory.
 rmmError_t rmmRealloc(void **ptr, size_t new_size, cudaStream_t stream, const char* file, unsigned int line)
 {
-  return rmm_realloc(ptr, new_size, stream, file, line);
+  return rmm::realloc(ptr, new_size, stream, file, line);
 }
 
 // Release device memory and recycle the associated memory.

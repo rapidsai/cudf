@@ -20,8 +20,11 @@
  * Efficient allocation, deallocation and tracking of GPU memory.
  * --------------------------------------------------------------------------**/
 
-template <typename T>
-rmmError_t rmm_alloc(T **ptr, size_t size, cudaStream_t stream, const char* file, unsigned int line);
+namespace rmm
+{
+  template <typename T>
+  rmmError_t alloc(T **ptr, size_t size, cudaStream_t stream, const char* file, unsigned int line);
 
-template <typename T>
-rmmError_t rmm_realloc(T **ptr, size_t new_size, cudaStream_t stream, const char* file, unsigned int line);
+  template <typename T>
+  rmmError_t realloc(T **ptr, size_t new_size, cudaStream_t stream, const char* file, unsigned int line);
+}
