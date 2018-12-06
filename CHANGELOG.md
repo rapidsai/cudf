@@ -1,3 +1,15 @@
+# cuDF 0.5.0 
+
+## New Features
+
+
+## Improvements
+- PR #426 Removed sort based groupby and refactored existing groupby APIs
+
+ 
+## Bug Fixes
+
+
 # cuDF 0.4.0 (05 Dec 2018)
 
 ## New Features
