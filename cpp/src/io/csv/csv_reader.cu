@@ -87,8 +87,8 @@ typedef struct raw_csv_ {
     bool* 				d_parseCol;		// device : array of booleans stating if column should be parsed in reading process: parseCol[x]=false means that the column x needs to be filtered out.
     long 				header_row;		// Row id of the header
     bool				dayfirst;
-	char				decimal;
-	char				thousands;
+    char				decimal;
+    char				thousands;
 } raw_csv_t;
 
 typedef struct column_data_ {
