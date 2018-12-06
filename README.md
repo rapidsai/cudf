@@ -83,7 +83,7 @@ source activate cudf_dev
 
 - Build and install `libcudf`. CMake depends on the `nvcc` executable being on your path or defined in `$CUDACXX`.
 ```bash
-$ cd $CUDF_HOME                                     # navigate to C/C++ CUDA source root directory
+$ cd $CUDF_HOME/cpp                                 # navigate to C/C++ CUDA source root directory
 $ mkdir build                                       # make a build directory
 $ cd build                                          # enter the build directory
 $ cmake .. -DCMAKE_INSTALL_PREFIX=/install/path     # configure cmake ... use $CONDA_PREFIX if you're using Anaconda
