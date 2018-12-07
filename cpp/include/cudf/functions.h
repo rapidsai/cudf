@@ -913,7 +913,7 @@ gdf_error gdf_order_by(gdf_column** input_columns,             //input columns
                        int          flag_nulls_are_smallest);  //flag to indicate if nulls are to be considered smaller than non-nulls or viceversa
 
 gdf_error gdf_order_by_asc_desc(gdf_column** input_columns,             //input columns
-                                char*        asc_desc,                  //array of sort order types where 0 is ascending order and 1 is descending order for each input column
+                                char*        asc_desc,                  //device array of sort order types where 0 is ascending order and 1 is descending order for each input column
                                 size_t       num_inputs,                //number of columns in the first parameter (e.g. number of columsn to sort by)
                                 gdf_column*  output_indices,            //a gdf_column that is pre allocated for storing sorted indices
                                 int          flag_nulls_are_smallest);  //flag to indicate if nulls are to be considered smaller than non-nulls or viceversa

@@ -230,6 +230,27 @@ struct LesserRTTI
     return false;
   }
 
+    __device__
+  bool less_with_nulls(IndexT row1, IndexT row2) const
+  {
+    for(size_t col_index = 0; col_index < sz_; ++col_index)
+    {
+      gdf_dtype col_type = static_cast<gdf_dtype>(rtti_[col_index]);
+
+      OpLess_with_nulls less(row1, row2, nulls_are_smallest_);
+      switch( type_dispatcher_with_nulls(less, col_type, col_index) )
+      {
+      case State::False:
+        return false;
+      case State::True:
+        return true;
+      case State::Undecided:
+        break;
+      }
+    }
+    return false;
+  }
+
   template<typename ColType>
   __device__
   static ColType at(int col_index,
