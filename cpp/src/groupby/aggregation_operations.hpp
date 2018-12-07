@@ -18,13 +18,8 @@
 #define AGGREGATION_OPERATIONS_H
 
 #include <limits>
+#include "utilities/cudf_utils.h"
 
-
-#ifndef __CUDACC__
-#define __host__
-#define __device__
-#define __forceinline__
-#endif
 
 /* --------------------------------------------------------------------------*/
 /** 
@@ -41,7 +36,7 @@ template<typename value_type>
 struct max_op{
   constexpr static value_type IDENTITY{std::numeric_limits<value_type>::lowest()};
 
-  __host__ __device__ __forceinline__
+  CUDA_HOST_DEVICE_CALLABLE
   value_type operator()(value_type new_value, value_type old_value)
   {
     return (new_value > old_value ? new_value : old_value);
@@ -53,7 +48,7 @@ struct min_op
 {
   constexpr static value_type IDENTITY{std::numeric_limits<value_type>::max()};
 
-  __host__ __device__ __forceinline__
+  CUDA_HOST_DEVICE_CALLABLE
   value_type operator()(value_type new_value, value_type old_value)
   {
     return (new_value < old_value ? new_value : old_value);
@@ -65,7 +60,7 @@ struct count_op
 {
   constexpr static value_type IDENTITY{0};
 
-  __host__ __device__ __forceinline__
+  CUDA_HOST_DEVICE_CALLABLE
   value_type operator()(value_type new_value, value_type old_value)
   {
     return ++old_value;
@@ -77,7 +72,7 @@ struct sum_op
 {
   constexpr static value_type IDENTITY{0};
 
-  __host__ __device__ __forceinline__
+  CUDA_HOST_DEVICE_CALLABLE
   value_type operator()(value_type new_value, value_type old_value)
   {
     return new_value + old_value;
@@ -89,7 +84,7 @@ template<typename value_type>
 struct avg_op
 {
   constexpr static value_type IDENTITY{};
-  __host__ __device__ __forceinline__
+  CUDA_HOST_DEVICE_CALLABLE
   value_type operator()(value_type new_value, value_type old_value)
   {
     return 0;
