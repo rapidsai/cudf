@@ -4,8 +4,11 @@
 
 - PR #455 CSV Reader: Add support for user-specified decimal point and thousands separator
 
+## Improvements
 
-# cuDF 0.4.0 (DATE TBD)
+## Bug Fixes
+
+# cuDF 0.4.0 (05 Dec 2018)
 
 ## New Features
 
