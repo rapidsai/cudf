@@ -20,6 +20,9 @@
  * Efficient allocation, deallocation and tracking of GPU memory.
  * --------------------------------------------------------------------------**/
 
+#ifndef MEMORY_HPP
+#define MEMORY_HPP
+#include "memory.h"
 namespace rmm
 {
   template <typename T>
@@ -28,3 +31,4 @@ namespace rmm
   template <typename T>
   rmmError_t realloc(T **ptr, size_t new_size, cudaStream_t stream, const char* file, unsigned int line);
 }
+#endif
