@@ -2,6 +2,8 @@
 
 ## New Features
 
+- PR #455 CSV Reader: Add support for user-specified decimal point and thousands separator
+
 ## Improvements
 
 ## Bug Fixes
