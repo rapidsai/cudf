@@ -1,3 +1,10 @@
+# cuDF 0.5.0 (DATE TBD)
+
+## New Features
+
+- PR #411 added null support to gdf_order_by (new API), gdf_order_by_asc_desc (new function) and cudf_table::sort
+
+
 # cuDF 0.4.0 (DATE TBD)
 
 ## New Features
