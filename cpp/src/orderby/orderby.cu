@@ -75,16 +75,16 @@ namespace{ //annonymus
 //					have_nulls, static_cast<int16_t*>(output_indices->data), flag_nulls_are_smallest);
 //			break;
 //		}
-//		case GDF_INT32: {
-//			multi_col_sort(d_col_data, d_valids_data, d_col_types, asc_desc, ncols, cols[0]->size,
-//					have_nulls, static_cast<int32_t*>(output_indices->data), flag_nulls_are_smallest);
-//			break;
-//		}
-		case GDF_INT64: {
+		case GDF_INT32: {
 			multi_col_sort(d_col_data, d_valids_data, d_col_types, asc_desc, ncols, cols[0]->size,
-					have_nulls, static_cast<int64_t*>(output_indices->data), flag_nulls_are_smallest);
+					have_nulls, static_cast<int32_t*>(output_indices->data), flag_nulls_are_smallest);
 			break;
 		}
+		// case GDF_INT64: {
+		// 	multi_col_sort(d_col_data, d_valids_data, d_col_types, asc_desc, ncols, cols[0]->size,
+		// 			have_nulls, static_cast<int64_t*>(output_indices->data), flag_nulls_are_smallest);
+		// 	break;
+		// }
 		default:
 			return GDF_UNSUPPORTED_DTYPE;
     }
