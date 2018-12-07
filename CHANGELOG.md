@@ -1,4 +1,4 @@
-# cuDF 0.5.0 (DATE TBD)
+# cuDF 0.5.0 (Date TBD)
 
 ## New Features
 
