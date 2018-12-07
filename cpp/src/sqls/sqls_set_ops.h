@@ -31,14 +31,11 @@
 template<typename ...Ts>
 using Tuple = thrust::tuple<Ts...>;
 
-// thrust::device_vector set to use rmmAlloc and rmmFree.
-template <typename T>
-using Vector = thrust::device_vector<T, rmm_allocator<T>>;
 
 
-template<typename T, typename Allocator, template<typename, typename> class Vector>
+template<typename T, typename Allocator, template<typename, typename> class rmm::device_vector>
 __host__ __device__
-void print_v(const Vector<T, Allocator>& v, std::ostream& os)
+void print_v(const rmm::device_vector<T, Allocator>& v, std::ostream& os)
 {
   thrust::copy(v.begin(), v.end(), std::ostream_iterator<T>(os,","));
   os<<"\n";
@@ -46,9 +43,9 @@ void print_v(const Vector<T, Allocator>& v, std::ostream& os)
 
 template<typename T,
 	 typename Allocator,
-	 template<typename, typename> class Vector>
+	 template<typename, typename> class rmm::device_vector>
 __host__ __device__
-void print_v(const Vector<T, Allocator>& v, typename Vector<T, Allocator>::const_iterator pos, std::ostream& os)
+void print_v(const rmm::device_vector<T, Allocator>& v, typename rmm::device_vector<T, Allocator>::const_iterator pos, std::ostream& os)
 { 
   thrust::copy(v.begin(), pos, std::ostream_iterator<T>(os,","));//okay
   os<<"\n";
@@ -56,9 +53,9 @@ void print_v(const Vector<T, Allocator>& v, typename Vector<T, Allocator>::const
 
 template<typename T,
 	 typename Allocator,
-	 template<typename, typename> class Vector>
+	 template<typename, typename> class rmm::device_vector>
 __host__ __device__
-void print_v(const Vector<T, Allocator>& v, size_t n, std::ostream& os)
+void print_v(const rmm::device_vector<T, Allocator>& v, size_t n, std::ostream& os)
 { 
   thrust::copy_n(v.begin(), n, std::ostream_iterator<T>(os,","));//okay
   os<<"\n";

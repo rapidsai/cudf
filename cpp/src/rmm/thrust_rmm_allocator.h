@@ -67,4 +67,17 @@ class rmm_allocator : public thrust::device_malloc_allocator<T>
   	cudaStream_t stream;
 };
 
+namespace rmm
+{
+/**
+ * @brief Alias for a thrust::device_vector that uses RMM for memory allocation.
+ * 
+ */
+template <typename T>
+using device_vector = thrust::device_vector<T, rmm_allocator<T>>;
+
+
+//struct rmm_device_policy : thrust::device_execution_policy
+}
+
 typedef rmm_allocator<char> rmm_temp_allocator; // Use this alias for thrust::cuda::par(allocator).on(stream)

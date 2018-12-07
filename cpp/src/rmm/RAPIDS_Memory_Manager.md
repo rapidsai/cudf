@@ -70,18 +70,8 @@ You can tell Thrust to use `rmm_allocator` like this:
 thrust::device_vector<size_type, rmm_allocator<T>> permuted_indices(column_length);
 ```
 
-For convenience, usually you will want to create an alias, like this:
-
-```template <typename T> 
-using Vector = thrust::device_vector<T, rmm_allocator<T>>;
-
-...
-
-Vector<size_type> permuted_indices(column_length);
-```
-
-(TODO: add a definition of this alias in an include so all files can easily use 
-it.)
+For convenience, you can use the alias `rmm::device_vector<T>` defined in 
+`thrust_rmm_allocator.h` that can be used as if it were a `thrust::device_vector<T>`. 
 
 #### Thrust Algorithms
 

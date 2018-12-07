@@ -12,11 +12,6 @@
 #include <thrust/iterator/iterator_adaptor.h>
 #include <thrust/device_vector.h>
 
-// thrust::device_vector set to use rmmAlloc and rmmFree.
-template <typename T>
-using Vector = thrust::device_vector<T, rmm_allocator<T>>;
-
-
 /*
  * bit_mask_null_counts Generated using the following code
 
@@ -86,11 +81,11 @@ gdf_error apply_bitmask_to_bitmask(gdf_size_type & out_null_count, gdf_valid_typ
 	cudaError_t error = cudaMemcpyAsync(last_char,valid_out + ( num_chars_bitmask-1),sizeof(gdf_valid_type),cudaMemcpyDeviceToHost,stream);
 
 
-	Vector<gdf_valid_type> bit_mask_null_counts_device(bit_mask_null_counts);
+	rmm::device_vector<gdf_valid_type> bit_mask_null_counts_device(bit_mask_null_counts);
 
 	//this permutation iterator makes it so that each char basically gets replaced with its number of null counts
 	//so if you sum up this perm iterator you add up all of the counts for null values per unsigned char
-	thrust::permutation_iterator<Vector<gdf_valid_type>::iterator,thrust::detail::normal_iterator<thrust::device_ptr<gdf_valid_type> > >
+	thrust::permutation_iterator<rmm::device_vector<gdf_valid_type>::iterator,thrust::detail::normal_iterator<thrust::device_ptr<gdf_valid_type> > >
 	null_counts_iter( bit_mask_null_counts_device.begin(),thrust::detail::make_normal_iterator(valid_out_ptr));
 
 	//you will notice that we subtract the number of zeros we found in the last character

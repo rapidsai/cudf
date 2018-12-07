@@ -37,9 +37,6 @@
 //std lib
 #include <map>
 
-// thrust::device_vector set to use rmmAlloc and rmmFree.
-template <typename T>
-using Vector = thrust::device_vector<T, rmm_allocator<T>>;
 
 
 //wow the freaking example from iterator_adaptpr, what a break right!
@@ -283,7 +280,7 @@ gdf_error gpu_apply_stencil(gdf_column *lhs, gdf_column * stencil, gdf_column * 
 	//TODO:BRING OVER THE BITMASK!!!
 	//need to store a prefix sum
 	//align to size 8
-	Vector<gdf_valid_type> valid_bit_mask; //we are expanding the bit mask to an int8 because I can't envision an algorithm that operates on the bitmask that
+	rmm::device_vector<gdf_valid_type> valid_bit_mask; //we are expanding the bit mask to an int8 because I can't envision an algorithm that operates on the bitmask that
 	if(num_values % GDF_VALID_BITSIZE != 0){
 		valid_bit_mask.resize(num_values + (GDF_VALID_BITSIZE - (num_values % GDF_VALID_BITSIZE))); //align this allocation on GDF_VALID_BITSIZE so we don't have to bounds check
 	}else{
@@ -434,8 +431,8 @@ gdf_error gpu_concat(gdf_column *lhs, gdf_column *rhs, gdf_column *output)
 			thrust::copy( last_byte.begin(), last_byte.begin() + 1, output_device_bits + left_num_chars - 1);
 			
 			if(right_num_chars > 1)  {
-				using first_iterator_type = thrust::transform_iterator<shift_left,Vector<gdf_valid_type>::iterator>;
-				using second_iterator_type = thrust::transform_iterator<shift_right,Vector<gdf_valid_type>::iterator>;
+				using first_iterator_type = thrust::transform_iterator<shift_left,rmm::device_vector<gdf_valid_type>::iterator>;
+				using second_iterator_type = thrust::transform_iterator<shift_right,rmm::device_vector<gdf_valid_type>::iterator>;
 				using offset_tuple = thrust::tuple<first_iterator_type, second_iterator_type>;
 				using zipped_offset = thrust::zip_iterator<offset_tuple>;
 
@@ -450,11 +447,11 @@ gdf_error gpu_concat(gdf_column *lhs, gdf_column *rhs, gdf_column *output)
 				
 				zipped_offset  zipped_offset_iter(
 						thrust::make_tuple(
-								thrust::make_transform_iterator<shift_left, Vector<gdf_valid_type>::iterator >(
+								thrust::make_transform_iterator<shift_left, rmm::device_vector<gdf_valid_type>::iterator >(
 										right_device_bits,
 										shift_left(shift_bits)),
 								
-								thrust::make_transform_iterator<shift_right, Vector<gdf_valid_type>::iterator >(
+								thrust::make_transform_iterator<shift_right, rmm::device_vector<gdf_valid_type>::iterator >(
 										right_device_bits + 1,
 										shift_right(GDF_VALID_BITSIZE - shift_bits, !too_many_bits))
 						)	

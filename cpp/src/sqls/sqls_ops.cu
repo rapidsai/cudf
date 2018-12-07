@@ -38,9 +38,6 @@ namespace{ //annonymus
     cudaMemcpy(d_types, h_types, ncols*sizeof(int), cudaMemcpyHostToDevice);//TODO: add streams
   }
 
-  // thrust::device_vector set to use rmmAlloc and rmmFree.
-  template<typename T>
-  using Vector = thrust::device_vector<T, rmm_allocator<T>>;
 
   void type_dispatcher(gdf_dtype col_type,
                        int col_index,
@@ -1144,9 +1141,9 @@ gdf_error gdf_group_by_single(int ncols,                    // # columns
 
       size_t n_group = 0;
 
-      Vector<IndexT> d_indx;//allocate only if necessary (see below)
-      Vector<void*> d_cols(ncols, nullptr);
-      Vector<int>   d_types(ncols, 0);
+      rmm::device_vector<IndexT> d_indx;//allocate only if necessary (see below)
+      rmm::device_vector<void*> d_cols(ncols, nullptr);
+      rmm::device_vector<int>   d_types(ncols, 0);
   
       void** d_col_data = d_cols.data().get();
       int* d_col_types = d_types.data().get();
@@ -1160,13 +1157,13 @@ gdf_error gdf_group_by_single(int ncols,                    // # columns
           ptr_d_indx = d_indx.data().get();
         }
 
-      Vector<IndexT> d_sort(nrows, 0);
+      rmm::device_vector<IndexT> d_sort(nrows, 0);
       IndexT* ptr_d_sort = d_sort.data().get();
       
       gdf_column c_agg_p;
       c_agg_p.dtype = col_agg->dtype;
       c_agg_p.size = nrows;
-      Vector<char> d_agg_p(nrows * dtype_size(c_agg_p.dtype));//purpose: avoids a switch-case on type;
+      rmm::device_vector<char> d_agg_p(nrows * dtype_size(c_agg_p.dtype));//purpose: avoids a switch-case on type;
       c_agg_p.data = d_agg_p.data().get();
 
       switch( op )
@@ -1218,7 +1215,7 @@ gdf_error gdf_group_by_single(int ncols,                    // # columns
 
         case GDF_AVG:
           {
-            Vector<IndexT> d_cout(nrows, 0);
+            rmm::device_vector<IndexT> d_cout(nrows, 0);
             IndexT* ptr_d_cout = d_cout.data().get();
             
             gdf_group_by_avg(nrows,

@@ -17,4 +17,6 @@ extern "C" {
                                                     __FILE__, __LINE__)
 #define RMM_FREE(ptr, stream) rmmFree((ptr), (stream), __FILE__, __LINE__)
 
+
+
 #endif // RMM_H
