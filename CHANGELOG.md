@@ -1,11 +1,9 @@
-# cuDF 0.5.0 
+# cuDF 0.5.0 (Date TBD)
 
 ## New Features
 
-
 ## Improvements
-- PR #426 Removed sort based groupby and refactored existing groupby APIs
-
+- PR #426 Removed sort-based groupby and refactored existing groupby APIs. Also improves C++/CUDA compile time.
  
 ## Bug Fixes
 

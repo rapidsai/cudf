@@ -73,7 +73,7 @@ class Groupby(object):
             The list of columns names that the aggregation results should be
             output into.
         """
-        if (sort_result):
+        if sort_result:
             ctx.flag_sort_result = 1
 
         ncols = len(self._by)
