@@ -74,7 +74,7 @@ typedef struct {
   bool			infer_datetime_format;		// try and determine the date format
   bool			dayfirst;					// is the first value the day?  DD/MM  versus MM/DD
 
-  char			*compression;				// specify the type of compression
+  char			*compression;				/**< specify the type of compression (nullptr,"none","infer","gzip","zip"), "infer" infers the compression from the file extension, default(nullptr) is uncompressed */
   char			*thousands;					// single character		a separate within numeric data  - if this matches the delimiter then system will return NULL
 
   char			decimal;					// the decimal point character

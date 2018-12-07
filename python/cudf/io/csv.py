@@ -22,7 +22,7 @@ def read_csv(filepath, lineterminator='\n',
              quotechar='"', quoting=True, doublequote=True,
              delimiter=',', sep=None, delim_whitespace=False,
              skipinitialspace=False, names=None, dtype=None,
-             skipfooter=0, skiprows=0, dayfirst=False):
+             skipfooter=0, skiprows=0, dayfirst=False, compression='infer'):
     """
     Load and parse a CSV file into a DataFrame
 
@@ -55,6 +55,7 @@ def read_csv(filepath, lineterminator='\n',
         Number of rows to be skipped from the start of file.
     skipfooter : int, default 0
         Number of rows to be skipped at the bottom of file.
+    compression : {'infer','gzip','bz2','zip',None} on-the-fly decompression, default 'infer' detects from the file extension
 
     Returns
     -------
@@ -126,6 +127,7 @@ def read_csv(filepath, lineterminator='\n',
     csv_reader.num_cols = len(names)
     csv_reader.skiprows = skiprows
     csv_reader.skipfooter = skipfooter
+    csv_reader.compression = _wrap_string(compression)
 
     # Call read_csv
     libgdf.read_csv(csv_reader)
