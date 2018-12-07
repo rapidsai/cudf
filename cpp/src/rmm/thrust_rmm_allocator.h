@@ -20,7 +20,8 @@
  Author: Mark Harris
  */
 
-#pragma once
+#ifndef THRUST_RMM_ALLOCATOR_H
+#define THRUST_RMM_ALLOCATOR_H
 
 #include <thrust/device_malloc_allocator.h>
 #include <thrust/system_error.h>
@@ -67,6 +68,8 @@ class rmm_allocator : public thrust::device_malloc_allocator<T>
   	cudaStream_t stream;
 };
 
+using rmm_temp_allocator = rmm_allocator<char>; // Use this alias for thrust::cuda::par(allocator).on(stream)
+
 namespace rmm
 {
 /**
@@ -76,8 +79,12 @@ namespace rmm
 template <typename T>
 using device_vector = thrust::device_vector<T, rmm_allocator<T>>;
 
-
-//struct rmm_device_policy : thrust::device_execution_policy
+auto exec_policy(cudaStream_t stream)
+{
+  rmm_temp_allocator allocator(stream);
+  return thrust::cuda::par(allocator).on(stream);
 }
 
-typedef rmm_allocator<char> rmm_temp_allocator; // Use this alias for thrust::cuda::par(allocator).on(stream)
+}
+
+#endif // THRUST_RMM_ALLOCATOR_H
