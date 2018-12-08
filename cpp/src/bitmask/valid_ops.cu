@@ -277,7 +277,7 @@ gdf_error gdf_mask_concat(gdf_valid_type *output_mask,
 
     // This is like thrust::for_each where the lambda gets the current index into the output array
     // as input
-    thrust::tabulate(thrust::cuda::par,
+    thrust::tabulate(rmm::exec_policy(cudaStream_t{0}),
                      output_mask,
                      output_mask + gdf_get_num_chars_bitmask(output_column_length),
                      mask_concatenator);

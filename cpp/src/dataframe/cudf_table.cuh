@@ -306,13 +306,10 @@ public:
     device_row_valid.resize(mask_size);
 
        
-    cudaStream_t stream = 0; // TODO: non-default stream?
-    rmm_temp_allocator allocator(stream);   
-
     // If a row contains a single NULL value, then the entire row is considered
     // to be NULL, therefore initialize the row-validity mask with the 
     // bit-wise AND of the validity mask of all the columns
-    thrust::tabulate(thrust::cuda::par(allocator).on(stream),
+    thrust::tabulate(rmm::exec_policy(cudaStream_t{0}),
                      device_row_valid.begin(),
                      device_row_valid.end(),
                      row_masker<size_type>(d_columns_valids, num_cols));
@@ -803,7 +800,6 @@ public:
   /* ----------------------------------------------------------------------------*/
   rmm::device_vector<size_type> sort(void) {
 
-      cudaStream_t stream = NULL;
 
       // Functor that defines a `less` operator between rows of a set of
       // gdf_columns
@@ -811,16 +807,14 @@ public:
               reinterpret_cast<int*>(d_columns_types),
               num_columns);
 
-      rmm_temp_allocator allocator(stream);
-	    auto exec = thrust::cuda::par(allocator).on(stream);
 
       // rmm::device_vector that will store the permutation of the rows after the sort
       rmm::device_vector<size_type> permuted_indices(column_length);
-      thrust::sequence(exec, permuted_indices.begin(), permuted_indices.end());
+      thrust::sequence(rmm::exec_policy(cudaStream_t{0}), permuted_indices.begin(), permuted_indices.end());
 
       // Use the LesserRTTI functor to sort the rows of the table and the
       // permutation vector
-      thrust::sort(exec, permuted_indices.begin(), permuted_indices.end(),
+      thrust::sort(rmm::exec_policy(cudaStream_t{0}), permuted_indices.begin(), permuted_indices.end(),
               [comparator] __host__ __device__ (size_type i1, size_type i2) {
               return comparator.less(i1, i2);
               });
@@ -1008,13 +1002,11 @@ private:
   
     gdf_error gdf_status{GDF_SUCCESS};
 
-    rmm_temp_allocator allocator(stream);
-	  auto exec = thrust::cuda::par(allocator).on(stream);
 
     // Gathering from one table to another
     if (i_data != o_data) {
         if (range_check) {
-            thrust::gather_if(exec,
+            thrust::gather_if(rmm::exec_policy(stream),
                     row_gather_map,
                     row_gather_map + num_rows,
                     row_gather_map,
@@ -1023,7 +1015,7 @@ private:
                     ValidRange<index_type>(0, input_column->size));
 
         } else {
-            thrust::gather(exec,
+            thrust::gather(rmm::exec_policy(stream),
                     row_gather_map,
                     row_gather_map + num_rows,
                     i_data,
@@ -1034,7 +1026,7 @@ private:
     else {
         rmm::device_vector<column_type> remapped_copy(num_rows);
         if (range_check) {
-            thrust::gather_if(exec,
+            thrust::gather_if(rmm::exec_policy(stream),
                            row_gather_map,
                            row_gather_map + num_rows,
                            row_gather_map,
@@ -1042,13 +1034,13 @@ private:
                            remapped_copy.begin(),
                            ValidRange<index_type>(0, input_column->size));
         } else {
-            thrust::gather(exec,
+            thrust::gather(rmm::exec_policy(stream),
                            row_gather_map,
                            row_gather_map + num_rows,
                            i_data,
                            remapped_copy.begin());
         }
-        thrust::copy(exec,
+        thrust::copy(rmm::exec_policy(stream),
                 remapped_copy.begin(),
                 remapped_copy.end(),
                 o_data);
@@ -1056,13 +1048,13 @@ private:
     //If gather is in-place
     if ((input_column->valid == output_column->valid) &&
             (input_column->valid != nullptr)) {
-        thrust::device_vector<gdf_valid_type> remapped_valid_copy(gdf_get_num_chars_bitmask(num_rows));
+        rmm::device_vector<gdf_valid_type> remapped_valid_copy(gdf_get_num_chars_bitmask(num_rows));
         gather_valid<index_type>(
                 input_column->valid,
                 remapped_valid_copy.data().get(),
                 row_gather_map, 
                 num_rows, input_column->size, stream);
-        thrust::copy(thrust::cuda::par.on(stream),
+        thrust::copy(rmm::exec_policy(stream),
                 remapped_valid_copy.begin(),
                 remapped_valid_copy.end(), output_column->valid);
     }
@@ -1108,10 +1100,8 @@ gdf_error scatter_column(column_type const * const __restrict__ input_column,
 
   gdf_error gdf_status{GDF_SUCCESS};
 
-  rmm_temp_allocator allocator(stream);
-	auto exec = thrust::cuda::par(allocator).on(stream);
 
-  thrust::scatter(exec,
+  thrust::scatter(rmm::exec_policy(stream),
                   input_column,
                   input_column + num_rows,
                   row_scatter_map,

@@ -69,7 +69,6 @@ class rmm_allocator : public thrust::device_malloc_allocator<T>
   	cudaStream_t stream;
 };
 
-using rmm_temp_allocator = rmm_allocator<char>; // Use this alias for thrust::cuda::par(allocator).on(stream)
 
 namespace rmm
 {
@@ -81,7 +80,7 @@ template <typename T>
 using device_vector = thrust::device_vector<T, rmm_allocator<T>>;
 
 inline auto exec_policy(cudaStream_t stream = 0){
-  rmm_temp_allocator allocator(stream);
+  rmm_allocator<char> allocator(stream);
   return thrust::cuda::par(allocator).on(stream);
 }
 
