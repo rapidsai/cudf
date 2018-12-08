@@ -64,9 +64,13 @@ typedef struct {
 
   bool			skip_blank_lines;			// whether or not to ignore blank lines
 
-  char			**true_values;				// array of char *	what should be considered as True - each char string contains {col ID, true value, ...} - this will allow multiple true values to be specified over multiple columns
-  char			**false_values;				// array of char *	what should be considered as True - each char string contains {col ID, false value, ...} - this will allow multiple false values to be specified over multiple columns
-  char			**na_values;				// array of char *	what should be considered as True - each char string contains {col ID, na value, ...} - this will allow multiple na values to be specified over multiple columns
+  const char	**true_values;				/**< list of values to recognize as boolean True */
+  int			num_true_values;			/**< number of values in the true_values list */
+  const char	**false_values;				/**< list of values to recognize as boolean False */
+  int			num_false_values;			/**< number of values in the true_values list */
+
+  const char	**na_values;				// array of char *	what should be considered as True - each char string contains {col ID, na value, ...} - this will allow multiple na values to be specified over multiple columns
+
   char			*prefix;					// if there is no header or names, append this to the column ID as the name
   bool			mangle_dupe_cols;			// if true: duplicate columns will be specified as (deleted because utf-8 chars kill the build)
 

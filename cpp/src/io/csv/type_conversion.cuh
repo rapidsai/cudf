@@ -40,13 +40,25 @@ void removePrePostWhiteSpaces2(char *data, long* start_idx, long* end_idx) {
 		*end_idx=*end_idx-1;
 }
 
+
+template<typename T>
+__host__ __device__
+bool isBooleanValue(T value, int32_t* boolValues, int32_t count) {
+	for (int i = 0; i < count; ++i) {
+		if (value == static_cast<T>(boolValues[i])) {
+			return true;
+		}
+	}
+	return false;
+}
+
 //---------------------------------------------------------------------------
 
 
 
 template<typename T>
 __host__ __device__
-T convertStrtoInt(char *data, long start_idx, long end_idx, char thousands='\0') {
+T convertStrtoInt(const char *data, long start_idx, long end_idx, char thousands='\0') {
 
 	T answer = (T)0;
 
