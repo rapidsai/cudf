@@ -237,14 +237,15 @@ def test_csv_reader_usecols_int_char(tmpdir):
     df.to_csv(fname, columns=['Integer', 'Date', 'Float', 'Integer2'],
               index=False, header=False)
 
-    df_out = pd.read_csv(fname, usecols=[0, 1, 3], parse_dates=[1], dayfirst=True)
+    df_out = pd.read_csv(fname, usecols=[0, 1, 3], parse_dates=[1],
+             dayfirst=True)
     out = read_csv(str(fname), usecols=[0, 1, 3], dayfirst=True)
     print(df_out)
     print(out)
     assert len(out.columns) == len(df_out.columns)
     assert len(out) == len(df_out)
     pd.util.testing.assert_frame_equal(df_out, out.to_pandas(),
-                                       check_names = False)
+                                       check_names=False)
 
 
 def test_csv_reader_mangle_dupe_cols_header(tmpdir):
