@@ -268,7 +268,7 @@ gdf_error read_csv(csv_read_arg *args)
 	struct stat     st;
 	int				fd;
 
-	fd = open(args->file_path, O_RDONLY );
+	fd = open(args->input_file.path, O_RDONLY );
 
 	if (fd < 0) 		{ close(fd); checkError(GDF_FILE_ERROR, "Error opening file"); }
 	if (fstat(fd, &st)) { close(fd); checkError(GDF_FILE_ERROR, "cannot stat file");   }

@@ -18,7 +18,7 @@ def _wrap_string(text):
         return ffi.new("char[]", text.encode())
 
 
-def read_csv(filepath, lineterminator='\n',
+def read_csv(filepath_or_buffer, lineterminator='\n',
              quotechar='"', quoting=True, doublequote=True,
              delimiter=',', sep=None, delim_whitespace=False,
              skipinitialspace=False, names=None, dtype=None,
@@ -28,8 +28,8 @@ def read_csv(filepath, lineterminator='\n',
 
     Parameters
     ----------
-    filepath : str
-        Path of file to be read.
+    filepath_or_buffer : str
+        Path of file to be read or a file-like object containing the file.
     delimiter : char, default ','
         Delimiter to be used.
     delim_whitespace : bool, default False
@@ -97,8 +97,9 @@ def read_csv(filepath, lineterminator='\n',
     csv_reader = ffi.new('csv_read_arg*')
 
     # Populate csv_reader struct
-    file_path = _wrap_string(filepath)
-    csv_reader.file_path = file_path
+    file_path = _wrap_string(filepath_or_buffer)
+    csv_reader.input_file.type = libgdf.FILE_PATH
+    csv_reader.input_file.path = file_path
 
     arr_names = []
     arr_dtypes = []
@@ -159,7 +160,7 @@ def read_csv(filepath, lineterminator='\n',
     return df
 
 
-def read_csv_strings(filepath, lineterminator='\n',
+def read_csv_strings(filepath_or_buffer, lineterminator='\n',
                      quotechar='"', quoting=True, doublequote=True,
                      delimiter=',', sep=None, delim_whitespace=False,
                      skipinitialspace=False, names=None, dtype=None,
@@ -229,8 +230,9 @@ def read_csv_strings(filepath, lineterminator='\n',
     csv_reader = ffi.new('csv_read_arg*')
 
     # Populate csv_reader struct
-    file_path = _wrap_string(filepath)
-    csv_reader.file_path = file_path
+    file_path = _wrap_string(filepath_or_buffer)
+    csv_reader.input_file.type = libgdf.FILE_PATH
+    csv_reader.input_file.path = file_path
 
     arr_names = []
     arr_dtypes = []

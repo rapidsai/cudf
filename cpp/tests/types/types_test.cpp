@@ -19,7 +19,7 @@
 
 #include <cudf.h>
 
-
+#include <random>
 
 /**
  * @file types_test.cpp
