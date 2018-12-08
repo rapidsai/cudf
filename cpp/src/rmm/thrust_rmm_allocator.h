@@ -79,6 +79,17 @@ namespace rmm
 template <typename T>
 using device_vector = thrust::device_vector<T, rmm_allocator<T>>;
 
+/* --------------------------------------------------------------------------*/
+/** 
+ * @brief Returns a Thrust CUDA execution policy that uses RMM for temporary memory
+ * allocation and executes on the specified stream.
+ * 
+ * @Param stream The stream that the execution policy will execute on.
+ * 
+ * @Returns A Thrust execution policy that will use RMM for temporary memory allocation
+ * that runs on the specified stream.
+ */
+/* ----------------------------------------------------------------------------*/
 inline auto exec_policy(cudaStream_t stream = 0){
   rmm_allocator<char> allocator(stream);
   return thrust::cuda::par(allocator).on(stream);
