@@ -23,6 +23,7 @@
 #ifndef THRUST_RMM_ALLOCATOR_H
 #define THRUST_RMM_ALLOCATOR_H
 
+#include <thrust/device_vector.h>
 #include <thrust/device_malloc_allocator.h>
 #include <thrust/system_error.h>
 #include <thrust/system/cuda/error.h>
@@ -79,12 +80,11 @@ namespace rmm
 template <typename T>
 using device_vector = thrust::device_vector<T, rmm_allocator<T>>;
 
-auto exec_policy(cudaStream_t stream)
-{
+inline auto exec_policy(cudaStream_t stream = 0){
   rmm_temp_allocator allocator(stream);
   return thrust::cuda::par(allocator).on(stream);
 }
 
-}
+} // namespace rmm
 
 #endif // THRUST_RMM_ALLOCATOR_H
