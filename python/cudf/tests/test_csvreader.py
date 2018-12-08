@@ -238,7 +238,7 @@ def test_csv_reader_usecols_int_char(tmpdir):
               index=False, header=False)
 
     df_out = pd.read_csv(fname, usecols=[0, 1, 3], parse_dates=[1],
-             dayfirst=True)
+                         dayfirst=True)
     out = read_csv(str(fname), usecols=[0, 1, 3], dayfirst=True)
     print(df_out)
     print(out)
