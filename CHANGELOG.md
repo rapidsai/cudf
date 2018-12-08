@@ -5,6 +5,7 @@
 - PR #455 CSV Reader: Add support for user-specified decimal point and thousands separator
 
 ## Improvements
+- PR #472 RMM: Created centralized rmm::device_vector alias and rmm::exec_policy
 
 ## Bug Fixes
 
