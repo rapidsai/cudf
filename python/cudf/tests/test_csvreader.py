@@ -215,56 +215,57 @@ def test_csv_reader_strings_quotechars(tmpdir):
     assert(cols[0].sublist([2]).to_host()[0] == 'e')
     assert(cols[0].sublist([3]).to_host()[0] == 'f,,!.,')
 
+
 def test_csv_reader_auto_column_detection(tmpdir):
     fname = tmpdir.mkdir("gdf_csv").join("tmp_csvreader_file7.csv")
     df = make_numpy_mixed_dataframe()
     df.to_csv(fname, columns=['Integer', 'Date', 'Float'], index=False,
               header=False)
- 
-    df_out = pd.read_csv(fname, parse_dates=[1], dayfirst = True)
-    out = read_csv(str(fname), dayfirst = True)
+
+    df_out = pd.read_csv(fname, parse_dates=[1], dayfirst=True)
+    out = read_csv(str(fname), dayfirst=True)
     assert len(out.columns) == len(df_out.columns)
     assert len(out) == len(df_out)
     pd.util.testing.assert_frame_equal(df_out, out.to_pandas())
     # Check dtypes
     assert list(df_out.dtypes) == list(out.to_pandas().dtypes)
- 
+
 
 def test_csv_reader_usecols_int_char(tmpdir):
     fname = tmpdir.mkdir("gdf_csv").join("tmp_csvreader_file7.csv")
     df = make_numpy_mixed_dataframe()
-    df.to_csv(fname, columns=['Integer', 'Date', 'Float', 'Integer2'], index=False,
-              header=False)
- 
-    df_out = pd.read_csv(fname, usecols=[0,1,3], parse_dates=[1], dayfirst=True)
-    out = read_csv(str(fname), usecols=[0,1,3], dayfirst=True)
+    df.to_csv(fname, columns=['Integer', 'Date', 'Float', 'Integer2'],
+              index=False, header=False)
+
+    df_out = pd.read_csv(fname, usecols=[0, 1, 3], parse_dates=[1], dayfirst=True)
+    out = read_csv(str(fname), usecols=[0, 1, 3], dayfirst=True)
     print(df_out)
     print(out)
     assert len(out.columns) == len(df_out.columns)
     assert len(out) == len(df_out)
-    pd.util.testing.assert_frame_equal(df_out, out.to_pandas(), check_names = False)
+    pd.util.testing.assert_frame_equal(df_out, out.to_pandas(),
+                                       check_names = False)
 
 
 def test_csv_reader_mangle_dupe_cols_header(tmpdir):
     fname = tmpdir.mkdir("gdf_csv").join("tmp_csvreader_file7.csv")
     df = make_numpy_mixed_dataframe()
-    df.to_csv(fname, columns=['Integer', 'Date', 'Float', 'Integer2'], index=False,
-              header=False)
+    df.to_csv(fname, columns=['Integer', 'Date', 'Float', 'Integer2'],
+              index=False, header=False)
 
-    # Default: header=0 when names not passed, mangle_dupe_cols = True 
-    df_out = pd.read_csv(fname, parse_dates=[1], dayfirst = True)
-    out = read_csv(str(fname), dayfirst = True)
+    # Default: header=0 when names not passed, mangle_dupe_cols = True
+    df_out = pd.read_csv(fname, parse_dates=[1], dayfirst=True)
+    out = read_csv(str(fname), dayfirst=True)
     assert len(out.columns) == len(df_out.columns)
     assert len(out) == len(df_out)
     # Compare mangled column names for duplicate names in header row
     assert list(df_out.columns.values) == list(out.columns.values)
     pd.util.testing.assert_frame_equal(df_out, out.to_pandas())
 
-    # header = 3 
-    df_out = pd.read_csv(fname, parse_dates=[1], dayfirst = True, header = 2)
-    out = read_csv(str(fname), dayfirst = True, header = 2)    
+    # header = 3
+    df_out = pd.read_csv(fname, parse_dates=[1], dayfirst=True, header=2)
+    out = read_csv(str(fname), dayfirst=True, header=2)
     assert len(out.columns) == len(df_out.columns)
-    #assert len(out) == len(df_out)
+    # assert len(out) == len(df_out)
     # Compare column names
     assert list(df_out.columns.values) == list(out.columns.values)
-    

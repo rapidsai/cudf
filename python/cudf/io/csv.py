@@ -17,9 +17,10 @@ def _wrap_string(text):
     else:
         return ffi.new("char[]", text.encode())
 
+
 def read_csv(filepath, lineterminator='\n',
              quotechar='"', quoting=True, doublequote=True,
-             windowslinetermination=False,header = -1, 
+             windowslinetermination=False, header=-1,
              mangle_dupe_cols=True, usecols=None,
              delimiter=',', sep=None, delim_whitespace=False,
              skipinitialspace=False, names=None, dtype=None,
@@ -56,15 +57,15 @@ def read_csv(filepath, lineterminator='\n',
         When quotechar is specified and quoting is True, indicates whether to
         interpret two consecutive quotechar inside fields as single quotechar
     header : int, default 'infer'
-        Row number to use as the column names. Default behavior is to infer 
-        the column names: if no names are passed, header=0; 
+        Row number to use as the column names. Default behavior is to infer
+        the column names: if no names are passed, header=0;
         if column names are passed explicitly, header=None.
     usecols : list of int or str, default None
         Returns subset of the columns given in the list. All elements must be
         either integer indices (column number) or strings that correspond to
         column names
     mangle_dupe_cols : boolean, default True
-        Duplicate columns will be specified as 'X','X.1',...'X.N'. 
+        Duplicate columns will be specified as 'X','X.1',...'X.N'.
     skiprows : int, default 0
         Number of rows to be skipped from the start of file.
     skipfooter : int, default 0
@@ -90,7 +91,6 @@ def read_csv(filepath, lineterminator='\n',
     1 30   70
     """
 
-    
     if dtype is not None:
         if isinstance(dtype, dict):
             dtype_dict = True
@@ -153,13 +153,12 @@ def read_csv(filepath, lineterminator='\n',
             usecols_ptr = ffi.new('int[]', usecols)
             csv_reader.use_cols_int = usecols_ptr
             csv_reader.use_cols_int_len = len(usecols)
-        else: 
+        else:
             for col_name in usecols:
                 arr_col_names.append(_wrap_string(col_name))
             col_names_ptr = ffi.new('char*[]', arr_col_names)
             csv_reader.use_cols_char = col_names_ptr
             csv_reader.use_cols_char_len = len(usecols)
-
 
     csv_reader.delimiter = delimiter.encode()
     csv_reader.lineterminator = lineterminator.encode()
@@ -179,9 +178,6 @@ def read_csv(filepath, lineterminator='\n',
     libgdf.read_csv(csv_reader)
 
     out = csv_reader.data
-    #str1 = out[0].col_name
-    #y=ffi.string(str1)
-    #print(y.decode())
     if out == ffi.NULL:
         raise ValueError("Failed to parse CSV")
 
@@ -191,8 +187,7 @@ def read_csv(filepath, lineterminator='\n',
     new_names = []
     for i in range(csv_reader.num_cols_out):
         newcol = Column.from_cffi_view(out[i])
-        #print(ffi.string(out[i].col_name).decode())
-        new_names.append(ffi.string(out[i].col_name).decode()) 
+        new_names.append(ffi.string(out[i].col_name).decode())
         if(newcol.dtype == np.dtype('datetime64[ms]')):
             outcols.append(newcol.view(DatetimeColumn, dtype='datetime64[ms]'))
         else:
@@ -200,9 +195,9 @@ def read_csv(filepath, lineterminator='\n',
 
     # Build dataframe
     df = DataFrame()
-    #if names is not None and header_infer is -1:
-        #new_names = names
-    for k, v in zip(new_names,outcols):
+    # if names is not None and header_infer is -1:
+
+    for k, v in zip(new_names, outcols):
         df[k] = v
 
     nvtx_range_pop()
