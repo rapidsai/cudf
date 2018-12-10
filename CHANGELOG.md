@@ -5,6 +5,7 @@
 
 - PR #455 CSV Reader: Add support for user-specified decimal point and thousands separator
 - PR #439 add `DataFrame.drop` method similar to pandas
+- PR #490 Added print_env.sh script to gather relevant environment details when reporting cuDF issues.
 
 ## Improvements
 - PR #426 Removed sort-based groupby and refactored existing groupby APIs. Also improves C++/CUDA compile time.
