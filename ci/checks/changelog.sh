@@ -2,13 +2,15 @@
 #########################
 # cuDF CHANGELOG Tester #
 #########################
-set -e
 
 # Checkout master for comparison
 git checkout master
 
 # Switch back to tip of PR branch
 git checkout current-pr-branch
+
+# Ignore errors during searching
+set +e
 
 # Get list of modified files between matster and PR branch
 CHANGELOG=`git diff --name-only master...current-pr-branch | grep CHANGELOG.md`
