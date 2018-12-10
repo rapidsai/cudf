@@ -30,17 +30,17 @@ like to see it/the use case
 
 <!--
 
+In order to better diagnose your issue, please provide the details of your 
+environment by running the `print_env.sh` script found at `cudf/print_env.sh`.
+Please attach the output of this script to your issue.
+
 Before submitting a bug report please ensure that you can check off these boxes:
 
 -->
 
 - [ ] I am using the latest version of cuDF from conda, built from `master`, or
 built from the latest tagged release. 
-- [ ] I have included the version or commit hash I am using for reference.
-- [ ] I have included the following environment details:
-      Linux Distro, Linux Kernel, GPU Model
-- [ ] I have included the following version information for:
-      Arrow, cmake, CUDA, gcc/g++, Numpy, Pandas, Python
+- [ ] I have attached the output of the `print_env.sh` script.
 - [ ] I have included below a minimal working reproducer (if you are unsure how
  to write one see http://matthewrocklin.com/blog/work/2018/02/28/minimal-bug-reports).
 
