@@ -91,6 +91,7 @@ using device_vector = thrust::device_vector<T, rmm_allocator<T>>;
  */
 /* ----------------------------------------------------------------------------*/
 inline auto exec_policy(cudaStream_t stream = 0){
+  // par_t::operator() can't accept a r-value, so need to pass it an l-value
   rmm_allocator<char> allocator(stream);
   return thrust::cuda::par(allocator).on(stream);
 }
