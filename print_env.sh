@@ -19,15 +19,15 @@ conda list 'pandas|arrow|numpy|^python$'
 echo " "
 
 echo "***which cmake && cmake --version***"
-which cmake && cmake --version
+which cmake && cmake --version | grep "version"
 echo " "
 
 echo "***which g++ && g++ --version***"
-which g++ && g++ --version
+which g++ && g++ --version | grep "g++"
 echo " "
 
 echo "***which nvcc && nvcc --version***"
-which nvcc && nvcc --version
+which nvcc && nvcc --version | grep "release"
 
 
 
