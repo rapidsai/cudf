@@ -321,5 +321,3 @@ def test_csv_reader_thousands(tmpdir):
     np.testing.assert_allclose(f64_ref, df['float64'])
     np.testing.assert_allclose(int32_ref, df['int32'])
     np.testing.assert_allclose(int64_ref, df['int64'])
-
-
