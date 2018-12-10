@@ -86,6 +86,14 @@ set(JOIN_TEST_SRC
 ConfigureTest(JOIN_TEST "${JOIN_TEST_SRC}")
 
 ###################################################################################################
+# - orderby tests ---------------------------------------------------------------------------------
+
+set(ORDERBY_TEST_SRC 
+    "${CMAKE_CURRENT_SOURCE_DIR}/orderby/orderby_tests.cu")
+
+ConfigureTest(ORDERBY_TEST "${ORDERBY_TEST_SRC}")
+
+###################################################################################################
 # - sqls tests ------------------------------------------------------------------------------------
 
 set(SQLS_TEST_SRC 
@@ -158,6 +166,15 @@ set(RMM_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/rmm/memory_tests.cpp")
 
 ConfigureTest(RMM_TEST "${RMM_TEST_SRC}")
+
+###################################################################################################
+# - types tests -------------------------------------------------------------------------------------
+
+set(TYPES_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/types/types_test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/types/dispatcher_test.cu")
+
+ConfigureTest(TYPES_TEST "${TYPES_TEST_SRC}")
 
 ###################################################################################################
 ### enable testing ################################################################################

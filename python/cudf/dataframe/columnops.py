@@ -34,7 +34,7 @@ class TypedColumnBase(Column):
         dtype = kwargs.pop('dtype')
         super(TypedColumnBase, self).__init__(**kwargs)
         # Logical dtype
-        self._dtype = dtype
+        self._dtype = pd.api.types.pandas_dtype(dtype)
 
     @property
     def dtype(self):
@@ -133,7 +133,7 @@ def column_select_by_position(column, positions):
                                             dtype=selected_index.dtype)
 
 
-def as_column(arbitrary):
+def as_column(arbitrary, nan_as_null=True):
     """Create a Column from an arbitrary object
 
     Currently support inputs are:
@@ -167,14 +167,15 @@ def as_column(arbitrary):
         data = as_column(Buffer(arbitrary))
         if (data.dtype in [np.float16, np.float32, np.float64]
                 and arbitrary.size > 0):
-            mask = cudautils.mask_from_devary(arbitrary)
-            data = data.set_mask(mask)
+            if nan_as_null:
+                mask = cudautils.mask_from_devary(arbitrary)
+                data = data.set_mask(mask)
 
     elif isinstance(arbitrary, np.ndarray):
         if arbitrary.dtype.kind == 'M':
             data = datetime.DatetimeColumn.from_numpy(arbitrary)
         else:
-            data = as_column(rmm.to_device(arbitrary))
+            data = as_column(rmm.to_device(arbitrary), nan_as_null=nan_as_null)
 
     elif isinstance(arbitrary, pa.Array):
         if isinstance(arbitrary, pa.StringArray):
@@ -273,9 +274,12 @@ def as_column(arbitrary):
             )
 
     elif isinstance(arbitrary, (pd.Series, pd.Categorical)):
-        data = as_column(pa.array(arbitrary, from_pandas=True))
+        if pd.core.common.is_categorical_dtype(arbitrary):
+            data = as_column(pa.array(arbitrary, from_pandas=True))
+        else:
+            data = as_column(pa.array(arbitrary, from_pandas=nan_as_null))
 
-    elif np.isscalar(arbitrary):
+    elif np.isscalar(arbitrary) and not isinstance(arbitrary, memoryview):
         if hasattr(arbitrary, 'dtype'):
             data_type = _gdf.np_to_pa_dtype(arbitrary.dtype)
             if data_type in (pa.date64(), pa.date32()):
@@ -286,8 +290,14 @@ def as_column(arbitrary):
         else:
             data = as_column(pa.array([arbitrary]))
 
+    elif isinstance(arbitrary, memoryview):
+        data = as_column(np.array(arbitrary))
+
     else:
-        data = as_column(pa.array(arbitrary))
+        try:
+            data = as_column(memoryview(arbitrary))
+        except TypeError:
+            data = as_column(pa.array(arbitrary))
 
     return data
 

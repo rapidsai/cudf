@@ -7,6 +7,7 @@ Welcome to cuDF's documentation!
 
    api.rst
    developer.rst
+   10min.rst
 
 Indices and tables
 ==================

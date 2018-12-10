@@ -65,7 +65,7 @@ struct MapTest : public GdfTest
 
   const int THREAD_BLOCK_SIZE{256};
 
-  std::vector<std::pair<key_type,value_type>> pairs;
+  std::vector<thrust::pair<key_type,value_type>> pairs;
 
   Vector<pair_type> d_pairs;
 

@@ -17,6 +17,8 @@
 #ifndef HASH_FUNCTIONS_CUH
 #define HASH_FUNCTIONS_CUH
 
+#include "utilities/wrapper_types.hpp"
+
 using hash_value_type = uint32_t;
 
 //MurmurHash3_32 implementation from https://github.com/aappleby/smhasher/blob/master/src/MurmurHash3.cpp 
@@ -157,6 +159,30 @@ struct IdentityHash
     __host__ __device__ result_type operator()(const Key& key) const
     {
       return static_cast<result_type>(key);
+    }
+};
+
+/**
+* @brief Specialization of IdentityHash for wrapper structs that hashes the underlying value.
+*/
+template <typename T, gdf_dtype type_id>
+struct IdentityHash<cudf::detail::wrapper<T,type_id>>
+{
+    using result_type = hash_value_type;
+
+    __host__ __device__ result_type hash_combine(result_type lhs, result_type rhs) const
+    {
+      result_type combined{lhs};
+
+      combined ^= rhs + 0x9e3779b9 + (combined << 6) + (combined >> 2);
+
+      return combined;
+    }
+
+    __forceinline__ 
+    __host__ __device__ result_type operator()(cudf::detail::wrapper<T,type_id> const& key) const
+    {
+      return static_cast<result_type>(key.value);
     }
 };
 

@@ -5,6 +5,7 @@ import pytest
 import numpy as np
 import pandas as pd
 import pyarrow as pa
+import array as arr
 
 from librmm_cffi import librmm as rmm
 
@@ -538,18 +539,26 @@ def test_dataframe_setitem_from_masked_object():
     np.random.shuffle(mask)
     ary[mask] = np.nan
 
-    test1 = Series(ary)
-    assert(test1.has_null_mask)
-    assert(test1.null_count == 20)
+    test1_null = Series(ary, nan_as_null=True)
+    assert(test1_null.has_null_mask)
+    assert(test1_null.null_count == 20)
+    test1_nan = Series(ary, nan_as_null=False)
+    assert(test1_nan.null_count == 0)
 
-    test2 = DataFrame.from_pandas(pd.DataFrame({'a': ary}))
-    assert(test2['a'].has_null_mask)
-    assert(test2['a'].null_count == 20)
+    test2_null = DataFrame.from_pandas(pd.DataFrame({'a': ary}),
+                                       nan_as_null=True)
+    assert(test2_null['a'].has_null_mask)
+    assert(test2_null['a'].null_count == 20)
+    test2_nan = DataFrame.from_pandas(pd.DataFrame({'a': ary}),
+                                      nan_as_null=False)
+    assert(test2_nan['a'].null_count == 0)
 
     gpu_ary = rmm.to_device(ary)
-    test3 = Series(gpu_ary)
-    assert(test3.has_null_mask)
-    assert(test3.null_count == 20)
+    test3_null = Series(gpu_ary, nan_as_null=True)
+    assert(test3_null.has_null_mask)
+    assert(test3_null.null_count == 20)
+    test3_nan = Series(gpu_ary, nan_as_null=False)
+    assert(test3_nan.null_count == 0)
 
     test4 = DataFrame()
     lst = [1, 2, None, 4, 5, 6, None, 8, 9]
@@ -928,6 +937,20 @@ def test_from_scalar_typing(data_type):
     gdf['b'] = scalar
     assert(gdf['b'].dtype == np.dtype(data_type))
     assert(len(gdf['b']) == len(gdf['a']))
+
+
+@pytest.mark.parametrize(
+    'data_type',
+    ['int8', 'int16', 'int32', 'int64', 'float32', 'float64']
+)
+def test_from_python_array(data_type):
+    np_arr = np.random.randint(0, 100, 10).astype(data_type)
+    data = memoryview(np_arr)
+    data = arr.array(data.format, data)
+
+    gs = gd.Series(data)
+
+    np.testing.assert_equal(gs.to_array(), np_arr)
 
 
 def test_series_shape():
