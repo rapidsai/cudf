@@ -1,4 +1,18 @@
-# cuDF 0.4.0 (DATE TBD)
+
+# cuDF 0.5.0 (Date TBD)
+
+## New Features
+
+- PR #455 CSV Reader: Add support for user-specified decimal point and thousands separator
+- PR #439 add `DataFrame.drop` method similar to pandas
+
+## Improvements
+- PR #426 Removed sort-based groupby and refactored existing groupby APIs. Also improves C++/CUDA compile time.
+ 
+## Bug Fixes
+
+
+# cuDF 0.4.0 (05 Dec 2018)
 
 ## New Features
 
@@ -16,6 +30,7 @@
  - PR #349 Improve performance for creating columns from memoryview objects
  - PR #445 Update reductions to use type_dispatcher. Adds integer types support to sum_of_squares. 
  - PR #448 Improve installation instructions in README.md
+ - PR #456 Change default CMake build to Release, and added option for disabling compilation of tests
  
 ## Bug Fixes
 
