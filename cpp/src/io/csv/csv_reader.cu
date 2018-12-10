@@ -87,8 +87,8 @@ typedef struct raw_csv_ {
     bool* 				d_parseCol;		// device : array of booleans stating if column should be parsed in reading process: parseCol[x]=false means that the column x needs to be filtered out.
     long 				header_row;		// Row id of the header
     bool				dayfirst;
-	char				decimal;
-	char				thousands;
+    char				decimal;
+    char				thousands;
 } raw_csv_t;
 
 typedef struct column_data_ {
@@ -261,6 +261,15 @@ gdf_error read_csv(csv_read_arg *args)
 	raw_csv->dayfirst = args->dayfirst;
 	raw_csv->decimal = args->decimal;
 	raw_csv->thousands = args->thousands == nullptr ? '\0' : *args->thousands;
+
+	if (raw_csv->decimal == raw_csv->delimiter)
+	{ 
+		checkError(GDF_INVALID_API_CALL, "Decimal point cannot be the same as the delimiter");
+	}
+	if (raw_csv->thousands == raw_csv->delimiter)
+	{ 
+		checkError(GDF_INVALID_API_CALL, "Thousands separator cannot be the same as the delimiter");
+	}
 
 	//-----------------------------------------------------------------------------
 	// memory map in the data
