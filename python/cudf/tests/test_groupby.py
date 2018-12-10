@@ -26,7 +26,7 @@ def make_frame(dataframe_class, nelem, seed=0, extra_levels=(), extra_vals=()):
 
 
 def get_methods():
-    for method in ['cudf', 'hash', 'sort']:
+    for method in ['cudf', 'hash']:
         yield method
 
 
