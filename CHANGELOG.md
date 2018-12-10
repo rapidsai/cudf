@@ -8,7 +8,7 @@
 
 ## Improvements
 - PR #426 Removed sort-based groupby and refactored existing groupby APIs. Also improves C++/CUDA compile time.
-- PR #465 Added templated C++ for RMM to avoid explicit cast to `void**`
+- PR #465 Added templated C++ API for RMM to avoid explicit cast to `void**`
  
 ## Bug Fixes
 
