@@ -19,22 +19,27 @@
 #include <thrust/execution_policy.h>
 #include <thrust/functional.h>
 #include <thrust/iterator/counting_iterator.h>
+#include "rmm/thrust_rmm_allocator.h"
+
 /** ---------------------------------------------------------------------------*
 * @file full_join.cuh
 * @brief Implementation of full join.
 *
-* The highest level function in the file append_full_join_indices takes a left
-* join indices output and appends indices to it to perform a full join.
-* Given the number of rows of a column or a table, this function would look for all
-* the rows on the right that have not participated in the left join. These indices
-* are then added to the join indices output to complete the full join.
+* The functions in this file are used to append indices to the output of a left
+* join call to create the output of a full join. The highest level function in
+* this file is append_full_join_indices.
 * ---------------------------------------------------------------------------**/
+
+template <typename T>
+using DeviceVector = typename thrust::device_vector<T, rmm_allocator<T>>;
 
 /* --------------------------------------------------------------------------*/
 /**
-* @Synopsis  Creates a vector of indices containing values from 0 to
-* max_index_value - 1 provided that they do not appear in the range index_ptr
-* to index_ptr + index_size
+* @Synopsis  Creates a vector of indices missing from an array of indices given
+* a maximum index value
+*
+* A vector of indices containing values from 0 to max_index_value - 1 is created
+* provided that they do not appear in the range index_ptr to index_ptr + index_size
 *
 * @Param index_ptr Array of indices
 * @Param max_index_value The maximum value an index can have in index_ptr
@@ -45,23 +50,24 @@
 * @Returns  thrust::device_vector containing the indices that are missing from index_ptr
 */
 /* ----------------------------------------------------------------------------*/
-template <typename index_type, typename size_type>
-thrust::device_vector<index_type>
+template <typename index_type, typename size_type, typename ExecutionPolicy>
+DeviceVector<index_type>
 create_missing_indices(
         index_type const * const index_ptr,
         const size_type max_index_value,
-		const size_type index_size) {
+        const size_type index_size,
+        const ExecutionPolicy& exec_policy) {
 	//Assume all the indices in invalid_index_map are invalid
-	thrust::device_vector<index_type> invalid_index_map(max_index_value, 1);
+	DeviceVector<index_type> invalid_index_map(max_index_value, 1);
 	//Vector allocated for unmatched result
-	thrust::device_vector<index_type> unmatched_indices(max_index_value);
+	DeviceVector<index_type> unmatched_indices(max_index_value);
 	//Functor to check for index validity since left joins can create invalid indices
 	ValidRange<size_type> valid_range(0, max_index_value);
 
 	//invalid_index_map[index_ptr[i]] = 0 for i = 0 to max_index_value
 	//Thus specifying that those locations are valid
 	thrust::scatter_if(
-			thrust::device,
+            exec_policy,
 			thrust::make_constant_iterator(0),
 			thrust::make_constant_iterator(0) + index_size,
 			index_ptr,//Index locations
@@ -72,7 +78,7 @@ create_missing_indices(
 	size_type end_counter = static_cast<size_type>(invalid_index_map.size());
 	//Create list of indices that have been marked as invalid
 	size_type compacted_size = thrust::copy_if(
-			thrust::device,
+            exec_policy,
 			thrust::make_counting_iterator(begin_counter),
 			thrust::make_counting_iterator(end_counter),
 			invalid_index_map.begin(),
@@ -104,7 +110,8 @@ gdf_error expand_buffer(
         data_type ** buffer,
         size_type * const buffer_capacity,
         const size_type buffer_size,
-        const size_type expand_size) {
+        const size_type expand_size,
+        cudaStream_t stream) {
     size_type requested_size = buffer_size + expand_size;
     //No need to proceed if the buffer can contain requested additional elements
     if (*buffer_capacity >= requested_size) {
@@ -112,9 +119,9 @@ gdf_error expand_buffer(
     }
     data_type * new_buffer{nullptr};
     data_type * old_buffer = *buffer;
-    CUDA_TRY( cudaMalloc(&new_buffer, requested_size*sizeof(data_type)) );
+    RMM_TRY( RMM_ALLOC((void**)&new_buffer, requested_size*sizeof(data_type), stream) );
     CUDA_TRY( cudaMemcpy(new_buffer, old_buffer, buffer_size*sizeof(data_type), cudaMemcpyDeviceToDevice) );
-    CUDA_TRY( cudaFree(old_buffer) );
+    RMM_TRY( RMM_FREE(old_buffer, stream) );
     *buffer = new_buffer;
     *buffer_capacity = requested_size;
 
@@ -138,38 +145,41 @@ gdf_error expand_buffer(
 * the appropriate CUDA error code
 */
 /* ----------------------------------------------------------------------------*/
-template <typename index_type, typename size_type>
+template <typename index_type, typename size_type, typename MemAlloc = rmm_temp_allocator>
 gdf_error append_full_join_indices(
         index_type ** l_index_ptr,
         index_type ** r_index_ptr,
         size_type * const index_capacity,
         size_type * const index_size,
-        const size_type max_index_value) {
+        const size_type max_index_value,
+        MemAlloc& allocator,
+        cudaStream_t stream) {
     gdf_error err;
     //Get array of indices that do not appear in r_index_ptr
-    thrust::device_vector<index_type> unmatched_indices =
+    DeviceVector<index_type> unmatched_indices =
         create_missing_indices(
-                *r_index_ptr, max_index_value, *index_size);
+                *r_index_ptr, max_index_value, *index_size, thrust::cuda::par(allocator).on(stream));
     CUDA_CHECK_LAST()
 
     //Expand l_index_ptr and r_index_ptr if necessary
     size_type mismatch_index_size = unmatched_indices.size();
     size_type l_index_capacity = *index_capacity;
     size_type r_index_capacity = *index_capacity;
-    err = expand_buffer(l_index_ptr, &l_index_capacity, *index_size, mismatch_index_size);
+    err = expand_buffer(l_index_ptr, &l_index_capacity, *index_size, mismatch_index_size, stream);
     if (GDF_SUCCESS != err) return err;
-    err = expand_buffer(r_index_ptr, &r_index_capacity, *index_size, mismatch_index_size);
+    err = expand_buffer(r_index_ptr, &r_index_capacity, *index_size, mismatch_index_size, stream);
     if (GDF_SUCCESS != err) return err;
 
     //Copy JoinNoneValue to l_index_ptr to denote that a match does not exist on the left
     thrust::fill(
-            thrust::device,
+            thrust::cuda::par(allocator).on(stream),
             *l_index_ptr + *index_size,
             *l_index_ptr + *index_size + mismatch_index_size,
             JoinNoneValue);
 
     //Copy unmatched indices to the r_index_ptr
-    thrust::copy(thrust::device,
+    thrust::copy(
+            thrust::cuda::par(allocator).on(stream),
             unmatched_indices.begin(),
             unmatched_indices.begin() + mismatch_index_size,
             *r_index_ptr + *index_size);

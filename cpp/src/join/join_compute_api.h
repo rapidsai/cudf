@@ -194,7 +194,8 @@ gdf_error estimate_join_output_size(gdf_table<size_type> const & build_table,
 /* ----------------------------------------------------------------------------*/
 template<JoinType join_type,
          typename output_index_type,
-         typename size_type>
+         typename size_type,
+         typename MemAlloc = rmm_temp_allocator>
 gdf_error compute_hash_join(
                             gdf_column * const output_l, 
                             gdf_column * const output_r,
@@ -361,11 +362,14 @@ gdf_error compute_hash_join(
   // free memory used for the counters
   RMM_TRY( RMM_FREE(d_global_write_index, 0) );
 
+  cudaStream_t stream = 0;
+  rmm_temp_allocator allocator(stream);
   if (join_type == JoinType::FULL_JOIN) {
       append_full_join_indices(
               &output_l_ptr, &output_r_ptr,
               &estimated_join_output_size,
-              &h_actual_found, build_table_num_rows);
+              &h_actual_found, build_table_num_rows,
+              allocator, stream);
   }
 
   // If the estimated join output size was larger than the actual output size,
