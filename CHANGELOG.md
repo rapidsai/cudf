@@ -8,9 +8,10 @@
 
 ## Improvements
 - PR #426 Removed sort-based groupby and refactored existing groupby APIs. Also improves C++/CUDA compile time.
+- PR #478 CSV Reader: Add api support for auto column detection, header, mangle_dupe_cols, usecols
  
 ## Bug Fixes
-
+- PR #478 CSV Reader: Fix/update and test usecols code for parsing only the specified columns
 
 # cuDF 0.4.0 (05 Dec 2018)
 

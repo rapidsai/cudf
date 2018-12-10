@@ -217,7 +217,7 @@ def test_csv_reader_strings_quotechars(tmpdir):
 
 
 def test_csv_reader_auto_column_detection(tmpdir):
-    fname = tmpdir.mkdir("gdf_csv").join("tmp_csvreader_file7.csv")
+    fname = tmpdir.mkdir("gdf_csv").join("tmp_csvreader_file9.csv")
     df = make_numpy_mixed_dataframe()
     df.to_csv(fname, columns=['Integer', 'Date', 'Float'], index=False,
               header=False)
@@ -232,7 +232,7 @@ def test_csv_reader_auto_column_detection(tmpdir):
 
 
 def test_csv_reader_usecols_int_char(tmpdir):
-    fname = tmpdir.mkdir("gdf_csv").join("tmp_csvreader_file7.csv")
+    fname = tmpdir.mkdir("gdf_csv").join("tmp_csvreader_file10.csv")
     df = make_numpy_mixed_dataframe()
     df.to_csv(fname, columns=['Integer', 'Date', 'Float', 'Integer2'],
               index=False, header=False)
@@ -249,7 +249,7 @@ def test_csv_reader_usecols_int_char(tmpdir):
 
 
 def test_csv_reader_mangle_dupe_cols_header(tmpdir):
-    fname = tmpdir.mkdir("gdf_csv").join("tmp_csvreader_file7.csv")
+    fname = tmpdir.mkdir("gdf_csv").join("tmp_csvreader_file11.csv")
     df = make_numpy_mixed_dataframe()
     df.to_csv(fname, columns=['Integer', 'Date', 'Float', 'Integer2'],
               index=False, header=False)
@@ -271,9 +271,9 @@ def test_csv_reader_mangle_dupe_cols_header(tmpdir):
     # Compare column names
     assert list(df_out.columns.values) == list(out.columns.values)
 
-    
+
 def test_csv_reader_float_decimal(tmpdir):
-    fname = tmpdir.mkdir("gdf_csv").join("tmp_csvreader_file9.csv")
+    fname = tmpdir.mkdir("gdf_csv").join("tmp_csvreader_file12.csv")
 
     names = ['basic_32', 'basic_64', 'round', 'decimal_only']
     dtypes = ['float32', 'float64', 'float64', 'float32']
@@ -299,7 +299,7 @@ def test_csv_reader_float_decimal(tmpdir):
 
 
 def test_csv_reader_thousands(tmpdir):
-    fname = tmpdir.mkdir("gdf_csv").join("tmp_csvreader_file10.csv")
+    fname = tmpdir.mkdir("gdf_csv").join("tmp_csvreader_file13.csv")
 
     names = dtypes = ["float32", "float64", "int32", "int64"]
     lines = [','.join(names),
@@ -321,3 +321,5 @@ def test_csv_reader_thousands(tmpdir):
     np.testing.assert_allclose(f64_ref, df['float64'])
     np.testing.assert_allclose(int32_ref, df['int32'])
     np.testing.assert_allclose(int64_ref, df['int64'])
+
+
