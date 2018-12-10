@@ -1,8 +1,10 @@
+
 # cuDF 0.5.0 (Date TBD)
 
 ## New Features
 
 - PR #455 CSV Reader: Add support for user-specified decimal point and thousands separator
+- PR #439 add `DataFrame.drop` method similar to pandas
 
 ## Improvements
 
