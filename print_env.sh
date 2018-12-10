@@ -1,3 +1,9 @@
+# Reports relevant environment information useful for diagnosing and
+# debugging cuDF issues.
+# Usage: 
+# "./print_env.sh" - prints to stdout
+# "./print_env.sh > env.txt" - prints to file "env.txt"
+
 echo "***git log --decorate -n 1***"
 git log --decorate -n 1
 echo " "
