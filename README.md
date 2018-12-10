@@ -17,7 +17,7 @@ It is easy to install cuDF using conda. You can get a minimal conda installation
 Install and update cuDF using the conda command:
 
 ```bash
-conda install -c nvidia -c rapidsai -c numba -c conda-forge -c defaults cudf=0.3.0
+conda install -c nvidia -c rapidsai -c numba -c conda-forge -c defaults cudf=0.4.0
 ```
 
 Note: This conda installation only applies to Linux and Python versions 3.5/3.6.
