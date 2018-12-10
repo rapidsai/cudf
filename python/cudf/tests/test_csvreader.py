@@ -270,3 +270,54 @@ def test_csv_reader_mangle_dupe_cols_header(tmpdir):
     # assert len(out) == len(df_out)
     # Compare column names
     assert list(df_out.columns.values) == list(out.columns.values)
+
+    
+def test_csv_reader_float_decimal(tmpdir):
+    fname = tmpdir.mkdir("gdf_csv").join("tmp_csvreader_file9.csv")
+
+    names = ['basic_32', 'basic_64', 'round', 'decimal_only']
+    dtypes = ['float32', 'float64', 'float64', 'float32']
+    lines = [';'.join(names),
+             '1,2;1234,5678;12345;0,123',
+             '3,4;3456,7890;67890;,456']
+
+    with open(str(fname), 'w') as fp:
+        fp.write('\n'.join(lines) + '\n')
+
+    basic_32_ref = [1.2, 3.4]
+    basic_64_ref = [1234.5678, 3456.7890]
+    round_ref = [12345, 67890]
+    decimal_only_ref = [0.123, 0.456]
+
+    df = read_csv(str(fname), names=names, dtype=dtypes, skiprows=1,
+                  delimiter=';', decimal=',')
+
+    np.testing.assert_allclose(basic_32_ref, df['basic_32'])
+    np.testing.assert_allclose(basic_64_ref, df['basic_64'])
+    np.testing.assert_allclose(round_ref, df['round'])
+    np.testing.assert_allclose(decimal_only_ref, df['decimal_only'])
+
+
+def test_csv_reader_thousands(tmpdir):
+    fname = tmpdir.mkdir("gdf_csv").join("tmp_csvreader_file10.csv")
+
+    names = dtypes = ["float32", "float64", "int32", "int64"]
+    lines = [','.join(names),
+             "1'234.5, 1'234.567, 1'234'567, 1'234'567'890",
+             "12'345.6, 123'456.7, 12'345, 123'456'789"]
+
+    with open(str(fname), 'w') as fp:
+        fp.write('\n'.join(lines) + '\n')
+
+    f32_ref = [1234.5, 12345.6]
+    f64_ref = [1234.567, 123456.7]
+    int32_ref = [1234567, 12345]
+    int64_ref = [1234567890, 123456789]
+
+    df = read_csv(str(fname), names=names, dtype=dtypes, skiprows=1,
+                  thousands="'")
+
+    np.testing.assert_allclose(f32_ref, df['float32'])
+    np.testing.assert_allclose(f64_ref, df['float64'])
+    np.testing.assert_allclose(int32_ref, df['int32'])
+    np.testing.assert_allclose(int64_ref, df['int64'])
