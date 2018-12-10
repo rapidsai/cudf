@@ -37,9 +37,7 @@ namespace{ //annonymus
                                gdf_column* output_indices,
                                bool flag_nulls_are_smallest)
   {
-    // Return error if the inputs or no output pointers are invalid
-    if (cols == nullptr || output_indices == nullptr) { return GDF_DATASET_EMPTY; }
-
+    GDF_REQUIRE(cols != nullptr && output_indices != nullptr, GDF_DATASET_EMPTY);
     GDF_REQUIRE(cols[0]->size == output_indices->size, GDF_COLUMN_SIZE_MISMATCH);
 
     // Check for null so we can use a faster sorting comparator 
@@ -96,9 +94,9 @@ namespace{ //annonymus
 
 /* --------------------------------------------------------------------------*/
 /** 
- * @brief Sorts an array of gdf_column.
+ * @brief Sorts an array of gdf_column in ascending order.
  * 
- * @Param[in] cols Host-side array of gdf_columns
+ * @Param[in] cols Array of gdf_columns
  * @Param[in] ncols # columns
  * @Param[in] flag_nulls_are_smallest Flag to indicate if nulls are to be considered
  * smaller than non-nulls or viceversa
@@ -118,7 +116,7 @@ gdf_error gdf_order_by(gdf_column** cols,
 
 /* --------------------------------------------------------------------------*/
 /** 
- * @brief Sorts an array of gdf_column.
+ * @brief Sorts an array of gdf_column given the sort order for each column.
  * 
  * @Param[in] cols Array of gdf_columns
  * @Param[in] asc_desc Device array of sort order types for each column
