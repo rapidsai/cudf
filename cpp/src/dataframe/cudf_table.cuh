@@ -357,6 +357,12 @@ public:
     return host_columns[column_index];
   }
 
+   __host__ 
+  gdf_column ** get_columns() const
+  {
+    return host_columns;
+  }
+
   __host__ __device__
   size_type get_column_length() const
   {
@@ -796,73 +802,7 @@ public:
       return gather(row_gather_map, *this, range_check);
   }
 
-  /* --------------------------------------------------------------------------*/
-  /** 
-   * @Synopsis  Lexicographically sorts the rows of the gdf_table in-place
-   * 
-   * @Returns A permutation vector of the new ordering of the rows, e.g.,
-   * sorted_table[i] == unsorted_table[ permuted_indices[i] ]
-   */
-  /* ----------------------------------------------------------------------------*/
-  Vector<size_type> sort(void) {
-
-      cudaStream_t stream = NULL;
-
-      rmm_temp_allocator allocator(stream);
-	    auto exec = thrust::cuda::par(allocator).on(stream);
-
-      // Vector that will store the permutation of the rows after the sort
-      Vector<size_type> permuted_indices(column_length);
-      thrust::sequence(exec, permuted_indices.begin(), permuted_indices.end());
-
-      // Check for null so we can use a faster sorting comparator 
-      bool have_nulls = false;
-      for (size_type i = 0; i < num_columns; i++) {
-        if (d_columns_valids[i]) {  // TODO: check null_count variable as well
-          have_nulls = true;
-          break;
-        }
-      }
-
-      if (have_nulls){
-        // Functor that defines a `less` operator between rows of a set of
-        // gdf_columns
-        bool nulls_are_smallest = 0; // default
-        LesserRTTI<size_type> comparator(d_columns_data, d_columns_valids,
-                reinterpret_cast<int*>(d_columns_types),
-                num_columns, nulls_are_smallest);
-
-        // Use the LesserRTTI functor to sort the rows of the table and the
-        // permutation vector
-        thrust::sort(exec, permuted_indices.begin(), permuted_indices.end(),
-                [comparator] __host__ __device__ (size_type i1, size_type i2) {
-                return comparator.less_with_nulls(i1, i2);
-                });
-      } else {
-        // Functor that defines a `less` operator between rows of a set of
-        // gdf_columns
-        LesserRTTI<size_type> comparator(d_columns_data, 
-                reinterpret_cast<int*>(d_columns_types),
-                num_columns);
-
-        // Use the LesserRTTI functor to sort the rows of the table and the
-        // permutation vector
-        thrust::sort(exec, permuted_indices.begin(), permuted_indices.end(),
-                [comparator] __host__ __device__ (size_type i1, size_type i2) {
-                return comparator.less(i1, i2);
-                });
-      }
-
-      //thrust::host_vector<void*> host_columns = device_columns;
-      //thrust::host_vector<gdf_dtype> host_types = device_types;
-
-      gather<size_type>(permuted_indices);
-
-      return permuted_indices;
-  }
-
-
-
+  
   
 /* --------------------------------------------------------------------------*/
 /** 

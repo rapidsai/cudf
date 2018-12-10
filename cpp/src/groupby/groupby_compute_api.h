@@ -213,12 +213,29 @@ gdf_error GroupbyHash(gdf_table<size_type> const & groupby_input_table,
       rmm_temp_allocator allocator(0);
     	auto exec = thrust::cuda::par(allocator).on(0);
 
-      auto sorted_indices = groupby_output_table.sort();
+      Vector<int32_t> sorted_indices(*out_size);
+      thrust::sequence(exec, sorted_indices.begin(), sorted_indices.end());
+
+      gdf_column sorted_indices_col;
+      gdf_error status = gdf_column_view(&sorted_indices_col, (void*)thrust::raw_pointer_cast(sorted_indices.data()), 
+                            nullptr, *out_size, GDF_INT32);
+      if (status != GDF_SUCCESS)
+        return status;
+
+      status = gdf_order_by(groupby_output_table.get_columns(),             //input columns
+                       groupby_output_table.get_num_columns(),                //number of columns in the first parameter (e.g. number of columsn to sort by)
+                       &sorted_indices_col,            //a gdf_column that is pre allocated for storing sorted indices
+                       0);  //flag to indicate if nulls are to be considered smaller than non-nulls or viceversa
+      if (status != GDF_SUCCESS)
+        return status;
+
+      groupby_output_table.gather(sorted_indices);
+
       Vector<aggregation_type> agg(*out_size);
       thrust::gather(exec,
-              sorted_indices.begin(), sorted_indices.end(),
-              out_aggregation_column,
-              agg.begin());
+               sorted_indices.begin(), sorted_indices.end(),
+               out_aggregation_column,
+               agg.begin());
       thrust::copy(exec, agg.begin(), agg.end(), out_aggregation_column);
   }
 
