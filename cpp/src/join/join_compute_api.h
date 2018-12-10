@@ -13,7 +13,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#pragma once
+#ifndef JOIN_COMPUTE_API_CUH
+#define JOIN_COMPUTE_API_CUH
 
 #include <cuda_runtime.h>
 #include <future>
@@ -367,8 +368,8 @@ gdf_error compute_hash_join(
   if (join_type == JoinType::FULL_JOIN) {
       append_full_join_indices(
               &output_l_ptr, &output_r_ptr,
-              &estimated_join_output_size,
-              &h_actual_found, build_table_num_rows,
+              estimated_join_output_size,
+              h_actual_found, build_table_num_rows,
               allocator, stream);
   }
 
@@ -407,3 +408,5 @@ gdf_error compute_hash_join(
 
   return gdf_error_code;
 }
+
+#endif

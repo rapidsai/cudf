@@ -13,7 +13,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#pragma once
+#ifndef SORT_JOIN_CUH
+#define SORT_JOIN_CUH
 
 /* Sort-based join using thrust */
 
@@ -255,8 +256,8 @@ compute_joined_indices(const JoinBounds<index_type>& bounds,
         gdf_size_type join_column_capacity = final_join_size;
         GDF_TRY(append_full_join_indices(
                 &l_ptr, &r_ptr,
-                &join_column_capacity,
-                &final_join_size, rightcol->size,
+                join_column_capacity,
+                final_join_size, rightcol->size,
                 allocator, stream));
     }
     gdf_column output_l, output_r;
@@ -348,3 +349,5 @@ struct compute_sort_join {
         return sort_join_typed<join_type, T, index_type>(output_l, output_r, lcol, rcol, flip);
     }
 };
+
+#endif

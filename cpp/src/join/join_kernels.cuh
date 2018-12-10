@@ -13,7 +13,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#pragma once
+#ifndef JOIN_KERNELS_CUH
+#define JOIN_KERNELS_CUH
 
 #include "cudf.h"
 #include "dataframe/cudf_table.cuh"
@@ -504,3 +505,5 @@ __global__ void probe_hash_table_uniq_keys(
 }
 
 */
+
+#endif

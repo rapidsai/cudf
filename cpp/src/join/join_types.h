@@ -13,8 +13,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
-#pragma once
+#ifndef JOIN_TYPES_H
+#define JOIN_TYPES_H
 
 constexpr int JoinNoneValue = -1; /*!< Index value used to signify a mismatch between rows of the left and right table */
 
@@ -27,3 +27,5 @@ enum class JoinType {
   LEFT_JOIN,  
   FULL_JOIN   
 };
+
+#endif

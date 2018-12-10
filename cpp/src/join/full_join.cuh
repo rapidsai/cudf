@@ -13,7 +13,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#pragma once
+#ifndef FULL_JOIN_CUH
+#define FULL_JOIN_CUH
 
 #include <thrust/copy.h>
 #include <thrust/execution_policy.h>
@@ -57,36 +58,36 @@ create_missing_indices(
         const size_type max_index_value,
         const size_type index_size,
         const ExecutionPolicy& exec_policy) {
-	//Assume all the indices in invalid_index_map are invalid
-	DeviceVector<index_type> invalid_index_map(max_index_value, 1);
-	//Vector allocated for unmatched result
-	DeviceVector<index_type> unmatched_indices(max_index_value);
-	//Functor to check for index validity since left joins can create invalid indices
-	ValidRange<size_type> valid_range(0, max_index_value);
+    //Assume all the indices in invalid_index_map are invalid
+    DeviceVector<index_type> invalid_index_map(max_index_value, 1);
+    //Vector allocated for unmatched result
+    DeviceVector<index_type> unmatched_indices(max_index_value);
+    //Functor to check for index validity since left joins can create invalid indices
+    ValidRange<size_type> valid_range(0, max_index_value);
 
-	//invalid_index_map[index_ptr[i]] = 0 for i = 0 to max_index_value
-	//Thus specifying that those locations are valid
-	thrust::scatter_if(
+    //invalid_index_map[index_ptr[i]] = 0 for i = 0 to max_index_value
+    //Thus specifying that those locations are valid
+    thrust::scatter_if(
             exec_policy,
-			thrust::make_constant_iterator(0),
-			thrust::make_constant_iterator(0) + index_size,
-			index_ptr,//Index locations
-			index_ptr,//Stencil - Check if index location is valid
-			invalid_index_map.begin(),//Output indices
-			valid_range);//Stencil Predicate
-	size_type begin_counter = static_cast<size_type>(0);
-	size_type end_counter = static_cast<size_type>(invalid_index_map.size());
-	//Create list of indices that have been marked as invalid
-	size_type compacted_size = thrust::copy_if(
+            thrust::make_constant_iterator(0),
+            thrust::make_constant_iterator(0) + index_size,
+            index_ptr,//Index locations
+            index_ptr,//Stencil - Check if index location is valid
+            invalid_index_map.begin(),//Output indices
+            valid_range);//Stencil Predicate
+    size_type begin_counter = static_cast<size_type>(0);
+    size_type end_counter = static_cast<size_type>(invalid_index_map.size());
+    //Create list of indices that have been marked as invalid
+    size_type compacted_size = thrust::copy_if(
             exec_policy,
-			thrust::make_counting_iterator(begin_counter),
-			thrust::make_counting_iterator(end_counter),
-			invalid_index_map.begin(),
-			unmatched_indices.begin(),
-			thrust::identity<index_type>()) -
-		unmatched_indices.begin();
-	unmatched_indices.resize(compacted_size);
-	return unmatched_indices;
+            thrust::make_counting_iterator(begin_counter),
+            thrust::make_counting_iterator(end_counter),
+            invalid_index_map.begin(),
+            unmatched_indices.begin(),
+            thrust::identity<index_type>()) -
+        unmatched_indices.begin();
+    unmatched_indices.resize(compacted_size);
+    return unmatched_indices;
 }
 
 /* --------------------------------------------------------------------------*/
@@ -149,8 +150,8 @@ template <typename index_type, typename size_type, typename MemAlloc = rmm_temp_
 gdf_error append_full_join_indices(
         index_type ** l_index_ptr,
         index_type ** r_index_ptr,
-        size_type * const index_capacity,
-        size_type * const index_size,
+        size_type &index_capacity,
+        size_type &index_size,
         const size_type max_index_value,
         MemAlloc& allocator,
         cudaStream_t stream) {
@@ -158,23 +159,23 @@ gdf_error append_full_join_indices(
     //Get array of indices that do not appear in r_index_ptr
     DeviceVector<index_type> unmatched_indices =
         create_missing_indices(
-                *r_index_ptr, max_index_value, *index_size, thrust::cuda::par(allocator).on(stream));
+                *r_index_ptr, max_index_value, index_size, thrust::cuda::par(allocator).on(stream));
     CUDA_CHECK_LAST()
 
     //Expand l_index_ptr and r_index_ptr if necessary
     size_type mismatch_index_size = unmatched_indices.size();
-    size_type l_index_capacity = *index_capacity;
-    size_type r_index_capacity = *index_capacity;
-    err = expand_buffer(l_index_ptr, &l_index_capacity, *index_size, mismatch_index_size, stream);
+    size_type l_index_capacity = index_capacity;
+    size_type r_index_capacity = index_capacity;
+    err = expand_buffer(l_index_ptr, &l_index_capacity, index_size, mismatch_index_size, stream);
     if (GDF_SUCCESS != err) return err;
-    err = expand_buffer(r_index_ptr, &r_index_capacity, *index_size, mismatch_index_size, stream);
+    err = expand_buffer(r_index_ptr, &r_index_capacity, index_size, mismatch_index_size, stream);
     if (GDF_SUCCESS != err) return err;
 
     //Copy JoinNoneValue to l_index_ptr to denote that a match does not exist on the left
     thrust::fill(
             thrust::cuda::par(allocator).on(stream),
-            *l_index_ptr + *index_size,
-            *l_index_ptr + *index_size + mismatch_index_size,
+            *l_index_ptr + index_size,
+            *l_index_ptr + index_size + mismatch_index_size,
             JoinNoneValue);
 
     //Copy unmatched indices to the r_index_ptr
@@ -182,10 +183,12 @@ gdf_error append_full_join_indices(
             thrust::cuda::par(allocator).on(stream),
             unmatched_indices.begin(),
             unmatched_indices.begin() + mismatch_index_size,
-            *r_index_ptr + *index_size);
-    *index_capacity = l_index_capacity;
-    *index_size = *index_size + mismatch_index_size;
+            *r_index_ptr + index_size);
+    index_capacity = l_index_capacity;
+    index_size = index_size + mismatch_index_size;
 
     CUDA_CHECK_LAST()
-	return GDF_SUCCESS;
+    return GDF_SUCCESS;
 }
+
+#endif

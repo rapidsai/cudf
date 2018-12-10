@@ -13,7 +13,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#pragma once
+#ifndef JOINING_H
+#define JOINING_H
 
 /* Header-only join C++ API (high-level) */
 
@@ -107,3 +108,5 @@ gdf_error join_sort(gdf_column *leftcol, gdf_column *rightcol,
           leftcol, rightcol,
           flip_indices);
 }
+
+#endif
