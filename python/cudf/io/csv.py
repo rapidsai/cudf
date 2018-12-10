@@ -22,7 +22,8 @@ def read_csv(filepath, lineterminator='\n',
              quotechar='"', quoting=True, doublequote=True,
              delimiter=',', sep=None, delim_whitespace=False,
              skipinitialspace=False, names=None, dtype=None,
-             skipfooter=0, skiprows=0, dayfirst=False, compression='infer'):
+             skipfooter=0, skiprows=0, dayfirst=False, compression='infer',
+             thousands=None, decimal='.'):
     """
     Load and parse a CSV file into a DataFrame
 
@@ -116,6 +117,12 @@ def read_csv(filepath, lineterminator='\n',
     dtype_ptr = ffi.new('char*[]', arr_dtypes)
     csv_reader.dtype = dtype_ptr
 
+    if decimal == delimiter:
+        raise ValueError("decimal cannot be the same as delimiter")
+
+    if thousands == delimiter:
+        raise ValueError("thousands cannot be the same as delimiter")
+
     csv_reader.delimiter = delimiter.encode()
     csv_reader.lineterminator = lineterminator.encode()
     csv_reader.quotechar = quotechar.encode()
@@ -128,6 +135,10 @@ def read_csv(filepath, lineterminator='\n',
     csv_reader.skiprows = skiprows
     csv_reader.skipfooter = skipfooter
     csv_reader.compression = _wrap_string(compression)
+    csv_reader.decimal = decimal.encode()
+    csv_reader.thousands = ffi.NULL
+    if thousands:
+        csv_reader.thousands = ffi.new('char*', thousands.encode())
 
     # Call read_csv
     libgdf.read_csv(csv_reader)
