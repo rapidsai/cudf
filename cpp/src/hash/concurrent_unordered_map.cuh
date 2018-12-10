@@ -24,7 +24,7 @@
 #include <thrust/pair.h>
 
 #include "cudf.h"
-#include "groupby/aggregation_operations.cuh"
+#include "groupby/aggregation_operations.hpp"
 
 #include "managed_allocator.cuh"
 #include "managed.cuh"

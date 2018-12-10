@@ -7,8 +7,10 @@
 - PR #439 add `DataFrame.drop` method similar to pandas
 
 ## Improvements
-
+- PR #426 Removed sort-based groupby and refactored existing groupby APIs. Also improves C++/CUDA compile time.
+ 
 ## Bug Fixes
+
 
 # cuDF 0.4.0 (05 Dec 2018)
 
