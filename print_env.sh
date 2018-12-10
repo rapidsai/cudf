@@ -28,6 +28,15 @@ echo " "
 
 echo "***which nvcc && nvcc --version***"
 which nvcc && nvcc --version | grep "release"
+echo " "
+
+echo "***echo NUMBAPRO_NVVM***"
+echo $NUMBAPRO_NVVM
+echo " "
+
+echo "***echo NUMBAPRO_LIBDEVICE***"
+echo $NUMBAPRO_LIBDEVICE
+echo " "
 
 
 
