@@ -25,7 +25,7 @@
 #include <thrust/copy.h>
 
 #include "hash/managed.cuh"
-#include "groupby_kernels.cuh"
+#include "hash_groupby_kernels.cuh"
 #include "dataframe/cudf_table.cuh"
 #include "rmm/thrust_rmm_allocator.h"
 

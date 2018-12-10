@@ -24,7 +24,8 @@
 
 #include <cstdint>
 
-#include "../utilities/cudf_utils.h"
+#include "utilities/cudf_utils.h"
+#include "utilities/type_dispatcher.hpp"
 
 template<typename IndexT>
 struct LesserRTTI
@@ -113,11 +114,17 @@ struct LesserRTTI
 
       State state;
       if(asc){
-        OpLess less(row1, row2);
-        state = type_dispatcher(less, col_type, col_index);
+        state = cudf::type_dispatcher(col_type, OpLess{},
+                                      row1,
+                                      row2,
+                                      col_index,
+                                      columns_);
       }else{
-        OpGreater greater(row1, row2);
-        state = type_dispatcher(greater, col_type, col_index);
+        state = cudf::type_dispatcher(col_type, OpGreater{},
+                                      row1,
+                                      row2,
+                                      col_index,
+                                      columns_);
       }
 
       switch( state )
@@ -147,11 +154,21 @@ struct LesserRTTI
 
       State state;
       if(asc){
-        OpLess_with_nulls less(row1, row2, nulls_are_smallest_);
-        state = type_dispatcher_with_nulls(less, col_type, col_index);
+        state = cudf::type_dispatcher(col_type, OpLess_with_nulls{},
+                                      row1,
+                                      row2,
+                                      col_index,
+                                      columns_,
+                                      valids_,
+                                      nulls_are_smallest_);
       }else{
-        OpGreater_with_nulls greater(row1, row2, nulls_are_smallest_);
-        state = type_dispatcher_with_nulls(greater, col_type, col_index);
+        state = cudf::type_dispatcher(col_type, OpGreater_with_nulls{},
+                                      row1,
+                                      row2,
+                                      col_index,
+                                      columns_,
+                                      valids_,
+                                      nulls_are_smallest_);
       }
 
       switch( state )
@@ -174,8 +191,12 @@ struct LesserRTTI
     {
       gdf_dtype col_type = static_cast<gdf_dtype>(rtti_[col_index]);
 
-      OpEqual eq(row1, row2);
-      switch( type_dispatcher(eq, col_type, col_index) )
+      State state = cudf::type_dispatcher(col_type, OpEqual{},
+                                          row1,
+                                          row2,
+                                          col_index,
+                                          columns_);
+      switch( state )
       {
       case State::False:
         return false;
@@ -195,8 +216,12 @@ struct LesserRTTI
     {
       gdf_dtype col_type = static_cast<gdf_dtype>(rtti_[col_index]);
 
-      OpEqualV eq(vals_, row1);
-      switch( type_dispatcher(eq, col_type, col_index) )
+      State state = cudf::type_dispatcher(col_type, OpEqualV{},
+                                          vals_,
+                                          row1,
+                                          col_index,
+                                          columns_);
+      switch( state )
       {
       case State::False:
         return false;
@@ -216,8 +241,12 @@ struct LesserRTTI
     {
       gdf_dtype col_type = static_cast<gdf_dtype>(rtti_[col_index]);
 
-      OpLess less(row1, row2);
-      switch( type_dispatcher(less, col_type, col_index) )
+      State state = cudf::type_dispatcher(col_type, OpLess{},
+                                          row1,
+                                          row2,
+                                          col_index,
+                                          columns_);
+      switch( state )
       {
       case State::False:
         return false;
@@ -237,8 +266,14 @@ struct LesserRTTI
     {
       gdf_dtype col_type = static_cast<gdf_dtype>(rtti_[col_index]);
 
-      OpLess_with_nulls less(row1, row2, nulls_are_smallest_);
-      switch( type_dispatcher_with_nulls(less, col_type, col_index) )
+      State state = cudf::type_dispatcher(col_type, OpLess_with_nulls{},
+                                          row1,
+                                          row2,
+                                          col_index,
+                                          columns_,
+                                          valids_,
+                                          nulls_are_smallest_);
+      switch( state )
       {
       case State::False:
         return false;
@@ -273,20 +308,14 @@ private:
 
   struct OpLess
   {
-    __device__
-    OpLess(IndexT row1, IndexT row2) : row1_(row1),
-                                       row2_(row2)
-    {
-    }
-
     template<typename ColType>
     __device__
-    State operator() (int col_index,
-                      const void* const * columns,
-                      ColType dummy)
+    State operator() (IndexT row1, IndexT row2,
+                      int col_index,
+                      const void* const * columns)
     {
-      ColType res1 = LesserRTTI::at<ColType>(col_index, row1_, columns);
-      ColType res2 = LesserRTTI::at<ColType>(col_index, row2_, columns);
+      ColType res1 = LesserRTTI::at<ColType>(col_index, row1, columns);
+      ColType res2 = LesserRTTI::at<ColType>(col_index, row2, columns);
       
       if( res1 < res2 )
         return State::True;
@@ -295,32 +324,22 @@ private:
       else
 	      return State::False;
     }
-
-  private:
-    IndexT row1_;
-    IndexT row2_;
   };
 
   struct OpLess_with_nulls
   {
-    __device__
-    OpLess_with_nulls(IndexT row1, IndexT row2, bool nulls_are_smallest) : row1_(row1),
-                                                                           row2_(row2),
-                                                                           nulls_are_smallest_(nulls_are_smallest)
-    {
-    }
-
     template<typename ColType>
 	  __device__
-	  State operator() (int col_index,
+	  State operator() (IndexT row1, IndexT row2,
+                      int col_index,
                       const void* const * columns,
                       const gdf_valid_type* const * valids,
-                      ColType dummy)
+                      bool nulls_are_smallest)
 	  {
-		  ColType res1 = LesserRTTI::at<ColType>(col_index, row1_, columns);
-		  ColType res2 = LesserRTTI::at<ColType>(col_index, row2_, columns);
-		  bool isValid1 = LesserRTTI::is_valid(col_index, row1_, valids);
-		  bool isValid2 = LesserRTTI::is_valid(col_index, row2_, valids);
+		  ColType res1 = LesserRTTI::at<ColType>(col_index, row1, columns);
+		  ColType res2 = LesserRTTI::at<ColType>(col_index, row2, columns);
+		  bool isValid1 = LesserRTTI::is_valid(col_index, row1, valids);
+		  bool isValid2 = LesserRTTI::is_valid(col_index, row2, valids);
 
 		  if (!isValid2 && !isValid1)
 			  return State::Undecided;
@@ -333,36 +352,25 @@ private:
 			  else
 				  return State::False;
 		  }
-		  else if (!isValid1 && nulls_are_smallest_)
+		  else if (!isValid1 && nulls_are_smallest)
 			  return State::True;
-	  	else if (!isValid2 && !nulls_are_smallest_)
+	  	else if (!isValid2 && !nulls_are_smallest)
 	  		return State::True;
 		  else
 			  return State::False;
 	  }
-    
-  private:
-	  IndexT row1_;
-	  IndexT row2_;
-	  bool nulls_are_smallest_;
   };
 
   struct OpGreater
   {
-    __host__ __device__
-    OpGreater(IndexT row1, IndexT row2) : row1_(row1),
-                                            row2_(row2)
-    {
-    }
-
     template<typename ColType>
-    __host__ __device__
-    State operator() (int col_index,
-  		                const void* const * columns,
-                      ColType dummy)
+    __device__
+    State operator() (IndexT row1, IndexT row2,
+                      int col_index,
+  		                const void* const * columns)
     {
-      ColType res1 = LesserRTTI::at<ColType>(col_index, row1_, columns);
-      ColType res2 = LesserRTTI::at<ColType>(col_index, row2_, columns);
+      ColType res1 = LesserRTTI::at<ColType>(col_index, row1, columns);
+      ColType res2 = LesserRTTI::at<ColType>(col_index, row2, columns);
 
       if( res1 > res2 )
   	    return State::True;
@@ -371,32 +379,22 @@ private:
       else
   	    return State::False;
     }
-
-  private:
-    IndexT row1_;
-    IndexT row2_;
   };
 
   struct OpGreater_with_nulls
   {
-    __device__
-    OpGreater_with_nulls(IndexT row1, IndexT row2, bool nulls_are_smallest) : row1_(row1),
-                                                                              row2_(row2),
-                                                                              nulls_are_smallest_(nulls_are_smallest)
-    {
-    }
-
     template<typename ColType>
 	  __device__
-	  State operator() (int col_index,
+	  State operator() (IndexT row1, IndexT row2,
+                      int col_index,
                       const void* const * columns,
                       const gdf_valid_type* const * valids,
-                      ColType dummy)
+                      bool nulls_are_smallest)
 	  {
-		  ColType res1 = LesserRTTI::at<ColType>(col_index, row1_, columns);
-		  ColType res2 = LesserRTTI::at<ColType>(col_index, row2_, columns);
-		  bool isValid1 = LesserRTTI::is_valid(col_index, row1_, valids);
-		  bool isValid2 = LesserRTTI::is_valid(col_index, row2_, valids);
+		  ColType res1 = LesserRTTI::at<ColType>(col_index, row1, columns);
+		  ColType res2 = LesserRTTI::at<ColType>(col_index, row2, columns);
+		  bool isValid1 = LesserRTTI::is_valid(col_index, row1, valids);
+		  bool isValid2 = LesserRTTI::is_valid(col_index, row2, valids);
 
 		  if (!isValid2 && !isValid1)
 			  return State::Undecided;
@@ -409,185 +407,51 @@ private:
 			  else
 				  return State::False;
 		  }
-		  else if (!isValid1 && nulls_are_smallest_)
+		  else if (!isValid1 && nulls_are_smallest)
 			  return State::False;
-	  	else if (!isValid2 && !nulls_are_smallest_)
+	  	else if (!isValid2 && !nulls_are_smallest)
 	  		return State::False;
 		  else
 			  return State::True;
 	  }
-  
-  private:
-	  IndexT row1_;
-	  IndexT row2_;
-	  bool nulls_are_smallest_;
   };
 
   struct OpEqual
   {
-    __device__
-    OpEqual(IndexT row1, IndexT row2) : row1_(row1),
-                                        row2_(row2)
-    {
-    }
-
     template<typename ColType>
     __device__
-    State operator() (int col_index,
-		                  const void* const * columns,
-                      ColType dummy)
+    State operator() (IndexT row1, IndexT row2,
+                      int col_index,
+		                  const void* const * columns)
     {
-      ColType res1 = LesserRTTI::at<ColType>(col_index, row1_, columns);
-      ColType res2 = LesserRTTI::at<ColType>(col_index, row2_, columns);
+      ColType res1 = LesserRTTI::at<ColType>(col_index, row1, columns);
+      ColType res2 = LesserRTTI::at<ColType>(col_index, row2, columns);
       
       if( res1 != res2 )
         return State::False;
       else
         return State::Undecided;
     }
-    
-  private:
-    IndexT row1_;
-    IndexT row2_;
   };
 
   struct OpEqualV
   {
-    __device__
-    OpEqualV(const void *const *vals, IndexT row) : target_vals_(vals),
-                                                    row_(row)
-    {
-    }
-
     template<typename ColType>
     __device__
-    State operator() (int col_index,
-                      const void* const * columns,
-                      ColType dummy)
+    State operator() (const void* const * vals,
+                      IndexT row,
+                      int col_index,
+                      const void* const * columns)
     {
-      ColType res1 = LesserRTTI::at<ColType>(col_index, row_, columns);
-      ColType res2 = LesserRTTI::at<ColType>(col_index, 0, target_vals_);
+      ColType res1 = LesserRTTI::at<ColType>(col_index, row, columns);
+      ColType res2 = LesserRTTI::at<ColType>(col_index, 0, vals);
       
       if( res1 != res2 )
         return State::False;
       else
         return State::Undecided;
     }
-
-  private:
-    const void* const * target_vals_;
-    IndexT row_;
   };
-
-  template<typename Predicate>
-  __device__
-  State type_dispatcher(Predicate pred, gdf_dtype col_type, int col_index) const
-  {
-    switch( col_type )
-    {
-      case GDF_INT8:
-      {
-        using ColType = int8_t;//char;
-        
-        ColType dummy=0;
-        return pred(col_index, columns_, dummy);
-      }
-      case GDF_INT16:
-      {
-        using ColType = int16_t;//short;
-
-        ColType dummy=0;
-        return pred(col_index, columns_, dummy);
-      }
-      case GDF_INT32:
-      {
-        using ColType = int32_t;//int;
-
-        ColType dummy=0;
-        return pred(col_index, columns_, dummy);
-      }
-      case GDF_INT64:
-      {
-        using ColType = int64_t;//long;
-
-        ColType dummy=0;
-        return pred(col_index, columns_, dummy);
-      }
-      case GDF_FLOAT32:
-      {
-        using ColType = float;
-
-        ColType dummy=0;
-        return pred(col_index, columns_, dummy);
-      }
-      case GDF_FLOAT64:
-      {
-        using ColType = double;
-
-        ColType dummy=0;
-        return pred(col_index, columns_, dummy);
-      }
-
-      default:
-	      assert( false );//type not handled
-    }
-    return State::Undecided;
-  }
-  
-  template<typename Predicate>
-  __device__
-  State type_dispatcher_with_nulls(Predicate pred, gdf_dtype col_type, int col_index) const
-  {
-    switch( col_type )
-    {
-      case GDF_INT8:
-      {
-        using ColType = int8_t;//char;
-
-        ColType dummy=0;
-        return pred(col_index, columns_, valids_, dummy);
-      }
-      case GDF_INT16:
-      {
-        using ColType = int16_t;//short;
-
-        ColType dummy=0;
-        return pred(col_index, columns_, valids_, dummy);
-      }
-      case GDF_INT32:
-      {
-        using ColType = int32_t;//int;
-
-        ColType dummy=0;
-        return pred(col_index, columns_, valids_, dummy);
-      }
-      case GDF_INT64:
-      {
-        using ColType = int64_t;//long;
-
-        ColType dummy=0;
-        return pred(col_index, columns_, valids_, dummy);
-      }
-      case GDF_FLOAT32:
-      {
-        using ColType = float;
-
-        ColType dummy=0;
-        return pred(col_index, columns_, valids_, dummy);
-      }
-      case GDF_FLOAT64:
-      {
-        using ColType = double;
-
-        ColType dummy=0;
-        return pred(col_index, columns_, valids_, dummy);
-      }
-
-      default:
-      assert( false );//type not handled
-    }
-    return State::Undecided;
-  }
 
   const void* const * columns_;
   const gdf_valid_type* const * valids_;

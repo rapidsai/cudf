@@ -245,7 +245,7 @@ class DataFrame(object):
         """
         Drop the given column by *name*.
         """
-        self.drop_column(name)
+        self._drop_column(name)
 
     def __sizeof__(self):
         return sum(col.__sizeof__() for col in self._cols.values())
@@ -434,7 +434,7 @@ class DataFrame(object):
         # When index is a column name
         if isinstance(index, str):
             df = self.copy()
-            df.drop_column(index)
+            df._drop_column(index)
             return df.set_index(self[index])
         # Otherwise
         else:
@@ -553,7 +553,67 @@ class DataFrame(object):
         series.name = name
         self._cols[name] = series
 
+    def drop(self, labels):
+        """Drop column(s)
+
+        Parameters
+        ----------
+        labels : str or sequence of strings
+            Name of column(s) to be dropped.
+
+        Returns
+        -------
+        A dataframe without dropped column(s)
+
+        Examples
+        ----------
+
+        .. code-block:: python
+
+            from cudf.dataframe.dataframe import DataFrame
+            df = DataFrame()
+            df['key'] = [0, 1, 2, 3, 4]
+            df['val'] = [float(i + 10) for i in range(5)]
+
+            df_new = df.drop('val')
+            print(df)
+            print(df_new)
+
+        Output:
+        .. code-block:: python
+
+                key  val
+            0    0 10.0
+            1    1 11.0
+            2    2 12.0
+            3    3 13.0
+            4    4 14.0
+
+                key
+            0    0
+            1    1
+            2    2
+            3    3
+            4    4
+        """
+        columns = [labels] if isinstance(labels, str) else list(labels)
+
+        outdf = self.copy()
+        for c in columns:
+            outdf._drop_column(c)
+        return outdf
+
     def drop_column(self, name):
+        """Drop a column by *name*
+        """
+        warnings.warn(
+                'The drop_column method is deprecated. '
+                'Use the drop method instead.',
+                DeprecationWarning
+            )
+        self._drop_column(name)
+
+    def _drop_column(self, name):
         """Drop a column by *name*
         """
         if name not in self._cols:
@@ -1151,7 +1211,7 @@ class DataFrame(object):
 
         return df
 
-    def groupby(self, by, sort=False, as_index=False, method="sort"):
+    def groupby(self, by, sort=False, as_index=False, method="hash"):
         """Groupby
 
         Parameters
@@ -1166,7 +1226,7 @@ class DataFrame(object):
             The keys are always left as regular columns in the result.
         method : str, optional
             A string indicating the method to use to perform the group by.
-            Valid values are "sort", "hash", or "cudf".
+            Valid values are "hash" or "cudf".
             "cudf" method may be deprecated in the future, but is currently
             the only method supporting group UDFs via the `apply` function.
 

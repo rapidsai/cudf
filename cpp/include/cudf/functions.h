@@ -932,14 +932,44 @@ gdf_error gdf_quantile_aprrox(	gdf_column*  col_in,       //input column with 0 
                                 void*        t_erased_res, //type-erased result of same type as column;
                                 gdf_context* ctxt);        //context info
 
-gdf_error gdf_order_by(gdf_column** input_columns,             //input columns
-                       size_t       num_inputs,                //number of columns in the first parameter (e.g. number of columsn to sort by)
-                       gdf_column*  output_indices,            //a gdf_column that is pre allocated for storing sorted indices
-                       int          flag_nulls_are_smallest);  //flag to indicate if nulls are to be considered smaller than non-nulls or viceversa
 
-gdf_error gdf_order_by_asc_desc(gdf_column** input_columns,             //input columns
-                                char*        asc_desc,                  //device array of sort order types where 0 is ascending order and 1 is descending order for each input column
-                                size_t       num_inputs,                //number of columns in the first parameter (e.g. number of columsn to sort by)
-                                gdf_column*  output_indices,            //a gdf_column that is pre allocated for storing sorted indices
-                                int          flag_nulls_are_smallest);  //flag to indicate if nulls are to be considered smaller than non-nulls or viceversa
+/* --------------------------------------------------------------------------*/
+/** 
+ * @brief Sorts an array of gdf_column in ascending order.
+ * 
+ * @Param[in] input_columns Array of gdf_columns
+ * @Param[in] num_inputs # columns 
+ * @Param[in] flag_nulls_are_smallest Flag to indicate if nulls are to be considered
+ *                                    smaller than non-nulls or viceversa
+ * @Param[out] output_indices Pre-allocated gdf_column to be filled with sorted
+ *                            indices
+ * 
+ * @Returns GDF_SUCCESS upon successful completion
+ */
+/* ----------------------------------------------------------------------------*/
+gdf_error gdf_order_by(gdf_column** input_columns,
+                       size_t       num_inputs,
+                       gdf_column*  output_indices,
+                       int          flag_nulls_are_smallest);
 
+/* --------------------------------------------------------------------------*/
+/** 
+ * @brief Sorts an array of gdf_column given the sort order for each column.
+ * 
+ * @Param[in] input_columns Array of gdf_columns
+ * @Param[in] asc_desc Device array of sort order types for each column
+ *                     (0 is ascending order and 1 is descending)
+ * @Param[in] num_inputs # columns
+ * @Param[in] flag_nulls_are_smallest Flag to indicate if nulls are to be considered
+ *                                    smaller than non-nulls or viceversa
+ * @Param[out] output_indices Pre-allocated gdf_column to be filled with sorted
+ *                            indices
+ * 
+ * @Returns GDF_SUCCESS upon successful completion
+ */
+/* ----------------------------------------------------------------------------*/
+gdf_error gdf_order_by_asc_desc(gdf_column** input_columns,
+                                char*        asc_desc,
+                                size_t       num_inputs,
+                                gdf_column*  output_indices,
+                                int          flag_nulls_are_smallest);
