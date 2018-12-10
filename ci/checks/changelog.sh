@@ -1,11 +1,22 @@
 #!/bin/bash
+#########################
+# cuDF CHANGELOG Tester #
+#########################
 set -e
+
+# Checkout master for comparison
 git checkout master
+
+# Switch back to tip of PR branch
 git checkout current-pr-branch
+
+# Get list of modified files between matster and PR branch
 CHANGELOG=`git diff --name-only master...current-pr-branch | grep CHANGELOG.md`
+# Check if CHANGELOG has PR ID
 PRNUM=`cat CHANGELOG.md | grep "$PR_ID"`
 RETVAL=0
 
+# Return status of check result
 if [ "$CHANGELOG" != "" -a "$PRNUM" != "" ] ; then
   echo -e "\n\n>>>> PASSED: CHANGELOG.md has been updated with current PR information.\n\n"
 else
