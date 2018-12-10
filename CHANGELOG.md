@@ -3,6 +3,7 @@
 
 ## New Features
 
+- PR #350 Add gdf_find_and_replace_all method
 - PR #455 CSV Reader: Add support for user-specified decimal point and thousands separator
 - PR #439 add `DataFrame.drop` method similar to pandas
 
@@ -22,7 +23,6 @@
 
 ## Improvements
 
- - PR #350 Add replace functionality
  - PR #436 Improvements for type_dispatcher and wrapper structs
  - PR #429 Add CHANGELOG.md (this file)
  - PR #266 use faster CUDA-accelerated DataFrame column/Series concatenation.
