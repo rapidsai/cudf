@@ -251,9 +251,16 @@ def read_csv_strings(filepath_or_buffer, lineterminator='\n',
     csv_reader = ffi.new('csv_read_arg*')
 
     # Populate csv_reader struct
-    file_path = _wrap_string(filepath_or_buffer)
-    csv_reader.input_file.type = libgdf.FILE_PATH
-    csv_reader.input_file.path = file_path
+    if is_file_like(filepath_or_buffer):
+      csv_reader.input_file.type = libgdf.BUFFER
+      buffer = filepath_or_buffer.read().encode()
+      buffer_data_holder = ffi.new("char[]", buffer)
+      csv_reader.input_file.buffer.data = buffer_data_holder
+      csv_reader.input_file.buffer.size = len(buffer)
+    else:
+      csv_reader.input_file.type = libgdf.FILE_PATH
+      file_path = _wrap_string(filepath_or_buffer)
+      csv_reader.input_file.path = file_path
 
     arr_names = []
     arr_dtypes = []

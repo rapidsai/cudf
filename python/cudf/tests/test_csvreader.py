@@ -282,9 +282,25 @@ def test_csv_reader_buffer(tmpdir):
 
     df = read_csv(StringIO(buffer), names=names, dtype=dtypes, skiprows=1)
 
-    print(df['date'])
     np.testing.assert_allclose(f32_ref, df['float32'])
     np.testing.assert_allclose(int32_ref, df['int32'])
-
     assert("1995-11-22T00:00:00.000" == str(df['date'][0]))
     assert("2002-01-02T00:00:00.000" == str(df['date'][1]))
+
+def test_csv_reader_buffer_strings(tmpdir):
+
+    names = ['text', 'int']
+    dtypes = ['str', 'int']
+    lines = [','.join(names), 'a,0', 'b,0', 'c,0', 'd,0']
+
+    buffer = '\n'.join(lines) + '\n'
+
+    cols = read_csv_strings(StringIO(buffer), names=names, dtype=dtypes, skiprows=1)
+
+    assert(len(cols) == 2)
+    assert(type(cols[0]) == nvstrings.nvstrings)
+    assert(type(cols[1]) == cudf.Series)
+    assert(cols[0].sublist([0]).to_host()[0] == 'a')
+    assert(cols[0].sublist([1]).to_host()[0] == 'b')
+    assert(cols[0].sublist([2]).to_host()[0] == 'c')
+    assert(cols[0].sublist([3]).to_host()[0] == 'd')
