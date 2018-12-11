@@ -15,12 +15,14 @@
  */
 
 // #include "test_utils.h"
-#include "gdf_test_fixtures.h"
 #include "gtest/gtest.h"
+#include <tests/utilities/cudf_test_fixtures.h>
 
-#include <gdf/gdf.h>
-#include <gdf/cffi/functions.h>
-#include <gdf/errorutils.h>
+#include <cudf.h>
+#include <cudf/functions.h>
+#include <utilities/error_utils.h>
+#include <utilities/cudf_utils.h>
+
 
 #include <vector>
 #include <random>
@@ -137,7 +139,8 @@ protected:
         }
     }
     
-    gdf_col_pointer create_gdf_column(std::vector<T> const & host_vector)
+    gdf_col_pointer create_gdf_column(std::vector<T> const & host_vector,
+        const gdf_size_type n_count = 0)
     {
         // Deduce the type and set the gdf_dtype accordingly
         gdf_dtype gdf_col_type = N_GDF_TYPES;
@@ -152,15 +155,19 @@ protected:
 
         // Create a new instance of a gdf_column with a custom deleter that will free
         // the associated device memory when it eventually goes out of scope
-        auto deleter = [](gdf_column* col){col->size = 0; rmmFree(col->data, 0);};
+        auto deleter = [](gdf_column* col){col->size = 0; RMM_FREE(col->data, 0); RMM_FREE(col->valid, 0); };
         gdf_col_pointer the_column{new gdf_column, deleter};
 
         // Allocate device storage for gdf_column and copy contents from host_vector
-        rmmAlloc(&(the_column->data), host_vector.size() * sizeof(T), 0);
-        cudaMemcpy(the_column->data, host_vector.data(), host_vector.size() * sizeof(T), cudaMemcpyHostToDevice);
+        EXPECT_EQ(RMM_ALLOC(&(the_column->data), host_vector.size() * sizeof(T), 0), RMM_SUCCESS);
+        EXPECT_EQ(cudaMemcpy(the_column->data, host_vector.data(), host_vector.size() * sizeof(T), cudaMemcpyHostToDevice), cudaSuccess);
+
+        int valid_size = gdf_get_num_chars_bitmask(host_vector.size());
+        EXPECT_EQ(RMM_ALLOC((void**)&(the_column->valid), valid_size, 0), RMM_SUCCESS);
+        EXPECT_EQ(cudaMemset(the_column->valid, 0xff, valid_size), cudaSuccess);
 
         // Fill the gdf_column members
-        the_column->valid = nullptr;
+        the_column->null_count = n_count;
         the_column->size = host_vector.size();
         the_column->dtype = gdf_col_type;
         gdf_dtype_extra_info extra_info;

@@ -1,7 +1,7 @@
 /* Copyright 2018 NVIDIA Corporation.  All rights reserved. */
 
-#include "gdf_table.cuh"
-#include <gdf/gdf.h>
+#include "dataframe/cudf_table.cuh"
+#include <cudf.h>
 #include <thrust/for_each.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <memory>
