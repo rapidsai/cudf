@@ -9,7 +9,8 @@ dependencies:
 - cmake>=3.12
 - python=3.5.*
 - pytest
-- numba>=0.40.0dev
+- numba>=0.40
+# Locked to Pandas 0.20.3 by https://github.com/rapidsai/cudf/issues/118
 - pandas=0.20.3
 - pyarrow=0.10.0
 - notebook>=0.5.0
@@ -18,3 +19,7 @@ dependencies:
 - cffi>=1.10.0   
 - distributed>=1.23.0
 - cython=0.28.*
+- pytest
+- pip:
+  - recommonmark
+  - sphinx-markdown-tables
