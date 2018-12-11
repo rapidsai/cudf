@@ -20,6 +20,11 @@ dependencies:
 - distributed>=1.23.0
 - cython=0.28.*
 - pytest
+- sphinx
+- sphinx_rtd_theme
+- sphinxcontrib-websupport
+- numpydoc
+- ipython
 - pip:
   - recommonmark
   - sphinx-markdown-tables
