@@ -274,19 +274,27 @@ gdf_error read_csv(csv_read_arg *args)
 	//-----------------------------------------------------------------------------
 	// memory map in the data
 	void * 			map_data = NULL;
-	struct stat     st;
-	int				fd;
+	int fd = 0;
+	if (args->input_file.type == resource_type::FILE_PATH)
+	{
+		fd = open(args->input_file.path, O_RDONLY );
+		if (fd < 0) { close(fd); checkError(GDF_FILE_ERROR, "Error opening file"); }
 
-	fd = open(args->input_file.path, O_RDONLY );
+		struct stat st{};
+		if (fstat(fd, &st)) { close(fd); checkError(GDF_FILE_ERROR, "cannot stat file");   }
+		
+		raw_csv->num_bytes = st.st_size;
 
-	if (fd < 0) 		{ close(fd); checkError(GDF_FILE_ERROR, "Error opening file"); }
-	if (fstat(fd, &st)) { close(fd); checkError(GDF_FILE_ERROR, "cannot stat file");   }
+		map_data = mmap(0, raw_csv->num_bytes, PROT_READ, MAP_PRIVATE, fd, 0);
 
-	raw_csv->num_bytes = st.st_size;
-
-	map_data = mmap(0, raw_csv->num_bytes, PROT_READ, MAP_PRIVATE, fd, 0);
-
-    if (map_data == MAP_FAILED || raw_csv->num_bytes==0) { close(fd); checkError(GDF_C_ERROR, "Error mapping file"); }
+		if (map_data == MAP_FAILED || raw_csv->num_bytes==0) { close(fd); checkError(GDF_C_ERROR, "Error mapping file"); }
+	}
+	else if (args->input_file.type == resource_type::BUFFER)
+	{
+		map_data = args->input_file.buffer.data;
+		raw_csv->num_bytes = args->input_file.buffer.size;
+	}
+	else { checkError(GDF_C_ERROR, "invalid input type"); }
 
 	//-----------------------------------------------------------------------------
 	//---  create a structure to hold variables used to parse the CSV data
@@ -508,8 +516,11 @@ gdf_error read_csv(csv_read_arg *args)
 
 	//-----------------------------------------------------------------------------
 	//---  done with host data
-	close(fd);
-	munmap(map_data, raw_csv->num_bytes);
+	if (args->input_file.type == resource_type::FILE_PATH)
+	{
+		close(fd);
+		munmap(map_data, raw_csv->num_bytes);
+	}
 
 
 	//-----------------------------------------------------------------------------

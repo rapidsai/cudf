@@ -6,6 +6,8 @@ from collections import OrderedDict
 import numpy as np
 import pandas as pd
 
+from io import StringIO
+
 from cudf import read_csv
 from cudf.io.csv import read_csv_strings
 import cudf
@@ -264,3 +266,25 @@ def test_csv_reader_thousands(tmpdir):
     np.testing.assert_allclose(f64_ref, df['float64'])
     np.testing.assert_allclose(int32_ref, df['int32'])
     np.testing.assert_allclose(int64_ref, df['int64'])
+
+
+def test_csv_reader_buffer(tmpdir):
+
+    names = dtypes = ["float32", "int32", "date"]
+    lines = [','.join(names),
+             "1234.5, 1234567, 11/22/1995",
+             "12345.6, 12345, 1/2/2002"]
+
+    buffer = '\n'.join(lines) + '\n'
+
+    f32_ref = [1234.5, 12345.6]
+    int32_ref = [1234567, 12345]
+
+    df = read_csv(StringIO(buffer), names=names, dtype=dtypes, skiprows=1)
+
+    print(df['date'])
+    np.testing.assert_allclose(f32_ref, df['float32'])
+    np.testing.assert_allclose(int32_ref, df['int32'])
+
+    assert("1995-11-22T00:00:00.000" == str(df['date'][0]))
+    assert("2002-01-02T00:00:00.000" == str(df['date'][1]))

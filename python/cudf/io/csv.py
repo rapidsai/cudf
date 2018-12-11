@@ -18,12 +18,20 @@ def _wrap_string(text):
         return ffi.new("char[]", text.encode())
 
 
+def is_file_like(obj):
+  if not (hasattr(obj,'read') or hasattr(obj,'write')):
+    return False
+  if not hasattr(obj,"__iter__"):
+    return False
+  return True
+
+
 def read_csv(filepath_or_buffer, lineterminator='\n',
              quotechar='"', quoting=True, doublequote=True,
              delimiter=',', sep=None, delim_whitespace=False,
              skipinitialspace=False, names=None, dtype=None,
              skipfooter=0, skiprows=0, dayfirst=False, thousands=None,
-             decimal='.'):
+						 decimal='.'):
     """
     Load and parse a CSV file into a DataFrame
 
@@ -98,9 +106,16 @@ def read_csv(filepath_or_buffer, lineterminator='\n',
     csv_reader = ffi.new('csv_read_arg*')
 
     # Populate csv_reader struct
-    file_path = _wrap_string(filepath_or_buffer)
-    csv_reader.input_file.type = libgdf.FILE_PATH
-    csv_reader.input_file.path = file_path
+    if is_file_like(filepath_or_buffer):
+      csv_reader.input_file.type = libgdf.BUFFER
+      buffer = filepath_or_buffer.read().encode()
+      buffer_data_holder = ffi.new("char[]", buffer)
+      csv_reader.input_file.buffer.data = buffer_data_holder
+      csv_reader.input_file.buffer.size = len(buffer)
+    else:
+      csv_reader.input_file.type = libgdf.FILE_PATH
+      file_path = _wrap_string(filepath_or_buffer)
+      csv_reader.input_file.path = file_path
 
     arr_names = []
     arr_dtypes = []
