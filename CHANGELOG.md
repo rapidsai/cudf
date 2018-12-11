@@ -16,6 +16,7 @@
  - PR #445 Update reductions to use type_dispatcher. Adds integer types support to sum_of_squares. 
  - PR #448 Improve installation instructions in README.md
  - PR #456 Change default CMake build to Release, and added option for disabling compilation of tests
+ - PR #502 Simplify Dockerfile for local dev, eliminate old conda/pip envs
  
 ## Bug Fixes
 
