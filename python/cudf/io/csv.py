@@ -11,6 +11,7 @@ from cudf._gdf import nvtx_range_push, nvtx_range_pop
 import numpy as np
 import collections.abc
 
+
 def _wrap_string(text):
     if(text is None):
         return ffi.NULL
