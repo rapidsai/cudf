@@ -379,6 +379,9 @@ public:
      * @Synopsis  Inserts a (key, value) pair into the hash map
      * 
      * @Param[in] x The (key, value) pair to insert
+     * @Param[in] pass The pass (partition) number for the partitioned hash table
+     * @Param[in] num_passes The total number of passes (partitions) in the
+     * partitioned hash table
      * @Param[in] precomputed_hash A flag indicating whether or not a precomputed 
      * hash value is passed in
      * @Param[in] precomputed_hash_value A precomputed hash value to use for determing
@@ -395,6 +398,8 @@ public:
                typename comparison_type = key_equal>
     __forceinline__
     __device__ iterator insert(const value_type& x,
+                               const int pass = 0,
+                               const int num_passes = 1,
                                bool precomputed_hash = false,
                                hash_value_type precomputed_hash_value = 0,
                                comparison_type keys_are_equal = key_equal())
@@ -417,7 +422,14 @@ public:
         }
 
         size_type hash_tbl_idx = hash_value % hashtbl_size;
-        
+
+        const size_type partition_size  = m_hashtbl_size/num_passes;
+
+        // If using the partitioned hash table, only insert into the specified partition
+        if( ( pass < (num_passes-1) && hash_tbl_idx/partition_size != pass ) ||
+            ( (num_passes-1) == pass && hash_tbl_idx/partition_size < pass ) )
+          return end();
+
         value_type* it = 0;
 
         size_type attempt_counter{0};
@@ -476,6 +488,9 @@ public:
      * instance of the key in the map.
      * 
      * @Param[in] the_key The key to search for
+     * @Param[in] pass The pass (partition) number for the partitioned hash table
+     * @Param[in] num_passes The total number of passes (partitions) in the
+     * partitioned hash table
      * @Param[in] precomputed_hash A flag indicating whether or not a precomputed 
      * hash value is passed in
      * @Param[in] precomputed_hash_value A precomputed hash value to use for determing
@@ -492,6 +507,8 @@ public:
                typename comparison_type = key_equal>
     __forceinline__
     __host__ __device__ const_iterator find(const key_type& the_key,
+                                            const int pass = 0,
+                                            const int num_passes = 1,
                                             bool precomputed_hash = false,
                                             hash_value_type precomputed_hash_value = 0,
                                             comparison_type keys_are_equal = key_equal()) const
@@ -509,6 +526,13 @@ public:
         }
 
         size_type hash_tbl_idx = hash_value % m_hashtbl_size;
+
+        const size_type partition_size  = m_hashtbl_size/num_passes;
+
+        // If using the partitioned hash table, only probe the specified partition
+        if( ( pass < (num_passes-1) && hash_tbl_idx/partition_size != pass ) ||
+            ( (num_passes-1) == pass && hash_tbl_idx/partition_size < pass ) )
+          return end();
         
         value_type* begin_ptr = 0;
         
