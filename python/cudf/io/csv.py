@@ -56,6 +56,10 @@ def read_csv(filepath, lineterminator='\n',
         Number of rows to be skipped from the start of file.
     skipfooter : int, default 0
         Number of rows to be skipped at the bottom of file.
+    decimal : char, default '.'
+        Character used as a decimal point.
+    thousands : char, default None
+        Character used as a thousands delimiter.
 
     Returns
     -------
@@ -169,7 +173,8 @@ def read_csv_strings(filepath, lineterminator='\n',
                      quotechar='"', quoting=True, doublequote=True,
                      delimiter=',', sep=None, delim_whitespace=False,
                      skipinitialspace=False, names=None, dtype=None,
-                     skipfooter=0, skiprows=0, dayfirst=False):
+                     skipfooter=0, skiprows=0, dayfirst=False, thousands=None,
+                     decimal='.'):
 
     import nvstrings
     from cudf.dataframe.series import Series
@@ -207,7 +212,7 @@ def read_csv_strings(filepath, lineterminator='\n',
 
     .. code-block:: python
 
-      <class 'cudf.series.Series'>
+      <class 'cudf.series.Series'>python setup.py build_ext --inplace
       0 40
       1 30
 
@@ -253,6 +258,12 @@ def read_csv_strings(filepath, lineterminator='\n',
     dtype_ptr = ffi.new('char*[]', arr_dtypes)
     csv_reader.dtype = dtype_ptr
 
+    if decimal == delimiter:
+      raise ValueError("decimal cannot be the same as delimiter")
+
+    if thousands == delimiter:
+      raise ValueError("thousands cannot be the same as delimiter")
+
     csv_reader.delimiter = delimiter.encode()
     csv_reader.lineterminator = lineterminator.encode()
     csv_reader.quotechar = quotechar.encode()
@@ -264,6 +275,10 @@ def read_csv_strings(filepath, lineterminator='\n',
     csv_reader.num_cols = len(names)
     csv_reader.skiprows = skiprows
     csv_reader.skipfooter = skipfooter
+    csv_reader.decimal = decimal.encode()
+    csv_reader.thousands = ffi.NULL
+    if thousands:
+      csv_reader.thousands = ffi.new('char*', thousands.encode())
 
     # Call read_csv
     libgdf.read_csv(csv_reader)
