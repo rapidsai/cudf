@@ -39,7 +39,10 @@ gdf_error gdf_filter(size_t nrows,     //in: # rows
   //copy H-D:
   //
   GDF_REQUIRE(!cols->valid || !cols->null_count, GDF_VALIDITY_UNSUPPORTED);
-  soa_col_info(cols, ncols, d_cols, d_types);
+
+  gdf_error gdf_status = soa_col_info(cols, ncols, d_cols, d_types);
+  if(GDF_SUCCESS != gdf_status)
+    return gdf_status;
 
   *new_sz = multi_col_filter(nrows,
                              ncols,

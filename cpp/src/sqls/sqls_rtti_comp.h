@@ -33,26 +33,8 @@ struct LesserRTTI
   LesserRTTI(void *const *cols,
              int *const types,
              size_t sz) : columns_(cols),
-                          valids_(nullptr),
                           rtti_(types),
-                          sz_(sz),
-                          vals_(nullptr),
-                          asc_desc_flags_(nullptr),
-                          nulls_are_smallest_(false)
-  {
-  }
-
-  LesserRTTI(void *const *cols,
-            gdf_valid_type *const *valids,
-            int *const types,
-            size_t sz,
-            bool nulls_are_smallest) : columns_(cols),
-                                       valids_(valids),
-                                       rtti_(types),
-                                       sz_(sz),
-                                       vals_(nullptr),
-                                       asc_desc_flags_(nullptr),
-                                       nulls_are_smallest_(nulls_are_smallest)
+                          sz_(sz)
   {
   }
 
@@ -60,25 +42,9 @@ struct LesserRTTI
              int *const types,
              size_t sz,
              const void *const *vals) : columns_(cols),
-                                        valids_(nullptr),
                                         rtti_(types),
                                         sz_(sz),
-                                        vals_(vals),
-                                        asc_desc_flags_(nullptr),
-                                        nulls_are_smallest_(false)
-  {
-  }
-
-  LesserRTTI(void *const *cols,
-             int *const types,
-             char* const asc_desc_flags,
-             size_t sz) : columns_(cols),
-                          valids_(nullptr),
-                          rtti_(types),
-                          sz_(sz),
-                          vals_(nullptr),
-                          asc_desc_flags_(asc_desc_flags),
-                          nulls_are_smallest_(false)
+                                        vals_(vals)
   {
   }
 
@@ -91,7 +57,6 @@ struct LesserRTTI
                                         valids_(valids),
                                         rtti_(types),
                                         sz_(sz),
-                                        vals_(nullptr),
                                         asc_desc_flags_(asc_desc_flags),
                                         nulls_are_smallest_(nulls_are_smallest)
   {
@@ -453,13 +418,13 @@ private:
     }
   };
 
-  const void* const * columns_;
-  const gdf_valid_type* const * valids_;
-  const int* const rtti_;
+  const void* const * columns_{nullptr};
+  const gdf_valid_type* const * valids_{nullptr};
+  const int* const rtti_{nullptr};
   size_t sz_;
-  const void* const * vals_; //for filtering
-  char* const asc_desc_flags_; //array of 0 and 1 that allows us to know whether or not a column should be sorted ascending or descending
-  bool nulls_are_smallest_;  // when sorting if there are nulls in the data if this is true, then they will be treated as the smallest value, otherwise they will be treated as the largest value
+  const void* const * vals_{nullptr}; //for filtering
+  char* const asc_desc_flags_{nullptr}; //array of 0 and 1 that allows us to know whether or not a column should be sorted ascending or descending
+  bool nulls_are_smallest_{false};  // when sorting if there are nulls in the data if this is true, then they will be treated as the smallest value, otherwise they will be treated as the largest value
 };
 
 //###########################################################################
@@ -842,8 +807,8 @@ void multi_col_sort(void* const *           d_cols,
   rmm_temp_allocator allocator(stream);
   thrust::sequence(thrust::cuda::par(allocator).on(stream), d_indx, d_indx+nrows, 0);
   
+  LesserRTTI<IndexT> comp(d_cols, d_valids, d_col_types, d_asc_desc, ncols, nulls_are_smallest);
   if (d_valids != nullptr && have_nulls) {
-    LesserRTTI<IndexT> comp(d_cols, d_valids, d_col_types, d_asc_desc, ncols, nulls_are_smallest);
 		thrust::sort(thrust::cuda::par.on(stream),
 				         d_indx, d_indx+nrows,
 				         [comp] __device__ (IndexT i1, IndexT i2){
@@ -851,7 +816,6 @@ void multi_col_sort(void* const *           d_cols,
                  });
   }
   else {
-    LesserRTTI<IndexT> comp(d_cols, d_col_types, d_asc_desc, ncols);
     thrust::sort(thrust::cuda::par(allocator).on(stream),
                 d_indx, d_indx+nrows,
                 [comp] __device__ (IndexT i1, IndexT i2) {

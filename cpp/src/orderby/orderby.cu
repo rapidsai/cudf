@@ -39,6 +39,8 @@ namespace{ //annonymus
   {
     GDF_REQUIRE(cols != nullptr && output_indices != nullptr, GDF_DATASET_EMPTY);
     GDF_REQUIRE(cols[0]->size == output_indices->size, GDF_COLUMN_SIZE_MISMATCH);
+    /* NOTE: providing support for indexes to be multiple different types explodes compilation time, such that it become infeasible */
+    GDF_REQUIRE(output_indices->dtype == GDF_INT32, GDF_UNSUPPORTED_DTYPE);
 
     // Check for null so we can use a faster sorting comparator 
     bool have_nulls = false;
@@ -57,35 +59,12 @@ namespace{ //annonymus
     gdf_valid_type** d_valids_data = d_valids.data().get();
     int* d_col_types = d_types.data().get();
 
-    soa_col_info(cols, ncols, d_col_data, d_valids_data, d_col_types);
+    gdf_error gdf_status = soa_col_info(cols, ncols, d_col_data, d_valids_data, d_col_types);
+    if(GDF_SUCCESS != gdf_status)
+      return gdf_status;
 
-    switch(output_indices->dtype)
-    {
-    /* NOTE: providing support for indexes to be multiple different types explodes compilation time, such that it become infeasible */
-
-//		case GDF_INT8: {
-//			multi_col_sort(d_col_data, d_valids_data, d_col_types, asc_desc, ncols, cols[0]->size,
-//					have_nulls, static_cast<int8_t*>(output_indices->data), flag_nulls_are_smallest);
-//			break;
-//		}
-//		case GDF_INT16: {
-//			multi_col_sort(d_col_data, d_valids_data, d_col_types, asc_desc, ncols, cols[0]->size,
-//					have_nulls, static_cast<int16_t*>(output_indices->data), flag_nulls_are_smallest);
-//			break;
-//		}
-		case GDF_INT32: {
-			multi_col_sort(d_col_data, d_valids_data, d_col_types, asc_desc, ncols, cols[0]->size,
-					have_nulls, static_cast<int32_t*>(output_indices->data), flag_nulls_are_smallest);
-			break;
-		}
-		// case GDF_INT64: {
-		// 	multi_col_sort(d_col_data, d_valids_data, d_col_types, asc_desc, ncols, cols[0]->size,
-		// 			have_nulls, static_cast<int64_t*>(output_indices->data), flag_nulls_are_smallest);
-		// 	break;
-		// }
-		default:
-			return GDF_UNSUPPORTED_DTYPE;
-    }
+		multi_col_sort(d_col_data, d_valids_data, d_col_types, asc_desc, ncols, cols[0]->size,
+				have_nulls, static_cast<int32_t*>(output_indices->data), flag_nulls_are_smallest);
 
     return GDF_SUCCESS;
   }
