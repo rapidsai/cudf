@@ -3,7 +3,7 @@
 
 ## New Features
 
-- PR #455 CSV Reader: add support for user-specified decimal point and thousands separator
+- PR #455 #501 CSV Reader: add support for user-specified decimal point and thousands separator
 - PR #439 add `DataFrame.drop` method similar to pandas
 
 ## Improvements
