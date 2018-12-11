@@ -9,7 +9,7 @@ from cudf.dataframe.datetime import DatetimeColumn
 from cudf._gdf import nvtx_range_push, nvtx_range_pop
 
 import numpy as np
-
+import collections.abc
 
 def _wrap_string(text):
     if(text is None):
@@ -20,7 +20,7 @@ def _wrap_string(text):
 
 def read_csv(filepath, lineterminator='\n',
              quotechar='"', quoting=True, doublequote=True,
-             windowslinetermination=False, header=-1,
+             windowslinetermination=False, header='infer',
              mangle_dupe_cols=True, usecols=None,
              delimiter=',', sep=None, delim_whitespace=False,
              skipinitialspace=False, names=None, dtype=None,
@@ -93,12 +93,12 @@ def read_csv(filepath, lineterminator='\n',
     """
 
     if dtype is not None:
-        if isinstance(dtype, dict):
+        if isinstance(dtype, collections.abc.Mapping):
             dtype_dict = True
-        elif isinstance(dtype, list):
+        elif isinstance(dtype, collections.abc.Iterable):
             dtype_dict = False
         else:
-            msg = '''dtype must be 'list' or 'dict' '''
+            msg = '''dtype must be 'list like' or 'dict' '''
             raise TypeError(msg)
         if names is not None and len(dtype) != len(names):
             msg = '''All column dtypes must be specified.'''
@@ -112,6 +112,8 @@ def read_csv(filepath, lineterminator='\n',
     file_path = _wrap_string(filepath)
     csv_reader.file_path = file_path
 
+    if header is 'infer':
+        header = -1
     header_infer = header
     arr_names = []
     arr_dtypes = []
