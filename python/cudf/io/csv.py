@@ -56,7 +56,9 @@ def read_csv(filepath, lineterminator='\n',
         Number of rows to be skipped from the start of file.
     skipfooter : int, default 0
         Number of rows to be skipped at the bottom of file.
-    compression : {'infer','gzip','bz2','zip',None} on-the-fly decompression, default 'infer' detects from the file extension
+    compression : {'infer', 'gzip', 'zip', None}, default 'infer'
+        For on-the-fly decompression of on-disk data. If 'infer', then detect
+        format from the file extension. Set to None for no decompression.
 
     Returns
     -------
