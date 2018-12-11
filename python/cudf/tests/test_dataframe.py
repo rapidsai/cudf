@@ -378,42 +378,105 @@ def test_dataframe_emptycolumns_to_string():
     # values should match despite whitespace difference
     assert got.split() == expect.split()
 
+"""
+DataFrame copy expectations
+* A shallow copy constructs a new compound object and then (to the extent
+  possible) inserts references into it to the objects found in the original.
+* A deep copy constructs a new compound object and then, recursively, inserts
+  copies into it of the objects found in the original.
 
-def test_dataframe_copy():
-    # Test for copying the dataframe using python copy pkg
+  A cuDF DataFrame is a compound object containing a few members:
+  _index, _size, _cols,
+  and _iter_count, _iter_keys # temporary?
+  where _cols is an OrderedDict and _iter_keys is a list
+"""
+
+
+@pytest.mark.parametrize('ncols', [0, 1, 2, 10])
+@pytest.mark.parametrize(
+    'data_type',
+    ['int8', 'int16', 'int32', 'int64', 'float32', 'float64', 'datetime64[ms]']
+)
+def test_pandas_dataframe_deep_copy(ncols, data_type):
+    from copy import deepcopy
+    pdf = pd.DataFrame()
+    for i in range(ncols):
+        pdf[chr(i+ord('a'))] = np.random.randint(0, 1000, 20).astype(data_type)
+    pdfdc = deepcopy(pdf)
+    assert pdf.to_string().split() == pdfdc.to_string().split()
+
+
+@pytest.mark.parametrize('ncols', [0, 1, 2, 10])
+@pytest.mark.parametrize(
+    'data_type',
+    ['int8', 'int16', 'int32', 'int64', 'float32', 'float64', 'datetime64[ms]']
+)
+def test_cudf_dataframe_deep_copy(ncols, data_type):
+    from copy import deepcopy
+    pdf = pd.DataFrame()
+    for i in range(ncols):
+        pdf[chr(i+ord('a'))] = np.random.randint(0, 1000, 20).astype(data_type)
+    df = DataFrame.from_pandas(pdf)
+    dfdc = deepcopy(df)
+    assert df.to_string().split() == dfdc.to_string().split()
+
+
+@pytest.mark.parametrize('ncols', [0, 1, 2, 10])
+@pytest.mark.parametrize(
+    'data_type',
+    ['int8', 'int16', 'int32', 'int64', 'float32', 'float64', 'datetime64[ms]']
+)
+def test_pandas_dataframe_shallow_copy(ncols, data_type):
     from copy import copy
-    df = DataFrame()
-    df['a'] = [1, 2, 3]
-    df2 = copy(df)
-    df2['b'] = [4, 5, 6]
-    got = df.to_string()
-    print(got)
-    expect = '''
-     a
-0    1
-1    2
-2    3
-'''
-    # values should match despite whitespace difference
-    assert got.split() == expect.split()
+    pdf = pd.DataFrame()
+    for i in range(ncols):
+        pdf[chr(i+ord('a'))] = np.random.randint(0, 1000, 20).astype(data_type)
+    pdfsc = copy(pdf)
+    assert pdf.to_string().split() == pdfsc.to_string().split()
 
 
-def test_dataframe_copy_shallow():
-    # Test for copy dataframe using class method
-    df = DataFrame()
-    df['a'] = [1, 2, 3]
-    df2 = df.copy()
-    df2['b'] = [4, 2, 3]
-    got = df.to_string()
-    print(got)
-    expect = '''
-     a
-0    1
-1    2
-2    3
-'''
-    # values should match despite whitespace difference
-    assert got.split() == expect.split()
+@pytest.mark.parametrize('ncols', [0, 1, 2, 10])
+@pytest.mark.parametrize(
+    'data_type',
+    ['int8', 'int16', 'int32', 'int64', 'float32', 'float64', 'datetime64[ms]']
+)
+def test_cudf_dataframe_shallow_copy(ncols, data_type):
+    from copy import copy
+    pdf = pd.DataFrame()
+    for i in range(ncols):
+        pdf[chr(i+ord('a'))] = np.random.randint(0, 1000, 20).astype(data_type)
+    df = DataFrame.from_pandas(pdf)
+    dfsc = copy(df)
+    assert df.to_string().split() == dfsc.to_string().split()
+
+
+@pytest.mark.parametrize('ncols', [0, 1, 2, 10])
+@pytest.mark.parametrize(
+    'data_type',
+    ['int8', 'int16', 'int32', 'int64', 'float32', 'float64', 'datetime64[ms]']
+)
+def test_pandas_dataframe_class_copy(ncols, data_type):
+    from copy import copy
+    pdf = pd.DataFrame()
+    for i in range(ncols):
+        pdf[chr(i+ord('a'))] = np.random.randint(0, 1000, 20).astype(data_type)
+    pdfcc = pdf.copy()
+    assert pdf.to_string().split() == pdfcc.to_string().split()
+
+
+@pytest.mark.parametrize('ncols', [0, 1, 2, 10])
+@pytest.mark.parametrize(
+    'data_type',
+    ['int8', 'int16', 'int32', 'int64', 'float32', 'float64', 'datetime64[ms]']
+)
+def test_cudf_dataframe_class_copy(ncols, data_type):
+    from copy import copy
+    pdf = pd.DataFrame()
+    for i in range(ncols):
+        pdf[chr(i+ord('a'))] = np.random.randint(0, 1000, 20).astype(data_type)
+    df = DataFrame.from_pandas(pdf)
+    dfcc = df.copy()
+    assert df.to_string().split() == dfcc.to_string().split()
 
 
 def test_dataframe_dtypes():
