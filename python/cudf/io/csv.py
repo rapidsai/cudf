@@ -212,7 +212,7 @@ def read_csv_strings(filepath, lineterminator='\n',
 
     .. code-block:: python
 
-      <class 'cudf.series.Series'>python setup.py build_ext --inplace
+      <class 'cudf.series.Series'>
       0 40
       1 30
 
