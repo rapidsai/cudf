@@ -5,6 +5,7 @@
 
 - PR #455 CSV Reader: Add support for user-specified decimal point and thousands separator
 - PR #439 add `DataFrame.drop` method similar to pandas
+- PR #505 CVS Reader: Add support for user-specified boolean values
 
 ## Improvements
 
