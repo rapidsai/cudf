@@ -194,6 +194,13 @@ gdf_col_pointer create_gdf_column(std::vector<col_type> const & host_vector,
   RMM_ALLOC(&(the_column->data), host_vector.size() * sizeof(col_type), 0);
   cudaMemcpy(the_column->data, host_vector.data(), host_vector.size() * sizeof(col_type), cudaMemcpyHostToDevice);
 
+  // Fill the gdf_column members
+  the_column->size = host_vector.size();
+  the_column->dtype = gdf_col_type;
+  gdf_dtype_extra_info extra_info;
+  extra_info.time_unit = TIME_UNIT_NONE;
+  the_column->dtype_info = extra_info;
+
   // If a validity bitmask vector was passed in, allocate device storage 
   // and copy its contents from the host vector
   if(valid_vector.size() > 0)
@@ -219,13 +226,6 @@ gdf_col_pointer create_gdf_column(std::vector<col_type> const & host_vector,
     the_column->valid = nullptr;
     the_column->null_count = 0;
   }
-
-  // Fill the gdf_column members
-  the_column->size = host_vector.size();
-  the_column->dtype = gdf_col_type;
-  gdf_dtype_extra_info extra_info;
-  extra_info.time_unit = TIME_UNIT_NONE;
-  the_column->dtype_info = extra_info;
 
   return the_column;
 }

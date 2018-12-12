@@ -6,6 +6,7 @@
 - PR #350 Add gdf_find_and_replace_all method
 - PR #455 CSV Reader: Add support for user-specified decimal point and thousands separator
 - PR #439 add `DataFrame.drop` method similar to pandas
+- PR #350 Implemented Series replace function
 
 ## Improvements
 
