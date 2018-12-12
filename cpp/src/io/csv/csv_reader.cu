@@ -91,8 +91,8 @@ typedef struct raw_csv_ {
     char				decimal;
     char				thousands;
 
-    thrust::device_vector<int32_t, rmm_allocator<int32_t>>	d_trueValues;	// device: array of values to recognize as true
-    thrust::device_vector<int32_t, rmm_allocator<int32_t>>	d_falseValues;	// device: array of values to recognize as false
+    rmm::device_vector<int32_t>	d_trueValues;	// device: array of values to recognize as true
+    rmm::device_vector<int32_t>	d_falseValues;	// device: array of values to recognize as false
 } raw_csv_t;
 
 typedef struct column_data_ {
