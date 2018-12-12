@@ -1001,3 +1001,41 @@ def test_dataframe_shape_empty():
     gdf = DataFrame()
 
     assert pdf.shape == gdf.shape
+
+
+@pytest.mark.parametrize('num_cols', [0, 1, 2, 3, 5, 10])
+@pytest.mark.parametrize('num_rows', [0, 1, 2, 10, 100, 1000])
+@pytest.mark.parametrize(
+    'dtype',
+    ['int8', 'int16', 'int32', 'int64', 'float32', 'float64',
+     'datetime64[ms]', 'category']
+)
+@pytest.mark.parametrize('nulls', ['none', 'some', 'all'])
+def test_dataframe_tranpose(nulls, num_cols, num_rows, dtype):
+    if dtype not in ['float32', 'float64'] and nulls in ['some', 'all']:
+        pytest.skip(msg='nulls not supported in dtype: ' + dtype)
+    pdf = pd.DataFrame()
+    from string import ascii_lowercase
+    for i in range(num_cols):
+        colname = ascii_lowercase[i]
+        if dtype != 'category':
+            data = np.random.randint(0, 26, num_rows).astype(dtype)
+            if nulls == 'some':
+                idx = np.random.choice(26, size=10, replace=False)
+                data[idx] = np.nan
+            elif nulls == 'all':
+                data[:] = np.nan
+        elif dtype == 'category':
+            data = pd.Series(list(ascii_lowercase), dtype='category')
+            data = data.sample(num_rows, replace=True).reset_index(drop=True)
+        pdf[colname] = data
+
+    gdf = DataFrame.from_pandas(pdf)
+
+    got_function = gdf.transpose()
+    got_property = gdf.T
+
+    expect = pdf.transpose()
+
+    assert pd.testing.assert_frame_equal(expect, got_function.to_pandas())
+    assert pd.testing.assert_frame_equal(expect, got_property.to_pandas())
