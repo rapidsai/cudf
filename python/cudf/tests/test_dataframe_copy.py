@@ -20,6 +20,7 @@ DataFrame copy expectations
   where _cols is an OrderedDict and _iter_keys is a list
 """
 
+
 def test_pandas_dataframe_copy():
     pdf = pd.DataFrame([[1, 2, 3], [4, 5, 6], [7, 8, 9]],
                        columns=['a', 'b', 'c'])
@@ -48,21 +49,6 @@ def test_pandas_dataframe_copy_deep_True():
     assert pdf.iloc[1][1] != copy_deep_True_pdf.iloc[1][1]
     copy_deep_True_pdf['b'] = [0, 0, 0]
     assert not np.array_equal(pdf['b'].values, copy_deep_True_pdf['b'].values)
-
-
-def test_pandas_dataframe_copy():
-    pdf = pd.DataFrame([[1, 2, 3], [4, 5, 6], [7, 8, 9]],
-                       columns=['a', 'b', 'c'])
-    from copy import copy
-    copy_pdf = copy(pdf)
-    copy_pdf.iloc[1][1] = 10
-    """
-    # Pandas only deep copies! This expected assert fails because pandas
-    # is broken here.
-    assert pdf.iloc[1][1] == copy_pdf.iloc[1][1]
-    copy_pdf['b'] = [0, 0, 0]
-    assert np.array_equal(pdf['b'].values, copy_pdf['b'].values)
-    """
 
 
 def test_pandas_dataframe_deepcopy():
@@ -101,15 +87,6 @@ def test_cudf_dataframe_copy_deep_True():
     copy_deep_True_cdf['b'] = [0, 0, 0]
     assert not np.array_equal(cdf['b'].to_array(), copy_deep_True_cdf['b']
                               .to_array())
-
-
-def test_cudf_dataframe_copy():
-    cdf = DataFrame.from_pandas(pd.DataFrame([[1, 2, 3], [4, 5, 6], [7, 8, 9]],
-                                             columns=['a', 'b', 'c']))
-    from copy import copy
-    copy_cdf = copy(cdf)
-    copy_cdf['b'] = [0, 0, 0]
-    assert np.array_equal(cdf['b'].to_array(), copy_cdf['b'].to_array())
 
 
 def test_cudf_dataframe_deepcopy():
