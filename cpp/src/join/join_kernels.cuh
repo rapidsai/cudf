@@ -66,7 +66,6 @@ __global__ void build_hash_table( multimap_type * const multi_map,
         // using the row hash value to determine the location in the 
         // hash map where the new pair should be inserted
         const auto insert_location = multi_map->insert( thrust::make_pair( row_hash_value, i ),
-                                                        0, 1, // single hash table partition
                                                         true,
                                                         row_hash_value );
 
@@ -165,7 +164,6 @@ __global__ void compute_join_output_size( multimap_type const * const multi_map,
       // Search the hash map for the hash value of the probe row
       probe_row_hash_value = probe_table.hash_row(probe_row_index);
       found = multi_map->find(probe_row_hash_value,
-                              0, 1, // single hash table partition
                               true,
                               probe_row_hash_value);
     }
@@ -321,7 +319,6 @@ __global__ void probe_hash_table( multimap_type const * const multi_map,
       // Search the hash map for the hash value of the probe row
       probe_row_hash_value = probe_table.hash_row(probe_row_index);
       found = multi_map->find(probe_row_hash_value,
-                              0, 1, // single hash table partition
                                    true,
                                    probe_row_hash_value);
     }
