@@ -281,14 +281,14 @@ def test_csv_reader_buffer(tmpdir):
     f32_ref = [1234.5, 12345.6]
     int32_ref = [1234567, 12345]
 
-    df_str = read_csv(StringIO(buffer), 
+    df_str = read_csv(StringIO(buffer),
                       names=names, dtype=dtypes, skiprows=1)
     np.testing.assert_allclose(f32_ref, df_str['float32'])
     np.testing.assert_allclose(int32_ref, df_str['int32'])
     assert("1995-11-22T00:00:00.000" == str(df_str['date'][0]))
     assert("2002-01-02T00:00:00.000" == str(df_str['date'][1]))
 
-    df_bytes = read_csv(BytesIO(str.encode(buffer)), 
+    df_bytes = read_csv(BytesIO(str.encode(buffer)),
                         names=names, dtype=dtypes, skiprows=1)
     np.testing.assert_allclose(f32_ref, df_bytes['float32'])
     np.testing.assert_allclose(int32_ref, df_bytes['int32'])
@@ -304,7 +304,7 @@ def test_csv_reader_buffer_strings(tmpdir):
 
     buffer = '\n'.join(lines) + '\n'
 
-    cols_str = read_csv_strings(StringIO(buffer), 
+    cols_str = read_csv_strings(StringIO(buffer),
                                 names=names, dtype=dtypes, skiprows=1)
     assert(len(cols_str) == 2)
     assert(type(cols_str[0]) == nvstrings.nvstrings)
@@ -314,7 +314,7 @@ def test_csv_reader_buffer_strings(tmpdir):
     assert(cols_str[0].sublist([2]).to_host()[0] == 'c')
     assert(cols_str[0].sublist([3]).to_host()[0] == 'd')
 
-    cols_bytes = read_csv_strings(BytesIO(str.encode(buffer)), 
+    cols_bytes = read_csv_strings(BytesIO(str.encode(buffer)),
                                   names=names, dtype=dtypes, skiprows=1)
     assert(len(cols_bytes) == 2)
     assert(type(cols_bytes[0]) == nvstrings.nvstrings)
