@@ -459,12 +459,11 @@ size_t multi_col_filter(size_t nrows,
 {
   LesserRTTI<size_t> f(d_cols, d_gdf_t, ncols, d_vals);//size_t, not IndexT, because of counting_iterator below;
   
-  rmm_temp_allocator allocator(stream);
 
   //actual filtering happens here:
   //
   auto ret_iter_last =
-    thrust::copy_if(thrust::cuda::par(allocator).on(stream),
+    thrust::copy_if(rmm::exec_policy(stream),
                     thrust::make_counting_iterator<size_t>(0), 
                     thrust::make_counting_iterator<size_t>(nrows),
                     ptr_d_flt_indx,
@@ -521,10 +520,9 @@ multi_col_group_by_count_sort(size_t         nrows,
 
   LesserRTTI<IndexT> f(d_cols, d_gdf_t, ncols);
 
-  rmm_temp_allocator allocator(stream);
 
   thrust::pair<IndexT*, CountT*> ret =
-    thrust::reduce_by_key(thrust::cuda::par(allocator).on(stream),
+    thrust::reduce_by_key(rmm::exec_policy(stream),
                           ptr_d_indx, ptr_d_indx+nrows,
                           thrust::make_constant_iterator<CountT>(1),
                           ptr_d_kout,
@@ -592,9 +590,8 @@ size_t multi_col_group_by_sort(size_t         nrows,
   if( !sorted )
     multi_col_sort(d_cols, nullptr, d_gdf_t, nullptr, ncols, nrows, false, ptr_d_indx, false, stream);
 
-  rmm_temp_allocator allocator(stream);
   
-  thrust::gather(thrust::cuda::par(allocator).on(stream),
+  thrust::gather(rmm::exec_policy(stream),
                  ptr_d_indx, ptr_d_indx + nrows,  //map[i]
   		 ptr_d_agg,                    //source[i]
   		 ptr_d_agg_p);                 //source[map[i]]
@@ -602,7 +599,7 @@ size_t multi_col_group_by_sort(size_t         nrows,
   LesserRTTI<IndexT> f(d_cols, d_gdf_t, ncols);
   
   thrust::pair<IndexT*, ValsT*> ret =
-    thrust::reduce_by_key(thrust::cuda::par(allocator).on(stream),
+    thrust::reduce_by_key(rmm::exec_policy(stream),
                           ptr_d_indx, ptr_d_indx + nrows,
                           ptr_d_agg_p,
                           ptr_d_kout,
@@ -756,9 +753,8 @@ size_t multi_col_group_by_avg_sort(size_t         nrows,
                                                sorted,
                                                stream);
 
-  rmm_temp_allocator allocator(stream);
 
-  thrust::transform(thrust::cuda::par(allocator).on(stream),
+  thrust::transform(rmm::exec_policy(stream),
                     ptr_d_cout, ptr_d_cout + nrows,
                     ptr_d_vout,
                     ptr_d_vout,
@@ -804,19 +800,18 @@ void multi_col_sort(void* const *           d_cols,
   //cannot use counting_iterator 2 reasons:
   //(1.) need to return a container result;
   //(2.) that container must be mutable;
-  rmm_temp_allocator allocator(stream);
-  thrust::sequence(thrust::cuda::par(allocator).on(stream), d_indx, d_indx+nrows, 0);
+  thrust::sequence(rmm::exec_policy(stream), d_indx, d_indx+nrows, 0);
   
   LesserRTTI<IndexT> comp(d_cols, d_valids, d_col_types, d_asc_desc, ncols, nulls_are_smallest);
   if (d_valids != nullptr && have_nulls) {
-		thrust::sort(thrust::cuda::par.on(stream),
+		thrust::sort(rmm::exec_policy(stream),
 				         d_indx, d_indx+nrows,
 				         [comp] __device__ (IndexT i1, IndexT i2){
                     return comp.asc_desc_comparison_with_nulls(i1, i2);
                  });
   }
   else {
-    thrust::sort(thrust::cuda::par(allocator).on(stream),
+    thrust::sort(rmm::exec_policy(stream),
                 d_indx, d_indx+nrows,
                 [comp] __device__ (IndexT i1, IndexT i2) {
                   return comp.asc_desc_comparison(i1, i2);

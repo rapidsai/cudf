@@ -12,13 +12,11 @@
 //using IndexT = int;//okay...
 using IndexT = size_t;
 
-namespace{ //annonymus
 
-  // thrust::device_vector set to use rmmAlloc and rmmFree.
-  template<typename T>
-  using Vector = thrust::device_vector<T, rmm_allocator<T>>;
 
-}//end unknown namespace
+
+
+
 
 //apparent duplication of info between
 //gdf_column array and two arrays:
