@@ -1037,5 +1037,5 @@ def test_dataframe_tranpose(nulls, num_cols, num_rows, dtype):
 
     expect = pdf.transpose()
 
-    assert pd.testing.assert_frame_equal(expect, got_function.to_pandas())
-    assert pd.testing.assert_frame_equal(expect, got_property.to_pandas())
+    pd.testing.assert_frame_equal(expect, got_function.to_pandas())
+    pd.testing.assert_frame_equal(expect, got_property.to_pandas())
