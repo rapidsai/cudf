@@ -71,6 +71,10 @@ typedef struct raw_csv_ {
     char				delimiter;		// host: the delimiter
     char				terminator;		// host: the line terminator
 
+    char				quotechar;		// host: the quote character
+    bool				keepquotes;		// host: indicates to keep the start and end quotechar
+    bool				doublequote;	// host: indicates to interpret two consecutive quotechar as a single
+
     long				num_bytes;		// host: the number of bytes in the data
     long				num_bits;		// host: the number of 64-bit bitmaps (different than valid)
 	unsigned long long 	num_records;  	// host: number of records (per column)
@@ -83,9 +87,11 @@ typedef struct raw_csv_ {
     bool* 				d_parseCol;		// device : array of booleans stating if column should be parsed in reading process: parseCol[x]=false means that the column x needs to be filtered out.
     long 				header_row;		// Row id of the header
     bool				dayfirst;
+    char				decimal;
+    char				thousands;
 } raw_csv_t;
 
-typedef struct column_data_{
+typedef struct column_data_ {
 	unsigned long long countFloat;
 	unsigned long long countDateAndTime;
 	unsigned long long countString;
@@ -94,7 +100,16 @@ typedef struct column_data_{
 	unsigned long long countInt32;
 	unsigned long long countInt64;	
 	unsigned long long countNULL;
-}column_data_t;
+} column_data_t;
+
+typedef struct parsing_opts_ {
+	char				delimiter;
+	char				terminator;
+	char				quotechar;
+	bool				keepquotes;
+	char				decimal;
+	char				thousands;
+} parsing_opts_t;
 
 using string_pair = std::pair<const char*,size_t>;
 
@@ -121,12 +136,10 @@ gdf_error launch_dataConvertColumns(raw_csv_t * raw_csv, void** d_gdf,  gdf_vali
 
 gdf_error launch_dataTypeDetection(raw_csv_t * raw_csv, long row_offset, column_data_t* d_columnData);
 
-__global__ void countRecords(char *data, const char delim, const char terminator, long num_bytes, long num_bits, unsigned long long* num_records);
-__global__ void storeRecordStart(char *data, const char delim, const char terminator, long num_bytes, long num_bits, unsigned long long* num_records,unsigned long long* recStart) ;
-
-__global__ void convertCsvToGdf(char *csv,char delim, char terminator,	unsigned long long num_records, int num_columns,bool *parseCol,unsigned long long *recStart,gdf_dtype *dtype,void **gdf_data,gdf_valid_type **valid,string_pair **str_cols,unsigned long long row_offset, long header_row,bool dayfirst,unsigned long long *num_valid);
-
-__global__ void dataTypeDetection( char *raw_csv, char delim, char terminator, unsigned long long  num_records, int  num_columns, bool  *parseCol, unsigned long long *recStart, unsigned long long row_offset, long header_row, column_data_t* d_columnData);
+__global__ void countRecords(char *data, const char terminator, const char quotechar, long num_bytes, long num_bits, unsigned long long* num_records);
+__global__ void storeRecordStart(char *data, const char terminator, const char quotechar, long num_bytes, long num_bits, unsigned long long* num_records,unsigned long long* recStart) ;
+__global__ void convertCsvToGdf(char *csv, const parsing_opts_t opts, unsigned long long num_records, int num_columns,bool *parseCol,unsigned long long *recStart,gdf_dtype *dtype,void **gdf_data,gdf_valid_type **valid,string_pair **str_cols,unsigned long long row_offset, long header_row,bool dayfirst,unsigned long long *num_valid);
+__global__ void dataTypeDetection(char *raw_csv, const parsing_opts_t opts, unsigned long long num_records, int  num_columns, bool  *parseCol, unsigned long long *recStart, unsigned long long row_offset, long header_row, column_data_t* d_columnData);
 
 //
 //---------------CUDA Valid (8 blocks of 8-bits) Bitmap Kernels ---------------------------------------------
@@ -180,14 +193,19 @@ std::string stringType(gdf_dtype dt){
  * Arguments:
  *
  *  Required Arguments
- * 		file_path			- 	file location to read from	- currently the file cannot be compressed
+ * 		file_path			-	file location to read from	- currently the file cannot be compressed
  * 		num_cols			-	number of columns in the names and dtype arrays
  * 		names				-	ordered List of column names, this is a required field
- * 		dtype				- 	ordered List of data types, this is required
+ * 		dtype				-	ordered List of data types, this is required
  *
  * 	Optional
- * 		lineterminator		-	define the line terminator character.  Default is  '\n'
- * 		delimiter			-	define the field separator, default is ','   This argument is also called 'sep'
+ * 		lineterminator		-	define the line terminator character.  Default is '\n'
+ * 		delimiter			-	define the field separator, default is ','.  This argument is also called 'sep'
+ *
+ * 		quotechar;				define the character used to denote start and end of a quoted item
+ * 		quoting;				treat string fields as quoted item and remove the first and last quotechar
+ * 		nodoublequote;			do not interpret two consecutive quotechar as a single quotechar
+ *
  * 		delim_whitespace	-	use white space as the delimiter - default is false.  This overrides the delimiter argument
  * 		skipinitialspace	-	skip white spaces after the delimiter - default is false
  *
@@ -199,8 +217,8 @@ std::string stringType(gdf_dtype dt){
  *
  *  Output
  *  	num_cols_out		-	Out: return the number of columns read in
- *  	num_rows_out		- 	Out: return the number of rows read in
- *  	gdf_column		**data	-  Out: return the array of *gdf_columns
+ *  	num_rows_out		-	Out: return the number of rows read in
+ *  	gdf_column **data	-	Out: return the array of *gdf_columns
  *
  *
  * @return gdf_error
@@ -219,19 +237,39 @@ gdf_error read_csv(csv_read_arg *args)
 	raw_csv->num_active_cols	= args->num_cols;
 	raw_csv->num_records		= 0;
 
-	if ( args->delim_whitespace == true) {
+	if(args->delim_whitespace == true) {
 		raw_csv->delimiter = ' ';
 	} else {
 		raw_csv->delimiter = args->delimiter;
 	}
 
-	if(args->windowslinetermination)
+	if(args->windowslinetermination) {
 		raw_csv->terminator = '\n';
-	else
+	} else {
 		raw_csv->terminator = args->lineterminator;
+	}
 
+	raw_csv->quotechar = args->quotechar;
+	if(raw_csv->quotechar != '\0') {
+		raw_csv->keepquotes = !args->quoting;
+		raw_csv->doublequote = args->doublequote;
+	} else {
+		raw_csv->keepquotes = true;
+		raw_csv->doublequote = false;
+	}
 
 	raw_csv->dayfirst = args->dayfirst;
+	raw_csv->decimal = args->decimal;
+	raw_csv->thousands = args->thousands == nullptr ? '\0' : *args->thousands;
+
+	if (raw_csv->decimal == raw_csv->delimiter)
+	{ 
+		checkError(GDF_INVALID_API_CALL, "Decimal point cannot be the same as the delimiter");
+	}
+	if (raw_csv->thousands == raw_csv->delimiter)
+	{ 
+		checkError(GDF_INVALID_API_CALL, "Thousands separator cannot be the same as the delimiter");
+	}
 
 	//-----------------------------------------------------------------------------
 	// memory map in the data
@@ -255,10 +293,8 @@ gdf_error read_csv(csv_read_arg *args)
 	error = updateRawCsv( (const char *)map_data, (long)raw_csv->num_bytes, raw_csv );
 	checkError(error, "call to createRawCsv");
 
-
 	//-----------------------------------------------------------------------------
 	// find the record and fields points (in bitmaps)
-	cudaDeviceSynchronize();
 	error = launch_countRecords(raw_csv);
 	checkError(error, "call to record counter");
 
@@ -272,9 +308,43 @@ gdf_error read_csv(csv_read_arg *args)
 	error = launch_storeRecordStart(raw_csv);
 	checkError(error, "call to record initial position store");
 
-	cudaDeviceSynchronize();
+	// Previous kernel stores the record positions as encountered by all threads
+	// Sort the record positions as subsequent processing may require filtering
+	// certain rows or other processing on specific records
+	thrust::sort(thrust::device, raw_csv->recStart, raw_csv->recStart + raw_csv->num_records + 1);
 
-	thrust::sort(thrust::device,raw_csv->recStart, raw_csv->recStart + raw_csv->num_records + 1);
+	// Currently, ignoring lineterminations within quotes is handled by recording
+	// the records of both, and then filtering out the records that is a quotechar
+	// or a linetermination within a quotechar pair. The future major refactoring
+	// of csv_reader and its kernels will probably use a different tactic.
+	if (raw_csv->quotechar != '\0') {
+		const size_t recTotalSize = sizeof(unsigned long long) * (raw_csv->num_records + 1);
+
+		unsigned long long *h_recStart = (unsigned long long*)malloc(recTotalSize);
+		CUDA_TRY( cudaMemcpy(h_recStart, raw_csv->recStart, recTotalSize, cudaMemcpyDeviceToHost) );
+
+		const char *h_data = (const char *)(map_data);
+		unsigned long long recCount = raw_csv->num_records;
+
+		bool quotation = false;
+		for (size_t i = 1; i < raw_csv->num_records; ++i) {
+			if (h_data[h_recStart[i] - 1] == raw_csv->quotechar) {
+				quotation = !quotation;
+				h_recStart[i] = raw_csv->num_bytes;
+				recCount--;
+			}
+			else if (quotation) {
+				h_recStart[i] = raw_csv->num_bytes;
+				recCount--;
+			}
+		}
+
+		CUDA_TRY( cudaMemcpy(raw_csv->recStart, h_recStart, recTotalSize, cudaMemcpyHostToDevice) );
+		thrust::sort(thrust::device, raw_csv->recStart, raw_csv->recStart + raw_csv->num_records + 1);
+		raw_csv->num_records = recCount;
+		
+		free(h_recStart);
+	}
 
 	//-----------------------------------------------------------------------------
 	//-- Acquire header row of 
@@ -309,7 +379,7 @@ gdf_error read_csv(csv_read_arg *args)
 		while(c<stop){
 			if (cmap_data[c]==args->lineterminator){
 				h_num_cols++;
-				break;				
+				break;
 			}
 			else if(cmap_data[c] == '\r' && (c+1L)<(unsigned long long)raw_csv->num_bytes && cmap_data[c+1] == '\n'){
 				h_num_cols++;
@@ -588,7 +658,18 @@ gdf_error read_csv(csv_read_arg *args)
 		if (gdf->dtype != gdf_dtype::GDF_STRING)
 			continue;
 
-		gdf->data = (void*)NVStrings::create_from_index(h_str_cols[stringColCount],size_t(raw_csv->num_records));
+		NVStrings* const stringCol = NVStrings::create_from_index(h_str_cols[stringColCount],size_t(raw_csv->num_records));
+		if ((raw_csv->quotechar != '\0') && (raw_csv->doublequote==true)) {
+			// In PANDAS, default of enabling doublequote for two consecutive
+			// quotechar in quote fields results in reduction to single
+			std::string quotechar = std::string(&raw_csv->quotechar);
+			std::string doublequotechar = quotechar + raw_csv->quotechar;
+			gdf->data = stringCol->replace(doublequotechar.c_str(), quotechar.c_str());
+			NVStrings::destroy(stringCol);
+		}
+		else {
+			gdf->data = stringCol;
+		}
 
 		RMM_TRY( RMM_FREE( h_str_cols [stringColCount], 0 ) );
 
@@ -746,30 +827,23 @@ gdf_error allocateGdfDataSpace(gdf_column *gdf) {
 
 gdf_error launch_countRecords(raw_csv_t * csvData) {
 
-	char 		*data 		= csvData->data;
-	long 		num_bytes	= csvData->num_bytes;
-	long 		numBitmaps 	= csvData->num_bits;
-	char		delim		= csvData->delimiter;
-	unsigned long long 		*d_num_records = csvData->d_num_records;
-	char		terminator	= csvData->terminator;
+	int blockSize;		// suggested thread count to use
+	int minGridSize;	// minimum block count required
+	CUDA_TRY( cudaOccupancyMaxPotentialBlockSize(&minGridSize, &blockSize, countRecords) );
 
-	/*
-	 * Each bitmap is for a 64-byte chunk,
-	 *
-	 *  Note: could do one thread per byte, but that would require a lock on the bit map
-	 *
-	 */
-	int64_t threads 	= 1024;
+	// Calculate actual block count to use based on bitmap count
+	// Each bitmap is for a 64-byte chunk, and each data index is bitmap ID * 64
+	int gridSize = (csvData->num_bits + blockSize - 1) / blockSize;
 
-	// Using the number of bitmaps as the size - data index is bitmap ID * 64
-	int64_t blocks = (numBitmaps + (threads -1)) / threads ;
-
-	countRecords <<< blocks, threads >>> (data, delim, terminator, num_bytes, numBitmaps, d_num_records);
+	countRecords <<< gridSize, blockSize >>> (
+		csvData->data, csvData->terminator, csvData->quotechar,
+		csvData->num_bytes, csvData->num_bits, csvData->d_num_records
+	);
 
 	CUDA_TRY(cudaGetLastError());
 
 	long recs=-1;
-	CUDA_TRY(cudaMemcpy(&recs, d_num_records, sizeof(long), cudaMemcpyDeviceToHost));
+	CUDA_TRY(cudaMemcpy(&recs, csvData->d_num_records, sizeof(long), cudaMemcpyDeviceToHost));
 	csvData->num_records=recs;
 
 	CUDA_TRY(cudaGetLastError());
@@ -778,12 +852,12 @@ gdf_error launch_countRecords(raw_csv_t * csvData) {
 }
 
 
-__global__ void countRecords(char *data, const char delim, const char terminator, long num_bytes, long num_bits, unsigned long long* num_records) {
+__global__ void countRecords(char *data, const char terminator, const char quotechar, long num_bytes, long num_bits, unsigned long long* num_records) {
 
 	// thread IDs range per block, so also need the block id
 	long tid = threadIdx.x + (blockDim.x * blockIdx.x);
 
-	if ( tid >= num_bits)
+	if (tid >= num_bits)
 		return;
 
 	// data ID is a multiple of 64
@@ -794,51 +868,45 @@ __global__ void countRecords(char *data, const char delim, const char terminator
 	long byteToProcess = ((did + 64L) < num_bytes) ? 64L : (num_bytes - did);
 
 	// process the data
-	long x = 0;
-	long newLinesFound=0;
-	for (x = 0; x < byteToProcess; x++) {
-
-		// records
-		if (raw[x] == terminator) {
-			newLinesFound++;
-		}	else if (raw[x] == '\r' && (x+1L)<num_bytes && raw[x +1] == '\n') {
+	long tokenCount = 0;
+	for (long x = 0; x < byteToProcess; x++) {
+		
+		// Scan and log records. If quotations are enabled, then also log quotes
+		// for a postprocess ignore, as the chunk here has limited visibility.
+		if ((raw[x] == terminator) || (quotechar != '\0' && raw[x] == quotechar)) {
+			tokenCount++;
+		} else if (raw[x] == '\r' && (x+1L)<num_bytes && raw[x +1] == '\n') {
 			x++;
-			newLinesFound++;
+			tokenCount++;
 		}
 
 	}
-	atomicAdd((unsigned long long int*)num_records,(unsigned long long int)newLinesFound);
+	atomicAdd((unsigned long long int*)num_records,(unsigned long long int)tokenCount);
 }
 
 
 gdf_error launch_storeRecordStart(raw_csv_t * csvData) {
 
-	char 		*data 		= csvData->data;
-	long 		num_bytes	= csvData->num_bytes;
-	long 		numBitmaps 	= csvData->num_bits;
-	char		delim		= csvData->delimiter;
-	char 		terminator	= csvData->terminator;
+	int blockSize;		// suggested thread count to use
+	int minGridSize;	// minimum block count required
+	CUDA_TRY( cudaOccupancyMaxPotentialBlockSize(&minGridSize, &blockSize, storeRecordStart) );
 
-	unsigned long long 	*d_num_records 	= csvData->d_num_records;
-	unsigned long long  *recStart 		= csvData->recStart;
+	// Calculate actual block count to use based on bitmap count
+	// Each bitmap is for a 64-byte chunk, and each data index is bitmap ID * 64
+	int gridSize = (csvData->num_bits + blockSize - 1) / blockSize;
 
-	/*
-	 * Each bitmap is for a 64-byte chunk
-	 *  Note: could do one thread per byte, but that would require a lock on the bit map
-	 */
-	long threads 	= 1024;
+	storeRecordStart <<< gridSize, blockSize >>> (
+		csvData->data, csvData->terminator, csvData->quotechar,
+		csvData->num_bytes, csvData->num_bits, csvData->d_num_records,
+		csvData->recStart
+	);
 
-	// Using the number of bitmaps as the size - data index is bitmap ID * 64
-	long blocks = (numBitmaps + (threads -1)) / threads ;
-
-	storeRecordStart <<< blocks, threads >>> (data, delim, terminator, num_bytes, numBitmaps,d_num_records,recStart);
-
-	CUDA_TRY(cudaGetLastError());
+	CUDA_TRY( cudaGetLastError() );
 	return GDF_SUCCESS;
 }
 
 
-__global__ void storeRecordStart(char *data, const char delim, const char terminator, long num_bytes, long num_bits, unsigned long long* num_records,unsigned long long* recStart) {
+__global__ void storeRecordStart(char *data, const char terminator, const char quotechar, long num_bytes, long num_bits, unsigned long long* num_records,unsigned long long* recStart) {
 
 	// thread IDs range per block, so also need the block id
 	long tid = threadIdx.x + (blockDim.x * blockIdx.x);
@@ -859,16 +927,16 @@ __global__ void storeRecordStart(char *data, const char delim, const char termin
 	}
 
 	// process the data
-	long x = 0;
-	for (x = 0; x < byteToProcess; x++) {
+	for (long x = 0; x < byteToProcess; x++) {
 
-		// records
-		if (raw[x] == terminator) {
+		// Scan and log records. If quotations are enabled, then also log quotes
+		// for a postprocess ignore, as the chunk here has limited visibility.
+		if ((raw[x] == terminator) || (quotechar != '\0' && raw[x] == quotechar)) {
 
 			long pos = atomicAdd((unsigned long long int*)num_records,(unsigned long long int)1);
 			recStart[pos]=did+x+1;
 
-		}	else if (raw[x] == '\r' && (x+1L)<num_bytes && raw[x +1] == '\n') {
+		} else if (raw[x] == '\r' && (x+1L)<num_bytes && raw[x +1] == '\n') {
 
 			x++;
 			long pos = atomicAdd((unsigned long long int*)num_records,(unsigned long long int)1);
@@ -882,16 +950,26 @@ __global__ void storeRecordStart(char *data, const char delim, const char termin
 //----------------------------------------------------------------------------------------------------------------
 
 
-gdf_error launch_dataConvertColumns(raw_csv_t * raw_csv, void **gdf, gdf_valid_type** valid, gdf_dtype* d_dtypes,string_pair **str_cols, long row_offset, unsigned long long *num_valid) {
+gdf_error launch_dataConvertColumns(raw_csv_t *raw_csv, void **gdf, gdf_valid_type** valid, gdf_dtype* d_dtypes,string_pair **str_cols, long row_offset, unsigned long long *num_valid) {
 
-	int64_t threads 	= 1024;
-	int64_t blocks 		= (  raw_csv->num_records + (threads -1)) / threads ;
+	int blockSize;		// suggested thread count to use
+	int minGridSize;	// minimum block count required
+	CUDA_TRY( cudaOccupancyMaxPotentialBlockSize(&minGridSize, &blockSize, convertCsvToGdf) );
 
+	// Calculate actual block count to use based on records count
+	int gridSize = (raw_csv->num_records + blockSize - 1) / blockSize;
 
-	convertCsvToGdf <<< blocks, threads >>>(
+	parsing_opts_t opts;
+	opts.delimiter		= raw_csv->delimiter;
+	opts.terminator		= raw_csv->terminator;
+	opts.quotechar		= raw_csv->quotechar;
+	opts.keepquotes		= raw_csv->keepquotes;
+	opts.decimal		= raw_csv->decimal;
+	opts.thousands		= raw_csv->thousands;
+
+	convertCsvToGdf <<< gridSize, blockSize >>>(
 		raw_csv->data,
-		raw_csv->delimiter,
-		raw_csv->terminator,
+		opts,
 		raw_csv->num_records,
 		raw_csv->num_actual_cols,
 		raw_csv->d_parseCol,
@@ -906,7 +984,7 @@ gdf_error launch_dataConvertColumns(raw_csv_t * raw_csv, void **gdf, gdf_valid_t
 		num_valid
 	);
 
-
+	CUDA_TRY( cudaGetLastError() );
 	return GDF_SUCCESS;
 }
 
@@ -917,8 +995,7 @@ gdf_error launch_dataConvertColumns(raw_csv_t * raw_csv, void **gdf, gdf_valid_t
  */
 __global__ void convertCsvToGdf(
 		char 			*raw_csv,
-		char 			delim,
-		char 			terminator,		
+		const parsing_opts_t	 	opts,
 		unsigned long long  num_records,
 		int  			num_columns,
 		bool  			*parseCol,
@@ -933,9 +1010,6 @@ __global__ void convertCsvToGdf(
 		unsigned long long			*num_valid
 		)
 {
-
-
-
 	// thread IDs range per block, so also need the block id
 	long	rec_id  = threadIdx.x + (blockDim.x * blockIdx.x);		// this is entry into the field array - tid is an elements within the num_entries array
 
@@ -954,7 +1028,7 @@ __global__ void convertCsvToGdf(
 	int  col 		= 0;
 	int  actual_col = 0;
 	int  stringCol 	= 0;
-
+	bool quotation	= false;
 
 	while(col<num_columns){
 
@@ -962,16 +1036,24 @@ __global__ void convertCsvToGdf(
 			break;
 
 		while(true){
-			if(raw_csv[pos]==delim){
-				break;
+			// Use simple logic to ignore control chars between any quote seq
+			// Handles nominal cases including doublequotes within quotes, but
+			// may not output exact failures as PANDAS for malformed fields
+			if(raw_csv[pos] == opts.quotechar){
+				quotation = !quotation;
 			}
-			else if (raw_csv[pos] == terminator){
-				break;
+			else if(quotation==false){
+				if(raw_csv[pos] == opts.delimiter){
+					break;
+				}
+				else if(raw_csv[pos] == opts.terminator){
+					break;
+				}
+				else if(raw_csv[pos] == '\r' && ((pos+1) < stop && raw_csv[pos+1] == '\n')){
+					stop--;
+					break;
+				}
 			}
-            else if(raw_csv[pos] == '\r' &&  ((pos+1) < stop && raw_csv[pos+1]=='\n')){
-            	stop--;
-                break;
-            }
 			if(pos>=stop)
 				break;
 			pos++;
@@ -992,36 +1074,36 @@ __global__ void convertCsvToGdf(
 					case gdf_dtype::GDF_INT8:
 					{
 						int8_t *gdf_out = (int8_t *)gdf_data[actual_col];
-						gdf_out[rec_id] = convertStrtoInt<int8_t>(raw_csv, start, tempPos);
+						gdf_out[rec_id] = convertStrtoInt<int8_t>(raw_csv, start, tempPos, opts.thousands);
 					}
 						break;
 					case gdf_dtype::GDF_INT16: {
 						int16_t *gdf_out = (int16_t *)gdf_data[actual_col];
-						gdf_out[rec_id] = convertStrtoInt<int16_t>(raw_csv, start, tempPos);
+						gdf_out[rec_id] = convertStrtoInt<int16_t>(raw_csv, start, tempPos, opts.thousands);
 					}
 						break;
 					case gdf_dtype::GDF_INT32:
 					{
 						int32_t *gdf_out = (int32_t *)gdf_data[actual_col];
-						gdf_out[rec_id] = convertStrtoInt<int32_t>(raw_csv, start, tempPos);
+						gdf_out[rec_id] = convertStrtoInt<int32_t>(raw_csv, start, tempPos, opts.thousands);
 					}
 						break;
 					case gdf_dtype::GDF_INT64:
 					{
 						int64_t *gdf_out = (int64_t *)gdf_data[actual_col];
-						gdf_out[rec_id] = convertStrtoInt<int64_t>(raw_csv, start, tempPos);
+						gdf_out[rec_id] = convertStrtoInt<int64_t>(raw_csv, start, tempPos, opts.thousands);
 					}
 						break;
 					case gdf_dtype::GDF_FLOAT32:
 					{
 						float *gdf_out = (float *)gdf_data[actual_col];
-						gdf_out[rec_id] = convertStrtoFloat<float>(raw_csv, start, tempPos);
+						gdf_out[rec_id] = convertStrtoFloat<float>(raw_csv, start, tempPos, opts.decimal, opts.thousands);
 					}
 						break;
 					case gdf_dtype::GDF_FLOAT64:
 					{
 						double *gdf_out = (double *)gdf_data[actual_col];
-						gdf_out[rec_id] = convertStrtoFloat<double>(raw_csv, start, tempPos);
+						gdf_out[rec_id] = convertStrtoFloat<double>(raw_csv, start, tempPos, opts.decimal, opts.thousands);
 					}
 						break;
 					case gdf_dtype::GDF_DATE32:
@@ -1039,7 +1121,7 @@ __global__ void convertCsvToGdf(
 					case gdf_dtype::GDF_TIMESTAMP:
 					{
 						int64_t *gdf_out = (int64_t *)gdf_data[actual_col];
-						gdf_out[rec_id] = convertStrtoInt<int64_t>(raw_csv, start, tempPos);
+						gdf_out[rec_id] = convertStrtoInt<int64_t>(raw_csv, start, tempPos, opts.thousands);
 					}
 					break;
 					case gdf_dtype::GDF_CATEGORY:
@@ -1048,9 +1130,17 @@ __global__ void convertCsvToGdf(
 						gdf_out[rec_id] = convertStrtoHash(raw_csv, start, pos, HASH_SEED);
 					}
 						break;
-					case gdf_dtype::GDF_STRING:{
-						str_cols[stringCol][rec_id].first 	= raw_csv+start;
-						str_cols[stringCol][rec_id].second 	= size_t(pos-start);
+					case gdf_dtype::GDF_STRING:
+					{
+						long end = pos;
+						if(opts.keepquotes==false){
+							if((raw_csv[start] == opts.quotechar) && (raw_csv[end-1] == opts.quotechar)){
+								start++;
+								end--;
+							}
+						}
+						str_cols[stringCol][rec_id].first	= raw_csv+start;
+						str_cols[stringCol][rec_id].second	= size_t(end-start);
 						stringCol++;
 					}
 						break;
@@ -1072,9 +1162,9 @@ __global__ void convertCsvToGdf(
 			}
 			actual_col++;
 		}
-			pos++;
-			start=pos;
-			col++;	
+		pos++;
+		start=pos;
+		col++;
 
 	}
 }
@@ -1089,14 +1179,22 @@ gdf_error launch_dataTypeDetection(
 	long row_offset,
 	column_data_t* d_columnData) 
 {
-	int64_t threads 	= 1024;
-	int64_t blocks 		= (  raw_csv->num_records + (threads -1)) / threads ;
+	int blockSize;		// suggested thread count to use
+	int minGridSize;	// minimum block count required
+	CUDA_TRY( cudaOccupancyMaxPotentialBlockSize(&minGridSize, &blockSize, dataTypeDetection) );
 
+	// Calculate actual block count to use based on records count
+	int gridSize = (raw_csv->num_records + blockSize - 1) / blockSize;
 
-	dataTypeDetection <<< blocks, threads >>>(
+	parsing_opts_t opts;
+	opts.delimiter		= raw_csv->delimiter;
+	opts.terminator		= raw_csv->terminator;
+	opts.quotechar		= raw_csv->quotechar;
+	opts.keepquotes		= raw_csv->keepquotes;
+
+	dataTypeDetection <<< gridSize, blockSize >>>(
 		raw_csv->data,
-		raw_csv->delimiter,
-		raw_csv->terminator,
+		opts,
 		raw_csv->num_records,
 		raw_csv->num_actual_cols,
 		raw_csv->d_parseCol,
@@ -1106,6 +1204,7 @@ gdf_error launch_dataTypeDetection(
 		d_columnData
 	);
 
+	CUDA_TRY( cudaGetLastError() );
 	return GDF_SUCCESS;
 }
 
@@ -1113,8 +1212,7 @@ gdf_error launch_dataTypeDetection(
  */
 __global__ void dataTypeDetection(
 		char 			*raw_csv,
-		char 			delim,
-		char 			terminator,
+		const parsing_opts_t			opts,
 		unsigned long long  			num_records,
 		int  			num_columns,
 		bool  			*parseCol,
@@ -1142,7 +1240,7 @@ __global__ void dataTypeDetection(
 	long pos 		= start;
 	int  col 		= 0;
 	int  actual_col = 0;
-
+	bool quotation	= false;
 
 	// Going through all the columns of a given record
 	while(col<num_columns){
@@ -1152,18 +1250,25 @@ __global__ void dataTypeDetection(
 
 		// Finding the breaking point for each column
 		while(true){
-
-			if(raw_csv[pos]==delim){
-				break;
+			// Use simple logic to ignore control chars between any quote seq
+			// Handles nominal cases including doublequotes within quotes, but
+			// may not output exact failures as PANDAS for malformed fields
+			if(raw_csv[pos] == opts.quotechar){
+				quotation = !quotation;
 			}
-			else if (raw_csv[pos] == terminator){
-				break;
+			else if(quotation==false){
+				if(raw_csv[pos] == opts.delimiter){
+					break;
+				}
+				else if(raw_csv[pos] == opts.terminator){
+					break;
+				}
+				else if(raw_csv[pos] == '\r' && ((pos+1) < stop && raw_csv[pos+1] == '\n')){
+					stop--;
+					break;
+				}
 			}
-            else if(raw_csv[pos] == '\r' &&  ((pos+1) < stop && raw_csv[pos+1]=='\n')){
-            	stop--;
-                break;
-            }
-			if(pos>stop)
+			if(pos>=stop)
 				break;
 			pos++;
 		}
@@ -1222,7 +1327,7 @@ __global__ void dataTypeDetection(
 			else if(countNumber==(strLen) || ( strLen>1 && countNumber==(strLen-1) && raw_csv[start]=='-') ){
 				// Checking to see if we the integer value requires 8,16,32,64 bits.
 				// This will allow us to allocate the exact amount of memory.
-				int64_t i = convertStrtoInt<int64_t>(raw_csv, start, tempPos);
+				int64_t i = convertStrtoInt<int64_t>(raw_csv, start, tempPos, opts.thousands);
 				if(i >= (1L<<31)){
 					atomicAdd(& d_columnData[actual_col].countInt64, 1L);
 				}

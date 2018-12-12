@@ -36,7 +36,7 @@ typedef struct {
   /*
    * Input arguments - all data is in the host
    */
-  char			*file_path;					/**< file location to read from	- currently the file cannot be compressed 							*/
+  const char	*file_path;					/**< file location to read from	- currently the file cannot be compressed 							*/
   char			*buffer	;					// process data from a buffer,  pointer to Host memory
   char			*object	;					// this is a URL path
 
@@ -75,12 +75,13 @@ typedef struct {
   bool			dayfirst;					// is the first value the day?  DD/MM  versus MM/DD
 
   char			*compression;				// specify the type of compression
-  char			*thousands;					// single character		a separate within numeric data  - if this matches the delimiter then system will return NULL
+  char			*thousands;					/**<  pointer to a single character that separates thousands in numeric data. If this matches the delimiter then system will return GDF_INVALID_API_CALL */
 
-  char			decimal;					// the decimal point character
+  char			decimal;					/**< the decimal point character. If this matches the delimiter then system will return GDF_INVALID_API_CALL */
 
-  char			*quotechar;					// single character 	character to use as a quote
-  bool			doublequote;				// whether to treat two quotes as a quote in a string or empty
+  char			quotechar;					/**< define the character used to denote start and end of a quoted item								*/
+  bool			quoting;					/**< treat string fields as quoted item and remove the first and last quotechar						*/
+  bool			doublequote;				/**< indicates whether to interpret two consecutive quotechar inside a field as a single quotechar	*/
 
   char			escapechar;					// single char	- char used as the escape character
 
@@ -103,7 +104,6 @@ typedef struct {
  * keep_date_col	- will not maintain raw data
  * date_parser		- there is only this parser
  * float_precision	- there is only one converter that will cover all specified values
- * quoting			- this is for out
  * dialect			- not used
  *
  */

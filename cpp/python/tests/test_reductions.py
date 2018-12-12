@@ -38,7 +38,7 @@ def test_sum(dtype, nelem):
     libgdf.gdf_column_view(col_data, unwrap_devary(d_data), ffi.NULL, nelem,
                            gdf_dtype)
 
-    libgdf.gdf_sum_generic(col_data, unwrap_devary(d_result), d_result.size)
+    libgdf.gdf_sum(col_data, unwrap_devary(d_result), d_result.size)
     got = d_result.copy_to_host()[0]
     expect = dtype(data.sum())
 
@@ -70,8 +70,7 @@ def test_product(dtype, nelem):
     libgdf.gdf_column_view(col_data, unwrap_devary(d_data), ffi.NULL, nelem,
                            gdf_dtype)
 
-    libgdf.gdf_product_generic(col_data, unwrap_devary(d_result),
-                               d_result.size)
+    libgdf.gdf_product(col_data, unwrap_devary(d_result), d_result.size)
     got = d_result.copy_to_host()[0]
     expect = np.product(data)
 
@@ -96,7 +95,7 @@ def test_sum_masked(nelem):
     gdf_dtype = get_dtype(dtype)
     libgdf.gdf_column_view(col_data, unwrap_devary(d_data),
                            unwrap_devary(d_mask), nelem, gdf_dtype)
-    libgdf.gdf_sum_generic(col_data, unwrap_devary(d_result), d_result.size)
+    libgdf.gdf_sum(col_data, unwrap_devary(d_result), d_result.size)
 
     got = d_result.copy_to_host()[0]
     boolmask = buffer_as_bits(mask)[:nelem]
@@ -109,12 +108,10 @@ accuracy_for_dtype = {
     np.float64: 6,
     np.float32: 5
 }
-params_real_only = list(product([np.float64, np.float32], params_sizes))
 
 
-@pytest.mark.parametrize('dtype,nelem', params_real_only)
-def test_sum_squared(dtype, nelem):
-    decimal = accuracy_for_dtype[dtype]
+@pytest.mark.parametrize('dtype,nelem', params)
+def test_sum_of_squares(dtype, nelem):
     data = gen_rand(dtype, nelem)
     d_data = rmm.to_device(data)
     d_result = rmm.device_array(libgdf.gdf_reduce_optimal_output_size(),
@@ -126,15 +123,21 @@ def test_sum_squared(dtype, nelem):
     libgdf.gdf_column_view(col_data, unwrap_devary(d_data), ffi.NULL, nelem,
                            gdf_dtype)
 
-    libgdf.gdf_sum_squared_generic(col_data, unwrap_devary(d_result),
-                                   d_result.size)
+    libgdf.gdf_sum_of_squares(col_data, unwrap_devary(d_result), d_result.size)
     got = d_result.copy_to_host()[0]
     expect = (data ** 2).sum()
 
     print('expect:', expect)
     print('got:', got)
 
-    np.testing.assert_array_almost_equal(expect, got, decimal=decimal)
+    if np.dtype(dtype).kind == 'i':
+        if 0 <= expect <= np.iinfo(dtype).max:
+            np.testing.assert_array_almost_equal(expect, got)
+        else:
+            print('overflow, passing')
+    else:
+        np.testing.assert_array_almost_equal(expect, got,
+                                             decimal=accuracy_for_dtype[dtype])
 
 
 @pytest.mark.parametrize('dtype,nelem', params)
@@ -150,7 +153,7 @@ def test_min(dtype, nelem):
     libgdf.gdf_column_view(col_data, unwrap_devary(d_data), ffi.NULL, nelem,
                            gdf_dtype)
 
-    libgdf.gdf_min_generic(col_data, unwrap_devary(d_result), d_result.size)
+    libgdf.gdf_min(col_data, unwrap_devary(d_result), d_result.size)
     got = d_result.copy_to_host()[0]
     expect = data.min()
 
@@ -173,7 +176,7 @@ def test_max(dtype, nelem):
     libgdf.gdf_column_view(col_data, unwrap_devary(d_data), ffi.NULL, nelem,
                            gdf_dtype)
 
-    libgdf.gdf_max_generic(col_data, unwrap_devary(d_result), d_result.size)
+    libgdf.gdf_max(col_data, unwrap_devary(d_result), d_result.size)
     got = d_result.copy_to_host()[0]
     expect = data.max()
 

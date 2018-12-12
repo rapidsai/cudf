@@ -39,9 +39,6 @@
 //std lib
 #include <map>
 
-// thrust::device_vector set to use rmmAlloc and rmmFree.
-template <typename T>
-using Vector = thrust::device_vector<T, rmm_allocator<T>>;
 
 struct shift_left: public thrust::unary_function<gdf_valid_type,gdf_valid_type>
 {
@@ -160,9 +157,6 @@ gdf_error gpu_apply_stencil(gdf_column * col, gdf_column * stencil, gdf_column *
 	cudaStream_t stream;
 	cudaStreamCreate(&stream);
 
-	rmm_temp_allocator allocator(stream);
-	auto exec = thrust::cuda::par(allocator).on(stream);
-
 	size_t n_bytes = get_number_of_bytes_for_valid(stencil->size);
 
 	zipped_mask  zipped_mask_stencil_iter(
@@ -192,7 +186,7 @@ gdf_error gpu_apply_stencil(gdf_column * col, gdf_column * stencil, gdf_column *
 		gdf_size_type num_values = col->size;
 
 		//TODO:BRING OVER THE BITMASK!!!
-		Vector<gdf_valid_type> valid_bit_mask; //we are expanding the bit mask to an int8 because I can't envision an algorithm that operates on the bitmask that
+		rmm::device_vector<gdf_valid_type> valid_bit_mask; //we are expanding the bit mask to an int8 because I can't envision an algorithm that operates on the bitmask that
 		if(num_values % GDF_VALID_BITSIZE != 0){
 			valid_bit_mask.resize(num_values + (GDF_VALID_BITSIZE - (num_values % GDF_VALID_BITSIZE))); //align this allocation on GDF_VALID_BITSIZE so we don't have to bounds check
 		}else{
@@ -212,10 +206,10 @@ gdf_error gpu_apply_stencil(gdf_column * col, gdf_column * stencil, gdf_column *
 		);
 
 		//copy the bitmask to device_vector of int8
-		thrust::copy(exec, bit_set_col_iter, bit_set_col_iter + num_values, valid_bit_mask.begin());
+		thrust::copy(rmm::exec_policy(stream), bit_set_col_iter, bit_set_col_iter + num_values, valid_bit_mask.begin());
 
 		//remove the values that don't pass the stencil
-		thrust::copy_if(exec, valid_bit_mask.begin(), valid_bit_mask.begin() + num_values, zipped_stencil_iter, valid_bit_mask.begin(),
+		thrust::copy_if(rmm::exec_policy(stream), valid_bit_mask.begin(), valid_bit_mask.begin() + num_values, zipped_stencil_iter, valid_bit_mask.begin(),
 				is_stencil_true<thrust::detail::normal_iterator<thrust::device_ptr<int8_t>>::value_type>());
 
 		//recompact the values and store them in the output bitmask
@@ -225,7 +219,7 @@ gdf_error gpu_apply_stencil(gdf_column * col, gdf_column * stencil, gdf_column *
 
 		//you may notice that we can write out more bytes than our valid_num_bytes, this only happens when we are not aligned to  GDF_VALID_BITSIZE bytes, becasue the
 		//arrow standard requires 64 byte alignment, this is a safe assumption to make
-		thrust::transform(exec, valid_bit_mask_group_8_iter, valid_bit_mask_group_8_iter + ((num_values + GDF_VALID_BITSIZE - 1) / GDF_VALID_BITSIZE),
+		thrust::transform(rmm::exec_policy(stream), valid_bit_mask_group_8_iter, valid_bit_mask_group_8_iter + ((num_values + GDF_VALID_BITSIZE - 1) / GDF_VALID_BITSIZE),
 				thrust::detail::make_normal_iterator(thrust::device_pointer_cast(output->valid)),bit_mask_pack_op());
 	}
 
@@ -335,8 +329,8 @@ gdf_error gpu_concat(gdf_column *lhs, gdf_column *rhs, gdf_column *output)
 			thrust::copy( last_byte.begin(), last_byte.begin() + 1, output_device_bits + left_num_chars - 1);
 			
 			if(right_num_chars > 1)  {
-				using first_iterator_type = thrust::transform_iterator<shift_left,Vector<gdf_valid_type>::iterator>;
-				using second_iterator_type = thrust::transform_iterator<shift_right,Vector<gdf_valid_type>::iterator>;
+				using first_iterator_type = thrust::transform_iterator<shift_left,rmm::device_vector<gdf_valid_type>::iterator>;
+				using second_iterator_type = thrust::transform_iterator<shift_right,rmm::device_vector<gdf_valid_type>::iterator>;
 				using offset_tuple = thrust::tuple<first_iterator_type, second_iterator_type>;
 				using zipped_offset = thrust::zip_iterator<offset_tuple>;
 
@@ -351,11 +345,11 @@ gdf_error gpu_concat(gdf_column *lhs, gdf_column *rhs, gdf_column *output)
 				
 				zipped_offset  zipped_offset_iter(
 						thrust::make_tuple(
-								thrust::make_transform_iterator<shift_left, Vector<gdf_valid_type>::iterator >(
+								thrust::make_transform_iterator<shift_left, rmm::device_vector<gdf_valid_type>::iterator >(
 										right_device_bits,
 										shift_left(shift_bits)),
 								
-								thrust::make_transform_iterator<shift_right, Vector<gdf_valid_type>::iterator >(
+								thrust::make_transform_iterator<shift_right, rmm::device_vector<gdf_valid_type>::iterator >(
 										right_device_bits + 1,
 										shift_right(GDF_VALID_BITSIZE - shift_bits, !too_many_bits))
 						)	

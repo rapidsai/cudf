@@ -5,9 +5,17 @@
 #include "miscellany.hpp"
 
 #ifdef __CUDACC__
-__host__ __device__
+#define CUDA_HOST_DEVICE_CALLABLE __host__ __device__ __forceinline__
+#define CUDA_DEVICE_CALLABLE __device__ __forceinline__
+#define CUDA_LAUNCHABLE __global__
+#else
+#define CUDA_HOST_DEVICE_CALLABLE
+#define CUDA_DEVICE_CALLABLE
+#define CUDA_LAUNCHABLE
 #endif
-inline
+
+
+CUDA_HOST_DEVICE_CALLABLE 
 bool gdf_is_valid(const gdf_valid_type *valid, gdf_index_type pos) {
 	if ( valid )
 		return (valid[pos / GDF_VALID_BITSIZE] >> (pos % GDF_VALID_BITSIZE)) & 1;
@@ -15,9 +23,7 @@ bool gdf_is_valid(const gdf_valid_type *valid, gdf_index_type pos) {
 		return true;
 }
 
-#ifdef __CUDACC__
-__host__ __device__
-#endif
+
 /**
  * Calculates the size in bytes of a validity indicator pseudo-column for a given column's size.
  *
@@ -28,7 +34,7 @@ __host__ __device__
  * for use, in the column
  * @return the number of bytes necessary to make available for the validity indicator pseudo-column
  */
-inline
+CUDA_HOST_DEVICE_CALLABLE
 gdf_size_type get_number_of_bytes_for_valid(gdf_size_type column_size) {
     return gdf::util::div_rounding_up_safe(column_size, GDF_VALID_BITSIZE);
 }

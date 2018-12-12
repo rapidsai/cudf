@@ -19,9 +19,11 @@ def _wrap_string(text):
 
 
 def read_csv(filepath, lineterminator='\n',
+             quotechar='"', quoting=True, doublequote=True,
              delimiter=',', sep=None, delim_whitespace=False,
              skipinitialspace=False, names=None, dtype=None,
-             skipfooter=0, skiprows=0, dayfirst=False):
+             skipfooter=0, skiprows=0, dayfirst=False, thousands=None,
+             decimal='.'):
     """
     Load and parse a CSV file into a DataFrame
 
@@ -42,6 +44,14 @@ def read_csv(filepath, lineterminator='\n',
     dtype : list of str or dict of {col: dtype}, default None
         List of data types in the same order of the column names
         or a dictionary with column_name:dtype (pandas style).
+    quotechar : char, default '"'
+        Character to indicate start and end of quote item.
+    quoting : bool, default True
+        If True, start and end quotechar are removed from returned strings
+        If False, start and end quotechar are kept in returned strings
+    doublequote : bool, default True
+        When quotechar is specified and quoting is True, indicates whether to
+        interpret two consecutive quotechar inside fields as single quotechar
     skiprows : int, default 0
         Number of rows to be skipped from the start of file.
     skipfooter : int, default 0
@@ -106,14 +116,27 @@ def read_csv(filepath, lineterminator='\n',
     dtype_ptr = ffi.new('char*[]', arr_dtypes)
     csv_reader.dtype = dtype_ptr
 
+    if decimal == delimiter:
+        raise ValueError("decimal cannot be the same as delimiter")
+
+    if thousands == delimiter:
+        raise ValueError("thousands cannot be the same as delimiter")
+
     csv_reader.delimiter = delimiter.encode()
     csv_reader.lineterminator = lineterminator.encode()
+    csv_reader.quotechar = quotechar.encode()
+    csv_reader.quoting = quoting
+    csv_reader.doublequote = doublequote
     csv_reader.delim_whitespace = delim_whitespace
     csv_reader.skipinitialspace = skipinitialspace
     csv_reader.dayfirst = dayfirst
     csv_reader.num_cols = len(names)
     csv_reader.skiprows = skiprows
     csv_reader.skipfooter = skipfooter
+    csv_reader.decimal = decimal.encode()
+    csv_reader.thousands = ffi.NULL
+    if thousands:
+        csv_reader.thousands = ffi.new('char*', thousands.encode())
 
     # Call read_csv
     libgdf.read_csv(csv_reader)
@@ -143,12 +166,13 @@ def read_csv(filepath, lineterminator='\n',
 
 
 def read_csv_strings(filepath, lineterminator='\n',
+                     quotechar='"', quoting=True, doublequote=True,
                      delimiter=',', sep=None, delim_whitespace=False,
                      skipinitialspace=False, names=None, dtype=None,
                      skipfooter=0, skiprows=0, dayfirst=False):
 
     import nvstrings
-    from .series import Series
+    from cudf.dataframe.series import Series
 
     """
     **Experimental**: This function provided only as an alpha way of providing
@@ -231,6 +255,9 @@ def read_csv_strings(filepath, lineterminator='\n',
 
     csv_reader.delimiter = delimiter.encode()
     csv_reader.lineterminator = lineterminator.encode()
+    csv_reader.quotechar = quotechar.encode()
+    csv_reader.quoting = quoting
+    csv_reader.doublequote = doublequote
     csv_reader.delim_whitespace = delim_whitespace
     csv_reader.skipinitialspace = skipinitialspace
     csv_reader.dayfirst = dayfirst
