@@ -253,10 +253,10 @@ gdf_error read_csv(csv_read_arg *args)
 	if(raw_csv->quotechar != '\0') {
 		raw_csv->keepquotes = !args->quoting;
 		raw_csv->doublequote = args->doublequote;
-        } else {
- 	raw_csv->keepquotes = true;
- 	raw_csv->doublequote = false;
-        }
+	} else {
+	raw_csv->keepquotes = true;
+	raw_csv->doublequote = false;
+	}
 
 	raw_csv->dayfirst = args->dayfirst;
 	raw_csv->decimal = args->decimal;
@@ -832,22 +832,22 @@ gdf_error allocateGdfDataSpace(gdf_column *gdf) {
 gdf_error launch_countRecords(raw_csv_t * csvData) {
 
 	int blockSize;		// suggested thread count to use
- 	int minGridSize;	// minimum block count required
- 	CUDA_TRY( cudaOccupancyMaxPotentialBlockSize(&minGridSize, &blockSize, countRecords) );
+	int minGridSize;	// minimum block count required
+	CUDA_TRY( cudaOccupancyMaxPotentialBlockSize(&minGridSize, &blockSize, countRecords) );
 
 	// Calculate actual block count to use based on bitmap count
- 	// Each bitmap is for a 64-byte chunk, and each data index is bitmap ID * 64
- 	int gridSize = (csvData->num_bits + blockSize - 1) / blockSize;
+	// Each bitmap is for a 64-byte chunk, and each data index is bitmap ID * 64
+	int gridSize = (csvData->num_bits + blockSize - 1) / blockSize;
 
 	countRecords <<< gridSize, blockSize >>> (
- 		csvData->data, csvData->terminator, csvData->quotechar,
- 		csvData->num_bytes, csvData->num_bits, csvData->d_num_records
- 	);
+		csvData->data, csvData->terminator, csvData->quotechar,
+		csvData->num_bytes, csvData->num_bits, csvData->d_num_records
+	);
 
 	CUDA_TRY(cudaGetLastError());
 
 	long recs=-1;
-        CUDA_TRY(cudaMemcpy(&recs, csvData->d_num_records, sizeof(long), cudaMemcpyDeviceToHost));
+	CUDA_TRY(cudaMemcpy(&recs, csvData->d_num_records, sizeof(long), cudaMemcpyDeviceToHost));
 	csvData->num_records=recs;
 
 	CUDA_TRY(cudaGetLastError());
@@ -892,20 +892,20 @@ __global__ void countRecords(char *data, const char terminator, const char quote
 gdf_error launch_storeRecordStart(raw_csv_t * csvData) {
 
 	int blockSize;		// suggested thread count to use
- 	int minGridSize;	// minimum block count required
- 	CUDA_TRY( cudaOccupancyMaxPotentialBlockSize(&minGridSize, &blockSize, storeRecordStart) );
+	int minGridSize;	// minimum block count required
+	CUDA_TRY( cudaOccupancyMaxPotentialBlockSize(&minGridSize, &blockSize, storeRecordStart) );
 
 	// Calculate actual block count to use based on bitmap count
- 	// Each bitmap is for a 64-byte chunk, and each data index is bitmap ID * 64
- 	int gridSize = (csvData->num_bits + blockSize - 1) / blockSize;
+	// Each bitmap is for a 64-byte chunk, and each data index is bitmap ID * 64
+	int gridSize = (csvData->num_bits + blockSize - 1) / blockSize;
 
 	storeRecordStart <<< gridSize, blockSize >>> (
- 		csvData->data, csvData->terminator, csvData->quotechar,
- 		csvData->num_bytes, csvData->num_bits, csvData->d_num_records,
- 		csvData->recStart
- 	);
+		csvData->data, csvData->terminator, csvData->quotechar,
+		csvData->num_bytes, csvData->num_bits, csvData->d_num_records,
+		csvData->recStart
+	);
 
- 	CUDA_TRY( cudaGetLastError());
+	CUDA_TRY( cudaGetLastError() );
 
 	return GDF_SUCCESS;
 }
@@ -958,11 +958,11 @@ __global__ void storeRecordStart(char *data, const char terminator, const char q
 gdf_error launch_dataConvertColumns(raw_csv_t *raw_csv, void **gdf, gdf_valid_type** valid, gdf_dtype* d_dtypes,string_pair **str_cols, long row_offset, unsigned long long *num_valid) {
 
 	int blockSize;		// suggested thread count to use
- 	int minGridSize;	// minimum block count required
- 	CUDA_TRY( cudaOccupancyMaxPotentialBlockSize(&minGridSize, &blockSize, convertCsvToGdf) );
+	int minGridSize;	// minimum block count required
+	CUDA_TRY( cudaOccupancyMaxPotentialBlockSize(&minGridSize, &blockSize, convertCsvToGdf) );
 
- 	// Calculate actual block count to use based on records count
- 	int gridSize = (raw_csv->num_records + blockSize - 1) / blockSize;
+	// Calculate actual block count to use based on records count
+	int gridSize = (raw_csv->num_records + blockSize - 1) / blockSize;
 
 	parsing_opts_t opts;
 	opts.delimiter		= raw_csv->delimiter;
@@ -989,7 +989,7 @@ gdf_error launch_dataConvertColumns(raw_csv_t *raw_csv, void **gdf, gdf_valid_ty
 		num_valid
 	);
 
-	CUDA_TRY( cudaGetLastError());
+	CUDA_TRY( cudaGetLastError() );
 	return GDF_SUCCESS;
 }
 
@@ -1185,11 +1185,11 @@ gdf_error launch_dataTypeDetection(
 	column_data_t* d_columnData) 
 {
 	int blockSize;		// suggested thread count to use
- 	int minGridSize;	// minimum block count required
- 	CUDA_TRY( cudaOccupancyMaxPotentialBlockSize(&minGridSize, &blockSize, dataTypeDetection) );
+	int minGridSize;	// minimum block count required
+	CUDA_TRY( cudaOccupancyMaxPotentialBlockSize(&minGridSize, &blockSize, dataTypeDetection) );
 
- 	// Calculate actual block count to use based on records count
- 	int gridSize = (raw_csv->num_records + blockSize - 1) / blockSize;
+	// Calculate actual block count to use based on records count
+	int gridSize = (raw_csv->num_records + blockSize - 1) / blockSize;
 
 	parsing_opts_t opts;
 	opts.delimiter		= raw_csv->delimiter;
@@ -1209,7 +1209,7 @@ gdf_error launch_dataTypeDetection(
 		d_columnData
 	);
 
-	CUDA_TRY( cudaGetLastError());
+	CUDA_TRY( cudaGetLastError() );
 	return GDF_SUCCESS;
 }
 
