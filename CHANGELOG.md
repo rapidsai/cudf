@@ -1,3 +1,9 @@
+# cuDF 0.5.0 (TBD)
+
+## Bug Fixes
+
+ - PR #510 Enable deep and shallow copying
+
 # cuDF 0.4.0 (05 Dec 2018)
 
 ## New Features
