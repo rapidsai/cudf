@@ -36,9 +36,6 @@
 #include <utilities/cudf_utils.h>
 #include <rmm/thrust_rmm_allocator.h>
 
-// Vector set to use rmmAlloc and rmmFree.
-template <typename T>
-using Vector = thrust::device_vector<T, rmm_allocator<T>>;
 
 struct gdf_cast_test : public GdfTest {};
 
@@ -91,8 +88,8 @@ TEST_F(gdf_cast_test, usage_example) {
 	int colSize = 3;
 
 	// Input column for int32
-	Vector<int32_t> inputInt32DataDev(inputInt32Data);
-	Vector<gdf_valid_type> inputInt32ValidDev(1,255);
+	rmm::device_vector<int32_t> inputInt32DataDev(inputInt32Data);
+	rmm::device_vector<gdf_valid_type> inputInt32ValidDev(1,255);
 
 	gdf_column inputInt32Col;
 	inputInt32Col.dtype = GDF_INT32;
@@ -102,8 +99,8 @@ TEST_F(gdf_cast_test, usage_example) {
 	inputInt32Col.valid = thrust::raw_pointer_cast(inputInt32ValidDev.data());
 
 	// Input column for float32
-	Vector<float> inputFloat32DataDev(inputFloat32Data);
-	Vector<gdf_valid_type> inputFloat32ValidDev(1,255);
+	rmm::device_vector<float> inputFloat32DataDev(inputFloat32Data);
+	rmm::device_vector<gdf_valid_type> inputFloat32ValidDev(1,255);
 
 	gdf_column inputFloat32Col;
 	inputFloat32Col.dtype = GDF_FLOAT32;
@@ -113,8 +110,8 @@ TEST_F(gdf_cast_test, usage_example) {
 	inputFloat32Col.valid = thrust::raw_pointer_cast(inputFloat32ValidDev.data());
 
 	// Input column for int64
-	Vector<int64_t> inputInt64DataDev(inputInt64Data);
-	Vector<gdf_valid_type> inputInt64ValidDev(1,255);
+	rmm::device_vector<int64_t> inputInt64DataDev(inputInt64Data);
+	rmm::device_vector<gdf_valid_type> inputInt64ValidDev(1,255);
 
 	gdf_column inputInt64Col;
 	inputInt64Col.dtype = GDF_INT64;
@@ -124,8 +121,8 @@ TEST_F(gdf_cast_test, usage_example) {
 	inputInt64Col.valid = thrust::raw_pointer_cast(inputInt64ValidDev.data());
 
 	// Input column for date32
-	Vector<int32_t> inputDate32DataDev(inputDate32Data);
-	Vector<gdf_valid_type> inputDate32ValidDev(1,255);
+	rmm::device_vector<int32_t> inputDate32DataDev(inputDate32Data);
+	rmm::device_vector<gdf_valid_type> inputDate32ValidDev(1,255);
 
 	gdf_column inputDate32Col;
 	inputDate32Col.dtype = GDF_DATE32;
@@ -135,8 +132,8 @@ TEST_F(gdf_cast_test, usage_example) {
 	inputDate32Col.valid = thrust::raw_pointer_cast(inputDate32ValidDev.data());
 
 	// Input column for date64
-	Vector<int64_t> inputDate64DataDev(inputDate64Data);
-	Vector<gdf_valid_type> inputDate64ValidDev(1,255);
+	rmm::device_vector<int64_t> inputDate64DataDev(inputDate64Data);
+	rmm::device_vector<gdf_valid_type> inputDate64ValidDev(1,255);
 
 	gdf_column inputDate64Col;
 	inputDate64Col.dtype = GDF_DATE64;
@@ -146,8 +143,8 @@ TEST_F(gdf_cast_test, usage_example) {
 	inputDate64Col.valid = thrust::raw_pointer_cast(inputDate64ValidDev.data());
 
 	// Input column for timestamp in ms
-	Vector<int64_t> inputTimestampMilliDataDev(inputTimestampMilliData);
-	Vector<gdf_valid_type> inputTimestampMilliValidDev(1,255);
+	rmm::device_vector<int64_t> inputTimestampMilliDataDev(inputTimestampMilliData);
+	rmm::device_vector<gdf_valid_type> inputTimestampMilliValidDev(1,255);
 
 	gdf_column inputTimestampMilliCol;
 	inputTimestampMilliCol.dtype = GDF_TIMESTAMP;
@@ -162,8 +159,8 @@ TEST_F(gdf_cast_test, usage_example) {
 	// example for gdf_error gdf_cast_generic_to_f32(gdf_column *input, gdf_column *output)
 	{
 		// Output column
-		Vector<float> outDataDev(colSize);
-		Vector<gdf_valid_type> outValidDev(1,0);
+		rmm::device_vector<float> outDataDev(colSize);
+		rmm::device_vector<gdf_valid_type> outValidDev(1,0);
 
 		gdf_column outputFloat32Col;
 		outputFloat32Col.dtype = GDF_FLOAT32;
@@ -189,8 +186,8 @@ TEST_F(gdf_cast_test, usage_example) {
 	// example for gdf_error gdf_cast_generic_to_i32(gdf_column *input, gdf_column *output);
 	{
 		// Output column
-		Vector<int32_t> outDataDev(colSize);
-		Vector<gdf_valid_type> outValidDev(1,0);
+		rmm::device_vector<int32_t> outDataDev(colSize);
+		rmm::device_vector<gdf_valid_type> outValidDev(1,0);
 
 		gdf_column outputInt32Col;
 		outputInt32Col.dtype = GDF_INT32;
@@ -216,8 +213,8 @@ TEST_F(gdf_cast_test, usage_example) {
 	// example for gdf_error gdf_cast_generic_to_i64(gdf_column *input, gdf_column *output) - upcast
 	{
 		// Output column
-		Vector<int64_t> outDataDev(colSize);
-		Vector<gdf_valid_type> outValidDev(1,0);
+		rmm::device_vector<int64_t> outDataDev(colSize);
+		rmm::device_vector<gdf_valid_type> outValidDev(1,0);
 
 		gdf_column outputInt64Col;
 		outputInt64Col.dtype = GDF_INT64;
@@ -243,8 +240,8 @@ TEST_F(gdf_cast_test, usage_example) {
 	// example for gdf_error gdf_cast_generic_to_i32(gdf_column *input, gdf_column *output) - downcast
 	{
 		// Output column
-		Vector<int32_t> outDataDev(colSize);
-		Vector<gdf_valid_type> outValidDev(1,0);
+		rmm::device_vector<int32_t> outDataDev(colSize);
+		rmm::device_vector<gdf_valid_type> outValidDev(1,0);
 
 		gdf_column outputInt32Col;
 		outputInt32Col.dtype = GDF_INT32;
@@ -270,8 +267,8 @@ TEST_F(gdf_cast_test, usage_example) {
 	// example for gdf_error gdf_cast_generic_to_i32(gdf_column *input, gdf_column *output)
 	{
 		// Output column
-		Vector<int32_t> outDataDev(colSize);
-		Vector<gdf_valid_type> outValidDev(1,0);
+		rmm::device_vector<int32_t> outDataDev(colSize);
+		rmm::device_vector<gdf_valid_type> outValidDev(1,0);
 
 		gdf_column outputInt32Col;
 		outputInt32Col.dtype = GDF_INT32;
@@ -297,8 +294,8 @@ TEST_F(gdf_cast_test, usage_example) {
 	// example for gdf_error gdf_cast_generic_to_date32(gdf_column *input, gdf_column *output)
 	{
 		// Output column
-		Vector<int32_t> outDataDev(colSize);
-		Vector<gdf_valid_type> outValidDev(1,0);
+		rmm::device_vector<int32_t> outDataDev(colSize);
+		rmm::device_vector<gdf_valid_type> outValidDev(1,0);
 
 		gdf_column outputDate32Col;
 		outputDate32Col.dtype = GDF_DATE32;
@@ -324,8 +321,8 @@ TEST_F(gdf_cast_test, usage_example) {
 	// example for gdf_error gdf_cast_generic_to_timestamp(gdf_column *input, gdf_column *output, gdf_time_unit time_unit)
 	{
 		// Output column
-		Vector<int64_t> outDataDev(colSize);
-		Vector<gdf_valid_type> outValidDev(1,0);
+		rmm::device_vector<int64_t> outDataDev(colSize);
+		rmm::device_vector<gdf_valid_type> outValidDev(1,0);
 
 		gdf_column outputTimestampMicroCol;
 		outputTimestampMicroCol.dtype = GDF_TIMESTAMP;
@@ -351,8 +348,8 @@ TEST_F(gdf_cast_test, usage_example) {
 	// example for gdf_error gdf_cast_generic_to_date32(gdf_column *input, gdf_column *output)
 	{
 		// Output column
-		Vector<int32_t> outDataDev(colSize);
-		Vector<gdf_valid_type> outValidDev(1,0);
+		rmm::device_vector<int32_t> outDataDev(colSize);
+		rmm::device_vector<gdf_valid_type> outValidDev(1,0);
 
 		gdf_column outputDate32Col;
 		outputDate32Col.dtype = GDF_DATE32;
@@ -458,8 +455,8 @@ gdf_error gdf_host_cast_##VFROM##_to_##VTO(gdf_column *input, gdf_column *output
 		std::vector<TFROM> inputData(colSize);									\
 		fill_with_random_values<TTO, TFROM>(inputData, colSize);				\
 																				\
-		Vector<TFROM> inputDataDev(inputData);					\
-		Vector<TTO> outputDataDev(colSize);						\
+		rmm::device_vector<TFROM> inputDataDev(inputData);					\
+		rmm::device_vector<TTO> outputDataDev(colSize);						\
 																				\
 		inputCol.data = thrust::raw_pointer_cast(inputDataDev.data());			\
 		inputCol.valid = nullptr;												\
@@ -537,9 +534,9 @@ struct gdf_cast_swap_TEST : public GdfTest {};
 		std::vector<TFROM> inputData(colSize);									\
 		fill_with_random_values<TTO, TFROM>(inputData, colSize);				\
 																				\
-		Vector<TFROM> inputDataDev(inputData);					\
-		Vector<TTO> outputDataDev(colSize);						\
-		Vector<TFROM> origOutputDataDev(colSize);				\
+		rmm::device_vector<TFROM> inputDataDev(inputData);					\
+		rmm::device_vector<TTO> outputDataDev(colSize);						\
+		rmm::device_vector<TFROM> origOutputDataDev(colSize);				\
 																				\
 		inputCol.data = thrust::raw_pointer_cast(inputDataDev.data());			\
 		inputCol.valid = nullptr;												\
@@ -583,9 +580,9 @@ struct gdf_cast_swap_TEST : public GdfTest {};
 		std::vector<TFROM> inputData(colSize);									\
 		fill_with_random_values<int64_t, TFROM>(inputData, colSize);				\
 																				\
-		Vector<TFROM> inputDataDev(inputData);					\
-		Vector<int64_t> outputDataDev(colSize);						\
-		Vector<TFROM> origOutputDataDev(colSize);				\
+		rmm::device_vector<TFROM> inputDataDev(inputData);					\
+		rmm::device_vector<int64_t> outputDataDev(colSize);						\
+		rmm::device_vector<TFROM> origOutputDataDev(colSize);				\
 																				\
 		inputCol.data = thrust::raw_pointer_cast(inputDataDev.data());			\
 		inputCol.valid = nullptr;												\
@@ -655,8 +652,8 @@ TEST_F(gdf_unaryops_output_valid_TEST, checkingValidAndDtype) {
 		std::vector<float> inputData(colSize);
 		fill_with_random_values<double, float>(inputData, colSize);
 
-		Vector<float> inputDataDev(inputData);
-		Vector<double> outputDataDev(colSize);
+		rmm::device_vector<float> inputDataDev(inputData);
+		rmm::device_vector<double> outputDataDev(colSize);
 
 		inputCol.data = thrust::raw_pointer_cast(inputDataDev.data());
 		inputCol.valid = nullptr;
@@ -682,12 +679,12 @@ TEST_F(gdf_unaryops_output_valid_TEST, checkingValidAndDtype) {
 		std::vector<float> inputData(colSize);
 		fill_with_random_values<float, float>(inputData, colSize);
 
-		Vector<float> inputDataDev(inputData);
-		Vector<float> outputDataDev(colSize);
+		rmm::device_vector<float> inputDataDev(inputData);
+		rmm::device_vector<float> outputDataDev(colSize);
 
 		gdf_size_type num_chars_bitmask = gdf_get_num_chars_bitmask(inputCol.size);
-		Vector<gdf_valid_type> inputValidDev(num_chars_bitmask);
-		Vector<gdf_valid_type> outputValidDev(num_chars_bitmask);
+		rmm::device_vector<gdf_valid_type> inputValidDev(num_chars_bitmask);
+		rmm::device_vector<gdf_valid_type> outputValidDev(num_chars_bitmask);
 
 		thrust::transform(thrust::make_counting_iterator(static_cast<gdf_size_type>(0)), thrust::make_counting_iterator(num_chars_bitmask), inputValidDev.begin(), generateValidRandom());
 
@@ -719,12 +716,12 @@ TEST_F(gdf_unaryops_output_valid_TEST, checkingValidAndDtype) {
 		std::vector<float> inputData(colSize);
 		fill_with_random_values<float, float>(inputData, colSize);
 
-		Vector<float> inputDataDev(inputData);
-		Vector<float> outputDataDev(colSize);
+		rmm::device_vector<float> inputDataDev(inputData);
+		rmm::device_vector<float> outputDataDev(colSize);
 
 		gdf_size_type num_chars_bitmask = gdf_get_num_chars_bitmask(inputCol.size);
-		Vector<gdf_valid_type> inputValidDev(num_chars_bitmask);
-		Vector<gdf_valid_type> outputValidDev(num_chars_bitmask);
+		rmm::device_vector<gdf_valid_type> inputValidDev(num_chars_bitmask);
+		rmm::device_vector<gdf_valid_type> outputValidDev(num_chars_bitmask);
 
 		thrust::transform(thrust::make_counting_iterator(static_cast<gdf_size_type>(0)), thrust::make_counting_iterator(num_chars_bitmask), inputValidDev.begin(), generateValidRandom());
 
@@ -788,10 +785,10 @@ TEST_F(gdf_date_casting_TEST, date32_to_date64) {
 			-4870713600000  // '1815-08-28 00:00:00.000'
 		};
 
-		Vector<int32_t> inputDataDev(inputData);
-		Vector<gdf_valid_type> inputValidDev(1,255);
-		Vector<int64_t> outputDataDev(colSize);
-		Vector<gdf_valid_type> outputValidDev(1,255);
+		rmm::device_vector<int32_t> inputDataDev(inputData);
+		rmm::device_vector<gdf_valid_type> inputValidDev(1,255);
+		rmm::device_vector<int64_t> outputDataDev(colSize);
+		rmm::device_vector<gdf_valid_type> outputValidDev(1,255);
 
 		inputCol.data = thrust::raw_pointer_cast(inputDataDev.data());
 		inputCol.valid = thrust::raw_pointer_cast(inputValidDev.data());
@@ -893,14 +890,14 @@ TEST_F(gdf_date_casting_TEST, date32_to_date64) {
 			22294	// '2031-01-15'
 		};
 
-		Vector<int64_t> inputDataDev(inputData);
-		Vector<gdf_valid_type> inputValidDev(4);
+		rmm::device_vector<int64_t> inputDataDev(inputData);
+		rmm::device_vector<gdf_valid_type> inputValidDev(4);
 		inputValidDev[0] = 255;
 		inputValidDev[1] = 255;
 		inputValidDev[2] = 255;
 		inputValidDev[3] = 63;
-		Vector<int32_t> outputDataDev(colSize);
-		Vector<gdf_valid_type> outputValidDev(4);
+		rmm::device_vector<int32_t> outputDataDev(colSize);
+		rmm::device_vector<gdf_valid_type> outputValidDev(4);
 
 		inputCol.data = thrust::raw_pointer_cast(inputDataDev.data());
 		inputCol.valid = thrust::raw_pointer_cast(inputValidDev.data());
@@ -960,10 +957,10 @@ TEST_F(gdf_date_casting_TEST, date32_to_date64_over_valid_bitmask) {
 			0 // no operation
 		};
 
-		Vector<int32_t> inputDataDev(inputData);
-		Vector<gdf_valid_type> inputValidDev(1,85); //01010101
-		Vector<int64_t> outputDataDev(colSize, 0);
-		Vector<gdf_valid_type> outputValidDev(1,255);
+		rmm::device_vector<int32_t> inputDataDev(inputData);
+		rmm::device_vector<gdf_valid_type> inputValidDev(1,85); //01010101
+		rmm::device_vector<int64_t> outputDataDev(colSize, 0);
+		rmm::device_vector<gdf_valid_type> outputValidDev(1,255);
 
 		inputCol.data = thrust::raw_pointer_cast(inputDataDev.data());
 		inputCol.valid = thrust::raw_pointer_cast(inputValidDev.data());
@@ -1023,10 +1020,10 @@ TEST_F(gdf_date_casting_TEST, date32_to_timestamp) {
 			-4870713600  // '1815-08-28 00:00:00'
 		};
 
-		Vector<int32_t> inputDataDev(inputData);
-		Vector<gdf_valid_type> inputValidDev(1,255);
-		Vector<int64_t> outputDataDev(colSize);
-		Vector<gdf_valid_type> outputValidDev(1,255);
+		rmm::device_vector<int32_t> inputDataDev(inputData);
+		rmm::device_vector<gdf_valid_type> inputValidDev(1,255);
+		rmm::device_vector<int64_t> outputDataDev(colSize);
+		rmm::device_vector<gdf_valid_type> outputValidDev(1,255);
 
 		inputCol.data = thrust::raw_pointer_cast(inputDataDev.data());
 		inputCol.valid = thrust::raw_pointer_cast(inputValidDev.data());
@@ -1085,10 +1082,10 @@ TEST_F(gdf_date_casting_TEST, date32_to_timestamp) {
 			-56374  // '1815-08-28
 		};
 
-		Vector<int64_t> inputDataDev(inputData);
-		Vector<gdf_valid_type> inputValidDev(1,255);
-		Vector<int32_t> outputDataDev(colSize);
-		Vector<gdf_valid_type> outputValidDev(1,255);
+		rmm::device_vector<int64_t> inputDataDev(inputData);
+		rmm::device_vector<gdf_valid_type> inputValidDev(1,255);
+		rmm::device_vector<int32_t> outputDataDev(colSize);
+		rmm::device_vector<gdf_valid_type> outputValidDev(1,255);
 
 		inputCol.data = thrust::raw_pointer_cast(inputDataDev.data());
 		inputCol.valid = thrust::raw_pointer_cast(inputValidDev.data());
@@ -1145,10 +1142,10 @@ TEST_F(gdf_date_casting_TEST, date32_to_timestamp) {
 			-4870713600000  // '1815-08-28 00:00:00.000'
 		};
 
-		Vector<int32_t> inputDataDev(inputData);
-		Vector<gdf_valid_type> inputValidDev(1,255);
-		Vector<int64_t> outputDataDev(colSize);
-		Vector<gdf_valid_type> outputValidDev(1,255);
+		rmm::device_vector<int32_t> inputDataDev(inputData);
+		rmm::device_vector<gdf_valid_type> inputValidDev(1,255);
+		rmm::device_vector<int64_t> outputDataDev(colSize);
+		rmm::device_vector<gdf_valid_type> outputValidDev(1,255);
 
 		inputCol.data = thrust::raw_pointer_cast(inputDataDev.data());
 		inputCol.valid = thrust::raw_pointer_cast(inputValidDev.data());
@@ -1207,10 +1204,10 @@ TEST_F(gdf_date_casting_TEST, date32_to_timestamp) {
 			-56374  // '1815-08-28
 		};
 
-		Vector<int64_t> inputDataDev(inputData);
-		Vector<gdf_valid_type> inputValidDev(1,255);
-		Vector<int32_t> outputDataDev(colSize);
-		Vector<gdf_valid_type> outputValidDev(1,255);
+		rmm::device_vector<int64_t> inputDataDev(inputData);
+		rmm::device_vector<gdf_valid_type> inputValidDev(1,255);
+		rmm::device_vector<int32_t> outputDataDev(colSize);
+		rmm::device_vector<gdf_valid_type> outputValidDev(1,255);
 
 		inputCol.data = thrust::raw_pointer_cast(inputDataDev.data());
 		inputCol.valid = thrust::raw_pointer_cast(inputValidDev.data());
@@ -1267,10 +1264,10 @@ TEST_F(gdf_date_casting_TEST, date32_to_timestamp) {
 			-4870713600000000000	// '1815-08-28 00:00:00.000000000'
 		};
 
-		Vector<int32_t> inputDataDev(inputData);
-		Vector<gdf_valid_type> inputValidDev(1,255);
-		Vector<int64_t> outputDataDev(colSize);
-		Vector<gdf_valid_type> outputValidDev(1,255);
+		rmm::device_vector<int32_t> inputDataDev(inputData);
+		rmm::device_vector<gdf_valid_type> inputValidDev(1,255);
+		rmm::device_vector<int64_t> outputDataDev(colSize);
+		rmm::device_vector<gdf_valid_type> outputValidDev(1,255);
 
 		inputCol.data = thrust::raw_pointer_cast(inputDataDev.data());
 		inputCol.valid = thrust::raw_pointer_cast(inputValidDev.data());
@@ -1329,10 +1326,10 @@ TEST_F(gdf_date_casting_TEST, date32_to_timestamp) {
 			-56374  // '1815-08-28
 		};
 
-		Vector<int64_t> inputDataDev(inputData);
-		Vector<gdf_valid_type> inputValidDev(1,255);
-		Vector<int32_t> outputDataDev(colSize);
-		Vector<gdf_valid_type> outputValidDev(1,255);
+		rmm::device_vector<int64_t> inputDataDev(inputData);
+		rmm::device_vector<gdf_valid_type> inputValidDev(1,255);
+		rmm::device_vector<int32_t> outputDataDev(colSize);
+		rmm::device_vector<gdf_valid_type> outputValidDev(1,255);
 
 		inputCol.data = thrust::raw_pointer_cast(inputDataDev.data());
 		inputCol.valid = thrust::raw_pointer_cast(inputValidDev.data());
@@ -1389,10 +1386,10 @@ TEST_F(gdf_date_casting_TEST, date32_to_timestamp) {
 			-4870713600000000  // '1815-08-28 00:00:00.000000'
 		};
 
-		Vector<int32_t> inputDataDev(inputData);
-		Vector<gdf_valid_type> inputValidDev(1,255);
-		Vector<int64_t> outputDataDev(colSize);
-		Vector<gdf_valid_type> outputValidDev(1,255);
+		rmm::device_vector<int32_t> inputDataDev(inputData);
+		rmm::device_vector<gdf_valid_type> inputValidDev(1,255);
+		rmm::device_vector<int64_t> outputDataDev(colSize);
+		rmm::device_vector<gdf_valid_type> outputValidDev(1,255);
 
 		inputCol.data = thrust::raw_pointer_cast(inputDataDev.data());
 		inputCol.valid = thrust::raw_pointer_cast(inputValidDev.data());
@@ -1451,10 +1448,10 @@ TEST_F(gdf_date_casting_TEST, date32_to_timestamp) {
 			-56374  // '1815-08-28
 		};
 
-		Vector<int64_t> inputDataDev(inputData);
-		Vector<gdf_valid_type> inputValidDev(1,255);
-		Vector<int32_t> outputDataDev(colSize);
-		Vector<gdf_valid_type> outputValidDev(1,255);
+		rmm::device_vector<int64_t> inputDataDev(inputData);
+		rmm::device_vector<gdf_valid_type> inputValidDev(1,255);
+		rmm::device_vector<int32_t> outputDataDev(colSize);
+		rmm::device_vector<gdf_valid_type> outputValidDev(1,255);
 
 		inputCol.data = thrust::raw_pointer_cast(inputDataDev.data());
 		inputCol.valid = thrust::raw_pointer_cast(inputValidDev.data());
@@ -1528,14 +1525,14 @@ TEST_F(gdf_date_casting_TEST, date64_to_timestamp) {
 
 		std::vector<int64_t> outputData(colSize);
 
-		Vector<int64_t> inputDataDev(inputData);
-		Vector<gdf_valid_type> inputValidDev(4);
+		rmm::device_vector<int64_t> inputDataDev(inputData);
+		rmm::device_vector<gdf_valid_type> inputValidDev(4);
 		inputValidDev[0] = 255;
 		inputValidDev[1] = 255;
 		inputValidDev[2] = 255;
 		inputValidDev[3] = 63;
-		Vector<int64_t> outputDataDev(colSize);
-		Vector<gdf_valid_type> outputValidDev(4);
+		rmm::device_vector<int64_t> outputDataDev(colSize);
+		rmm::device_vector<gdf_valid_type> outputValidDev(4);
 
 		inputCol.data = thrust::raw_pointer_cast(inputDataDev.data());
 		inputCol.valid = thrust::raw_pointer_cast(inputValidDev.data());
@@ -1608,14 +1605,14 @@ TEST_F(gdf_date_casting_TEST, date64_to_timestamp) {
 
 		std::vector<int64_t> outputData(colSize);
 
-		Vector<int64_t> inputDataDev(inputData);
-		Vector<gdf_valid_type> inputValidDev(4);
+		rmm::device_vector<int64_t> inputDataDev(inputData);
+		rmm::device_vector<gdf_valid_type> inputValidDev(4);
 		inputValidDev[0] = 255;
 		inputValidDev[1] = 255;
 		inputValidDev[2] = 255;
 		inputValidDev[3] = 63;
-		Vector<int64_t> outputDataDev(colSize);
-		Vector<gdf_valid_type> outputValidDev(4);
+		rmm::device_vector<int64_t> outputDataDev(colSize);
+		rmm::device_vector<gdf_valid_type> outputValidDev(4);
 
 		inputCol.data = thrust::raw_pointer_cast(inputDataDev.data());
 		inputCol.valid = thrust::raw_pointer_cast(inputValidDev.data());
@@ -1672,10 +1669,10 @@ TEST_F(gdf_date_casting_TEST, date64_to_timestamp) {
 			-4870653059,  // '1815-08-28 16:49:01'
 		};
 
-		Vector<int64_t> inputDataDev(inputData);
-		Vector<gdf_valid_type> inputValidDev(1,255);
-		Vector<int64_t> outputDataDev(colSize);
-		Vector<gdf_valid_type> outputValidDev(1,255);
+		rmm::device_vector<int64_t> inputDataDev(inputData);
+		rmm::device_vector<gdf_valid_type> inputValidDev(1,255);
+		rmm::device_vector<int64_t> outputDataDev(colSize);
+		rmm::device_vector<gdf_valid_type> outputValidDev(1,255);
 
 		inputCol.data = thrust::raw_pointer_cast(inputDataDev.data());
 		inputCol.valid = thrust::raw_pointer_cast(inputValidDev.data());
@@ -1734,10 +1731,10 @@ TEST_F(gdf_date_casting_TEST, date64_to_timestamp) {
 			-4870653059000,  // '1815-08-28 16:49:01.000
 		};
 
-		Vector<int64_t> inputDataDev(inputData);
-		Vector<gdf_valid_type> inputValidDev(1,255);
-		Vector<int64_t> outputDataDev(colSize);
-		Vector<gdf_valid_type> outputValidDev(1,255);
+		rmm::device_vector<int64_t> inputDataDev(inputData);
+		rmm::device_vector<gdf_valid_type> inputValidDev(1,255);
+		rmm::device_vector<int64_t> outputDataDev(colSize);
+		rmm::device_vector<gdf_valid_type> outputValidDev(1,255);
 
 		inputCol.data = thrust::raw_pointer_cast(inputDataDev.data());
 		inputCol.valid = thrust::raw_pointer_cast(inputValidDev.data());
@@ -1794,10 +1791,10 @@ TEST_F(gdf_date_casting_TEST, date64_to_timestamp) {
 			-4870653058987000,  // '1815-08-28 16:49:01.013000'
 		};
 
-		Vector<int64_t> inputDataDev(inputData);
-		Vector<gdf_valid_type> inputValidDev(1,255);
-		Vector<int64_t> outputDataDev(colSize);
-		Vector<gdf_valid_type> outputValidDev(1,255);
+		rmm::device_vector<int64_t> inputDataDev(inputData);
+		rmm::device_vector<gdf_valid_type> inputValidDev(1,255);
+		rmm::device_vector<int64_t> outputDataDev(colSize);
+		rmm::device_vector<gdf_valid_type> outputValidDev(1,255);
 
 		inputCol.data = thrust::raw_pointer_cast(inputDataDev.data());
 		inputCol.valid = thrust::raw_pointer_cast(inputValidDev.data());
@@ -1856,10 +1853,10 @@ TEST_F(gdf_date_casting_TEST, date64_to_timestamp) {
 			-4870653058988,  // '1815-08-28 16:49:01.012'
 		};
 
-		Vector<int64_t> inputDataDev(inputData);
-		Vector<gdf_valid_type> inputValidDev(1,255);
-		Vector<int64_t> outputDataDev(colSize);
-		Vector<gdf_valid_type> outputValidDev(1,255);
+		rmm::device_vector<int64_t> inputDataDev(inputData);
+		rmm::device_vector<gdf_valid_type> inputValidDev(1,255);
+		rmm::device_vector<int64_t> outputDataDev(colSize);
+		rmm::device_vector<gdf_valid_type> outputValidDev(1,255);
 
 		inputCol.data = thrust::raw_pointer_cast(inputDataDev.data());
 		inputCol.valid = thrust::raw_pointer_cast(inputValidDev.data());
@@ -1916,10 +1913,10 @@ TEST_F(gdf_date_casting_TEST, date64_to_timestamp) {
 			-4870653058987000000,  // '1815-08-28 16:49:01.013000000'
 		};
 
-		Vector<int64_t> inputDataDev(inputData);
-		Vector<gdf_valid_type> inputValidDev(1,255);
-		Vector<int64_t> outputDataDev(colSize);
-		Vector<gdf_valid_type> outputValidDev(1,255);
+		rmm::device_vector<int64_t> inputDataDev(inputData);
+		rmm::device_vector<gdf_valid_type> inputValidDev(1,255);
+		rmm::device_vector<int64_t> outputDataDev(colSize);
+		rmm::device_vector<gdf_valid_type> outputValidDev(1,255);
 
 		inputCol.data = thrust::raw_pointer_cast(inputDataDev.data());
 		inputCol.valid = thrust::raw_pointer_cast(inputValidDev.data());
@@ -1978,10 +1975,10 @@ TEST_F(gdf_date_casting_TEST, date64_to_timestamp) {
 			-4870653058988,  // '1815-08-28 16:49:01.012'
 		};
 
-		Vector<int64_t> inputDataDev(inputData);
-		Vector<gdf_valid_type> inputValidDev(1,255);
-		Vector<int64_t> outputDataDev(colSize);
-		Vector<gdf_valid_type> outputValidDev(1,255);
+		rmm::device_vector<int64_t> inputDataDev(inputData);
+		rmm::device_vector<gdf_valid_type> inputValidDev(1,255);
+		rmm::device_vector<int64_t> outputDataDev(colSize);
+		rmm::device_vector<gdf_valid_type> outputValidDev(1,255);
 
 		inputCol.data = thrust::raw_pointer_cast(inputDataDev.data());
 		inputCol.valid = thrust::raw_pointer_cast(inputValidDev.data());
@@ -2090,14 +2087,14 @@ TEST_F(gdf_timestamp_casting_TEST, timestamp_to_timestamp) {
 			1926203568000 //	2031-01-15 00:32:48.000
 		};
 
-		Vector<int64_t> inputDataDev(inputData);
-		Vector<gdf_valid_type> inputValidDev(4);
+		rmm::device_vector<int64_t> inputDataDev(inputData);
+		rmm::device_vector<gdf_valid_type> inputValidDev(4);
 		inputValidDev[0] = 255;
 		inputValidDev[1] = 255;
 		inputValidDev[2] = 255;
 		inputValidDev[3] = 63;
-		Vector<int64_t> outputDataDev(colSize);
-		Vector<gdf_valid_type> outputValidDev(4);
+		rmm::device_vector<int64_t> outputDataDev(colSize);
+		rmm::device_vector<gdf_valid_type> outputValidDev(4);
 
 		inputCol.data = thrust::raw_pointer_cast(inputDataDev.data());
 		inputCol.valid = thrust::raw_pointer_cast(inputValidDev.data());
@@ -2202,14 +2199,14 @@ TEST_F(gdf_timestamp_casting_TEST, timestamp_to_timestamp) {
 			1926203568 //	'2031-01-15 00:32:48'
 		};
 
-		Vector<int64_t> inputDataDev(inputData);
-		Vector<gdf_valid_type> inputValidDev(4);
+		rmm::device_vector<int64_t> inputDataDev(inputData);
+		rmm::device_vector<gdf_valid_type> inputValidDev(4);
 		inputValidDev[0] = 255;
 		inputValidDev[1] = 255;
 		inputValidDev[2] = 255;
 		inputValidDev[3] = 63;
-		Vector<int64_t> outputDataDev(colSize);
-		Vector<gdf_valid_type> outputValidDev(4);
+		rmm::device_vector<int64_t> outputDataDev(colSize);
+		rmm::device_vector<gdf_valid_type> outputValidDev(4);
 
 		inputCol.data = thrust::raw_pointer_cast(inputDataDev.data());
 		inputCol.valid = thrust::raw_pointer_cast(inputValidDev.data());
@@ -2314,14 +2311,14 @@ TEST_F(gdf_timestamp_casting_TEST, timestamp_to_timestamp) {
 			1926203568000000 //	'2031-01-15 00:32:48.000000'
 		};
 
-		Vector<int64_t> inputDataDev(inputData);
-		Vector<gdf_valid_type> inputValidDev(4);
+		rmm::device_vector<int64_t> inputDataDev(inputData);
+		rmm::device_vector<gdf_valid_type> inputValidDev(4);
 		inputValidDev[0] = 255;
 		inputValidDev[1] = 255;
 		inputValidDev[2] = 255;
 		inputValidDev[3] = 63;
-		Vector<int64_t> outputDataDev(colSize);
-		Vector<gdf_valid_type> outputValidDev(4);
+		rmm::device_vector<int64_t> outputDataDev(colSize);
+		rmm::device_vector<gdf_valid_type> outputValidDev(4);
 
 		inputCol.data = thrust::raw_pointer_cast(inputDataDev.data());
 		inputCol.valid = thrust::raw_pointer_cast(inputValidDev.data());
@@ -2426,14 +2423,14 @@ TEST_F(gdf_timestamp_casting_TEST, timestamp_to_timestamp) {
 			1926203568 //	'2031-01-15 00:32:48'
 		};
 
-		Vector<int64_t> inputDataDev(inputData);
-		Vector<gdf_valid_type> inputValidDev(4);
+		rmm::device_vector<int64_t> inputDataDev(inputData);
+		rmm::device_vector<gdf_valid_type> inputValidDev(4);
 		inputValidDev[0] = 255;
 		inputValidDev[1] = 255;
 		inputValidDev[2] = 255;
 		inputValidDev[3] = 63;
-		Vector<int64_t> outputDataDev(colSize);
-		Vector<gdf_valid_type> outputValidDev(4);
+		rmm::device_vector<int64_t> outputDataDev(colSize);
+		rmm::device_vector<gdf_valid_type> outputValidDev(4);
 
 		inputCol.data = thrust::raw_pointer_cast(inputDataDev.data());
 		inputCol.valid = thrust::raw_pointer_cast(inputValidDev.data());
@@ -2538,14 +2535,14 @@ TEST_F(gdf_timestamp_casting_TEST, timestamp_to_timestamp) {
 			1926203568000000000 //	'2031-01-15 00:32:48.000000000'
 		};
 
-		Vector<int64_t> inputDataDev(inputData);
-		Vector<gdf_valid_type> inputValidDev(4);
+		rmm::device_vector<int64_t> inputDataDev(inputData);
+		rmm::device_vector<gdf_valid_type> inputValidDev(4);
 		inputValidDev[0] = 255;
 		inputValidDev[1] = 255;
 		inputValidDev[2] = 255;
 		inputValidDev[3] = 63;
-		Vector<int64_t> outputDataDev(colSize);
-		Vector<gdf_valid_type> outputValidDev(4);
+		rmm::device_vector<int64_t> outputDataDev(colSize);
+		rmm::device_vector<gdf_valid_type> outputValidDev(4);
 
 		inputCol.data = thrust::raw_pointer_cast(inputDataDev.data());
 		inputCol.valid = thrust::raw_pointer_cast(inputValidDev.data());
@@ -2650,14 +2647,14 @@ TEST_F(gdf_timestamp_casting_TEST, timestamp_to_timestamp) {
 			1926203568 //	'2031-01-15 00:32:48'
 		};
 
-		Vector<int64_t> inputDataDev(inputData);
-		Vector<gdf_valid_type> inputValidDev(4);
+		rmm::device_vector<int64_t> inputDataDev(inputData);
+		rmm::device_vector<gdf_valid_type> inputValidDev(4);
 		inputValidDev[0] = 255;
 		inputValidDev[1] = 255;
 		inputValidDev[2] = 255;
 		inputValidDev[3] = 63;
-		Vector<int64_t> outputDataDev(colSize);
-		Vector<gdf_valid_type> outputValidDev(4);
+		rmm::device_vector<int64_t> outputDataDev(colSize);
+		rmm::device_vector<gdf_valid_type> outputValidDev(4);
 
 		inputCol.data = thrust::raw_pointer_cast(inputDataDev.data());
 		inputCol.valid = thrust::raw_pointer_cast(inputValidDev.data());
@@ -2762,14 +2759,14 @@ TEST_F(gdf_timestamp_casting_TEST, timestamp_to_timestamp) {
 			1926203568000000000 //	'2031-01-15 00:32:48.000000000'
 		};
 
-		Vector<int64_t> inputDataDev(inputData);
-		Vector<gdf_valid_type> inputValidDev(4);
+		rmm::device_vector<int64_t> inputDataDev(inputData);
+		rmm::device_vector<gdf_valid_type> inputValidDev(4);
 		inputValidDev[0] = 255;
 		inputValidDev[1] = 255;
 		inputValidDev[2] = 255;
 		inputValidDev[3] = 63;
-		Vector<int64_t> outputDataDev(colSize);
-		Vector<gdf_valid_type> outputValidDev(4);
+		rmm::device_vector<int64_t> outputDataDev(colSize);
+		rmm::device_vector<gdf_valid_type> outputValidDev(4);
 
 		inputCol.data = thrust::raw_pointer_cast(inputDataDev.data());
 		inputCol.valid = thrust::raw_pointer_cast(inputValidDev.data());
@@ -2874,14 +2871,14 @@ TEST_F(gdf_timestamp_casting_TEST, timestamp_to_timestamp) {
 			1926203568000000 //	'2031-01-15 00:32:48.000000'
 		};
 
-		Vector<int64_t> inputDataDev(inputData);
-		Vector<gdf_valid_type> inputValidDev(4);
+		rmm::device_vector<int64_t> inputDataDev(inputData);
+		rmm::device_vector<gdf_valid_type> inputValidDev(4);
 		inputValidDev[0] = 255;
 		inputValidDev[1] = 255;
 		inputValidDev[2] = 255;
 		inputValidDev[3] = 63;
-		Vector<int64_t> outputDataDev(colSize);
-		Vector<gdf_valid_type> outputValidDev(4);
+		rmm::device_vector<int64_t> outputDataDev(colSize);
+		rmm::device_vector<gdf_valid_type> outputValidDev(4);
 
 		inputCol.data = thrust::raw_pointer_cast(inputDataDev.data());
 		inputCol.valid = thrust::raw_pointer_cast(inputValidDev.data());
@@ -2986,14 +2983,14 @@ TEST_F(gdf_timestamp_casting_TEST, timestamp_to_timestamp) {
 			1926203568000000000 //	'2031-01-15 00:32:48.000000000'
 		};
 
-		Vector<int64_t> inputDataDev(inputData);
-		Vector<gdf_valid_type> inputValidDev(4);
+		rmm::device_vector<int64_t> inputDataDev(inputData);
+		rmm::device_vector<gdf_valid_type> inputValidDev(4);
 		inputValidDev[0] = 255;
 		inputValidDev[1] = 255;
 		inputValidDev[2] = 255;
 		inputValidDev[3] = 63;
-		Vector<int64_t> outputDataDev(colSize);
-		Vector<gdf_valid_type> outputValidDev(4);
+		rmm::device_vector<int64_t> outputDataDev(colSize);
+		rmm::device_vector<gdf_valid_type> outputValidDev(4);
 
 		inputCol.data = thrust::raw_pointer_cast(inputDataDev.data());
 		inputCol.valid = thrust::raw_pointer_cast(inputValidDev.data());
@@ -3098,14 +3095,14 @@ TEST_F(gdf_timestamp_casting_TEST, timestamp_to_timestamp) {
 			1926203568000 //	'2031-01-15 00:32:48.000'
 		};
 
-		Vector<int64_t> inputDataDev(inputData);
-		Vector<gdf_valid_type> inputValidDev(4);
+		rmm::device_vector<int64_t> inputDataDev(inputData);
+		rmm::device_vector<gdf_valid_type> inputValidDev(4);
 		inputValidDev[0] = 255;
 		inputValidDev[1] = 255;
 		inputValidDev[2] = 255;
 		inputValidDev[3] = 63;
-		Vector<int64_t> outputDataDev(colSize);
-		Vector<gdf_valid_type> outputValidDev(4);
+		rmm::device_vector<int64_t> outputDataDev(colSize);
+		rmm::device_vector<gdf_valid_type> outputValidDev(4);
 
 		inputCol.data = thrust::raw_pointer_cast(inputDataDev.data());
 		inputCol.valid = thrust::raw_pointer_cast(inputValidDev.data());
@@ -3210,14 +3207,14 @@ TEST_F(gdf_timestamp_casting_TEST, timestamp_to_timestamp) {
 			1926203568000 //	'2031-01-15 00:32:48.000'
 		};
 
-		Vector<int64_t> inputDataDev(inputData);
-		Vector<gdf_valid_type> inputValidDev(4);
+		rmm::device_vector<int64_t> inputDataDev(inputData);
+		rmm::device_vector<gdf_valid_type> inputValidDev(4);
 		inputValidDev[0] = 255;
 		inputValidDev[1] = 255;
 		inputValidDev[2] = 255;
 		inputValidDev[3] = 63;
-		Vector<int64_t> outputDataDev(colSize);
-		Vector<gdf_valid_type> outputValidDev(4);
+		rmm::device_vector<int64_t> outputDataDev(colSize);
+		rmm::device_vector<gdf_valid_type> outputValidDev(4);
 
 		inputCol.data = thrust::raw_pointer_cast(inputDataDev.data());
 		inputCol.valid = thrust::raw_pointer_cast(inputValidDev.data());
@@ -3322,14 +3319,14 @@ TEST_F(gdf_timestamp_casting_TEST, timestamp_to_timestamp) {
 			1926203568000000 //	'2031-01-15 00:32:48.000000'
 		};
 
-		Vector<int64_t> inputDataDev(inputData);
-		Vector<gdf_valid_type> inputValidDev(4);
+		rmm::device_vector<int64_t> inputDataDev(inputData);
+		rmm::device_vector<gdf_valid_type> inputValidDev(4);
 		inputValidDev[0] = 255;
 		inputValidDev[1] = 255;
 		inputValidDev[2] = 255;
 		inputValidDev[3] = 63;
-		Vector<int64_t> outputDataDev(colSize);
-		Vector<gdf_valid_type> outputValidDev(4);
+		rmm::device_vector<int64_t> outputDataDev(colSize);
+		rmm::device_vector<gdf_valid_type> outputValidDev(4);
 
 		inputCol.data = thrust::raw_pointer_cast(inputDataDev.data());
 		inputCol.valid = thrust::raw_pointer_cast(inputValidDev.data());
