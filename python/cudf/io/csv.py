@@ -42,7 +42,7 @@ def read_csv(filepath, lineterminator='\n',
     lineterminator : char, default '\\n'
         Character to indicate end of line.
     windowslinetermination : bool, default False
-        Indicates whether the file is a windows file
+        Indicates whether the file uses Windows-style CRLF line endings
     skipinitialspace : bool, default False
         Skip spaces after delimiter.
     names : list of str, default None
