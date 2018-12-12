@@ -99,7 +99,7 @@ class Column(object):
         else:
             # check that mask length is sufficient
             assert mask.size * utils.mask_bitsize >= len(self)
-        
+
         self._update_null_count(null_count)
 
     def _update_null_count(self, null_count=None):
