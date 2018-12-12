@@ -321,7 +321,19 @@ private:
     
 public:
 
+    /* --------------------------------------------------------------------------*/
+    /**
+     * @Synopsis Allocates memory and optionally fills the hash map with unused keys/values
+     *
+     * @Param[in] n The size of the hash table (the number of key-value pairs)
+     * @Param[in] init Initialize the hash table with the unused keys/values
+     * @Param[in] hf An optional hashing function
+     * @Param[in] eql An optional functor for comparing if two keys are equal
+     * @Param[in] a An optional functor for allocating the hash table memory
+     */
+    /* ----------------------------------------------------------------------------*/
     explicit concurrent_unordered_multimap(size_type n,
+                                           const bool init = true,
                                            const Hasher& hf = hasher(),
                                            const Equality& eql = key_equal(),
                                            const allocator_type& a = allocator_type())
@@ -339,10 +351,13 @@ public:
                 CUDA_RT_CALL( cudaMemPrefetchAsync(m_hashtbl_values, m_hashtbl_size*sizeof(value_type), dev_id, 0) );
             }
         }
-        
-        init_hashtbl<<<((m_hashtbl_size-1)/block_size)+1,block_size>>>( m_hashtbl_values, m_hashtbl_size, unused_key, unused_element );
-        CUDA_RT_CALL( cudaGetLastError() );
-        CUDA_RT_CALL( cudaStreamSynchronize(0) );
+
+        if( init )
+        {
+            init_hashtbl<<<((m_hashtbl_size-1)/block_size)+1,block_size>>>( m_hashtbl_values, m_hashtbl_size, unused_key, unused_element );
+            CUDA_RT_CALL( cudaGetLastError() );
+            CUDA_RT_CALL( cudaStreamSynchronize(0) );
+        }
     }
     
     ~concurrent_unordered_multimap()
