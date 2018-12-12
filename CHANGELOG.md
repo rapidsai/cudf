@@ -13,6 +13,7 @@
 
 ## Bug Fixes
 
+- PR #410 Apply stencil. Fixed inter-container order is LSB to MSB rather than the other way around. Documentation, refactoring, unit tests.
 
 # cuDF 0.4.0 (05 Dec 2018)
 

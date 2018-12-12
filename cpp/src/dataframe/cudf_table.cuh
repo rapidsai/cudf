@@ -1048,7 +1048,7 @@ private:
     //If gather is in-place
     if ((input_column->valid == output_column->valid) &&
             (input_column->valid != nullptr)) {
-        rmm::device_vector<gdf_valid_type> remapped_valid_copy(gdf_get_num_chars_bitmask(num_rows));
+        rmm::device_vector<gdf_valid_type> remapped_valid_copy(get_number_of_bytes_for_valid(num_rows));
         gather_valid<index_type>(
                 input_column->valid,
                 remapped_valid_copy.data().get(),

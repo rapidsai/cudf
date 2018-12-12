@@ -34,7 +34,7 @@
 #include "utilities/error_utils.h"
 #include "rmm/thrust_rmm_allocator.h"
 #include "utilities/miscellany.hpp"
-#include "dataframe/type_dispatcher.hpp"
+#include "utilities/type_dispatcher.hpp"
 
 //std lib
 #include <map>
