@@ -31,7 +31,7 @@ def read_csv(filepath_or_buffer, lineterminator='\n',
              delimiter=',', sep=None, delim_whitespace=False,
              skipinitialspace=False, names=None, dtype=None,
              skipfooter=0, skiprows=0, dayfirst=False, thousands=None,
-						 decimal='.'):
+			 decimal='.'):
     """
     Load and parse a CSV file into a DataFrame
 
