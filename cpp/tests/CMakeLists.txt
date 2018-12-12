@@ -86,14 +86,6 @@ set(JOIN_TEST_SRC
 ConfigureTest(JOIN_TEST "${JOIN_TEST_SRC}")
 
 ###################################################################################################
-# - sqls tests ------------------------------------------------------------------------------------
-
-set(SQLS_TEST_SRC 
-    "${CMAKE_CURRENT_SOURCE_DIR}/sqls/sqls_test.cu")
-
-ConfigureTest(SQLS_TEST "${SQLS_TEST_SRC}")
-
-###################################################################################################
 # - bitmask tests ---------------------------------------------------------------------------------
 
 set(BITMASK_TEST_SRC
@@ -158,6 +150,15 @@ set(RMM_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/rmm/memory_tests.cpp")
 
 ConfigureTest(RMM_TEST "${RMM_TEST_SRC}")
+
+###################################################################################################
+# - types tests -------------------------------------------------------------------------------------
+
+set(TYPES_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/types/types_test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/types/dispatcher_test.cu")
+
+ConfigureTest(TYPES_TEST "${TYPES_TEST_SRC}")
 
 ###################################################################################################
 ### enable testing ################################################################################

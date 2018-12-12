@@ -33,15 +33,18 @@ ARG NUMPY_VERSION=1.14.3
 # Locked to Pandas 0.20.3 by https://github.com/rapidsai/cudf/issues/118
 ARG PANDAS_VERSION=0.20.3
 ARG PYARROW_VERSION=0.10.0
+ARG CYTHON_VERSION=0.29.1
 RUN conda install -n cudf -y -c numba -c conda-forge -c nvidia -c rapidsai -c defaults \
       numba=${NUMBA_VERSION} \
       numpy=${NUMPY_VERSION} \
       pandas=${PANDAS_VERSION} \
       pyarrow=${PYARROW_VERSION} \
+      cython=${CYTHON_VERSION} \
       nvstrings \
       cmake=3.12 \
       gtest=1.8.0 \
-      cython
+      cffi \
+      pytest
 
 # Clone cuDF repo
 ARG CUDF_REPO=https://github.com/rapidsai/cudf
@@ -51,12 +54,11 @@ RUN git clone --recurse-submodules -b ${CUDF_BRANCH} ${CUDF_REPO} /cudf
 # libcudf build/install
 ENV CC=/usr/bin/gcc-${CC}
 ENV CXX=/usr/bin/g++-${CXX}
-ARG HASH_JOIN=ON
 RUN source activate cudf && \
     mkdir -p /cudf/cpp/build && \
     cd /cudf/cpp/build && \
-    cmake .. -DHASH_JOIN=${HASH_JOIN} -DCMAKE_INSTALL_PREFIX=${CONDA_PREFIX} && \
-    make -j2 install && \
+    cmake .. -DCMAKE_INSTALL_PREFIX=${CONDA_PREFIX} && \
+    make -j install && \
     make python_cffi && \
     make install_python
 

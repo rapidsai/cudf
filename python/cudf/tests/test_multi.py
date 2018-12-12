@@ -85,7 +85,7 @@ def test_concat_errors():
 
     # Mismatched index dtypes
     gdf3 = gdf2.set_index('z')
-    gdf2.drop_column('z')
+    del gdf2['z']
     with pytest.raises(ValueError):
         gd.concat([gdf2, gdf3])
 

@@ -1,4 +1,20 @@
-# cuDF 0.4.0 (DATE TBD)
+
+# cuDF 0.5.0 (Date TBD)
+
+## New Features
+
+- PR #455 CSV Reader: Add support for user-specified decimal point and thousands separator
+- PR #439 add `DataFrame.drop` method similar to pandas
+
+## Improvements
+
+- PR #472 RMM: Created centralized rmm::device_vector alias and rmm::exec_policy
+- PR #426 Removed sort-based groupby and refactored existing groupby APIs. Also improves C++/CUDA compile time.
+
+## Bug Fixes
+
+
+# cuDF 0.4.0 (05 Dec 2018)
 
 ## New Features
 
@@ -8,16 +24,21 @@
 
 ## Improvements
 
+ - PR #436 Improvements for type_dispatcher and wrapper structs
  - PR #429 Add CHANGELOG.md (this file)
  - PR #266 use faster CUDA-accelerated DataFrame column/Series concatenation.
  - PR #379 new C++ `type_dispatcher` reduces code complexity in supporting many data types.
  - PR #349 Improve performance for creating columns from memoryview objects
+ - PR #445 Update reductions to use type_dispatcher. Adds integer types support to sum_of_squares. 
+ - PR #448 Improve installation instructions in README.md
+ - PR #456 Change default CMake build to Release, and added option for disabling compilation of tests
  
 ## Bug Fixes
 
  - PR #444 Fix csv_test CUDA too many resources requested fail. 
  - PR #396 added missing output buffer in validity tests for groupbys.
- - PR #408 Docker file updates for source reorganization
+ - PR #408 Dockerfile updates for source reorganization
+ - PR #437 Add cffi to Dockerfile conda env, fixes "cannot import name 'librmm'"
  - PR #417 Fix `map_test` failure with CUDA 10
  - PR #414 Fix CMake installation include file paths
  - PR #418 Properly cast string dtypes to programmatic dtypes when instantiating columns
