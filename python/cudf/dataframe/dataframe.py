@@ -903,6 +903,9 @@ class DataFrame(object):
         Not supporting *copy* because default and only behaviour is copy=True
         """
         dtype = self.dtypes[0]
+        if pd.api.types.is_categorical_dtype(dtype):
+            raise NotImplementedError('Categorical columns are not yet '
+                                      'supported for function')
         if any(t != dtype for t in self.dtypes):
             raise ValueError('all columns must have the same dtype')
         has_null = any(c.null_count for c in self._cols.values())
