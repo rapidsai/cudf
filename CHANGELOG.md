@@ -7,6 +7,8 @@
 - PR #439 add `DataFrame.drop` method similar to pandas
 
 ## Improvements
+
+- PR #472 RMM: Created centralized rmm::device_vector alias and rmm::exec_policy
 - PR #426 Removed sort-based groupby and refactored existing groupby APIs. Also improves C++/CUDA compile time.
 - PR #454 Improve CSV reader docs and examples
  
