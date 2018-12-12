@@ -225,8 +225,8 @@ std::string stringType(gdf_dtype dt){
  *
  */
 gdf_error read_csv(csv_read_arg *args)
-{       
-        gdf_error error = gdf_error::GDF_SUCCESS;
+{
+	gdf_error error = gdf_error::GDF_SUCCESS;
 
 	//-----------------------------------------------------------------------------
 	// create the CSV data structure - this will be filled in as the CSV data is processed.
@@ -254,8 +254,8 @@ gdf_error read_csv(csv_read_arg *args)
 		raw_csv->keepquotes = !args->quoting;
 		raw_csv->doublequote = args->doublequote;
 	} else {
-	raw_csv->keepquotes = true;
-	raw_csv->doublequote = false;
+		raw_csv->keepquotes = true;
+		raw_csv->doublequote = false;
 	}
 
 	raw_csv->dayfirst = args->dayfirst;
@@ -617,12 +617,12 @@ gdf_error read_csv(csv_read_arg *args)
 		CUDA_TRY(cudaMemcpy(d_str_cols, h_str_cols, sizeof(string_pair *)	* stringColCount, cudaMemcpyHostToDevice));
 	}
 
-        for (int acol = 0,col=-1; acol < raw_csv->num_actual_cols; acol++) {
+	for (int acol = 0,col=-1; acol < raw_csv->num_actual_cols; acol++) {
 	if(raw_csv->h_parseCol[acol]==false)
 		continue;
 	col++;
 
-	gdf_column *gdf = (gdf_column *)malloc(sizeof(gdf_column) * 1);
+		gdf_column *gdf = (gdf_column *)malloc(sizeof(gdf_column) * 1);
 
 		gdf->size		= raw_csv->num_records;
 		gdf->dtype		= raw_csv->dtypes[col];
