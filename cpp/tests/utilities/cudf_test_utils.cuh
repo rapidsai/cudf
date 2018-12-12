@@ -26,6 +26,8 @@
 #include <utilities/bit_util.cuh>
 
 #include <bitset>
+#include <algorithm>
+#include <iostream>
 #include <numeric> // for std::accumulate
 #include <memory>
 
@@ -46,85 +48,32 @@ void print_typed_column(col_type * col_data,
   cudaMemcpy(h_data.data(), col_data, num_rows * sizeof(col_type), cudaMemcpyDeviceToHost);
 
 
-  const size_t num_masks = gdf_get_num_chars_bitmask(num_rows);
+  const size_t num_masks = get_number_of_bytes_for_valid(num_rows);
   std::vector<gdf_valid_type> h_mask(num_masks);
   if(nullptr != validity_mask)
   {
     cudaMemcpy(h_mask.data(), validity_mask, num_masks * sizeof(gdf_valid_type), cudaMemcpyDeviceToHost);
   }
 
-
-  for(size_t i = 0; i < num_rows; ++i)
-  {
-    // If the element is valid, print it's value
-    if(true == gdf_is_valid(h_mask.data(), i))
+  if (validity_mask == nullptr) {
+    for(size_t i = 0; i < num_rows; ++i)
     {
-      std::cout << h_data[i] << " ";
+      if (sizeof(col_type) == 1)
+        std::cout << static_cast<int>(h_data[i]) << " ";
+      else
+        std::cout << h_data[i] << " ";
     }
-    // Otherwise, print an @ to represent a null value
-    else
+  } 
+  else {
+    for(size_t i = 0; i < num_rows; ++i)
     {
-      std::cout << "@" << " ";
+        std::cout << "(" << std::to_string(h_data[i]) << "|" << gdf_is_valid(h_mask.data(), i) << "), ";
     }
   }
-  std::cout << std::endl;
+  std::cout << std::endl << std::endl;
 }
 
-void print_gdf_column(gdf_column const * the_column)
-{
-  const size_t num_rows = the_column->size;
-
-  const gdf_dtype gdf_col_type = the_column->dtype;
-  switch(gdf_col_type)
-  {
-    case GDF_INT8:
-      {
-        using col_type = int8_t;
-        col_type * col_data = static_cast<col_type*>(the_column->data);
-        print_typed_column<col_type>(col_data, the_column->valid, num_rows);
-        break;
-      }
-    case GDF_INT16:
-      {
-        using col_type = int16_t;
-        col_type * col_data = static_cast<col_type*>(the_column->data);
-        print_typed_column<col_type>(col_data, the_column->valid, num_rows);
-        break;
-      }
-    case GDF_INT32:
-      {
-        using col_type = int32_t;
-        col_type * col_data = static_cast<col_type*>(the_column->data);
-        print_typed_column<col_type>(col_data, the_column->valid, num_rows);
-        break;
-      }
-    case GDF_INT64:
-      {
-        using col_type = int64_t;
-        col_type * col_data = static_cast<col_type*>(the_column->data);
-        print_typed_column<col_type>(col_data, the_column->valid, num_rows);
-        break;
-      }
-    case GDF_FLOAT32:
-      {
-        using col_type = float;
-        col_type * col_data = static_cast<col_type*>(the_column->data);
-        print_typed_column<col_type>(col_data, the_column->valid, num_rows);
-        break;
-      }
-    case GDF_FLOAT64:
-      {
-        using col_type = double;
-        col_type * col_data = static_cast<col_type*>(the_column->data);
-        print_typed_column<col_type>(col_data, the_column->valid, num_rows);
-        break;
-      }
-    default:
-      {
-        std::cout << "Attempted to print unsupported type.\n";
-      }
-  }
-}
+void print_gdf_column(gdf_column const * the_column);
 
 /** ---------------------------------------------------------------------------*
  * @brief prints validity data from either a host or device pointer
@@ -132,28 +81,8 @@ void print_gdf_column(gdf_column const * the_column)
  * @param validity_mask The validity bitmask to print
  * @param num_rows The length of the column (not the bitmask) in rows
  * ---------------------------------------------------------------------------**/
-void print_valid_data(const gdf_valid_type *validity_mask, 
-                      const size_t num_rows)
-{
-  cudaError_t error;
-  cudaPointerAttributes attrib;
-  cudaPointerGetAttributes(&attrib, validity_mask);
-  error = cudaGetLastError();
-
-  const size_t num_masks = gdf_get_num_chars_bitmask(num_rows);
-  std::vector<gdf_valid_type> h_mask(num_masks);
-  if (error != cudaErrorInvalidValue && attrib.memoryType == cudaMemoryTypeDevice)
-    cudaMemcpy(h_mask.data(), validity_mask, num_masks * sizeof(gdf_valid_type), cudaMemcpyDeviceToHost);
-  else
-    memcpy(h_mask.data(), validity_mask, num_masks * sizeof(gdf_valid_type));
-
-  std::transform(h_mask.begin(), h_mask.end(), std::ostream_iterator<std::string>(std::cout, " "), 
-                 [](gdf_valid_type x){ 
-                   auto bits = std::bitset<GDF_VALID_BITSIZE>(x).to_string('@'); 
-                   return std::string(bits.rbegin(), bits.rend());  
-                 });
-  std::cout << std::endl;
-}
+void print_valid_data(const gdf_valid_type *validity_mask,
+                      const size_t num_rows);
 
 /* --------------------------------------------------------------------------*/
 /**
@@ -235,7 +164,7 @@ template <typename T, typename valid_initializer_t>
 gdf_col_pointer init_gdf_column(std::vector<T> data, size_t col_index, valid_initializer_t bit_initializer)
 {
   const size_t num_rows = data.size();
-  const size_t num_masks = gdf_get_num_chars_bitmask(num_rows);
+  const size_t num_masks = get_number_of_bytes_for_valid(num_rows);
 
   // Initialize the valid mask for this column using the initializer
   std::vector<gdf_valid_type> valid_masks(num_masks,0);
@@ -343,7 +272,7 @@ bool gdf_equal_columns(gdf_column* left, gdf_column* right)
   
   if (!thrust::equal(thrust::cuda::par, 
                      left->valid, 
-                     left->valid + gdf_get_num_chars_bitmask(left->size), 
+                     left->valid + get_number_of_bytes_for_valid(left->size), 
                      right->valid))
     return false;
   

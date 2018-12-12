@@ -130,7 +130,7 @@ struct OrderByTest : public GdfTest
 
     // Allocate device storage for gdf_column.valid
     if (host_valid != nullptr) {
-      int valid_size = gdf_get_num_chars_bitmask(host_vector.size());
+      int valid_size = get_number_of_bytes_for_valid(host_vector.size());
       EXPECT_EQ(RMM_ALLOC((void**)&(the_column->valid), valid_size, 0), RMM_SUCCESS);
       EXPECT_EQ(cudaMemcpy(the_column->valid, host_valid, valid_size, cudaMemcpyHostToDevice), cudaSuccess);
       the_column->null_count = n_count;

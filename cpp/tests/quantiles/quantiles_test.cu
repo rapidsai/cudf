@@ -87,7 +87,7 @@ TEST_F(gdf_quantile, DoubleVector)
   using VType = double;
   std::vector<VType> v{6.8, 0.15, 3.4, 4.17, 2.13, 1.11, -1.01, 0.8, 5.7};
   rmm::device_vector<VType> d_in = v;
-  rmm::device_vector<gdf_valid_type> d_valid(gdf_get_num_chars_bitmask(d_in.size()));
+  rmm::device_vector<gdf_valid_type> d_valid(get_number_of_bytes_for_valid(d_in.size()));
   
   gdf_column col_in;
   col_in.size = d_in.size();
@@ -135,7 +135,7 @@ TEST_F(gdf_quantile, IntegerVector)
   using VType = int32_t;
   std::vector<VType> v{7, 0, 3, 4, 2, 1, -1, 1, 6};;
   rmm::device_vector<VType> d_in = v;
-  rmm::device_vector<gdf_valid_type> d_valid(gdf_get_num_chars_bitmask(d_in.size()));
+  rmm::device_vector<gdf_valid_type> d_valid(get_number_of_bytes_for_valid(d_in.size()));
   
   gdf_column col_in;
   col_in.size = d_in.size();
@@ -183,7 +183,7 @@ TEST_F(gdf_quantile, ReportValidMaskError)
   using VType = int32_t;
   std::vector<VType> v{7, 0, 3, 4, 2, 1, -1, 1, 6};;
   rmm::device_vector<VType> d_in = v;
-  rmm::device_vector<gdf_valid_type> d_valid(gdf_get_num_chars_bitmask(d_in.size()));
+  rmm::device_vector<gdf_valid_type> d_valid(get_number_of_bytes_for_valid(d_in.size()));
   
   gdf_column col_in;
   col_in.size = d_in.size();

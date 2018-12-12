@@ -682,7 +682,7 @@ TEST_F(gdf_unaryops_output_valid_TEST, checkingValidAndDtype) {
 		rmm::device_vector<float> inputDataDev(inputData);
 		rmm::device_vector<float> outputDataDev(colSize);
 
-		gdf_size_type num_chars_bitmask = gdf_get_num_chars_bitmask(inputCol.size);
+		gdf_size_type num_chars_bitmask = get_number_of_bytes_for_valid(inputCol.size);
 		rmm::device_vector<gdf_valid_type> inputValidDev(num_chars_bitmask);
 		rmm::device_vector<gdf_valid_type> outputValidDev(num_chars_bitmask);
 
@@ -719,7 +719,7 @@ TEST_F(gdf_unaryops_output_valid_TEST, checkingValidAndDtype) {
 		rmm::device_vector<float> inputDataDev(inputData);
 		rmm::device_vector<float> outputDataDev(colSize);
 
-		gdf_size_type num_chars_bitmask = gdf_get_num_chars_bitmask(inputCol.size);
+		gdf_size_type num_chars_bitmask = get_number_of_bytes_for_valid(inputCol.size);
 		rmm::device_vector<gdf_valid_type> inputValidDev(num_chars_bitmask);
 		rmm::device_vector<gdf_valid_type> outputValidDev(num_chars_bitmask);
 
