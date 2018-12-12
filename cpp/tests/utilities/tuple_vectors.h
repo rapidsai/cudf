@@ -19,7 +19,9 @@
 #include <vector>
 #include <type_traits>
 #include <iostream>
+#include <iterator>
 #include <cstdlib>
+#include <algorithm>
 
 template <typename... T>
 using VTuple = std::tuple<std::vector<T>...>;
