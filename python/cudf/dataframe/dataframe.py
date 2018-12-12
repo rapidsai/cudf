@@ -281,7 +281,7 @@ class DataFrame(object):
              2    2    5
 
         """
-        new = self.copy()
+        new = self.copy(deep=True)
         for k, v in kwargs.items():
             new[k] = v
         return new
@@ -433,7 +433,7 @@ class DataFrame(object):
         """
         # When index is a column name
         if isinstance(index, str):
-            df = self.copy()
+            df = self.copy(deep=True)
             df.drop_column(index)
             return df.set_index(self[index])
         # Otherwise
@@ -453,7 +453,7 @@ class DataFrame(object):
             out[col] = self[col].take(positions, ignore_index=ignore_index)
         return out
 
-    def copy(self, deep=True):
+    def copy(self, deep=False):
         """
         Returns a copy of this dataframe
         """
@@ -705,7 +705,7 @@ class DataFrame(object):
         """
         newnames = [prefix_sep.join([prefix, str(cat)]) for cat in cats]
         newcols = self[column].one_hot_encoding(cats=cats, dtype=dtype)
-        outdf = self.copy()
+        outdf = self.copy(deep=True)
         for name, col in zip(newnames, newcols):
             outdf.add_column(name, col)
         return outdf
@@ -736,7 +736,7 @@ class DataFrame(object):
         newname = prefix_sep.join([prefix, 'labels'])
         newcol = self[column].label_encoding(cats=cats, dtype=dtype,
                                              na_sentinel=na_sentinel)
-        outdf = self.copy()
+        outdf = self.copy(deep=True)
         outdf.add_column(newname, newcol)
 
         return outdf
