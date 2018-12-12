@@ -313,12 +313,11 @@ struct OrderByTest : public GdfTest
   /**
    * @Synopsis  Computes the result of sorting the set of columns with the libgdf functions
    *
-   * @Param use_gdf_order_by_method Whether to use gdf_order_by or gdf_order_by_asc_desc
-   *                                      libgdf sort function
+   * @Param use_default_sort_order Whether or not to sort using the default ascending order 
    * @Param print Option to print the result computed by the libgdf function
    */
   /* ----------------------------------------------------------------------------*/
-  std::vector<size_t> compute_gdf_result(bool use_gdf_order_by_method = false, bool print = false, gdf_error expected_result = GDF_SUCCESS)
+  std::vector<size_t> compute_gdf_result(bool use_default_sort_order = false, bool print = false, gdf_error expected_result = GDF_SUCCESS)
   {
     const int num_columns = std::tuple_size<multi_column_t>::value;
 
@@ -328,20 +327,12 @@ struct OrderByTest : public GdfTest
     gdf_column* sort_order_types = gdf_raw_sort_order_types;
     gdf_column* sorted_indices_output = gdf_raw_output_indices_column;
 
-    if (use_gdf_order_by_method) {
-      result_error = gdf_order_by(columns_to_sort,
-                                  num_columns,
-                                  sorted_indices_output,
-                                  nulls_are_smallest);
-    }
-    else {
-      result_error = gdf_order_by_asc_desc(columns_to_sort,
-                                           (char*)(sort_order_types->data),
-                                           num_columns,
-                                           sorted_indices_output,
-                                           nulls_are_smallest);
-    }
-    
+    result_error = gdf_order_by(columns_to_sort,
+                                (use_default_sort_order ? nullptr : (char*)(sort_order_types->data)),
+                                num_columns,
+                                sorted_indices_output,
+                                nulls_are_smallest);
+
     EXPECT_EQ(expected_result, result_error) << "The gdf order by function did not complete successfully";
 
     // If the expected result was not GDF_SUCCESS, then this test was testing for a

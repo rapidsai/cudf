@@ -73,9 +73,12 @@ namespace{ //annonymus
 
 /* --------------------------------------------------------------------------*/
 /** 
- * @brief Sorts an array of gdf_column in ascending order.
+ * @brief Sorts an array of gdf_column.
  * 
  * @Param[in] cols Array of gdf_columns
+ * @Param[in] asc_desc Device array of sort order types for each column
+ * (0 is ascending order and 1 is descending). If NULL is provided defaults
+ * to ascending order for evey column.
  * @Param[in] ncols # columns
  * @Param[in] flag_nulls_are_smallest Flag to indicate if nulls are to be considered
  * smaller than non-nulls or viceversa
@@ -86,34 +89,10 @@ namespace{ //annonymus
  */
 /* ----------------------------------------------------------------------------*/
 gdf_error gdf_order_by(gdf_column** cols,
+                       char* asc_desc,
                        size_t ncols,
                        gdf_column* output_indices,
                        int flag_nulls_are_smallest)
-{
-  return multi_col_order_by(cols, ncols, nullptr, output_indices, flag_nulls_are_smallest);
-}
-
-/* --------------------------------------------------------------------------*/
-/** 
- * @brief Sorts an array of gdf_column given the sort order for each column.
- * 
- * @Param[in] cols Array of gdf_columns
- * @Param[in] asc_desc Device array of sort order types for each column
- * (0 is ascending order and 1 is descending)
- * @Param[in] ncols # columns
- * @Param[in] flag_nulls_are_smallest Flag to indicate if nulls are to be considered
- * smaller than non-nulls or viceversa
- * @Param[out] output_indices Pre-allocated gdf_column to be filled
- * with sorted indices
- * 
- * @Returns GDF_SUCCESS upon successful completion
- */
-/* ----------------------------------------------------------------------------*/
-gdf_error gdf_order_by_asc_desc(gdf_column** cols,
-                                char* asc_desc,
-                                size_t ncols,
-                                gdf_column* output_indices,
-                                int flag_nulls_are_smallest)
 {
   return multi_col_order_by(cols, ncols, asc_desc, output_indices, flag_nulls_are_smallest);
 }

@@ -218,6 +218,7 @@ gdf_error GroupbyHash(gdf_table<size_type> const & groupby_input_table,
         return status;
 
       status = gdf_order_by(groupby_output_table.get_columns(),             //input columns
+                       nullptr,
                        groupby_output_table.get_num_columns(),                //number of columns in the first parameter (e.g. number of columsn to sort by)
                        &sorted_indices_col,            //a gdf_column that is pre allocated for storing sorted indices
                        0);  //flag to indicate if nulls are to be considered smaller than non-nulls or viceversa
