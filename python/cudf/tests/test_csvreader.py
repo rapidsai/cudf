@@ -273,7 +273,8 @@ def test_csv_reader_gzip_compression(tmpdir):
     df = make_datetime_dataframe()
     df.to_csv(fname, index=False, header=False, compression='gzip')
 
-    df_out = pd.read_csv(fname, names=['col1', 'col2'], parse_dates=[0, 1], dayfirst=True, compression='gzip')
+    df_out = pd.read_csv(fname, names=['col1', 'col2'], parse_dates=[0, 1],
+                         dayfirst=True, compression='gzip')
     dtypes = ['date', 'date']
     out = read_csv(str(fname), names=list(df.columns.values), dtype=dtypes, dayfirst=True, compression='gzip')
 
