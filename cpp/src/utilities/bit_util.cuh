@@ -17,6 +17,8 @@
  */
 #pragma once
 
+#include <utilities/cudf_utils.h>
+
 namespace gdf {
 namespace util {
 

@@ -53,7 +53,7 @@ host_valid_pointer create_and_init_valid(size_t length, bool all_bits_on = false
 host_valid_pointer create_and_init_valid(size_t length, size_t null_count)
 {
   auto deleter = [](gdf_valid_type* valid) { delete[] valid; };
-  auto n_bytes = gdf_get_num_chars_bitmask(length);
+  auto n_bytes = get_number_of_bytes_for_valid(length);
   auto valid_bits = new gdf_valid_type[n_bytes];
    for (size_t i = 0; i < length; ++i) {
     if ((float)std::rand()/(RAND_MAX + 1u) >= (float)null_count/(length-i)) {
