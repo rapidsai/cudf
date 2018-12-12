@@ -184,7 +184,7 @@ struct LesserRTTI
     return false;
   }
 
-  __device__
+  __host__ __device__
   bool equal(IndexT row1, IndexT row2) const
   {
     for(size_t col_index = 0; col_index < sz_; ++col_index)
@@ -196,6 +196,32 @@ struct LesserRTTI
                                           row2,
                                           col_index,
                                           columns_);
+      switch( state )
+      {
+      case State::False:
+        return false;
+
+      case State::True:
+      case State::Undecided:
+        break;
+      }
+    }
+    return true;
+  }
+
+    __host__ __device__
+  bool equal_with_nulls(IndexT row1, IndexT row2) const
+  {
+    for(size_t col_index = 0; col_index < sz_; ++col_index)
+    {
+      gdf_dtype col_type = static_cast<gdf_dtype>(rtti_[col_index]);
+
+      State state = cudf::type_dispatcher(col_type, OpEqual_with_nulls{},
+                                          row1,
+                                          row2,
+                                          col_index,
+                                          columns_,
+                                          valids_);
       switch( state )
       {
       case State::False:
@@ -431,6 +457,29 @@ private:
         return State::False;
       else
         return State::Undecided;
+    }
+  };
+
+  struct OpEqual_with_nulls
+  {
+    template<typename ColType>
+    __device__
+    State operator() (IndexT row1, IndexT row2,
+                       int col_index,
+                      const void* const * columns,
+                      const gdf_valid_type* const * valids)
+    {
+      ColType res1 = LesserRTTI::at<ColType>(col_index, row1, columns);
+      ColType res2 = LesserRTTI::at<ColType>(col_index, row2, columns);
+      bool isValid1 = LesserRTTI::is_valid(col_index, row1, valids);
+		  bool isValid2 = LesserRTTI::is_valid(col_index, row2, valids);
+      
+      if (!isValid2 && !isValid1)
+			  return State::Undecided;
+		  else if( isValid1 && isValid2 && res1 == res2)
+        return State::True;
+      else
+        return State::False;      
     }
   };
 

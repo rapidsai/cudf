@@ -28,6 +28,7 @@
 #include <bitset>
 #include <numeric> // for std::accumulate
 #include <memory>
+#include <algorithm>
 
 #include <thrust/equal.h>
 
@@ -45,19 +46,19 @@ void print_typed_column(col_type * col_data,
   std::vector<col_type> h_data(num_rows);
   cudaMemcpy(h_data.data(), col_data, num_rows * sizeof(col_type), cudaMemcpyDeviceToHost);
 
-
   const size_t num_masks = gdf_get_num_chars_bitmask(num_rows);
   std::vector<gdf_valid_type> h_mask(num_masks);
-  if(nullptr != validity_mask)
+  bool have_valid = nullptr != validity_mask;
+  if(have_valid)
   {
     cudaMemcpy(h_mask.data(), validity_mask, num_masks * sizeof(gdf_valid_type), cudaMemcpyDeviceToHost);
   }
-
+ 
 
   for(size_t i = 0; i < num_rows; ++i)
   {
     // If the element is valid, print it's value
-    if(true == gdf_is_valid(h_mask.data(), i))
+    if(!have_valid || gdf_is_valid(h_mask.data(), i))
     {
       std::cout << h_data[i] << " ";
     }
@@ -213,18 +214,23 @@ gdf_col_pointer create_gdf_column(std::vector<col_type> const & host_vector,
   extra_info.time_unit = TIME_UNIT_NONE;
   the_column->dtype_info = extra_info;
 
-  // Count the number of null bits
-  // count in all but last element in case it is not full
-  the_column->null_count = std::accumulate(valid_vector.begin(), valid_vector.end() - 1, 0,
-    [](gdf_size_type s, gdf_valid_type x) { 
-      return s + std::bitset<GDF_VALID_BITSIZE>(x).flip().count(); 
-    });
-  // Now count the bits in the last mask
-  int unused_bits = GDF_VALID_BITSIZE - the_column->size % GDF_VALID_BITSIZE;
-  if (GDF_VALID_BITSIZE == unused_bits) unused_bits = 0;
-  auto last_mask = std::bitset<GDF_VALID_BITSIZE>(*(valid_vector.end()-1)).flip();
-  last_mask = (last_mask << unused_bits) >> unused_bits;
-  the_column->null_count += last_mask.count();
+  if(valid_vector.size() > 0) {
+    // Count the number of null bits
+    // count in all but last element in case it is not full
+    the_column->null_count = std::accumulate(valid_vector.begin(), valid_vector.end() - 1, 0,
+      [](gdf_size_type s, gdf_valid_type x) { 
+        return s + std::bitset<GDF_VALID_BITSIZE>(x).flip().count(); 
+      });
+
+    // Now count the bits in the last mask
+    int unused_bits = GDF_VALID_BITSIZE - the_column->size % GDF_VALID_BITSIZE;
+    if (GDF_VALID_BITSIZE == unused_bits) unused_bits = 0;
+    auto last_mask = std::bitset<GDF_VALID_BITSIZE>(*(valid_vector.end()-1)).flip();
+    last_mask = (last_mask << unused_bits) >> unused_bits;
+    the_column->null_count += last_mask.count();
+  } else {
+    the_column->null_count = 0;
+  }
 
   return the_column;
 }
@@ -331,7 +337,8 @@ bool gdf_equal_columns(gdf_column* left, gdf_column* right)
   if (left->null_count != right->null_count) return false;
   if (left->dtype_info.time_unit != right->dtype_info.time_unit) return false;
   
-  if (!(left->data && right->data)) return false; // if one is null but not both
+  if ((left->data == nullptr &&  right->data != nullptr) ||
+        (left->data != nullptr &&  right->data == nullptr)) return false; // if one is null but not both
   
   if (!thrust::equal(thrust::cuda::par, 
                      reinterpret_cast<T*>(left->data), 
@@ -339,13 +346,16 @@ bool gdf_equal_columns(gdf_column* left, gdf_column* right)
                      reinterpret_cast<T*>(right->data)) ) 
     return false;
   
-  if (!(left->valid && right->valid)) return false; // if one is null but not both
+  if ((left->valid == nullptr &&  right->valid != nullptr) ||
+        (left->valid != nullptr &&  right->valid == nullptr)) return false; // if one is null but not both
   
-  if (!thrust::equal(thrust::cuda::par, 
-                     left->valid, 
-                     left->valid + gdf_get_num_chars_bitmask(left->size), 
-                     right->valid))
-    return false;
+  if (left->valid != nullptr && right->valid != nullptr){
+    if (!thrust::equal(thrust::cuda::par, 
+                      left->valid, 
+                      left->valid + gdf_get_num_chars_bitmask(left->size), 
+                      right->valid))
+      return false;
+  }
   
   return true;
 }

@@ -26,10 +26,6 @@
 #include "aggregation_operations.hpp"
 
 
-// thrust::device_vector set to use rmmAlloc and rmmFree.
-template <typename T>
-using Vector = thrust::device_vector<T, rmm_allocator<T>>;
-
 /* --------------------------------------------------------------------------*/
 /** 
  * @Synopsis Calls the Hash Based group by compute API to compute the groupby with 
@@ -425,116 +421,6 @@ gdf_error gdf_group_by_hash_avg(int ncols,
     case GDF_FLOAT64:{ return multi_pass_avg<double>(ncols, in_groupby_columns, in_aggregation_column, out_groupby_columns, out_aggregation_column);}
     default: return GDF_UNSUPPORTED_DTYPE;
   }
-}
-
-
-/* --------------------------------------------------------------------------*/
-  /**
-   * @brief Given a set of columns, of which a subset of these are defined to be the group by columns,
-   * all columns are sorted by the group by columns and returned, along with a column containing
-   * a list of the start indices of each group
-   *
-   * @Param[in] The number of columns in the dataset
-   * @Param[in] The input columns in the dataset
-   * @Param[in] The number of columns to be grouping by
-   * @Param[in] The column indices of the input dataset that will be grouped by
-   * @Param[out] The dataset sorted by the group by columns (needs to be pre-allocated)
-   * @Param[out] A column containing the starting indices of each group. Indices based off of new sort order. (needs to be pre-allocated)
-   * @Param[in] Flag indicating if nulls are smaller (0) or larger (1) than non nulls for the sort operation
-   *
-   * @Returns gdf_error with error code on failure, otherwise GDF_SUCESS
-   */
-  /* ----------------------------------------------------------------------------*/
-gdf_error gdf_group_by_wo_aggregations(int num_data_cols,
-                           	   	   	   gdf_column** data_cols_in,
-									   int num_groupby_cols,
-									   int * groupby_col_indices,
-									   gdf_column** data_cols_out,
-									   gdf_column* group_start_indices,
-									   int nulls_are_smallest = 0)
-{
-// TODO ASSERTS: num_groupby_cols > 0
-
-
-  // setup for order by call
-  std::vector<gdf_column*> orderby_cols_vect(num_groupby_cols);
-  for (int i = 0; i < num_groupby_cols; i++){
-    orderby_cols_vect[i] = data_cols_in[groupby_col_indices[i]];
-  }
-
-  Vector<int32_t> sorted_indices(*out_size);
-  thrust::sequence(exec, sorted_indices.begin(), sorted_indices.end());
-
-  gdf_column sorted_indices_col;
-  gdf_error status = gdf_column_view(&sorted_indices_col, (void*)thrust::raw_pointer_cast(sorted_indices.data()), 
-                            nullptr, *out_size, GDF_INT32);
-  if (status != GDF_SUCCESS)
-    return status;
-
-// run order by and get new sort indexes
-  status = gdf_order_by(&orderby_cols_vect[0],             //input columns
-                       num_groupby_cols,                //number of columns in the first parameter (e.g. number of columsn to sort by)
-                       &sorted_indices_col,            //a gdf_column that is pre allocated for storing sorted indices
-                       0);  //flag to indicate if nulls are to be considered smaller than non-nulls or viceversa
-  if (status != GDF_SUCCESS)
-    return status;
-
-
-  // run gather operation to establish new order
-  std::unique_ptr< gdf_table<int32_t> > table_in{new gdf_table<int32_t>(num_data_cols, data_cols_in)};
-  std::unique_ptr< gdf_table<int32_t> > table_out{new gdf_table<int32_t>(num_data_cols, data_cols_out)};
-  status = table_in.gather(sorted_indices, table_out);
-  if (status != GDF_SUCCESS)
-    return status;
-
-  // setup for reduce by key
-  bool have_nulls = false;
-  for (size_t i = 0; i < num_groupby_cols; i++) {
-    if (orderby_cols_vect[i]->null_count > 0) {
-      have_nulls = true;
-      break;
-    }
-  }
-
-  Device_Vector<void*> d_cols(num_groupby_cols);
-  Device_Vector<gdf_valid_type*> d_valids(num_groupby_cols);
-  Device_Vector<int> d_types(num_groupby_cols, 0);
-
-  void** d_col_data = d_cols.data().get();
-  gdf_valid_type** d_valids_data = d_valids.data().get();
-  int* d_col_types = d_types.data().get();
-
-  soa_col_info(data_cols_out, num_groupby_cols, d_col_data, d_valids_data, d_col_types);
-
-  LesserRTTI<IndexT> f(d_cols, d_gdf_t, num_groupby_cols);
-
-  rmm_temp_allocator allocator(stream);
-
-  thrust::pair<IndexT*, CountT*> ret =
-    thrust::reduce_by_key(thrust::cuda::par(allocator).on(stream),
-                          ptr_d_indx, ptr_d_indx+nrows,
-                          thrust::make_constant_iterator<CountT>(1),
-                          ptr_d_kout,
-                          ptr_d_vout,
-                          [f] __host__ __device__(IndexT key1, IndexT key2){
-                            return f.equal(key1, key2);
-                          });
-
-    size_t new_sz = thrust::distance(ptr_d_vout, ret.second);
-
-
-  // reduce by key to count number of elements per group
-
-
-  // setup for pre-fix sum
-
-
-  // perform pre-fix sum to get group_start_indices
-
-
-
-
-
 }
 
 #endif

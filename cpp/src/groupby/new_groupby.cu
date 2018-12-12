@@ -5,6 +5,7 @@
 #include "utilities/error_utils.h"
 #include "aggregation_operations.hpp"
 #include "groupby/hash_groupby.cuh"
+#include <../tests/utilities/cudf_test_utils.cuh>
 
 namespace{
   /* --------------------------------------------------------------------------*/
@@ -189,4 +190,126 @@ gdf_error gdf_group_by(gdf_column* in_key_columns[],
   POP_RANGE();
 
   return gdf_error_code;
+}
+
+
+// thrust::device_vector set to use rmmAlloc and rmmFree.
+template <typename T>
+using Vector = thrust::device_vector<T, rmm_allocator<T>>;
+
+/* --------------------------------------------------------------------------*/
+  /**
+   * @brief Given a set of columns, of which a subset of these are defined to be the group by columns,
+   * all columns are sorted by the group by columns and returned, along with a column containing
+   * a list of the start indices of each group
+   *
+   * @Param[in] The number of columns in the dataset
+   * @Param[in] The input columns in the dataset
+   * @Param[in] The number of columns to be grouping by
+   * @Param[in] The host column indices of the input dataset that will be grouped by
+   * @Param[out] The dataset sorted by the group by columns (needs to be pre-allocated)
+   * @Param[out] A column containing the starting indices of each group. Indices based off of new sort order. (needs to be pre-allocated)
+   * @Param[in] Flag indicating if nulls are smaller (0) or larger (1) than non nulls for the sort operation
+   *
+   * @Returns gdf_error with error code on failure, otherwise GDF_SUCESS
+   */
+  /* ----------------------------------------------------------------------------*/
+gdf_error gdf_group_by_wo_aggregations(int num_data_cols,
+                           	   	   	   gdf_column** data_cols_in,
+									   int num_groupby_cols,
+									   int * groupby_col_indices,
+									   gdf_column** data_cols_out,
+									   gdf_column* group_start_indices,
+									   int nulls_are_smallest = 0)
+{
+// TODO ASSERTS: num_groupby_cols > 0
+
+  int32_t nrows = data_cols_in[0]->size;
+
+  // setup for order by call
+  std::vector<gdf_column*> orderby_cols_vect(num_groupby_cols);
+  for (int i = 0; i < num_groupby_cols; i++){
+    orderby_cols_vect[i] = data_cols_in[groupby_col_indices[i]];
+  }
+
+  Vector<int32_t> sorted_indices(nrows);
+  rmm_temp_allocator allocator(0);  // TODO make stream
+  auto exec = thrust::cuda::par(allocator).on(0);
+
+  thrust::sequence(exec, sorted_indices.begin(), sorted_indices.end());
+
+  gdf_column sorted_indices_col;
+  gdf_error status = gdf_column_view(&sorted_indices_col, (void*)thrust::raw_pointer_cast(sorted_indices.data()), 
+                            nullptr, nrows, GDF_INT32);
+  if (status != GDF_SUCCESS)
+    return status;
+
+// run order by and get new sort indexes
+  status = gdf_order_by(&orderby_cols_vect[0],             //input columns
+                       num_groupby_cols,                //number of columns in the first parameter (e.g. number of columsn to sort by)
+                       &sorted_indices_col,            //a gdf_column that is pre allocated for storing sorted indices
+                       0);  //flag to indicate if nulls are to be considered smaller than non-nulls or viceversa
+  if (status != GDF_SUCCESS)
+    return status;
+
+  // run gather operation to establish new order
+  std::unique_ptr< gdf_table<int32_t> > table_in{new gdf_table<int32_t>(num_data_cols, data_cols_in)};
+  std::unique_ptr< gdf_table<int32_t> > table_out{new gdf_table<int32_t>(num_data_cols, data_cols_out)};
+
+  status = table_in->gather<int32_t>(sorted_indices, *table_out.get());
+  if (status != GDF_SUCCESS)
+    return status;
+
+  // setup for reduce by key  
+  bool have_nulls = false;
+  for (int i = 0; i < num_groupby_cols; i++) {
+    if (orderby_cols_vect[i]->null_count > 0) {
+      have_nulls = true;
+      break;
+    }
+  }
+
+  Vector<void*> d_cols(num_groupby_cols); 
+  Vector<int> d_types(num_groupby_cols, 0);
+  void** d_col_data = d_cols.data().get();
+  int* d_col_types = d_types.data().get();
+
+  int32_t* result_end;
+  if (have_nulls){
+
+    Vector<gdf_valid_type*> d_valids(num_groupby_cols);
+    gdf_valid_type** d_valids_data = d_valids.data().get();
+
+    soa_col_info(data_cols_out, num_groupby_cols, d_col_data, d_valids_data, d_col_types);
+    
+    LesserRTTI<int32_t> comp(d_col_data, d_valids_data, d_col_types, nullptr, num_groupby_cols, 0);
+    
+    auto counting_iter = thrust::make_counting_iterator<int32_t>(0);
+    
+    result_end = thrust::unique_copy(exec, counting_iter, counting_iter+nrows, 
+                              (int32_t*)group_start_indices->data,
+                              [comp] __host__ __device__(int32_t key1, int32_t key2){
+                              return comp.equal_with_nulls(key1, key2);
+                            });
+
+  } else {
+
+    soa_col_info(*data_cols_out, num_groupby_cols, d_col_data, d_col_types);
+    
+    LesserRTTI<int32_t> comp(d_col_data, nullptr, d_col_types, nullptr, num_groupby_cols, 0);
+
+    auto counting_iter = thrust::make_counting_iterator<int32_t>(0);
+    
+    result_end = thrust::unique_copy(exec, counting_iter, counting_iter+nrows, 
+                              (int32_t*)group_start_indices->data,
+                              [comp] __host__ __device__(int32_t key1, int32_t key2){
+                              return comp.equal(key1, key2);  
+                            });
+  }
+
+  size_t new_sz = thrust::distance((int32_t*)group_start_indices->data, result_end);
+  group_start_indices->size = new_sz;
+
+  return status;
+
 }
