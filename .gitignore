@@ -29,6 +29,10 @@ python/cudf/bindings/*.cpp
 dist/
 *.egg-info/
 
+## python distribution / packaging
+dist/
+*.egg-info/
+
 ## libgdf
 CMakeFiles/
 Debug
