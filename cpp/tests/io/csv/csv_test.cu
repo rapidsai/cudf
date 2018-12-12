@@ -33,6 +33,9 @@
 #include <arrow/io/interfaces.h>
 #include <arrow/io/file.h>
 
+#include "tests/utilities/cudf_test_utils.cuh"
+#include "tests/utilities/cudf_test_fixtures.h"
+
 bool checkFile(const char *fname)
 {
 	struct stat st;
@@ -102,6 +105,18 @@ TEST(gdf_csv_test, Simple)
 }
 
 
+std::vector<gdf_column*> ToGdfColumnCpps(gdf_column	**data, const char	**names, size_t ncols)   {
+  std::vector<gdf_column*> gdfColumnsCpps;
+  for(size_t i = 0; i < ncols; i++ ){
+    gdf_column	*column = data[i];
+
+	gdfColumnsCpps.push_back(column);
+  }
+  return gdfColumnsCpps;
+}
+
+
+
 TEST(gdf_csv_test, CsvSimpleRandomAccessFile)
 {
 
@@ -130,7 +145,15 @@ TEST(gdf_csv_test, CsvSimpleRandomAccessFile)
 		args.lineterminator = '\n';
 		error = read_csv_arrow(&args,readable_file);
 		EXPECT_TRUE( args.num_cols_out == 10);
+		EXPECT_EQ(args.num_rows_out, 4);
 		EXPECT_TRUE( error == GDF_SUCCESS );
+	
+		std::cout << args.num_cols_out << std::endl;
+	    std::cout << args.num_rows_out << std::endl;
+
+		auto gpu_columns  = ToGdfColumnCpps(args.data, args.names, args.num_cols_out);
+ 		for (auto ptr : gpu_columns)
+		 	print_typed_column((int32_t*)ptr->data, ptr->valid, ptr->size);
 	}
 }
 
