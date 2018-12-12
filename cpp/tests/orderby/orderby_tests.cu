@@ -224,7 +224,7 @@ struct OrderByTest : public GdfTest
   }
 
   void create_gdf_output_buffers(const size_t orderby_column_length) {
-    std::vector<size_t> temp(orderby_column_length, 0);
+    std::vector<int> temp(orderby_column_length, 0);
     gdf_output_indices_column = create_gdf_column(temp, nullptr, 0);
     gdf_raw_output_indices_column = gdf_output_indices_column.get();
   }
@@ -352,14 +352,14 @@ struct OrderByTest : public GdfTest
     }
 
     size_t output_size = sorted_indices_output->size;
-    size_t* device_result = static_cast<size_t*>(sorted_indices_output->data);
+    int* device_result = static_cast<int*>(sorted_indices_output->data);
 
     // Host vector to hold gdf sort output
-    std::vector<size_t> host_result(output_size);
+    std::vector<int> host_result(output_size);
 
     // Copy result of gdf sorted_indices_output the host
     EXPECT_EQ(cudaMemcpy(host_result.data(),
-               device_result, output_size * sizeof(size_t), cudaMemcpyDeviceToHost), cudaSuccess);
+               device_result, output_size * sizeof(int), cudaMemcpyDeviceToHost), cudaSuccess);
 
     if(print){
       std::cout << "GDF result size: " << host_result.size() << std::endl;
@@ -368,7 +368,7 @@ struct OrderByTest : public GdfTest
       std::cout << "\n";
     }
 
-    return host_result;
+    return std::vector<size_t>(host_result.begin(), host_result.end());
   }
 };
 

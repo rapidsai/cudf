@@ -1,8 +1,17 @@
-# cuDF 0.5.0 (DATE TBD)
+
+# cuDF 0.5.0 (Date TBD)
 
 ## New Features
 
 - PR #411 added null support to gdf_order_by (new API), gdf_order_by_asc_desc (new function) and cudf_table::sort
+- PR #455 CSV Reader: Add support for user-specified decimal point and thousands separator
+- PR #439 add `DataFrame.drop` method similar to pandas
+
+## Improvements
+- PR #426 Removed sort-based groupby and refactored existing groupby APIs. Also improves C++/CUDA compile time.
+ 
+## Bug Fixes
+
 
 # cuDF 0.4.0 (05 Dec 2018)
 
