@@ -20,8 +20,10 @@
  Author: Mark Harris
  */
 
-#pragma once
+#ifndef THRUST_RMM_ALLOCATOR_H
+#define THRUST_RMM_ALLOCATOR_H
 
+#include <thrust/device_vector.h>
 #include <thrust/device_malloc_allocator.h>
 #include <thrust/system_error.h>
 #include <thrust/system/cuda/error.h>
@@ -67,4 +69,33 @@ class rmm_allocator : public thrust::device_malloc_allocator<T>
   	cudaStream_t stream;
 };
 
-typedef rmm_allocator<char> rmm_temp_allocator; // Use this alias for thrust::cuda::par(allocator).on(stream)
+
+namespace rmm
+{
+/**
+ * @brief Alias for a thrust::device_vector that uses RMM for memory allocation.
+ * 
+ */
+template <typename T>
+using device_vector = thrust::device_vector<T, rmm_allocator<T>>;
+
+/* --------------------------------------------------------------------------*/
+/** 
+ * @brief Returns a Thrust CUDA execution policy that uses RMM for temporary memory
+ * allocation and executes on the specified stream.
+ * 
+ * @Param stream The stream that the execution policy will execute on.
+ * 
+ * @Returns A Thrust execution policy that will use RMM for temporary memory allocation
+ * that runs on the specified stream.
+ */
+/* ----------------------------------------------------------------------------*/
+inline auto exec_policy(cudaStream_t stream = 0){
+  // par_t::operator() can't accept a r-value, so need to pass it an l-value
+  rmm_allocator<char> allocator(stream);
+  return thrust::cuda::par(allocator).on(stream);
+}
+
+} // namespace rmm
+
+#endif // THRUST_RMM_ALLOCATOR_H

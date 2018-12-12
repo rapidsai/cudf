@@ -37,9 +37,6 @@
 #include "tests/utilities/cudf_test_utils.cuh"
 #include "tests/utilities/cudf_test_fixtures.h"
 
-// Vector set to use rmmAlloc and rmmFree.
-template <typename T>
-using Vector = thrust::device_vector<T, rmm_allocator<T>>;
 
 
 template <template <typename> class hash_function,
@@ -177,7 +174,7 @@ struct HashPartitionTest : public GdfTest
     // Create a table from the gdf output of only the columns that were hashed
     std::unique_ptr< gdf_table<int> > table_to_hash{new gdf_table<int>(num_cols_to_hash, gdf_cols_to_hash.data())};
 
-    Vector<int> row_partition_numbers(table_to_hash->get_column_length());
+    rmm::device_vector<int> row_partition_numbers(table_to_hash->get_column_length());
 
     // Compute the partition number for every row in the result
     switch(gdf_hash_function)

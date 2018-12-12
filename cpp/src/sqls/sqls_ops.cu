@@ -35,9 +35,7 @@ namespace{ //annonymus
     cudaMemcpy(d_types, h_types, ncols*sizeof(int), cudaMemcpyHostToDevice);//TODO: add streams
   }
 
-  // thrust::device_vector set to use rmmAlloc and rmmFree.
-  template<typename T>
-  using Vector = thrust::device_vector<T, rmm_allocator<T>>;
+
 
 }//end unknown namespace
 
