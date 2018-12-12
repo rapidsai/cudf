@@ -276,7 +276,8 @@ def test_csv_reader_gzip_compression(tmpdir):
     df_out = pd.read_csv(fname, names=['col1', 'col2'], parse_dates=[0, 1],
                          dayfirst=True, compression='gzip')
     dtypes = ['date', 'date']
-    out = read_csv(str(fname), names=list(df.columns.values), dtype=dtypes, dayfirst=True, compression='gzip')
+    out = read_csv(str(fname), names=list(df.columns.values), dtype=dtypes,
+                   dayfirst=True, compression='gzip')
 
     assert len(out.columns) == len(df_out.columns)
     pd.util.testing.assert_frame_equal(df_out, out.to_pandas())
