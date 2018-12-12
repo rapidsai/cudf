@@ -19,11 +19,11 @@ def _wrap_string(text):
 
 
 def is_file_like(obj):
-  if not (hasattr(obj,'read') or hasattr(obj,'write')):
-    return False
-  if not hasattr(obj,"__iter__"):
-    return False
-  return True
+    if not (hasattr(obj, 'read') or hasattr(obj, 'write')):
+        return False
+    if not hasattr(obj, "__iter__"):
+        return False
+    return True
 
 
 def read_csv(filepath_or_buffer, lineterminator='\n',
@@ -31,7 +31,7 @@ def read_csv(filepath_or_buffer, lineterminator='\n',
              delimiter=',', sep=None, delim_whitespace=False,
              skipinitialspace=False, names=None, dtype=None,
              skipfooter=0, skiprows=0, dayfirst=False, thousands=None,
-			 decimal='.'):
+             decimal='.'):
     """
     Load and parse a CSV file into a DataFrame
 
@@ -107,22 +107,22 @@ def read_csv(filepath_or_buffer, lineterminator='\n',
 
     # Populate csv_reader struct
     if is_file_like(filepath_or_buffer):
-      buffer = filepath_or_buffer.read()
-      # check if StringIO is used
-      if hasattr(buffer,'encode'):
-        buffer_as_bytes = buffer.encode()
-      else:
-        buffer_as_bytes = buffer
-      buffer_data_holder = ffi.new("char[]", buffer_as_bytes)
+        buffer = filepath_or_buffer.read()
+        # check if StringIO is used
+        if hasattr(buffer, 'encode'):
+            buffer_as_bytes = buffer.encode()
+        else:
+            buffer_as_bytes = buffer
+        buffer_data_holder = ffi.new("char[]", buffer_as_bytes)
 
-      csv_reader.input_file.type = libgdf.BUFFER
-      csv_reader.input_file.buffer.data = buffer_data_holder
-      csv_reader.input_file.buffer.size = len(buffer_as_bytes)
+        csv_reader.input_file.type = libgdf.BUFFER
+        csv_reader.input_file.buffer.data = buffer_data_holder
+        csv_reader.input_file.buffer.size = len(buffer_as_bytes)
     else:
-      file_path = _wrap_string(filepath_or_buffer)
+        file_path = _wrap_string(filepath_or_buffer)
 
-      csv_reader.input_file.type = libgdf.FILE_PATH
-      csv_reader.input_file.path = file_path
+        csv_reader.input_file.type = libgdf.FILE_PATH
+        csv_reader.input_file.path = file_path
 
     arr_names = []
     arr_dtypes = []
@@ -259,22 +259,22 @@ def read_csv_strings(filepath_or_buffer, lineterminator='\n',
 
     # Populate csv_reader struct
     if is_file_like(filepath_or_buffer):
-      buffer = filepath_or_buffer.read()
-      # check if StringIO is used
-      if hasattr(buffer,'encode'):
-        buffer_as_bytes = buffer.encode()
-      else:
-        buffer_as_bytes = buffer
-      buffer_data_holder = ffi.new("char[]", buffer_as_bytes)
+        buffer = filepath_or_buffer.read()
+        # check if StringIO is used
+        if hasattr(buffer, 'encode'):
+            buffer_as_bytes = buffer.encode()
+        else:
+            buffer_as_bytes = buffer
+        buffer_data_holder = ffi.new("char[]", buffer_as_bytes)
 
-      csv_reader.input_file.type = libgdf.BUFFER
-      csv_reader.input_file.buffer.data = buffer_data_holder
-      csv_reader.input_file.buffer.size = len(buffer_as_bytes)
+        csv_reader.input_file.type = libgdf.BUFFER
+        csv_reader.input_file.buffer.data = buffer_data_holder
+        csv_reader.input_file.buffer.size = len(buffer_as_bytes)
     else:
-      file_path = _wrap_string(filepath_or_buffer)
+        file_path = _wrap_string(filepath_or_buffer)
 
-      csv_reader.input_file.type = libgdf.FILE_PATH
-      csv_reader.input_file.path = file_path
+        csv_reader.input_file.type = libgdf.FILE_PATH
+        csv_reader.input_file.path = file_path
 
     arr_names = []
     arr_dtypes = []
