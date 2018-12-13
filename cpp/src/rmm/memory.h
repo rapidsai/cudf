@@ -22,9 +22,6 @@
 
 #pragma once 
 
-extern "C"{
-
-
 typedef struct CUstream_st *cudaStream_t;
 typedef long int offset_t; // would prefer ptrdiff_t but can't #include <stddef.h>
                            // due to CFFI limitations
@@ -194,5 +191,3 @@ size_t rmmLogSize();
  * @return rmmError_t RMM_SUCCESS, or RMM_IO_ERROR on any failure.
  * --------------------------------------------------------------------------**/
 rmmError_t rmmGetLog(char* buffer, size_t buffer_size);
-
-}
