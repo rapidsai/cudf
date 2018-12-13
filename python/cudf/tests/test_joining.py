@@ -252,7 +252,7 @@ def test_dataframe_join_on(on):
     # Expected result (from pandas)
     pddf_joined = pddf_left.merge(pddf_right, on=on, how='left')
 
-    # Result (from cuDF)
+    # Test (from cuDF; doesn't check for ordering)
     join_result = df_left.merge(df_right, on=on, how='left')
 
     join_result['right_val'] = (join_result['right_val']
