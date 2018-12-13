@@ -1,5 +1,6 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
 
+import operator
 import pytest
 
 import numpy as np
@@ -17,6 +18,7 @@ from cudf.settings import set_options
 from itertools import combinations
 
 from . import utils
+from .utils import assert_eq
 
 
 def test_buffer_basic():
@@ -1001,3 +1003,60 @@ def test_dataframe_shape_empty():
     gdf = DataFrame()
 
     assert pdf.shape == gdf.shape
+
+
+@pytest.fixture
+def df():
+    return pd.DataFrame({'x': range(10),
+                         'y': range(10)})
+
+@pytest.fixture
+def gf(df):
+    return gd.DataFrame.from_pandas(df)
+
+
+@pytest.mark.parametrize('func', [
+    lambda df: df.mean(),
+    lambda df: df.sum(),
+    lambda df: df.min(),
+    lambda df: df.max(),
+    lambda df: df.std(),
+    lambda df: df.count(),
+    pytest.param(lambda df: df.size, marks=pytest.mark.xfail()),
+])
+@pytest.mark.parametrize('accessor', [
+    pytest.param(lambda df: df, marks=pytest.mark.xfail(reason="dataframe reductions not yet supported")),
+    lambda df: df.x,
+])
+def test_reductions(df, gf, accessor, func):
+    assert_eq(func(accessor(df)), func(accessor(gf)))
+
+
+@pytest.mark.parametrize('left', [
+    pytest.param(lambda df: df, marks=pytest.mark.xfail()),
+    lambda df: df.x,
+    lambda df: 3,
+])
+@pytest.mark.parametrize('right', [
+    pytest.param(lambda df: df, marks=pytest.mark.xfail()),
+    lambda df: df.x,
+    lambda df: 3,
+])
+@pytest.mark.parametrize('binop', [
+    operator.add,
+    operator.mul,
+    pytest.param(operator.floordiv, marks=pytest.mark.xfail()),
+    pytest.param(operator.truediv, marks=pytest.mark.xfail()),
+    pytest.param(operator.mod, marks=pytest.mark.xfail()),
+    pytest.param(operator.pow, marks=pytest.mark.xfail()),
+    operator.eq,
+    operator.lt,
+    operator.le,
+    operator.gt,
+    operator.ge,
+    operator.ne,
+])
+def test_binops(df, gf, left, right, binop):
+    d = binop(left(df), right(df))
+    g = binop(left(gf), right(gf))
+    assert_eq(d, g)
