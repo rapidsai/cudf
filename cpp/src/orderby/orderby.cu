@@ -27,10 +27,6 @@
 
 namespace{ //annonymus
 
-  // thrust::device_vector set to use rmmAlloc and rmmFree.
-  template<typename T>
-  using Device_Vector = thrust::device_vector<T, rmm_allocator<T>>;
-
   gdf_error multi_col_order_by(gdf_column** cols,
                                int8_t* asc_desc,
                                size_t ncols,
@@ -51,9 +47,9 @@ namespace{ //annonymus
       }
     }
 
-    Device_Vector<void*> d_cols(ncols);
-    Device_Vector<gdf_valid_type*> d_valids(ncols);
-    Device_Vector<int> d_types(ncols, 0);
+    rmm::device_vector<void*> d_cols(ncols);
+    rmm::device_vector<gdf_valid_type*> d_valids(ncols);
+    rmm::device_vector<int> d_types(ncols, 0);
 
     void** d_col_data = d_cols.data().get();
     gdf_valid_type** d_valids_data = d_valids.data().get();
