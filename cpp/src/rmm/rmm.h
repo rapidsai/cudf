@@ -3,10 +3,7 @@
 
 #include <cuda_runtime_api.h>
 #include "memory.hpp"
-
-extern "C" {
 #include "memory.h"
-}
 
 /** ---------------------------------------------------------------------------*
  * @brief Device memory alloc / realloc / free macros that pass the calling file
