@@ -26,9 +26,9 @@ def test_pandas_dataframe_copy():
                        columns=['a', 'b', 'c'])
     copy_pdf = pdf.copy()
     copy_pdf.iloc[1][1] = 10
-    assert pdf.iloc[1][1] == copy_pdf.iloc[1][1]
+    assert pdf.iloc[1][1] != copy_pdf.iloc[1][1]
     copy_pdf['b'] = [0, 0, 0]
-    assert np.array_equal(pdf['b'].values, copy_pdf['b'].values)
+    assert not np.array_equal(pdf['b'].values, copy_pdf['b'].values)
 
 
 def test_pandas_dataframe_copy_deep_False():
@@ -68,7 +68,7 @@ def test_cudf_dataframe_copy():
     copy_deep_False_cdf = cdf.copy()
     copy_deep_False_cdf['b'] = [0, 0, 0]
     assert not np.array_equal(cdf['b'].to_array(), copy_deep_False_cdf['b']
-                          .to_array())
+                              .to_array())
 
 
 def test_cudf_dataframe_copy_deep_False():
