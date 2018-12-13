@@ -22,7 +22,9 @@
 
 #ifndef MEMORY_HPP
 #define MEMORY_HPP
+extern "C" {
 #include "memory.h"
+}
 #include "memory_manager.h"
 
 /** ---------------------------------------------------------------------------*
