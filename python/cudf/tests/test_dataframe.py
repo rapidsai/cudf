@@ -1014,6 +1014,7 @@ def test_dataframe_shape_empty():
 def test_dataframe_tranpose(nulls, num_cols, num_rows, dtype):
     if dtype not in ['float32', 'float64'] and nulls in ['some', 'all']:
         pytest.skip(msg='nulls not supported in dtype: ' + dtype)
+
     pdf = pd.DataFrame()
     from string import ascii_lowercase
     for i in range(num_cols):
@@ -1033,8 +1034,18 @@ def test_dataframe_tranpose(nulls, num_cols, num_rows, dtype):
 
     expect = pdf.transpose()
 
-    pd.testing.assert_frame_equal(expect, got_function.to_pandas())
-    pd.testing.assert_frame_equal(expect, got_property.to_pandas())
+    # Pandas creates an empty index of `object` dtype by default while cuDF
+    # creates a RangeIndex by default, type is different but same value
+    pd.testing.assert_frame_equal(
+        expect,
+        got_function.to_pandas(),
+        check_index_type=False
+    )
+    pd.testing.assert_frame_equal(
+        expect,
+        got_property.to_pandas(),
+        check_index_type=False
+    )
 
 
 @pytest.mark.parametrize('num_cols', [0, 1, 2, 3, 5, 10])
