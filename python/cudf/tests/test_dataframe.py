@@ -1003,8 +1003,8 @@ def test_dataframe_shape_empty():
     assert pdf.shape == gdf.shape
 
 
-@pytest.mark.parametrize('num_cols', [0, 1, 2, 3, 5, 10])
-@pytest.mark.parametrize('num_rows', [0, 1, 2, 10, 100, 1000])
+@pytest.mark.parametrize('num_cols', [0, 1, 2, 10])
+@pytest.mark.parametrize('num_rows', [0, 1, 2, 1000])
 @pytest.mark.parametrize(
     'dtype',
     ['int8', 'int16', 'int32', 'int64', 'float32', 'float64',
@@ -1034,6 +1034,10 @@ def test_dataframe_tranpose(nulls, num_cols, num_rows, dtype):
 
     expect = pdf.transpose()
 
+    # Temporarily reset index since we don't use index for col names
+    if len(expect.columns) > 0:
+        expect = expect.reset_index()
+
     # Pandas creates an empty index of `object` dtype by default while cuDF
     # creates a RangeIndex by default, type is different but same value
     pd.testing.assert_frame_equal(
@@ -1048,8 +1052,8 @@ def test_dataframe_tranpose(nulls, num_cols, num_rows, dtype):
     )
 
 
-@pytest.mark.parametrize('num_cols', [0, 1, 2, 3, 5, 10])
-@pytest.mark.parametrize('num_rows', [0, 1, 2, 10, 100, 1000])
+@pytest.mark.parametrize('num_cols', [0, 1, 2, 10])
+@pytest.mark.parametrize('num_rows', [0, 1, 2, 1000])
 def test_dataframe_tranpose_category(num_cols, num_rows):
     pytest.xfail("category dtype not yet supported for transpose")
     pdf = pd.DataFrame()
