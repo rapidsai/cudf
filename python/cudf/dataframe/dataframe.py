@@ -950,7 +950,10 @@ class DataFrame(object):
             series._column._update_null_count()
 
         for i in range(0, new_ncol):
-            df[str(i)] = new_col_series[i]
+            if i == 0:
+                df['index'] = new_col_series[i]
+            else:
+                df[str(i)] = new_col_series[i]
         return df
 
     @property
