@@ -63,13 +63,15 @@ TEST_F(MemoryManagerTest, AllocateZeroBytes) {
 }
 
 TEST_F(MemoryManagerTest, NullPtrAllocateZeroBytes) {
-    ASSERT_SUCCESS(RMM_ALLOC(0, 0, stream));
+    char ** p{nullptr};
+    ASSERT_SUCCESS(RMM_ALLOC(p, 0, stream));
 }
 
 // Bad argument tests
 
 TEST_F(MemoryManagerTest, NullPtrInvalidArgument) {
-    rmmError_t res = RMM_ALLOC(0, 4, stream);
+    char ** p{nullptr};
+    rmmError_t res = RMM_ALLOC(p, 4, stream);
     ASSERT_FAILURE(res);
     ASSERT_EQ(RMM_ERROR_INVALID_ARGUMENT, res);
 }

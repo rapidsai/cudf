@@ -10,6 +10,7 @@
 
 - PR #472 RMM: Created centralized rmm::device_vector alias and rmm::exec_policy
 - PR #426 Removed sort-based groupby and refactored existing groupby APIs. Also improves C++/CUDA compile time.
+- PR #465 Added templated C++ API for RMM to avoid explicit cast to `void**`
 
 ## Bug Fixes
 - PR #495 Updated README to correct where cffi pytest should be executed.
