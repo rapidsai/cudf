@@ -17,14 +17,16 @@ DataFrame copy expectations
   A cuDF DataFrame is a compound object containing a few members:
   _index, _size, _cols, where _cols is an OrderedDict
 """
-from copy import copy
-from copy import deepcopy
+from copy import copy  # noqa:F401
+from copy import deepcopy  # noqa:F401
+
+
 @pytest.mark.parametrize('copy_parameters', [
-    {'fn':'lambda x:x.copy()', 'expected':False},
-    {'fn':'lambda x:x.copy(deep=True)', 'expected':False},
-    {'fn':'lambda x:copy(x)', 'expected':False},
-    {'fn':'lambda x:deepcopy(x)', 'expected':False},
-    {'fn':'lambda x:x.copy(deep=False)', 'expected':True},
+    {'fn': 'lambda x:x.copy()', 'expected': False},
+    {'fn': 'lambda x:x.copy(deep=True)', 'expected': False},
+    {'fn': 'lambda x:copy(x)', 'expected': False},
+    {'fn': 'lambda x:deepcopy(x)', 'expected': False},
+    {'fn': 'lambda x:x.copy(deep=False)', 'expected': True},
     ])
 def test_dataframe_copy(copy_parameters):
     pdf = pd.DataFrame([[1, 2, 3], [4, 5, 6], [7, 8, 9]],
@@ -41,9 +43,12 @@ def test_dataframe_copy(copy_parameters):
     assert cdf_pass == copy_parameters['expected']
     assert pdf_pass == copy_parameters['expected']
 
+
 """
 DataFrame copy bounds checking - sizes 0 through 10 perform as expected
 """
+
+
 @pytest.mark.parametrize('copy_fn', [
     'lambda x:x.copy()',
     'lambda x:x.copy(deep=True)',
@@ -63,4 +68,3 @@ def test_cudf_dataframe_copy(copy_fn, ncols, data_type):
     df = DataFrame.from_pandas(pdf)
     copy_df = eval(copy_fn)(df)
     assert df.to_string().split() == copy_df.to_string().split()
-
