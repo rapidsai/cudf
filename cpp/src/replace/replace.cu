@@ -30,8 +30,8 @@ namespace{ //anonymous
   /* --------------------------------------------------------------------------*/
   /** 
    * @brief Kernel that replaces elements from `d_col_data` given the following
-   *        rule: for each value `old_values[i]` in [old_values_begin`, `old_values_end`)
-   *        that is present in `d_col_data`, it will be replaced with `d_new_values[i]`.
+   *        rule: replace all `old_values[i]` in [old_values_begin`, `old_values_end`)
+   *        present in `d_col_data` with `d_new_values[i]`.
    * 
    * @Param[in,out] d_col_data Device array with the data to be modified
    * @Param[in] nrows # rows in `d_col_data`
@@ -68,7 +68,7 @@ namespace{ //anonymous
 
   /* --------------------------------------------------------------------------*/
   /** 
-   * @brief Functor called by the `type_dispatcher` in order to invoke and instanciate
+   * @brief Functor called by the `type_dispatcher` in order to invoke and instantiate
    *        `replace_kernel` with the apropiate data types.
    */
   /* ----------------------------------------------------------------------------*/
@@ -80,14 +80,13 @@ namespace{ //anonymous
                     const void* d_new_values,
                     size_t      nvalues)
     {
-      thrust::device_ptr<const col_type> old_values_begin(static_cast<const col_type*>(d_old_values));
-      thrust::device_ptr<const col_type> old_values_end(static_cast<const col_type*>(d_old_values) + nvalues);
+      thrust::device_ptr<const col_type> old_values_begin = thrust::device_pointer_cast(static_cast<const col_type*>(d_old_values));
 
       const size_t grid_size = nrows / BLOCK_SIZE + (nrows % BLOCK_SIZE != 0);
       replace_kernel<<<grid_size, BLOCK_SIZE>>>(static_cast<col_type*>(d_col_data),
                                              nrows,
                                              old_values_begin,
-                                             old_values_end,
+                                             old_values_begin + nvalues,
                                              static_cast<const col_type*>(d_new_values));
     }
   };
@@ -119,8 +118,8 @@ namespace{ //anonymous
 /* --------------------------------------------------------------------------*/
 /** 
  * @brief Replace elements from `col` according to the mapping `old_values` to
- *        `new_values`, that is, for each value `old_values[i]` that is present
- *        in `col`, it will be replaced with `new_values[i]`.
+ *        `new_values`, that is, replace all `old_values[i]` present in `col` 
+ *        with `new_values[i]`.
  * 
  * @Param[in,out] col gdf_column with the data to be modified
  * @Param[in] old_values gdf_column with the old values to be replaced
