@@ -979,6 +979,8 @@ class DataFrame(object):
 
         if on is None:
             on = list(same_names)
+            if len(on) == 0:
+                raise ValueError('No common columns to perform merge on')
         on = [on] if isinstance(on, str) else list(on)
         for name in on:
             if pd.api.types.is_categorical_dtype(self[name]):

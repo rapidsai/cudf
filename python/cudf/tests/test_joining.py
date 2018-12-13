@@ -274,3 +274,45 @@ def test_dataframe_merge_on(on):
         .sort_values(list(pddf_joined.columns))
         .reset_index(drop=True),
         check_like=True)
+
+
+def test_dataframe_merge_on_unknown_column():
+    np.random.seed(0)
+
+    # Make cuDF
+    df_left = DataFrame()
+    nelem = 500
+    df_left['key1'] = np.random.randint(0, 40, nelem)
+    df_left['key2'] = np.random.randint(0, 50, nelem)
+    df_left['left_val'] = np.arange(nelem)
+
+    df_right = DataFrame()
+    nelem = 500
+    df_right['key1'] = np.random.randint(0, 30, nelem)
+    df_right['key2'] = np.random.randint(0, 50, nelem)
+    df_right['right_val'] = np.arange(nelem)
+
+    with pytest.raises(KeyError) as raises:
+        df_left.merge(df_right, on='bad_key', how='left')
+    raises.match('bad_key')
+
+
+def test_dataframe_merge_no_common_column():
+    np.random.seed(0)
+
+    # Make cuDF
+    df_left = DataFrame()
+    nelem = 500
+    df_left['key1'] = np.random.randint(0, 40, nelem)
+    df_left['key2'] = np.random.randint(0, 50, nelem)
+    df_left['left_val'] = np.arange(nelem)
+
+    df_right = DataFrame()
+    nelem = 500
+    df_right['key3'] = np.random.randint(0, 30, nelem)
+    df_right['key4'] = np.random.randint(0, 50, nelem)
+    df_right['right_val'] = np.arange(nelem)
+
+    with pytest.raises(ValueError) as raises:
+        df_left.merge(df_right, how='left')
+    raises.match('No common columns to perform merge on')
