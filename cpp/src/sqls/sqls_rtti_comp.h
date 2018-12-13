@@ -51,7 +51,7 @@ struct LesserRTTI
   LesserRTTI(void *const *cols,
              gdf_valid_type *const *valids,
              int *const types,
-             char *const asc_desc_flags,
+             int8_t *const asc_desc_flags,
              size_t sz,
              bool nulls_are_smallest) : columns_(cols),
                                         valids_(valids),
@@ -423,7 +423,7 @@ private:
   const int* const rtti_{nullptr};
   size_t sz_;
   const void* const * vals_{nullptr}; //for filtering
-  char* const asc_desc_flags_{nullptr}; //array of 0 and 1 that allows us to know whether or not a column should be sorted ascending or descending
+  int8_t* const asc_desc_flags_{nullptr}; //array of 0 and 1 that allows us to know whether or not a column should be sorted ascending or descending
   bool nulls_are_smallest_{false};  // when sorting if there are nulls in the data if this is true, then they will be treated as the smallest value, otherwise they will be treated as the largest value
 };
 
@@ -789,7 +789,7 @@ template<typename IndexT>
 void multi_col_sort(void* const *           d_cols,
                     gdf_valid_type* const * d_valids,
                     int*                    d_col_types,
-                    char*                   d_asc_desc,
+                    int8_t*                 d_asc_desc,
                     size_t                  ncols,
                     size_t                  nrows,
                     bool                    have_nulls,

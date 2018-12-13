@@ -3,7 +3,7 @@
 
 ## New Features
 
-- PR #411 added null support to gdf_order_by (new API), gdf_order_by_asc_desc (new function) and cudf_table::sort
+- PR #411 added null support to gdf_order_by (new API) and cudf_table::sort
 - PR #455 CSV Reader: Add support for user-specified decimal point and thousands separator
 - PR #439 add `DataFrame.drop` method similar to pandas
 

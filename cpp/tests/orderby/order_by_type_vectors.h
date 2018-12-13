@@ -23,17 +23,17 @@
 #include <utilities/cudf_utils.h>
 
 // Initialize valids
-void initialize_order_by_types(std::vector<char>& order_by_types, size_t length, bool random_values = true)
+void initialize_order_by_types(std::vector<int8_t>& order_by_types, size_t length, bool random_values = true)
 {
   order_by_types.clear();
   order_by_types.reserve(length);
 
   for (size_t i = 0; i < length; ++i) {
     if (random_values) {
-      order_by_types.push_back((char)(std::rand() % 2));
+      order_by_types.push_back((int8_t)(std::rand() % 2));
     }
     else {
-      order_by_types.push_back((char)GDF_ORDER_ASC);
+      order_by_types.push_back((int8_t)GDF_ORDER_ASC);
     }    
   }
 }
@@ -57,7 +57,7 @@ void print_vector_valids_and_sort_order(std::vector<T>& v, gdf_valid_type* valid
 
 template <std::size_t I = 0, typename... Tp>
 inline typename std::enable_if<I == sizeof...(Tp), void>::type
-print_tuples_valids_and_order_by_types(std::tuple<std::vector<Tp>...>& t, std::vector<host_valid_pointer>& valid, std::vector<char>& order_by_types )
+print_tuples_valids_and_order_by_types(std::tuple<std::vector<Tp>...>& t, std::vector<host_valid_pointer>& valid, std::vector<int8_t>& order_by_types )
 {
   //bottom of compile-time recursion
   //purposely empty...
@@ -66,7 +66,7 @@ print_tuples_valids_and_order_by_types(std::tuple<std::vector<Tp>...>& t, std::v
 //compile time recursion to print a tuple of vectors
 template <std::size_t I = 0, typename... Tp>
 inline typename std::enable_if < I<sizeof...(Tp), void>::type
-print_tuples_valids_and_order_by_types(std::tuple<std::vector<Tp>...>& t, std::vector<host_valid_pointer>& valid, std::vector<char>& order_by_types)
+print_tuples_valids_and_order_by_types(std::tuple<std::vector<Tp>...>& t, std::vector<host_valid_pointer>& valid, std::vector<int8_t>& order_by_types)
 {
   // print the current vector:
   print_vector_valids_and_sort_order(std::get<I>(t), valid[I].get(), (order_by_type)order_by_types[I]);

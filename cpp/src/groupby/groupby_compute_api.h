@@ -208,7 +208,7 @@ gdf_error GroupbyHash(gdf_table<size_type> const & groupby_input_table,
   // Optionally sort the groupby/aggregation result columns
   if(true == sort_result) {
 
-     rmm::device_vector<int32_t> sorted_indices(*out_size);
+      rmm::device_vector<int32_t> sorted_indices(*out_size);
       thrust::sequence(rmm::exec_policy(cudaStream_t{0}), sorted_indices.begin(), sorted_indices.end());
 
       gdf_column sorted_indices_col;
@@ -218,6 +218,7 @@ gdf_error GroupbyHash(gdf_table<size_type> const & groupby_input_table,
         return status;
 
       status = gdf_order_by(groupby_output_table.get_columns(),             //input columns
+                       nullptr,
                        groupby_output_table.get_num_columns(),                //number of columns in the first parameter (e.g. number of columsn to sort by)
                        &sorted_indices_col,            //a gdf_column that is pre allocated for storing sorted indices
                        0);  //flag to indicate if nulls are to be considered smaller than non-nulls or viceversa
