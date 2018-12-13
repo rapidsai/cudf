@@ -121,16 +121,13 @@ gdf_error gdf_hash(int num_cols, gdf_column **input, gdf_hash_func hash, gdf_col
   hash_value_type * p_output = static_cast<hash_value_type*>(output->data);
   thrust::device_ptr<hash_value_type> row_hash_values = thrust::device_pointer_cast(p_output);
 
-  cudaStream_t stream{0};
-  rmm_temp_allocator allocator(stream);
-  auto exec = thrust::cuda::par(allocator).on(stream);
 
   // Compute the hash value for each row depending on the specified hash function
   switch(hash)
   {
     case GDF_HASH_MURMUR3:
       {
-        thrust::tabulate(exec,
+        thrust::tabulate(rmm::exec_policy(cudaStream_t{0}),
                         row_hash_values, 
                          row_hash_values + num_rows, 
                          row_hasher<MurmurHash3_32,size_type>(*input_table));
@@ -138,7 +135,7 @@ gdf_error gdf_hash(int num_cols, gdf_column **input, gdf_hash_func hash, gdf_col
       }
     case GDF_HASH_IDENTITY:
       {
-        thrust::tabulate(exec,
+        thrust::tabulate(rmm::exec_policy(cudaStream_t{0}),
                          row_hash_values, 
                          row_hash_values + num_rows, 
                          row_hasher<IdentityHash,size_type>(*input_table));
@@ -470,13 +467,11 @@ gdf_error hash_partition_gdf_table(gdf_table<size_type> const & input_table,
 
   CUDA_CHECK_LAST();
 
-  cudaStream_t stream{0}; // TODO: non-default stream?
-  rmm_temp_allocator allocator(stream);
   
   // Compute exclusive scan of all blocks' partition sizes in-place to determine 
   // the starting point for each blocks portion of each partition in the output
   size_type * scanned_block_partition_sizes{block_partition_sizes};
-  thrust::exclusive_scan(thrust::cuda::par(allocator).on(stream),
+  thrust::exclusive_scan(rmm::exec_policy(cudaStream_t{0}),
                          block_partition_sizes, 
                          block_partition_sizes + (grid_size * num_partitions), 
                          scanned_block_partition_sizes);
@@ -488,7 +483,7 @@ gdf_error hash_partition_gdf_table(gdf_table<size_type> const & input_table,
   cudaStream_t s1{};
   cudaStreamCreate(&s1);
   size_type * scanned_global_partition_sizes{global_partition_sizes};
-  thrust::exclusive_scan(thrust::cuda::par(allocator).on(s1),
+  thrust::exclusive_scan(rmm::exec_policy(s1),
                          global_partition_sizes, 
                          global_partition_sizes + num_partitions,
                          scanned_global_partition_sizes);

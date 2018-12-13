@@ -30,9 +30,6 @@
 #include "rmm/thrust_rmm_allocator.h"
 
 
-// Vector set to use rmmAlloc and rmmFree.
-template <typename T>
-using Vector = thrust::device_vector<T, rmm_allocator<T>>;
 
 
 // The occupancy of the hash table determines it's capacity. A value of 50 implies
@@ -210,16 +207,14 @@ gdf_error GroupbyHash(gdf_table<size_type> const & groupby_input_table,
 
   // Optionally sort the groupby/aggregation result columns
   if(true == sort_result) {
-      rmm_temp_allocator allocator(0);
-    	auto exec = thrust::cuda::par(allocator).on(0);
 
       auto sorted_indices = groupby_output_table.sort();
-      Vector<aggregation_type> agg(*out_size);
-      thrust::gather(exec,
+      rmm::device_vector<aggregation_type> agg(*out_size);
+      thrust::gather(rmm::exec_policy(cudaStream_t{0}),
               sorted_indices.begin(), sorted_indices.end(),
               out_aggregation_column,
               agg.begin());
-      thrust::copy(exec, agg.begin(), agg.end(), out_aggregation_column);
+      thrust::copy(rmm::exec_policy(cudaStream_t{0}), agg.begin(), agg.end(), out_aggregation_column);
   }
 
   return GDF_SUCCESS;

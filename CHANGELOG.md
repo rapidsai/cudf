@@ -7,10 +7,14 @@
 - PR #439 add `DataFrame.drop` method similar to pandas
 
 ## Improvements
+
+- PR #472 RMM: Created centralized rmm::device_vector alias and rmm::exec_policy
 - PR #426 Removed sort-based groupby and refactored existing groupby APIs. Also improves C++/CUDA compile time.
- 
+
 ## Bug Fixes
 - PR #473 Added missing <random> include
+- PR #495 Updated README to correct where cffi pytest should be executed.
+
 
 # cuDF 0.4.0 (05 Dec 2018)
 
