@@ -229,7 +229,7 @@ def test_dataframe_join_mismatch_cats(how):
 
 
 @pytest.mark.parametrize('on', ['key1', ['key1', 'key2'], None])
-def test_dataframe_join_on(on):
+def test_dataframe_merge_on(on):
     np.random.seed(0)
 
     # Make cuDF
