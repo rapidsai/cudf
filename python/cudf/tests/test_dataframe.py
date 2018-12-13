@@ -979,3 +979,23 @@ def test_dataframe_shape_empty():
     gdf = DataFrame()
 
     assert pdf.shape == gdf.shape
+
+
+@pytest.mark.xfail(reason="null is not supported in gpu yet")
+def test_dataframe_boolean_mask_with_None():
+    pdf = pd.DataFrame({'a': [0, 1, 2, 3], 'b': [0.1, 0.2, None, 0.3]})
+    gdf = DataFrame.from_pandas(pdf)
+    pdf_masked = pdf[[True, False, True, False]]
+    print(pdf_masked)
+    gdf_masked = gdf[[True, False, True, False]]
+    print(gdf_masked)
+    assert pdf_masked.to_string().split() == gdf_masked.to_string().split()
+
+def test_dataframe_boolean_mask():
+    pdf = pd.DataFrame({'a': [0, 1, 2, 3], 'b': [0.1, 0.2, 0.4, 0.3]})
+    gdf = DataFrame.from_pandas(pdf)
+    pdf_masked = pdf[[True, False, True, False]]
+    print(pdf_masked)
+    gdf_masked = gdf[[True, False, True, False]]
+    print(gdf_masked)
+    assert pdf_masked.to_string().split() == gdf_masked.to_string().split()

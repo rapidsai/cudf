@@ -224,9 +224,14 @@ class DataFrame(object):
                 df[k] = col[arg]
             return df
         elif isinstance(arg, (list,)):
+            mask = np.array(arg)
             df = DataFrame()
-            for col in arg:
-                df[col] = self[col]
+            if(mask.dtype=='bool'):
+                for col in self._cols:
+                    df[col] = self._cols[col][arg]
+            else:
+                for col in arg:
+                    df[col] = self[col]
             return df
         else:
             msg = "__getitem__ on type {!r} is not supported"
