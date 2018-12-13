@@ -1020,7 +1020,7 @@ def test_dataframe_tranpose(nulls, num_cols, num_rows, dtype):
         colname = ascii_lowercase[i]
         data = np.random.randint(0, 26, num_rows).astype(dtype)
         if nulls == 'some':
-            idx = np.random.choice(26, size=10, replace=False)
+            idx = np.random.choice(26, size=int(num_rows/2), replace=False)
             data[idx] = np.nan
         elif nulls == 'all':
             data[:] = np.nan
@@ -1039,8 +1039,8 @@ def test_dataframe_tranpose(nulls, num_cols, num_rows, dtype):
 
 @pytest.mark.parametrize('num_cols', [0, 1, 2, 3, 5, 10])
 @pytest.mark.parametrize('num_rows', [0, 1, 2, 10, 100, 1000])
-@pytest.mark.xfail(raises=NotImplementedError)
 def test_dataframe_tranpose_category(num_cols, num_rows):
+    pytest.xfail("category dtype not yet supported for transpose")
     pdf = pd.DataFrame()
     from string import ascii_lowercase
     for i in range(num_cols):

@@ -902,6 +902,9 @@ class DataFrame(object):
         ----------------------
         Not supporting *copy* because default and only behaviour is copy=True
         """
+        if len(self.columns) == 0:
+            return self
+
         dtype = self.dtypes[0]
         if pd.api.types.is_categorical_dtype(dtype):
             raise NotImplementedError('Categorical columns are not yet '
