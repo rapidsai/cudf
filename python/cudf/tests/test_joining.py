@@ -228,42 +228,49 @@ def test_dataframe_join_mismatch_cats(how):
     assert list(got.index) == list(expect.index)
 
 
-def test_dataframe_multi_column_join():
+@pytest.mark.parametrize('on', ['key1', ['key1', 'key2'], None])
+def test_dataframe_join_on(on):
     np.random.seed(0)
 
-    # Make GDF
+    # Make cuDF
     df_left = DataFrame()
     nelem = 500
-    df_left['key1'] = np.random.randint(0, 30, nelem)
+    df_left['key1'] = np.random.randint(0, 40, nelem)
     df_left['key2'] = np.random.randint(0, 50, nelem)
-    df_left['val1'] = np.arange(nelem)
+    df_left['left_val'] = np.arange(nelem)
 
     df_right = DataFrame()
     nelem = 500
     df_right['key1'] = np.random.randint(0, 30, nelem)
     df_right['key2'] = np.random.randint(0, 50, nelem)
-    df_right['val1'] = np.arange(nelem)
+    df_right['right_val'] = np.arange(nelem)
 
     # Make pandas DF
     pddf_left = df_left.to_pandas()
     pddf_right = df_right.to_pandas()
 
-    # Expected result
-    pddf_joined = pddf_left.merge(pddf_right, on=['key1', 'key2'], how='left',
-                                  sort=True)
+    # Expected result (from pandas)
+    pddf_joined = pddf_left.merge(pddf_right, on=on, how='left')
 
-    # Test (doesn't check for ordering)
-    join_result = df_left.merge(df_right, on=['key1', 'key2'], how='left')
+    # Result (from cuDF)
+    join_result = df_left.merge(df_right, on=on, how='left')
 
+    join_result['right_val'] = (join_result['right_val']
+                                .astype(np.float64)
+                                .fillna(np.nan))
     for col in list(pddf_joined.columns):
         if(col.count('_y') > 0):
             join_result[col] = (join_result[col]
                                 .astype(np.float64)
                                 .fillna(np.nan))
 
+    # Test dataframe equality (ignore order of rows and columns)
     pd.util.testing.assert_frame_equal(
         join_result
         .to_pandas()
         .sort_values(list(pddf_joined.columns))
         .reset_index(drop=True),
-        pddf_joined)
+        pddf_joined
+        .sort_values(list(pddf_joined.columns))
+        .reset_index(drop=True),
+        check_like=True)

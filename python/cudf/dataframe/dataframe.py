@@ -977,6 +977,9 @@ class DataFrame(object):
 
         col_cats = {}
 
+        if on is None:
+            on = list(same_names)
+        on = [on] if isinstance(on, str) else list(on)
         for name in on:
             if pd.api.types.is_categorical_dtype(self[name]):
                 lcats = self[name].cat.categories
