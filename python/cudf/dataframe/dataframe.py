@@ -226,7 +226,7 @@ class DataFrame(object):
         elif isinstance(arg, (list,)):
             mask = np.array(arg)
             df = DataFrame()
-            if(mask.dtype=='bool'):
+            if(mask.dtype == 'bool'):
                 for col in self._cols:
                     df[col] = self._cols[col][arg]
             else:
