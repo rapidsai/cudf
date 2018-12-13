@@ -13,6 +13,7 @@
 
 ## Bug Fixes
 
+- PR #512 fix bug for `on` parameter in `DataFrame.merge`
 
 # cuDF 0.4.0 (05 Dec 2018)
 
