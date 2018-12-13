@@ -17,4 +17,4 @@
 
 #define RMM_FREE(ptr, stream) rmm::free((ptr), (stream), __FILE__, __LINE__)
 
-#endif  // RMM_H
+#endif // RMM_H
