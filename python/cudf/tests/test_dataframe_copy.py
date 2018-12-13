@@ -31,16 +31,16 @@ from copy import deepcopy  # noqa:F401
 def test_dataframe_copy(copy_parameters):
     pdf = pd.DataFrame([[1, 2, 3], [4, 5, 6], [7, 8, 9]],
                        columns=['a', 'b', 'c'])
-    cdf = DataFrame.from_pandas(pdf)
+    gdf = DataFrame.from_pandas(pdf)
     copy_pdf = eval(copy_parameters['fn'])(pdf)
-    copy_cdf = eval(copy_parameters['fn'])(cdf)
+    copy_gdf = eval(copy_parameters['fn'])(gdf)
     copy_pdf['b'] = [0, 0, 0]
-    copy_cdf['b'] = [0, 0, 0]
+    copy_gdf['b'] = [0, 0, 0]
     pdf_pass = np.array_equal(pdf['b'].values, copy_pdf['b'].values)
-    cdf_pass = np.array_equal(cdf['b'].to_array(), copy_cdf['b'].to_array())
+    gdf_pass = np.array_equal(gdf['b'].to_array(), copy_gdf['b'].to_array())
     print(pdf)
     print(copy_pdf)
-    assert cdf_pass == copy_parameters['expected']
+    assert gdf_pass == copy_parameters['expected']
     assert pdf_pass == copy_parameters['expected']
 
 
