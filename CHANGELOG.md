@@ -1,6 +1,6 @@
 # cuDF 0.5.0 (TBD)
 
-## Bug Fixes
+## New Features
 
  - PR #510 Enable deep and shallow copying
 

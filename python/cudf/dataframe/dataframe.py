@@ -467,7 +467,7 @@ class DataFrame(object):
         return df
 
     def __copy__(self):
-        return self.copy(deep=False)
+        return self.copy(deep=True)
 
     def __deepcopy__(self, memo={}):
         """
