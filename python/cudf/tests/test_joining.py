@@ -267,3 +267,32 @@ def test_dataframe_multi_column_join():
         .sort_values(list(pddf_joined.columns))
         .reset_index(drop=True),
         pddf_joined)
+
+
+def test_dataframe_merge_stdout():
+    np.random.seed(0)
+
+    # Make GDF
+    df_left = DataFrame()
+    nelem = 500
+    df_left['key1'] = np.random.randint(0, 30, nelem)
+    df_left['key2'] = np.random.randint(0, 50, nelem)
+    df_left['val1'] = np.arange(nelem)
+
+    df_right = DataFrame()
+    nelem = 500
+    df_right['key1'] = np.random.randint(0, 30, nelem)
+    df_right['key2'] = np.random.randint(0, 50, nelem)
+    df_right['val1'] = np.arange(nelem)
+
+    import sys
+    from io import StringIO
+    saved_stdout = sys.stdout
+    try:
+        out = StringIO()
+        sys.stdout = out
+        join_result = df_left.merge(df_right, on=['key1', 'key2'], how='left')
+        output = out.getvalue().strip()
+        assert output == ""
+    finally:
+        sys.stdout = saved_stdout
