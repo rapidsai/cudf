@@ -46,7 +46,7 @@ struct OrderByTest : public GdfTest
   const bool nulls_are_smallest = test_parameters::nulls_are_smallest;
 
   // The sorting order for each column is passed via a member of the template argument class
-  std::vector<char> sort_order_types;
+  std::vector<int8_t> sort_order_types;
 
   // multi_column_t is a tuple of vectors. The number of vectors in the tuple
   // determines the number of columns to be ordered by, and the value_type of each
@@ -232,14 +232,14 @@ struct OrderByTest : public GdfTest
   // Compile time recursion to sort an array of indices by each vector in a tuple of vectors
   template<std::size_t I = 0, typename... Tp>
   inline typename std::enable_if<I == sizeof...(Tp), void>::type
-  sort_multi_column(std::tuple<std::vector<Tp>...>& t, std::vector<host_valid_pointer>& valids, std::vector<char>& asc_desc, std::vector<size_t>& indices)
+  sort_multi_column(std::tuple<std::vector<Tp>...>& t, std::vector<host_valid_pointer>& valids, std::vector<int8_t>& asc_desc, std::vector<size_t>& indices)
   {
     //bottom of compile-time recursion
     //purposely empty...
   }
   template<std::size_t I = 0, typename... Tp>
   inline typename std::enable_if<I < sizeof...(Tp), void>::type
-  sort_multi_column(std::tuple<std::vector<Tp>...>& t, std::vector<host_valid_pointer>& valids, std::vector<char>& asc_desc, std::vector<size_t>& indices)
+  sort_multi_column(std::tuple<std::vector<Tp>...>& t, std::vector<host_valid_pointer>& valids, std::vector<int8_t>& asc_desc, std::vector<size_t>& indices)
   {
     const size_t col_index = sizeof...(Tp)-I-1;
     
@@ -328,7 +328,7 @@ struct OrderByTest : public GdfTest
     gdf_column* sorted_indices_output = gdf_raw_output_indices_column;
 
     result_error = gdf_order_by(columns_to_sort,
-                                (use_default_sort_order ? nullptr : (char*)(sort_order_types->data)),
+                                (use_default_sort_order ? nullptr : (int8_t*)(sort_order_types->data)),
                                 num_columns,
                                 sorted_indices_output,
                                 nulls_are_smallest);

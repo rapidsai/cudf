@@ -926,7 +926,7 @@ gdf_error gdf_quantile_aprrox(	gdf_column*  col_in,       //input column with 0 
  */
 /* ----------------------------------------------------------------------------*/
 gdf_error gdf_order_by(gdf_column** input_columns,
-                       char*        asc_desc,
+                       int8_t*      asc_desc,
                        size_t       num_inputs,
                        gdf_column*  output_indices,
                        int          flag_nulls_are_smallest);

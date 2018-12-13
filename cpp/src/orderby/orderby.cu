@@ -32,8 +32,8 @@ namespace{ //annonymus
   using Device_Vector = thrust::device_vector<T, rmm_allocator<T>>;
 
   gdf_error multi_col_order_by(gdf_column** cols,
+                               int8_t* asc_desc,
                                size_t ncols,
-                               char* asc_desc,
                                gdf_column* output_indices,
                                bool flag_nulls_are_smallest)
   {
@@ -89,10 +89,10 @@ namespace{ //annonymus
  */
 /* ----------------------------------------------------------------------------*/
 gdf_error gdf_order_by(gdf_column** cols,
-                       char* asc_desc,
+                       int8_t* asc_desc,
                        size_t ncols,
                        gdf_column* output_indices,
                        int flag_nulls_are_smallest)
 {
-  return multi_col_order_by(cols, ncols, asc_desc, output_indices, flag_nulls_are_smallest);
+  return multi_col_order_by(cols, asc_desc, ncols, output_indices, flag_nulls_are_smallest);
 }
