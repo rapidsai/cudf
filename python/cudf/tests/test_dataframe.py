@@ -991,6 +991,7 @@ def test_dataframe_boolean_mask_with_None():
     print(gdf_masked)
     assert pdf_masked.to_string().split() == gdf_masked.to_string().split()
 
+
 def test_dataframe_boolean_mask():
     pdf = pd.DataFrame({'a': [0, 1, 2, 3], 'b': [0.1, 0.2, 0.4, 0.3]})
     gdf = DataFrame.from_pandas(pdf)
