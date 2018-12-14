@@ -1,6 +1,6 @@
 # cuDF 0.5.0 (TBD)
 
-## Bug Fixes
+## New Features
 
 - PR #524 Boolean indexing not supported
 
