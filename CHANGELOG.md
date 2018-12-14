@@ -4,6 +4,7 @@
 ## New Features
 
 - PR #455 #501 CSV Reader: add support for user-specified decimal point and thousands separator
+- PR #411 added null support to gdf_order_by (new API) and cudf_table::sort
 - PR #525 Added GitHub Issue templates for bugs, documentation, new features, and questions
 - PR #455 CSV Reader: Add support for user-specified decimal point and thousands separator
 - PR #439 add `DataFrame.drop` method similar to pandas
@@ -20,6 +21,7 @@
 - PR #531 CSV Reader: Fix incorrect parsing of quoted numbers
 - PR #473 Added missing <random> include
 - PR #495 Updated README to correct where cffi pytest should be executed.
+
 
 # cuDF 0.4.0 (05 Dec 2018)
 
@@ -87,6 +89,7 @@
  - PR #320 FIX out-of-bounds access error in reductions.cu 
  - PR #319 Fix out-of-bounds memory access in libcudf count_valid_bits
  - PR #303 Fix printing empty dataframe
+
 
 # cuDF 0.2.0 and cuDF 0.1.0
 
