@@ -15,6 +15,7 @@
 
 
 ## Bug Fixes
+- PR #473 Added missing <random> include
 - PR #495 Updated README to correct where cffi pytest should be executed.
 - PR #511 Updated python/cudf/bindings/join.pyx to fix cudf merge printing out dtypes.
 
