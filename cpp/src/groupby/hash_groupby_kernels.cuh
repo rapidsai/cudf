@@ -19,8 +19,7 @@
 
 #include "hash/concurrent_unordered_map.cuh"
 #include "dataframe/cudf_table.cuh"
-#include "aggregation_operations.cuh"
-
+#include "aggregation_operations.hpp"
 
 /* --------------------------------------------------------------------------*/
 /** 

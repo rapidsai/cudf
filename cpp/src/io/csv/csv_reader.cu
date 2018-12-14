@@ -87,6 +87,8 @@ typedef struct raw_csv_ {
     bool* 				d_parseCol;		// device : array of booleans stating if column should be parsed in reading process: parseCol[x]=false means that the column x needs to be filtered out.
     long 				header_row;		// Row id of the header
     bool				dayfirst;
+    char				decimal;
+    char				thousands;
 } raw_csv_t;
 
 typedef struct column_data_ {
@@ -105,6 +107,8 @@ typedef struct parsing_opts_ {
 	char				terminator;
 	char				quotechar;
 	bool				keepquotes;
+	char				decimal;
+	char				thousands;
 } parsing_opts_t;
 
 using string_pair = std::pair<const char*,size_t>;
@@ -255,6 +259,17 @@ gdf_error read_csv(csv_read_arg *args)
 	}
 
 	raw_csv->dayfirst = args->dayfirst;
+	raw_csv->decimal = args->decimal;
+	raw_csv->thousands = args->thousands == nullptr ? '\0' : *args->thousands;
+
+	if (raw_csv->decimal == raw_csv->delimiter)
+	{ 
+		checkError(GDF_INVALID_API_CALL, "Decimal point cannot be the same as the delimiter");
+	}
+	if (raw_csv->thousands == raw_csv->delimiter)
+	{ 
+		checkError(GDF_INVALID_API_CALL, "Thousands separator cannot be the same as the delimiter");
+	}
 
 	//-----------------------------------------------------------------------------
 	// memory map in the data
@@ -949,6 +964,8 @@ gdf_error launch_dataConvertColumns(raw_csv_t *raw_csv, void **gdf, gdf_valid_ty
 	opts.terminator		= raw_csv->terminator;
 	opts.quotechar		= raw_csv->quotechar;
 	opts.keepquotes		= raw_csv->keepquotes;
+	opts.decimal		= raw_csv->decimal;
+	opts.thousands		= raw_csv->thousands;
 
 	convertCsvToGdf <<< gridSize, blockSize >>>(
 		raw_csv->data,
@@ -1057,36 +1074,36 @@ __global__ void convertCsvToGdf(
 					case gdf_dtype::GDF_INT8:
 					{
 						int8_t *gdf_out = (int8_t *)gdf_data[actual_col];
-						gdf_out[rec_id] = convertStrtoInt<int8_t>(raw_csv, start, tempPos);
+						gdf_out[rec_id] = convertStrtoInt<int8_t>(raw_csv, start, tempPos, opts.thousands);
 					}
 						break;
 					case gdf_dtype::GDF_INT16: {
 						int16_t *gdf_out = (int16_t *)gdf_data[actual_col];
-						gdf_out[rec_id] = convertStrtoInt<int16_t>(raw_csv, start, tempPos);
+						gdf_out[rec_id] = convertStrtoInt<int16_t>(raw_csv, start, tempPos, opts.thousands);
 					}
 						break;
 					case gdf_dtype::GDF_INT32:
 					{
 						int32_t *gdf_out = (int32_t *)gdf_data[actual_col];
-						gdf_out[rec_id] = convertStrtoInt<int32_t>(raw_csv, start, tempPos);
+						gdf_out[rec_id] = convertStrtoInt<int32_t>(raw_csv, start, tempPos, opts.thousands);
 					}
 						break;
 					case gdf_dtype::GDF_INT64:
 					{
 						int64_t *gdf_out = (int64_t *)gdf_data[actual_col];
-						gdf_out[rec_id] = convertStrtoInt<int64_t>(raw_csv, start, tempPos);
+						gdf_out[rec_id] = convertStrtoInt<int64_t>(raw_csv, start, tempPos, opts.thousands);
 					}
 						break;
 					case gdf_dtype::GDF_FLOAT32:
 					{
 						float *gdf_out = (float *)gdf_data[actual_col];
-						gdf_out[rec_id] = convertStrtoFloat<float>(raw_csv, start, tempPos);
+						gdf_out[rec_id] = convertStrtoFloat<float>(raw_csv, start, tempPos, opts.decimal, opts.thousands);
 					}
 						break;
 					case gdf_dtype::GDF_FLOAT64:
 					{
 						double *gdf_out = (double *)gdf_data[actual_col];
-						gdf_out[rec_id] = convertStrtoFloat<double>(raw_csv, start, tempPos);
+						gdf_out[rec_id] = convertStrtoFloat<double>(raw_csv, start, tempPos, opts.decimal, opts.thousands);
 					}
 						break;
 					case gdf_dtype::GDF_DATE32:
@@ -1104,7 +1121,7 @@ __global__ void convertCsvToGdf(
 					case gdf_dtype::GDF_TIMESTAMP:
 					{
 						int64_t *gdf_out = (int64_t *)gdf_data[actual_col];
-						gdf_out[rec_id] = convertStrtoInt<int64_t>(raw_csv, start, tempPos);
+						gdf_out[rec_id] = convertStrtoInt<int64_t>(raw_csv, start, tempPos, opts.thousands);
 					}
 					break;
 					case gdf_dtype::GDF_CATEGORY:
@@ -1310,7 +1327,7 @@ __global__ void dataTypeDetection(
 			else if(countNumber==(strLen) || ( strLen>1 && countNumber==(strLen-1) && raw_csv[start]=='-') ){
 				// Checking to see if we the integer value requires 8,16,32,64 bits.
 				// This will allow us to allocate the exact amount of memory.
-				int64_t i = convertStrtoInt<int64_t>(raw_csv, start, tempPos);
+				int64_t i = convertStrtoInt<int64_t>(raw_csv, start, tempPos, opts.thousands);
 				if(i >= (1L<<31)){
 					atomicAdd(& d_columnData[actual_col].countInt64, 1L);
 				}

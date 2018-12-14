@@ -1,3 +1,5 @@
+#ifndef HASH_GROUPBY_H
+#define HASH_GROUPBY_H
 /*
  * Copyright (c) 2018, NVIDIA CORPORATION.
  *
@@ -21,7 +23,7 @@
 #include "dataframe/cudf_table.cuh"
 
 #include "groupby_compute_api.h"
-#include "aggregation_operations.cuh"
+#include "aggregation_operations.hpp"
 
 /* --------------------------------------------------------------------------*/
 /** 
@@ -331,13 +333,9 @@ void compute_average(gdf_column * avg_column, gdf_column const & count_column, g
     }
   };
 
-  cudaStream_t stream = 0; // TODO: non-default stream?
-  rmm_temp_allocator allocator(stream);
-
   // Computes the average into the passed in output buffer for the average column
   thrust::device_ptr<avg_type>  d_avg = thrust::device_pointer_cast(static_cast<avg_type*>(avg_column->data));
-  thrust::tabulate(thrust::cuda::par(allocator).on(stream), d_avg, d_avg + output_size, average_op);
-
+  thrust::tabulate(rmm::exec_policy(cudaStream_t{0}), d_avg, d_avg + output_size, average_op);
 
   // Update the size of the average column
   avg_column->size = output_size;
@@ -444,4 +442,4 @@ gdf_error gdf_group_by_hash_avg(int ncols,
   }
 }
 
-
+#endif

@@ -25,14 +25,11 @@
 #include <thrust/copy.h>
 
 #include "hash/managed.cuh"
-#include "groupby_kernels.cuh"
+#include "hash_groupby_kernels.cuh"
 #include "dataframe/cudf_table.cuh"
 #include "rmm/thrust_rmm_allocator.h"
 
 
-// Vector set to use rmmAlloc and rmmFree.
-template <typename T>
-using Vector = thrust::device_vector<T, rmm_allocator<T>>;
 
 
 // The occupancy of the hash table determines it's capacity. A value of 50 implies
@@ -232,14 +229,11 @@ gdf_error GroupbyHash(gdf_table<size_type> const & groupby_input_table,
   groupby_output_table.set_column_length(*out_size);
 
   // Optionally sort the groupby/aggregation result columns
-
   if((*out_size > 0) && (true == sort_result)) {
-      rmm_temp_allocator allocator(0);
-      auto exec = thrust::cuda::par(allocator).on(0);
 
       auto sorted_indices = groupby_output_table.sort();
       Vector<aggregation_type> agg(*out_size);
-      thrust::gather(exec,
+      thrust::gather(rmm::exec_policy(cudaStream_t{0}),
                      sorted_indices.begin(), 
                      sorted_indices.end(),
                      out_aggregation_column,
@@ -252,15 +246,14 @@ gdf_error GroupbyHash(gdf_table<size_type> const & groupby_input_table,
         // according to the new sorted order
         const size_type gather_grid_size = (*out_size + THREAD_BLOCK_SIZE - 1)/THREAD_BLOCK_SIZE;
         const size_type num_masks = gdf_get_num_chars_bitmask(*out_size);
-        thrust::device_vector<gdf_valid_type> new_valid_mask(num_masks,0);
+        rmm::device_vector<gdf_valid_type> new_valid_mask(num_masks,0);
         gather_valid_mask<<<gather_grid_size, THREAD_BLOCK_SIZE>>>(*out_aggregation_validity_mask,
                                                                    new_valid_mask.data().get(),
                                                                    sorted_indices.data().get(),
                                                                    *out_size,
                                                                    num_masks);
-        thrust::copy(new_valid_mask.begin(), new_valid_mask.end(), *out_aggregation_validity_mask);
+        thrust::copy(rmm::exec_policy(cudaStream_t{0}), new_valid_mask.begin(), new_valid_mask.end(), *out_aggregation_validity_mask);
       }
-
   }
 
   RMM_TRY( RMM_FREE(hash_bucket_states, 0) );
