@@ -22,11 +22,11 @@ from copy import deepcopy  # noqa:F401
 
 
 @pytest.mark.parametrize('copy_parameters', [
-    {'fn': lambda x:x.copy(), 'expected': False},
-    {'fn': lambda x:x.copy(deep=True), 'expected': False},
-    {'fn': lambda x:copy(x), 'expected': False},
-    {'fn': lambda x:deepcopy(x), 'expected': False},
-    {'fn': lambda x:x.copy(deep=False), 'expected': True},
+    {'fn': lambda x: x.copy(), 'expected': False},
+    {'fn': lambda x: x.copy(deep=True), 'expected': False},
+    {'fn': lambda x: copy(x), 'expected': False},
+    {'fn': lambda x: deepcopy(x), 'expected': False},
+    {'fn': lambda x: x.copy(deep=False), 'expected': True},
     ])
 def test_dataframe_copy(copy_parameters):
     pdf = pd.DataFrame([[1, 2, 3], [4, 5, 6], [7, 8, 9]],
@@ -48,22 +48,23 @@ DataFrame copy bounds checking - sizes 0 through 10 perform as expected
 
 
 @pytest.mark.parametrize('copy_fn', [
-    lambda x:x.copy(),
-    lambda x:x.copy(deep=True),
-    lambda x:copy(x),
-    lambda x:deepcopy(x),
-    lambda x:x.copy(deep=False),
+    lambda x: x.copy(),
+    lambda x: x.copy(deep=True),
+    lambda x: copy(x),
+    lambda x: deepcopy(x),
+    lambda x: x.copy(deep=False),
     ])
 @pytest.mark.parametrize('ncols', [0, 1, 2, 10])
 @pytest.mark.parametrize(
     'data_type',
-    ['int8', 'int16', 'int32', 'int64', 'float32', 'float64', 'datetime64[ms]', 'category',
-    ]
+    ['int8', 'int16', 'int32', 'int64', 'float32', 'float64', 'datetime64[ms]',
+        'category', ]
 )
 def test_cudf_dataframe_copy(copy_fn, ncols, data_type):
     pdf = pd.DataFrame()
     for i in range(ncols):
-        pdf[chr(i+ord('a'))] = pd.Series(np.random.randint(0, 1000, 20), dtype="category")
+        pdf[chr(i+ord('a'))] = pd.Series(np.random.randint(0, 1000, 20),
+                                         dtype="category")
     df = DataFrame.from_pandas(pdf)
     copy_df = copy_fn(df)
     assert df.to_string().split() == copy_df.to_string().split()
