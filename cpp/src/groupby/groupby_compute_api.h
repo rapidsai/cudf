@@ -232,7 +232,7 @@ gdf_error GroupbyHash(gdf_table<size_type> const & groupby_input_table,
   if((*out_size > 0) && (true == sort_result)) {
 
       auto sorted_indices = groupby_output_table.sort();
-      Vector<aggregation_type> agg(*out_size);
+      rmm::device_vector<aggregation_type> agg(*out_size);
       thrust::gather(rmm::exec_policy(cudaStream_t{0}),
                      sorted_indices.begin(), 
                      sorted_indices.end(),
