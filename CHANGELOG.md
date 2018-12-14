@@ -5,8 +5,8 @@
 
 
 - PR #525 Added GitHub Issue templates for bugs, documentation, new features, and questions
-- PR #501 CSV Reader: Add support for user-specified decimal point and thousands separator to csv_read_strings()
-- PR #455 CSV Reader: Add support for user-specified decimal point and thousands separator to csv_read()
+- PR #501 CSV Reader: Add support for user-specified decimal point and thousands separator to read_csv_strings()
+- PR #455 CSV Reader: Add support for user-specified decimal point and thousands separator to read_csv()
 
 - PR #439 add `DataFrame.drop` method similar to pandas
 
