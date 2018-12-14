@@ -279,8 +279,8 @@ private:
                       int col_index,
                       const void* const * columns)
     {
-      ColType res1 = LesserRTTI::at<ColType>(col_index, row1, columns);
-      ColType res2 = LesserRTTI::at<ColType>(col_index, row2, columns);
+      const ColType res1 = LesserRTTI::at<ColType>(col_index, row1, columns);
+      const ColType res2 = LesserRTTI::at<ColType>(col_index, row2, columns);
       
       if( res1 < res2 )
         return State::True;
@@ -301,10 +301,10 @@ private:
                       const gdf_valid_type* const * valids,
                       bool nulls_are_smallest)
 	  {
-		  ColType res1 = LesserRTTI::at<ColType>(col_index, row1, columns);
-		  ColType res2 = LesserRTTI::at<ColType>(col_index, row2, columns);
-		  bool isValid1 = LesserRTTI::is_valid(col_index, row1, valids);
-		  bool isValid2 = LesserRTTI::is_valid(col_index, row2, valids);
+		  const ColType res1 = LesserRTTI::at<ColType>(col_index, row1, columns);
+		  const ColType res2 = LesserRTTI::at<ColType>(col_index, row2, columns);
+		  const bool isValid1 = LesserRTTI::is_valid(col_index, row1, valids);
+		  const bool isValid2 = LesserRTTI::is_valid(col_index, row2, valids);
 
 		  if (!isValid2 && !isValid1)
 			  return State::Undecided;
@@ -334,8 +334,8 @@ private:
                       int col_index,
   		                const void* const * columns)
     {
-      ColType res1 = LesserRTTI::at<ColType>(col_index, row1, columns);
-      ColType res2 = LesserRTTI::at<ColType>(col_index, row2, columns);
+      const ColType res1 = LesserRTTI::at<ColType>(col_index, row1, columns);
+      const ColType res2 = LesserRTTI::at<ColType>(col_index, row2, columns);
 
       if( res1 > res2 )
   	    return State::True;
@@ -356,10 +356,10 @@ private:
                       const gdf_valid_type* const * valids,
                       bool nulls_are_smallest)
 	  {
-		  ColType res1 = LesserRTTI::at<ColType>(col_index, row1, columns);
-		  ColType res2 = LesserRTTI::at<ColType>(col_index, row2, columns);
-		  bool isValid1 = LesserRTTI::is_valid(col_index, row1, valids);
-		  bool isValid2 = LesserRTTI::is_valid(col_index, row2, valids);
+		  const ColType res1 = LesserRTTI::at<ColType>(col_index, row1, columns);
+		  const ColType res2 = LesserRTTI::at<ColType>(col_index, row2, columns);
+		  const bool isValid1 = LesserRTTI::is_valid(col_index, row1, valids);
+		  const bool isValid2 = LesserRTTI::is_valid(col_index, row2, valids);
 
 		  if (!isValid2 && !isValid1)
 			  return State::Undecided;
@@ -389,8 +389,8 @@ private:
                       int col_index,
 		                  const void* const * columns)
     {
-      ColType res1 = LesserRTTI::at<ColType>(col_index, row1, columns);
-      ColType res2 = LesserRTTI::at<ColType>(col_index, row2, columns);
+      const ColType res1 = LesserRTTI::at<ColType>(col_index, row1, columns);
+      const ColType res2 = LesserRTTI::at<ColType>(col_index, row2, columns);
       
       if( res1 != res2 )
         return State::False;
@@ -408,8 +408,8 @@ private:
                       int col_index,
                       const void* const * columns)
     {
-      ColType res1 = LesserRTTI::at<ColType>(col_index, row, columns);
-      ColType res2 = LesserRTTI::at<ColType>(col_index, 0, vals);
+      const ColType res1 = LesserRTTI::at<ColType>(col_index, row, columns);
+      const ColType res2 = LesserRTTI::at<ColType>(col_index, 0, vals);
       
       if( res1 != res2 )
         return State::False;
@@ -423,7 +423,7 @@ private:
   const int* const rtti_{nullptr};
   size_t sz_;
   const void* const * vals_{nullptr}; //for filtering
-  int8_t* const asc_desc_flags_{nullptr}; //array of 0 and 1 that allows us to know whether or not a column should be sorted ascending or descending
+  const int8_t* const asc_desc_flags_{nullptr}; //array of 0 and 1 that allows us to know whether or not a column should be sorted ascending or descending
   bool nulls_are_smallest_{false};  // when sorting if there are nulls in the data if this is true, then they will be treated as the smallest value, otherwise they will be treated as the largest value
 };
 

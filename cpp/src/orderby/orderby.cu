@@ -16,6 +16,7 @@
  */
 
 #include <type_traits>
+#include <algorithm>
 
 #include "cudf.h"
 #include "utilities/cudf_utils.h"
@@ -39,13 +40,7 @@ namespace{ //annonymus
     GDF_REQUIRE(output_indices->dtype == GDF_INT32, GDF_UNSUPPORTED_DTYPE);
 
     // Check for null so we can use a faster sorting comparator 
-    bool have_nulls = false;
-    for (size_t i = 0; i < ncols; i++) {
-      if (cols[i]->null_count > 0) {
-        have_nulls = true;
-        break;
-      }
-    }
+    bool const have_nulls{ std::any_of(cols, cols + ncols, [](gdf_column * col){ return col->null_count > 0; }) };
 
     rmm::device_vector<void*> d_cols(ncols);
     rmm::device_vector<gdf_valid_type*> d_valids(ncols);
