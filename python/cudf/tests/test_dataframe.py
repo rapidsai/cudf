@@ -1006,14 +1006,14 @@ def test_dataframe_shape_empty():
 
 
 @pytest.fixture
-def df():
+def pdf():
     return pd.DataFrame({'x': range(10),
                          'y': range(10)})
 
 
 @pytest.fixture
-def gf(df):
-    return gd.DataFrame.from_pandas(df)
+def gdf(pdf):
+    return gd.DataFrame.from_pandas(pdf)
 
 
 @pytest.mark.parametrize('func', [
@@ -1030,8 +1030,8 @@ def gf(df):
         reason="dataframe reductions not yet supported")),
     lambda df: df.x,
 ])
-def test_reductions(df, gf, accessor, func):
-    assert_eq(func(accessor(df)), func(accessor(gf)))
+def test_reductions(pdf, gdf, accessor, func):
+    assert_eq(func(accessor(pdf)), func(accessor(gdf)))
 
 
 @pytest.mark.parametrize('left', [
@@ -1058,7 +1058,7 @@ def test_reductions(df, gf, accessor, func):
     operator.ge,
     operator.ne,
 ])
-def test_binops(df, gf, left, right, binop):
-    d = binop(left(df), right(df))
-    g = binop(left(gf), right(gf))
+def test_binops(pdf, gdf, left, right, binop):
+    d = binop(left(pdf), right(pdf))
+    g = binop(left(gdf), right(gdf))
     assert_eq(d, g)
