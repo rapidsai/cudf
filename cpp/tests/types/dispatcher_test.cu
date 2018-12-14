@@ -25,7 +25,7 @@
  * @brief Tests the type_dispatcher
 */
 
-namespace{ 
+namespace {
 
 struct test_functor {
   template <typename T> 
@@ -58,11 +58,26 @@ struct test_functor {
   }
 };
 
+struct single_column_type_functor {
+template <typename T>
+__host__ __device__
+constexpr int operator()(gdf_dtype type_id) const;
+};
+
+template<>
+constexpr int single_column_type_functor::operator()<int8_t>(gdf_dtype type_id) const
+{
+    return 42;
+}
+
+
+
+template <typename F>
 __global__ 
 void dispatch_test_kernel(gdf_dtype type, bool * d_result)
 {
   if(0 == threadIdx.x + blockIdx.x * blockDim.x)
-    *d_result = cudf::type_dispatcher(type, test_functor{}, type);
+    *d_result = cudf::type_dispatcher(type, F{}, type);
 }
 
 } // anonymous namespace
@@ -86,7 +101,7 @@ TEST_F(DispatcherTest, DeviceDispatchFunctor)
 {
   thrust::device_vector<bool> result(1);
   for (auto const& t : this->dtype_enums) {
-    dispatch_test_kernel<<<1,1>>>(t, result.data().get());
+    dispatch_test_kernel<test_functor><<<1,1>>>(t, result.data().get());
     cudaDeviceSynchronize();
     EXPECT_EQ(true, result[0]);
   }
@@ -96,8 +111,8 @@ TEST_F(DispatcherTest, DeviceDispatchFunctor)
 // The assert is only present if the NDEBUG macro isn't defined 
 #ifndef NDEBUG
 
-// Unsuported gdf_dtypes should cause program to exit
-TEST(DispatcherDeathTest, UnsuportedTypesTest)
+// Unsupported gdf_dtypes should cause program to exit
+TEST(DispatcherDeathTest, UnsupportedTypesTest)
 {
   testing::FLAGS_gtest_death_test_style="threadsafe";
   std::vector<gdf_dtype> unsupported_types{ GDF_invalid, GDF_STRING, N_GDF_TYPES};
@@ -106,7 +121,7 @@ TEST(DispatcherDeathTest, UnsuportedTypesTest)
   }
 }
 
-// Unsuported gdf_dtypes in device code should set appropriate error code
+// Unsupported gdf_dtypes in device code should set appropriate error code
 // and invalidates device context
 TEST(DispatcherDeathTest, DeviceDispatchFunctor)
 {
@@ -115,7 +130,7 @@ TEST(DispatcherDeathTest, DeviceDispatchFunctor)
   thrust::device_vector<bool> result(1);
 
   auto call_kernel = [&result](gdf_dtype t) {
-    dispatch_test_kernel<<<1, 1>>>(t, result.data().get());
+    dispatch_test_kernel<test_functor><<<1, 1>>>(t, result.data().get());
     auto error_code = cudaDeviceSynchronize();
 
     // Kernel should fail with `cudaErrorAssert` on an unsupported gdf_dtype
