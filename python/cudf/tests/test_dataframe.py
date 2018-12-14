@@ -1010,6 +1010,7 @@ def df():
     return pd.DataFrame({'x': range(10),
                          'y': range(10)})
 
+
 @pytest.fixture
 def gf(df):
     return gd.DataFrame.from_pandas(df)
@@ -1025,7 +1026,8 @@ def gf(df):
     pytest.param(lambda df: df.size, marks=pytest.mark.xfail()),
 ])
 @pytest.mark.parametrize('accessor', [
-    pytest.param(lambda df: df, marks=pytest.mark.xfail(reason="dataframe reductions not yet supported")),
+    pytest.param(lambda df: df, marks=pytest.mark.xfail(
+        reason="dataframe reductions not yet supported")),
     lambda df: df.x,
 ])
 def test_reductions(df, gf, accessor, func):
