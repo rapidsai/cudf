@@ -33,11 +33,14 @@ long firstOcurance(char *data, long stx, long endx, char c) {
 
 
 __host__ __device__
-void removePrePostWhiteSpaces2(char *data, long* start_idx, long* end_idx) {
-	while(*start_idx < *end_idx && data[*start_idx] == ' ')
-		*start_idx=*start_idx+1;
-	while(*start_idx < *end_idx && data[*end_idx] == ' ')
-		*end_idx=*end_idx-1;
+void adjustforWhitespaceAndQuotes(const char *data, long& start_idx, long& end_idx, char quotechar='\0') {
+
+	while ((start_idx < end_idx) && (data[start_idx] == ' ' || data[start_idx] == quotechar)) {
+		++start_idx;
+	}
+	while ((start_idx < end_idx) && (data[end_idx] == ' ' || data[end_idx] == quotechar)) {
+		--end_idx;
+	}
 }
 
 //---------------------------------------------------------------------------

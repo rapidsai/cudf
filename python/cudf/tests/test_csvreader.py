@@ -265,3 +265,26 @@ def test_csv_reader_thousands(tmpdir):
     np.testing.assert_allclose(f64_ref, df['float64'])
     np.testing.assert_allclose(int32_ref, df['int32'])
     np.testing.assert_allclose(int64_ref, df['int64'])
+
+def test_csv_quotednumbers(tmpdir):
+    fname = tmpdir.mkdir("gdf_csv").join("tmp_csvreader_file11.csv")
+
+    names = ['integer', 'decimal']
+    dtypes = ['int32', 'float32']
+    lines = [','.join(names),
+             '1,"3.14"', '"2","300"', '"3",10101.0101', '4,"6.28318"']
+
+    with open(str(fname), 'w') as fp:
+        fp.write('\n'.join(lines) + '\n')
+
+    integer_ref = [1, 2, 3, 4]
+    decimal_ref = [3.14, 300, 10101.0101, 6.28318]
+
+    cols1 = read_csv(str(fname), names=names, dtype=dtypes, skiprows=1)
+    cols2 = read_csv_strings(str(fname), names=names, dtype=dtypes, skiprows=1)
+
+    assert(len(cols2) == 2)
+    np.testing.assert_allclose(integer_ref, cols1['integer'])
+    np.testing.assert_allclose(decimal_ref, cols1['decimal'])
+    np.testing.assert_allclose(integer_ref, cols2[0])
+    np.testing.assert_allclose(decimal_ref, cols2[1])
