@@ -23,93 +23,11 @@
 
 #include "rmm.h"
 #include "memory_manager.h"
+#include "memory.hpp"
 #include <fstream>
 #include <sstream>
 #include <cstddef>
 #include <cuda.h>
-
-// Set true to enable free/total memory logging at each RMM call (expensive)
-#define RMM_USAGE_LOGGING false
-
-/** ---------------------------------------------------------------------------*
- * @brief Macro wrapper to check for error in RMM API calls.
- * ---------------------------------------------------------------------------**/
-#define RMM_CHECK(call) do { \
-    rmmError_t error = (call); \
-    if( error != RMM_SUCCESS ) return error; \
-} while(0)
-
-/** ---------------------------------------------------------------------------*
- * @brief Macro wrapper for RMM API calls to return appropriate RMM errors.
- * ---------------------------------------------------------------------------**/
-#define RMM_CHECK_CUDA(call) do { \
-    cudaError_t cudaError = (call); \
-    if( cudaError == cudaErrorMemoryAllocation ) \
-        return RMM_ERROR_OUT_OF_MEMORY; \
-    else if( cudaError != cudaSuccess ) \
-        return RMM_ERROR_CUDA_ERROR; \
-} while(0)
-
-namespace rmm 
-{
-    // RAII logger class
-    class LogIt
-    {
-    public:
-        LogIt(Logger::MemEvent_t event, 
-              void* ptr,
-              size_t size, 
-              cudaStream_t stream,
-              const char* filename,
-              unsigned int line,
-              bool usageLogging=RMM_USAGE_LOGGING)
-        : event(event), device(0), ptr(ptr), size(size), stream(stream),
-          usageLogging(usageLogging), line(line)
-        {
-            if (filename) file = filename;
-            if (Manager::getOptions().enable_logging)
-            {
-                cudaGetDevice(&device);
-                start = std::chrono::system_clock::now();
-            }
-        }
-
-        /// Sometimes you need to start logging before the pointer address is
-        /// known
-        inline void setPointer(void* p) {
-            if (Manager::getOptions().enable_logging) ptr = p;
-        }
-
-        ~LogIt() 
-        {
-            if (Manager::getOptions().enable_logging)
-            {
-                Logger::TimePt end = std::chrono::system_clock::now();
-                size_t freeMem = 0, totalMem = 0;
-                if (usageLogging) rmmGetInfo(&freeMem, &totalMem, stream);
-                Manager::getLogger().record(event, device, ptr, start, end,
-                                            freeMem, totalMem, size, stream,
-                                            file, line);
-            }
-        }
-
-    private:
-        rmm::Logger::MemEvent_t event;
-        int device;
-        void* ptr;
-        size_t size;
-        cudaStream_t stream;
-        rmm::Logger::TimePt start;
-        std::string file;
-        unsigned int line;
-        bool usageLogging;
-    };
-
-    inline bool usePoolAllocator()
-    {
-        return Manager::getOptions().allocation_mode == PoolAllocation;
-    }
-};
 
 #ifndef GETNAME
 #define GETNAME(x) case x: return #x;
@@ -169,64 +87,19 @@ rmmError_t rmmFinalize()
 // Allocate memory and return a pointer to device memory. 
 rmmError_t rmmAlloc(void **ptr, size_t size, cudaStream_t stream, const char* file, unsigned int line)
 {
-    rmm::LogIt log(rmm::Logger::Alloc, 0, size, stream, file, line);
-
-    if (!ptr && !size) {
-        return RMM_SUCCESS;
-    }
-    
-    if (!ptr) 
-        return RMM_ERROR_INVALID_ARGUMENT;
-
-    if (rmm::usePoolAllocator())
-    {
-        RMM_CHECK( rmm::Manager::getInstance().registerStream(stream) );
-        RMM_CHECK_CNMEM( cnmemMalloc(ptr, size, stream) );
-    }
-    else
-        RMM_CHECK_CUDA(cudaMalloc(ptr, size));
-
-
-    log.setPointer(*ptr);
-    return RMM_SUCCESS;
+  return rmm::alloc(ptr, size, stream, file, line);
 }
 
 // Reallocate device memory block to new size and recycle any remaining memory.
 rmmError_t rmmRealloc(void **ptr, size_t new_size, cudaStream_t stream, const char* file, unsigned int line)
 {
-    rmm::LogIt log(rmm::Logger::Realloc, ptr, new_size, stream, file, line);
-
-	if (!ptr && !new_size) {
-        return RMM_SUCCESS;
-    }
-
-    if (!ptr) 
-    	return RMM_ERROR_INVALID_ARGUMENT;
-
-    if (rmm::usePoolAllocator())
-    {
-        RMM_CHECK( rmm::Manager::getInstance().registerStream(stream) );
-        RMM_CHECK_CNMEM( cnmemFree(*ptr, stream) );
-        RMM_CHECK_CNMEM( cnmemMalloc(ptr, new_size, stream) );
-    }
-    else
-    {
-        RMM_CHECK_CUDA(cudaFree(*ptr));
-	    RMM_CHECK_CUDA(cudaMalloc(ptr, new_size));
-    }
-    log.setPointer(*ptr);
-    return RMM_SUCCESS;
+  return rmm::realloc(ptr, new_size, stream, file, line);
 }
 
 // Release device memory and recycle the associated memory.
 rmmError_t rmmFree(void *ptr, cudaStream_t stream, const char* file, unsigned int line)
 {
-    rmm::LogIt log(rmm::Logger::Free, ptr, 0, stream, file, line);
-    if (rmm::usePoolAllocator())
-        RMM_CHECK_CNMEM( cnmemFree(ptr, stream) );
-    else
-        RMM_CHECK_CUDA(cudaFree(ptr));
-	return RMM_SUCCESS;
+    return rmm::free(ptr, stream, file, line);
 }
 
 // Get the offset of ptr from its base allocation
