@@ -33,26 +33,8 @@ struct LesserRTTI
   LesserRTTI(void *const *cols,
              int *const types,
              size_t sz) : columns_(cols),
-                          valids_(nullptr),
                           rtti_(types),
-                          sz_(sz),
-                          vals_(nullptr),
-                          asc_desc_flags_(nullptr),
-                          nulls_are_smallest_(false)
-  {
-  }
-
-  LesserRTTI(void *const *cols,
-            gdf_valid_type *const *valids,
-            int *const types,
-            size_t sz,
-            bool nulls_are_smallest) : columns_(cols),
-                                       valids_(valids),
-                                       rtti_(types),
-                                       sz_(sz),
-                                       vals_(nullptr),
-                                       asc_desc_flags_(nullptr),
-                                       nulls_are_smallest_(nulls_are_smallest)
+                          sz_(sz)
   {
   }
 
@@ -60,38 +42,21 @@ struct LesserRTTI
              int *const types,
              size_t sz,
              const void *const *vals) : columns_(cols),
-                                        valids_(nullptr),
                                         rtti_(types),
                                         sz_(sz),
-                                        vals_(vals),
-                                        asc_desc_flags_(nullptr),
-                                        nulls_are_smallest_(false)
-  {
-  }
-
-  LesserRTTI(void *const *cols,
-             int *const types,
-             char* const asc_desc_flags,
-             size_t sz) : columns_(cols),
-                          valids_(nullptr),
-                          rtti_(types),
-                          sz_(sz),
-                          vals_(nullptr),
-                          asc_desc_flags_(asc_desc_flags),
-                          nulls_are_smallest_(false)
+                                        vals_(vals)
   {
   }
 
   LesserRTTI(void *const *cols,
              gdf_valid_type *const *valids,
              int *const types,
-             char *const asc_desc_flags,
+             int8_t *const asc_desc_flags,
              size_t sz,
              bool nulls_are_smallest) : columns_(cols),
                                         valids_(valids),
                                         rtti_(types),
                                         sz_(sz),
-                                        vals_(nullptr),
                                         asc_desc_flags_(asc_desc_flags),
                                         nulls_are_smallest_(nulls_are_smallest)
   {
@@ -340,8 +305,8 @@ private:
                       int col_index,
                       const void* const * columns)
     {
-      ColType res1 = LesserRTTI::at<ColType>(col_index, row1, columns);
-      ColType res2 = LesserRTTI::at<ColType>(col_index, row2, columns);
+      const ColType res1 = LesserRTTI::at<ColType>(col_index, row1, columns);
+      const ColType res2 = LesserRTTI::at<ColType>(col_index, row2, columns);
       
       if( res1 < res2 )
         return State::True;
@@ -362,10 +327,10 @@ private:
                       const gdf_valid_type* const * valids,
                       bool nulls_are_smallest)
 	  {
-		  ColType res1 = LesserRTTI::at<ColType>(col_index, row1, columns);
-		  ColType res2 = LesserRTTI::at<ColType>(col_index, row2, columns);
-		  bool isValid1 = LesserRTTI::is_valid(col_index, row1, valids);
-		  bool isValid2 = LesserRTTI::is_valid(col_index, row2, valids);
+		  const ColType res1 = LesserRTTI::at<ColType>(col_index, row1, columns);
+		  const ColType res2 = LesserRTTI::at<ColType>(col_index, row2, columns);
+		  const bool isValid1 = LesserRTTI::is_valid(col_index, row1, valids);
+		  const bool isValid2 = LesserRTTI::is_valid(col_index, row2, valids);
 
 		  if (!isValid2 && !isValid1)
 			  return State::Undecided;
@@ -395,8 +360,8 @@ private:
                       int col_index,
   		                const void* const * columns)
     {
-      ColType res1 = LesserRTTI::at<ColType>(col_index, row1, columns);
-      ColType res2 = LesserRTTI::at<ColType>(col_index, row2, columns);
+      const ColType res1 = LesserRTTI::at<ColType>(col_index, row1, columns);
+      const ColType res2 = LesserRTTI::at<ColType>(col_index, row2, columns);
 
       if( res1 > res2 )
   	    return State::True;
@@ -417,10 +382,10 @@ private:
                       const gdf_valid_type* const * valids,
                       bool nulls_are_smallest)
 	  {
-		  ColType res1 = LesserRTTI::at<ColType>(col_index, row1, columns);
-		  ColType res2 = LesserRTTI::at<ColType>(col_index, row2, columns);
-		  bool isValid1 = LesserRTTI::is_valid(col_index, row1, valids);
-		  bool isValid2 = LesserRTTI::is_valid(col_index, row2, valids);
+		  const ColType res1 = LesserRTTI::at<ColType>(col_index, row1, columns);
+		  const ColType res2 = LesserRTTI::at<ColType>(col_index, row2, columns);
+		  const bool isValid1 = LesserRTTI::is_valid(col_index, row1, valids);
+		  const bool isValid2 = LesserRTTI::is_valid(col_index, row2, valids);
 
 		  if (!isValid2 && !isValid1)
 			  return State::Undecided;
@@ -450,8 +415,8 @@ private:
                       int col_index,
 		                  const void* const * columns)
     {
-      ColType res1 = LesserRTTI::at<ColType>(col_index, row1, columns);
-      ColType res2 = LesserRTTI::at<ColType>(col_index, row2, columns);
+      const ColType res1 = LesserRTTI::at<ColType>(col_index, row1, columns);
+      const ColType res2 = LesserRTTI::at<ColType>(col_index, row2, columns);
       
       if( res1 != res2 )
         return State::False;
@@ -492,8 +457,8 @@ private:
                       int col_index,
                       const void* const * columns)
     {
-      ColType res1 = LesserRTTI::at<ColType>(col_index, row, columns);
-      ColType res2 = LesserRTTI::at<ColType>(col_index, 0, vals);
+      const ColType res1 = LesserRTTI::at<ColType>(col_index, row, columns);
+      const ColType res2 = LesserRTTI::at<ColType>(col_index, 0, vals);
       
       if( res1 != res2 )
         return State::False;
@@ -502,13 +467,13 @@ private:
     }
   };
 
-  const void* const * columns_;
-  const gdf_valid_type* const * valids_;
-  const int* const rtti_;
+  const void* const * columns_{nullptr};
+  const gdf_valid_type* const * valids_{nullptr};
+  const int* const rtti_{nullptr};
   size_t sz_;
-  const void* const * vals_; //for filtering
-  char* const asc_desc_flags_; //array of 0 and 1 that allows us to know whether or not a column should be sorted ascending or descending
-  bool nulls_are_smallest_;  // when sorting if there are nulls in the data if this is true, then they will be treated as the smallest value, otherwise they will be treated as the largest value
+  const void* const * vals_{nullptr}; //for filtering
+  const int8_t* const asc_desc_flags_{nullptr}; //array of 0 and 1 that allows us to know whether or not a column should be sorted ascending or descending
+  bool nulls_are_smallest_{false};  // when sorting if there are nulls in the data if this is true, then they will be treated as the smallest value, otherwise they will be treated as the largest value
 };
 
 //###########################################################################
@@ -543,12 +508,11 @@ size_t multi_col_filter(size_t nrows,
 {
   LesserRTTI<size_t> f(d_cols, d_gdf_t, ncols, d_vals);//size_t, not IndexT, because of counting_iterator below;
   
-  rmm_temp_allocator allocator(stream);
 
   //actual filtering happens here:
   //
   auto ret_iter_last =
-    thrust::copy_if(thrust::cuda::par(allocator).on(stream),
+    thrust::copy_if(rmm::exec_policy(stream),
                     thrust::make_counting_iterator<size_t>(0), 
                     thrust::make_counting_iterator<size_t>(nrows),
                     ptr_d_flt_indx,
@@ -605,10 +569,9 @@ multi_col_group_by_count_sort(size_t         nrows,
 
   LesserRTTI<IndexT> f(d_cols, d_gdf_t, ncols);
 
-  rmm_temp_allocator allocator(stream);
 
   thrust::pair<IndexT*, CountT*> ret =
-    thrust::reduce_by_key(thrust::cuda::par(allocator).on(stream),
+    thrust::reduce_by_key(rmm::exec_policy(stream),
                           ptr_d_indx, ptr_d_indx+nrows,
                           thrust::make_constant_iterator<CountT>(1),
                           ptr_d_kout,
@@ -676,9 +639,8 @@ size_t multi_col_group_by_sort(size_t         nrows,
   if( !sorted )
     multi_col_sort(d_cols, nullptr, d_gdf_t, nullptr, ncols, nrows, false, ptr_d_indx, false, stream);
 
-  rmm_temp_allocator allocator(stream);
   
-  thrust::gather(thrust::cuda::par(allocator).on(stream),
+  thrust::gather(rmm::exec_policy(stream),
                  ptr_d_indx, ptr_d_indx + nrows,  //map[i]
   		 ptr_d_agg,                    //source[i]
   		 ptr_d_agg_p);                 //source[map[i]]
@@ -686,7 +648,7 @@ size_t multi_col_group_by_sort(size_t         nrows,
   LesserRTTI<IndexT> f(d_cols, d_gdf_t, ncols);
   
   thrust::pair<IndexT*, ValsT*> ret =
-    thrust::reduce_by_key(thrust::cuda::par(allocator).on(stream),
+    thrust::reduce_by_key(rmm::exec_policy(stream),
                           ptr_d_indx, ptr_d_indx + nrows,
                           ptr_d_agg_p,
                           ptr_d_kout,
@@ -840,9 +802,8 @@ size_t multi_col_group_by_avg_sort(size_t         nrows,
                                                sorted,
                                                stream);
 
-  rmm_temp_allocator allocator(stream);
 
-  thrust::transform(thrust::cuda::par(allocator).on(stream),
+  thrust::transform(rmm::exec_policy(stream),
                     ptr_d_cout, ptr_d_cout + nrows,
                     ptr_d_vout,
                     ptr_d_vout,
@@ -877,7 +838,7 @@ template<typename IndexT>
 void multi_col_sort(void* const *           d_cols,
                     gdf_valid_type* const * d_valids,
                     int*                    d_col_types,
-                    char*                   d_asc_desc,
+                    int8_t*                 d_asc_desc,
                     size_t                  ncols,
                     size_t                  nrows,
                     bool                    have_nulls,
@@ -888,20 +849,18 @@ void multi_col_sort(void* const *           d_cols,
   //cannot use counting_iterator 2 reasons:
   //(1.) need to return a container result;
   //(2.) that container must be mutable;
-  rmm_temp_allocator allocator(stream);
-  thrust::sequence(thrust::cuda::par(allocator).on(stream), d_indx, d_indx+nrows, 0);
+  thrust::sequence(rmm::exec_policy(stream), d_indx, d_indx+nrows, 0);
   
+  LesserRTTI<IndexT> comp(d_cols, d_valids, d_col_types, d_asc_desc, ncols, nulls_are_smallest);
   if (d_valids != nullptr && have_nulls) {
-    LesserRTTI<IndexT> comp(d_cols, d_valids, d_col_types, d_asc_desc, ncols, nulls_are_smallest);
-		thrust::sort(thrust::cuda::par.on(stream),
+		thrust::sort(rmm::exec_policy(stream),
 				         d_indx, d_indx+nrows,
 				         [comp] __device__ (IndexT i1, IndexT i2){
                     return comp.asc_desc_comparison_with_nulls(i1, i2);
                  });
   }
   else {
-    LesserRTTI<IndexT> comp(d_cols, d_col_types, d_asc_desc, ncols);
-    thrust::sort(thrust::cuda::par(allocator).on(stream),
+    thrust::sort(rmm::exec_policy(stream),
                 d_indx, d_indx+nrows,
                 [comp] __device__ (IndexT i1, IndexT i2) {
                   return comp.asc_desc_comparison(i1, i2);

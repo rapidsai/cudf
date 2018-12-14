@@ -46,7 +46,7 @@ struct OrderByTest : public GdfTest
   const bool nulls_are_smallest = test_parameters::nulls_are_smallest;
 
   // The sorting order for each column is passed via a member of the template argument class
-  std::vector<char> sort_order_types;
+  std::vector<int8_t> sort_order_types;
 
   // multi_column_t is a tuple of vectors. The number of vectors in the tuple
   // determines the number of columns to be ordered by, and the value_type of each
@@ -232,14 +232,14 @@ struct OrderByTest : public GdfTest
   // Compile time recursion to sort an array of indices by each vector in a tuple of vectors
   template<std::size_t I = 0, typename... Tp>
   inline typename std::enable_if<I == sizeof...(Tp), void>::type
-  sort_multi_column(std::tuple<std::vector<Tp>...>& t, std::vector<host_valid_pointer>& valids, std::vector<char>& asc_desc, std::vector<size_t>& indices)
+  sort_multi_column(std::tuple<std::vector<Tp>...>& t, std::vector<host_valid_pointer>& valids, std::vector<int8_t>& asc_desc, std::vector<size_t>& indices)
   {
     //bottom of compile-time recursion
     //purposely empty...
   }
   template<std::size_t I = 0, typename... Tp>
   inline typename std::enable_if<I < sizeof...(Tp), void>::type
-  sort_multi_column(std::tuple<std::vector<Tp>...>& t, std::vector<host_valid_pointer>& valids, std::vector<char>& asc_desc, std::vector<size_t>& indices)
+  sort_multi_column(std::tuple<std::vector<Tp>...>& t, std::vector<host_valid_pointer>& valids, std::vector<int8_t>& asc_desc, std::vector<size_t>& indices)
   {
     const size_t col_index = sizeof...(Tp)-I-1;
     
@@ -313,12 +313,11 @@ struct OrderByTest : public GdfTest
   /**
    * @Synopsis  Computes the result of sorting the set of columns with the libgdf functions
    *
-   * @Param use_gdf_order_by_method Whether to use gdf_order_by or gdf_order_by_asc_desc
-   *                                      libgdf sort function
+   * @Param use_default_sort_order Whether or not to sort using the default ascending order 
    * @Param print Option to print the result computed by the libgdf function
    */
   /* ----------------------------------------------------------------------------*/
-  std::vector<size_t> compute_gdf_result(bool use_gdf_order_by_method = false, bool print = false, gdf_error expected_result = GDF_SUCCESS)
+  std::vector<size_t> compute_gdf_result(bool use_default_sort_order = false, bool print = false, gdf_error expected_result = GDF_SUCCESS)
   {
     const int num_columns = std::tuple_size<multi_column_t>::value;
 
@@ -328,20 +327,12 @@ struct OrderByTest : public GdfTest
     gdf_column* sort_order_types = gdf_raw_sort_order_types;
     gdf_column* sorted_indices_output = gdf_raw_output_indices_column;
 
-    if (use_gdf_order_by_method) {
-      result_error = gdf_order_by(columns_to_sort,
-                                  num_columns,
-                                  sorted_indices_output,
-                                  nulls_are_smallest);
-    }
-    else {
-      result_error = gdf_order_by_asc_desc(columns_to_sort,
-                                           (char*)(sort_order_types->data),
-                                           num_columns,
-                                           sorted_indices_output,
-                                           nulls_are_smallest);
-    }
-    
+    result_error = gdf_order_by(columns_to_sort,
+                                (use_default_sort_order ? nullptr : (int8_t*)(sort_order_types->data)),
+                                num_columns,
+                                sorted_indices_output,
+                                nulls_are_smallest);
+
     EXPECT_EQ(expected_result, result_error) << "The gdf order by function did not complete successfully";
 
     // If the expected result was not GDF_SUCCESS, then this test was testing for a

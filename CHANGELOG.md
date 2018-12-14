@@ -3,13 +3,15 @@
 
 ## New Features
 
-- PR #411 added null support to gdf_order_by (new API), gdf_order_by_asc_desc (new function) and cudf_table::sort
+- PR #411 added null support to gdf_order_by (new API) and cudf_table::sort
 - PR #455 CSV Reader: Add support for user-specified decimal point and thousands separator
 - PR #439 add `DataFrame.drop` method similar to pandas
 
 ## Improvements
+
+- PR #472 RMM: Created centralized rmm::device_vector alias and rmm::exec_policy
 - PR #426 Removed sort-based groupby and refactored existing groupby APIs. Also improves C++/CUDA compile time.
- 
+
 ## Bug Fixes
 
 

@@ -30,9 +30,6 @@
 #include "rmm/thrust_rmm_allocator.h"
 
 
-// Vector set to use rmmAlloc and rmmFree.
-template <typename T>
-using Vector = thrust::device_vector<T, rmm_allocator<T>>;
 
 
 // The occupancy of the hash table determines it's capacity. A value of 50 implies
@@ -210,11 +207,9 @@ gdf_error GroupbyHash(gdf_table<size_type> const & groupby_input_table,
 
   // Optionally sort the groupby/aggregation result columns
   if(true == sort_result) {
-      rmm_temp_allocator allocator(0);
-    	auto exec = thrust::cuda::par(allocator).on(0);
 
-      Vector<int32_t> sorted_indices(*out_size);
-      thrust::sequence(exec, sorted_indices.begin(), sorted_indices.end());
+      rmm::device_vector<int32_t> sorted_indices(*out_size);
+      thrust::sequence(rmm::exec_policy(cudaStream_t{0}), sorted_indices.begin(), sorted_indices.end());
 
       gdf_column sorted_indices_col;
       gdf_error status = gdf_column_view(&sorted_indices_col, (void*)thrust::raw_pointer_cast(sorted_indices.data()), 
@@ -223,6 +218,7 @@ gdf_error GroupbyHash(gdf_table<size_type> const & groupby_input_table,
         return status;
 
       status = gdf_order_by(groupby_output_table.get_columns(),             //input columns
+                       nullptr,
                        groupby_output_table.get_num_columns(),                //number of columns in the first parameter (e.g. number of columsn to sort by)
                        &sorted_indices_col,            //a gdf_column that is pre allocated for storing sorted indices
                        0);  //flag to indicate if nulls are to be considered smaller than non-nulls or viceversa
@@ -231,12 +227,12 @@ gdf_error GroupbyHash(gdf_table<size_type> const & groupby_input_table,
 
       groupby_output_table.gather(sorted_indices);
 
-      Vector<aggregation_type> agg(*out_size);
-      thrust::gather(exec,
+      rmm::device_vector<aggregation_type> agg(*out_size);
+      thrust::gather(rmm::exec_policy(cudaStream_t{0}),
                sorted_indices.begin(), sorted_indices.end(),
                out_aggregation_column,
                agg.begin());
-      thrust::copy(exec, agg.begin(), agg.end(), out_aggregation_column);
+      thrust::copy(rmm::exec_policy(cudaStream_t{0}), agg.begin(), agg.end(), out_aggregation_column);
   }
 
   return GDF_SUCCESS;

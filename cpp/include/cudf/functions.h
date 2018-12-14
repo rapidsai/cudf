@@ -935,30 +935,12 @@ gdf_error gdf_quantile_aprrox(	gdf_column*  col_in,       //input column with 0 
 
 /* --------------------------------------------------------------------------*/
 /** 
- * @brief Sorts an array of gdf_column in ascending order.
- * 
- * @Param[in] input_columns Array of gdf_columns
- * @Param[in] num_inputs # columns 
- * @Param[in] flag_nulls_are_smallest Flag to indicate if nulls are to be considered
- *                                    smaller than non-nulls or viceversa
- * @Param[out] output_indices Pre-allocated gdf_column to be filled with sorted
- *                            indices
- * 
- * @Returns GDF_SUCCESS upon successful completion
- */
-/* ----------------------------------------------------------------------------*/
-gdf_error gdf_order_by(gdf_column** input_columns,
-                       size_t       num_inputs,
-                       gdf_column*  output_indices,
-                       int          flag_nulls_are_smallest);
-
-/* --------------------------------------------------------------------------*/
-/** 
- * @brief Sorts an array of gdf_column given the sort order for each column.
+ * @brief Sorts an array of gdf_column.
  * 
  * @Param[in] input_columns Array of gdf_columns
  * @Param[in] asc_desc Device array of sort order types for each column
- *                     (0 is ascending order and 1 is descending)
+ *                     (0 is ascending order and 1 is descending). If NULL
+ *                     is provided defaults to ascending order for evey column.
  * @Param[in] num_inputs # columns
  * @Param[in] flag_nulls_are_smallest Flag to indicate if nulls are to be considered
  *                                    smaller than non-nulls or viceversa
@@ -968,8 +950,8 @@ gdf_error gdf_order_by(gdf_column** input_columns,
  * @Returns GDF_SUCCESS upon successful completion
  */
 /* ----------------------------------------------------------------------------*/
-gdf_error gdf_order_by_asc_desc(gdf_column** input_columns,
-                                char*        asc_desc,
-                                size_t       num_inputs,
-                                gdf_column*  output_indices,
-                                int          flag_nulls_are_smallest);
+gdf_error gdf_order_by(gdf_column** input_columns,
+                       int8_t*      asc_desc,
+                       size_t       num_inputs,
+                       gdf_column*  output_indices,
+                       int          flag_nulls_are_smallest);
