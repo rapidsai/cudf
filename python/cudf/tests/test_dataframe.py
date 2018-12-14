@@ -986,17 +986,43 @@ def test_dataframe_boolean_mask_with_None():
     pdf = pd.DataFrame({'a': [0, 1, 2, 3], 'b': [0.1, 0.2, None, 0.3]})
     gdf = DataFrame.from_pandas(pdf)
     pdf_masked = pdf[[True, False, True, False]]
-    print(pdf_masked)
     gdf_masked = gdf[[True, False, True, False]]
-    print(gdf_masked)
     assert pdf_masked.to_string().split() == gdf_masked.to_string().split()
 
 
-def test_dataframe_boolean_mask():
-    pdf = pd.DataFrame({'a': [0, 1, 2, 3], 'b': [0.1, 0.2, 0.4, 0.3]})
-    gdf = DataFrame.from_pandas(pdf)
-    pdf_masked = pdf[[True, False, True, False]]
-    print(pdf_masked)
-    gdf_masked = gdf[[True, False, True, False]]
-    print(gdf_masked)
-    assert pdf_masked.to_string().split() == gdf_masked.to_string().split()
+"""
+This test compares cudf and Pandas dataframe boolean indexing.
+"""
+
+
+@pytest.fixture
+def df():
+    return pd.DataFrame({'x': range(4), 'y': range(4)})
+
+
+@pytest.fixture
+def gf(df):
+    return gd.DataFrame.from_pandas(df)
+
+
+@pytest.mark.parametrize('mask', [
+    [True, False, True, False],
+    np.array([True, False, True, False]),
+    pd.Series([True, False, True, False]),
+    ])
+def test_dataframe_boolean_mask(df, gf, mask):
+    df_masked = df[mask]
+    gf_masked = gf[mask]
+    assert df_masked.to_string().split() == gf_masked.to_string().split()
+
+
+"""
+This test only tests boolean indexing of a cudf DataFrame with a cudf Series.
+Pandas does not support cudf Series.
+"""
+
+
+def test_dataframe_boolean_mask_Series(gf):
+    mask = Series([True, False, True, False])
+    gf_masked = gf[mask]
+    assert gf_masked.shape[0] == 2

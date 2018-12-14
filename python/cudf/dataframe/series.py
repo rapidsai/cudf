@@ -188,7 +188,7 @@ class Series(object):
         return len(self._column)
 
     def __getitem__(self, arg):
-        if isinstance(arg, (list,)):
+        if isinstance(arg, (list, np.ndarray, pd.Series,)):
             arg = Series(arg)
         if isinstance(arg, Series):
             if arg.dtype in [np.int8, np.int16, np.int32, np.int32, np.int64]:
