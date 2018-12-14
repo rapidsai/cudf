@@ -13,11 +13,12 @@
 - PR #500 Improved the concurrent hash map class to support partitioned (multi-pass) hash table building.
 - PR #465 Added templated C++ API for RMM to avoid explicit cast to `void**`
 
-
 ## Bug Fixes
 
+- PR #473 Added missing <random> include
 - PR #495 Updated README to correct where cffi pytest should be executed.
 - PR #512 fix bug for `on` parameter in `DataFrame.merge` to allow for None or single column name
+
 
 # cuDF 0.4.0 (05 Dec 2018)
 
