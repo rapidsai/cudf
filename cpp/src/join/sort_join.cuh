@@ -26,13 +26,10 @@
 #include <utility>
 #include <thrust/transform_scan.h>
 
-template <typename T>
-using DeviceVector = typename thrust::device_vector<T, rmm_allocator<T>>;
-
 template <typename index_type>
 struct JoinBounds {
-    DeviceVector<index_type> lower;
-    DeviceVector<index_type> upper;
+    rmm::device_vector<index_type> lower;
+    rmm::device_vector<index_type> upper;
 };
 
 /* --------------------------------------------------------------------------*/
@@ -53,24 +50,23 @@ struct JoinBounds {
 /* ----------------------------------------------------------------------------*/
 template<typename T,
     typename index_type,
-    typename size_type,
-    typename ExecutionPolicy>
+    typename size_type>
 JoinBounds<index_type>
 compute_join_bounds(
         T const * const l, size_type l_count,
         T const * const r, size_type r_count,
-        const ExecutionPolicy& exec_policy) {
+        cudaStream_t stream) {
     JoinBounds<index_type> bounds;
     bounds.lower.resize(l_count);
     bounds.upper.resize(l_count);
     thrust::lower_bound(
-            exec_policy,
+            rmm::exec_policy(stream),
             r, r + r_count,
             l, l + l_count,
             bounds.lower.begin(),
             thrust::less<T>());
     thrust::upper_bound(
-            exec_policy,
+            rmm::exec_policy(stream),
             r, r + r_count,
             l, l + l_count,
             bounds.upper.begin(),
@@ -142,13 +138,12 @@ struct JoinConditionalAdd {
  */
 /* ----------------------------------------------------------------------------*/
 template<JoinType join_type,
-    typename index_type,
-    typename ExecutionPolicy>
-DeviceVector<index_type>
-scan_join_bounds(const JoinBounds<index_type>& bounds, const ExecutionPolicy& exec_policy) {
-    DeviceVector<index_type> scanned_sizes(bounds.lower.size() + 1, 0);
+    typename index_type>
+rmm::device_vector<index_type>
+scan_join_bounds(const JoinBounds<index_type>& bounds, cudaStream_t stream) {
+    rmm::device_vector<index_type> scanned_sizes(bounds.lower.size() + 1, 0);
     thrust::transform_inclusive_scan(
-            exec_policy,
+            rmm::exec_policy(stream),
             thrust::make_zip_iterator(thrust::make_tuple(bounds.upper.begin(), bounds.lower.begin())),
             thrust::make_zip_iterator(thrust::make_tuple(  bounds.upper.end(),   bounds.lower.end())),
             scanned_sizes.begin() + 1,
@@ -171,27 +166,27 @@ scan_join_bounds(const JoinBounds<index_type>& bounds, const ExecutionPolicy& ex
  *
  */
 /* ----------------------------------------------------------------------------*/
-template <typename index_type, typename ExecutionPolicy>
+template <typename index_type>
 void
-create_load_balanced_tuple(const DeviceVector<index_type>& scanned_sizes,
+create_load_balanced_tuple(const rmm::device_vector<index_type>& scanned_sizes,
         index_type * const seg, index_type * const rank, const index_type segment_length,
-        const ExecutionPolicy& exec_policy) {
+        cudaStream_t stream) {
     thrust::upper_bound(
-            exec_policy,
+            rmm::exec_policy(stream),
             scanned_sizes.begin(),
             scanned_sizes.end(),
             thrust::make_counting_iterator(static_cast<index_type>(0)),
             thrust::make_counting_iterator(static_cast<index_type>(segment_length)),
             seg);
     thrust::transform(
-            exec_policy,
+            rmm::exec_policy(stream),
             seg,
             seg + segment_length,
             thrust::make_constant_iterator(static_cast<index_type>(1)),
             seg,
             thrust::minus<index_type>());
     thrust::transform(
-            exec_policy,
+            rmm::exec_policy(stream),
             thrust::make_counting_iterator(static_cast<index_type>(0)),
             thrust::make_counting_iterator(static_cast<index_type>(segment_length)),
             thrust::make_permutation_iterator(scanned_sizes.begin(), seg),
@@ -213,14 +208,13 @@ create_load_balanced_tuple(const DeviceVector<index_type>& scanned_sizes,
  */
 /* ----------------------------------------------------------------------------*/
 template<JoinType join_type,
-    typename index_type,
-    typename MemAlloc = rmm_temp_allocator>
+    typename index_type>
 gdf_error
 compute_joined_indices(const JoinBounds<index_type>& bounds,
         gdf_column * const leftcol, gdf_column * const rightcol,
-        DeviceVector<index_type>& scanned_sizes,
+        rmm::device_vector<index_type>& scanned_sizes,
         std::pair<gdf_column, gdf_column>& join_result,
-        MemAlloc& allocator, cudaStream_t stream) {
+        cudaStream_t stream) {
     index_type join_size = scanned_sizes[scanned_sizes.size() - 1];
     scanned_sizes.resize(scanned_sizes.size() - 1);
 
@@ -229,11 +223,11 @@ compute_joined_indices(const JoinBounds<index_type>& bounds,
     RMM_TRY( RMM_ALLOC((void**)&l_ptr, join_size*sizeof(index_type), stream));
     RMM_TRY( RMM_ALLOC((void**)&r_ptr, join_size*sizeof(index_type), stream));
     create_load_balanced_tuple(scanned_sizes, l_ptr, r_ptr, join_size,
-            thrust::cuda::par(allocator).on(stream));
+            stream);
     CUDA_CHECK_LAST()
     if (join_type == JoinType::INNER_JOIN) {
         thrust::transform(
-                thrust::cuda::par(allocator).on(stream),
+                rmm::exec_policy(stream),
                 r_ptr,
                 r_ptr + join_size,
                 thrust::make_permutation_iterator(bounds.lower.begin(), l_ptr),
@@ -241,7 +235,7 @@ compute_joined_indices(const JoinBounds<index_type>& bounds,
                 thrust::plus<index_type>());
     } else {
         thrust::transform(
-                thrust::cuda::par(allocator).on(stream),
+                rmm::exec_policy(stream),
                 r_ptr,
                 r_ptr + join_size,
                 thrust::make_zip_iterator(thrust::make_tuple(
@@ -258,7 +252,7 @@ compute_joined_indices(const JoinBounds<index_type>& bounds,
                 &l_ptr, &r_ptr,
                 join_column_capacity,
                 final_join_size, rightcol->size,
-                allocator, stream));
+                stream));
     }
     gdf_column output_l, output_r;
     gdf_column_view(&output_l, l_ptr, nullptr, final_join_size, GDF_INT32);
@@ -287,8 +281,7 @@ compute_joined_indices(const JoinBounds<index_type>& bounds,
 /* ----------------------------------------------------------------------------*/
 template<JoinType join_type,
     typename column_type,
-    typename index_type,
-    typename MemAlloc = rmm_temp_allocator>
+    typename index_type>
 gdf_error sort_join_typed(
         gdf_column * const output_l,
         gdf_column * const output_r,
@@ -296,21 +289,20 @@ gdf_error sort_join_typed(
         gdf_column * const rightcol,
         bool flip_results = false) {
     cudaStream_t stream = 0;
-    MemAlloc allocator(stream);
     JoinBounds<index_type> bounds =
         compute_join_bounds<column_type, index_type>(
                 static_cast<column_type*>(leftcol->data), leftcol->size,
                 static_cast<column_type*>(rightcol->data), rightcol->size,
-                thrust::cuda::par(allocator).on(stream));
+                stream);
     CUDA_CHECK_LAST()
-    DeviceVector<index_type> scanned_sizes =
-        scan_join_bounds<join_type, index_type>(bounds, thrust::cuda::par(allocator).on(stream));
+    rmm::device_vector<index_type> scanned_sizes =
+        scan_join_bounds<join_type, index_type>(bounds, stream);
     CUDA_CHECK_LAST()
     std::pair<gdf_column, gdf_column> join_result;
     GDF_TRY(compute_joined_indices<join_type, index_type>(
             bounds, leftcol, rightcol,
             scanned_sizes, join_result,
-            allocator, stream));
+            stream));
     *output_l = join_result.first;
     *output_r = join_result.second;
     if (flip_results) {

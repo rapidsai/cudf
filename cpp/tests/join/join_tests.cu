@@ -557,12 +557,6 @@ typedef ::testing::Types<
                           TestParameters< join_op::INNER, HASH, VTuple<double  > >,
                           TestParameters< join_op::INNER, HASH, VTuple<uint32_t> >,
                           TestParameters< join_op::INNER, HASH, VTuple<uint64_t> >,
-                          TestParameters< join_op::INNER, SORT, VTuple<int32_t > >,
-                          TestParameters< join_op::INNER, SORT, VTuple<int64_t > >,
-                          TestParameters< join_op::INNER, SORT, VTuple<float   > >,
-                          TestParameters< join_op::INNER, SORT, VTuple<double  > >,
-                          TestParameters< join_op::INNER, SORT, VTuple<uint32_t> >,
-                          TestParameters< join_op::INNER, SORT, VTuple<uint64_t> >,
                           // Single column left join tests for all types
                           TestParameters< join_op::LEFT,  HASH, VTuple<int32_t > >,
                           TestParameters< join_op::LEFT,  HASH, VTuple<int64_t > >,
@@ -570,19 +564,13 @@ typedef ::testing::Types<
                           TestParameters< join_op::LEFT,  HASH, VTuple<double  > >,
                           TestParameters< join_op::LEFT,  HASH, VTuple<uint32_t> >,
                           TestParameters< join_op::LEFT,  HASH, VTuple<uint64_t> >,
-                          TestParameters< join_op::LEFT,  SORT, VTuple<int32_t > >,
-                          TestParameters< join_op::LEFT,  SORT, VTuple<int64_t > >,
-                          TestParameters< join_op::LEFT,  SORT, VTuple<float   > >,
-                          TestParameters< join_op::LEFT,  SORT, VTuple<double  > >,
-                          TestParameters< join_op::LEFT,  SORT, VTuple<uint32_t> >,
-                          TestParameters< join_op::LEFT,  SORT, VTuple<uint64_t> >,
                           // Single column full join tests for all types
                           TestParameters< join_op::FULL, HASH, VTuple<int32_t > >,
                           TestParameters< join_op::FULL, HASH, VTuple<int64_t > >,
                           TestParameters< join_op::FULL, HASH, VTuple<float   > >,
-                          TestParameters< join_op::FULL, SORT, VTuple<double  > >,
-                          TestParameters< join_op::FULL, SORT, VTuple<uint32_t> >,
-                          TestParameters< join_op::FULL, SORT, VTuple<uint64_t> >,
+                          TestParameters< join_op::FULL, HASH, VTuple<double  > >,
+                          TestParameters< join_op::FULL, HASH, VTuple<uint32_t> >,
+                          TestParameters< join_op::FULL, HASH, VTuple<uint64_t> >,
                           // Two Column Left Join tests for some combination of types
                           TestParameters< join_op::LEFT,  HASH, VTuple<int32_t , int32_t> >,
                           TestParameters< join_op::LEFT,  HASH, VTuple<uint32_t, int32_t> >,
@@ -604,7 +592,28 @@ typedef ::testing::Types<
                           // Five column test for Left Joins
                           TestParameters< join_op::LEFT, HASH, VTuple<double, int32_t, int64_t, int32_t, int32_t> >,
                           // Five column test for Inner Joins
-                          TestParameters< join_op::INNER, HASH, VTuple<uint32_t, float, int64_t, int32_t, float> >
+                          TestParameters< join_op::INNER, HASH, VTuple<uint32_t, float, int64_t, int32_t, float> >,
+                          // Single column inner join tests for all types
+                          TestParameters< join_op::INNER, SORT, VTuple<int32_t > >,
+                          TestParameters< join_op::INNER, SORT, VTuple<int64_t > >,
+                          TestParameters< join_op::INNER, SORT, VTuple<float   > >,
+                          TestParameters< join_op::INNER, SORT, VTuple<double  > >,
+                          TestParameters< join_op::INNER, SORT, VTuple<uint32_t> >,
+                          TestParameters< join_op::INNER, SORT, VTuple<uint64_t> >,
+                          // Single column left join tests for all types
+                          TestParameters< join_op::LEFT,  SORT, VTuple<int32_t > >,
+                          TestParameters< join_op::LEFT,  SORT, VTuple<int64_t > >,
+                          TestParameters< join_op::LEFT,  SORT, VTuple<float   > >,
+                          TestParameters< join_op::LEFT,  SORT, VTuple<double  > >,
+                          TestParameters< join_op::LEFT,  SORT, VTuple<uint32_t> >,
+                          TestParameters< join_op::LEFT,  SORT, VTuple<uint64_t> >,
+                          // Single column full join tests for all types
+                          TestParameters< join_op::FULL, SORT, VTuple<int32_t > >,
+                          TestParameters< join_op::FULL, SORT, VTuple<int64_t > >,
+                          TestParameters< join_op::FULL, SORT, VTuple<float   > >,
+                          TestParameters< join_op::FULL, SORT, VTuple<double  > >,
+                          TestParameters< join_op::FULL, SORT, VTuple<uint32_t> >,
+                          TestParameters< join_op::FULL, SORT, VTuple<uint64_t> >
                           > Implementations;
 
 TYPED_TEST_CASE(JoinTest, Implementations);
