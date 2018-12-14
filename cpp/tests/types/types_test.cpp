@@ -15,10 +15,9 @@
  */
 #include <random>
 #include "gtest/gtest.h"
-
 #include <utilities/wrapper_types.hpp>
-
 #include <cudf.h>
+#include <random>
 
 
 
