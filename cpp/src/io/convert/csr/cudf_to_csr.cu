@@ -115,11 +115,10 @@ gdf_error gdf_to_csr(gdf_column **gdfData, int numCol, csr_gdf *csrReturn) {
 		determineValidRecCount<<<blocks, threads>>>(gdfData[x]->valid, numRows, numCol, offsets);
 	}
 
-	rmm_temp_allocator allocator(0); // TODO: non-default stream?
 
 	//--------------------------------------------------------------------------------------
 	// Now do an exclusive scan to compute the offsets for where to write data
-    thrust::exclusive_scan(thrust::cuda::par(allocator).on(0), offsets, (offsets + numRows + 1), offsets);
+    thrust::exclusive_scan(rmm::exec_policy(cudaStream_t{0}), offsets, (offsets + numRows + 1), offsets);
 
 	//--------------------------------------------------------------------------------------
     // get the number of elements - NNZ, this is the last item in the array
