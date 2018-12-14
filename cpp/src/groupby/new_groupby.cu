@@ -6,6 +6,7 @@
 #include "aggregation_operations.hpp"
 #include "groupby/hash_groupby.cuh"
 #include <../tests/utilities/cudf_test_utils.cuh>
+#include <iostream>
 
 namespace{
   /* --------------------------------------------------------------------------*/
@@ -259,6 +260,13 @@ gdf_error gdf_group_by_wo_aggregations(int num_data_cols,
   status = table_in->gather<int32_t>(sorted_indices, *table_out.get());
   if (status != GDF_SUCCESS)
     return status;
+
+  bool haveValidIn = data_cols_in[0]->valid != nullptr;
+  bool haveValidOut = data_cols_out[0]->valid != nullptr;
+  std::cout<<"have valids in: "<<haveValidIn<<std::endl;
+  std::cout<<"null count in: "<<data_cols_in[0]->null_count<<std::endl;
+  std::cout<<"have valids out: "<<haveValidOut<<std::endl;
+  std::cout<<"null count out: "<<data_cols_out[0]->null_count<<std::endl;
 
   // setup for reduce by key  
   bool have_nulls = false;
