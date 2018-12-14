@@ -96,11 +96,11 @@ $ make install                                      # install the libraries libr
 $ make test
 ```
 
-- Build and install cffi bindings:
+- Build, install, and test cffi bindings:
 ```bash
 $ make python_cffi                                  # build CFFI bindings for librmm.so, libcudf.so
 $ make install_python                               # build & install CFFI python bindings. Depends on cffi package from PyPi or Conda
-$ py.test -v                                        # optional, run python tests on low-level python bindings
+$ cd python && py.test -v                           # optional, run python tests on low-level python bindings
 ```
 
 - 4. Build the `cudf` python package, in the `python` folder:
