@@ -1,8 +1,23 @@
-# cuDF 0.5.0 (TBD)
+
+# cuDF 0.5.0 (Date TBD)
 
 ## New Features
 
- - PR #510 Enable deep and shallow copying
+- PR #455 CSV Reader: Add support for user-specified decimal point and thousands separator
+- PR #439 add `DataFrame.drop` method similar to pandas
+- PR #510 Enable deep and shallow copying
+
+## Improvements
+
+- PR #472 RMM: Created centralized rmm::device_vector alias and rmm::exec_policy
+- PR #426 Removed sort-based groupby and refactored existing groupby APIs. Also improves C++/CUDA compile time.
+- PR #500 Improved the concurrent hash map class to support partitioned (multi-pass) hash table building.
+- PR #465 Added templated C++ API for RMM to avoid explicit cast to `void**`
+
+
+## Bug Fixes
+- PR #495 Updated README to correct where cffi pytest should be executed.
+
 
 # cuDF 0.4.0 (05 Dec 2018)
 
