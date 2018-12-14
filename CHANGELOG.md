@@ -4,6 +4,8 @@
 ## New Features
 
 - PR #455 #501 CSV Reader: add support for user-specified decimal point and thousands separator
+- PR #525 Added GitHub Issue templates for bugs, documentation, new features, and questions
+- PR #455 CSV Reader: Add support for user-specified decimal point and thousands separator
 - PR #439 add `DataFrame.drop` method similar to pandas
 
 ## Improvements
@@ -15,10 +17,9 @@
 
 ## Bug Fixes
 
+- PR #531 CSV Reader: Fix incorrect parsing of quoted numbers
 - PR #473 Added missing <random> include
 - PR #495 Updated README to correct where cffi pytest should be executed.
-- PR #531 CSV Reader: Fix incorrect parsing of quoted numbers
-
 
 # cuDF 0.4.0 (05 Dec 2018)
 
