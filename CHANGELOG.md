@@ -16,6 +16,7 @@
 
 
 ## Bug Fixes
+- PR #473 Added missing <random> include
 - PR #495 Updated README to correct where cffi pytest should be executed.
 
 # cuDF 0.4.0 (05 Dec 2018)
