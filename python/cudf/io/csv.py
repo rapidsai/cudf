@@ -21,7 +21,7 @@ def _wrap_string(text):
 
 def read_csv(filepath, lineterminator='\n',
              quotechar='"', quoting=True, doublequote=True,
-             windowslinetermination=False, header='infer',
+             header='infer',
              mangle_dupe_cols=True, usecols=None,
              delimiter=',', sep=None, delim_whitespace=False,
              skipinitialspace=False, names=None, dtype=None,
@@ -41,8 +41,6 @@ def read_csv(filepath, lineterminator='\n',
         Determines whether to use whitespace as delimiter.
     lineterminator : char, default '\\n'
         Character to indicate end of line.
-    windowslinetermination : bool, default False
-        Indicates whether the file uses Windows-style CRLF line endings
     skipinitialspace : bool, default False
         Skip spaces after delimiter.
     names : list of str, default None
@@ -182,7 +180,7 @@ def read_csv(filepath, lineterminator='\n',
     csv_reader.skiprows = skiprows
     csv_reader.skipfooter = skipfooter
     csv_reader.mangle_dupe_cols = mangle_dupe_cols
-    csv_reader.windowslinetermination = windowslinetermination
+    csv_reader.windowslinetermination = False
     csv_reader.decimal = decimal.encode()
     csv_reader.thousands = ffi.NULL
     if thousands:
@@ -233,7 +231,9 @@ def read_csv_strings(filepath, lineterminator='\n',
     a way to use nvstrings alongside cudf.
     Future versions of cuDF will provide cleaner integration.
 
-    Uses the same arguments as read_csv.
+    Uses mostly same arguments as read_csv.
+    Note: Doesn't currently support auto-column detection, header, usecols
+    and mangle_dupe_cols args.
 
     Returns list of Series objects for numeric or date columns and nvstrings
     objects for those columns that are strings (dtype='str').
