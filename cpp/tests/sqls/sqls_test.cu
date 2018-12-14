@@ -52,8 +52,6 @@
 #include "gtest/gtest.h"
 #include "tests/utilities/cudf_test_fixtures.h"
 
-template<typename T>
-using Vector = thrust::device_vector<T, rmm_allocator<T>>;
 
 ///using IndexT = int;//okay...
 using IndexT = size_t;
@@ -87,7 +85,7 @@ void print_v(const Vector<T, Allocator>& v, size_t n, std::ostream& os)
 }
 
 template<typename T>
-bool compare(const Vector<T>& d_v, const std::vector<T>& baseline, T eps)
+bool compare(const rmm::device_vector<T>& d_v, const std::vector<T>& baseline, T eps)
 {
   size_t n = baseline.size();//because d_v might be larger
   
@@ -116,9 +114,9 @@ TEST_F(gdf_group_by, UsageTestSum)
   std::vector<int> vi1{1,3,3,5,5,0};
   std::vector<double> vd1{12., 13., 13., 17., 17., 17};
 
-  Vector<int> dc1 = vc1;
-  Vector<int> di1 = vi1;
-  Vector<double> dd1 = vd1;
+  rmm::device_vector<int> dc1 = vc1;
+  rmm::device_vector<int> di1 = vi1;
+  rmm::device_vector<double> dd1 = vd1;
   
   size_t sz = dc1.size();
   assert( sz > 0 );
@@ -126,15 +124,15 @@ TEST_F(gdf_group_by, UsageTestSum)
   assert( sz == dd1.size() );
  
 
-  Vector<IndexT> d_indx(sz, 0);
-  Vector<IndexT> d_keys(sz, 0);
-  Vector<IndexT> d_vals(sz, 0);
+  rmm::device_vector<IndexT> d_indx(sz, 0);
+  rmm::device_vector<IndexT> d_keys(sz, 0);
+  rmm::device_vector<IndexT> d_vals(sz, 0);
 
   size_t ncols = 3;
   size_t& nrows = sz;
 
-  Vector<void*> d_cols(ncols, nullptr);
-  Vector<int>   d_types(ncols, 0);
+  rmm::device_vector<void*> d_cols(ncols, nullptr);
+  rmm::device_vector<int>   d_types(ncols, 0);
 
   std::vector<gdf_column> v_gdf_cols(ncols);
   v_gdf_cols[0].data = static_cast<void*>(dc1.data().get());
@@ -152,7 +150,7 @@ TEST_F(gdf_group_by, UsageTestSum)
   gdf_column c_agg;
   gdf_column c_vout;
 
-  Vector<double> d_outd(sz, 0);
+  rmm::device_vector<double> d_outd(sz, 0);
 
   c_agg.dtype = GDF_FLOAT64;
   c_agg.data = dd1.data().get();
@@ -182,9 +180,9 @@ TEST_F(gdf_group_by, UsageTestSum)
 
   //output:
   //{
-  Vector<int32_t> d_vc_out(nrows);
-  Vector<int32_t> d_vi_out(nrows);
-  Vector<double> d_vd_out(nrows);
+  rmm::device_vector<int32_t> d_vc_out(nrows);
+  rmm::device_vector<int32_t> d_vi_out(nrows);
+  rmm::device_vector<double> d_vd_out(nrows);
     
   std::vector<gdf_column> v_gdf_cols_out(ncols);
   v_gdf_cols_out[0].data = d_vc_out.data().get();
@@ -267,24 +265,24 @@ TEST_F(gdf_group_by, UsageTestCount)
   std::vector<int> vi1{1,3,3,5,5,0};
   std::vector<double> vd1{12., 13., 13., 17., 17., 17};
 
-  Vector<int> dc1 = vc1;
-  Vector<int> di1 = vi1;
-  Vector<double> dd1 = vd1;
+  rmm::device_vector<int> dc1 = vc1;
+  rmm::device_vector<int> di1 = vi1;
+  rmm::device_vector<double> dd1 = vd1;
   
   size_t sz = dc1.size();
   assert( sz > 0 );
   assert( sz == di1.size() );
   assert( sz == dd1.size() );
  
-  Vector<IndexT> d_indx(sz, 0);
-  Vector<IndexT> d_keys(sz, 0);
-  Vector<int32_t> d_vals(sz, 0);
+  rmm::device_vector<IndexT> d_indx(sz, 0);
+  rmm::device_vector<IndexT> d_keys(sz, 0);
+  rmm::device_vector<int32_t> d_vals(sz, 0);
 
   size_t ncols = 3;
   size_t& nrows = sz;
 
-  Vector<void*> d_cols(ncols, nullptr);
-  Vector<int>   d_types(ncols, 0);
+  rmm::device_vector<void*> d_cols(ncols, nullptr);
+  rmm::device_vector<int>   d_types(ncols, 0);
 
   std::vector<gdf_column> v_gdf_cols(ncols);
   v_gdf_cols[0].data = static_cast<void*>(dc1.data().get());
@@ -302,7 +300,7 @@ TEST_F(gdf_group_by, UsageTestCount)
   gdf_column c_agg;
   gdf_column c_vout;
 
-  Vector<double> d_outd(sz, 0);
+  rmm::device_vector<double> d_outd(sz, 0);
 
   c_agg.dtype = GDF_FLOAT64;
   c_agg.data = dd1.data().get();
@@ -332,9 +330,9 @@ TEST_F(gdf_group_by, UsageTestCount)
 
   //output:
   //{
-  Vector<int32_t> d_vc_out(nrows);
-  Vector<int32_t> d_vi_out(nrows);
-  Vector<double> d_vd_out(nrows);
+  rmm::device_vector<int32_t> d_vc_out(nrows);
+  rmm::device_vector<int32_t> d_vi_out(nrows);
+  rmm::device_vector<double> d_vd_out(nrows);
     
   std::vector<gdf_column> v_gdf_cols_out(ncols);
   v_gdf_cols_out[0].data = d_vc_out.data().get();
@@ -415,23 +413,23 @@ TEST_F(gdf_group_by, UsageTestAvg)
   std::vector<int> vi1{1,3,3,5,5,0};
   std::vector<double> vd1{12., 13., 13., 17., 17., 17};
 
-  Vector<int> dc1 = vc1;
-  Vector<int> di1 = vi1;
-  Vector<double> dd1 = vd1;
+  rmm::device_vector<int> dc1 = vc1;
+  rmm::device_vector<int> di1 = vi1;
+  rmm::device_vector<double> dd1 = vd1;
 
   size_t sz = dc1.size();
   assert( sz == di1.size() );
   assert( sz == dd1.size() );
     
-  Vector<IndexT> d_indx(sz, 0);
-  Vector<IndexT> d_keys(sz, 0);
-  Vector<IndexT> d_vals(sz, 0);
+  rmm::device_vector<IndexT> d_indx(sz, 0);
+  rmm::device_vector<IndexT> d_keys(sz, 0);
+  rmm::device_vector<IndexT> d_vals(sz, 0);
 
   size_t ncols = 3;
   size_t& nrows = sz;
 
-  Vector<void*> d_cols(ncols, nullptr);
-  Vector<int>   d_types(ncols, 0);
+  rmm::device_vector<void*> d_cols(ncols, nullptr);
+  rmm::device_vector<int>   d_types(ncols, 0);
 
   std::vector<gdf_column> v_gdf_cols(ncols);
   v_gdf_cols[0].data = static_cast<void*>(dc1.data().get());
@@ -450,7 +448,7 @@ TEST_F(gdf_group_by, UsageTestAvg)
   gdf_column c_agg;
   gdf_column c_vout;
 
-  Vector<double> d_outd(sz, 0);
+  rmm::device_vector<double> d_outd(sz, 0);
 
   c_agg.dtype = GDF_FLOAT64;
   c_agg.data = dd1.data().get();
@@ -480,9 +478,9 @@ TEST_F(gdf_group_by, UsageTestAvg)
 
   //output:
   //{
-  Vector<int32_t> d_vc_out(nrows);
-  Vector<int32_t> d_vi_out(nrows);
-  Vector<double> d_vd_out(nrows);
+  rmm::device_vector<int32_t> d_vc_out(nrows);
+  rmm::device_vector<int32_t> d_vi_out(nrows);
+  rmm::device_vector<double> d_vd_out(nrows);
     
   std::vector<gdf_column> v_gdf_cols_out(ncols);
   v_gdf_cols_out[0].data = d_vc_out.data().get();
@@ -563,23 +561,23 @@ TEST_F(gdf_group_by, UsageTestMin)
   std::vector<int> vi1{1,3,3,5,5,0};
   std::vector<double> vd1{12., 13., 13., 17., 17., 17};
 
-  Vector<int> dc1 = vc1;
-  Vector<int> di1 = vi1;
-  Vector<double> dd1 = vd1;
+  rmm::device_vector<int> dc1 = vc1;
+  rmm::device_vector<int> di1 = vi1;
+  rmm::device_vector<double> dd1 = vd1;
 
   size_t sz = dc1.size();
   assert( sz == di1.size() );
   assert( sz == dd1.size() );
     
-  Vector<IndexT> d_indx(sz, 0);
-  Vector<IndexT> d_keys(sz, 0);
-  Vector<IndexT> d_vals(sz, 0);
+  rmm::device_vector<IndexT> d_indx(sz, 0);
+  rmm::device_vector<IndexT> d_keys(sz, 0);
+  rmm::device_vector<IndexT> d_vals(sz, 0);
 
   size_t ncols = 3;
   size_t& nrows = sz;
 
-  Vector<void*> d_cols(ncols, nullptr);
-  Vector<int>   d_types(ncols, 0);
+  rmm::device_vector<void*> d_cols(ncols, nullptr);
+  rmm::device_vector<int>   d_types(ncols, 0);
 
   std::vector<gdf_column> v_gdf_cols(ncols);
   v_gdf_cols[0].data = static_cast<void*>(dc1.data().get());
@@ -597,7 +595,7 @@ TEST_F(gdf_group_by, UsageTestMin)
   gdf_column c_agg;
   gdf_column c_vout;
 
-  Vector<double> d_outd(sz, 0);
+  rmm::device_vector<double> d_outd(sz, 0);
 
   c_agg.dtype = GDF_FLOAT64;
   ///c_agg.data = dd1.data().get();
@@ -611,7 +609,7 @@ TEST_F(gdf_group_by, UsageTestMin)
   //int flag_sorted = 0;
 
   std::vector<double> v_col{2., 4., 5., 7., 11., 3.};
-  Vector<double> d_col = v_col;
+  rmm::device_vector<double> d_col = v_col;
 
   std::cout<<"aggregate = min on column:\n";
   print_v(d_col, std::cout);
@@ -633,9 +631,9 @@ TEST_F(gdf_group_by, UsageTestMin)
 
   //output:
   //{
-  Vector<int32_t> d_vc_out(nrows);
-  Vector<int32_t> d_vi_out(nrows);
-  Vector<double> d_vd_out(nrows);
+  rmm::device_vector<int32_t> d_vc_out(nrows);
+  rmm::device_vector<int32_t> d_vi_out(nrows);
+  rmm::device_vector<double> d_vd_out(nrows);
     
   std::vector<gdf_column> v_gdf_cols_out(ncols);
   v_gdf_cols_out[0].data = d_vc_out.data().get();
@@ -716,23 +714,23 @@ TEST_F(gdf_group_by, UsageTestMax)
   std::vector<int> vi1{1,3,3,5,5,0};
   std::vector<double> vd1{12., 13., 13., 17., 17., 17};
 
-  Vector<int> dc1 = vc1;
-  Vector<int> di1 = vi1;
-  Vector<double> dd1 = vd1;
+  rmm::device_vector<int> dc1 = vc1;
+  rmm::device_vector<int> di1 = vi1;
+  rmm::device_vector<double> dd1 = vd1;
 
   size_t sz = dc1.size();
   assert( sz == di1.size() );
   assert( sz == dd1.size() );
     
-  Vector<IndexT> d_indx(sz, 0);
-  Vector<IndexT> d_keys(sz, 0);
-  Vector<IndexT> d_vals(sz, 0);
+  rmm::device_vector<IndexT> d_indx(sz, 0);
+  rmm::device_vector<IndexT> d_keys(sz, 0);
+  rmm::device_vector<IndexT> d_vals(sz, 0);
 
   size_t ncols = 3;
   size_t& nrows = sz;
 
-  Vector<void*> d_cols(ncols, nullptr);
-  Vector<int>   d_types(ncols, 0);
+  rmm::device_vector<void*> d_cols(ncols, nullptr);
+  rmm::device_vector<int>   d_types(ncols, 0);
 
   std::vector<gdf_column> v_gdf_cols(ncols);
   v_gdf_cols[0].data = static_cast<void*>(dc1.data().get());
@@ -750,7 +748,7 @@ TEST_F(gdf_group_by, UsageTestMax)
   gdf_column c_agg;
   gdf_column c_vout;
 
-  Vector<double> d_outd(sz, 0);
+  rmm::device_vector<double> d_outd(sz, 0);
 
   c_agg.dtype = GDF_FLOAT64;
   ///c_agg.data = dd1.data().get();
@@ -764,7 +762,7 @@ TEST_F(gdf_group_by, UsageTestMax)
   //int flag_sorted = 0;
 
   std::vector<double> v_col{2., 4., 5., 7., 11., 3.};
-  Vector<double> d_col = v_col;
+  rmm::device_vector<double> d_col = v_col;
 
   std::cout<<"aggregate = max on column:\n";
   print_v(d_col, std::cout);
@@ -786,9 +784,9 @@ TEST_F(gdf_group_by, UsageTestMax)
 
   //output:
   //{
-  Vector<int32_t> d_vc_out(nrows);
-  Vector<int32_t> d_vi_out(nrows);
-  Vector<double> d_vd_out(nrows);
+  rmm::device_vector<int32_t> d_vc_out(nrows);
+  rmm::device_vector<int32_t> d_vi_out(nrows);
+  rmm::device_vector<double> d_vd_out(nrows);
     
   std::vector<gdf_column> v_gdf_cols_out(ncols);
   v_gdf_cols_out[0].data = d_vc_out.data().get();

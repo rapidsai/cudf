@@ -46,15 +46,17 @@ The macro versions use the preprocessor to automatically specify these params.
 
 ### Using RMM with Thrust
 
-libGDF makes heavy use of Thrust. Thrust uses CUDA device memory in two 
+libcudf makes heavy use of Thrust. Thrust uses CUDA device memory in two 
 situations:
 
  1. As the backing store for `thrust::device_vector`, and
  2. As temporary storage inside some algorithms, such as `thrust::sort`.
 
-libGDF now includes a custom Thrust allocator in the file 
+libcudf now includes a custom Thrust allocator in the file 
 `thrust_rmm_allocator.h`. This defines the template class `rmm_allocator`, and 
-an alias for algorithm temporary storage called `rmm_temp_allocator`. 
+a custom Thrust CUDA device execution policy called `rmm::exec_policy(stream)`.
+This instructs Thrust to use RMM for temporary memory allocation and execute on 
+the specified `stream`.
 
 #### Thrust Device Vectors
 
@@ -70,33 +72,19 @@ You can tell Thrust to use `rmm_allocator` like this:
 thrust::device_vector<size_type, rmm_allocator<T>> permuted_indices(column_length);
 ```
 
-For convenience, usually you will want to create an alias, like this:
-
-```template <typename T> 
-using Vector = thrust::device_vector<T, rmm_allocator<T>>;
-
-...
-
-Vector<size_type> permuted_indices(column_length);
-```
-
-(TODO: add a definition of this alias in an include so all files can easily use 
-it.)
+For convenience, you can use the alias `rmm::device_vector<T>` defined in 
+`thrust_rmm_allocator.h` that can be used as if it were a `thrust::device_vector<T>`. 
 
 #### Thrust Algorithms
 
-To instruct Thrust to use RMM to allocate temporary storage, you need to create
-an execution policy that uses it, like this:
+To instruct Thrust to use RMM to allocate temporary storage, you can use the custom
+Thrust CUDA device execution policy: `rmm::exec_policy(stream)`. This instructs 
+Thrust to use RMM for temporary memory allocation and execute on the specified `stream`.
 
+Example usage:
 ```
-rmm_temp_allocator allocator(stream);
-
-thrust::sort(thrust::cuda::par(allocator).on(stream), ...);
+thrust::sort(rmm::exec_policy(stream), ...);
 ```
-
-Note a current Thrust bug prevents this from being a one-liner. 
-
-(TODO: define the execution policy in an include so all files can easily use it.)
 
 ## Using RMM in Python Code
 
