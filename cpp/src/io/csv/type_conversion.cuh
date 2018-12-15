@@ -5,20 +5,11 @@
 
 #include <cuda_runtime_api.h>
 
-
+#include "utilities/wrapper_types.hpp"
 
 //---------------------------------------------------------------------------
 //				Helper functions
 //---------------------------------------------------------------------------
-
-__host__ __device__
-bool isDigit(char data) {
-	if ( data < '0' ) return false;
-	if ( data > '9' ) return false;
-
-	return true;
-}
-
 
 __host__ __device__
 long firstOcurance(char *data, long stx, long endx, char c) {
@@ -41,129 +32,6 @@ void removePrePostWhiteSpaces2(char *data, long* start_idx, long* end_idx) {
 }
 
 //---------------------------------------------------------------------------
-
-
-
-template<typename T>
-__host__ __device__
-T convertStrtoInt(char *data, long start_idx, long end_idx, char thousands='\0') {
-
-	T answer = (T)0;
-
-	// if the start and end indexs are the same, then it is a single digit value
-	if (start_idx == end_idx) {
-		answer = (data[start_idx] -'0');
-		return answer;
-	}
-
-	bool negative=false;
-	if(data[start_idx]=='-'){
-		negative=true;
-		start_idx++;
-	}
-
-	// the data is in little ending, so the last item of data is the lowest digit
-	int powSize = 0;
-	long idx = end_idx;
-
-	while(idx > (start_idx - 1))
-	{
-		if (data[idx] != thousands) {
-			answer += (data[idx] -'0') * pow(10, powSize);
-			++powSize;
-		}
-
-		--idx;
-	}
-
-	if (negative==true)
-		answer *=-1;
-
-    return answer;
-}
-
-
-template<typename T>
-__host__ __device__
-T convertStrtoFloat(char *data, long start_idx, long end_idx, char decimal, char thousands='\0') {
-
-	T answer = (T)0.0;
-	// removePrePostWhiteSpaces(data, &start_idx, &end_idx);
-
-
-	// check for single digit conversions
-	if (start_idx == end_idx) {
-		answer = (data[start_idx] -'0');
-		return answer;
-	}
-
-	// trim leading and trailing spaces
-	if (data[start_idx] == ' ')
-		++start_idx;
-
-	if (data[end_idx] == ' ')
-		--end_idx;
-
-	bool negative=false;
-	if(data[start_idx]=='-'){
-		negative=true;
-		start_idx++;
-	}
-
-	// find the decimal point - might not be one
-	long decimal_pt = end_idx;
-	long d_idx = start_idx;
-	int found = 0;
-
-	while ( (d_idx < (end_idx +1)) && ! found  ) {
-		if ( data[d_idx] == decimal) {
-			decimal_pt = d_idx;
-			found = 1;
-		}
-		++d_idx;
-	}
-
-	// work on upper part
-	long idx = decimal_pt;
-	int powSize = 0;
-
-	if ( idx >= start_idx ) {
-		if (data[idx] == decimal)
-			--idx;
-
-		while(idx > (start_idx - 1))
-		{
-			if (data[idx] != thousands) {
-				answer += (data[idx] -'0') * pow(10, powSize);
-				++powSize;
-			}
-			--idx;
-		}
-	}
-
-	//lower part - work left to right
-	if ( found ) {
-		powSize = -1;
-		idx = decimal_pt +1;
-
-		while(idx < (end_idx + 1))
-		{
-			if (data[idx] != thousands) {
-				answer += (data[idx] -'0') * pow(10, powSize);
-				--powSize;
-			}
-
-			++idx;
-		}
-	}
-
-	if (negative==true)
-		answer *=-1;
-
-
-    return answer;
-}
-
 
 /**
  * Convert a date (MM/YYYY or DD/MM/YYYY) into a date64
@@ -332,8 +200,94 @@ int32_t convertStrtoHash(const char * key, long start_idx, long end_idx, uint32_
     return h1;
 }
 
+__host__ __device__ gdf_date32 parseDateFormat(char *data, long start_idx, long end_idx, bool dayfirst);
+__host__ __device__ gdf_date64 parseDateTimeFormat(char *data, long start_idx, long end_idx, bool dayfirst);
 
+typedef struct parsing_opts_ {
+	char				delimiter;
+	char				terminator;
+	char				quotechar;
+	bool				keepquotes;
+	bool				dayfirst;
+	char				decimal;
+	char				thousands;
+	int32_t*			trueValues;
+	int32_t*			falseValues;
+	int32_t				trueValuesCount;
+	int32_t				falseValuesCount;
+} parsing_opts_t;
 
+// Default function for parsing and extracting a GDF value from a CSV field
+// Handles all integer and floating point data types
+// Other GDF data types are templated for their individual, unique parsing
+template<typename T>
+__host__ __device__
+T convertStrToValue(const char *data, long start, long end, const parsing_opts_t& opts) {
 
+	T value = 0;
+
+	// Handle negative values if necessary
+	int32_t sign = 1;
+	if (data[start] == '-') {
+		sign = -1;
+		start++;
+	}
+
+	// Handle the whole part of the number
+	long index = start;
+	while (index <= end) {
+		if (data[index] == opts.decimal) {
+			++index;
+			break;
+		}
+		else if (data[index] != opts.thousands) {
+			value *= 10;
+			value += data[index] -'0';
+		}
+		++index;
+	}
+
+	// Handle fractional part of the number if necessary
+	int32_t divisor = 1;
+	while (index <= end) {
+		if (data[index] != opts.thousands) {
+			value *= 10;
+			value += data[index] -'0';
+			divisor *= 10;
+		}
+		++index;
+	}
+
+	return (divisor > 1) ? (value * sign / divisor) : (value * sign);
+}
+
+template<>
+__host__ __device__
+cudf::date32 convertStrToValue<cudf::date32>(const char *data, long start, long end, const parsing_opts_t& opts) {
+
+	return cudf::date32{ parseDateFormat(const_cast<char*>(data), start, end, opts.dayfirst) };
+}
+
+template<>
+__host__ __device__
+cudf::date64 convertStrToValue<cudf::date64>(const char *data, long start, long end, const parsing_opts_t& opts) {
+
+	return cudf::date64{ parseDateTimeFormat(const_cast<char*>(data), start, end, opts.dayfirst) };
+}
+
+template<>
+__host__ __device__
+cudf::category convertStrToValue<cudf::category>(const char *data, long start, long end, const parsing_opts_t& opts) {
+
+	constexpr int32_t HASH_SEED = 33;
+	return cudf::category{ convertStrtoHash(data, start, end + 1, HASH_SEED) };
+}
+
+template<>
+__host__ __device__
+cudf::timestamp convertStrToValue<cudf::timestamp>(const char *data, long start, long end, const parsing_opts_t& opts) {
+
+	return cudf::timestamp{ convertStrToValue<int64_t>(data, start, end, opts) };
+}
 
 #endif

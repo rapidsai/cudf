@@ -63,7 +63,6 @@
 #pragma once
 
 #include "cudf.h"
-#include "type_conversion.cuh"
 
 __host__ __device__ gdf_date32 parseDateFormat(char *data, long start_idx, long end_idx, bool dayfirst);
 __host__ __device__ gdf_date64 parseDateTimeFormat(char *data, long start_idx, long end_idx, bool dayfirst);
@@ -74,6 +73,23 @@ __host__ __device__ bool extractTime(char *data, int sIdx, int eIdx, int *hour_o
 __host__ __device__ int32_t daysSinceEpoch(int year, int month, int day);
 __host__ __device__ int64_t secondsFromEpoch(int year, int month, int day, int hour, int minute, int second);
 
+// Helper function for date and time parsing
+// Simplified to handle only numeric characters and returns positive numbers
+template<typename T>
+__host__ __device__
+T convertStrToInteger(const char *data, long start, long end) {
+
+	T value = 0;
+
+	long index = start;
+	while (index <= end) {
+		value *= 10;
+		value += data[index] -'0';
+		++index;
+	}
+
+	return value;
+}
 
 /**
  * @brief Parse a Date string into a date32, days since epoch
@@ -192,7 +208,7 @@ bool extractDate(char *data, long sIdx, long eIdx, bool dayfirst, int *year, int
 	//--- is year the first filed?
 	if ( (sep_pos - sIdx) == 4  ) {
 
-		*year = convertStrtoInt<int>(data, sIdx, (sep_pos -1) );
+		*year = convertStrToInteger<int>(data, sIdx, (sep_pos -1) );
 
 		// Month
 		long s2 = sep_pos +1;
@@ -201,12 +217,12 @@ bool extractDate(char *data, long sIdx, long eIdx, bool dayfirst, int *year, int
 		if (sep_pos == -1 ) {
 
 			//--- Data is just Year and Month - no day
-			*month = convertStrtoInt<int>(data, s2, eIdx );
+			*month = convertStrToInteger<int>(data, s2, eIdx );
 			*day = 1;
 
 		} else {
-			*month = convertStrtoInt<int>(data, s2, (sep_pos -1) );
-			*day = convertStrtoInt<int>(data, (sep_pos + 1), eIdx);
+			*month = convertStrToInteger<int>(data, s2, (sep_pos -1) );
+			*day = convertStrToInteger<int>(data, (sep_pos + 1), eIdx);
 		}
 
 	} else {
@@ -214,17 +230,17 @@ bool extractDate(char *data, long sIdx, long eIdx, bool dayfirst, int *year, int
 		//--- if the dayfirst flag is set, then restricts the format options
 		if ( dayfirst) {
 
-			*day = convertStrtoInt<int>(data, sIdx, (sep_pos -1) );
+			*day = convertStrToInteger<int>(data, sIdx, (sep_pos -1) );
 
 			long s2 = sep_pos +1;
 			sep_pos = firstOcurance(data, s2, eIdx, sep);
 
-			*month = convertStrtoInt<int>(data, s2, (sep_pos -1) );
-			*year = convertStrtoInt<int>(data, (sep_pos + 1), eIdx);
+			*month = convertStrToInteger<int>(data, s2, (sep_pos -1) );
+			*year = convertStrToInteger<int>(data, (sep_pos + 1), eIdx);
 
 		} else {
 
-			*month = convertStrtoInt<int>(data, sIdx, (sep_pos -1) );
+			*month = convertStrToInteger<int>(data, sIdx, (sep_pos -1) );
 
 			long s2 = sep_pos +1;
 			sep_pos = firstOcurance(data, s2, eIdx, sep);
@@ -232,12 +248,12 @@ bool extractDate(char *data, long sIdx, long eIdx, bool dayfirst, int *year, int
 			if (sep_pos == -1 )
 			{
 				//--- Data is just Year and Month - no day
-				*year = convertStrtoInt<int>(data, s2, eIdx );
+				*year = convertStrToInteger<int>(data, s2, eIdx );
 				*day = 1;
 
 			} else {
-				*day = convertStrtoInt<int>(data, s2, (sep_pos -1) );
-				*year = convertStrtoInt<int>(data, (sep_pos + 1), eIdx);
+				*day = convertStrToInteger<int>(data, s2, (sep_pos -1) );
+				*year = convertStrToInteger<int>(data, (sep_pos + 1), eIdx);
 			}
 		}
 	}
@@ -286,7 +302,7 @@ bool extractTime(char *data, int sIdx, int eIdx, int *hour, int *minute, int *se
 	// Hour to Minute Separator
 	int hm_sep = firstOcurance(data, sIdx, eIdx, sep);
 
-	*hour = convertStrtoInt<int>(data, sIdx, (hm_sep -1) );
+	*hour = convertStrToInteger<int>(data, sIdx, (hm_sep -1) );
 
 	*hour += hour_adjust;
 
@@ -295,12 +311,12 @@ bool extractTime(char *data, int sIdx, int eIdx, int *hour, int *minute, int *se
 
 	if (ms_sep == -1 ) {
 		//--- Data is just Hour and Minutes, no seconds
-		*minute = convertStrtoInt<int>(data, (hm_sep + 1), eIdx );
+		*minute = convertStrToInteger<int>(data, (hm_sep + 1), eIdx );
 		*second = 0;
 
 	} else {
-		*minute = convertStrtoInt<int>(data, (hm_sep + 1), (ms_sep -1) );
-		*second = convertStrtoInt<int>(data, (ms_sep + 1), eIdx);
+		*minute = convertStrToInteger<int>(data, (hm_sep + 1), (ms_sep -1) );
+		*second = convertStrToInteger<int>(data, (ms_sep + 1), eIdx);
 	}
 
 	return true;

@@ -53,12 +53,9 @@
 
 #include "cudf.h"
 #include "utilities/error_utils.h"
- 
+#include "utilities/type_dispatcher.hpp"
+
 #include "rmm/rmm.h"
-
-#include "NVStrings.h"
-
-constexpr int32_t HASH_SEED = 33;
 
 using namespace std;
 
@@ -102,15 +99,6 @@ typedef struct column_data_ {
 	unsigned long long countNULL;
 } column_data_t;
 
-typedef struct parsing_opts_ {
-	char				delimiter;
-	char				terminator;
-	char				quotechar;
-	bool				keepquotes;
-	char				decimal;
-	char				thousands;
-} parsing_opts_t;
-
 using string_pair = std::pair<const char*,size_t>;
 
 //
@@ -138,7 +126,7 @@ gdf_error launch_dataTypeDetection(raw_csv_t * raw_csv, long row_offset, column_
 
 __global__ void countRecords(char *data, const char terminator, const char quotechar, long num_bytes, long num_bits, unsigned long long* num_records);
 __global__ void storeRecordStart(char *data, const char terminator, const char quotechar, long num_bytes, long num_bits, unsigned long long* num_records,unsigned long long* recStart) ;
-__global__ void convertCsvToGdf(char *csv, const parsing_opts_t opts, unsigned long long num_records, int num_columns,bool *parseCol,unsigned long long *recStart,gdf_dtype *dtype,void **gdf_data,gdf_valid_type **valid,string_pair **str_cols,unsigned long long row_offset, long header_row,bool dayfirst,unsigned long long *num_valid);
+__global__ void convertCsvToGdf(char *csv, const parsing_opts_t opts, unsigned long long num_records, int num_columns,bool *parseCol,unsigned long long *recStart,gdf_dtype *dtype,void **gdf_data,gdf_valid_type **valid,string_pair **str_cols,unsigned long long row_offset, long header_row,unsigned long long *num_valid);
 __global__ void dataTypeDetection(char *raw_csv, const parsing_opts_t opts, unsigned long long num_records, int  num_columns, bool  *parseCol, unsigned long long *recStart, unsigned long long row_offset, long header_row, column_data_t* d_columnData);
 
 //
@@ -960,14 +948,15 @@ gdf_error launch_dataConvertColumns(raw_csv_t *raw_csv, void **gdf, gdf_valid_ty
 	int gridSize = (raw_csv->num_records + blockSize - 1) / blockSize;
 
 	parsing_opts_t opts;
-	opts.delimiter		= raw_csv->delimiter;
-	opts.terminator		= raw_csv->terminator;
-	opts.quotechar		= raw_csv->quotechar;
-	opts.keepquotes		= raw_csv->keepquotes;
-	opts.decimal		= raw_csv->decimal;
-	opts.thousands		= raw_csv->thousands;
+	opts.delimiter			= raw_csv->delimiter;
+	opts.terminator			= raw_csv->terminator;
+	opts.quotechar			= raw_csv->quotechar;
+	opts.keepquotes			= raw_csv->keepquotes;
+	opts.dayfirst			= raw_csv->dayfirst;
+	opts.decimal			= raw_csv->decimal;
+	opts.thousands			= raw_csv->thousands;
 
-	convertCsvToGdf <<< gridSize, blockSize >>>(
+	convertCsvToGdf <<< gridSize, blockSize >>> (
 		raw_csv->data,
 		opts,
 		raw_csv->num_records,
@@ -980,7 +969,6 @@ gdf_error launch_dataConvertColumns(raw_csv_t *raw_csv, void **gdf, gdf_valid_ty
 		str_cols,
 		row_offset,
 		raw_csv->header_row,
-		raw_csv->dayfirst,
 		num_valid
 	);
 
@@ -988,6 +976,16 @@ gdf_error launch_dataConvertColumns(raw_csv_t *raw_csv, void **gdf, gdf_valid_ty
 	return GDF_SUCCESS;
 }
 
+struct ReadData {
+	template <typename T>
+	__host__ __device__ __forceinline__
+	void operator()(const char* csvData, void *gdfColumnData, long rowIndex,
+					long start, long end, const parsing_opts_t& opts)
+	{
+		T& value { static_cast<T*>(gdfColumnData)[rowIndex] };
+		value = convertStrToValue<T>(csvData, start, end, opts);
+	}
+};
 
 /*
  * Data is processed in one row\record at a time - so the number of total threads (tid) is equal to the number of rows.
@@ -1006,7 +1004,6 @@ __global__ void convertCsvToGdf(
 		string_pair		**str_cols,
 		unsigned long long 			row_offset,
 		long 			header_row,
-		bool			dayfirst,
 		unsigned long long			*num_valid
 		)
 {
@@ -1067,85 +1064,25 @@ __global__ void convertCsvToGdf(
 				removePrePostWhiteSpaces2(raw_csv, &start, &tempPos);
 			}
 
+			if(start<=(tempPos)) { // Empty fields are not legal values
 
-			if(start<=(tempPos)) { // Empty strings are not legal values
-
-				switch(dtype[col]) {
-					case gdf_dtype::GDF_INT8:
-					{
-						int8_t *gdf_out = (int8_t *)gdf_data[actual_col];
-						gdf_out[rec_id] = convertStrtoInt<int8_t>(raw_csv, start, tempPos, opts.thousands);
-					}
-						break;
-					case gdf_dtype::GDF_INT16: {
-						int16_t *gdf_out = (int16_t *)gdf_data[actual_col];
-						gdf_out[rec_id] = convertStrtoInt<int16_t>(raw_csv, start, tempPos, opts.thousands);
-					}
-						break;
-					case gdf_dtype::GDF_INT32:
-					{
-						int32_t *gdf_out = (int32_t *)gdf_data[actual_col];
-						gdf_out[rec_id] = convertStrtoInt<int32_t>(raw_csv, start, tempPos, opts.thousands);
-					}
-						break;
-					case gdf_dtype::GDF_INT64:
-					{
-						int64_t *gdf_out = (int64_t *)gdf_data[actual_col];
-						gdf_out[rec_id] = convertStrtoInt<int64_t>(raw_csv, start, tempPos, opts.thousands);
-					}
-						break;
-					case gdf_dtype::GDF_FLOAT32:
-					{
-						float *gdf_out = (float *)gdf_data[actual_col];
-						gdf_out[rec_id] = convertStrtoFloat<float>(raw_csv, start, tempPos, opts.decimal, opts.thousands);
-					}
-						break;
-					case gdf_dtype::GDF_FLOAT64:
-					{
-						double *gdf_out = (double *)gdf_data[actual_col];
-						gdf_out[rec_id] = convertStrtoFloat<double>(raw_csv, start, tempPos, opts.decimal, opts.thousands);
-					}
-						break;
-					case gdf_dtype::GDF_DATE32:
-					{
-						gdf_date32 *gdf_out = (gdf_date32 *)gdf_data[actual_col];
-						gdf_out[rec_id] = parseDateFormat(raw_csv, start, tempPos, dayfirst);
-					}
-						break;
-					case gdf_dtype::GDF_DATE64:
-					{
-						gdf_date64 *gdf_out = (gdf_date64 *)gdf_data[actual_col];
-						gdf_out[rec_id] = parseDateTimeFormat(raw_csv, start, tempPos, dayfirst);
-					}
-						break;
-					case gdf_dtype::GDF_TIMESTAMP:
-					{
-						int64_t *gdf_out = (int64_t *)gdf_data[actual_col];
-						gdf_out[rec_id] = convertStrtoInt<int64_t>(raw_csv, start, tempPos, opts.thousands);
-					}
-					break;
-					case gdf_dtype::GDF_CATEGORY:
-					{
-						gdf_category *gdf_out = (gdf_category *)gdf_data[actual_col];
-						gdf_out[rec_id] = convertStrtoHash(raw_csv, start, pos, HASH_SEED);
-					}
-						break;
-					case gdf_dtype::GDF_STRING:
-					{
-						long end = pos;
-						if(opts.keepquotes==false){
-							if((raw_csv[start] == opts.quotechar) && (raw_csv[end-1] == opts.quotechar)){
-								start++;
-								end--;
-							}
+				// Type dispatcher does not handle GDF_STRINGS
+				if (dtype[col] == gdf_dtype::GDF_STRING) {
+					long end = pos;
+					if(opts.keepquotes==false){
+						if((raw_csv[start] == opts.quotechar) && (raw_csv[end-1] == opts.quotechar)){
+							start++;
+							end--;
 						}
-						str_cols[stringCol][rec_id].first	= raw_csv+start;
-						str_cols[stringCol][rec_id].second	= size_t(end-start);
-						stringCol++;
 					}
-						break;
-					default:
-						break;
+					str_cols[stringCol][rec_id].first	= raw_csv+start;
+					str_cols[stringCol][rec_id].second	= size_t(end-start);
+					stringCol++;
+				}
+				else {
+					cudf::type_dispatcher(
+						dtype[col], ReadData{}, raw_csv,
+						gdf_data[actual_col], rec_id, start, tempPos, opts);
 				}
 
 				// set the valid bitmap - all bits were set to 0 to start
@@ -1187,10 +1124,11 @@ gdf_error launch_dataTypeDetection(
 	int gridSize = (raw_csv->num_records + blockSize - 1) / blockSize;
 
 	parsing_opts_t opts;
-	opts.delimiter		= raw_csv->delimiter;
-	opts.terminator		= raw_csv->terminator;
-	opts.quotechar		= raw_csv->quotechar;
-	opts.keepquotes		= raw_csv->keepquotes;
+	opts.delimiter			= raw_csv->delimiter;
+	opts.terminator			= raw_csv->terminator;
+	opts.quotechar			= raw_csv->quotechar;
+	opts.keepquotes			= raw_csv->keepquotes;
+	opts.dayfirst			= raw_csv->dayfirst;
 
 	dataTypeDetection <<< gridSize, blockSize >>>(
 		raw_csv->data,
@@ -1327,7 +1265,7 @@ __global__ void dataTypeDetection(
 			else if(countNumber==(strLen) || ( strLen>1 && countNumber==(strLen-1) && raw_csv[start]=='-') ){
 				// Checking to see if we the integer value requires 8,16,32,64 bits.
 				// This will allow us to allocate the exact amount of memory.
-				int64_t i = convertStrtoInt<int64_t>(raw_csv, start, tempPos, opts.thousands);
+				int64_t i = convertStrToValue<int64_t>(raw_csv, start, tempPos, opts);
 				if(i >= (1L<<31)){
 					atomicAdd(& d_columnData[actual_col].countInt64, 1L);
 				}
