@@ -7,6 +7,7 @@
 - PR #525 Added GitHub Issue templates for bugs, documentation, new features, and questions
 - PR #455 CSV Reader: Add support for user-specified decimal point and thousands separator
 - PR #439 add `DataFrame.drop` method similar to pandas
+- PR #509 CSV Reader: Input CSV file can now be passed in as a text or a binary buffer
 
 ## Improvements
 

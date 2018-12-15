@@ -23,27 +23,47 @@
  */
 #pragma once
 
+typedef enum 
+{
+  FILE_PATH,
+  BUFFER,
+  URL
+} resource_type;
+
+typedef struct 
+{  
+  char			*data;			/**< pointer to a host memory buffer	*/
+  size_t		size;			/**< size of the buffer, in bytes		*/
+} buffer_desc;
+
+typedef struct
+{
+  resource_type type;
+
+  const char	*path;			/**< file location						*/
+  buffer_desc	buffer;			/**< host memory buffer					*/
+  char			*object;		// URL path. currently unsupported
+} resource;
+
 typedef struct {
 
   /*
    * Output Arguments - space created in reader.
    */
   int			num_cols_out;				/**< Out: return the number of columns read in	*/
-  int			num_rows_out;				/**< Out: return the number of rows read in 	*/
-  gdf_column	**data;						/**< Out: return the array of *gdf_columns 		*/
-									
+  int			num_rows_out;				/**< Out: return the number of rows read in		*/
+  gdf_column	**data;						/**< Out: return the array of *gdf_columns		*/
+
 
   /*
    * Input arguments - all data is in the host
    */
-  const char	*file_path;					/**< file location to read from	- currently the file cannot be compressed 							*/
-  char			*buffer	;					// process data from a buffer,  pointer to Host memory
-  char			*object	;					// this is a URL path
+  resource		input_file;					/**< input CSV file. Can be a buffer or a file path													*/
 
-  bool			windowslinetermination;		/**< States if we should \r\n as our line termination>**/
-  char			lineterminator;				/**< define the line terminator character.  Default is  '\n'  										*/
-  char			delimiter;					/**< define the field separator, default is ','   This argument is also called 'sep'  				*/
-  bool			delim_whitespace;			/**< use white space as the delimiter - default is false.  This overrides the delimiter argument 	*/
+  bool			windowslinetermination;		/**< States if we should \r\n as our line termination>												*/
+  char			lineterminator;				/**< define the line terminator character.  Default is  '\n'										*/
+  char			delimiter;					/**< define the field separator, default is ','   This argument is also called 'sep'				*/
+  bool			delim_whitespace;			/**< use white space as the delimiter - default is false.  This overrides the delimiter argument	*/
   bool			skipinitialspace;			/**< skip white spaces after the delimiter - default is false  										*/
 
   int			nrows;						// number of rows to read,  -1 indicates all
