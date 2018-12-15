@@ -25,6 +25,6 @@ dependencies:
 - sphinxcontrib-websupport
 - numpydoc
 - ipython
-- pip:
+- recommonmark
   - recommonmark
   - sphinx-markdown-tables
