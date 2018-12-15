@@ -28,7 +28,6 @@
 #include <rmm/rmm.h>
 #include <cudf/functions.h>
 #include <join/joining.h>
-#include <bitmask/bitmask_util.cuh>
 
 #include "tests/utilities/cudf_test_fixtures.h"
 
@@ -124,7 +123,7 @@ struct JoinTest : public GdfTest
   * @Returns A unique_ptr wrapping the new gdf_column
   * --------------------------------------------------------------------------*/
   template <typename col_type>
-  gdf_col_pointer create_gdf_column(std::vector<col_type> const & host_vector, gdf_valid_type* host_valid,
+  gdf_col_pointer create_gdf_column(std::vector<col_type> const & host_vector, HostOnly* host_valid,
           const gdf_size_type n_count)
   {
     // Deduce the type and set the gdf_dtype accordingly
@@ -155,9 +154,8 @@ struct JoinTest : public GdfTest
 
     // Allocate device storage for gdf_column.valid
     if (host_valid != nullptr) {
-      int valid_size = gdf_get_num_chars_bitmask(host_vector.size());
-      EXPECT_EQ(RMM_ALLOC((void**)&(the_column->valid), valid_size, 0), RMM_SUCCESS);
-      EXPECT_EQ(cudaMemcpy(the_column->valid, host_valid, valid_size, cudaMemcpyHostToDevice), cudaSuccess);
+      the_column->valid = bitmask::Host::CreateBitmask(host_vector.size());
+      bitmask::Host::CopyBitmask(the_column->valid, host_valid->GetValid(), host_vector.size(), cudaMemcpyHostToDevice);
       the_column->null_count = n_count;
     } else {
         the_column->valid = nullptr;
@@ -309,7 +307,7 @@ struct JoinTest : public GdfTest
 
     for(size_t right_index = 0; right_index < build_column.size(); ++right_index)
     {
-      if (gdf_is_valid(build_valid, right_index)) {
+      if (build_valid->IsValid(right_index)) {
         the_map.insert(std::make_pair(build_column[right_index], right_index));
       }
     }
@@ -323,7 +321,7 @@ struct JoinTest : public GdfTest
     for(size_t left_index = 0; left_index < probe_column.size(); ++left_index)
     {
       bool match{false};
-      if (gdf_is_valid(probe_valid, left_index)) {
+      if (probe_valid->IsValid(left_index)) {
         // Find all keys that match probe_key
         const auto probe_key = probe_column[left_index];
         auto range = the_map.equal_range(probe_key);
@@ -356,7 +354,7 @@ struct JoinTest : public GdfTest
         // Build hash table that maps the first left columns' values to their row index in the column
         for(size_t left_index = 0; left_index < probe_column.size(); ++left_index)
         {
-          if (gdf_is_valid(probe_valid, left_index)) {
+          if (probe_valid->IsValid(left_index)) {
             the_map.insert(std::make_pair(probe_column[left_index], left_index));
           }
         }
@@ -366,7 +364,7 @@ struct JoinTest : public GdfTest
         {
           const auto probe_key = build_column[right_index];
           auto search = the_map.find(probe_key);
-          if ((search == the_map.end()) || (!gdf_is_valid(build_valid, right_index)))
+          if ((search == the_map.end()) || (!build_valid->IsValid(right_index)))
           {
               constexpr int JoinNullValue{-1};
               reference_result.emplace_back(JoinNullValue, right_index);
