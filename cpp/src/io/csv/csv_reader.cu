@@ -288,7 +288,6 @@ gdf_error read_csv_arrow(csv_read_arg *args, std::shared_ptr<arrow::io::RandomAc
 	error = read_file_into_buffer(arrow_file_handle, raw_csv->num_bytes, (uint8_t*) map_data,100,10);
 	checkError(error, "reading from file into system memory");
 	//done reading data from map
-	arrow_file_handle->Close();
 
 	//-----------------------------------------------------------------------------
 	//---  create a structure to hold variables used to parse the CSV data
@@ -764,8 +763,10 @@ gdf_error read_csv(csv_read_arg *args)
 	if (!arrow::io::ReadableFile::Open(std::string(args->file_path), &arrow_file_handle).ok()) {
 		checkError(GDF_FILE_ERROR,"fileHandle null (file probably does not exist)");
 	}
+	auto ret = read_csv_arrow(args,arrow_file_handle);
 
-	return read_csv_arrow(args,arrow_file_handle);
+	arrow_file_handle->Close();
+	return ret;
 }
 
 
