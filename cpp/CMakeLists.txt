@@ -26,7 +26,7 @@ set(CMAKE_CXX_COMPILER $ENV{CXX})
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 set(CMAKE_CUDA_STANDARD 14)
-set(CMAKE_CUDA_STANDARD_REQURIED ON)
+set(CMAKE_CUDA_STANDARD_REQUIRED ON)
 
 if(CMAKE_COMPILER_IS_GNUCXX)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Werror")
@@ -74,6 +74,16 @@ if (ARROW_FOUND)
 else()
     message(FATAL_ERROR "Apache Arrow not found, please check your settings.")
 endif()
+
+###################################################################################################
+# - find zlib -------------------------------------------------------------------------------------
+
+find_package(ZLIB REQUIRED)
+if(ZLIB_FOUND)
+    include_directories(${ZLIB_INCLUDE_DIRS})
+else()
+    message(FATAL_ERROR "ZLib not found.")
+endif(ZLIB_FOUND)
 
 ###################################################################################################
 # - add gtest -------------------------------------------------------------------------------------
@@ -139,6 +149,7 @@ add_library(cudf SHARED
             src/dataframe/context.cpp
             src/filter/filter_ops.cu
             src/join/joining.cu
+            src/orderby/orderby.cu
             src/sort/segmented_sorting.cu
             src/sort/sorting.cu
             src/sqls/sqls_ops.cu
@@ -158,6 +169,7 @@ add_library(cudf SHARED
             # src/windowed/windowed_ops.cu ... this is broken
             src/io/convert/csr/cudf_to_csr.cu
             src/io/csv/csv_reader.cu
+            src/io/comp/uncomp.cpp
             src/utilities/cuda_utils.cu
             src/utilities/error_utils.cpp
             src/utilities/nvtx/nvtx_utils.cpp)
@@ -193,7 +205,7 @@ endif(CMAKE_BUILD_TYPE MATCHES Debug)
 # - link libraries --------------------------------------------------------------------------------
 
 target_link_libraries(rmm cudart cuda NVStrings)
-target_link_libraries(cudf rmm "${ARROW_LIB}")
+target_link_libraries(cudf rmm "${ARROW_LIB}" ${ZLIB_LIBRARIES})
 
 ###################################################################################################
 # - python cffi bindings --------------------------------------------------------------------------
