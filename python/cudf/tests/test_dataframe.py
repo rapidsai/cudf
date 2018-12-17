@@ -111,6 +111,14 @@ def test_series_indexing():
     np.testing.assert_equal(sr3.to_array(), a1[3:12:2])
 
 
+def test_series_replace():
+    a1 = np.array([0, 1, 2, 3, 4])
+    a2 = np.array([5, 1, 2, 3, 4])
+    sr1 = Series(a1)
+    sr1.replace(0, 5)
+    np.testing.assert_equal(sr1.to_array(), a2)
+
+
 def test_dataframe_basic():
     np.random.seed(0)
     df = DataFrame()

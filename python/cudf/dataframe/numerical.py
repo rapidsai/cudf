@@ -18,6 +18,7 @@ from cudf._gdf import nvtx_range_push, nvtx_range_pop
 
 import cudf.bindings.sort as cpp_sort
 import cudf.bindings.reduce as cpp_reduce
+import cudf.bindings.replace as cpp_replace
 
 # Operator mappings
 
@@ -277,6 +278,12 @@ class NumericalColumn(columnops.TypedColumnBase):
                                   return_indexers=return_indexers)
         else:
             raise ValueError('Unsupported join method')
+
+    def find_and_replace(self, to_replace, values):
+        from .series import Series
+        to_replace = Series(to_replace)
+        values = Series(values)
+        cpp_replace.replace(self, to_replace._column, values._column)
 
     def _hashjoin(self, other, how='left', return_indexers=False):
 
