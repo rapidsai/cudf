@@ -22,6 +22,7 @@
 
 - PR #473 Added missing <random> include
 - PR #495 Updated README to correct where cffi pytest should be executed.
+- PR #511 Updated python/cudf/bindings/join.pyx to fix cudf merge printing out dtypes.
 - PR #537 Fix CMAKE_CUDA_STANDARD_REQURIED typo in CMakeLists.txt
 - PR #545 Temporarily disable csv reader thousands test to prevent segfault
 
