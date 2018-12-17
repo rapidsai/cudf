@@ -609,6 +609,9 @@ class Series(object):
         sr_inds = self._copy_construct(data=col_inds)
         return sr_keys, sr_inds
 
+    def replace(self, to_replace, values):
+        self._column.find_and_replace(to_replace, values)
+
     def reverse(self):
         """Reverse the Series
         """

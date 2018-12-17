@@ -676,3 +676,7 @@ cdef extern from "cudf.h" nogil:
                                     gdf_context* ctxt)
 
 
+    cdef gdf_error gdf_find_and_replace_all(gdf_column*       col,
+                                   gdf_column* old_values,
+                                   gdf_column* new_values);
+
