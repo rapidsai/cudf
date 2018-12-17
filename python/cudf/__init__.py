@@ -7,7 +7,7 @@ from cudf.dataframe import Series      # noqa: F401
 from cudf.multi import concat          # noqa: F401
 from cudf.io import read_csv           # noqa: F401
 from cudf.settings import set_options  # noqa: F401
-
+from cudf import reshape
 
 # Versioneer
 from ._version import get_versions
