@@ -23,27 +23,14 @@
  */
 #pragma once
 
+ /*
+   * Enumerator for the supported forms of the input CSV file
+   */
 typedef enum 
 {
-  FILE_PATH,
-  BUFFER,
-  URL
-} resource_type;
-
-typedef struct 
-{  
-  char			*data;			/**< pointer to a host memory buffer	*/
-  size_t		size;			/**< size of the buffer, in bytes		*/
-} buffer_desc;
-
-typedef struct
-{
-  resource_type type;
-
-  const char	*path;			/**< file location						*/
-  buffer_desc	buffer;			/**< host memory buffer					*/
-  char			*object;		// URL path. currently unsupported
-} resource;
+  FILE_PATH,								//< Indicates that the input is specified with a file path
+  HOST_BUFFER								//< Indicates that the input is passed as a buffer in host memory
+} gdf_csv_input_form;
 
 typedef struct {
 
@@ -58,7 +45,9 @@ typedef struct {
   /*
    * Input arguments - all data is in the host
    */
-  resource		input_file;					/**< input CSV file. Can be a buffer or a file path													*/
+  gdf_csv_input_form	input_data_form;	/**< Type of source of CSV data */
+  const char			*filepath_or_buffer;/**< If input_data_form is FILE_PATH, contains the filepath. If input_data_type is HOST_BUFFER, points to the host memory buffer*/
+  size_t				buffer_size;		/**< If input_data_form is HOST_BUFFER, represents the size of the buffer in bytes. Unused otherwise */
 
   bool			windowslinetermination;		/**< States if we should \r\n as our line termination>												*/
   char			lineterminator;				/**< define the line terminator character.  Default is  '\n'										*/

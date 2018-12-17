@@ -115,14 +115,14 @@ def read_csv(filepath_or_buffer, lineterminator='\n',
             buffer_as_bytes = buffer
         buffer_data_holder = ffi.new("char[]", buffer_as_bytes)
 
-        csv_reader.input_file.type = libgdf.BUFFER
-        csv_reader.input_file.buffer.data = buffer_data_holder
-        csv_reader.input_file.buffer.size = len(buffer_as_bytes)
+        csv_reader.input_data_form = libgdf.HOST_BUFFER
+        csv_reader.filepath_or_buffer = buffer_data_holder
+        csv_reader.buffer_size = len(buffer_as_bytes)
     else:
         file_path = _wrap_string(filepath_or_buffer)
 
-        csv_reader.input_file.type = libgdf.FILE_PATH
-        csv_reader.input_file.path = file_path
+        csv_reader.input_data_form = libgdf.FILE_PATH
+        csv_reader.filepath_or_buffer = file_path
 
     arr_names = []
     arr_dtypes = []
@@ -267,14 +267,14 @@ def read_csv_strings(filepath_or_buffer, lineterminator='\n',
             buffer_as_bytes = buffer
         buffer_data_holder = ffi.new("char[]", buffer_as_bytes)
 
-        csv_reader.input_file.type = libgdf.BUFFER
-        csv_reader.input_file.buffer.data = buffer_data_holder
-        csv_reader.input_file.buffer.size = len(buffer_as_bytes)
+        csv_reader.input_data_form = libgdf.HOST_BUFFER
+        csv_reader.filepath_or_buffer = buffer_data_holder
+        csv_reader.buffer_size = len(buffer_as_bytes)
     else:
         file_path = _wrap_string(filepath_or_buffer)
 
-        csv_reader.input_file.type = libgdf.FILE_PATH
-        csv_reader.input_file.path = file_path
+        csv_reader.input_data_form = libgdf.FILE_PATH
+        csv_reader.filepath_or_buffer = file_path
 
     arr_names = []
     arr_dtypes = []

@@ -275,9 +275,9 @@ gdf_error read_csv(csv_read_arg *args)
 	// memory map in the data
 	void * 			map_data = NULL;
 	int fd = 0;
-	if (args->input_file.type == resource_type::FILE_PATH)
+	if (args->input_data_form == gdf_csv_input_form::FILE_PATH)
 	{
-		fd = open(args->input_file.path, O_RDONLY );
+		fd = open(args->filepath_or_buffer, O_RDONLY );
 		if (fd < 0) { close(fd); checkError(GDF_FILE_ERROR, "Error opening file"); }
 
 		struct stat st{};
@@ -289,10 +289,10 @@ gdf_error read_csv(csv_read_arg *args)
 
 		if (map_data == MAP_FAILED || raw_csv->num_bytes==0) { close(fd); checkError(GDF_C_ERROR, "Error mapping file"); }
 	}
-	else if (args->input_file.type == resource_type::BUFFER)
+	else if (args->input_data_form == gdf_csv_input_form::HOST_BUFFER)
 	{
-		map_data = args->input_file.buffer.data;
-		raw_csv->num_bytes = args->input_file.buffer.size;
+		map_data = (void *)args->filepath_or_buffer;
+		raw_csv->num_bytes = args->buffer_size;
 	}
 	else { checkError(GDF_C_ERROR, "invalid input type"); }
 
@@ -316,7 +316,7 @@ gdf_error read_csv(csv_read_arg *args)
 	error = launch_storeRecordStart(raw_csv);
 	checkError(error, "call to record initial position store");
 
-	// Previous kernel stores the record positions as encountered by all threads
+	// Previous kernel stores the record pinput_file.typeositions as encountered by all threads
 	// Sort the record positions as subsequent processing may require filtering
 	// certain rows or other processing on specific records
 	thrust::sort(thrust::device, raw_csv->recStart, raw_csv->recStart + raw_csv->num_records + 1);
@@ -516,7 +516,7 @@ gdf_error read_csv(csv_read_arg *args)
 
 	//-----------------------------------------------------------------------------
 	//---  done with host data
-	if (args->input_file.type == resource_type::FILE_PATH)
+	if (args->input_data_form == gdf_csv_input_form::FILE_PATH)
 	{
 		close(fd);
 		munmap(map_data, raw_csv->num_bytes);
