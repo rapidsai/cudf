@@ -7,6 +7,7 @@
 - PR #525 Added GitHub Issue templates for bugs, documentation, new features, and questions
 - PR #455 CSV Reader: Add support for user-specified decimal point and thousands separator
 - PR #439 add `DataFrame.drop` method similar to pandas
+- PR #490 Added print_env.sh script to gather relevant environment details when reporting cuDF issues.
 - PR #474 add ZLIB-based GZIP/ZIP support to `read_csv()`
 
 ## Improvements
@@ -15,14 +16,18 @@
 - PR #426 Removed sort-based groupby and refactored existing groupby APIs. Also improves C++/CUDA compile time.
 - PR #500 Improved the concurrent hash map class to support partitioned (multi-pass) hash table building.
 - PR #465 Added templated C++ API for RMM to avoid explicit cast to `void**`
+- PR #513 `.gitignore` tweaks
 - PR #521 Add `assert_eq` function for testing
+- PR #502 Simplify Dockerfile for local dev, eliminate old conda/pip envs
 
 ## Bug Fixes
 
 - PR #473 Added missing <random> include
 - PR #495 Updated README to correct where cffi pytest should be executed.
 - PR #512 fix bug for `on` parameter in `DataFrame.merge` to allow for None or single column name
+- PR #511 Updated python/cudf/bindings/join.pyx to fix cudf merge printing out dtypes.
 - PR #537 Fix CMAKE_CUDA_STANDARD_REQURIED typo in CMakeLists.txt
+- PR #545 Temporarily disable csv reader thousands test to prevent segfault
 
 
 # cuDF 0.4.0 (05 Dec 2018)
