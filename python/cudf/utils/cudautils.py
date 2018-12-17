@@ -184,6 +184,12 @@ def fill_value(arr, value):
     gpu_fill_value.forall(arr.size)(arr, value)
 
 
+def full(size, value, dtype):
+    out = rmm.device_array(size, dtype=dtype)
+    fill_value(out, value)
+    return out
+
+
 @cuda.jit
 def gpu_expand_mask_bits(bits, out):
     """Expand each bits in bitmask *bits* into an element in out.
