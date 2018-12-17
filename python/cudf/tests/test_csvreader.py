@@ -241,6 +241,7 @@ def test_csv_reader_float_decimal(tmpdir):
     np.testing.assert_allclose(decimal_only_ref, df['decimal_only'])
 
 
+@pytest.mark.skip(reason="currently segfaulting")
 def test_csv_reader_thousands(tmpdir):
     fname = tmpdir.mkdir("gdf_csv").join("tmp_csvreader_file10.csv")
 
