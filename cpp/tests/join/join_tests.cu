@@ -36,7 +36,7 @@
 #include "tests/utilities/tuple_vectors.h"
 
 // See this header for all of the handling of valids' vectors 
-#include "valid_vectors.h"
+#include "tests/utilities/valid_vectors.h"
 
 // Selects the kind of join operation that is performed
 enum struct join_op
