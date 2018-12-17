@@ -697,43 +697,103 @@ The following reduction functions use the result array as a temporary working
 space.  Use gdf_reduce_optimal_output_size() to get its optimal size.
 */
 
+
+/* --------------------------------------------------------------------------*
+ * @brief  Reports the intermediate buffer size in elements required for 
+ *         all cuDF reduction operations (gdf_sum, gdf_product, 
+ *         gdf_sum_of_squares, gdf_min and gdf_max)
+ * * 
+ * @return  The size of output/intermediate buffer to allocate for reductions
+ * 
+ * @todo Reductions should be re-implemented to use an atomic add for each
+ *       block sum rather than launch a second kernel. When that happens, this
+ *       function can go away and the output can be a single element.
+ * --------------------------------------------------------------------------*/
 unsigned int gdf_reduce_optimal_output_size();
 
-gdf_error gdf_sum_generic(gdf_column *col, void *dev_result, gdf_size_type dev_result_size);
-gdf_error gdf_sum_f64(gdf_column *col, double *dev_result, gdf_size_type dev_result_size);
-gdf_error gdf_sum_f32(gdf_column *col, float *dev_result, gdf_size_type dev_result_size);
-gdf_error gdf_sum_i64(gdf_column *col, int64_t *dev_result, gdf_size_type dev_result_size);
-gdf_error gdf_sum_i32(gdf_column *col, int32_t *dev_result, gdf_size_type dev_result_size);
-gdf_error gdf_sum_i8(gdf_column *col, int8_t *dev_result, gdf_size_type dev_result_size);
+/* --------------------------------------------------------------------------*
+ * @brief  Computes the sum of the values in all rows of a column
+ * 
+ * @param[in] col Input column
+ * @param[out] dev_result The output sum 
+ * @param[in] dev_result_size The size of dev_result in elements, which should
+ *                            be computed using gdf_reduce_optimal_output_size
+ *                            This is used as intermediate storage, and the 
+ *                            first element contains the total result
+ * 
+ * @return    GDF_SUCCESS if the operation was successful, otherwise an 
+ *            appropriate error code. 
+ * 
+ * --------------------------------------------------------------------------*/
+gdf_error gdf_sum(gdf_column *col, void *dev_result, gdf_size_type dev_result_size);
 
-gdf_error gdf_product_generic(gdf_column *col, void *dev_result, gdf_size_type dev_result_size);
-gdf_error gdf_product_f64(gdf_column *col, double *dev_result, gdf_size_type dev_result_size);
-gdf_error gdf_product_f32(gdf_column *col, float *dev_result, gdf_size_type dev_result_size);
-gdf_error gdf_product_i64(gdf_column *col, int64_t *dev_result, gdf_size_type dev_result_size);
-gdf_error gdf_product_i32(gdf_column *col, int32_t *dev_result, gdf_size_type dev_result_size);
-gdf_error gdf_product_i8(gdf_column *col, int8_t *dev_result, gdf_size_type dev_result_size);
+/* --------------------------------------------------------------------------*
+ * @brief  Computes the multiplicative product of the values in all rows of 
+ *         a column
+ * 
+ * @param[in] col Input column
+ * @param[out] dev_result The output product
+ * @param[in] dev_result_size The size of dev_result in elements, which should
+ *                            be computed using gdf_reduce_optimal_output_size
+ *                            This is used as intermediate storage, and the 
+ *                            first element contains the total result
+ * 
+ * @return    GDF_SUCCESS if the operation was successful, otherwise an 
+ *            appropriate error code. 
+ * --------------------------------------------------------------------------*/
+gdf_error gdf_product(gdf_column *col, void *dev_result, gdf_size_type dev_result_size);
 
-/* sum squared is useful for variance implementation */
-gdf_error gdf_sum_squared_generic(gdf_column *col, void *dev_result, gdf_size_type dev_result_size);
-gdf_error gdf_sum_squared_f64(gdf_column *col, double *dev_result, gdf_size_type dev_result_size);
-gdf_error gdf_sum_squared_f32(gdf_column *col, float *dev_result, gdf_size_type dev_result_size);
+/* --------------------------------------------------------------------------*
+ * @brief  Computes the sum of squares of the values in all rows of a column
+ * 
+ * Sum of squares is useful for variance implementation.
+ * 
+ * @param[in] col Input column
+ * @param[out] dev_result The output sum of squares
+ * @param[in] dev_result_size The size of dev_result in elements, which should
+ *                            be computed using gdf_reduce_optimal_output_size
+ *                            This is used as intermediate storage, and the 
+ *                            first element contains the total result
+ * 
+ * @return    GDF_SUCCESS if the operation was successful, otherwise an 
+ *            appropriate error code. 
+ * 
+ * @todo could be implemented using inner_product if that function is 
+ *       implemented
+ * --------------------------------------------------------------------------*/
+gdf_error gdf_sum_of_squares(gdf_column *col, void *dev_result, gdf_size_type dev_result_size);
 
+/* --------------------------------------------------------------------------*
+ * @brief  Computes the minimum of the values in all rows of a column
+ * 
+ * @param[in] col Input column
+ * @param[out] dev_result The output minimum
+ * @param[in] dev_result_size The size of dev_result in elements, which should
+ *                            be computed using gdf_reduce_optimal_output_size
+ *                            This is used as intermediate storage, and the 
+ *                            first element contains the total result
+ * 
+ * @return    GDF_SUCCESS if the operation was successful, otherwise an 
+ *            appropriate error code. 
+ * 
+ * --------------------------------------------------------------------------*/
+gdf_error gdf_min(gdf_column *col, void *dev_result, gdf_size_type dev_result_size);
 
-gdf_error gdf_min_generic(gdf_column *col, void *dev_result, gdf_size_type dev_result_size);
-gdf_error gdf_min_f64(gdf_column *col, double *dev_result, gdf_size_type dev_result_size);
-gdf_error gdf_min_f32(gdf_column *col, float *dev_result, gdf_size_type dev_result_size);
-gdf_error gdf_min_i64(gdf_column *col, int64_t *dev_result, gdf_size_type dev_result_size);
-gdf_error gdf_min_i32(gdf_column *col, int32_t *dev_result, gdf_size_type dev_result_size);
-gdf_error gdf_min_i8(gdf_column *col, int8_t *dev_result, gdf_size_type dev_result_size);
-
-gdf_error gdf_max_generic(gdf_column *col, void *dev_result, gdf_size_type dev_result_size);
-gdf_error gdf_max_f64(gdf_column *col, double *dev_result, gdf_size_type dev_result_size);
-gdf_error gdf_max_f32(gdf_column *col, float *dev_result, gdf_size_type dev_result_size);
-gdf_error gdf_max_i64(gdf_column *col, int64_t *dev_result, gdf_size_type dev_result_size);
-gdf_error gdf_max_i32(gdf_column *col, int32_t *dev_result, gdf_size_type dev_result_size);
-gdf_error gdf_max_i8(gdf_column *col, int8_t *dev_result, gdf_size_type dev_result_size);
-
-
+/* --------------------------------------------------------------------------*
+ * @brief  Computes the maximum of the values in all rows of a column
+ * 
+ * @param[in] col Input column
+ * @param[out] dev_result The output maximum
+ * @param[in] dev_result_size The size of dev_result in elements, which should
+ *                            be computed using gdf_reduce_optimal_output_size
+ *                            This is used as intermediate storage, and the 
+ *                            first element contains the total result
+ * 
+ * @return    GDF_SUCCESS if the operation was successful, otherwise an 
+ *            appropriate error code. 
+ * 
+ * --------------------------------------------------------------------------*/
+gdf_error gdf_max(gdf_column *col, void *dev_result, gdf_size_type dev_result_size);
 
 
 /*
@@ -777,12 +837,6 @@ gdf_error get_column_byte_width(gdf_column * col, int * width);
    ORDER-BY
    GROUP-BY
  */
-gdf_error gdf_order_by(size_t nrows,     //in: # rows
-		       gdf_column* cols, //in: host-side array of gdf_columns with 0 null_count otherwise GDF_VALIDITY_UNSUPPORTED is returned
-		       size_t ncols,     //in: # cols
-		       void** d_cols,    //out: pre-allocated device-side array to be filled with gdf_column::data for each column; slicing of gdf_column array (host)
-		       int* d_types,     //out: pre-allocated device-side array to be filled with gdf_colum::dtype for each column; slicing of gdf_column array (host)
-		       size_t* d_indx);  //out: device-side array of re-rdered row indices
 
 gdf_error gdf_filter(size_t nrows,     //in: # rows
 		     gdf_column* cols, //in: host-side array of gdf_columns with 0 null_count otherwise GDF_VALIDITY_UNSUPPORTED is returned
@@ -852,3 +906,27 @@ gdf_error gdf_quantile_aprrox(	gdf_column*  col_in,       //input column with 0 
                                 double       q,            //requested quantile in [0,1]
                                 void*        t_erased_res, //type-erased result of same type as column;
                                 gdf_context* ctxt);        //context info
+
+
+/* --------------------------------------------------------------------------*/
+/** 
+ * @brief Sorts an array of gdf_column.
+ * 
+ * @Param[in] input_columns Array of gdf_columns
+ * @Param[in] asc_desc Device array of sort order types for each column
+ *                     (0 is ascending order and 1 is descending). If NULL
+ *                     is provided defaults to ascending order for evey column.
+ * @Param[in] num_inputs # columns
+ * @Param[in] flag_nulls_are_smallest Flag to indicate if nulls are to be considered
+ *                                    smaller than non-nulls or viceversa
+ * @Param[out] output_indices Pre-allocated gdf_column to be filled with sorted
+ *                            indices
+ * 
+ * @Returns GDF_SUCCESS upon successful completion
+ */
+/* ----------------------------------------------------------------------------*/
+gdf_error gdf_order_by(gdf_column** input_columns,
+                       int8_t*      asc_desc,
+                       size_t       num_inputs,
+                       gdf_column*  output_indices,
+                       int          flag_nulls_are_smallest);

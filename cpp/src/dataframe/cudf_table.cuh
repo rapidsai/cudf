@@ -29,7 +29,7 @@
 #include <thrust/execution_policy.h>
 #include <thrust/device_vector.h>
 #include <cassert>
-#include "type_dispatcher.hpp"
+#include "utilities/type_dispatcher.hpp"
 
 template <typename size_type>
 struct ValidRange {
@@ -48,9 +48,6 @@ struct ValidRange {
 };
 
 
-// Vector set to use rmmAlloc and rmmFree.
-template <typename T>
-using Vector = thrust::device_vector<T, rmm_allocator<T>>;
 
 /* --------------------------------------------------------------------------*/
 /** 
@@ -309,13 +306,10 @@ public:
     device_row_valid.resize(mask_size);
 
        
-    cudaStream_t stream = 0; // TODO: non-default stream?
-    rmm_temp_allocator allocator(stream);   
-
     // If a row contains a single NULL value, then the entire row is considered
     // to be NULL, therefore initialize the row-validity mask with the 
     // bit-wise AND of the validity mask of all the columns
-    thrust::tabulate(thrust::cuda::par(allocator).on(stream),
+    thrust::tabulate(rmm::exec_policy(cudaStream_t{0}),
                      device_row_valid.begin(),
                      device_row_valid.end(),
                      row_masker<size_type>(d_columns_valids, num_cols));
@@ -355,6 +349,12 @@ public:
   gdf_column * get_column(size_type column_index) const
   {
     return host_columns[column_index];
+  }
+
+   __host__ 
+  gdf_column ** get_columns() const
+  {
+    return host_columns;
   }
 
   __host__ __device__
@@ -460,21 +460,21 @@ public:
   }
 
   struct copy_element{
-    template <typename col_type>
+    template <typename ColumnType>
     __device__ __forceinline__
-    void operator()(void * my_column, size_type my_row_index,
-                    void const * other_column, size_type other_row_index)
+    void operator()(void * target_column, size_type target_row_index,
+                    void const * source_column, size_type source_row_index)
     {
-      col_type& my_value{static_cast<col_type*>(my_column)[my_row_index]};
-      col_type const& other_value{static_cast<col_type const*>(other_column)[other_row_index]};
-      cudf::detail::unwrap(my_value) = cudf::detail::unwrap(other_value);
+      ColumnType& target_value { static_cast<ColumnType*>(target_column)[target_row_index] };
+      ColumnType const& source_value{static_cast<ColumnType const*>(source_column)[source_row_index]};
+      target_value = source_value;
     }
 
   };
 
     /* --------------------------------------------------------------------------*/
     /** 
-     * @Synopsis  Copies a row from another table to a row in this table
+     * @Synopsis  Copies a row from a source table to a target row in this table
      *  
      * This device function should be called by a single thread and the thread will copy all of 
      * the elements in the row from one table to the other. TODO: In the future, this could be done
@@ -486,26 +486,26 @@ public:
      */
     /* ----------------------------------------------------------------------------*/
   __device__ 
-  gdf_error copy_row(gdf_table const & other,
-                const size_type my_row_index,
-                const size_type other_row_index)
+  gdf_error copy_row(gdf_table const & source,
+                     const size_type target_row_index,
+                     const size_type source_row_index)
   {
     for(size_type i = 0; i < num_columns; ++i)
     {
-      const gdf_dtype my_col_type = d_columns_types[i];
-      const gdf_dtype other_col_type = other.d_columns_types[i];
+      const gdf_dtype target_col_type = d_columns_types[i];
+      const gdf_dtype source_col_type = source.d_columns_types[i];
     
-      if(my_col_type != other_col_type)
+      if(target_col_type != source_col_type)
       {
         return GDF_DTYPE_MISMATCH;
       }
 
-      cudf::type_dispatcher(my_col_type,
-                          copy_element{},
-                          d_columns_data[i],
-                          my_row_index,
-                          other.d_columns_data[i],
-                          other_row_index);
+      cudf::type_dispatcher(target_col_type,
+                            copy_element{},
+                            d_columns_data[i],
+                            target_row_index,
+                            source.d_columns_data[i],
+                            source_row_index);
 
     }
     return GDF_SUCCESS;
@@ -513,37 +513,38 @@ public:
 
 
   struct elements_are_equal{
-    template <typename col_type>
+    template <typename ColumnType>
     __device__ __forceinline__
-    bool operator()(void const * my_column, size_type my_row_index,
-                    void const * other_column, size_type other_row_index)
+    bool operator()(void const * lhs_column, size_type lhs_row_index,
+                    void const * rhs_column, size_type rhs_row_index)
     {
-      col_type const my_elem = static_cast<col_type const*>(my_column)[my_row_index];
-      col_type const other_elem = static_cast<col_type const*>(other_column)[other_row_index];
-      return cudf::detail::unwrap(my_elem) == cudf::detail::unwrap(other_elem);
+      ColumnType const lhs_elem{static_cast<ColumnType const*>(lhs_column)[lhs_row_index]};
+      ColumnType const rhs_elem{static_cast<ColumnType const*>(rhs_column)[rhs_row_index]};
+      return lhs_elem == rhs_elem;
     }
   };
 
   /* --------------------------------------------------------------------------*/
   /** 
-   * @Synopsis  Checks for equality between a row in this table and another table.
+   * @Synopsis  Checks for equality between a target row in this table and a source 
+   * row in another table.
    * 
-   * @Param other The other table whose row is compared to this tables
-   * @Param my_row_index The row index of this table to compare
-   * @Param other_row_index The row index of the other table to compare
+   * @Param rhs The other table whose row is compared to this tables
+   * @Param this_row_index The row index of this table to compare
+   * @Param rhs_row_index The row index of the rhs table to compare
    * 
    * @Returns True if the elements in both rows are equivalent, otherwise False
    */
   /* ----------------------------------------------------------------------------*/
   __device__
-  bool rows_equal(gdf_table const & other, 
-                  const size_type my_row_index, 
-                  const size_type other_row_index) const
+  bool rows_equal(gdf_table const & rhs, 
+                  const size_type this_row_index, 
+                  const size_type rhs_row_index) const
   {
 
     // If either row contains a NULL, then by definition, because NULL != x for all x,
     // the two rows are not equal
-    bool valid = this->is_row_valid(my_row_index) && other.is_row_valid(other_row_index);
+    bool const valid = this->is_row_valid(this_row_index) && rhs.is_row_valid(rhs_row_index);
     if (false == valid) 
     {
       return false;
@@ -551,20 +552,20 @@ public:
 
     for(size_type i = 0; i < num_columns; ++i)
     {
-      const gdf_dtype my_col_type = d_columns_types[i];
-      const gdf_dtype other_col_type = other.d_columns_types[i];
+      gdf_dtype const this_col_type = d_columns_types[i];
+      gdf_dtype const rhs_col_type = rhs.d_columns_types[i];
     
-      if(my_col_type != other_col_type)
+      if(this_col_type != rhs_col_type)
       {
         return false;
       }
 
-      bool is_equal = cudf::type_dispatcher(my_col_type, 
-                                          elements_are_equal{}, 
-                                          d_columns_data[i], 
-                                          my_row_index, 
-                                          other.d_columns_data[i], 
-                                          other_row_index);
+      bool is_equal = cudf::type_dispatcher(this_col_type, 
+                                            elements_are_equal{}, 
+                                            d_columns_data[i], 
+                                            this_row_index, 
+                                            rhs.d_columns_data[i], 
+                                            rhs_row_index);
 
       // If the elements in column `i` do not match, return false
       // Otherwise, continue to column i+1
@@ -588,11 +589,9 @@ public:
                     size_type row_index,
                     size_type col_index)
     {
-      using underlying_type = typename std::decay<decltype(cudf::detail::unwrap(col_type{}))>::type;
-      hash_function<underlying_type> hasher;
+      hash_function<col_type> hasher;
       col_type const * const current_column{static_cast<col_type const*>(col_data)};
-      //underlying_type const current_value{cudf::detail::unwrap(current_column[row_index])};
-      hash_value_type const key_hash{hasher(cudf::detail::unwrap(current_column[row_index]))};
+      hash_value_type const key_hash{hasher(current_column[row_index])};
 
       // Only combine hash-values after the first column
       if(0 == col_index)
@@ -751,7 +750,7 @@ public:
   }
 
   template <typename index_type>
-  gdf_error gather(Vector<index_type> const & row_gather_map,
+  gdf_error gather(rmm::device_vector<index_type> const & row_gather_map,
           gdf_table<size_type> & gather_output_table, bool range_check = false)
   {
       return gather(row_gather_map.data().get(), gather_output_table, range_check);
@@ -786,7 +785,7 @@ public:
   }
 
   template <typename size_type>
-  gdf_error gather(Vector<size_type> const & row_gather_map,
+  gdf_error gather(rmm::device_vector<size_type> const & row_gather_map,
           bool range_check = false) {
       return gather(row_gather_map, *this, range_check);
   }
@@ -797,48 +796,7 @@ public:
       return gather(row_gather_map, *this, range_check);
   }
 
-  /* --------------------------------------------------------------------------*/
-  /** 
-   * @Synopsis  Lexicographically sorts the rows of the gdf_table in-place
-   * 
-   * @Returns A permutation vector of the new ordering of the rows, e.g.,
-   * sorted_table[i] == unsorted_table[ permuted_indices[i] ]
-   */
-  /* ----------------------------------------------------------------------------*/
-  Vector<size_type> sort(void) {
-
-      cudaStream_t stream = NULL;
-
-      // Functor that defines a `less` operator between rows of a set of
-      // gdf_columns
-      LesserRTTI<size_type> comparator(d_columns_data,
-              reinterpret_cast<int*>(d_columns_types),
-              num_columns);
-
-      rmm_temp_allocator allocator(stream);
-	    auto exec = thrust::cuda::par(allocator).on(stream);
-
-      // Vector that will store the permutation of the rows after the sort
-      Vector<size_type> permuted_indices(column_length);
-      thrust::sequence(exec, permuted_indices.begin(), permuted_indices.end());
-
-      // Use the LesserRTTI functor to sort the rows of the table and the
-      // permutation vector
-      thrust::sort(exec, permuted_indices.begin(), permuted_indices.end(),
-              [comparator] __host__ __device__ (size_type i1, size_type i2) {
-              return comparator.less(i1, i2);
-              });
-
-      //thrust::host_vector<void*> host_columns = device_columns;
-      //thrust::host_vector<gdf_dtype> host_types = device_types;
-
-      gather<size_type>(permuted_indices);
-
-      return permuted_indices;
-  }
-
-
-
+  
   
 /* --------------------------------------------------------------------------*/
 /** 
@@ -1012,13 +970,11 @@ private:
   
     gdf_error gdf_status{GDF_SUCCESS};
 
-    rmm_temp_allocator allocator(stream);
-	  auto exec = thrust::cuda::par(allocator).on(stream);
 
     // Gathering from one table to another
     if (i_data != o_data) {
         if (range_check) {
-            thrust::gather_if(exec,
+            thrust::gather_if(rmm::exec_policy(stream),
                     row_gather_map,
                     row_gather_map + num_rows,
                     row_gather_map,
@@ -1027,7 +983,7 @@ private:
                     ValidRange<index_type>(0, input_column->size));
 
         } else {
-            thrust::gather(exec,
+            thrust::gather(rmm::exec_policy(stream),
                     row_gather_map,
                     row_gather_map + num_rows,
                     i_data,
@@ -1036,9 +992,9 @@ private:
     } 
     // Gather is in-place
     else {
-        Vector<column_type> remapped_copy(num_rows);
+        rmm::device_vector<column_type> remapped_copy(num_rows);
         if (range_check) {
-            thrust::gather_if(exec,
+            thrust::gather_if(rmm::exec_policy(stream),
                            row_gather_map,
                            row_gather_map + num_rows,
                            row_gather_map,
@@ -1046,13 +1002,13 @@ private:
                            remapped_copy.begin(),
                            ValidRange<index_type>(0, input_column->size));
         } else {
-            thrust::gather(exec,
+            thrust::gather(rmm::exec_policy(stream),
                            row_gather_map,
                            row_gather_map + num_rows,
                            i_data,
                            remapped_copy.begin());
         }
-        thrust::copy(exec,
+        thrust::copy(rmm::exec_policy(stream),
                 remapped_copy.begin(),
                 remapped_copy.end(),
                 o_data);
@@ -1060,13 +1016,13 @@ private:
     //If gather is in-place
     if ((input_column->valid == output_column->valid) &&
             (input_column->valid != nullptr)) {
-        thrust::device_vector<gdf_valid_type> remapped_valid_copy(gdf_get_num_chars_bitmask(num_rows));
+        rmm::device_vector<gdf_valid_type> remapped_valid_copy(gdf_get_num_chars_bitmask(num_rows));
         gather_valid<index_type>(
                 input_column->valid,
                 remapped_valid_copy.data().get(),
                 row_gather_map, 
                 num_rows, input_column->size, stream);
-        thrust::copy(thrust::cuda::par.on(stream),
+        thrust::copy(rmm::exec_policy(stream),
                 remapped_valid_copy.begin(),
                 remapped_valid_copy.end(), output_column->valid);
     }
@@ -1112,10 +1068,8 @@ gdf_error scatter_column(column_type const * const __restrict__ input_column,
 
   gdf_error gdf_status{GDF_SUCCESS};
 
-  rmm_temp_allocator allocator(stream);
-	auto exec = thrust::cuda::par(allocator).on(stream);
 
-  thrust::scatter(exec,
+  thrust::scatter(rmm::exec_policy(stream),
                   input_column,
                   input_column + num_rows,
                   row_scatter_map,
@@ -1132,20 +1086,20 @@ gdf_error scatter_column(column_type const * const __restrict__ input_column,
 
   gdf_column ** host_columns{nullptr};  /** The set of gdf_columns that this table wraps */
 
-  Vector<void*> device_columns_data; /** Device array of pointers to each columns data */
+  rmm::device_vector<void*> device_columns_data; /** Device array of pointers to each columns data */
   void ** d_columns_data{nullptr};                  /** Raw pointer to the device array's data */
 
-  Vector<gdf_valid_type*> device_columns_valids;  /** Device array of pointers to each columns validity bitmask*/
+  rmm::device_vector<gdf_valid_type*> device_columns_valids;  /** Device array of pointers to each columns validity bitmask*/
   gdf_valid_type** d_columns_valids{nullptr};                   /** Raw pointer to the device array's data */
 
-  Vector<gdf_valid_type> device_row_valid;  /** Device array of bitmask for the validity of each row. */
+  rmm::device_vector<gdf_valid_type> device_row_valid;  /** Device array of bitmask for the validity of each row. */
   gdf_valid_type * d_row_valid{nullptr};                   /** Raw pointer to device array's data */
 
-  Vector<gdf_dtype> device_columns_types; /** Device array of each columns data type */
+  rmm::device_vector<gdf_dtype> device_columns_types; /** Device array of each columns data type */
   gdf_dtype * d_columns_types{nullptr};                 /** Raw pointer to the device array's data */
 
   size_type row_size_bytes{0};
-  Vector<byte_type> column_byte_widths;
+  rmm::device_vector<byte_type> column_byte_widths;
   byte_type * d_column_byte_widths{nullptr};
 
 };

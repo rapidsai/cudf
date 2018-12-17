@@ -27,9 +27,6 @@
  #include <cudf/functions.h>
  #include <rmm/thrust_rmm_allocator.h>
  
- // thrust::device_vector set to use rmmAlloc and rmmFree.
- template <typename T>
- using Vector = thrust::device_vector<T, rmm_allocator<T>>;
 
  struct gdf_hashing_test : public GdfTest {};
  
@@ -110,17 +107,17 @@
 	 inputData6[3] = 786.34;
 	 inputData6[4] = 343.01;
  
-	 Vector<gdf_valid_type> inputValidDev(1,0);
+	 rmm::device_vector<gdf_valid_type> inputValidDev(1,0);
  
-	 Vector<int8_t> intputDataDev1(inputData1);
-	 Vector<int16_t> intputDataDev2(inputData2);
-	 Vector<int32_t> intputDataDev3(inputData3);
-	 Vector<int64_t> intputDataDev4(inputData4);
-	 Vector<float> intputDataDev5(inputData5);
-	 Vector<double> intputDataDev6(inputData6);
+	 rmm::device_vector<int8_t> intputDataDev1(inputData1);
+	 rmm::device_vector<int16_t> intputDataDev2(inputData2);
+	 rmm::device_vector<int32_t> intputDataDev3(inputData3);
+	 rmm::device_vector<int64_t> intputDataDev4(inputData4);
+	 rmm::device_vector<float> intputDataDev5(inputData5);
+	 rmm::device_vector<double> intputDataDev6(inputData6);
  
-	 Vector<int32_t> outDataDev(nrows);
-	 Vector<gdf_valid_type> outputValidDev(1,0);
+	 rmm::device_vector<int32_t> outDataDev(nrows);
+	 rmm::device_vector<gdf_valid_type> outputValidDev(1,0);
  
 	 inputCol[0]->data = thrust::raw_pointer_cast(intputDataDev1.data());
 	 inputCol[0]->valid = thrust::raw_pointer_cast(inputValidDev.data());

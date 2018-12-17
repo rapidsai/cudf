@@ -52,7 +52,6 @@ cpdef join(col_lhs, col_rhs, on, how, method='sort'):
         list_lhs[idx] = column_view_from_column(col._column)
 
         if name not in on:
-            print("1:" + str(col._column.dtype))
             result_cols[res_idx] = column_view_from_NDArrays(0, None, mask=None, dtype=col._column.dtype, null_count=0)
             result_col_names.append(name)
             res_idx = res_idx + 1
@@ -60,7 +59,6 @@ cpdef join(col_lhs, col_rhs, on, how, method='sort'):
 
     idx = 0
     for name in on:
-        print("2:" + str(col_lhs[name]._column.dtype))
         result_cols[res_idx] = column_view_from_NDArrays(0, None, mask=None, dtype=col_lhs[name]._column.dtype, null_count=0)
         result_col_names.append(name)
         left_idx[idx] = list(col_lhs.keys()).index(name)
@@ -73,7 +71,6 @@ cpdef join(col_lhs, col_rhs, on, how, method='sort'):
         list_rhs[idx] = column_view_from_column(col._column)
 
         if name not in on:
-            print("3:" + str(col._column.dtype))
             result_cols[res_idx] = column_view_from_NDArrays(0, None, mask=None, dtype=col._column.dtype, null_count=0)
             result_col_names.append(name)
             res_idx = res_idx + 1

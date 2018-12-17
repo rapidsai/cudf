@@ -26,14 +26,10 @@
 
 #include "quantiles.h"
 
-// thrust::device_vector set to use rmmAlloc and rmmFree.
-template <typename T>
-using Vector = thrust::device_vector<T, rmm_allocator<T>>;
-
 namespace{ //unknown
   template<typename VType,
            typename RetT = double>
-    void f_quantile_tester(Vector<VType>& d_in)
+    void f_quantile_tester(rmm::device_vector<VType>& d_in)
   {
     using FctrType = std::function<RetT(VType, VType, double)>;
 
@@ -101,7 +97,7 @@ namespace{ //unknown
       }
     else
       {
-        Vector<ColType> dv(n);
+        rmm::device_vector<ColType> dv(n);
         thrust::copy_n(thrust::device, /*TODO: stream*/p_dv, n, dv.begin());
         cudaDeviceSynchronize();
         p_dv = dv.data().get();
@@ -130,7 +126,7 @@ namespace{ //unknown
       }
     else
       {
-        Vector<ColType> dv(n);
+        rmm::device_vector<ColType> dv(n);
         thrust::copy_n(thrust::device, /*TODO: stream*/p_dv, n, dv.begin());
         cudaDeviceSynchronize();
         p_dv = dv.data().get();
