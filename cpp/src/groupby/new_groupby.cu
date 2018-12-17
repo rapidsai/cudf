@@ -5,6 +5,9 @@
 #include "utilities/error_utils.h"
 #include "aggregation_operations.hpp"
 #include "groupby/hash_groupby.cuh"
+
+#include <thrust/fill.h>
+
 #include <../tests/utilities/cudf_test_utils.cuh>
 #include <iostream>
 
@@ -233,29 +236,27 @@ gdf_error gdf_group_by_wo_aggregations(int num_data_cols,
     orderby_cols_vect[i] = data_cols_in[groupby_col_indices[i]];
   }
 
-  Vector<int32_t> sorted_indices(nrows);
-  rmm_temp_allocator allocator(0);  // TODO make stream
-  auto exec = thrust::cuda::par(allocator).on(0);
+  auto exec = rmm::exec_policy();
 
-  thrust::sequence(exec, sorted_indices.begin(), sorted_indices.end());
-
+  rmm::device_vector<int32_t> sorted_indices(nrows);
   gdf_column sorted_indices_col;
-  gdf_error status = gdf_column_view(&sorted_indices_col, (void*)thrust::raw_pointer_cast(sorted_indices.data()), 
+  gdf_error status = gdf_column_view(&sorted_indices_col, (void*)(sorted_indices.data().get()), 
                             nullptr, nrows, GDF_INT32);
   if (status != GDF_SUCCESS)
     return status;
 
 // run order by and get new sort indexes
   status = gdf_order_by(&orderby_cols_vect[0],             //input columns
-                       num_groupby_cols,                //number of columns in the first parameter (e.g. number of columsn to sort by)
-                       &sorted_indices_col,            //a gdf_column that is pre allocated for storing sorted indices
-                       0);  //flag to indicate if nulls are to be considered smaller than non-nulls or viceversa
+                        nullptr,
+                        num_groupby_cols,                //number of columns in the first parameter (e.g. number of columsn to sort by)
+                        &sorted_indices_col,            //a gdf_column that is pre allocated for storing sorted indices
+                        0);  //flag to indicate if nulls are to be considered smaller than non-nulls or viceversa
   if (status != GDF_SUCCESS)
     return status;
 
   // run gather operation to establish new order
-  std::unique_ptr< gdf_table<int32_t> > table_in{new gdf_table<int32_t>(num_data_cols, data_cols_in)};
-  std::unique_ptr< gdf_table<int32_t> > table_out{new gdf_table<int32_t>(num_data_cols, data_cols_out)};
+  std::unique_ptr< gdf_table<int32_t> > table_in{new gdf_table<int32_t>{num_data_cols, data_cols_in}};
+  std::unique_ptr< gdf_table<int32_t> > table_out{new gdf_table<int32_t>{num_data_cols, data_cols_out}};
 
   status = table_in->gather<int32_t>(sorted_indices, *table_out.get());
   if (status != GDF_SUCCESS)

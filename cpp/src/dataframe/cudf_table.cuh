@@ -24,12 +24,13 @@
 #include "hash/hash_functions.cuh"
 #include "hash/managed.cuh"
 #include "sqls/sqls_rtti_comp.h"
+#include "utilities/type_dispatcher.hpp"
+#include "bitmask/bitmask_ops.h"
 
 #include <thrust/tabulate.h>
 #include <thrust/execution_policy.h>
 #include <thrust/device_vector.h>
 #include <cassert>
-#include "utilities/type_dispatcher.hpp"
 
 template <typename size_type>
 struct ValidRange {
@@ -1013,26 +1014,33 @@ private:
                 remapped_copy.end(),
                 o_data);
     }
-    //If gather is in-place
-    if ((input_column->valid == output_column->valid) &&
-            (input_column->valid != nullptr)) {
-        rmm::device_vector<gdf_valid_type> remapped_valid_copy(gdf_get_num_chars_bitmask(num_rows));
-        gather_valid<index_type>(
-                input_column->valid,
-                remapped_valid_copy.data().get(),
-                row_gather_map, 
-                num_rows, input_column->size, stream);
-        thrust::copy(rmm::exec_policy(stream),
-                remapped_valid_copy.begin(),
-                remapped_valid_copy.end(), output_column->valid);
-    }
-    //If both input and output columns have a non null valid pointer
-    else if (nullptr != output_column->valid) {
-        gather_valid<index_type>(
-                input_column->valid,
-                output_column->valid,
-                row_gather_map, 
-                num_rows, input_column->size, stream);
+    if (input_column->valid != nullptr && output_column->valid != nullptr) {
+      if (input_column->valid == output_column->valid) { //If gather is in-place
+          rmm::device_vector<gdf_valid_type> remapped_valid_copy(gdf_get_num_chars_bitmask(num_rows), 0);
+          gather_valid<index_type>(
+                  input_column->valid,
+                  remapped_valid_copy.data().get(),
+                  row_gather_map, 
+                  num_rows, input_column->size, stream);
+          thrust::copy(rmm::exec_policy(stream),
+                  remapped_valid_copy.begin(),
+                  remapped_valid_copy.end(), output_column->valid);
+      }
+      else {
+          // Ensure the output bitmask is initialized to zero
+          const size_type num_masks = gdf_get_num_chars_bitmask(output_column->size);
+          cudaMemsetAsync(output_column->valid, 0, num_masks * sizeof(gdf_valid_type), stream);
+
+          gather_valid<index_type>(
+                  input_column->valid,
+                  output_column->valid,
+                  row_gather_map, 
+                  num_rows, input_column->size, stream);
+      }
+
+      int valid_count;
+      gdf_status = count_nonzero_mask(output_column->valid, num_rows, valid_count, stream);
+      output_column->null_count = output_column->size - valid_count;
     }
   
     CUDA_CHECK_LAST();

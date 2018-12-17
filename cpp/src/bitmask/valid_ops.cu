@@ -20,25 +20,16 @@
  * ---------------------------------------------------------------------------**/
 #include <vector>
 #include <cassert>
-#include <cub/cub.cuh>
 
 #include "cudf.h"
 #include "rmm/rmm.h"
 #include "rmm/thrust_rmm_allocator.h"
 #include "utilities/error_utils.h"
 #include "utilities/cudf_utils.h"
+#include "bitmask_ops.h"
 
 #include <thrust/tabulate.h>
 
-
-// To account for if gdf_valid_type is not a 4 byte type,
-// compute the RATIO of the number of bytes in gdf_valid_type
-// to the 4 byte type being used for casting
-using valid32_t = uint32_t;
-constexpr size_t RATIO = sizeof(valid32_t) / sizeof(gdf_valid_type);
-constexpr int BITS_PER_MASK32 = GDF_VALID_BITSIZE * RATIO;
-
-constexpr int block_size = 256;
 
 /** --------------------------------------------------------------------------*
  * @Synopsis  Counts the number of valid bits for the specified number of rows
@@ -86,76 +77,6 @@ size_t count_valid_bits_host(std::vector<gdf_valid_type> const & masks, int cons
 }
 
 
-/* --------------------------------------------------------------------------*/
-/** 
- * @brief Kernel to count the number of set bits in a column's validity buffer
- *
- * The underlying buffer type may only be a 1B type, but it is casted to a 4B 
- * type (valid32_t) such that __popc may be used to more efficiently count the 
- * number of set bits. This requires handling the last 4B element as a special 
- * case as the buffer may not be a multiple of 4 bytes.
- * 
- * @Param[in] masks32 Pointer to buffer (casted as a 4B type) whose bits will be counted
- * @Param[in] num_masks32 The number of 4B elements in the buffer
- * @Param[in] num_rows The number of rows in the column, i.e., the number of bits
- * in the buffer that correspond to rows
- * @Param[out] global_count The number of set bits in the range of bits [0, num_rows)
- */
-/* ----------------------------------------------------------------------------*/
-template <typename size_type>
-__global__ 
-void count_valid_bits(valid32_t const * const masks32, 
-                      int const num_masks32, 
-                      int const num_rows, 
-                      size_type * const global_count)
-{
-  using BlockReduce = cub::BlockReduce<size_type, block_size>;
-  __shared__ typename BlockReduce::TempStorage temp_storage;
-
-  // If the number of rows is not a multiple of 32, then the remaining 
-  // rows need to be handled separtely because not all of its bits correspond
-  // to rows
-  int last_mask32{0};
-  int const num_rows_last_mask{num_rows % BITS_PER_MASK32};
-  if(0 == num_rows_last_mask)
-    last_mask32 = num_masks32;
-  else
-    last_mask32 = num_masks32 - 1;
-
-  int const idx{static_cast<int>(threadIdx.x + blockIdx.x * blockDim.x)};
-
-  int cur_mask{idx};
-
-  size_type my_count{0};
-
-  // Use popc to count the valid bits for the all of the masks 
-  // where all of the bits correspond to rows
-  while(cur_mask < last_mask32)
-  {
-    my_count += __popc(masks32[cur_mask]);
-    cur_mask += blockDim.x * gridDim.x;
-  }
-
-  // Handle the remainder rows
-  if(idx < num_rows_last_mask)
-  {
-    gdf_valid_type const * const valids{reinterpret_cast<gdf_valid_type const *>(masks32)};
-    int const my_row{num_rows - idx - 1};
-
-    if(true == gdf_is_valid(valids,my_row))
-      ++my_count;
-  }
-
-  // Reduces the count from each thread in a block into a block count
-  int const block_count{BlockReduce(temp_storage).Sum(my_count)};
-
-  // Store the block count into the global count
-  if(threadIdx.x == 0)
-  {
-    atomicAdd(global_count, block_count);
-  }
-}
-
 /* ---------------------------------------------------------------------------*
  * @Synopsis  Counts the number of valid bits for the specified number of rows
  * in a validity bitmask.
@@ -169,52 +90,17 @@ void count_valid_bits(valid32_t const * const masks32,
  * ----------------------------------------------------------------------------*/
 gdf_error gdf_count_nonzero_mask(gdf_valid_type const * masks, int num_rows, int * count)
 {
+  gdf_error gdf_status{GDF_SUCCESS};
+  
+  // TODO: Probably shouldn't create/destroy the stream every time
+  cudaStream_t count_stream;
+  CUDA_TRY(cudaStreamCreate(&count_stream));
+  
+  gdf_status = count_nonzero_mask(masks, num_rows, *count, count_stream);
 
-  if((nullptr == masks) || (nullptr == count)){return GDF_DATASET_EMPTY;}
-  if(0 == num_rows) {return GDF_SUCCESS;}
+  CUDA_TRY(cudaStreamDestroy(count_stream));
 
-  // Masks will be proccessed as 4B types, therefore we require that the underlying
-  // type be less than or equal to 4B
-  assert(sizeof(valid32_t) >= sizeof(gdf_valid_type));
-
-  // Number of gdf_valid_types in the validity bitmask
-  size_t const num_masks{gdf_get_num_chars_bitmask(num_rows)};
-
-  // Number of 4 byte types in the validity bit mask 
-  size_t num_masks32{static_cast<size_t>(std::ceil(static_cast<float>(num_masks) / RATIO))};
-
-  int h_count{0};
-  if(num_masks32 > 0)
-  {
-    // TODO: Probably shouldn't create/destroy the stream every time
-    cudaStream_t count_stream;
-    CUDA_TRY(cudaStreamCreate(&count_stream));
-    int * d_count{nullptr};
-
-    // Cast validity buffer to 4 byte type
-    valid32_t const * masks32{reinterpret_cast<valid32_t const *>(masks)};
-
-    RMM_TRY(RMM_ALLOC((void**)&d_count, sizeof(int), count_stream));
-    CUDA_TRY(cudaMemsetAsync(d_count, 0, sizeof(int), count_stream));
-
-    size_t const grid_size{(num_masks32 + block_size - 1)/block_size};
-
-    count_valid_bits<<<grid_size, block_size,0,count_stream>>>(masks32, num_masks32, num_rows, d_count);
-
-    CUDA_TRY( cudaGetLastError() );
-
-    CUDA_TRY(cudaMemcpyAsync(&h_count, d_count, sizeof(int), cudaMemcpyDeviceToHost, count_stream));
-    RMM_TRY(RMM_FREE(d_count, count_stream));
-    CUDA_TRY(cudaStreamSynchronize(count_stream));
-    CUDA_TRY(cudaStreamDestroy(count_stream));
-  }
-
-  assert(h_count >= 0);
-  assert(h_count <= num_rows);
-
-  *count = h_count;
-
-  return GDF_SUCCESS;
+  return gdf_status;
 }
 
 /** ---------------------------------------------------------------------------*
