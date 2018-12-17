@@ -15,9 +15,11 @@
 - PR #426 Removed sort-based groupby and refactored existing groupby APIs. Also improves C++/CUDA compile time.
 - PR #500 Improved the concurrent hash map class to support partitioned (multi-pass) hash table building.
 - PR #465 Added templated C++ API for RMM to avoid explicit cast to `void**`
+- PR #513 `.gitignore` tweaks
 - PR #521 Add `assert_eq` function for testing
 
 ## Bug Fixes
+
 - PR #473 Added missing <random> include
 - PR #495 Updated README to correct where cffi pytest should be executed.
 - PR #537 Fix CMAKE_CUDA_STANDARD_REQURIED typo in CMakeLists.txt
