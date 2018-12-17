@@ -17,6 +17,7 @@
 - PR #465 Added templated C++ API for RMM to avoid explicit cast to `void**`
 - PR #513 `.gitignore` tweaks
 - PR #521 Add `assert_eq` function for testing
+- PR #502 Simplify Dockerfile for local dev, eliminate old conda/pip envs
 
 ## Bug Fixes
 
