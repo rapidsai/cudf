@@ -3,15 +3,25 @@
 
 ## New Features
 
+- PR #411 added null support to gdf_order_by (new API) and cudf_table::sort
+- PR #525 Added GitHub Issue templates for bugs, documentation, new features, and questions
 - PR #455 CSV Reader: Add support for user-specified decimal point and thousands separator
 - PR #439 add `DataFrame.drop` method similar to pandas
 
 ## Improvements
+
+- PR #472 RMM: Created centralized rmm::device_vector alias and rmm::exec_policy
 - PR #426 Removed sort-based groupby and refactored existing groupby APIs. Also improves C++/CUDA compile time.
 - PR #478 CSV Reader: Add api support for auto column detection, header, mangle_dupe_cols, usecols
  
 ## Bug Fixes
+
+- PR #500 Improved the concurrent hash map class to support partitioned (multi-pass) hash table building.
+- PR #465 Added templated C++ API for RMM to avoid explicit cast to `void**`
+- PR #473 Added missing <random> include
+- PR #495 Updated README to correct where cffi pytest should be executed.
 - PR #478 CSV Reader: Fix/Update and test usecols code for parsing only the specified columns
+
 
 # cuDF 0.4.0 (05 Dec 2018)
 
@@ -79,6 +89,7 @@
  - PR #320 FIX out-of-bounds access error in reductions.cu 
  - PR #319 Fix out-of-bounds memory access in libcudf count_valid_bits
  - PR #303 Fix printing empty dataframe
+
 
 # cuDF 0.2.0 and cuDF 0.1.0
 

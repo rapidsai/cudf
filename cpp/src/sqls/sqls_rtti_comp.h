@@ -4,7 +4,6 @@
 
 #pragma once
 
-#include <iostream>
 #include <cassert>
 #include <iterator>
 
@@ -13,8 +12,6 @@
 #include <thrust/system/cuda/execution_policy.h>
 #include <thrust/copy.h>
 #include <thrust/sort.h>
-#include <thrust/binary_search.h>
-#include <thrust/unique.h>
 #include <thrust/sequence.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/constant_iterator.h>
@@ -25,34 +22,131 @@
 
 #include "rmm/thrust_rmm_allocator.h"
 
-//for int<n>_t:
-//
 #include <cstdint>
 
-///#include "gdf/cffi/types.h"
+#include "utilities/cudf_utils.h"
+#include "utilities/type_dispatcher.hpp"
 
 template<typename IndexT>
 struct LesserRTTI
 {
-  LesserRTTI(void* const* cols,
-	     int* const types,
-	     size_t sz):
-    columns_(cols),
-    rtti_(types),
-    sz_(sz),
-    vals_(nullptr)
+  LesserRTTI(void *const *cols,
+             int *const types,
+             size_t sz) : columns_(cols),
+                          rtti_(types),
+                          sz_(sz)
   {
   }
 
-  LesserRTTI(void* const* cols,
-	     int* const types,
-	     size_t sz,
-	     const void* const * vals):
-    columns_(cols),
-    rtti_(types),
-    sz_(sz),
-    vals_(vals)
+  LesserRTTI(void *const *cols,
+             int *const types,
+             size_t sz,
+             const void *const *vals) : columns_(cols),
+                                        rtti_(types),
+                                        sz_(sz),
+                                        vals_(vals)
   {
+  }
+
+  LesserRTTI(void *const *cols,
+             gdf_valid_type *const *valids,
+             int *const types,
+             int8_t *const asc_desc_flags,
+             size_t sz,
+             bool nulls_are_smallest) : columns_(cols),
+                                        valids_(valids),
+                                        rtti_(types),
+                                        sz_(sz),
+                                        asc_desc_flags_(asc_desc_flags),
+                                        nulls_are_smallest_(nulls_are_smallest)
+  {
+  }
+
+  /**
+   * Should be used when you want to sort multiple columns using asc/desc flags for each column
+   */
+  __device__
+  bool asc_desc_comparison(IndexT row1, IndexT row2) const
+  {
+    for(size_t col_index = 0; col_index < sz_; ++col_index)
+    {
+      gdf_dtype col_type = static_cast<gdf_dtype>(rtti_[col_index]);
+      
+      bool asc = true;
+      if(asc_desc_flags_ != nullptr){
+        asc = (asc_desc_flags_[col_index] == GDF_ORDER_ASC);
+      }
+
+      State state;
+      if(asc){
+        state = cudf::type_dispatcher(col_type, OpLess{},
+                                      row1,
+                                      row2,
+                                      col_index,
+                                      columns_);
+      }else{
+        state = cudf::type_dispatcher(col_type, OpGreater{},
+                                      row1,
+                                      row2,
+                                      col_index,
+                                      columns_);
+      }
+
+      switch( state )
+      {
+      case State::False:
+        return false;
+      case State::True:
+        return true;
+      case State::Undecided:
+        break;
+      }
+    }
+    return false;
+  }
+
+  __device__
+  bool asc_desc_comparison_with_nulls(IndexT row1, IndexT row2) const
+  {
+    for(size_t col_index = 0; col_index < sz_; ++col_index)
+    {
+      gdf_dtype col_type = static_cast<gdf_dtype>(rtti_[col_index]);
+
+      bool asc = true;
+      if(asc_desc_flags_ != nullptr){
+        asc = (asc_desc_flags_[col_index] == GDF_ORDER_ASC);
+      }
+
+      State state;
+      if(asc){
+        state = cudf::type_dispatcher(col_type, OpLess_with_nulls{},
+                                      row1,
+                                      row2,
+                                      col_index,
+                                      columns_,
+                                      valids_,
+                                      nulls_are_smallest_);
+      }else{
+        state = cudf::type_dispatcher(col_type, OpGreater_with_nulls{},
+                                      row1,
+                                      row2,
+                                      col_index,
+                                      columns_,
+                                      valids_,
+                                      nulls_are_smallest_);
+      }
+
+      switch( state )
+      {
+      case State::False:
+        return false;
+      case State::True:
+        return true;
+      case State::Undecided:
+        break;
+      }
+    }
+    return false;
   }
 
   __device__
@@ -62,8 +156,12 @@ struct LesserRTTI
     {
       gdf_dtype col_type = static_cast<gdf_dtype>(rtti_[col_index]);
 
-      OpEqual eq(row1, row2);
-      switch( type_dispatcher(eq, col_type, col_index) )
+      State state = cudf::type_dispatcher(col_type, OpEqual{},
+                                          row1,
+                                          row2,
+                                          col_index,
+                                          columns_);
+      switch( state )
       {
       case State::False:
         return false;
@@ -83,8 +181,12 @@ struct LesserRTTI
     {
       gdf_dtype col_type = static_cast<gdf_dtype>(rtti_[col_index]);
 
-      OpEqualV eq(vals_, row1);
-      switch( type_dispatcher(eq, col_type, col_index) )
+      State state = cudf::type_dispatcher(col_type, OpEqualV{},
+                                          vals_,
+                                          row1,
+                                          col_index,
+                                          columns_);
+      switch( state )
       {
       case State::False:
         return false;
@@ -104,8 +206,39 @@ struct LesserRTTI
     {
       gdf_dtype col_type = static_cast<gdf_dtype>(rtti_[col_index]);
 
-      OpLess less(row1, row2);
-      switch( type_dispatcher(less, col_type, col_index) )
+      State state = cudf::type_dispatcher(col_type, OpLess{},
+                                          row1,
+                                          row2,
+                                          col_index,
+                                          columns_);
+      switch( state )
+      {
+      case State::False:
+        return false;
+      case State::True:
+        return true;
+      case State::Undecided:
+        break;
+      }
+    }
+    return false;
+  }
+
+    __device__
+  bool less_with_nulls(IndexT row1, IndexT row2) const
+  {
+    for(size_t col_index = 0; col_index < sz_; ++col_index)
+    {
+      gdf_dtype col_type = static_cast<gdf_dtype>(rtti_[col_index]);
+
+      State state = cudf::type_dispatcher(col_type, OpLess_with_nulls{},
+                                          row1,
+                                          row2,
+                                          col_index,
+                                          columns_,
+                                          valids_,
+                                          nulls_are_smallest_);
+      switch( state )
       {
       case State::False:
         return false;
@@ -127,198 +260,172 @@ struct LesserRTTI
     return (static_cast<const ColType*>(columns[col_index]))[row];
   }
   
+  __device__
+  static bool is_valid(int col_index,
+                       IndexT row,
+                       const gdf_valid_type* const * valids)
+  {
+    return gdf_is_valid(valids[col_index], row);
+  }
+
 private:
   enum class State {False = 0, True = 1, Undecided = 2};
 
   struct OpLess
   {
-    __device__
-    OpLess(IndexT row1, IndexT row2):
-      row1_(row1),
-      row2_(row2)
-    {
-    }
-    
     template<typename ColType>
     __device__
-    State operator() (int col_index,
-                      const void* const * columns,
-                      ColType)
+    State operator() (IndexT row1, IndexT row2,
+                      int col_index,
+                      const void* const * columns)
     {
-      ColType res1 = LesserRTTI::at<ColType>(col_index, row1_, columns);
-      ColType res2 = LesserRTTI::at<ColType>(col_index, row2_, columns);
+      const ColType res1 = LesserRTTI::at<ColType>(col_index, row1, columns);
+      const ColType res2 = LesserRTTI::at<ColType>(col_index, row2, columns);
       
       if( res1 < res2 )
         return State::True;
       else if( res1 == res2 )
         return State::Undecided;
       else
-	return State::False;
+	      return State::False;
     }
-  private:
-    IndexT row1_;
-    IndexT row2_;
+  };
+
+  struct OpLess_with_nulls
+  {
+    template<typename ColType>
+	  __device__
+	  State operator() (IndexT row1, IndexT row2,
+                      int col_index,
+                      const void* const * columns,
+                      const gdf_valid_type* const * valids,
+                      bool nulls_are_smallest)
+	  {
+		  const ColType res1 = LesserRTTI::at<ColType>(col_index, row1, columns);
+		  const ColType res2 = LesserRTTI::at<ColType>(col_index, row2, columns);
+		  const bool isValid1 = LesserRTTI::is_valid(col_index, row1, valids);
+		  const bool isValid2 = LesserRTTI::is_valid(col_index, row2, valids);
+
+		  if (!isValid2 && !isValid1)
+			  return State::Undecided;
+		  else if( isValid1 && isValid2)
+		  {
+			  if( res1 < res2 )
+				  return State::True;
+			  else if( res1 == res2 )
+				  return State::Undecided;
+			  else
+				  return State::False;
+		  }
+		  else if (!isValid1 && nulls_are_smallest)
+			  return State::True;
+	  	else if (!isValid2 && !nulls_are_smallest)
+	  		return State::True;
+		  else
+			  return State::False;
+	  }
+  };
+
+  struct OpGreater
+  {
+    template<typename ColType>
+    __device__
+    State operator() (IndexT row1, IndexT row2,
+                      int col_index,
+  		                const void* const * columns)
+    {
+      const ColType res1 = LesserRTTI::at<ColType>(col_index, row1, columns);
+      const ColType res2 = LesserRTTI::at<ColType>(col_index, row2, columns);
+
+      if( res1 > res2 )
+  	    return State::True;
+      else if( res1 == res2 )
+  	    return State::Undecided;
+      else
+  	    return State::False;
+    }
+  };
+
+  struct OpGreater_with_nulls
+  {
+    template<typename ColType>
+	  __device__
+	  State operator() (IndexT row1, IndexT row2,
+                      int col_index,
+                      const void* const * columns,
+                      const gdf_valid_type* const * valids,
+                      bool nulls_are_smallest)
+	  {
+		  const ColType res1 = LesserRTTI::at<ColType>(col_index, row1, columns);
+		  const ColType res2 = LesserRTTI::at<ColType>(col_index, row2, columns);
+		  const bool isValid1 = LesserRTTI::is_valid(col_index, row1, valids);
+		  const bool isValid2 = LesserRTTI::is_valid(col_index, row2, valids);
+
+		  if (!isValid2 && !isValid1)
+			  return State::Undecided;
+		  else if( isValid1 && isValid2)
+		  {
+			  if( res1 > res2 )
+				  return State::True;
+			  else if( res1 == res2 )
+				  return State::Undecided;
+			  else
+				  return State::False;
+		  }
+		  else if (!isValid1 && nulls_are_smallest)
+			  return State::False;
+	  	else if (!isValid2 && !nulls_are_smallest)
+	  		return State::False;
+		  else
+			  return State::True;
+	  }
   };
 
   struct OpEqual
   {
+    template<typename ColType>
     __device__
-    OpEqual(IndexT row1, IndexT row2):
-      row1_(row1),
-      row2_(row2)
+    State operator() (IndexT row1, IndexT row2,
+                      int col_index,
+		                  const void* const * columns)
     {
-    }
-    
-     template<typename ColType>
-    __device__
-    State operator() (int col_index,
-		      const void* const * columns,
-		      ColType )
-    {
-      ColType res1 = LesserRTTI::at<ColType>(col_index, row1_, columns);
-      ColType res2 = LesserRTTI::at<ColType>(col_index, row2_, columns);
+      const ColType res1 = LesserRTTI::at<ColType>(col_index, row1, columns);
+      const ColType res2 = LesserRTTI::at<ColType>(col_index, row2, columns);
       
       if( res1 != res2 )
         return State::False;
       else
         return State::Undecided;
     }
-    
-  private:
-    IndexT row1_;
-    IndexT row2_;
   };
 
   struct OpEqualV
   {
-    __device__
-    OpEqualV(const void* const * vals, IndexT row):
-      target_vals_(vals),
-      row_(row)
-    {
-    }
-    
     template<typename ColType>
     __device__
-    State operator() (int col_index,
-		      const void* const * columns,
-		      ColType )
+    State operator() (const void* const * vals,
+                      IndexT row,
+                      int col_index,
+                      const void* const * columns)
     {
-      ColType res1 = LesserRTTI::at<ColType>(col_index, row_, columns);
-      ColType res2 = LesserRTTI::at<ColType>(col_index, 0, target_vals_);
+      const ColType res1 = LesserRTTI::at<ColType>(col_index, row, columns);
+      const ColType res2 = LesserRTTI::at<ColType>(col_index, 0, vals);
       
       if( res1 != res2 )
         return State::False;
       else
         return State::Undecided;
     }
-
-  private:
-    const void* const * target_vals_;
-    IndexT row_;
   };
 
-  template<typename Predicate>
-  __device__
-  State type_dispatcher(Predicate pred, gdf_dtype col_type, int col_index) const
-  {
-    switch( col_type )
-    {
-      case GDF_INT8:
-      {
-        using ColType = int8_t;//char;
-        
-        ColType dummy=0;
-        return pred(col_index, columns_, dummy);
-      }
-      case GDF_INT16:
-      {
-        using ColType = int16_t;//short;
-
-        ColType dummy=0;
-        return pred(col_index, columns_, dummy);
-      }
-      case GDF_INT32:
-      {
-        using ColType = int32_t;//int;
-
-        ColType dummy=0;
-        return pred(col_index, columns_, dummy);
-      }
-      case GDF_INT64:
-      {
-        using ColType = int64_t;//long;
-
-        ColType dummy=0;
-        return pred(col_index, columns_, dummy);
-      }
-      case GDF_FLOAT32:
-      {
-        using ColType = float;
-
-        ColType dummy=0;
-        return pred(col_index, columns_, dummy);
-      }
-      case GDF_FLOAT64:
-      {
-        using ColType = double;
-
-        ColType dummy=0;
-        return pred(col_index, columns_, dummy);
-      }
-
-      default:
-	      assert( false );//type not handled
-    }
-    return State::Undecided;
-  }
-  
-  const void* const * columns_;
-  const int* const rtti_;
+  const void* const * columns_{nullptr};
+  const gdf_valid_type* const * valids_{nullptr};
+  const int* const rtti_{nullptr};
   size_t sz_;
-  const void* const * vals_; //for filtering
+  const void* const * vals_{nullptr}; //for filtering
+  const int8_t* const asc_desc_flags_{nullptr}; //array of 0 and 1 that allows us to know whether or not a column should be sorted ascending or descending
+  bool nulls_are_smallest_{false};  // when sorting if there are nulls in the data if this is true, then they will be treated as the smallest value, otherwise they will be treated as the largest value
 };
-
-//###########################################################################
-//#                          Multi-column ORDER-BY:                         #
-//###########################################################################
-//Version with array of columns,
-//using type erasure and RTTI at
-//comparison operator level;
-//
-//args:
-//Input:
-// nrows    = # rows;
-// ncols    = # columns;
-// d_cols   = device array to ncols type erased columns;
-// d_gdf_t  = device array to runtime column types;
-// stream   = cudaStream to work in;
-//
-//Output:
-// d_indx   = vector of indices re-ordered after sorting;
-//
-template<typename IndexT>
-void multi_col_order_by(size_t nrows,
-			size_t ncols,
-			void* const* d_cols,
-			int* const  d_gdf_t,
-			IndexT*      d_indx,
-			cudaStream_t stream = NULL)
-{
-  LesserRTTI<IndexT> f(d_cols, d_gdf_t, ncols);
-
-  rmm_temp_allocator allocator(stream);
-  thrust::sequence(thrust::cuda::par(allocator).on(stream), d_indx, d_indx+nrows, 0);//cannot use counting_iterator
-  //                                          2 reasons:
-  //(1.) need to return a container result;
-  //(2.) that container must be mutable;
-  
-  thrust::sort(thrust::cuda::par(allocator).on(stream),
-               d_indx, d_indx+nrows,
-               [f] __device__ (IndexT i1, IndexT i2) {
-                 return f.less(i1, i2);
-               });
-}
 
 //###########################################################################
 //#                          Multi-column Filter:                           #
@@ -343,21 +450,20 @@ void multi_col_order_by(size_t nrows,
 //
 template<typename IndexT>
 size_t multi_col_filter(size_t nrows,
-			size_t ncols,
-			void* const* d_cols,
-			int* const  d_gdf_t,
-			void* const* d_vals,
-			IndexT* ptr_d_flt_indx,
-			cudaStream_t stream = NULL)
+                        size_t ncols,
+                        void* const* d_cols,
+                        int* const  d_gdf_t,
+                        void* const* d_vals,
+                        IndexT* ptr_d_flt_indx,
+                        cudaStream_t stream = NULL)
 {
   LesserRTTI<size_t> f(d_cols, d_gdf_t, ncols, d_vals);//size_t, not IndexT, because of counting_iterator below;
   
-  rmm_temp_allocator allocator(stream);
 
   //actual filtering happens here:
   //
   auto ret_iter_last =
-    thrust::copy_if(thrust::cuda::par(allocator).on(stream),
+    thrust::copy_if(rmm::exec_policy(stream),
                     thrust::make_counting_iterator<size_t>(0), 
                     thrust::make_counting_iterator<size_t>(nrows),
                     ptr_d_flt_indx,
@@ -410,14 +516,13 @@ multi_col_group_by_count_sort(size_t         nrows,
                               cudaStream_t   stream = NULL)
 {
   if( !sorted )
-    multi_col_order_by(nrows, ncols, d_cols, d_gdf_t, ptr_d_indx, stream);
+    multi_col_sort(d_cols, nullptr, d_gdf_t, nullptr, ncols, nrows, false, ptr_d_indx, false, stream);
 
   LesserRTTI<IndexT> f(d_cols, d_gdf_t, ncols);
 
-  rmm_temp_allocator allocator(stream);
 
   thrust::pair<IndexT*, CountT*> ret =
-    thrust::reduce_by_key(thrust::cuda::par(allocator).on(stream),
+    thrust::reduce_by_key(rmm::exec_policy(stream),
                           ptr_d_indx, ptr_d_indx+nrows,
                           thrust::make_constant_iterator<CountT>(1),
                           ptr_d_kout,
@@ -483,11 +588,10 @@ size_t multi_col_group_by_sort(size_t         nrows,
                                cudaStream_t   stream = NULL)
 {
   if( !sorted )
-    multi_col_order_by(nrows, ncols, d_cols, d_gdf_t, ptr_d_indx, stream);
+    multi_col_sort(d_cols, nullptr, d_gdf_t, nullptr, ncols, nrows, false, ptr_d_indx, false, stream);
 
-  rmm_temp_allocator allocator(stream);
   
-  thrust::gather(thrust::cuda::par(allocator).on(stream),
+  thrust::gather(rmm::exec_policy(stream),
                  ptr_d_indx, ptr_d_indx + nrows,  //map[i]
   		 ptr_d_agg,                    //source[i]
   		 ptr_d_agg_p);                 //source[map[i]]
@@ -495,7 +599,7 @@ size_t multi_col_group_by_sort(size_t         nrows,
   LesserRTTI<IndexT> f(d_cols, d_gdf_t, ncols);
   
   thrust::pair<IndexT*, ValsT*> ret =
-    thrust::reduce_by_key(thrust::cuda::par(allocator).on(stream),
+    thrust::reduce_by_key(rmm::exec_policy(stream),
                           ptr_d_indx, ptr_d_indx + nrows,
                           ptr_d_agg_p,
                           ptr_d_kout,
@@ -649,9 +753,8 @@ size_t multi_col_group_by_avg_sort(size_t         nrows,
                                                sorted,
                                                stream);
 
-  rmm_temp_allocator allocator(stream);
 
-  thrust::transform(thrust::cuda::par(allocator).on(stream),
+  thrust::transform(rmm::exec_policy(stream),
                     ptr_d_cout, ptr_d_cout + nrows,
                     ptr_d_vout,
                     ptr_d_vout,
@@ -660,4 +763,58 @@ size_t multi_col_group_by_avg_sort(size_t         nrows,
                     });
 
   return new_sz;
+}
+
+/* --------------------------------------------------------------------------*/
+/** 
+ * @brief Sorts an array of columns, using type erasure and RTTI at
+ * comparison operator level.
+ * 
+ * @Param[in] d_cols Device array to ncols type erased columns
+ * @Param[in] d_valids Device array to ncols gdf_valid_type columns
+ * @Param[in] d_col_types Device array of runtime column types
+ * @Param[in] d_asc_desc Device array of column sort order types
+ * @Param[in] ncols # columns
+ * @Param[in] nrows # rows
+ * @Param[in] have_nulls Whether or not any column have null values
+ * @Param[in] nulls_are_smallest Whether or not nulls are smallest
+ * @Param[in] stream CudaStream to work in
+ * @Param[out] d_indx Device array of re-ordered indices after sorting
+ * @tparam IndexT The type of d_indx array 
+ * 
+ * @Returns
+ */
+/* ----------------------------------------------------------------------------*/
+template<typename IndexT>
+void multi_col_sort(void* const *           d_cols,
+                    gdf_valid_type* const * d_valids,
+                    int*                    d_col_types,
+                    int8_t*                 d_asc_desc,
+                    size_t                  ncols,
+                    size_t                  nrows,
+                    bool                    have_nulls,
+                    IndexT*                 d_indx,
+                    bool                    nulls_are_smallest = false,
+                    cudaStream_t            stream = NULL)
+{
+  //cannot use counting_iterator 2 reasons:
+  //(1.) need to return a container result;
+  //(2.) that container must be mutable;
+  thrust::sequence(rmm::exec_policy(stream), d_indx, d_indx+nrows, 0);
+  
+  LesserRTTI<IndexT> comp(d_cols, d_valids, d_col_types, d_asc_desc, ncols, nulls_are_smallest);
+  if (d_valids != nullptr && have_nulls) {
+		thrust::sort(rmm::exec_policy(stream),
+				         d_indx, d_indx+nrows,
+				         [comp] __device__ (IndexT i1, IndexT i2){
+                    return comp.asc_desc_comparison_with_nulls(i1, i2);
+                 });
+  }
+  else {
+    thrust::sort(rmm::exec_policy(stream),
+                d_indx, d_indx+nrows,
+                [comp] __device__ (IndexT i1, IndexT i2) {
+                  return comp.asc_desc_comparison(i1, i2);
+                });
+  }
 }
