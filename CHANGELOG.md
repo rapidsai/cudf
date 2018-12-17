@@ -9,6 +9,7 @@
 - PR #439 add `DataFrame.drop` method similar to pandas
 - PR #490 Added print_env.sh script to gather relevant environment details when reporting cuDF issues.
 - PR #474 add ZLIB-based GZIP/ZIP support to `read_csv()`
+- PR #547 Added melt similar to `pandas.melt()`
 
 
 ## Improvements
