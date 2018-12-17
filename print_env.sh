@@ -36,6 +36,7 @@ echo
 
 echo "***Python***"
 which python && python --version
+echo
 
 echo "***Environment Variables***"
 
