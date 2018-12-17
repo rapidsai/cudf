@@ -25,7 +25,7 @@
 #include "hash/managed.cuh"
 #include "sqls/sqls_rtti_comp.h"
 #include "utilities/type_dispatcher.hpp"
-#include "bitmask/bitmask_ops.h"
+#include "bitmask/valid_ops.h"
 
 #include <thrust/tabulate.h>
 #include <thrust/execution_policy.h>

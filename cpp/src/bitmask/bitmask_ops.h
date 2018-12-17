@@ -11,6 +11,4 @@ gdf_error all_bitmask_on(gdf_valid_type * valid_out, gdf_size_type & out_null_co
 gdf_error apply_bitmask_to_bitmask(gdf_size_type & out_null_count, gdf_valid_type * valid_out, gdf_valid_type * valid_left, gdf_valid_type * valid_right,
 		cudaStream_t stream, gdf_size_type num_values);
 
-
-gdf_error count_nonzero_mask(gdf_valid_type const * masks, int num_rows, int& count, cudaStream_t stream = NULL);
 #endif
