@@ -8,6 +8,7 @@
 
 ## Improvements
 
+- PR #377 Replace moderngpu sort join with thrust sort join 
 - PR #472 RMM: Created centralized rmm::device_vector alias and rmm::exec_policy
 - PR #426 Removed sort-based groupby and refactored existing groupby APIs. Also improves C++/CUDA compile time.
 - PR #500 Improved the concurrent hash map class to support partitioned (multi-pass) hash table building.

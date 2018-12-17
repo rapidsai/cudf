@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, NVIDIA CORPORATION.
+ * Copyright (c) 2018, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,6 +25,7 @@
 
 #include <utility>
 #include <thrust/transform_scan.h>
+#include <thrust/binary_search.h>
 
 template <typename index_type>
 struct JoinBounds {
