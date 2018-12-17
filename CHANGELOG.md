@@ -18,6 +18,7 @@
 ## Bug Fixes
 - PR #473 Added missing <random> include
 - PR #495 Updated README to correct where cffi pytest should be executed.
+- PR #537 Fix CMAKE_CUDA_STANDARD_REQURIED typo in CMakeLists.txt
 
 
 # cuDF 0.4.0 (05 Dec 2018)
