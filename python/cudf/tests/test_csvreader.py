@@ -264,3 +264,20 @@ def test_csv_reader_thousands(tmpdir):
     np.testing.assert_allclose(f64_ref, df['float64'])
     np.testing.assert_allclose(int32_ref, df['int32'])
     np.testing.assert_allclose(int64_ref, df['int64'])
+
+
+def test_csv_reader_gzip_compression(tmpdir):
+
+    fname = tmpdir.mkdir("gdf_csv").join('tmp_csvreader_file10.csv.gz')
+
+    df = make_datetime_dataframe()
+    df.to_csv(fname, index=False, header=False, compression='gzip')
+
+    df_out = pd.read_csv(fname, names=['col1', 'col2'], parse_dates=[0, 1],
+                         dayfirst=True, compression='gzip')
+    dtypes = ['date', 'date']
+    out = read_csv(str(fname), names=list(df.columns.values), dtype=dtypes,
+                   dayfirst=True, compression='gzip')
+
+    assert len(out.columns) == len(df_out.columns)
+    pd.util.testing.assert_frame_equal(df_out, out.to_pandas())
