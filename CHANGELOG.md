@@ -7,6 +7,7 @@
 - PR #525 Added GitHub Issue templates for bugs, documentation, new features, and questions
 - PR #455 CSV Reader: Add support for user-specified decimal point and thousands separator
 - PR #439 add `DataFrame.drop` method similar to pandas
+- PR #474 add ZLIB-based GZIP/ZIP support to `read_csv()`
 
 ## Improvements
 

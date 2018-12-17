@@ -55,6 +55,7 @@
 #include "utilities/error_utils.h"
  
 #include "rmm/rmm.h"
+#include "io/comp/io_uncomp.h"
 
 #include "NVStrings.h"
 
@@ -118,7 +119,7 @@ using string_pair = std::pair<const char*,size_t>;
 //
 gdf_error parseArguments(csv_read_arg *args, raw_csv_t *csv);
 // gdf_error getColNamesAndTypes(const char **col_names, const  char **dtypes, raw_csv_t *d);
-gdf_error updateRawCsv( const char * data, long num_bytes, raw_csv_t * csvData );
+gdf_error updateRawCsv( const char * data, size_t num_bytes, raw_csv_t * csvData, const char *compression );
 gdf_error allocateGdfDataSpace(gdf_column *);
 gdf_dtype convertStringToDtype(std::string &dtype);
 
@@ -193,7 +194,7 @@ std::string stringType(gdf_dtype dt){
  * Arguments:
  *
  *  Required Arguments
- * 		file_path			-	file location to read from	- currently the file cannot be compressed
+ * 		file_path			-	file location to read from
  * 		num_cols			-	number of columns in the names and dtype arrays
  * 		names				-	ordered List of column names, this is a required field
  * 		dtype				-	ordered List of data types, this is required
@@ -213,6 +214,7 @@ std::string stringType(gdf_dtype dt){
  * 		skipfooter			-	number of rows at the bottom of the file to skip - default is 0
  *
  * 		dayfirst			-	is the first value the day?  DD/MM  versus MM/DD
+ * 		compression			-	compression {"infer","gzip","zip"}, default is no compression.
  *
  *
  *  Output
@@ -276,21 +278,41 @@ gdf_error read_csv(csv_read_arg *args)
 	void * 			map_data = NULL;
 	struct stat     st;
 	int				fd;
+	size_t	map_size;
+	const char *compression;
 
 	fd = open(args->file_path, O_RDONLY );
 
 	if (fd < 0) 		{ close(fd); checkError(GDF_FILE_ERROR, "Error opening file"); }
 	if (fstat(fd, &st)) { close(fd); checkError(GDF_FILE_ERROR, "cannot stat file");   }
 
-	raw_csv->num_bytes = st.st_size;
+	map_size = st.st_size;
+	raw_csv->num_bytes = map_size;
 
-	map_data = mmap(0, raw_csv->num_bytes, PROT_READ, MAP_PRIVATE, fd, 0);
+	map_data = mmap(0, map_size, PROT_READ, MAP_PRIVATE, fd, 0);
 
-    if (map_data == MAP_FAILED || raw_csv->num_bytes==0) { close(fd); checkError(GDF_C_ERROR, "Error mapping file"); }
+    if (map_data == MAP_FAILED || map_size==0) { close(fd); checkError(GDF_C_ERROR, "Error mapping file"); }
 
 	//-----------------------------------------------------------------------------
 	//---  create a structure to hold variables used to parse the CSV data
-	error = updateRawCsv( (const char *)map_data, (long)raw_csv->num_bytes, raw_csv );
+	compression = (args->compression && 0 != strcasecmp(args->compression, "none")) ? args->compression : nullptr;
+	if (compression && 0 == strcasecmp(compression, "infer"))
+	{
+		const char *file_ext = strrchr(args->file_path, '.');
+		compression = nullptr;
+		if (file_ext)
+		{
+			if (!strcasecmp(file_ext, ".gz"))
+				compression = "gzip";
+			else if (!strcasecmp(file_ext, ".zip"))
+				compression = "zip";
+			else if (!strcasecmp(file_ext, ".bz2"))
+				compression = "bz2";
+			else if (!strcasecmp(file_ext, ".xz"))
+				compression = "xz";
+		}
+	}
+	error = updateRawCsv( (const char *)map_data, map_size, raw_csv, compression );
 	checkError(error, "call to createRawCsv");
 
 	//-----------------------------------------------------------------------------
@@ -744,16 +766,41 @@ gdf_dtype convertStringToDtype(std::string &dtype) {
 /*
  * Create the raw_csv_t structure and allocate space on the GPU
  */
-gdf_error updateRawCsv( const char * data, long num_bytes, raw_csv_t * raw ) {
+gdf_error updateRawCsv( const char * data, size_t num_bytes, raw_csv_t * raw, const char *compression ) {
 
-	int num_bits = (num_bytes + 63) / 64;
+	int num_bits;
 
-	CUDA_TRY( cudaMallocManaged ((void**)&raw->data, 		(sizeof(char)		* num_bytes)));
-	// RMM_TRY( RMM_ALLOC((void**)&raw->data, 		(sizeof(char)		* num_bytes),0 ));
+	// Check if input is compressed
+	if (compression) {
+		int comp_type = IO_UNCOMP_STREAM_TYPE_INFER;
+		char *data_out = nullptr;
+		gdf_size_type uncomp_size = 0;
+		gdf_error err;
+		if (!strcasecmp(compression, "gzip"))
+			comp_type = IO_UNCOMP_STREAM_TYPE_GZIP;
+		else if (!strcasecmp(compression, "zip"))
+			comp_type = IO_UNCOMP_STREAM_TYPE_ZIP;
+		else if (!strcasecmp(compression, "bz2"))
+			comp_type = IO_UNCOMP_STREAM_TYPE_BZIP2;
+		else if (!strcasecmp(compression, "xz"))
+			comp_type = IO_UNCOMP_STREAM_TYPE_XZ;
+		err = io_uncompress_single_h2d(data, num_bytes, (void **)&data_out, &uncomp_size, comp_type);
+		if (err != GDF_SUCCESS) {
+			return err;
+		}
+		raw->data = data_out;
+		raw->num_bytes = uncomp_size;
+		num_bytes = uncomp_size;
+	}
+	else {
+		CUDA_TRY( cudaMallocManaged ((void**)&raw->data, 		(sizeof(char)		* num_bytes)));
+		// RMM_TRY( RMM_ALLOC((void**)&raw->data, 		(sizeof(char)		* num_bytes),0 ));
+		CUDA_TRY( cudaMemcpy(raw->data, data, num_bytes, cudaMemcpyHostToDevice));
+	}
+
+	num_bits = (num_bytes + 63) / 64;
 
 	RMM_TRY( RMM_ALLOC((void**)&raw->d_num_records, sizeof(unsigned long long),0) );
-
-	CUDA_TRY( cudaMemcpy(raw->data, data, num_bytes, cudaMemcpyHostToDevice));
 	CUDA_TRY( cudaMemset(raw->d_num_records,0, ((sizeof(long)) )) );
 
 	raw->num_bits  = num_bits;
