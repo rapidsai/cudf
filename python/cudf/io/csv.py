@@ -132,6 +132,8 @@ def read_csv(filepath, lineterminator='\n',
     if thousands == delimiter:
         raise ValueError("thousands cannot be the same as delimiter")
 
+    compression_bytes = _wrap_string(compression)
+
     csv_reader.delimiter = delimiter.encode()
     csv_reader.lineterminator = lineterminator.encode()
     csv_reader.quotechar = quotechar.encode()
@@ -143,7 +145,7 @@ def read_csv(filepath, lineterminator='\n',
     csv_reader.num_cols = len(names)
     csv_reader.skiprows = skiprows
     csv_reader.skipfooter = skipfooter
-    csv_reader.compression = _wrap_string(compression)
+    csv_reader.compression = compression_bytes
     csv_reader.decimal = decimal.encode()
     csv_reader.thousands = thousands.encode() if thousands else b'\0'
 
