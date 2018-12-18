@@ -42,10 +42,12 @@ def melt(frame, id_vars=None, value_vars=None, var_name='variable',
 
     # Arg cleaning
     import types
+    import collections
     # id_vars
     if id_vars is not None:
-        if not isinstance(id_vars, list):
+        if not isinstance(id_vars, collections.abc.Sequence):
             id_vars = [id_vars]
+        id_vars = list(id_vars)
         missing = set(id_vars) - set(frame.columns)
         if not len(missing) == 0:
             raise KeyError(
@@ -57,8 +59,9 @@ def melt(frame, id_vars=None, value_vars=None, var_name='variable',
 
     # value_vars
     if value_vars is not None:
-        if not isinstance(value_vars, list):
+        if not isinstance(value_vars, collections.abc.Sequence):
             value_vars = [value_vars]
+        value_vars = list(value_vars)
         missing = set(value_vars) - set(frame.columns)
         if not len(missing) == 0:
             raise KeyError(
