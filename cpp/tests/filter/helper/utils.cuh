@@ -166,7 +166,7 @@ auto print_column(gdf_column * column) -> void {
     }
     delete[] host_out;
     delete[] host_valid_out;
-    std::cout<<std::endl<<std::endl;
+    std::cout<<std::endl;
 }
 
 
