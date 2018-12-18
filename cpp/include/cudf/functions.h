@@ -837,12 +837,6 @@ gdf_error get_column_byte_width(gdf_column * col, int * width);
    ORDER-BY
    GROUP-BY
  */
-gdf_error gdf_order_by(size_t nrows,     //in: # rows
-		       gdf_column* cols, //in: host-side array of gdf_columns with 0 null_count otherwise GDF_VALIDITY_UNSUPPORTED is returned
-		       size_t ncols,     //in: # cols
-		       void** d_cols,    //out: pre-allocated device-side array to be filled with gdf_column::data for each column; slicing of gdf_column array (host)
-		       int* d_types,     //out: pre-allocated device-side array to be filled with gdf_colum::dtype for each column; slicing of gdf_column array (host)
-		       size_t* d_indx);  //out: device-side array of re-rdered row indices
 
 gdf_error gdf_filter(size_t nrows,     //in: # rows
 		     gdf_column* cols, //in: host-side array of gdf_columns with 0 null_count otherwise GDF_VALIDITY_UNSUPPORTED is returned
@@ -912,3 +906,41 @@ gdf_error gdf_quantile_aprrox(	gdf_column*  col_in,       //input column with 0 
                                 double       q,            //requested quantile in [0,1]
                                 void*        t_erased_res, //type-erased result of same type as column;
                                 gdf_context* ctxt);        //context info
+
+/* --------------------------------------------------------------------------*
+ * @brief Replace elements from `col` according to the mapping `old_values` to
+ *        `new_values`, that is, replace all `old_values[i]` present in `col` 
+ *        with `new_values[i]`.
+ * 
+ * @Param[in,out] col gdf_column with the data to be modified
+ * @Param[in] old_values gdf_column with the old values to be replaced
+ * @Param[in] new_values gdf_column with the new values
+ * 
+ * @Returns GDF_SUCCESS upon successful completion
+ *
+ * --------------------------------------------------------------------------*/
+gdf_error gdf_find_and_replace_all(gdf_column*       col,
+                                   const gdf_column* old_values,
+                                   const gdf_column* new_values);
+
+/* --------------------------------------------------------------------------* 
+ * @brief Sorts an array of gdf_column.
+ * 
+ * @Param[in] input_columns Array of gdf_columns
+ * @Param[in] asc_desc Device array of sort order types for each column
+ *                     (0 is ascending order and 1 is descending). If NULL
+ *                     is provided defaults to ascending order for evey column.
+ * @Param[in] num_inputs # columns
+ * @Param[in] flag_nulls_are_smallest Flag to indicate if nulls are to be considered
+ *                                    smaller than non-nulls or viceversa
+ * @Param[out] output_indices Pre-allocated gdf_column to be filled with sorted
+ *                            indices
+ * 
+ * @Returns GDF_SUCCESS upon successful completion
+ *
+ * ----------------------------------------------------------------------------*/
+gdf_error gdf_order_by(gdf_column** input_columns,
+                       int8_t*      asc_desc,
+                       size_t       num_inputs,
+                       gdf_column*  output_indices,
+                       int          flag_nulls_are_smallest);
