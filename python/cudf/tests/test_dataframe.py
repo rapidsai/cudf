@@ -1062,3 +1062,13 @@ def test_binops(pdf, gdf, left, right, binop):
     d = binop(left(pdf), right(pdf))
     g = binop(left(gdf), right(gdf))
     assert_eq(d, g)
+
+
+@pytest.mark.parametrize('func', [
+    lambda df: df.empty,
+    lambda df: df.x.empty,
+])
+def test_unary_operators(func, pdf, gdf):
+    p = func(pdf)
+    g = func(gdf)
+    assert_eq(p, g)

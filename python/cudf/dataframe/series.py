@@ -187,6 +187,10 @@ class Series(object):
         """
         return len(self._column)
 
+    @property
+    def empty(self):
+        return not len(self)
+
     def __getitem__(self, arg):
         if isinstance(arg, Series):
             if arg.dtype in [np.int8, np.int16, np.int32, np.int32, np.int64]:
