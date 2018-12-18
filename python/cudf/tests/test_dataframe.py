@@ -113,10 +113,24 @@ def test_series_indexing():
 
 def test_series_replace():
     a1 = np.array([0, 1, 2, 3, 4])
+
+    # Numerical
     a2 = np.array([5, 1, 2, 3, 4])
     sr1 = Series(a1)
-    sr1.replace(0, 5)
-    np.testing.assert_equal(sr1.to_array(), a2)
+    sr2 = sr1.replace(0, 5)
+    np.testing.assert_equal(sr2.to_array(), a2)
+
+    # Categorical
+    psr3 = pd.Series(["one", "two", "three"], dtype='category')
+    psr4 = psr3.replace("one", "two")
+    sr3 = Series.from_pandas(psr3)
+    sr4 = sr3.replace("one", "two")
+    pd.testing.assert_series_equal(sr4.to_pandas(), psr4)
+
+    # List input
+    a6 = np.array([5, 6, 2, 3, 4])
+    sr6 = sr1.replace([0, 1], [5, 6])
+    np.testing.assert_equal(sr6.to_array(), a6)
 
 
 def test_dataframe_basic():
