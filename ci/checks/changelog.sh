@@ -4,10 +4,10 @@
 #########################
 
 # Checkout master for comparison
-git checkout master
+git checkout master 2>&1 /dev/null
 
 # Switch back to tip of PR branch
-git checkout current-pr-branch
+git checkout current-pr-branch 2>&1 /dev/null
 
 # Ignore errors during searching
 set +e
@@ -30,6 +30,8 @@ cat << EOF
   It should be placed under the section for the appropriate release.
   It should be placed under "New Features", "Improvements", or "Bug Fixes" as appropriate.
   It should be formatted as '-  <PR #> <Concise human-readable description of the PR's new feature, improvement, or bug fix>'
+
+
 EOF
 
 exit $RETVAL
