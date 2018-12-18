@@ -1043,7 +1043,7 @@ gdf_error launch_dataConvertColumns(raw_csv_t *raw_csv, void **gdf, gdf_valid_ty
 	opts.trueValues			= thrust::raw_pointer_cast(raw_csv->d_trueValues.data());
 	opts.trueValuesCount	= raw_csv->d_trueValues.size();
 	opts.falseValues		= thrust::raw_pointer_cast(raw_csv->d_falseValues.data());
-	opts.falseValuesCount	= raw_csv->d_falseValues.size();
+	opts.falseValuesCount		= raw_csv->d_falseValues.size();
 
 	convertCsvToGdf <<< gridSize, blockSize >>>(
 		raw_csv->data,
