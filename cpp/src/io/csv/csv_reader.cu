@@ -1294,7 +1294,7 @@ gdf_error launch_dataTypeDetection(
 	opts.quotechar			= raw_csv->quotechar;
 	opts.keepquotes			= raw_csv->keepquotes;
 	opts.trueValues			= thrust::raw_pointer_cast(raw_csv->d_trueValues.data());
-	opts.trueValuesCount	= raw_csv->d_trueValues.size();
+	opts.trueValuesCount		= raw_csv->d_trueValues.size();
 	opts.falseValues		= thrust::raw_pointer_cast(raw_csv->d_falseValues.data());
 	opts.falseValuesCount		= raw_csv->d_falseValues.size();
 
