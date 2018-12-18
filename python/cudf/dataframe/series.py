@@ -610,7 +610,8 @@ class Series(object):
         return sr_keys, sr_inds
 
     def replace(self, to_replace, values):
-        self._column.find_and_replace(to_replace, values)
+        result = self._column.find_and_replace(to_replace, values)
+        return self._copy_construct(data=result)
 
     def reverse(self):
         """Reverse the Series

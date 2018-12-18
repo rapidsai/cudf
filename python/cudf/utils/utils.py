@@ -77,3 +77,11 @@ def normalize_slice(arg, size):
     stop = arg.stop if arg.stop is not None else size
     return (normalize_index(start, size, doraise=False),
             normalize_index(stop, size, doraise=False))
+
+
+def make_list(obj):
+    """Make list if not already list-like
+    """
+    if object is not None and not isinstance(obj, (tuple, list)):
+        return [obj]
+    return obj

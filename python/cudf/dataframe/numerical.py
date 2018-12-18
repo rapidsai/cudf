@@ -279,12 +279,6 @@ class NumericalColumn(columnops.TypedColumnBase):
         else:
             raise ValueError('Unsupported join method')
 
-    def find_and_replace(self, to_replace, values):
-        from .series import Series
-        to_replace = Series(to_replace)
-        values = Series(values)
-        cpp_replace.replace(self, to_replace._column, values._column)
-
     def _hashjoin(self, other, how='left', return_indexers=False):
 
         from .series import Series
@@ -373,6 +367,17 @@ class NumericalColumn(columnops.TypedColumnBase):
                 return joined_index, indexers
             else:
                 return joined_index
+
+    def find_and_replace(self, to_replace, values):
+        """
+        Return col with to_replace replaced with values.
+        """
+        replaced = self.replace(data=self.data.copy(),
+                                dtype=self._data.dtype)
+        to_replace_col = columnops.as_column(to_replace)
+        values_col = columnops.as_column(values)
+        cpp_replace.replace(replaced, to_replace_col, values_col)
+        return replaced
 
 
 def numeric_column_binop(lhs, rhs, op, out_dtype):
