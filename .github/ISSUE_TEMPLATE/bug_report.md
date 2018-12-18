@@ -18,13 +18,10 @@ A clear and concise description of what you expected to happen.
 
 **Environment details (please complete the following information):**
  - Environment location: [Bare-metal, Docker, Cloud(specify cloud provider)]
- - Linux Distro/Architecture: [Ubuntu 16.04 amd64]
- - GPU Model/Driver: [V100 and driver 396.44]
- - CUDA: [9.2]
  - Method of cuDF install: [conda, Docker, or from source]
-   - If method of install is [conda], run `conda list` and include results here
    - If method of install is [Docker], provide `docker pull` & `docker run` commands used
-   - If method of install is [from source], provide versions of `cmake` & `gcc/g++` and commit hash of build
+ - Please run and attach the output of the `cudf/print_env.sh` script to gather relevant environment details
+ 
 
 **Additional context**
 Add any other context about the problem here.

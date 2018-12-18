@@ -30,8 +30,8 @@ def read_csv(filepath_or_buffer, lineterminator='\n',
              quotechar='"', quoting=True, doublequote=True,
              delimiter=',', sep=None, delim_whitespace=False,
              skipinitialspace=False, names=None, dtype=None,
-             skipfooter=0, skiprows=0, dayfirst=False, thousands=None,
-             decimal='.'):
+             skipfooter=0, skiprows=0, dayfirst=False, compression='infer',
+             thousands=None, decimal='.'):
     """
     Load and parse a CSV file into a DataFrame
 
@@ -64,6 +64,12 @@ def read_csv(filepath_or_buffer, lineterminator='\n',
         Number of rows to be skipped from the start of file.
     skipfooter : int, default 0
         Number of rows to be skipped at the bottom of file.
+    compression : {'infer', 'gzip', 'zip', None}, default 'infer'
+        For on-the-fly decompression of on-disk data. If ‘infer’, then detect
+        compression from the following extensions: ‘.gz’,‘.zip’ (otherwise no
+        decompression). If using ‘zip’, the ZIP file must contain only one
+        data file to be read in, otherwise the first non-zero-sized file will
+        be used. Set to None for no decompression.
 
     Returns
     -------
@@ -107,6 +113,8 @@ def read_csv(filepath_or_buffer, lineterminator='\n',
 
     # Populate csv_reader struct
     if is_file_like(filepath_or_buffer):
+        if compression == 'infer':
+            raise ValueError("Cannot infer compression type from a buffer")
         buffer = filepath_or_buffer.read()
         # check if StringIO is used
         if hasattr(buffer, 'encode'):
@@ -156,6 +164,7 @@ def read_csv(filepath_or_buffer, lineterminator='\n',
     csv_reader.num_cols = len(names)
     csv_reader.skiprows = skiprows
     csv_reader.skipfooter = skipfooter
+    csv_reader.compression = _wrap_string(compression)
     csv_reader.decimal = decimal.encode()
     csv_reader.thousands = ffi.NULL
     if thousands:
