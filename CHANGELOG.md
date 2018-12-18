@@ -29,7 +29,8 @@
 - PR #512 fix bug for `on` parameter in `DataFrame.merge` to allow for None or single column name
 - PR #511 Updated python/cudf/bindings/join.pyx to fix cudf merge printing out dtypes.
 - PR #537 Fix CMAKE_CUDA_STANDARD_REQURIED typo in CMakeLists.txt
-- PR #545 Temporarily disable csv reader thousands test to prevent segfault
+- PR #545 Temporarily disable csv reader thousands test to prevent segfault (test re-enabled in PR #501)
+- PR #501 Fix the intermittent segfault caused by the `thousands` and `compression` parameters in the csv reader
 
 
 # cuDF 0.4.0 (05 Dec 2018)
