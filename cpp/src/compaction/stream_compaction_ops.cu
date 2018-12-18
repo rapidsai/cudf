@@ -39,6 +39,8 @@
 //std lib
 #include <map>
 
+// Anonymous namespace
+namespace {
 
 struct shift_left: public thrust::unary_function<gdf_valid_type,gdf_valid_type>
 {
@@ -88,6 +90,7 @@ struct bit_or: public thrust::unary_function<thrust::tuple<gdf_valid_type,gdf_va
 	}
 };
 
+
 struct is_bit_set
 {
 	__host__ __device__
@@ -99,10 +102,9 @@ struct is_bit_set
 	}
 }; 
 
-typedef thrust::tuple<thrust::counting_iterator<gdf_size_type>, thrust::constant_iterator<gdf_valid_type*>> mask_tuple;
-typedef thrust::zip_iterator<mask_tuple> zipped_mask;
-
-typedef thrust::transform_iterator<is_bit_set, zipped_mask> bit_set_iterator;
+using mask_tuple = thrust::tuple<thrust::counting_iterator<gdf_size_type>, thrust::constant_iterator<gdf_valid_type*>>;
+using zipped_mask = thrust::zip_iterator<mask_tuple>;
+using bit_set_iterator = thrust::transform_iterator<is_bit_set, zipped_mask>;
 
 template<typename stencil_type>
 struct is_stencil_true
@@ -130,23 +132,23 @@ struct bit_mask_pack_op : public thrust::unary_function<int64_t,gdf_valid_type>
 };
 
 //zip the stencil and the valid iterator together
-typedef thrust::tuple<thrust::detail::normal_iterator<thrust::device_ptr<int8_t>>, bit_set_iterator> zipped_stencil_tuple;
-typedef thrust::zip_iterator<zipped_stencil_tuple> zipped_stencil_iterator;
+using zipped_stencil_tuple = thrust::tuple<thrust::detail::normal_iterator<thrust::device_ptr<int8_t>>, bit_set_iterator>;
+using zipped_stencil_iterator = thrust::zip_iterator<zipped_stencil_tuple>;
 
 struct apply_stencil_functor{
 	template <typename col_type>
 	__host__
 	void operator()(gdf_column* col, gdf_column* output, zipped_stencil_iterator zipped_stencil_iter)
 	{
-		thrust::detail::normal_iterator<thrust::device_ptr<col_type> > input_start =
-		thrust::detail::make_normal_iterator(thrust::device_pointer_cast((col_type *) col->data));
-		thrust::detail::normal_iterator<thrust::device_ptr<col_type> > output_start =
-				thrust::detail::make_normal_iterator(thrust::device_pointer_cast((col_type *) output->data));
-		thrust::detail::normal_iterator<thrust::device_ptr<col_type> > output_end =
-				thrust::copy_if(input_start,input_start + col->size,zipped_stencil_iter,output_start,is_stencil_true<thrust::detail::normal_iterator<thrust::device_ptr<int8_t> >::value_type >());
+		auto input_start = thrust::detail::make_normal_iterator(thrust::device_pointer_cast((col_type *) col->data));
+		auto output_start = thrust::detail::make_normal_iterator(thrust::device_pointer_cast((col_type *) output->data));
+		auto output_end = thrust::copy_if(input_start, input_start + col->size, zipped_stencil_iter, output_start, 
+					is_stencil_true<thrust::detail::normal_iterator<thrust::device_ptr<int8_t> >::value_type >());
 		output->size = output_end - output_start;
 	}
 };
+
+} // Anonymous namespace
 
 //TODO: add a way for the space where we store temp bitmaps for compaction be allocated
 //on the outside
