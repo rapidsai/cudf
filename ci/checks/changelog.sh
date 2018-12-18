@@ -29,7 +29,8 @@ fi
 cat << EOF
   It should be placed under the section for the appropriate release.
   It should be placed under "New Features", "Improvements", or "Bug Fixes" as appropriate.
-  It should be formatted as '-  <PR #> <Concise human-readable description of the PR's new feature, improvement, or bug fix>'
+  It should be formatted as '- PR #<PR number> <Concise human-readable description of the PR's new feature, improvement, or bug fix>'
+    Example format for #491 '- PR #491 Add CI test script to check for updates to CHANGELOG.md in PRs'
 
 
 EOF
