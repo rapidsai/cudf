@@ -3,12 +3,15 @@
 """
 Test related to Index
 """
+import operator
 import pytest
 
 import numpy as np
+import pandas as pd
 
 from cudf.dataframe import DataFrame
 from cudf.dataframe.index import GenericIndex, RangeIndex
+from cudf.tests.utils import assert_eq
 
 
 def test_df_set_index_from_series():
@@ -88,3 +91,34 @@ def test_reductions(func):
 def test_name():
     idx = GenericIndex(np.asarray([4, 5, 6, 10]), name='foo')
     assert idx.name == 'foo'
+
+
+@pytest.mark.xfail(reason="Not yet implemented")
+@pytest.mark.parametrize('operator', [
+    operator.eq,
+    operator.lt,
+    operator.le,
+    operator.gt,
+    operator.ge,
+    operator.ne,
+])
+@pytest.mark.parametrize('left', [
+    lambda df: df.index,
+    lambda df: 1,
+])
+@pytest.mark.parametrize('right', [
+    lambda df: df.index,
+    lambda df: 1,
+])
+def test_index_binary_operators(operator, left, right):
+    pdf = pd.DataFrame({'x': range(5)}, index=[0, 3, 1, 2, 4])
+    gdf = DataFrame.from_pandas(pdf)
+    lpdf = left(pdf)
+    rpdf = right(pdf)
+    p = operator(lpdf, rpdf)
+
+    lgdf = left(gdf)
+    rgdf = right(gdf)
+    g = operator(lgdf, rgdf)
+
+    assert_eq(p, g)
