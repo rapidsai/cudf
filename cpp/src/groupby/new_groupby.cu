@@ -238,29 +238,29 @@ gdf_error gdf_group_by_wo_aggregations(int num_data_cols,
 
   rmm::device_vector<int32_t> sorted_indices(nrows);
   gdf_column sorted_indices_col;
-  gdf_error status = gdf_column_view(&sorted_indices_col, (void*)(sorted_indices.data().get()), 
+  gdf_error gdf_status = gdf_column_view(&sorted_indices_col, (void*)(sorted_indices.data().get()), 
                             nullptr, nrows, GDF_INT32);
-  if (status != GDF_SUCCESS)
-    return status;
+  if (gdf_status != GDF_SUCCESS)
+    return gdf_status;
 
 // run order by and get new sort indexes
-  status = gdf_order_by(&orderby_cols_vect[0],             //input columns
+  gdf_status = gdf_order_by(&orderby_cols_vect[0],             //input columns
                         nullptr,
                         num_groupby_cols,                //number of columns in the first parameter (e.g. number of columsn to sort by)
                         &sorted_indices_col,            //a gdf_column that is pre allocated for storing sorted indices
                         0);  //flag to indicate if nulls are to be considered smaller than non-nulls or viceversa
-  if (status != GDF_SUCCESS)
-    return status;
+  if (gdf_status != GDF_SUCCESS)
+    return gdf_status;
 
   // run gather operation to establish new order
   std::unique_ptr< gdf_table<int32_t> > table_in{new gdf_table<int32_t>{num_data_cols, data_cols_in}};
   std::unique_ptr< gdf_table<int32_t> > table_out{new gdf_table<int32_t>{num_data_cols, data_cols_out}};
 
-  status = table_in->gather<int32_t>(sorted_indices, *table_out.get());
-  if (status != GDF_SUCCESS)
-    return status;
+  gdf_status = table_in->gather<int32_t>(sorted_indices, *table_out.get());
+  if (gdf_status != GDF_SUCCESS)
+    return gdf_status;
 
-  // status = gdf_group_start_indices(num_data_cols, data_cols_out, num_groupby_cols,
+  // gdf_status = gdf_group_start_indices(num_data_cols, data_cols_out, num_groupby_cols,
 	// 								   groupby_col_indices, group_start_indices, nulls_are_smallest);
 
 // setup for reduce by key  
@@ -272,41 +272,33 @@ gdf_error gdf_group_by_wo_aggregations(int num_data_cols,
     }
   }
 
-  Vector<void*> d_cols(num_groupby_cols); 
-  Vector<int> d_types(num_groupby_cols, 0);
+  rmm::device_vector<void*> d_cols(num_groupby_cols);
+  rmm::device_vector<gdf_valid_type*> d_valids(num_groupby_cols);
+  rmm::device_vector<int> d_types(num_groupby_cols, 0);
+
   void** d_col_data = d_cols.data().get();
+  gdf_valid_type** d_valids_data = d_valids.data().get();
   int* d_col_types = d_types.data().get();
 
-  int32_t* result_end;
+  gdf_status = soa_col_info(data_cols_out, num_groupby_cols, d_col_data, d_valids_data, d_col_types);
+  if (gdf_status != GDF_SUCCESS)
+    return gdf_status;
+
   auto exec = rmm::exec_policy();
-  if (have_nulls){
-
-    Vector<gdf_valid_type*> d_valids(num_groupby_cols);
-    gdf_valid_type** d_valids_data = d_valids.data().get();
-
-    soa_col_info(data_cols_out, num_groupby_cols, d_col_data, d_valids_data, d_col_types);
-    
-    LesserRTTI<int32_t> comp(d_col_data, d_valids_data, d_col_types, nullptr, num_groupby_cols, nulls_are_smallest);
-    
-    auto counting_iter = thrust::make_counting_iterator<int32_t>(0);
-    
+  LesserRTTI<int32_t> comp(d_col_data, d_valids_data, d_col_types, nullptr, num_groupby_cols, nulls_are_smallest);
+  auto counting_iter = thrust::make_counting_iterator<int32_t>(0);
+  int32_t* result_end;
+  if (have_nulls){   
     result_end = thrust::unique_copy(exec, counting_iter, counting_iter+nrows, 
                               (int32_t*)group_start_indices->data,
-                              [comp] __host__ __device__(int32_t key1, int32_t key2){
+                              [comp] __device__(int32_t key1, int32_t key2){
                               return comp.equal_with_nulls(key1, key2);
                             });
 
-  } else {
-
-    soa_col_info(*data_cols_out, num_groupby_cols, d_col_data, d_col_types);
-    
-    LesserRTTI<int32_t> comp(d_col_data, nullptr, d_col_types, nullptr, num_groupby_cols, nulls_are_smallest);
-
-    auto counting_iter = thrust::make_counting_iterator<int32_t>(0);
-    
+  } else {  
     result_end = thrust::unique_copy(exec, counting_iter, counting_iter+nrows, 
                               (int32_t*)group_start_indices->data,
-                              [comp] __host__ __device__(int32_t key1, int32_t key2){
+                              [comp] __device__(int32_t key1, int32_t key2){
                               return comp.equal(key1, key2);  
                             });
   }
@@ -314,7 +306,7 @@ gdf_error gdf_group_by_wo_aggregations(int num_data_cols,
   size_t new_sz = thrust::distance((int32_t*)group_start_indices->data, result_end);
   group_start_indices->size = new_sz;
 
-  return status;
+  return gdf_status;
 }
 
 
