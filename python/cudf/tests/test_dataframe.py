@@ -1072,3 +1072,7 @@ def test_unary_operators(func, pdf, gdf):
     p = func(pdf)
     g = func(gdf)
     assert_eq(p, g)
+
+
+def test_is_monotonic(gdf):
+    assert hasattr(gdf.index, 'is_monotonic')
