@@ -909,8 +909,7 @@ gdf_error launch_countRecords(raw_csv_t * csvData) {
 	// Each bitmap is for a 64-byte chunk, and each data index is bitmap ID * 64
 	int gridSize = (csvData->num_bits + blockSize - 1) / blockSize;
 
-	countRecords <<< gridSize, blockSize 
-    > (
+	countRecords <<< gridSize, blockSize >>> (
 		csvData->data, csvData->terminator, csvData->quotechar,
 		csvData->num_bytes, csvData->num_bits, csvData->d_num_records
 	);
