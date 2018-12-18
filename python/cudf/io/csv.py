@@ -62,6 +62,10 @@ def read_csv(filepath, lineterminator='\n',
         decompression). If using ‘zip’, the ZIP file must contain only one
         data file to be read in, otherwise the first non-zero-sized file will
         be used. Set to None for no decompression.
+    decimal : char, default '.'
+        Character used as a decimal point.
+    thousands : char, default None
+        Character used as a thousands delimiter.
     true_values : list, default None
         Values to consider as boolean True
     false_values : list, default None
@@ -148,6 +152,8 @@ def read_csv(filepath, lineterminator='\n',
     csv_reader.false_values = false_values_ptr
     csv_reader.num_false_values = len(arr_false_values)
 
+    compression_bytes = _wrap_string(compression)
+
     csv_reader.delimiter = delimiter.encode()
     csv_reader.lineterminator = lineterminator.encode()
     csv_reader.quotechar = quotechar.encode()
@@ -159,11 +165,9 @@ def read_csv(filepath, lineterminator='\n',
     csv_reader.num_cols = len(names)
     csv_reader.skiprows = skiprows
     csv_reader.skipfooter = skipfooter
-    csv_reader.compression = _wrap_string(compression)
+    csv_reader.compression = compression_bytes
     csv_reader.decimal = decimal.encode()
-    csv_reader.thousands = ffi.NULL
-    if thousands:
-        csv_reader.thousands = ffi.new('char*', thousands.encode())
+    csv_reader.thousands = thousands.encode() if thousands else b'\0'
 
     # Call read_csv
     libgdf.read_csv(csv_reader)
@@ -196,8 +200,8 @@ def read_csv_strings(filepath, lineterminator='\n',
                      quotechar='"', quoting=True, doublequote=True,
                      delimiter=',', sep=None, delim_whitespace=False,
                      skipinitialspace=False, names=None, dtype=None,
-                     skipfooter=0, skiprows=0, dayfirst=False,
-                     true_values=None, false_values=None):
+                     skipfooter=0, skiprows=0, dayfirst=False, thousands=None,
+                     decimal='.', true_values=None, false_values=None):
 
     import nvstrings
     from cudf.dataframe.series import Series
@@ -281,6 +285,12 @@ def read_csv_strings(filepath, lineterminator='\n',
     dtype_ptr = ffi.new('char*[]', arr_dtypes)
     csv_reader.dtype = dtype_ptr
 
+    if decimal == delimiter:
+        raise ValueError("decimal cannot be the same as delimiter")
+
+    if thousands == delimiter:
+        raise ValueError("thousands cannot be the same as delimiter")
+    
     # Start with default values recognized as boolean
     arr_true_values = [_wrap_string(str('True')), _wrap_string(str('TRUE'))]
     arr_false_values = [_wrap_string(str('False')), _wrap_string(str('FALSE'))]
@@ -308,6 +318,8 @@ def read_csv_strings(filepath, lineterminator='\n',
     csv_reader.num_cols = len(names)
     csv_reader.skiprows = skiprows
     csv_reader.skipfooter = skipfooter
+    csv_reader.decimal = decimal.encode()
+    csv_reader.thousands = thousands.encode() if thousands else b'\0'
 
     # Call read_csv
     libgdf.read_csv(csv_reader)

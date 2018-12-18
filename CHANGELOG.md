@@ -5,7 +5,8 @@
 
 - PR #411 added null support to gdf_order_by (new API) and cudf_table::sort
 - PR #525 Added GitHub Issue templates for bugs, documentation, new features, and questions
-- PR #455 CSV Reader: Add support for user-specified decimal point and thousands separator
+- PR #501 CSV Reader: Add support for user-specified decimal point and thousands separator to read_csv_strings()
+- PR #455 CSV Reader: Add support for user-specified decimal point and thousands separator to read_csv()
 - PR #439 add `DataFrame.drop` method similar to pandas
 - PR #505 CSV Reader: Add support for user-specified boolean values
 - PR #350 Implemented Series replace function
@@ -29,7 +30,8 @@
 - PR #512 fix bug for `on` parameter in `DataFrame.merge` to allow for None or single column name
 - PR #511 Updated python/cudf/bindings/join.pyx to fix cudf merge printing out dtypes.
 - PR #537 Fix CMAKE_CUDA_STANDARD_REQURIED typo in CMakeLists.txt
-- PR #545 Temporarily disable csv reader thousands test to prevent segfault
+- PR #545 Temporarily disable csv reader thousands test to prevent segfault (test re-enabled in PR #501)
+- PR #501 Fix the intermittent segfault caused by the `thousands` and `compression` parameters in the csv reader
 
 
 # cuDF 0.4.0 (05 Dec 2018)

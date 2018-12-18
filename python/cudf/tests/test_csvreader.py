@@ -182,7 +182,8 @@ def test_csv_reader_strings(tmpdir):
     with open(str(fname), 'w') as fp:
         fp.write('\n'.join(lines) + '\n')
 
-    cols = read_csv_strings(str(fname), names=names, dtype=dtypes, skiprows=1)
+    cols = read_csv_strings(str(fname), names=names, dtype=dtypes, skiprows=1,
+                            decimal='.', thousands="'")
 
     assert(len(cols) == 2)
     assert(type(cols[0]) == nvstrings.nvstrings)
@@ -241,7 +242,6 @@ def test_csv_reader_float_decimal(tmpdir):
     np.testing.assert_allclose(decimal_only_ref, df['decimal_only'])
 
 
-@pytest.mark.skip(reason="currently segfaulting")
 def test_csv_reader_thousands(tmpdir):
     fname = tmpdir.mkdir("gdf_csv").join("tmp_csvreader_file10.csv")
 
