@@ -20,10 +20,16 @@ RETVAL=0
 
 # Return status of check result
 if [ "$CHANGELOG" != "" -a "$PRNUM" != "" ] ; then
-  echo -e "\n\n>>>> PASSED: CHANGELOG.md has been updated with current PR information.\n\n"
+  echo -e "\n\n>>>> PASSED: CHANGELOG.md has been updated with current PR information.\n\nPlease ensure the update meets the following criteria.\n"
 else
-  echo -e "\n\n>>>> FAILED: CHANGELOG.md has not been updated! Update with PR information to pass this test.\n\n"
+  echo -e "\n\n>>>> FAILED: CHANGELOG.md has not been updated!\n\nPlease add a line describing this PR to CHANGELOG.md in the repository root directory. The line should meet the following criteria.\n"
   RETVAL=1
 fi
+
+cat << EOF
+  It should be placed under the section for the appropriate release.
+  It should be placed under "New Features", "Improvements", or "Bug Fixes" as appropriate.
+  It should be formatted as '-  <PR #> <Concise human-readable description of the PR's new feature, improvement, or bug fix>'
+EOF
 
 exit $RETVAL
