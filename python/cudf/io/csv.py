@@ -290,7 +290,7 @@ def read_csv_strings(filepath, lineterminator='\n',
 
     if thousands == delimiter:
         raise ValueError("thousands cannot be the same as delimiter")
-    
+
     # Start with default values recognized as boolean
     arr_true_values = [_wrap_string(str('True')), _wrap_string(str('TRUE'))]
     arr_false_values = [_wrap_string(str('False')), _wrap_string(str('FALSE'))]
