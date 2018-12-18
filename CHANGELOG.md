@@ -20,6 +20,7 @@
 - PR #513 `.gitignore` tweaks
 - PR #521 Add `assert_eq` function for testing
 - PR #502 Simplify Dockerfile for local dev, eliminate old conda/pip envs
+- PR #549 Adds `-rdynamic` compiler flag to nvcc for Debug builds
 
 ## Bug Fixes
 
