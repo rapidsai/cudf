@@ -262,7 +262,7 @@ gdf_error read_csv(csv_read_arg *args)
 
 	raw_csv->dayfirst = args->dayfirst;
 	raw_csv->decimal = args->decimal;
-	raw_csv->thousands = args->thousands == nullptr ? '\0' : *args->thousands;
+	raw_csv->thousands = args->thousands;
 
 	if (raw_csv->decimal == raw_csv->delimiter)
 	{ 

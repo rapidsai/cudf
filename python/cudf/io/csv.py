@@ -145,9 +145,7 @@ def read_csv(filepath, lineterminator='\n',
     csv_reader.skipfooter = skipfooter
     csv_reader.compression = _wrap_string(compression)
     csv_reader.decimal = decimal.encode()
-    csv_reader.thousands = ffi.NULL
-    if thousands:
-        csv_reader.thousands = ffi.new('char*', thousands.encode())
+    csv_reader.thousands = thousands.encode() if thousands else b'\0'
 
     # Call read_csv
     libgdf.read_csv(csv_reader)
@@ -283,9 +281,7 @@ def read_csv_strings(filepath, lineterminator='\n',
     csv_reader.skiprows = skiprows
     csv_reader.skipfooter = skipfooter
     csv_reader.decimal = decimal.encode()
-    csv_reader.thousands = ffi.NULL
-    if thousands:
-        csv_reader.thousands = ffi.new('char*', thousands.encode())
+    csv_reader.thousands = thousands.encode() if thousands else b'\0'
 
     # Call read_csv
     libgdf.read_csv(csv_reader)
