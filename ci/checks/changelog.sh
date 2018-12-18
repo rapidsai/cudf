@@ -4,10 +4,10 @@
 #########################
 
 # Checkout master for comparison
-git checkout master 2>&1 /dev/null
+git checkout --quiet master
 
 # Switch back to tip of PR branch
-git checkout current-pr-branch 2>&1 /dev/null
+git checkout --quiet current-pr-branch
 
 # Ignore errors during searching
 set +e
