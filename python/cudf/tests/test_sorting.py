@@ -8,6 +8,7 @@ import numpy as np
 import pandas as pd
 
 from cudf.dataframe import DataFrame, Series
+from cudf.tests.utils import assert_eq
 
 
 sort_nelem_args = [2, 257]
@@ -166,3 +167,42 @@ def test_dataframe_nsmallest_sliced(counts, sliceobj):
     gdf = DataFrame.from_pandas(df)
     got = gdf[sliceobj].nsmallest(n, 'a')
     assert (got.to_pandas() == expect).all().all()
+
+
+@pytest.mark.parametrize('num_cols', [1, 2, 5])
+@pytest.mark.parametrize('num_rows', [0, 1, 2, 1000])
+@pytest.mark.parametrize(
+    'dtype',
+    ['int8', 'int16', 'int32', 'int64', 'float32', 'float64',
+     'datetime64[ms]']
+)
+@pytest.mark.parametrize('nulls', ['none', 'some', 'all'])
+@pytest.mark.parametrize('ascending', [True, False])
+@pytest.mark.parametrize('na_position', ['first', 'last'])
+def test_dataframe_multi_column(num_cols, num_rows, dtype, nulls, ascending,
+                                na_position):
+    if dtype not in ['float32', 'float64'] and nulls in ['some', 'all']:
+        pytest.skip(msg='nulls not supported in dtype: ' + dtype)
+
+    np.random.seed(0)
+
+    pdf = pd.DataFrame()
+    from string import ascii_lowercase
+    for i in range(10):
+        colname = ascii_lowercase[i]
+        data = np.random.randint(0, 26, num_rows).astype(dtype)
+        if nulls == 'some':
+            idx = np.random.choice(26, size=int(num_rows/2), replace=False)
+            data[idx] = np.nan
+        elif nulls == 'all':
+            data[:] = np.nan
+        pdf[colname] = data
+
+    gdf = DataFrame.from_pandas(pdf)
+
+    by = ascii_lowercase[:num_cols]
+
+    got = gdf.sort_values(by, ascending=ascending, na_position=na_position)
+    expect = pdf.sort_values(by, ascending=ascending, na_position=na_position)
+
+    assert_eq(got, expect)
