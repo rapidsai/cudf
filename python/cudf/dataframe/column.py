@@ -110,7 +110,6 @@ class Column(object):
                     self._mask = None
             else:
                 null_count = 0
-
         assert 0 <= null_count <= len(self)
         if null_count == 0:
             # Remove mask if null_count is zero
@@ -160,6 +159,12 @@ class Column(object):
 
     def __len__(self):
         return self._data.size
+
+    def __copy__(self):
+        return self.copy(deep=True)
+
+    def __deepcopy__(self):
+        return self.copy(deep=True)
 
     @property
     def dtype(self):
@@ -295,15 +300,25 @@ class Column(object):
         """
         return self.replace(data=self.data.copy())
 
-    def copy(self):
+    def copy(self, deep=True):
         """Copy the column with a new allocation of the data and mask.
         """
-        copied = self.copy_data()
-        if self.has_null_mask:
-            return copied.set_mask(mask=self.mask.copy(),
-                                   null_count=self.null_count)
-        else:
-            return copied.allocate_mask()
+        print('self data: ', end='')
+        print(self._data)
+        # TODO: Make Categorical or Datetime columns here as necessary
+        column = Column(self._data.copy())
+        if self._mask:
+            column._mask = self._mask.copy()
+        column._null_count = self._null_count
+        print('Column data: ', end='')
+        print(column._data)
+        return column
+        # copied = self.copy_data()
+        # if self.has_null_mask:
+        #    return copied.set_mask(mask=self.mask.copy(),
+        #                           null_count=self.null_count)
+        # else:
+        #    return copied.allocate_mask()
 
     def replace(self, **kwargs):
         """Replace attibutes of the class and return a new Column.

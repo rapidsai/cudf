@@ -178,8 +178,14 @@ class Buffer(object):
     def copy(self):
         """Deep copy the buffer
         """
-        return Buffer(mem=cudautils.copy_array(self.mem),
-                      size=self.size, capacity=self.capacity)
+        print('Buffer dtype')
+        print(self.dtype)
+        return Buffer(
+                mem=cudautils.astype(cudautils.copy_array(self.mem),
+                                     self.mem.dtype),
+                size=self.size,
+                capacity=self.capacity
+                )
 
     def as_contiguous(self):
         out = Buffer(mem=cudautils.as_contiguous(self.mem),

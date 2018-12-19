@@ -460,8 +460,13 @@ class DataFrame(object):
         df = DataFrame()
         df._index = self._index
         df._size = self._size
+        df._cols = OrderedDict()
         if deep:
-            df._cols = self._cols.copy()
+            for col in self._cols:
+                print('The original dtype')
+                print(self[col].dtype)
+                new_series = self[col].copy(deep=True)
+                df[col] = new_series
         else:
             df._cols = self._cols
         return df

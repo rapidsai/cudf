@@ -191,6 +191,9 @@ class RangeIndex(Index):
         return pd.RangeIndex(start=self._start, stop=self._stop,
                              dtype=self.dtype)
 
+    def __sizeof__(self):
+        return self._values.__sizeof__()
+
 
 def index_from_range(start, stop=None, step=None):
     vals = cudautils.arange(start, stop, step, dtype=np.int64)
@@ -216,6 +219,7 @@ class GenericIndex(Index):
         res = Index.__new__(GenericIndex)
         res._values = values
         res.name = name
+        res.size = len(res._values)
         return res
 
     def serialize(self, serialize):
@@ -229,9 +233,6 @@ class GenericIndex(Index):
         payload = deserialize(header['payload'],
                               frames[:header['frame_count']])
         return cls(payload)
-
-    def __sizeof__(self):
-        return self._values.__sizeof__()
 
     def __reduce__(self):
         return GenericIndex, tuple([self._values])

@@ -403,6 +403,30 @@ class Series(object):
     def __ge__(self, other):
         return self._ordered_compare(other, 'ge')
 
+    def copy(self, deep=True):
+        series = Series(self.data)
+        print('Series: ', end='')
+        print(series)
+        series._index = GenericIndex(self._index)
+        print('Series index: ', end='')
+        print(series._index)
+        print('Self column: ', end='')
+        print(self._column)
+        print('self column dtype:')
+        print(self._column.dtype)
+        series._column = self._column.copy(deep)
+        print('Series column: ', end='')
+        print(series._column)
+        print('series column dtype:')
+        print(series._column.dtype)
+        return series
+
+    def __copy__(self):
+        return self.copy(deep=True)
+
+    def __deepcopy__(self):
+        return self.copy(deep=True)
+
     @property
     def cat(self):
         return self._column.cat()
