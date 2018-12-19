@@ -250,7 +250,7 @@ class NumericalColumn(columnops.TypedColumnBase):
             out_dtype = self.dtype
         out = columnops.column_applymap(udf=udf, column=self,
                                         out_dtype=out_dtype)
-        return self.replace(data=out)
+        return self.replace(data=out, dtype=out_dtype)
 
     def default_na_value(self):
         """Returns the default NA value for this column

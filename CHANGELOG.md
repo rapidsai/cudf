@@ -31,7 +31,7 @@
 - PR #537 Fix CMAKE_CUDA_STANDARD_REQURIED typo in CMakeLists.txt
 - PR #545 Temporarily disable csv reader thousands test to prevent segfault (test re-enabled in PR #501)
 - PR #501 Fix the intermittent segfault caused by the `thousands` and `compression` parameters in the csv reader
-
+- PR #559 Fix Assertion error while using `applymap` to change the output dtype
 
 # cuDF 0.4.0 (05 Dec 2018)
 
