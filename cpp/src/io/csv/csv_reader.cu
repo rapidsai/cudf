@@ -538,7 +538,6 @@ gdf_error read_csv(csv_read_arg *args)
 	//--- Auto detect types of the vectors
 
 	if(args->dtype==NULL){
-	//if(args->names==NULL){
 
 		column_data_t *d_ColumnData,*h_ColumnData;
 
@@ -640,9 +639,9 @@ gdf_error read_csv(csv_read_arg *args)
 	}
 
 	for (int acol = 0,col=-1; acol < raw_csv->num_actual_cols; acol++) {
-	if(raw_csv->h_parseCol[acol]==false)
-		continue;
-	col++;
+		if(raw_csv->h_parseCol[acol]==false)
+			continue;
+		col++;
 
 		gdf_column *gdf = (gdf_column *)malloc(sizeof(gdf_column) * 1);
 
