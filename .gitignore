@@ -1,4 +1,4 @@
-## common
+## Common
 __pycache__
 *.pyc
 *.a
@@ -13,7 +13,7 @@ __pycache__
 DartConfiguration.tcl
 .DS_Store
 
-build
+## Python build directories & artifacts
 htmlcov
 dist/
 cudf.egg-info/
@@ -25,17 +25,10 @@ python/cudf/bindings/*.cpp
 *.orig
 *.rej
 
-## python distribution / packaging
-dist/
-*.egg-info/
-
-## python distribution / packaging
-dist/
-*.egg-info/
-
-## libgdf
+## C++ build directories & artifacts
 CMakeFiles/
 Debug
+build/
 cpp/build/
 cpp/include/cudf/ipc_generated/*.h
 cpp/thirdparty/googletest/

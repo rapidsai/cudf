@@ -350,6 +350,12 @@ public:
     return host_columns[column_index];
   }
 
+   __host__ 
+  gdf_column ** get_columns() const
+  {
+    return host_columns;
+  }
+
   __host__ __device__
   size_type get_column_length() const
   {
@@ -818,45 +824,7 @@ public:
       return gather(row_gather_map, *this, range_check);
   }
 
-  /* --------------------------------------------------------------------------*/
-  /** 
-   * @Synopsis  Lexicographically sorts the rows of the gdf_table in-place
-   * 
-   * @Returns A permutation vector of the new ordering of the rows, e.g.,
-   * sorted_table[i] == unsorted_table[ permuted_indices[i] ]
-   */
-  /* ----------------------------------------------------------------------------*/
-  rmm::device_vector<size_type> sort(void) {
-
-
-      // Functor that defines a `less` operator between rows of a set of
-      // gdf_columns
-      LesserRTTI<size_type> comparator(d_columns_data,
-              reinterpret_cast<int*>(d_columns_types),
-              num_columns);
-
-
-      // rmm::device_vector that will store the permutation of the rows after the sort
-      rmm::device_vector<size_type> permuted_indices(column_length);
-      thrust::sequence(rmm::exec_policy(cudaStream_t{0}), permuted_indices.begin(), permuted_indices.end());
-
-      // Use the LesserRTTI functor to sort the rows of the table and the
-      // permutation vector
-      thrust::sort(rmm::exec_policy(cudaStream_t{0}), permuted_indices.begin(), permuted_indices.end(),
-              [comparator] __host__ __device__ (size_type i1, size_type i2) {
-              return comparator.less(i1, i2);
-              });
-
-      //thrust::host_vector<void*> host_columns = device_columns;
-      //thrust::host_vector<gdf_dtype> host_types = device_types;
-
-      gather<size_type>(permuted_indices);
-
-      return permuted_indices;
-  }
-
-
-
+  
   
 /* --------------------------------------------------------------------------*/
 /** 

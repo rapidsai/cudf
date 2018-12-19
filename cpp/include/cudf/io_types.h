@@ -74,8 +74,8 @@ typedef struct {
   bool			infer_datetime_format;		// try and determine the date format
   bool			dayfirst;					// is the first value the day?  DD/MM  versus MM/DD
 
-  char			*compression;				// specify the type of compression
-  char			*thousands;					/**<  pointer to a single character that separates thousands in numeric data. If this matches the delimiter then system will return GDF_INVALID_API_CALL */
+  char			*compression;				/**< specify the type of compression (nullptr,"none","infer","gzip","zip"), "infer" infers the compression from the file extension, default(nullptr) is uncompressed */
+  char			thousands;					/**<  single character that separates thousands in numeric data. If this matches the delimiter then system will return GDF_INVALID_API_CALL */
 
   char			decimal;					/**< the decimal point character. If this matches the delimiter then system will return GDF_INVALID_API_CALL */
 

@@ -86,6 +86,14 @@ set(JOIN_TEST_SRC
 ConfigureTest(JOIN_TEST "${JOIN_TEST_SRC}")
 
 ###################################################################################################
+# - orderby tests ---------------------------------------------------------------------------------
+
+set(ORDERBY_TEST_SRC 
+    "${CMAKE_CURRENT_SOURCE_DIR}/orderby/orderby_tests.cu")
+
+ConfigureTest(ORDERBY_TEST "${ORDERBY_TEST_SRC}")
+
+###################################################################################################
 # - bitmask tests ---------------------------------------------------------------------------------
 
 set(BITMASK_TEST_SRC
@@ -126,6 +134,14 @@ set(QUANTILES_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/quantiles/quantiles_test.cu")
 
 ConfigureTest(QUANTILES_TEST "${QUANTILES_TEST_SRC}")
+
+###################################################################################################
+# - replace tests ---------------------------------------------------------------------------------
+
+set(REPLACE_TEST_SRC 
+    "${CMAKE_CURRENT_SOURCE_DIR}/replace/replace_tests.cu")
+
+ConfigureTest(REPLACE_TEST "${REPLACE_TEST_SRC}")
 
 ###################################################################################################
 # - unary tests -----------------------------------------------------------------------------------
