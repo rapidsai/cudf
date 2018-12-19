@@ -30,10 +30,11 @@ def make_datetime_dataframe():
 
 def make_numpy_mixed_dataframe():
     df = pd.DataFrame()
-    df['Integer'] = np.array([2345, 11987, 9027, 53916])
+    df['Integer'] = np.array([2345, 11987, 9027, 9027])
     df['Date'] = np.array(['18/04/1995', '14/07/1994', '07/06/2006',
                           '16/09/2005'])
     df['Float'] = np.array([9.001, 8.343, 6, 2.781])
+    df['Integer2'] = np.array([2345, 106, 2088, 789277])
     df['Category'] = np.array(['M', 'F', 'F', 'F'])
     return df
 
@@ -102,10 +103,10 @@ def test_csv_reader_mixed_data_delimiter(tmpdir):
     df = make_numpy_mixed_dataframe()
     df.to_csv(fname, sep='|', index=False, header=False)
 
-    out = read_csv(str(fname), delimiter='|', names=['1', '2', '3', '4'],
-                   dtype=['int64', 'date', 'float64', 'category'],
+    out = read_csv(str(fname), delimiter='|', names=['1', '2', '3', '4', '5'],
+                   dtype=['int64', 'date', 'float64', 'int64', 'category'],
                    dayfirst=True)
-    df_out = pd.read_csv(fname, delimiter='|', names=['1', '2', '3', '4'],
+    df_out = pd.read_csv(fname, delimiter='|', names=['1', '2', '3', '4', '5'],
                          parse_dates=[1], dayfirst=True)
 
     assert len(out.columns) == len(df_out.columns)
@@ -216,8 +217,64 @@ def test_csv_reader_strings_quotechars(tmpdir):
     assert(cols[0].sublist([3]).to_host()[0] == 'f,,!.,')
 
 
-def test_csv_reader_float_decimal(tmpdir):
+def test_csv_reader_auto_column_detection(tmpdir):
     fname = tmpdir.mkdir("gdf_csv").join("tmp_csvreader_file9.csv")
+    df = make_numpy_mixed_dataframe()
+    df.to_csv(fname, columns=['Integer', 'Date', 'Float'], index=False,
+              header=False)
+
+    df_out = pd.read_csv(fname, parse_dates=[1], dayfirst=True)
+    out = read_csv(str(fname), dayfirst=True)
+    assert len(out.columns) == len(df_out.columns)
+    assert len(out) == len(df_out)
+    pd.util.testing.assert_frame_equal(df_out, out.to_pandas())
+    # Check dtypes
+    assert list(df_out.dtypes) == list(out.to_pandas().dtypes)
+
+
+def test_csv_reader_usecols_int_char(tmpdir):
+    fname = tmpdir.mkdir("gdf_csv").join("tmp_csvreader_file10.csv")
+    df = make_numpy_mixed_dataframe()
+    df.to_csv(fname, columns=['Integer', 'Date', 'Float', 'Integer2'],
+              index=False, header=False)
+
+    df_out = pd.read_csv(fname, usecols=[0, 1, 3], parse_dates=[1],
+                         dayfirst=True)
+    out = read_csv(str(fname), usecols=[0, 1, 3], dayfirst=True)
+    print(df_out)
+    print(out)
+    assert len(out.columns) == len(df_out.columns)
+    assert len(out) == len(df_out)
+    pd.util.testing.assert_frame_equal(df_out, out.to_pandas(),
+                                       check_names=False)
+
+
+def test_csv_reader_mangle_dupe_cols_header(tmpdir):
+    fname = tmpdir.mkdir("gdf_csv").join("tmp_csvreader_file11.csv")
+    df = make_numpy_mixed_dataframe()
+    df.to_csv(fname, columns=['Integer', 'Date', 'Float', 'Integer2'],
+              index=False, header=False)
+
+    # Default: header=0 when names not passed, mangle_dupe_cols = True
+    df_out = pd.read_csv(fname, parse_dates=[1], dayfirst=True)
+    out = read_csv(str(fname), dayfirst=True)
+    assert len(out.columns) == len(df_out.columns)
+    assert len(out) == len(df_out)
+    # Compare mangled column names for duplicate names in header row
+    assert list(df_out.columns.values) == list(out.columns.values)
+    pd.util.testing.assert_frame_equal(df_out, out.to_pandas())
+
+    # header = 3
+    df_out = pd.read_csv(fname, parse_dates=[1], dayfirst=True, header=2)
+    out = read_csv(str(fname), dayfirst=True, header=2)
+    assert len(out.columns) == len(df_out.columns)
+    # assert len(out) == len(df_out)
+    # Compare column names
+    assert list(df_out.columns.values) == list(out.columns.values)
+
+
+def test_csv_reader_float_decimal(tmpdir):
+    fname = tmpdir.mkdir("gdf_csv").join("tmp_csvreader_file12.csv")
 
     names = ['basic_32', 'basic_64', 'round', 'decimal_only']
     dtypes = ['float32', 'float64', 'float64', 'float32']
@@ -243,7 +300,7 @@ def test_csv_reader_float_decimal(tmpdir):
 
 
 def test_csv_reader_thousands(tmpdir):
-    fname = tmpdir.mkdir("gdf_csv").join("tmp_csvreader_file10.csv")
+    fname = tmpdir.mkdir("gdf_csv").join("tmp_csvreader_file13.csv")
 
     names = dtypes = ["float32", "float64", "int32", "int64"]
     lines = [','.join(names),

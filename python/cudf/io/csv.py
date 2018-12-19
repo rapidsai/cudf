@@ -9,6 +9,7 @@ from cudf.dataframe.datetime import DatetimeColumn
 from cudf._gdf import nvtx_range_push, nvtx_range_pop
 
 import numpy as np
+import collections.abc
 
 
 def _wrap_string(text):
@@ -20,6 +21,8 @@ def _wrap_string(text):
 
 def read_csv(filepath, lineterminator='\n',
              quotechar='"', quoting=True, doublequote=True,
+             header='infer',
+             mangle_dupe_cols=True, usecols=None,
              delimiter=',', sep=None, delim_whitespace=False,
              skipinitialspace=False, names=None, dtype=None,
              skipfooter=0, skiprows=0, dayfirst=False, compression='infer',
@@ -52,6 +55,16 @@ def read_csv(filepath, lineterminator='\n',
     doublequote : bool, default True
         When quotechar is specified and quoting is True, indicates whether to
         interpret two consecutive quotechar inside fields as single quotechar
+    header : int, default 'infer'
+        Row number to use as the column names. Default behavior is to infer
+        the column names: if no names are passed, header=0;
+        if column names are passed explicitly, header=None.
+    usecols : list of int or str, default None
+        Returns subset of the columns given in the list. All elements must be
+        either integer indices (column number) or strings that correspond to
+        column names
+    mangle_dupe_cols : boolean, default True
+        Duplicate columns will be specified as 'X','X.1',...'X.N'.
     skiprows : int, default 0
         Number of rows to be skipped from the start of file.
     skipfooter : int, default 0
@@ -87,21 +100,17 @@ def read_csv(filepath, lineterminator='\n',
     1 30   70
     """
 
-    if names is None or dtype is None:
-        msg = '''Automatic dtype detection not implemented:
-        Column names and dtypes must be specified.'''
-        raise TypeError(msg)
-
-    if isinstance(dtype, dict):
-        dtype_dict = True
-    elif isinstance(dtype, list):
-        dtype_dict = False
-        if len(dtype) != len(names):
+    if dtype is not None:
+        if isinstance(dtype, collections.abc.Mapping):
+            dtype_dict = True
+        elif isinstance(dtype, collections.abc.Iterable):
+            dtype_dict = False
+        else:
+            msg = '''dtype must be 'list like' or 'dict' '''
+            raise TypeError(msg)
+        if names is not None and len(dtype) != len(names):
             msg = '''All column dtypes must be specified.'''
             raise TypeError(msg)
-    else:
-        msg = '''dtype must be 'list' or 'dict' '''
-        raise TypeError(msg)
 
     nvtx_range_push("PYGDF_READ_CSV", "purple")
 
@@ -111,20 +120,56 @@ def read_csv(filepath, lineterminator='\n',
     file_path = _wrap_string(filepath)
     csv_reader.file_path = file_path
 
+    if header is 'infer':
+        header = -1
+    header_infer = header
     arr_names = []
     arr_dtypes = []
-    for col_name in names:
-        arr_names.append(_wrap_string(col_name))
-        if dtype_dict:
-            arr_dtypes.append(_wrap_string(str(dtype[col_name])))
-    names_ptr = ffi.new('char*[]', arr_names)
-    csv_reader.names = names_ptr
+    if names is None:
+        if header is -1:
+            header_infer = 0
+        if header is None:
+            header_infer = -1
+        csv_reader.names = ffi.NULL
+        csv_reader.num_cols = 0
+    else:
+        if header is None:
+            header_infer = -1
+        csv_reader.num_cols = len(names)
+        for col_name in names:
+            arr_names.append(_wrap_string(col_name))
+            if dtype is not None:
+                if dtype_dict:
+                    arr_dtypes.append(_wrap_string(str(dtype[col_name])))
+        names_ptr = ffi.new('char*[]', arr_names)
+        csv_reader.names = names_ptr
 
-    if not dtype_dict:
-        for col_dtype in dtype:
-            arr_dtypes.append(_wrap_string(str(col_dtype)))
-    dtype_ptr = ffi.new('char*[]', arr_dtypes)
-    csv_reader.dtype = dtype_ptr
+    if dtype is None:
+        csv_reader.dtype = ffi.NULL
+    else:
+        if not dtype_dict:
+            for col_dtype in dtype:
+                arr_dtypes.append(_wrap_string(str(col_dtype)))
+        dtype_ptr = ffi.new('char*[]', arr_dtypes)
+        csv_reader.dtype = dtype_ptr
+
+    csv_reader.use_cols_int = ffi.NULL
+    csv_reader.use_cols_int_len = 0
+    csv_reader.use_cols_char = ffi.NULL
+    csv_reader.use_cols_char_len = 0
+
+    if usecols is not None:
+        arr_col_names = []
+        if(all(isinstance(x, int) for x in usecols)):
+            usecols_ptr = ffi.new('int[]', usecols)
+            csv_reader.use_cols_int = usecols_ptr
+            csv_reader.use_cols_int_len = len(usecols)
+        else:
+            for col_name in usecols:
+                arr_col_names.append(_wrap_string(col_name))
+            col_names_ptr = ffi.new('char*[]', arr_col_names)
+            csv_reader.use_cols_char = col_names_ptr
+            csv_reader.use_cols_char_len = len(usecols)
 
     if decimal == delimiter:
         raise ValueError("decimal cannot be the same as delimiter")
@@ -142,9 +187,11 @@ def read_csv(filepath, lineterminator='\n',
     csv_reader.delim_whitespace = delim_whitespace
     csv_reader.skipinitialspace = skipinitialspace
     csv_reader.dayfirst = dayfirst
-    csv_reader.num_cols = len(names)
+    csv_reader.header = header_infer
     csv_reader.skiprows = skiprows
     csv_reader.skipfooter = skipfooter
+    csv_reader.mangle_dupe_cols = mangle_dupe_cols
+    csv_reader.windowslinetermination = False
     csv_reader.compression = compression_bytes
     csv_reader.decimal = decimal.encode()
     csv_reader.thousands = thousands.encode() if thousands else b'\0'
@@ -159,8 +206,10 @@ def read_csv(filepath, lineterminator='\n',
     # Extract parsed columns
 
     outcols = []
+    new_names = []
     for i in range(csv_reader.num_cols_out):
         newcol = Column.from_cffi_view(out[i])
+        new_names.append(ffi.string(out[i].col_name).decode())
         if(newcol.dtype == np.dtype('datetime64[ms]')):
             outcols.append(newcol.view(DatetimeColumn, dtype='datetime64[ms]'))
         else:
@@ -168,7 +217,9 @@ def read_csv(filepath, lineterminator='\n',
 
     # Build dataframe
     df = DataFrame()
-    for k, v in zip(names, outcols):
+    # if names is not None and header_infer is -1:
+
+    for k, v in zip(new_names, outcols):
         df[k] = v
 
     nvtx_range_pop()
@@ -191,7 +242,9 @@ def read_csv_strings(filepath, lineterminator='\n',
     a way to use nvstrings alongside cudf.
     Future versions of cuDF will provide cleaner integration.
 
-    Uses the same arguments as read_csv.
+    Uses mostly same arguments as read_csv.
+    Note: Doesn't currently support auto-column detection, header, usecols
+    and mangle_dupe_cols args.
 
     Returns list of Series objects for numeric or date columns and nvstrings
     objects for those columns that are strings (dtype='str').

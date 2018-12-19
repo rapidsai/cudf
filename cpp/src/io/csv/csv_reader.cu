@@ -411,7 +411,7 @@ gdf_error read_csv(csv_read_arg *args)
 			c++;
 		}
 
-		unsigned long long prev=0;
+		unsigned long long prev=start;
 		c=start;
 
 		raw_csv->col_names.clear();
@@ -537,8 +537,7 @@ gdf_error read_csv(csv_read_arg *args)
 	//-----------------------------------------------------------------------------
 	//--- Auto detect types of the vectors
 
-	// if(args->dtype==NULL){
-	if(args->names==NULL){
+	if(args->dtype==NULL){
 
 		column_data_t *d_ColumnData,*h_ColumnData;
 
@@ -639,7 +638,10 @@ gdf_error read_csv(csv_read_arg *args)
 		CUDA_TRY(cudaMemcpy(d_str_cols, h_str_cols, sizeof(string_pair *)	* stringColCount, cudaMemcpyHostToDevice));
 	}
 
-	for (int col = 0; col < raw_csv->num_active_cols; col++) {
+	for (int acol = 0,col=-1; acol < raw_csv->num_actual_cols; acol++) {
+		if(raw_csv->h_parseCol[acol]==false)
+			continue;
+		col++;
 
 		gdf_column *gdf = (gdf_column *)malloc(sizeof(gdf_column) * 1);
 
@@ -648,7 +650,7 @@ gdf_error read_csv(csv_read_arg *args)
 		gdf->null_count	= 0;						// will be filled in later
 
 		//--- column name
-		std::string str = raw_csv->col_names[col];
+		std::string str = raw_csv->col_names[acol];
 		int len = str.length() + 1;
 		gdf->col_name = (char *)malloc(sizeof(char) * len);
 		memcpy(gdf->col_name, str.c_str(), len);
@@ -657,10 +659,11 @@ gdf_error read_csv(csv_read_arg *args)
 		allocateGdfDataSpace(gdf);
 
 		cols[col] 		= gdf;
-		h_dtypes[col] 	= raw_csv->dtypes[col];
+		h_dtypes[col] 	= gdf->dtype;
 		h_data[col] 	= gdf->data;
-		h_valid[col] 	= gdf->valid;
-	}
+		h_valid[col] 	= gdf->valid;	
+        }
+
 	CUDA_TRY( cudaMemcpy(d_dtypes,h_dtypes, sizeof(gdf_dtype) * (raw_csv->num_active_cols), cudaMemcpyHostToDevice));
 	CUDA_TRY( cudaMemcpy(d_data,h_data, sizeof(void*) * (raw_csv->num_active_cols), cudaMemcpyHostToDevice));
 	CUDA_TRY( cudaMemcpy(d_valid,h_valid, sizeof(gdf_valid_type*) * (raw_csv->num_active_cols), cudaMemcpyHostToDevice));
@@ -949,6 +952,7 @@ gdf_error launch_storeRecordStart(raw_csv_t * csvData) {
 	);
 
 	CUDA_TRY( cudaGetLastError() );
+
 	return GDF_SUCCESS;
 }
 
@@ -1110,14 +1114,14 @@ __global__ void convertCsvToGdf(
 
 			long tempPos=pos-1;
 
-			if(dtype[col] != gdf_dtype::GDF_CATEGORY && dtype[col] != gdf_dtype::GDF_STRING){
+			if(dtype[actual_col] != gdf_dtype::GDF_CATEGORY && dtype[actual_col] != gdf_dtype::GDF_STRING){
 				removePrePostWhiteSpaces2(raw_csv, &start, &tempPos);
 			}
 
 
 			if(start<=(tempPos)) { // Empty strings are not legal values
 
-				switch(dtype[col]) {
+				switch(dtype[actual_col]) {
 					case gdf_dtype::GDF_INT8:
 					{
 						int8_t *gdf_out = (int8_t *)gdf_data[actual_col];
@@ -1198,11 +1202,11 @@ __global__ void convertCsvToGdf(
 				// set the valid bitmap - all bits were set to 0 to start
 				int bitmapIdx 	= whichBitmap(rec_id);  	// which bitmap
 				int bitIdx		= whichBit(rec_id);		// which bit - over an 8-bit index
-				setBit(valid[col]+bitmapIdx, bitIdx);		// This is done with atomics
+				setBit(valid[actual_col]+bitmapIdx, bitIdx);		// This is done with atomics
 
-				atomicAdd((unsigned long long int*)&num_valid[col],(unsigned long long int)1);
+				atomicAdd((unsigned long long int*)&num_valid[actual_col],(unsigned long long int)1);
 			}
-			else if(dtype[col]==gdf_dtype::GDF_STRING){
+			else if(dtype[actual_col]==gdf_dtype::GDF_STRING){
 				str_cols[stringCol][rec_id].first 	= NULL;
 				str_cols[stringCol][rec_id].second 	= 0;
 				stringCol++;

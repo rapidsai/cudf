@@ -17,6 +17,7 @@
 
 - PR #472 RMM: Created centralized rmm::device_vector alias and rmm::exec_policy
 - PR #426 Removed sort-based groupby and refactored existing groupby APIs. Also improves C++/CUDA compile time.
+- PR #478 CSV Reader: Add api support for auto column detection, header, mangle_dupe_cols, usecols
 - PR #500 Improved the concurrent hash map class to support partitioned (multi-pass) hash table building.
 - PR #465 Added templated C++ API for RMM to avoid explicit cast to `void**`
 - PR #513 `.gitignore` tweaks
@@ -27,6 +28,7 @@
 
 - PR #473 Added missing <random> include
 - PR #495 Updated README to correct where cffi pytest should be executed.
+- PR #478 CSV Reader: Fix/Update and test usecols code for parsing only the specified columns
 - PR #512 fix bug for `on` parameter in `DataFrame.merge` to allow for None or single column name
 - PR #511 Updated python/cudf/bindings/join.pyx to fix cudf merge printing out dtypes.
 - PR #537 Fix CMAKE_CUDA_STANDARD_REQURIED typo in CMakeLists.txt
