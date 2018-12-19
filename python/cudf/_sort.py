@@ -2,8 +2,9 @@
 
 
 from cudf.dataframe.buffer import Buffer
+from cudf.dataframe.column import Column
 from cudf.utils import cudautils
-from cudf.bindings.sort.cpp_sort import apply_order_by
+import cudf.bindings.sort as cpp_sort
 from cudf.dataframe import columnops
 
 
@@ -28,12 +29,11 @@ def get_sorted_inds(by, ascending=True, na_position="last"):
           * Support axis='index' only.
           * Not supporting: inplace, kind
     """
-    if isinstance(by, str):
+    if isinstance(by, (Column)):
         by = [by]
-    by = [col._column for col in by]
 
     inds = Buffer(cudautils.arange(len(by[0])))
-    col_inds = columnops.as_column(inds)
+    col_inds = columnops.as_column(inds).astype('int32')
 
     if ascending is True:
         if na_position == "last":
@@ -46,6 +46,6 @@ def get_sorted_inds(by, ascending=True, na_position="last"):
         elif na_position == "first":
             na_position = 0
 
-    apply_order_by(by, col_inds, ascending, na_position)
+    cpp_sort.apply_order_by(by, col_inds, ascending, na_position)
 
     return col_inds

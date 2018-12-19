@@ -15,8 +15,9 @@ from cudf import _gdf
 from .buffer import Buffer
 from cudf.comm.serialize import register_distributed_serializer
 from cudf._gdf import nvtx_range_push, nvtx_range_pop
+from cudf._sort import get_sorted_inds
 
-import cudf.bindings.sort as cpp_sort
+# import cudf.bindings.sort as cpp_sort
 import cudf.bindings.reduce as cpp_reduce
 
 # Operator mappings
@@ -127,16 +128,21 @@ class NumericalColumn(columnops.TypedColumnBase):
                                dtype=np.dtype(dtype))
             return col
 
-    def sort_by_values(self, ascending):
-        if self.null_count > 0:
-            raise ValueError('nulls not yet supported')
-        # Clone data buffer as the key
-        col_keys = self.replace(data=self.data.copy(),
-                                dtype=self._data.dtype)
-        # Create new array for the positions
-        inds = Buffer(cudautils.arange(len(self)))
-        col_inds = self.replace(data=inds, dtype=inds.dtype)
-        cpp_sort.apply_sort(col_keys, col_inds, ascending=ascending)
+    def sort_by_values(self, ascending, na_position):
+        # if self.null_count > 0:
+        #     raise ValueError('nulls not yet supported')
+        # # Clone data buffer as the key
+        # col_keys = self.replace(data=self.data.copy(),
+        #                         dtype=self._data.dtype)
+        # # Create new array for the positions
+        # inds = Buffer(cudautils.arange(len(self)))
+        # col_inds = self.replace(data=inds, dtype=inds.dtype)
+        # cpp_sort.apply_order_by(col_keys, col_inds, ascending=ascending,
+        #                         na_position=na_position)
+        new_inds = get_sorted_inds(self, ascending, na_position)
+        col_keys = cudautils.gather(data=self.data, index=new_inds.data)
+        col_keys = self.replace(data=col_keys, dtype=self.dtype)
+        col_inds = self.replace(data=new_inds.data, dtype=new_inds.data.dtype)
         return col_keys, col_inds
 
     def to_pandas(self, index=None):

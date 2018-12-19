@@ -810,10 +810,10 @@ class DataFrame(object):
         """
         return self._sort_by(self.index.argsort(ascending=ascending))
 
-    def sort_values(self, by, ascending=True):
+    def sort_values(self, by, ascending=True, na_position='last'):
         """
 
-        Uses parallel radixsort, which is a stable sort.
+        Sort by the values row-wise.
 
         Parameters
         ----------
@@ -821,14 +821,15 @@ class DataFrame(object):
             Name of Series to sort by
         ascending : bool, default True
             Sort ascending vs. descending.
+        na_position : str
+            first puts nulls at the beginning, last puts nulls at the end
         Returns
         -------
         sorted_obj : cuDF DataFrame
 
         Difference from pandas:
-          * *by* must be the name of a single column.
-          * Support axis='index' only.	        by : str
-          * Not supporting: inplace, kind, na_position
+          * Support axis='index' only.
+          * Not supporting: inplace, kind
 
         Examples
         --------

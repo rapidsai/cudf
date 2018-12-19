@@ -543,7 +543,7 @@ class Series(object):
 
         return self._copy_construct(data=self._column.astype(dtype))
 
-    def argsort(self, ascending=True):
+    def argsort(self, ascending=True, na_position="last"):
         """Returns a Series of int64 index that will sort the series.
 
         Uses stable parallel radixsort.
@@ -552,7 +552,7 @@ class Series(object):
         -------
         result: Series
         """
-        return self._sort(ascending=ascending)[1]
+        return self._sort(ascending=ascending, na_position=na_position)[1]
 
     def sort_index(self, ascending=True):
         """Sort by the index.
@@ -560,7 +560,7 @@ class Series(object):
         inds = self.index.argsort(ascending=ascending)
         return self.take(inds.to_gpu_array())
 
-    def sort_values(self, ascending=True):
+    def sort_values(self, ascending=True, na_position="last"):
         """
         Sort by values.
 
@@ -571,7 +571,7 @@ class Series(object):
         Details:
         Uses parallel radixsort, which is a stable sort.
         """
-        vals, inds = self._sort(ascending=ascending)
+        vals, inds = self._sort(ascending=ascending, na_position=na_position)
         index = self.index.take(inds.to_gpu_array())
         return vals.set_index(index)
 
@@ -596,7 +596,7 @@ class Series(object):
         """
         return self._n_largest_or_smallest(n=n, keep=keep, largest=False)
 
-    def _sort(self, ascending=True):
+    def _sort(self, ascending=True, na_position="last"):
         """
         Sort by values
 
@@ -604,7 +604,10 @@ class Series(object):
         -------
         2-tuple of key and index
         """
-        col_keys, col_inds = self._column.sort_by_values(ascending=ascending)
+        col_keys, col_inds = self._column.sort_by_values(
+            ascending=ascending,
+            na_position=na_position
+        )
         sr_keys = self._copy_construct(data=col_keys)
         sr_inds = self._copy_construct(data=col_inds)
         return sr_keys, sr_inds
