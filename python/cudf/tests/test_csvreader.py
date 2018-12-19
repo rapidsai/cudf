@@ -1,6 +1,5 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
 
-"""
 import pytest
 from collections import OrderedDict
 
@@ -365,4 +364,3 @@ def test_csv_reader_bools(tmpdir, names, dtypes, data, trues, falses):
 
     assert len(out.columns) == len(df_out.columns)
     assert len(out) == len(df_out)
-"""
