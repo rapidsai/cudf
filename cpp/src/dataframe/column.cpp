@@ -20,7 +20,7 @@
  * ---------------------------------------------------------------------------**/
 
 #include "cudf.h"
-#include "utilities/cudf_utils.h"
+#include "bitmask/bitmask_util.cuh"
 #include "utilities/error_utils.h"
 #include "rmm/rmm.h"
 #include <cuda_runtime_api.h>
@@ -147,7 +147,7 @@ gdf_error gdf_column_concat(gdf_column *output_column, gdf_column *columns_to_co
     // TODO: async
     CUDA_TRY( cudaMemset(output_column->valid, 
                          0xff, 
-                         gdf_get_num_chars_bitmask(total_size) * sizeof(gdf_valid_type)) );
+                         bitmask::gdf_get_num_bitmask_recs(total_size) * sizeof(gdf_valid_type)) );
   }
   
   return GDF_SUCCESS;
