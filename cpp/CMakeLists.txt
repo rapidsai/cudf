@@ -73,9 +73,6 @@ endif(CMAKE_BUILD_TYPE MATCHES Debug)
 option(BUILD_TESTS "Configure CMake to build tests"
        ON)
 
-#Override RPATH
-SET(CMAKE_BUILD_WITH_INSTALL_RPATH TRUE)
-SET(CMAKE_INSTALL_RPATH "\$ORIGIN")
 ###################################################################################################
 # - cmake modules ---------------------------------------------------------------------------------
 
@@ -201,6 +198,9 @@ add_library(rmm SHARED
             src/rmm/memory.cpp
             src/rmm/memory_manager.cpp
             thirdparty/cnmem/src/cnmem.cpp)
+
+#Override RPATH for cudf & rmm
+SET_TARGET_PROPERTIES(cudf rmm PROPERTIES BUILD_RPATH "\$ORIGIN")
 
 ###################################################################################################
 # - build options ---------------------------------------------------------------------------------
