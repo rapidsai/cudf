@@ -1,5 +1,11 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
-# This setup.py packages librmm, libcudf, libgdf_cffi, librmm_cffi, and cudf all together for distribution via pypi
+# This setup.py packages these modules together as one pip package:
+#   * librmm
+#   * libcudf
+#   * libgdf_cffi
+#   * librmm_cffi
+#   * cudf
+
 # cython & cffi must be installed to run this
 import os
 import subprocess
@@ -8,21 +14,16 @@ import sys
 import sysconfig
 from setuptools import setup, Extension, find_packages
 from setuptools.command.build_ext import build_ext
-import glob
 from distutils.command.install_headers import install_headers
 from distutils.sysconfig import get_python_lib
 from Cython.Build import cythonize
 import numpy
 
-sys.path.append('cpp/python')
 os.environ['RMM_HEADER'] = 'cpp/src/rmm/memory.h'
 os.environ['CUDF_INCLUDE_DIR'] = 'cpp/include/cudf'
 
-from libgdf_cffi import libgdf_build
-from librmm_cffi import librmm_build
+CMAKE_EXE = os.environ.get('CMAKE_EXE', shutil.which('cmake'))
 
-
-CMAKE_EXE=os.environ.get('CMAKE_EXE', shutil.which('cmake'))
 
 def distutils_dir_name(dname):
     """Returns the name of a distutils build directory"""
@@ -70,8 +71,9 @@ class CMakeBuildExt(build_ext):
 
 class InstallHeaders(install_headers):
     """
-    This overrides the install_header command to walk a directory tree and copy all of the specified headers
-    This is necessary because the built-in install_headers installs all headers in the same directory
+    The built-in install_headers installs all headers in the same directory
+    This overrides that to walk a directory tree and copy the tree of headers
+
     """
 
     def run(self):
@@ -136,7 +138,7 @@ setup(name='cudf',
           "Intended Audience :: Developers",
           "Programming Language :: Python",
           "Programming Language :: Python :: 3.5",
-          ],
+      ],
       author="NVIDIA Corporation",
       packages=packages,
       package_dir={
