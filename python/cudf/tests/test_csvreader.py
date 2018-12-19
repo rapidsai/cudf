@@ -22,9 +22,9 @@ def make_numeric_dataframe(nrows, dtype):
 def make_datetime_dataframe():
     df = pd.DataFrame()
     df['col1'] = np.array(['31/10/2010', '05/03/2001', '20/10/1994',
-                          '18/10/1990','1/1/1970'])
+                          '18/10/1990', '1/1/1970'])
     df['col2'] = np.array(['18/04/1995', '14/07/1994', '07/06/2006',
-                          '16/09/2005','2/2/1970'])
+                          '16/09/2005', '2/2/1970'])
     return df
 
 
