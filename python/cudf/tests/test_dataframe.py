@@ -1,5 +1,6 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
 
+import operator
 import pytest
 
 import numpy as np
@@ -17,6 +18,7 @@ from cudf.settings import set_options
 from itertools import combinations
 
 from . import utils
+from .utils import assert_eq
 
 
 def test_buffer_basic():
@@ -1003,6 +1005,65 @@ def test_dataframe_shape_empty():
     assert pdf.shape == gdf.shape
 
 
+@pytest.fixture
+def pdf():
+    return pd.DataFrame({'x': range(10),
+                         'y': range(10)})
+
+
+@pytest.fixture
+def gdf(pdf):
+    return gd.DataFrame.from_pandas(pdf)
+
+
+@pytest.mark.parametrize('func', [
+    lambda df: df.mean(),
+    lambda df: df.sum(),
+    lambda df: df.min(),
+    lambda df: df.max(),
+    lambda df: df.std(),
+    lambda df: df.count(),
+    pytest.param(lambda df: df.size, marks=pytest.mark.xfail()),
+])
+@pytest.mark.parametrize('accessor', [
+    pytest.param(lambda df: df, marks=pytest.mark.xfail(
+        reason="dataframe reductions not yet supported")),
+    lambda df: df.x,
+])
+def test_reductions(pdf, gdf, accessor, func):
+    assert_eq(func(accessor(pdf)), func(accessor(gdf)))
+
+
+@pytest.mark.parametrize('left', [
+    pytest.param(lambda df: df, marks=pytest.mark.xfail()),
+    lambda df: df.x,
+    lambda df: 3,
+])
+@pytest.mark.parametrize('right', [
+    pytest.param(lambda df: df, marks=pytest.mark.xfail()),
+    lambda df: df.x,
+    lambda df: 3,
+])
+@pytest.mark.parametrize('binop', [
+    operator.add,
+    operator.mul,
+    pytest.param(operator.floordiv, marks=pytest.mark.xfail()),
+    pytest.param(operator.truediv, marks=pytest.mark.xfail()),
+    pytest.param(operator.mod, marks=pytest.mark.xfail()),
+    pytest.param(operator.pow, marks=pytest.mark.xfail()),
+    operator.eq,
+    operator.lt,
+    operator.le,
+    operator.gt,
+    operator.ge,
+    operator.ne,
+])
+def test_binops(pdf, gdf, left, right, binop):
+    d = binop(left(pdf), right(pdf))
+    g = binop(left(gdf), right(gdf))
+    assert_eq(d, g)
+
+
 @pytest.mark.xfail(reason="null is not supported in gpu yet")
 def test_dataframe_boolean_mask_with_None():
     pdf = pd.DataFrame({'a': [0, 1, 2, 3], 'b': [0.1, 0.2, None, 0.3]})
@@ -1017,34 +1078,35 @@ This test compares cudf and Pandas dataframe boolean indexing.
 """
 
 
-@pytest.fixture
-def df():
-    return pd.DataFrame({'x': range(4), 'y': range(4)})
-
-
-@pytest.fixture
-def gf(df):
-    return gd.DataFrame.from_pandas(df)
-
-
-@pytest.mark.parametrize('mask', [
-    [True, False, True, False],
-    np.array([True, False, True, False]),
-    pd.Series([True, False, True, False]),
+@pytest.mark.parametrize('mask_fn', [
+    lambda x: x,
+    lambda x: np.array(x),
+    lambda x: pd.Series(x),
     ])
-def test_dataframe_boolean_mask(df, gf, mask):
-    df_masked = df[mask]
-    gf_masked = gf[mask]
-    assert df_masked.to_string().split() == gf_masked.to_string().split()
+def test_dataframe_boolean_mask(pdf, gdf, mask_fn):
+    mask_base = [True, False, True, False, True, False, True, False, True,
+                 False]
+    mask = mask_fn(mask_base)
+    assert len(mask) == gdf.shape[0]
+    pdf_masked = pdf[mask]
+    gdf_masked = gdf[mask]
+    assert pdf_masked.to_string().split() == gdf_masked.to_string().split()
 
 
 """
 This test only tests boolean indexing of a cudf DataFrame with a cudf Series.
-Pandas does not support cudf Series.
+Pandas does not support cudf Series.  When masking with a Series, the length
+is not required to match.
 """
 
 
-def test_dataframe_boolean_mask_Series(gf):
+def test_dataframe_boolean_mask_Series(gdf):
     mask = Series([True, False, True, False])
-    gf_masked = gf[mask]
-    assert gf_masked.shape[0] == 2
+    mask2 = Series([True, True, True, True])
+    mask3 = Series([True, True, True, True, True, True, True, True])
+    gdf_masked = gdf[mask]
+    gdf_masked2 = gdf[mask2]
+    gdf_masked3 = gdf[mask3]
+    assert gdf_masked.shape[0] == 2
+    assert gdf_masked2.shape[0] == 4
+    assert gdf_masked3.shape[0] == 8
