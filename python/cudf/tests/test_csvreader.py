@@ -341,8 +341,34 @@ def test_csv_reader_gzip_compression(tmpdir):
     pd.util.testing.assert_frame_equal(df_out, out.to_pandas())
 
 
-def test_csv_quotednumbers(tmpdir):
+@pytest.mark.parametrize('names, dtypes, data, trues, falses', [
+    (['A', 'B'], ['int32', 'int32'], 'True,1\nFalse,2\nTrue,3', None, None),
+    (['A', 'B'], ['int32', 'int32'], 'YES,1\nno,2\nyes,3\nNo,4\nYes,5',
+        ["yes", "Yes", "YES"], ["no", "NO", "No"]),
+    (['A', 'B'], ['int32', 'int32'], 'foo,bar\nbar,foo', ['foo'], ['bar'])
+])
+def test_csv_reader_bools(tmpdir, names, dtypes, data, trues, falses):
     fname = tmpdir.mkdir("gdf_csv").join("tmp_csvreader_file11.csv")
+
+    lines = [','.join(names), data]
+
+    with open(str(fname), 'w') as fp:
+        fp.write('\n'.join(lines) + '\n')
+
+    # Usage of true_values and false_values makes that column into bool type
+    df_out = pd.read_csv(fname, names=names, skiprows=1,
+                         dtype=(dtypes[0] if dtypes else None),
+                         true_values=trues, false_values=falses)
+
+    out = read_csv(str(fname), names=names, dtype=dtypes, skiprows=1,
+                   true_values=trues, false_values=falses)
+
+    assert len(out.columns) == len(df_out.columns)
+    assert len(out) == len(df_out)
+
+
+def test_csv_quotednumbers(tmpdir):
+    fname = tmpdir.mkdir("gdf_csv").join("tmp_csvreader_file12.csv")
 
     names = ['integer', 'decimal']
     dtypes = ['int32', 'float32']

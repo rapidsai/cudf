@@ -26,7 +26,7 @@ def read_csv(filepath, lineterminator='\n',
              delimiter=',', sep=None, delim_whitespace=False,
              skipinitialspace=False, names=None, dtype=None,
              skipfooter=0, skiprows=0, dayfirst=False, compression='infer',
-             thousands=None, decimal='.'):
+             thousands=None, decimal='.', true_values=None, false_values=None):
     """
     Load and parse a CSV file into a DataFrame
 
@@ -79,6 +79,10 @@ def read_csv(filepath, lineterminator='\n',
         Character used as a decimal point.
     thousands : char, default None
         Character used as a thousands delimiter.
+    true_values : list, default None
+        Values to consider as boolean True
+    false_values : list, default None
+        Values to consider as boolean False
 
     Returns
     -------
@@ -177,6 +181,22 @@ def read_csv(filepath, lineterminator='\n',
     if thousands == delimiter:
         raise ValueError("thousands cannot be the same as delimiter")
 
+    # Start with default values recognized as boolean
+    arr_true_values = [_wrap_string(str('True')), _wrap_string(str('TRUE'))]
+    arr_false_values = [_wrap_string(str('False')), _wrap_string(str('FALSE'))]
+
+    for value in true_values or []:
+        arr_true_values.append(_wrap_string(str(value)))
+    arr_true_values_ptr = ffi.new('char*[]', arr_true_values)
+    csv_reader.true_values = arr_true_values_ptr
+    csv_reader.num_true_values = len(arr_true_values)
+
+    for value in false_values or []:
+        arr_false_values.append(_wrap_string(str(value)))
+    false_values_ptr = ffi.new('char*[]', arr_false_values)
+    csv_reader.false_values = false_values_ptr
+    csv_reader.num_false_values = len(arr_false_values)
+
     compression_bytes = _wrap_string(compression)
 
     csv_reader.delimiter = delimiter.encode()
@@ -232,7 +252,7 @@ def read_csv_strings(filepath, lineterminator='\n',
                      delimiter=',', sep=None, delim_whitespace=False,
                      skipinitialspace=False, names=None, dtype=None,
                      skipfooter=0, skiprows=0, dayfirst=False, thousands=None,
-                     decimal='.'):
+                     decimal='.', true_values=None, false_values=None):
 
     import nvstrings
     from cudf.dataframe.series import Series
@@ -323,6 +343,22 @@ def read_csv_strings(filepath, lineterminator='\n',
 
     if thousands == delimiter:
         raise ValueError("thousands cannot be the same as delimiter")
+
+    # Start with default values recognized as boolean
+    arr_true_values = [_wrap_string(str('True')), _wrap_string(str('TRUE'))]
+    arr_false_values = [_wrap_string(str('False')), _wrap_string(str('FALSE'))]
+
+    for value in true_values or []:
+        arr_true_values.append(_wrap_string(str(value)))
+    arr_true_values_ptr = ffi.new('char*[]', arr_true_values)
+    csv_reader.true_values = arr_true_values_ptr
+    csv_reader.num_true_values = len(arr_true_values)
+
+    for value in false_values or []:
+        arr_false_values.append(_wrap_string(str(value)))
+    false_values_ptr = ffi.new('char*[]', arr_false_values)
+    csv_reader.false_values = false_values_ptr
+    csv_reader.num_false_values = len(arr_false_values)
 
     csv_reader.delimiter = delimiter.encode()
     csv_reader.lineterminator = lineterminator.encode()
