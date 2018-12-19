@@ -19,7 +19,7 @@
  
 ## Bug Fixes
 
- - PR #473 Added missing <random> include
+ - PR #566 Added missing <random> include
  - PR #444 Fix csv_test CUDA too many resources requested fail. 
  - PR #396 added missing output buffer in validity tests for groupbys.
  - PR #408 Dockerfile updates for source reorganization
