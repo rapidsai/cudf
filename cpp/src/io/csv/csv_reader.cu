@@ -537,8 +537,8 @@ gdf_error read_csv(csv_read_arg *args)
 	//-----------------------------------------------------------------------------
 	//--- Auto detect types of the vectors
 
-	// if(args->dtype==NULL){
-	if(args->names==NULL){
+	if(args->dtype==NULL){
+	//if(args->names==NULL){
 
 		column_data_t *d_ColumnData,*h_ColumnData;
 
