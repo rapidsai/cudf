@@ -8,6 +8,7 @@
 - PR #501 CSV Reader: Add support for user-specified decimal point and thousands separator to read_csv_strings()
 - PR #455 CSV Reader: Add support for user-specified decimal point and thousands separator to read_csv()
 - PR #439 add `DataFrame.drop` method similar to pandas
+- PR #505 CSV Reader: Add support for user-specified boolean values
 - PR #350 Implemented Series replace function
 - PR #490 Added print_env.sh script to gather relevant environment details when reporting cuDF issues.
 - PR #474 add ZLIB-based GZIP/ZIP support to `read_csv()`

@@ -53,8 +53,9 @@
 
 #include "cudf.h"
 #include "utilities/error_utils.h"
- 
+
 #include "rmm/rmm.h"
+#include "rmm/thrust_rmm_allocator.h"
 #include "io/comp/io_uncomp.h"
 
 #include "NVStrings.h"
@@ -90,6 +91,9 @@ typedef struct raw_csv_ {
     bool				dayfirst;
     char				decimal;
     char				thousands;
+
+    rmm::device_vector<int32_t>	d_trueValues;	// device: array of values to recognize as true
+    rmm::device_vector<int32_t>	d_falseValues;	// device: array of values to recognize as false
 } raw_csv_t;
 
 typedef struct column_data_ {
@@ -99,7 +103,7 @@ typedef struct column_data_ {
 	unsigned long long countInt8;
 	unsigned long long countInt16;
 	unsigned long long countInt32;
-	unsigned long long countInt64;	
+	unsigned long long countInt64;
 	unsigned long long countNULL;
 } column_data_t;
 
@@ -110,6 +114,10 @@ typedef struct parsing_opts_ {
 	bool				keepquotes;
 	char				decimal;
 	char				thousands;
+	int32_t*			trueValues;
+	int32_t*			falseValues;
+	int32_t				trueValuesCount;
+	int32_t				falseValuesCount;
 } parsing_opts_t;
 
 using string_pair = std::pair<const char*,size_t>;
@@ -271,6 +279,25 @@ gdf_error read_csv(csv_read_arg *args)
 	if (raw_csv->thousands == raw_csv->delimiter)
 	{ 
 		checkError(GDF_INVALID_API_CALL, "Thousands separator cannot be the same as the delimiter");
+	}
+
+	// Handle user-defined booleans values, whereby field data is substituted
+	// with true/false values; CUDF booleans are int types of 0 or 1
+	// The true/false value strings are converted to integers which are used
+	// by the data conversion kernel for comparison and value replacement
+	if ((args->true_values != NULL) && (args->num_true_values > 0)) {
+		thrust::host_vector<int32_t> h_values(args->num_true_values);
+		for (int i = 0; i < args->num_true_values; ++i) {
+			h_values[i] = convertStrtoInt<int32_t>(args->true_values[i], 0, strlen(args->true_values[i]) - 1);
+		}
+		raw_csv->d_trueValues = h_values;
+	}
+	if ((args->false_values != NULL) && (args->num_false_values > 0)) {
+		thrust::host_vector<int32_t> h_values(args->num_false_values);
+		for (int i = 0; i < args->num_false_values; ++i) {
+			h_values[i] = convertStrtoInt<int32_t>(args->false_values[i], 0, strlen(args->false_values[i]) - 1);
+		}
+		raw_csv->d_falseValues = h_values;
 	}
 
 	//-----------------------------------------------------------------------------
@@ -1011,12 +1038,16 @@ gdf_error launch_dataConvertColumns(raw_csv_t *raw_csv, void **gdf, gdf_valid_ty
 	int gridSize = (raw_csv->num_records + blockSize - 1) / blockSize;
 
 	parsing_opts_t opts;
-	opts.delimiter		= raw_csv->delimiter;
-	opts.terminator		= raw_csv->terminator;
-	opts.quotechar		= raw_csv->quotechar;
-	opts.keepquotes		= raw_csv->keepquotes;
-	opts.decimal		= raw_csv->decimal;
-	opts.thousands		= raw_csv->thousands;
+	opts.delimiter			= raw_csv->delimiter;
+	opts.terminator			= raw_csv->terminator;
+	opts.quotechar			= raw_csv->quotechar;
+	opts.keepquotes			= raw_csv->keepquotes;
+	opts.decimal			= raw_csv->decimal;
+	opts.thousands			= raw_csv->thousands;
+	opts.trueValues			= thrust::raw_pointer_cast(raw_csv->d_trueValues.data());
+	opts.trueValuesCount		= raw_csv->d_trueValues.size();
+	opts.falseValues		= thrust::raw_pointer_cast(raw_csv->d_falseValues.data());
+	opts.falseValuesCount		= raw_csv->d_falseValues.size();
 
 	convertCsvToGdf <<< gridSize, blockSize >>>(
 		raw_csv->data,
@@ -1126,23 +1157,47 @@ __global__ void convertCsvToGdf(
 					{
 						int8_t *gdf_out = (int8_t *)gdf_data[actual_col];
 						gdf_out[rec_id] = convertStrtoInt<int8_t>(raw_csv, start, tempPos, opts.thousands);
+
+						if(isBooleanValue(gdf_out[rec_id], opts.trueValues, opts.trueValuesCount)==true){
+							gdf_out[rec_id] = 1;
+						}else if(isBooleanValue(gdf_out[rec_id], opts.falseValues, opts.falseValuesCount)==true){
+							gdf_out[rec_id] = 0;
+						}
 					}
 						break;
 					case gdf_dtype::GDF_INT16: {
 						int16_t *gdf_out = (int16_t *)gdf_data[actual_col];
 						gdf_out[rec_id] = convertStrtoInt<int16_t>(raw_csv, start, tempPos, opts.thousands);
+
+						if(isBooleanValue(gdf_out[rec_id], opts.trueValues, opts.trueValuesCount)==true){
+							gdf_out[rec_id] = 1;
+						}else if(isBooleanValue(gdf_out[rec_id], opts.falseValues, opts.falseValuesCount)==true){
+							gdf_out[rec_id] = 0;
+						}
 					}
 						break;
 					case gdf_dtype::GDF_INT32:
 					{
 						int32_t *gdf_out = (int32_t *)gdf_data[actual_col];
 						gdf_out[rec_id] = convertStrtoInt<int32_t>(raw_csv, start, tempPos, opts.thousands);
+
+						if(isBooleanValue(gdf_out[rec_id], opts.trueValues, opts.trueValuesCount)==true){
+							gdf_out[rec_id] = 1;
+						}else if(isBooleanValue(gdf_out[rec_id], opts.falseValues, opts.falseValuesCount)==true){
+							gdf_out[rec_id] = 0;
+						}
 					}
 						break;
 					case gdf_dtype::GDF_INT64:
 					{
 						int64_t *gdf_out = (int64_t *)gdf_data[actual_col];
 						gdf_out[rec_id] = convertStrtoInt<int64_t>(raw_csv, start, tempPos, opts.thousands);
+
+						if(isBooleanValue(gdf_out[rec_id], opts.trueValues, opts.trueValuesCount)==true){
+							gdf_out[rec_id] = 1;
+						}else if(isBooleanValue(gdf_out[rec_id], opts.falseValues, opts.falseValuesCount)==true){
+							gdf_out[rec_id] = 0;
+						}
 					}
 						break;
 					case gdf_dtype::GDF_FLOAT32:
@@ -1238,10 +1293,14 @@ gdf_error launch_dataTypeDetection(
 	int gridSize = (raw_csv->num_records + blockSize - 1) / blockSize;
 
 	parsing_opts_t opts;
-	opts.delimiter		= raw_csv->delimiter;
-	opts.terminator		= raw_csv->terminator;
-	opts.quotechar		= raw_csv->quotechar;
-	opts.keepquotes		= raw_csv->keepquotes;
+	opts.delimiter			= raw_csv->delimiter;
+	opts.terminator			= raw_csv->terminator;
+	opts.quotechar			= raw_csv->quotechar;
+	opts.keepquotes			= raw_csv->keepquotes;
+	opts.trueValues			= thrust::raw_pointer_cast(raw_csv->d_trueValues.data());
+	opts.trueValuesCount		= raw_csv->d_trueValues.size();
+	opts.falseValues		= thrust::raw_pointer_cast(raw_csv->d_falseValues.data());
+	opts.falseValuesCount		= raw_csv->d_falseValues.size();
 
 	dataTypeDetection <<< gridSize, blockSize >>>(
 		raw_csv->data,
@@ -1372,24 +1431,31 @@ __global__ void dataTypeDetection(
 				}
 			}
 
-			if(strLen==0) // Removed spaces ' ' in the pre-processing and thus we can have an empty string.
+			if(strLen==0){ // Removed spaces ' ' in the pre-processing and thus we can have an empty string.
 				atomicAdd(& d_columnData[actual_col].countNULL, 1L);
+			}
 			// Integers have to have the length of the string or can be off by one if they start with a minus sign
 			else if(countNumber==(strLen) || ( strLen>1 && countNumber==(strLen-1) && raw_csv[start]=='-') ){
 				// Checking to see if we the integer value requires 8,16,32,64 bits.
 				// This will allow us to allocate the exact amount of memory.
-				int64_t i = convertStrtoInt<int64_t>(raw_csv, start, tempPos, opts.thousands);
-				if(i >= (1L<<31)){
+				int64_t value = convertStrtoInt<int64_t>(raw_csv, start, tempPos, opts.thousands);
+
+				if (isBooleanValue<int32_t>(value, opts.trueValues, opts.trueValuesCount) ||
+					isBooleanValue<int32_t>(value, opts.falseValues, opts.falseValuesCount)){
+					atomicAdd(& d_columnData[actual_col].countInt8, 1L);
+				}
+				else if(value >= (1L<<31)){
 					atomicAdd(& d_columnData[actual_col].countInt64, 1L);
 				}
-				else if(i >= (1L<<15)){
+				else if(value >= (1L<<15)){
 					atomicAdd(& d_columnData[actual_col].countInt32, 1L);
 				}
-				else if(i >= (1L<<7)){
+				else if(value >= (1L<<7)){
 					atomicAdd(& d_columnData[actual_col].countInt16, 1L);
 				}
-				else
+				else{
 					atomicAdd(& d_columnData[actual_col].countInt8, 1L);
+				}
 			}
 			// Floating point numbers are made up of numerical strings, have to have a decimal sign, and can have a minus sign.
 			else if((countNumber==(strLen-1) && countDecimal==1) || (strLen>2 && countNumber==(strLen-2) && raw_csv[start]=='-')){
