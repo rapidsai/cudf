@@ -1116,7 +1116,7 @@ __global__ void convertCsvToGdf(
 
 			// Modify start & end to ignore whitespace and quotechars
 			if(dtype[col] != gdf_dtype::GDF_CATEGORY && dtype[col] != gdf_dtype::GDF_STRING){
-				adjustforWhitespaceAndQuotes(raw_csv, start, tempPos, opts.quotechar);
+				adjustForWhitespaceAndQuotes(raw_csv, start, tempPos, opts.quotechar);
 			}
 
 			if(start<=(tempPos)) { // Empty strings are not legal values
@@ -1351,7 +1351,7 @@ __global__ void dataTypeDetection(
 
 			// Modify start & end to ignore whitespace and quotechars
 			// This could possibly result in additional empty fields
-			adjustforWhitespaceAndQuotes(raw_csv, start, tempPos);
+			adjustForWhitespaceAndQuotes(raw_csv, start, tempPos);
 
 			for(long startPos=start; startPos<=tempPos; startPos++){
 				if(raw_csv[startPos]>= '0' && raw_csv[startPos] <= '9'){
