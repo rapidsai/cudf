@@ -10,8 +10,8 @@ if [ "$BUILD_CUDF" == "1" ]; then
 
   test -e ${UPLOADFILE}
 
-  # Pull requests or commits to other branches shouldn't upload
-  if [ ${TRAVIS_PULL_REQUEST} != false -o ${TRAVIS_BRANCH} != ${SOURCE_BRANCH} ]; then
+  # Restrict uploads to master branch
+  if [ ${GIT_BRANCH} != ${SOURCE_BRANCH} ]; then
     echo "Skipping upload"
     return 0
   fi
@@ -23,5 +23,5 @@ if [ "$BUILD_CUDF" == "1" ]; then
 
   echo "Upload"
   echo ${UPLOADFILE}
-  travis_retry anaconda -t ${MY_UPLOAD_KEY} upload -u rapidsai -l main --force ${UPLOADFILE}
+  anaconda -t ${MY_UPLOAD_KEY} upload -u rapidsai -l main --force ${UPLOADFILE}
 fi
