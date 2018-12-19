@@ -59,8 +59,8 @@ cpdef apply_order_by(in_cols, out_indices, ascending=True, na_position=1):
       of rows.
     '''
     cdef gdf_column** input_columns = <gdf_column**>malloc(len(in_cols) * sizeof(gdf_column*))
-    for col in in_cols:
-        input_columns.append(column_view_from_column(col._column))
+    for idx, col in enumerate(in_cols):
+        input_columns[idx] = column_view_from_column(col._column)
     
     cdef int8_t* asc_desc = ascending
 
