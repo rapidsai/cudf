@@ -63,7 +63,6 @@
 #pragma once
 
 #include "cudf.h"
-#include "type_conversion.cuh"
 
 __host__ __device__ gdf_date32 parseDateFormat(char *data, long start_idx, long end_idx, bool dayfirst);
 __host__ __device__ gdf_date64 parseDateTimeFormat(char *data, long start_idx, long end_idx, bool dayfirst);
@@ -71,9 +70,34 @@ __host__ __device__ gdf_date64 parseDateTimeFormat(char *data, long start_idx, l
 __host__ __device__ bool extractDate(char *data, long sIdx, long eIdx, bool dayfirst, int *year_out, int *month_out, int *day_out);
 __host__ __device__ bool extractTime(char *data, int sIdx, int eIdx, int *hour_out, int *minute_out, int *second_out);
 
-__host__ __device__ int32_t daysSinceEpoch(int year, int month, int day);
-__host__ __device__ int64_t secondsFromEpoch(int year, int month, int day, int hour, int minute, int second);
+__host__ __device__ constexpr int32_t daysSinceEpoch(int year, int month, int day);
+__host__ __device__ constexpr int64_t secondsSinceEpoch(int year, int month, int day, int hour, int minute, int second);
 
+
+/**
+ * @brief Returns location to the first occurrence of a character in a string
+ *
+ * This helper function takes a string and a search range to return the location
+ * of the first instance of the specified character.
+ *
+ * @param[in] data 		Pointer to the data block
+ * @param[in] start_idx Starting index within the data block
+ * @param[in] end_idx 	Ending index within the data block
+ * @param[in] c 		Character to find
+ *
+ * @return index into the string, or -1 if the character is not found
+ */
+__host__ __device__
+long findFirstOccurrence(const char *data, long start_idx, long end_idx, char c) {
+
+	for (long i = start_idx; i <= end_idx; ++i) {
+		if (data[i] == c) {
+			return i;
+		}
+	}
+
+	return -1;
+}
 
 /**
  * @brief Parse a Date string into a date32, days since epoch
@@ -123,10 +147,10 @@ gdf_date64 parseDateTimeFormat(char *data, long start_idx, long end_idx, bool da
 	gdf_date64 	answer = -1;
 
 	// find the time separator between date and time
-	long t_pos = firstOcurance(data, start_idx, end_idx, 'T');
+	long t_pos = findFirstOccurrence(data, start_idx, end_idx, 'T');
 
 	if ( t_pos == -1) {
-		t_pos = firstOcurance(data, start_idx, end_idx, ' ');
+		t_pos = findFirstOccurrence(data, start_idx, end_idx, ' ');
 		if ( t_pos < 8 || t_pos > 10)
 			t_pos = -1;
 	}
@@ -138,14 +162,14 @@ gdf_date64 parseDateTimeFormat(char *data, long start_idx, long end_idx, bool da
 		{
 
 			if ( extractTime(data, (t_pos + 1), end_idx, &hour, &minute, &second) )
-				answer = secondsFromEpoch(year, month, day, hour, minute, second);
+				answer = secondsSinceEpoch(year, month, day, hour, minute, second);
 		}
 	} else {
 
 		if ( (end_idx - start_idx) < 11 ) {
 			// only have a date portion, no time
 			extractDate(data, start_idx, end_idx, dayfirst, &year, &month, &day);
-			answer = secondsFromEpoch(year, month, day, 0, 0, 0);
+			answer = secondsSinceEpoch(year, month, day, 0, 0, 0);
 		} else {
 			answer = -1;
 		}
@@ -179,11 +203,11 @@ bool extractDate(char *data, long sIdx, long eIdx, bool dayfirst, int *year, int
 
 	char sep = '/';
 
-	long sep_pos = firstOcurance(data, sIdx, eIdx, sep);
+	long sep_pos = findFirstOccurrence(data, sIdx, eIdx, sep);
 
 	if ( sep_pos == -1 ) {
 		sep = '-';
-		sep_pos = firstOcurance(data, sIdx, eIdx, sep);
+		sep_pos = findFirstOccurrence(data, sIdx, eIdx, sep);
 	}
 
 	if ( sep_pos == -1)
@@ -196,7 +220,7 @@ bool extractDate(char *data, long sIdx, long eIdx, bool dayfirst, int *year, int
 
 		// Month
 		long s2 = sep_pos +1;
-		sep_pos = firstOcurance(data, s2, eIdx, sep);
+		sep_pos = findFirstOccurrence(data, s2, eIdx, sep);
 
 		if (sep_pos == -1 ) {
 
@@ -217,7 +241,7 @@ bool extractDate(char *data, long sIdx, long eIdx, bool dayfirst, int *year, int
 			*day = convertStrtoInt<int>(data, sIdx, (sep_pos -1) );
 
 			long s2 = sep_pos +1;
-			sep_pos = firstOcurance(data, s2, eIdx, sep);
+			sep_pos = findFirstOccurrence(data, s2, eIdx, sep);
 
 			*month = convertStrtoInt<int>(data, s2, (sep_pos -1) );
 			*year = convertStrtoInt<int>(data, (sep_pos + 1), eIdx);
@@ -227,7 +251,7 @@ bool extractDate(char *data, long sIdx, long eIdx, bool dayfirst, int *year, int
 			*month = convertStrtoInt<int>(data, sIdx, (sep_pos -1) );
 
 			long s2 = sep_pos +1;
-			sep_pos = firstOcurance(data, s2, eIdx, sep);
+			sep_pos = findFirstOccurrence(data, s2, eIdx, sep);
 
 			if (sep_pos == -1 )
 			{
@@ -284,14 +308,14 @@ bool extractTime(char *data, int sIdx, int eIdx, int *hour, int *minute, int *se
 
 
 	// Hour to Minute Separator
-	int hm_sep = firstOcurance(data, sIdx, eIdx, sep);
+	int hm_sep = findFirstOccurrence(data, sIdx, eIdx, sep);
 
 	*hour = convertStrtoInt<int>(data, sIdx, (hm_sep -1) );
 
 	*hour += hour_adjust;
 
 	// now minute
-	long ms_sep = firstOcurance(data, (hm_sep + 1), eIdx, sep);
+	long ms_sep = findFirstOccurrence(data, (hm_sep + 1), eIdx, sep);
 
 	if (ms_sep == -1 ) {
 		//--- Data is just Hour and Minutes, no seconds
@@ -308,10 +332,10 @@ bool extractTime(char *data, int sIdx, int eIdx, int *hour, int *minute, int *se
 
 
 /**
- * @brief compute number of days since epoch
+ * @brief Compute number of days since epoch, given a date
  *
- * This function takes year, month, and day and return the
- * number of days since epcoh as a int32
+ * This function takes year, month, and day and returns the number of days
+ * since epoch (1970-01-01).
  *
  * @param[in] year
  * @param[in] month
@@ -321,43 +345,32 @@ bool extractTime(char *data, int sIdx, int eIdx, int *hour, int *minute, int *se
  *
  */
 __host__ __device__
-gdf_date32 daysSinceEpoch(int year, int month, int day)  {
+constexpr int32_t daysSinceEpoch(int year, int month, int day) {
 
-	static unsigned short days[12] = {0,  31,  59,  90, 120, 151, 181, 212, 243, 273, 304, 334};
+    // More details of this formula is located in cuDF datetime_ops
+    // In brief, the calculation is split over several components:
+    //     era: a 400 year range, where the date cycle repeats exactly
+    //     yoe: year within the 400 range of an era
+    //     doy: day within the 364 range of a year
+    //     doe: exact day within the whole era
+    // The months are shifted so that Feb (possible leap day) is the last month
+    // The result subtraction of 719468 shifts start date to epoch (1970-01-01)
+    year -= (month <= 2) ? 1 : 0;
 
-	// years since epoch
-	int ye = year - 1970;
+    const int32_t era = (year >= 0 ? year : year - 399) / 400;
+    const int32_t yoe = year - era * 400;
+    const int32_t doy = (153 * (month + (month > 2 ? -3 : 9)) + 2)/5 + day - 1;
+    const int32_t doe = yoe * 365 + yoe/4 - yoe/100 + doy;
 
-	// 1972 was a leap year, so how many have occurred between date and 1972? Do not include this year in count
-	int lpy = ((year - 1972 - 1) / 4);
-
-	// compute days since epoch
-	gdf_date32 days_e = (ye * 365) + lpy;
-
-	// is this a leap year?
-	if ( year % 4 == 0 && month > 2)
-		days_e++;
-
-	// months since January
-	int me = month - 01;
-
-	// days up to start of month
-	days_e += days[me];
-
-	// now just add days, but not current full days since this one is not over
-	days_e +=  day;
-
-	return days_e;
+    return era * 146097 + doe - 719468;
 }
 
 
-
-
 /**
- * @brief Given year,month,day,hour,minute,second and return the epcoh
+ * @brief Compute the number of seconds since epoch, given a date and time
  *
- * Given year, month, day, hour, minute, second compute the number of
- * seconds since epoch
+ * This function takes year, month, day, hour, minute and second and returns
+ * the number of seconds since epoch (1970-01-01)
  *
  * @param[in] year
  * @param[in] month
@@ -370,19 +383,11 @@ gdf_date32 daysSinceEpoch(int year, int month, int day)  {
  *
  */
 __host__ __device__
-int64_t secondsFromEpoch(int year, int month, int day, int hour, int minute, int second)  {
+constexpr int64_t secondsSinceEpoch(int year, int month, int day, int hour, int minute, int second) {
 
-	// leverage the epoch days function
-	gdf_date32 days_e = daysSinceEpoch(year, month, day);
+	// Leverage the function to find the days since epoch
+	const auto days = daysSinceEpoch(year, month, day);
 
-	// now convert to seconds
-	int64_t t = (days_e * 24) * 60 * 60;
-
-	t += hour * 60 * 60;
-	t += minute * 60;
-	t += second;
-
-	return t;
+	// Return sum total seconds from each time portion
+	return (days * 24 * 60 * 60) + (hour * 60 * 60) + (minute * 60) + second;
 }
-
-

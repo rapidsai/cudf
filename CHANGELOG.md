@@ -27,6 +27,7 @@
 
 ## Bug Fixes
 
+- PR #xxx Fix days being off-by-one when parsing some dates
 - PR #473 Added missing <random> include
 - PR #495 Updated README to correct where cffi pytest should be executed.
 - PR #478 CSV Reader: Fix/Update and test usecols code for parsing only the specified columns
