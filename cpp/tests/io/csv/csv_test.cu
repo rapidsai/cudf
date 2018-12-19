@@ -391,7 +391,8 @@ TEST(gdf_csv_test, SpecifiedBoolValues)
 
 	{
 		csv_read_arg args{};
-		args.file_path			= fname;
+		args.input_data_form		= gdf_csv_input_form::FILE_PATH;
+		args.filepath_or_buffer		= fname;
 		args.num_cols			= std::extent<decltype(names)>::value;
 		args.names				= names;
 		args.dtype				= types;
