@@ -972,6 +972,12 @@ class DataFrame(object):
                 return "{}{}".format(name, suffix)
             return name
 
+        if on is None:
+            on = list(same_names)
+            if len(on) == 0:
+                raise ValueError('No common columns to perform merge on')
+        on = [on] if isinstance(on, str) else list(on)
+
         lhs = self
         rhs = other
 
