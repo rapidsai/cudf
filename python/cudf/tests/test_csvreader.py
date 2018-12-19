@@ -183,7 +183,8 @@ def test_csv_reader_strings(tmpdir):
     with open(str(fname), 'w') as fp:
         fp.write('\n'.join(lines) + '\n')
 
-    cols = read_csv_strings(str(fname), names=names, dtype=dtypes, skiprows=1)
+    cols = read_csv_strings(str(fname), names=names, dtype=dtypes, skiprows=1,
+                            decimal='.', thousands="'")
 
     assert(len(cols) == 2)
     assert(type(cols[0]) == nvstrings.nvstrings)

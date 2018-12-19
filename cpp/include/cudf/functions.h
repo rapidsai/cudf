@@ -907,9 +907,23 @@ gdf_error gdf_quantile_aprrox(	gdf_column*  col_in,       //input column with 0 
                                 void*        t_erased_res, //type-erased result of same type as column;
                                 gdf_context* ctxt);        //context info
 
+/* --------------------------------------------------------------------------*
+ * @brief Replace elements from `col` according to the mapping `old_values` to
+ *        `new_values`, that is, replace all `old_values[i]` present in `col` 
+ *        with `new_values[i]`.
+ * 
+ * @Param[in,out] col gdf_column with the data to be modified
+ * @Param[in] old_values gdf_column with the old values to be replaced
+ * @Param[in] new_values gdf_column with the new values
+ * 
+ * @Returns GDF_SUCCESS upon successful completion
+ *
+ * --------------------------------------------------------------------------*/
+gdf_error gdf_find_and_replace_all(gdf_column*       col,
+                                   const gdf_column* old_values,
+                                   const gdf_column* new_values);
 
-/* --------------------------------------------------------------------------*/
-/** 
+/* --------------------------------------------------------------------------* 
  * @brief Sorts an array of gdf_column.
  * 
  * @Param[in] input_columns Array of gdf_columns
@@ -923,8 +937,8 @@ gdf_error gdf_quantile_aprrox(	gdf_column*  col_in,       //input column with 0 
  *                            indices
  * 
  * @Returns GDF_SUCCESS upon successful completion
- */
-/* ----------------------------------------------------------------------------*/
+ *
+ * ----------------------------------------------------------------------------*/
 gdf_error gdf_order_by(gdf_column** input_columns,
                        int8_t*      asc_desc,
                        size_t       num_inputs,
