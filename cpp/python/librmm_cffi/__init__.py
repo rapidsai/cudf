@@ -17,7 +17,7 @@ from __future__ import absolute_import
 import os
 import sys
 import atexit
-
+from itertools import chain
 from .wrapper import _RMMWrapper
 from .wrapper import RMMError     # noqa: F401      # re-exported
 
@@ -40,6 +40,11 @@ else:
         if os.path.isfile(localpath):
             return localpath
         else:
+            lib_path = os.path.join(sys.prefix, 'lib')
+            for sys_path in chain([lib_path], sys.path):
+                lib = os.path.join(sys_path, path)
+                if os.path.isfile(lib):
+                    return lib
             return path
 
     librmm_api = ffi.dlopen(_get_lib_name())

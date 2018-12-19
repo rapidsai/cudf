@@ -73,6 +73,9 @@ endif(CMAKE_BUILD_TYPE MATCHES Debug)
 option(BUILD_TESTS "Configure CMake to build tests"
        ON)
 
+#Override RPATH
+SET(CMAKE_BUILD_WITH_INSTALL_RPATH TRUE)
+SET(CMAKE_INSTALL_RPATH "\$ORIGIN")
 ###################################################################################################
 # - cmake modules ---------------------------------------------------------------------------------
 
