@@ -906,6 +906,9 @@ gdf_error gdf_group_by_count(int ncols,                    // # columns
    * @Param[in] The column indices of the input dataset that will be grouped by
    * @Param[out] The dataset sorted by the group by columns (needs to be pre-allocated)
    * @Param[out] A column containing the starting indices of each group. Indices based off of new sort order. (needs to be pre-allocated)
+   * @Param[in] struct with additional info, like flag_groupby_include_nulls 
+   *                    0 = Nulls are ignored in group by keys (Pandas style), 
+                        1 = Nulls are treated as values in group by keys where NULL == NULL (SQL style)
    * @Param[in] Flag indicating if nulls are smaller (0) or larger (1) than non nulls for the sort operation
    *
    * @Returns gdf_error with error code on failure, otherwise GDF_SUCESS
@@ -917,7 +920,8 @@ gdf_error gdf_group_by_wo_aggregations(int num_data_cols,
 									   int * groupby_col_indices,
 									   gdf_column** data_cols_out,
 									   gdf_column* group_start_indices,
-									   int nulls_are_smallest);
+                     gdf_context* ctxt,
+									   int nulls_are_smallest);           
 
 /* --------------------------------------------------------------------------*/
   /**

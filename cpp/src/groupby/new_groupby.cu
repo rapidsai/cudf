@@ -201,7 +201,7 @@ gdf_error gdf_group_by(gdf_column* in_key_columns[],
 template <typename T>
 using Vector = thrust::device_vector<T, rmm_allocator<T>>;
 
-/* --------------------------------------------------------------------------*/
+//* --------------------------------------------------------------------------*/
   /**
    * @brief Given a set of columns, of which a subset of these are defined to be the group by columns,
    * all columns are sorted by the group by columns and returned, along with a column containing
@@ -210,9 +210,12 @@ using Vector = thrust::device_vector<T, rmm_allocator<T>>;
    * @Param[in] The number of columns in the dataset
    * @Param[in] The input columns in the dataset
    * @Param[in] The number of columns to be grouping by
-   * @Param[in] The host column indices of the input dataset that will be grouped by
+   * @Param[in] The column indices of the input dataset that will be grouped by
    * @Param[out] The dataset sorted by the group by columns (needs to be pre-allocated)
    * @Param[out] A column containing the starting indices of each group. Indices based off of new sort order. (needs to be pre-allocated)
+   * @Param[in] struct with additional info, like flag_groupby_include_nulls 
+   *                    0 = Nulls are ignored in group by keys (Pandas style), 
+                        1 = Nulls are treated as values in group by keys where NULL == NULL (SQL style)
    * @Param[in] Flag indicating if nulls are smaller (0) or larger (1) than non nulls for the sort operation
    *
    * @Returns gdf_error with error code on failure, otherwise GDF_SUCESS
@@ -224,9 +227,17 @@ gdf_error gdf_group_by_wo_aggregations(int num_data_cols,
 									   int * groupby_col_indices,
 									   gdf_column** data_cols_out,
 									   gdf_column* group_start_indices,
+                     gdf_context* ctxt,
 									   int nulls_are_smallest = 0)
 {
-// TODO ASSERTS: num_groupby_cols > 0
+  GDF_REQUIRE((nullptr != data_cols_in), GDF_DATASET_EMPTY);
+  GDF_REQUIRE((nullptr != data_cols_in[0]), GDF_DATASET_EMPTY);
+  GDF_REQUIRE((nullptr != data_cols_out), GDF_DATASET_EMPTY);
+  GDF_REQUIRE((nullptr != data_cols_out[0]), GDF_DATASET_EMPTY);
+  GDF_REQUIRE((num_data_cols > 0), GDF_DATASET_EMPTY);
+  GDF_REQUIRE((num_groupby_cols > 0), GDF_DATASET_EMPTY);
+  GDF_REQUIRE((nullptr != groupby_col_indices), GDF_DATASET_EMPTY);
+
 
   int32_t nrows = data_cols_in[0]->size;
 
@@ -260,59 +271,59 @@ gdf_error gdf_group_by_wo_aggregations(int num_data_cols,
   if (status != GDF_SUCCESS)
     return status;
 
-  // status = gdf_group_start_indices(num_data_cols, data_cols_out, num_groupby_cols,
-	// 								   groupby_col_indices, group_start_indices, nulls_are_smallest);
+  status = gdf_group_start_indices(num_data_cols, data_cols_out, num_groupby_cols,
+									   groupby_col_indices, group_start_indices, nulls_are_smallest);
 
-// setup for reduce by key  
-  bool have_nulls = false;
-  for (int i = 0; i < num_groupby_cols; i++) {
-    if (data_cols_in[i]->null_count > 0) {
-      have_nulls = true;
-      break;
-    }
-  }
+// // setup for reduce by key  
+//   bool have_nulls = false;
+//   for (int i = 0; i < num_groupby_cols; i++) {
+//     if (data_cols_in[i]->null_count > 0) {
+//       have_nulls = true;
+//       break;
+//     }
+//   }
 
-  Vector<void*> d_cols(num_groupby_cols); 
-  Vector<int> d_types(num_groupby_cols, 0);
-  void** d_col_data = d_cols.data().get();
-  int* d_col_types = d_types.data().get();
+//   Vector<void*> d_cols(num_groupby_cols); 
+//   Vector<int> d_types(num_groupby_cols, 0);
+//   void** d_col_data = d_cols.data().get();
+//   int* d_col_types = d_types.data().get();
 
-  int32_t* result_end;
-  auto exec = rmm::exec_policy();
-  if (have_nulls){
+//   int32_t* result_end;
+//   auto exec = rmm::exec_policy();
+//   if (have_nulls){
 
-    Vector<gdf_valid_type*> d_valids(num_groupby_cols);
-    gdf_valid_type** d_valids_data = d_valids.data().get();
+//     Vector<gdf_valid_type*> d_valids(num_groupby_cols);
+//     gdf_valid_type** d_valids_data = d_valids.data().get();
 
-    soa_col_info(data_cols_out, num_groupby_cols, d_col_data, d_valids_data, d_col_types);
+//     soa_col_info(data_cols_out, num_groupby_cols, d_col_data, d_valids_data, d_col_types);
     
-    LesserRTTI<int32_t> comp(d_col_data, d_valids_data, d_col_types, nullptr, num_groupby_cols, nulls_are_smallest);
+//     LesserRTTI<int32_t> comp(d_col_data, d_valids_data, d_col_types, nullptr, num_groupby_cols, nulls_are_smallest);
     
-    auto counting_iter = thrust::make_counting_iterator<int32_t>(0);
+//     auto counting_iter = thrust::make_counting_iterator<int32_t>(0);
     
-    result_end = thrust::unique_copy(exec, counting_iter, counting_iter+nrows, 
-                              (int32_t*)group_start_indices->data,
-                              [comp] __host__ __device__(int32_t key1, int32_t key2){
-                              return comp.equal_with_nulls(key1, key2);
-                            });
+//     result_end = thrust::unique_copy(exec, counting_iter, counting_iter+nrows, 
+//                               (int32_t*)group_start_indices->data,
+//                               [comp] __host__ __device__(int32_t key1, int32_t key2){
+//                               return comp.equal_with_nulls(key1, key2);
+//                             });
 
-  } else {
+//   } else {
 
-    soa_col_info(*data_cols_out, num_groupby_cols, d_col_data, d_col_types);
+//     soa_col_info(*data_cols_out, num_groupby_cols, d_col_data, d_col_types);
     
-    LesserRTTI<int32_t> comp(d_col_data, nullptr, d_col_types, nullptr, num_groupby_cols, nulls_are_smallest);
+//     LesserRTTI<int32_t> comp(d_col_data, nullptr, d_col_types, nullptr, num_groupby_cols, nulls_are_smallest);
 
-    auto counting_iter = thrust::make_counting_iterator<int32_t>(0);
+//     auto counting_iter = thrust::make_counting_iterator<int32_t>(0);
     
-    result_end = thrust::unique_copy(exec, counting_iter, counting_iter+nrows, 
-                              (int32_t*)group_start_indices->data,
-                              [comp] __host__ __device__(int32_t key1, int32_t key2){
-                              return comp.equal(key1, key2);  
-                            });
-  }
+//     result_end = thrust::unique_copy(exec, counting_iter, counting_iter+nrows, 
+//                               (int32_t*)group_start_indices->data,
+//                               [comp] __host__ __device__(int32_t key1, int32_t key2){
+//                               return comp.equal(key1, key2);  
+//                             });
+//   }
 
-  size_t new_sz = thrust::distance((int32_t*)group_start_indices->data, result_end);
-  group_start_indices->size = new_sz;
+//   size_t new_sz = thrust::distance((int32_t*)group_start_indices->data, result_end);
+//   group_start_indices->size = new_sz;
 
   return status;
 }
@@ -396,3 +407,7 @@ gdf_error gdf_group_start_indices(int num_data_cols,
   return GDF_SUCCESS;
 
 }
+
+
+/* WSM NOTE: For pandas like group by version. Do a less than operator where any null returns false. 
+Then to calculate where the nulls start to ignore them, OR all the valids then do a null count*/

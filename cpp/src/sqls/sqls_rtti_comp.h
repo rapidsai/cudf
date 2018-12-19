@@ -25,6 +25,7 @@
 #include <cstdint>
 
 #include "utilities/cudf_utils.h"
+#include "utilities/error_utils.h"
 #include "utilities/type_dispatcher.hpp"
 
 template<typename IndexT>
@@ -264,6 +265,32 @@ struct LesserRTTI
                                           columns_,
                                           valids_,
                                           nulls_are_smallest_);
+      switch( state )
+      {
+      case State::False:
+        return false;
+      case State::True:
+        return true;
+      case State::Undecided:
+        break;
+      }
+    }
+    return false;
+  }
+
+    __device__
+  bool less_with_nulls_always_false(IndexT row1, IndexT row2) const
+  {
+    for(size_t col_index = 0; col_index < sz_; ++col_index)
+    {
+      gdf_dtype col_type = static_cast<gdf_dtype>(rtti_[col_index]);
+
+      State state = cudf::type_dispatcher(col_type, OpLess_with_nulls_always_false{},
+                                          row1,
+                                          row2,
+                                          col_index,
+                                          columns_,
+                                          valids_);
       switch( state )
       {
       case State::False:
@@ -565,7 +592,7 @@ multi_col_group_by_count_sort(size_t         nrows,
                               cudaStream_t   stream = NULL)
 {
   if( !sorted )
-    multi_col_sort(d_cols, nullptr, d_gdf_t, nullptr, ncols, nrows, false, ptr_d_indx, false, stream);
+    multi_col_sort(d_cols, nullptr, d_gdf_t, nullptr, ncols, nrows, false, ptr_d_indx, false, false, stream);
 
   LesserRTTI<IndexT> f(d_cols, d_gdf_t, ncols);
 
@@ -637,7 +664,7 @@ size_t multi_col_group_by_sort(size_t         nrows,
                                cudaStream_t   stream = NULL)
 {
   if( !sorted )
-    multi_col_sort(d_cols, nullptr, d_gdf_t, nullptr, ncols, nrows, false, ptr_d_indx, false, stream);
+    multi_col_sort(d_cols, nullptr, d_gdf_t, nullptr, ncols, nrows, false, ptr_d_indx, false, false, stream);
 
   
   thrust::gather(rmm::exec_policy(stream),
@@ -827,6 +854,7 @@ size_t multi_col_group_by_avg_sort(size_t         nrows,
  * @Param[in] nrows # rows
  * @Param[in] have_nulls Whether or not any column have null values
  * @Param[in] nulls_are_smallest Whether or not nulls are smallest
+ * @Param[in] nulls_are_lessthan_always_false. If set to true, nulls will always trigger less than equal to false
  * @Param[in] stream CudaStream to work in
  * @Param[out] d_indx Device array of re-ordered indices after sorting
  * @tparam IndexT The type of d_indx array 
@@ -844,8 +872,13 @@ void multi_col_sort(void* const *           d_cols,
                     bool                    have_nulls,
                     IndexT*                 d_indx,
                     bool                    nulls_are_smallest = false,
+                    bool                    nulls_are_lessthan_always_false = false,
                     cudaStream_t            stream = NULL)
 {
+
+// if using nulls_are_lessthan_always_false = true, then you cant set ascending descending order (d_asc_desc)
+  GDF_REQUIRE((nulls_are_lessthan_always_false && (nullptr == d_asc_desc)) || !nulls_are_lessthan_always_false, GDF_INVALID_API_CALL);
+
   //cannot use counting_iterator 2 reasons:
   //(1.) need to return a container result;
   //(2.) that container must be mutable;
@@ -853,11 +886,19 @@ void multi_col_sort(void* const *           d_cols,
   
   LesserRTTI<IndexT> comp(d_cols, d_valids, d_col_types, d_asc_desc, ncols, nulls_are_smallest);
   if (d_valids != nullptr && have_nulls) {
-		thrust::sort(rmm::exec_policy(stream),
-				         d_indx, d_indx+nrows,
-				         [comp] __device__ (IndexT i1, IndexT i2){
-                    return comp.asc_desc_comparison_with_nulls(i1, i2);
-                 });
+    if (nulls_are_lessthan_always_false){
+      thrust::sort(rmm::exec_policy(stream),
+                  d_indx, d_indx+nrows,
+                  [comp] __device__ (IndexT i1, IndexT i2){
+                      return comp.less_with_nulls_always_false(i1, i2);
+                  });
+    } else {
+      thrust::sort(rmm::exec_policy(stream),
+                  d_indx, d_indx+nrows,
+                  [comp] __device__ (IndexT i1, IndexT i2){
+                      return comp.asc_desc_comparison_with_nulls(i1, i2);
+                  });
+    }
   }
   else {
     thrust::sort(rmm::exec_policy(stream),

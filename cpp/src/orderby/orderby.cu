@@ -32,7 +32,8 @@ namespace{ //annonymus
                                int8_t* asc_desc,
                                size_t ncols,
                                gdf_column* output_indices,
-                               bool flag_nulls_are_smallest)
+                               bool flag_nulls_are_smallest, 
+                               bool nulls_are_lessthan_always_false = false)
   {
     GDF_REQUIRE(cols != nullptr && output_indices != nullptr, GDF_DATASET_EMPTY);
     GDF_REQUIRE(cols[0]->size == output_indices->size, GDF_COLUMN_SIZE_MISMATCH);
@@ -55,7 +56,7 @@ namespace{ //annonymus
       return gdf_status;
 
 		multi_col_sort(d_col_data, d_valids_data, d_col_types, asc_desc, ncols, cols[0]->size,
-				have_nulls, static_cast<int32_t*>(output_indices->data), flag_nulls_are_smallest);
+				have_nulls, static_cast<int32_t*>(output_indices->data), flag_nulls_are_smallest, nulls_are_lessthan_always_false);
 
     return GDF_SUCCESS;
   }
