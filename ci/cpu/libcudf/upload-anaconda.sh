@@ -17,8 +17,8 @@ if [ "${LABEL_MAIN}" == '1' ]; then
 fi
 echo "LABEL_OPTION=${LABEL_OPTION}"
 
-# Pull requests or commits to other branches shouldn't upload
-if [ ${TRAVIS_PULL_REQUEST} != false -o ${TRAVIS_BRANCH} != ${SOURCE_BRANCH} ]; then
+# Restrict uploads to master branch
+if [ ${GIT_BRANCH} != ${SOURCE_BRANCH} ]; then
   echo "Skipping upload"
   return 0
 fi
