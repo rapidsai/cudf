@@ -3,17 +3,17 @@
 
 ## New Features
 
-- PR #350 Implemented Series replace function
 - PR #411 added null support to gdf_order_by (new API) and cudf_table::sort
 - PR #525 Added GitHub Issue templates for bugs, documentation, new features, and questions
 - PR #501 CSV Reader: Add support for user-specified decimal point and thousands separator to read_csv_strings()
 - PR #455 CSV Reader: Add support for user-specified decimal point and thousands separator to read_csv()
 - PR #439 add `DataFrame.drop` method similar to pandas
-- PR #474 add ZLIB-based GZIP/ZIP support to `read_csv()`
-- PR #490 Added print_env.sh script to gather relevant environment details when reporting cuDF issues.
 - PR #505 CSV Reader: Add support for user-specified boolean values
-- PR #509 CSV Reader: Input CSV file can now be passed in as a text or a binary buffer
+- PR #350 Implemented Series replace function
+- PR #490 Added print_env.sh script to gather relevant environment details when reporting cuDF issues.
+- PR #474 add ZLIB-based GZIP/ZIP support to `read_csv()`
 - PR #558 Add CI scripts for cpu-based conda and gpu-based test builds
+- PR #509 CSV Reader: Input CSV file can now be passed in as a text or a binary buffer
 
 ## Improvements
 
