@@ -1026,6 +1026,7 @@ def test_dataframe_shape_empty():
 
     assert pdf.shape == gdf.shape
 
+
 @pytest.fixture
 def pdf():
     return pd.DataFrame({'x': range(10),
@@ -1094,7 +1095,8 @@ def test_dataframe_replace():
     pd.testing.assert_frame_equal(gdf2.to_pandas(), pdf2)
 
     # categorical
-    pdf4 = pd.DataFrame({'a': ['one', 'two', 'three'], 'b': ['one', 'two', 'three']}, dtype='category')
+    pdf4 = pd.DataFrame({'a': ['one', 'two', 'three'],
+                         'b': ['one', 'two', 'three']}, dtype='category')
     gdf4 = DataFrame.from_pandas(pdf4)
     pdf5 = pdf4.replace('two', 'three')
     gdf5 = gdf4.replace('two', 'three')
@@ -1116,4 +1118,4 @@ def test_dataframe_replace():
 
     pdf9 = pdf1.replace({'a': 0}, {'a': 4})
     gdf9 = gdf1.replace({'a': 0}, {'a': 4})
-    pd.testing.assert_frame_equal(gdf8.to_pandas(), pdf8)
+    pd.testing.assert_frame_equal(gdf9.to_pandas(), pdf9)

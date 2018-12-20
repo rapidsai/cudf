@@ -10,7 +10,7 @@ import warnings
 import numpy as np
 import pandas as pd
 import pyarrow as pa
-from pandas.api.types import is_scalar, is_dict_like
+from pandas.api.types import is_dict_like
 
 from numba.cuda.cudadrv.devicearray import DeviceNDArray
 
