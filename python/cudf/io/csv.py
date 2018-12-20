@@ -90,20 +90,47 @@ def read_csv(filepath, lineterminator='\n',
 
     Examples
     --------
-    foo.txt : ::
 
-        50,50|40,60|30,70|20,80|
 
-    >>> import cudf
-    >>> df = cudf.read_csv('foo.txt', delimiter=',', lineterminator='|',
-    ...                     names=['col1', 'col2'], dtype=['int64', 'int64'],
-    ...                     skiprows=1, skipfooter=1)
-    >>> df
-      col1 col2
-    0 40   60
-    1 30   70
+    .. code-block:: python
+
+      import cudf
+
+      # Create a test csv file
+      filename = 'foo.csv'
+      lines = [
+        "num1,datetime,text",
+        "123,2018-11-13T12:00:00,abc",
+        "456,2018-11-14T12:35:01,def",
+        "789,2018-11-15T18:02:59,ghi"
+      ]
+      with open(filename, 'w') as fp:
+          fp.write('\\n'.join(lines)+'\\n')
+
+      # Read the file with cudf
+      names = ['num1', 'datetime', 'text']
+      # Note 'int' for 3rd column- text will be hashed
+      dtypes = ['int', 'date', 'int']
+      df = cudf.read_csv(filename, delimiter=',',
+                         names=names, dtype=dtypes,
+                         skiprows=1)
+
+      # Display results
+      print(df)
+
+    Output:
+
+    .. code-block:: python
+
+          num1                datetime text
+        0  123 2018-11-13T12:00:00.000 5451
+        1  456 2018-11-14T12:35:01.000 5784
+        2  789 2018-11-15T18:02:59.000 6117
+
+    See Also
+    --------
+    .read_csv_strings
     """
-
     if dtype is not None:
         if isinstance(dtype, collections.abc.Mapping):
             dtype_dict = True
@@ -254,52 +281,72 @@ def read_csv_strings(filepath, lineterminator='\n',
                      skipfooter=0, skiprows=0, dayfirst=False, thousands=None,
                      decimal='.', true_values=None, false_values=None):
 
-    import nvstrings
-    from cudf.dataframe.series import Series
-
     """
-    **Experimental**: This function provided only as an alpha way of providing
-    a way to use nvstrings alongside cudf.
+    **Experimental**: This function exists only as a beta way to use
+    `nvstrings <https://nvstrings.readthedocs.io/en/latest/>`_. with cudf.
+
     Future versions of cuDF will provide cleaner integration.
 
     Uses mostly same arguments as read_csv.
     Note: Doesn't currently support auto-column detection, header, usecols
     and mangle_dupe_cols args.
 
-    Returns list of Series objects for numeric or date columns and nvstrings
-    objects for those columns that are strings (dtype='str').
+    Returns
+    -------
+    columns : ordered list of cudf.dataframe.Series and nvstrings objects
+      numeric or date dtyped columns will be Series.
+
+      'str' dtyped columns will be
+      `nvstrings <https://nvstrings.readthedocs.io/en/latest/>`_.
 
     Examples
     --------
-    foo.txt : ::
-
-        50,abc|40,def|30,ghi|20,jkl|
 
     .. code-block:: python
 
       import cudf
-      fn = 'foo.txt'
-      cols = cudf.io.read_csv_strings(fn, delimiter=',', lineterminator='|',
-                           names=['col1', 'col2'], dtype=['int64', 'str'],
-                           skiprows=1, skipfooter=1)
-      type(cols[0])
-      print(cols[0])
 
-      type(cols[1])
-      print(cols[1])
+      # Create a test csv file
+      filename = 'foo.csv'
+      lines = [
+        "num1,datetime,text",
+        "123,2018-11-13T12:00:00,abc",
+        "456,2018-11-14T12:35:01,def",
+        "789,2018-11-15T18:02:59,ghi"
+      ]
+      with open(filename, 'w') as fp:
+          fp.write('\\n'.join(lines)+'\\n')
+
+      # Read the file with cudf
+      names = ['num1', 'datetime', 'text']
+      dtypes = ['int', 'date', 'str']
+      columns = cudf.io.csv.read_csv_strings(filename, delimiter=',',
+                              names=names, dtype=dtypes,
+                              skiprows=1)
+      # Display results
+      columns[0]
+      print(columns[0])
+      columns[2]
+      print(columns[2])
 
     Output:
 
     .. code-block:: python
 
-      <class 'cudf.series.Series'>
-      0 40
-      1 30
+      <cudf.Series nrows=3 >
+      0  123
+      1  456
+      2  789
 
-      <class 'nvstrings.nvstrings'>
-      ['def', 'ghi']
+      <nvstrings count=3>
+      ['abc', 'def', 'ghi']
 
+    See Also
+    --------
+    .read_csv
     """
+    import nvstrings
+    from cudf.dataframe.series import Series
 
     if names is None or dtype is None:
         msg = '''Automatic dtype detection not implemented:
