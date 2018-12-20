@@ -25,6 +25,7 @@
 
 ## Bug Fixes
 
+- PR #531 CSV Reader: Fix incorrect parsing of quoted numbers
 - PR #465 Added templated C++ API for RMM to avoid explicit cast to `void**`
 - PR #473 Added missing <random> include
 - PR #478 CSV Reader: Add api support for auto column detection, header, mangle_dupe_cols, usecols
