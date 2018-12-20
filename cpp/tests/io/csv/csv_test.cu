@@ -78,7 +78,8 @@ TEST(gdf_csv_test, Simple)
 
 	{
 		csv_read_arg args{};
-		args.file_path		= fname;
+		args.input_data_form = gdf_csv_input_form::FILE_PATH;
+		args.filepath_or_buffer = fname;
 		args.num_cols		= std::extent<decltype(names)>::value;
 		args.names			= names;
 		args.dtype			= types;
@@ -173,9 +174,10 @@ TEST(gdf_csv_test, MortPerf)
 
         args.dtype = dtype;
 
-    args.file_path = (char *)("/tmp/Performance_2000Q1.txt");
+		args.input_data_form = gdf_csv_input_form::FILE_PATH;
+		args.filepath_or_buffer = (char *)("/tmp/Performance_2000Q1.txt");
 
-	if (  checkFile(args.file_path))
+	if (  checkFile(args.filepath_or_buffer))
 	{
 		args.delimiter 		= '|';
 		args.lineterminator = '\n';
@@ -218,8 +220,9 @@ TEST(gdf_csv_test, Strings)
 	ASSERT_TRUE( checkFile(fname) );
 
 	{
-		csv_read_arg args{};
-		args.file_path		= fname;
+		csv_read_arg args{};	
+		args.input_data_form = gdf_csv_input_form::FILE_PATH;
+		args.filepath_or_buffer = fname;
 		args.num_cols		= std::extent<decltype(names)>::value;
 		args.names			= names;
 		args.dtype			= types;
@@ -273,7 +276,8 @@ TEST(gdf_csv_test, QuotedStrings)
 
 	{
 		csv_read_arg args{};
-		args.file_path		= fname;
+		args.input_data_form = gdf_csv_input_form::FILE_PATH;
+		args.filepath_or_buffer = fname;
 		args.num_cols		= std::extent<decltype(names)>::value;
 		args.names			= names;
 		args.dtype			= types;
@@ -330,7 +334,8 @@ TEST(gdf_csv_test, KeepFullQuotedStrings)
 
 	{
 		csv_read_arg args{};
-		args.file_path		= fname;
+		args.input_data_form = gdf_csv_input_form::FILE_PATH;
+		args.filepath_or_buffer = fname;
 		args.num_cols		= std::extent<decltype(names)>::value;
 		args.names			= names;
 		args.dtype			= types;
@@ -386,7 +391,8 @@ TEST(gdf_csv_test, SpecifiedBoolValues)
 
 	{
 		csv_read_arg args{};
-		args.file_path			= fname;
+		args.input_data_form		= gdf_csv_input_form::FILE_PATH;
+		args.filepath_or_buffer		= fname;
 		args.num_cols			= std::extent<decltype(names)>::value;
 		args.names				= names;
 		args.dtype				= types;
