@@ -1,6 +1,7 @@
 #pragma once
 
-typedef size_t gdf_size_type;
+// TODO: Update to use fixed width types when CFFI goes away
+typedef int gdf_size_type; 
 typedef gdf_size_type gdf_index_type;
 typedef unsigned char gdf_valid_type;
 typedef	long	gdf_date64;
