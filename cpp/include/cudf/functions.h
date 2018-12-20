@@ -955,8 +955,8 @@ gdf_error gdf_order_by(gdf_column** input_columns,
  * The number of elements in the scatter_map must equal the number of elements in the source
  * column. 
  * 
- * If any index in scatter_map is outside the range of [0, destination->size), it 
- * will be ignored.
+ * If any index in scatter_map is outside the range of [0, destination->size), the result 
+ * is undefined.
  * 
  * If the same index appears more than once in scatter_map, the result is undefined.
  * 
@@ -983,8 +983,7 @@ gdf_error gdf_scatter(gdf_column const * source,
  * The number of elements in the gather_map must equal the number of elements in the 
  * destination column. 
  * 
- * If gather_map[i] is outside the range [0, source->size),
- * it will be ignored and the value of destination[i] will not be modified.
+ * If gather_map[i] is outside the range [0, source->size), the result is undefined.
  * 
  * If the same index appears more than once in gather_map, the result is undefined.
  * 
