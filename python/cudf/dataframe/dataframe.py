@@ -27,6 +27,7 @@ from .datetime import DatetimeColumn
 from .numerical import NumericalColumn
 from .buffer import Buffer
 from cudf._gdf import nvtx_range_push, nvtx_range_pop
+from cudf._sort import get_sorted_inds
 
 import cudf.bindings.join as cpp_join
 
@@ -805,6 +806,11 @@ class DataFrame(object):
             df[k] = self[k].take(sorted_indices.to_gpu_array())
         return df
 
+    def argsort(self, ascending=True, na_position='last'):
+        cols = [series._column for series in self._cols.values()]
+        return get_sorted_inds(cols, ascending=ascending,
+                               na_position=na_position)
+
     def sort_index(self, ascending=True):
         """Sort by the index
         """
@@ -819,8 +825,8 @@ class DataFrame(object):
         ----------
         by : str
             Name of Series to sort by
-        ascending : bool, default True
-            Sort ascending vs. descending.
+        ascending : bool or list of bool, default True
+            If True, sort values in ascending order, otherwise descending.
         na_position : str
             first puts nulls at the beginning, last puts nulls at the end
         Returns
@@ -830,6 +836,7 @@ class DataFrame(object):
         Difference from pandas:
           * Support axis='index' only.
           * Not supporting: inplace, kind
+          * Ascending can be a list of bools to control per column
 
         Examples
         --------
@@ -853,7 +860,10 @@ class DataFrame(object):
 
         """
         # argsort the `by` column
-        return self._sort_by(self[by].argsort(ascending=ascending))
+        return self._sort_by(self[by].argsort(
+            ascending=ascending,
+            na_position=na_position)
+        )
 
     def nlargest(self, n, columns, keep='first'):
         """Get the rows of the DataFrame sorted by the n largest value of *columns*

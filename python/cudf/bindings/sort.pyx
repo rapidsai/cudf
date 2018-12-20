@@ -62,16 +62,16 @@ cpdef apply_order_by(in_cols, out_indices, ascending=True, na_position=1):
     for idx, col in enumerate(in_cols):
         input_columns[idx] = column_view_from_column(col)
     
-    cdef int8_t asc_desc = ascending
+    cdef uintptr_t asc_desc = get_ctype_ptr(ascending)
 
     cdef size_t num_inputs = len(in_cols)
 
     cdef gdf_column* output_indices = column_view_from_column(out_indices)
 
-    flag_nulls_are_smallest = na_position
+    cdef int flag_nulls_are_smallest = na_position
 
     cdef gdf_error result =  gdf_order_by(<gdf_column**> input_columns,
-                                          <int8_t*> &asc_desc,
+                                          <int8_t*> asc_desc,
                                           <size_t> num_inputs,
                                           <gdf_column*> output_indices,
                                           <int> flag_nulls_are_smallest)
