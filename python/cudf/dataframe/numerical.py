@@ -18,7 +18,6 @@ from cudf._gdf import nvtx_range_push, nvtx_range_pop
 from cudf._sort import get_sorted_inds
 import cudf.dataframe.series
 
-# import cudf.bindings.sort as cpp_sort
 import cudf.bindings.reduce as cpp_reduce
 
 # Operator mappings
