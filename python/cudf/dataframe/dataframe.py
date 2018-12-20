@@ -1540,8 +1540,8 @@ class DataFrame(object):
                 - Dicts can be used to replace
                   different values in different columns.
                   For example, `{'a': 1, 'z': 2}` specifies
-                  that the value 1 in column `a` and the values
-                  1 and 2 in column `z` must be replaced with
+                  that the value 1 in column `a` and the value
+                  2 in column `z` must be replaced with
                   *value*.
 
         value : numeric, str, list-like, or dict
