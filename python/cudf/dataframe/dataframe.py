@@ -3,7 +3,6 @@
 from __future__ import print_function, division
 
 import inspect
-import itertools
 import random
 from collections import OrderedDict
 import warnings
@@ -1550,7 +1549,7 @@ class DataFrame(object):
         -------
         result : DataFrame
         """
-        outdf = DataFrame()
+        outdf = self.copy()
 
         if not is_dict_like(to_replace):
             to_replace = dict.fromkeys(self.columns, to_replace)
