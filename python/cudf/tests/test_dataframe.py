@@ -1113,3 +1113,7 @@ def test_dataframe_replace():
     pdf8 = pdf1.replace({'a': 0, 'b': 0}, {'a': 4, 'b': 5})
     gdf8 = gdf1.replace({'a': 0, 'b': 0}, {'a': 4, 'b': 5})
     pd.testing.assert_frame_equal(gdf8.to_pandas(), pdf8)
+
+    pdf9 = pdf1.replace({'a': 0}, {'a': 4})
+    gdf9 = gdf1.replace({'a': 0}, {'a': 4})
+    pd.testing.assert_frame_equal(gdf8.to_pandas(), pdf8)
