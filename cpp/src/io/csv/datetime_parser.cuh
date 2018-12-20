@@ -347,7 +347,7 @@ bool extractTime(char *data, int sIdx, int eIdx, int *hour, int *minute, int *se
 __host__ __device__
 constexpr int32_t daysSinceEpoch(int year, int month, int day) {
 
-    // More details of this formula is located in cuDF datetime_ops
+    // More details of this formula are located in cuDF datetime_ops
     // In brief, the calculation is split over several components:
     //     era: a 400 year range, where the date cycle repeats exactly
     //     yoe: year within the 400 range of an era
