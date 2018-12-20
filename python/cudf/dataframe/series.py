@@ -642,23 +642,20 @@ class Series(object):
                 value = list(itertools.repeat(value, len(to_replace)))
         elif is_scalar(to_replace):
             if not is_scalar(value):
-                raise TypeError("Incompatible type {}"
-                                "for *value* parameter."
-                                "Expected numeric or str,"
-                                "got {}".format(type(value)))
+                raise TypeError("Incompatible types {} and {}"
+                                "for *to_replace* and *value*.".format(
+                                    type(to_replace), type(value)))
             to_replace = [to_replace]
             value = [value]
 
         if len(to_replace) != len(value):
             raise ValueError("Replacement lists must be"
                              "of same length."
-                             "Expected {}, got {}".format(
+                             "Expected {}, got {}.".format(
                                len(to_replace), len(value)))
 
-        if is_dict_like(to_replace):
-            raise TypeError("Replacement lists can be"
-                            "numeric, str or list-like,"
-                            "not dict.")
+        if is_dict_like(to_replace) or is_dict_like(value):
+            raise TypeError("Dict-like args not supported in Series.replace()")
 
         result = self._column.find_and_replace(to_replace, value)
 
