@@ -1,7 +1,7 @@
 #pragma once
 
 // TODO: Update to use fixed width types when CFFI goes away
-typedef int gdf_size_type; 
+typedef int gdf_size_type; /**< Limits the maximum size of a gdf_column to 2^31-1 */
 typedef gdf_size_type gdf_index_type;
 typedef unsigned char gdf_valid_type;
 typedef	long	gdf_date64;
@@ -86,7 +86,7 @@ typedef struct {
 typedef struct gdf_column_{
     void *data;                       /**< Pointer to the columns data */ 
     gdf_valid_type *valid;            /**< Pointer to the columns validity bit mask where the 'i'th bit indicates if the 'i'th row is NULL */
-    gdf_size_type size;               /**< Number of data elements in the columns data buffer*/
+    gdf_size_type size;               /**< Number of data elements in the columns data buffer. Limited to 2^31 - 1.*/
     gdf_dtype dtype;                  /**< The datatype of the column's data */
     gdf_size_type null_count;         /**< The number of NULL values in the column's data */
     gdf_dtype_extra_info dtype_info;
