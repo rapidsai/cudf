@@ -1028,7 +1028,7 @@ private:
       }
       else {
           // Ensure the output bitmask is initialized to zero
-          const size_type num_masks = gdf_get_num_chars_bitmask(output_column->size);
+          const size_type num_masks = get_number_of_bytes_for_valid(output_column->size);
           cudaMemsetAsync(output_column->valid, 0, num_masks * sizeof(gdf_valid_type), stream);
 
           gather_valid<index_type>(

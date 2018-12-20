@@ -79,7 +79,9 @@ set(GROUPBY_TEST_SRC
 
 ConfigureTest(GROUPBY_TEST "${GROUPBY_TEST_SRC}")
 
-set(GROUPBY_WO_AGG_TEST_SRC 
+set(GROUPBY_WO_AGG_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/utilities/cudf_test_utils.cuh"
+    "${CMAKE_CURRENT_SOURCE_DIR}/utilities/cudf_test_utils.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/groupby/groupby_wo_agg_test.cu")
 
 ConfigureTest(GROUPBY_WO_AGG_TEST "${GROUPBY_WO_AGG_TEST_SRC}")

@@ -27,8 +27,8 @@
 #include <cudf/functions.h>
 #include "utilities/cudf_utils.h"
 #include "utilities/bit_util.cuh"
-#include <tests/utilities/cudf_test_fixtures.h>
-#include <tests/utilities/cudf_test_utils.cuh>
+#include "tests/utilities/cudf_test_utils.cuh"
+#include "tests/utilities/cudf_test_fixtures.h"
 
 cudaStream_t stream;
 
@@ -41,7 +41,7 @@ struct GroupByWoAggregationsTest : public GdfTest {
     std::vector<int64_t> data_col2 = {0, 0, 0, -10000, -10000, -10000, 999999, 999999, 999999, -4412355, -4412355, -4412355, 12345678, 12345678, 12345678, 5, 5, 5};
     std::vector<float> data_col3 = {1000.5, 1000.5, 1000.5, -2.33, -2.33, 1000.5, -3.123, 1000.5, 0, 1, -2.33, 2.33, -2.33, -3.123, 123, -3.123, 123, 0};
 
-    size_t num_masks = gdf_get_num_chars_bitmask(num_rows);
+    size_t num_masks = get_number_of_bytes_for_valid(num_rows);
     std::vector<gdf_valid_type> valid_int_col0;
     std::vector<gdf_valid_type> valid_int_col1;
     std::vector<gdf_valid_type> valid_int_col2;
