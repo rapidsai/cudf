@@ -897,8 +897,8 @@ class Series(object):
         """Scale values to [0, 1] in float64
         """
         if self.null_count != 0:
-                msg = 'masked series not supported by this operation'
-                raise NotImplementedError(msg)
+            msg = 'masked series not supported by this operation'
+            raise NotImplementedError(msg)
         vmin = self.min()
         vmax = self.max()
         gpuarr = self.to_gpu_array()
