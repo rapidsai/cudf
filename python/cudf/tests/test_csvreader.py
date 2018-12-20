@@ -11,6 +11,7 @@ from cudf.io.csv import read_csv_strings
 import cudf
 import nvstrings
 
+
 def make_numeric_dataframe(nrows, dtype):
     df = pd.DataFrame()
     df['col1'] = np.arange(nrows, dtype=dtype)
