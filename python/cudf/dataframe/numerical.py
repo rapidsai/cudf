@@ -16,7 +16,6 @@ from .buffer import Buffer
 from cudf.comm.serialize import register_distributed_serializer
 from cudf._gdf import nvtx_range_push, nvtx_range_pop
 from cudf._sort import get_sorted_inds
-import cudf.dataframe.series
 
 import cudf.bindings.reduce as cpp_reduce
 
@@ -129,25 +128,21 @@ class NumericalColumn(columnops.TypedColumnBase):
             return col
 
     def sort_by_values(self, ascending=True, na_position="last"):
-        new_inds = get_sorted_inds(self, ascending, na_position)
+        sort_inds = get_sorted_inds(self, ascending, na_position)
         col_keys = cudautils.gather(data=self.data.mem,
-                                    index=new_inds.data.mem)
+                                    index=sort_inds.data.mem)
+        mask = None
         if self.mask:
-            mask = cudf.dataframe.series.Series(self)._get_mask_as_series()\
-                .take(new_inds.data.to_gpu_array()).as_mask()
+            mask = self._get_mask_as_column()\
+                .take(sort_inds.data.to_gpu_array()).as_mask()
             mask = Buffer(mask)
-            # Need to gather the bitmask based on the indices as well
-            col_keys = self.replace(data=Buffer(col_keys),
-                                    mask=mask,
-                                    null_count=self.null_count,
-                                    dtype=self.dtype)
-        else:
-            col_keys = self.replace(data=Buffer(col_keys),
-                                    null_count=self.null_count,
-                                    dtype=self.dtype)
-        col_inds = self.replace(data=new_inds.data,
-                                mask=None,
-                                dtype=new_inds.data.dtype)
+        col_keys = self.replace(data=Buffer(col_keys),
+                                mask=mask,
+                                null_count=self.null_count,
+                                dtype=self.dtype)
+        col_inds = self.replace(data=sort_inds.data,
+                                mask=sort_inds.mask,
+                                dtype=sort_inds.data.dtype)
         return col_keys, col_inds
 
     def to_pandas(self, index=None):
