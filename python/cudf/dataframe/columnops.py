@@ -69,6 +69,9 @@ class TypedColumnBase(Column):
     def sort_by_values(self, ascending):
         raise NotImplementedError
 
+    def find_and_replace(self, to_replace, values):
+        raise NotImplementedError
+
 
 def column_empty_like(column, dtype, masked):
     """Allocate a new column like the given *column*

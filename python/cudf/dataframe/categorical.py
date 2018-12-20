@@ -291,22 +291,22 @@ class CategoricalColumn(columnops.TypedColumnBase):
         else:
             return joined_index
 
-    def find_and_replace(self, to_replace, values):
-        to_replace = utils.make_list(to_replace)
-        values = utils.make_list(values)
-
+    def find_and_replace(self, to_replace, value):
+        """
+        Return col with *to_replace* replaced with *value*.
+        """
         replaced = columnops.as_column(self.cat().codes)
 
         to_replace_col = columnops.as_column(
             np.asarray([self._encode(val) for val in to_replace],
                        dtype=replaced.dtype)
         )
-        values_col = columnops.as_column(
-            np.asarray([self._encode(val) for val in values],
+        value_col = columnops.as_column(
+            np.asarray([self._encode(val) for val in value],
                        dtype=replaced.dtype)
         )
 
-        cpp_replace.replace(replaced, to_replace_col, values_col)
+        cpp_replace.replace(replaced, to_replace_col, value_col)
 
         return self.replace(data=replaced.data)
 
