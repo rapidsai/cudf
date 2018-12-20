@@ -368,15 +368,18 @@ class NumericalColumn(columnops.TypedColumnBase):
             else:
                 return joined_index
 
-    def find_and_replace(self, to_replace, values):
+    def find_and_replace(self, to_replace, value):
         """
-        Return col with to_replace replaced with values.
+        Return col with *to_replace* replaced with *value*.
         """
         replaced = self.replace(data=self.data.copy(),
                                 dtype=self._data.dtype)
+
         to_replace_col = columnops.as_column(to_replace)
-        values_col = columnops.as_column(values)
-        cpp_replace.replace(replaced, to_replace_col, values_col)
+        value_col = columnops.as_column(value)
+
+        cpp_replace.replace(replaced, to_replace_col, value_col)
+
         return replaced
 
 

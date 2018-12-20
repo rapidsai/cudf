@@ -1026,7 +1026,6 @@ def test_dataframe_shape_empty():
 
     assert pdf.shape == gdf.shape
 
-
 @pytest.fixture
 def pdf():
     return pd.DataFrame({'x': range(10),
@@ -1084,3 +1083,33 @@ def test_binops(pdf, gdf, left, right, binop):
     d = binop(left(pdf), right(pdf))
     g = binop(left(gdf), right(gdf))
     assert_eq(d, g)
+
+
+def test_dataframe_replace():
+    # numerical
+    pdf1 = pd.DataFrame({'a': [0, 1, 2, 3], 'b': [0, 1, 2, 3]})
+    gdf1 = DataFrame.from_pandas(pdf1)
+    pdf2 = pdf1.replace(0, 4)
+    gdf2 = gdf1.replace(0, 4)
+    pd.testing.assert_frame_equal(gdf2.to_pandas(), pdf2)
+
+    # categorical
+    pdf4 = pd.DataFrame({'a': ['one', 'two', 'three'], 'b': ['one', 'two', 'three']}, dtype='category')
+    gdf4 = DataFrame.from_pandas(pdf4)
+    pdf5 = pdf4.replace('two', 'three')
+    gdf5 = gdf4.replace('two', 'three')
+    pd.testing.assert_frame_equal(gdf5.to_pandas(), pdf5)
+
+    # list input
+    pdf6 = pdf1.replace([0, 1], [4, 5])
+    gdf6 = gdf1.replace([0, 1], [4, 5])
+    pd.testing.assert_frame_equal(gdf6.to_pandas(), pdf6)
+
+    pdf7 = pdf1.replace([0, 1], 4)
+    gdf7 = gdf1.replace([0, 1], 4)
+    pd.testing.assert_frame_equal(gdf7.to_pandas(), pdf7)
+
+    # dict input:
+    pdf8 = pdf1.replace({'a': 0, 'b': 0}, {'a': 4, 'b': 5})
+    gdf8 = gdf1.replace({'a': 0, 'b': 0}, {'a': 4, 'b': 5})
+    pd.testing.assert_frame_equal(gdf8.to_pandas(), pdf8)

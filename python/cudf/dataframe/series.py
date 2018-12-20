@@ -7,6 +7,7 @@ from numbers import Number
 
 import numpy as np
 import pandas as pd
+from pandas.api.types import is_scalar, is_dict_like
 
 from cudf.utils import cudautils
 from cudf import formatting
@@ -609,8 +610,50 @@ class Series(object):
         sr_inds = self._copy_construct(data=col_inds)
         return sr_keys, sr_inds
 
-    def replace(self, to_replace, values):
-        result = self._column.find_and_replace(to_replace, values)
+    def replace(self, to_replace, value):
+        """
+        Replace values given in *to_replace* with *value*.
+
+        Parameters
+        ----------
+        to_replace : numeric, str or list-like
+            Value(s) to replace.
+
+            * numeric or str:
+
+                - values equal to *to_replace* will be replaced
+                  with *value*
+
+            * list of numeric or str:
+
+                - If *value* is also list-like,
+                  *to_replace* and *value* must be of same length.
+        value : numeric, str, list-like, or dict
+            Value(s) to replace `to_replace` with.
+
+        Returns
+        -------
+        result : Series
+            The mask and index are preserved.
+        """
+        if is_scalar(to_replace):
+            to_replace = [to_replace]
+        if is_scalar(value):
+            value = [value]
+
+        if len(to_replace) != len(value):
+            raise ValueError("Replacement lists must be"
+               "of same length."
+               "Expected {}, got {}".format(
+                   len(to_replace), len(value)))
+
+        if is_dict_like(to_replace):
+            raise TypeError("Replacement lists can be"
+                    "numeric, str or list-like,"
+                    "not dict.")
+
+        result = self._column.find_and_replace(to_replace, value)
+
         return self._copy_construct(data=result)
 
     def reverse(self):
@@ -849,8 +892,8 @@ class Series(object):
         """Scale values to [0, 1] in float64
         """
         if self.null_count != 0:
-            msg = 'masked series not supported by this operation'
-            raise NotImplementedError(msg)
+                msg = 'masked series not supported by this operation'
+                raise NotImplementedError(msg)
         vmin = self.min()
         vmax = self.max()
         gpuarr = self.to_gpu_array()
@@ -858,7 +901,6 @@ class Series(object):
         return self._copy_construct(data=scaled)
 
     # Rounding
-
     def ceil(self):
         """Rounds each value upward to the smallest integral value not less
         than the original.
