@@ -6,27 +6,19 @@
 #include <limits.h>
 #include <gtest/gtest.h>
 #include "utils.cuh"
+#include "utilities/bit_util.cuh"
 
 
 gdf_valid_type * get_gdf_valid_from_device(gdf_column* column) {
+    if (column->valid == nullptr) {
+        return nullptr;
+    }
+
     gdf_valid_type * host_valid_out;
     size_t n_bytes = get_number_of_bytes_for_valid(column->size);
     host_valid_out = new gdf_valid_type[n_bytes];
     cudaMemcpy(host_valid_out,column->valid, n_bytes, cudaMemcpyDeviceToHost);
     return host_valid_out;
-}
-
-std::string gdf_valid_to_str(gdf_valid_type *valid, size_t column_size)
-{
-    size_t n_bytes = get_number_of_bytes_for_valid(column_size);
-    std::string response;
-    for (size_t i = 0; i < n_bytes; i++)
-    {
-        size_t length = (n_bytes != i + 1) ? GDF_VALID_BITSIZE : (column_size - GDF_VALID_BITSIZE * (n_bytes - 1));
-        auto result = chartobin(valid[i], length);
-        response += std::string(result);
-    }
-    return response;
 }
 
 gdf_valid_type* gen_gdf_valid(size_t column_size, size_t init_value)
@@ -58,7 +50,7 @@ void delete_gdf_column(gdf_column * column){
 }
 
 gdf_size_type count_zero_bits(gdf_valid_type *valid, size_t column_size)
-{    
+{
     size_t numbits = 0;
     auto bin = gdf_valid_to_str(valid, column_size);
 
@@ -69,20 +61,27 @@ gdf_size_type count_zero_bits(gdf_valid_type *valid, size_t column_size)
     return numbits;
 }
 
-std::string chartobin(gdf_valid_type c, int size/* = 8*/)
-{
-    std::string bin;
-    bin.resize(size);
-    bin[0] = 0;
-    int i;
-    for (i = size - 1; i >= 0; i--)
-    {
-        bin[i] = (c % 2) + '0';
-        c /= 2;
-    }
-    return bin;
-}
-
 auto print_binary(gdf_valid_type n, int size) -> void {
     std::cout << chartobin(n) << "\t sz: " <<  size <<  "\tbinary: " << chartobin(n, size) << std::endl;
+}
+
+// Create the valid pointer and init randomly the last half column
+void initialize_valids(host_valid_pointer& valid_ptr, size_t length, bool all_bits_on)
+{
+    auto deleter = [](gdf_valid_type* valid) { delete[] valid; };
+    auto n_bytes = get_number_of_bytes_for_valid(length);
+    auto valid_bits = new gdf_valid_type[n_bytes];
+
+    for (size_t i = 0; i < length; ++i) {
+        if (all_bits_on) {
+            gdf::util::turn_bit_on(valid_bits, i);
+        } else {
+            if (i < length / 2 || std::rand() % 2 == 1) {
+               gdf::util::turn_bit_on(valid_bits, i);
+            } else {
+                gdf::util::turn_bit_off(valid_bits, i);
+            }
+        }
+    }
+    valid_ptr = host_valid_pointer{ valid_bits, deleter };
 }

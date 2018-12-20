@@ -19,12 +19,22 @@
 #include <fstream>
 #include <vector>
 #include <sys/stat.h>
+#include <memory>
 
 #include "gtest/gtest.h"
 
 #include <cudf.h>
 #include <cudf/functions.h>
 #include <NVStrings.h>
+
+#include <cudf/io_functions_cpp.h>
+
+#include <arrow/status.h>
+#include <arrow/io/interfaces.h>
+#include <arrow/io/file.h>
+
+#include "tests/utilities/cudf_test_utils.cuh"
+#include "tests/utilities/cudf_test_fixtures.h"
 
 bool checkFile(const char *fname)
 {
@@ -43,9 +53,142 @@ TEST(gdf_csv_test, Simple)
 	outfile <<	"10,20,30,40,50,60,70,80,90,100\n"\
 				"11,21,31,41,51,61,71,81,91,101\n"\
 				"12,22,32,42,52,62,72,82,92,102\n"\
-				"13,23,33,43,53,63,73,83,93,103";
+				"13,23,33,43,53,63,73,83,93,103\n";//@todo, check last hast \n endofline
 	outfile.close();
 	ASSERT_TRUE( checkFile(fname) );
+	size_t index = 0;
+	while (index < 5) {
+		csv_read_arg args{};
+		args.file_path		= fname;
+		args.num_cols		= std::extent<decltype(names)>::value;
+		args.names			= names;
+		args.dtype			= types;
+		args.delimiter		= ',';
+		args.lineterminator = '\n';
+		EXPECT_EQ( read_csv(&args), GDF_SUCCESS );
+
+		EXPECT_EQ(args.num_cols_out, 10);
+		EXPECT_EQ(args.num_rows_out, 4);
+		index++;
+	}
+}
+TEST(gdf_csv_test, nation_csv) {
+	std::cout << "nation_csv\n"; 
+	const char* fname = "/tmp/nation.psv";
+	
+	std::ofstream outfile(fname, std::ofstream::out);
+
+	auto content = 
+R"(0|ALGERIA|0| haggle. carefully final deposits detect slyly agai
+1|ARGENTINA|1|al foxes promise slyly according to the regular accounts. bold requests alon
+2|BRAZIL|1|y alongside of the pending deposits. carefully special packages are about the ironic forges. slyly special 
+3|CANADA|1|eas hang ironic, silent packages. slyly regular packages are furiously over the tithes. fluffily bold
+4|EGYPT|4|y above the carefully unusual theodolites. final dugouts are quickly across the furiously regular d
+5|ETHIOPIA|0|ven packages wake quickly. regu
+6|FRANCE|3|refully final requests. regular, ironi
+7|GERMANY|3|l platelets. regular accounts x-ray: unusual, regular acco
+8|INDIA|2|ss excuses cajole slyly across the packages. deposits print aroun
+9|INDONESIA|2| slyly express asymptotes. regular deposits haggle slyly. carefully ironic hockey players sleep blithely. carefull
+10|IRAN|4|efully alongside of the slyly final dependencies. 
+11|IRAQ|4|nic deposits boost atop the quickly final requests? quickly regula
+12|JAPAN|2|ously. final, express gifts cajole a
+13|JORDAN|4|ic deposits are blithely about the carefully regular pa
+14|KENYA|0| pending excuses haggle furiously deposits. pending, express pinto beans wake fluffily past t
+15|MOROCCO|0|rns. blithely bold courts among the closely regular packages use furiously bold platelets?
+16|MOZAMBIQUE|0|s. ironic, unusual asymptotes wake blithely r
+17|PERU|1|platelets. blithely pending dependencies use fluffily across the even pinto beans. carefully silent accoun
+18|CHINA|2|c dependencies. furiously express notornis sleep slyly regular accounts. ideas sleep. depos
+19|ROMANIA|3|ular asymptotes are about the furious multipliers. express dependencies nag above the ironically ironic account
+20|SAUDI ARABIA|4|ts. silent requests haggle. closely express packages sleep across the blithely
+21|VIETNAM|2|hely enticingly express accounts. even, final 
+22|RUSSIA|3| requests against the platelets use never according to the quickly regular pint
+23|UNITED KINGDOM|3|eans boost carefully special requests. accounts are. carefull
+24|UNITED STATES|1|y final packages. slow foxes cajole quickly. quickly silent platelets breach ironic accounts. unusual pinto be)";
+
+	outfile <<	content << std::endl;
+	outfile.close();
+
+	const char* names[]	= { "n_nationkey", "n_name", "n_regionkey", "n_comment" };
+	const char* types[]	= { "int32", "int64", "int32", "int64" };
+
+	ASSERT_TRUE( checkFile(fname) );
+	size_t index = 0;
+	while (index < 5){
+		csv_read_arg args{};
+		args.file_path		= fname;
+		args.num_cols		= std::extent<decltype(names)>::value;
+		args.names			= names;
+		args.dtype			= types;
+		args.delimiter		= '|';
+		args.lineterminator = '\n';
+		EXPECT_EQ( read_csv(&args), GDF_SUCCESS );
+
+		EXPECT_EQ(args.num_cols_out, 4);
+		EXPECT_EQ(args.num_rows_out, 25);
+		index++;
+	}
+}
+
+TEST(gdf_csv_test, nation_csv_arrow) {
+	std::cout << "nation_csv_arrow\n"; 
+	const char* fname = "/tmp/nation.psv";
+	const char* names[]	= { "n_nationkey", "n_name", "n_regionkey", "n_comment" };
+	const char* types[]	= { "int32", "int64", "int32", "int64" };
+
+	std::shared_ptr<arrow::io::ReadableFile> readable_file;
+
+	size_t index = 0;
+	while (index < 5){
+		csv_read_arg args{};
+		args.file_path		= fname;
+		args.num_cols		= std::extent<decltype(names)>::value;
+		args.names			= names;
+		args.dtype			= types;
+		args.delimiter		= '|';
+		args.lineterminator = '\n';
+
+		if (!arrow::io::ReadableFile::Open(std::string(fname), &readable_file).ok()) {
+			std::cout << "arrow::io::ReadableFile erroR\n";
+		}
+		EXPECT_EQ( read_csv_arrow(&args, readable_file), GDF_SUCCESS );
+
+		EXPECT_EQ(args.num_cols_out, 4);
+		EXPECT_EQ(args.num_rows_out, 25);
+		
+		readable_file->Close();
+		index++;
+
+	}
+} 
+std::vector<gdf_column*> ToGdfColumnCpps(gdf_column	**data, const char	**names, size_t ncols)   {
+  std::vector<gdf_column*> gdfColumnsCpps;
+  for(size_t i = 0; i < ncols; i++ ){
+    gdf_column	*column = data[i];
+
+	gdfColumnsCpps.push_back(column);
+  }
+  return gdfColumnsCpps;
+}
+
+
+
+TEST(gdf_csv_test, CsvSimpleRandomAccessFile)
+{
+
+	gdf_error error = GDF_SUCCESS;
+
+
+  	const char* fname	= "/tmp/CsvSimpleTest.csv";
+	const char* names[]	= { "A", "B", "C", "D", "E", "F", "G", "H", "I", "J" };
+	const char* types[]	= { "int32", "int32", "int32", "int32", "int32",
+							"int32", "int32", "int32", "int32", "int32", };
+
+
+
+	std::shared_ptr<arrow::io::ReadableFile> readable_file;
+	EXPECT_TRUE(arrow::io::ReadableFile::Open(std::string("/tmp/CsvSimpleTest.csv"), &readable_file).ok());
+
+ 	ASSERT_TRUE( checkFile(fname) );
 
 	{
 		csv_read_arg args{};
@@ -55,9 +198,20 @@ TEST(gdf_csv_test, Simple)
 		args.dtype			= types;
 		args.delimiter		= ',';
 		args.lineterminator = '\n';
-		EXPECT_EQ( read_csv(&args), GDF_SUCCESS );
+		error = read_csv_arrow(&args,readable_file);
+		EXPECT_TRUE( args.num_cols_out == 10);
+		EXPECT_EQ(args.num_rows_out, 4);
+		EXPECT_TRUE( error == GDF_SUCCESS );
+	
+		std::cout << args.num_cols_out << std::endl;
+	    std::cout << args.num_rows_out << std::endl;
+
+		auto gpu_columns  = ToGdfColumnCpps(args.data, args.names, args.num_cols_out);
+ 		for (auto ptr : gpu_columns)
+		 	print_typed_column((int32_t*)ptr->data, ptr->valid, ptr->size);
 	}
 }
+
 
 TEST(gdf_csv_test, MortPerf)
 {

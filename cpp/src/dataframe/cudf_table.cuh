@@ -303,7 +303,7 @@ public:
 
     // Allocate storage sufficient to hold a validity bit for every row
     // in the table
-    const size_type mask_size = gdf_get_num_chars_bitmask(column_length);
+    const size_type mask_size = get_number_of_bytes_for_valid(column_length);
     device_row_valid.resize(mask_size);
 
        
@@ -850,7 +850,7 @@ gdf_error scatter( gdf_table<size_type> & scattered_output_table,
         && (nullptr != current_output_column->valid))
     {
       // Ensure the output bitmask is initialized to zero
-      const size_type num_masks = gdf_get_num_chars_bitmask(column_length);
+      const size_type num_masks = get_number_of_bytes_for_valid(column_length);
       cudaMemsetAsync(current_output_column->valid, 0,  num_masks * sizeof(gdf_valid_type), valid_streams[i]);
 
       // Scatter the validity bits from the input column to output column
@@ -1016,7 +1016,7 @@ private:
     }
     if (input_column->valid != nullptr && output_column->valid != nullptr) {
       if (input_column->valid == output_column->valid) { //If gather is in-place
-          rmm::device_vector<gdf_valid_type> remapped_valid_copy(gdf_get_num_chars_bitmask(num_rows), 0);
+        rmm::device_vector<gdf_valid_type> remapped_valid_copy(get_number_of_bytes_for_valid(num_rows), 0);
           gather_valid<index_type>(
                   input_column->valid,
                   remapped_valid_copy.data().get(),
