@@ -6,7 +6,7 @@
 #   * librmm_cffi
 #   * cudf
 
-# cython & cffi must be installed to run this
+# cython, cffi, & numpy must be installed to run this
 import os
 import subprocess
 import shutil
@@ -98,11 +98,12 @@ shutil.rmtree('build', ignore_errors=True)
 
 install_requires = [
     'pandas>=0.20,<0.21',
-    'numba>=0.40.0dev,<0.41',
+    'numba>=0.40.0,<0.42',
     'pycparser==2.19',
     'pyarrow>=0.10,<0.11',
     'cffi>=1.0.0',
     'cython>=0.28,<0.29',
+    'numpy>=1.14',
     'nvstrings'
 ]
 
@@ -133,13 +134,18 @@ packages += find_packages(where='python')
 
 setup(name='cudf',
       description='cuDF - GPU Dataframe',
+      long_description=open('README.md', encoding='UTF-8').read(),
+      long_description_content_type='text/markdown',
+      url='https://github.com/rapidsai/cudf',
       version=os.environ.get('GIT_DESCRIBE_TAG', '0.0.0.dev').lstrip('v'),
       classifiers=[
           "Intended Audience :: Developers",
           "Programming Language :: Python",
           "Programming Language :: Python :: 3.5",
+          "Programming Language :: Python :: 3.6"
       ],
       author="NVIDIA Corporation",
+      license='Apache 2.0',
       packages=packages,
       package_dir={
           'cudf': 'python/cudf',
@@ -151,6 +157,7 @@ setup(name='cudf',
       },
       install_requires=install_requires,
       setup_requires=install_requires,
+      python_requires='>=3.5,<3.7',
       cffi_modules=[
           'cpp/python/libgdf_cffi/libgdf_build.py:ffibuilder',
           'cpp/python/librmm_cffi/librmm_build.py:ffibuilder'
