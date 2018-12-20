@@ -371,6 +371,10 @@ public:
     return row_valid;
   }
 
+  gdf_error get_num_valid_rows(int & num_valid_rows) {
+      return count_nonzero_mask(d_row_valid, column_length, num_valid_rows, 0);
+  }
+
 
   /* --------------------------------------------------------------------------*/
   /** 

@@ -906,10 +906,11 @@ gdf_error gdf_group_by_count(int ncols,                    // # columns
    * @Param[in] The column indices of the input dataset that will be grouped by
    * @Param[out] The dataset sorted by the group by columns (needs to be pre-allocated)
    * @Param[out] A column containing the starting indices of each group. Indices based off of new sort order. (needs to be pre-allocated)
-   * @Param[in] struct with additional info, like flag_groupby_include_nulls 
-   *                    0 = Nulls are ignored in group by keys (Pandas style), 
-                        1 = Nulls are treated as values in group by keys where NULL == NULL (SQL style)
-   * @Param[in] Flag indicating if nulls are smaller (0) or larger (1) than non nulls for the sort operation
+   * @Param[in] The context used to control how nulls are treated in a sort and in group by
+   *   context->flag_nulls_sort_behavior< 0 = Nulls are are treated as largest, 
+   *   1 = Nulls are treated as smallest, 2 = Special multi-sort case any row with null is largest>
+   *   context-> flag_groupby_include_nulls <0 = Nulls are ignored in group by keys (Pandas style), 
+                        1 = Nulls are treated as values in group by keys where NULL == NULL (SQL style)>
    *
    * @Returns gdf_error with error code on failure, otherwise GDF_SUCESS
    */
@@ -920,8 +921,7 @@ gdf_error gdf_group_by_wo_aggregations(int num_data_cols,
 									   int * groupby_col_indices,
 									   gdf_column** data_cols_out,
 									   gdf_column* group_start_indices,
-                     gdf_context* ctxt,
-									   int nulls_are_smallest);           
+                     gdf_context* ctxt);           
 
 /* --------------------------------------------------------------------------*/
   /**
@@ -934,7 +934,9 @@ gdf_error gdf_group_by_wo_aggregations(int num_data_cols,
    * @Param[in] The number of columns to be grouping by
    * @Param[in] The column indices of the input dataset that will be grouped by
    * @Param[out] A column containing the starting indices of each group. Indices based off of new sort order. (needs to be pre-allocated)
-   * @Param[in] Flag indicating if nulls are smaller (0) or larger (1) than non nulls for the sort operation
+   * @Param[in] The context used to control how nulls are treated in a sort
+   *   context->flag_nulls_sort_behavior< 0 = Nulls are are treated as largest, 
+   *   1 = Nulls are treated as smallest, 2 = Special multi-sort case any row with null is largest>
    *
    * @Returns gdf_error with error code on failure, otherwise GDF_SUCESS
    */
@@ -944,7 +946,7 @@ gdf_error gdf_group_start_indices(int num_data_cols,
 									   int num_groupby_cols,
 									   int * groupby_col_indices,
 									   gdf_column* group_start_indices,
-									   int nulls_are_smallest);
+									   gdf_context* ctxt);
 
 gdf_error gdf_quantile_exact(	gdf_column*         col_in,       //input column with 0 null_count otherwise GDF_VALIDITY_UNSUPPORTED is returned
                                 gdf_quantile_method prec,         //precision: type of quantile method calculation
@@ -969,8 +971,9 @@ gdf_error gdf_quantile_aprrox(	gdf_column*  col_in,       //input column with 0 
  *                     (0 is ascending order and 1 is descending). If NULL
  *                     is provided defaults to ascending order for evey column.
  * @Param[in] num_inputs # columns
- * @Param[in] flag_nulls_are_smallest Flag to indicate if nulls are to be considered
- *                                    smaller than non-nulls or viceversa
+ * @Param[in] The context used to control how nulls are treated in a sort
+ *   context->flag_nulls_sort_behavior< 0 = Nulls are are treated as largest, 
+ *   1 = Nulls are treated as smallest, 2 = Special multi-sort case any row with null is largest>
  * @Param[out] output_indices Pre-allocated gdf_column to be filled with sorted
  *                            indices
  * 
@@ -981,4 +984,4 @@ gdf_error gdf_order_by(gdf_column** input_columns,
                        int8_t*      asc_desc,
                        size_t       num_inputs,
                        gdf_column*  output_indices,
-                       int          flag_nulls_are_smallest);
+                       gdf_context * context);

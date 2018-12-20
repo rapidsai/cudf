@@ -25,7 +25,6 @@
 #include <cstdint>
 
 #include "utilities/cudf_utils.h"
-#include "utilities/error_utils.h"
 #include "utilities/type_dispatcher.hpp"
 
 template<typename IndexT>
@@ -376,6 +375,31 @@ private:
 	  		return State::True;
 		  else
 			  return State::False;
+	  }
+  };
+
+  struct OpLess_with_nulls_always_false
+  {
+    template<typename ColType>
+	  __device__
+	  State operator() (IndexT row1, IndexT row2,
+                      int col_index,
+                      const void* const * columns,
+                      const gdf_valid_type* const * valids)
+	  {
+		  const ColType res1 = LesserRTTI::at<ColType>(col_index, row1, columns);
+		  const ColType res2 = LesserRTTI::at<ColType>(col_index, row2, columns);
+		  const bool isValid1 = LesserRTTI::is_valid(col_index, row1, valids);
+		  const bool isValid2 = LesserRTTI::is_valid(col_index, row2, valids);
+
+		  if (!isValid2 || !isValid1)
+			  return State::False;
+		  else if( res1 < res2 )
+        return State::True;
+      else if( res1 == res2 )
+        return State::Undecided;
+      else
+        return State::False;
 	  }
   };
 
@@ -875,9 +899,6 @@ void multi_col_sort(void* const *           d_cols,
                     bool                    nulls_are_lessthan_always_false = false,
                     cudaStream_t            stream = NULL)
 {
-
-// if using nulls_are_lessthan_always_false = true, then you cant set ascending descending order (d_asc_desc)
-  GDF_REQUIRE((nulls_are_lessthan_always_false && (nullptr == d_asc_desc)) || !nulls_are_lessthan_always_false, GDF_INVALID_API_CALL);
 
   //cannot use counting_iterator 2 reasons:
   //(1.) need to return a container result;

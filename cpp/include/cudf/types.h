@@ -167,6 +167,8 @@ typedef struct gdf_context_{
   int flag_sort_inplace;        /**< 0 = No sort in place allowed, 1 = else */
   int flag_groupby_include_nulls; /**< 0 = Nulls are ignored in group by keys (Pandas style), 
                                       1 = Nulls are treated as values in group by keys where NULL == NULL (SQL style)*/ 
+  int flag_nulls_sort_behavior; /**< 0 = Nulls are are treated as largest, 1 = Nulls are treated as smallest, 
+                                      2 = Special multi-sort case any row with null is largest*/ 
 } gdf_context;
 
 struct _OpaqueIpcParser;

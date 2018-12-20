@@ -55,6 +55,9 @@ namespace{ //annonymus
     if(GDF_SUCCESS != gdf_status)
       return gdf_status;
 
+    // if using nulls_are_lessthan_always_false = true, then you cant set ascending descending order (asc_desc)
+    GDF_REQUIRE(((nulls_are_lessthan_always_false && (nullptr == asc_desc)) || !nulls_are_lessthan_always_false), GDF_INVALID_API_CALL);
+
 		multi_col_sort(d_col_data, d_valids_data, d_col_types, asc_desc, ncols, cols[0]->size,
 				have_nulls, static_cast<int32_t*>(output_indices->data), flag_nulls_are_smallest, nulls_are_lessthan_always_false);
 
@@ -84,7 +87,15 @@ gdf_error gdf_order_by(gdf_column** cols,
                        int8_t* asc_desc,
                        size_t ncols,
                        gdf_column* output_indices,
-                       int flag_nulls_are_smallest)
+                       gdf_context * context)                       
 {
-  return multi_col_order_by(cols, asc_desc, ncols, output_indices, flag_nulls_are_smallest);
+
+  bool flag_nulls_are_smallest = false;
+  bool nulls_are_lessthan_always_false = false;
+  if (context->flag_nulls_sort_behavior == 1)
+    flag_nulls_are_smallest = true;
+  else if (context->flag_nulls_sort_behavior == 2)
+    nulls_are_lessthan_always_false = true;
+
+  return multi_col_order_by(cols, asc_desc, ncols, output_indices, flag_nulls_are_smallest, nulls_are_lessthan_always_false);
 }
