@@ -1157,7 +1157,7 @@ __global__ void convertCsvToGdf(
 			long tempPos=pos-1;
 
 			// Modify start & end to ignore whitespace and quotechars
-			if(dtype[col] != gdf_dtype::GDF_CATEGORY && dtype[col] != gdf_dtype::GDF_STRING){
+			if(dtype[actual_col] != gdf_dtype::GDF_CATEGORY && dtype[actual_col] != gdf_dtype::GDF_STRING){
 				adjustForWhitespaceAndQuotes(raw_csv, start, tempPos, opts.quotechar);
 			}
 
