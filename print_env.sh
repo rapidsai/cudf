@@ -6,7 +6,11 @@
 # "./print_env.sh > env.txt" - prints to file "env.txt"
 
 echo "**git***"
+if [ "$(git rev-parse --is-inside-work-tree 2>/dev/null)" == "true" ]; then
 git log --decorate -n 1
+else
+echo "Not inside a git repository"
+fi
 echo 
 
 echo "***OS Information***"
@@ -54,14 +58,19 @@ printf '%-32s: %s\n' PYTHON_PATH $PYTHON_PATH
 
 echo
 
+
 # Print conda packages if conda exists
-if type "conda" > /dev/null; then
+if type "conda" &> /dev/null; then
 echo '***conda packages***'
 which conda && conda list 
 echo
 # Print pip packages if pip exists
-elif type "pip" > /dev/null; then
+elif type "pip" &> /dev/null; then
+echo "conda not found"
 echo "***pip packages***"
 which pip && pip list
 echo
+else
+echo "conda not found"
+echo "pip not found"
 fi
