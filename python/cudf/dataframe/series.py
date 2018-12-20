@@ -638,27 +638,27 @@ class Series(object):
             The mask and index are preserved.
         """
         if is_list_like(to_replace):
-            if is_scalar(value): # allow but make value same len
+            if is_scalar(value):  # allow but make value same len
                 value = list(itertools.repeat(value, len(to_replace)))
         elif is_scalar(to_replace):
             if not is_scalar(value):
                 raise TypeError("Incompatible type {}"
-                    "for *value* parameter."
-                    "Expected numeric or str,"
-                    "got {}".format(type(value)))
+                                "for *value* parameter."
+                                "Expected numeric or str,"
+                                "got {}".format(type(value)))
             to_replace = [to_replace]
             value = [value]
 
         if len(to_replace) != len(value):
             raise ValueError("Replacement lists must be"
-               "of same length."
-               "Expected {}, got {}".format(
-                   len(to_replace), len(value)))
+                             "of same length."
+                             "Expected {}, got {}".format(
+                               len(to_replace), len(value)))
 
         if is_dict_like(to_replace):
             raise TypeError("Replacement lists can be"
-                    "numeric, str or list-like,"
-                    "not dict.")
+                            "numeric, str or list-like,"
+                            "not dict.")
 
         result = self._column.find_and_replace(to_replace, value)
 
