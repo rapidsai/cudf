@@ -188,7 +188,7 @@ class DataFrame(object):
         sliced to the specified range.
         If *arg* is an ``array`` containing column names, return a new
         DataFrame with the corresponding columns.
-
+        If *arg* is a ``dtype.bool array``, return the rows marked True
 
         Examples
         --------
@@ -214,6 +214,8 @@ class DataFrame(object):
         1    1    1
         2    2    2
         3    3    3
+        >>> df[[True, False, True, False]] # mask the entire dataframe,
+        # returning the rows specified in the boolean mask
         """
         if isinstance(arg, str) or isinstance(arg, int):
             s = self._cols[arg]
@@ -224,10 +226,15 @@ class DataFrame(object):
             for k, col in self._cols.items():
                 df[k] = col[arg]
             return df
-        elif isinstance(arg, (list,)):
+        elif isinstance(arg, (list, np.ndarray, pd.Series, Series,)):
+            mask = np.array(arg)
             df = DataFrame()
-            for col in arg:
-                df[col] = self[col]
+            if(mask.dtype == 'bool'):
+                for col in self._cols:
+                    df[col] = self._cols[col][arg]
+            else:
+                for col in arg:
+                    df[col] = self[col]
             return df
         else:
             msg = "__getitem__ on type {!r} is not supported"

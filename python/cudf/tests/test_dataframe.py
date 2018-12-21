@@ -1062,3 +1062,51 @@ def test_binops(pdf, gdf, left, right, binop):
     d = binop(left(pdf), right(pdf))
     g = binop(left(gdf), right(gdf))
     assert_eq(d, g)
+
+
+@pytest.mark.xfail(reason="null is not supported in gpu yet")
+def test_dataframe_boolean_mask_with_None():
+    pdf = pd.DataFrame({'a': [0, 1, 2, 3], 'b': [0.1, 0.2, None, 0.3]})
+    gdf = DataFrame.from_pandas(pdf)
+    pdf_masked = pdf[[True, False, True, False]]
+    gdf_masked = gdf[[True, False, True, False]]
+    assert pdf_masked.to_string().split() == gdf_masked.to_string().split()
+
+
+"""
+This test compares cudf and Pandas dataframe boolean indexing.
+"""
+
+
+@pytest.mark.parametrize('mask_fn', [
+    lambda x: x,
+    lambda x: np.array(x),
+    lambda x: pd.Series(x),
+    ])
+def test_dataframe_boolean_mask(pdf, gdf, mask_fn):
+    mask_base = [True, False, True, False, True, False, True, False, True,
+                 False]
+    mask = mask_fn(mask_base)
+    assert len(mask) == gdf.shape[0]
+    pdf_masked = pdf[mask]
+    gdf_masked = gdf[mask]
+    assert pdf_masked.to_string().split() == gdf_masked.to_string().split()
+
+
+"""
+This test only tests boolean indexing of a cudf DataFrame with a cudf Series.
+Pandas does not support cudf Series.  When masking with a Series, the length
+is not required to match.
+"""
+
+
+def test_dataframe_boolean_mask_Series(gdf):
+    mask = Series([True, False, True, False])
+    mask2 = Series([True, True, True, True])
+    mask3 = Series([True, True, True, True, True, True, True, True])
+    gdf_masked = gdf[mask]
+    gdf_masked2 = gdf[mask2]
+    gdf_masked3 = gdf[mask3]
+    assert gdf_masked.shape[0] == 2
+    assert gdf_masked2.shape[0] == 4
+    assert gdf_masked3.shape[0] == 8
