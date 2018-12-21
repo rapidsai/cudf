@@ -71,9 +71,10 @@ DataFrame copy bounds checking - sizes 0 through 10 perform as expected
 @pytest.mark.parametrize('ncols', [1])
 @pytest.mark.parametrize(
     'data_type',
-    # ['int8', 'int16', 'int32', 'int64', 'float32', 'float64', ]
-    [ 'datetime64[ms]', 'category', ]
-    # ['datetime64[ms]']
+    # ['int8', 'int16', 'int32', 'int64', 'float32', 'float64',
+    #     'category', 'datetime64[ms]']
+    # [ 'datetime64[ms]', 'category', ]
+    ['datetime64[ms]']
     # ['int8']
 )
 def test_cudf_dataframe_copy(copy_fn, ncols, data_type):

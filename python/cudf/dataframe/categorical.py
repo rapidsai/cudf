@@ -72,9 +72,17 @@ class CategoricalColumn(columnops.TypedColumnBase):
         ordered : bool
             whether the categorical has a logical ordering (e.g. less than)
         """
-        categories = kwargs.pop('categories')
-        ordered = kwargs.pop('ordered')
+        categories = kwargs.pop('categories', False) or\
+            kwargs.pop('_categories')
+        ordered = kwargs.pop('ordered', False) or\
+            kwargs.pop('_ordered', False)
         kwargs.update({'dtype': pd.api.types.CategoricalDtype()})
+        kwargs.pop('_dtype', None)
+        kwargs.pop('_mask', None)
+        kwargs.pop('_null_count', None)
+        data = kwargs.pop('_data', None)
+        if data:
+            kwargs.update({'data': data})
         super(CategoricalColumn, self).__init__(**kwargs)
         self._categories = tuple(categories)
         self._ordered = bool(ordered)
@@ -290,8 +298,13 @@ class CategoricalColumn(columnops.TypedColumnBase):
             return joined_index
 
     def copy(self, deep=True):
-        column = CategoricalColumn()
+        print(self.__dict__)
+        column = CategoricalColumn(**self.__dict__)
         return column.copy_base(self)
+
+    @property
+    def data(self):
+        return self._data
 
 
 def pandas_categorical_as_column(categorical, codes=None):
