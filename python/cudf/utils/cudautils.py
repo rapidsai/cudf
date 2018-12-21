@@ -93,9 +93,6 @@ def gpu_copy(inp, out):
 
 
 def astype(ary, dtype):
-    print('cudautils astype')
-    print(ary.dtype)
-    print(dtype)
     if ary.dtype == np.dtype(dtype):
         return ary
     elif (

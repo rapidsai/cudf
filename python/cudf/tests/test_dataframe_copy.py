@@ -6,6 +6,7 @@ import numpy as np
 import pandas as pd
 
 from cudf.dataframe.dataframe import DataFrame
+from .utils import assert_eq
 
 """
 DataFrame copy expectations
@@ -29,10 +30,8 @@ def test_dataframe_copy_shallow():
     copy_gdf = gdf.copy(deep=False)
     copy_pdf['b'] = [0, 0, 0]
     copy_gdf['b'] = [0, 0, 0]
-    pdf_pass = np.array_equal(pdf['b'].values, copy_pdf['b'].values)
-    gdf_pass = np.array_equal(gdf['b'].to_array(), copy_gdf['b'].to_array())
-    assert gdf_pass
-    assert pdf_pass
+    assert_eq(pdf['b'].values, copy_pdf['b'].values)
+    assert_eq(gdf['b'].to_array(), copy_gdf['b'].to_array())
 
 
 @pytest.mark.parametrize('copy_parameters', [
@@ -69,11 +68,12 @@ DataFrame copy bounds checking - sizes 0 through 10 perform as expected
 @pytest.mark.parametrize('copy_fn', [
     lambda x: x.copy(),
     ])
-@pytest.mark.parametrize('ncols', [0, 1, 2, 10])
+@pytest.mark.parametrize('ncols', [1])
 @pytest.mark.parametrize(
     'data_type',
     ['int8', 'int16', 'int32', 'int64', 'float32', 'float64', 'datetime64[ms]',
-     'category', ]
+        'category', ]
+    # ['datetime64[ms]']
     # ['int8']
 )
 def test_cudf_dataframe_copy(copy_fn, ncols, data_type):
@@ -83,6 +83,4 @@ def test_cudf_dataframe_copy(copy_fn, ncols, data_type):
                                          dtype=data_type)
     df = DataFrame.from_pandas(pdf)
     copy_df = copy_fn(df)
-    print(df.to_string().split())
-    print(copy_df.to_string().split())
-    assert df.to_string().split() == copy_df.to_string().split()
+    assert_eq(df, copy_df)

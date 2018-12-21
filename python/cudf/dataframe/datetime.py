@@ -161,6 +161,10 @@ class DatetimeColumn(columnops.TypedColumnBase):
             null_count=self.null_count
         )
 
+    def copy(self):
+        print('Datetime copy')
+        return self.__super__(DatetimeColumn, self).copy()
+
 
 def binop(lhs, rhs, op, out_dtype):
     nvtx_range_push("PYGDF_BINARY_OP", "orange")

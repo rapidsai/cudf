@@ -300,19 +300,17 @@ class Column(object):
         """
         return self.replace(data=self.data.copy())
 
-    def copy(self, deep=True):
+    def copy_base(self, column_child, deep=True):
         """Copy the column with a new allocation of the data and mask.
         """
         print('self data: ', end='')
         print(self._data)
-        # TODO: Make Categorical or Datetime columns here as necessary
-        column = Column(self._data.copy())
         if self._mask:
-            column._mask = self._mask.copy()
-        column._null_count = self._null_count
+            column_child._mask = self._mask.copy()
+        column_child._null_count = self._null_count
         print('Column data: ', end='')
-        print(column._data)
-        return column
+        print(column_child._data)
+        return column_child
         # copied = self.copy_data()
         # if self.has_null_mask:
         #    return copied.set_mask(mask=self.mask.copy(),

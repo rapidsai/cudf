@@ -367,6 +367,10 @@ class NumericalColumn(columnops.TypedColumnBase):
             else:
                 return joined_index
 
+    def copy(self, deep=True):
+        column = NumericalColumn(self._data.copy())
+        return column.copy_base(self)
+
 
 def numeric_column_binop(lhs, rhs, op, out_dtype):
     if lhs.dtype != rhs.dtype:

@@ -289,6 +289,10 @@ class CategoricalColumn(columnops.TypedColumnBase):
         else:
             return joined_index
 
+    def copy(self, deep=True):
+        column = CategoricalColumn()
+        return column.copy_base(self)
+
 
 def pandas_categorical_as_column(categorical, codes=None):
     """Creates a CategoricalColumn from a pandas.Categorical

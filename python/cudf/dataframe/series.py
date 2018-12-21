@@ -405,6 +405,7 @@ class Series(object):
 
     def copy(self, deep=True):
         series = Series(self.data)
+        print('ctype ' + type(series._column).__name__)
         print('Series: ', end='')
         print(series)
         series._index = GenericIndex(self._index)
@@ -414,6 +415,8 @@ class Series(object):
         print(self._column)
         print('self column dtype:')
         print(self._column.dtype)
+        if isinstance(self, DatetimeColumn):
+            print("This series has a DatetimeColumn")
         series._column = self._column.copy(deep)
         print('Series column: ', end='')
         print(series._column)
