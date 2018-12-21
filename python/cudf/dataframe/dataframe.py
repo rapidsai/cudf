@@ -823,12 +823,14 @@ class DataFrame(object):
 
         Parameters
         ----------
-        by : str
-            Name of Series to sort by
+        by : str or list of str
+            Name or list of names to sort by.
         ascending : bool or list of bool, default True
-            If True, sort values in ascending order, otherwise descending.
-        na_position : str
-            first puts nulls at the beginning, last puts nulls at the end
+            Sort ascending vs. descending. Specify list for multiple sort
+            orders. If this is a list of bools, must match the length of the
+            by.
+        na_position : {‘first’, ‘last’}, default ‘last’
+            'first' puts nulls at the beginning, 'last' puts nulls at the end
         Returns
         -------
         sorted_obj : cuDF DataFrame
@@ -836,7 +838,6 @@ class DataFrame(object):
         Difference from pandas:
           * Support axis='index' only.
           * Not supporting: inplace, kind
-          * Ascending can be a list of bools to control per column
 
         Examples
         --------

@@ -546,7 +546,7 @@ class Series(object):
     def argsort(self, ascending=True, na_position="last"):
         """Returns a Series of int64 index that will sort the series.
 
-        Uses stable parallel radixsort.
+        Uses Thrust sort.
 
         Returns
         -------
@@ -562,14 +562,42 @@ class Series(object):
 
     def sort_values(self, ascending=True, na_position="last"):
         """
-        Sort by values.
+        Sort by the values.
+
+        Sort a Series in ascending or descending order by some criterion.
+
+        Parameters
+        ----------
+        ascending : bool, default True
+            If True, sort values in ascending order, otherwise descending.
+        na_position : {‘first’, ‘last’}, default ‘last’
+            'first' puts nulls at the beginning, 'last' puts nulls at the end.
+        Returns
+        -------
+        sorted_obj : cuDF Series
 
         Difference from pandas:
-        * Support axis='index' only.
-        * Not supporting: inplace, kind, na_position
+          * Not supporting: inplace, kind
 
-        Details:
-        Uses parallel radixsort, which is a stable sort.
+        Examples
+        --------
+
+        .. code-block:: python
+
+              from cudf.dataframe import Series
+              s = Series([1,5,2,4,3])
+              s.sort_values()
+
+        Output:
+
+        .. code-block:: python
+
+              0    1
+              2    2
+              4    3
+              3    4
+              1    5
+
         """
         vals, inds = self._sort(ascending=ascending, na_position=na_position)
         index = self.index.take(inds.to_gpu_array())
