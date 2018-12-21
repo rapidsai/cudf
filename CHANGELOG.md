@@ -14,6 +14,7 @@
 - PR #474 add ZLIB-based GZIP/ZIP support to `read_csv()`
 - PR #550 Add CI test script to check for style issues in PRs
 - PR #558 Add CI scripts for cpu-based conda and gpu-based test builds
+- PR #564 Update python `sort_values` method to use updated libcudf `gdf_order_by` API
 - PR #509 CSV Reader: Input CSV file can now be passed in as a text or a binary buffer
 
 ## Improvements
