@@ -10,7 +10,8 @@ from librmm_cffi import librmm as rmm
 
 import collections
 import numpy as np
-import warnings
+import logging
+logging.basicConfig(format='%(levelname)s:%(message)s')
 
 
 def get_sorted_inds(by, ascending=True, na_position="last"):
@@ -54,11 +55,11 @@ def get_sorted_inds(by, ascending=True, na_position="last"):
         elif na_position == "first":
             na_position = 0
     else:
-        warnings.warn("When using a sequence of booleans for `ascending` "
-                      "na_position flag is not yet supported and defaults to "
-                      "treating nulls as greater than all numbers",
-                      category=RuntimeWarning,
-                      stacklevel=4)
+        logging.warning(
+            "When using a sequence of booleans for `ascending`, `na_position` "
+            "flag is not yet supported and defaults to treating nulls as "
+            "greater than all numbers"
+        )
         na_position = 0
 
     # If given a scalar need to construct a sequence of length # of columns
