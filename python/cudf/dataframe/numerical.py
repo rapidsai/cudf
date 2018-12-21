@@ -368,7 +368,7 @@ class NumericalColumn(columnops.TypedColumnBase):
                 return joined_index
 
     def copy(self, deep=True):
-        column = NumericalColumn(self._data.copy())
+        column = NumericalColumn(data=self._data.copy(), dtype=self.dtype)
         return column.copy_base(self)
 
 

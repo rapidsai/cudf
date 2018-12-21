@@ -303,20 +303,15 @@ class Column(object):
     def copy_base(self, column_child, deep=True):
         """Copy the column with a new allocation of the data and mask.
         """
-        print('self data: ', end='')
-        print(self._data)
+        column_child = self.copy_data()
         if self._mask:
             column_child._mask = self._mask.copy()
         column_child._null_count = self._null_count
-        print('Column data: ', end='')
-        print(column_child._data)
-        return column_child
-        # copied = self.copy_data()
-        # if self.has_null_mask:
-        #    return copied.set_mask(mask=self.mask.copy(),
-        #                           null_count=self.null_count)
-        # else:
-        #    return copied.allocate_mask()
+        if self.has_null_mask:
+            return column_child.set_mask(mask=self.mask.copy(),
+                                         null_count=self.null_count)
+        else:
+            return column_child.allocate_mask()
 
     def replace(self, **kwargs):
         """Replace attibutes of the class and return a new Column.
