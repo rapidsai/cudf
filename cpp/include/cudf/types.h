@@ -92,6 +92,16 @@ typedef struct gdf_column_{
     char *			col_name;			// host-side:	null terminated string
 } gdf_column;
 
+
+/**
+ * @brief A wrapper for a set of gdf_columns all with equal number of rows.
+ * 
+ */
+typedef struct gdf_dataframe {
+  gdf_column *columns[];     /**< The set of gdf_columns*/
+  gdf_size_type num_columns; /**< The number of columns in the set */
+} gdf_dataframe;
+
 /* --------------------------------------------------------------------------*/
 /** 
  * @Synopsis  These enums indicate which method is to be used for an operation.

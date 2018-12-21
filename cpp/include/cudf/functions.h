@@ -947,51 +947,64 @@ gdf_error gdf_order_by(gdf_column** input_columns,
 
 
 /** 
- * @brief Scatters the values of a source column into a destination column.
+ * @brief Scatters the rows of a set of source columns into a set
+ * of destination columns.
  * 
- * Scatters the elements of the source column into the destination column according
- * to a scatter map such that source[i] will be scattered to destination[ scatter_map[i] ]
+ * Scatters the rows of the source columns into the destination columns according
+ * to a scatter map such that row "i" from the source columns will be scattered 
+ * to row "scatter_map[i]" in the destination columns.
  * 
- * The number of elements in the scatter_map must equal the number of elements in the source
- * column. 
+ * The datatypes between coresponding columns in the source and destination columns
+ * must be the same.
  * 
- * If any index in scatter_map is outside the range of [0, destination->size), the result 
- * is undefined.
+ * The number of elements in the scatter_map must equal the number of rows in the source
+ * columns. 
+ * 
+ * If any index in scatter_map is outside the range of [0, num rows in destination_columns),
+ * the result is undefined.
  * 
  * If the same index appears more than once in scatter_map, the result is undefined.
  * 
- * @Param[in] source The input column whose rows will be scattered
- * @Param[in] scatter_map An array that maps rows in the input column
- * to rows in the output column. The size of the the scatter_map must equal
- * the size of the source column. 
- * @Param[out] destination A preallocated column equal in size to the source column that 
- * will contain the rearrangement of the source column based on the mapping determined 
- * by the scatter_map 
+ * @Param[in] source_columns The columns whose rows will be scattered
+ * @Param[in] scatter_map An array that maps rows in the input columns
+ * to rows in the output columns.
+ * @Param[out] destination_columns A preallocated set of columns with a number of 
+ * rows equal in size to the maximum index contained in scatter_map
  * 
  * @Returns GDF_SUCCESS upon successful completion
  */
-gdf_error gdf_scatter(gdf_column const * source, 
-                      gdf_column const * scatter_map, 
-                      gdf_column * destination);
+gdf_error gdf_scatter(gdf_dataframe const * source_columns,
+                      gdf_size_type const scatter_map[], 
+                      gdf_dataframe * destination_columns);
 
 /**
- * @brief Gathers the values from the source column into the destination column.
+ * @brief Gathers the rows of a set of source columns into a set of destination 
+ * columns.
  * 
- * Gathers the elements of the source column into the destination column according 
- * to a gather map such that destination[i] will contain source[ gather_map[i] ]
+ * Gathers the rows of the source columns into the destination columns according 
+ * to a gather map such that row "i" in the destination columns will contain
+ * row "gather_map[i]" from the source columns.
  * 
- * The number of elements in the gather_map must equal the number of elements in the 
- * destination column. 
+ * The datatypes between coresponding columns in the source and destination columns
+ * must be the same.
  * 
- * If gather_map[i] is outside the range [0, source->size), the result is undefined.
+ * The number of elements in the gather_map must equal the number of rows in the 
+ * destination columns. 
+ * 
+ * If any index in the gather_map is outside the range [0, num rows in source_columns), 
+ * the result is undefined.
  * 
  * If the same index appears more than once in gather_map, the result is undefined.
  * 
- * @param[in] source The input column whose rows will be gathered
- * @param[in] gather_map An array of indices that maps the rows in the source column
- * to rows in the destination column. 
- * @param[out] destination The preallocated column equal in size 
+ * @param[in] source_columns The input columns whose rows will be gathered
+ * @param[in] gather_map An array of indices that maps the rows in the source columns
+ * to rows in the destination columns. 
+ * @param[out] destination_columns A preallocated set of columns with a number of rows 
+ * equal in size to the number of elements in the gather_map that will contain the 
+ * rearrangement of the source columns based on the mapping determined by the gather_map.
+ * 
+ * @Returns GDF_SUCCESS upon successful completion
  */
-gdf_error gdf_gather(gdf_column const * source, 
-                     gdf_column const * gather_map, 
-                     gdf_column * destination);
+gdf_error gdf_gather(gdf_dataframe const * source_columns, 
+                     gdf_size_type const gather_map[], 
+                     gdf_dataframe * destination_columns);
