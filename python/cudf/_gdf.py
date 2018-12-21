@@ -178,24 +178,6 @@ def apply_reduce(fn, inp):
     return out[0]
 
 
-def apply_sort(col_keys, col_vals, ascending=True):
-    """Inplace sort
-    """
-    nelem = len(col_keys)
-    begin_bit = 0
-    end_bit = col_keys.dtype.itemsize * 8
-    plan = libgdf.gdf_radixsort_plan(nelem, not ascending, begin_bit, end_bit)
-    sizeof_key = col_keys.dtype.itemsize
-    sizeof_val = col_vals.dtype.itemsize
-    try:
-        libgdf.gdf_radixsort_plan_setup(plan, sizeof_key, sizeof_val)
-        libgdf.gdf_radixsort_generic(plan,
-                                     col_keys.cffi_view,
-                                     col_vals.cffi_view)
-    finally:
-        libgdf.gdf_radixsort_plan_free(plan)
-
-
 _join_how_api = {
     'inner': libgdf.gdf_inner_join,
     'outer': libgdf.gdf_full_join,

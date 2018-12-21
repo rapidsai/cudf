@@ -8,6 +8,7 @@ import numpy as np
 import pandas as pd
 
 from cudf.dataframe import DataFrame, Series
+from cudf.tests.utils import assert_eq
 
 
 sort_nelem_args = [2, 257]
@@ -166,3 +167,77 @@ def test_dataframe_nsmallest_sliced(counts, sliceobj):
     gdf = DataFrame.from_pandas(df)
     got = gdf[sliceobj].nsmallest(n, 'a')
     assert (got.to_pandas() == expect).all().all()
+
+
+@pytest.mark.parametrize('num_cols', [1, 2, 3, 5])
+@pytest.mark.parametrize('num_rows', [0, 1, 2, 1000])
+@pytest.mark.parametrize(
+    'dtype',
+    ['int8', 'int16', 'int32', 'int64', 'float32', 'float64',
+     'datetime64[ms]']
+)
+@pytest.mark.parametrize('ascending', [True, False])
+@pytest.mark.parametrize('na_position', ['first', 'last'])
+def test_dataframe_multi_column(num_cols, num_rows, dtype, ascending,
+                                na_position):
+
+    from string import ascii_lowercase
+    np.random.seed(0)
+    by = list(ascii_lowercase[:num_cols])
+    pdf = pd.DataFrame()
+
+    for i in range(5):
+        colname = ascii_lowercase[i]
+        data = np.random.randint(0, 26, num_rows).astype(dtype)
+        pdf[colname] = data
+
+    gdf = DataFrame.from_pandas(pdf)
+
+    got = gdf.sort_values(by, ascending=ascending, na_position=na_position)
+    expect = pdf.sort_values(by, ascending=ascending, na_position=na_position)
+
+    assert_eq(
+        got[by].reset_index(),
+        expect[by].reset_index(drop=True)
+    )
+
+
+@pytest.mark.parametrize('num_cols', [1, 2, 3, 5])
+@pytest.mark.parametrize('num_rows', [0, 1, 2, 1000])
+@pytest.mark.parametrize(
+    'dtype',
+    ['float32', 'float64']
+)
+@pytest.mark.parametrize('nulls', ['some', 'all'])
+@pytest.mark.parametrize('ascending', [True, False])
+@pytest.mark.parametrize('na_position', ['first', 'last'])
+def test_dataframe_multi_column_nulls(num_cols, num_rows, dtype, nulls,
+                                      ascending, na_position):
+
+    from string import ascii_lowercase
+    np.random.seed(0)
+    by = list(ascii_lowercase[:num_cols])
+    pdf = pd.DataFrame()
+
+    for i in range(5):
+        colname = ascii_lowercase[i]
+        data = np.random.randint(0, 26, num_rows).astype(dtype)
+        if nulls == 'some':
+            idx = np.array([], dtype='int64')
+            if num_rows > 0:
+                idx = np.random.choice(num_rows, size=int(num_rows/4),
+                                       replace=False)
+            data[idx] = np.nan
+        elif nulls == 'all':
+            data[:] = np.nan
+        pdf[colname] = data
+
+    gdf = DataFrame.from_pandas(pdf)
+
+    got = gdf.sort_values(by, ascending=ascending, na_position=na_position)
+    expect = pdf.sort_values(by, ascending=ascending, na_position=na_position)
+
+    assert_eq(
+        got[by].reset_index(),
+        expect[by].reset_index(drop=True)
+    )
