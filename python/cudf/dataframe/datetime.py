@@ -162,8 +162,9 @@ class DatetimeColumn(columnops.TypedColumnBase):
         )
 
     def copy(self):
-        print('Datetime copy')
-        return self.__super__(DatetimeColumn, self).copy()
+        print(self.__dict__)
+        column = DatetimeColumn(**self.__dict__)
+        return column.copy_base(self)
 
 
 def binop(lhs, rhs, op, out_dtype):

@@ -298,7 +298,6 @@ class CategoricalColumn(columnops.TypedColumnBase):
             return joined_index
 
     def copy(self, deep=True):
-        print(self.__dict__)
         column = CategoricalColumn(**self.__dict__)
         return column.copy_base(self)
 
