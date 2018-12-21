@@ -1,3 +1,14 @@
+# cuDF 0.4.1 (21 Dec 2018)
+
+## New Features
+
+## Improvements
+
+## Bug Fix
+
+- PR #566 Added missing <random> include that prevents building of unit tests on some systems
+
+
 # cuDF 0.4.0 (05 Dec 2018)
 
 ## New Features
@@ -19,7 +30,6 @@
  
 ## Bug Fixes
 
- - PR #566 Added missing <random> include
  - PR #444 Fix csv_test CUDA too many resources requested fail. 
  - PR #396 added missing output buffer in validity tests for groupbys.
  - PR #408 Dockerfile updates for source reorganization
