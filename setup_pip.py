@@ -96,6 +96,8 @@ class InstallHeaders(install_headers):
 # setup does not clean up the build directory, so do it manually
 shutil.rmtree('build', ignore_errors=True)
 
+cuda_version=''.join(os.environ.get('CUDA', 'unknown').split('.')[:2])
+
 install_requires = [
     'pandas>=0.20,<0.21',
     'numba>=0.40.0,<0.42',
@@ -104,7 +106,7 @@ install_requires = [
     'cffi>=1.0.0',
     'cython>=0.28,<0.29',
     'numpy>=1.14',
-    'nvstrings'
+    'nvstrings-cuda{}'.format(cuda_version)
 ]
 
 try:
@@ -132,7 +134,7 @@ packages = [
 ]
 packages += find_packages(where='python')
 
-setup(name='cudf',
+setup(name='cudf-cuda{}'.format(cuda_version),
       description='cuDF - GPU Dataframe',
       long_description=open('README.md', encoding='UTF-8').read(),
       long_description_content_type='text/markdown',
