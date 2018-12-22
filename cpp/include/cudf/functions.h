@@ -821,10 +821,9 @@ gdf_error gpu_comparison(gdf_column *lhs, gdf_column *rhs, gdf_column *output,gd
  *
  * @note If there are nulls in the stencil, they are treated as "false" and those
  * values in the data don't get copied. If there are nulls in the data itself, then
- * they are carry to the output if the stencil is set to "true" for that value.
+ * they are carried to the output if the stencil is set to "true" for that value.
  *
- * @param[in] col the original, unfiltered column of data. This column may or not be nullable
- * (i.e. have a validity pseudo-column)
+ * @param[in] col the original, unfiltered column of data. This column may have a valid mask.
  * @param[in] stencil A "boolean" column, in the sense that its `0` values are interpreted
  * as `false` and its non-zero values as `true`; has the same length as @p col. Represents
  * the subset of `{ 0, ... , col.size-1 }` which are to be included in the output. Also

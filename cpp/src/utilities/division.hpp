@@ -15,8 +15,8 @@
  * limitations under the License.
  */
 
-#ifndef UTIL_MISCELLANY_HPP_
-#define UTIL_MISCELLANY_HPP_
+#ifndef UTIL_DIVISION_HPP_
+#define UTIL_DIVISION_HPP_
 
 #include <cstdlib> // for std::div
 #include <type_traits> // for std::enable_if
@@ -42,7 +42,7 @@ namespace util {
 * the result will be incorrect
 */
 template <typename S, typename T>
-constexpr inline S div_rounding_up_unsafe(const S& dividend, const T& divisor) {
+constexpr inline S div_round_up_unsafe(const S& dividend, const T& divisor) {
     return (dividend + divisor - 1) / divisor;
 }
 
@@ -60,11 +60,11 @@ constexpr inline S div_rounding_up_unsafe(const S& dividend, const T& divisor) {
 * approach of using (dividend + divisor - 1) / divisor
 */
 template <typename I>
-constexpr inline I div_rounding_up_safe(I dividend, I divisor);
+constexpr inline I div_round_up_safe(I dividend, I divisor);
 
 template <typename I>
 constexpr inline typename std::enable_if<std::is_signed<I>::value, I>::type
-div_rounding_up_safe(I dividend, I divisor)
+div_round_up_safe(I dividend, I divisor)
 {
 #if cplusplus >= 201402L
     auto div_result = std::div(dividend, divisor);
@@ -77,11 +77,11 @@ div_rounding_up_safe(I dividend, I divisor)
 
 // This variant will be used for unsigned types
 template <typename I>
-constexpr inline I div_rounding_up_safe(I dividend, I divisor)
+constexpr inline I div_round_up_safe(I dividend, I divisor)
 {
     // TODO: This could probably be implemented faster
     return (dividend > divisor) ?
-        1 + div_rounding_up_unsafe(dividend - divisor, divisor) :
+        1 + div_round_up_unsafe(dividend - divisor, divisor) :
         (dividend > 0);
 }
 
@@ -89,4 +89,4 @@ constexpr inline I div_rounding_up_safe(I dividend, I divisor)
 } // namespace gdf
 
 
-#endif // UTIL_MISCELLANY_HPP_
+#endif // UTIL_DIVISION_HPP_

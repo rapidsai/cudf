@@ -61,7 +61,6 @@ ConfigureTest(CUDF_INTERNAL_TEST "${CUDF_INTERNAL_TEST_SRC}")
 # - filter tests ----------------------------------------------------------------------------------
 
 set(FILTER_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/utilities/cudf_test_utils.cuh"
     "${CMAKE_CURRENT_SOURCE_DIR}/utilities/cudf_test_utils.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/filter/helper/utils.cuh"
     "${CMAKE_CURRENT_SOURCE_DIR}/filter/helper/utils.cu"
