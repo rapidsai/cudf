@@ -168,6 +168,12 @@ gdf_error gpu_apply_stencil(gdf_column * col, gdf_column * stencil, gdf_column *
         //arrow standard requires 64 byte alignment, this is a safe assumption to make
         thrust::transform(rmm::exec_policy(stream), valid_bit_mask_group_8_iter, valid_bit_mask_group_8_iter + ((num_values + GDF_VALID_BITSIZE - 1) / GDF_VALID_BITSIZE),
                 thrust::detail::make_normal_iterator(thrust::device_pointer_cast(output->valid)),bit_mask_pack_op());
+
+        //Updating null count
+        int count;
+        gdf_error result = gdf_count_nonzero_mask(output->valid, output->size, &count);
+        if (result != GDF_SUCCESS) { return result; }
+        output->null_count = output->size - static_cast<gdf_size_type>(count);
     }
 
     CUDA_TRY( cudaStreamSynchronize(stream) );

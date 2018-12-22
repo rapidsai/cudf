@@ -65,6 +65,8 @@ struct GpuApplyStencilTest : public GdfTest {
     // contains the valids for the filtered column
     host_valid_pointer reference_valid = nullptr;
 
+    gdf_size_type reference_null_count = 0;
+
     /* --------------------------------------------------------------------------*/
     /**
     * @Synopsis  Initializes input columns
@@ -143,6 +145,7 @@ struct GpuApplyStencilTest : public GdfTest {
                     gdf::util::turn_bit_on(reference_valid.get(), valid_index);
                 } else {
                     gdf::util::turn_bit_off(reference_valid.get(), valid_index);
+                    reference_null_count++;
                 }
 
                 valid_index++;
@@ -184,6 +187,9 @@ struct GpuApplyStencilTest : public GdfTest {
         for(size_t i = 0; i < reference_vector.size(); ++i) {
             EXPECT_EQ( gdf_is_valid(reference_valid.get(), i), gdf_is_valid(host_ptr, i) );
         }
+
+        // Check null count
+        EXPECT_EQ(reference_null_count, output.get()->null_count);
     }
 };
 
