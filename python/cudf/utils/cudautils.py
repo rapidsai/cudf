@@ -34,12 +34,13 @@ def arange(start, stop=None, step=1, dtype=np.int64):
     if stop is None:
         start, stop = 0, start
     size = (stop - start + (step - 1)) // step
-    if size <= 0:
+    if size < 0:
         msgfmt = "size={size} in arange({start}, {stop}, {step}, {dtype})"
         raise ValueError(msgfmt.format(size=size, start=start, stop=stop,
                                        step=step, dtype=dtype))
     out = rmm.device_array(size, dtype=dtype)
-    gpu_arange.forall(size)(start, size, step, out)
+    if size > 0:
+        gpu_arange.forall(size)(start, size, step, out)
     return out
 
 
