@@ -834,8 +834,6 @@ gdf_error gpu_comparison(gdf_column *lhs, gdf_column *rhs, gdf_column *output,gd
  */
 gdf_error gpu_apply_stencil(gdf_column *col, gdf_column * stencil, gdf_column *output);
 
-gdf_error gpu_concat(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
-
 /*
  * Hashing
  */
