@@ -124,8 +124,6 @@ def test_dataframe_join_how(aa, bb, how, method):
 
 def _check_series(expect, got):
     magic = 0xdeadbeaf
-    # print("expect\n", expect)
-    # print("got\n", got.to_string(nrows=None))
     direct_equal = np.all(expect.values == got.to_array())
     nanfilled_equal = np.all(expect.fillna(magic).values ==
                              got.fillna(magic).to_array())
@@ -139,20 +137,32 @@ def test_dataframe_join_suffix():
 
     df = DataFrame()
     for k in 'abc':
-        df[k] = np.random.randint(0, 5, 5)
+        df[k] = np.random.randint(0, 5, 2)
 
+    df = DataFrame.from_pandas(pd.DataFrame(
+        {'a': [4, 0, 1], 'b': [3, 3, 1], 'c': [3, 1, 1]}))
     left = df.set_index('a')
     right = df.set_index('c')
     with pytest.raises(ValueError) as raises:
         left.join(right)
     raises.match("there are overlapping columns but lsuffix"
                  " and rsuffix are not defined")
-
+    print(df)
+    print('left')
+    print(left)
+    print('righti')
+    print(right)
     got = left.join(right, lsuffix='_left', rsuffix='_right', sort=True)
+    print(got)
     # Get expected value
     pddf = df.to_pandas()
+    pl = pddf.set_index('a')
+    pr = pddf.set_index('c')
+    print(pl)
+    print(pr)
     expect = pddf.set_index('a').join(pddf.set_index('c'),
                                       lsuffix='_left', rsuffix='_right')
+    print(expect)
     # Check
     assert list(expect.columns) == list(got.columns)
     assert np.all(expect.index.values == got.index.values)

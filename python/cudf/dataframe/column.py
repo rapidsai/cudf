@@ -306,7 +306,7 @@ class Column(object):
             return copied.allocate_mask()
 
     def replace(self, **kwargs):
-        """Replace attibutes of the class and return a new Column.
+        """Replace attributes of the class and return a new Column.
 
         Valid keywords are valid parameters for ``self.__init__``.
         Any omitted keywords will be defaulted to the corresponding
