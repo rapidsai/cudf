@@ -4,6 +4,7 @@ import pytest
 
 import numpy as np
 import pandas as pd
+from numba import cuda
 
 from cudf.dataframe.dataframe import DataFrame
 from .utils import assert_eq
@@ -81,3 +82,46 @@ def test_cudf_dataframe_copy(copy_fn, ncols, data_type):
     df = DataFrame.from_pandas(pdf)
     copy_df = copy_fn(df)
     assert_eq(df, copy_df)
+
+
+@cuda.jit
+def group_mean(data, segments, output):
+    i = cuda.grid(1)
+    if i < segments.size:
+        s = segments[i]
+        e = (segments[i + 1]
+             if (i + 1) < segments.size
+             else data.size)
+        # mean calculation
+        carry = 0.0
+        n = e - s
+        for j in range(s, e):
+            carry += data[j]
+        output[i] = carry / n
+
+
+@cuda.jit
+def add_one(data):
+    i = cuda.grid(1)
+    if i < len(data):
+        data[i] = data[i] + 1.0
+
+
+def test_kernel_deep_copy():
+    pdf = pd.DataFrame([[1, 2, 3], [4, 5, 6], [7, 8, 9]],
+                       columns=['a', 'b', 'c'])
+    gdf = DataFrame.from_pandas(pdf)
+    cdf = gdf.copy(deep=True)
+    sr = gdf['a']
+    add_one[1, len(sr)](sr.to_gpu_array())
+    assert not gdf.to_string().split() == cdf['a'].to_string().split()
+
+
+def test_kernel_shallow_copy():
+    pdf = pd.DataFrame([[1, 2, 3], [4, 5, 6], [7, 8, 9]],
+                       columns=['a', 'b', 'c'])
+    gdf = DataFrame.from_pandas(pdf)
+    cdf = gdf.copy(deep=False)
+    sr = gdf['a']
+    add_one[1, len(sr)](sr.to_gpu_array())
+    assert_eq(gdf, cdf)
