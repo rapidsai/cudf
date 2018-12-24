@@ -103,7 +103,7 @@ def group_mean(data, segments, output):
 @cuda.jit
 def add_one(data):
     i = cuda.grid(1)
-    if i < len(data):
+    if i == 1:
         data[i] = data[i] + 1.0
 
 
@@ -112,9 +112,9 @@ def test_kernel_deep_copy():
                        columns=['a', 'b', 'c'])
     gdf = DataFrame.from_pandas(pdf)
     cdf = gdf.copy(deep=True)
-    sr = gdf['a']
+    sr = gdf['b']
     add_one[1, len(sr)](sr.to_gpu_array())
-    assert not gdf.to_string().split() == cdf['a'].to_string().split()
+    assert not gdf.to_string().split() == cdf.to_string().split()
 
 
 def test_kernel_shallow_copy():
