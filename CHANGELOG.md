@@ -43,7 +43,7 @@
 - PR #545 Temporarily disable csv reader thousands test to prevent segfault (test re-enabled in PR #501)
 - PR #559 Fix Assertion error while using `applymap` to change the output dtype
 - PR #575 Update `print_env.sh` script to better handle missing commands
-
+- PR      Fix error while creating an empty column using None.
 # cuDF 0.4.0 (05 Dec 2018)
 
 ## New Features
