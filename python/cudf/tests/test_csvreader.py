@@ -115,6 +115,22 @@ def test_csv_reader_mixed_data_delimiter(tmpdir):
     assert len(out.columns) == len(df_out.columns)
 
 
+def test_csv_reader_mixed_data_sep(tmpdir):
+
+    fname = tmpdir.mkdir("gdf_csv").join('tmp_csvreader_file3.csv')
+
+    df = make_numpy_mixed_dataframe()
+    df.to_csv(fname, sep='|', index=False, header=False)
+
+    out = read_csv(str(fname), sep='|', names=['1', '2', '3', '4', '5'],
+                   dtype=['int64', 'date', 'float64', 'int64', 'category'],
+                   dayfirst=True)
+    df_out = pd.read_csv(fname, sep='|', names=['1', '2', '3', '4', '5'],
+                         parse_dates=[1], dayfirst=True)
+
+    assert len(out.columns) == len(df_out.columns)
+
+
 def test_csv_reader_all_numeric_dtypes(tmpdir):
 
     # fname = os.path.abspath('cudf/tests/data/tmp_csvreader_file4.csv')
