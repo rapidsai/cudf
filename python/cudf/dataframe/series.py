@@ -1015,13 +1015,11 @@ class Iloc(object):
         len_idx = len(self._sr)
 
         if isinstance(arg, tuple):
-            print(arg, "in tuple")
             for idx in arg:
                 rows.append(idx)
             # rows.sort() //sort the indices
 
         elif isinstance(arg, slice):
-            print(arg, "slice")
             start = arg.start if arg.start is not None else 0
             stop = arg.stop if arg.stop is not None else len_idx
             step = arg.step if arg.step is not None else 1
@@ -1029,7 +1027,6 @@ class Iloc(object):
                 rows.append(idx)
 
         elif isinstance(arg, int):
-            print(arg, "int")
             rows.append(arg)
 
         else:
