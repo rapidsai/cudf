@@ -528,7 +528,7 @@ class Series(object):
         # get the value from 0th and 2nd index
         >>> sr.iloc[0,2]
         0   0
-        1   2
+        2   2
 
         :return:
         Series containing the elements corresponding to the indices
