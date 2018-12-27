@@ -418,6 +418,23 @@ class DataFrame(object):
         return Loc(self)
 
     @property
+    def iloc(self):
+        """
+        Returns a  integer-location based indexer for selection by position.
+
+        Examples
+        --------
+        >>> df = DataFrame([('a', list(range(20))),
+        ...                 ('b', list(range(20))),
+        ...                 ('c', list(range(20)))])
+        # get the row from index 2.
+        >>> df.iloc[2]
+            a   b
+        2   2   2
+        """
+        return Iloc(self)
+
+    @property
     def columns(self):
         """Returns a tuple of columns
         """
@@ -1786,6 +1803,53 @@ class Loc(object):
         for col in col_slice:
             sr = self._df[col]
             df.add_column(col, sr[begin:end], forceindex=True)
+
+        return df
+
+
+class Iloc(object):
+    """
+    For integer-location based selection.
+    """
+
+    def __init__(self, df):
+        self._df = df
+
+    def __getitem__(self, arg):
+        rows = []
+        len_idx = len(self._df.index)
+
+        if isinstance(arg, tuple):
+            print(arg, "in tuple")
+            for idx in arg:
+                rows.append(idx)
+            # rows.sort() //sort the indices
+
+        elif isinstance(arg, slice):
+            print(arg, "slice")
+            start = arg.start if arg.start is not None else 0
+            stop = arg.stop if arg.stop is not None else len_idx
+            step = arg.step if arg.step is not None else 1
+            for idx in range(start, stop, step):
+                rows.append(idx)
+
+        elif isinstance(arg, int):
+            print(arg, "int")
+            rows.append(arg)
+
+        else:
+            raise TypeError(type(arg))
+
+        # To check whether all the indices are valid.
+        for idx in rows:
+            if idx >= len_idx:
+                raise IndexError(idx)
+
+        df = DataFrame()
+
+        for col in self._df.columns:
+            sr = self._df[col]
+            df.add_column(col, sr.iloc[tuple(rows)], forceindex=True)
 
         return df
 

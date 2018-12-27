@@ -517,6 +517,25 @@ class Series(object):
         return self._index
 
     @property
+    def iloc(self):
+        """
+        For integer-location based selection.
+
+        Examples
+        --------
+
+        >>> sr = Series(list(range(20)))
+        # get the value from 0th and 2nd index
+        >>> sr.iloc[0,2]
+        0   0
+        1   2
+
+        :return:
+        Series containing the elements corresponding to the indices
+        """
+        return Iloc(self)
+
+    @property
     def nullmask(self):
         """The gpu buffer for the null-mask
         """
@@ -981,3 +1000,47 @@ class DatetimeProperties(object):
     def get_dt_field(self, field):
         out_column = self.series._column.get_dt_field(field)
         return Series(data=out_column, index=self.series._index)
+
+
+class Iloc(object):
+    """
+    For integer-location based selection.
+    """
+
+    def __init__(self, sr):
+        self._sr = sr
+
+    def __getitem__(self, arg):
+        rows = []
+        len_idx = len(self._sr)
+
+        if isinstance(arg, tuple):
+            print(arg, "in tuple")
+            for idx in arg:
+                rows.append(idx)
+            # rows.sort() //sort the indices
+
+        elif isinstance(arg, slice):
+            print(arg, "slice")
+            start = arg.start if arg.start is not None else 0
+            stop = arg.stop if arg.stop is not None else len_idx
+            step = arg.step if arg.step is not None else 1
+            for idx in range(start, stop, step):
+                rows.append(idx)
+
+        elif isinstance(arg, int):
+            print(arg, "int")
+            rows.append(arg)
+
+        else:
+            raise TypeError(type(arg))
+
+        # To check whether all the indices are valid.
+        for idx in rows:
+            if idx >= len_idx:
+                raise IndexError(idx)
+        ret_list = []
+        for idx in rows:
+            ret_list.append(self._sr[idx])
+
+        return Series(ret_list, index=GenericIndex(np.asarray(rows)))
