@@ -525,10 +525,23 @@ class Series(object):
         --------
 
         >>> sr = Series(list(range(20)))
-        # get the value from 0th and 2nd index
-        >>> sr.iloc[0,2]
-        0   0
-        2   2
+        # get the value from 1st index
+        >>> sr.iloc[1]
+        1    1
+
+        # get the values from 0,2,9 and 18th index
+        >>> sr.iloc[0,2,9,18]
+        0    0
+        2    2
+        9    9
+        18   18
+
+        # get the values using slice indices
+        >>> sr.iloc[3:10:2]
+        3    3
+        5    5
+        7    7
+        9    9
 
         :return:
         Series containing the elements corresponding to the indices
