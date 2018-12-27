@@ -43,6 +43,8 @@
 - PR #545 Temporarily disable csv reader thousands test to prevent segfault (test re-enabled in PR #501)
 - PR #559 Fix Assertion error while using `applymap` to change the output dtype
 - PR #575 Update `print_env.sh` script to better handle missing commands
+- PR #611 Renamed `gdf_reduce_optimal_output_size()` -> `gdf_reduction_get_intermediate_output_size()`
+
 
 # cuDF 0.4.0 (05 Dec 2018)
 
