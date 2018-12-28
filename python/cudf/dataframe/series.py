@@ -357,14 +357,18 @@ class Series(object):
         return self._rbinaryop(other, 'floordiv')
 
     def __truediv__(self, other):
-        if self.dtype in ('int64', 'int32',):
-            return self._binaryop(other, 'floordiv')
-        return self._binaryop(other, 'truediv')
+        if self.dtype in list(truediv_int_dtype_corrections.keys()):
+            truediv_type = truediv_int_dtype_corrections[str(self.dtype)]
+            return self.astype(truediv_type)._binaryop(other, 'truediv')
+        else:
+            return self._binaryop(other, 'truediv')
 
     def __rtruediv__(self, other):
-        if self.dtype in ('int64', 'int32',):
-            return self._rbinaryop(other, 'floordiv')
-        return self._rbinaryop(other, 'truediv')
+        if self.dtype in list(truediv_int_dtype_corrections.keys()):
+            truediv_type = truediv_int_dtype_corrections[str(self.dtype)]
+            return self.astype(truediv_type)._rbinaryop(other, 'truediv')
+        else:
+            return self._rbinaryop(other, 'truediv')
 
     __div__ = __truediv__
 
@@ -951,6 +955,13 @@ class Series(object):
 
 
 register_distributed_serializer(Series)
+
+
+truediv_int_dtype_corrections = {
+        'int64': 'float64',
+        'int32': 'float32',
+        'int': 'float',
+}
 
 
 class DatetimeProperties(object):
