@@ -161,6 +161,10 @@ _reflected_ops = [
     lambda x: -3 - x,
     lambda x: -3 // x,
     lambda x: -3 / x,
+    lambda x: 0 + x,
+    lambda x: 0 * x,
+    lambda x: 0 - x,
+    lambda x: 0 // x,
     lambda x: 0 / x,
 ]
 
