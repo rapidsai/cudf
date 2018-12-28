@@ -1120,3 +1120,4 @@ def test_iteritems(gdf):
     for k, v in gdf.iteritems():
         assert k in gdf.columns
         assert isinstance(v, gd.Series)
+        assert_eq(v, gdf[k])
