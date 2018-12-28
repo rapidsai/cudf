@@ -357,9 +357,13 @@ class Series(object):
         return self._rbinaryop(other, 'floordiv')
 
     def __truediv__(self, other):
+        if self.dtype in ('int64', 'int32',):
+            return self._binaryop(other, 'floordiv')
         return self._binaryop(other, 'truediv')
 
     def __rtruediv__(self, other):
+        if self.dtype in ('int64', 'int32',):
+            return self._rbinaryop(other, 'floordiv')
         return self._rbinaryop(other, 'truediv')
 
     __div__ = __truediv__
