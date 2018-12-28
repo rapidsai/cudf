@@ -1837,12 +1837,10 @@ class Iloc(object):
         len_idx = len(self._df.index)
 
         if isinstance(arg, tuple):
-            raise IndexError('cudf columnar iloc not supported')
+            raise NotImplementedError('cudf columnar iloc not supported')
 
-        elif isinstance(arg, utils.list_types_tuple):
-            for idx in arg:
-                rows.append(idx)
-            # rows.sort() //sort the indices
+        elif isinstance(arg, int):
+            rows.append(arg)
 
         elif isinstance(arg, slice):
             start = arg.start if arg.start is not None else 0
@@ -1851,16 +1849,18 @@ class Iloc(object):
             for idx in range(start, stop, step):
                 rows.append(idx)
 
-        elif isinstance(arg, int):
-            rows.append(arg)
+        elif isinstance(arg, utils.list_types_tuple):
+            for idx in arg:
+                rows.append(idx)
+            # rows.sort() //sort the indices
 
         else:
             raise TypeError(type(arg))
 
         # To check whether all the indices are valid.
-        for idx in rows:
-            if idx >= len_idx:
-                raise IndexError(idx)
+        for i in range(len(rows)):
+            if abs(rows[i]) > len_idx or rows[i] == len_idx:
+                rows.remove(rows[i])
 
         df = DataFrame()
 

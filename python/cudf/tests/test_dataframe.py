@@ -319,8 +319,6 @@ def test_dataframe_iloc(index, ranges):
                         'c': list(range(20))})
 
 
-
-
 @pytest.mark.parametrize('index', -2, 0, 19, 20, 40)
 @pytest.mark.parametrize('ranges', slice(-1, 1, None), slice(19, 1, None),
                          slice(0, 19, None), slice(0, 20, None),
@@ -330,6 +328,7 @@ def test_series_iloc(index, ranges):
     gsr = Series(list(range(20)))
 
     psr = pd.Series(list(range(20)))
+
 
 def test_dataframe_to_string():
     with set_options(formatting={'nrows': 5, 'ncols': 8}):

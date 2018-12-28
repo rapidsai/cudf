@@ -1032,6 +1032,9 @@ class Iloc(object):
                 rows.append(idx)
             # rows.sort() //sort the indices
 
+        elif isinstance(arg, int):
+            rows.append(arg)
+
         elif isinstance(arg, slice):
             start = arg.start if arg.start is not None else 0
             stop = arg.stop if arg.stop is not None else len_idx
@@ -1039,16 +1042,17 @@ class Iloc(object):
             for idx in range(start, stop, step):
                 rows.append(idx)
 
-        elif isinstance(arg, int):
-            rows.append(arg)
-
         else:
             raise TypeError(type(arg))
 
         # To check whether all the indices are valid.
-        for idx in rows:
-            if idx >= len_idx:
-                raise IndexError(idx)
+        for i in range(len(rows)):
+            if abs(rows[i]) > len_idx or rows[i] == len_idx:
+                rows.remove(rows[i])
+                continue
+            if rows[i] < 0:
+                rows[i] = len_idx+rows[i]
+
         ret_list = []
         for idx in rows:
             ret_list.append(self._sr[idx])
