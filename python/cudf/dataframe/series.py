@@ -1046,10 +1046,11 @@ class Iloc(object):
             raise TypeError(type(arg))
 
         # To check whether all the indices are valid.
+        for idx in rows:
+            if abs(idx) > len_idx or idx == len_idx:
+                rows.remove(idx)
+
         for i in range(len(rows)):
-            if abs(rows[i]) > len_idx or rows[i] == len_idx:
-                rows.remove(rows[i])
-                continue
             if rows[i] < 0:
                 rows[i] = len_idx+rows[i]
 

@@ -304,32 +304,6 @@ def test_dataframe_loc():
     np.testing.assert_equal(fewer['d'].to_array(), hd[begin:end + 1])
 
 
-@pytest.mark.parametrize('index', -2, 0, 19, 20, 40)
-@pytest.mark.parametrize('ranges', slice(-1, 1, None), slice(19, 1, None),
-                         slice(0, 19, None), slice(0, 20, None),
-                         slice(1, 1, None), slice(1, 2, None),
-                         slice(19, 21, None), slice(20, 40, None))
-def test_dataframe_iloc(index, ranges):
-    gdf = DataFrame({'a': list(range(20)),
-                     'b': list(range(20)),
-                     'c': list(range(20))})
-
-    pdf = pd.DataFrame({'a': list(range(20)),
-                        'b': list(range(20)),
-                        'c': list(range(20))})
-
-
-@pytest.mark.parametrize('index', -2, 0, 19, 20, 40)
-@pytest.mark.parametrize('ranges', slice(-1, 1, None), slice(19, 1, None),
-                         slice(0, 19, None), slice(0, 20, None),
-                         slice(1, 1, None), slice(1, 2, None),
-                         slice(19, 21, None), slice(20, 40, None))
-def test_series_iloc(index, ranges):
-    gsr = Series(list(range(20)))
-
-    psr = pd.Series(list(range(20)))
-
-
 def test_dataframe_to_string():
     with set_options(formatting={'nrows': 5, 'ncols': 8}):
         # Test basic
