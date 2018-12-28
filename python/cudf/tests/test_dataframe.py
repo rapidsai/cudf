@@ -304,6 +304,15 @@ def test_dataframe_loc():
     np.testing.assert_equal(fewer['d'].to_array(), hd[begin:end + 1])
 
 
+def test_dataframe_iloc():
+    df = DataFrame()
+
+
+
+def test_series_iloc():
+    sr = Series()
+
+
 def test_dataframe_to_string():
     with set_options(formatting={'nrows': 5, 'ncols': 8}):
         # Test basic

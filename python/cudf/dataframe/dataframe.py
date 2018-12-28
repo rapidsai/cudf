@@ -428,7 +428,7 @@ class DataFrame(object):
         ...                 ('b', list(range(20))),
         ...                 ('c', list(range(20)))])
         #get the row from index 1st
-        >>>df.iloc[1]
+        >>> df.iloc[1]
              a    b    c
         1    1    1    1
 
@@ -1837,6 +1837,9 @@ class Iloc(object):
         len_idx = len(self._df.index)
 
         if isinstance(arg, tuple):
+            raise IndexError('cudf columnar iloc not supported')
+
+        elif isinstance(arg, utils.list_types_tuple):
             for idx in arg:
                 rows.append(idx)
             # rows.sort() //sort the indices
@@ -1866,6 +1869,10 @@ class Iloc(object):
             df.add_column(col, sr.iloc[tuple(rows)], forceindex=True)
 
         return df
+
+    def __setitem__(self, key, value):
+        # throws a custom CudfColumnIsImmmutable exception
+        raise utils.CudfColumnIsImmutable("updating columns using iloc is not allowed")
 
 
 register_distributed_serializer(DataFrame)

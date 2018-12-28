@@ -8,7 +8,7 @@ from numbers import Number
 import numpy as np
 import pandas as pd
 
-from cudf.utils import cudautils
+from cudf.utils import cudautils, utils
 from cudf import formatting
 from .buffer import Buffer
 from .index import Index, RangeIndex, GenericIndex
@@ -1054,3 +1054,7 @@ class Iloc(object):
             ret_list.append(self._sr[idx])
 
         return Series(ret_list, index=GenericIndex(np.asarray(rows)))
+
+    def __setitem__(self, key, value):
+        # throws a custom CudfColumnIsImmmutable exception
+        raise utils.CudfColumnIsImmutable("updating columns using iloc is not allowed")

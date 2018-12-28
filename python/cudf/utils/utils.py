@@ -77,3 +77,10 @@ def normalize_slice(arg, size):
     stop = arg.stop if arg.stop is not None else size
     return (normalize_index(start, size, doraise=False),
             normalize_index(stop, size, doraise=False))
+
+
+list_types_tuple = (list, np.array)
+
+
+class CudfColumnIsImmutable(Exception):
+    """Exception raised if df.iloc[] is used to update the columns """
