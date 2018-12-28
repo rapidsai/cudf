@@ -167,14 +167,14 @@ def test_reflected_ops_scalar(func, dtype):
     np.testing.assert_allclose(ps_result, gs_result)
 
 
-@pytest.mark.parametrize('int_dtypes', ['int64', 'int32'])
+@pytest.mark.parametrize('int_dtypes', ['int64', 'int32', 'int'])
 def test_integer_true_division(int_dtypes):
     s = Series([-3, -2, -1, -0, 1, 2, 3]).astype(int_dtypes)
     assert np.array_equal((s/2), (s//2))
     assert np.array_equal((s/3), (s//3))
 
 
-@pytest.mark.parametrize('float_dtypes', ['float64', 'float32'])
+@pytest.mark.parametrize('float_dtypes', ['float64', 'float32', 'float'])
 def test_float_true_division(float_dtypes):
     s = Series([-3, -2, -1, -0, 1, 2, 3]).astype(float_dtypes)
     assert not np.array_equal((s/2), (s//2))
