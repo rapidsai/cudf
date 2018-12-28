@@ -424,16 +424,16 @@ class DataFrame(object):
 
         Examples
         --------
-        >>> df = DataFrame([('a', list(range(20))),
-        ...                 ('b', list(range(20))),
-        ...                 ('c', list(range(20)))])
+        >>> df = DataFrame({'a':list(range(20)),
+        ...                 'b':list(range(20)),
+        ...                 'c':list(range(20))})
         #get the row from index 1st
         >>> df.iloc[1]
              a    b    c
         1    1    1    1
 
         # get the rows from indices 0,2,9 and 18.
-        >>> df.iloc[0, 2, 9, 18]
+        >>> df.iloc[[0, 2, 9, 18]]
              a    b    c
         0    0    0    0
         2    2    2    2
@@ -1872,7 +1872,8 @@ class Iloc(object):
 
     def __setitem__(self, key, value):
         # throws a custom CudfColumnIsImmmutable exception
-        raise utils.CudfColumnIsImmutable("updating columns using iloc is not allowed")
+        msg = "updating columns using iloc is not allowed"
+        raise utils.CudfColumnIsImmutable(msg)
 
 
 register_distributed_serializer(DataFrame)

@@ -79,7 +79,7 @@ def normalize_slice(arg, size):
             normalize_index(stop, size, doraise=False))
 
 
-list_types_tuple = (list, np.array)
+list_types_tuple = (type(list), type(np.array))
 
 
 class CudfColumnIsImmutable(Exception):

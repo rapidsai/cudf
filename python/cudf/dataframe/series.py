@@ -1057,4 +1057,5 @@ class Iloc(object):
 
     def __setitem__(self, key, value):
         # throws a custom CudfColumnIsImmmutable exception
-        raise utils.CudfColumnIsImmutable("updating columns using iloc is not allowed")
+        msg = "updating columns using iloc is not allowed"
+        raise utils.CudfColumnIsImmutable(msg)
