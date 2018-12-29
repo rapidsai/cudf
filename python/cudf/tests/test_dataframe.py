@@ -1007,7 +1007,6 @@ def test_dataframe_shape_empty():
 
 def test_generated_column():
     gdf = DataFrame({'a': (i for i in range(5))})
-    
     assert len(gdf) == 5
 
 
