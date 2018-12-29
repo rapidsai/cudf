@@ -1110,3 +1110,14 @@ def test_dataframe_boolean_mask_Series(gdf):
     assert gdf_masked.shape[0] == 2
     assert gdf_masked2.shape[0] == 4
     assert gdf_masked3.shape[0] == 8
+
+
+def test_iter(pdf, gdf):
+    assert list(pdf) == list(gdf)
+
+
+def test_iteritems(gdf):
+    for k, v in gdf.iteritems():
+        assert k in gdf.columns
+        assert isinstance(v, gd.Series)
+        assert_eq(v, gdf[k])

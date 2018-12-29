@@ -396,6 +396,14 @@ class DataFrame(object):
             len(self),
         )
 
+    def __iter__(self):
+        return iter(self.columns)
+
+    def iteritems(self):
+        """ Iterate over column names and series pairs """
+        for k in self:
+            yield (k, self[k])
+
     @property
     def loc(self):
         """
