@@ -1035,7 +1035,7 @@ class Iloc(object):
             rows.append(arg)
 
         elif isinstance(arg, slice):
-            start, stop, step, sln = utils.normalize_slice(len_idx, arg)
+            start, stop, step, sln = utils.standard_python_slice(len_idx, arg)
             if sln > 0:
                 for idx in range(start, stop, step):
                     rows.append(idx)

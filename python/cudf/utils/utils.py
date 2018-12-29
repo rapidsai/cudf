@@ -81,7 +81,7 @@ def normalize_slice(arg, size):
 
 # borrowed from a wonderful blog:
 # https://avilpage.com/2015/03/a-slice-of-python-intelligence-behind.html
-def normalize_slice(len_idx, arg):
+def standard_python_slice(len_idx, arg):
     """ Figuring out the missing parameters of slice"""
 
     start = arg.start
