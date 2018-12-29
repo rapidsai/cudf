@@ -10,7 +10,6 @@
 - PR #490 Added print_env.sh script to gather relevant environment details when reporting cuDF issues.
 - PR #474 add ZLIB-based GZIP/ZIP support to `read_csv()`
 
-
 ## Improvements
 
 - PR #472 RMM: Created centralized rmm::device_vector alias and rmm::exec_policy
@@ -28,6 +27,7 @@
 - PR #511 Updated python/cudf/bindings/join.pyx to fix cudf merge printing out dtypes.
 - PR #537 Fix CMAKE_CUDA_STANDARD_REQURIED typo in CMakeLists.txt
 - PR #545 Temporarily disable csv reader thousands test to prevent segfault
+- PR #447 Fix silent failure in initializing DataFrame from generator
 
 
 # cuDF 0.4.0 (05 Dec 2018)
