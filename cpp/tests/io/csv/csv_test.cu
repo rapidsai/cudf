@@ -21,9 +21,9 @@
 #include <sys/stat.h>
 
 #include "gtest/gtest.h"
+#include "gmock/gmock.h"
 
 #include <cudf.h>
-#include <cudf/functions.h>
 #include <NVStrings.h>
 
 bool checkFile(const char *fname)
@@ -31,6 +31,35 @@ bool checkFile(const char *fname)
 	struct stat st;
 	return (stat(fname, &st) ? 0 : 1);
 }
+
+// DESCRIPTION: Simple test internal helper class to transfer cudf column data
+// from device to host for test comparisons and debugging/development
+template <typename T>
+class gdf_host_column
+{
+public:
+	gdf_host_column() = delete;
+	explicit gdf_host_column(gdf_column* const col)
+	{
+		m_hostdata = std::vector<T>(col->size);
+		cudaMemcpy(m_hostdata.data(), col->data, sizeof(T) * col->size, cudaMemcpyDeviceToHost);
+	}
+
+	auto hostdata() const -> const auto&
+	{
+		return m_hostdata;
+	}
+	void print() const
+	{
+		for (size_t i = 0; i < m_hostdata.size(); ++i)
+		{
+			std::cout << "[" << i << "]: value=" << m_hostdata[i] << "\n";
+		}
+	}
+
+private:
+	std::vector<T> m_hostdata;
+};
 
 TEST(gdf_csv_test, Simple)
 {
@@ -43,19 +72,25 @@ TEST(gdf_csv_test, Simple)
 	outfile <<	"10,20,30,40,50,60,70,80,90,100\n"\
 				"11,21,31,41,51,61,71,81,91,101\n"\
 				"12,22,32,42,52,62,72,82,92,102\n"\
-				"13,23,33,43,53,63,73,83,93,103";
+				"13,23,33,43,53,63,73,83,93,103\n";
 	outfile.close();
 	ASSERT_TRUE( checkFile(fname) );
 
 	{
 		csv_read_arg args{};
-		args.file_path		= fname;
+		args.input_data_form = gdf_csv_input_form::FILE_PATH;
+		args.filepath_or_buffer = fname;
 		args.num_cols		= std::extent<decltype(names)>::value;
 		args.names			= names;
 		args.dtype			= types;
 		args.delimiter		= ',';
 		args.lineterminator = '\n';
 		EXPECT_EQ( read_csv(&args), GDF_SUCCESS );
+
+		auto firstCol = gdf_host_column<int32_t>(args.data[0]);
+		auto sixthCol = gdf_host_column<int32_t>(args.data[5]);
+		EXPECT_THAT(firstCol.hostdata(), ::testing::ElementsAre(10, 11, 12, 13));
+		EXPECT_THAT(sixthCol.hostdata(), ::testing::ElementsAre(60, 61, 62, 63));
 	}
 }
 
@@ -139,9 +174,10 @@ TEST(gdf_csv_test, MortPerf)
 
         args.dtype = dtype;
 
-    args.file_path = (char *)("/tmp/Performance_2000Q1.txt");
+		args.input_data_form = gdf_csv_input_form::FILE_PATH;
+		args.filepath_or_buffer = (char *)("/tmp/Performance_2000Q1.txt");
 
-	if (  checkFile(args.file_path))
+	if (  checkFile(args.filepath_or_buffer))
 	{
 		args.delimiter 		= '|';
 		args.lineterminator = '\n';
@@ -173,7 +209,7 @@ TEST(gdf_csv_test, Strings)
 {
 	const char* fname	= "/tmp/CsvStringsTest.csv";
 	const char* names[]	= { "line", "verse" };
-	const char* types[] = { "int32", "str" };
+	const char* types[]	= { "int32", "str" };
 
 	std::ofstream outfile(fname, std::ofstream::out);
 	outfile << names[0] << ',' << names[1] << ',' << '\n';
@@ -184,8 +220,9 @@ TEST(gdf_csv_test, Strings)
 	ASSERT_TRUE( checkFile(fname) );
 
 	{
-		csv_read_arg args{};
-		args.file_path		= fname;
+		csv_read_arg args{};	
+		args.input_data_form = gdf_csv_input_form::FILE_PATH;
+		args.filepath_or_buffer = fname;
 		args.num_cols		= std::extent<decltype(names)>::value;
 		args.names			= names;
 		args.dtype			= types;
@@ -227,7 +264,7 @@ TEST(gdf_csv_test, QuotedStrings)
 {
 	const char* fname	= "/tmp/CsvQuotedStringsTest.csv";
 	const char* names[]	= { "line", "verse" };
-	const char* types[] = { "int32", "str" };
+	const char* types[]	= { "int32", "str" };
 
 	std::ofstream outfile(fname, std::ofstream::out);
 	outfile << names[0] << ',' << names[1] << ',' << '\n';
@@ -239,7 +276,8 @@ TEST(gdf_csv_test, QuotedStrings)
 
 	{
 		csv_read_arg args{};
-		args.file_path		= fname;
+		args.input_data_form = gdf_csv_input_form::FILE_PATH;
+		args.filepath_or_buffer = fname;
 		args.num_cols		= std::extent<decltype(names)>::value;
 		args.names			= names;
 		args.dtype			= types;
@@ -284,7 +322,7 @@ TEST(gdf_csv_test, KeepFullQuotedStrings)
 {
 	const char* fname	= "/tmp/CsvKeepFullQuotedStringsTest.csv";
 	const char* names[]	= { "line", "verse" };
-	const char* types[] = { "int32", "str" };
+	const char* types[]	= { "int32", "str" };
 
 	std::ofstream outfile(fname, std::ofstream::out);
 	outfile << names[0] << ',' << names[1] << ',' << '\n';
@@ -296,7 +334,8 @@ TEST(gdf_csv_test, KeepFullQuotedStrings)
 
 	{
 		csv_read_arg args{};
-		args.file_path		= fname;
+		args.input_data_form = gdf_csv_input_form::FILE_PATH;
+		args.filepath_or_buffer = fname;
 		args.num_cols		= std::extent<decltype(names)>::value;
 		args.names			= names;
 		args.dtype			= types;
@@ -334,5 +373,45 @@ TEST(gdf_csv_test, KeepFullQuotedStrings)
 		for (size_t i = 0; i < stringCount; ++i) {
 			delete[] strings[i];
 		}
+	}
+}
+
+TEST(gdf_csv_test, SpecifiedBoolValues)
+{
+	const char* fname			= "/tmp/CsvSpecifiedBoolValuesTest.csv";
+	const char* names[]			= { "A", "B", "C" };
+	const char* types[]			= { "int32", "int32", "short" };
+	const char* trueValues[]	= { "yes", "Yes", "YES", "foo", "FOO" };
+	const char* falseValues[]	= { "no", "No", "NO", "Bar", "bar" };
+
+	std::ofstream outfile(fname, std::ofstream::out);
+	outfile << "YES,1,bar\nno,2,FOO\nBar,3,yes\nNo,4,NO\nYes,5,foo\n";
+	outfile.close();
+	ASSERT_TRUE( checkFile(fname) );
+
+	{
+		csv_read_arg args{};
+		args.input_data_form		= gdf_csv_input_form::FILE_PATH;
+		args.filepath_or_buffer		= fname;
+		args.num_cols			= std::extent<decltype(names)>::value;
+		args.names				= names;
+		args.dtype				= types;
+		args.delimiter			= ',';
+		args.lineterminator 	= '\n';
+		args.true_values		= trueValues;
+		args.num_true_values	= std::extent<decltype(trueValues)>::value;
+		args.false_values		= falseValues;
+		args.num_false_values	= std::extent<decltype(falseValues)>::value;
+		EXPECT_EQ( read_csv(&args), GDF_SUCCESS );
+
+		// Booleans are the same (integer) data type, but valued at 0 or 1
+		EXPECT_EQ( args.num_cols_out, args.num_cols );
+		ASSERT_EQ( args.data[0]->dtype, GDF_INT32 );
+		ASSERT_EQ( args.data[2]->dtype, GDF_INT16 );
+
+		auto firstCol = gdf_host_column<int32_t>(args.data[0]);
+		EXPECT_THAT(firstCol.hostdata(), ::testing::ElementsAre(1, 0, 0, 0, 1));
+		auto thirdCol = gdf_host_column<int16_t>(args.data[2]);
+		EXPECT_THAT(thirdCol.hostdata(), ::testing::ElementsAre(0, 1, 1, 0, 1));
 	}
 }
