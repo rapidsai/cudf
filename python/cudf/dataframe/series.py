@@ -1030,17 +1030,15 @@ class Iloc(object):
         if isinstance(arg, tuple):
             for idx in arg:
                 rows.append(idx)
-            # rows.sort() //sort the indices
 
         elif isinstance(arg, int):
             rows.append(arg)
 
         elif isinstance(arg, slice):
-            start = arg.start if arg.start is not None else 0
-            stop = arg.stop if arg.stop is not None else len_idx
-            step = arg.step if arg.step is not None else 1
-            for idx in range(start, stop, step):
-                rows.append(idx)
+            start, stop, step, sln = utils.normalize_slice(len_idx, arg)
+            if sln > 0:
+                for idx in range(start, stop, step):
+                    rows.append(idx)
 
         else:
             raise TypeError(type(arg))
