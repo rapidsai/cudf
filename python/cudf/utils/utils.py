@@ -124,4 +124,3 @@ def standard_python_slice(len_idx, arg):
 
 
 list_types_tuple = (list, np.array)
-

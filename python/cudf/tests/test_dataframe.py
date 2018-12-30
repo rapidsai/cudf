@@ -310,38 +310,38 @@ def test_dataframe_loc():
     np.testing.assert_equal(fewer['d'].to_array(), hd[begin:end + 1])
 
 
-@pytest.mark.parametrize('nelem', 'dtype', list(product([0, 1, 20, 100])))
-def test_series_iloc(nelem, dtype):
+@pytest.mark.parametrize('nelem', [1, 5, 20, 100])
+def test_series_iloc(nelem):
 
     # create random series
     np.random.seed(12)
-    ps = pd.Series(np.random.sample(nelem), dtype=dtype)
+    ps = pd.Series(np.random.sample(nelem))
 
     # gpu series
     gs = Series(ps)
 
     # positive tests for indexing
-    assert np.testing.assert_allclose(gs.iloc[-1*nelem], ps.iloc[-1*nelem])
-    assert np.testing.assert_allclose(gs.iloc[-1], ps.iloc[-1])
-    assert np.testing.assert_allclose(gs.iloc[0], ps.iloc[0])
-    assert np.testing.assert_allclose(gs.iloc[1], ps.iloc[1])
-    assert np.testing.assert_allclose(gs.iloc[nelem-1], ps.iloc[nelem-1])
+    np.testing.assert_allclose(gs.iloc[-1*nelem], ps.iloc[-1*nelem])
+    np.testing.assert_allclose(gs.iloc[-1], ps.iloc[-1])
+    np.testing.assert_allclose(gs.iloc[0], ps.iloc[0])
+    np.testing.assert_allclose(gs.iloc[1], ps.iloc[1])
+    np.testing.assert_allclose(gs.iloc[nelem-1], ps.iloc[nelem-1])
 
     # positive tests for slice
-    assert np.testing.assert_allclose(gs.iloc[-1:1], ps.iloc[-1:1])
-    assert np.testing.assert_allclose(
+    np.testing.assert_allclose(gs.iloc[-1:1], ps.iloc[-1:1])
+    np.testing.assert_allclose(
         gs.iloc[nelem-1:-1], ps.iloc[nelem-1:-1])
-    assert np.testing.assert_allclose(gs.iloc[0:nelem-1], ps.iloc[0:nelem-1])
-    assert np.testing.assert_allclose(gs.iloc[0:nelem], ps.iloc[0:nelem])
-    assert np.testing.assert_allclose(gs.iloc[1:1], ps.iloc[1:1])
-    assert np.testing.assert_allclose(gs.iloc[1:2], ps.iloc[1:2])
-    assert np.testing.assert_allclose(
+    np.testing.assert_allclose(gs.iloc[0:nelem-1], ps.iloc[0:nelem-1])
+    np.testing.assert_allclose(gs.iloc[0:nelem], ps.iloc[0:nelem])
+    np.testing.assert_allclose(gs.iloc[1:1], ps.iloc[1:1])
+    np.testing.assert_allclose(gs.iloc[1:2], ps.iloc[1:2])
+    np.testing.assert_allclose(
         gs.iloc[nelem-1:nelem+1], ps.iloc[nelem-1:nelem+1])
-    assert np.testing.assert_allclose(
+    np.testing.assert_allclose(
         gs.iloc[nelem:nelem*2], ps.iloc[nelem:nelem*2])
 
 
-@pytest.mark.parametrize('nelem', [0, 1, 5, 20, 100])
+@pytest.mark.parametrize('nelem', [1, 5, 20, 100])
 def test_dataframe_iloc(nelem):
     gdf = DataFrame()
 
@@ -353,9 +353,10 @@ def test_dataframe_iloc(nelem):
     pdf['a'] = ha
     pdf['b'] = hb
 
+    # Positive tests for slicing using iloc
     def assert_col(g, p):
-        np.testing.assert_equal(g['a'].to_array(), p['a'].to_array())
-        np.testing.assert_equal(g['b'].to_array(), p['b'].to_array())
+        np.testing.assert_equal(g['a'].to_array(), p['a'])
+        np.testing.assert_equal(g['b'].to_array(), p['b'])
 
     assert_col(gdf.iloc[-1:1], pdf.iloc[-1:1])
     assert_col(gdf.iloc[nelem-1:-1], pdf.iloc[nelem-1:-1])
@@ -365,6 +366,16 @@ def test_dataframe_iloc(nelem):
     assert_col(gdf.iloc[1:2], pdf.iloc[1:2])
     assert_col(gdf.iloc[nelem-1:nelem+1], pdf.iloc[nelem-1:nelem+1])
     assert_col(gdf.iloc[nelem:nelem*2], pdf.iloc[nelem:nelem*2])
+
+    # Positive tests for int indexing
+    def assert_series(g, p):
+        np.testing.assert_equal(g.to_array(), p)
+
+    assert_series(gdf.iloc[-1 * nelem], pdf.iloc[-1 * nelem])
+    assert_series(gdf.iloc[-1], pdf.iloc[-1])
+    assert_series(gdf.iloc[0], pdf.iloc[0])
+    assert_series(gdf.iloc[1], pdf.iloc[1])
+    assert_series(gdf.iloc[nelem - 1], pdf.iloc[nelem - 1])
 
 
 @pytest.mark.xfail(
@@ -383,8 +394,8 @@ def test_dataframe_iloc_tuple():
     pdf['b'] = hb
 
     def assert_col(g, p):
-        np.testing.assert_equal(g['a'].to_array(), p['a'].to_array())
-        np.testing.assert_equal(g['b'].to_array(), p['b'].to_array())
+        np.testing.assert_equal(g['a'].to_array(), p['a'])
+        np.testing.assert_equal(g['b'].to_array(), p['b'])
 
     assert_col(gdf.iloc[1, 2], pdf.iloc[1, 2])
 
@@ -393,7 +404,7 @@ def test_dataframe_iloc_tuple():
     raises=IndexError,
     reason="positional indexers are out-of-bounds"
 )
-def test_dataframe_iloc_type_error():
+def test_dataframe_iloc_index_error():
     gdf = DataFrame()
     nelem = 123
     gdf['a'] = ha = np.random.randint(low=0, high=100, size=nelem) \
@@ -405,8 +416,8 @@ def test_dataframe_iloc_type_error():
     pdf['b'] = hb
 
     def assert_col(g, p):
-        np.testing.assert_equal(g['a'].to_array(), p['a'].to_array())
-        np.testing.assert_equal(g['b'].to_array(), p['b'].to_array())
+        np.testing.assert_equal(g['a'].to_array(), p['a'])
+        np.testing.assert_equal(g['b'].to_array(), p['b'])
 
     assert_col(gdf.iloc[nelem*2], pdf.iloc[nelem*2])
 
