@@ -1858,7 +1858,16 @@ class Iloc(object):
         # To check whether all the indices are valid.
         for idx in rows:
             if abs(idx) > len_idx or idx == len_idx:
-                rows.remove(idx)
+                raise IndexError("positional indexers are out-of-bounds")
+
+        # returns the series similar to pandas
+        if isinstance(arg, int) and len(rows) == 1:
+            ret_list = []
+            col_list = list(self._df.columns)
+            for col in col_list:
+                ret_list.append(self._df[col][rows[0]])
+            return Series(ret_list,
+                          index=GenericIndex(np.asarray(col_list)))
 
         df = DataFrame()
 
@@ -1869,9 +1878,9 @@ class Iloc(object):
         return df
 
     def __setitem__(self, key, value):
-        # throws a custom CudfColumnIsImmmutable exception
+        # throws an exception while updating
         msg = "updating columns using iloc is not allowed"
-        raise utils.CudfColumnIsImmutable(msg)
+        raise ValueError(msg)
 
 
 register_distributed_serializer(DataFrame)

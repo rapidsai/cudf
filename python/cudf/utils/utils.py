@@ -125,6 +125,3 @@ def standard_python_slice(len_idx, arg):
 
 list_types_tuple = (list, np.array)
 
-
-class CudfColumnIsImmutable(Exception):
-    """Exception raised if df.iloc[] is used to update the columns """

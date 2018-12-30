@@ -1046,11 +1046,15 @@ class Iloc(object):
         # To check whether all the indices are valid.
         for idx in rows:
             if abs(idx) > len_idx or idx == len_idx:
-                rows.remove(idx)
+                raise IndexError("positional indexers are out-of-bounds")
 
         for i in range(len(rows)):
             if rows[i] < 0:
                 rows[i] = len_idx+rows[i]
+
+        # returns the single elem similar to pandas
+        if isinstance(arg, int) and len(rows) == 1:
+            return self._sr[rows[0]]
 
         ret_list = []
         for idx in rows:
@@ -1059,6 +1063,6 @@ class Iloc(object):
         return Series(ret_list, index=GenericIndex(np.asarray(rows)))
 
     def __setitem__(self, key, value):
-        # throws a custom CudfColumnIsImmmutable exception
+        # throws an exception while updating
         msg = "updating columns using iloc is not allowed"
-        raise utils.CudfColumnIsImmutable(msg)
+        raise ValueError(msg)
