@@ -16,7 +16,6 @@ from cudf.dataframe.buffer import Buffer
 from cudf.settings import set_options
 
 from itertools import combinations
-from itertools import product
 
 from . import utils
 from .utils import assert_eq
@@ -310,7 +309,7 @@ def test_dataframe_loc():
     np.testing.assert_equal(fewer['d'].to_array(), hd[begin:end + 1])
 
 
-@pytest.mark.parametrize('nelem', [1, 5, 20, 100])
+@pytest.mark.parametrize('nelem', [2, 5, 20, 100])
 def test_series_iloc(nelem):
 
     # create random series
@@ -341,7 +340,7 @@ def test_series_iloc(nelem):
         gs.iloc[nelem:nelem*2], ps.iloc[nelem:nelem*2])
 
 
-@pytest.mark.parametrize('nelem', [1, 5, 20, 100])
+@pytest.mark.parametrize('nelem', [2, 5, 20, 100])
 def test_dataframe_iloc(nelem):
     gdf = DataFrame()
 
