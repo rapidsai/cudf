@@ -527,7 +527,7 @@ class Series(object):
         >>> sr = Series(list(range(20)))
         # get the value from 1st index
         >>> sr.iloc[1]
-        1    1
+        1
 
         # get the values from 0,2,9 and 18th index
         >>> sr.iloc[0,2,9,18]

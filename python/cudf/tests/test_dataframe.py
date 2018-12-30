@@ -20,11 +20,6 @@ from itertools import combinations
 from . import utils
 from .utils import assert_eq
 
-_dtypes = [
-    np.int32, np.int64,
-    np.float32, np.float64,
-]
-
 
 def test_buffer_basic():
     n = 10
