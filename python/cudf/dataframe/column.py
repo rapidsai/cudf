@@ -451,13 +451,14 @@ class Column(object):
                                       "yet supported")
         newsize = len(self) + len(other)
         # allocate memory
-        mem = rmm.device_array(shape=newsize, dtype=self.data.dtype)
+        out_dtype = utils.result_type(self.data.dtype, other.data.dtype)
+        mem = rmm.device_array(shape=newsize, dtype=out_dtype)
         newbuf = Buffer.from_empty(mem)
         # copy into new memory
         for buf in [self.data, other.data]:
             newbuf.extend(buf.to_gpu_array())
         # return new column
-        return self.replace(data=newbuf)
+        return self.replace(data=newbuf, dtype=out_dtype)
 
     def quantile(self, q, interpolation, exact):
         if isinstance(q, Number):
