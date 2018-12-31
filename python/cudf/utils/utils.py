@@ -77,3 +77,11 @@ def normalize_slice(arg, size):
     stop = arg.stop if arg.stop is not None else size
     return (normalize_index(start, size, doraise=False),
             normalize_index(stop, size, doraise=False))
+
+
+def result_type(*dtypes):
+    """
+    Returns the type that results from type promotion
+    rules to the input dtypes.
+    """
+    return np.result_type(*dtypes)
