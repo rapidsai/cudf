@@ -15,6 +15,8 @@
  */
 
 #include "cudf.h"
+#include "copying.hpp"
+#include "dataframe/cudf_table.cuh"
 
 /**
  * @brief Operations for copying from one column to another
@@ -22,13 +24,13 @@
  */
 
 gdf_error gdf_scatter(gdf_dataframe const* source_columns,
-                      gdf_size_type const scatter_map[],
-                      gdf_dataframe* destination_columns) {
+                      gdf_index_type const scatter_map[],
+                      gdf_dataframe * destination_columns) {
   return GDF_SUCCESS;
 }
 
 gdf_error gdf_gather(gdf_dataframe const* source_columns,
-                     gdf_size_type const gather_map[],
-                     gdf_dataframe* destination_columns) {
+                     gdf_index_type const gather_map[],
+                     gdf_dataframe * destination_columns) {
   return GDF_SUCCESS;
 }

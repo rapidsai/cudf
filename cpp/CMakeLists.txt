@@ -174,7 +174,7 @@ add_library(cudf SHARED
             src/utilities/cuda_utils.cu
             src/utilities/error_utils.cpp
             src/utilities/nvtx/nvtx_utils.cpp
-            src/copying/copying_ops.cu)
+            src/copying/copying.cu)
 
 add_library(rmm SHARED
             src/rmm/memory.cpp
