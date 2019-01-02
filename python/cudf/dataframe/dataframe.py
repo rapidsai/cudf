@@ -493,6 +493,37 @@ class DataFrame(object):
             memo = {}
         return self.copy()
 
+    def __add__(self, other):
+        """
+        Parameters
+        ----------
+        other, DataFrame
+            the DataFrame to be added
+
+        Returns
+        -------
+        DataFrame
+        """
+        df = DataFrame()
+
+        matched_cols = list(set(self.columns) & set(other.columns))
+        extra_self = list(set(self.columns) - set(other.columns))
+        extra_other = list(set(other.columns) - set(self.columns))
+
+        # to maintain the order of columns in both df
+        for col in self.columns:
+            if col in matched_cols:
+                df.add_column(col, self[col] + other[col], forceindex=True)
+
+            if col in extra_self:
+                df.add_column(col, self[col], forceindex=True)
+
+        for col in other.columns:
+            if col in extra_other:
+                df.add_column(col, other[col], forceindex=True)
+
+        return df
+
     def _sanitize_columns(self, col):
         """Sanitize pre-appended
            col values
