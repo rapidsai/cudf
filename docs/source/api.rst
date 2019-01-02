@@ -13,22 +13,22 @@ DataFrame
 
 Series
 ------
-.. autoclass:: cudf.Series
+.. autoclass:: cudf.dataframe.Series
     :members:
 
 Groupby
 -------
-.. currentmodule:: cudf.groupby
+.. currentmodule:: cudf.groupby.groupby
 .. autoclass:: Groupby
     :members:
 
 IO
 --------------
-.. automodule:: cudf.io
+.. automodule:: cudf.io.csv
     :members:
 
 GpuArrowReader
 --------------
-.. currentmodule:: cudf.gpuarrow
+.. currentmodule:: cudf.comm.gpuarrow
 .. autoclass:: GpuArrowReader
     :members:

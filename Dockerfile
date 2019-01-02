@@ -25,41 +25,34 @@ ENV PATH=${PATH}:/conda/bin
 SHELL ["/bin/bash", "-c"]
 
 # Build cuDF conda env
-ARG PYTHON_VERSION=3.5
-RUN conda create -n cudf python=${PYTHON_VERSION}
+ADD conda /cudf/conda
+RUN conda env create --name cudf --file /cudf/conda/environments/dev_py35.yml
 
-ARG NUMBA_VERSION=0.40.0
-ARG NUMPY_VERSION=1.14.3
-# Locked to Pandas 0.20.3 by https://github.com/rapidsai/cudf/issues/118
-ARG PANDAS_VERSION=0.20.3
-ARG PYARROW_VERSION=0.10.0
-RUN conda install -n cudf -y -c numba -c conda-forge -c nvidia -c rapidsai -c defaults \
-      numba=${NUMBA_VERSION} \
-      numpy=${NUMPY_VERSION} \
-      pandas=${PANDAS_VERSION} \
-      pyarrow=${PYARROW_VERSION} \
-      nvstrings \
-      cmake=3.12 \
-      gtest=1.8.0
-
+# Preserved for users who currently use these build-args
 # Clone cuDF repo
-ARG CUDF_REPO=https://github.com/rapidsai/cudf
-ARG CUDF_BRANCH=master
-RUN git clone --recurse-submodules -b ${CUDF_BRANCH} ${CUDF_REPO} /cudf
+#ARG CUDF_REPO=https://github.com/rapidsai/cudf
+#ARG CUDF_BRANCH=master
+#RUN git clone --recurse-submodules -b ${CUDF_BRANCH} ${CUDF_REPO} /cudf
+ADD cpp /cudf/cpp
 
 # libcudf build/install
 ENV CC=/usr/bin/gcc-${CC}
 ENV CXX=/usr/bin/g++-${CXX}
-ARG HASH_JOIN=ON
 RUN source activate cudf && \
-    mkdir -p /cudf/libgdf/build && \
-    cd /cudf/libgdf/build && \
-    cmake .. -DHASH_JOIN=${HASH_JOIN} -DCMAKE_INSTALL_PREFIX=${CONDA_PREFIX} && \
-    make -j2 install && \
+    mkdir -p /cudf/cpp/build && \
+    cd /cudf/cpp/build && \
+    cmake .. -DCMAKE_INSTALL_PREFIX=${CONDA_PREFIX} && \
+    make -j install && \
     make python_cffi && \
     make install_python
 
+ADD docs /cudf/docs
+ADD python /cudf/python
+# Needed for cudf.__version__ accuracy
+ADD .git /cudf/.git
+
 # cuDF build/install
 RUN source activate cudf && \
-    cd /cudf && \
+    cd /cudf/python && \
+    python setup.py build_ext --inplace && \
     python setup.py install

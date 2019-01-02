@@ -3,10 +3,11 @@
 import pytest
 
 import pandas as pd
+import numpy as np
 import cudf as gd
 
 
-def make_frames(index=None):
+def make_frames(index=None, nulls='none'):
     df = pd.DataFrame({'x': range(10),
                        'y': list(map(float, range(10))),
                        'z': list('abcde')*2})
@@ -15,6 +16,15 @@ def make_frames(index=None):
                         'y': list(map(float, range(10, 20))),
                         'z': list('edcba')*2})
     df2.z = df2.z.astype('category')
+    if nulls == 'all':
+        df.y = np.full_like(df.y, np.nan)
+        df2.y = np.full_like(df2.y, np.nan)
+    if nulls == 'some':
+        mask = np.arange(10)
+        np.random.shuffle(mask)
+        mask = mask[:5]
+        df.y[mask] = np.nan
+        df2.y[mask] = np.nan
     gdf = gd.DataFrame.from_pandas(df)
     gdf2 = gd.DataFrame.from_pandas(df2)
     if index:
@@ -25,9 +35,12 @@ def make_frames(index=None):
     return df, df2, gdf, gdf2
 
 
+@pytest.mark.parametrize('nulls', ['none', 'some', 'all'])
 @pytest.mark.parametrize('index', [False, 'z', 'y'])
-def test_concat(index):
-    df, df2, gdf, gdf2 = make_frames(index)
+def test_concat(index, nulls):
+    if index == 'y' and nulls in ('some', 'all'):
+        pytest.skip('nulls in columns, dont index')
+    df, df2, gdf, gdf2 = make_frames(index, nulls=nulls)
     # Make empty frame
     gdf_empty1 = gdf2[:0]
     assert len(gdf_empty1) == 0
@@ -72,7 +85,7 @@ def test_concat_errors():
 
     # Mismatched index dtypes
     gdf3 = gdf2.set_index('z')
-    gdf2.drop_column('z')
+    del gdf2['z']
     with pytest.raises(ValueError):
         gd.concat([gdf2, gdf3])
 

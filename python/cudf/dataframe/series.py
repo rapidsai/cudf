@@ -26,6 +26,7 @@ class Series(object):
 
     ``Series`` objects are used as columns of ``DataFrame``.
     """
+
     @classmethod
     def from_categorical(cls, categorical, codes=None):
         """Creates from a pandas.Categorical
@@ -61,7 +62,7 @@ class Series(object):
         col = columnops.as_column(data).set_mask(mask, null_count=null_count)
         return cls(data=col)
 
-    def __init__(self, data, index=None, name=None):
+    def __init__(self, data, index=None, name=None, nan_as_null=True):
         if isinstance(data, pd.Series):
             name = data.name
             index = GenericIndex(data.index)
@@ -71,7 +72,7 @@ class Series(object):
             data = data._column
 
         if not isinstance(data, columnops.TypedColumnBase):
-            data = columnops.as_column(data)
+            data = columnops.as_column(data, nan_as_null=nan_as_null)
 
         if index is not None and not isinstance(index, Index):
             raise TypeError('index not a Index type: got {!r}'.format(index))
@@ -82,8 +83,8 @@ class Series(object):
         self.name = name
 
     @classmethod
-    def from_pandas(cls, s):
-        return cls(s)
+    def from_pandas(cls, s, nan_as_null=True):
+        return cls(s, nan_as_null=nan_as_null)
 
     @classmethod
     def from_arrow(cls, s):
@@ -99,6 +100,12 @@ class Series(object):
         frames.extend(column_frames)
         header['column_frame_count'] = len(column_frames)
         return header, frames
+
+    @property
+    def shape(self):
+        """Returns a tuple representing the dimensionality of the Series.
+        """
+        return len(self),
 
     @property
     def dt(self):
@@ -181,6 +188,8 @@ class Series(object):
         return len(self._column)
 
     def __getitem__(self, arg):
+        if isinstance(arg, (list, np.ndarray, pd.Series,)):
+            arg = Series(arg)
         if isinstance(arg, Series):
             if arg.dtype in [np.int8, np.int16, np.int32, np.int32, np.int64]:
                 selvals, selinds = columnops.column_select_by_position(
@@ -536,16 +545,16 @@ class Series(object):
 
         return self._copy_construct(data=self._column.astype(dtype))
 
-    def argsort(self, ascending=True):
+    def argsort(self, ascending=True, na_position="last"):
         """Returns a Series of int64 index that will sort the series.
 
-        Uses stable parallel radixsort.
+        Uses Thrust sort.
 
         Returns
         -------
         result: Series
         """
-        return self._sort(ascending=ascending)[1]
+        return self._sort(ascending=ascending, na_position=na_position)[1]
 
     def sort_index(self, ascending=True):
         """Sort by the index.
@@ -553,18 +562,46 @@ class Series(object):
         inds = self.index.argsort(ascending=ascending)
         return self.take(inds.to_gpu_array())
 
-    def sort_values(self, ascending=True):
+    def sort_values(self, ascending=True, na_position="last"):
         """
-        Sort by values.
+        Sort by the values.
+
+        Sort a Series in ascending or descending order by some criterion.
+
+        Parameters
+        ----------
+        ascending : bool, default True
+            If True, sort values in ascending order, otherwise descending.
+        na_position : {‘first’, ‘last’}, default ‘last’
+            'first' puts nulls at the beginning, 'last' puts nulls at the end.
+        Returns
+        -------
+        sorted_obj : cuDF Series
 
         Difference from pandas:
-        * Support axis='index' only.
-        * Not supporting: inplace, kind, na_position
+          * Not supporting: inplace, kind
 
-        Details:
-        Uses parallel radixsort, which is a stable sort.
+        Examples
+        --------
+
+        .. code-block:: python
+
+              from cudf.dataframe import Series
+              s = Series([1,5,2,4,3])
+              s.sort_values()
+
+        Output:
+
+        .. code-block:: python
+
+              0    1
+              2    2
+              4    3
+              3    4
+              1    5
+
         """
-        vals, inds = self._sort(ascending=ascending)
+        vals, inds = self._sort(ascending=ascending, na_position=na_position)
         index = self.index.take(inds.to_gpu_array())
         return vals.set_index(index)
 
@@ -589,7 +626,7 @@ class Series(object):
         """
         return self._n_largest_or_smallest(n=n, keep=keep, largest=False)
 
-    def _sort(self, ascending=True):
+    def _sort(self, ascending=True, na_position="last"):
         """
         Sort by values
 
@@ -597,7 +634,10 @@ class Series(object):
         -------
         2-tuple of key and index
         """
-        col_keys, col_inds = self._column.sort_by_values(ascending=ascending)
+        col_keys, col_inds = self._column.sort_by_values(
+            ascending=ascending,
+            na_position=na_position
+        )
         sr_keys = self._copy_construct(data=col_keys)
         sr_inds = self._copy_construct(data=col_inds)
         return sr_keys, sr_inds

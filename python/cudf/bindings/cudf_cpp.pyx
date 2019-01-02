@@ -92,10 +92,8 @@ cdef gdf_column* column_view_from_column(col):
 
     if pd.api.types.is_categorical_dtype(col.dtype):
         c_dtype = GDF_INT8
-    elif col.dtype != np.bool_:
-        c_dtype = dtypes[col.dtype.type]
     else:
-        c_dtype = dtypes[col.dtype]
+        c_dtype = dtypes[col.dtype.type]
 
     gdf_column_view_augmented(<gdf_column*>c_col,
                               <void*> data_ptr,

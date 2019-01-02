@@ -86,12 +86,12 @@ set(JOIN_TEST_SRC
 ConfigureTest(JOIN_TEST "${JOIN_TEST_SRC}")
 
 ###################################################################################################
-# - sqls tests ------------------------------------------------------------------------------------
+# - orderby tests ---------------------------------------------------------------------------------
 
-set(SQLS_TEST_SRC 
-    "${CMAKE_CURRENT_SOURCE_DIR}/sqls/sqls_test.cu")
+set(ORDERBY_TEST_SRC 
+    "${CMAKE_CURRENT_SOURCE_DIR}/orderby/orderby_tests.cu")
 
-ConfigureTest(SQLS_TEST "${SQLS_TEST_SRC}")
+ConfigureTest(ORDERBY_TEST "${ORDERBY_TEST_SRC}")
 
 ###################################################################################################
 # - bitmask tests ---------------------------------------------------------------------------------
@@ -144,6 +144,14 @@ set(QUANTILES_TEST_SRC
 ConfigureTest(QUANTILES_TEST "${QUANTILES_TEST_SRC}")
 
 ###################################################################################################
+# - replace tests ---------------------------------------------------------------------------------
+
+set(REPLACE_TEST_SRC 
+    "${CMAKE_CURRENT_SOURCE_DIR}/replace/replace_tests.cu")
+
+ConfigureTest(REPLACE_TEST "${REPLACE_TEST_SRC}")
+
+###################################################################################################
 # - unary tests -----------------------------------------------------------------------------------
 
 set(UNARY_TEST_SRC 
@@ -166,6 +174,15 @@ set(RMM_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/rmm/memory_tests.cpp")
 
 ConfigureTest(RMM_TEST "${RMM_TEST_SRC}")
+
+###################################################################################################
+# - types tests -------------------------------------------------------------------------------------
+
+set(TYPES_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/types/types_test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/types/dispatcher_test.cu")
+
+ConfigureTest(TYPES_TEST "${TYPES_TEST_SRC}")
 
 ###################################################################################################
 ### enable testing ################################################################################

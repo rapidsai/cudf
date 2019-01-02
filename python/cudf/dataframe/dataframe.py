@@ -27,6 +27,7 @@ from .datetime import DatetimeColumn
 from .numerical import NumericalColumn
 from .buffer import Buffer
 from cudf._gdf import nvtx_range_push, nvtx_range_pop
+from cudf._sort import get_sorted_inds
 
 import cudf.bindings.join as cpp_join
 
@@ -160,6 +161,12 @@ class DataFrame(object):
         return pd.Series([x.dtype for x in self._cols.values()],
                          index=self._cols.keys())
 
+    @property
+    def shape(self):
+        """Returns a tuple representing the dimensionality of the DataFrame.
+        """
+        return len(self), len(self._cols)
+
     def __dir__(self):
         o = set(dir(type(self)))
         o.update(self.__dict__)
@@ -181,7 +188,7 @@ class DataFrame(object):
         sliced to the specified range.
         If *arg* is an ``array`` containing column names, return a new
         DataFrame with the corresponding columns.
-
+        If *arg* is a ``dtype.bool array``, return the rows marked True
 
         Examples
         --------
@@ -207,6 +214,8 @@ class DataFrame(object):
         1    1    1
         2    2    2
         3    3    3
+        >>> df[[True, False, True, False]] # mask the entire dataframe,
+        # returning the rows specified in the boolean mask
         """
         if isinstance(arg, str) or isinstance(arg, int):
             s = self._cols[arg]
@@ -217,10 +226,15 @@ class DataFrame(object):
             for k, col in self._cols.items():
                 df[k] = col[arg]
             return df
-        elif isinstance(arg, (list,)):
+        elif isinstance(arg, (list, np.ndarray, pd.Series, Series,)):
+            mask = np.array(arg)
             df = DataFrame()
-            for col in arg:
-                df[col] = self[col]
+            if(mask.dtype == 'bool'):
+                for col in self._cols:
+                    df[col] = self._cols[col][arg]
+            else:
+                for col in arg:
+                    df[col] = self[col]
             return df
         else:
             msg = "__getitem__ on type {!r} is not supported"
@@ -239,7 +253,7 @@ class DataFrame(object):
         """
         Drop the given column by *name*.
         """
-        self.drop_column(name)
+        self._drop_column(name)
 
     def __sizeof__(self):
         return sum(col.__sizeof__() for col in self._cols.values())
@@ -382,6 +396,14 @@ class DataFrame(object):
             len(self),
         )
 
+    def __iter__(self):
+        return iter(self.columns)
+
+    def iteritems(self):
+        """ Iterate over column names and series pairs """
+        for k in self:
+            yield (k, self[k])
+
     @property
     def loc(self):
         """
@@ -428,7 +450,7 @@ class DataFrame(object):
         # When index is a column name
         if isinstance(index, str):
             df = self.copy()
-            df.drop_column(index)
+            df._drop_column(index)
             return df.set_index(self[index])
         # Otherwise
         else:
@@ -547,7 +569,67 @@ class DataFrame(object):
         series.name = name
         self._cols[name] = series
 
+    def drop(self, labels):
+        """Drop column(s)
+
+        Parameters
+        ----------
+        labels : str or sequence of strings
+            Name of column(s) to be dropped.
+
+        Returns
+        -------
+        A dataframe without dropped column(s)
+
+        Examples
+        ----------
+
+        .. code-block:: python
+
+            from cudf.dataframe.dataframe import DataFrame
+            df = DataFrame()
+            df['key'] = [0, 1, 2, 3, 4]
+            df['val'] = [float(i + 10) for i in range(5)]
+
+            df_new = df.drop('val')
+            print(df)
+            print(df_new)
+
+        Output:
+        .. code-block:: python
+
+                key  val
+            0    0 10.0
+            1    1 11.0
+            2    2 12.0
+            3    3 13.0
+            4    4 14.0
+
+                key
+            0    0
+            1    1
+            2    2
+            3    3
+            4    4
+        """
+        columns = [labels] if isinstance(labels, str) else list(labels)
+
+        outdf = self.copy()
+        for c in columns:
+            outdf._drop_column(c)
+        return outdf
+
     def drop_column(self, name):
+        """Drop a column by *name*
+        """
+        warnings.warn(
+                'The drop_column method is deprecated. '
+                'Use the drop method instead.',
+                DeprecationWarning
+            )
+        self._drop_column(name)
+
+    def _drop_column(self, name):
         """Drop a column by *name*
         """
         if name not in self._cols:
@@ -739,30 +821,38 @@ class DataFrame(object):
             df[k] = self[k].take(sorted_indices.to_gpu_array())
         return df
 
+    def argsort(self, ascending=True, na_position='last'):
+        cols = [series._column for series in self._cols.values()]
+        return get_sorted_inds(cols, ascending=ascending,
+                               na_position=na_position)
+
     def sort_index(self, ascending=True):
         """Sort by the index
         """
         return self._sort_by(self.index.argsort(ascending=ascending))
 
-    def sort_values(self, by, ascending=True):
+    def sort_values(self, by, ascending=True, na_position='last'):
         """
 
-        Uses parallel radixsort, which is a stable sort.
+        Sort by the values row-wise.
 
         Parameters
         ----------
-        by : str
-            Name of Series to sort by
-        ascending : bool, default True
-            Sort ascending vs. descending.
+        by : str or list of str
+            Name or list of names to sort by.
+        ascending : bool or list of bool, default True
+            Sort ascending vs. descending. Specify list for multiple sort
+            orders. If this is a list of bools, must match the length of the
+            by.
+        na_position : {‘first’, ‘last’}, default ‘last’
+            'first' puts nulls at the beginning, 'last' puts nulls at the end
         Returns
         -------
         sorted_obj : cuDF DataFrame
 
         Difference from pandas:
-          * *by* must be the name of a single column.
-          * Support axis='index' only.	        by : str
-          * Not supporting: inplace, kind, na_position
+          * Support axis='index' only.
+          * Not supporting: inplace, kind
 
         Examples
         --------
@@ -786,7 +876,10 @@ class DataFrame(object):
 
         """
         # argsort the `by` column
-        return self._sort_by(self[by].argsort(ascending=ascending))
+        return self._sort_by(self[by].argsort(
+            ascending=ascending,
+            na_position=na_position)
+        )
 
     def nlargest(self, n, columns, keep='first'):
         """Get the rows of the DataFrame sorted by the n largest value of *columns*
@@ -905,6 +998,12 @@ class DataFrame(object):
             if name in same_names:
                 return "{}{}".format(name, suffix)
             return name
+
+        if on is None:
+            on = list(same_names)
+            if len(on) == 0:
+                raise ValueError('No common columns to perform merge on')
+        on = [on] if isinstance(on, str) else list(on)
 
         lhs = self
         rhs = other
@@ -1145,7 +1244,7 @@ class DataFrame(object):
 
         return df
 
-    def groupby(self, by, sort=False, as_index=False, method="sort"):
+    def groupby(self, by, sort=False, as_index=False, method="hash"):
         """Groupby
 
         Parameters
@@ -1160,7 +1259,7 @@ class DataFrame(object):
             The keys are always left as regular columns in the result.
         method : str, optional
             A string indicating the method to use to perform the group by.
-            Valid values are "sort", "hash", or "cudf".
+            Valid values are "hash" or "cudf".
             "cudf" method may be deprecated in the future, but is currently
             the only method supporting group UDFs via the `apply` function.
 
@@ -1471,7 +1570,7 @@ class DataFrame(object):
         return pd.DataFrame(data, columns=list(self._cols), index=index)
 
     @classmethod
-    def from_pandas(cls, dataframe):
+    def from_pandas(cls, dataframe, nan_as_null=True):
         """
         Convert from a Pandas DataFrame.
 
@@ -1504,7 +1603,7 @@ class DataFrame(object):
         df = cls()
         # Set columns
         for colk in dataframe.columns:
-            df[colk] = dataframe[colk].values
+            df[colk] = Series(dataframe[colk].values, nan_as_null=nan_as_null)
         # Set index
         return df.set_index(dataframe.index.values)
 
@@ -1612,7 +1711,7 @@ class DataFrame(object):
         return ret
 
     @classmethod
-    def from_records(self, data, index=None, columns=None):
+    def from_records(self, data, index=None, columns=None, nan_as_null=False):
         """Convert from a numpy recarray or structured array.
 
         Parameters
@@ -1632,7 +1731,8 @@ class DataFrame(object):
         df = DataFrame()
         for k in names:
             # FIXME: unnecessary copy
-            df[k] = np.ascontiguousarray(data[k])
+            df[k] = Series(np.ascontiguousarray(data[k]),
+                           nan_as_null=nan_as_null)
         if index is not None:
             indices = data[index]
             return df.set_index(indices.astype(np.int64))

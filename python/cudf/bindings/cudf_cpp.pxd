@@ -576,39 +576,12 @@ cdef extern from "cudf.h" nogil:
 
     cdef unsigned int gdf_reduce_optimal_output_size()
 
-    cdef gdf_error gdf_sum_generic(gdf_column *col, void *dev_result, gdf_size_type dev_result_size)
-    cdef gdf_error gdf_sum_f64(gdf_column *col, double *dev_result, gdf_size_type dev_result_size)
-    cdef gdf_error gdf_sum_f32(gdf_column *col, float *dev_result, gdf_size_type dev_result_size)
-    cdef gdf_error gdf_sum_i64(gdf_column *col, int64_t *dev_result, gdf_size_type dev_result_size)
-    cdef gdf_error gdf_sum_i32(gdf_column *col, int32_t *dev_result, gdf_size_type dev_result_size)
-    cdef gdf_error gdf_sum_i8(gdf_column *col, int8_t *dev_result, gdf_size_type dev_result_size)
-
-    cdef gdf_error gdf_product_generic(gdf_column *col, void *dev_result, gdf_size_type dev_result_size)
-    cdef gdf_error gdf_product_f64(gdf_column *col, double *dev_result, gdf_size_type dev_result_size)
-    cdef gdf_error gdf_product_f32(gdf_column *col, float *dev_result, gdf_size_type dev_result_size)
-    cdef gdf_error gdf_product_i64(gdf_column *col, int64_t *dev_result, gdf_size_type dev_result_size)
-    cdef gdf_error gdf_product_i32(gdf_column *col, int32_t *dev_result, gdf_size_type dev_result_size)
-    cdef gdf_error gdf_product_i8(gdf_column *col, int8_t *dev_result, gdf_size_type dev_result_size)
-
-    cdef gdf_error gdf_sum_squared_generic(gdf_column *col, void *dev_result, gdf_size_type dev_result_size)
-    cdef gdf_error gdf_sum_squared_f64(gdf_column *col, double *dev_result, gdf_size_type dev_result_size)
-    cdef gdf_error gdf_sum_squared_f32(gdf_column *col, float *dev_result, gdf_size_type dev_result_size)
-
-
-    cdef gdf_error gdf_min_generic(gdf_column *col, void *dev_result, gdf_size_type dev_result_size)
-    cdef gdf_error gdf_min_f64(gdf_column *col, double *dev_result, gdf_size_type dev_result_size)
-    cdef gdf_error gdf_min_f32(gdf_column *col, float *dev_result, gdf_size_type dev_result_size)
-    cdef gdf_error gdf_min_i64(gdf_column *col, int64_t *dev_result, gdf_size_type dev_result_size)
-    cdef gdf_error gdf_min_i32(gdf_column *col, int32_t *dev_result, gdf_size_type dev_result_size)
-    cdef gdf_error gdf_min_i8(gdf_column *col, int8_t *dev_result, gdf_size_type dev_result_size)
-
-    cdef gdf_error gdf_max_generic(gdf_column *col, void *dev_result, gdf_size_type dev_result_size)
-    cdef gdf_error gdf_max_f64(gdf_column *col, double *dev_result, gdf_size_type dev_result_size)
-    cdef gdf_error gdf_max_f32(gdf_column *col, float *dev_result, gdf_size_type dev_result_size)
-    cdef gdf_error gdf_max_i64(gdf_column *col, int64_t *dev_result, gdf_size_type dev_result_size)
-    cdef gdf_error gdf_max_i32(gdf_column *col, int32_t *dev_result, gdf_size_type dev_result_size)
-    cdef gdf_error gdf_max_i8(gdf_column *col, int8_t *dev_result, gdf_size_type dev_result_size)
-
+    cdef gdf_error gdf_sum(gdf_column *col, void *dev_result, gdf_size_type dev_result_size)
+    cdef gdf_error gdf_product(gdf_column *col, void *dev_result, gdf_size_type dev_result_size)
+    cdef gdf_error gdf_sum_of_squares(gdf_column *col, void *dev_result, gdf_size_type dev_result_size)
+    cdef gdf_error gdf_min(gdf_column *col, void *dev_result, gdf_size_type dev_result_size)
+    cdef gdf_error gdf_max(gdf_column *col, void *dev_result, gdf_size_type dev_result_size)
+    
     cdef gdf_error gpu_comparison_static_i8(gdf_column *lhs, int8_t value, gdf_column *output,gdf_comparison_operator operation)
     cdef gdf_error gpu_comparison_static_i16(gdf_column *lhs, int16_t value, gdf_column *output,gdf_comparison_operator operation)
     cdef gdf_error gpu_comparison_static_i32(gdf_column *lhs, int32_t value, gdf_column *output,gdf_comparison_operator operation)
@@ -626,12 +599,11 @@ cdef extern from "cudf.h" nogil:
 
     cdef gdf_error get_column_byte_width(gdf_column * col, int * width)
 
-    cdef gdf_error gdf_order_by(size_t nrows,
-                   gdf_column* cols,
-                   size_t ncols,
-                   void** d_cols,
-                   int* d_types,
-                   size_t* d_indx)
+    cdef gdf_error gdf_order_by(gdf_column** input_columns,
+                                int8_t* asc_desc,
+                                size_t num_inputs,
+                                gdf_column* output_indices,
+                                int flag_nulls_are_smallest)
 
     cdef gdf_error gdf_filter(size_t nrows,
                  gdf_column* cols,

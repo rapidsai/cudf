@@ -28,13 +28,10 @@
 #include <cudf/functions.h>
 #include <rmm/thrust_rmm_allocator.h>
 #include <hash/concurrent_unordered_map.cuh>
-#include <groupby/aggregation_operations.cuh>
+#include <groupby/aggregation_operations.hpp>
 
 #include "tests/utilities/cudf_test_fixtures.h"
 
-// Vector set to use rmmAlloc and rmmFree.
-template <typename T>
-using Vector = thrust::device_vector<T, rmm_allocator<T>>;
 
 // This is necessary to do a parametrized typed-test over multiple template arguments
 template <typename Key, typename Value, template <typename> typename Aggregation_Operator>
@@ -65,9 +62,9 @@ struct MapTest : public GdfTest
 
   const int THREAD_BLOCK_SIZE{256};
 
-  std::vector<std::pair<key_type,value_type>> pairs;
+  std::vector<thrust::pair<key_type,value_type>> pairs;
 
-  Vector<pair_type> d_pairs;
+  rmm::device_vector<pair_type> d_pairs;
 
   std::unordered_map<key_type, value_type> expected_values;
 

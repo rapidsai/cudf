@@ -1,10 +1,12 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
 
+import operator
 import pytest
 
 import numpy as np
 import pandas as pd
 import pyarrow as pa
+import array as arr
 
 from librmm_cffi import librmm as rmm
 
@@ -16,6 +18,7 @@ from cudf.settings import set_options
 from itertools import combinations
 
 from . import utils
+from .utils import assert_eq
 
 
 def test_buffer_basic():
@@ -171,6 +174,28 @@ def test_dataframe_column_name_indexing():
     for i in range(1, len(pdf.columns)+1):
         for idx in combinations(pdf.columns, i):
             assert(pdf[list(idx)].equals(df[list(idx)].to_pandas()))
+
+
+def test_dataframe_drop_method():
+    df = DataFrame()
+    data = np.asarray(range(10))
+    df['a'] = data
+    df['b'] = data
+    df['c'] = data
+
+    assert tuple(df.columns) == ('a', 'b', 'c')
+    assert tuple(df.drop('a').columns) == ('b', 'c')
+    assert tuple(df.columns) == ('a', 'b', 'c')
+    assert tuple(df.drop(['a', 'b']).columns) == ('c',)
+    assert tuple(df.columns) == ('a', 'b', 'c')
+
+    # Test drop error
+    with pytest.raises(NameError) as raises:
+        df.drop('d')
+    raises.match("column 'd' does not exist")
+    with pytest.raises(NameError) as raises:
+        df.drop(['a', 'd', 'b'])
+    raises.match("column 'd' does not exist")
 
 
 def test_dataframe_column_add_drop():
@@ -538,18 +563,26 @@ def test_dataframe_setitem_from_masked_object():
     np.random.shuffle(mask)
     ary[mask] = np.nan
 
-    test1 = Series(ary)
-    assert(test1.has_null_mask)
-    assert(test1.null_count == 20)
+    test1_null = Series(ary, nan_as_null=True)
+    assert(test1_null.has_null_mask)
+    assert(test1_null.null_count == 20)
+    test1_nan = Series(ary, nan_as_null=False)
+    assert(test1_nan.null_count == 0)
 
-    test2 = DataFrame.from_pandas(pd.DataFrame({'a': ary}))
-    assert(test2['a'].has_null_mask)
-    assert(test2['a'].null_count == 20)
+    test2_null = DataFrame.from_pandas(pd.DataFrame({'a': ary}),
+                                       nan_as_null=True)
+    assert(test2_null['a'].has_null_mask)
+    assert(test2_null['a'].null_count == 20)
+    test2_nan = DataFrame.from_pandas(pd.DataFrame({'a': ary}),
+                                      nan_as_null=False)
+    assert(test2_nan['a'].null_count == 0)
 
     gpu_ary = rmm.to_device(ary)
-    test3 = Series(gpu_ary)
-    assert(test3.has_null_mask)
-    assert(test3.null_count == 20)
+    test3_null = Series(gpu_ary, nan_as_null=True)
+    assert(test3_null.has_null_mask)
+    assert(test3_null.null_count == 20)
+    test3_nan = Series(gpu_ary, nan_as_null=False)
+    assert(test3_nan.null_count == 0)
 
     test4 = DataFrame()
     lst = [1, 2, None, 4, 5, 6, None, 8, 9]
@@ -928,3 +961,163 @@ def test_from_scalar_typing(data_type):
     gdf['b'] = scalar
     assert(gdf['b'].dtype == np.dtype(data_type))
     assert(len(gdf['b']) == len(gdf['a']))
+
+
+@pytest.mark.parametrize(
+    'data_type',
+    ['int8', 'int16', 'int32', 'int64', 'float32', 'float64']
+)
+def test_from_python_array(data_type):
+    np_arr = np.random.randint(0, 100, 10).astype(data_type)
+    data = memoryview(np_arr)
+    data = arr.array(data.format, data)
+
+    gs = gd.Series(data)
+
+    np.testing.assert_equal(gs.to_array(), np_arr)
+
+
+def test_series_shape():
+    ps = pd.Series([1, 2, 3, 4])
+    cs = Series([1, 2, 3, 4])
+
+    assert ps.shape == cs.shape
+
+
+def test_series_shape_empty():
+    ps = pd.Series()
+    cs = Series([])
+
+    assert ps.shape == cs.shape
+
+
+def test_dataframe_shape():
+    pdf = pd.DataFrame({'a': [0, 1, 2, 3], 'b': [0.1, 0.2, None, 0.3]})
+    gdf = DataFrame.from_pandas(pdf)
+
+    assert pdf.shape == gdf.shape
+
+
+def test_dataframe_shape_empty():
+    pdf = pd.DataFrame()
+    gdf = DataFrame()
+
+    assert pdf.shape == gdf.shape
+
+
+@pytest.fixture
+def pdf():
+    return pd.DataFrame({'x': range(10),
+                         'y': range(10)})
+
+
+@pytest.fixture
+def gdf(pdf):
+    return gd.DataFrame.from_pandas(pdf)
+
+
+@pytest.mark.parametrize('func', [
+    lambda df: df.mean(),
+    lambda df: df.sum(),
+    lambda df: df.min(),
+    lambda df: df.max(),
+    lambda df: df.std(),
+    lambda df: df.count(),
+    pytest.param(lambda df: df.size, marks=pytest.mark.xfail()),
+])
+@pytest.mark.parametrize('accessor', [
+    pytest.param(lambda df: df, marks=pytest.mark.xfail(
+        reason="dataframe reductions not yet supported")),
+    lambda df: df.x,
+])
+def test_reductions(pdf, gdf, accessor, func):
+    assert_eq(func(accessor(pdf)), func(accessor(gdf)))
+
+
+@pytest.mark.parametrize('left', [
+    pytest.param(lambda df: df, marks=pytest.mark.xfail()),
+    lambda df: df.x,
+    lambda df: 3,
+])
+@pytest.mark.parametrize('right', [
+    pytest.param(lambda df: df, marks=pytest.mark.xfail()),
+    lambda df: df.x,
+    lambda df: 3,
+])
+@pytest.mark.parametrize('binop', [
+    operator.add,
+    operator.mul,
+    pytest.param(operator.floordiv, marks=pytest.mark.xfail()),
+    pytest.param(operator.truediv, marks=pytest.mark.xfail()),
+    pytest.param(operator.mod, marks=pytest.mark.xfail()),
+    pytest.param(operator.pow, marks=pytest.mark.xfail()),
+    operator.eq,
+    operator.lt,
+    operator.le,
+    operator.gt,
+    operator.ge,
+    operator.ne,
+])
+def test_binops(pdf, gdf, left, right, binop):
+    d = binop(left(pdf), right(pdf))
+    g = binop(left(gdf), right(gdf))
+    assert_eq(d, g)
+
+
+@pytest.mark.xfail(reason="null is not supported in gpu yet")
+def test_dataframe_boolean_mask_with_None():
+    pdf = pd.DataFrame({'a': [0, 1, 2, 3], 'b': [0.1, 0.2, None, 0.3]})
+    gdf = DataFrame.from_pandas(pdf)
+    pdf_masked = pdf[[True, False, True, False]]
+    gdf_masked = gdf[[True, False, True, False]]
+    assert pdf_masked.to_string().split() == gdf_masked.to_string().split()
+
+
+"""
+This test compares cudf and Pandas dataframe boolean indexing.
+"""
+
+
+@pytest.mark.parametrize('mask_fn', [
+    lambda x: x,
+    lambda x: np.array(x),
+    lambda x: pd.Series(x),
+    ])
+def test_dataframe_boolean_mask(pdf, gdf, mask_fn):
+    mask_base = [True, False, True, False, True, False, True, False, True,
+                 False]
+    mask = mask_fn(mask_base)
+    assert len(mask) == gdf.shape[0]
+    pdf_masked = pdf[mask]
+    gdf_masked = gdf[mask]
+    assert pdf_masked.to_string().split() == gdf_masked.to_string().split()
+
+
+"""
+This test only tests boolean indexing of a cudf DataFrame with a cudf Series.
+Pandas does not support cudf Series.  When masking with a Series, the length
+is not required to match.
+"""
+
+
+def test_dataframe_boolean_mask_Series(gdf):
+    mask = Series([True, False, True, False])
+    mask2 = Series([True, True, True, True])
+    mask3 = Series([True, True, True, True, True, True, True, True])
+    gdf_masked = gdf[mask]
+    gdf_masked2 = gdf[mask2]
+    gdf_masked3 = gdf[mask3]
+    assert gdf_masked.shape[0] == 2
+    assert gdf_masked2.shape[0] == 4
+    assert gdf_masked3.shape[0] == 8
+
+
+def test_iter(pdf, gdf):
+    assert list(pdf) == list(gdf)
+
+
+def test_iteritems(gdf):
+    for k, v in gdf.iteritems():
+        assert k in gdf.columns
+        assert isinstance(v, gd.Series)
+        assert_eq(v, gdf[k])

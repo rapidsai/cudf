@@ -6,6 +6,7 @@ typedef unsigned char gdf_valid_type;
 typedef	long	gdf_date64;
 typedef	int		gdf_date32;
 typedef	int		gdf_category;
+typedef	long	gdf_timestamp;
 
 /* --------------------------------------------------------------------------*/
  /**
@@ -159,11 +160,11 @@ typedef enum {
  */
 /* ----------------------------------------------------------------------------*/
 typedef struct gdf_context_{
-  int flag_sorted;        /**< Indicates if the input data is sorted. 0 = No, 1 = yes */
-  gdf_method flag_method; /**< The method to be used for the operation (e.g., sort vs hash) */
-  int flag_distinct;      /**< for COUNT: DISTINCT = 1, else = 0 */
-  int flag_sort_result;   /**< When method is GDF_HASH, 0 = result is not sorted, 1 = result is sorted */
-  int flag_sort_inplace;  /**< 0 = No sort in place allowed, 1 = else */
+  int flag_sorted;              /**< Indicates if the input data is sorted. 0 = No, 1 = yes */
+  gdf_method flag_method;       /**< The method to be used for the operation (e.g., sort vs hash) */
+  int flag_distinct;            /**< for COUNT: DISTINCT = 1, else = 0 */
+  int flag_sort_result;         /**< When method is GDF_HASH, 0 = result is not sorted, 1 = result is sorted */
+  int flag_sort_inplace;        /**< 0 = No sort in place allowed, 1 = else */
 } gdf_context;
 
 struct _OpaqueIpcParser;

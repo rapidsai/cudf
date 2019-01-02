@@ -15,18 +15,18 @@
 #=============================================================================
 cmake_minimum_required(VERSION 3.12 FATAL_ERROR)
 
-project(CUDA_DATAFRAME VERSION 0.3.0 LANGUAGES C CXX CUDA)
+project(CUDA_DATAFRAME VERSION 0.4.0 LANGUAGES C CXX CUDA)
 
 ###################################################################################################
 # - compiler options ------------------------------------------------------------------------------
 
-set(CMAKE_CXX_STANDARD 11)
+set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_C_COMPILER $ENV{CC})
 set(CMAKE_CXX_COMPILER $ENV{CXX})
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-set(CMAKE_CUDA_STANDARD 11)
-set(CMAKE_CUDA_STANDARD_REQURIED ON)
+set(CMAKE_CUDA_STANDARD 14)
+set(CMAKE_CUDA_STANDARD_REQUIRED ON)
 
 if(CMAKE_COMPILER_IS_GNUCXX)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Werror")
@@ -50,7 +50,10 @@ set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -Werror cross-execution-space-call -Xc
 set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -Xcompiler -D_GLIBCXX_USE_CXX11_ABI=0")
 
 # set default build type
-# set(CMAKE_BUILD_TYPE "Release")
+set(CMAKE_BUILD_TYPE "Release")
+
+option(BUILD_TESTS "Configure CMake to build tests"
+       ON)
 
 ###################################################################################################
 # - cmake modules ---------------------------------------------------------------------------------
@@ -60,9 +63,7 @@ set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/Modules/" ${CMAKE_MODUL
 include(FeatureSummary)
 include(CheckIncludeFiles)
 include(CheckLibraryExists)
-include(CTest)
 
-include(ConfigureGoogleTest)
 include(ConfigureArrow)
 
 ###################################################################################################
@@ -75,21 +76,35 @@ else()
 endif()
 
 ###################################################################################################
+# - find zlib -------------------------------------------------------------------------------------
+
+find_package(ZLIB REQUIRED)
+if(ZLIB_FOUND)
+    include_directories(${ZLIB_INCLUDE_DIRS})
+else()
+    message(FATAL_ERROR "ZLib not found.")
+endif(ZLIB_FOUND)
+
+###################################################################################################
 # - add gtest -------------------------------------------------------------------------------------
 
-if(GTEST_FOUND)
-    message(STATUS "Google C++ Testing Framework (Google Test) found in ${GTEST_ROOT}")
-    include_directories(${GTEST_INCLUDE_DIRS})
-    add_subdirectory(${CMAKE_SOURCE_DIR}/tests)
-else()
-    message(AUTHOR_WARNING "Google C++ Testing Framework (Google Test) not found: automated tests are disabled.")
-endif(GTEST_FOUND)
+if(BUILD_TESTS)
+    include(CTest)
+    include(ConfigureGoogleTest)
+
+    if(GTEST_FOUND)
+        message(STATUS "Google C++ Testing Framework (Google Test) found in ${GTEST_ROOT}")
+        include_directories(${GTEST_INCLUDE_DIR})
+        add_subdirectory(${CMAKE_SOURCE_DIR}/tests)
+    else()
+        message(AUTHOR_WARNING "Google C++ Testing Framework (Google Test) not found: automated tests are disabled.")
+    endif(GTEST_FOUND)
+endif(BUILD_TESTS)
 
 ###################################################################################################
 # - include paths ---------------------------------------------------------------------------------
 
-include_directories("${GTEST_INCLUDE_DIR}"
-                    "${ARROW_INCLUDE_DIR}"
+include_directories("${ARROW_INCLUDE_DIR}"
                     "${FLATBUFFERS_INCLUDE_DIR}"
                     "${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}"
                     "${CMAKE_BINARY_DIR}/include"
@@ -134,9 +149,12 @@ add_library(cudf SHARED
             src/dataframe/context.cpp
             src/filter/filter_ops.cu
             src/join/joining.cu
+            src/orderby/orderby.cu
             src/sort/segmented_sorting.cu
             src/sort/sorting.cu
             src/sqls/sqls_ops.cu
+            src/groupby/groupby.cu
+            src/groupby/new_groupby.cu
             src/binary/binary_ops.cu
             src/bitmask/bitmask_ops.cu
             src/bitmask/valid_ops.cu
@@ -146,11 +164,13 @@ add_library(cudf SHARED
             src/hash/hash_ops.cu
             src/quantiles/quantiles.cu
             src/reductions/reductions.cu
+            src/replace/replace.cu
             src/reductions/scan.cu
             src/unary/unary_ops.cu
             # src/windowed/windowed_ops.cu ... this is broken
             src/io/convert/csr/cudf_to_csr.cu
             src/io/csv/csv_reader.cu
+            src/io/comp/uncomp.cpp
             src/utilities/cuda_utils.cu
             src/utilities/error_utils.cpp
             src/utilities/nvtx/nvtx_utils.cpp)
@@ -186,7 +206,7 @@ endif(CMAKE_BUILD_TYPE MATCHES Debug)
 # - link libraries --------------------------------------------------------------------------------
 
 target_link_libraries(rmm cudart cuda NVStrings)
-target_link_libraries(cudf rmm "${ARROW_LIB}")
+target_link_libraries(cudf rmm "${ARROW_LIB}" ${ZLIB_LIBRARIES})
 
 ###################################################################################################
 # - python cffi bindings --------------------------------------------------------------------------
@@ -205,10 +225,10 @@ add_custom_target(python_cffi DEPENDS cudf PYTHON_CFFI)
 install(TARGETS cudf rmm
         DESTINATION lib)
 
-install(FILES ${CMAKE_BINARY_DIR}/../include/cudf.h
+install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/include/cudf.h
         DESTINATION include)
 
-install(DIRECTORY ${CMAKE_BINARY_DIR}/../include/cudf 
+install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/cudf
         DESTINATION include)
 
 add_custom_command(OUTPUT INSTALL_PYTHON_CFFI
