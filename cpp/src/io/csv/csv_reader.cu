@@ -28,6 +28,7 @@
 #include <string>
 #include <stdio.h>
 #include <iostream>
+#include <numeric>
 #include <iomanip>
 #include <vector>
 #include <unordered_map>
@@ -139,7 +140,7 @@ gdf_dtype convertStringToDtype(std::string &dtype);
 
 __device__ int findSetBit(int tid, long num_bits, uint64_t *f_bits, int x);
 
-gdf_error launch_countRecords(raw_csv_t * csvData);
+gdf_error launch_countRecords(const char* h_data, size_t h_size, char terminator, char quote, vector<unsigned long long>& h_cnts);
 gdf_error launch_storeRecordStart(raw_csv_t * csvData);
 gdf_error launch_dataConvertColumns(raw_csv_t * raw_csv, void** d_gdf,  gdf_valid_type** valid, gdf_dtype* d_dtypes, string_pair	**str_cols, long row_offset, unsigned long long *);
 
@@ -802,11 +803,11 @@ gdf_dtype convertStringToDtype(std::string &dtype) {
 /*
  * Create the raw_csv_t structure and allocate space on the GPU
  */
-gdf_error uploadUncompressedCsv( const char * h_data, size_t num_bytes, raw_csv_t* raw_csv, const char *compression ) {
-
+gdf_error uploadUncompressedCsv( const char * h_data, size_t num_bytes, raw_csv_t* raw_csv, const char *compression ) 
+{
+	// Store complete uncompresed csv on host 
 	const char* h_uncomp_data = h_data;
 	gdf_size_type h_uncomp_size = num_bytes;
-	// Check if input is compressed
 	if (compression) {
 		int comp_type = IO_UNCOMP_STREAM_TYPE_INFER;
 		if (!strcasecmp(compression, "gzip"))
@@ -824,22 +825,26 @@ gdf_error uploadUncompressedCsv( const char * h_data, size_t num_bytes, raw_csv_
 		}
 	}
 
-	// TODO chunk count and determine which chunks need to be copied
-
-	raw_csv->num_bytes = h_uncomp_size;
-	CUDA_TRY( cudaMallocManaged ((void**)&raw_csv->data, (sizeof(char) * raw_csv->num_bytes)));
-	CUDA_TRY( cudaMemcpy(raw_csv->data, h_uncomp_data, raw_csv->num_bytes, cudaMemcpyHostToDevice));
-
-	raw_csv->num_bits = (raw_csv->num_bytes + 63) / 64;
-
+	// Count records in chunks (here, only a part of the file is stored on GPU at one time)
+	vector<unsigned long long> rec_cnts;
+	gdf_error error = launch_countRecords(h_uncomp_data, h_uncomp_size, 
+		raw_csv->terminator, raw_csv->quotechar, rec_cnts);
+	if (error != GDF_SUCCESS) {
+			return error;
+	}
+	raw_csv->num_records = std::accumulate(rec_cnts.begin(), rec_cnts.end(), 0);
 	RMM_TRY( RMM_ALLOC((void**)&raw_csv->d_num_records, sizeof(unsigned long long), 0) );
-	CUDA_TRY( cudaMemset(raw_csv->d_num_records,0, ((sizeof(unsigned long long)) )) );
-	
-	// find the record and fields points (in bitmaps)
-	gdf_error error = launch_countRecords(raw_csv);
-	checkError(error, "call to record counter");
+	CUDA_TRY(cudaMemset(raw_csv->d_num_records, raw_csv->num_records, ((sizeof(unsigned long long)))));
 
-	return GDF_SUCCESS;
+	// TODO: select chunks that need to be copied to the GPU
+
+	// Set up raw_csv struct and upload data to the GPU
+	raw_csv->num_bytes = h_uncomp_size;
+	raw_csv->num_bits = (raw_csv->num_bytes + 63) / 64;
+	CUDA_TRY(cudaMallocManaged ((void**)&raw_csv->data, (sizeof(char) * raw_csv->num_bytes)));
+	CUDA_TRY(cudaMemcpy(raw_csv->data, h_uncomp_data, raw_csv->num_bytes, cudaMemcpyHostToDevice));
+
+	return gdf_error::GDF_SUCCESS;
 }
 
 
@@ -905,30 +910,47 @@ gdf_error allocateGdfDataSpace(gdf_column *gdf) {
 //				CUDA Kernels
 //----------------------------------------------------------------------------------------------------------------
 
+gdf_error launch_countRecords(const char* h_data, size_t h_size, 
+							  char terminator, char quote, 
+							  vector<unsigned long long>& h_cnts)
+{
+	constexpr size_t max_chunk_bytes = 512;
+	const size_t chunk_count = (h_size + max_chunk_bytes - 1) / max_chunk_bytes;
+	h_cnts.resize(chunk_count);
 
-gdf_error launch_countRecords(raw_csv_t * csvData) {
+	unsigned long long* d_cnts = nullptr;
+	RMM_TRY( RMM_ALLOC(&d_cnts, sizeof(unsigned long long)* chunk_count, 0));
+	CUDA_TRY(cudaMemset(d_cnts, 0, sizeof(unsigned long long)* chunk_count));
+
+	char* d_chunk = nullptr;
+	CUDA_TRY(cudaMalloc(&d_chunk, max_chunk_bytes));
 
 	int blockSize;		// suggested thread count to use
 	int minGridSize;	// minimum block count required
-	CUDA_TRY( cudaOccupancyMaxPotentialBlockSize(&minGridSize, &blockSize, countRecords) );
+	CUDA_TRY(cudaOccupancyMaxPotentialBlockSize(&minGridSize, &blockSize, countRecords));
 
-	// Calculate actual block count to use based on bitmap count
-	// Each bitmap is for a 64-byte chunk, and each data index is bitmap ID * 64
-	int gridSize = (csvData->num_bits + blockSize - 1) / blockSize;
+	for (size_t ci = 0; ci < chunk_count; ++ci)
+	{
+		const auto h_chunk = h_data + ci * max_chunk_bytes;
+		const auto chunk_bytes = std::min((size_t)(h_size - ci * max_chunk_bytes), max_chunk_bytes);
+		const auto chunk_bits = (chunk_bytes + 63) / 64;
 
-	countRecords <<< gridSize, blockSize >>> (
-		csvData->data, csvData->terminator, csvData->quotechar,
-		csvData->num_bytes, csvData->num_bits, csvData->d_num_records
-	);
+		// copy chunk to device
+		CUDA_TRY(cudaMemcpy(d_chunk, h_chunk, chunk_bytes, cudaMemcpyDefault));
+
+		const int gridSize = (chunk_bits + blockSize - 1) / blockSize;
+		countRecords <<< gridSize, blockSize >>> (
+			d_chunk, terminator, quote,
+			chunk_bytes, chunk_bits, &d_cnts[ci]
+			);
+	}
+	CUDA_TRY(cudaMemcpy(h_cnts.data(), d_cnts, chunk_count*sizeof(unsigned long long), cudaMemcpyDefault));
+
+	CUDA_TRY(cudaFree(d_chunk));
+	CUDA_TRY(cudaFree(d_cnts));
 
 	CUDA_TRY(cudaGetLastError());
-
-	long recs=-1;
-	CUDA_TRY(cudaMemcpy(&recs, csvData->d_num_records, sizeof(long), cudaMemcpyDeviceToHost));
-	csvData->num_records=recs;
-
-	CUDA_TRY(cudaGetLastError());
-
+	
 	return GDF_SUCCESS;
 }
 
