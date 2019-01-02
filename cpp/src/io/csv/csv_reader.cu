@@ -127,7 +127,7 @@ using string_pair = std::pair<const char*,size_t>;
 //
 gdf_error parseArguments(csv_read_arg *args, raw_csv_t *csv);
 // gdf_error getColNamesAndTypes(const char **col_names, const  char **dtypes, raw_csv_t *d);
-gdf_error loadUncompressedCsvToDevice( const char * data, size_t num_bytes, raw_csv_t * csvData, const char *compression );
+gdf_error uploadUncompressedCsv( const char * data, size_t num_bytes, raw_csv_t * csvData, const char *compression );
 gdf_error allocateGdfDataSpace(gdf_column *);
 gdf_dtype convertStringToDtype(std::string &dtype);
 
@@ -347,7 +347,7 @@ gdf_error read_csv(csv_read_arg *args)
 				compression = "xz";
 		}
 	}
-	error = loadUncompressedCsvToDevice( (const char *)map_data, map_size, raw_csv, compression );
+	error = uploadUncompressedCsv( (const char *)map_data, map_size, raw_csv, compression );
 	checkError(error, "call to createRawCsv");
 
 	//-----------------------------------------------------------------------------
@@ -802,7 +802,7 @@ gdf_dtype convertStringToDtype(std::string &dtype) {
 /*
  * Create the raw_csv_t structure and allocate space on the GPU
  */
-gdf_error loadUncompressedCsvToDevice( const char * h_data, size_t num_bytes, raw_csv_t* raw_csv, const char *compression ) {
+gdf_error uploadUncompressedCsv( const char * h_data, size_t num_bytes, raw_csv_t* raw_csv, const char *compression ) {
 
 	const char* h_uncomp_data = h_data;
 	gdf_size_type h_uncomp_size = num_bytes;
