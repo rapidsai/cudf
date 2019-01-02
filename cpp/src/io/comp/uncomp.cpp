@@ -263,7 +263,7 @@ int cpu_inflate(uint8_t *uncomp_data, size_t *destLen, const uint8_t *comp_data,
 }
 
 
-gdf_error io_uncompress_single_h2d(const void *src, gdf_size_type src_size, void **dst_dev, gdf_size_type *dst_size, int strm_type)
+gdf_error io_uncompress_single_h2d(const void *src, gdf_size_type src_size, void **dst, gdf_size_type *dst_size, int strm_type)
 {
     const uint8_t *raw = (const uint8_t *)src;
     const uint8_t *comp_data = nullptr;
@@ -275,11 +275,11 @@ gdf_error io_uncompress_single_h2d(const void *src, gdf_size_type src_size, void
     cudaError_t cu_err;
     gdf_error gdf_err = GDF_SUCCESS;
 
-    if (!(src && src_size && dst_dev && dst_size))
+    if (!(src && src_size && dst && dst_size))
     {
         return GDF_INVALID_API_CALL;
     }
-    *dst_dev = nullptr;
+    *dst = nullptr;
     *dst_size = 0;
     switch(strm_type)
     {
@@ -353,12 +353,7 @@ gdf_error io_uncompress_single_h2d(const void *src, gdf_size_type src_size, void
     {
         uncomp_len = comp_len * 4 + 4096; // In case uncompressed size isn't known in advance, assume ~4:1 compression for initial size
     }
-    cu_err = cudaMallocManaged((void **)&uncomp_data, uncomp_len);
-    if (cu_err != cudaSuccess)
-    {
-        gdf_err = GDF_MEMORYMANAGER_ERROR;
-        goto error_exit;
-    }
+    uncomp_data = (uint8_t*)malloc(uncomp_len);
 
     if (strm_type == IO_UNCOMP_STREAM_TYPE_GZIP || strm_type == IO_UNCOMP_STREAM_TYPE_ZIP)
     {
@@ -379,7 +374,7 @@ gdf_error io_uncompress_single_h2d(const void *src, gdf_size_type src_size, void
 error_exit:
     if (gdf_err == GDF_SUCCESS)
     {
-        *dst_dev = uncomp_data;
+        *dst = uncomp_data;
         *dst_size = uncomp_len;
     }
     else

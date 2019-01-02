@@ -127,7 +127,7 @@ using string_pair = std::pair<const char*,size_t>;
 //
 gdf_error parseArguments(csv_read_arg *args, raw_csv_t *csv);
 // gdf_error getColNamesAndTypes(const char **col_names, const  char **dtypes, raw_csv_t *d);
-gdf_error updateRawCsv( const char * data, size_t num_bytes, raw_csv_t * csvData, const char *compression );
+gdf_error loadUncompressedCsvToDevice( const char * data, size_t num_bytes, raw_csv_t * csvData, const char *compression );
 gdf_error allocateGdfDataSpace(gdf_column *);
 gdf_dtype convertStringToDtype(std::string &dtype);
 
@@ -347,13 +347,8 @@ gdf_error read_csv(csv_read_arg *args)
 				compression = "xz";
 		}
 	}
-	error = updateRawCsv( (const char *)map_data, map_size, raw_csv, compression );
+	error = loadUncompressedCsvToDevice( (const char *)map_data, map_size, raw_csv, compression );
 	checkError(error, "call to createRawCsv");
-
-	//-----------------------------------------------------------------------------
-	// find the record and fields points (in bitmaps)
-	error = launch_countRecords(raw_csv);
-	checkError(error, "call to record counter");
 
 	//-----------------------------------------------------------------------------
 	//-- Allocate space to hold the record starting point
@@ -807,16 +802,13 @@ gdf_dtype convertStringToDtype(std::string &dtype) {
 /*
  * Create the raw_csv_t structure and allocate space on the GPU
  */
-gdf_error updateRawCsv( const char * data, size_t num_bytes, raw_csv_t * raw, const char *compression ) {
+gdf_error loadUncompressedCsvToDevice( const char * h_data, size_t num_bytes, raw_csv_t* raw_csv, const char *compression ) {
 
-	int num_bits;
-
+	const char* h_uncomp_data = h_data;
+	gdf_size_type h_uncomp_size = num_bytes;
 	// Check if input is compressed
 	if (compression) {
 		int comp_type = IO_UNCOMP_STREAM_TYPE_INFER;
-		char *data_out = nullptr;
-		gdf_size_type uncomp_size = 0;
-		gdf_error err;
 		if (!strcasecmp(compression, "gzip"))
 			comp_type = IO_UNCOMP_STREAM_TYPE_GZIP;
 		else if (!strcasecmp(compression, "zip"))
@@ -825,26 +817,27 @@ gdf_error updateRawCsv( const char * data, size_t num_bytes, raw_csv_t * raw, co
 			comp_type = IO_UNCOMP_STREAM_TYPE_BZIP2;
 		else if (!strcasecmp(compression, "xz"))
 			comp_type = IO_UNCOMP_STREAM_TYPE_XZ;
-		err = io_uncompress_single_h2d(data, num_bytes, (void **)&data_out, &uncomp_size, comp_type);
+
+		gdf_error err = io_uncompress_single_h2d(h_data, num_bytes, (void **)&h_uncomp_data, &h_uncomp_size, comp_type);
 		if (err != GDF_SUCCESS) {
 			return err;
 		}
-		raw->data = data_out;
-		raw->num_bytes = uncomp_size;
-		num_bytes = uncomp_size;
-	}
-	else {
-		CUDA_TRY( cudaMallocManaged ((void**)&raw->data, 		(sizeof(char)		* num_bytes)));
-		// RMM_TRY( RMM_ALLOC((void**)&raw->data, 		(sizeof(char)		* num_bytes),0 ));
-		CUDA_TRY( cudaMemcpy(raw->data, data, num_bytes, cudaMemcpyHostToDevice));
 	}
 
-	num_bits = (num_bytes + 63) / 64;
+	// TODO chunk count and determine which chunks need to be copied
 
-	RMM_TRY( RMM_ALLOC((void**)&raw->d_num_records, sizeof(unsigned long long),0) );
-	CUDA_TRY( cudaMemset(raw->d_num_records,0, ((sizeof(long)) )) );
+	raw_csv->num_bytes = h_uncomp_size;
+	CUDA_TRY( cudaMallocManaged ((void**)&raw_csv->data, (sizeof(char) * raw_csv->num_bytes)));
+	CUDA_TRY( cudaMemcpy(raw_csv->data, h_uncomp_data, raw_csv->num_bytes, cudaMemcpyHostToDevice));
 
-	raw->num_bits  = num_bits;
+	raw_csv->num_bits = (raw_csv->num_bytes + 63) / 64;
+
+	RMM_TRY( RMM_ALLOC((void**)&raw_csv->d_num_records, sizeof(unsigned long long), 0) );
+	CUDA_TRY( cudaMemset(raw_csv->d_num_records,0, ((sizeof(unsigned long long)) )) );
+	
+	// find the record and fields points (in bitmaps)
+	gdf_error error = launch_countRecords(raw_csv);
+	checkError(error, "call to record counter");
 
 	return GDF_SUCCESS;
 }
