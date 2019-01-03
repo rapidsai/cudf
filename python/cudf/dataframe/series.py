@@ -292,14 +292,8 @@ class Series(object):
     def __repr__(self):
         return repr(get_renderable_pandas_dataframe(self))
 
-    def _repr_html_(self):
-        return get_renderable_pandas_dataframe(self)._repr_html_()
-
     def _repr_latex_(self):
         return get_renderable_pandas_dataframe(self)._repr_latex_()
-
-    def to_html(self):
-        return get_renderable_pandas_dataframe(self).to_html()
 
     def _binaryop(self, other, fn):
         """
