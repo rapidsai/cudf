@@ -353,7 +353,7 @@ gdf_error io_uncompress_single_h2d(const void *src, gdf_size_type src_size, void
     {
         uncomp_len = comp_len * 4 + 4096; // In case uncompressed size isn't known in advance, assume ~4:1 compression for initial size
     }
-    uncomp_data = (uint8_t*)malloc(uncomp_len);
+    uncomp_data = new uint8_t[uncomp_len];
 
     if (strm_type == IO_UNCOMP_STREAM_TYPE_GZIP || strm_type == IO_UNCOMP_STREAM_TYPE_ZIP)
     {

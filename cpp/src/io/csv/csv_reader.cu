@@ -847,6 +847,11 @@ gdf_error uploadUncompressedCsv( const char * h_data, size_t num_bytes, raw_csv_
 	raw_csv->num_bits = (raw_csv->num_bytes + 63) / 64;
 	CUDA_TRY(cudaMallocManaged ((void**)&raw_csv->data, (sizeof(char) * raw_csv->num_bytes)));
 	CUDA_TRY(cudaMemcpy(raw_csv->data, h_uncomp_data, raw_csv->num_bytes, cudaMemcpyHostToDevice));
+	
+	if (compression)
+	{
+		delete[] h_uncomp_data;
+	}
 
 	return gdf_error::GDF_SUCCESS;
 }
@@ -923,7 +928,7 @@ gdf_error launch_countRecords(const char* h_data, size_t h_size,
 	h_cnts.resize(chunk_count);
 
 	unsigned long long* d_cnts = nullptr;
-	RMM_TRY( RMM_ALLOC(&d_cnts, sizeof(unsigned long long)* chunk_count, 0));
+	CUDA_TRY(cudaMalloc(&d_cnts, sizeof(unsigned long long)* chunk_count));
 	CUDA_TRY(cudaMemset(d_cnts, 0, sizeof(unsigned long long)* chunk_count));
 
 	char* d_chunk = nullptr;
