@@ -33,7 +33,7 @@ __global__ void count_bits_g(int *counter, BitMask bits) {
     
   int local_counter = 0;
 
-  for (int i = index ; i < bits.NumWords() ; i += stride) {
+  for (int i = index ; i < bits.NumElements() ; i += stride) {
     local_counter += __popc(bits.GetValid()[i]);
   }
 
@@ -113,7 +113,7 @@ TEST_F(BitMaskTest, FirstRowValid)
   EXPECT_EQ(1U, local_count);
 
   bit_mask_t temp = 0;
-  bit_mask::get_word(&temp, bit_mask.GetValid());
+  bit_mask::get_element(&temp, bit_mask.GetValid());
 
   EXPECT_EQ(GDF_SUCCESS, bit_mask::destroy_bit_mask(bits));
 
@@ -140,7 +140,7 @@ TEST_F(BitMaskTest, EveryOtherBit)
   EXPECT_EQ(4U, local_count);
 
   bit_mask_t temp = 0;
-  bit_mask::get_word(&temp, bit_mask.GetValid());
+  bit_mask::get_element(&temp, bit_mask.GetValid());
 
   EXPECT_EQ(GDF_SUCCESS, bit_mask::destroy_bit_mask(bits));
 
@@ -167,7 +167,7 @@ TEST_F(BitMaskTest, OtherEveryOtherBit)
   EXPECT_EQ(4U, local_count);
 
   bit_mask_t temp = 0;
-  bit_mask::get_word(&temp, bit_mask.GetValid());
+  bit_mask::get_element(&temp, bit_mask.GetValid());
 
   EXPECT_EQ(GDF_SUCCESS, bit_mask::destroy_bit_mask(bits));
 
@@ -298,12 +298,12 @@ TEST_F(BitMaskTest, PerformanceTest)
 
   BitMask bit_mask(bits, num_rows);
 
-  int num_words = bit_mask::num_words(num_rows);
+  int num_elements = bit_mask::num_elements(num_rows);
   int block_size = 256;
-  int grid_size = (num_words + block_size - 1)/block_size;
+  int grid_size = (num_elements + block_size - 1)/block_size;
 
-  uint32_t *local_valid = (uint32_t *) malloc(num_words * sizeof(uint32_t));
-  for (int i = 0 ; i < num_words ; ++i) {
+  uint32_t *local_valid = (uint32_t *) malloc(num_elements * sizeof(uint32_t));
+  for (int i = 0 ; i < num_elements ; ++i) {
     local_valid[i] = 0x55555555U;
   }
 

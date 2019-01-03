@@ -14,12 +14,8 @@
  * limitations under the License.
  */
 
-#ifndef _BIT_CONTAINER_H_
-#define _BIT_CONTAINER_H_
-
-#pragma once
-
-#include <string.h>
+#ifndef _BIT_MASK_H_
+#define _BIT_MASK_H_
 
 #include "cudf.h"
 #include "bit_mask.h"
@@ -32,22 +28,15 @@ using bit_mask_t = bit_mask::bit_mask_t;
 
 /* ---------------------------------------------------------------------------- */
 /**
- * @Synopsis  Class for managing bit containers on the device
+ * @brief  Class for managing bit containers on the device
  */
 /* ---------------------------------------------------------------------------- */
 class BitMask {
 public:
    __host__ __device__ BitMask(bit_mask_t *valid, int bitlength): valid_(valid), bitlength_(bitlength) {}
-   __host__ __device__ BitMask(const BitMask &other): valid_(other.valid_), bitlength_(other.bitlength_) {}
-
-   __host__ __device__ BitMask &operator=(const BitMask &other) {
-     valid_ = other.valid_;
-     bitlength_ = other.bitlength_;
-     return *this;
-   }
 
   /**
-   * Check to see if a record is Valid (aka not null)
+   * @brief Check to see if a record is Valid (aka not null)
    *
    * @param[in] record_idx   the record index to check
    *
@@ -59,7 +48,7 @@ public:
   }
 
   /**
-   * Set a bit (not thread-save)
+   * @brief Set a bit (not thread-save)
    *
    * @param[in] record_idx    the record index
    */
@@ -70,53 +59,47 @@ public:
 
 
   /**
-   * Clear a bit (not thread-safe)
+   * @brief Clear a bit (not thread-safe)
    *
    * @param[in] record_idx    the record index
    */
   template <typename T>
   __device__ void ClearBitUnsafe(T record_idx) {
-    bit_mask::clear_bit_unsafe(record_idx);
+    bit_mask::clear_bit_unsafe(valid_, record_idx);
   }
 
   /**
-   * Set a bit in a thread-safe manner
+   * @brief Set a bit in a thread-safe manner
    *
    * @param[in] record_idx    the record index
    */
   template <typename T>
   __device__ void SetBit(T record_idx) {
-    int rec = bit_mask::details::which_word(record_idx);
-    int bit = bit_mask::details::which_bit(record_idx);
-
-    atomicOr( &valid_[rec], (1U << bit));
+    bit_mask::set_bit_safe(valid_, record_idx);
   }
 
 
   /**
-   * Clear a bit in a thread-safe manner
+   * @brief Clear a bit in a thread-safe manner
    *
    * @param[in] record_idx    the record index
    */
   template <typename T>
   __device__ void ClearBit(T record_idx) {
-    int rec = bit_mask::details::which_word(record_idx);
-    int bit = bit_mask::details::which_bit(record_idx);
-
-    atomicAnd( &valid_[rec], ~(1U << bit));
+    bit_mask::clear_bit_unsafe(valid_, record_idx);
   }
 
   /**
-   * Get the number of words in this bit container
+   * @brief Get the number of elements in this bit container
    *
-   * @return the number of words
+   * @return the number of elements
    */
-  __device__ int NumWords() const {
-    return bit_mask::num_words(bitlength_);
+  __device__ gdf_size_type NumElements() const {
+    return bit_mask::num_elements(bitlength_);
   }
 
   /**
-   * Getter for valid
+   * @brief Getter for valid
    *
    * @return pointer to valid bit container
    */
@@ -125,17 +108,17 @@ public:
   }
 
   /**
-   * Get length
+   * @brief Get length
    *
    * @return length of bit container in bits
    */
-  __host__ __device__ int Length() const {
+  __host__ __device__ gdf_size_type Length() const {
     return bitlength_;
   }
 
 private:
   bit_mask_t      *valid_;
-  int              bitlength_;
+  gdf_size_type    bitlength_;
 };
 
 #endif
