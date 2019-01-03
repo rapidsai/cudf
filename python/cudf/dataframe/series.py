@@ -11,6 +11,7 @@ import pandas as pd
 from cudf.utils import cudautils
 from cudf import formatting
 from .buffer import Buffer
+from .core import get_renderable_pandas_dataframe
 from .index import Index, RangeIndex, GenericIndex
 from cudf.settings import NOTSET, settings
 from .column import Column
@@ -289,7 +290,16 @@ class Series(object):
         return self.to_string(nrows=10)
 
     def __repr__(self):
-        return "<cudf.Series nrows={} >".format(len(self))
+        return repr(get_renderable_pandas_dataframe(self))
+
+    def _repr_html_(self):
+        return get_renderable_pandas_dataframe(self)._repr_html_()
+
+    def _repr_latex_(self):
+        return get_renderable_pandas_dataframe(self)._repr_latex_()
+
+    def to_html(self):
+        return get_renderable_pandas_dataframe(self).to_html()
 
     def _binaryop(self, other, fn):
         """

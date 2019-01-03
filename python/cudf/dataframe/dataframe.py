@@ -17,6 +17,7 @@ from librmm_cffi import librmm as rmm
 
 from cudf import formatting, _gdf
 from cudf.utils import cudautils, queryutils, applyutils, utils
+from .core import get_renderable_pandas_dataframe
 from .index import GenericIndex, Index, RangeIndex
 from .series import Series
 from .column import Column
@@ -391,10 +392,16 @@ class DataFrame(object):
         return self.to_string(nrows=nrows, ncols=ncols)
 
     def __repr__(self):
-        return "<cudf.DataFrame ncols={} nrows={} >".format(
-            len(self.columns),
-            len(self),
-        )
+        return repr(get_renderable_pandas_dataframe(self))
+
+    def _repr_html_(self):
+        return get_renderable_pandas_dataframe(self)._repr_html_()
+
+    def _repr_latex_(self):
+        return get_renderable_pandas_dataframe(self)._repr_latex_()
+
+    def to_html(self):
+        return get_renderable_pandas_dataframe(self).to_html()
 
     def __iter__(self):
         return iter(self.columns)

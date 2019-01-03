@@ -1121,3 +1121,27 @@ def test_iteritems(gdf):
         assert k in gdf.columns
         assert isinstance(v, gd.Series)
         assert_eq(v, gdf[k])
+
+
+@pytest.mark.parametrize('func', [
+    repr,
+    lambda x: x.to_html(),
+    lambda x: x._repr_html_(),
+    lambda x: x._repr_latex_(),
+])
+@pytest.mark.parametrize('transform', [
+    lambda df: df,
+    lambda df: df.x,
+    pytest.param(lambda df: df.index, marks=pytest.mark.xfail()),
+])
+def test_repr(func, transform, pdf, gdf):
+    pdf = transform(pdf)
+    gdf = transform(gdf)
+
+    try:
+        pdf_text = func(pdf)
+    except AttributeError:  # https://github.com/pandas-dev/pandas/issues/8829
+        return
+    else:
+        gdf_text = func(gdf)
+        assert gdf_text == pdf_text
