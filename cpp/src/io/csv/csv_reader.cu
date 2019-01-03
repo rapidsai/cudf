@@ -28,6 +28,7 @@
 #include <string>
 #include <stdio.h>
 #include <iostream>
+//#include <fstream>
 #include <numeric>
 #include <iomanip>
 #include <vector>
@@ -62,6 +63,7 @@
 #include "NVStrings.h"
 
 constexpr int32_t HASH_SEED = 33;
+constexpr size_t max_chunk_bytes = 64*1024*1024; // 64MB
 
 using namespace std;
 
@@ -92,8 +94,9 @@ typedef struct raw_csv_ {
     char				decimal;
     char				thousands;
 
-	long          		skiprows;       // number of rows at the start of the files to skip, default is 0                                 */
-	long          		skipfooter;     // number of rows at the bottom of the file to skip - default is 0   
+	unsigned long long  nrows;       	// number of rows to read
+	unsigned long long  skiprows;       // number of rows at the start of the files to skip, default is 0                                 */
+	unsigned long long  skipfooter;     // number of rows at the bottom of the file to skip - default is 0   
 
     rmm::device_vector<int32_t>	d_trueValues;	// device: array of values to recognize as true
     rmm::device_vector<int32_t>	d_falseValues;	// device: array of values to recognize as false
@@ -274,6 +277,7 @@ gdf_error read_csv(csv_read_arg *args)
 	raw_csv->dayfirst = args->dayfirst;
 	raw_csv->decimal = args->decimal;
 	raw_csv->thousands = args->thousands;
+	raw_csv->nrows = args->nrows;
 	raw_csv->skiprows = args->skiprows;
 	raw_csv->skipfooter = args->skipfooter;
 
@@ -838,23 +842,51 @@ gdf_error uploadUncompressedCsv( const char * h_data, size_t num_bytes, raw_csv_
 	if (error != GDF_SUCCESS) {
 			return error;
 	}
-	// TODO: select chunks that need to be copied to the GPU
+	//ofstream dbg;
+	//dbg.open("debug.txt", ios::out|ios::app);
+	//for (auto& rc: rec_cnts)
+	//	dbg << rc << ' ';
+	//dbg << '\n';
 
-	// TODO: set num_records to the number of actually loaded records
-	raw_csv->num_records = std::accumulate(rec_cnts.begin(), rec_cnts.end(), 0);
+	//TODO: add skipfooter support
+
+	// Select chunks that need to be copied to the GPU
+	unsigned long long sum_so_far = 0;
+	size_t first_chunk = 0;
+	while (first_chunk < rec_cnts.size() - 1 && raw_csv->skiprows > sum_so_far + rec_cnts[first_chunk] + 1)
+		sum_so_far += rec_cnts[first_chunk++];
+
+	size_t last_chunk = first_chunk;
+	while (last_chunk < rec_cnts.size() - 1 && raw_csv->skiprows + raw_csv->nrows > sum_so_far + rec_cnts[last_chunk])
+		sum_so_far += rec_cnts[last_chunk++];
+
+	//dbg << first_chunk << ' ' << last_chunk << '\n';
+
+	// Set num_records to the number of actually loaded records
+	raw_csv->num_records = std::accumulate(rec_cnts.begin() + first_chunk, rec_cnts.begin() + last_chunk + 1, 0);
 		
-
-	// Set up raw_csv struct and upload data to the GPU
-	// TODO: copy only required data
-	raw_csv->num_bytes = h_uncomp_size;
+	// Determine the total size to allocate on the GPU, without the last chunk for now
+	raw_csv->num_bytes = (last_chunk - first_chunk) * max_chunk_bytes;
+	// Add the last chunk size
+	raw_csv->num_bytes += (last_chunk == rec_cnts.size() - 1)?
+							(h_uncomp_size - last_chunk * max_chunk_bytes):
+							max_chunk_bytes;
+	assert(raw_csv->num_bytes <= h_uncomp_size);
 	raw_csv->num_bits = (raw_csv->num_bytes + 63) / 64;
-	CUDA_TRY(cudaMallocManaged ((void**)&raw_csv->data, (sizeof(char) * raw_csv->num_bytes)));
-	CUDA_TRY(cudaMemcpy(raw_csv->data, h_uncomp_data, raw_csv->num_bytes, cudaMemcpyHostToDevice));
-	
-	// TODO: update skiprows, skipfooter based on the loaded records
 
-	if (compression)
-	{
+	// Allocate and copy to the GPU
+	CUDA_TRY(cudaMallocManaged ((void**)&raw_csv->data, (sizeof(char) * raw_csv->num_bytes)));
+	CUDA_TRY(cudaMemcpy(raw_csv->data, h_uncomp_data + first_chunk*max_chunk_bytes, raw_csv->num_bytes, cudaMemcpyHostToDevice));
+	
+	// Update skiprows, skipfooter based on the records loaded on the GPU
+	raw_csv->skiprows -= std::accumulate(rec_cnts.begin(), rec_cnts.begin() + first_chunk, 0);
+	// TODO: update skipfooter
+
+	//dbg << raw_csv->num_bytes << ' ' << raw_csv->skiprows << '\n';
+	//dbg.close();
+
+	if (compression) {
+		// only allocated when input is compressed
 		delete[] h_uncomp_data;
 	}
 
@@ -928,7 +960,6 @@ gdf_error launch_countRecords(const char* h_data, size_t h_size,
 							  char terminator, char quote, 
 							  vector<unsigned long long>& h_cnts)
 {
-	constexpr size_t max_chunk_bytes = 512;
 	const size_t chunk_count = (h_size + max_chunk_bytes - 1) / max_chunk_bytes;
 	h_cnts.resize(chunk_count);
 
