@@ -403,6 +403,34 @@ def test_dataframe_emptycolumns_to_string():
     assert got.split() == expect.split()
 
 
+@pytest.mark.parametrize('nelem', [0, 2, 5, 20, 100])
+def test_dataframe_add(nelem):
+    # test for __add()__ operator of dataframe
+    gdf1 = DataFrame()
+    gdf2 = DataFrame()
+
+    gdf1['a'] = col_a = np.random.randint(low=0, high=100, size=nelem)\
+        .astype(np.int32)
+    gdf1['b'] = col_b = np.random.random(nelem).astype(np.float32)
+    gdf2['b'] = col_b
+    gdf2['c'] = col_a
+
+    pdf1 = pd.DataFrame()
+    pdf2 = pd.DataFrame()
+    pdf1['a'] = col_a
+    pdf1['b'] = col_b
+    pdf2['b'] = col_b
+    pdf2['c'] = col_a
+
+    gdf = gdf1 + gdf2
+    pdf = pdf1 + pdf2
+
+    assert tuple(gdf.columns) == tuple(pdf.columns)
+    np.testing.assert_equal(gdf['a'].to_array(), pdf['a'])
+    np.testing.assert_equal(gdf['b'].to_array(), pdf['b'])
+    np.testing.assert_equal(gdf['c'].to_array(), pdf['c'])
+
+
 def test_dataframe_copy():
     # Test for copying the dataframe using python copy pkg
     from copy import copy
