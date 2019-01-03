@@ -68,7 +68,6 @@ using namespace std;
 //-- define the structure for raw data handling - for internal use
 typedef struct raw_csv_ {
     char *				data;			// on-device: the raw unprocessed CSV data - loaded as a large char * array
-    unsigned long long*	d_num_records;	// on-device: Number of records.
     unsigned long long*	recStart;		// on-device: Starting position of the records.
 
     char				delimiter;		// host: the delimiter
@@ -80,7 +79,7 @@ typedef struct raw_csv_ {
 
     long				num_bytes;		// host: the number of bytes in the data
     long				num_bits;		// host: the number of 64-bit bitmaps (different than valid)
-	unsigned long long 	num_records;  	// host: number of records (per column)
+	unsigned long long 	num_records;  	// host: number of records loaded into device memory, and then number of records to read
 	// int				num_cols;		// host: number of columns
 	int					num_active_cols;	// host: number of columns that will be return to user.
 	int					num_actual_cols;	// host: number of columns in the file --- based on the number of columns in header
@@ -92,6 +91,9 @@ typedef struct raw_csv_ {
     bool				dayfirst;
     char				decimal;
     char				thousands;
+
+	long          		skiprows;       // number of rows at the start of the files to skip, default is 0                                 */
+	long          		skipfooter;     // number of rows at the bottom of the file to skip - default is 0   
 
     rmm::device_vector<int32_t>	d_trueValues;	// device: array of values to recognize as true
     rmm::device_vector<int32_t>	d_falseValues;	// device: array of values to recognize as false
@@ -272,6 +274,8 @@ gdf_error read_csv(csv_read_arg *args)
 	raw_csv->dayfirst = args->dayfirst;
 	raw_csv->decimal = args->decimal;
 	raw_csv->thousands = args->thousands;
+	raw_csv->skiprows = args->skiprows;
+	raw_csv->skipfooter = args->skipfooter;
 
 	if (raw_csv->decimal == raw_csv->delimiter)
 	{ 
@@ -354,7 +358,6 @@ gdf_error read_csv(csv_read_arg *args)
 	//-----------------------------------------------------------------------------
 	//-- Allocate space to hold the record starting point
 	RMM_TRY( RMM_ALLOC((void**)&(raw_csv->recStart), (sizeof(unsigned long long) * (raw_csv->num_records + 1)), 0) ); 
-	CUDA_TRY( cudaMemset(raw_csv->d_num_records,	0, 		(sizeof(unsigned long long) )) ) ;
 
 	//-----------------------------------------------------------------------------
 	//-- Scan data and set the starting positions
@@ -552,7 +555,7 @@ gdf_error read_csv(csv_read_arg *args)
 		CUDA_TRY(cudaMemcpy(raw_csv->d_parseCol, raw_csv->h_parseCol, sizeof(bool) * (raw_csv->num_actual_cols), cudaMemcpyHostToDevice));
 	}
 
-	raw_csv->num_records -= (args->skiprows + args->skipfooter);
+	raw_csv->num_records -= (raw_csv->skiprows + raw_csv->skipfooter);
 	if(skip_header==0){
 		raw_csv->header_row=-1;
 	}else{
@@ -584,7 +587,7 @@ gdf_error read_csv(csv_read_arg *args)
 
 		CUDA_TRY( cudaMemset(d_ColumnData,	0, 	(sizeof(column_data_t) * (raw_csv->num_active_cols)) ) ) ;
 
-		launch_dataTypeDetection(raw_csv, args->skiprows, d_ColumnData);
+		launch_dataTypeDetection(raw_csv, raw_csv->skiprows, d_ColumnData);
 
 		CUDA_TRY( cudaMemcpy(h_ColumnData,d_ColumnData, sizeof(column_data_t) * (raw_csv->num_active_cols), cudaMemcpyDeviceToHost));
 
@@ -710,7 +713,7 @@ gdf_error read_csv(csv_read_arg *args)
 	free(h_valid); 
 	free(h_data); 
 	
-	launch_dataConvertColumns(raw_csv,d_data, d_valid, d_dtypes,d_str_cols, args->skiprows, d_valid_count);
+	launch_dataConvertColumns(raw_csv,d_data, d_valid, d_dtypes,d_str_cols, raw_csv->skiprows, d_valid_count);
 	cudaDeviceSynchronize();
 
 	stringColCount=0;
@@ -765,7 +768,6 @@ gdf_error read_csv(csv_read_arg *args)
 
 	RMM_TRY( RMM_FREE( raw_csv->recStart, 0 ) ); 
 	RMM_TRY( RMM_FREE( raw_csv->d_parseCol, 0 ) ); 
-	RMM_TRY( RMM_FREE( raw_csv->d_num_records, 0 ) ); 
 	CUDA_TRY( cudaFree ( raw_csv->data) );
 
 
@@ -836,18 +838,21 @@ gdf_error uploadUncompressedCsv( const char * h_data, size_t num_bytes, raw_csv_
 	if (error != GDF_SUCCESS) {
 			return error;
 	}
-	raw_csv->num_records = std::accumulate(rec_cnts.begin(), rec_cnts.end(), 0);
-	RMM_TRY( RMM_ALLOC((void**)&raw_csv->d_num_records, sizeof(unsigned long long), 0) );
-	CUDA_TRY(cudaMemset(raw_csv->d_num_records, raw_csv->num_records, ((sizeof(unsigned long long)))));
-
 	// TODO: select chunks that need to be copied to the GPU
 
+	// TODO: set num_records to the number of actually loaded records
+	raw_csv->num_records = std::accumulate(rec_cnts.begin(), rec_cnts.end(), 0);
+		
+
 	// Set up raw_csv struct and upload data to the GPU
+	// TODO: copy only required data
 	raw_csv->num_bytes = h_uncomp_size;
 	raw_csv->num_bits = (raw_csv->num_bytes + 63) / 64;
 	CUDA_TRY(cudaMallocManaged ((void**)&raw_csv->data, (sizeof(char) * raw_csv->num_bytes)));
 	CUDA_TRY(cudaMemcpy(raw_csv->data, h_uncomp_data, raw_csv->num_bytes, cudaMemcpyHostToDevice));
 	
+	// TODO: update skiprows, skipfooter based on the loaded records
+
 	if (compression)
 	{
 		delete[] h_uncomp_data;
@@ -1003,15 +1008,21 @@ gdf_error launch_storeRecordStart(raw_csv_t * csvData) {
 	int minGridSize;	// minimum block count required
 	CUDA_TRY( cudaOccupancyMaxPotentialBlockSize(&minGridSize, &blockSize, storeRecordStart) );
 
+    unsigned long long*	d_num_records;
+	RMM_TRY( RMM_ALLOC((void**)&d_num_records, sizeof(unsigned long long), 0) );
+	CUDA_TRY( cudaMemset(d_num_records, 0, (sizeof(unsigned long long) )) ) ;
+
 	// Calculate actual block count to use based on bitmap count
 	// Each bitmap is for a 64-byte chunk, and each data index is bitmap ID * 64
 	int gridSize = (csvData->num_bits + blockSize - 1) / blockSize;
 
 	storeRecordStart <<< gridSize, blockSize >>> (
 		csvData->data, csvData->terminator, csvData->quotechar,
-		csvData->num_bytes, csvData->num_bits, csvData->d_num_records,
+		csvData->num_bytes, csvData->num_bits, d_num_records,
 		csvData->recStart
 	);
+
+	RMM_TRY( RMM_FREE( d_num_records, 0 ) ); 
 
 	CUDA_TRY( cudaGetLastError() );
 
