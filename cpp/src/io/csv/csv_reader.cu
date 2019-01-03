@@ -552,11 +552,15 @@ gdf_error read_csv(csv_read_arg *args)
 		CUDA_TRY(cudaMemcpy(raw_csv->d_parseCol, raw_csv->h_parseCol, sizeof(bool) * (raw_csv->num_actual_cols), cudaMemcpyHostToDevice));
 	}
 
-	raw_csv->num_records -= (args->skiprows + args->skipfooter); 
+	raw_csv->num_records -= (args->skiprows + args->skipfooter);
 	if(skip_header==0){
 		raw_csv->header_row=-1;
 	}else{
 		raw_csv->num_records-=1;
+	}
+	if (args->nrows != -1 && (int)raw_csv->num_records > args->nrows)
+	{
+		raw_csv->num_records = args->nrows;
 	}
 
 	//-----------------------------------------------------------------------------
@@ -950,7 +954,7 @@ gdf_error launch_countRecords(const char* h_data, size_t h_size,
 	CUDA_TRY(cudaFree(d_cnts));
 
 	CUDA_TRY(cudaGetLastError());
-	
+
 	return GDF_SUCCESS;
 }
 
