@@ -968,7 +968,8 @@ gdf_error launch_countRecords(const char* h_data, size_t h_size,
 	CUDA_TRY(cudaMemset(d_cnts, 0, sizeof(unsigned long long)* chunk_count));
 
 	char* d_chunk = nullptr;
-	CUDA_TRY(cudaMalloc(&d_chunk, max_chunk_bytes));
+	// alloc extra byte in case \r\n is at the chunk border
+	CUDA_TRY(cudaMalloc(&d_chunk, max_chunk_bytes + 1)); 
 
 	int blockSize;		// suggested thread count to use
 	int minGridSize;	// minimum block count required
@@ -980,8 +981,8 @@ gdf_error launch_countRecords(const char* h_data, size_t h_size,
 		const auto chunk_bytes = std::min((size_t)(h_size - ci * max_chunk_bytes), max_chunk_bytes);
 		const auto chunk_bits = (chunk_bytes + 63) / 64;
 
-		// copy chunk to device
-		CUDA_TRY(cudaMemcpy(d_chunk, h_chunk, chunk_bytes, cudaMemcpyDefault));
+		// Copy chunk to device. Copy extra byte if not last chunk
+		CUDA_TRY(cudaMemcpy(d_chunk, h_chunk, ci < (chunk_count - 1)?chunk_bytes:chunk_bytes + 1, cudaMemcpyDefault));
 
 		const int gridSize = (chunk_bits + blockSize - 1) / blockSize;
 		countRecords <<< gridSize, blockSize >>> (
@@ -1023,7 +1024,7 @@ __global__ void countRecords(char *data, const char terminator, const char quote
 		// for a postprocess ignore, as the chunk here has limited visibility.
 		if ((raw[x] == terminator) || (quotechar != '\0' && raw[x] == quotechar)) {
 			tokenCount++;
-		} else if (raw[x] == '\r' && (x+1L)<num_bytes && raw[x +1] == '\n') {
+		} else if (raw[x] == '\r' && raw[x +1] == '\n') {
 			x++;
 			tokenCount++;
 		}
@@ -1041,7 +1042,11 @@ gdf_error launch_storeRecordStart(raw_csv_t * csvData) {
 
     unsigned long long*	d_num_records;
 	RMM_TRY( RMM_ALLOC((void**)&d_num_records, sizeof(unsigned long long), 0) );
-	CUDA_TRY( cudaMemset(d_num_records, 0, (sizeof(unsigned long long) )) ) ;
+
+	// set the first record starting a zero instead of setting it in the kernel
+    const auto one = 1ull;
+	CUDA_TRY( cudaMemcpy(d_num_records, &one, sizeof(unsigned long long), cudaMemcpyDefault) ) ;
+	CUDA_TRY( cudaMemset(csvData->recStart, 0ull, (sizeof(unsigned long long) )) ) ;
 
 	// Calculate actual block count to use based on bitmap count
 	// Each bitmap is for a 64-byte chunk, and each data index is bitmap ID * 64
@@ -1075,11 +1080,6 @@ __global__ void storeRecordStart(char *data, const char terminator, const char q
 	char *raw = (data + did);
 
 	long byteToProcess = ((did + 64L) < num_bytes) ? 64L : (num_bytes - did);
-
-	if(tid==0){
-		long pos = atomicAdd((unsigned long long int*)num_records,(unsigned long long int)1);
-		recStart[pos]=did+0;
-	}
 
 	// process the data
 	for (long x = 0; x < byteToProcess; x++) {
