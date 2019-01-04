@@ -70,7 +70,7 @@ class NumericalColumn(columnops.TypedColumnBase):
 
     def replace(self, **kwargs):
         if 'data' in kwargs and 'dtype' not in kwargs:
-            kwargs.update({'dtype': kwargs['data'].dtype})
+            kwargs['dtype'] = kwargs['data'].dtype
         return super(NumericalColumn, self).replace(**kwargs)
 
     def serialize(self, serialize):
