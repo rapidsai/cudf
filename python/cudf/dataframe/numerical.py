@@ -372,11 +372,14 @@ class NumericalColumn(columnops.TypedColumnBase):
         """
         Return col with *to_replace* replaced with *value*.
         """
-        replaced = self.replace(data=self.data.copy(),
-                                dtype=self._data.dtype)
-
         to_replace_col = columnops.as_column(to_replace)
         value_col = columnops.as_column(value)
+
+        replaced = self.replace(data=self.data.copy(),
+                                dtype=np.result_type(
+                                    self._data.dtype,
+                                    to_replace_col._data.dtype,
+                                    value_col._data.dtype))
 
         cpp_replace.replace(replaced, to_replace_col, value_col)
 
