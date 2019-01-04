@@ -139,6 +139,17 @@ class Series(object):
         params.update(kwargs)
         return cls(**params)
 
+    def copy(self, deep=True):
+        result = self._copy_construct()
+        result._column = self._column.copy()
+        return result
+
+    def __copy__(self, deep=True):
+        return self.copy(deep)
+
+    def __deepcopy__(self):
+        return self.copy()
+
     def reset_index(self):
         """Reset index to RangeIndex
         """

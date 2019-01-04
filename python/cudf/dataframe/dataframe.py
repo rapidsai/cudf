@@ -478,8 +478,7 @@ class DataFrame(object):
         df._size = self._size
         if deep:
             for k in self._cols:
-                df[k] = Series(self._cols[k])
-                df[k]._column = self._cols[k]._column.copy()
+                df[k] = self._cols[k].copy()
         else:
             df._cols = self._cols
         return df
