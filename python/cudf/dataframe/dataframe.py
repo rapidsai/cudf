@@ -419,16 +419,22 @@ class DataFrame(object):
         return self.to_string(nrows=nrows, ncols=ncols)
 
     def __repr__(self):
-        return repr(get_renderable_pandas_dataframe(self))
+        lines = repr(get_renderable_pandas_dataframe(self)).split('\n')
+        if lines[-1].startswith('['):
+            lines = lines[:-1]  # final line counts number of rows
+            lines.append("[%d rows x %d columns]" % (len(self), len(self.columns)))
+        return '\n'.join(lines)
 
     def _repr_html_(self):
-        return get_renderable_pandas_dataframe(self)._repr_html_()
+        lines = get_renderable_pandas_dataframe(self)._repr_html_().split('\n')
+        if lines[-2].startswith('<p>'):
+            lines = lines[:-2]
+            lines.append('<p>%d rows × %d columns</p>' % (len(self), len(self.columns)))
+            lines.append('</div>')
+        return '\n'.join(lines)
 
     def _repr_latex_(self):
         return get_renderable_pandas_dataframe(self)._repr_latex_()
-
-    def to_html(self):
-        return get_renderable_pandas_dataframe(self).to_html()
 
     def __iter__(self):
         return iter(self.columns)

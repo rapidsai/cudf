@@ -293,7 +293,10 @@ class Series(object):
         return self.to_string(nrows=10)
 
     def __repr__(self):
-        return repr(get_renderable_pandas_dataframe(self))
+        lines = repr(get_renderable_pandas_dataframe(self)).split('\n')
+        lines = lines[:-1]
+        lines.append("Name: %s, Length: %d, dtype: %s" % (self.name, len(self), self.dtype))
+        return '\n'.join(lines)
 
     def _repr_latex_(self):
         return get_renderable_pandas_dataframe(self)._repr_latex_()

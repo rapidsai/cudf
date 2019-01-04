@@ -1132,16 +1132,19 @@ def test_iteritems(gdf):
 
 @pytest.mark.parametrize('func', [
     repr,
-    lambda x: x.to_html(),
+    pytest.param(lambda x: x.to_html(), marks=pytest.mark.xfail()),
     lambda x: x._repr_html_(),
     lambda x: x._repr_latex_(),
 ])
 @pytest.mark.parametrize('transform', [
     lambda df: df,
     lambda df: df.x,
+    lambda df: df.head(5),
     pytest.param(lambda df: df.index, marks=pytest.mark.xfail()),
 ])
 def test_repr(func, transform, pdf, gdf):
+    pdf = pd.concat([pdf] * 10)
+    gdf = gd.concat([gdf] * 10)
     pdf = transform(pdf)
     gdf = transform(gdf)
 

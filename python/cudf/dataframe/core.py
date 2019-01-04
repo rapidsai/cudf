@@ -7,5 +7,6 @@ def get_renderable_pandas_dataframe(gdf):
         return gdf.to_pandas()
     else:
         return pd.concat(
-            [gdf.head(n + 1), gdf.tail(n + 1)]
-        )  # enough head and tail to look the same, plus some extra
+            [gdf.head(n + 1).to_pandas(),
+             gdf.tail(n + 1).to_pandas(),
+         ])  # enough head and tail to look the same, plus some extra
