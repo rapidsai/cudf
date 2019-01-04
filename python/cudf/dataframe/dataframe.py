@@ -6,6 +6,7 @@ import inspect
 import random
 from collections import OrderedDict
 import warnings
+import operator
 
 import numpy as np
 import pandas as pd
@@ -493,6 +494,33 @@ class DataFrame(object):
             memo = {}
         return self.copy()
 
+    def _apply_binary_operator(self, other, bin_op, fill_values=None):
+
+        df = DataFrame()
+
+        matched_cols = set(self.columns) & set(other.columns)
+        extra_self = set(self.columns) - set(other.columns)
+        extra_other = set(other.columns) - set(self.columns)
+
+        # to maintain the order of columns in both df
+        for col in self.columns:
+            if col in matched_cols:
+                df.add_column(col, bin_op(self[col], other[col]),
+                              forceindex=True)
+
+            if col in extra_self:
+                df.add_column(col, self[col], forceindex=True)
+
+        for col in other.columns:
+            if col in extra_other:
+                df.add_column(col, other[col], forceindex=True)
+
+        return df
+
+    def add(self, other, fill_values=None):
+
+        return self._apply_binary_operator(other, operator.add, fill_values)
+
     def __add__(self, other):
         """
         Parameters
@@ -504,25 +532,7 @@ class DataFrame(object):
         -------
         DataFrame
         """
-        df = DataFrame()
-
-        matched_cols = list(set(self.columns) & set(other.columns))
-        extra_self = list(set(self.columns) - set(other.columns))
-        extra_other = list(set(other.columns) - set(self.columns))
-
-        # to maintain the order of columns in both df
-        for col in self.columns:
-            if col in matched_cols:
-                df.add_column(col, self[col] + other[col], forceindex=True)
-
-            if col in extra_self:
-                df.add_column(col, self[col], forceindex=True)
-
-        for col in other.columns:
-            if col in extra_other:
-                df.add_column(col, other[col], forceindex=True)
-
-        return df
+        return self._apply_binary_operator(other, operator.add)
 
     def _sanitize_columns(self, col):
         """Sanitize pre-appended

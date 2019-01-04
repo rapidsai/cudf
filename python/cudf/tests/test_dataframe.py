@@ -405,7 +405,7 @@ def test_dataframe_emptycolumns_to_string():
 
 @pytest.mark.parametrize('nelem', [0, 2, 5, 20, 100])
 def test_dataframe_add(nelem):
-    # test for __add()__ operator of dataframe
+    # test for __add__ operator of dataframe
     gdf1 = DataFrame()
     gdf2 = DataFrame()
 
