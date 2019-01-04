@@ -258,6 +258,9 @@ class Series(object):
     def head(self, n=5):
         return self[:n]
 
+    def tail(self, n=5):
+        return self[-n:]
+
     def to_string(self, nrows=NOTSET):
         """Convert to string
 

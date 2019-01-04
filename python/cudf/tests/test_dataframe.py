@@ -1073,6 +1073,13 @@ def test_dataframe_boolean_mask_with_None():
     assert pdf_masked.to_string().split() == gdf_masked.to_string().split()
 
 
+@pytest.mark.parametrize('func', [
+    lambda df: df.head(3),
+    lambda df: df.tail(4),
+])
+def test_unary_operators(pdf, gdf, func):
+    assert_eq(func(pdf), func(gdf))
+
 """
 This test compares cudf and Pandas dataframe boolean indexing.
 """
