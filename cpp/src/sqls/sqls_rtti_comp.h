@@ -434,10 +434,10 @@ private:
                       const void* const * columns,
                       const gdf_valid_type* const * valids)
     {
-      ColType res1 = LesserRTTI::at<ColType>(col_index, row1, columns);
-      ColType res2 = LesserRTTI::at<ColType>(col_index, row2, columns);
-      bool isValid1 = LesserRTTI::is_valid(col_index, row1, valids);
-		  bool isValid2 = LesserRTTI::is_valid(col_index, row2, valids);
+      const ColType res1 = LesserRTTI::at<ColType>(col_index, row1, columns);
+      const ColType res2 = LesserRTTI::at<ColType>(col_index, row2, columns);
+      const bool isValid1 = LesserRTTI::is_valid(col_index, row1, valids);
+		  const bool isValid2 = LesserRTTI::is_valid(col_index, row2, valids);
       
       if (!isValid2 && !isValid1)
 			  return State::Undecided;
