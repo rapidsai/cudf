@@ -133,7 +133,12 @@ using string_pair = std::pair<const char*,size_t>;
 //
 gdf_error parseArguments(csv_read_arg *args, raw_csv_t *csv);
 // gdf_error getColNamesAndTypes(const char **col_names, const  char **dtypes, raw_csv_t *d);
-gdf_error uploadUncompressedCsv( const char * data, size_t num_bytes, raw_csv_t * csvData, const char *compression );
+gdf_error getUncompressedHostData( const char * h_data, size_t num_bytes, 
+	const char *compression, const char* filepath, 
+	const char*& uncomp_data, size_t& uncomp_size);
+gdf_error loadChunksOnDevice(const char* h_uncomp_data, size_t h_uncomp_size,
+							 const vector<unsigned long long>& rec_cnts,
+							 raw_csv_t * raw_csv);
 gdf_error allocateGdfDataSpace(gdf_column *);
 gdf_dtype convertStringToDtype(std::string &dtype);
 
@@ -337,27 +342,21 @@ gdf_error read_csv(csv_read_arg *args)
 	}
 	else { checkError(GDF_C_ERROR, "invalid input type"); }
 
-	//-----------------------------------------------------------------------------
-	//---  create a structure to hold variables used to parse the CSV data
-	compression = (args->compression && 0 != strcasecmp(args->compression, "none")) ? args->compression : nullptr;
-	if (compression && 0 == strcasecmp(compression, "infer"))
-	{
-		const char *file_ext = strrchr(args->filepath_or_buffer, '.');
-		compression = nullptr;
-		if (file_ext)
-		{
-			if (!strcasecmp(file_ext, ".gz"))
-				compression = "gzip";
-			else if (!strcasecmp(file_ext, ".zip"))
-				compression = "zip";
-			else if (!strcasecmp(file_ext, ".bz2"))
-				compression = "bz2";
-			else if (!strcasecmp(file_ext, ".xz"))
-				compression = "xz";
-		}
+	const char* h_uncomp_data = nullptr;
+	size_t h_uncomp_size = 0;
+	error = getUncompressedHostData( (const char *)map_data, map_size, 
+								args->compression, args->filepath_or_buffer, 
+								h_uncomp_data, h_uncomp_size);
+	checkError(error, "call to getUncompressedHostData");
+
+	// Count records in chunks 
+	vector<unsigned long long> rec_cnts;
+	error = launch_countRecords(h_uncomp_data, h_uncomp_size, raw_csv->terminator, raw_csv->quotechar, rec_cnts);
+	if (error != GDF_SUCCESS) {
+			return error;
 	}
-	error = uploadUncompressedCsv( (const char *)map_data, map_size, raw_csv, compression );
-	checkError(error, "call to createRawCsv");
+
+	loadChunksOnDevice(h_uncomp_data, h_uncomp_size, rec_cnts, raw_csv);
 
 	//-----------------------------------------------------------------------------
 	//-- Allocate space to hold the record starting point
@@ -576,6 +575,10 @@ gdf_error read_csv(csv_read_arg *args)
 	{
 		close(fd);
 		munmap(map_data, raw_csv->num_bytes);
+	}
+	if (compression) {
+		// only allocated when input is compressed
+		delete[] h_uncomp_data;
 	}
 
 
@@ -811,14 +814,40 @@ gdf_dtype convertStringToDtype(std::string &dtype) {
 
 
 /*
- * Create the raw_csv_t structure and allocate space on the GPU
+ * Store the uncompressed file in host memory
  */
-gdf_error uploadUncompressedCsv( const char * h_data, size_t num_bytes, raw_csv_t* raw_csv, const char *compression ) 
-{
-	// Store complete uncompresed csv on host 
-	const char* h_uncomp_data = h_data;
-	gdf_size_type h_uncomp_size = num_bytes;
-	if (compression) {
+gdf_error getUncompressedHostData( const char * h_data, size_t num_bytes, 
+	const char *compression, const char* filepath, 
+	const char*& h_uncomp_data, size_t& h_uncomp_size) 
+{	
+	if (compression && 0 == strcasecmp(compression, "none")) {
+		compression = nullptr;
+	}
+	if (compression && 0 == strcasecmp(compression, "infer"))
+	{
+		const char *file_ext = strrchr(filepath, '.');
+		compression = nullptr;
+		if (file_ext)
+		{
+			if (!strcasecmp(file_ext, ".gz"))
+				compression = "gzip";
+			else if (!strcasecmp(file_ext, ".zip"))
+				compression = "zip";
+			else if (!strcasecmp(file_ext, ".bz2"))
+				compression = "bz2";
+			else if (!strcasecmp(file_ext, ".xz"))
+				compression = "xz";
+			else {
+				// TODO: return error here
+			}
+		}
+	}
+
+	if (compression == nullptr) {
+		h_uncomp_data = h_data;
+		h_uncomp_size = num_bytes;
+	}
+	else {
 		int comp_type = IO_UNCOMP_STREAM_TYPE_INFER;
 		if (!strcasecmp(compression, "gzip"))
 			comp_type = IO_UNCOMP_STREAM_TYPE_GZIP;
@@ -829,27 +858,14 @@ gdf_error uploadUncompressedCsv( const char * h_data, size_t num_bytes, raw_csv_
 		else if (!strcasecmp(compression, "xz"))
 			comp_type = IO_UNCOMP_STREAM_TYPE_XZ;
 
-		gdf_error err = io_uncompress_single_h2d(h_data, num_bytes, (void **)&h_uncomp_data, &h_uncomp_size, comp_type);
-		if (err != GDF_SUCCESS) {
-			return err;
-		}
+		return io_uncompress_single_h2d(h_data, num_bytes, (void **)&h_uncomp_data, &h_uncomp_size, comp_type);
 	}
+	return GDF_SUCCESS;
+}
 
-	// Count records in chunks (here, only a part of the file is stored on GPU at one time)
-	vector<unsigned long long> rec_cnts;
-	gdf_error error = launch_countRecords(h_uncomp_data, h_uncomp_size, 
-		raw_csv->terminator, raw_csv->quotechar, rec_cnts);
-	if (error != GDF_SUCCESS) {
-			return error;
-	}
-	//ofstream dbg;
-	//dbg.open("debug.txt", ios::out|ios::app);
-	//for (auto& rc: rec_cnts)
-	//	dbg << rc << ' ';
-	//dbg << '\n';
-
-	//TODO: add skipfooter support
-
+gdf_error loadChunksOnDevice(const char* h_uncomp_data, size_t h_uncomp_size,
+							 const vector<unsigned long long>& rec_cnts,
+							 raw_csv_t * raw_csv) {
 	// Select chunks that need to be copied to the GPU
 	unsigned long long sum_so_far = 0;
 	size_t first_chunk = 0;
@@ -860,11 +876,10 @@ gdf_error uploadUncompressedCsv( const char * h_data, size_t num_bytes, raw_csv_
 	while (last_chunk < rec_cnts.size() - 1 && raw_csv->skiprows + raw_csv->nrows > sum_so_far + rec_cnts[last_chunk])
 		sum_so_far += rec_cnts[last_chunk++];
 
-	//dbg << first_chunk << ' ' << last_chunk << '\n';
 
 	// Set num_records to the number of actually loaded records
 	raw_csv->num_records = std::accumulate(rec_cnts.begin() + first_chunk, rec_cnts.begin() + last_chunk + 1, 0);
-		
+	
 	// Determine the total size to allocate on the GPU, without the last chunk for now
 	raw_csv->num_bytes = (last_chunk - first_chunk) * max_chunk_bytes;
 	// Add the last chunk size
@@ -877,22 +892,19 @@ gdf_error uploadUncompressedCsv( const char * h_data, size_t num_bytes, raw_csv_
 	// Allocate and copy to the GPU
 	CUDA_TRY(cudaMallocManaged ((void**)&raw_csv->data, (sizeof(char) * raw_csv->num_bytes)));
 	CUDA_TRY(cudaMemcpy(raw_csv->data, h_uncomp_data + first_chunk*max_chunk_bytes, raw_csv->num_bytes, cudaMemcpyHostToDevice));
-	
+
 	// Update skiprows, skipfooter based on the records loaded on the GPU
 	raw_csv->skiprows -= std::accumulate(rec_cnts.begin(), rec_cnts.begin() + first_chunk, 0);
 	// TODO: update skipfooter
 
-	//dbg << raw_csv->num_bytes << ' ' << raw_csv->skiprows << '\n';
-	//dbg.close();
+	// ofstream dbg;
+	// dbg.open("debug.txt", ios::out|ios::app);
+	// dbg << first_chunk << ' ' << last_chunk << '\n';
+	// dbg << raw_csv->num_bytes << ' ' << raw_csv->skiprows << '\n';
+	// dbg.close();
 
-	if (compression) {
-		// only allocated when input is compressed
-		delete[] h_uncomp_data;
-	}
-
-	return gdf_error::GDF_SUCCESS;
+	return GDF_SUCCESS;
 }
-
 
 /*
  * For each of the gdf_cvolumns, create the on-device space.  the on-host fields should already be filled in
@@ -968,7 +980,7 @@ gdf_error launch_countRecords(const char* h_data, size_t h_size,
 	CUDA_TRY(cudaMemset(d_cnts, 0, sizeof(unsigned long long)* chunk_count));
 
 	char* d_chunk = nullptr;
-	// alloc extra byte in case \r\n is at the chunk border
+	// Allocate extra byte in case \r\n is at the chunk border
 	CUDA_TRY(cudaMalloc(&d_chunk, max_chunk_bytes + 1)); 
 
 	int blockSize;		// suggested thread count to use
