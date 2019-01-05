@@ -94,7 +94,7 @@ typedef struct raw_csv_ {
     char				decimal;
     char				thousands;
 
-	unsigned long long  nrows;       	// number of rows to read
+	long  				nrows;       	// number of rows to read
 	unsigned long long  skiprows;       // number of rows at the start of the files to skip, default is 0                                 */
 	unsigned long long  skipfooter;     // number of rows at the bottom of the file to skip - default is 0   
 
@@ -137,7 +137,6 @@ gdf_error getUncompressedHostData( const char * h_data, size_t num_bytes,
 	const char *compression, const char* filepath, 
 	const char*& uncomp_data, size_t& uncomp_size);
 gdf_error loadChunksOnDevice(const char* h_uncomp_data, size_t h_uncomp_size,
-							 const vector<unsigned long long>& rec_cnts,
 							 raw_csv_t * raw_csv);
 gdf_error allocateGdfDataSpace(gdf_column *);
 gdf_dtype convertStringToDtype(std::string &dtype);
@@ -151,13 +150,16 @@ gdf_dtype convertStringToDtype(std::string &dtype);
 __device__ int findSetBit(int tid, long num_bits, uint64_t *f_bits, int x);
 
 gdf_error launch_countRecords(const char* h_data, size_t h_size, char terminator, char quote, vector<unsigned long long>& h_cnts);
-gdf_error launch_storeRecordStart(raw_csv_t * csvData);
+gdf_error launch_storeRecordStart(const char * h_data, size_t num_bytes, raw_csv_t * csvData);
 gdf_error launch_dataConvertColumns(raw_csv_t * raw_csv, void** d_gdf,  gdf_valid_type** valid, gdf_dtype* d_dtypes, string_pair	**str_cols, long row_offset, unsigned long long *);
 
 gdf_error launch_dataTypeDetection(raw_csv_t * raw_csv, long row_offset, column_data_t* d_columnData);
 
 __global__ void countRecords(char *data, const char terminator, const char quotechar, long num_bytes, long num_bits, unsigned long long* num_records);
-__global__ void storeRecordStart(char *data, const char terminator, const char quotechar, long num_bytes, long num_bits, unsigned long long* num_records,unsigned long long* recStart) ;
+__global__ void storeRecordStart(char *data, size_t chunk_offset, 
+	const char terminator, const char quotechar, 
+	long num_bytes, long num_bits, unsigned long long* num_records,
+	unsigned long long* recStart);
 __global__ void convertCsvToGdf(char *csv, const parsing_opts_t opts, unsigned long long num_records, int num_columns,bool *parseCol,unsigned long long *recStart,gdf_dtype *dtype,void **gdf_data,gdf_valid_type **valid,string_pair **str_cols,unsigned long long row_offset, long header_row,bool dayfirst,unsigned long long *num_valid);
 __global__ void dataTypeDetection(char *raw_csv, const parsing_opts_t opts, unsigned long long num_records, int  num_columns, bool  *parseCol, unsigned long long *recStart, unsigned long long row_offset, long header_row, column_data_t* d_columnData);
 
@@ -356,7 +358,9 @@ gdf_error read_csv(csv_read_arg *args)
 			return error;
 	}
 
-	loadChunksOnDevice(h_uncomp_data, h_uncomp_size, rec_cnts, raw_csv);
+	// Use all records to find record starts and filter them
+	// Will be set to the number of loaded records when loading to the GPU
+	raw_csv->num_records = std::accumulate(rec_cnts.begin(), rec_cnts.end(), 0);
 
 	//-----------------------------------------------------------------------------
 	//-- Allocate space to hold the record starting point
@@ -364,7 +368,7 @@ gdf_error read_csv(csv_read_arg *args)
 
 	//-----------------------------------------------------------------------------
 	//-- Scan data and set the starting positions
-	error = launch_storeRecordStart(raw_csv);
+	error = launch_storeRecordStart(h_uncomp_data, h_uncomp_size, raw_csv);
 	checkError(error, "call to record initial position store");
 
 	// Previous kernel stores the record pinput_file.typeositions as encountered by all threads
@@ -377,33 +381,34 @@ gdf_error read_csv(csv_read_arg *args)
 	// or a linetermination within a quotechar pair. The future major refactoring
 	// of csv_reader and its kernels will probably use a different tactic.
 	if (raw_csv->quotechar != '\0') {
-		const size_t recTotalSize = sizeof(unsigned long long) * (raw_csv->num_records + 1);
-
-		unsigned long long *h_recStart = (unsigned long long*)malloc(recTotalSize);
-		CUDA_TRY( cudaMemcpy(h_recStart, raw_csv->recStart, recTotalSize, cudaMemcpyDeviceToHost) );
+		const size_t rec_start_size = sizeof(unsigned long long) * (raw_csv->num_records + 1);
+		unsigned long long *h_rec_starts = (unsigned long long*)malloc(rec_start_size);
+		CUDA_TRY( cudaMemcpy(h_rec_starts, raw_csv->recStart, rec_start_size, cudaMemcpyDeviceToHost) );
 
 		const char *h_data = (const char *)(map_data);
 		unsigned long long recCount = raw_csv->num_records;
 
 		bool quotation = false;
 		for (size_t i = 1; i < raw_csv->num_records; ++i) {
-			if (h_data[h_recStart[i] - 1] == raw_csv->quotechar) {
+			if (h_data[h_rec_starts[i] - 1] == raw_csv->quotechar) {
 				quotation = !quotation;
-				h_recStart[i] = raw_csv->num_bytes;
+				h_rec_starts[i] = raw_csv->num_bytes;
 				recCount--;
 			}
 			else if (quotation) {
-				h_recStart[i] = raw_csv->num_bytes;
+				h_rec_starts[i] = raw_csv->num_bytes;
 				recCount--;
 			}
 		}
 
-		CUDA_TRY( cudaMemcpy(raw_csv->recStart, h_recStart, recTotalSize, cudaMemcpyHostToDevice) );
+		CUDA_TRY( cudaMemcpy(raw_csv->recStart, h_rec_starts, rec_start_size, cudaMemcpyHostToDevice) );
 		thrust::sort(thrust::device, raw_csv->recStart, raw_csv->recStart + raw_csv->num_records + 1);
 		raw_csv->num_records = recCount;
 		
-		free(h_recStart);
+		free(h_rec_starts);
 	}
+
+	loadChunksOnDevice(h_uncomp_data, h_uncomp_size, raw_csv);
 
 	//-----------------------------------------------------------------------------
 	//-- Acquire header row of 
@@ -558,17 +563,11 @@ gdf_error read_csv(csv_read_arg *args)
 		CUDA_TRY(cudaMemcpy(raw_csv->d_parseCol, raw_csv->h_parseCol, sizeof(bool) * (raw_csv->num_actual_cols), cudaMemcpyHostToDevice));
 	}
 
-	raw_csv->num_records -= (raw_csv->skiprows + raw_csv->skipfooter);
 	if(skip_header==0){
 		raw_csv->header_row=-1;
 	}else{
 		raw_csv->num_records-=1;
 	}
-	if (args->nrows != -1 && (int)raw_csv->num_records > args->nrows)
-	{
-		raw_csv->num_records = args->nrows;
-	}
-
 	//-----------------------------------------------------------------------------
 	//---  done with host data
 	if (args->input_data_form == gdf_csv_input_form::FILE_PATH)
@@ -864,44 +863,35 @@ gdf_error getUncompressedHostData( const char * h_data, size_t num_bytes,
 }
 
 gdf_error loadChunksOnDevice(const char* h_uncomp_data, size_t h_uncomp_size,
-							 const vector<unsigned long long>& rec_cnts,
 							 raw_csv_t * raw_csv) {
-	// Select chunks that need to be copied to the GPU
-	unsigned long long sum_so_far = 0;
-	size_t first_chunk = 0;
-	while (first_chunk < rec_cnts.size() - 1 && raw_csv->skiprows > sum_so_far + rec_cnts[first_chunk] + 1)
-		sum_so_far += rec_cnts[first_chunk++];
 
-	size_t last_chunk = first_chunk;
-	while (last_chunk < rec_cnts.size() - 1 && raw_csv->skiprows + raw_csv->nrows > sum_so_far + rec_cnts[last_chunk])
-		sum_so_far += rec_cnts[last_chunk++];
-
-
-	// Set num_records to the number of actually loaded records
-	raw_csv->num_records = std::accumulate(rec_cnts.begin() + first_chunk, rec_cnts.begin() + last_chunk + 1, 0);
+	const size_t rec_start_size = sizeof(unsigned long long) * (raw_csv->num_records + 1);
+	unsigned long long *h_rec_starts = (unsigned long long*)malloc(rec_start_size);
+	CUDA_TRY( cudaMemcpy(h_rec_starts, raw_csv->recStart, rec_start_size, cudaMemcpyDefault));
 	
-	// Determine the total size to allocate on the GPU, without the last chunk for now
-	raw_csv->num_bytes = (last_chunk - first_chunk) * max_chunk_bytes;
-	// Add the last chunk size
-	raw_csv->num_bytes += (last_chunk == rec_cnts.size() - 1)?
-							(h_uncomp_size - last_chunk * max_chunk_bytes):
-							max_chunk_bytes;
+	// Set to the number of records that will be loaded to the GPU
+	raw_csv->num_records = (raw_csv->nrows != -1)? 
+		raw_csv->nrows:
+		size_t(raw_csv->num_records - (raw_csv->skipfooter + raw_csv->skiprows));
+
+	const auto start_offset = h_rec_starts[raw_csv->skiprows];
+	const auto end_offset = h_rec_starts[raw_csv->skiprows + raw_csv->num_records] - 1;
+	raw_csv->num_bytes = end_offset - start_offset + 1;
 	assert(raw_csv->num_bytes <= h_uncomp_size);
 	raw_csv->num_bits = (raw_csv->num_bytes + 63) / 64;
 
+	// Update the record starts to match the device data
+	for (size_t i = raw_csv->skiprows; i <= raw_csv->skiprows + raw_csv->num_records; ++i)
+		h_rec_starts[i] -= start_offset;
+	CUDA_TRY( cudaMemcpy(raw_csv->recStart, h_rec_starts + raw_csv->skiprows, sizeof(unsigned long long) * (raw_csv->num_records + 1), cudaMemcpyDefault));
+
 	// Allocate and copy to the GPU
 	CUDA_TRY(cudaMallocManaged ((void**)&raw_csv->data, (sizeof(char) * raw_csv->num_bytes)));
-	CUDA_TRY(cudaMemcpy(raw_csv->data, h_uncomp_data + first_chunk*max_chunk_bytes, raw_csv->num_bytes, cudaMemcpyHostToDevice));
+	CUDA_TRY(cudaMemcpy(raw_csv->data, h_uncomp_data + start_offset, raw_csv->num_bytes, cudaMemcpyHostToDevice));
 
-	// Update skiprows, skipfooter based on the records loaded on the GPU
-	raw_csv->skiprows -= std::accumulate(rec_cnts.begin(), rec_cnts.begin() + first_chunk, 0);
-	// TODO: update skipfooter
-
-	// ofstream dbg;
-	// dbg.open("debug.txt", ios::out|ios::app);
-	// dbg << first_chunk << ' ' << last_chunk << '\n';
-	// dbg << raw_csv->num_bytes << ' ' << raw_csv->skiprows << '\n';
-	// dbg.close();
+	// Reset the skiprows and skipfooter as the devide data does not include those rows
+	raw_csv->skiprows = 0;
+	raw_csv->skipfooter = 0;
 
 	return GDF_SUCCESS;
 }
@@ -987,8 +977,7 @@ gdf_error launch_countRecords(const char* h_data, size_t h_size,
 	int minGridSize;	// minimum block count required
 	CUDA_TRY(cudaOccupancyMaxPotentialBlockSize(&minGridSize, &blockSize, countRecords));
 
-	for (size_t ci = 0; ci < chunk_count; ++ci)
-	{
+	for (size_t ci = 0; ci < chunk_count; ++ci) {
 		const auto h_chunk = h_data + ci * max_chunk_bytes;
 		const auto chunk_bytes = std::min((size_t)(h_size - ci * max_chunk_bytes), max_chunk_bytes);
 		const auto chunk_bits = (chunk_bytes + 63) / 64;
@@ -1046,12 +1035,12 @@ __global__ void countRecords(char *data, const char terminator, const char quote
 }
 
 
-gdf_error launch_storeRecordStart(raw_csv_t * csvData) {
+gdf_error launch_storeRecordStart(const char * h_data, size_t h_size, raw_csv_t * csvData) {
 
-	int blockSize;		// suggested thread count to use
-	int minGridSize;	// minimum block count required
-	CUDA_TRY( cudaOccupancyMaxPotentialBlockSize(&minGridSize, &blockSize, storeRecordStart) );
-
+	char* d_chunk = nullptr;
+	// Allocate extra byte in case \r\n is at the chunk border
+	CUDA_TRY(cudaMalloc(&d_chunk, max_chunk_bytes + 1)); 
+	
     unsigned long long*	d_num_records;
 	RMM_TRY( RMM_ALLOC((void**)&d_num_records, sizeof(unsigned long long), 0) );
 
@@ -1060,17 +1049,30 @@ gdf_error launch_storeRecordStart(raw_csv_t * csvData) {
 	CUDA_TRY( cudaMemcpy(d_num_records, &one, sizeof(unsigned long long), cudaMemcpyDefault) ) ;
 	CUDA_TRY( cudaMemset(csvData->recStart, 0ull, (sizeof(unsigned long long) )) ) ;
 
-	// Calculate actual block count to use based on bitmap count
-	// Each bitmap is for a 64-byte chunk, and each data index is bitmap ID * 64
-	int gridSize = (csvData->num_bits + blockSize - 1) / blockSize;
+	int blockSize;		// suggested thread count to use
+	int minGridSize;	// minimum block count required
+	CUDA_TRY( cudaOccupancyMaxPotentialBlockSize(&minGridSize, &blockSize, storeRecordStart) );
 
-	storeRecordStart <<< gridSize, blockSize >>> (
-		csvData->data, csvData->terminator, csvData->quotechar,
-		csvData->num_bytes, csvData->num_bits, d_num_records,
-		csvData->recStart
-	);
+	const size_t chunk_count = (h_size + max_chunk_bytes - 1) / max_chunk_bytes;
+	for (size_t ci = 0; ci < chunk_count; ++ci) {	
+		const auto chunk_offset = ci * max_chunk_bytes;	
+		const auto h_chunk = h_data + chunk_offset;
+		const auto chunk_bytes = std::min((size_t)(h_size - ci * max_chunk_bytes), max_chunk_bytes);
+		const auto chunk_bits = (chunk_bytes + 63) / 64;
+		
+		// Copy chunk to device. Copy extra byte if not last chunk
+		CUDA_TRY(cudaMemcpy(d_chunk, h_chunk, ci < (chunk_count - 1)?chunk_bytes:chunk_bytes + 1, cudaMemcpyDefault));
+
+		const int gridSize = (chunk_bits + blockSize - 1) / blockSize;
+		storeRecordStart <<< gridSize, blockSize >>> (
+			d_chunk, chunk_offset, csvData->terminator, csvData->quotechar,
+			chunk_bytes, chunk_bits, d_num_records,
+			csvData->recStart
+		);
+	}
 
 	RMM_TRY( RMM_FREE( d_num_records, 0 ) ); 
+	CUDA_TRY(cudaFree(d_chunk));
 
 	CUDA_TRY( cudaGetLastError() );
 
@@ -1078,7 +1080,10 @@ gdf_error launch_storeRecordStart(raw_csv_t * csvData) {
 }
 
 
-__global__ void storeRecordStart(char *data, const char terminator, const char quotechar, long num_bytes, long num_bits, unsigned long long* num_records,unsigned long long* recStart) {
+__global__ void storeRecordStart(char *data, size_t chunk_offset, 
+	const char terminator, const char quotechar, 
+	long num_bytes, long num_bits, unsigned long long* num_records,
+	unsigned long long* recStart) {
 
 	// thread IDs range per block, so also need the block id
 	long tid = threadIdx.x + (blockDim.x * blockIdx.x);
@@ -1100,14 +1105,14 @@ __global__ void storeRecordStart(char *data, const char terminator, const char q
 		// for a postprocess ignore, as the chunk here has limited visibility.
 		if ((raw[x] == terminator) || (quotechar != '\0' && raw[x] == quotechar)) {
 
-			long pos = atomicAdd((unsigned long long int*)num_records,(unsigned long long int)1);
-			recStart[pos]=did+x+1;
+			const auto pos = atomicAdd((unsigned long long int*)num_records,(unsigned long long int)1);
+			recStart[pos] = did + chunk_offset + x + 1;
 
 		} else if (raw[x] == '\r' && (x+1L)<num_bytes && raw[x +1] == '\n') {
 
 			x++;
-			long pos = atomicAdd((unsigned long long int*)num_records,(unsigned long long int)1);
-			recStart[pos]=did+x+1;
+			const auto pos = atomicAdd((unsigned long long int*)num_records,(unsigned long long int)1);
+			recStart[pos] = did + chunk_offset + x + 1;
 		}
 
 	}
