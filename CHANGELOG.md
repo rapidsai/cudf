@@ -15,6 +15,10 @@
 - PR #550 Add CI test script to check for style issues in PRs
 - PR #558 Add CI scripts for cpu-based conda and gpu-based test builds
 - PR #539 Add Python bindings for replace function
+- PR #524 Add Boolean Indexing
+- PR #564 Update python `sort_values` method to use updated libcudf `gdf_order_by` API
+- PR #509 CSV Reader: Input CSV file can now be passed in as a text or a binary buffer
+- PR #607 Add `__iter__` and iteritems to DataFrame class
 
 ## Improvements
 
@@ -25,6 +29,7 @@
 
 ## Bug Fixes
 
+- PR #531 CSV Reader: Fix incorrect parsing of quoted numbers
 - PR #465 Added templated C++ API for RMM to avoid explicit cast to `void**`
 - PR #473 Added missing <random> include
 - PR #478 CSV Reader: Add api support for auto column detection, header, mangle_dupe_cols, usecols
@@ -39,6 +44,8 @@
 - PR #537 Fix CMAKE_CUDA_STANDARD_REQURIED typo in CMakeLists.txt
 - PR #545 Temporarily disable csv reader thousands test to prevent segfault (test re-enabled in PR #501)
 - PR #559 Fix Assertion error while using `applymap` to change the output dtype
+- PR #575 Update `print_env.sh` script to better handle missing commands
+- PR #622 Fix Series.append() behaviour when appending values with different numeric dtype
 
 # cuDF 0.4.0 (05 Dec 2018)
 
