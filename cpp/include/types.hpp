@@ -16,18 +16,30 @@
 #ifndef TYPES_HPP
 #define TYPES_HPP
 
+#include <algorithm>
+#include <cassert>
 #include "cudf.h"
 
 namespace cudf {
 
 /**
  * @brief A wrapper for a set of gdf_columns all with equal number of rows.
- * 
+ *
  */
 struct table {
-  table(gdf_column * cols[], gdf_size_type num_cols) : columns{cols}, num_columns{num_cols}
-  {}
-  gdf_column ** columns;     /**< The set of gdf_columns*/
+  table(gdf_column* cols[], gdf_size_type num_cols)
+      : columns{cols}, num_columns{num_cols} {
+
+    assert(nullptr != cols[0]);
+
+    gdf_size_type const num_rows{cols[0]->size};
+
+    std::for_each(columns, columns + num_columns, [num_rows](gdf_column* col) {
+      assert(nullptr != col);
+      assert(num_rows == col->size);
+    });
+  }
+  gdf_column** columns;      /**< The set of gdf_columns*/
   gdf_size_type num_columns; /**< The number of columns in the set */
 };
 
