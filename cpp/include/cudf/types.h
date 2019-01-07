@@ -93,17 +93,6 @@ typedef struct gdf_column_{
 } gdf_column;
 
 
-/**
- * @brief A wrapper for a set of gdf_columns all with equal number of rows.
- * 
- * TODO Placeholder until the gdf_table class can be used natively from Python
- * with C++/Cython
- * 
- */
-typedef struct gdf_dataframe {
-  gdf_column *columns[];     /**< The set of gdf_columns*/
-  gdf_size_type num_columns; /**< The number of columns in the set */
-} gdf_dataframe;
 
 /* --------------------------------------------------------------------------*/
 /** 

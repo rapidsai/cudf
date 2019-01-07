@@ -14,10 +14,11 @@
  * limitations under the License.
  */
 
-#ifndef COPYING_H
-#define COPYING_H
+#ifndef COPYING_HPP
+#define COPYING_HPP
 
 #include "cudf.h"
+#include "types.hpp"
 
 /** 
  * @brief Scatters the rows of a set of source columns into a set
@@ -46,9 +47,9 @@
  * 
  * @Returns GDF_SUCCESS upon successful completion
  */
-gdf_error gdf_scatter(gdf_dataframe const * source_columns,
-                      gdf_size_type const scatter_map[], 
-                      gdf_dataframe * destination_columns);
+gdf_error gdf_scatter(cudf::table const * source_table,
+                      gdf_index_type const scatter_map[], 
+                      cudf::table * destination_table);
 
 /**
  * @brief Gathers the rows of a set of source columns into a set of destination 
@@ -78,8 +79,8 @@ gdf_error gdf_scatter(gdf_dataframe const * source_columns,
  * 
  * @Returns GDF_SUCCESS upon successful completion
  */
-gdf_error gdf_gather(gdf_dataframe const * source_columns, 
-                     gdf_size_type const gather_map[], 
-                     gdf_dataframe * destination_columns);
+gdf_error gdf_gather(cudf::table const * source_table, 
+                     gdf_index_type const gather_map[], 
+                     cudf::table * destination_table);
 
 #endif // COPYING_H

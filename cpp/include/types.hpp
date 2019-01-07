@@ -13,23 +13,24 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#ifndef TYPES_HPP
+#define TYPES_HPP
 
 #include "cudf.h"
-#include "copying.hpp"
+
+namespace cudf {
 
 /**
- * @brief Operations for copying from one column to another
- * @file copying_ops.cu
+ * @brief A wrapper for a set of gdf_columns all with equal number of rows.
+ * 
  */
+struct table {
+  table(gdf_column * cols[], gdf_size_type num_cols) : columns{cols}, num_columns{num_cols}
+  {}
+  gdf_column ** columns;     /**< The set of gdf_columns*/
+  gdf_size_type num_columns; /**< The number of columns in the set */
+};
 
-gdf_error gdf_scatter(cudf::table const* source_columns,
-                      gdf_index_type const scatter_map[],
-                      cudf::table * destination_columns) {
-  return GDF_SUCCESS;
-}
+}  // namespace cudf
 
-gdf_error gdf_gather(cudf::table const* source_columns,
-                     gdf_index_type const gather_map[],
-                     cudf::table * destination_columns) {
-  return GDF_SUCCESS;
-}
+#endif
