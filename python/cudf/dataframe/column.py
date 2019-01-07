@@ -451,7 +451,8 @@ class Column(object):
                                       "yet supported")
         newsize = len(self) + len(other)
         # allocate memory
-        mem = rmm.device_array(shape=newsize, dtype=self.data.dtype)
+        data_dtype = np.result_type(self.data.dtype, other.data.dtype)
+        mem = rmm.device_array(shape=newsize, dtype=data_dtype)
         newbuf = Buffer.from_empty(mem)
         # copy into new memory
         for buf in [self.data, other.data]:
@@ -468,3 +469,30 @@ class Column(object):
             msg = "`q` must be either a single element, list or numpy array"
             raise TypeError(msg)
         return _gdf.quantile(self, quant, interpolation, exact)
+
+    def take(self, indices, ignore_index=False):
+        """Return Column by taking values from the corresponding *indices*.
+        """
+        indices = Buffer(indices).to_gpu_array()
+        # Handle zero size
+        if indices.size == 0:
+            return self.copy()
+
+        data = cudautils.gather(data=self._data.to_gpu_array(), index=indices)
+
+        if self._mask:
+            mask = self._get_mask_as_column().take(indices).as_mask()
+            mask = Buffer(mask)
+        else:
+            mask = None
+
+        return self.replace(data=Buffer(data), mask=mask)
+
+    def as_mask(self):
+        """Convert booleans to bitmask
+
+        Returns
+        -------
+        device array
+        """
+        return cudautils.compact_mask_bytes(self.to_gpu_array())

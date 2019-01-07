@@ -2,7 +2,7 @@
 name: Feature request
 about: Suggest an idea for cuDF
 title: "[FEA]"
-labels: "? - Needs Triage, doc"
+labels: "? - Needs Triage, feature request"
 assignees: ''
 
 ---
