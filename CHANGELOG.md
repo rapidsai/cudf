@@ -21,6 +21,7 @@
 - PR #454 Improve CSV reader docs and examples
 - PR #465 Added templated C++ API for RMM to avoid explicit cast to `void**`
 - PR #472 RMM: Created centralized rmm::device_vector alias and rmm::exec_policy
+- PR #577 Added external C++ API for scatter/gather functions
 
 ## Bug Fixes
 
