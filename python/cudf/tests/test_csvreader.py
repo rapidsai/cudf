@@ -459,34 +459,21 @@ def test_csv_reader_nrows(tmpdir):
     dtypes = ["int32", "int32"]
     with open(str(fname), 'w') as fp:
     	fp.write(','.join(names) + '\n')
-    	for i in range(5000000):
+    	for i in range(4000000):
             fp.write(str(i) + ', ' + str(2*i) + ' \n')
 
-    read_few = 100000
-    read_many = 4000000
-    skip_few = 100000
-    skip_many = 4000000
+    read_rows = 3000000
+    skip_rows = 500000
 
-    df1 = read_csv(str(fname),
-                      names=names, dtype=dtypes, skiprows=skip_many+1,
-                      compression=None, nrows=read_few)
-    assert(df1.shape == (read_few, 2))
-    for row in range(0, read_few//1000, 1000):
-        assert(df1['int1'][row] == row + skip_many)
-        assert(df1['int2'][row] == 2*(row + skip_many))
+    df = read_csv(str(fname),
+                  names=names, dtype=dtypes, skiprows=skip_rows + 1,
+                  compression=None, nrows=read_rows)
+    assert(df.shape == (read_rows, 2))
+    for row in range(0, read_rows//1000, 1000):
+        assert(df['int1'][row] == row + skip_rows)
+        assert(df['int2'][row] == 2*(row + skip_rows))
 
-    df2 = read_csv(str(fname),
-                      names=names, dtype=dtypes, skiprows=skip_few+1,
-                      compression=None, nrows=read_few)
-    assert(df2.shape == (read_few, 2))
-    for row in range(0, read_few//1000, 1000):
-        assert(df2['int1'][row] == row + skip_few)
-        assert(df2['int2'][row] == 2*(row + skip_few))
-
-    df3 = read_csv(str(fname),
-                      names=names, dtype=dtypes, skiprows=skip_few+1,
-                      compression=None, nrows=read_many)
-    assert(df3.shape == (read_many, 2))
-    for row in range(0, read_many//1000, 1000):
-        assert(df3['int1'][row] == row + skip_few)
-        assert(df3['int2'][row] == 2*(row + skip_few))
+    with pytest.raises(ValueError):
+        read_csv(str(fname),
+                 names=names, dtype=dtypes, skiprows=skip_rows + 1,
+                 compression=None, nrows=read_rows, skipfooter=1)
