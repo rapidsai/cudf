@@ -45,6 +45,7 @@
 - PR #559 Fix Assertion error while using `applymap` to change the output dtype
 - PR #575 Update `print_env.sh` script to better handle missing commands
 - PR #622 Fix Series.append() behaviour when appending values with different numeric dtype
+- PR #634 Fix create `DataFrame.from_pandas()` with numeric column names
 
 # cuDF 0.4.0 (05 Dec 2018)
 

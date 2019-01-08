@@ -238,7 +238,7 @@ class DataFrame(object):
             return df
         else:
             msg = "__getitem__ on type {!r} is not supported"
-            raise TypeError(msg.format(arg))
+            raise TypeError(msg.format(type(arg)))
 
     def __setitem__(self, name, col):
         """Add/set column by *name*
