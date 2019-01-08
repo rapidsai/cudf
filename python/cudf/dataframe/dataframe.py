@@ -474,13 +474,14 @@ class DataFrame(object):
         Returns a copy of this dataframe
         """
         df = DataFrame()
-        df._index = self._index
         df._size = self._size
-        if deep:
-            for k in self._cols:
+        for k in self._cols:
+            if deep:
                 df[k] = self._cols[k].copy()
-        else:
-            df._cols = self._cols
+                df._index = self._index.copy()
+            else:
+                df[k] = self._cols[k].copy(deep=False)
+                df._index = self._index
         return df
 
     def __copy__(self):

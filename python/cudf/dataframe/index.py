@@ -5,6 +5,7 @@ from __future__ import print_function, division
 import pandas as pd
 import numpy as np
 import pickle
+from copy import deepcopy, copy
 
 from librmm_cffi import librmm as rmm
 
@@ -16,6 +17,14 @@ from .column import Column
 from .datetime import DatetimeColumn
 from cudf.comm.serialize import register_distributed_serializer
 
+"""Index
+
+Properties
+---
+_start: 
+_stop:
+name:
+"""
 
 class Index(object):
     def serialize(self, serialize):
@@ -110,6 +119,12 @@ class Index(object):
         else:
             return column_join_res
 
+    def copy(self, deep=True):
+        if(deep):
+            return deepcopy(self)
+        else:
+            return copy(self)
+
 
 class RangeIndex(Index):
     """Basic start..stop
@@ -195,6 +210,16 @@ class RangeIndex(Index):
 def index_from_range(start, stop=None, step=None):
     vals = cudautils.arange(start, stop, step, dtype=np.int64)
     return GenericIndex(NumericalColumn(data=Buffer(vals), dtype=vals.dtype))
+
+
+"""GenericIndex
+
+Properties
+---
+
+Interface
+---
+"""
 
 
 class GenericIndex(Index):

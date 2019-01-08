@@ -141,7 +141,7 @@ class Series(object):
 
     def copy(self, deep=True):
         result = self._copy_construct()
-        result._column = self._column.copy()
+        result._column = self._column.copy(deep)
         return result
 
     def __copy__(self, deep=True):
