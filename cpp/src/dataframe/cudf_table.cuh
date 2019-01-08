@@ -23,6 +23,7 @@
 #include "utilities/error_utils.h"
 #include "hash/hash_functions.cuh"
 #include "hash/managed.cuh"
+#include "copying/gather.hpp"
 #include "sqls/sqls_rtti_comp.h"
 
 #include <thrust/tabulate.h>

@@ -24,6 +24,8 @@
 #include "utilities/error_utils.h"
 #include "dataframe/cudf_table.cuh"
 #include "utilities/nvtx/nvtx_utils.h"
+#include "copying/gather.hpp"
+#include "types.hpp"
 
 #include "joining.h"
 
@@ -31,7 +33,7 @@ using namespace mgpu;
 
 // Size limit due to use of int32 as join output.
 // FIXME: upgrade to 64-bit
-using output_index_type = int;
+using output_index_type = gdf_index_type;
 constexpr output_index_type MAX_JOIN_SIZE{std::numeric_limits<output_index_type>::max()};
 
 /* --------------------------------------------------------------------------*/
@@ -440,41 +442,64 @@ gdf_error construct_join_output_df(
 
     gdf_error err{GDF_SUCCESS};
 
-    //Construct the left columns
+    // If the join_type is an outer join, then indices for non-matches will be
+    // -1, requiring bounds checking when gathering the result table
+    bool const check_bounds{ join_type != JoinType::INNER_JOIN };
+
+    // Construct the left columns
     if (0 != lnonjoincol.size()) {
-        gdf_table<size_type> l_i_table(lnonjoincol.size(), lnonjoincol.data());
-        gdf_table<size_type> l_table(num_left_cols - num_cols_to_join, result_cols);
-        err = l_i_table.gather(static_cast<index_type*>(left_indices->data),
-                l_table, join_type != JoinType::INNER_JOIN);
-        if (err != GDF_SUCCESS) { return err; }
+      cudf::table left_source_table(lnonjoincol.data(), lnonjoincol.size());
+      cudf::table left_destination_table(result_cols,
+                                         num_left_cols - num_cols_to_join);
+
+      err = cudf::detail::gather(
+          &left_source_table,
+          static_cast<index_type const *>(left_indices->data),
+          &left_destination_table, check_bounds);
+
+      GDF_REQUIRE(GDF_SUCCESS == err, err);
     }
 
-    //Construct the right columns
+    // Construct the right columns
     if (0 != rnonjoincol.size()) {
-        gdf_table<size_type> r_i_table(rnonjoincol.size(), rnonjoincol.data());
-        gdf_table<size_type> r_table(num_right_cols - num_cols_to_join, result_cols + right_table_begin);
-        err = r_i_table.gather(static_cast<index_type*>(right_indices->data),
-                r_table, join_type != JoinType::INNER_JOIN);
-        if (err != GDF_SUCCESS) { return err; }
+      cudf::table right_source_table(rnonjoincol.data(), rnonjoincol.size());
+      cudf::table right_destination_table(result_cols + right_table_begin,
+                                          num_right_cols - num_cols_to_join);
+
+      err = cudf::detail::gather(
+          &right_source_table,
+          static_cast<index_type const *>(right_indices->data),
+          &right_destination_table, check_bounds);
+
+      GDF_REQUIRE(GDF_SUCCESS == err, err);
     }
 
-    //Construct the joined columns
+    // Construct the joined columns
     if (0 != ljoincol.size()) {
-        gdf_table<size_type> j_i_table(ljoincol.size(), ljoincol.data());
-        gdf_table<size_type> j_table(num_cols_to_join, result_cols + left_table_end);
-        //Gather valid rows from the right table
-	// TODO: Revisit this, because it probably can be done more efficiently
-        if (JoinType::FULL_JOIN == join_type) {
-            gdf_table<size_type> j_i_r_table(rjoincol.size(), rjoincol.data());
-            err = j_i_r_table.gather(static_cast<index_type*>(right_indices->data),
-                    j_table, join_type != JoinType::INNER_JOIN);
-            if (err != GDF_SUCCESS) { return err; }
-        }
-        err = j_i_table.gather(static_cast<index_type*>(left_indices->data),
-                j_table, join_type != JoinType::INNER_JOIN);
+      cudf::table join_source_table(ljoincol.data(), ljoincol.size());
+      cudf::table join_destination_table(result_cols + left_table_end,
+                                         num_cols_to_join);
+
+      // Gather valid rows from the right table
+      // TODO: Revisit this, because it probably can be done more efficiently
+      if (JoinType::FULL_JOIN == join_type) {
+        cudf::table right_source_table(rjoincol.data(), rjoincol.size());
+
+        err = cudf::detail::gather(
+            &right_source_table,
+            static_cast<index_type const *>(right_indices->data),
+            &join_destination_table, check_bounds);
+
+        GDF_REQUIRE(GDF_SUCCESS == err, err);
+      }
+
+      err = cudf::detail::gather(
+          &join_source_table,
+          static_cast<index_type const *>(left_indices->data),
+          &join_destination_table, check_bounds);
     }
 
-	POP_RANGE();
+    POP_RANGE();
     return err;
 }
 

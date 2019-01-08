@@ -16,6 +16,7 @@
 
 #include <thrust/gather.h>
 #include "copying.hpp"
+#include "gather.hpp"
 #include "cudf.h"
 #include "rmm/thrust_rmm_allocator.h"
 #include "utilities/type_dispatcher.hpp"
@@ -343,43 +344,9 @@ struct column_gatherer {
 
 namespace cudf {
 namespace detail {
-/**---------------------------------------------------------------------------*
- * @brief Gathers the rows (including null values) of a set of source columns
- * into a set of destination columns.
- *
- * Gathers the rows of the source columns into the destination columns according
- * to a gather map such that row "i" in the destination columns will contain
- * row "gather_map[i]" from the source columns.
- *
- * The datatypes between coresponding columns in the source and destination
- * columns must be the same.
- *
- * The number of elements in the gather_map must equal the number of rows in the
- * destination columns.
- *
- * Optionally performs bounds checking on the values of the `gather_map` that
- * ignores values outside [0, num_source_rows). It is undefined behavior if a
- * value in `gather_map` is outside these bounds and bounds checking is not
- * enabled.
- *
- * If the same index appears more than once in gather_map, the result is
- * undefined.
- *
- * @param[in] source_table The input columns whose rows will be gathered
- * @param[in] gather_map An array of indices that maps the rows in the source
- * columns to rows in the destination columns.
- * @param[out] destination_table A preallocated set of columns with a number
- * of rows equal in size to the number of elements in the gather_map that will
- * contain the rearrangement of the source columns based on the mapping
- * determined by the gather_map.
- * @param check_bounds Optionally perform bounds checking on the values of
- * `gather_map`
- * @param stream Optional CUDA stream on which to execute kernels
- * @return gdf_error
- *---------------------------------------------------------------------------**/
+
 gdf_error gather(table const* source_table, gdf_index_type const gather_map[],
-                 table* destination_table, bool check_bounds = false,
-                 cudaStream_t stream = 0) {
+                 table* destination_table, bool check_bounds, cudaStream_t stream) {
   assert(source_table->size() == destination_table->size());
 
   gdf_error gdf_status{GDF_SUCCESS};

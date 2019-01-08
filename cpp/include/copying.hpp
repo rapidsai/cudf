@@ -77,7 +77,8 @@ gdf_error scatter(table const* source_table, gdf_index_type const scatter_map[],
  * columns to rows in the destination columns.
  * @param[out] destination_table A preallocated set of columns with a number
  * of rows equal in size to the number of elements in the gather_map that will
- * contain the rearrangement of the source columns based on the mapping
+ * contain the rearrangement of the source columns based on the mapping. Can be
+ * the same as `source_table` (in-place gather).
  * determined by the gather_map.
  *
  * @Returns GDF_SUCCESS upon successful completion
