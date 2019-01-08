@@ -17,6 +17,7 @@
 - PR #524 Add Boolean Indexing
 - PR #564 Update python `sort_values` method to use updated libcudf `gdf_order_by` API
 - PR #509 CSV Reader: Input CSV file can now be passed in as a text or a binary buffer
+- PR #607 Add `__iter__` and iteritems to DataFrame class
 
 ## Improvements
 
@@ -44,6 +45,8 @@
 - PR #559 Fix Assertion error while using `applymap` to change the output dtype
 - PR #575 Update `print_env.sh` script to better handle missing commands
 - PR #612 Prevent an exception from occuring with true division on integer series.
+- PR #622 Fix Series.append() behaviour when appending values with different numeric dtype
+
 
 # cuDF 0.4.0 (05 Dec 2018)
 
