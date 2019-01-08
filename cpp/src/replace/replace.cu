@@ -134,3 +134,11 @@ gdf_error gdf_find_and_replace_all(gdf_column*       col,
 {
   return find_and_replace_all(col, old_values, new_values);
 }
+
+gdf_error replace_nulls(gdf_column*       col_out, const gdf_column* col_in)
+{
+  GDF_REQUIRE(col_out->dtype == col_in->dtype, GDF_DTYPE_MISMATCH);
+  GDF_REQUIRE(col_in->size == 1 || col_in->size == col_out->size, GDF_COLUMN_SIZE_MISMATCH);
+
+  return GDF_SUCCESS;
+}
