@@ -279,12 +279,23 @@ gdf_error read_csv(csv_read_arg *args)
 		raw_csv->doublequote = false;
 	}
 
+	if (args->names == nullptr) {
+		raw_csv->header_row = args->header;
+	}
+	else{
+		raw_csv->header_row = -1;
+	}
+
 	raw_csv->dayfirst = args->dayfirst;
 	raw_csv->decimal = args->decimal;
 	raw_csv->thousands = args->thousands;
-	raw_csv->nrows = args->nrows;
+
 	raw_csv->skiprows = args->skiprows;
 	raw_csv->skipfooter = args->skipfooter;
+	raw_csv->nrows = args->nrows;
+	if (raw_csv->header_row >= 0 && args->nrows >= 0) {
+		++raw_csv->nrows;
+	}
 
 	if (raw_csv->decimal == raw_csv->delimiter)
 	{ 
@@ -413,35 +424,28 @@ gdf_error read_csv(csv_read_arg *args)
 
 	int h_num_cols=0, h_dup_cols_removed=0;
 
-	int skip_header=0;
-
 	// Check if the user gave us a list of column names
 	if(args->names==NULL){
 
 		// Getting the first row of data from the file. We will parse the data to find lineterminator as
 		// well as the column delimiter.
 
-
-		raw_csv->header_row=0;
-		if (args->header>=0){
-			raw_csv->header_row = args->header;
-		}
-		if(raw_csv->header_row > (long)raw_csv->num_records){
+		if(raw_csv->header_row >= (long)raw_csv->num_records){
 			checkError(GDF_FILE_ERROR, "Number of records is smaller than the id of the specified header row");
 		}
 
 		unsigned long long headerPositions[2];
-		CUDA_TRY( cudaMemcpy(headerPositions,raw_csv->recStart + raw_csv->header_row, sizeof(unsigned long long)*2, cudaMemcpyDeviceToHost));
-		vector<char> cmap_data(headerPositions[1] - headerPositions[0] + 1);
+		CUDA_TRY( cudaMemcpy(headerPositions, raw_csv->recStart + raw_csv->header_row, sizeof(unsigned long long)*2, cudaMemcpyDeviceToHost));
+		vector<char> cmap_data(headerPositions[1] - headerPositions[0]);
 		CUDA_TRY( cudaMemcpy(cmap_data.data(), raw_csv->data + headerPositions[0], sizeof(char) * cmap_data.size(), cudaMemcpyDefault));
 
 		unsigned long long c=0;
-		while(c < cmap_data.size() - 1){
+		while(c < cmap_data.size()){
 			if (cmap_data[c]==args->lineterminator){
 				h_num_cols++;
 				break;
 			}
-			else if(cmap_data[c] == '\r' && (c+1L)<(unsigned long long)raw_csv->num_bytes && cmap_data[c+1] == '\n'){
+			else if(cmap_data[c] == '\r' && (c+1L)<cmap_data.size() && cmap_data[c+1] == '\n'){
 				h_num_cols++;
 				break;
 			}else if (cmap_data[c]==args->delimiter)
@@ -454,7 +458,7 @@ gdf_error read_csv(csv_read_arg *args)
 
 		raw_csv->col_names.clear();
 
-		if(args->header>=0){
+		if(raw_csv->header_row>=0){
 			h_num_cols=0;
 			// Storing the names of the columns into a vector of strings
 			while(c < cmap_data.size()){
@@ -466,7 +470,6 @@ gdf_error read_csv(csv_read_arg *args)
 				}
 				c++;
 			}
-			skip_header=1;
 		}else{
 			for (int i = 0; i<h_num_cols; i++){
 				std::string newColName = std::to_string(i);
@@ -559,11 +562,7 @@ gdf_error read_csv(csv_read_arg *args)
 		CUDA_TRY(cudaMemcpy(raw_csv->d_parseCol, raw_csv->h_parseCol, sizeof(bool) * (raw_csv->num_actual_cols), cudaMemcpyHostToDevice));
 	}
 
-	if(skip_header==0){
-		raw_csv->header_row=-1;
-	} 
-	else if (raw_csv->nrows == -1) {
-		// Reduce the number of records only if reading all rows (nrows not used)
+	if (raw_csv->header_row>=0) {
 		raw_csv->num_records-=1;
 	}
 	
