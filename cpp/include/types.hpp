@@ -29,7 +29,6 @@ namespace cudf {
 struct table {
   table(gdf_column* cols[], gdf_size_type num_cols)
       : columns{cols}, num_columns{num_cols} {
-
     assert(nullptr != cols[0]);
 
     gdf_size_type const num_rows{cols[0]->size};
@@ -39,8 +38,20 @@ struct table {
       assert(num_rows == col->size);
     });
   }
-  gdf_column** columns;      /**< The set of gdf_columns*/
-  gdf_size_type num_columns; /**< The number of columns in the set */
+
+  gdf_column** data() const { return columns; }
+
+  gdf_column** begin() const { return columns; }
+
+  gdf_column** end() const { return columns + num_columns; }
+
+  gdf_column* get_column(gdf_index_type index) { return columns[index]; }
+
+  gdf_size_type size() const { return num_columns; }
+
+ private:
+  gdf_column** columns;            /**< The set of gdf_columns*/
+  gdf_size_type const num_columns; /**< The number of columns in the set */
 };
 
 }  // namespace cudf
