@@ -3,14 +3,13 @@
 
 import warnings
 from collections import OrderedDict
-import itertools
 from numbers import Number
 
 import numpy as np
 import pandas as pd
-from pandas.api.types import is_scalar, is_dict_like, is_list_like
+from pandas.api.types import is_scalar, is_dict_like
 
-from cudf.utils import cudautils
+from cudf.utils import cudautils, utils
 from cudf import formatting
 from .buffer import Buffer
 from .index import Index, RangeIndex, GenericIndex
@@ -670,10 +669,12 @@ class Series(object):
         result : Series
             The mask and index are preserved.
         """
-        if is_list_like(to_replace):
-            if is_scalar(value):  # allow but make value same len
-                value = list(itertools.repeat(value, len(to_replace)))
-        elif is_scalar(to_replace):
+        if not is_scalar(to_replace):
+            if is_scalar(value):
+                value = utils.scalar_broadcast_to(
+                    value, (len(to_replace),), np.dtype(type(value))
+                )
+        else:
             if not is_scalar(value):
                 raise TypeError(
                     "Incompatible types '{}' and '{}' "
