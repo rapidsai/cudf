@@ -3,6 +3,7 @@
 """
 Define how data are formatted
 """
+from cudf.utils import utils
 
 
 def format(index, cols, show_headers=True, more_cols=0, more_rows=0,
@@ -49,7 +50,7 @@ def format(index, cols, show_headers=True, more_cols=0, more_rows=0,
     # compute column widths
     widths = {}
     for k, vs in cols.items():
-        if isinstance(k, int):
+        if isinstance(k, utils.int_types_tuple):
             widths[k] = min_width
         else:
             widths[k] = max(len(k), max(map(len, vs), default=0), min_width)

@@ -217,7 +217,7 @@ class DataFrame(object):
         >>> df[[True, False, True, False]] # mask the entire dataframe,
         # returning the rows specified in the boolean mask
         """
-        if isinstance(arg, str) or isinstance(arg, int):
+        if isinstance(arg, str) or isinstance(arg, utils.int_types_tuple):
             s = self._cols[arg]
             s.name = arg
             return s
