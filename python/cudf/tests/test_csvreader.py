@@ -457,23 +457,47 @@ def test_csv_reader_nrows(tmpdir):
 
     names = ["int1", "int2"]
     dtypes = ["int32", "int32"]
+
+    rows = 4000000
+    read_rows = (rows*3)//4
+    skip_rows = (rows - read_rows)//2
+    sample_skip = 1000
+
     with open(str(fname), 'w') as fp:
     	fp.write(','.join(names) + '\n')
-    	for i in range(4000000):
+    	for i in range(rows):
             fp.write(str(i) + ', ' + str(2*i) + ' \n')
 
-    read_rows = 3000000
-    skip_rows = 500000
+	# with specified names
+    df1 = read_csv(str(fname),
+                   names=names, dtype = dtypes,
+                   skiprows=skip_rows + 1, nrows=read_rows)
+    assert(df1.shape == (read_rows, 2))
+    for row in range(0, read_rows//sample_skip, sample_skip):
+        assert(df1['int1'][row] == row + skip_rows)
+        assert(df1['int2'][row] == 2 * (row + skip_rows))
 
-    df = read_csv(str(fname),
-                  names=names, dtype=dtypes, skiprows=skip_rows + 1,
-                  compression=None, nrows=read_rows)
-    assert(df.shape == (read_rows, 2))
-    for row in range(0, read_rows//1000, 1000):
-        assert(df['int1'][row] == row + skip_rows)
-        assert(df['int2'][row] == 2*(row + skip_rows))
+	# with column name and type inference
+    df2 = read_csv(str(fname),
+                   skiprows=skip_rows + 1, nrows=read_rows)
+    assert(df2.shape == (read_rows, 2))
+    assert(str(skip_rows) in list(df2)[0])
+    assert(str(2*skip_rows) in list(df2)[1])
 
+	# nrows larger than the file
+    df3 = read_csv(str(fname), 
+                   dtype = dtypes, nrows=rows*2)
+    assert(df3.shape == (rows, 2))
+    for row in range(0, rows//sample_skip, sample_skip):
+        assert(df3['int1'][row] == row)
+        assert(df3['int2'][row] == 2 * row)
+
+	# nrows equal to zero
+    #df3 = read_csv(str(fname), 
+    #               nrows=0)
+    #assert(df3.shape == (0, 2))
+
+	# with both skipfooter and nrows - should throw
     with pytest.raises(ValueError):
-        read_csv(str(fname),
-                 names=names, dtype=dtypes, skiprows=skip_rows + 1,
-                 compression=None, nrows=read_rows, skipfooter=1)
+        read_csv(str(fname), 
+                 nrows=read_rows, skipfooter=1)

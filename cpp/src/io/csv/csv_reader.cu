@@ -420,9 +420,7 @@ gdf_error read_csv(csv_read_arg *args)
 
 		// Getting the first row of data from the file. We will parse the data to find lineterminator as
 		// well as the column delimiter.
-		char* cmap_data = (char *)map_data;
 
-		unsigned long long c=0;
 
 		raw_csv->header_row=0;
 		if (args->header>=0){
@@ -434,11 +432,11 @@ gdf_error read_csv(csv_read_arg *args)
 
 		unsigned long long headerPositions[2];
 		CUDA_TRY( cudaMemcpy(headerPositions,raw_csv->recStart + raw_csv->header_row, sizeof(unsigned long long)*2, cudaMemcpyDeviceToHost));
-		unsigned long long start = headerPositions[0];
-		unsigned long long stop  = headerPositions[1];
+		vector<char> cmap_data(headerPositions[1] - headerPositions[0] + 1);
+		CUDA_TRY( cudaMemcpy(cmap_data.data(), raw_csv->data + headerPositions[0], sizeof(char) * cmap_data.size(), cudaMemcpyDefault));
 
-		c=start;
-		while(c<stop){
+		unsigned long long c=0;
+		while(c < cmap_data.size() - 1){
 			if (cmap_data[c]==args->lineterminator){
 				h_num_cols++;
 				break;
@@ -451,17 +449,17 @@ gdf_error read_csv(csv_read_arg *args)
 			c++;
 		}
 
-		unsigned long long prev=start;
-		c=start;
+		unsigned long long prev=0;
+		c=0;
 
 		raw_csv->col_names.clear();
 
 		if(args->header>=0){
 			h_num_cols=0;
 			// Storing the names of the columns into a vector of strings
-			while(c<=stop){
+			while(c < cmap_data.size()){
 				if (cmap_data[c]==args->delimiter || cmap_data[c]==args->lineterminator){
-					std::string colName(cmap_data +prev,c-prev );
+					std::string colName(cmap_data.data() + prev, c - prev );
 					prev=c+1;
 					raw_csv->col_names.push_back(colName);
 					h_num_cols++;
@@ -563,9 +561,12 @@ gdf_error read_csv(csv_read_arg *args)
 
 	if(skip_header==0){
 		raw_csv->header_row=-1;
-	}else{
+	} 
+	else if (raw_csv->nrows == -1) {
+		// Reduce the number of records only if reading all rows (nrows not used)
 		raw_csv->num_records-=1;
 	}
+	
 	//-----------------------------------------------------------------------------
 	//---  done with host data
 	if (args->input_data_form == gdf_csv_input_form::FILE_PATH)
@@ -865,6 +866,11 @@ gdf_error uploadDataToDevice(const char* h_uncomp_data, size_t h_uncomp_size, ra
 	vector<unsigned long long> h_rec_starts(raw_csv->num_records + 1);
 	CUDA_TRY( cudaMemcpy(h_rec_starts.data(), raw_csv->recStart, rec_size * h_rec_starts.size(), cudaMemcpyDefault));
 	
+	// Read whole file is nrows is too large
+	if ((unsigned long long)raw_csv->nrows >= raw_csv->num_records) {
+		raw_csv->nrows = -1;
+	}
+
 	// Set to the number of records that will be loaded to the GPU
 	raw_csv->num_records = (raw_csv->nrows != -1)? 
 		raw_csv->nrows:

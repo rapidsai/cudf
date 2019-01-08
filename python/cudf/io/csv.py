@@ -236,7 +236,7 @@ def read_csv(filepath_or_buffer, lineterminator='\n',
     if thousands == delimiter:
         raise ValueError("thousands cannot be the same as delimiter")
 
-    if nrows and skipfooter != 0:
+    if nrows != None and skipfooter != 0:
         raise ValueError("cannot use both nrows and skipfooter parameters")
 
     # Start with default values recognized as boolean
@@ -273,7 +273,7 @@ def read_csv(filepath_or_buffer, lineterminator='\n',
     csv_reader.compression = compression_bytes
     csv_reader.decimal = decimal.encode()
     csv_reader.thousands = thousands.encode() if thousands else b'\0'
-    csv_reader.nrows = nrows if nrows else -1
+    csv_reader.nrows = nrows if nrows != None else -1
 
     # Call read_csv
     libgdf.read_csv(csv_reader)
@@ -439,7 +439,7 @@ def read_csv_strings(filepath_or_buffer, lineterminator='\n',
     if thousands == delimiter:
         raise ValueError("thousands cannot be the same as delimiter")
 
-    if nrows and skipfooter != 0:
+    if nrows != None and skipfooter != 0:
         raise ValueError("cannot use both nrows and skipfooter parameters")
 
     # Start with default values recognized as boolean
@@ -471,7 +471,7 @@ def read_csv_strings(filepath_or_buffer, lineterminator='\n',
     csv_reader.skipfooter = skipfooter
     csv_reader.decimal = decimal.encode()
     csv_reader.thousands = thousands.encode() if thousands else b'\0'
-    csv_reader.nrows = nrows if nrows else -1
+    csv_reader.nrows = nrows if nrows != None else -1
 
     # Call read_csv
     libgdf.read_csv(csv_reader)
