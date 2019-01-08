@@ -10,7 +10,7 @@
 - PR #439 add `DataFrame.drop` method similar to pandas
 - PR #505 CSV Reader: Add support for user-specified boolean values
 - PR #350 Implemented Series replace function
-- PR #490 Added print_env.sh script to gather relevant environment details when reporting cuDF issues.
+- PR #490 Added print_env.sh script to gather relevant environment details when reporting cuDF issues
 - PR #474 add ZLIB-based GZIP/ZIP support to `read_csv()`
 - PR #550 Add CI test script to check for style issues in PRs
 - PR #558 Add CI scripts for cpu-based conda and gpu-based test builds
@@ -21,11 +21,11 @@
 
 ## Improvements
 
-- PR #426 Removed sort-based groupby and refactored existing groupby APIs. Also improves C++/CUDA compile time.
+- PR #426 Removed sort-based groupby and refactored existing groupby APIs. Also improves C++/CUDA compile time
 - PR #454 Improve CSV reader docs and examples
 - PR #465 Added templated C++ API for RMM to avoid explicit cast to `void**`
 - PR #472 RMM: Created centralized rmm::device_vector alias and rmm::exec_policy
-- PR #617 Introduced .dockerignore file to project. Prevents stale cmake cache files from being "ADD" to the docker container if previously built on host machine which causes the container build to fail.
+- PR #617 Added .dockerignore file. Prevents adding stale cmake cache files to the docker container
 
 ## Bug Fixes
 
@@ -33,12 +33,12 @@
 - PR #465 Added templated C++ API for RMM to avoid explicit cast to `void**`
 - PR #473 Added missing <random> include
 - PR #478 CSV Reader: Add api support for auto column detection, header, mangle_dupe_cols, usecols
-- PR #495 Updated README to correct where cffi pytest should be executed.
-- PR #500 Improved the concurrent hash map class to support partitioned (multi-pass) hash table building.
+- PR #495 Updated README to correct where cffi pytest should be executed
+- PR #500 Improved the concurrent hash map class to support partitioned (multi-pass) hash table building
 - PR #501 Fix the intermittent segfault caused by the `thousands` and `compression` parameters in the csv reader
 - PR #502 Simplify Dockerfile for local dev, eliminate old conda/pip envs
 - PR #512 fix bug for `on` parameter in `DataFrame.merge` to allow for None or single column name
-- PR #511 Updated python/cudf/bindings/join.pyx to fix cudf merge printing out dtypes.
+- PR #511 Updated python/cudf/bindings/join.pyx to fix cudf merge printing out dtypes
 - PR #513 `.gitignore` tweaks
 - PR #521 Add `assert_eq` function for testing
 - PR #537 Fix CMAKE_CUDA_STANDARD_REQURIED typo in CMakeLists.txt
