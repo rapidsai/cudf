@@ -93,7 +93,7 @@ def read_csv(filepath_or_buffer, lineterminator='\n',
     false_values : list, default None
         Values to consider as boolean False
     nrows: int, default None
-	    If specified, maximum number of rows to read
+        If specified, maximum number of rows to read
 
     Returns
     -------
