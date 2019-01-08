@@ -615,7 +615,8 @@ public:
      * iterator if the key could not be found in the specified partition.
      *
      * @Param[in] the_key The key to search for
-     * @Param[in] part The partitions number for the partitioned hash table
+     * @Param[out] dest_part The destination partition for the key
+     * @Param[in] part The current partition number for the partitioned hash table
      * @Param[in] num_parts The total number of partitions in the partitioned
      * hash table
      * @Param[in] precomputed_hash A flag indicating whether or not a precomputed
@@ -634,6 +635,7 @@ public:
                typename comparison_type = key_equal>
     __forceinline__
     __host__ __device__ const_iterator find_part(const key_type& the_key,
+						 int& dest_part,
                                                  const int part = 0,
                                                  const int num_parts = 1,
                                                  bool precomputed_hash = false,
@@ -657,8 +659,9 @@ public:
         const size_type partition_size  = m_hashtbl_size/num_parts;
 
         // Only probe the specified partition
-        if( ( part < (num_parts-1) && hash_tbl_idx/partition_size != part ) ||
-            ( (num_parts-1) == part && hash_tbl_idx/partition_size < part ) )
+	dest_part = hash_tbl_idx/partition_size;
+        if( ( part < (num_parts-1) && dest_part != part ) ||
+            ( (num_parts-1) == part && dest_part < part ) )
           return end();
         else
           return find(the_key, true, hash_value, keys_are_equal);
