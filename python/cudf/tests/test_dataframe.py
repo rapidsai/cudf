@@ -187,6 +187,14 @@ def test_dataframe_column_name_indexing():
         for idx in combinations(pdf.columns, i):
             assert(pdf[list(idx)].equals(df[list(idx)].to_pandas()))
 
+    # test for only numeric columns
+    df = pd.DataFrame()
+    for i in range(0, 10):
+        df[i] = range(nelem)
+    gdf = DataFrame.from_pandas(df)
+    for i in range(0, 10):
+        np.testing.assert_equal(gdf[i].to_array(), df[i])
+
 
 def test_dataframe_drop_method():
     df = DataFrame()

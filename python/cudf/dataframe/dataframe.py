@@ -183,7 +183,7 @@ class DataFrame(object):
 
     def __getitem__(self, arg):
         """
-        If *arg* is a ``str``, return the column Series.
+        If *arg* is a ``str`` or ``int`` type, return the column Series.
         If *arg* is a ``slice``, return a new DataFrame with all columns
         sliced to the specified range.
         If *arg* is an ``array`` containing column names, return a new
