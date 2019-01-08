@@ -77,6 +77,3 @@ def normalize_slice(arg, size):
     stop = arg.stop if arg.stop is not None else size
     return (normalize_index(start, size, doraise=False),
             normalize_index(stop, size, doraise=False))
-
-
-int_types_tuple = (int, np.int64, np.int32)

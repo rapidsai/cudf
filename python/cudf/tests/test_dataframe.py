@@ -192,8 +192,7 @@ def test_dataframe_column_name_indexing():
     for i in range(0, 10):
         df[i] = range(nelem)
     gdf = DataFrame.from_pandas(df)
-    for i in range(0, 10):
-        np.testing.assert_equal(gdf[i].to_array(), df[i])
+    assert_eq(gdf, df)
 
 
 def test_dataframe_drop_method():

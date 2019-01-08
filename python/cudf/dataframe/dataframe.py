@@ -6,6 +6,7 @@ import inspect
 import random
 from collections import OrderedDict
 import warnings
+import numbers
 
 import numpy as np
 import pandas as pd
@@ -217,7 +218,7 @@ class DataFrame(object):
         >>> df[[True, False, True, False]] # mask the entire dataframe,
         # returning the rows specified in the boolean mask
         """
-        if isinstance(arg, str) or isinstance(arg, utils.int_types_tuple):
+        if isinstance(arg, str) or isinstance(arg, numbers.Integral):
             s = self._cols[arg]
             s.name = arg
             return s
