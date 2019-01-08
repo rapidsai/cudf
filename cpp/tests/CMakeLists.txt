@@ -151,6 +151,11 @@ set(REPLACE_TEST_SRC
 
 ConfigureTest(REPLACE_TEST "${REPLACE_TEST_SRC}")
 
+set(REPLACE_NULLS_TEST_SRC 
+    "${CMAKE_CURRENT_SOURCE_DIR}/replace/replace-nulls_tests.cu")
+
+ConfigureTest(REPLACE_NULLS_TEST "${REPLACE_NULLS_TEST_SRC}")
+
 ###################################################################################################
 # - unary tests -----------------------------------------------------------------------------------
 

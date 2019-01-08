@@ -135,10 +135,94 @@ gdf_error gdf_find_and_replace_all(gdf_column*       col,
   return find_and_replace_all(col, old_values, new_values);
 }
 
-gdf_error replace_nulls(gdf_column*       col_out, const gdf_column* col_in)
+template <typename Type>
+__global__
+void replace_nulls_kernel(int size, Type* vax_data, uint32_t* vax_valid, const Type* vay_data) 
 {
-  GDF_REQUIRE(col_out->dtype == col_in->dtype, GDF_DTYPE_MISMATCH);
-  GDF_REQUIRE(col_in->size == 1 || col_in->size == col_out->size, GDF_COLUMN_SIZE_MISMATCH);
+  int tid = threadIdx.x;
+  int blkid = blockIdx.x;
+  int blksz = blockDim.x;
+  int gridsz = gridDim.x;
 
+  int start = tid + blkid * blksz;
+  int step = blksz * gridsz;
+
+  for (int i=start; i<size; i+=step) {
+    int index = i / warpSize;
+    uint32_t position = i % warpSize;
+    uint32_t is_vax_valid = vax_valid[index];
+
+    uint32_t sel_vax = (is_vax_valid >> position) & 1;
+    vax_data[i] = sel_vax? vax_data[i] : *vay_data;
+  }
+}
+
+/* --------------------------------------------------------------------------*/
+/** 
+ * @brief Functor called by the `type_dispatcher` in order to invoke and instantiate
+ *        `replace_nulls` with the apropiate data types.
+ */
+/* ----------------------------------------------------------------------------*/
+struct replace_nulls_kernel_forwarder {
+  template <typename col_type>
+  void operator()(size_t           nrows,
+                  void*            d_col_data,
+                  gdf_valid_type*  d_col_valid,
+                  const void*      d_new_value)
+  {
+    const size_t grid_size = nrows / BLOCK_SIZE + (nrows % BLOCK_SIZE != 0);
+    replace_nulls_kernel<<<grid_size, BLOCK_SIZE>>>(nrows,
+                                          static_cast<col_type*>(d_col_data),
+                                          (uint32_t*)(d_col_valid),
+                                          static_cast<const col_type*>(d_new_value)
+                                          );
+  }
+};
+
+/* --------------------------------------------------------------------------*
+ * @brief This function is a binary function. It will take in two gdf_columns.
+ * The first one is expected to be a regular gdf_column, the second one
+ * has to be a column of the same type as the first, and it has to be of
+ * size one or of the same size as the other column.
+ * 
+ * case 1: If the second column contains only one value, then this funciton will
+ * replace all nulls in the first column with the value in the second
+ * column.
+ *  
+ * case 2: If the second column is of the same size as the first, then the function will
+ * replace all nulls of the first column with the corresponding elemetns of the
+ * second column
+ * 
+ * @Param[out] first gdf_column
+ * @Param[in] second gdf_column, reference column
+ * 
+ * @Returns GDF_SUCCESS upon successful completion
+ *
+ * --------------------------------------------------------------------------*/
+gdf_error gdf_replace_nulls(gdf_column* col_out, const gdf_column* reference)
+{
+  GDF_REQUIRE(col_out->dtype == reference->dtype, GDF_DTYPE_MISMATCH);
+  GDF_REQUIRE(reference->size == 1 || reference->size == col_out->size, GDF_COLUMN_SIZE_MISMATCH);
+
+  if (reference->size == 1) {
+    cudf::type_dispatcher(col_out->dtype, replace_nulls_kernel_forwarder{},
+                          col_out->size,
+                          col_out->data,
+                          col_out->valid,
+                          reference->data);
+  } else if(reference->size == col_out->size) {
+    
+  }
   return GDF_SUCCESS;
 }
+
+
+//for_each(auto &[data, valid] in zip(col_out->data, col_out->valid) ) {
+//    if !valid 
+//      data = reference->data[0];   
+//}
+
+//for_each(auto &[data, valid, data_ref] in zip(col_out->data, col_out->valid, reference->data) ) {
+//   if !valid 
+//      data = data_ref;   
+//}
