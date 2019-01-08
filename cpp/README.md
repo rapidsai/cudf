@@ -47,6 +47,9 @@ $ conda env create --name cudf_dev --file conda_environments/dev_py35.yml
 $ source activate cudf_dev
 # when not using default arrow version 0.10.0, run
 $ conda install pyarrow=$ARROW_VERSION -c conda-forge
+
+# To update the conda environment (assuming `pwd` is base `cuio` directory)
+$ conda env update --name cuio_dev --file conda/environments/dev_py35.yml
 ```
 
 This installs the required `cmake`, `nvstrings`, `pyarrow` and other 
