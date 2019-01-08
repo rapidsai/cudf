@@ -319,17 +319,6 @@ gdf_error read_csv_arrow(csv_read_arg *args, std::shared_ptr<arrow::io::RandomAc
 	//done reading data from map
 	arrow_file_handle->Close();
 
-	fd = open(args->file_path, O_RDONLY );
-
-	if (fd < 0) 		{ close(fd); checkError(GDF_FILE_ERROR, "Error opening file"); }
-	if (fstat(fd, &st)) { close(fd); checkError(GDF_FILE_ERROR, "cannot stat file");   }
-
-	raw_csv->num_bytes = st.st_size;
-
-	map_data = mmap(0, raw_csv->num_bytes, PROT_READ, MAP_PRIVATE, fd, 0);
-
-    if (map_data == MAP_FAILED || raw_csv->num_bytes==0) { close(fd); checkError(GDF_C_ERROR, "Error mapping file"); }
-
 	//-----------------------------------------------------------------------------
 	//---  create a structure to hold variables used to parse the CSV data
 	compression = (args->compression && 0 != strcasecmp(args->compression, "none")) ? args->compression : nullptr;
