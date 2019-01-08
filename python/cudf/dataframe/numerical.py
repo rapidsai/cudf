@@ -385,15 +385,10 @@ class NumericalColumn(columnops.TypedColumnBase):
         """
         to_replace_col = columnops.as_column(to_replace)
         value_col = columnops.as_column(value)
-
-        replaced = self.replace(data=self.data.copy(),
-                                dtype=np.result_type(
-                                    self._data.dtype,
-                                    to_replace_col._data.dtype,
-                                    value_col._data.dtype))
-
+        replaced = self.copy()
+        to_replace_col, value_col, replaced = numeric_normalize_types(
+               to_replace_col, value_col, replaced)
         cpp_replace.replace(replaced, to_replace_col, value_col)
-
         return replaced
 
 
