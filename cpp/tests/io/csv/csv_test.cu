@@ -137,7 +137,7 @@ TEST(gdf_csv_test, CsvSimpleRandomAccessFile)
 
 	{
 		csv_read_arg args{};
-		args.file_path		= fname;
+		args.filepath_or_buffer		= fname;
 		args.num_cols		= std::extent<decltype(names)>::value;
 		args.names			= names;
 		args.dtype			= types;

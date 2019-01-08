@@ -41,6 +41,11 @@
 #include <sys/stat.h>
 #include <sys/mman.h>
 
+#include <memory>
+#include <arrow/status.h>
+#include <arrow/io/interfaces.h>
+#include <arrow/io/file.h>
+
 #include <thrust/scan.h>
 #include <thrust/reduce.h>
 #include <thrust/device_ptr.h>
@@ -53,19 +58,12 @@
 
 #include "cudf.h"
 #include "utilities/error_utils.h"
-#include "utilities/cudf_utils.h"
-#include "utilities/bit_util.cuh"
 
 #include "rmm/rmm.h"
 #include "rmm/thrust_rmm_allocator.h"
 #include "io/comp/io_uncomp.h"
 
 #include "NVStrings.h"
-
-#include <memory>
-#include <arrow/status.h>
-#include <arrow/io/interfaces.h>
-#include <arrow/io/file.h>
 
 constexpr int32_t HASH_SEED = 33;
 
@@ -157,8 +155,6 @@ __global__ void storeRecordStart(char *data, const char terminator, const char q
 __global__ void convertCsvToGdf(char *csv, const parsing_opts_t opts, unsigned long long num_records, int num_columns,bool *parseCol,unsigned long long *recStart,gdf_dtype *dtype,void **gdf_data,gdf_valid_type **valid,string_pair **str_cols,unsigned long long row_offset, long header_row,bool dayfirst,unsigned long long *num_valid);
 __global__ void dataTypeDetection(char *raw_csv, const parsing_opts_t opts, unsigned long long num_records, int  num_columns, bool  *parseCol, unsigned long long *recStart, unsigned long long row_offset, long header_row, column_data_t* d_columnData);
 
-gdf_error read_file_into_buffer(std::shared_ptr<arrow::io::RandomAccessFile> file, int64_t bytes_to_read, uint8_t* buffer, int total_read_attempts_allowed, int empty_reads_allowed);
-
 //
 //---------------CUDA Valid (8 blocks of 8-bits) Bitmap Kernels ---------------------------------------------
 //
@@ -199,6 +195,80 @@ std::string stringType(gdf_dtype dt){
 
 }
 
+/**
+ * reads contents of an arrow::io::RandomAccessFile in a char * buffer up to the number of bytes specified in bytes_to_read
+ * for non local filesystems where latency and availability can be an issue it will retry until it has exhausted its the read attemps and empty reads that are allowed
+ */
+gdf_error read_file_into_buffer(std::shared_ptr<arrow::io::RandomAccessFile> file, int64_t bytes_to_read, uint8_t* buffer, int total_read_attempts_allowed, int empty_reads_allowed){
+
+	if (bytes_to_read > 0){
+
+		int64_t total_read;
+		arrow::Status status = file->Read(bytes_to_read,&total_read, buffer);
+
+		if (!status.ok()){
+			return GDF_FILE_ERROR;
+		}
+
+		if (total_read < bytes_to_read){
+			//the following two variables shoudl be explained
+			//Certain file systems can timeout like hdfs or nfs,
+			//so we shoudl introduce the capacity to retry
+			int total_read_attempts = 0;
+			int empty_reads = 0;
+
+			while (total_read < bytes_to_read && total_read_attempts < total_read_attempts_allowed && empty_reads < empty_reads_allowed){
+				int64_t bytes_read;
+				status = file->Read(bytes_to_read-total_read,&bytes_read, buffer + total_read);
+				if (!status.ok()){
+					return GDF_FILE_ERROR;
+				}
+				if (bytes_read == 0){
+					empty_reads++;
+				}
+				total_read += bytes_read;
+			}
+			if (total_read < bytes_to_read){
+				return GDF_FILE_ERROR;
+			} else {
+				return GDF_SUCCESS;
+			}
+		} else {
+			return GDF_SUCCESS;
+		}
+	} else {
+		return GDF_SUCCESS;
+	}
+}
+
+
+/**
+ * @brief read in a CSV file
+ *
+ * Read in a CSV file, extract all fields, and return a GDF (array of gdf_columns) using arrow interface
+ **/
+
+gdf_error read_csv_arrow(csv_read_arg *args, std::shared_ptr<arrow::io::RandomAccessFile> arrow_file_handle)
+{
+ 	void * 		map_data = NULL;
+	int64_t 	num_bytes;
+	arrow_file_handle->GetSize(&num_bytes);
+	map_data = (void *) malloc(num_bytes);
+	gdf_error error = read_file_into_buffer(arrow_file_handle, num_bytes, (uint8_t*) map_data,100,10);
+	checkError(error, "reading from file into system memory");
+
+	args->input_data_form = gdf_csv_input_form::HOST_BUFFER;
+	args->filepath_or_buffer = (const char *)map_data;
+	args->buffer_size = num_bytes;
+	
+	error = read_csv(args);
+	free(map_data);
+
+	//done reading data from map
+	arrow_file_handle->Close();
+
+	return error;
+}
 
 
 /**
@@ -243,12 +313,10 @@ std::string stringType(gdf_dtype dt){
  * @return gdf_error
  *
  */
-gdf_error read_csv_arrow(csv_read_arg *args, std::shared_ptr<arrow::io::RandomAccessFile> arrow_file_handle)
+gdf_error read_csv(csv_read_arg *args)
 {
 	gdf_error error = gdf_error::GDF_SUCCESS;
-	if(arrow_file_handle == nullptr){
-		checkError(GDF_FILE_ERROR,"fileHandle null (file probably does not exist)");
-	}
+
 	//-----------------------------------------------------------------------------
 	// create the CSV data structure - this will be filled in as the CSV data is processed.
 	// Done first to validate data types
@@ -312,14 +380,32 @@ gdf_error read_csv_arrow(csv_read_arg *args, std::shared_ptr<arrow::io::RandomAc
 	}
 
 	//-----------------------------------------------------------------------------
-	// read data from arrow file
-	void * 			map_data = NULL;
-	arrow_file_handle->GetSize(&raw_csv->num_bytes);
-	map_data = (void *) malloc(raw_csv->num_bytes);
-	error = read_file_into_buffer(arrow_file_handle, raw_csv->num_bytes, (uint8_t*) map_data,100,10);
-	checkError(error, "reading from file into system memory");
-	//done reading data from map
-	arrow_file_handle->Close();
+	// memory map in the data
+	void * 	map_data = NULL;
+	size_t	map_size = 0;
+	const char *compression = nullptr;
+	int fd = 0;
+	if (args->input_data_form == gdf_csv_input_form::FILE_PATH)
+	{
+		fd = open(args->filepath_or_buffer, O_RDONLY );
+		if (fd < 0) 		{ close(fd); checkError(GDF_FILE_ERROR, "Error opening file"); }
+
+		struct stat st{};
+		if (fstat(fd, &st)) { close(fd); checkError(GDF_FILE_ERROR, "cannot stat file");   }
+	
+		map_size = st.st_size;
+		raw_csv->num_bytes = map_size;
+	
+		map_data = mmap(0, map_size, PROT_READ, MAP_PRIVATE, fd, 0);
+	
+		if (map_data == MAP_FAILED || map_size==0) { close(fd); checkError(GDF_C_ERROR, "Error mapping file"); }
+	}
+	else if (args->input_data_form == gdf_csv_input_form::HOST_BUFFER)
+	{
+		map_data = (void *)args->filepath_or_buffer;
+		raw_csv->num_bytes = map_size = args->buffer_size;
+	}
+	else { checkError(GDF_C_ERROR, "invalid input type"); }
 
 	//-----------------------------------------------------------------------------
 	//---  create a structure to hold variables used to parse the CSV data
@@ -558,7 +644,11 @@ gdf_error read_csv_arrow(csv_read_arg *args, std::shared_ptr<arrow::io::RandomAc
 
 	//-----------------------------------------------------------------------------
 	//---  done with host data
-	free(map_data);
+	if (args->input_data_form == gdf_csv_input_form::FILE_PATH)
+	{
+		close(fd);
+		munmap(map_data, raw_csv->num_bytes);
+	}
 
 
 	//-----------------------------------------------------------------------------
@@ -764,59 +854,6 @@ gdf_error read_csv_arrow(csv_read_arg *args, std::shared_ptr<arrow::io::RandomAc
 
 	delete raw_csv;
 	return error;
-
-}
-
-/**
- * @brief read in a CSV file
- *
- * Read in a CSV file, extract all fields, and return a GDF (array of gdf_columns)
- *
- * @param[in and out] args the input arguments, but this also contains the returned data
- *
- * Arguments:
- *
- *  Required Arguments
- * 		file_path			-	file location to read from	- currently the file cannot be compressed
- * 		num_cols			-	number of columns in the names and dtype arrays
- * 		names				-	ordered List of column names, this is a required field
- * 		dtype				-	ordered List of data types, this is required
- *
- * 	Optional
- * 		lineterminator		-	define the line terminator character.  Default is '\n'
- * 		delimiter			-	define the field separator, default is ','.  This argument is also called 'sep'
- *
- * 		quotechar;				define the character used to denote start and end of a quoted item
- * 		quoting;				treat string fields as quoted item and remove the first and last quotechar
- * 		nodoublequote;			do not interpret two consecutive quotechar as a single quotechar
- *
- * 		delim_whitespace	-	use white space as the delimiter - default is false.  This overrides the delimiter argument
- * 		skipinitialspace	-	skip white spaces after the delimiter - default is false
- *
- * 		skiprows			-	number of rows at the start of the files to skip, default is 0
- * 		skipfooter			-	number of rows at the bottom of the file to skip - default is 0
- *
- * 		dayfirst			-	is the first value the day?  DD/MM  versus MM/DD
- *
- *
- *  Output
- *  	num_cols_out		-	Out: return the number of columns read in
- *  	num_rows_out		-	Out: return the number of rows read in
- *  	gdf_column **data	-	Out: return the array of *gdf_columns
- *
- *
- * @return gdf_error
- *
- */
-gdf_error read_csv(csv_read_arg *args)
-{
-	std::shared_ptr<arrow::io::ReadableFile> arrow_file_handle;
-
-	if (!arrow::io::ReadableFile::Open(std::string(args->file_path), &arrow_file_handle).ok()) {
-		checkError(GDF_FILE_ERROR,"fileHandle null (file probably does not exist)");
-	}
-
-	return read_csv_arrow(args,arrow_file_handle);
 }
 
 
@@ -898,8 +935,7 @@ gdf_error updateRawCsv( const char * data, size_t num_bytes, raw_csv_t * raw, co
 gdf_error allocateGdfDataSpace(gdf_column *gdf) {
 
 	long N = gdf->size;
-	// long num_bitmaps = (N + 31) / 8; // What? 8 bytes per bitmap
-	long num_bitmaps = padded_length(gdf_get_num_chars_bitmask(N)); // 64 bytes per bitmap
+	long num_bitmaps = (N + 31) / 8;			// 8 bytes per bitmap
 
 	//--- allocate space for the valid bitmaps
 	RMM_TRY( RMM_ALLOC((void**)&gdf->valid, (sizeof(gdf_valid_type) * num_bitmaps), 0) );
@@ -1592,50 +1628,3 @@ __device__ int findSetBit(int tid, long num_bits, uint64_t *r_bits, int x) {
 	return offset;
 }
 
-
-
-/**
- * reads contents of an arrow::io::RandomAccessFile in a char * buffer up to the number of bytes specified in bytes_to_read
- * for non local filesystems where latency and availability can be an issue it will retry until it has exhausted its the read attemps and empty reads that are allowed
- */
-gdf_error read_file_into_buffer(std::shared_ptr<arrow::io::RandomAccessFile> file, int64_t bytes_to_read, uint8_t* buffer, int total_read_attempts_allowed, int empty_reads_allowed){
-
-	if (bytes_to_read > 0){
-
-		int64_t total_read;
-		arrow::Status status = file->Read(bytes_to_read,&total_read, buffer);
-
-		if (!status.ok()){
-			return GDF_FILE_ERROR;
-		}
-
-		if (total_read < bytes_to_read){
-			//the following two variables shoudl be explained
-			//Certain file systems can timeout like hdfs or nfs,
-			//so we shoudl introduce the capacity to retry
-			int total_read_attempts = 0;
-			int empty_reads = 0;
-
-			while (total_read < bytes_to_read && total_read_attempts < total_read_attempts_allowed && empty_reads < empty_reads_allowed){
-				int64_t bytes_read;
-				status = file->Read(bytes_to_read-total_read,&bytes_read, buffer + total_read);
-				if (!status.ok()){
-					return GDF_FILE_ERROR;
-				}
-				if (bytes_read == 0){
-					empty_reads++;
-				}
-				total_read += bytes_read;
-			}
-			if (total_read < bytes_to_read){
-				return GDF_FILE_ERROR;
-			} else {
-				return GDF_SUCCESS;
-			}
-		} else {
-			return GDF_SUCCESS;
-		}
-	} else {
-		return GDF_SUCCESS;
-	}
-}
