@@ -45,6 +45,7 @@
 - PR #545 Temporarily disable csv reader thousands test to prevent segfault (test re-enabled in PR #501)
 - PR #559 Fix Assertion error while using `applymap` to change the output dtype
 - PR #575 Update `print_env.sh` script to better handle missing commands
+- PR #612 Prevent an exception from occuring with true division on integer series.
 - PR #630 Fix deprecation warning for `pd.core.common.is_categorical_dtype`
 - PR #622 Fix Series.append() behaviour when appending values with different numeric dtype
 
