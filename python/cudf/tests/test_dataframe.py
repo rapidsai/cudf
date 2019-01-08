@@ -150,6 +150,11 @@ def test_series_replace():
     sr7 = sr1.replace([0, 1], [5.5, 6.5])
     np.testing.assert_equal(sr7.to_array(), a7)
 
+    # Series input
+    a8 = np.array([5, 5, 5, 3, 4])
+    sr8 = sr1.replace(sr1[:3], 5)
+    np.testing.assert_equal(sr8.to_array(), a8)
+
 
 def test_dataframe_basic():
     np.random.seed(0)
