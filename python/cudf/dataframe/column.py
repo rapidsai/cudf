@@ -451,7 +451,8 @@ class Column(object):
                                       "yet supported")
         newsize = len(self) + len(other)
         # allocate memory
-        mem = rmm.device_array(shape=newsize, dtype=self.data.dtype)
+        data_dtype = np.result_type(self.data.dtype, other.data.dtype)
+        mem = rmm.device_array(shape=newsize, dtype=data_dtype)
         newbuf = Buffer.from_empty(mem)
         # copy into new memory
         for buf in [self.data, other.data]:
