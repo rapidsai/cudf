@@ -137,7 +137,7 @@ gdf_error gdf_find_and_replace_all(gdf_column*       col,
 
 template <typename Type>
 __global__
-void replace_nulls_kernel(int size, Type* vax_data, uint32_t* vax_valid, const Type* vay_data) 
+void replace_nulls_with_scalar_kernel(int size, Type* vax_data, uint32_t* vax_valid, const Type *vay_data_scalar) 
 {
   int tid = threadIdx.x;
   int blkid = blockIdx.x;
@@ -153,7 +153,30 @@ void replace_nulls_kernel(int size, Type* vax_data, uint32_t* vax_valid, const T
     uint32_t is_vax_valid = vax_valid[index];
 
     uint32_t sel_vax = (is_vax_valid >> position) & 1;
-    vax_data[i] = sel_vax? vax_data[i] : *vay_data;
+    vax_data[i] = sel_vax? vax_data[i] : *vay_data_scalar;
+  }
+}
+
+
+template <typename Type>
+__global__
+void replace_nulls_with_column_kernel(int size, Type* vax_data, uint32_t* vax_valid, const Type *vay_data) 
+{
+  int tid = threadIdx.x;
+  int blkid = blockIdx.x;
+  int blksz = blockDim.x;
+  int gridsz = gridDim.x;
+
+  int start = tid + blkid * blksz;
+  int step = blksz * gridsz;
+
+  for (int i=start; i<size; i+=step) {
+    int index = i / warpSize;
+    uint32_t position = i % warpSize;
+    uint32_t is_vax_valid = vax_valid[index];
+
+    uint32_t sel_vax = (is_vax_valid >> position) & 1;
+    vax_data[i] = sel_vax? vax_data[i] : vay_data[i];
   }
 }
 
@@ -166,16 +189,26 @@ void replace_nulls_kernel(int size, Type* vax_data, uint32_t* vax_valid, const T
 struct replace_nulls_kernel_forwarder {
   template <typename col_type>
   void operator()(size_t           nrows,
+                  size_t           new_values_length,
                   void*            d_col_data,
                   gdf_valid_type*  d_col_valid,
                   const void*      d_new_value)
   {
     const size_t grid_size = nrows / BLOCK_SIZE + (nrows % BLOCK_SIZE != 0);
-    replace_nulls_kernel<<<grid_size, BLOCK_SIZE>>>(nrows,
-                                          static_cast<col_type*>(d_col_data),
-                                          (uint32_t*)(d_col_valid),
-                                          static_cast<const col_type*>(d_new_value)
-                                          );
+    if (new_values_length == 1) {
+      replace_nulls_with_scalar_kernel<<<grid_size, BLOCK_SIZE>>>(nrows,
+                                            static_cast<col_type*>(d_col_data),
+                                            (uint32_t*)(d_col_valid),
+                                            static_cast<const col_type*>(d_new_value)
+                                            );
+    } else if(new_values_length == nrows) {
+      replace_nulls_with_column_kernel<<<grid_size, BLOCK_SIZE>>>(nrows,
+                                            static_cast<col_type*>(d_col_data),
+                                            (uint32_t*)(d_col_valid),
+                                            static_cast<const col_type*>(d_new_value)
+                                            );
+      
+    }
   }
 };
 
@@ -194,35 +227,32 @@ struct replace_nulls_kernel_forwarder {
  * second column
  * 
  * @Param[out] first gdf_column
- * @Param[in] second gdf_column, reference column
+ * @Param[in] second gdf_column, new_values_column column
  * 
  * @Returns GDF_SUCCESS upon successful completion
  *
  * --------------------------------------------------------------------------*/
-gdf_error gdf_replace_nulls(gdf_column* col_out, const gdf_column* reference)
+gdf_error gdf_replace_nulls(gdf_column* col_out, const gdf_column* new_values_column)
 {
-  GDF_REQUIRE(col_out->dtype == reference->dtype, GDF_DTYPE_MISMATCH);
-  GDF_REQUIRE(reference->size == 1 || reference->size == col_out->size, GDF_COLUMN_SIZE_MISMATCH);
+  GDF_REQUIRE(col_out->dtype == new_values_column->dtype, GDF_DTYPE_MISMATCH);
+  GDF_REQUIRE(new_values_column->size == 1 || new_values_column->size == col_out->size, GDF_COLUMN_SIZE_MISMATCH);
 
-  if (reference->size == 1) {
     cudf::type_dispatcher(col_out->dtype, replace_nulls_kernel_forwarder{},
                           col_out->size,
+                          new_values_column->size,
                           col_out->data,
                           col_out->valid,
-                          reference->data);
-  } else if(reference->size == col_out->size) {
-    
-  }
+                          new_values_column->data);
   return GDF_SUCCESS;
 }
 
 
 //for_each(auto &[data, valid] in zip(col_out->data, col_out->valid) ) {
 //    if !valid 
-//      data = reference->data[0];   
+//      data = new_values_column->data[0];   
 //}
 
-//for_each(auto &[data, valid, data_ref] in zip(col_out->data, col_out->valid, reference->data) ) {
+//for_each(auto &[data, valid, data_ref] in zip(col_out->data, col_out->valid, new_values_column->data) ) {
 //   if !valid 
 //      data = data_ref;   
 //}

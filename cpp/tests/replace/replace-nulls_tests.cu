@@ -33,8 +33,9 @@
 template <class T>
 struct ReplaceNullTest : public GdfTest
 {
-  std::vector<T> replace_column;
-  std::vector<T> new_values_column;
+  std::vector<T>              replace_column;
+  std::vector<gdf_valid_type> replace_valid_column;
+  std::vector<T>              new_values_column;
 
   gdf_col_pointer gdf_replace_column;
   gdf_col_pointer gdf_new_values_column;
@@ -62,14 +63,16 @@ struct ReplaceNullTest : public GdfTest
    * @Param new_values_column_list The new values
    * @Param print Optionally print the set of columns for debug
    * -------------------------------------------------------------------------*/
-  void create_input(const std::initializer_list<T> &replace_column_list,
+  void create_input(const std::initializer_list<T> &replace_column_list,  
+                    const std::vector<gdf_valid_type> & replace_column_valid_list,
                     const std::initializer_list<T> &new_values_column_list,
                     bool print = false)
   {
     replace_column    = replace_column_list;
+    replace_valid_column = replace_column_valid_list;
     new_values_column = new_values_column_list;
 
-    gdf_replace_column    = create_gdf_column(replace_column);
+    gdf_replace_column    = create_gdf_column(replace_column, replace_column_valid_list);
     gdf_new_values_column = create_gdf_column(new_values_column);
 
     gdf_raw_replace_column = gdf_replace_column.get();
@@ -78,7 +81,7 @@ struct ReplaceNullTest : public GdfTest
     if(print)
     {
       std::cout << "replace column(s) created. Size: " << replace_column.size() << std::endl;
-      print_vector(replace_column);
+      print_gdf_column(gdf_raw_replace_column);
       std::cout << "\n";
     }
   }
@@ -94,33 +97,39 @@ struct ReplaceNullTest : public GdfTest
   /* ----------------------------------------------------------------------------*/
   std::vector<T> compute_reference_solution(bool print = false)
   {
-    // std::vector<T> reference_result(replace_column);
-    // std::vector<bool> isReplaced(reference_result.size(), false);
+    std::vector<T> reference_result(replace_column);
+    if (new_values_column.size() == 1) {
+        int k = 0;
+        auto pred = [&, this] (T element) {
+          bool toBeReplaced = false;
+          if( !gdf_is_valid(this->replace_valid_column.data(), k)) {
+            toBeReplaced = true;
+          }
+          ++k;
+          return toBeReplaced;
+        };
+        std::replace_if(reference_result.begin(), reference_result.end(), pred, new_values_column[0]);  
+    } else {
+        auto pred = [&, this] (size_t k) {
+          bool toBeReplaced = false;
+          if( !gdf_is_valid(this->replace_valid_column.data(), k)) {
+            toBeReplaced = true;
+          }
+          return toBeReplaced;
+        };
 
-    // for(size_t i = 0; i < old_values_column.size(); i++)
-    // {
-    //   size_t k = 0;
-    //   auto pred = [&, this] (T element) {
-    //     bool toBeReplaced = false;
-    //     if(!isReplaced[k])
-    //     {
-    //       toBeReplaced = (element == this->old_values_column[i]);
-    //       isReplaced[k] = toBeReplaced;
-    //     }    
-
-    //     ++k;
-    //     return toBeReplaced;
-    //   };
-    //   std::replace_if(reference_result.begin(), reference_result.end(), pred, new_values_column[i]);
-    // }
-
-    // if(print)
-    // {
-    //   std::cout << "Reference result size: " << reference_result.size() << std::endl;
-    //   print_vector(reference_result);
-    //   std::cout << "\n";
-    // }
-
+        for (size_t index=0; index < new_values_column.size(); index++) {
+          if ( pred(index) ) {
+            reference_result[index] = new_values_column[index];
+          }
+        }
+    } 
+    if(print)
+    {
+      std::cout << "Reference result size: " << reference_result.size() << std::endl;
+      print_vector(reference_result);
+      std::cout << "\n";
+    }
     return reference_result;
   }
 
@@ -138,7 +147,7 @@ struct ReplaceNullTest : public GdfTest
   {
     gdf_error result_error{GDF_SUCCESS};
 
-    gdf_error status = gdf_replace_nulls(gdf_raw_replace_column, gdf_raw_old_values_column, gdf_raw_new_values_column);
+    gdf_error status = gdf_replace_nulls(gdf_raw_replace_column, gdf_raw_new_values_column);
 
     EXPECT_EQ(expected_result, result_error) << "The gdf order by function did not complete successfully";
 
@@ -160,25 +169,19 @@ struct ReplaceNullTest : public GdfTest
       print_vector(host_result);
       std::cout << "\n";
     }
-
     return host_result;
   }
 };
 
-using Types = testing::Types<int8_t,
-                             int16_t,
-                             int, 
-                             int64_t,
-                             float,
-                             double>;
+using Types = testing::Types<int32_t>;
 
 TYPED_TEST_CASE(ReplaceNullTest, Types);
 
 // This test is used for debugging purposes and is disabled by default.
 // The input sizes are small and has a large amount of debug printing enabled.
-TYPED_TEST(ReplaceNullTest, DemoTest)
+TYPED_TEST(ReplaceNullTest, case1)
 {
-  this->create_input({7, 5, 6, 3, 1, 2, 8, 4}, {2, 6, 4, 8}, {0, 4, 2, 6}, true);
+  this->create_input({7, 5, 6, 3, 1, 2, 8, 4, 1, 2, 8, 4, 1, 2, 8, 4}, {0xF0, 0x0F}, {-1}, true);
 
   auto reference_result = this->compute_reference_solution(true);
   auto gdf_result = this->compute_gdf_result(true);
@@ -190,4 +193,16 @@ TYPED_TEST(ReplaceNullTest, DemoTest)
   }
 }
 
- 
+ TYPED_TEST(ReplaceNullTest, case2)
+{
+  this->create_input({7, 5, 6, 3, 1, 2, 8, 4, 1, 2, 8, 4, 1, 2, 8, 4}, {0xF0, 0x0F}, {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0}, true);
+
+  auto reference_result = this->compute_reference_solution(true);
+  auto gdf_result = this->compute_gdf_result(true);
+  
+  ASSERT_EQ(reference_result.size(), gdf_result.size()) << "Size of gdf result does not match reference result\n";
+   // Compare the GDF and reference solutions
+  for(size_t i = 0; i < reference_result.size(); ++i){
+    EXPECT_EQ(reference_result[i], gdf_result[i]);
+  }
+}
