@@ -22,8 +22,8 @@
 
 namespace cudf {
 /**
- * @brief Scatters the rows of a set of source columns into a set
- * of destination columns.
+ * @brief Scatters the rows (including null values) of a set of source columns
+ * into a set of destination columns.
  *
  * Scatters the rows of the source columns into the destination columns
  * according to a scatter map such that row "i" from the source columns will be
@@ -41,10 +41,10 @@ namespace cudf {
  * If the same index appears more than once in scatter_map, the result is
  * undefined.
  *
- * @Param[in] source_columns The columns whose rows will be scattered
+ * @Param[in] source_table The columns whose rows will be scattered
  * @Param[in] scatter_map An array that maps rows in the input columns
  * to rows in the output columns.
- * @Param[out] destination_columns A preallocated set of columns with a number
+ * @Param[out] destination_table A preallocated set of columns with a number
  * of rows equal in size to the maximum index contained in scatter_map
  *
  * @Returns GDF_SUCCESS upon successful completion
@@ -53,8 +53,8 @@ gdf_error scatter(table const* source_table, gdf_index_type const scatter_map[],
                   table* destination_table);
 
 /**
- * @brief Gathers the rows of a set of source columns into a set of destination
- * columns.
+ * @brief Gathers the rows (including null values) of a set of source columns
+ * into a set of destination columns.
  *
  * Gathers the rows of the source columns into the destination columns according
  * to a gather map such that row "i" in the destination columns will contain
@@ -72,10 +72,10 @@ gdf_error scatter(table const* source_table, gdf_index_type const scatter_map[],
  * If the same index appears more than once in gather_map, the result is
  * undefined.
  *
- * @param[in] source_columns The input columns whose rows will be gathered
+ * @param[in] source_table The input columns whose rows will be gathered
  * @param[in] gather_map An array of indices that maps the rows in the source
  * columns to rows in the destination columns.
- * @param[out] destination_columns A preallocated set of columns with a number
+ * @param[out] destination_table A preallocated set of columns with a number
  * of rows equal in size to the number of elements in the gather_map that will
  * contain the rearrangement of the source columns based on the mapping
  * determined by the gather_map.
