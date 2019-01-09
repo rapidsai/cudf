@@ -470,8 +470,8 @@ def test_csv_reader_nrows(tmpdir):
 
     # with specified names
     df = read_csv(str(fname),
-                   names=names, dtype=dtypes,
-                   skiprows=skip_rows + 1, nrows=read_rows)
+                  names=names, dtype=dtypes,
+                  skiprows=skip_rows + 1, nrows=read_rows)
     assert(df.shape == (read_rows, 2))
     for row in range(0, read_rows//sample_skip, sample_skip):
         assert(df['int1'][row] == row + skip_rows)
@@ -480,8 +480,8 @@ def test_csv_reader_nrows(tmpdir):
 
     # with column name inference
     df = read_csv(str(fname),
-                   dtype=dtypes,
-                   skiprows=skip_rows + 1, nrows=read_rows)
+                  dtype=dtypes,
+                  skiprows=skip_rows + 1, nrows=read_rows)
     assert(df.shape == (read_rows, 2))
     assert(str(skip_rows) in list(df)[0])
     assert(str(2*skip_rows) in list(df)[1])
@@ -491,8 +491,8 @@ def test_csv_reader_nrows(tmpdir):
     assert(df[list(df)[1]][read_rows - 1] == 2 * (read_rows + skip_rows))
 
     # nrows larger than the file
-    df = read_csv(str(fname), 
-                   dtype = dtypes, nrows=rows*2)
+    df = read_csv(str(fname),
+                  dtype=dtypes, nrows=rows*2)
     assert(df.shape == (rows, 2))
     for row in range(0, rows//sample_skip, sample_skip):
         assert(df['int1'][row] == row)
@@ -500,13 +500,13 @@ def test_csv_reader_nrows(tmpdir):
     assert(df['int2'][rows - 1] == 2 * (rows - 1))
 
     # nrows equal to zero
-    df = read_csv(str(fname), 
-                   dtype=dtypes, 
-                   nrows=0)
+    df = read_csv(str(fname),
+                  dtype=dtypes,
+                  nrows=0)
     print(df)
     assert(df.shape == (0, 2))
 
     # with both skipfooter and nrows - should throw
     with pytest.raises(ValueError):
-        read_csv(str(fname), 
+        read_csv(str(fname),
                  nrows=read_rows, skipfooter=1)
