@@ -6,6 +6,7 @@ import inspect
 import random
 from collections import OrderedDict
 import warnings
+import numbers
 
 import numpy as np
 import pandas as pd
@@ -183,7 +184,7 @@ class DataFrame(object):
 
     def __getitem__(self, arg):
         """
-        If *arg* is a ``str``, return the column Series.
+        If *arg* is a ``str`` or ``int`` type, return the column Series.
         If *arg* is a ``slice``, return a new DataFrame with all columns
         sliced to the specified range.
         If *arg* is an ``array`` containing column names, return a new
@@ -217,7 +218,7 @@ class DataFrame(object):
         >>> df[[True, False, True, False]] # mask the entire dataframe,
         # returning the rows specified in the boolean mask
         """
-        if isinstance(arg, str) or isinstance(arg, int):
+        if isinstance(arg, str) or isinstance(arg, numbers.Integral):
             s = self._cols[arg]
             s.name = arg
             return s
@@ -238,7 +239,7 @@ class DataFrame(object):
             return df
         else:
             msg = "__getitem__ on type {!r} is not supported"
-            raise TypeError(msg.format(arg))
+            raise TypeError(msg.format(type(arg)))
 
     def __setitem__(self, name, col):
         """Add/set column by *name*
