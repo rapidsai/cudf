@@ -159,14 +159,16 @@ namespace bit_mask {
       CUDA_TRY(cudaMemset(*mask, 0xff, sizeof(bit_mask_t) * used_elements));
       CUDA_TRY(cudaMemset(&(*mask)[used_elements], 0, sizeof(bit_mask_t) * (num_elements - used_elements)));
 
-      //
-      //  Need to worry about the case where we set bits past the end
-      //
-      int bits_used_in_last_element = number_of_records - (used_elements - 1) * detail::BITS_PER_ELEMENT;
-      bit_mask_t temp = bit_mask_t{1} << bits_used_in_last_element;
-      temp--;
+      if ((number_of_records % detail::BITS_PER_ELEMENT) != 0) {
+        //
+        //  Need to worry about the case where we set bits past the end
+        //
+        int bits_used_in_last_element = number_of_records - (used_elements - 1) * detail::BITS_PER_ELEMENT;
+        bit_mask_t temp = bit_mask_t{1} << bits_used_in_last_element;
+        temp--;
 
-      return put_element(temp, &(*mask)[used_elements-1]);
+        return put_element(temp, &(*mask)[used_elements-1]);
+      }
     }
 
     return GDF_SUCCESS;

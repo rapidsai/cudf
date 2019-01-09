@@ -399,7 +399,38 @@ TEST_F(BitMaskTest, MultiThreadedTest)
   local_count = 0;
   EXPECT_EQ(GDF_SUCCESS, count_bits(&local_count, bit_mask));
 
-  EXPECT_EQ((unsigned) (num_rows/2), local_count);
+  EXPECT_EQ((gdf_size_type) (num_rows/2), local_count);
+
+  EXPECT_EQ(GDF_SUCCESS, bit_mask::destroy_bit_mask(bits));
+}
+
+TEST_F(BitMaskTest, PaddingTest)
+{
+  //
+  //  Set the number of rows to 32, we'll try padding to 
+  //  256 bytes.
+  //
+  const int num_rows = 32;
+  const int padding_bytes = 256;
+  bit_mask_t *bits = nullptr;
+ 
+  EXPECT_EQ(GDF_SUCCESS, bit_mask::create_bit_mask(&bits, num_rows, 1, padding_bytes));
+
+  BitMask bit_mask(bits, num_rows);
+
+  gdf_size_type local_count = 0;
+  EXPECT_EQ(GDF_SUCCESS, count_bits(&local_count, bit_mask));
+
+  EXPECT_EQ((gdf_size_type) num_rows, local_count);
+
+  //
+  //  To test this, we should be able to access the last element
+  //
+  int last_element = (padding_bytes / sizeof(bit_mask_t)) - 1;
+  
+  bit_mask_t temp = ~bit_mask_t{0};
+  bit_mask.get_element_host(last_element, temp);
+  EXPECT_EQ(bit_mask_t{0}, temp);
 
   EXPECT_EQ(GDF_SUCCESS, bit_mask::destroy_bit_mask(bits));
 }
