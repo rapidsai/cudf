@@ -34,7 +34,7 @@ namespace bit_mask {
      */
     template <typename T>
     CUDA_HOST_DEVICE_CALLABLE
-    constexpr gdf_size_type WhichElement(T record_idx) {
+    constexpr gdf_size_type which_element(T record_idx) {
       return (record_idx / BITS_PER_ELEMENT);
     }
 
@@ -47,7 +47,7 @@ namespace bit_mask {
      */
     template <typename T>
     CUDA_HOST_DEVICE_CALLABLE
-    constexpr gdf_size_type WhichBit(T record_idx) {
+    constexpr gdf_size_type which_bit(T record_idx) {
       return (record_idx % BITS_PER_ELEMENT);
     }
   }
@@ -60,7 +60,7 @@ namespace bit_mask {
    * @return the number of elements
    */
   CUDA_HOST_DEVICE_CALLABLE
-  constexpr gdf_size_type NumElements(gdf_size_type size) { 
+  constexpr gdf_size_type num_elements(gdf_size_type size) { 
     return (( size + ( detail::BITS_PER_ELEMENT - 1)) / detail::BITS_PER_ELEMENT ); 
   }
 
@@ -74,8 +74,8 @@ namespace bit_mask {
    *
    *  @return GDF_SUCCESS on success, the CUDA error on failure
    */
-  inline gdf_error CopyBitMask(bit_mask_t *dst, const bit_mask_t *src, size_t num_bits, enum cudaMemcpyKind kind) {
-    CUDA_TRY(cudaMemcpy(dst, src, NumElements(num_bits) * sizeof(bit_mask_t), kind));
+  inline gdf_error copy_bit_mask(bit_mask_t *dst, const bit_mask_t *src, size_t num_bits, enum cudaMemcpyKind kind) {
+    CUDA_TRY(cudaMemcpy(dst, src, num_elements(num_bits) * sizeof(bit_mask_t), kind));
     return GDF_SUCCESS;
   }
 
@@ -86,7 +86,7 @@ namespace bit_mask {
    *
    *  @return GDF_SUCCESS on success, the CUDA error on failure
    */
-  inline gdf_error DestroyBitMask(bit_mask_t *valid) {
+  inline gdf_error destroy_bit_mask(bit_mask_t *valid) {
     RMM_TRY(RMM_FREE(valid, 0));
     return GDF_SUCCESS;
   }
@@ -99,7 +99,7 @@ namespace bit_mask {
    *
    *  @return GDF_SUCCESS on success, the CUDA error on failure
    */
-  inline gdf_error GetElement(bit_mask_t *element, const bit_mask_t *device_element) {
+  inline gdf_error get_element(bit_mask_t *element, const bit_mask_t *device_element) {
     CUDA_TRY(cudaMemcpy(element, device_element, sizeof(bit_mask_t), cudaMemcpyDeviceToHost));
     return GDF_SUCCESS;
   }
@@ -112,7 +112,7 @@ namespace bit_mask {
    *
    *  @return GDF_SUCCESS on success, the CUDA error on failure
    */
-  inline gdf_error PutElement(bit_mask_t element, bit_mask_t *device_element) {
+  inline gdf_error put_element(bit_mask_t element, bit_mask_t *device_element) {
     CUDA_TRY(cudaMemcpy(device_element, &element, sizeof(bit_mask_t), cudaMemcpyHostToDevice));
     return GDF_SUCCESS;
   }
@@ -130,14 +130,14 @@ namespace bit_mask {
    *
    *  @return GDF_SUCCESS on success, the RMM or CUDA error on error
    */
-  gdf_error CreateBitMask(bit_mask_t **mask, gdf_size_type number_of_records, int fill_value = -1, gdf_size_type padding_bytes = 64) {
+  gdf_error create_bit_mask(bit_mask_t **mask, gdf_size_type number_of_records, int fill_value = -1, gdf_size_type padding_bytes = 64) {
     //
     //  To handle padding, we will round the number_of_records up to the next padding boundary, then identify how many element
     //  that equates to.  Then we can allocate the appropriate amount of storage.
     //
     gdf_size_type num_bytes = (number_of_records + 7) / 8;
     gdf_size_type num_padding_blocks = (num_bytes + padding_bytes - 1) / padding_bytes;
-    gdf_size_type num_elements = bit_mask::NumElements(num_padding_blocks * 8 * padding_bytes);
+    gdf_size_type num_elements = bit_mask::num_elements(num_padding_blocks * 8 * padding_bytes);
 
     RMM_TRY(RMM_ALLOC(mask, sizeof(bit_mask_t) * num_elements, 0));
 
@@ -155,7 +155,7 @@ namespace bit_mask {
       //  used element will be constructed to set to a left mask of ones
       //  and stored out on the device.
       //
-      gdf_size_type used_elements = bit_mask::NumElements(number_of_records);
+      gdf_size_type used_elements = bit_mask::num_elements(number_of_records);
       CUDA_TRY(cudaMemset(*mask, 0xff, sizeof(bit_mask_t) * used_elements));
       CUDA_TRY(cudaMemset(&(*mask)[used_elements], 0, sizeof(bit_mask_t) * (num_elements - used_elements)));
 
@@ -166,7 +166,7 @@ namespace bit_mask {
       bit_mask_t temp = bit_mask_t{1} << bits_used_in_last_element;
       temp--;
 
-      return PutElement(temp, &(*mask)[used_elements-1]);
+      return put_element(temp, &(*mask)[used_elements-1]);
     }
 
     return GDF_SUCCESS;
@@ -182,11 +182,11 @@ namespace bit_mask {
    */
   template <typename T>
   CUDA_HOST_DEVICE_CALLABLE
-  bool IsValid(const bit_mask_t *valid, T record_idx) {
+  bool is_valid(const bit_mask_t *valid, T record_idx) {
     static_assert(std::is_integral<T>::value, "Record index must be of an integral type");
 
-    const gdf_size_type rec{detail::WhichElement(record_idx)};
-    const gdf_size_type bit{detail::WhichBit(record_idx)};
+    const gdf_size_type rec{detail::which_element(record_idx)};
+    const gdf_size_type bit{detail::which_bit(record_idx)};
 
     return ((valid[rec] & (bit_mask_t{1} << bit)) != 0);
   }
@@ -206,11 +206,11 @@ namespace bit_mask {
    */
   template <typename T>
   CUDA_HOST_DEVICE_CALLABLE
-  void SetBitUnsafe(bit_mask_t *valid, T record_idx) {
+  void set_bit_unsafe(bit_mask_t *valid, T record_idx) {
     static_assert(std::is_integral<T>::value, "Record index must be of an integral type");
 
-    const gdf_size_type rec{detail::WhichElement(record_idx)};
-    const gdf_size_type bit{detail::WhichBit(record_idx)};
+    const gdf_size_type rec{detail::which_element(record_idx)};
+    const gdf_size_type bit{detail::which_bit(record_idx)};
 
     valid[rec] = valid[rec] | (bit_mask_t{1} << bit);
   }
@@ -230,11 +230,11 @@ namespace bit_mask {
    */
   template <typename T>
   CUDA_HOST_DEVICE_CALLABLE
-  void ClearBitUnsafe(bit_mask_t *valid, T record_idx) {
+  void clear_bit_unsafe(bit_mask_t *valid, T record_idx) {
     static_assert(std::is_integral<T>::value, "Record index must be of an integral type");
 
-    const gdf_size_type rec{detail::WhichElement(record_idx)};
-    const gdf_size_type bit{detail::WhichBit(record_idx)};
+    const gdf_size_type rec{detail::which_element(record_idx)};
+    const gdf_size_type bit{detail::which_bit(record_idx)};
 
     valid[rec] = valid[rec] & (~(bit_mask_t{1} << bit));
   }
@@ -252,11 +252,11 @@ namespace bit_mask {
    */
   template <typename T>
   CUDA_DEVICE_CALLABLE
-  void SetBitSafe(bit_mask_t *valid, T record_idx) {
+  void set_bit_safe(bit_mask_t *valid, T record_idx) {
     static_assert(std::is_integral<T>::value, "Record index must be of an integral type");
 
-    const gdf_size_type rec{detail::WhichElement(record_idx)};
-    const gdf_size_type bit{detail::WhichBit(record_idx)};
+    const gdf_size_type rec{detail::which_element(record_idx)};
+    const gdf_size_type bit{detail::which_bit(record_idx)};
 
     atomicOr( &valid[rec], (bit_mask_t{1} << bit));
   }
@@ -274,11 +274,11 @@ namespace bit_mask {
    */
   template <typename T>
   CUDA_DEVICE_CALLABLE
-  void ClearBitSafe(bit_mask_t *valid, T record_idx) {
+  void clear_bit_safe(bit_mask_t *valid, T record_idx) {
     static_assert(std::is_integral<T>::value, "Record index must be of an integral type");
 
-    const gdf_size_type rec{detail::WhichElement(record_idx)};
-    const gdf_size_type bit{detail::WhichBit(record_idx)};
+    const gdf_size_type rec{detail::which_element(record_idx)};
+    const gdf_size_type bit{detail::which_bit(record_idx)};
 
     atomicAnd( &valid[rec], ~(bit_mask_t{1} << bit));
   }
