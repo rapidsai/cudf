@@ -50,6 +50,7 @@
 - PR #630 Fix deprecation warning for `pd.core.common.is_categorical_dtype`
 - PR #622 Fix Series.append() behaviour when appending values with different numeric dtype
 - PR #634 Fix create `DataFrame.from_pandas()` with numeric column names
+- PR #657 Update cython version to 0.29
 
 
 # cuDF 0.4.0 (05 Dec 2018)
