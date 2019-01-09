@@ -1140,3 +1140,16 @@ def test_iteritems(gdf):
         assert k in gdf.columns
         assert isinstance(v, gd.Series)
         assert_eq(v, gdf[k])
+
+
+def test_from_pandas_function(pdf):
+    gdf = gd.from_pandas(pdf)
+    assert isinstance(gdf, gd.dataframe)
+    assert_eq(pdf, gdf)
+
+    gdf = gd.from_pandas(pdf.x)
+    assert isinstance(gdf, gd.Series)
+    assert_eq(pdf.x, gdf)
+
+    with pytest.raises(TypeError):
+        gd.from_pandas(123)
