@@ -26,11 +26,9 @@
 using bit_mask_t = bit_mask::bit_mask_t;
 
 
-/* ---------------------------------------------------------------------------- */
-/**
+/* ---------------------------------------------------------------------------- *
  * @brief  Class for managing bit containers on the device
- */
-/* ---------------------------------------------------------------------------- */
+ * ---------------------------------------------------------------------------- */
 class BitMask {
 public:
    __host__ __device__ BitMask(bit_mask_t *valid, int bitlength): valid_(valid), bitlength_(bitlength) {}
@@ -44,7 +42,7 @@ public:
    */
   template <typename T>
   __device__ bool IsValid(T record_idx) const {
-    return bit_mask::is_valid(valid_, record_idx);
+    return bit_mask::IsValid(valid_, record_idx);
   }
 
   /**
@@ -54,7 +52,7 @@ public:
    */
   template <typename T>
   __device__ void SetBitUnsafe(T record_idx) {
-    bit_mask::set_bit_unsafe(valid_, record_idx);
+    bit_mask::SetBitUnsafe(valid_, record_idx);
   }
 
 
@@ -65,7 +63,7 @@ public:
    */
   template <typename T>
   __device__ void ClearBitUnsafe(T record_idx) {
-    bit_mask::clear_bit_unsafe(valid_, record_idx);
+    bit_mask::ClearBitUnsafe(valid_, record_idx);
   }
 
   /**
@@ -75,7 +73,7 @@ public:
    */
   template <typename T>
   __device__ void SetBit(T record_idx) {
-    bit_mask::set_bit_safe(valid_, record_idx);
+    bit_mask::SetBitSafe(valid_, record_idx);
   }
 
 
@@ -86,7 +84,7 @@ public:
    */
   template <typename T>
   __device__ void ClearBit(T record_idx) {
-    bit_mask::clear_bit_unsafe(valid_, record_idx);
+    bit_mask::ClearBitSafe(valid_, record_idx);
   }
 
   /**
@@ -95,7 +93,41 @@ public:
    * @return the number of elements
    */
   __device__ gdf_size_type NumElements() const {
-    return bit_mask::num_elements(bitlength_);
+    return bit_mask::NumElements(bitlength_);
+  }
+
+  /**
+   * @brief Get a reference to a specific element (device only)
+   *
+   * @param[in] element_idx
+   *
+   * @return reference to the specified element
+   */
+  __device__ bit_mask_t &GetElementDevice(gdf_size_type element_idx) {
+    return valid_[element_idx];
+  }
+
+  /**
+   * @brief Get a specific element (host only)
+   *
+   *  @param[in]  element_idx
+   *  @param[out] element
+   *
+   *  @return GDF_SUCCESS on success, the CUDA error on failure
+   */
+  __host__ gdf_error GetElementHost(gdf_size_type element_idx, bit_mask_t &element) const {
+    return bit_mask::GetElement(&element, valid_ + element_idx);
+  }
+
+  /**
+   * @brief Set a specific element (host only)
+   *
+   * @param[in] element_idx
+   *
+   * @return the specified element
+   */
+  __host__ gdf_error SetElementHost(gdf_size_type element_idx, const bit_mask_t &element) {
+    return bit_mask::PutElement(element, valid_ + element_idx);
   }
 
   /**

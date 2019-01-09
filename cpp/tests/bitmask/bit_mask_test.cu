@@ -27,6 +27,9 @@
 
 struct BitMaskTest : public GdfTest {};
 
+//
+//  Kernel to count bits set in the bit mask
+//
 __global__ void count_bits_g(int *counter, BitMask bits) {
   int index = blockIdx.x * blockDim.x + threadIdx.x;
   int stride = blockDim.x * gridDim.x;
@@ -34,7 +37,7 @@ __global__ void count_bits_g(int *counter, BitMask bits) {
   int local_counter = 0;
 
   for (int i = index ; i < bits.NumElements() ; i += stride) {
-    local_counter += __popc(bits.GetValid()[i]);
+    local_counter += __popc(bits.GetElementDevice(i));
   }
 
   atomicAdd(counter, local_counter);
@@ -47,6 +50,53 @@ __global__ void count_bits_g(int *counter, BitMask bits) {
 __global__ void set_bit(gdf_size_type bit, BitMask bits) {
   bits.SetBit(bit);
 }
+
+//
+//  Kernel to do unsafe bit set/clear
+//
+__global__ void test_unsafe_set_clear_g(BitMask bits) {
+  int index = threadIdx.x;
+
+  if ((index % 2) == 0) {
+    for (int i = index ; i < bits.Length() ; i += bit_mask::detail::BITS_PER_ELEMENT) {
+      bits.SetBitUnsafe(i);
+    }
+  }
+
+  for (int i = index ; i < bits.Length() ; i += bit_mask::detail::BITS_PER_ELEMENT) {
+    bits.ClearBitUnsafe(i);
+  }
+
+  if ((index % 2) == 0) {
+    for (int i = index ; i < bits.Length() ; i += bit_mask::detail::BITS_PER_ELEMENT) {
+      bits.SetBitUnsafe(i);
+    }
+  }
+}
+
+//
+//  Kernel to do safe bit set/clear
+//
+__global__ void test_safe_set_clear_g(BitMask bits) {
+  int index = threadIdx.x;
+
+  if ((index % 2) == 0) {
+    for (int i = index ; i < bits.Length() ; i += bit_mask::detail::BITS_PER_ELEMENT) {
+      bits.SetBit(i);
+    }
+  }
+
+  for (int i = index ; i < bits.Length() ; i += bit_mask::detail::BITS_PER_ELEMENT) {
+    bits.ClearBit(i);
+  }
+
+  if ((index % 2) == 0) {
+    for (int i = index ; i < bits.Length() ; i += bit_mask::detail::BITS_PER_ELEMENT) {
+      bits.SetBit(i);
+    }
+  }
+}
+
 
 __host__ gdf_error count_bits(gdf_size_type *count, const BitMask &bit_mask, int a = 1, int b = 1) {
   int *count_d;
@@ -67,14 +117,14 @@ TEST_F(BitMaskTest, NoValids)
   const int num_rows = 100;
 
   bit_mask_t *bits = nullptr;
-  EXPECT_EQ(GDF_SUCCESS, bit_mask::create_bit_mask(&bits, num_rows, 0));
+  EXPECT_EQ(GDF_SUCCESS, bit_mask::CreateBitMask(&bits, num_rows, 0));
 
   BitMask bit_mask(bits, num_rows);
 
   gdf_size_type local_count = 0;
   EXPECT_EQ(GDF_SUCCESS, count_bits(&local_count, bit_mask));
 
-  EXPECT_EQ(GDF_SUCCESS, bit_mask::destroy_bit_mask(bits));
+  EXPECT_EQ(GDF_SUCCESS, bit_mask::DestroyBitMask(bits));
 
   EXPECT_EQ(0U, local_count);
 }
@@ -84,14 +134,14 @@ TEST_F(BitMaskTest, AllValids)
   const int num_rows = 100;
 
   bit_mask_t *bits = nullptr;
-  EXPECT_EQ(GDF_SUCCESS, bit_mask::create_bit_mask(&bits, num_rows, 1));
+  EXPECT_EQ(GDF_SUCCESS, bit_mask::CreateBitMask(&bits, num_rows, 1));
 
   BitMask bit_mask(bits, num_rows);
 
   gdf_size_type local_count = 0;
   EXPECT_EQ(GDF_SUCCESS, count_bits(&local_count, bit_mask));
 
-  EXPECT_EQ(GDF_SUCCESS, bit_mask::destroy_bit_mask(bits));
+  EXPECT_EQ(GDF_SUCCESS, bit_mask::DestroyBitMask(bits));
 
   EXPECT_EQ(100U, local_count);
 }
@@ -101,7 +151,7 @@ TEST_F(BitMaskTest, FirstRowValid)
   const int num_rows = 4;
 
   bit_mask_t *bits = nullptr;
-  EXPECT_EQ(GDF_SUCCESS, bit_mask::create_bit_mask(&bits, num_rows, 0));
+  EXPECT_EQ(GDF_SUCCESS, bit_mask::CreateBitMask(&bits, num_rows, 0));
 
   BitMask bit_mask(bits, num_rows);
 
@@ -113,9 +163,9 @@ TEST_F(BitMaskTest, FirstRowValid)
   EXPECT_EQ(1U, local_count);
 
   bit_mask_t temp = 0;
-  bit_mask::get_element(&temp, bit_mask.GetValid());
+  bit_mask.GetElementHost(0, temp);
 
-  EXPECT_EQ(GDF_SUCCESS, bit_mask::destroy_bit_mask(bits));
+  EXPECT_EQ(GDF_SUCCESS, bit_mask::DestroyBitMask(bits));
 
   EXPECT_EQ(temp, 0x1U);
 }
@@ -125,7 +175,7 @@ TEST_F(BitMaskTest, EveryOtherBit)
   const int num_rows = 8;
 
   bit_mask_t *bits = nullptr;
-  EXPECT_EQ(GDF_SUCCESS, bit_mask::create_bit_mask(&bits, num_rows, 0));
+  EXPECT_EQ(GDF_SUCCESS, bit_mask::CreateBitMask(&bits, num_rows, 0));
 
   BitMask bit_mask(bits, num_rows);
 
@@ -140,9 +190,9 @@ TEST_F(BitMaskTest, EveryOtherBit)
   EXPECT_EQ(4U, local_count);
 
   bit_mask_t temp = 0;
-  bit_mask::get_element(&temp, bit_mask.GetValid());
+  bit_mask.GetElementHost(0, temp);
 
-  EXPECT_EQ(GDF_SUCCESS, bit_mask::destroy_bit_mask(bits));
+  EXPECT_EQ(GDF_SUCCESS, bit_mask::DestroyBitMask(bits));
 
   EXPECT_EQ(temp, 0x55U);
 }
@@ -152,7 +202,7 @@ TEST_F(BitMaskTest, OtherEveryOtherBit)
   const int num_rows = 8;
 
   bit_mask_t *bits = nullptr;
-  EXPECT_EQ(GDF_SUCCESS, bit_mask::create_bit_mask(&bits, num_rows, 0));
+  EXPECT_EQ(GDF_SUCCESS, bit_mask::CreateBitMask(&bits, num_rows, 0));
 
   BitMask bit_mask(bits, num_rows);
 
@@ -167,9 +217,9 @@ TEST_F(BitMaskTest, OtherEveryOtherBit)
   EXPECT_EQ(4U, local_count);
 
   bit_mask_t temp = 0;
-  bit_mask::get_element(&temp, bit_mask.GetValid());
+  bit_mask.GetElementHost(0, temp);
 
-  EXPECT_EQ(GDF_SUCCESS, bit_mask::destroy_bit_mask(bits));
+  EXPECT_EQ(GDF_SUCCESS, bit_mask::DestroyBitMask(bits));
 
   EXPECT_EQ(temp, 0xAAU);
 }
@@ -179,7 +229,7 @@ TEST_F(BitMaskTest, 15rows)
   const int num_rows = 15;
 
   bit_mask_t *bits = nullptr;
-  EXPECT_EQ(GDF_SUCCESS, bit_mask::create_bit_mask(&bits, num_rows, 0));
+  EXPECT_EQ(GDF_SUCCESS, bit_mask::CreateBitMask(&bits, num_rows, 0));
 
   BitMask bit_mask(bits, num_rows);
 
@@ -191,7 +241,7 @@ TEST_F(BitMaskTest, 15rows)
 
   EXPECT_EQ(2U, local_count);
 
-  EXPECT_EQ(GDF_SUCCESS, bit_mask::destroy_bit_mask(bits));
+  EXPECT_EQ(GDF_SUCCESS, bit_mask::DestroyBitMask(bits));
 }
 
 TEST_F(BitMaskTest, 5rows)
@@ -199,7 +249,7 @@ TEST_F(BitMaskTest, 5rows)
   const int num_rows = 5;
 
   bit_mask_t *bits = nullptr;
-  EXPECT_EQ(GDF_SUCCESS, bit_mask::create_bit_mask(&bits, num_rows, 0));
+  EXPECT_EQ(GDF_SUCCESS, bit_mask::CreateBitMask(&bits, num_rows, 0));
 
   BitMask bit_mask(bits, num_rows);
 
@@ -208,7 +258,7 @@ TEST_F(BitMaskTest, 5rows)
   gdf_size_type local_count = 0;
   EXPECT_EQ(GDF_SUCCESS, count_bits(&local_count, bit_mask));
 
-  EXPECT_EQ(GDF_SUCCESS, bit_mask::destroy_bit_mask(bits));
+  EXPECT_EQ(GDF_SUCCESS, bit_mask::DestroyBitMask(bits));
 
   EXPECT_EQ(1U, local_count);
 }
@@ -218,14 +268,14 @@ TEST_F(BitMaskTest, 10ValidRows)
   const int num_rows = 10;
 
   bit_mask_t *bits = nullptr;
-  EXPECT_EQ(GDF_SUCCESS, bit_mask::create_bit_mask(&bits, num_rows, 1));
+  EXPECT_EQ(GDF_SUCCESS, bit_mask::CreateBitMask(&bits, num_rows, 1));
 
   BitMask bit_mask(bits, num_rows);
 
   gdf_size_type local_count = 0;
   EXPECT_EQ(GDF_SUCCESS, count_bits(&local_count, bit_mask));
 
-  EXPECT_EQ(GDF_SUCCESS, bit_mask::destroy_bit_mask(bits));
+  EXPECT_EQ(GDF_SUCCESS, bit_mask::DestroyBitMask(bits));
 
   EXPECT_EQ(10U, local_count);
 }
@@ -235,7 +285,7 @@ TEST_F(BitMaskTest, MultipleOfEight)
   const int num_rows = 1024;
 
   bit_mask_t *bits = nullptr;
-  EXPECT_EQ(GDF_SUCCESS, bit_mask::create_bit_mask(&bits, num_rows, 0));
+  EXPECT_EQ(GDF_SUCCESS, bit_mask::CreateBitMask(&bits, num_rows, 0));
 
   BitMask bit_mask(bits, num_rows);
 
@@ -246,7 +296,7 @@ TEST_F(BitMaskTest, MultipleOfEight)
   gdf_size_type local_count = 0;
   EXPECT_EQ(GDF_SUCCESS, count_bits(&local_count, bit_mask));
 
-  EXPECT_EQ(GDF_SUCCESS, bit_mask::destroy_bit_mask(bits));
+  EXPECT_EQ(GDF_SUCCESS, bit_mask::DestroyBitMask(bits));
 
   EXPECT_EQ(128U, local_count);
 }
@@ -256,7 +306,7 @@ TEST_F(BitMaskTest, NotMultipleOfEight)
   const int num_rows = 1023;
 
   bit_mask_t *bits = nullptr;
-  EXPECT_EQ(GDF_SUCCESS, bit_mask::create_bit_mask(&bits, num_rows, 0));
+  EXPECT_EQ(GDF_SUCCESS, bit_mask::CreateBitMask(&bits, num_rows, 0));
 
   BitMask bit_mask(bits, num_rows);
 
@@ -267,7 +317,7 @@ TEST_F(BitMaskTest, NotMultipleOfEight)
   gdf_size_type local_count = 0;
   EXPECT_EQ(GDF_SUCCESS, count_bits(&local_count, bit_mask));
 
-  EXPECT_EQ(GDF_SUCCESS, bit_mask::destroy_bit_mask(bits));
+  EXPECT_EQ(GDF_SUCCESS, bit_mask::DestroyBitMask(bits));
 
   EXPECT_EQ(127U, local_count);
 }
@@ -277,14 +327,14 @@ TEST_F(BitMaskTest, TenThousandRows)
   const int num_rows = 10000;
 
   bit_mask_t *bits = nullptr;
-  EXPECT_EQ(GDF_SUCCESS, bit_mask::create_bit_mask(&bits, num_rows, 1));
+  EXPECT_EQ(GDF_SUCCESS, bit_mask::CreateBitMask(&bits, num_rows, 1));
 
   BitMask bit_mask(bits, num_rows);
 
   gdf_size_type local_count = 0;
   EXPECT_EQ(GDF_SUCCESS, count_bits(&local_count, bit_mask));
 
-  EXPECT_EQ(GDF_SUCCESS, bit_mask::destroy_bit_mask(bits));
+  EXPECT_EQ(GDF_SUCCESS, bit_mask::DestroyBitMask(bits));
 
   EXPECT_EQ(10000U, local_count);
 }
@@ -294,11 +344,11 @@ TEST_F(BitMaskTest, PerformanceTest)
   const int num_rows = 100000000;
 
   bit_mask_t *bits = nullptr;
-  EXPECT_EQ(GDF_SUCCESS, bit_mask::create_bit_mask(&bits, num_rows, 0));
+  EXPECT_EQ(GDF_SUCCESS, bit_mask::CreateBitMask(&bits, num_rows, 0));
 
   BitMask bit_mask(bits, num_rows);
 
-  int num_elements = bit_mask::num_elements(num_rows);
+  int num_elements = bit_mask::NumElements(num_rows);
   int block_size = 256;
   int grid_size = (num_elements + block_size - 1)/block_size;
 
@@ -307,7 +357,7 @@ TEST_F(BitMaskTest, PerformanceTest)
     local_valid[i] = 0x55555555U;
   }
 
-  EXPECT_EQ(GDF_SUCCESS, bit_mask::copy_bit_mask(bit_mask.GetValid(), local_valid, num_rows, cudaMemcpyHostToDevice));
+  EXPECT_EQ(GDF_SUCCESS, bit_mask::CopyBitMask(bit_mask.GetValid(), local_valid, num_rows, cudaMemcpyHostToDevice));
 
   auto start = std::chrono::system_clock::now();
   cudaProfilerStart();
@@ -320,6 +370,36 @@ TEST_F(BitMaskTest, PerformanceTest)
   std::chrono::duration<double> elapsed_seconds = end-start;
   std::cout << "Elapsed time (ms): " << elapsed_seconds.count()*1000 << std::endl;
 
-  EXPECT_EQ(GDF_SUCCESS, bit_mask::destroy_bit_mask(bits));
+  EXPECT_EQ(GDF_SUCCESS, bit_mask::DestroyBitMask(bits));
   free(local_valid);
+}
+
+TEST_F(BitMaskTest, MultiThreadedTest)
+{
+  const int num_rows = 100000;
+  bit_mask_t *bits = nullptr;
+ 
+  EXPECT_EQ(GDF_SUCCESS, bit_mask::CreateBitMask(&bits, num_rows, 0));
+
+  BitMask bit_mask(bits, num_rows);
+
+  test_unsafe_set_clear_g<<<1,bit_mask::detail::BITS_PER_ELEMENT>>>(bit_mask);
+
+  gdf_size_type local_count = 0;
+  EXPECT_EQ(GDF_SUCCESS, count_bits(&local_count, bit_mask));
+
+  if ((num_rows / 2) != local_count) {
+    std::cout << "  unsafe version got wrong count due to race condition" << std::endl;
+  } else {
+    std::cout << "  unsafe version got correct answer, race condition not triggered" << std::endl;
+  }
+  
+  test_safe_set_clear_g<<<1,bit_mask::detail::BITS_PER_ELEMENT>>>(bit_mask);
+
+  local_count = 0;
+  EXPECT_EQ(GDF_SUCCESS, count_bits(&local_count, bit_mask));
+
+  EXPECT_EQ((unsigned) (num_rows/2), local_count);
+
+  EXPECT_EQ(GDF_SUCCESS, bit_mask::DestroyBitMask(bits));
 }
