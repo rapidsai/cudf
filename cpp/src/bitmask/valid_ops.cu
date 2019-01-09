@@ -167,9 +167,8 @@ void count_valid_bits(valid32_t const * const masks32,
  * @Returns  GDF_SUCCESS upon successful completion 
  *
  * ----------------------------------------------------------------------------*/
-gdf_error gdf_count_nonzero_mask(gdf_valid_type const * masks, int num_rows, int * count)
-{
-
+gdf_error gdf_count_nonzero_mask(gdf_valid_type const *masks,
+                                 gdf_size_type num_rows, gdf_size_type *count) {
   if((nullptr == masks) || (nullptr == count)){return GDF_DATASET_EMPTY;}
   if(0 == num_rows) {return GDF_SUCCESS;}
 
