@@ -78,11 +78,9 @@ __global__ void gather_bitmask_if_kernel(
     gdf_size_type const num_destination_rows, gdf_index_type const* gather_map,
     T const* stencil, P pred) {
   using MaskType = uint32_t;
+  constexpr uint32_t BITS_PER_MASK{sizeof(MaskType) * 8};
 
-  // Cast the validity type to a type where atomicOr is natively supported
   // TODO: Update to use new bit_mask_t
-  const MaskType* __restrict__ source_mask32 =
-      reinterpret_cast<MaskType const*>(source_mask);
   MaskType* const __restrict__ destination_mask32 =
       reinterpret_cast<MaskType*>(destination_mask);
 
@@ -98,7 +96,7 @@ __global__ void gather_bitmask_if_kernel(
     MaskType const result_mask{__ballot_sync(
         active_mask, pred(stencil[destination_row]) && source_bit_is_valid)};
 
-    gdf_index_type const output_element = destination_index / BITS_PER_MASK;
+    gdf_index_type const output_element = destination_row / BITS_PER_MASK;
 
     destination_mask32[output_element] = result_mask;
 
@@ -140,6 +138,7 @@ __global__ void gather_bitmask_kernel(gdf_valid_type const* const source_mask,
                                       gdf_size_type const num_destination_rows,
                                       gdf_index_type const* gather_map) {
   using MaskType = uint32_t;
+  constexpr uint32_t BITS_PER_MASK{sizeof(MaskType) * 8};
 
   // Cast bitmask to a type to a 4B type
   // TODO: Update to use new bit_mask_t
@@ -158,7 +157,7 @@ __global__ void gather_bitmask_kernel(gdf_valid_type const* const source_mask,
     // bitmask element
     MaskType const result_mask{__ballot_sync(active_mask, source_bit_is_valid)};
 
-    gdf_index_type const output_element = destination_index / BITS_PER_MASK;
+    gdf_index_type const output_element = destination_row / BITS_PER_MASK;
 
     destination_mask32[output_element] = result_mask;
 
@@ -269,6 +268,7 @@ struct column_gatherer {
                        gdf_index_type const gather_map[],
                        gdf_column* destination_column,
                        bool check_bounds = false, cudaStream_t stream = 0) {
+    gdf_error gdf_status{GDF_SUCCESS};
     ColumnType const* const source_data{
         static_cast<ColumnType const*>(source_column->data)};
     ColumnType* destination_data{
@@ -306,23 +306,18 @@ struct column_gatherer {
     bool const bitmasks_exist{(nullptr != source_column->valid) &&
                               (nullptr != destination_column->valid)};
     if (bitmasks_exist) {
-      gdf_error gdf_status = gather_bitmask(
+      gdf_status = gather_bitmask(
           source_column->valid, source_column->size, destination_column->valid,
           num_destination_rows, gather_map, check_bounds, stream);
 
       GDF_REQUIRE(GDF_SUCCESS == gdf_status, gdf_status);
     }
 
-    // Set the destination column's null count
-    gdf_size_type valid_count{};
-    gdf_error result = gdf_count_nonzero_mask(
-        destination_column->valid, destination_column->size, &valid_count);
+    gdf_status = set_null_count(destination_column);
 
-    GDF_REQUIRE(GDF_SUCCESS == result, result);
+    GDF_REQUIRE(GDF_SUCCESS == gdf_status, gdf_status);
 
-    destination_column->null_count = destination_column->size - valid_count;
-
-    return GDF_SUCCESS;
+    return gdf_status;
   }
 };
 }  // namespace
