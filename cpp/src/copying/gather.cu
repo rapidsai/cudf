@@ -219,12 +219,6 @@ gdf_error gather_bitmask(gdf_valid_type const* source_mask,
     output_bitmask = temp_bitmask.data().get();
   }
 
-  // gather_bitmask kernels only gather the *set* bits, therefore we must
-  // ensure the output bitmask is initialized to all unset bits
-  CUDA_TRY(cudaMemsetAsync(output_bitmask, 0,
-                           num_destination_rows * sizeof(gdf_valid_type),
-                           stream);)
-
   if (check_bounds) {
     gather_bitmask_if_kernel<<<gather_grid_size, BLOCK_SIZE, 0, stream>>>(
         source_mask, num_source_rows, output_bitmask, num_destination_rows,
