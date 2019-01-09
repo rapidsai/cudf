@@ -1144,7 +1144,7 @@ def test_iteritems(gdf):
 
 def test_from_pandas_function(pdf):
     gdf = gd.from_pandas(pdf)
-    assert isinstance(gdf, gd.dataframe)
+    assert isinstance(gdf, gd.DataFrame)
     assert_eq(pdf, gdf)
 
     gdf = gd.from_pandas(pdf.x)
