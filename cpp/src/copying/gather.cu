@@ -16,8 +16,8 @@
 
 #include <thrust/gather.h>
 #include "copying.hpp"
-#include "gather.hpp"
 #include "cudf.h"
+#include "gather.hpp"
 #include "rmm/thrust_rmm_allocator.h"
 #include "utilities/type_dispatcher.hpp"
 
@@ -44,50 +44,6 @@ struct bounds_checker {
     return ((index >= begin) && (index < end));
   }
 };
-
-/**---------------------------------------------------------------------------*
- * @brief Gathers a set bit from a source bitmask to a bit in a destination
- * mask.
- *
- * If bit `source_index` is set in `source_mask`, then bit `destination_index`
- * will be set in `destination_mask`.
- *
- * If bit `source_index` in `source_mask` is not set, then bit
- * `destination_index` in `destination_mask` is unmodified.
- *
- * @tparam MaskType The type of the bitmask
- * @param source_mask The mask to gather from
- * @param source_index The index of the bit to gather from
- * @param destination_mask The mask to gather to
- * @param destination_index The index of the bit to gather to
- *---------------------------------------------------------------------------**/
-template <typename MaskType>
-__device__ __forceinline__ void gather_bit(
-    MaskType const* __restrict__ source_mask, gdf_index_type source_index,
-    MaskType* __restrict__ destination_mask, gdf_index_type destination_index) {
-  constexpr uint32_t BITS_PER_MASK = 8 * sizeof(MaskType);
-
-  // Get the source bit
-  // FIXME Replace with a standard `get_bit` function
-  MaskType input_bit = (MaskType{1} << (source_index % BITS_PER_MASK));
-  if (nullptr != source_mask) {
-    input_bit = input_bit & source_mask[source_index / BITS_PER_MASK];
-  }
-
-  // Only set the output bit if the input is valid
-  if (input_bit > 0) {
-    // FIXME Replace with a standard `set_bit` function
-    // Construct the mask that sets the bit for the output row
-    MaskType const output_bit = MaskType{1}
-                                << (destination_index % BITS_PER_MASK);
-
-    // Find the mask in the output that will hold the bit for output row
-    gdf_index_type const output_location = destination_index / BITS_PER_MASK;
-
-    // Bitwise OR to set the gathered row's bit
-    atomicOr(&destination_mask[output_location], output_bit);
-  }
-}
 
 /**---------------------------------------------------------------------------*
  * @brief Conditionally gathers the set bits of a validity bitmask.
@@ -132,17 +88,25 @@ __global__ void gather_bitmask_if_kernel(
 
   gdf_index_type destination_row = threadIdx.x + blockIdx.x * blockDim.x;
 
+  auto active_mask =
+      __ballot_sync(0xffffffff, destination_row < num_destination_rows);
   while (destination_row < num_destination_rows) {
-    // If the predicate is false for this row, continue to the next row
-    if (not pred(stencil[destination_row])) {
-      destination_row += blockDim.x * gridDim.x;
-      continue;
-    }
+    bool const source_bit_is_valid{
+        gdf_is_valid(source_mask, gather_map[destination_row])};
 
-    gather_bit(source_mask32, gather_map[destination_row], destination_mask32,
-               destination_row);
+    // Use ballot to create the output bitmask element for this warp
+    MaskType const result_mask{__ballot_sync(
+        active_mask, pred(stencil[destination_row]) && source_bit_is_valid)};
+
+    gdf_index_type const output_element = destination_index / BITS_PER_MASK;
+
+    destination_mask32[output_element] = result_mask;
 
     destination_row += blockDim.x * gridDim.x;
+
+    // Recompute the mask of active threads after grid stride
+    active_mask =
+        __ballot_sync(active_mask, destination_row < num_destination_rows);
   }
 }
 
@@ -177,20 +141,32 @@ __global__ void gather_bitmask_kernel(gdf_valid_type const* const source_mask,
                                       gdf_index_type const* gather_map) {
   using MaskType = uint32_t;
 
-  // Cast the validity type to a type where atomicOr is natively supported
+  // Cast bitmask to a type to a 4B type
   // TODO: Update to use new bit_mask_t
-  const MaskType* __restrict__ source_mask32 =
-      reinterpret_cast<MaskType const*>(source_mask);
   MaskType* const __restrict__ destination_mask32 =
       reinterpret_cast<MaskType*>(destination_mask);
 
   gdf_index_type destination_row = threadIdx.x + blockIdx.x * blockDim.x;
 
+  auto active_mask =
+      __ballot_sync(0xffffffff, destination_row < num_destination_rows);
   while (destination_row < num_destination_rows) {
-    gather_bit(source_mask32, gather_map[destination_row], destination_mask32,
-               destination_row);
+    bool const source_bit_is_valid{
+        gdf_is_valid(source_mask, gather_map[destination_row])};
+
+    // Use ballot to find all valid bits in this warp and create the output
+    // bitmask element
+    MaskType const result_mask{__ballot_sync(active_mask, source_bit_is_valid)};
+
+    gdf_index_type const output_element = destination_index / BITS_PER_MASK;
+
+    destination_mask32[output_element] = result_mask;
 
     destination_row += blockDim.x * gridDim.x;
+
+    // Recompute mask of active threads after grid stride
+    active_mask =
+        __ballot_sync(active_mask, destination_row < num_destination_rows);
   }
 }
 
@@ -337,6 +313,15 @@ struct column_gatherer {
       GDF_REQUIRE(GDF_SUCCESS == gdf_status, gdf_status);
     }
 
+    // Set the destination column's null count
+    gdf_size_type valid_count{};
+    gdf_error result = gdf_count_nonzero_mask(
+        destination_column->valid, destination_column->size, &valid_count);
+
+    GDF_REQUIRE(GDF_SUCCESS == result, result);
+
+    destination_column->null_count = destination_column->size - valid_count;
+
     return GDF_SUCCESS;
   }
 };
@@ -346,7 +331,8 @@ namespace cudf {
 namespace detail {
 
 gdf_error gather(table const* source_table, gdf_index_type const gather_map[],
-                 table* destination_table, bool check_bounds, cudaStream_t stream) {
+                 table* destination_table, bool check_bounds,
+                 cudaStream_t stream) {
   assert(source_table->size() == destination_table->size());
 
   gdf_error gdf_status{GDF_SUCCESS};
