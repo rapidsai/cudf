@@ -10,7 +10,7 @@ from libgdf_cffi import libgdf
 from librmm_cffi import librmm as rmm
 
 from . import columnops, datetime
-from cudf.utils import utils, cudautils
+from cudf.utils import cudautils, utils
 from cudf import _gdf
 from .buffer import Buffer
 from cudf.comm.serialize import register_distributed_serializer
@@ -67,6 +67,11 @@ class NumericalColumn(columnops.TypedColumnBase):
         """
         super(NumericalColumn, self).__init__(**kwargs)
         assert self._dtype == self._data.dtype
+
+    def replace(self, **kwargs):
+        if 'data' in kwargs and 'dtype' not in kwargs:
+            kwargs['dtype'] = kwargs['data'].dtype
+        return super(NumericalColumn, self).replace(**kwargs)
 
     def serialize(self, serialize):
         header, frames = super(NumericalColumn, self).serialize(serialize)
