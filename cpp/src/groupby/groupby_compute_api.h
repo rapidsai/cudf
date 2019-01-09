@@ -209,7 +209,7 @@ gdf_error GroupbyHash(gdf_table<size_type> const & groupby_input_table,
   // Optionally sort the groupby/aggregation result columns
   if(true == sort_result) {
 
-      rmm::device_vector<int32_t> sorted_indices(*out_size);
+      rmm::device_vector<gdf_index_type> sorted_indices(*out_size);
       thrust::sequence(rmm::exec_policy(cudaStream_t{0}), sorted_indices.begin(), sorted_indices.end());
 
       gdf_column sorted_indices_col;
