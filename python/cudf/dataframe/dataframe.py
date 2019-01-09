@@ -1829,7 +1829,7 @@ def from_pandas(obj):
     if isinstance(obj, pd.DataFrame):
         return DataFrame.from_pandas(obj)
     elif isinstance(obj, pd.Series):
-        return DataFrame.from_pandas(obj)
+        return Series.from_pandas(obj)
     else:
         raise TypeError(
             "from_pandas only accepts Pandas Dataframes and Series objects. "
