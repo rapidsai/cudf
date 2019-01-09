@@ -9,14 +9,14 @@ import pyarrow as pa
 from libgdf_cffi import libgdf
 from librmm_cffi import librmm as rmm
 
-from . import columnops,  datetime
-from cudf.utils import utils, cudautils
+from . import columnops, datetime
+from cudf.utils import cudautils, utils
 from cudf import _gdf
 from .buffer import Buffer
 from cudf.comm.serialize import register_distributed_serializer
 from cudf._gdf import nvtx_range_push, nvtx_range_pop
+from cudf._sort import get_sorted_inds
 
-import cudf.bindings.sort as cpp_sort
 import cudf.bindings.reduce as cpp_reduce
 
 # Operator mappings
@@ -67,6 +67,11 @@ class NumericalColumn(columnops.TypedColumnBase):
         """
         super(NumericalColumn, self).__init__(**kwargs)
         assert self._dtype == self._data.dtype
+
+    def replace(self, **kwargs):
+        if 'data' in kwargs and 'dtype' not in kwargs:
+            kwargs['dtype'] = kwargs['data'].dtype
+        return super(NumericalColumn, self).replace(**kwargs)
 
     def serialize(self, serialize):
         header, frames = super(NumericalColumn, self).serialize(serialize)
@@ -127,16 +132,22 @@ class NumericalColumn(columnops.TypedColumnBase):
                                dtype=np.dtype(dtype))
             return col
 
-    def sort_by_values(self, ascending):
-        if self.null_count > 0:
-            raise ValueError('nulls not yet supported')
-        # Clone data buffer as the key
-        col_keys = self.replace(data=self.data.copy(),
-                                dtype=self._data.dtype)
-        # Create new array for the positions
-        inds = Buffer(cudautils.arange(len(self)))
-        col_inds = self.replace(data=inds, dtype=inds.dtype)
-        cpp_sort.apply_sort(col_keys, col_inds, ascending=ascending)
+    def sort_by_values(self, ascending=True, na_position="last"):
+        sort_inds = get_sorted_inds(self, ascending, na_position)
+        col_keys = cudautils.gather(data=self.data.mem,
+                                    index=sort_inds.data.mem)
+        mask = None
+        if self.mask:
+            mask = self._get_mask_as_column()\
+                .take(sort_inds.data.to_gpu_array()).as_mask()
+            mask = Buffer(mask)
+        col_keys = self.replace(data=Buffer(col_keys),
+                                mask=mask,
+                                null_count=self.null_count,
+                                dtype=self.dtype)
+        col_inds = self.replace(data=sort_inds.data,
+                                mask=sort_inds.mask,
+                                dtype=sort_inds.data.dtype)
         return col_keys, col_inds
 
     def to_pandas(self, index=None):
@@ -250,7 +261,7 @@ class NumericalColumn(columnops.TypedColumnBase):
             out_dtype = self.dtype
         out = columnops.column_applymap(udf=udf, column=self,
                                         out_dtype=out_dtype)
-        return self.replace(data=out)
+        return self.replace(data=out, dtype=out_dtype)
 
     def default_na_value(self):
         """Returns the default NA value for this column

@@ -5,9 +5,20 @@
 
 - PR #411 added null support to gdf_order_by (new API) and cudf_table::sort
 - PR #525 Added GitHub Issue templates for bugs, documentation, new features, and questions
-- PR #455 CSV Reader: Add support for user-specified decimal point and thousands separator
+- PR #501 CSV Reader: Add support for user-specified decimal point and thousands separator to read_csv_strings()
+- PR #455 CSV Reader: Add support for user-specified decimal point and thousands separator to read_csv()
 - PR #439 add `DataFrame.drop` method similar to pandas
+- PR #505 CSV Reader: Add support for user-specified boolean values
+- PR #350 Implemented Series replace function
+- PR #490 Added print_env.sh script to gather relevant environment details when reporting cuDF issues
 - PR #474 add ZLIB-based GZIP/ZIP support to `read_csv()`
+- PR #491 Add CI test script to check for updates to CHANGELOG.md in PRs
+- PR #550 Add CI test script to check for style issues in PRs
+- PR #558 Add CI scripts for cpu-based conda and gpu-based test builds
+- PR #524 Add Boolean Indexing
+- PR #564 Update python `sort_values` method to use updated libcudf `gdf_order_by` API
+- PR #509 CSV Reader: Input CSV file can now be passed in as a text or a binary buffer
+- PR #607 Add `__iter__` and iteritems to DataFrame class
 
 ## Improvements
 
@@ -15,13 +26,32 @@
 - PR #461 Add `CUDF_HOME` variable in README.md to replace relative pathing.
 - PR #472 RMM: Created centralized rmm::device_vector alias and rmm::exec_policy
 - PR #500 Improved the concurrent hash map class to support partitioned (multi-pass) hash table building.
+- PR #454 Improve CSV reader docs and examples
 - PR #465 Added templated C++ API for RMM to avoid explicit cast to `void**`
-- PR #521 Add `assert_eq` function for testing
+- PR #472 RMM: Created centralized rmm::device_vector alias and rmm::exec_policy
+- PR #617 Added .dockerignore file. Prevents adding stale cmake cache files to the docker container
 
 ## Bug Fixes
+
+- PR #531 CSV Reader: Fix incorrect parsing of quoted numbers
+- PR #465 Added templated C++ API for RMM to avoid explicit cast to `void**`
 - PR #473 Added missing <random> include
-- PR #495 Updated README to correct where cffi pytest should be executed.
+- PR #478 CSV Reader: Add api support for auto column detection, header, mangle_dupe_cols, usecols
+- PR #495 Updated README to correct where cffi pytest should be executed
+- PR #500 Improved the concurrent hash map class to support partitioned (multi-pass) hash table building
+- PR #501 Fix the intermittent segfault caused by the `thousands` and `compression` parameters in the csv reader
+- PR #502 Simplify Dockerfile for local dev, eliminate old conda/pip envs
+- PR #512 fix bug for `on` parameter in `DataFrame.merge` to allow for None or single column name
+- PR #511 Updated python/cudf/bindings/join.pyx to fix cudf merge printing out dtypes
+- PR #513 `.gitignore` tweaks
+- PR #521 Add `assert_eq` function for testing
 - PR #537 Fix CMAKE_CUDA_STANDARD_REQURIED typo in CMakeLists.txt
+- PR #545 Temporarily disable csv reader thousands test to prevent segfault (test re-enabled in PR #501)
+- PR #559 Fix Assertion error while using `applymap` to change the output dtype
+- PR #575 Update `print_env.sh` script to better handle missing commands
+- PR #612 Prevent an exception from occuring with true division on integer series.
+- PR #630 Fix deprecation warning for `pd.core.common.is_categorical_dtype`
+- PR #622 Fix Series.append() behaviour when appending values with different numeric dtype
 
 
 # cuDF 0.4.0 (05 Dec 2018)

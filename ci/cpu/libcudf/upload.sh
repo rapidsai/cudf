@@ -7,7 +7,7 @@ set -e
 function upload() {
     echo "UPLOADFILE = ${UPLOADFILE}"
     test -e ${UPLOADFILE}
-    source ./travisci/libcudf/upload-anaconda.sh
+    source ./ci/cpu/libcudf/upload-anaconda.sh
 }
 
 if [ "$BUILD_LIBCUDF" == "1" ]; then
