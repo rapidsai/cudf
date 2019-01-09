@@ -13,6 +13,7 @@ from cudf import read_csv
 from cudf.io.csv import read_csv_strings
 import cudf
 import nvstrings
+from .utils import assert_eq
 
 
 def make_numeric_dataframe(nrows, dtype):
@@ -122,13 +123,14 @@ def test_csv_reader_mixed_data_sep(tmpdir):
     df = make_numpy_mixed_dataframe()
     df.to_csv(fname, sep='|', index=False, header=False)
 
-    out = read_csv(str(fname), sep='|', names=['1', '2', '3', '4', '5'],
-                   dtype=['int64', 'date', 'float64', 'int64', 'category'],
-                   dayfirst=True)
+    gdf_out = read_csv(str(fname), sep='|', names=['1', '2', '3', '4', '5'],
+                       dtype=['int64', 'date', 'float64', 'int64', 'category'],
+                       dayfirst=True)
     df_out = pd.read_csv(fname, sep='|', names=['1', '2', '3', '4', '5'],
                          parse_dates=[1], dayfirst=True)
 
-    assert len(out.columns) == len(df_out.columns)
+    assert len(gdf_out.columns) == len(df_out.columns)
+    assert_eq(gdf_out, df_out)
 
 
 def test_csv_reader_all_numeric_dtypes(tmpdir):
