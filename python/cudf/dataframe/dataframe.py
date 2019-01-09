@@ -1762,12 +1762,15 @@ class DataFrame(object):
         DataFrame
 
         """
+        if columns is None:
+            columns = self.columns
 
         result = DataFrame()
         result['Quantile'] = q
         for k, col in self._cols.items():
-            if columns is None or k in columns:
-                result[k] = col.quantile(q, interpolation, exact,
+            if k in columns:
+                result[k] = col.quantile(q, interpolation=interpolation,
+                                         exact=exact,
                                          quant_index=False)
         return result
 
