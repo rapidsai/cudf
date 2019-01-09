@@ -51,6 +51,8 @@
 - PR #622 Fix Series.append() behaviour when appending values with different numeric dtype
 - PR #634 Fix create `DataFrame.from_pandas()` with numeric column names
 - PR #648 Enforce one-to-one copy required when using `numba>=0.42.0`
+- PR #645 Fix cmake build type handling not setting debug options when CMAKE_BUILD_TYPE=="Debug"
+
 
 # cuDF 0.4.0 (05 Dec 2018)
 
