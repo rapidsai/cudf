@@ -83,6 +83,10 @@ def test_series_basic():
     assert len(series) == 10
     np.testing.assert_equal(series.to_array(), np.hstack([a1]))
 
+
+def test_series_append():
+    a1 = np.arange(10, dtype=np.float64)
+    series = Series(a1)
     # Add new buffer
     a2 = np.arange(5)
     series = series.append(a2)
@@ -95,6 +99,14 @@ def test_series_basic():
     assert len(series) == 18
     a4 = np.hstack([a1, a2, a3])
     np.testing.assert_equal(series.to_array(), a4)
+
+    # Appending different dtype
+    a5 = np.array([1, 2, 3], dtype=np.int32)
+    a6 = np.array([4.5, 5.5, 6.5], dtype=np.float64)
+    series = Series(a5).append(a6)
+    np.testing.assert_equal(series.to_array(), np.hstack([a5, a6]))
+    series = Series(a6).append(a5)
+    np.testing.assert_equal(series.to_array(), np.hstack([a6, a5]))
 
 
 def test_series_indexing():
@@ -174,6 +186,13 @@ def test_dataframe_column_name_indexing():
     for i in range(1, len(pdf.columns)+1):
         for idx in combinations(pdf.columns, i):
             assert(pdf[list(idx)].equals(df[list(idx)].to_pandas()))
+
+    # test for only numeric columns
+    df = pd.DataFrame()
+    for i in range(0, 10):
+        df[i] = range(nelem)
+    gdf = DataFrame.from_pandas(df)
+    assert_eq(gdf, df)
 
 
 def test_dataframe_drop_method():
@@ -1076,3 +1095,62 @@ def test_unary_operators(func, pdf, gdf):
 
 def test_is_monotonic(gdf):
     assert hasattr(gdf.index, 'is_monotonic')
+
+
+@pytest.mark.xfail(reason="null is not supported in gpu yet")
+def test_dataframe_boolean_mask_with_None():
+    pdf = pd.DataFrame({'a': [0, 1, 2, 3], 'b': [0.1, 0.2, None, 0.3]})
+    gdf = DataFrame.from_pandas(pdf)
+    pdf_masked = pdf[[True, False, True, False]]
+    gdf_masked = gdf[[True, False, True, False]]
+    assert pdf_masked.to_string().split() == gdf_masked.to_string().split()
+
+
+"""
+This test compares cudf and Pandas dataframe boolean indexing.
+"""
+
+
+@pytest.mark.parametrize('mask_fn', [
+    lambda x: x,
+    lambda x: np.array(x),
+    lambda x: pd.Series(x),
+    ])
+def test_dataframe_boolean_mask(pdf, gdf, mask_fn):
+    mask_base = [True, False, True, False, True, False, True, False, True,
+                 False]
+    mask = mask_fn(mask_base)
+    assert len(mask) == gdf.shape[0]
+    pdf_masked = pdf[mask]
+    gdf_masked = gdf[mask]
+    assert pdf_masked.to_string().split() == gdf_masked.to_string().split()
+
+
+"""
+This test only tests boolean indexing of a cudf DataFrame with a cudf Series.
+Pandas does not support cudf Series.  When masking with a Series, the length
+is not required to match.
+"""
+
+
+def test_dataframe_boolean_mask_Series(gdf):
+    mask = Series([True, False, True, False])
+    mask2 = Series([True, True, True, True])
+    mask3 = Series([True, True, True, True, True, True, True, True])
+    gdf_masked = gdf[mask]
+    gdf_masked2 = gdf[mask2]
+    gdf_masked3 = gdf[mask3]
+    assert gdf_masked.shape[0] == 2
+    assert gdf_masked2.shape[0] == 4
+    assert gdf_masked3.shape[0] == 8
+
+
+def test_iter(pdf, gdf):
+    assert list(pdf) == list(gdf)
+
+
+def test_iteritems(gdf):
+    for k, v in gdf.iteritems():
+        assert k in gdf.columns
+        assert isinstance(v, gd.Series)
+        assert_eq(v, gdf[k])
