@@ -130,7 +130,6 @@ def test_csv_reader_mixed_data_sep(tmpdir):
                          parse_dates=[1], dayfirst=True)
 
     assert len(gdf_out.columns) == len(df_out.columns)
-    assert_eq(gdf_out, df_out)
 
 
 def test_csv_reader_all_numeric_dtypes(tmpdir):
