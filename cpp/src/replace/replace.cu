@@ -22,6 +22,7 @@
 #include "cudf.h"
 #include "utilities/error_utils.h"
 #include "utilities//type_dispatcher.hpp"
+#include "utilities/cudf_utils.h"
 
 namespace{ //anonymous
 
@@ -47,12 +48,12 @@ namespace{ //anonymous
   template <class T>
   __global__
   void replace_kernel(T*                          d_col_data,
-                      size_t                      nrows,
+                      gdf_size_type                      nrows,
                       thrust::device_ptr<const T> old_values_begin,
                       thrust::device_ptr<const T> old_values_end,
                       const T*                    d_new_values)
   {
-    size_t i = blockIdx.x * blockDim.x + threadIdx.x;
+    gdf_size_type i = blockIdx.x * blockDim.x + threadIdx.x;
     while(i < nrows)
     {
       auto found_ptr = thrust::find(thrust::seq, old_values_begin, old_values_end, d_col_data[i]);
@@ -75,10 +76,10 @@ namespace{ //anonymous
   struct replace_kernel_forwarder {
     template <typename col_type>
     void operator()(void*       d_col_data,
-                    size_t      nrows,
+                    gdf_size_type      nrows,
                     const void* d_old_values,
                     const void* d_new_values,
-                    size_t      nvalues)
+                    gdf_size_type      nvalues)
     {
       thrust::device_ptr<const col_type> old_values_begin = thrust::device_pointer_cast(static_cast<const col_type*>(d_old_values));
 
@@ -137,7 +138,7 @@ gdf_error gdf_find_and_replace_all(gdf_column*       col,
 
 template <typename Type>
 __global__
-void replace_nulls_with_scalar_kernel(int size, Type* vax_data, uint32_t* vax_valid, const Type *vay_data_scalar) 
+void replace_nulls_with_scalar(gdf_size_type size, Type* out_data, gdf_valid_type * out_valid, const Type *in_data_scalar) 
 {
   int tid = threadIdx.x;
   int blkid = blockIdx.x;
@@ -148,19 +149,14 @@ void replace_nulls_with_scalar_kernel(int size, Type* vax_data, uint32_t* vax_va
   int step = blksz * gridsz;
 
   for (int i=start; i<size; i+=step) {
-    int index = i / warpSize;
-    uint32_t position = i % warpSize;
-    uint32_t is_vax_valid = vax_valid[index];
-
-    uint32_t sel_vax = (is_vax_valid >> position) & 1;
-    vax_data[i] = sel_vax? vax_data[i] : *vay_data_scalar;
+    out_data[i] = gdf_is_valid(out_valid, i)? out_data[i] : *in_data_scalar;
   }
 }
 
 
 template <typename Type>
 __global__
-void replace_nulls_with_column_kernel(int size, Type* vax_data, uint32_t* vax_valid, const Type *vay_data) 
+void replace_nulls_with_column(gdf_size_type size, Type* out_data, gdf_valid_type* out_valid, const Type *in_data) 
 {
   int tid = threadIdx.x;
   int blkid = blockIdx.x;
@@ -171,12 +167,7 @@ void replace_nulls_with_column_kernel(int size, Type* vax_data, uint32_t* vax_va
   int step = blksz * gridsz;
 
   for (int i=start; i<size; i+=step) {
-    int index = i / warpSize;
-    uint32_t position = i % warpSize;
-    uint32_t is_vax_valid = vax_valid[index];
-
-    uint32_t sel_vax = (is_vax_valid >> position) & 1;
-    vax_data[i] = sel_vax? vax_data[i] : vay_data[i];
+    out_data[i] = gdf_is_valid(out_valid, i)? out_data[i] : in_data[i];
   }
 }
 
@@ -188,23 +179,23 @@ void replace_nulls_with_column_kernel(int size, Type* vax_data, uint32_t* vax_va
 /* ----------------------------------------------------------------------------*/
 struct replace_nulls_kernel_forwarder {
   template <typename col_type>
-  void operator()(size_t           nrows,
-                  size_t           new_values_length,
+  void operator()(gdf_size_type           nrows,
+                  gdf_size_type           new_values_length,
                   void*            d_col_data,
                   gdf_valid_type*  d_col_valid,
                   const void*      d_new_value)
   {
     const size_t grid_size = nrows / BLOCK_SIZE + (nrows % BLOCK_SIZE != 0);
     if (new_values_length == 1) {
-      replace_nulls_with_scalar_kernel<<<grid_size, BLOCK_SIZE>>>(nrows,
+      replace_nulls_with_scalar<<<grid_size, BLOCK_SIZE>>>(nrows,
                                             static_cast<col_type*>(d_col_data),
-                                            (uint32_t*)(d_col_valid),
+                                            (d_col_valid),
                                             static_cast<const col_type*>(d_new_value)
                                             );
     } else if(new_values_length == nrows) {
-      replace_nulls_with_column_kernel<<<grid_size, BLOCK_SIZE>>>(nrows,
+      replace_nulls_with_column<<<grid_size, BLOCK_SIZE>>>(nrows,
                                             static_cast<col_type*>(d_col_data),
-                                            (uint32_t*)(d_col_valid),
+                                            (d_col_valid),
                                             static_cast<const col_type*>(d_new_value)
                                             );
       
@@ -212,26 +203,7 @@ struct replace_nulls_kernel_forwarder {
   }
 };
 
-/* --------------------------------------------------------------------------*
- * @brief This function is a binary function. It will take in two gdf_columns.
- * The first one is expected to be a regular gdf_column, the second one
- * has to be a column of the same type as the first, and it has to be of
- * size one or of the same size as the other column.
- * 
- * case 1: If the second column contains only one value, then this funciton will
- * replace all nulls in the first column with the value in the second
- * column.
- *  
- * case 2: If the second column is of the same size as the first, then the function will
- * replace all nulls of the first column with the corresponding elemetns of the
- * second column
- * 
- * @Param[out] first gdf_column
- * @Param[in] second gdf_column, new_values_column column
- * 
- * @Returns GDF_SUCCESS upon successful completion
- *
- * --------------------------------------------------------------------------*/
+
 gdf_error gdf_replace_nulls(gdf_column* col_out, const gdf_column* new_values_column)
 {
   GDF_REQUIRE(col_out->dtype == new_values_column->dtype, GDF_DTYPE_MISMATCH);
@@ -247,12 +219,4 @@ gdf_error gdf_replace_nulls(gdf_column* col_out, const gdf_column* new_values_co
 }
 
 
-//for_each(auto &[data, valid] in zip(col_out->data, col_out->valid) ) {
-//    if !valid 
-//      data = new_values_column->data[0];   
-//}
 
-//for_each(auto &[data, valid, data_ref] in zip(col_out->data, col_out->valid, new_values_column->data) ) {
-//   if !valid 
-//      data = data_ref;   
-//}
