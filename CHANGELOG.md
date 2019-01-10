@@ -95,16 +95,7 @@
 - PR #564 Update python `sort_values` method to use updated libcudf `gdf_order_by` API
 - PR #509 CSV Reader: Input CSV file can now be passed in as a text or a binary buffer
 - PR #607 Add `__iter__` and iteritems to DataFrame class
-- PR #576 Create BitMask class and unit test to make 32-bit bit masks
-- PR #608 Added the `DataFrame.iloc[]` and `Series.iloc[]` features
-- PR #600 Enable deep or shallow copy
-- PR #635 Add Doxygen template
-- PR #649 Add `cudf.from_pandas` function
-- PR #633 CSV Reader: Add support for the nrows parameter to specify the number of rows to read from the input file
-- PR #668 Added Python 3.7 support, upgraded packages: pandas>=0.23.4, pyarrow=0.11.1, numba>=0.40.0, cython>=0.29, GLIBCXX11 ABI compatibility; align with gcc7 conda update
-- PR #679 Test Series indexing, support integer scalars and integer sequences
-- PR #567 Adds setup for a wheel which is installable by pip
-- PR #718 Expose `product` reduction method to Python and add `GDF_NOTIMPLEMENTED_ERROR` error value
+- PR #643 added a new api gdf_replace_nulls that allows a user to replace nulls in a column
 
 ## Improvements
 
