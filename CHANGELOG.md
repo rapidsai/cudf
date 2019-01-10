@@ -34,6 +34,7 @@
 - PR #472 RMM: Created centralized rmm::device_vector alias and rmm::exec_policy
 - PR #617 Added .dockerignore file. Prevents adding stale cmake cache files to the docker container
 - PR #658 Reduced `JOIN_TEST` time by isolating overflow test of hash table size computation
+- PR #664 Added Debuging instructions to README
 
 ## Bug Fixes
 
