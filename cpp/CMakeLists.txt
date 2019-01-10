@@ -67,7 +67,7 @@ set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -Xcompiler -D_GLIBCXX_USE_CXX11_ABI=0"
 # Debug options
 if(CMAKE_BUILD_TYPE MATCHES Debug)
     message(STATUS "Building with debugging flags")
-    set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -G")
+    set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -G -Xcompiler -rdynamic")
 endif(CMAKE_BUILD_TYPE MATCHES Debug)
 
 option(BUILD_TESTS "Configure CMake to build tests"
@@ -214,6 +214,7 @@ if(HT_LEGACY_ALLOCATOR)
     message(STATUS "Using legacy allocator for hash tables")
     set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} --define-macro HT_LEGACY_ALLOCATOR")
 endif(HT_LEGACY_ALLOCATOR)
+
 
 ###################################################################################################
 # - link libraries --------------------------------------------------------------------------------

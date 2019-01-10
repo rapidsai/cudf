@@ -25,6 +25,10 @@
 - PR #426 Removed sort-based groupby and refactored existing groupby APIs. Also improves C++/CUDA compile time
 - PR #454 Improve CSV reader docs and examples
 - PR #465 Added templated C++ API for RMM to avoid explicit cast to `void**`
+- PR #513 `.gitignore` tweaks
+- PR #521 Add `assert_eq` function for testing
+- PR #502 Simplify Dockerfile for local dev, eliminate old conda/pip envs
+- PR #549 Adds `-rdynamic` compiler flag to nvcc for Debug builds
 - PR #472 RMM: Created centralized rmm::device_vector alias and rmm::exec_policy
 - PR #617 Added .dockerignore file. Prevents adding stale cmake cache files to the docker container
 
