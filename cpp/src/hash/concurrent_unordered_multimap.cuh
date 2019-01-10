@@ -668,7 +668,13 @@ public:
 
         const size_type partition_size  = m_hashtbl_size/num_parts;
 
-        return hash_tbl_idx/partition_size;
+        int dest_part = hash_tbl_idx/partition_size;
+	// Note that if m_hashtbl_size % num_parts != 0 then dest_part can be
+	// num_parts for the last few elements and we remap that to the
+	// num_parts-1 partition
+	if (dest_part == num_parts) dest_part = num_parts-1;
+
+	return dest_part;
     }
 
     gdf_error assign_async( const concurrent_unordered_multimap& other, cudaStream_t stream = 0 )
