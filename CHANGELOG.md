@@ -18,6 +18,7 @@
 - PR #564 Update python `sort_values` method to use updated libcudf `gdf_order_by` API
 - PR #509 CSV Reader: Input CSV file can now be passed in as a text or a binary buffer
 - PR #607 Add `__iter__` and iteritems to DataFrame class
+- PR #636 add the ability csv to use arrow::io::RandomAccessFile as an input
 
 ## Improvements
 
