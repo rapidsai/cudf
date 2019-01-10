@@ -610,13 +610,26 @@ public:
 
     /* --------------------------------------------------------------------------*/
     /**
-     * @Synopsis Searches for a key in the hash map partition and returns an
-     * iterator to the first instance of the key in the map, or the end()
-     * iterator if the key could not be found in the specified partition.
+     * @Synopsis Computes a hash value for a key
+     *
+     * @Param[in] the_key The key to compute a hash for
+     * @tparam hash_value_type The datatype of the hash value
+     *
+     * @Returns   The hash value for the key
+     */
+    /* ----------------------------------------------------------------------------*/
+    template <typename hash_value_type = typename Hasher::result_type>
+    __forceinline__
+    __host__ __device__ hash_value_type get_hash(const key_type& the_key) const
+    {
+        return m_hf(the_key);
+    }
+
+    /* --------------------------------------------------------------------------*/
+    /**
+     * @Synopsis Computes the destination hash map partition for a key
      *
      * @Param[in] the_key The key to search for
-     * @Param[out] dest_part The destination partition for the key
-     * @Param[in] part The current partition number for the partitioned hash table
      * @Param[in] num_parts The total number of partitions in the partitioned
      * hash table
      * @Param[in] precomputed_hash A flag indicating whether or not a precomputed
@@ -624,23 +637,17 @@ public:
      * @Param[in] precomputed_hash_value A precomputed hash value to use for determing
      * the write location of the key into the hash map instead of computing the
      * the hash value directly from the key
-     * @Param[in] keys_are_equal An optional functor for comparing if two keys are equal
      * @tparam hash_value_type The datatype of the hash value
-     * @tparam comparison_type The type of the key comparison functor
      *
-     * @Returns   An iterator to the first instance of the key in the map
+     * @Returns   The destination hash table partition for the specified key
      */
     /* ----------------------------------------------------------------------------*/
-    template < typename hash_value_type = typename Hasher::result_type,
-               typename comparison_type = key_equal>
+    template <typename hash_value_type = typename Hasher::result_type>
     __forceinline__
-    __host__ __device__ const_iterator find_part(const key_type& the_key,
-						 int& dest_part,
-                                                 const int part = 0,
-                                                 const int num_parts = 1,
-                                                 bool precomputed_hash = false,
-                                                 hash_value_type precomputed_hash_value = 0,
-                                                 comparison_type keys_are_equal = key_equal()) const
+    __host__ __device__ int get_partition(const key_type& the_key,
+                                          const int num_parts = 1,
+                                          bool precomputed_hash = false,
+                                          hash_value_type precomputed_hash_value = 0) const
     {
         hash_value_type hash_value{0};
 
@@ -658,15 +665,9 @@ public:
 
         const size_type partition_size  = m_hashtbl_size/num_parts;
 
-        // Only probe the specified partition
-	dest_part = hash_tbl_idx/partition_size;
-        if( ( part < (num_parts-1) && dest_part != part ) ||
-            ( (num_parts-1) == part && dest_part < part ) )
-          return end();
-        else
-          return find(the_key, true, hash_value, keys_are_equal);
+        return hash_tbl_idx/partition_size;
     }
-    
+
     gdf_error assign_async( const concurrent_unordered_multimap& other, cudaStream_t stream = 0 )
     {
         m_collisions = other.m_collisions;
