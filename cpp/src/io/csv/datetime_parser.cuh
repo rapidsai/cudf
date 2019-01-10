@@ -400,7 +400,8 @@ __host__ __device__
 constexpr int32_t daysSinceEpoch(int year, int month, int day) {
 
     // Shift the start date to epoch to match unix time
-    static_assert(daysSinceBaseline(1970, 1, 1) == 719468_days);
+    static_assert(daysSinceBaseline(1970, 1, 1) == 719468_days,
+                  "Baseline to epoch returns incorrect number of days");
 
     return daysSinceBaseline(year, month, day) - daysSinceBaseline(1970, 1, 1);
 }
