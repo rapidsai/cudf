@@ -13,6 +13,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#ifndef JOIN_COMPUTE_API_H
+#define JOIN_COMPUTE_API_H
 
 #include <cuda_runtime.h>
 #include <future>
@@ -320,6 +322,31 @@ gdf_error estimate_join_output_size(gdf_table<size_type> const & build_table,
   return GDF_SUCCESS;
 }
 
+/**---------------------------------------------------------------------------*
+ * @brief Computes the number of entries required in a hash table to satisfy
+ * inserting a specified number of keys to achieve the specified hash table
+ * occupancy.
+ *
+ * @param num_keys_to_insert The number of keys that will be inserted
+ * @param desired_occupancy The desired occupancy percentage, e.g., 50 implies a
+ * 50% occupancy
+ * @return size_t The size of the hash table that will satisfy the desired
+ * occupancy for the specified number of insertions
+ *---------------------------------------------------------------------------**/
+inline size_t compute_hash_table_size(
+    gdf_size_type num_keys_to_insert,
+    uint32_t desired_occupancy = DEFAULT_HASH_TABLE_OCCUPANCY) {
+  assert(desired_occupancy != 0);
+  assert(desired_occupancy <= 100);
+  double const grow_factor{100.0 / desired_occupancy};
+
+  // Calculate size of hash map based on the desired occupancy
+  size_t hash_table_size{
+      static_cast<size_t>(std::ceil(num_keys_to_insert * grow_factor))};
+
+  return hash_table_size;
+}
+
 /* --------------------------------------------------------------------------*/
 /**
 * @Synopsis  Performs a hash-based join between two sets of gdf_tables.
@@ -382,13 +409,12 @@ gdf_error compute_hash_join(
   gdf_table<size_type> const & probe_table{left_table};
   const size_type probe_table_num_rows{probe_table.get_column_length()};
 
-  // Calculate size of hash map based on the desired occupancy
-  size_type hash_table_size{(build_table_num_rows * 100) / DEFAULT_HASH_TABLE_OCCUPANCY};
+  // Hash table size must be at least 1 in order to have a valid allocation.
+  // Even if the hash table will be empty, it still must be allocated for the
+  // probing phase in the event of an outer join
+  size_t const hash_table_size =
+      std::max(compute_hash_table_size(build_table_num_rows), size_t{1});
 
-  // It's possible that the hash table size will be zero, in which case
-  // we still need to allocate something.
-  hash_table_size = std::max(hash_table_size, size_type(1));
- 
   std::unique_ptr<multimap_type> hash_table(new multimap_type(hash_table_size));
 
   // FIXME: use GPU device id from the context?
@@ -549,3 +575,4 @@ gdf_error compute_hash_join(
 
   return gdf_error_code;
 }
+#endif
