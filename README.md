@@ -137,7 +137,7 @@ For example:
 $ cmake .. -DCMAKE_INSTALL_PREFIX=/install/path -DCMAKE_BUILD_TYPE=Debug     # configure cmake ... use $CONDA_PREFIX if you're using Anaconda
 ```
 
-This will build `libcudf` in Debug mode which enables some `assert` safety checks as well as builds with library with symbols enabled that helps when using a debugger.
+This will build `libcudf` in Debug mode which enables some `assert` safety checks as well as builds the library with symbols enabled that helps when using a debugger.
 
 All other steps for installing `libcudf` into your environment are the same.
 
