@@ -48,30 +48,7 @@ __global__ void count_bits_g(int *counter, BitMask bits) {
 //  for simplicity - all of the tests are small.
 //
 __global__ void set_bit(gdf_size_type bit, BitMask bits) {
-  bits.set_bit(bit);
-}
-
-//
-//  Kernel to do unsafe bit set/clear
-//
-__global__ void test_unsafe_set_clear_g(BitMask bits) {
-  int index = threadIdx.x;
-
-  if ((index % 2) == 0) {
-    for (int i = index ; i < bits.length() ; i += bit_mask::detail::BITS_PER_ELEMENT) {
-      bits.set_bit_unsafe(i);
-    }
-  }
-
-  for (int i = index ; i < bits.length() ; i += bit_mask::detail::BITS_PER_ELEMENT) {
-    bits.clear_bit_unsafe(i);
-  }
-
-  if ((index % 2) == 0) {
-    for (int i = index ; i < bits.length() ; i += bit_mask::detail::BITS_PER_ELEMENT) {
-      bits.set_bit_unsafe(i);
-    }
-  }
+  bits.set_bit_unsafe(bit);
 }
 
 //
@@ -374,7 +351,7 @@ TEST_F(BitMaskTest, PerformanceTest)
   free(local_valid);
 }
 
-TEST_F(BitMaskTest, MultiThreadedTest)
+TEST_F(BitMaskTest, CudaThreadingTest)
 {
   const int num_rows = 100000;
   bit_mask_t *bits = nullptr;
@@ -383,20 +360,9 @@ TEST_F(BitMaskTest, MultiThreadedTest)
 
   BitMask bit_mask(bits, num_rows);
 
-  test_unsafe_set_clear_g<<<1,bit_mask::detail::BITS_PER_ELEMENT>>>(bit_mask);
-
-  gdf_size_type local_count = 0;
-  EXPECT_EQ(GDF_SUCCESS, count_bits(&local_count, bit_mask));
-
-  if ((num_rows / 2) != local_count) {
-    std::cout << "  unsafe version got wrong count due to race condition" << std::endl;
-  } else {
-    std::cout << "  unsafe version got correct answer, race condition not triggered" << std::endl;
-  }
-  
   test_safe_set_clear_g<<<1,bit_mask::detail::BITS_PER_ELEMENT>>>(bit_mask);
 
-  local_count = 0;
+  gdf_size_type local_count = 0;
   EXPECT_EQ(GDF_SUCCESS, count_bits(&local_count, bit_mask));
 
   EXPECT_EQ((gdf_size_type) (num_rows/2), local_count);
