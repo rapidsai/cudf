@@ -20,6 +20,7 @@
 #include "gather.hpp"
 #include "rmm/thrust_rmm_allocator.h"
 #include "utilities/type_dispatcher.hpp"
+#include "utilities/cudf_utils.h"
 
 /**
  * @brief Operations for copying from one column to another
@@ -46,14 +47,14 @@ struct bounds_checker {
 };
 
 /**---------------------------------------------------------------------------*
- * @brief Conditionally gathers the set bits of a validity bitmask.
+ * @brief Conditionally gathers the bits of a validity bitmask.
  *
- * Gathers the set bits of a validity bitmask according to a gather map.
- * If pred(stencil[i]) evaluates to true, then bit `i` in `destination_mask`
- * will be set if bit `gather_map[i]` from the `source_mask` is set.
- *
- * If bit `gather_map[i]` from `source_mask` is not set, then bit `i` in
- * `destination_mask` is unmodified.
+ * Gathers the bits of a validity bitmask according to a gather map.
+ * If `pred(stencil[i])` evaluates to true, then bit `i` in `destination_mask`
+ * will equal bit `gather_map[i]` from the `source_mask`. 
+ * 
+ * If `pred(stencil[i])` evaluates to false, then bit `i` in `destination_mask`
+ * will be set to 0.
  *
  * If any value appears in `gather_map` more than once, the result is undefined.
  *
@@ -98,6 +99,7 @@ __global__ void gather_bitmask_if_kernel(
 
     gdf_index_type const output_element = destination_row / BITS_PER_MASK;
 
+    // TODO Only one thread should write this back
     destination_mask32[output_element] = result_mask;
 
     destination_row += blockDim.x * gridDim.x;
@@ -109,14 +111,11 @@ __global__ void gather_bitmask_if_kernel(
 }
 
 /**---------------------------------------------------------------------------*
- * @brief Gathers the set bits of a validity bitmask.
+ * @brief Gathers the bits of a validity bitmask.
  *
- * Gathers the set bits of a validity bitmask according to a gather map.
- * If bit `gather_map[i]` in `source_mask` is set, then bit `i` in
- *`destination_mask` will be set.
- *
- * If bit `gather_map[i]` in `source_mask` is *not* set, then bit `i` in
- *`destination_mask` will be unmodified.
+ * Gathers the bits from the source bitmask into the destination bitmask
+ * according to a `gather_map` such that bit `i` in `destination_mask` will be
+ * equal to bit `gather_map[i]` from `source_bitmask`.
  *
  * Undefined behavior results if any value in `gather_map` is outside the range
  * [0, num_destination_rows).
@@ -159,6 +158,7 @@ __global__ void gather_bitmask_kernel(gdf_valid_type const* const source_mask,
 
     gdf_index_type const output_element = destination_row / BITS_PER_MASK;
 
+    // TODO: Only one thread should write output
     destination_mask32[output_element] = result_mask;
 
     destination_row += blockDim.x * gridDim.x;
@@ -215,7 +215,7 @@ gdf_error gather_bitmask(gdf_valid_type const* source_mask,
   bool const in_place{source_mask == destination_mask};
   rmm::device_vector<gdf_valid_type> temp_bitmask;
   if (in_place) {
-    temp_bitmask.resize(num_destination_rows);
+    temp_bitmask.resize(gdf_get_num_chars_bitmask(num_destination_rows));
     output_bitmask = temp_bitmask.data().get();
   }
 
@@ -307,9 +307,11 @@ struct column_gatherer {
       GDF_REQUIRE(GDF_SUCCESS == gdf_status, gdf_status);
     }
 
+    // Update destination columns null count
     gdf_status = set_null_count(destination_column);
-
     GDF_REQUIRE(GDF_SUCCESS == gdf_status, gdf_status);
+
+    CUDA_CHECK_LAST();
 
     return gdf_status;
   }
