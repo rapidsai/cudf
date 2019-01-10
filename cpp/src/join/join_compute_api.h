@@ -575,6 +575,4 @@ gdf_error compute_hash_join(
 
   return gdf_error_code;
 }
-
 #endif
-
