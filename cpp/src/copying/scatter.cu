@@ -46,21 +46,14 @@ __global__ void scatter_bitmask_kernel(
   constexpr uint32_t BITS_PER_MASK = 8 * sizeof(mask_type);
 
   // Cast the validity type to a type where atomicOr is natively supported
-  const mask_type* __restrict__ source_mask32 =
-      reinterpret_cast<mask_type const*>(source_mask);
   mask_type* const __restrict__ destination_mask32 =
       reinterpret_cast<mask_type*>(destination_mask);
 
   gdf_size_type row_number = threadIdx.x + blockIdx.x * blockDim.x;
 
   while (row_number < num_source_rows) {
-    // Get the bit corresponding to the row
-    const mask_type input_bit =
-        source_mask32[row_number / BITS_PER_MASK] &
-        (static_cast<mask_type>(1) << (row_number % BITS_PER_MASK));
-
     // Only scatter the input bit if it is valid
-    if (input_bit > 0) {
+    if (gdf_is_valid(source_mask, row_number) > 0) {
       const gdf_index_type output_row = scatter_map[row_number];
 
       // Set the according output bit
