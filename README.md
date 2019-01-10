@@ -126,6 +126,31 @@ $ python setup.py install                           # install cudf python bindin
 
 Done! You are ready to develop for the cuDF OSS project.
 
+## Debugging cuDF
+
+### Building Debug mode from source
+
+Follow the [above instructions](#build-from-source) to build from source and add `-DCMAKE_BUILD_TYPE=Debug` to the `cmake` step. 
+
+For example:
+```bash
+$ cmake .. -DCMAKE_INSTALL_PREFIX=/install/path -DCMAKE_BUILD_TYPE=Debug     # configure cmake ... use $CONDA_PREFIX if you're using Anaconda
+```
+
+This will build `libcudf` in Debug mode which enables some `assert` safety checks as well as builds with library with symbols enabled that helps when using a debugger.
+
+All other steps for installing `libcudf` into your environment are the same.
+
+### Debuging with `cuda-gdb`
+
+When you have a debug build of `libcudf` installed, debugging with the `cuda-gdb` debugger is easy.
+
+If you are debugging a Python script, simply run the following:
+
+```bash
+cuda-gdb -ex r --args python <program_name>.py <program_arguments>
+```
+
 ## Automated Build in Docker Container
 
 A Dockerfile is provided with a preconfigured conda environment for building and installing cuDF from source based off of the master branch.
