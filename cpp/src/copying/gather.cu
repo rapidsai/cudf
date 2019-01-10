@@ -14,13 +14,14 @@
  * limitations under the License.
  */
 
+#include <cooperative_groups.h>
 #include <thrust/gather.h>
 #include "copying.hpp"
 #include "cudf.h"
 #include "gather.hpp"
 #include "rmm/thrust_rmm_allocator.h"
-#include "utilities/type_dispatcher.hpp"
 #include "utilities/cudf_utils.h"
+#include "utilities/type_dispatcher.hpp"
 
 /**
  * @brief Operations for copying from one column to another
@@ -51,8 +52,8 @@ struct bounds_checker {
  *
  * Gathers the bits of a validity bitmask according to a gather map.
  * If `pred(stencil[i])` evaluates to true, then bit `i` in `destination_mask`
- * will equal bit `gather_map[i]` from the `source_mask`. 
- * 
+ * will equal bit `gather_map[i]` from the `source_mask`.
+ *
  * If `pred(stencil[i])` evaluates to false, then bit `i` in `destination_mask`
  * will be set to 0.
  *
@@ -78,6 +79,7 @@ __global__ void gather_bitmask_if_kernel(
     gdf_size_type const num_source_rows, gdf_valid_type* const destination_mask,
     gdf_size_type const num_destination_rows, gdf_index_type const* gather_map,
     T const* stencil, P pred) {
+  namespace cg = cooperative_groups;
   using MaskType = uint32_t;
   constexpr uint32_t BITS_PER_MASK{sizeof(MaskType) * 8};
 
@@ -87,26 +89,25 @@ __global__ void gather_bitmask_if_kernel(
 
   gdf_index_type destination_row = threadIdx.x + blockIdx.x * blockDim.x;
 
-  auto active_mask =
-      __ballot_sync(0xffffffff, destination_row < num_destination_rows);
   while (destination_row < num_destination_rows) {
+    cg::coalesced_group active_threads = cg::coalesced_threads();
+
     bool const source_bit_is_valid{
         gdf_is_valid(source_mask, gather_map[destination_row])};
 
-    // Use ballot to create the output bitmask element for this warp
-    MaskType const result_mask{__ballot_sync(
-        active_mask, pred(stencil[destination_row]) && source_bit_is_valid)};
+    // Use ballot to find all valid bits in this warp and create the output
+    // bitmask element
+    MaskType const result_mask{active_threads.ballot(
+        pred(stencil[destination_row]) && source_bit_is_valid)};
 
     gdf_index_type const output_element = destination_row / BITS_PER_MASK;
 
-    // TODO Only one thread should write this back
-    destination_mask32[output_element] = result_mask;
+    // Only one thread writes output
+    if (0 == active_threads.thread_rank()) {
+      destination_mask32[output_element] = result_mask;
+    }
 
     destination_row += blockDim.x * gridDim.x;
-
-    // Recompute the mask of active threads after grid stride
-    active_mask =
-        __ballot_sync(active_mask, destination_row < num_destination_rows);
   }
 }
 
@@ -136,6 +137,7 @@ __global__ void gather_bitmask_kernel(gdf_valid_type const* const source_mask,
                                       gdf_valid_type* const destination_mask,
                                       gdf_size_type const num_destination_rows,
                                       gdf_index_type const* gather_map) {
+  namespace cg = cooperative_groups;
   using MaskType = uint32_t;
   constexpr uint32_t BITS_PER_MASK{sizeof(MaskType) * 8};
 
@@ -146,26 +148,24 @@ __global__ void gather_bitmask_kernel(gdf_valid_type const* const source_mask,
 
   gdf_index_type destination_row = threadIdx.x + blockIdx.x * blockDim.x;
 
-  auto active_mask =
-      __ballot_sync(0xffffffff, destination_row < num_destination_rows);
   while (destination_row < num_destination_rows) {
+    cg::coalesced_group active_threads = cg::coalesced_threads();
+
     bool const source_bit_is_valid{
         gdf_is_valid(source_mask, gather_map[destination_row])};
 
     // Use ballot to find all valid bits in this warp and create the output
     // bitmask element
-    MaskType const result_mask{__ballot_sync(active_mask, source_bit_is_valid)};
+    MaskType const result_mask{active_threads.ballot(source_bit_is_valid)};
 
     gdf_index_type const output_element = destination_row / BITS_PER_MASK;
 
-    // TODO: Only one thread should write output
-    destination_mask32[output_element] = result_mask;
+    // Only one thread writes output
+    if (0 == active_threads.thread_rank()) {
+      destination_mask32[output_element] = result_mask;
+    }
 
     destination_row += blockDim.x * gridDim.x;
-
-    // Recompute mask of active threads after grid stride
-    active_mask =
-        __ballot_sync(active_mask, destination_row < num_destination_rows);
   }
 }
 
