@@ -53,7 +53,7 @@ __global__ void scatter_bitmask_kernel(
 
   while (row_number < num_source_rows) {
     // Only scatter the input bit if it is valid
-    if (gdf_is_valid(source_mask, row_number) > 0) {
+    if (gdf_is_valid(source_mask, row_number)) {
       const gdf_index_type output_row = scatter_map[row_number];
 
       // Set the according output bit
@@ -97,9 +97,9 @@ gdf_error scatter_bitmask(gdf_valid_type const* source_mask,
   }
 
   // Ensure the output bitmask is initialized to zero
-  cudaMemsetAsync(output_bitmask, 0,
-                  num_destination_mask_elements * sizeof(gdf_valid_type),
-                  stream);
+  CUDA_TRY(cudaMemsetAsync(
+      output_bitmask, 0, num_destination_mask_elements * sizeof(gdf_valid_type),
+      stream));
 
   scatter_bitmask_kernel<<<scatter_grid_size, BLOCK_SIZE, 0, stream>>>(
       source_mask, num_source_rows, destination_mask, scatter_map);
