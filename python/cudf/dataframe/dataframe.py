@@ -449,7 +449,7 @@ class DataFrame(object):
         """
         # When index is a column name
         if isinstance(index, str):
-            df = self.copy()
+            df = self.copy(deep=False)
             df._drop_column(index)
             return df.set_index(self[index])
         # Otherwise
@@ -476,12 +476,8 @@ class DataFrame(object):
         df = DataFrame()
         df._size = self._size
         for k in self._cols:
-            if deep:
-                df[k] = self._cols[k].copy()
-                df._index = self._index.copy()
-            else:
-                df[k] = self._cols[k].copy(deep=False)
-                df._index = self._index
+            df._index = self._index.copy(deep)
+            df[k] = self._cols[k].copy(deep)
         return df
 
     def __copy__(self):

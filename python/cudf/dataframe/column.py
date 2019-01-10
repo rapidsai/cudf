@@ -296,15 +296,21 @@ class Column(object):
         """
         return self.replace(data=self.data.copy())
 
-    def copy(self):
-        """Copy the column with a new allocation of the data and mask.
+    def copy(self, deep=True):
+        """Columns are immutable, so a deep copy produces a copy of the
+        underlying data and mask and a shallow copy creates a new column and
+        copies the references of the data and mask.
         """
-        copied = self.copy_data()
-        if self.has_null_mask:
-            return copied.set_mask(mask=self.mask.copy(),
-                                   null_count=self.null_count)
+        if(deep):
+            copied = self.copy_data()
         else:
-            return copied.allocate_mask()
+            copied = Column(self.data)
+            if self.has_null_mask:
+                return copied.set_mask(mask=self.mask.copy(deep),
+                                       null_count=self.null_count)
+            else:
+                return copied.allocate_mask()
+            return self
 
     def replace(self, **kwargs):
         """Replace attributes of the class and return a new Column.
