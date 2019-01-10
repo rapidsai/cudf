@@ -302,30 +302,38 @@ gdf_error read_csv(csv_read_arg *args)
 
 	//-----------------------------------------------------------------------------
 	// memory map in the data
-	void * 			map_data = NULL;
-	struct stat     st;
-	int				fd;
-	size_t	map_size;
-	const char *compression;
+	void * 	map_data = NULL;
+	size_t	map_size = 0;
+	const char *compression = nullptr;
+	int fd = 0;
+	if (args->input_data_form == gdf_csv_input_form::FILE_PATH)
+	{
+		fd = open(args->filepath_or_buffer, O_RDONLY );
+		if (fd < 0) 		{ close(fd); checkError(GDF_FILE_ERROR, "Error opening file"); }
 
-	fd = open(args->file_path, O_RDONLY );
-
-	if (fd < 0) 		{ close(fd); checkError(GDF_FILE_ERROR, "Error opening file"); }
-	if (fstat(fd, &st)) { close(fd); checkError(GDF_FILE_ERROR, "cannot stat file");   }
-
-	map_size = st.st_size;
-	raw_csv->num_bytes = map_size;
-
-	map_data = mmap(0, map_size, PROT_READ, MAP_PRIVATE, fd, 0);
-
-    if (map_data == MAP_FAILED || map_size==0) { close(fd); checkError(GDF_C_ERROR, "Error mapping file"); }
+		struct stat st{};
+		if (fstat(fd, &st)) { close(fd); checkError(GDF_FILE_ERROR, "cannot stat file");   }
+	
+		map_size = st.st_size;
+		raw_csv->num_bytes = map_size;
+	
+		map_data = mmap(0, map_size, PROT_READ, MAP_PRIVATE, fd, 0);
+	
+		if (map_data == MAP_FAILED || map_size==0) { close(fd); checkError(GDF_C_ERROR, "Error mapping file"); }
+	}
+	else if (args->input_data_form == gdf_csv_input_form::HOST_BUFFER)
+	{
+		map_data = (void *)args->filepath_or_buffer;
+		raw_csv->num_bytes = map_size = args->buffer_size;
+	}
+	else { checkError(GDF_C_ERROR, "invalid input type"); }
 
 	//-----------------------------------------------------------------------------
 	//---  create a structure to hold variables used to parse the CSV data
 	compression = (args->compression && 0 != strcasecmp(args->compression, "none")) ? args->compression : nullptr;
 	if (compression && 0 == strcasecmp(compression, "infer"))
 	{
-		const char *file_ext = strrchr(args->file_path, '.');
+		const char *file_ext = strrchr(args->filepath_or_buffer, '.');
 		compression = nullptr;
 		if (file_ext)
 		{
@@ -357,7 +365,7 @@ gdf_error read_csv(csv_read_arg *args)
 	error = launch_storeRecordStart(raw_csv);
 	checkError(error, "call to record initial position store");
 
-	// Previous kernel stores the record positions as encountered by all threads
+	// Previous kernel stores the record pinput_file.typeositions as encountered by all threads
 	// Sort the record positions as subsequent processing may require filtering
 	// certain rows or other processing on specific records
 	thrust::sort(thrust::device, raw_csv->recStart, raw_csv->recStart + raw_csv->num_records + 1);
@@ -557,8 +565,11 @@ gdf_error read_csv(csv_read_arg *args)
 
 	//-----------------------------------------------------------------------------
 	//---  done with host data
-	close(fd);
-	munmap(map_data, raw_csv->num_bytes);
+	if (args->input_data_form == gdf_csv_input_form::FILE_PATH)
+	{
+		close(fd);
+		munmap(map_data, raw_csv->num_bytes);
+	}
 
 
 	//-----------------------------------------------------------------------------
@@ -1145,10 +1156,10 @@ __global__ void convertCsvToGdf(
 
 			long tempPos=pos-1;
 
+			// Modify start & end to ignore whitespace and quotechars
 			if(dtype[actual_col] != gdf_dtype::GDF_CATEGORY && dtype[actual_col] != gdf_dtype::GDF_STRING){
-				removePrePostWhiteSpaces2(raw_csv, &start, &tempPos);
+				adjustForWhitespaceAndQuotes(raw_csv, start, tempPos, opts.quotechar);
 			}
-
 
 			if(start<=(tempPos)) { // Empty strings are not legal values
 
@@ -1408,8 +1419,10 @@ __global__ void dataTypeDetection(
 
 			long strLen=pos-start;
 
-			// Remove all pre and post white-spaces.  We might find additional NULL fields if the entire entry is made up of only spaces.
-			removePrePostWhiteSpaces2(raw_csv, &start, &tempPos);
+			// Modify start & end to ignore whitespace and quotechars
+			// This could possibly result in additional empty fields
+			adjustForWhitespaceAndQuotes(raw_csv, start, tempPos);
+
 			for(long startPos=start; startPos<=tempPos; startPos++){
 				if(raw_csv[startPos]>= '0' && raw_csv[startPos] <= '9'){
 					countNumber++;
