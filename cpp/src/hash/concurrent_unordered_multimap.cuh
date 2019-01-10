@@ -539,6 +539,9 @@ public:
         const size_type partition_size  = m_hashtbl_size/num_parts;
 
         // Only insert into the specified partition
+	// Note that if m_hashtbl_size % num_parts != 0 then
+	// hash_tbl_idx/partition_size can exceed num_parts-1 for the last few
+	// elements, so we map them to the previous num_parts-1 partition
         if( ( part < (num_parts-1) && hash_tbl_idx/partition_size != part ) ||
             ( (num_parts-1) == part && hash_tbl_idx/partition_size < part ) )
           return end();
