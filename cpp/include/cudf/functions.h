@@ -966,6 +966,7 @@ gdf_error gdf_order_by(gdf_column** input_columns,
 
 /* --------------------------------------------------------------------------*
  * @brief This function is a binary function. It will take in two gdf_columns.
+ *
  * The first one is expected to be a regular gdf_column, the second one
  * has to be a column of the same type as the first, and it has to be of
  * size one or of the same size as the other column.
@@ -978,13 +979,15 @@ gdf_error gdf_order_by(gdf_column** input_columns,
  * replace all nulls of the first column with the corresponding elemetns of the
  * second column
  * 
- * @Param[out] first gdf_column
- * @Param[in] second gdf_column 
+ * @param col_out gdf_column that is the output of this function with null values replaced
+ * @Param[in] col_in a gdf_column that is of size 1 or same size as col_out, contains value / values to be placed in col_out
  * 
  * @Returns GDF_SUCCESS upon successful completion
  *
  * --------------------------------------------------------------------------*/
 gdf_error gdf_replace_nulls(gdf_column*       col_out,
+                                   const gdf_column* col_in);
+
                                    const gdf_column* col_in);/* --------------------------------------------------------------------------*
  * @brief Finds the indices of the bins in which each value of the column
  * belongs.
