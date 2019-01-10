@@ -27,22 +27,11 @@ from libcpp.string  cimport string as cstring
 
 
 
-# Cython function references need to be stored in a std::map
-ctypedef gdf_error (*reduce_type)(gdf_column*, void*, gdf_size_type)
-
-cdef cmap[cstring, reduce_type] _REDUCE_FUNCTIONS
-_REDUCE_FUNCTIONS[b'max'] = gdf_max
-_REDUCE_FUNCTIONS[b'min'] = gdf_min
-_REDUCE_FUNCTIONS[b'sum'] = gdf_sum
-_REDUCE_FUNCTIONS[b'sum_of_squares'] = gdf_sum_of_squares
-
-
 def apply_reduce(reduction, col):
     """
       Call gdf reductions.
     """
 
-    func = bytes(reduction, encoding="UTF-8")
 
     outsz = gdf_reduce_optimal_output_size()
     out = rmm.device_array(outsz, dtype=col.dtype)
@@ -50,9 +39,21 @@ def apply_reduce(reduction, col):
 
     cdef gdf_column* c_col = column_view_from_column(col)
 
-    cdef gdf_error result = _REDUCE_FUNCTIONS[func](<gdf_column*>c_col,
-                            <void*>out_ptr,
-                            outsz)
+    cdef gdf_error result
+    if reduction == 'max':
+        with nogil:
+            result = gdf_max(<gdf_column*>c_col, <void*>out_ptr, outsz)
+    elif reduction == 'min':
+        with nogil:
+            result = gdf_min(<gdf_column*>c_col, <void*>out_ptr, outsz)
+    elif reduction == 'sum':
+        with nogil:
+            result = gdf_sum(<gdf_column*>c_col, <void*>out_ptr, outsz)
+    elif reduction == 'sum_of_squares':
+        with nogil:
+            result = gdf_sum_of_squares(<gdf_column*>c_col,
+                                        <void*>out_ptr,
+                                        outsz)
 
     check_gdf_error(result)
 

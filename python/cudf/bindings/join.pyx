@@ -77,47 +77,55 @@ cpdef join(col_lhs, col_rhs, on, how, method='sort'):
         idx = idx + 1
 
     cdef gdf_error result
+    cdef gdf_size_type col_lhs_len = len(col_lhs)
+    cdef gdf_size_type col_rhs_len = len(col_rhs)
+    cdef int c_num_cols_to_join = num_cols_to_join
+    cdef int c_result_num_cols = result_num_cols
+
     if how == 'left':
-         result = gdf_left_join(list_lhs,
-               len(col_lhs),
-               <int*>left_idx.data,
-               list_rhs,
-               len(col_rhs),
-               <int*>right_idx.data,
-               num_cols_to_join,
-               result_num_cols,
-               result_cols,
-               <gdf_column*> NULL,
-               <gdf_column*> NULL,
-               context)
+         with nogil:
+            result = gdf_left_join(list_lhs,
+                col_lhs_len,
+                <int*>left_idx.data,
+                list_rhs,
+                col_rhs_len,
+                <int*>right_idx.data,
+                c_num_cols_to_join,
+                c_result_num_cols,
+                result_cols,
+                <gdf_column*> NULL,
+                <gdf_column*> NULL,
+                context)
 
     elif how == 'inner':
-        result = gdf_inner_join(list_lhs,
-               len(col_lhs),
-               <int*>left_idx.data,
-               list_rhs,
-               len(col_rhs),
-               <int*>right_idx.data,
-               num_cols_to_join,
-               result_num_cols,
-               result_cols,
-               <gdf_column*> NULL,
-               <gdf_column*> NULL,
-               context)
+        with nogil:
+            result = gdf_inner_join(list_lhs,
+                col_lhs_len,
+                <int*>left_idx.data,
+                list_rhs,
+                col_rhs_len,
+                <int*>right_idx.data,
+                c_num_cols_to_join,
+                c_result_num_cols,
+                result_cols,
+                <gdf_column*> NULL,
+                <gdf_column*> NULL,
+                context)
 
     elif how == 'outer':
-        result = gdf_full_join(list_lhs,
-               len(col_lhs),
-               <int*>left_idx.data,
-               list_rhs,
-               len(col_rhs),
-               <int*>right_idx.data,
-               num_cols_to_join,
-               result_num_cols,
-               result_cols,
-               <gdf_column*> NULL,
-               <gdf_column*> NULL,
-               context)
+        with nogil:
+            result = gdf_full_join(list_lhs,
+                col_lhs_len,
+                <int*>left_idx.data,
+                list_rhs,
+                col_rhs_len,
+                <int*>right_idx.data,
+                c_num_cols_to_join,
+                c_result_num_cols,
+                result_cols,
+                <gdf_column*> NULL,
+                <gdf_column*> NULL,
+                context)
 
     check_gdf_error(result)
 
