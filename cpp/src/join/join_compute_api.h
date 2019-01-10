@@ -324,7 +324,7 @@ gdf_error estimate_join_output_size(gdf_table<size_type> const & build_table,
 
 /**---------------------------------------------------------------------------*
  * @brief Computes the number of entries required in a hash table to satisfy
- * inserting a specified number of keys to achieve thew specified hash table
+ * inserting a specified number of keys to achieve the specified hash table
  * occupancy.
  *
  * @param num_keys_to_insert The number of keys that will be inserted
