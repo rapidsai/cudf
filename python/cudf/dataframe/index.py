@@ -19,6 +19,9 @@ from cudf.comm.serialize import register_distributed_serializer
 
 class Index(object):
     is_monotonic = None
+    is_monotonic_increasing = None
+    is_monotonic_decreasing = None
+
     def serialize(self, serialize):
         header = {}
         header['payload'], frames = serialize(pickle.dumps(self))
