@@ -22,7 +22,7 @@ project(CUDA_DATAFRAME VERSION 0.4.0 LANGUAGES C CXX CUDA)
 
 # Set a default build type if none was specified
 set(DEFAULT_BUILD_TYPE "Release")
- 
+
 if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
   message(STATUS "Setting build type to '${DEFAULT_BUILD_TYPE}' since none specified.")
   set(CMAKE_BUILD_TYPE "${DEFAULT_BUILD_TYPE}" CACHE
@@ -98,9 +98,9 @@ endif()
 
 find_package(ZLIB REQUIRED)
 if(ZLIB_FOUND)
-    include_directories(${ZLIB_INCLUDE_DIRS})
+    message(STATUS "ZLib found in ${ZLIB_INCLUDE_DIRS}")
 else()
-    message(FATAL_ERROR "ZLib not found.")
+    message(FATAL_ERROR "ZLib not found, please check your settings.")
 endif(ZLIB_FOUND)
 
 ###################################################################################################
@@ -130,7 +130,8 @@ include_directories("${ARROW_INCLUDE_DIR}"
                     "${CMAKE_SOURCE_DIR}/src"
                     "${CMAKE_SOURCE_DIR}/thirdparty/cub"
                     "${CMAKE_SOURCE_DIR}/thirdparty/moderngpu/src"
-                    "${CMAKE_SOURCE_DIR}/thirdparty/cnmem/include")
+                    "${CMAKE_SOURCE_DIR}/thirdparty/cnmem/include"
+                    "${ZLIB_INCLUDE_DIRS}")
 
 ###################################################################################################
 # - library paths ---------------------------------------------------------------------------------
