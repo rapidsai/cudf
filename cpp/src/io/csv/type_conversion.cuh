@@ -21,18 +21,6 @@ bool isDigit(char data) {
 
 
 __host__ __device__
-long firstOcurance(char *data, long stx, long endx, char c) {
-
-	for ( long x = stx; x < endx +1; x++) {
-		if (data[x] == c)
-			return x;
-	}
-
-	return -1;
-}
-
-
-__host__ __device__
 void adjustForWhitespaceAndQuotes(const char *data, long& start_idx, long& end_idx, char quotechar='\0') {
 
 	while ((start_idx < end_idx) && (data[start_idx] == ' ' || data[start_idx] == quotechar)) {

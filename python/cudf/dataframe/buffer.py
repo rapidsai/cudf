@@ -158,7 +158,7 @@ class Buffer(object):
         needed = array.size
         self._sentry_capacity(needed)
         array = cudautils.astype(array, dtype=self.dtype)
-        self.mem[self.size:].copy_to_device(array)
+        self.mem[self.size:self.size+needed].copy_to_device(array)
         self.size += needed
 
     def astype(self, dtype):
