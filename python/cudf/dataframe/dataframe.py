@@ -450,7 +450,7 @@ class DataFrame(object):
         """
         # When index is a column name
         if isinstance(index, str):
-            df = self.copy()
+            df = self.copy(deep=False)
             df._drop_column(index)
             return df.set_index(self[index])
         # Otherwise
@@ -470,18 +470,30 @@ class DataFrame(object):
             out[col] = self[col].take(positions, ignore_index=ignore_index)
         return out
 
-    def copy(self):
+    def copy(self, deep=True):
         """
         Returns a copy of this dataframe
+
+        Parameters
+        ----------
+        deep: bool
+           Make a full copy of Series columns and Index at the GPU level, or
+           create a new allocation with references.
         """
         df = DataFrame()
-        df._index = self._index
         df._size = self._size
-        df._cols = self._cols.copy()
+        if deep:
+            df._index = self._index.copy(deep)
+            for k in self._cols:
+                df._cols[k] = self._cols[k].copy(deep)
+        else:
+            df._index = self._index
+            for k in self._cols:
+                df._cols[k] = self._cols[k]
         return df
 
     def __copy__(self):
-        return self.copy()
+        return self.copy(deep=True)
 
     def __deepcopy__(self, memo={}):
         """
@@ -492,7 +504,7 @@ class DataFrame(object):
         """
         if memo is None:
             memo = {}
-        return self.copy()
+        return self.copy(deep=True)
 
     def _sanitize_columns(self, col):
         """Sanitize pre-appended
