@@ -268,9 +268,11 @@ class GenericIndex(Index):
 
     def copy(self, deep=True):
         if(deep):
-            return deepcopy(self)
+            result = deepcopy(self)
         else:
-            return copy(self)
+            result = copy(self)
+        result._values = self._values.copy(deep)
+        return result
 
     def serialize(self, serialize):
         header = {}

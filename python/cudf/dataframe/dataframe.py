@@ -481,9 +481,14 @@ class DataFrame(object):
         """
         df = DataFrame()
         df._size = self._size
-        for k in self._cols:
+        if deep:
             df._index = self._index.copy(deep)
-            df._cols[k] = self._cols[k].copy(deep)
+            for k in self._cols:
+                df._cols[k] = self._cols[k].copy(deep)
+        else:
+            df._index = self._index
+            for k in self._cols:
+                df._cols[k] = self._cols[k]
         return df
 
     def __copy__(self):
