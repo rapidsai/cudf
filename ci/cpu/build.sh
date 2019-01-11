@@ -34,6 +34,9 @@ env
 logger "Activate conda env..."
 source activate gdf
 
+logger "Bump pyarrow"
+conda install pyarrow=0.11
+
 logger "Check versions..."
 python --version
 gcc --version
