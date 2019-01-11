@@ -35,6 +35,7 @@
 - PR #500 Improved the concurrent hash map class to support partitioned (multi-pass) hash table building
 - PR #617 Added .dockerignore file. Prevents adding stale cmake cache files to the docker container
 - PR #658 Reduced `JOIN_TEST` time by isolating overflow test of hash table size computation
+- PR #651 Remove noqa marks in `__init__.py` files
 
 ## Bug Fixes
 
