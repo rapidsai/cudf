@@ -19,14 +19,22 @@
 - PR #564 Update python `sort_values` method to use updated libcudf `gdf_order_by` API
 - PR #509 CSV Reader: Input CSV file can now be passed in as a text or a binary buffer
 - PR #607 Add `__iter__` and iteritems to DataFrame class
+- PR #635 Add Doxygen template
+- PR #649 Add `cudf.from_pandas` function
 
 ## Improvements
 
 - PR #426 Removed sort-based groupby and refactored existing groupby APIs. Also improves C++/CUDA compile time
 - PR #454 Improve CSV reader docs and examples
 - PR #465 Added templated C++ API for RMM to avoid explicit cast to `void**`
+- PR #513 `.gitignore` tweaks
+- PR #521 Add `assert_eq` function for testing
+- PR #502 Simplify Dockerfile for local dev, eliminate old conda/pip envs
+- PR #549 Adds `-rdynamic` compiler flag to nvcc for Debug builds
 - PR #472 RMM: Created centralized rmm::device_vector alias and rmm::exec_policy
+- PR #500 Improved the concurrent hash map class to support partitioned (multi-pass) hash table building
 - PR #617 Added .dockerignore file. Prevents adding stale cmake cache files to the docker container
+- PR #658 Reduced `JOIN_TEST` time by isolating overflow test of hash table size computation
 
 ## Bug Fixes
 
@@ -35,7 +43,6 @@
 - PR #473 Added missing <random> include
 - PR #478 CSV Reader: Add api support for auto column detection, header, mangle_dupe_cols, usecols
 - PR #495 Updated README to correct where cffi pytest should be executed
-- PR #500 Improved the concurrent hash map class to support partitioned (multi-pass) hash table building
 - PR #501 Fix the intermittent segfault caused by the `thousands` and `compression` parameters in the csv reader
 - PR #502 Simplify Dockerfile for local dev, eliminate old conda/pip envs
 - PR #512 fix bug for `on` parameter in `DataFrame.merge` to allow for None or single column name
@@ -50,6 +57,9 @@
 - PR #630 Fix deprecation warning for `pd.core.common.is_categorical_dtype`
 - PR #622 Fix Series.append() behaviour when appending values with different numeric dtype
 - PR #634 Fix create `DataFrame.from_pandas()` with numeric column names
+- PR #648 Enforce one-to-one copy required when using `numba>=0.42.0`
+- PR #645 Fix cmake build type handling not setting debug options when CMAKE_BUILD_TYPE=="Debug"
+- PR #665 Reworked the hash map to add a way to report the destination partition for a key
 
 
 # cuDF 0.4.0 (05 Dec 2018)
