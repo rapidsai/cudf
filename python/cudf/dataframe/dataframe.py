@@ -6,6 +6,7 @@ import inspect
 import random
 from collections import OrderedDict
 import warnings
+import numbers
 
 import numpy as np
 import pandas as pd
@@ -183,7 +184,7 @@ class DataFrame(object):
 
     def __getitem__(self, arg):
         """
-        If *arg* is a ``str``, return the column Series.
+        If *arg* is a ``str`` or ``int`` type, return the column Series.
         If *arg* is a ``slice``, return a new DataFrame with all columns
         sliced to the specified range.
         If *arg* is an ``array`` containing column names, return a new
@@ -217,7 +218,7 @@ class DataFrame(object):
         >>> df[[True, False, True, False]] # mask the entire dataframe,
         # returning the rows specified in the boolean mask
         """
-        if isinstance(arg, str) or isinstance(arg, int):
+        if isinstance(arg, str) or isinstance(arg, numbers.Integral):
             s = self._cols[arg]
             s.name = arg
             return s
@@ -238,7 +239,7 @@ class DataFrame(object):
             return df
         else:
             msg = "__getitem__ on type {!r} is not supported"
-            raise TypeError(msg.format(arg))
+            raise TypeError(msg.format(type(arg)))
 
     def __setitem__(self, name, col):
         """Add/set column by *name*
@@ -1808,6 +1809,44 @@ class Loc(object):
             df.add_column(col, sr[begin:end], forceindex=True)
 
         return df
+
+
+def from_pandas(obj):
+    """
+    Convert a Pandas DataFrame or Series object into the cudf equivalent
+
+    Raises
+    ------
+    TypeError for invalid input type.
+
+    Examples
+    --------
+
+    .. code-block:: python
+
+        import cudf
+        import pandas as pd
+
+        data = [[0,1], [1,2], [3,4]]
+        pdf = pd.DataFrame(data, columns=['a', 'b'], dtype=int)
+        cudf.from_pandas(pdf)
+
+    Output:
+
+    .. code-block:: python
+
+        <cudf.DataFrame ncols=2 nrows=3 >
+
+    """
+    if isinstance(obj, pd.DataFrame):
+        return DataFrame.from_pandas(obj)
+    elif isinstance(obj, pd.Series):
+        return Series.from_pandas(obj)
+    else:
+        raise TypeError(
+            "from_pandas only accepts Pandas Dataframes and Series objects. "
+            "Got %s" % type(obj)
+        )
 
 
 register_distributed_serializer(DataFrame)
