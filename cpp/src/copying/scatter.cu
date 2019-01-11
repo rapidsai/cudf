@@ -25,18 +25,16 @@ namespace cudf {
 
 namespace {
 
-/* --------------------------------------------------------------------------*/
-/**
- * @Synopsis  Scatters the bits of a bitmask from one bitmask to another.
+/**---------------------------------------------------------------------------*
+ * @brief Scatters the bits of a bitmask from one bitmask to another.
  *
- * @Param source_mask The mask that will be scattered.
- * @Param destination_mask The output after scattering the input
- * @Param scatter_map The map that indicates where elements from the input
+ * @param[in] source_mask The mask that will be scattered.
+ * @param[out] destination_mask The output after scattering the input
+ * @param[in] scatter_map The map that indicates where elements from the input
    will be scattered to in the output. output_bit[ scatter_map [i] ] =
  input_bit[i]
- * @Param num_source_rows The number of bits in the source mask
- */
-/* ----------------------------------------------------------------------------*/
+ * @param[in] num_source_rows The number of bits in the source mask
+*---------------------------------------------------------------------------**/
 __global__ void scatter_bitmask_kernel(
     gdf_valid_type const* const __restrict__ source_mask,
     gdf_size_type const num_source_rows,
