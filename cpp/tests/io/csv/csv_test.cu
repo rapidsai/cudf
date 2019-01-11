@@ -415,3 +415,38 @@ TEST(gdf_csv_test, SpecifiedBoolValues)
 		EXPECT_THAT(thirdCol.hostdata(), ::testing::ElementsAre(0, 1, 1, 0, 1));
 	}
 }
+
+TEST(gdf_csv_test, Dates)
+{
+	const char* fname			= "/tmp/CsvDatesTest.csv";
+	const char* names[]			= { "A" };
+	const char* types[]			= { "date" };
+
+	std::ofstream outfile(fname, std::ofstream::out);
+	outfile << "05/03/2001\n31/10/2010\n20/10/1994\n18/10/1990\n1/1/1970\n";
+	outfile << "18/04/1995\n14/07/1994\n07/06/2006\n16/09/2005\n2/2/1970\n";
+	outfile.close();
+	ASSERT_TRUE( checkFile(fname) );
+
+	{
+		csv_read_arg args{};
+		args.input_data_form	= gdf_csv_input_form::FILE_PATH;
+		args.filepath_or_buffer	= fname;
+		args.num_cols			= std::extent<decltype(names)>::value;
+		args.names				= names;
+		args.dtype				= types;
+		args.delimiter			= ',';
+		args.lineterminator 	= '\n';
+		args.dayfirst			= true;
+		EXPECT_EQ( read_csv(&args), GDF_SUCCESS );
+
+		EXPECT_EQ( args.num_cols_out, args.num_cols );
+		ASSERT_EQ( args.data[0]->dtype, GDF_DATE64 );
+
+		auto ACol = gdf_host_column<uint64_t>(args.data[0]);
+		EXPECT_THAT( ACol.hostdata(),
+			::testing::ElementsAre(983750400000, 1288483200000, 782611200000,
+								   656208000000, 0, 798163200000, 774144000000,
+								   1149638400000, 1126828800000, 2764800000) );
+	}
+}

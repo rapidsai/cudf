@@ -35,10 +35,12 @@
 - PR #500 Improved the concurrent hash map class to support partitioned (multi-pass) hash table building
 - PR #617 Added .dockerignore file. Prevents adding stale cmake cache files to the docker container
 - PR #658 Reduced `JOIN_TEST` time by isolating overflow test of hash table size computation
+- PR #651 Remove noqa marks in `__init__.py` files
 - PR #671 CSV Reader: uncompressed buffer input can be parsed without explicitly specifying compression as None
 
 ## Bug Fixes
 
+- PR #569 CSV Reader: Fix days being off-by-one when parsing some dates
 - PR #531 CSV Reader: Fix incorrect parsing of quoted numbers
 - PR #465 Added templated C++ API for RMM to avoid explicit cast to `void**`
 - PR #473 Added missing <random> include
@@ -61,6 +63,7 @@
 - PR #648 Enforce one-to-one copy required when using `numba>=0.42.0`
 - PR #645 Fix cmake build type handling not setting debug options when CMAKE_BUILD_TYPE=="Debug"
 - PR #665 Reworked the hash map to add a way to report the destination partition for a key
+- PR #670 CMAKE: Fix env include path taking precedence over libcudf source headers
 
 # cuDF 0.4.0 (05 Dec 2018)
 
