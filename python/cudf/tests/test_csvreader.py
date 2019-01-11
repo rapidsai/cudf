@@ -13,6 +13,7 @@ from cudf import read_csv
 from cudf.io.csv import read_csv_strings
 import cudf
 import nvstrings
+from .utils import assert_eq
 
 
 def make_numeric_dataframe(nrows, dtype):
@@ -25,9 +26,9 @@ def make_numeric_dataframe(nrows, dtype):
 def make_datetime_dataframe():
     df = pd.DataFrame()
     df['col1'] = np.array(['31/10/2010', '05/03/2001', '20/10/1994',
-                          '18/10/1990'])
+                          '18/10/1990', '1/1/1970'])
     df['col2'] = np.array(['18/04/1995', '14/07/1994', '07/06/2006',
-                          '16/09/2005'])
+                          '16/09/2005', '2/2/1970'])
     return df
 
 
@@ -122,13 +123,16 @@ def test_csv_reader_mixed_data_sep(tmpdir):
     df = make_numpy_mixed_dataframe()
     df.to_csv(fname, sep='|', index=False, header=False)
 
-    gdf_out = read_csv(str(fname), sep='|', names=['1', '2', '3', '4', '5'],
-                       dtype=['int64', 'date', 'float64', 'int64', 'category'],
-                       dayfirst=True)
-    df_out = pd.read_csv(fname, sep='|', names=['1', '2', '3', '4', '5'],
-                         parse_dates=[1], dayfirst=True)
+    gdf1 = read_csv(str(fname), sep='|', names=['1', '2', '3', '4', '5'],
+                    dtype=['int64', 'date', 'float64', 'int64', 'category'],
+                    dayfirst=True)
 
-    assert len(gdf_out.columns) == len(df_out.columns)
+    gdf2 = read_csv(str(fname), delimiter='|', names=['1', '2', '3', '4', '5'],
+                    dtype=['int64', 'date', 'float64', 'int64', 'category'],
+                    dayfirst=True)
+
+    assert len(gdf1.columns) == len(gdf2.columns)
+    assert_eq(gdf1, gdf2)
 
 
 def test_csv_reader_all_numeric_dtypes(tmpdir):
