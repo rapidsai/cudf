@@ -145,30 +145,11 @@ namespace bit_mask {
       CUDA_TRY(cudaMemset(*mask, 0, sizeof(bit_mask_t) * num_elements));
     } else if (fill_value == 1) {
       //
-      //  Filling with one is a more complex case, as we want the first
-      //  number_of_records bits set to 1, and all of the remaining
-      //  bits set to 0.
+      //  Value outside range of [0, num_rows) is undefined, so we will
+      //  initialize in the simplest manner... we'll initialize all
+      //  elements to 1.
       //
-      //  We accomplish this by identifying the number of used element.
-      //  We'll set all elements from 0 to used_elements - 1 to 1, all elements
-      //  from used_elements to num_elements - 1 to 0.  Finally, the last
-      //  used element will be constructed to set to a left mask of ones
-      //  and stored out on the device.
-      //
-      gdf_size_type used_elements = bit_mask::num_elements(number_of_records);
-      CUDA_TRY(cudaMemset(*mask, 0xff, sizeof(bit_mask_t) * used_elements));
-      CUDA_TRY(cudaMemset(&(*mask)[used_elements], 0, sizeof(bit_mask_t) * (num_elements - used_elements)));
-
-      if ((number_of_records % detail::BITS_PER_ELEMENT) != 0) {
-        //
-        //  Need to worry about the case where we set bits past the end
-        //
-        int bits_used_in_last_element = number_of_records - (used_elements - 1) * detail::BITS_PER_ELEMENT;
-        bit_mask_t temp = bit_mask_t{1} << bits_used_in_last_element;
-        temp--;
-
-        return put_element(temp, &(*mask)[used_elements-1]);
-      }
+      CUDA_TRY(cudaMemset(*mask, 0xff, sizeof(bit_mask_t) * num_elements));
     }
 
     return GDF_SUCCESS;

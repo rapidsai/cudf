@@ -35,9 +35,25 @@ __global__ void count_bits_g(int *counter, BitMask bits) {
   int stride = blockDim.x * gridDim.x;
     
   int local_counter = 0;
+  int i;
 
-  for (int i = index ; i < bits.num_elements() ; i += stride) {
+  for (i = index ; i < (bits.num_elements() - 1) ; i += stride) {
     local_counter += __popc(bits.get_element_device(i));
+  }
+
+  if (i == (bits.num_elements() - 1)) {
+    //
+    //  Special case... last word is only partial
+    //
+    int bits_used = bits.length() % bit_mask::detail::BITS_PER_ELEMENT;
+    if (bits_used == 0) {
+      //
+      //  The whole word is used
+      //
+      local_counter += __popc(bits.get_element_device(i));
+    } else {
+      local_counter += __popc(bits.get_element_device(i) & ((bit_mask_t{1} << bits_used) - 1));
+    }
   }
 
   atomicAdd(counter, local_counter);
@@ -394,9 +410,9 @@ TEST_F(BitMaskTest, PaddingTest)
   //
   int last_element = (padding_bytes / sizeof(bit_mask_t)) - 1;
   
-  bit_mask_t temp = ~bit_mask_t{0};
+  bit_mask_t temp = bit_mask_t{0};
   bit_mask.get_element_host(last_element, temp);
-  EXPECT_EQ(bit_mask_t{0}, temp);
+  EXPECT_EQ(~bit_mask_t{0}, temp);
 
   EXPECT_EQ(GDF_SUCCESS, bit_mask::destroy_bit_mask(bits));
 }
