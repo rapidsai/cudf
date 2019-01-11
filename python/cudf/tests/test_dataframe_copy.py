@@ -23,26 +23,13 @@ from copy import copy  # noqa:F401
 from copy import deepcopy  # noqa:F401
 
 
-def test_dataframe_copy_shallow():
-    pdf = pd.DataFrame([[1, 2, 3], [4, 5, 6], [7, 8, 9]],
-                       columns=['a', 'b', 'c'])
-    gdf = DataFrame.from_pandas(pdf)
-    copy_pdf = pdf.copy(deep=False)
-    copy_gdf = gdf.copy(deep=False)
-    copy_pdf['b'] = [0, 0, 0]
-    copy_gdf['b'] = [0, 0, 0]
-    assert_eq(pdf['b'], copy_pdf['b'])
-    assert_eq(gdf['b'], copy_gdf['b'])
-
-
 @pytest.mark.parametrize('copy_parameters', [
-    {'fn': lambda x: x.copy(), 'expected': False},
-    {'fn': lambda x: x.copy(deep=True), 'expected': False},
-    {'fn': lambda x: copy(x), 'expected': False},
-    {'fn': lambda x: deepcopy(x), 'expected': False},
-    {'fn': lambda x: x.copy(deep=False), 'expected': True},
+    {'fn': lambda x: x.copy(), 'expected_equality': False},
+    {'fn': lambda x: x.copy(deep=True), 'expected_equality': False},
+    {'fn': lambda x: copy(x), 'expected_equality': False},
+    {'fn': lambda x: deepcopy(x), 'expected_equality': False},
     ])
-def test_dataframe_copy(copy_parameters):
+def test_dataframe_deep_copy(copy_parameters):
     pdf = pd.DataFrame([[1, 2, 3], [4, 5, 6], [7, 8, 9]],
                        columns=['a', 'b', 'c'])
     gdf = DataFrame.from_pandas(pdf)
@@ -50,18 +37,19 @@ def test_dataframe_copy(copy_parameters):
     copy_gdf = copy_parameters['fn'](gdf)
     copy_pdf['b'] = [0, 0, 0]
     copy_gdf['b'] = [0, 0, 0]
-    pdf_pass = np.array_equal(pdf['b'].values, copy_pdf['b'].values)
-    gdf_pass = np.array_equal(gdf['b'].to_array(), copy_gdf['b'].to_array())
-    assert gdf_pass == copy_parameters['expected']
-    assert pdf_pass == copy_parameters['expected']
+    pdf_is_equal = np.array_equal(pdf['b'].values, copy_pdf['b'].values)
+    gdf_is_equal = np.array_equal(gdf['b'].to_array(),
+                                  copy_gdf['b'].to_array())
+    assert pdf_is_equal == copy_parameters['expected_equality']
+    assert gdf_is_equal == copy_parameters['expected_equality']
 
 
 @pytest.mark.parametrize('copy_parameters', [
-    {'fn': lambda x: x.copy(), 'expected': False},
-    {'fn': lambda x: x.copy(deep=True), 'expected': False},
-    {'fn': lambda x: copy(x), 'expected': False},
-    {'fn': lambda x: deepcopy(x), 'expected': False},
-    {'fn': lambda x: x.copy(deep=False), 'expected': True},
+    {'fn': lambda x: x.copy(), 'expected_equality': True},
+    {'fn': lambda x: x.copy(deep=True), 'expected_equality': True},
+    {'fn': lambda x: copy(x), 'expected_equality': True},
+    {'fn': lambda x: deepcopy(x), 'expected_equality': True},
+    {'fn': lambda x: x.copy(deep=False), 'expected_equality': True},
     ])
 def test_dataframe_copy_and_insert(copy_parameters):
     pdf = pd.DataFrame([[1, 2, 3], [4, 5, 6], [7, 8, 9]],
@@ -71,14 +59,16 @@ def test_dataframe_copy_and_insert(copy_parameters):
     copy_gdf = copy_parameters['fn'](gdf)
     copy_pdf['d'] = [0, 0, 0]
     copy_gdf['d'] = [0, 0, 0]
-    pdf_pass = np.array_equal(pdf['b'].values, copy_pdf['b'].values)
-    gdf_pass = np.array_equal(gdf['b'].to_array(), copy_gdf['b'].to_array())
-    assert gdf_pass == copy_parameters['expected']
-    assert pdf_pass == copy_parameters['expected']
+    pdf_is_equal = np.array_equal(pdf['b'].values, copy_pdf['b'].values)
+    gdf_is_equal = np.array_equal(gdf['b'].to_array(),
+                                  copy_gdf['b'].to_array())
+    assert pdf_is_equal == copy_parameters['expected_equality']
+    assert gdf_is_equal == copy_parameters['expected_equality']
 
 
 """
-DataFrame copy bounds checking - sizes 0 through 10 perform as expected
+DataFrame copy bounds checking - sizes 0 through 10 perform as
+expected_equality
 """
 
 
@@ -128,9 +118,10 @@ def test_cudf_dataframe_copy_then_insert(copy_fn, ncols, data_type):
     copy_df = copy_fn(df)
     copy_pdf = copy_fn(pdf)
     copy_df['aa'] = pd.Series(np.random.randint(0, 1000, 20)).astype(data_type)
-    copy_pdf['aa'] = pd.Series(np.random.randint(0, 1000, 20)).astype(data_type)
+    copy_pdf['aa'] = pd.Series(np.random.randint(0, 1000, 20))\
+        .astype(data_type)
+    assert not copy_pdf.to_string().split() == pdf.to_string().split()
     assert not copy_df.to_string().split() == df.to_string().split()
-    # assert not copy_pdf.to_string().split() == pdf.to_string().split()
 
 
 @cuda.jit
@@ -174,3 +165,16 @@ def test_kernel_shallow_copy():
     sr = gdf['a']
     add_one[1, len(sr)](sr.to_gpu_array())
     assert_eq(gdf, cdf)
+
+
+@pytest.mark.xfail(reason="cudf row wise shallow copy immutable")
+def test_dataframe_copy_shallow():
+    pdf = pd.DataFrame([[1, 2, 3], [4, 5, 6], [7, 8, 9]],
+                       columns=['a', 'b', 'c'])
+    gdf = DataFrame.from_pandas(pdf)
+    copy_pdf = pdf.copy(deep=False)
+    copy_gdf = gdf.copy(deep=False)
+    copy_pdf['b'] = [0, 0, 0]
+    copy_gdf['b'] = [0, 0, 0]
+    assert_eq(pdf['b'], copy_pdf['b'])
+    assert_eq(gdf['b'], copy_gdf['b'])

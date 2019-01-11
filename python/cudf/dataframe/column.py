@@ -303,13 +303,12 @@ class Column(object):
         """
         if(deep):
             copied = self.copy_data()
-        else:
-            copied = Column(self.data)
             if self.has_null_mask:
-                return copied.set_mask(mask=self.mask.copy(deep),
+                return copied.set_mask(mask=self.mask.copy(),
                                        null_count=self.null_count)
             else:
                 return copied.allocate_mask()
+        else:
             return self
 
     def replace(self, **kwargs):

@@ -89,6 +89,7 @@ def test_name():
     idx = GenericIndex(np.asarray([4, 5, 6, 10]), name='foo')
     assert idx.name == 'foo'
 
+
 def test_index_immutable():
     start, stop = 10, 34
     rg = RangeIndex(start, stop)
@@ -97,6 +98,7 @@ def test_index_immutable():
     gi = GenericIndex(np.arange(start, stop))
     with pytest.raises(TypeError):
         gi[1] = 5
+
 
 def test_index_copy():
     start, stop = 10, 34

@@ -136,12 +136,6 @@ class Index(object):
         else:
             return column_join_res
 
-    def copy(self, deep=True):
-        if(deep):
-            return deepcopy(self)
-        else:
-            return copy(self)
-
 
 class RangeIndex(Index):
     """An iterable integer index defined by a starting value and ending value.
@@ -167,6 +161,12 @@ class RangeIndex(Index):
         self._start = int(start)
         self._stop = int(stop)
         self.name = name
+
+    def copy(self, deep=True):
+        if(deep):
+            return deepcopy(self)
+        else:
+            return copy(self)
 
     def __repr__(self):
         return "{}(start={}, stop={})".format(self.__class__.__name__,
@@ -265,6 +265,12 @@ class GenericIndex(Index):
         res._values = values
         res.name = name
         return res
+
+    def copy(self, deep=True):
+        if(deep):
+            return deepcopy(self)
+        else:
+            return copy(self)
 
     def serialize(self, serialize):
         header = {}

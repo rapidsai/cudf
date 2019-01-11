@@ -473,11 +473,14 @@ class DataFrame(object):
         """
         Returns a copy of this dataframe
         """
+        print('DF deep ', deep)
         df = DataFrame()
         df._size = self._size
         for k in self._cols:
             df._index = self._index.copy(deep)
-            df[k] = self._cols[k].copy(deep)
+            print(id(self._cols[k]))
+            df._cols[k] = self._cols[k].copy(deep)
+            print(id(df._cols[k]))
         return df
 
     def __copy__(self):

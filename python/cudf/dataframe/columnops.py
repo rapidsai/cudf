@@ -294,8 +294,6 @@ def as_column(arbitrary, nan_as_null=True):
         data = as_column(np.array(arbitrary))
 
     else:
-        if arbitrary is None:
-            arbitrary = []
         try:
             data = as_column(memoryview(arbitrary))
         except TypeError:
