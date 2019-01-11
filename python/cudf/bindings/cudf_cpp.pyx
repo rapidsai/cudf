@@ -51,7 +51,7 @@ def check_gdf_compatibility(col):
     """
     Raise TypeError when a column type does not have gdf support.
     """
-    if col.dtype.type not in dtypes:
+    if not (col.dtype.type in dtypes or pd.api.types.is_categorical_dtype(col)):
         raise TypeError('column type `%s` not supported in gdf' % (col.dtype))
 
 
