@@ -6,6 +6,7 @@ import inspect
 import random
 from collections import OrderedDict
 import warnings
+import numbers
 
 import numpy as np
 import pandas as pd
@@ -183,7 +184,7 @@ class DataFrame(object):
 
     def __getitem__(self, arg):
         """
-        If *arg* is a ``str``, return the column Series.
+        If *arg* is a ``str`` or ``int`` type, return the column Series.
         If *arg* is a ``slice``, return a new DataFrame with all columns
         sliced to the specified range.
         If *arg* is an ``array`` containing column names, return a new
@@ -217,7 +218,7 @@ class DataFrame(object):
         >>> df[[True, False, True, False]] # mask the entire dataframe,
         # returning the rows specified in the boolean mask
         """
-        if isinstance(arg, str) or isinstance(arg, int):
+        if isinstance(arg, str) or isinstance(arg, numbers.Integral):
             s = self._cols[arg]
             s.name = arg
             return s
@@ -238,7 +239,7 @@ class DataFrame(object):
             return df
         else:
             msg = "__getitem__ on type {!r} is not supported"
-            raise TypeError(msg.format(arg))
+            raise TypeError(msg.format(type(arg)))
 
     def __setitem__(self, name, col):
         """Add/set column by *name*
@@ -484,7 +485,7 @@ class DataFrame(object):
         """
         # When index is a column name
         if isinstance(index, str):
-            df = self.copy()
+            df = self.copy(deep=False)
             df._drop_column(index)
             return df.set_index(self[index])
         # Otherwise
@@ -504,18 +505,30 @@ class DataFrame(object):
             out[col] = self[col].take(positions, ignore_index=ignore_index)
         return out
 
-    def copy(self):
+    def copy(self, deep=True):
         """
         Returns a copy of this dataframe
+
+        Parameters
+        ----------
+        deep: bool
+           Make a full copy of Series columns and Index at the GPU level, or
+           create a new allocation with references.
         """
         df = DataFrame()
-        df._index = self._index
         df._size = self._size
-        df._cols = self._cols.copy()
+        if deep:
+            df._index = self._index.copy(deep)
+            for k in self._cols:
+                df._cols[k] = self._cols[k].copy(deep)
+        else:
+            df._index = self._index
+            for k in self._cols:
+                df._cols[k] = self._cols[k]
         return df
 
     def __copy__(self):
-        return self.copy()
+        return self.copy(deep=True)
 
     def __deepcopy__(self, memo={}):
         """
@@ -526,7 +539,7 @@ class DataFrame(object):
         """
         if memo is None:
             memo = {}
-        return self.copy()
+        return self.copy(deep=True)
 
     def _sanitize_columns(self, col):
         """Sanitize pre-appended
@@ -1773,7 +1786,11 @@ class DataFrame(object):
             return df.set_index(indices.astype(np.int64))
         return df
 
-    def quantile(self, q, interpolation='linear', exact=False):
+    def quantile(self,
+                 q=0.5,
+                 interpolation='linear',
+                 columns=None,
+                 exact=True):
         """
         Return values at the given quantile.
 
@@ -1797,13 +1814,17 @@ class DataFrame(object):
         DataFrame
 
         """
+        if columns is None:
+            columns = self.columns
 
         result = DataFrame()
         result['Quantile'] = q
         for k, col in self._cols.items():
-            result[k] = col.quantile(q, interpolation, exact,
-                                     quant_index=False)
-        print(result)
+            if k in columns:
+                result[k] = col.quantile(q, interpolation=interpolation,
+                                         exact=exact,
+                                         quant_index=False)
+        return result
 
 
 class Loc(object):
@@ -1890,6 +1911,44 @@ class Iloc(object):
         # throws an exception while updating
         msg = "updating columns using iloc is not allowed"
         raise ValueError(msg)
+
+
+def from_pandas(obj):
+    """
+    Convert a Pandas DataFrame or Series object into the cudf equivalent
+
+    Raises
+    ------
+    TypeError for invalid input type.
+
+    Examples
+    --------
+
+    .. code-block:: python
+
+        import cudf
+        import pandas as pd
+
+        data = [[0,1], [1,2], [3,4]]
+        pdf = pd.DataFrame(data, columns=['a', 'b'], dtype=int)
+        cudf.from_pandas(pdf)
+
+    Output:
+
+    .. code-block:: python
+
+        <cudf.DataFrame ncols=2 nrows=3 >
+
+    """
+    if isinstance(obj, pd.DataFrame):
+        return DataFrame.from_pandas(obj)
+    elif isinstance(obj, pd.Series):
+        return Series.from_pandas(obj)
+    else:
+        raise TypeError(
+            "from_pandas only accepts Pandas Dataframes and Series objects. "
+            "Got %s" % type(obj)
+        )
 
 
 register_distributed_serializer(DataFrame)

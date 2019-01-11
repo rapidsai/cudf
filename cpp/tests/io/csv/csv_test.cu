@@ -85,6 +85,7 @@ TEST(gdf_csv_test, Simple)
 		args.dtype			= types;
 		args.delimiter		= ',';
 		args.lineterminator = '\n';
+		args.nrows = -1;
 		EXPECT_EQ( read_csv(&args), GDF_SUCCESS );
 
 		auto firstCol = gdf_host_column<int32_t>(args.data[0]);
@@ -98,10 +99,11 @@ TEST(gdf_csv_test, MortPerf)
 {
 	gdf_error error = GDF_SUCCESS;
 
-	csv_read_arg	args;
+	csv_read_arg	args{};
 	const int num_cols = 31;
 
     args.num_cols = num_cols;
+	args.nrows = -1;
 
     const char ** dnames = new const char *[num_cols] {
         "loan_id",
@@ -229,6 +231,7 @@ TEST(gdf_csv_test, Strings)
 		args.delimiter		= ',';
 		args.lineterminator = '\n';
 		args.skiprows		= 1;
+		args.nrows = -1;
 		EXPECT_EQ( read_csv(&args), GDF_SUCCESS );
 
 		// No filtering of any columns
@@ -287,6 +290,7 @@ TEST(gdf_csv_test, QuotedStrings)
 		args.quoting		= true;	// strip outermost quotechar
 		args.doublequote	= true;	// replace double quotechar with single
 		args.skiprows		= 1;
+		args.nrows = -1;
 		EXPECT_EQ( read_csv(&args), GDF_SUCCESS );
 
 		// No filtering of any columns
@@ -345,6 +349,7 @@ TEST(gdf_csv_test, KeepFullQuotedStrings)
 		args.quoting		= false;	// do not strip outermost quotechar
 		args.doublequote	= false;	// do not replace double quotechar with single
 		args.skiprows		= 1;
+		args.nrows = -1;
 		EXPECT_EQ( read_csv(&args), GDF_SUCCESS );
 
 		// No filtering of any columns
@@ -402,6 +407,7 @@ TEST(gdf_csv_test, SpecifiedBoolValues)
 		args.num_true_values	= std::extent<decltype(trueValues)>::value;
 		args.false_values		= falseValues;
 		args.num_false_values	= std::extent<decltype(falseValues)>::value;
+		args.nrows = -1;
 		EXPECT_EQ( read_csv(&args), GDF_SUCCESS );
 
 		// Booleans are the same (integer) data type, but valued at 0 or 1
@@ -413,5 +419,40 @@ TEST(gdf_csv_test, SpecifiedBoolValues)
 		EXPECT_THAT(firstCol.hostdata(), ::testing::ElementsAre(1, 0, 0, 0, 1));
 		auto thirdCol = gdf_host_column<int16_t>(args.data[2]);
 		EXPECT_THAT(thirdCol.hostdata(), ::testing::ElementsAre(0, 1, 1, 0, 1));
+	}
+}
+
+TEST(gdf_csv_test, Dates)
+{
+	const char* fname			= "/tmp/CsvDatesTest.csv";
+	const char* names[]			= { "A" };
+	const char* types[]			= { "date" };
+
+	std::ofstream outfile(fname, std::ofstream::out);
+	outfile << "05/03/2001\n31/10/2010\n20/10/1994\n18/10/1990\n1/1/1970\n";
+	outfile << "18/04/1995\n14/07/1994\n07/06/2006\n16/09/2005\n2/2/1970\n";
+	outfile.close();
+	ASSERT_TRUE( checkFile(fname) );
+
+	{
+		csv_read_arg args{};
+		args.input_data_form	= gdf_csv_input_form::FILE_PATH;
+		args.filepath_or_buffer	= fname;
+		args.num_cols			= std::extent<decltype(names)>::value;
+		args.names				= names;
+		args.dtype				= types;
+		args.delimiter			= ',';
+		args.lineterminator 	= '\n';
+		args.dayfirst			= true;
+		EXPECT_EQ( read_csv(&args), GDF_SUCCESS );
+
+		EXPECT_EQ( args.num_cols_out, args.num_cols );
+		ASSERT_EQ( args.data[0]->dtype, GDF_DATE64 );
+
+		auto ACol = gdf_host_column<uint64_t>(args.data[0]);
+		EXPECT_THAT( ACol.hostdata(),
+			::testing::ElementsAre(983750400000, 1288483200000, 782611200000,
+								   656208000000, 0, 798163200000, 774144000000,
+								   1149638400000, 1126828800000, 2764800000) );
 	}
 }
