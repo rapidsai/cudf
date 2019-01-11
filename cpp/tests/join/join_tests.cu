@@ -28,6 +28,7 @@
 #include <rmm/rmm.h>
 #include <cudf/functions.h>
 #include <join/joining.h>
+#include <join/join_compute_api.h>
 #include <utilities/bit_util.cuh>
 
 #include "tests/utilities/cudf_test_fixtures.h"
@@ -257,7 +258,8 @@ struct JoinTest : public GdfTest
   }
 
   /* --------------------------------------------------------------------------*
-   * @Synopsis  Creates two empty columns, left and right.
+   * @Synopsis  Creates two gdf_columns with size 1 data buffer allocations, but
+   * with a specified `size` attributed
    *
    * @Param left_column_length The length of the left column
    * @Param right_column_length The length of the right column
@@ -267,17 +269,21 @@ struct JoinTest : public GdfTest
   {
     using col_type = typename std::tuple_element<0, multi_column_t>::type::value_type;
     
-    std::vector<col_type> dummy_vector_left(left_column_length, static_cast<col_type>(0));
-    std::vector<col_type> dummy_vector_right(right_column_length, static_cast<col_type>(0));
+    // Only allocate a single element
+    std::vector<col_type> dummy_vector_left(1, static_cast<col_type>(0));
+    std::vector<col_type> dummy_vector_right(1, static_cast<col_type>(0));
     gdf_left_columns.push_back(create_gdf_column<col_type>(dummy_vector_left, nullptr, 0));
     gdf_right_columns.push_back(create_gdf_column<col_type>(dummy_vector_right, nullptr, 0));
+
     
     // Fill vector of raw pointers to gdf_columns
     for (auto const& c : gdf_left_columns) {
+      c->size = left_column_length;
       gdf_raw_left_columns.push_back(c.get());
     }
 
     for (auto const& c : gdf_right_columns) {
+      c->size = right_column_length;
       gdf_raw_right_columns.push_back(c.get());
     }
   }
@@ -785,19 +791,6 @@ using MaxImplementations = testing::Types< TestParameters< join_op::INNER, HASH,
 
 TYPED_TEST_CASE(MaxJoinTest, MaxImplementations);
 
-TYPED_TEST(MaxJoinTest, HugeJoinSize)
-{
-  // FIXME The maximum input join size should be std::numeric_limits<int>::max() - 1, 
-  // however, this will currently cause OOM on a GV100 as it will attempt to allocate 
-  // a 34GB hash table. Therefore, use a 2^29 input to make sure we can handle big 
-  // inputs until we can better handle OOM errors
-  // The CI Server only has a 16GB GPU, therefore need to use 2^29 input size
-  const size_t right_table_size = 1<<29;
-  this->create_input(100, RAND_MAX,
-                     right_table_size, RAND_MAX);
-  std::vector<result_type> gdf_result = this->compute_gdf_result();
-}
-
 TYPED_TEST(MaxJoinTest, InputTooLarge)
 {   
     const gdf_size_type left_table_size = 100;  
@@ -816,3 +809,28 @@ TYPED_TEST(MaxJoinTest, InputTooLarge)
                                                                    sort_result, 
                                                                    expected_error);
 }
+
+// These tests will only fail on a non-release build where `assert`s are enabled
+#ifndef NDEBUG
+TEST(HashTableSizeDeathTest, ZeroOccupancyTest){
+    int const num_insertions{100};
+    uint32_t occupancy{0};
+    EXPECT_DEATH(compute_hash_table_size(num_insertions,occupancy),"");
+}
+
+TEST(HashTableSizeDeathTest, TooLargeOccupancyTest){
+    int const num_insertions{100};
+    uint32_t occupancy{101};
+    EXPECT_DEATH(compute_hash_table_size(num_insertions,occupancy),"");
+}
+#endif
+
+TEST(HashTableSizeTest, OverflowTest){
+    int const num_insertions{std::numeric_limits<int>::max()};
+    uint32_t occupancy{50};
+    size_t hash_table_size = compute_hash_table_size(num_insertions, occupancy);
+    size_t expected_size{ size_t{2} * std::numeric_limits<int>::max()};
+    ASSERT_TRUE(hash_table_size > num_insertions);
+    EXPECT_EQ(expected_size, hash_table_size);
+}
+
