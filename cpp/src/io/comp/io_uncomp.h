@@ -16,6 +16,8 @@
 
 #pragma once
 
+#include <vector>
+
 #include "cudf.h"
 
 enum {
@@ -26,5 +28,5 @@ enum {
     IO_UNCOMP_STREAM_TYPE_XZ    = 4,
 };
 
-gdf_error io_uncompress_single_h2d(const void *src, gdf_size_type src_size, void **dst_dev, gdf_size_type *dst_size, int strm_type);
+gdf_error io_uncompress_single_h2d(const void *src, gdf_size_type src_size, int strm_type, std::vector<char>& dst);
 

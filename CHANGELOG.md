@@ -22,6 +22,7 @@
 - PR #600 Enable deep or shallow copy
 - PR #635 Add Doxygen template
 - PR #649 Add `cudf.from_pandas` function
+- PR #633 CSV Reader: Add support for the nrows parameter to specify the number of rows to read from the input file
 
 ## Improvements
 

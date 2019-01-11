@@ -34,7 +34,8 @@ def read_csv(filepath_or_buffer, lineterminator='\n',
              delimiter=',', sep=None, delim_whitespace=False,
              skipinitialspace=False, names=None, dtype=None,
              skipfooter=0, skiprows=0, dayfirst=False, compression='infer',
-             thousands=None, decimal='.', true_values=None, false_values=None):
+             thousands=None, decimal='.', true_values=None, false_values=None,
+             nrows=None):
     """
     Load and parse a CSV file into a DataFrame
 
@@ -91,6 +92,8 @@ def read_csv(filepath_or_buffer, lineterminator='\n',
         Values to consider as boolean True
     false_values : list, default None
         Values to consider as boolean False
+    nrows: int, default None
+        If specified, maximum number of rows to read
 
     Returns
     -------
@@ -233,6 +236,9 @@ def read_csv(filepath_or_buffer, lineterminator='\n',
     if thousands == delimiter:
         raise ValueError("thousands cannot be the same as delimiter")
 
+    if nrows is not None and skipfooter != 0:
+        raise ValueError("cannot use both nrows and skipfooter parameters")
+
     # Start with default values recognized as boolean
     arr_true_values = [_wrap_string(str('True')), _wrap_string(str('TRUE'))]
     arr_false_values = [_wrap_string(str('False')), _wrap_string(str('FALSE'))]
@@ -267,6 +273,7 @@ def read_csv(filepath_or_buffer, lineterminator='\n',
     csv_reader.compression = compression_bytes
     csv_reader.decimal = decimal.encode()
     csv_reader.thousands = thousands.encode() if thousands else b'\0'
+    csv_reader.nrows = nrows if nrows is not None else -1
 
     # Call read_csv
     libgdf.read_csv(csv_reader)
@@ -304,7 +311,8 @@ def read_csv_strings(filepath_or_buffer, lineterminator='\n',
                      delimiter=',', sep=None, delim_whitespace=False,
                      skipinitialspace=False, names=None, dtype=None,
                      skipfooter=0, skiprows=0, dayfirst=False, thousands=None,
-                     decimal='.', true_values=None, false_values=None):
+                     decimal='.', true_values=None, false_values=None,
+                     nrows=None):
 
     """
     **Experimental**: This function exists only as a beta way to use
@@ -431,6 +439,9 @@ def read_csv_strings(filepath_or_buffer, lineterminator='\n',
     if thousands == delimiter:
         raise ValueError("thousands cannot be the same as delimiter")
 
+    if nrows is not None and skipfooter != 0:
+        raise ValueError("cannot use both nrows and skipfooter parameters")
+
     # Start with default values recognized as boolean
     arr_true_values = [_wrap_string(str('True')), _wrap_string(str('TRUE'))]
     arr_false_values = [_wrap_string(str('False')), _wrap_string(str('FALSE'))]
@@ -460,6 +471,7 @@ def read_csv_strings(filepath_or_buffer, lineterminator='\n',
     csv_reader.skipfooter = skipfooter
     csv_reader.decimal = decimal.encode()
     csv_reader.thousands = thousands.encode() if thousands else b'\0'
+    csv_reader.nrows = nrows if nrows is not None else -1
 
     # Call read_csv
     libgdf.read_csv(csv_reader)

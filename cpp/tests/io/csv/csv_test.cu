@@ -85,6 +85,7 @@ TEST(gdf_csv_test, Simple)
 		args.dtype			= types;
 		args.delimiter		= ',';
 		args.lineterminator = '\n';
+		args.nrows = -1;
 		EXPECT_EQ( read_csv(&args), GDF_SUCCESS );
 
 		auto firstCol = gdf_host_column<int32_t>(args.data[0]);
@@ -98,10 +99,11 @@ TEST(gdf_csv_test, MortPerf)
 {
 	gdf_error error = GDF_SUCCESS;
 
-	csv_read_arg	args;
+	csv_read_arg	args{};
 	const int num_cols = 31;
 
     args.num_cols = num_cols;
+	args.nrows = -1;
 
     const char ** dnames = new const char *[num_cols] {
         "loan_id",
@@ -229,6 +231,7 @@ TEST(gdf_csv_test, Strings)
 		args.delimiter		= ',';
 		args.lineterminator = '\n';
 		args.skiprows		= 1;
+		args.nrows = -1;
 		EXPECT_EQ( read_csv(&args), GDF_SUCCESS );
 
 		// No filtering of any columns
@@ -287,6 +290,7 @@ TEST(gdf_csv_test, QuotedStrings)
 		args.quoting		= true;	// strip outermost quotechar
 		args.doublequote	= true;	// replace double quotechar with single
 		args.skiprows		= 1;
+		args.nrows = -1;
 		EXPECT_EQ( read_csv(&args), GDF_SUCCESS );
 
 		// No filtering of any columns
@@ -345,6 +349,7 @@ TEST(gdf_csv_test, KeepFullQuotedStrings)
 		args.quoting		= false;	// do not strip outermost quotechar
 		args.doublequote	= false;	// do not replace double quotechar with single
 		args.skiprows		= 1;
+		args.nrows = -1;
 		EXPECT_EQ( read_csv(&args), GDF_SUCCESS );
 
 		// No filtering of any columns
@@ -402,6 +407,7 @@ TEST(gdf_csv_test, SpecifiedBoolValues)
 		args.num_true_values	= std::extent<decltype(trueValues)>::value;
 		args.false_values		= falseValues;
 		args.num_false_values	= std::extent<decltype(falseValues)>::value;
+		args.nrows = -1;
 		EXPECT_EQ( read_csv(&args), GDF_SUCCESS );
 
 		// Booleans are the same (integer) data type, but valued at 0 or 1
