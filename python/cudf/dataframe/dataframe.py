@@ -1738,7 +1738,11 @@ class DataFrame(object):
             return df.set_index(indices.astype(np.int64))
         return df
 
-    def quantile(self, q=0.5, interpolation='linear', columns=None, exact=True):
+    def quantile(self,
+                 q=0.5,
+                 interpolation='linear',
+                 columns=None,
+                 exact=True):
         """
         Return values at the given quantile.
 
