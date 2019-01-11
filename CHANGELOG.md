@@ -48,6 +48,7 @@
 - PR #612 Prevent an exception from occuring with true division on integer series.
 - PR #630 Fix deprecation warning for `pd.core.common.is_categorical_dtype`
 - PR #622 Fix Series.append() behaviour when appending values with different numeric dtype
+- PR #673 Fix array of strings not being caught in from_pandas
 
 
 # cuDF 0.4.0 (05 Dec 2018)
