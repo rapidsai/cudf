@@ -65,6 +65,7 @@
 - PR #670 CMAKE: Fix env include path taking precedence over libcudf source headers
 - PR #674 Check for gdf supported column types
 
+
 # cuDF 0.4.0 (05 Dec 2018)
 
 ## New Features
