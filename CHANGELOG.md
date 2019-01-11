@@ -38,6 +38,7 @@
 
 ## Bug Fixes
 
+- PR #569 CSV Reader: Fix days being off-by-one when parsing some dates
 - PR #531 CSV Reader: Fix incorrect parsing of quoted numbers
 - PR #465 Added templated C++ API for RMM to avoid explicit cast to `void**`
 - PR #473 Added missing <random> include
