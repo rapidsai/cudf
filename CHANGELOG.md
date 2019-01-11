@@ -65,6 +65,7 @@
 - PR #665 Reworked the hash map to add a way to report the destination partition for a key
 - PR #670 CMAKE: Fix env include path taking precedence over libcudf source headers
 
+
 # cuDF 0.4.0 (05 Dec 2018)
 
 ## New Features
