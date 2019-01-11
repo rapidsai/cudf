@@ -206,50 +206,15 @@ std::string stringType(gdf_dtype dt){
 }
 
 
-
-/**
- * @brief read in a CSV file
+/**---------------------------------------------------------------------------*
+ * @brief Read in a CSV file, extract all fields and return 
+ * a GDF (array of gdf_columns)
  *
- * Read in a CSV file, extract all fields, and return a GDF (array of gdf_columns)
- *
- * @param[in and out] args the input arguments, but this also contains the returned data
- *
- * Arguments:
- *
- *  Required Arguments
- * 		file_path			-	file location to read from
- * 		num_cols			-	number of columns in the names and dtype arrays
- * 		names				-	ordered List of column names, this is a required field
- * 		dtype				-	ordered List of data types, this is required
- *
- * 	Optional
- * 		lineterminator		-	define the line terminator character.  Default is '\n'
- * 		delimiter			-	define the field separator, default is ','.  This argument is also called 'sep'
- *
- * 		quotechar;				define the character used to denote start and end of a quoted item
- * 		quoting;				treat string fields as quoted item and remove the first and last quotechar
- * 		nodoublequote;			do not interpret two consecutive quotechar as a single quotechar
- *
- * 		delim_whitespace	-	use white space as the delimiter - default is false.  This overrides the delimiter argument
- * 		skipinitialspace	-	skip white spaces after the delimiter - default is false
- *
- *		nrows       	 	-	number of rows of file to read, default is to read all rows
- *		skiprows			-	number of rows at the start of the file to skip, default is 0
- *		skipfooter			-	number of rows at the bottom of the file to skip, default is 0   
- *
- * 		dayfirst			-	is the first value the day?  DD/MM  versus MM/DD
- * 		compression			-	compression {"infer","gzip","zip"}, default is no compression.
- *
- *
- *  Output
- *  	num_cols_out		-	Out: return the number of columns read in
- *  	num_rows_out		-	Out: return the number of rows read in
- *  	gdf_column **data	-	Out: return the array of *gdf_columns
- *
+ * @param[in,out] args Structure containing both the the input arguments 
+ * and the returned data
  *
  * @return gdf_error
- *
- */
+ *---------------------------------------------------------------------------**/
 gdf_error read_csv(csv_read_arg *args)
 {
 	gdf_error error = gdf_error::GDF_SUCCESS;
@@ -818,6 +783,20 @@ gdf_dtype convertStringToDtype(std::string &dtype) {
 	return GDF_invalid;
 }
 
+
+/**---------------------------------------------------------------------------*
+ * @brief Infer the compression type from the compression parameter and 
+ * the input file name
+ * 
+ * Returns "none" if the input is not compressed.
+ * 
+ * @param[in] compression_arg Input string that is potentially describing 
+ * the compression type. Can also be nullptr, "none", or "infer"
+ * @param[in] filepath path + name of the input file
+ * @param[out] compression_type String describing the inferred compression type
+ * 
+ * @return gdf_error with error code on failure, otherwise GDF_SUCCESS
+ *---------------------------------------------------------------------------**/
 gdf_error inferCompressionType(const char* compression_arg, const char* filepath, string& compression_type)
 {
 	if (compression_arg && 0 == strcasecmp(compression_arg, "none")) {
@@ -846,9 +825,19 @@ gdf_error inferCompressionType(const char* compression_arg, const char* filepath
 	
 	return GDF_SUCCESS;
 }
-/*
- * Store the uncompressed file in host memory
- */
+
+
+/**---------------------------------------------------------------------------*
+ * @brief Uncompresses the input data and stores the allocated result into 
+ * a vector.
+ * 
+ * @param[in] h_data Pointer to the csv data in host memory
+ * @param[in] num_bytes Size of the input data, in bytes
+ * @param[in] compression String describing the compression type
+ * @param[out] h_uncomp_data Vector containing the output uncompressed data
+ * 
+ * @return gdf_error with error code on failure, otherwise GDF_SUCCESS
+ *---------------------------------------------------------------------------**/
 gdf_error getUncompressedHostData(const char* h_data, size_t num_bytes, const string& compression, vector<char>& h_uncomp_data) 
 {	
 	int comp_type = IO_UNCOMP_STREAM_TYPE_INFER;
@@ -865,6 +854,20 @@ gdf_error getUncompressedHostData(const char* h_data, size_t num_bytes, const st
 }
 
 
+/**---------------------------------------------------------------------------*
+ * @brief Uploads the relevant segment of the input csv data onto the GPU.
+ * 
+ * Only rows that need to be read are copied to the GPU, based on parameters
+ * like nrows, skipheader, skipfooter.
+ * Also updates the array of record starts to match the device data offset.
+ * 
+ * @param[in] h_uncomp_data Pointer to the uncompressed csv data in host memory
+ * @param[in] h_uncomp_size Size of the input data, in bytes
+ * @param[in,out] csvData Structure containing the csv parsing parameters
+ * and intermediate results
+ * 
+ * @return gdf_error with error code on failure, otherwise GDF_SUCCESS
+ *---------------------------------------------------------------------------**/
 gdf_error uploadDataToDevice(const char* h_uncomp_data, size_t h_uncomp_size, raw_csv_t * raw_csv) {
 	vector<cu_recstart_t> h_rec_starts(raw_csv->num_records + 1);
 	CUDA_TRY( cudaMemcpy(h_rec_starts.data(), raw_csv->recStart, sizeof(cu_recstart_t) * h_rec_starts.size(), cudaMemcpyDefault));
@@ -960,6 +963,25 @@ gdf_error allocateGdfDataSpace(gdf_column *gdf) {
 //				CUDA Kernels
 //----------------------------------------------------------------------------------------------------------------
 
+
+/**---------------------------------------------------------------------------*
+ * @brief Counts the number of rows in the input csv file.
+ * 
+ * Does not load the entire file into the GPU memory at any time, so it can 
+ * be used to parse large files.
+ * Does not take quotes into consideration, so it will return extra rows
+ * if the line terminating characters are present within quotes.
+ * Because of this the result should be postprocessed to remove 
+ * the fake line endings.
+ * 
+ * @param[in] h_data Pointer to the csv data in host memory
+ * @param[in] h_size Size of the input data, in bytes
+ * @param[in] terminator Line terminator character
+ * @param[in] quote Quote character
+ * @param[out] rec_cnt The resulting number of rows (records)
+ * 
+ * @return gdf_error with error code on failure, otherwise GDF_SUCCESS
+ *---------------------------------------------------------------------------**/
 gdf_error launch_countRecords(const char* h_data, size_t h_size, 
 							  char terminator, char quote, 
 							  gdf_size_type& rec_cnt)
@@ -1006,6 +1028,21 @@ gdf_error launch_countRecords(const char* h_data, size_t h_size,
 }
 
 
+/**---------------------------------------------------------------------------* 
+ * @brief CUDA kernel that counts the number of rows in the given 
+ * file segment, based on the location of line terminators. 
+ * 
+ * @param[in] data Device memory pointer to the csv data, 
+ * potentially a chunk of the whole file
+ * @param[in] terminator Line terminator character
+ * @param[in] quotechar Quote character
+ * @param[in] num_bytes Number of bytes in the input data
+ * @param[in] num_bits Number of 'bits' in the input data. Each 'bit' is
+ * processed by a separate CUDA thread
+ * @param[in,out] num_records Device memory pointer to the number of found rows
+ * 
+ * @return gdf_error with error code on failure, otherwise GDF_SUCCESS
+ *---------------------------------------------------------------------------**/
 __global__ void countRecords(char *data, const char terminator, const char quotechar, long num_bytes, long num_bits, 
 	cu_reccnt_t* num_records) {
 
@@ -1040,6 +1077,25 @@ __global__ void countRecords(char *data, const char terminator, const char quote
 }
 
 
+/**---------------------------------------------------------------------------*
+ * @brief Finds the start of each row (record) in the given file, based on
+ * the location of line terminators. The offset of each found row is stored 
+ * in the recStart data member of the csvData parameter.
+ * 
+ * Does not load the entire file into the GPU memory at any time, so it can 
+ * be used to parse large files.
+ * Does not take quotes into consideration, so it will return extra rows
+ * if the line terminating characters are present within quotes.
+ * Because of this the result should be postprocessed to remove 
+ * the fake line endings.
+ * 
+ * @param[in] h_data Pointer to the csv data in host memory
+ * @param[in] h_size Size of the input data, in bytes
+ * @param[in,out] csvData Structure containing the csv parsing parameters
+ * and intermediate results
+ * 
+ * @return gdf_error with error code on failure, otherwise GDF_SUCCESS
+ *---------------------------------------------------------------------------**/
 gdf_error launch_storeRecordStart(const char* h_data, size_t h_size, raw_csv_t * csvData) {
 
 	char* d_chunk = nullptr;
@@ -1085,6 +1141,26 @@ gdf_error launch_storeRecordStart(const char* h_data, size_t h_size, raw_csv_t *
 }
 
 
+/**---------------------------------------------------------------------------*
+ * @brief CUDA kernel that finds the start of each row (record) in the given 
+ * file segment, based on the location of line terminators. 
+ * 
+ * The offset of each found row is stored in a device memory array. 
+ * The kernel operate on a segment (chunk) of the csv file.
+ * 
+ * @param[in] data Device memory pointer to the csv data, 
+ * potentially a chunk of the whole file
+ * @param[in] chunk_offset Offset of the data pointer from the start of the file
+ * @param[in] terminator Line terminator character
+ * @param[in] quotechar Quote character
+ * @param[in] num_bytes Number of bytes in the input data
+ * @param[in] num_bits Number of 'bits' in the input data. Each 'bit' is
+ * processed by a separate CUDA thread
+ * @param[in,out] num_records Device memory pointer to the number of found rows
+ * @param[out] recStart device memory array containing the offset of each record
+ * 
+ * @return void
+ *---------------------------------------------------------------------------**/
 __global__ void storeRecordStart(char *data, size_t chunk_offset, 
 	const char terminator, const char quotechar, 
 	long num_bytes, long num_bits, cu_reccnt_t* num_records,

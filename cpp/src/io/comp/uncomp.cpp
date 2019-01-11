@@ -263,6 +263,20 @@ int cpu_inflate(uint8_t *uncomp_data, size_t *destLen, const uint8_t *comp_data,
 }
 
 
+/* --------------------------------------------------------------------------*/
+/** 
+ * @Brief Uncompresses a gzip/zip/bzip2/xz file stored in system memory.
+ * The result is allocated and stored in a vector.
+ * If the function call fails, the output vector is empty.
+ * 
+ * @param src[in] Pointer to the compressed data in system memory
+ * @param src_size[in] The size of the compressed data, in bytes
+ * @param strm_type[in] Type of compression of the input data
+ * @param dst[out] Vector containing the uncompressed output
+ * 
+ * @Returns gdf_error with error code on failure, otherwise GDF_SUCCESS
+ */
+/* ----------------------------------------------------------------------------*/
 gdf_error io_uncompress_single_h2d(const void *src, gdf_size_type src_size, int strm_type, std::vector<char>& dst)
 {
     const uint8_t *raw = (const uint8_t *)src;
