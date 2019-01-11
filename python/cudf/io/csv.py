@@ -158,7 +158,7 @@ def read_csv(filepath_or_buffer, lineterminator='\n',
     # Populate csv_reader struct
     if is_file_like(filepath_or_buffer):
         if compression == 'infer':
-            raise ValueError("Cannot infer compression type from a buffer")
+            compression = None
         buffer = filepath_or_buffer.read()
         # check if StringIO is used
         if hasattr(buffer, 'encode'):
