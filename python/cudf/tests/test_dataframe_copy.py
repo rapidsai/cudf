@@ -45,20 +45,19 @@ def test_dataframe_deep_copy(copy_parameters):
 
 
 @pytest.mark.parametrize('copy_parameters', [
-    {'fn': lambda x: x.copy(), 'expected_equality': True},
-    {'fn': lambda x: x.copy(deep=True), 'expected_equality': True},
-    {'fn': lambda x: copy(x), 'expected_equality': True},
-    {'fn': lambda x: deepcopy(x), 'expected_equality': True},
-    {'fn': lambda x: x.copy(deep=False), 'expected_equality': True},
+    {'fn': lambda x: x.copy(), 'expected_equality': False},
+    {'fn': lambda x: x.copy(deep=True), 'expected_equality': False},
+    {'fn': lambda x: copy(x), 'expected_equality': False},
+    {'fn': lambda x: deepcopy(x), 'expected_equality': False},
     ])
-def test_dataframe_copy_and_insert(copy_parameters):
+def test_dataframe_deep_copy_and_insert(copy_parameters):
     pdf = pd.DataFrame([[1, 2, 3], [4, 5, 6], [7, 8, 9]],
                        columns=['a', 'b', 'c'])
     gdf = DataFrame.from_pandas(pdf)
     copy_pdf = copy_parameters['fn'](pdf)
     copy_gdf = copy_parameters['fn'](gdf)
-    copy_pdf['d'] = [0, 0, 0]
-    copy_gdf['d'] = [0, 0, 0]
+    copy_pdf['b'] = [0, 0, 0]
+    copy_gdf['b'] = [0, 0, 0]
     pdf_is_equal = np.array_equal(pdf['b'].values, copy_pdf['b'].values)
     gdf_is_equal = np.array_equal(gdf['b'].to_array(),
                                   copy_gdf['b'].to_array())
@@ -79,7 +78,7 @@ expected_equality
     lambda x: deepcopy(x),
     lambda x: x.copy(deep=False),
     ])
-@pytest.mark.parametrize('ncols', [0, 1, 2, 10])
+@pytest.mark.parametrize('ncols', [0, 1, 10])
 @pytest.mark.parametrize(
     'data_type',
     ['int8', 'int16', 'int32', 'int64', 'float32', 'float64',
@@ -96,18 +95,17 @@ def test_cudf_dataframe_copy(copy_fn, ncols, data_type):
 
 
 @pytest.mark.parametrize('copy_fn', [
-    # lambda x: x.copy(),
-    # lambda x: x.copy(deep=True),
-    # lambda x: copy(x),
-    # lambda x: deepcopy(x),
+    lambda x: x.copy(),
+    lambda x: x.copy(deep=True),
+    lambda x: copy(x),
+    lambda x: deepcopy(x),
     lambda x: x.copy(deep=False),
     ])
-@pytest.mark.parametrize('ncols', [0, 1, 2, 10])
+@pytest.mark.parametrize('ncols', [0, 1, 10])
 @pytest.mark.parametrize(
     'data_type',
-    # ['int8', 'int16', 'int32', 'int64', 'float32', 'float64',
-    #     'category', 'datetime64[ms]', ]
-    ['int8']
+    ['int8', 'int16', 'int32', 'int64', 'float32', 'float64',
+     'category', 'datetime64[ms]', ]
 )
 def test_cudf_dataframe_copy_then_insert(copy_fn, ncols, data_type):
     pdf = pd.DataFrame()
