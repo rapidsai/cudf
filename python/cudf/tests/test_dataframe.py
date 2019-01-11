@@ -187,6 +187,13 @@ def test_dataframe_column_name_indexing():
         for idx in combinations(pdf.columns, i):
             assert(pdf[list(idx)].equals(df[list(idx)].to_pandas()))
 
+    # test for only numeric columns
+    df = pd.DataFrame()
+    for i in range(0, 10):
+        df[i] = range(nelem)
+    gdf = DataFrame.from_pandas(df)
+    assert_eq(gdf, df)
+
 
 def test_dataframe_drop_method():
     df = DataFrame()
@@ -1133,3 +1140,21 @@ def test_iteritems(gdf):
         assert k in gdf.columns
         assert isinstance(v, gd.Series)
         assert_eq(v, gdf[k])
+
+
+@pytest.mark.xfail(reason="our quantile result is a DataFrame, not a Series")
+def test_quantile(pdf, gdf):
+    assert_eq(pdf.quantile(), gdf.quantile())
+
+
+def test_from_pandas_function(pdf):
+    gdf = gd.from_pandas(pdf)
+    assert isinstance(gdf, gd.DataFrame)
+    assert_eq(pdf, gdf)
+
+    gdf = gd.from_pandas(pdf.x)
+    assert isinstance(gdf, gd.Series)
+    assert_eq(pdf.x, gdf)
+
+    with pytest.raises(TypeError):
+        gd.from_pandas(123)
