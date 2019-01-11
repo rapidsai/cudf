@@ -58,6 +58,7 @@
 - PR #634 Fix create `DataFrame.from_pandas()` with numeric column names
 - PR #648 Enforce one-to-one copy required when using `numba>=0.42.0`
 - PR #645 Fix cmake build type handling not setting debug options when CMAKE_BUILD_TYPE=="Debug"
+- PR #669 Fix GIL deadlock when launching multiple python threads that make Cython calls
 
 
 # cuDF 0.4.0 (05 Dec 2018)
