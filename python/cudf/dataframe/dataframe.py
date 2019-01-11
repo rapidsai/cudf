@@ -472,15 +472,18 @@ class DataFrame(object):
     def copy(self, deep=True):
         """
         Returns a copy of this dataframe
+
+        Parameters
+        ----------
+        deep: bool
+           Make a full copy of Series columns and Index at the GPU level, or
+           create a new allocation with references.
         """
-        print('DF deep ', deep)
         df = DataFrame()
         df._size = self._size
         for k in self._cols:
             df._index = self._index.copy(deep)
-            print(id(self._cols[k]))
             df._cols[k] = self._cols[k].copy(deep)
-            print(id(df._cols[k]))
         return df
 
     def __copy__(self):

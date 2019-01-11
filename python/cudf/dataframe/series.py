@@ -140,7 +140,6 @@ class Series(object):
         return cls(**params)
 
     def copy(self, deep=True):
-        print('Series deep ', deep)
         if deep:
             result = self._copy_construct()
             result._column = self._column.copy(deep)

@@ -302,14 +302,18 @@ class Column(object):
         copies the references of the data and mask.
         """
         if(deep):
-            copied = self.copy_data()
+            deep = self.copy_data()
             if self.has_null_mask:
-                return copied.set_mask(mask=self.mask.copy(),
-                                       null_count=self.null_count)
+                return deep.set_mask(mask=self.mask.copy(),
+                                     null_count=self.null_count)
             else:
-                return copied.allocate_mask()
+                return deep.allocate_mask()
         else:
-            return self
+            shallow = Column()
+            shallow._data = self._data
+            shallow._mask = self._mask
+            shallow.has_null_mask = self.has_null_mask
+            return shallow
 
     def replace(self, **kwargs):
         """Replace attributes of the class and return a new Column.

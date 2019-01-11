@@ -167,7 +167,7 @@ def test_kernel_shallow_copy():
     assert_eq(gdf, cdf)
 
 
-@pytest.mark.xfail(reason="cudf row wise shallow copy immutable")
+@pytest.mark.xfail(reason="cudf column-wise shallow copy is immutable")
 def test_dataframe_copy_shallow():
     pdf = pd.DataFrame([[1, 2, 3], [4, 5, 6], [7, 8, 9]],
                        columns=['a', 'b', 'c'])
