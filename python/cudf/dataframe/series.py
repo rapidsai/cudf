@@ -140,11 +140,9 @@ class Series(object):
         return cls(**params)
 
     def copy(self, deep=True):
+        result = self._copy_construct()
         if deep:
-            result = self._copy_construct()
             result._column = self._column.copy(deep)
-        else:
-            result = self
         return result
 
     def __copy__(self, deep=True):
