@@ -1799,4 +1799,42 @@ class Loc(object):
         return df
 
 
+def from_pandas(obj):
+    """
+    Convert a Pandas DataFrame or Series object into the cudf equivalent
+
+    Raises
+    ------
+    TypeError for invalid input type.
+
+    Examples
+    --------
+
+    .. code-block:: python
+
+        import cudf
+        import pandas as pd
+
+        data = [[0,1], [1,2], [3,4]]
+        pdf = pd.DataFrame(data, columns=['a', 'b'], dtype=int)
+        cudf.from_pandas(pdf)
+
+    Output:
+
+    .. code-block:: python
+
+        <cudf.DataFrame ncols=2 nrows=3 >
+
+    """
+    if isinstance(obj, pd.DataFrame):
+        return DataFrame.from_pandas(obj)
+    elif isinstance(obj, pd.Series):
+        return Series.from_pandas(obj)
+    else:
+        raise TypeError(
+            "from_pandas only accepts Pandas Dataframes and Series objects. "
+            "Got %s" % type(obj)
+        )
+
+
 register_distributed_serializer(DataFrame)
