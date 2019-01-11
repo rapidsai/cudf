@@ -340,16 +340,14 @@ def test_csv_reader_buffer(tmpdir):
     int32_ref = [1234567, 12345]
 
     df_str = read_csv(StringIO(buffer),
-                      names=names, dtype=dtypes, skiprows=1,
-                      compression=None)
+                      names=names, dtype=dtypes, skiprows=1)
     np.testing.assert_allclose(f32_ref, df_str['float32'])
     np.testing.assert_allclose(int32_ref, df_str['int32'])
     assert("1995-11-22T00:00:00.000" == str(df_str['date'][0]))
     assert("2002-01-02T00:00:00.000" == str(df_str['date'][1]))
 
     df_bytes = read_csv(BytesIO(str.encode(buffer)),
-                        names=names, dtype=dtypes, skiprows=1,
-                        compression=None)
+                        names=names, dtype=dtypes, skiprows=1)
     np.testing.assert_allclose(f32_ref, df_bytes['float32'])
     np.testing.assert_allclose(int32_ref, df_bytes['int32'])
     assert("1995-11-22T00:00:00.000" == str(df_bytes['date'][0]))
