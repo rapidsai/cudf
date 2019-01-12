@@ -872,26 +872,43 @@ gdf_error uploadDataToDevice(const char* h_uncomp_data, size_t h_uncomp_size, ra
 	vector<cu_recstart_t> h_rec_starts(raw_csv->num_records + 1);
 	CUDA_TRY( cudaMemcpy(h_rec_starts.data(), raw_csv->recStart, sizeof(cu_recstart_t) * h_rec_starts.size(), cudaMemcpyDefault));
 	
-	// Read whole file is nrows is too large
-	if (raw_csv->nrows >= 0 && (gdf_size_type)raw_csv->nrows >= raw_csv->num_records) {
-		raw_csv->nrows = -1;
+	// Exclude the rows user chose to skip at the start of the file
+	const gdf_size_type first_row = raw_csv->skiprows + max(raw_csv->header_row, 0l);
+	if (raw_csv->num_records > first_row) {
+		raw_csv->num_records = raw_csv->num_records - (long)first_row;
+	}
+	else {
+		raw_csv->num_records = 0;
 	}
 
-	// Set to the number of records that will be loaded to the GPU
-	raw_csv->num_records = (raw_csv->nrows >= 0)? 
-		gdf_size_type(raw_csv->nrows):
-		gdf_size_type(raw_csv->num_records - (raw_csv->skipfooter + raw_csv->skiprows));
+	// Restrict the rows to nrows if nrows is smaller than the remaining number of rows
+	if (raw_csv->nrows >= 0 && (gdf_size_type)raw_csv->nrows < raw_csv->num_records) {
+		raw_csv->num_records = (gdf_size_type)raw_csv->nrows;
+	}
 
-	const auto start_offset = h_rec_starts[raw_csv->skiprows];
-	const auto end_offset = h_rec_starts[raw_csv->skiprows + raw_csv->num_records] - 1;
+	// Exclude the rows user chose to skip at the end of the file
+	if (raw_csv->skipfooter != 0) {
+		raw_csv->num_records = gdf_size_type(max(raw_csv->num_records - raw_csv->skipfooter, 0ul));
+		
+	}
+	
+	// Have to at least read the header row
+	if (raw_csv->header_row >= 0 && raw_csv->num_records == 0) 
+		raw_csv->num_records = 1;
+
+	// If specified, header row will always be the first row in the GPU data
+	raw_csv->header_row = min(raw_csv->header_row, 0l);
+
+	const auto start_offset = h_rec_starts[first_row];
+	const auto end_offset = h_rec_starts[first_row + raw_csv->num_records] - 1;
 	raw_csv->num_bytes = end_offset - start_offset + 1;
 	assert(raw_csv->num_bytes <= h_uncomp_size);
 	raw_csv->num_bits = (raw_csv->num_bytes + 63) / 64;
 
 	// Update the record starts to match the device data (skip missing records, fix offset)
-	for (auto i = raw_csv->skiprows; i <= raw_csv->skiprows + raw_csv->num_records; ++i)
+	for (gdf_size_type i = first_row; i <= first_row + raw_csv->num_records; ++i)
 		h_rec_starts[i] -= start_offset;
-	CUDA_TRY( cudaMemcpy(raw_csv->recStart, h_rec_starts.data() + raw_csv->skiprows, 
+	CUDA_TRY( cudaMemcpy(raw_csv->recStart, h_rec_starts.data() + first_row, 
 		sizeof(cu_recstart_t) * (raw_csv->num_records + 1), cudaMemcpyDefault));
 
 	// Allocate and copy to the GPU

@@ -272,7 +272,7 @@ def test_csv_reader_mangle_dupe_cols_header(tmpdir):
     out = read_csv(str(fname), dayfirst=True, header=2)
     assert len(out.columns) == len(df_out.columns)
     # assert len(out) == len(df_out)
-    # Compare column names
+    # Compare column names    
     assert list(df_out.columns.values) == list(out.columns.values)
 
 
@@ -496,6 +496,11 @@ def test_csv_reader_nrows(tmpdir):
         assert(df['int1'][row] == row)
         assert(df['int2'][row] == 2 * row)
     assert(df['int2'][rows - 1] == 2 * (rows - 1))
+
+    # nrows + skiprows larger than the file
+    df = read_csv(str(fname),
+                  dtype=dtypes, nrows=read_rows, skiprows=read_rows)
+    assert(df.shape == (rows - read_rows, 2))
 
     # nrows equal to zero
     df = read_csv(str(fname),
