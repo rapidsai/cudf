@@ -1068,6 +1068,14 @@ class DataFrame(object):
         # Columns are returned in order left - on - right from libgdf
         # Creating dataframe with ordering as pandas:
 
+        dummy = pd.DataFrame(data=dict([(c,[None]) for c in self.columns]),
+                             columns=self.columns) \
+                  .merge(pd.DataFrame(data=dict([(c,[None]) for c in other.columns]),
+                                      columns=other.columns),
+                                      on=on, how=how, suffixes=(lsuffix, rsuffix))
+        for c in dummy.columns:
+            df._cols[c] = None
+
         gap = len(self.columns) - len(on)
         for idx in range(len(on)):
             if (cols[idx + gap].dtype == 'datetime64[ms]'):
@@ -1085,7 +1093,6 @@ class DataFrame(object):
                                               mask=Buffer(valids[idx]))
 
         idx = 0
-
         for name in self.columns:
             if name not in on:
                 f_n = fix_name(name, lsuffix)
