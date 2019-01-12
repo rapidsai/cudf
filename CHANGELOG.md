@@ -69,6 +69,7 @@
 - PR #665 Reworked the hash map to add a way to report the destination partition for a key
 - PR #670 CMAKE: Fix env include path taking precedence over libcudf source headers
 - PR #677 Fix 'gdf_csv_test_Dates' gtest failure due to missing nrows parameter
+- PR #678 Ensure pandas column ordering in merge
 
 
 # cuDF 0.4.0 (05 Dec 2018)
