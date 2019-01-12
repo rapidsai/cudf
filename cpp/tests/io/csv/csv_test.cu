@@ -444,6 +444,7 @@ TEST(gdf_csv_test, Dates)
 		args.delimiter			= ',';
 		args.lineterminator 	= '\n';
 		args.dayfirst			= true;
+		args.nrows				= -1;
 		EXPECT_EQ( read_csv(&args), GDF_SUCCESS );
 
 		EXPECT_EQ( args.num_cols_out, args.num_cols );
