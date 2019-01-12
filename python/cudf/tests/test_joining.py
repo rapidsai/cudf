@@ -322,18 +322,18 @@ def test_dataframe_merge_issue251():
     gdf1 = DataFrame()
     gdf2 = DataFrame()
     gdf1['id'] = [10, 11]
-    gdf1['b'] = [1,2]
+    gdf1['b'] = [1, 2]
     gdf1['a'] = [3, 4]
-    gdf2['id'] = [4,5]
+    gdf2['id'] = [4, 5]
     gdf2['a'] = [7, 8]
     gdf = gdf1.merge(gdf2, how='left', on=['id', 'a'], method='hash')
 
     df1 = pd.DataFrame()
     df2 = pd.DataFrame()
     df1['id'] = [10, 11]
-    df1['b'] = [1,2]
+    df1['b'] = [1, 2]
     df1['a'] = [3, 4]
-    df2['id'] = [4,5]
+    df2['id'] = [4, 5]
     df2['a'] = [7, 8]
     df = df1.merge(df2, how='left', on=['id', 'a'])
 
