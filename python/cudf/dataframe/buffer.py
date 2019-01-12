@@ -132,8 +132,8 @@ class Buffer(object):
             buf = Buffer(sliced)
             buf.dtype = self.dtype  # for np.datetime64 support
             return buf
-        elif isinstance(arg, int):
-            arg = utils.normalize_index(arg, self.size)
+        elif isinstance(arg, (int, np.integer)):
+            arg = utils.normalize_index(int(arg), self.size)
             # the dtype argument is necessary for datetime64 support
             # because currently we can't pass datetime64 types into
             # cuda dev arrays, so the type of the cuda dev array is

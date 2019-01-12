@@ -109,20 +109,52 @@ def test_series_append():
     np.testing.assert_equal(series.to_array(), np.hstack([a6, a5]))
 
 
-def test_series_indexing():
+index_dtypes = [np.int64, np.int32, np.int16, np.int8,
+                np.uint64, np.uint32, np.uint16, np.uint8]
+
+
+@pytest.mark.parametrize(
+    'i1, i2, i3',
+    ([(slice(None, 12), slice(3, None), slice(None, None, 2)),
+      (range(12), range(3, 12), range(0, 9, 2)),
+      (np.arange(12), np.arange(3, 12), np.arange(0, 9, 2)),
+      (list(range(12)), list(range(3, 12)), list(range(0, 9, 2))),
+      (pd.Series(range(12)), pd.Series(range(3, 12)),
+       pd.Series(range(0, 9, 2))),
+      (Series(range(12)), Series(range(3, 12)), Series(range(0, 9, 2))),
+      ([i in range(12) for i in range(20)],
+       [i in range(3, 12) for i in range(12)],
+       [i in range(0, 9, 2) for i in range(9)]),
+      (np.array([i in range(12) for i in range(20)], dtype=bool),
+       np.array([i in range(3, 12) for i in range(12)], dtype=bool),
+       np.array([i in range(0, 9, 2) for i in range(9)], dtype=bool))]
+     + [(np.arange(12, dtype=t), np.arange(3, 12, dtype=t),
+         np.arange(0, 9, 2, dtype=t)) for t in index_dtypes]),
+    ids=(['slice', 'range', 'numpy.array', 'list', 'pandas.Series',
+          'Series', 'list[bool]', 'numpy.array[bool]']
+         + ['numpy.array[%s]' % t.__name__ for t in index_dtypes]))
+def test_series_indexing(i1, i2, i3):
     a1 = np.arange(20)
     series = Series(a1)
     # Indexing
-    sr1 = series[:12]
+    sr1 = series[i1]
     assert sr1.null_count == 0
     np.testing.assert_equal(sr1.to_array(), a1[:12])
-    sr2 = sr1[3:]
+    sr2 = sr1[i2]
     assert sr2.null_count == 0
     np.testing.assert_equal(sr2.to_array(), a1[3:12])
     # Index with stride
-    sr3 = sr2[::2]
+    sr3 = sr2[i3]
     assert sr3.null_count == 0
     np.testing.assert_equal(sr3.to_array(), a1[3:12:2])
+
+    # Integer indexing
+    if isinstance(i1, range):
+        for i in i1:  # Python int-s
+            assert series[i] == a1[i]
+    if isinstance(i1, np.ndarray) and i1.dtype in index_dtypes:
+        for i in i1:  # numpy integers
+            assert series[i] == a1[i]
 
 
 def test_dataframe_basic():
