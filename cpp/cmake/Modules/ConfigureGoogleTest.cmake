@@ -8,7 +8,7 @@ if(NOT CMAKE_CXX11_ABI)
                          " -DCMAKE_CXX_FLAGS=-D_GLIBCXX_USE_CXX11_ABI=0")   # enable old ABI for C/C++
 elseif(CMAKE_CXX11_ABI)
     set(GTEST_CMAKE_ARGS " -Dgtest_build_samples=ON" 
-                         " -DCMAKE_VERBOSE_MAKEFILE=ON"
+                         " -DCMAKE_VERBOSE_MAKEFILE=ON")
 endif(NOT CMAKE_CXX11_ABI)
 
 
