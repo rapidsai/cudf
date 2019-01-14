@@ -9,6 +9,7 @@ from pandas.util.testing import (
 )
 from cudf.dataframe import Series, DataFrame
 from cudf.dataframe.index import DatetimeIndex
+from cudf.tests.utils import assert_eq
 
 
 def data1():
@@ -131,3 +132,21 @@ def test_typecast_to_datetime(data, dtype):
     gdf_casted = gdf_data.astype('datetime64[ms]')
 
     np.testing.assert_equal(np_casted, np.array(gdf_casted))
+
+
+@pytest.mark.parametrize('data', [numerical_data()])
+@pytest.mark.parametrize('nulls', ['some', 'all'])
+def test_to_from_pandas_nulls(data, nulls):
+    pd_data = pd.Series(data.copy().astype('datetime64[ms]'))
+    if nulls == 'some':
+        # Fill half the values with NaT
+        pd_data[list(range(0, len(pd_data), 2))] = np.datetime64('nat')
+    elif nulls == 'all':
+        # Fill all the values with NaT
+        pd_data[:] = np.datetime64('nat')
+    gdf_data = Series.from_pandas(pd_data)
+
+    expect = pd_data
+    got = gdf_data.to_pandas()
+
+    assert_eq(expect, got)

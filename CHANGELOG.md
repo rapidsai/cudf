@@ -19,8 +19,10 @@
 - PR #564 Update python `sort_values` method to use updated libcudf `gdf_order_by` API
 - PR #509 CSV Reader: Input CSV file can now be passed in as a text or a binary buffer
 - PR #607 Add `__iter__` and iteritems to DataFrame class
+- PR #600 Enable deep or shallow copy
 - PR #635 Add Doxygen template
 - PR #649 Add `cudf.from_pandas` function
+- PR #633 CSV Reader: Add support for the nrows parameter to specify the number of rows to read from the input file
 
 ## Improvements
 
@@ -32,17 +34,20 @@
 - PR #502 Simplify Dockerfile for local dev, eliminate old conda/pip envs
 - PR #549 Adds `-rdynamic` compiler flag to nvcc for Debug builds
 - PR #472 RMM: Created centralized rmm::device_vector alias and rmm::exec_policy
+- PR #500 Improved the concurrent hash map class to support partitioned (multi-pass) hash table building
 - PR #617 Added .dockerignore file. Prevents adding stale cmake cache files to the docker container
 - PR #658 Reduced `JOIN_TEST` time by isolating overflow test of hash table size computation
+- PR #651 Remove noqa marks in `__init__.py` files
+- PR #671 CSV Reader: uncompressed buffer input can be parsed without explicitly specifying compression as None
 
 ## Bug Fixes
 
+- PR #569 CSV Reader: Fix days being off-by-one when parsing some dates
 - PR #531 CSV Reader: Fix incorrect parsing of quoted numbers
 - PR #465 Added templated C++ API for RMM to avoid explicit cast to `void**`
 - PR #473 Added missing <random> include
 - PR #478 CSV Reader: Add api support for auto column detection, header, mangle_dupe_cols, usecols
 - PR #495 Updated README to correct where cffi pytest should be executed
-- PR #500 Improved the concurrent hash map class to support partitioned (multi-pass) hash table building
 - PR #501 Fix the intermittent segfault caused by the `thousands` and `compression` parameters in the csv reader
 - PR #502 Simplify Dockerfile for local dev, eliminate old conda/pip envs
 - PR #512 fix bug for `on` parameter in `DataFrame.merge` to allow for None or single column name
@@ -56,9 +61,16 @@
 - PR #612 Prevent an exception from occuring with true division on integer series.
 - PR #630 Fix deprecation warning for `pd.core.common.is_categorical_dtype`
 - PR #622 Fix Series.append() behaviour when appending values with different numeric dtype
+- PR #644 Fix return type and column support of dataframe.quantile()
 - PR #634 Fix create `DataFrame.from_pandas()` with numeric column names
+- PR #654 Add resolution check for GDF_TIMESTAMP in Join
 - PR #648 Enforce one-to-one copy required when using `numba>=0.42.0`
 - PR #645 Fix cmake build type handling not setting debug options when CMAKE_BUILD_TYPE=="Debug"
+- PR #665 Reworked the hash map to add a way to report the destination partition for a key
+- PR #670 CMAKE: Fix env include path taking precedence over libcudf source headers
+- PR #674 Check for gdf supported column types
+- PR #677 Fix 'gdf_csv_test_Dates' gtest failure due to missing nrows parameter
+- PR #686 Fix converting nulls to NaT values when converting Series to Pandas/Numpy
 
 
 # cuDF 0.4.0 (05 Dec 2018)

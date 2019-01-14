@@ -12,7 +12,7 @@ PATH=/conda/bin:$PATH
 source activate gdf
 
 # Run flake8 and get results/return code
-FLAKE=`flake8`
+FLAKE=`flake8 python`
 RETVAL=$?
 
 # Output results if failure otherwise show pass
