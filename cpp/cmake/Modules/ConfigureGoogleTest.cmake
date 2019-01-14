@@ -1,9 +1,15 @@
 set(GTEST_ROOT "${CMAKE_BINARY_DIR}/googletest")
 
-set(GTEST_CMAKE_ARGS " -Dgtest_build_samples=ON" 
-                     " -DCMAKE_VERBOSE_MAKEFILE=ON"
-                     " -DCMAKE_C_FLAGS=-D_GLIBCXX_USE_CXX11_ABI=0"      # enable old ABI for C/C++
-                     " -DCMAKE_CXX_FLAGS=-D_GLIBCXX_USE_CXX11_ABI=0")   # enable old ABI for C/C++
+if(NOT CMAKE_CXX11_ABI)
+    message(STATUS "GTEST: Disabling the GLIBCXX11 ABI")
+    set(GTEST_CMAKE_ARGS " -Dgtest_build_samples=ON" 
+                         " -DCMAKE_VERBOSE_MAKEFILE=ON"
+                         " -DCMAKE_C_FLAGS=-D_GLIBCXX_USE_CXX11_ABI=0"      # enable old ABI for C/C++
+                         " -DCMAKE_CXX_FLAGS=-D_GLIBCXX_USE_CXX11_ABI=0")   # enable old ABI for C/C++
+elseif(CMAKE_CXX11_ABI)
+    set(GTEST_CMAKE_ARGS " -Dgtest_build_samples=ON" 
+                         " -DCMAKE_VERBOSE_MAKEFILE=ON"
+endif(NOT CMAKE_CXX11_ABI)
 
 
 configure_file("${CMAKE_SOURCE_DIR}/cmake/Templates/GoogleTest.CMakeLists.txt.cmake"

@@ -1,23 +1,45 @@
 set(ARROW_ROOT ${CMAKE_BINARY_DIR}/arrow)
 
-set(ARROW_CMAKE_ARGS " -DARROW_WITH_LZ4=OFF"
-                     " -DARROW_WITH_ZSTD=OFF"
-                     " -DARROW_WITH_BROTLI=OFF"
-                     " -DARROW_WITH_SNAPPY=OFF"
-                     " -DARROW_WITH_ZLIB=OFF"
-                     " -DARROW_BUILD_STATIC=ON"
-                     " -DARROW_BUILD_SHARED=OFF"
-                     " -DARROW_BOOST_USE_SHARED=ON"
-                     " -DARROW_BUILD_TESTS=OFF"
-                     " -DARROW_TEST_MEMCHECK=OFF"
-                     " -DARROW_BUILD_BENCHMARKS=OFF"
-                     " -DARROW_IPC=ON"
-                     " -DARROW_COMPUTE=OFF"
-                     " -DARROW_GPU=OFF"
-                     " -DARROW_JEMALLOC=OFF"
-                     " -DARROW_BOOST_VENDORED=OFF"
-                     " -DARROW_PYTHON=OFF"
-                     " -DARROW_TENSORFLOW=ON") # enable old ABI for C/C++
+if(NOT CMAKE_CXX11_ABI)
+    message(STATUS "ARROW: Disabling the GLIBCXX11 ABI")
+    set(ARROW_CMAKE_ARGS " -DARROW_WITH_LZ4=OFF"
+                         " -DARROW_WITH_ZSTD=OFF"
+                         " -DARROW_WITH_BROTLI=OFF"
+                         " -DARROW_WITH_SNAPPY=OFF"
+                         " -DARROW_WITH_ZLIB=OFF"
+                         " -DARROW_BUILD_STATIC=ON"
+                         " -DARROW_BUILD_SHARED=OFF"
+                         " -DARROW_BOOST_USE_SHARED=ON"
+                         " -DARROW_BUILD_TESTS=OFF"
+                         " -DARROW_TEST_MEMCHECK=OFF"
+                         " -DARROW_BUILD_BENCHMARKS=OFF"
+                         " -DARROW_IPC=ON"
+                         " -DARROW_COMPUTE=OFF"
+                         " -DARROW_GPU=OFF"
+                         " -DARROW_JEMALLOC=OFF"
+                         " -DARROW_BOOST_VENDORED=OFF"
+                         " -DARROW_PYTHON=OFF"
+                         " -DARROW_TENSORFLOW=ON") # enable old ABI for C/C++
+elseif(CMAKE_CXX11_ABI)
+    set(ARROW_CMAKE_ARGS " -DARROW_WITH_LZ4=OFF"
+                         " -DARROW_WITH_ZSTD=OFF"
+                         " -DARROW_WITH_BROTLI=OFF"
+                         " -DARROW_WITH_SNAPPY=OFF"
+                         " -DARROW_WITH_ZLIB=OFF"
+                         " -DARROW_BUILD_STATIC=ON"
+                         " -DARROW_BUILD_SHARED=OFF"
+                         " -DARROW_BOOST_USE_SHARED=ON"
+                         " -DARROW_BUILD_TESTS=OFF"
+                         " -DARROW_TEST_MEMCHECK=OFF"
+                         " -DARROW_BUILD_BENCHMARKS=OFF"
+                         " -DARROW_IPC=ON"
+                         " -DARROW_COMPUTE=OFF"
+                         " -DARROW_GPU=OFF"
+                         " -DARROW_JEMALLOC=OFF"
+                         " -DARROW_BOOST_VENDORED=OFF"
+                         " -DARROW_PYTHON=OFF"
+                         " -DARROW_TENSORFLOW=OFF") # enable old ABI for C/C++
+endif(NOT CMAKE_CXX11_ABI)
 
 configure_file("${CMAKE_SOURCE_DIR}/cmake/Templates/Arrow.CMakeLists.txt.cmake"
                "${ARROW_ROOT}/CMakeLists.txt")
