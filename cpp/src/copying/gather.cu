@@ -59,6 +59,10 @@ struct bounds_checker {
  *
  * If any value appears in `gather_map` more than once, the result is undefined.
  *
+ * If any of the range [source_mask, source_mask + num_source_rows) overlaps
+ * [destination_mask, destination_mask + num_destination_rows), the result is
+ * undefined.
+ *
  * @tparam T The type of the stencil array
  * @tparam P The type of the predicate
  * @param[in] source_mask The mask whose bits will be gathered
@@ -75,11 +79,10 @@ struct bounds_checker {
  *---------------------------------------------------------------------------**/
 template <typename T, typename P>
 __global__ void gather_bitmask_if_kernel(
-    gdf_valid_type const* const source_mask,
+    gdf_valid_type const* const __restrict__ source_mask,
     gdf_size_type const num_source_rows, gdf_valid_type* const destination_mask,
     gdf_size_type const num_destination_rows, gdf_index_type const* gather_map,
     T const* stencil, P pred) {
-  namespace cg = cooperative_groups;
   using MaskType = uint32_t;
   constexpr uint32_t BITS_PER_MASK{sizeof(MaskType) * 8};
 
@@ -89,25 +92,28 @@ __global__ void gather_bitmask_if_kernel(
 
   gdf_index_type destination_row = threadIdx.x + blockIdx.x * blockDim.x;
 
-  while (destination_row < num_destination_rows) {
-    cg::coalesced_group active_threads = cg::coalesced_threads();
+  auto active_threads =
+      __ballot_sync(0xffffffff, destination_row < num_destination_rows);
 
+  while (destination_row < num_destination_rows) {
     bool const source_bit_is_valid{
         gdf_is_valid(source_mask, gather_map[destination_row])};
 
     // Use ballot to find all valid bits in this warp and create the output
     // bitmask element
-    MaskType const result_mask{active_threads.ballot(
-        pred(stencil[destination_row]) && source_bit_is_valid)};
+    MaskType const result_mask{__ballot_sync(
+        active_threads, pred(stencil[destination_row]) && source_bit_is_valid)};
 
     gdf_index_type const output_element = destination_row / BITS_PER_MASK;
 
     // Only one thread writes output
-    if (0 == active_threads.thread_rank()) {
+    if (0 == threadIdx.x % warpSize) {
       destination_mask32[output_element] = result_mask;
     }
 
     destination_row += blockDim.x * gridDim.x;
+    active_threads =
+        __ballot_sync(active_threads, destination_row < num_destination_rows);
   }
 }
 
@@ -123,6 +129,10 @@ __global__ void gather_bitmask_if_kernel(
  *
  * If any value appears in `gather_map` more than once, the result is undefined.
  *
+ * If any of the range [source_mask, source_mask + num_source_rows) overlaps
+ * [destination_mask, destination_mask + num_destination_rows), the result is
+ * undefined.
+ *
  * @param[in] source_mask The mask whose bits will be gathered
  * @param[in] num_source_rows The number of bits in the source_mask
  * @param[out] destination_mask The output after gathering the input
@@ -132,12 +142,11 @@ __global__ void gather_bitmask_if_kernel(
  * input will be gathered to in the output. Length must be equal to
  * `num_destination_rows`.
  *---------------------------------------------------------------------------**/
-__global__ void gather_bitmask_kernel(gdf_valid_type const* const source_mask,
-                                      gdf_size_type const num_source_rows,
-                                      gdf_valid_type* const destination_mask,
-                                      gdf_size_type const num_destination_rows,
-                                      gdf_index_type const* gather_map) {
-  namespace cg = cooperative_groups;
+__global__ void gather_bitmask_kernel(
+    gdf_valid_type const* const __restrict__ source_mask,
+    gdf_size_type const num_source_rows, gdf_valid_type* const destination_mask,
+    gdf_size_type const num_destination_rows,
+    gdf_index_type const* __restrict__ gather_map) {
   using MaskType = uint32_t;
   constexpr uint32_t BITS_PER_MASK{sizeof(MaskType) * 8};
 
@@ -148,24 +157,28 @@ __global__ void gather_bitmask_kernel(gdf_valid_type const* const source_mask,
 
   gdf_index_type destination_row = threadIdx.x + blockIdx.x * blockDim.x;
 
-  while (destination_row < num_destination_rows) {
-    cg::coalesced_group active_threads = cg::coalesced_threads();
+  auto active_threads =
+      __ballot_sync(0xffffffff, destination_row < num_destination_rows);
 
+  while (destination_row < num_destination_rows) {
     bool const source_bit_is_valid{
         gdf_is_valid(source_mask, gather_map[destination_row])};
 
     // Use ballot to find all valid bits in this warp and create the output
     // bitmask element
-    MaskType const result_mask{active_threads.ballot(source_bit_is_valid)};
+    MaskType const result_mask{
+        __ballot_sync(active_threads, source_bit_is_valid)};
 
     gdf_index_type const output_element = destination_row / BITS_PER_MASK;
 
     // Only one thread writes output
-    if (0 == active_threads.thread_rank()) {
+    if (0 == threadIdx.x % warpSize) {
       destination_mask32[output_element] = result_mask;
     }
 
     destination_row += blockDim.x * gridDim.x;
+    active_threads =
+        __ballot_sync(active_threads, destination_row < num_destination_rows);
   }
 }
 
