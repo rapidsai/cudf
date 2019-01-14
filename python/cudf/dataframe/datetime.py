@@ -164,6 +164,16 @@ class DatetimeColumn(columnops.TypedColumnBase):
             null_count=self.null_count
         )
 
+    def default_na_value(self):
+        """Returns the default NA value for this column
+        """
+        dkind = self.dtype.kind
+        if dkind == 'M':
+            return np.datetime64('nat')
+        else:
+            raise TypeError(
+                "datetime column of {} has no NaN value".format(self.dtype))
+
 
 def binop(lhs, rhs, op, out_dtype):
     nvtx_range_push("PYGDF_BINARY_OP", "orange")
