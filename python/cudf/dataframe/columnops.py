@@ -174,7 +174,7 @@ def as_column(arbitrary, nan_as_null=True):
     elif isinstance(arbitrary, np.ndarray):
         if arbitrary.dtype.kind == 'M':
             data = datetime.DatetimeColumn.from_numpy(arbitrary)
-        elif arbitrary.dtype.kind == 'O':
+        elif arbitrary.dtype.kind in ('O', 'U'):
             raise NotImplementedError("Strings are not yet supported")
         else:
             data = as_column(rmm.to_device(arbitrary), nan_as_null=nan_as_null)
