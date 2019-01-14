@@ -35,9 +35,7 @@ logger "Activate conda env..."
 source activate gdf
 
 logger "Bump pyarrow"
-conda uninstall nvstrings
 conda install pyarrow=0.11.1 pandas>=0.23.4 numpy>=1.15.3
-conda install --force --no-deps nvstrings
 
 logger "Check versions..."
 python --version
