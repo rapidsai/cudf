@@ -48,6 +48,7 @@ def apply_reduce(reduction, col):
     out = rmm.device_array(outsz, dtype=col.dtype)
     cdef uintptr_t out_ptr = get_ctype_ptr(out)
 
+    check_gdf_compatibility(col)
     cdef gdf_column* c_col = column_view_from_column(col)
 
     cdef gdf_error result = _REDUCE_FUNCTIONS[func](<gdf_column*>c_col,
