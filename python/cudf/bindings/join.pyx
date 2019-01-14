@@ -49,6 +49,7 @@ cpdef join(col_lhs, col_rhs, on, how, method='sort'):
     res_idx = 0
     idx = 0
     for name, col in col_lhs.items():
+        check_gdf_compatibility(col)
         list_lhs[idx] = column_view_from_column(col._column)
 
         if name not in on:
@@ -68,6 +69,7 @@ cpdef join(col_lhs, col_rhs, on, how, method='sort'):
 
     idx = 0
     for name, col in col_rhs.items():
+        check_gdf_compatibility(col)
         list_rhs[idx] = column_view_from_column(col._column)
 
         if name not in on:
