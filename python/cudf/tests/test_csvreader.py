@@ -100,38 +100,33 @@ def test_csv_reader_datetime_data(tmpdir):
     pd.util.testing.assert_frame_equal(df_out, out.to_pandas())
 
 
-def test_csv_reader_mixed_data_delimiter(tmpdir):
+@pytest.mark.parametrize('pandas_arg', [
+        {'delimiter': '|'},
+        {'sep': '|'}
+    ])
+@pytest.mark.parametrize('cudf_arg', [
+        {'sep': '|'},
+        {'delimiter': '|'}
+    ])
+def test_csv_reader_mixed_data_delimiter_sep(tmpdir, pandas_arg, cudf_arg):
 
     fname = tmpdir.mkdir("gdf_csv").join('tmp_csvreader_file3.csv')
 
     df = make_numpy_mixed_dataframe()
     df.to_csv(fname, sep='|', index=False, header=False)
 
-    out = read_csv(str(fname), delimiter='|', names=['1', '2', '3', '4', '5'],
-                   dtype=['int64', 'date', 'float64', 'int64', 'category'],
-                   dayfirst=True)
-    df_out = pd.read_csv(fname, delimiter='|', names=['1', '2', '3', '4', '5'],
-                         parse_dates=[1], dayfirst=True)
-
-    assert len(out.columns) == len(df_out.columns)
-
-
-def test_csv_reader_mixed_data_sep(tmpdir):
-
-    fname = tmpdir.mkdir("gdf_csv").join('tmp_csvreader_file3.csv')
-
-    df = make_numpy_mixed_dataframe()
-    df.to_csv(fname, sep='|', index=False, header=False)
-
-    gdf1 = read_csv(str(fname), sep='|', names=['1', '2', '3', '4', '5'],
+    gdf1 = read_csv(str(fname), names=['1', '2', '3', '4', '5'],
                     dtype=['int64', 'date', 'float64', 'int64', 'category'],
-                    dayfirst=True)
-
-    gdf2 = read_csv(str(fname), delimiter='|', names=['1', '2', '3', '4', '5'],
+                    dayfirst=True, **cudf_arg)
+    gdf2 = read_csv(str(fname), names=['1', '2', '3', '4', '5'],
                     dtype=['int64', 'date', 'float64', 'int64', 'category'],
-                    dayfirst=True)
+                    dayfirst=True, **pandas_arg)
 
-    assert len(gdf1.columns) == len(gdf2.columns)
+    pdf = pd.read_csv(fname, names=['1', '2', '3', '4', '5'],
+                      parse_dates=[1], dayfirst=True, **pandas_arg)
+
+    assert len(gdf1.columns) == len(pdf.columns)
+    assert len(gdf2.columns) == len(pdf.columns)
     assert_eq(gdf1, gdf2)
 
 
