@@ -21,6 +21,7 @@ if(NOT CMAKE_CXX11_ABI)
                          " -DARROW_PYTHON=OFF"
                          " -DARROW_TENSORFLOW=ON") # enable old ABI for C/C++
 elseif(CMAKE_CXX11_ABI)
+    message(STATUS "ARROW: Enabling the GLIBCXX11 ABI")
     set(ARROW_CMAKE_ARGS " -DARROW_WITH_LZ4=OFF"
                          " -DARROW_WITH_ZSTD=OFF"
                          " -DARROW_WITH_BROTLI=OFF"
