@@ -20,7 +20,7 @@ project(CUDA_DATAFRAME VERSION 0.4.0 LANGUAGES C CXX CUDA)
 ###################################################################################################
 # - compiler options ------------------------------------------------------------------------------
 
-option(CMAKE_CXX11_ABI "Enable the GLIBCXX11 ABI" ON)
+option(CMAKE_CXX11_ABI "Enable the GLIBCXX11 ABI" OFF)
 
 set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_C_COMPILER $ENV{CC})
