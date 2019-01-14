@@ -143,7 +143,10 @@ class DatetimeColumn(columnops.TypedColumnBase):
         )
 
     def to_pandas(self, index):
-        return pd.Series(self.to_array().astype(self.dtype), index=index)
+        return pd.Series(
+            self.to_array(fillna='pandas').astype(self.dtype),
+            index=index
+        )
 
     def to_arrow(self):
         mask = None
