@@ -1024,8 +1024,8 @@ def test_dataframe_shape_empty():
     assert pdf.shape == gdf.shape
 
 
-@pytest.mark.parametrize('num_cols', [0, 1, 2, 10])
-@pytest.mark.parametrize('num_rows', [0, 1, 2, 1000])
+@pytest.mark.parametrize('num_cols', [1, 2, 10])
+@pytest.mark.parametrize('num_rows', [1, 2, 1000])
 @pytest.mark.parametrize(
     'dtype',
     ['int8', 'int16', 'int32', 'int64', 'float32', 'float64',
@@ -1042,7 +1042,7 @@ def test_dataframe_tranpose(nulls, num_cols, num_rows, dtype):
         colname = ascii_lowercase[i]
         data = np.random.randint(0, 26, num_rows).astype(dtype)
         if nulls == 'some':
-            idx = np.random.choice(26, size=int(num_rows/2), replace=False)
+            idx = np.random.choice(num_rows, size=int(num_rows/2), replace=False)
             data[idx] = np.nan
         elif nulls == 'all':
             data[:] = np.nan
@@ -1057,7 +1057,8 @@ def test_dataframe_tranpose(nulls, num_cols, num_rows, dtype):
 
     # Temporarily reset index since we don't use index for col names
     if len(expect.columns) > 0:
-        expect = expect.reset_index()
+        expect = expect.reset_index(drop=True)
+        expect.columns = [str(x) for x in range(expect.shape[1])]
 
     # Pandas creates an empty index of `object` dtype by default while cuDF
     # creates a RangeIndex by default, type is different but same value
