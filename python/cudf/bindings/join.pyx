@@ -82,8 +82,8 @@ cpdef join(col_lhs, col_rhs, on, how, method='sort'):
     cdef int c_num_cols_to_join = num_cols_to_join
     cdef int c_result_num_cols = result_num_cols
 
-    if how == 'left':
-         with nogil:
+    with nogil:
+        if how == 'left':
             result = gdf_left_join(list_lhs,
                 col_lhs_len,
                 <int*>left_idx.data,
@@ -97,8 +97,7 @@ cpdef join(col_lhs, col_rhs, on, how, method='sort'):
                 <gdf_column*> NULL,
                 context)
 
-    elif how == 'inner':
-        with nogil:
+        elif how == 'inner':
             result = gdf_inner_join(list_lhs,
                 col_lhs_len,
                 <int*>left_idx.data,
@@ -112,8 +111,7 @@ cpdef join(col_lhs, col_rhs, on, how, method='sort'):
                 <gdf_column*> NULL,
                 context)
 
-    elif how == 'outer':
-        with nogil:
+        elif how == 'outer':
             result = gdf_full_join(list_lhs,
                 col_lhs_len,
                 <int*>left_idx.data,

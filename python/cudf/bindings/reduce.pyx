@@ -40,17 +40,14 @@ def apply_reduce(reduction, col):
     cdef gdf_column* c_col = column_view_from_column(col)
 
     cdef gdf_error result
-    if reduction == 'max':
-        with nogil:
+    with nogil:    
+        if reduction == 'max':
             result = gdf_max(<gdf_column*>c_col, <void*>out_ptr, outsz)
-    elif reduction == 'min':
-        with nogil:
+        elif reduction == 'min':
             result = gdf_min(<gdf_column*>c_col, <void*>out_ptr, outsz)
-    elif reduction == 'sum':
-        with nogil:
+        elif reduction == 'sum':
             result = gdf_sum(<gdf_column*>c_col, <void*>out_ptr, outsz)
-    elif reduction == 'sum_of_squares':
-        with nogil:
+        elif reduction == 'sum_of_squares':
             result = gdf_sum_of_squares(<gdf_column*>c_col,
                                         <void*>out_ptr,
                                         outsz)
