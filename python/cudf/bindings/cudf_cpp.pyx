@@ -47,6 +47,13 @@ def gdf_to_np_dtype(dtype):
          GDF_CATEGORY: np.int32,
      }[dtype])
 
+def check_gdf_compatibility(col):
+    """
+    Raise TypeError when a column type does not have gdf support.
+    """
+    if not (col.dtype.type in dtypes or pd.api.types.is_categorical_dtype(col)):
+        raise TypeError('column type `%s` not supported in gdf' % (col.dtype))
+
 
 cpdef get_ctype_ptr(obj):
     return obj.device_ctypes_pointer.value
