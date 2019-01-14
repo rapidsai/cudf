@@ -134,7 +134,7 @@ def test_typecast_to_datetime(data, dtype):
     np.testing.assert_equal(np_casted, np.array(gdf_casted))
 
 
-@pytest.mark.parametrize('data', [numerical_data])
+@pytest.mark.parametrize('data', [numerical_data()])
 @pytest.mark.parametrize('nulls', ['some', 'all'])
 def test_to_from_pandas_nulls(data, nulls):
     pd_data = pd.Series(data.copy()).astype('datetime64[ns]')
