@@ -120,6 +120,12 @@ if(BUILD_TESTS)
 endif(BUILD_TESTS)
 
 ###################################################################################################
+# - add RMM -------------------------------------------------------------------------------------
+
+add_subdirectory(thirdparty/rmm "${CMAKE_CURRENT_BINARY_DIR}/rmm")
+
+
+###################################################################################################
 # - include paths ---------------------------------------------------------------------------------
 
 include_directories("${ARROW_INCLUDE_DIR}"
@@ -130,7 +136,7 @@ include_directories("${ARROW_INCLUDE_DIR}"
                     "${CMAKE_SOURCE_DIR}/src"
                     "${CMAKE_SOURCE_DIR}/thirdparty/cub"
                     "${CMAKE_SOURCE_DIR}/thirdparty/moderngpu/src"
-                    "${CMAKE_SOURCE_DIR}/thirdparty/cnmem/include")
+                    "${CMAKE_SOURCE_DIR}/thirdparty/rmm/include")
 
 ###################################################################################################
 # - library paths ---------------------------------------------------------------------------------
@@ -193,11 +199,6 @@ add_library(cudf SHARED
             src/utilities/error_utils.cpp
             src/utilities/nvtx/nvtx_utils.cpp)
 
-add_library(rmm SHARED
-            src/rmm/memory.cpp
-            src/rmm/memory_manager.cpp
-            thirdparty/cnmem/src/cnmem.cpp)
-
 ###################################################################################################
 # - build options ---------------------------------------------------------------------------------
 
@@ -219,8 +220,7 @@ endif(HT_LEGACY_ALLOCATOR)
 ###################################################################################################
 # - link libraries --------------------------------------------------------------------------------
 
-target_link_libraries(rmm cudart cuda NVStrings)
-target_link_libraries(cudf rmm "${ARROW_LIB}" ${ZLIB_LIBRARIES})
+target_link_libraries(cudf rmm "${ARROW_LIB}" ${ZLIB_LIBRARIES} NVStrings)
 
 ###################################################################################################
 # - python cffi bindings --------------------------------------------------------------------------
@@ -236,7 +236,7 @@ add_custom_target(python_cffi DEPENDS cudf PYTHON_CFFI)
 ###################################################################################################
 # - install targets -------------------------------------------------------------------------------
 
-install(TARGETS cudf rmm
+install(TARGETS cudf
         DESTINATION lib)
 
 install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/include/cudf.h

@@ -27,7 +27,7 @@ include_directories("${GTEST_INCLUDE_DIR}"
                     "${CMAKE_SOURCE_DIR}/src"
                     "${CMAKE_SOURCE_DIR}/thirdparty/cub"
                     "${CMAKE_SOURCE_DIR}/thirdparty/moderngpu/src"
-                    "${CMAKE_SOURCE_DIR}/thirdparty/cnmem/include")
+                    "${CMAKE_SOURCE_DIR}/thirdparty/rmm/include")
 
 ###################################################################################################
 # - library paths ---------------------------------------------------------------------------------
@@ -158,14 +158,6 @@ set(CSV_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/io/csv/csv_test.cu")
 
 ConfigureTest(CSV_TEST "${CSV_TEST_SRC}")
-
-###################################################################################################
-# - rmm tests -------------------------------------------------------------------------------------
-
-set(RMM_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/rmm/memory_tests.cpp")
-
-ConfigureTest(RMM_TEST "${RMM_TEST_SRC}")
 
 ###################################################################################################
 # - types tests -------------------------------------------------------------------------------------
