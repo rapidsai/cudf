@@ -141,15 +141,24 @@ This will build `libcudf` in Debug mode which enables some `assert` safety check
 
 All other steps for installing `libcudf` into your environment are the same.
 
-### Debuging with `cuda-gdb`
+### Debugging with `cuda-gdb` and `cuda-memcheck`
 
-When you have a debug build of `libcudf` installed, debugging with the `cuda-gdb` debugger is easy.
+When you have a debug build of `libcudf` installed, debugging with the `cuda-gdb` and `cuda-memcheck` is easy.
 
 If you are debugging a Python script, simply run the following:
+
+#### `cuda-gdb`
 
 ```bash
 cuda-gdb -ex r --args python <program_name>.py <program_arguments>
 ```
+
+#### `cuda-memcheck`
+
+```bash
+cuda-memcheck python <program_name>.py <program_arguments>
+```
+
 
 ## Automated Build in Docker Container
 
