@@ -316,3 +316,15 @@ def test_dataframe_merge_no_common_column():
     with pytest.raises(ValueError) as raises:
         df_left.merge(df_right, how='left')
     raises.match('No common columns to perform merge on')
+
+
+def test_dataframe_merge_issue626():
+    pleft = pd.DataFrame({'x': [0, 1, 2, 3],
+                          'name': ['Alice', 'Bob', 'Charlie', 'Dan']})
+    gleft = DataFrame.from_pandas(pleft)
+    pright = pd.DataFrame({'x': [i % 4 for i in range(10)],
+                           'y': range(10)})
+    gright = DataFrame.from_pandas(pright)
+    with pytest.raises(TypeError) as raises:
+        gleft.merge(gright)
+    raises.match('column type `object` not supported in gdf')

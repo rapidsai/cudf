@@ -139,6 +139,18 @@ class Series(object):
         params.update(kwargs)
         return cls(**params)
 
+    def copy(self, deep=True):
+        result = self._copy_construct()
+        if deep:
+            result._column = self._column.copy(deep)
+        return result
+
+    def __copy__(self, deep=True):
+        return self.copy(deep)
+
+    def __deepcopy__(self):
+        return self.copy()
+
     def reset_index(self):
         """Reset index to RangeIndex
         """
@@ -357,10 +369,18 @@ class Series(object):
         return self._rbinaryop(other, 'floordiv')
 
     def __truediv__(self, other):
-        return self._binaryop(other, 'truediv')
+        if self.dtype in list(truediv_int_dtype_corrections.keys()):
+            truediv_type = truediv_int_dtype_corrections[str(self.dtype)]
+            return self.astype(truediv_type)._binaryop(other, 'truediv')
+        else:
+            return self._binaryop(other, 'truediv')
 
     def __rtruediv__(self, other):
-        return self._rbinaryop(other, 'truediv')
+        if self.dtype in list(truediv_int_dtype_corrections.keys()):
+            truediv_type = truediv_int_dtype_corrections[str(self.dtype)]
+            return self.astype(truediv_type)._rbinaryop(other, 'truediv')
+        else:
+            return self._rbinaryop(other, 'truediv')
 
     __div__ = __truediv__
 
@@ -979,6 +999,13 @@ class Series(object):
 
 
 register_distributed_serializer(Series)
+
+
+truediv_int_dtype_corrections = {
+        'int64': 'float64',
+        'int32': 'float32',
+        'int': 'float',
+}
 
 
 class DatetimeProperties(object):
