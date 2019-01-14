@@ -169,7 +169,7 @@ class DatetimeColumn(columnops.TypedColumnBase):
         """
         dkind = self.dtype.kind
         if dkind == 'M':
-            return np.datetime64('nat')
+            return np.datetime64('nat', 'ms')
         else:
             raise TypeError(
                 "datetime column of {} has no NaN value".format(self.dtype))
