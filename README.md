@@ -134,10 +134,10 @@ Follow the [above instructions](#build-from-source) to build from source and add
 
 For example:
 ```bash
-$ cmake .. -DCMAKE_INSTALL_PREFIX=/install/path -DCMAKE_BUILD_TYPE=Debug     # configure cmake ... use $CONDA_PREFIX if you're using Anaconda
+$ cmake .. -DCMAKE_INSTALL_PREFIX=/install/path -DCMAKE_BUILD_TYPE=Debug     # configure cmake ... use -DCMAKE_INSTALL_PREFIX=$CONDA_PREFIX if you're using Anaconda
 ```
 
-This will build `libcudf` in Debug mode which enables some `assert` safety checks as well as builds the library with symbols enabled that helps when using a debugger.
+This builds `libcudf` in Debug mode which enables some `assert` safety checks and includes symbols in the library for debugging.
 
 All other steps for installing `libcudf` into your environment are the same.
 
