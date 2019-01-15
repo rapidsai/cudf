@@ -3,6 +3,7 @@
 
 ## New Features
 
+- PR #693 add ZLIB-based GZIP/ZIP support to `read_csv_strings()`
 - PR #411 added null support to gdf_order_by (new API) and cudf_table::sort
 - PR #525 Added GitHub Issue templates for bugs, documentation, new features, and questions
 - PR #501 CSV Reader: Add support for user-specified decimal point and thousands separator to read_csv_strings()
@@ -66,6 +67,7 @@
 - PR #654 Add resolution check for GDF_TIMESTAMP in Join
 - PR #648 Enforce one-to-one copy required when using `numba>=0.42.0`
 - PR #645 Fix cmake build type handling not setting debug options when CMAKE_BUILD_TYPE=="Debug"
+- PR #669 Fix GIL deadlock when launching multiple python threads that make Cython calls
 - PR #665 Reworked the hash map to add a way to report the destination partition for a key
 - PR #670 CMAKE: Fix env include path taking precedence over libcudf source headers
 - PR #674 Check for gdf supported column types

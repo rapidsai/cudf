@@ -13,6 +13,8 @@ from cudf import read_csv
 from cudf.io.csv import read_csv_strings
 import cudf
 import nvstrings
+import gzip
+import shutil
 
 
 def make_numeric_dataframe(nrows, dtype):
@@ -513,6 +515,33 @@ def test_csv_reader_nrows(tmpdir):
     with pytest.raises(ValueError):
         read_csv(str(fname),
                  nrows=read_rows, skipfooter=1)
+
+
+def test_csv_reader_gzip_compression_strings(tmpdir):
+    fnamebase = tmpdir.mkdir("gdf_csv")
+    fname = fnamebase.join("tmp_csvreader_file15.csv")
+    fnamez = fnamebase.join("tmp_csvreader_file15.csv.gz")
+
+    names = ['text', 'int']
+    dtypes = ['str', 'int']
+    lines = [','.join(names), 'a,0', 'b,0', 'c,0', 'd,0']
+
+    with open(str(fname), 'w') as fp:
+        fp.write('\n'.join(lines) + '\n')
+
+    with open(str(fname), 'rb') as f_in, gzip.open(str(fnamez), 'wb') as f_out:
+        shutil.copyfileobj(f_in, f_out)
+
+    cols = read_csv_strings(str(fnamez), names=names, dtype=dtypes, skiprows=1,
+                            decimal='.', thousands="'", compression='gzip')
+
+    assert(len(cols) == 2)
+    assert(type(cols[0]) == nvstrings.nvstrings)
+    assert(type(cols[1]) == cudf.Series)
+    assert(cols[0].sublist([0]).to_host()[0] == 'a')
+    assert(cols[0].sublist([1]).to_host()[0] == 'b')
+    assert(cols[0].sublist([2]).to_host()[0] == 'c')
+    assert(cols[0].sublist([3]).to_host()[0] == 'd')
 
 
 @pytest.mark.parametrize('skip_rows', [0, 2, 4])
