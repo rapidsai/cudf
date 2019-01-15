@@ -66,6 +66,7 @@
 - PR #654 Add resolution check for GDF_TIMESTAMP in Join
 - PR #648 Enforce one-to-one copy required when using `numba>=0.42.0`
 - PR #645 Fix cmake build type handling not setting debug options when CMAKE_BUILD_TYPE=="Debug"
+- PR #669 Fix GIL deadlock when launching multiple python threads that make Cython calls
 - PR #665 Reworked the hash map to add a way to report the destination partition for a key
 - PR #670 CMAKE: Fix env include path taking precedence over libcudf source headers
 - PR #674 Check for gdf supported column types
