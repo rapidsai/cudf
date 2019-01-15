@@ -272,7 +272,7 @@ def test_csv_reader_mangle_dupe_cols_header(tmpdir):
     out = read_csv(str(fname), dayfirst=True, header=2)
     assert len(out.columns) == len(df_out.columns)
     # assert len(out) == len(df_out)
-    # Compare column names    
+    # Compare column names
     assert list(df_out.columns.values) == list(out.columns.values)
 
 
@@ -522,18 +522,18 @@ def test_csv_reader_skiprows_header(skip_rows, header_row):
     names = ['float_point', 'integer']
     dtypes = ['float64', 'int64']
     lines = [','.join(names),
-	         '1.2, 1',
-	         '2.3, 2',
-	         '3.4, 3',
-	         '4.5, 4',
-	         '5.6, 5',
-	         '6.7, 6']
+             '1.2, 1',
+             '2.3, 2',
+             '3.4, 3',
+             '4.5, 4',
+             '5.6, 5',
+             '6.7, 6']
     buffer = '\n'.join(lines) + '\n'
 
     cu_df = read_csv(StringIO(buffer), dtype=dtypes,
-	              skiprows=skip_rows, header=header_row)
+                     skiprows=skip_rows, header=header_row)
     pd_df = pd.read_csv(StringIO(buffer),
-	              skiprows=skip_rows, header=header_row)
+                        skiprows=skip_rows, header=header_row)
 
     assert(cu_df.shape == pd_df.shape)
     assert(list(cu_df.columns.values) == list(pd_df.columns.values))
