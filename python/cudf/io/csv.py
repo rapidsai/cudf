@@ -310,9 +310,9 @@ def read_csv_strings(filepath_or_buffer, lineterminator='\n',
                      quotechar='"', quoting=True, doublequote=True,
                      delimiter=',', sep=None, delim_whitespace=False,
                      skipinitialspace=False, names=None, dtype=None,
-                     skipfooter=0, skiprows=0, dayfirst=False, compression='infer',
-                     thousands=None, decimal='.', true_values=None, false_values=None,
-                     nrows=None):
+                     skipfooter=0, skiprows=0, dayfirst=False,
+                     compression='infer', thousands=None, decimal='.',
+                     true_values=None, false_values=None, nrows=None):
 
     """
     **Experimental**: This function exists only as a beta way to use

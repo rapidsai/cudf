@@ -511,8 +511,8 @@ def test_csv_reader_nrows(tmpdir):
         read_csv(str(fname),
                  nrows=read_rows, skipfooter=1)
 
-def test_csv_reader_gzip_compression_strings(tmpdir):
 
+def test_csv_reader_gzip_compression_strings(tmpdir):
     fnamebase = tmpdir.mkdir("gdf_csv")
     fname = fnamebase.join("tmp_csvreader_file15.csv")
     fnamez = fnamebase.join("tmp_csvreader_file15.csv.gz")
