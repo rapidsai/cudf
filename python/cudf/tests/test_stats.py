@@ -62,7 +62,7 @@ def test_series_reductions_concurrency(method):
             return fn(ddof=1)
         else:
             return fn()
-    
+
     def f(sr):
         return call_test(sr + 1)
 
