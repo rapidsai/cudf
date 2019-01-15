@@ -3,6 +3,7 @@
 
 ## New Features
 
+- PR #693 add ZLIB-based GZIP/ZIP support to `read_csv_strings()`
 - PR #411 added null support to gdf_order_by (new API) and cudf_table::sort
 - PR #525 Added GitHub Issue templates for bugs, documentation, new features, and questions
 - PR #501 CSV Reader: Add support for user-specified decimal point and thousands separator to read_csv_strings()
