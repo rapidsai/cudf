@@ -112,7 +112,7 @@ typedef struct column_data_ {
 	unsigned long long countInt16;
 	unsigned long long countInt32;
 	unsigned long long countInt64;
-	unsigned long long countNULL;
+	gdf_size_type countNULL;
 } column_data_t;
 
 typedef struct parsing_opts_ {
@@ -377,7 +377,7 @@ gdf_error read_csv(csv_read_arg *args)
 		auto recCount = raw_csv->num_records;
 
 		bool quotation = false;
-		for (size_t i = 1; i < raw_csv->num_records; ++i) {
+		for (gdf_size_type i = 1; i < raw_csv->num_records; ++i) {
 			if (h_uncomp_data[h_rec_starts[i] - 1] == raw_csv->quotechar) {
 				quotation = !quotation;
 				h_rec_starts[i] = raw_csv->num_bytes;
