@@ -182,7 +182,7 @@ gdf_error gdf_count_nonzero_mask(gdf_valid_type const *masks,
   // Number of 4 byte types in the validity bit mask 
   gdf_size_type num_masks32{static_cast<gdf_size_type>(std::ceil(static_cast<float>(num_masks) / RATIO))};
 
-  int h_count{0};
+  gdf_size_type h_count{0};
   if(num_masks32 > 0)
   {
     // TODO: Probably shouldn't create/destroy the stream every time
@@ -193,8 +193,8 @@ gdf_error gdf_count_nonzero_mask(gdf_valid_type const *masks,
     // Cast validity buffer to 4 byte type
     valid32_t const * masks32{reinterpret_cast<valid32_t const *>(masks)};
 
-    RMM_TRY(RMM_ALLOC((void**)&d_count, sizeof(int), count_stream));
-    CUDA_TRY(cudaMemsetAsync(d_count, 0, sizeof(int), count_stream));
+    RMM_TRY(RMM_ALLOC((void**)&d_count, sizeof(gdf_size_type), count_stream));
+    CUDA_TRY(cudaMemsetAsync(d_count, 0, sizeof(gdf_size_type), count_stream));
 
     gdf_size_type const grid_size{(num_masks32 + block_size - 1)/block_size};
 
@@ -202,7 +202,7 @@ gdf_error gdf_count_nonzero_mask(gdf_valid_type const *masks,
 
     CUDA_TRY( cudaGetLastError() );
 
-    CUDA_TRY(cudaMemcpyAsync(&h_count, d_count, sizeof(int), cudaMemcpyDeviceToHost, count_stream));
+    CUDA_TRY(cudaMemcpyAsync(&h_count, d_count, sizeof(gdf_size_type), cudaMemcpyDeviceToHost, count_stream));
     RMM_TRY(RMM_FREE(d_count, count_stream));
     CUDA_TRY(cudaStreamSynchronize(count_stream));
     CUDA_TRY(cudaStreamDestroy(count_stream));
