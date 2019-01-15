@@ -120,7 +120,6 @@ install_requires = [
 setup_requires = install_requires.copy()
 
 install_requires.append('nvstrings-cuda{}'.format(cuda_version))
-setup_requires.append('nvstrings')
 
 try:
     numpy_include = numpy.get_include()
@@ -148,7 +147,7 @@ packages = [
 packages += find_packages(where='python')
 
 name = 'cudf-cuda{}'.format(cuda_version)
-version = os.environ.get('GIT_DESCRIBE_TAG', '0.0.0.dev').lstrip('v')
+version = os.environ.get('GIT_DESCRIBE_TAG', '0.0.0.dev0').lstrip('v')
 setup(name=name,
       description='cuDF - GPU Dataframe',
       long_description=open('README.md', encoding='UTF-8').read(),
@@ -205,6 +204,7 @@ def convert_to_manylinux(name, version):
                                                           python_version)
     dist_zip_path = os.path.join('dist', dist_zip)
     if not os.path.exists(dist_zip_path):
+        print('Wheel not found: {}'.format(dist_zip_path))
         return
 
     unzip_dir = 'dist/unzip'
