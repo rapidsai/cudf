@@ -333,9 +333,16 @@ gdf_error join_call( int num_cols, gdf_column **leftcol, gdf_column **rightcol,
     if((left_col_size > 0) && (nullptr == leftcol[i]->data)){
      return GDF_DATASET_EMPTY;
     } 
-    if(rightcol[i]->dtype != leftcol[i]->dtype) return GDF_JOIN_DTYPE_MISMATCH;
+    if(rightcol[i]->dtype != leftcol[i]->dtype) return GDF_DTYPE_MISMATCH;
     if(left_col_size != leftcol[i]->size) return GDF_COLUMN_SIZE_MISMATCH;
     if(right_col_size != rightcol[i]->size) return GDF_COLUMN_SIZE_MISMATCH;
+
+    // Ensure GDF_TIMESTAMP columns have the same resolution
+    if (GDF_TIMESTAMP == rightcol[i]->dtype) {
+      GDF_REQUIRE(
+          rightcol[i]->dtype_info.time_unit == leftcol[i]->dtype_info.time_unit,
+          GDF_TIMESTAMP_RESOLUTION_MISMATCH);
+    }
   }
 
   gdf_method join_method = join_context->flag_method; 

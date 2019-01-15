@@ -5,6 +5,7 @@ from __future__ import print_function, division
 import pandas as pd
 import numpy as np
 import pickle
+from copy import deepcopy, copy
 
 from librmm_cffi import librmm as rmm
 
@@ -18,7 +19,17 @@ from cudf.comm.serialize import register_distributed_serializer
 
 
 class Index(object):
+    """The root interface for all Series indexes.
+    """
     def serialize(self, serialize):
+        """Serialize into pickle format suitable for file storage or network
+        transmission.
+
+        Parameters
+        ---
+        serialize:  A function provided by register_distributed_serializer
+        middleware.
+        """
         header = {}
         header['payload'], frames = serialize(pickle.dumps(self))
         header['frame_count'] = len(frames)
@@ -26,11 +37,26 @@ class Index(object):
 
     @classmethod
     def deserialize(cls, deserialize, header, frames):
+        """Convert from pickle format into Index
+
+        Parameters
+        ---
+        deserialize:  A function provided by register_distributed_serializer
+        middleware.
+        header: The data header produced by the serialize function.
+        frames: The serialized data
+        """
         payload = deserialize(header['payload'],
                               frames[:header['frame_count']])
         return pickle.loads(payload)
 
     def take(self, indices):
+        """Gather only the specific subset of indices
+
+        Parameters
+        ---
+        indices: An array-like that maps to values contained in this Index.
+        """
         assert indices.dtype.kind in 'iu'
         if indices.size == 0:
             # Empty indices
@@ -112,20 +138,35 @@ class Index(object):
 
 
 class RangeIndex(Index):
-    """Basic start..stop
+    """An iterable integer index defined by a starting value and ending value.
+    Can be sliced and indexed arbitrarily without allocating memory for the
+    complete structure.
+
+    Properties
+    ---
+    _start: The first value
+    _stop: The last value
+    name: Name of the index
     """
     def __init__(self, start, stop=None, name=None):
         """RangeIndex(size), RangeIndex(start, stop)
 
         Parameters
         ----------
-        size, start, stop: int
+        start, stop: int
+        name: string
         """
         if stop is None:
             start, stop = 0, start
         self._start = int(start)
         self._stop = int(stop)
         self.name = name
+
+    def copy(self, deep=True):
+        if(deep):
+            return deepcopy(self)
+        else:
+            return copy(self)
 
     def __repr__(self):
         return "{}(start={}, stop={})".format(self.__class__.__name__,
@@ -198,6 +239,13 @@ def index_from_range(start, stop=None, step=None):
 
 
 class GenericIndex(Index):
+    """An array of orderable values that represent the indices of another Column
+
+    Attributes
+    ---
+    _values: A Column object
+    name: A string
+    """
     def __new__(self, values, name=None):
         from .series import Series
 
@@ -217,6 +265,14 @@ class GenericIndex(Index):
         res._values = values
         res.name = name
         return res
+
+    def copy(self, deep=True):
+        if(deep):
+            result = deepcopy(self)
+        else:
+            result = copy(self)
+        result._values = self._values.copy(deep)
+        return result
 
     def serialize(self, serialize):
         header = {}
