@@ -34,6 +34,7 @@
 - PR #502 Simplify Dockerfile for local dev, eliminate old conda/pip envs
 - PR #549 Adds `-rdynamic` compiler flag to nvcc for Debug builds
 - PR #472 RMM: Created centralized rmm::device_vector alias and rmm::exec_policy
+<<<<<<< HEAD
 - PR #577 Added external C++ API for scatter/gather functions
 - PR #583 Updated `gdf_size_type` to `int`
 - PR #500 Improved the concurrent hash map class to support partitioned (multi-pass) hash table building
