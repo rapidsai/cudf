@@ -1042,7 +1042,9 @@ def test_dataframe_tranpose(nulls, num_cols, num_rows, dtype):
         colname = ascii_lowercase[i]
         data = np.random.randint(0, 26, num_rows).astype(dtype)
         if nulls == 'some':
-            idx = np.random.choice(num_rows, size=int(num_rows/2), replace=False)
+            idx = np.random.choice(num_rows,
+                                   size=int(num_rows/2),
+                                   replace=False)
             data[idx] = np.nan
         elif nulls == 'all':
             data[:] = np.nan
