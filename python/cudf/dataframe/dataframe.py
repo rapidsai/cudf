@@ -1067,17 +1067,20 @@ class DataFrame(object):
 
         # Columns are returned in order left - on - right from libgdf
         # Creating dataframe with ordering as pandas:
-
-        dummy = pd.DataFrame(data=dict([(c, [None]) for c in self.columns]),
-                             columns=self.columns) \
-                  .merge(pd.DataFrame(data=dict([(c, [None])
-                                                 for c in other.columns]),
-                                      columns=other.columns),
-                         on=on, how=how,
-                         suffixes=(lsuffix, rsuffix))
-
-        for c in dummy.columns:
-            df._cols[c] = None
+        columns = []
+        for c in self.columns:
+            if c in other.columns and c not in on:
+                columns.append(c+lsuffix)
+            else:
+                columns.append(c)
+        for c in other.columns:
+            if c == other.index.name:
+                continue
+            if c in self.columns and c not in on:
+                columns.append(c+rsuffix)
+            elif c not in columns:
+                columns.append(c)
+        [df._cols.__setitem__(c, None) for c in columns]
 
         gap = len(self.columns) - len(on)
         for idx in range(len(on)):
