@@ -21,6 +21,8 @@
 #include <memory>
 #include <thrust/equal.h>
 
+#include "gtest/gtest.h"
+
 // See this header for all of the recursive handling of tuples of vectors
 #include "tuple_vectors.h"
 #include "cudf.h"
@@ -35,6 +37,8 @@
 // Custom deleter is defined at construction
 using gdf_col_pointer = typename std::unique_ptr<gdf_column, 
                                                  std::function<void(gdf_column*)>>;
+
+namespace {
 
 struct column_printer {
   template <typename ColumnType>
@@ -70,6 +74,7 @@ struct column_printer {
     std::cout << std::endl;
   }
 };
+}
 
 void print_gdf_column(gdf_column const * the_column)
 {
@@ -121,7 +126,7 @@ gdf_col_pointer create_gdf_column(std::vector<ColumnType> const & host_vector,
   // Get the corresponding gdf_dtype for the ColumnType
   gdf_dtype gdf_col_type{cudf::type_to_gdf_dtype<ColumnType>::value};
 
-  assert(GDF_invalid != gdf_col_type);
+  EXPECT_TRUE(GDF_invalid != gdf_col_type);
 
   // Create a new instance of a gdf_column with a custom deleter that will free
   // the associated device memory when it eventually goes out of scope
@@ -218,7 +223,6 @@ convert_tuple_to_gdf_columns(std::vector<gdf_col_pointer> &gdf_columns,std::tupl
 }
 
 // Converts a tuple of host vectors into a vector of gdf_columns
-
 template<typename valid_initializer_t, typename... Tp>
 std::vector<gdf_col_pointer> initialize_gdf_columns(std::tuple<std::vector<Tp>...> & host_columns, 
                                                     valid_initializer_t bit_initializer)
