@@ -70,7 +70,7 @@
 - PR #670 CMAKE: Fix env include path taking precedence over libcudf source headers
 - PR #674 Check for gdf supported column types
 - PR #677 Fix 'gdf_csv_test_Dates' gtest failure due to missing nrows parameter
-
+- PR #689 CSV Reader: Fix behavior with skiprows+header to match pandas implementation
 
 # cuDF 0.4.0 (05 Dec 2018)
 
