@@ -19,21 +19,30 @@ def _wrap_string(text):
         return ffi.new("char[]", text.encode())
 
 
-def read_csv(filepath, lineterminator='\n',
+def is_file_like(obj):
+    if not (hasattr(obj, 'read') or hasattr(obj, 'write')):
+        return False
+    if not hasattr(obj, "__iter__"):
+        return False
+    return True
+
+
+def read_csv(filepath_or_buffer, lineterminator='\n',
              quotechar='"', quoting=True, doublequote=True,
              header='infer',
              mangle_dupe_cols=True, usecols=None,
              delimiter=',', sep=None, delim_whitespace=False,
              skipinitialspace=False, names=None, dtype=None,
              skipfooter=0, skiprows=0, dayfirst=False, compression='infer',
-             thousands=None, decimal='.', true_values=None, false_values=None):
+             thousands=None, decimal='.', true_values=None, false_values=None,
+             nrows=None):
     """
     Load and parse a CSV file into a DataFrame
 
     Parameters
     ----------
-    filepath : str
-        Path of file to be read.
+    filepath_or_buffer : str
+        Path of file to be read or a file-like object containing the file.
     delimiter : char, default ','
         Delimiter to be used.
     delim_whitespace : bool, default False
@@ -83,6 +92,8 @@ def read_csv(filepath, lineterminator='\n',
         Values to consider as boolean True
     false_values : list, default None
         Values to consider as boolean False
+    nrows: int, default None
+        If specified, maximum number of rows to read
 
     Returns
     -------
@@ -148,8 +159,25 @@ def read_csv(filepath, lineterminator='\n',
     csv_reader = ffi.new('csv_read_arg*')
 
     # Populate csv_reader struct
-    file_path = _wrap_string(filepath)
-    csv_reader.file_path = file_path
+    if is_file_like(filepath_or_buffer):
+        if compression == 'infer':
+            compression = None
+        buffer = filepath_or_buffer.read()
+        # check if StringIO is used
+        if hasattr(buffer, 'encode'):
+            buffer_as_bytes = buffer.encode()
+        else:
+            buffer_as_bytes = buffer
+        buffer_data_holder = ffi.new("char[]", buffer_as_bytes)
+
+        csv_reader.input_data_form = libgdf.HOST_BUFFER
+        csv_reader.filepath_or_buffer = buffer_data_holder
+        csv_reader.buffer_size = len(buffer_as_bytes)
+    else:
+        file_path = _wrap_string(filepath_or_buffer)
+
+        csv_reader.input_data_form = libgdf.FILE_PATH
+        csv_reader.filepath_or_buffer = file_path
 
     if header is 'infer':
         header = -1
@@ -208,6 +236,9 @@ def read_csv(filepath, lineterminator='\n',
     if thousands == delimiter:
         raise ValueError("thousands cannot be the same as delimiter")
 
+    if nrows is not None and skipfooter != 0:
+        raise ValueError("cannot use both nrows and skipfooter parameters")
+
     # Start with default values recognized as boolean
     arr_true_values = [_wrap_string(str('True')), _wrap_string(str('TRUE'))]
     arr_false_values = [_wrap_string(str('False')), _wrap_string(str('FALSE'))]
@@ -242,6 +273,7 @@ def read_csv(filepath, lineterminator='\n',
     csv_reader.compression = compression_bytes
     csv_reader.decimal = decimal.encode()
     csv_reader.thousands = thousands.encode() if thousands else b'\0'
+    csv_reader.nrows = nrows if nrows is not None else -1
 
     # Call read_csv
     libgdf.read_csv(csv_reader)
@@ -274,12 +306,13 @@ def read_csv(filepath, lineterminator='\n',
     return df
 
 
-def read_csv_strings(filepath, lineterminator='\n',
+def read_csv_strings(filepath_or_buffer, lineterminator='\n',
                      quotechar='"', quoting=True, doublequote=True,
                      delimiter=',', sep=None, delim_whitespace=False,
                      skipinitialspace=False, names=None, dtype=None,
                      skipfooter=0, skiprows=0, dayfirst=False, thousands=None,
-                     decimal='.', true_values=None, false_values=None):
+                     decimal='.', true_values=None, false_values=None,
+                     nrows=None):
 
     """
     **Experimental**: This function exists only as a beta way to use
@@ -367,8 +400,23 @@ def read_csv_strings(filepath, lineterminator='\n',
     csv_reader = ffi.new('csv_read_arg*')
 
     # Populate csv_reader struct
-    file_path = _wrap_string(filepath)
-    csv_reader.file_path = file_path
+    if is_file_like(filepath_or_buffer):
+        buffer = filepath_or_buffer.read()
+        # check if StringIO is used
+        if hasattr(buffer, 'encode'):
+            buffer_as_bytes = buffer.encode()
+        else:
+            buffer_as_bytes = buffer
+        buffer_data_holder = ffi.new("char[]", buffer_as_bytes)
+
+        csv_reader.input_data_form = libgdf.HOST_BUFFER
+        csv_reader.filepath_or_buffer = buffer_data_holder
+        csv_reader.buffer_size = len(buffer_as_bytes)
+    else:
+        file_path = _wrap_string(filepath_or_buffer)
+
+        csv_reader.input_data_form = libgdf.FILE_PATH
+        csv_reader.filepath_or_buffer = file_path
 
     arr_names = []
     arr_dtypes = []
@@ -390,6 +438,9 @@ def read_csv_strings(filepath, lineterminator='\n',
 
     if thousands == delimiter:
         raise ValueError("thousands cannot be the same as delimiter")
+
+    if nrows is not None and skipfooter != 0:
+        raise ValueError("cannot use both nrows and skipfooter parameters")
 
     # Start with default values recognized as boolean
     arr_true_values = [_wrap_string(str('True')), _wrap_string(str('TRUE'))]
@@ -420,6 +471,7 @@ def read_csv_strings(filepath, lineterminator='\n',
     csv_reader.skipfooter = skipfooter
     csv_reader.decimal = decimal.encode()
     csv_reader.thousands = thousands.encode() if thousands else b'\0'
+    csv_reader.nrows = nrows if nrows is not None else -1
 
     # Call read_csv
     libgdf.read_csv(csv_reader)
