@@ -132,8 +132,8 @@ class Buffer(object):
             buf = Buffer(sliced)
             buf.dtype = self.dtype  # for np.datetime64 support
             return buf
-        elif isinstance(arg, int):
-            arg = utils.normalize_index(arg, self.size)
+        elif isinstance(arg, (int, np.integer)):
+            arg = utils.normalize_index(int(arg), self.size)
             item = self.mem[arg]
             if isinstance(item, str):
                 return item
