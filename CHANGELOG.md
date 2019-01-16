@@ -74,6 +74,7 @@
 - PR #677 Fix 'gdf_csv_test_Dates' gtest failure due to missing nrows parameter
 - PR #686 Fix converting nulls to NaT values when converting Series to Pandas/Numpy
 - PR #689 CSV Reader: Fix behavior with skiprows+header to match pandas implementation
+- PR #691 Fixes Join on empty input DFs
 
 
 # cuDF 0.4.0 (05 Dec 2018)
@@ -83,6 +84,7 @@
 - PR #398 add pandas-compatible `DataFrame.shape()` and `Series.shape()`
 - PR #394 New documentation feature "10 Minutes to cuDF"
 - PR #361 CSV Reader: Add support for strings with delimiters
+- PR #567 Adds setup for a wheel which is installable by pip
 
 ## Improvements
 
