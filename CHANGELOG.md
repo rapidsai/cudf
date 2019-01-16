@@ -76,6 +76,7 @@
 - PR #670 CMAKE: Fix env include path taking precedence over libcudf source headers
 - PR #674 Check for gdf supported column types
 - PR #677 Fix 'gdf_csv_test_Dates' gtest failure due to missing nrows parameter
+- PR #604 Fix the parsing errors while reading a csv file using `sep` instead of `delimiter`.
 - PR #686 Fix converting nulls to NaT values when converting Series to Pandas/Numpy
 - PR #689 CSV Reader: Fix behavior with skiprows+header to match pandas implementation
 - PR #691 Fixes Join on empty input DFs
