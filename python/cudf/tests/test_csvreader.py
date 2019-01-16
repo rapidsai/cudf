@@ -13,6 +13,8 @@ from cudf import read_csv
 from cudf.io.csv import read_csv_strings
 import cudf
 import nvstrings
+import gzip
+import shutil
 
 
 def make_numeric_dataframe(nrows, dtype):
@@ -327,7 +329,7 @@ def test_csv_reader_thousands(tmpdir):
     np.testing.assert_allclose(int64_ref, df['int64'])
 
 
-def test_csv_reader_buffer(tmpdir):
+def test_csv_reader_buffer():
 
     names = dtypes = ["float32", "int32", "date"]
     lines = [','.join(names),
@@ -354,7 +356,7 @@ def test_csv_reader_buffer(tmpdir):
     assert("2002-01-02T00:00:00.000" == str(df_bytes['date'][1]))
 
 
-def test_csv_reader_buffer_strings(tmpdir):
+def test_csv_reader_buffer_strings():
 
     names = ['text', 'int']
     dtypes = ['str', 'int']
@@ -497,6 +499,11 @@ def test_csv_reader_nrows(tmpdir):
         assert(df['int2'][row] == 2 * row)
     assert(df['int2'][rows - 1] == 2 * (rows - 1))
 
+    # nrows + skiprows larger than the file
+    df = read_csv(str(fname),
+                  dtype=dtypes, nrows=read_rows, skiprows=read_rows)
+    assert(df.shape == (rows - read_rows, 2))
+
     # nrows equal to zero
     df = read_csv(str(fname),
                   dtype=dtypes,
@@ -508,3 +515,54 @@ def test_csv_reader_nrows(tmpdir):
     with pytest.raises(ValueError):
         read_csv(str(fname),
                  nrows=read_rows, skipfooter=1)
+
+
+def test_csv_reader_gzip_compression_strings(tmpdir):
+    fnamebase = tmpdir.mkdir("gdf_csv")
+    fname = fnamebase.join("tmp_csvreader_file15.csv")
+    fnamez = fnamebase.join("tmp_csvreader_file15.csv.gz")
+
+    names = ['text', 'int']
+    dtypes = ['str', 'int']
+    lines = [','.join(names), 'a,0', 'b,0', 'c,0', 'd,0']
+
+    with open(str(fname), 'w') as fp:
+        fp.write('\n'.join(lines) + '\n')
+
+    with open(str(fname), 'rb') as f_in, gzip.open(str(fnamez), 'wb') as f_out:
+        shutil.copyfileobj(f_in, f_out)
+
+    cols = read_csv_strings(str(fnamez), names=names, dtype=dtypes, skiprows=1,
+                            decimal='.', thousands="'", compression='gzip')
+
+    assert(len(cols) == 2)
+    assert(type(cols[0]) == nvstrings.nvstrings)
+    assert(type(cols[1]) == cudf.Series)
+    assert(cols[0].sublist([0]).to_host()[0] == 'a')
+    assert(cols[0].sublist([1]).to_host()[0] == 'b')
+    assert(cols[0].sublist([2]).to_host()[0] == 'c')
+    assert(cols[0].sublist([3]).to_host()[0] == 'd')
+
+
+@pytest.mark.parametrize('skip_rows', [0, 2, 4])
+@pytest.mark.parametrize('header_row', [0, 2])
+def test_csv_reader_skiprows_header(skip_rows, header_row):
+
+    names = ['float_point', 'integer']
+    dtypes = ['float64', 'int64']
+    lines = [','.join(names),
+             '1.2, 1',
+             '2.3, 2',
+             '3.4, 3',
+             '4.5, 4',
+             '5.6, 5',
+             '6.7, 6']
+    buffer = '\n'.join(lines) + '\n'
+
+    cu_df = read_csv(StringIO(buffer), dtype=dtypes,
+                     skiprows=skip_rows, header=header_row)
+    pd_df = pd.read_csv(StringIO(buffer),
+                        skiprows=skip_rows, header=header_row)
+
+    assert(cu_df.shape == pd_df.shape)
+    assert(list(cu_df.columns.values) == list(pd_df.columns.values))

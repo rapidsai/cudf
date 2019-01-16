@@ -43,10 +43,13 @@ cpdef apply_order_by(in_cols, out_indices, ascending=True, na_position=1):
 
     cdef int flag_nulls_are_smallest = na_position
 
-    cdef gdf_error result =  gdf_order_by(<gdf_column**> input_columns,
-                                          <int8_t*> asc_desc,
-                                          <size_t> num_inputs,
-                                          <gdf_column*> output_indices,
-                                          <int> flag_nulls_are_smallest)
+    cdef gdf_error result 
+    
+    with nogil:
+        result = gdf_order_by(<gdf_column**> input_columns,
+                              <int8_t*> asc_desc,
+                              <size_t> num_inputs,
+                              <gdf_column*> output_indices,
+                              <int> flag_nulls_are_smallest)
     
     check_gdf_error(result)
