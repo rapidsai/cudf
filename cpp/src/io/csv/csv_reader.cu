@@ -553,6 +553,9 @@ gdf_error read_csv(csv_read_arg *args)
 	//--- Auto detect types of the vectors
 
 	if(args->dtype==NULL){
+		if (raw_csv->num_records == 0) {
+			checkError(GDF_INVALID_API_CALL, "read_csv: no data available for data type inference");
+		}
 
 		column_data_t *d_ColumnData,*h_ColumnData;
 
@@ -686,45 +689,50 @@ gdf_error read_csv(csv_read_arg *args)
 	free(h_dtypes); 
 	free(h_valid); 
 	free(h_data); 
-	
-	launch_dataConvertColumns(raw_csv, d_data, d_valid, d_dtypes, d_str_cols, d_valid_count);
-	cudaDeviceSynchronize();
 
-	stringColCount=0;
-	for (int col = 0; col < raw_csv->num_active_cols; col++) {
-
-		gdf_column *gdf = cols[col];
-
-		if (gdf->dtype != gdf_dtype::GDF_STRING)
-			continue;
-
-		NVStrings* const stringCol = NVStrings::create_from_index(h_str_cols[stringColCount],size_t(raw_csv->num_records));
-		if ((raw_csv->quotechar != '\0') && (raw_csv->doublequote==true)) {
-			// In PANDAS, default of enabling doublequote for two consecutive
-			// quotechar in quote fields results in reduction to single
-			std::string quotechar = std::string(&raw_csv->quotechar);
-			std::string doublequotechar = quotechar + raw_csv->quotechar;
-			gdf->data = stringCol->replace(doublequotechar.c_str(), quotechar.c_str());
-			NVStrings::destroy(stringCol);
+	if (raw_csv->num_records != 0) {
+		error = launch_dataConvertColumns(raw_csv, d_data, d_valid, d_dtypes, d_str_cols, d_valid_count);
+		if (error != GDF_SUCCESS) {
+			return error;
 		}
-		else {
-			gdf->data = stringCol;
+		cudaDeviceSynchronize();
+
+		stringColCount=0;
+		for (int col = 0; col < raw_csv->num_active_cols; col++) {
+
+			gdf_column *gdf = cols[col];
+
+			if (gdf->dtype != gdf_dtype::GDF_STRING)
+				continue;
+
+			NVStrings* const stringCol = NVStrings::create_from_index(h_str_cols[stringColCount],size_t(raw_csv->num_records));
+			if ((raw_csv->quotechar != '\0') && (raw_csv->doublequote==true)) {
+				// In PANDAS, default of enabling doublequote for two consecutive
+				// quotechar in quote fields results in reduction to single
+				std::string quotechar = std::string(&raw_csv->quotechar);
+				std::string doublequotechar = quotechar + raw_csv->quotechar;
+				gdf->data = stringCol->replace(doublequotechar.c_str(), quotechar.c_str());
+				NVStrings::destroy(stringCol);
+			}
+			else {
+				gdf->data = stringCol;
+			}
+
+			RMM_TRY( RMM_FREE( h_str_cols [stringColCount], 0 ) );
+
+			stringColCount++;
 		}
 
-		RMM_TRY( RMM_FREE( h_str_cols [stringColCount], 0 ) );
 
-		stringColCount++;
+		CUDA_TRY( cudaMemcpy(h_valid_count,d_valid_count, sizeof(unsigned long long) * (raw_csv->num_active_cols), cudaMemcpyDeviceToHost));
+
+		//--- set the null count
+		for ( int col = 0; col < raw_csv->num_active_cols; col++) {
+			cols[col]->null_count = raw_csv->num_records - h_valid_count[col];
+		}
+
+		free(h_valid_count); 
 	}
-
-
-	CUDA_TRY( cudaMemcpy(h_valid_count,d_valid_count, sizeof(unsigned long long) * (raw_csv->num_active_cols), cudaMemcpyDeviceToHost));
-
-	//--- set the null count
-	for ( int col = 0; col < raw_csv->num_active_cols; col++) {
-		cols[col]->null_count = raw_csv->num_records - h_valid_count[col];
-	}
-
-	free(h_valid_count); 
 
 	// free up space that is no longer needed
 	if (h_str_cols != NULL)

@@ -17,6 +17,7 @@ from .utils import assert_eq
 import gzip
 import shutil
 
+from libgdf_cffi import GDFError
 
 def make_numeric_dataframe(nrows, dtype):
     df = pd.DataFrame()
@@ -581,3 +582,17 @@ def test_csv_reader_skiprows_header(skip_rows, header_row):
 
     assert(cu_df.shape == pd_df.shape)
     assert(list(cu_df.columns.values) == list(pd_df.columns.values))
+
+
+def test_csv_reader_empty_dataframe():
+
+    dtypes = ['float64', 'int64']
+    buffer = 'float_point, integer\n'
+
+    #should work fine with dtypes
+    df = read_csv(StringIO(buffer), dtype=dtypes)
+    assert(df.shape == (0, 2))
+
+	# should raise an error without dtypes
+    with pytest.raises(GDFError):
+        read_csv(StringIO(buffer))
