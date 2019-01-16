@@ -97,14 +97,14 @@ def melt(frame, id_vars=None, value_vars=None, var_name='variable',
         value_vars = list(value_vars)
 
     # Error for unimplemented support for datatype
-    dtypes = [ frame[col].dtype for col in id_vars + value_vars ]
+    dtypes = [frame[col].dtype for col in id_vars + value_vars]
     if any(pd.api.types.is_categorical_dtype(t) for t in dtypes):
         raise NotImplementedError('Categorical columns are not yet '
-                                    'supported for function')
+                                  'supported for function')
 
     # Check dtype homogeneity in value_var
     # Because heterogeneous concat is unimplemented
-    dtypes = [ frame[col].dtype for col in value_vars ]
+    dtypes = [frame[col].dtype for col in value_vars]
     if len(dtypes) > 0:
         dtype = dtypes[0]
         if any(t != dtype for t in dtypes):
