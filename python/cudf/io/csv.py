@@ -31,7 +31,7 @@ def read_csv(filepath_or_buffer, lineterminator='\n',
              quotechar='"', quoting=True, doublequote=True,
              header='infer',
              mangle_dupe_cols=True, usecols=None,
-             delimiter=',', sep=None, delim_whitespace=False,
+             sep=',', delimiter=None, delim_whitespace=False,
              skipinitialspace=False, names=None, dtype=None,
              skipfooter=0, skiprows=0, dayfirst=False, compression='infer',
              thousands=None, decimal='.', true_values=None, false_values=None,
@@ -43,8 +43,10 @@ def read_csv(filepath_or_buffer, lineterminator='\n',
     ----------
     filepath_or_buffer : str
         Path of file to be read or a file-like object containing the file.
-    delimiter : char, default ','
+    sep : char, default ','
         Delimiter to be used.
+    delimiter : char, default None
+        Alternative argument name for sep.
     delim_whitespace : bool, default False
         Determines whether to use whitespace as delimiter.
     lineterminator : char, default '\\n'
@@ -142,6 +144,11 @@ def read_csv(filepath_or_buffer, lineterminator='\n',
     --------
     .read_csv_strings
     """
+
+    # Alias sep -> delimiter.
+    if delimiter is None:
+        delimiter = sep
+
     if dtype is not None:
         if isinstance(dtype, collections.abc.Mapping):
             dtype_dict = True
@@ -308,7 +315,7 @@ def read_csv(filepath_or_buffer, lineterminator='\n',
 
 def read_csv_strings(filepath_or_buffer, lineterminator='\n',
                      quotechar='"', quoting=True, doublequote=True,
-                     delimiter=',', sep=None, delim_whitespace=False,
+                     sep=',', delimiter=None, delim_whitespace=False,
                      skipinitialspace=False, names=None, dtype=None,
                      skipfooter=0, skiprows=0, dayfirst=False,
                      compression='infer', thousands=None, decimal='.',
@@ -385,6 +392,10 @@ def read_csv_strings(filepath_or_buffer, lineterminator='\n',
         msg = '''Automatic dtype detection not implemented:
         Column names and dtypes must be specified.'''
         raise TypeError(msg)
+
+    # Alias sep -> delimiter.
+    if delimiter is None:
+        delimiter = sep
 
     if isinstance(dtype, dict):
         dtype_dict = True
