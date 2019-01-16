@@ -6,12 +6,14 @@ import inspect
 import random
 from collections import OrderedDict
 import warnings
+import numbers
 
 import numpy as np
 import pandas as pd
 import pyarrow as pa
 
 from numba.cuda.cudadrv.devicearray import DeviceNDArray
+from types import GeneratorType
 
 from librmm_cffi import librmm as rmm
 
@@ -27,6 +29,7 @@ from .datetime import DatetimeColumn
 from .numerical import NumericalColumn
 from .buffer import Buffer
 from cudf._gdf import nvtx_range_push, nvtx_range_pop
+from cudf._sort import get_sorted_inds
 
 import cudf.bindings.join as cpp_join
 
@@ -182,12 +185,12 @@ class DataFrame(object):
 
     def __getitem__(self, arg):
         """
-        If *arg* is a ``str``, return the column Series.
+        If *arg* is a ``str`` or ``int`` type, return the column Series.
         If *arg* is a ``slice``, return a new DataFrame with all columns
         sliced to the specified range.
         If *arg* is an ``array`` containing column names, return a new
         DataFrame with the corresponding columns.
-
+        If *arg* is a ``dtype.bool array``, return the rows marked True
 
         Examples
         --------
@@ -213,8 +216,10 @@ class DataFrame(object):
         1    1    1
         2    2    2
         3    3    3
+        >>> df[[True, False, True, False]] # mask the entire dataframe,
+        # returning the rows specified in the boolean mask
         """
-        if isinstance(arg, str) or isinstance(arg, int):
+        if isinstance(arg, str) or isinstance(arg, numbers.Integral):
             s = self._cols[arg]
             s.name = arg
             return s
@@ -223,14 +228,19 @@ class DataFrame(object):
             for k, col in self._cols.items():
                 df[k] = col[arg]
             return df
-        elif isinstance(arg, (list,)):
+        elif isinstance(arg, (list, np.ndarray, pd.Series, Series,)):
+            mask = np.array(arg)
             df = DataFrame()
-            for col in arg:
-                df[col] = self[col]
+            if(mask.dtype == 'bool'):
+                for col in self._cols:
+                    df[col] = self._cols[col][arg]
+            else:
+                for col in arg:
+                    df[col] = self[col]
             return df
         else:
             msg = "__getitem__ on type {!r} is not supported"
-            raise TypeError(msg.format(arg))
+            raise TypeError(msg.format(type(arg)))
 
     def __setitem__(self, name, col):
         """Add/set column by *name*
@@ -388,6 +398,14 @@ class DataFrame(object):
             len(self),
         )
 
+    def __iter__(self):
+        return iter(self.columns)
+
+    def iteritems(self):
+        """ Iterate over column names and series pairs """
+        for k in self:
+            yield (k, self[k])
+
     @property
     def loc(self):
         """
@@ -433,7 +451,7 @@ class DataFrame(object):
         """
         # When index is a column name
         if isinstance(index, str):
-            df = self.copy()
+            df = self.copy(deep=False)
             df._drop_column(index)
             return df.set_index(self[index])
         # Otherwise
@@ -453,18 +471,30 @@ class DataFrame(object):
             out[col] = self[col].take(positions, ignore_index=ignore_index)
         return out
 
-    def copy(self):
+    def copy(self, deep=True):
         """
         Returns a copy of this dataframe
+
+        Parameters
+        ----------
+        deep: bool
+           Make a full copy of Series columns and Index at the GPU level, or
+           create a new allocation with references.
         """
         df = DataFrame()
-        df._index = self._index
         df._size = self._size
-        df._cols = self._cols.copy()
+        if deep:
+            df._index = self._index.copy(deep)
+            for k in self._cols:
+                df._cols[k] = self._cols[k].copy(deep)
+        else:
+            df._index = self._index
+            for k in self._cols:
+                df._cols[k] = self._cols[k]
         return df
 
     def __copy__(self):
-        return self.copy()
+        return self.copy(deep=True)
 
     def __deepcopy__(self, memo={}):
         """
@@ -475,7 +505,7 @@ class DataFrame(object):
         """
         if memo is None:
             memo = {}
-        return self.copy()
+        return self.copy(deep=True)
 
     def _sanitize_columns(self, col):
         """Sanitize pre-appended
@@ -549,6 +579,8 @@ class DataFrame(object):
         if name in self._cols:
             raise NameError('duplicated column name {!r}'.format(name))
 
+        if isinstance(data, GeneratorType):
+            data = Series(data)
         series = self._prepare_series_for_add(data, forceindex=forceindex)
         series.name = name
         self._cols[name] = series
@@ -805,30 +837,38 @@ class DataFrame(object):
             df[k] = self[k].take(sorted_indices.to_gpu_array())
         return df
 
+    def argsort(self, ascending=True, na_position='last'):
+        cols = [series._column for series in self._cols.values()]
+        return get_sorted_inds(cols, ascending=ascending,
+                               na_position=na_position)
+
     def sort_index(self, ascending=True):
         """Sort by the index
         """
         return self._sort_by(self.index.argsort(ascending=ascending))
 
-    def sort_values(self, by, ascending=True):
+    def sort_values(self, by, ascending=True, na_position='last'):
         """
 
-        Uses parallel radixsort, which is a stable sort.
+        Sort by the values row-wise.
 
         Parameters
         ----------
-        by : str
-            Name of Series to sort by
-        ascending : bool, default True
-            Sort ascending vs. descending.
+        by : str or list of str
+            Name or list of names to sort by.
+        ascending : bool or list of bool, default True
+            Sort ascending vs. descending. Specify list for multiple sort
+            orders. If this is a list of bools, must match the length of the
+            by.
+        na_position : {‘first’, ‘last’}, default ‘last’
+            'first' puts nulls at the beginning, 'last' puts nulls at the end
         Returns
         -------
         sorted_obj : cuDF DataFrame
 
         Difference from pandas:
-          * *by* must be the name of a single column.
-          * Support axis='index' only.	        by : str
-          * Not supporting: inplace, kind, na_position
+          * Support axis='index' only.
+          * Not supporting: inplace, kind
 
         Examples
         --------
@@ -852,7 +892,10 @@ class DataFrame(object):
 
         """
         # argsort the `by` column
-        return self._sort_by(self[by].argsort(ascending=ascending))
+        return self._sort_by(self[by].argsort(
+            ascending=ascending,
+            na_position=na_position)
+        )
 
     def nlargest(self, n, columns, keep='first'):
         """Get the rows of the DataFrame sorted by the n largest value of *columns*
@@ -1711,7 +1754,11 @@ class DataFrame(object):
             return df.set_index(indices.astype(np.int64))
         return df
 
-    def quantile(self, q, interpolation='linear', exact=False):
+    def quantile(self,
+                 q=0.5,
+                 interpolation='linear',
+                 columns=None,
+                 exact=True):
         """
         Return values at the given quantile.
 
@@ -1735,13 +1782,17 @@ class DataFrame(object):
         DataFrame
 
         """
+        if columns is None:
+            columns = self.columns
 
         result = DataFrame()
         result['Quantile'] = q
         for k, col in self._cols.items():
-            result[k] = col.quantile(q, interpolation, exact,
-                                     quant_index=False)
-        print(result)
+            if k in columns:
+                result[k] = col.quantile(q, interpolation=interpolation,
+                                         exact=exact,
+                                         quant_index=False)
+        return result
 
 
 class Loc(object):
@@ -1769,6 +1820,44 @@ class Loc(object):
             df.add_column(col, sr[begin:end], forceindex=True)
 
         return df
+
+
+def from_pandas(obj):
+    """
+    Convert a Pandas DataFrame or Series object into the cudf equivalent
+
+    Raises
+    ------
+    TypeError for invalid input type.
+
+    Examples
+    --------
+
+    .. code-block:: python
+
+        import cudf
+        import pandas as pd
+
+        data = [[0,1], [1,2], [3,4]]
+        pdf = pd.DataFrame(data, columns=['a', 'b'], dtype=int)
+        cudf.from_pandas(pdf)
+
+    Output:
+
+    .. code-block:: python
+
+        <cudf.DataFrame ncols=2 nrows=3 >
+
+    """
+    if isinstance(obj, pd.DataFrame):
+        return DataFrame.from_pandas(obj)
+    elif isinstance(obj, pd.Series):
+        return Series.from_pandas(obj)
+    else:
+        raise TypeError(
+            "from_pandas only accepts Pandas Dataframes and Series objects. "
+            "Got %s" % type(obj)
+        )
 
 
 register_distributed_serializer(DataFrame)

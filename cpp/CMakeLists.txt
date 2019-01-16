@@ -18,6 +18,21 @@ cmake_minimum_required(VERSION 3.12 FATAL_ERROR)
 project(CUDA_DATAFRAME VERSION 0.4.0 LANGUAGES C CXX CUDA)
 
 ###################################################################################################
+# - build type ------------------------------------------------------------------------------------
+
+# Set a default build type if none was specified
+set(DEFAULT_BUILD_TYPE "Release")
+
+if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
+  message(STATUS "Setting build type to '${DEFAULT_BUILD_TYPE}' since none specified.")
+  set(CMAKE_BUILD_TYPE "${DEFAULT_BUILD_TYPE}" CACHE
+      STRING "Choose the type of build." FORCE)
+  # Set the possible values of build type for cmake-gui
+  set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS
+    "Debug" "Release" "MinSizeRel" "RelWithDebInfo")
+endif()
+
+###################################################################################################
 # - compiler options ------------------------------------------------------------------------------
 
 set(CMAKE_CXX_STANDARD 14)
@@ -49,8 +64,11 @@ set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -Werror cross-execution-space-call -Wn
 set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -Werror cross-execution-space-call -Xcompiler -Wall,-Werror")
 set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -Xcompiler -D_GLIBCXX_USE_CXX11_ABI=0")
 
-# set default build type
-set(CMAKE_BUILD_TYPE "Release")
+# Debug options
+if(CMAKE_BUILD_TYPE MATCHES Debug)
+    message(STATUS "Building with debugging flags")
+    set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -G -Xcompiler -rdynamic")
+endif(CMAKE_BUILD_TYPE MATCHES Debug)
 
 option(BUILD_TESTS "Configure CMake to build tests"
        ON)
@@ -80,9 +98,9 @@ endif()
 
 find_package(ZLIB REQUIRED)
 if(ZLIB_FOUND)
-    include_directories(${ZLIB_INCLUDE_DIRS})
+    message(STATUS "ZLib found in ${ZLIB_INCLUDE_DIRS}")
 else()
-    message(FATAL_ERROR "ZLib not found.")
+    message(FATAL_ERROR "ZLib not found, please check your settings.")
 endif(ZLIB_FOUND)
 
 ###################################################################################################
@@ -112,7 +130,8 @@ include_directories("${ARROW_INCLUDE_DIR}"
                     "${CMAKE_SOURCE_DIR}/src"
                     "${CMAKE_SOURCE_DIR}/thirdparty/cub"
                     "${CMAKE_SOURCE_DIR}/thirdparty/moderngpu/src"
-                    "${CMAKE_SOURCE_DIR}/thirdparty/cnmem/include")
+                    "${CMAKE_SOURCE_DIR}/thirdparty/cnmem/include"
+                    "${ZLIB_INCLUDE_DIRS}")
 
 ###################################################################################################
 # - library paths ---------------------------------------------------------------------------------
@@ -180,6 +199,9 @@ add_library(rmm SHARED
             src/rmm/memory_manager.cpp
             thirdparty/cnmem/src/cnmem.cpp)
 
+#Override RPATH for cudf & rmm
+SET_TARGET_PROPERTIES(cudf rmm PROPERTIES BUILD_RPATH "\$ORIGIN")
+
 ###################################################################################################
 # - build options ---------------------------------------------------------------------------------
 
@@ -197,10 +219,6 @@ if(HT_LEGACY_ALLOCATOR)
     set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} --define-macro HT_LEGACY_ALLOCATOR")
 endif(HT_LEGACY_ALLOCATOR)
 
-if(CMAKE_BUILD_TYPE MATCHES Debug)
-    message(STATUS "Building with debugging flags")
-    set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -G")
-endif(CMAKE_BUILD_TYPE MATCHES Debug)
 
 ###################################################################################################
 # - link libraries --------------------------------------------------------------------------------

@@ -83,6 +83,10 @@ def test_series_basic():
     assert len(series) == 10
     np.testing.assert_equal(series.to_array(), np.hstack([a1]))
 
+
+def test_series_append():
+    a1 = np.arange(10, dtype=np.float64)
+    series = Series(a1)
     # Add new buffer
     a2 = np.arange(5)
     series = series.append(a2)
@@ -96,21 +100,61 @@ def test_series_basic():
     a4 = np.hstack([a1, a2, a3])
     np.testing.assert_equal(series.to_array(), a4)
 
+    # Appending different dtype
+    a5 = np.array([1, 2, 3], dtype=np.int32)
+    a6 = np.array([4.5, 5.5, 6.5], dtype=np.float64)
+    series = Series(a5).append(a6)
+    np.testing.assert_equal(series.to_array(), np.hstack([a5, a6]))
+    series = Series(a6).append(a5)
+    np.testing.assert_equal(series.to_array(), np.hstack([a6, a5]))
 
-def test_series_indexing():
+
+index_dtypes = [np.int64, np.int32, np.int16, np.int8,
+                np.uint64, np.uint32, np.uint16, np.uint8]
+
+
+@pytest.mark.parametrize(
+    'i1, i2, i3',
+    ([(slice(None, 12), slice(3, None), slice(None, None, 2)),
+      (range(12), range(3, 12), range(0, 9, 2)),
+      (np.arange(12), np.arange(3, 12), np.arange(0, 9, 2)),
+      (list(range(12)), list(range(3, 12)), list(range(0, 9, 2))),
+      (pd.Series(range(12)), pd.Series(range(3, 12)),
+       pd.Series(range(0, 9, 2))),
+      (Series(range(12)), Series(range(3, 12)), Series(range(0, 9, 2))),
+      ([i in range(12) for i in range(20)],
+       [i in range(3, 12) for i in range(12)],
+       [i in range(0, 9, 2) for i in range(9)]),
+      (np.array([i in range(12) for i in range(20)], dtype=bool),
+       np.array([i in range(3, 12) for i in range(12)], dtype=bool),
+       np.array([i in range(0, 9, 2) for i in range(9)], dtype=bool))]
+     + [(np.arange(12, dtype=t), np.arange(3, 12, dtype=t),
+         np.arange(0, 9, 2, dtype=t)) for t in index_dtypes]),
+    ids=(['slice', 'range', 'numpy.array', 'list', 'pandas.Series',
+          'Series', 'list[bool]', 'numpy.array[bool]']
+         + ['numpy.array[%s]' % t.__name__ for t in index_dtypes]))
+def test_series_indexing(i1, i2, i3):
     a1 = np.arange(20)
     series = Series(a1)
     # Indexing
-    sr1 = series[:12]
+    sr1 = series[i1]
     assert sr1.null_count == 0
     np.testing.assert_equal(sr1.to_array(), a1[:12])
-    sr2 = sr1[3:]
+    sr2 = sr1[i2]
     assert sr2.null_count == 0
     np.testing.assert_equal(sr2.to_array(), a1[3:12])
     # Index with stride
-    sr3 = sr2[::2]
+    sr3 = sr2[i3]
     assert sr3.null_count == 0
     np.testing.assert_equal(sr3.to_array(), a1[3:12:2])
+
+    # Integer indexing
+    if isinstance(i1, range):
+        for i in i1:  # Python int-s
+            assert series[i] == a1[i]
+    if isinstance(i1, np.ndarray) and i1.dtype in index_dtypes:
+        for i in i1:  # numpy integers
+            assert series[i] == a1[i]
 
 
 def test_dataframe_basic():
@@ -174,6 +218,13 @@ def test_dataframe_column_name_indexing():
     for i in range(1, len(pdf.columns)+1):
         for idx in combinations(pdf.columns, i):
             assert(pdf[list(idx)].equals(df[list(idx)].to_pandas()))
+
+    # test for only numeric columns
+    df = pd.DataFrame()
+    for i in range(0, 10):
+        df[i] = range(nelem)
+    gdf = DataFrame.from_pandas(df)
+    assert_eq(gdf, df)
 
 
 def test_dataframe_drop_method():
@@ -1005,6 +1056,11 @@ def test_dataframe_shape_empty():
     assert pdf.shape == gdf.shape
 
 
+def test_generated_column():
+    gdf = DataFrame({'a': (i for i in range(5))})
+    assert len(gdf) == 5
+
+
 @pytest.fixture
 def pdf():
     return pd.DataFrame({'x': range(10),
@@ -1062,3 +1118,80 @@ def test_binops(pdf, gdf, left, right, binop):
     d = binop(left(pdf), right(pdf))
     g = binop(left(gdf), right(gdf))
     assert_eq(d, g)
+
+
+@pytest.mark.xfail(reason="null is not supported in gpu yet")
+def test_dataframe_boolean_mask_with_None():
+    pdf = pd.DataFrame({'a': [0, 1, 2, 3], 'b': [0.1, 0.2, None, 0.3]})
+    gdf = DataFrame.from_pandas(pdf)
+    pdf_masked = pdf[[True, False, True, False]]
+    gdf_masked = gdf[[True, False, True, False]]
+    assert pdf_masked.to_string().split() == gdf_masked.to_string().split()
+
+
+"""
+This test compares cudf and Pandas dataframe boolean indexing.
+"""
+
+
+@pytest.mark.parametrize('mask_fn', [
+    lambda x: x,
+    lambda x: np.array(x),
+    lambda x: pd.Series(x),
+    ])
+def test_dataframe_boolean_mask(pdf, gdf, mask_fn):
+    mask_base = [True, False, True, False, True, False, True, False, True,
+                 False]
+    mask = mask_fn(mask_base)
+    assert len(mask) == gdf.shape[0]
+    pdf_masked = pdf[mask]
+    gdf_masked = gdf[mask]
+    assert pdf_masked.to_string().split() == gdf_masked.to_string().split()
+
+
+"""
+This test only tests boolean indexing of a cudf DataFrame with a cudf Series.
+Pandas does not support cudf Series.  When masking with a Series, the length
+is not required to match.
+"""
+
+
+def test_dataframe_boolean_mask_Series(gdf):
+    mask = Series([True, False, True, False])
+    mask2 = Series([True, True, True, True])
+    mask3 = Series([True, True, True, True, True, True, True, True])
+    gdf_masked = gdf[mask]
+    gdf_masked2 = gdf[mask2]
+    gdf_masked3 = gdf[mask3]
+    assert gdf_masked.shape[0] == 2
+    assert gdf_masked2.shape[0] == 4
+    assert gdf_masked3.shape[0] == 8
+
+
+def test_iter(pdf, gdf):
+    assert list(pdf) == list(gdf)
+
+
+def test_iteritems(gdf):
+    for k, v in gdf.iteritems():
+        assert k in gdf.columns
+        assert isinstance(v, gd.Series)
+        assert_eq(v, gdf[k])
+
+
+@pytest.mark.xfail(reason="our quantile result is a DataFrame, not a Series")
+def test_quantile(pdf, gdf):
+    assert_eq(pdf.quantile(), gdf.quantile())
+
+
+def test_from_pandas_function(pdf):
+    gdf = gd.from_pandas(pdf)
+    assert isinstance(gdf, gd.DataFrame)
+    assert_eq(pdf, gdf)
+
+    gdf = gd.from_pandas(pdf.x)
+    assert isinstance(gdf, gd.Series)
+    assert_eq(pdf.x, gdf)
+
+    with pytest.raises(TypeError):
+        gd.from_pandas(123)

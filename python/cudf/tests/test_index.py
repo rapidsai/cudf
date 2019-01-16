@@ -88,3 +88,13 @@ def test_reductions(func):
 def test_name():
     idx = GenericIndex(np.asarray([4, 5, 6, 10]), name='foo')
     assert idx.name == 'foo'
+
+
+def test_index_immutable():
+    start, stop = 10, 34
+    rg = RangeIndex(start, stop)
+    with pytest.raises(TypeError):
+        rg[1] = 5
+    gi = GenericIndex(np.arange(start, stop))
+    with pytest.raises(TypeError):
+        gi[1] = 5

@@ -139,6 +139,18 @@ class Series(object):
         params.update(kwargs)
         return cls(**params)
 
+    def copy(self, deep=True):
+        result = self._copy_construct()
+        if deep:
+            result._column = self._column.copy(deep)
+        return result
+
+    def __copy__(self, deep=True):
+        return self.copy(deep)
+
+    def __deepcopy__(self):
+        return self.copy()
+
     def reset_index(self):
         """Reset index to RangeIndex
         """
@@ -188,8 +200,10 @@ class Series(object):
         return len(self._column)
 
     def __getitem__(self, arg):
+        if isinstance(arg, (list, np.ndarray, pd.Series, range,)):
+            arg = Series(arg)
         if isinstance(arg, Series):
-            if arg.dtype in [np.int8, np.int16, np.int32, np.int32, np.int64]:
+            if issubclass(arg.dtype.type, np.integer):
                 selvals, selinds = columnops.column_select_by_position(
                     self._column, arg)
                 index = self.index.take(selinds.to_gpu_array())
@@ -197,6 +211,8 @@ class Series(object):
                 selvals, selinds = columnops.column_select_by_boolmask(
                     self._column, arg)
                 index = self.index.take(selinds.to_gpu_array())
+            else:
+                raise NotImplementedError(arg.dtype)
             return self._copy_construct(data=selvals, index=index)
 
         elif isinstance(arg, slice):
@@ -355,10 +371,18 @@ class Series(object):
         return self._rbinaryop(other, 'floordiv')
 
     def __truediv__(self, other):
-        return self._binaryop(other, 'truediv')
+        if self.dtype in list(truediv_int_dtype_corrections.keys()):
+            truediv_type = truediv_int_dtype_corrections[str(self.dtype)]
+            return self.astype(truediv_type)._binaryop(other, 'truediv')
+        else:
+            return self._binaryop(other, 'truediv')
 
     def __rtruediv__(self, other):
-        return self._rbinaryop(other, 'truediv')
+        if self.dtype in list(truediv_int_dtype_corrections.keys()):
+            truediv_type = truediv_int_dtype_corrections[str(self.dtype)]
+            return self.astype(truediv_type)._rbinaryop(other, 'truediv')
+        else:
+            return self._rbinaryop(other, 'truediv')
 
     __div__ = __truediv__
 
@@ -543,16 +567,16 @@ class Series(object):
 
         return self._copy_construct(data=self._column.astype(dtype))
 
-    def argsort(self, ascending=True):
+    def argsort(self, ascending=True, na_position="last"):
         """Returns a Series of int64 index that will sort the series.
 
-        Uses stable parallel radixsort.
+        Uses Thrust sort.
 
         Returns
         -------
         result: Series
         """
-        return self._sort(ascending=ascending)[1]
+        return self._sort(ascending=ascending, na_position=na_position)[1]
 
     def sort_index(self, ascending=True):
         """Sort by the index.
@@ -560,18 +584,46 @@ class Series(object):
         inds = self.index.argsort(ascending=ascending)
         return self.take(inds.to_gpu_array())
 
-    def sort_values(self, ascending=True):
+    def sort_values(self, ascending=True, na_position="last"):
         """
-        Sort by values.
+        Sort by the values.
+
+        Sort a Series in ascending or descending order by some criterion.
+
+        Parameters
+        ----------
+        ascending : bool, default True
+            If True, sort values in ascending order, otherwise descending.
+        na_position : {‘first’, ‘last’}, default ‘last’
+            'first' puts nulls at the beginning, 'last' puts nulls at the end.
+        Returns
+        -------
+        sorted_obj : cuDF Series
 
         Difference from pandas:
-        * Support axis='index' only.
-        * Not supporting: inplace, kind, na_position
+          * Not supporting: inplace, kind
 
-        Details:
-        Uses parallel radixsort, which is a stable sort.
+        Examples
+        --------
+
+        .. code-block:: python
+
+              from cudf.dataframe import Series
+              s = Series([1,5,2,4,3])
+              s.sort_values()
+
+        Output:
+
+        .. code-block:: python
+
+              0    1
+              2    2
+              4    3
+              3    4
+              1    5
+
         """
-        vals, inds = self._sort(ascending=ascending)
+        vals, inds = self._sort(ascending=ascending, na_position=na_position)
         index = self.index.take(inds.to_gpu_array())
         return vals.set_index(index)
 
@@ -596,7 +648,7 @@ class Series(object):
         """
         return self._n_largest_or_smallest(n=n, keep=keep, largest=False)
 
-    def _sort(self, ascending=True):
+    def _sort(self, ascending=True, na_position="last"):
         """
         Sort by values
 
@@ -604,7 +656,10 @@ class Series(object):
         -------
         2-tuple of key and index
         """
-        col_keys, col_inds = self._column.sort_by_values(ascending=ascending)
+        col_keys, col_inds = self._column.sort_by_values(
+            ascending=ascending,
+            na_position=na_position
+        )
         sr_keys = self._copy_construct(data=col_keys)
         sr_inds = self._copy_construct(data=col_inds)
         return sr_keys, sr_inds
@@ -914,6 +969,13 @@ class Series(object):
 
 
 register_distributed_serializer(Series)
+
+
+truediv_int_dtype_corrections = {
+        'int64': 'float64',
+        'int32': 'float32',
+        'int': 'float',
+}
 
 
 class DatetimeProperties(object):
