@@ -139,6 +139,18 @@ class Series(object):
         params.update(kwargs)
         return cls(**params)
 
+    def copy(self, deep=True):
+        result = self._copy_construct()
+        if deep:
+            result._column = self._column.copy(deep)
+        return result
+
+    def __copy__(self, deep=True):
+        return self.copy(deep)
+
+    def __deepcopy__(self):
+        return self.copy()
+
     def reset_index(self):
         """Reset index to RangeIndex
         """
@@ -188,10 +200,10 @@ class Series(object):
         return len(self._column)
 
     def __getitem__(self, arg):
-        if isinstance(arg, (list, np.ndarray, pd.Series,)):
+        if isinstance(arg, (list, np.ndarray, pd.Series, range,)):
             arg = Series(arg)
         if isinstance(arg, Series):
-            if arg.dtype in [np.int8, np.int16, np.int32, np.int32, np.int64]:
+            if issubclass(arg.dtype.type, np.integer):
                 selvals, selinds = columnops.column_select_by_position(
                     self._column, arg)
                 index = self.index.take(selinds.to_gpu_array())
@@ -199,6 +211,8 @@ class Series(object):
                 selvals, selinds = columnops.column_select_by_boolmask(
                     self._column, arg)
                 index = self.index.take(selinds.to_gpu_array())
+            else:
+                raise NotImplementedError(arg.dtype)
             return self._copy_construct(data=selvals, index=index)
 
         elif isinstance(arg, slice):
