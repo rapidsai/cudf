@@ -56,7 +56,6 @@ class Column(object):
         if nulls:
             mask = Buffer(utils.make_mask(newsize))
 
-        # Libcudf calculates the null_count so we don't need to set it
         col = head.replace(data=data, mask=mask, null_count=nulls)
 
         # Performance the actual concatenation
