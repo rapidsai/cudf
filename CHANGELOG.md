@@ -57,6 +57,7 @@
 - PR #513 `.gitignore` tweaks
 - PR #521 Add `assert_eq` function for testing
 - PR #537 Fix CMAKE_CUDA_STANDARD_REQURIED typo in CMakeLists.txt
+- PR #447 Fix silent failure in initializing DataFrame from generator
 - PR #545 Temporarily disable csv reader thousands test to prevent segfault (test re-enabled in PR #501)
 - PR #559 Fix Assertion error while using `applymap` to change the output dtype
 - PR #575 Update `print_env.sh` script to better handle missing commands
@@ -75,6 +76,7 @@
 - PR #677 Fix 'gdf_csv_test_Dates' gtest failure due to missing nrows parameter
 - PR #686 Fix converting nulls to NaT values when converting Series to Pandas/Numpy
 - PR #691 Fixes Join on empty input DFs
+
 
 
 # cuDF 0.4.0 (05 Dec 2018)

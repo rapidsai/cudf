@@ -1056,6 +1056,11 @@ def test_dataframe_shape_empty():
     assert pdf.shape == gdf.shape
 
 
+def test_generated_column():
+    gdf = DataFrame({'a': (i for i in range(5))})
+    assert len(gdf) == 5
+
+
 @pytest.fixture
 def pdf():
     return pd.DataFrame({'x': range(10),
