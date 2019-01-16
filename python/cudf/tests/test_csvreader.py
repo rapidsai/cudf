@@ -597,4 +597,4 @@ def test_csv_reader_empty_dataframe():
     # should raise an error without dtypes
     with pytest.raises(GDFError):
         read_csv(StringIO(buffer))
-	
+
