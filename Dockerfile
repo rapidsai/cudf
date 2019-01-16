@@ -47,8 +47,8 @@ RUN conda install -n cudf -y -c numba -c conda-forge -c nvidia -c rapidsai -c de
       pytest
 
 # Clone cuDF repo
-ARG CUDF_REPO=https://github.com/rapidsai/cudf
-ARG CUDF_BRANCH=master
+ARG CUDF_REPO=https://github.com/yidong-nvidia/cudf
+ARG CUDF_BRANCH=feature-rolling
 RUN git clone --recurse-submodules -b ${CUDF_BRANCH} ${CUDF_REPO} /cudf
 
 # libcudf build/install

@@ -1,7 +1,6 @@
 from numba import cuda
 import numba
 from cudf.rolling.windows import (ewma_mean_window)
-from cudf.dataframe.series import Series
 
 
 kernel_cache = {}
@@ -126,7 +125,7 @@ class Ewm(object):
                                             self.array_len,
                                             self.thread_tile,
                                             self.min_periods)
-        return Series(gpu_out)
+        return gpu_out
 
     def mean(self):
         return self.apply(ewma_mean_window)

@@ -5,7 +5,6 @@ from cudf.rolling.windows import (mean_window, std_window, var_window,
                                   min_window, sum_window, backward_diff_window,
                                   backward_shift_window, forward_diff_window,
                                   forward_shift_window)
-from cudf.dataframe.series import Series
 
 
 kernel_cache = {}
@@ -127,7 +126,6 @@ class Rolling(object):
 
     def apply(self, method):
         gpu_out = numba.cuda.device_array_like(self.gpu_in)
-        #gpu_out = cudf.Series(gpu_out)
         kernel = get_rolling_kernel(method)
         kernel[(self.number_of_blocks,),
                (self.number_of_threads,),
@@ -139,7 +137,7 @@ class Rolling(object):
                                             self.array_len,
                                             self.thread_tile,
                                             self.min_periods)
-        return Series(gpu_out)
+        return gpu_out
 
     def mean(self):
         return self.apply(mean_window)
