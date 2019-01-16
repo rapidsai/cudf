@@ -24,8 +24,8 @@ def test_melt(nulls, num_id_vars, num_value_vars, num_rows, dtype):
         data = np.random.randint(0, 26, num_rows).astype(dtype)
         if nulls == 'some':
             idx = np.random.choice(num_rows,
-                size=int(num_rows/2),
-                replace=False)
+                                   size=int(num_rows/2),
+                                   replace=False)
             data[idx] = np.nan
         elif nulls == 'all':
             data[:] = np.nan
@@ -38,8 +38,8 @@ def test_melt(nulls, num_id_vars, num_value_vars, num_rows, dtype):
         data = np.random.randint(0, 26, num_rows).astype(dtype)
         if nulls == 'some':
             idx = np.random.choice(num_rows,
-                size=int(num_rows/2),
-                replace=False)
+                                   size=int(num_rows/2),
+                                   replace=False)
             data[idx] = np.nan
         elif nulls == 'all':
             data[:] = np.nan
