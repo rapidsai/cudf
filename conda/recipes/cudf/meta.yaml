@@ -25,7 +25,7 @@ requirements:
   #   - defaults
   build:
     - python
-    - cython>=0.29
+    - cython>=0.29,<0.30
     - setuptools
     - libcudf 0.4.0.*
     - libcudf_cffi 0.4.0.*
