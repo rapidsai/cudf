@@ -8,6 +8,7 @@ import numpy as np
 import pandas as pd
 
 from cudf.dataframe import DataFrame
+from cudf.tests.utils import assert_eq
 
 
 def make_params():
@@ -318,13 +319,19 @@ def test_dataframe_merge_no_common_column():
     raises.match('No common columns to perform merge on')
 
 
-def test_dataframe_merge_issue626():
+def test_dataframe_merge_strings_not_supported():
     pleft = pd.DataFrame({'x': [0, 1, 2, 3],
                           'name': ['Alice', 'Bob', 'Charlie', 'Dan']})
-    gleft = DataFrame.from_pandas(pleft)
-    pright = pd.DataFrame({'x': [i % 4 for i in range(10)],
-                           'y': range(10)})
-    gright = DataFrame.from_pandas(pright)
-    with pytest.raises(TypeError) as raises:
-        gleft.merge(gright)
-    raises.match('column type `object` not supported in gdf')
+    with pytest.raises(NotImplementedError) as raises:
+        gleft = DataFrame.from_pandas(pleft)  # noqa:F841
+    raises.match('Strings are not yet supported')
+
+
+def test_dataframe_empty_merge():
+    gdf1 = DataFrame([('a', []), ('b', [])])
+    gdf2 = DataFrame([('a', []), ('c', [])])
+
+    expect = DataFrame([('a', []), ('b', []), ('c', [])])
+    got = gdf1.merge(gdf2, how='left', on=['a'])
+
+    assert_eq(expect, got)

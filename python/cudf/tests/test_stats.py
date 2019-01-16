@@ -48,6 +48,27 @@ def test_series_reductions(method, dtype):
     np.testing.assert_approx_equal(expect, got)
 
 
+@pytest.mark.parametrize('method', methods)
+def test_series_reductions_concurrency(method):
+    from concurrent.futures import ThreadPoolExecutor
+    e = ThreadPoolExecutor(10)
+
+    np.random.seed(0)
+    srs = [Series(np.random.random(10000)) for _ in range(1)]
+
+    def call_test(sr):
+        fn = getattr(sr, method)
+        if method in ['std', 'var']:
+            return fn(ddof=1)
+        else:
+            return fn()
+
+    def f(sr):
+        return call_test(sr + 1)
+
+    list(e.map(f, srs * 50))
+
+
 @pytest.mark.parametrize('ddof', range(3))
 def test_series_std(ddof):
     np.random.seed(0)
