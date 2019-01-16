@@ -20,6 +20,7 @@ bool isDigit(char data) {
 }
 
 
+/*
 __host__ __device__
 void adjustForWhitespaceAndQuotes(const char *data, long& start_idx, long& end_idx, char quotechar='\0') {
 
@@ -30,7 +31,17 @@ void adjustForWhitespaceAndQuotes(const char *data, long& start_idx, long& end_i
 		--end_idx;
 	}
 }
+*/
 
+__host__ __device__
+void adjustForWhitespaceAndQuotes(const char *data, long* start_idx, long* end_idx, char quotechar='\0') {
+  while ((*start_idx < *end_idx) && (data[*start_idx] == ' ' || data[*start_idx] == quotechar)) {
+    (*start_idx)++;
+  }
+  while ((*start_idx < *end_idx) && (data[*end_idx] == ' ' || data[*end_idx] == quotechar)) {
+    (*end_idx)--;
+  }
+}
 
 template<typename T>
 __host__ __device__
