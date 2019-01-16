@@ -12,6 +12,7 @@ import pandas as pd
 import pyarrow as pa
 
 from numba.cuda.cudadrv.devicearray import DeviceNDArray
+from types import GeneratorType
 
 from librmm_cffi import librmm as rmm
 
@@ -565,7 +566,7 @@ class DataFrame(object):
         if name in self._cols:
             raise NameError('duplicated column name {!r}'.format(name))
 
-        if isinstance(data, type(1 for i in range(1))):
+        if isinstance(data, GeneratorType):
             data = Series(data)
         series = self._prepare_series_for_add(data, forceindex=forceindex)
         series.name = name
