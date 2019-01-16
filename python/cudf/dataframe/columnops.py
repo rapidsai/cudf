@@ -174,6 +174,8 @@ def as_column(arbitrary, nan_as_null=True):
     elif isinstance(arbitrary, np.ndarray):
         if arbitrary.dtype.kind == 'M':
             data = datetime.DatetimeColumn.from_numpy(arbitrary)
+        elif arbitrary.dtype.kind in ('O', 'U'):
+            raise NotImplementedError("Strings are not yet supported")
         else:
             data = as_column(rmm.to_device(arbitrary), nan_as_null=nan_as_null)
 
@@ -274,7 +276,7 @@ def as_column(arbitrary, nan_as_null=True):
             )
 
     elif isinstance(arbitrary, (pd.Series, pd.Categorical)):
-        if pd.core.common.is_categorical_dtype(arbitrary):
+        if pd.api.types.is_categorical_dtype(arbitrary):
             data = as_column(pa.array(arbitrary, from_pandas=True))
         else:
             data = as_column(pa.array(arbitrary, from_pandas=nan_as_null))

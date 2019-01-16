@@ -387,7 +387,72 @@ public:
     {
         return unused_key;
     }
-    
+   
+    /* --------------------------------------------------------------------------*/
+    /**
+     * @Synopsis Computes a hash value for a key
+     *
+     * @Param[in] the_key The key to compute a hash for
+     * @tparam hash_value_type The datatype of the hash value
+     *
+     * @Returns   The hash value for the key
+     */
+    /* ----------------------------------------------------------------------------*/
+    template <typename hash_value_type = typename Hasher::result_type>
+    __forceinline__
+    __host__ __device__ hash_value_type get_hash(const key_type& the_key) const
+    {
+        return m_hf(the_key);
+    }
+
+    /* --------------------------------------------------------------------------*/
+    /**
+     * @Synopsis Computes the destination hash map partition for a key
+     *
+     * @Param[in] the_key The key to search for
+     * @Param[in] num_parts The total number of partitions in the partitioned
+     * hash table
+     * @Param[in] precomputed_hash A flag indicating whether or not a precomputed
+     * hash value is passed in
+     * @Param[in] precomputed_hash_value A precomputed hash value to use for determing
+     * the write location of the key into the hash map instead of computing the
+     * the hash value directly from the key
+     * @tparam hash_value_type The datatype of the hash value
+     *
+     * @Returns   The destination hash table partition for the specified key
+     */
+    /* ----------------------------------------------------------------------------*/
+    template <typename hash_value_type = typename Hasher::result_type>
+    __forceinline__
+    __host__ __device__ int get_partition(const key_type& the_key,
+                                          const int num_parts = 1,
+                                          bool precomputed_hash = false,
+                                          hash_value_type precomputed_hash_value = 0) const
+    {
+        hash_value_type hash_value{0};
+
+        // If a precomputed hash value has been passed in, then use it to determine
+        // the location of the key
+        if(true == precomputed_hash) {
+          hash_value = precomputed_hash_value;
+        }
+        // Otherwise, compute the hash value from the key
+        else {
+          hash_value = m_hf(the_key);
+        }
+
+        size_type hash_tbl_idx = hash_value % m_hashtbl_size;
+
+        const size_type partition_size  = m_hashtbl_size/num_parts;
+
+        int dest_part = hash_tbl_idx/partition_size;
+        // Note that if m_hashtbl_size % num_parts != 0 then dest_part can be
+        // num_parts for the last few elements and we remap that to the
+        // num_parts-1 partition
+        if (dest_part == num_parts) dest_part = num_parts-1;
+
+        return dest_part;
+    }
 
     /* --------------------------------------------------------------------------*/
     /** 
@@ -518,8 +583,6 @@ public:
                                     hash_value_type precomputed_hash_value = 0,
                                     comparison_type keys_are_equal = key_equal())
     {
-        const size_type hashtbl_size    = m_hashtbl_size;
-
         hash_value_type hash_value{0};
 
         // If a precomputed hash value has been passed in, then use it to determine
@@ -534,13 +597,11 @@ public:
           hash_value = m_hf(x.first);
         }
 
-        size_type hash_tbl_idx = hash_value % hashtbl_size;
+	// Find the destination partition index 
+	int dest_part = get_partition(x.first, num_parts, true, hash_value);
 
-        const size_type partition_size  = m_hashtbl_size/num_parts;
-
-        // Only insert into the specified partition
-        if( ( part < (num_parts-1) && hash_tbl_idx/partition_size != part ) ||
-            ( (num_parts-1) == part && hash_tbl_idx/partition_size < part ) )
+        // Only insert if the key belongs to the specified partition
+        if ( dest_part != part )
           return end();
         else
           return insert(x, true, hash_value, keys_are_equal);
@@ -608,62 +669,6 @@ public:
         return const_iterator( m_hashtbl_values,m_hashtbl_values+m_hashtbl_size,begin_ptr);
     }
 
-    /* --------------------------------------------------------------------------*/
-    /**
-     * @Synopsis Searches for a key in the hash map partition and returns an
-     * iterator to the first instance of the key in the map, or the end()
-     * iterator if the key could not be found in the specified partition.
-     *
-     * @Param[in] the_key The key to search for
-     * @Param[in] part The partitions number for the partitioned hash table
-     * @Param[in] num_parts The total number of partitions in the partitioned
-     * hash table
-     * @Param[in] precomputed_hash A flag indicating whether or not a precomputed
-     * hash value is passed in
-     * @Param[in] precomputed_hash_value A precomputed hash value to use for determing
-     * the write location of the key into the hash map instead of computing the
-     * the hash value directly from the key
-     * @Param[in] keys_are_equal An optional functor for comparing if two keys are equal
-     * @tparam hash_value_type The datatype of the hash value
-     * @tparam comparison_type The type of the key comparison functor
-     *
-     * @Returns   An iterator to the first instance of the key in the map
-     */
-    /* ----------------------------------------------------------------------------*/
-    template < typename hash_value_type = typename Hasher::result_type,
-               typename comparison_type = key_equal>
-    __forceinline__
-    __host__ __device__ const_iterator find_part(const key_type& the_key,
-                                                 const int part = 0,
-                                                 const int num_parts = 1,
-                                                 bool precomputed_hash = false,
-                                                 hash_value_type precomputed_hash_value = 0,
-                                                 comparison_type keys_are_equal = key_equal()) const
-    {
-        hash_value_type hash_value{0};
-
-        // If a precomputed hash value has been passed in, then use it to determine
-        // the location of the key
-        if(true == precomputed_hash) {
-          hash_value = precomputed_hash_value;
-        }
-        // Otherwise, compute the hash value from the key
-        else {
-          hash_value = m_hf(the_key);
-        }
-
-        size_type hash_tbl_idx = hash_value % m_hashtbl_size;
-
-        const size_type partition_size  = m_hashtbl_size/num_parts;
-
-        // Only probe the specified partition
-        if( ( part < (num_parts-1) && hash_tbl_idx/partition_size != part ) ||
-            ( (num_parts-1) == part && hash_tbl_idx/partition_size < part ) )
-          return end();
-        else
-          return find(the_key, true, hash_value, keys_are_equal);
-    }
-    
     gdf_error assign_async( const concurrent_unordered_multimap& other, cudaStream_t stream = 0 )
     {
         m_collisions = other.m_collisions;

@@ -27,9 +27,8 @@
 #include <vector>
 #include <string>
 #include <stdio.h>
-#include <iostream>
+#include <numeric>
 #include <iomanip>
-#include <vector>
 #include <unordered_map>
 
 #include <stdio.h>
@@ -61,14 +60,18 @@
 #include "NVStrings.h"
 
 constexpr int32_t HASH_SEED = 33;
+constexpr size_t max_chunk_bytes = 64*1024*1024; // 64MB
 
-using namespace std;
+using std::vector;
+using std::string;
+
+using cu_reccnt_t = unsigned long long int;
+using cu_recstart_t = unsigned long long int;
 
 //-- define the structure for raw data handling - for internal use
 typedef struct raw_csv_ {
     char *				data;			// on-device: the raw unprocessed CSV data - loaded as a large char * array
-    unsigned long long*	d_num_records;	// on-device: Number of records.
-    unsigned long long*	recStart;		// on-device: Starting position of the records.
+    cu_recstart_t*		recStart;		// on-device: Starting position of the records.
 
     char				delimiter;		// host: the delimiter
     char				terminator;		// host: the line terminator
@@ -79,7 +82,7 @@ typedef struct raw_csv_ {
 
     long				num_bytes;		// host: the number of bytes in the data
     long				num_bits;		// host: the number of 64-bit bitmaps (different than valid)
-	unsigned long long 	num_records;  	// host: number of records (per column)
+	gdf_size_type 		num_records;  	// host: number of records loaded into device memory, and then number of records to read
 	// int				num_cols;		// host: number of columns
 	int					num_active_cols;	// host: number of columns that will be return to user.
 	int					num_actual_cols;	// host: number of columns in the file --- based on the number of columns in header
@@ -91,6 +94,11 @@ typedef struct raw_csv_ {
     bool				dayfirst;
     char				decimal;
     char				thousands;
+
+	// TODO: change nrows to gdf_size_type once gdf_size_type is changed to a signed integer type
+	int  				nrows;       	// number of rows of file to read. default is -1, and all rows are read in this case
+	gdf_size_type		skiprows;       // number of rows at the start of the file to skip, default is 0
+	gdf_size_type		skipfooter;     // number of rows at the bottom of the file to skip, default is 0
 
     rmm::device_vector<int32_t>	d_trueValues;	// device: array of values to recognize as true
     rmm::device_vector<int32_t>	d_falseValues;	// device: array of values to recognize as false
@@ -127,11 +135,15 @@ using string_pair = std::pair<const char*,size_t>;
 //
 gdf_error parseArguments(csv_read_arg *args, raw_csv_t *csv);
 // gdf_error getColNamesAndTypes(const char **col_names, const  char **dtypes, raw_csv_t *d);
-gdf_error updateRawCsv( const char * data, size_t num_bytes, raw_csv_t * csvData, const char *compression );
+gdf_error inferCompressionType(const char* compression_arg, const char* filepath, string& compression_type);
+gdf_error getUncompressedHostData(const char* h_data, size_t num_bytes, 
+	const string& compression, 
+	vector<char>& h_uncomp_data);
+gdf_error uploadDataToDevice(const char* h_uncomp_data, size_t h_uncomp_size, raw_csv_t * raw_csv);
 gdf_error allocateGdfDataSpace(gdf_column *);
 gdf_dtype convertStringToDtype(std::string &dtype);
 
-#define checkError(error, txt)  if ( error != GDF_SUCCESS) { cerr << "ERROR:  " << error <<  "  in "  << txt << endl;  return error; }
+#define checkError(error, txt)  if ( error != GDF_SUCCESS) { std::cerr << "ERROR:  " << error <<  "  in "  << txt << std::endl;  return error; }
 
 //
 //---------------CUDA Kernel ---------------------------------------------
@@ -139,16 +151,22 @@ gdf_dtype convertStringToDtype(std::string &dtype);
 
 __device__ int findSetBit(int tid, long num_bits, uint64_t *f_bits, int x);
 
-gdf_error launch_countRecords(raw_csv_t * csvData);
-gdf_error launch_storeRecordStart(raw_csv_t * csvData);
-gdf_error launch_dataConvertColumns(raw_csv_t * raw_csv, void** d_gdf,  gdf_valid_type** valid, gdf_dtype* d_dtypes, string_pair	**str_cols, long row_offset, unsigned long long *);
+gdf_error launch_countRecords(const char* h_data, size_t h_size, char terminator, char quote, gdf_size_type& rec_cnt);
+gdf_error launch_storeRecordStart(const char* h_data, size_t h_size, raw_csv_t * csvData);
+gdf_error launch_dataConvertColumns(raw_csv_t * raw_csv, void** d_gdf,  gdf_valid_type** valid, gdf_dtype* d_dtypes, string_pair **str_cols, unsigned long long *);
 
-gdf_error launch_dataTypeDetection(raw_csv_t * raw_csv, long row_offset, column_data_t* d_columnData);
+gdf_error launch_dataTypeDetection(raw_csv_t * raw_csv, column_data_t* d_columnData);
 
-__global__ void countRecords(char *data, const char terminator, const char quotechar, long num_bytes, long num_bits, unsigned long long* num_records);
-__global__ void storeRecordStart(char *data, const char terminator, const char quotechar, long num_bytes, long num_bits, unsigned long long* num_records,unsigned long long* recStart) ;
-__global__ void convertCsvToGdf(char *csv, const parsing_opts_t opts, unsigned long long num_records, int num_columns,bool *parseCol,unsigned long long *recStart,gdf_dtype *dtype,void **gdf_data,gdf_valid_type **valid,string_pair **str_cols,unsigned long long row_offset, long header_row,bool dayfirst,unsigned long long *num_valid);
-__global__ void dataTypeDetection(char *raw_csv, const parsing_opts_t opts, unsigned long long num_records, int  num_columns, bool  *parseCol, unsigned long long *recStart, unsigned long long row_offset, long header_row, column_data_t* d_columnData);
+__global__ void countRecords(char *data, const char terminator, const char quotechar, long num_bytes, long num_bits, cu_reccnt_t* num_records);
+__global__ void storeRecordStart(char *data, size_t chunk_offset, 
+	const char terminator, const char quotechar, 
+	long num_bytes, long num_bits, cu_reccnt_t* num_records,
+	cu_recstart_t* recStart);
+__global__ void convertCsvToGdf(char *csv, const parsing_opts_t opts, gdf_size_type num_records, int num_columns, 
+	bool *parseCol, cu_recstart_t *recStart,gdf_dtype *dtype, void **gdf_data, gdf_valid_type **valid, 
+	string_pair **str_cols, bool dayfirst, unsigned long long *num_valid);
+__global__ void dataTypeDetection(char *raw_csv, const parsing_opts_t opts, gdf_size_type num_records, 
+	int  num_columns, bool  *parseCol, cu_recstart_t *recStart, column_data_t* d_columnData);
 
 //
 //---------------CUDA Valid (8 blocks of 8-bits) Bitmap Kernels ---------------------------------------------
@@ -191,49 +209,15 @@ std::string stringType(gdf_dtype dt){
 }
 
 
-
-/**
- * @brief read in a CSV file
+/**---------------------------------------------------------------------------*
+ * @brief Read in a CSV file, extract all fields and return 
+ * a GDF (array of gdf_columns)
  *
- * Read in a CSV file, extract all fields, and return a GDF (array of gdf_columns)
- *
- * @param[in and out] args the input arguments, but this also contains the returned data
- *
- * Arguments:
- *
- *  Required Arguments
- * 		file_path			-	file location to read from
- * 		num_cols			-	number of columns in the names and dtype arrays
- * 		names				-	ordered List of column names, this is a required field
- * 		dtype				-	ordered List of data types, this is required
- *
- * 	Optional
- * 		lineterminator		-	define the line terminator character.  Default is '\n'
- * 		delimiter			-	define the field separator, default is ','.  This argument is also called 'sep'
- *
- * 		quotechar;				define the character used to denote start and end of a quoted item
- * 		quoting;				treat string fields as quoted item and remove the first and last quotechar
- * 		nodoublequote;			do not interpret two consecutive quotechar as a single quotechar
- *
- * 		delim_whitespace	-	use white space as the delimiter - default is false.  This overrides the delimiter argument
- * 		skipinitialspace	-	skip white spaces after the delimiter - default is false
- *
- * 		skiprows			-	number of rows at the start of the files to skip, default is 0
- * 		skipfooter			-	number of rows at the bottom of the file to skip - default is 0
- *
- * 		dayfirst			-	is the first value the day?  DD/MM  versus MM/DD
- * 		compression			-	compression {"infer","gzip","zip"}, default is no compression.
- *
- *
- *  Output
- *  	num_cols_out		-	Out: return the number of columns read in
- *  	num_rows_out		-	Out: return the number of rows read in
- *  	gdf_column **data	-	Out: return the array of *gdf_columns
- *
+ * @param[in,out] args Structure containing both the the input arguments 
+ * and the returned data
  *
  * @return gdf_error
- *
- */
+ *---------------------------------------------------------------------------**/
 gdf_error read_csv(csv_read_arg *args)
 {
 	gdf_error error = gdf_error::GDF_SUCCESS;
@@ -268,9 +252,23 @@ gdf_error read_csv(csv_read_arg *args)
 		raw_csv->doublequote = false;
 	}
 
+	if (args->names == nullptr) {
+		raw_csv->header_row = args->header;
+	}
+	else{
+		raw_csv->header_row = -1;
+	}
+
 	raw_csv->dayfirst = args->dayfirst;
 	raw_csv->decimal = args->decimal;
 	raw_csv->thousands = args->thousands;
+
+	raw_csv->skiprows = args->skiprows;
+	raw_csv->skipfooter = args->skipfooter;
+	raw_csv->nrows = args->nrows;
+	if (raw_csv->header_row >= 0 && args->nrows >= 0) {
+		++raw_csv->nrows;
+	}
 
 	if (raw_csv->decimal == raw_csv->delimiter)
 	{ 
@@ -304,7 +302,6 @@ gdf_error read_csv(csv_read_arg *args)
 	// memory map in the data
 	void * 	map_data = NULL;
 	size_t	map_size = 0;
-	const char *compression = nullptr;
 	int fd = 0;
 	if (args->input_data_form == gdf_csv_input_form::FILE_PATH)
 	{
@@ -328,41 +325,42 @@ gdf_error read_csv(csv_read_arg *args)
 	}
 	else { checkError(GDF_C_ERROR, "invalid input type"); }
 
-	//-----------------------------------------------------------------------------
-	//---  create a structure to hold variables used to parse the CSV data
-	compression = (args->compression && 0 != strcasecmp(args->compression, "none")) ? args->compression : nullptr;
-	if (compression && 0 == strcasecmp(compression, "infer"))
-	{
-		const char *file_ext = strrchr(args->filepath_or_buffer, '.');
-		compression = nullptr;
-		if (file_ext)
-		{
-			if (!strcasecmp(file_ext, ".gz"))
-				compression = "gzip";
-			else if (!strcasecmp(file_ext, ".zip"))
-				compression = "zip";
-			else if (!strcasecmp(file_ext, ".bz2"))
-				compression = "bz2";
-			else if (!strcasecmp(file_ext, ".xz"))
-				compression = "xz";
-		}
-	}
-	error = updateRawCsv( (const char *)map_data, map_size, raw_csv, compression );
-	checkError(error, "call to createRawCsv");
 
-	//-----------------------------------------------------------------------------
-	// find the record and fields points (in bitmaps)
-	error = launch_countRecords(raw_csv);
-	checkError(error, "call to record counter");
+
+	string compression_type;
+	error = inferCompressionType(args->compression, args->filepath_or_buffer, compression_type);
+	checkError(error, "call to inferCompressionType");
+
+	const char* h_uncomp_data;
+	size_t h_uncomp_size = 0;
+	// Used when the input data is compressed, to ensure the allocated uncompressed data is freed
+	vector<char> h_uncomp_data_owner;
+	if (compression_type == "none") {
+		// Do not use the owner vector here to avoid copying the whole file to the heap
+		h_uncomp_data = (const char*)map_data;
+		h_uncomp_size = map_size;
+	}
+	else {
+		error = getUncompressedHostData( (const char *)map_data, map_size, compression_type, h_uncomp_data_owner);
+		checkError(error, "call to getUncompressedHostData");
+		h_uncomp_data = h_uncomp_data_owner.data();
+		h_uncomp_size = h_uncomp_data_owner.size();
+	}
+	assert(h_uncomp_data != nullptr);
+	assert(h_uncomp_size != 0);
+
+	error = launch_countRecords(h_uncomp_data, h_uncomp_size, raw_csv->terminator, raw_csv->quotechar, raw_csv->num_records);
+	if (error != GDF_SUCCESS) {
+			return error;
+	}
 
 	//-----------------------------------------------------------------------------
 	//-- Allocate space to hold the record starting point
-	RMM_TRY( RMM_ALLOC((void**)&(raw_csv->recStart), (sizeof(unsigned long long) * (raw_csv->num_records + 1)), 0) ); 
-	CUDA_TRY( cudaMemset(raw_csv->d_num_records,	0, 		(sizeof(unsigned long long) )) ) ;
+	RMM_TRY( RMM_ALLOC((void**)&(raw_csv->recStart), (sizeof(cu_recstart_t) * (raw_csv->num_records + 1)), 0) ); 
 
 	//-----------------------------------------------------------------------------
 	//-- Scan data and set the starting positions
-	error = launch_storeRecordStart(raw_csv);
+	error = launch_storeRecordStart(h_uncomp_data, h_uncomp_size, raw_csv);
 	checkError(error, "call to record initial position store");
 
 	// Previous kernel stores the record pinput_file.typeositions as encountered by all threads
@@ -375,109 +373,91 @@ gdf_error read_csv(csv_read_arg *args)
 	// or a linetermination within a quotechar pair. The future major refactoring
 	// of csv_reader and its kernels will probably use a different tactic.
 	if (raw_csv->quotechar != '\0') {
-		const size_t recTotalSize = sizeof(unsigned long long) * (raw_csv->num_records + 1);
+		vector<cu_recstart_t> h_rec_starts(raw_csv->num_records + 1);
+		const size_t rec_start_size = sizeof(cu_recstart_t) * (h_rec_starts.size());
+		CUDA_TRY( cudaMemcpy(h_rec_starts.data(), raw_csv->recStart, rec_start_size, cudaMemcpyDeviceToHost) );
 
-		unsigned long long *h_recStart = (unsigned long long*)malloc(recTotalSize);
-		CUDA_TRY( cudaMemcpy(h_recStart, raw_csv->recStart, recTotalSize, cudaMemcpyDeviceToHost) );
-
-		const char *h_data = (const char *)(map_data);
-		unsigned long long recCount = raw_csv->num_records;
+		auto recCount = raw_csv->num_records;
 
 		bool quotation = false;
 		for (size_t i = 1; i < raw_csv->num_records; ++i) {
-			if (h_data[h_recStart[i] - 1] == raw_csv->quotechar) {
+			if (h_uncomp_data[h_rec_starts[i] - 1] == raw_csv->quotechar) {
 				quotation = !quotation;
-				h_recStart[i] = raw_csv->num_bytes;
+				h_rec_starts[i] = raw_csv->num_bytes;
 				recCount--;
 			}
 			else if (quotation) {
-				h_recStart[i] = raw_csv->num_bytes;
+				h_rec_starts[i] = raw_csv->num_bytes;
 				recCount--;
 			}
 		}
 
-		CUDA_TRY( cudaMemcpy(raw_csv->recStart, h_recStart, recTotalSize, cudaMemcpyHostToDevice) );
+		CUDA_TRY( cudaMemcpy(raw_csv->recStart, h_rec_starts.data(), rec_start_size, cudaMemcpyHostToDevice) );
 		thrust::sort(thrust::device, raw_csv->recStart, raw_csv->recStart + raw_csv->num_records + 1);
 		raw_csv->num_records = recCount;
-		
-		free(h_recStart);
+	}
+
+	error = uploadDataToDevice(h_uncomp_data, h_uncomp_size, raw_csv);
+	if (error != GDF_SUCCESS) {
+		return error;
 	}
 
 	//-----------------------------------------------------------------------------
-	//-- Acquire header row of 
-
-	int h_num_cols=0, h_dup_cols_removed=0;
-
-	int skip_header=0;
+	//-- Populate the header
 
 	// Check if the user gave us a list of column names
-	if(args->names==NULL){
-
+	if(args->names == nullptr) {
+		int h_num_cols = 0;
 		// Getting the first row of data from the file. We will parse the data to find lineterminator as
 		// well as the column delimiter.
-		char* cmap_data = (char *)map_data;
+		cu_recstart_t second_rec_start;
+		CUDA_TRY(cudaMemcpy(&second_rec_start, raw_csv->recStart + 1, sizeof(cu_recstart_t), cudaMemcpyDefault));
+		vector<char> first_row(second_rec_start);
+		CUDA_TRY(cudaMemcpy(first_row.data(), raw_csv->data, sizeof(char) * first_row.size(), cudaMemcpyDefault));
 
-		unsigned long long c=0;
-
-		raw_csv->header_row=0;
-		if (args->header>=0){
-			raw_csv->header_row = args->header;
-		}
-		if(raw_csv->header_row > (long)raw_csv->num_records){
-			checkError(GDF_FILE_ERROR, "Number of records is smaller than the id of the specified header row");
-		}
-
-		unsigned long long headerPositions[2];
-		CUDA_TRY( cudaMemcpy(headerPositions,raw_csv->recStart + raw_csv->header_row, sizeof(unsigned long long)*2, cudaMemcpyDeviceToHost));
-		unsigned long long start = headerPositions[0];
-		unsigned long long stop  = headerPositions[1];
-
-		c=start;
-		while(c<stop){
-			if (cmap_data[c]==args->lineterminator){
-				h_num_cols++;
-				break;
-			}
-			else if(cmap_data[c] == '\r' && (c+1L)<(unsigned long long)raw_csv->num_bytes && cmap_data[c+1] == '\n'){
-				h_num_cols++;
-				break;
-			}else if (cmap_data[c]==args->delimiter)
-				h_num_cols++;
-			c++;
-		}
-
-		unsigned long long prev=start;
-		c=start;
-
+		// datect the number of rows and assign the column name
 		raw_csv->col_names.clear();
-
-		if(args->header>=0){
-			h_num_cols=0;
+		if(raw_csv->header_row >= 0) {
+			size_t prev = 0;
+			size_t c = 0;
 			// Storing the names of the columns into a vector of strings
-			while(c<=stop){
-				if (cmap_data[c]==args->delimiter || cmap_data[c]==args->lineterminator){
-					std::string colName(cmap_data +prev,c-prev );
-					prev=c+1;
+			while(c < first_row.size()) {
+				if (first_row[c] == args->delimiter || first_row[c] == args->lineterminator){
+					std::string colName(first_row.data() + prev, c - prev );
+					prev = c + 1;
 					raw_csv->col_names.push_back(colName);
 					h_num_cols++;
 				}
 				c++;
 			}
-			skip_header=1;
-		}else{
-			for (int i = 0; i<h_num_cols; i++){
+		}
+		else {
+			size_t c = 0;
+			while(c < first_row.size()) {
+				if (first_row[c] == args->lineterminator) {
+					h_num_cols++;
+					break;
+				}
+				else if(first_row[c] == '\r' && (c+1L) < first_row.size() && first_row[c+1] == '\n'){
+					h_num_cols++;
+					break;
+				}else if (first_row[c] == args->delimiter)
+					h_num_cols++;
+				c++;
+			}
+			// assign column indexes as names if the header column is not present
+			for (int i = 0; i<h_num_cols; i++) {
 				std::string newColName = std::to_string(i);
 				raw_csv->col_names.push_back(newColName);
 			}
 		}
 		// Allocating a boolean array that will use to state if a column needs to read or filtered.
-
-
 		raw_csv->h_parseCol = (bool*)malloc(sizeof(bool) * (h_num_cols));
 		RMM_TRY( RMM_ALLOC((void**)&raw_csv->d_parseCol,(sizeof(bool) * (h_num_cols)),0 ) );
 		for (int i = 0; i<h_num_cols; i++)
 			raw_csv->h_parseCol[i]=true;
 
+		int h_dup_cols_removed = 0;
 		// Looking for duplicates
 		for (auto it = raw_csv->col_names.begin(); it != raw_csv->col_names.end(); it++){
 			bool found_dupe = false;
@@ -508,7 +488,7 @@ gdf_error read_csv(csv_read_arg *args)
 			}
 		}
 
-		raw_csv->num_actual_cols = h_num_cols;							// Actuaul number of columns in the CSV file
+		raw_csv->num_actual_cols = h_num_cols;							// Actual number of columns in the CSV file
 		raw_csv->num_active_cols = h_num_cols-h_dup_cols_removed;		// Number of fields that need to be processed based on duplicatation fields
 
 		CUDA_TRY(cudaMemcpy(raw_csv->d_parseCol, raw_csv->h_parseCol, sizeof(bool) * (h_num_cols), cudaMemcpyHostToDevice));
@@ -556,13 +536,10 @@ gdf_error read_csv(csv_read_arg *args)
 		CUDA_TRY(cudaMemcpy(raw_csv->d_parseCol, raw_csv->h_parseCol, sizeof(bool) * (raw_csv->num_actual_cols), cudaMemcpyHostToDevice));
 	}
 
-	raw_csv->num_records -= (args->skiprows + args->skipfooter); 
-	if(skip_header==0){
-		raw_csv->header_row=-1;
-	}else{
+	if (raw_csv->header_row>=0) {
 		raw_csv->num_records-=1;
 	}
-
+	
 	//-----------------------------------------------------------------------------
 	//---  done with host data
 	if (args->input_data_form == gdf_csv_input_form::FILE_PATH)
@@ -584,7 +561,7 @@ gdf_error read_csv(csv_read_arg *args)
 
 		CUDA_TRY( cudaMemset(d_ColumnData,	0, 	(sizeof(column_data_t) * (raw_csv->num_active_cols)) ) ) ;
 
-		launch_dataTypeDetection(raw_csv, args->skiprows, d_ColumnData);
+		launch_dataTypeDetection(raw_csv, d_ColumnData);
 
 		CUDA_TRY( cudaMemcpy(h_ColumnData,d_ColumnData, sizeof(column_data_t) * (raw_csv->num_active_cols), cudaMemcpyDeviceToHost));
 
@@ -710,7 +687,7 @@ gdf_error read_csv(csv_read_arg *args)
 	free(h_valid); 
 	free(h_data); 
 	
-	launch_dataConvertColumns(raw_csv,d_data, d_valid, d_dtypes,d_str_cols, args->skiprows, d_valid_count);
+	launch_dataConvertColumns(raw_csv, d_data, d_valid, d_dtypes, d_str_cols, d_valid_count);
 	cudaDeviceSynchronize();
 
 	stringColCount=0;
@@ -765,7 +742,6 @@ gdf_error read_csv(csv_read_arg *args)
 
 	RMM_TRY( RMM_FREE( raw_csv->recStart, 0 ) ); 
 	RMM_TRY( RMM_FREE( raw_csv->d_parseCol, 0 ) ); 
-	RMM_TRY( RMM_FREE( raw_csv->d_num_records, 0 ) ); 
 	CUDA_TRY( cudaFree ( raw_csv->data) );
 
 
@@ -804,51 +780,139 @@ gdf_dtype convertStringToDtype(std::string &dtype) {
 }
 
 
-/*
- * Create the raw_csv_t structure and allocate space on the GPU
- */
-gdf_error updateRawCsv( const char * data, size_t num_bytes, raw_csv_t * raw, const char *compression ) {
-
-	int num_bits;
-
-	// Check if input is compressed
-	if (compression) {
-		int comp_type = IO_UNCOMP_STREAM_TYPE_INFER;
-		char *data_out = nullptr;
-		gdf_size_type uncomp_size = 0;
-		gdf_error err;
-		if (!strcasecmp(compression, "gzip"))
-			comp_type = IO_UNCOMP_STREAM_TYPE_GZIP;
-		else if (!strcasecmp(compression, "zip"))
-			comp_type = IO_UNCOMP_STREAM_TYPE_ZIP;
-		else if (!strcasecmp(compression, "bz2"))
-			comp_type = IO_UNCOMP_STREAM_TYPE_BZIP2;
-		else if (!strcasecmp(compression, "xz"))
-			comp_type = IO_UNCOMP_STREAM_TYPE_XZ;
-		err = io_uncompress_single_h2d(data, num_bytes, (void **)&data_out, &uncomp_size, comp_type);
-		if (err != GDF_SUCCESS) {
-			return err;
+/**---------------------------------------------------------------------------*
+ * @brief Infer the compression type from the compression parameter and 
+ * the input file name
+ * 
+ * Returns "none" if the input is not compressed.
+ * 
+ * @param[in] compression_arg Input string that is potentially describing 
+ * the compression type. Can also be nullptr, "none", or "infer"
+ * @param[in] filepath path + name of the input file
+ * @param[out] compression_type String describing the inferred compression type
+ * 
+ * @return gdf_error with error code on failure, otherwise GDF_SUCCESS
+ *---------------------------------------------------------------------------**/
+gdf_error inferCompressionType(const char* compression_arg, const char* filepath, string& compression_type)
+{
+	if (compression_arg && 0 == strcasecmp(compression_arg, "none")) {
+		compression_arg = nullptr;
+	}
+	if (compression_arg && 0 == strcasecmp(compression_arg, "infer"))
+	{
+		const char *file_ext = strrchr(filepath, '.');
+		compression_arg = nullptr;
+		if (file_ext)
+		{
+			if (!strcasecmp(file_ext, ".gz"))
+				compression_arg = "gzip";
+			else if (!strcasecmp(file_ext, ".zip"))
+				compression_arg = "zip";
+			else if (!strcasecmp(file_ext, ".bz2"))
+				compression_arg = "bz2";
+			else if (!strcasecmp(file_ext, ".xz"))
+				compression_arg = "xz";
+			else {
+				// TODO: return error here
+			}
 		}
-		raw->data = data_out;
-		raw->num_bytes = uncomp_size;
-		num_bytes = uncomp_size;
 	}
-	else {
-		CUDA_TRY( cudaMallocManaged ((void**)&raw->data, 		(sizeof(char)		* num_bytes)));
-		// RMM_TRY( RMM_ALLOC((void**)&raw->data, 		(sizeof(char)		* num_bytes),0 ));
-		CUDA_TRY( cudaMemcpy(raw->data, data, num_bytes, cudaMemcpyHostToDevice));
-	}
-
-	num_bits = (num_bytes + 63) / 64;
-
-	RMM_TRY( RMM_ALLOC((void**)&raw->d_num_records, sizeof(unsigned long long),0) );
-	CUDA_TRY( cudaMemset(raw->d_num_records,0, ((sizeof(long)) )) );
-
-	raw->num_bits  = num_bits;
-
+	compression_type = compression_arg == nullptr? "none":string(compression_arg);
+	
 	return GDF_SUCCESS;
 }
 
+
+/**---------------------------------------------------------------------------*
+ * @brief Uncompresses the input data and stores the allocated result into 
+ * a vector.
+ * 
+ * @param[in] h_data Pointer to the csv data in host memory
+ * @param[in] num_bytes Size of the input data, in bytes
+ * @param[in] compression String describing the compression type
+ * @param[out] h_uncomp_data Vector containing the output uncompressed data
+ * 
+ * @return gdf_error with error code on failure, otherwise GDF_SUCCESS
+ *---------------------------------------------------------------------------**/
+gdf_error getUncompressedHostData(const char* h_data, size_t num_bytes, const string& compression, vector<char>& h_uncomp_data) 
+{	
+	int comp_type = IO_UNCOMP_STREAM_TYPE_INFER;
+	if (compression == "gzip")
+		comp_type = IO_UNCOMP_STREAM_TYPE_GZIP;
+	else if (compression == "zip")
+		comp_type = IO_UNCOMP_STREAM_TYPE_ZIP;
+	else if (compression == "bz2")
+		comp_type = IO_UNCOMP_STREAM_TYPE_BZIP2;
+	else if (compression == "xz")
+		comp_type = IO_UNCOMP_STREAM_TYPE_XZ;
+
+	return io_uncompress_single_h2d(h_data, num_bytes, comp_type, h_uncomp_data);
+}
+
+
+/**---------------------------------------------------------------------------*
+ * @brief Uploads the relevant segment of the input csv data onto the GPU.
+ * 
+ * Only rows that need to be read are copied to the GPU, based on parameters
+ * like nrows, skipheader, skipfooter.
+ * Also updates the array of record starts to match the device data offset.
+ * 
+ * @param[in] h_uncomp_data Pointer to the uncompressed csv data in host memory
+ * @param[in] h_uncomp_size Size of the input data, in bytes
+ * @param[in,out] csvData Structure containing the csv parsing parameters
+ * and intermediate results
+ * 
+ * @return gdf_error with error code on failure, otherwise GDF_SUCCESS
+ *---------------------------------------------------------------------------**/
+gdf_error uploadDataToDevice(const char* h_uncomp_data, size_t h_uncomp_size, raw_csv_t * raw_csv) {
+	vector<cu_recstart_t> h_rec_starts(raw_csv->num_records + 1);
+	CUDA_TRY( cudaMemcpy(h_rec_starts.data(), raw_csv->recStart, sizeof(cu_recstart_t) * h_rec_starts.size(), cudaMemcpyDefault));
+	
+	// Exclude the rows user chose to skip at the start of the file
+	const gdf_size_type first_row = raw_csv->skiprows + max(raw_csv->header_row, 0l);
+	if (raw_csv->num_records > first_row) {
+		raw_csv->num_records = raw_csv->num_records - (long)first_row;
+	}
+	else {
+		checkError(GDF_FILE_ERROR, "Number of records is too small for the specified skiprows and header parameters");
+	}
+
+	// Restrict the rows to nrows if nrows is smaller than the remaining number of rows
+	if (raw_csv->nrows >= 0 && (gdf_size_type)raw_csv->nrows < raw_csv->num_records) {
+		raw_csv->num_records = (gdf_size_type)raw_csv->nrows;
+	}
+
+	// Exclude the rows user chose to skip at the end of the file
+	if (raw_csv->skipfooter != 0) {
+		raw_csv->num_records = gdf_size_type(max(raw_csv->num_records - raw_csv->skipfooter, 0ul));
+		
+	}
+	
+	// Have to at least read the header row
+	if (raw_csv->header_row >= 0 && raw_csv->num_records == 0) 
+		raw_csv->num_records = 1;
+
+	// If specified, header row will always be the first row in the GPU data
+	raw_csv->header_row = min(raw_csv->header_row, 0l);
+
+	const auto start_offset = h_rec_starts[first_row];
+	const auto end_offset = h_rec_starts[first_row + raw_csv->num_records] - 1;
+	raw_csv->num_bytes = end_offset - start_offset + 1;
+	assert(raw_csv->num_bytes <= h_uncomp_size);
+	raw_csv->num_bits = (raw_csv->num_bytes + 63) / 64;
+
+	// Update the record starts to match the device data (skip missing records, fix offset)
+	for (gdf_size_type i = first_row; i <= first_row + raw_csv->num_records; ++i)
+		h_rec_starts[i] -= start_offset;
+	CUDA_TRY( cudaMemcpy(raw_csv->recStart, h_rec_starts.data() + first_row, 
+		sizeof(cu_recstart_t) * (raw_csv->num_records + 1), cudaMemcpyDefault));
+
+	// Allocate and copy to the GPU
+	CUDA_TRY(cudaMallocManaged ((void**)&raw_csv->data, (sizeof(char) * raw_csv->num_bytes)));
+	CUDA_TRY(cudaMemcpy(raw_csv->data, h_uncomp_data + start_offset, raw_csv->num_bytes, cudaMemcpyHostToDevice));
+
+	return GDF_SUCCESS;
+}
 
 /*
  * For each of the gdf_cvolumns, create the on-device space.  the on-host fields should already be filled in
@@ -913,34 +977,87 @@ gdf_error allocateGdfDataSpace(gdf_column *gdf) {
 //----------------------------------------------------------------------------------------------------------------
 
 
-gdf_error launch_countRecords(raw_csv_t * csvData) {
+/**---------------------------------------------------------------------------*
+ * @brief Counts the number of rows in the input csv file.
+ * 
+ * Does not load the entire file into the GPU memory at any time, so it can 
+ * be used to parse large files.
+ * Does not take quotes into consideration, so it will return extra rows
+ * if the line terminating characters are present within quotes.
+ * Because of this the result should be postprocessed to remove 
+ * the fake line endings.
+ * 
+ * @param[in] h_data Pointer to the csv data in host memory
+ * @param[in] h_size Size of the input data, in bytes
+ * @param[in] terminator Line terminator character
+ * @param[in] quote Quote character
+ * @param[out] rec_cnt The resulting number of rows (records)
+ * 
+ * @return gdf_error with error code on failure, otherwise GDF_SUCCESS
+ *---------------------------------------------------------------------------**/
+gdf_error launch_countRecords(const char* h_data, size_t h_size, 
+							  char terminator, char quote, 
+							  gdf_size_type& rec_cnt)
+{
+	const size_t chunk_count = (h_size + max_chunk_bytes - 1) / max_chunk_bytes;
+	vector<cu_reccnt_t> h_cnts(chunk_count);
+
+	cu_reccnt_t* d_cnts = nullptr;
+	CUDA_TRY(cudaMalloc(&d_cnts, sizeof(cu_reccnt_t)* chunk_count));
+	CUDA_TRY(cudaMemset(d_cnts, 0, sizeof(cu_reccnt_t)* chunk_count));
+
+	char* d_chunk = nullptr;
+	// Allocate extra byte in case \r\n is at the chunk border
+	CUDA_TRY(cudaMalloc(&d_chunk, max_chunk_bytes + 1)); 
 
 	int blockSize;		// suggested thread count to use
 	int minGridSize;	// minimum block count required
-	CUDA_TRY( cudaOccupancyMaxPotentialBlockSize(&minGridSize, &blockSize, countRecords) );
+	CUDA_TRY(cudaOccupancyMaxPotentialBlockSize(&minGridSize, &blockSize, countRecords));
 
-	// Calculate actual block count to use based on bitmap count
-	// Each bitmap is for a 64-byte chunk, and each data index is bitmap ID * 64
-	int gridSize = (csvData->num_bits + blockSize - 1) / blockSize;
+	for (size_t ci = 0; ci < chunk_count; ++ci) {
+		const auto h_chunk = h_data + ci * max_chunk_bytes;
+		const auto chunk_bytes = std::min((size_t)(h_size - ci * max_chunk_bytes), max_chunk_bytes);
+		const auto chunk_bits = (chunk_bytes + 63) / 64;
 
-	countRecords <<< gridSize, blockSize >>> (
-		csvData->data, csvData->terminator, csvData->quotechar,
-		csvData->num_bytes, csvData->num_bits, csvData->d_num_records
-	);
+		// Copy chunk to device. Copy extra byte if not last chunk
+		CUDA_TRY(cudaMemcpy(d_chunk, h_chunk, ci < (chunk_count - 1)?chunk_bytes:chunk_bytes + 1, cudaMemcpyDefault));
+
+		const int gridSize = (chunk_bits + blockSize - 1) / blockSize;
+		countRecords <<< gridSize, blockSize >>> (
+			d_chunk, terminator, quote,
+			chunk_bytes, chunk_bits, &d_cnts[ci]
+			);
+	}
+	CUDA_TRY(cudaMemcpy(h_cnts.data(), d_cnts, chunk_count*sizeof(cu_reccnt_t), cudaMemcpyDefault));
+
+	CUDA_TRY(cudaFree(d_chunk));
+	CUDA_TRY(cudaFree(d_cnts));
 
 	CUDA_TRY(cudaGetLastError());
 
-	long recs=-1;
-	CUDA_TRY(cudaMemcpy(&recs, csvData->d_num_records, sizeof(long), cudaMemcpyDeviceToHost));
-	csvData->num_records=recs;
-
-	CUDA_TRY(cudaGetLastError());
+	rec_cnt = std::accumulate(h_cnts.begin(), h_cnts.end(), gdf_size_type(0));
 
 	return GDF_SUCCESS;
 }
 
 
-__global__ void countRecords(char *data, const char terminator, const char quotechar, long num_bytes, long num_bits, unsigned long long* num_records) {
+/**---------------------------------------------------------------------------* 
+ * @brief CUDA kernel that counts the number of rows in the given 
+ * file segment, based on the location of line terminators. 
+ * 
+ * @param[in] data Device memory pointer to the csv data, 
+ * potentially a chunk of the whole file
+ * @param[in] terminator Line terminator character
+ * @param[in] quotechar Quote character
+ * @param[in] num_bytes Number of bytes in the input data
+ * @param[in] num_bits Number of 'bits' in the input data. Each 'bit' is
+ * processed by a separate CUDA thread
+ * @param[in,out] num_records Device memory pointer to the number of found rows
+ * 
+ * @return gdf_error with error code on failure, otherwise GDF_SUCCESS
+ *---------------------------------------------------------------------------**/
+__global__ void countRecords(char *data, const char terminator, const char quotechar, long num_bytes, long num_bits, 
+	cu_reccnt_t* num_records) {
 
 	// thread IDs range per block, so also need the block id
 	long tid = threadIdx.x + (blockDim.x * blockIdx.x);
@@ -956,38 +1073,80 @@ __global__ void countRecords(char *data, const char terminator, const char quote
 	long byteToProcess = ((did + 64L) < num_bytes) ? 64L : (num_bytes - did);
 
 	// process the data
-	long tokenCount = 0;
+	cu_reccnt_t tokenCount = 0;
 	for (long x = 0; x < byteToProcess; x++) {
 		
 		// Scan and log records. If quotations are enabled, then also log quotes
 		// for a postprocess ignore, as the chunk here has limited visibility.
 		if ((raw[x] == terminator) || (quotechar != '\0' && raw[x] == quotechar)) {
 			tokenCount++;
-		} else if (raw[x] == '\r' && (x+1L)<num_bytes && raw[x +1] == '\n') {
+		} else if (raw[x] == '\r' && raw[x +1] == '\n') {
 			x++;
 			tokenCount++;
 		}
 
 	}
-	atomicAdd((unsigned long long int*)num_records,(unsigned long long int)tokenCount);
+	atomicAdd(num_records, tokenCount);
 }
 
 
-gdf_error launch_storeRecordStart(raw_csv_t * csvData) {
+/**---------------------------------------------------------------------------*
+ * @brief Finds the start of each row (record) in the given file, based on
+ * the location of line terminators. The offset of each found row is stored 
+ * in the recStart data member of the csvData parameter.
+ * 
+ * Does not load the entire file into the GPU memory at any time, so it can 
+ * be used to parse large files.
+ * Does not take quotes into consideration, so it will return extra rows
+ * if the line terminating characters are present within quotes.
+ * Because of this the result should be postprocessed to remove 
+ * the fake line endings.
+ * 
+ * @param[in] h_data Pointer to the csv data in host memory
+ * @param[in] h_size Size of the input data, in bytes
+ * @param[in,out] csvData Structure containing the csv parsing parameters
+ * and intermediate results
+ * 
+ * @return gdf_error with error code on failure, otherwise GDF_SUCCESS
+ *---------------------------------------------------------------------------**/
+gdf_error launch_storeRecordStart(const char* h_data, size_t h_size, raw_csv_t * csvData) {
+
+	char* d_chunk = nullptr;
+	// Allocate extra byte in case \r\n is at the chunk border
+	CUDA_TRY(cudaMalloc(&d_chunk, max_chunk_bytes + 1)); 
+	
+    cu_reccnt_t*	d_num_records;
+	RMM_TRY(RMM_ALLOC((void**)&d_num_records, sizeof(cu_reccnt_t), 0) );
+
+	// set the first record starting a zero instead of setting it in the kernel
+    const auto one = 1ull;
+	CUDA_TRY(cudaMemcpy(d_num_records, &one, sizeof(cu_reccnt_t), cudaMemcpyDefault));
+	CUDA_TRY(cudaMemset(csvData->recStart, 0ull, (sizeof(cu_recstart_t))));
 
 	int blockSize;		// suggested thread count to use
 	int minGridSize;	// minimum block count required
-	CUDA_TRY( cudaOccupancyMaxPotentialBlockSize(&minGridSize, &blockSize, storeRecordStart) );
+	CUDA_TRY(cudaOccupancyMaxPotentialBlockSize(&minGridSize, &blockSize, storeRecordStart) );
 
-	// Calculate actual block count to use based on bitmap count
-	// Each bitmap is for a 64-byte chunk, and each data index is bitmap ID * 64
-	int gridSize = (csvData->num_bits + blockSize - 1) / blockSize;
+	const size_t chunk_count = (h_size + max_chunk_bytes - 1) / max_chunk_bytes;
+	for (size_t ci = 0; ci < chunk_count; ++ci) {	
+		const auto chunk_offset = ci * max_chunk_bytes;	
+		const auto h_chunk = h_data + chunk_offset;
+		const auto chunk_bytes = std::min((size_t)(h_size - ci * max_chunk_bytes), max_chunk_bytes);
+		const auto chunk_bits = (chunk_bytes + 63) / 64;
+		
+		// Copy chunk to device. Copy extra byte if not last chunk
+		CUDA_TRY(cudaMemcpy(d_chunk, h_chunk, ci < (chunk_count - 1)?chunk_bytes:chunk_bytes + 1, cudaMemcpyDefault));
 
-	storeRecordStart <<< gridSize, blockSize >>> (
-		csvData->data, csvData->terminator, csvData->quotechar,
-		csvData->num_bytes, csvData->num_bits, csvData->d_num_records,
-		csvData->recStart
-	);
+		const int gridSize = (chunk_bits + blockSize - 1) / blockSize;
+		storeRecordStart <<< gridSize, blockSize >>> (
+			d_chunk, chunk_offset, csvData->terminator, csvData->quotechar,
+			chunk_bytes, chunk_bits, d_num_records,
+			csvData->recStart
+		);
+	}
+
+	RMM_TRY( RMM_FREE( d_num_records, 0 ) ); 
+	CUDA_TRY(cudaFree(d_chunk));
 
 	CUDA_TRY( cudaGetLastError() );
 
@@ -995,7 +1154,30 @@ gdf_error launch_storeRecordStart(raw_csv_t * csvData) {
 }
 
 
-__global__ void storeRecordStart(char *data, const char terminator, const char quotechar, long num_bytes, long num_bits, unsigned long long* num_records,unsigned long long* recStart) {
+/**---------------------------------------------------------------------------*
+ * @brief CUDA kernel that finds the start of each row (record) in the given 
+ * file segment, based on the location of line terminators. 
+ * 
+ * The offset of each found row is stored in a device memory array. 
+ * The kernel operate on a segment (chunk) of the csv file.
+ * 
+ * @param[in] data Device memory pointer to the csv data, 
+ * potentially a chunk of the whole file
+ * @param[in] chunk_offset Offset of the data pointer from the start of the file
+ * @param[in] terminator Line terminator character
+ * @param[in] quotechar Quote character
+ * @param[in] num_bytes Number of bytes in the input data
+ * @param[in] num_bits Number of 'bits' in the input data. Each 'bit' is
+ * processed by a separate CUDA thread
+ * @param[in,out] num_records Device memory pointer to the number of found rows
+ * @param[out] recStart device memory array containing the offset of each record
+ * 
+ * @return void
+ *---------------------------------------------------------------------------**/
+__global__ void storeRecordStart(char *data, size_t chunk_offset, 
+	const char terminator, const char quotechar, 
+	long num_bytes, long num_bits, cu_reccnt_t* num_records,
+	cu_recstart_t* recStart) {
 
 	// thread IDs range per block, so also need the block id
 	long tid = threadIdx.x + (blockDim.x * blockIdx.x);
@@ -1010,11 +1192,6 @@ __global__ void storeRecordStart(char *data, const char terminator, const char q
 
 	long byteToProcess = ((did + 64L) < num_bytes) ? 64L : (num_bytes - did);
 
-	if(tid==0){
-		long pos = atomicAdd((unsigned long long int*)num_records,(unsigned long long int)1);
-		recStart[pos]=did+0;
-	}
-
 	// process the data
 	for (long x = 0; x < byteToProcess; x++) {
 
@@ -1022,14 +1199,14 @@ __global__ void storeRecordStart(char *data, const char terminator, const char q
 		// for a postprocess ignore, as the chunk here has limited visibility.
 		if ((raw[x] == terminator) || (quotechar != '\0' && raw[x] == quotechar)) {
 
-			long pos = atomicAdd((unsigned long long int*)num_records,(unsigned long long int)1);
-			recStart[pos]=did+x+1;
+			const auto pos = atomicAdd(num_records, 1ull);
+			recStart[pos] = did + chunk_offset + x + 1;
 
 		} else if (raw[x] == '\r' && (x+1L)<num_bytes && raw[x +1] == '\n') {
 
 			x++;
-			long pos = atomicAdd((unsigned long long int*)num_records,(unsigned long long int)1);
-			recStart[pos]=did+x+1;
+			const auto pos = atomicAdd(num_records, 1ull);
+			recStart[pos] = did + chunk_offset + x + 1;
 		}
 
 	}
@@ -1039,7 +1216,7 @@ __global__ void storeRecordStart(char *data, const char terminator, const char q
 //----------------------------------------------------------------------------------------------------------------
 
 
-gdf_error launch_dataConvertColumns(raw_csv_t *raw_csv, void **gdf, gdf_valid_type** valid, gdf_dtype* d_dtypes,string_pair **str_cols, long row_offset, unsigned long long *num_valid) {
+gdf_error launch_dataConvertColumns(raw_csv_t *raw_csv, void **gdf, gdf_valid_type** valid, gdf_dtype* d_dtypes,string_pair **str_cols, unsigned long long *num_valid) {
 
 	int blockSize;		// suggested thread count to use
 	int minGridSize;	// minimum block count required
@@ -1060,19 +1237,23 @@ gdf_error launch_dataConvertColumns(raw_csv_t *raw_csv, void **gdf, gdf_valid_ty
 	opts.falseValues		= thrust::raw_pointer_cast(raw_csv->d_falseValues.data());
 	opts.falseValuesCount		= raw_csv->d_falseValues.size();
 
+	auto first_data_rec_start = raw_csv->recStart;
+	if (raw_csv->header_row >= 0) {
+		// skip the header row if present
+		++first_data_rec_start;
+	}
+
 	convertCsvToGdf <<< gridSize, blockSize >>>(
 		raw_csv->data,
 		opts,
 		raw_csv->num_records,
 		raw_csv->num_actual_cols,
 		raw_csv->d_parseCol,
-		raw_csv->recStart,
+		first_data_rec_start,
 		d_dtypes,
 		gdf,
 		valid,
 		str_cols,
-		row_offset,
-		raw_csv->header_row,
 		raw_csv->dayfirst,
 		num_valid
 	);
@@ -1089,16 +1270,14 @@ gdf_error launch_dataConvertColumns(raw_csv_t *raw_csv, void **gdf, gdf_valid_ty
 __global__ void convertCsvToGdf(
 		char 			*raw_csv,
 		const parsing_opts_t	 	opts,
-		unsigned long long  num_records,
+		gdf_size_type  num_records,
 		int  			num_columns,
 		bool  			*parseCol,
-		unsigned long long 			*recStart,
+		cu_recstart_t 			*recStart,
 		gdf_dtype 		*dtype,
 		void			**gdf_data,
 		gdf_valid_type 	**valid,
 		string_pair		**str_cols,
-		unsigned long long 			row_offset,
-		long 			header_row,
 		bool			dayfirst,
 		unsigned long long			*num_valid
 		)
@@ -1110,12 +1289,8 @@ __global__ void convertCsvToGdf(
 	if ( rec_id >= num_records)
 		return;
 
-	long extraOff=0;
-	if(rec_id>=header_row && header_row>=0)
-		extraOff=1;
-
-	long start 		= recStart[rec_id + row_offset + extraOff];
-	long stop 		= recStart[rec_id + 1 + row_offset + extraOff];
+	long start 		= recStart[rec_id];
+	long stop 		= recStart[rec_id + 1];
 
 	long pos 		= start;
 	int  col 		= 0;
@@ -1292,8 +1467,7 @@ __global__ void convertCsvToGdf(
 
 
 gdf_error launch_dataTypeDetection(
-	raw_csv_t * raw_csv, 
-	long row_offset,
+	raw_csv_t * raw_csv,
 	column_data_t* d_columnData) 
 {
 	int blockSize;		// suggested thread count to use
@@ -1313,15 +1487,19 @@ gdf_error launch_dataTypeDetection(
 	opts.falseValues		= thrust::raw_pointer_cast(raw_csv->d_falseValues.data());
 	opts.falseValuesCount		= raw_csv->d_falseValues.size();
 
+	auto first_data_rec_start = raw_csv->recStart;
+	if (raw_csv->header_row >= 0) {
+		// skip the header row if present
+		++first_data_rec_start;
+	}
+
 	dataTypeDetection <<< gridSize, blockSize >>>(
 		raw_csv->data,
 		opts,
 		raw_csv->num_records,
 		raw_csv->num_actual_cols,
 		raw_csv->d_parseCol,
-		raw_csv->recStart,
-		row_offset,
-		raw_csv->header_row,
+		first_data_rec_start,
 		d_columnData
 	);
 
@@ -1334,12 +1512,10 @@ gdf_error launch_dataTypeDetection(
 __global__ void dataTypeDetection(
 		char 			*raw_csv,
 		const parsing_opts_t			opts,
-		unsigned long long  			num_records,
+		gdf_size_type  			num_records,
 		int  			num_columns,
 		bool  			*parseCol,
-		unsigned long long 			*recStart,
-		unsigned long long  			row_offset,
-		long 			header_row,
+		cu_recstart_t 			*recStart,
 		column_data_t* d_columnData
 		)
 {
@@ -1351,12 +1527,8 @@ __global__ void dataTypeDetection(
 	if ( rec_id >= num_records)
 		return;
 
-	long extraOff=0;
-	if(rec_id>=header_row && header_row>=0)
-		extraOff=1;
-
-	long start 		= recStart[rec_id + row_offset + extraOff];
-	long stop 		= recStart[rec_id + 1 + row_offset + extraOff];
+	long start 		= recStart[rec_id];
+	long stop 		= recStart[rec_id + 1];
 
 	long pos 		= start;
 	int  col 		= 0;

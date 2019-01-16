@@ -24,7 +24,12 @@ Note: This conda installation only applies to Linux and Python versions 3.5/3.6.
 
 ### Pip
 
-Support is coming soon, please use conda for the time being.
+It is easy to install cuDF using pip. You must specify the CUDA version to ensure you install the right package.
+
+```bash
+pip install cudf-cuda92 # CUDA 9.2
+pip install cudf-cuda100 # CUDA 10.0
+```
 
 ## Development Setup
 
