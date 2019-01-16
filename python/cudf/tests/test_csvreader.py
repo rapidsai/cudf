@@ -19,6 +19,7 @@ import shutil
 
 from libgdf_cffi import GDFError
 
+
 def make_numeric_dataframe(nrows, dtype):
     df = pd.DataFrame()
     df['col1'] = np.arange(nrows, dtype=dtype)
@@ -589,10 +590,11 @@ def test_csv_reader_empty_dataframe():
     dtypes = ['float64', 'int64']
     buffer = 'float_point, integer\n'
 
-    #should work fine with dtypes
+    # should work fine with dtypes
     df = read_csv(StringIO(buffer), dtype=dtypes)
     assert(df.shape == (0, 2))
 
-	# should raise an error without dtypes
+    # should raise an error without dtypes
     with pytest.raises(GDFError):
         read_csv(StringIO(buffer))
+	
