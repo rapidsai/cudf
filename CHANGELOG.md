@@ -64,6 +64,7 @@
 - PR #612 Prevent an exception from occuring with true division on integer series.
 - PR #630 Fix deprecation warning for `pd.core.common.is_categorical_dtype`
 - PR #622 Fix Series.append() behaviour when appending values with different numeric dtype
+- PR #603 Fix error while creating an empty column using None.
 - PR #673 Fix array of strings not being caught in from_pandas
 - PR #644 Fix return type and column support of dataframe.quantile()
 - PR #634 Fix create `DataFrame.from_pandas()` with numeric column names
@@ -78,7 +79,6 @@
 - PR #686 Fix converting nulls to NaT values when converting Series to Pandas/Numpy
 - PR #689 CSV Reader: Fix behavior with skiprows+header to match pandas implementation
 - PR #691 Fixes Join on empty input DFs
-
 
 
 # cuDF 0.4.0 (05 Dec 2018)

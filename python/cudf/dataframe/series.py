@@ -62,7 +62,7 @@ class Series(object):
         col = columnops.as_column(data).set_mask(mask, null_count=null_count)
         return cls(data=col)
 
-    def __init__(self, data, index=None, name=None, nan_as_null=True):
+    def __init__(self, data=None, index=None, name=None, nan_as_null=True):
         if isinstance(data, pd.Series):
             name = data.name
             index = GenericIndex(data.index)
@@ -70,6 +70,8 @@ class Series(object):
             index = data._index
             name = data.name
             data = data._column
+        if data is None:
+            data = {}
 
         if not isinstance(data, columnops.TypedColumnBase):
             data = columnops.as_column(data, nan_as_null=nan_as_null)

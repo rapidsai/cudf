@@ -157,6 +157,26 @@ def test_series_indexing(i1, i2, i3):
             assert series[i] == a1[i]
 
 
+def test_series_init_none():
+
+    # test for creating empty series
+    # 1: without initializing
+    sr1 = Series()
+    got = sr1.to_string()
+    print(got)
+    expect = '<empty Series of dtype=float64>'
+    # values should match despite whitespace difference
+    assert got.split() == expect.split()
+
+    # 2: Using `None` as a initializer
+    sr2 = Series(None)
+    got = sr2.to_string()
+    print(got)
+    expect = '<empty Series of dtype=float64>'
+    # values should match despite whitespace difference
+    assert got.split() == expect.split()
+
+
 def test_dataframe_basic():
     np.random.seed(0)
     df = DataFrame()
