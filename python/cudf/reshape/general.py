@@ -1,6 +1,7 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
 
 import numpy as np
+import pandas as pd
 
 from cudf.dataframe import Series
 from cudf.dataframe import Buffer
@@ -13,7 +14,7 @@ def melt(frame, id_vars=None, value_vars=None, var_name='variable',
          value_name='value'):
     """Unpivots a DataFrame from wide format to long format,
     optionally leaving identifier variables set.
-    
+
     Parameters
     ----------
     frame : DataFrame
@@ -37,11 +38,33 @@ def melt(frame, id_vars=None, value_vars=None, var_name='variable',
     Difference from pandas:
      * Does not support 'col_level' because cuDF does not have multi-index
 
-    TODO: Examples
+    Examples
+    --------
+
+    .. code-block:: python
+        import cudf
+        import pandas as pd
+
+        pdf = pd.DataFrame({'A': {0: 1, 1: 1, 2: 5},
+                            'B': {0: 1, 1: 3, 2: 6},
+                            'C': {0: 1.0, 1: np.nan, 2: 4.0},
+                            'D': {0: 2.0, 1: 5.0, 2: 6.0}})
+        df = DataFrame.from_pandas(pdf)
+        df2 = melt(frame=df, id_vars=['A', 'B'], value_vars=['C', 'D'])
+        print(df2)
+
+    Output:
+    .. code-block:: python
+             A    B variable value
+        0    1    1        C   1.0
+        1    1    3        C
+        2    5    6        C   4.0
+        3    1    1        D   2.0
+        4    1    3        D   5.0
+        5    5    6        D   6.0
     """
 
     # Arg cleaning
-    import types
     import collections
     # id_vars
     if id_vars is not None:
@@ -69,7 +92,23 @@ def melt(frame, id_vars=None, value_vars=None, var_name='variable',
                 " in the DataFrame: {missing}"
                 "".format(missing=list(missing)))
     else:
-        value_vars = []
+        # then all remaining columns in frame
+        value_vars = frame.columns.drop(id_vars)
+        value_vars = list(value_vars)
+
+    # Error for unimplemented support for datatype
+    dtypes = [ frame[col].dtype for col in id_vars + value_vars ]
+    if any(pd.api.types.is_categorical_dtype(t) for t in dtypes):
+        raise NotImplementedError('Categorical columns are not yet '
+                                    'supported for function')
+
+    # Check dtype homogeneity in value_var
+    # Because heterogeneous concat is unimplemented
+    dtypes = [ frame[col].dtype for col in value_vars ]
+    if len(dtypes) > 0:
+        dtype = dtypes[0]
+        if any(t != dtype for t in dtypes):
+            raise ValueError('all cols in value_vars must have the same dtype')
 
     # overlap
     overlap = set(id_vars).intersection(set(value_vars))
@@ -85,13 +124,16 @@ def melt(frame, id_vars=None, value_vars=None, var_name='variable',
 
     def _tile(A, reps):
         series_list = [A] * reps
-        return Series._concat(objs=series_list, index=None)
+        if reps > 0:
+            return Series._concat(objs=series_list, index=None)
+        else:
+            return Series(Buffer.null(dtype=A.dtype))
 
     # Step 1: tile id_vars
-    mdata = {}
+    mdata = collections.OrderedDict()
     for col in id_vars:
         mdata[col] = _tile(frame[col], K)
-        
+
     # Step 2: add variable
     var_cols = []
     for i, var in enumerate(value_vars):
