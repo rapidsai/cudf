@@ -38,6 +38,8 @@ class Column(object):
     """
     @classmethod
     def _concat(cls, objs):
+        if len(objs) == 0:
+            return Column(Buffer.null(np.float))
         head = objs[0]
         for o in objs:
             if not o.is_type_equivalent(head):
