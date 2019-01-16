@@ -112,11 +112,13 @@ class CategoricalColumn(columnops.TypedColumnBase):
                                    ordered=self._ordered)
 
     def binary_operator(self, binop, rhs):
-        msg = 'Series cannot perform the operation: {}'.format(binop)
+        msg = 'Series of dtype `category` cannot perform the operation: {}'\
+            .format(binop)
         raise TypeError(msg)
 
     def unary_operator(self, unaryop):
-        msg = 'Series cannot perform the operation: {}'.format(unaryop)
+        msg = 'Series of dtype `category` cannot perform the operation: {}'\
+            .format(unaryop)
         raise TypeError(msg)
 
     def unordered_compare(self, cmpop, rhs):
