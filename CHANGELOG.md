@@ -3,6 +3,7 @@
 
 ## New Features
 
+- PR #693 add ZLIB-based GZIP/ZIP support to `read_csv_strings()`
 - PR #411 added null support to gdf_order_by (new API) and cudf_table::sort
 - PR #525 Added GitHub Issue templates for bugs, documentation, new features, and questions
 - PR #501 CSV Reader: Add support for user-specified decimal point and thousands separator to read_csv_strings()
@@ -73,6 +74,7 @@
 - PR #674 Check for gdf supported column types
 - PR #677 Fix 'gdf_csv_test_Dates' gtest failure due to missing nrows parameter
 - PR #686 Fix converting nulls to NaT values when converting Series to Pandas/Numpy
+- PR #691 Fixes Join on empty input DFs
 
 
 # cuDF 0.4.0 (05 Dec 2018)
@@ -82,6 +84,7 @@
 - PR #398 add pandas-compatible `DataFrame.shape()` and `Series.shape()`
 - PR #394 New documentation feature "10 Minutes to cuDF"
 - PR #361 CSV Reader: Add support for strings with delimiters
+- PR #567 Adds setup for a wheel which is installable by pip
 
 ## Improvements
 
