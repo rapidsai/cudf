@@ -53,7 +53,7 @@ def test_melt(nulls, num_id_vars, num_value_vars, num_rows, dtype):
     expect = pd.melt(frame=pdf, id_vars=id_vars, value_vars=value_vars)
     # pandas' melt makes the 'variable' column of 'object' type (string)
     # cuDF's melt makes it Categorical because it doesn't support strings
-    expect['variable'] = pd.Series(expect['variable'], dtype="category")
+    expect['variable'] = expect['variable'].astype('category')
 
     pd.testing.assert_frame_equal(
         expect,
