@@ -23,6 +23,7 @@
 - PR #635 Add Doxygen template
 - PR #649 Add `cudf.from_pandas` function
 - PR #633 CSV Reader: Add support for the nrows parameter to specify the number of rows to read from the input file
+- PR #668 Added Python 3.7 support, upgraded packages: pandas>=0.23.4, pyarrow=0.11.1, numba>=0.40.0, cython>=0.29
 
 ## Improvements
 
