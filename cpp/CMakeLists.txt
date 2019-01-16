@@ -82,7 +82,17 @@ include(FeatureSummary)
 include(CheckIncludeFiles)
 include(CheckLibraryExists)
 
+# NOTE Do not change the inclusion order
+# Configure dependencies
+include(ConfigureBoost)
+include(ConfigureFlatBuffers)
+include(ConfigureLz4)
+include(ConfigureZSTD)
+include(ConfigureBrotli)
+include(ConfigureSnappy)
+include(ConfigureThrift)
 include(ConfigureArrow)
+include(ConfigureParquet)
 
 ###################################################################################################
 # - find arrow ------------------------------------------------------------------------------------
@@ -190,6 +200,15 @@ add_library(cudf SHARED
             src/io/convert/csr/cudf_to_csr.cu
             src/io/csv/csv_reader.cu
             src/io/comp/uncomp.cpp
+            src/io/parquet/file_reader.cpp
+            src/io/parquet/file_reader_contents.cpp
+            src/io/parquet/row_group_reader_contents.cpp
+            src/io/parquet/column_reader.cu
+            src/io/parquet/decoder/cu_level_decoder.cu
+            src/io/parquet/page_reader.cpp
+            src/io/parquet/decoder/arrow/cu_decoder.cu
+            src/io/parquet/decoder/arrow/util/pinned_allocator.cu
+            src/io/parquet/api.cpp
             src/utilities/cuda_utils.cu
             src/utilities/error_utils.cpp
             src/utilities/nvtx/nvtx_utils.cpp)
@@ -221,7 +240,20 @@ endif(HT_LEGACY_ALLOCATOR)
 # - link libraries --------------------------------------------------------------------------------
 
 target_link_libraries(rmm cudart cuda NVStrings)
-target_link_libraries(cudf rmm "${ARROW_LIB}" ${ZLIB_LIBRARIES})
+target_link_libraries(cudf 
+    rmm
+    ${PARQUET_STATIC_LIB}
+    ${ARROW_STATIC_LIB}
+    ${THRIFT_STATIC_LIB}
+    ${SNAPPY_STATIC_LIB}
+    ${BROTLI_STATIC_LIB}
+    ${ZSTD_STATIC_LIB}
+    ${LZ4_STATIC_LIB}
+    ${FLATBUFFERS_STATIC_LIB}
+    Boost::filesystem
+    Boost::system
+    Boost::regex
+    ${ZLIB_LIBRARIES})
 
 ###################################################################################################
 # - python cffi bindings --------------------------------------------------------------------------

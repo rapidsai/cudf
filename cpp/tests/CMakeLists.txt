@@ -8,7 +8,25 @@ project(CUDF_TESTS LANGUAGES C CXX CUDA)
 function(ConfigureTest CMAKE_TEST_NAME CMAKE_TEST_SRC)
     add_executable(${CMAKE_TEST_NAME} ${CMAKE_TEST_SRC})
     set_target_properties(${CMAKE_TEST_NAME} PROPERTIES POSITION_INDEPENDENT_CODE ON)
-    target_link_libraries(${CMAKE_TEST_NAME} gmock gtest gmock_main gtest_main pthread cudf)
+    target_link_libraries(${CMAKE_TEST_NAME}
+        gmock_main
+        gmock
+        GTest::GTest
+        pthread
+        cudf
+        NVStrings
+        rmm
+        ${PARQUET_STATIC_LIB}
+        ${ARROW_STATIC_LIB}
+        ${THRIFT_STATIC_LIB}
+        ${SNAPPY_STATIC_LIB}
+        ${BROTLI_STATIC_LIB}
+        ${ZSTD_STATIC_LIB}
+        ${LZ4_STATIC_LIB}
+        ${FLATBUFFERS_STATIC_LIB}
+        Boost::filesystem
+        Boost::system
+        Boost::regex)
     set_target_properties(${CMAKE_TEST_NAME} PROPERTIES
                             RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/gtests")
     add_test(NAME ${CMAKE_TEST_NAME} COMMAND ${CMAKE_TEST_NAME})
@@ -158,6 +176,14 @@ set(CSV_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/io/csv/csv_test.cu")
 
 ConfigureTest(CSV_TEST "${CSV_TEST_SRC}")
+
+# - parquet tests -------------------------------------------------------------------------------------
+
+set(PARQUET_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/io/parquet/api-test.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/io/parquet/utils.cu")
+
+ConfigureTest(PARQUET_TEST "${PARQUET_TEST_SRC}")
 
 ###################################################################################################
 # - rmm tests -------------------------------------------------------------------------------------

@@ -14,21 +14,24 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #=============================================================================
-cmake_minimum_required(VERSION 2.8.12)
 
-cmake_policy(SET CMP0048 NEW)
+# BEGIN MAIN #
 
-project(googletest-download NONE)
+# NOTE since parquet and arrow are in the same repo is safe to pass the arrrow installation dir here
+set(PARQUET_ROOT ${ARROW_ROOT})
 
-include(ExternalProject)
+message(STATUS "PARQUET_ROOT is pointed to ARROW_ROOT: ${ARROW_ROOT}")
 
-ExternalProject_Add(googletest
-    GIT_REPOSITORY    https://github.com/google/googletest.git
-    GIT_TAG           master
-    SOURCE_DIR        "${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/thirdparty/googletest-src"
-    BINARY_DIR        "${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/thirdparty/googletest-build"
-    INSTALL_DIR       "${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/thirdparty/googletest-install"
-    UPDATE_COMMAND    ""
-    CMAKE_ARGS        -DCMAKE_INSTALL_PREFIX:PATH=${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/thirdparty/googletest-install
-                      ${GOOGLETEST_CMAKE_ARGS}
-)
+set(ENV{PARQUET_HOME} ${PARQUET_ROOT})
+
+find_package(Parquet REQUIRED)
+set_package_properties(Parquet PROPERTIES TYPE REQUIRED
+    PURPOSE "Apache Parquet CPP is a C++ library to read and write the Apache Parquet columnar data format."
+    URL "https://arrow.apache.org")
+
+set(PARQUET_INCLUDEDIR ${PARQUET_ROOT}/include/)
+
+include_directories(${PARQUET_INCLUDEDIR})
+link_directories(${PARQUET_ROOT}/lib/)
+
+# END MAIN #

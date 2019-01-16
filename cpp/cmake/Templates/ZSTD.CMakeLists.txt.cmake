@@ -14,21 +14,22 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #=============================================================================
-cmake_minimum_required(VERSION 2.8.12)
 
-cmake_policy(SET CMP0048 NEW)
+cmake_minimum_required(VERSION 3.12)
 
-project(googletest-download NONE)
+project(zstd-download NONE)
 
 include(ExternalProject)
 
-ExternalProject_Add(googletest
-    GIT_REPOSITORY    https://github.com/google/googletest.git
-    GIT_TAG           master
-    SOURCE_DIR        "${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/thirdparty/googletest-src"
-    BINARY_DIR        "${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/thirdparty/googletest-build"
-    INSTALL_DIR       "${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/thirdparty/googletest-install"
+ExternalProject_Add(zstd
+    GIT_REPOSITORY    https://github.com/facebook/zstd.git
+    GIT_TAG           v1.2.0
+    SOURCE_DIR        "${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/thirdparty/zstd-src"
+    SOURCE_SUBDIR     "build/cmake/"
+    BINARY_DIR        "${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/thirdparty/zstd-build"
+    INSTALL_DIR       "${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/thirdparty/zstd-install"
     UPDATE_COMMAND    ""
-    CMAKE_ARGS        -DCMAKE_INSTALL_PREFIX:PATH=${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/thirdparty/googletest-install
-                      ${GOOGLETEST_CMAKE_ARGS}
+    CMAKE_ARGS        ${ZSTD_CMAKE_ARGS}
+                      -DCMAKE_BUILD_TYPE=Release
+                      -DCMAKE_INSTALL_PREFIX=${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/thirdparty/zstd-install
 )

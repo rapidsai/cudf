@@ -1,49 +1,77 @@
-set(GTEST_ROOT "${CMAKE_BINARY_DIR}/googletest")
+#=============================================================================
+# Copyright 2018 BlazingDB, Inc.
+#     Copyright 2018 Percy Camilo Triveño Aucahuasi <percy@blazingdb.com>
+#=============================================================================
 
-set(GTEST_CMAKE_ARGS " -Dgtest_build_samples=ON" 
-                     " -DCMAKE_VERBOSE_MAKEFILE=ON"
-                     " -DCMAKE_C_FLAGS=-D_GLIBCXX_USE_CXX11_ABI=0"      # enable old ABI for C/C++
-                     " -DCMAKE_CXX_FLAGS=-D_GLIBCXX_USE_CXX11_ABI=0")   # enable old ABI for C/C++
+# BEGIN macros
 
+macro(CONFIGURE_GOOGLETEST_EXTERNAL_PROJECT)
+    # NOTE percy c.gonzales if you want to pass other RAL CMAKE_CXX_FLAGS into this dependency add it by harcoding
+    set(GOOGLETEST_CMAKE_ARGS
+        " -Dgtest_build_samples=ON"
+        " -DCMAKE_C_FLAGS=-D_GLIBCXX_USE_CXX11_ABI=0"      # enable old ABI for C/C++
+        " -DCMAKE_CXX_FLAGS=-D_GLIBCXX_USE_CXX11_ABI=0")   # enable old ABI for C/C++
 
-configure_file("${CMAKE_SOURCE_DIR}/cmake/Templates/GoogleTest.CMakeLists.txt.cmake"
-               "${GTEST_ROOT}/CMakeLists.txt")
+    # Download and unpack googletest at configure time
+    configure_file(${CMAKE_SOURCE_DIR}/cmake/Templates/GoogleTest.CMakeLists.txt.cmake ${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/thirdparty/googletest-download/CMakeLists.txt)
 
-file(MAKE_DIRECTORY "${GTEST_ROOT}/build")
-file(MAKE_DIRECTORY "${GTEST_ROOT}/install")
+    execute_process(
+        COMMAND ${CMAKE_COMMAND} -G "${CMAKE_GENERATOR}" .
+        RESULT_VARIABLE result
+        WORKING_DIRECTORY ${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/thirdparty/googletest-download/
+    )
 
-execute_process(COMMAND ${CMAKE_COMMAND} -G ${CMAKE_GENERATOR} .
-                RESULT_VARIABLE GTEST_CONFIG
-                WORKING_DIRECTORY ${GTEST_ROOT})
+    if(result)
+        message(FATAL_ERROR "CMake step for googletest failed: ${result}")
+    endif()
 
-if(GTEST_CONFIG)
-    message(FATAL_ERROR "Configuring GoogleTest failed: " ${GTEST_CONFIG})
-endif(GTEST_CONFIG)
+    execute_process(
+        COMMAND ${CMAKE_COMMAND} --build . -- -j8
+        RESULT_VARIABLE result
+        WORKING_DIRECTORY ${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/thirdparty/googletest-download/
+    )
 
-# Parallel builds cause Travis to run out of memory
-unset(PARALLEL_BUILD)
-if($ENV{TRAVIS})
-    if(NOT DEFINED ENV{CMAKE_BUILD_PARALLEL_LEVEL})
-        message(STATUS "Disabling Parallel CMake build on Travis")
-    else()
-        set(PARALLEL_BUILD --parallel)
-        message(STATUS "Using $ENV{CMAKE_BUILD_PARALLEL_LEVEL} build jobs on Travis")
-    endif(NOT DEFINED ENV{CMAKE_BUILD_PARALLEL_LEVEL})
+    if(result)
+        message(FATAL_ERROR "Build step for googletest failed: ${result}")
+    endif()
+endmacro()
+
+# END macros
+
+# BEGIN MAIN #
+
+if (GOOGLETEST_INSTALL_DIR)
+    message(STATUS "GOOGLETEST_INSTALL_DIR defined, it will use vendor version from ${GOOGLETEST_INSTALL_DIR}")
+    set(GTEST_ROOT "${GOOGLETEST_INSTALL_DIR}")
 else()
-    set(PARALLEL_BUILD --parallel)
-    message("STATUS Enabling Parallel CMake build")
-endif($ENV{TRAVIS})
+    message(STATUS "GOOGLETEST_INSTALL_DIR not defined, it will be built from sources")
+    configure_googletest_external_project()
+    set(GTEST_ROOT "${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/thirdparty/googletest-install/")
+endif()
 
-execute_process(COMMAND ${CMAKE_COMMAND} --build ${PARALLEL_BUILD} ..
-                RESULT_VARIABLE GTEST_BUILD
-                WORKING_DIRECTORY ${GTEST_ROOT}/build)
+# Prevent overriding the parent project's compiler/linker
+# settings on Windows
+set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
 
-if(GTEST_BUILD)
-    message(FATAL_ERROR "Building GoogleTest failed: " ${GTEST_BUILD})
-endif(GTEST_BUILD)
+# Prevent overriding the parent project's compiler/linker
+# settings on Windows
+set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
 
-message(STATUS "GoogleTest installed here: " ${GTEST_ROOT}/install)
-set(GTEST_INCLUDE_DIR "${GTEST_ROOT}/install/include")
-set(GTEST_LIBRARY_DIR "${GTEST_ROOT}/install/lib")
-set(GTEST_FOUND TRUE)
+message(STATUS "GTEST_ROOT: " ${GTEST_ROOT})
 
+find_package(GTest QUIET)
+set_package_properties(GTest PROPERTIES TYPE OPTIONAL
+    PURPOSE "Google C++ Testing Framework (Google Test)."
+    URL "https://github.com/google/googletest")
+
+link_directories(${GTEST_ROOT}/lib/)
+include_directories(${GTEST_INCLUDE_DIRS})
+
+if(GTEST_FOUND)
+    message(STATUS "Google C++ Testing Framework (Google Test) found in ${GTEST_ROOT}")
+else()
+    message(AUTHOR_WARNING "Google C++ Testing Framework (Google Test) not found: automated tests are disabled.")
+    set(BUILD_TESTING OFF)
+endif()
+
+# END MAIN #

@@ -14,21 +14,20 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #=============================================================================
-cmake_minimum_required(VERSION 2.8.12)
 
-cmake_policy(SET CMP0048 NEW)
+cmake_minimum_required(VERSION 3.12)
 
-project(googletest-download NONE)
+project(lz4-download NONE)
 
 include(ExternalProject)
 
-ExternalProject_Add(googletest
-    GIT_REPOSITORY    https://github.com/google/googletest.git
-    GIT_TAG           master
-    SOURCE_DIR        "${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/thirdparty/googletest-src"
-    BINARY_DIR        "${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/thirdparty/googletest-build"
-    INSTALL_DIR       "${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/thirdparty/googletest-install"
+ExternalProject_Add(lz4
+    GIT_REPOSITORY    https://github.com/lz4/lz4.git
+    GIT_TAG           v1.7.5
+    SOURCE_DIR        "${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/thirdparty/lz4-src"
+    BUILD_IN_SOURCE   1
+    INSTALL_DIR       "${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/thirdparty/lz4-install"
+    CONFIGURE_COMMAND ""
     UPDATE_COMMAND    ""
-    CMAKE_ARGS        -DCMAKE_INSTALL_PREFIX:PATH=${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/thirdparty/googletest-install
-                      ${GOOGLETEST_CMAKE_ARGS}
+    BUILD_COMMAND     ${CMAKE_MAKE_PROGRAM} -j4 install
 )

@@ -14,21 +14,20 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #=============================================================================
-cmake_minimum_required(VERSION 2.8.12)
 
-cmake_policy(SET CMP0048 NEW)
+cmake_minimum_required(VERSION 3.12)
 
-project(googletest-download NONE)
+project(snappy-download NONE)
 
 include(ExternalProject)
 
-ExternalProject_Add(googletest
-    GIT_REPOSITORY    https://github.com/google/googletest.git
-    GIT_TAG           master
-    SOURCE_DIR        "${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/thirdparty/googletest-src"
-    BINARY_DIR        "${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/thirdparty/googletest-build"
-    INSTALL_DIR       "${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/thirdparty/googletest-install"
+ExternalProject_Add(snappy
+    GIT_REPOSITORY    https://github.com/google/snappy.git
+    GIT_TAG           1.1.3
+    SOURCE_DIR        "${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/thirdparty/snappy-src"
+    BUILD_IN_SOURCE   1
+    INSTALL_DIR       "${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/thirdparty/snappy-install"
+    CONFIGURE_COMMAND ./autogen.sh COMMAND ./configure --prefix=${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/thirdparty/snappy-install
+    BUILD_COMMAND     ${CMAKE_MAKE_PROGRAM} -j4 install
     UPDATE_COMMAND    ""
-    CMAKE_ARGS        -DCMAKE_INSTALL_PREFIX:PATH=${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/thirdparty/googletest-install
-                      ${GOOGLETEST_CMAKE_ARGS}
 )
