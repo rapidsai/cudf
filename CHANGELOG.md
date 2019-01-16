@@ -82,6 +82,7 @@
 - PR #398 add pandas-compatible `DataFrame.shape()` and `Series.shape()`
 - PR #394 New documentation feature "10 Minutes to cuDF"
 - PR #361 CSV Reader: Add support for strings with delimiters
+- PR #567 Adds setup for a wheel which is installable by pip
 
 ## Improvements
 
