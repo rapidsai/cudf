@@ -18,6 +18,8 @@ from .datetime import DatetimeColumn
 from . import columnops
 from cudf.comm.serialize import register_distributed_serializer
 from cudf._gdf import nvtx_range_push, nvtx_range_pop
+from cudf.rolling.rolling import Rolling
+from cudf.rolling.ewm import Ewm
 
 
 class Series(object):
@@ -911,6 +913,57 @@ class Series(object):
         else:
             return Series(self._column.quantile(q, interpolation, exact),
                           index=GenericIndex(np.asarray(q)))
+
+    def rolling(self, window, min_periods=None, forward_window=0,
+                thread_tile=48, number_of_threads=64):
+        """
+        Return the instance of the Rolling class that is used to do rolling
+        window computations. The window size is `window + forward_window`.
+        The element i uses [i - window -1, i + forward_window] elements to do
+        the window computation.
+
+        Parameters:
+        ----------
+        window: the history window size.
+        min_periods: the minimum number of non-na elements need to get an
+                         output
+        forward_window: the windows size in the forward direction
+        thread_tile: each thread will be responsible for `thread_tile`
+                         number of elements in window computation
+        number_of_threads: number of threads in a block for CUDA computation
+        """
+        return Rolling(window, self,
+                       min_periods=min_periods,
+                       forward_window=forward_window,
+                       thread_tile=thread_tile,
+                       number_of_threads=number_of_threads)
+
+    def ewm(self, span, min_periods=None, thread_tile=48,
+            number_of_threads=64, expand_multiplier=10):
+        """
+        Returns the instance of the Ewm class that is used to do rolling
+        exponential weighted moving average. It uses `expand_multiplier * span`
+        elements to do the weighted average. So adjust expand_multiplier
+        to adjust accuracy.
+        Parameters:
+        ----------
+        Arguments:
+        span: the span parameter in the exponential weighted moving average
+        min_periods: the minimum number of non-na elements need to get an
+                         output
+        thread_tile: each thread will be responsible for `thread_tile`
+                         number of elements in window computation
+        number_of_threads: number of threads in a block for CUDA computation
+        expand_multiplier: the number of elements used computing EWM is
+                                controled by this constant. The higher this
+                                number, the better the accuracy but slower in
+                                performance
+        """
+        return Ewm(span, self,
+                   min_periods=min_periods,
+                   thread_tile=thread_tile,
+                   number_of_threads=number_of_threads,
+                   expand_multiplier=expand_multiplier)
 
 
 register_distributed_serializer(Series)
