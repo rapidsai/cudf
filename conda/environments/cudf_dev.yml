@@ -17,7 +17,7 @@ dependencies:
 - nvstrings
 - cffi>=1.10.0   
 - distributed>=1.23.0
-- cython>=0.29
+- cython>=0.29,<0.30
 - pytest
 - sphinx
 - sphinx_rtd_theme
