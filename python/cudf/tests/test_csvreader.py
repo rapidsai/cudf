@@ -13,6 +13,9 @@ from cudf import read_csv
 from cudf.io.csv import read_csv_strings
 import cudf
 import nvstrings
+from .utils import assert_eq
+import gzip
+import shutil
 
 
 def make_numeric_dataframe(nrows, dtype):
@@ -99,20 +102,34 @@ def test_csv_reader_datetime_data(tmpdir):
     pd.util.testing.assert_frame_equal(df_out, out.to_pandas())
 
 
-def test_csv_reader_mixed_data_delimiter(tmpdir):
+@pytest.mark.parametrize('pandas_arg', [
+        {'delimiter': '|'},
+        {'sep': '|'}
+    ])
+@pytest.mark.parametrize('cudf_arg', [
+        {'sep': '|'},
+        {'delimiter': '|'}
+    ])
+def test_csv_reader_mixed_data_delimiter_sep(tmpdir, pandas_arg, cudf_arg):
 
     fname = tmpdir.mkdir("gdf_csv").join('tmp_csvreader_file3.csv')
 
     df = make_numpy_mixed_dataframe()
     df.to_csv(fname, sep='|', index=False, header=False)
 
-    out = read_csv(str(fname), delimiter='|', names=['1', '2', '3', '4', '5'],
-                   dtype=['int64', 'date', 'float64', 'int64', 'category'],
-                   dayfirst=True)
-    df_out = pd.read_csv(fname, delimiter='|', names=['1', '2', '3', '4', '5'],
-                         parse_dates=[1], dayfirst=True)
+    gdf1 = read_csv(str(fname), names=['1', '2', '3', '4', '5'],
+                    dtype=['int64', 'date', 'float64', 'int64', 'category'],
+                    dayfirst=True, **cudf_arg)
+    gdf2 = read_csv(str(fname), names=['1', '2', '3', '4', '5'],
+                    dtype=['int64', 'date', 'float64', 'int64', 'category'],
+                    dayfirst=True, **pandas_arg)
 
-    assert len(out.columns) == len(df_out.columns)
+    pdf = pd.read_csv(fname, names=['1', '2', '3', '4', '5'],
+                      parse_dates=[1], dayfirst=True, **pandas_arg)
+
+    assert len(gdf1.columns) == len(pdf.columns)
+    assert len(gdf2.columns) == len(pdf.columns)
+    assert_eq(gdf1, gdf2)
 
 
 def test_csv_reader_all_numeric_dtypes(tmpdir):
@@ -513,6 +530,33 @@ def test_csv_reader_nrows(tmpdir):
     with pytest.raises(ValueError):
         read_csv(str(fname),
                  nrows=read_rows, skipfooter=1)
+
+
+def test_csv_reader_gzip_compression_strings(tmpdir):
+    fnamebase = tmpdir.mkdir("gdf_csv")
+    fname = fnamebase.join("tmp_csvreader_file15.csv")
+    fnamez = fnamebase.join("tmp_csvreader_file15.csv.gz")
+
+    names = ['text', 'int']
+    dtypes = ['str', 'int']
+    lines = [','.join(names), 'a,0', 'b,0', 'c,0', 'd,0']
+
+    with open(str(fname), 'w') as fp:
+        fp.write('\n'.join(lines) + '\n')
+
+    with open(str(fname), 'rb') as f_in, gzip.open(str(fnamez), 'wb') as f_out:
+        shutil.copyfileobj(f_in, f_out)
+
+    cols = read_csv_strings(str(fnamez), names=names, dtype=dtypes, skiprows=1,
+                            decimal='.', thousands="'", compression='gzip')
+
+    assert(len(cols) == 2)
+    assert(type(cols[0]) == nvstrings.nvstrings)
+    assert(type(cols[1]) == cudf.Series)
+    assert(cols[0].sublist([0]).to_host()[0] == 'a')
+    assert(cols[0].sublist([1]).to_host()[0] == 'b')
+    assert(cols[0].sublist([2]).to_host()[0] == 'c')
+    assert(cols[0].sublist([3]).to_host()[0] == 'd')
 
 
 @pytest.mark.parametrize('skip_rows', [0, 2, 4])
