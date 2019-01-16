@@ -7,7 +7,7 @@ channels:
 - defaults
 dependencies:
 - cmake>=3.12
-- python>=3.6
+- python>=3.6,<3.8
 - pytest
 - numba>=0.40
 - pandas>=0.23.4
