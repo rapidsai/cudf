@@ -160,6 +160,8 @@ void count_valid_bits(valid32_t const * const masks32,
  * @Synopsis  Counts the number of valid bits for the specified number of rows
  * in a validity bitmask.
  * 
+ * If the bitmask is null, returns a count of 0.
+ * 
  * @Param[in] masks The validity bitmask buffer in device memory
  * @Param[in] num_rows The number of bits to count
  * @Param[out] count The number of valid bits in the buffer from [0, num_rows)
@@ -167,10 +169,18 @@ void count_valid_bits(valid32_t const * const masks32,
  * @Returns  GDF_SUCCESS upon successful completion 
  *
  * ----------------------------------------------------------------------------*/
+
 gdf_error gdf_count_nonzero_mask(gdf_valid_type const *masks,
                                  gdf_size_type num_rows, gdf_size_type *count) {
-  if((nullptr == masks) || (nullptr == count)){return GDF_DATASET_EMPTY;}
+
+  if((nullptr == count)){return GDF_DATASET_EMPTY;}
+
   if(0 == num_rows) {return GDF_SUCCESS;}
+
+  if(nullptr == masks){
+      *count = 0;
+      return GDF_SUCCESS;
+  }
 
   // Masks will be proccessed as 4B types, therefore we require that the underlying
   // type be less than or equal to 4B

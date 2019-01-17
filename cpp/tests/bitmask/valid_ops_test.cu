@@ -51,7 +51,8 @@ TEST_F(ValidsTest, NullValids)
   int count{-1};
   gdf_error error_code = gdf_count_nonzero_mask(nullptr, 1, &count);
 
-  ASSERT_EQ(GDF_DATASET_EMPTY,error_code) << "Expected failure for null input.";
+  ASSERT_EQ(GDF_SUCCESS,error_code) << "GDF Operation did not complete successfully.";
+  EXPECT_EQ(0, count);
 }
 
 TEST_F(ValidsTest, NullCount)
