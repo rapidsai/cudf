@@ -20,11 +20,13 @@
 - PR #564 Update python `sort_values` method to use updated libcudf `gdf_order_by` API
 - PR #509 CSV Reader: Input CSV file can now be passed in as a text or a binary buffer
 - PR #607 Add `__iter__` and iteritems to DataFrame class
+- PR #608 Added the `DataFrame.iloc[]` and `Series.iloc[]` features
 - PR #600 Enable deep or shallow copy
 - PR #635 Add Doxygen template
 - PR #649 Add `cudf.from_pandas` function
 - PR #633 CSV Reader: Add support for the nrows parameter to specify the number of rows to read from the input file
 - PR #679 Test Series indexing, support integer scalars and integer sequences
+- PR #567 Adds setup for a wheel which is installable by pip
 
 ## Improvements
 
@@ -42,6 +44,7 @@
 - PR #651 Remove noqa marks in `__init__.py` files
 - PR #671 CSV Reader: uncompressed buffer input can be parsed without explicitly specifying compression as None
 - PR #718 Ensure sum, product, min, max methods pandas compatibility on empty datasets
+- PR #720 Refactored Index classes to make them more Pandas-like, added CategoricalIndex
 
 ## Bug Fixes
 
@@ -65,6 +68,7 @@
 - PR #612 Prevent an exception from occuring with true division on integer series.
 - PR #630 Fix deprecation warning for `pd.core.common.is_categorical_dtype`
 - PR #622 Fix Series.append() behaviour when appending values with different numeric dtype
+- PR #603 Fix error while creating an empty column using None.
 - PR #673 Fix array of strings not being caught in from_pandas
 - PR #644 Fix return type and column support of dataframe.quantile()
 - PR #634 Fix create `DataFrame.from_pandas()` with numeric column names
@@ -76,10 +80,10 @@
 - PR #670 CMAKE: Fix env include path taking precedence over libcudf source headers
 - PR #674 Check for gdf supported column types
 - PR #677 Fix 'gdf_csv_test_Dates' gtest failure due to missing nrows parameter
+- PR #604 Fix the parsing errors while reading a csv file using `sep` instead of `delimiter`.
 - PR #686 Fix converting nulls to NaT values when converting Series to Pandas/Numpy
 - PR #689 CSV Reader: Fix behavior with skiprows+header to match pandas implementation
 - PR #691 Fixes Join on empty input DFs
-
 
 
 # cuDF 0.4.0 (05 Dec 2018)
@@ -89,7 +93,6 @@
 - PR #398 add pandas-compatible `DataFrame.shape()` and `Series.shape()`
 - PR #394 New documentation feature "10 Minutes to cuDF"
 - PR #361 CSV Reader: Add support for strings with delimiters
-- PR #567 Adds setup for a wheel which is installable by pip
 
 ## Improvements
 
