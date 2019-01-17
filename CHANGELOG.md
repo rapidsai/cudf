@@ -41,6 +41,7 @@
 - PR #658 Reduced `JOIN_TEST` time by isolating overflow test of hash table size computation
 - PR #651 Remove noqa marks in `__init__.py` files
 - PR #671 CSV Reader: uncompressed buffer input can be parsed without explicitly specifying compression as None
+- PR #718 Ensure sum, product, min, max methods pandas compatibility on empty datasets
 
 ## Bug Fixes
 
