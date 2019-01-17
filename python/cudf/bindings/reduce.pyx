@@ -13,6 +13,8 @@ from .cudf_cpp import *
 import numpy as np
 import pandas as pd
 import pyarrow as pa
+pandas_version = tuple(map(int,pd.__version__.split('.', 2)[:2]))
+
 
 cimport numpy as np
 
@@ -63,6 +65,8 @@ def apply_reduce(reduction, col):
     if result == GDF_DATASET_EMPTY:
         if reduction == 'sum' or reduction == 'sum_of_squares':
             return col.dtype.type(0)
+        if reduction == 'product' and pandas_version >= (0, 22):
+            return col.dtype.type(1)
         return np.nan
 
     check_gdf_error(result)
