@@ -19,9 +19,12 @@ gdf_error gdf_transpose(gdf_size_type ncols,
 
     // Check datatype homogeneity
     gdf_dtype dtype = in_cols[0]->dtype; 
-    for(gdf_size_type i = 1; i < ncols; i++)
-    {
+    for(gdf_size_type i = 1; i < ncols; i++) {
         GDF_REQUIRE(in_cols[i]->dtype == dtype, GDF_DTYPE_MISMATCH)
+    }
+    gdf_size_type out_ncols = in_cols[0]->size;
+    for(gdf_size_type i = 0; i < out_ncols; i++) {
+        GDF_REQUIRE(out_cols[i]->dtype == dtype, GDF_DTYPE_MISMATCH)
     }
 
     // Check if there are nulls to be processed
@@ -33,7 +36,6 @@ gdf_error gdf_transpose(gdf_size_type ncols,
             break;
         }   
     }
-    gdf_size_type out_ncols = in_cols[0]->size;
     if (has_null)
         for(gdf_size_type i = 0; i < out_ncols; i++)
             GDF_REQUIRE(out_cols[i]->valid != nullptr, GDF_DATASET_EMPTY)

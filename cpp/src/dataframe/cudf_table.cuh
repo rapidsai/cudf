@@ -406,55 +406,16 @@ public:
       return GDF_DATASET_EMPTY;
     }
 
-    byte_type * write_pointer{reinterpret_cast<byte_type *>(row_byte_buffer)};
-
     // Pack the element from each column in the row into the buffer
     for(size_type i = 0; i < num_columns; ++i)
     {
-      const byte_type current_column_byte_width = d_column_byte_widths[i];
-      switch(current_column_byte_width)
-      {
-        case 1:
-          {
-            using col_type = int8_t;
-            const col_type * const current_row_element = reinterpret_cast<col_type const *>(d_columns_data[i]) + row_index;
-            col_type * write_location = reinterpret_cast<col_type*>(write_pointer);
-            *write_location = *current_row_element;
-            write_pointer += sizeof(col_type);
-            break;
-          }
-        case 2:
-          {
-            using col_type = int16_t;
-            const col_type * const current_row_element = reinterpret_cast<col_type const *>(d_columns_data[i]) + row_index;
-            col_type * write_location = reinterpret_cast<col_type*>(write_pointer);
-            *write_location = *current_row_element;
-            write_pointer += sizeof(col_type);
-            break;
-          }
-        case 4:
-          {
-            using col_type = int32_t;
-            const col_type * const current_row_element = reinterpret_cast<col_type const *>(d_columns_data[i]) + row_index;
-            col_type * write_location = reinterpret_cast<col_type*>(write_pointer);
-            *write_location = *current_row_element;
-            write_pointer += sizeof(col_type);
-            break;
-          }
-        case 8:
-          {
-            using col_type = int64_t;
-            const col_type * const current_row_element = reinterpret_cast<col_type const *>(d_columns_data[i]) + row_index;
-            col_type * write_location = reinterpret_cast<col_type*>(write_pointer);
-            *write_location = *current_row_element;
-            write_pointer += sizeof(col_type);
-            break;
-          }
-        default:
-          {
-            return GDF_UNSUPPORTED_DTYPE;
-          }
-      }
+      const gdf_dtype source_col_type = d_columns_types[i];
+
+      cudf::type_dispatcher(source_col_type,
+                            copy_element{},
+                            row_byte_buffer, i,
+                            d_columns_data[i], row_index);
+
     }
     return GDF_SUCCESS;
   }
@@ -478,6 +439,18 @@ public:
     return d_columns_data[column_index];
   }
 
+  /* --------------------------------------------------------------------------*/
+  /**
+   * @Synopsis  Packs the validity mask of a specified row into a contiguous byte-buffer 
+   * 
+   * This function is called by a single thread, and the thread will copy each element
+   * of the row into a single contiguous buffer.
+   * 
+   * @param row_index The row of the table to return validity mask for
+   * @param row_valid_byte_buffer A pointer to a preallocated buffer large enough to hold
+      the validity bitmask of a row of the table
+   */
+  /* ----------------------------------------------------------------------------*/
   __device__
   gdf_error get_row_valids(size_type row_index, gdf_valid_type * row_valid_byte_buffer) const
   {
@@ -488,9 +461,9 @@ public:
     for(size_type i = 0; i < num_columns; i++)
     {
       // get validity of item in column in self
-      byte_type validity = gdf_is_valid(d_columns_valids[i], row_index);
-      // set validity in output buffer
-      row_valid_byte_buffer[i / GDF_VALID_BITSIZE] |= (validity << (i % GDF_VALID_BITSIZE));
+      if (gdf_is_valid(d_columns_valids[i], row_index))
+        // set validity in output buffer
+        row_valid_byte_buffer[i / GDF_VALID_BITSIZE] |= (gdf_valid_type{1} << (i % GDF_VALID_BITSIZE));
     }
     return GDF_SUCCESS;
   }
