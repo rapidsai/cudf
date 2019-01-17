@@ -90,6 +90,8 @@
 - PR #689 CSV Reader: Fix behavior with skiprows+header to match pandas implementation
 - PR #691 Fixes Join on empty input DFs
 - PR #706 CSV Reader: Fix broken dtype inference when whitespace is in data
+- PR #717 CSV reader: fix behavior when parsing a csv file with no data rows
+
 
 # cuDF 0.4.0 (05 Dec 2018)
 
