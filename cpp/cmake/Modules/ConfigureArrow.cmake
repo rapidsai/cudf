@@ -16,7 +16,8 @@ set(ARROW_CMAKE_ARGS " -DARROW_WITH_LZ4=OFF"
                      " -DARROW_GPU=OFF"
                      " -DARROW_JEMALLOC=OFF"
                      " -DARROW_BOOST_VENDORED=OFF"
-                     " -DARROW_PYTHON=OFF")
+                     " -DARROW_PYTHON=OFF"
+                     " -DCMAKE_VERBOSE_MAKEFILE=ON")
 
 if(NOT CMAKE_CXX11_ABI)
     message(STATUS "ARROW: Disabling the GLIBCXX11 ABI")
