@@ -18,6 +18,21 @@ cmake_minimum_required(VERSION 3.12 FATAL_ERROR)
 project(CUDA_DATAFRAME VERSION 0.4.0 LANGUAGES C CXX CUDA)
 
 ###################################################################################################
+# - build type ------------------------------------------------------------------------------------
+
+# Set a default build type if none was specified
+set(DEFAULT_BUILD_TYPE "Release")
+
+if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
+  message(STATUS "Setting build type to '${DEFAULT_BUILD_TYPE}' since none specified.")
+  set(CMAKE_BUILD_TYPE "${DEFAULT_BUILD_TYPE}" CACHE
+      STRING "Choose the type of build." FORCE)
+  # Set the possible values of build type for cmake-gui
+  set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS
+    "Debug" "Release" "MinSizeRel" "RelWithDebInfo")
+endif()
+
+###################################################################################################
 # - compiler options ------------------------------------------------------------------------------
 
 set(CMAKE_CXX_STANDARD 14)
@@ -26,7 +41,7 @@ set(CMAKE_CXX_COMPILER $ENV{CXX})
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 set(CMAKE_CUDA_STANDARD 14)
-set(CMAKE_CUDA_STANDARD_REQURIED ON)
+set(CMAKE_CUDA_STANDARD_REQUIRED ON)
 
 if(CMAKE_COMPILER_IS_GNUCXX)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Werror")
@@ -49,8 +64,11 @@ set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -Werror cross-execution-space-call -Wn
 set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -Werror cross-execution-space-call -Xcompiler -Wall,-Werror")
 set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -Xcompiler -D_GLIBCXX_USE_CXX11_ABI=0")
 
-# set default build type
-set(CMAKE_BUILD_TYPE "Debug")
+# Debug options
+if(CMAKE_BUILD_TYPE MATCHES Debug)
+    message(STATUS "Building with debugging flags")
+    set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -G -Xcompiler -rdynamic")
+endif(CMAKE_BUILD_TYPE MATCHES Debug)
 
 option(BUILD_TESTS "Configure CMake to build tests"
        ON)
@@ -74,6 +92,16 @@ if (ARROW_FOUND)
 else()
     message(FATAL_ERROR "Apache Arrow not found, please check your settings.")
 endif()
+
+###################################################################################################
+# - find zlib -------------------------------------------------------------------------------------
+
+find_package(ZLIB REQUIRED)
+if(ZLIB_FOUND)
+    message(STATUS "ZLib found in ${ZLIB_INCLUDE_DIRS}")
+else()
+    message(FATAL_ERROR "ZLib not found, please check your settings.")
+endif(ZLIB_FOUND)
 
 ###################################################################################################
 # - add gtest -------------------------------------------------------------------------------------
@@ -102,7 +130,8 @@ include_directories("${ARROW_INCLUDE_DIR}"
                     "${CMAKE_SOURCE_DIR}/src"
                     "${CMAKE_SOURCE_DIR}/thirdparty/cub"
                     "${CMAKE_SOURCE_DIR}/thirdparty/moderngpu/src"
-                    "${CMAKE_SOURCE_DIR}/thirdparty/cnmem/include")
+                    "${CMAKE_SOURCE_DIR}/thirdparty/cnmem/include"
+                    "${ZLIB_INCLUDE_DIRS}")
 
 ###################################################################################################
 # - library paths ---------------------------------------------------------------------------------
@@ -154,11 +183,13 @@ add_library(cudf SHARED
             src/hash/hash_ops.cu
             src/quantiles/quantiles.cu
             src/reductions/reductions.cu
+            src/replace/replace.cu
             src/reductions/scan.cu
             src/unary/unary_ops.cu
             # src/windowed/windowed_ops.cu ... this is broken
             src/io/convert/csr/cudf_to_csr.cu
             src/io/csv/csv_reader.cu
+            src/io/comp/uncomp.cpp
             src/utilities/cuda_utils.cu
             src/utilities/error_utils.cpp
             src/utilities/nvtx/nvtx_utils.cpp)
@@ -167,6 +198,9 @@ add_library(rmm SHARED
             src/rmm/memory.cpp
             src/rmm/memory_manager.cpp
             thirdparty/cnmem/src/cnmem.cpp)
+
+#Override RPATH for cudf & rmm
+SET_TARGET_PROPERTIES(cudf rmm PROPERTIES BUILD_RPATH "\$ORIGIN")
 
 ###################################################################################################
 # - build options ---------------------------------------------------------------------------------
@@ -185,16 +219,12 @@ if(HT_LEGACY_ALLOCATOR)
     set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} --define-macro HT_LEGACY_ALLOCATOR")
 endif(HT_LEGACY_ALLOCATOR)
 
-if(CMAKE_BUILD_TYPE MATCHES Debug)
-    message(STATUS "Building with debugging flags")
-    set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -G")
-endif(CMAKE_BUILD_TYPE MATCHES Debug)
 
 ###################################################################################################
 # - link libraries --------------------------------------------------------------------------------
 
 target_link_libraries(rmm cudart cuda NVStrings)
-target_link_libraries(cudf rmm "${ARROW_LIB}")
+target_link_libraries(cudf rmm "${ARROW_LIB}" ${ZLIB_LIBRARIES})
 
 ###################################################################################################
 # - python cffi bindings --------------------------------------------------------------------------

@@ -24,7 +24,12 @@ Note: This conda installation only applies to Linux and Python versions 3.5/3.6.
 
 ### Pip
 
-Support is coming soon, please use conda for the time being.
+It is easy to install cuDF using pip. You must specify the CUDA version to ensure you install the right package.
+
+```bash
+pip install cudf-cuda92 # CUDA 9.2
+pip install cudf-cuda100 # CUDA 10.0
+```
 
 ## Development Setup
 
@@ -69,8 +74,9 @@ To install cuDF from source, ensure the dependencies are met and follow the step
 
 - Clone the repository and submodules
 ```bash
-git clone --recurse-submodules https://github.com/rapidsai/cudf.git
-cd cudf
+CUDF_HOME=$(pwd)/cudf
+git clone --recurse-submodules https://github.com/rapidsai/cudf.git $CUDF_HOME
+cd CUDF_HOME
 ```
 - Create the conda development environment `cudf_dev`
 ```bash
@@ -82,7 +88,7 @@ source activate cudf_dev
 
 - Build and install `libcudf`. CMake depends on the `nvcc` executable being on your path or defined in `$CUDACXX`.
 ```bash
-$ cd cpp                                            # navigate to C/C++ CUDA source root directory
+$ cd $CUDF_HOME/cpp                                 # navigate to C/C++ CUDA source root directory
 $ mkdir build                                       # make a build directory
 $ cd build                                          # enter the build directory
 $ cmake .. -DCMAKE_INSTALL_PREFIX=/install/path     # configure cmake ... use $CONDA_PREFIX if you're using Anaconda
@@ -95,16 +101,16 @@ $ make install                                      # install the libraries libr
 $ make test
 ```
 
-- Build and install cffi bindings:
+- Build, install, and test cffi bindings:
 ```bash
 $ make python_cffi                                  # build CFFI bindings for librmm.so, libcudf.so
 $ make install_python                               # build & install CFFI python bindings. Depends on cffi package from PyPi or Conda
-$ py.test -v                                        # optional, run python tests on low-level python bindings
+$ cd python && py.test -v                           # optional, run python tests on low-level python bindings
 ```
 
 - 4. Build the `cudf` python package, in the `python` folder:
 ```bash
-$ cd ../../python
+$ cd $CUDF_HOME/python
 $ python setup.py build_ext --inplace
 ```
 
@@ -125,6 +131,40 @@ $ python setup.py install                           # install cudf python bindin
 ```
 
 Done! You are ready to develop for the cuDF OSS project.
+
+## Debugging cuDF
+
+### Building Debug mode from source
+
+Follow the [above instructions](#build-from-source) to build from source and add `-DCMAKE_BUILD_TYPE=Debug` to the `cmake` step. 
+
+For example:
+```bash
+$ cmake .. -DCMAKE_INSTALL_PREFIX=/install/path -DCMAKE_BUILD_TYPE=Debug     # configure cmake ... use -DCMAKE_INSTALL_PREFIX=$CONDA_PREFIX if you're using Anaconda
+```
+
+This builds `libcudf` in Debug mode which enables some `assert` safety checks and includes symbols in the library for debugging.
+
+All other steps for installing `libcudf` into your environment are the same.
+
+### Debugging with `cuda-gdb` and `cuda-memcheck`
+
+When you have a debug build of `libcudf` installed, debugging with the `cuda-gdb` and `cuda-memcheck` is easy.
+
+If you are debugging a Python script, simply run the following:
+
+#### `cuda-gdb`
+
+```bash
+cuda-gdb -ex r --args python <program_name>.py <program_arguments>
+```
+
+#### `cuda-memcheck`
+
+```bash
+cuda-memcheck python <program_name>.py <program_arguments>
+```
+
 
 ## Automated Build in Docker Container
 
@@ -156,7 +196,7 @@ root@3f689ba9c842:/# source activate cudf
 ### Customizing the Build
 
 Several build arguments are available to customize the build process of the
-container. These are spcified by using the Docker [build-arg](https://docs.docker.com/engine/reference/commandline/build/#set-build-time-variables---build-arg)
+container. These are specified by using the Docker [build-arg](https://docs.docker.com/engine/reference/commandline/build/#set-build-time-variables---build-arg)
 flag. Below is a list of the available arguments and their purpose:
 
 | Build Argument | Default Value | Other Value(s) | Purpose |

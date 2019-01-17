@@ -8,6 +8,7 @@ import numpy as np
 import pandas as pd
 
 from cudf.dataframe import DataFrame
+from cudf.tests.utils import assert_eq
 
 
 def make_params():
@@ -228,42 +229,109 @@ def test_dataframe_join_mismatch_cats(how):
     assert list(got.index) == list(expect.index)
 
 
-def test_dataframe_multi_column_join():
+@pytest.mark.parametrize('on', ['key1', ['key1', 'key2'], None])
+def test_dataframe_merge_on(on):
     np.random.seed(0)
 
-    # Make GDF
+    # Make cuDF
     df_left = DataFrame()
     nelem = 500
-    df_left['key1'] = np.random.randint(0, 30, nelem)
+    df_left['key1'] = np.random.randint(0, 40, nelem)
     df_left['key2'] = np.random.randint(0, 50, nelem)
-    df_left['val1'] = np.arange(nelem)
+    df_left['left_val'] = np.arange(nelem)
 
     df_right = DataFrame()
     nelem = 500
     df_right['key1'] = np.random.randint(0, 30, nelem)
     df_right['key2'] = np.random.randint(0, 50, nelem)
-    df_right['val1'] = np.arange(nelem)
+    df_right['right_val'] = np.arange(nelem)
 
     # Make pandas DF
     pddf_left = df_left.to_pandas()
     pddf_right = df_right.to_pandas()
 
-    # Expected result
-    pddf_joined = pddf_left.merge(pddf_right, on=['key1', 'key2'], how='left',
-                                  sort=True)
+    # Expected result (from pandas)
+    pddf_joined = pddf_left.merge(pddf_right, on=on, how='left')
 
-    # Test (doesn't check for ordering)
-    join_result = df_left.merge(df_right, on=['key1', 'key2'], how='left')
+    # Test (from cuDF; doesn't check for ordering)
+    join_result = df_left.merge(df_right, on=on, how='left')
 
+    join_result['right_val'] = (join_result['right_val']
+                                .astype(np.float64)
+                                .fillna(np.nan))
     for col in list(pddf_joined.columns):
         if(col.count('_y') > 0):
             join_result[col] = (join_result[col]
                                 .astype(np.float64)
                                 .fillna(np.nan))
 
+    # Test dataframe equality (ignore order of rows and columns)
     pd.util.testing.assert_frame_equal(
         join_result
         .to_pandas()
         .sort_values(list(pddf_joined.columns))
         .reset_index(drop=True),
-        pddf_joined)
+        pddf_joined
+        .sort_values(list(pddf_joined.columns))
+        .reset_index(drop=True),
+        check_like=True)
+
+
+def test_dataframe_merge_on_unknown_column():
+    np.random.seed(0)
+
+    # Make cuDF
+    df_left = DataFrame()
+    nelem = 500
+    df_left['key1'] = np.random.randint(0, 40, nelem)
+    df_left['key2'] = np.random.randint(0, 50, nelem)
+    df_left['left_val'] = np.arange(nelem)
+
+    df_right = DataFrame()
+    nelem = 500
+    df_right['key1'] = np.random.randint(0, 30, nelem)
+    df_right['key2'] = np.random.randint(0, 50, nelem)
+    df_right['right_val'] = np.arange(nelem)
+
+    with pytest.raises(KeyError) as raises:
+        df_left.merge(df_right, on='bad_key', how='left')
+    raises.match('bad_key')
+
+
+def test_dataframe_merge_no_common_column():
+    np.random.seed(0)
+
+    # Make cuDF
+    df_left = DataFrame()
+    nelem = 500
+    df_left['key1'] = np.random.randint(0, 40, nelem)
+    df_left['key2'] = np.random.randint(0, 50, nelem)
+    df_left['left_val'] = np.arange(nelem)
+
+    df_right = DataFrame()
+    nelem = 500
+    df_right['key3'] = np.random.randint(0, 30, nelem)
+    df_right['key4'] = np.random.randint(0, 50, nelem)
+    df_right['right_val'] = np.arange(nelem)
+
+    with pytest.raises(ValueError) as raises:
+        df_left.merge(df_right, how='left')
+    raises.match('No common columns to perform merge on')
+
+
+def test_dataframe_merge_strings_not_supported():
+    pleft = pd.DataFrame({'x': [0, 1, 2, 3],
+                          'name': ['Alice', 'Bob', 'Charlie', 'Dan']})
+    with pytest.raises(NotImplementedError) as raises:
+        gleft = DataFrame.from_pandas(pleft)  # noqa:F841
+    raises.match('Strings are not yet supported')
+
+
+def test_dataframe_empty_merge():
+    gdf1 = DataFrame([('a', []), ('b', [])])
+    gdf2 = DataFrame([('a', []), ('c', [])])
+
+    expect = DataFrame([('a', []), ('b', []), ('c', [])])
+    got = gdf1.merge(gdf2, how='left', on=['a'])
+
+    assert_eq(expect, got)
