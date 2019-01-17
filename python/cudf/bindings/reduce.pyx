@@ -52,10 +52,19 @@ def apply_reduce(reduction, col):
             result = gdf_sum_of_squares(<gdf_column*>c_col,
                                         <void*>out_ptr,
                                         outsz)
-
-    check_gdf_error(result)
+        elif reduction == 'product':
+            result = gdf_product(<gdf_column*>c_col, <void*>out_ptr, outsz)
+        else:
+            # TODO: should be GDF_NOTIMPLEMENTED_ERROR
+            result = GDF_UNSUPPORTED_METHOD
 
     free(c_col)
 
+    if result == GDF_DATASET_EMPTY:
+        if reduction == 'sum' or reduction == 'sum_of_squares':
+            return col.dtype.type(0)
+        return np.nan
+
+    check_gdf_error(result)
 
     return out[0]

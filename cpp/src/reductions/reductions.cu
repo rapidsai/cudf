@@ -65,7 +65,8 @@ struct ReduceOp {
     static
     gdf_error launch(gdf_column *input, T identity, T *output,
                      gdf_size_type output_size) {
-
+        if (input->size == input->null_count)
+            return GDF_DATASET_EMPTY;
         // 1st round
         //    Partially reduce the input into *output_size* length.
         //    Each block computes one output in *output*.
