@@ -129,7 +129,7 @@ gdf_error gdf_to_csr(gdf_column **gdfData, int numCol, csr_gdf *csrReturn) {
 
 	//--------------------------------------------------------------------------------------
 	// now start creating output data
-    size_t * IA;
+    gdf_size_type* IA;
     RMM_TRY(RMM_ALLOC((void**)&IA, (numRows + 2) * sizeof(gdf_size_type), 0));
     CUDA_TRY(cudaMemcpy(IA, offsets, ( sizeof(gdf_size_type) * (numRows + 2) ), cudaMemcpyDeviceToDevice) );
 
