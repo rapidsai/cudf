@@ -41,14 +41,19 @@ struct column_wrapper {
     initialize_with_host_data(host_data, host_bitmask);
   }
 
+  column_wrapper(std::vector<ColumnType> const& host_data){
+      initialize_with_host_data(host_data);
+  }
+
   template <typename BitInitializerType>
   column_wrapper(std::vector<ColumnType> const& host_data,
                  BitInitializerType bit_initializer) {
     const size_t num_masks = gdf_get_num_chars_bitmask(host_data.size());
+    const gdf_size_type num_rows{static_cast<gdf_size_type>(host_data.size())};
 
     // Initialize the valid mask for this column using the initializer
     std::vector<gdf_valid_type> host_bitmask(num_masks, 0);
-    for (gdf_index_type row = 0; row < host_data.size(); ++row) {
+    for (gdf_index_type row = 0; row < num_rows; ++row) {
       if (true == bit_initializer(row)) {
         gdf::util::turn_bit_on(host_bitmask.data(), row);
       }
@@ -105,26 +110,26 @@ struct column_wrapper {
   }
 
   bool operator==(column_wrapper<ColumnType> const& rhs) {
-    if (the_column.size != rhs.size) return false;
-    if (the_column.dtype != rhs.dtype) return false;
-    if (the_column.null_count != rhs.null_count) return false;
-    if (the_column.dtype_info.time_unit != rhs.dtype_info.time_unit)
+    if (the_column.size != rhs.the_column.size) return false;
+    if (the_column.dtype != rhs.the_column.dtype) return false;
+    if (the_column.null_count != rhs.the_column.null_count) return false;
+    if (the_column.dtype_info.time_unit != rhs.the_column.dtype_info.time_unit)
       return false;
 
-    if (!(the_column.data && rhs.data))
+    if (!(the_column.data && rhs.the_column.data))
       return false;  // if one is null but not both
 
     if (!thrust::equal(
             thrust::cuda::par, static_cast<ColumnType*>(the_column.data),
             static_cast<ColumnType*>(the_column.data) + the_column.size,
-            static_cast<ColumnType*>(rhs.data))) {
+            static_cast<ColumnType*>(rhs.the_column.data))) {
       return false;
     }
 
-    if (!(the_column.valid && rhs.valid))
+    if (!(the_column.valid && rhs.the_column.valid))
       return false;  // if one is null but not both
 
-    if (not compare_bitmasks(the_column.valid, rhs.valid, the_column.size))
+    if (not compare_bitmasks(the_column.valid, rhs.the_column.valid, the_column.size))
       return false;
 
     return true;
@@ -133,7 +138,7 @@ struct column_wrapper {
  private:
   void initialize_with_host_data(
       std::vector<ColumnType> const& host_data,
-      std::vector<gdf_valid_type> const& host_bitmask) {
+      std::vector<gdf_valid_type> const& host_bitmask = std::vector<gdf_valid_type>{}) {
     // Allocate device storage for gdf_column and copy contents from host_data
     RMM_ALLOC(&(the_column.data), host_data.size() * sizeof(ColumnType), 0);
     cudaMemcpy(the_column.data, host_data.data(),
@@ -182,7 +187,8 @@ struct column_wrapper {
     std::bitset<GDF_VALID_BITSIZE> lhs_bitset(lhs_last_mask);
     std::bitset<GDF_VALID_BITSIZE> rhs_bitset(rhs_last_mask);
 
-    size_t num_bits_last_mask{num_rows % GDF_VALID_BITSIZE};
+    gdf_size_type num_bits_last_mask = num_rows % GDF_VALID_BITSIZE;
+
     if (0 == num_bits_last_mask) num_bits_last_mask = GDF_VALID_BITSIZE;
 
     for (gdf_size_type i = 0; i < num_bits_last_mask; ++i) {
