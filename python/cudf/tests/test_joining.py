@@ -335,3 +335,29 @@ def test_dataframe_empty_merge():
     got = gdf1.merge(gdf2, how='left', on=['a'])
 
     assert_eq(expect, got)
+
+
+def test_dataframe_merge_order():
+    gdf1 = DataFrame()
+    gdf2 = DataFrame()
+    gdf1['id'] = [10, 11]
+    gdf1['timestamp'] = [1, 2]
+    gdf1['a'] = [3, 4]
+
+    gdf2['id'] = [4, 5]
+    gdf2['a'] = [7, 8]
+
+    gdf = gdf1.merge(gdf2, how='left', on=['id', 'a'], method='hash')
+
+    df1 = pd.DataFrame()
+    df2 = pd.DataFrame()
+    df1['id'] = [10, 11]
+    df1['timestamp'] = [1, 2]
+    df1['a'] = [3, 4]
+
+    df2['id'] = [4, 5]
+    df2['a'] = [7, 8]
+
+    df = df1.merge(df2, how='left', on=['id', 'a'])
+
+    assert_eq(gdf, df)

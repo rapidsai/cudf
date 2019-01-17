@@ -1104,7 +1104,6 @@ class DataFrame(object):
         df = DataFrame()
 
         # Columns are returned in order left - on - right from libgdf
-        # Creating dataframe with ordering as pandas:
 
         gap = len(self.columns) - len(on)
         for idx in range(len(on)):
@@ -1162,9 +1161,25 @@ class DataFrame(object):
                                               mask=Buffer(valids[idx]))
                 idx = idx + 1
 
+        # Creating dataframe with ordering as pandas:
+        # Pandas always orders the output first according to the input
+        # column order.
+
+        final_df = DataFrame()
+        for col in lhs.columns:
+            fcol = col
+            if col not in df.columns:
+                fcol = fix_name(col, lsuffix)
+            if fcol not in df.columns:
+                fcol = fix_name(col, rsuffix)
+            final_df[fcol] = df[fcol]
+        for col in df.columns:
+            if col not in final_df.columns:
+                final_df[col] = df[col]
+
         _gdf.nvtx_range_pop()
 
-        return df
+        return final_df
 
     def join(self, other, on=None, how='left', lsuffix='', rsuffix='',
              sort=False, type="", method='hash'):
