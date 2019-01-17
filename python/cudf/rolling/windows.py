@@ -57,10 +57,8 @@ def ewma_mean_window(shared, history_len, out_arr, window_size, span,
             out_arr[i] = np.nan
         else:
             if not first:
-                # print(i, i + history_len + 1, window_size, history_len)
-                for j in range(0, min(i + history_len + 1,
-                                      window_size)):
-                    if (cmath.isnan(shared[i + offset - j])) :
+                for j in range(0, min(i + history_len + 1, window_size)):
+                    if (cmath.isnan(shared[i + offset - j])):
                         v = 0.0
                         weight_scale = 0.0
                     else:
@@ -77,7 +75,7 @@ def ewma_mean_window(shared, history_len, out_arr, window_size, span,
                     out_arr[i] = np.nan
                 first = True
             else:
-                if (cmath.isnan(shared[i + offset])) :
+                if (cmath.isnan(shared[i + offset])):
                     v_current = 0.0
                     weight_scale_current = 0.0
                 else:
@@ -85,7 +83,7 @@ def ewma_mean_window(shared, history_len, out_arr, window_size, span,
                     weight_scale_current = 1.0
                     average_size += 1
                 if counter >= window_size:
-                    if (cmath.isnan(shared[i + offset - window_size])) :
+                    if (cmath.isnan(shared[i + offset - window_size])):
                         v = 0.0
                         weight_scale = 0.0
                     else:
@@ -96,7 +94,6 @@ def ewma_mean_window(shared, history_len, out_arr, window_size, span,
                     total_weight -= lam / (1 - alpha) * weight_scale
                 else:
                     counter += 1
-                    #total_weight += lam * weight_scale_current
                     lam *= (1 - alpha)
                 total_weight *= (1 - alpha)
                 total_weight += 1.0 * weight_scale_current
@@ -110,7 +107,7 @@ def ewma_mean_window(shared, history_len, out_arr, window_size, span,
 
 @cuda.jit(device=True)
 def mean_window(shared, history_len, future_len, out_arr, window_size,
-                  forward_window_size, arr_len, offset, min_size):
+                forward_window_size, arr_len, offset, min_size):
     """
     This function is to compute the moving average for the window
     See `window_kernel` for detailed arguments
@@ -127,7 +124,7 @@ def mean_window(shared, history_len, future_len, out_arr, window_size,
             if not first:
                 for j in range(0, window_size + forward_window_size):
                     if not (cmath.isnan(
-                        shared[offset + i - j + forward_window_size])):
+                            shared[offset + i - j + forward_window_size])):
                         s += shared[offset + i - j + forward_window_size]
                         average_size += 1
                 if average_size >= min_size:
@@ -137,11 +134,11 @@ def mean_window(shared, history_len, future_len, out_arr, window_size,
                 first = True
             else:
                 if not (cmath.isnan(
-                    shared[offset + i + forward_window_size])):
+                        shared[offset + i + forward_window_size])):
                     s += shared[offset + i + forward_window_size]
                     average_size += 1
                 if not (cmath.isnan(
-                    shared[offset + i - window_size])):
+                        shared[offset + i - window_size])):
                     s -= shared[offset + i - window_size]
                     average_size -= 1
                 if average_size >= min_size:
@@ -149,15 +146,16 @@ def mean_window(shared, history_len, future_len, out_arr, window_size,
                 else:
                     out_arr[i] = np.nan
 
+
 @cuda.jit(device=True)
 def var_window(shared, history_len, future_len, out_arr, window_size,
-                  forward_window_size, arr_len, offset, min_size):
+               forward_window_size, arr_len, offset, min_size):
     """
     This function is to compute the var for the window
     See `window_kernel` for detailed arguments
     """
-    s = 0.0 # this is mean
-    var = 0.0 # this is variance
+    s = 0.0  # this is mean
+    var = 0.0  # this is variance
     first = False
     average_size = 0
     for i in range(arr_len):
@@ -169,40 +167,46 @@ def var_window(shared, history_len, future_len, out_arr, window_size,
             if not first:
                 for j in range(0, window_size + forward_window_size):
                     if not (cmath.isnan(
-                        shared[offset + i - j + forward_window_size])):
+                            shared[offset + i - j + forward_window_size])):
                         s += shared[offset + i - j + forward_window_size]
-                        var += shared[offset + i - j + forward_window_size] * shared[offset + i - j + forward_window_size]
+                        var += shared[offset + i - j + forward_window_size] * \
+                            shared[offset + i - j + forward_window_size]
                         average_size += 1
                 if average_size >= min_size:
-                    out_arr[i] = (var - s * s / np.float64(average_size) ) / np.float64(average_size - 1.0)
+                    out_arr[i] = (var - s * s / np.float64(average_size)
+                                  ) / np.float64(average_size - 1.0)
                 else:
                     out_arr[i] = np.nan
                 first = True
             else:
                 if not (cmath.isnan(
-                    shared[offset + i + forward_window_size])):
+                        shared[offset + i + forward_window_size])):
                     s += shared[offset + i + forward_window_size]
-                    var += shared[offset + i + forward_window_size] * shared[offset + i + forward_window_size]
+                    var += shared[offset + i + forward_window_size] * \
+                        shared[offset + i + forward_window_size]
                     average_size += 1
                 if not (cmath.isnan(
-                    shared[offset + i - window_size])):
+                        shared[offset + i - window_size])):
                     s -= shared[offset + i - window_size]
-                    var -= shared[offset + i - window_size] * shared[offset + i - window_size]
+                    var -= shared[offset + i - window_size] * \
+                        shared[offset + i - window_size]
                     average_size -= 1
                 if average_size >= min_size:
-                    out_arr[i] = (var - s * s / np.float64(average_size) ) / np.float64(average_size - 1.0)
+                    out_arr[i] = (var - s * s / np.float64(average_size)
+                                  ) / np.float64(average_size - 1.0)
                 else:
                     out_arr[i] = np.nan
 
+
 @cuda.jit(device=True)
 def std_window(shared, history_len, future_len, out_arr, window_size,
-                  forward_window_size, arr_len, offset, min_size):
+               forward_window_size, arr_len, offset, min_size):
     """
     This function is to compute the std for the window
     See `window_kernel` for detailed arguments
     """
-    s = 0.0 # this is mean
-    var = 0.0 # this is variance
+    s = 0.0  # this is mean
+    var = 0.0  # this is variance
     first = False
     average_size = 0
     for i in range(arr_len):
@@ -214,38 +218,44 @@ def std_window(shared, history_len, future_len, out_arr, window_size,
             if not first:
                 for j in range(0, window_size + forward_window_size):
                     if not (cmath.isnan(
-                        shared[offset + i - j + forward_window_size])):
+                            shared[offset + i - j + forward_window_size])):
                         s += shared[offset + i - j + forward_window_size]
-                        var += shared[offset + i - j + forward_window_size] * shared[offset + i - j + forward_window_size]
+                        var += shared[offset + i - j + forward_window_size] * \
+                            shared[offset + i - j + forward_window_size]
                         average_size += 1
                 if average_size >= min_size:
-                    v = math.sqrt(abs((var - s * s / np.float64(average_size) ) / np.float64(average_size - 1.0)))
+                    v = math.sqrt(
+                        abs((var - s * s / np.float64(
+                            average_size)) / np.float64(average_size - 1.0)))
                     out_arr[i] = v
                 else:
                     out_arr[i] = np.nan
                 first = True
             else:
                 if not (cmath.isnan(
-                    shared[offset + i + forward_window_size])):
+                        shared[offset + i + forward_window_size])):
                     s += shared[offset + i + forward_window_size]
-                    var += shared[offset + i + forward_window_size] * shared[offset + i + forward_window_size]
+                    var += shared[offset + i + forward_window_size] * \
+                        shared[offset + i + forward_window_size]
                     average_size += 1
                 if not (cmath.isnan(
-                    shared[offset + i - window_size])):
+                        shared[offset + i - window_size])):
                     s -= shared[offset + i - window_size]
-                    var -= shared[offset + i - window_size] * shared[offset + i - window_size]
+                    var -= shared[offset + i - window_size] * \
+                        shared[offset + i - window_size]
                     average_size -= 1
                 if average_size >= min_size:
-                    v = math.sqrt(abs((var - s * s / np.float64(average_size) ) / np.float64(average_size - 1.0)))
+                    v = math.sqrt(
+                        abs((var - s * s / np.float64(
+                            average_size)) / np.float64(average_size - 1.0)))
                     out_arr[i] = v
                 else:
                     out_arr[i] = np.nan
 
 
-
 @cuda.jit(device=True)
 def sum_window(shared, history_len, future_len, out_arr, window_size,
-                  forward_window_size, arr_len, offset, min_size):
+               forward_window_size, arr_len, offset, min_size):
     """
     This function is to compute the sum for the window
     See `window_kernel` for detailed arguments
@@ -262,7 +272,7 @@ def sum_window(shared, history_len, future_len, out_arr, window_size,
             if not first:
                 for j in range(0, window_size + forward_window_size):
                     if not (cmath.isnan(
-                        shared[offset + i - j + forward_window_size])):
+                            shared[offset + i - j + forward_window_size])):
                         s += shared[offset + i - j + forward_window_size]
                         average_size += 1
                 if average_size >= min_size:
@@ -272,11 +282,11 @@ def sum_window(shared, history_len, future_len, out_arr, window_size,
                 first = True
             else:
                 if not (cmath.isnan(
-                    shared[offset + i + forward_window_size])):
+                        shared[offset + i + forward_window_size])):
                     s += shared[offset + i + forward_window_size]
                     average_size += 1
                 if not (cmath.isnan(
-                    shared[offset + i - window_size])):
+                        shared[offset + i - window_size])):
                     s -= shared[offset + i - window_size]
                     average_size -= 1
                 if average_size >= min_size:
@@ -287,7 +297,7 @@ def sum_window(shared, history_len, future_len, out_arr, window_size,
 
 @cuda.jit(device=True)
 def max_window(shared, history_len, future_len, out_arr, window_size,
-                  forward_window_size, arr_len, offset, min_size):
+               forward_window_size, arr_len, offset, min_size):
     """
     This function is to compute the max for the window
     See `window_kernel` for detailed arguments
@@ -302,7 +312,7 @@ def max_window(shared, history_len, future_len, out_arr, window_size,
             average_size = 0
             for j in range(0, window_size + forward_window_size):
                 if not (cmath.isnan(
-                    shared[offset + i - j + forward_window_size])):
+                        shared[offset + i - j + forward_window_size])):
                     # bigger than the max
                     if shared[i + offset - j + forward_window_size] > s:
                         s = shared[i + offset - j + forward_window_size]
@@ -315,7 +325,7 @@ def max_window(shared, history_len, future_len, out_arr, window_size,
 
 @cuda.jit(device=True)
 def min_window(shared, history_len, future_len, out_arr, window_size,
-                  forward_window_size, arr_len, offset, min_size):
+               forward_window_size, arr_len, offset, min_size):
     """
     This function is to compute the min for the window
     See `window_kernel` for detailed arguments
@@ -330,7 +340,7 @@ def min_window(shared, history_len, future_len, out_arr, window_size,
             average_size = 0
             for j in range(0, window_size + forward_window_size):
                 if not (cmath.isnan(
-                    shared[offset + i - j + forward_window_size])):
+                        shared[offset + i - j + forward_window_size])):
                     # smaller than the min
                     if shared[i + offset - j + forward_window_size] < s:
                         s = shared[i + offset - j + forward_window_size]
@@ -343,7 +353,7 @@ def min_window(shared, history_len, future_len, out_arr, window_size,
 
 @cuda.jit(device=True)
 def backward_diff_window(shared, history_len, future_len, out_arr, window_size,
-                  forward_window_size, arr_len, offset, min_size):
+                         forward_window_size, arr_len, offset, min_size):
     """
     This function is to compute the backward element difference.
     See `window_kernel` for detailed arguments
@@ -354,7 +364,8 @@ def backward_diff_window(shared, history_len, future_len, out_arr, window_size,
         elif future_len - i < forward_window_size + 1:
             out_arr[i] = np.nan
         else:
-            if (cmath.isnan(shared[offset + i]) or cmath.isnan(shared[offset + i - window_size + 1])):
+            if (cmath.isnan(shared[offset + i]) or cmath.isnan(
+                    shared[offset + i - window_size + 1])):
                 out_arr[i] = np.nan
             else:
                 out_arr[i] = shared[offset + i] - shared[offset + i
@@ -362,8 +373,9 @@ def backward_diff_window(shared, history_len, future_len, out_arr, window_size,
 
 
 @cuda.jit(device=True)
-def backward_shift_window(shared, history_len, future_len, out_arr, window_size,
-                          forward_window_size, arr_len, offset, min_size):
+def backward_shift_window(shared, history_len, future_len, out_arr,
+                          window_size, forward_window_size, arr_len,
+                          offset, min_size):
     """
     This function is to shfit elements backward
     See `window_kernel` for detailed arguments
@@ -375,7 +387,7 @@ def backward_shift_window(shared, history_len, future_len, out_arr, window_size,
             out_arr[i] = np.nan
         else:
             if (cmath.isnan(
-                shared[offset + i - window_size + 1])):
+                    shared[offset + i - window_size + 1])):
                 out_arr[i] = np.nan
             else:
                 out_arr[i] = shared[offset + i - window_size + 1]
@@ -394,10 +406,12 @@ def forward_diff_window(shared, history_len, future_len, out_arr, window_size,
         elif future_len - i < forward_window_size + 1:
             out_arr[i] = np.nan
         else:
-            if (cmath.isnan(shared[offset + i]) or cmath.isnan(shared[offset + i + forward_window_size])):
+            if (cmath.isnan(shared[offset + i]) or cmath.isnan(
+                    shared[offset + i + forward_window_size])):
                 out_arr[i] = np.nan
             else:
-                out_arr[i] = shared[offset + i] - shared[offset + i + forward_window_size]
+                out_arr[i] = shared[offset + i] - \
+                    shared[offset + i + forward_window_size]
 
 
 @cuda.jit(device=True)
@@ -414,7 +428,7 @@ def forward_shift_window(shared, history_len, future_len, out_arr, window_size,
             out_arr[i] = np.nan
         else:
             if (cmath.isnan(
-                shared[offset + i + forward_window_size])):
+                    shared[offset + i + forward_window_size])):
                 out_arr[i] = np.nan
             else:
                 out_arr[i] = shared[offset + i + forward_window_size]

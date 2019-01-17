@@ -13,7 +13,7 @@ kernel_cache = {}
 def get_rolling_kernel(method):
 
     if method in kernel_cache:
-         return kernel_cache[method]
+        return kernel_cache[method]
 
     @cuda.jit
     def kernel(in_arr, out_arr, backward_length, forward_length,
@@ -101,7 +101,8 @@ class Rolling(object):
             forward_window: the windows size in the forward direction
             thread_tile: each thread will be responsible for `thread_tile`
                          number of elements in window computation
-            number_of_threads: number of threads in a block for CUDA computation
+            number_of_threads: number of threads in a block for CUDA
+                               computation
         """
         if isinstance(input_arr, numba.cuda.cudadrv.devicearray.DeviceNDArray):
             self.gpu_in = input_arr

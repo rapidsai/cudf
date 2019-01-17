@@ -86,7 +86,8 @@ class Ewm(object):
                          output
             thread_tile: each thread will be responsible for `thread_tile`
                          number of elements in window computation
-            number_of_threads: number of threads in a block for CUDA computation
+            number_of_threads: number of threads in a block for CUDA
+                               computation
             expand_multiplier: the number of elements used computing EWM is
                                 controled by this constant. The higher this
                                 number, the better the accuracy but slower in
