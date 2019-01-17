@@ -125,7 +125,7 @@ __global__ void gather_bitmask_if_kernel(
  * equal to bit `gather_map[i]` from `source_bitmask`.
  *
  * Undefined behavior results if any value in `gather_map` is outside the range
- * [0, num_destination_rows).
+ * [0, num_source_rows).
  *
  * If any value appears in `gather_map` more than once, the result is undefined.
  *
