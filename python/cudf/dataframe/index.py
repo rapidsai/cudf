@@ -76,7 +76,7 @@ class Index(object):
         return np.asarray([i for i in self.as_column()])
 
     def to_pandas(self):
-        return pd.Index(self.as_column().to_pandas())
+        return pd.Index(self.as_column().to_pandas(), name=self.name)
 
     def to_arrow(self):
         return self.as_column().to_arrow()
@@ -411,6 +411,7 @@ class CategoricalIndex(GenericIndex):
 
         self._values = values
         self.name = name
+        self.names = [name]
 
     @property
     def codes(self):

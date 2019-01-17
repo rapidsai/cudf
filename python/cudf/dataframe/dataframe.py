@@ -1656,7 +1656,7 @@ class DataFrame(object):
         for colk in dataframe.columns:
             df[colk] = Series(dataframe[colk].values, nan_as_null=nan_as_null)
         # Set index
-        return df.set_index(dataframe.index.values)
+        return df.set_index(dataframe.index)
 
     def to_arrow(self, index=True):
         """
