@@ -230,8 +230,8 @@ struct JoinTest : public GdfTest
     initialize_tuple(right_columns, right_column_length, right_column_range, static_cast<size_t>(ctxt.flag_sorted));
 
     auto n_columns = std::tuple_size<multi_column_t>::value;
-    initialize_valids(left_valids, n_columns, left_column_length, true);
-    initialize_valids(right_valids, n_columns, right_column_length, true);
+    initialize_valids(left_valids, n_columns, left_column_length, 0);
+    initialize_valids(right_valids, n_columns, right_column_length, 0);
 
     gdf_left_columns = initialize_gdf_columns(left_columns, left_valids, n_count);
     gdf_right_columns = initialize_gdf_columns(right_columns, right_valids, n_count);

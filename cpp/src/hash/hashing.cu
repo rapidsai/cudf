@@ -576,7 +576,7 @@ gdf_error gdf_hash_partition(int num_input_cols,
     return GDF_INVALID_API_CALL;
   }
 
-  const size_t num_rows{input[0]->size};
+  const gdf_size_type num_rows{input[0]->size};
 
   // If the input is empty, return immediately
   if(0 == num_rows)
