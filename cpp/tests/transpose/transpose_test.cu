@@ -208,8 +208,7 @@ protected:
         
         gdf_transpose(in_gdf_columns.size(),
             in_gdf_column_ptr.data(),
-            out_gdf_column_ptr.data(),
-            _add_nulls);
+            out_gdf_column_ptr.data());
     }
 
     void create_reference_output(void)

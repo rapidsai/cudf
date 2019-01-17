@@ -982,8 +982,7 @@ class DataFrame(object):
         libgdf.gdf_transpose(
             ncols,
             cols,
-            new_col_ptrs,
-            has_null
+            new_col_ptrs
         )
 
         for series in new_col_series:
