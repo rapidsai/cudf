@@ -56,7 +56,7 @@ def test_series_pandas_methods(mth):
     arr = (1 + np.random.random(5) * 100).astype(np.int64)
     sr = Series(arr)
     psr = pd.Series(arr)
-    np.testing.assert_equal(getattr(sr,mth)(), getattr(psr,mth)())
+    np.testing.assert_equal(getattr(sr, mth)(), getattr(psr, mth)())
 
 
 @pytest.mark.parametrize('mth', ['min', 'max', 'sum', 'product'])
@@ -64,4 +64,4 @@ def test_series_pandas_methods_empty(mth):
     arr = np.array([])
     sr = Series(arr)
     psr = pd.Series(arr)
-    np.testing.assert_equal(getattr(sr,mth)(), getattr(psr,mth)())
+    np.testing.assert_equal(getattr(sr, mth)(), getattr(psr, mth)())
