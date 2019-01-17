@@ -525,7 +525,6 @@ def test_csv_reader_nrows(tmpdir):
     df = read_csv(str(fname),
                   dtype=dtypes,
                   nrows=0)
-    print(df)
     assert(df.shape == (0, 2))
 
     # with both skipfooter and nrows - should throw
