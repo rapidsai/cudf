@@ -6,9 +6,12 @@ Test related to Index
 import pytest
 
 import numpy as np
+import pandas as pd
 
 from cudf.dataframe import DataFrame
-from cudf.dataframe.index import GenericIndex, RangeIndex
+from cudf.dataframe.index import (
+    GenericIndex, RangeIndex, CategoricalIndex, as_index
+)
 
 
 def test_df_set_index_from_series():
@@ -98,3 +101,8 @@ def test_index_immutable():
     gi = GenericIndex(np.arange(start, stop))
     with pytest.raises(TypeError):
         gi[1] = 5
+
+
+# def test_categorical_index():
+#     pdf = pd.DataFrame()
+#     pdf['a'] = [1, 2, 3]
