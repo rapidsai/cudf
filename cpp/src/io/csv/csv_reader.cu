@@ -618,7 +618,7 @@ gdf_error read_csv(csv_read_arg *args)
 
 	void **d_data,**h_data;
 	gdf_valid_type **d_valid,**h_valid;
-    unsigned long long	*d_valid_count,*h_valid_count;
+    unsigned long long	*d_valid_count;
 	gdf_dtype *d_dtypes,*h_dtypes;
 
 
@@ -626,7 +626,6 @@ gdf_error read_csv(csv_read_arg *args)
 
 
 	h_dtypes 		= (gdf_dtype*)malloc (	sizeof(gdf_dtype)* (raw_csv->num_active_cols));
-	h_valid_count	= (unsigned long long*)malloc (	sizeof(unsigned long long)* (raw_csv->num_active_cols));
 	h_data 			= (void**)malloc (	sizeof(void*)* (raw_csv->num_active_cols));
 	h_valid 		= (gdf_valid_type**)malloc (	sizeof(gdf_valid_type*)* (raw_csv->num_active_cols));
 
@@ -695,7 +694,8 @@ gdf_error read_csv(csv_read_arg *args)
 		if (error != GDF_SUCCESS) {
 			return error;
 		}
-		cudaDeviceSynchronize();
+		// Sync with the default stream, just in case create_from_index() is asynchronous 
+		cudaStreamSynchronize(0);
 
 		stringColCount=0;
 		for (int col = 0; col < raw_csv->num_active_cols; col++) {
@@ -709,8 +709,8 @@ gdf_error read_csv(csv_read_arg *args)
 			if ((raw_csv->quotechar != '\0') && (raw_csv->doublequote==true)) {
 				// In PANDAS, default of enabling doublequote for two consecutive
 				// quotechar in quote fields results in reduction to single
-				std::string quotechar = std::string(&raw_csv->quotechar);
-				std::string doublequotechar = quotechar + raw_csv->quotechar;
+				const string quotechar(1, raw_csv->quotechar);
+				const string doublequotechar(2, raw_csv->quotechar);
 				gdf->data = stringCol->replace(doublequotechar.c_str(), quotechar.c_str());
 				NVStrings::destroy(stringCol);
 			}
@@ -723,15 +723,13 @@ gdf_error read_csv(csv_read_arg *args)
 			stringColCount++;
 		}
 
-
-		CUDA_TRY( cudaMemcpy(h_valid_count,d_valid_count, sizeof(unsigned long long) * (raw_csv->num_active_cols), cudaMemcpyDeviceToHost));
+		vector<unsigned long long>	h_valid_count(raw_csv->num_active_cols);
+		CUDA_TRY( cudaMemcpy(h_valid_count.data(), d_valid_count, sizeof(unsigned long long) * h_valid_count.size(), cudaMemcpyDeviceToHost));
 
 		//--- set the null count
-		for ( int col = 0; col < raw_csv->num_active_cols; col++) {
+		for (size_t col = 0; col < h_valid_count.size(); col++) {
 			cols[col]->null_count = raw_csv->num_records - h_valid_count[col];
 		}
-
-		free(h_valid_count); 
 	}
 
 	// free up space that is no longer needed
