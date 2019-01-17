@@ -584,6 +584,40 @@ def test_csv_reader_skiprows_header(skip_rows, header_row):
     assert(list(cu_df.columns.values) == list(pd_df.columns.values))
 
 
+def test_csv_reader_dtype_inference():
+    names = ['float_point', 'integer']
+    lines = [','.join(names),
+             '1.2,1',
+             '2.3,2',
+             '3.4,3',
+             '4.5,4',
+             '5.6,5',
+             '6.7,6']
+    buffer = '\n'.join(lines) + '\n'
+    cu_df = read_csv(StringIO(buffer))
+    pd_df = pd.read_csv(StringIO(buffer))
+
+    assert(cu_df.shape == pd_df.shape)
+    assert(list(cu_df.columns.values) == list(pd_df.columns.values))
+
+
+def test_csv_reader_dtype_inference_whitespace():
+    names = ['float_point', 'integer']
+    lines = [','.join(names),
+             '  1.2,    1',
+             '2.3,2    ',
+             '  3.4,   3',
+             ' 4.5,4',
+             '5.6,  5',
+             ' 6.7,6 ']
+    buffer = '\n'.join(lines) + '\n'
+    cu_df = read_csv(StringIO(buffer))
+    pd_df = pd.read_csv(StringIO(buffer))
+
+    assert(cu_df.shape == pd_df.shape)
+    assert(list(cu_df.columns.values) == list(pd_df.columns.values))
+
+
 def test_csv_reader_empty_dataframe():
 
     dtypes = ['float64', 'int64']
