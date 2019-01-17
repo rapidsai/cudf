@@ -74,8 +74,9 @@ To install cuDF from source, ensure the dependencies are met and follow the step
 
 - Clone the repository and submodules
 ```bash
-git clone --recurse-submodules https://github.com/rapidsai/cudf.git
-cd cudf
+CUDF_HOME=$(pwd)/cudf
+git clone --recurse-submodules https://github.com/rapidsai/cudf.git $CUDF_HOME
+cd CUDF_HOME
 ```
 - Create the conda development environment `cudf_dev`
 ```bash
@@ -87,7 +88,7 @@ source activate cudf_dev
 
 - Build and install `libcudf`. CMake depends on the `nvcc` executable being on your path or defined in `$CUDACXX`.
 ```bash
-$ cd cpp                                            # navigate to C/C++ CUDA source root directory
+$ cd $CUDF_HOME/cpp                                 # navigate to C/C++ CUDA source root directory
 $ mkdir build                                       # make a build directory
 $ cd build                                          # enter the build directory
 $ cmake .. -DCMAKE_INSTALL_PREFIX=/install/path     # configure cmake ... use $CONDA_PREFIX if you're using Anaconda
@@ -109,7 +110,7 @@ $ cd python && py.test -v                           # optional, run python tests
 
 - 4. Build the `cudf` python package, in the `python` folder:
 ```bash
-$ cd ../../python
+$ cd $CUDF_HOME/python
 $ python setup.py build_ext --inplace
 ```
 
