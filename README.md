@@ -131,6 +131,40 @@ $ python setup.py install                           # install cudf python bindin
 
 Done! You are ready to develop for the cuDF OSS project.
 
+## Debugging cuDF
+
+### Building Debug mode from source
+
+Follow the [above instructions](#build-from-source) to build from source and add `-DCMAKE_BUILD_TYPE=Debug` to the `cmake` step. 
+
+For example:
+```bash
+$ cmake .. -DCMAKE_INSTALL_PREFIX=/install/path -DCMAKE_BUILD_TYPE=Debug     # configure cmake ... use -DCMAKE_INSTALL_PREFIX=$CONDA_PREFIX if you're using Anaconda
+```
+
+This builds `libcudf` in Debug mode which enables some `assert` safety checks and includes symbols in the library for debugging.
+
+All other steps for installing `libcudf` into your environment are the same.
+
+### Debugging with `cuda-gdb` and `cuda-memcheck`
+
+When you have a debug build of `libcudf` installed, debugging with the `cuda-gdb` and `cuda-memcheck` is easy.
+
+If you are debugging a Python script, simply run the following:
+
+#### `cuda-gdb`
+
+```bash
+cuda-gdb -ex r --args python <program_name>.py <program_arguments>
+```
+
+#### `cuda-memcheck`
+
+```bash
+cuda-memcheck python <program_name>.py <program_arguments>
+```
+
+
 ## Automated Build in Docker Container
 
 A Dockerfile is provided with a preconfigured conda environment for building and installing cuDF from source based off of the master branch.
@@ -161,7 +195,7 @@ root@3f689ba9c842:/# source activate cudf
 ### Customizing the Build
 
 Several build arguments are available to customize the build process of the
-container. These are spcified by using the Docker [build-arg](https://docs.docker.com/engine/reference/commandline/build/#set-build-time-variables---build-arg)
+container. These are specified by using the Docker [build-arg](https://docs.docker.com/engine/reference/commandline/build/#set-build-time-variables---build-arg)
 flag. Below is a list of the available arguments and their purpose:
 
 | Build Argument | Default Value | Other Value(s) | Purpose |
