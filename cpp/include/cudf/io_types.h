@@ -54,8 +54,8 @@ typedef struct {
   bool          skipinitialspace;           /**< skip white spaces after the delimiter - default is false                                       */
 
 
-  int           nrows;                      // number of rows to read,  -1 indicates all
-  int           header;                     // Row of the header data,  zero based counting. Default states that header should not be read from file.
+  gdf_size_type nrows;                      // number of rows to read,  -1 indicates all
+  gdf_size_type header;                     // Row of the header data,  zero based counting. Default states that header should not be read from file.
 
   int           num_cols;                   /**< number of columns in the names and dtype arrays                                                */
   const char    **names;                    /**< ordered List of column names, this is a required field                                         */
