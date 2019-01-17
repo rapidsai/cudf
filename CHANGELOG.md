@@ -1,9 +1,3 @@
-# cuDF 0.4.1 (15 Jan 2019)
-
-## Hotfix
-
-- PR #685 Support switching GLIBCXX11 ABI compatibility; align with gcc7 conda update
-
 # cuDF 0.4.0 (05 Dec 2018)
 
 ## New Features
