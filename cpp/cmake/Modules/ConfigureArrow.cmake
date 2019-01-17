@@ -24,6 +24,7 @@ if(NOT CMAKE_CXX11_ABI)
     list(APPEND ARROW_CMAKE_ARGS " -DARROW_TENSORFLOW=ON")
 elseif(CMAKE_CXX11_ABI)
     message(STATUS "ARROW: Enabling the GLIBCXX11 ABI")
+    list(APPEND ARROW_CMAKE_ARGS " -DARROW_TENSORFLOW=OFF")
 endif(NOT CMAKE_CXX11_ABI)
 
 configure_file("${CMAKE_SOURCE_DIR}/cmake/Templates/Arrow.CMakeLists.txt.cmake"
