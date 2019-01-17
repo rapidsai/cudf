@@ -81,7 +81,7 @@
 - PR #686 Fix converting nulls to NaT values when converting Series to Pandas/Numpy
 - PR #689 CSV Reader: Fix behavior with skiprows+header to match pandas implementation
 - PR #691 Fixes Join on empty input DFs
-- PR #700 CSV Reader: Fix broken dtype inference when whitespace is in data
+- PR #706 CSV Reader: Fix broken dtype inference when whitespace is in data
 
 # cuDF 0.4.0 (05 Dec 2018)
 
