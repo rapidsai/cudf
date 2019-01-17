@@ -26,6 +26,7 @@
 - PR #649 Add `cudf.from_pandas` function
 - PR #633 CSV Reader: Add support for the nrows parameter to specify the number of rows to read from the input file
 - PR #679 Test Series indexing, support integer scalars and integer sequences
+- PR #567 Adds setup for a wheel which is installable by pip
 
 ## Improvements
 
@@ -90,7 +91,6 @@
 - PR #398 add pandas-compatible `DataFrame.shape()` and `Series.shape()`
 - PR #394 New documentation feature "10 Minutes to cuDF"
 - PR #361 CSV Reader: Add support for strings with delimiters
-- PR #567 Adds setup for a wheel which is installable by pip
 
 ## Improvements
 
