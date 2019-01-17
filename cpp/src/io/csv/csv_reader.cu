@@ -1333,7 +1333,7 @@ __global__ void convertCsvToGdf(
 
 			// Modify start & end to ignore whitespace and quotechars
 			if(dtype[actual_col] != gdf_dtype::GDF_CATEGORY && dtype[actual_col] != gdf_dtype::GDF_STRING){
-				adjustForWhitespaceAndQuotes(raw_csv, start, tempPos, opts.quotechar);
+				adjustForWhitespaceAndQuotes(raw_csv, &start, &tempPos, opts.quotechar);
 			}
 
 			if(start<=(tempPos)) { // Empty strings are not legal values
@@ -1519,7 +1519,6 @@ __global__ void dataTypeDetection(
 		column_data_t* d_columnData
 		)
 {
-
 	// thread IDs range per block, so also need the block id
 	long	rec_id  = threadIdx.x + (blockDim.x * blockIdx.x);		// this is entry into the field array - tid is an elements within the num_entries array
 
@@ -1589,11 +1588,11 @@ __global__ void dataTypeDetection(
 			long countColon=0;
 			long countString=0;
 
-			long strLen=pos-start;
-
 			// Modify start & end to ignore whitespace and quotechars
 			// This could possibly result in additional empty fields
-			adjustForWhitespaceAndQuotes(raw_csv, start, tempPos);
+			adjustForWhitespaceAndQuotes(raw_csv, &start, &tempPos);
+
+			long strLen=tempPos-start+1;
 
 			for(long startPos=start; startPos<=tempPos; startPos++){
 				if(raw_csv[startPos]>= '0' && raw_csv[startPos] <= '9'){
