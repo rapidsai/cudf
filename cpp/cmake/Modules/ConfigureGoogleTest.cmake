@@ -32,11 +32,11 @@ if($ENV{TRAVIS})
         message(STATUS "Disabling Parallel CMake build on Travis")
     else()
         set(PARALLEL_BUILD --parallel)
-        message(STATUS "Using $ENV{CMAKE_BUILD_PARALLEL_LEVEL} build jobs on Travis")
+        message(STATUS "GTEST BUILD: Using $ENV{CMAKE_BUILD_PARALLEL_LEVEL} build jobs on Travis")
     endif(NOT DEFINED ENV{CMAKE_BUILD_PARALLEL_LEVEL})
 else()
     set(PARALLEL_BUILD --parallel)
-    message("STATUS Enabling Parallel CMake build")
+    message(STATUS "GTEST BUILD: Enabling Parallel CMake build")
 endif($ENV{TRAVIS})
 
 execute_process(COMMAND ${CMAKE_COMMAND} --build ${PARALLEL_BUILD} ..
