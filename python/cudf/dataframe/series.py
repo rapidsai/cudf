@@ -20,6 +20,7 @@ from cudf.comm.serialize import register_distributed_serializer
 from cudf._gdf import nvtx_range_push, nvtx_range_pop
 from cudf.rolling.rolling import Rolling
 from cudf.rolling.ewm import Ewm
+from cudf.rolling.util import diff, shift
 
 
 class Series(object):
@@ -964,6 +965,27 @@ class Series(object):
                    thread_tile=thread_tile,
                    number_of_threads=number_of_threads,
                    expand_multiplier=expand_multiplier)
+
+    def diff(self, n):
+        """
+        First discrete difference of element.
+
+        Calculates the difference of a element compared with another element in
+        the
+        ----------
+        Arguments:
+        n: the time period
+        """
+        return diff(self, n)
+
+    def shift(self, n):
+        """
+        Shift elements by desired number of periods
+        ----------
+        Arguments:
+        n: the time period
+        """
+        return shift(self, n)
 
 
 register_distributed_serializer(Series)
