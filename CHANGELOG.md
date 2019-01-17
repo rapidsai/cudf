@@ -1,4 +1,3 @@
-
 # cuDF 0.5.0 (Date TBD)
 
 ## New Features
@@ -24,7 +23,7 @@
 - PR #635 Add Doxygen template
 - PR #649 Add `cudf.from_pandas` function
 - PR #633 CSV Reader: Add support for the nrows parameter to specify the number of rows to read from the input file
-- PR #668 Added Python 3.7 support, upgraded packages: pandas>=0.23.4, pyarrow=0.11.1, numba>=0.40.0, cython>=0.29
+- PR #668 Added Python 3.7 support, upgraded packages: pandas>=0.23.4, pyarrow=0.11.1, numba>=0.40.0, cython>=0.29, GLIBCXX11 ABI compatibility; align with gcc7 conda update
 - PR #679 Test Series indexing, support integer scalars and integer sequences
 
 ## Improvements
@@ -78,8 +77,6 @@
 - PR #677 Fix 'gdf_csv_test_Dates' gtest failure due to missing nrows parameter
 - PR #686 Fix converting nulls to NaT values when converting Series to Pandas/Numpy
 - PR #691 Fixes Join on empty input DFs
-
-
 
 # cuDF 0.4.0 (05 Dec 2018)
 

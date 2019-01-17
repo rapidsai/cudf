@@ -17,7 +17,15 @@ set(ARROW_CMAKE_ARGS " -DARROW_WITH_LZ4=OFF"
                      " -DARROW_JEMALLOC=OFF"
                      " -DARROW_BOOST_VENDORED=OFF"
                      " -DARROW_PYTHON=OFF"
-                     " -DARROW_TENSORFLOW=ON") # enable old ABI for C/C++
+                     " -DCMAKE_VERBOSE_MAKEFILE=ON")
+
+if(NOT CMAKE_CXX11_ABI)
+    message(STATUS "ARROW: Disabling the GLIBCXX11 ABI")
+    list(APPEND ARROW_CMAKE_ARGS " -DARROW_TENSORFLOW=ON")
+elseif(CMAKE_CXX11_ABI)
+    message(STATUS "ARROW: Enabling the GLIBCXX11 ABI")
+    list(APPEND ARROW_CMAKE_ARGS " -DARROW_TENSORFLOW=OFF")
+endif(NOT CMAKE_CXX11_ABI)
 
 configure_file("${CMAKE_SOURCE_DIR}/cmake/Templates/Arrow.CMakeLists.txt.cmake"
                "${ARROW_ROOT}/CMakeLists.txt")
@@ -38,14 +46,14 @@ endif(ARROW_CONFIG)
 unset(PARALLEL_BUILD)            
 if($ENV{TRAVIS})
     if(NOT DEFINED ENV{CMAKE_BUILD_PARALLEL_LEVEL})
-        message(STATUS "Disabling Parallel CMake build on Travis")
+        message(STATUS "ARROW BUILD: Disabling Parallel CMake build on Travis")
     else()
         set(PARALLEL_BUILD --parallel)
-        message(STATUS "Using $ENV{CMAKE_BUILD_PARALLEL_LEVEL} build jobs on Travis")
+        message(STATUS "ARROW BUILD: Using $ENV{CMAKE_BUILD_PARALLEL_LEVEL} build jobs on Travis")
     endif(NOT DEFINED ENV{CMAKE_BUILD_PARALLEL_LEVEL})
 else()
     set(PARALLEL_BUILD --parallel)
-    message("STATUS Enabling Parallel CMake build")
+    message(STATUS "ARROW BUILD: Enabling Parallel CMake build")
 endif($ENV{TRAVIS})
 
 execute_process(
