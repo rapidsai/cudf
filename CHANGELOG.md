@@ -81,6 +81,7 @@
 - PR #686 Fix converting nulls to NaT values when converting Series to Pandas/Numpy
 - PR #689 CSV Reader: Fix behavior with skiprows+header to match pandas implementation
 - PR #691 Fixes Join on empty input DFs
+- PR #719 Fix merge column ordering
 
 
 # cuDF 0.4.0 (05 Dec 2018)
