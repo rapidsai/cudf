@@ -889,7 +889,7 @@ gdf_error uploadDataToDevice(const char* h_uncomp_data, size_t h_uncomp_size, ra
 
 	// Exclude the rows user chose to skip at the end of the file
 	if (raw_csv->skipfooter != 0) {
-		raw_csv->num_records = gdf_size_type(max(raw_csv->num_records - raw_csv->skipfooter, 0));
+		raw_csv->num_records = gdf_size_type(max(raw_csv->num_records - raw_csv->skipfooter, gdf_size_type{0}));
 		
 	}
 	
