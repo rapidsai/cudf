@@ -262,7 +262,7 @@ public:
 
 
     // Copy pointers to each column's data, types, and validity bitmasks 
-    // to the device  as contiguous arrays
+    // to contiguous host vectors (AoS to SoA conversion)
     std::vector<void*> columns_data(num_cols);
     std::vector<gdf_valid_type*> columns_valids(num_cols);
     std::vector<gdf_dtype> columns_types(num_cols);
