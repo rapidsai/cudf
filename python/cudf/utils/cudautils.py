@@ -182,7 +182,14 @@ def gpu_fill_value(data, value):
 def fill_value(arr, value):
     """Fill *arr* with value
     """
-    gpu_fill_value.forall(arr.size)(arr, value)
+    if not arr.size == 0:
+        gpu_fill_value.forall(arr.size)(arr, value)
+
+
+def full(size, value, dtype):
+    out = rmm.device_array(size, dtype=dtype)
+    fill_value(out, value)
+    return out
 
 
 @cuda.jit

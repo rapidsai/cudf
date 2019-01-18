@@ -11,7 +11,7 @@ import pandas as pd
 from cudf.utils import cudautils, utils
 from cudf import formatting
 from .buffer import Buffer
-from .index import Index, RangeIndex, GenericIndex
+from .index import Index, RangeIndex, as_index
 from cudf.settings import NOTSET, settings
 from .column import Column
 from .datetime import DatetimeColumn
@@ -65,7 +65,7 @@ class Series(object):
     def __init__(self, data=None, index=None, name=None, nan_as_null=True):
         if isinstance(data, pd.Series):
             name = data.name
-            index = GenericIndex(data.index)
+            index = as_index(data.index)
         if isinstance(data, Series):
             index = data._index
             name = data.name
@@ -166,7 +166,7 @@ class Series(object):
         index : Index, Series-convertible
             the new index or values for the new index
         """
-        index = index if isinstance(index, Index) else GenericIndex(index)
+        index = index if isinstance(index, Index) else as_index(index)
         return self._copy_construct(index=index)
 
     def as_index(self):
@@ -702,7 +702,7 @@ class Series(object):
         """Reverse the Series
         """
         data = cudautils.reverse_array(self.to_gpu_array())
-        index = GenericIndex(cudautils.reverse_array(self.index.gpu_values))
+        index = as_index(cudautils.reverse_array(self.index.gpu_values))
         col = self._column.replace(data=Buffer(data))
         return self._copy_construct(data=col, index=index)
 
@@ -857,6 +857,11 @@ class Series(object):
         assert axis in (None, 0) and skipna is True
         return self._column.sum()
 
+    def product(self, axis=None, skipna=True):
+        """Compute the product of the series"""
+        assert axis in (None, 0) and skipna is True
+        return self._column.product()
+
     def mean(self, axis=None, skipna=True):
         """Compute the mean of the series
         """
@@ -925,7 +930,7 @@ class Series(object):
         if self.null_count == len(self):
             return 0
         vals, cnts = self._column.value_counts(method=method)
-        res = Series(cnts, index=GenericIndex(vals))
+        res = Series(cnts, index=as_index(vals))
         if sort:
             return res.sort_values(ascending=False)
         return res
@@ -999,7 +1004,7 @@ class Series(object):
             return Series(self._column.quantile(q, interpolation, exact))
         else:
             return Series(self._column.quantile(q, interpolation, exact),
-                          index=GenericIndex(np.asarray(q)))
+                          index=as_index(np.asarray(q)))
 
 
 register_distributed_serializer(Series)
@@ -1091,7 +1096,7 @@ class Iloc(object):
         for idx in rows:
             ret_list.append(self._sr[idx])
 
-        return Series(ret_list, index=GenericIndex(np.asarray(rows)))
+        return Series(ret_list, index=as_index(np.asarray(rows)))
 
     def __setitem__(self, key, value):
         # throws an exception while updating

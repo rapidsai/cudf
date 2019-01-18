@@ -30,7 +30,7 @@ struct ColumnConcatTest : public testing::Test
   ~ColumnConcatTest() {}
   
   template <typename T, typename data_initializer_t, typename null_initializer_t>
-  void multicolumn_test(std::vector<size_t> column_sizes, 
+  void multicolumn_test(std::vector<gdf_size_type> column_sizes, 
                         data_initializer_t data_init, 
                         null_initializer_t null_init)
   { 
@@ -194,7 +194,7 @@ TEST_F(ColumnConcatTest, RandomData) {
   gdf_size_type column_size = 1005;
   gdf_size_type null_interval = 17;
     
-  std::vector<size_t> column_sizes{column_size, column_size, column_size};
+  std::vector<gdf_size_type> column_sizes{column_size, column_size, column_size};
 
   multicolumn_test<int>(column_sizes, 
                         [](int index){ return std::rand(); },
@@ -206,7 +206,7 @@ TEST_F(ColumnConcatTest, RandomData) {
 TEST_F(ColumnConcatTest, DifferentLengthColumns) {
   gdf_size_type null_interval = 2;
     
-  std::vector<size_t> column_sizes{13, 3, 5};
+  std::vector<gdf_size_type> column_sizes{13, 3, 5};
 
   multicolumn_test<int>(column_sizes, 
                         [](int index){ return std::rand(); },
@@ -216,7 +216,7 @@ TEST_F(ColumnConcatTest, DifferentLengthColumns) {
 }
 
 TEST_F(ColumnConcatTest, DifferentLengthColumnsLimitedBits) {   
-  std::vector<size_t> column_sizes{13, 3, 5};
+  std::vector<gdf_size_type> column_sizes{13, 3, 5};
 
   auto limited_bits = [column_sizes](gdf_size_type row, gdf_size_type col){ 
     return row < column_sizes[col]; 
@@ -229,7 +229,7 @@ TEST_F(ColumnConcatTest, DifferentLengthColumnsLimitedBits) {
 
 TEST_F(ColumnConcatTest, MoreComplicatedColumns) {   
    
-  std::vector<size_t> column_sizes{5, 1003, 17, 117};
+  std::vector<gdf_size_type> column_sizes{5, 1003, 17, 117};
 
   auto bit_setter = [column_sizes](gdf_size_type row, gdf_size_type col) { 
     switch (col) {
@@ -252,7 +252,7 @@ TEST_F(ColumnConcatTest, MoreComplicatedColumns) {
 
 
 TEST_F(ColumnConcatTest, EightByteColumns) {   
-  std::vector<size_t> column_sizes{13, 3, 5};
+  std::vector<gdf_size_type> column_sizes{13, 3, 5};
 
   auto limited_bits = [column_sizes](gdf_size_type row, gdf_size_type col){ 
     return row < column_sizes[col]; 
