@@ -13,6 +13,7 @@
 - PR #350 Implemented Series replace function
 - PR #490 Added print_env.sh script to gather relevant environment details when reporting cuDF issues
 - PR #474 add ZLIB-based GZIP/ZIP support to `read_csv()`
+- PR #547 Added melt similar to `pandas.melt()`
 - PR #491 Add CI test script to check for updates to CHANGELOG.md in PRs
 - PR #550 Add CI test script to check for style issues in PRs
 - PR #558 Add CI scripts for cpu-based conda and gpu-based test builds
