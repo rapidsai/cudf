@@ -33,7 +33,8 @@ def melt(frame, id_vars=None, value_vars=None, var_name='variable',
 
     Returns
     -------
-    molten : DataFrame
+    out : DataFrame
+        Melted result
 
     Difference from pandas:
      * Does not support 'col_level' because cuDF does not have multi-index
@@ -43,14 +44,13 @@ def melt(frame, id_vars=None, value_vars=None, var_name='variable',
 
     .. code-block:: python
         import cudf
-        import pandas as pd
+        import numpy as np
 
-        pdf = pd.DataFrame({'A': {0: 1, 1: 1, 2: 5},
-                            'B': {0: 1, 1: 3, 2: 6},
-                            'C': {0: 1.0, 1: np.nan, 2: 4.0},
-                            'D': {0: 2.0, 1: 5.0, 2: 6.0}})
-        df = DataFrame.from_pandas(pdf)
-        df2 = melt(frame=df, id_vars=['A', 'B'], value_vars=['C', 'D'])
+        df = cudf.DataFrame({'A': {0: 1, 1: 1, 2: 5},
+                             'B': {0: 1, 1: 3, 2: 6},
+                             'C': {0: 1.0, 1: np.nan, 2: 4.0},
+                             'D': {0: 2.0, 1: 5.0, 2: 6.0}})
+        df2 = cudf.melt(frame=df, id_vars=['A', 'B'], value_vars=['C', 'D'])
         print(df2)
 
     Output:
