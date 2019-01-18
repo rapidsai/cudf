@@ -796,6 +796,36 @@ gdf_error gdf_min(gdf_column *col, void *dev_result, gdf_size_type dev_result_si
  * --------------------------------------------------------------------------*/
 gdf_error gdf_max(gdf_column *col, void *dev_result, gdf_size_type dev_result_size);
 
+/* --------------------------------------------------------------------------*
+ * @brief  Computes the rolling window function of the values in a column. This
+ * is matching Pandas' API for DataFrame.rolling with one notable difference -
+ * instead of the center flag, in cuDF we're using the forward window size
+ * which allows for more flexible windows. Note, that the total window size is
+ * window + forward_window. The element i uses [i-window+1, i+forward_window]
+ * elements to do the window computation.
+ *
+ * @param[out] output_col The output column
+ * @param[in] input_col The input column
+ * @param[in] window The rolling window size, output_col[i] will accumulate
+ *                values from input_col[i-window+1] to input_col[i] inclusive
+ * @param[in] min_periods Minimum number of observations in window required to
+ *                have a value, otherwise NaN will be stored in output_col[i]
+ * @param[in] forward_window The window size in the forward direction,
+ *                output_col[i] will accumulate values from input_col[i] to
+ *                input_col[i+forward_window] inclusive
+ * @param[in] agg_type The rolling window reduction type (sum, max, min, etc.)
+ *
+ * @return    GDF_SUCCESS if the operation was successful, otherwise an
+ *            appropriate error code.
+ *
+ * --------------------------------------------------------------------------*/
+gdf_error gdf_rolling_window(gdf_column *output_col,
+			     gdf_column *input_col,
+			     int32_t window,
+			     int32_t min_periods,
+			     int32_t forward_window,
+			     window_reduction_type agg_type);
+
 
 /*
  * Filtering and comparison operators
