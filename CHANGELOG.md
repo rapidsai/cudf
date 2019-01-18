@@ -49,6 +49,7 @@
 - PR #651 Remove noqa marks in `__init__.py` files
 - PR #671 CSV Reader: uncompressed buffer input can be parsed without explicitly specifying compression as None
 - PR #720 Refactored Index classes to make them more Pandas-like, added CategoricalIndex
+- PR #730 Improve performance of `gdf_table` constructor 
 
 
 ## Bug Fixes
