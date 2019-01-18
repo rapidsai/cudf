@@ -110,9 +110,6 @@ private:
 template <typename T>
 class TransposeTest : public GdfTest {
 
-    using vecT = std::vector<T>;
-    using vecT_ptr = std::shared_ptr< vecT >;
-
 protected:
     void make_input()
     {
