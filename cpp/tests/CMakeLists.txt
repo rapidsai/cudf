@@ -136,6 +136,14 @@ set(QUANTILES_TEST_SRC
 ConfigureTest(QUANTILES_TEST "${QUANTILES_TEST_SRC}")
 
 ###################################################################################################
+# - replace tests ---------------------------------------------------------------------------------
+
+set(REPLACE_TEST_SRC 
+    "${CMAKE_CURRENT_SOURCE_DIR}/replace/replace_tests.cu")
+
+ConfigureTest(REPLACE_TEST "${REPLACE_TEST_SRC}")
+
+###################################################################################################
 # - unary tests -----------------------------------------------------------------------------------
 
 set(UNARY_TEST_SRC 

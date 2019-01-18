@@ -12,103 +12,36 @@
 //---------------------------------------------------------------------------
 
 __host__ __device__
-long firstOcurance(char *data, long stx, long endx, char c) {
+bool isDigit(char data) {
+	if ( data < '0' ) return false;
+	if ( data > '9' ) return false;
 
-	for ( long x = stx; x < endx +1; x++) {
-		if (data[x] == c)
-			return x;
-	}
-
-	return -1;
+	return true;
 }
 
 
 __host__ __device__
-void removePrePostWhiteSpaces2(char *data, long* start_idx, long* end_idx) {
-	while(*start_idx < *end_idx && data[*start_idx] == ' ')
-		*start_idx=*start_idx+1;
-	while(*start_idx < *end_idx && data[*end_idx] == ' ')
-		*end_idx=*end_idx-1;
+void adjustForWhitespaceAndQuotes(const char *data, long* start_idx, long* end_idx, char quotechar='\0') {
+  while ((*start_idx < *end_idx) && (data[*start_idx] == ' ' || data[*start_idx] == quotechar)) {
+    (*start_idx)++;
+  }
+  while ((*start_idx < *end_idx) && (data[*end_idx] == ' ' || data[*end_idx] == quotechar)) {
+    (*end_idx)--;
+  }
+}
+
+template<typename T>
+__host__ __device__
+bool isBooleanValue(T value, int32_t* boolValues, int32_t count) {
+	for (int i = 0; i < count; ++i) {
+		if (value == static_cast<T>(boolValues[i])) {
+			return true;
+		}
+	}
+	return false;
 }
 
 //---------------------------------------------------------------------------
-
-/**
- * Convert a date (MM/YYYY or DD/MM/YYYY) into a date64
- */
-/*
-__host__ __device__
-int64_t convertStrtoDate(char *data, long start_idx, long end_idx) {
-
-	// removePrePostWhiteSpaces(data, &start_idx, &end_idx);
-
-	static unsigned short days[12] = {0,  31,  60,  91, 121, 152, 182, 213, 244, 274, 305, 335};
-
-	int day 	= 01;
-	int month 	= 01;
-	int year 	= 1970;
-
-	//  determine format  MM/YYYY  or DD/MM/YYYY by looking at size
-	if (end_idx - start_idx < 8) {
-
-		//find the "/"
-		long slash_idx = start_idx;
-
-		while (data[slash_idx] !='/' && slash_idx < end_idx)
-			++slash_idx;
-
-		month = convertStrtoInt<int>(data, start_idx, (slash_idx - 1));
-		year  = convertStrtoInt<int>(data, (slash_idx + 1), end_idx);
-
-	} else {
-
-		//find the "/"
-		long slash_idx = start_idx;
-
-		while (data[slash_idx] !='/' && slash_idx < end_idx)
-			++slash_idx;
-
-		long slash_2_idx = slash_idx + 1;
-
-		while (data[slash_2_idx] !='/' && slash_2_idx < end_idx)
-			++slash_2_idx;
-
-		day 	= convertStrtoInt<int>(data, start_idx, 		(slash_idx  - 1));
-		month  	= convertStrtoInt<int>(data, (slash_idx + 1), 	(slash_2_idx - 1));
-		year  	= convertStrtoInt<int>(data, (slash_2_idx + 1), end_idx);
-	}
-
-	// years since epoch
-	int ye = year - 1970;
-
-	// 1972 was a leap year, so how many between date and 1972?
-	int lpy = (year - 1972)/4 + 1;
-
-	// compute days since epoch
-	int64_t days_e = ((ye - lpy) * 365) + (lpy * 366);
-
-	// is this a leap year?
-	if ( year % 4 == 0 && month > 2)
-		days_e++;
-
-	// months since January
-	int me = month - 01;
-
-	// days up to start of month
-	days_e += days[me];
-
-	// now just add days, but not full days since this one is not over
-	days_e += (day -1);
-
-	// scoot back to midnight
-	--days_e;
-
-	// now convert to seconds
-	int64_t t = (days_e * 24) * 60 * 60;
-
-	return t;
-}
-*/
 
 __forceinline__
 __host__ __device__ uint32_t rotl32( uint32_t x, int8_t r )

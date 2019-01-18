@@ -47,6 +47,13 @@ def gdf_to_np_dtype(dtype):
          GDF_CATEGORY: np.int32,
      }[dtype])
 
+def check_gdf_compatibility(col):
+    """
+    Raise TypeError when a column type does not have gdf support.
+    """
+    if not (col.dtype.type in dtypes or pd.api.types.is_categorical_dtype(col)):
+        raise TypeError('column type `%s` not supported in gdf' % (col.dtype))
+
 
 cpdef get_ctype_ptr(obj):
     return obj.device_ctypes_pointer.value
@@ -91,16 +98,21 @@ cdef gdf_column* column_view_from_column(col):
         valid_ptr = 0
 
     if pd.api.types.is_categorical_dtype(col.dtype):
-        c_dtype = GDF_INT8
+        g_dtype = GDF_INT8
     else:
-        c_dtype = dtypes[col.dtype.type]
+        g_dtype = dtypes[col.dtype.type]
 
-    gdf_column_view_augmented(<gdf_column*>c_col,
-                              <void*> data_ptr,
-                              <gdf_valid_type*> valid_ptr,
-                              <gdf_size_type>len(col),
-                              c_dtype,
-                              <gdf_size_type>col.null_count)
+    cdef gdf_dtype c_dtype = g_dtype
+    cdef gdf_size_type len_col = len(col)
+    cdef gdf_size_type col_null_count = col.null_count
+
+    with nogil:
+        gdf_column_view_augmented(<gdf_column*>c_col,
+                                <void*> data_ptr,
+                                <gdf_valid_type*> valid_ptr,
+                                len_col,
+                                c_dtype,
+                                col_null_count)
 
 
     return c_col
@@ -140,24 +152,29 @@ cdef gdf_column* column_view_from_NDArrays(size, data, mask, dtype,
 
     if dtype is not None:
         if pd.api.types.is_categorical_dtype(dtype):
-            c_dtype = GDF_INT8
+            g_dtype = GDF_INT8
         elif dtype != np.bool_:
-            c_dtype = dtypes[dtype.type]
+            g_dtype = dtypes[dtype.type]
         else:
             print("HITHER ::::::")
-            c_dtype = dtypes[dtype]
+            g_dtype = dtypes[dtype]
     else:
-        c_dtype = dtypes[data.dtype]
+        g_dtype = dtypes[data.dtype]
 
     if null_count is None:
         null_count = 0
 
-    gdf_column_view_augmented(<gdf_column*>c_col,
-                              <void*> data_ptr,
-                              <gdf_valid_type*> valid_ptr,
-                              <gdf_size_type>size,
-                              c_dtype,
-                              <gdf_size_type>null_count)
+    cdef gdf_dtype c_dtype = g_dtype
+    cdef gdf_size_type c_size = size
+    cdef gdf_size_type c_null_count = null_count
+    
+    with nogil:
+        gdf_column_view_augmented(<gdf_column*>c_col,
+                                <void*> data_ptr,
+                                <gdf_valid_type*> valid_ptr,
+                                c_size,
+                                c_dtype,
+                                c_null_count)
 
     return c_col
 
@@ -172,15 +189,21 @@ _join_method_api = {
 cdef gdf_context* create_context_view(flag_sorted, method, flag_distinct,
                                  flag_sort_result, flag_sort_inplace):
 
-    method_api = _join_method_api[method]
+    cdef gdf_method method_api = _join_method_api[method]
     cdef gdf_context* context = <gdf_context*>malloc(sizeof(gdf_context))
 
-    gdf_context_view(context,
-                     flag_sorted,
-                     method_api,
-                     flag_distinct,
-                     flag_sort_result,
-                     flag_sort_inplace)
+    cdef int c_flag_sorted = flag_sorted
+    cdef int c_flag_distinct = flag_distinct
+    cdef int c_flag_sort_result = flag_sort_result
+    cdef int c_flag_sort_inplace = flag_sort_inplace
+    
+    with nogil:
+        gdf_context_view(context,
+                         c_flag_sorted,
+                         method_api,
+                         c_flag_distinct,
+                         c_flag_sort_result,
+                         c_flag_sort_inplace)
 
     return context
 
@@ -191,15 +214,19 @@ cdef gdf_context* create_context_view(flag_sorted, method, flag_distinct,
 cpdef check_gdf_error(errcode):
         """Get error message for the given error code.
         """
-        if errcode != GDF_SUCCESS:
-            if errcode == GDF_CUDA_ERROR:
-                cudaerr = gdf_cuda_last_error()
-                errname = gdf_cuda_error_name(cudaerr)
-                details = gdf_cuda_error_string(cudaerr)
+        cdef gdf_error c_errcode = errcode
+
+        if c_errcode != GDF_SUCCESS:
+            if c_errcode == GDF_CUDA_ERROR:
+                with nogil:
+                    cudaerr = gdf_cuda_last_error()
+                    errname = gdf_cuda_error_name(cudaerr)
+                    details = gdf_cuda_error_string(cudaerr)
                 msg = 'CUDA ERROR. {}: {}'.format(errname, details)
 
             else:
-                errname = gdf_error_get_name(errcode)
+                with nogil:
+                    errname = gdf_error_get_name(c_errcode)
                 msg = errname
 
             raise GDFError(errname, msg)
