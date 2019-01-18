@@ -857,6 +857,11 @@ class Series(object):
         assert axis in (None, 0) and skipna is True
         return self._column.sum()
 
+    def product(self, axis=None, skipna=True):
+        """Compute the product of the series"""
+        assert axis in (None, 0) and skipna is True
+        return self._column.product()
+
     def mean(self, axis=None, skipna=True):
         """Compute the mean of the series
         """
