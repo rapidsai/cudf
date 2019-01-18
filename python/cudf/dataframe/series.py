@@ -8,10 +8,10 @@ from numbers import Number
 import numpy as np
 import pandas as pd
 
-from cudf.utils import cudautils
+from cudf.utils import cudautils, utils
 from cudf import formatting
 from .buffer import Buffer
-from .index import Index, RangeIndex, GenericIndex
+from .index import Index, RangeIndex, as_index
 from cudf.settings import NOTSET, settings
 from .column import Column
 from .datetime import DatetimeColumn
@@ -62,14 +62,16 @@ class Series(object):
         col = columnops.as_column(data).set_mask(mask, null_count=null_count)
         return cls(data=col)
 
-    def __init__(self, data, index=None, name=None, nan_as_null=True):
+    def __init__(self, data=None, index=None, name=None, nan_as_null=True):
         if isinstance(data, pd.Series):
             name = data.name
-            index = GenericIndex(data.index)
+            index = as_index(data.index)
         if isinstance(data, Series):
             index = data._index
             name = data.name
             data = data._column
+        if data is None:
+            data = {}
 
         if not isinstance(data, columnops.TypedColumnBase):
             data = columnops.as_column(data, nan_as_null=nan_as_null)
@@ -164,7 +166,7 @@ class Series(object):
         index : Index, Series-convertible
             the new index or values for the new index
         """
-        index = index if isinstance(index, Index) else GenericIndex(index)
+        index = index if isinstance(index, Index) else as_index(index)
         return self._copy_construct(index=index)
 
     def as_index(self):
@@ -539,6 +541,38 @@ class Series(object):
         return self._index
 
     @property
+    def iloc(self):
+        """
+        For integer-location based selection.
+
+        Examples
+        --------
+
+        >>> sr = Series(list(range(20)))
+        # get the value from 1st index
+        >>> sr.iloc[1]
+        1
+
+        # get the values from 0,2,9 and 18th index
+        >>> sr.iloc[0,2,9,18]
+        0    0
+        2    2
+        9    9
+        18   18
+
+        # get the values using slice indices
+        >>> sr.iloc[3:10:2]
+        3    3
+        5    5
+        7    7
+        9    9
+
+        :return:
+        Series containing the elements corresponding to the indices
+        """
+        return Iloc(self)
+
+    @property
     def nullmask(self):
         """The gpu buffer for the null-mask
         """
@@ -668,7 +702,7 @@ class Series(object):
         """Reverse the Series
         """
         data = cudautils.reverse_array(self.to_gpu_array())
-        index = GenericIndex(cudautils.reverse_array(self.index.gpu_values))
+        index = as_index(cudautils.reverse_array(self.index.gpu_values))
         col = self._column.replace(data=Buffer(data))
         return self._copy_construct(data=col, index=index)
 
@@ -891,7 +925,7 @@ class Series(object):
         if self.null_count == len(self):
             return 0
         vals, cnts = self._column.value_counts(method=method)
-        res = Series(cnts, index=GenericIndex(vals))
+        res = Series(cnts, index=as_index(vals))
         if sort:
             return res.sort_values(ascending=False)
         return res
@@ -965,7 +999,7 @@ class Series(object):
             return Series(self._column.quantile(q, interpolation, exact))
         else:
             return Series(self._column.quantile(q, interpolation, exact),
-                          index=GenericIndex(np.asarray(q)))
+                          index=as_index(np.asarray(q)))
 
 
 register_distributed_serializer(Series)
@@ -1010,3 +1044,56 @@ class DatetimeProperties(object):
     def get_dt_field(self, field):
         out_column = self.series._column.get_dt_field(field)
         return Series(data=out_column, index=self.series._index)
+
+
+class Iloc(object):
+    """
+    For integer-location based selection.
+    """
+
+    def __init__(self, sr):
+        self._sr = sr
+
+    def __getitem__(self, arg):
+        rows = []
+        len_idx = len(self._sr)
+
+        if isinstance(arg, tuple):
+            for idx in arg:
+                rows.append(idx)
+
+        elif isinstance(arg, int):
+            rows.append(arg)
+
+        elif isinstance(arg, slice):
+            start, stop, step, sln = utils.standard_python_slice(len_idx, arg)
+            if sln > 0:
+                for idx in range(start, stop, step):
+                    rows.append(idx)
+
+        else:
+            raise TypeError(type(arg))
+
+        # To check whether all the indices are valid.
+        for idx in rows:
+            if abs(idx) > len_idx or idx == len_idx:
+                raise IndexError("positional indexers are out-of-bounds")
+
+        for i in range(len(rows)):
+            if rows[i] < 0:
+                rows[i] = len_idx+rows[i]
+
+        # returns the single elem similar to pandas
+        if isinstance(arg, int) and len(rows) == 1:
+            return self._sr[rows[0]]
+
+        ret_list = []
+        for idx in rows:
+            ret_list.append(self._sr[idx])
+
+        return Series(ret_list, index=as_index(np.asarray(rows)))
+
+    def __setitem__(self, key, value):
+        # throws an exception while updating
+        msg = "updating columns using iloc is not allowed"
+        raise ValueError(msg)

@@ -157,6 +157,26 @@ def test_series_indexing(i1, i2, i3):
             assert series[i] == a1[i]
 
 
+def test_series_init_none():
+
+    # test for creating empty series
+    # 1: without initializing
+    sr1 = Series()
+    got = sr1.to_string()
+    print(got)
+    expect = '<empty Series of dtype=float64>'
+    # values should match despite whitespace difference
+    assert got.split() == expect.split()
+
+    # 2: Using `None` as a initializer
+    sr2 = Series(None)
+    got = sr2.to_string()
+    print(got)
+    expect = '<empty Series of dtype=float64>'
+    # values should match despite whitespace difference
+    assert got.split() == expect.split()
+
+
 def test_dataframe_basic():
     np.random.seed(0)
     df = DataFrame()
@@ -353,6 +373,132 @@ def test_dataframe_loc():
     np.testing.assert_equal(fewer['a'].to_array(), ha[begin:end + 1])
     np.testing.assert_equal(fewer['c'].to_array(), hc[begin:end + 1])
     np.testing.assert_equal(fewer['d'].to_array(), hd[begin:end + 1])
+
+
+@pytest.mark.parametrize('nelem', [2, 5, 20, 100])
+def test_series_iloc(nelem):
+
+    # create random series
+    np.random.seed(12)
+    ps = pd.Series(np.random.sample(nelem))
+
+    # gpu series
+    gs = Series(ps)
+
+    # positive tests for indexing
+    np.testing.assert_allclose(gs.iloc[-1*nelem], ps.iloc[-1*nelem])
+    np.testing.assert_allclose(gs.iloc[-1], ps.iloc[-1])
+    np.testing.assert_allclose(gs.iloc[0], ps.iloc[0])
+    np.testing.assert_allclose(gs.iloc[1], ps.iloc[1])
+    np.testing.assert_allclose(gs.iloc[nelem-1], ps.iloc[nelem-1])
+
+    # positive tests for slice
+    np.testing.assert_allclose(gs.iloc[-1:1], ps.iloc[-1:1])
+    np.testing.assert_allclose(
+        gs.iloc[nelem-1:-1], ps.iloc[nelem-1:-1])
+    np.testing.assert_allclose(gs.iloc[0:nelem-1], ps.iloc[0:nelem-1])
+    np.testing.assert_allclose(gs.iloc[0:nelem], ps.iloc[0:nelem])
+    np.testing.assert_allclose(gs.iloc[1:1], ps.iloc[1:1])
+    np.testing.assert_allclose(gs.iloc[1:2], ps.iloc[1:2])
+    np.testing.assert_allclose(
+        gs.iloc[nelem-1:nelem+1], ps.iloc[nelem-1:nelem+1])
+    np.testing.assert_allclose(
+        gs.iloc[nelem:nelem*2], ps.iloc[nelem:nelem*2])
+
+
+@pytest.mark.parametrize('nelem', [2, 5, 20, 100])
+def test_dataframe_iloc(nelem):
+    gdf = DataFrame()
+
+    gdf['a'] = ha = np.random.randint(low=0, high=100, size=nelem) \
+        .astype(np.int32)
+    gdf['b'] = hb = np.random.random(nelem).astype(np.float32)
+
+    pdf = pd.DataFrame()
+    pdf['a'] = ha
+    pdf['b'] = hb
+
+    # Positive tests for slicing using iloc
+    def assert_col(g, p):
+        np.testing.assert_equal(g['a'].to_array(), p['a'])
+        np.testing.assert_equal(g['b'].to_array(), p['b'])
+
+    assert_col(gdf.iloc[-1:1], pdf.iloc[-1:1])
+    assert_col(gdf.iloc[nelem-1:-1], pdf.iloc[nelem-1:-1])
+    assert_col(gdf.iloc[0:nelem-1], pdf.iloc[0:nelem-1])
+    assert_col(gdf.iloc[0:nelem], pdf.iloc[0:nelem])
+    assert_col(gdf.iloc[1:1], pdf.iloc[1:1])
+    assert_col(gdf.iloc[1:2], pdf.iloc[1:2])
+    assert_col(gdf.iloc[nelem-1:nelem+1], pdf.iloc[nelem-1:nelem+1])
+    assert_col(gdf.iloc[nelem:nelem*2], pdf.iloc[nelem:nelem*2])
+
+    # Positive tests for int indexing
+    def assert_series(g, p):
+        np.testing.assert_equal(g.to_array(), p)
+
+    assert_series(gdf.iloc[-1 * nelem], pdf.iloc[-1 * nelem])
+    assert_series(gdf.iloc[-1], pdf.iloc[-1])
+    assert_series(gdf.iloc[0], pdf.iloc[0])
+    assert_series(gdf.iloc[1], pdf.iloc[1])
+    assert_series(gdf.iloc[nelem - 1], pdf.iloc[nelem - 1])
+
+
+@pytest.mark.xfail(
+    raises=NotImplementedError,
+    reason="cudf columnar iloc not supported"
+)
+def test_dataframe_iloc_tuple():
+    gdf = DataFrame()
+    nelem = 123
+    gdf['a'] = ha = np.random.randint(low=0, high=100, size=nelem) \
+        .astype(np.int32)
+    gdf['b'] = hb = np.random.random(nelem).astype(np.float32)
+
+    pdf = pd.DataFrame()
+    pdf['a'] = ha
+    pdf['b'] = hb
+
+    def assert_col(g, p):
+        np.testing.assert_equal(g['a'].to_array(), p['a'])
+        np.testing.assert_equal(g['b'].to_array(), p['b'])
+
+    assert_col(gdf.iloc[1, 2], pdf.iloc[1, 2])
+
+
+@pytest.mark.xfail(
+    raises=IndexError,
+    reason="positional indexers are out-of-bounds"
+)
+def test_dataframe_iloc_index_error():
+    gdf = DataFrame()
+    nelem = 123
+    gdf['a'] = ha = np.random.randint(low=0, high=100, size=nelem) \
+        .astype(np.int32)
+    gdf['b'] = hb = np.random.random(nelem).astype(np.float32)
+
+    pdf = pd.DataFrame()
+    pdf['a'] = ha
+    pdf['b'] = hb
+
+    def assert_col(g, p):
+        np.testing.assert_equal(g['a'].to_array(), p['a'])
+        np.testing.assert_equal(g['b'].to_array(), p['b'])
+
+    assert_col(gdf.iloc[nelem*2], pdf.iloc[nelem*2])
+
+
+@pytest.mark.xfail(
+    raises=ValueError,
+    reason="updating columns using df.iloc[] is not allowed"
+)
+def test_dataframe_iloc_setitem():
+    gdf = DataFrame()
+    nelem = 123
+    gdf['a'] = np.random.randint(low=0, high=100, size=nelem) \
+        .astype(np.int32)
+    gdf['b'] = np.random.random(nelem).astype(np.float32)
+
+    gdf.iloc[0] = nelem
 
 
 def test_dataframe_to_string():

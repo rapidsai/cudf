@@ -13,8 +13,11 @@ from cudf import read_csv
 from cudf.io.csv import read_csv_strings
 import cudf
 import nvstrings
+from .utils import assert_eq
 import gzip
 import shutil
+
+from libgdf_cffi import GDFError
 
 
 def make_numeric_dataframe(nrows, dtype):
@@ -101,20 +104,34 @@ def test_csv_reader_datetime_data(tmpdir):
     pd.util.testing.assert_frame_equal(df_out, out.to_pandas())
 
 
-def test_csv_reader_mixed_data_delimiter(tmpdir):
+@pytest.mark.parametrize('pandas_arg', [
+        {'delimiter': '|'},
+        {'sep': '|'}
+    ])
+@pytest.mark.parametrize('cudf_arg', [
+        {'sep': '|'},
+        {'delimiter': '|'}
+    ])
+def test_csv_reader_mixed_data_delimiter_sep(tmpdir, pandas_arg, cudf_arg):
 
     fname = tmpdir.mkdir("gdf_csv").join('tmp_csvreader_file3.csv')
 
     df = make_numpy_mixed_dataframe()
     df.to_csv(fname, sep='|', index=False, header=False)
 
-    out = read_csv(str(fname), delimiter='|', names=['1', '2', '3', '4', '5'],
-                   dtype=['int64', 'date', 'float64', 'int64', 'category'],
-                   dayfirst=True)
-    df_out = pd.read_csv(fname, delimiter='|', names=['1', '2', '3', '4', '5'],
-                         parse_dates=[1], dayfirst=True)
+    gdf1 = read_csv(str(fname), names=['1', '2', '3', '4', '5'],
+                    dtype=['int64', 'date', 'float64', 'int64', 'category'],
+                    dayfirst=True, **cudf_arg)
+    gdf2 = read_csv(str(fname), names=['1', '2', '3', '4', '5'],
+                    dtype=['int64', 'date', 'float64', 'int64', 'category'],
+                    dayfirst=True, **pandas_arg)
 
-    assert len(out.columns) == len(df_out.columns)
+    pdf = pd.read_csv(fname, names=['1', '2', '3', '4', '5'],
+                      parse_dates=[1], dayfirst=True, **pandas_arg)
+
+    assert len(gdf1.columns) == len(pdf.columns)
+    assert len(gdf2.columns) == len(pdf.columns)
+    assert_eq(gdf1, gdf2)
 
 
 def test_csv_reader_all_numeric_dtypes(tmpdir):
@@ -329,7 +346,7 @@ def test_csv_reader_thousands(tmpdir):
     np.testing.assert_allclose(int64_ref, df['int64'])
 
 
-def test_csv_reader_buffer(tmpdir):
+def test_csv_reader_buffer():
 
     names = dtypes = ["float32", "int32", "date"]
     lines = [','.join(names),
@@ -356,7 +373,7 @@ def test_csv_reader_buffer(tmpdir):
     assert("2002-01-02T00:00:00.000" == str(df_bytes['date'][1]))
 
 
-def test_csv_reader_buffer_strings(tmpdir):
+def test_csv_reader_buffer_strings():
 
     names = ['text', 'int']
     dtypes = ['str', 'int']
@@ -499,11 +516,15 @@ def test_csv_reader_nrows(tmpdir):
         assert(df['int2'][row] == 2 * row)
     assert(df['int2'][rows - 1] == 2 * (rows - 1))
 
+    # nrows + skiprows larger than the file
+    df = read_csv(str(fname),
+                  dtype=dtypes, nrows=read_rows, skiprows=read_rows)
+    assert(df.shape == (rows - read_rows, 2))
+
     # nrows equal to zero
     df = read_csv(str(fname),
                   dtype=dtypes,
                   nrows=0)
-    print(df)
     assert(df.shape == (0, 2))
 
     # with both skipfooter and nrows - should throw
@@ -537,3 +558,75 @@ def test_csv_reader_gzip_compression_strings(tmpdir):
     assert(cols[0].sublist([1]).to_host()[0] == 'b')
     assert(cols[0].sublist([2]).to_host()[0] == 'c')
     assert(cols[0].sublist([3]).to_host()[0] == 'd')
+
+
+@pytest.mark.parametrize('skip_rows', [0, 2, 4])
+@pytest.mark.parametrize('header_row', [0, 2])
+def test_csv_reader_skiprows_header(skip_rows, header_row):
+
+    names = ['float_point', 'integer']
+    dtypes = ['float64', 'int64']
+    lines = [','.join(names),
+             '1.2, 1',
+             '2.3, 2',
+             '3.4, 3',
+             '4.5, 4',
+             '5.6, 5',
+             '6.7, 6']
+    buffer = '\n'.join(lines) + '\n'
+
+    cu_df = read_csv(StringIO(buffer), dtype=dtypes,
+                     skiprows=skip_rows, header=header_row)
+    pd_df = pd.read_csv(StringIO(buffer),
+                        skiprows=skip_rows, header=header_row)
+
+    assert(cu_df.shape == pd_df.shape)
+    assert(list(cu_df.columns.values) == list(pd_df.columns.values))
+
+
+def test_csv_reader_dtype_inference():
+    names = ['float_point', 'integer']
+    lines = [','.join(names),
+             '1.2,1',
+             '2.3,2',
+             '3.4,3',
+             '4.5,4',
+             '5.6,5',
+             '6.7,6']
+    buffer = '\n'.join(lines) + '\n'
+    cu_df = read_csv(StringIO(buffer))
+    pd_df = pd.read_csv(StringIO(buffer))
+
+    assert(cu_df.shape == pd_df.shape)
+    assert(list(cu_df.columns.values) == list(pd_df.columns.values))
+
+
+def test_csv_reader_dtype_inference_whitespace():
+    names = ['float_point', 'integer']
+    lines = [','.join(names),
+             '  1.2,    1',
+             '2.3,2    ',
+             '  3.4,   3',
+             ' 4.5,4',
+             '5.6,  5',
+             ' 6.7,6 ']
+    buffer = '\n'.join(lines) + '\n'
+    cu_df = read_csv(StringIO(buffer))
+    pd_df = pd.read_csv(StringIO(buffer))
+
+    assert(cu_df.shape == pd_df.shape)
+    assert(list(cu_df.columns.values) == list(pd_df.columns.values))
+
+
+def test_csv_reader_empty_dataframe():
+
+    dtypes = ['float64', 'int64']
+    buffer = 'float_point, integer\n'
+
+    # should work fine with dtypes
+    df = read_csv(StringIO(buffer), dtype=dtypes)
+    assert(df.shape == (0, 2))
+
+    # should raise an error without dtypes
+    with pytest.raises(GDFError):
+        read_csv(StringIO(buffer))

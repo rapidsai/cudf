@@ -6,7 +6,6 @@ import pyarrow as pa
 
 from . import numerical, columnops
 from .buffer import Buffer
-from .series import Series
 from cudf.utils import utils, cudautils
 from cudf.comm.serialize import register_distributed_serializer
 
@@ -30,6 +29,7 @@ class CategoricalAccessor(object):
 
     @property
     def codes(self):
+        from cudf.dataframe.series import Series
         data = self._parent.data
         if self._parent.has_null_mask:
             mask = self._parent.mask
