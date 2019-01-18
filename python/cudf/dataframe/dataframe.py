@@ -20,7 +20,7 @@ from libgdf_cffi import libgdf
 
 from cudf import formatting, _gdf
 from cudf.utils import cudautils, queryutils, applyutils, utils
-from .index import GenericIndex, Index, RangeIndex
+from .index import as_index, Index, RangeIndex
 from .series import Series
 from .column import Column
 from cudf.settings import NOTSET, settings
@@ -492,7 +492,7 @@ class DataFrame(object):
             return df.set_index(self[index])
         # Otherwise
         else:
-            index = index if isinstance(index, Index) else GenericIndex(index)
+            index = index if isinstance(index, Index) else as_index(index)
             df = DataFrame()
             for k in self.columns:
                 df[k] = self[k].set_index(index)
@@ -1722,7 +1722,7 @@ class DataFrame(object):
         for colk in dataframe.columns:
             df[colk] = Series(dataframe[colk].values, nan_as_null=nan_as_null)
         # Set index
-        return df.set_index(dataframe.index.values)
+        return df.set_index(dataframe.index)
 
     def to_arrow(self, index=True):
         """
@@ -1962,11 +1962,11 @@ class Iloc(object):
         # returns the series similar to pandas
         if isinstance(arg, int) and len(rows) == 1:
             ret_list = []
-            col_list = list(self._df.columns)
+            col_list = pd.Categorical(list(self._df.columns))
             for col in col_list:
                 ret_list.append(self._df[col][rows[0]])
             return Series(ret_list,
-                          index=GenericIndex(np.asarray(col_list)))
+                          index=as_index(col_list))
 
         df = DataFrame()
 

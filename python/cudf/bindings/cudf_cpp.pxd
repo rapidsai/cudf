@@ -75,6 +75,7 @@ cdef extern from "cudf.h" nogil:
         GDF_MEMORYMANAGER_ERROR,
         GDF_UNDEFINED_NVTX_COLOR,
         GDF_NULL_NVTX_NAME,
+        GDF_NOTIMPLEMENTED_ERROR,
         N_GDF_ERRORS
 
     ctypedef enum gdf_hash_func:

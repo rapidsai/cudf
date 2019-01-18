@@ -226,6 +226,9 @@ class NumericalColumn(columnops.TypedColumnBase):
     def sum(self):
         return cpp_reduce.apply_reduce('sum', self)
 
+    def product(self):
+        return cpp_reduce.apply_reduce('product', self)
+
     def mean(self):
         return self.sum().astype('f8') / self.valid_count
 

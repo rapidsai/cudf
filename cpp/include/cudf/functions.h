@@ -64,7 +64,8 @@ gdf_error gdf_nvtx_range_pop();
  * @Returns  GDF_SUCCESS upon successful completion. 
  */
 /* ----------------------------------------------------------------------------*/
-gdf_error gdf_count_nonzero_mask(gdf_valid_type const * masks, int num_rows, int * count);
+gdf_error gdf_count_nonzero_mask(gdf_valid_type const *masks,
+                                 gdf_size_type num_rows, gdf_size_type *count);
 
 /* column operations */
 
