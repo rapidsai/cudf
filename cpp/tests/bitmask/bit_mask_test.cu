@@ -119,7 +119,7 @@ TEST_F(BitMaskTest, NoValids)
 
   EXPECT_EQ(GDF_SUCCESS, bit_mask::destroy_bit_mask(bits));
 
-  EXPECT_EQ(0U, local_count);
+  EXPECT_EQ(gdf_size_type{0}, local_count);
 }
 
 TEST_F(BitMaskTest, AllValids)
@@ -136,7 +136,7 @@ TEST_F(BitMaskTest, AllValids)
 
   EXPECT_EQ(GDF_SUCCESS, bit_mask::destroy_bit_mask(bits));
 
-  EXPECT_EQ(100U, local_count);
+  EXPECT_EQ(gdf_size_type{100}, local_count);
 }
 
 TEST_F(BitMaskTest, FirstRowValid)
@@ -153,14 +153,14 @@ TEST_F(BitMaskTest, FirstRowValid)
   gdf_size_type local_count = 0;
   EXPECT_EQ(GDF_SUCCESS, count_bits(&local_count, bit_mask));
 
-  EXPECT_EQ(1U, local_count);
+  EXPECT_EQ(gdf_size_type{1}, local_count);
 
   bit_mask_t temp = 0;
   bit_mask.get_element_host(0, temp);
 
   EXPECT_EQ(GDF_SUCCESS, bit_mask::destroy_bit_mask(bits));
 
-  EXPECT_EQ(temp, 0x1U);
+  EXPECT_EQ(temp, bit_mask_t{0x1});
 }
 
 TEST_F(BitMaskTest, EveryOtherBit)
@@ -180,14 +180,14 @@ TEST_F(BitMaskTest, EveryOtherBit)
   gdf_size_type local_count = 0;
   EXPECT_EQ(GDF_SUCCESS, count_bits(&local_count, bit_mask));
 
-  EXPECT_EQ(4U, local_count);
+  EXPECT_EQ(gdf_size_type{4}, local_count);
 
   bit_mask_t temp = 0;
   bit_mask.get_element_host(0, temp);
 
   EXPECT_EQ(GDF_SUCCESS, bit_mask::destroy_bit_mask(bits));
 
-  EXPECT_EQ(temp, 0x55U);
+  EXPECT_EQ(temp, bit_mask_t{0x55});
 }
 
 TEST_F(BitMaskTest, OtherEveryOtherBit)
@@ -207,14 +207,14 @@ TEST_F(BitMaskTest, OtherEveryOtherBit)
   gdf_size_type local_count = 0;
   EXPECT_EQ(GDF_SUCCESS, count_bits(&local_count, bit_mask));
 
-  EXPECT_EQ(4U, local_count);
+  EXPECT_EQ(gdf_size_type{4}, local_count);
 
   bit_mask_t temp = 0;
   bit_mask.get_element_host(0, temp);
 
   EXPECT_EQ(GDF_SUCCESS, bit_mask::destroy_bit_mask(bits));
 
-  EXPECT_EQ(temp, 0xAAU);
+  EXPECT_EQ(temp, bit_mask_t{0xAA});
 }
 
 TEST_F(BitMaskTest, 15rows)
@@ -232,7 +232,7 @@ TEST_F(BitMaskTest, 15rows)
   gdf_size_type local_count = 0;
   EXPECT_EQ(GDF_SUCCESS, count_bits(&local_count, bit_mask));
 
-  EXPECT_EQ(2U, local_count);
+  EXPECT_EQ(gdf_size_type{2}, local_count);
 
   EXPECT_EQ(GDF_SUCCESS, bit_mask::destroy_bit_mask(bits));
 }
@@ -253,7 +253,7 @@ TEST_F(BitMaskTest, 5rows)
 
   EXPECT_EQ(GDF_SUCCESS, bit_mask::destroy_bit_mask(bits));
 
-  EXPECT_EQ(1U, local_count);
+  EXPECT_EQ(gdf_size_type{1}, local_count);
 }
 
 TEST_F(BitMaskTest, 10ValidRows)
@@ -270,7 +270,7 @@ TEST_F(BitMaskTest, 10ValidRows)
 
   EXPECT_EQ(GDF_SUCCESS, bit_mask::destroy_bit_mask(bits));
 
-  EXPECT_EQ(10U, local_count);
+  EXPECT_EQ(gdf_size_type{10}, local_count);
 }
 
 TEST_F(BitMaskTest, MultipleOfEight)
@@ -291,7 +291,7 @@ TEST_F(BitMaskTest, MultipleOfEight)
 
   EXPECT_EQ(GDF_SUCCESS, bit_mask::destroy_bit_mask(bits));
 
-  EXPECT_EQ(128U, local_count);
+  EXPECT_EQ(gdf_size_type{128}, local_count);
 }
 
 TEST_F(BitMaskTest, NotMultipleOfEight)
@@ -312,7 +312,7 @@ TEST_F(BitMaskTest, NotMultipleOfEight)
 
   EXPECT_EQ(GDF_SUCCESS, bit_mask::destroy_bit_mask(bits));
 
-  EXPECT_EQ(127U, local_count);
+  EXPECT_EQ(gdf_size_type{127}, local_count);
 }
 
 TEST_F(BitMaskTest, TenThousandRows)
@@ -329,7 +329,7 @@ TEST_F(BitMaskTest, TenThousandRows)
 
   EXPECT_EQ(GDF_SUCCESS, bit_mask::destroy_bit_mask(bits));
 
-  EXPECT_EQ(10000U, local_count);
+  EXPECT_EQ(gdf_size_type{10000}, local_count);
 }
 
 TEST_F(BitMaskTest, PerformanceTest)
