@@ -57,8 +57,7 @@ def apply_reduce(reduction, col):
         elif reduction == 'product':
             result = gdf_product(<gdf_column*>c_col, <void*>out_ptr, outsz)
         else:
-            # TODO: should be GDF_NOTIMPLEMENTED_ERROR
-            result = GDF_UNSUPPORTED_METHOD
+            result = GDF_NOTIMPLEMENTED_ERROR
 
     free(c_col)
 

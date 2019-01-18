@@ -62,6 +62,7 @@ typedef enum {
     GDF_UNDEFINED_NVTX_COLOR,          /**< The requested color used to define an NVTX range is not defined */
     GDF_NULL_NVTX_NAME,                /**< The requested name for an NVTX range cannot be nullptr */
     GDF_TIMESTAMP_RESOLUTION_MISMATCH, /**< Resolution mismatch between two columns of GDF_TIMESTAMP */
+    GDF_NOTIMPLEMENTED_ERROR,          /**< A feature is not implemented */
     N_GDF_ERRORS
 } gdf_error;
 
