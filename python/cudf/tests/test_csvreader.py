@@ -630,3 +630,17 @@ def test_csv_reader_empty_dataframe():
     # should raise an error without dtypes
     with pytest.raises(GDFError):
         read_csv(StringIO(buffer))
+
+def test_csv_reader_tabs():
+    names = ['float_point', 'integer']
+    dtypes = ['float64', 'int64']
+    lines = [','.join(names),
+             '1.2,\t1',
+             '2.3\t,\t2\t',
+             '\t 3.4,3 \t',
+             '\t4.5 , 4\t']
+    buffer = '\n'.join(lines) + '\n'
+    cu_df = read_csv(StringIO(buffer), dtype=dtypes)
+    pd_df = pd.read_csv(StringIO(buffer))
+	
+    pd.util.testing.assert_frame_equal(pd_df, cu_df.to_pandas())
