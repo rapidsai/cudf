@@ -21,6 +21,7 @@
 - PR #564 Update python `sort_values` method to use updated libcudf `gdf_order_by` API
 - PR #509 CSV Reader: Input CSV file can now be passed in as a text or a binary buffer
 - PR #607 Add `__iter__` and iteritems to DataFrame class
+- PR #576 Create BitMask class and unit test to make 32-bit bit masks
 - PR #608 Added the `DataFrame.iloc[]` and `Series.iloc[]` features
 - PR #600 Enable deep or shallow copy
 - PR #635 Add Doxygen template
