@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-#include <io/parquet/api.h>
+#include <cudf/io_functions.hpp>
 
 #include <arrow/io/file.h>
 #include <arrow/util/logging.h>

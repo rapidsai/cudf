@@ -1,6 +1,7 @@
+
 /*
  * Copyright 2018 BlazingDB, Inc.
- *     Copyright 2018 Cristhian Alberto Gonzales Castillo <cristhian@blazingdb.com>
+ *     Copyright 2018 Felipe Aramburu Terry <felipe@blazingdb.com>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,6 +15,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
+
+#pragma once
+
 
 #include <cudf.h>
 
@@ -86,3 +91,5 @@ gdf_error read_schema(std::shared_ptr<::arrow::io::RandomAccessFile> file,
 }  // namespace gdf
 
 #endif
+
+

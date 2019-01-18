@@ -31,7 +31,7 @@
 #include "column_reader.h"
 #include "file_reader.h"
 #include "util/bit_util.cuh"
-#include "api.h"
+#include "cudf/io_functions.hpp"
 
 #include "rmm/rmm.h"
 
