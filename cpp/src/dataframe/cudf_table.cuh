@@ -31,6 +31,8 @@
 #include <cassert>
 #include "utilities/type_dispatcher.hpp"
 
+
+
 template <typename size_type>
 struct ValidRange {
     size_type start, stop;
@@ -282,45 +284,29 @@ public:
       {
         row_size_bytes += column_width_bytes;
         // Store the byte width of each column in a device array
-        columns_byte_widths.push_back(static_cast<byte_type>(row_size_bytes));
+        columns_byte_widths[i] = (static_cast<byte_type>(row_size_bytes));
       }
       else
       {
         std::cerr << "Attempted to get column byte width of unsupported GDF datatype.\n";
-        columns_byte_widths.push_back(0);
+        columns_byte_widths[i] = 0;
       }
 
-      columns_data.push_back(host_columns[i]->data);
-      columns_valids.push_back(host_columns[i]->valid);
-      columns_types.push_back(host_columns[i]->dtype);
+      columns_data[i] = (host_columns[i]->data);
+      columns_valids[i] = (host_columns[i]->valid);
+      columns_types[i] = (host_columns[i]->dtype);
     }
 
     // Copy host vectors to device vectors
-    device_columns_data.resize(num_cols);
-    device_columns_valids.resize(num_cols);
-    device_columns_types.resize(num_cols);
-    device_column_byte_widths.resize(num_cols);
-
-
-    //device_columns_data = columns_data;
-    //device_columns_valids = columns_valids;
-    //device_columns_types = columns_types;
-    //device_column_byte_widths = columns_byte_widths;
+    device_columns_data = columns_data;
+    device_columns_valids = columns_valids;
+    device_columns_types = columns_types;
+    device_column_byte_widths = columns_byte_widths;
 
     d_columns_data_ptr = device_columns_data.data().get();
     d_columns_valids_ptr = device_columns_valids.data().get();
     d_columns_types_ptr = device_columns_types.data().get();
     d_columns_byte_widths_ptr = device_column_byte_widths.data().get();
-
-    cudaMemcpy(d_columns_data_ptr, columns_data.data(),
-               sizeof(void *) * columns_data.size(), cudaMemcpyHostToDevice);
-    cudaMemcpy(d_columns_valids_ptr, columns_valids.data(),
-               sizeof(void *) * columns_valids.size(), cudaMemcpyHostToDevice);
-    cudaMemcpy(d_columns_types_ptr, columns_types.data(),
-               sizeof(void *) * columns_types.size(), cudaMemcpyHostToDevice);
-    cudaMemcpy(d_columns_byte_widths_ptr, columns_byte_widths.data(),
-               sizeof(void *) * columns_byte_widths.size(),
-               cudaMemcpyHostToDevice);
 
     // Allocate storage sufficient to hold a validity bit for every row
     // in the table
