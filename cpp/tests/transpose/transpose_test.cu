@@ -108,7 +108,7 @@ private:
 };
 
 template <typename T>
-class TransposeTest : public GdfTest {
+class TransposeTest : public RMMPoolTest {
 
 protected:
     void make_input()
@@ -215,7 +215,7 @@ protected:
     size_t _nrows = 0;
 };
 
-using TestTypes = ::testing::Types<int64_t, int64_t>;
+using TestTypes = ::testing::Types<int8_t, int16_t, int32_t, int64_t>;
 
 TYPED_TEST_CASE(TransposeTest, TestTypes);
 
