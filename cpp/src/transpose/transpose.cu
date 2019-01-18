@@ -4,9 +4,44 @@
 #include <stdio.h>
 #include <thrust/for_each.h>
 #include <thrust/iterator/counting_iterator.h>
+#include <cub/cub.cuh>
 #include <memory>
 #include "dataframe/cudf_table.cuh"
 #include "utilities/nvtx/nvtx_utils.h"
+#include <chrono>
+
+constexpr int BLOCK_SIZE = 32;
+constexpr int WARP_SIZE = 32;
+
+__global__
+void gpu_transpose( int64_t **in_cols, int64_t **out_cols,
+                   gdf_size_type ncols, gdf_size_type nrows)
+{
+  // I'm hardcoding block to be warp size
+  int tid = threadIdx.x;
+  int blkid = blockIdx.x;
+  int blksz = blockDim.x;
+
+  int idx = blkid * blksz + tid;
+
+  int64_t thread_data[WARP_SIZE];
+  
+  for(size_t i = 0; i < WARP_SIZE; i++)
+  {
+    thread_data[i] = in_cols[i][idx];
+  }
+  
+  typedef cub::BlockExchange<int64_t, 32, 32> BlockExchange;
+  __shared__ typename BlockExchange::TempStorage temp_storage;
+  BlockExchange(temp_storage).StripedToBlocked(thread_data);
+
+  
+  for(size_t i = 0; i < WARP_SIZE; i++)
+  {
+    out_cols[i + blkid * blksz][tid] = thread_data[i];
+  }
+  
+}
 
 gdf_error gdf_transpose(gdf_size_type ncols, gdf_column** in_cols,
                         gdf_column** out_cols) {
@@ -63,20 +98,36 @@ gdf_error gdf_transpose(gdf_size_type ncols, gdf_column** in_cols,
   void** out_cols_data_ptr = d_out_columns_data.data().get();
   gdf_valid_type** out_cols_valid_ptr = d_out_columns_valid.data().get();
 
-  auto copy_to_outcol = [input_table_ptr, out_cols_data_ptr, out_cols_valid_ptr,
-                         has_null] __device__(gdf_size_type i) {
+  // auto copy_to_outcol = [input_table_ptr, out_cols_data_ptr, out_cols_valid_ptr,
+  //                        has_null] __device__(gdf_size_type i) {
 
-    input_table_ptr->get_packed_row_values(i, out_cols_data_ptr[i]);
+  //   input_table_ptr->get_packed_row_values(i, out_cols_data_ptr[i]);
 
-    if (has_null) {
-      input_table_ptr->get_row_valids(i, out_cols_valid_ptr[i]);
-    }
-  };
+  //   if (has_null) {
+  //     input_table_ptr->get_row_valids(i, out_cols_valid_ptr[i]);
+  //   }
+  // };
 
-  thrust::for_each(
-      rmm::exec_policy(), thrust::counting_iterator<gdf_size_type>(0),
-      thrust::counting_iterator<gdf_size_type>(out_ncols), copy_to_outcol);
+  // auto start = std::chrono::high_resolution_clock::now();
+  // thrust::for_each(
+  //     rmm::exec_policy(), thrust::counting_iterator<gdf_size_type>(0),
+  //     thrust::counting_iterator<gdf_size_type>(out_ncols), copy_to_outcol);
+  // cudaDeviceSynchronize();
+  // auto end = std::chrono::system_clock::now();
+  // std::chrono::duration<double> elapsed_seconds = end-start;
+  // std::cout << "Elapsed time (ms): " << elapsed_seconds.count()*1000 << std::endl;
 
+
+  auto start = std::chrono::high_resolution_clock::now();
+  gpu_transpose<<<100000,32>>>(
+    (int64_t **)input_table->d_columns_data,
+    (int64_t **)out_cols_data_ptr,
+    ncols, out_ncols
+  );
+  cudaDeviceSynchronize();
+  auto end = std::chrono::system_clock::now();
+  std::chrono::duration<double> elapsed_seconds = end-start;
+  std::cout << "Elapsed time (ms): " << elapsed_seconds.count()*1000 << std::endl;
   POP_RANGE();
   return GDF_SUCCESS;
 }
