@@ -64,11 +64,8 @@
 
 #include "cudf.h"
 
-__host__ __device__ gdf_date32 parseDateFormat(char *data, long start_idx, long end_idx, bool dayfirst);
-__host__ __device__ gdf_date64 parseDateTimeFormat(char *data, long start_idx, long end_idx, bool dayfirst);
-
-__host__ __device__ bool extractDate(char *data, long sIdx, long eIdx, bool dayfirst, int *year_out, int *month_out, int *day_out);
-__host__ __device__ bool extractTime(char *data, int sIdx, int eIdx, int *hour_out, int *minute_out, int *second_out);
+__host__ __device__ bool extractDate(const char *data, long sIdx, long eIdx, bool dayfirst, int *year_out, int *month_out, int *day_out);
+__host__ __device__ bool extractTime(const char *data, int sIdx, int eIdx, int *hour_out, int *minute_out, int *second_out);
 
 __host__ __device__ constexpr int32_t daysSinceEpoch(int year, int month, int day);
 __host__ __device__ constexpr int64_t secondsSinceEpoch(int year, int month, int day, int hour, int minute, int second);
@@ -130,7 +127,7 @@ long findFirstOccurrence(const char *data, long start_idx, long end_idx, char c)
  * @return returns the number of days since epoch
  */
 __host__ __device__
-gdf_date32 parseDateFormat(char *data, long start_idx, long end_idx, bool dayfirst) {
+gdf_date32 parseDateFormat(const char *data, long start_idx, long end_idx, bool dayfirst) {
 
 	int day, month, year;
 	gdf_date32 e = -1;
@@ -157,7 +154,7 @@ gdf_date32 parseDateFormat(char *data, long start_idx, long end_idx, bool dayfir
  * @return milliseconds since epoch
  */
 __host__ __device__
-gdf_date64 parseDateTimeFormat(char *data, long start_idx, long end_idx, bool dayfirst) {
+gdf_date64 parseDateTimeFormat(const char *data, long start_idx, long end_idx, bool dayfirst) {
 
 	int 		day, month, year;
 	int 		hour, minute, second;
@@ -216,7 +213,7 @@ gdf_date64 parseDateTimeFormat(char *data, long start_idx, long end_idx, bool da
  * @return T/F - false indicates that an error occurred
  */
 __host__ __device__
-bool extractDate(char *data, long sIdx, long eIdx, bool dayfirst, int *year, int *month, int *day) {
+bool extractDate(const char *data, long sIdx, long eIdx, bool dayfirst, int *year, int *month, int *day) {
 
 	char sep = '/';
 
@@ -305,7 +302,7 @@ bool extractDate(char *data, long sIdx, long eIdx, bool dayfirst, int *year, int
  * @return T/F - false indicates that an error occurred
  */
 __host__ __device__
-bool extractTime(char *data, int sIdx, int eIdx, int *hour, int *minute, int *second) {
+bool extractTime(const char *data, int sIdx, int eIdx, int *hour, int *minute, int *second) {
 
 	char sep = ':';
 

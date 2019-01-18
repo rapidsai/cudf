@@ -3,9 +3,9 @@
 #ifndef CONVERSION_FUNCTIONS_CUH
 #define CONVERSION_FUNCTIONS_CUH
 
-#include <cuda_runtime_api.h>
-
+#include "datetime_parser.cuh"
 #include "utilities/wrapper_types.hpp"
+#include <cuda_runtime_api.h>
 
 //---------------------------------------------------------------------------
 //				Helper functions
@@ -133,29 +133,27 @@ int32_t convertStrtoHash(const char * key, long start_idx, long end_idx, uint32_
     return h1;
 }
 
-__host__ __device__ gdf_date32 parseDateFormat(char *data, long start_idx, long end_idx, bool dayfirst);
-__host__ __device__ gdf_date64 parseDateTimeFormat(char *data, long start_idx, long end_idx, bool dayfirst);
-
-typedef struct parsing_opts_ {
+struct ParseOptions {
 	char				delimiter;
 	char				terminator;
 	char				quotechar;
-	bool				keepquotes;
-	bool				dayfirst;
 	char				decimal;
 	char				thousands;
+	bool				keepquotes;
+	bool				doublequote;
+	bool				dayfirst;
 	int32_t*			trueValues;
 	int32_t*			falseValues;
 	int32_t				trueValuesCount;
 	int32_t				falseValuesCount;
-} parsing_opts_t;
+};
 
 // Default function for parsing and extracting a GDF value from a CSV field
 // Handles all integer and floating point data types
 // Other GDF data types are templated for their individual, unique parsing
 template<typename T>
 __host__ __device__
-T convertStrToValue(const char *data, long start, long end, const parsing_opts_t& opts) {
+T convertStrToValue(const char *data, long start, long end, const ParseOptions& opts) {
 
 	T value = 0;
 
@@ -196,21 +194,21 @@ T convertStrToValue(const char *data, long start, long end, const parsing_opts_t
 
 template<>
 __host__ __device__
-cudf::date32 convertStrToValue<cudf::date32>(const char *data, long start, long end, const parsing_opts_t& opts) {
+cudf::date32 convertStrToValue<cudf::date32>(const char *data, long start, long end, const ParseOptions& opts) {
 
-	return cudf::date32{ parseDateFormat(const_cast<char*>(data), start, end, opts.dayfirst) };
+	return cudf::date32{ parseDateFormat(data, start, end, opts.dayfirst) };
 }
 
 template<>
 __host__ __device__
-cudf::date64 convertStrToValue<cudf::date64>(const char *data, long start, long end, const parsing_opts_t& opts) {
+cudf::date64 convertStrToValue<cudf::date64>(const char *data, long start, long end, const ParseOptions& opts) {
 
-	return cudf::date64{ parseDateTimeFormat(const_cast<char*>(data), start, end, opts.dayfirst) };
+	return cudf::date64{ parseDateTimeFormat(data, start, end, opts.dayfirst) };
 }
 
 template<>
 __host__ __device__
-cudf::category convertStrToValue<cudf::category>(const char *data, long start, long end, const parsing_opts_t& opts) {
+cudf::category convertStrToValue<cudf::category>(const char *data, long start, long end, const ParseOptions& opts) {
 
 	constexpr int32_t HASH_SEED = 33;
 	return cudf::category{ convertStrtoHash(data, start, end + 1, HASH_SEED) };
@@ -218,7 +216,7 @@ cudf::category convertStrToValue<cudf::category>(const char *data, long start, l
 
 template<>
 __host__ __device__
-cudf::timestamp convertStrToValue<cudf::timestamp>(const char *data, long start, long end, const parsing_opts_t& opts) {
+cudf::timestamp convertStrToValue<cudf::timestamp>(const char *data, long start, long end, const ParseOptions& opts) {
 
 	return cudf::timestamp{ convertStrToValue<int64_t>(data, start, end, opts) };
 }
