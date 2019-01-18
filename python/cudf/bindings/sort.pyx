@@ -31,20 +31,25 @@ cpdef apply_order_by(in_cols, out_indices, ascending=True, na_position=1):
     '''
     cdef gdf_column** input_columns = <gdf_column**>malloc(len(in_cols) * sizeof(gdf_column*))
     for idx, col in enumerate(in_cols):
+        check_gdf_compatibility(col)
         input_columns[idx] = column_view_from_column(col)
     
     cdef uintptr_t asc_desc = get_ctype_ptr(ascending)
 
     cdef size_t num_inputs = len(in_cols)
 
+    check_gdf_compatibility(out_indices)
     cdef gdf_column* output_indices = column_view_from_column(out_indices)
 
     cdef int flag_nulls_are_smallest = na_position
 
-    cdef gdf_error result =  gdf_order_by(<gdf_column**> input_columns,
-                                          <int8_t*> asc_desc,
-                                          <size_t> num_inputs,
-                                          <gdf_column*> output_indices,
-                                          <int> flag_nulls_are_smallest)
+    cdef gdf_error result 
+    
+    with nogil:
+        result = gdf_order_by(<gdf_column**> input_columns,
+                              <int8_t*> asc_desc,
+                              <size_t> num_inputs,
+                              <gdf_column*> output_indices,
+                              <int> flag_nulls_are_smallest)
     
     check_gdf_error(result)

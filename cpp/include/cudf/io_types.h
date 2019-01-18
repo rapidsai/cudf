@@ -54,8 +54,8 @@ typedef struct {
   bool          skipinitialspace;           /**< skip white spaces after the delimiter - default is false                                       */
 
 
-  int           nrows;                      // number of rows to read,  -1 indicates all
-  int           header;                     // Row of the header data,  zero based counting. Default states that header should not be read from file.
+  gdf_size_type nrows;                      // number of rows to read,  -1 indicates all
+  gdf_size_type header;                     // Row of the header data,  zero based counting. Default states that header should not be read from file.
 
   int           num_cols;                   /**< number of columns in the names and dtype arrays                                                */
   const char    **names;                    /**< ordered List of column names, this is a required field                                         */
@@ -67,8 +67,8 @@ typedef struct {
   const char    **use_cols_char;            // array of char:    Return a subset of the columns.  CSV reader will only process those columns,  another read is needed to get full data
   int           use_cols_char_len;          // int:    number of elements in list of returned columns
 
-  long          skiprows;                   /**< number of rows at the start of the files to skip, default is 0                                 */
-  long          skipfooter;                 /**< number of rows at the bottom of the file to skip - default is 0                                */
+  gdf_size_type skiprows;                   /**< number of rows at the start of the files to skip, default is 0                                 */
+  gdf_size_type skipfooter;                 /**< number of rows at the bottom of the file to skip - default is 0                                */
 
   bool          skip_blank_lines;           // whether or not to ignore blank lines
 
