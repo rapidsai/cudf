@@ -95,8 +95,7 @@ typedef struct raw_csv_ {
     char				decimal;
     char				thousands;
 
-	// TODO: change nrows to gdf_size_type once gdf_size_type is changed to a signed integer type
-	int  				nrows;       	// number of rows of file to read. default is -1, and all rows are read in this case
+	gdf_size_type  		nrows;       	// number of rows of file to read. default is -1, and all rows are read in this case
 	gdf_size_type		skiprows;       // number of rows at the start of the file to skip, default is 0
 	gdf_size_type		skipfooter;     // number of rows at the bottom of the file to skip, default is 0
 
@@ -890,7 +889,7 @@ gdf_error uploadDataToDevice(const char* h_uncomp_data, size_t h_uncomp_size, ra
 
 	// Exclude the rows user chose to skip at the end of the file
 	if (raw_csv->skipfooter != 0) {
-		raw_csv->num_records = gdf_size_type(max(raw_csv->num_records - raw_csv->skipfooter, 0ul));
+		raw_csv->num_records = gdf_size_type(max(raw_csv->num_records - raw_csv->skipfooter, gdf_size_type{0}));
 		
 	}
 	
