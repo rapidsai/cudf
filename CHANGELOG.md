@@ -13,6 +13,7 @@
 - PR #350 Implemented Series replace function
 - PR #490 Added print_env.sh script to gather relevant environment details when reporting cuDF issues
 - PR #474 add ZLIB-based GZIP/ZIP support to `read_csv()`
+- PR #547 Added melt similar to `pandas.melt()`
 - PR #491 Add CI test script to check for updates to CHANGELOG.md in PRs
 - PR #550 Add CI test script to check for style issues in PRs
 - PR #558 Add CI scripts for cpu-based conda and gpu-based test builds
@@ -26,10 +27,14 @@
 - PR #649 Add `cudf.from_pandas` function
 - PR #633 CSV Reader: Add support for the nrows parameter to specify the number of rows to read from the input file
 - PR #679 Test Series indexing, support integer scalars and integer sequences
+- PR #567 Adds setup for a wheel which is installable by pip
 
 ## Improvements
 
-- PR #426 Removed sort-based groupby and refactored existing groupby APIs. Also improves C++/CUDA compile time
+- PR #426 Removed sort-based groupby and refactored existing groupby APIs. Also improves C++/CUDA compile time.
+- PR #461 Add `CUDF_HOME` variable in README.md to replace relative pathing.
+- PR #472 RMM: Created centralized rmm::device_vector alias and rmm::exec_policy
+- PR #500 Improved the concurrent hash map class to support partitioned (multi-pass) hash table building.
 - PR #454 Improve CSV reader docs and examples
 - PR #465 Added templated C++ API for RMM to avoid explicit cast to `void**`
 - PR #513 `.gitignore` tweaks
@@ -38,10 +43,14 @@
 - PR #549 Adds `-rdynamic` compiler flag to nvcc for Debug builds
 - PR #472 RMM: Created centralized rmm::device_vector alias and rmm::exec_policy
 - PR #500 Improved the concurrent hash map class to support partitioned (multi-pass) hash table building
+- PR #583 Updated `gdf_size_type` to `int`
 - PR #617 Added .dockerignore file. Prevents adding stale cmake cache files to the docker container
 - PR #658 Reduced `JOIN_TEST` time by isolating overflow test of hash table size computation
+- PR #664 Added Debuging instructions to README
 - PR #651 Remove noqa marks in `__init__.py` files
 - PR #671 CSV Reader: uncompressed buffer input can be parsed without explicitly specifying compression as None
+- PR #720 Refactored Index classes to make them more Pandas-like, added CategoricalIndex
+
 
 ## Bug Fixes
 
@@ -81,6 +90,9 @@
 - PR #686 Fix converting nulls to NaT values when converting Series to Pandas/Numpy
 - PR #689 CSV Reader: Fix behavior with skiprows+header to match pandas implementation
 - PR #691 Fixes Join on empty input DFs
+- PR #706 CSV Reader: Fix broken dtype inference when whitespace is in data
+- PR #717 CSV reader: fix behavior when parsing a csv file with no data rows
+- PR #724 CSV Reader: fix build issue due to parameter type mismatch in a std::max call
 - PR #719 Fix merge column ordering
 
 
@@ -91,7 +103,6 @@
 - PR #398 add pandas-compatible `DataFrame.shape()` and `Series.shape()`
 - PR #394 New documentation feature "10 Minutes to cuDF"
 - PR #361 CSV Reader: Add support for strings with delimiters
-- PR #567 Adds setup for a wheel which is installable by pip
 
 ## Improvements
 

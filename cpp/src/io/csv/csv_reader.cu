@@ -95,8 +95,7 @@ typedef struct raw_csv_ {
     char				decimal;
     char				thousands;
 
-	// TODO: change nrows to gdf_size_type once gdf_size_type is changed to a signed integer type
-	int  				nrows;       	// number of rows of file to read. default is -1, and all rows are read in this case
+	gdf_size_type  		nrows;       	// number of rows of file to read. default is -1, and all rows are read in this case
 	gdf_size_type		skiprows;       // number of rows at the start of the file to skip, default is 0
 	gdf_size_type		skipfooter;     // number of rows at the bottom of the file to skip, default is 0
 
@@ -112,7 +111,7 @@ typedef struct column_data_ {
 	unsigned long long countInt16;
 	unsigned long long countInt32;
 	unsigned long long countInt64;
-	unsigned long long countNULL;
+	gdf_size_type countNULL;
 } column_data_t;
 
 typedef struct parsing_opts_ {
@@ -380,7 +379,7 @@ gdf_error read_csv(csv_read_arg *args)
 		auto recCount = raw_csv->num_records;
 
 		bool quotation = false;
-		for (size_t i = 1; i < raw_csv->num_records; ++i) {
+		for (gdf_size_type i = 1; i < raw_csv->num_records; ++i) {
 			if (h_uncomp_data[h_rec_starts[i] - 1] == raw_csv->quotechar) {
 				quotation = !quotation;
 				h_rec_starts[i] = raw_csv->num_bytes;
@@ -553,6 +552,9 @@ gdf_error read_csv(csv_read_arg *args)
 	//--- Auto detect types of the vectors
 
 	if(args->dtype==NULL){
+		if (raw_csv->num_records == 0) {
+			checkError(GDF_INVALID_API_CALL, "read_csv: no data available for data type inference");
+		}
 
 		column_data_t *d_ColumnData,*h_ColumnData;
 
@@ -615,7 +617,7 @@ gdf_error read_csv(csv_read_arg *args)
 
 	void **d_data,**h_data;
 	gdf_valid_type **d_valid,**h_valid;
-    unsigned long long	*d_valid_count,*h_valid_count;
+    unsigned long long	*d_valid_count;
 	gdf_dtype *d_dtypes,*h_dtypes;
 
 
@@ -623,7 +625,6 @@ gdf_error read_csv(csv_read_arg *args)
 
 
 	h_dtypes 		= (gdf_dtype*)malloc (	sizeof(gdf_dtype)* (raw_csv->num_active_cols));
-	h_valid_count	= (unsigned long long*)malloc (	sizeof(unsigned long long)* (raw_csv->num_active_cols));
 	h_data 			= (void**)malloc (	sizeof(void*)* (raw_csv->num_active_cols));
 	h_valid 		= (gdf_valid_type**)malloc (	sizeof(gdf_valid_type*)* (raw_csv->num_active_cols));
 
@@ -686,45 +687,49 @@ gdf_error read_csv(csv_read_arg *args)
 	free(h_dtypes); 
 	free(h_valid); 
 	free(h_data); 
-	
-	launch_dataConvertColumns(raw_csv, d_data, d_valid, d_dtypes, d_str_cols, d_valid_count);
-	cudaDeviceSynchronize();
 
-	stringColCount=0;
-	for (int col = 0; col < raw_csv->num_active_cols; col++) {
-
-		gdf_column *gdf = cols[col];
-
-		if (gdf->dtype != gdf_dtype::GDF_STRING)
-			continue;
-
-		NVStrings* const stringCol = NVStrings::create_from_index(h_str_cols[stringColCount],size_t(raw_csv->num_records));
-		if ((raw_csv->quotechar != '\0') && (raw_csv->doublequote==true)) {
-			// In PANDAS, default of enabling doublequote for two consecutive
-			// quotechar in quote fields results in reduction to single
-			std::string quotechar = std::string(&raw_csv->quotechar);
-			std::string doublequotechar = quotechar + raw_csv->quotechar;
-			gdf->data = stringCol->replace(doublequotechar.c_str(), quotechar.c_str());
-			NVStrings::destroy(stringCol);
+	if (raw_csv->num_records != 0) {
+		error = launch_dataConvertColumns(raw_csv, d_data, d_valid, d_dtypes, d_str_cols, d_valid_count);
+		if (error != GDF_SUCCESS) {
+			return error;
 		}
-		else {
-			gdf->data = stringCol;
+		// Sync with the default stream, just in case create_from_index() is asynchronous 
+		cudaStreamSynchronize(0);
+
+		stringColCount=0;
+		for (int col = 0; col < raw_csv->num_active_cols; col++) {
+
+			gdf_column *gdf = cols[col];
+
+			if (gdf->dtype != gdf_dtype::GDF_STRING)
+				continue;
+
+			NVStrings* const stringCol = NVStrings::create_from_index(h_str_cols[stringColCount],size_t(raw_csv->num_records));
+			if ((raw_csv->quotechar != '\0') && (raw_csv->doublequote==true)) {
+				// In PANDAS, default of enabling doublequote for two consecutive
+				// quotechar in quote fields results in reduction to single
+				const string quotechar(1, raw_csv->quotechar);
+				const string doublequotechar(2, raw_csv->quotechar);
+				gdf->data = stringCol->replace(doublequotechar.c_str(), quotechar.c_str());
+				NVStrings::destroy(stringCol);
+			}
+			else {
+				gdf->data = stringCol;
+			}
+
+			RMM_TRY( RMM_FREE( h_str_cols [stringColCount], 0 ) );
+
+			stringColCount++;
 		}
 
-		RMM_TRY( RMM_FREE( h_str_cols [stringColCount], 0 ) );
+		vector<unsigned long long>	h_valid_count(raw_csv->num_active_cols);
+		CUDA_TRY( cudaMemcpy(h_valid_count.data(), d_valid_count, sizeof(unsigned long long) * h_valid_count.size(), cudaMemcpyDeviceToHost));
 
-		stringColCount++;
+		//--- set the null count
+		for (size_t col = 0; col < h_valid_count.size(); col++) {
+			cols[col]->null_count = raw_csv->num_records - h_valid_count[col];
+		}
 	}
-
-
-	CUDA_TRY( cudaMemcpy(h_valid_count,d_valid_count, sizeof(unsigned long long) * (raw_csv->num_active_cols), cudaMemcpyDeviceToHost));
-
-	//--- set the null count
-	for ( int col = 0; col < raw_csv->num_active_cols; col++) {
-		cols[col]->null_count = raw_csv->num_records - h_valid_count[col];
-	}
-
-	free(h_valid_count); 
 
 	// free up space that is no longer needed
 	if (h_str_cols != NULL)
@@ -884,7 +889,7 @@ gdf_error uploadDataToDevice(const char* h_uncomp_data, size_t h_uncomp_size, ra
 
 	// Exclude the rows user chose to skip at the end of the file
 	if (raw_csv->skipfooter != 0) {
-		raw_csv->num_records = gdf_size_type(max(raw_csv->num_records - raw_csv->skipfooter, 0ul));
+		raw_csv->num_records = gdf_size_type(max(raw_csv->num_records - raw_csv->skipfooter, gdf_size_type{0}));
 		
 	}
 	
@@ -1333,7 +1338,7 @@ __global__ void convertCsvToGdf(
 
 			// Modify start & end to ignore whitespace and quotechars
 			if(dtype[actual_col] != gdf_dtype::GDF_CATEGORY && dtype[actual_col] != gdf_dtype::GDF_STRING){
-				adjustForWhitespaceAndQuotes(raw_csv, start, tempPos, opts.quotechar);
+				adjustForWhitespaceAndQuotes(raw_csv, &start, &tempPos, opts.quotechar);
 			}
 
 			if(start<=(tempPos)) { // Empty strings are not legal values
@@ -1519,7 +1524,6 @@ __global__ void dataTypeDetection(
 		column_data_t* d_columnData
 		)
 {
-
 	// thread IDs range per block, so also need the block id
 	long	rec_id  = threadIdx.x + (blockDim.x * blockIdx.x);		// this is entry into the field array - tid is an elements within the num_entries array
 
@@ -1589,11 +1593,11 @@ __global__ void dataTypeDetection(
 			long countColon=0;
 			long countString=0;
 
-			long strLen=pos-start;
-
 			// Modify start & end to ignore whitespace and quotechars
 			// This could possibly result in additional empty fields
-			adjustForWhitespaceAndQuotes(raw_csv, start, tempPos);
+			adjustForWhitespaceAndQuotes(raw_csv, &start, &tempPos);
+
+			long strLen=tempPos-start+1;
 
 			for(long startPos=start; startPos<=tempPos; startPos++){
 				if(raw_csv[startPos]>= '0' && raw_csv[startPos] <= '9'){
