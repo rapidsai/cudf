@@ -292,7 +292,6 @@ gdf_error io_uncompress_single_h2d(const void *src, gdf_size_type src_size, int 
     size_t uncomp_len = 0;
     cudaStream_t strm = (cudaStream_t)0;
     rmmError_t rmmErr;
-    gdf_error gdf_err = GDF_SUCCESS;
 
     if (!(src && src_size))
     {
@@ -393,7 +392,7 @@ gdf_error io_uncompress_single_h2d(const void *src, gdf_size_type src_size, int 
         int zerr = cpu_inflate((uint8_t*)dst.data(), &zdestLen, comp_data, comp_len);
         if (zerr != 0 || zdestLen != uncomp_len)
         {
-    		dst.resize(0);
+            dst.resize(0);
             return GDF_FILE_ERROR;
         }
     }
@@ -402,6 +401,7 @@ gdf_error io_uncompress_single_h2d(const void *src, gdf_size_type src_size, int 
         size_t src_ofs = 0;
         size_t dst_ofs = 0;
         int bz_err = 0;
+    	dst.resize(uncomp_len);
         do
         {
             size_t dst_len = uncomp_len - dst_ofs;
@@ -422,8 +422,8 @@ gdf_error io_uncompress_single_h2d(const void *src, gdf_size_type src_size, int 
         } while (bz_err == BZ_OUTBUFF_FULL);
         if (bz_err != 0)
         {
-            gdf_err = GDF_FILE_ERROR;
-            goto error_exit;
+            dst.resize(0);
+            return GDF_FILE_ERROR;
         }
     }
     else
