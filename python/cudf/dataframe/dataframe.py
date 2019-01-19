@@ -1028,6 +1028,7 @@ class DataFrame(object):
         """
         _gdf.nvtx_range_push("PYGDF_JOIN", "blue")
 
+        # Early termination Error checking
         if type != "":
             warnings.warn(
                 'type="' + type + '" parameter is deprecated.'
@@ -1035,32 +1036,29 @@ class DataFrame(object):
                 DeprecationWarning
             )
             method = type
-
         if how not in ['left', 'inner', 'outer']:
             raise NotImplementedError('{!r} merge not supported yet'
                                       .format(how))
-
         same_names = set(self.columns) & set(other.columns)
         if same_names and not (lsuffix or rsuffix):
             raise ValueError('there are overlapping columns but '
                              'lsuffix and rsuffix are not defined')
-
         def fix_name(name, suffix):
             if name in same_names:
                 return "{}{}".format(name, suffix)
             return name
-
         if on is None:
             on = list(same_names)
             if len(on) == 0:
                 raise ValueError('No common columns to perform merge on')
-        on = [on] if isinstance(on, str) else list(on)
 
+        # Essential parameters
+        on = [on] if isinstance(on, str) else list(on)
         lhs = self
         rhs = other
 
+        # Column prep - this can be simplified
         col_cats = {}
-
         for name in on:
             if pd.api.types.is_categorical_dtype(self[name]):
                 lcats = self[name].cat.categories
@@ -1077,72 +1075,75 @@ class DataFrame(object):
                     # Do the join using the union of categories from both side.
                     # Adjust for inner joins afterwards
                     cats = sorted(set(lcats) | set(rcats))
-
                     self[name] = (self[name].cat.set_categories(cats)
                                   .fillna(-1))
                     self[name] = self[name]._column.as_numerical
-
                     other[name] = (other[name].cat.set_categories(cats)
                                    .fillna(-1))
                     other[name] = other[name]._column.as_numerical
-
                 col_cats[name] = cats
-
         for name, col in lhs._cols.items():
             if pd.api.types.is_categorical_dtype(col) and name not in on:
                 f_n = fix_name(name, lsuffix)
                 col_cats[f_n] = self[name].cat.categories
-
         for name, col in rhs._cols.items():
             if pd.api.types.is_categorical_dtype(col) and name not in on:
                 f_n = fix_name(name, rsuffix)
                 col_cats[f_n] = other[name].cat.categories
 
+        # Compute merge
         cols, valids = cpp_join.join(lhs._cols, rhs._cols, on, how,
                                      method=method)
 
+        # Output conversion - take cols and valids from `cpp_join` and
+        # combined into a DataFrame()
         df = DataFrame()
-
         # Columns are returned in order left - on - right from libgdf
+        print([Buffer(cols).to_array() for cols in cols])
+        print([Buffer(valids).to_array() for valids in valids])
+        print(lhs)
+        print(rhs)
+        print(on)
 
+        on_count = 0
         gap = len(self.columns) - len(on)
-        for idx in range(len(on)):
-            if (cols[idx + gap].dtype == 'datetime64[ms]'):
-                df[on[idx]] = DatetimeColumn(data=Buffer(cols[idx + gap]),
-                                             dtype=np.dtype('datetime64[ms]'),
-                                             mask=Buffer(valids[idx]))
-            elif on[idx] in col_cats.keys():
-                df[on[idx]] = CategoricalColumn(data=Buffer(cols[idx + gap]),
-                                                categories=col_cats[on[idx]],
-                                                ordered=False,
-                                                mask=Buffer(valids[idx]))
+        for idc, name in enumerate(self.columns):
+            if name in on:
+                for idx in range(len(on)):
+                    if on[idx] == name:
+                        on_count = on_count + 1
+                        if (cols[idx + gap].dtype == 'datetime64[ms]'):
+                            df[on[idx]] = DatetimeColumn(data=Buffer(cols[idx + gap]),
+                                                         dtype=np.dtype('datetime64[ms]'),
+                                                         mask=Buffer(valids[idx]))
+                        elif on[idx] in col_cats.keys():
+                            df[on[idx]] = CategoricalColumn(data=Buffer(cols[idx + gap]),
+                                                            categories=col_cats[on[idx]],
+                                                            ordered=False,
+                                                            mask=Buffer(valids[idx]))
+                        else:
+                            df[on[idx]] = NumericalColumn(data=Buffer(cols[idx + gap]),
+                                                          dtype=cols[idx + gap].dtype,
+                                                          mask=Buffer(valids[idx + gap]))
             else:
-                df[on[idx]] = NumericalColumn(data=Buffer(cols[idx + gap]),
-                                              dtype=cols[idx + gap].dtype,
-                                              mask=Buffer(valids[idx]))
-
-        idx = 0
-
-        for name in self.columns:
-            if name not in on:
+                left_column_idx = idc - on_count
                 f_n = fix_name(name, lsuffix)
-                if (cols[idx].dtype == 'datetime64[ms]'):
-                    df[f_n] = DatetimeColumn(data=Buffer(cols[idx]),
+                if (cols[left_column_idx].dtype == 'datetime64[ms]'):
+                    df[f_n] = DatetimeColumn(data=Buffer(cols[left_column_idx]),
                                              dtype=np.dtype('datetime64[ms]'),
-                                             mask=Buffer(valids[idx]))
+                                             mask=Buffer(valids[left_column_idx]))
                 elif f_n in col_cats.keys():
-                    df[f_n] = CategoricalColumn(data=Buffer(cols[idx]),
+                    df[f_n] = CategoricalColumn(data=Buffer(cols[left_column_idx]),
                                                 categories=col_cats[f_n],
                                                 ordered=False,
-                                                mask=Buffer(valids[idx]))
+                                                mask=Buffer(valids[left_column_idx]))
                 else:
-                    df[f_n] = NumericalColumn(data=Buffer(cols[idx]),
-                                              dtype=cols[idx].dtype,
-                                              mask=Buffer(valids[idx]))
+                    df[f_n] = NumericalColumn(data=Buffer(cols[left_column_idx]),
+                                              dtype=cols[left_column_idx].dtype,
+                                              mask=Buffer(valids[left_column_idx]))
                 idx = idx + 1
 
         idx = len(self.columns)
-
         for name in other.columns:
             if name not in on:
                 f_n = fix_name(name, rsuffix)
@@ -1164,7 +1165,7 @@ class DataFrame(object):
         # Creating dataframe with ordering as pandas:
         # Pandas always orders the output first according to the input
         # column order.
-
+        """
         final_df = DataFrame()
         for col in lhs.columns:
             fcol = col
@@ -1176,10 +1177,11 @@ class DataFrame(object):
         for col in df.columns:
             if col not in final_df.columns:
                 final_df[col] = df[col]
+        """
 
         _gdf.nvtx_range_pop()
 
-        return final_df
+        return df
 
     def join(self, other, on=None, how='left', lsuffix='', rsuffix='',
              sort=False, type="", method='hash'):
