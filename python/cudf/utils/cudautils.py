@@ -264,7 +264,8 @@ def copy_to_dense(data, mask, out=None):
         # check it
         if sz >= out.size:
             raise ValueError('output array too small')
-    gpu_copy_to_dense.forall(data.size)(data, mask, slots, out)
+    if out.size > 0:
+        gpu_copy_to_dense.forall(data.size)(data, mask, slots, out)
     return (sz, out)
 
 
