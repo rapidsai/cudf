@@ -1098,13 +1098,8 @@ class DataFrame(object):
         # Output conversion - take cols and valids from `cpp_join` and
         # combined into a DataFrame()
         df = DataFrame()
-        # Columns are returned in order left - on - right from libgdf
-        print([Buffer(cols).to_array() for cols in cols])
-        print([Buffer(valids).to_array() for valids in valids])
-        print(lhs)
-        print(rhs)
-        print(on)
 
+        # Columns are returned in order left - on - right from libgdf
         # In order to mirror pandas, reconstruct our df using the
         # columns from `left` and the data from `cpp_join`.
         on_count = 0
