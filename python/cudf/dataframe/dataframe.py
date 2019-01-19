@@ -1105,7 +1105,7 @@ class DataFrame(object):
         print(rhs)
         print(on)
 
-        # In ordser to mirror pandas, reconstruct our df using the
+        # In order to mirror pandas, reconstruct our df using the
         # columns from `left` and the data from `cpp_join`.
         on_count = 0
         # gap spaces between left and `on` for result from `cpp_join`
