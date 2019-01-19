@@ -1306,12 +1306,15 @@ def test_dataframe_boolean_mask_Series(gdf):
     mask = Series([True, False, True, False])
     mask2 = Series([True, True, True, True])
     mask3 = Series([True, True, True, True, True, True, True, True])
+    mask4 = Series([True]*11)  # Larger than Series to be masked
     gdf_masked = gdf[mask]
     gdf_masked2 = gdf[mask2]
     gdf_masked3 = gdf[mask3]
+    gdf_masked4 = gdf[mask4]
     assert gdf_masked.shape[0] == 2
     assert gdf_masked2.shape[0] == 4
     assert gdf_masked3.shape[0] == 8
+    assert gdf_masked4.shape[0] == 10
 
 
 def test_iter(pdf, gdf):
