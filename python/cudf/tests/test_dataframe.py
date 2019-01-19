@@ -1306,7 +1306,7 @@ def test_dataframe_boolean_mask_Series(gdf):
     mask = Series([True, False, True, False])
     mask2 = Series([True, True, True, True])
     mask3 = Series([True, True, True, True, True, True, True, True])
-    mask4 = Series([True]*11)  # Larger than Series to be masked
+    mask4 = Series([True])  # More likely to trigger an undefined memory read
     gdf_masked = gdf[mask]
     gdf_masked2 = gdf[mask2]
     gdf_masked3 = gdf[mask3]
@@ -1314,7 +1314,7 @@ def test_dataframe_boolean_mask_Series(gdf):
     assert gdf_masked.shape[0] == 2
     assert gdf_masked2.shape[0] == 4
     assert gdf_masked3.shape[0] == 8
-    assert gdf_masked4.shape[0] == 10
+    assert gdf_masked4.shape[0] == 1
 
 
 def test_iter(pdf, gdf):
