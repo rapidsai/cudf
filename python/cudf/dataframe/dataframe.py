@@ -1115,15 +1115,16 @@ class DataFrame(object):
                 # on columns returned first from `cpp_join`
                 for idx in range(len(on)):
                     if on[idx] == name:
+                        on_idx = idx + gap
                         on_count = on_count + 1
                         key = on[idx]
                         categories = None
                         if key in col_cats.keys():
                             categories = col_cats[key]
                         df[key] = columnops.build_column(
-                                Buffer(cols[idx + gap]),
-                                dtype=cols[idx + gap].dtype,
-                                mask=Buffer(valids[idx + gap]),
+                                Buffer(cols[on_idx]),
+                                dtype=cols[on_idx].dtype,
+                                mask=Buffer(valids[on_idx]),
                                 categories=categories,
                                 )
             else:  # not an `on`-column, `cpp_join` returns these after `on`
@@ -1139,7 +1140,7 @@ class DataFrame(object):
                         mask=Buffer(valids[left_column_idx]),
                         categories=categories,
                         )
-        idx = len(self.columns)
+        right_column_idx = len(self.columns)
         for name in other.columns:
             if name not in on:
                 # now copy the columns from `right` that were not in `on`
@@ -1148,12 +1149,12 @@ class DataFrame(object):
                 if f_n in col_cats.keys():
                     categories = col_cats[f_n]
                 df[f_n] = columnops.build_column(
-                        Buffer(cols[idx]),
-                        dtype=cols[idx].dtype,
-                        mask=Buffer(valids[idx]),
+                        Buffer(cols[right_column_idx]),
+                        dtype=cols[right_column_idx].dtype,
+                        mask=Buffer(valids[right_column_idx]),
                         categories=categories,
                         )
-                idx = idx + 1
+                right_column_idx = right_column_idx + 1
 
         _gdf.nvtx_range_pop()
 
