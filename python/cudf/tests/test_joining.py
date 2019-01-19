@@ -360,3 +360,44 @@ def test_dataframe_merge_order():
 
     df = df1.merge(df2, how='left', on=['id', 'a'])
     assert_eq(gdf, df)
+
+
+@pytest.mark.parametrize('pairs', [('', ''), ('', 'a'), ('', 'ab'), ('', 'abc'), ('', 'b'), ('', 'bcd'), ('', 'cde'), ('a', 'a'), ('a', 'ab'), ('a', 'abc'), ('a', 'b'), ('a', 'bcd'), ('a', 'cde'), ('ab', 'ab'), ('ab', 'abc'), ('ab', 'b'), ('ab', 'bcd'), ('ab', 'cde'), ('abc', 'abc'), ('abc', 'b'), ('abc', 'bcd'), ('abc', 'cde'), ('b', 'b'), ('b', 'bcd'), ('b', 'cde'), ('bcd', 'bcd'), ('bcd', 'cde'), ('cde', 'cde')])   # noqa: E501
+@pytest.mark.parametrize('max', [5, 1000])
+@pytest.mark.parametrize('rows', [5, 15, 100])
+@pytest.mark.parametrize('how', ['left', 'inner', 'outer'])
+def test_dataframe_pairs_of_triples(pairs, max, rows, how):
+    np.random.seed(0)
+
+    pdf_left = pd.DataFrame()
+    pdf_right = pd.DataFrame()
+    for left_column in pairs[0]:
+        pdf_left[left_column] = np.random.randint(0, max, rows)
+    for right_column in pairs[1]:
+        pdf_right[right_column] = np.random.randint(0, max, rows)
+    gdf_left = DataFrame.from_pandas(pdf_left)
+    gdf_right = DataFrame.from_pandas(pdf_right)
+    if len(pdf_left) == 0 or len(pdf_right) == 0:
+        with pytest.raises(pd.core.reshape.merge.MergeError) as raises:
+            pdf_left.merge(pdf_right)
+        raises.match("No common columns to perform merge on")
+        with pytest.raises(ValueError) as raises:
+            gdf_left.merge(gdf_right)
+        raises.match("No common columns to perform merge on")
+    elif not [value for value in pdf_left if value in pdf_right]:
+        with pytest.raises(pd.core.reshape.merge.MergeError) as raises:
+            pdf_left.merge(pdf_right)
+        raises.match("No common columns to perform merge on")
+        with pytest.raises(ValueError) as raises:
+            gdf_left.merge(gdf_right)
+        raises.match("No common columns to perform merge on")
+    else:
+        pdf_result = pdf_left.merge(pdf_right, how=how)
+        print('pdf_result')
+        print(pdf_result)
+        gdf_result = gdf_left.merge(gdf_right, how=how)
+        print('gdf_result')
+        print(gdf_result)
+        for column in gdf_result:
+            assert np.array_equal(gdf_result[column].fillna(-1).sort_values(),
+                                  pdf_result[column].fillna(-1).sort_values())
