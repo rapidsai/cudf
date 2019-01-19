@@ -30,6 +30,7 @@ from .numerical import NumericalColumn
 from .buffer import Buffer
 from cudf._gdf import nvtx_range_push, nvtx_range_pop
 from cudf._sort import get_sorted_inds
+from . import columnops
 
 import cudf.bindings.join as cpp_join
 
@@ -1105,61 +1106,54 @@ class DataFrame(object):
         print(rhs)
         print(on)
 
+        # In ordser to mirror pandas, reconstruct our df using the
+        # columns from `left` and the data from `cpp_join`.
         on_count = 0
-        gap = len(self.columns) - len(on)
+        # gap spaces between left and `on` for result from `cpp_join`
+        gap = len(self.columns) - len(on) 
         for idc, name in enumerate(self.columns):
             if name in on:
+                # on columns returned first from `cpp_join`
                 for idx in range(len(on)):
                     if on[idx] == name:
                         on_count = on_count + 1
-                        if (cols[idx + gap].dtype == 'datetime64[ms]'):
-                            df[on[idx]] = DatetimeColumn(data=Buffer(cols[idx + gap]),
-                                                         dtype=np.dtype('datetime64[ms]'),
-                                                         mask=Buffer(valids[idx]))
-                        elif on[idx] in col_cats.keys():
-                            df[on[idx]] = CategoricalColumn(data=Buffer(cols[idx + gap]),
-                                                            categories=col_cats[on[idx]],
-                                                            ordered=False,
-                                                            mask=Buffer(valids[idx]))
-                        else:
-                            df[on[idx]] = NumericalColumn(data=Buffer(cols[idx + gap]),
-                                                          dtype=cols[idx + gap].dtype,
-                                                          mask=Buffer(valids[idx + gap]))
-            else:
+                        key = on[idx]
+                        categories = None
+                        if key in col_cats.keys():
+                            categories = col_cats[key]
+                        df[key] = columnops.build_column(
+                                Buffer(cols[idx + gap]),
+                                dtype=cols[idx + gap].dtype,
+                                mask=Buffer(valids[idx + gap]),
+                                categories=categories,
+                                )
+            else: # not an `on`-column, `cpp_join` returns these after `on`
+                # on_count corrects gap for non-`on` columns
                 left_column_idx = idc - on_count
                 f_n = fix_name(name, lsuffix)
-                if (cols[left_column_idx].dtype == 'datetime64[ms]'):
-                    df[f_n] = DatetimeColumn(data=Buffer(cols[left_column_idx]),
-                                             dtype=np.dtype('datetime64[ms]'),
-                                             mask=Buffer(valids[left_column_idx]))
-                elif f_n in col_cats.keys():
-                    df[f_n] = CategoricalColumn(data=Buffer(cols[left_column_idx]),
-                                                categories=col_cats[f_n],
-                                                ordered=False,
-                                                mask=Buffer(valids[left_column_idx]))
-                else:
-                    df[f_n] = NumericalColumn(data=Buffer(cols[left_column_idx]),
-                                              dtype=cols[left_column_idx].dtype,
-                                              mask=Buffer(valids[left_column_idx]))
-                idx = idx + 1
-
+                categories = None
+                if f_n in col_cats.keys():
+                    categories = col_cats[f_n]
+                df[f_n] = columnops.build_column(
+                        Buffer(cols[left_column_idx]),
+                        dtype=cols[left_column_idx].dtype,
+                        mask=Buffer(valids[left_column_idx]),
+                        categories=categories,
+                        )
         idx = len(self.columns)
         for name in other.columns:
             if name not in on:
+                # now copy the columns from `right` that were not in `on`
                 f_n = fix_name(name, rsuffix)
-                if (cols[idx].dtype == 'datetime64[ms]'):
-                    df[f_n] = DatetimeColumn(data=Buffer(cols[idx]),
-                                             dtype=np.dtype('datetime64[ms]'),
-                                             mask=Buffer(valids[idx]))
-                elif f_n in col_cats.keys():
-                    df[f_n] = CategoricalColumn(data=Buffer(cols[idx]),
-                                                categories=col_cats[f_n],
-                                                ordered=False,
-                                                mask=Buffer(valids[idx]))
-                else:
-                    df[f_n] = NumericalColumn(data=Buffer(cols[idx]),
-                                              dtype=cols[idx].dtype,
-                                              mask=Buffer(valids[idx]))
+                categories = None
+                if f_n in col_cats.keys():
+                    categories = col_cats[f_n]
+                df[f_n] = columnops.build_column(
+                        Buffer(cols[idx]),
+                        dtype=cols[idx].dtype,
+                        mask=Buffer(valids[idx]),
+                        categories=categories,
+                        )
                 idx = idx + 1
 
         # Creating dataframe with ordering as pandas:
