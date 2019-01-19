@@ -359,5 +359,4 @@ def test_dataframe_merge_order():
     df2['a'] = [7, 8]
 
     df = df1.merge(df2, how='left', on=['id', 'a'])
-
     assert_eq(gdf, df)

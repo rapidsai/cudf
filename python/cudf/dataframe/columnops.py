@@ -28,7 +28,7 @@ class TypedColumnBase(Column):
 
     Notes
     -----
-    For designed to be instantiated directly.  Instantiate subclasses instead.
+    Not designed to be instantiated directly.  Instantiate subclasses instead.
     """
     def __init__(self, **kwargs):
         dtype = kwargs.pop('dtype')
@@ -131,6 +131,24 @@ def column_select_by_position(column, positions):
 
     return selected_values, NumericalColumn(data=selected_index,
                                             dtype=selected_index.dtype)
+
+
+def build_column(buffer, dtype, mask=None, categories=None):
+    from . import numerical, categorical, datetime
+    if dtype == 'datetime64[ms]':
+        return datetime.DatetimeColumn(data=buffer,
+                              dtype=np.dtype(dtype),
+                              mask=mask)
+    elif pd.api.types.is_categorical_dtype(dtype):
+        return categorical.CategoricalColumn(data=buffer,
+                                 dtype='categorical',
+                                 categories=categories,
+                                 ordered=False,
+                                 mask=mask)
+    else:
+        return numerical.NumericalColumn(data=buffer,
+                               dtype=dtype,
+                               mask=mask)
 
 
 def as_column(arbitrary, nan_as_null=True):
