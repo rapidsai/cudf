@@ -96,6 +96,7 @@
 - PR #706 CSV Reader: Fix broken dtype inference when whitespace is in data
 - PR #717 CSV reader: fix behavior when parsing a csv file with no data rows
 - PR #724 CSV Reader: fix build issue due to parameter type mismatch in a std::max call
+- PR #734 Prevents reading undefined memory in gpu_expand_mask_bits numba kernel
 
 
 # cuDF 0.4.0 (05 Dec 2018)
