@@ -25,8 +25,6 @@ from .column import Column
 from cudf.settings import NOTSET, settings
 from cudf.comm.serialize import register_distributed_serializer
 from .categorical import CategoricalColumn
-from .datetime import DatetimeColumn
-from .numerical import NumericalColumn
 from .buffer import Buffer
 from cudf._gdf import nvtx_range_push, nvtx_range_pop
 from cudf._sort import get_sorted_inds
@@ -1044,6 +1042,7 @@ class DataFrame(object):
         if same_names and not (lsuffix or rsuffix):
             raise ValueError('there are overlapping columns but '
                              'lsuffix and rsuffix are not defined')
+
         def fix_name(name, suffix):
             if name in same_names:
                 return "{}{}".format(name, suffix)
@@ -1110,7 +1109,7 @@ class DataFrame(object):
         # columns from `left` and the data from `cpp_join`.
         on_count = 0
         # gap spaces between left and `on` for result from `cpp_join`
-        gap = len(self.columns) - len(on) 
+        gap = len(self.columns) - len(on)
         for idc, name in enumerate(self.columns):
             if name in on:
                 # on columns returned first from `cpp_join`
@@ -1127,7 +1126,7 @@ class DataFrame(object):
                                 mask=Buffer(valids[idx + gap]),
                                 categories=categories,
                                 )
-            else: # not an `on`-column, `cpp_join` returns these after `on`
+            else:  # not an `on`-column, `cpp_join` returns these after `on`
                 # on_count corrects gap for non-`on` columns
                 left_column_idx = idc - on_count
                 f_n = fix_name(name, lsuffix)
@@ -1155,23 +1154,6 @@ class DataFrame(object):
                         categories=categories,
                         )
                 idx = idx + 1
-
-        # Creating dataframe with ordering as pandas:
-        # Pandas always orders the output first according to the input
-        # column order.
-        """
-        final_df = DataFrame()
-        for col in lhs.columns:
-            fcol = col
-            if col not in df.columns:
-                fcol = fix_name(col, lsuffix)
-            if fcol not in df.columns:
-                fcol = fix_name(col, rsuffix)
-            final_df[fcol] = df[fcol]
-        for col in df.columns:
-            if col not in final_df.columns:
-                final_df[col] = df[col]
-        """
 
         _gdf.nvtx_range_pop()
 
