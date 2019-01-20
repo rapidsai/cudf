@@ -1098,10 +1098,10 @@ class DataFrame(object):
                                      method=method)
 
         # Output conversion - take cols and valids from `cpp_join` and
-        # combined into a DataFrame()
+        # combine into a DataFrame()
         df = DataFrame()
 
-        # Columns are returned in order left - on - right from libgdf
+        # Columns are returned in order on - left - right from libgdf
         # In order to mirror pandas, reconstruct our df using the
         # columns from `left` and the data from `cpp_join`.
         on_count = 0
