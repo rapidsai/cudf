@@ -21,6 +21,7 @@
 - PR #564 Update python `sort_values` method to use updated libcudf `gdf_order_by` API
 - PR #509 CSV Reader: Input CSV file can now be passed in as a text or a binary buffer
 - PR #607 Add `__iter__` and iteritems to DataFrame class
+- PR #576 Create BitMask class and unit test to make 32-bit bit masks
 - PR #608 Added the `DataFrame.iloc[]` and `Series.iloc[]` features
 - PR #600 Enable deep or shallow copy
 - PR #635 Add Doxygen template
@@ -28,6 +29,7 @@
 - PR #633 CSV Reader: Add support for the nrows parameter to specify the number of rows to read from the input file
 - PR #679 Test Series indexing, support integer scalars and integer sequences
 - PR #567 Adds setup for a wheel which is installable by pip
+- PR #718 Expose `product` reduction method to Python and add `GDF_NOTIMPLEMENTED_ERROR` error value
 
 ## Improvements
 
@@ -49,6 +51,7 @@
 - PR #664 Added Debuging instructions to README
 - PR #651 Remove noqa marks in `__init__.py` files
 - PR #671 CSV Reader: uncompressed buffer input can be parsed without explicitly specifying compression as None
+- PR #718 Ensure sum, product, min, max methods pandas compatibility on empty datasets
 - PR #720 Refactored Index classes to make them more Pandas-like, added CategoricalIndex
 
 
@@ -93,6 +96,7 @@
 - PR #706 CSV Reader: Fix broken dtype inference when whitespace is in data
 - PR #717 CSV reader: fix behavior when parsing a csv file with no data rows
 - PR #724 CSV Reader: fix build issue due to parameter type mismatch in a std::max call
+- PR #734 Prevents reading undefined memory in gpu_expand_mask_bits numba kernel
 - PR #719 Fix merge column ordering
 
 
