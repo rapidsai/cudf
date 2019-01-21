@@ -124,7 +124,7 @@ struct RMMPoolTest : public ::testing::Test
 };
 
 template <typename T>
-class TransposeTest : public RMMPoolTest {
+class TransposeTest : public GdfTest {
 
 protected:
     void make_input()
@@ -267,7 +267,7 @@ TYPED_TEST_CASE(TransposeTest, TestTypes);
 TYPED_TEST(TransposeTest, Slim)
 {
     size_t num_cols = 32;
-    size_t num_rows = 320000;
+    size_t num_rows = 3200000;
     this->set_params(num_cols, num_rows);
     this->run_test();
 }

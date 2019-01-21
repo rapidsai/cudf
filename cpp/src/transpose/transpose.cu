@@ -13,34 +13,54 @@
 constexpr int BLOCK_SIZE = 32;
 constexpr int WARP_SIZE = 32;
 
+// __global__
+// void gpu_transpose( int64_t **in_cols, int64_t **out_cols,
+//                    gdf_size_type ncols, gdf_size_type nrows)
+// {
+//   // I'm hardcoding block to be warp size
+//   int tid = threadIdx.x;
+//   int blkid = blockIdx.x;
+//   int blksz = blockDim.x;
+
+//   int idx = blkid * blksz + tid;
+
+//   int64_t thread_data[WARP_SIZE];
+  
+//   for(size_t i = 0; i < WARP_SIZE; i++)
+//   {
+//     thread_data[i] = in_cols[i][idx];
+//   }
+  
+//   typedef cub::BlockExchange<int64_t, 32, 32> BlockExchange;
+//   __shared__ typename BlockExchange::TempStorage temp_storage;
+//   BlockExchange(temp_storage).StripedToBlocked(thread_data);
+
+  
+//   for(size_t i = 0; i < WARP_SIZE; i++)
+//   {
+//     out_cols[i + blkid * blksz][tid] = thread_data[i];
+//   }
+  
+// }
+
+
 __global__
 void gpu_transpose( int64_t **in_cols, int64_t **out_cols,
                    gdf_size_type ncols, gdf_size_type nrows)
 {
-  // I'm hardcoding block to be warp size
-  int tid = threadIdx.x;
-  int blkid = blockIdx.x;
-  int blksz = blockDim.x;
+  // __shared__ float tile[WARP_SIZE][WARP_SIZE];
+  int x = blockIdx.x * WARP_SIZE + threadIdx.x;
+  int y = blockIdx.y * WARP_SIZE + threadIdx.y;
 
-  int idx = blkid * blksz + tid;
+  out_cols[x][y] = in_cols[y][x];
+  // tile[threadIdx.y][threadIdx.x] = in_cols[y][x];
 
-  int64_t thread_data[WARP_SIZE];
-  
-  for(size_t i = 0; i < WARP_SIZE; i++)
-  {
-    thread_data[i] = in_cols[i][idx];
-  }
-  
-  typedef cub::BlockExchange<int64_t, 32, 32> BlockExchange;
-  __shared__ typename BlockExchange::TempStorage temp_storage;
-  BlockExchange(temp_storage).StripedToBlocked(thread_data);
+  // __syncthreads();
 
-  
-  for(size_t i = 0; i < WARP_SIZE; i++)
-  {
-    out_cols[i + blkid * blksz][tid] = thread_data[i];
-  }
-  
+  // x = blockIdx.y * WARP_SIZE + threadIdx.x;  // transpose block offset
+  // y = blockIdx.x * WARP_SIZE + threadIdx.y;
+
+  // out_cols[x][y] = tile[threadIdx.y][threadIdx.x];
 }
 
 gdf_error gdf_transpose(gdf_size_type ncols, gdf_column** in_cols,
@@ -118,8 +138,10 @@ gdf_error gdf_transpose(gdf_size_type ncols, gdf_column** in_cols,
   // std::cout << "Elapsed time (ms): " << elapsed_seconds.count()*1000 << std::endl;
 
 
+  dim3 dimBlock(WARP_SIZE, WARP_SIZE, 1);
+  dim3 dimGrid(100000, 1, 1);
   auto start = std::chrono::high_resolution_clock::now();
-  gpu_transpose<<<100000,32>>>(
+  gpu_transpose<<<dimGrid,dimBlock>>>(
     (int64_t **)input_table->d_columns_data,
     (int64_t **)out_cols_data_ptr,
     ncols, out_ncols
