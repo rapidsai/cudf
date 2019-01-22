@@ -36,6 +36,7 @@ $CC --version
 $CXX --version
 conda list
 
+apt-get update -q
 # Add autotools suite to build some Apache Parquet dependencies
 DEBIAN_FRONTEND=noninteractive apt-get -y install libtool automake autoconf
 # Install Apache Parquet / Thrift dependencies
