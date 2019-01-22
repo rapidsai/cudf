@@ -36,6 +36,11 @@ $CC --version
 $CXX --version
 conda list
 
+# Add autotools suite to build some Apache Parquet dependencies
+DEBIAN_FRONTEND=noninteractive apt-get -y install libtool automake autoconf
+# Install Apache Parquet / Thrift dependencies
+DEBIAN_FRONTEND=noninteractive apt-get install -y libssl-dev libtool bison flex pkg-config
+
 ################################################################################
 # BUILD - Build libcudf and cuDF from source
 ################################################################################
