@@ -398,6 +398,7 @@ def test_dataframe_pairs_of_triples(pairs, max, rows, how):
         gdf_result = gdf_left.merge(gdf_right, how=how)
         print('gdf_result')
         print(gdf_result)
+        assert np.array_equal(gdf_result.columns, pdf_result.columns)
         for column in gdf_result:
             assert np.array_equal(gdf_result[column].fillna(-1).sort_values(),
                                   pdf_result[column].fillna(-1).sort_values())
