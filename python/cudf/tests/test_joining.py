@@ -377,7 +377,6 @@ def test_dataframe_pairs_of_triples(pairs, max, rows, how):
         pdf_right[right_column] = np.random.randint(0, max, rows)
     gdf_left = DataFrame.from_pandas(pdf_left)
     gdf_right = DataFrame.from_pandas(pdf_right)
-    #if len(pdf_left.columns) == 0 or len(pdf_right.columns) == 0:
     if not set(pdf_left.columns).intersection(pdf_right.columns):
         with pytest.raises(pd.core.reshape.merge.MergeError) as raises:
             pdf_left.merge(pdf_right)
