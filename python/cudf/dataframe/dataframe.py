@@ -1564,23 +1564,20 @@ class DataFrame(object):
 
             * dict:
 
-                - Dicts can be used to replace
-                  different values in different columns.
-                  For example, `{'a': 1, 'z': 2}` specifies
-                  that the value 1 in column `a` and the value
-                  2 in column `z` must be replaced with
-                  *value*.
-
+                - Dicts can be used to replace different values in different
+                  columns. For example, `{'a': 1, 'z': 2}` specifies that the
+                  value 1 in column `a` and the value 2 in column `z` should be
+                  replaced with value*.
         value : numeric, str, list-like, or dict
-            Value(s) to replace `to_replace` with.
-            If a dict is provided,
-            then dict keys must match the keys in *to_replace*,
-            and correponding values must be compatible (e.g.,
-            if they are lists, then they must match in length).
+            Value(s) to replace `to_replace` with. If a dict is provided, then
+            its keys must match the keys in *to_replace*, and correponding
+            values must be compatible (e.g., if they are lists, then they must
+            match in length).
 
         Returns
         -------
         result : DataFrame
+            DataFrame after replacement.
         """
         outdf = self.copy()
 

@@ -654,20 +654,23 @@ class Series(object):
 
             * numeric or str:
 
-                - values equal to *to_replace* will be replaced
-                  with *value*
+                - values equal to *to_replace* will be replaced with *value*
 
             * list of numeric or str:
 
-                - If *value* is also list-like,
-                  *to_replace* and *value* must be of same length.
+                - If *value* is also list-like, *to_replace* and *value* must
+                be of same length.
         value : numeric, str, list-like, or dict
             Value(s) to replace `to_replace` with.
+
+        See also
+        --------
+        Series.fillna
 
         Returns
         -------
         result : Series
-            The mask and index are preserved.
+            Series after replacement. The mask and index are preserved.
         """
         if not is_scalar(to_replace):
             if is_scalar(value):
