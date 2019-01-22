@@ -387,7 +387,7 @@ gdf_error io_uncompress_single_h2d(const void *src, gdf_size_type src_size, int 
     if (strm_type == IO_UNCOMP_STREAM_TYPE_GZIP || strm_type == IO_UNCOMP_STREAM_TYPE_ZIP)
     {
         // INFLATE
-    	dst.resize(uncomp_len);
+        dst.resize(uncomp_len);
         size_t zdestLen = uncomp_len;
         int zerr = cpu_inflate((uint8_t*)dst.data(), &zdestLen, comp_data, comp_len);
         if (zerr != 0 || zdestLen != uncomp_len)
@@ -401,7 +401,7 @@ gdf_error io_uncompress_single_h2d(const void *src, gdf_size_type src_size, int 
         size_t src_ofs = 0;
         size_t dst_ofs = 0;
         int bz_err = 0;
-    	dst.resize(uncomp_len);
+        dst.resize(uncomp_len);
         do
         {
             size_t dst_len = uncomp_len - dst_ofs;
