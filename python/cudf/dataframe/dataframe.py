@@ -230,7 +230,9 @@ class DataFrame(object):
                 df[k] = col[arg]
             return df
         elif isinstance(arg, (list, np.ndarray, pd.Series, Series,)):
-            mask = np.array(arg)
+            mask = arg
+            if isinstance(mask, list):
+                mask = np.array(mask)
             df = DataFrame()
             if(mask.dtype == 'bool'):
                 for col in self._cols:

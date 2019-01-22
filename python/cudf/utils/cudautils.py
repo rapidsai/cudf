@@ -199,13 +199,14 @@ def gpu_expand_mask_bits(bits, out):
     and threads.
     """
     for i in range(cuda.grid(1), out.size, cuda.gridsize(1)):
-        out[i] = mask_get(bits, i)
+        if i < bits.size * mask_bitsize:
+            out[i] = mask_get(bits, i)
 
 
 def expand_mask_bits(size, bits):
     """Expand bit-mask into byte-mask
     """
-    expanded_mask = rmm.device_array(size, dtype=np.int32)
+    expanded_mask = full(size, 0, dtype=np.int32)
     numtasks = min(1024, expanded_mask.size)
     if numtasks > 0:
         gpu_expand_mask_bits.forall(numtasks)(bits, expanded_mask)
@@ -214,12 +215,7 @@ def expand_mask_bits(size, bits):
 
 def mask_assign_slot(size, mask):
     # expand bits into bytes
-    dtype = (np.int32 if size < 2 ** 31 else np.int64)
-    expanded_mask = rmm.device_array(size, dtype=dtype)
-    numtasks = min(64 * 128, expanded_mask.size)
-    if numtasks > 0:
-        gpu_expand_mask_bits.forall(numtasks)(mask, expanded_mask)
-
+    expanded_mask = expand_mask_bits(size, mask)
     # compute prefixsum
     slots = prefixsum(expanded_mask)
     sz = int(slots[slots.size - 1])
@@ -268,7 +264,8 @@ def copy_to_dense(data, mask, out=None):
         # check it
         if sz >= out.size:
             raise ValueError('output array too small')
-    gpu_copy_to_dense.forall(data.size)(data, mask, slots, out)
+    if out.size > 0:
+        gpu_copy_to_dense.forall(data.size)(data, mask, slots, out)
     return (sz, out)
 
 
