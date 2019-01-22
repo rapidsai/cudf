@@ -1660,7 +1660,7 @@ class DataFrame(object):
         # Set index
         return df.set_index(dataframe.index)
 
-    def to_arrow(self, index=True):
+    def to_arrow(self, preserve_index=True):
         """
         Convert to a PyArrow Table.
 
@@ -1688,13 +1688,34 @@ class DataFrame(object):
         """
         arrays = []
         names = []
-        if index:
-            names.append(self.index.name)
-            arrays.append(self.index.to_arrow())
+        types = []
+        index_names = []
+        index_columns = []
+
         for name, column in self._cols.items():
             names.append(name)
-            arrays.append(column.to_arrow())
-        return pa.Table.from_arrays(arrays, names=names)
+            arrow_col = column.to_arrow()
+            arrays.append(arrow_col)
+            types.append(arrow_col.type)
+
+        index_names.append(self.index.name)
+        index_columns.append(self.index)
+        # It would be better if we didn't convert this if we didn't have to,
+        # but we first need better tooling for cudf --> pyarrow type
+        # conversions
+        index_arrow = self.index.to_arrow()
+        types.append(index_arrow.type)
+        if preserve_index:
+            arrays.append(index_arrow)
+            names.append(self.index.name)
+
+        # We may want to add additional metadata to this in the future, but
+        # for now lets just piggyback off of what's done for Pandas
+        metadata = pa.pandas_compat.construct_metadata(
+            self, names, index_columns, index_names, preserve_index, types
+        )
+
+        return pa.Table.from_arrays(arrays, names=names, metadata=metadata)
 
     @classmethod
     def from_arrow(cls, table):
@@ -1729,8 +1750,16 @@ class DataFrame(object):
             <cudf.DataFrame ncols=2 nrows=3 >
 
         """
+        import json
         if not isinstance(table, pa.Table):
             raise TypeError('not a pyarrow.Table')
+
+        index_col = None
+        if isinstance(table.schema.metadata, dict):
+            if b'pandas' in table.schema.metadata:
+                index_col = json.loads(
+                    table.schema.metadata[b'pandas']
+                )['index_columns']
 
         df = cls()
         for col in table.columns:
@@ -1739,6 +1768,8 @@ class DataFrame(object):
                                           "with multiple chunks is not yet "
                                           "supported")
             df[col.name] = col.data.chunk(0)
+        if index_col:
+            df = df.set_index(index_col[0])
         return df
 
     def to_records(self, index=True):
