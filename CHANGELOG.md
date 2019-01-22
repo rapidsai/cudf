@@ -21,6 +21,7 @@
 - PR #607 Add `__iter__` and iteritems to DataFrame class
 - PR #635 Add Doxygen template
 - PR #649 Add `cudf.from_pandas` function
+- PR #703 add cpp apis for read_parquet
 
 ## Improvements
 
