@@ -8,60 +8,85 @@
 #include <memory>
 #include "dataframe/cudf_table.cuh"
 #include "utilities/nvtx/nvtx_utils.h"
+#include "utilities/type_dispatcher.hpp"
 #include <chrono>
 
-constexpr int BLOCK_SIZE = 32;
 constexpr int WARP_SIZE = 32;
 
-// __global__
-// void gpu_transpose( int64_t **in_cols, int64_t **out_cols,
-//                    gdf_size_type ncols, gdf_size_type nrows)
-// {
-//   // I'm hardcoding block to be warp size
-//   int tid = threadIdx.x;
-//   int blkid = blockIdx.x;
-//   int blksz = blockDim.x;
-
-//   int idx = blkid * blksz + tid;
-
-//   int64_t thread_data[WARP_SIZE];
-  
-//   for(size_t i = 0; i < WARP_SIZE; i++)
-//   {
-//     thread_data[i] = in_cols[i][idx];
-//   }
-  
-//   typedef cub::BlockExchange<int64_t, 32, 32> BlockExchange;
-//   __shared__ typename BlockExchange::TempStorage temp_storage;
-//   BlockExchange(temp_storage).StripedToBlocked(thread_data);
-
-  
-//   for(size_t i = 0; i < WARP_SIZE; i++)
-//   {
-//     out_cols[i + blkid * blksz][tid] = thread_data[i];
-//   }
-  
-// }
-
-
+template <typename ColumnType>
 __global__
-void gpu_transpose( int64_t **in_cols, int64_t **out_cols,
-                   gdf_size_type ncols, gdf_size_type nrows)
+void gpu_transpose(ColumnType **in_cols, ColumnType **out_cols,
+                  gdf_size_type ncols, gdf_size_type nrows)
 {
-  // __shared__ float tile[WARP_SIZE][WARP_SIZE];
   int x = blockIdx.x * WARP_SIZE + threadIdx.x;
   int y = blockIdx.y * WARP_SIZE + threadIdx.y;
 
-  out_cols[x][y] = in_cols[y][x];
-  // tile[threadIdx.y][threadIdx.x] = in_cols[y][x];
-
-  // __syncthreads();
-
-  // x = blockIdx.y * WARP_SIZE + threadIdx.x;  // transpose block offset
-  // y = blockIdx.x * WARP_SIZE + threadIdx.y;
-
-  // out_cols[x][y] = tile[threadIdx.y][threadIdx.x];
+  if (x < ncols && y < nrows)
+    out_cols[y][x] = in_cols[x][y];
 }
+
+__global__
+void gpu_transpose_valids(gdf_valid_type **in_cols_valid,
+                          gdf_valid_type **out_cols_valid,
+                          gdf_size_type ncols, gdf_size_type nrows)
+{
+  using MaskType = uint32_t;
+  constexpr uint32_t BITS_PER_MASK{sizeof(MaskType) * 8};
+
+  int x = blockIdx.x * WARP_SIZE + threadIdx.x;
+  int y = blockIdx.y * WARP_SIZE + threadIdx.y;
+
+  MaskType* const __restrict__ out_mask32 =
+    reinterpret_cast<MaskType*>(out_cols_valid[y]);
+
+  auto active_threads = __ballot_sync(0xffffffff, x < ncols && y < nrows);
+  if (x < ncols && y < nrows)
+  {
+    bool const input_is_valid{gdf_is_valid(in_cols_valid[x], y)};
+
+    MaskType const result_mask{__ballot_sync(active_threads, input_is_valid)};
+
+    gdf_index_type const out_location = x / BITS_PER_MASK;
+
+    // Only one thread writes output
+    if (0 == threadIdx.x % warpSize) {
+      out_mask32[out_location] = result_mask;
+    }
+  }
+}
+
+// TODO: refactor and separate `valids` kernel launch into another function.
+// Should not need to pass `has_null`
+struct launch_kernel{
+  template <typename ColumnType>
+  gdf_error operator()(
+    void **in_cols_data_ptr, void **out_cols_data_ptr,
+    gdf_valid_type **in_cols_valid_ptr, gdf_valid_type **out_cols_valid_ptr,
+    gdf_size_type ncols, gdf_size_type nrows, bool has_null)
+  {
+    dim3 dimBlock(WARP_SIZE, WARP_SIZE, 1);
+    dim3 dimGrid( (ncols + WARP_SIZE - 1) / WARP_SIZE,
+                  (nrows + WARP_SIZE - 1) / WARP_SIZE, 1);
+    // auto start = std::chrono::high_resolution_clock::now();
+    gpu_transpose<ColumnType><<<dimGrid,dimBlock>>>(
+      reinterpret_cast<ColumnType**>(in_cols_data_ptr),
+      reinterpret_cast<ColumnType**>(out_cols_data_ptr),
+      ncols, nrows
+    );
+    if (has_null)
+      gpu_transpose_valids<<<dimGrid,dimBlock>>>(
+        in_cols_valid_ptr,
+        out_cols_valid_ptr,
+        ncols, nrows
+      );
+    cudaDeviceSynchronize();
+    // auto end = std::chrono::system_clock::now();
+    // std::chrono::duration<double> elapsed_seconds = end-start;
+    // std::cout << "Elapsed time (ms): " << elapsed_seconds.count()*1000 << std::endl;
+    CUDA_CHECK_LAST();
+    return GDF_SUCCESS;
+  }
+};
 
 gdf_error gdf_transpose(gdf_size_type ncols, gdf_column** in_cols,
                         gdf_column** out_cols) {
@@ -77,7 +102,8 @@ gdf_error gdf_transpose(gdf_size_type ncols, gdf_column** in_cols,
   for (gdf_size_type i = 1; i < ncols; i++) {
     GDF_REQUIRE(in_cols[i]->dtype == dtype, GDF_DTYPE_MISMATCH)
   }
-  gdf_size_type out_ncols = in_cols[0]->size;
+  gdf_size_type nrows = in_cols[0]->size;
+  gdf_size_type out_ncols = nrows;
   for (gdf_size_type i = 0; i < out_ncols; i++) {
     GDF_REQUIRE(out_cols[i]->dtype == dtype, GDF_DTYPE_MISMATCH)
   }
@@ -114,42 +140,16 @@ gdf_error gdf_transpose(gdf_size_type ncols, gdf_column** in_cols,
   rmm::device_vector<void*> d_out_columns_data(out_columns_data);
   rmm::device_vector<gdf_valid_type*> d_out_columns_valid(out_columns_valid);
 
-  auto input_table_ptr = input_table.get();
   void** out_cols_data_ptr = d_out_columns_data.data().get();
   gdf_valid_type** out_cols_valid_ptr = d_out_columns_valid.data().get();
 
-  // auto copy_to_outcol = [input_table_ptr, out_cols_data_ptr, out_cols_valid_ptr,
-  //                        has_null] __device__(gdf_size_type i) {
-
-  //   input_table_ptr->get_packed_row_values(i, out_cols_data_ptr[i]);
-
-  //   if (has_null) {
-  //     input_table_ptr->get_row_valids(i, out_cols_valid_ptr[i]);
-  //   }
-  // };
-
-  // auto start = std::chrono::high_resolution_clock::now();
-  // thrust::for_each(
-  //     rmm::exec_policy(), thrust::counting_iterator<gdf_size_type>(0),
-  //     thrust::counting_iterator<gdf_size_type>(out_ncols), copy_to_outcol);
-  // cudaDeviceSynchronize();
-  // auto end = std::chrono::system_clock::now();
-  // std::chrono::duration<double> elapsed_seconds = end-start;
-  // std::cout << "Elapsed time (ms): " << elapsed_seconds.count()*1000 << std::endl;
-
-
-  dim3 dimBlock(WARP_SIZE, WARP_SIZE, 1);
-  dim3 dimGrid(100000, 1, 1);
-  auto start = std::chrono::high_resolution_clock::now();
-  gpu_transpose<<<dimGrid,dimBlock>>>(
-    (int64_t **)input_table->d_columns_data,
-    (int64_t **)out_cols_data_ptr,
-    ncols, out_ncols
-  );
-  cudaDeviceSynchronize();
-  auto end = std::chrono::system_clock::now();
-  std::chrono::duration<double> elapsed_seconds = end-start;
-  std::cout << "Elapsed time (ms): " << elapsed_seconds.count()*1000 << std::endl;
+  cudf::type_dispatcher(dtype,
+                        launch_kernel{},
+                        input_table->d_columns_data_ptr,
+                        out_cols_data_ptr,
+                        input_table->d_columns_valids_ptr,
+                        out_cols_valid_ptr,
+                        ncols, nrows, has_null);
   POP_RANGE();
   return GDF_SUCCESS;
 }
