@@ -414,12 +414,12 @@ public:
     // Pack the element from each column in the row into the buffer
     for(size_type i = 0; i < num_columns; ++i)
     {
-      const gdf_dtype source_col_type = d_columns_types[i];
+      const gdf_dtype source_col_type = d_columns_types_ptr[i];
 
       cudf::type_dispatcher(source_col_type,
                             copy_element{},
                             row_byte_buffer, i,
-                            d_columns_data[i], row_index);
+                            d_columns_data_ptr[i], row_index);
 
     }
     return GDF_SUCCESS;
@@ -441,7 +441,7 @@ public:
   __device__
   void* get_column_device_pointer(size_type column_index)
   {
-    return d_columns_data[column_index];
+    return d_columns_data_ptr[column_index];
   }
 
   /* --------------------------------------------------------------------------*/
@@ -466,7 +466,7 @@ public:
     for(size_type i = 0; i < num_columns; i++)
     {
       // get validity of item in column in self
-      if (gdf_is_valid(d_columns_valids[i], row_index))
+      if (gdf_is_valid(d_columns_valids_ptr[i], row_index))
         // set validity in output buffer
         row_valid_byte_buffer[i / GDF_VALID_BITSIZE] |= (gdf_valid_type{1} << (i % GDF_VALID_BITSIZE));
     }
@@ -476,7 +476,7 @@ public:
   __device__
   gdf_valid_type* get_columns_device_valids_ptr(size_type column_index)
   {
-    return d_columns_valids[column_index];
+    return d_columns_valids_ptr[column_index];
   }
     /* --------------------------------------------------------------------------*/
     /** 
