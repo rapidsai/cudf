@@ -267,7 +267,7 @@ protected:
 
         int fails = 0;
 
-        for (std::size_t i = 0; i < boolean_column.size; i++) {
+        for (gdf_size_type i = 0; i < boolean_column.size; i++) {
             if (i % 3 > 0) {
                 bool expected = true;
                 bool value    = static_cast<bool *>(boolean_column.data)[i];
@@ -292,7 +292,7 @@ protected:
 
         int fails = 0;
 
-        for (std::size_t i = 0; i < int32_column.size; i++) {
+        for (gdf_size_type i = 0; i < int32_column.size; i++) {
             if (i % 3 > 0) {
                 std::int32_t expected = genInt32(i);
                 std::int32_t value =
@@ -318,7 +318,7 @@ protected:
 
         int fails = 0;
 
-        for (std::size_t i = 0; i < int64_column.size; i++) {
+        for (gdf_size_type i = 0; i < int64_column.size; i++) {
             if (i % 3 > 0) {
                 std::int64_t expected = genInt64(i);
                 std::int64_t value =
@@ -344,7 +344,7 @@ protected:
 
         int fails = 0;
 
-        for (std::size_t i = 0; i < double_column.size; i++) {
+        for (gdf_size_type i = 0; i < double_column.size; i++) {
             if (i % 3 > 0) {
                 double expected = static_cast<double>(i);
                 double value    = static_cast<double *>(double_column.data)[i];
