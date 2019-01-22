@@ -5,6 +5,7 @@ from __future__ import print_function, division
 import inspect
 import random
 from collections import OrderedDict
+import logging
 import warnings
 import numbers
 
@@ -1058,6 +1059,14 @@ class DataFrame(object):
         on = [on] if isinstance(on, str) else list(on)
         lhs = self
         rhs = other
+
+        # Pandas inconsistency warning
+        if len(lhs) == 0 and len(lhs.columns) > len(rhs.columns) and\
+                set(rhs.columns).intersection(lhs.columns):
+            logging.warning(
+                    "Pandas and CUDF column ordering may not match for "
+                    "DataFrames with 0 rows."
+                    )
 
         # Column prep - this can be simplified
         col_cats = {}

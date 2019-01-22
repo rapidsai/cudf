@@ -364,7 +364,7 @@ def test_dataframe_merge_order():
 
 @pytest.mark.parametrize('pairs', [('', ''), ('', 'a'), ('', 'ab'), ('', 'abc'), ('', 'b'), ('', 'bcd'), ('', 'cde'), ('a', 'a'), ('a', 'ab'), ('a', 'abc'), ('a', 'b'), ('a', 'bcd'), ('a', 'cde'), ('ab', 'ab'), ('ab', 'abc'), ('ab', 'b'), ('ab', 'bcd'), ('ab', 'cde'), ('abc', 'abc'), ('abc', 'b'), ('abc', 'bcd'), ('abc', 'cde'), ('b', 'b'), ('b', 'bcd'), ('b', 'cde'), ('bcd', 'bcd'), ('bcd', 'cde'), ('cde', 'cde')])   # noqa: E501
 @pytest.mark.parametrize('max', [5, 1000])
-@pytest.mark.parametrize('rows', [5, 15, 100])
+@pytest.mark.parametrize('rows', [1, 5, 100])
 @pytest.mark.parametrize('how', ['left', 'inner', 'outer'])
 def test_dataframe_pairs_of_triples(pairs, max, rows, how):
     np.random.seed(0)
@@ -377,7 +377,7 @@ def test_dataframe_pairs_of_triples(pairs, max, rows, how):
         pdf_right[right_column] = np.random.randint(0, max, rows)
     gdf_left = DataFrame.from_pandas(pdf_left)
     gdf_right = DataFrame.from_pandas(pdf_right)
-    if len(pdf_left) == 0 or len(pdf_right) == 0:
+    if len(pdf_left.columns) == 0 or len(pdf_right.columns) == 0:
         with pytest.raises(pd.core.reshape.merge.MergeError) as raises:
             pdf_left.merge(pdf_right)
         raises.match("No common columns to perform merge on")
