@@ -26,8 +26,8 @@
 struct ScatterTest : GdfTest {};
 
 TEST_F(ScatterTest, IdentityTest) {
-  gdf_size_type source_size{100};
-  gdf_size_type destination_size{100};
+  constexpr gdf_size_type source_size{1000};
+  constexpr gdf_size_type destination_size{1000};
 
   cudf::test::column_wrapper<int32_t> source_column{
       source_size, [](gdf_index_type row) { return row; },
@@ -50,8 +50,8 @@ TEST_F(ScatterTest, IdentityTest) {
 }
 
 TEST_F(ScatterTest, ReverseIdentityTest) {
-  gdf_size_type const source_size{100};
-  gdf_size_type const destination_size{100};
+  constexpr gdf_size_type source_size{1000};
+  constexpr gdf_size_type destination_size{1000};
 
   cudf::test::column_wrapper<int32_t> source_column{
       source_size, [](gdf_index_type row) { return row; },
@@ -93,8 +93,8 @@ TEST_F(ScatterTest, ReverseIdentityTest) {
 }
 
 TEST_F(ScatterTest, AllNull) {
-  gdf_size_type const source_size{100};
-  gdf_size_type const destination_size{100};
+  constexpr gdf_size_type source_size{1000};
+  constexpr gdf_size_type destination_size{1000};
 
   // source column has all null values
   cudf::test::column_wrapper<int32_t> source_column{
@@ -127,5 +127,60 @@ TEST_F(ScatterTest, AllNull) {
   for (gdf_index_type i = 0; i < destination_size; i++) {
     EXPECT_FALSE(gdf_is_valid(result_bitmask.data(), i))
         << "Value at index " << i << " should be null!\n";
+  }
+}
+
+TEST_F(ScatterTest, EveryOtherNull) {
+  constexpr gdf_size_type source_size{1000};
+  constexpr gdf_size_type destination_size{1000};
+
+  static_assert(0 == source_size % 2,
+                "Size of source data must be a multiple of 2.");
+  static_assert(source_size == destination_size,
+                "Source and destination columns must be equal size.");
+
+  // elements with even indices are null
+  cudf::test::column_wrapper<int32_t> source_column{
+      source_size, [](gdf_index_type row) { return row; },
+      [](gdf_index_type row) { return row % 2; }};
+
+  // Scatter null values to the last half of the destination column
+  std::vector<gdf_index_type> host_scatter_map(source_size);
+  gdf_size_type counter{0};
+  for (gdf_size_type i = 0; i < source_size; ++i) {
+    bool const is_even{0 == i % 2};
+    host_scatter_map[i] =
+        is_even ? ((destination_size / 2) + counter) : counter;
+    if (i % 2) counter++;
+  }
+  thrust::device_vector<gdf_index_type> scatter_map(host_scatter_map);
+
+  cudf::test::column_wrapper<int32_t> destination_column(destination_size);
+
+  gdf_column* raw_source = source_column.get();
+  gdf_column* raw_destination = destination_column.get();
+
+  cudf::table source_table{&raw_source, 1};
+  cudf::table destination_table{&raw_destination, 1};
+
+  cudf::scatter(&source_table, scatter_map.data().get(), &destination_table);
+
+  // Copy result of destination column to host
+  std::vector<int32_t> result_data;
+  std::vector<gdf_valid_type> result_bitmask;
+  std::tie(result_data, result_bitmask) = destination_column.to_host();
+
+  // All values of result should be null
+  for (gdf_index_type i = 0; i < destination_size; i++) {
+    // The first half of the destination column should be all valid 
+    // and values should be 1, 3, 5, 7, etc.
+    if (i < destination_size / 2) {
+      EXPECT_TRUE(gdf_is_valid(result_bitmask.data(), i))
+          << "Value at index " << i << " should be non-null!\n";
+      EXPECT_EQ(1 + i*2,result_data[i]);
+    } else {
+      EXPECT_FALSE(gdf_is_valid(result_bitmask.data(), i))
+          << "Value at index " << i << " should be null!\n";
+    }
   }
 }
