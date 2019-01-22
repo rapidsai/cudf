@@ -31,6 +31,8 @@
 #include <cassert>
 #include "utilities/type_dispatcher.hpp"
 
+
+
 template <typename size_type>
 struct ValidRange {
     size_type start, stop;
@@ -260,11 +262,12 @@ public:
 
 
     // Copy pointers to each column's data, types, and validity bitmasks 
-    // to the device  as contiguous arrays
-    device_columns_data.reserve(num_cols);
-    device_columns_valids.reserve(num_cols);
-    device_columns_types.reserve(num_cols);
-    column_byte_widths.reserve(num_cols);
+    // to contiguous host vectors (AoS to SoA conversion)
+    std::vector<void*> columns_data(num_cols);
+    std::vector<gdf_valid_type*> columns_valids(num_cols);
+    std::vector<gdf_dtype> columns_types(num_cols);
+    std::vector<byte_type> columns_byte_widths(num_cols);
+
     for(size_type i = 0; i < num_cols; ++i)
     {
       gdf_column * const current_column = host_columns[i];
@@ -280,42 +283,44 @@ public:
       if(GDF_SUCCESS == get_column_byte_width(current_column, &column_width_bytes))
       {
         row_size_bytes += column_width_bytes;
-
         // Store the byte width of each column in a device array
-        column_byte_widths.push_back(static_cast<byte_type>(row_size_bytes));
+        columns_byte_widths[i] = (static_cast<byte_type>(row_size_bytes));
       }
       else
       {
         std::cerr << "Attempted to get column byte width of unsupported GDF datatype.\n";
-        column_byte_widths.push_back(0);
+        columns_byte_widths[i] = 0;
       }
 
-      device_columns_data.push_back(host_columns[i]->data);
-      device_columns_valids.push_back(host_columns[i]->valid);
-      device_columns_types.push_back(host_columns[i]->dtype);
+      columns_data[i] = (host_columns[i]->data);
+      columns_valids[i] = (host_columns[i]->valid);
+      columns_types[i] = (host_columns[i]->dtype);
     }
 
-    d_columns_data = device_columns_data.data().get();
-    d_columns_valids = device_columns_valids.data().get();
-    d_columns_types = device_columns_types.data().get();
-    d_column_byte_widths = column_byte_widths.data().get();
+    // Copy host vectors to device vectors
+    device_columns_data = columns_data;
+    device_columns_valids = columns_valids;
+    device_columns_types = columns_types;
+    device_column_byte_widths = columns_byte_widths;
+
+    d_columns_data_ptr = device_columns_data.data().get();
+    d_columns_valids_ptr = device_columns_valids.data().get();
+    d_columns_types_ptr = device_columns_types.data().get();
+    d_columns_byte_widths_ptr = device_column_byte_widths.data().get();
 
     // Allocate storage sufficient to hold a validity bit for every row
     // in the table
     const size_type mask_size = gdf_get_num_chars_bitmask(column_length);
     device_row_valid.resize(mask_size);
 
-       
     // If a row contains a single NULL value, then the entire row is considered
-    // to be NULL, therefore initialize the row-validity mask with the 
+    // to be NULL, therefore initialize the row-validity mask with the
     // bit-wise AND of the validity mask of all the columns
     thrust::tabulate(rmm::exec_policy(cudaStream_t{0}),
-                     device_row_valid.begin(),
-                     device_row_valid.end(),
-                     row_masker<size_type>(d_columns_valids, num_cols));
+                     device_row_valid.begin(), device_row_valid.end(),
+                     row_masker<size_type>(d_columns_valids_ptr, num_cols));
 
     d_row_valid = device_row_valid.data().get();
-
   }
 
   ~gdf_table(){}
@@ -412,13 +417,13 @@ public:
     // Pack the element from each column in the row into the buffer
     for(size_type i = 0; i < num_columns; ++i)
     {
-      const byte_type current_column_byte_width = d_column_byte_widths[i];
+      const byte_type current_column_byte_width = d_columns_byte_widths_ptr[i];
       switch(current_column_byte_width)
       {
         case 1:
           {
             using col_type = int8_t;
-            const col_type * const current_row_element = static_cast<col_type *>(d_columns_data[i])[row_index];
+            const col_type * const current_row_element = static_cast<col_type *>(d_columns_data_ptr[i])[row_index];
             col_type * write_location = static_cast<col_type*>(write_pointer);
             *write_location = *current_row_element;
             write_pointer += sizeof(col_type);
@@ -427,7 +432,7 @@ public:
         case 2:
           {
             using col_type = int16_t;
-            const col_type * const current_row_element = static_cast<col_type *>(d_columns_data[i])[row_index];
+            const col_type * const current_row_element = static_cast<col_type *>(d_columns_data_ptr[i])[row_index];
             col_type * write_location = static_cast<col_type*>(write_pointer);
             *write_location = *current_row_element;
             write_pointer += sizeof(col_type);
@@ -436,7 +441,7 @@ public:
         case 4:
           {
             using col_type = int32_t;
-            const col_type * const current_row_element = static_cast<col_type *>(d_columns_data[i])[row_index];
+            const col_type * const current_row_element = static_cast<col_type *>(d_columns_data_ptr[i])[row_index];
             col_type * write_location = static_cast<col_type*>(write_pointer);
             *write_location = *current_row_element;
             write_pointer += sizeof(col_type);
@@ -445,7 +450,7 @@ public:
         case 8:
           {
             using col_type = int64_t;
-            const col_type * const current_row_element = static_cast<col_type *>(d_columns_data[i])[row_index];
+            const col_type * const current_row_element = static_cast<col_type *>(d_columns_data_ptr[i])[row_index];
             col_type * write_location = static_cast<col_type*>(write_pointer);
             *write_location = *current_row_element;
             write_pointer += sizeof(col_type);
@@ -492,8 +497,8 @@ public:
   {
     for(size_type i = 0; i < num_columns; ++i)
     {
-      const gdf_dtype target_col_type = d_columns_types[i];
-      const gdf_dtype source_col_type = source.d_columns_types[i];
+      const gdf_dtype target_col_type = d_columns_types_ptr[i];
+      const gdf_dtype source_col_type = source.d_columns_types_ptr[i];
     
       if(target_col_type != source_col_type)
       {
@@ -502,9 +507,9 @@ public:
 
       cudf::type_dispatcher(target_col_type,
                             copy_element{},
-                            d_columns_data[i],
+                            d_columns_data_ptr[i],
                             target_row_index,
-                            source.d_columns_data[i],
+                            source.d_columns_data_ptr[i],
                             source_row_index);
 
     }
@@ -552,8 +557,8 @@ public:
 
     for(size_type i = 0; i < num_columns; ++i)
     {
-      gdf_dtype const this_col_type = d_columns_types[i];
-      gdf_dtype const rhs_col_type = rhs.d_columns_types[i];
+      gdf_dtype const this_col_type = d_columns_types_ptr[i];
+      gdf_dtype const rhs_col_type = rhs.d_columns_types_ptr[i];
     
       if(this_col_type != rhs_col_type)
       {
@@ -562,9 +567,9 @@ public:
 
       bool is_equal = cudf::type_dispatcher(this_col_type, 
                                             elements_are_equal{}, 
-                                            d_columns_data[i], 
+                                            d_columns_data_ptr[i], 
                                             this_row_index, 
-                                            rhs.d_columns_data[i], 
+                                            rhs.d_columns_data_ptr[i], 
                                             rhs_row_index);
 
       // If the elements in column `i` do not match, return false
@@ -629,11 +634,11 @@ public:
     // Iterate all the columns and hash each element, combining the hash values together
     for(size_type i = 0; i < num_columns_to_hash; ++i)
     {
-      gdf_dtype const current_column_type = d_columns_types[i];
+      gdf_dtype const current_column_type = d_columns_types_ptr[i];
 
       cudf::type_dispatcher(current_column_type, 
                           hash_element<hash_function>{}, 
-                          hash_value, d_columns_data[i], row_index, i);
+                          hash_value, d_columns_data_ptr[i], row_index, i);
     }
 
     return hash_value;
@@ -1087,20 +1092,20 @@ gdf_error scatter_column(column_type const * const __restrict__ input_column,
   gdf_column ** host_columns{nullptr};  /** The set of gdf_columns that this table wraps */
 
   rmm::device_vector<void*> device_columns_data; /** Device array of pointers to each columns data */
-  void ** d_columns_data{nullptr};                  /** Raw pointer to the device array's data */
+  void ** d_columns_data_ptr{nullptr};                  /** Raw pointer to the device array's data */
 
   rmm::device_vector<gdf_valid_type*> device_columns_valids;  /** Device array of pointers to each columns validity bitmask*/
-  gdf_valid_type** d_columns_valids{nullptr};                   /** Raw pointer to the device array's data */
+  gdf_valid_type** d_columns_valids_ptr{nullptr};                   /** Raw pointer to the device array's data */
 
   rmm::device_vector<gdf_valid_type> device_row_valid;  /** Device array of bitmask for the validity of each row. */
   gdf_valid_type * d_row_valid{nullptr};                   /** Raw pointer to device array's data */
 
   rmm::device_vector<gdf_dtype> device_columns_types; /** Device array of each columns data type */
-  gdf_dtype * d_columns_types{nullptr};                 /** Raw pointer to the device array's data */
+  gdf_dtype * d_columns_types_ptr{nullptr};                 /** Raw pointer to the device array's data */
 
   size_type row_size_bytes{0};
-  rmm::device_vector<byte_type> column_byte_widths;
-  byte_type * d_column_byte_widths{nullptr};
+  rmm::device_vector<byte_type> device_column_byte_widths;
+  byte_type * d_columns_byte_widths_ptr{nullptr};
 
 };
 
