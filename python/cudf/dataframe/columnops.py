@@ -140,17 +140,23 @@ def as_column(arbitrary, nan_as_null=True):
 
     * ``Column``
     * ``Buffer``
+    * ``Series``
+    * ``Index``
     * numba device array
     * numpy array
+    * pyarrow array
     * pandas.Categorical
 
     Returns
     -------
     result : subclass of TypedColumnBase
         - CategoricalColumn for pandas.Categorical input.
+        - DatetimeColumn for datetime input
         - NumericalColumn for all other inputs.
     """
     from . import numerical, categorical, datetime
+    from cudf.dataframe.series import Series
+    from cudf.dataframe.index import Index
 
     if isinstance(arbitrary, Column):
         if not isinstance(arbitrary, TypedColumnBase):
@@ -159,6 +165,12 @@ def as_column(arbitrary, nan_as_null=True):
                                   dtype=arbitrary.dtype)
         else:
             data = arbitrary
+
+    elif isinstance(arbitrary, Series):
+        data = arbitrary._column
+
+    elif isinstance(arbitrary, Index):
+        data = arbitrary._values
 
     elif isinstance(arbitrary, Buffer):
         data = numerical.NumericalColumn(data=arbitrary, dtype=arbitrary.dtype)
@@ -174,6 +186,8 @@ def as_column(arbitrary, nan_as_null=True):
     elif isinstance(arbitrary, np.ndarray):
         if arbitrary.dtype.kind == 'M':
             data = datetime.DatetimeColumn.from_numpy(arbitrary)
+        elif arbitrary.dtype.kind in ('O', 'U'):
+            raise NotImplementedError("Strings are not yet supported")
         else:
             data = as_column(rmm.to_device(arbitrary), nan_as_null=nan_as_null)
 

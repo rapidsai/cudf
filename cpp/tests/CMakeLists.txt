@@ -120,6 +120,14 @@ set(BITMASK_TEST_SRC
 ConfigureTest(BITMASK_TEST "${BITMASK_TEST_SRC}")
 
 ###################################################################################################
+# - bit_mask tests ---------------------------------------------------------------------------------
+
+set(BIT_MASK_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/bitmask/bit_mask_test.cu")
+
+ConfigureTest(BIT_MASK_TEST "${BIT_MASK_TEST_SRC}")
+
+###################################################################################################
 # - datetime tests --------------------------------------------------------------------------------
 
 set(DATETIME_TEST_SRC

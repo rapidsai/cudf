@@ -300,6 +300,7 @@ gdf_error join_call( int num_cols, gdf_column **leftcol, gdf_column **rightcol,
   if(left_col_size >= MAX_JOIN_SIZE) return GDF_COLUMN_SIZE_TOO_BIG;
   if(right_col_size >= MAX_JOIN_SIZE) return GDF_COLUMN_SIZE_TOO_BIG;
 
+
   // If both frames are empty, return immediately
   if((0 == left_col_size ) && (0 == right_col_size)) {
     return GDF_SUCCESS;
@@ -331,9 +332,16 @@ gdf_error join_call( int num_cols, gdf_column **leftcol, gdf_column **rightcol,
     if((left_col_size > 0) && (nullptr == leftcol[i]->data)){
      return GDF_DATASET_EMPTY;
     } 
-    if(rightcol[i]->dtype != leftcol[i]->dtype) return GDF_JOIN_DTYPE_MISMATCH;
+    if(rightcol[i]->dtype != leftcol[i]->dtype) return GDF_DTYPE_MISMATCH;
     if(left_col_size != leftcol[i]->size) return GDF_COLUMN_SIZE_MISMATCH;
     if(right_col_size != rightcol[i]->size) return GDF_COLUMN_SIZE_MISMATCH;
+
+    // Ensure GDF_TIMESTAMP columns have the same resolution
+    if (GDF_TIMESTAMP == rightcol[i]->dtype) {
+      GDF_REQUIRE(
+          rightcol[i]->dtype_info.time_unit == leftcol[i]->dtype_info.time_unit,
+          GDF_TIMESTAMP_RESOLUTION_MISMATCH);
+    }
   }
 
   gdf_method join_method = join_context->flag_method; 
@@ -492,40 +500,50 @@ gdf_error join_call_compute_df(
                          gdf_column * left_indices,
                          gdf_column * right_indices,
                          gdf_context *join_context) {
-    //return error if the inputs are invalid
-    if ((left_cols == nullptr)  ||
-        (right_cols == nullptr)) { return GDF_DATASET_EMPTY; }
+  GDF_REQUIRE(nullptr != left_cols, GDF_DATASET_EMPTY);
+  GDF_REQUIRE(nullptr != right_cols, GDF_DATASET_EMPTY);
 
-    if (num_cols_to_join == 0) { return GDF_SUCCESS; }
-    
-    if ((left_join_cols == nullptr)  ||
-        (right_join_cols == nullptr)) { return GDF_DATASET_EMPTY; }
+  // If the inputs are empty, immediately return
+  if( (0 == left_cols[0]->size) && (0 == right_cols[0]->size) ){
+    return GDF_SUCCESS;
+  }
 
-    //check if combined join output is expected
-    bool compute_df = (result_cols != nullptr);
+  GDF_REQUIRE(0 != num_cols_to_join, GDF_SUCCESS);
 
-    //return error if no output pointers are valid
-    if ( ((left_indices == nullptr)||(right_indices == nullptr)) &&
-         (!compute_df) ) { return GDF_DATASET_EMPTY; }
+  GDF_REQUIRE(nullptr != left_join_cols, GDF_DATASET_EMPTY);
+  GDF_REQUIRE(nullptr != right_join_cols, GDF_DATASET_EMPTY);
+  GDF_REQUIRE(nullptr != join_context, GDF_INVALID_API_CALL);
 
-    if (join_context == nullptr) { return GDF_INVALID_API_CALL; }
+  // Determine if requested output is the indices of matching rows, the fully
+  // constructed output dataframe, or both
+  bool const construct_output_dataframe{nullptr != result_cols};
+  bool const return_output_indices{(nullptr != left_indices) and
+                                   (nullptr != right_indices)};
 
-    //If index outputs are not requested, create columns to store them
-    //for computing combined join output
-    gdf_column * left_index_out = left_indices;
-    gdf_column * right_index_out = right_indices;
+  GDF_REQUIRE(construct_output_dataframe or return_output_indices,
+              GDF_INVALID_API_CALL);
 
-    using gdf_col_pointer = typename std::unique_ptr<gdf_column, std::function<void(gdf_column*)>>;
-    auto gdf_col_deleter = [](gdf_column* col){
-        col->size = 0;
-        if (col->data)  { RMM_FREE(col->data, 0);  }
-        if (col->valid) { RMM_FREE(col->valid, 0); }
-    };
-    gdf_col_pointer l_index_temp, r_index_temp;
+  // If index outputs are not requested, create columns to store them
+  // for computing combined join output
+  gdf_column *left_index_out = left_indices;
+  gdf_column *right_index_out = right_indices;
 
-    if (nullptr == left_indices) {
-        l_index_temp = {new gdf_column, gdf_col_deleter};
-        left_index_out = l_index_temp.get();
+  using gdf_col_pointer =
+      typename std::unique_ptr<gdf_column, std::function<void(gdf_column *)>>;
+  auto gdf_col_deleter = [](gdf_column *col) {
+    col->size = 0;
+    if (col->data) {
+      RMM_FREE(col->data, 0);
+    }
+    if (col->valid) {
+      RMM_FREE(col->valid, 0);
+    }
+  };
+  gdf_col_pointer l_index_temp, r_index_temp;
+
+  if (nullptr == left_indices) {
+    l_index_temp = {new gdf_column, gdf_col_deleter};
+    left_index_out = l_index_temp.get();
     }
 
     if (nullptr == right_indices) {
@@ -546,9 +564,9 @@ gdf_error join_call_compute_df(
             ljoincol.data(), rjoincol.data(),
             left_index_out, right_index_out,
             join_context);
-    //If compute_df is false then left_index_out or right_index_out
+    //If construct_output_dataframe is false then left_index_out or right_index_out
     //was not dynamically allocated.
-    if ((!compute_df) || (GDF_SUCCESS != join_err)) {
+    if ((!construct_output_dataframe) || (GDF_SUCCESS != join_err)) {
         return join_err;
     }
 

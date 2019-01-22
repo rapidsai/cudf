@@ -31,10 +31,11 @@ def read_csv(filepath_or_buffer, lineterminator='\n',
              quotechar='"', quoting=True, doublequote=True,
              header='infer',
              mangle_dupe_cols=True, usecols=None,
-             delimiter=',', sep=None, delim_whitespace=False,
+             sep=',', delimiter=None, delim_whitespace=False,
              skipinitialspace=False, names=None, dtype=None,
              skipfooter=0, skiprows=0, dayfirst=False, compression='infer',
-             thousands=None, decimal='.', true_values=None, false_values=None):
+             thousands=None, decimal='.', true_values=None, false_values=None,
+             nrows=None):
     """
     Load and parse a CSV file into a DataFrame
 
@@ -42,8 +43,10 @@ def read_csv(filepath_or_buffer, lineterminator='\n',
     ----------
     filepath_or_buffer : str
         Path of file to be read or a file-like object containing the file.
-    delimiter : char, default ','
+    sep : char, default ','
         Delimiter to be used.
+    delimiter : char, default None
+        Alternative argument name for sep.
     delim_whitespace : bool, default False
         Determines whether to use whitespace as delimiter.
     lineterminator : char, default '\\n'
@@ -91,6 +94,8 @@ def read_csv(filepath_or_buffer, lineterminator='\n',
         Values to consider as boolean True
     false_values : list, default None
         Values to consider as boolean False
+    nrows: int, default None
+        If specified, maximum number of rows to read
 
     Returns
     -------
@@ -139,6 +144,11 @@ def read_csv(filepath_or_buffer, lineterminator='\n',
     --------
     .read_csv_strings
     """
+
+    # Alias sep -> delimiter.
+    if delimiter is None:
+        delimiter = sep
+
     if dtype is not None:
         if isinstance(dtype, collections.abc.Mapping):
             dtype_dict = True
@@ -158,7 +168,7 @@ def read_csv(filepath_or_buffer, lineterminator='\n',
     # Populate csv_reader struct
     if is_file_like(filepath_or_buffer):
         if compression == 'infer':
-            raise ValueError("Cannot infer compression type from a buffer")
+            compression = None
         buffer = filepath_or_buffer.read()
         # check if StringIO is used
         if hasattr(buffer, 'encode'):
@@ -233,6 +243,9 @@ def read_csv(filepath_or_buffer, lineterminator='\n',
     if thousands == delimiter:
         raise ValueError("thousands cannot be the same as delimiter")
 
+    if nrows is not None and skipfooter != 0:
+        raise ValueError("cannot use both nrows and skipfooter parameters")
+
     # Start with default values recognized as boolean
     arr_true_values = [_wrap_string(str('True')), _wrap_string(str('TRUE'))]
     arr_false_values = [_wrap_string(str('False')), _wrap_string(str('FALSE'))]
@@ -267,6 +280,7 @@ def read_csv(filepath_or_buffer, lineterminator='\n',
     csv_reader.compression = compression_bytes
     csv_reader.decimal = decimal.encode()
     csv_reader.thousands = thousands.encode() if thousands else b'\0'
+    csv_reader.nrows = nrows if nrows is not None else -1
 
     # Call read_csv
     libgdf.read_csv(csv_reader)
@@ -301,10 +315,11 @@ def read_csv(filepath_or_buffer, lineterminator='\n',
 
 def read_csv_strings(filepath_or_buffer, lineterminator='\n',
                      quotechar='"', quoting=True, doublequote=True,
-                     delimiter=',', sep=None, delim_whitespace=False,
+                     sep=',', delimiter=None, delim_whitespace=False,
                      skipinitialspace=False, names=None, dtype=None,
-                     skipfooter=0, skiprows=0, dayfirst=False, thousands=None,
-                     decimal='.', true_values=None, false_values=None):
+                     skipfooter=0, skiprows=0, dayfirst=False,
+                     compression='infer', thousands=None, decimal='.',
+                     true_values=None, false_values=None, nrows=None):
 
     """
     **Experimental**: This function exists only as a beta way to use
@@ -378,6 +393,10 @@ def read_csv_strings(filepath_or_buffer, lineterminator='\n',
         Column names and dtypes must be specified.'''
         raise TypeError(msg)
 
+    # Alias sep -> delimiter.
+    if delimiter is None:
+        delimiter = sep
+
     if isinstance(dtype, dict):
         dtype_dict = True
     elif isinstance(dtype, list):
@@ -431,6 +450,9 @@ def read_csv_strings(filepath_or_buffer, lineterminator='\n',
     if thousands == delimiter:
         raise ValueError("thousands cannot be the same as delimiter")
 
+    if nrows is not None and skipfooter != 0:
+        raise ValueError("cannot use both nrows and skipfooter parameters")
+
     # Start with default values recognized as boolean
     arr_true_values = [_wrap_string(str('True')), _wrap_string(str('TRUE'))]
     arr_false_values = [_wrap_string(str('False')), _wrap_string(str('FALSE'))]
@@ -447,6 +469,8 @@ def read_csv_strings(filepath_or_buffer, lineterminator='\n',
     csv_reader.false_values = false_values_ptr
     csv_reader.num_false_values = len(arr_false_values)
 
+    compression_bytes = _wrap_string(compression)
+
     csv_reader.delimiter = delimiter.encode()
     csv_reader.lineterminator = lineterminator.encode()
     csv_reader.quotechar = quotechar.encode()
@@ -458,8 +482,10 @@ def read_csv_strings(filepath_or_buffer, lineterminator='\n',
     csv_reader.num_cols = len(names)
     csv_reader.skiprows = skiprows
     csv_reader.skipfooter = skipfooter
+    csv_reader.compression = compression_bytes
     csv_reader.decimal = decimal.encode()
     csv_reader.thousands = thousands.encode() if thousands else b'\0'
+    csv_reader.nrows = nrows if nrows is not None else -1
 
     # Call read_csv
     libgdf.read_csv(csv_reader)

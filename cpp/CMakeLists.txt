@@ -218,6 +218,9 @@ add_library(rmm SHARED
             src/rmm/memory_manager.cpp
             thirdparty/cnmem/src/cnmem.cpp)
 
+#Override RPATH for cudf & rmm
+SET_TARGET_PROPERTIES(cudf rmm PROPERTIES BUILD_RPATH "\$ORIGIN")
+
 ###################################################################################################
 # - build options ---------------------------------------------------------------------------------
 
