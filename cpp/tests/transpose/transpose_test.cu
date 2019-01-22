@@ -24,8 +24,6 @@
 #include <utilities/error_utils.h>
 #include <utilities/cudf_utils.h>
 
-
-#include <chrono>
 #include <vector>
 #include <random>
 #include <algorithm>
@@ -109,20 +107,6 @@ private:
 };
 
 
-struct RMMPoolTest : public ::testing::Test
-{
-    static void SetUpTestCase() {
-        rmmOptions_t options;
-        options.allocation_mode = PoolAllocation;
-        options.initial_pool_size = 0;
-        ASSERT_EQ( RMM_SUCCESS, rmmInitialize(&options) );
-    }
-
-    static void TearDownTestCase() {
-        ASSERT_EQ( RMM_SUCCESS, rmmFinalize() );
-    }
-};
-
 template <typename T>
 class TransposeTest : public GdfTest {
 
@@ -169,12 +153,8 @@ protected:
       std::transform(out_gdf_columns.begin(), out_gdf_columns.end(),
                      out_gdf_column_ptr.begin(), to_raw_ptr);
 
-      auto start = std::chrono::high_resolution_clock::now();
       gdf_transpose(in_gdf_columns.size(), in_gdf_column_ptr.data(),
                     out_gdf_column_ptr.data());
-      auto end = std::chrono::system_clock::now();
-      std::chrono::duration<double> elapsed_seconds = end-start;
-      std::cout << "Elapsed time (ms): " << elapsed_seconds.count()*1000 << std::endl;
 
     }
 
@@ -219,8 +199,8 @@ protected:
         make_input();
         create_gdf_output_buffers();
         compute_gdf_result();
-        // create_reference_output();
-        // compare_gdf_result();
+        create_reference_output();
+        compare_gdf_result();
     }
 
     // vector of vector to serve as input to transpose
@@ -236,46 +216,46 @@ protected:
     size_t _nrows = 0;
 };
 
-using TestTypes = ::testing::Types<int64_t>;
+using TestTypes = ::testing::Types<int8_t, int16_t, int32_t, int64_t>;
 
 TYPED_TEST_CASE(TransposeTest, TestTypes);
 
-// TYPED_TEST(TransposeTest, SingleValue)
-// {
-//     size_t num_cols = 1;
-//     size_t num_rows = 1;
-//     this->set_params(num_cols, num_rows);
-//     this->run_test();
-// }
-
-// TYPED_TEST(TransposeTest, SingleColumn)
-// {
-//     size_t num_cols = 1;
-//     size_t num_rows = 10000;
-//     this->set_params(num_cols, num_rows);
-//     this->run_test();
-// }
-
-// TYPED_TEST(TransposeTest, Square)
-// {
-//     size_t num_cols = 32;
-//     size_t num_rows = 32;
-//     this->set_params(num_cols, num_rows);
-//     this->run_test();
-// }
-
-TYPED_TEST(TransposeTest, Slim)
+TYPED_TEST(TransposeTest, SingleValue)
 {
-    size_t num_cols = 32;
-    size_t num_rows = 3200000;
+    size_t num_cols = 1;
+    size_t num_rows = 1;
     this->set_params(num_cols, num_rows);
     this->run_test();
 }
 
-// TYPED_TEST(TransposeTest, Fat)
-// {
-//     size_t num_cols = 10000;
-//     size_t num_rows = 10;
-//     this->set_params(num_cols, num_rows);
-//     this->run_test();
-// }
+TYPED_TEST(TransposeTest, SingleColumn)
+{
+    size_t num_cols = 1;
+    size_t num_rows = 10000;
+    this->set_params(num_cols, num_rows);
+    this->run_test();
+}
+
+TYPED_TEST(TransposeTest, Square)
+{
+    size_t num_cols = 100;
+    size_t num_rows = 100;
+    this->set_params(num_cols, num_rows);
+    this->run_test();
+}
+
+TYPED_TEST(TransposeTest, Slim)
+{
+    size_t num_cols = 10;
+    size_t num_rows = 10000;
+    this->set_params(num_cols, num_rows);
+    this->run_test();
+}
+
+TYPED_TEST(TransposeTest, Fat)
+{
+    size_t num_cols = 10000;
+    size_t num_rows = 10;
+    this->set_params(num_cols, num_rows);
+    this->run_test();
+}

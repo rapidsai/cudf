@@ -12,17 +12,26 @@
 #include <chrono>
 
 constexpr int WARP_SIZE = 32;
+constexpr int MAX_GRID_SIZE = (1<<16)-1;
 
 template <typename ColumnType>
 __global__
 void gpu_transpose(ColumnType **in_cols, ColumnType **out_cols,
                   gdf_size_type ncols, gdf_size_type nrows)
 {
-  int x = blockIdx.x * WARP_SIZE + threadIdx.x;
-  int y = blockIdx.y * WARP_SIZE + threadIdx.y;
+  gdf_size_type x = blockIdx.x * blockDim.x + threadIdx.x;
+  gdf_size_type y = blockIdx.y * blockDim.y + threadIdx.y;
+    
+  gdf_size_type stride_x = blockDim.x * gridDim.x;
+  gdf_size_type stride_y = blockDim.y * gridDim.y;
 
-  if (x < ncols && y < nrows)
-    out_cols[y][x] = in_cols[x][y];
+  for(gdf_size_type i = x; i < ncols; i += stride_x)
+  {
+    for(gdf_size_type j = y; j < nrows; j += stride_y)
+    {
+      out_cols[j][i] = in_cols[i][j];
+    }
+  }
 }
 
 __global__
@@ -33,24 +42,33 @@ void gpu_transpose_valids(gdf_valid_type **in_cols_valid,
   using MaskType = uint32_t;
   constexpr uint32_t BITS_PER_MASK{sizeof(MaskType) * 8};
 
-  int x = blockIdx.x * WARP_SIZE + threadIdx.x;
-  int y = blockIdx.y * WARP_SIZE + threadIdx.y;
+  gdf_size_type x = blockIdx.x * blockDim.x + threadIdx.x;
+  gdf_size_type y = blockIdx.y * blockDim.y + threadIdx.y;
+
+  gdf_size_type stride_x = blockDim.x * gridDim.x;
+  gdf_size_type stride_y = blockDim.y * gridDim.y;
 
   MaskType* const __restrict__ out_mask32 =
     reinterpret_cast<MaskType*>(out_cols_valid[y]);
 
-  auto active_threads = __ballot_sync(0xffffffff, x < ncols && y < nrows);
-  if (x < ncols && y < nrows)
+  for(gdf_size_type i = x; i < ncols; i += stride_x)
   {
-    bool const input_is_valid{gdf_is_valid(in_cols_valid[x], y)};
+    for(gdf_size_type j = y; j < nrows; j += stride_y)
+    {
+      auto active_threads = __ballot_sync(0xffffffff, x < ncols && y < nrows);
+      if (x < ncols && y < nrows)
+      {
+        bool const input_is_valid{gdf_is_valid(in_cols_valid[x], y)};
 
-    MaskType const result_mask{__ballot_sync(active_threads, input_is_valid)};
+        MaskType const result_mask{__ballot_sync(active_threads, input_is_valid)};
 
-    gdf_index_type const out_location = x / BITS_PER_MASK;
+        gdf_index_type const out_location = x / BITS_PER_MASK;
 
-    // Only one thread writes output
-    if (0 == threadIdx.x % warpSize) {
-      out_mask32[out_location] = result_mask;
+        // Only one thread writes output
+        if (0 == threadIdx.x % warpSize) {
+          out_mask32[out_location] = result_mask;
+        }
+      }
     }
   }
 }
@@ -65,24 +83,23 @@ struct launch_kernel{
     gdf_size_type ncols, gdf_size_type nrows, bool has_null)
   {
     dim3 dimBlock(WARP_SIZE, WARP_SIZE, 1);
-    dim3 dimGrid( (ncols + WARP_SIZE - 1) / WARP_SIZE,
-                  (nrows + WARP_SIZE - 1) / WARP_SIZE, 1);
-    // auto start = std::chrono::high_resolution_clock::now();
+    dim3 dimGrid(std::min((ncols + WARP_SIZE - 1) / WARP_SIZE, MAX_GRID_SIZE),
+                 std::min((nrows + WARP_SIZE - 1) / WARP_SIZE, MAX_GRID_SIZE),
+                 1);
+
     gpu_transpose<ColumnType><<<dimGrid,dimBlock>>>(
       reinterpret_cast<ColumnType**>(in_cols_data_ptr),
       reinterpret_cast<ColumnType**>(out_cols_data_ptr),
       ncols, nrows
     );
-    if (has_null)
+    if (has_null){
       gpu_transpose_valids<<<dimGrid,dimBlock>>>(
         in_cols_valid_ptr,
         out_cols_valid_ptr,
         ncols, nrows
       );
+    }
     cudaDeviceSynchronize();
-    // auto end = std::chrono::system_clock::now();
-    // std::chrono::duration<double> elapsed_seconds = end-start;
-    // std::cout << "Elapsed time (ms): " << elapsed_seconds.count()*1000 << std::endl;
     CUDA_CHECK_LAST();
     return GDF_SUCCESS;
   }
