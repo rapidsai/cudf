@@ -77,7 +77,7 @@ struct column_printer {
 };
 }
 
-void print_gdf_column(gdf_column const * the_column)
+inline void print_gdf_column(gdf_column const * the_column)
 {
     cudf::type_dispatcher(the_column->dtype, column_printer{}, the_column);
 }
@@ -88,7 +88,7 @@ void print_gdf_column(gdf_column const * the_column)
  * @param validity_mask The validity bitmask to print
  * @param num_rows The length of the column (not the bitmask) in rows
  * ---------------------------------------------------------------------------**/
-void print_valid_data(const gdf_valid_type *validity_mask, 
+inline void print_valid_data(const gdf_valid_type *validity_mask, 
                       const size_t num_rows)
 {
   cudaError_t error;
