@@ -1103,7 +1103,8 @@ class DataFrame(object):
 
         # Columns are returned in order on - left - right from libgdf
         # In order to mirror pandas, reconstruct our df using the
-        # columns from `left` and the data from `cpp_join`.
+        # columns from `left` and the data from `cpp_join`. The final order
+        # is left columns, followed by non-join-key right columns.
         on_count = 0
         # gap spaces between left and `on` for result from `cpp_join`
         gap = len(self.columns) - len(on)
