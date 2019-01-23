@@ -67,6 +67,7 @@
 - PR #671 CSV Reader: uncompressed buffer input can be parsed without explicitly specifying compression as None
 - PR #718 Ensure sum, product, min, max methods pandas compatibility on empty datasets
 - PR #720 Refactored Index classes to make them more Pandas-like, added CategoricalIndex
+- PR #749 Improve to_arrow and from_arrow Pandas compatibility
 
 ## Bug Fixes
 
@@ -110,6 +111,7 @@
 - PR #717 CSV reader: fix behavior when parsing a csv file with no data rows
 - PR #724 CSV Reader: fix build issue due to parameter type mismatch in a std::max call
 - PR #734 Prevents reading undefined memory in gpu_expand_mask_bits numba kernel
+- PR #750 Fix race condition for handling NVStrings in CMake
 - PR #719 Fix merge column ordering
 
 
