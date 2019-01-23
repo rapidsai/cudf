@@ -138,11 +138,13 @@ __global__ void storeRecordStart(char *data, size_t chunk_offset,
 	const char terminator, const char quotechar, 
 	long num_bytes, long num_bits, cu_reccnt_t* num_records,
 	cu_recstart_t* recStart);
-__global__ void convertCsvToGdf(char *csv, const ParseOptions opts, gdf_size_type num_records, int num_columns, 
-	bool *parseCol, cu_recstart_t *recStart,gdf_dtype *dtype, void **gdf_data, gdf_valid_type **valid, 
+__global__ void convertCsvToGdf(char *csv, const ParseOptions opts,
+	gdf_size_type num_records, int num_columns, bool *parseCol,
+	cu_recstart_t *recStart, gdf_dtype *dtype, void **gdf_data, gdf_valid_type **valid,
 	string_pair **str_cols, unsigned long long *num_valid);
-__global__ void dataTypeDetection(char *raw_csv, const ParseOptions opts, gdf_size_type num_records, 
-	int  num_columns, bool  *parseCol, cu_recstart_t *recStart, column_data_t* d_columnData);
+__global__ void dataTypeDetection(char *raw_csv, const ParseOptions opts,
+	gdf_size_type num_records, int num_columns, bool *parseCol,
+	cu_recstart_t *recStart, column_data_t* d_columnData);
 
 //
 //---------------CUDA Valid (8 blocks of 8-bits) Bitmap Kernels ---------------------------------------------
@@ -875,7 +877,7 @@ gdf_error uploadDataToDevice(const char* h_uncomp_data, size_t h_uncomp_size, ra
 }
 
 /**---------------------------------------------------------------------------*
- * @brief This is a helper functor for getting the size of GDF data types.
+ * @brief Functor for getting the size of a cuDF data type.
  *---------------------------------------------------------------------------**/
 struct SizeOfFunctor {
 	template <typename T>
@@ -902,7 +904,7 @@ gdf_error allocateGdfDataSpace(gdf_column *gdf) {
 	CUDA_TRY( cudaMemset(gdf->valid, 0, sizeof(gdf_valid_type) * bitmapCount) );
 
 	// Allocate space for gdf->data column; except for string types which will
-	// allocated by separately by the NVstring class later
+	// be allocated by separately by the NVstring class later
 	if (gdf->dtype != gdf_dtype::GDF_STRING) {
 		const auto elementSize = cudf::type_dispatcher(gdf->dtype, SizeOfFunctor{});
 		RMM_TRY( RMM_ALLOC((void**)&gdf->data, elementCount * elementSize, 0) );
@@ -1153,7 +1155,7 @@ __global__ void storeRecordStart(char *data, size_t chunk_offset,
 
 
 /**---------------------------------------------------------------------------*
- * @brief Helper function to setup and launch CSV parsing on the GPU
+ * @brief Helper function to setup and launch CSV parsing CUDA kernel.
  * 
  * @Param[in,out] raw_csv The metadata for the CSV data
  * @Param[out] gdf The output column data
@@ -1197,8 +1199,7 @@ gdf_error launch_dataConvertColumns(raw_csv_t *raw_csv, void **gdf, gdf_valid_ty
 }
 
 /**---------------------------------------------------------------------------*
- * @brief This is a helper functor for parsing a CSV data field and converting
- * it to its associated cuDF data type.
+ * @brief Functor for converting CSV data to cuDF data type value.
  *---------------------------------------------------------------------------**/
 struct ConvertFunctor {
 	template <typename T,
@@ -1231,7 +1232,7 @@ struct ConvertFunctor {
 };
 
 /**---------------------------------------------------------------------------*
- * @brief CUDA kernel that parses and converts CSV data into cuDF column data
+ * @brief CUDA kernel that parses and converts CSV data into cuDF column data.
  * 
  * Data is processed one record at a time
  *
@@ -1358,7 +1359,7 @@ void convertCsvToGdf(char *raw_csv,
 }
 
 /**---------------------------------------------------------------------------*
- * @brief Helper function to setup and launch CSV data type detect on the GPU
+ * @brief Helper function to setup and launch CSV data type detect CUDA kernel.
  * 
  * @Param[in] raw_csv The metadata for the CSV data
  * @Param[out] d_columnData The count for each column data type
@@ -1396,9 +1397,10 @@ gdf_error launch_dataTypeDetection(raw_csv_t *raw_csv,
 }
 
 /**---------------------------------------------------------------------------*
- * @brief CUDA kernel that parses and converts CSV data into cuDF column data
- * 
- * Data is processed one record at a time
+ * @brief CUDA kernel that parses and converts CSV data into cuDF column data.
+ *
+ * Data is processed in one row/record at a time, so the number of total
+ * threads (tid) is equal to the number of rows.
  *
  * @Param[in] raw_csv The entire CSV data to read
  * @Param[in] opts A set of parsing options

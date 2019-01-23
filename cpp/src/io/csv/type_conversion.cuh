@@ -12,15 +12,6 @@
 //---------------------------------------------------------------------------
 
 __host__ __device__
-bool isDigit(char data) {
-	if ( data < '0' ) return false;
-	if ( data > '9' ) return false;
-
-	return true;
-}
-
-
-__host__ __device__
 void adjustForWhitespaceAndQuotes(const char *data, long* start_idx, long* end_idx, char quotechar='\0') {
   while ((*start_idx < *end_idx) && (data[*start_idx] == ' ' || data[*start_idx] == quotechar)) {
     (*start_idx)++;
@@ -133,24 +124,37 @@ int32_t convertStrtoHash(const char * key, long start_idx, long end_idx, uint32_
     return h1;
 }
 
+/**---------------------------------------------------------------------------*
+ * @brief Structure for holding various options used when parsing and
+ * converting CSV data to cuDF data type values.
+ *---------------------------------------------------------------------------**/
 struct ParseOptions {
-	char				delimiter;
-	char				terminator;
-	char				quotechar;
-	char				decimal;
-	char				thousands;
-	bool				keepquotes;
-	bool				doublequote;
-	bool				dayfirst;
-	int32_t*			trueValues;
-	int32_t*			falseValues;
-	int32_t				trueValuesCount;
-	int32_t				falseValuesCount;
+	char     delimiter;
+	char     terminator;
+	char     quotechar;
+	char     decimal;
+	char     thousands;
+	bool     keepquotes;
+	bool     doublequote;
+	bool     dayfirst;
+	int32_t* trueValues;
+	int32_t* falseValues;
+	int32_t  trueValuesCount;
+	int32_t  falseValuesCount;
 };
 
-// Default function for parsing and extracting a GDF value from a CSV field
-// Handles all integer and floating point data types
-// Other GDF data types are templated for their individual, unique parsing
+/**---------------------------------------------------------------------------*
+ * @brief Default function for extracting a data value from a character string.
+ * Handles all arithmetic data types; other data types are handled in
+ * specialized template functions.
+ *
+ * @Param[in] data The character string for parse
+ * @Param[in] start The index within data to start parsing from
+ * @Param[in] end The end index within data to end parsing
+ * @Param[in] opts The various parsing behavior options and settings
+ *
+ * @Returns The parsed and converted value
+ *---------------------------------------------------------------------------**/
 template<typename T>
 __host__ __device__
 T convertStrToValue(const char *data, long start, long end, const ParseOptions& opts) {
