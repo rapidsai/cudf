@@ -98,6 +98,7 @@
 - PR #724 CSV Reader: fix build issue due to parameter type mismatch in a std::max call
 - PR #734 Prevents reading undefined memory in gpu_expand_mask_bits numba kernel
 - PR #747 CSV Reader: fix an issue where CUDA allocations fail with some large input files
+- PR #719 Fix merge column ordering
 
 
 # cuDF 0.4.0 (05 Dec 2018)
