@@ -9,6 +9,8 @@ from .buffer import Buffer
 from cudf.utils import utils, cudautils
 from cudf.comm.serialize import register_distributed_serializer
 
+import cudf.bindings.replace as cpp_replace
+
 
 class CategoricalAccessor(object):
     """
@@ -288,6 +290,25 @@ class CategoricalColumn(columnops.TypedColumnBase):
             return joined_index, indexers
         else:
             return joined_index
+
+    def find_and_replace(self, to_replace, value):
+        """
+        Return col with *to_replace* replaced with *value*.
+        """
+        replaced = columnops.as_column(self.cat().codes)
+
+        to_replace_col = columnops.as_column(
+            np.asarray([self._encode(val) for val in to_replace],
+                       dtype=replaced.dtype)
+        )
+        value_col = columnops.as_column(
+            np.asarray([self._encode(val) for val in value],
+                       dtype=replaced.dtype)
+        )
+
+        cpp_replace.replace(replaced, to_replace_col, value_col)
+
+        return self.replace(data=replaced.data)
 
 
 def pandas_categorical_as_column(categorical, codes=None):
