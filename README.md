@@ -88,12 +88,17 @@ source activate cudf_dev
 
 - Build and install `libcudf`. CMake depends on the `nvcc` executable being on your path or defined in `$CUDACXX`.
 ```bash
-$ cd $CUDF_HOME/cpp                                 # navigate to C/C++ CUDA source root directory
-$ mkdir build                                       # make a build directory
-$ cd build                                          # enter the build directory
-$ cmake .. -DCMAKE_INSTALL_PREFIX=/install/path     # configure cmake ... use $CONDA_PREFIX if you're using Anaconda
-$ make -j                                           # compile the libraries librmm.so, libcudf.so ... '-j' will start a parallel job using the number of physical cores available on your system
-$ make install                                      # install the libraries librmm.so, libcudf.so to '/install/path'
+$ cd $CUDF_HOME/cpp                                                       # navigate to C/C++ CUDA source root directory
+$ mkdir build                                                             # make a build directory
+$ cd build                                                                # enter the build directory
+
+# CMake options:
+# -DCMAKE_INSTALL_PREFIX set to the install path for your libraries or $CONDA_PREFIX if you're using Anaconda, i.e. -DCMAKE_INSTALL_PREFIX=/install/path or -DCMAKE_INSTALL_PREFIX=$CONDA_PREFIX
+# -DCMAKE_CXX11_ABI set to ON or OFF depending on the ABI version you want, defaults to OFF, i.e. -DCMAKE_CXX11_ABI=OFF or -DCMAKE_CXX11_ABI=ON
+$ cmake .. -DCMAKE_INSTALL_PREFIX=$CONDA_PREFIX -DCMAKE_CXX11_ABI=OFF     # configure cmake ...
+
+$ make -j                                                                 # compile the libraries librmm.so, libcudf.so ... '-j' will start a parallel job using the number of physical cores available on your system
+$ make install                                                            # install the libraries librmm.so, libcudf.so to the CMAKE_INSTALL_PREFIX
 ```
 
 - To run tests (Optional):
