@@ -398,3 +398,25 @@ def test_dataframe_pairs_of_triples(pairs, max, rows, how):
         for column in gdf_result:
             assert np.array_equal(gdf_result[column].fillna(-1).sort_values(),
                                   pdf_result[column].fillna(-1).sort_values())
+
+
+def test_crash():
+    import numpy as np
+    from cudf import DataFrame
+    import pandas as pd
+    np.random.seed(0)
+
+    pairs = ('bcd', 'b')
+    pdf_left = pd.DataFrame()
+    pdf_right = pd.DataFrame()
+    for left_column in pairs[0]:
+        pdf_left[left_column] = np.random.randint(0, 10, 0)
+    for right_column in pairs[1]:
+        pdf_right[right_column] = np.random.randint(0, 10, 5)
+    gdf_left = DataFrame.from_pandas(pdf_left)
+    gdf_right = DataFrame.from_pandas(pdf_right)
+
+    pdf_result = pdf_left.merge(pdf_right)
+    print(pdf_result)
+    gdf_result = gdf_left.merge(gdf_right)
+    print(gdf_result)
