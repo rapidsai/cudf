@@ -1,3 +1,8 @@
+# cuDF 0.6.0 (Date TBD)
+
+## Improvements
+
+- PR #756 Consolidate common helper functions from unordered map and multimap
 
 # cuDF 0.5.0 (Date TBD)
 
