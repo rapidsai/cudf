@@ -5,6 +5,7 @@ from __future__ import print_function, division
 import inspect
 import random
 from collections import OrderedDict
+import logging
 import warnings
 import numbers
 
@@ -25,11 +26,10 @@ from .column import Column
 from cudf.settings import NOTSET, settings
 from cudf.comm.serialize import register_distributed_serializer
 from .categorical import CategoricalColumn
-from .datetime import DatetimeColumn
-from .numerical import NumericalColumn
 from .buffer import Buffer
 from cudf._gdf import nvtx_range_push, nvtx_range_pop
 from cudf._sort import get_sorted_inds
+from . import columnops
 
 import cudf.bindings.join as cpp_join
 
@@ -1030,6 +1030,7 @@ class DataFrame(object):
         """
         _gdf.nvtx_range_push("PYGDF_JOIN", "blue")
 
+        # Early termination Error checking
         if type != "":
             warnings.warn(
                 'type="' + type + '" parameter is deprecated.'
@@ -1037,11 +1038,9 @@ class DataFrame(object):
                 DeprecationWarning
             )
             method = type
-
         if how not in ['left', 'inner', 'outer']:
             raise NotImplementedError('{!r} merge not supported yet'
                                       .format(how))
-
         same_names = set(self.columns) & set(other.columns)
         if same_names and not (lsuffix or rsuffix):
             raise ValueError('there are overlapping columns but '
@@ -1051,18 +1050,26 @@ class DataFrame(object):
             if name in same_names:
                 return "{}{}".format(name, suffix)
             return name
-
         if on is None:
             on = list(same_names)
             if len(on) == 0:
                 raise ValueError('No common columns to perform merge on')
-        on = [on] if isinstance(on, str) else list(on)
 
+        # Essential parameters
+        on = [on] if isinstance(on, str) else list(on)
         lhs = self
         rhs = other
 
-        col_cats = {}
+        # Pandas inconsistency warning
+        if len(lhs) == 0 and len(lhs.columns) > len(rhs.columns) and\
+                set(rhs.columns).intersection(lhs.columns):
+            logging.warning(
+                    "Pandas and CUDF column ordering may not match for "
+                    "DataFrames with 0 rows."
+                    )
 
+        # Column prep - this can be simplified
+        col_cats = {}
         for name in on:
             if pd.api.types.is_categorical_dtype(self[name]):
                 lcats = self[name].cat.categories
@@ -1079,90 +1086,80 @@ class DataFrame(object):
                     # Do the join using the union of categories from both side.
                     # Adjust for inner joins afterwards
                     cats = sorted(set(lcats) | set(rcats))
-
                     self[name] = (self[name].cat.set_categories(cats)
                                   .fillna(-1))
                     self[name] = self[name]._column.as_numerical
-
                     other[name] = (other[name].cat.set_categories(cats)
                                    .fillna(-1))
                     other[name] = other[name]._column.as_numerical
-
                 col_cats[name] = cats
-
         for name, col in lhs._cols.items():
             if pd.api.types.is_categorical_dtype(col) and name not in on:
                 f_n = fix_name(name, lsuffix)
                 col_cats[f_n] = self[name].cat.categories
-
         for name, col in rhs._cols.items():
             if pd.api.types.is_categorical_dtype(col) and name not in on:
                 f_n = fix_name(name, rsuffix)
                 col_cats[f_n] = other[name].cat.categories
 
+        # Compute merge
         cols, valids = cpp_join.join(lhs._cols, rhs._cols, on, how,
                                      method=method)
 
+        # Output conversion - take cols and valids from `cpp_join` and
+        # combine into a DataFrame()
         df = DataFrame()
 
-        # Columns are returned in order left - on - right from libgdf
-        # Creating dataframe with ordering as pandas:
-
+        # Columns are returned in order on - left - right from libgdf
+        # In order to mirror pandas, reconstruct our df using the
+        # columns from `left` and the data from `cpp_join`. The final order
+        # is left columns, followed by non-join-key right columns.
+        on_count = 0
+        # gap spaces between left and `on` for result from `cpp_join`
         gap = len(self.columns) - len(on)
-        for idx in range(len(on)):
-            if (cols[idx + gap].dtype == 'datetime64[ms]'):
-                df[on[idx]] = DatetimeColumn(data=Buffer(cols[idx + gap]),
-                                             dtype=np.dtype('datetime64[ms]'),
-                                             mask=Buffer(valids[idx]))
-            elif on[idx] in col_cats.keys():
-                df[on[idx]] = CategoricalColumn(data=Buffer(cols[idx + gap]),
-                                                categories=col_cats[on[idx]],
-                                                ordered=False,
-                                                mask=Buffer(valids[idx]))
-            else:
-                df[on[idx]] = NumericalColumn(data=Buffer(cols[idx + gap]),
-                                              dtype=cols[idx + gap].dtype,
-                                              mask=Buffer(valids[idx]))
-
-        idx = 0
-
-        for name in self.columns:
-            if name not in on:
-                f_n = fix_name(name, lsuffix)
-                if (cols[idx].dtype == 'datetime64[ms]'):
-                    df[f_n] = DatetimeColumn(data=Buffer(cols[idx]),
-                                             dtype=np.dtype('datetime64[ms]'),
-                                             mask=Buffer(valids[idx]))
-                elif f_n in col_cats.keys():
-                    df[f_n] = CategoricalColumn(data=Buffer(cols[idx]),
-                                                categories=col_cats[f_n],
-                                                ordered=False,
-                                                mask=Buffer(valids[idx]))
-                else:
-                    df[f_n] = NumericalColumn(data=Buffer(cols[idx]),
-                                              dtype=cols[idx].dtype,
-                                              mask=Buffer(valids[idx]))
-                idx = idx + 1
-
-        idx = len(self.columns)
-
+        for idc, name in enumerate(self.columns):
+            if name in on:
+                # on columns returned first from `cpp_join`
+                for idx in range(len(on)):
+                    if on[idx] == name:
+                        on_idx = idx + gap
+                        on_count = on_count + 1
+                        key = on[idx]
+                        categories = col_cats[key] if key in col_cats.keys()\
+                            else None
+                        df[key] = columnops.build_column(
+                                Buffer(cols[on_idx]),
+                                dtype=cols[on_idx].dtype,
+                                mask=Buffer(valids[on_idx]),
+                                categories=categories,
+                                )
+            else:  # not an `on`-column, `cpp_join` returns these after `on`
+                # but they need to be added to the result before `on` columns.
+                # on_count corrects gap for non-`on` columns
+                left_column_idx = idc - on_count
+                left_name = fix_name(name, lsuffix)
+                categories = col_cats[left_name] if left_name in\
+                    col_cats.keys() else None
+                df[left_name] = columnops.build_column(
+                        Buffer(cols[left_column_idx]),
+                        dtype=cols[left_column_idx].dtype,
+                        mask=Buffer(valids[left_column_idx]),
+                        categories=categories,
+                        )
+        right_column_idx = len(self.columns)
         for name in other.columns:
             if name not in on:
-                f_n = fix_name(name, rsuffix)
-                if (cols[idx].dtype == 'datetime64[ms]'):
-                    df[f_n] = DatetimeColumn(data=Buffer(cols[idx]),
-                                             dtype=np.dtype('datetime64[ms]'),
-                                             mask=Buffer(valids[idx]))
-                elif f_n in col_cats.keys():
-                    df[f_n] = CategoricalColumn(data=Buffer(cols[idx]),
-                                                categories=col_cats[f_n],
-                                                ordered=False,
-                                                mask=Buffer(valids[idx]))
-                else:
-                    df[f_n] = NumericalColumn(data=Buffer(cols[idx]),
-                                              dtype=cols[idx].dtype,
-                                              mask=Buffer(valids[idx]))
-                idx = idx + 1
+                # now copy the columns from `right` that were not in `on`
+                right_name = fix_name(name, rsuffix)
+                categories = col_cats[right_name] if right_name in\
+                    col_cats.keys() else None
+                df[right_name] = columnops.build_column(
+                        Buffer(cols[right_column_idx]),
+                        dtype=cols[right_column_idx].dtype,
+                        mask=Buffer(valids[right_column_idx]),
+                        categories=categories,
+                        )
+                right_column_idx = right_column_idx + 1
 
         _gdf.nvtx_range_pop()
 
