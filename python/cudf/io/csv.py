@@ -182,7 +182,9 @@ def read_csv(filepath_or_buffer, lineterminator='\n',
         csv_reader.filepath_or_buffer = buffer_data_holder
         csv_reader.buffer_size = len(buffer_as_bytes)
     else:
-        if (not os.path.isfile(filepath_or_buffer)) or (not os.path.exists(filepath_or_buffer)):
+        if (not os.path.isfile(filepath_or_buffer)):
+            raise(FileNotFoundError)
+        if (not os.path.exists(filepath_or_buffer)):
             raise(FileNotFoundError)
         file_path = _wrap_string(filepath_or_buffer)
 
@@ -427,7 +429,9 @@ def read_csv_strings(filepath_or_buffer, lineterminator='\n',
         csv_reader.filepath_or_buffer = buffer_data_holder
         csv_reader.buffer_size = len(buffer_as_bytes)
     else:
-        if (not os.path.isfile(filepath_or_buffer)) or (not os.path.exists(filepath_or_buffer)):
+        if (not os.path.isfile(filepath_or_buffer)):
+            raise(FileNotFoundError)
+        if (not os.path.exists(filepath_or_buffer)):
             raise(FileNotFoundError)
         file_path = _wrap_string(filepath_or_buffer)
 
