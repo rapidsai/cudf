@@ -2,6 +2,7 @@
 
 ## New Features
 
+- PR #760 Raise `FileNotFoundError` instead of `GDF_FILE_ERROR` in `read_csv` if the file does not exist
 - PR #539 Add Python bindings for replace function
 
 ## Improvements
