@@ -1108,9 +1108,6 @@ def test_to_arrow_categorical():
         .replace_schema_metadata(None)
 
     assert isinstance(pa_gdf, pa.Table)
-    print(pa_df)
-    print()
-    print(pa_gdf)
     assert pa.Table.equals(pa_df, pa_gdf)
 
     pa_s = pa.Array.from_pandas(df.a)
