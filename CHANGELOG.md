@@ -17,6 +17,7 @@
 - PR #491 Add CI test script to check for updates to CHANGELOG.md in PRs
 - PR #550 Add CI test script to check for style issues in PRs
 - PR #558 Add CI scripts for cpu-based conda and gpu-based test builds
+- PR #539 Add Python bindings for replace function
 - PR #524 Add Boolean Indexing
 - PR #564 Update python `sort_values` method to use updated libcudf `gdf_order_by` API
 - PR #509 CSV Reader: Input CSV file can now be passed in as a text or a binary buffer

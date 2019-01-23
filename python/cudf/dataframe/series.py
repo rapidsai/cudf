@@ -7,6 +7,7 @@ from numbers import Number
 
 import numpy as np
 import pandas as pd
+from pandas.api.types import is_scalar, is_dict_like
 
 from cudf.utils import cudautils, utils
 from cudf import formatting
@@ -700,6 +701,65 @@ class Series(object):
         sr_inds = self._copy_construct(data=col_inds)
         return sr_keys, sr_inds
 
+    def replace(self, to_replace, value):
+        """
+        Replace values given in *to_replace* with *value*.
+
+        Parameters
+        ----------
+        to_replace : numeric, str or list-like
+            Value(s) to replace.
+
+            * numeric or str:
+
+                - values equal to *to_replace* will be replaced with *value*
+
+            * list of numeric or str:
+
+                - If *value* is also list-like, *to_replace* and *value* must
+                be of same length.
+        value : numeric, str, list-like, or dict
+            Value(s) to replace `to_replace` with.
+
+        See also
+        --------
+        Series.fillna
+
+        Returns
+        -------
+        result : Series
+            Series after replacement. The mask and index are preserved.
+        """
+        if not is_scalar(to_replace):
+            if is_scalar(value):
+                value = utils.scalar_broadcast_to(
+                    value, (len(to_replace),), np.dtype(type(value))
+                )
+        else:
+            if not is_scalar(value):
+                raise TypeError(
+                    "Incompatible types '{}' and '{}' "
+                    "for *to_replace* and *value*.".format(
+                        type(to_replace).__name__, type(value).__name__
+                    )
+                )
+            to_replace = [to_replace]
+            value = [value]
+
+        if len(to_replace) != len(value):
+            raise ValueError(
+                "Replacement lists must be"
+                "of same length."
+                "Expected {}, got {}.".format(len(to_replace), len(value))
+            )
+
+        if is_dict_like(to_replace) or is_dict_like(value):
+            raise TypeError("Dict-like args not supported in Series.replace()")
+
+        result = self._column.find_and_replace(to_replace, value)
+
+        return self._copy_construct(data=result)
+
     def reverse(self):
         """Reverse the Series
         """
@@ -950,7 +1010,6 @@ class Series(object):
         return self._copy_construct(data=scaled)
 
     # Rounding
-
     def ceil(self):
         """Rounds each value upward to the smallest integral value not less
         than the original.
