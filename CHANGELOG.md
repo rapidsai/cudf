@@ -1,8 +1,16 @@
 
-# cuDF 0.5.0 (Date TBD)
+# cuDF 0.6.0 (Date TBD)
 
 ## New Features
 
+## Improvements
+
+## Bug Fixes
+- PR #759 - Fix left join crash when left dataframe has 0 rows
+
+# cuDF 0.5.0 (Date TBD)
+
+## New Features
 - PR #693 add ZLIB-based GZIP/ZIP support to `read_csv_strings()`
 - PR #411 added null support to gdf_order_by (new API) and cudf_table::sort
 - PR #525 Added GitHub Issue templates for bugs, documentation, new features, and questions
