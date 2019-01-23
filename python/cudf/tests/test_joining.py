@@ -400,7 +400,7 @@ def test_dataframe_pairs_of_triples(pairs, max, rows, how):
                                   pdf_result[column].fillna(-1).sort_values())
 
 
-def test_crash():
+def test_safe_merging_with_left_empty():
     import numpy as np
     from cudf import DataFrame
     import pandas as pd
@@ -417,6 +417,5 @@ def test_crash():
     gdf_right = DataFrame.from_pandas(pdf_right)
 
     pdf_result = pdf_left.merge(pdf_right)
-    print(pdf_result)
     gdf_result = gdf_left.merge(gdf_right)
-    print(gdf_result)
+    assert_eq(pdf_result, gdf_result)
