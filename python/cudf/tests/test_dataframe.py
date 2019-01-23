@@ -1046,7 +1046,7 @@ def test_to_arrow(nelem, data_type):
                     .cast(pa.int64())
                     .cast(pa.date64())
                 ).remove_column(2).remove_column(2)
-    pa_gdf = gdf.to_arrow(index=False)
+    pa_gdf = gdf.to_arrow(preserve_index=False).replace_schema_metadata(None)
 
     assert isinstance(pa_gdf, pa.Table)
     assert pa.Table.equals(pa_df, pa_gdf)
@@ -1104,7 +1104,8 @@ def test_to_arrow_categorical():
 
     pa_df = pa.Table.from_pandas(df, preserve_index=False)\
         .replace_schema_metadata(None)
-    pa_gdf = gdf.to_arrow(index=False)
+    pa_gdf = gdf.to_arrow(preserve_index=False)\
+        .replace_schema_metadata(None)
 
     assert isinstance(pa_gdf, pa.Table)
     assert pa.Table.equals(pa_df, pa_gdf)
@@ -1306,12 +1307,21 @@ def test_dataframe_boolean_mask_Series(gdf):
     mask = Series([True, False, True, False])
     mask2 = Series([True, True, True, True])
     mask3 = Series([True, True, True, True, True, True, True, True])
+    mask4 = Series([True])  # More likely to trigger an undefined memory read
+    mask5 = Series([False])
+    mask6 = Series([False, False, False, False])
     gdf_masked = gdf[mask]
     gdf_masked2 = gdf[mask2]
     gdf_masked3 = gdf[mask3]
+    gdf_masked4 = gdf[mask4]
+    gdf_masked5 = gdf[mask5]
+    gdf_masked6 = gdf[mask6]
     assert gdf_masked.shape[0] == 2
     assert gdf_masked2.shape[0] == 4
     assert gdf_masked3.shape[0] == 8
+    assert gdf_masked4.shape[0] == 1
+    assert gdf_masked5.shape[0] == 0
+    assert gdf_masked6.shape[0] == 0
 
 
 def test_iter(pdf, gdf):
@@ -1341,3 +1351,21 @@ def test_from_pandas_function(pdf):
 
     with pytest.raises(TypeError):
         gd.from_pandas(123)
+
+
+@pytest.mark.parametrize('preserve_index', [True, False])
+def test_arrow_pandas_compat(pdf, gdf, preserve_index):
+    pdf['z'] = range(10)
+    pdf = pdf.set_index('z')
+    gdf['z'] = range(10)
+    gdf = gdf.set_index('z')
+
+    pdf_arrow_table = pa.Table.from_pandas(pdf, preserve_index=preserve_index)
+    gdf_arrow_table = gdf.to_arrow(preserve_index=preserve_index)
+
+    assert(pa.Table.equals(pdf_arrow_table, gdf_arrow_table))
+
+    gdf2 = DataFrame.from_arrow(pdf_arrow_table)
+    pdf2 = pdf_arrow_table.to_pandas()
+
+    assert_eq(pdf2, gdf2)

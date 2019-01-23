@@ -161,7 +161,8 @@ find_library(NVSTRINGS_LIBRARY "NVStrings"
 if(NVSTRINGS_INCLUDE AND NVSTRINGS_LIBRARY)
     execute_process(WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
                     COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/include
-                    COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/lib
+                    COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/lib)
+    execute_process(WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
                     COMMAND ${CMAKE_COMMAND} -E chdir ${CMAKE_BINARY_DIR} ln -snf ${NVSTRINGS_INCLUDE} ${CMAKE_BINARY_DIR}/include/NVStrings.h
                     COMMAND ${CMAKE_COMMAND} -E chdir ${CMAKE_BINARY_DIR} ln -snf ${NVSTRINGS_LIBRARY} ${CMAKE_BINARY_DIR}/lib/libNVStrings.so)
 endif(NVSTRINGS_INCLUDE AND NVSTRINGS_LIBRARY)

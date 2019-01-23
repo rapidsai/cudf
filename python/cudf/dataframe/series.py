@@ -657,6 +657,8 @@ class Series(object):
               1    5
 
         """
+        if len(self) == 0:
+            return self
         vals, inds = self._sort(ascending=ascending, na_position=na_position)
         index = self.index.take(inds.to_gpu_array())
         return vals.set_index(index)
@@ -856,6 +858,11 @@ class Series(object):
         """Compute the sum of the series"""
         assert axis in (None, 0) and skipna is True
         return self._column.sum()
+
+    def product(self, axis=None, skipna=True):
+        """Compute the product of the series"""
+        assert axis in (None, 0) and skipna is True
+        return self._column.product()
 
     def mean(self, axis=None, skipna=True):
         """Compute the mean of the series
