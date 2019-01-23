@@ -1,3 +1,17 @@
+# cuDF 0.6.0 (Date TBD)
+
+## New Features
+
+- PR #539 Add Python bindings for replace function
+
+## Improvements
+
+- PR #730 Improve performance of `gdf_table` constructor
+
+## Bug Fixes
+
+- ...
+
 
 # cuDF 0.5.0 (Date TBD)
 
@@ -17,7 +31,6 @@
 - PR #491 Add CI test script to check for updates to CHANGELOG.md in PRs
 - PR #550 Add CI test script to check for style issues in PRs
 - PR #558 Add CI scripts for cpu-based conda and gpu-based test builds
-- PR #539 Add Python bindings for replace function
 - PR #524 Add Boolean Indexing
 - PR #564 Update python `sort_values` method to use updated libcudf `gdf_order_by` API
 - PR #509 CSV Reader: Input CSV file can now be passed in as a text or a binary buffer
@@ -54,8 +67,6 @@
 - PR #671 CSV Reader: uncompressed buffer input can be parsed without explicitly specifying compression as None
 - PR #718 Ensure sum, product, min, max methods pandas compatibility on empty datasets
 - PR #720 Refactored Index classes to make them more Pandas-like, added CategoricalIndex
-- PR #730 Improve performance of `gdf_table` constructor 
-
 
 ## Bug Fixes
 
