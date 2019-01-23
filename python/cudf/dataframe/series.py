@@ -657,6 +657,8 @@ class Series(object):
               1    5
 
         """
+        if len(self) == 0:
+            return self
         vals, inds = self._sort(ascending=ascending, na_position=na_position)
         index = self.index.take(inds.to_gpu_array())
         return vals.set_index(index)
