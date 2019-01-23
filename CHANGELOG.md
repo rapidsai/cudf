@@ -53,7 +53,7 @@
 - PR #671 CSV Reader: uncompressed buffer input can be parsed without explicitly specifying compression as None
 - PR #718 Ensure sum, product, min, max methods pandas compatibility on empty datasets
 - PR #720 Refactored Index classes to make them more Pandas-like, added CategoricalIndex
-
+- PR #749 Improve to_arrow and from_arrow Pandas compatibility
 
 ## Bug Fixes
 
