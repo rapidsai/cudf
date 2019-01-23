@@ -296,4 +296,4 @@ __host__ __device__ bool operator!=(const cycle_iterator_adapter<T>& lhs, const 
     return !lhs.equal(rhs);
 }
 
-#endif HELPER_FUNCTIONS_CUH
+#endif // HELPER_FUNCTIONS_CUH
