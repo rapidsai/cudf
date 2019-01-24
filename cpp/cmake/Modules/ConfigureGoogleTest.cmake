@@ -1,7 +1,8 @@
 set(GTEST_ROOT "${CMAKE_BINARY_DIR}/googletest")
 
-set(GTEST_CMAKE_ARGS " -Dgtest_build_samples=ON" 
-                     " -DCMAKE_VERBOSE_MAKEFILE=ON")
+set(GTEST_CMAKE_ARGS "")
+                     #" -Dgtest_build_samples=ON" 
+                     #" -DCMAKE_VERBOSE_MAKEFILE=ON")
 
 if(NOT CMAKE_CXX11_ABI)
     message(STATUS "GTEST: Disabling the GLIBCXX11 ABI")
