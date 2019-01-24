@@ -28,7 +28,7 @@ if(GTEST_CONFIG)
     message(FATAL_ERROR "Configuring GoogleTest failed: " ${GTEST_CONFIG})
 endif(GTEST_CONFIG)
 
-set(PARALLEL_BUILD --parallel)
+set(PARALLEL_BUILD --parallel $ENV{PARALLEL_LEVEL})
 message(STATUS "GTEST BUILD: Enabling Parallel CMake build")
 
 execute_process(COMMAND ${CMAKE_COMMAND} --build ${PARALLEL_BUILD} ..
