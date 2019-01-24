@@ -115,6 +115,7 @@
 - PR #747 CSV Reader: fix an issue where CUDA allocations fail with some large input files
 - PR #750 Fix race condition for handling NVStrings in CMake
 - PR #719 Fix merge column ordering
+- PR #770 Fix issue where RMM submodule pointed to wrong branch and pin other to correct branches
 
 
 # cuDF 0.4.0 (05 Dec 2018)
