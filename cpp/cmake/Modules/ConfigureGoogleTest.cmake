@@ -1,10 +1,17 @@
 set(GTEST_ROOT "${CMAKE_BINARY_DIR}/googletest")
 
 set(GTEST_CMAKE_ARGS " -Dgtest_build_samples=ON" 
-                     " -DCMAKE_VERBOSE_MAKEFILE=ON"
-                     " -DCMAKE_C_FLAGS=-D_GLIBCXX_USE_CXX11_ABI=0"      # enable old ABI for C/C++
-                     " -DCMAKE_CXX_FLAGS=-D_GLIBCXX_USE_CXX11_ABI=0")   # enable old ABI for C/C++
+                     " -DCMAKE_VERBOSE_MAKEFILE=ON")
 
+if(NOT CMAKE_CXX11_ABI)
+    message(STATUS "GTEST: Disabling the GLIBCXX11 ABI")
+    list(APPEND GTEST_CMAKE_ARGS " -DCMAKE_C_FLAGS=-D_GLIBCXX_USE_CXX11_ABI=0")
+    list(APPEND GTEST_CMAKE_ARGS " -DCMAKE_CXX_FLAGS=-D_GLIBCXX_USE_CXX11_ABI=0")
+elseif(CMAKE_CXX11_ABI)
+    message(STATUS "GTEST: Enabling the GLIBCXX11 ABI")
+    list(APPEND GTEST_CMAKE_ARGS " -DCMAKE_C_FLAGS=-D_GLIBCXX_USE_CXX11_ABI=1")
+    list(APPEND GTEST_CMAKE_ARGS " -DCMAKE_CXX_FLAGS=-D_GLIBCXX_USE_CXX11_ABI=1")
+endif(NOT CMAKE_CXX11_ABI)
 
 configure_file("${CMAKE_SOURCE_DIR}/cmake/Templates/GoogleTest.CMakeLists.txt.cmake"
                "${GTEST_ROOT}/CMakeLists.txt")
@@ -27,11 +34,11 @@ if($ENV{TRAVIS})
         message(STATUS "Disabling Parallel CMake build on Travis")
     else()
         set(PARALLEL_BUILD --parallel)
-        message(STATUS "Using $ENV{CMAKE_BUILD_PARALLEL_LEVEL} build jobs on Travis")
+        message(STATUS "GTEST BUILD: Using $ENV{CMAKE_BUILD_PARALLEL_LEVEL} build jobs on Travis")
     endif(NOT DEFINED ENV{CMAKE_BUILD_PARALLEL_LEVEL})
 else()
     set(PARALLEL_BUILD --parallel)
-    message("STATUS Enabling Parallel CMake build")
+    message(STATUS "GTEST BUILD: Enabling Parallel CMake build")
 endif($ENV{TRAVIS})
 
 execute_process(COMMAND ${CMAKE_COMMAND} --build ${PARALLEL_BUILD} ..

@@ -5,6 +5,7 @@ from __future__ import print_function, division
 import inspect
 import random
 from collections import OrderedDict
+import logging
 import warnings
 import numbers
 
@@ -19,17 +20,16 @@ from librmm_cffi import librmm as rmm
 
 from cudf import formatting, _gdf
 from cudf.utils import cudautils, queryutils, applyutils, utils
-from .index import GenericIndex, Index, RangeIndex
+from .index import as_index, Index, RangeIndex
 from .series import Series
 from .column import Column
 from cudf.settings import NOTSET, settings
 from cudf.comm.serialize import register_distributed_serializer
 from .categorical import CategoricalColumn
-from .datetime import DatetimeColumn
-from .numerical import NumericalColumn
 from .buffer import Buffer
 from cudf._gdf import nvtx_range_push, nvtx_range_pop
 from cudf._sort import get_sorted_inds
+from . import columnops
 
 import cudf.bindings.join as cpp_join
 
@@ -229,7 +229,9 @@ class DataFrame(object):
                 df[k] = col[arg]
             return df
         elif isinstance(arg, (list, np.ndarray, pd.Series, Series,)):
-            mask = np.array(arg)
+            mask = arg
+            if isinstance(mask, list):
+                mask = np.array(mask)
             df = DataFrame()
             if(mask.dtype == 'bool'):
                 for col in self._cols:
@@ -428,6 +430,41 @@ class DataFrame(object):
         return Loc(self)
 
     @property
+    def iloc(self):
+        """
+        Returns a  integer-location based indexer for selection by position.
+
+        Examples
+        --------
+        >>> df = DataFrame([('a', list(range(20))),
+        ...                 ('b', list(range(20))),
+        ...                 ('c', list(range(20)))])
+        #get the row from index 1st
+        >>> df.iloc[1]
+        a    1
+        b    1
+        c    1
+
+        # get the rows from indices 0,2,9 and 18.
+        >>> df.iloc[[0, 2, 9, 18]]
+             a    b    c
+        0    0    0    0
+        2    2    2    2
+        9    9    9    9
+        18   18   18   18
+
+        # get the rows using slice indices
+        >>> df.iloc[3:10:2]
+             a    b    c
+        3    3    3    3
+        5    5    5    5
+        7    7    7    7
+        9    9    9    9
+        """
+
+        return Iloc(self)
+
+    @property
     def columns(self):
         """Returns a tuple of columns
         """
@@ -456,7 +493,7 @@ class DataFrame(object):
             return df.set_index(self[index])
         # Otherwise
         else:
-            index = index if isinstance(index, Index) else GenericIndex(index)
+            index = index if isinstance(index, Index) else as_index(index)
             df = DataFrame()
             for k in self.columns:
                 df[k] = self[k].set_index(index)
@@ -993,6 +1030,7 @@ class DataFrame(object):
         """
         _gdf.nvtx_range_push("PYGDF_JOIN", "blue")
 
+        # Early termination Error checking
         if type != "":
             warnings.warn(
                 'type="' + type + '" parameter is deprecated.'
@@ -1000,11 +1038,9 @@ class DataFrame(object):
                 DeprecationWarning
             )
             method = type
-
         if how not in ['left', 'inner', 'outer']:
             raise NotImplementedError('{!r} merge not supported yet'
                                       .format(how))
-
         same_names = set(self.columns) & set(other.columns)
         if same_names and not (lsuffix or rsuffix):
             raise ValueError('there are overlapping columns but '
@@ -1014,18 +1050,26 @@ class DataFrame(object):
             if name in same_names:
                 return "{}{}".format(name, suffix)
             return name
-
         if on is None:
             on = list(same_names)
             if len(on) == 0:
                 raise ValueError('No common columns to perform merge on')
-        on = [on] if isinstance(on, str) else list(on)
 
+        # Essential parameters
+        on = [on] if isinstance(on, str) else list(on)
         lhs = self
         rhs = other
 
-        col_cats = {}
+        # Pandas inconsistency warning
+        if len(lhs) == 0 and len(lhs.columns) > len(rhs.columns) and\
+                set(rhs.columns).intersection(lhs.columns):
+            logging.warning(
+                    "Pandas and CUDF column ordering may not match for "
+                    "DataFrames with 0 rows."
+                    )
 
+        # Column prep - this can be simplified
+        col_cats = {}
         for name in on:
             if pd.api.types.is_categorical_dtype(self[name]):
                 lcats = self[name].cat.categories
@@ -1042,90 +1086,80 @@ class DataFrame(object):
                     # Do the join using the union of categories from both side.
                     # Adjust for inner joins afterwards
                     cats = sorted(set(lcats) | set(rcats))
-
                     self[name] = (self[name].cat.set_categories(cats)
                                   .fillna(-1))
                     self[name] = self[name]._column.as_numerical
-
                     other[name] = (other[name].cat.set_categories(cats)
                                    .fillna(-1))
                     other[name] = other[name]._column.as_numerical
-
                 col_cats[name] = cats
-
         for name, col in lhs._cols.items():
             if pd.api.types.is_categorical_dtype(col) and name not in on:
                 f_n = fix_name(name, lsuffix)
                 col_cats[f_n] = self[name].cat.categories
-
         for name, col in rhs._cols.items():
             if pd.api.types.is_categorical_dtype(col) and name not in on:
                 f_n = fix_name(name, rsuffix)
                 col_cats[f_n] = other[name].cat.categories
 
+        # Compute merge
         cols, valids = cpp_join.join(lhs._cols, rhs._cols, on, how,
                                      method=method)
 
+        # Output conversion - take cols and valids from `cpp_join` and
+        # combine into a DataFrame()
         df = DataFrame()
 
-        # Columns are returned in order left - on - right from libgdf
-        # Creating dataframe with ordering as pandas:
-
+        # Columns are returned in order on - left - right from libgdf
+        # In order to mirror pandas, reconstruct our df using the
+        # columns from `left` and the data from `cpp_join`. The final order
+        # is left columns, followed by non-join-key right columns.
+        on_count = 0
+        # gap spaces between left and `on` for result from `cpp_join`
         gap = len(self.columns) - len(on)
-        for idx in range(len(on)):
-            if (cols[idx + gap].dtype == 'datetime64[ms]'):
-                df[on[idx]] = DatetimeColumn(data=Buffer(cols[idx + gap]),
-                                             dtype=np.dtype('datetime64[ms]'),
-                                             mask=Buffer(valids[idx]))
-            elif on[idx] in col_cats.keys():
-                df[on[idx]] = CategoricalColumn(data=Buffer(cols[idx + gap]),
-                                                categories=col_cats[on[idx]],
-                                                ordered=False,
-                                                mask=Buffer(valids[idx]))
-            else:
-                df[on[idx]] = NumericalColumn(data=Buffer(cols[idx + gap]),
-                                              dtype=cols[idx + gap].dtype,
-                                              mask=Buffer(valids[idx]))
-
-        idx = 0
-
-        for name in self.columns:
-            if name not in on:
-                f_n = fix_name(name, lsuffix)
-                if (cols[idx].dtype == 'datetime64[ms]'):
-                    df[f_n] = DatetimeColumn(data=Buffer(cols[idx]),
-                                             dtype=np.dtype('datetime64[ms]'),
-                                             mask=Buffer(valids[idx]))
-                elif f_n in col_cats.keys():
-                    df[f_n] = CategoricalColumn(data=Buffer(cols[idx]),
-                                                categories=col_cats[f_n],
-                                                ordered=False,
-                                                mask=Buffer(valids[idx]))
-                else:
-                    df[f_n] = NumericalColumn(data=Buffer(cols[idx]),
-                                              dtype=cols[idx].dtype,
-                                              mask=Buffer(valids[idx]))
-                idx = idx + 1
-
-        idx = len(self.columns)
-
+        for idc, name in enumerate(self.columns):
+            if name in on:
+                # on columns returned first from `cpp_join`
+                for idx in range(len(on)):
+                    if on[idx] == name:
+                        on_idx = idx + gap
+                        on_count = on_count + 1
+                        key = on[idx]
+                        categories = col_cats[key] if key in col_cats.keys()\
+                            else None
+                        df[key] = columnops.build_column(
+                                Buffer(cols[on_idx]),
+                                dtype=cols[on_idx].dtype,
+                                mask=Buffer(valids[on_idx]),
+                                categories=categories,
+                                )
+            else:  # not an `on`-column, `cpp_join` returns these after `on`
+                # but they need to be added to the result before `on` columns.
+                # on_count corrects gap for non-`on` columns
+                left_column_idx = idc - on_count
+                left_name = fix_name(name, lsuffix)
+                categories = col_cats[left_name] if left_name in\
+                    col_cats.keys() else None
+                df[left_name] = columnops.build_column(
+                        Buffer(cols[left_column_idx]),
+                        dtype=cols[left_column_idx].dtype,
+                        mask=Buffer(valids[left_column_idx]),
+                        categories=categories,
+                        )
+        right_column_idx = len(self.columns)
         for name in other.columns:
             if name not in on:
-                f_n = fix_name(name, rsuffix)
-                if (cols[idx].dtype == 'datetime64[ms]'):
-                    df[f_n] = DatetimeColumn(data=Buffer(cols[idx]),
-                                             dtype=np.dtype('datetime64[ms]'),
-                                             mask=Buffer(valids[idx]))
-                elif f_n in col_cats.keys():
-                    df[f_n] = CategoricalColumn(data=Buffer(cols[idx]),
-                                                categories=col_cats[f_n],
-                                                ordered=False,
-                                                mask=Buffer(valids[idx]))
-                else:
-                    df[f_n] = NumericalColumn(data=Buffer(cols[idx]),
-                                              dtype=cols[idx].dtype,
-                                              mask=Buffer(valids[idx]))
-                idx = idx + 1
+                # now copy the columns from `right` that were not in `on`
+                right_name = fix_name(name, rsuffix)
+                categories = col_cats[right_name] if right_name in\
+                    col_cats.keys() else None
+                df[right_name] = columnops.build_column(
+                        Buffer(cols[right_column_idx]),
+                        dtype=cols[right_column_idx].dtype,
+                        mask=Buffer(valids[right_column_idx]),
+                        categories=categories,
+                        )
+                right_column_idx = right_column_idx + 1
 
         _gdf.nvtx_range_pop()
 
@@ -1621,9 +1655,9 @@ class DataFrame(object):
         for colk in dataframe.columns:
             df[colk] = Series(dataframe[colk].values, nan_as_null=nan_as_null)
         # Set index
-        return df.set_index(dataframe.index.values)
+        return df.set_index(dataframe.index)
 
-    def to_arrow(self, index=True):
+    def to_arrow(self, preserve_index=True):
         """
         Convert to a PyArrow Table.
 
@@ -1651,13 +1685,34 @@ class DataFrame(object):
         """
         arrays = []
         names = []
-        if index:
-            names.append(self.index.name)
-            arrays.append(self.index.to_arrow())
+        types = []
+        index_names = []
+        index_columns = []
+
         for name, column in self._cols.items():
             names.append(name)
-            arrays.append(column.to_arrow())
-        return pa.Table.from_arrays(arrays, names=names)
+            arrow_col = column.to_arrow()
+            arrays.append(arrow_col)
+            types.append(arrow_col.type)
+
+        index_names.append(self.index.name)
+        index_columns.append(self.index)
+        # It would be better if we didn't convert this if we didn't have to,
+        # but we first need better tooling for cudf --> pyarrow type
+        # conversions
+        index_arrow = self.index.to_arrow()
+        types.append(index_arrow.type)
+        if preserve_index:
+            arrays.append(index_arrow)
+            names.append(self.index.name)
+
+        # We may want to add additional metadata to this in the future, but
+        # for now lets just piggyback off of what's done for Pandas
+        metadata = pa.pandas_compat.construct_metadata(
+            self, names, index_columns, index_names, preserve_index, types
+        )
+
+        return pa.Table.from_arrays(arrays, names=names, metadata=metadata)
 
     @classmethod
     def from_arrow(cls, table):
@@ -1692,8 +1747,16 @@ class DataFrame(object):
             <cudf.DataFrame ncols=2 nrows=3 >
 
         """
+        import json
         if not isinstance(table, pa.Table):
             raise TypeError('not a pyarrow.Table')
+
+        index_col = None
+        if isinstance(table.schema.metadata, dict):
+            if b'pandas' in table.schema.metadata:
+                index_col = json.loads(
+                    table.schema.metadata[b'pandas']
+                )['index_columns']
 
         df = cls()
         for col in table.columns:
@@ -1702,6 +1765,8 @@ class DataFrame(object):
                                           "with multiple chunks is not yet "
                                           "supported")
             df[col.name] = col.data.chunk(0)
+        if index_col:
+            df = df.set_index(index_col[0])
         return df
 
     def to_records(self, index=True):
@@ -1820,6 +1885,73 @@ class Loc(object):
             df.add_column(col, sr[begin:end], forceindex=True)
 
         return df
+
+
+class Iloc(object):
+    """
+    For integer-location based selection.
+    """
+
+    def __init__(self, df):
+        self._df = df
+
+    def __getitem__(self, arg):
+        rows = []
+        len_idx = len(self._df.index)
+
+        if isinstance(arg, tuple):
+            raise NotImplementedError('cudf columnar iloc not supported')
+
+        elif isinstance(arg, int):
+            rows.append(arg)
+
+        elif isinstance(arg, slice):
+            start, stop, step, sln = utils.standard_python_slice(len_idx, arg)
+            if sln > 0:
+                for idx in range(start, stop, step):
+                    rows.append(idx)
+
+        elif isinstance(arg, utils.list_types_tuple):
+            for idx in arg:
+                rows.append(idx)
+
+        else:
+            raise TypeError(type(arg))
+
+        # To check whether all the indices are valid.
+        for idx in rows:
+            if abs(idx) > len_idx or idx == len_idx:
+                raise IndexError("positional indexers are out-of-bounds")
+
+        # returns the series similar to pandas
+        if isinstance(arg, int) and len(rows) == 1:
+            ret_list = []
+            col_list = pd.Categorical(list(self._df.columns))
+            for col in col_list:
+                if pd.api.types.is_categorical_dtype(
+                    self._df[col][rows[0]].dtype
+                ):
+                    raise NotImplementedError(
+                        "categorical dtypes are not yet supported in iloc"
+                    )
+                ret_list.append(self._df[col][rows[0]])
+            promoted_type = np.result_type(*[val.dtype for val in ret_list])
+            ret_list = np.array(ret_list, dtype=promoted_type)
+            return Series(ret_list,
+                          index=as_index(col_list))
+
+        df = DataFrame()
+
+        for col in self._df.columns:
+            sr = self._df[col]
+            df.add_column(col, sr.iloc[tuple(rows)], forceindex=True)
+
+        return df
+
+    def __setitem__(self, key, value):
+        # throws an exception while updating
+        msg = "updating columns using iloc is not allowed"
+        raise ValueError(msg)
 
 
 def from_pandas(obj):

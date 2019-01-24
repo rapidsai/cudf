@@ -77,3 +77,50 @@ def normalize_slice(arg, size):
     stop = arg.stop if arg.stop is not None else size
     return (normalize_index(start, size, doraise=False),
             normalize_index(stop, size, doraise=False))
+
+
+# borrowed from a wonderful blog:
+# https://avilpage.com/2015/03/a-slice-of-python-intelligence-behind.html
+def standard_python_slice(len_idx, arg):
+    """ Figuring out the missing parameters of slice"""
+
+    start = arg.start
+    stop = arg.stop
+    step = arg.step
+
+    if step is None:
+        step = 1
+    if step == 0:
+        raise Exception("Step cannot be zero.")
+
+    if start is None:
+        start = 0 if step > 0 else len_idx - 1
+    else:
+        if start < 0:
+            start += len_idx
+        if start < 0:
+            start = 0 if step > 0 else -1
+        if start >= len_idx:
+            start = len_idx if step > 0 else len_idx - 1
+
+    if stop is None:
+        stop = len_idx if step > 0 else -1
+    else:
+        if stop < 0:
+            stop += len_idx
+        if stop < 0:
+            stop = 0 if step > 0 else -1
+        if stop >= len_idx:
+            stop = len_idx if step > 0 else len_idx - 1
+
+    if (step < 0 and stop >= start) or (step > 0 and start >= stop):
+        slice_length = 0
+    elif step < 0:
+        slice_length = (stop - start + 1)/step + 1
+    else:
+        slice_length = (stop - start - 1)/step + 1
+
+    return start, stop, step, slice_length
+
+
+list_types_tuple = (list, np.array)
