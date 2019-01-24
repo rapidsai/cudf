@@ -28,10 +28,10 @@ if(GTEST_CONFIG)
     message(FATAL_ERROR "Configuring GoogleTest failed: " ${GTEST_CONFIG})
 endif(GTEST_CONFIG)
 
-set(PARALLEL_BUILD --parallel)
+set(PARALLEL_BUILD -j)
 if($ENV{PARALLEL_LEVEL})
     set(NUM_JOBS $ENV{PARALLEL_LEVEL})
-    list(APPEND PARALLEL_BUILD " ${NUM_JOBS}") 
+    set(PARALLEL_BUILD "${PARALLEL_BUILD}${NUM_JOBS}")
 endif($ENV{PARALLEL_LEVEL})
 
 if(${NUM_JOBS})
@@ -44,7 +44,7 @@ else()
     message(STATUS "GTEST BUILD: Enabling Parallel CMake build with all threads")
 endif(${NUM_JOBS})
 
-execute_process(COMMAND ${CMAKE_COMMAND} --build ${PARALLEL_BUILD} ..
+execute_process(COMMAND ${CMAKE_COMMAND} --build .. -- ${PARALLEL_BUILD}
                 RESULT_VARIABLE GTEST_BUILD
                 WORKING_DIRECTORY ${GTEST_ROOT}/build)
 

@@ -42,10 +42,10 @@ if(ARROW_CONFIG)
     message(FATAL_ERROR "Configuring Arrow failed: " ${ARROW_CONFIG})
 endif(ARROW_CONFIG)
 
-set(PARALLEL_BUILD --parallel)
+set(PARALLEL_BUILD -j)
 if($ENV{PARALLEL_LEVEL})
     set(NUM_JOBS $ENV{PARALLEL_LEVEL})
-    list(APPEND PARALLEL_BUILD " ${NUM_JOBS}") 
+    set(PARALLEL_BUILD "${PARALLEL_BUILD}${NUM_JOBS}")
 endif($ENV{PARALLEL_LEVEL})
 
 if(${NUM_JOBS})
@@ -59,7 +59,7 @@ else()
 endif(${NUM_JOBS})
 
 execute_process(
-    COMMAND ${CMAKE_COMMAND} --build ${PARALLEL_BUILD} ..
+    COMMAND ${CMAKE_COMMAND} --build .. -- ${PARALLEL_BUILD}
     RESULT_VARIABLE ARROW_BUILD
     WORKING_DIRECTORY ${ARROW_ROOT}/build)
 
