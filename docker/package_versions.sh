@@ -13,7 +13,7 @@ replace_text() {
 }
 
 add_package() {
-    sed -i "/$1/a \- $2=$3/" $FILENAME
+    sed -i "/\- $1[<>=][^a-Z]*/a \- $2=$3/" $FILENAME
 }
 
 if [ -z "$PYTHON_VERSION" ]; then
