@@ -16,6 +16,7 @@ import nvstrings
 from .utils import assert_eq
 import gzip
 import shutil
+import os
 
 from libgdf_cffi import GDFError
 
@@ -630,3 +631,26 @@ def test_csv_reader_empty_dataframe():
     # should raise an error without dtypes
     with pytest.raises(GDFError):
         read_csv(StringIO(buffer))
+
+
+@pytest.mark.parametrize('segment_bytes', [10000, 19999, 30001, 36000])
+def test_csv_reader_byte_range(tmpdir, segment_bytes):
+    fname = tmpdir.mkdir("gdf_csv").join("tmp_csvreader_file16.csv")
+
+    names = ["int1", "int2"]
+    dtypes = ["int32", "int32"]
+
+    rows = 10000
+    with open(str(fname), 'w') as fp:
+        for i in range(rows):
+            fp.write(str(i) + ', ' + str(2*i) + ' \n')
+    file_size = os.stat(str(fname)).st_size
+
+    rows_read = 0
+    for segment in range((file_size + segment_bytes - 1)//segment_bytes):
+        df = read_csv(str(fname),
+                      names=names, dtype=dtypes,
+                      byte_range=(segment*segment_bytes, segment_bytes))
+        rows_read += df.shape[0]
+
+    assert(rows_read == rows)
