@@ -94,7 +94,7 @@ $ cd build                                                                # ente
 
 # CMake options:
 # -DCMAKE_INSTALL_PREFIX set to the install path for your libraries or $CONDA_PREFIX if you're using Anaconda, i.e. -DCMAKE_INSTALL_PREFIX=/install/path or -DCMAKE_INSTALL_PREFIX=$CONDA_PREFIX
-# -DCMAKE_CXX11_ABI set to ON or OFF depending on the ABI version you want, defaults to ON. When turned ON, ABI compability for C++11 is used. When OFF, pre-C++11 ABI compability is used.
+# -DCMAKE_CXX11_ABI set to ON or OFF depending on the ABI version you want, defaults to OFF. When turned ON, ABI compability for C++11 is used. When OFF, pre-C++11 ABI compability is used.
 $ cmake .. -DCMAKE_INSTALL_PREFIX=$CONDA_PREFIX -DCMAKE_CXX11_ABI=OFF     # configure cmake ...
 
 $ make -j                                                                 # compile the libraries librmm.so, libcudf.so ... '-j' will start a parallel job using the number of physical cores available on your system
