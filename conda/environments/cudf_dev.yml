@@ -1,9 +1,9 @@
 name: cudf_dev
 channels:
 - nvidia
+- rapidsai
 - numba
 - conda-forge
-- rapidsai
 - defaults
 dependencies:
 - cmake>=3.12
