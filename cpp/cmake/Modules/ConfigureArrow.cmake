@@ -42,8 +42,22 @@ if(ARROW_CONFIG)
     message(FATAL_ERROR "Configuring Arrow failed: " ${ARROW_CONFIG})
 endif(ARROW_CONFIG)
 
+# Parallel builds cause Travis to run out of memory
+unset(PARALLEL_BUILD)            
+if($ENV{TRAVIS})
+    if(NOT DEFINED ENV{CMAKE_BUILD_PARALLEL_LEVEL})
+        message(STATUS "ARROW BUILD: Disabling Parallel CMake build on Travis")
+    else()
+        set(PARALLEL_BUILD --parallel)
+        message(STATUS "ARROW BUILD: Using $ENV{CMAKE_BUILD_PARALLEL_LEVEL} build jobs on Travis")
+    endif(NOT DEFINED ENV{CMAKE_BUILD_PARALLEL_LEVEL})
+else()
+    set(PARALLEL_BUILD --parallel)
+    message(STATUS "ARROW BUILD: Enabling Parallel CMake build")
+endif($ENV{TRAVIS})
+
 execute_process(
-    COMMAND ${CMAKE_COMMAND} --build --parallel ..
+    COMMAND ${CMAKE_COMMAND} --build ${PARALLEL_BUILD} ..
     RESULT_VARIABLE ARROW_BUILD
     WORKING_DIRECTORY ${ARROW_ROOT}/build)
 
