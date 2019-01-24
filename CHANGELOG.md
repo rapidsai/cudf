@@ -55,6 +55,7 @@
 - PR #720 Refactored Index classes to make them more Pandas-like, added CategoricalIndex
 - PR #749 Improve to_arrow and from_arrow Pandas compatibility
 - PR #766 Remove TravisCI references, remove unused variables from CMake, fix ARROW_VERSION in Cmake
+- PR #773 Add build-args back to Dockerfile and handle dependencies based on environment yml file
 
 ## Bug Fixes
 
