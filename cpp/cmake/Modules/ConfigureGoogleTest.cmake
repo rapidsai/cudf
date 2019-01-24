@@ -27,21 +27,7 @@ if(GTEST_CONFIG)
     message(FATAL_ERROR "Configuring GoogleTest failed: " ${GTEST_CONFIG})
 endif(GTEST_CONFIG)
 
-# Parallel builds cause Travis to run out of memory
-unset(PARALLEL_BUILD)
-if($ENV{TRAVIS})
-    if(NOT DEFINED ENV{CMAKE_BUILD_PARALLEL_LEVEL})
-        message(STATUS "Disabling Parallel CMake build on Travis")
-    else()
-        set(PARALLEL_BUILD --parallel)
-        message(STATUS "GTEST BUILD: Using $ENV{CMAKE_BUILD_PARALLEL_LEVEL} build jobs on Travis")
-    endif(NOT DEFINED ENV{CMAKE_BUILD_PARALLEL_LEVEL})
-else()
-    set(PARALLEL_BUILD --parallel)
-    message(STATUS "GTEST BUILD: Enabling Parallel CMake build")
-endif($ENV{TRAVIS})
-
-execute_process(COMMAND ${CMAKE_COMMAND} --build ${PARALLEL_BUILD} ..
+execute_process(COMMAND ${CMAKE_COMMAND} --build --parallel ..
                 RESULT_VARIABLE GTEST_BUILD
                 WORKING_DIRECTORY ${GTEST_ROOT}/build)
 
