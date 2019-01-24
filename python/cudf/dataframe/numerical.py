@@ -18,6 +18,7 @@ from cudf._gdf import nvtx_range_push, nvtx_range_pop
 from cudf._sort import get_sorted_inds
 
 import cudf.bindings.reduce as cpp_reduce
+import cudf.bindings.replace as cpp_replace
 
 # Operator mappings
 
@@ -226,6 +227,9 @@ class NumericalColumn(columnops.TypedColumnBase):
     def sum(self):
         return cpp_reduce.apply_reduce('sum', self)
 
+    def product(self):
+        return cpp_reduce.apply_reduce('product', self)
+
     def mean(self):
         return self.sum().astype('f8') / self.valid_count
 
@@ -377,6 +381,18 @@ class NumericalColumn(columnops.TypedColumnBase):
                 return joined_index, indexers
             else:
                 return joined_index
+
+    def find_and_replace(self, to_replace, value):
+        """
+        Return col with *to_replace* replaced with *value*.
+        """
+        to_replace_col = columnops.as_column(to_replace)
+        value_col = columnops.as_column(value)
+        replaced = self.copy()
+        to_replace_col, value_col, replaced = numeric_normalize_types(
+               to_replace_col, value_col, replaced)
+        cpp_replace.replace(replaced, to_replace_col, value_col)
+        return replaced
 
 
 def numeric_column_binop(lhs, rhs, op, out_dtype):

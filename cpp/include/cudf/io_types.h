@@ -61,9 +61,8 @@ typedef struct {
   bool          delim_whitespace;           //< Use white space as the delimiter - default is false. This overrides the delimiter argument
   bool          skipinitialspace;           //< Skip white spaces after the delimiter - default is false
 
-
-  int           nrows;                      //< Number of rows to read, -1 indicates all
-  int           header;                     //< Row of the header data, zero based counting. Default states that header should not be read from file.
+  gdf_size_type nrows;                      //< Number of rows to read, -1 indicates all
+  gdf_size_type header;                     //< Row of the header data, zero based counting. Default states that header should not be read from file.
 
   int           num_cols;                   //< Number of columns in the names and dtype arrays
   const char    **names;                    //< Ordered List of column names

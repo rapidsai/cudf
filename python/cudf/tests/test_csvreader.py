@@ -19,6 +19,7 @@ import shutil
 
 from libgdf_cffi import GDFError
 
+
 def make_numeric_dataframe(nrows, dtype):
     df = pd.DataFrame()
     df['col1'] = np.arange(nrows, dtype=dtype)
@@ -524,7 +525,6 @@ def test_csv_reader_nrows(tmpdir):
     df = read_csv(str(fname),
                   dtype=dtypes,
                   nrows=0)
-    print(df)
     assert(df.shape == (0, 2))
 
     # with both skipfooter and nrows - should throw
@@ -584,15 +584,49 @@ def test_csv_reader_skiprows_header(skip_rows, header_row):
     assert(list(cu_df.columns.values) == list(pd_df.columns.values))
 
 
+def test_csv_reader_dtype_inference():
+    names = ['float_point', 'integer']
+    lines = [','.join(names),
+             '1.2,1',
+             '2.3,2',
+             '3.4,3',
+             '4.5,4',
+             '5.6,5',
+             '6.7,6']
+    buffer = '\n'.join(lines) + '\n'
+    cu_df = read_csv(StringIO(buffer))
+    pd_df = pd.read_csv(StringIO(buffer))
+
+    assert(cu_df.shape == pd_df.shape)
+    assert(list(cu_df.columns.values) == list(pd_df.columns.values))
+
+
+def test_csv_reader_dtype_inference_whitespace():
+    names = ['float_point', 'integer']
+    lines = [','.join(names),
+             '  1.2,    1',
+             '2.3,2    ',
+             '  3.4,   3',
+             ' 4.5,4',
+             '5.6,  5',
+             ' 6.7,6 ']
+    buffer = '\n'.join(lines) + '\n'
+    cu_df = read_csv(StringIO(buffer))
+    pd_df = pd.read_csv(StringIO(buffer))
+
+    assert(cu_df.shape == pd_df.shape)
+    assert(list(cu_df.columns.values) == list(pd_df.columns.values))
+
+
 def test_csv_reader_empty_dataframe():
 
     dtypes = ['float64', 'int64']
     buffer = 'float_point, integer\n'
 
-    #should work fine with dtypes
+    # should work fine with dtypes
     df = read_csv(StringIO(buffer), dtype=dtypes)
     assert(df.shape == (0, 2))
 
-	# should raise an error without dtypes
+    # should raise an error without dtypes
     with pytest.raises(GDFError):
         read_csv(StringIO(buffer))

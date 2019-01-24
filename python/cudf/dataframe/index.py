@@ -15,6 +15,7 @@ from .buffer import Buffer
 from .numerical import NumericalColumn
 from .column import Column
 from .datetime import DatetimeColumn
+from .categorical import CategoricalColumn
 from cudf.comm.serialize import register_distributed_serializer
 
 
@@ -65,7 +66,7 @@ class Index(object):
             # Gather
             index = cudautils.gather(data=self.gpu_values, index=indices)
             col = self.as_column().replace(data=Buffer(index))
-            return GenericIndex(col)
+            return as_index(col)
 
     def argsort(self, ascending=True):
         return self.as_column().argsort(ascending=ascending)
@@ -75,7 +76,7 @@ class Index(object):
         return np.asarray([i for i in self.as_column()])
 
     def to_pandas(self):
-        return pd.Index(self.as_column().to_pandas())
+        return pd.Index(self.as_column().to_pandas(), name=self.name)
 
     def to_arrow(self):
         return self.as_column().to_arrow()
@@ -110,9 +111,7 @@ class Index(object):
     @classmethod
     def _concat(cls, objs):
         data = Column._concat([o.as_column() for o in objs])
-        # TODO: add ability to concatenate indices without always casting to
-        # `GenericIndex`
-        return GenericIndex(data)
+        return as_index(data)
 
     def __eq__(self, other):
         if not isinstance(other, Index):
@@ -131,7 +130,7 @@ class Index(object):
             method=method)
         if return_indexers:
             joined_col, indexers = column_join_res
-            joined_index = GenericIndex(joined_col)
+            joined_index = as_index(joined_col)
             return joined_index, indexers
         else:
             return column_join_res
@@ -235,7 +234,7 @@ class RangeIndex(Index):
 
 def index_from_range(start, stop=None, step=None):
     vals = cudautils.arange(start, stop, step, dtype=np.int64)
-    return GenericIndex(NumericalColumn(data=Buffer(vals), dtype=vals.dtype))
+    return as_index(vals)
 
 
 class GenericIndex(Index):
@@ -246,11 +245,11 @@ class GenericIndex(Index):
     _values: A Column object
     name: A string
     """
-    def __new__(self, values, name=None):
-        from .series import Series
-
+    def __init__(self, values, name=None):
+        from cudf.dataframe.series import Series
         # normalize the input
         if isinstance(values, Series):
+            name = values.name
             values = values._column
         elif isinstance(values, columnops.TypedColumnBase):
             values = values
@@ -260,11 +259,8 @@ class GenericIndex(Index):
         assert isinstance(values, columnops.TypedColumnBase), type(values)
         assert values.null_count == 0
 
-        # Make GenericIndex object
-        res = Index.__new__(GenericIndex)
-        res._values = values
-        res.name = name
-        return res
+        self._values = values
+        self.name = name
 
     def copy(self, deep=True):
         if(deep):
@@ -303,7 +299,7 @@ class GenericIndex(Index):
     def __getitem__(self, index):
         res = self._values[index]
         if not isinstance(index, int):
-            return GenericIndex(res)
+            return as_index(res)
         else:
             return res
 
@@ -336,14 +332,10 @@ class GenericIndex(Index):
         return begin, end
 
 
-register_distributed_serializer(RangeIndex)
-register_distributed_serializer(GenericIndex)
-
-
 class DatetimeIndex(GenericIndex):
     # TODO this constructor should take a timezone or something to be
     # consistent with pandas
-    def __new__(self, values, name=None):
+    def __init__(self, values, name=None):
         # we should be more strict on what we accept here but
         # we'd have to go and figure out all the semantics around
         # pandas dtindex creation first which.  For now
@@ -353,12 +345,9 @@ class DatetimeIndex(GenericIndex):
             values = DatetimeColumn.from_numpy(values)
         elif isinstance(values, pd.DatetimeIndex):
             values = DatetimeColumn.from_numpy(values.values)
-        # can someone look this over, I never remember how to
-        # override __new__ properly
-        res = Index.__new__(DatetimeIndex)
-        res._values = values
-        res.name = name
-        return res
+
+        self._values = values
+        self.name = name
 
     @property
     def year(self):
@@ -393,4 +382,86 @@ class DatetimeIndex(GenericIndex):
                                      mask=out_column.mask,
                                      null_count=out_column.null_count,
                                      dtype=out_column.dtype)
-        return GenericIndex(out_column)
+        return as_index(out_column)
+
+
+class CategoricalIndex(GenericIndex):
+    """An categorical of orderable values that represent the indices of another
+    Column
+
+    Attributes
+    ---
+    _values: A CategoricalColumn object
+    name: A string
+    """
+    def __init__(self, values, name=None):
+        if isinstance(values, pd.Series) and \
+           pd.api.types.is_categorical_dtype(values.dtype):
+            values = CategoricalColumn(
+                data=Buffer(values.cat.codes.values),
+                categories=values.cat.categories.tolist(),
+                ordered=values.cat.ordered
+            )
+        elif isinstance(values, (pd.Categorical, pd.CategoricalIndex)):
+            values = CategoricalColumn(
+                data=Buffer(values.codes),
+                categories=values.categories.tolist(),
+                ordered=values.ordered
+            )
+
+        self._values = values
+        self.name = name
+        self.names = [name]
+
+    @property
+    def codes(self):
+        return self._values.codes
+
+    @property
+    def categories(self):
+        return self._values.categories
+
+
+def as_index(arbitrary, name=None):
+    """Create an Index from an arbitrary object
+
+    Currently supported inputs are:
+
+    * ``Column``
+    * ``Buffer``
+    * ``Series``
+    * ``Index``
+    * numba device array
+    * numpy array
+    * pyarrow array
+    * pandas.Categorical
+
+    Returns
+    -------
+    result : subclass of Index
+        - CategoricalIndex for Categorical input.
+        - DatetimeIndex for Datetime input.
+        - GenericIndex for all other inputs.
+    """
+    # This function should probably be moved to Index.__new__
+    if isinstance(arbitrary, Index):
+        return arbitrary
+    elif isinstance(arbitrary, NumericalColumn):
+        return GenericIndex(arbitrary, name=name)
+    elif isinstance(arbitrary, DatetimeColumn):
+        return DatetimeIndex(arbitrary, name=name)
+    elif isinstance(arbitrary, CategoricalColumn):
+        return CategoricalIndex(arbitrary, name=name)
+    else:
+        name = None
+        if hasattr(arbitrary, 'name'):
+            name = arbitrary.name
+        if len(arbitrary) == 0:
+            return RangeIndex(0, 0, name=name)
+        return as_index(columnops.as_column(arbitrary), name=name)
+
+
+register_distributed_serializer(RangeIndex)
+register_distributed_serializer(GenericIndex)
+register_distributed_serializer(DatetimeIndex)
+register_distributed_serializer(CategoricalIndex)

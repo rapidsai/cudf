@@ -7,11 +7,12 @@ from numbers import Number
 
 import numpy as np
 import pandas as pd
+from pandas.api.types import is_scalar, is_dict_like
 
 from cudf.utils import cudautils, utils
 from cudf import formatting
 from .buffer import Buffer
-from .index import Index, RangeIndex, GenericIndex
+from .index import Index, RangeIndex, as_index
 from cudf.settings import NOTSET, settings
 from .column import Column
 from .datetime import DatetimeColumn
@@ -65,7 +66,7 @@ class Series(object):
     def __init__(self, data=None, index=None, name=None, nan_as_null=True):
         if isinstance(data, pd.Series):
             name = data.name
-            index = GenericIndex(data.index)
+            index = as_index(data.index)
         if isinstance(data, Series):
             index = data._index
             name = data.name
@@ -166,7 +167,7 @@ class Series(object):
         index : Index, Series-convertible
             the new index or values for the new index
         """
-        index = index if isinstance(index, Index) else GenericIndex(index)
+        index = index if isinstance(index, Index) else as_index(index)
         return self._copy_construct(index=index)
 
     def as_index(self):
@@ -657,6 +658,8 @@ class Series(object):
               1    5
 
         """
+        if len(self) == 0:
+            return self
         vals, inds = self._sort(ascending=ascending, na_position=na_position)
         index = self.index.take(inds.to_gpu_array())
         return vals.set_index(index)
@@ -698,11 +701,70 @@ class Series(object):
         sr_inds = self._copy_construct(data=col_inds)
         return sr_keys, sr_inds
 
+    def replace(self, to_replace, value):
+        """
+        Replace values given in *to_replace* with *value*.
+
+        Parameters
+        ----------
+        to_replace : numeric, str or list-like
+            Value(s) to replace.
+
+            * numeric or str:
+
+                - values equal to *to_replace* will be replaced with *value*
+
+            * list of numeric or str:
+
+                - If *value* is also list-like, *to_replace* and *value* must
+                be of same length.
+        value : numeric, str, list-like, or dict
+            Value(s) to replace `to_replace` with.
+
+        See also
+        --------
+        Series.fillna
+
+        Returns
+        -------
+        result : Series
+            Series after replacement. The mask and index are preserved.
+        """
+        if not is_scalar(to_replace):
+            if is_scalar(value):
+                value = utils.scalar_broadcast_to(
+                    value, (len(to_replace),), np.dtype(type(value))
+                )
+        else:
+            if not is_scalar(value):
+                raise TypeError(
+                    "Incompatible types '{}' and '{}' "
+                    "for *to_replace* and *value*.".format(
+                        type(to_replace).__name__, type(value).__name__
+                    )
+                )
+            to_replace = [to_replace]
+            value = [value]
+
+        if len(to_replace) != len(value):
+            raise ValueError(
+                "Replacement lists must be"
+                "of same length."
+                "Expected {}, got {}.".format(len(to_replace), len(value))
+            )
+
+        if is_dict_like(to_replace) or is_dict_like(value):
+            raise TypeError("Dict-like args not supported in Series.replace()")
+
+        result = self._column.find_and_replace(to_replace, value)
+
+        return self._copy_construct(data=result)
+
     def reverse(self):
         """Reverse the Series
         """
         data = cudautils.reverse_array(self.to_gpu_array())
-        index = GenericIndex(cudautils.reverse_array(self.index.gpu_values))
+        index = as_index(cudautils.reverse_array(self.index.gpu_values))
         col = self._column.replace(data=Buffer(data))
         return self._copy_construct(data=col, index=index)
 
@@ -857,6 +919,11 @@ class Series(object):
         assert axis in (None, 0) and skipna is True
         return self._column.sum()
 
+    def product(self, axis=None, skipna=True):
+        """Compute the product of the series"""
+        assert axis in (None, 0) and skipna is True
+        return self._column.product()
+
     def mean(self, axis=None, skipna=True):
         """Compute the mean of the series
         """
@@ -925,7 +992,7 @@ class Series(object):
         if self.null_count == len(self):
             return 0
         vals, cnts = self._column.value_counts(method=method)
-        res = Series(cnts, index=GenericIndex(vals))
+        res = Series(cnts, index=as_index(vals))
         if sort:
             return res.sort_values(ascending=False)
         return res
@@ -943,7 +1010,6 @@ class Series(object):
         return self._copy_construct(data=scaled)
 
     # Rounding
-
     def ceil(self):
         """Rounds each value upward to the smallest integral value not less
         than the original.
@@ -999,7 +1065,7 @@ class Series(object):
             return Series(self._column.quantile(q, interpolation, exact))
         else:
             return Series(self._column.quantile(q, interpolation, exact),
-                          index=GenericIndex(np.asarray(q)))
+                          index=as_index(np.asarray(q)))
 
 
 register_distributed_serializer(Series)
@@ -1091,7 +1157,7 @@ class Iloc(object):
         for idx in rows:
             ret_list.append(self._sr[idx])
 
-        return Series(ret_list, index=GenericIndex(np.asarray(rows)))
+        return Series(ret_list, index=as_index(np.asarray(rows)))
 
     def __setitem__(self, key, value):
         # throws an exception while updating
