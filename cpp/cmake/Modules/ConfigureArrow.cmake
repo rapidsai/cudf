@@ -42,19 +42,8 @@ if(ARROW_CONFIG)
     message(FATAL_ERROR "Configuring Arrow failed: " ${ARROW_CONFIG})
 endif(ARROW_CONFIG)
 
-# Parallel builds cause Travis to run out of memory
-unset(PARALLEL_BUILD)            
-if($ENV{TRAVIS})
-    if(NOT DEFINED ENV{CMAKE_BUILD_PARALLEL_LEVEL})
-        message(STATUS "ARROW BUILD: Disabling Parallel CMake build on Travis")
-    else()
-        set(PARALLEL_BUILD --parallel)
-        message(STATUS "ARROW BUILD: Using $ENV{CMAKE_BUILD_PARALLEL_LEVEL} build jobs on Travis")
-    endif(NOT DEFINED ENV{CMAKE_BUILD_PARALLEL_LEVEL})
-else()
-    set(PARALLEL_BUILD --parallel)
-    message(STATUS "ARROW BUILD: Enabling Parallel CMake build")
-endif($ENV{TRAVIS})
+set(PARALLEL_BUILD --parallel)
+message(STATUS "ARROW BUILD: Enabling Parallel CMake build")
 
 execute_process(
     COMMAND ${CMAKE_COMMAND} --build ${PARALLEL_BUILD} ..
@@ -93,7 +82,7 @@ set(FLATBUFFERS_INCLUDE_DIR "${FLATBUFFERS_ROOT}/include")
 set(FLATBUFFERS_LIBRARY_DIR "${FLATBUFFERS_ROOT}/lib")
 
 add_definitions(-DARROW_METADATA_V4)
-add_definitions(-DARROW_VERSION=1000)
+add_definitions(-DARROW_VERSION=1110)
 
 
 

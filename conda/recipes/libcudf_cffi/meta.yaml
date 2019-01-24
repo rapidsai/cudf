@@ -21,8 +21,6 @@ build:
     - CC
     - CXX
     - CUDAHOSTCXX
-    - TRAVIS
-    - CMAKE_BUILD_PARALLEL_LEVEL
 
 requirements:
   # use channel:
