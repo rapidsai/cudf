@@ -652,6 +652,6 @@ def test_csv_reader_byte_range(tmpdir, segment_bytes):
         dfs.append(read_csv(str(fname), names=names,
                    byte_range=(segment*segment_bytes, segment_bytes)))
     df = cudf.concat(dfs)
-    
+
     # comparing only the values here, concat does not update the index
     np.array_equal(ref_df.to_pandas().values, df.to_pandas().values)
