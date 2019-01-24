@@ -4,7 +4,7 @@
 #   conda build -c nvidia -c rapidsai -c conda-forge -c defaults .
 {% set version = environ.get('GIT_DESCRIBE_TAG', '0.0.0.dev').lstrip('v') %}
 {% set git_revision_count=environ.get('GIT_DESCRIBE_NUMBER', 0) %}
-{% set cuda_version='.'.join(environ.get('CUDA', 'unknown').split('.')[:2]) %}
+{% set cuda_version='.'.join(environ.get('CUDA', '9.2').split('.')[:2]) %}
 package:
   name: libcudf
   version: {{ version }}
