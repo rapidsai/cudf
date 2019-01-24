@@ -275,9 +275,6 @@ gdf_error read_csv(csv_read_arg *args)
 	error = inferCompressionType(args->compression, args->filepath_or_buffer, compression_type);
 	checkError(error, "call to inferCompressionType");
 	
-	if (args->byte_range_offset < 0 || args->byte_range_size < 0) {
-		checkError(GDF_INVALID_API_CALL, "Byte range offset and size cannot be less than zero");
-	}
 	if (args->byte_range_offset > 0 || args->byte_range_size > 0) {
 		if (raw_csv->nrows >=0 || raw_csv->skiprows > 0 || raw_csv->skipfooter > 0) {
 			checkError(GDF_INVALID_API_CALL, 
