@@ -251,7 +251,7 @@ struct column_wrapper {
   }
 
   gdf_column the_column;
-};  // namespace test
+};
 
 }  // namespace test
 }  // namespace cudf
