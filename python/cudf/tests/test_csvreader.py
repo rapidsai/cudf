@@ -263,8 +263,7 @@ def test_csv_reader_usecols_int_char(tmpdir):
     df_out = pd.read_csv(fname, usecols=[0, 1, 3], parse_dates=[1],
                          dayfirst=True)
     out = read_csv(str(fname), usecols=[0, 1, 3], dayfirst=True)
-    print(df_out)
-    print(out)
+
     assert len(out.columns) == len(df_out.columns)
     assert len(out) == len(df_out)
     pd.util.testing.assert_frame_equal(df_out, out.to_pandas(),
@@ -631,16 +630,27 @@ def test_csv_reader_empty_dataframe():
     with pytest.raises(GDFError):
         read_csv(StringIO(buffer))
 
+
 def test_csv_reader_tabs():
-    names = ['float_point', 'integer']
-    dtypes = ['float64', 'int64']
+    names = ['float_point', 'integer','date']
     lines = [','.join(names),
-             '1.2,\t1',
-             '2.3\t,\t2\t',
-             '\t 3.4,3 \t',
-             '\t4.5 , 4\t']
+             '1.2,\t12,     \t11/22/1995',
+             '3.4\t,\t34\t,\t 01/01/2001',
+             '\t 5.6,56 \t, 12/12/1970',
+             '\t7.8 , 78\t,06/15/2018 \t']
     buffer = '\n'.join(lines) + '\n'
-    cu_df = read_csv(StringIO(buffer), dtype=dtypes)
-    pd_df = pd.read_csv(StringIO(buffer))
-	
-    pd.util.testing.assert_frame_equal(pd_df, cu_df.to_pandas())
+
+    df = read_csv(StringIO(buffer))
+
+    assert(df.shape == (4, 3))
+
+    floats = [1.2, 3.4, 5.6, 7.8]
+    ints = [12, 34, 56, 78]
+    dates = ['1995-11-22T00:00:00.000',
+             '2001-01-01T00:00:00.000',
+             '1970-12-12T00:00:00.000',
+             '2018-06-15T00:00:00.000']
+    np.testing.assert_allclose(floats, df['float_point'])
+    np.testing.assert_allclose(ints, df['integer'])
+    for row in range(4):
+        assert(str(df['date'][row]) == dates[row])
