@@ -630,3 +630,12 @@ def test_csv_reader_empty_dataframe():
     # should raise an error without dtypes
     with pytest.raises(GDFError):
         read_csv(StringIO(buffer))
+
+
+def test_csv_reader_filenotfound():
+
+    fname = "non-existing-filename.csv"
+
+    # should raise an error
+    with pytest.raises(FileNotFoundError):
+        read_csv(str(fname))
