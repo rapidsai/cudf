@@ -69,6 +69,7 @@
 - PR #718 Ensure sum, product, min, max methods pandas compatibility on empty datasets
 - PR #720 Refactored Index classes to make them more Pandas-like, added CategoricalIndex
 - PR #749 Improve to_arrow and from_arrow Pandas compatibility
+- PR #766 Remove TravisCI references, remove unused variables from CMake, fix ARROW_VERSION in Cmake
 
 ## Bug Fixes
 
