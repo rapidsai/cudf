@@ -39,7 +39,7 @@ list(APPEND PARALLEL_BUILD " ${NUM_JOBS}")
 if(${NUM_JOBS} EQUAL 1)
     message(STATUS "GTEST BUILD: Enabling Sequential CMake build")
 elseif(${NUM_JOBS} GREATER 1)
-    message(STATUS "GTEST BUILD: Enabling Parallel CMake build with ${NUM_JOBS}")
+    message(STATUS "GTEST BUILD: Enabling Parallel CMake build with ${NUM_JOBS} jobs")
 endif(${NUM_JOBS} EQUAL 1)
 
 
