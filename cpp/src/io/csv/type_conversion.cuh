@@ -86,83 +86,67 @@ T convertStrtoInt(const char *data, long start_idx, long end_idx, char thousands
 
 template<typename T>
 __host__ __device__
-T convertStrtoFloat(char *data, long start_idx, long end_idx, char decimal, char thousands='\0') {
+T convertStrtoFloat(char *data, long start, long end, char decimal, char thousands='\0') {
 
-	T answer = (T)0.0;
-	// removePrePostWhiteSpaces(data, &start_idx, &end_idx);
+	T value = 0;
 
-
-	// check for single digit conversions
-	if (start_idx == end_idx) {
-		answer = (data[start_idx] -'0');
-		return answer;
+	// Handle negative values if necessary
+	int32_t sign = 1;
+	if (data[start] == '-') {
+		sign = -1;
+		start++;
 	}
 
-	// trim leading and trailing spaces
-	if (data[start_idx] == ' ')
-		++start_idx;
-
-	if (data[end_idx] == ' ')
-		--end_idx;
-
-	bool negative=false;
-	if(data[start_idx]=='-'){
-		negative=true;
-		start_idx++;
-	}
-
-	// find the decimal point - might not be one
-	long decimal_pt = end_idx;
-	long d_idx = start_idx;
-	int found = 0;
-
-	while ( (d_idx < (end_idx +1)) && ! found  ) {
-		if ( data[d_idx] == decimal) {
-			decimal_pt = d_idx;
-			found = 1;
+	// Handle the whole part of the number
+	long index = start;
+	while (index <= end) {
+		if (data[index] == decimal) {
+			++index;
+			break;
 		}
-		++d_idx;
-	}
-
-	// work on upper part
-	long idx = decimal_pt;
-	int powSize = 0;
-
-	if ( idx >= start_idx ) {
-		if (data[idx] == decimal)
-			--idx;
-
-		while(idx > (start_idx - 1))
-		{
-			if (data[idx] != thousands) {
-				answer += (data[idx] -'0') * pow(10, powSize);
-				++powSize;
-			}
-			--idx;
+		else if (data[index] == 'e' || data[index] == 'E') {
+			break;
 		}
-	}
-
-	//lower part - work left to right
-	if ( found ) {
-		powSize = -1;
-		idx = decimal_pt +1;
-
-		while(idx < (end_idx + 1))
-		{
-			if (data[idx] != thousands) {
-				answer += (data[idx] -'0') * pow(10, powSize);
-				--powSize;
-			}
-
-			++idx;
+		else if (data[index] != thousands) {
+			value *= 10;
+			value += data[index] -'0';
 		}
+		++index;
 	}
 
-	if (negative==true)
-		answer *=-1;
+	// Handle fractional part of the number if necessary
+	int32_t divisor = 1;
+	while (index <= end) {
+		if (data[index] == 'e' || data[index] == 'E') {
+			++index;
+			break;
+		}
+		else if (data[index] != thousands) {
+			value *= 10;
+			value += data[index] -'0';
+			divisor *= 10;
+		}
+		++index;
+	}
 
+	// Handle exponential part of the number if necessary
+	int32_t exponent = 0;
+	while (index <= end) {
+		if (data[index] == '-') {
+			++index;
+			exponent = (data[index] -'0') * -1;
+		} else {
+			exponent *= 10;
+			exponent += data[index] -'0';
+		}
+		++index;
+	}
 
-    return answer;
+	if (exponent != 0) {
+		return ((divisor > 1) ? (value * sign / divisor) : (value * sign)) * exp10f(exponent);
+	} else {
+		return  (divisor > 1) ? (value * sign / divisor) : (value * sign);
+	}
 }
 
 

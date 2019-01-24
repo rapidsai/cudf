@@ -26,6 +26,12 @@
 #include <cudf.h>
 #include <NVStrings.h>
 
+MATCHER_P(FloatNearPointwise, tolerance, "Out of range")
+{
+    return (std::get<0>(arg)>std::get<1>(arg)-tolerance &&
+            std::get<0>(arg)<std::get<1>(arg)+tolerance) ;
+}
+
 bool checkFile(const char *fname)
 {
 	struct stat st;
@@ -455,5 +461,39 @@ TEST(gdf_csv_test, Dates)
 			::testing::ElementsAre(983750400000, 1288483200000, 782611200000,
 								   656208000000, 0, 798163200000, 774144000000,
 								   1149638400000, 1126828800000, 2764800000) );
+	}
+}
+
+TEST(gdf_csv_test, FloatingPoint)
+{
+	const char* fname			= "/tmp/CsvFloatingPoint.csv";
+	const char* names[]			= { "A" };
+	const char* types[]			= { "float32" };
+
+	std::ofstream outfile(fname, std::ofstream::out);
+	outfile << "5.6;0.5679e2;1.2e10;0.07e1;3000e-3;";
+	outfile.close();
+	ASSERT_TRUE( checkFile(fname) );
+
+	{
+		csv_read_arg args{};
+		args.input_data_form    = gdf_csv_input_form::FILE_PATH;
+		args.filepath_or_buffer = fname;
+		args.num_cols           = std::extent<decltype(names)>::value;
+		args.names              = names;
+		args.dtype              = types;
+		args.decimal            = '.';
+		args.delimiter          = ',';
+		args.lineterminator     = ';';
+		args.nrows              = -1;
+		EXPECT_EQ( read_csv(&args), GDF_SUCCESS );
+
+		EXPECT_EQ( args.num_cols_out, args.num_cols );
+		ASSERT_EQ( args.data[0]->dtype, GDF_FLOAT32 );
+
+		auto ACol = gdf_host_column<float>(args.data[0]);
+		EXPECT_THAT( ACol.hostdata(),
+			::testing::Pointwise(FloatNearPointwise(1e-6),
+				std::vector<float>{ 5.6, 56.79, 12000000000, 0.7, 3.000 }) );
 	}
 }

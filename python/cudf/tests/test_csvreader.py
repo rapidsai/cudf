@@ -302,15 +302,16 @@ def test_csv_reader_float_decimal(tmpdir):
     dtypes = ['float32', 'float64', 'float64', 'float32']
     lines = [';'.join(names),
              '1,2;1234,5678;12345;0,123',
-             '3,4;3456,7890;67890;,456']
+             '3,4;3456,7890;67890;,456',
+             '5,6;0,5679e2;1,2e10;0,07e-1']
 
     with open(str(fname), 'w') as fp:
         fp.write('\n'.join(lines) + '\n')
 
-    basic_32_ref = [1.2, 3.4]
-    basic_64_ref = [1234.5678, 3456.7890]
-    round_ref = [12345, 67890]
-    decimal_only_ref = [0.123, 0.456]
+    basic_32_ref = [1.2, 3.4, 5.6]
+    basic_64_ref = [1234.5678, 3456.7890, 56.79]
+    round_ref = [12345, 67890, 12000000000]
+    decimal_only_ref = [0.123, 0.456, 0.007]
 
     df = read_csv(str(fname), names=names, dtype=dtypes, skiprows=1,
                   delimiter=';', decimal=',')
