@@ -1,13 +1,17 @@
-
 # cuDF 0.6.0 (Date TBD)
 
 ## New Features
 
+- PR #539 Add Python bindings for replace function
+
 ## Improvements
 
+- PR #730 Improve performance of `gdf_table` constructor
 - PR #532 CSV Reader: Use type dispatcher instead of switch block
 
 ## Bug Fixes
+
+- ...
 
 
 # cuDF 0.5.0 (Date TBD)
@@ -64,7 +68,7 @@
 - PR #671 CSV Reader: uncompressed buffer input can be parsed without explicitly specifying compression as None
 - PR #718 Ensure sum, product, min, max methods pandas compatibility on empty datasets
 - PR #720 Refactored Index classes to make them more Pandas-like, added CategoricalIndex
-- PR #730 Improve performance of `gdf_table` constructor 
+- PR #749 Improve to_arrow and from_arrow Pandas compatibility
 
 ## Bug Fixes
 
@@ -108,6 +112,8 @@
 - PR #717 CSV reader: fix behavior when parsing a csv file with no data rows
 - PR #724 CSV Reader: fix build issue due to parameter type mismatch in a std::max call
 - PR #734 Prevents reading undefined memory in gpu_expand_mask_bits numba kernel
+- PR #750 Fix race condition for handling NVStrings in CMake
+- PR #719 Fix merge column ordering
 
 
 # cuDF 0.4.0 (05 Dec 2018)

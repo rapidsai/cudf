@@ -177,6 +177,37 @@ def test_series_init_none():
     assert got.split() == expect.split()
 
 
+def test_series_replace():
+    a1 = np.array([0, 1, 2, 3, 4])
+
+    # Numerical
+    a2 = np.array([5, 1, 2, 3, 4])
+    sr1 = Series(a1)
+    sr2 = sr1.replace(0, 5)
+    np.testing.assert_equal(sr2.to_array(), a2)
+
+    # Categorical
+    psr3 = pd.Series(["one", "two", "three"], dtype='category')
+    psr4 = psr3.replace("one", "two")
+    sr3 = Series.from_pandas(psr3)
+    sr4 = sr3.replace("one", "two")
+    pd.testing.assert_series_equal(sr4.to_pandas(), psr4)
+
+    # List input
+    a6 = np.array([5, 6, 2, 3, 4])
+    sr6 = sr1.replace([0, 1], [5, 6])
+    np.testing.assert_equal(sr6.to_array(), a6)
+
+    a7 = np.array([5.5, 6.5, 2, 3, 4])
+    sr7 = sr1.replace([0, 1], [5.5, 6.5])
+    np.testing.assert_equal(sr7.to_array(), a7)
+
+    # Series input
+    a8 = np.array([5, 5, 5, 3, 4])
+    sr8 = sr1.replace(sr1[:3], 5)
+    np.testing.assert_equal(sr8.to_array(), a8)
+
+
 def test_dataframe_basic():
     np.random.seed(0)
     df = DataFrame()
@@ -1046,7 +1077,7 @@ def test_to_arrow(nelem, data_type):
                     .cast(pa.int64())
                     .cast(pa.date64())
                 ).remove_column(2).remove_column(2)
-    pa_gdf = gdf.to_arrow(index=False)
+    pa_gdf = gdf.to_arrow(preserve_index=False).replace_schema_metadata(None)
 
     assert isinstance(pa_gdf, pa.Table)
     assert pa.Table.equals(pa_df, pa_gdf)
@@ -1104,7 +1135,8 @@ def test_to_arrow_categorical():
 
     pa_df = pa.Table.from_pandas(df, preserve_index=False)\
         .replace_schema_metadata(None)
-    pa_gdf = gdf.to_arrow(index=False)
+    pa_gdf = gdf.to_arrow(preserve_index=False)\
+        .replace_schema_metadata(None)
 
     assert isinstance(pa_gdf, pa.Table)
     assert pa.Table.equals(pa_df, pa_gdf)
@@ -1266,6 +1298,41 @@ def test_binops(pdf, gdf, left, right, binop):
     assert_eq(d, g)
 
 
+def test_dataframe_replace():
+    # numerical
+    pdf1 = pd.DataFrame({'a': [0, 1, 2, 3], 'b': [0, 1, 2, 3]})
+    gdf1 = DataFrame.from_pandas(pdf1)
+    pdf2 = pdf1.replace(0, 4)
+    gdf2 = gdf1.replace(0, 4)
+    pd.testing.assert_frame_equal(gdf2.to_pandas(), pdf2)
+
+    # categorical
+    pdf4 = pd.DataFrame({'a': ['one', 'two', 'three'],
+                         'b': ['one', 'two', 'three']}, dtype='category')
+    gdf4 = DataFrame.from_pandas(pdf4)
+    pdf5 = pdf4.replace('two', 'three')
+    gdf5 = gdf4.replace('two', 'three')
+    pd.testing.assert_frame_equal(gdf5.to_pandas(), pdf5)
+
+    # list input
+    pdf6 = pdf1.replace([0, 1], [4, 5])
+    gdf6 = gdf1.replace([0, 1], [4, 5])
+    pd.testing.assert_frame_equal(gdf6.to_pandas(), pdf6)
+
+    pdf7 = pdf1.replace([0, 1], 4)
+    gdf7 = gdf1.replace([0, 1], 4)
+    pd.testing.assert_frame_equal(gdf7.to_pandas(), pdf7)
+
+    # dict input:
+    pdf8 = pdf1.replace({'a': 0, 'b': 0}, {'a': 4, 'b': 5})
+    gdf8 = gdf1.replace({'a': 0, 'b': 0}, {'a': 4, 'b': 5})
+    pd.testing.assert_frame_equal(gdf8.to_pandas(), pdf8)
+
+    pdf9 = pdf1.replace({'a': 0}, {'a': 4})
+    gdf9 = gdf1.replace({'a': 0}, {'a': 4})
+    pd.testing.assert_frame_equal(gdf9.to_pandas(), pdf9)
+
+
 @pytest.mark.xfail(reason="null is not supported in gpu yet")
 def test_dataframe_boolean_mask_with_None():
     pdf = pd.DataFrame({'a': [0, 1, 2, 3], 'b': [0.1, 0.2, None, 0.3]})
@@ -1350,3 +1417,21 @@ def test_from_pandas_function(pdf):
 
     with pytest.raises(TypeError):
         gd.from_pandas(123)
+
+
+@pytest.mark.parametrize('preserve_index', [True, False])
+def test_arrow_pandas_compat(pdf, gdf, preserve_index):
+    pdf['z'] = range(10)
+    pdf = pdf.set_index('z')
+    gdf['z'] = range(10)
+    gdf = gdf.set_index('z')
+
+    pdf_arrow_table = pa.Table.from_pandas(pdf, preserve_index=preserve_index)
+    gdf_arrow_table = gdf.to_arrow(preserve_index=preserve_index)
+
+    assert(pa.Table.equals(pdf_arrow_table, gdf_arrow_table))
+
+    gdf2 = DataFrame.from_arrow(pdf_arrow_table)
+    pdf2 = pdf_arrow_table.to_pandas()
+
+    assert_eq(pdf2, gdf2)
