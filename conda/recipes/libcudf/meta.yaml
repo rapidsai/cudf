@@ -35,6 +35,7 @@ requirements:
   run:
     - pyarrow 0.11.1
     - nvstrings
+    - cudatoolkit {{ cuda_version }}.*
 
 test:
   commands:
