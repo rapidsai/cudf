@@ -4,7 +4,6 @@
 #=============================================================================
 
 # BEGIN macros
-
 macro(CONFIGURE_GOOGLETEST_EXTERNAL_PROJECT)
     # NOTE percy c.gonzales if you want to pass other RAL CMAKE_CXX_FLAGS into this dependency add it by harcoding
     set(GOOGLETEST_CMAKE_ARGS

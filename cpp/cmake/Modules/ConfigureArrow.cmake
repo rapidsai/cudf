@@ -109,6 +109,6 @@ include_directories(${ARROW_INCLUDEDIR})
 link_directories(${ARROW_ROOT}/lib/)
 
 add_definitions(-DARROW_METADATA_V4)
-add_definitions(-DARROW_VERSION=1000)
+add_definitions(-DARROW_VERSION=1110)
 
 # END MAIN #
