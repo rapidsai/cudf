@@ -26,24 +26,26 @@ SHELL ["/bin/bash", "-c"]
 
 # Build cuDF conda env
 ARG PYTHON_VERSION
+ENV PYTHON_VERSION=$PYTHON_VERSION
 ARG NUMBA_VERSION
+ENV NUMBA_VERSION=$NUMBA_VERSION
 ARG NUMPY_VERSION
+ENV NUMPY_VERSION=$NUMPY_VERSION
 ARG PANDAS_VERSION
+ENV PANDAS_VERSION=$PANDAS_VERSION
 ARG PYARROW_VERSION
+ENV PYARROW_VERSION=$PYARROW_VERSION
 ARG CYTHON_VERSION
+ENV CYTHON_VERSION=$CYTHON_VERSION
 ARG CMAKE_VERSION
+ENV CMAKE_VERSION=$CMAKE_VERSION
+
+ADD docker /cudf/docker
 ADD conda /cudf/conda
-# This isn't ideal as it will create a Python 3.7 environment and then reinstall
-# everything with Python 3.6 if you specify that version
-RUN conda env create --name cudf --file /cudf/conda/environments/cudf_dev.yml && \
-    conda install -y -n cudf \
-      python=${PYTHON_VERSION} \
-      numba=${NUMBA_VERSION} \
-      numpy=${NUMPY_VERSION} \
-      pandas=${PANDAS_VERSION} \
-      pyarrow=${PYARROW_VERSION} \
-      cython=${CYTHON_VERSION} \
-      cmake=${CMAKE_VERSION}
+
+# Bash-fu to modify the environment file based on versions set in build args
+RUN bash -c "/cudf/docker/package_versions.sh /cudf/conda/environments/cudf_dev.yml" && \
+    conda env create --name cudf --file /cudf/conda/environments/cudf_dev.yml
 
 # Preserved for users who currently use these build-args
 # Clone cuDF repo
