@@ -25,8 +25,25 @@ ENV PATH=${PATH}:/conda/bin
 SHELL ["/bin/bash", "-c"]
 
 # Build cuDF conda env
+ARG PYTHON_VERSION
+ARG NUMBA_VERSION
+ARG NUMPY_VERSION
+ARG PANDAS_VERSION
+ARG PYARROW_VERSION
+ARG CYTHON_VERSION
+ARG CMAKE_VERSION
 ADD conda /cudf/conda
-RUN conda env create --name cudf --file /cudf/conda/environments/dev_py35.yml
+# This isn't ideal as it will create a Python 3.7 environment and then reinstall
+# everything with Python 3.6 if you specify that version
+RUN conda env create --name cudf --file /cudf/conda/environments/cudf_dev.yml && \
+    conda install -y -n cudf \
+      python=${PYTHON_VERSION} \
+      numba=${NUMBA_VERSION} \
+      numpy=${NUMPY_VERSION} \
+      pandas=${PANDAS_VERSION} \
+      pyarrow=${PYARROW_VERSION} \
+      cython=${CYTHON_VERSION} \
+      cmake=${CMAKE_VERSION}
 
 # Preserved for users who currently use these build-args
 # Clone cuDF repo
