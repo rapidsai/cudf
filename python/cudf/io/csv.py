@@ -256,7 +256,7 @@ def read_csv(filepath_or_buffer, lineterminator='\n',
     if byte_range is not None:
         if skipfooter != 0 or skiprows != 0 or nrows is not None:
             raise ValueError("""cannot manually limit rows to be read when
-	                        using the byte range parameter""")
+                                using the byte range parameter""")
 
     # Start with default values recognized as boolean
     arr_true_values = [_wrap_string(str('True')), _wrap_string(str('TRUE'))]
