@@ -109,12 +109,12 @@ shutil.rmtree('build', ignore_errors=True)
 cuda_version = ''.join(os.environ.get('CUDA', 'unknown').split('.')[:2])
 
 install_requires = [
-    'pandas>=0.20,<0.21',
+    'pandas>=0.23.4',
     'numba>=0.40.0,<0.42',
     'pycparser==2.19',
-    'pyarrow>=0.10,<0.11',
+    'pyarrow==0.11.1',
     'cffi>=1.0.0',
-    'cython>=0.28,<0.29',
+    'cython>=0.29,<0.30',
     'numpy>=1.14'
 ]
 setup_requires = install_requires.copy()
@@ -157,8 +157,8 @@ setup(name=name,
       classifiers=[
           "Intended Audience :: Developers",
           "Programming Language :: Python",
-          "Programming Language :: Python :: 3.5",
-          "Programming Language :: Python :: 3.6"
+          "Programming Language :: Python :: 3.6",
+          "Programming Language :: Python :: 3.7"
       ],
       author="NVIDIA Corporation",
       license='Apache 2.0',
@@ -173,7 +173,7 @@ setup(name=name,
       },
       install_requires=install_requires,
       setup_requires=setup_requires,
-      python_requires='>=3.5,<3.7',
+      python_requires='>=3.6,<3.8',
       cffi_modules=[
           'cpp/python/libgdf_cffi/libgdf_build.py:ffibuilder',
           'cpp/python/librmm_cffi/librmm_build.py:ffibuilder'
