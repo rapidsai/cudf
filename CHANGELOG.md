@@ -103,6 +103,7 @@
 - PR #719 Fix merge column ordering
 - PR #770 Fix issue where RMM submodule pointed to wrong branch and pin other to correct branches
 
+- PR TEST rename RMM headers (testing RMM PR, will delete this PR when CI passes)
 
 # cuDF 0.4.0 (05 Dec 2018)
 
