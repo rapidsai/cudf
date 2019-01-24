@@ -43,7 +43,6 @@
 - PR #521 Add `assert_eq` function for testing
 - PR #502 Simplify Dockerfile for local dev, eliminate old conda/pip envs
 - PR #549 Adds `-rdynamic` compiler flag to nvcc for Debug builds
-- PR #472 RMM: Created centralized rmm::device_vector alias and rmm::exec_policy
 - PR #500 Improved the concurrent hash map class to support partitioned (multi-pass) hash table building
 - PR #583 Updated `gdf_size_type` to `int`
 - PR #617 Added .dockerignore file. Prevents adding stale cmake cache files to the docker container
@@ -51,6 +50,7 @@
 - PR #664 Added Debuging instructions to README
 - PR #651 Remove noqa marks in `__init__.py` files
 - PR #671 CSV Reader: uncompressed buffer input can be parsed without explicitly specifying compression as None
+- PR #684 Make RMM a submodule
 - PR #718 Ensure sum, product, min, max methods pandas compatibility on empty datasets
 - PR #720 Refactored Index classes to make them more Pandas-like, added CategoricalIndex
 - PR #749 Improve to_arrow and from_arrow Pandas compatibility
@@ -98,8 +98,10 @@
 - PR #717 CSV reader: fix behavior when parsing a csv file with no data rows
 - PR #724 CSV Reader: fix build issue due to parameter type mismatch in a std::max call
 - PR #734 Prevents reading undefined memory in gpu_expand_mask_bits numba kernel
+- PR #747 CSV Reader: fix an issue where CUDA allocations fail with some large input files
 - PR #750 Fix race condition for handling NVStrings in CMake
 - PR #719 Fix merge column ordering
+- PR #770 Fix issue where RMM submodule pointed to wrong branch and pin other to correct branches
 
 
 # cuDF 0.4.0 (05 Dec 2018)

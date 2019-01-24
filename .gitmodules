@@ -1,9 +1,12 @@
 [submodule "cpp/thirdparty/cub"]
 	path = cpp/thirdparty/cub
 	url = https://github.com/NVlabs/cub.git
+	branch = b165e1fb11eeea64ccf95053e40f2424312599cc
 [submodule "cpp/thirdparty/moderngpu"]
 	path = cpp/thirdparty/moderngpu
 	url = https://github.com/moderngpu/moderngpu.git
-[submodule "cpp/thirdparty/cnmem"]
-	path = cpp/thirdparty/cnmem
-	url = https://github.com/NVIDIA/cnmem.git
+	branch = c1fd31df008d79f727483e795b1ee1ce45b782ca
+[submodule "cpp/thirdparty/rmm"]
+	path = cpp/thirdparty/rmm
+	url = https://github.com/rapidsai/rmm
+	branch = branch-0.5
