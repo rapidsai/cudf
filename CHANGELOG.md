@@ -58,7 +58,6 @@
 - PR #521 Add `assert_eq` function for testing
 - PR #502 Simplify Dockerfile for local dev, eliminate old conda/pip envs
 - PR #549 Adds `-rdynamic` compiler flag to nvcc for Debug builds
-- PR #472 RMM: Created centralized rmm::device_vector alias and rmm::exec_policy
 - PR #500 Improved the concurrent hash map class to support partitioned (multi-pass) hash table building
 - PR #583 Updated `gdf_size_type` to `int`
 - PR #617 Added .dockerignore file. Prevents adding stale cmake cache files to the docker container
@@ -66,6 +65,7 @@
 - PR #664 Added Debuging instructions to README
 - PR #651 Remove noqa marks in `__init__.py` files
 - PR #671 CSV Reader: uncompressed buffer input can be parsed without explicitly specifying compression as None
+- PR #684 Make RMM a submodule
 - PR #718 Ensure sum, product, min, max methods pandas compatibility on empty datasets
 - PR #720 Refactored Index classes to make them more Pandas-like, added CategoricalIndex
 - PR #749 Improve to_arrow and from_arrow Pandas compatibility

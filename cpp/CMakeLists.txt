@@ -127,6 +127,11 @@ if(BUILD_TESTS)
 endif(BUILD_TESTS)
 
 ###################################################################################################
+# - add RMM -------------------------------------------------------------------------------------
+
+add_subdirectory(thirdparty/rmm "${CMAKE_BINARY_DIR}/rmm")
+
+###################################################################################################
 # - include paths ---------------------------------------------------------------------------------
 
 include_directories("${ARROW_INCLUDE_DIR}"
@@ -137,7 +142,7 @@ include_directories("${ARROW_INCLUDE_DIR}"
                     "${CMAKE_SOURCE_DIR}/src"
                     "${CMAKE_SOURCE_DIR}/thirdparty/cub"
                     "${CMAKE_SOURCE_DIR}/thirdparty/moderngpu/src"
-                    "${CMAKE_SOURCE_DIR}/thirdparty/cnmem/include"
+                    "${CMAKE_SOURCE_DIR}/thirdparty/rmm/include"
                     "${ZLIB_INCLUDE_DIRS}")
 
 ###################################################################################################
@@ -202,13 +207,8 @@ add_library(cudf SHARED
             src/utilities/error_utils.cpp
             src/utilities/nvtx/nvtx_utils.cpp)
 
-add_library(rmm SHARED
-            src/rmm/memory.cpp
-            src/rmm/memory_manager.cpp
-            thirdparty/cnmem/src/cnmem.cpp)
-
-#Override RPATH for cudf & rmm
-SET_TARGET_PROPERTIES(cudf rmm PROPERTIES BUILD_RPATH "\$ORIGIN")
+#Override RPATH for cudf
+SET_TARGET_PROPERTIES(cudf PROPERTIES BUILD_RPATH "\$ORIGIN")
 
 ###################################################################################################
 # - build options ---------------------------------------------------------------------------------
@@ -231,8 +231,7 @@ endif(HT_LEGACY_ALLOCATOR)
 ###################################################################################################
 # - link libraries --------------------------------------------------------------------------------
 
-target_link_libraries(rmm cudart cuda NVStrings)
-target_link_libraries(cudf rmm "${ARROW_LIB}" ${ZLIB_LIBRARIES})
+target_link_libraries(cudf rmm "${ARROW_LIB}" ${ZLIB_LIBRARIES} NVStrings)
 
 ###################################################################################################
 # - python cffi bindings --------------------------------------------------------------------------
@@ -243,12 +242,12 @@ add_custom_command(OUTPUT PYTHON_CFFI
                    COMMAND ${CMAKE_COMMAND} -E chdir ${CMAKE_BINARY_DIR}/python python setup.py build_ext --inplace
                    VERBATIM)
 
-add_custom_target(python_cffi DEPENDS cudf PYTHON_CFFI)
+add_custom_target(python_cffi DEPENDS cudf rmm_python_cffi PYTHON_CFFI)
 
 ###################################################################################################
 # - install targets -------------------------------------------------------------------------------
 
-install(TARGETS cudf rmm
+install(TARGETS cudf
         DESTINATION lib)
 
 install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/include/cudf.h
@@ -262,7 +261,7 @@ add_custom_command(OUTPUT INSTALL_PYTHON_CFFI
                    COMMAND ${CMAKE_COMMAND} -E chdir ${CMAKE_BINARY_DIR}/python python setup.py install --single-version-externally-managed --record=record.txt
                    VERBATIM)
 
-add_custom_target(install_python DEPENDS cudf PYTHON_CFFI INSTALL_PYTHON_CFFI)
+add_custom_target(install_python DEPENDS cudf rmm_install_python PYTHON_CFFI INSTALL_PYTHON_CFFI)
 
 
 
