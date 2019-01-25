@@ -39,20 +39,27 @@ ARG CYTHON_VERSION
 ENV CYTHON_VERSION=$CYTHON_VERSION
 ARG CMAKE_VERSION
 ENV CMAKE_VERSION=$CMAKE_VERSION
+ARG CUDF_REPO=https://github.com/rapidsai/cudf
+ENV CUDF_REPO=$CUDF_REPO
+ARG CUDF_BRANCH=master
+ENV CUDF_BRANCH=$CUDF_BRANCH
 
-ADD docker /cudf/docker
-ADD conda /cudf/conda
+# Always adds the Dockerfile and conditionally adds the local files, at the end we remove the
+# Dockerfiles from each folder and then check if the local files existed, if they did use them, if
+# not clean up folder and clone based on build-args
+ADD Dockerfile cpp* /cudf/cpp/
+ADD Dockerfile python* /cudf/python/
+ADD Dockerfile docs* /cudf/docs/
+ADD Dockerfile .git* /cudf/.git/
+ADD Dockerfile docker* /cudf/docker/
+ADD Dockerfile conda* /cudf/conda/
+RUN rm /cudf/*/Dockerfile && \
+    rmdir --ignore-fail-on-non-empty /cudf/* && \
+    if [ -z "$(ls -A /cudf)" ]; then git clone --recurse-submodules -b ${CUDF_BRANCH} ${CUDF_REPO} /cudf; else echo "Using local files"; fi
 
 # Bash-fu to modify the environment file based on versions set in build args
 RUN bash -c "/cudf/docker/package_versions.sh /cudf/conda/environments/cudf_dev.yml" && \
     conda env create --name cudf --file /cudf/conda/environments/cudf_dev.yml
-
-# Preserved for users who currently use these build-args
-# Clone cuDF repo
-#ARG CUDF_REPO=https://github.com/rapidsai/cudf
-#ARG CUDF_BRANCH=master
-#RUN git clone --recurse-submodules -b ${CUDF_BRANCH} ${CUDF_REPO} /cudf
-ADD cpp /cudf/cpp
 
 # libcudf build/install
 ENV CC=/usr/bin/gcc-${CC}
@@ -65,10 +72,10 @@ RUN source activate cudf && \
     make python_cffi && \
     make install_python
 
-ADD docs /cudf/docs
-ADD python /cudf/python
+#ADD docs /cudf/docs
+#ADD python /cudf/python
 # Needed for cudf.__version__ accuracy
-ADD .git /cudf/.git
+#ADD .git /cudf/.git
 
 # cuDF build/install
 RUN source activate cudf && \
