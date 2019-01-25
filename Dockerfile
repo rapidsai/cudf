@@ -53,8 +53,8 @@ ADD Dockerfile docs* /cudf/docs/
 ADD Dockerfile .git* /cudf/.git/
 ADD Dockerfile docker* /cudf/docker/
 ADD Dockerfile conda* /cudf/conda/
-RUN rm /cudf/*/Dockerfile && \
-    rmdir --ignore-fail-on-non-empty /cudf/* && \
+RUN rm /cudf/{.,}*/Dockerfile && \
+    find /cudf/ -mindepth 1 -maxdepth 1 -type d -empty -delete && \
     if [ -z "$(ls -A /cudf)" ]; then git clone --recurse-submodules -b ${CUDF_BRANCH} ${CUDF_REPO} /cudf; else echo "Using local files"; fi
 
 # Bash-fu to modify the environment file based on versions set in build args
