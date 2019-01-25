@@ -1,3 +1,17 @@
+# cuDF 0.6.0 (Date TBD)
+
+## New Features
+
+- PR #539 Add Python bindings for replace function
+
+## Improvements
+
+- PR #730 Improve performance of `gdf_table` constructor
+
+## Bug Fixes
+
+- ...
+
 
 # cuDF 0.5.0 (Date TBD)
 
@@ -13,6 +27,7 @@
 - PR #350 Implemented Series replace function
 - PR #490 Added print_env.sh script to gather relevant environment details when reporting cuDF issues
 - PR #474 add ZLIB-based GZIP/ZIP support to `read_csv()`
+- PR #547 Added melt similar to `pandas.melt()`
 - PR #491 Add CI test script to check for updates to CHANGELOG.md in PRs
 - PR #550 Add CI test script to check for style issues in PRs
 - PR #558 Add CI scripts for cpu-based conda and gpu-based test builds
@@ -20,13 +35,16 @@
 - PR #564 Update python `sort_values` method to use updated libcudf `gdf_order_by` API
 - PR #509 CSV Reader: Input CSV file can now be passed in as a text or a binary buffer
 - PR #607 Add `__iter__` and iteritems to DataFrame class
+- PR #576 Create BitMask class and unit test to make 32-bit bit masks
 - PR #608 Added the `DataFrame.iloc[]` and `Series.iloc[]` features
 - PR #600 Enable deep or shallow copy
 - PR #635 Add Doxygen template
 - PR #649 Add `cudf.from_pandas` function
 - PR #633 CSV Reader: Add support for the nrows parameter to specify the number of rows to read from the input file
+- PR #668 Added Python 3.7 support, upgraded packages: pandas>=0.23.4, pyarrow=0.11.1, numba>=0.40.0, cython>=0.29, GLIBCXX11 ABI compatibility; align with gcc7 conda update
 - PR #679 Test Series indexing, support integer scalars and integer sequences
 - PR #567 Adds setup for a wheel which is installable by pip
+- PR #718 Expose `product` reduction method to Python and add `GDF_NOTIMPLEMENTED_ERROR` error value
 
 ## Improvements
 
@@ -40,7 +58,6 @@
 - PR #521 Add `assert_eq` function for testing
 - PR #502 Simplify Dockerfile for local dev, eliminate old conda/pip envs
 - PR #549 Adds `-rdynamic` compiler flag to nvcc for Debug builds
-- PR #472 RMM: Created centralized rmm::device_vector alias and rmm::exec_policy
 - PR #500 Improved the concurrent hash map class to support partitioned (multi-pass) hash table building
 - PR #583 Updated `gdf_size_type` to `int`
 - PR #617 Added .dockerignore file. Prevents adding stale cmake cache files to the docker container
@@ -48,8 +65,12 @@
 - PR #664 Added Debuging instructions to README
 - PR #651 Remove noqa marks in `__init__.py` files
 - PR #671 CSV Reader: uncompressed buffer input can be parsed without explicitly specifying compression as None
+- PR #684 Make RMM a submodule
+- PR #718 Ensure sum, product, min, max methods pandas compatibility on empty datasets
 - PR #720 Refactored Index classes to make them more Pandas-like, added CategoricalIndex
-
+- PR #749 Improve to_arrow and from_arrow Pandas compatibility
+- PR #766 Remove TravisCI references, remove unused variables from CMake, fix ARROW_VERSION in Cmake
+- PR #781 Move thirdparty submodules to root and symlink in /cpp
 
 ## Bug Fixes
 
@@ -91,6 +112,14 @@
 - PR #691 Fixes Join on empty input DFs
 - PR #706 CSV Reader: Fix broken dtype inference when whitespace is in data
 - PR #717 CSV reader: fix behavior when parsing a csv file with no data rows
+- PR #724 CSV Reader: fix build issue due to parameter type mismatch in a std::max call
+- PR #734 Prevents reading undefined memory in gpu_expand_mask_bits numba kernel
+- PR #747 CSV Reader: fix an issue where CUDA allocations fail with some large input files
+- PR #750 Fix race condition for handling NVStrings in CMake
+- PR #719 Fix merge column ordering
+- PR #770 Fix issue where RMM submodule pointed to wrong branch and pin other to correct branches
+- PR #778 Fix hard coded ABI off setting
+- PR #784 Update RMM submodule commit-ish and pip paths
 
 
 # cuDF 0.4.0 (05 Dec 2018)

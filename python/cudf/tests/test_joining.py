@@ -69,6 +69,8 @@ def test_dataframe_join_how(aa, bb, how, method):
         df1 = df.set_index('a')
         df2 = df.set_index('b')
         joined = df1.join(df2, how=how, sort=True)
+        # Prevent ambiguity with index name
+        joined.index.rename('index', inplace=True)
         te = timer()
         print('timing', type(df), te - ts)
         return joined
@@ -221,6 +223,10 @@ def test_dataframe_join_mismatch_cats(how):
 
     expect.data_col_right = expect.data_col_right.astype(np.int64)
     expect.data_col_left = expect.data_col_left.astype(np.int64)
+
+    # Pandas returns a `object` dtype index for some reason...
+    expect.index = expect.index.astype('category')
+
     pd.util.testing.assert_frame_equal(got, expect, check_names=False,
                                        check_index_type=False,
                                        # For inner joins, pandas returns
@@ -335,3 +341,66 @@ def test_dataframe_empty_merge():
     got = gdf1.merge(gdf2, how='left', on=['a'])
 
     assert_eq(expect, got)
+
+
+def test_dataframe_merge_order():
+    gdf1 = DataFrame()
+    gdf2 = DataFrame()
+    gdf1['id'] = [10, 11]
+    gdf1['timestamp'] = [1, 2]
+    gdf1['a'] = [3, 4]
+
+    gdf2['id'] = [4, 5]
+    gdf2['a'] = [7, 8]
+
+    gdf = gdf1.merge(gdf2, how='left', on=['id', 'a'], method='hash')
+
+    df1 = pd.DataFrame()
+    df2 = pd.DataFrame()
+    df1['id'] = [10, 11]
+    df1['timestamp'] = [1, 2]
+    df1['a'] = [3, 4]
+
+    df2['id'] = [4, 5]
+    df2['a'] = [7, 8]
+
+    df = df1.merge(df2, how='left', on=['id', 'a'])
+    assert_eq(gdf, df)
+
+
+@pytest.mark.parametrize('pairs', [('', ''), ('', 'a'), ('', 'ab'), ('', 'abc'), ('', 'b'), ('', 'bcd'), ('', 'cde'), ('a', 'a'), ('a', 'ab'), ('a', 'abc'), ('a', 'b'), ('a', 'bcd'), ('a', 'cde'), ('ab', 'ab'), ('ab', 'abc'), ('ab', 'b'), ('ab', 'bcd'), ('ab', 'cde'), ('abc', 'abc'), ('abc', 'b'), ('abc', 'bcd'), ('abc', 'cde'), ('b', 'b'), ('b', 'bcd'), ('b', 'cde'), ('bcd', 'bcd'), ('bcd', 'cde'), ('cde', 'cde')])   # noqa: E501
+@pytest.mark.parametrize('max', [5, 1000])
+@pytest.mark.parametrize('rows', [1, 5, 100])
+@pytest.mark.parametrize('how', ['left', 'inner', 'outer'])
+def test_dataframe_pairs_of_triples(pairs, max, rows, how):
+    np.random.seed(0)
+
+    pdf_left = pd.DataFrame()
+    pdf_right = pd.DataFrame()
+    for left_column in pairs[0]:
+        pdf_left[left_column] = np.random.randint(0, max, rows)
+    for right_column in pairs[1]:
+        pdf_right[right_column] = np.random.randint(0, max, rows)
+    gdf_left = DataFrame.from_pandas(pdf_left)
+    gdf_right = DataFrame.from_pandas(pdf_right)
+    if not set(pdf_left.columns).intersection(pdf_right.columns):
+        with pytest.raises(pd.core.reshape.merge.MergeError) as raises:
+            pdf_left.merge(pdf_right)
+        raises.match("No common columns to perform merge on")
+        with pytest.raises(ValueError) as raises:
+            gdf_left.merge(gdf_right)
+        raises.match("No common columns to perform merge on")
+    elif not [value for value in pdf_left if value in pdf_right]:
+        with pytest.raises(pd.core.reshape.merge.MergeError) as raises:
+            pdf_left.merge(pdf_right)
+        raises.match("No common columns to perform merge on")
+        with pytest.raises(ValueError) as raises:
+            gdf_left.merge(gdf_right)
+        raises.match("No common columns to perform merge on")
+    else:
+        pdf_result = pdf_left.merge(pdf_right, how=how)
+        gdf_result = gdf_left.merge(gdf_right, how=how)
+        assert np.array_equal(gdf_result.columns, pdf_result.columns)
+        for column in gdf_result:
+            assert np.array_equal(gdf_result[column].fillna(-1).sort_values(),
+                                  pdf_result[column].fillna(-1).sort_values())

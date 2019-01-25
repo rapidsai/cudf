@@ -23,8 +23,8 @@ def make_frames(index=None, nulls='none'):
         mask = np.arange(10)
         np.random.shuffle(mask)
         mask = mask[:5]
-        df.y[mask] = np.nan
-        df2.y[mask] = np.nan
+        df.y.loc[mask] = np.nan
+        df2.y.loc[mask] = np.nan
     gdf = gd.DataFrame.from_pandas(df)
     gdf2 = gd.DataFrame.from_pandas(df2)
     if index:
@@ -100,6 +100,6 @@ def test_concat_misordered_columns():
     df2 = df2[['z', 'x', 'y']]
 
     res = gd.concat([gdf, gdf2]).to_pandas()
-    sol = pd.concat([df, df2])
+    sol = pd.concat([df, df2], sort=False)
 
     pd.util.testing.assert_frame_equal(res, sol, check_names=False)

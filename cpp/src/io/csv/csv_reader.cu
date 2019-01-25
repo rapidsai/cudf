@@ -544,7 +544,7 @@ gdf_error read_csv(csv_read_arg *args)
 	if (args->input_data_form == gdf_csv_input_form::FILE_PATH)
 	{
 		close(fd);
-		munmap(map_data, raw_csv->num_bytes);
+		munmap(map_data, map_size);
 	}
 
 
@@ -747,7 +747,7 @@ gdf_error read_csv(csv_read_arg *args)
 
 	RMM_TRY( RMM_FREE( raw_csv->recStart, 0 ) ); 
 	RMM_TRY( RMM_FREE( raw_csv->d_parseCol, 0 ) ); 
-	CUDA_TRY( cudaFree ( raw_csv->data) );
+	RMM_TRY( RMM_FREE ( raw_csv->data, 0) );
 
 
 	args->data 			= cols;
@@ -889,7 +889,7 @@ gdf_error uploadDataToDevice(const char* h_uncomp_data, size_t h_uncomp_size, ra
 
 	// Exclude the rows user chose to skip at the end of the file
 	if (raw_csv->skipfooter != 0) {
-		raw_csv->num_records = gdf_size_type(max(raw_csv->num_records - raw_csv->skipfooter, 0));
+		raw_csv->num_records = gdf_size_type(max(raw_csv->num_records - raw_csv->skipfooter, gdf_size_type{0}));
 		
 	}
 	
@@ -909,11 +909,12 @@ gdf_error uploadDataToDevice(const char* h_uncomp_data, size_t h_uncomp_size, ra
 	// Update the record starts to match the device data (skip missing records, fix offset)
 	for (gdf_size_type i = first_row; i <= first_row + raw_csv->num_records; ++i)
 		h_rec_starts[i] -= start_offset;
+	RMM_TRY(RMM_REALLOC(&raw_csv->recStart, sizeof(cu_recstart_t) * (raw_csv->num_records + 1), 0));
 	CUDA_TRY( cudaMemcpy(raw_csv->recStart, h_rec_starts.data() + first_row, 
 		sizeof(cu_recstart_t) * (raw_csv->num_records + 1), cudaMemcpyDefault));
 
 	// Allocate and copy to the GPU
-	CUDA_TRY(cudaMallocManaged ((void**)&raw_csv->data, (sizeof(char) * raw_csv->num_bytes)));
+	RMM_TRY(RMM_ALLOC ((void**)&raw_csv->data, (sizeof(char) * raw_csv->num_bytes), 0));
 	CUDA_TRY(cudaMemcpy(raw_csv->data, h_uncomp_data + start_offset, raw_csv->num_bytes, cudaMemcpyHostToDevice));
 
 	return GDF_SUCCESS;
@@ -1008,12 +1009,12 @@ gdf_error launch_countRecords(const char* h_data, size_t h_size,
 	vector<cu_reccnt_t> h_cnts(chunk_count);
 
 	cu_reccnt_t* d_cnts = nullptr;
-	CUDA_TRY(cudaMalloc(&d_cnts, sizeof(cu_reccnt_t)* chunk_count));
+	RMM_TRY(RMM_ALLOC (&d_cnts, sizeof(cu_reccnt_t)* chunk_count, 0));
 	CUDA_TRY(cudaMemset(d_cnts, 0, sizeof(cu_reccnt_t)* chunk_count));
 
 	char* d_chunk = nullptr;
 	// Allocate extra byte in case \r\n is at the chunk border
-	CUDA_TRY(cudaMalloc(&d_chunk, max_chunk_bytes + 1)); 
+	RMM_TRY(RMM_ALLOC (&d_chunk, max_chunk_bytes + 1, 0)); 
 
 	int blockSize;		// suggested thread count to use
 	int minGridSize;	// minimum block count required
@@ -1035,8 +1036,8 @@ gdf_error launch_countRecords(const char* h_data, size_t h_size,
 	}
 	CUDA_TRY(cudaMemcpy(h_cnts.data(), d_cnts, chunk_count*sizeof(cu_reccnt_t), cudaMemcpyDefault));
 
-	CUDA_TRY(cudaFree(d_chunk));
-	CUDA_TRY(cudaFree(d_cnts));
+	RMM_TRY( RMM_FREE(d_chunk, 0) );
+	RMM_TRY( RMM_FREE(d_cnts, 0) );
 
 	CUDA_TRY(cudaGetLastError());
 
@@ -1118,7 +1119,7 @@ gdf_error launch_storeRecordStart(const char* h_data, size_t h_size, raw_csv_t *
 
 	char* d_chunk = nullptr;
 	// Allocate extra byte in case \r\n is at the chunk border
-	CUDA_TRY(cudaMalloc(&d_chunk, max_chunk_bytes + 1)); 
+	RMM_TRY(RMM_ALLOC (&d_chunk, max_chunk_bytes + 1, 0)); 
 	
     cu_reccnt_t*	d_num_records;
 	RMM_TRY(RMM_ALLOC((void**)&d_num_records, sizeof(cu_reccnt_t), 0) );
@@ -1151,7 +1152,7 @@ gdf_error launch_storeRecordStart(const char* h_data, size_t h_size, raw_csv_t *
 	}
 
 	RMM_TRY( RMM_FREE( d_num_records, 0 ) ); 
-	CUDA_TRY(cudaFree(d_chunk));
+	RMM_TRY( RMM_FREE( d_chunk, 0 ) );
 
 	CUDA_TRY( cudaGetLastError() );
 
