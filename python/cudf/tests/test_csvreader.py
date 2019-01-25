@@ -322,6 +322,22 @@ def test_csv_reader_float_decimal(tmpdir):
     np.testing.assert_allclose(decimal_only_ref, df['decimal_only'])
 
 
+def test_csv_reader_NaN_values():
+
+    names = dtypes = ['float32']
+    buffer = '476940.0\n59e3\n\n""\n305245.0\n'
+
+    cu_df = read_csv(StringIO(buffer), names=names, dtype=dtypes)
+    pd_df = pd.read_csv(StringIO(buffer), names=names, dtype=dtypes[0],
+                        skip_blank_lines=False)
+
+    cu_df = cu_df.to_pandas()
+
+    assert len(pd_df.columns) == len(cu_df.columns)
+    assert len(pd_df) == len(cu_df)
+    pd.util.testing.assert_frame_equal(pd_df, cu_df)
+
+
 def test_csv_reader_thousands(tmpdir):
     fname = tmpdir.mkdir("gdf_csv").join("tmp_csvreader_file13.csv")
 
