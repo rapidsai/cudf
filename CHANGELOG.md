@@ -10,7 +10,7 @@
 
 ## Bug Fixes
 
-- ...
+- PR #787 CSV Reader: fix parsing when data rows include tabs
 
 
 # cuDF 0.5.0 (Date TBD)
