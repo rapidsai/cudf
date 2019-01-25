@@ -72,11 +72,6 @@ RUN source activate cudf && \
     make python_cffi && \
     make install_python
 
-#ADD docs /cudf/docs
-#ADD python /cudf/python
-# Needed for cudf.__version__ accuracy
-#ADD .git /cudf/.git
-
 # cuDF build/install
 RUN source activate cudf && \
     cd /cudf/python && \
