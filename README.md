@@ -17,10 +17,10 @@ It is easy to install cuDF using conda. You can get a minimal conda installation
 Install and update cuDF using the conda command:
 
 ```bash
-conda install -c nvidia -c rapidsai -c numba -c conda-forge -c defaults cudf=0.4.0
+conda install -c nvidia -c rapidsai -c numba -c conda-forge -c defaults cudf
 ```
 
-Note: This conda installation only applies to Linux and Python versions 3.5/3.6.
+Note: This conda installation only applies to Linux and Python versions 3.6/3.7.
 
 ### Pip
 
@@ -39,7 +39,7 @@ The following instructions are for developers and contributors to cuDF OSS devel
 
 Compiler requirements:
 
-* `gcc`     version 5.4
+* `gcc`     version 5.4+
 * `nvcc`    version 9.2
 * `cmake`   version 3.12
 
@@ -51,7 +51,7 @@ CUDA/GPU requirements:
 
 You can obtain CUDA from [https://developer.nvidia.com/cuda-downloads](https://developer.nvidia.com/cuda-downloads)
 
-Since `cmake` will download and build Apache Arrow (version 0.7.1 or 0.8+) you may need to install Boost C++ (version 1.58+) before running
+Since `cmake` will download and build Apache Arrow you may need to install Boost C++ (version 1.58+) before running
 `cmake`:
 
 ```bash
@@ -81,19 +81,24 @@ cd CUDF_HOME
 - Create the conda development environment `cudf_dev`
 ```bash
 # create the conda environment (assuming in base `cudf` directory)
-conda env create --name cudf_dev --file conda/environments/dev_py35.yml
+conda env create --name cudf_dev --file conda/environments/cudf_dev.yml
 # activate the environment
 source activate cudf_dev
 ```
 
 - Build and install `libcudf`. CMake depends on the `nvcc` executable being on your path or defined in `$CUDACXX`.
 ```bash
-$ cd $CUDF_HOME/cpp                                 # navigate to C/C++ CUDA source root directory
-$ mkdir build                                       # make a build directory
-$ cd build                                          # enter the build directory
-$ cmake .. -DCMAKE_INSTALL_PREFIX=/install/path     # configure cmake ... use $CONDA_PREFIX if you're using Anaconda
-$ make -j                                           # compile the libraries librmm.so, libcudf.so ... '-j' will start a parallel job using the number of physical cores available on your system
-$ make install                                      # install the libraries librmm.so, libcudf.so to '/install/path'
+$ cd $CUDF_HOME/cpp                                                       # navigate to C/C++ CUDA source root directory
+$ mkdir build                                                             # make a build directory
+$ cd build                                                                # enter the build directory
+
+# CMake options:
+# -DCMAKE_INSTALL_PREFIX set to the install path for your libraries or $CONDA_PREFIX if you're using Anaconda, i.e. -DCMAKE_INSTALL_PREFIX=/install/path or -DCMAKE_INSTALL_PREFIX=$CONDA_PREFIX
+# -DCMAKE_CXX11_ABI set to ON or OFF depending on the ABI version you want, defaults to OFF. When turned ON, ABI compability for C++11 is used. When OFF, pre-C++11 ABI compability is used.
+$ cmake .. -DCMAKE_INSTALL_PREFIX=$CONDA_PREFIX -DCMAKE_CXX11_ABI=OFF     # configure cmake ...
+
+$ make -j                                                                 # compile the libraries librmm.so, libcudf.so ... '-j' will start a parallel job using the number of physical cores available on your system
+$ make install                                                            # install the libraries librmm.so, libcudf.so to the CMAKE_INSTALL_PREFIX
 ```
 
 - To run tests (Optional):
@@ -208,9 +213,9 @@ flag. Below is a list of the available arguments and their purpose:
 | `CUDF_BRANCH` | master | Any branch name | set git branch to checkout of `CUDF_REPO` |
 | `NUMBA_VERSION` | 0.40.0 | Not supported | set numba version |
 | `NUMPY_VERSION` | 1.14.3 | Not supported | set numpy version |
-| `PANDAS_VERSION` | 0.20.3 | Not supported | set pandas version |
-| `PYARROW_VERSION` | 0.10.0 | 0.8.0+ | set pyarrow version |
-| `PYTHON_VERSION` | 3.5 | 3.6 | set python version |
+| `PANDAS_VERSION` | 0.24.3 | Not supported | set pandas version |
+| `PYARROW_VERSION` | 0.11.1 | Not supported | set pyarrow version |
+| `PYTHON_VERSION` | 3.6 | 3.7 | set python version |
 
 ---
 

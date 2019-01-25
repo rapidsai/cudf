@@ -17,7 +17,15 @@ set(ARROW_CMAKE_ARGS " -DARROW_WITH_LZ4=OFF"
                      " -DARROW_JEMALLOC=OFF"
                      " -DARROW_BOOST_VENDORED=OFF"
                      " -DARROW_PYTHON=OFF"
-                     " -DARROW_TENSORFLOW=ON") # enable old ABI for C/C++
+                     " -DCMAKE_VERBOSE_MAKEFILE=ON")
+
+if(NOT CMAKE_CXX11_ABI)
+    message(STATUS "ARROW: Disabling the GLIBCXX11 ABI")
+    list(APPEND ARROW_CMAKE_ARGS " -DARROW_TENSORFLOW=ON")
+elseif(CMAKE_CXX11_ABI)
+    message(STATUS "ARROW: Enabling the GLIBCXX11 ABI")
+    list(APPEND ARROW_CMAKE_ARGS " -DARROW_TENSORFLOW=OFF")
+endif(NOT CMAKE_CXX11_ABI)
 
 configure_file("${CMAKE_SOURCE_DIR}/cmake/Templates/Arrow.CMakeLists.txt.cmake"
                "${ARROW_ROOT}/CMakeLists.txt")
@@ -34,22 +42,24 @@ if(ARROW_CONFIG)
     message(FATAL_ERROR "Configuring Arrow failed: " ${ARROW_CONFIG})
 endif(ARROW_CONFIG)
 
-# Parallel builds cause Travis to run out of memory
-unset(PARALLEL_BUILD)            
-if($ENV{TRAVIS})
-    if(NOT DEFINED ENV{CMAKE_BUILD_PARALLEL_LEVEL})
-        message(STATUS "Disabling Parallel CMake build on Travis")
-    else()
-        set(PARALLEL_BUILD --parallel)
-        message(STATUS "Using $ENV{CMAKE_BUILD_PARALLEL_LEVEL} build jobs on Travis")
-    endif(NOT DEFINED ENV{CMAKE_BUILD_PARALLEL_LEVEL})
+set(PARALLEL_BUILD -j)
+if($ENV{PARALLEL_LEVEL})
+    set(NUM_JOBS $ENV{PARALLEL_LEVEL})
+    set(PARALLEL_BUILD "${PARALLEL_BUILD}${NUM_JOBS}")
+endif($ENV{PARALLEL_LEVEL})
+
+if(${NUM_JOBS})
+    if(${NUM_JOBS} EQUAL 1)
+        message(STATUS "ARROW BUILD: Enabling Sequential CMake build")
+    elseif(${NUM_JOBS} GREATER 1)
+        message(STATUS "ARROW BUILD: Enabling Parallel CMake build with ${NUM_JOBS} jobs")
+    endif(${NUM_JOBS} EQUAL 1)
 else()
-    set(PARALLEL_BUILD --parallel)
-    message("STATUS Enabling Parallel CMake build")
-endif($ENV{TRAVIS})
+    message(STATUS "ARROW BUILD: Enabling Parallel CMake build with all threads")
+endif(${NUM_JOBS})
 
 execute_process(
-    COMMAND ${CMAKE_COMMAND} --build ${PARALLEL_BUILD} ..
+    COMMAND ${CMAKE_COMMAND} --build .. -- ${PARALLEL_BUILD}
     RESULT_VARIABLE ARROW_BUILD
     WORKING_DIRECTORY ${ARROW_ROOT}/build)
 
@@ -85,7 +95,7 @@ set(FLATBUFFERS_INCLUDE_DIR "${FLATBUFFERS_ROOT}/include")
 set(FLATBUFFERS_LIBRARY_DIR "${FLATBUFFERS_ROOT}/lib")
 
 add_definitions(-DARROW_METADATA_V4)
-add_definitions(-DARROW_VERSION=1000)
+add_definitions(-DARROW_VERSION=1110)
 
 
 
