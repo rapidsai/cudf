@@ -881,7 +881,7 @@ gdf_error uploadDataToDevice(const char* h_uncomp_data, size_t h_uncomp_size, ra
  *---------------------------------------------------------------------------**/
 struct SizeOfFunctor {
 	template <typename T>
-	int operator()() {
+	constexpr auto operator()() {
 		return sizeof(T);
 	}
 };
