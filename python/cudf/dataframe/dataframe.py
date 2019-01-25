@@ -238,7 +238,7 @@ class DataFrame(object):
                 # New df-wide index
                 selvals, selinds = columnops.column_select_by_boolmask(
                         columnops.as_column(self.index), Series(mask))
-                index = df.index.take(selinds.to_gpu_array())
+                index = self.index.take(selinds.to_gpu_array())
                 for col in self._cols:
                     df[col] = Series(self._cols[col][arg], index=index)
                 df.set_index(index)
@@ -1809,7 +1809,7 @@ class DataFrame(object):
         if isinstance(table.schema.metadata, dict):
             if b'pandas' in table.schema.metadata:
                 index_col = json.loads(
-                    table.schema.metadata[b'pandas']
+                    table.schema.metadata[b'pandas'].decode('utf-8')
                 )['index_columns']
 
         df = cls()

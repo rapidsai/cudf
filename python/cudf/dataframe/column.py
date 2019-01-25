@@ -87,6 +87,10 @@ class Column(object):
         null_count : int; optional
             The number of null values in the mask.
         """
+        from .index import RangeIndex
+        # Convert range to RangeIndex
+        if isinstance(data, range):
+            data = RangeIndex(data)
         # Forces Column content to be contiguous
         if not data.is_contiguous():
             data = data.as_contiguous()

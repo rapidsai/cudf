@@ -77,7 +77,9 @@ class Series(object):
         if not isinstance(data, columnops.TypedColumnBase):
             data = columnops.as_column(data, nan_as_null=nan_as_null)
 
-        if index is not None and not isinstance(index, Index):
+        if isinstance(index, range):
+            index = RangeIndex(index)
+        if index is not None and not isinstance(index, (RangeIndex, Index,)):
             raise TypeError('index not a Index type: got {!r}'.format(index))
 
         assert isinstance(data, columnops.TypedColumnBase)
