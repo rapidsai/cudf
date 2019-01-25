@@ -126,7 +126,16 @@ protected:
             std::generate(c.begin(), c.end(), generator);
         }
 
-        in_gdf_columns = initialize_gdf_columns(in_columns);
+        if (_add_nulls) {
+            auto valid_generator = [&](size_t row, size_t col){
+                return static_cast<bool>( (row ^ col) % 3 );
+            };
+
+            in_gdf_columns = initialize_gdf_columns(in_columns, valid_generator);
+        } 
+        else {
+            in_gdf_columns = initialize_gdf_columns(in_columns);
+        }
     }
 
     void create_gdf_output_buffers()
@@ -173,7 +182,16 @@ protected:
             for(size_t j = 0; j < _ncols; j++)
                 (ref_data[i])[j] = (in_columns[j])[i];
         
-        ref_gdf_columns = initialize_gdf_columns(ref_data);
+        if (_add_nulls) {
+            auto valid_generator = [&](size_t row, size_t col){
+                return static_cast<bool>( (row ^ col) % 3 );
+            };
+
+            ref_gdf_columns = initialize_gdf_columns(ref_data, valid_generator);
+        }
+        else {
+            ref_gdf_columns = initialize_gdf_columns(ref_data);
+        }
     }
 
     void compare_gdf_result(void)
@@ -182,9 +200,7 @@ protected:
         for(size_t i = 0; i < _nrows; i++)
         {
             ASSERT_TRUE(
-                devArrMatch(reinterpret_cast<T*> (ref_gdf_columns[i]->data) ,
-                    reinterpret_cast<T*> (out_gdf_columns[i]->data) ,
-                    ref_gdf_columns[i]->size, CompareApproxAbs<T>(1e-7))
+                gdf_equal_columns<T>(ref_gdf_columns[i].get(), out_gdf_columns[i].get())
             );
         }
     }
@@ -231,8 +247,16 @@ TYPED_TEST(TransposeTest, SingleValue)
 TYPED_TEST(TransposeTest, SingleColumn)
 {
     size_t num_cols = 1;
-    size_t num_rows = 10000;
+    size_t num_rows = 1000;
     this->set_params(num_cols, num_rows);
+    this->run_test();
+}
+
+TYPED_TEST(TransposeTest, SingleColumnNulls)
+{
+    size_t num_cols = 1;
+    size_t num_rows = 1000;
+    this->set_params(num_cols, num_rows, true);
     this->run_test();
 }
 
@@ -244,18 +268,42 @@ TYPED_TEST(TransposeTest, Square)
     this->run_test();
 }
 
+TYPED_TEST(TransposeTest, SquareNulls)
+{
+    size_t num_cols = 100;
+    size_t num_rows = 100;
+    this->set_params(num_cols, num_rows, true);
+    this->run_test();
+}
+
 TYPED_TEST(TransposeTest, Slim)
 {
     size_t num_cols = 10;
-    size_t num_rows = 10000;
+    size_t num_rows = 1000;
     this->set_params(num_cols, num_rows);
+    this->run_test();
+}
+
+TYPED_TEST(TransposeTest, SlimNulls)
+{
+    size_t num_cols = 10;
+    size_t num_rows = 1000;
+    this->set_params(num_cols, num_rows, true);
     this->run_test();
 }
 
 TYPED_TEST(TransposeTest, Fat)
 {
-    size_t num_cols = 10000;
+    size_t num_cols = 1000;
     size_t num_rows = 10;
     this->set_params(num_cols, num_rows);
+    this->run_test();
+}
+
+TYPED_TEST(TransposeTest, FatNulls)
+{
+    size_t num_cols = 1000;
+    size_t num_rows = 10;
+    this->set_params(num_cols, num_rows, true);
     this->run_test();
 }
