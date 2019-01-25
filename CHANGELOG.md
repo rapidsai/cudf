@@ -70,6 +70,7 @@
 - PR #720 Refactored Index classes to make them more Pandas-like, added CategoricalIndex
 - PR #749 Improve to_arrow and from_arrow Pandas compatibility
 - PR #766 Remove TravisCI references, remove unused variables from CMake, fix ARROW_VERSION in Cmake
+- PR #781 Move thirdparty submodules to root and symlink in /cpp
 
 ## Bug Fixes
 
