@@ -1468,9 +1468,7 @@ def test_gpu_memory_usage_with_boolmask():
 
 
 def test_boolmask(pdf, gdf):
-    boolmask = np.random.randint(0,2,len(pdf)) > 0
+    boolmask = np.random.randint(0, 2, len(pdf)) > 0
     gdf = gdf[boolmask]
     pdf = pdf[boolmask]
     assert_eq(pdf, gdf)
-
-
