@@ -11,6 +11,7 @@
 ## Bug Fixes
 
 - PR #782 Fix issue with memory leak when dataframe boolmask is used
+- PR #759 Fix left join crash when left dataframe has 0 rows
 
 
 # cuDF 0.6.0 (Date TBD)
