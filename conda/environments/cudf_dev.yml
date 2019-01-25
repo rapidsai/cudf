@@ -1,4 +1,4 @@
-name: cudf_dev_py35
+name: cudf_dev
 channels:
 - nvidia
 - numba
@@ -7,18 +7,17 @@ channels:
 - defaults
 dependencies:
 - cmake>=3.12
-- python=3.5.*
+- python>=3.6,<3.8
 - pytest
 - numba>=0.40
-# Locked to Pandas 0.20.3 by https://github.com/rapidsai/cudf/issues/118
-- pandas=0.20.3
-- pyarrow=0.10.0
+- pandas>=0.23.4
+- pyarrow=0.11.1
 - notebook>=0.5.0
 - boost
 - nvstrings
 - cffi>=1.10.0   
 - distributed>=1.23.0
-- cython=0.28.*
+- cython>=0.29,<0.30
 - pytest
 - sphinx
 - sphinx_rtd_theme
