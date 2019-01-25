@@ -56,6 +56,7 @@
 - PR #749 Improve to_arrow and from_arrow Pandas compatibility
 - PR #766 Remove TravisCI references, remove unused variables from CMake, fix ARROW_VERSION in Cmake
 - PR #773 Add build-args back to Dockerfile and handle dependencies based on environment yml file
+- PR #781 Move thirdparty submodules to root and symlink in /cpp
 
 ## Bug Fixes
 
@@ -103,6 +104,8 @@
 - PR #750 Fix race condition for handling NVStrings in CMake
 - PR #719 Fix merge column ordering
 - PR #770 Fix issue where RMM submodule pointed to wrong branch and pin other to correct branches
+- PR #778 Fix hard coded ABI off setting
+- PR #784 Update RMM submodule commit-ish and pip paths
 
 
 # cuDF 0.4.0 (05 Dec 2018)
