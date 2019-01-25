@@ -55,7 +55,7 @@ ADD Dockerfile docker* /cudf/docker/
 ADD Dockerfile conda* /cudf/conda/
 RUN rm /cudf/{.,}*/Dockerfile && \
     find /cudf/ -mindepth 1 -maxdepth 1 -type d -empty -delete && \
-    if [ -z "$(ls -A /cudf)" ]; then git clone --recurse-submodules -b ${CUDF_BRANCH} ${CUDF_REPO} /cudf; else echo "Using local files"; fi
+    if [ -z "$(ls -A /cudf)" ]; then git clone --recurse-submodules -b ${CUDF_BRANCH} ${CUDF_REPO} /cudf; fi
 
 # Bash-fu to modify the environment file based on versions set in build args
 RUN bash -c "/cudf/docker/package_versions.sh /cudf/conda/environments/cudf_dev.yml" && \
