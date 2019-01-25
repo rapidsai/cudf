@@ -20,6 +20,8 @@ project(CUDA_DATAFRAME VERSION 0.4.0 LANGUAGES C CXX CUDA)
 ###################################################################################################
 # - build type ------------------------------------------------------------------------------------
 
+set(DUMMY ON)
+
 # Set a default build type if none was specified
 set(DEFAULT_BUILD_TYPE "Release")
 
