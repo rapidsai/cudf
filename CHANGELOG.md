@@ -11,6 +11,7 @@
 ## Bug Fixes
 
 - PR #808 Resolved renamed `d_columns_valids` variable name
+- PR #780 CSV Reader: Fix scientific notation parsing and null values for empty quotes
 
 
 # cuDF 0.5.0 (28 Jan 2019)
