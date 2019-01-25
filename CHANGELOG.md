@@ -10,7 +10,7 @@
 
 ## Bug Fixes
 
-- ...
+- PR #782 Fix issue with memory leak when dataframe boolmask is used
 
 
 # cuDF 0.6.0 (Date TBD)
