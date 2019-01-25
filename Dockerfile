@@ -52,11 +52,11 @@ ADD . /cudf/
 RUN ls -la /cudf
 RUN if [ -f /cudf/docker/package_versions.sh ]; \
     then /cudf/docker/package_versions.sh /cudf/conda/environments/cudf_dev.yml && \
-	   conda env create --name cudf --file /cudf/conda/environments/cudf_dev.yml ; \
+         conda env create --name cudf --file /cudf/conda/environments/cudf_dev.yml ; \
     else rm -rf /cudf && \
-	   git clone --recurse-submodules -b ${CUDF_BRANCH} ${CUDF_REPO} /cudf && \
-	   /cudf/docker/package_versions.sh /cudf/conda/environments/cudf_dev.yml && \
-	   conda env create --name cudf --file /cudf/conda/environments/cudf_dev.yml ; \
+         git clone --recurse-submodules -b ${CUDF_BRANCH} ${CUDF_REPO} /cudf && \
+         /cudf/docker/package_versions.sh /cudf/conda/environments/cudf_dev.yml && \
+         conda env create --name cudf --file /cudf/conda/environments/cudf_dev.yml ; \
     fi
 
 # libcudf build/install
