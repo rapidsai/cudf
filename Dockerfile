@@ -44,22 +44,20 @@ ENV CUDF_REPO=$CUDF_REPO
 ARG CUDF_BRANCH=master
 ENV CUDF_BRANCH=$CUDF_BRANCH
 
-# Always adds the Dockerfile and conditionally adds the local files, at the end we remove the
-# Dockerfiles from each folder and then check if the local files existed, if they did use them, if
-# not clean up folder and clone based on build-args
-ADD Dockerfile cpp* /cudf/cpp/
-ADD Dockerfile python* /cudf/python/
-ADD Dockerfile docs* /cudf/docs/
-ADD Dockerfile .git* /cudf/.git/
-ADD Dockerfile docker* /cudf/docker/
-ADD Dockerfile conda* /cudf/conda/
-RUN rm /cudf/{.,}*/Dockerfile && \
-    find /cudf/ -mindepth 1 -maxdepth 1 -type d -empty -delete && \
-    if [ -z "$(ls -A /cudf)" ]; then git clone --recurse-submodules -b ${CUDF_BRANCH} ${CUDF_REPO} /cudf; fi
+# Add everything from the local build context
+ADD . /cudf/
 
-# Bash-fu to modify the environment file based on versions set in build args
-RUN bash -c "/cudf/docker/package_versions.sh /cudf/conda/environments/cudf_dev.yml" && \
-    conda env create --name cudf --file /cudf/conda/environments/cudf_dev.yml
+# Checks if local build context has the source, if not clone it then run a bash script to modify
+# the environment file based on versions set in build args
+RUN ls -la /cudf
+RUN if [ -f /cudf/docker/package_versions.sh ]; \
+    then /cudf/docker/package_versions.sh /cudf/conda/environments/cudf_dev.yml && \
+	   conda env create --name cudf --file /cudf/conda/environments/cudf_dev.yml ; \
+    else rm -rf /cudf && \
+	   git clone --recurse-submodules -b ${CUDF_BRANCH} ${CUDF_REPO} /cudf && \
+	   /cudf/docker/package_versions.sh /cudf/conda/environments/cudf_dev.yml && \
+	   conda env create --name cudf --file /cudf/conda/environments/cudf_dev.yml ; \
+    fi
 
 # libcudf build/install
 ENV CC=/usr/bin/gcc-${CC}
