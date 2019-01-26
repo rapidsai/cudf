@@ -20,6 +20,7 @@
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "tests/utilities/column_wrapper.cuh"
+#include "tests/utilities/table_wrapper.cuh"
 #include "tests/utilities/cudf_test_fixtures.h"
 #include "tests/utilities/cudf_test_utils.cuh"
 #include "types.hpp"
@@ -32,6 +33,9 @@ using test_types = ::testing::Types<int8_t, int16_t, int32_t, int64_t, float, do
 TYPED_TEST_CASE(GatherTest, test_types);
 
 TYPED_TEST(GatherTest, IdentityTest) {
+
+  cudf::test::table_wrapper<std::tuple<int, int>> table(100);
+
   constexpr gdf_size_type source_size{1000};
   constexpr gdf_size_type destination_size{1000};
 

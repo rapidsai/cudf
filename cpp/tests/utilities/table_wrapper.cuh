@@ -28,45 +28,103 @@
 namespace cudf {
 namespace test {
 
+namespace detail {
+/**---------------------------------------------------------------------------*
+ * @brief Invokes a callable with a specified index sequence.
+ *
+ * This is a helper function for `index_apply` that will invoke the callable `f`
+ * with the expansion of the specified `index_sequence` as
+ * `std::integral_constant`s.
+ *
+ * @tparam F The callable's type
+ * @tparam Is The index_sequence
+ * @param f The callable
+ * @return constexpr auto Returns whatever is returned by the callable
+ *---------------------------------------------------------------------------**/
+template <class F, size_t... Is>
+constexpr auto index_apply_impl(F f, std::index_sequence<Is...>) {
+  return f(std::integral_constant<size_t, Is>{}...);
+}
+
+/**---------------------------------------------------------------------------*
+ * @brief Invokes a callable with an index sequence of a specified sized.
+ *
+ * Given a unary callable `f`, and a size `N`, this function will invoke
+ * `f(0, 1, ..., N-1)` where the index_sequence are integral_constant values.
+ *
+ * @tparam N The size of the index sequence
+ * @tparam F The callable's type
+ * @param f The unary callable
+ *---------------------------------------------------------------------------**/
+template <size_t N, class F>
+constexpr auto index_apply(F f) {
+  return index_apply_impl(f, std::make_index_sequence<N>{});
+}
+
+template <class Tuple, class F>
+constexpr auto apply(Tuple const& t, F f) {
+  return index_apply<std::tuple_size<Tuple>{}>(
+      [&](auto... Is) { return f(std::get<Is>(t)...); });
+}
+
+}  // namespace detail
+
 template <typename>
 struct table_wrapper;
 
 template <typename... Ts>
 struct table_wrapper<std::tuple<Ts...>> {
-  table_wrapper(gdf_size_type num_rows) {}
+  table_wrapper(gdf_size_type num_rows)
+      : column_wrappers{std::unique_ptr<column_wrapper<Ts>>(new column_wrapper<Ts>(num_rows))...} {
+    detail::apply(column_wrappers,
+                  [this](std::unique_ptr<column_wrapper<Ts>> &... cols) {});
+  }
 
   gdf_column **get() { return gdf_columns.data(); }
 
  private:
-  template <typename ValueGenerator, typename BitmaskGenerator>
-  void initialize_columns(gdf_size_type num_rows, ValueGenerator v,
-                          BitmaskGenerator b) {
-    initialize_columns_impl(num_rows, v, b, std::index_sequence_for<Ts...>{});
-  }
+  /*
+   template <typename ValueGenerator, typename BitmaskGenerator>
+   void initialize_columns(gdf_size_type num_rows, ValueGenerator v,
+                           BitmaskGenerator b) {
+     return detail::index_apply<sizeof...(Ts)>([this](auto... Is) {
+       return init_columns(std::get<Is>(column_wrappers)...);
+     });
+   }
 
-  template <typename ValueGenerator, typename BitmaskGenerator,
-            std::size_t... Is>
-  void initialize_columns_impl(gdf_size_type num_rows, ValueGenerator v,
-                               BitmaskGenerator b, std::index_sequence<Is...>) {
-    // This is some nasty hackery, but essentially we're just iterating
-    // over the tuple of column wrappers, initializing each column_wrapper, and
-    // pushing a pointer to the underlying `gdf_column` onto the `gdf_columns`
-    // vector
-    // For more details on the hackery, see:
-    // https://codereview.stackexchange.com/a/67394
-    using dummy = int[];
-    (void)dummy{
-        1, (initialize_column(std::get<Is>(column_wrappers), num_rows, v, b),
-            void(), int{})...};
-  }
+   void init_columns(std::unique_ptr<column_wrapper<Ts>> &... cols) {
+     (void)std::initializer_list<int>{
+         ((void)gdf_columns.push_back(cols->get()), 0)...};
+   }
+   */
 
-  template <typename T, typename ValueGenerator, typename BitmaskGenerator>
-  void initialize_column(std::unique_ptr<column_wrapper<T>> &column,
-                         gdf_size_type num_rows, ValueGenerator v,
-                         BitmaskGenerator b) {
-    column.reset(new column_wrapper<T>(num_rows, v, b));
-    gdf_columns.push_back(column->get());
-  }
+  /*
+    template <typename ValueGenerator, typename BitmaskGenerator,
+              std::size_t... Is>
+    void initialize_columns_impl(gdf_size_type num_rows, ValueGenerator v,
+                                 BitmaskGenerator b, std::index_sequence<Is...>)
+    {
+      // This is some nasty hackery, but essentially we're just iterating
+      // over the tuple of column wrappers, initializing each column_wrapper,
+    and
+      // pushing a pointer to the underlying `gdf_column` onto the `gdf_columns`
+      // vector
+      // For more details on the hackery, see:
+      // https://codereview.stackexchange.com/a/67394
+      using dummy = int[];
+      (void)dummy{
+          1, (initialize_column(std::get<Is>(column_wrappers), num_rows, v, b),
+              void(), int{})...};
+    }
+
+    template <typename T, typename ValueGenerator, typename BitmaskGenerator>
+    void initialize_column(std::unique_ptr<column_wrapper<T>> &column,
+                           gdf_size_type num_rows, ValueGenerator v,
+                           BitmaskGenerator b) {
+      column.reset(new column_wrapper<T>(num_rows, v, b));
+      gdf_columns.push_back(column->get());
+    }
+    */
 
   gdf_size_type const num_columns{sizeof...(Ts)};
   std::tuple<std::unique_ptr<column_wrapper<Ts>>...> column_wrappers;
