@@ -70,22 +70,31 @@ __host__ __device__ bool extractTime(const char *data, int sIdx, int eIdx, int *
 __host__ __device__ constexpr int32_t daysSinceEpoch(int year, int month, int day);
 __host__ __device__ constexpr int64_t secondsSinceEpoch(int year, int month, int day, int hour, int minute, int second);
 
-// Helper function for date and time parsing
-// Simplified to handle only numeric characters and returns positive numbers
-template<typename T>
-__host__ __device__
-T convertStrToInteger(const char *data, long start, long end) {
+/**---------------------------------------------------------------------------*
+ * @brief Simplified parsing function for use by date and time parsing
+ *
+ * This helper function is only intended to handle positive integers. The input
+ * character string is expected to be well-formed.
+ *
+ * @param[in] data The character string for parse
+ * @param[in] start The index within data to start parsing from
+ * @param[in] end The end index within data to end parsing
+ *
+ * @return The parsed and converted value
+ *---------------------------------------------------------------------------**/
+template <typename T>
+__host__ __device__ T convertStrToInteger(const char *data, long start,
+                                          long end) {
+  T value = 0;
 
-	T value = 0;
+  long index = start;
+  while (index <= end) {
+    value *= 10;
+    value += data[index] - '0';
+    ++index;
+  }
 
-	long index = start;
-	while (index <= end) {
-		value *= 10;
-		value += data[index] -'0';
-		++index;
-	}
-
-	return value;
+  return value;
 }
 
 /**

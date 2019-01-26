@@ -129,18 +129,18 @@ int32_t convertStrtoHash(const char * key, long start_idx, long end_idx, uint32_
  * converting CSV data to cuDF data type values.
  *---------------------------------------------------------------------------**/
 struct ParseOptions {
-	char     delimiter;
-	char     terminator;
-	char     quotechar;
-	char     decimal;
-	char     thousands;
-	bool     keepquotes;
-	bool     doublequote;
-	bool     dayfirst;
-	int32_t* trueValues;
-	int32_t* falseValues;
-	int32_t  trueValuesCount;
-	int32_t  falseValuesCount;
+  char delimiter;
+  char terminator;
+  char quotechar;
+  char decimal;
+  char thousands;
+  bool keepquotes;
+  bool doublequote;
+  bool dayfirst;
+  int32_t* trueValues;
+  int32_t* falseValues;
+  int32_t trueValuesCount;
+  int32_t falseValuesCount;
 };
 
 /**---------------------------------------------------------------------------*
@@ -148,81 +148,75 @@ struct ParseOptions {
  * Handles all arithmetic data types; other data types are handled in
  * specialized template functions.
  *
- * @Param[in] data The character string for parse
- * @Param[in] start The index within data to start parsing from
- * @Param[in] end The end index within data to end parsing
- * @Param[in] opts The various parsing behavior options and settings
+ * @param[in] data The character string for parse
+ * @param[in] start The index within data to start parsing from
+ * @param[in] end The end index within data to end parsing
+ * @param[in] opts The various parsing behavior options and settings
  *
- * @Returns The parsed and converted value
+ * @return The parsed and converted value
  *---------------------------------------------------------------------------**/
-template<typename T>
-__host__ __device__
-T convertStrToValue(const char *data, long start, long end, const ParseOptions& opts) {
+template <typename T>
+__host__ __device__ T convertStrToValue(const char* data, long start, long end,
+                                        const ParseOptions& opts) {
+  T value = 0;
 
-	T value = 0;
+  // Handle negative values if necessary
+  int32_t sign = 1;
+  if (data[start] == '-') {
+    sign = -1;
+    start++;
+  }
 
-	// Handle negative values if necessary
-	int32_t sign = 1;
-	if (data[start] == '-') {
-		sign = -1;
-		start++;
-	}
+  // Handle the whole part of the number
+  long index = start;
+  while (index <= end) {
+    if (data[index] == opts.decimal) {
+      ++index;
+      break;
+    } else if (data[index] != opts.thousands) {
+      value *= 10;
+      value += data[index] - '0';
+    }
+    ++index;
+  }
 
-	// Handle the whole part of the number
-	long index = start;
-	while (index <= end) {
-		if (data[index] == opts.decimal) {
-			++index;
-			break;
-		}
-		else if (data[index] != opts.thousands) {
-			value *= 10;
-			value += data[index] -'0';
-		}
-		++index;
-	}
+  // Handle fractional part of the number if necessary
+  int32_t divisor = 1;
+  while (index <= end) {
+    if (data[index] != opts.thousands) {
+      value *= 10;
+      value += data[index] - '0';
+      divisor *= 10;
+    }
+    ++index;
+  }
 
-	// Handle fractional part of the number if necessary
-	int32_t divisor = 1;
-	while (index <= end) {
-		if (data[index] != opts.thousands) {
-			value *= 10;
-			value += data[index] -'0';
-			divisor *= 10;
-		}
-		++index;
-	}
-
-	return (divisor > 1) ? (value * sign / divisor) : (value * sign);
+  return (divisor > 1) ? (value * sign / divisor) : (value * sign);
 }
 
-template<>
-__host__ __device__
-cudf::date32 convertStrToValue<cudf::date32>(const char *data, long start, long end, const ParseOptions& opts) {
-
-	return cudf::date32{ parseDateFormat(data, start, end, opts.dayfirst) };
+template <>
+__host__ __device__ cudf::date32 convertStrToValue<cudf::date32>(
+    const char* data, long start, long end, const ParseOptions& opts) {
+  return cudf::date32{parseDateFormat(data, start, end, opts.dayfirst)};
 }
 
-template<>
-__host__ __device__
-cudf::date64 convertStrToValue<cudf::date64>(const char *data, long start, long end, const ParseOptions& opts) {
-
-	return cudf::date64{ parseDateTimeFormat(data, start, end, opts.dayfirst) };
+template <>
+__host__ __device__ cudf::date64 convertStrToValue<cudf::date64>(
+    const char* data, long start, long end, const ParseOptions& opts) {
+  return cudf::date64{parseDateTimeFormat(data, start, end, opts.dayfirst)};
 }
 
-template<>
-__host__ __device__
-cudf::category convertStrToValue<cudf::category>(const char *data, long start, long end, const ParseOptions& opts) {
-
-	constexpr int32_t HASH_SEED = 33;
-	return cudf::category{ convertStrtoHash(data, start, end + 1, HASH_SEED) };
+template <>
+__host__ __device__ cudf::category convertStrToValue<cudf::category>(
+    const char* data, long start, long end, const ParseOptions& opts) {
+  constexpr int32_t HASH_SEED = 33;
+  return cudf::category{convertStrtoHash(data, start, end + 1, HASH_SEED)};
 }
 
-template<>
-__host__ __device__
-cudf::timestamp convertStrToValue<cudf::timestamp>(const char *data, long start, long end, const ParseOptions& opts) {
-
-	return cudf::timestamp{ convertStrToValue<int64_t>(data, start, end, opts) };
+template <>
+__host__ __device__ cudf::timestamp convertStrToValue<cudf::timestamp>(
+    const char* data, long start, long end, const ParseOptions& opts) {
+  return cudf::timestamp{convertStrToValue<int64_t>(data, start, end, opts)};
 }
 
 #endif

@@ -249,9 +249,9 @@ gdf_error read_csv(csv_read_arg *args)
 		}
 		raw_csv->d_falseValues = h_values;
 	}
-	raw_csv->opts.trueValues       = thrust::raw_pointer_cast(raw_csv->d_trueValues.data());
+	raw_csv->opts.trueValues       = raw_csv->d_trueValues.data().get();
 	raw_csv->opts.trueValuesCount  = raw_csv->d_trueValues.size();
-	raw_csv->opts.falseValues      = thrust::raw_pointer_cast(raw_csv->d_falseValues.data());
+	raw_csv->opts.falseValues      = raw_csv->d_falseValues.data().get();
 	raw_csv->opts.falseValuesCount = raw_csv->d_falseValues.size();
 
 	//-----------------------------------------------------------------------------
@@ -635,7 +635,7 @@ gdf_error read_csv(csv_read_arg *args)
 		h_dtypes[col] 	= gdf->dtype;
 		h_data[col] 	= gdf->data;
 		h_valid[col] 	= gdf->valid;	
-        }
+    }
 
 	CUDA_TRY( cudaMemcpy(d_dtypes,h_dtypes, sizeof(gdf_dtype) * (raw_csv->num_active_cols), cudaMemcpyHostToDevice));
 	CUDA_TRY( cudaMemcpy(d_data,h_data, sizeof(void*) * (raw_csv->num_active_cols), cudaMemcpyHostToDevice));
@@ -876,43 +876,35 @@ gdf_error uploadDataToDevice(const char* h_uncomp_data, size_t h_uncomp_size, ra
 	return GDF_SUCCESS;
 }
 
-/**---------------------------------------------------------------------------*
- * @brief Functor for getting the size of a cuDF data type.
- *---------------------------------------------------------------------------**/
-struct SizeOfFunctor {
-	template <typename T>
-	constexpr auto operator()() {
-		return sizeof(T);
-	}
-};
 
 /**---------------------------------------------------------------------------*
- * @brief Allocates device memory for a column's parsed output and its validity
- * bitmap according to column size and data type.
+ * @brief Allocates memory for a column's parsed output and its validity bitmap
  *
- * @Param[in,out] gdf The column whose memory will be allocated
+ * Memory for column data is simply based upon number of rows and the size of
+ * the output data type, regardless of actual validity of the row element.
  *
- * @Returns GDF_SUCCESS upon successful computation
+ * @param[in,out] col The column whose memory will be allocated
+ *
+ * @return gdf_error GDF_SUCCESS upon completion
  *---------------------------------------------------------------------------**/
-gdf_error allocateGdfDataSpace(gdf_column *gdf) {
+gdf_error allocateGdfDataSpace(gdf_column *col) {
+  // TODO: We should not need to allocate space if there is nothing to parse
+  // Need to debug/refactor the code to eliminate this requirement
+  const auto num_rows = std::max(col->size, 1);
+  const auto num_masks = gdf_get_num_chars_bitmask(num_rows);
 
-	const auto elementCount = gdf->size;
-	const auto bitmapCount  = (elementCount + 31) / 8; // 8 bytes per bitmap
+  RMM_TRY(RMM_ALLOC(&col->valid, sizeof(gdf_valid_type) * num_masks, 0));
+  CUDA_TRY(cudaMemset(col->valid, 0, sizeof(gdf_valid_type) * num_masks));
 
-	// Allocate space for column row validity bitmaps
-	RMM_TRY( RMM_ALLOC((void**)&gdf->valid, sizeof(gdf_valid_type) * bitmapCount, 0) );
-	CUDA_TRY( cudaMemset(gdf->valid, 0, sizeof(gdf_valid_type) * bitmapCount) );
+  if (col->dtype != gdf_dtype::GDF_STRING) {
+    int column_byte_width = 0;
+    checkError(get_column_byte_width(col, &column_byte_width),
+               "Could not get column width using data type");
+    RMM_TRY(RMM_ALLOC(&col->data, num_rows * column_byte_width, 0));
+  }
 
-	// Allocate space for gdf->data column; except for string types which will
-	// be allocated by separately by the NVstring class later
-	if (gdf->dtype != gdf_dtype::GDF_STRING) {
-		const auto elementSize = cudf::type_dispatcher(gdf->dtype, SizeOfFunctor{});
-		RMM_TRY( RMM_ALLOC((void**)&gdf->data, elementCount * elementSize, 0) );
-	}
-	
-	return gdf_error::GDF_SUCCESS;
+  return GDF_SUCCESS;
 }
-
 
 //----------------------------------------------------------------------------------------------------------------
 //				CUDA Kernels
@@ -1157,13 +1149,13 @@ __global__ void storeRecordStart(char *data, size_t chunk_offset,
 /**---------------------------------------------------------------------------*
  * @brief Helper function to setup and launch CSV parsing CUDA kernel.
  * 
- * @Param[in,out] raw_csv The metadata for the CSV data
- * @Param[out] gdf The output column data
- * @Param[out] valid The bitmaps indicating whether column fields are valid
- * @Param[out] str_cols The start/end offsets for string data types
- * @Param[out] num_valid The numbers of valid fields in columns
+ * @param[in,out] raw_csv The metadata for the CSV data
+ * @param[out] gdf The output column data
+ * @param[out] valid The bitmaps indicating whether column fields are valid
+ * @param[out] str_cols The start/end offsets for string data types
+ * @param[out] num_valid The numbers of valid fields in columns
  *
- * @Returns GDF_SUCCESS upon successful computation
+ * @return gdf_error GDF_SUCCESS upon completion
  *---------------------------------------------------------------------------**/
 gdf_error launch_dataConvertColumns(raw_csv_t *raw_csv, void **gdf, gdf_valid_type** valid, gdf_dtype* d_dtypes,string_pair **str_cols, unsigned long long *num_valid) {
 
@@ -1202,33 +1194,44 @@ gdf_error launch_dataConvertColumns(raw_csv_t *raw_csv, void **gdf, gdf_valid_ty
  * @brief Functor for converting CSV data to cuDF data type value.
  *---------------------------------------------------------------------------**/
 struct ConvertFunctor {
-	template <typename T,
-	          typename std::enable_if_t<std::is_integral<T>::value>* = nullptr>
-	__host__ __device__ __forceinline__
-	void operator()(const char* csvData, void *gdfColumnData, long rowIndex,
-	                long start, long end, const ParseOptions& opts)
-	{
-		T& value{ static_cast<T*>(gdfColumnData)[rowIndex] };
-		value = convertStrToValue<T>(csvData, start, end, opts);
+  /**---------------------------------------------------------------------------*
+   * @brief Template specialization for operator() that handles integer types
+   * that additionally checks whether the parsed data value should be overridden
+   * with user-specified true/false matches.
+   *
+   * It is handled here rather than within convertStrToValue() as that function
+   * is already used to construct the true/false match list from user-provided
+   * strings at the start of parsing.
+   *---------------------------------------------------------------------------**/
+  template <typename T,
+            typename std::enable_if_t<std::is_integral<T>::value> * = nullptr>
+  __host__ __device__ __forceinline__ void operator()(
+      const char *csvData, void *gdfColumnData, long rowIndex, long start,
+      long end, const ParseOptions &opts) {
+    T &value{static_cast<T *>(gdfColumnData)[rowIndex]};
+    value = convertStrToValue<T>(csvData, start, end, opts);
 
-		// Check for user-specified true/false values where the output is
-		// replaced with 1/0 respectively
-		if (isBooleanValue(value, opts.trueValues, opts.trueValuesCount)) {
-			value = 1;
-		} else if (isBooleanValue(value, opts.falseValues, opts.falseValuesCount)) {
-			value = 0;
-		}
-	}
+    // Check for user-specified true/false values where the output is
+    // replaced with 1/0 respectively
+    if (isBooleanValue(value, opts.trueValues, opts.trueValuesCount)) {
+      value = 1;
+    } else if (isBooleanValue(value, opts.falseValues, opts.falseValuesCount)) {
+      value = 0;
+    }
+  }
 
-	template <typename T,
-	          typename std::enable_if_t<!std::is_integral<T>::value>* = nullptr>
-	__host__ __device__ __forceinline__
-	void operator()(const char* csvData, void *gdfColumnData, long rowIndex,
-	                long start, long end, const ParseOptions& opts)
-	{
-		T& value{ static_cast<T*>(gdfColumnData)[rowIndex] };
-		value = convertStrToValue<T>(csvData, start, end, opts);
-	}
+  /**---------------------------------------------------------------------------*
+   * @brief Default template operator() dispatch specialization all data types
+   * (including wrapper types) that is not covered by integral specialization.
+   *---------------------------------------------------------------------------**/
+  template <typename T,
+            typename std::enable_if_t<!std::is_integral<T>::value> * = nullptr>
+  __host__ __device__ __forceinline__ void operator()(
+      const char *csvData, void *gdfColumnData, long rowIndex, long start,
+      long end, const ParseOptions &opts) {
+    T &value{static_cast<T *>(gdfColumnData)[rowIndex]};
+    value = convertStrToValue<T>(csvData, start, end, opts);
+  }
 };
 
 /**---------------------------------------------------------------------------*
@@ -1236,19 +1239,19 @@ struct ConvertFunctor {
  * 
  * Data is processed one record at a time
  *
- * @Param[in] raw_csv The entire CSV data to read
- * @Param[in] opts A set of parsing options
- * @Param[in] num_records The number of lines/rows of CSV data
- * @Param[in] num_columns The number of columns of CSV data
- * @Param[in] parseCol Whether to parse or skip a column
- * @Param[in] recStart The start the CSV data of interest
- * @Param[in] dtype The data type of the column
- * @Param[out] gdf_data The output column data
- * @Param[out] valid The bitmaps indicating whether column fields are valid
- * @Param[out] str_cols The start/end offsets for string data types
- * @Param[out] num_valid The numbers of valid fields in columns
+ * @param[in] raw_csv The entire CSV data to read
+ * @param[in] opts A set of parsing options
+ * @param[in] num_records The number of lines/rows of CSV data
+ * @param[in] num_columns The number of columns of CSV data
+ * @param[in] parseCol Whether to parse or skip a column
+ * @param[in] recStart The start the CSV data of interest
+ * @param[in] dtype The data type of the column
+ * @param[out] gdf_data The output column data
+ * @param[out] valid The bitmaps indicating whether column fields are valid
+ * @param[out] str_cols The start/end offsets for string data types
+ * @param[out] num_valid The numbers of valid fields in columns
  *
- * @Returns GDF_SUCCESS upon successful computation
+ * @return gdf_error GDF_SUCCESS upon completion
  *---------------------------------------------------------------------------**/
 __global__
 void convertCsvToGdf(char *raw_csv,
@@ -1361,10 +1364,10 @@ void convertCsvToGdf(char *raw_csv,
 /**---------------------------------------------------------------------------*
  * @brief Helper function to setup and launch CSV data type detect CUDA kernel.
  * 
- * @Param[in] raw_csv The metadata for the CSV data
- * @Param[out] d_columnData The count for each column data type
+ * @param[in] raw_csv The metadata for the CSV data
+ * @param[out] d_columnData The count for each column data type
  *
- * @Returns GDF_SUCCESS upon successful computation
+ * @return gdf_error GDF_SUCCESS upon completion
  *---------------------------------------------------------------------------**/
 gdf_error launch_dataTypeDetection(raw_csv_t *raw_csv,
                                    column_data_t *d_columnData)
