@@ -337,7 +337,7 @@ def test_dataframe_empty_merge():
     gdf1 = DataFrame([('a', []), ('b', [])])
     gdf2 = DataFrame([('a', []), ('c', [])])
 
-    expect = DataFrame([('b', []), ('a', []), ('c', [])])
+    expect = DataFrame([('a', []), ('b', []), ('c', [])])
     got = gdf1.merge(gdf2, how='left', on=['a'])
 
     assert_eq(expect, got)
@@ -370,7 +370,7 @@ def test_dataframe_merge_order():
 
 @pytest.mark.parametrize('pairs', [('', ''), ('', 'a'), ('', 'ab'), ('', 'abc'), ('', 'b'), ('', 'bcd'), ('', 'cde'), ('a', 'a'), ('a', 'ab'), ('a', 'abc'), ('a', 'b'), ('a', 'bcd'), ('a', 'cde'), ('ab', 'ab'), ('ab', 'abc'), ('ab', 'b'), ('ab', 'bcd'), ('ab', 'cde'), ('abc', 'abc'), ('abc', 'b'), ('abc', 'bcd'), ('abc', 'cde'), ('b', 'b'), ('b', 'bcd'), ('b', 'cde'), ('bcd', 'bcd'), ('bcd', 'cde'), ('cde', 'cde')])   # noqa: E501
 @pytest.mark.parametrize('max', [5, 1000])
-@pytest.mark.parametrize('rows', [1, 5, 0])
+@pytest.mark.parametrize('rows', [1, 5, 100])
 @pytest.mark.parametrize('how', ['left', 'inner', 'outer'])
 def test_dataframe_pairs_of_triples(pairs, max, rows, how):
     np.random.seed(0)
@@ -421,7 +421,6 @@ def test_safe_merging_with_left_empty():
         pdf_right[right_column] = np.random.randint(0, 10, 5)
     gdf_left = DataFrame.from_pandas(pdf_left)
     gdf_right = DataFrame.from_pandas(pdf_right)
-
-    pdf_result = pdf_left.merge(pdf_right)
-    gdf_result = gdf_left.merge(gdf_right)
+    pdf_result = pdf_left.merge(pdf_right, how="left")
+    gdf_result = gdf_left.merge(gdf_right, how="left")
     assert_eq(pdf_result, gdf_result)
