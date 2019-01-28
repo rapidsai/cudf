@@ -3,6 +3,7 @@
 ## New Features
 
 - PR #539 Add Python bindings for replace function
+- PR #762 CSV Reader: Add byte_range parameter to specify the range in the input file to be read
 
 ## Improvements
 
