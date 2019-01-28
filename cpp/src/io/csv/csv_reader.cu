@@ -61,13 +61,27 @@
 
 constexpr int32_t HASH_SEED = 33;
 constexpr size_t max_chunk_bytes = 64*1024*1024; // 64MB
-constexpr size_t max_row_bytes = 1024; // 1KB
 
 using std::vector;
 using std::string;
 
 using cu_reccnt_t = unsigned long long int;
 using cu_recstart_t = unsigned long long int;
+
+constexpr size_t calculateMaxRowSize(int column_num=0) noexcept {
+	constexpr size_t max_row_bytes = 16*1024; // 16KB
+	constexpr size_t column_bytes = 64;
+	constexpr size_t base_padding = 4*1024; // 4KB
+	if (column_num == 0){
+		// use flat size if the number of columns is not known
+		return max_row_bytes;
+	}
+	else {
+		// Expand the size based on the number of columns, if available
+		return base_padding + column_num * column_bytes; 
+	}
+}
+
 
 //-- define the structure for raw data handling - for internal use
 typedef struct raw_csv_ {
@@ -345,7 +359,7 @@ gdf_error read_csv(csv_read_arg *args)
 		if(args->byte_range_size != 0 && (size_t)padded_byte_range_size < map_size) {
 			read_extra_row = true;
 			// Need to make sure that w/ padding we don't overshoot the end of file
-			map_size = min(padded_byte_range_size + max_row_bytes, map_size);
+			map_size = min(padded_byte_range_size + calculateMaxRowSize(args->num_cols), map_size);
 			// Ignore page padding for parsing purposes
 			raw_csv->num_bytes = map_size - page_padding; 
 		}
@@ -838,12 +852,13 @@ gdf_dtype convertStringToDtype(std::string &dtype) {
  * @return gdf_error with error code on failure, otherwise GDF_SUCCESS
  *---------------------------------------------------------------------------**/
 gdf_error trimExtraRows(gdf_size_type byte_range_size, raw_csv_t * raw_csv) {
-	// TODO: don't copy the whole array, only up to max_row_bytes rows are relevant here
+	// TODO: don't copy the whole array, only up to calculateMaxRowSize() rows are relevant here
 	vector<cu_recstart_t> h_rec_starts(raw_csv->num_records + 1);
 	const size_t rec_start_size = sizeof(cu_recstart_t) * (h_rec_starts.size());
 	CUDA_TRY( cudaMemcpy(h_rec_starts.data(), raw_csv->recStart, rec_start_size, cudaMemcpyDeviceToHost) );
 	size_t rec_start_idx = raw_csv->num_records;
 
+	// TODO: we could use a modified binary search here instead
 	// Searching for the last row that starts before the range end
 	// This row with be the extra one we want to read, as it ends after the byte range end
 	while (rec_start_idx != 0 && h_rec_starts[rec_start_idx] > (cu_recstart_t)byte_range_size) {
