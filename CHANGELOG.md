@@ -107,6 +107,7 @@
 - PR #778 Fix hard coded ABI off setting
 - PR #784 Update RMM submodule commit-ish and pip paths
 - PR #794 Update `rmm::exec_policy` usage to fix segmentation faults when used as temprory allocator.
+- PR #800 Point git submodules to branches of forks instead of exact commits
 
 
 # cuDF 0.4.0 (05 Dec 2018)
