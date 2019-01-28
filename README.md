@@ -77,7 +77,7 @@ To install cuDF from source, ensure the dependencies are met and follow the step
 - Clone the repository and submodules
 ```bash
 CUDF_HOME=$(pwd)/cudf
-git clone --recurse-submodules https://github.com/rapidsai/cudf.git $CUDF_HOME
+git clone --recurse-submodules --remote https://github.com/rapidsai/cudf.git $CUDF_HOME
 cd CUDF_HOME
 ```
 - Create the conda development environment `cudf_dev`
