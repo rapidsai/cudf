@@ -19,7 +19,11 @@ It is easy to install cuDF using conda. You can get a minimal conda installation
 Install and update cuDF using the conda command:
 
 ```bash
+# CUDA 9.2
 conda install -c nvidia -c rapidsai -c numba -c conda-forge -c defaults cudf
+
+# CUDA 10.0
+conda install -c nvidia/label/cuda10.0 -c rapidsai/label/cuda10.0 -c numba -c conda-forge -c defaults cudf
 ```
 
 Note: This conda installation only applies to Linux and Python versions 3.6/3.7.
@@ -29,8 +33,11 @@ Note: This conda installation only applies to Linux and Python versions 3.6/3.7.
 It is easy to install cuDF using pip. You must specify the CUDA version to ensure you install the right package.
 
 ```bash
-pip install cudf-cuda92 # CUDA 9.2
-pip install cudf-cuda100 # CUDA 10.0
+# CUDA 9.2
+pip install cudf-cuda92
+
+# CUDA 10.0.
+pip install cudf-cuda100
 ```
 
 ## Development Setup
