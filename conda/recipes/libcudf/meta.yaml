@@ -21,6 +21,7 @@ build:
     - CXX
     - CUDAHOSTCXX
     - PARALLEL_LEVEL
+    - BUILD_ABI
 
 requirements:
   # use channel:
