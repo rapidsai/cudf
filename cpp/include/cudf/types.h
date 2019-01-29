@@ -9,6 +9,7 @@ typedef	int		gdf_date32;
 typedef	int		gdf_category;
 typedef	long	gdf_timestamp;
 
+
 /* --------------------------------------------------------------------------*/
  /**
  * @Synopsis  These enums indicate the possible data types for a gdf_column
@@ -27,6 +28,11 @@ typedef enum {
     GDF_TIMESTAMP,	/**< Exact timestamp encoded with int64 since UNIX epoch (Default unit millisecond) */
     GDF_CATEGORY,
     GDF_STRING,
+    GDF_BOOL,
+    GDF_UINT8,
+    GDF_UINT16,
+    GDF_UINT32,
+    GDF_UINT64,
     N_GDF_TYPES, 	/* additional types should go BEFORE N_GDF_TYPES */
 } gdf_dtype;
 
