@@ -337,7 +337,7 @@ def read_csv_strings(filepath_or_buffer, lineterminator='\n',
                      skipfooter=0, skiprows=0, dayfirst=False,
                      compression='infer', thousands=None, decimal='.',
                      true_values=None, false_values=None, nrows=None,
-					 byte_range=None):
+                     byte_range=None):
 
     """
     **Experimental**: This function exists only as a beta way to use
