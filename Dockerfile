@@ -25,31 +25,39 @@ ENV PATH=${PATH}:/conda/bin
 SHELL ["/bin/bash", "-c"]
 
 # Build cuDF conda env
-ARG PYTHON_VERSION=3.5
-RUN conda create -n cudf python=${PYTHON_VERSION}
-
-ARG NUMBA_VERSION=0.40.0
-ARG NUMPY_VERSION=1.14.3
-# Locked to Pandas 0.20.3 by https://github.com/rapidsai/cudf/issues/118
-ARG PANDAS_VERSION=0.20.3
-ARG PYARROW_VERSION=0.10.0
-ARG CYTHON_VERSION=0.29.1
-RUN conda install -n cudf -y -c numba -c conda-forge -c nvidia -c rapidsai -c defaults \
-      numba=${NUMBA_VERSION} \
-      numpy=${NUMPY_VERSION} \
-      pandas=${PANDAS_VERSION} \
-      pyarrow=${PYARROW_VERSION} \
-      cython=${CYTHON_VERSION} \
-      nvstrings \
-      cmake=3.12 \
-      gtest=1.8.0 \
-      cffi \
-      pytest
-
-# Clone cuDF repo
+ARG PYTHON_VERSION
+ENV PYTHON_VERSION=$PYTHON_VERSION
+ARG NUMBA_VERSION
+ENV NUMBA_VERSION=$NUMBA_VERSION
+ARG NUMPY_VERSION
+ENV NUMPY_VERSION=$NUMPY_VERSION
+ARG PANDAS_VERSION
+ENV PANDAS_VERSION=$PANDAS_VERSION
+ARG PYARROW_VERSION
+ENV PYARROW_VERSION=$PYARROW_VERSION
+ARG CYTHON_VERSION
+ENV CYTHON_VERSION=$CYTHON_VERSION
+ARG CMAKE_VERSION
+ENV CMAKE_VERSION=$CMAKE_VERSION
 ARG CUDF_REPO=https://github.com/rapidsai/cudf
+ENV CUDF_REPO=$CUDF_REPO
 ARG CUDF_BRANCH=master
-RUN git clone --recurse-submodules -b ${CUDF_BRANCH} ${CUDF_REPO} /cudf
+ENV CUDF_BRANCH=$CUDF_BRANCH
+
+# Add everything from the local build context
+ADD . /cudf/
+
+# Checks if local build context has the source, if not clone it then run a bash script to modify
+# the environment file based on versions set in build args
+RUN ls -la /cudf
+RUN if [ -f /cudf/docker/package_versions.sh ]; \
+    then /cudf/docker/package_versions.sh /cudf/conda/environments/cudf_dev.yml && \
+         conda env create --name cudf --file /cudf/conda/environments/cudf_dev.yml ; \
+    else rm -rf /cudf && \
+         git clone --recurse-submodules -b ${CUDF_BRANCH} ${CUDF_REPO} /cudf && \
+         /cudf/docker/package_versions.sh /cudf/conda/environments/cudf_dev.yml && \
+         conda env create --name cudf --file /cudf/conda/environments/cudf_dev.yml ; \
+    fi
 
 # libcudf build/install
 ENV CC=/usr/bin/gcc-${CC}
@@ -65,4 +73,5 @@ RUN source activate cudf && \
 # cuDF build/install
 RUN source activate cudf && \
     cd /cudf/python && \
+    python setup.py build_ext --inplace && \
     python setup.py install

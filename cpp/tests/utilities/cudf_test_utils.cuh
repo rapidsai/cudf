@@ -194,18 +194,6 @@ gdf_col_pointer create_gdf_column(std::vector<col_type> const & host_vector,
   RMM_ALLOC(&(the_column->data), host_vector.size() * sizeof(col_type), 0);
   cudaMemcpy(the_column->data, host_vector.data(), host_vector.size() * sizeof(col_type), cudaMemcpyHostToDevice);
 
-  // If a validity bitmask vector was passed in, allocate device storage 
-  // and copy its contents from the host vector
-  if(valid_vector.size() > 0)
-  {
-    RMM_ALLOC((void**)&(the_column->valid), valid_vector.size() * sizeof(gdf_valid_type), 0);
-    cudaMemcpy(the_column->valid, valid_vector.data(), valid_vector.size() * sizeof(gdf_valid_type), cudaMemcpyHostToDevice);
-  }
-  else
-  {
-    the_column->valid = nullptr;
-  }
-
   // Fill the gdf_column members
   the_column->size = host_vector.size();
   the_column->dtype = gdf_col_type;
@@ -213,18 +201,31 @@ gdf_col_pointer create_gdf_column(std::vector<col_type> const & host_vector,
   extra_info.time_unit = TIME_UNIT_NONE;
   the_column->dtype_info = extra_info;
 
-  // Count the number of null bits
-  // count in all but last element in case it is not full
-  the_column->null_count = std::accumulate(valid_vector.begin(), valid_vector.end() - 1, 0,
-    [](gdf_size_type s, gdf_valid_type x) { 
-      return s + std::bitset<GDF_VALID_BITSIZE>(x).flip().count(); 
-    });
-  // Now count the bits in the last mask
-  int unused_bits = GDF_VALID_BITSIZE - the_column->size % GDF_VALID_BITSIZE;
-  if (GDF_VALID_BITSIZE == unused_bits) unused_bits = 0;
-  auto last_mask = std::bitset<GDF_VALID_BITSIZE>(*(valid_vector.end()-1)).flip();
-  last_mask = (last_mask << unused_bits) >> unused_bits;
-  the_column->null_count += last_mask.count();
+  // If a validity bitmask vector was passed in, allocate device storage 
+  // and copy its contents from the host vector
+  if(valid_vector.size() > 0)
+  {
+    RMM_ALLOC((void**)&(the_column->valid), valid_vector.size() * sizeof(gdf_valid_type), 0);
+    cudaMemcpy(the_column->valid, valid_vector.data(), valid_vector.size() * sizeof(gdf_valid_type), cudaMemcpyHostToDevice);
+
+    // Count the number of null bits
+    // count in all but last element in case it is not full
+    the_column->null_count = std::accumulate(valid_vector.begin(), valid_vector.end() - 1, 0,
+      [](gdf_size_type s, gdf_valid_type x) { 
+        return s + std::bitset<GDF_VALID_BITSIZE>(x).flip().count(); 
+      });
+    // Now count the bits in the last mask
+    size_t unused_bits = GDF_VALID_BITSIZE - the_column->size % GDF_VALID_BITSIZE;
+    if (GDF_VALID_BITSIZE == unused_bits) unused_bits = 0;
+    auto last_mask = std::bitset<GDF_VALID_BITSIZE>(*(valid_vector.end()-1)).flip();
+    last_mask = (last_mask << unused_bits) >> unused_bits;
+    the_column->null_count += last_mask.count();
+  }
+  else
+  {
+    the_column->valid = nullptr;
+    the_column->null_count = 0;
+  }
 
   return the_column;
 }

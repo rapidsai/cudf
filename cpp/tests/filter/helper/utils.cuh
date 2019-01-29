@@ -213,7 +213,7 @@ void check_column_for_stencil_operation(gdf_column *column, gdf_column *stencil,
     
     int  n_bytes =  sizeof(int8_t) * (column->size + GDF_VALID_BITSIZE - 1) / GDF_VALID_BITSIZE;
     std::vector<int> indexes;
-    for(size_t i = 0; i < host_stencil.size; i++) {
+    for(gdf_size_type i = 0; i < host_stencil.size; i++) {
         int col_position =  i / 8;
         int length_col = n_bytes != col_position+1 ? GDF_VALID_BITSIZE : column->size - GDF_VALID_BITSIZE * (n_bytes - 1);
         int bit_offset =  (length_col - 1) - (i % 8);
@@ -250,7 +250,7 @@ void check_column_for_comparison_operation(gdf_column *lhs, gdf_column *rhs, gdf
 
         EXPECT_EQ(lhs->size, rhs->size); 
         
-        for(size_t i = 0; i < output->size; i++) {
+        for(gdf_size_type i = 0; i < output->size; i++) {
             size_t col_position =  i / 8;
             size_t length_col = n_bytes != col_position+1 ? GDF_VALID_BITSIZE : output->size - GDF_VALID_BITSIZE * (n_bytes - 1);
             size_t bit_offset =  (length_col - 1) - (i % 8);
@@ -270,7 +270,7 @@ void check_column_for_comparison_operation(gdf_column *lhs, gdf_column *rhs, gdf
         auto output_data = get_gdf_data_from_device<int8_t>(output);
 
         EXPECT_EQ(lhs->size, rhs->size); 
-        for(size_t i = 0; i < lhs->size; i++)
+        for(gdf_size_type i = 0; i < lhs->size; i++)
         {
             EXPECT_EQ(lhs_data[i] == rhs_data[i] ? 1 : 0,  output_data[i]);              
         }
