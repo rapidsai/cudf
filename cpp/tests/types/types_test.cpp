@@ -49,7 +49,13 @@ struct WrappersTest : public ::testing::Test {
 };
 
 using Wrappers = ::testing::Types<cudf::category, cudf::timestamp, cudf::date32,
-                                  cudf::date64, cudf::gdf_bool>;
+                                  cudf::date64,
+                                  cudf::gdf_bool,
+                                  cudf::gdf_uint8,
+                                  cudf::gdf_uint16,
+                                  cudf::gdf_uint32,
+                                  cudf::gdf_uint64
+                                  >;
 
 TYPED_TEST_CASE(WrappersTest, Wrappers);
 
