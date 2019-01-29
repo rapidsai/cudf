@@ -29,10 +29,6 @@ typedef enum {
     GDF_CATEGORY,
     GDF_STRING,
     GDF_BOOL,
-    GDF_UINT8,
-    GDF_UINT16,
-    GDF_UINT32,
-    GDF_UINT64,
     N_GDF_TYPES, 	/* additional types should go BEFORE N_GDF_TYPES */
 } gdf_dtype;
 
