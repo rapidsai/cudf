@@ -263,7 +263,7 @@ using date32 = detail::wrapper<gdf_date32, GDF_DATE32>;
 
 using date64 	= detail::wrapper<gdf_date64, GDF_DATE64>;
 
-using bool_gdf 	= detail::wrapper<int8_t, GDF_BOOL>;
+using gdf_bool 	= detail::wrapper<int8_t, GDF_BOOL>;
 
 using gdf_uint8  = detail::wrapper<uint8_t, GDF_UINT8>;
 
