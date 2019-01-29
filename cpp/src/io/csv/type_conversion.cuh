@@ -21,23 +21,24 @@ bool isDigit(char data) {
 
 
 __host__ __device__
-long firstOcurance(char *data, long stx, long endx, char c) {
-
-	for ( long x = stx; x < endx +1; x++) {
-		if (data[x] == c)
-			return x;
-	}
-
-	return -1;
+void adjustForWhitespaceAndQuotes(const char *data, long* start_idx, long* end_idx, char quotechar='\0') {
+  while ((*start_idx < *end_idx) && (data[*start_idx] == ' ' || data[*start_idx] == quotechar)) {
+    (*start_idx)++;
+  }
+  while ((*start_idx < *end_idx) && (data[*end_idx] == ' ' || data[*end_idx] == quotechar)) {
+    (*end_idx)--;
+  }
 }
 
-
+template<typename T>
 __host__ __device__
-void removePrePostWhiteSpaces2(char *data, long* start_idx, long* end_idx) {
-	while(*start_idx < *end_idx && data[*start_idx] == ' ')
-		*start_idx=*start_idx+1;
-	while(*start_idx < *end_idx && data[*end_idx] == ' ')
-		*end_idx=*end_idx-1;
+bool isBooleanValue(T value, int32_t* boolValues, int32_t count) {
+	for (int i = 0; i < count; ++i) {
+		if (value == static_cast<T>(boolValues[i])) {
+			return true;
+		}
+	}
+	return false;
 }
 
 //---------------------------------------------------------------------------
@@ -46,7 +47,7 @@ void removePrePostWhiteSpaces2(char *data, long* start_idx, long* end_idx) {
 
 template<typename T>
 __host__ __device__
-T convertStrtoInt(char *data, long start_idx, long end_idx) {
+T convertStrtoInt(const char *data, long start_idx, long end_idx, char thousands='\0') {
 
 	T answer = (T)0;
 
@@ -68,7 +69,7 @@ T convertStrtoInt(char *data, long start_idx, long end_idx) {
 
 	while(idx > (start_idx - 1))
 	{
-		if (data[idx] != ',') {
+		if (data[idx] != thousands) {
 			answer += (data[idx] -'0') * pow(10, powSize);
 			++powSize;
 		}
@@ -85,7 +86,7 @@ T convertStrtoInt(char *data, long start_idx, long end_idx) {
 
 template<typename T>
 __host__ __device__
-T convertStrtoFloat(char *data, long start_idx, long end_idx) {
+T convertStrtoFloat(char *data, long start_idx, long end_idx, char decimal, char thousands='\0') {
 
 	T answer = (T)0.0;
 	// removePrePostWhiteSpaces(data, &start_idx, &end_idx);
@@ -116,7 +117,7 @@ T convertStrtoFloat(char *data, long start_idx, long end_idx) {
 	int found = 0;
 
 	while ( (d_idx < (end_idx +1)) && ! found  ) {
-		if ( data[d_idx] == '.') {
+		if ( data[d_idx] == decimal) {
 			decimal_pt = d_idx;
 			found = 1;
 		}
@@ -128,12 +129,12 @@ T convertStrtoFloat(char *data, long start_idx, long end_idx) {
 	int powSize = 0;
 
 	if ( idx >= start_idx ) {
-		if (data[idx] == '.')
+		if (data[idx] == decimal)
 			--idx;
 
 		while(idx > (start_idx - 1))
 		{
-			if (data[idx] != ',') {
+			if (data[idx] != thousands) {
 				answer += (data[idx] -'0') * pow(10, powSize);
 				++powSize;
 			}
@@ -148,7 +149,7 @@ T convertStrtoFloat(char *data, long start_idx, long end_idx) {
 
 		while(idx < (end_idx + 1))
 		{
-			if (data[idx] != ',') {
+			if (data[idx] != thousands) {
 				answer += (data[idx] -'0') * pow(10, powSize);
 				--powSize;
 			}

@@ -27,7 +27,7 @@ include_directories("${GTEST_INCLUDE_DIR}"
                     "${CMAKE_SOURCE_DIR}/src"
                     "${CMAKE_SOURCE_DIR}/thirdparty/cub"
                     "${CMAKE_SOURCE_DIR}/thirdparty/moderngpu/src"
-                    "${CMAKE_SOURCE_DIR}/thirdparty/cnmem/include")
+                    "${CMAKE_SOURCE_DIR}/thirdparty/rmm/include")
 
 ###################################################################################################
 # - library paths ---------------------------------------------------------------------------------
@@ -86,12 +86,12 @@ set(JOIN_TEST_SRC
 ConfigureTest(JOIN_TEST "${JOIN_TEST_SRC}")
 
 ###################################################################################################
-# - sqls tests ------------------------------------------------------------------------------------
+# - orderby tests ---------------------------------------------------------------------------------
 
-set(SQLS_TEST_SRC 
-    "${CMAKE_CURRENT_SOURCE_DIR}/sqls/sqls_test.cu")
+set(ORDERBY_TEST_SRC 
+    "${CMAKE_CURRENT_SOURCE_DIR}/orderby/orderby_tests.cu")
 
-ConfigureTest(SQLS_TEST "${SQLS_TEST_SRC}")
+ConfigureTest(ORDERBY_TEST "${ORDERBY_TEST_SRC}")
 
 ###################################################################################################
 # - bitmask tests ---------------------------------------------------------------------------------
@@ -100,6 +100,14 @@ set(BITMASK_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/bitmask/valid_ops_test.cu")
 
 ConfigureTest(BITMASK_TEST "${BITMASK_TEST_SRC}")
+
+###################################################################################################
+# - bit_mask tests ---------------------------------------------------------------------------------
+
+set(BIT_MASK_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/bitmask/bit_mask_test.cu")
+
+ConfigureTest(BIT_MASK_TEST "${BIT_MASK_TEST_SRC}")
 
 ###################################################################################################
 # - datetime tests --------------------------------------------------------------------------------
@@ -136,6 +144,14 @@ set(QUANTILES_TEST_SRC
 ConfigureTest(QUANTILES_TEST "${QUANTILES_TEST_SRC}")
 
 ###################################################################################################
+# - replace tests ---------------------------------------------------------------------------------
+
+set(REPLACE_TEST_SRC 
+    "${CMAKE_CURRENT_SOURCE_DIR}/replace/replace_tests.cu")
+
+ConfigureTest(REPLACE_TEST "${REPLACE_TEST_SRC}")
+
+###################################################################################################
 # - unary tests -----------------------------------------------------------------------------------
 
 set(UNARY_TEST_SRC 
@@ -150,14 +166,6 @@ set(CSV_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/io/csv/csv_test.cu")
 
 ConfigureTest(CSV_TEST "${CSV_TEST_SRC}")
-
-###################################################################################################
-# - rmm tests -------------------------------------------------------------------------------------
-
-set(RMM_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/rmm/memory_tests.cpp")
-
-ConfigureTest(RMM_TEST "${RMM_TEST_SRC}")
 
 ###################################################################################################
 # - types tests -------------------------------------------------------------------------------------

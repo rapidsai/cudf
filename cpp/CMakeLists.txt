@@ -15,7 +15,22 @@
 #=============================================================================
 cmake_minimum_required(VERSION 3.12 FATAL_ERROR)
 
-project(CUDA_DATAFRAME VERSION 0.4.0 LANGUAGES C CXX CUDA)
+project(CUDA_DATAFRAME VERSION 0.5.0 LANGUAGES C CXX CUDA)
+
+###################################################################################################
+# - build type ------------------------------------------------------------------------------------
+
+# Set a default build type if none was specified
+set(DEFAULT_BUILD_TYPE "Release")
+
+if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
+  message(STATUS "Setting build type to '${DEFAULT_BUILD_TYPE}' since none specified.")
+  set(CMAKE_BUILD_TYPE "${DEFAULT_BUILD_TYPE}" CACHE
+      STRING "Choose the type of build." FORCE)
+  # Set the possible values of build type for cmake-gui
+  set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS
+    "Debug" "Release" "MinSizeRel" "RelWithDebInfo")
+endif()
 
 ###################################################################################################
 # - compiler options ------------------------------------------------------------------------------
@@ -26,14 +41,21 @@ set(CMAKE_CXX_COMPILER $ENV{CXX})
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 set(CMAKE_CUDA_STANDARD 14)
-set(CMAKE_CUDA_STANDARD_REQURIED ON)
+set(CMAKE_CUDA_STANDARD_REQUIRED ON)
 
 if(CMAKE_COMPILER_IS_GNUCXX)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Werror")
-endif(CMAKE_COMPILER_IS_GNUCXX)
 
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -D_GLIBCXX_USE_CXX11_ABI=0")
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -D_GLIBCXX_USE_CXX11_ABI=0")
+    option(CMAKE_CXX11_ABI "Enable the GLIBCXX11 ABI" OFF)
+    if(CMAKE_CXX11_ABI)
+        message(STATUS "CUDF: Enabling the GLIBCXX11 ABI")
+    else()
+        message(STATUS "CUDF: Disabling the GLIBCXX11 ABI")
+        set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -D_GLIBCXX_USE_CXX11_ABI=0")
+        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -D_GLIBCXX_USE_CXX11_ABI=0")
+        set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -Xcompiler -D_GLIBCXX_USE_CXX11_ABI=0")
+    endif(CMAKE_CXX11_ABI)
+endif(CMAKE_COMPILER_IS_GNUCXX)
 
 #set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -gencode=arch=compute_60,code=sm_60 -gencode=arch=compute_61,code=sm_61")
 set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -gencode=arch=compute_60,code=sm_60")
@@ -46,11 +68,14 @@ set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} --expt-extended-lambda --expt-relaxed-
 set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -Werror cross-execution-space-call -Wno-deprecated-declarations -Xptxas --disable-warnings")
 
 # set warnings as errors
+# TODO: remove `no-maybe-unitialized` used to suppress warnings in rmm::exec_policy
 set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -Werror cross-execution-space-call -Xcompiler -Wall,-Werror")
-set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -Xcompiler -D_GLIBCXX_USE_CXX11_ABI=0")
 
-# set default build type
-set(CMAKE_BUILD_TYPE "Release")
+# Debug options
+if(CMAKE_BUILD_TYPE MATCHES Debug)
+    message(STATUS "Building with debugging flags")
+    set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -G -Xcompiler -rdynamic")
+endif(CMAKE_BUILD_TYPE MATCHES Debug)
 
 option(BUILD_TESTS "Configure CMake to build tests"
        ON)
@@ -76,6 +101,16 @@ else()
 endif()
 
 ###################################################################################################
+# - find zlib -------------------------------------------------------------------------------------
+
+find_package(ZLIB REQUIRED)
+if(ZLIB_FOUND)
+    message(STATUS "ZLib found in ${ZLIB_INCLUDE_DIRS}")
+else()
+    message(FATAL_ERROR "ZLib not found, please check your settings.")
+endif(ZLIB_FOUND)
+
+###################################################################################################
 # - add gtest -------------------------------------------------------------------------------------
 
 if(BUILD_TESTS)
@@ -92,6 +127,11 @@ if(BUILD_TESTS)
 endif(BUILD_TESTS)
 
 ###################################################################################################
+# - add RMM -------------------------------------------------------------------------------------
+
+add_subdirectory(thirdparty/rmm "${CMAKE_BINARY_DIR}/rmm")
+
+###################################################################################################
 # - include paths ---------------------------------------------------------------------------------
 
 include_directories("${ARROW_INCLUDE_DIR}"
@@ -102,7 +142,8 @@ include_directories("${ARROW_INCLUDE_DIR}"
                     "${CMAKE_SOURCE_DIR}/src"
                     "${CMAKE_SOURCE_DIR}/thirdparty/cub"
                     "${CMAKE_SOURCE_DIR}/thirdparty/moderngpu/src"
-                    "${CMAKE_SOURCE_DIR}/thirdparty/cnmem/include")
+                    "${CMAKE_SOURCE_DIR}/thirdparty/rmm/include"
+                    "${ZLIB_INCLUDE_DIRS}")
 
 ###################################################################################################
 # - library paths ---------------------------------------------------------------------------------
@@ -125,7 +166,8 @@ find_library(NVSTRINGS_LIBRARY "NVStrings"
 if(NVSTRINGS_INCLUDE AND NVSTRINGS_LIBRARY)
     execute_process(WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
                     COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/include
-                    COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/lib
+                    COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/lib)
+    execute_process(WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
                     COMMAND ${CMAKE_COMMAND} -E chdir ${CMAKE_BINARY_DIR} ln -snf ${NVSTRINGS_INCLUDE} ${CMAKE_BINARY_DIR}/include/NVStrings.h
                     COMMAND ${CMAKE_COMMAND} -E chdir ${CMAKE_BINARY_DIR} ln -snf ${NVSTRINGS_LIBRARY} ${CMAKE_BINARY_DIR}/lib/libNVStrings.so)
 endif(NVSTRINGS_INCLUDE AND NVSTRINGS_LIBRARY)
@@ -139,9 +181,12 @@ add_library(cudf SHARED
             src/dataframe/context.cpp
             src/filter/filter_ops.cu
             src/join/joining.cu
+            src/orderby/orderby.cu
             src/sort/segmented_sorting.cu
             src/sort/sorting.cu
             src/sqls/sqls_ops.cu
+            src/groupby/groupby.cu
+            src/groupby/new_groupby.cu
             src/binary/binary_ops.cu
             src/bitmask/bitmask_ops.cu
             src/bitmask/valid_ops.cu
@@ -151,19 +196,19 @@ add_library(cudf SHARED
             src/hash/hash_ops.cu
             src/quantiles/quantiles.cu
             src/reductions/reductions.cu
+            src/replace/replace.cu
             src/reductions/scan.cu
             src/unary/unary_ops.cu
             # src/windowed/windowed_ops.cu ... this is broken
             src/io/convert/csr/cudf_to_csr.cu
             src/io/csv/csv_reader.cu
+            src/io/comp/uncomp.cpp
             src/utilities/cuda_utils.cu
             src/utilities/error_utils.cpp
             src/utilities/nvtx/nvtx_utils.cpp)
 
-add_library(rmm SHARED
-            src/rmm/memory.cpp
-            src/rmm/memory_manager.cpp
-            thirdparty/cnmem/src/cnmem.cpp)
+#Override RPATH for cudf
+SET_TARGET_PROPERTIES(cudf PROPERTIES BUILD_RPATH "\$ORIGIN")
 
 ###################################################################################################
 # - build options ---------------------------------------------------------------------------------
@@ -182,16 +227,11 @@ if(HT_LEGACY_ALLOCATOR)
     set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} --define-macro HT_LEGACY_ALLOCATOR")
 endif(HT_LEGACY_ALLOCATOR)
 
-if(CMAKE_BUILD_TYPE MATCHES Debug)
-    message(STATUS "Building with debugging flags")
-    set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -G")
-endif(CMAKE_BUILD_TYPE MATCHES Debug)
 
 ###################################################################################################
 # - link libraries --------------------------------------------------------------------------------
 
-target_link_libraries(rmm cudart cuda NVStrings)
-target_link_libraries(cudf rmm "${ARROW_LIB}")
+target_link_libraries(cudf rmm "${ARROW_LIB}" ${ZLIB_LIBRARIES} NVStrings)
 
 ###################################################################################################
 # - python cffi bindings --------------------------------------------------------------------------
@@ -202,12 +242,12 @@ add_custom_command(OUTPUT PYTHON_CFFI
                    COMMAND ${CMAKE_COMMAND} -E chdir ${CMAKE_BINARY_DIR}/python python setup.py build_ext --inplace
                    VERBATIM)
 
-add_custom_target(python_cffi DEPENDS cudf PYTHON_CFFI)
+add_custom_target(python_cffi DEPENDS cudf rmm_python_cffi PYTHON_CFFI)
 
 ###################################################################################################
 # - install targets -------------------------------------------------------------------------------
 
-install(TARGETS cudf rmm
+install(TARGETS cudf
         DESTINATION lib)
 
 install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/include/cudf.h
@@ -221,7 +261,7 @@ add_custom_command(OUTPUT INSTALL_PYTHON_CFFI
                    COMMAND ${CMAKE_COMMAND} -E chdir ${CMAKE_BINARY_DIR}/python python setup.py install --single-version-externally-managed --record=record.txt
                    VERBATIM)
 
-add_custom_target(install_python DEPENDS cudf PYTHON_CFFI INSTALL_PYTHON_CFFI)
+add_custom_target(install_python DEPENDS cudf rmm_install_python PYTHON_CFFI INSTALL_PYTHON_CFFI)
 
 
 

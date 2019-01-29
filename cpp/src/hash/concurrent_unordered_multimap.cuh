@@ -321,7 +321,19 @@ private:
     
 public:
 
+    /* --------------------------------------------------------------------------*/
+    /**
+     * @Synopsis Allocates memory and optionally fills the hash map with unused keys/values
+     *
+     * @Param[in] n The size of the hash table (the number of key-value pairs)
+     * @Param[in] init Initialize the hash table with the unused keys/values
+     * @Param[in] hf An optional hashing function
+     * @Param[in] eql An optional functor for comparing if two keys are equal
+     * @Param[in] a An optional functor for allocating the hash table memory
+     */
+    /* ----------------------------------------------------------------------------*/
     explicit concurrent_unordered_multimap(size_type n,
+                                           const bool init = true,
                                            const Hasher& hf = hasher(),
                                            const Equality& eql = key_equal(),
                                            const allocator_type& a = allocator_type())
@@ -339,10 +351,13 @@ public:
                 CUDA_RT_CALL( cudaMemPrefetchAsync(m_hashtbl_values, m_hashtbl_size*sizeof(value_type), dev_id, 0) );
             }
         }
-        
-        init_hashtbl<<<((m_hashtbl_size-1)/block_size)+1,block_size>>>( m_hashtbl_values, m_hashtbl_size, unused_key, unused_element );
-        CUDA_RT_CALL( cudaGetLastError() );
-        CUDA_RT_CALL( cudaStreamSynchronize(0) );
+
+        if( init )
+        {
+            init_hashtbl<<<((m_hashtbl_size-1)/block_size)+1,block_size>>>( m_hashtbl_values, m_hashtbl_size, unused_key, unused_element );
+            CUDA_RT_CALL( cudaGetLastError() );
+            CUDA_RT_CALL( cudaStreamSynchronize(0) );
+        }
     }
     
     ~concurrent_unordered_multimap()
@@ -372,7 +387,72 @@ public:
     {
         return unused_key;
     }
-    
+   
+    /* --------------------------------------------------------------------------*/
+    /**
+     * @Synopsis Computes a hash value for a key
+     *
+     * @Param[in] the_key The key to compute a hash for
+     * @tparam hash_value_type The datatype of the hash value
+     *
+     * @Returns   The hash value for the key
+     */
+    /* ----------------------------------------------------------------------------*/
+    template <typename hash_value_type = typename Hasher::result_type>
+    __forceinline__
+    __host__ __device__ hash_value_type get_hash(const key_type& the_key) const
+    {
+        return m_hf(the_key);
+    }
+
+    /* --------------------------------------------------------------------------*/
+    /**
+     * @Synopsis Computes the destination hash map partition for a key
+     *
+     * @Param[in] the_key The key to search for
+     * @Param[in] num_parts The total number of partitions in the partitioned
+     * hash table
+     * @Param[in] precomputed_hash A flag indicating whether or not a precomputed
+     * hash value is passed in
+     * @Param[in] precomputed_hash_value A precomputed hash value to use for determing
+     * the write location of the key into the hash map instead of computing the
+     * the hash value directly from the key
+     * @tparam hash_value_type The datatype of the hash value
+     *
+     * @Returns   The destination hash table partition for the specified key
+     */
+    /* ----------------------------------------------------------------------------*/
+    template <typename hash_value_type = typename Hasher::result_type>
+    __forceinline__
+    __host__ __device__ int get_partition(const key_type& the_key,
+                                          const int num_parts = 1,
+                                          bool precomputed_hash = false,
+                                          hash_value_type precomputed_hash_value = 0) const
+    {
+        hash_value_type hash_value{0};
+
+        // If a precomputed hash value has been passed in, then use it to determine
+        // the location of the key
+        if(true == precomputed_hash) {
+          hash_value = precomputed_hash_value;
+        }
+        // Otherwise, compute the hash value from the key
+        else {
+          hash_value = m_hf(the_key);
+        }
+
+        size_type hash_tbl_idx = hash_value % m_hashtbl_size;
+
+        const size_type partition_size  = m_hashtbl_size/num_parts;
+
+        int dest_part = hash_tbl_idx/partition_size;
+        // Note that if m_hashtbl_size % num_parts != 0 then dest_part can be
+        // num_parts for the last few elements and we remap that to the
+        // num_parts-1 partition
+        if (dest_part == num_parts) dest_part = num_parts-1;
+
+        return dest_part;
+    }
 
     /* --------------------------------------------------------------------------*/
     /** 
@@ -417,7 +497,7 @@ public:
         }
 
         size_type hash_tbl_idx = hash_value % hashtbl_size;
-        
+
         value_type* it = 0;
 
         size_type attempt_counter{0};
@@ -469,6 +549,63 @@ public:
         
         return iterator( m_hashtbl_values,m_hashtbl_values+hashtbl_size,it);
     }
+
+    /* --------------------------------------------------------------------------*/
+    /**
+     * @Synopsis  Inserts a (key, value) pair into the hash map partition. This
+     * is useful when building the hash table in multiple passes, one
+     * contiguous partition at a time, or when building the hash table
+     * distributed between multiple devices.
+     *
+     * @Param[in] x The (key, value) pair to insert
+     * @Param[in] part The partition number for the partitioned hash table build
+     * @Param[in] num_parts The total number of partitions in the partitioned
+     * hash table
+     * @Param[in] precomputed_hash A flag indicating whether or not a precomputed
+     * hash value is passed in
+     * @Param[in] precomputed_hash_value A precomputed hash value to use for determing
+     * the write location of the key into the hash map instead of computing the
+     * the hash value directly from the key
+     * @Param[in] keys_are_equal An optional functor for comparing if two keys are equal
+     * @tparam hash_value_type The datatype of the hash value
+     * @tparam comparison_type The type of the key comparison functor
+     *
+     * @Returns An iterator to the newly inserted (key, value) pair
+     */
+    /* ----------------------------------------------------------------------------*/
+    template < typename hash_value_type = typename Hasher::result_type,
+               typename comparison_type = key_equal>
+    __forceinline__
+    __device__ iterator insert_part(const value_type& x,
+                                    const int part = 0,
+                                    const int num_parts = 1,
+                                    bool precomputed_hash = false,
+                                    hash_value_type precomputed_hash_value = 0,
+                                    comparison_type keys_are_equal = key_equal())
+    {
+        hash_value_type hash_value{0};
+
+        // If a precomputed hash value has been passed in, then use it to determine
+        // the write location of the new key
+        if(true == precomputed_hash)
+        {
+          hash_value = precomputed_hash_value;
+        }
+        // Otherwise, compute the hash value from the new key
+        else
+        {
+          hash_value = m_hf(x.first);
+        }
+
+	// Find the destination partition index 
+	int dest_part = get_partition(x.first, num_parts, true, hash_value);
+
+        // Only insert if the key belongs to the specified partition
+        if ( dest_part != part )
+          return end();
+        else
+          return insert(x, true, hash_value, keys_are_equal);
+    }
     
     /* --------------------------------------------------------------------------*/
     /** 
@@ -509,7 +646,7 @@ public:
         }
 
         size_type hash_tbl_idx = hash_value % m_hashtbl_size;
-        
+
         value_type* begin_ptr = 0;
         
         size_type counter = 0;
@@ -531,7 +668,7 @@ public:
         
         return const_iterator( m_hashtbl_values,m_hashtbl_values+m_hashtbl_size,begin_ptr);
     }
-    
+
     gdf_error assign_async( const concurrent_unordered_multimap& other, cudaStream_t stream = 0 )
     {
         m_collisions = other.m_collisions;

@@ -21,8 +21,7 @@ build:
     - CC
     - CXX
     - CUDAHOSTCXX
-    - TRAVIS
-    - CMAKE_BUILD_PARALLEL_LEVEL
+    - PARALLEL_LEVEL
 
 requirements:
   # use channel:
@@ -37,13 +36,13 @@ requirements:
     - setuptools
     - nvstrings
     - pycparser=2.19
-    - pyarrow 0.10.*
+    - pyarrow 0.11.1
   run:
     - libcudf {{ version }}.*
     - python x.x
     - cffi
     - pycparser=2.19
-    - pyarrow 0.10.*
+    - pyarrow 0.11.1
 
 test:
   commands:

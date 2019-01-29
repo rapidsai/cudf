@@ -48,9 +48,6 @@ struct ValidRange {
 };
 
 
-// Vector set to use rmmAlloc and rmmFree.
-template <typename T>
-using Vector = thrust::device_vector<T, rmm_allocator<T>>;
 
 /* --------------------------------------------------------------------------*/
 /** 
@@ -309,13 +306,10 @@ public:
     device_row_valid.resize(mask_size);
 
        
-    cudaStream_t stream = 0; // TODO: non-default stream?
-    rmm_temp_allocator allocator(stream);   
-
     // If a row contains a single NULL value, then the entire row is considered
     // to be NULL, therefore initialize the row-validity mask with the 
     // bit-wise AND of the validity mask of all the columns
-    thrust::tabulate(thrust::cuda::par(allocator).on(stream),
+    thrust::tabulate(rmm::exec_policy()->on(0),
                      device_row_valid.begin(),
                      device_row_valid.end(),
                      row_masker<size_type>(d_columns_valids, num_cols));
@@ -355,6 +349,12 @@ public:
   gdf_column * get_column(size_type column_index) const
   {
     return host_columns[column_index];
+  }
+
+   __host__ 
+  gdf_column ** get_columns() const
+  {
+    return host_columns;
   }
 
   __host__ __device__
@@ -750,7 +750,7 @@ public:
   }
 
   template <typename index_type>
-  gdf_error gather(Vector<index_type> const & row_gather_map,
+  gdf_error gather(rmm::device_vector<index_type> const & row_gather_map,
           gdf_table<size_type> & gather_output_table, bool range_check = false)
   {
       return gather(row_gather_map.data().get(), gather_output_table, range_check);
@@ -785,7 +785,7 @@ public:
   }
 
   template <typename size_type>
-  gdf_error gather(Vector<size_type> const & row_gather_map,
+  gdf_error gather(rmm::device_vector<size_type> const & row_gather_map,
           bool range_check = false) {
       return gather(row_gather_map, *this, range_check);
   }
@@ -796,48 +796,7 @@ public:
       return gather(row_gather_map, *this, range_check);
   }
 
-  /* --------------------------------------------------------------------------*/
-  /** 
-   * @Synopsis  Lexicographically sorts the rows of the gdf_table in-place
-   * 
-   * @Returns A permutation vector of the new ordering of the rows, e.g.,
-   * sorted_table[i] == unsorted_table[ permuted_indices[i] ]
-   */
-  /* ----------------------------------------------------------------------------*/
-  Vector<size_type> sort(void) {
-
-      cudaStream_t stream = NULL;
-
-      // Functor that defines a `less` operator between rows of a set of
-      // gdf_columns
-      LesserRTTI<size_type> comparator(d_columns_data,
-              reinterpret_cast<int*>(d_columns_types),
-              num_columns);
-
-      rmm_temp_allocator allocator(stream);
-	    auto exec = thrust::cuda::par(allocator).on(stream);
-
-      // Vector that will store the permutation of the rows after the sort
-      Vector<size_type> permuted_indices(column_length);
-      thrust::sequence(exec, permuted_indices.begin(), permuted_indices.end());
-
-      // Use the LesserRTTI functor to sort the rows of the table and the
-      // permutation vector
-      thrust::sort(exec, permuted_indices.begin(), permuted_indices.end(),
-              [comparator] __host__ __device__ (size_type i1, size_type i2) {
-              return comparator.less(i1, i2);
-              });
-
-      //thrust::host_vector<void*> host_columns = device_columns;
-      //thrust::host_vector<gdf_dtype> host_types = device_types;
-
-      gather<size_type>(permuted_indices);
-
-      return permuted_indices;
-  }
-
-
-
+  
   
 /* --------------------------------------------------------------------------*/
 /** 
@@ -1011,13 +970,11 @@ private:
   
     gdf_error gdf_status{GDF_SUCCESS};
 
-    rmm_temp_allocator allocator(stream);
-	  auto exec = thrust::cuda::par(allocator).on(stream);
 
     // Gathering from one table to another
     if (i_data != o_data) {
         if (range_check) {
-            thrust::gather_if(exec,
+            thrust::gather_if(rmm::exec_policy(stream)->on(stream),
                     row_gather_map,
                     row_gather_map + num_rows,
                     row_gather_map,
@@ -1026,7 +983,7 @@ private:
                     ValidRange<index_type>(0, input_column->size));
 
         } else {
-            thrust::gather(exec,
+            thrust::gather(rmm::exec_policy(stream)->on(stream),
                     row_gather_map,
                     row_gather_map + num_rows,
                     i_data,
@@ -1035,9 +992,9 @@ private:
     } 
     // Gather is in-place
     else {
-        Vector<column_type> remapped_copy(num_rows);
+        rmm::device_vector<column_type> remapped_copy(num_rows);
         if (range_check) {
-            thrust::gather_if(exec,
+            thrust::gather_if(rmm::exec_policy(stream)->on(stream),
                            row_gather_map,
                            row_gather_map + num_rows,
                            row_gather_map,
@@ -1045,13 +1002,13 @@ private:
                            remapped_copy.begin(),
                            ValidRange<index_type>(0, input_column->size));
         } else {
-            thrust::gather(exec,
+            thrust::gather(rmm::exec_policy(stream)->on(stream),
                            row_gather_map,
                            row_gather_map + num_rows,
                            i_data,
                            remapped_copy.begin());
         }
-        thrust::copy(exec,
+        thrust::copy(rmm::exec_policy(stream)->on(stream),
                 remapped_copy.begin(),
                 remapped_copy.end(),
                 o_data);
@@ -1059,13 +1016,13 @@ private:
     //If gather is in-place
     if ((input_column->valid == output_column->valid) &&
             (input_column->valid != nullptr)) {
-        thrust::device_vector<gdf_valid_type> remapped_valid_copy(gdf_get_num_chars_bitmask(num_rows));
+        rmm::device_vector<gdf_valid_type> remapped_valid_copy(gdf_get_num_chars_bitmask(num_rows));
         gather_valid<index_type>(
                 input_column->valid,
                 remapped_valid_copy.data().get(),
                 row_gather_map, 
                 num_rows, input_column->size, stream);
-        thrust::copy(thrust::cuda::par.on(stream),
+        thrust::copy(rmm::exec_policy(stream)->on(stream),
                 remapped_valid_copy.begin(),
                 remapped_valid_copy.end(), output_column->valid);
     }
@@ -1111,10 +1068,8 @@ gdf_error scatter_column(column_type const * const __restrict__ input_column,
 
   gdf_error gdf_status{GDF_SUCCESS};
 
-  rmm_temp_allocator allocator(stream);
-	auto exec = thrust::cuda::par(allocator).on(stream);
 
-  thrust::scatter(exec,
+  thrust::scatter(rmm::exec_policy(stream)->on(stream),
                   input_column,
                   input_column + num_rows,
                   row_scatter_map,
@@ -1131,20 +1086,20 @@ gdf_error scatter_column(column_type const * const __restrict__ input_column,
 
   gdf_column ** host_columns{nullptr};  /** The set of gdf_columns that this table wraps */
 
-  Vector<void*> device_columns_data; /** Device array of pointers to each columns data */
+  rmm::device_vector<void*> device_columns_data; /** Device array of pointers to each columns data */
   void ** d_columns_data{nullptr};                  /** Raw pointer to the device array's data */
 
-  Vector<gdf_valid_type*> device_columns_valids;  /** Device array of pointers to each columns validity bitmask*/
+  rmm::device_vector<gdf_valid_type*> device_columns_valids;  /** Device array of pointers to each columns validity bitmask*/
   gdf_valid_type** d_columns_valids{nullptr};                   /** Raw pointer to the device array's data */
 
-  Vector<gdf_valid_type> device_row_valid;  /** Device array of bitmask for the validity of each row. */
+  rmm::device_vector<gdf_valid_type> device_row_valid;  /** Device array of bitmask for the validity of each row. */
   gdf_valid_type * d_row_valid{nullptr};                   /** Raw pointer to device array's data */
 
-  Vector<gdf_dtype> device_columns_types; /** Device array of each columns data type */
+  rmm::device_vector<gdf_dtype> device_columns_types; /** Device array of each columns data type */
   gdf_dtype * d_columns_types{nullptr};                 /** Raw pointer to the device array's data */
 
   size_type row_size_bytes{0};
-  Vector<byte_type> column_byte_widths;
+  rmm::device_vector<byte_type> column_byte_widths;
   byte_type * d_column_byte_widths{nullptr};
 
 };

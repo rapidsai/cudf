@@ -28,7 +28,7 @@ class TypedColumnBase(Column):
 
     Notes
     -----
-    For designed to be instantiated directly.  Instantiate subclasses instead.
+    Not designed to be instantiated directly.  Instantiate subclasses instead.
     """
     def __init__(self, **kwargs):
         dtype = kwargs.pop('dtype')
@@ -133,6 +133,24 @@ def column_select_by_position(column, positions):
                                             dtype=selected_index.dtype)
 
 
+def build_column(buffer, dtype, mask=None, categories=None):
+    from . import numerical, categorical, datetime
+    if dtype == 'datetime64[ms]':
+        return datetime.DatetimeColumn(data=buffer,
+                                       dtype=np.dtype(dtype),
+                                       mask=mask)
+    elif pd.api.types.is_categorical_dtype(dtype):
+        return categorical.CategoricalColumn(data=buffer,
+                                             dtype='categorical',
+                                             categories=categories,
+                                             ordered=False,
+                                             mask=mask)
+    else:
+        return numerical.NumericalColumn(data=buffer,
+                                         dtype=dtype,
+                                         mask=mask)
+
+
 def as_column(arbitrary, nan_as_null=True):
     """Create a Column from an arbitrary object
 
@@ -140,17 +158,23 @@ def as_column(arbitrary, nan_as_null=True):
 
     * ``Column``
     * ``Buffer``
+    * ``Series``
+    * ``Index``
     * numba device array
     * numpy array
+    * pyarrow array
     * pandas.Categorical
 
     Returns
     -------
     result : subclass of TypedColumnBase
         - CategoricalColumn for pandas.Categorical input.
+        - DatetimeColumn for datetime input
         - NumericalColumn for all other inputs.
     """
     from . import numerical, categorical, datetime
+    from cudf.dataframe.series import Series
+    from cudf.dataframe.index import Index
 
     if isinstance(arbitrary, Column):
         if not isinstance(arbitrary, TypedColumnBase):
@@ -159,6 +183,12 @@ def as_column(arbitrary, nan_as_null=True):
                                   dtype=arbitrary.dtype)
         else:
             data = arbitrary
+
+    elif isinstance(arbitrary, Series):
+        data = arbitrary._column
+
+    elif isinstance(arbitrary, Index):
+        data = arbitrary._values
 
     elif isinstance(arbitrary, Buffer):
         data = numerical.NumericalColumn(data=arbitrary, dtype=arbitrary.dtype)
@@ -174,6 +204,8 @@ def as_column(arbitrary, nan_as_null=True):
     elif isinstance(arbitrary, np.ndarray):
         if arbitrary.dtype.kind == 'M':
             data = datetime.DatetimeColumn.from_numpy(arbitrary)
+        elif arbitrary.dtype.kind in ('O', 'U'):
+            raise NotImplementedError("Strings are not yet supported")
         else:
             data = as_column(rmm.to_device(arbitrary), nan_as_null=nan_as_null)
 
@@ -274,7 +306,7 @@ def as_column(arbitrary, nan_as_null=True):
             )
 
     elif isinstance(arbitrary, (pd.Series, pd.Categorical)):
-        if pd.core.common.is_categorical_dtype(arbitrary):
+        if pd.api.types.is_categorical_dtype(arbitrary):
             data = as_column(pa.array(arbitrary, from_pandas=True))
         else:
             data = as_column(pa.array(arbitrary, from_pandas=nan_as_null))
