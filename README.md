@@ -123,7 +123,7 @@ $ make install_python                               # build & install CFFI pytho
 $ cd python && py.test -v                           # optional, run python tests on low-level python bindings
 ```
 
-- 4. Build the `cudf` python package, in the `python` folder:
+- Build the `cudf` python package, in the `python` folder:
 ```bash
 $ cd $CUDF_HOME/python
 $ python setup.py build_ext --inplace
