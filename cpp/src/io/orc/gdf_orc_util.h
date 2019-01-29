@@ -1,4 +1,3 @@
-
 /*
  * Copyright (c) 2018, NVIDIA CORPORATION.
  *
@@ -15,19 +14,23 @@
  * limitations under the License.
  */
 
-#pragma once
+// file: gdf_orc_util.h
+// gdf interface and utility
 
+#ifndef __GDF_ORC_UTIL_H__
+#define __GDF_ORC_UTIL_H__
 
-gdf_error read_csv(csv_read_arg *args);
+#include <cudf.h>
+#include "orc_types.h"
+#include "orc_read.h"
 
-gdf_error gdf_to_csr(gdf_column **gdfData, int num_cols, csr_gdf *csrReturn);
+CudaOrcReader* gdf_create_orc_reader();
 
-/* --------------------------------------------------------------------------*/
-/**
-* @brief Road ORC format file into gdf_column.
-*
-* @Returns  If the operation was successful, returns GDF_SUCCESS
-*/
-/* ----------------------------------------------------------------------------*/
-gdf_error gdf_read_orc(orc_read_arg *arg);
+gdf_error gdf_orc_convertErrorCode(CudaOrcError_t err);
 
+gdf_dtype gdf_orc_convertDataKind(ORCTypeKind kind);
+
+gdf_error gdf_orc_set_column_name(gdf_column* col, const std::string& name);
+gdf_error gdf_orc_release_column_name(gdf_column* col);
+
+#endif //  __GDF_ORC_UTIL_H__

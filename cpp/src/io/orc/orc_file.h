@@ -1,4 +1,3 @@
-
 /*
  * Copyright (c) 2018, NVIDIA CORPORATION.
  *
@@ -15,19 +14,30 @@
  * limitations under the License.
  */
 
-#pragma once
+#ifndef __ORC_FILE_HEADER__
+#define __ORC_FILE_HEADER__
+
+#include "orc_types.h"
+
+class OrcFile {
+public:
+    OrcFile() : _file_top(NULL), _filesize(0){};
+    ~OrcFile() {release();};
+
+public:
+    CudaOrcError_t loadFile(orc_byte*  &file_top, size_t &filesize, const char* filename );
+
+    void release();
+    
+protected:
+    orc_byte*   _file_top;
+    size_t      _filesize;
+
+#ifdef __linux__
+    int         _fd;
+#endif
+
+};
 
 
-gdf_error read_csv(csv_read_arg *args);
-
-gdf_error gdf_to_csr(gdf_column **gdfData, int num_cols, csr_gdf *csrReturn);
-
-/* --------------------------------------------------------------------------*/
-/**
-* @brief Road ORC format file into gdf_column.
-*
-* @Returns  If the operation was successful, returns GDF_SUCCESS
-*/
-/* ----------------------------------------------------------------------------*/
-gdf_error gdf_read_orc(orc_read_arg *arg);
-
+#endif // __ORC_FILE_HEADER__

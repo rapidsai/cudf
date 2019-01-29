@@ -26,3 +26,6 @@ dependencies:
 - recommonmark
 - pip:
   - sphinx-markdown-tables
+- zlib>=1.2.8,<1.3
+- libprotobuf=3.6.0=hd28b015_0
+- protobuf=3.6.0

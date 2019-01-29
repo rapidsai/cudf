@@ -1,4 +1,3 @@
-
 /*
  * Copyright (c) 2018, NVIDIA CORPORATION.
  *
@@ -15,19 +14,14 @@
  * limitations under the License.
  */
 
-#pragma once
+#include <stdio.h>
+
+#include "orc_read.h"
 
 
-gdf_error read_csv(csv_read_arg *args);
+CudaOrcError_t CudaOrcReader::SetOption(const OrcReaderOption* _option)
+{
+    option = *_option; // copy paramter
 
-gdf_error gdf_to_csr(gdf_column **gdfData, int num_cols, csr_gdf *csrReturn);
-
-/* --------------------------------------------------------------------------*/
-/**
-* @brief Road ORC format file into gdf_column.
-*
-* @Returns  If the operation was successful, returns GDF_SUCCESS
-*/
-/* ----------------------------------------------------------------------------*/
-gdf_error gdf_read_orc(orc_read_arg *arg);
-
+    return GDF_ORC_SUCCESS;
+}

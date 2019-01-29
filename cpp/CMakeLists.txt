@@ -111,6 +111,29 @@ else()
 endif(ZLIB_FOUND)
 
 ###################################################################################################
+# - find protobuf ---------------------------------------------------------------------------------
+
+set(Protobuf_ROOT $ENV{CONDA_PREFIX})
+find_package(Protobuf REQUIRED)
+if(PROTOBUF_FOUND)
+    message(STATUS "protobuf found in ${PROTOBUF_INCLUDE_DIRS}")
+else()
+    message(FATAL_ERROR "protobuf not found, please check your settings.")
+endif(PROTOBUF_FOUND)
+
+set(ORC_LIB_ROOT ${CMAKE_CURRENT_SOURCE_DIR}/../thirdparty/orc)
+protobuf_generate_cpp(ORC_SRC ORC_HDR  ${ORC_LIB_ROOT}/proto/orc_proto.proto)
+
+set(CMAKE_CXX_FLAGS  "${CMAKE_CXX_FLAGS}  -pthread")
+set(CMAKE_C_FLAGS    "${CMAKE_C_FLAGS}    -pthread")
+set(CMAKE_LINK_FLAGS "${CMAKE_LINK_FLAGS} -pthread")
+
+file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
+execute_process(COMMAND ${CMAKE_COMMAND} -E create_symlink ${ORC_LIB_ROOT}/examples tests/examples)
+
+
+
+###################################################################################################
 # - add gtest -------------------------------------------------------------------------------------
 
 if(BUILD_TESTS)
@@ -137,12 +160,15 @@ add_subdirectory(thirdparty/rmm "${CMAKE_BINARY_DIR}/rmm")
 include_directories("${ARROW_INCLUDE_DIR}"
                     "${FLATBUFFERS_INCLUDE_DIR}"
                     "${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}"
+                    "${CMAKE_BINARY_DIR}"
                     "${CMAKE_BINARY_DIR}/include"
                     "${CMAKE_SOURCE_DIR}/include"
                     "${CMAKE_SOURCE_DIR}/src"
                     "${CMAKE_SOURCE_DIR}/thirdparty/cub"
                     "${CMAKE_SOURCE_DIR}/thirdparty/moderngpu/src"
                     "${CMAKE_SOURCE_DIR}/thirdparty/rmm/include"
+                    "${PROTOBUF_INCLUDE_DIRS}"
+		    "${CMAKE_CURRENT_BINARY_DIR}"
                     "${ZLIB_INCLUDE_DIRS}")
 
 ###################################################################################################
@@ -150,6 +176,8 @@ include_directories("${ARROW_INCLUDE_DIR}"
 
 link_directories("${CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES}" # CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES is an undocumented/unsupported variable containing the link directories for nvcc
                  "${CMAKE_BINARY_DIR}/lib"
+                 "${PROTOBUF_LIBRARY_DIR}"
+                 "${ZLIB_LIBRARY_DIR}"
                  "${FLATBUFFERS_LIBRARY_DIR}"
                  "${GTEST_LIBRARY_DIR}")
 
@@ -205,10 +233,33 @@ add_library(cudf SHARED
             src/io/comp/uncomp.cpp
             src/utilities/cuda_utils.cu
             src/utilities/error_utils.cpp
-            src/utilities/nvtx/nvtx_utils.cpp)
+            src/utilities/nvtx/nvtx_utils.cpp
+	    ${ORC_SRC}
+	    src/io/orc/gdf_orc_util.cpp
+	    src/io/orc/orc_read.cpp
+	    src/io/orc/orc_read_impl_gdf.cpp
+	    src/io/orc/orc_read_impl_proto.cpp
+	    src/io/orc/orc_stripe.cpp
+	    src/io/orc/orc_util.cpp
+	    src/io/orc/orc_memory.cpp
+	    src/io/orc/orc_gzip_stream.cpp
+	    src/io/orc/orc_debug.c
+	    src/io/orc/orc_file.cpp
+	    src/io/orc/kernel_orc.cu
+	    src/io/orc/kernel_boolean.cu
+	    src/io/orc/kernel_byteRLE.cu
+	    src/io/orc/kernel_intRLEv1.cu
+	    src/io/orc/kernel_intRLEv2.cu
+	    src/io/orc/kernel_present.cu
+	    src/io/orc/kernel_rawdata.cu
+	    src/io/orc/kernel_varint.cu
+	    src/io/orc/kernel_convert.cu)
+
+set_source_files_properties(${ORC_SRC} ${ORC_HDR} PROPERTIES GENERATED TRUE)
 
 #Override RPATH for cudf
 SET_TARGET_PROPERTIES(cudf PROPERTIES BUILD_RPATH "\$ORIGIN")
+
 
 ###################################################################################################
 # - build options ---------------------------------------------------------------------------------
@@ -231,7 +282,7 @@ endif(HT_LEGACY_ALLOCATOR)
 ###################################################################################################
 # - link libraries --------------------------------------------------------------------------------
 
-target_link_libraries(cudf rmm "${ARROW_LIB}" ${ZLIB_LIBRARIES} NVStrings)
+target_link_libraries(cudf rmm "${ARROW_LIB}" z ${PROTOBUF_LIBRARY} NVStrings)
 
 ###################################################################################################
 # - python cffi bindings --------------------------------------------------------------------------

@@ -118,3 +118,25 @@ typedef struct {
  * dialect          - not used
  *
  */
+
+
+/*
+ * The paramteter for loading ORC format file.
+ * API: gdf_error gdf_read_orc(orc_read_arg *arg)
+ */
+typedef struct {
+    /*
+    * Output Arguments - space created in reader.
+    */
+    int                 num_cols_out;           /**< Out: return the number of columns read in  */
+    int                 num_rows_out;           /**< Out: return the number of rows read in     */
+    gdf_column          **data;                 /**< Out: return the array of *gdf_columns      */
+
+
+    /*
+    * Input arguments - all data is in the host
+    */
+    const char          *file_path;             /**< file location to read from    - currently the file cannot be compressed */
+    bool                convertToGMT;           /**< timestamp data is converted into GMT if timestamp column has timezone, no conversion if convertGTM = false */
+} orc_read_arg;
+

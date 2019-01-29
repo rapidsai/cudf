@@ -10,3 +10,7 @@
 	path = thirdparty/rmm
 	url = https://github.com/rapidsai/rmm.git
 	branch = master
+[submodule "thirdparty/orc"]
+	path = thirdparty/orc
+	url = https://github.com/apache/orc.git
+	branch = master

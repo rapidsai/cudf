@@ -1,4 +1,3 @@
-
 /*
  * Copyright (c) 2018, NVIDIA CORPORATION.
  *
@@ -15,19 +14,25 @@
  * limitations under the License.
  */
 
-#pragma once
+#ifndef __ORC_KERNEL_WRITER_BITMAP_DEPENDS_H__
+#define __ORC_KERNEL_WRITER_BITMAP_DEPENDS_H__
+
+#include "kernel_writer_bitmap.cuh"
+#include "kernel_reader_bitmap.cuh"
 
 
-gdf_error read_csv(csv_read_arg *args);
+template <class  T>
+class bitmap_writer_depends : public bitmap_writer {
+public:
+    __device__ bitmap_writer_depends(KernelParamBitmap* param)
+        : bitmap_writer(param), input(param->parent, param->input_size, param->start_id, param->input_size)
+    {};
 
-gdf_error gdf_to_csr(gdf_column **gdfData, int num_cols, csr_gdf *csrReturn);
+    __device__ ~bitmap_writer_depends() {};
 
-/* --------------------------------------------------------------------------*/
-/**
-* @brief Road ORC format file into gdf_column.
-*
-* @Returns  If the operation was successful, returns GDF_SUCCESS
-*/
-/* ----------------------------------------------------------------------------*/
-gdf_error gdf_read_orc(orc_read_arg *arg);
+protected:
+    byte_reader_bitmap<T> input;
 
+};
+
+#endif // __ORC_KERNEL_WRITER_BITMAP_DEPENDS_H__

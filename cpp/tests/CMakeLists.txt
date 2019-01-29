@@ -21,10 +21,14 @@ include_directories("${GTEST_INCLUDE_DIR}"
                     "${ARROW_INCLUDE_DIR}"
                     "${FLATBUFFERS_INCLUDE_DIR}"
                     "${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}"
+                    "${CMAKE_BINARY_DIR}"
                     "${CMAKE_BINARY_DIR}/include"
                     "${CMAKE_SOURCE_DIR}/include"
                     "${CMAKE_SOURCE_DIR}"
                     "${CMAKE_SOURCE_DIR}/src"
+                    "${PROTOBUF_INCLUDE_DIRS}"
+                    "${CMAKE_CURRENT_BINARY_DIR}"
+                    "${ZLIB_INCLUDE_DIRS}"
                     "${CMAKE_SOURCE_DIR}/thirdparty/cub"
                     "${CMAKE_SOURCE_DIR}/thirdparty/moderngpu/src"
                     "${CMAKE_SOURCE_DIR}/thirdparty/rmm/include")
@@ -35,6 +39,8 @@ include_directories("${GTEST_INCLUDE_DIR}"
 link_directories("${CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES}" # CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES is an undocumented/unsupported variable containing the link directories for nvcc
                  "${CMAKE_BINARY_DIR}/lib"
                  "${FLATBUFFERS_LIBRARY_DIR}"
+                 "${PROTOBUF_LIBRARY_DIR}"
+                 "${ZLIB_LIBRARY_DIR}"
                  "${GTEST_LIBRARY_DIR}")
 
 ###################################################################################################
@@ -166,6 +172,31 @@ set(CSV_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/io/csv/csv_test.cu")
 
 ConfigureTest(CSV_TEST "${CSV_TEST_SRC}")
+
+
+###################################################################################################
+# - orc tests -------------------------------------------------------------------------------------
+
+set(ORC_TEST_SRC
+
+    ${CMAKE_CURRENT_SOURCE_DIR}/io/orc/kernel_present.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/io/orc/kernel_rawdata.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/io/orc/kernel_rle_v1.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/io/orc/kernel_rle_v2.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/io/orc/kernel_varint.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/io/orc/kernel_boolean.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/io/orc/kernel_byte.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/io/orc/kernel_util.cpp
+
+    ${CMAKE_CURRENT_SOURCE_DIR}/io/orc/tests_main.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/io/orc/tests_common.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/io/orc/unit_test.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/io/orc/gdf_interface_raw.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/io/orc/gdf_interface_zlib.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/io/orc/gdf_interface_others.cpp
+)
+
+ConfigureTest(ORC_TEST "${ORC_TEST_SRC}")
 
 ###################################################################################################
 # - types tests -------------------------------------------------------------------------------------
