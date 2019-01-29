@@ -68,6 +68,22 @@ using std::string;
 using cu_reccnt_t = unsigned long long int;
 using cu_recstart_t = unsigned long long int;
 
+
+constexpr size_t calculateMaxRowSize(int column_num=0) noexcept {
+	constexpr size_t max_row_bytes = 16*1024; // 16KB
+	constexpr size_t column_bytes = 64;
+	constexpr size_t base_padding = 4*1024; // 4KB
+	if (column_num == 0){
+		// use flat size if the number of columns is not known
+		return max_row_bytes;
+	}
+	else {
+		// Expand the size based on the number of columns, if available
+		return base_padding + column_num * column_bytes; 
+	}
+}
+
+
 //-- define the structure for raw data handling - for internal use
 typedef struct raw_csv_ {
     char *				data;			// on-device: the raw unprocessed CSV data - loaded as a large char * array
@@ -134,6 +150,7 @@ using string_pair = std::pair<const char*,size_t>;
 //
 gdf_error parseArguments(csv_read_arg *args, raw_csv_t *csv);
 // gdf_error getColNamesAndTypes(const char **col_names, const  char **dtypes, raw_csv_t *d);
+gdf_error trimExtraRows(gdf_size_type byte_range_size, raw_csv_t * raw_csv);
 gdf_error inferCompressionType(const char* compression_arg, const char* filepath, string& compression_type);
 gdf_error getUncompressedHostData(const char* h_data, size_t num_bytes, 
 	const string& compression, 
@@ -151,7 +168,7 @@ gdf_dtype convertStringToDtype(std::string &dtype);
 __device__ int findSetBit(int tid, long num_bits, uint64_t *f_bits, int x);
 
 gdf_error launch_countRecords(const char* h_data, size_t h_size, char terminator, char quote, gdf_size_type& rec_cnt);
-gdf_error launch_storeRecordStart(const char* h_data, size_t h_size, raw_csv_t * csvData);
+gdf_error launch_storeRecordStart(const char* h_data, size_t h_size, bool include_first_row, raw_csv_t * csvData);
 gdf_error launch_dataConvertColumns(raw_csv_t * raw_csv, void** d_gdf,  gdf_valid_type** valid, gdf_dtype* d_dtypes, string_pair **str_cols, unsigned long long *);
 
 gdf_error launch_dataTypeDetection(raw_csv_t * raw_csv, column_data_t* d_columnData);
@@ -278,6 +295,21 @@ gdf_error read_csv(csv_read_arg *args)
 		checkError(GDF_INVALID_API_CALL, "Thousands separator cannot be the same as the delimiter");
 	}
 
+	string compression_type;
+	error = inferCompressionType(args->compression, args->filepath_or_buffer, compression_type);
+	checkError(error, "call to inferCompressionType");
+
+	if (args->byte_range_offset > 0 || args->byte_range_size > 0) {
+		if (raw_csv->nrows >=0 || raw_csv->skiprows > 0 || raw_csv->skipfooter > 0) {
+			checkError(GDF_INVALID_API_CALL, 
+				"Cannot manually limit rows to be read when using the byte range parameter");
+		}
+		if (compression_type != "none") {
+			checkError(GDF_INVALID_API_CALL, 
+				"Cannot read compressed input when using the byte range parameter");
+		}
+	}
+
 	// Handle user-defined booleans values, whereby field data is substituted
 	// with true/false values; CUDF booleans are int types of 0 or 1
 	// The true/false value strings are converted to integers which are used
@@ -301,7 +333,9 @@ gdf_error read_csv(csv_read_arg *args)
 	// memory map in the data
 	void * 	map_data = NULL;
 	size_t	map_size = 0;
+	size_t	map_offset = 0;
 	int fd = 0;
+	bool read_extra_row = false;
 	if (args->input_data_form == gdf_csv_input_form::FILE_PATH)
 	{
 		fd = open(args->filepath_or_buffer, O_RDONLY );
@@ -310,10 +344,29 @@ gdf_error read_csv(csv_read_arg *args)
 		struct stat st{};
 		if (fstat(fd, &st)) { close(fd); checkError(GDF_FILE_ERROR, "cannot stat file");   }
 	
-		map_size = st.st_size;
-		raw_csv->num_bytes = map_size;
-	
-		map_data = mmap(0, map_size, PROT_READ, MAP_PRIVATE, fd, 0);
+		const auto file_size = st.st_size;
+		const auto page_size = sysconf(_SC_PAGESIZE);
+
+		// Have to align map offset to page size
+		map_offset = (args->byte_range_offset/page_size)*page_size;
+		if (map_offset >= (size_t)file_size) { close(fd); checkError(GDF_C_ERROR, "The offset is too high"); }
+
+		// Set to rest-of-the-file size, will reduce based on the byte range size
+		raw_csv->num_bytes = map_size = file_size - map_offset;
+
+		// Include the page padding in the mapped size
+		const auto page_padding = args->byte_range_offset - map_offset;
+		const auto padded_byte_range_size = args->byte_range_size + page_padding;
+		// If byte range size is zero, read the whole thing
+		if(args->byte_range_size != 0 && (size_t)padded_byte_range_size < map_size) {
+			read_extra_row = true;
+			// Need to make sure that w/ padding we don't overshoot the end of file
+			map_size = min(padded_byte_range_size + calculateMaxRowSize(args->num_cols), map_size);
+			// Ignore page padding for parsing purposes
+			raw_csv->num_bytes = map_size - page_padding; 
+		}
+
+		map_data = mmap(0, map_size, PROT_READ, MAP_PRIVATE, fd, map_offset);
 	
 		if (map_data == MAP_FAILED || map_size==0) { close(fd); checkError(GDF_C_ERROR, "Error mapping file"); }
 	}
@@ -324,20 +377,14 @@ gdf_error read_csv(csv_read_arg *args)
 	}
 	else { checkError(GDF_C_ERROR, "invalid input type"); }
 
-
-
-	string compression_type;
-	error = inferCompressionType(args->compression, args->filepath_or_buffer, compression_type);
-	checkError(error, "call to inferCompressionType");
-
 	const char* h_uncomp_data;
 	size_t h_uncomp_size = 0;
 	// Used when the input data is compressed, to ensure the allocated uncompressed data is freed
 	vector<char> h_uncomp_data_owner;
 	if (compression_type == "none") {
 		// Do not use the owner vector here to avoid copying the whole file to the heap
-		h_uncomp_data = (const char*)map_data;
-		h_uncomp_size = map_size;
+		h_uncomp_data = (const char*)map_data + (args->byte_range_offset - map_offset);
+		h_uncomp_size = raw_csv->num_bytes;
 	}
 	else {
 		error = getUncompressedHostData( (const char *)map_data, map_size, compression_type, h_uncomp_data_owner);
@@ -353,13 +400,18 @@ gdf_error read_csv(csv_read_arg *args)
 			return error;
 	}
 
+	const bool include_first_row = args->byte_range_offset==0;
+	if (!include_first_row) {
+		--raw_csv->num_records;
+	}
+
 	//-----------------------------------------------------------------------------
 	//-- Allocate space to hold the record starting point
 	RMM_TRY( RMM_ALLOC((void**)&(raw_csv->recStart), (sizeof(cu_recstart_t) * (raw_csv->num_records + 1)), 0) ); 
 
 	//-----------------------------------------------------------------------------
 	//-- Scan data and set the starting positions
-	error = launch_storeRecordStart(h_uncomp_data, h_uncomp_size, raw_csv);
+	error = launch_storeRecordStart(h_uncomp_data, h_uncomp_size, include_first_row, raw_csv);
 	checkError(error, "call to record initial position store");
 
 	// Previous kernel stores the record pinput_file.typeositions as encountered by all threads
@@ -394,6 +446,12 @@ gdf_error read_csv(csv_read_arg *args)
 		CUDA_TRY( cudaMemcpy(raw_csv->recStart, h_rec_starts.data(), rec_start_size, cudaMemcpyHostToDevice) );
 		thrust::sort(thrust::device, raw_csv->recStart, raw_csv->recStart + raw_csv->num_records + 1);
 		raw_csv->num_records = recCount;
+	}
+
+	// discard the records that start after the end of the byte range
+	if (read_extra_row) {
+		error = trimExtraRows(args->byte_range_size, raw_csv);
+		checkError(error, "call to trim extra rows");
 	}
 
 	error = uploadDataToDevice(h_uncomp_data, h_uncomp_size, raw_csv);
@@ -786,6 +844,38 @@ gdf_dtype convertStringToDtype(std::string &dtype) {
 
 
 /**---------------------------------------------------------------------------*
+ * @brief Updates the number of records to trim the rows that start after 
+ * the end of the byte range.
+ * 
+ * Does not modify the recStart array, just modifies num_records.
+ * 
+ * @param[in] byte_range_size Size of the byte range, in bytes
+ * @param[in,out] raw_csv pointer to the structure containing the csv parsing parameters
+ * and intermediate results
+ * 
+ * @return gdf_error with error code on failure, otherwise GDF_SUCCESS
+ *---------------------------------------------------------------------------**/
+gdf_error trimExtraRows(gdf_size_type byte_range_size, raw_csv_t * raw_csv) {
+	// TODO: don't copy the whole array, only up to calculateMaxRowSize() rows are relevant here
+	vector<cu_recstart_t> h_rec_starts(raw_csv->num_records + 1);
+	const size_t rec_start_size = sizeof(cu_recstart_t) * (h_rec_starts.size());
+	CUDA_TRY( cudaMemcpy(h_rec_starts.data(), raw_csv->recStart, rec_start_size, cudaMemcpyDeviceToHost) );
+	size_t rec_start_idx = raw_csv->num_records;
+
+	// TODO: we could use a modified binary search here instead
+	// Searching for the last row that starts before the range end
+	// This row with be the extra one we want to read, as it ends after the byte range end
+	while (rec_start_idx != 0 && h_rec_starts[rec_start_idx] > (cu_recstart_t)byte_range_size) {
+		--rec_start_idx;
+	}
+	// +1 to convert from index to size
+	raw_csv->num_records = rec_start_idx + 1;
+
+	return GDF_SUCCESS;
+}
+
+
+/**---------------------------------------------------------------------------*
  * @brief Infer the compression type from the compression parameter and 
  * the input file name
  * 
@@ -1115,7 +1205,7 @@ __global__ void countRecords(char *data, const char terminator, const char quote
  * 
  * @return gdf_error with error code on failure, otherwise GDF_SUCCESS
  *---------------------------------------------------------------------------**/
-gdf_error launch_storeRecordStart(const char* h_data, size_t h_size, raw_csv_t * csvData) {
+gdf_error launch_storeRecordStart(const char* h_data, size_t h_size, bool include_first_row, raw_csv_t * csvData) {
 
 	char* d_chunk = nullptr;
 	// Allocate extra byte in case \r\n is at the chunk border
@@ -1124,10 +1214,15 @@ gdf_error launch_storeRecordStart(const char* h_data, size_t h_size, raw_csv_t *
     cu_reccnt_t*	d_num_records;
 	RMM_TRY(RMM_ALLOC((void**)&d_num_records, sizeof(cu_reccnt_t), 0) );
 
-	// set the first record starting a zero instead of setting it in the kernel
-    const auto one = 1ull;
-	CUDA_TRY(cudaMemcpy(d_num_records, &one, sizeof(cu_reccnt_t), cudaMemcpyDefault));
-	CUDA_TRY(cudaMemset(csvData->recStart, 0ull, (sizeof(cu_recstart_t))));
+	if (include_first_row) {
+		// set the first record starting a zero instead of setting it in the kernel
+    	const auto one = 1ull;
+		CUDA_TRY(cudaMemcpy(d_num_records, &one, sizeof(cu_reccnt_t), cudaMemcpyDefault));
+		CUDA_TRY(cudaMemset(csvData->recStart, 0ull, (sizeof(cu_recstart_t))));
+	}
+	else {
+		CUDA_TRY(cudaMemset(d_num_records, 0ull, sizeof(cu_reccnt_t)));
+	}
 
 	int blockSize;		// suggested thread count to use
 	int minGridSize;	// minimum block count required
