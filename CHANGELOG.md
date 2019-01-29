@@ -13,7 +13,7 @@
 - ...
 
 
-# cuDF 0.5.0 (Date TBD)
+# cuDF 0.5.0 (28 Jan 2019)
 
 ## New Features
 
@@ -121,6 +121,8 @@
 - PR #770 Fix issue where RMM submodule pointed to wrong branch and pin other to correct branches
 - PR #778 Fix hard coded ABI off setting
 - PR #784 Update RMM submodule commit-ish and pip paths
+- PR #794 Update `rmm::exec_policy` usage to fix segmentation faults when used as temprory allocator.
+- PR #800 Point git submodules to branches of forks instead of exact commits
 
 
 # cuDF 0.4.0 (05 Dec 2018)
