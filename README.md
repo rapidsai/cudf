@@ -23,7 +23,7 @@ Install and update cuDF using the conda command:
 conda install -c nvidia -c rapidsai -c numba -c conda-forge -c defaults cudf
 
 # CUDA 10.0
-conda install -c nvidia -c rapidsai/label/cuda10.0 -c numba -c conda-forge -c defaults cudf
+conda install -c nvidia/label/cuda10.0 -c rapidsai/label/cuda10.0 -c numba -c conda-forge -c defaults cudf
 ```
 
 Note: This conda installation only applies to Linux and Python versions 3.6/3.7.
