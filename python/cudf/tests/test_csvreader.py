@@ -655,4 +655,3 @@ def test_csv_reader_byte_range(tmpdir, segment_bytes):
 
     # comparing only the values here, concat does not update the index
     np.array_equal(ref_df.to_pandas().values, df.to_pandas().values)
-	
