@@ -799,27 +799,45 @@ gdf_error gdf_max(gdf_column *col, void *dev_result, gdf_size_type dev_result_si
 /* --------------------------------------------------------------------------*
  * @brief  Computes the rolling window function of the values in a column.
  *
- * This matches Pandas' API for DataFrame.rolling with a couple notable
+ * This function aggregates values in a window around each element i of the input
+ * column, and invalidates the bit mask if there are not enough observations. The
+ * window size and the number of observations can be static or dynamic (varying for
+ * each element). This matches Pandas' API for DataFrame.rolling with a few notable
  * differences:
  * - instead of the center flag it uses the forward window size to allow for
- * more flexible windows. The total window size = window + forward_window.
- * Element i uses elements [i-window+1, i+forward_window] to do the window
- * computation.
+ *   more flexible windows. The total window size = window + forward_window.
+ *   Element i uses elements [i-window+1, i+forward_window] to do the window
+ *   computation.
  * - instead of storing NA/NaN for output rows that do not meet the minimum
- * number of observations this function updates the valid bitmask of the column
- * to indicate which elements are valid.
+ *   number of observations this function updates the valid bitmask of the column
+ *   to indicate which elements are valid.
+ * - support for dynamic rolling windows, i.e. window size or number of
+ *   observations can be specified for each element using an additional column.
  *
  * @param[out] output_col The output column
  * @param[in] input_col The input column
- * @param[in] window The rolling window size, output_col[i] accumulates values
- *                from input_col[i-window+1] to input_col[i] inclusive
+ * @param[in] window The static rolling window size. If window_col = NULL, 
+ *		  output_col[i] accumulates values from input_col[i-window+1] to 
+ *		  input_col[i] inclusive
  * @param[in] min_periods Minimum number of observations in window required to
  *                have a value, otherwise 0 is stored in the valid bit mask for
- *                the element i
- * @param[in] forward_window The window size in the forward direction,
- *                output_col[i] accumulates values from input_col[i] to
- *                input_col[i+forward_window] inclusive
+ *                element i. If min_periods_col != NULL, then minimum number of
+ *		  observations for element i is obtained from min_periods_col[i]
+ * @param[in] forward_window The static window size in the forward direction. If 
+ *		  forward_window_col = NULL, output_col[i] accumulates values from
+ *		  input_col[i] to input_col[i+forward_window] inclusive
  * @param[in] agg_type The rolling window aggregtion type (sum, max, min, etc.)
+ * @param[in] window_col The column with window size values, window_col[i] specifies
+ *		  window size for element i. If window_col = NULL, then window is 
+ *		  used as the static window size for all elements
+ * @param[in] min_periods_col The column with minimum number of observation values,
+ *		  min_periods_col[i] specifies minimum number of observations for 
+ *		  element i. If min_periods_col = NULL, then min_periods is used as 
+ *		  the static value for all elements
+ * @param[in] forward_window_col The column with forward window size values,
+ *		  forward_window_col[i] specifies forward window size for element i.
+ *		  If forward_window_col = NULL, then forward_window is used as the
+ * 		  static forward window size for all elements
  *
  * @return    GDF_SUCCESS if the operation was successful, otherwise an
  *            appropriate error code.
@@ -830,7 +848,10 @@ gdf_error gdf_rolling_window(gdf_column *output_col,
 			     gdf_size_type window,
 			     gdf_size_type min_periods,
 			     gdf_size_type forward_window,
-			     gdf_agg_op agg_type);
+			     gdf_agg_op agg_type,
+			     const gdf_column *window_col,
+			     const gdf_column *min_periods_col,
+			     const gdf_column *forward_window_col);
 
 
 /*
