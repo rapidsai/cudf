@@ -7,7 +7,7 @@
 ## Improvements
 
 - PR #730 Improve performance of `gdf_table` constructor
-- PR #383 unified libcudf API functions by replacing gpu_ with gdf_
+- PR #813 unified libcudf API functions by replacing gpu_ with gdf_
 
 ## Bug Fixes
 
