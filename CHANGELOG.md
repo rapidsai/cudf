@@ -10,6 +10,8 @@
 
 ## Bug Fixes
 
+- PR #808 Resolved renamed `d_columns_valids` variable name
+
 - ...
 
 
