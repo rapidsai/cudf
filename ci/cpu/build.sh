@@ -12,7 +12,7 @@ function logger() {
 
 # Set path and build parallel level
 export PATH=/conda/bin:/usr/local/cuda/bin:$PATH
-export CMAKE_BUILD_PARALLEL_LEVEL=4
+export PARALLEL_LEVEL=4
 
 # Set home to the job's workspace
 export HOME=$WORKSPACE
@@ -33,6 +33,9 @@ env
 
 logger "Activate conda env..."
 source activate gdf
+
+logger "Bump pyarrow"
+conda install -c conda-forge pyarrow=0.11.1 arrow-cpp=0.11.1 pandas>=0.23.4
 
 logger "Check versions..."
 python --version
