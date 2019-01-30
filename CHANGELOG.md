@@ -3,6 +3,7 @@
 ## New Features
 
 - PR #539 Add Python bindings for replace function
+- PR #732 Rolling windows C++ API
 
 ## Improvements
 
