@@ -10,7 +10,7 @@
 
 ## Bug Fixes
 
-- ...
+- PR #815 CSV Reader: Fix data parsing when tabs are present in the input CSV file
 
 
 # cuDF 0.5.0 (28 Jan 2019)
