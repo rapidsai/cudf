@@ -11,7 +11,6 @@
 ## Bug Fixes
 
 - PR #808 Resolved renamed `d_columns_valids` variable name
-- PR #816 HOTFIX Fix gpuCI conda builds 
 
 
 # cuDF 0.5.0 (28 Jan 2019)
