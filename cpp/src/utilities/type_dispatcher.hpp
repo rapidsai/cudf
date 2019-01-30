@@ -107,6 +107,7 @@ decltype(auto) type_dispatcher(gdf_dtype dtype,
     case GDF_DATE64:    { return f.template operator()< date64 >(std::forward<Ts>(args)...); }
     case GDF_TIMESTAMP: { return f.template operator()< timestamp >(std::forward<Ts>(args)...); }
     case GDF_CATEGORY:  { return f.template operator()< category >(std::forward<Ts>(args)...); }
+    case GDF_BOOL:      { return f.template operator()< gdf_bool >(std::forward<Ts>(args)...); }
     default:            { assert(false && "type_dispatcher: invalid gdf_type"); }
   }
   // Need to find out what the return type is in order to have a default return value
