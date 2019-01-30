@@ -30,9 +30,6 @@ nvidia-smi
 logger "Activate conda env..."
 source activate gdf
 
-logger "Bump pyarrow"
-conda install -c conda-forge pyarrow=0.11.1 arrow-cpp=0.11.1 pandas>=0.23.4
-
 logger "Check versions..."
 python --version
 $CC --version
