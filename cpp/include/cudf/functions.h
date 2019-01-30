@@ -812,7 +812,7 @@ gdf_error gdf_max(gdf_column *col, void *dev_result, gdf_size_type dev_result_si
  *   number of observations this function updates the valid bitmask of the column
  *   to indicate which elements are valid.
  * - support for dynamic rolling windows, i.e. window size or number of
- *   observations can be specified for each element using an additional column.
+ *   observations can be specified for each element using an additional array.
  *
  * @param[out] output_col The output column
  * @param[in] input_col The input column
@@ -827,14 +827,14 @@ gdf_error gdf_max(gdf_column *col, void *dev_result, gdf_size_type dev_result_si
  *		  forward_window_col = NULL, output_col[i] accumulates values from
  *		  input_col[i] to input_col[i+forward_window] inclusive
  * @param[in] agg_type The rolling window aggregtion type (sum, max, min, etc.)
- * @param[in] window_col The column with window size values, window_col[i] specifies
- *		  window size for element i. If window_col = NULL, then window is 
- *		  used as the static window size for all elements
- * @param[in] min_periods_col The column with minimum number of observation values,
- *		  min_periods_col[i] specifies minimum number of observations for 
+ * @param[in] window_col The window size values, window_col[i] specifies window
+ *		  size for element i. If window_col = NULL, then window is used as 
+ *		  the static window size for all elements
+ * @param[in] min_periods_col The minimum number of observation values,
+ * 		  min_periods_col[i] specifies minimum number of observations for 
  *		  element i. If min_periods_col = NULL, then min_periods is used as 
  *		  the static value for all elements
- * @param[in] forward_window_col The column with forward window size values,
+ * @param[in] forward_window_col The forward window size values,
  *		  forward_window_col[i] specifies forward window size for element i.
  *		  If forward_window_col = NULL, then forward_window is used as the
  * 		  static forward window size for all elements
@@ -849,9 +849,9 @@ gdf_error gdf_rolling_window(gdf_column *output_col,
 			     gdf_size_type min_periods,
 			     gdf_size_type forward_window,
 			     gdf_agg_op agg_type,
-			     const gdf_column *window_col,
-			     const gdf_column *min_periods_col,
-			     const gdf_column *forward_window_col);
+			     const gdf_size_type *window_col,
+			     const gdf_size_type *min_periods_col,
+			     const gdf_size_type *forward_window_col);
 
 
 /*
