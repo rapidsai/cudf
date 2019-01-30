@@ -10,7 +10,7 @@
 
 ## Bug Fixes
 
-- ...
+- PR #816 HOTFIX Fix gpuCI conda builds 
 
 
 # cuDF 0.5.0 (28 Jan 2019)
