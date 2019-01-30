@@ -3,6 +3,7 @@
 ## New Features
 
 - PR #539 Add Python bindings for replace function
+- PR #817 Added GDF_BOOL data type to CUDA code
 
 ## Improvements
 
