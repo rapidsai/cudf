@@ -53,8 +53,8 @@ TEST_F(GdfConcat, usage_example) {
     // reserve space for gdf_column output
     gdf_column output = gen_gdb_column<ValueType>(lhs_size + rhs_size, 0);
 
-    //call gpu_concat
-    gpu_concat(&lhs, &rhs, &output);
+    //call gdf_concat
+    gdf_concat(&lhs, &rhs, &output);
     std::cout << "*****output**************\n";
     print_column(&output);
     
@@ -81,7 +81,7 @@ TEST_F(GdfConcat, CaseWithZeroLeft)
     std::cout << "*******************\n";
     gdf_column output = gen_gdb_column<ValueType>(lhs_size + rhs_size, 0);
 
-    gpu_concat(&lhs, &rhs, &output);
+    gdf_concat(&lhs, &rhs, &output);
     check_column_for_concat_operation<ValueType>(&lhs, &rhs, &output);
     delete_gdf_column(&lhs);
     delete_gdf_column(&rhs);
@@ -103,7 +103,7 @@ TEST_F(GdfConcat, CaseWithZeroRight)
     std::cout << "*******************\n";
     gdf_column output = gen_gdb_column<ValueType>(lhs_size + rhs_size, 0);
 
-    gpu_concat(&lhs, &rhs, &output);
+    gdf_concat(&lhs, &rhs, &output);
     check_column_for_concat_operation<ValueType>(&lhs, &rhs, &output);
     delete_gdf_column(&lhs);
     delete_gdf_column(&rhs);
@@ -125,7 +125,7 @@ TEST_F(GdfConcat, CaseWithOutputOfOneByte)
     std::cout << "*******************\n";
     gdf_column output = gen_gdb_column<ValueType>(lhs_size + rhs_size, 0);
 
-    gpu_concat(&lhs, &rhs, &output);
+    gdf_concat(&lhs, &rhs, &output);
     check_column_for_concat_operation<ValueType>(&lhs, &rhs, &output);
     delete_gdf_column(&lhs);
     delete_gdf_column(&rhs);
@@ -147,7 +147,7 @@ TEST_F(GdfConcat, CaseWithOutputOfTwoBytes)
     std::cout << "*******************\n";
     gdf_column output = gen_gdb_column<ValueType>(lhs_size + rhs_size, 0);
 
-    gpu_concat(&lhs, &rhs, &output);
+    gdf_concat(&lhs, &rhs, &output);
     check_column_for_concat_operation<ValueType>(&lhs, &rhs, &output);
     delete_gdf_column(&lhs);
     delete_gdf_column(&rhs);
@@ -172,7 +172,7 @@ TEST_F(GdfConcat, CaseWithInput_2_2_Output3)
     print_column(&rhs);
     std::cout << "*******************\n";
 
-    gpu_concat(&lhs, &rhs, &output);
+    gdf_concat(&lhs, &rhs, &output);
     check_column_for_concat_operation<ValueType>(&lhs, &rhs, &output);
     delete_gdf_column(&lhs);
     delete_gdf_column(&rhs);
@@ -191,7 +191,7 @@ TEST_F(GdfConcat, CaseWithInput_2_5_Output5)
     gdf_column rhs = gen_gdb_column<ValueType>(rhs_size, 3);
     gdf_column output = gen_gdb_column<ValueType>(lhs_size + rhs_size, 0);
 
-    gpu_concat(&lhs, &rhs, &output);
+    gdf_concat(&lhs, &rhs, &output);
     check_column_for_concat_operation<ValueType>(&lhs, &rhs, &output);
     delete_gdf_column(&lhs);
     delete_gdf_column(&rhs);
@@ -224,7 +224,7 @@ TEST_F(GdfConcat, CaseWithInput_1_4_Output5)
     print_column(&rhs);
     std::cout << "*******************\n";
 
-    gpu_concat(&lhs, &rhs, &output);
+    gdf_concat(&lhs, &rhs, &output);
 
 
   std::cout << "*****output**************\n";
@@ -265,7 +265,7 @@ TEST_F(GdfConcat, CaseWithInput_0_9_Output2)
     print_column(&rhs);
     std::cout << "*******************\n";
 
-    gpu_concat(&lhs, &rhs, &output);
+    gdf_concat(&lhs, &rhs, &output);
     check_column_for_concat_operation<ValueType>(&lhs, &rhs, &output);
 
     delete_gdf_column(&lhs);
@@ -299,7 +299,7 @@ TEST_F(GdfConcat, CaseWithInput_5_11_Output22)
     print_column(&rhs);
     std::cout << "*******************\n";
 
-    gpu_concat(&lhs, &rhs, &output);
+    gdf_concat(&lhs, &rhs, &output);
     std::cout << "*****output**************\n";
     print_column(&output);
     std::cout << "*******************\n";
@@ -326,7 +326,7 @@ TEST_F(GdfConcat, WithDifferentColumnSizes)
             gdf_column rhs = gen_gdb_column<ValueType>(rhs_size, 3);
 
             gdf_column output = gen_gdb_column<ValueType>(lhs_size + rhs_size, 0);
-            gdf_error error = gpu_concat(&lhs, &rhs, &output);
+            gdf_error error = gdf_concat(&lhs, &rhs, &output);
 
             // std::cout << "Output" << std::endl;
             // print_column<ValueType>(&output);
