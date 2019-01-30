@@ -47,7 +47,7 @@ logger "Build libcudf..."
 mkdir -p $WORKSPACE/cpp/build
 cd $WORKSPACE/cpp/build
 logger "Run cmake libcudf..."
-cmake -DCMAKE_INSTALL_PREFIX=$CONDA_PREFIX ..
+cmake -DCMAKE_INSTALL_PREFIX=$CONDA_PREFIX -DCMAKE_CXX11_ABI=ON ..
 
 logger "Clean up make..."
 make clean
