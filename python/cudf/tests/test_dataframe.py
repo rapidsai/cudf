@@ -1448,9 +1448,10 @@ def test_many_string_outputs(length_variety, ncols, data_type):
     np.random.seed(0)
     pdf = pd.DataFrame()
     for i in range(ncols):
-        header_length = max(1, length_variety+(np.random.randint(-length_variety, length_variety)))
-        col = ''.join(np.random.choice(list(string.ascii_lowercase))\
-            for _ in range(header_length))
+        header_length = max(1, length_variety+(np.random.randint(
+                            -length_variety, length_variety)))
+        col = ''.join(np.random.choice(list(string.ascii_lowercase))
+                      for _ in range(header_length))
         pdf[col] = pd.Series(np.random.randint(0, 10**length_variety))\
             .astype(data_type)
     gdf = DataFrame.from_pandas(pdf)
