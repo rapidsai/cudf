@@ -10,6 +10,8 @@
 
 ## Bug Fixes
 
+- PR #811 Improve output of DataFrame and Series to better match Pandas
+
 - ...
 
 
