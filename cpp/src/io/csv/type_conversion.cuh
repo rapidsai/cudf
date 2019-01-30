@@ -19,13 +19,17 @@ bool isDigit(char data) {
 	return true;
 }
 
+__inline__ __device__ 
+bool isWhitespace(char ch) {
+	return ch == '\t' || ch == ' ';
+}
 
-__host__ __device__
+__device__
 void adjustForWhitespaceAndQuotes(const char *data, long* start_idx, long* end_idx, char quotechar='\0') {
-  while ((*start_idx < *end_idx) && (data[*start_idx] == ' ' || data[*start_idx] == quotechar)) {
+  while ((*start_idx < *end_idx) && (isWhitespace(data[*start_idx]) || data[*start_idx] == quotechar)) {
     (*start_idx)++;
   }
-  while ((*start_idx < *end_idx) && (data[*end_idx] == ' ' || data[*end_idx] == quotechar)) {
+  while ((*start_idx < *end_idx) && (isWhitespace(data[*end_idx]) || data[*end_idx] == quotechar)) {
     (*end_idx)--;
   }
 }

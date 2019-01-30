@@ -630,3 +630,28 @@ def test_csv_reader_empty_dataframe():
     # should raise an error without dtypes
     with pytest.raises(GDFError):
         read_csv(StringIO(buffer))
+
+
+def test_csv_reader_tabs():
+    names = ['float_point', 'integer','date']
+    lines = [','.join(names),
+             '1.2,\t12,     \t11/22/1995',
+             '3.4\t,\t34\t,\t 01/01/2001',
+             '\t 5.6,56 \t, 12/12/1970',
+             '\t7.8 , 78\t,06/15/2018 \t']
+    buffer = '\n'.join(lines) + '\n'
+
+    df = read_csv(StringIO(buffer))
+
+    assert(df.shape == (4, 3))
+
+    floats = [1.2, 3.4, 5.6, 7.8]
+    ints = [12, 34, 56, 78]
+    dates = ['1995-11-22T00:00:00.000',
+             '2001-01-01T00:00:00.000',
+             '1970-12-12T00:00:00.000',
+             '2018-06-15T00:00:00.000']
+    np.testing.assert_allclose(floats, df['float_point'])
+    np.testing.assert_allclose(ints, df['integer'])
+    for row in range(4):
+        assert(str(df['date'][row]) == dates[row])
