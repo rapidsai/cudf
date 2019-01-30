@@ -19,7 +19,8 @@ def test_categorical_basic():
     assert tuple(pdsr.cat.categories) == tuple(sr.cat.categories)
     assert pdsr.cat.ordered == sr.cat.ordered
 
-    np.testing.assert_array_equal(pdsr.cat.codes.data, sr.cat.codes.to_array())
+    np.testing.assert_array_equal(pdsr.cat.codes.values,
+                                  sr.cat.codes.to_array())
     np.testing.assert_array_equal(pdsr.cat.codes.dtype, sr.cat.codes.dtype)
 
     string = str(sr)
@@ -40,7 +41,7 @@ def test_categorical_integer():
     np.testing.assert_array_equal(cat.codes, sr.to_array(fillna='pandas'))
     assert sr.null_count == 2
 
-    np.testing.assert_array_equal(pdsr.cat.codes.data,
+    np.testing.assert_array_equal(pdsr.cat.codes.values,
                                   sr.cat.codes.fillna(-1).to_array())
     np.testing.assert_equal(pdsr.cat.codes.dtype, sr.cat.codes.dtype)
 
@@ -125,11 +126,12 @@ def test_categorical_binary_add():
 
     with pytest.raises(TypeError) as raises:
         pdsr + pdsr
-    raises.match(r'Categorical cannot perform the operation \+')
+    raises.match(r'Series cannot perform the operation \+')
 
     with pytest.raises(TypeError) as raises:
         sr + sr
-    raises.match('Categorical cannot perform the operation: add')
+    raises.match('Series of dtype `category` cannot perform the operation: '
+                 'add')
 
 
 def test_categorical_unary_ceil():
@@ -143,7 +145,8 @@ def test_categorical_unary_ceil():
 
     with pytest.raises(TypeError) as raises:
         sr.ceil()
-    raises.match('Categorical cannot perform the operation: ceil')
+    raises.match('Series of dtype `category` cannot perform the operation: '
+                 'ceil')
 
 
 def test_categorical_element_indexing():
@@ -232,7 +235,8 @@ def test_cat_series_binop_error():
     # lhs is a categorical
     with pytest.raises(TypeError) as raises:
         dfa + dfb
-    raises.match("Categorical cannot perform the operation: add")
+    raises.match("Series of dtype `category` cannot perform the operation: "
+                 "add")
     # if lhs is a numerical
     with pytest.raises(TypeError) as raises:
         dfb + dfa
@@ -334,5 +338,6 @@ def test_categorical_empty():
     assert tuple(pdsr.cat.categories) == tuple(sr.cat.categories)
     assert pdsr.cat.ordered == sr.cat.ordered
 
-    np.testing.assert_array_equal(pdsr.cat.codes.data, sr.cat.codes.to_array())
+    np.testing.assert_array_equal(pdsr.cat.codes.values,
+                                  sr.cat.codes.to_array())
     np.testing.assert_array_equal(pdsr.cat.codes.dtype, sr.cat.codes.dtype)

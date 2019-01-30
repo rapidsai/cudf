@@ -20,8 +20,7 @@ build:
     - CC
     - CXX
     - CUDAHOSTCXX
-    - TRAVIS
-    - CMAKE_BUILD_PARALLEL_LEVEL
+    - PARALLEL_LEVEL
 
 requirements:
   # use channel:
@@ -33,7 +32,7 @@ requirements:
     - cmake 3.12
     - nvstrings
   run:
-    - pyarrow 0.10.*
+    - pyarrow 0.11.1
     - nvstrings
 
 test:

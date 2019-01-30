@@ -29,11 +29,11 @@ def make_frame(dataframe_class, nelem, seed=0, extra_levels=(), extra_vals=()):
 def test_groupby_mean(nelem):
     # gdf
     got_df = make_frame(DataFrame, nelem=nelem).groupby(
-        ('x', 'y'), method="hash").mean()
+        ['x', 'y'], method="hash").mean()
     got = np.sort(got_df['mean_val'].to_array())
     # pandas
     expect_df = make_frame(pd.DataFrame,
-                           nelem=nelem).groupby(('x', 'y')).mean()
+                           nelem=nelem).groupby(['x', 'y']).mean()
     expect = np.sort(expect_df['val'].values)
     # verify
     np.testing.assert_array_almost_equal(expect, got)
@@ -59,11 +59,11 @@ def test_groupby_mean_3level(nelem):
 def test_groupby_agg_mean_min(nelem):
     # gdf (Note: lack of multindex)
     got_df = make_frame(DataFrame, nelem=nelem).groupby(
-        ('x', 'y'), method="hash").agg(['mean', 'min'])
+        ['x', 'y'], method="hash").agg(['mean', 'min'])
     got_mean = np.sort(got_df['mean_val'].to_array())
     got_min = np.sort(got_df['min_val'].to_array())
     # pandas
-    expect_df = make_frame(pd.DataFrame, nelem=nelem).groupby(('x', 'y'))\
+    expect_df = make_frame(pd.DataFrame, nelem=nelem).groupby(['x', 'y'])\
                                                      .agg(['mean', 'min'])
     expect_mean = np.sort(expect_df['val', 'mean'].values)
     expect_min = np.sort(expect_df['val', 'min'].values)
@@ -76,12 +76,12 @@ def test_groupby_agg_mean_min(nelem):
 def test_groupby_agg_min_max_dictargs(nelem):
     # gdf (Note: lack of multindex)
     got_df = make_frame(DataFrame, nelem=nelem, extra_vals='ab').groupby(
-        ('x', 'y'), method="hash").agg({'a': 'min', 'b': 'max'})
+        ['x', 'y'], method="hash").agg({'a': 'min', 'b': 'max'})
     got_min = np.sort(got_df['min_a'].to_array())
     got_max = np.sort(got_df['max_b'].to_array())
     # pandas
     expect_df = make_frame(pd.DataFrame, nelem=nelem, extra_vals='ab').groupby(
-        ('x', 'y')).agg({'a': 'min', 'b': 'max'})
+        ['x', 'y']).agg({'a': 'min', 'b': 'max'})
     expect_min = np.sort(expect_df['a'].values)
     expect_max = np.sort(expect_df['b'].values)
     # verify
@@ -93,7 +93,7 @@ def test_groupby_agg_min_max_dictargs(nelem):
 def test_groupby_agg_min_max_dictlist(nelem):
     # gdf (Note: lack of multindex)
     got_df = make_frame(DataFrame, nelem=nelem, extra_vals='ab').groupby(
-        ('x', 'y'), method="hash").agg({'a': ['min', 'max'],
+        ['x', 'y'], method="hash").agg({'a': ['min', 'max'],
                                         'b': ['min', 'max']})
     got_min_a = np.sort(got_df['min_a'].to_array())
     got_max_a = np.sort(got_df['max_a'].to_array())
@@ -101,7 +101,7 @@ def test_groupby_agg_min_max_dictlist(nelem):
     got_max_b = np.sort(got_df['max_b'].to_array())
     # pandas
     expect_df = make_frame(pd.DataFrame, nelem=nelem, extra_vals='ab').groupby(
-        ('x', 'y')).agg({'a': ['min', 'max'], 'b': ['min', 'max']})
+        ['x', 'y']).agg({'a': ['min', 'max'], 'b': ['min', 'max']})
     expect_min_a = np.sort(expect_df['a']['min'].values)
     expect_max_a = np.sort(expect_df['a']['max'].values)
     expect_min_b = np.sort(expect_df['b']['min'].values)
@@ -118,12 +118,12 @@ def test_groupby_agg_min_max_dictlist(nelem):
 def test_groupby_2keys_agg(nelem, func):
     # gdf (Note: lack of multindex)
     got_df = make_frame(DataFrame, nelem=nelem)\
-        .groupby(('x', 'y'), method="hash").agg(func)
+        .groupby(['x', 'y'], method="hash").agg(func)
 
     got_agg = np.sort(got_df[func + '_val'].to_array())
     # pandas
     expect_df = make_frame(pd.DataFrame, nelem=nelem)\
-        .groupby(('x', 'y')).agg(func)
+        .groupby(['x', 'y']).agg(func)
 
     expect_agg = np.sort(expect_df['val'].values)
     # verify
