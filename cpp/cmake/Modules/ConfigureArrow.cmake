@@ -18,6 +18,7 @@ set(ARROW_CMAKE_ARGS " -DARROW_WITH_LZ4=OFF"
                      " -DARROW_JEMALLOC=OFF"
                      " -DARROW_BOOST_VENDORED=OFF"
                      " -DARROW_PYTHON=OFF"
+                     " -DARROW_USE_GLOG=OFF"
                      " -DCMAKE_VERBOSE_MAKEFILE=ON")
 
 if(NOT CMAKE_CXX11_ABI)
