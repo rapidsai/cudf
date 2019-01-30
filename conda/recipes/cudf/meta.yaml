@@ -15,6 +15,7 @@ build:
   number: {{ git_revision_count }}
   script_env:
     - CUDF_BUILD_NO_GPU_TEST
+    - BUILD_ABI
 
 requirements:
   # use channel:
