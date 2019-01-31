@@ -319,7 +319,7 @@ public:
     thrust::tabulate(rmm::exec_policy()->on(0),
                      device_row_valid.begin(),
                      device_row_valid.end(),
-                     row_masker<size_type>(d_columns_valids, num_cols));
+                     row_masker<size_type>(d_columns_valids_ptr, num_cols));
 
     d_row_valid = device_row_valid.data().get();
   }
