@@ -1435,3 +1435,19 @@ def test_arrow_pandas_compat(pdf, gdf, preserve_index):
     pdf2 = pdf_arrow_table.to_pandas()
 
     assert_eq(pdf2, gdf2)
+
+
+@pytest.mark.parametrize('nrows', [1, 8, 100, 1000])
+def test_series_hash_encode(nrows):
+    data = np.asarray(range(nrows))
+    s = Series(data, name="x1")
+    num_features = 1000
+
+    encoded_series = s.hash_encode(num_features)
+    assert isinstance(encoded_series, gd.Series)
+    enc_arr = encoded_series.to_array()
+    assert np.all(enc_arr >= 0)
+    assert np.max(enc_arr) < num_features
+
+    enc_with_name_arr = s.hash_encode(num_features, use_name=True).to_array()
+    assert enc_with_name_arr[0] != enc_arr[0]
