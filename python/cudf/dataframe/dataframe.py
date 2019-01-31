@@ -1342,10 +1342,12 @@ class DataFrame(object):
             from cudf.groupby.groupby import Groupby
 
             _gdf.nvtx_range_push("PYGDF_GROUPBY", "purple")
+            """
             if as_index:
                 msg = "as_index==True not supported due to the lack of\
                     multi-index"
                 raise NotImplementedError(msg)
+            """
             # The matching `pop` for this range is inside LibGdfGroupby
             # __apply_agg
             result = Groupby(self, by=by, method=method)

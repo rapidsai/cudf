@@ -4,6 +4,7 @@
 Define how data are formatted
 """
 import numbers
+from collections import OrderedDict
 
 
 def format(index, cols, show_headers=True, more_cols=0, more_rows=0,
@@ -60,8 +61,11 @@ def format(index, cols, show_headers=True, more_cols=0, more_rows=0,
 
     cell_template = "{:>{}}"
     #   format headers
-    if show_headers:
-        header = [' ' * widthkey]
+    if show_headers and headers[0] != '':
+        if index.name:
+            header = [cell_template.format(str(index.name), 0)]
+        else:
+            header = [' ' * widthkey]
         header += [cell_template.format(k, widths[k]) for k in headers[:-1]]
         if lastcol is not None:
             header += ['...']
