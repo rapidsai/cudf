@@ -10,7 +10,7 @@
 
 ## Bug Fixes
 
-- ...
+- PR #821 Fix flake8 issues revealed by flake8 update
 
 
 # cuDF 0.5.0 (28 Jan 2019)
