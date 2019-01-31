@@ -641,10 +641,10 @@ def test_csv_reader_carriage_return(tmpdir):
     with open(str(fname), 'w') as fp:
         for i in range(rows):
             fp.write(str(i) + ', ' + str(2*i) + '\r\n')
-	
+
     df = read_csv(str(fname), names=["int1", "int2"])
 
     assert(len(df) == rows)
     for row in range(0, rows):
-        assert(df['int1'][row] == row )
+        assert(df['int1'][row] == row)
         assert(df['int2'][row] == 2 * row)
