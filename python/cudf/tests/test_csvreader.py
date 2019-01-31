@@ -303,7 +303,7 @@ def test_csv_reader_float_decimal(tmpdir):
     lines = [';'.join(names),
              '1,2;1234,5678;12345;0,123',
              '3,4;3456,7890;67890;,456',
-             '5,6;0,5679e2;1,2e10;0,07e-1']
+             '5,6e0;0,5679e2;1,2e10;0,07e-1']
 
     with open(str(fname), 'w') as fp:
         fp.write('\n'.join(lines) + '\n')

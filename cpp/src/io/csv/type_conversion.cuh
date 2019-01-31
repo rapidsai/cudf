@@ -88,67 +88,66 @@ template<typename T>
 __host__ __device__
 T convertStrtoFloat(char *data, long start, long end, char decimal, char thousands='\0') {
 
-	T value = 0;
+  T value = 0;
 
-	// Handle negative values if necessary
-	int32_t sign = 1;
-	if (data[start] == '-') {
-		sign = -1;
-		start++;
-	}
+  // Handle negative values if necessary
+  int32_t sign = 1;
+  if (data[start] == '-') {
+    sign = -1;
+    start++;
+  }
 
-	// Handle the whole part of the number
-	long index = start;
-	while (index <= end) {
-		if (data[index] == decimal) {
-			++index;
-			break;
-		}
-		else if (data[index] == 'e' || data[index] == 'E') {
-			break;
-		}
-		else if (data[index] != thousands) {
-			value *= 10;
-			value += data[index] -'0';
-		}
-		++index;
-	}
+  // Handle the whole part of the number
+  long index = start;
+  while (index <= end) {
+    if (data[index] == decimal) {
+      ++index;
+      break;
+    } else if (data[index] == 'e' || data[index] == 'E') {
+      break;
+    } else if (data[index] != thousands) {
+      value *= 10;
+      value += data[index] - '0';
+    }
+    ++index;
+  }
 
-	// Handle fractional part of the number if necessary
-	int32_t divisor = 1;
-	while (index <= end) {
-		if (data[index] == 'e' || data[index] == 'E') {
-			++index;
-			break;
-		}
-		else if (data[index] != thousands) {
-			value *= 10;
-			value += data[index] -'0';
-			divisor *= 10;
-		}
-		++index;
-	}
+  // Handle fractional part of the number if necessary
+  int32_t divisor = 1;
+  while (index <= end) {
+    if (data[index] == 'e' || data[index] == 'E') {
+      ++index;
+      break;
+    } else if (data[index] != thousands) {
+      value *= 10;
+      value += data[index] - '0';
+      divisor *= 10;
+    }
+    ++index;
+  }
 
-	// Handle exponential part of the number if necessary
-	int32_t exponent = 0;
-	while (index <= end) {
-		if (data[index] == '-') {
-			++index;
-			exponent = (data[index] -'0') * -1;
-		} else {
-			exponent *= 10;
-			exponent += data[index] -'0';
-		}
-		++index;
-	}
+  // Handle exponential part of the number if necessary
+  int32_t exponent = 0;
+  while (index <= end) {
+    if (data[index] == '-') {
+      ++index;
+      exponent = (data[index] - '0') * -1;
+    } else {
+      exponent *= 10;
+      exponent += data[index] - '0';
+    }
+    ++index;
+  }
 
-	if (exponent != 0) {
-		return ((divisor > 1) ? (value * sign / divisor) : (value * sign)) * exp10f(exponent);
-	} else {
-		return  (divisor > 1) ? (value * sign / divisor) : (value * sign);
-	}
+  if (divisor > 1) {
+    value /= divisor;
+  }
+  if (exponent != 0) {
+    value *= exp10f(exponent);
+  }
+
+  return value * sign;
 }
-
 
 /**
  * Convert a date (MM/YYYY or DD/MM/YYYY) into a date64
