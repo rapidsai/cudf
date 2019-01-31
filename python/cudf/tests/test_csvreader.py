@@ -630,3 +630,19 @@ def test_csv_reader_empty_dataframe():
     # should raise an error without dtypes
     with pytest.raises(GDFError):
         read_csv(StringIO(buffer))
+
+
+def test_csv_reader_carriage_return(tmpdir):
+
+    fname = tmpdir.mkdir("gdf_csv").join("tmp_csvreader_file16.csv")
+
+    rows = 10000
+
+    with open(str(fname), 'w') as fp:
+        fp.write(','.join(["int1", "int2"]) + '\r\n')
+        for i in range(rows):
+            fp.write(str(i) + ', ' + str(2*i) + '\r\n')
+	
+    df = read_csv(str(fname))
+
+    assert(len(df) == rows)
