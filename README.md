@@ -4,6 +4,8 @@
 
 The [RAPIDS](https://rapids.ai) cuDF library is a GPU DataFrame manipulation library based on Apache Arrow that accelerates loading, filtering, and manipulation of data for model training data preparation. The RAPIDS GPU DataFrame provides a pandas-like API that will be familiar to data scientists, so they can now build GPU-accelerated workflows more easily.
 
+**NOTE:** For the latest stable [README.md](https://github.com/rapidsai/cudf/blob/master/README.md) ensure you are on the `master` branch.
+
 ## Quick Start
 
 Please see the [Demo Docker Repository](https://hub.docker.com/r/rapidsai/rapidsai/), choosing a tag based on the NVIDIA CUDA version you’re running. This provides a ready to run Docker container with example notebooks and data, showcasing how you can utilize cuDF.
@@ -17,7 +19,11 @@ It is easy to install cuDF using conda. You can get a minimal conda installation
 Install and update cuDF using the conda command:
 
 ```bash
+# CUDA 9.2
 conda install -c nvidia -c rapidsai -c numba -c conda-forge -c defaults cudf
+
+# CUDA 10.0
+conda install -c nvidia/label/cuda10.0 -c rapidsai/label/cuda10.0 -c numba -c conda-forge -c defaults cudf
 ```
 
 Note: This conda installation only applies to Linux and Python versions 3.6/3.7.
@@ -27,8 +33,11 @@ Note: This conda installation only applies to Linux and Python versions 3.6/3.7.
 It is easy to install cuDF using pip. You must specify the CUDA version to ensure you install the right package.
 
 ```bash
-pip install cudf-cuda92 # CUDA 9.2
-pip install cudf-cuda100 # CUDA 10.0
+# CUDA 9.2
+pip install cudf-cuda92
+
+# CUDA 10.0.
+pip install cudf-cuda100
 ```
 
 ## Development Setup
@@ -75,8 +84,9 @@ To install cuDF from source, ensure the dependencies are met and follow the step
 - Clone the repository and submodules
 ```bash
 CUDF_HOME=$(pwd)/cudf
-git clone --recurse-submodules https://github.com/rapidsai/cudf.git $CUDF_HOME
+git clone https://github.com/rapidsai/cudf.git $CUDF_HOME
 cd CUDF_HOME
+git submodule update --init --remote --recursive
 ```
 - Create the conda development environment `cudf_dev`
 ```bash
@@ -113,7 +123,7 @@ $ make install_python                               # build & install CFFI pytho
 $ cd python && py.test -v                           # optional, run python tests on low-level python bindings
 ```
 
-- 4. Build the `cudf` python package, in the `python` folder:
+- Build the `cudf` python package, in the `python` folder:
 ```bash
 $ cd $CUDF_HOME/python
 $ python setup.py build_ext --inplace
@@ -211,10 +221,12 @@ flag. Below is a list of the available arguments and their purpose:
 | `CC` & `CXX` | 5 | 7 | set gcc/g++ version; **NOTE:** gcc7 requires Ubuntu 18.04 |
 | `CUDF_REPO` | This repo | Forks of cuDF | set git URL to use for `git clone` |
 | `CUDF_BRANCH` | master | Any branch name | set git branch to checkout of `CUDF_REPO` |
-| `NUMBA_VERSION` | 0.40.0 | Not supported | set numba version |
-| `NUMPY_VERSION` | 1.14.3 | Not supported | set numpy version |
-| `PANDAS_VERSION` | 0.24.3 | Not supported | set pandas version |
+| `NUMBA_VERSION` | newest | >=0.40.0 | set numba version |
+| `NUMPY_VERSION` | newest | >=1.14.3 | set numpy version |
+| `PANDAS_VERSION` | newest | >=0.23.4 | set pandas version |
 | `PYARROW_VERSION` | 0.11.1 | Not supported | set pyarrow version |
+| `CMAKE_VERSION` | newest | >=3.12 | set cmake version |
+| `CYTHON_VERSION` | 0.29 | Not supported | set Cython version |
 | `PYTHON_VERSION` | 3.6 | 3.7 | set python version |
 
 ---

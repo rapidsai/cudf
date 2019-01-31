@@ -53,7 +53,7 @@ gdf_error all_bitmask_on(gdf_valid_type * valid_out, gdf_size_type & out_null_co
 
 	thrust::device_ptr<gdf_valid_type> valid_out_ptr = thrust::device_pointer_cast(valid_out);
 	gdf_valid_type max_char = 255;
-	thrust::fill(rmm::exec_policy(stream),thrust::detail::make_normal_iterator(valid_out_ptr),thrust::detail::make_normal_iterator(valid_out_ptr + num_chars_bitmask),max_char);
+	thrust::fill(rmm::exec_policy(stream)->on(stream),thrust::detail::make_normal_iterator(valid_out_ptr),thrust::detail::make_normal_iterator(valid_out_ptr + num_chars_bitmask),max_char);
 	//we have no nulls so set all the bits in gdf_valid_type to 1
 	out_null_count = 0;
 	return GDF_SUCCESS;
@@ -70,7 +70,7 @@ gdf_error apply_bitmask_to_bitmask(gdf_size_type & out_null_count, gdf_valid_typ
 	thrust::device_ptr<gdf_valid_type> valid_right_ptr = thrust::device_pointer_cast(valid_right);
 
 
-	thrust::transform(rmm::exec_policy(stream), thrust::detail::make_normal_iterator(valid_left_ptr),
+	thrust::transform(rmm::exec_policy(stream)->on(stream), thrust::detail::make_normal_iterator(valid_left_ptr),
 			thrust::detail::make_normal_iterator(valid_left_end_ptr), thrust::detail::make_normal_iterator(valid_right_ptr),
 			thrust::detail::make_normal_iterator(valid_out_ptr), thrust::bit_and<gdf_valid_type>());
 
@@ -87,7 +87,7 @@ gdf_error apply_bitmask_to_bitmask(gdf_size_type & out_null_count, gdf_valid_typ
 	null_counts_iter( bit_mask_null_counts_device.begin(),thrust::detail::make_normal_iterator(valid_out_ptr));
 
 	//you will notice that we subtract the number of zeros we found in the last character
-	out_null_count = thrust::reduce(rmm::exec_policy(stream),null_counts_iter, null_counts_iter + num_chars_bitmask) - gdf_num_bits_zero_after_pos(*last_char,num_values % GDF_VALID_BITSIZE );
+	out_null_count = thrust::reduce(rmm::exec_policy(stream)->on(stream),null_counts_iter, null_counts_iter + num_chars_bitmask) - gdf_num_bits_zero_after_pos(*last_char,num_values % GDF_VALID_BITSIZE );
 
 	delete[] last_char;
 	return GDF_SUCCESS;
