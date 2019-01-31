@@ -388,7 +388,7 @@ class DataFrame(object):
         # Format into a table
         return formatting.format(index=self._index, cols=cols,
                                  show_headers=True, more_cols=more_cols,
-                                 more_rows=more_rows)
+                                 more_rows=more_rows, min_width=2)
 
     def __str__(self):
         nrows = settings.formatting.get('nrows') or 10

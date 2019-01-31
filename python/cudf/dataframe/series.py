@@ -299,8 +299,11 @@ class Series(object):
         # Prepare cells
         cols = OrderedDict([('', self.values_to_string(nrows=nrows))])
         # Format into a table
-        return formatting.format(index=self.index,
-                                 cols=cols, more_rows=more_rows)
+        output = formatting.format(index=self.index,
+                                   cols=cols, more_rows=more_rows,
+                                   series_spacing=True)
+        return output + "\nName: {}, dtype: {}".format(self.name, self.dtype)\
+            if self.name else output + "\ndtype: {}".format(self.dtype)
 
     def __str__(self):
         return self.to_string(nrows=10)
