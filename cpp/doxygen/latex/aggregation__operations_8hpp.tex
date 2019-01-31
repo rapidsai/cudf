@@ -1,0 +1,29 @@
+\hypertarget{aggregation__operations_8hpp}{}\section{/home/jhemstad/cudf/cpp/src/groupby/aggregation\+\_\+operations.hpp File Reference}
+\label{aggregation__operations_8hpp}\index{/home/jhemstad/cudf/cpp/src/groupby/aggregation\+\_\+operations.\+hpp@{/home/jhemstad/cudf/cpp/src/groupby/aggregation\+\_\+operations.\+hpp}}
+
+
+This header defines the functors that may be used as aggregation operations for the hash-\/based groupby implementation. Each functor must define an \textquotesingle{}identity value\textquotesingle{}. The identity value \textquotesingle{}I\textquotesingle{} of an operation \textquotesingle{}op\textquotesingle{} is defined as\+: for any x, op(x,\+I) == x. This identity value is used to initialize the hash table values Every functor accepts a \textquotesingle{}new\+\_\+value\textquotesingle{} which is the new value being inserted into the hash table and an \textquotesingle{}old\+\_\+value\textquotesingle{} which is the existing value in the hash table.  
+
+
+{\ttfamily \#include $<$limits$>$}\\*
+{\ttfamily \#include \char`\"{}utilities/cudf\+\_\+utils.\+h\char`\"{}}\\*
+Include dependency graph for aggregation\+\_\+operations.\+hpp\+:
+% FIG 0
+\subsection*{Classes}
+\begin{DoxyCompactItemize}
+\item 
+struct \hyperlink{structmax__op}{max\+\_\+op$<$ value\+\_\+type $>$}
+\item 
+struct \hyperlink{structmin__op}{min\+\_\+op$<$ value\+\_\+type $>$}
+\item 
+struct \hyperlink{structcount__op}{count\+\_\+op$<$ value\+\_\+type $>$}
+\item 
+struct \hyperlink{structsum__op}{sum\+\_\+op$<$ value\+\_\+type $>$}
+\item 
+struct \hyperlink{structavg__op}{avg\+\_\+op$<$ value\+\_\+type $>$}
+\end{DoxyCompactItemize}
+
+
+\subsection{Detailed Description}
+This header defines the functors that may be used as aggregation operations for the hash-\/based groupby implementation. Each functor must define an \textquotesingle{}identity value\textquotesingle{}. The identity value \textquotesingle{}I\textquotesingle{} of an operation \textquotesingle{}op\textquotesingle{} is defined as\+: for any x, op(x,\+I) == x. This identity value is used to initialize the hash table values Every functor accepts a \textquotesingle{}new\+\_\+value\textquotesingle{} which is the new value being inserted into the hash table and an \textquotesingle{}old\+\_\+value\textquotesingle{} which is the existing value in the hash table. 
+

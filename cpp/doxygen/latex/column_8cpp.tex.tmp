@@ -1,0 +1,174 @@
+\hypertarget{column_8cpp}{}\section{/home/jhemstad/cudf/cpp/src/dataframe/column.cpp File Reference}
+\label{column_8cpp}\index{/home/jhemstad/cudf/cpp/src/dataframe/column.\+cpp@{/home/jhemstad/cudf/cpp/src/dataframe/column.\+cpp}}
+
+
+Operations on G\+DF columns.  
+
+
+{\ttfamily \#include \char`\"{}cudf.\+h\char`\"{}}\\*
+{\ttfamily \#include \char`\"{}utilities/cudf\+\_\+utils.\+h\char`\"{}}\\*
+{\ttfamily \#include \char`\"{}utilities/error\+\_\+utils.\+h\char`\"{}}\\*
+{\ttfamily \#include \char`\"{}rmm/rmm.\+h\char`\"{}}\\*
+{\ttfamily \#include $<$cuda\+\_\+runtime\+\_\+api.\+h$>$}\\*
+{\ttfamily \#include \char`\"{}utilities/type\+\_\+dispatcher.\+hpp\char`\"{}}\\*
+Include dependency graph for column.\+cpp\+:
+% FIG 0
+\subsection*{Functions}
+\begin{DoxyCompactItemize}
+\item 
+gdf\+\_\+error {\bfseries gdf\+\_\+mask\+\_\+concat} (gdf\+\_\+valid\+\_\+type $\ast$output\+\_\+mask, gdf\+\_\+size\+\_\+type output\+\_\+column\+\_\+length, gdf\+\_\+valid\+\_\+type $\ast$masks\+\_\+to\+\_\+concat\mbox{[}$\,$\mbox{]}, gdf\+\_\+size\+\_\+type $\ast$column\+\_\+lengths, gdf\+\_\+size\+\_\+type num\+\_\+columns)\hypertarget{column_8cpp_adf88b7f733ccf4f7c76866519e3c3369}{}\label{column_8cpp_adf88b7f733ccf4f7c76866519e3c3369}
+
+\item 
+gdf\+\_\+error \hyperlink{column_8cpp_a647accc4cfbd520af151cc80530606fe}{gdf\+\_\+column\+\_\+concat} (\hyperlink{structgdf__column__}{gdf\+\_\+column} $\ast$output\+\_\+column, \hyperlink{structgdf__column__}{gdf\+\_\+column} $\ast$columns\+\_\+to\+\_\+concat\mbox{[}$\,$\mbox{]}, int num\+\_\+columns)
+\begin{DoxyCompactList}\small\item\em Concatenates multiple gdf\+\_\+columns into a single, contiguous column, including the validity bitmasks. \end{DoxyCompactList}\item 
+gdf\+\_\+size\+\_\+type \hyperlink{column_8cpp_a35074b93d5d102c0b3781ffd55c04e27}{gdf\+\_\+column\+\_\+sizeof} ()
+\begin{DoxyCompactList}\small\item\em Return the size of the gdf\+\_\+column data type. \end{DoxyCompactList}\item 
+gdf\+\_\+error \hyperlink{column_8cpp_a4abaef270ed26c7ff081085f37fca300}{gdf\+\_\+column\+\_\+view} (\hyperlink{structgdf__column__}{gdf\+\_\+column} $\ast$column, void $\ast$data, gdf\+\_\+valid\+\_\+type $\ast$valid, gdf\+\_\+size\+\_\+type size, gdf\+\_\+dtype dtype)
+\begin{DoxyCompactList}\small\item\em Create a G\+DF column given data and validity bitmask pointers, size, and datatype. \end{DoxyCompactList}\item 
+gdf\+\_\+error \hyperlink{column_8cpp_ae21b12d55d8ffb3c782c3a55545549aa}{gdf\+\_\+column\+\_\+view\+\_\+augmented} (\hyperlink{structgdf__column__}{gdf\+\_\+column} $\ast$column, void $\ast$data, gdf\+\_\+valid\+\_\+type $\ast$valid, gdf\+\_\+size\+\_\+type size, gdf\+\_\+dtype dtype, gdf\+\_\+size\+\_\+type null\+\_\+count)
+\begin{DoxyCompactList}\small\item\em Create a G\+DF column given data and validity bitmask pointers, size, and datatype, and count of null (non-\/valid) elements. \end{DoxyCompactList}\item 
+gdf\+\_\+error \hyperlink{column_8cpp_afa150e61d61d55a9ac5a8e1e4c4e78fe}{gdf\+\_\+column\+\_\+free} (\hyperlink{structgdf__column__}{gdf\+\_\+column} $\ast$column)
+\begin{DoxyCompactList}\small\item\em Free the C\+U\+DA device memory of a gdf\+\_\+column. \end{DoxyCompactList}\item 
+gdf\+\_\+error \hyperlink{column_8cpp_a2843b44e974ef17991af21c671a00747}{get\+\_\+column\+\_\+byte\+\_\+width} (\hyperlink{structgdf__column__}{gdf\+\_\+column} $\ast$col, int $\ast$width)
+\begin{DoxyCompactList}\small\item\em Get the byte width of a column. \end{DoxyCompactList}\end{DoxyCompactItemize}
+
+
+\subsection{Detailed Description}
+Operations on G\+DF columns. 
+
+-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/---$\ast$ 
+
+
+
+\subsection{Function Documentation}
+\index{column.\+cpp@{column.\+cpp}!gdf\+\_\+column\+\_\+concat@{gdf\+\_\+column\+\_\+concat}}
+\index{gdf\+\_\+column\+\_\+concat@{gdf\+\_\+column\+\_\+concat}!column.\+cpp@{column.\+cpp}}
+\subsubsection[{\texorpdfstring{gdf\+\_\+column\+\_\+concat(gdf\+\_\+column $\ast$output\+\_\+column, gdf\+\_\+column $\ast$columns\+\_\+to\+\_\+concat[], int num\+\_\+columns)}{gdf_column_concat(gdf_column *output_column, gdf_column *columns_to_concat[], int num_columns)}}]{\setlength{\rightskip}{0pt plus 5cm}gdf\+\_\+error gdf\+\_\+column\+\_\+concat (
+\begin{DoxyParamCaption}
+\item[{{\bf gdf\+\_\+column} $\ast$}]{output\+\_\+column, }
+\item[{{\bf gdf\+\_\+column} $\ast$}]{columns\+\_\+to\+\_\+concat\mbox{[}$\,$\mbox{]}, }
+\item[{int}]{num\+\_\+columns}
+\end{DoxyParamCaption}
+)}\hypertarget{column_8cpp_a647accc4cfbd520af151cc80530606fe}{}\label{column_8cpp_a647accc4cfbd520af151cc80530606fe}
+
+
+Concatenates multiple gdf\+\_\+columns into a single, contiguous column, including the validity bitmasks. 
+
+-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/---$\ast$ Note that input columns with nullptr validity masks are treated as if all elements are valid.
+
+
+\begin{DoxyParams}[1]{Parameters}
+\mbox{\tt out}  & {\em output\+\_\+column} & A column whose buffers are already allocated that will contain the concatenation of the input columns data and validity bitmasks \mbox{[}in\mbox{]} columns\+\_\+to\+\_\+concat\mbox{[}\mbox{]} The columns to concatenate \mbox{[}in\mbox{]} num\+\_\+columns The number of columns to concatenate\\
+\hline
+\end{DoxyParams}
+\begin{DoxyReturn}{Returns}
+gdf\+\_\+error G\+D\+F\+\_\+\+S\+U\+C\+C\+E\+SS upon completion; G\+D\+F\+\_\+\+D\+A\+T\+A\+S\+E\+T\+\_\+\+E\+M\+P\+TY if any data pointer is N\+U\+LL, G\+D\+F\+\_\+\+C\+O\+L\+U\+M\+N\+\_\+\+S\+I\+Z\+E\+\_\+\+M\+I\+S\+M\+A\+T\+CH if the output column size != the total size of the input columns; G\+D\+F\+\_\+\+D\+T\+Y\+P\+E\+\_\+\+M\+I\+S\+M\+A\+T\+CH if the \subsubsection*{input columns have different datatypes. }
+\end{DoxyReturn}
+\index{column.\+cpp@{column.\+cpp}!gdf\+\_\+column\+\_\+free@{gdf\+\_\+column\+\_\+free}}
+\index{gdf\+\_\+column\+\_\+free@{gdf\+\_\+column\+\_\+free}!column.\+cpp@{column.\+cpp}}
+\subsubsection[{\texorpdfstring{gdf\+\_\+column\+\_\+free(gdf\+\_\+column $\ast$column)}{gdf_column_free(gdf_column *column)}}]{\setlength{\rightskip}{0pt plus 5cm}gdf\+\_\+error gdf\+\_\+column\+\_\+free (
+\begin{DoxyParamCaption}
+\item[{{\bf gdf\+\_\+column} $\ast$}]{column}
+\end{DoxyParamCaption}
+)}\hypertarget{column_8cpp_afa150e61d61d55a9ac5a8e1e4c4e78fe}{}\label{column_8cpp_afa150e61d61d55a9ac5a8e1e4c4e78fe}
+
+
+Free the C\+U\+DA device memory of a gdf\+\_\+column. 
+
+-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/---$\ast$ 
+\begin{DoxyParams}[1]{Parameters}
+\mbox{\tt in,out}  & {\em column} & Data and validity bitmask pointers of this column will be freed \subsubsection*{gdf\+\_\+error G\+D\+F\+\_\+\+S\+U\+C\+C\+E\+SS or G\+D\+F\+\_\+\+E\+R\+R\+OR if there is an error freeing the data }\\
+\hline
+\end{DoxyParams}
+\index{column.\+cpp@{column.\+cpp}!gdf\+\_\+column\+\_\+sizeof@{gdf\+\_\+column\+\_\+sizeof}}
+\index{gdf\+\_\+column\+\_\+sizeof@{gdf\+\_\+column\+\_\+sizeof}!column.\+cpp@{column.\+cpp}}
+\subsubsection[{\texorpdfstring{gdf\+\_\+column\+\_\+sizeof()}{gdf_column_sizeof()}}]{\setlength{\rightskip}{0pt plus 5cm}gdf\+\_\+size\+\_\+type gdf\+\_\+column\+\_\+sizeof (
+\begin{DoxyParamCaption}
+{}
+\end{DoxyParamCaption}
+)}\hypertarget{column_8cpp_a35074b93d5d102c0b3781ffd55c04e27}{}\label{column_8cpp_a35074b93d5d102c0b3781ffd55c04e27}
+
+
+Return the size of the gdf\+\_\+column data type. 
+
+-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/---$\ast$ \subsubsection*{gdf\+\_\+size\+\_\+type Size of the gdf\+\_\+column data type. }\index{column.\+cpp@{column.\+cpp}!gdf\+\_\+column\+\_\+view@{gdf\+\_\+column\+\_\+view}}
+\index{gdf\+\_\+column\+\_\+view@{gdf\+\_\+column\+\_\+view}!column.\+cpp@{column.\+cpp}}
+\subsubsection[{\texorpdfstring{gdf\+\_\+column\+\_\+view(gdf\+\_\+column $\ast$column, void $\ast$data, gdf\+\_\+valid\+\_\+type $\ast$valid, gdf\+\_\+size\+\_\+type size, gdf\+\_\+dtype dtype)}{gdf_column_view(gdf_column *column, void *data, gdf_valid_type *valid, gdf_size_type size, gdf_dtype dtype)}}]{\setlength{\rightskip}{0pt plus 5cm}gdf\+\_\+error gdf\+\_\+column\+\_\+view (
+\begin{DoxyParamCaption}
+\item[{{\bf gdf\+\_\+column} $\ast$}]{column, }
+\item[{void $\ast$}]{data, }
+\item[{gdf\+\_\+valid\+\_\+type $\ast$}]{valid, }
+\item[{gdf\+\_\+size\+\_\+type}]{size, }
+\item[{gdf\+\_\+dtype}]{dtype}
+\end{DoxyParamCaption}
+)}\hypertarget{column_8cpp_a4abaef270ed26c7ff081085f37fca300}{}\label{column_8cpp_a4abaef270ed26c7ff081085f37fca300}
+
+
+Create a G\+DF column given data and validity bitmask pointers, size, and datatype. 
+
+-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/---$\ast$ 
+\begin{DoxyParams}[1]{Parameters}
+\mbox{\tt out}  & {\em column} & The output column. \\
+\hline
+\mbox{\tt in}  & {\em data} & Pointer to data. \\
+\hline
+\mbox{\tt in}  & {\em valid} & Pointer to validity bitmask for the data. \\
+\hline
+\mbox{\tt in}  & {\em size} & Number of rows in the column. \\
+\hline
+\mbox{\tt in}  & {\em dtype} & Data type of the column. \subsubsection*{gdf\+\_\+error Returns G\+D\+F\+\_\+\+S\+U\+C\+C\+E\+SS upon successful creation. }\\
+\hline
+\end{DoxyParams}
+\index{column.\+cpp@{column.\+cpp}!gdf\+\_\+column\+\_\+view\+\_\+augmented@{gdf\+\_\+column\+\_\+view\+\_\+augmented}}
+\index{gdf\+\_\+column\+\_\+view\+\_\+augmented@{gdf\+\_\+column\+\_\+view\+\_\+augmented}!column.\+cpp@{column.\+cpp}}
+\subsubsection[{\texorpdfstring{gdf\+\_\+column\+\_\+view\+\_\+augmented(gdf\+\_\+column $\ast$column, void $\ast$data, gdf\+\_\+valid\+\_\+type $\ast$valid, gdf\+\_\+size\+\_\+type size, gdf\+\_\+dtype dtype, gdf\+\_\+size\+\_\+type null\+\_\+count)}{gdf_column_view_augmented(gdf_column *column, void *data, gdf_valid_type *valid, gdf_size_type size, gdf_dtype dtype, gdf_size_type null_count)}}]{\setlength{\rightskip}{0pt plus 5cm}gdf\+\_\+error gdf\+\_\+column\+\_\+view\+\_\+augmented (
+\begin{DoxyParamCaption}
+\item[{{\bf gdf\+\_\+column} $\ast$}]{column, }
+\item[{void $\ast$}]{data, }
+\item[{gdf\+\_\+valid\+\_\+type $\ast$}]{valid, }
+\item[{gdf\+\_\+size\+\_\+type}]{size, }
+\item[{gdf\+\_\+dtype}]{dtype, }
+\item[{gdf\+\_\+size\+\_\+type}]{null\+\_\+count}
+\end{DoxyParamCaption}
+)}\hypertarget{column_8cpp_ae21b12d55d8ffb3c782c3a55545549aa}{}\label{column_8cpp_ae21b12d55d8ffb3c782c3a55545549aa}
+
+
+Create a G\+DF column given data and validity bitmask pointers, size, and datatype, and count of null (non-\/valid) elements. 
+
+-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/---$\ast$ 
+\begin{DoxyParams}[1]{Parameters}
+\mbox{\tt out}  & {\em column} & The output column. \\
+\hline
+\mbox{\tt in}  & {\em data} & Pointer to data. \\
+\hline
+\mbox{\tt in}  & {\em valid} & Pointer to validity bitmask for the data. \\
+\hline
+\mbox{\tt in}  & {\em size} & Number of rows in the column. \\
+\hline
+\mbox{\tt in}  & {\em dtype} & Data type of the column. \\
+\hline
+\mbox{\tt in}  & {\em null\+\_\+count} & The number of non-\/valid elements in the validity bitmask \subsubsection*{gdf\+\_\+error Returns G\+D\+F\+\_\+\+S\+U\+C\+C\+E\+SS upon successful creation. }\\
+\hline
+\end{DoxyParams}
+\index{column.\+cpp@{column.\+cpp}!get\+\_\+column\+\_\+byte\+\_\+width@{get\+\_\+column\+\_\+byte\+\_\+width}}
+\index{get\+\_\+column\+\_\+byte\+\_\+width@{get\+\_\+column\+\_\+byte\+\_\+width}!column.\+cpp@{column.\+cpp}}
+\subsubsection[{\texorpdfstring{get\+\_\+column\+\_\+byte\+\_\+width(gdf\+\_\+column $\ast$col, int $\ast$width)}{get_column_byte_width(gdf_column *col, int *width)}}]{\setlength{\rightskip}{0pt plus 5cm}gdf\+\_\+error get\+\_\+column\+\_\+byte\+\_\+width (
+\begin{DoxyParamCaption}
+\item[{{\bf gdf\+\_\+column} $\ast$}]{col, }
+\item[{int $\ast$}]{width}
+\end{DoxyParamCaption}
+)}\hypertarget{column_8cpp_a2843b44e974ef17991af21c671a00747}{}\label{column_8cpp_a2843b44e974ef17991af21c671a00747}
+
+
+Get the byte width of a column. 
+
+-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/---$\ast$ 
+\begin{DoxyParams}[1]{Parameters}
+\mbox{\tt in}  & {\em col} & The input column \\
+\hline
+\mbox{\tt out}  & {\em width} & The data type size of col \\
+\hline
+\end{DoxyParams}
+\begin{DoxyReturn}{Returns}
+gdf\+\_\+error G\+D\+F\+\_\+\+S\+U\+C\+C\+E\+SS, or G\+D\+F\+\_\+\+U\+N\+S\+U\+P\+P\+O\+R\+T\+E\+D\+\_\+\+D\+T\+Y\+PE if col has an invalid \subsubsection*{datatype }
+\end{DoxyReturn}

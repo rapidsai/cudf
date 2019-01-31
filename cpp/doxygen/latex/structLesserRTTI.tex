@@ -1,0 +1,56 @@
+\hypertarget{structLesserRTTI}{}\section{Lesser\+R\+T\+TI$<$ IndexT $>$ Struct Template Reference}
+\label{structLesserRTTI}\index{Lesser\+R\+T\+T\+I$<$ Index\+T $>$@{Lesser\+R\+T\+T\+I$<$ Index\+T $>$}}
+\subsection*{Public Member Functions}
+\begin{DoxyCompactItemize}
+\item 
+{\bfseries Lesser\+R\+T\+TI} (void $\ast$const $\ast$cols, int $\ast$const types, size\+\_\+t sz)\hypertarget{structLesserRTTI_a6da0e234922473ba38789fd58c6895b4}{}\label{structLesserRTTI_a6da0e234922473ba38789fd58c6895b4}
+
+\item 
+{\bfseries Lesser\+R\+T\+TI} (void $\ast$const $\ast$cols, int $\ast$const types, size\+\_\+t sz, const void $\ast$const $\ast$vals)\hypertarget{structLesserRTTI_ac8e0dc0c40eb5a88d364c84d2abde27a}{}\label{structLesserRTTI_ac8e0dc0c40eb5a88d364c84d2abde27a}
+
+\item 
+{\bfseries Lesser\+R\+T\+TI} (void $\ast$const $\ast$cols, gdf\+\_\+valid\+\_\+type $\ast$const $\ast$valids, int $\ast$const types, int8\+\_\+t $\ast$const asc\+\_\+desc\+\_\+flags, size\+\_\+t sz, bool nulls\+\_\+are\+\_\+smallest)\hypertarget{structLesserRTTI_a44d88703c5186d2951e98f9844fe4b52}{}\label{structLesserRTTI_a44d88703c5186d2951e98f9844fe4b52}
+
+\item 
+\+\_\+\+\_\+device\+\_\+\+\_\+ bool \hyperlink{structLesserRTTI_a34e8e07ea72ebf620d33bad90b0c0989}{asc\+\_\+desc\+\_\+comparison} (IndexT row1, IndexT row2) const 
+\item 
+\+\_\+\+\_\+device\+\_\+\+\_\+ bool {\bfseries asc\+\_\+desc\+\_\+comparison\+\_\+with\+\_\+nulls} (IndexT row1, IndexT row2) const \hypertarget{structLesserRTTI_a38c146b3433fa0e26c08d6b923c115a1}{}\label{structLesserRTTI_a38c146b3433fa0e26c08d6b923c115a1}
+
+\item 
+\+\_\+\+\_\+device\+\_\+\+\_\+ bool {\bfseries equal} (IndexT row1, IndexT row2) const \hypertarget{structLesserRTTI_a1aa23d8db3e3df40e762f6987a0d0457}{}\label{structLesserRTTI_a1aa23d8db3e3df40e762f6987a0d0457}
+
+\item 
+\+\_\+\+\_\+device\+\_\+\+\_\+ bool {\bfseries equal\+\_\+v} (size\+\_\+t row1) const \hypertarget{structLesserRTTI_a61bb75edc204e6c7d9b078fb8879116e}{}\label{structLesserRTTI_a61bb75edc204e6c7d9b078fb8879116e}
+
+\item 
+\+\_\+\+\_\+device\+\_\+\+\_\+ bool {\bfseries less} (IndexT row1, IndexT row2) const \hypertarget{structLesserRTTI_aec36458876da0f872b2fdfd6e14cd8c7}{}\label{structLesserRTTI_aec36458876da0f872b2fdfd6e14cd8c7}
+
+\item 
+\+\_\+\+\_\+device\+\_\+\+\_\+ bool {\bfseries less\+\_\+with\+\_\+nulls} (IndexT row1, IndexT row2) const \hypertarget{structLesserRTTI_a1c7c24e916b2673fb5e0ac3a7b4fc7dd}{}\label{structLesserRTTI_a1c7c24e916b2673fb5e0ac3a7b4fc7dd}
+
+\end{DoxyCompactItemize}
+\subsection*{Static Public Member Functions}
+\begin{DoxyCompactItemize}
+\item 
+{\footnotesize template$<$typename Col\+Type $>$ }\\static \+\_\+\+\_\+device\+\_\+\+\_\+ Col\+Type {\bfseries at} (int col\+\_\+index, IndexT row, const void $\ast$const $\ast$columns)\hypertarget{structLesserRTTI_af3bf9a7cc71f9c557aa1eee109d0aee3}{}\label{structLesserRTTI_af3bf9a7cc71f9c557aa1eee109d0aee3}
+
+\item 
+static \+\_\+\+\_\+device\+\_\+\+\_\+ bool {\bfseries is\+\_\+valid} (int col\+\_\+index, IndexT row, const gdf\+\_\+valid\+\_\+type $\ast$const $\ast$valids)\hypertarget{structLesserRTTI_a2917343e949e2badff73516591ca6b66}{}\label{structLesserRTTI_a2917343e949e2badff73516591ca6b66}
+
+\end{DoxyCompactItemize}
+
+
+\subsection{Member Function Documentation}
+\index{Lesser\+R\+T\+TI@{Lesser\+R\+T\+TI}!asc\+\_\+desc\+\_\+comparison@{asc\+\_\+desc\+\_\+comparison}}
+\index{asc\+\_\+desc\+\_\+comparison@{asc\+\_\+desc\+\_\+comparison}!Lesser\+R\+T\+TI@{Lesser\+R\+T\+TI}}
+\subsubsection[{\texorpdfstring{asc\+\_\+desc\+\_\+comparison(\+Index\+T row1, Index\+T row2) const }{asc_desc_comparison(IndexT row1, IndexT row2) const }}]{\setlength{\rightskip}{0pt plus 5cm}template$<$typename IndexT$>$ \+\_\+\+\_\+device\+\_\+\+\_\+ bool {\bf Lesser\+R\+T\+TI}$<$ IndexT $>$\+::asc\+\_\+desc\+\_\+comparison (
+\begin{DoxyParamCaption}
+\item[{IndexT}]{row1, }
+\item[{IndexT}]{row2}
+\end{DoxyParamCaption}
+) const\hspace{0.3cm}{\ttfamily [inline]}}\hypertarget{structLesserRTTI_a34e8e07ea72ebf620d33bad90b0c0989}{}\label{structLesserRTTI_a34e8e07ea72ebf620d33bad90b0c0989}
+Should be used when you want to sort multiple columns using asc/desc flags for each column 
+
+The documentation for this struct was generated from the following file\+:\begin{DoxyCompactItemize}
+\item 
+/home/jhemstad/cudf/cpp/src/sqls/sqls\+\_\+rtti\+\_\+comp.\+h\end{DoxyCompactItemize}

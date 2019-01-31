@@ -1,0 +1,37 @@
+digraph "/home/jhemstad/cudf/cpp/src/groupby/aggregation_operations.hpp"
+{
+  edge [fontname="Helvetica",fontsize="10",labelfontname="Helvetica",labelfontsize="10"];
+  node [fontname="Helvetica",fontsize="10",shape=record];
+  Node1 [label="/home/jhemstad/cudf\l/cpp/src/groupby/aggregation\l_operations.hpp",height=0.2,width=0.4,color="black", fillcolor="grey75", style="filled", fontcolor="black"];
+  Node1 -> Node2 [color="midnightblue",fontsize="10",style="solid",fontname="Helvetica"];
+  Node2 [label="limits",height=0.2,width=0.4,color="grey75", fillcolor="white", style="filled"];
+  Node1 -> Node3 [color="midnightblue",fontsize="10",style="solid",fontname="Helvetica"];
+  Node3 [label="utilities/cudf_utils.h",height=0.2,width=0.4,color="black", fillcolor="white", style="filled",URL="$cudf__utils_8h_source.html"];
+  Node3 -> Node4 [color="midnightblue",fontsize="10",style="solid",fontname="Helvetica"];
+  Node4 [label="cuda_runtime_api.h",height=0.2,width=0.4,color="grey75", fillcolor="white", style="filled"];
+  Node3 -> Node5 [color="midnightblue",fontsize="10",style="solid",fontname="Helvetica"];
+  Node5 [label="vector",height=0.2,width=0.4,color="grey75", fillcolor="white", style="filled"];
+  Node3 -> Node6 [color="midnightblue",fontsize="10",style="solid",fontname="Helvetica"];
+  Node6 [label="cudf.h",height=0.2,width=0.4,color="black", fillcolor="white", style="filled",URL="$cudf_8h_source.html"];
+  Node6 -> Node7 [color="midnightblue",fontsize="10",style="solid",fontname="Helvetica"];
+  Node7 [label="cstdlib",height=0.2,width=0.4,color="grey75", fillcolor="white", style="filled"];
+  Node6 -> Node8 [color="midnightblue",fontsize="10",style="solid",fontname="Helvetica"];
+  Node8 [label="cstdint",height=0.2,width=0.4,color="grey75", fillcolor="white", style="filled"];
+  Node6 -> Node9 [color="midnightblue",fontsize="10",style="solid",fontname="Helvetica"];
+  Node9 [label="cudf/types.h",height=0.2,width=0.4,color="black", fillcolor="white", style="filled",URL="$types_8h_source.html"];
+  Node6 -> Node10 [color="midnightblue",fontsize="10",style="solid",fontname="Helvetica"];
+  Node10 [label="cudf/io_types.h",height=0.2,width=0.4,color="black", fillcolor="white", style="filled",URL="$io__types_8h_source.html"];
+  Node6 -> Node11 [color="midnightblue",fontsize="10",style="solid",fontname="Helvetica"];
+  Node11 [label="cudf/convert_types.h",height=0.2,width=0.4,color="black", fillcolor="white", style="filled",URL="$convert__types_8h_source.html"];
+  Node6 -> Node12 [color="midnightblue",fontsize="10",style="solid",fontname="Helvetica"];
+  Node12 [label="cudf/functions.h",height=0.2,width=0.4,color="black", fillcolor="white", style="filled",URL="$functions_8h_source.html"];
+  Node6 -> Node13 [color="midnightblue",fontsize="10",style="solid",fontname="Helvetica"];
+  Node13 [label="cudf/io_functions.h",height=0.2,width=0.4,color="black", fillcolor="white", style="filled",URL="$io__functions_8h_source.html"];
+  Node3 -> Node14 [color="midnightblue",fontsize="10",style="solid",fontname="Helvetica"];
+  Node14 [label="error_utils.h",height=0.2,width=0.4,color="black", fillcolor="white", style="filled",URL="$error__utils_8h_source.html"];
+  Node14 -> Node15 [color="midnightblue",fontsize="10",style="solid",fontname="Helvetica"];
+  Node15 [label="iostream",height=0.2,width=0.4,color="grey75", fillcolor="white", style="filled"];
+  Node14 -> Node16 [color="midnightblue",fontsize="10",style="solid",fontname="Helvetica"];
+  Node16 [label="cuda.h",height=0.2,width=0.4,color="grey75", fillcolor="white", style="filled"];
+  Node14 -> Node4 [color="midnightblue",fontsize="10",style="solid",fontname="Helvetica"];
+}

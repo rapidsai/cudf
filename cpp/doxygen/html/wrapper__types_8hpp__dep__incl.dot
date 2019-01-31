@@ -1,0 +1,12 @@
+digraph "/home/jhemstad/cudf/cpp/src/utilities/wrapper_types.hpp"
+{
+  edge [fontname="Helvetica",fontsize="10",labelfontname="Helvetica",labelfontsize="10"];
+  node [fontname="Helvetica",fontsize="10",shape=record];
+  Node1 [label="/home/jhemstad/cudf\l/cpp/src/utilities/wrapper\l_types.hpp",height=0.2,width=0.4,color="black", fillcolor="grey75", style="filled", fontcolor="black"];
+  Node1 -> Node2 [dir="back",color="midnightblue",fontsize="10",style="solid",fontname="Helvetica"];
+  Node2 [label="/home/jhemstad/cudf\l/cpp/src/utilities/type\l_dispatcher.hpp",height=0.2,width=0.4,color="black", fillcolor="white", style="filled",URL="$type__dispatcher_8hpp_source.html"];
+  Node2 -> Node3 [dir="back",color="midnightblue",fontsize="10",style="solid",fontname="Helvetica"];
+  Node3 [label="/home/jhemstad/cudf\l/cpp/src/dataframe/column.cpp",height=0.2,width=0.4,color="black", fillcolor="white", style="filled",URL="$column_8cpp.html",tooltip="Operations on GDF columns. "];
+  Node2 -> Node4 [dir="back",color="midnightblue",fontsize="10",style="solid",fontname="Helvetica"];
+  Node4 [label="/home/jhemstad/cudf\l/cpp/src/sqls/sqls_rtti\l_comp.h",height=0.2,width=0.4,color="black", fillcolor="white", style="filled",URL="$sqls__rtti__comp_8h_source.html"];
+}

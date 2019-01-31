@@ -1,0 +1,168 @@
+\hypertarget{wrapper__types_8hpp}{}\section{/home/jhemstad/cudf/cpp/src/utilities/wrapper\+\_\+types.hpp File Reference}
+\label{wrapper__types_8hpp}\index{/home/jhemstad/cudf/cpp/src/utilities/wrapper\+\_\+types.\+hpp@{/home/jhemstad/cudf/cpp/src/utilities/wrapper\+\_\+types.\+hpp}}
+
+
+Wrapper structs for for the non-\/fundamental gdf\+\_\+dtype types.  
+
+
+{\ttfamily \#include \char`\"{}cudf/types.\+h\char`\"{}}\\*
+{\ttfamily \#include \char`\"{}cudf\+\_\+utils.\+h\char`\"{}}\\*
+{\ttfamily \#include $<$iostream$>$}\\*
+Include dependency graph for wrapper\+\_\+types.\+hpp\+:
+% FIG 0
+This graph shows which files directly or indirectly include this file\+:
+% FIG 1
+\subsection*{Classes}
+\begin{DoxyCompactItemize}
+\item 
+struct \hyperlink{structcudf_1_1detail_1_1wrapper}{cudf\+::detail\+::wrapper$<$ T, type\+\_\+id $>$}
+\begin{DoxyCompactList}\small\item\em Base wrapper structure to emulate \char`\"{}strong typedefs\char`\"{} for gdf\+\_\+dtype values that do not correspond to fundamental types. \end{DoxyCompactList}\end{DoxyCompactItemize}
+\subsection*{Namespaces}
+\begin{DoxyCompactItemize}
+\item 
+ \hyperlink{namespacecudf}{cudf}
+\begin{DoxyCompactList}\small\item\em Invokes an instance of a functor template with the appropriate type determined by a gdf\+\_\+dtype enum value. \end{DoxyCompactList}\end{DoxyCompactItemize}
+\subsection*{Typedefs}
+\begin{DoxyCompactItemize}
+\item 
+using {\bfseries cudf\+::category} = detail\+::wrapper$<$ gdf\+\_\+category, G\+D\+F\+\_\+\+C\+A\+T\+E\+G\+O\+RY $>$\hypertarget{namespacecudf_a8c6e344a72404039eef838a8cb39295b}{}\label{namespacecudf_a8c6e344a72404039eef838a8cb39295b}
+
+\item 
+using {\bfseries cudf\+::timestamp} = detail\+::wrapper$<$ gdf\+\_\+timestamp, G\+D\+F\+\_\+\+T\+I\+M\+E\+S\+T\+A\+MP $>$\hypertarget{namespacecudf_a6916ffd2fdcad20b769afc3d4130140e}{}\label{namespacecudf_a6916ffd2fdcad20b769afc3d4130140e}
+
+\item 
+using {\bfseries cudf\+::date32} = detail\+::wrapper$<$ gdf\+\_\+date32, G\+D\+F\+\_\+\+D\+A\+T\+E32 $>$\hypertarget{namespacecudf_a788a6ac25db35f51d612644bebd86970}{}\label{namespacecudf_a788a6ac25db35f51d612644bebd86970}
+
+\item 
+using {\bfseries cudf\+::date64} = detail\+::wrapper$<$ gdf\+\_\+date64, G\+D\+F\+\_\+\+D\+A\+T\+E64 $>$\hypertarget{namespacecudf_a5da9e96ba9d677a713403fb3704600ef}{}\label{namespacecudf_a5da9e96ba9d677a713403fb3704600ef}
+
+\end{DoxyCompactItemize}
+\subsection*{Functions}
+\begin{DoxyCompactItemize}
+\item 
+{\footnotesize template$<$typename T , gdf\+\_\+dtype type\+\_\+id$>$ }\\std\+::ostream \& {\bfseries cudf\+::detail\+::operator$<$$<$} (std\+::ostream \&os, wrapper$<$ T, type\+\_\+id $>$ const \&w)\hypertarget{wrapper__types_8hpp_a0fb320e0745674dcfbbafa464477991d}{}\label{wrapper__types_8hpp_a0fb320e0745674dcfbbafa464477991d}
+
+\item 
+{\footnotesize template$<$typename T , gdf\+\_\+dtype type\+\_\+id$>$ }\\C\+U\+D\+A\+\_\+\+H\+O\+S\+T\+\_\+\+D\+E\+V\+I\+C\+E\+\_\+\+C\+A\+L\+L\+A\+B\+LE bool {\bfseries cudf\+::detail\+::operator==} (wrapper$<$ T, type\+\_\+id $>$ const \&lhs, wrapper$<$ T, type\+\_\+id $>$ const \&rhs)\hypertarget{wrapper__types_8hpp_a2461262508790a162148975a4866dc83}{}\label{wrapper__types_8hpp_a2461262508790a162148975a4866dc83}
+
+\item 
+{\footnotesize template$<$typename T , gdf\+\_\+dtype type\+\_\+id$>$ }\\C\+U\+D\+A\+\_\+\+H\+O\+S\+T\+\_\+\+D\+E\+V\+I\+C\+E\+\_\+\+C\+A\+L\+L\+A\+B\+LE bool {\bfseries cudf\+::detail\+::operator!=} (wrapper$<$ T, type\+\_\+id $>$ const \&lhs, wrapper$<$ T, type\+\_\+id $>$ const \&rhs)\hypertarget{wrapper__types_8hpp_aecd39bf2abd804efb14adbcafef7b6a6}{}\label{wrapper__types_8hpp_aecd39bf2abd804efb14adbcafef7b6a6}
+
+\item 
+{\footnotesize template$<$typename T , gdf\+\_\+dtype type\+\_\+id$>$ }\\C\+U\+D\+A\+\_\+\+H\+O\+S\+T\+\_\+\+D\+E\+V\+I\+C\+E\+\_\+\+C\+A\+L\+L\+A\+B\+LE bool {\bfseries cudf\+::detail\+::operator$<$=} (wrapper$<$ T, type\+\_\+id $>$ const \&lhs, wrapper$<$ T, type\+\_\+id $>$ const \&rhs)\hypertarget{wrapper__types_8hpp_a2eaf9192d2841fd1b09d7fb8eabdd0e8}{}\label{wrapper__types_8hpp_a2eaf9192d2841fd1b09d7fb8eabdd0e8}
+
+\item 
+{\footnotesize template$<$typename T , gdf\+\_\+dtype type\+\_\+id$>$ }\\C\+U\+D\+A\+\_\+\+H\+O\+S\+T\+\_\+\+D\+E\+V\+I\+C\+E\+\_\+\+C\+A\+L\+L\+A\+B\+LE bool {\bfseries cudf\+::detail\+::operator$>$=} (wrapper$<$ T, type\+\_\+id $>$ const \&lhs, wrapper$<$ T, type\+\_\+id $>$ const \&rhs)\hypertarget{wrapper__types_8hpp_aeaa9be69396de13a547ebc9d7412b097}{}\label{wrapper__types_8hpp_aeaa9be69396de13a547ebc9d7412b097}
+
+\item 
+{\footnotesize template$<$typename T , gdf\+\_\+dtype type\+\_\+id$>$ }\\C\+U\+D\+A\+\_\+\+H\+O\+S\+T\+\_\+\+D\+E\+V\+I\+C\+E\+\_\+\+C\+A\+L\+L\+A\+B\+LE bool {\bfseries cudf\+::detail\+::operator$<$} (wrapper$<$ T, type\+\_\+id $>$ const \&lhs, wrapper$<$ T, type\+\_\+id $>$ const \&rhs)\hypertarget{wrapper__types_8hpp_aa04ae28303aefa80c7ba45fb637a403e}{}\label{wrapper__types_8hpp_aa04ae28303aefa80c7ba45fb637a403e}
+
+\item 
+{\footnotesize template$<$typename T , gdf\+\_\+dtype type\+\_\+id$>$ }\\C\+U\+D\+A\+\_\+\+H\+O\+S\+T\+\_\+\+D\+E\+V\+I\+C\+E\+\_\+\+C\+A\+L\+L\+A\+B\+LE bool {\bfseries cudf\+::detail\+::operator$>$} (wrapper$<$ T, type\+\_\+id $>$ const \&lhs, wrapper$<$ T, type\+\_\+id $>$ const \&rhs)\hypertarget{wrapper__types_8hpp_a87bba8805503d5a3f3b67efb24692f2d}{}\label{wrapper__types_8hpp_a87bba8805503d5a3f3b67efb24692f2d}
+
+\item 
+{\footnotesize template$<$typename T , gdf\+\_\+dtype type\+\_\+id$>$ }\\C\+U\+D\+A\+\_\+\+H\+O\+S\+T\+\_\+\+D\+E\+V\+I\+C\+E\+\_\+\+C\+A\+L\+L\+A\+B\+LE wrapper$<$ T, type\+\_\+id $>$ \& {\bfseries cudf\+::detail\+::operator+=} (wrapper$<$ T, type\+\_\+id $>$ \&lhs, wrapper$<$ T, type\+\_\+id $>$ const \&rhs)\hypertarget{wrapper__types_8hpp_aadbec5327f9fcc24e65f00febd5ca118}{}\label{wrapper__types_8hpp_aadbec5327f9fcc24e65f00febd5ca118}
+
+\item 
+{\footnotesize template$<$typename T , gdf\+\_\+dtype type\+\_\+id$>$ }\\C\+U\+D\+A\+\_\+\+H\+O\+S\+T\+\_\+\+D\+E\+V\+I\+C\+E\+\_\+\+C\+A\+L\+L\+A\+B\+LE wrapper$<$ T, type\+\_\+id $>$ \& {\bfseries cudf\+::detail\+::operator-\/=} (wrapper$<$ T, type\+\_\+id $>$ \&lhs, wrapper$<$ T, type\+\_\+id $>$ const \&rhs)\hypertarget{wrapper__types_8hpp_a51dff9c59d2a17cd02f956a74905befd}{}\label{wrapper__types_8hpp_a51dff9c59d2a17cd02f956a74905befd}
+
+\item 
+{\footnotesize template$<$typename T , gdf\+\_\+dtype type\+\_\+id$>$ }\\C\+U\+D\+A\+\_\+\+H\+O\+S\+T\+\_\+\+D\+E\+V\+I\+C\+E\+\_\+\+C\+A\+L\+L\+A\+B\+LE wrapper$<$ T, type\+\_\+id $>$ \& {\bfseries cudf\+::detail\+::operator$\ast$=} (wrapper$<$ T, type\+\_\+id $>$ \&lhs, wrapper$<$ T, type\+\_\+id $>$ const \&rhs)\hypertarget{wrapper__types_8hpp_afe24726188aa949d4f8d467bffc0ca64}{}\label{wrapper__types_8hpp_afe24726188aa949d4f8d467bffc0ca64}
+
+\item 
+{\footnotesize template$<$typename T , gdf\+\_\+dtype type\+\_\+id$>$ }\\C\+U\+D\+A\+\_\+\+H\+O\+S\+T\+\_\+\+D\+E\+V\+I\+C\+E\+\_\+\+C\+A\+L\+L\+A\+B\+LE wrapper$<$ T, type\+\_\+id $>$ \& {\bfseries cudf\+::detail\+::operator/=} (wrapper$<$ T, type\+\_\+id $>$ \&lhs, wrapper$<$ T, type\+\_\+id $>$ const \&rhs)\hypertarget{wrapper__types_8hpp_a781b156653fd3be1c27da9d6c3c900e1}{}\label{wrapper__types_8hpp_a781b156653fd3be1c27da9d6c3c900e1}
+
+\item 
+{\footnotesize template$<$typename T , gdf\+\_\+dtype type\+\_\+id$>$ }\\C\+U\+D\+A\+\_\+\+H\+O\+S\+T\+\_\+\+D\+E\+V\+I\+C\+E\+\_\+\+C\+A\+L\+L\+A\+B\+LE wrapper$<$ T, type\+\_\+id $>$ {\bfseries cudf\+::detail\+::operator+} (wrapper$<$ T, type\+\_\+id $>$ const \&lhs, wrapper$<$ T, type\+\_\+id $>$ const \&rhs)\hypertarget{wrapper__types_8hpp_a1f069c522ae7e8ae5e6f5786f86cfebc}{}\label{wrapper__types_8hpp_a1f069c522ae7e8ae5e6f5786f86cfebc}
+
+\item 
+{\footnotesize template$<$typename T , gdf\+\_\+dtype type\+\_\+id$>$ }\\C\+U\+D\+A\+\_\+\+H\+O\+S\+T\+\_\+\+D\+E\+V\+I\+C\+E\+\_\+\+C\+A\+L\+L\+A\+B\+LE wrapper$<$ T, type\+\_\+id $>$ {\bfseries cudf\+::detail\+::operator-\/} (wrapper$<$ T, type\+\_\+id $>$ const \&lhs, wrapper$<$ T, type\+\_\+id $>$ const \&rhs)\hypertarget{wrapper__types_8hpp_acdb82e4475b47ec9681b630a1d12ccaa}{}\label{wrapper__types_8hpp_acdb82e4475b47ec9681b630a1d12ccaa}
+
+\item 
+{\footnotesize template$<$typename T , gdf\+\_\+dtype type\+\_\+id$>$ }\\C\+U\+D\+A\+\_\+\+H\+O\+S\+T\+\_\+\+D\+E\+V\+I\+C\+E\+\_\+\+C\+A\+L\+L\+A\+B\+LE wrapper$<$ T, type\+\_\+id $>$ {\bfseries cudf\+::detail\+::operator$\ast$} (wrapper$<$ T, type\+\_\+id $>$ const \&lhs, wrapper$<$ T, type\+\_\+id $>$ const \&rhs)\hypertarget{wrapper__types_8hpp_a3f5fb31e6aa49da4cc6320a6e7457bbb}{}\label{wrapper__types_8hpp_a3f5fb31e6aa49da4cc6320a6e7457bbb}
+
+\item 
+{\footnotesize template$<$typename T , gdf\+\_\+dtype type\+\_\+id$>$ }\\C\+U\+D\+A\+\_\+\+H\+O\+S\+T\+\_\+\+D\+E\+V\+I\+C\+E\+\_\+\+C\+A\+L\+L\+A\+B\+LE wrapper$<$ T, type\+\_\+id $>$ {\bfseries cudf\+::detail\+::operator/} (wrapper$<$ T, type\+\_\+id $>$ const \&lhs, wrapper$<$ T, type\+\_\+id $>$ const \&rhs)\hypertarget{wrapper__types_8hpp_adfa65b453d6a29c49bab136cb9a84028}{}\label{wrapper__types_8hpp_adfa65b453d6a29c49bab136cb9a84028}
+
+\item 
+{\footnotesize template$<$typename T , gdf\+\_\+dtype type\+\_\+id$>$ }\\C\+U\+D\+A\+\_\+\+H\+O\+S\+T\+\_\+\+D\+E\+V\+I\+C\+E\+\_\+\+C\+A\+L\+L\+A\+B\+LE wrapper$<$ T, type\+\_\+id $>$\+::value\+\_\+type \& \hyperlink{wrapper__types_8hpp_a35af9b9eea930e00a8bdc42510c944a0}{cudf\+::detail\+::unwrap} (wrapper$<$ T, type\+\_\+id $>$ \&wrapped)
+\begin{DoxyCompactList}\small\item\em Returns a reference to the underlying \char`\"{}value\char`\"{} member of a wrapper struct. \end{DoxyCompactList}\item 
+{\footnotesize template$<$typename T , gdf\+\_\+dtype type\+\_\+id$>$ }\\C\+U\+D\+A\+\_\+\+H\+O\+S\+T\+\_\+\+D\+E\+V\+I\+C\+E\+\_\+\+C\+A\+L\+L\+A\+B\+LE wrapper$<$ T, type\+\_\+id $>$\+::value\+\_\+type const \& \hyperlink{wrapper__types_8hpp_ae53ec1eabb2ca1c2002702bb727cec0e}{cudf\+::detail\+::unwrap} (wrapper$<$ T, type\+\_\+id $>$ const \&wrapped)
+\begin{DoxyCompactList}\small\item\em Returns a reference to the underlying \char`\"{}value\char`\"{} member of a wrapper struct. \end{DoxyCompactList}\item 
+{\footnotesize template$<$typename T $>$ }\\C\+U\+D\+A\+\_\+\+H\+O\+S\+T\+\_\+\+D\+E\+V\+I\+C\+E\+\_\+\+C\+A\+L\+L\+A\+B\+LE std\+::enable\+\_\+if\+\_\+t$<$ std\+::is\+\_\+fundamental$<$ typename std\+::decay$<$ T $>$\+::type $>$\+::value, T $>$ \& \hyperlink{wrapper__types_8hpp_abde5b9dde447ea0df4eb920310efff22}{cudf\+::detail\+::unwrap} (T \&value)
+\begin{DoxyCompactList}\small\item\em Passthrough function for fundamental types. \end{DoxyCompactList}\item 
+{\footnotesize template$<$typename T $>$ }\\C\+U\+D\+A\+\_\+\+H\+O\+S\+T\+\_\+\+D\+E\+V\+I\+C\+E\+\_\+\+C\+A\+L\+L\+A\+B\+LE std\+::enable\+\_\+if\+\_\+t$<$ std\+::is\+\_\+fundamental$<$ typename std\+::decay$<$ T $>$\+::type $>$\+::value, T $>$ const \& \hyperlink{wrapper__types_8hpp_a928f2b326a2505ec9d13eadcc6bcced6}{cudf\+::detail\+::unwrap} (T const \&value)
+\begin{DoxyCompactList}\small\item\em Passthrough function for fundamental types. \end{DoxyCompactList}\end{DoxyCompactItemize}
+
+
+\subsection{Detailed Description}
+Wrapper structs for for the non-\/fundamental gdf\+\_\+dtype types. 
+
+These structs simply wrap a single member variable of a fundamental type called \char`\"{}value\char`\"{}.
+
+These wrapper structures are used in conjunction with the type\+\_\+dispatcher to emulate \char`\"{}strong typedefs\char`\"{}, i.\+e., provide opaque types that allow template specialization. A normal C++ typedef is simply an alias and does not allow for specializing a template or overloading a function.
+
+The purpose of these \char`\"{}strong typedefs\char`\"{} is to provide a one-\/to-\/one mapping between gdf\+\_\+dtype enum values and concrete C++ types and allow distinguishing columns with different gdf\+\_\+dtype types, but have the same underlying type. For example, the underlying type of both G\+D\+F\+\_\+\+D\+A\+T\+E32 and G\+D\+F\+\_\+\+I\+N\+T32 is int32\+\_\+t. However, if one wished to specialize a functor invoked with the type\+\_\+dispatcher to handle G\+D\+F\+\_\+\+D\+A\+T\+E32 different from G\+D\+F\+\_\+\+I\+N\+T32, that would not be possible with aliases.
+
+The standard arithmetic operators are defined for these wrapper structs such that they can be used as if they were fundamental arithmetic types.
+
+In general, interacting with the wrapper structs should be done via the defined operators. However, if one needs to directly access the underlying value, the \char`\"{}unwrap\char`\"{} function may be used. Calling {\ttfamily unwrap} on an instance of a wrapper struct will return a reference to the underlying value. Calling {\ttfamily unwrap} on an instance of a fundamental type will return a reference to that instance (effectively a no-\/op). 
+
+\subsection{Function Documentation}
+\index{wrapper\+\_\+types.\+hpp@{wrapper\+\_\+types.\+hpp}!unwrap@{unwrap}}
+\index{unwrap@{unwrap}!wrapper\+\_\+types.\+hpp@{wrapper\+\_\+types.\+hpp}}
+\subsubsection[{\texorpdfstring{unwrap(wrapper$<$ T, type\+\_\+id $>$ \&wrapped)}{unwrap(wrapper< T, type_id > &wrapped)}}]{\setlength{\rightskip}{0pt plus 5cm}template$<$typename T , gdf\+\_\+dtype type\+\_\+id$>$ C\+U\+D\+A\+\_\+\+H\+O\+S\+T\+\_\+\+D\+E\+V\+I\+C\+E\+\_\+\+C\+A\+L\+L\+A\+B\+LE wrapper$<$T, type\+\_\+id$>$\+::value\+\_\+type\& cudf\+::detail\+::unwrap (
+\begin{DoxyParamCaption}
+\item[{{\bf wrapper}$<$ T, type\+\_\+id $>$ \&}]{wrapped}
+\end{DoxyParamCaption}
+)}\hypertarget{wrapper__types_8hpp_file_a35af9b9eea930e00a8bdc42510c944a0}{}\label{wrapper__types_8hpp_file_a35af9b9eea930e00a8bdc42510c944a0}
+
+
+Returns a reference to the underlying \char`\"{}value\char`\"{} member of a wrapper struct. 
+
+\mbox{[}in\mbox{]} wrapped A non-\/const reference to the wrapper struct to unwrap
+
+A reference to the underlying wrapped value \index{wrapper\+\_\+types.\+hpp@{wrapper\+\_\+types.\+hpp}!unwrap@{unwrap}}
+\index{unwrap@{unwrap}!wrapper\+\_\+types.\+hpp@{wrapper\+\_\+types.\+hpp}}
+\subsubsection[{\texorpdfstring{unwrap(wrapper$<$ T, type\+\_\+id $>$ const \&wrapped)}{unwrap(wrapper< T, type_id > const &wrapped)}}]{\setlength{\rightskip}{0pt plus 5cm}template$<$typename T , gdf\+\_\+dtype type\+\_\+id$>$ C\+U\+D\+A\+\_\+\+H\+O\+S\+T\+\_\+\+D\+E\+V\+I\+C\+E\+\_\+\+C\+A\+L\+L\+A\+B\+LE wrapper$<$T, type\+\_\+id$>$\+::value\+\_\+type const\& cudf\+::detail\+::unwrap (
+\begin{DoxyParamCaption}
+\item[{{\bf wrapper}$<$ T, type\+\_\+id $>$ const \&}]{wrapped}
+\end{DoxyParamCaption}
+)}\hypertarget{wrapper__types_8hpp_file_ae53ec1eabb2ca1c2002702bb727cec0e}{}\label{wrapper__types_8hpp_file_ae53ec1eabb2ca1c2002702bb727cec0e}
+
+
+Returns a reference to the underlying \char`\"{}value\char`\"{} member of a wrapper struct. 
+
+\mbox{[}in\mbox{]} wrapped A const reference to the wrapper struct to unwrap
+
+A const reference to the underlying wrapped value \index{wrapper\+\_\+types.\+hpp@{wrapper\+\_\+types.\+hpp}!unwrap@{unwrap}}
+\index{unwrap@{unwrap}!wrapper\+\_\+types.\+hpp@{wrapper\+\_\+types.\+hpp}}
+\subsubsection[{\texorpdfstring{unwrap(\+T \&value)}{unwrap(T &value)}}]{\setlength{\rightskip}{0pt plus 5cm}template$<$typename T $>$ C\+U\+D\+A\+\_\+\+H\+O\+S\+T\+\_\+\+D\+E\+V\+I\+C\+E\+\_\+\+C\+A\+L\+L\+A\+B\+LE std\+::enable\+\_\+if\+\_\+t$<$std\+::is\+\_\+fundamental$<$typename std\+::decay$<$T$>$\+::type$>$\+::value, T$>$\& cudf\+::detail\+::unwrap (
+\begin{DoxyParamCaption}
+\item[{T \&}]{value}
+\end{DoxyParamCaption}
+)}\hypertarget{wrapper__types_8hpp_file_abde5b9dde447ea0df4eb920310efff22}{}\label{wrapper__types_8hpp_file_abde5b9dde447ea0df4eb920310efff22}
+
+
+Passthrough function for fundamental types. 
+
+This specialization of \char`\"{}unwrap\char`\"{} is provided such that it can be used in generic code that is agnostic to whether or not the type being operated on is a wrapper struct or a fundamental type
+
+\mbox{[}in\mbox{]} value Reference to a fundamental type to passthrough
+
+Reference to the value passed in \index{wrapper\+\_\+types.\+hpp@{wrapper\+\_\+types.\+hpp}!unwrap@{unwrap}}
+\index{unwrap@{unwrap}!wrapper\+\_\+types.\+hpp@{wrapper\+\_\+types.\+hpp}}
+\subsubsection[{\texorpdfstring{unwrap(\+T const \&value)}{unwrap(T const &value)}}]{\setlength{\rightskip}{0pt plus 5cm}template$<$typename T $>$ C\+U\+D\+A\+\_\+\+H\+O\+S\+T\+\_\+\+D\+E\+V\+I\+C\+E\+\_\+\+C\+A\+L\+L\+A\+B\+LE std\+::enable\+\_\+if\+\_\+t$<$std\+::is\+\_\+fundamental$<$typename std\+::decay$<$T$>$\+::type$>$\+::value, T$>$ const\& cudf\+::detail\+::unwrap (
+\begin{DoxyParamCaption}
+\item[{T const \&}]{value}
+\end{DoxyParamCaption}
+)}\hypertarget{wrapper__types_8hpp_file_a928f2b326a2505ec9d13eadcc6bcced6}{}\label{wrapper__types_8hpp_file_a928f2b326a2505ec9d13eadcc6bcced6}
+
+
+Passthrough function for fundamental types. 
+
+This specialization of \char`\"{}unwrap\char`\"{} is provided such that it can be used in generic code that is agnostic to whether or not the type being operated on is a wrapper struct or a fundamental type
+
+\mbox{[}in\mbox{]} value const reference to a fundamental type to passthrough
+
+const reference to the value passed in 

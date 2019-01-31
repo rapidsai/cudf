@@ -1,0 +1,7 @@
+digraph "Graphical Class Hierarchy"
+{
+  edge [fontname="Helvetica",fontsize="10",labelfontname="Helvetica",labelfontsize="10"];
+  node [fontname="Helvetica",fontsize="10",shape=record];
+  rankdir="LR";
+  Node1 [label="cudf::detail::wrapper\l\< T, type_id \>",height=0.2,width=0.4,color="black", fillcolor="white", style="filled",URL="$structcudf_1_1detail_1_1wrapper.html",tooltip="Base wrapper structure to emulate \"strong typedefs\" for gdf_dtype values that do not correspond to fu..."];
+}

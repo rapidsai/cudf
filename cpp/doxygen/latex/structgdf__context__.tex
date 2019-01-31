@@ -1,0 +1,45 @@
+\hypertarget{structgdf__context__}{}\section{gdf\+\_\+context\+\_\+ Struct Reference}
+\label{structgdf__context__}\index{gdf\+\_\+context\+\_\+@{gdf\+\_\+context\+\_\+}}
+
+
+{\ttfamily \#include $<$types.\+h$>$}
+
+\subsection*{Public Attributes}
+\begin{DoxyCompactItemize}
+\item 
+int \hyperlink{structgdf__context___afb8cf060524049e9c05a3cfe523528cd}{flag\+\_\+sorted}
+\item 
+gdf\+\_\+method \hyperlink{structgdf__context___a835f25957aee3644e44dae95fcee9824}{flag\+\_\+method}
+\item 
+int \hyperlink{structgdf__context___ad37c154f7eb77796490dd56f74f5485c}{flag\+\_\+distinct}
+\item 
+int \hyperlink{structgdf__context___a85dc10323c2f955a715d2edad1618835}{flag\+\_\+sort\+\_\+result}
+\item 
+int \hyperlink{structgdf__context___ac694627cbc70f39bc249a99876baf8de}{flag\+\_\+sort\+\_\+inplace}
+\end{DoxyCompactItemize}
+
+
+\subsection{Detailed Description}
+This struct holds various information about how an operation should be performed as well as additional information about the input data. 
+
+\subsection{Member Data Documentation}
+\index{gdf\+\_\+context\+\_\+@{gdf\+\_\+context\+\_\+}!flag\+\_\+distinct@{flag\+\_\+distinct}}
+\index{flag\+\_\+distinct@{flag\+\_\+distinct}!gdf\+\_\+context\+\_\+@{gdf\+\_\+context\+\_\+}}
+\subsubsection[{\texorpdfstring{flag\+\_\+distinct}{flag_distinct}}]{\setlength{\rightskip}{0pt plus 5cm}int gdf\+\_\+context\+\_\+\+::flag\+\_\+distinct}\hypertarget{structgdf__context___ad37c154f7eb77796490dd56f74f5485c}{}\label{structgdf__context___ad37c154f7eb77796490dd56f74f5485c}
+for C\+O\+U\+NT\+: D\+I\+S\+T\+I\+N\+CT = 1, else = 0 \index{gdf\+\_\+context\+\_\+@{gdf\+\_\+context\+\_\+}!flag\+\_\+method@{flag\+\_\+method}}
+\index{flag\+\_\+method@{flag\+\_\+method}!gdf\+\_\+context\+\_\+@{gdf\+\_\+context\+\_\+}}
+\subsubsection[{\texorpdfstring{flag\+\_\+method}{flag_method}}]{\setlength{\rightskip}{0pt plus 5cm}gdf\+\_\+method gdf\+\_\+context\+\_\+\+::flag\+\_\+method}\hypertarget{structgdf__context___a835f25957aee3644e44dae95fcee9824}{}\label{structgdf__context___a835f25957aee3644e44dae95fcee9824}
+The method to be used for the operation (e.\+g., sort vs hash) \index{gdf\+\_\+context\+\_\+@{gdf\+\_\+context\+\_\+}!flag\+\_\+sort\+\_\+inplace@{flag\+\_\+sort\+\_\+inplace}}
+\index{flag\+\_\+sort\+\_\+inplace@{flag\+\_\+sort\+\_\+inplace}!gdf\+\_\+context\+\_\+@{gdf\+\_\+context\+\_\+}}
+\subsubsection[{\texorpdfstring{flag\+\_\+sort\+\_\+inplace}{flag_sort_inplace}}]{\setlength{\rightskip}{0pt plus 5cm}int gdf\+\_\+context\+\_\+\+::flag\+\_\+sort\+\_\+inplace}\hypertarget{structgdf__context___ac694627cbc70f39bc249a99876baf8de}{}\label{structgdf__context___ac694627cbc70f39bc249a99876baf8de}
+0 = No sort in place allowed, 1 = else \index{gdf\+\_\+context\+\_\+@{gdf\+\_\+context\+\_\+}!flag\+\_\+sort\+\_\+result@{flag\+\_\+sort\+\_\+result}}
+\index{flag\+\_\+sort\+\_\+result@{flag\+\_\+sort\+\_\+result}!gdf\+\_\+context\+\_\+@{gdf\+\_\+context\+\_\+}}
+\subsubsection[{\texorpdfstring{flag\+\_\+sort\+\_\+result}{flag_sort_result}}]{\setlength{\rightskip}{0pt plus 5cm}int gdf\+\_\+context\+\_\+\+::flag\+\_\+sort\+\_\+result}\hypertarget{structgdf__context___a85dc10323c2f955a715d2edad1618835}{}\label{structgdf__context___a85dc10323c2f955a715d2edad1618835}
+When method is G\+D\+F\+\_\+\+H\+A\+SH, 0 = result is not sorted, 1 = result is sorted \index{gdf\+\_\+context\+\_\+@{gdf\+\_\+context\+\_\+}!flag\+\_\+sorted@{flag\+\_\+sorted}}
+\index{flag\+\_\+sorted@{flag\+\_\+sorted}!gdf\+\_\+context\+\_\+@{gdf\+\_\+context\+\_\+}}
+\subsubsection[{\texorpdfstring{flag\+\_\+sorted}{flag_sorted}}]{\setlength{\rightskip}{0pt plus 5cm}int gdf\+\_\+context\+\_\+\+::flag\+\_\+sorted}\hypertarget{structgdf__context___afb8cf060524049e9c05a3cfe523528cd}{}\label{structgdf__context___afb8cf060524049e9c05a3cfe523528cd}
+Indicates if the input data is sorted. 0 = No, 1 = yes 
+
+The documentation for this struct was generated from the following file\+:\begin{DoxyCompactItemize}
+\item 
+/home/jhemstad/cudf/cpp/include/cudf/types.\+h\end{DoxyCompactItemize}

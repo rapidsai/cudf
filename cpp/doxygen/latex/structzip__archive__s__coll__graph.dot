@@ -1,0 +1,12 @@
+digraph "zip_archive_s"
+{
+  edge [fontname="Helvetica",fontsize="10",labelfontname="Helvetica",labelfontsize="10"];
+  node [fontname="Helvetica",fontsize="10",shape=record];
+  Node1 [label="zip_archive_s",height=0.2,width=0.4,color="black", fillcolor="grey75", style="filled", fontcolor="black"];
+  Node2 -> Node1 [dir="back",color="darkorchid3",fontsize="10",style="dashed",label=" cdfh" ];
+  Node2 [label="zip_cdfh_s",height=0.2,width=0.4,color="black", fillcolor="white", style="filled",URL="$structzip__cdfh__s.html"];
+  Node3 -> Node1 [dir="back",color="darkorchid3",fontsize="10",style="dashed",label=" eocdl" ];
+  Node3 [label="zip64_eocdl",height=0.2,width=0.4,color="black", fillcolor="white", style="filled",URL="$structzip64__eocdl.html"];
+  Node4 -> Node1 [dir="back",color="darkorchid3",fontsize="10",style="dashed",label=" eocd" ];
+  Node4 [label="zip_eocd_s",height=0.2,width=0.4,color="black", fillcolor="white", style="filled",URL="$structzip__eocd__s.html"];
+}

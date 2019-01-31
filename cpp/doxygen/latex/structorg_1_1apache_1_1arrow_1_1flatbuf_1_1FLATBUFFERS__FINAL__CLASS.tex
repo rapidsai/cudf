@@ -1,0 +1,669 @@
+\hypertarget{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS}{}\section{org\+:\+:apache\+:\+:arrow\+:\+:flatbuf\+:\+:F\+L\+A\+T\+B\+U\+F\+F\+E\+R\+S\+\_\+\+F\+I\+N\+A\+L\+\_\+\+C\+L\+A\+SS Struct Reference}
+\label{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS}\index{org\+::apache\+::arrow\+::flatbuf\+::\+F\+L\+A\+T\+B\+U\+F\+F\+E\+R\+S\+\_\+\+F\+I\+N\+A\+L\+\_\+\+C\+L\+A\+SS@{org\+::apache\+::arrow\+::flatbuf\+::\+F\+L\+A\+T\+B\+U\+F\+F\+E\+R\+S\+\_\+\+F\+I\+N\+A\+L\+\_\+\+C\+L\+A\+SS}}
+
+
+These are stored in the flatbuffer in the Type union below.  
+
+
+
+
+{\ttfamily \#include $<$File\+\_\+generated.\+h$>$}
+
+
+
+Inheritance diagram for org\+:\+:apache\+:\+:arrow\+:\+:flatbuf\+:\+:F\+L\+A\+T\+B\+U\+F\+F\+E\+R\+S\+\_\+\+F\+I\+N\+A\+L\+\_\+\+C\+L\+A\+SS\+:
+% FIG 0
+
+
+Collaboration diagram for org\+:\+:apache\+:\+:arrow\+:\+:flatbuf\+:\+:F\+L\+A\+T\+B\+U\+F\+F\+E\+R\+S\+\_\+\+F\+I\+N\+A\+L\+\_\+\+C\+L\+A\+SS\+:
+% FIG 1
+\subsection*{Public Types}
+\begin{DoxyCompactItemize}
+\item 
+enum \{ {\bfseries V\+T\+\_\+\+V\+E\+R\+S\+I\+ON} = 4, 
+{\bfseries V\+T\+\_\+\+S\+C\+H\+E\+MA} = 6, 
+{\bfseries V\+T\+\_\+\+D\+I\+C\+T\+I\+O\+N\+A\+R\+I\+ES} = 8, 
+{\bfseries V\+T\+\_\+\+R\+E\+C\+O\+R\+D\+B\+A\+T\+C\+H\+ES} = 10
+ \}\hypertarget{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_ad0ffaac013eacf67047fdb45a5523e73}{}\label{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_ad0ffaac013eacf67047fdb45a5523e73}
+
+\item 
+enum \{ {\bfseries V\+T\+\_\+\+L\+E\+N\+G\+TH} = 4, 
+{\bfseries V\+T\+\_\+\+N\+O\+D\+ES} = 6, 
+{\bfseries V\+T\+\_\+\+B\+U\+F\+F\+E\+RS} = 8
+ \}\hypertarget{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_aea1c84f92596dc976e996d77b6bdad68}{}\label{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_aea1c84f92596dc976e996d77b6bdad68}
+
+\item 
+enum \{ {\bfseries V\+T\+\_\+\+ID} = 4, 
+{\bfseries V\+T\+\_\+\+D\+A\+TA} = 6, 
+{\bfseries V\+T\+\_\+\+I\+S\+D\+E\+L\+TA} = 8
+ \}\hypertarget{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a266e269c197dc614e996945e940bd80d}{}\label{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a266e269c197dc614e996945e940bd80d}
+
+\item 
+enum \{ {\bfseries V\+T\+\_\+\+V\+E\+R\+S\+I\+ON} = 4, 
+{\bfseries V\+T\+\_\+\+H\+E\+A\+D\+E\+R\+\_\+\+T\+Y\+PE} = 6, 
+{\bfseries V\+T\+\_\+\+H\+E\+A\+D\+ER} = 8, 
+{\bfseries V\+T\+\_\+\+B\+O\+D\+Y\+L\+E\+N\+G\+TH} = 10
+ \}\hypertarget{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a0da49fe54670285637586fe618e7f76f}{}\label{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a0da49fe54670285637586fe618e7f76f}
+
+\item 
+enum \{ {\bfseries V\+T\+\_\+\+L\+I\+S\+T\+S\+I\+ZE} = 4
+ \}\hypertarget{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a4e64347a73734d798d6955ee96205424}{}\label{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a4e64347a73734d798d6955ee96205424}
+
+\item 
+enum \{ {\bfseries V\+T\+\_\+\+K\+E\+Y\+S\+S\+O\+R\+T\+ED} = 4
+ \}\hypertarget{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_ab6530ff3ada84fc964dc63c9fb3a0d4a}{}\label{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_ab6530ff3ada84fc964dc63c9fb3a0d4a}
+
+\item 
+enum \{ {\bfseries V\+T\+\_\+\+M\+O\+DE} = 4, 
+{\bfseries V\+T\+\_\+\+T\+Y\+P\+E\+I\+DS} = 6
+ \}\hypertarget{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a1f23bac2f65e1ef251677cbd6e10a477}{}\label{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a1f23bac2f65e1ef251677cbd6e10a477}
+
+\item 
+enum \{ {\bfseries V\+T\+\_\+\+B\+I\+T\+W\+I\+D\+TH} = 4, 
+{\bfseries V\+T\+\_\+\+I\+S\+\_\+\+S\+I\+G\+N\+ED} = 6
+ \}\hypertarget{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a82d222917deb0beda511daf40b8c2224}{}\label{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a82d222917deb0beda511daf40b8c2224}
+
+\item 
+enum \{ {\bfseries V\+T\+\_\+\+P\+R\+E\+C\+I\+S\+I\+ON} = 4
+ \}\hypertarget{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a5b0e9701dff1e25b5e07a93c07a2eb6a}{}\label{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a5b0e9701dff1e25b5e07a93c07a2eb6a}
+
+\item 
+enum \{ {\bfseries V\+T\+\_\+\+B\+Y\+T\+E\+W\+I\+D\+TH} = 4
+ \}\hypertarget{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a5e9943560a3274db46dba8b0cfcd40d6}{}\label{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a5e9943560a3274db46dba8b0cfcd40d6}
+
+\item 
+enum \{ {\bfseries V\+T\+\_\+\+P\+R\+E\+C\+I\+S\+I\+ON} = 4, 
+{\bfseries V\+T\+\_\+\+S\+C\+A\+LE} = 6
+ \}\hypertarget{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a60b2738257ec2157a02ae4ebc0da5abe}{}\label{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a60b2738257ec2157a02ae4ebc0da5abe}
+
+\item 
+enum \{ {\bfseries V\+T\+\_\+\+U\+N\+IT} = 4
+ \}\hypertarget{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a33f6d44a9a6de62c1af4d0bf7282c259}{}\label{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a33f6d44a9a6de62c1af4d0bf7282c259}
+
+\item 
+enum \{ {\bfseries V\+T\+\_\+\+U\+N\+IT} = 4, 
+{\bfseries V\+T\+\_\+\+B\+I\+T\+W\+I\+D\+TH} = 4
+ \}\hypertarget{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a56b3587010912c5568bbaf22f0768d1a}{}\label{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a56b3587010912c5568bbaf22f0768d1a}
+
+\item 
+enum \{ {\bfseries V\+T\+\_\+\+U\+N\+IT} = 4, 
+{\bfseries V\+T\+\_\+\+T\+I\+M\+E\+Z\+O\+NE} = 6
+ \}\hypertarget{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a9610420d24fea561c9cae2cca1801c9a}{}\label{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a9610420d24fea561c9cae2cca1801c9a}
+
+\item 
+enum \{ {\bfseries V\+T\+\_\+\+U\+N\+IT} = 4
+ \}\hypertarget{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a95f72a75f30a884e50852919b2aefeb1}{}\label{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a95f72a75f30a884e50852919b2aefeb1}
+
+\item 
+enum \{ {\bfseries V\+T\+\_\+\+K\+EY} = 4, 
+{\bfseries V\+T\+\_\+\+V\+A\+L\+UE} = 6
+ \}\hypertarget{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_aebf032e0c741c2e797a49644603fd0c7}{}\label{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_aebf032e0c741c2e797a49644603fd0c7}
+
+\item 
+enum \{ {\bfseries V\+T\+\_\+\+ID} = 4, 
+{\bfseries V\+T\+\_\+\+I\+N\+D\+E\+X\+T\+Y\+PE} = 6, 
+{\bfseries V\+T\+\_\+\+I\+S\+O\+R\+D\+E\+R\+ED} = 8
+ \}\hypertarget{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_aba8bd87c794363e09a885bb2082bad86}{}\label{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_aba8bd87c794363e09a885bb2082bad86}
+
+\item 
+enum \{ \\*
+{\bfseries V\+T\+\_\+\+N\+A\+ME} = 4, 
+{\bfseries V\+T\+\_\+\+N\+U\+L\+L\+A\+B\+LE} = 6, 
+{\bfseries V\+T\+\_\+\+T\+Y\+P\+E\+\_\+\+T\+Y\+PE} = 8, 
+{\bfseries V\+T\+\_\+\+T\+Y\+PE} = 10, 
+\\*
+{\bfseries V\+T\+\_\+\+D\+I\+C\+T\+I\+O\+N\+A\+RY} = 12, 
+{\bfseries V\+T\+\_\+\+C\+H\+I\+L\+D\+R\+EN} = 14, 
+{\bfseries V\+T\+\_\+\+C\+U\+S\+T\+O\+M\+\_\+\+M\+E\+T\+A\+D\+A\+TA} = 16
+ \}\hypertarget{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_ac6657967ff9346865d7992b4d9dfc1be}{}\label{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_ac6657967ff9346865d7992b4d9dfc1be}
+
+\item 
+enum \{ {\bfseries V\+T\+\_\+\+E\+N\+D\+I\+A\+N\+N\+E\+SS} = 4, 
+{\bfseries V\+T\+\_\+\+F\+I\+E\+L\+DS} = 6, 
+{\bfseries V\+T\+\_\+\+C\+U\+S\+T\+O\+M\+\_\+\+M\+E\+T\+A\+D\+A\+TA} = 16
+ \}\hypertarget{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_ae011c1116f06df235fe2242e20bdbc9e}{}\label{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_ae011c1116f06df235fe2242e20bdbc9e}
+
+\item 
+enum \{ {\bfseries V\+T\+\_\+\+S\+I\+ZE} = 4, 
+{\bfseries V\+T\+\_\+\+N\+A\+ME} = 4
+ \}\hypertarget{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_af1f6807f98fcb7496e1d9eed8ef64f65}{}\label{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_af1f6807f98fcb7496e1d9eed8ef64f65}
+
+\item 
+enum \{ \\*
+{\bfseries V\+T\+\_\+\+T\+Y\+P\+E\+\_\+\+T\+Y\+PE} = 8, 
+{\bfseries V\+T\+\_\+\+T\+Y\+PE} = 10, 
+{\bfseries V\+T\+\_\+\+S\+H\+A\+PE} = 8, 
+{\bfseries V\+T\+\_\+\+S\+T\+R\+I\+D\+ES} = 10, 
+\\*
+{\bfseries V\+T\+\_\+\+D\+A\+TA} = 6
+ \}\hypertarget{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a3ede0116fa958f3c517fae8cc7a1e84e}{}\label{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a3ede0116fa958f3c517fae8cc7a1e84e}
+
+\end{DoxyCompactItemize}
+\subsection*{Public Member Functions}
+\begin{DoxyCompactItemize}
+\item 
+Metadata\+Version {\bfseries version} () const \hypertarget{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a581ef6387b085df698f948cfeb515f3c}{}\label{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a581ef6387b085df698f948cfeb515f3c}
+
+\item 
+const Schema $\ast$ {\bfseries schema} () const \hypertarget{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_aeba86820c609cf2d71eec23f3c7e5629}{}\label{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_aeba86820c609cf2d71eec23f3c7e5629}
+
+\item 
+const flatbuffers\+::\+Vector$<$ const Block $\ast$ $>$ $\ast$ {\bfseries dictionaries} () const \hypertarget{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_abda5fb64a31fe9a7d9060a0f095e45f2}{}\label{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_abda5fb64a31fe9a7d9060a0f095e45f2}
+
+\item 
+const flatbuffers\+::\+Vector$<$ const Block $\ast$ $>$ $\ast$ {\bfseries record\+Batches} () const \hypertarget{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a8b3739f0d2625d3ea75f873e47b261ff}{}\label{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a8b3739f0d2625d3ea75f873e47b261ff}
+
+\item 
+bool {\bfseries Verify} (flatbuffers\+::\+Verifier \&verifier) const \hypertarget{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_af3e217fc40beb9b315e3979010413969}{}\label{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_af3e217fc40beb9b315e3979010413969}
+
+\item 
+int64\+\_\+t \hyperlink{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a4c8b89371bd76124e94a00a7044d9f69}{length} () const 
+\item 
+const flatbuffers\+::\+Vector$<$ const Field\+Node $\ast$ $>$ $\ast$ \hyperlink{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_aa4ecd50311e1db74c5ab26d4626396eb}{nodes} () const \hypertarget{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_aa4ecd50311e1db74c5ab26d4626396eb}{}\label{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_aa4ecd50311e1db74c5ab26d4626396eb}
+
+\begin{DoxyCompactList}\small\item\em Nodes correspond to the pre-\/ordered flattened logical schema. \end{DoxyCompactList}\item 
+const flatbuffers\+::\+Vector$<$ const Buffer $\ast$ $>$ $\ast$ \hyperlink{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a00a1e3efc7f08d49bc2647967c10dc4e}{buffers} () const 
+\item 
+bool {\bfseries Verify} (flatbuffers\+::\+Verifier \&verifier) const \hypertarget{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_af3e217fc40beb9b315e3979010413969}{}\label{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_af3e217fc40beb9b315e3979010413969}
+
+\item 
+int64\+\_\+t {\bfseries id} () const \hypertarget{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a228576dd5bc73c49a95d44c56d910250}{}\label{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a228576dd5bc73c49a95d44c56d910250}
+
+\item 
+const Record\+Batch $\ast$ {\bfseries data} () const \hypertarget{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_ac804561a7b1c02345de274476650e75a}{}\label{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_ac804561a7b1c02345de274476650e75a}
+
+\item 
+bool \hyperlink{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a753f594feb01fa8aac729d9cef045242}{is\+Delta} () const 
+\item 
+bool {\bfseries Verify} (flatbuffers\+::\+Verifier \&verifier) const \hypertarget{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_af3e217fc40beb9b315e3979010413969}{}\label{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_af3e217fc40beb9b315e3979010413969}
+
+\item 
+Metadata\+Version {\bfseries version} () const \hypertarget{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a581ef6387b085df698f948cfeb515f3c}{}\label{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a581ef6387b085df698f948cfeb515f3c}
+
+\item 
+Message\+Header {\bfseries header\+\_\+type} () const \hypertarget{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_ad89656f1b8d7c4e21886fbcca9912368}{}\label{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_ad89656f1b8d7c4e21886fbcca9912368}
+
+\item 
+const void $\ast$ {\bfseries header} () const \hypertarget{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a4cbf74c37fbe985b3db2a4c8ba7532b9}{}\label{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a4cbf74c37fbe985b3db2a4c8ba7532b9}
+
+\item 
+{\footnotesize template$<$typename T $>$ }\\const T $\ast$ {\bfseries header\+\_\+as} () const \hypertarget{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a1046db74762674df1d2eb2d7cac2bbbb}{}\label{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a1046db74762674df1d2eb2d7cac2bbbb}
+
+\item 
+const Schema $\ast$ {\bfseries header\+\_\+as\+\_\+\+Schema} () const \hypertarget{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a864793628573d914837e32a44fa1283c}{}\label{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a864793628573d914837e32a44fa1283c}
+
+\item 
+const Dictionary\+Batch $\ast$ {\bfseries header\+\_\+as\+\_\+\+Dictionary\+Batch} () const \hypertarget{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a402524533fb34111e8e24921f29c1b25}{}\label{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a402524533fb34111e8e24921f29c1b25}
+
+\item 
+const Record\+Batch $\ast$ {\bfseries header\+\_\+as\+\_\+\+Record\+Batch} () const \hypertarget{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a9164e7d1762e7ec4df91a0d0c9e8b457}{}\label{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a9164e7d1762e7ec4df91a0d0c9e8b457}
+
+\item 
+const Tensor $\ast$ {\bfseries header\+\_\+as\+\_\+\+Tensor} () const \hypertarget{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_ad8496403b72345dd63bd82d58ff0a47c}{}\label{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_ad8496403b72345dd63bd82d58ff0a47c}
+
+\item 
+int64\+\_\+t {\bfseries body\+Length} () const \hypertarget{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a655e29bf0d5024b2edbd873f0b040424}{}\label{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a655e29bf0d5024b2edbd873f0b040424}
+
+\item 
+bool {\bfseries Verify} (flatbuffers\+::\+Verifier \&verifier) const \hypertarget{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_af3e217fc40beb9b315e3979010413969}{}\label{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_af3e217fc40beb9b315e3979010413969}
+
+\item 
+bool {\bfseries Verify} (flatbuffers\+::\+Verifier \&verifier) const \hypertarget{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_af3e217fc40beb9b315e3979010413969}{}\label{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_af3e217fc40beb9b315e3979010413969}
+
+\item 
+bool {\bfseries Verify} (flatbuffers\+::\+Verifier \&verifier) const \hypertarget{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_af3e217fc40beb9b315e3979010413969}{}\label{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_af3e217fc40beb9b315e3979010413969}
+
+\item 
+bool {\bfseries Verify} (flatbuffers\+::\+Verifier \&verifier) const \hypertarget{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_af3e217fc40beb9b315e3979010413969}{}\label{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_af3e217fc40beb9b315e3979010413969}
+
+\item 
+int32\+\_\+t \hyperlink{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a0214adc04d1a6439c8486e67b90160af}{list\+Size} () const \hypertarget{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a0214adc04d1a6439c8486e67b90160af}{}\label{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a0214adc04d1a6439c8486e67b90160af}
+
+\begin{DoxyCompactList}\small\item\em Number of list items per value. \end{DoxyCompactList}\item 
+bool {\bfseries Verify} (flatbuffers\+::\+Verifier \&verifier) const \hypertarget{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_af3e217fc40beb9b315e3979010413969}{}\label{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_af3e217fc40beb9b315e3979010413969}
+
+\item 
+bool \hyperlink{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_aa734e31a4ab69080e9adf09c1519227e}{keys\+Sorted} () const \hypertarget{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_aa734e31a4ab69080e9adf09c1519227e}{}\label{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_aa734e31a4ab69080e9adf09c1519227e}
+
+\begin{DoxyCompactList}\small\item\em Set to true if the keys within each value are sorted. \end{DoxyCompactList}\item 
+bool {\bfseries Verify} (flatbuffers\+::\+Verifier \&verifier) const \hypertarget{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_af3e217fc40beb9b315e3979010413969}{}\label{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_af3e217fc40beb9b315e3979010413969}
+
+\item 
+Union\+Mode {\bfseries mode} () const \hypertarget{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a9c0ba505695874b0c8cafc4617d86459}{}\label{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a9c0ba505695874b0c8cafc4617d86459}
+
+\item 
+const flatbuffers\+::\+Vector$<$ int32\+\_\+t $>$ $\ast$ {\bfseries type\+Ids} () const \hypertarget{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_adba68519f3a174c0af6623810620d25c}{}\label{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_adba68519f3a174c0af6623810620d25c}
+
+\item 
+bool {\bfseries Verify} (flatbuffers\+::\+Verifier \&verifier) const \hypertarget{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_af3e217fc40beb9b315e3979010413969}{}\label{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_af3e217fc40beb9b315e3979010413969}
+
+\item 
+int32\+\_\+t {\bfseries bit\+Width} () const \hypertarget{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_aa2264238055110009cce803ae981291d}{}\label{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_aa2264238055110009cce803ae981291d}
+
+\item 
+bool {\bfseries is\+\_\+signed} () const \hypertarget{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_ad210deaee74171329c43d6bedd906f25}{}\label{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_ad210deaee74171329c43d6bedd906f25}
+
+\item 
+bool {\bfseries Verify} (flatbuffers\+::\+Verifier \&verifier) const \hypertarget{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_af3e217fc40beb9b315e3979010413969}{}\label{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_af3e217fc40beb9b315e3979010413969}
+
+\item 
+Precision {\bfseries precision} () const \hypertarget{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a85052ede3509274c05bb118a10bb9427}{}\label{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a85052ede3509274c05bb118a10bb9427}
+
+\item 
+bool {\bfseries Verify} (flatbuffers\+::\+Verifier \&verifier) const \hypertarget{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_af3e217fc40beb9b315e3979010413969}{}\label{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_af3e217fc40beb9b315e3979010413969}
+
+\item 
+bool {\bfseries Verify} (flatbuffers\+::\+Verifier \&verifier) const \hypertarget{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_af3e217fc40beb9b315e3979010413969}{}\label{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_af3e217fc40beb9b315e3979010413969}
+
+\item 
+bool {\bfseries Verify} (flatbuffers\+::\+Verifier \&verifier) const \hypertarget{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_af3e217fc40beb9b315e3979010413969}{}\label{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_af3e217fc40beb9b315e3979010413969}
+
+\item 
+int32\+\_\+t \hyperlink{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_ab4efaa8e4b8bda85b130cbc4f617a8fc}{byte\+Width} () const \hypertarget{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_ab4efaa8e4b8bda85b130cbc4f617a8fc}{}\label{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_ab4efaa8e4b8bda85b130cbc4f617a8fc}
+
+\begin{DoxyCompactList}\small\item\em Number of bytes per value. \end{DoxyCompactList}\item 
+bool {\bfseries Verify} (flatbuffers\+::\+Verifier \&verifier) const \hypertarget{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_af3e217fc40beb9b315e3979010413969}{}\label{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_af3e217fc40beb9b315e3979010413969}
+
+\item 
+bool {\bfseries Verify} (flatbuffers\+::\+Verifier \&verifier) const \hypertarget{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_af3e217fc40beb9b315e3979010413969}{}\label{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_af3e217fc40beb9b315e3979010413969}
+
+\item 
+int32\+\_\+t \hyperlink{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a56c3f6f7cf35f40958a55c03ae35c8b9}{precision} () const \hypertarget{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a56c3f6f7cf35f40958a55c03ae35c8b9}{}\label{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a56c3f6f7cf35f40958a55c03ae35c8b9}
+
+\begin{DoxyCompactList}\small\item\em Total number of decimal digits. \end{DoxyCompactList}\item 
+int32\+\_\+t \hyperlink{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a98265275779df7dea029edf9ecbb59d1}{scale} () const \hypertarget{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a98265275779df7dea029edf9ecbb59d1}{}\label{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a98265275779df7dea029edf9ecbb59d1}
+
+\begin{DoxyCompactList}\small\item\em Number of digits after the decimal point \char`\"{}.\char`\"{}. \end{DoxyCompactList}\item 
+bool {\bfseries Verify} (flatbuffers\+::\+Verifier \&verifier) const \hypertarget{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_af3e217fc40beb9b315e3979010413969}{}\label{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_af3e217fc40beb9b315e3979010413969}
+
+\item 
+Date\+Unit {\bfseries unit} () const \hypertarget{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_ad19d7aa00544c615cc0166eebfd8d836}{}\label{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_ad19d7aa00544c615cc0166eebfd8d836}
+
+\item 
+bool {\bfseries Verify} (flatbuffers\+::\+Verifier \&verifier) const \hypertarget{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_af3e217fc40beb9b315e3979010413969}{}\label{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_af3e217fc40beb9b315e3979010413969}
+
+\item 
+Time\+Unit {\bfseries unit} () const \hypertarget{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a375692099509e989d1f151fd6fa06d30}{}\label{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a375692099509e989d1f151fd6fa06d30}
+
+\item 
+int32\+\_\+t {\bfseries bit\+Width} () const \hypertarget{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_aa2264238055110009cce803ae981291d}{}\label{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_aa2264238055110009cce803ae981291d}
+
+\item 
+bool {\bfseries Verify} (flatbuffers\+::\+Verifier \&verifier) const \hypertarget{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_af3e217fc40beb9b315e3979010413969}{}\label{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_af3e217fc40beb9b315e3979010413969}
+
+\item 
+Time\+Unit {\bfseries unit} () const \hypertarget{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a375692099509e989d1f151fd6fa06d30}{}\label{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a375692099509e989d1f151fd6fa06d30}
+
+\item 
+const flatbuffers\+::\+String $\ast$ \hyperlink{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a95d83d815c202d830601fb53f6b5179a}{timezone} () const 
+\item 
+bool {\bfseries Verify} (flatbuffers\+::\+Verifier \&verifier) const \hypertarget{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_af3e217fc40beb9b315e3979010413969}{}\label{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_af3e217fc40beb9b315e3979010413969}
+
+\item 
+Interval\+Unit {\bfseries unit} () const \hypertarget{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a8ab541b82eed46b2c19373362f146559}{}\label{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a8ab541b82eed46b2c19373362f146559}
+
+\item 
+bool {\bfseries Verify} (flatbuffers\+::\+Verifier \&verifier) const \hypertarget{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_af3e217fc40beb9b315e3979010413969}{}\label{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_af3e217fc40beb9b315e3979010413969}
+
+\item 
+const flatbuffers\+::\+String $\ast$ {\bfseries key} () const \hypertarget{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a1f8d84706583150d05ae64885f093bf8}{}\label{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a1f8d84706583150d05ae64885f093bf8}
+
+\item 
+const flatbuffers\+::\+String $\ast$ {\bfseries value} () const \hypertarget{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a698e188abe82469976dfe942ad514459}{}\label{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a698e188abe82469976dfe942ad514459}
+
+\item 
+bool {\bfseries Verify} (flatbuffers\+::\+Verifier \&verifier) const \hypertarget{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_af3e217fc40beb9b315e3979010413969}{}\label{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_af3e217fc40beb9b315e3979010413969}
+
+\item 
+int64\+\_\+t \hyperlink{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a228576dd5bc73c49a95d44c56d910250}{id} () const 
+\item 
+const Int $\ast$ \hyperlink{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a8e7e4d0c914c7c6906f981b0a5373c10}{index\+Type} () const 
+\item 
+bool \hyperlink{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a00390df0634d5d250957016552f553aa}{is\+Ordered} () const 
+\item 
+bool {\bfseries Verify} (flatbuffers\+::\+Verifier \&verifier) const \hypertarget{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_af3e217fc40beb9b315e3979010413969}{}\label{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_af3e217fc40beb9b315e3979010413969}
+
+\item 
+const flatbuffers\+::\+String $\ast$ {\bfseries name} () const \hypertarget{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_aeff56ab21e54702ac98abf0168742905}{}\label{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_aeff56ab21e54702ac98abf0168742905}
+
+\item 
+bool {\bfseries nullable} () const \hypertarget{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a65255ed8a60150205066ec1a3946d7f9}{}\label{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a65255ed8a60150205066ec1a3946d7f9}
+
+\item 
+Type {\bfseries type\+\_\+type} () const \hypertarget{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a5c1431f6e88c272a295561d0384a40fc}{}\label{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a5c1431f6e88c272a295561d0384a40fc}
+
+\item 
+const void $\ast$ {\bfseries type} () const \hypertarget{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a1cf12a7156b1a88d51b807208b08209c}{}\label{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a1cf12a7156b1a88d51b807208b08209c}
+
+\item 
+{\footnotesize template$<$typename T $>$ }\\const T $\ast$ {\bfseries type\+\_\+as} () const \hypertarget{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a7e2b9efcf5cde0f73d29454cecae8472}{}\label{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a7e2b9efcf5cde0f73d29454cecae8472}
+
+\item 
+const Null $\ast$ {\bfseries type\+\_\+as\+\_\+\+Null} () const \hypertarget{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a27ff0d09b9b7defb959da46dbe2bc985}{}\label{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a27ff0d09b9b7defb959da46dbe2bc985}
+
+\item 
+const Int $\ast$ {\bfseries type\+\_\+as\+\_\+\+Int} () const \hypertarget{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a0b21fdf99633f5667a2c1d7ea018cd0a}{}\label{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a0b21fdf99633f5667a2c1d7ea018cd0a}
+
+\item 
+const Floating\+Point $\ast$ {\bfseries type\+\_\+as\+\_\+\+Floating\+Point} () const \hypertarget{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a119decab6f74fe45edc773fae560b241}{}\label{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a119decab6f74fe45edc773fae560b241}
+
+\item 
+const Binary $\ast$ {\bfseries type\+\_\+as\+\_\+\+Binary} () const \hypertarget{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a9b5432e8e9001aa6215a65935f5b91d2}{}\label{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a9b5432e8e9001aa6215a65935f5b91d2}
+
+\item 
+const Utf8 $\ast$ {\bfseries type\+\_\+as\+\_\+\+Utf8} () const \hypertarget{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a3a44578a39ec14d1aa1f93eca416d3c9}{}\label{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a3a44578a39ec14d1aa1f93eca416d3c9}
+
+\item 
+const Bool $\ast$ {\bfseries type\+\_\+as\+\_\+\+Bool} () const \hypertarget{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a031630ec5195cd67691fc73501b7461f}{}\label{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a031630ec5195cd67691fc73501b7461f}
+
+\item 
+const Decimal $\ast$ {\bfseries type\+\_\+as\+\_\+\+Decimal} () const \hypertarget{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_ad4685535f1336ab21d2fc6b8ea5efdb2}{}\label{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_ad4685535f1336ab21d2fc6b8ea5efdb2}
+
+\item 
+const Date $\ast$ {\bfseries type\+\_\+as\+\_\+\+Date} () const \hypertarget{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a849709b63c51dddc6d5f25183e1ff4db}{}\label{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a849709b63c51dddc6d5f25183e1ff4db}
+
+\item 
+const Time $\ast$ {\bfseries type\+\_\+as\+\_\+\+Time} () const \hypertarget{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_ab681176f54a4cce44b2764d368493ae5}{}\label{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_ab681176f54a4cce44b2764d368493ae5}
+
+\item 
+const Timestamp $\ast$ {\bfseries type\+\_\+as\+\_\+\+Timestamp} () const \hypertarget{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a6d56ea1ced316ebd5dfa2ea80c6b3915}{}\label{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a6d56ea1ced316ebd5dfa2ea80c6b3915}
+
+\item 
+const Interval $\ast$ {\bfseries type\+\_\+as\+\_\+\+Interval} () const \hypertarget{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a50eb5a55c492d0bed32384a976ef86ff}{}\label{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a50eb5a55c492d0bed32384a976ef86ff}
+
+\item 
+const List $\ast$ {\bfseries type\+\_\+as\+\_\+\+List} () const \hypertarget{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_ad65d698905d2344295c329ff70a90edc}{}\label{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_ad65d698905d2344295c329ff70a90edc}
+
+\item 
+const Struct\+\_\+ $\ast$ {\bfseries type\+\_\+as\+\_\+\+Struct\+\_\+} () const \hypertarget{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_ada07feee8322c45923ff088ffaf9d20c}{}\label{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_ada07feee8322c45923ff088ffaf9d20c}
+
+\item 
+const Union $\ast$ {\bfseries type\+\_\+as\+\_\+\+Union} () const \hypertarget{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_ab86bb10ffcd7f91e1c6a5350f66138fc}{}\label{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_ab86bb10ffcd7f91e1c6a5350f66138fc}
+
+\item 
+const Fixed\+Size\+Binary $\ast$ {\bfseries type\+\_\+as\+\_\+\+Fixed\+Size\+Binary} () const \hypertarget{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_aa23f44e7388779ffb96cd989b91f659d}{}\label{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_aa23f44e7388779ffb96cd989b91f659d}
+
+\item 
+const Fixed\+Size\+List $\ast$ {\bfseries type\+\_\+as\+\_\+\+Fixed\+Size\+List} () const \hypertarget{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a161f11c2cee3eda3e8f7903bee014f82}{}\label{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a161f11c2cee3eda3e8f7903bee014f82}
+
+\item 
+const Map $\ast$ {\bfseries type\+\_\+as\+\_\+\+Map} () const \hypertarget{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a6463946691f7425cb114046c6cac6562}{}\label{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a6463946691f7425cb114046c6cac6562}
+
+\item 
+const Dictionary\+Encoding $\ast$ {\bfseries dictionary} () const \hypertarget{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a786a78c2459ebcfc4a4fcb8c90923b71}{}\label{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a786a78c2459ebcfc4a4fcb8c90923b71}
+
+\item 
+const flatbuffers\+::\+Vector$<$ flatbuffers\+::\+Offset$<$ Field $>$ $>$ $\ast$ {\bfseries children} () const \hypertarget{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a07630c376940e829e1b949ed123afe17}{}\label{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a07630c376940e829e1b949ed123afe17}
+
+\item 
+const flatbuffers\+::\+Vector$<$ flatbuffers\+::\+Offset$<$ Key\+Value $>$ $>$ $\ast$ {\bfseries custom\+\_\+metadata} () const \hypertarget{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a7a7e36a6964b31926622fdfd0c0c73b4}{}\label{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a7a7e36a6964b31926622fdfd0c0c73b4}
+
+\item 
+bool {\bfseries Verify} (flatbuffers\+::\+Verifier \&verifier) const \hypertarget{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_af3e217fc40beb9b315e3979010413969}{}\label{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_af3e217fc40beb9b315e3979010413969}
+
+\item 
+Endianness \hyperlink{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a3cb8166b9d30c27313f3387a6d775a07}{endianness} () const 
+\item 
+const flatbuffers\+::\+Vector$<$ flatbuffers\+::\+Offset$<$ Field $>$ $>$ $\ast$ {\bfseries fields} () const \hypertarget{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_afec9f05ba236bf768c82a36781bcbc00}{}\label{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_afec9f05ba236bf768c82a36781bcbc00}
+
+\item 
+const flatbuffers\+::\+Vector$<$ flatbuffers\+::\+Offset$<$ Key\+Value $>$ $>$ $\ast$ {\bfseries custom\+\_\+metadata} () const \hypertarget{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a7a7e36a6964b31926622fdfd0c0c73b4}{}\label{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a7a7e36a6964b31926622fdfd0c0c73b4}
+
+\item 
+bool {\bfseries Verify} (flatbuffers\+::\+Verifier \&verifier) const \hypertarget{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_af3e217fc40beb9b315e3979010413969}{}\label{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_af3e217fc40beb9b315e3979010413969}
+
+\item 
+int64\+\_\+t \hyperlink{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a6e12a4c0b74281b15308168dd22b12de}{size} () const \hypertarget{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a6e12a4c0b74281b15308168dd22b12de}{}\label{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a6e12a4c0b74281b15308168dd22b12de}
+
+\begin{DoxyCompactList}\small\item\em Length of dimension. \end{DoxyCompactList}\item 
+const flatbuffers\+::\+String $\ast$ \hyperlink{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_aeff56ab21e54702ac98abf0168742905}{name} () const \hypertarget{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_aeff56ab21e54702ac98abf0168742905}{}\label{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_aeff56ab21e54702ac98abf0168742905}
+
+\begin{DoxyCompactList}\small\item\em Name of the dimension, optional. \end{DoxyCompactList}\item 
+bool {\bfseries Verify} (flatbuffers\+::\+Verifier \&verifier) const \hypertarget{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_af3e217fc40beb9b315e3979010413969}{}\label{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_af3e217fc40beb9b315e3979010413969}
+
+\item 
+Type {\bfseries type\+\_\+type} () const \hypertarget{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a5c1431f6e88c272a295561d0384a40fc}{}\label{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a5c1431f6e88c272a295561d0384a40fc}
+
+\item 
+const void $\ast$ \hyperlink{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a1cf12a7156b1a88d51b807208b08209c}{type} () const 
+\item 
+{\footnotesize template$<$typename T $>$ }\\const T $\ast$ {\bfseries type\+\_\+as} () const \hypertarget{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a7e2b9efcf5cde0f73d29454cecae8472}{}\label{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a7e2b9efcf5cde0f73d29454cecae8472}
+
+\item 
+const Null $\ast$ {\bfseries type\+\_\+as\+\_\+\+Null} () const \hypertarget{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a27ff0d09b9b7defb959da46dbe2bc985}{}\label{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a27ff0d09b9b7defb959da46dbe2bc985}
+
+\item 
+const Int $\ast$ {\bfseries type\+\_\+as\+\_\+\+Int} () const \hypertarget{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a0b21fdf99633f5667a2c1d7ea018cd0a}{}\label{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a0b21fdf99633f5667a2c1d7ea018cd0a}
+
+\item 
+const Floating\+Point $\ast$ {\bfseries type\+\_\+as\+\_\+\+Floating\+Point} () const \hypertarget{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a119decab6f74fe45edc773fae560b241}{}\label{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a119decab6f74fe45edc773fae560b241}
+
+\item 
+const Binary $\ast$ {\bfseries type\+\_\+as\+\_\+\+Binary} () const \hypertarget{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a9b5432e8e9001aa6215a65935f5b91d2}{}\label{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a9b5432e8e9001aa6215a65935f5b91d2}
+
+\item 
+const Utf8 $\ast$ {\bfseries type\+\_\+as\+\_\+\+Utf8} () const \hypertarget{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a3a44578a39ec14d1aa1f93eca416d3c9}{}\label{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a3a44578a39ec14d1aa1f93eca416d3c9}
+
+\item 
+const Bool $\ast$ {\bfseries type\+\_\+as\+\_\+\+Bool} () const \hypertarget{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a031630ec5195cd67691fc73501b7461f}{}\label{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a031630ec5195cd67691fc73501b7461f}
+
+\item 
+const Decimal $\ast$ {\bfseries type\+\_\+as\+\_\+\+Decimal} () const \hypertarget{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_ad4685535f1336ab21d2fc6b8ea5efdb2}{}\label{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_ad4685535f1336ab21d2fc6b8ea5efdb2}
+
+\item 
+const Date $\ast$ {\bfseries type\+\_\+as\+\_\+\+Date} () const \hypertarget{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a849709b63c51dddc6d5f25183e1ff4db}{}\label{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a849709b63c51dddc6d5f25183e1ff4db}
+
+\item 
+const Time $\ast$ {\bfseries type\+\_\+as\+\_\+\+Time} () const \hypertarget{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_ab681176f54a4cce44b2764d368493ae5}{}\label{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_ab681176f54a4cce44b2764d368493ae5}
+
+\item 
+const Timestamp $\ast$ {\bfseries type\+\_\+as\+\_\+\+Timestamp} () const \hypertarget{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a6d56ea1ced316ebd5dfa2ea80c6b3915}{}\label{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a6d56ea1ced316ebd5dfa2ea80c6b3915}
+
+\item 
+const Interval $\ast$ {\bfseries type\+\_\+as\+\_\+\+Interval} () const \hypertarget{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a50eb5a55c492d0bed32384a976ef86ff}{}\label{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a50eb5a55c492d0bed32384a976ef86ff}
+
+\item 
+const List $\ast$ {\bfseries type\+\_\+as\+\_\+\+List} () const \hypertarget{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_ad65d698905d2344295c329ff70a90edc}{}\label{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_ad65d698905d2344295c329ff70a90edc}
+
+\item 
+const Struct\+\_\+ $\ast$ {\bfseries type\+\_\+as\+\_\+\+Struct\+\_\+} () const \hypertarget{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_ada07feee8322c45923ff088ffaf9d20c}{}\label{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_ada07feee8322c45923ff088ffaf9d20c}
+
+\item 
+const Union $\ast$ {\bfseries type\+\_\+as\+\_\+\+Union} () const \hypertarget{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_ab86bb10ffcd7f91e1c6a5350f66138fc}{}\label{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_ab86bb10ffcd7f91e1c6a5350f66138fc}
+
+\item 
+const Fixed\+Size\+Binary $\ast$ {\bfseries type\+\_\+as\+\_\+\+Fixed\+Size\+Binary} () const \hypertarget{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_aa23f44e7388779ffb96cd989b91f659d}{}\label{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_aa23f44e7388779ffb96cd989b91f659d}
+
+\item 
+const Fixed\+Size\+List $\ast$ {\bfseries type\+\_\+as\+\_\+\+Fixed\+Size\+List} () const \hypertarget{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a161f11c2cee3eda3e8f7903bee014f82}{}\label{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a161f11c2cee3eda3e8f7903bee014f82}
+
+\item 
+const Map $\ast$ {\bfseries type\+\_\+as\+\_\+\+Map} () const \hypertarget{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a6463946691f7425cb114046c6cac6562}{}\label{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a6463946691f7425cb114046c6cac6562}
+
+\item 
+const flatbuffers\+::\+Vector$<$ flatbuffers\+::\+Offset$<$ Tensor\+Dim $>$ $>$ $\ast$ \hyperlink{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_af8976c9e3e21335bfc564f75b631f7a5}{shape} () const \hypertarget{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_af8976c9e3e21335bfc564f75b631f7a5}{}\label{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_af8976c9e3e21335bfc564f75b631f7a5}
+
+\begin{DoxyCompactList}\small\item\em The dimensions of the tensor, optionally named. \end{DoxyCompactList}\item 
+const flatbuffers\+::\+Vector$<$ int64\+\_\+t $>$ $\ast$ \hyperlink{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_aa5d22ebb288b2e3d7692278dd726cc96}{strides} () const \hypertarget{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_aa5d22ebb288b2e3d7692278dd726cc96}{}\label{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_aa5d22ebb288b2e3d7692278dd726cc96}
+
+\begin{DoxyCompactList}\small\item\em Non-\/negative byte offsets to advance one value cell along each dimension. \end{DoxyCompactList}\item 
+const Buffer $\ast$ \hyperlink{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_aae5b551dd7fe7a072099b7a3b4d47e73}{data} () const \hypertarget{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_aae5b551dd7fe7a072099b7a3b4d47e73}{}\label{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_aae5b551dd7fe7a072099b7a3b4d47e73}
+
+\begin{DoxyCompactList}\small\item\em The location and size of the tensor\textquotesingle{}s data. \end{DoxyCompactList}\item 
+bool {\bfseries Verify} (flatbuffers\+::\+Verifier \&verifier) const \hypertarget{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_af3e217fc40beb9b315e3979010413969}{}\label{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_af3e217fc40beb9b315e3979010413969}
+
+\end{DoxyCompactItemize}
+
+
+\subsection{Detailed Description}
+These are stored in the flatbuffer in the Type union below. 
+
+Shape data for a single axis in a tensor.
+
+Unicode with U\+T\+F-\/8 encoding.
+
+
+
+ Arrow File metadata
+
+A data header describing the shared memory layout of a \char`\"{}record\char`\"{} or \char`\"{}row\char`\"{} batch. Some systems call this a \char`\"{}row batch\char`\"{} internally and others a \char`\"{}record
+batch\char`\"{}.
+
+For sending dictionary encoding information. Any Field can be dictionary-\/encoded, but in this case none of its children may be dictionary-\/encoded. There is one vector / column per dictionary, but that vector / column may be spread across multiple dictionary batches by using the is\+Delta flag
+
+A Struct\+\_\+ in the flatbuffer metadata is the same as an Arrow Struct (according to the physical memory layout). We used Struct\+\_\+ here as Struct is a reserved word in Flatbuffers
+
+A Map is a logical nested type that is represented as
+
+List$<$entry\+: Struct$<$key\+: K, value\+: V$>$$>$
+
+In this layout, the keys and values are each respectively contiguous. We do not constrain the key and value types, so the application is responsible for ensuring that the keys are hashable and unique. Whether the keys are sorted may be set in the metadata for this field
+
+In a Field with Map type, the Field has a child Struct field, which then has two children\+: key type and the second the value type. The names of the child fields may be respectively \char`\"{}entry\char`\"{}, \char`\"{}key\char`\"{}, and \char`\"{}value\char`\"{}, but this is not enforced
+
+Map
+\begin{DoxyItemize}
+\item child\mbox{[}0\mbox{]} entry\+: Struct
+\begin{DoxyItemize}
+\item child\mbox{[}0\mbox{]} key\+: K
+\item child\mbox{[}1\mbox{]} value\+: V
+\end{DoxyItemize}
+\end{DoxyItemize}
+
+Neither the \char`\"{}entry\char`\"{} field nor the \char`\"{}key\char`\"{} field may be nullable.
+
+The metadata is structured so that Arrow systems without special handling for Map can make Map an alias for List. The \char`\"{}layout\char`\"{} attribute for the Map field must have the same contents as a List.
+
+A union is a complex type with children in Field By default ids in the type vector refer to the offsets in the children optionally type\+Ids provides an indirection between the child offset and the type id for each child type\+Ids\mbox{[}offset\mbox{]} is the id used in the type vector
+
+Date is either a 32-\/bit or 64-\/bit type representing elapsed time since U\+N\+IX epoch (1970-\/01-\/01), stored in either of two units\+:
+
+
+\begin{DoxyItemize}
+\item Milliseconds (64 bits) indicating U\+N\+IX time elapsed since the epoch (no leap seconds), where the values are evenly divisible by 86400000
+\item Days (32 bits) since the U\+N\+IX epoch
+\end{DoxyItemize}
+
+Time type. The physical storage type depends on the unit
+\begin{DoxyItemize}
+\item S\+E\+C\+O\+ND and M\+I\+L\+L\+I\+S\+E\+C\+O\+ND\+: 32 bits
+\item M\+I\+C\+R\+O\+S\+E\+C\+O\+ND and N\+A\+N\+O\+S\+E\+C\+O\+ND\+: 64 bits
+\end{DoxyItemize}
+
+Time elapsed from the Unix epoch, 00\+:00\+:00.\+000 on 1 January 1970, excluding leap seconds, as a 64-\/bit integer. Note that U\+N\+IX time does not include leap seconds.
+
+The Timestamp metadata supports both \char`\"{}time zone naive\char`\"{} and \char`\"{}time zone
+aware\char`\"{} timestamps. Read about the timezone attribute for more detail
+
+
+
+ user defined key value pairs to add custom metadata to arrow key namespacing is the responsibility of the user
+
+
+
+ Dictionary encoding metadata
+
+
+
+ A field represents a named column in a record / row batch or child of a nested type.
+
+
+\begin{DoxyItemize}
+\item children is only for nested Arrow arrays
+\item For primitive types, children will have length 0
+\item nullable should default to true in general
+\end{DoxyItemize}
+
+
+
+ A Schema describes the columns in a row batch 
+
+\subsection{Member Function Documentation}
+\index{org\+::apache\+::arrow\+::flatbuf\+::\+F\+L\+A\+T\+B\+U\+F\+F\+E\+R\+S\+\_\+\+F\+I\+N\+A\+L\+\_\+\+C\+L\+A\+SS@{org\+::apache\+::arrow\+::flatbuf\+::\+F\+L\+A\+T\+B\+U\+F\+F\+E\+R\+S\+\_\+\+F\+I\+N\+A\+L\+\_\+\+C\+L\+A\+SS}!buffers@{buffers}}
+\index{buffers@{buffers}!org\+::apache\+::arrow\+::flatbuf\+::\+F\+L\+A\+T\+B\+U\+F\+F\+E\+R\+S\+\_\+\+F\+I\+N\+A\+L\+\_\+\+C\+L\+A\+SS@{org\+::apache\+::arrow\+::flatbuf\+::\+F\+L\+A\+T\+B\+U\+F\+F\+E\+R\+S\+\_\+\+F\+I\+N\+A\+L\+\_\+\+C\+L\+A\+SS}}
+\subsubsection[{\texorpdfstring{buffers() const }{buffers() const }}]{\setlength{\rightskip}{0pt plus 5cm}const flatbuffers\+::\+Vector$<$const Buffer $\ast$$>$$\ast$ org\+::apache\+::arrow\+::flatbuf\+::\+F\+L\+A\+T\+B\+U\+F\+F\+E\+R\+S\+\_\+\+F\+I\+N\+A\+L\+\_\+\+C\+L\+A\+S\+S\+::buffers (
+\begin{DoxyParamCaption}
+{}
+\end{DoxyParamCaption}
+) const\hspace{0.3cm}{\ttfamily [inline]}}\hypertarget{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a00a1e3efc7f08d49bc2647967c10dc4e}{}\label{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a00a1e3efc7f08d49bc2647967c10dc4e}
+Buffers correspond to the pre-\/ordered flattened buffer tree
+
+The number of buffers appended to this list depends on the schema. For example, most primitive arrays will have 2 buffers, 1 for the validity bitmap and 1 for the values. For struct arrays, there will only be a single buffer for the validity (nulls) bitmap \index{org\+::apache\+::arrow\+::flatbuf\+::\+F\+L\+A\+T\+B\+U\+F\+F\+E\+R\+S\+\_\+\+F\+I\+N\+A\+L\+\_\+\+C\+L\+A\+SS@{org\+::apache\+::arrow\+::flatbuf\+::\+F\+L\+A\+T\+B\+U\+F\+F\+E\+R\+S\+\_\+\+F\+I\+N\+A\+L\+\_\+\+C\+L\+A\+SS}!endianness@{endianness}}
+\index{endianness@{endianness}!org\+::apache\+::arrow\+::flatbuf\+::\+F\+L\+A\+T\+B\+U\+F\+F\+E\+R\+S\+\_\+\+F\+I\+N\+A\+L\+\_\+\+C\+L\+A\+SS@{org\+::apache\+::arrow\+::flatbuf\+::\+F\+L\+A\+T\+B\+U\+F\+F\+E\+R\+S\+\_\+\+F\+I\+N\+A\+L\+\_\+\+C\+L\+A\+SS}}
+\subsubsection[{\texorpdfstring{endianness() const }{endianness() const }}]{\setlength{\rightskip}{0pt plus 5cm}Endianness org\+::apache\+::arrow\+::flatbuf\+::\+F\+L\+A\+T\+B\+U\+F\+F\+E\+R\+S\+\_\+\+F\+I\+N\+A\+L\+\_\+\+C\+L\+A\+S\+S\+::endianness (
+\begin{DoxyParamCaption}
+{}
+\end{DoxyParamCaption}
+) const\hspace{0.3cm}{\ttfamily [inline]}}\hypertarget{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a3cb8166b9d30c27313f3387a6d775a07}{}\label{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a3cb8166b9d30c27313f3387a6d775a07}
+endianness of the buffer it is Little Endian by default if endianness doesn\textquotesingle{}t match the underlying system then the vectors need to be converted \index{org\+::apache\+::arrow\+::flatbuf\+::\+F\+L\+A\+T\+B\+U\+F\+F\+E\+R\+S\+\_\+\+F\+I\+N\+A\+L\+\_\+\+C\+L\+A\+SS@{org\+::apache\+::arrow\+::flatbuf\+::\+F\+L\+A\+T\+B\+U\+F\+F\+E\+R\+S\+\_\+\+F\+I\+N\+A\+L\+\_\+\+C\+L\+A\+SS}!id@{id}}
+\index{id@{id}!org\+::apache\+::arrow\+::flatbuf\+::\+F\+L\+A\+T\+B\+U\+F\+F\+E\+R\+S\+\_\+\+F\+I\+N\+A\+L\+\_\+\+C\+L\+A\+SS@{org\+::apache\+::arrow\+::flatbuf\+::\+F\+L\+A\+T\+B\+U\+F\+F\+E\+R\+S\+\_\+\+F\+I\+N\+A\+L\+\_\+\+C\+L\+A\+SS}}
+\subsubsection[{\texorpdfstring{id() const }{id() const }}]{\setlength{\rightskip}{0pt plus 5cm}int64\+\_\+t org\+::apache\+::arrow\+::flatbuf\+::\+F\+L\+A\+T\+B\+U\+F\+F\+E\+R\+S\+\_\+\+F\+I\+N\+A\+L\+\_\+\+C\+L\+A\+S\+S\+::id (
+\begin{DoxyParamCaption}
+{}
+\end{DoxyParamCaption}
+) const\hspace{0.3cm}{\ttfamily [inline]}}\hypertarget{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a228576dd5bc73c49a95d44c56d910250}{}\label{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a228576dd5bc73c49a95d44c56d910250}
+The known dictionary id in the application where this data is used. In the file or streaming formats, the dictionary ids are found in the Dictionary\+Batch messages \index{org\+::apache\+::arrow\+::flatbuf\+::\+F\+L\+A\+T\+B\+U\+F\+F\+E\+R\+S\+\_\+\+F\+I\+N\+A\+L\+\_\+\+C\+L\+A\+SS@{org\+::apache\+::arrow\+::flatbuf\+::\+F\+L\+A\+T\+B\+U\+F\+F\+E\+R\+S\+\_\+\+F\+I\+N\+A\+L\+\_\+\+C\+L\+A\+SS}!index\+Type@{index\+Type}}
+\index{index\+Type@{index\+Type}!org\+::apache\+::arrow\+::flatbuf\+::\+F\+L\+A\+T\+B\+U\+F\+F\+E\+R\+S\+\_\+\+F\+I\+N\+A\+L\+\_\+\+C\+L\+A\+SS@{org\+::apache\+::arrow\+::flatbuf\+::\+F\+L\+A\+T\+B\+U\+F\+F\+E\+R\+S\+\_\+\+F\+I\+N\+A\+L\+\_\+\+C\+L\+A\+SS}}
+\subsubsection[{\texorpdfstring{index\+Type() const }{indexType() const }}]{\setlength{\rightskip}{0pt plus 5cm}const Int$\ast$ org\+::apache\+::arrow\+::flatbuf\+::\+F\+L\+A\+T\+B\+U\+F\+F\+E\+R\+S\+\_\+\+F\+I\+N\+A\+L\+\_\+\+C\+L\+A\+S\+S\+::index\+Type (
+\begin{DoxyParamCaption}
+{}
+\end{DoxyParamCaption}
+) const\hspace{0.3cm}{\ttfamily [inline]}}\hypertarget{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a8e7e4d0c914c7c6906f981b0a5373c10}{}\label{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a8e7e4d0c914c7c6906f981b0a5373c10}
+The dictionary indices are constrained to be positive integers. If this field is null, the indices must be signed int32 \index{org\+::apache\+::arrow\+::flatbuf\+::\+F\+L\+A\+T\+B\+U\+F\+F\+E\+R\+S\+\_\+\+F\+I\+N\+A\+L\+\_\+\+C\+L\+A\+SS@{org\+::apache\+::arrow\+::flatbuf\+::\+F\+L\+A\+T\+B\+U\+F\+F\+E\+R\+S\+\_\+\+F\+I\+N\+A\+L\+\_\+\+C\+L\+A\+SS}!is\+Delta@{is\+Delta}}
+\index{is\+Delta@{is\+Delta}!org\+::apache\+::arrow\+::flatbuf\+::\+F\+L\+A\+T\+B\+U\+F\+F\+E\+R\+S\+\_\+\+F\+I\+N\+A\+L\+\_\+\+C\+L\+A\+SS@{org\+::apache\+::arrow\+::flatbuf\+::\+F\+L\+A\+T\+B\+U\+F\+F\+E\+R\+S\+\_\+\+F\+I\+N\+A\+L\+\_\+\+C\+L\+A\+SS}}
+\subsubsection[{\texorpdfstring{is\+Delta() const }{isDelta() const }}]{\setlength{\rightskip}{0pt plus 5cm}bool org\+::apache\+::arrow\+::flatbuf\+::\+F\+L\+A\+T\+B\+U\+F\+F\+E\+R\+S\+\_\+\+F\+I\+N\+A\+L\+\_\+\+C\+L\+A\+S\+S\+::is\+Delta (
+\begin{DoxyParamCaption}
+{}
+\end{DoxyParamCaption}
+) const\hspace{0.3cm}{\ttfamily [inline]}}\hypertarget{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a753f594feb01fa8aac729d9cef045242}{}\label{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a753f594feb01fa8aac729d9cef045242}
+If is\+Delta is true the values in the dictionary are to be appended to a dictionary with the indicated id \index{org\+::apache\+::arrow\+::flatbuf\+::\+F\+L\+A\+T\+B\+U\+F\+F\+E\+R\+S\+\_\+\+F\+I\+N\+A\+L\+\_\+\+C\+L\+A\+SS@{org\+::apache\+::arrow\+::flatbuf\+::\+F\+L\+A\+T\+B\+U\+F\+F\+E\+R\+S\+\_\+\+F\+I\+N\+A\+L\+\_\+\+C\+L\+A\+SS}!is\+Ordered@{is\+Ordered}}
+\index{is\+Ordered@{is\+Ordered}!org\+::apache\+::arrow\+::flatbuf\+::\+F\+L\+A\+T\+B\+U\+F\+F\+E\+R\+S\+\_\+\+F\+I\+N\+A\+L\+\_\+\+C\+L\+A\+SS@{org\+::apache\+::arrow\+::flatbuf\+::\+F\+L\+A\+T\+B\+U\+F\+F\+E\+R\+S\+\_\+\+F\+I\+N\+A\+L\+\_\+\+C\+L\+A\+SS}}
+\subsubsection[{\texorpdfstring{is\+Ordered() const }{isOrdered() const }}]{\setlength{\rightskip}{0pt plus 5cm}bool org\+::apache\+::arrow\+::flatbuf\+::\+F\+L\+A\+T\+B\+U\+F\+F\+E\+R\+S\+\_\+\+F\+I\+N\+A\+L\+\_\+\+C\+L\+A\+S\+S\+::is\+Ordered (
+\begin{DoxyParamCaption}
+{}
+\end{DoxyParamCaption}
+) const\hspace{0.3cm}{\ttfamily [inline]}}\hypertarget{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a00390df0634d5d250957016552f553aa}{}\label{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a00390df0634d5d250957016552f553aa}
+By default, dictionaries are not ordered, or the order does not have semantic meaning. In some statistical, applications, dictionary-\/encoding is used to represent ordered categorical data, and we provide a way to preserve that metadata here \index{org\+::apache\+::arrow\+::flatbuf\+::\+F\+L\+A\+T\+B\+U\+F\+F\+E\+R\+S\+\_\+\+F\+I\+N\+A\+L\+\_\+\+C\+L\+A\+SS@{org\+::apache\+::arrow\+::flatbuf\+::\+F\+L\+A\+T\+B\+U\+F\+F\+E\+R\+S\+\_\+\+F\+I\+N\+A\+L\+\_\+\+C\+L\+A\+SS}!length@{length}}
+\index{length@{length}!org\+::apache\+::arrow\+::flatbuf\+::\+F\+L\+A\+T\+B\+U\+F\+F\+E\+R\+S\+\_\+\+F\+I\+N\+A\+L\+\_\+\+C\+L\+A\+SS@{org\+::apache\+::arrow\+::flatbuf\+::\+F\+L\+A\+T\+B\+U\+F\+F\+E\+R\+S\+\_\+\+F\+I\+N\+A\+L\+\_\+\+C\+L\+A\+SS}}
+\subsubsection[{\texorpdfstring{length() const }{length() const }}]{\setlength{\rightskip}{0pt plus 5cm}int64\+\_\+t org\+::apache\+::arrow\+::flatbuf\+::\+F\+L\+A\+T\+B\+U\+F\+F\+E\+R\+S\+\_\+\+F\+I\+N\+A\+L\+\_\+\+C\+L\+A\+S\+S\+::length (
+\begin{DoxyParamCaption}
+{}
+\end{DoxyParamCaption}
+) const\hspace{0.3cm}{\ttfamily [inline]}}\hypertarget{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a4c8b89371bd76124e94a00a7044d9f69}{}\label{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a4c8b89371bd76124e94a00a7044d9f69}
+number of records / rows. The arrays in the batch should all have this length \index{org\+::apache\+::arrow\+::flatbuf\+::\+F\+L\+A\+T\+B\+U\+F\+F\+E\+R\+S\+\_\+\+F\+I\+N\+A\+L\+\_\+\+C\+L\+A\+SS@{org\+::apache\+::arrow\+::flatbuf\+::\+F\+L\+A\+T\+B\+U\+F\+F\+E\+R\+S\+\_\+\+F\+I\+N\+A\+L\+\_\+\+C\+L\+A\+SS}!timezone@{timezone}}
+\index{timezone@{timezone}!org\+::apache\+::arrow\+::flatbuf\+::\+F\+L\+A\+T\+B\+U\+F\+F\+E\+R\+S\+\_\+\+F\+I\+N\+A\+L\+\_\+\+C\+L\+A\+SS@{org\+::apache\+::arrow\+::flatbuf\+::\+F\+L\+A\+T\+B\+U\+F\+F\+E\+R\+S\+\_\+\+F\+I\+N\+A\+L\+\_\+\+C\+L\+A\+SS}}
+\subsubsection[{\texorpdfstring{timezone() const }{timezone() const }}]{\setlength{\rightskip}{0pt plus 5cm}const flatbuffers\+::\+String$\ast$ org\+::apache\+::arrow\+::flatbuf\+::\+F\+L\+A\+T\+B\+U\+F\+F\+E\+R\+S\+\_\+\+F\+I\+N\+A\+L\+\_\+\+C\+L\+A\+S\+S\+::timezone (
+\begin{DoxyParamCaption}
+{}
+\end{DoxyParamCaption}
+) const\hspace{0.3cm}{\ttfamily [inline]}}\hypertarget{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a95d83d815c202d830601fb53f6b5179a}{}\label{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a95d83d815c202d830601fb53f6b5179a}
+The time zone is a string indicating the name of a time zone, one of\+:
+
+
+\begin{DoxyItemize}
+\item As used in the Olson time zone database (the \char`\"{}tz database\char`\"{} or \char`\"{}tzdata\char`\"{}), such as \char`\"{}\+America/\+New\+\_\+\+York\char`\"{}
+\item An absolute time zone offset of the form +\+XX\+:XX or -\/\+XX\+:XX, such as +07\+:30
+\end{DoxyItemize}
+
+Whether a timezone string is present indicates different semantics about the data\+:
+
+
+\begin{DoxyItemize}
+\item If the time zone is null or equal to an empty string, the data is \char`\"{}time
+  zone naive\char`\"{} and shall be displayed {\itshape as is} to the user, not localized to the locale of the user. This data can be though of as U\+TC but without having \char`\"{}\+U\+T\+C\char`\"{} as the time zone, it is not considered to be localized to any time zone
+\item If the time zone is set to a valid value, values can be displayed as \char`\"{}localized\char`\"{} to that time zone, even though the underlying 64-\/bit integers are identical to the same data stored in U\+TC. Converting between time zones is a metadata-\/only operation and does not change the underlying values 
+\end{DoxyItemize}\index{org\+::apache\+::arrow\+::flatbuf\+::\+F\+L\+A\+T\+B\+U\+F\+F\+E\+R\+S\+\_\+\+F\+I\+N\+A\+L\+\_\+\+C\+L\+A\+SS@{org\+::apache\+::arrow\+::flatbuf\+::\+F\+L\+A\+T\+B\+U\+F\+F\+E\+R\+S\+\_\+\+F\+I\+N\+A\+L\+\_\+\+C\+L\+A\+SS}!type@{type}}
+\index{type@{type}!org\+::apache\+::arrow\+::flatbuf\+::\+F\+L\+A\+T\+B\+U\+F\+F\+E\+R\+S\+\_\+\+F\+I\+N\+A\+L\+\_\+\+C\+L\+A\+SS@{org\+::apache\+::arrow\+::flatbuf\+::\+F\+L\+A\+T\+B\+U\+F\+F\+E\+R\+S\+\_\+\+F\+I\+N\+A\+L\+\_\+\+C\+L\+A\+SS}}
+\subsubsection[{\texorpdfstring{type() const }{type() const }}]{\setlength{\rightskip}{0pt plus 5cm}const void$\ast$ org\+::apache\+::arrow\+::flatbuf\+::\+F\+L\+A\+T\+B\+U\+F\+F\+E\+R\+S\+\_\+\+F\+I\+N\+A\+L\+\_\+\+C\+L\+A\+S\+S\+::type (
+\begin{DoxyParamCaption}
+{}
+\end{DoxyParamCaption}
+) const\hspace{0.3cm}{\ttfamily [inline]}}\hypertarget{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a1cf12a7156b1a88d51b807208b08209c}{}\label{structorg_1_1apache_1_1arrow_1_1flatbuf_1_1FLATBUFFERS__FINAL__CLASS_a1cf12a7156b1a88d51b807208b08209c}
+The type of data contained in a value cell. Currently only fixed-\/width value types are supported, no strings or nested types 
+
+The documentation for this struct was generated from the following files\+:\begin{DoxyCompactItemize}
+\item 
+/home/jhemstad/cudf/cpp/include/cudf/ipc\+\_\+generated/File\+\_\+generated.\+h\item 
+/home/jhemstad/cudf/cpp/include/cudf/ipc\+\_\+generated/Message\+\_\+generated.\+h\item 
+/home/jhemstad/cudf/cpp/include/cudf/ipc\+\_\+generated/Schema\+\_\+generated.\+h\item 
+/home/jhemstad/cudf/cpp/include/cudf/ipc\+\_\+generated/Tensor\+\_\+generated.\+h\end{DoxyCompactItemize}

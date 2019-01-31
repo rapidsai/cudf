@@ -1,0 +1,7 @@
+digraph "Graphical Class Hierarchy"
+{
+  edge [fontname="Helvetica",fontsize="10",labelfontname="Helvetica",labelfontsize="10"];
+  node [fontname="Helvetica",fontsize="10",shape=record];
+  rankdir="LR";
+  Node1 [label="org::apache::arrow\l::flatbuf::Struct_Builder",height=0.2,width=0.4,color="black", fillcolor="white", style="filled",URL="$structorg_1_1apache_1_1arrow_1_1flatbuf_1_1Struct__Builder.html"];
+}

@@ -1,0 +1,88 @@
+\hypertarget{structrow__comparator}{}\section{row\+\_\+comparator$<$ map\+\_\+type, size\+\_\+type $>$ Struct Template Reference}
+\label{structrow__comparator}\index{row\+\_\+comparator$<$ map\+\_\+type, size\+\_\+type $>$@{row\+\_\+comparator$<$ map\+\_\+type, size\+\_\+type $>$}}
+
+
+{\ttfamily \#include $<$groupby\+\_\+compute\+\_\+api.\+h$>$}
+
+\subsection*{Public Types}
+\begin{DoxyCompactItemize}
+\item 
+using {\bfseries key\+\_\+type} = typename map\+\_\+type\+::key\+\_\+type\hypertarget{structrow__comparator_ae23601b2cbd61b1915443169ccebe545}{}\label{structrow__comparator_ae23601b2cbd61b1915443169ccebe545}
+
+\item 
+using {\bfseries map\+\_\+key\+\_\+comparator} = typename map\+\_\+type\+::key\+\_\+equal\hypertarget{structrow__comparator_a4f2dd22a117e09dcdc645fa4c5712d6d}{}\label{structrow__comparator_a4f2dd22a117e09dcdc645fa4c5712d6d}
+
+\end{DoxyCompactItemize}
+\subsection*{Public Member Functions}
+\begin{DoxyCompactItemize}
+\item 
+\hyperlink{structrow__comparator_a30203956e7d237c1b235f002ca372fb7}{row\+\_\+comparator} (map\+\_\+type const \&map, gdf\+\_\+table$<$ size\+\_\+type $>$ const \&l\+\_\+table, gdf\+\_\+table$<$ size\+\_\+type $>$ const \&r\+\_\+table)
+\item 
+\+\_\+\+\_\+device\+\_\+\+\_\+ bool \hyperlink{structrow__comparator_a6dcb2d9ec909242087324163a50a8f0a}{operator()} (key\+\_\+type const \&left\+\_\+index, key\+\_\+type const \&right\+\_\+index) const 
+\end{DoxyCompactItemize}
+\subsection*{Public Attributes}
+\begin{DoxyCompactItemize}
+\item 
+const map\+\_\+key\+\_\+comparator {\bfseries default\+\_\+comparator} \{\}\hypertarget{structrow__comparator_a7d1d67f8366a1c71d9d880bb9b840698}{}\label{structrow__comparator_a7d1d67f8366a1c71d9d880bb9b840698}
+
+\item 
+const key\+\_\+type {\bfseries unused\+\_\+key}\hypertarget{structrow__comparator_a94af7d38b59e365e9e3bcceb838fb733}{}\label{structrow__comparator_a94af7d38b59e365e9e3bcceb838fb733}
+
+\item 
+map\+\_\+type const \& {\bfseries the\+\_\+map}\hypertarget{structrow__comparator_a9bc2f555ccb5fe4ec1073f8b2e74de83}{}\label{structrow__comparator_a9bc2f555ccb5fe4ec1073f8b2e74de83}
+
+\item 
+gdf\+\_\+table$<$ size\+\_\+type $>$ const \& {\bfseries left\+\_\+table}\hypertarget{structrow__comparator_a80e31ed42416fcf0577517e90520b913}{}\label{structrow__comparator_a80e31ed42416fcf0577517e90520b913}
+
+\item 
+gdf\+\_\+table$<$ size\+\_\+type $>$ const \& {\bfseries right\+\_\+table}\hypertarget{structrow__comparator_a8e0f7be825b2b612739edf0ddb26b368}{}\label{structrow__comparator_a8e0f7be825b2b612739edf0ddb26b368}
+
+\end{DoxyCompactItemize}
+
+
+\subsection{Detailed Description}
+\subsubsection*{template$<$typename map\+\_\+type, typename size\+\_\+type$>$\\*
+struct row\+\_\+comparator$<$ map\+\_\+type, size\+\_\+type $>$}
+
+This functor is used inside the hash table\textquotesingle{}s insert function to compare equality between two keys in the hash table.
+
+If comparing a key to the map\textquotesingle{}s unused key, simply performs the default key comparison defined in the map class.
+
+Otherwise, the hash table keys refer to row indices in gdf\+\_\+tables and the functor checks for equality between the two rows. 
+
+\subsection{Constructor \& Destructor Documentation}
+\index{row\+\_\+comparator@{row\+\_\+comparator}!row\+\_\+comparator@{row\+\_\+comparator}}
+\index{row\+\_\+comparator@{row\+\_\+comparator}!row\+\_\+comparator@{row\+\_\+comparator}}
+\subsubsection[{\texorpdfstring{row\+\_\+comparator(map\+\_\+type const \&map, gdf\+\_\+table$<$ size\+\_\+type $>$ const \&l\+\_\+table, gdf\+\_\+table$<$ size\+\_\+type $>$ const \&r\+\_\+table)}{row_comparator(map_type const &map, gdf_table< size_type > const &l_table, gdf_table< size_type > const &r_table)}}]{\setlength{\rightskip}{0pt plus 5cm}template$<$typename map\+\_\+type , typename size\+\_\+type $>$ {\bf row\+\_\+comparator}$<$ map\+\_\+type, size\+\_\+type $>$\+::{\bf row\+\_\+comparator} (
+\begin{DoxyParamCaption}
+\item[{map\+\_\+type const \&}]{map, }
+\item[{gdf\+\_\+table$<$ size\+\_\+type $>$ const \&}]{l\+\_\+table, }
+\item[{gdf\+\_\+table$<$ size\+\_\+type $>$ const \&}]{r\+\_\+table}
+\end{DoxyParamCaption}
+)\hspace{0.3cm}{\ttfamily [inline]}}\hypertarget{structrow__comparator_a30203956e7d237c1b235f002ca372fb7}{}\label{structrow__comparator_a30203956e7d237c1b235f002ca372fb7}
+Constructs a \hyperlink{structrow__comparator}{row\+\_\+comparator} functor to check for equality between keys in the hash table.
+
+map The hash table  l\+\_\+table The left gdf\+\_\+table  r\+\_\+table The right gdf\+\_\+table 
+
+\subsection{Member Function Documentation}
+\index{row\+\_\+comparator@{row\+\_\+comparator}!operator()@{operator()}}
+\index{operator()@{operator()}!row\+\_\+comparator@{row\+\_\+comparator}}
+\subsubsection[{\texorpdfstring{operator()(key\+\_\+type const \&left\+\_\+index, key\+\_\+type const \&right\+\_\+index) const }{operator()(key_type const &left_index, key_type const &right_index) const }}]{\setlength{\rightskip}{0pt plus 5cm}template$<$typename map\+\_\+type , typename size\+\_\+type $>$ \+\_\+\+\_\+device\+\_\+\+\_\+ bool {\bf row\+\_\+comparator}$<$ map\+\_\+type, size\+\_\+type $>$\+::operator() (
+\begin{DoxyParamCaption}
+\item[{key\+\_\+type const \&}]{left\+\_\+index, }
+\item[{key\+\_\+type const \&}]{right\+\_\+index}
+\end{DoxyParamCaption}
+) const\hspace{0.3cm}{\ttfamily [inline]}}\hypertarget{structrow__comparator_a6dcb2d9ec909242087324163a50a8f0a}{}\label{structrow__comparator_a6dcb2d9ec909242087324163a50a8f0a}
+Used in the hash table\textquotesingle{}s insert function to check for equality between two keys. Two cases are possible\+:
+
+
+\begin{DoxyEnumerate}
+\item If left\+\_\+index OR right\+\_\+index is equal to the map\textquotesingle{}s unused\+\_\+key, then the functor is being used to compare against an empty key. In this case, perform the default key comparison defined in the map class.
+\item Else, the functor is being used to compare two rows of gdf\+\_\+tables. In this case, the gdf\+\_\+table rows\+\_\+equal function is used to check if the two rows are equal.
+\end{DoxyEnumerate}
+
+left\+\_\+index The left table index to compare  right\+\_\+index The right table index to compare
+
+The documentation for this struct was generated from the following file\+:\begin{DoxyCompactItemize}
+\item 
+/home/jhemstad/cudf/cpp/src/groupby/groupby\+\_\+compute\+\_\+api.\+h\end{DoxyCompactItemize}

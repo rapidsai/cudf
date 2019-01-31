@@ -1,0 +1,7 @@
+digraph "Graphical Class Hierarchy"
+{
+  edge [fontname="Helvetica",fontsize="10",labelfontname="Helvetica",labelfontsize="10"];
+  node [fontname="Helvetica",fontsize="10",shape=record];
+  rankdir="LR";
+  Node1 [label="MultiColGroupBy\< TplPtrs,\l IndexT, ValsT, Reducer,\l ColumnOrderingPolicy::Sort \>",height=0.2,width=0.4,color="black", fillcolor="white", style="filled",URL="$structMultiColGroupBy_3_01TplPtrs_00_01IndexT_00_01ValsT_00_01Reducer_00_01ColumnOrderingPolicy_1_1Sort_01_4.html"];
+}

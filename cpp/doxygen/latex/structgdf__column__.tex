@@ -1,0 +1,48 @@
+\hypertarget{structgdf__column__}{}\section{gdf\+\_\+column\+\_\+ Struct Reference}
+\label{structgdf__column__}\index{gdf\+\_\+column\+\_\+@{gdf\+\_\+column\+\_\+}}
+
+
+Collaboration diagram for gdf\+\_\+column\+\_\+\+:
+% FIG 0
+\subsection*{Public Attributes}
+\begin{DoxyCompactItemize}
+\item 
+void $\ast$ \hyperlink{structgdf__column___af1b8c6631a36f6af309c26d1e40accac}{data}
+\item 
+gdf\+\_\+valid\+\_\+type $\ast$ \hyperlink{structgdf__column___aab16b9467d41db5f36d2a708cba7d612}{valid}
+\item 
+gdf\+\_\+size\+\_\+type \hyperlink{structgdf__column___a85c0e9161098e1bdf1c56f7657acf8dc}{size}
+\item 
+gdf\+\_\+dtype \hyperlink{structgdf__column___a3e4d04127fb96d0c7debbe8d4e9d577f}{dtype}
+\item 
+gdf\+\_\+size\+\_\+type \hyperlink{structgdf__column___a728baf018dbceb2b251332fd313478ec}{null\+\_\+count}
+\item 
+\hyperlink{structgdf__dtype__extra__info}{gdf\+\_\+dtype\+\_\+extra\+\_\+info} {\bfseries dtype\+\_\+info}\hypertarget{structgdf__column___ab38a744b851e4e6827e69475a25cbbf9}{}\label{structgdf__column___ab38a744b851e4e6827e69475a25cbbf9}
+
+\item 
+char $\ast$ {\bfseries col\+\_\+name}\hypertarget{structgdf__column___ae42ce179f2e0abd909f511114a9fdfd6}{}\label{structgdf__column___ae42ce179f2e0abd909f511114a9fdfd6}
+
+\end{DoxyCompactItemize}
+
+
+\subsection{Member Data Documentation}
+\index{gdf\+\_\+column\+\_\+@{gdf\+\_\+column\+\_\+}!data@{data}}
+\index{data@{data}!gdf\+\_\+column\+\_\+@{gdf\+\_\+column\+\_\+}}
+\subsubsection[{\texorpdfstring{data}{data}}]{\setlength{\rightskip}{0pt plus 5cm}void$\ast$ gdf\+\_\+column\+\_\+\+::data}\hypertarget{structgdf__column___af1b8c6631a36f6af309c26d1e40accac}{}\label{structgdf__column___af1b8c6631a36f6af309c26d1e40accac}
+Pointer to the columns data \index{gdf\+\_\+column\+\_\+@{gdf\+\_\+column\+\_\+}!dtype@{dtype}}
+\index{dtype@{dtype}!gdf\+\_\+column\+\_\+@{gdf\+\_\+column\+\_\+}}
+\subsubsection[{\texorpdfstring{dtype}{dtype}}]{\setlength{\rightskip}{0pt plus 5cm}gdf\+\_\+dtype gdf\+\_\+column\+\_\+\+::dtype}\hypertarget{structgdf__column___a3e4d04127fb96d0c7debbe8d4e9d577f}{}\label{structgdf__column___a3e4d04127fb96d0c7debbe8d4e9d577f}
+The datatype of the column\textquotesingle{}s data \index{gdf\+\_\+column\+\_\+@{gdf\+\_\+column\+\_\+}!null\+\_\+count@{null\+\_\+count}}
+\index{null\+\_\+count@{null\+\_\+count}!gdf\+\_\+column\+\_\+@{gdf\+\_\+column\+\_\+}}
+\subsubsection[{\texorpdfstring{null\+\_\+count}{null_count}}]{\setlength{\rightskip}{0pt plus 5cm}gdf\+\_\+size\+\_\+type gdf\+\_\+column\+\_\+\+::null\+\_\+count}\hypertarget{structgdf__column___a728baf018dbceb2b251332fd313478ec}{}\label{structgdf__column___a728baf018dbceb2b251332fd313478ec}
+The number of N\+U\+LL values in the column\textquotesingle{}s data \index{gdf\+\_\+column\+\_\+@{gdf\+\_\+column\+\_\+}!size@{size}}
+\index{size@{size}!gdf\+\_\+column\+\_\+@{gdf\+\_\+column\+\_\+}}
+\subsubsection[{\texorpdfstring{size}{size}}]{\setlength{\rightskip}{0pt plus 5cm}gdf\+\_\+size\+\_\+type gdf\+\_\+column\+\_\+\+::size}\hypertarget{structgdf__column___a85c0e9161098e1bdf1c56f7657acf8dc}{}\label{structgdf__column___a85c0e9161098e1bdf1c56f7657acf8dc}
+Number of data elements in the columns data buffer. Limited to 2$^\wedge$31 -\/ 1. \index{gdf\+\_\+column\+\_\+@{gdf\+\_\+column\+\_\+}!valid@{valid}}
+\index{valid@{valid}!gdf\+\_\+column\+\_\+@{gdf\+\_\+column\+\_\+}}
+\subsubsection[{\texorpdfstring{valid}{valid}}]{\setlength{\rightskip}{0pt plus 5cm}gdf\+\_\+valid\+\_\+type$\ast$ gdf\+\_\+column\+\_\+\+::valid}\hypertarget{structgdf__column___aab16b9467d41db5f36d2a708cba7d612}{}\label{structgdf__column___aab16b9467d41db5f36d2a708cba7d612}
+Pointer to the columns validity bit mask where the \textquotesingle{}i\textquotesingle{}th bit indicates if the \textquotesingle{}i\textquotesingle{}th row is N\+U\+LL 
+
+The documentation for this struct was generated from the following file\+:\begin{DoxyCompactItemize}
+\item 
+/home/jhemstad/cudf/cpp/include/cudf/types.\+h\end{DoxyCompactItemize}

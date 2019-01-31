@@ -1,0 +1,7 @@
+\hypertarget{dir_90e6b1e2f287d433df14197820adf3de}{}\section{/home/jhemstad/cudf/cpp/src/groupby Directory Reference}
+\label{dir_90e6b1e2f287d433df14197820adf3de}\index{/home/jhemstad/cudf/cpp/src/groupby Directory Reference@{/home/jhemstad/cudf/cpp/src/groupby Directory Reference}}
+\subsection*{Files}
+\begin{DoxyCompactItemize}
+\item 
+file \hyperlink{aggregation__operations_8hpp}{aggregation\+\_\+operations.\+hpp}
+\begin{DoxyCompactList}\small\item\em This header defines the functors that may be used as aggregation operations for the hash-\/based groupby implementation. Each functor must define an \textquotesingle{}identity value\textquotesingle{}. The identity value \textquotesingle{}I\textquotesingle{} of an operation \textquotesingle{}op\textquotesingle{} is defined as\+: for any x, op(x,\+I) == x. This identity value is used to initialize the hash table values Every functor accepts a \textquotesingle{}new\+\_\+value\textquotesingle{} which is the new value being inserted into the hash table and an \textquotesingle{}old\+\_\+value\textquotesingle{} which is the existing value in the hash table. \end{DoxyCompactList}\end{DoxyCompactItemize}
