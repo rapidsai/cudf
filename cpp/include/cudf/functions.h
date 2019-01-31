@@ -438,13 +438,18 @@ gdf_error gdf_prefixsum_i64(gdf_column *inp, gdf_column *out, int inclusive);
  * @Param num_cols The number of columns in the input set
  * @Param input The list of columns whose rows will be hashed
  * @Param hash The hash function to use
+ * @Param initial_hash_values Initial hash values to combine with column hash values
  * @Param output The hash value of each row of the input
  * 
  * @Returns   GDF_SUCCESS if the operation was successful, otherwise an appropriate
  * error code
  */
 /* ----------------------------------------------------------------------------*/
-gdf_error gdf_hash(int num_cols, gdf_column **input, gdf_hash_func hash, gdf_column *output);
+gdf_error gdf_hash(int num_cols,
+                   gdf_column **input,
+                   gdf_hash_func hash,
+                   uint32_t *initial_hash_values,
+                   gdf_column *output);
 
 /* trig */
 

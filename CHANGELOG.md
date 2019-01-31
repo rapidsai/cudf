@@ -3,6 +3,7 @@
 ## New Features
 
 - PR #539 Add Python bindings for replace function
+- PR #826 Add series feature hashing support
 
 ## Improvements
 

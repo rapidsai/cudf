@@ -593,17 +593,22 @@ public:
     void operator()(hash_value_type& hash_value, 
                     void const * col_data,
                     size_type row_index,
-                    size_type col_index)
+                    size_type col_index,
+                    bool use_initial_value = false,
+                    const hash_value_type& initial_value = 0)
     {
       hash_function<col_type> hasher;
       col_type const * const current_column{static_cast<col_type const*>(col_data)};
-      hash_value_type const key_hash{hasher(current_column[row_index])};
+      hash_value_type key_hash{hasher(current_column[row_index])};
+
+      if (use_initial_value)
+        key_hash = hasher.hash_combine(initial_value, key_hash);
 
       // Only combine hash-values after the first column
       if(0 == col_index)
         hash_value = key_hash;
       else
-        hash_value = hasher.hash_combine(hash_value,key_hash);
+        hash_value = hasher.hash_combine(hash_value, key_hash);
     }
   };
 
@@ -614,6 +619,7 @@ public:
    * @Param row_index The row of the table to compute the hash value for
    * @Param num_columns_to_hash The number of columns in the row to hash. If 0, 
    * hashes all columns
+   * @Param initial_hash_values Optional initial hash values to combine with each column's hashed values
    * @tparam hash_function The hash function that is used for each element in the row,
    * as well as combine hash values
    * 
@@ -622,7 +628,9 @@ public:
   /* ----------------------------------------------------------------------------*/
   template <template <typename> class hash_function = default_hash>
   __device__ 
-  hash_value_type hash_row(size_type row_index, size_type num_columns_to_hash = 0) const
+  hash_value_type hash_row(size_type row_index,
+                           size_type num_columns_to_hash = 0,
+                           hash_value_type* initial_hash_values = nullptr) const
   {
     hash_value_type hash_value{0};
 
@@ -632,14 +640,17 @@ public:
       num_columns_to_hash = this->num_columns;
     }
 
+    bool use_initial_value = initial_hash_values != nullptr;
     // Iterate all the columns and hash each element, combining the hash values together
     for(size_type i = 0; i < num_columns_to_hash; ++i)
     {
       gdf_dtype const current_column_type = d_columns_types_ptr[i];
 
+      hash_value_type const initial_hash_value = (use_initial_value) ? initial_hash_values[i] : 0;
       cudf::type_dispatcher(current_column_type, 
                           hash_element<hash_function>{}, 
-                          hash_value, d_columns_data_ptr[i], row_index, i);
+                          hash_value, d_columns_data_ptr[i], row_index, i,
+                          use_initial_value, initial_hash_value);
     }
 
     return hash_value;
