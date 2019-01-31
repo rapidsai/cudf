@@ -10,6 +10,7 @@
 
 ## Bug Fixes
 
+- PR #808 Resolved renamed `d_columns_valids` variable name
 - PR #820 SCV Reader: fix the issue where reader adds additional rows when file uses \r\n as a line terminator
 
 
