@@ -6,6 +6,7 @@ import collections
 from pandas.api.types import is_categorical_dtype
 
 from cudf.dataframe.dataframe import DataFrame
+import cudf.dataframe.index as index
 from cudf.dataframe.series import Series
 from cudf.dataframe.buffer import Buffer
 from cudf.dataframe.categorical import CategoricalColumn
@@ -267,6 +268,12 @@ class Groupby(object):
 
         else:
             result = self.agg([args])
+
+        if(self._as_index):
+            idx = index.as_index(result[self._by[0]])
+            idx.name = self._by[0]
+            result = result.set_index(idx)
+            result.drop_column(idx.name)
 
         nvtx_range_pop()
         return result
