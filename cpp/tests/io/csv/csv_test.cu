@@ -144,17 +144,11 @@ TEST(gdf_csv_test, CsvSimpleRandomAccessFile)
 		args.dtype			= types;
 		args.delimiter		= ',';
 		args.lineterminator = '\n';
+		args.nrows = -1;
 		error = read_csv_arrow(&args,readable_file);
 		EXPECT_TRUE( args.num_cols_out == 10);
 		EXPECT_EQ(args.num_rows_out, 4);
-		EXPECT_TRUE( error == GDF_SUCCESS );
-	
-		std::cout << args.num_cols_out << std::endl;
-	    std::cout << args.num_rows_out << std::endl;
-
-		auto gpu_columns  = ToGdfColumnCpps(args.data, args.names, args.num_cols_out);
- 		for (auto ptr : gpu_columns)
-		 	print_typed_column((int32_t*)ptr->data, ptr->valid, ptr->size);
+		EXPECT_TRUE( error == GDF_SUCCESS );		
 	}
 }
 
