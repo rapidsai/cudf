@@ -1332,7 +1332,7 @@ class DataFrame(object):
         """
         if (method == "cudf"):
             from cudf.groupby.legacy_groupby import Groupby
-            result = Groupby(self, by=by, as_index=as_index)
+            result = Groupby(self, by=by)
             return result
         else:
             from cudf.groupby.groupby import Groupby

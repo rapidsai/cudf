@@ -2,10 +2,12 @@
 
 import pytest
 
+import cudf
 import numpy as np
 import pandas as pd
 
 from cudf.dataframe import DataFrame
+from .utils import assert_eq
 
 
 def make_frame(dataframe_class, nelem, seed=0, extra_levels=(), extra_vals=()):
@@ -33,6 +35,45 @@ def get_methods():
 def get_nelem():
     for elem in [2, 3, 1000]:
         yield elem
+
+
+@pytest.fixture
+def gdf():
+    return DataFrame({'x': [1, 2], 'y': [1, 2]})
+
+
+@pytest.fixture
+def pdf(gdf):
+    return gdf.to_pandas()
+
+
+def test_groupby_no_index(pdf, gdf):
+    gdf = gdf.groupby('y', as_index=False).agg({'x': 'mean'})
+    pdf = pdf.groupby('y', as_index=False).agg({'x': 'mean'})
+    assert_eq(pdf, gdf)
+
+
+def test_groupby_index(pdf, gdf):
+    gdf = gdf.groupby('y', as_index=True).agg({'x': 'mean'})
+    pdf = pdf.groupby('y', as_index=True).agg({'x': 'mean'})
+    assert_eq(pdf, gdf)
+
+
+def test_groupby_default(pdf, gdf):
+    gdf = gdf.groupby('y').agg({'x': 'mean'})
+    pdf = pdf.groupby('y').agg({'x': 'mean'})
+    assert_eq(pdf, gdf)
+
+
+def test_groupby_indexing():
+    pdf = pd.DataFrame({'x': [1, 2, 1], 'y': [1, 2, 3]})
+    gdf = cudf.from_pandas(pdf)
+    assert_eq(pdf.groupby('x')['y'].sum(),
+              gdf.groupby('x')['y'].sum())
+    assert_eq(pdf.groupby('x').y.sum(),
+              gdf.groupby('x').y.sum())
+    assert_eq(pdf.groupby('x')[['y']].sum(),
+              gdf.groupby('x')[['y']].sum())
 
 
 @pytest.mark.parametrize('nelem', get_nelem())

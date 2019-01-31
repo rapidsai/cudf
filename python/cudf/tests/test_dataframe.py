@@ -1455,11 +1455,7 @@ def test_many_string_outputs(length_variety, ncols, data_type):
         pdf[col] = pd.Series(np.random.randint(0, 10**length_variety))\
             .astype(data_type)
     gdf = DataFrame.from_pandas(pdf)
-    print(pdf)
-    print(gdf)
     assert pdf.to_string() == gdf.to_string()
 
     for col in gdf.columns:
-        print(pdf[col])
-        print(gdf[col])
         assert pdf[col].to_string() == gdf[col].to_string()
