@@ -7,6 +7,7 @@
 ## Improvements
 
 - PR #730 Improve performance of `gdf_table` constructor
+- PR #561 Add Doxygen style comments to Join CUDA functions
 
 ## Bug Fixes
 
