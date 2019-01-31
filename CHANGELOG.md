@@ -10,6 +10,7 @@
 
 ## Bug Fixes
 
+- PR #808 Resolved renamed `d_columns_valids` variable name
 - PR #815 CSV Reader: Fix data parsing when tabs are present in the input CSV file
 
 
