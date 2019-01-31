@@ -1332,25 +1332,15 @@ class DataFrame(object):
         """
         if (method == "cudf"):
             from cudf.groupby.legacy_groupby import Groupby
-            if as_index:
-                msg = "as_index==True not supported due to the lack of\
-                    multi-index"
-                raise NotImplementedError(msg)
-            result = Groupby(self, by=by)
+            result = Groupby(self, by=by, as_index=as_index)
             return result
         else:
             from cudf.groupby.groupby import Groupby
 
             _gdf.nvtx_range_push("PYGDF_GROUPBY", "purple")
-            """
-            if as_index:
-                msg = "as_index==True not supported due to the lack of\
-                    multi-index"
-                raise NotImplementedError(msg)
-            """
             # The matching `pop` for this range is inside LibGdfGroupby
             # __apply_agg
-            result = Groupby(self, by=by, method=method)
+            result = Groupby(self, by=by, method=method, as_index=as_index)
             return result
 
     def query(self, expr):

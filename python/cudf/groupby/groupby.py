@@ -26,7 +26,7 @@ class Groupby(object):
                         'sum': libgdf.gdf_group_by_sum,
                         }
 
-    def __init__(self, df, by, method="hash"):
+    def __init__(self, df, by, method="hash", as_index=True):
         """
         Parameters
         ----------
@@ -45,6 +45,7 @@ class Groupby(object):
         self._by = [by] if isinstance(by, str) else list(by)
         self._val_columns = [idx for idx in self._df.columns
                              if idx not in self._by]
+        self._as_index = as_index
         if (method == "hash"):
             self._method = libgdf.GDF_HASH
         else:
@@ -80,7 +81,7 @@ class Groupby(object):
         cols = [self._df[thisBy]._column.cffi_view for thisBy in self._by]
 
         first_run = add_col_values
-        need_to_index = False
+        need_to_index = self._as_index
 
         col_count = 0
         for val_col in val_columns:
@@ -94,7 +95,6 @@ class Groupby(object):
                 out_col_indices = out_col_indices_series._column.cffi_view
             else:
                 out_col_indices = ffi.NULL
-
             out_col_values_series = [Series(Buffer(rmm.device_array(
                 col_agg.size,
                 dtype=self._df[self._by[i]]._column.data.dtype)))
