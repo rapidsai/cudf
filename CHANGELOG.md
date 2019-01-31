@@ -3,6 +3,7 @@
 ## New Features
 
 - PR #539 Add Python bindings for replace function
+- PR #823 Add building HTML version of source code Doxygen documentation
 
 ## Improvements
 
