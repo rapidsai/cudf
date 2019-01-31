@@ -1435,3 +1435,24 @@ def test_arrow_pandas_compat(pdf, gdf, preserve_index):
     pdf2 = pdf_arrow_table.to_pandas()
 
     assert_eq(pdf2, gdf2)
+
+
+@pytest.mark.parametrize('dtype', ['int8', 'int16', 'int32', 'int64',
+                                   'float32', 'float64'])
+def test_cuda_array_interface(dtype):
+    try:
+        import cupy
+        _have_cupy = True
+    except ImportError:
+        _have_cupy = False
+    pytest.mark.skipif(not _have_cupy, reason='CuPy is not installed')
+
+    np_data = np.arange(10).astype(dtype)
+    cupy_data = cupy.array(np_data)
+
+    cudf_data = gd.Series(cupy_data)
+    assert_eq(np_data, cudf_data)
+
+    gdf = gd.DataFrame()
+    gdf['test'] = cupy_data
+    assert_eq(np_data, gdf['test'])
