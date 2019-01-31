@@ -633,7 +633,7 @@ def test_csv_reader_empty_dataframe():
 
 
 def test_csv_reader_tabs():
-    names = ['float_point', 'integer','date']
+    names = ['float_point', 'integer', 'date']
     lines = [','.join(names),
              '1.2,\t12,     \t11/22/1995',
              '3.4\t,\t34\t,\t 01/01/2001',
