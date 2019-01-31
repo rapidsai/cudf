@@ -1186,17 +1186,17 @@ __global__ void storeRecordStart(char *data, size_t chunk_offset,
 	cu_recstart_t* recStart) {
 
 	// thread IDs range per block, so also need the block id
-	long tid = threadIdx.x + (blockDim.x * blockIdx.x);
+	const long tid = threadIdx.x + (blockDim.x * blockIdx.x);
 
 	if ( tid >= num_bits)
 		return;
 
 	// data ID - multiple of 64
-	long did = tid * 64L;
+	const long did = tid * 64L;
 
-	char *raw = (data + did);
+	const char *raw = (data + did);
 
-	long byteToProcess = ((did + 64L) < num_bytes) ? 64L : (num_bytes - did);
+	const long byteToProcess = ((did + 64L) < num_bytes) ? 64L : (num_bytes - did);
 
 	// process the data
 	for (long x = 0; x < byteToProcess; x++) {
@@ -1208,7 +1208,8 @@ __global__ void storeRecordStart(char *data, size_t chunk_offset,
 			const auto pos = atomicAdd(num_records, 1ull);
 			recStart[pos] = did + chunk_offset + x + 1;
 
-		} else if (raw[x] == '\r' && (x+1L)<num_bytes && raw[x +1] == '\n') {
+		} else if (terminator == '\n' && (x + 1L) < byteToProcess && 
+				   raw[x] == '\r' && raw[x + 1L] == '\n') {
 
 			x++;
 			const auto pos = atomicAdd(num_records, 1ull);
