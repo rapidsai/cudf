@@ -10,7 +10,7 @@
 
 ## Bug Fixes
 
-- ...
+- PR #820 SCV Reader: fix the issue where reader adds additional rows when file uses \r\n as a line terminator
 
 
 # cuDF 0.5.0 (28 Jan 2019)
