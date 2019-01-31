@@ -34,12 +34,13 @@ def arange(start, stop=None, step=1, dtype=np.int64):
     if stop is None:
         start, stop = 0, start
     size = (stop - start + (step - 1)) // step
-    if size <= 0:
+    if size < 0:
         msgfmt = "size={size} in arange({start}, {stop}, {step}, {dtype})"
         raise ValueError(msgfmt.format(size=size, start=start, stop=stop,
                                        step=step, dtype=dtype))
     out = rmm.device_array(size, dtype=dtype)
-    gpu_arange.forall(size)(start, size, step, out)
+    if size > 0:
+        gpu_arange.forall(size)(start, size, step, out)
     return out
 
 
@@ -181,7 +182,14 @@ def gpu_fill_value(data, value):
 def fill_value(arr, value):
     """Fill *arr* with value
     """
-    gpu_fill_value.forall(arr.size)(arr, value)
+    if not arr.size == 0:
+        gpu_fill_value.forall(arr.size)(arr, value)
+
+
+def full(size, value, dtype):
+    out = rmm.device_array(size, dtype=dtype)
+    fill_value(out, value)
+    return out
 
 
 @cuda.jit
@@ -191,13 +199,14 @@ def gpu_expand_mask_bits(bits, out):
     and threads.
     """
     for i in range(cuda.grid(1), out.size, cuda.gridsize(1)):
-        out[i] = mask_get(bits, i)
+        if i < bits.size * mask_bitsize:
+            out[i] = mask_get(bits, i)
 
 
 def expand_mask_bits(size, bits):
     """Expand bit-mask into byte-mask
     """
-    expanded_mask = rmm.device_array(size, dtype=np.int32)
+    expanded_mask = full(size, 0, dtype=np.int32)
     numtasks = min(1024, expanded_mask.size)
     if numtasks > 0:
         gpu_expand_mask_bits.forall(numtasks)(bits, expanded_mask)
@@ -206,12 +215,7 @@ def expand_mask_bits(size, bits):
 
 def mask_assign_slot(size, mask):
     # expand bits into bytes
-    dtype = (np.int32 if size < 2 ** 31 else np.int64)
-    expanded_mask = rmm.device_array(size, dtype=dtype)
-    numtasks = min(64 * 128, expanded_mask.size)
-    if numtasks > 0:
-        gpu_expand_mask_bits.forall(numtasks)(mask, expanded_mask)
-
+    expanded_mask = expand_mask_bits(size, mask)
     # compute prefixsum
     slots = prefixsum(expanded_mask)
     sz = int(slots[slots.size - 1])
@@ -260,7 +264,8 @@ def copy_to_dense(data, mask, out=None):
         # check it
         if sz >= out.size:
             raise ValueError('output array too small')
-    gpu_copy_to_dense.forall(data.size)(data, mask, slots, out)
+    if out.size > 0:
+        gpu_copy_to_dense.forall(data.size)(data, mask, slots, out)
     return (sz, out)
 
 

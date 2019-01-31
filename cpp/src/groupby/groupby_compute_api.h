@@ -209,7 +209,7 @@ gdf_error GroupbyHash(gdf_table<size_type> const & groupby_input_table,
   if(true == sort_result) {
 
       rmm::device_vector<int32_t> sorted_indices(*out_size);
-      thrust::sequence(rmm::exec_policy(cudaStream_t{0}), sorted_indices.begin(), sorted_indices.end());
+      thrust::sequence(rmm::exec_policy()->on(0), sorted_indices.begin(), sorted_indices.end());
 
       gdf_column sorted_indices_col;
       gdf_error status = gdf_column_view(&sorted_indices_col, (void*)thrust::raw_pointer_cast(sorted_indices.data()), 
@@ -228,11 +228,11 @@ gdf_error GroupbyHash(gdf_table<size_type> const & groupby_input_table,
       groupby_output_table.gather(sorted_indices);
 
       rmm::device_vector<aggregation_type> agg(*out_size);
-      thrust::gather(rmm::exec_policy(cudaStream_t{0}),
+      thrust::gather(rmm::exec_policy()->on(0),
                sorted_indices.begin(), sorted_indices.end(),
                out_aggregation_column,
                agg.begin());
-      thrust::copy(rmm::exec_policy(cudaStream_t{0}), agg.begin(), agg.end(), out_aggregation_column);
+      thrust::copy(rmm::exec_policy()->on(0), agg.begin(), agg.end(), out_aggregation_column);
   }
 
   return GDF_SUCCESS;

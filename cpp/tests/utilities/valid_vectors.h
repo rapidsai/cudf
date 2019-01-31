@@ -28,26 +28,6 @@
 // host_valid_pointer is a wrapper for gdf_valid_type* with custom deleter
 using host_valid_pointer = typename std::unique_ptr<gdf_valid_type, std::function<void(gdf_valid_type*)>>;
 
-// Create a valid pointer and init randomly the last half column
-host_valid_pointer create_and_init_valid(size_t length, bool all_bits_on = false)
-{
-  auto deleter = [](gdf_valid_type* valid) { delete[] valid; };
-  auto n_bytes = gdf_get_num_chars_bitmask(length);
-  auto valid_bits = new gdf_valid_type[n_bytes];
-
-  for (size_t i = 0; i < length; ++i) {
-    if (all_bits_on) {
-      gdf::util::turn_bit_on(valid_bits, i);
-    } else {
-      if (i < length / 2 || std::rand() % 2 == 1) {
-        gdf::util::turn_bit_on(valid_bits, i);
-      } else {
-        gdf::util::turn_bit_off(valid_bits, i);
-      }
-    }
-  }
-  return host_valid_pointer{ valid_bits, deleter };
-}
 
 // Create a valid pointer and init it with null_count invalids
 host_valid_pointer create_and_init_valid(size_t length, size_t null_count)
@@ -64,15 +44,6 @@ host_valid_pointer create_and_init_valid(size_t length, size_t null_count)
     }
   }
   return host_valid_pointer{ valid_bits, deleter };
-}
-
-// Initialize valids
-void initialize_valids(std::vector<host_valid_pointer>& valids, size_t size, size_t length, bool all_bits_on = false)
-{
-  valids.clear();
-  for (size_t i = 0; i < size; ++i) {
-    valids.push_back(create_and_init_valid(length, all_bits_on));
-  }
 }
 
 void initialize_valids(std::vector<host_valid_pointer>& valids, size_t size, size_t length, size_t null_count)

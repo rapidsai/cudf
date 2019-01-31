@@ -6,9 +6,10 @@ import pyarrow as pa
 
 from . import numerical, columnops
 from .buffer import Buffer
-from .series import Series
 from cudf.utils import utils, cudautils
 from cudf.comm.serialize import register_distributed_serializer
+
+import cudf.bindings.replace as cpp_replace
 
 
 class CategoricalAccessor(object):
@@ -30,6 +31,7 @@ class CategoricalAccessor(object):
 
     @property
     def codes(self):
+        from cudf.dataframe.series import Series
         data = self._parent.data
         if self._parent.has_null_mask:
             mask = self._parent.mask
@@ -112,11 +114,13 @@ class CategoricalColumn(columnops.TypedColumnBase):
                                    ordered=self._ordered)
 
     def binary_operator(self, binop, rhs):
-        msg = 'Categorical cannot perform the operation: {}'.format(binop)
+        msg = 'Series of dtype `category` cannot perform the operation: {}'\
+            .format(binop)
         raise TypeError(msg)
 
     def unary_operator(self, unaryop):
-        msg = 'Categorical cannot perform the operation: {}'.format(unaryop)
+        msg = 'Series of dtype `category` cannot perform the operation: {}'\
+            .format(unaryop)
         raise TypeError(msg)
 
     def unordered_compare(self, cmpop, rhs):
@@ -288,6 +292,25 @@ class CategoricalColumn(columnops.TypedColumnBase):
             return joined_index, indexers
         else:
             return joined_index
+
+    def find_and_replace(self, to_replace, value):
+        """
+        Return col with *to_replace* replaced with *value*.
+        """
+        replaced = columnops.as_column(self.cat().codes)
+
+        to_replace_col = columnops.as_column(
+            np.asarray([self._encode(val) for val in to_replace],
+                       dtype=replaced.dtype)
+        )
+        value_col = columnops.as_column(
+            np.asarray([self._encode(val) for val in value],
+                       dtype=replaced.dtype)
+        )
+
+        cpp_replace.replace(replaced, to_replace_col, value_col)
+
+        return self.replace(data=replaced.data)
 
 
 def pandas_categorical_as_column(categorical, codes=None):

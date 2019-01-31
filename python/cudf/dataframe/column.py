@@ -38,13 +38,15 @@ class Column(object):
     """
     @classmethod
     def _concat(cls, objs):
+        if len(objs) == 0:
+            return Column(Buffer.null(np.float))
         head = objs[0]
         for o in objs:
             if not o.is_type_equivalent(head):
                 raise ValueError("All series must be of same type")
         # Filter out inputs that have 0 length
         objs = [o for o in objs if len(o) > 0]
-        nulls = any(o.null_count for o in objs)
+        nulls = sum(o.null_count for o in objs)
         newsize = sum(map(len, objs))
         mem = rmm.device_array(shape=newsize, dtype=head.data.dtype)
         data = Buffer.from_empty(mem, size=newsize)
@@ -54,8 +56,7 @@ class Column(object):
         if nulls:
             mask = Buffer(utils.make_mask(newsize))
 
-        # Libcudf calculates the null_count so we don't need to set it
-        col = head.replace(data=data, mask=mask)
+        col = head.replace(data=data, mask=mask, null_count=nulls)
 
         # Performance the actual concatenation
         if newsize > 0:
@@ -220,7 +221,8 @@ class Column(object):
         nelem = len(self)
         mask_sz = utils.calc_chunk_size(nelem, utils.mask_bitsize)
         mask = cuda.device_array(mask_sz, dtype=utils.mask_dtype)
-        cudautils.fill_value(mask, 0xff if all_valid else 0)
+        if nelem > 0:
+            cudautils.fill_value(mask, 0xff if all_valid else 0)
         return self.set_mask(mask=mask, null_count=0 if all_valid else nelem)
 
     def to_gpu_array(self, fillna=None):
@@ -295,18 +297,27 @@ class Column(object):
         """
         return self.replace(data=self.data.copy())
 
-    def copy(self):
-        """Copy the column with a new allocation of the data and mask.
+    def copy(self, deep=True):
+        """Columns are immutable, so a deep copy produces a copy of the
+        underlying data and mask and a shallow copy creates a new column and
+        copies the references of the data and mask.
         """
-        copied = self.copy_data()
-        if self.has_null_mask:
-            return copied.set_mask(mask=self.mask.copy(),
-                                   null_count=self.null_count)
+        if(deep):
+            deep = self.copy_data()
+            if self.has_null_mask:
+                return deep.set_mask(mask=self.mask.copy(),
+                                     null_count=self.null_count)
+            else:
+                return deep.allocate_mask()
         else:
-            return copied.allocate_mask()
+            shallow = Column()
+            shallow._data = self._data
+            shallow._mask = self._mask
+            shallow.has_null_mask = self.has_null_mask
+            return shallow
 
     def replace(self, **kwargs):
-        """Replace attibutes of the class and return a new Column.
+        """Replace attributes of the class and return a new Column.
 
         Valid keywords are valid parameters for ``self.__init__``.
         Any omitted keywords will be defaulted to the corresponding
@@ -451,7 +462,8 @@ class Column(object):
                                       "yet supported")
         newsize = len(self) + len(other)
         # allocate memory
-        mem = rmm.device_array(shape=newsize, dtype=self.data.dtype)
+        data_dtype = np.result_type(self.data.dtype, other.data.dtype)
+        mem = rmm.device_array(shape=newsize, dtype=data_dtype)
         newbuf = Buffer.from_empty(mem)
         # copy into new memory
         for buf in [self.data, other.data]:
@@ -468,3 +480,30 @@ class Column(object):
             msg = "`q` must be either a single element, list or numpy array"
             raise TypeError(msg)
         return _gdf.quantile(self, quant, interpolation, exact)
+
+    def take(self, indices, ignore_index=False):
+        """Return Column by taking values from the corresponding *indices*.
+        """
+        indices = Buffer(indices).to_gpu_array()
+        # Handle zero size
+        if indices.size == 0:
+            return self.copy()
+
+        data = cudautils.gather(data=self._data.to_gpu_array(), index=indices)
+
+        if self._mask:
+            mask = self._get_mask_as_column().take(indices).as_mask()
+            mask = Buffer(mask)
+        else:
+            mask = None
+
+        return self.replace(data=Buffer(data), mask=mask)
+
+    def as_mask(self):
+        """Convert booleans to bitmask
+
+        Returns
+        -------
+        device array
+        """
+        return cudautils.compact_mask_bytes(self.to_gpu_array())
