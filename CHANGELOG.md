@@ -4,6 +4,7 @@
 
 - PR #539 Add Python bindings for replace function
 - PR #807 CSV Reader: Add byte_range parameter to specify the range in the input file to be read
+- PR #826 Add series feature hashing support
 
 ## Improvements
 
