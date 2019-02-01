@@ -632,7 +632,7 @@ def test_csv_reader_empty_dataframe():
     with pytest.raises(GDFError):
         read_csv(StringIO(buffer))
 
-        
+
 def test_csv_reader_bzip2_compression(tmpdir):
     fname = tmpdir.mkdir("gdf_csv").join('tmp_csvreader_file16.csv.bz2')
 
@@ -648,7 +648,7 @@ def test_csv_reader_bzip2_compression(tmpdir):
     assert len(out.columns) == len(df_out.columns)
     pd.util.testing.assert_frame_equal(df_out, out.to_pandas())
 
-    
+
 @pytest.mark.parametrize('segment_bytes', [10000, 19999, 30001, 36000])
 def test_csv_reader_byte_range(tmpdir, segment_bytes):
     fname = tmpdir.mkdir("gdf_csv").join("tmp_csvreader_file16.csv")
