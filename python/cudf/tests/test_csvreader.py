@@ -264,8 +264,7 @@ def test_csv_reader_usecols_int_char(tmpdir):
     df_out = pd.read_csv(fname, usecols=[0, 1, 3], parse_dates=[1],
                          dayfirst=True)
     out = read_csv(str(fname), usecols=[0, 1, 3], dayfirst=True)
-    print(df_out)
-    print(out)
+
     assert len(out.columns) == len(df_out.columns)
     assert len(out) == len(df_out)
     pd.util.testing.assert_frame_equal(df_out, out.to_pandas(),
@@ -329,8 +328,7 @@ def test_csv_reader_NaN_values():
     buffer = '476940.0\n59e3\n\n""\n305245.0\n'
 
     cu_df = read_csv(StringIO(buffer), names=names, dtype=dtypes)
-    pd_df = pd.read_csv(StringIO(buffer), names=names, dtype=dtypes[0],
-                        skip_blank_lines=False)
+    pd_df = pd.read_csv(StringIO(buffer), names=names, dtype=dtypes[0])
 
     cu_df = cu_df.to_pandas()
 
@@ -744,3 +742,25 @@ def test_csv_reader_byte_range(tmpdir, segment_bytes):
 
     # comparing only the values here, concat does not update the index
     np.array_equal(ref_df.to_pandas().values, df.to_pandas().values)
+
+
+@pytest.mark.parametrize('header_row, skip_rows',
+                         [(1, 0), ('infer', 2), (1, 4)])
+def test_csv_reader_blanks_and_comments(skip_rows, header_row):
+
+    lines = ['# first empty line',
+             '\n',
+             '# third empty line',
+             '1,2,3',
+             '4,5,6',
+             '7,8,9',
+             '0,0,0']
+    buffer = '\n'.join(lines) + '\n'
+
+    cu_df = read_csv(StringIO(buffer), comment='#',
+                     header=header_row, skiprows=skip_rows)
+    pd_df = pd.read_csv(StringIO(buffer), comment='#',
+                        header=header_row, skiprows=skip_rows)
+
+    assert(cu_df.shape == pd_df.shape)
+    assert(list(cu_df.columns.values) == list(pd_df.columns.values))

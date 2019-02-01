@@ -104,7 +104,7 @@ typedef struct {
 
   char          escapechar;                 // Single character used as the escape character
 
-  char          comment;                    // Single character indicating that the remainder of line is a comment
+  char          comment;                    ///< The character used to denote start of a comment line. The rest of the line will not be parsed.
 
   char          *encoding;                  // the data encoding, NULL = UTF-8
 
