@@ -11,7 +11,8 @@
 
 ## Bug Fixes
 
-- ...
+- PR #821 Fix flake8 issues revealed by flake8 update
+- PR #808 Resolved renamed `d_columns_valids` variable name
 
 
 # cuDF 0.5.0 (28 Jan 2019)

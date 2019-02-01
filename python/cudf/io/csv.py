@@ -192,7 +192,7 @@ def read_csv(filepath_or_buffer, lineterminator='\n',
         csv_reader.input_data_form = libgdf.FILE_PATH
         csv_reader.filepath_or_buffer = file_path
 
-    if header is 'infer':
+    if header == 'infer':
         header = -1
     header_infer = header
     arr_names = []
