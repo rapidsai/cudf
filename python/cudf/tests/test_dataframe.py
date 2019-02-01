@@ -1445,7 +1445,8 @@ def test_cuda_array_interface(dtype):
         _have_cupy = True
     except ImportError:
         _have_cupy = False
-    pytest.mark.skipif(not _have_cupy, reason='CuPy is not installed')
+    if not _have_cupy:
+        pytest.skip('CuPy is not installed')
 
     np_data = np.arange(10).astype(dtype)
     cupy_data = cupy.array(np_data)
