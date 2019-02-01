@@ -210,10 +210,10 @@ std::string stringType(gdf_dtype dt){
 
 
 /**---------------------------------------------------------------------------*
- * @brief Estimates the maximum expected lenght or a row, based on the number 
+ * @brief Estimates the maximum expected length or a row, based on the number 
  * of columns
  * 
- * If the number of colums is not available, it will return a value large 
+ * If the number of columns is not available, it will return a value large 
  * enough for most use cases
  * 
  * @param[in] num_columns Number of columns in the CSV file (optional)
