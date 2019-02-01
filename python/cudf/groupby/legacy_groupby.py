@@ -14,7 +14,7 @@ from cudf.dataframe.column import Column
 from cudf.dataframe.buffer import Buffer
 from cudf.multi import concat
 from cudf import _gdf
-from cudf.utils import cudautils
+from cudf.utils import cudautils, applyutils
 from cudf.comm.serialize import register_distributed_serializer
 
 
@@ -149,6 +149,45 @@ class Groupby(object):
             - df : DataFrame
             - segs : Series
                 Beginning offsets of each group.
+
+        Examples
+        --------
+        .. code-block:: python
+
+          from cudf import DataFrame
+
+          df = DataFrame()
+          df['key'] = [0, 0, 1, 1, 2, 2, 2]
+          df['val'] = [0, 1, 2, 3, 4, 5, 6]
+          groups = df.groupby(['key'], method='cudf')
+
+          df_groups = groups.as_df()
+
+          # DataFrame indexes of group starts
+          print(df_groups[1])
+                
+          # DataFrame itself
+          print(df_groups[0]) 
+
+        Output:
+
+        .. code-block:: python
+
+          # DataFrame indexes of group starts
+          0    0
+          1    2
+          2    4
+
+          # DataFrame itself
+             key  val
+          0    0    0
+          1    0    1
+          2    1    2
+          3    1    3
+          4    2    4
+          5    2    5 
+          6    2    6
+
         """
         return self._group_dataframe(self._df, self._by)
 
@@ -415,6 +454,46 @@ class Groupby(object):
 
     def apply(self, function):
         """Apply a transformation function over the grouped chunk.
+
+        This uses numba's CUDA JIT compiler to convert the Python transformation
+        function into a CUDA kernel, thus will have a compilation overhead 
+        during the first run.
+
+        Parameters
+        ----------
+        func : function
+          The transformation function that will be executed on the CUDA GPU.
+
+        Examples
+        --------
+        .. code-block:: python
+
+          from cudf import DataFrame
+          df = DataFrame()
+          df['key'] = [0, 0, 1, 1, 2, 2, 2]
+          df['val'] = [0, 1, 2, 3, 4, 5, 6]
+          groups = df.groupby(['key'], method='cudf')
+
+          # Define a function to apply to each row in a group
+          def mult(df):
+            df['out'] = df['key'] * df['val']
+            return df
+
+          result = groups.apply(mult)
+          print(result)
+
+        Output:
+
+        .. code-block:: python
+
+             key  val  out
+          0    0    0    0
+          1    0    1    0
+          2    1    2    2
+          3    1    3    3
+          4    2    4    8
+          5    2    5   10
+          6    2    6   12
         """
         if not callable(function):
             raise TypeError("type {!r} is not callable", type(function))
@@ -425,6 +504,65 @@ class Groupby(object):
         return concat([function(chk) for chk in chunks])
 
     def apply_grouped(self, function, **kwargs):
+        """Apply a transformation function over the grouped chunk.
+
+        This uses numba's CUDA JIT compiler to convert the Python transformation
+        function into a CUDA kernel, thus will have a compilation overhead 
+        during the first run.
+
+        Parameters
+        ----------
+        func : function
+          The transformation function that will be executed on the CUDA GPU.
+        incols: list
+          A list of names of input columns.
+        outcols: list
+          A dictionary of output column names and their dtype.
+        kwargs : dict
+          name-value of extra arguments. These values are passed directly into the function.
+
+        Examples
+        --------
+        .. code-block:: python
+
+            from cudf import DataFrame
+            from numba import cuda
+            import numpy as np
+
+            df = DataFrame()
+            df['key'] = [0, 0, 1, 1, 2, 2, 2]
+            df['val'] = [0, 1, 2, 3, 4, 5, 6]
+            groups = df.groupby(['key'], method='cudf')
+
+            # Define a function to apply to each group
+            def mult_add(key, val, out1, out2):
+                for i in range(cuda.threadIdx.x, len(key), cuda.blockDim.x):
+                    out1[i] = key[i] * val[i]
+                    out2[i] = key[i] + val[i]
+
+            result = groups.apply_grouped(mult_add,
+                                          incols=['key', 'val'],
+                                          outcols={'out1': np.int32,
+                                                   'out2': np.int32},
+                                          # threads per block
+                                          tpb=8)
+
+            print(result)
+
+        Output:
+
+        .. code-block:: python
+
+               key  val out1 out2
+            0    0    0    0    0
+            1    0    1    0    1
+            2    1    2    2    3
+            3    1    3    3    4
+            4    2    4    8    6
+            5    2    5   10    7
+            6    2    6   12    8
+
+        """
         if not callable(function):
             raise TypeError("type {!r} is not callable", type(function))
 
