@@ -648,3 +648,19 @@ def test_csv_reader_carriage_return(tmpdir):
     for row in range(0, rows):
         assert(df['int1'][row] == row)
         assert(df['int2'][row] == 2 * row)
+
+
+def test_csv_reader_bzip2_compression(tmpdir):
+    fname = tmpdir.mkdir("gdf_csv").join('tmp_csvreader_file16.csv.bz2')
+
+    df = make_datetime_dataframe()
+    df.to_csv(fname, index=False, header=False, compression='bz2')
+
+    df_out = pd.read_csv(fname, names=['col1', 'col2'], parse_dates=[0, 1],
+                         dayfirst=True, compression='bz2')
+    dtypes = ['date', 'date']
+    out = read_csv(str(fname), names=list(df.columns.values), dtype=dtypes,
+                   dayfirst=True, compression='bz2')
+
+    assert len(out.columns) == len(df_out.columns)
+    pd.util.testing.assert_frame_equal(df_out, out.to_pandas())
