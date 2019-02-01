@@ -7,6 +7,7 @@
 ## Improvements
 
 - PR #730 Improve performance of `gdf_table` constructor
+- PR #836 Add ingest support for arrow chunked arrays in Column, Series, DataFrame creation
 
 ## Bug Fixes
 
