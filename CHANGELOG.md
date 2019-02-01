@@ -7,6 +7,7 @@
 ## Improvements
 
 - PR #730 Improve performance of `gdf_table` constructor
+- PR #532 CSV Reader: Use type dispatcher instead of switch block
 
 ## Bug Fixes
 
