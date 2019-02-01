@@ -7,6 +7,7 @@
 ## Improvements
 
 - PR #730 Improve performance of `gdf_table` constructor
+- PR #822 Add support for `__cuda_array_interface__` for ingest
 
 ## Bug Fixes
 
