@@ -47,22 +47,15 @@ function sed_runner() {
     sed -i.bak ''"$1"'' $2 && rm -f ${2}.bak
 }
 
-# README updates
-sed_runner 's/'cudf="${CURRENT_TAG}"'/'cudf="${NEXT_FULL_TAG}"'/g' README.md
-
 # cpp update
 sed_runner 's/'"CUDA_DATAFRAME VERSION ${CURRENT_TAG}"'/'"CUDA_DATAFRAME VERSION ${NEXT_FULL_TAG}"'/g' cpp/CMakeLists.txt
 
-# libgdf/librmm
+# libcudf
 sed_runner 's/version=.*/version=\"'"${NEXT_FULL_TAG}"'\",/g' cpp/python/setup.py
 
-# Conda environment updates
-sed_runner 's/libcudf=.*/libcudf='"${NEXT_FULL_TAG}.*"'/g' conda/environments/builddocs_py35.yml
-sed_runner 's/libcudf_cffi=.*/libcudf_cffi='"${NEXT_FULL_TAG}.*"'/g' conda/environments/builddocs_py35.yml
-
 # Conda recipe updates
-sed_runner 's/libcudf .*/libcudf '"${NEXT_FULL_TAG}.*"'/g' conda/recipes/cudf/meta.yaml
-sed_runner 's/libcudf_cffi .*/libcudf_cffi '"${NEXT_FULL_TAG}.*"'/g' conda/recipes/cudf/meta.yaml
+sed_runner 's/libcudf .*/libcudf '"${NEXT_SHORT_TAG}*"'/g' conda/recipes/cudf/meta.yaml
+sed_runner 's/libcudf_cffi .*/libcudf_cffi '"${NEXT_SHORT_TAG}*"'/g' conda/recipes/cudf/meta.yaml
 
 # RTD update
 sed_runner 's/version = .*/version = '"'${NEXT_SHORT_TAG}'"'/g' docs/source/conf.py

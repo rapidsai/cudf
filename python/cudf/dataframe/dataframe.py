@@ -1977,7 +1977,15 @@ class Iloc(object):
             ret_list = []
             col_list = pd.Categorical(list(self._df.columns))
             for col in col_list:
+                if pd.api.types.is_categorical_dtype(
+                    self._df[col][rows[0]].dtype
+                ):
+                    raise NotImplementedError(
+                        "categorical dtypes are not yet supported in iloc"
+                    )
                 ret_list.append(self._df[col][rows[0]])
+            promoted_type = np.result_type(*[val.dtype for val in ret_list])
+            ret_list = np.array(ret_list, dtype=promoted_type)
             return Series(ret_list,
                           index=as_index(col_list))
 
