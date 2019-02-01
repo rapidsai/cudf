@@ -14,7 +14,7 @@ from cudf.dataframe.column import Column
 from cudf.dataframe.buffer import Buffer
 from cudf.multi import concat
 from cudf import _gdf
-from cudf.utils import cudautils, applyutils
+from cudf.utils import cudautils
 from cudf.comm.serialize import register_distributed_serializer
 
 
@@ -165,9 +165,9 @@ class Groupby(object):
 
           # DataFrame indexes of group starts
           print(df_groups[1])
-                
+
           # DataFrame itself
-          print(df_groups[0]) 
+          print(df_groups[0])
 
         Output:
 
@@ -185,7 +185,7 @@ class Groupby(object):
           2    1    2
           3    1    3
           4    2    4
-          5    2    5 
+          5    2    5
           6    2    6
 
         """
@@ -455,9 +455,9 @@ class Groupby(object):
     def apply(self, function):
         """Apply a transformation function over the grouped chunk.
 
-        This uses numba's CUDA JIT compiler to convert the Python transformation
-        function into a CUDA kernel, thus will have a compilation overhead 
-        during the first run.
+        This uses numba's CUDA JIT compiler to convert the Python
+        transformation function into a CUDA kernel, thus will have a
+        compilation overhead during the first run.
 
         Parameters
         ----------
@@ -506,9 +506,9 @@ class Groupby(object):
     def apply_grouped(self, function, **kwargs):
         """Apply a transformation function over the grouped chunk.
 
-        This uses numba's CUDA JIT compiler to convert the Python transformation
-        function into a CUDA kernel, thus will have a compilation overhead 
-        during the first run.
+        This uses numba's CUDA JIT compiler to convert the Python
+        transformation function into a CUDA kernel, thus will have a
+        compilation overhead during the first run.
 
         Parameters
         ----------
@@ -519,7 +519,8 @@ class Groupby(object):
         outcols: list
           A dictionary of output column names and their dtype.
         kwargs : dict
-          name-value of extra arguments. These values are passed directly into the function.
+          name-value of extra arguments. These values are passed directly into
+          the function.
 
         Examples
         --------
