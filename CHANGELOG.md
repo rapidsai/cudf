@@ -10,6 +10,7 @@
 
 ## Bug Fixes
 
+- PR #821 Fix flake8 issues revealed by flake8 update
 - PR #808 Resolved renamed `d_columns_valids` variable name
 - PR #782 Fix issue with memory leak when dataframe boolmask is used
 - PR #759 Fix left join crash when left dataframe has 0 rows
