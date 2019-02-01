@@ -1435,3 +1435,33 @@ def test_arrow_pandas_compat(pdf, gdf, preserve_index):
     pdf2 = pdf_arrow_table.to_pandas()
 
     assert_eq(pdf2, gdf2)
+
+
+@pytest.mark.parametrize('nelem', [0, 2, 3, 100])
+@pytest.mark.parametrize('nchunks', [0, 1, 2, 5, 10])
+@pytest.mark.parametrize(
+    'data_type',
+    ['bool', 'int8', 'int16', 'int32', 'int64',
+     'float32', 'float64', 'datetime64[ms]']
+)
+def test_from_arrow_chunked_arrays(nelem, nchunks, data_type):
+    np_list_data = [(np.random.randint(0, 100, nelem).astype(data_type) for
+                     i in range(nchunks))]
+    pa_chunk_array = pa.chunked_array(np_list_data)
+
+    expect = pd.Series(pa_chunk_array.to_pandas())
+    got = gd.Series(pa_chunk_array)
+
+    assert_eq(expect, got)
+
+    np_list_data2 = [(np.random.randint(0, 100, nelem).astype(data_type) for
+                      i in range(nchunks))]
+    pa_chunk_array2 = pa.chunked_array(np_list_data2)
+    pa_table = pa.Table.from_arrays([pa_chunk_array, pa_chunk_array2],
+                                    names=['a', 'b'])
+
+    expect = pa_table.to_pandas()
+    got = gd.DataFrame.from_arrow(pa_table)
+
+    assert_eq(expect, got)
+    
