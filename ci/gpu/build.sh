@@ -12,7 +12,7 @@ function logger() {
 
 # Set path and build parallel level
 export PATH=/conda/bin:/usr/local/cuda/bin:$PATH
-export CMAKE_BUILD_PARALLEL_LEVEL=4
+export PARALLEL_LEVEL=4
 
 # Set home to the job's workspace
 export HOME=$WORKSPACE
@@ -44,16 +44,16 @@ logger "Build libcudf..."
 mkdir -p $WORKSPACE/cpp/build
 cd $WORKSPACE/cpp/build
 logger "Run cmake libcudf..."
-cmake -DCMAKE_INSTALL_PREFIX=$CONDA_PREFIX ..
+cmake -DCMAKE_INSTALL_PREFIX=$CONDA_PREFIX -DCMAKE_CXX11_ABI=ON ..
 
 logger "Clean up make..."
 make clean
 
 logger "Make libcudf..."
-make -j${CMAKE_BUILD_PARALLEL_LEVEL}
+make -j${PARALLEL_LEVEL}
 
 logger "Install libcudf..."
-make -j${CMAKE_BUILD_PARALLEL_LEVEL} install
+make -j${PARALLEL_LEVEL} install
 
 logger "Install libcudf for Python..."
 make python_cffi
@@ -72,7 +72,7 @@ nvidia-smi
 
 logger "GoogleTest for libcudf..."
 cd $WORKSPACE/cpp/build
-GTEST_OUTPUT="xml:${WORKSPACE}/test-results/" make -j${CMAKE_BUILD_PARALLEL_LEVEL} test
+GTEST_OUTPUT="xml:${WORKSPACE}/test-results/" make -j${PARALLEL_LEVEL} test
 
 logger "Python py.test for libcudf..."
 cd $WORKSPACE/cpp/build/python
