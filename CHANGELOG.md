@@ -18,6 +18,7 @@
 
 ## New Features
 
+- PR #722 Add bzip2 decompression support to `read_csv()`
 - PR #693 add ZLIB-based GZIP/ZIP support to `read_csv_strings()`
 - PR #411 added null support to gdf_order_by (new API) and cudf_table::sort
 - PR #525 Added GitHub Issue templates for bugs, documentation, new features, and questions
