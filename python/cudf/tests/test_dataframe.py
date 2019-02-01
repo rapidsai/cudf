@@ -1464,4 +1464,3 @@ def test_from_arrow_chunked_arrays(nelem, nchunks, data_type):
     got = gd.DataFrame.from_arrow(pa_table)
 
     assert_eq(expect, got)
-    
