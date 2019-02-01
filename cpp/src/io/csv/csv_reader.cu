@@ -69,21 +69,6 @@ using cu_reccnt_t = unsigned long long int;
 using cu_recstart_t = unsigned long long int;
 
 
-constexpr size_t calculateMaxRowSize(int column_num=0) noexcept {
-	constexpr size_t max_row_bytes = 16*1024; // 16KB
-	constexpr size_t column_bytes = 64;
-	constexpr size_t base_padding = 4*1024; // 4KB
-	if (column_num == 0){
-		// use flat size if the number of columns is not known
-		return max_row_bytes;
-	}
-	else {
-		// Expand the size based on the number of columns, if available
-		return base_padding + column_num * column_bytes; 
-	}
-}
-
-
 //-- define the structure for raw data handling - for internal use
 typedef struct raw_csv_ {
     char *				data;			// on-device: the raw unprocessed CSV data - loaded as a large char * array
@@ -150,7 +135,6 @@ using string_pair = std::pair<const char*,size_t>;
 //
 gdf_error parseArguments(csv_read_arg *args, raw_csv_t *csv);
 // gdf_error getColNamesAndTypes(const char **col_names, const  char **dtypes, raw_csv_t *d);
-gdf_error trimExtraRows(gdf_size_type byte_range_size, raw_csv_t * raw_csv);
 gdf_error inferCompressionType(const char* compression_arg, const char* filepath, string& compression_type);
 gdf_error getUncompressedHostData(const char* h_data, size_t num_bytes, 
 	const string& compression, 
@@ -175,7 +159,7 @@ gdf_error launch_dataTypeDetection(raw_csv_t * raw_csv, column_data_t* d_columnD
 
 __global__ void countRecords(char *data, const char terminator, const char quotechar, long num_bytes, long num_bits, cu_reccnt_t* num_records);
 __global__ void storeRecordStart(char *data, size_t chunk_offset, 
-	const char terminator, const char quotechar, 
+	const char terminator, const char quotechar, bool include_first_row,
 	long num_bytes, long num_bits, cu_reccnt_t* num_records,
 	cu_recstart_t* recStart);
 __global__ void convertCsvToGdf(char *csv, const parsing_opts_t opts, gdf_size_type num_records, int num_columns, 
@@ -222,6 +206,64 @@ std::string stringType(gdf_dtype dt){
 	}
 
 
+}
+
+
+/**---------------------------------------------------------------------------*
+ * @brief Estimates the maximum expected lenght or a row, based on the number 
+ * of columns
+ * 
+ * If the number of colums is not available, it will return a value large 
+ * enough for most use cases
+ * 
+ * @param[in] num_columns Number of columns in the CSV file (optional)
+ * 
+ * @return Estimated maximum size of a row, in bytes
+ *---------------------------------------------------------------------------**/
+ constexpr size_t calculateMaxRowSize(int num_columns=0) noexcept {
+	constexpr size_t max_row_bytes = 16*1024; // 16KB
+	constexpr size_t column_bytes = 64;
+	constexpr size_t base_padding = 1024; // 1KB
+	if (num_columns == 0){
+		// Use flat size if the number of columns is not known
+		return max_row_bytes;
+	}
+	else {
+		// Expand the size based on the number of columns, if available
+		return base_padding + num_columns * column_bytes; 
+	}
+}
+
+
+/**---------------------------------------------------------------------------*
+ * @brief Updates the number of records to trim the rows that start after 
+ * the end of the byte range.
+ * 
+ * Does not modify the recStart array, just modifies num_records.
+ * 
+ * @param[in] byte_range_size Size of the byte range, in bytes
+ * @param[in,out] raw_csv pointer to the structure containing the csv parsing parameters
+ * and intermediate results
+ * 
+ * @return gdf_error with error code on failure, otherwise GDF_SUCCESS
+ *---------------------------------------------------------------------------**/
+ gdf_error trimExtraRows(gdf_size_type byte_range_size, raw_csv_t * raw_csv) {
+	// TODO: don't copy the whole array, only up to calculateMaxRowSize() rows are relevant here
+	vector<cu_recstart_t> h_rec_starts(raw_csv->num_records + 1);
+	const size_t rec_start_size = sizeof(cu_recstart_t) * (h_rec_starts.size());
+	CUDA_TRY( cudaMemcpy(h_rec_starts.data(), raw_csv->recStart, rec_start_size, cudaMemcpyDeviceToHost) );
+	size_t rec_start_idx = raw_csv->num_records;
+
+	// TODO: we could use a modified binary search here instead
+	// Searching for the last row that starts before the range end
+	// This row with be the extra one we want to read, as it ends after the byte range end
+	while (rec_start_idx != 0 && h_rec_starts[rec_start_idx] > (cu_recstart_t)byte_range_size) {
+		--rec_start_idx;
+	}
+	// +1 to convert from index to size
+	raw_csv->num_records = rec_start_idx + 1;
+
+	return GDF_SUCCESS;
 }
 
 
@@ -844,38 +886,6 @@ gdf_dtype convertStringToDtype(std::string &dtype) {
 
 
 /**---------------------------------------------------------------------------*
- * @brief Updates the number of records to trim the rows that start after 
- * the end of the byte range.
- * 
- * Does not modify the recStart array, just modifies num_records.
- * 
- * @param[in] byte_range_size Size of the byte range, in bytes
- * @param[in,out] raw_csv pointer to the structure containing the csv parsing parameters
- * and intermediate results
- * 
- * @return gdf_error with error code on failure, otherwise GDF_SUCCESS
- *---------------------------------------------------------------------------**/
-gdf_error trimExtraRows(gdf_size_type byte_range_size, raw_csv_t * raw_csv) {
-	// TODO: don't copy the whole array, only up to calculateMaxRowSize() rows are relevant here
-	vector<cu_recstart_t> h_rec_starts(raw_csv->num_records + 1);
-	const size_t rec_start_size = sizeof(cu_recstart_t) * (h_rec_starts.size());
-	CUDA_TRY( cudaMemcpy(h_rec_starts.data(), raw_csv->recStart, rec_start_size, cudaMemcpyDeviceToHost) );
-	size_t rec_start_idx = raw_csv->num_records;
-
-	// TODO: we could use a modified binary search here instead
-	// Searching for the last row that starts before the range end
-	// This row with be the extra one we want to read, as it ends after the byte range end
-	while (rec_start_idx != 0 && h_rec_starts[rec_start_idx] > (cu_recstart_t)byte_range_size) {
-		--rec_start_idx;
-	}
-	// +1 to convert from index to size
-	raw_csv->num_records = rec_start_idx + 1;
-
-	return GDF_SUCCESS;
-}
-
-
-/**---------------------------------------------------------------------------*
  * @brief Infer the compression type from the compression parameter and 
  * the input file name
  * 
@@ -1211,18 +1221,9 @@ gdf_error launch_storeRecordStart(const char* h_data, size_t h_size, bool includ
 	// Allocate extra byte in case \r\n is at the chunk border
 	RMM_TRY(RMM_ALLOC (&d_chunk, max_chunk_bytes + 1, 0)); 
 	
-    cu_reccnt_t*	d_num_records;
+	cu_reccnt_t*	d_num_records;
 	RMM_TRY(RMM_ALLOC((void**)&d_num_records, sizeof(cu_reccnt_t), 0) );
-
-	if (include_first_row) {
-		// set the first record starting a zero instead of setting it in the kernel
-    	const auto one = 1ull;
-		CUDA_TRY(cudaMemcpy(d_num_records, &one, sizeof(cu_reccnt_t), cudaMemcpyDefault));
-		CUDA_TRY(cudaMemset(csvData->recStart, 0ull, (sizeof(cu_recstart_t))));
-	}
-	else {
-		CUDA_TRY(cudaMemset(d_num_records, 0ull, sizeof(cu_reccnt_t)));
-	}
+	CUDA_TRY(cudaMemset(d_num_records, 0ull, sizeof(cu_reccnt_t)));
 
 	int blockSize;		// suggested thread count to use
 	int minGridSize;	// minimum block count required
@@ -1234,13 +1235,15 @@ gdf_error launch_storeRecordStart(const char* h_data, size_t h_size, bool includ
 		const auto h_chunk = h_data + chunk_offset;
 		const auto chunk_bytes = std::min((size_t)(h_size - ci * max_chunk_bytes), max_chunk_bytes);
 		const auto chunk_bits = (chunk_bytes + 63) / 64;
+		// include_first_row should only apply to the first chunk
+		const bool cu_include_first_row = (ci == 0) && include_first_row;
 		
 		// Copy chunk to device. Copy extra byte if not last chunk
 		CUDA_TRY(cudaMemcpy(d_chunk, h_chunk, ci < (chunk_count - 1)?chunk_bytes:chunk_bytes + 1, cudaMemcpyDefault));
 
 		const int gridSize = (chunk_bits + blockSize - 1) / blockSize;
 		storeRecordStart <<< gridSize, blockSize >>> (
-			d_chunk, chunk_offset, csvData->terminator, csvData->quotechar,
+			d_chunk, chunk_offset, csvData->terminator, csvData->quotechar, cu_include_first_row,
 			chunk_bytes, chunk_bits, d_num_records,
 			csvData->recStart
 		);
@@ -1276,7 +1279,7 @@ gdf_error launch_storeRecordStart(const char* h_data, size_t h_size, bool includ
  * @return void
  *---------------------------------------------------------------------------**/
 __global__ void storeRecordStart(char *data, size_t chunk_offset, 
-	const char terminator, const char quotechar, 
+	const char terminator, const char quotechar, bool include_first_row,
 	long num_bytes, long num_bits, cu_reccnt_t* num_records,
 	cu_recstart_t* recStart) {
 
@@ -1288,6 +1291,11 @@ __global__ void storeRecordStart(char *data, size_t chunk_offset,
 
 	// data ID - multiple of 64
 	long did = tid * 64L;
+
+	if (did == 0 && include_first_row) {
+		const auto pos = atomicAdd(num_records, 1ull);
+		recStart[pos] = 0;
+	}
 
 	char *raw = (data + did);
 
