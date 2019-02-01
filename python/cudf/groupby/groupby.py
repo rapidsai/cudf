@@ -234,8 +234,7 @@ class Groupby(object):
                 sort_result = False
             for agg_type in args:
 
-                val_columns_out = [agg_type + '_' +
-                                   val for val in self._val_columns]
+                val_columns_out = [val for val in self._val_columns]
 
                 result = self._apply_agg(
                     agg_type, result, add_col_values, ctx, self._val_columns,
@@ -252,13 +251,13 @@ class Groupby(object):
                 if not isinstance(agg_type, str) and \
                        isinstance(agg_type, collections.abc.Sequence):
                     for sub_agg_type in agg_type:
-                        val_columns_out = [sub_agg_type + '_' + val]
+                        val_columns_out = [val]
                         result = self._apply_agg(sub_agg_type, result,
                                                  add_col_values, ctx, [val],
                                                  val_columns_out,
                                                  sort_result=sort_result)
                 elif isinstance(agg_type, str):
-                    val_columns_out = [agg_type + '_' + val]
+                    val_columns_out = [val]
                     result = self._apply_agg(agg_type, result,
                                              add_col_values, ctx, [val],
                                              val_columns_out,
