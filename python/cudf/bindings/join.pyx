@@ -13,8 +13,7 @@ from .cudf_cpp import *
 import numpy as np
 import pandas as pd
 import pyarrow as pa
-
-cimport numpy as np
+import numpy as np
 
 from librmm_cffi import librmm as rmm
 
@@ -36,8 +35,8 @@ cpdef join(col_lhs, col_rhs, on, how, method='sort'):
 
     result_col_names = []
 
-    cdef np.ndarray[np.int32_t, ndim=1, mode = 'c', cast=True] left_idx = np.zeros(len(on), dtype=np.dtype("i"))
-    cdef np.ndarray[np.int32_t, ndim=1, mode = 'c', cast=True] right_idx = np.zeros(len(on), dtype=np.dtype("i"))
+    left_idx = np.zeros(len(on), dtype=np.dtype("int32"))
+    right_idx = np.zeros(len(on), dtype=np.dtype("int32"))
 
     num_cols_to_join = len(on)
     result_num_cols = len(col_lhs) + len(col_rhs) - num_cols_to_join

@@ -10,11 +10,9 @@
 from .cudf_cpp cimport *
 from .cudf_cpp import *
 
-import numpy as np
 import pandas as pd
 import pyarrow as pa
 
-cimport numpy as np
 
 from libgdf_cffi import ffi, libgdf
 from librmm_cffi import librmm as rmm
