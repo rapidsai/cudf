@@ -105,7 +105,6 @@ TEST(gdf_csv_test, Numbers)
 		auto CCol = gdf_host_column<int64_t>(args.data[2]);
 		auto DCol = gdf_host_column<double>(args.data[3]);
 		auto ECol = gdf_host_column<float>(args.data[4]);
-		DCol.print();
 		EXPECT_THAT( ACol.hostdata(), ::testing::ElementsAre<int16_t>(10, -11, 12, -13) );
 		EXPECT_THAT( BCol.hostdata(), ::testing::ElementsAre<int32_t>(20, -21, 22, -23) );
 		EXPECT_THAT( CCol.hostdata(), ::testing::ElementsAre<int64_t>(30, -31, 32, -33) );

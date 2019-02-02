@@ -13,19 +13,19 @@
 
 __host__ __device__
 void adjustForWhitespaceAndQuotes(const char *data, long* start_idx, long* end_idx, char quotechar='\0') {
-	while ((*start_idx <= *end_idx) && (data[*start_idx] == ' ' || data[*start_idx] == quotechar)) {
-		(*start_idx)++;
-	}
-	while ((*start_idx < *end_idx) && (data[*end_idx] == ' ' || data[*end_idx] == quotechar)) {
-		(*end_idx)--;
-	}
+  while ((*start_idx <= *end_idx) && (data[*start_idx] == ' ' || data[*start_idx] == quotechar)) {
+    (*start_idx)++;
+  }
+  while ((*start_idx < *end_idx) && (data[*end_idx] == ' ' || data[*end_idx] == quotechar)) {
+    (*end_idx)--;
+  }
 }
 
 template<typename T>
 __host__ __device__
 bool isBooleanValue(T value, int32_t* boolValues, int32_t count) {
 	for (int i = 0; i < count; ++i) {
-		if (value == static_cast<T>(boolValues[i])) {
+		if (static_cast<int32_t>(value) == boolValues[i]) {
 			return true;
 		}
 	}
@@ -182,38 +182,40 @@ __host__ __device__ T convertStrToValue(const char* data, long start, long end,
     ++index;
   }
 
-  // Handle fractional part of the number if necessary
-  int32_t divisor = 1;
-  while (index <= end) {
-    if (data[index] == 'e' || data[index] == 'E') {
+  if (std::is_floating_point<T>::value) {
+    // Handle fractional part of the number if necessary
+    int32_t divisor = 1;
+    while (index <= end) {
+      if (data[index] == 'e' || data[index] == 'E') {
+        ++index;
+        break;
+      } else if (data[index] != opts.thousands) {
+        value *= 10;
+        value += data[index] - '0';
+        divisor *= 10;
+      }
       ++index;
-      break;
-    } else if (data[index] != opts.thousands) {
-      value *= 10;
-      value += data[index] - '0';
-      divisor *= 10;
     }
-    ++index;
-  }
 
-  // Handle exponential part of the number if necessary
-  int32_t exponent = 0;
-  while (index <= end) {
-    if (data[index] == '-') {
+    // Handle exponential part of the number if necessary
+    int32_t exponent = 0;
+    while (index <= end) {
+      if (data[index] == '-') {
+        ++index;
+        exponent = (data[index] - '0') * -1;
+      } else {
+        exponent *= 10;
+        exponent += data[index] - '0';
+      }
       ++index;
-      exponent = (data[index] - '0') * -1;
-    } else {
-      exponent *= 10;
-      exponent += data[index] - '0';
     }
-    ++index;
-  }
 
-  if (divisor > 1) {
-    value /= divisor;
-  }
-  if (exponent != 0) {
-    value *= exp10f(exponent);
+    if (divisor > 1) {
+      value /= divisor;
+    }
+    if (exponent != 0) {
+      value *= exp10f(exponent);
+    }
   }
 
   return value * sign;
