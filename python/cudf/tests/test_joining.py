@@ -69,8 +69,6 @@ def test_dataframe_join_how(aa, bb, how, method):
         df1 = df.set_index('a')
         df2 = df.set_index('b')
         joined = df1.join(df2, how=how, sort=True)
-        # Prevent ambiguity with index name
-        joined.index.rename('index', inplace=True)
         te = timer()
         print('timing', type(df), te - ts)
         return joined
@@ -223,10 +221,6 @@ def test_dataframe_join_mismatch_cats(how):
 
     expect.data_col_right = expect.data_col_right.astype(np.int64)
     expect.data_col_left = expect.data_col_left.astype(np.int64)
-
-    # Pandas returns a `object` dtype index for some reason...
-    expect.index = expect.index.astype('category')
-
     pd.util.testing.assert_frame_equal(got, expect, check_names=False,
                                        check_index_type=False,
                                        # For inner joins, pandas returns
@@ -404,3 +398,24 @@ def test_dataframe_pairs_of_triples(pairs, max, rows, how):
         for column in gdf_result:
             assert np.array_equal(gdf_result[column].fillna(-1).sort_values(),
                                   pdf_result[column].fillna(-1).sort_values())
+
+
+def test_safe_merging_with_left_empty():
+    import numpy as np
+    from cudf import DataFrame
+    import pandas as pd
+    np.random.seed(0)
+
+    pairs = ('bcd', 'b')
+    pdf_left = pd.DataFrame()
+    pdf_right = pd.DataFrame()
+    for left_column in pairs[0]:
+        pdf_left[left_column] = np.random.randint(0, 10, 0)
+    for right_column in pairs[1]:
+        pdf_right[right_column] = np.random.randint(0, 10, 5)
+    gdf_left = DataFrame.from_pandas(pdf_left)
+    gdf_right = DataFrame.from_pandas(pdf_right)
+
+    pdf_result = pdf_left.merge(pdf_right)
+    gdf_result = gdf_left.merge(gdf_right)
+    assert_eq(pdf_result, gdf_result)
