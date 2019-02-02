@@ -8,16 +8,20 @@
 
 - PR #730 Improve performance of `gdf_table` constructor
 - PR #813 unified libcudf API functions by replacing gpu_ with gdf_
+- PR #532 CSV Reader: Use type dispatcher instead of switch block
 
 ## Bug Fixes
 
-- ...
+- PR #821 Fix flake8 issues revealed by flake8 update
+- PR #808 Resolved renamed `d_columns_valids` variable name
+- PR #780 CSV Reader: Fix scientific notation parsing and null values for empty quotes
 
 
 # cuDF 0.5.0 (28 Jan 2019)
 
 ## New Features
 
+- PR #722 Add bzip2 decompression support to `read_csv()`
 - PR #693 add ZLIB-based GZIP/ZIP support to `read_csv_strings()`
 - PR #411 added null support to gdf_order_by (new API) and cudf_table::sort
 - PR #525 Added GitHub Issue templates for bugs, documentation, new features, and questions

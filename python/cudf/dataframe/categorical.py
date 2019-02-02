@@ -207,14 +207,14 @@ class CategoricalColumn(columnops.TypedColumnBase):
             ordered=self._ordered)
 
     def unique_count(self, method='sort'):
-        if method is not 'sort':
+        if method != 'sort':
             msg = 'non sort based unique_count() not implemented yet'
             raise NotImplementedError(msg)
         segs, _ = self._unique_segments()
         return len(segs)
 
     def value_counts(self, method='sort'):
-        if method is not 'sort':
+        if method != 'sort':
             msg = 'non sort based value_count() not implemented yet'
             raise NotImplementedError(msg)
         segs, sortedvals = self._unique_segments()
