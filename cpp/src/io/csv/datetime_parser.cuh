@@ -64,15 +64,38 @@
 
 #include "cudf.h"
 
-__host__ __device__ gdf_date32 parseDateFormat(char *data, long start_idx, long end_idx, bool dayfirst);
-__host__ __device__ gdf_date64 parseDateTimeFormat(char *data, long start_idx, long end_idx, bool dayfirst);
-
-__host__ __device__ bool extractDate(char *data, long sIdx, long eIdx, bool dayfirst, int *year_out, int *month_out, int *day_out);
-__host__ __device__ bool extractTime(char *data, int sIdx, int eIdx, int *hour_out, int *minute_out, int *second_out);
+__host__ __device__ bool extractDate(const char *data, long sIdx, long eIdx, bool dayfirst, int *year_out, int *month_out, int *day_out);
+__host__ __device__ bool extractTime(const char *data, int sIdx, int eIdx, int *hour_out, int *minute_out, int *second_out);
 
 __host__ __device__ constexpr int32_t daysSinceEpoch(int year, int month, int day);
 __host__ __device__ constexpr int64_t secondsSinceEpoch(int year, int month, int day, int hour, int minute, int second);
 
+/**---------------------------------------------------------------------------*
+ * @brief Simplified parsing function for use by date and time parsing
+ *
+ * This helper function is only intended to handle positive integers. The input
+ * character string is expected to be well-formed.
+ *
+ * @param[in] data The character string for parse
+ * @param[in] start The index within data to start parsing from
+ * @param[in] end The end index within data to end parsing
+ *
+ * @return The parsed and converted value
+ *---------------------------------------------------------------------------**/
+template <typename T>
+__host__ __device__ T convertStrToInteger(const char *data, long start,
+                                          long end) {
+  T value = 0;
+
+  long index = start;
+  while (index <= end) {
+    value *= 10;
+    value += data[index] - '0';
+    ++index;
+  }
+
+  return value;
+}
 
 /**
  * @brief Returns location to the first occurrence of a character in a string
@@ -113,7 +136,7 @@ long findFirstOccurrence(const char *data, long start_idx, long end_idx, char c)
  * @return returns the number of days since epoch
  */
 __host__ __device__
-gdf_date32 parseDateFormat(char *data, long start_idx, long end_idx, bool dayfirst) {
+gdf_date32 parseDateFormat(const char *data, long start_idx, long end_idx, bool dayfirst) {
 
 	int day, month, year;
 	gdf_date32 e = -1;
@@ -140,7 +163,7 @@ gdf_date32 parseDateFormat(char *data, long start_idx, long end_idx, bool dayfir
  * @return milliseconds since epoch
  */
 __host__ __device__
-gdf_date64 parseDateTimeFormat(char *data, long start_idx, long end_idx, bool dayfirst) {
+gdf_date64 parseDateTimeFormat(const char *data, long start_idx, long end_idx, bool dayfirst) {
 
 	int 		day, month, year;
 	int 		hour, minute, second;
@@ -199,7 +222,7 @@ gdf_date64 parseDateTimeFormat(char *data, long start_idx, long end_idx, bool da
  * @return T/F - false indicates that an error occurred
  */
 __host__ __device__
-bool extractDate(char *data, long sIdx, long eIdx, bool dayfirst, int *year, int *month, int *day) {
+bool extractDate(const char *data, long sIdx, long eIdx, bool dayfirst, int *year, int *month, int *day) {
 
 	char sep = '/';
 
@@ -216,7 +239,7 @@ bool extractDate(char *data, long sIdx, long eIdx, bool dayfirst, int *year, int
 	//--- is year the first filed?
 	if ( (sep_pos - sIdx) == 4  ) {
 
-		*year = convertStrtoInt<int>(data, sIdx, (sep_pos -1) );
+		*year = convertStrToInteger<int>(data, sIdx, (sep_pos -1) );
 
 		// Month
 		long s2 = sep_pos +1;
@@ -225,12 +248,12 @@ bool extractDate(char *data, long sIdx, long eIdx, bool dayfirst, int *year, int
 		if (sep_pos == -1 ) {
 
 			//--- Data is just Year and Month - no day
-			*month = convertStrtoInt<int>(data, s2, eIdx );
+			*month = convertStrToInteger<int>(data, s2, eIdx );
 			*day = 1;
 
 		} else {
-			*month = convertStrtoInt<int>(data, s2, (sep_pos -1) );
-			*day = convertStrtoInt<int>(data, (sep_pos + 1), eIdx);
+			*month = convertStrToInteger<int>(data, s2, (sep_pos -1) );
+			*day = convertStrToInteger<int>(data, (sep_pos + 1), eIdx);
 		}
 
 	} else {
@@ -238,17 +261,17 @@ bool extractDate(char *data, long sIdx, long eIdx, bool dayfirst, int *year, int
 		//--- if the dayfirst flag is set, then restricts the format options
 		if ( dayfirst) {
 
-			*day = convertStrtoInt<int>(data, sIdx, (sep_pos -1) );
+			*day = convertStrToInteger<int>(data, sIdx, (sep_pos -1) );
 
 			long s2 = sep_pos +1;
 			sep_pos = findFirstOccurrence(data, s2, eIdx, sep);
 
-			*month = convertStrtoInt<int>(data, s2, (sep_pos -1) );
-			*year = convertStrtoInt<int>(data, (sep_pos + 1), eIdx);
+			*month = convertStrToInteger<int>(data, s2, (sep_pos -1) );
+			*year = convertStrToInteger<int>(data, (sep_pos + 1), eIdx);
 
 		} else {
 
-			*month = convertStrtoInt<int>(data, sIdx, (sep_pos -1) );
+			*month = convertStrToInteger<int>(data, sIdx, (sep_pos -1) );
 
 			long s2 = sep_pos +1;
 			sep_pos = findFirstOccurrence(data, s2, eIdx, sep);
@@ -256,12 +279,12 @@ bool extractDate(char *data, long sIdx, long eIdx, bool dayfirst, int *year, int
 			if (sep_pos == -1 )
 			{
 				//--- Data is just Year and Month - no day
-				*year = convertStrtoInt<int>(data, s2, eIdx );
+				*year = convertStrToInteger<int>(data, s2, eIdx );
 				*day = 1;
 
 			} else {
-				*day = convertStrtoInt<int>(data, s2, (sep_pos -1) );
-				*year = convertStrtoInt<int>(data, (sep_pos + 1), eIdx);
+				*day = convertStrToInteger<int>(data, s2, (sep_pos -1) );
+				*year = convertStrToInteger<int>(data, (sep_pos + 1), eIdx);
 			}
 		}
 	}
@@ -288,7 +311,7 @@ bool extractDate(char *data, long sIdx, long eIdx, bool dayfirst, int *year, int
  * @return T/F - false indicates that an error occurred
  */
 __host__ __device__
-bool extractTime(char *data, int sIdx, int eIdx, int *hour, int *minute, int *second) {
+bool extractTime(const char *data, int sIdx, int eIdx, int *hour, int *minute, int *second) {
 
 	char sep = ':';
 
@@ -310,7 +333,7 @@ bool extractTime(char *data, int sIdx, int eIdx, int *hour, int *minute, int *se
 	// Hour to Minute Separator
 	int hm_sep = findFirstOccurrence(data, sIdx, eIdx, sep);
 
-	*hour = convertStrtoInt<int>(data, sIdx, (hm_sep -1) );
+	*hour = convertStrToInteger<int>(data, sIdx, (hm_sep -1) );
 
 	*hour += hour_adjust;
 
@@ -319,12 +342,12 @@ bool extractTime(char *data, int sIdx, int eIdx, int *hour, int *minute, int *se
 
 	if (ms_sep == -1 ) {
 		//--- Data is just Hour and Minutes, no seconds
-		*minute = convertStrtoInt<int>(data, (hm_sep + 1), eIdx );
+		*minute = convertStrToInteger<int>(data, (hm_sep + 1), eIdx );
 		*second = 0;
 
 	} else {
-		*minute = convertStrtoInt<int>(data, (hm_sep + 1), (ms_sep -1) );
-		*second = convertStrtoInt<int>(data, (ms_sep + 1), eIdx);
+		*minute = convertStrToInteger<int>(data, (hm_sep + 1), (ms_sep -1) );
+		*second = convertStrToInteger<int>(data, (ms_sep + 1), eIdx);
 	}
 
 	return true;
