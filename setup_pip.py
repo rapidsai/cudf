@@ -25,7 +25,7 @@ import zipfile
 from hashlib import sha256
 from base64 import urlsafe_b64encode
 
-os.environ['RMM_HEADER'] = 'cpp/src/rmm/memory.h'
+os.environ['RMM_HEADER'] = 'cpp/thirdparty/rmm/include/rmm/rmm_api.h'
 os.environ['CUDF_INCLUDE_DIR'] = 'cpp/include/cudf'
 
 CMAKE_EXE = os.environ.get('CMAKE_EXE', shutil.which('cmake'))
@@ -112,7 +112,7 @@ install_requires = [
     'pandas>=0.23.4',
     'numba>=0.40.0,<0.42',
     'pycparser==2.19',
-    'pyarrow==0.11.1',
+    'pyarrow==0.12.0',
     'cffi>=1.0.0',
     'cython>=0.29,<0.30',
     'numpy>=1.14'
@@ -166,7 +166,7 @@ setup(name=name,
       package_dir={
           'cudf': 'python/cudf',
           'libgdf_cffi': 'cpp/python/libgdf_cffi',
-          'librmm_cffi': 'cpp/python/librmm_cffi'
+          'librmm_cffi': 'cpp/thirdparty/rmm/python/librmm_cffi'
       },
       package_data={
           'cudf.tests': ['data/*'],
@@ -176,7 +176,7 @@ setup(name=name,
       python_requires='>=3.6,<3.8',
       cffi_modules=[
           'cpp/python/libgdf_cffi/libgdf_build.py:ffibuilder',
-          'cpp/python/librmm_cffi/librmm_build.py:ffibuilder'
+          'cpp/thirdparty/rmm/python/librmm_cffi/librmm_build.py.in:ffibuilder'
       ],
       ext_modules=cythonize(extensions),
       cmdclass={

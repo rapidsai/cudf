@@ -8,16 +8,19 @@
 ## Improvements
 
 - PR #730 Improve performance of `gdf_table` constructor
+- PR #532 CSV Reader: Use type dispatcher instead of switch block
 
 ## Bug Fixes
 
-- ...
+- PR #821 Fix flake8 issues revealed by flake8 update
+- PR #808 Resolved renamed `d_columns_valids` variable name
 
 
-# cuDF 0.5.0 (Date TBD)
+# cuDF 0.5.0 (28 Jan 2019)
 
 ## New Features
 
+- PR #722 Add bzip2 decompression support to `read_csv()`
 - PR #693 add ZLIB-based GZIP/ZIP support to `read_csv_strings()`
 - PR #411 added null support to gdf_order_by (new API) and cudf_table::sort
 - PR #525 Added GitHub Issue templates for bugs, documentation, new features, and questions
@@ -71,6 +74,8 @@
 - PR #720 Refactored Index classes to make them more Pandas-like, added CategoricalIndex
 - PR #749 Improve to_arrow and from_arrow Pandas compatibility
 - PR #766 Remove TravisCI references, remove unused variables from CMake, fix ARROW_VERSION in Cmake
+- PR #773 Add build-args back to Dockerfile and handle dependencies based on environment yml file
+- PR #781 Move thirdparty submodules to root and symlink in /cpp
 
 ## Bug Fixes
 
@@ -118,6 +123,10 @@
 - PR #750 Fix race condition for handling NVStrings in CMake
 - PR #719 Fix merge column ordering
 - PR #770 Fix issue where RMM submodule pointed to wrong branch and pin other to correct branches
+- PR #778 Fix hard coded ABI off setting
+- PR #784 Update RMM submodule commit-ish and pip paths
+- PR #794 Update `rmm::exec_policy` usage to fix segmentation faults when used as temprory allocator.
+- PR #800 Point git submodules to branches of forks instead of exact commits
 
 
 # cuDF 0.4.0 (05 Dec 2018)
