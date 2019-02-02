@@ -1,17 +1,17 @@
-# An integration test & dev container which builds and installs cuDF from master                                                             
+# An integration test & dev container which builds and installs cuDF from master
 ARG CUDA_VERSION=9.2
 ARG LINUX_VERSION=ubuntu16.04
 FROM nvidia/cuda:${CUDA_VERSION}-devel-${LINUX_VERSION}
 ENV LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/cuda/lib64:/usr/local/lib
-# Needed for pygdf.concat(), avoids "OSError: library nvvm not found"                                                                        
+# Needed for pygdf.concat(), avoids "OSError: library nvvm not found"
 ENV NUMBAPRO_NVVM=/usr/local/cuda/nvvm/lib64/libnvvm.so
 ENV NUMBAPRO_LIBDEVICE=/usr/local/cuda/nvvm/libdevice/
 
 ARG CC=5
 ARG CXX=5
 RUN apt update -y --fix-missing && \
-    apt upgrade -y && \ 
-      apt install -y \
+    apt upgrade -y && \
+    apt install -y \
       git \
       gcc-${CC} \
       g++-${CXX} \
@@ -25,12 +25,41 @@ ENV PATH=${PATH}:/conda/bin
 SHELL ["/bin/bash", "-c"]
 
 # Build cuDF conda env
-ADD conda /cudf/conda
-RUN conda env create --name cudf --file /cudf/conda/environments/cudf_dev.yml
+ARG PYTHON_VERSION
+ENV PYTHON_VERSION=$PYTHON_VERSION
+ARG NUMBA_VERSION
+ENV NUMBA_VERSION=$NUMBA_VERSION
+ARG NUMPY_VERSION
+ENV NUMPY_VERSION=$NUMPY_VERSION
+ARG PANDAS_VERSION
+ENV PANDAS_VERSION=$PANDAS_VERSION
+ARG PYARROW_VERSION
+ENV PYARROW_VERSION=$PYARROW_VERSION
+ARG CYTHON_VERSION
+ENV CYTHON_VERSION=$CYTHON_VERSION
+ARG CMAKE_VERSION
+ENV CMAKE_VERSION=$CMAKE_VERSION
+ARG CUDF_REPO=https://github.com/rapidsai/cudf
+ENV CUDF_REPO=$CUDF_REPO
+ARG CUDF_BRANCH=master
+ENV CUDF_BRANCH=$CUDF_BRANCH
+
+# Add everything from the local build context
+ADD . /cudf/
+
+# Checks if local build context has the source, if not clone it then run a bash script to modify
+# the environment file based on versions set in build args
+RUN ls -la /cudf
+RUN if [ -f /cudf/docker/package_versions.sh ]; \
+    then /cudf/docker/package_versions.sh /cudf/conda/environments/cudf_dev.yml && \
+         conda env create --name cudf --file /cudf/conda/environments/cudf_dev.yml ; \
+    else rm -rf /cudf && \
+         git clone --recurse-submodules -b ${CUDF_BRANCH} ${CUDF_REPO} /cudf && \
+         /cudf/docker/package_versions.sh /cudf/conda/environments/cudf_dev.yml && \
+         conda env create --name cudf --file /cudf/conda/environments/cudf_dev.yml ; \
+    fi
 
 # libcudf build/install
-ADD thirdparty /cudf/thirdparty
-ADD cpp /cudf/cpp
 ENV CC=/usr/bin/gcc-${CC}
 ENV CXX=/usr/bin/g++-${CXX}
 RUN source activate cudf && \
@@ -41,15 +70,8 @@ RUN source activate cudf && \
     make python_cffi && \
     make install_python
 
-# cuDF python bindings build/install
-ADD .git /cudf/.git
-ADD python /cudf/python
+# cuDF build/install
 RUN source activate cudf && \
     cd /cudf/python && \
     python setup.py build_ext --inplace && \
     python setup.py install
-
-# doc builds
-ADD docs /cudf/docs
-WORKDIR /cudf/docs
-CMD source activate cudf && make html && cd build/html && python -m http.server
