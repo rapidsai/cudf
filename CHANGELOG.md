@@ -72,6 +72,7 @@
 - PR #766 Remove TravisCI references, remove unused variables from CMake, fix ARROW_VERSION in Cmake
 - PR #773 Add build-args back to Dockerfile and handle dependencies based on environment yml file
 - PR #781 Move thirdparty submodules to root and symlink in /cpp
+- PR #843 Fix broken cudf/python API examples, add new methods to the API index
 
 ## Bug Fixes
 
