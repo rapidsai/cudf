@@ -14,6 +14,7 @@
 - PR #821 Fix flake8 issues revealed by flake8 update
 - PR #808 Resolved renamed `d_columns_valids` variable name
 - PR #820 SCV Reader: fix the issue where reader adds additional rows when file uses \r\n as a line terminator
+- PR #780 CSV Reader: Fix scientific notation parsing and null values for empty quotes
 
 
 # cuDF 0.5.0 (28 Jan 2019)
