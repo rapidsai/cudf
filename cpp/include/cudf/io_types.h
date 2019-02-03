@@ -52,7 +52,7 @@ typedef struct {
    * Input arguments - all data is in the host memory
    */
   gdf_csv_input_form	input_data_form;	///< Type of source of CSV data
-  const char			*filepath_or_buffer;///< If input_data_form is FILE_PATH, contains the filepath. If input_data_type is HOST_BUFFER, points to the host memory buffer
+  const char			*filepath_or_buffer; ///< If input_data_form is FILE_PATH, contains the filepath. If input_data_type is HOST_BUFFER, points to the host memory buffer
   size_t				buffer_size;		///< If input_data_form is HOST_BUFFER, represents the size of the buffer in bytes. Unused otherwise
 
   bool          windowslinetermination;     ///< States if we should \r\n as our line termination
