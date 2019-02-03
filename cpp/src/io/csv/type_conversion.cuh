@@ -20,7 +20,7 @@ bool isWhitespace(char ch) {
 
 __device__
 void adjustForWhitespaceAndQuotes(const char *data, long* start_idx, long* end_idx, char quotechar='\0') {
-  while ((*start_idx < *end_idx) && (isWhitespace(data[*start_idx]) || data[*start_idx] == quotechar)) {
+  while ((*start_idx <= *end_idx) && (isWhitespace(data[*start_idx]) || data[*start_idx] == quotechar)) {
     (*start_idx)++;
   }
   while ((*start_idx < *end_idx) && (isWhitespace(data[*end_idx]) || data[*end_idx] == quotechar)) {
