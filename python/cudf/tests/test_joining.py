@@ -460,4 +460,4 @@ def test_empty_joins(how, left_empty, right_empty):
 
     expected = left.merge(right, how=how)
     result = gleft.merge(gright, how=how)
-    assert len(expected) == 0 and len(result) == 0
+    assert len(expected) == len(result)
