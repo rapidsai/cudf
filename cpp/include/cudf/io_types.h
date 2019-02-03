@@ -58,7 +58,7 @@ typedef struct {
   bool          windowslinetermination;     ///< States if we should \r\n as our line termination
   char          lineterminator;             ///< define the line terminator character. Default is  '\n'
   char          delimiter;                  ///< define the field separator, default is ',' This argument is also called 'sep' 
-  bool          delim_whitespace;           //< Use white space as the delimiter - default is false. This overrides the delimiter argument
+  bool          delim_whitespace;           ///< Use white space as the delimiter - default is false. This overrides the delimiter argument
   bool          skipinitialspace;           ///< Skip white spaces after the delimiter - default is false
 
   gdf_size_type nrows;                      ///< Number of rows to read, -1 indicates all
