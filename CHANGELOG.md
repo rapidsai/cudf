@@ -7,6 +7,7 @@
 ## Improvements
 
 - PR #730 Improve performance of `gdf_table` constructor
+- PR #851 Test all RMM allocation modes in all cuDF google tests
 
 ## Bug Fixes
 
