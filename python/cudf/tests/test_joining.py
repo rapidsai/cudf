@@ -7,6 +7,7 @@ import pytest
 import numpy as np
 import pandas as pd
 
+import cudf
 from cudf.dataframe import DataFrame
 from cudf.tests.utils import assert_eq
 
@@ -437,3 +438,26 @@ def test_safe_merging_with_left_empty():
     # Simplify test because pandas does not consider empty Index and RangeIndex
     # to be equivalent. TODO: Allow empty Index objects to have equivalence.
     assert len(pdf_result) == len(gdf_result)
+
+
+@pytest.mark.parametrize('how', ['left', 'inner', 'outer'])
+@pytest.mark.parametrize('left_empty', [True, False])
+@pytest.mark.parametrize('right_empty', [True, False])
+def test_empty_joins(how, left_empty, right_empty):
+    pdf = pd.DataFrame({'x': [1, 2, 3]})
+
+    if left_empty:
+        left = pdf.head(0)
+    else:
+        left = pdf
+    if right_empty:
+        right = pdf.head(0)
+    else:
+        right = pdf
+
+    gleft = cudf.from_pandas(left)
+    gright = cudf.from_pandas(right)
+
+    expected = left.merge(right, how=how)
+    result = gleft.merge(gright, how=how)
+    assert len(expected) == 0 and len(result) == 0
