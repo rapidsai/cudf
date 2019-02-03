@@ -27,10 +27,13 @@
 
 #include "tests/utilities/cudf_test_fixtures.h"
 
+template <typename TestParameters>
+struct gdf_extract_from_datetime_example_test : public cudfTest<TestParameters>
+{};
 
-struct gdf_extract_from_datetime_example_test : public GdfTest {};
+TYPED_TEST_CASE(gdf_extract_from_datetime_example_test, allocation_modes);
 
-TEST_F(gdf_extract_from_datetime_example_test, usage_example) {
+TYPED_TEST(gdf_extract_from_datetime_example_test, usage_example) {
 
 	// gdf_column input examples for date32, date64 and timestamp (in seconds)
 
@@ -287,8 +290,8 @@ TEST_F(gdf_extract_from_datetime_example_test, usage_example) {
 
 }
 
-
-struct gdf_extract_from_datetime_test : public GdfTest {
+template <typename TestParameters>
+struct gdf_extract_from_datetime_test : public cudfTest<TestParameters> {
 
 	void SetUp() {
 
@@ -521,9 +524,10 @@ struct gdf_extract_from_datetime_test : public GdfTest {
 
 };
 
+TYPED_TEST_CASE(gdf_extract_from_datetime_test, allocation_modes);
 
 
-TEST_F(gdf_extract_from_datetime_test, date64Tests) {
+TYPED_TEST(gdf_extract_from_datetime_test, date64Tests) {
 
 	// extract from milliseconds
 	{
@@ -565,24 +569,24 @@ TEST_F(gdf_extract_from_datetime_test, date64Tests) {
 
 		gdf_column inputCol;
 		inputCol.dtype = GDF_DATE64;
-		inputCol.size = colSize;
+		inputCol.size = this->colSize;
 		inputCol.data = thrust::raw_pointer_cast(intputDataDev.data());
 		inputCol.valid = thrust::raw_pointer_cast(inputValidDev.data());
 
-		test_all_extract_functions(inputCol);
+		this->test_all_extract_functions(inputCol);
 
 		inputCol.valid = NULL;
-        test_all_extract_functions(inputCol);
-        inputCol.valid = thrust::raw_pointer_cast(inputValidDev.data());
+		this->test_all_extract_functions(inputCol);
+    inputCol.valid = thrust::raw_pointer_cast(inputValidDev.data());
 
 		// TIMESTAMP in ms should be the same as DATE64
 		inputCol.dtype = GDF_TIMESTAMP;
 		inputCol.dtype_info.time_unit = TIME_UNIT_ms;
 
-		test_all_extract_functions(inputCol);
+		this->test_all_extract_functions(inputCol);
 
-        inputCol.valid = NULL;
-        test_all_extract_functions(inputCol);
+		inputCol.valid = NULL;
+		this->test_all_extract_functions(inputCol);
 
 	}
 
@@ -627,14 +631,14 @@ TEST_F(gdf_extract_from_datetime_test, date64Tests) {
 		gdf_column inputCol;
 		inputCol.dtype = GDF_TIMESTAMP;
 		inputCol.dtype_info.time_unit = TIME_UNIT_s;
-		inputCol.size = colSize;
+		inputCol.size = this->colSize;
 		inputCol.data = thrust::raw_pointer_cast(intputDataDev.data());
 		inputCol.valid = thrust::raw_pointer_cast(inputValidDev.data());
 
-		test_all_extract_functions(inputCol);
+		this->test_all_extract_functions(inputCol);
 
-        inputCol.valid = NULL;
-        test_all_extract_functions(inputCol);
+		inputCol.valid = NULL;
+		this->test_all_extract_functions(inputCol);
 	}
 
 	// extract from microseconds
@@ -678,14 +682,14 @@ TEST_F(gdf_extract_from_datetime_test, date64Tests) {
 		gdf_column inputCol;
 		inputCol.dtype = GDF_TIMESTAMP;
 		inputCol.dtype_info.time_unit = TIME_UNIT_us;
-		inputCol.size = colSize;
+		inputCol.size = this->colSize;
 		inputCol.data = thrust::raw_pointer_cast(intputDataDev.data());
 		inputCol.valid = thrust::raw_pointer_cast(inputValidDev.data());
 
-		test_all_extract_functions(inputCol);
+		this->test_all_extract_functions(inputCol);
 
-        inputCol.valid = NULL;
-        test_all_extract_functions(inputCol);
+		inputCol.valid = NULL;
+		this->test_all_extract_functions(inputCol);
 	}
 
 	// extract from nanoseconds
@@ -729,20 +733,23 @@ TEST_F(gdf_extract_from_datetime_test, date64Tests) {
 		gdf_column inputCol;
 		inputCol.dtype = GDF_TIMESTAMP;
 		inputCol.dtype_info.time_unit = TIME_UNIT_ns;
-		inputCol.size = colSize;
+		inputCol.size = this->colSize;
 		inputCol.data = thrust::raw_pointer_cast(intputDataDev.data());
 		inputCol.valid = thrust::raw_pointer_cast(inputValidDev.data());
 
-		test_all_extract_functions(inputCol);
+		this->test_all_extract_functions(inputCol);
 
-        inputCol.valid = NULL;
-        test_all_extract_functions(inputCol);
+		inputCol.valid = NULL;
+		this->test_all_extract_functions(inputCol);
 	}
 }
 
-struct gdf_extract_datetime_TEST : public GdfTest {};
+template<typename TestParameters>
+struct gdf_extract_datetime_TEST : public cudfTest<TestParameters> {};
 
-TEST_F(gdf_extract_datetime_TEST, date32Tests) {
+TYPED_TEST_CASE(gdf_extract_datetime_TEST, allocation_modes);
+
+TYPED_TEST(gdf_extract_datetime_TEST, date32Tests) {
 
 	int colSize = 8;
 
@@ -827,7 +834,7 @@ TEST_F(gdf_extract_datetime_TEST, date32Tests) {
 	}
 }
 
-TEST_F(gdf_extract_datetime_TEST, testErrors) {
+TYPED_TEST(gdf_extract_datetime_TEST, testErrors) {
 
 	// WRONG SIZE OF OUTPUT
 	{

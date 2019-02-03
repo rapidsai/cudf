@@ -32,14 +32,17 @@
 
 using ValueType = int16_t;
 
-struct GdfConcat : public GdfTest {};
+template<typename TestParameters>
+struct GdfConcat : public cudfTest<TestParameters> {};
+
+TYPED_TEST_CASE(GdfConcat, allocation_modes);
 
 /*
  ============================================================================
  Description : Compute concat of gdf_columns using Thrust on GPU
  ============================================================================
  */
-TEST_F(GdfConcat, usage_example) {
+TYPED_TEST(GdfConcat, usage_example) {
     const size_t lhs_size = 10;
     const size_t rhs_size = 20;
     gdf_column lhs = gen_gdb_column<ValueType>(lhs_size, 2);
@@ -66,7 +69,7 @@ TEST_F(GdfConcat, usage_example) {
     delete_gdf_column(&output);
 }
 
-TEST_F(GdfConcat, CaseWithZeroLeft)
+TYPED_TEST(GdfConcat, CaseWithZeroLeft)
 {
     //  0 + 2
     //  2
@@ -88,7 +91,7 @@ TEST_F(GdfConcat, CaseWithZeroLeft)
     delete_gdf_column(&output);
 }
 
-TEST_F(GdfConcat, CaseWithZeroRight)
+TYPED_TEST(GdfConcat, CaseWithZeroRight)
 {
     //  2 + 0
     //  2
@@ -110,7 +113,7 @@ TEST_F(GdfConcat, CaseWithZeroRight)
     delete_gdf_column(&output);
 }
 
-TEST_F(GdfConcat, CaseWithOutputOfOneByte)
+TYPED_TEST(GdfConcat, CaseWithOutputOfOneByte)
 {
     //  3 + 4
     //  3|4
@@ -132,7 +135,7 @@ TEST_F(GdfConcat, CaseWithOutputOfOneByte)
     delete_gdf_column(&output);
 }
 
-TEST_F(GdfConcat, CaseWithOutputOfTwoBytes)
+TYPED_TEST(GdfConcat, CaseWithOutputOfTwoBytes)
 {
     //  3 + 7  // caso especial
     //  3|5, 3
@@ -154,7 +157,7 @@ TEST_F(GdfConcat, CaseWithOutputOfTwoBytes)
     delete_gdf_column(&output);
 }
 
-TEST_F(GdfConcat, CaseWithInput_2_2_Output3)
+TYPED_TEST(GdfConcat, CaseWithInput_2_2_Output3)
 {
     //  8, 3 + 8, 1
     //  8, 3|5, 3|1
@@ -179,7 +182,7 @@ TEST_F(GdfConcat, CaseWithInput_2_2_Output3)
     delete_gdf_column(&output);
 }
 
-TEST_F(GdfConcat, CaseWithInput_2_5_Output5)
+TYPED_TEST(GdfConcat, CaseWithInput_2_5_Output5)
 {
     //  8, 2 + 8, 8, 8, 8, 5
     //  8, 2|6, 2|6, 2|6, 2|5
@@ -198,7 +201,7 @@ TEST_F(GdfConcat, CaseWithInput_2_5_Output5)
     delete_gdf_column(&output);
 }
 
-TEST_F(GdfConcat, CaseWithInput_1_4_Output5)
+TYPED_TEST(GdfConcat, CaseWithInput_1_4_Output5)
 {
     //  3 + 8, 8, 8, 7      // caso especial
     //  3|5, 3|5, 3|5, 3|5, 2
@@ -239,7 +242,7 @@ TEST_F(GdfConcat, CaseWithInput_1_4_Output5)
 }
 
 
-TEST_F(GdfConcat, CaseWithInput_0_9_Output2)
+TYPED_TEST(GdfConcat, CaseWithInput_0_9_Output2)
 {
     //  3 + 8, 8, 8, 7      // caso especial
     //  3|5, 3|5, 3|5, 3|5, 2
@@ -273,7 +276,7 @@ TEST_F(GdfConcat, CaseWithInput_0_9_Output2)
     delete_gdf_column(&output);
 }
 
-TEST_F(GdfConcat, CaseWithInput_5_11_Output22)
+TYPED_TEST(GdfConcat, CaseWithInput_5_11_Output22)
 {
     //  3 + 8, 8, 8, 7      // caso especial
     //  3|5, 3|5, 3|5, 3|5, 2
@@ -312,7 +315,7 @@ TEST_F(GdfConcat, CaseWithInput_5_11_Output22)
 }
 
 
-TEST_F(GdfConcat, WithDifferentColumnSizes)
+TYPED_TEST(GdfConcat, WithDifferentColumnSizes)
 {
     using ValueType = int16_t;
     //0, ..., 100,

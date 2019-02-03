@@ -27,9 +27,12 @@
 
 #include <chrono>
 
-struct ValidsTest : public GdfTest {};
+template <typename TestParameters>
+struct ValidsTest : public cudfTest<TestParameters> {};
 
-TEST_F(ValidsTest, NoValids)
+TYPED_TEST_CASE(ValidsTest, allocation_modes);
+
+TYPED_TEST(ValidsTest, NoValids)
 {
   const int num_rows = 100;
   std::vector<int> data(num_rows);
@@ -46,7 +49,7 @@ TEST_F(ValidsTest, NoValids)
   EXPECT_EQ(0, count);
 }
 
-TEST_F(ValidsTest, NullValids)
+TYPED_TEST(ValidsTest, NullValids)
 {
   int count{-1};
   gdf_error error_code = gdf_count_nonzero_mask(nullptr, 1, &count);
@@ -54,7 +57,7 @@ TEST_F(ValidsTest, NullValids)
   ASSERT_EQ(GDF_DATASET_EMPTY,error_code) << "Expected failure for null input.";
 }
 
-TEST_F(ValidsTest, NullCount)
+TYPED_TEST(ValidsTest, NullCount)
 {
   std::vector<int> data(0);
   std::vector<gdf_valid_type> valid{0x0};
@@ -64,7 +67,7 @@ TEST_F(ValidsTest, NullCount)
   ASSERT_EQ(GDF_DATASET_EMPTY,error_code) << "Expected failure for null input.";
 }
 
-TEST_F(ValidsTest, FirstRowValid)
+TYPED_TEST(ValidsTest, FirstRowValid)
 {
   std::vector<int> data(4);
   std::vector<gdf_valid_type> valid{0x1};
@@ -79,7 +82,7 @@ TEST_F(ValidsTest, FirstRowValid)
   EXPECT_EQ(1, count);
 }
 
-TEST_F(ValidsTest, EightRowsValid)
+TYPED_TEST(ValidsTest, EightRowsValid)
 {
   std::vector<int> data(8);
   std::vector<gdf_valid_type> valid{0xFF};
@@ -94,7 +97,7 @@ TEST_F(ValidsTest, EightRowsValid)
   EXPECT_EQ(8, count);
 }
 
-TEST_F(ValidsTest, EveryOtherBit)
+TYPED_TEST(ValidsTest, EveryOtherBit)
 {
   std::vector<int> data(8);
   std::vector<gdf_valid_type> valid{0xAA};
@@ -109,7 +112,7 @@ TEST_F(ValidsTest, EveryOtherBit)
   EXPECT_EQ(4, count);
 }
 
-TEST_F(ValidsTest, OtherEveryOtherBit)
+TYPED_TEST(ValidsTest, OtherEveryOtherBit)
 {
   std::vector<int> data(8);
   std::vector<gdf_valid_type> valid{0x55};
@@ -124,7 +127,7 @@ TEST_F(ValidsTest, OtherEveryOtherBit)
   EXPECT_EQ(4, count);
 }
 
-TEST_F(ValidsTest, 15rows)
+TYPED_TEST(ValidsTest, 15rows)
 {
   const int num_rows = 15;
   std::vector<int> data(num_rows);
@@ -141,7 +144,7 @@ TEST_F(ValidsTest, 15rows)
   EXPECT_EQ(2, count);
 }
 
-TEST_F(ValidsTest, 5rows)
+TYPED_TEST(ValidsTest, 5rows)
 {
   const int num_rows = 5;
   std::vector<int> data(num_rows);
@@ -158,7 +161,7 @@ TEST_F(ValidsTest, 5rows)
   EXPECT_EQ(1, count);
 }
 
-TEST_F(ValidsTest, 10ValidRows)
+TYPED_TEST(ValidsTest, 10ValidRows)
 {
   const int num_rows = 10;
   std::vector<float> data(num_rows);
@@ -175,7 +178,7 @@ TEST_F(ValidsTest, 10ValidRows)
   EXPECT_EQ(10, count);
 }
 
-TEST_F(ValidsTest, MultipleOfEight)
+TYPED_TEST(ValidsTest, MultipleOfEight)
 {
   const int num_rows = 1024;
   std::vector<int> data(num_rows);
@@ -193,7 +196,7 @@ TEST_F(ValidsTest, MultipleOfEight)
   EXPECT_EQ(128, count);
 }
 
-TEST_F(ValidsTest, NotMultipleOfEight)
+TYPED_TEST(ValidsTest, NotMultipleOfEight)
 {
   const int num_rows = 1023;
   std::vector<int> data(num_rows);
@@ -211,7 +214,7 @@ TEST_F(ValidsTest, NotMultipleOfEight)
   EXPECT_EQ(127, count);
 }
 
-TEST_F(ValidsTest, TenThousandRows)
+TYPED_TEST(ValidsTest, TenThousandRows)
 {
   const int num_rows = 10000;
   std::vector<int> data(num_rows);
@@ -229,7 +232,7 @@ TEST_F(ValidsTest, TenThousandRows)
   EXPECT_EQ(10000, count);
 }
 
-TEST_F(ValidsTest, PerformanceTest)
+TYPED_TEST(ValidsTest, PerformanceTest)
 {
   const int num_rows = 100000000;
   std::vector<int> data(num_rows);

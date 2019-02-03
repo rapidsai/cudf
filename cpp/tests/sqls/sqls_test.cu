@@ -106,9 +106,10 @@ bool compare(const rmm::device_vector<T>& d_v, const std::vector<T>& baseline, T
           });
 }
 
-struct gdf_group_by : public GdfTest {};
+template <typename TestParameters>
+struct gdf_group_by : public cudfTest<TEstParameters> {};
 
-TEST_F(gdf_group_by, UsageTestSum)
+TYPED_TEST(gdf_group_by, UsageTestSum)
 {
   std::vector<int> vc1{1,1,1,1,1,1};
   std::vector<int> vi1{1,3,3,5,5,0};
@@ -259,7 +260,7 @@ TEST_F(gdf_group_by, UsageTestSum)
   EXPECT_EQ( flag, true ) << "GROUP-BY SUM aggregation returns unexpected result";
 }
 
-TEST_F(gdf_group_by, UsageTestCount)
+TYPED_TEST(gdf_group_by, UsageTestCount)
 {
   std::vector<int> vc1{1,1,1,1,1,1};
   std::vector<int> vi1{1,3,3,5,5,0};
@@ -407,7 +408,7 @@ TEST_F(gdf_group_by, UsageTestCount)
   EXPECT_EQ( flag, true ) << "GROUP-BY COUNT aggregation returns unexpected result";
 }
 
-TEST_F(gdf_group_by, UsageTestAvg)
+TYPED_TEST(gdf_group_by, UsageTestAvg)
 {
   std::vector<int> vc1{1,1,1,1,1,1};
   std::vector<int> vi1{1,3,3,5,5,0};
@@ -555,7 +556,7 @@ TEST_F(gdf_group_by, UsageTestAvg)
   EXPECT_EQ( flag, true ) << "GROUP-BY AVG aggregation returns unexpected result";
 }
 
-TEST_F(gdf_group_by, UsageTestMin)
+TYPED_TEST(gdf_group_by, UsageTestMin)
 {
   std::vector<int> vc1{1,1,1,1,1,1};
   std::vector<int> vi1{1,3,3,5,5,0};
@@ -708,7 +709,7 @@ TEST_F(gdf_group_by, UsageTestMin)
   EXPECT_EQ( flag, true ) << "GROUP-BY MIN aggregation returns unexpected result";
 }
 
-TEST_F(gdf_group_by, UsageTestMax)
+TYPED_TEST(gdf_group_by, UsageTestMax)
 {
   std::vector<int> vc1{1,1,1,1,1,1};
   std::vector<int> vi1{1,3,3,5,5,0};

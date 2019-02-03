@@ -22,6 +22,7 @@
 
 #include "gtest/gtest.h"
 #include "gmock/gmock.h"
+#include "tests/utilities/cudf_test_fixtures.h"
 
 #include <cudf.h>
 #include <NVStrings.h>
@@ -61,7 +62,12 @@ private:
 	std::vector<T> m_hostdata;
 };
 
-TEST(gdf_csv_test, Simple)
+template<typename TestParameters>
+struct gdf_csv_test : public cudfTest<TestParameters> {};
+
+TYPED_TEST_CASE(gdf_csv_test, allocation_modes);
+
+TYPED_TEST(gdf_csv_test, Simple)
 {
 	const char* fname	= "/tmp/CsvSimpleTest.csv";
 	const char* names[]	= { "A", "B", "C", "D", "E", "F", "G", "H", "I", "J" };
@@ -95,89 +101,89 @@ TEST(gdf_csv_test, Simple)
 	}
 }
 
-TEST(gdf_csv_test, MortPerf)
+TYPED_TEST(gdf_csv_test, MortPerf)
 {
 	gdf_error error = GDF_SUCCESS;
 
 	csv_read_arg	args{};
 	const int num_cols = 31;
 
-    args.num_cols = num_cols;
+  args.num_cols = num_cols;
 	args.nrows = -1;
 
-    const char ** dnames = new const char *[num_cols] {
-        "loan_id",
-        "monthly_reporting_period",
-        "servicer",
-        "interest_rate",
-        "current_actual_upb",
-        "loan_age",
-        "remaining_months_to_legal_maturity",
-        "adj_remaining_months_to_maturity",
-        "maturity_date",
-        "msa",
-        "current_loan_delinquency_status",
-        "mod_flag",
-        "zero_balance_code",
-        "zero_balance_effective_date",
-        "last_paid_installment_date",
-        "foreclosed_after",
-        "disposition_date",
-        "foreclosure_costs",
-        "prop_preservation_and_repair_costs",
-        "asset_recovery_costs",
-        "misc_holding_expenses",
-        "holding_taxes",
-        "net_sale_proceeds",
-        "credit_enhancement_proceeds",
-        "repurchase_make_whole_proceeds",
-        "other_foreclosure_proceeds",
-        "non_interest_bearing_upb",
-        "principal_forgiveness_upb",
-        "repurchase_make_whole_proceeds_flag",
-        "foreclosure_principal_write_off_amount",
-        "servicing_activity_indicator"
-    };
-    args.names = dnames;
+	const char* names[] {
+		"loan_id",
+		"monthly_reporting_period",
+		"servicer",
+		"interest_rate",
+		"current_actual_upb",
+		"loan_age",
+		"remaining_months_to_legal_maturity",
+		"adj_remaining_months_to_maturity",
+		"maturity_date",
+		"msa",
+		"current_loan_delinquency_status",
+		"mod_flag",
+		"zero_balance_code",
+		"zero_balance_effective_date",
+		"last_paid_installment_date",
+		"foreclosed_after",
+		"disposition_date",
+		"foreclosure_costs",
+		"prop_preservation_and_repair_costs",
+		"asset_recovery_costs",
+		"misc_holding_expenses",
+		"holding_taxes",
+		"net_sale_proceeds",
+		"credit_enhancement_proceeds",
+		"repurchase_make_whole_proceeds",
+		"other_foreclosure_proceeds",
+		"non_interest_bearing_upb",
+		"principal_forgiveness_upb",
+		"repurchase_make_whole_proceeds_flag",
+		"foreclosure_principal_write_off_amount",
+		"servicing_activity_indicator"
+	};
+	args.names = names;
 
-    const char ** dtype = new const char *[num_cols] {
-    		"int64",
-    		"date",
-    		"category",
-    		"float64",
-    		"float64",
-    		"float64",
-    		"float64",
-    		"float64",
-    		"date",
-    		"float64",
-    		"category",
-    		"category",
-    		"category",
-    		"date",
-    		"date",
-    		"date",
-    		"date",
-    		"float64",
-    		"float64",
-    		"float64",
-    		"float64",
-    		"float64",
-    		"float64",
-    		"float64",
-    		"float64",
-    		"float64",
-    		"float64",
-    		"float64",
-    		"category",
-    		"float64",
-    		"category"
-        };
+	const char* dtype[] = {
+		"int64",
+		"date",
+		"category",
+		"float64",
+		"float64",
+		"float64",
+		"float64",
+		"float64",
+		"date",
+		"float64",
+		"category",
+		"category",
+		"category",
+		"date",
+		"date",
+		"date",
+		"date",
+		"float64",
+		"float64",
+		"float64",
+		"float64",
+		"float64",
+		"float64",
+		"float64",
+		"float64",
+		"float64",
+		"float64",
+		"float64",
+		"category",
+		"float64",
+		"category"
+	};
 
-        args.dtype = dtype;
+	args.dtype = dtype;
 
-		args.input_data_form = gdf_csv_input_form::FILE_PATH;
-		args.filepath_or_buffer = (char *)("/tmp/Performance_2000Q1.txt");
+	args.input_data_form = gdf_csv_input_form::FILE_PATH;
+	args.filepath_or_buffer = (char *)("/tmp/Performance_2000Q1.txt");
 
 	if (  checkFile(args.filepath_or_buffer))
 	{
@@ -188,18 +194,16 @@ TEST(gdf_csv_test, MortPerf)
 		args.skiprows 		= 0;
 		args.skipfooter 	= 0;
 		args.dayfirst 		= 0;
-        args.mangle_dupe_cols=true;
-        args.num_cols_out=0;
+		args.mangle_dupe_cols=true;
+		args.num_cols_out=0;
 
-        args.use_cols_int       = NULL;
-        args.use_cols_char      = NULL;
-        args.use_cols_char_len  = 0;
-        args.use_cols_int_len   = 0;
+		args.use_cols_int       = NULL;
+		args.use_cols_char      = NULL;
+		args.use_cols_char_len  = 0;
+		args.use_cols_int_len   = 0;
 
-
-        args.names = NULL;
-        args.dtype = NULL;
-
+		args.names = NULL;
+		args.dtype = NULL;
 
 		error = read_csv(&args);
 	}
@@ -207,7 +211,7 @@ TEST(gdf_csv_test, MortPerf)
 	EXPECT_TRUE( error == GDF_SUCCESS );
 }
 
-TEST(gdf_csv_test, Strings)
+TYPED_TEST(gdf_csv_test, Strings)
 {
 	const char* fname	= "/tmp/CsvStringsTest.csv";
 	const char* names[]	= { "line", "verse" };
@@ -263,7 +267,7 @@ TEST(gdf_csv_test, Strings)
 	}
 }
 
-TEST(gdf_csv_test, QuotedStrings)
+TYPED_TEST(gdf_csv_test, QuotedStrings)
 {
 	const char* fname	= "/tmp/CsvQuotedStringsTest.csv";
 	const char* names[]	= { "line", "verse" };
@@ -322,7 +326,7 @@ TEST(gdf_csv_test, QuotedStrings)
 	}
 }
 
-TEST(gdf_csv_test, KeepFullQuotedStrings)
+TYPED_TEST(gdf_csv_test, KeepFullQuotedStrings)
 {
 	const char* fname	= "/tmp/CsvKeepFullQuotedStringsTest.csv";
 	const char* names[]	= { "line", "verse" };
@@ -381,7 +385,7 @@ TEST(gdf_csv_test, KeepFullQuotedStrings)
 	}
 }
 
-TEST(gdf_csv_test, SpecifiedBoolValues)
+TYPED_TEST(gdf_csv_test, SpecifiedBoolValues)
 {
 	const char* fname			= "/tmp/CsvSpecifiedBoolValuesTest.csv";
 	const char* names[]			= { "A", "B", "C" };
@@ -422,7 +426,7 @@ TEST(gdf_csv_test, SpecifiedBoolValues)
 	}
 }
 
-TEST(gdf_csv_test, Dates)
+TYPED_TEST(gdf_csv_test, Dates)
 {
 	const char* fname			= "/tmp/CsvDatesTest.csv";
 	const char* names[]			= { "A" };

@@ -80,9 +80,12 @@ void f_quantile_tester(gdf_column* col_in, std::vector<VType>& v_out_exact, std:
     }
 }
 
-struct gdf_quantile : public GdfTest {};
+template <typename TestParameters>
+struct gdf_quantile : public cudfTest<TestParameters> {};
 
-TEST_F(gdf_quantile, DoubleVector)
+TYPED_TEST_CASE(gdf_quantile, allocation_modes);
+
+TYPED_TEST(gdf_quantile, DoubleVector)
 {
   using VType = double;
   std::vector<VType> v{6.8, 0.15, 3.4, 4.17, 2.13, 1.11, -1.01, 0.8, 5.7};
@@ -130,7 +133,7 @@ TEST_F(gdf_quantile, DoubleVector)
     }
 }
 
-TEST_F(gdf_quantile, IntegerVector)
+TYPED_TEST(gdf_quantile, IntegerVector)
 {
   using VType = int32_t;
   std::vector<VType> v{7, 0, 3, 4, 2, 1, -1, 1, 6};;
@@ -178,7 +181,7 @@ TEST_F(gdf_quantile, IntegerVector)
     }
 }
 
-TEST_F(gdf_quantile, ReportValidMaskError)
+TYPED_TEST(gdf_quantile, ReportValidMaskError)
 {
   using VType = int32_t;
   std::vector<VType> v{7, 0, 3, 4, 2, 1, -1, 1, 6};;

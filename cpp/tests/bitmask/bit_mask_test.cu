@@ -25,7 +25,10 @@
 
 #include <chrono>
 
-struct BitMaskTest : public GdfTest {};
+template <typename TestParameters>
+struct BitMaskTest : public cudfTest<TestParameters> {};
+
+TYPED_TEST_CASE(BitMaskTest, allocation_modes);
 
 //
 //  Kernel to count bits set in the bit mask
@@ -105,7 +108,7 @@ __host__ gdf_error count_bits(gdf_size_type *count, const BitMask &bit_mask, int
 }
 
 
-TEST_F(BitMaskTest, NoValids)
+TYPED_TEST(BitMaskTest, NoValids)
 {
   const int num_rows = 100;
 
@@ -122,7 +125,7 @@ TEST_F(BitMaskTest, NoValids)
   EXPECT_EQ(gdf_size_type{0}, local_count);
 }
 
-TEST_F(BitMaskTest, AllValids)
+TYPED_TEST(BitMaskTest, AllValids)
 {
   const int num_rows = 100;
 
@@ -139,7 +142,7 @@ TEST_F(BitMaskTest, AllValids)
   EXPECT_EQ(gdf_size_type{100}, local_count);
 }
 
-TEST_F(BitMaskTest, FirstRowValid)
+TYPED_TEST(BitMaskTest, FirstRowValid)
 {
   const int num_rows = 4;
 
@@ -163,7 +166,7 @@ TEST_F(BitMaskTest, FirstRowValid)
   EXPECT_EQ(temp, bit_mask_t{0x1});
 }
 
-TEST_F(BitMaskTest, EveryOtherBit)
+TYPED_TEST(BitMaskTest, EveryOtherBit)
 {
   const int num_rows = 8;
 
@@ -190,7 +193,7 @@ TEST_F(BitMaskTest, EveryOtherBit)
   EXPECT_EQ(temp, bit_mask_t{0x55});
 }
 
-TEST_F(BitMaskTest, OtherEveryOtherBit)
+TYPED_TEST(BitMaskTest, OtherEveryOtherBit)
 {
   const int num_rows = 8;
 
@@ -217,7 +220,7 @@ TEST_F(BitMaskTest, OtherEveryOtherBit)
   EXPECT_EQ(temp, bit_mask_t{0xAA});
 }
 
-TEST_F(BitMaskTest, 15rows)
+TYPED_TEST(BitMaskTest, 15rows)
 {
   const int num_rows = 15;
 
@@ -237,7 +240,7 @@ TEST_F(BitMaskTest, 15rows)
   EXPECT_EQ(GDF_SUCCESS, bit_mask::destroy_bit_mask(bits));
 }
 
-TEST_F(BitMaskTest, 5rows)
+TYPED_TEST(BitMaskTest, 5rows)
 {
   const int num_rows = 5;
 
@@ -256,7 +259,7 @@ TEST_F(BitMaskTest, 5rows)
   EXPECT_EQ(gdf_size_type{1}, local_count);
 }
 
-TEST_F(BitMaskTest, 10ValidRows)
+TYPED_TEST(BitMaskTest, 10ValidRows)
 {
   const int num_rows = 10;
 
@@ -273,7 +276,7 @@ TEST_F(BitMaskTest, 10ValidRows)
   EXPECT_EQ(gdf_size_type{10}, local_count);
 }
 
-TEST_F(BitMaskTest, MultipleOfEight)
+TYPED_TEST(BitMaskTest, MultipleOfEight)
 {
   const int num_rows = 1024;
 
@@ -294,7 +297,7 @@ TEST_F(BitMaskTest, MultipleOfEight)
   EXPECT_EQ(gdf_size_type{128}, local_count);
 }
 
-TEST_F(BitMaskTest, NotMultipleOfEight)
+TYPED_TEST(BitMaskTest, NotMultipleOfEight)
 {
   const int num_rows = 1023;
 
@@ -315,7 +318,7 @@ TEST_F(BitMaskTest, NotMultipleOfEight)
   EXPECT_EQ(gdf_size_type{127}, local_count);
 }
 
-TEST_F(BitMaskTest, TenThousandRows)
+TYPED_TEST(BitMaskTest, TenThousandRows)
 {
   const int num_rows = 10000;
 
@@ -332,7 +335,7 @@ TEST_F(BitMaskTest, TenThousandRows)
   EXPECT_EQ(gdf_size_type{10000}, local_count);
 }
 
-TEST_F(BitMaskTest, PerformanceTest)
+TYPED_TEST(BitMaskTest, PerformanceTest)
 {
   const int num_rows = 100000000;
 
@@ -367,7 +370,7 @@ TEST_F(BitMaskTest, PerformanceTest)
   free(local_valid);
 }
 
-TEST_F(BitMaskTest, CudaThreadingTest)
+TYPED_TEST(BitMaskTest, CudaThreadingTest)
 {
   const int num_rows = 100000;
   bit_mask_t *bits = nullptr;
@@ -386,7 +389,7 @@ TEST_F(BitMaskTest, CudaThreadingTest)
   EXPECT_EQ(GDF_SUCCESS, bit_mask::destroy_bit_mask(bits));
 }
 
-TEST_F(BitMaskTest, PaddingTest)
+TYPED_TEST(BitMaskTest, PaddingTest)
 {
   //
   //  Set the number of rows to 32, we'll try padding to 
