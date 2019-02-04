@@ -20,8 +20,10 @@ from librmm_cffi import librmm as rmm
 from libc.stdint cimport uintptr_t
 from libc.stdlib cimport calloc, malloc, free
 
+cimport cython
 
 
+@cython.boundscheck(False)
 cpdef join(col_lhs, col_rhs, on, how, method='sort'):
     """
       Call gdf join for full outer, inner and left joins.
@@ -77,7 +79,7 @@ cpdef join(col_lhs, col_rhs, on, how, method='sort'):
             res_idx = res_idx + 1
         idx = idx + 1
 
-    cdef gdf_error result
+    cdef gdf_error result = GDF_CUDA_ERROR
     cdef gdf_size_type col_lhs_len = len(col_lhs)
     cdef gdf_size_type col_rhs_len = len(col_rhs)
     cdef int c_num_cols_to_join = num_cols_to_join
