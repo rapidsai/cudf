@@ -1468,6 +1468,7 @@ def test_head_tail(nelem, data_type):
     check_frame_series_equality(gdf.head(), gdf[:5])
     check_frame_series_equality(gdf.head(3), gdf[:3])
     check_frame_series_equality(gdf.head(-2), gdf[:-2])
+    check_frame_series_equality(gdf.head(0), gdf[0:0])
 
     check_frame_series_equality(gdf['a'].head(), gdf['a'][:5])
     check_frame_series_equality(gdf['a'].head(3), gdf['a'][:3])
@@ -1476,6 +1477,7 @@ def test_head_tail(nelem, data_type):
     check_frame_series_equality(gdf.tail(), gdf[-5:])
     check_frame_series_equality(gdf.tail(3), gdf[-3:])
     check_frame_series_equality(gdf.tail(-2), gdf[2:])
+    check_frame_series_equality(gdf.tail(0), gdf[0:0])
 
     check_frame_series_equality(gdf['a'].tail(), gdf['a'][-5:])
     check_frame_series_equality(gdf['a'].tail(3), gdf['a'][-3:])
