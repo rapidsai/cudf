@@ -1437,6 +1437,7 @@ def test_arrow_pandas_compat(pdf, gdf, preserve_index):
     assert_eq(pdf2, gdf2)
 
 
+
 @pytest.mark.parametrize('nelem', [0, 100])
 @pytest.mark.parametrize(
     'data_type',
@@ -1449,6 +1450,9 @@ def test_head_tail(nelem, data_type):
         assert left.index == right.index
 
     def check_values_equality(left, right):
+        if len(left) == 0 and len(right) == 0:
+            return None
+
         np.testing.assert_array_equal(left.to_pandas(), right.to_pandas())
 
     def check_frame_series_equality(left, right):
