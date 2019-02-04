@@ -15,6 +15,7 @@
 - PR #821 Fix flake8 issues revealed by flake8 update
 - PR #808 Resolved renamed `d_columns_valids` variable name
 - PR #780 CSV Reader: Fix scientific notation parsing and null values for empty quotes
+- PR #850 Fix bug where left joins where the left df has 0 rows causes a crash
 
 
 # cuDF 0.5.0 (28 Jan 2019)
