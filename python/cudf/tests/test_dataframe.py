@@ -1438,7 +1438,7 @@ def test_arrow_pandas_compat(pdf, gdf, preserve_index):
 
 
 @pytest.mark.parametrize('nelem', [0, 2, 3, 100])
-@pytest.mark.parametrize('nchunks', [0, 1, 2, 5, 10])
+@pytest.mark.parametrize('nchunks', [1, 2, 5, 10])
 @pytest.mark.parametrize(
     'data_type',
     ['bool', 'int8', 'int16', 'int32', 'int64',
