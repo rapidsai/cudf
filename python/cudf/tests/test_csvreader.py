@@ -642,7 +642,7 @@ def test_csv_reader_filenotfound(tmpdir):
     # should raise an error
     dname = tmpdir.mkdir("gdf_csv")
     with pytest.raises(FileNotFoundError):
-        read_csv(str(fname))
+        read_csv(str(dname))
 
 
 def test_csv_reader_bzip2_compression(tmpdir):
