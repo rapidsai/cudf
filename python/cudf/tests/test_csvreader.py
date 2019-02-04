@@ -16,6 +16,7 @@ import nvstrings
 from .utils import assert_eq
 import gzip
 import shutil
+import os
 
 from libgdf_cffi import GDFError
 
@@ -688,3 +689,27 @@ def test_csv_reader_tabs():
     np.testing.assert_allclose(ints, df['integer'])
     for row in range(4):
         assert(str(df['date'][row]) == dates[row])
+
+
+@pytest.mark.parametrize('segment_bytes', [10000, 19999, 30001, 36000])
+def test_csv_reader_byte_range(tmpdir, segment_bytes):
+    fname = tmpdir.mkdir("gdf_csv").join("tmp_csvreader_file16.csv")
+
+    names = ["int1", "int2"]
+
+    rows = 10000
+    with open(str(fname), 'w') as fp:
+        for i in range(rows):
+            fp.write(str(i) + ', ' + str(2*i) + ' \n')
+    file_size = os.stat(str(fname)).st_size
+
+    ref_df = read_csv(str(fname), names=names)
+
+    dfs = []
+    for segment in range((file_size + segment_bytes - 1)//segment_bytes):
+        dfs.append(read_csv(str(fname), names=names,
+                   byte_range=(segment*segment_bytes, segment_bytes)))
+    df = cudf.concat(dfs)
+
+    # comparing only the values here, concat does not update the index
+    np.array_equal(ref_df.to_pandas().values, df.to_pandas().values)

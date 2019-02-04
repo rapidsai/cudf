@@ -3,6 +3,7 @@
 ## New Features
 
 - PR #539 Add Python bindings for replace function
+- PR #807 CSV Reader: Add byte_range parameter to specify the range in the input file to be read
 
 ## Improvements
 
@@ -77,6 +78,7 @@
 - PR #766 Remove TravisCI references, remove unused variables from CMake, fix ARROW_VERSION in Cmake
 - PR #773 Add build-args back to Dockerfile and handle dependencies based on environment yml file
 - PR #781 Move thirdparty submodules to root and symlink in /cpp
+- PR #843 Fix broken cudf/python API examples, add new methods to the API index
 
 ## Bug Fixes
 
