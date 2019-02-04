@@ -46,7 +46,7 @@ class DataFrame(object):
 
     .. code-block:: python
 
-          from cudf.dataframe import DataFrame
+          from cudf import DataFrame
           df = DataFrame()
           df['key'] = [0, 1, 2, 3, 4]
           df['val'] = [float(i + 10) for i in range(5)]  # insert column
@@ -67,7 +67,7 @@ class DataFrame(object):
 
     .. code-block:: python
 
-          from cudf.dataframe import DataFrame
+          from cudf import DataFrame
           import numpy as np
           import datetime as dt
           ids = np.arange(5)
@@ -285,7 +285,7 @@ class DataFrame(object):
 
             import cudf
 
-            df = cudf.dataframe.DataFrame()
+            df = cudf.DataFrame()
             df = df.assign(a=[0,1,2], b=[3,4,5])
             print(df)
 
@@ -313,7 +313,7 @@ class DataFrame(object):
 
         .. code-block:: python
 
-            from cudf.dataframe import DataFrame
+            from cudf import DataFrame
 
             df = DataFrame()
             df['key'] = [0, 1, 2, 3, 4]
@@ -350,7 +350,7 @@ class DataFrame(object):
 
         .. code-block:: python
 
-            from cudf.dataframe import DataFrame()
+            from cudf import DataFrame
             df = DataFrame()
             df['key'] = [0, 1, 2]
             df['val'] = [float(i + 10) for i in range(3)]
@@ -421,17 +421,25 @@ class DataFrame(object):
 
         Examples
         --------
+        .. code-block:: python
 
-        >>> df = DataFrame([('a', list(range(20))),
-        ...                 ('b', list(range(20))),
-        ...                 ('c', list(range(20)))])
-        # get rows from index 2 to index 5 from 'a' and 'b' columns.
-        >>> df.loc[2:5, ['a', 'b']]
-             a    b
-        2    2    2
-        3    3    3
-        4    4    4
-        5    5    5
+           df = DataFrame([('a', list(range(20))),
+                           ('b', list(range(20))),
+                           ('c', list(range(20)))])
+
+           # get rows from index 2 to index 5 from 'a' and 'b' columns.
+           df.loc[2:5, ['a', 'b']]
+
+        Output:
+
+        .. code-block:: python
+
+               a    b
+          2    2    2
+          3    3    3
+          4    4    4
+          5    5    5
+
         """
         return Loc(self)
 
@@ -442,30 +450,41 @@ class DataFrame(object):
 
         Examples
         --------
-        >>> df = DataFrame([('a', list(range(20))),
-        ...                 ('b', list(range(20))),
-        ...                 ('c', list(range(20)))])
+        df = DataFrame([('a', list(range(20))),
+                        ('b', list(range(20))),
+                        ('c', list(range(20)))])
+
         #get the row from index 1st
-        >>> df.iloc[1]
-        a    1
-        b    1
-        c    1
+        df.iloc[1]
 
         # get the rows from indices 0,2,9 and 18.
-        >>> df.iloc[[0, 2, 9, 18]]
-             a    b    c
-        0    0    0    0
-        2    2    2    2
-        9    9    9    9
-        18   18   18   18
+        df.iloc[[0, 2, 9, 18]]
 
         # get the rows using slice indices
-        >>> df.iloc[3:10:2]
-             a    b    c
-        3    3    3    3
-        5    5    5    5
-        7    7    7    7
-        9    9    9    9
+        df.iloc[3:10:2]
+
+        Output:
+
+        .. code-block:: python
+
+          #get the row from index 1st
+          a    1
+          b    1
+          c    1
+
+          # get the rows from indices 0,2,9 and 18.
+               a    b    c
+          0    0    0    0
+          2    2    2    2
+          9    9    9    9
+          18   18   18   18
+
+          # get the rows using slice indices
+               a    b    c
+          3    3    3    3
+          5    5    5    5
+          7    7    7    7
+          9    9    9    9
         """
 
         return Iloc(self)
@@ -641,20 +660,22 @@ class DataFrame(object):
         A dataframe without dropped column(s)
 
         Examples
-        ----------
+        --------
 
         .. code-block:: python
 
-            from cudf.dataframe.dataframe import DataFrame
+            from cudf import DataFrame
+
             df = DataFrame()
             df['key'] = [0, 1, 2, 3, 4]
             df['val'] = [float(i + 10) for i in range(5)]
-
             df_new = df.drop('val')
+
             print(df)
             print(df_new)
 
         Output:
+
         .. code-block:: python
 
                 key  val
@@ -807,7 +828,7 @@ class DataFrame(object):
         .. code-block:: python
 
           import pandas as pd
-          from cudf.dataframe import DataFrame as gdf
+          from cudf import DataFrame as gdf
 
           pet_owner = [1, 2, 3, 4, 5]
           pet_type = ['fish', 'dog', 'fish', 'bird', 'fish']
@@ -918,7 +939,8 @@ class DataFrame(object):
 
         .. code-block:: python
 
-              from cudf.dataframe import DataFrame
+              from cudf import DataFrame
+
               a = ('a', [0, 1, 2])
               b = ('b', [-3, 2, 0])
               df = DataFrame([a, b])
@@ -1010,7 +1032,7 @@ class DataFrame(object):
 
         .. code-block:: python
 
-            from cudf.dataframe import DataFrame
+            from cudf import DataFrame
 
             df_a = DataFrame()
             df['key'] = [0, 1, 2, 3, 4]
@@ -1380,7 +1402,8 @@ class DataFrame(object):
 
         .. code-block:: python
 
-              from cudf.dataframe import DataFrame
+              from cudf import DataFrame
+
               a = ('a', [1, 2, 2])
               b = ('b', [3, 4, 5])
               df = DataFrame([a, b])
@@ -1399,7 +1422,7 @@ class DataFrame(object):
 
         .. code-block:: python
 
-           from cudf.dataframe import DataFrame
+           from cudf import DataFrame
            import numpy as np
 
            df = DataFrame()
@@ -1655,7 +1678,8 @@ class DataFrame(object):
 
         .. code-block:: python
 
-          from cudf.dataframe import DataFrame
+          from cudf import DataFrame
+
           a = ('a', [0, 1, 2])
           b = ('b', [-3, 2, 0])
           df = DataFrame([a, b])
@@ -1692,7 +1716,7 @@ class DataFrame(object):
 
             data = [[0,1], [1,2], [3,4]]
             pdf = pd.DataFrame(data, columns=['a', 'b'], dtype=int)
-            cudf.dataframe.DataFrame.from_pandas(pdf)
+            cudf.DataFrame.from_pandas(pdf)
 
         Output:
 
@@ -1720,7 +1744,7 @@ class DataFrame(object):
 
         .. code-block:: python
 
-            from cudf.dataframe import DataFrame
+            from cudf import DataFrame
 
             a = ('a', [0, 1, 2])
             b = ('b', [-3, 2, 0])
@@ -1787,7 +1811,7 @@ class DataFrame(object):
         .. code-block:: python
 
             import pyarrow as pa
-            from cudf.dataframe import DataFrame
+            from cudf import DataFrame
 
             data = [pa.array([1, 2, 3]), pa.array([4, 5, 6])
             batch = pa.RecordBatch.from_arrays(data, ['f0', 'f1'])
@@ -1809,7 +1833,7 @@ class DataFrame(object):
         if isinstance(table.schema.metadata, dict):
             if b'pandas' in table.schema.metadata:
                 index_col = json.loads(
-                    table.schema.metadata[b'pandas'].decode('utf-8')
+                    table.schema.metadata[b'pandas']
                 )['index_columns']
 
         df = cls()
