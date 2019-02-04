@@ -1069,6 +1069,28 @@ class Series(object):
             return Series(self._column.quantile(q, interpolation, exact),
                           index=as_index(np.asarray(q)))
 
+    def digitize(self, bins, right=False):
+        """Return the indices of the bins to which each value in series belongs.
+
+        Notes
+        -----
+        Monotonicity of bins is assumed and not checked.
+
+        Parameters
+        ----------
+        bins : np.array
+            1-D monotonically increasing array of bins with same type as this series.
+        right : bool
+            Indicates whether interval contains the right or left bin edge.
+
+        Returns
+        -------
+        A new Series containing the indices.
+        """
+        from . import numerical
+
+        return Series(numerical.digitize(self._column, bins, right))
+
 
 register_distributed_serializer(Series)
 

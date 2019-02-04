@@ -182,6 +182,7 @@ add_library(cudf SHARED
             src/filter/filter_ops.cu
             src/join/joining.cu
             src/orderby/orderby.cu
+            src/sort/digitize.cu
             src/sort/segmented_sorting.cu
             src/sort/sorting.cu
             src/sqls/sqls_ops.cu

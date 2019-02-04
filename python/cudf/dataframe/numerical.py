@@ -439,4 +439,28 @@ def column_hash_values(column0, *other_columns):
     return result
 
 
+def digitize(column, bins, right=False):
+    """Return the indices of the bins to which each value in column belongs.
+
+    Parameters
+    ----------
+    column : Column
+        Input column.
+    bins : np.array
+        1-D monotonically increasing array of bins with same type as `column`.
+    right : bool
+        Indicates whether interval contains the right or left bin edge.
+
+    Returns
+    -------
+    A NumericalColumn[int32] containing the indices
+    """
+    assert column.dtype == bins.dtype
+    buf = Buffer(rmm.device_array(len(column), dtype=np.int32))
+    result = NumericalColumn(data=buf, dtype=buf.dtype)
+    d_bins = rmm.to_device(bins)
+    _gdf.digitize(column, d_bins, result, right)
+    return result
+
+
 register_distributed_serializer(NumericalColumn)

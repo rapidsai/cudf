@@ -1525,3 +1525,16 @@ def test_boolmask(pdf, gdf):
     gdf = gdf[boolmask]
     pdf = pdf[boolmask]
     assert_eq(pdf, gdf)
+
+
+@pytest.mark.parametrize('num_rows', [1, 3, 10, 100])
+@pytest.mark.parametrize('num_bins', [1, 2, 4, 20])
+@pytest.mark.parametrize('right', [True, False])
+@pytest.mark.parametrize('dtype', ['int8', 'int16', 'int32', 'int64',
+                                   'float32', 'float64'])
+def test_series_digitize(num_rows, num_bins, right, dtype):
+    data = np.random.randint(0, 100, num_rows).astype(dtype)
+    bins = np.unique(np.sort(np.random.randint(2, 95, num_bins).astype(dtype)))
+    s = Series(data)
+    indices = s.digitize(bins, right)
+    np.testing.assert_array_equal(np.digitize(data, bins, right), indices.to_array())

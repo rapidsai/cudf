@@ -594,3 +594,31 @@ def quantile(column, quant, method, exact):
                                        gdf_context)
         res.append(px[0])
     return res
+
+
+def digitize(column, bins, result, right=False):
+    """Return the indices of the bins to which each value in column belongs.
+
+    Parameters
+    ----------
+    column : Column
+        Input column.
+    bins : rmm device array
+        1-D monotonically increasing array of bins.
+    result : Column
+        Pre-allocated output column of type `np.int32`.
+    right : bool
+        Indicates whether interval contains the right or left bin edge.
+
+    Returns
+    -------
+    The output column
+    """
+    assert len(column) == len(result)
+    assert result.dtype == np.int32
+    if len(result) == 0:
+        return result
+    col_in = column.cffi_view
+    col_out = result.cffi_view
+    libgdf.gdf_digitize(col_in, unwrap_devary(bins), len(bins), right, col_out)
+    return result
