@@ -351,6 +351,9 @@ class DataFrame(object):
            4    4 14.0
 
         """
+        if n == 0:
+            return self[0:0]
+
         return self[-n:]
 
     def to_string(self, nrows=NOTSET, ncols=NOTSET):

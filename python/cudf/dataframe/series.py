@@ -296,6 +296,9 @@ class Series(object):
            4    0
 
         """
+        if n == 0:
+            return self[0:0]
+
         return self[-n:]
 
     def to_string(self, nrows=NOTSET):
