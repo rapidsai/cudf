@@ -11,9 +11,19 @@ if [ "${CUDA:0:2}" == '10' ]; then
   CUDA_REL=${CUDA:0:4}
 fi
 
-LABEL_OPTION="--label dev --label cuda${CUDA_REL}"
-if [ "${LABEL_MAIN}" == '1' ]; then
+SOURCE_BRANCH=master
+
+if [ "$LABEL_MAIN" == "1" -a "$BUILD_ABI" == "1" ]; then
   LABEL_OPTION="--label main --label cuda${CUDA_REL}"
+elif [ "$LABEL_MAIN" == "0" -a "$BUILD_ABI" == "1" ]; then
+  LABEL_OPTION="--label dev --label cuda${CUDA_REL}"
+elif [ "$LABEL_MAIN" == "1" -a "$BUILD_ABI" == "0" ]; then
+  LABEL_OPTION="--label cf201901 --label cf201901-cuda${CUDA_REL}"
+elif [ "$LABEL_MAIN" == "0" -a "$BUILD_ABI" == "0" ]; then
+  LABEL_OPTION="--label cf201901-dev --label cf201901-cuda${CUDA_REL}"
+else
+  echo "Unknown label configuration LABEL_MAIN='$LABEL_MAIN' BUILD_ABI='$BUILD_ABI'"
+  exit 1
 fi
 echo "LABEL_OPTION=${LABEL_OPTION}"
 

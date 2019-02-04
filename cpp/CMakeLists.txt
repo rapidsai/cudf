@@ -203,6 +203,7 @@ add_library(cudf SHARED
             src/io/convert/csr/cudf_to_csr.cu
             src/io/csv/csv_reader.cu
             src/io/comp/uncomp.cpp
+            src/io/comp/cpu_unbz2.cpp
             src/utilities/cuda_utils.cu
             src/utilities/error_utils.cpp
             src/utilities/nvtx/nvtx_utils.cpp)

@@ -16,6 +16,7 @@ import nvstrings
 from .utils import assert_eq
 import gzip
 import shutil
+import os
 
 from libgdf_cffi import GDFError
 
@@ -302,15 +303,16 @@ def test_csv_reader_float_decimal(tmpdir):
     dtypes = ['float32', 'float64', 'float64', 'float32']
     lines = [';'.join(names),
              '1,2;1234,5678;12345;0,123',
-             '3,4;3456,7890;67890;,456']
+             '3,4;3456,7890;67890;,456',
+             '5,6e0;0,5679e2;1,2e10;0,07e-1']
 
     with open(str(fname), 'w') as fp:
         fp.write('\n'.join(lines) + '\n')
 
-    basic_32_ref = [1.2, 3.4]
-    basic_64_ref = [1234.5678, 3456.7890]
-    round_ref = [12345, 67890]
-    decimal_only_ref = [0.123, 0.456]
+    basic_32_ref = [1.2, 3.4, 5.6]
+    basic_64_ref = [1234.5678, 3456.7890, 56.79]
+    round_ref = [12345, 67890, 12000000000]
+    decimal_only_ref = [0.123, 0.456, 0.007]
 
     df = read_csv(str(fname), names=names, dtype=dtypes, skiprows=1,
                   delimiter=';', decimal=',')
@@ -319,6 +321,22 @@ def test_csv_reader_float_decimal(tmpdir):
     np.testing.assert_allclose(basic_64_ref, df['basic_64'])
     np.testing.assert_allclose(round_ref, df['round'])
     np.testing.assert_allclose(decimal_only_ref, df['decimal_only'])
+
+
+def test_csv_reader_NaN_values():
+
+    names = dtypes = ['float32']
+    buffer = '476940.0\n59e3\n\n""\n305245.0\n'
+
+    cu_df = read_csv(StringIO(buffer), names=names, dtype=dtypes)
+    pd_df = pd.read_csv(StringIO(buffer), names=names, dtype=dtypes[0],
+                        skip_blank_lines=False)
+
+    cu_df = cu_df.to_pandas()
+
+    assert len(pd_df.columns) == len(cu_df.columns)
+    assert len(pd_df) == len(cu_df)
+    pd.util.testing.assert_frame_equal(pd_df, cu_df)
 
 
 def test_csv_reader_thousands(tmpdir):
@@ -630,3 +648,43 @@ def test_csv_reader_empty_dataframe():
     # should raise an error without dtypes
     with pytest.raises(GDFError):
         read_csv(StringIO(buffer))
+
+
+def test_csv_reader_bzip2_compression(tmpdir):
+    fname = tmpdir.mkdir("gdf_csv").join('tmp_csvreader_file16.csv.bz2')
+
+    df = make_datetime_dataframe()
+    df.to_csv(fname, index=False, header=False, compression='bz2')
+
+    df_out = pd.read_csv(fname, names=['col1', 'col2'], parse_dates=[0, 1],
+                         dayfirst=True, compression='bz2')
+    dtypes = ['date', 'date']
+    out = read_csv(str(fname), names=list(df.columns.values), dtype=dtypes,
+                   dayfirst=True, compression='bz2')
+
+    assert len(out.columns) == len(df_out.columns)
+    pd.util.testing.assert_frame_equal(df_out, out.to_pandas())
+
+
+@pytest.mark.parametrize('segment_bytes', [10000, 19999, 30001, 36000])
+def test_csv_reader_byte_range(tmpdir, segment_bytes):
+    fname = tmpdir.mkdir("gdf_csv").join("tmp_csvreader_file16.csv")
+
+    names = ["int1", "int2"]
+
+    rows = 10000
+    with open(str(fname), 'w') as fp:
+        for i in range(rows):
+            fp.write(str(i) + ', ' + str(2*i) + ' \n')
+    file_size = os.stat(str(fname)).st_size
+
+    ref_df = read_csv(str(fname), names=names)
+
+    dfs = []
+    for segment in range((file_size + segment_bytes - 1)//segment_bytes):
+        dfs.append(read_csv(str(fname), names=names,
+                   byte_range=(segment*segment_bytes, segment_bytes)))
+    df = cudf.concat(dfs)
+
+    # comparing only the values here, concat does not update the index
+    np.array_equal(ref_df.to_pandas().values, df.to_pandas().values)

@@ -112,7 +112,7 @@ install_requires = [
     'pandas>=0.23.4',
     'numba>=0.40.0,<0.42',
     'pycparser==2.19',
-    'pyarrow==0.11.1',
+    'pyarrow==0.12.0',
     'cffi>=1.0.0',
     'cython>=0.29,<0.30',
     'numpy>=1.14'
