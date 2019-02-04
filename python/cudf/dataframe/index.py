@@ -208,6 +208,7 @@ class RangeIndex(Index):
     def _values(self):
         return Column(range(self._start, self._stop))
 
+    @property
     def is_contiguous(self):
         return True
 
