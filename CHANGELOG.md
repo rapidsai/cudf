@@ -3,6 +3,7 @@
 ## New Features
 
 - PR #539 Add Python bindings for replace function
+- PR #855 Improve string formatting
 
 ## Improvements
 
