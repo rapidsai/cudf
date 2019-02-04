@@ -74,6 +74,9 @@ logger "GoogleTest for libcudf..."
 cd $WORKSPACE/cpp/build
 GTEST_OUTPUT="xml:${WORKSPACE}/test-results/" make -j${PARALLEL_LEVEL} test
 
+# Temporarily install cupy for testing
+pip install cupy-cuda92
+
 logger "Python py.test for libcudf..."
 cd $WORKSPACE/cpp/build/python
 py.test --cache-clear --junitxml=${WORKSPACE}/junit-libgdf.xml -v
