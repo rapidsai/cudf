@@ -274,6 +274,30 @@ class Series(object):
     def head(self, n=5):
         return self[:n]
 
+    def tail(self, n=5):
+        """
+        Returns the last n rows as a new Series
+
+        Examples
+        --------
+
+        .. code-block:: python
+
+            from cudf.dataframe import Series
+
+            ser = Series([4, 3, 2, 1, 0])
+            print(ser.tail(2))
+
+        Output
+
+        .. code-block:: python
+
+           3    1
+           4    0
+
+        """
+        return self[-n:]
+
     def to_string(self, nrows=NOTSET):
         """Convert to string
 

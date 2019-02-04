@@ -1435,3 +1435,45 @@ def test_arrow_pandas_compat(pdf, gdf, preserve_index):
     pdf2 = pdf_arrow_table.to_pandas()
 
     assert_eq(pdf2, gdf2)
+
+
+@pytest.mark.parametrize('nelem', [0, 100])
+@pytest.mark.parametrize(
+    'data_type',
+    ['bool', 'int8', 'int16', 'int32', 'int64',
+     'float32', 'float64', 'datetime64[ms]']
+)
+def test_head_tail(nelem, data_type):
+
+    def check_index_equality(left, right):
+        assert left.index == right.index
+
+    def check_values_equality(left, right):
+        np.testing.assert_array_equal(left.to_pandas(), right.to_pandas())
+
+    def check_frame_series_equality(left, right):
+        check_index_equality(left, right)
+        check_values_equality(left, right)
+
+    gdf = gd.DataFrame(
+        {
+            'a': np.random.randint(0, 1000, nelem).astype(data_type),
+            'b': np.random.randint(0, 1000, nelem).astype(data_type)
+        }
+    )
+
+    check_frame_series_equality(gdf.head(), gdf[:5])
+    check_frame_series_equality(gdf.head(3), gdf[:3])
+    check_frame_series_equality(gdf.head(-2), gdf[:-2])
+
+    check_frame_series_equality(gdf['a'].head(), gdf['a'][:5])
+    check_frame_series_equality(gdf['a'].head(3), gdf['a'][:3])
+    check_frame_series_equality(gdf['a'].head(-2), gdf['a'][:-2])
+
+    check_frame_series_equality(gdf.tail(), gdf[-5:])
+    check_frame_series_equality(gdf.tail(3), gdf[-3:])
+    check_frame_series_equality(gdf.tail(-2), gdf[--2:])
+
+    check_frame_series_equality(gdf['a'].tail(), gdf['a'][-5:])
+    check_frame_series_equality(gdf['a'].tail(3), gdf['a'][-3:])
+    check_frame_series_equality(gdf['a'].tail(-2), gdf['a'][--2:])
