@@ -1437,7 +1437,6 @@ def test_arrow_pandas_compat(pdf, gdf, preserve_index):
     assert_eq(pdf2, gdf2)
 
 
-
 @pytest.mark.parametrize('nelem', [0, 100])
 @pytest.mark.parametrize(
     'data_type',
