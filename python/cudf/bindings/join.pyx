@@ -45,8 +45,8 @@ cpdef join(col_lhs, col_rhs, on, how, method='sort'):
     cdef gdf_column** list_rhs = <gdf_column**>malloc(len(col_rhs) * sizeof(gdf_column*))
     cdef gdf_column** result_cols = <gdf_column**>malloc(result_num_cols * sizeof(gdf_column*))
 
-    res_idx = 0
-    idx = 0
+    cdef int res_idx = 0
+    cdef int idx = 0
     for name, col in col_lhs.items():
         check_gdf_compatibility(col)
         list_lhs[idx] = column_view_from_column(col._column)

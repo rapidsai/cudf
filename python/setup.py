@@ -14,11 +14,6 @@ install_requires = [
     'cython'
 ]
 
-# try:
-#     numpy_include = numpy.get_include()
-# except AttributeError:
-#     numpy_include = numpy.get_numpy_include()
-
 cython_files = ['cudf/bindings/*.pyx']
 
 extensions = [
