@@ -1472,8 +1472,8 @@ def test_head_tail(nelem, data_type):
 
     check_frame_series_equality(gdf.tail(), gdf[-5:])
     check_frame_series_equality(gdf.tail(3), gdf[-3:])
-    check_frame_series_equality(gdf.tail(-2), gdf[--2:])
+    check_frame_series_equality(gdf.tail(-2), gdf[2:])
 
     check_frame_series_equality(gdf['a'].tail(), gdf['a'][-5:])
     check_frame_series_equality(gdf['a'].tail(3), gdf['a'][-3:])
-    check_frame_series_equality(gdf['a'].tail(-2), gdf['a'][--2:])
+    check_frame_series_equality(gdf['a'].tail(-2), gdf['a'][2:])
