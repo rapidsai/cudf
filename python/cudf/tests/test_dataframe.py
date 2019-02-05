@@ -1450,13 +1450,14 @@ def test_cuda_array_interface(dtype):
 
     np_data = np.arange(10).astype(dtype)
     cupy_data = cupy.array(np_data)
+    pd_data = pd.Series(np_data)
 
     cudf_data = gd.Series(cupy_data)
-    assert_eq(np_data, cudf_data)
+    assert_eq(pd_data, cudf_data)
 
     gdf = gd.DataFrame()
     gdf['test'] = cupy_data
-    assert_eq(np_data, gdf['test'])
+    assert_eq(pd_data, gdf['test'])
 
 
 @pytest.mark.parametrize('nelem', [0, 2, 3, 100])
