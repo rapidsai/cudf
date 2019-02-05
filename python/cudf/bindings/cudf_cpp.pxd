@@ -6,7 +6,7 @@
 # cython: language_level = 3
 
 from libcpp cimport bool
-from numpy cimport uint8_t, int64_t, int32_t, int16_t, int8_t
+from libc.stdint cimport uint8_t, int64_t, int32_t, int16_t, int8_t
 
 # Utility functions to build gdf_columns, gdf_context and error handling
 

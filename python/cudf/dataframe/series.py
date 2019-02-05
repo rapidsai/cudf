@@ -900,7 +900,7 @@ class Series(object):
         """Returns unique values of this Series.
         default='sort' will be changed to 'hash' when implemented.
         """
-        if method is not 'sort':
+        if method != 'sort':
             msg = 'non sort based unique() not implemented yet'
             raise NotImplementedError(msg)
         if not sort:
@@ -915,7 +915,7 @@ class Series(object):
         """Returns the number of unique valies of the Series: approximate version,
         and exact version to be moved to libgdf
         """
-        if method is not 'sort':
+        if method != 'sort':
             msg = 'non sort based unique_count() not implemented yet'
             raise NotImplementedError(msg)
         if self.null_count == len(self):
@@ -926,7 +926,7 @@ class Series(object):
     def value_counts(self, method='sort', sort=True):
         """Returns unique values of this Series.
         """
-        if method is not 'sort':
+        if method != 'sort':
             msg = 'non sort based value_count() not implemented yet'
             raise NotImplementedError(msg)
         if self.null_count == len(self):
