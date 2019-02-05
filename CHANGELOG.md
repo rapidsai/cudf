@@ -3,18 +3,24 @@
 ## New Features
 
 - PR #539 Add Python bindings for replace function
+- PR #807 CSV Reader: Add byte_range parameter to specify the range in the input file to be read
 
 ## Improvements
 
 - PR #730 Improve performance of `gdf_table` constructor
 - PR #836 Add ingest support for arrow chunked arrays in Column, Series, DataFrame creation
+- PR #763 Format doxygen comments for csv_read_arg struct
 - PR #532 CSV Reader: Use type dispatcher instead of switch block
 
 ## Bug Fixes
 
 - PR #821 Fix flake8 issues revealed by flake8 update
 - PR #808 Resolved renamed `d_columns_valids` variable name
+- PR #820 SCV Reader: fix the issue where reader adds additional rows when file uses \r\n as a line terminator
 - PR #780 CSV Reader: Fix scientific notation parsing and null values for empty quotes
+- PR #815 CSV Reader: Fix data parsing when tabs are present in the input CSV file
+- PR #850 Fix bug where left joins where the left df has 0 rows causes a crash
+- PR #861 Fix memory leak by preserving the boolean mask index
 
 
 # cuDF 0.5.0 (28 Jan 2019)
@@ -77,6 +83,7 @@
 - PR #766 Remove TravisCI references, remove unused variables from CMake, fix ARROW_VERSION in Cmake
 - PR #773 Add build-args back to Dockerfile and handle dependencies based on environment yml file
 - PR #781 Move thirdparty submodules to root and symlink in /cpp
+- PR #843 Fix broken cudf/python API examples, add new methods to the API index
 
 ## Bug Fixes
 

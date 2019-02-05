@@ -1464,3 +1464,40 @@ def test_from_arrow_chunked_arrays(nelem, nchunks, data_type):
     got = gd.DataFrame.from_arrow(pa_table)
 
     assert_eq(expect, got)
+
+
+def test_gpu_memory_usage_with_boolmask():
+    from numba import cuda
+    import cudf
+    ctx = cuda.current_context()
+
+    def query_GPU_memory(note=''):
+        memInfo = ctx.get_memory_info()
+        usedMemoryGB = (memInfo.total - memInfo.free)/1e9
+        return usedMemoryGB
+
+    cuda.current_context().deallocations.clear()
+    nRows = int(1e8)
+    nCols = 2
+    dataNumpy = np.asfortranarray(np.random.rand(nRows, nCols))
+    colNames = ['col'+str(iCol) for iCol in range(nCols)]
+    pandasDF = pd.DataFrame(data=dataNumpy, columns=colNames, dtype=np.float32)
+    cudaDF = cudf.dataframe.DataFrame.from_pandas(pandasDF)
+    boolmask = cudf.Series(np.random.randint(1, 2, len(cudaDF)).astype('bool'))
+
+    memory_used = query_GPU_memory()
+    cudaDF = cudaDF[boolmask]
+
+    assert cudaDF.index._values.data.mem.device_ctypes_pointer ==\
+        cudaDF['col0'].index._values.data.mem.device_ctypes_pointer
+    assert cudaDF.index._values.data.mem.device_ctypes_pointer ==\
+        cudaDF['col1'].index._values.data.mem.device_ctypes_pointer
+
+    assert memory_used == query_GPU_memory()
+
+
+def test_boolmask(pdf, gdf):
+    boolmask = np.random.randint(0, 2, len(pdf)) > 0
+    gdf = gdf[boolmask]
+    pdf = pdf[boolmask]
+    assert_eq(pdf, gdf)
