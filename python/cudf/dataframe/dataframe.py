@@ -1485,7 +1485,7 @@ class DataFrame(object):
           import cudf
           import numpy as np
 
-          df = cudf.dataframe.DataFrame()
+          df = cudf.DataFrame()
           nelem = 3
           df['in1'] = np.arange(nelem)
           df['in2'] = np.arange(nelem)
