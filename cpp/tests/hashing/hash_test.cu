@@ -167,7 +167,7 @@ TEST_F(gdf_hashing_test, allDtypesTest) {
 
   {
     gdf_hash_func hash = GDF_HASH_MURMUR3;
-    uint32_t *initialHashValuesPtr = thrust::raw_pointer_cast(initialHashValuesDev.data());
+    uint32_t *initialHashValuesPtr = initialHashValuesDev.data().get();
     gdf_error gdfError = gdf_hash(ncols, inputCol, hash, initialHashValuesPtr, outputCol);
 
     EXPECT_TRUE( gdfError == GDF_SUCCESS );

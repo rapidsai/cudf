@@ -612,25 +612,23 @@ public:
     }
   };
 
-  /* --------------------------------------------------------------------------*/
-  /** 
-   * @Synopsis  Device function to compute a hash value for a given row in the table
+  /** --------------------------------------------------------------------------*
+   * @brief Device function to compute a hash value for a given row in the table
    * 
-   * @Param row_index The row of the table to compute the hash value for
-   * @Param num_columns_to_hash The number of columns in the row to hash. If 0, 
+   * @param[in] row_index The row of the table to compute the hash value for
+   * @param[in] num_columns_to_hash The number of columns in the row to hash. If 0,
    * hashes all columns
-   * @Param initial_hash_values Optional initial hash values to combine with each column's hashed values
+   * @param[in] initial_hash_values Optional initial hash values to combine with each column's hashed values
    * @tparam hash_function The hash function that is used for each element in the row,
    * as well as combine hash values
    * 
-   * @Returns The hash value of the row
-   */
-  /* ----------------------------------------------------------------------------*/
+   * @return The hash value of the row
+   * ----------------------------------------------------------------------------**/
   template <template <typename> class hash_function = default_hash>
   __device__ 
   hash_value_type hash_row(size_type row_index,
-                           size_type num_columns_to_hash = 0,
-                           hash_value_type* initial_hash_values = nullptr) const
+                           hash_value_type* initial_hash_values = nullptr,
+                           size_type num_columns_to_hash = 0) const
   {
     hash_value_type hash_value{0};
 
@@ -640,7 +638,7 @@ public:
       num_columns_to_hash = this->num_columns;
     }
 
-    bool use_initial_value = initial_hash_values != nullptr;
+    bool const use_initial_value{ initial_hash_values != nullptr };
     // Iterate all the columns and hash each element, combining the hash values together
     for(size_type i = 0; i < num_columns_to_hash; ++i)
     {

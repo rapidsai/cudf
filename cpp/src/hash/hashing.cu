@@ -60,7 +60,7 @@ struct row_hasher
   __device__
   hash_value_type operator()(size_type row_index) const
   {
-    return the_table.template hash_row<hash_function>(row_index, 0, initial_hash_values);
+    return the_table.template hash_row<hash_function>(row_index, initial_hash_values);
   }
 
   gdf_table<size_type> const & the_table;
@@ -71,15 +71,18 @@ struct row_hasher
 
 /* --------------------------------------------------------------------------*/
 /** 
- * @Synopsis  Computes the hash value of each row in the input set of columns.
+ * @brief Computes the hash value of each row in the input set of columns.
  * 
- * @Param num_cols The number of columns in the input set
- * @Param input The list of columns whose rows will be hashed
- * @Param hash The hash function to use
- * @Param initial_hash_values Initial hash values to combine with column hash values
- * @Param output The hash value of each row of the input
+ * @param[in] num_cols The number of columns in the input set
+ * @param[in] input The list of columns whose rows will be hashed
+ * @param[in] hash The hash function to use
+ * @param[in] initial_hash_values Optional array in device memory specifying an initial hash value for each column
+ * that will be combined with the hash of every element in the column. If this argument is `nullptr`,
+ * then each element will be hashed as-is.
+ * @param[out] output The hash value of each row of the input
  * 
- * @Returns   
+ * @return    GDF_SUCCESS if the operation was successful, otherwise an
+ *            appropriate error code.
  */
 /* ----------------------------------------------------------------------------*/
 gdf_error gdf_hash(int num_cols,
