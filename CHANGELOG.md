@@ -10,6 +10,9 @@
 
 - PR #730 Improve performance of `gdf_table` constructor
 - PR #813 unified libcudf API functions by replacing gpu_ with gdf_
+- PR #756 Consolidate common helper functions from unordered map and multimap
+- PR #753 Improve performance of groupby sum and average, especially for cases with few groups.
+- PR #836 Add ingest support for arrow chunked arrays in Column, Series, DataFrame creation
 - PR #763 Format doxygen comments for csv_read_arg struct
 - PR #532 CSV Reader: Use type dispatcher instead of switch block
 
