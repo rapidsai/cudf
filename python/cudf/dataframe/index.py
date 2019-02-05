@@ -155,6 +155,10 @@ class RangeIndex(Index):
         start, stop: int
         name: string
         """
+        if isinstance(start, range):
+            therange = start
+            start = therange.start
+            stop = therange.stop
         if stop is None:
             start, stop = 0, start
         self._start = int(start)
@@ -200,6 +204,18 @@ class RangeIndex(Index):
     def dtype(self):
         return np.dtype(np.int64)
 
+    @property
+    def _values(self):
+        return Column(range(self._start, self._stop))
+
+    @property
+    def is_contiguous(self):
+        return True
+
+    @property
+    def size(self):
+        return max(0, self._stop - self._start)
+
     def find_label_range(self, first, last):
         # clip first to range
         if first is None or first < self._start:
@@ -226,6 +242,9 @@ class RangeIndex(Index):
         else:
             vals = rmm.device_array(0, dtype=self.dtype)
         return NumericalColumn(data=Buffer(vals), dtype=vals.dtype)
+
+    def to_gpu_array(self):
+        return self.as_column().to_gpu_array()
 
     def to_pandas(self):
         return pd.RangeIndex(start=self._start, stop=self._stop,

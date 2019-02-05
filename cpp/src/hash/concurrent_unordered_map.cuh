@@ -182,6 +182,34 @@ public:
       atomicAdd(&existing_value, static_cast<mapped_type>(1));
     }
 
+    // Specialization for SUM aggregator (int32)
+    __forceinline__  __device__
+    void update_existing_value(mapped_type & existing_value, value_type const & insert_pair, sum_op<int32_t> op)
+    {
+      atomicAdd(&existing_value, insert_pair.second);
+    }
+
+    // Specialization for SUM aggregator (int64)
+    __forceinline__  __device__
+    void update_existing_value(mapped_type & existing_value, value_type const & insert_pair, sum_op<int64_t> op)
+    {
+      atomicAdd(&existing_value, insert_pair.second);
+    }
+
+    // Specialization for SUM aggregator (fp32)
+    __forceinline__  __device__
+    void update_existing_value(mapped_type & existing_value, value_type const & insert_pair, sum_op<float> op)
+    {
+      atomicAdd(&existing_value, insert_pair.second);
+    }
+
+    // Specialization for SUM aggregator (fp64)
+    __forceinline__  __device__
+    void update_existing_value(mapped_type & existing_value, value_type const & insert_pair, sum_op<double> op)
+    {
+      atomicAdd(&existing_value, insert_pair.second);
+    }
+
     /* --------------------------------------------------------------------------*/
     /** 
      * @Synopsis  Inserts a new (key, value) pair. If the key already exists in the map
