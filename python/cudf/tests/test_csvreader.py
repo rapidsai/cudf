@@ -326,7 +326,10 @@ def test_csv_reader_float_decimal(tmpdir):
 def test_csv_reader_NaN_values():
 
     names = dtypes = ['float32']
-    buffer = '476940.0\n59e3\n\n""\n305245.0\n'
+    buffer = ('#N/A\n#N/A N/A\n#NA\n-1.#IND\n'
+              '-1.#QNAN\n-NaN\n-nan\n1.#IND\n'
+              '1.#QNAN\nN/A\nNA\nNULL\n\n'
+              'NaN\nn/a\nnan\nnull\n""\n')
 
     cu_df = read_csv(StringIO(buffer), names=names, dtype=dtypes)
     pd_df = pd.read_csv(StringIO(buffer), names=names, dtype=dtypes[0],
