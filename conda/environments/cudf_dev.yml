@@ -21,6 +21,7 @@ dependencies:
 - sphinx
 - sphinx_rtd_theme
 - sphinxcontrib-websupport
+- nbsphinx
 - numpydoc
 - ipython
 - recommonmark
