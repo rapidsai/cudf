@@ -66,7 +66,7 @@ const std::
       {::parquet::LogicalType::LIST, GDF_invalid},
       {::parquet::LogicalType::ENUM, GDF_invalid},
       {::parquet::LogicalType::DECIMAL, GDF_invalid},
-      {::parquet::LogicalType::DATE, GDF_DATE32},
+      {::parquet::LogicalType::DATE, GDF_INT32}, //@todo, use GDF_DATE32 when: libgdf.GDF_DATE32: np.int32, # DIRTY HACK ??
       {::parquet::LogicalType::TIME_MILLIS, GDF_invalid},
       {::parquet::LogicalType::TIME_MICROS, GDF_invalid},
       {::parquet::LogicalType::TIMESTAMP_MILLIS, GDF_TIMESTAMP},
@@ -111,6 +111,7 @@ _ReadColumn(const std::shared_ptr<GdfRowGroupReader> &row_group_reader,
             const std::vector<std::size_t> &          column_indices,
             std::size_t                               offsets[],
             gdf_column *const                         gdf_columns) {
+
     for (std::size_t column_reader_index = 0;
          column_reader_index < column_indices.size();
          column_reader_index++) {
@@ -118,7 +119,7 @@ _ReadColumn(const std::shared_ptr<GdfRowGroupReader> &row_group_reader,
         const std::shared_ptr<::parquet::ColumnReader> column_reader =
           row_group_reader->Column(
             static_cast<int>(column_indices[column_reader_index]));
-
+        size_t row_group_size = row_group_reader->metadata()->num_rows();
         switch (column_reader->type()) {
 #define WHEN(TYPE)                                                             \
     case ::parquet::Type::TYPE: {                                              \
@@ -128,7 +129,7 @@ _ReadColumn(const std::shared_ptr<GdfRowGroupReader> &row_group_reader,
             ::parquet::DataType<::parquet::Type::TYPE>>>(column_reader);       \
         if (reader->HasNext()) {                                               \
             offsets[column_reader_index] +=                                    \
-              reader->ToGdfColumn(_gdf_column, offsets[column_reader_index]);  \
+              reader->ToGdfColumn(_gdf_column, row_group_size, offsets[column_reader_index]);  \
         }                                                                      \
     } break
             WHEN(BOOLEAN);
@@ -136,6 +137,7 @@ _ReadColumn(const std::shared_ptr<GdfRowGroupReader> &row_group_reader,
             WHEN(INT64);
             WHEN(FLOAT);
             WHEN(DOUBLE);
+            // tipo logico date32, ???? 
         default:
 #ifdef GDF_DEBUG
             std::cerr << "Column type error from file" << std::endl;
@@ -203,11 +205,12 @@ struct ParquetReaderJob {
     std::size_t column_index;
     std::size_t column_index_in_read_set;
 
-    //	std::shared_ptr<GdfRowGroupReader> row_group_reader;
+    //  std::shared_ptr<GdfRowGroupReader> row_group_reader;
     std::shared_ptr<::parquet::ColumnReader> column_reader;
 
     const gdf_column &column;
     std::size_t       offset;
+    std::size_t       row_group_size;
 
     gdf_valid_type first_valid_byte;
     gdf_valid_type last_valid_byte;
@@ -215,13 +218,15 @@ struct ParquetReaderJob {
     ParquetReaderJob(std::size_t _row_group_index,
                      std::size_t _column_index,
                      std::size_t _column_index_in_read_set,
-                     //	std::shared_ptr<GdfRowGroupReader> _row_group_reader,
+                     // std::shared_ptr<GdfRowGroupReader> _row_group_reader,
                      std::shared_ptr<::parquet::ColumnReader> _column_reader,
                      const gdf_column &                       _column,
-                     std::size_t                              _offset)
-      : row_group_index(_row_group_index), column_index(_column_index),
+                     std::size_t                              _offset,
+                     std::size_t                              _row_group_size
+                     )
+      : row_group_size(_row_group_size), row_group_index(_row_group_index), column_index(_column_index),
         column_index_in_read_set(_column_index_in_read_set),
-        //	  row_group_reader(std::move(_row_group_reader)),
+        //    row_group_reader(std::move(_row_group_reader)),
         column_reader(std::move(_column_reader)), column(std::move(_column)),
         offset(_offset) {}
 };
@@ -240,7 +245,7 @@ _ProcessParquetReaderJobsThread(std::vector<ParquetReaderJob> &jobs,
     gdf_error current_gdf_error = GDF_SUCCESS;
 
     while (current_job < jobs.size()) {
-
+        size_t row_group_size = jobs[current_job].row_group_size;
         switch (jobs[current_job].column_reader->type()) {
 #define WHEN(TYPE)                                                             \
     case ::parquet::Type::TYPE: {                                              \
@@ -251,9 +256,10 @@ _ProcessParquetReaderJobsThread(std::vector<ParquetReaderJob> &jobs,
             jobs[current_job].column_reader);                                  \
         if (reader->HasNext()) {                                               \
             reader->ToGdfColumn(jobs[current_job].column,                      \
+                                row_group_size,                                \
                                 jobs[current_job].offset,                      \
                                 jobs[current_job].first_valid_byte,            \
-                                jobs[current_job].last_valid_byte);            \
+                                jobs[current_job].last_valid_byte, lock);            \
         }                                                                      \
     } break
             WHEN(BOOLEAN);
@@ -295,7 +301,7 @@ _ProcessParquetReaderJobs(std::vector<ParquetReaderJob> &jobs) {
     int num_threads = std::thread::hardware_concurrency();
     num_threads     = jobs.size() < num_threads ? jobs.size() : num_threads;
 
-    //	_ProcessParquetReaderJobsThread(jobs, lock, job_index, gdf_error_out);
+    //  _ProcessParquetReaderJobsThread(jobs, lock, job_index, gdf_error_out);
 
     std::vector<std::thread> threads(num_threads);
 
@@ -348,7 +354,9 @@ _ReadFileMultiThread(const std::unique_ptr<FileReader> &file_reader,
                               column_reader_index,
                               column_reader,
                               _gdf_column,
-                              offsets[row_group_index_in_set]);
+                              offsets[row_group_index_in_set],
+                              num_rows
+                              );
         }
 
         if (row_group_index_in_set < row_group_indices.size() - 1) {
@@ -429,7 +437,7 @@ _AllocateGdfColumn(const std::size_t                        num_rows,
 
     _gdf_column.size  = num_rows;
     _gdf_column.dtype = _DTypeFrom(column_descriptor);
-
+    _gdf_column.null_count = 0;
     return GDF_SUCCESS;
 }  // namespace
 
@@ -702,37 +710,37 @@ read_parquet_by_ids(std::shared_ptr<::arrow::io::RandomAccessFile> file,
 
 
 gdf_error read_schema(std::shared_ptr<::arrow::io::RandomAccessFile> file, size_t &num_row_groups, size_t &num_cols, std::vector< ::parquet::Type::type> &parquet_dtypes, std::vector< std::string> &column_names ) {
-	gdf_error error;
-	auto parquet_reader = FileReader::OpenFile(file);
-	auto file_metadata = parquet_reader->metadata();
+  gdf_error error;
+  auto parquet_reader = FileReader::OpenFile(file);
+  auto file_metadata = parquet_reader->metadata();
 
-	auto schema = file_metadata->schema();
+  auto schema = file_metadata->schema();
 
     num_row_groups = file_metadata->num_row_groups();
-	std::vector<unsigned long long> numRowsPerGroup(num_row_groups);
+  std::vector<unsigned long long> numRowsPerGroup(num_row_groups);
 
-	for (int j = 0; j < num_row_groups; j++) {
-		auto groupReader = parquet_reader->RowGroup(j);
-		auto rowGroupMetadata = groupReader->metadata();
-		numRowsPerGroup[j] = rowGroupMetadata->num_rows();
-	}
+  for (int j = 0; j < num_row_groups; j++) {
+    auto groupReader = parquet_reader->RowGroup(j);
+    auto rowGroupMetadata = groupReader->metadata();
+    numRowsPerGroup[j] = rowGroupMetadata->num_rows();
+  }
 
-	for (int rowGroupIndex = 0; rowGroupIndex < num_row_groups; rowGroupIndex++) {
-		auto groupReader = parquet_reader->RowGroup(rowGroupIndex);
-		auto rowGroupMetadata = groupReader->metadata();
+  for (int rowGroupIndex = 0; rowGroupIndex < num_row_groups; rowGroupIndex++) {
+    auto groupReader = parquet_reader->RowGroup(rowGroupIndex);
+    auto rowGroupMetadata = groupReader->metadata();
 
         num_cols = file_metadata->num_columns();
-		for (int columnIndex = 0; columnIndex < file_metadata->num_columns(); columnIndex++) {
-			auto column = schema->Column(columnIndex);
-			auto columnMetaData = rowGroupMetadata->ColumnChunk(columnIndex);
-			auto type = column->physical_type();
+    for (int columnIndex = 0; columnIndex < file_metadata->num_columns(); columnIndex++) {
+      auto column = schema->Column(columnIndex);
+      auto columnMetaData = rowGroupMetadata->ColumnChunk(columnIndex);
+      auto type = column->physical_type();
             parquet_dtypes.push_back(type);
             column_names.push_back(column->name()); //@todo, not found a column name
 
-		}
-	}
+    }
+  }
 
-	return error;
+  return error;
 }
 
 extern "C" {
