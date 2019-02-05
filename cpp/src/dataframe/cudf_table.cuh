@@ -316,8 +316,9 @@ public:
     // If a row contains a single NULL value, then the entire row is considered
     // to be NULL, therefore initialize the row-validity mask with the
     // bit-wise AND of the validity mask of all the columns
-    thrust::tabulate(rmm::exec_policy(cudaStream_t{0}),
-                     device_row_valid.begin(), device_row_valid.end(),
+    thrust::tabulate(rmm::exec_policy()->on(0),
+                     device_row_valid.begin(),
+                     device_row_valid.end(),
                      row_masker<size_type>(d_columns_valids_ptr, num_cols));
 
     d_row_valid = device_row_valid.data().get();
@@ -979,7 +980,7 @@ private:
     // Gathering from one table to another
     if (i_data != o_data) {
         if (range_check) {
-            thrust::gather_if(rmm::exec_policy(stream),
+            thrust::gather_if(rmm::exec_policy(stream)->on(stream),
                     row_gather_map,
                     row_gather_map + num_rows,
                     row_gather_map,
@@ -988,7 +989,7 @@ private:
                     ValidRange<index_type>(0, input_column->size));
 
         } else {
-            thrust::gather(rmm::exec_policy(stream),
+            thrust::gather(rmm::exec_policy(stream)->on(stream),
                     row_gather_map,
                     row_gather_map + num_rows,
                     i_data,
@@ -999,7 +1000,7 @@ private:
     else {
         rmm::device_vector<column_type> remapped_copy(num_rows);
         if (range_check) {
-            thrust::gather_if(rmm::exec_policy(stream),
+            thrust::gather_if(rmm::exec_policy(stream)->on(stream),
                            row_gather_map,
                            row_gather_map + num_rows,
                            row_gather_map,
@@ -1007,13 +1008,13 @@ private:
                            remapped_copy.begin(),
                            ValidRange<index_type>(0, input_column->size));
         } else {
-            thrust::gather(rmm::exec_policy(stream),
+            thrust::gather(rmm::exec_policy(stream)->on(stream),
                            row_gather_map,
                            row_gather_map + num_rows,
                            i_data,
                            remapped_copy.begin());
         }
-        thrust::copy(rmm::exec_policy(stream),
+        thrust::copy(rmm::exec_policy(stream)->on(stream),
                 remapped_copy.begin(),
                 remapped_copy.end(),
                 o_data);
@@ -1027,7 +1028,7 @@ private:
                 remapped_valid_copy.data().get(),
                 row_gather_map, 
                 num_rows, input_column->size, stream);
-        thrust::copy(rmm::exec_policy(stream),
+        thrust::copy(rmm::exec_policy(stream)->on(stream),
                 remapped_valid_copy.begin(),
                 remapped_valid_copy.end(), output_column->valid);
     }
@@ -1074,7 +1075,7 @@ gdf_error scatter_column(column_type const * const __restrict__ input_column,
   gdf_error gdf_status{GDF_SUCCESS};
 
 
-  thrust::scatter(rmm::exec_policy(stream),
+  thrust::scatter(rmm::exec_policy(stream)->on(stream),
                   input_column,
                   input_column + num_rows,
                   row_scatter_map,
