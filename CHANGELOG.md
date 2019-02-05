@@ -19,6 +19,7 @@
 - PR #780 CSV Reader: Fix scientific notation parsing and null values for empty quotes
 - PR #815 CSV Reader: Fix data parsing when tabs are present in the input CSV file
 - PR #850 Fix bug where left joins where the left df has 0 rows causes a crash
+- PR #861 Fix memory leak by preserving the boolean mask index
 
 
 # cuDF 0.5.0 (28 Jan 2019)

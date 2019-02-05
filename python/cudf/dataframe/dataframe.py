@@ -235,8 +235,13 @@ class DataFrame(object):
                 mask = np.array(mask)
             df = DataFrame()
             if(mask.dtype == 'bool'):
+                # New df-wide index
+                selvals, selinds = columnops.column_select_by_boolmask(
+                        columnops.as_column(self.index), Series(mask))
+                index = self.index.take(selinds.to_gpu_array())
                 for col in self._cols:
-                    df[col] = self._cols[col][arg]
+                    df[col] = Series(self._cols[col][arg], index=index)
+                df.set_index(index)
             else:
                 for col in arg:
                     df[col] = self[col]
