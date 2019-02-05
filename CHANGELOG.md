@@ -9,6 +9,7 @@
 ## Improvements
 
 - PR #730 Improve performance of `gdf_table` constructor
+- PR #836 Add ingest support for arrow chunked arrays in Column, Series, DataFrame creation
 - PR #763 Format doxygen comments for csv_read_arg struct
 - PR #532 CSV Reader: Use type dispatcher instead of switch block
 

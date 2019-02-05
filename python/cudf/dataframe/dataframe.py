@@ -1838,11 +1838,7 @@ class DataFrame(object):
 
         df = cls()
         for col in table.columns:
-            if len(col.data.chunks) != 1:
-                raise NotImplementedError("Importing from PyArrow Tables "
-                                          "with multiple chunks is not yet "
-                                          "supported")
-            df[col.name] = col.data.chunk(0)
+            df[col.name] = col.data
         if index_col:
             df = df.set_index(index_col[0])
         return df
