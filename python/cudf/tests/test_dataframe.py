@@ -1453,6 +1453,30 @@ def test_series_hash_encode(nrows):
     assert enc_with_name_arr[0] != enc_arr[0]
 
 
+@pytest.mark.parametrize('dtype', ['int8', 'int16', 'int32', 'int64',
+                                   'float32', 'float64'])
+def test_cuda_array_interface(dtype):
+    try:
+        import cupy
+        _have_cupy = True
+    except ImportError:
+        _have_cupy = False
+    if not _have_cupy:
+        pytest.skip('CuPy is not installed')
+
+    np_data = np.arange(10).astype(dtype)
+    cupy_data = cupy.array(np_data)
+    pd_data = pd.Series(np_data)
+
+    cudf_data = gd.Series(cupy_data)
+    assert_eq(pd_data, cudf_data)
+
+    gdf = gd.DataFrame()
+    gdf['test'] = cupy_data
+    pd_data.name = 'test'
+    assert_eq(pd_data, gdf['test'])
+
+
 @pytest.mark.parametrize('nelem', [0, 2, 3, 100])
 @pytest.mark.parametrize('nchunks', [1, 2, 5, 10])
 @pytest.mark.parametrize(
