@@ -164,6 +164,7 @@ def as_column(arbitrary, nan_as_null=True):
     * ``Series``
     * ``Index``
     * numba device array
+    * cuda array interface
     * numpy array
     * pyarrow array
     * pandas.Categorical
@@ -203,6 +204,18 @@ def as_column(arbitrary, nan_as_null=True):
             if nan_as_null:
                 mask = cudautils.mask_from_devary(arbitrary)
                 data = data.set_mask(mask)
+
+    elif cuda.is_cuda_array(arbitrary):
+        # Use cuda array interface to do create a numba device array by
+        # reference
+        new_dev_array = cuda.as_cuda_array(arbitrary)
+
+        # Allocate new output array using rmm and copy the numba device array
+        # to an rmm owned device array
+        out_dev_array = rmm.device_array_like(new_dev_array)
+        out_dev_array.copy_to_device(new_dev_array)
+
+        data = as_column(out_dev_array)
 
     elif isinstance(arbitrary, np.ndarray):
         if arbitrary.dtype.kind == 'M':
@@ -307,6 +320,10 @@ def as_column(arbitrary, nan_as_null=True):
                 null_count=arbitrary.null_count,
                 dtype=np.dtype(arbitrary.type.to_pandas_dtype())
             )
+
+    elif isinstance(arbitrary, pa.ChunkedArray):
+        gpu_cols = [as_column(chunk) for chunk in arbitrary.chunks]
+        data = Column._concat(gpu_cols)
 
     elif isinstance(arbitrary, (pd.Series, pd.Categorical)):
         if pd.api.types.is_categorical_dtype(arbitrary):
