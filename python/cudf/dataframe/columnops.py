@@ -321,6 +321,10 @@ def as_column(arbitrary, nan_as_null=True):
                 dtype=np.dtype(arbitrary.type.to_pandas_dtype())
             )
 
+    elif isinstance(arbitrary, pa.ChunkedArray):
+        gpu_cols = [as_column(chunk) for chunk in arbitrary.chunks]
+        data = Column._concat(gpu_cols)
+
     elif isinstance(arbitrary, (pd.Series, pd.Categorical)):
         if pd.api.types.is_categorical_dtype(arbitrary):
             data = as_column(pa.array(arbitrary, from_pandas=True))

@@ -82,8 +82,8 @@ class example_class {
   }
 
  private:
-  int my_int;                //< An example private member variable
-  std::vector<T> my_vector;  //< An example private member variable
+  int my_int;                ///< An example private member variable
+  std::vector<T> my_vector;  ///< An example private member variable
 };
 
 // DESCRIPTION: Free functions should be commented in the same way as
@@ -115,7 +115,7 @@ return_type free_function(functor_type functor, input_type input_argument) {
  *
  *---------------------------------------------------------------------------**/
 enum class example_enum {
-  first_enum,   //< Description of the first enum
-  second_enum,  //< Description of the second enum
-  third_enum    //< Description of the third enum
+  first_enum,   ///< Description of the first enum
+  second_enum,  ///< Description of the second enum
+  third_enum    ///< Description of the third enum
 };
