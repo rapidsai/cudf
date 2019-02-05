@@ -10,6 +10,7 @@ from cudf._gdf import nvtx_range_push, nvtx_range_pop
 
 import numpy as np
 import collections.abc
+import os
 
 
 def _wrap_string(text):
@@ -187,6 +188,10 @@ def read_csv(filepath_or_buffer, lineterminator='\n',
         csv_reader.filepath_or_buffer = buffer_data_holder
         csv_reader.buffer_size = len(buffer_as_bytes)
     else:
+        if (not os.path.isfile(filepath_or_buffer)):
+            raise(FileNotFoundError)
+        if (not os.path.exists(filepath_or_buffer)):
+            raise(FileNotFoundError)
         file_path = _wrap_string(filepath_or_buffer)
 
         csv_reader.input_data_form = libgdf.FILE_PATH
@@ -442,6 +447,10 @@ def read_csv_strings(filepath_or_buffer, lineterminator='\n',
         csv_reader.filepath_or_buffer = buffer_data_holder
         csv_reader.buffer_size = len(buffer_as_bytes)
     else:
+        if (not os.path.isfile(filepath_or_buffer)):
+            raise(FileNotFoundError)
+        if (not os.path.exists(filepath_or_buffer)):
+            raise(FileNotFoundError)
         file_path = _wrap_string(filepath_or_buffer)
 
         csv_reader.input_data_form = libgdf.FILE_PATH

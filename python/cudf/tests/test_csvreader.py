@@ -650,6 +650,19 @@ def test_csv_reader_empty_dataframe():
         read_csv(StringIO(buffer))
 
 
+def test_csv_reader_filenotfound(tmpdir):
+    fname = "non-existing-filename.csv"
+
+    # should raise an error
+    with pytest.raises(FileNotFoundError):
+        read_csv(str(fname))
+
+    # should raise an error
+    dname = tmpdir.mkdir("gdf_csv")
+    with pytest.raises(FileNotFoundError):
+        read_csv(str(dname))
+
+
 def test_csv_reader_carriage_return(tmpdir):
 
     fname = tmpdir.mkdir("gdf_csv").join("tmp_csvreader_file16.csv")
