@@ -3,7 +3,6 @@
 from setuptools import setup, find_packages
 from setuptools.extension import Extension
 from Cython.Build import cythonize
-# import numpy
 
 import versioneer
 from distutils.sysconfig import get_python_lib
