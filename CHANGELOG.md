@@ -8,6 +8,7 @@
 ## Improvements
 
 - PR #730 Improve performance of `gdf_table` constructor
+- PR #763 Format doxygen comments for csv_read_arg struct
 - PR #532 CSV Reader: Use type dispatcher instead of switch block
 
 ## Bug Fixes
@@ -16,6 +17,7 @@
 - PR #808 Resolved renamed `d_columns_valids` variable name
 - PR #780 CSV Reader: Fix scientific notation parsing and null values for empty quotes
 - PR #815 CSV Reader: Fix data parsing when tabs are present in the input CSV file
+- PR #850 Fix bug where left joins where the left df has 0 rows causes a crash
 
 
 # cuDF 0.5.0 (28 Jan 2019)
