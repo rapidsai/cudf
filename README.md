@@ -20,10 +20,10 @@ Install and update cuDF using the conda command:
 
 ```bash
 # CUDA 9.2
-conda install -c nvidia -c rapidsai -c numba -c conda-forge -c defaults cudf
+conda install -c nvidia -c rapidsai -c numba -c conda-forge -c defaults cudf=0.6
 
 # CUDA 10.0
-conda install -c nvidia/label/cuda10.0 -c rapidsai/label/cuda10.0 -c numba -c conda-forge -c defaults cudf
+conda install -c nvidia/label/cuda10.0 -c rapidsai/label/cuda10.0 -c numba -c conda-forge -c defaults cudf=0.6
 ```
 
 Note: This conda installation only applies to Linux and Python versions 3.6/3.7.
@@ -49,8 +49,8 @@ The following instructions are for developers and contributors to cuDF OSS devel
 Compiler requirements:
 
 * `gcc`     version 5.4+
-* `nvcc`    version 9.2
-* `cmake`   version 3.12
+* `nvcc`    version 9.2+
+* `cmake`   version 3.12.4+
 
 CUDA/GPU requirements:
 

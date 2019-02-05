@@ -16,8 +16,6 @@ import pyarrow as pa
 pandas_version = tuple(map(int,pd.__version__.split('.', 2)[:2]))
 
 
-cimport numpy as np
-
 from librmm_cffi import librmm as rmm
 
 
