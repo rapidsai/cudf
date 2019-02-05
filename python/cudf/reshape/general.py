@@ -43,6 +43,7 @@ def melt(frame, id_vars=None, value_vars=None, var_name='variable',
     --------
 
     .. code-block:: python
+
         import cudf
         import numpy as np
 
@@ -54,7 +55,9 @@ def melt(frame, id_vars=None, value_vars=None, var_name='variable',
         print(df2)
 
     Output:
+
     .. code-block:: python
+
              A    B variable value
         0    1    1        C   1.0
         1    1    3        C

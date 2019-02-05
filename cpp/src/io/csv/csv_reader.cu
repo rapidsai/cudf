@@ -1042,8 +1042,7 @@ gdf_error launch_countRecords(const char* h_data, size_t h_size,
 	CUDA_TRY(cudaMemset(d_cnts, 0, sizeof(cu_reccnt_t)* chunk_count));
 
 	char* d_chunk = nullptr;
-	// Allocate extra byte in case \r\n is at the chunk border
-	RMM_TRY(RMM_ALLOC (&d_chunk, max_chunk_bytes + 1, 0)); 
+	RMM_TRY(RMM_ALLOC (&d_chunk, max_chunk_bytes, 0)); 
 
 	int blockSize;		// suggested thread count to use
 	int minGridSize;	// minimum block count required
@@ -1054,8 +1053,8 @@ gdf_error launch_countRecords(const char* h_data, size_t h_size,
 		const auto chunk_bytes = std::min((size_t)(h_size - ci * max_chunk_bytes), max_chunk_bytes);
 		const auto chunk_bits = (chunk_bytes + 63) / 64;
 
-		// Copy chunk to device. Copy extra byte if not last chunk
-		CUDA_TRY(cudaMemcpy(d_chunk, h_chunk, ci < (chunk_count - 1)?chunk_bytes:chunk_bytes + 1, cudaMemcpyDefault));
+		// Copy chunk to device
+		CUDA_TRY(cudaMemcpy(d_chunk, h_chunk, chunk_bytes, cudaMemcpyDefault));
 
 		const int gridSize = (chunk_bits + blockSize - 1) / blockSize;
 		countRecords <<< gridSize, blockSize >>> (
@@ -1095,17 +1094,17 @@ __global__ void countRecords(char *data, const char terminator, const char quote
 	cu_reccnt_t* num_records) {
 
 	// thread IDs range per block, so also need the block id
-	long tid = threadIdx.x + (blockDim.x * blockIdx.x);
+	const long tid = threadIdx.x + (blockDim.x * blockIdx.x);
 
 	if (tid >= num_bits)
 		return;
 
 	// data ID is a multiple of 64
-	long did = tid * 64L;
+	const long did = tid * 64L;
 
-	char *raw = (data + did);
+	const char *raw = (data + did);
 
-	long byteToProcess = ((did + 64L) < num_bytes) ? 64L : (num_bytes - did);
+	const long byteToProcess = ((did + 64L) < num_bytes) ? 64L : (num_bytes - did);
 
 	// process the data
 	cu_reccnt_t tokenCount = 0;
@@ -1115,7 +1114,8 @@ __global__ void countRecords(char *data, const char terminator, const char quote
 		// for a postprocess ignore, as the chunk here has limited visibility.
 		if ((raw[x] == terminator) || (quotechar != '\0' && raw[x] == quotechar)) {
 			tokenCount++;
-		} else if (raw[x] == '\r' && raw[x +1] == '\n') {
+		} else if (terminator == '\n' && (x + 1L) < byteToProcess && 
+		           raw[x] == '\r' && raw[x + 1L] == '\n') {
 			x++;
 			tokenCount++;
 		}
@@ -1213,22 +1213,22 @@ __global__ void storeRecordStart(char *data, size_t chunk_offset,
 	cu_recstart_t* recStart) {
 
 	// thread IDs range per block, so also need the block id
-	long tid = threadIdx.x + (blockDim.x * blockIdx.x);
+	const long tid = threadIdx.x + (blockDim.x * blockIdx.x);
 
 	if ( tid >= num_bits)
 		return;
 
 	// data ID - multiple of 64
-	long did = tid * 64L;
+	const long did = tid * 64L;
 
 	if (did == 0 && include_first_row) {
 		const auto pos = atomicAdd(num_records, 1ull);
 		recStart[pos] = 0;
 	}
 
-	char *raw = (data + did);
+	const char *raw = (data + did);
 
-	long byteToProcess = ((did + 64L) < num_bytes) ? 64L : (num_bytes - did);
+	const long byteToProcess = ((did + 64L) < num_bytes) ? 64L : (num_bytes - did);
 
 	// process the data
 	for (long x = 0; x < byteToProcess; x++) {
@@ -1240,7 +1240,8 @@ __global__ void storeRecordStart(char *data, size_t chunk_offset,
 			const auto pos = atomicAdd(num_records, 1ull);
 			recStart[pos] = did + chunk_offset + x + 1;
 
-		} else if (raw[x] == '\r' && (x+1L)<num_bytes && raw[x +1] == '\n') {
+		} else if (terminator == '\n' && (x + 1L) < byteToProcess && 
+				   raw[x] == '\r' && raw[x + 1L] == '\n') {
 
 			x++;
 			const auto pos = atomicAdd(num_records, 1ull);
