@@ -68,7 +68,7 @@ class Series(object):
             name = data.name
             index = as_index(data.index)
         if isinstance(data, Series):
-            index = data._index
+            index = data._index if index is None else index
             name = data.name
             data = data._column
         if data is None:
@@ -77,7 +77,9 @@ class Series(object):
         if not isinstance(data, columnops.TypedColumnBase):
             data = columnops.as_column(data, nan_as_null=nan_as_null)
 
-        if index is not None and not isinstance(index, Index):
+        if isinstance(index, range):
+            index = RangeIndex(index)
+        if index is not None and not isinstance(index, (RangeIndex, Index,)):
             raise TypeError('index not a Index type: got {!r}'.format(index))
 
         assert isinstance(data, columnops.TypedColumnBase)
@@ -960,7 +962,7 @@ class Series(object):
         """Returns unique values of this Series.
         default='sort' will be changed to 'hash' when implemented.
         """
-        if method is not 'sort':
+        if method != 'sort':
             msg = 'non sort based unique() not implemented yet'
             raise NotImplementedError(msg)
         if not sort:
@@ -975,7 +977,7 @@ class Series(object):
         """Returns the number of unique valies of the Series: approximate version,
         and exact version to be moved to libgdf
         """
-        if method is not 'sort':
+        if method != 'sort':
             msg = 'non sort based unique_count() not implemented yet'
             raise NotImplementedError(msg)
         if self.null_count == len(self):
@@ -986,7 +988,7 @@ class Series(object):
     def value_counts(self, method='sort', sort=True):
         """Returns unique values of this Series.
         """
-        if method is not 'sort':
+        if method != 'sort':
             msg = 'non sort based value_count() not implemented yet'
             raise NotImplementedError(msg)
         if self.null_count == len(self):

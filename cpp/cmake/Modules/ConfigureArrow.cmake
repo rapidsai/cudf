@@ -9,6 +9,7 @@ set(ARROW_CMAKE_ARGS " -DARROW_WITH_LZ4=OFF"
                      " -DARROW_BUILD_SHARED=OFF"
                      " -DARROW_BOOST_USE_SHARED=ON"
                      " -DARROW_BUILD_TESTS=OFF"
+                     " -DARROW_TEST_LINKAGE=OFF"
                      " -DARROW_TEST_MEMCHECK=OFF"
                      " -DARROW_BUILD_BENCHMARKS=OFF"
                      " -DARROW_IPC=ON"
@@ -17,6 +18,7 @@ set(ARROW_CMAKE_ARGS " -DARROW_WITH_LZ4=OFF"
                      " -DARROW_JEMALLOC=OFF"
                      " -DARROW_BOOST_VENDORED=OFF"
                      " -DARROW_PYTHON=OFF"
+                     " -DARROW_USE_GLOG=OFF"
                      " -DCMAKE_VERBOSE_MAKEFILE=ON")
 
 if(NOT CMAKE_CXX11_ABI)
@@ -95,7 +97,7 @@ set(FLATBUFFERS_INCLUDE_DIR "${FLATBUFFERS_ROOT}/include")
 set(FLATBUFFERS_LIBRARY_DIR "${FLATBUFFERS_ROOT}/lib")
 
 add_definitions(-DARROW_METADATA_V4)
-add_definitions(-DARROW_VERSION=1110)
+add_definitions(-DARROW_VERSION=1200)
 
 
 
