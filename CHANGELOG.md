@@ -17,6 +17,7 @@
 - PR #808 Resolved renamed `d_columns_valids` variable name
 - PR #820 SCV Reader: fix the issue where reader adds additional rows when file uses \r\n as a line terminator
 - PR #780 CSV Reader: Fix scientific notation parsing and null values for empty quotes
+- PR #815 CSV Reader: Fix data parsing when tabs are present in the input CSV file
 - PR #850 Fix bug where left joins where the left df has 0 rows causes a crash
 
 
