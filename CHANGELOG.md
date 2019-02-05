@@ -25,11 +25,14 @@
 - PR #815 CSV Reader: Fix data parsing when tabs are present in the input CSV file
 - PR #850 Fix bug where left joins where the left df has 0 rows causes a crash
 - PR #861 Fix memory leak by preserving the boolean mask index
+
+
 # cuDF 0.5.1 (05 Feb 2019)
 
 ## Bug Fixes
 
 - PR #842 Avoid using numpy via cimport to prevent ABI issues in Cython compilation
+
 
 # cuDF 0.5.0 (28 Jan 2019)
 
