@@ -413,11 +413,25 @@ gdf_error read_csv(csv_read_arg *args)
 		raw_csv->d_falseValues = h_values;
 	}
 
-	raw_csv->d_naTrie = createSerializedTrie({
-		"#N/A", "#N/A N/A", "#NA", "-1.#IND", 
-		"-1.#QNAN", "-NaN", "-nan", "1.#IND", 
-		"1.#QNAN", "N/A", "NA", "NULL", 
-		"NaN", "n/a", "nan", "null"});
+	if (args->na_filter && 
+		(args->keep_default_na || (args->na_values != nullptr && args->num_na_values > 0))) {
+		vector<string> na_values{
+			"#N/A", "#N/A N/A", "#NA", "-1.#IND", 
+			"-1.#QNAN", "-NaN", "-nan", "1.#IND", 
+			"1.#QNAN", "N/A", "NA", "NULL", 
+			"NaN", "n/a", "nan", "null"};
+		if(!args->keep_default_na){
+			na_values.clear();
+		}
+
+		if (args->na_values != nullptr && args->num_na_values > 0) {
+			for (int i = 0; i < args->num_na_values; ++i) {
+				na_values.emplace_back(args->na_values[i]);
+			}
+		}
+
+		raw_csv->d_naTrie = createSerializedTrie(na_values);
+	}
 
 	raw_csv->opts.trueValues       = raw_csv->d_trueValues.data().get();
 	raw_csv->opts.trueValuesCount  = raw_csv->d_trueValues.size();
@@ -1381,7 +1395,7 @@ gdf_error launch_dataConvertColumns(raw_csv_t *raw_csv, void **gdf, gdf_valid_ty
 		raw_csv->d_parseCol,
 		first_data_rec_start,
 		d_dtypes,
-		raw_csv->d_naTrie.data().get(),
+		raw_csv->d_naTrie.empty() ? nullptr : raw_csv->d_naTrie.data().get(),
 		gdf,
 		valid,
 		str_cols,
@@ -1517,7 +1531,7 @@ void convertCsvToGdf(char *raw_csv,
 		if(parseCol[col]==true){
 
 			// check if full cell is a NaN string - consistent with pandas
-			const bool is_na = serializedTrieContains(na_trie, raw_csv + start, pos - start);
+			const bool is_na = (na_trie == nullptr) ? false : serializedTrieContains(na_trie, raw_csv + start, pos - start);
 
 			// Modify start & end to ignore whitespace and quotechars
 			long tempPos=pos-1;

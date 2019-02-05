@@ -84,7 +84,12 @@ typedef struct {
   const char    **false_values;             ///< List of values to recognize as boolean False
   int           num_false_values;           ///< Number of values in the true_values list
 
-  const char    **na_values;                // Array of strings that should be considered as NA
+  const char    **na_values;                /**< Array of strings that should be considered as NA. By default the following values are interpreted as NaN: 
+                                            ‘’, ‘#N/A’, ‘#N/A N/A’, ‘#NA’, ‘-1.#IND’, ‘-1.#QNAN’, ‘-NaN’, ‘-nan’, ‘1.#IND’, ‘1.#QNAN’, ‘N/A’, ‘NA’, ‘NULL’,
+                                            ‘NaN’, ‘n/a’, ‘nan’, ‘null’. */
+  int           num_na_values;              ///< Number of values in the na_values list
+  bool          keep_default_na;            ///< Keep the default NA values
+  bool          na_filter;                  ///< Detect missing values (empty strings and the values in na_values). Passing false can improve performance.
 
   char          *prefix;                    // If there is no header or names, append this to the column ID as the name
   bool          mangle_dupe_cols;           ///< If true, duplicate columns get a suffix. If false, data will be overwritten if there are columns with duplicate names
@@ -120,8 +125,6 @@ typedef struct {
  *
  * squeeze          - data is always returned as a gdf_column array
  * engine           - this is the only engine
- * keep_default_na  - this has no meaning since the field is marked invalid and the value not seen
- * na_filter        - empty fields are automatically tagged as invalid
  * verbose
  * keep_date_col    - will not maintain raw data
  * date_parser      - there is only this parser

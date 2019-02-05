@@ -329,17 +329,22 @@ def test_csv_reader_NaN_values():
     buffer = ('#N/A\n#N/A N/A\n#NA\n-1.#IND\n'
               '-1.#QNAN\n-NaN\n-nan\n1.#IND\n'
               '1.#QNAN\nN/A\nNA\nNULL\n\n'
-              'NaN\nn/a\nnan\nnull\n""\n')
+              'NaN\nn/a\nnan\nnull\n""\nNV_NAN\n')
 
-    cu_df = read_csv(StringIO(buffer), names=names, dtype=dtypes)
+    cu_df = read_csv(StringIO(buffer), names=names, dtype=dtypes,
+                     na_values=['NV_NAN'])
     pd_df = pd.read_csv(StringIO(buffer), names=names, dtype=dtypes[0],
-                        skip_blank_lines=False)
+                        skip_blank_lines=False, na_values=['NV_NAN'])
 
     cu_df = cu_df.to_pandas()
 
     assert len(pd_df.columns) == len(cu_df.columns)
     assert len(pd_df) == len(cu_df)
     pd.util.testing.assert_frame_equal(pd_df, cu_df)
+
+    # TODO add tests for keep_default_na
+
+    # TODO add tests for na_filter
 
 
 def test_csv_reader_thousands(tmpdir):
