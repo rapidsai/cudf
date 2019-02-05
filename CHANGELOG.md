@@ -1,4 +1,4 @@
-# cuDF 0.5.1 (TBD)
+# cuDF 0.5.1 (05 Feb 2019)
 
 ## Bug Fixes
 
