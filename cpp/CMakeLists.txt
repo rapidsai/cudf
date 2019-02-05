@@ -250,7 +250,6 @@ endif(HT_LEGACY_ALLOCATOR)
 ###################################################################################################
 # - link libraries --------------------------------------------------------------------------------
 
-target_link_libraries(rmm cudart cuda NVStrings)
 target_link_libraries(cudf 
     rmm
     ${PARQUET_STATIC_LIB}

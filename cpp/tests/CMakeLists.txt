@@ -13,9 +13,10 @@ function(ConfigureTest CMAKE_TEST_NAME CMAKE_TEST_SRC)
         gmock
         GTest::GTest
         pthread
+        cudart
+        rmm
         cudf
         NVStrings
-        rmm
         ${PARQUET_STATIC_LIB}
         ${ARROW_STATIC_LIB}
         ${THRIFT_STATIC_LIB}
