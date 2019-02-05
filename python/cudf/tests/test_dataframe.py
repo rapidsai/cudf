@@ -1457,6 +1457,7 @@ def test_cuda_array_interface(dtype):
 
     gdf = gd.DataFrame()
     gdf['test'] = cupy_data
+    pd_data.name = 'test'
     assert_eq(pd_data, gdf['test'])
 
 
