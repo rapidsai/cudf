@@ -9,6 +9,7 @@
 ## Improvements
 
 - PR #730 Improve performance of `gdf_table` constructor
+- PR #822 Add support for `__cuda_array_interface__` for ingest
 - PR #756 Consolidate common helper functions from unordered map and multimap
 - PR #753 Improve performance of groupby sum and average, especially for cases with few groups.
 - PR #836 Add ingest support for arrow chunked arrays in Column, Series, DataFrame creation
