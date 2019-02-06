@@ -141,6 +141,7 @@ include_directories("${ARROW_INCLUDE_DIR}"
                     "${CMAKE_SOURCE_DIR}/include"
                     "${CMAKE_SOURCE_DIR}/src"
                     "${CMAKE_SOURCE_DIR}/thirdparty/cub"
+                    "${CMAKE_SOURCE_DIR}/thirdparty/jitify"
                     "${CMAKE_SOURCE_DIR}/thirdparty/moderngpu/src"
                     "${CMAKE_SOURCE_DIR}/thirdparty/rmm/include"
                     "${ZLIB_INCLUDE_DIRS}")
@@ -188,6 +189,14 @@ add_library(cudf SHARED
             src/groupby/groupby.cu
             src/groupby/new_groupby.cu
             src/binary/binary_ops.cu
+            src/binary/jit/code/gdf-data.cpp
+            src/binary/jit/code/kernel.cpp
+            src/binary/jit/code/operation.cpp
+            src/binary/jit/code/traits.cpp
+            src/binary/jit/core/binop.cpp
+            src/binary/jit/core/launcher.cpp
+            src/binary/jit/util/operator.cpp
+            src/binary/jit/util/type.cpp
             src/bitmask/bitmask_ops.cu
             src/bitmask/valid_ops.cu
             src/compaction/stream_compaction_ops.cu
@@ -232,7 +241,8 @@ endif(HT_LEGACY_ALLOCATOR)
 ###################################################################################################
 # - link libraries --------------------------------------------------------------------------------
 
-target_link_libraries(cudf rmm "${ARROW_LIB}" ${ZLIB_LIBRARIES} NVStrings)
+# TODO: better nvrtc linking with optional variables
+target_link_libraries(cudf rmm "${ARROW_LIB}" ${ZLIB_LIBRARIES} NVStrings nvrtc)
 
 ###################################################################################################
 # - python cffi bindings --------------------------------------------------------------------------

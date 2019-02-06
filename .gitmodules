@@ -10,3 +10,6 @@
 	path = thirdparty/rmm
 	url = https://github.com/rapidsai/rmm.git
 	branch = branch-0.6
+[submodule "thirdparty/jitify"]
+	path = thirdparty/jitify
+	url = https://github.com/NVIDIA/jitify.git

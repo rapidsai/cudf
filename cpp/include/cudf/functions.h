@@ -592,6 +592,149 @@ gdf_error gdf_extract_datetime_second(gdf_column *input, gdf_column *output);
 
 /* binary operators */
 
+/**
+ * @brief Binary operation function between gdf_scalar and gdf_column structs.
+ *
+ * The function performs the binary operation of a gdf_scalar operand and a
+ * gdf_column operand.
+ *
+ * The valid field in the gdf_column output will be 1 (by bit) when the two
+ * operands (vax and vay) are not null. Otherwise, it will be 0 (by bit).
+ *
+ * It is required to set in an appropriate manner the fields in the gdf_scalar and
+ * gdf_column structs due to that the binary operation will not be performed.
+ *
+ * @param out (gdf_column) Output of the operation.
+ * @param vax (gdf_scalar) First operand of the operation.
+ * @param vay (gdf_column) Second operand of the operation.
+ * @param ope (enum) The binary operator that is going to be used in the operation.
+ * @return    GDF_SUCCESS if the operation was successful, otherwise an appropriate
+ *            error code
+ */
+gdf_error gdf_binary_operation_v_s_v(gdf_column* out, gdf_scalar* vax, gdf_column* vay, gdf_binary_operator ope);
+
+/**
+ * @brief Binary operation function between gdf_column and gdf_scalar structs.
+ *
+ * The function performs the binary operation of a gdf_column operand and a
+ * gdf_scalar operand.
+ *
+ * The valid field in the gdf_column output will be 1 (by bit) when the two
+ * operands (vax and vay) are not null. Otherwise, it will be 0 (by bit).
+ *
+ * It is required to set in an appropriate manner the fields in the gdf_scalar and
+ * gdf_column structs due to that the binary operation will not be performed.
+ *
+ * @param out (gdf_column) Output of the operation.
+ * @param vax (gdf_column) First operand of the operation.
+ * @param vay (gdf_scalar) Second operand of the operation.
+ * @param ope (enum) The binary operator that is going to be used in the operation.
+ * @return    GDF_SUCCESS if the operation was successful, otherwise an appropriate
+ *            error code
+ */
+gdf_error gdf_binary_operation_v_v_s(gdf_column* out, gdf_column* vax, gdf_scalar* vay, gdf_binary_operator ope);
+
+/**
+ * @brief Binary operation function between two gdf_column structs.
+ *
+ * The function performs the binary operation of two gdf_column operands.
+ *
+ * The valid field in the gdf_column output will be 1 (by bit) when the two
+ * operands (vax and vay) are not null. Otherwise, it will be 0 (by bit).
+ *
+ * It is required to set in an appropriate manner the fields in the gdf_column
+ * struct due to that the binary operation will not be performed.
+ *
+ * @param out (gdf_column) Output of the operation.
+ * @param vax (gdf_column) First operand of the operation.
+ * @param vay (gdf_column) Second operand of the operation.
+ * @param ope (enum) The binary operator that is going to be used in the operation.
+ * @return    GDF_SUCCESS if the operation was successful, otherwise an appropriate
+ *            error code
+ */
+gdf_error gdf_binary_operation_v_v_v(gdf_column* out, gdf_column* vax, gdf_column* vay, gdf_binary_operator ope);
+
+/**
+ * @brief Binary operation function between gdf_scalar and gdf_column structs.
+ *
+ * The function performs the binary operation of a gdf_scalar operand and a
+ * gdf_column operand. A default scalar operand is used to replace an operand
+ * in the binary operation when such operand is null.
+ *
+ * Whether any operand (vax or vay) is null, then it will be replaced with the
+ * default scalar operand value (def). In case both operands (vax and vay) are
+ * null, each of them will be replaced with the default scalar operand value.
+ *
+ * The valid field in the gdf_column output will be 1 (by bit) when two or three
+ * operands (vax, vay and def) are not null. Otherwise, it will be 0 (by bit).
+ *
+ * It is required to set in an appropriate manner the fields in the gdf_scalar and
+ * gdf_column structs due to that the binary operation will not be performed.
+ *
+ * @param out (gdf_column) Output of the operation.
+ * @param vax (gdf_column) First operand of the operation.
+ * @param vay (gdf_scalar) Second operand of the operation - gdf_scalar.
+ * @param def (gdf_scalar) Default operand used to replace a null operand.
+ * @param ope (enum) The binary operator that is going to be used in the operation.
+ * @return     GDF_SUCCESS if the operation was successful, otherwise an appropriate
+ *             error code
+ */
+gdf_error gdf_binary_operation_v_s_v_d(gdf_column* out, gdf_scalar* vax, gdf_column* vay, gdf_scalar* def, gdf_binary_operator ope);
+
+/**
+ * @brief Binary operation function between gdf_column and gdf_scalar structs.
+ *
+ * The function performs the binary operation of a gdf_column operand and a
+ * gdf_scalar operand. A default scalar operand is used to replace an operand
+ * in the binary operation when such operand is null.
+ *
+ * Whether any operand (vax or vay) is null, then it will be replaced with the
+ * default scalar operand value (def). In case both operands (vax and vay) are
+ * null, each of them will be replaced with the default scalar operand value.
+ *
+ * The valid field in the gdf_column output will be 1 (by bit) when two or three
+ * operands (vax, vay and def) are not null. Otherwise, it will be 0 (by bit).
+ *
+ * It is required to set in an appropriate manner the fields in the gdf_scalar and
+ * gdf_column structs due to that the binary operation will not be performed.
+ *
+ * @param out (gdf_column) Output of the operation.
+ * @param vax (gdf_column) First operand of the operation.
+ * @param vay (gdf_scalar) Second operand of the operation - gdf_scalar.
+ * @param def (gdf_scalar) Default operand used to replace a null operand.
+ * @param ope (enum) The binary operator that is going to be used in the operation.
+ * @return     GDF_SUCCESS if the operation was successful, otherwise an appropriate
+ *             error code
+ */
+gdf_error gdf_binary_operation_v_v_s_d(gdf_column* out, gdf_column* vax, gdf_scalar* vay, gdf_scalar* def, gdf_binary_operator ope);
+
+/**
+ * @brief Binary operation function between two gdf_column structs.
+ *
+ * The function performs the binary operation of two gdf_column operands. A default
+ * scalar operand is used to replace an operand in the binary operation when such
+ * operand is null.
+ *
+ * Whether any gdf_column (vax or vay) is null, then it will be replaced with the
+ * default scalar operand value (def). In case both operands (vax and vay) are null,
+ * each of them will be replaced with the default scalar operand value.
+ *
+ * The valid field in the gdf_column output will be 1 (by bit) when two or three
+ * operands (vax, vay and def) are not null. Otherwise, it will be 0 (by bit).
+ *
+ * It is required to set in an appropriate manner the fields in the gdf_scalar and
+ * gdf_column structs due to that the binary operation will not be performed.
+ *
+ * @param out (gdf_column) Output of the operation.
+ * @param vax (gdf_column) First operand of the operation.
+ * @param vay (gdf_column) Second operand of the operation.
+ * @param def (gdf_scalar) Default operand used to replace a null operand.
+ * @param ope (enum) The binary operator that is going to be used in the operation.
+ * @return    GDF_SUCCESS if the operation was successful, otherwise an appropriate
+ *            error code.
+ */
+gdf_error gdf_binary_operation_v_v_v_d(gdf_column* out, gdf_column* vax, gdf_column* vay, gdf_scalar* def, gdf_binary_operator ope);
+
 /* arith */
 
 gdf_error gdf_add_generic(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
