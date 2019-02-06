@@ -25,7 +25,6 @@
 
 #include <iostream>
 #include <vector>
-#include <deque>
 #include <string>
 #include <stdio.h>
 #include <numeric>
@@ -64,7 +63,6 @@ constexpr size_t max_chunk_bytes = 64*1024*1024; // 64MB
 
 using std::vector;
 using std::string;
-using std::deque;
 
 using cu_reccnt_t = unsigned long long int;
 using cu_recstart_t = unsigned long long int;
