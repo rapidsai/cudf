@@ -370,7 +370,7 @@ gdf_error read_csv(csv_read_arg *args)
 	// Previous kernel stores the record pinput_file.typeositions as encountered by all threads
 	// Sort the record positions as subsequent processing may require filtering
 	// certain rows or other processing on specific records
-	thrust::sort(thrust::device, raw_csv->recStart, raw_csv->recStart + raw_csv->num_records);
+	thrust::sort(rmm::exec_policy()->on(0), raw_csv->recStart, raw_csv->recStart + raw_csv->num_records);
 
 	// Currently, ignoring lineterminations within quotes is handled by recording
 	// the records of both, and then filtering out the records that is a quotechar
@@ -397,7 +397,7 @@ gdf_error read_csv(csv_read_arg *args)
 		}
 
 		CUDA_TRY( cudaMemcpy(raw_csv->recStart, h_rec_starts.data(), rec_start_size, cudaMemcpyHostToDevice) );
-		thrust::sort(thrust::device, raw_csv->recStart, raw_csv->recStart + raw_csv->num_records);
+		thrust::sort(rmm::exec_policy()->on(0), raw_csv->recStart, raw_csv->recStart + raw_csv->num_records);
 		raw_csv->num_records = recCount;
 	}
 
@@ -885,9 +885,10 @@ gdf_error uploadDataToDevice(const char *h_uncomp_data, size_t h_uncomp_size,
     }
   }
 
-  // Discard any blank/empty and comment lines
-  if (raw_csv->opts.skipblanklines ||
-      raw_csv->opts.comment != raw_csv->opts.terminator) {
+  // Discard only blank lines, only fully comment lines, or both.
+  // If only handling one of them, ensure it doesn't match against \0 as we do
+  // not certain scenarios filtered-out (end-of-file)
+  if (raw_csv->opts.skipblanklines || raw_csv->opts.comment != '\0') {
     const auto match1 = raw_csv->opts.skipblanklines ? raw_csv->opts.terminator
                                                      : raw_csv->opts.comment;
     const auto match2 = raw_csv->opts.comment != '\0' ? raw_csv->opts.comment
@@ -913,9 +914,9 @@ gdf_error uploadDataToDevice(const char *h_uncomp_data, size_t h_uncomp_size,
   // Exclude the rows that exceed past the requested number
   if (raw_csv->nrows >= 0 && raw_csv->nrows < raw_csv->num_records) {
     if (raw_csv->header_row >= 0) {
-      h_rec_starts.resize(raw_csv->nrows + 2);
+      h_rec_starts.resize(raw_csv->nrows + 2);  // include header & end offset
     } else {
-      h_rec_starts.resize(raw_csv->nrows + 1);
+      h_rec_starts.resize(raw_csv->nrows + 1);  // include end offset
     }
     raw_csv->num_records = h_rec_starts.size();
   }
@@ -948,7 +949,7 @@ gdf_error uploadDataToDevice(const char *h_uncomp_data, size_t h_uncomp_size,
                       raw_csv->num_bytes, cudaMemcpyHostToDevice));
 
   // Adjust row start positions to account for the data subcopy
-  thrust::transform(thrust::device, raw_csv->recStart,
+  thrust::transform(rmm::exec_policy()->on(0), raw_csv->recStart,
                     raw_csv->recStart + raw_csv->num_records,
                     thrust::make_constant_iterator(start_offset),
                     raw_csv->recStart, thrust::minus<cu_recstart_t>());
@@ -1052,7 +1053,7 @@ gdf_error launch_countRecords(const char *h_data, size_t h_size,
 
 	// Row count is used to allocate/track row start positions
 	// If not starting at an offset, add an extra row to account for offset=0
-	rec_cnt = thrust::reduce(thrust::device, d_counts.begin(), d_counts.end());
+	rec_cnt = thrust::reduce(rmm::exec_policy()->on(0), d_counts.begin(), d_counts.end());
 	if (raw_csv->byte_range_offset == 0) {
 		rec_cnt++;
 	}
