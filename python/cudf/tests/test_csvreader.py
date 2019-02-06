@@ -334,7 +334,6 @@ def test_csv_reader_NaN_values():
     custom_na_cells = 'NV_NAN\nNotANumber\n'
     all_cells = empty_cells + default_na_cells + custom_na_cells
     custom_na_values = ['NV_NAN', 'NotANumber']
-    
 
     # test default NA values. emply cells should also yield NaNs
     all_nan = read_csv(StringIO(default_na_cells + empty_cells),
@@ -356,8 +355,8 @@ def test_csv_reader_NaN_values():
 
     # custom NA values
     all_nan = read_csv(StringIO(all_cells),
-                        names=names, dtype=dtypes,
-                        na_values=custom_na_values)
+                       names=names, dtype=dtypes,
+                       na_values=custom_na_values)
     assert(all(np.isnan(all_nan.to_pandas()['float32'])))
 
 
