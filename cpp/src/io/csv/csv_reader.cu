@@ -502,9 +502,10 @@ gdf_error read_csv(csv_read_arg *args)
 				c++;
 			}
 			// assign column indexes as names if the header column is not present
-			for (int i = 0; i<h_num_cols; i++) {
-				std::string newColName = std::to_string(i);
-				raw_csv->col_names.push_back(newColName);
+			raw_csv->col_names.reserve(h_num_cols);
+			const string str_prefix = args->prefix != nullptr ? string(args->prefix) : "";
+			for (int i = 0; i < h_num_cols; ++i) {
+				raw_csv->col_names.push_back(str_prefix + std::to_string(i));
 			}
 		}
 		// Allocating a boolean array that will use to state if a column needs to read or filtered.

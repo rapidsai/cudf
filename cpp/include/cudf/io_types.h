@@ -86,7 +86,7 @@ typedef struct {
 
   const char    **na_values;                // Array of strings that should be considered as NA
 
-  char          *prefix;                    // If there is no header or names, append this to the column ID as the name
+  char          *prefix;                    ///< If there is no header or names, prepend this to the column ID as the name
   bool          mangle_dupe_cols;           ///< If true, duplicate columns get a suffix. If false, data will be overwritten if there are columns with duplicate names
 
   bool          parse_dates;                // Parse date field into date32 or date64.  If false then date fields are saved as a string. Specifying a date dtype overrides this

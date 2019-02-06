@@ -744,3 +744,16 @@ def test_csv_reader_byte_range(tmpdir, segment_bytes):
 
     # comparing only the values here, concat does not update the index
     np.array_equal(ref_df.to_pandas().values, df.to_pandas().values)
+
+
+def test_csv_reader_prefix(tmpdir):
+
+    lines = ['1, 1, 1, 1']
+    buffer = '\n'.join(lines) + '\n'
+
+    prefix_str = 'a_prefix'
+    df = read_csv(StringIO(buffer), header=None, prefix=prefix_str)
+
+    column_names = list(df.columns.values)
+    for col in range(len(column_names)):
+        assert(column_names[col] == prefix_str + str(col))

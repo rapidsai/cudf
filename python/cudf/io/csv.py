@@ -36,7 +36,7 @@ def read_csv(filepath_or_buffer, lineterminator='\n',
              skipinitialspace=False, names=None, dtype=None,
              skipfooter=0, skiprows=0, dayfirst=False, compression='infer',
              thousands=None, decimal='.', true_values=None, false_values=None,
-             nrows=None, byte_range=None):
+             nrows=None, byte_range=None, prefix=None):
     """
     Load and parse a CSV file into a DataFrame
 
@@ -103,6 +103,8 @@ def read_csv(filepath_or_buffer, lineterminator='\n',
         size to zero to read all data after the offset location. Reads the row
         that starts before or at the end of the range, even if it ends after
         the end of the range.
+    prefix : str, default None
+        Prefix to add to column numbers when parsing without a header row
 
     Returns
     -------
@@ -303,6 +305,8 @@ def read_csv(filepath_or_buffer, lineterminator='\n',
     else:
         csv_reader.byte_range_offset = 0
         csv_reader.byte_range_size = 0
+    prefix_bytes = _wrap_string(prefix)
+    csv_reader.prefix = prefix_bytes
 
     # Call read_csv
     libgdf.read_csv(csv_reader)
@@ -342,7 +346,7 @@ def read_csv_strings(filepath_or_buffer, lineterminator='\n',
                      skipfooter=0, skiprows=0, dayfirst=False,
                      compression='infer', thousands=None, decimal='.',
                      true_values=None, false_values=None, nrows=None,
-                     byte_range=None):
+                     byte_range=None, prefix=None):
 
     """
     **Experimental**: This function exists only as a beta way to use
@@ -524,6 +528,8 @@ def read_csv_strings(filepath_or_buffer, lineterminator='\n',
     else:
         csv_reader.byte_range_offset = 0
         csv_reader.byte_range_size = 0
+    prefix_bytes = _wrap_string(prefix)
+    csv_reader.prefix = prefix_bytes
 
     # Call read_csv
     libgdf.read_csv(csv_reader)
