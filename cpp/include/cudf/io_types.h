@@ -85,8 +85,8 @@ typedef struct {
   int           num_false_values;           ///< Number of values in the true_values list
 
   const char    **na_values;                /**< Array of strings that should be considered as NA. By default the following values are interpreted as NaN: 
-                                            ‘’, ‘#N/A’, ‘#N/A N/A’, ‘#NA’, ‘-1.#IND’, ‘-1.#QNAN’, ‘-NaN’, ‘-nan’, ‘1.#IND’, ‘1.#QNAN’, ‘N/A’, ‘NA’, ‘NULL’,
-                                            ‘NaN’, ‘n/a’, ‘nan’, ‘null’. */
+                                            '', '#N/A', '#N/A N/A', '#NA', '-1.#IND', '-1.#QNAN', '-NaN', '-nan', '1.#IND', '1.#QNAN', 'N/A', 'NA', 'NULL',
+                                            'NaN', 'n/a', 'nan', 'null'. */
   int           num_na_values;              ///< Number of values in the na_values list
   bool          keep_default_na;            ///< Keep the default NA values
   bool          na_filter;                  ///< Detect missing values (empty strings and the values in na_values). Passing false can improve performance.
