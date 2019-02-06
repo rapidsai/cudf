@@ -39,8 +39,8 @@ setup(name='cudf',
         "Intended Audience :: Developers",
         # "Operating System :: OS Independent",
         "Programming Language :: Python",
-        # "Programming Language :: Python :: 2.7",
-        "Programming Language :: Python :: 3.5",
+        "Programming Language :: Python :: 3.6",
+        "Programming Language :: Python :: 3.7"
       ],
       # Include the separately-compiled shared library
       author="NVIDIA Corporation",

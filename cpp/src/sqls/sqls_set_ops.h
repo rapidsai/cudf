@@ -220,12 +220,12 @@ void multi_col_order_by(size_t sz,
 			cudaStream_t stream = NULL)
 {
 
-  thrust::sequence(rmm::exec_policy(stream), ptr_d_v, ptr_d_v+sz, 0);//cannot use counting_iterator
+  thrust::sequence(rmm::exec_policy(stream)->on(stream), ptr_d_v, ptr_d_v+sz, 0);//cannot use counting_iterator
   //                                          2 reasons:
   //(1.) need to return a container result;
   //(2.) that container must be mutable;
   
-  thrust::sort(rmm::exec_policy(stream),
+  thrust::sort(rmm::exec_policy(stream)->on(stream),
 		 ptr_d_v, ptr_d_v+sz,
 		 [tv1] __host__ __device__ (int i1, int i2){
 		   //C+11 variadic pack expansion doesn't work with
@@ -285,7 +285,7 @@ size_t multi_col_filter(size_t nrows,
   //actual filtering happens here:
   //
   auto ret_iter_last =
-    thrust::copy_if(rmm::exec_policy(stream),
+    thrust::copy_if(rmm::exec_policy(stream)->on(stream),
 		    thrust::make_counting_iterator<size_t>(0), thrust::make_counting_iterator<size_t>(nrows),
 		    ptr_d_flt_indx,
 		    [tptrs, tvals] __host__ __device__ (size_t indx){
@@ -319,7 +319,7 @@ size_t multi_col_filter(size_t nrows,
   //actual filtering happens here:
   //
   auto ret_iter_last =
-    thrust::copy_if(rmm::exec_policy(stream),
+    thrust::copy_if(rmm::exec_policy(stream)->on(stream),
 		    thrust::make_counting_iterator<IndexT>(0), thrust::make_counting_iterator<IndexT>(nrows),
 		    ptr_d_flt_indx,
 		    [tptrs] __host__ __device__ (IndexT indx){
@@ -388,7 +388,7 @@ multi_col_group_by_count_via_sort(size_t sz,
     multi_col_order_by(sz, tptrs, ptr_d_indx, stream);
 
   thrust::pair<IndexT*, IndexT*> ret =
-    thrust::reduce_by_key(rmm::exec_policy(stream),
+    thrust::reduce_by_key(rmm::exec_policy(stream)->on(stream),
 			  ptr_d_indx, ptr_d_indx+sz,
 			  thrust::make_constant_iterator(1),
 			  ptr_d_kout,
@@ -524,13 +524,13 @@ thrust::pair<IndexT*, ValsT*>
   if( !sorted )
     multi_col_order_by(sz, tptrs, ptr_d_indx, stream);
   
-  thrust::gather(rmm::exec_policy(stream),
+  thrust::gather(rmm::exec_policy(stream)->on(stream),
                  ptr_d_indx, ptr_d_indx + sz,  //map[i]
   		 ptr_d_agg,                    //source[i]
   		 ptr_d_agg_p);                 //source[map[i]]
 
   thrust::pair<IndexT*, ValsT*> ret =
-    thrust::reduce_by_key(rmm::exec_policy(stream),
+    thrust::reduce_by_key(rmm::exec_policy(stream)->on(stream),
   			    ptr_d_indx, ptr_d_indx + sz,
   			    ptr_d_agg_p,
   			    ptr_d_kout,
@@ -685,7 +685,7 @@ thrust::pair<IndexT*, ValsT*>
 					      sorted,
 					      stream);
 
-  thrust::transform(rmm::exec_policy(stream),
+  thrust::transform(rmm::exec_policy(stream)->on(stream),
 		    ptr_d_cout, ptr_d_cout + sz,
 		    ptr_d_vout,
 		    ptr_d_vout,
@@ -785,7 +785,7 @@ thrust::pair<typename VectorIndexT::iterator, typename VectorValsT::iterator>
 
   // multi_col_order_by(sz, tptrs, d_indx, stream);
   
-  // thrust::gather(rmm::exec_policy(stream),
+  // thrust::gather(rmm::exec_policy(stream)->on(stream),
   //                d_indx.begin(), d_indx.end(), //map[i]
   // 		 d_agg.begin(),                //source[i]
   // 		 d_agg_p.begin());             //source[map[i]]
@@ -992,7 +992,7 @@ thrust::pair<typename VectorIndexT::iterator, typename VectorValsT::iterator>
   
   auto pair_sum = multi_col_group_by_sum<VectorValsT, VectorIndexT, TplPtrs, orderp>(sz, tptrs, d_agg, d_indx, d_agg_p, d_kout, d_vout, sorted, stream);
 
-  thrust::transform(rmm::exec_policy(stream),
+  thrust::transform(rmm::exec_policy(stream)->on(stream),
 		    d_cout.begin(), d_cout.end(),
 		    d_vout.begin(),
 		    d_vout.begin(),

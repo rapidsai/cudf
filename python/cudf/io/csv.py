@@ -10,6 +10,7 @@ from cudf._gdf import nvtx_range_push, nvtx_range_pop
 
 import numpy as np
 import collections.abc
+import os
 
 
 def _wrap_string(text):
@@ -31,11 +32,11 @@ def read_csv(filepath_or_buffer, lineterminator='\n',
              quotechar='"', quoting=True, doublequote=True,
              header='infer',
              mangle_dupe_cols=True, usecols=None,
-             delimiter=',', sep=None, delim_whitespace=False,
+             sep=',', delimiter=None, delim_whitespace=False,
              skipinitialspace=False, names=None, dtype=None,
              skipfooter=0, skiprows=0, dayfirst=False, compression='infer',
              thousands=None, decimal='.', true_values=None, false_values=None,
-             nrows=None):
+             nrows=None, byte_range=None):
     """
     Load and parse a CSV file into a DataFrame
 
@@ -43,8 +44,10 @@ def read_csv(filepath_or_buffer, lineterminator='\n',
     ----------
     filepath_or_buffer : str
         Path of file to be read or a file-like object containing the file.
-    delimiter : char, default ','
+    sep : char, default ','
         Delimiter to be used.
+    delimiter : char, default None
+        Alternative argument name for sep.
     delim_whitespace : bool, default False
         Determines whether to use whitespace as delimiter.
     lineterminator : char, default '\\n'
@@ -92,8 +95,14 @@ def read_csv(filepath_or_buffer, lineterminator='\n',
         Values to consider as boolean True
     false_values : list, default None
         Values to consider as boolean False
-    nrows: int, default None
+    nrows : int, default None
         If specified, maximum number of rows to read
+    byte_range : list or tuple, default None
+        Byte range within the input file to be read. The first number is the
+        offset in bytes, the second number is the range size in bytes. Set the
+        size to zero to read all data after the offset location. Reads the row
+        that starts before or at the end of the range, even if it ends after
+        the end of the range.
 
     Returns
     -------
@@ -142,6 +151,11 @@ def read_csv(filepath_or_buffer, lineterminator='\n',
     --------
     .read_csv_strings
     """
+
+    # Alias sep -> delimiter.
+    if delimiter is None:
+        delimiter = sep
+
     if dtype is not None:
         if isinstance(dtype, collections.abc.Mapping):
             dtype_dict = True
@@ -174,12 +188,16 @@ def read_csv(filepath_or_buffer, lineterminator='\n',
         csv_reader.filepath_or_buffer = buffer_data_holder
         csv_reader.buffer_size = len(buffer_as_bytes)
     else:
+        if (not os.path.isfile(filepath_or_buffer)):
+            raise(FileNotFoundError)
+        if (not os.path.exists(filepath_or_buffer)):
+            raise(FileNotFoundError)
         file_path = _wrap_string(filepath_or_buffer)
 
         csv_reader.input_data_form = libgdf.FILE_PATH
         csv_reader.filepath_or_buffer = file_path
 
-    if header is 'infer':
+    if header == 'infer':
         header = -1
     header_infer = header
     arr_names = []
@@ -239,6 +257,11 @@ def read_csv(filepath_or_buffer, lineterminator='\n',
     if nrows is not None and skipfooter != 0:
         raise ValueError("cannot use both nrows and skipfooter parameters")
 
+    if byte_range is not None:
+        if skipfooter != 0 or skiprows != 0 or nrows is not None:
+            raise ValueError("""cannot manually limit rows to be read when
+                                using the byte range parameter""")
+
     # Start with default values recognized as boolean
     arr_true_values = [_wrap_string(str('True')), _wrap_string(str('TRUE'))]
     arr_false_values = [_wrap_string(str('False')), _wrap_string(str('FALSE'))]
@@ -274,6 +297,12 @@ def read_csv(filepath_or_buffer, lineterminator='\n',
     csv_reader.decimal = decimal.encode()
     csv_reader.thousands = thousands.encode() if thousands else b'\0'
     csv_reader.nrows = nrows if nrows is not None else -1
+    if byte_range is not None:
+        csv_reader.byte_range_offset = byte_range[0]
+        csv_reader.byte_range_size = byte_range[1]
+    else:
+        csv_reader.byte_range_offset = 0
+        csv_reader.byte_range_size = 0
 
     # Call read_csv
     libgdf.read_csv(csv_reader)
@@ -308,11 +337,12 @@ def read_csv(filepath_or_buffer, lineterminator='\n',
 
 def read_csv_strings(filepath_or_buffer, lineterminator='\n',
                      quotechar='"', quoting=True, doublequote=True,
-                     delimiter=',', sep=None, delim_whitespace=False,
+                     sep=',', delimiter=None, delim_whitespace=False,
                      skipinitialspace=False, names=None, dtype=None,
-                     skipfooter=0, skiprows=0, dayfirst=False, thousands=None,
-                     decimal='.', true_values=None, false_values=None,
-                     nrows=None):
+                     skipfooter=0, skiprows=0, dayfirst=False,
+                     compression='infer', thousands=None, decimal='.',
+                     true_values=None, false_values=None, nrows=None,
+                     byte_range=None):
 
     """
     **Experimental**: This function exists only as a beta way to use
@@ -386,6 +416,10 @@ def read_csv_strings(filepath_or_buffer, lineterminator='\n',
         Column names and dtypes must be specified.'''
         raise TypeError(msg)
 
+    # Alias sep -> delimiter.
+    if delimiter is None:
+        delimiter = sep
+
     if isinstance(dtype, dict):
         dtype_dict = True
     elif isinstance(dtype, list):
@@ -413,6 +447,10 @@ def read_csv_strings(filepath_or_buffer, lineterminator='\n',
         csv_reader.filepath_or_buffer = buffer_data_holder
         csv_reader.buffer_size = len(buffer_as_bytes)
     else:
+        if (not os.path.isfile(filepath_or_buffer)):
+            raise(FileNotFoundError)
+        if (not os.path.exists(filepath_or_buffer)):
+            raise(FileNotFoundError)
         file_path = _wrap_string(filepath_or_buffer)
 
         csv_reader.input_data_form = libgdf.FILE_PATH
@@ -442,6 +480,11 @@ def read_csv_strings(filepath_or_buffer, lineterminator='\n',
     if nrows is not None and skipfooter != 0:
         raise ValueError("cannot use both nrows and skipfooter parameters")
 
+    if byte_range is not None:
+        if skipfooter != 0 or skiprows != 0 or nrows is not None:
+            raise ValueError("""cannot manually limit rows to be read when
+                                using the byte range parameter""")
+
     # Start with default values recognized as boolean
     arr_true_values = [_wrap_string(str('True')), _wrap_string(str('TRUE'))]
     arr_false_values = [_wrap_string(str('False')), _wrap_string(str('FALSE'))]
@@ -458,6 +501,8 @@ def read_csv_strings(filepath_or_buffer, lineterminator='\n',
     csv_reader.false_values = false_values_ptr
     csv_reader.num_false_values = len(arr_false_values)
 
+    compression_bytes = _wrap_string(compression)
+
     csv_reader.delimiter = delimiter.encode()
     csv_reader.lineterminator = lineterminator.encode()
     csv_reader.quotechar = quotechar.encode()
@@ -469,9 +514,16 @@ def read_csv_strings(filepath_or_buffer, lineterminator='\n',
     csv_reader.num_cols = len(names)
     csv_reader.skiprows = skiprows
     csv_reader.skipfooter = skipfooter
+    csv_reader.compression = compression_bytes
     csv_reader.decimal = decimal.encode()
     csv_reader.thousands = thousands.encode() if thousands else b'\0'
     csv_reader.nrows = nrows if nrows is not None else -1
+    if byte_range is not None:
+        csv_reader.byte_range_offset = byte_range[0]
+        csv_reader.byte_range_size = byte_range[1]
+    else:
+        csv_reader.byte_range_offset = 0
+        csv_reader.byte_range_size = 0
 
     # Call read_csv
     libgdf.read_csv(csv_reader)
