@@ -68,7 +68,7 @@ class Series(object):
             name = data.name
             index = as_index(data.index)
         if isinstance(data, Series):
-            index = data._index
+            index = data._index if index is None else index
             name = data.name
             data = data._column
         if data is None:
