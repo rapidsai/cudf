@@ -27,6 +27,7 @@
 - PR #861 Fix memory leak by preserving the boolean mask index
 - PR #875 Handle unnamed indexes in to/from arrow functions
 - PR #876 Added missing `<type_traits>` include
+- PR #889 Deleted test_rmm.py which has now moved to RMM repo
 
 
 # cuDF 0.5.0 (28 Jan 2019)
