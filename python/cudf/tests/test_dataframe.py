@@ -1528,6 +1528,10 @@ def test_boolmask(pdf, gdf):
 
 
 def test_arrow_handle_no_index_name(pdf, gdf):
-    pat = gdf.to_arrow()
-    got = DataFrame.from_arrow(pat)
-    assert_eq(pdf, got)
+    gdf_arrow = gdf.to_arrow()
+    pdf_arrow = pa.Table.from_pandas(pdf)
+    assert pa.Table.equals(pdf_arrow, gdf_arrow)
+
+    got = DataFrame.from_arrow(gdf_arrow)
+    expect = pdf_arrow.to_pandas()
+    assert_eq(expect, got)
