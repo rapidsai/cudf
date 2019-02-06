@@ -253,4 +253,10 @@ __host__ __device__ cudf::timestamp convertStrToValue<cudf::timestamp>(
   return cudf::timestamp{convertStrToValue<int64_t>(data, start, end, opts)};
 }
 
+template <>
+__host__ __device__ cudf::nvstring_category convertStrToValue<cudf::nvstring_category>(
+    const char* data, long start, long end, const ParseOptions& opts) {
+  return cudf::nvstring_category{0};
+}
+
 #endif
