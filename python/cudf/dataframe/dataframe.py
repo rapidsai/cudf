@@ -592,9 +592,8 @@ class DataFrame(object):
         index = self._index
         series = Series(col)
         sind = series.index
-        VALID = isinstance(col, (np.ndarray, DeviceNDArray, list, Series,
-                                 Column))
-        if len(self) > 0 and len(series) == 1 and not VALID:
+        SCALAR = np.ndim(col) == 0
+        if len(self) > 0 and len(series) == 1 and SCALAR:
             arr = rmm.device_array(shape=len(index), dtype=series.dtype)
             cudautils.gpu_fill_value.forall(arr.size)(arr, col)
             return Series(arr)
