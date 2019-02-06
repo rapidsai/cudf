@@ -2,7 +2,7 @@
 
 from libgdf_cffi import libgdf, ffi
 
-from cudf.dataframe.dataframe import Column
+from cudf.dataframe.column import Column
 from cudf.dataframe.numerical import NumericalColumn
 from cudf.dataframe.dataframe import DataFrame
 from cudf.dataframe.datetime import DatetimeColumn
