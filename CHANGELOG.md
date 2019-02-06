@@ -5,6 +5,7 @@
 - PR #760 Raise `FileNotFoundError` instead of `GDF_FILE_ERROR` in `read_csv` if the file does not exist
 - PR #539 Add Python bindings for replace function
 - PR #807 CSV Reader: Add byte_range parameter to specify the range in the input file to be read
+- PR #888 CSV Reader: Add prefix parameter for column names, used when parsing without a header
 
 ## Improvements
 
