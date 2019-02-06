@@ -47,15 +47,10 @@ def pdf(gdf):
     return gdf.to_pandas()
 
 
-def test_groupby_no_index(pdf, gdf):
-    gdf = gdf.groupby('y', as_index=False).agg({'x': 'mean'})
-    pdf = pdf.groupby('y', as_index=False).agg({'x': 'mean'})
-    assert_eq(pdf, gdf)
-
-
-def test_groupby_index(pdf, gdf):
-    gdf = gdf.groupby('y', as_index=True).agg({'x': 'mean'})
-    pdf = pdf.groupby('y', as_index=True).agg({'x': 'mean'})
+@pytest.mark.parametrize('as_index', [True, False])
+def test_groupby_no_index(pdf, gdf, as_index):
+    gdf = gdf.groupby('y', as_index=as_index).agg({'x': 'mean'})
+    pdf = pdf.groupby('y', as_index=as_index).agg({'x': 'mean'})
     assert_eq(pdf, gdf)
 
 
@@ -163,7 +158,6 @@ def test_groupby_cats(method):
 
     grouped = df.groupby(['cats'], method=method, as_index=False).mean()
 
-    print(grouped)
     got_vals = grouped['vals']
 
     got_cats = grouped['cats']
