@@ -1022,7 +1022,7 @@ private:
     //If gather is in-place
     if ((input_column->valid == output_column->valid) &&
             (input_column->valid != nullptr)) {
-        rmm::device_vector<gdf_valid_type> remapped_valid_copy(gdf_get_num_chars_bitmask(num_rows));
+        rmm::device_vector<gdf_valid_type> remapped_valid_copy(gdf_get_num_bytes_for_valids_allocation(num_rows));
         gather_valid<index_type>(
                 input_column->valid,
                 remapped_valid_copy.data().get(),
@@ -1030,7 +1030,7 @@ private:
                 num_rows, input_column->size, stream);
         thrust::copy(rmm::exec_policy(stream)->on(stream),
                 remapped_valid_copy.begin(),
-                remapped_valid_copy.end(), output_column->valid);
+                remapped_valid_copy.begin() + gdf_get_num_chars_bitmask(num_rows), output_column->valid);
     }
     //If both input and output columns have a non null valid pointer
     else if (nullptr != output_column->valid) {
