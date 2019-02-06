@@ -41,4 +41,4 @@ cpp/python/librmm_cffi/librmm_cffi.py
 .settings
 
 ## Doxygen
-cpp/html/
+cpp/doxygen/html
