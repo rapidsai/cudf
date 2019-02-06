@@ -1079,7 +1079,7 @@ class Series(object):
         Parameters
         ----------
         bins : np.array
-            1-D monotonically increasing array of bins with same type as this series.
+            1-D monotonically, increasing array with same type as this series.
         right : bool
             Indicates whether interval contains the right or left bin edge.
 

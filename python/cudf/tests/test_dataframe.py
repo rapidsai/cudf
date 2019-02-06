@@ -1547,4 +1547,5 @@ def test_series_digitize(num_rows, num_bins, right, dtype):
     bins = np.unique(np.sort(np.random.randint(2, 95, num_bins).astype(dtype)))
     s = Series(data)
     indices = s.digitize(bins, right)
-    np.testing.assert_array_equal(np.digitize(data, bins, right), indices.to_array())
+    np.testing.assert_array_equal(np.digitize(data, bins, right),
+                                  indices.to_array())
