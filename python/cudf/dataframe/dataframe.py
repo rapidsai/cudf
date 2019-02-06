@@ -14,7 +14,6 @@ import pandas as pd
 import pyarrow as pa
 from pandas.api.types import is_dict_like
 
-from numba.cuda.cudadrv.devicearray import DeviceNDArray
 from types import GeneratorType
 
 from librmm_cffi import librmm as rmm
@@ -23,7 +22,6 @@ from cudf import formatting, _gdf
 from cudf.utils import cudautils, queryutils, applyutils, utils
 from .index import as_index, Index, RangeIndex
 from .series import Series
-from .column import Column
 from cudf.settings import NOTSET, settings
 from cudf.comm.serialize import register_distributed_serializer
 from .categorical import CategoricalColumn
