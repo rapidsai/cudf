@@ -272,7 +272,7 @@ class Series(object):
         return out
 
     def head(self, n=5):
-        return self[:n]
+        return self.iloc[:n]
 
     def tail(self, n=5):
         """
@@ -297,9 +297,9 @@ class Series(object):
 
         """
         if n == 0:
-            return self[0:0]
+            return self.iloc[0:0]
 
-        return self[-n:]
+        return self.iloc[-n:]
 
     def to_string(self, nrows=NOTSET):
         """Convert to string

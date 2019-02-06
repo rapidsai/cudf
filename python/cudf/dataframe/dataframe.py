@@ -324,7 +324,7 @@ class DataFrame(object):
            1    1 11.0
 
         """
-        return self[:n]
+        return self.iloc[:n]
 
     def tail(self, n=5):
         """
@@ -352,9 +352,9 @@ class DataFrame(object):
 
         """
         if n == 0:
-            return self[0:0]
+            return self.iloc[0:0]
 
-        return self[-n:]
+        return self.iloc[-n:]
 
     def to_string(self, nrows=NOTSET, ncols=NOTSET):
         """
