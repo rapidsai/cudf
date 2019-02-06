@@ -1782,7 +1782,9 @@ class DataFrame(object):
         types.append(index_arrow.type)
         if preserve_index:
             arrays.append(index_arrow)
-            names.append(self.index.name)
+            name = pa.pandas_compat._index_level_name(
+                self.index, 0, [])
+            names.append(name)
 
         # We may want to add additional metadata to this in the future, but
         # for now lets just piggyback off of what's done for Pandas

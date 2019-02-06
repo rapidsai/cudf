@@ -1525,3 +1525,9 @@ def test_boolmask(pdf, gdf):
     gdf = gdf[boolmask]
     pdf = pdf[boolmask]
     assert_eq(pdf, gdf)
+
+
+def test_arrow_handle_no_index_name(pdf, gdf):
+    pat = gdf.to_arrow()
+    got = DataFrame.from_arrow(pat)
+    assert_eq(pdf, got)
