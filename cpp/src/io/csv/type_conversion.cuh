@@ -145,6 +145,7 @@ struct ParseOptions {
   bool keepquotes;
   bool doublequote;
   bool dayfirst;
+  bool skipblanklines;
   int32_t* trueValues;
   int32_t* falseValues;
   int32_t trueValuesCount;

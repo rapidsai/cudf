@@ -77,7 +77,7 @@ typedef struct {
   gdf_size_type skiprows;                   ///< Number of rows at the start of the files to skip, default is 0
   gdf_size_type skipfooter;                 ///< Number of rows at the bottom of the file to skip - default is 0
 
-  bool          skip_blank_lines;           // Whether or not to ignore blank lines
+  bool          skip_blank_lines;           ///< Indicates whether to ignore empty lines, or parse and interpret values as NaN 
 
   const char    **true_values;              ///< List of values to recognize as boolean True
   int           num_true_values;            ///< Number of values in the true_values list

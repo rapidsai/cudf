@@ -239,11 +239,8 @@ gdf_error read_csv(csv_read_arg *args)
 		raw_csv->opts.keepquotes = true;
 		raw_csv->opts.doublequote = false;
 	}
-	if (args->comment != '\0') {
-		raw_csv->opts.comment = args->comment;
-	} else {
-		raw_csv->opts.comment = raw_csv->opts.terminator;
-	}
+	raw_csv->opts.skipblanklines = args->skip_blank_lines;
+	raw_csv->opts.comment = args->comment;
 	raw_csv->opts.dayfirst = args->dayfirst;
 	raw_csv->opts.decimal = args->decimal;
 	raw_csv->opts.thousands = args->thousands;
@@ -889,13 +886,20 @@ gdf_error uploadDataToDevice(const char *h_uncomp_data, size_t h_uncomp_size,
   }
 
   // Discard any blank/empty and comment lines
-  h_rec_starts.erase(
-      std::remove_if(h_rec_starts.begin(), h_rec_starts.end(),
-                     [&](cu_recstart_t i) {
-                       return (h_uncomp_data[i] == raw_csv->opts.terminator) ||
-                              (h_uncomp_data[i] == raw_csv->opts.comment);
-                     }),
-      h_rec_starts.end());
+  if (raw_csv->opts.skipblanklines ||
+      raw_csv->opts.comment != raw_csv->opts.terminator) {
+    const auto match1 = raw_csv->opts.skipblanklines ? raw_csv->opts.terminator
+                                                     : raw_csv->opts.comment;
+    const auto match2 = raw_csv->opts.comment != '\0' ? raw_csv->opts.comment
+                                                      : match1;
+    h_rec_starts.erase(
+        std::remove_if(h_rec_starts.begin(), h_rec_starts.end(),
+                       [&](cu_recstart_t i) {
+                         return (h_uncomp_data[i] == match1 ||
+                                 h_uncomp_data[i] == match2);
+                       }),
+        h_rec_starts.end());
+  }
 
   raw_csv->num_records = h_rec_starts.size();
 

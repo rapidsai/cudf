@@ -724,7 +724,7 @@ def test_csv_reader_tabs():
 def test_csv_reader_byte_range(tmpdir, segment_bytes):
     fname = tmpdir.mkdir("gdf_csv").join("tmp_csvreader_file16.csv")
 
-    names = ["int1", "int2"]
+    names = ['int1', 'int2']
 
     rows = 10000
     with open(str(fname), 'w') as fp:
@@ -744,23 +744,27 @@ def test_csv_reader_byte_range(tmpdir, segment_bytes):
     np.array_equal(ref_df.to_pandas().values, df.to_pandas().values)
 
 
-@pytest.mark.parametrize('header_row, skip_rows',
-                         [(1, 0), ('infer', 2), (1, 4)])
-def test_csv_reader_blanks_and_comments(skip_rows, header_row):
+@pytest.mark.parametrize('header_row, skip_rows, skip_blanks',
+                         [(1, 0, True), ('infer', 2, True), (1, 4, True),
+                          (3, 0, False), ('infer', 5, False)])
+def test_csv_reader_blanks_and_comments(skip_rows, header_row, skip_blanks):
 
-    lines = ['# first empty line',
+    lines = ['# first comment line',
              '\n',
-             '# third empty line',
+             '# third comment line',
              '1,2,3',
              '4,5,6',
              '7,8,9',
-             '0,0,0']
+             '\n',
+             '# last comment line'
+             '\n',
+             '1,1,1']
     buffer = '\n'.join(lines) + '\n'
 
-    cu_df = read_csv(StringIO(buffer), comment='#',
-                     header=header_row, skiprows=skip_rows)
-    pd_df = pd.read_csv(StringIO(buffer), comment='#',
-                        header=header_row, skiprows=skip_rows)
+    cu_df = read_csv(StringIO(buffer), comment='#', header=header_row,
+                     skiprows=skip_rows, skip_blank_lines=skip_blanks)
+    pd_df = pd.read_csv(StringIO(buffer), comment='#', header=header_row,
+                        skiprows=skip_rows, skip_blank_lines=skip_blanks)
 
     assert(cu_df.shape == pd_df.shape)
     assert(list(cu_df.columns.values) == list(pd_df.columns.values))

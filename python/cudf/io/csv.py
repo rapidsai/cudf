@@ -36,7 +36,7 @@ def read_csv(filepath_or_buffer, lineterminator='\n',
              skipinitialspace=False, names=None, dtype=None,
              skipfooter=0, skiprows=0, dayfirst=False, compression='infer',
              thousands=None, decimal='.', true_values=None, false_values=None,
-             nrows=None, byte_range=None, comment=None):
+             nrows=None, byte_range=None, skip_blank_lines=True, comment=None):
     """
     Load and parse a CSV file into a DataFrame
 
@@ -103,6 +103,9 @@ def read_csv(filepath_or_buffer, lineterminator='\n',
         size to zero to read all data after the offset location. Reads the row
         that starts before or at the end of the range, even if it ends after
         the end of the range.
+    skip_blank_lines : bool, default True
+        If True, discard and do not parse empty lines
+        If False, interpret empty lines as NaN values
     comment : char, default None
         Character used as a comments indicator. If found at the beginning of a
         line, the line will be ignored altogether.
@@ -306,6 +309,7 @@ def read_csv(filepath_or_buffer, lineterminator='\n',
     else:
         csv_reader.byte_range_offset = 0
         csv_reader.byte_range_size = 0
+    csv_reader.skip_blank_lines = skip_blank_lines
     csv_reader.comment = comment.encode() if comment else b'\0'
 
     # Call read_csv
@@ -347,7 +351,7 @@ def read_csv_strings(filepath_or_buffer, lineterminator='\n',
                      skipfooter=0, skiprows=0, dayfirst=False,
                      compression='infer', thousands=None, decimal='.',
                      true_values=None, false_values=None, nrows=None,
-                     byte_range=None, comment=None):
+                     byte_range=None, skip_blank_lines=True, comment=None):
 
     """
     **Experimental**: This function exists only as a beta way to use
@@ -544,6 +548,7 @@ def read_csv_strings(filepath_or_buffer, lineterminator='\n',
     else:
         csv_reader.byte_range_offset = 0
         csv_reader.byte_range_size = 0
+    csv_reader.skip_blank_lines = skip_blank_lines
     csv_reader.comment = comment.encode() if comment else b'\0'
 
     # Call read_csv

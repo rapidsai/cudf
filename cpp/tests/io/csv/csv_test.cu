@@ -92,6 +92,7 @@ TEST(gdf_csv_test, Numbers)
 		args.delimiter = ',';
 		args.lineterminator = '\n';
 		args.decimal = '.';
+		args.skip_blank_lines = true;
 		args.header = -1;
 		args.nrows = -1;
 		EXPECT_EQ( read_csv(&args), GDF_SUCCESS );
@@ -249,6 +250,7 @@ TEST(gdf_csv_test, Strings)
 		args.dtype = types;
 		args.delimiter = ',';
 		args.lineterminator = '\n';
+		args.skip_blank_lines = true;
 		args.header = 0;
 		args.nrows = -1;
 		EXPECT_EQ( read_csv(&args), GDF_SUCCESS );
@@ -306,8 +308,9 @@ TEST(gdf_csv_test, QuotedStrings)
 		args.delimiter = ',';
 		args.lineterminator = '\n';
 		args.quotechar = '`';
-		args.quoting = true;	// strip outermost quotechar
-		args.doublequote = true;	// replace double quotechar with single
+		args.quoting = true;          // strip outermost quotechar
+		args.doublequote = true;      // replace double quotechar with single
+		args.skip_blank_lines = true;
 		args.header = 0;
 		args.nrows = -1;
 		EXPECT_EQ( read_csv(&args), GDF_SUCCESS );
@@ -365,8 +368,9 @@ TEST(gdf_csv_test, KeepFullQuotedStrings)
 		args.delimiter = ',';
 		args.lineterminator = '\n';
 		args.quotechar = '\"';
-		args.quoting = false;	// do not strip outermost quotechar
-		args.doublequote = false;	// do not replace double quotechar with single
+		args.quoting = false;         // do not strip outermost quotechar
+		args.doublequote = false;     // do not replace double quotechar with single
+		args.skip_blank_lines = true;
 		args.header = 0;
 		args.nrows = -1;
 		EXPECT_EQ( read_csv(&args), GDF_SUCCESS );
@@ -422,6 +426,7 @@ TEST(gdf_csv_test, SpecifiedBoolValues)
 		args.dtype = types;
 		args.delimiter = ',';
 		args.lineterminator = '\n';
+		args.skip_blank_lines = true;
 		args.true_values = trueValues;
 		args.num_true_values = std::extent<decltype(trueValues)>::value;
 		args.false_values = falseValues;
@@ -464,6 +469,7 @@ TEST(gdf_csv_test, Dates)
 		args.delimiter = ',';
 		args.lineterminator = '\n';
 		args.dayfirst = true;
+		args.skip_blank_lines = true;
 		args.header = -1;
 		args.nrows = -1;
 		EXPECT_EQ( read_csv(&args), GDF_SUCCESS );
@@ -500,6 +506,7 @@ TEST(gdf_csv_test, FloatingPoint)
 		args.decimal = '.';
 		args.delimiter = ',';
 		args.lineterminator = ';';
+		args.skip_blank_lines = true;
 		args.header = -1;
 		args.nrows = -1;
 		EXPECT_EQ( read_csv(&args), GDF_SUCCESS );
@@ -534,6 +541,7 @@ TEST(gdf_csv_test, SkiprowsNrows)
 		args.dtype = types;
 		args.delimiter = ',';
 		args.lineterminator = '\n';
+		args.skip_blank_lines = true;
 		args.header = 1;
 		args.skiprows = 2;
 		args.nrows = 2;
@@ -567,6 +575,7 @@ TEST(gdf_csv_test, ByteRange)
 		args.dtype = types;
 		args.delimiter = ',';
 		args.lineterminator = '\n';
+		args.skip_blank_lines = true;
 		args.header = -1;
 		args.nrows = -1;
 		args.byte_range_offset = 11;
@@ -601,6 +610,7 @@ TEST(gdf_csv_test, BlanksAndComments)
 		args.dtype = types;
 		args.delimiter = ',';
 		args.lineterminator = '\n';
+		args.skip_blank_lines = true;
 		args.header = -1;
 		args.comment = '#';
 		args.nrows = -1;
