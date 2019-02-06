@@ -1525,3 +1525,13 @@ def test_boolmask(pdf, gdf):
     gdf = gdf[boolmask]
     pdf = pdf[boolmask]
     assert_eq(pdf, gdf)
+
+
+def test_1row_arrow_table():
+    data = [pa.array([0]), pa.array([1])]
+    batch = pa.RecordBatch.from_arrays(data, ['f0', 'f1'])
+    table = pa.Table.from_batches([batch])
+
+    expect = table.to_pandas()
+    got = DataFrame.from_arrow(table)
+    assert_eq(expect, got)
