@@ -127,7 +127,7 @@ gdf_error gdf_hash(int num_cols, gdf_column **input, gdf_hash_func hash, gdf_col
   {
     case GDF_HASH_MURMUR3:
       {
-        thrust::tabulate(rmm::exec_policy(cudaStream_t{0}),
+        thrust::tabulate(rmm::exec_policy()->on(0),
                         row_hash_values, 
                          row_hash_values + num_rows, 
                          row_hasher<MurmurHash3_32,size_type>(*input_table));
@@ -135,7 +135,7 @@ gdf_error gdf_hash(int num_cols, gdf_column **input, gdf_hash_func hash, gdf_col
       }
     case GDF_HASH_IDENTITY:
       {
-        thrust::tabulate(rmm::exec_policy(cudaStream_t{0}),
+        thrust::tabulate(rmm::exec_policy()->on(0),
                          row_hash_values, 
                          row_hash_values + num_rows, 
                          row_hasher<IdentityHash,size_type>(*input_table));
@@ -471,7 +471,7 @@ gdf_error hash_partition_gdf_table(gdf_table<size_type> const & input_table,
   // Compute exclusive scan of all blocks' partition sizes in-place to determine 
   // the starting point for each blocks portion of each partition in the output
   size_type * scanned_block_partition_sizes{block_partition_sizes};
-  thrust::exclusive_scan(rmm::exec_policy(cudaStream_t{0}),
+  thrust::exclusive_scan(rmm::exec_policy()->on(0),
                          block_partition_sizes, 
                          block_partition_sizes + (grid_size * num_partitions), 
                          scanned_block_partition_sizes);
@@ -483,7 +483,7 @@ gdf_error hash_partition_gdf_table(gdf_table<size_type> const & input_table,
   cudaStream_t s1{};
   cudaStreamCreate(&s1);
   size_type * scanned_global_partition_sizes{global_partition_sizes};
-  thrust::exclusive_scan(rmm::exec_policy(s1),
+  thrust::exclusive_scan(rmm::exec_policy(s1)->on(s1),
                          global_partition_sizes, 
                          global_partition_sizes + num_partitions,
                          scanned_global_partition_sizes);
@@ -576,7 +576,7 @@ gdf_error gdf_hash_partition(int num_input_cols,
     return GDF_INVALID_API_CALL;
   }
 
-  const size_t num_rows{input[0]->size};
+  const gdf_size_type num_rows{input[0]->size};
 
   // If the input is empty, return immediately
   if(0 == num_rows)

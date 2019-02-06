@@ -1,6 +1,7 @@
 #pragma once
 
-typedef size_t gdf_size_type;
+// TODO: Update to use fixed width types when CFFI goes away
+typedef int gdf_size_type; /**< Limits the maximum size of a gdf_column to 2^31-1 */
 typedef gdf_size_type gdf_index_type;
 typedef unsigned char gdf_valid_type;
 typedef	long	gdf_date64;
@@ -62,6 +63,7 @@ typedef enum {
     GDF_UNDEFINED_NVTX_COLOR,          /**< The requested color used to define an NVTX range is not defined */
     GDF_NULL_NVTX_NAME,                /**< The requested name for an NVTX range cannot be nullptr */
     GDF_TIMESTAMP_RESOLUTION_MISMATCH, /**< Resolution mismatch between two columns of GDF_TIMESTAMP */
+    GDF_NOTIMPLEMENTED_ERROR,          /**< A feature is not implemented */
     N_GDF_ERRORS
 } gdf_error;
 
@@ -86,7 +88,7 @@ typedef struct {
 typedef struct gdf_column_{
     void *data;                       /**< Pointer to the columns data */ 
     gdf_valid_type *valid;            /**< Pointer to the columns validity bit mask where the 'i'th bit indicates if the 'i'th row is NULL */
-    gdf_size_type size;               /**< Number of data elements in the columns data buffer*/
+    gdf_size_type size;               /**< Number of data elements in the columns data buffer. Limited to 2^31 - 1.*/
     gdf_dtype dtype;                  /**< The datatype of the column's data */
     gdf_size_type null_count;         /**< The number of NULL values in the column's data */
     gdf_dtype_extra_info dtype_info;

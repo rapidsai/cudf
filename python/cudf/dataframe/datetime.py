@@ -142,7 +142,7 @@ class DatetimeColumn(columnops.TypedColumnBase):
             out_dtype=np.bool
         )
 
-    def to_pandas(self, index):
+    def to_pandas(self, index=None):
         return pd.Series(
             self.to_array(fillna='pandas').astype(self.dtype),
             index=index

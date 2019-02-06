@@ -287,18 +287,17 @@ gdf_error join_call( int num_cols, gdf_column **leftcol, gdf_column **rightcol,
 
   using size_type = int64_t;
 
-  if( (0 == num_cols) || (nullptr == leftcol) || (nullptr == rightcol))
-    return GDF_DATASET_EMPTY;
-
-  if(nullptr == join_context)
-    return GDF_INVALID_API_CALL;
+  GDF_REQUIRE( 0 != num_cols, GDF_DATASET_EMPTY);
+  GDF_REQUIRE( nullptr != leftcol, GDF_DATASET_EMPTY);
+  GDF_REQUIRE( nullptr != rightcol, GDF_DATASET_EMPTY);
+  GDF_REQUIRE( nullptr != join_context, GDF_INVALID_API_CALL);
 
   const auto left_col_size = leftcol[0]->size;
   const auto right_col_size = rightcol[0]->size;
   
-  // Check that the number of rows does not exceed the maximum
-  if(left_col_size >= MAX_JOIN_SIZE) return GDF_COLUMN_SIZE_TOO_BIG;
-  if(right_col_size >= MAX_JOIN_SIZE) return GDF_COLUMN_SIZE_TOO_BIG;
+  GDF_REQUIRE( left_col_size < MAX_JOIN_SIZE, GDF_COLUMN_SIZE_TOO_BIG);
+  GDF_REQUIRE( right_col_size < MAX_JOIN_SIZE, GDF_COLUMN_SIZE_TOO_BIG);
+
 
   // If both frames are empty, return immediately
   if((0 == left_col_size ) && (0 == right_col_size)) {
@@ -316,7 +315,7 @@ gdf_error join_call( int num_cols, gdf_column **leftcol, gdf_column **rightcol,
     return GDF_SUCCESS;
   }
 
-  // If Inner Join and either table is empty, compute trivial full join
+  // If Full Join and either table is empty, compute trivial full join
   if( (JoinType::FULL_JOIN == join_type) && 
       ((0 == left_col_size) || (0 == right_col_size)) ){
     return trivial_full_join<size_type>(left_col_size, right_col_size, left_result, right_result);
@@ -499,40 +498,62 @@ gdf_error join_call_compute_df(
                          gdf_column * left_indices,
                          gdf_column * right_indices,
                          gdf_context *join_context) {
-    //return error if the inputs are invalid
-    if ((left_cols == nullptr)  ||
-        (right_cols == nullptr)) { return GDF_DATASET_EMPTY; }
+  GDF_REQUIRE(nullptr != left_cols, GDF_DATASET_EMPTY);
+  GDF_REQUIRE(nullptr != right_cols, GDF_DATASET_EMPTY);
+  GDF_REQUIRE(0 != num_cols_to_join, GDF_SUCCESS);
+  GDF_REQUIRE(nullptr != left_join_cols, GDF_DATASET_EMPTY);
+  GDF_REQUIRE(nullptr != right_join_cols, GDF_DATASET_EMPTY);
+  GDF_REQUIRE(nullptr != join_context, GDF_INVALID_API_CALL);
 
-    if (num_cols_to_join == 0) { return GDF_SUCCESS; }
-    
-    if ((left_join_cols == nullptr)  ||
-        (right_join_cols == nullptr)) { return GDF_DATASET_EMPTY; }
+  // Determine if requested output is the indices of matching rows, the fully
+  // constructed output dataframe, or both
+  bool const construct_output_dataframe{nullptr != result_cols};
+  bool const return_output_indices{(nullptr != left_indices) and
+                                   (nullptr != right_indices)};
 
-    //check if combined join output is expected
-    bool compute_df = (result_cols != nullptr);
+  GDF_REQUIRE(construct_output_dataframe or return_output_indices,
+              GDF_INVALID_API_CALL);
 
-    //return error if no output pointers are valid
-    if ( ((left_indices == nullptr)||(right_indices == nullptr)) &&
-         (!compute_df) ) { return GDF_DATASET_EMPTY; }
+  auto const left_col_size = left_cols[0]->size;
+  auto const right_col_size = right_cols[0]->size;
 
-    if (join_context == nullptr) { return GDF_INVALID_API_CALL; }
+  // If the inputs are empty, immediately return
+  if ((0 == left_col_size) && (0 == right_col_size)) {
+    return GDF_SUCCESS;
+  }
 
-    //If index outputs are not requested, create columns to store them
-    //for computing combined join output
-    gdf_column * left_index_out = left_indices;
-    gdf_column * right_index_out = right_indices;
+  // If left join and the left table is empty, return immediately
+  if ((JoinType::LEFT_JOIN == join_type) && (0 == left_col_size)) {
+    return GDF_SUCCESS;
+  }
 
-    using gdf_col_pointer = typename std::unique_ptr<gdf_column, std::function<void(gdf_column*)>>;
-    auto gdf_col_deleter = [](gdf_column* col){
-        col->size = 0;
-        if (col->data)  { RMM_FREE(col->data, 0);  }
-        if (col->valid) { RMM_FREE(col->valid, 0); }
-    };
-    gdf_col_pointer l_index_temp, r_index_temp;
+  // If Inner Join and either table is empty, return immediately
+  if ((JoinType::INNER_JOIN == join_type) &&
+      ((0 == left_col_size) || (0 == right_col_size))) {
+    return GDF_SUCCESS;
+  }
 
-    if (nullptr == left_indices) {
-        l_index_temp = {new gdf_column, gdf_col_deleter};
-        left_index_out = l_index_temp.get();
+  // If index outputs are not requested, create columns to store them
+  // for computing combined join output
+  gdf_column *left_index_out = left_indices;
+  gdf_column *right_index_out = right_indices;
+
+  using gdf_col_pointer =
+      typename std::unique_ptr<gdf_column, std::function<void(gdf_column *)>>;
+  auto gdf_col_deleter = [](gdf_column *col) {
+    col->size = 0;
+    if (col->data) {
+      RMM_FREE(col->data, 0);
+    }
+    if (col->valid) {
+      RMM_FREE(col->valid, 0);
+    }
+  };
+  gdf_col_pointer l_index_temp, r_index_temp;
+
+  if (nullptr == left_indices) {
+    l_index_temp = {new gdf_column, gdf_col_deleter};
+    left_index_out = l_index_temp.get();
     }
 
     if (nullptr == right_indices) {
@@ -553,9 +574,12 @@ gdf_error join_call_compute_df(
             ljoincol.data(), rjoincol.data(),
             left_index_out, right_index_out,
             join_context);
-    //If compute_df is false then left_index_out or right_index_out
+
+    GDF_REQUIRE(GDF_SUCCESS == join_err, join_err);
+
+    //If construct_output_dataframe is false then left_index_out or right_index_out
     //was not dynamically allocated.
-    if ((!compute_df) || (GDF_SUCCESS != join_err)) {
+    if (not construct_output_dataframe) {
         return join_err;
     }
 

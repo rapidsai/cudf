@@ -19,6 +19,7 @@
 #include "rmm/rmm.h"
 #include <string.h> // memset
 #include <zlib.h> // uncompress
+#include "unbz2.h" // bz2 uncompress
 
 #define GZ_FLG_FTEXT    0x01    // ASCII text hint
 #define GZ_FLG_FHCRC    0x02    // Header CRC present
@@ -94,6 +95,12 @@ struct zip_lfh_s
     uint32_t uncomp_size;   // uncompressed size
     uint16_t fname_len;     // filename length
     uint16_t extra_len;     // extra field length
+};
+
+struct bz2_file_header_s
+{
+    uint8_t sig[3]; // "BZh"
+    uint8_t blksz;  // block size 1..9 in 100kB units (post-RLE)
 };
 
 #pragma pack(pop)
@@ -285,7 +292,6 @@ gdf_error io_uncompress_single_h2d(const void *src, gdf_size_type src_size, int 
     size_t uncomp_len = 0;
     cudaStream_t strm = (cudaStream_t)0;
     rmmError_t rmmErr;
-    cudaError_t cu_err;
 
     if (!(src && src_size))
     {
@@ -350,12 +356,27 @@ gdf_error io_uncompress_single_h2d(const void *src, gdf_size_type src_size, int 
                     cdfh_ofs += cdfh_len;
                 }
             }
-            if (strm_type != IO_UNCOMP_STREAM_TYPE_INFER)
-                break; // Fall through for INFER
-        default:
-            // Unsupported format
-            break;
         }
+        if (strm_type != IO_UNCOMP_STREAM_TYPE_INFER)
+            break; // Fall through for INFER
+    case IO_UNCOMP_STREAM_TYPE_BZIP2:
+        if (src_size > 4)
+        {
+            const bz2_file_header_s *fhdr = (const bz2_file_header_s *)raw;
+            // Check for BZIP2 file signature "BZh1" to "BZh9"
+            if (fhdr->sig[0] == 'B' && fhdr->sig[1] == 'Z' && fhdr->sig[2] == 'h' && fhdr->sig[3] >= '1' && fhdr->sig[3] <= '9')
+            {
+                strm_type = IO_UNCOMP_STREAM_TYPE_BZIP2;
+                comp_data = raw;
+                comp_len = src_size;
+                uncomp_len = 0;
+            }
+        }
+        if (strm_type != IO_UNCOMP_STREAM_TYPE_INFER)
+            break; // Fall through for INFER     
+    default:
+        // Unsupported format
+        break;
     }
     if (!comp_data || comp_len <= 0)
         return GDF_UNSUPPORTED_DTYPE;
@@ -367,12 +388,42 @@ gdf_error io_uncompress_single_h2d(const void *src, gdf_size_type src_size, int 
     if (strm_type == IO_UNCOMP_STREAM_TYPE_GZIP || strm_type == IO_UNCOMP_STREAM_TYPE_ZIP)
     {
         // INFLATE
-    	dst.resize(uncomp_len);
+        dst.resize(uncomp_len);
         size_t zdestLen = uncomp_len;
         int zerr = cpu_inflate((uint8_t*)dst.data(), &zdestLen, comp_data, comp_len);
         if (zerr != 0 || zdestLen != uncomp_len)
         {
-    		dst.resize(0);
+            dst.resize(0);
+            return GDF_FILE_ERROR;
+        }
+    }
+    else if (strm_type == IO_UNCOMP_STREAM_TYPE_BZIP2)
+    {
+        size_t src_ofs = 0;
+        size_t dst_ofs = 0;
+        int bz_err = 0;
+        dst.resize(uncomp_len);
+        do
+        {
+            size_t dst_len = uncomp_len - dst_ofs;
+            bz_err = cpu_bz2_uncompress(comp_data, comp_len, ((uint8_t*)dst.data()) + dst_ofs, &dst_len, &src_ofs);
+            if (bz_err == BZ_OUTBUFF_FULL)
+            {
+                // TBD: We could infer the compression ratio based on produced/consumed byte counts
+                // in order to minimize realloc events and over-allocation
+                dst_ofs = dst_len;
+                dst_len = uncomp_len + (uncomp_len / 2);
+                dst.resize(dst_len);
+                uncomp_len = dst_len;
+            }
+            else if (bz_err == 0)
+            {
+                uncomp_len = dst_len;
+            }
+        } while (bz_err == BZ_OUTBUFF_FULL);
+        if (bz_err != 0)
+        {
+            dst.resize(0);
             return GDF_FILE_ERROR;
         }
     }

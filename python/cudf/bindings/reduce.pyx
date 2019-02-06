@@ -13,6 +13,8 @@ from .cudf_cpp import *
 import numpy as np
 import pandas as pd
 import pyarrow as pa
+pandas_version = tuple(map(int,pd.__version__.split('.', 2)[:2]))
+
 
 cimport numpy as np
 
@@ -27,22 +29,11 @@ from libcpp.string  cimport string as cstring
 
 
 
-# Cython function references need to be stored in a std::map
-ctypedef gdf_error (*reduce_type)(gdf_column*, void*, gdf_size_type)
-
-cdef cmap[cstring, reduce_type] _REDUCE_FUNCTIONS
-_REDUCE_FUNCTIONS[b'max'] = gdf_max
-_REDUCE_FUNCTIONS[b'min'] = gdf_min
-_REDUCE_FUNCTIONS[b'sum'] = gdf_sum
-_REDUCE_FUNCTIONS[b'sum_of_squares'] = gdf_sum_of_squares
-
-
 def apply_reduce(reduction, col):
     """
       Call gdf reductions.
     """
 
-    func = bytes(reduction, encoding="UTF-8")
 
     outsz = gdf_reduce_optimal_output_size()
     out = rmm.device_array(outsz, dtype=col.dtype)
@@ -51,13 +42,32 @@ def apply_reduce(reduction, col):
     check_gdf_compatibility(col)
     cdef gdf_column* c_col = column_view_from_column(col)
 
-    cdef gdf_error result = _REDUCE_FUNCTIONS[func](<gdf_column*>c_col,
-                            <void*>out_ptr,
-                            outsz)
-
-    check_gdf_error(result)
+    cdef gdf_error result
+    with nogil:    
+        if reduction == 'max':
+            result = gdf_max(<gdf_column*>c_col, <void*>out_ptr, outsz)
+        elif reduction == 'min':
+            result = gdf_min(<gdf_column*>c_col, <void*>out_ptr, outsz)
+        elif reduction == 'sum':
+            result = gdf_sum(<gdf_column*>c_col, <void*>out_ptr, outsz)
+        elif reduction == 'sum_of_squares':
+            result = gdf_sum_of_squares(<gdf_column*>c_col,
+                                        <void*>out_ptr,
+                                        outsz)
+        elif reduction == 'product':
+            result = gdf_product(<gdf_column*>c_col, <void*>out_ptr, outsz)
+        else:
+            result = GDF_NOTIMPLEMENTED_ERROR
 
     free(c_col)
 
+    if result == GDF_DATASET_EMPTY:
+        if reduction == 'sum' or reduction == 'sum_of_squares':
+            return col.dtype.type(0)
+        if reduction == 'product' and pandas_version >= (0, 22):
+            return col.dtype.type(1)
+        return np.nan
+
+    check_gdf_error(result)
 
     return out[0]

@@ -1,7 +1,8 @@
 import logging
 import json
 from contextlib import contextmanager
-from collections import namedtuple, Sequence, OrderedDict
+from collections import namedtuple, OrderedDict
+from collections.abc import Sequence
 
 import numpy as np
 import pandas as pd
