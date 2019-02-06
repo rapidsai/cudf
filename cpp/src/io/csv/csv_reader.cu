@@ -1444,7 +1444,7 @@ void convertCsvToGdf(char *raw_csv,
 
 		if(parseCol[col]==true){
 
-			// check if full cell is a NaN string - consistent with pandas
+			// check if the entire field is a NaN string - consistent with pandas
 			const bool is_na = (na_trie == nullptr) ? false : serializedTrieContains(na_trie, raw_csv + start, pos - start);
 
 			// Modify start & end to ignore whitespace and quotechars
