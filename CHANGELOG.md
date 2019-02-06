@@ -26,6 +26,7 @@
 - PR #850 Fix bug where left joins where the left df has 0 rows causes a crash
 - PR #861 Fix memory leak by preserving the boolean mask index
 - PR #875 Handle unnamed indexes in to/from arrow functions
+- PR #876 Added missing `<type_traits>` include
 
 
 # cuDF 0.5.0 (28 Jan 2019)
