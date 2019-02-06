@@ -944,7 +944,7 @@ gdf_error scatter( gdf_table<size_type> & scattered_output_table,
 }
 
 
-// private:
+private:
 /* --------------------------------------------------------------------------*/
   /** 
    * @brief Gathers the values of a column into a new column based on a map that

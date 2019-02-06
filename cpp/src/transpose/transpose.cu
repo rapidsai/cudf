@@ -7,10 +7,24 @@
 #include <cub/cub.cuh>
 #include <memory>
 #include <stdio.h>
+#include <algorithm>
+
+namespace
+{
 
 constexpr int WARP_SIZE = 32;
 constexpr int MAX_GRID_SIZE = (1<<16)-1;
 
+/**
+ * @brief Transposes the values from ncols x nrows input columns to
+ *  nrows x ncols output columns
+ * 
+ * @tparam ColumnType  Datatype of values pointed to by the pointers
+ * @param in_cols[in]  Pointers to input columns' data
+ * @param out_cols[out]  Pointers to pre-allocated output columns' data
+ * @param ncols[in]  Number of columns in input table
+ * @param nrows[in]  Number of rown in input table
+ */
 template <typename ColumnType>
 __global__
 void gpu_transpose(ColumnType **in_cols, ColumnType **out_cols,
@@ -31,6 +45,16 @@ void gpu_transpose(ColumnType **in_cols, ColumnType **out_cols,
   }
 }
 
+/**
+ * @brief Transposes the validity mask
+ * 
+ * @param[in] in_cols_valid  pointers to the validity mask of the input columns
+ * @param[out] out_cols_valid  pointers to the pre-allocated validity mask of
+ *  the output columns
+ * @param[out] out_cols_null_count  array of per output-row null counts
+ * @param[in] ncols  number of columns in input table
+ * @param[in] nrows  number of rows in input table
+ */
 __global__
 void gpu_transpose_valids(gdf_valid_type **in_cols_valid,
                           gdf_valid_type **out_cols_valid,
@@ -46,16 +70,16 @@ void gpu_transpose_valids(gdf_valid_type **in_cols_valid,
   gdf_size_type stride_x = blockDim.x * gridDim.x;
   gdf_size_type stride_y = blockDim.y * gridDim.y;
 
-  MaskType* const __restrict__ out_mask32 =
-    reinterpret_cast<MaskType*>(out_cols_valid[y]);
-
   for(gdf_size_type i = x; i < ncols; i += stride_x)
   {
     for(gdf_size_type j = y; j < nrows; j += stride_y)
     {
-      auto active_threads = __ballot_sync(0xffffffff, i < ncols && j < nrows);
+      auto active_threads = __ballot_sync(0xffffffff, 1);
       bool const input_is_valid{gdf_is_valid(in_cols_valid[i], j)};
       MaskType const result_mask{__ballot_sync(active_threads, input_is_valid)};
+
+      MaskType* const __restrict__ out_mask32 =
+        reinterpret_cast<MaskType*>(out_cols_valid[j]);
 
       gdf_index_type const out_location = i / BITS_PER_MASK;
 
@@ -103,6 +127,8 @@ struct launch_kernel{
   }
 };
 
+}
+
 gdf_error gdf_transpose(gdf_size_type ncols, gdf_column** in_cols,
                         gdf_column** out_cols) {
   // Make sure the inputs are not null
@@ -124,13 +150,8 @@ gdf_error gdf_transpose(gdf_size_type ncols, gdf_column** in_cols,
   }
 
   // Check if there are nulls to be processed
-  bool has_null = false;
-  for (gdf_size_type i = 0; i < ncols; i++) {
-    if (in_cols[i]->null_count > 0) {
-      has_null = true;
-      break;
-    }
-  }
+  bool const has_null{ std::any_of(in_cols, in_cols + ncols, 
+    [](gdf_column * col){ return col->null_count > 0; }) };
 
   if (has_null) {
     for (gdf_size_type i = 0; i < out_ncols; i++) {
@@ -139,8 +160,6 @@ gdf_error gdf_transpose(gdf_size_type ncols, gdf_column** in_cols,
   }
 
   PUSH_RANGE("CUDF_TRANSPOSE", GDF_GREEN);
-  // Wrap the input columns in a gdf_table
-  using size_type = decltype(ncols);
 
   // Copy input columns `data` and `valid` pointers to device
   std::vector<void*> in_columns_data(ncols);
