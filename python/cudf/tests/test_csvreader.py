@@ -744,3 +744,15 @@ def test_csv_reader_byte_range(tmpdir, segment_bytes):
 
     # comparing only the values here, concat does not update the index
     np.array_equal(ref_df.to_pandas().values, df.to_pandas().values)
+
+
+def test_csv_reader_escapechar(tmpdir):
+    fname = tmpdir.mkdir("gdf_csv").join('tmp_csvreader_file17.csv')
+    df = pd.DataFrame()
+    df['col1,0'] = np.array(['ab,cd', 'ef,gh'])
+    df['col2,0'] = np.array(['ij,kl', 'mn,op'])
+    df.to_csv(str(fname), escapechar='|', quoting=3, index_label=False)
+    df_ref = pd.read_csv(str(fname), escapechar='|')
+    pd.util.testing.assert_frame_equal(df_ref, df)
+    df_cudf = read_csv(str(fname), escapechar='|')
+    pd.util.testing.assert_frame_equal(df_cudf.to_pandas(), df)

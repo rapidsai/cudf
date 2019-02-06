@@ -126,8 +126,6 @@ gdf_dtype convertStringToDtype(std::string &dtype);
 //---------------CUDA Kernel ---------------------------------------------
 //
 
-__device__ int findSetBit(int tid, long num_bits, uint64_t *f_bits, int x);
-
 gdf_error launch_countRecords(const char* h_data, size_t h_size, char terminator, char quote, gdf_size_type& rec_cnt);
 gdf_error launch_storeRecordStart(const char* h_data, size_t h_size, bool include_first_row, raw_csv_t * csvData);
 gdf_error launch_dataConvertColumns(raw_csv_t * raw_csv, void** d_gdf,  gdf_valid_type** valid, gdf_dtype* d_dtypes, string_pair **str_cols, unsigned long long *);
@@ -279,6 +277,10 @@ gdf_error read_csv(csv_read_arg *args)
 		raw_csv->opts.quotechar = args->quotechar;
 		raw_csv->opts.keepquotes = true;
 		raw_csv->opts.doublequote = false;
+	}
+	raw_csv->opts.escapechar = args->escapechar;
+	if (raw_csv->opts.escapechar == raw_csv->opts.delimiter) {
+		checkError(GDF_INVALID_API_CALL, "Escape char cannot be the same as the delimiter");
 	}
 	raw_csv->opts.dayfirst = args->dayfirst;
 	raw_csv->opts.decimal = args->decimal;
@@ -1687,48 +1689,5 @@ void dataTypeDetection(char *raw_csv,
 }
 
 //----------------------------------------------------------------------------------------------------------------
-
-/*
- * Return which bit is set
- * x is the occurrence: 1 = first, 2 = seconds, ...
- */
-__device__ int findSetBit(int tid, long num_bits, uint64_t *r_bits, int x) {
-
-	int idx = tid;
-
-	if ( x == 0 )
-		return -1;
-
-	int withinBitCount = 0;
-	int offset = 0;
-	int found  = 0;
-
-	uint64_t bitmap = r_bits[idx];
-
-	while (found != x)
-	{
-		if(bitmap == 0)
-		{
-			idx++;
-			if (idx >= num_bits)
-				return -1;
-			bitmap = r_bits[idx];
-			offset += 64;
-			withinBitCount = 0;
-		}
-
-		if ( bitmap & 1 ) {
-			found++;			//found a set bit
-		}
-
-		bitmap >>= 1;
-		++withinBitCount;
-	 }
-
-	offset += withinBitCount -1;
-
-
-	return offset;
-}
 
 

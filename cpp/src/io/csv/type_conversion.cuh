@@ -141,6 +141,7 @@ struct ParseOptions {
   char quotechar;
   char decimal;
   char thousands;
+  char escapechar;
   bool keepquotes;
   bool doublequote;
   bool dayfirst;

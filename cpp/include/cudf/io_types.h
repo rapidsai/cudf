@@ -93,7 +93,7 @@ typedef struct {
   bool          infer_datetime_format;      // Try and determine the date format
   bool          dayfirst;                   ///< Is the first value in the date formatthe day?  DD/MM  versus MM/DD
 
-  char          *compression;               ///< Specify the type of compression (nullptr,"none","infer","gzip","zip"), "infer" infers the compression from the file extension, default(nullptr) is uncompressed
+  char          *compression;               ///< Specify the type of compression (nullptr,"none","infer","gzip","zip","bz2"), "infer" infers the compression from the file extension, default(nullptr) is uncompressed
   char          thousands;                  ///< Single character that separates thousands in numeric data. If this matches the delimiter then system will return GDF_INVALID_API_CALL
 
   char          decimal;                    ///< The decimal point character. If this matches the delimiter then system will return GDF_INVALID_API_CALL
@@ -102,7 +102,7 @@ typedef struct {
   bool          quoting;                    ///< Treat string fields as quoted item and remove the first and last quotechar
   bool          doublequote;                ///< Indicates whether to interpret two consecutive quotechar inside a field as a single quotechar
 
-  char          escapechar;                 // Single character used as the escape character
+  char          escapechar;                 ///< Single character used as the escape character
 
   char          comment;                    // Single character indicating that the remainder of line is a comment
 

@@ -30,7 +30,7 @@ def is_file_like(obj):
 
 def read_csv(filepath_or_buffer, lineterminator='\n',
              quotechar='"', quoting=True, doublequote=True,
-             header='infer',
+             escapechar=None, header='infer',
              mangle_dupe_cols=True, usecols=None,
              sep=',', delimiter=None, delim_whitespace=False,
              skipinitialspace=False, names=None, dtype=None,
@@ -67,6 +67,8 @@ def read_csv(filepath_or_buffer, lineterminator='\n',
     doublequote : bool, default True
         When quotechar is specified and quoting is True, indicates whether to
         interpret two consecutive quotechar inside fields as single quotechar
+    escapechar : char, default None
+        Character used to escape other characters
     header : int, default 'infer'
         Row number to use as the column names. Default behavior is to infer
         the column names: if no names are passed, header=0;
@@ -81,7 +83,7 @@ def read_csv(filepath_or_buffer, lineterminator='\n',
         Number of rows to be skipped from the start of file.
     skipfooter : int, default 0
         Number of rows to be skipped at the bottom of file.
-    compression : {'infer', 'gzip', 'zip', None}, default 'infer'
+    compression : {'infer', 'gzip', 'zip', 'bz2', None}, default 'infer'
         For on-the-fly decompression of on-disk data. If ‘infer’, then detect
         compression from the following extensions: ‘.gz’,‘.zip’ (otherwise no
         decompression). If using ‘zip’, the ZIP file must contain only one
@@ -285,6 +287,10 @@ def read_csv(filepath_or_buffer, lineterminator='\n',
     csv_reader.quotechar = quotechar.encode()
     csv_reader.quoting = quoting
     csv_reader.doublequote = doublequote
+    if escapechar is None:
+        csv_reader.escapechar = b'\0'
+    else:
+        csv_reader.escapechar = escapechar.encode()
     csv_reader.delim_whitespace = delim_whitespace
     csv_reader.skipinitialspace = skipinitialspace
     csv_reader.dayfirst = dayfirst
@@ -342,7 +348,7 @@ def read_csv_strings(filepath_or_buffer, lineterminator='\n',
                      skipfooter=0, skiprows=0, dayfirst=False,
                      compression='infer', thousands=None, decimal='.',
                      true_values=None, false_values=None, nrows=None,
-                     byte_range=None):
+                     escapechar=None, byte_range=None):
 
     """
     **Experimental**: This function exists only as a beta way to use
@@ -508,6 +514,10 @@ def read_csv_strings(filepath_or_buffer, lineterminator='\n',
     csv_reader.quotechar = quotechar.encode()
     csv_reader.quoting = quoting
     csv_reader.doublequote = doublequote
+    if escapechar is None:
+        csv_reader.escapechar = b'\0'
+    else:
+        csv_reader.escapechar = escapechar.encode()
     csv_reader.delim_whitespace = delim_whitespace
     csv_reader.skipinitialspace = skipinitialspace
     csv_reader.dayfirst = dayfirst
