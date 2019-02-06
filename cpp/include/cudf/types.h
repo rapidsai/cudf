@@ -9,6 +9,8 @@ typedef	int		gdf_date32;
 typedef	int		gdf_category;
 typedef	long	gdf_timestamp;
 
+class NVCategory;
+
 /* --------------------------------------------------------------------------*/
  /**
  * @Synopsis  These enums indicate the possible data types for a gdf_column
@@ -27,6 +29,7 @@ typedef enum {
     GDF_TIMESTAMP,	/**< Exact timestamp encoded with int64 since UNIX epoch (Default unit millisecond) */
     GDF_CATEGORY,
     GDF_STRING,
+    GDF_STRING_CATEGORY, /**< Stores indices of an NVCategory in data and in extra col info a reference to the nv_category*/
     N_GDF_TYPES, 	/* additional types should go BEFORE N_GDF_TYPES */
 } gdf_dtype;
 
@@ -82,6 +85,7 @@ typedef enum {
 
 typedef struct {
 	gdf_time_unit time_unit;
+	NVCategory * category;
 	// here we can also hold info for decimal datatype or any other datatype that requires additional information
 } gdf_dtype_extra_info;
 
