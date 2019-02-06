@@ -107,9 +107,10 @@ def read_csv(filepath_or_buffer, lineterminator='\n',
     na_values : list, default None
         Values to consider as invalid
     keep_default_na : bool, default True
-        TODO TODO
+        Whether or not to include the default NA values when parsing the data.
     na_filter : bool, default True
-        TODO TODO
+        Detect missing values (empty strings and the values in na_values).
+        Passing False can improve performance.
 
     Returns
     -------

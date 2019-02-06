@@ -53,6 +53,7 @@
 
 #include "cudf.h"
 #include "utilities/error_utils.h"
+#include "utilities/trie.cuh"
 #include "utilities/type_dispatcher.hpp"
 
 #include "rmm/rmm.h"
@@ -68,92 +69,6 @@ using std::deque;
 using cu_reccnt_t = unsigned long long int;
 using cu_recstart_t = unsigned long long int;
 
-
-static constexpr char trie_terminating_character = '\n';
-	
-struct SerialTrieNode {
-	int16_t children_offset = -1;
-	char character;
-	bool is_leaf;
-	explicit SerialTrieNode(char c, bool leaf = false) noexcept
-		: character(c), is_leaf(leaf) {}
-};
-	
-thrust::host_vector<SerialTrieNode> createSerializedTrie(const vector<string> &keys) {
-
-	static constexpr int alphabet_size = std::numeric_limits<char>::max() + 1;
-	struct TreeTrieNode {
-		using TrieNodePtr = std::unique_ptr<TreeTrieNode>;
-		vector<TrieNodePtr> children = vector<TrieNodePtr>(alphabet_size);
-			bool is_end_of_word = false;
-		};
-
-	// construct a tree-structured trie
-	TreeTrieNode tree_trie;	
-	for (const auto &key : keys) {
-		auto *current_node = &tree_trie;
-
-		for (const char character : key) {
-			if (current_node->children[character] == nullptr)
-				current_node->children[character] = std::make_unique<TreeTrieNode>();
-		
-			current_node = current_node->children[character].get();
-		}
-		
-		current_node->is_end_of_word = true;
-	}
-
-	struct IndexedTrieNode {
-		TreeTrieNode const *const pnode;
-		int16_t const idx;
-		IndexedTrieNode(TreeTrieNode const *const node, int16_t index)
-			: pnode(node), idx(index) {}
-	};
-
-	// serialize the tree trie
-	deque<IndexedTrieNode> to_visit;
-	thrust::host_vector<SerialTrieNode> nodes;
-	to_visit.emplace_back(&tree_trie, -1);
-	while (!to_visit.empty()) {
-		const auto node_and_idx = to_visit.front();
-		const auto node = node_and_idx.pnode;
-		const auto idx = node_and_idx.idx;
-		to_visit.pop_front();
-
-		bool has_children = false;
-		for (size_t i = 0; i < node->children.size(); ++i) {
-			if (node->children[i] != nullptr) {
-				if (idx >= 0 && nodes[idx].children_offset < 0) {
-					nodes[idx].children_offset = static_cast<uint16_t>(nodes.size() - idx);
-				}
-				nodes.push_back(SerialTrieNode(static_cast<char>(i), node->children[i]->is_end_of_word));
-
-				to_visit.emplace_back(node->children[i].get(), static_cast<uint16_t>(nodes.size()) - 1);
-
-				has_children = true;
-			}
-		}
-		if (has_children) {
-			nodes.push_back(SerialTrieNode(trie_terminating_character));
-		}
-	}
-	return nodes;
-}
-
-__device__
-bool serializedTrieContains(const SerialTrieNode* trie, const char* key, size_t key_len) {
-	int curr_node = 0;
-		
-	for (size_t i = 0; i < key_len; ++i) {
-		if (i != 0) curr_node += trie[curr_node].children_offset;
-		
-		while (trie[curr_node].character != trie_terminating_character && trie[curr_node].character != key[i])
-			curr_node++;
-		if (trie[curr_node].character == trie_terminating_character) return false;
-	}
-
-	return trie[curr_node].is_leaf;
-}
 
 //-- define the structure for raw data handling - for internal use
 typedef struct raw_csv_ {
@@ -178,9 +93,9 @@ typedef struct raw_csv_ {
 	gdf_size_type		skiprows;       // number of rows at the start of the file to skip, default is 0
 	gdf_size_type		skipfooter;     // number of rows at the bottom of the file to skip, default is 0
 
-    rmm::device_vector<int32_t>	d_trueValues;	// device: array of values to recognize as true
-    rmm::device_vector<int32_t>	d_falseValues;	// device: array of values to recognize as false
-    rmm::device_vector<SerialTrieNode>	d_naTrie;		// TODO
+    rmm::device_vector<int32_t>	d_trueValues;		// device: array of values to recognize as true
+    rmm::device_vector<int32_t>	d_falseValues;		// device: array of values to recognize as false
+    rmm::device_vector<SerialTrieNode>	d_naTrie;	// device: serialized trie of NA values
 } raw_csv_t;
 
 typedef struct column_data_ {
