@@ -27,6 +27,7 @@
 - PR #861 Fix memory leak by preserving the boolean mask index
 - PR #875 Handle unnamed indexes in to/from arrow functions
 - PR #877 Fix ingest of 1 row arrow tables in from arrow function
+- PR #876 Added missing `<type_traits>` include
 
 
 # cuDF 0.5.0 (28 Jan 2019)
