@@ -1773,7 +1773,8 @@ class DataFrame(object):
             arrays.append(arrow_col)
             types.append(arrow_col.type)
 
-        index_names.append(self.index.name)
+        index_name = pa.pandas_compat._index_level_name(self.index, 0, names)
+        index_names.append(index_name)
         index_columns.append(self.index)
         # It would be better if we didn't convert this if we didn't have to,
         # but we first need better tooling for cudf --> pyarrow type
@@ -1782,7 +1783,7 @@ class DataFrame(object):
         types.append(index_arrow.type)
         if preserve_index:
             arrays.append(index_arrow)
-            names.append(self.index.name)
+            names.append(index_name)
 
         # We may want to add additional metadata to this in the future, but
         # for now lets just piggyback off of what's done for Pandas
@@ -1841,6 +1842,9 @@ class DataFrame(object):
             df[col.name] = col.data
         if index_col:
             df = df.set_index(index_col[0])
+            new_index_name = pa.pandas_compat._backwards_compatible_index_name(
+                df.index.name, df.index.name)
+            df.index.name = new_index_name
         return df
 
     def to_records(self, index=True):

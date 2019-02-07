@@ -36,7 +36,8 @@ def read_csv(filepath_or_buffer, lineterminator='\n',
              skipinitialspace=False, names=None, dtype=None,
              skipfooter=0, skiprows=0, dayfirst=False, compression='infer',
              thousands=None, decimal='.', true_values=None, false_values=None,
-             nrows=None, byte_range=None, skip_blank_lines=True, comment=None):
+             nrows=None, byte_range=None, skip_blank_lines=True, comment=None,
+             na_values=None, keep_default_na=True, na_filter=True):
     """
     Load and parse a CSV file into a DataFrame
 
@@ -109,6 +110,13 @@ def read_csv(filepath_or_buffer, lineterminator='\n',
     comment : char, default None
         Character used as a comments indicator. If found at the beginning of a
         line, the line will be ignored altogether.
+    na_values : list, default None
+        Values to consider as invalid
+    keep_default_na : bool, default True
+        Whether or not to include the default NA values when parsing the data.
+    na_filter : bool, default True
+        Detect missing values (empty strings and the values in na_values).
+        Passing False can improve performance.
 
     Returns
     -------
@@ -284,6 +292,13 @@ def read_csv(filepath_or_buffer, lineterminator='\n',
     csv_reader.false_values = false_values_ptr
     csv_reader.num_false_values = len(arr_false_values)
 
+    arr_na_values = []
+    for value in na_values or []:
+        arr_na_values.append(_wrap_string(str(value)))
+    arr_na_values_ptr = ffi.new('char*[]', arr_na_values)
+    csv_reader.na_values = arr_na_values_ptr
+    csv_reader.num_na_values = len(arr_na_values)
+
     compression_bytes = _wrap_string(compression)
 
     csv_reader.delimiter = delimiter.encode()
@@ -311,6 +326,8 @@ def read_csv(filepath_or_buffer, lineterminator='\n',
         csv_reader.byte_range_size = 0
     csv_reader.skip_blank_lines = skip_blank_lines
     csv_reader.comment = comment.encode() if comment else b'\0'
+    csv_reader.keep_default_na = keep_default_na
+    csv_reader.na_filter = na_filter
 
     # Call read_csv
     libgdf.read_csv(csv_reader)
@@ -351,7 +368,8 @@ def read_csv_strings(filepath_or_buffer, lineterminator='\n',
                      skipfooter=0, skiprows=0, dayfirst=False,
                      compression='infer', thousands=None, decimal='.',
                      true_values=None, false_values=None, nrows=None,
-                     byte_range=None, skip_blank_lines=True, comment=None):
+                     byte_range=None, skip_blank_lines=True, comment=None,
+                     na_values=None, keep_default_na=True, na_filter=True):
 
     """
     **Experimental**: This function exists only as a beta way to use
@@ -524,6 +542,13 @@ def read_csv_strings(filepath_or_buffer, lineterminator='\n',
     csv_reader.false_values = false_values_ptr
     csv_reader.num_false_values = len(arr_false_values)
 
+    arr_na_values = []
+    for value in na_values or []:
+        arr_na_values.append(_wrap_string(str(value)))
+    arr_na_values_ptr = ffi.new('char*[]', arr_na_values)
+    csv_reader.na_values = arr_na_values_ptr
+    csv_reader.num_na_values = len(arr_na_values)
+
     compression_bytes = _wrap_string(compression)
 
     csv_reader.delimiter = delimiter.encode()
@@ -550,6 +575,8 @@ def read_csv_strings(filepath_or_buffer, lineterminator='\n',
         csv_reader.byte_range_size = 0
     csv_reader.skip_blank_lines = skip_blank_lines
     csv_reader.comment = comment.encode() if comment else b'\0'
+    csv_reader.keep_default_na = keep_default_na
+    csv_reader.na_filter = na_filter
 
     # Call read_csv
     libgdf.read_csv(csv_reader)

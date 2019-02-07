@@ -325,16 +325,38 @@ def test_csv_reader_float_decimal(tmpdir):
 def test_csv_reader_NaN_values():
 
     names = dtypes = ['float32']
-    buffer = '476940.0\n59e3\n\n""\n305245.0\n'
+    empty_cells = '\n""\n"  "\n " " \n'
+    default_na_cells = ('#N/A\n#N/A N/A\n#NA\n-1.#IND\n'
+                        '-1.#QNAN\n-NaN\n-nan\n1.#IND\n'
+                        '1.#QNAN\nN/A\nNA\nNULL\n'
+                        'NaN\nn/a\nnan\nnull\n')
+    custom_na_cells = 'NV_NAN\nNotANumber\n'
+    all_cells = empty_cells + default_na_cells + custom_na_cells
+    custom_na_values = ['NV_NAN', 'NotANumber']
 
-    cu_df = read_csv(StringIO(buffer), names=names, dtype=dtypes)
-    pd_df = pd.read_csv(StringIO(buffer), names=names, dtype=dtypes[0])
+    # test default NA values. emply cells should also yield NaNs
+    all_nan = read_csv(StringIO(default_na_cells + empty_cells),
+                       names=names, dtype=dtypes)
+    assert(all(np.isnan(all_nan.to_pandas()['float32'])))
 
-    cu_df = cu_df.to_pandas()
+    # no NA values: defaults are off, no custom values passed in
+    # only NaNs should be empty cells
+    none_nan = read_csv(StringIO(default_na_cells),
+                        names=names, dtype=dtypes,
+                        keep_default_na=False)
+    assert(not any(np.isnan(none_nan.to_pandas()['float32'])))
 
-    assert len(pd_df.columns) == len(cu_df.columns)
-    assert len(pd_df) == len(cu_df)
-    pd.util.testing.assert_frame_equal(pd_df, cu_df)
+    # na_filter off - only NaNs should be empty cells
+    none_nan = read_csv(StringIO(default_na_cells + custom_na_cells),
+                        names=names, dtype=dtypes,
+                        na_filter=False, na_values=custom_na_values)
+    assert(not any(np.isnan(none_nan.to_pandas()['float32'])))
+
+    # custom NA values
+    all_nan = read_csv(StringIO(all_cells),
+                       names=names, dtype=dtypes,
+                       na_values=custom_na_values)
+    assert(all(np.isnan(all_nan.to_pandas()['float32'])))
 
 
 def test_csv_reader_thousands(tmpdir):

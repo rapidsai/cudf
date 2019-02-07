@@ -5,7 +5,8 @@
 - PR #760 Raise `FileNotFoundError` instead of `GDF_FILE_ERROR` in `read_csv` if the file does not exist
 - PR #539 Add Python bindings for replace function
 - PR #807 CSV Reader: Add byte_range parameter to specify the range in the input file to be read
-- PR #867 CSV Reader: Add support for ignoring blank lines and comment lines 
+- PR #871 CSV Reader: Add support for NA values, including user specified strings
+- PR #867 CSV Reader: Add support for ignoring blank lines and comment lines
 
 ## Improvements
 
@@ -26,6 +27,8 @@
 - PR #815 CSV Reader: Fix data parsing when tabs are present in the input CSV file
 - PR #850 Fix bug where left joins where the left df has 0 rows causes a crash
 - PR #861 Fix memory leak by preserving the boolean mask index
+- PR #875 Handle unnamed indexes in to/from arrow functions
+- PR #876 Added missing `<type_traits>` include
 
 
 # cuDF 0.5.0 (28 Jan 2019)
