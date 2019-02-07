@@ -53,3 +53,26 @@ cpdef apply_order_by(in_cols, out_indices, ascending=True, na_position=1):
                               <int> flag_nulls_are_smallest)
     
     check_gdf_error(result)
+
+
+cpdef digitize(column, bins, out_indices, right=False):
+    check_gdf_compatibility(column)
+    cdef gdf_column* in_col = column_view_from_column(column)
+
+    check_gdf_compatibility(out_indices)
+    cdef gdf_column* out_col_indices = column_view_from_column(out_indices)
+
+    cdef size_t num_bins = len(bins)
+    cdef uintptr_t bins_ptr = get_ctype_ptr(bins)
+    cdef bool cright = right
+
+    cdef gdf_error result
+
+    with nogil:
+        result = gdf_digitize(<gdf_column*> in_col,
+                              <void*> bins_ptr,
+                              <size_t> num_bins,
+                              <bool> cright,
+                              <gdf_column*> out_col_indices)
+
+    check_gdf_error(result)

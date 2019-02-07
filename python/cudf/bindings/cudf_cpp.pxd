@@ -680,3 +680,9 @@ cdef extern from "cudf.h" nogil:
                                    gdf_column* old_values,
                                    gdf_column* new_values);
 
+
+    cdef gdf_error gdf_digitize(gdf_column* col,
+                                void* bins,
+                                size_t num_bins,
+                                bool right,
+                                gdf_column* out_col_indices);

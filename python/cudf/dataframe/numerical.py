@@ -19,6 +19,7 @@ from cudf._sort import get_sorted_inds
 
 import cudf.bindings.reduce as cpp_reduce
 import cudf.bindings.replace as cpp_replace
+import cudf.bindings.sort as cpp_sort
 
 # Operator mappings
 
@@ -459,7 +460,7 @@ def digitize(column, bins, right=False):
     buf = Buffer(rmm.device_array(len(column), dtype=np.int32))
     result = NumericalColumn(data=buf, dtype=buf.dtype)
     d_bins = rmm.to_device(bins)
-    _gdf.digitize(column, d_bins, result, right)
+    cpp_sort.digitize(column, d_bins, result, right)
     return result
 
 
