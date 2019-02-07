@@ -8,7 +8,6 @@
 - PR #871 CSV Reader: Add support for NA values, including user specified strings
 - PR #888 CSV Reader: Add prefix parameter for column names, used when parsing without a header
 
-
 ## Improvements
 
 - PR #730 Improve performance of `gdf_table` constructor
