@@ -242,17 +242,13 @@ def as_column(arbitrary, nan_as_null=True):
         elif isinstance(arbitrary, pa.DictionaryArray):
             if arbitrary.buffers()[0]:
                 pamask = Buffer(
-                    np.frombuffer(
-                        arbitrary.buffers()[0],
-                        dtype='int8'
-                    )
+                    np.array(arbitrary.buffers()[0]).view('int8')
                 )
             else:
                 pamask = None
             padata = Buffer(
-                np.frombuffer(
-                    arbitrary.buffers()[1],
-                    dtype=arbitrary.indices.type.to_pandas_dtype()
+                np.array(arbitrary.buffers()[1]).view(
+                    arbitrary.indices.type.to_pandas_dtype()
                 )[arbitrary.offset:arbitrary.offset + len(arbitrary)]
             )
             data = categorical.CategoricalColumn(
@@ -266,18 +262,14 @@ def as_column(arbitrary, nan_as_null=True):
             arbitrary = arbitrary.cast(pa.timestamp('ms'))
             if arbitrary.buffers()[0]:
                 pamask = Buffer(
-                    np.frombuffer(
-                        arbitrary.buffers()[0],
-                        dtype='int8'
-                    )
+                    np.array(arbitrary.buffers()[0]).view('int8')
                 )
             else:
                 pamask = None
             padata = Buffer(
-                np.frombuffer(
-                    arbitrary.buffers()[1],
-                    dtype='M8[ms]'
-                )[arbitrary.offset:arbitrary.offset + len(arbitrary)]
+                np.array(arbitrary.buffers()[1]).view('M8[ms]')[
+                    arbitrary.offset:arbitrary.offset + len(arbitrary)
+                ]
             )
             data = datetime.DatetimeColumn(
                 data=padata,
@@ -288,18 +280,14 @@ def as_column(arbitrary, nan_as_null=True):
         elif isinstance(arbitrary, pa.Date64Array):
             if arbitrary.buffers()[0]:
                 pamask = Buffer(
-                    np.frombuffer(
-                        arbitrary.buffers()[0],
-                        dtype='int8'
-                    )
+                    np.array(arbitrary.buffers()[0]).view('int8')
                 )
             else:
                 pamask = None
             padata = Buffer(
-                np.frombuffer(
-                    arbitrary.buffers()[1],
-                    dtype='M8[ms]'
-                )[arbitrary.offset:arbitrary.offset + len(arbitrary)]
+                np.array(arbitrary.buffers()[1]).view('M8[ms]')[
+                    arbitrary.offset:arbitrary.offset + len(arbitrary)
+                ]
             )
             data = datetime.DatetimeColumn(
                 data=padata,
@@ -318,18 +306,14 @@ def as_column(arbitrary, nan_as_null=True):
             arbitrary = arbitrary.cast(pa.int8())
             if arbitrary.buffers()[0]:
                 pamask = Buffer(
-                    np.frombuffer(
-                        arbitrary.buffers()[0],
-                        dtype='int8'
-                    )
+                    np.array(arbitrary.buffers()[0]).view('int8')
                 )
             else:
                 pamask = None
             padata = Buffer(
-                np.frombuffer(
-                    arbitrary.buffers()[1],
-                    dtype='bool'
-                )[arbitrary.offset:arbitrary.offset + len(arbitrary)]
+                np.array(arbitrary.buffers()[1]).view('bool')[
+                    arbitrary.offset:arbitrary.offset + len(arbitrary)
+                ]
             )
             data = numerical.NumericalColumn(
                 data=padata,
@@ -340,17 +324,13 @@ def as_column(arbitrary, nan_as_null=True):
         else:
             if arbitrary.buffers()[0]:
                 pamask = Buffer(
-                    np.frombuffer(
-                        arbitrary.buffers()[0],
-                        dtype='int8'
-                    )
+                    np.array(arbitrary.buffers()[0]).view('int8')
                 )
             else:
                 pamask = None
             padata = Buffer(
-                np.frombuffer(
-                    arbitrary.buffers()[1],
-                    dtype=arbitrary.type.to_pandas_dtype()
+                np.array(arbitrary.buffers()[1]).view(
+                    arbitrary.type.to_pandas_dtype()
                 )[arbitrary.offset:arbitrary.offset + len(arbitrary)]
             )
             data = numerical.NumericalColumn(
