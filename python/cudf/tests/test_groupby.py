@@ -48,7 +48,7 @@ def pdf(gdf):
 
 
 @pytest.mark.parametrize('as_index', [True, False])
-def test_groupby_no_index(pdf, gdf, as_index):
+def test_groupby_as_index_single_agg(pdf, gdf, as_index):
     gdf = gdf.groupby('y', as_index=as_index).agg({'x': 'mean'})
     pdf = pdf.groupby('y', as_index=as_index).agg({'x': 'mean'})
     assert_eq(pdf, gdf)
@@ -60,7 +60,7 @@ def test_groupby_default(pdf, gdf):
     assert_eq(pdf, gdf)
 
 
-def test_groupby_indexing():
+def test_groupby_getitem_styles():
     pdf = pd.DataFrame({'x': [1, 3, 1], 'y': [1, 2, 3]})
     gdf = cudf.from_pandas(pdf)
     assert_eq(gdf.groupby('x')['y'].mean(),
