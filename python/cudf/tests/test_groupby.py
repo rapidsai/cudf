@@ -2,10 +2,12 @@
 
 import pytest
 
+import cudf
 import numpy as np
 import pandas as pd
 
 from cudf.dataframe import DataFrame
+from .utils import assert_eq
 
 
 def make_frame(dataframe_class, nelem, seed=0, extra_levels=(), extra_vals=()):
@@ -35,16 +37,47 @@ def get_nelem():
         yield elem
 
 
+@pytest.fixture
+def gdf():
+    return DataFrame({'x': [1, 2], 'y': [1, 2]})
+
+
+@pytest.fixture
+def pdf(gdf):
+    return gdf.to_pandas()
+
+
+@pytest.mark.parametrize('as_index', [True, False])
+def test_groupby_as_index_single_agg(pdf, gdf, as_index):
+    gdf = gdf.groupby('y', as_index=as_index).agg({'x': 'mean'})
+    pdf = pdf.groupby('y', as_index=as_index).agg({'x': 'mean'})
+    assert_eq(pdf, gdf)
+
+
+def test_groupby_default(pdf, gdf):
+    gdf = gdf.groupby('y').agg({'x': 'mean'})
+    pdf = pdf.groupby('y').agg({'x': 'mean'})
+    assert_eq(pdf, gdf)
+
+
+def test_groupby_getitem_styles():
+    pdf = pd.DataFrame({'x': [1, 3, 1], 'y': [1, 2, 3]})
+    gdf = cudf.from_pandas(pdf)
+    assert_eq(gdf.groupby('x')['y'].mean(),
+              pdf.groupby('x')['y'].mean())
+    assert_eq(pdf.groupby('x').y.sum(),
+              gdf.groupby('x').y.sum())
+    assert_eq(pdf.groupby('x')[['y']].sum(),
+              gdf.groupby('x')[['y']].sum())
+
+
 @pytest.mark.parametrize('nelem', get_nelem())
 @pytest.mark.parametrize('method', get_methods())
 def test_groupby_mean(nelem, method):
     # gdf
     got_df = make_frame(DataFrame, nelem=nelem).groupby(
         ['x', 'y'], method=method).mean()
-    if method == 'cudf':
-        got = np.sort(got_df['val'].to_array())
-    else:
-        got = np.sort(got_df['mean_val'].to_array())
+    got = np.sort(got_df['val'].to_array())
     # pandas
     expect_df = make_frame(pd.DataFrame,
                            nelem=nelem).groupby(['x', 'y']).mean()
@@ -61,10 +94,7 @@ def test_groupby_mean_3level(nelem, method):
     # gdf
     got_df = make_frame(DataFrame, nelem=nelem,
                         extra_levels=lvls).groupby(bys, method=method).mean()
-    if method == "cudf":
-        got = np.sort(got_df['val'].to_array())
-    else:
-        got = np.sort(got_df['mean_val'].to_array())
+    got = np.sort(got_df['val'].to_array())
     # pandas
     expect_df = make_frame(pd.DataFrame, nelem=nelem,
                            extra_levels=lvls).groupby(bys).mean()
@@ -126,12 +156,9 @@ def test_groupby_cats(method):
     cats = np.asarray(list(df['cats']))
     vals = df['vals'].to_array()
 
-    grouped = df.groupby(['cats'], method=method).mean()
+    grouped = df.groupby(['cats'], method=method, as_index=False).mean()
 
-    if method == 'cudf':
-        got_vals = grouped['vals']
-    else:
-        got_vals = grouped['mean_vals']
+    got_vals = grouped['vals']
 
     got_cats = grouped['cats']
 
@@ -256,10 +283,7 @@ def test_groupby_cudf_2keys_agg(nelem, func, method):
     got_df = make_frame(DataFrame, nelem=nelem)\
         .groupby(['x', 'y'], method=method).agg(func)
 
-    if method == "cudf":
-        got_agg = np.sort(got_df['val'].to_array())
-    else:
-        got_agg = np.sort(got_df[func + '_val'].to_array())
+    got_agg = np.sort(got_df['val'].to_array())
     # pandas
     expect_df = make_frame(pd.DataFrame, nelem=nelem)\
         .groupby(['x', 'y']).agg(func)
