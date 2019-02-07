@@ -36,7 +36,9 @@ def read_csv(filepath_or_buffer, lineterminator='\n',
              skipinitialspace=False, names=None, dtype=None,
              skipfooter=0, skiprows=0, dayfirst=False, compression='infer',
              thousands=None, decimal='.', true_values=None, false_values=None,
-             nrows=None, byte_range=None, prefix=None):
+             nrows=None, byte_range=None, na_values=None,
+             keep_default_na=True, na_filter=True, prefix=None):
+
     """
     Load and parse a CSV file into a DataFrame
 
@@ -103,8 +105,16 @@ def read_csv(filepath_or_buffer, lineterminator='\n',
         size to zero to read all data after the offset location. Reads the row
         that starts before or at the end of the range, even if it ends after
         the end of the range.
+    na_values : list, default None
+        Values to consider as invalid
+    keep_default_na : bool, default True
+        Whether or not to include the default NA values when parsing the data.
+    na_filter : bool, default True
+        Detect missing values (empty strings and the values in na_values).
+        Passing False can improve performance.
     prefix : str, default None
         Prefix to add to column numbers when parsing without a header row
+
 
     Returns
     -------
@@ -280,7 +290,15 @@ def read_csv(filepath_or_buffer, lineterminator='\n',
     csv_reader.false_values = false_values_ptr
     csv_reader.num_false_values = len(arr_false_values)
 
+    arr_na_values = []
+    for value in na_values or []:
+        arr_na_values.append(_wrap_string(str(value)))
+    arr_na_values_ptr = ffi.new('char*[]', arr_na_values)
+    csv_reader.na_values = arr_na_values_ptr
+    csv_reader.num_na_values = len(arr_na_values)
+
     compression_bytes = _wrap_string(compression)
+    prefix_bytes = _wrap_string(prefix)
 
     csv_reader.delimiter = delimiter.encode()
     csv_reader.lineterminator = lineterminator.encode()
@@ -305,7 +323,8 @@ def read_csv(filepath_or_buffer, lineterminator='\n',
     else:
         csv_reader.byte_range_offset = 0
         csv_reader.byte_range_size = 0
-    prefix_bytes = _wrap_string(prefix)
+    csv_reader.keep_default_na = keep_default_na
+    csv_reader.na_filter = na_filter
     csv_reader.prefix = prefix_bytes
 
     # Call read_csv
@@ -346,7 +365,8 @@ def read_csv_strings(filepath_or_buffer, lineterminator='\n',
                      skipfooter=0, skiprows=0, dayfirst=False,
                      compression='infer', thousands=None, decimal='.',
                      true_values=None, false_values=None, nrows=None,
-                     byte_range=None, prefix=None):
+                     byte_range=None, na_values=None,
+                     keep_default_na=True, na_filter=True, prefix=None):
 
     """
     **Experimental**: This function exists only as a beta way to use
@@ -505,7 +525,15 @@ def read_csv_strings(filepath_or_buffer, lineterminator='\n',
     csv_reader.false_values = false_values_ptr
     csv_reader.num_false_values = len(arr_false_values)
 
+    arr_na_values = []
+    for value in na_values or []:
+        arr_na_values.append(_wrap_string(str(value)))
+    arr_na_values_ptr = ffi.new('char*[]', arr_na_values)
+    csv_reader.na_values = arr_na_values_ptr
+    csv_reader.num_na_values = len(arr_na_values)
+
     compression_bytes = _wrap_string(compression)
+    prefix_bytes = _wrap_string(prefix)
 
     csv_reader.delimiter = delimiter.encode()
     csv_reader.lineterminator = lineterminator.encode()
@@ -528,7 +556,8 @@ def read_csv_strings(filepath_or_buffer, lineterminator='\n',
     else:
         csv_reader.byte_range_offset = 0
         csv_reader.byte_range_size = 0
-    prefix_bytes = _wrap_string(prefix)
+    csv_reader.keep_default_na = keep_default_na
+    csv_reader.na_filter = na_filter
     csv_reader.prefix = prefix_bytes
 
     # Call read_csv

@@ -52,6 +52,7 @@
 
 #include "cudf.h"
 #include "utilities/error_utils.h"
+#include "utilities/trie.cuh"
 #include "utilities/type_dispatcher.hpp"
 
 #include "rmm/rmm.h"
@@ -90,8 +91,9 @@ typedef struct raw_csv_ {
 	gdf_size_type		skiprows;       // number of rows at the start of the file to skip, default is 0
 	gdf_size_type		skipfooter;     // number of rows at the bottom of the file to skip, default is 0
 
-    rmm::device_vector<int32_t>	d_trueValues;	// device: array of values to recognize as true
-    rmm::device_vector<int32_t>	d_falseValues;	// device: array of values to recognize as false
+    rmm::device_vector<int32_t>	d_trueValues;		// device: array of values to recognize as true
+    rmm::device_vector<int32_t>	d_falseValues;		// device: array of values to recognize as false
+    rmm::device_vector<SerialTrieNode>	d_naTrie;	// device: serialized trie of NA values
 } raw_csv_t;
 
 typedef struct column_data_ {
@@ -141,7 +143,7 @@ __global__ void storeRecordStart(char *data, size_t chunk_offset,
 	cu_recstart_t* recStart);
 __global__ void convertCsvToGdf(char *csv, const ParseOptions opts,
 	gdf_size_type num_records, int num_columns, bool *parseCol,
-	cu_recstart_t *recStart, gdf_dtype *dtype, void **gdf_data, gdf_valid_type **valid,
+	cu_recstart_t *recStart, gdf_dtype *dtype, SerialTrieNode *na_trie, void **gdf_data, gdf_valid_type **valid,
 	string_pair **str_cols, unsigned long long *num_valid);
 __global__ void dataTypeDetection(char *raw_csv, const ParseOptions opts,
 	gdf_size_type num_records, int num_columns, bool *parseCol,
@@ -323,6 +325,27 @@ gdf_error read_csv(csv_read_arg *args)
 		}
 		raw_csv->d_falseValues = h_values;
 	}
+
+	if (args->na_filter && 
+		(args->keep_default_na || (args->na_values != nullptr && args->num_na_values > 0))) {
+		vector<string> na_values{
+			"#N/A", "#N/A N/A", "#NA", "-1.#IND", 
+			"-1.#QNAN", "-NaN", "-nan", "1.#IND", 
+			"1.#QNAN", "N/A", "NA", "NULL", 
+			"NaN", "n/a", "nan", "null"};
+		if(!args->keep_default_na){
+			na_values.clear();
+		}
+
+		if (args->na_values != nullptr && args->num_na_values > 0) {
+			for (int i = 0; i < args->num_na_values; ++i) {
+				na_values.emplace_back(args->na_values[i]);
+			}
+		}
+
+		raw_csv->d_naTrie = createSerializedTrie(na_values);
+	}
+
 	raw_csv->opts.trueValues       = raw_csv->d_trueValues.data().get();
 	raw_csv->opts.trueValuesCount  = raw_csv->d_trueValues.size();
 	raw_csv->opts.falseValues      = raw_csv->d_falseValues.data().get();
@@ -1287,6 +1310,7 @@ gdf_error launch_dataConvertColumns(raw_csv_t *raw_csv, void **gdf, gdf_valid_ty
 		raw_csv->d_parseCol,
 		first_data_rec_start,
 		d_dtypes,
+		raw_csv->d_naTrie.empty() ? nullptr : raw_csv->d_naTrie.data().get(),
 		gdf,
 		valid,
 		str_cols,
@@ -1368,6 +1392,7 @@ void convertCsvToGdf(char *raw_csv,
                      bool *parseCol,
                      cu_recstart_t *recStart,
                      gdf_dtype *dtype,
+                     SerialTrieNode* na_trie,
                      void **gdf_data,
                      gdf_valid_type **valid,
                      string_pair **str_cols,
@@ -1420,14 +1445,16 @@ void convertCsvToGdf(char *raw_csv,
 
 		if(parseCol[col]==true){
 
-			long tempPos=pos-1;
+			// check if the entire field is a NaN string - consistent with pandas
+			const bool is_na = (na_trie == nullptr) ? false : serializedTrieContains(na_trie, raw_csv + start, pos - start);
 
 			// Modify start & end to ignore whitespace and quotechars
-			if(dtype[actual_col] != gdf_dtype::GDF_CATEGORY && dtype[actual_col] != gdf_dtype::GDF_STRING){
+			long tempPos=pos-1;
+			if(!is_na && dtype[actual_col] != gdf_dtype::GDF_CATEGORY && dtype[actual_col] != gdf_dtype::GDF_STRING){
 				adjustForWhitespaceAndQuotes(raw_csv, &start, &tempPos, opts.quotechar);
 			}
 
-			if(start<=(tempPos)) { // Empty fields are not legal values
+			if(!is_na && start<=(tempPos)) { // Empty fields are not legal values
 
 				// Type dispatcher does not handle GDF_STRINGS
 				if (dtype[actual_col] == gdf_dtype::GDF_STRING) {
