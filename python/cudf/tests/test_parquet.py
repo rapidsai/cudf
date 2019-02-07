@@ -21,7 +21,7 @@ def gdf(pdf):
 
 @pytest.fixture(params=['snappy', 'gzip', 'botli', None])
 def parquet_file(request, tmp_path_factory, pdf):
-    fname = tmp_path_factory.mktemp("parquet").join("test.parquet")
+    fname = tmp_path_factory.mktemp("parquet") / "test.parquet"
     pdf.to_parquet(fname, engine='pyarrow', compression=request.param)
     return fname
 
