@@ -463,7 +463,7 @@ gdf_error read_csv(csv_read_arg *args)
 			const string str_prefix = args->prefix != nullptr ? string(args->prefix) : "";
 			for (int i = 0; i < h_num_cols; ++i) {
 				raw_csv->col_names.push_back(str_prefix + std::to_string(i));
-      }
+			}
 		}
 
 		// Allocating a boolean array that will use to state if a column needs to read or filtered.
