@@ -160,6 +160,17 @@ set(UNARY_TEST_SRC
 ConfigureTest(UNARY_TEST "${UNARY_TEST_SRC}")
 
 ###################################################################################################
+# - binary tests ----------------------------------------------------------------------------------
+
+set(BINARY_TEST_SRC 
+    "${CMAKE_CURRENT_SOURCE_DIR}/binary/util/types.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/binary/unit/binop-verify-input-test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/binary/integration/binary-operation-integration-test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/binary/integration/binary-operation-operands-null-test.cpp")
+
+ConfigureTest(BINARY_TEST "${BINARY_TEST_SRC}")
+
+###################################################################################################
 # - csv tests -------------------------------------------------------------------------------------
 
 set(CSV_TEST_SRC
