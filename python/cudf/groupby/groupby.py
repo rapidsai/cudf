@@ -28,7 +28,7 @@ class SeriesGroupBy(object):
         df['x'] = self.source_series
         df['y'] = self.group_series
         groupby = df.groupby('y')
-        result_df = getattr(groupby, attr)(sort=True)
+        result_df = getattr(groupby, attr)()
 
         def get_result():
             result_series = result_df['x']
@@ -44,6 +44,9 @@ class SeriesGroupBy(object):
         df['x'] = self.source_series
         df['y'] = self.group_series
         groupby = df.groupby('y').agg(agg_types)
+        idx = groupby.index
+        idx.name = None
+        groupby.set_index(idx)
         return groupby
 
 
@@ -139,6 +142,9 @@ class Groupby(object):
             if agg_type == "count":
                 out_col_agg_series = Series(
                     Buffer(rmm.device_array(col_agg.size, dtype=np.int64)))
+            elif agg_type == "mean":
+                out_col_agg_series = Series(
+                    Buffer(rmm.device_array(col_agg.size, dtype=np.float64)))
             else:
                 out_col_agg_series = Series(Buffer(rmm.device_array(
                     col_agg.size, dtype=self._df[val_col]._column.data.dtype)))
@@ -243,19 +249,19 @@ class Groupby(object):
             return self[key]
         raise AttributeError("'Groupby' object has no attribute %r" % key)
 
-    def min(self, sort=False):
+    def min(self, sort=True):
         return self._apply_basic_agg("min", sort)
 
-    def max(self, sort=False):
+    def max(self, sort=True):
         return self._apply_basic_agg("max", sort)
 
-    def count(self, sort=False):
+    def count(self, sort=True):
         return self._apply_basic_agg("count", sort)
 
-    def sum(self, sort=False):
+    def sum(self, sort=True):
         return self._apply_basic_agg("sum", sort)
 
-    def mean(self, sort=False):
+    def mean(self, sort=True):
         return self._apply_basic_agg("mean", sort)
 
     def agg(self, args):
@@ -297,8 +303,6 @@ class Groupby(object):
         use_prefix = 1 < len(self._val_columns) or 1 < len(args)
         if not isinstance(args, str) and isinstance(
                 args, collections.abc.Sequence):
-            if (len(args) == 1 and len(self._val_columns) == 1):
-                sort_result = False
             for agg_type in args:
                 val_columns_out = [agg_type + '_' +
                                    val for val in self._val_columns]
