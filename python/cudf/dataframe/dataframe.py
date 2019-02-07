@@ -1322,7 +1322,8 @@ class DataFrame(object):
 
         return df
 
-    def groupby(self, by, sort=False, as_index=True, method="hash"):
+    def groupby(self, by=None, sort=False, as_index=True, method="hash",
+                level=None):
         """Groupby
 
         Parameters
@@ -1357,6 +1358,10 @@ class DataFrame(object):
         - Since we don't support multiindex, the *by* columns are stored
           as regular columns.
         """
+
+        if by is None and level is None:
+            raise TypeError('groupby() requires either by or level to be'
+                            'specified.')
         if (method == "cudf"):
             from cudf.groupby.legacy_groupby import Groupby
             if as_index:
@@ -1373,7 +1378,8 @@ class DataFrame(object):
             _gdf.nvtx_range_push("PYGDF_GROUPBY", "purple")
             # The matching `pop` for this range is inside LibGdfGroupby
             # __apply_agg
-            result = Groupby(self, by=by, method=method, as_index=as_index)
+            result = Groupby(self, by=by, method=method, as_index=as_index,
+                             level=level)
             return result
 
     def query(self, expr):

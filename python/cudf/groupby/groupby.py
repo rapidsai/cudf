@@ -61,7 +61,9 @@ class Groupby(object):
                         'sum': libgdf.gdf_group_by_sum,
                         }
 
-    def __init__(self, df, by, method="hash", as_index=True):
+    _LEVEL_0_INDEX_NAME = 'cudf_groupby_level_index'
+
+    def __init__(self, df, by, method="hash", as_index=True, level=None):
         """
         Parameters
         ----------
@@ -77,7 +79,13 @@ class Groupby(object):
         """
 
         self._df = df
-        self._by = [by] if isinstance(by, str) else list(by)
+        if level == 0:
+            self.level = level
+            self._df[self._LEVEL_0_INDEX_NAME] = self._df.index
+            self._original_index_name = self._df.index.name
+            self._by = [self._LEVEL_0_INDEX_NAME]
+        else:
+            self._by = [by] if isinstance(by, str) else list(by)
         self._val_columns = [idx for idx in self._df.columns
                              if idx not in self._by]
         self._as_index = as_index
@@ -109,6 +117,7 @@ class Groupby(object):
             The list of columns names that the aggregation results should be
             output into.
         """
+
         if sort_result:
             ctx.flag_sort_result = 1
 
@@ -222,7 +231,10 @@ class Groupby(object):
         if len(val_columns) == 1 and self._as_index:
             result_series = result[val_columns]
             idx = index.as_index(result[self._by[0]])
-            idx.name = self._by[0]
+            if self.level == 0:
+                idx.name = self._original_index_name
+            else:
+                idx.name = self._by[0]
             result_series = result_series.set_index(idx)
             return result_series
 
