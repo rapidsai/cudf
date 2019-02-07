@@ -115,7 +115,6 @@ def read_csv(filepath_or_buffer, lineterminator='\n',
     prefix : str, default None
         Prefix to add to column numbers when parsing without a header row
 
-
     Returns
     -------
     GPU ``DataFrame`` object.
