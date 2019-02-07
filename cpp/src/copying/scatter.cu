@@ -104,7 +104,7 @@ gdf_error scatter_bitmask(gdf_valid_type const* source_mask,
 
   // Copy temporary bitmask to destination mask
   if (in_place) {
-    thrust::copy(rmm::exec_policy(stream), temp_bitmask.begin(),
+    thrust::copy(rmm::exec_policy(stream)->on(stream), temp_bitmask.begin(),
                  temp_bitmask.end(), destination_mask);
   }
 
@@ -152,7 +152,7 @@ struct column_scatterer {
     }
 
     // Scatter the column's data
-    thrust::scatter(rmm::exec_policy(stream), source_data,
+    thrust::scatter(rmm::exec_policy(stream)->on(stream), source_data,
                     source_data + source_column->size, scatter_map,
                     destination_data);
 

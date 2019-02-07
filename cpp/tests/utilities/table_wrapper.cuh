@@ -47,14 +47,15 @@ constexpr auto index_apply_impl(F f, std::index_sequence<Is...>) {
 }
 
 /**---------------------------------------------------------------------------*
- * @brief Invokes a callable with an index sequence of a specified sized.
+ * @brief Invokes a callable with arguments consisting of an index sequence of a
+ * specified sized.
  *
- * Given a unary callable `f`, and a size `N`, this function will invoke
+ * Given a callable `f`, and a size `N`, this function will invoke
  * `f(0, 1, ..., N-1)` where the index_sequence are integral_constant values.
  *
  * @tparam N The size of the index sequence
  * @tparam F The callable's type
- * @param f The unary callable
+ * @param f The callable
  *---------------------------------------------------------------------------**/
 template <size_t N, class F>
 constexpr auto index_apply(F f) {
@@ -62,8 +63,8 @@ constexpr auto index_apply(F f) {
 }
 
 template <class Tuple, class F>
-constexpr auto apply(Tuple const& t, F f) {
-  return index_apply<std::tuple_size<Tuple>{}>(
+constexpr auto apply(Tuple const &t, F f) {
+  return index_apply<std::tuple_size<Tuple>::value>(
       [&](auto... Is) { return f(std::get<Is>(t)...); });
 }
 
@@ -75,7 +76,10 @@ struct table_wrapper;
 template <typename... Ts>
 struct table_wrapper<std::tuple<Ts...>> {
   table_wrapper(gdf_size_type num_rows)
-      : column_wrappers{std::unique_ptr<column_wrapper<Ts>>(new column_wrapper<Ts>(num_rows))...} {
+      : column_wrappers{std::unique_ptr<column_wrapper<Ts>>(
+            new column_wrapper<Ts>(num_rows))...}
+
+  {
     detail::apply(column_wrappers,
                   [this](std::unique_ptr<column_wrapper<Ts>> &... cols) {});
   }

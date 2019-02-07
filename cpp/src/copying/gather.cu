@@ -243,7 +243,7 @@ gdf_error gather_bitmask(gdf_valid_type const* source_mask,
   }
 
   if (in_place) {
-    thrust::copy(rmm::exec_policy(stream), temp_bitmask.begin(),
+    thrust::copy(rmm::exec_policy(stream)->on(stream), temp_bitmask.begin(),
                  temp_bitmask.end(), destination_mask);
   }
 
@@ -293,12 +293,12 @@ struct column_gatherer {
     }
 
     if (check_bounds) {
-      thrust::gather_if(rmm::exec_policy(stream), gather_map,
+      thrust::gather_if(rmm::exec_policy(stream)->on(stream), gather_map,
                         gather_map + num_destination_rows, gather_map,
                         source_data, destination_data,
                         bounds_checker{0, source_column->size});
     } else {
-      thrust::gather(rmm::exec_policy(stream), gather_map,
+      thrust::gather(rmm::exec_policy(stream)->on(stream), gather_map,
                      gather_map + num_destination_rows, source_data,
                      destination_data);
     }
