@@ -590,7 +590,10 @@ class DataFrame(object):
         index = self._index
         series = Series(col)
         sind = series.index
-        SCALAR = np.ndim(col) == 0
+
+        # This won't handle 0 dimensional arrays which should be okay
+        SCALAR = np.isscalar(col)
+        
         if len(self) > 0 and len(series) == 1 and SCALAR:
             arr = rmm.device_array(shape=len(index), dtype=series.dtype)
             cudautils.gpu_fill_value.forall(arr.size)(arr, col)
