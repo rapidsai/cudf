@@ -256,6 +256,7 @@ __host__ __device__ cudf::timestamp convertStrToValue<cudf::timestamp>(
 template <>
 __host__ __device__ cudf::nvstring_category convertStrToValue<cudf::nvstring_category>(
     const char* data, long start, long end, const ParseOptions& opts) {
+  assert(false);
   return cudf::nvstring_category{0};
 }
 
