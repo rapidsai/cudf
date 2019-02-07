@@ -1087,7 +1087,7 @@ class Series(object):
         -------
         A new Series containing the indices.
         """
-        from . import numerical
+        from cudf.dataframe import numerical
 
         return Series(numerical.digitize(self._column, bins, right))
 
