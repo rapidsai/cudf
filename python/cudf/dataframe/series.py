@@ -77,9 +77,7 @@ class Series(object):
         if not isinstance(data, columnops.TypedColumnBase):
             data = columnops.as_column(data, nan_as_null=nan_as_null)
 
-        if isinstance(index, range):
-            index = RangeIndex(index)
-        if index is not None and not isinstance(index, (RangeIndex, Index,)):
+        if index is not None and not isinstance(index, Index):
             raise TypeError('index not a Index type: got {!r}'.format(index))
 
         assert isinstance(data, columnops.TypedColumnBase)
@@ -301,8 +299,11 @@ class Series(object):
         # Prepare cells
         cols = OrderedDict([('', self.values_to_string(nrows=nrows))])
         # Format into a table
-        return formatting.format(index=self.index,
-                                 cols=cols, more_rows=more_rows)
+        output = formatting.format(index=self.index,
+                                   cols=cols, more_rows=more_rows,
+                                   series_spacing=True)
+        return output + "\nName: {}, dtype: {}".format(self.name, self.dtype)\
+            if self.name else output + "\ndtype: {}".format(self.dtype)
 
     def __str__(self):
         return self.to_string(nrows=10)

@@ -6,6 +6,7 @@
 - PR #539 Add Python bindings for replace function
 - PR #807 CSV Reader: Add byte_range parameter to specify the range in the input file to be read
 - PR #871 CSV Reader: Add support for NA values, including user specified strings
+- PR #867 CSV Reader: Add support for ignoring blank lines and comment lines
 - PR #888 CSV Reader: Add prefix parameter for column names, used when parsing without a header
 
 ## Improvements
@@ -17,6 +18,7 @@
 - PR #836 Add ingest support for arrow chunked arrays in Column, Series, DataFrame creation
 - PR #763 Format doxygen comments for csv_read_arg struct
 - PR #532 CSV Reader: Use type dispatcher instead of switch block
+- PR #878 Add better indexing to Groupby
 
 ## Bug Fixes
 

@@ -23,13 +23,11 @@
 
 #include <cuda_runtime.h>
 
+#include <algorithm>
 #include <iostream>
-#include <vector>
-#include <string>
-#include <stdio.h>
 #include <numeric>
-#include <iomanip>
-#include <unordered_map>
+#include <string>
+#include <vector>
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -87,6 +85,9 @@ typedef struct raw_csv_ {
     bool* 				d_parseCol;		// device : array of booleans stating if column should be parsed in reading process: parseCol[x]=false means that the column x needs to be filtered out.
     long 				header_row;		// Row id of the header
 
+    long        byte_range_offset;  // offset into the data to start parsing
+    long        byte_range_size;    // length of the data of interest to parse
+
 	gdf_size_type  		nrows;       	// number of rows of file to read. default is -1, and all rows are read in this case
 	gdf_size_type		skiprows;       // number of rows at the start of the file to skip, default is 0
 	gdf_size_type		skipfooter;     // number of rows at the bottom of the file to skip, default is 0
@@ -130,8 +131,8 @@ gdf_dtype convertStringToDtype(std::string &dtype);
 
 __device__ int findSetBit(int tid, long num_bits, uint64_t *f_bits, int x);
 
-gdf_error launch_countRecords(const char* h_data, size_t h_size, char terminator, char quote, gdf_size_type& rec_cnt);
-gdf_error launch_storeRecordStart(const char* h_data, size_t h_size, bool include_first_row, raw_csv_t * csvData);
+gdf_error launch_countRecords(const char* h_data, size_t h_size, raw_csv_t * raw_csv, gdf_size_type& rec_cnt);
+gdf_error launch_storeRecordStart(const char* h_data, size_t h_size, raw_csv_t * csvData);
 gdf_error launch_dataConvertColumns(raw_csv_t * raw_csv, void** d_gdf,  gdf_valid_type** valid, gdf_dtype* d_dtypes, string_pair **str_cols, unsigned long long *);
 
 gdf_error launch_dataTypeDetection(raw_csv_t * raw_csv, column_data_t* d_columnData);
@@ -194,39 +195,6 @@ __device__ void setBit(gdf_valid_type* address, int bit) {
 	}
 }
 
-
-/**---------------------------------------------------------------------------*
- * @brief Updates the number of records to trim the rows that start after 
- * the end of the byte range.
- * 
- * Does not modify the recStart array, just modifies num_records.
- * 
- * @param[in] byte_range_size Size of the byte range, in bytes
- * @param[in,out] raw_csv pointer to the structure containing the csv parsing parameters
- * and intermediate results
- * 
- * @return gdf_error with error code on failure, otherwise GDF_SUCCESS
- *---------------------------------------------------------------------------**/
- gdf_error trimExtraRows(gdf_size_type byte_range_size, raw_csv_t * raw_csv) {
-	// TODO: don't copy the whole array, only up to calculateMaxRowSize() rows are relevant here
-	vector<cu_recstart_t> h_rec_starts(raw_csv->num_records + 1);
-	const size_t rec_start_size = sizeof(cu_recstart_t) * (h_rec_starts.size());
-	CUDA_TRY( cudaMemcpy(h_rec_starts.data(), raw_csv->recStart, rec_start_size, cudaMemcpyDeviceToHost) );
-	size_t rec_start_idx = raw_csv->num_records;
-
-	// TODO: we could use a modified binary search here instead
-	// Searching for the last row that starts before the range end
-	// This row with be the extra one we want to read, as it ends after the byte range end
-	while (rec_start_idx != 0 && h_rec_starts[rec_start_idx] > (cu_recstart_t)byte_range_size) {
-		--rec_start_idx;
-	}
-	// +1 to convert from index to size
-	raw_csv->num_records = rec_start_idx + 1;
-
-	return GDF_SUCCESS;
-}
-
-
 /**---------------------------------------------------------------------------*
  * @brief Read in a CSV file, extract all fields and return 
  * a GDF (array of gdf_columns)
@@ -249,19 +217,10 @@ gdf_error read_csv(csv_read_arg *args)
 	raw_csv->num_active_cols	= args->num_cols;
 	raw_csv->num_records		= 0;
 
-	if (args->names == nullptr) {
-		raw_csv->header_row = args->header;
-	}
-	else{
-		raw_csv->header_row = -1;
-	}
-
+	raw_csv->header_row = args->header;
 	raw_csv->skiprows = args->skiprows;
 	raw_csv->skipfooter = args->skipfooter;
 	raw_csv->nrows = args->nrows;
-	if (raw_csv->header_row >= 0 && args->nrows >= 0) {
-		++raw_csv->nrows;
-	}
 
 	if (args->delim_whitespace) {
 		raw_csv->opts.delimiter = ' ';
@@ -282,6 +241,8 @@ gdf_error read_csv(csv_read_arg *args)
 		raw_csv->opts.keepquotes = true;
 		raw_csv->opts.doublequote = false;
 	}
+	raw_csv->opts.skipblanklines = args->skip_blank_lines;
+	raw_csv->opts.comment = args->comment;
 	raw_csv->opts.dayfirst = args->dayfirst;
 	raw_csv->opts.decimal = args->decimal;
 	raw_csv->opts.thousands = args->thousands;
@@ -296,8 +257,10 @@ gdf_error read_csv(csv_read_arg *args)
 	error = inferCompressionType(args->compression, args->filepath_or_buffer, compression_type);
 	checkError(error, "call to inferCompressionType");
 
-	if (args->byte_range_offset > 0 || args->byte_range_size > 0) {
-		if (raw_csv->nrows >=0 || raw_csv->skiprows > 0 || raw_csv->skipfooter > 0) {
+	raw_csv->byte_range_offset = args->byte_range_offset;
+	raw_csv->byte_range_size = args->byte_range_size;
+	if (raw_csv->byte_range_offset > 0 || raw_csv->byte_range_size > 0) {
+		if (raw_csv->nrows >= 0 || raw_csv->skiprows > 0 || raw_csv->skipfooter > 0) {
 			checkError(GDF_INVALID_API_CALL, 
 				"Cannot manually limit rows to be read when using the byte range parameter");
 		}
@@ -357,7 +320,6 @@ gdf_error read_csv(csv_read_arg *args)
 	size_t	map_size = 0;
 	size_t	map_offset = 0;
 	int fd = 0;
-	bool read_extra_row = false;
 	if (args->input_data_form == gdf_csv_input_form::FILE_PATH)
 	{
 		fd = open(args->filepath_or_buffer, O_RDONLY );
@@ -377,15 +339,14 @@ gdf_error read_csv(csv_read_arg *args)
 		raw_csv->num_bytes = map_size = file_size - map_offset;
 
 		// Include the page padding in the mapped size
-		const auto page_padding = args->byte_range_offset - map_offset;
-		const auto padded_byte_range_size = args->byte_range_size + page_padding;
-		// If byte range size is zero, read the whole thing
-		if(args->byte_range_size != 0 && (size_t)padded_byte_range_size < map_size) {
-			read_extra_row = true;
+		const size_t page_padding = args->byte_range_offset - map_offset;
+		const size_t padded_byte_range_size = args->byte_range_size + page_padding;
+
+		if (args->byte_range_size != 0 && padded_byte_range_size < map_size) {
 			// Need to make sure that w/ padding we don't overshoot the end of file
 			map_size = min(padded_byte_range_size + calculateMaxRowSize(args->num_cols), map_size);
 			// Ignore page padding for parsing purposes
-			raw_csv->num_bytes = map_size - page_padding; 
+			raw_csv->num_bytes = map_size - page_padding;
 		}
 
 		map_data = mmap(0, map_size, PROT_READ, MAP_PRIVATE, fd, map_offset);
@@ -417,36 +378,29 @@ gdf_error read_csv(csv_read_arg *args)
 	assert(h_uncomp_data != nullptr);
 	assert(h_uncomp_size != 0);
 
-	error = launch_countRecords(h_uncomp_data, h_uncomp_size, raw_csv->opts.terminator, raw_csv->opts.quotechar, raw_csv->num_records);
-	if (error != GDF_SUCCESS) {
-			return error;
-	}
-
-	const bool include_first_row = args->byte_range_offset==0;
-	if (!include_first_row) {
-		--raw_csv->num_records;
-	}
+	error = launch_countRecords(h_uncomp_data, h_uncomp_size, raw_csv, raw_csv->num_records);
+	checkError(error, "call to record number of rows");
 
 	//-----------------------------------------------------------------------------
 	//-- Allocate space to hold the record starting point
-	RMM_TRY( RMM_ALLOC((void**)&(raw_csv->recStart), (sizeof(cu_recstart_t) * (raw_csv->num_records + 1)), 0) ); 
+	RMM_TRY( RMM_ALLOC(&raw_csv->recStart, sizeof(cu_recstart_t) * raw_csv->num_records, 0) ); 
 
 	//-----------------------------------------------------------------------------
 	//-- Scan data and set the starting positions
-	error = launch_storeRecordStart(h_uncomp_data, h_uncomp_size, include_first_row, raw_csv);
+	error = launch_storeRecordStart(h_uncomp_data, h_uncomp_size, raw_csv);
 	checkError(error, "call to record initial position store");
 
 	// Previous kernel stores the record pinput_file.typeositions as encountered by all threads
 	// Sort the record positions as subsequent processing may require filtering
 	// certain rows or other processing on specific records
-	thrust::sort(thrust::device, raw_csv->recStart, raw_csv->recStart + raw_csv->num_records + 1);
+	thrust::sort(rmm::exec_policy()->on(0), raw_csv->recStart, raw_csv->recStart + raw_csv->num_records);
 
 	// Currently, ignoring lineterminations within quotes is handled by recording
 	// the records of both, and then filtering out the records that is a quotechar
 	// or a linetermination within a quotechar pair. The future major refactoring
 	// of csv_reader and its kernels will probably use a different tactic.
 	if (raw_csv->opts.quotechar != '\0') {
-		vector<cu_recstart_t> h_rec_starts(raw_csv->num_records + 1);
+		vector<cu_recstart_t> h_rec_starts(raw_csv->num_records);
 		const size_t rec_start_size = sizeof(cu_recstart_t) * (h_rec_starts.size());
 		CUDA_TRY( cudaMemcpy(h_rec_starts.data(), raw_csv->recStart, rec_start_size, cudaMemcpyDeviceToHost) );
 
@@ -466,14 +420,8 @@ gdf_error read_csv(csv_read_arg *args)
 		}
 
 		CUDA_TRY( cudaMemcpy(raw_csv->recStart, h_rec_starts.data(), rec_start_size, cudaMemcpyHostToDevice) );
-		thrust::sort(thrust::device, raw_csv->recStart, raw_csv->recStart + raw_csv->num_records + 1);
+		thrust::sort(rmm::exec_policy()->on(0), raw_csv->recStart, raw_csv->recStart + raw_csv->num_records);
 		raw_csv->num_records = recCount;
-	}
-
-	// discard the records that start after the end of the byte range
-	if (read_extra_row) {
-		error = trimExtraRows(args->byte_range_size, raw_csv);
-		checkError(error, "call to trim extra rows");
 	}
 
 	error = uploadDataToDevice(h_uncomp_data, h_uncomp_size, raw_csv);
@@ -494,43 +442,30 @@ gdf_error read_csv(csv_read_arg *args)
 		vector<char> first_row(second_rec_start);
 		CUDA_TRY(cudaMemcpy(first_row.data(), raw_csv->data, sizeof(char) * first_row.size(), cudaMemcpyDefault));
 
-		// datect the number of rows and assign the column name
-		raw_csv->col_names.clear();
-		if(raw_csv->header_row >= 0) {
-			size_t prev = 0;
-			size_t c = 0;
-			// Storing the names of the columns into a vector of strings
-			while(c < first_row.size()) {
-				if (first_row[c] == args->delimiter || first_row[c] == args->lineterminator){
-					std::string colName(first_row.data() + prev, c - prev );
-					prev = c + 1;
-					raw_csv->col_names.push_back(colName);
+		if (raw_csv->header_row >= 0) {
+			// Parse header row to assign column names; does not currently handle
+			// quotations to avoid added parsing complexity
+			for (size_t pos = 0, prev = 0; pos < first_row.size(); ++pos) {
+				if (first_row[pos] == raw_csv->opts.delimiter ||
+					first_row[pos] == raw_csv->opts.terminator) {
+					raw_csv->col_names.emplace_back(first_row.data() + prev, pos - prev);
 					h_num_cols++;
+					if (first_row[pos] == raw_csv->opts.terminator) {
+						break;
+					}
+					prev = pos + 1;
 				}
-				c++;
 			}
-		}
-		else {
-			size_t c = 0;
-			while(c < first_row.size()) {
-				if (first_row[c] == args->lineterminator) {
-					h_num_cols++;
-					break;
-				}
-				else if(first_row[c] == '\r' && (c+1L) < first_row.size() && first_row[c+1] == '\n'){
-					h_num_cols++;
-					break;
-				}else if (first_row[c] == args->delimiter)
-					h_num_cols++;
-				c++;
-			}
+		} else {
+			h_num_cols = std::count(first_row.begin(), first_row.end(), raw_csv->opts.delimiter) + 1;
 			// assign column indexes as names if the header column is not present
 			raw_csv->col_names.reserve(h_num_cols);
 			const string str_prefix = args->prefix != nullptr ? string(args->prefix) : "";
 			for (int i = 0; i < h_num_cols; ++i) {
 				raw_csv->col_names.push_back(str_prefix + std::to_string(i));
-			}
+      }
 		}
+
 		// Allocating a boolean array that will use to state if a column needs to read or filtered.
 		raw_csv->h_parseCol = (bool*)malloc(sizeof(bool) * (h_num_cols));
 		RMM_TRY( RMM_ALLOC((void**)&raw_csv->d_parseCol,(sizeof(bool) * (h_num_cols)),0 ) );
@@ -945,60 +880,115 @@ gdf_error getUncompressedHostData(const char* h_data, size_t num_bytes, const st
  * 
  * @param[in] h_uncomp_data Pointer to the uncompressed csv data in host memory
  * @param[in] h_uncomp_size Size of the input data, in bytes
- * @param[in,out] csvData Structure containing the csv parsing parameters
+ * @param[in,out] raw_csv Structure containing the csv parsing parameters
  * and intermediate results
  * 
  * @return gdf_error with error code on failure, otherwise GDF_SUCCESS
  *---------------------------------------------------------------------------**/
-gdf_error uploadDataToDevice(const char* h_uncomp_data, size_t h_uncomp_size, raw_csv_t * raw_csv) {
-	vector<cu_recstart_t> h_rec_starts(raw_csv->num_records + 1);
-	CUDA_TRY( cudaMemcpy(h_rec_starts.data(), raw_csv->recStart, sizeof(cu_recstart_t) * h_rec_starts.size(), cudaMemcpyDefault));
-	
-	// Exclude the rows user chose to skip at the start of the file
-	const gdf_size_type first_row = raw_csv->skiprows + max(raw_csv->header_row, 0l);
-	if (raw_csv->num_records > first_row) {
-		raw_csv->num_records = raw_csv->num_records - (long)first_row;
-	}
-	else {
-		checkError(GDF_FILE_ERROR, "Number of records is too small for the specified skiprows and header parameters");
-	}
+gdf_error uploadDataToDevice(const char *h_uncomp_data, size_t h_uncomp_size,
+                             raw_csv_t *raw_csv) {
 
-	// Restrict the rows to nrows if nrows is smaller than the remaining number of rows
-	if (raw_csv->nrows >= 0 && (gdf_size_type)raw_csv->nrows < raw_csv->num_records) {
-		raw_csv->num_records = (gdf_size_type)raw_csv->nrows;
-	}
+  // Exclude the rows that are to be skipped from the start
+  GDF_REQUIRE(raw_csv->num_records > raw_csv->skiprows, GDF_INVALID_API_CALL);
+  const auto first_row = raw_csv->skiprows;
+  raw_csv->num_records = raw_csv->num_records - first_row;
 
-	// Exclude the rows user chose to skip at the end of the file
-	if (raw_csv->skipfooter != 0) {
-		raw_csv->num_records = gdf_size_type(max(raw_csv->num_records - raw_csv->skipfooter, gdf_size_type{0}));
-		
-	}
-	
-	// Have to at least read the header row
-	if (raw_csv->header_row >= 0 && raw_csv->num_records == 0) 
-		raw_csv->num_records = 1;
+  std::vector<cu_recstart_t> h_rec_starts(raw_csv->num_records);
+  CUDA_TRY(cudaMemcpy(h_rec_starts.data(), raw_csv->recStart + first_row,
+                      sizeof(cu_recstart_t) * h_rec_starts.size(),
+                      cudaMemcpyDefault));
 
-	// If specified, header row will always be the first row in the GPU data
-	raw_csv->header_row = min(raw_csv->header_row, 0l);
+  // Trim lines that are outside range, but keep one greater for the end offset
+  if (raw_csv->byte_range_size != 0) {
+    auto it = h_rec_starts.end() - 1;
+    while (it >= h_rec_starts.begin() &&
+           *it > cu_recstart_t(raw_csv->byte_range_size)) {
+      --it;
+    }
+    if ((it + 2) < h_rec_starts.end()) {
+      h_rec_starts.erase(it + 2, h_rec_starts.end());
+    }
+  }
 
-	const auto start_offset = h_rec_starts[first_row];
-	const auto end_offset = h_rec_starts[first_row + raw_csv->num_records] - 1;
-	raw_csv->num_bytes = end_offset - start_offset + 1;
-	assert(raw_csv->num_bytes <= h_uncomp_size);
-	raw_csv->num_bits = (raw_csv->num_bytes + 63) / 64;
+  // Discard only blank lines, only fully comment lines, or both.
+  // If only handling one of them, ensure it doesn't match against \0 as we do
+  // not certain scenarios filtered-out (end-of-file)
+  if (raw_csv->opts.skipblanklines || raw_csv->opts.comment != '\0') {
+    const auto match1 = raw_csv->opts.skipblanklines ? raw_csv->opts.terminator
+                                                     : raw_csv->opts.comment;
+    const auto match2 = raw_csv->opts.comment != '\0' ? raw_csv->opts.comment
+                                                      : match1;
+    h_rec_starts.erase(
+        std::remove_if(h_rec_starts.begin(), h_rec_starts.end(),
+                       [&](cu_recstart_t i) {
+                         return (h_uncomp_data[i] == match1 ||
+                                 h_uncomp_data[i] == match2);
+                       }),
+        h_rec_starts.end());
+  }
 
-	// Update the record starts to match the device data (skip missing records, fix offset)
-	for (gdf_size_type i = first_row; i <= first_row + raw_csv->num_records; ++i)
-		h_rec_starts[i] -= start_offset;
-	RMM_TRY(RMM_REALLOC(&raw_csv->recStart, sizeof(cu_recstart_t) * (raw_csv->num_records + 1), 0));
-	CUDA_TRY( cudaMemcpy(raw_csv->recStart, h_rec_starts.data() + first_row, 
-		sizeof(cu_recstart_t) * (raw_csv->num_records + 1), cudaMemcpyDefault));
+  raw_csv->num_records = h_rec_starts.size();
 
-	// Allocate and copy to the GPU
-	RMM_TRY(RMM_ALLOC ((void**)&raw_csv->data, (sizeof(char) * raw_csv->num_bytes), 0));
-	CUDA_TRY(cudaMemcpy(raw_csv->data, h_uncomp_data + start_offset, raw_csv->num_bytes, cudaMemcpyHostToDevice));
+  // Exclude the rows before the header row
+  if (raw_csv->header_row > 0) {
+    h_rec_starts.erase(h_rec_starts.begin(),
+                       h_rec_starts.begin() + raw_csv->header_row);
+    raw_csv->num_records = h_rec_starts.size();
+  }
 
-	return GDF_SUCCESS;
+  // Exclude the rows that exceed past the requested number
+  if (raw_csv->nrows >= 0 && raw_csv->nrows < raw_csv->num_records) {
+    if (raw_csv->header_row >= 0) {
+      h_rec_starts.resize(raw_csv->nrows + 2);  // include header & end offset
+    } else {
+      h_rec_starts.resize(raw_csv->nrows + 1);  // include end offset
+    }
+    raw_csv->num_records = h_rec_starts.size();
+  }
+
+  // Exclude the rows that are to be skipped from the end
+  if (raw_csv->skipfooter > 0) {
+    h_rec_starts.resize(h_rec_starts.size() - raw_csv->skipfooter);
+    raw_csv->num_records = h_rec_starts.size();
+  }
+
+  // Check that there is actual data to parse
+  GDF_REQUIRE(raw_csv->num_records > 0, GDF_INVALID_API_CALL);
+
+  const auto start_offset = h_rec_starts.front();
+  const auto end_offset = h_rec_starts.back();
+  raw_csv->num_bytes = end_offset - start_offset;
+  assert(raw_csv->num_bytes <= h_uncomp_size);
+  raw_csv->num_bits = (raw_csv->num_bytes + 63) / 64;
+
+  // Resize and upload the rows of interest
+  RMM_TRY(RMM_REALLOC(&raw_csv->recStart,
+                      sizeof(cu_recstart_t) * raw_csv->num_records, 0));
+  CUDA_TRY(cudaMemcpy(raw_csv->recStart, h_rec_starts.data(),
+                      sizeof(cu_recstart_t) * raw_csv->num_records,
+                      cudaMemcpyDefault));
+
+  // Upload the raw data that is within the rows of interest
+  RMM_TRY(RMM_ALLOC(&raw_csv->data, raw_csv->num_bytes, 0));
+  CUDA_TRY(cudaMemcpy(raw_csv->data, h_uncomp_data + start_offset,
+                      raw_csv->num_bytes, cudaMemcpyHostToDevice));
+
+  // Adjust row start positions to account for the data subcopy
+  thrust::transform(rmm::exec_policy()->on(0), raw_csv->recStart,
+                    raw_csv->recStart + raw_csv->num_records,
+                    thrust::make_constant_iterator(start_offset),
+                    raw_csv->recStart, thrust::minus<cu_recstart_t>());
+
+  // We added extra for offset=0 position - remove for actual data row count
+  if (raw_csv->byte_range_offset == 0) {
+    raw_csv->num_records--;
+  }
+  // We kept extra for end offset - remove for actual data row count
+  if (raw_csv->byte_range_size != 0) {
+    raw_csv->num_records--;
+  }
+
+  return GDF_SUCCESS;
 }
 
 
@@ -1054,16 +1044,11 @@ gdf_error allocateGdfDataSpace(gdf_column *col) {
  * 
  * @return gdf_error with error code on failure, otherwise GDF_SUCCESS
  *---------------------------------------------------------------------------**/
-gdf_error launch_countRecords(const char* h_data, size_t h_size, 
-							  char terminator, char quote, 
-							  gdf_size_type& rec_cnt)
+gdf_error launch_countRecords(const char *h_data, size_t h_size,
+                              raw_csv_t *raw_csv, gdf_size_type &rec_cnt)
 {
 	const size_t chunk_count = (h_size + max_chunk_bytes - 1) / max_chunk_bytes;
-	vector<cu_reccnt_t> h_cnts(chunk_count);
-
-	cu_reccnt_t* d_cnts = nullptr;
-	RMM_TRY(RMM_ALLOC (&d_cnts, sizeof(cu_reccnt_t)* chunk_count, 0));
-	CUDA_TRY(cudaMemset(d_cnts, 0, sizeof(cu_reccnt_t)* chunk_count));
+	rmm::device_vector<cu_reccnt_t> d_counts(chunk_count);
 
 	char* d_chunk = nullptr;
 	RMM_TRY(RMM_ALLOC (&d_chunk, max_chunk_bytes, 0)); 
@@ -1082,18 +1067,21 @@ gdf_error launch_countRecords(const char* h_data, size_t h_size,
 
 		const int gridSize = (chunk_bits + blockSize - 1) / blockSize;
 		countRecords <<< gridSize, blockSize >>> (
-			d_chunk, terminator, quote,
-			chunk_bytes, chunk_bits, &d_cnts[ci]
+			d_chunk, raw_csv->opts.terminator, raw_csv->opts.quotechar,
+			chunk_bytes, chunk_bits, thrust::raw_pointer_cast(&d_counts[ci])
 			);
 	}
-	CUDA_TRY(cudaMemcpy(h_cnts.data(), d_cnts, chunk_count*sizeof(cu_reccnt_t), cudaMemcpyDefault));
 
 	RMM_TRY( RMM_FREE(d_chunk, 0) );
-	RMM_TRY( RMM_FREE(d_cnts, 0) );
 
 	CUDA_TRY(cudaGetLastError());
 
-	rec_cnt = std::accumulate(h_cnts.begin(), h_cnts.end(), gdf_size_type(0));
+	// Row count is used to allocate/track row start positions
+	// If not starting at an offset, add an extra row to account for offset=0
+	rec_cnt = thrust::reduce(rmm::exec_policy()->on(0), d_counts.begin(), d_counts.end());
+	if (raw_csv->byte_range_offset == 0) {
+		rec_cnt++;
+	}
 
 	return GDF_SUCCESS;
 }
@@ -1168,7 +1156,8 @@ __global__ void countRecords(char *data, const char terminator, const char quote
  * 
  * @return gdf_error with error code on failure, otherwise GDF_SUCCESS
  *---------------------------------------------------------------------------**/
-gdf_error launch_storeRecordStart(const char* h_data, size_t h_size, bool include_first_row, raw_csv_t * csvData) {
+gdf_error launch_storeRecordStart(const char *h_data, size_t h_size,
+                                  raw_csv_t *csvData) {
 
 	char* d_chunk = nullptr;
 	// Allocate extra byte in case \r\n is at the chunk border
@@ -1189,7 +1178,7 @@ gdf_error launch_storeRecordStart(const char* h_data, size_t h_size, bool includ
 		const auto chunk_bytes = std::min((size_t)(h_size - ci * max_chunk_bytes), max_chunk_bytes);
 		const auto chunk_bits = (chunk_bytes + 63) / 64;
 		// include_first_row should only apply to the first chunk
-		const bool cu_include_first_row = (ci == 0) && include_first_row;
+		const bool cu_include_first_row = (ci == 0) && (csvData->byte_range_offset == 0);
 		
 		// Copy chunk to device. Copy extra byte if not last chunk
 		CUDA_TRY(cudaMemcpy(d_chunk, h_chunk, ci < (chunk_count - 1)?chunk_bytes:chunk_bytes + 1, cudaMemcpyDefault));

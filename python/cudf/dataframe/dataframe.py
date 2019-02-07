@@ -393,7 +393,7 @@ class DataFrame(object):
         # Format into a table
         return formatting.format(index=self._index, cols=cols,
                                  show_headers=True, more_cols=more_cols,
-                                 more_rows=more_rows)
+                                 more_rows=more_rows, min_width=2)
 
     def __str__(self):
         nrows = settings.formatting.get('nrows') or 10
@@ -1322,7 +1322,7 @@ class DataFrame(object):
 
         return df
 
-    def groupby(self, by, sort=False, as_index=False, method="hash"):
+    def groupby(self, by, sort=False, as_index=True, method="hash"):
         """Groupby
 
         Parameters
@@ -1360,22 +1360,20 @@ class DataFrame(object):
         if (method == "cudf"):
             from cudf.groupby.legacy_groupby import Groupby
             if as_index:
-                msg = "as_index==True not supported due to the lack of\
-                    multi-index"
-                raise NotImplementedError(msg)
+                warnings.warn(
+                    'as_index==True not supported due to the lack of '
+                    'multi-index with legacy groupby function. Use hash '
+                    'method for multi-index'
+                )
             result = Groupby(self, by=by)
             return result
         else:
             from cudf.groupby.groupby import Groupby
 
             _gdf.nvtx_range_push("PYGDF_GROUPBY", "purple")
-            if as_index:
-                msg = "as_index==True not supported due to the lack of\
-                    multi-index"
-                raise NotImplementedError(msg)
             # The matching `pop` for this range is inside LibGdfGroupby
             # __apply_agg
-            result = Groupby(self, by=by, method=method)
+            result = Groupby(self, by=by, method=method, as_index=as_index)
             return result
 
     def query(self, expr):
