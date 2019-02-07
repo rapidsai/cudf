@@ -39,6 +39,13 @@ class SeriesGroupBy(object):
             return result_series
         return get_result
 
+    def agg(self, agg_types):
+        df = DataFrame()
+        df['x'] = self.source_series
+        df['y'] = self.group_series
+        groupby = df.groupby('y').agg(agg_types)
+        return groupby
+
 
 class Groupby(object):
     """Groupby object returned by cudf.DataFrame.groupby().
