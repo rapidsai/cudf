@@ -1437,6 +1437,22 @@ def test_arrow_pandas_compat(pdf, gdf, preserve_index):
     assert_eq(pdf2, gdf2)
 
 
+@pytest.mark.parametrize('nrows', [1, 8, 100, 1000])
+def test_series_hash_encode(nrows):
+    data = np.asarray(range(nrows))
+    s = Series(data, name="x1")
+    num_features = 1000
+
+    encoded_series = s.hash_encode(num_features)
+    assert isinstance(encoded_series, gd.Series)
+    enc_arr = encoded_series.to_array()
+    assert np.all(enc_arr >= 0)
+    assert np.max(enc_arr) < num_features
+
+    enc_with_name_arr = s.hash_encode(num_features, use_name=True).to_array()
+    assert enc_with_name_arr[0] != enc_arr[0]
+
+
 @pytest.mark.parametrize('dtype', ['int8', 'int16', 'int32', 'int64',
                                    'float32', 'float64'])
 def test_cuda_array_interface(dtype):
@@ -1525,3 +1541,13 @@ def test_boolmask(pdf, gdf):
     gdf = gdf[boolmask]
     pdf = pdf[boolmask]
     assert_eq(pdf, gdf)
+
+
+def test_arrow_handle_no_index_name(pdf, gdf):
+    gdf_arrow = gdf.to_arrow()
+    pdf_arrow = pa.Table.from_pandas(pdf)
+    assert pa.Table.equals(pdf_arrow, gdf_arrow)
+
+    got = DataFrame.from_arrow(gdf_arrow)
+    expect = pdf_arrow.to_pandas()
+    assert_eq(expect, got)

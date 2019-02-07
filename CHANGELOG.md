@@ -5,6 +5,10 @@
 - PR #760 Raise `FileNotFoundError` instead of `GDF_FILE_ERROR` in `read_csv` if the file does not exist
 - PR #539 Add Python bindings for replace function
 - PR #807 CSV Reader: Add byte_range parameter to specify the range in the input file to be read
+- PR #858 Add series feature hashing support
+- PR #871 CSV Reader: Add support for NA values, including user specified strings
+- PR #867 CSV Reader: Add support for ignoring blank lines and comment lines
+- PR #895 Add Series groupby
 
 ## Improvements
 
@@ -15,6 +19,7 @@
 - PR #836 Add ingest support for arrow chunked arrays in Column, Series, DataFrame creation
 - PR #763 Format doxygen comments for csv_read_arg struct
 - PR #532 CSV Reader: Use type dispatcher instead of switch block
+- PR #878 Add better indexing to Groupby
 
 ## Bug Fixes
 
@@ -25,6 +30,9 @@
 - PR #815 CSV Reader: Fix data parsing when tabs are present in the input CSV file
 - PR #850 Fix bug where left joins where the left df has 0 rows causes a crash
 - PR #861 Fix memory leak by preserving the boolean mask index
+- PR #875 Handle unnamed indexes in to/from arrow functions
+- PR #876 Added missing `<type_traits>` include
+- PR #889 Deleted test_rmm.py which has now moved to RMM repo
 - PR #866 Merge v0.5.1 numpy ABI hotfix into 0.6
 
 

@@ -393,7 +393,7 @@ class DataFrame(object):
         # Format into a table
         return formatting.format(index=self._index, cols=cols,
                                  show_headers=True, more_cols=more_cols,
-                                 more_rows=more_rows)
+                                 more_rows=more_rows, min_width=2)
 
     def __str__(self):
         nrows = settings.formatting.get('nrows') or 10
@@ -1322,7 +1322,7 @@ class DataFrame(object):
 
         return df
 
-    def groupby(self, by, sort=False, as_index=False, method="hash"):
+    def groupby(self, by, sort=False, as_index=True, method="hash"):
         """Groupby
 
         Parameters
@@ -1360,22 +1360,20 @@ class DataFrame(object):
         if (method == "cudf"):
             from cudf.groupby.legacy_groupby import Groupby
             if as_index:
-                msg = "as_index==True not supported due to the lack of\
-                    multi-index"
-                raise NotImplementedError(msg)
+                warnings.warn(
+                    'as_index==True not supported due to the lack of '
+                    'multi-index with legacy groupby function. Use hash '
+                    'method for multi-index'
+                )
             result = Groupby(self, by=by)
             return result
         else:
             from cudf.groupby.groupby import Groupby
 
             _gdf.nvtx_range_push("PYGDF_GROUPBY", "purple")
-            if as_index:
-                msg = "as_index==True not supported due to the lack of\
-                    multi-index"
-                raise NotImplementedError(msg)
             # The matching `pop` for this range is inside LibGdfGroupby
             # __apply_agg
-            result = Groupby(self, by=by, method=method)
+            result = Groupby(self, by=by, method=method, as_index=as_index)
             return result
 
     def query(self, expr):
@@ -1773,7 +1771,8 @@ class DataFrame(object):
             arrays.append(arrow_col)
             types.append(arrow_col.type)
 
-        index_names.append(self.index.name)
+        index_name = pa.pandas_compat._index_level_name(self.index, 0, names)
+        index_names.append(index_name)
         index_columns.append(self.index)
         # It would be better if we didn't convert this if we didn't have to,
         # but we first need better tooling for cudf --> pyarrow type
@@ -1782,7 +1781,7 @@ class DataFrame(object):
         types.append(index_arrow.type)
         if preserve_index:
             arrays.append(index_arrow)
-            names.append(self.index.name)
+            names.append(index_name)
 
         # We may want to add additional metadata to this in the future, but
         # for now lets just piggyback off of what's done for Pandas
@@ -1841,6 +1840,9 @@ class DataFrame(object):
             df[col.name] = col.data
         if index_col:
             df = df.set_index(index_col[0])
+            new_index_name = pa.pandas_compat._backwards_compatible_index_name(
+                df.index.name, df.index.name)
+            df.index.name = new_index_name
         return df
 
     def to_records(self, index=True):

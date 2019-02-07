@@ -141,9 +141,11 @@ struct ParseOptions {
   char quotechar;
   char decimal;
   char thousands;
+  char comment;
   bool keepquotes;
   bool doublequote;
   bool dayfirst;
+  bool skipblanklines;
   int32_t* trueValues;
   int32_t* falseValues;
   int32_t trueValuesCount;
