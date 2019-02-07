@@ -8,6 +8,7 @@
 - PR #858 Add series feature hashing support
 - PR #871 CSV Reader: Add support for NA values, including user specified strings
 - PR #867 CSV Reader: Add support for ignoring blank lines and comment lines
+- PR #895 Add Series groupby
 
 ## Improvements
 

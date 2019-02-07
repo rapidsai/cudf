@@ -1096,6 +1096,10 @@ class Series(object):
             return Series(self._column.quantile(q, interpolation, exact),
                           index=as_index(np.asarray(q)))
 
+    def groupby(self, group_series):
+        from cudf.groupby.groupby import SeriesGroupBy
+        return SeriesGroupBy(self, group_series)
+
 
 register_distributed_serializer(Series)
 
