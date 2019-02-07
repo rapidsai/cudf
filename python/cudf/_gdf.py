@@ -424,7 +424,7 @@ class SegmentedRadixortPlan(object):
                                                    unwrap_devary(d_ends[s:]))
 
 
-def hash_columns(columns, result):
+def hash_columns(columns, result, initial_hash_values=None):
     """Hash the *columns* and store in *result*.
     Returns *result*
     """
@@ -437,7 +437,11 @@ def hash_columns(columns, result):
     col_out = result.cffi_view
     ncols = len(col_input)
     hashfn = libgdf.GDF_HASH_MURMUR3
-    libgdf.gdf_hash(ncols, col_input, hashfn, col_out)
+    if initial_hash_values is None:
+        initial_hash_values = ffi.NULL
+    else:
+        initial_hash_values = unwrap_devary(initial_hash_values)
+    libgdf.gdf_hash(ncols, col_input, hashfn, initial_hash_values, col_out)
     return result
 
 
