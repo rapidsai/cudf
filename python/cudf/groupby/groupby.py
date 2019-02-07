@@ -78,12 +78,15 @@ class Groupby(object):
             group by. Valid values are "hash".
         """
 
+        self.level = None
         self._df = df
         if level == 0:
             self.level = level
             self._df[self._LEVEL_0_INDEX_NAME] = self._df.index
             self._original_index_name = self._df.index.name
             self._by = [self._LEVEL_0_INDEX_NAME]
+        elif level and level > 0:
+            raise NotImplementedError('MultiIndex not supported yet in cudf')
         else:
             self._by = [by] if isinstance(by, str) else list(by)
         self._val_columns = [idx for idx in self._df.columns
