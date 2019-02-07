@@ -16,6 +16,30 @@ from libgdf_cffi import ffi, libgdf
 from librmm_cffi import librmm as rmm
 
 
+class SeriesGroupBy(object):
+    """Wraps DataFrameGroupby with special attr methods
+    """
+    def __init__(self, source_series, group_series):
+        self.source_series = source_series
+        self.group_series = group_series
+
+    def __getattr__(self, attr):
+        df = DataFrame()
+        df['x'] = self.source_series
+        df['y'] = self.group_series
+        groupby = df.groupby('y')
+        result_df = getattr(groupby, attr)(sort=True)
+
+        def get_result():
+            result_series = result_df['x']
+            result_series.name = None
+            idx = result_df.index
+            idx.name = None
+            result_series.set_index(idx)
+            return result_series
+        return get_result
+
+
 class Groupby(object):
     """Groupby object returned by cudf.DataFrame.groupby().
     """
@@ -158,7 +182,7 @@ class Groupby(object):
 
         return result
 
-    def _apply_basic_agg(self, agg_type):
+    def _apply_basic_agg(self, agg_type, sort_results=False):
         """
         Parameters
         ----------
@@ -178,7 +202,7 @@ class Groupby(object):
 
         result = self._apply_agg(
             agg_type, result, add_col_values, ctx, val_columns,
-            val_columns_out, sort_result=False)
+            val_columns_out, sort_result=sort_results)
 
         # If a Groupby has one index column and one value column
         # and as_index is set, return a Series instead of a df
@@ -212,20 +236,20 @@ class Groupby(object):
             return self[key]
         raise AttributeError("'Groupby' object has no attribute %r" % key)
 
-    def min(self):
-        return self._apply_basic_agg("min")
+    def min(self, sort=False):
+        return self._apply_basic_agg("min", sort)
 
-    def max(self):
-        return self._apply_basic_agg("max")
+    def max(self, sort=False):
+        return self._apply_basic_agg("max", sort)
 
-    def count(self):
-        return self._apply_basic_agg("count")
+    def count(self, sort=False):
+        return self._apply_basic_agg("count", sort)
 
-    def sum(self):
-        return self._apply_basic_agg("sum")
+    def sum(self, sort=False):
+        return self._apply_basic_agg("sum", sort)
 
-    def mean(self):
-        return self._apply_basic_agg("mean")
+    def mean(self, sort=False):
+        return self._apply_basic_agg("mean", sort)
 
     def agg(self, args):
         """ Invoke aggregation functions on the groups.

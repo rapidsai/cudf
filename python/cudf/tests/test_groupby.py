@@ -7,6 +7,7 @@ import numpy as np
 import pandas as pd
 
 from cudf.dataframe import DataFrame
+from cudf.dataframe import Series
 from .utils import assert_eq
 
 
@@ -291,3 +292,13 @@ def test_groupby_cudf_2keys_agg(nelem, func, method):
     expect_agg = np.sort(expect_df['val'].values)
     # verify
     np.testing.assert_array_almost_equal(expect_agg, got_agg)
+
+
+def test_series_groupby():
+    s = pd.Series([1, 2, 3])
+    g = Series([1, 2, 3])
+    sg = s.groupby(s // 2)
+    gg = g.groupby(g // 2)
+    sa = sg.sum()
+    ga = gg.sum()
+    assert_eq(sa, ga)
