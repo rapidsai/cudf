@@ -148,90 +148,19 @@ namespace jit {
         return GDF_SUCCESS;
     }
 
-    gdf_error binary_operation(gdf_column* out, gdf_scalar* vax, gdf_column* vay, gdf_scalar* def, gdf_binary_operator ope) {
-        auto option_column = verify_column(out, vay);
-        if (!option_column) {
-            return option_column.get_gdf_error();
-        }
-        auto option_scalar_vax = verify_scalar(vax);
-        if (!option_scalar_vax) {
-            return option_scalar_vax.get_gdf_error();
-        }
-        auto option_scalar_def = verify_scalar(def);
-        if (!option_scalar_def) {
-            return option_scalar_def.get_gdf_error();
-        }
-
-        Launcher::launch().kernel("kernel_v_s_d")
-                          .instantiate(ope, Operator::Type::Reverse, out, vay, vax, def)
-                          .launch(out, vay, vax, def);
-
-        return GDF_SUCCESS;
-    }
-
-    gdf_error binary_operation(gdf_column* out, gdf_column* vax, gdf_scalar* vay, gdf_scalar* def, gdf_binary_operator ope) {
-        auto option_column = verify_column(out, vax);
-        if (!option_column) {
-            return option_column.get_gdf_error();
-        }
-        auto option_scalar_vax = verify_scalar(vay);
-        if (!option_scalar_vax) {
-            return option_scalar_vax.get_gdf_error();
-        }
-        auto option_scalar_def = verify_scalar(def);
-        if (!option_scalar_def) {
-            return option_scalar_def.get_gdf_error();
-        }
-
-        Launcher::launch().kernel("kernel_v_s_d")
-                          .instantiate(ope, Operator::Type::Direct, out, vax, vay, def)
-                          .launch(out, vax, vay, def);
-
-        return GDF_SUCCESS;
-    }
-
-    gdf_error binary_operation(gdf_column* out, gdf_column* vax, gdf_column* vay, gdf_scalar* def, gdf_binary_operator ope) {
-        auto option_column = verify_column(out, vax, vay);
-        if (!option_column) {
-            return option_column.get_gdf_error();
-        }
-        auto option_scalar = verify_scalar(def);
-        if (!option_scalar) {
-            return option_scalar.get_gdf_error();
-        }
-
-        Launcher::launch().kernel("kernel_v_v_d")
-                          .instantiate(ope, Operator::Type::Direct, out, vax, vay, def)
-                          .launch(out, vax, vay, def);
-
-        return GDF_SUCCESS;
-    }
-
 } // namespace jit
 } // namespace binops
 } // namespace gdf
 
 
-gdf_error gdf_binary_operation_v_s_v(gdf_column* out, gdf_scalar* vax, gdf_column* vay, gdf_binary_operator ope) {
+gdf_error gdf_binary_operation_s_v(gdf_column* out, gdf_scalar* vax, gdf_column* vay, gdf_binary_operator ope) {
     return gdf::binops::jit::binary_operation(out, vax, vay, ope);
 }
 
-gdf_error gdf_binary_operation_v_v_s(gdf_column* out, gdf_column* vax, gdf_scalar* vay, gdf_binary_operator ope) {
+gdf_error gdf_binary_operation_v_s(gdf_column* out, gdf_column* vax, gdf_scalar* vay, gdf_binary_operator ope) {
     return gdf::binops::jit::binary_operation(out, vax, vay, ope);
 }
 
-gdf_error gdf_binary_operation_v_v_v(gdf_column* out, gdf_column* vax, gdf_column* vay, gdf_binary_operator ope) {
+gdf_error gdf_binary_operation_v_v(gdf_column* out, gdf_column* vax, gdf_column* vay, gdf_binary_operator ope) {
     return gdf::binops::jit::binary_operation(out, vax, vay, ope);
-}
-
-gdf_error gdf_binary_operation_v_s_v_d(gdf_column* out, gdf_scalar* vax, gdf_column* vay, gdf_scalar* def, gdf_binary_operator ope) {
-    return gdf::binops::jit::binary_operation(out, vax, vay, def, ope);
-}
-
-gdf_error gdf_binary_operation_v_v_s_d(gdf_column* out, gdf_column* vax, gdf_scalar* vay, gdf_scalar* def, gdf_binary_operator ope) {
-    return gdf::binops::jit::binary_operation(out, vax, vay, def, ope);
-}
-
-gdf_error gdf_binary_operation_v_v_v_d(gdf_column* out, gdf_column* vax, gdf_column* vay, gdf_scalar* def, gdf_binary_operator ope) {
-    return gdf::binops::jit::binary_operation(out, vax, vay, def, ope);
 }

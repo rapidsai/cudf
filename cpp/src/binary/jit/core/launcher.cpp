@@ -78,35 +78,6 @@ namespace jit {
         return GDF_SUCCESS;
     }
 
-    gdf_error Launcher::launch(gdf_column* out, gdf_column* vax, gdf_scalar* vay, gdf_scalar* def)
-    {
-        uint32_t vay_valid = (vay->is_valid ? UINT32_MAX : 0);
-        uint32_t def_valid = (def->is_valid ? UINT32_MAX : 0);
-
-        program.kernel(kernelName)
-               .instantiate(arguments)
-               .configure_1d_max_occupancy()
-               .launch(out->size,
-                       out->data, vax->data, vay->data, def->data,
-                       out->valid, vax->valid, vay_valid, def_valid);
-
-        return GDF_SUCCESS;
-    }
-
-    gdf_error Launcher::launch(gdf_column* out, gdf_column* vax, gdf_column* vay, gdf_scalar* def)
-    {
-        uint32_t def_valid = (def->is_valid ? UINT32_MAX : 0);
-
-        program.kernel(kernelName)
-               .instantiate(arguments)
-               .configure_1d_max_occupancy()
-               .launch(out->size,
-                       out->data, vax->data, vay->data, def->data,
-                       out->valid, vax->valid, vay->valid, def_valid);
-
-        return GDF_SUCCESS;
-    }
-
 } // namespace jit
 } // namespace binops
 } // namespace gdf

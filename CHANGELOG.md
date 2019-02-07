@@ -8,6 +8,7 @@
 
 ## Improvements
 
+- PR #892 Add support for heterogeneous types in binary ops with JIT 
 - PR #730 Improve performance of `gdf_table` constructor
 - PR #822 Add support for `__cuda_array_interface__` for ingest
 - PR #756 Consolidate common helper functions from unordered map and multimap
