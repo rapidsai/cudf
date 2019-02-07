@@ -6,6 +6,7 @@
 - PR #539 Add Python bindings for replace function
 - PR #807 CSV Reader: Add byte_range parameter to specify the range in the input file to be read
 - PR #871 CSV Reader: Add support for NA values, including user specified strings
+- PR #893 Adds Parquet, ORC, Feather, JSON, and HDF5 IO support via Pandas / PyArrow
 
 ## Improvements
 
