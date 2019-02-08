@@ -444,33 +444,30 @@ gdf_error read_csv(csv_read_arg *args)
 		vector<char> first_row(second_rec_start);
 		CUDA_TRY(cudaMemcpy(first_row.data(), raw_csv->data, sizeof(char) * first_row.size(), cudaMemcpyDefault));
 
-		if (raw_csv->header_row >= 0) {
-			// Parse header row to assign column names; does not currently handle
-			// quotations to avoid added parsing complexity
-			for (size_t pos = 0, prev = 0; pos < first_row.size(); ++pos) {
-				if (first_row[pos] == raw_csv->opts.delimiter ||
-					first_row[pos] == raw_csv->opts.terminator) {
-					raw_csv->col_names.emplace_back(first_row.data() + prev, pos - prev);
-					h_num_cols++;
+		
+		// Parse header row to assign column names; does not currently handle
+		// quotations to avoid added parsing complexity
+		const string str_prefix = args->prefix != nullptr ? string(args->prefix) : "";
+		for (size_t pos = 0, prev = 0; pos < first_row.size(); ++pos) {
+			if (first_row[pos] == raw_csv->opts.delimiter ||
+				first_row[pos] == raw_csv->opts.terminator) {
+					if (raw_csv->header_row >= 0) {
+						raw_csv->col_names.emplace_back(first_row.data() + prev, pos - prev);
+					}
+					else {
+						raw_csv->col_names.push_back(str_prefix + std::to_string(h_num_cols));
+					}
+				h_num_cols++;
 
-					while (raw_csv->opts.multi_delimiter && 
-						first_row[pos] == raw_csv->opts.delimiter && 
-						first_row[pos + 1] == raw_csv->opts.delimiter) {
-							++pos;
-					}
-					if (first_row[pos] == raw_csv->opts.terminator) {
-						break;
-					}
-					prev = pos + 1;
+				while (raw_csv->opts.multi_delimiter && 
+					first_row[pos] == raw_csv->opts.delimiter && 
+					first_row[pos + 1] == raw_csv->opts.delimiter) {
+						++pos;
 				}
-			}
-		} else {
-			h_num_cols = std::count(first_row.begin(), first_row.end(), raw_csv->opts.delimiter) + 1;
-			// assign column indexes as names if the header column is not present
-			raw_csv->col_names.reserve(h_num_cols);
-			const string str_prefix = args->prefix != nullptr ? string(args->prefix) : "";
-			for (int i = 0; i < h_num_cols; ++i) {
-				raw_csv->col_names.push_back(str_prefix + std::to_string(i));
+				if (first_row[pos] == raw_csv->opts.terminator) {
+					break;
+				}
+				prev = pos + 1;
 			}
 		}
 

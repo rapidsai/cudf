@@ -806,6 +806,15 @@ def test_csv_reader_prefix(tmpdir):
 
 
 def test_csv_reader_delim_whitespace():
-    df = read_csv(StringIO('1    2  3\n4  5 6\n'), delim_whitespace=True)
+    buffer = '1    2  3\n4  5 6\n'
 
-    assert(df.shape == (1, 3))
+    # with header row
+    cu_df = read_csv(StringIO(buffer), delim_whitespace=True)
+    pd_df = pd.read_csv(StringIO(buffer), delim_whitespace=True)
+    assert(pd_df.shape == cu_df.shape)
+
+
+    # without header row
+    cu_df = read_csv(StringIO(buffer), delim_whitespace=True, header=None)
+    pd_df = pd.read_csv(StringIO(buffer), delim_whitespace=True, header=None)
+    assert(pd_df.shape == cu_df.shape)
