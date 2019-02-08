@@ -8,7 +8,7 @@
 
 
 struct SegmentedRadixSortPlan{
-    const size_t num_items;
+    const gdf_size_type num_items;
     // temporary storage
     void *storage;
     size_t storage_bytes;

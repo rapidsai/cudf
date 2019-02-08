@@ -7,11 +7,12 @@ from numbers import Number
 
 import numpy as np
 import pandas as pd
+from pandas.api.types import is_scalar, is_dict_like
 
-from cudf.utils import cudautils
+from cudf.utils import cudautils, utils
 from cudf import formatting
 from .buffer import Buffer
-from .index import Index, RangeIndex, GenericIndex
+from .index import Index, RangeIndex, as_index
 from cudf.settings import NOTSET, settings
 from .column import Column
 from .datetime import DatetimeColumn
@@ -62,14 +63,16 @@ class Series(object):
         col = columnops.as_column(data).set_mask(mask, null_count=null_count)
         return cls(data=col)
 
-    def __init__(self, data, index=None, name=None, nan_as_null=True):
+    def __init__(self, data=None, index=None, name=None, nan_as_null=True):
         if isinstance(data, pd.Series):
             name = data.name
-            index = GenericIndex(data.index)
+            index = as_index(data.index)
         if isinstance(data, Series):
-            index = data._index
+            index = data._index if index is None else index
             name = data.name
             data = data._column
+        if data is None:
+            data = {}
 
         if not isinstance(data, columnops.TypedColumnBase):
             data = columnops.as_column(data, nan_as_null=nan_as_null)
@@ -139,6 +142,18 @@ class Series(object):
         params.update(kwargs)
         return cls(**params)
 
+    def copy(self, deep=True):
+        result = self._copy_construct()
+        if deep:
+            result._column = self._column.copy(deep)
+        return result
+
+    def __copy__(self, deep=True):
+        return self.copy(deep)
+
+    def __deepcopy__(self):
+        return self.copy()
+
     def reset_index(self):
         """Reset index to RangeIndex
         """
@@ -152,7 +167,7 @@ class Series(object):
         index : Index, Series-convertible
             the new index or values for the new index
         """
-        index = index if isinstance(index, Index) else GenericIndex(index)
+        index = index if isinstance(index, Index) else as_index(index)
         return self._copy_construct(index=index)
 
     def as_index(self):
@@ -192,10 +207,10 @@ class Series(object):
         return not len(self)
 
     def __getitem__(self, arg):
-        if isinstance(arg, (list, np.ndarray, pd.Series,)):
+        if isinstance(arg, (list, np.ndarray, pd.Series, range,)):
             arg = Series(arg)
         if isinstance(arg, Series):
-            if arg.dtype in [np.int8, np.int16, np.int32, np.int32, np.int64]:
+            if issubclass(arg.dtype.type, np.integer):
                 selvals, selinds = columnops.column_select_by_position(
                     self._column, arg)
                 index = self.index.take(selinds.to_gpu_array())
@@ -203,6 +218,8 @@ class Series(object):
                 selvals, selinds = columnops.column_select_by_boolmask(
                     self._column, arg)
                 index = self.index.take(selinds.to_gpu_array())
+            else:
+                raise NotImplementedError(arg.dtype)
             return self._copy_construct(data=selvals, index=index)
 
         elif isinstance(arg, slice):
@@ -286,8 +303,11 @@ class Series(object):
         # Prepare cells
         cols = OrderedDict([('', self.values_to_string(nrows=nrows))])
         # Format into a table
-        return formatting.format(index=self.index,
-                                 cols=cols, more_rows=more_rows)
+        output = formatting.format(index=self.index,
+                                   cols=cols, more_rows=more_rows,
+                                   series_spacing=True)
+        return output + "\nName: {}, dtype: {}".format(self.name, self.dtype)\
+            if self.name else output + "\ndtype: {}".format(self.dtype)
 
     def __str__(self):
         return self.to_string(nrows=10)
@@ -529,6 +549,38 @@ class Series(object):
         return self._index
 
     @property
+    def iloc(self):
+        """
+        For integer-location based selection.
+
+        Examples
+        --------
+
+        >>> sr = Series(list(range(20)))
+        # get the value from 1st index
+        >>> sr.iloc[1]
+        1
+
+        # get the values from 0,2,9 and 18th index
+        >>> sr.iloc[0,2,9,18]
+        0    0
+        2    2
+        9    9
+        18   18
+
+        # get the values using slice indices
+        >>> sr.iloc[3:10:2]
+        3    3
+        5    5
+        7    7
+        9    9
+
+        :return:
+        Series containing the elements corresponding to the indices
+        """
+        return Iloc(self)
+
+    @property
     def nullmask(self):
         """The gpu buffer for the null-mask
         """
@@ -613,6 +665,8 @@ class Series(object):
               1    5
 
         """
+        if len(self) == 0:
+            return self
         vals, inds = self._sort(ascending=ascending, na_position=na_position)
         index = self.index.take(inds.to_gpu_array())
         return vals.set_index(index)
@@ -654,11 +708,70 @@ class Series(object):
         sr_inds = self._copy_construct(data=col_inds)
         return sr_keys, sr_inds
 
+    def replace(self, to_replace, value):
+        """
+        Replace values given in *to_replace* with *value*.
+
+        Parameters
+        ----------
+        to_replace : numeric, str or list-like
+            Value(s) to replace.
+
+            * numeric or str:
+
+                - values equal to *to_replace* will be replaced with *value*
+
+            * list of numeric or str:
+
+                - If *value* is also list-like, *to_replace* and *value* must
+                be of same length.
+        value : numeric, str, list-like, or dict
+            Value(s) to replace `to_replace` with.
+
+        See also
+        --------
+        Series.fillna
+
+        Returns
+        -------
+        result : Series
+            Series after replacement. The mask and index are preserved.
+        """
+        if not is_scalar(to_replace):
+            if is_scalar(value):
+                value = utils.scalar_broadcast_to(
+                    value, (len(to_replace),), np.dtype(type(value))
+                )
+        else:
+            if not is_scalar(value):
+                raise TypeError(
+                    "Incompatible types '{}' and '{}' "
+                    "for *to_replace* and *value*.".format(
+                        type(to_replace).__name__, type(value).__name__
+                    )
+                )
+            to_replace = [to_replace]
+            value = [value]
+
+        if len(to_replace) != len(value):
+            raise ValueError(
+                "Replacement lists must be"
+                "of same length."
+                "Expected {}, got {}.".format(len(to_replace), len(value))
+            )
+
+        if is_dict_like(to_replace) or is_dict_like(value):
+            raise TypeError("Dict-like args not supported in Series.replace()")
+
+        result = self._column.find_and_replace(to_replace, value)
+
+        return self._copy_construct(data=result)
+
     def reverse(self):
         """Reverse the Series
         """
         data = cudautils.reverse_array(self.to_gpu_array())
-        index = GenericIndex(cudautils.reverse_array(self.index.gpu_values))
+        index = as_index(cudautils.reverse_array(self.index.gpu_values))
         col = self._column.replace(data=Buffer(data))
         return self._copy_construct(data=col, index=index)
 
@@ -813,6 +926,11 @@ class Series(object):
         assert axis in (None, 0) and skipna is True
         return self._column.sum()
 
+    def product(self, axis=None, skipna=True):
+        """Compute the product of the series"""
+        assert axis in (None, 0) and skipna is True
+        return self._column.product()
+
     def mean(self, axis=None, skipna=True):
         """Compute the mean of the series
         """
@@ -849,7 +967,7 @@ class Series(object):
         """Returns unique values of this Series.
         default='sort' will be changed to 'hash' when implemented.
         """
-        if method is not 'sort':
+        if method != 'sort':
             msg = 'non sort based unique() not implemented yet'
             raise NotImplementedError(msg)
         if not sort:
@@ -864,7 +982,7 @@ class Series(object):
         """Returns the number of unique valies of the Series: approximate version,
         and exact version to be moved to libgdf
         """
-        if method is not 'sort':
+        if method != 'sort':
             msg = 'non sort based unique_count() not implemented yet'
             raise NotImplementedError(msg)
         if self.null_count == len(self):
@@ -875,13 +993,13 @@ class Series(object):
     def value_counts(self, method='sort', sort=True):
         """Returns unique values of this Series.
         """
-        if method is not 'sort':
+        if method != 'sort':
             msg = 'non sort based value_count() not implemented yet'
             raise NotImplementedError(msg)
         if self.null_count == len(self):
             return 0
         vals, cnts = self._column.value_counts(method=method)
-        res = Series(cnts, index=GenericIndex(vals))
+        res = Series(cnts, index=as_index(vals))
         if sort:
             return res.sort_values(ascending=False)
         return res
@@ -899,7 +1017,6 @@ class Series(object):
         return self._copy_construct(data=scaled)
 
     # Rounding
-
     def ceil(self):
         """Rounds each value upward to the smallest integral value not less
         than the original.
@@ -924,6 +1041,32 @@ class Series(object):
         from . import numerical
 
         return Series(numerical.column_hash_values(self._column))
+
+    def hash_encode(self, stop, use_name=False):
+        """Encode column values as ints in [0, stop) using hash function.
+
+        Parameters
+        ----------
+        stop : int
+            The upper bound on the encoding range.
+        use_name : bool
+            If ``True`` then combine hashed column values
+            with hashed column name. This is useful for when the same
+            values in different columns should be encoded
+            with different hashed values.
+        Returns
+        -------
+        result: Series
+            The encoded Series.
+        """
+        assert stop > 0
+
+        from . import numerical
+        initial_hash = np.asarray(hash(self.name)) if use_name else None
+        hashed_values = numerical.column_hash_values(
+            self._column, initial_hash_values=initial_hash)
+        hashed_values = np.mod(hashed_values, stop)
+        return Series(hashed_values)
 
     def quantile(self, q, interpolation='midpoint', exact=True,
                  quant_index=True):
@@ -955,7 +1098,11 @@ class Series(object):
             return Series(self._column.quantile(q, interpolation, exact))
         else:
             return Series(self._column.quantile(q, interpolation, exact),
-                          index=GenericIndex(np.asarray(q)))
+                          index=as_index(np.asarray(q)))
+
+    def groupby(self, group_series):
+        from cudf.groupby.groupby import SeriesGroupBy
+        return SeriesGroupBy(self, group_series)
 
 
 register_distributed_serializer(Series)
@@ -1000,3 +1147,56 @@ class DatetimeProperties(object):
     def get_dt_field(self, field):
         out_column = self.series._column.get_dt_field(field)
         return Series(data=out_column, index=self.series._index)
+
+
+class Iloc(object):
+    """
+    For integer-location based selection.
+    """
+
+    def __init__(self, sr):
+        self._sr = sr
+
+    def __getitem__(self, arg):
+        rows = []
+        len_idx = len(self._sr)
+
+        if isinstance(arg, tuple):
+            for idx in arg:
+                rows.append(idx)
+
+        elif isinstance(arg, int):
+            rows.append(arg)
+
+        elif isinstance(arg, slice):
+            start, stop, step, sln = utils.standard_python_slice(len_idx, arg)
+            if sln > 0:
+                for idx in range(start, stop, step):
+                    rows.append(idx)
+
+        else:
+            raise TypeError(type(arg))
+
+        # To check whether all the indices are valid.
+        for idx in rows:
+            if abs(idx) > len_idx or idx == len_idx:
+                raise IndexError("positional indexers are out-of-bounds")
+
+        for i in range(len(rows)):
+            if rows[i] < 0:
+                rows[i] = len_idx+rows[i]
+
+        # returns the single elem similar to pandas
+        if isinstance(arg, int) and len(rows) == 1:
+            return self._sr[rows[0]]
+
+        ret_list = []
+        for idx in rows:
+            ret_list.append(self._sr[idx])
+
+        return Series(ret_list, index=as_index(np.asarray(rows)))
+
+    def __setitem__(self, key, value):
+        # throws an exception while updating
+        msg = "updating columns using iloc is not allowed"
+        raise ValueError(msg)

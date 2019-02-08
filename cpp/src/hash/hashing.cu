@@ -53,34 +53,43 @@ template <template <typename> class hash_function,
          typename size_type>
 struct row_hasher
 {
-  row_hasher(gdf_table<size_type> const & table_to_hash)
-    : the_table{table_to_hash}
+  row_hasher(gdf_table<size_type> const & table_to_hash, hash_value_type *initial_hash_values)
+    : the_table{table_to_hash}, initial_hash_values(initial_hash_values)
   {}
 
   __device__
   hash_value_type operator()(size_type row_index) const
   {
-    return the_table.template hash_row<hash_function>(row_index);
+    return the_table.template hash_row<hash_function>(row_index, initial_hash_values);
   }
 
   gdf_table<size_type> const & the_table;
+  hash_value_type* initial_hash_values{nullptr};
 };
 
 
 
 /* --------------------------------------------------------------------------*/
 /** 
- * @Synopsis  Computes the hash value of each row in the input set of columns.
+ * @brief Computes the hash value of each row in the input set of columns.
  * 
- * @Param num_cols The number of columns in the input set
- * @Param input The list of columns whose rows will be hashed
- * @Param hash The hash function to use
- * @Param output The hash value of each row of the input
+ * @param[in] num_cols The number of columns in the input set
+ * @param[in] input The list of columns whose rows will be hashed
+ * @param[in] hash The hash function to use
+ * @param[in] initial_hash_values Optional array in device memory specifying an initial hash value for each column
+ * that will be combined with the hash of every element in the column. If this argument is `nullptr`,
+ * then each element will be hashed as-is.
+ * @param[out] output The hash value of each row of the input
  * 
- * @Returns   
+ * @return    GDF_SUCCESS if the operation was successful, otherwise an
+ *            appropriate error code.
  */
 /* ----------------------------------------------------------------------------*/
-gdf_error gdf_hash(int num_cols, gdf_column **input, gdf_hash_func hash, gdf_column *output)
+gdf_error gdf_hash(int num_cols,
+                   gdf_column **input,
+                   gdf_hash_func hash,
+                   hash_value_type *initial_hash_values,
+                   gdf_column *output)
 {
   // Ensure inputs aren't null
   if((0 == num_cols)
@@ -127,18 +136,18 @@ gdf_error gdf_hash(int num_cols, gdf_column **input, gdf_hash_func hash, gdf_col
   {
     case GDF_HASH_MURMUR3:
       {
-        thrust::tabulate(rmm::exec_policy(cudaStream_t{0}),
-                        row_hash_values, 
+        thrust::tabulate(rmm::exec_policy()->on(0),
+                         row_hash_values,
                          row_hash_values + num_rows, 
-                         row_hasher<MurmurHash3_32,size_type>(*input_table));
+                         row_hasher<MurmurHash3_32,size_type>(*input_table, initial_hash_values));
         break;
       }
     case GDF_HASH_IDENTITY:
       {
-        thrust::tabulate(rmm::exec_policy(cudaStream_t{0}),
+        thrust::tabulate(rmm::exec_policy()->on(0),
                          row_hash_values, 
                          row_hash_values + num_rows, 
-                         row_hasher<IdentityHash,size_type>(*input_table));
+                         row_hasher<IdentityHash,size_type>(*input_table, initial_hash_values));
         break;
       }
     default:
@@ -471,7 +480,7 @@ gdf_error hash_partition_gdf_table(gdf_table<size_type> const & input_table,
   // Compute exclusive scan of all blocks' partition sizes in-place to determine 
   // the starting point for each blocks portion of each partition in the output
   size_type * scanned_block_partition_sizes{block_partition_sizes};
-  thrust::exclusive_scan(rmm::exec_policy(cudaStream_t{0}),
+  thrust::exclusive_scan(rmm::exec_policy()->on(0),
                          block_partition_sizes, 
                          block_partition_sizes + (grid_size * num_partitions), 
                          scanned_block_partition_sizes);
@@ -483,7 +492,7 @@ gdf_error hash_partition_gdf_table(gdf_table<size_type> const & input_table,
   cudaStream_t s1{};
   cudaStreamCreate(&s1);
   size_type * scanned_global_partition_sizes{global_partition_sizes};
-  thrust::exclusive_scan(rmm::exec_policy(s1),
+  thrust::exclusive_scan(rmm::exec_policy(s1)->on(s1),
                          global_partition_sizes, 
                          global_partition_sizes + num_partitions,
                          scanned_global_partition_sizes);
@@ -576,7 +585,7 @@ gdf_error gdf_hash_partition(int num_input_cols,
     return GDF_INVALID_API_CALL;
   }
 
-  const size_t num_rows{input[0]->size};
+  const gdf_size_type num_rows{input[0]->size};
 
   // If the input is empty, return immediately
   if(0 == num_rows)

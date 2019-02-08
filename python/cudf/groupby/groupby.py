@@ -10,9 +10,44 @@ from cudf.dataframe.series import Series
 from cudf.dataframe.buffer import Buffer
 from cudf.dataframe.categorical import CategoricalColumn
 from cudf._gdf import nvtx_range_pop
+import cudf.dataframe.index as index
 
 from libgdf_cffi import ffi, libgdf
 from librmm_cffi import librmm as rmm
+
+
+class SeriesGroupBy(object):
+    """Wraps DataFrameGroupby with special attr methods
+    """
+    def __init__(self, source_series, group_series):
+        self.source_series = source_series
+        self.group_series = group_series
+
+    def __getattr__(self, attr):
+        df = DataFrame()
+        df['x'] = self.source_series
+        df['y'] = self.group_series
+        groupby = df.groupby('y')
+        result_df = getattr(groupby, attr)()
+
+        def get_result():
+            result_series = result_df['x']
+            result_series.name = None
+            idx = result_df.index
+            idx.name = None
+            result_series.set_index(idx)
+            return result_series
+        return get_result
+
+    def agg(self, agg_types):
+        df = DataFrame()
+        df['x'] = self.source_series
+        df['y'] = self.group_series
+        groupby = df.groupby('y').agg(agg_types)
+        idx = groupby.index
+        idx.name = None
+        groupby.set_index(idx)
+        return groupby
 
 
 class Groupby(object):
@@ -26,7 +61,9 @@ class Groupby(object):
                         'sum': libgdf.gdf_group_by_sum,
                         }
 
-    def __init__(self, df, by, method="hash"):
+    _LEVEL_0_INDEX_NAME = 'cudf_groupby_level_index'
+
+    def __init__(self, df, by, method="hash", as_index=True, level=None):
         """
         Parameters
         ----------
@@ -41,10 +78,20 @@ class Groupby(object):
             group by. Valid values are "hash".
         """
 
+        self.level = None
         self._df = df
-        self._by = [by] if isinstance(by, str) else list(by)
+        if level == 0:
+            self.level = level
+            self._df[self._LEVEL_0_INDEX_NAME] = self._df.index
+            self._original_index_name = self._df.index.name
+            self._by = [self._LEVEL_0_INDEX_NAME]
+        elif level and level > 0:
+            raise NotImplementedError('MultiIndex not supported yet in cudf')
+        else:
+            self._by = [by] if isinstance(by, str) else list(by)
         self._val_columns = [idx for idx in self._df.columns
                              if idx not in self._by]
+        self._as_index = as_index
         if (method == "hash"):
             self._method = libgdf.GDF_HASH
         else:
@@ -73,6 +120,7 @@ class Groupby(object):
             The list of columns names that the aggregation results should be
             output into.
         """
+
         if sort_result:
             ctx.flag_sort_result = 1
 
@@ -80,7 +128,7 @@ class Groupby(object):
         cols = [self._df[thisBy]._column.cffi_view for thisBy in self._by]
 
         first_run = add_col_values
-        need_to_index = False
+        need_to_index = self._as_index
 
         col_count = 0
         for val_col in val_columns:
@@ -106,6 +154,9 @@ class Groupby(object):
             if agg_type == "count":
                 out_col_agg_series = Series(
                     Buffer(rmm.device_array(col_agg.size, dtype=np.int64)))
+            elif agg_type == "mean":
+                out_col_agg_series = Series(
+                    Buffer(rmm.device_array(col_agg.size, dtype=np.float64)))
             else:
                 out_col_agg_series = Series(Buffer(rmm.device_array(
                     col_agg.size, dtype=self._df[val_col]._column.data.dtype)))
@@ -156,7 +207,7 @@ class Groupby(object):
 
         return result
 
-    def _apply_basic_agg(self, agg_type):
+    def _apply_basic_agg(self, agg_type, sort_results=False):
         """
         Parameters
         ----------
@@ -172,31 +223,64 @@ class Groupby(object):
         ctx.flag_distinct = 0
 
         val_columns = self._val_columns
-        val_columns_out = [agg_type + "_" + column for column in val_columns]
+        val_columns_out = self._val_columns
 
         result = self._apply_agg(
             agg_type, result, add_col_values, ctx, val_columns,
-            val_columns_out, sort_result=False)
+            val_columns_out, sort_result=sort_results)
+
+        # If a Groupby has one index column and one value column
+        # and as_index is set, return a Series instead of a df
+        if len(val_columns) == 1 and self._as_index:
+            result_series = result[val_columns]
+            idx = index.as_index(result[self._by[0]])
+            if self.level == 0:
+                idx.name = self._original_index_name
+            else:
+                idx.name = self._by[0]
+            result_series = result_series.set_index(idx)
+            return result_series
+
+        # TODO: Do MultiIndex here
+        if(self._as_index):
+            idx = index.as_index(result[self._by[0]])
+            idx.name = self._by[0]
+            result = result.set_index(idx)
+            result.drop_column(idx.name)
+
         nvtx_range_pop()
+
         return result
 
-    def min(self):
-        return self._apply_basic_agg("min")
+    def __getitem__(self, arg):
+        for val in arg:
+            if val not in self._val_columns:
+                raise KeyError("Column not found: " + val)
+        self._val_columns = arg
+        return self
 
-    def max(self):
-        return self._apply_basic_agg("max")
+    def __getattr__(self, key):
+        if key != '_val_columns' and key in self._val_columns:
+            return self[key]
+        raise AttributeError("'Groupby' object has no attribute %r" % key)
 
-    def count(self):
-        return self._apply_basic_agg("count")
+    def min(self, sort=True):
+        return self._apply_basic_agg("min", sort)
 
-    def sum(self):
-        return self._apply_basic_agg("sum")
+    def max(self, sort=True):
+        return self._apply_basic_agg("max", sort)
 
-    def mean(self):
-        return self._apply_basic_agg("mean")
+    def count(self, sort=True):
+        return self._apply_basic_agg("count", sort)
+
+    def sum(self, sort=True):
+        return self._apply_basic_agg("sum", sort)
+
+    def mean(self, sort=True):
+        return self._apply_basic_agg("mean", sort)
 
     def agg(self, args):
-        """Invoke aggregation functions on the groups.
+        """ Invoke aggregation functions on the groups.
 
         Parameters
         ----------
@@ -228,19 +312,20 @@ class Groupby(object):
 
         sort_result = True
 
+        # TODO: Use MultiColumn here instead of use_prefix
+        # use_prefix enables old functionality - prefixing column
+        # groupby names since we don't support MultiColumn quite yet
+        use_prefix = 1 < len(self._val_columns) or 1 < len(args)
         if not isinstance(args, str) and isinstance(
                 args, collections.abc.Sequence):
-            if (len(args) == 1 and len(self._val_columns) == 1):
-                sort_result = False
             for agg_type in args:
-
                 val_columns_out = [agg_type + '_' +
                                    val for val in self._val_columns]
-
+                if not use_prefix:
+                    val_columns_out = self._val_columns
                 result = self._apply_agg(
                     agg_type, result, add_col_values, ctx, self._val_columns,
                     val_columns_out, sort_result=sort_result)
-
                 add_col_values = False  # we only want to add them once
 
         elif isinstance(args, collections.abc.Mapping):
@@ -253,12 +338,16 @@ class Groupby(object):
                        isinstance(agg_type, collections.abc.Sequence):
                     for sub_agg_type in agg_type:
                         val_columns_out = [sub_agg_type + '_' + val]
+                        if not use_prefix:
+                            val_columns_out = self._val_columns
                         result = self._apply_agg(sub_agg_type, result,
                                                  add_col_values, ctx, [val],
                                                  val_columns_out,
                                                  sort_result=sort_result)
                 elif isinstance(agg_type, str):
                     val_columns_out = [agg_type + '_' + val]
+                    if not use_prefix:
+                        val_columns_out = self._val_columns
                     result = self._apply_agg(agg_type, result,
                                              add_col_values, ctx, [val],
                                              val_columns_out,
@@ -268,6 +357,13 @@ class Groupby(object):
 
         else:
             result = self.agg([args])
+
+        # TODO: Do multindex here
+        if(self._as_index) and 1 == len(self._by):
+            idx = index.as_index(result[self._by[0]])
+            idx.name = self._by[0]
+            result = result.set_index(idx)
+            result.drop_column(idx.name)
 
         nvtx_range_pop()
         return result

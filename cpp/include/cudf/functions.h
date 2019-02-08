@@ -64,7 +64,8 @@ gdf_error gdf_nvtx_range_pop();
  * @Returns  GDF_SUCCESS upon successful completion. 
  */
 /* ----------------------------------------------------------------------------*/
-gdf_error gdf_count_nonzero_mask(gdf_valid_type const * masks, int num_rows, int * count);
+gdf_error gdf_count_nonzero_mask(gdf_valid_type const *masks,
+                                 gdf_size_type num_rows, gdf_size_type *count);
 
 /* column operations */
 
@@ -429,21 +430,25 @@ gdf_error gdf_prefixsum_i64(gdf_column *inp, gdf_column *out, int inclusive);
 /* unary operators */
 
 /* hashing */
-
-/* --------------------------------------------------------------------------*/
-/** 
- * @Synopsis  Computes the hash value of each row in the input set of columns.
- * 
- * @Param num_cols The number of columns in the input set
- * @Param input The list of columns whose rows will be hashed
- * @Param hash The hash function to use
- * @Param output The hash value of each row of the input
- * 
- * @Returns   GDF_SUCCESS if the operation was successful, otherwise an appropriate
- * error code
- */
-/* ----------------------------------------------------------------------------*/
-gdf_error gdf_hash(int num_cols, gdf_column **input, gdf_hash_func hash, gdf_column *output);
+/** --------------------------------------------------------------------------*
+ * @brief Computes the hash value of each row in the input set of columns.
+ *
+ * @param[in] num_cols The number of columns in the input set
+ * @param[in] input The list of columns whose rows will be hashed
+ * @param[in] hash The hash function to use
+ * @param[in] initial_hash_values Optional array in device memory specifying an initial hash value for each column
+ * that will be combined with the hash of every element in the column. If this argument is `nullptr`,
+ * then each element will be hashed as-is.
+ * @param[out] output The hash value of each row of the input
+ *
+ * @return    GDF_SUCCESS if the operation was successful, otherwise an
+ *            appropriate error code.
+ * ----------------------------------------------------------------------------**/
+gdf_error gdf_hash(int num_cols,
+                   gdf_column **input,
+                   gdf_hash_func hash,
+                   uint32_t *initial_hash_values,
+                   gdf_column *output);
 
 /* trig */
 

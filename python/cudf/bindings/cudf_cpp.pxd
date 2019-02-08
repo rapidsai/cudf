@@ -6,7 +6,7 @@
 # cython: language_level = 3
 
 from libcpp cimport bool
-from numpy cimport uint8_t, int64_t, int32_t, int16_t, int8_t
+from libc.stdint cimport uint8_t, int64_t, int32_t, int16_t, int8_t
 
 # Utility functions to build gdf_columns, gdf_context and error handling
 
@@ -75,6 +75,7 @@ cdef extern from "cudf.h" nogil:
         GDF_MEMORYMANAGER_ERROR,
         GDF_UNDEFINED_NVTX_COLOR,
         GDF_NULL_NVTX_NAME,
+        GDF_NOTIMPLEMENTED_ERROR,
         N_GDF_ERRORS
 
     ctypedef enum gdf_hash_func:
@@ -674,4 +675,8 @@ cdef extern from "cudf.h" nogil:
                                     void*        t_erased_res,
                                     gdf_context* ctxt)
 
+
+    cdef gdf_error gdf_find_and_replace_all(gdf_column*       col,
+                                   gdf_column* old_values,
+                                   gdf_column* new_values);
 

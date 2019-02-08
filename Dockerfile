@@ -25,15 +25,39 @@ ENV PATH=${PATH}:/conda/bin
 SHELL ["/bin/bash", "-c"]
 
 # Build cuDF conda env
-ADD conda /cudf/conda
-RUN conda env create --name cudf --file /cudf/conda/environments/dev_py35.yml
+ARG PYTHON_VERSION
+ENV PYTHON_VERSION=$PYTHON_VERSION
+ARG NUMBA_VERSION
+ENV NUMBA_VERSION=$NUMBA_VERSION
+ARG NUMPY_VERSION
+ENV NUMPY_VERSION=$NUMPY_VERSION
+ARG PANDAS_VERSION
+ENV PANDAS_VERSION=$PANDAS_VERSION
+ARG PYARROW_VERSION
+ENV PYARROW_VERSION=$PYARROW_VERSION
+ARG CYTHON_VERSION
+ENV CYTHON_VERSION=$CYTHON_VERSION
+ARG CMAKE_VERSION
+ENV CMAKE_VERSION=$CMAKE_VERSION
+ARG CUDF_REPO=https://github.com/rapidsai/cudf
+ENV CUDF_REPO=$CUDF_REPO
+ARG CUDF_BRANCH=master
+ENV CUDF_BRANCH=$CUDF_BRANCH
 
-# Preserved for users who currently use these build-args
-# Clone cuDF repo
-#ARG CUDF_REPO=https://github.com/rapidsai/cudf
-#ARG CUDF_BRANCH=master
-#RUN git clone --recurse-submodules -b ${CUDF_BRANCH} ${CUDF_REPO} /cudf
-ADD cpp /cudf/cpp
+# Add everything from the local build context
+ADD . /cudf/
+
+# Checks if local build context has the source, if not clone it then run a bash script to modify
+# the environment file based on versions set in build args
+RUN ls -la /cudf
+RUN if [ -f /cudf/docker/package_versions.sh ]; \
+    then /cudf/docker/package_versions.sh /cudf/conda/environments/cudf_dev.yml && \
+         conda env create --name cudf --file /cudf/conda/environments/cudf_dev.yml ; \
+    else rm -rf /cudf && \
+         git clone --recurse-submodules -b ${CUDF_BRANCH} ${CUDF_REPO} /cudf && \
+         /cudf/docker/package_versions.sh /cudf/conda/environments/cudf_dev.yml && \
+         conda env create --name cudf --file /cudf/conda/environments/cudf_dev.yml ; \
+    fi
 
 # libcudf build/install
 ENV CC=/usr/bin/gcc-${CC}
@@ -45,11 +69,6 @@ RUN source activate cudf && \
     make -j install && \
     make python_cffi && \
     make install_python
-
-ADD docs /cudf/docs
-ADD python /cudf/python
-# Needed for cudf.__version__ accuracy
-ADD .git /cudf/.git
 
 # cuDF build/install
 RUN source activate cudf && \

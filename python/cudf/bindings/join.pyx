@@ -14,15 +14,15 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 
-cimport numpy as np
-
 from librmm_cffi import librmm as rmm
 
 from libc.stdint cimport uintptr_t
 from libc.stdlib cimport calloc, malloc, free
 
+cimport cython
 
 
+@cython.boundscheck(False)
 cpdef join(col_lhs, col_rhs, on, how, method='sort'):
     """
       Call gdf join for full outer, inner and left joins.
@@ -36,8 +36,8 @@ cpdef join(col_lhs, col_rhs, on, how, method='sort'):
 
     result_col_names = []
 
-    cdef np.ndarray[np.int32_t, ndim=1, mode = 'c', cast=True] left_idx = np.zeros(len(on), dtype=np.dtype("i"))
-    cdef np.ndarray[np.int32_t, ndim=1, mode = 'c', cast=True] right_idx = np.zeros(len(on), dtype=np.dtype("i"))
+    cdef int[::1] left_idx = np.zeros(len(on), dtype=np.dtype("int32"))
+    cdef int[::1] right_idx = np.zeros(len(on), dtype=np.dtype("int32"))
 
     num_cols_to_join = len(on)
     result_num_cols = len(col_lhs) + len(col_rhs) - num_cols_to_join
@@ -46,9 +46,10 @@ cpdef join(col_lhs, col_rhs, on, how, method='sort'):
     cdef gdf_column** list_rhs = <gdf_column**>malloc(len(col_rhs) * sizeof(gdf_column*))
     cdef gdf_column** result_cols = <gdf_column**>malloc(result_num_cols * sizeof(gdf_column*))
 
-    res_idx = 0
-    idx = 0
+    cdef int res_idx = 0
+    cdef int idx = 0
     for name, col in col_lhs.items():
+        check_gdf_compatibility(col)
         list_lhs[idx] = column_view_from_column(col._column)
 
         if name not in on:
@@ -68,6 +69,7 @@ cpdef join(col_lhs, col_rhs, on, how, method='sort'):
 
     idx = 0
     for name, col in col_rhs.items():
+        check_gdf_compatibility(col)
         list_rhs[idx] = column_view_from_column(col._column)
 
         if name not in on:
@@ -76,48 +78,54 @@ cpdef join(col_lhs, col_rhs, on, how, method='sort'):
             res_idx = res_idx + 1
         idx = idx + 1
 
-    cdef gdf_error result
-    if how == 'left':
-         result = gdf_left_join(list_lhs,
-               len(col_lhs),
-               <int*>left_idx.data,
-               list_rhs,
-               len(col_rhs),
-               <int*>right_idx.data,
-               num_cols_to_join,
-               result_num_cols,
-               result_cols,
-               <gdf_column*> NULL,
-               <gdf_column*> NULL,
-               context)
+    cdef gdf_error result = GDF_CUDA_ERROR
+    cdef gdf_size_type col_lhs_len = len(col_lhs)
+    cdef gdf_size_type col_rhs_len = len(col_rhs)
+    cdef int c_num_cols_to_join = num_cols_to_join
+    cdef int c_result_num_cols = result_num_cols
 
-    elif how == 'inner':
-        result = gdf_inner_join(list_lhs,
-               len(col_lhs),
-               <int*>left_idx.data,
-               list_rhs,
-               len(col_rhs),
-               <int*>right_idx.data,
-               num_cols_to_join,
-               result_num_cols,
-               result_cols,
-               <gdf_column*> NULL,
-               <gdf_column*> NULL,
-               context)
+    with nogil:
+        if how == 'left':
+            result = gdf_left_join(list_lhs,
+                col_lhs_len,
+                &left_idx[0],
+                list_rhs,
+                col_rhs_len,
+                &right_idx[0],
+                c_num_cols_to_join,
+                c_result_num_cols,
+                result_cols,
+                <gdf_column*> NULL,
+                <gdf_column*> NULL,
+                context)
 
-    elif how == 'outer':
-        result = gdf_full_join(list_lhs,
-               len(col_lhs),
-               <int*>left_idx.data,
-               list_rhs,
-               len(col_rhs),
-               <int*>right_idx.data,
-               num_cols_to_join,
-               result_num_cols,
-               result_cols,
-               <gdf_column*> NULL,
-               <gdf_column*> NULL,
-               context)
+        elif how == 'inner':
+            result = gdf_inner_join(list_lhs,
+                col_lhs_len,
+                &left_idx[0],
+                list_rhs,
+                col_rhs_len,
+                &right_idx[0],
+                c_num_cols_to_join,
+                c_result_num_cols,
+                result_cols,
+                <gdf_column*> NULL,
+                <gdf_column*> NULL,
+                context)
+
+        elif how == 'outer':
+            result = gdf_full_join(list_lhs,
+                col_lhs_len,
+                &left_idx[0],
+                list_rhs,
+                col_rhs_len,
+                &right_idx[0],
+                c_num_cols_to_join,
+                c_result_num_cols,
+                result_cols,
+                <gdf_column*> NULL,
+                <gdf_column*> NULL,
+                context)
 
     check_gdf_error(result)
 
