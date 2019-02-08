@@ -80,27 +80,23 @@ struct table_wrapper<std::tuple<Ts...>> {
             new column_wrapper<Ts>(num_rows))...}
 
   {
-    detail::apply(column_wrappers,
-                  [this](std::unique_ptr<column_wrapper<Ts>> &... cols) {});
+    initialize_columns();
   }
 
   gdf_column **get() { return gdf_columns.data(); }
 
  private:
-  /*
-   template <typename ValueGenerator, typename BitmaskGenerator>
-   void initialize_columns(gdf_size_type num_rows, ValueGenerator v,
-                           BitmaskGenerator b) {
-     return detail::index_apply<sizeof...(Ts)>([this](auto... Is) {
-       return init_columns(std::get<Is>(column_wrappers)...);
-     });
-   }
 
-   void init_columns(std::unique_ptr<column_wrapper<Ts>> &... cols) {
-     (void)std::initializer_list<int>{
-         ((void)gdf_columns.push_back(cols->get()), 0)...};
-   }
-   */
+  void init_columns(std::unique_ptr<column_wrapper<Ts>> &... cols) {
+    (void)std::initializer_list<int>{
+        ((void)gdf_columns.push_back(cols->get()), 0)...};
+  }
+
+  void initialize_columns() {
+    return detail::index_apply<sizeof...(Ts)>([this](auto... Is) {
+      return this->init_columns(std::get<Is>(column_wrappers)...);
+    });
+  }
 
   /*
     template <typename ValueGenerator, typename BitmaskGenerator,
@@ -130,9 +126,12 @@ struct table_wrapper<std::tuple<Ts...>> {
     }
     */
 
-  gdf_size_type const num_columns{sizeof...(Ts)};
-  std::tuple<std::unique_ptr<column_wrapper<Ts>>...> column_wrappers;
-  std::vector<gdf_column *> gdf_columns;
+  gdf_size_type const num_columns{
+      sizeof...(Ts)};  ///< number of columns in the table
+  std::tuple<std::unique_ptr<column_wrapper<Ts>>...>
+      column_wrappers;  ///< Collection of column_wrapper s of different types
+  std::vector<gdf_column *>
+      gdf_columns;  ///< Pointers to each column_wrapper's underlying gdf_column
 };
 }  // namespace test
 }  // namespace cudf
