@@ -1543,6 +1543,16 @@ def test_boolmask(pdf, gdf):
     assert_eq(pdf, gdf)
 
 
+def test_1row_arrow_table():
+    data = [pa.array([0]), pa.array([1])]
+    batch = pa.RecordBatch.from_arrays(data, ['f0', 'f1'])
+    table = pa.Table.from_batches([batch])
+
+    expect = table.to_pandas()
+    got = DataFrame.from_arrow(table)
+    assert_eq(expect, got)
+
+
 def test_arrow_handle_no_index_name(pdf, gdf):
     gdf_arrow = gdf.to_arrow()
     pdf_arrow = pa.Table.from_pandas(pdf)

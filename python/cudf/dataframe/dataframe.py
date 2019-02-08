@@ -14,7 +14,6 @@ import pandas as pd
 import pyarrow as pa
 from pandas.api.types import is_dict_like
 
-from numba.cuda.cudadrv.devicearray import DeviceNDArray
 from types import GeneratorType
 
 from librmm_cffi import librmm as rmm
@@ -23,7 +22,6 @@ from cudf import formatting, _gdf
 from cudf.utils import cudautils, queryutils, applyutils, utils
 from .index import as_index, Index, RangeIndex
 from .series import Series
-from .column import Column
 from cudf.settings import NOTSET, settings
 from cudf.comm.serialize import register_distributed_serializer
 from .categorical import CategoricalColumn
@@ -592,9 +590,11 @@ class DataFrame(object):
         index = self._index
         series = Series(col)
         sind = series.index
-        VALID = isinstance(col, (np.ndarray, DeviceNDArray, list, Series,
-                                 Column))
-        if len(self) > 0 and len(series) == 1 and not VALID:
+
+        # This won't handle 0 dimensional arrays which should be okay
+        SCALAR = np.isscalar(col)
+
+        if len(self) > 0 and len(series) == 1 and SCALAR:
             arr = rmm.device_array(shape=len(index), dtype=series.dtype)
             cudautils.gpu_fill_value.forall(arr.size)(arr, col)
             return Series(arr)

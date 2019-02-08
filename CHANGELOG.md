@@ -32,6 +32,7 @@
 - PR #850 Fix bug where left joins where the left df has 0 rows causes a crash
 - PR #861 Fix memory leak by preserving the boolean mask index
 - PR #875 Handle unnamed indexes in to/from arrow functions
+- PR #877 Fix ingest of 1 row arrow tables in from arrow function
 - PR #876 Added missing `<type_traits>` include
 - PR #889 Deleted test_rmm.py which has now moved to RMM repo
 - PR #866 Merge v0.5.1 numpy ABI hotfix into 0.6
