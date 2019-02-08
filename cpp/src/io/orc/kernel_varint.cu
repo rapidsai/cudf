@@ -17,6 +17,9 @@
 #include "kernel_private.cuh"
 #include "kernel_reader_int.cuh"
 
+namespace cudf {
+namespace orc {
+
 #define USE_DEPEND
 
 template <class T, class T_writer, class T_reader>
@@ -61,7 +64,7 @@ template <typename T, class T_writer, class T_reader>
 void cuda_base128_varint_entry(KernelParamCommon* param)
 {
     const int num_CTA = 1;
-    kernel_base128_varint<ORCdecodeVarintSingle<T, T_writer, T_reader>> << <1, num_CTA >> > (*param);
+    kernel_base128_varint<ORCdecodeVarintSingle<T, T_writer, T_reader>> << <1, num_CTA, 0, param->stream >> > (*param);
     ORC_DEBUG_KERNEL_CALL_CHECK();
 }
 
@@ -90,7 +93,7 @@ void cuda_base128_varint_writer_select(KernelParamCommon* param)
     }
 }
 
-void cuda_base128_varint_Depends(KernelParamCommon* param)
+void cudaDecodeVarint(KernelParamCommon* param)
 {
     switch (param->elementType) {
     case OrcElementType::Uint64:
@@ -104,3 +107,5 @@ void cuda_base128_varint_Depends(KernelParamCommon* param)
     }
 }
 
+}   // namespace orc
+}   // namespace cudf

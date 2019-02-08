@@ -19,6 +19,8 @@
 
 #include "kernel_reader.cuh"
 
+namespace cudf {
+namespace orc {
 
 template <class  T>
 class byte_reader_bitmap : public byte_reader<T> {
@@ -38,6 +40,7 @@ protected:
     int local_output_offset;    // offset for the output index.
 };
 
-
+}   // namespace orc
+}   // namespace cudf
 
 #endif // __ORC_KERNEL_READER_BITMAP_H__

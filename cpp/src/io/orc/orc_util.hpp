@@ -20,6 +20,9 @@
 #include "orc_types.h"
 #include <vector>
 
+namespace cudf {
+namespace orc {
+
 /** ---------------------------------------------------------------------------*
 * @brief define the chunk header of ORC format
 * ---------------------------------------------------------------------------**/
@@ -148,5 +151,8 @@ CudaOrcError_t AllocateTemporaryBufffer(void** dest, size_t size);
 CudaOrcError_t ReleaseTemporaryBufffer(void* dest, size_t size);
 
 bool findGMToffsetFromRegion(int& gmtoffset, const char* region);
+
+}   // namespace orc
+}   // namespace cudf
 
 #endif // __ORC__UTIL_HEADER__

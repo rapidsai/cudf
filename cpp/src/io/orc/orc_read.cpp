@@ -18,6 +18,8 @@
 
 #include "orc_read.h"
 
+namespace cudf {
+namespace orc {
 
 CudaOrcError_t CudaOrcReader::SetOption(const OrcReaderOption* _option)
 {
@@ -25,3 +27,6 @@ CudaOrcError_t CudaOrcReader::SetOption(const OrcReaderOption* _option)
 
     return GDF_ORC_SUCCESS;
 }
+
+}   // namespace orc
+}   // namespace cudf

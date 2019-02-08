@@ -26,6 +26,9 @@
 #include <fstream>
 #include <boost/date_time/local_time/local_time.hpp>
 
+namespace cudf {
+namespace orc {
+
 CudaOrcError_t AllocateAndCopyToDevice(void** dest, const void* src, size_t size)
 {
     // the cuda memory size must be multipled by 4 for orc reader for cuda
@@ -99,3 +102,6 @@ bool findGMToffsetFromRegion(int& gmtoffset, const char* region)
 
     return true;
 }
+
+}   // namespace orc
+}   // namespace cudf

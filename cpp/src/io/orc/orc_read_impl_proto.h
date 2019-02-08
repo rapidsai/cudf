@@ -25,6 +25,11 @@
 #include "orc_stripe.h"
 #include "orc_file.h"
 
+namespace cudf {
+namespace orc {
+
+namespace orc_proto = ::orc::proto;
+
 /** ---------------------------------------------------------------------------*
 * @brief implementation of reading protocol buffer from ORC file
 * ---------------------------------------------------------------------------**/
@@ -43,11 +48,12 @@ public:
     const ORCstream& getHost(int i);
 
 protected:
-    void GetPSInfo(const orc::proto::PostScript& ps);
-    void GetFooterInfo(const orc::proto::Footer& ft);
-    void GetStripesInfo(const orc::proto::Footer& ft);
-    void GetTypesInfo(const orc::proto::Footer& ft);
-    void GetMetaDataInfo(const orc::proto::Metadata& mt);
+
+    void GetPSInfo(const orc_proto::PostScript& ps);
+    void GetFooterInfo(const orc_proto::Footer& ft);
+    void GetStripesInfo(const orc_proto::Footer& ft);
+    void GetTypesInfo(const orc_proto::Footer& ft);
+    void GetMetaDataInfo(const orc_proto::Metadata& mt);
 
     bool isVariableContainer(int id);
     bool isVariableLength(int id);
@@ -56,8 +62,8 @@ protected:
 
     orc_uint32 findGMToffset(const char* region);
 
-    void ParseStripeColumns(const orc::proto::StripeFooter& stripe, OrcStripeArguemnts& stripeArg);
-    void ParseStripeStreams(const orc::proto::StripeFooter& stripe, OrcStripeArguemnts& stripeArg);
+    void ParseStripeColumns(const orc_proto::StripeFooter& stripe, OrcStripeArguemnts& stripeArg);
+    void ParseStripeStreams(const orc_proto::StripeFooter& stripe, OrcStripeArguemnts& stripeArg);
 
     void Decode();
 
@@ -68,8 +74,8 @@ protected:  // -- debug features
     void dumpFooterInfo();
     void dumpStripes();
     void dumpTypes();
-    void dumpMetaData(const orc::proto::Metadata& mt);
-    void dumpStreamInfo(const orc::proto::StripeFooter& ft);
+    void dumpMetaData(const orc_proto::Metadata& mt);
+    void dumpStreamInfo(const orc_proto::StripeFooter& ft);
 
 protected:
     OrcFile orc_file;                           //< file loader class
@@ -80,5 +86,7 @@ protected:
     std::vector<OrcStripeArguemnts> stripeArgs; //< arguments for each stripe
 };
 
+}   // namespace orc
+}   // namespace cudf
 
 #endif // __ORC_READER_PROTOCOL_BUFFER_HEADER__

@@ -49,13 +49,13 @@ TEST(gdf_orc_read_zlib, testDate2038) {
     EXPECT_EQ(GDF_DATE64, arg.data[1]->dtype);
     EXPECT_EQ(num_rows, arg.data[1]->size);
 
-    orc_sint64 *ts = reinterpret_cast<orc_sint64*>(arg.data[0]->data);
-    orc_sint64 *date = reinterpret_cast<orc_sint64*>(arg.data[1]->data);
+    int64_t *ts = reinterpret_cast<int64_t*>(arg.data[0]->data);
+    int64_t *date = reinterpret_cast<int64_t*>(arg.data[1]->data);
 
     EXPECT_EQ(convertDateToGdfDate64(2038, 12, 25), date[0]);
     EXPECT_EQ(convertDateToGdfDate64(2038, 12, 25), date[999]);
 
-    orc_sint64 gdf_ts = convertGdfTimestampMsPDT(2038, 5, 5, 12, 34, 56, 100);
+    int64_t gdf_ts = convertGdfTimestampMsPDT(2038, 5, 5, 12, 34, 56, 100);
     EXPECT_EQ(convertGdfTimestampMsPDT(2038, 5, 5, 12, 34, 56, 100), ts[0]);
     EXPECT_EQ(convertGdfTimestampMsPDT(2038, 5, 5, 12, 34, 56, 101), ts[13]);
     EXPECT_EQ(convertGdfTimestampMsPDT(2038, 5, 5, 12, 34, 56, 199), ts[999]);
@@ -87,8 +87,8 @@ TEST(gdf_orc_read_zlib, testDate1900) {
     EXPECT_EQ(GDF_DATE64, arg.data[1]->dtype);
     EXPECT_EQ(num_rows, arg.data[1]->size);
 
-    orc_sint64 *ts = reinterpret_cast<orc_sint64*>(arg.data[0]->data);
-    orc_sint64 *date = reinterpret_cast<orc_sint64*>(arg.data[1]->data);
+    int64_t *ts = reinterpret_cast<int64_t*>(arg.data[0]->data);
+    int64_t *date = reinterpret_cast<int64_t*>(arg.data[1]->data);
 
     //    1: {"time": "1900-05-05 12:34:56.1", "date" : "1900-12-25"}
     //    1000: {"time": "1900-05-05 12:34:56.1999", "date" : "1900-12-25"}
@@ -99,7 +99,7 @@ TEST(gdf_orc_read_zlib, testDate1900) {
     EXPECT_EQ(convertDateToGdfDate64(1969, 12, 25), date[num_rows - 1]);
 
     // summer time was not introduced before 1918
-    orc_sint64 gdf_ts = convertGdfTimestampMsPST(1900, 5, 5, 12, 34, 56, 0);
+    int64_t gdf_ts = convertGdfTimestampMsPST(1900, 5, 5, 12, 34, 56, 0);
     EXPECT_EQ(convertGdfTimestampMsPST(1900, 5, 5, 12, 34, 56, 100), ts[0]);
     EXPECT_EQ(convertGdfTimestampMsPST(1900, 5, 5, 12, 34, 56, 101), ts[13]);
     EXPECT_EQ(convertGdfTimestampMsPST(1900, 5, 5, 12, 34, 56, 199), ts[999]);
@@ -124,7 +124,7 @@ TEST(gdf_orc_read_zlib, testTimestamp) {
     EXPECT_EQ(GDF_TIMESTAMP, arg.data[0]->dtype);
     EXPECT_EQ(num_rows, arg.data[0]->size);
 
-    orc_sint64 *ts = reinterpret_cast<orc_sint64*>(arg.data[0]->data);
+    int64_t *ts = reinterpret_cast<int64_t*>(arg.data[0]->data);
 
     /*  the exact values:
         "2037-01-01 00:00:00.000999"
@@ -141,9 +141,9 @@ TEST(gdf_orc_read_zlib, testTimestamp) {
         "2008-10-02 00:00:00.0"
     */
 
-    orc_sint64 gdf_ts = convertGdfTimestampMsPST(2037, 1, 1, 0, 0, 0, 0);
-    orc_sint64 gdf_ts0 = convertGdfTimestampMsPDT(1996, 8, 2, 1);
-    orc_sint64 gdf_ts1 = convertGdfTimestampMsPDT(2008, 10, 2);
+    int64_t gdf_ts = convertGdfTimestampMsPST(2037, 1, 1, 0, 0, 0, 0);
+    int64_t gdf_ts0 = convertGdfTimestampMsPDT(1996, 8, 2, 1);
+    int64_t gdf_ts1 = convertGdfTimestampMsPDT(2008, 10, 2);
 
     EXPECT_EQ(convertGdfTimestampMsPST(2037, 1, 1, 0, 0, 0, 0), ts[0]);
     EXPECT_EQ(convertGdfTimestampMsPST(2003, 1, 1, 0, 0, 0, 0), ts[1]);
@@ -234,15 +234,15 @@ TEST(gdf_orc_read_zlib, over1k_bloom) {
         EXPECT_EQ(num_rows, arg.data[0]->size);
     }
 
-    orc_sint8* dint8 = reinterpret_cast<orc_sint8*>(arg.data[0]->data);
-    orc_sint16* dint16 = reinterpret_cast<orc_sint16*>(arg.data[1]->data);
-    orc_sint32* dint32 = reinterpret_cast<orc_sint32*>(arg.data[2]->data);
-    orc_sint64* dint64 = reinterpret_cast<orc_sint64*>(arg.data[3]->data);
-    orc_float32* dfloat32 = reinterpret_cast<orc_float32*>(arg.data[4]->data);
-    orc_float64* dfloat64 = reinterpret_cast<orc_float64*>(arg.data[5]->data);
+    int8_t* dint8 = reinterpret_cast<int8_t*>(arg.data[0]->data);
+    int16_t* dint16 = reinterpret_cast<int16_t*>(arg.data[1]->data);
+    int32_t* dint32 = reinterpret_cast<int32_t*>(arg.data[2]->data);
+    int64_t* dint64 = reinterpret_cast<int64_t*>(arg.data[3]->data);
+    float* dfloat32 = reinterpret_cast<float*>(arg.data[4]->data);
+    double* dfloat64 = reinterpret_cast<double*>(arg.data[5]->data);
 
-    orc_uint8* dbool = reinterpret_cast<orc_uint8*>(arg.data[6]->data);
-    orc_sint64* dts = reinterpret_cast<orc_sint64*>(arg.data[8]->data);
+    uint8_t* dbool = reinterpret_cast<uint8_t*>(arg.data[6]->data);
+    int64_t* dts = reinterpret_cast<int64_t*>(arg.data[8]->data);
 
     gdf_string *dstring = reinterpret_cast<gdf_string*>(arg.data[7]->data);
     gdf_string *dbinary = reinterpret_cast<gdf_string*>(arg.data[binary_id]->data);
@@ -255,24 +255,24 @@ TEST(gdf_orc_read_zlib, over1k_bloom) {
     */
 
     int id = 0;
-    EXPECT_EQ(dint8[id], orc_sint8(124));
-    EXPECT_EQ(dint16[id], orc_sint16(336));
-    EXPECT_EQ(dint32[id], orc_sint32(65664));
-    EXPECT_EQ(dint64[id], orc_sint64(4294967435));
+    EXPECT_EQ(dint8[id], int8_t(124));
+    EXPECT_EQ(dint16[id], int16_t(336));
+    EXPECT_EQ(dint32[id], int32_t(65664));
+    EXPECT_EQ(dint64[id], int64_t(4294967435));
     EXPECT_EQ(dfloat32[id], 74.72f);
     EXPECT_EQ(dfloat64[id], 42.47);
     EXPECT_EQ(dbool[id], 1);
 
-#if 0   // bug
+#if 0   // bug, issue #6 "the columns are not validated yet!!!!"
     EXPECT_EQ_STR(dstring[id], gdf_string("bob davidson", strlen("bob davidson")));
     EXPECT_EQ_STR(dbinary[id], gdf_string("\1\121\97\114\100\32\100\117\116\121\2", 11));
 #endif
 
     id = 1048;
-    EXPECT_EQ(dint8[id], orc_sint8(120));
-    EXPECT_EQ(dint16[id], orc_sint16(325));
-    EXPECT_EQ(dint32[id], orc_sint32(65758));
-    EXPECT_EQ(dint64[id], orc_sint64(4294967540));
+    EXPECT_EQ(dint8[id], int8_t(120));
+    EXPECT_EQ(dint16[id], int16_t(325));
+    EXPECT_EQ(dint32[id], int32_t(65758));
+    EXPECT_EQ(dint64[id], int64_t(4294967540));
     EXPECT_EQ(dfloat32[id], 79.19f);
     EXPECT_EQ(dfloat64[id], 11.26);
     EXPECT_EQ(dbool[id], 1);
@@ -283,17 +283,19 @@ TEST(gdf_orc_read_zlib, over1k_bloom) {
 #endif
 
     EXPECT_EQ(convertGdfTimestampMs(2013, 3, 1, 9, 11, 58, 703), dts[0]);
-    EXPECT_EQ(convertGdfTimestampMs(2013, 3, 1, 9, 11, 58, 703), dts[1105]);
+    EXPECT_EQ(convertGdfTimestampMs(2013, 3, 1, 9, 11, 58, 703), dts[1048]);
 
     for (id = 1049; id < 2098; id++) {
-        EXPECT_EQ(dint8[id], orc_sint8(-100));
-        EXPECT_EQ(dint16[id], orc_sint16(-1000));
-        EXPECT_EQ(dint32[id], orc_sint32(-10000));
-        EXPECT_EQ(dint64[id], orc_sint64(-1000000));
+        EXPECT_EQ(dint8[id], int8_t(-100));
+        EXPECT_EQ(dint16[id], int16_t(-1000));
+        EXPECT_EQ(dint32[id], int32_t(-10000));
+        EXPECT_EQ(dint64[id], int64_t(-1000000));
         EXPECT_EQ(dfloat32[id], -100.0f);
         EXPECT_EQ(dfloat64[id], -10.0);
         EXPECT_EQ(dbool[id], 0);
     }
+
+    // todo: null bitmap check!
     
     release_orc_read_arg(&arg);
 }
@@ -376,13 +378,13 @@ TEST(gdf_orc_read_zlib, test1) {
         EXPECT_EQ(std::string(col_names[i]), arg.data[i]->col_name);
     }
 
-    orc_sint8* dbool = reinterpret_cast<orc_sint8*>(arg.data[0]->data);
-    orc_sint8* dint8 = reinterpret_cast<orc_sint8*>(arg.data[1]->data);
-    orc_sint16* dint16 = reinterpret_cast<orc_sint16*>(arg.data[2]->data);
-    orc_sint32* dint32 = reinterpret_cast<orc_sint32*>(arg.data[3]->data);
-    orc_sint64* dint64 = reinterpret_cast<orc_sint64*>(arg.data[4]->data);
-    orc_float32* dfloat32 = reinterpret_cast<orc_float32*>(arg.data[5]->data);
-    orc_float64* dfloat64 = reinterpret_cast<orc_float64*>(arg.data[6]->data);
+    int8_t* dbool = reinterpret_cast<int8_t*>(arg.data[0]->data);
+    int8_t* dint8 = reinterpret_cast<int8_t*>(arg.data[1]->data);
+    int16_t* dint16 = reinterpret_cast<int16_t*>(arg.data[2]->data);
+    int32_t* dint32 = reinterpret_cast<int32_t*>(arg.data[3]->data);
+    int64_t* dint64 = reinterpret_cast<int64_t*>(arg.data[4]->data);
+    float* dfloat32 = reinterpret_cast<float*>(arg.data[5]->data);
+    double* dfloat64 = reinterpret_cast<double*>(arg.data[6]->data);
 
     gdf_string *dbinary = reinterpret_cast<gdf_string*>(arg.data[7]->data);
     gdf_string *dstring = reinterpret_cast<gdf_string*>(arg.data[8]->data);
@@ -401,10 +403,10 @@ TEST(gdf_orc_read_zlib, test1) {
 
     int id = 0;
     EXPECT_EQ(dbool[id], 0);
-    EXPECT_EQ(dint8[id], orc_sint8(1));
-    EXPECT_EQ(dint16[id], orc_sint16(1024));
-    EXPECT_EQ(dint32[id], orc_sint32(65536));
-    EXPECT_EQ(dint64[id], orc_sint64(9223372036854775807));
+    EXPECT_EQ(dint8[id], int8_t(1));
+    EXPECT_EQ(dint16[id], int16_t(1024));
+    EXPECT_EQ(dint32[id], int32_t(65536));
+    EXPECT_EQ(dint64[id], int64_t(9223372036854775807));
     EXPECT_EQ(dfloat32[id], 1.f);
     EXPECT_EQ(dfloat64[id], -15.0);
     EXPECT_EQ_STR(dbinary[id], gdf_string("\0\1\2\3\4", 5));
@@ -412,10 +414,10 @@ TEST(gdf_orc_read_zlib, test1) {
 
     id = 1;
     EXPECT_EQ(dbool[id], 1);
-    EXPECT_EQ(dint8[id], orc_sint8(100));
-    EXPECT_EQ(dint16[id], orc_sint16(2048));
-    EXPECT_EQ(dint32[id], orc_sint32(65536));
-    EXPECT_EQ(dint64[id], orc_sint64(9223372036854775807));
+    EXPECT_EQ(dint8[id], int8_t(100));
+    EXPECT_EQ(dint16[id], int16_t(2048));
+    EXPECT_EQ(dint32[id], int32_t(65536));
+    EXPECT_EQ(dint64[id], int64_t(9223372036854775807));
     EXPECT_EQ(dfloat32[id], 2.f);
     EXPECT_EQ(dfloat64[id], -5.0);
     EXPECT_EQ_STR(dbinary[id], gdf_string("", 0));
@@ -521,7 +523,7 @@ TEST(gdf_orc_read_zlib, testStripeLevelStats) {
     EXPECT_EQ(std::string("int1"), arg.data[0]->col_name);
     EXPECT_EQ(std::string("string1"), arg.data[1]->col_name);
 
-    orc_sint32 *dint = reinterpret_cast<orc_sint32*>(arg.data[0]->data);
+    int32_t *dint = reinterpret_cast<int32_t*>(arg.data[0]->data);
     gdf_string *dstr = reinterpret_cast<gdf_string*>(arg.data[1]->data);
 
     for (int i = 0; i < 5000; i++) {

@@ -243,7 +243,7 @@ add_library(cudf SHARED
 	    src/io/orc/orc_util.cpp
 	    src/io/orc/orc_memory.cpp
 	    src/io/orc/orc_gzip_stream.cpp
-	    src/io/orc/orc_debug.c
+	    src/io/orc/orc_debug.cpp
 	    src/io/orc/orc_file.cpp
 	    src/io/orc/kernel_orc.cu
 	    src/io/orc/kernel_boolean.cu
@@ -251,6 +251,7 @@ add_library(cudf SHARED
 	    src/io/orc/kernel_intRLEv1.cu
 	    src/io/orc/kernel_intRLEv2.cu
 	    src/io/orc/kernel_present.cu
+            src/io/orc/kernel_present_clear.cu
 	    src/io/orc/kernel_rawdata.cu
 	    src/io/orc/kernel_varint.cu
 	    src/io/orc/kernel_convert.cu)

@@ -19,6 +19,9 @@
 
 #include "kernel_private_common.cuh"
 
+namespace cudf {
+namespace orc {
+
 template <class TU, class  T_reader_input, int element_size>
 class stream_reader_element : public stream_reader<T_reader_input> {
 public:
@@ -46,5 +49,8 @@ public:
 
 protected:
 };
+
+}   // namespace orc
+}   // namespace cudf
 
 #endif // __ORC_KERNEL_READER_ELEMENT_H__

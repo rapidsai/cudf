@@ -24,7 +24,11 @@
 #pragma comment(lib, "libprotobufd.lib")    // required for bug: https://github.com/google/protobuf/issues/816
 #pragma comment(lib, "orc_read_cudad.lib")
 #else
+#if 1   // 1: link protobuf full, 0: link protobuf-lite
 #pragma comment(lib, "libprotobuf.lib")
+#else
+#pragma comment(lib, "libprotobuf-lite.lib")
+#endif
 #pragma comment(lib, "orc_read_cuda.lib")
 #endif
 

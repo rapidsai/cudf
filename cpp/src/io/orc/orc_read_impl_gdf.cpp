@@ -20,6 +20,8 @@
 #include "orc_read_impl_gdf.h"
 #include "gdf_orc_util.h"
 
+namespace cudf {
+namespace orc {
 
 CudaOrcError_t CudaOrcReaderImplGdf::ReadFromFile(const char* filename)
 {
@@ -125,7 +127,8 @@ bool CudaOrcReaderImplGdf::IsSupportedType(int id)
     return false;
 }
 
-
+}   // namespace orc
+}   // namespace cudf
 
 
 

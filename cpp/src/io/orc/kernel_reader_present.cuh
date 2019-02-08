@@ -19,6 +19,9 @@
 
 #include "kernel_reader.cuh"
 
+namespace cudf {
+namespace orc {
+
 //#define _INVESTIGATION
 
 // work as single thread
@@ -203,5 +206,7 @@ __device__ inline size_t byte_reader_present_warp::expect(int count)
     return offset_from_local;
 }
 
+}   // namespace orc
+}   // namespace cudf
 
 #endif // __ORC_KERNEL_READER_PRESENT_H__

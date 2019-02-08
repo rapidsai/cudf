@@ -24,6 +24,9 @@
 #include <stddef.h>
 #include <utility>
 
+namespace cudf {
+namespace orc {
+
 // define the byte size of the element for nanoseconds stream of timestamp
 #define GDF_ORC_TIMESTAMP_NANO_PRECISION 8
 
@@ -151,5 +154,8 @@ enum ORCColumnEncodingKind {
     OrcDirect_V2,
     OrcDictionary_V2,
 };
+
+}   // namespace orc
+}   // namespace cudf
 
 #endif //  __GDF_ORC_DATA_TYPES_H__

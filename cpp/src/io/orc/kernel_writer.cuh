@@ -19,6 +19,9 @@
 
 #include "kernel_private_common.cuh"
 
+namespace cudf {
+namespace orc {
+
 template <class T, class T_converter= ORCConverterBase<T>>
 class data_writer {
 public:
@@ -70,6 +73,7 @@ protected:
     int local_offset;    //< offset for the index.
 };
 
-
+}   // namespace orc
+}   // namespace cudf
 
 #endif // __ORC_KERNEL_WRITER_H__

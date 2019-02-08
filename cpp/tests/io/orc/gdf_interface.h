@@ -27,7 +27,7 @@
 #define DO_FULL_RANGE_CHECK 
 #define IGNORE_NULL_BITMAP_CHECK
 
-#if 0   // these are debug/test flags
+#if (0 || defined(ORC_DEVELOP_MODE) ) // these are debug/test flags
 #define DO_UNSUPPORTED_COMP_TEST
 #define DO_UNSUPPORTED_TEST
 #endif

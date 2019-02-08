@@ -23,6 +23,7 @@
 #include "io/orc/orc_debug.h"
 #include "io/orc/orc_util.hpp"
 #include "io/orc/kernel_orc.cuh"
+#include "io/orc/kernel_util.cuh"
 #include "cudf.h"
 
 
@@ -36,6 +37,8 @@
 
 #include "gtest/gtest.h"
 #endif
+
+using namespace cudf::orc;
 
 gdf_error release_orc_read_arg(orc_read_arg* arg);
 
@@ -55,7 +58,7 @@ long compare_arrays(T* lhs, T* rhs, size_t count) {
     for (size_t i = 0; i < count; i++) {
         bool match = (lhs[i] == rhs[i])? true : false;
         if (false == match){
-            ret = i;
+            ret = long(i);
 #if 0
             std::cout << "[" << i << "]: ";
             EXPECT_EQ(lhs[i], rhs[i]);
@@ -267,7 +270,6 @@ protected:
 
     int unreferenced_value;
 };
-
 
 
 #endif // __TESTS_COMMON__HEADER__

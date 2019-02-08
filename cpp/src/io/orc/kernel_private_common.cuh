@@ -20,6 +20,9 @@
 #include <stdio.h>
 #include "kernel_orc.cuh"
 
+namespace cudf {
+namespace orc {
+
 #undef NOOP
 #define NOOP (void)0;
 
@@ -40,6 +43,9 @@ template <typename T>
 using EnableSigned = typename std::enable_if< std::is_signed<T>::value >::type*;
 template <typename T>
 using EnableUnSigned = typename std::enable_if< std::is_unsigned<T>::value >::type*;
+
+}   // namespace orc
+}   // namespace cudf
 
 #endif // __ORC_KERNEL_PRIVATE_COMMON_H__
 

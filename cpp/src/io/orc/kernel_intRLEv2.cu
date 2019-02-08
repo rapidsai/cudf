@@ -17,6 +17,9 @@
 #include "kernel_private.cuh"
 #include "kernel_reader_int.cuh"
 
+namespace cudf {
+namespace orc {
+
 #define RLEv2_Mode_ShortRepeat      0
 #define RLEv2_Mode_Direct           1
 #define RLEv2_Mode_PatchedBase      2
@@ -647,7 +650,7 @@ void cuda_integerRLEv2_entry(KernelParamCommon* param)
 {
     const int num_threads = 32;
 
-    kernel_integerRLEv2<ORCdecodeIntRLEv2Warp<T, T_writer, T_reader>> << <1, num_threads >> > (*param);
+    kernel_integerRLEv2<ORCdecodeIntRLEv2Warp<T, T_writer, T_reader>> << <1, num_threads, 0, param->stream >> > (*param);
     ORC_DEBUG_KERNEL_CALL_CHECK();
 }
 
@@ -694,7 +697,7 @@ void cuda_integerRLEv2_converter_select(KernelParamCommon* param)
     }
 }
 
-void cuda_integerRLEv2_Depends(KernelParamCommon* param)
+void cudaDecodeIntRLEv2(KernelParamCommon* param)
 {
     switch (param->elementType) {
     case OrcElementType::Uint64:
@@ -774,28 +777,28 @@ __global__ void kernel_integerRLEv2_depends(KernelParamCommon kernParam)
     }
 }
 
-void cuda_integerRLEv2_Depends(KernelParamCommon* param)
+void cudaDecodeIntRLEv2(KernelParamCommon* param)
 {
     const int num_CTA = 32;
 
     switch (param->elementType) {
     case OrcElementType::Uint64:
-        kernel_integerRLEv2_depends<orc_uint64> << <1, num_CTA >> >(*param);
+        kernel_integerRLEv2_depends<orc_uint64> << <1, num_CTA, 0, param->stream >> >(*param);
         break;
     case OrcElementType::Sint64:
-        kernel_integerRLEv2_depends<orc_sint64> << <1, num_CTA >> >(*param);
+        kernel_integerRLEv2_depends<orc_sint64> << <1, num_CTA, 0, param->stream >> >(*param);
         break;
     case OrcElementType::Uint32:
-        kernel_integerRLEv2_depends<orc_uint32> << <1, num_CTA >> >(*param);
+        kernel_integerRLEv2_depends<orc_uint32> << <1, num_CTA, 0, param->stream >> >(*param);
         break;
     case OrcElementType::Sint32:
-        kernel_integerRLEv2_depends<orc_sint32> << <1, num_CTA >> >(*param);
+        kernel_integerRLEv2_depends<orc_sint32> << <1, num_CTA, 0, param->stream >> >(*param);
         break;
     case OrcElementType::Uint16:
-        kernel_integerRLEv2_depends<orc_uint16> << <1, num_CTA >> >(*param);
+        kernel_integerRLEv2_depends<orc_uint16> << <1, num_CTA, 0, param->stream >> >(*param);
         break;
     case OrcElementType::Sint16:
-        kernel_integerRLEv2_depends<orc_sint16> << <1, num_CTA >> >(*param);
+        kernel_integerRLEv2_depends<orc_sint16> << <1, num_CTA, 0, param->stream >> >(*param);
         break;
     default:
         EXIT("unhandled type");
@@ -806,3 +809,6 @@ void cuda_integerRLEv2_Depends(KernelParamCommon* param)
 }
 
 #endif
+
+}   // namespace orc
+}   // namespace cudf

@@ -23,6 +23,8 @@ gdf_error gdf_read_orc(
     orc_read_arg *arg
 )
 {
+    using namespace cudf::orc;
+
     // reset arg first
     arg->data = NULL;
     arg->num_cols_out = 0;
@@ -52,6 +54,9 @@ ORC_END_READ:
     delete reader;
     return gdf_orc_convertErrorCode(state);
 }
+
+namespace cudf {
+namespace orc {
 
 CudaOrcReader* gdf_create_orc_reader() {
     return new CudaOrcReaderImplProto;
@@ -145,3 +150,7 @@ gdf_dtype gdf_orc_convertDataKind(ORCTypeKind kind)
 
 
 }
+
+}   // namespace orc
+}   // namespace cudf
+

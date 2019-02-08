@@ -23,6 +23,9 @@
 #include <google/protobuf/io/zero_copy_stream_impl_lite.h>
 #include "orc_gzip_stream.h"
 
+namespace cudf {
+namespace orc {
+
 /** ---------------------------------------------------------------------------*
 * @brief A helper template class to load compressed/uncompressed protobuffer message
 * ---------------------------------------------------------------------------**/
@@ -77,5 +80,8 @@ protected:
     OrcCompressionKind compKind;
     T reader;
 };
+
+}   // namespace orc
+}   // namespace cudf
 
 #endif // __ORC_PROTO_HPP__

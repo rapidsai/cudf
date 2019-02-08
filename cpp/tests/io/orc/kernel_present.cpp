@@ -50,7 +50,7 @@ bool Do_test_cuda_present_bitmap_RLE(orc_bitmap* expected, int count, orc_byte* 
     param.parent = NULL;
     param.stat = (CudaOrcKernelRetStatsValue*)stats.getGpuAddr();
 
-    cuda_booleanRLEbitmapDepends(&param);
+    cudaDecodePresent(&param);
     // ----------------------------------
 
     CudaFuncCall(cudaDeviceSynchronize());    // kernel launch failure will be trapped here.

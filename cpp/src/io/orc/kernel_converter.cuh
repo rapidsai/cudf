@@ -19,6 +19,9 @@
 
 #include "kernel_private_common.cuh"
 
+namespace cudf {
+namespace orc {
+
 //! the base class of converter
 template <class T>
 class ORCConverterBase
@@ -73,7 +76,7 @@ public:
     };
 };
 
-
-
+}   // namespace orc
+}   // namespace cudf
 
 #endif // __ORC_KERNEL_CONVERTER_H__

@@ -16,6 +16,9 @@
 
 #include "kernel_private.cuh"
 
+namespace cudf {
+namespace orc {
+
 // default converter: day + nanosec -> millisec
 template <typename T_secondary>
 __device__ orc_sint64 kernel_convert_to_millisec(const orc_sint64 sec, const T_secondary nano, const orc_sint64 adjustClock)
@@ -123,13 +126,13 @@ void cuda_convert_depends_full_throttle(KernelParamCoversion* param)
     {
     case OrcKernelConvertionType::GdfTimestampUnit_ms:
 #if (GDF_ORC_TIMESTAMP_NANO_PRECISION == 8)
-        kernel_convert_timestamp_full<orc_uint64> << <block_dim, block_size >> > (*param);
+        kernel_convert_timestamp_full<orc_uint64> << <block_dim, block_size, 0, param->stream >> > (*param);
 #else
-        kernel_convert_timestamp_full<orc_uint32> << <block_dim, block_size >> > (*param);
+        kernel_convert_timestamp_full<orc_uint32> << <block_dim, block_size, 0, param->stream >> > (*param);
 #endif
         break;
     case OrcKernelConvertionType::GdfString_dictionary:
-        kernel_convert_string_dictionary_full << <block_dim, block_size >> > (*param);
+        kernel_convert_string_dictionary_full << <block_dim, block_size, 0, param->stream >> > (*param);
         break;
     default:
         EXIT("unknown convert type!");
@@ -145,7 +148,7 @@ void cuda_convert_depends_warp(KernelParamCoversion* param)
     switch (param->convertType)
     {
     case OrcKernelConvertionType::GdfString_direct:
-        kernel_convert_string_warp << <1, block_size >> > (*param);
+        kernel_convert_string_warp << <1, block_size, 0, param->stream >> > (*param);
         break;
     default:
         EXIT("unknown convert type!");
@@ -154,8 +157,7 @@ void cuda_convert_depends_warp(KernelParamCoversion* param)
     ORC_DEBUG_KERNEL_CALL_CHECK();
 }
 
-
-void cuda_convert_depends(KernelParamCoversion* param)
+void cudaConvertData(KernelParamCoversion* param)
 {
     switch (param->convertType)
     {
@@ -172,3 +174,6 @@ void cuda_convert_depends(KernelParamCoversion* param)
         break;
     }
 }
+
+}   // namespace orc
+}   // namespace cudf

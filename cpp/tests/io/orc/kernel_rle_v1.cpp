@@ -28,7 +28,7 @@ template <class T> bool Do_test_cuda_integerRLEv1_depends(T* expected, int count
     KernelParamCommon* param = helper.create(expected, count, raw, raw_count, present, present_size, array);
     param->elementType = std::is_same<orc_uint32, T>::value ? OrcElementType::Uint32 : OrcElementType::Sint32;
 
-    cuda_integerRLEv1_Depends(param);
+    cudaDecodeIntRLEv1(param);
 
     return helper.validate();
 }

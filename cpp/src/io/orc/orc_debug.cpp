@@ -25,6 +25,9 @@
 #include <windows.h>
 #endif
 
+namespace cudf {
+namespace orc {
+
 void defualtOutputMessageStringFunction(const char*  szBuffer);
 
 FILE*           _output_stream                  = NULL;
@@ -110,3 +113,6 @@ unsigned int    kvGetDebugLevel()
 {
     return _debugLevel;
 }    // kvGetDebugLevel
+
+}   // namespace orc
+}   // namespace cudf

@@ -24,6 +24,9 @@
 #include "orc_memory.h"
 #include <vector>
 
+namespace cudf {
+namespace orc {
+
 class OrcStripeArguemnts;
 class OrcStreamArguemnts;
 struct OrcColumnArguemnts;
@@ -127,6 +130,7 @@ public:
         param->parent = (_column->valid_parent_present) ? _column->valid_parent_present->target() : NULL;
         param->input_size = src_length;
         param->start_id = present_start_index;
+        param->end_id = present_end_index;
         param->output_count = dst_length;
         param->stat = NULL;
     }
@@ -189,7 +193,7 @@ protected:
 };
 
 /** ---------------------------------------------------------------------------*
-* @brief parameters to decode a stripe
+* @brief a class to decode a stripe
 * ---------------------------------------------------------------------------**/
 class OrcStripeArguemnts {
 public:
@@ -200,7 +204,9 @@ public:
     void releaseStripeBuffer();
 
     void SetCompressionKind(OrcCompressionKind kind) { compKind = kind; };
-    void SetStripeInfo(OrcStripeInfo* info, int id) { stripe_info = info; stripe_id = id; };
+    void SetStripeInfo(OrcStripeInfo* info, int id, bool isLastStripe = false) {
+        stripe_info = info; stripe_id = id; is_last_stripe = isLastStripe;
+    };
     void SetDeviceArray(std::vector<ORCstream>*    _deviceArray) { deviceArray = _deviceArray; };
 
 public:
@@ -232,7 +238,9 @@ public:
     int StripeId() const { return stripe_id; };
 
     void SetGMToffset(orc_uint32 gmtoff) { gmtoffset = gmtoff; };
-    orc_uint32 GetGMToffset() { return gmtoffset; };
+    orc_uint32 GetGMToffset() const { return gmtoffset; };
+
+    bool IsLastStripe() const { return is_last_stripe; };
 
 protected:
     int FindValidParant(int id);
@@ -245,7 +253,9 @@ protected:
     const orc_byte* stride_addr_gpu;                    //< gpu accessible memory for the stride, usually cuda device memory
     size_t          stride_length;                      //< the effective byte length of the stride
     orc_uint32      gmtoffset;                          //< GMT offset[sec] for the writer's local timezone
-    OrcCompressionKind      compKind;
+    bool            is_last_stripe;                     //< true if the stripe is last one.
+
+    OrcCompressionKind      compKind;                   //< the compression kind
 
     std::vector<OrcStreamArguemnts> streamArgs;         //< arguments for streams to be decoded
     std::vector<OrcColumnArguemnts> columnArgs;         //< arguments for culumns columnArgs.input_size == types.input_size
@@ -255,5 +265,7 @@ protected:
     OrcBufferInfoHolder holder;                         //< OrcBuffer holder for the stripe when ORC file is compressed
 };
 
+}   // namespace orc
+}   // namespace cudf
 
 #endif // __ORC_STRIPE_HEADER__

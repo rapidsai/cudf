@@ -21,6 +21,9 @@
 #include <vector>
 #include <string>
 
+namespace cudf {
+namespace orc {
+
 #define ORC_SET_ERROR_AND_RETURN(err_code) if(GDF_ORC_SUCCESS != err_code){status = err_code; return err_code; }
 #define ORC_RETURN_IF_ERROR(expr) { status = (expr); if(GDF_ORC_SUCCESS != status ){return status;}; }
 
@@ -159,6 +162,7 @@ protected:
     CudaOrcError_t                  status;
 };
 
-
+}   // namespace orc
+}   // namespace cudf
 
 #endif // __ORC_READER_HEADER__

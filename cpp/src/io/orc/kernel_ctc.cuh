@@ -19,6 +19,8 @@
 
 #include "kernel_private_common.cuh"
 
+namespace cudf {
+namespace orc {
 
 class CudaThreadControl {
 public:
@@ -69,6 +71,7 @@ public:
     int warp_bitmask;
 };
 
-
+}   // namespace orc
+}   // namespace cudf
 
 #endif // __ORC_KERNEL_CTC_H__

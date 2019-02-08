@@ -19,6 +19,9 @@
 
 #include "kernel_reader.cuh"
 
+namespace cudf {
+namespace orc {
+
 template <class TU, class  T_reader_input>
 class stream_reader_int : public stream_reader<T_reader_input> {
 public:
@@ -170,5 +173,8 @@ public:
         return value;
     }
 };
+
+}   // namespace orc
+}   // namespace cudf
 
 #endif // __ORC_KERNEL_READER_INT_H__

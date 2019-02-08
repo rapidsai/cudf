@@ -19,6 +19,10 @@
 
 #include "orc_types.h"
 
+namespace cudf {
+namespace orc {
+
+
 class OrcFile {
 public:
     OrcFile() : _file_top(NULL), _filesize(0){};
@@ -39,5 +43,7 @@ protected:
 
 };
 
+}   // namespace orc
+}   // namespace cudf
 
 #endif // __ORC_FILE_HEADER__

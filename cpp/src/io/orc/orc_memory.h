@@ -23,6 +23,9 @@
 #include "kernel_orc.cuh"
 #include <vector>
 
+namespace cudf {
+namespace orc {
+
 namespace OrcMem {
     struct OrcMemArgument {
         int blockSize;               //< byte size of the block size
@@ -121,5 +124,7 @@ private:
 
 };
 
+}   // namespace orc
+}   // namespace cudf
 
 #endif // __ORC_BUFFERS_HEADER__

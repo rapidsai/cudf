@@ -19,6 +19,10 @@
 #include "orc_memory.h"
 #include <assert.h>
 
+namespace cudf {
+namespace orc {
+
+
 bool OrcStripeArguemnts::isFinished() 
 {
     // for now, force synchronizing the devices
@@ -123,6 +127,7 @@ void OrcStripeArguemnts::DecodePresentStreams()
         if (col.type->skipPresentation) continue;
         
         if (!col.stream_present) {
+#if 0
             // It is needed to be cared even though current stripe does not have present stream
             // If all values of present stream in the stripe are non-null, stream is omitted.
             orc_byte* top = deviceArray->at(i).stream_present;
@@ -134,8 +139,10 @@ void OrcStripeArguemnts::DecodePresentStreams()
             param->parent = NULL;
             param->input_size = 0;
             param->start_id = (stripe_info->startRowIndex & 3);
-            param->output_count = ((stripe_info->numberOfRows + 7) >> 3);
+            param->output_count = stripe_info->numberOfRows;    // the count of present `bit`
             param->stat = NULL;
+            param->stream = NULL;
+
 
             if ( (stripe_info->startRowIndex & 0x07) == 0 ) {
                 current = top + ( stripe_info->startRowIndex >> 3);
@@ -147,13 +154,25 @@ void OrcStripeArguemnts::DecodePresentStreams()
                 EXIT("not suported case.");
                 // todo: copy from parent stream.
             }
+#else
+            OrcStreamArguemnts stream;
+            stream.SetArgs(this, ORCStreamKind::OrcPresent, &col, i);
+            stream.SetSource(NULL, NULL, 0);
+            stream.SetPresentTarget(deviceArray->at(i).stream_present, stripe_info->startRowIndex, stripe_info->numberOfRows);
+            stream.GetKernelParamBitmap(&paramBitmap);
+
+            if (paramBitmap.end_id && IsLastStripe()) {
+                paramBitmap.end_id = 0;
+            }
+            cudaClearPresent(&paramBitmap);
+#endif
             continue;
         }
 
         OrcStreamArguemnts* stream = col.stream_present;
         stream->GetKernelParamBitmap(&paramBitmap);
         DecodeCompressedStream(&paramBitmap, stream);
-        cuda_booleanRLEbitmapDepends(&paramBitmap);
+        cudaDecodePresent(&paramBitmap);
     }
 
 #if ( _DEBUG || 0 )
@@ -164,7 +183,7 @@ void OrcStripeArguemnts::DecodePresentStreams()
 
 #if ( _DEBUG && 1 )    // dump present stream
     D_MSG("[%d]: Column status.", stripe_id);
-    D_MSG("[column id]: num of rows, (has present, is no present, varid parent id)");
+    D_MSG("[column id]: num of rows, (has present, is no present, valid parent id)");
 
     for (int i = 0; i < columnArgs.size(); i++) {
         auto& col = columnArgs[i];
@@ -187,10 +206,10 @@ void cuda_intRLE_Depends(KernelParamCommon* param, ORCColumnEncodingKind encode)
     if ( encode == ORCColumnEncodingKind::OrcDirect_V2 || 
          encode == ORCColumnEncodingKind::OrcDictionary_V2
         ) {
-        cuda_integerRLEv2_Depends(param);
+        cudaDecodeIntRLEv2(param);
     }
     else {
-        cuda_integerRLEv1_Depends(param);
+        cudaDecodeIntRLEv1(param);
     }
 }
 
@@ -297,10 +316,10 @@ void OrcStripeArguemnts::DecodeDataStreams()
 
         switch (col.type->kind) {
         case OrcBolean:
-            cuda_booleanByteRLEDepends(&param);
+            cudaDecodeBooleanRLE(&param);
             break;
         case OrcByte:   // TinyInt 
-            cuda_ByteRLEDepends(&param);
+            cudaDecodeByteRLE(&param);
             break;
         case OrcShort:  // SmallInt, Int, and BigInt
         case OrcInt:
@@ -309,11 +328,11 @@ void OrcStripeArguemnts::DecodeDataStreams()
             break;
         case OrcFloat:
         case OrcDouble:
-            cuda_raw_data_depends(&param);
+            cudaDecodeRawData(&param);
             break;
         case OrcDecimal:
             param.elementType = OrcElementType::Sint64;
-            cuda_base128_varint_Depends(&param);
+            cudaDecodeVarint(&param);
 
             col.stream_second->GetKernelParamCommon(&param);
             DecodeCompressedStream(&param, col.stream_second);
@@ -331,6 +350,7 @@ void OrcStripeArguemnts::DecodeDataStreams()
             break;
 
         case OrcTimestamp:
+        {
             param.elementType = OrcElementType::Sint64;
             param.convertType = OrcKernelConvertionType::GdfConvertNone;
             cuda_intRLE_Depends(&param, col.encoding);
@@ -350,8 +370,9 @@ void OrcStripeArguemnts::DecodeDataStreams()
             KernelParamCoversion param_convert;
             GetTimestampKernelParam(param_convert, col, & (deviceArray->at(i)), this);
 
-            cuda_convert_depends(&param_convert);
+            cudaConvertData(&param_convert);
             break;
+        }
         case OrcBinary:
             D_ASSERT(   col.encoding != ORCColumnEncodingKind::OrcDictionary 
                      && col.encoding != ORCColumnEncodingKind::OrcDictionary_V2);
@@ -370,7 +391,7 @@ void OrcStripeArguemnts::DecodeDataStreams()
                         param.output_count, param.input_size);
                     EXIT("Failed at Streing decoding");
                 }
-                cuda_raw_data_depends(&param);
+                cudaDecodeRawData(&param);
 
                 // decode length stream
                 col.stream_length->GetKernelParamCommon(&param);
@@ -392,11 +413,11 @@ void OrcStripeArguemnts::DecodeDataStreams()
                 // convert data and length streams into gdf_string stream.
                 KernelParamCoversion param_convert;
                 GetStringDirectKernelParam(param_convert, col, &(deviceArray->at(i)), true);
-                cuda_convert_depends(&param_convert);
+                cudaConvertData(&param_convert);
 
                 // decode each rows from dictinary id by col.temporary_buffer. 
                 GetStringDictionaryKernelParam(param_convert, col, &(deviceArray->at(i)) );
-                cuda_convert_depends(&param_convert);
+                cudaConvertData(&param_convert);
 
                 break;
             }
@@ -412,7 +433,7 @@ void OrcStripeArguemnts::DecodeDataStreams()
                     }
                 }
                 param.present = NULL;
-                cuda_raw_data_depends(&param);
+                cudaDecodeRawData(&param);
 
                 // decode length stream
                 col.stream_length->GetKernelParamCommon(&param);
@@ -426,7 +447,7 @@ void OrcStripeArguemnts::DecodeDataStreams()
                 KernelParamCoversion param_convert;
                 GetStringDirectKernelParam(param_convert, col, &(deviceArray->at(i)));
 
-                cuda_convert_depends(&param_convert);
+                cudaConvertData(&param_convert);
 
                 break;
             }
@@ -454,5 +475,6 @@ void OrcStripeArguemnts::DecodeDataStreams()
 
 }
 
-
+}   // namespace orc
+}   // namespace cudf
 

@@ -20,6 +20,8 @@
 #include "kernel_writer_bitmap.cuh"
 #include "kernel_reader_bitmap.cuh"
 
+namespace cudf {
+namespace orc {
 
 template <class  T>
 class bitmap_writer_depends : public bitmap_writer {
@@ -34,5 +36,8 @@ protected:
     byte_reader_bitmap<T> input;
 
 };
+
+}   // namespace orc
+}   // namespace cudf
 
 #endif // __ORC_KERNEL_WRITER_BITMAP_DEPENDS_H__

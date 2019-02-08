@@ -17,6 +17,9 @@
 #include "kernel_decode_common.cuh"
 #include "kernel_reader_int.cuh"
 
+namespace cudf {
+namespace orc {
+
 template <class T, class T_writer, class T_reader>
 class ORCdecode_IntRLEv1_single : public ORCdecodeCommon<T, T_writer, T_reader>
 {
@@ -98,7 +101,7 @@ void cuda_integerRLEv1_entry(KernelParamCommon* param)
 {
     const int num_threads = 1;
 
-    kernel_integerRLEv1<ORCdecode_IntRLEv1_single<T, T_writer, T_reader>> << <1, num_threads >> > (*param);
+    kernel_integerRLEv1<ORCdecode_IntRLEv1_single<T, T_writer, T_reader>> << <1, num_threads, 0, param->stream >> > (*param);
     ORC_DEBUG_KERNEL_CALL_CHECK();
 }
 
@@ -144,7 +147,7 @@ void cuda_integerRLEv1_converter_select(KernelParamCommon* param)
 
 }
 
-void cuda_integerRLEv1_Depends(KernelParamCommon* param)
+void cudaDecodeIntRLEv1(KernelParamCommon* param)
 {
     switch (param->elementType) {
     case OrcElementType::Uint64:
@@ -172,3 +175,5 @@ void cuda_integerRLEv1_Depends(KernelParamCommon* param)
 
 }
 
+}   // namespace orc
+}   // namespace cudf

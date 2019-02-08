@@ -26,6 +26,7 @@
 #include "orc_types.h"
 #include "orc_debug.h"
 
+
 #ifdef _DEBUG
 #define CHECK_ORC_PERF_STATS    
 #endif
@@ -47,6 +48,9 @@
        DEBUG_BREAK(); \
     }                                                 \
 }
+
+namespace cudf {
+namespace orc {
 
 struct CudaOrcKernelRetStatsValue {
     // these parametes are required value to be returned from cuda kernel
@@ -102,9 +106,10 @@ struct KernelParamBase {
     orc_byte* output;                   //< the start address of output buffer
     const orc_byte* input;              //< the start address of input buffer
     size_t input_size;                  //< input_size of input buffer
-    size_t start_id;                    //< the start offset bits of output buffer
-    size_t output_count;                //< the element count of output buffer (1 bit/element)
+    size_t start_id;                    //< the start offset bits of output buffer [0-7]
+    size_t output_count;                //< the element count of output buffer (for present stream, byte length)
     OrcBufferArray bufferArray;         //< buffer array for cpu decompressed buffers
+    cudaStream_t stream;                //< cuda stream
     CudaOrcKernelRetStatsValue *stat;   //< return value and kernel statistics (stats are debug only) 
 
     KernelParamBase()
@@ -113,6 +118,7 @@ struct KernelParamBase {
         , input(NULL)
         , input_size(0)
         , start_id(0)
+        , stream(NULL)
     {
         bufferArray.numBuffers = 0;
         bufferArray.buffers = NULL;
@@ -122,6 +128,7 @@ struct KernelParamBase {
 //! cuda kernel's parameter only for decoding present streams.
 struct KernelParamBitmap : KernelParamBase {
     const orc_bitmap* parent;               //< the start address of parent stream, NULL if no parent stream.
+    size_t end_id;                          //< the end offset bits of output buffer [0-7]
 };
 
 //! cuda kernel's parameter for decoding data streams.
@@ -155,6 +162,12 @@ struct KernelParamCoversion {
 
     size_t data_count;                      //< the element count of output buffer
     size_t dict_count;                      //< the dictionary count for dictionary data conversion.
+
+    cudaStream_t stream;                    //< cuda stream
+
+    KernelParamCoversion()
+        : stream(NULL)
+    {};
 };
 
 // this parameter is designed to get the status of kernel execution to debug, perf tuning in future
@@ -181,18 +194,19 @@ protected:
 // -----------------------------------------------------------------------------------------
 // declaration of entry functions invoking cuda kernel
 // -----------------------------------------------------------------------------------------
-void cuda_booleanRLEbitmapDepends(KernelParamBitmap* param);
-void cuda_integerRLEv2_Depends(KernelParamCommon* param);
-void cuda_integerRLEv1_Depends(KernelParamCommon* param);
-void cuda_base128_varint_Depends(KernelParamCommon* param);
-void cuda_booleanByteRLEDepends(KernelParamCommon* param);
-void cuda_ByteRLEDepends(KernelParamCommon* param);
-void cuda_raw_data_depends(KernelParamCommon* param);
-void cuda_convert_depends(KernelParamCoversion* param);
+void cudaDecodePresent(KernelParamBitmap* param);
+void cudaDecodeIntRLEv2(KernelParamCommon* param);
+void cudaDecodeIntRLEv1(KernelParamCommon* param);
+void cudaDecodeVarint(KernelParamCommon* param);
+void cudaDecodeBooleanRLE(KernelParamCommon* param);
+void cudaDecodeByteRLE(KernelParamCommon* param);
+void cudaDecodeRawData(KernelParamCommon* param);
+
+void cudaConvertData(KernelParamCoversion* param);
+void cudaClearPresent(KernelParamBitmap* param);
 
 // -----------------------------------------------------------------------------------------
-
-#include "kernel_util.cuh"
-
+}   // namespace orc
+}   // namespace cudf
 
 #endif //  __ORC_CUDA_CUH__

@@ -16,6 +16,9 @@
 
 #include "kernel_decode_common.cuh"
 
+namespace cudf {
+namespace orc {
+
 template <class T, class T_writer, class T_reader>
 class ORCdecode_Byte_warp : public ORCdecodeCommon<T, T_writer, T_reader>
 {
@@ -117,7 +120,7 @@ template <typename T, class T_writer, class T_reader>
 void cuda_byteRLE_entry(KernelParamCommon* param)
 {
     const int num_threads = 32;
-    kernel_byteRLE<ORCdecode_Byte_warp<T, T_writer, T_reader>> << <1, num_threads >> > (*param);
+    kernel_byteRLE<ORCdecode_Byte_warp<T, T_writer, T_reader>> << <1, num_threads, 0, param->stream >> > (*param);
     ORC_DEBUG_KERNEL_CALL_CHECK();
 }
 
@@ -146,8 +149,10 @@ void cuda_byteRLE_writer_select(KernelParamCommon* param)
     }
 }
 
-void cuda_ByteRLEDepends(KernelParamCommon* param)
+void cudaDecodeByteRLE(KernelParamCommon* param)
 {
     cuda_byteRLE_writer_select<orc_byte>(param);
 }
 
+}   // namespace orc
+}   // namespace cudf

@@ -30,7 +30,7 @@ bool Do_test_cuda_boolean_RLE_depends(orc_byte* expected, int count, orc_byte* r
     helper.setUnrefValue(UNREFERENCED_VALUE);
     KernelParamCommon* param = helper.create(expected, count, raw, raw_count, present, present_size, array);
 
-    cuda_booleanByteRLEDepends(param);
+    cudaDecodeBooleanRLE(param);
 
     return helper.validate();
 }

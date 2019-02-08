@@ -16,6 +16,9 @@
 
 #include "kernel_private.cuh"
 
+namespace cudf {
+namespace orc {
+
 namespace kernel_booleanRLE_CudaOrcKernelRetStats {
 
     enum ORCCodePath {
@@ -142,7 +145,7 @@ template <typename T, class T_writer, class T_reader>
 void cuda_booleanRLE_entry(KernelParamCommon* param)
 {
     const int num_threads = 32;
-    kernel_booleanRLE<ORCdecode_Boolean_warp<T, T_writer, T_reader>> << <1, num_threads >> > (*param);
+    kernel_booleanRLE<ORCdecode_Boolean_warp<T, T_writer, T_reader>> << <1, num_threads, 0, param->stream >> > (*param);
 
     ORC_DEBUG_KERNEL_CALL_CHECK();
 }
@@ -172,8 +175,11 @@ void cuda_booleanRLE_writer_select(KernelParamCommon* param)
     }
 }
 
-void cuda_booleanByteRLEDepends(KernelParamCommon* param)
+void cudaDecodeBooleanRLE(KernelParamCommon* param)
 {
     cuda_booleanRLE_writer_select<orc_byte>(param);
 }
+
+}   // namespace orc
+}   // namespace cudf
 

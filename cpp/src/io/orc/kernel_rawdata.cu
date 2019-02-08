@@ -20,6 +20,9 @@
 #include "kernel_private.cuh"
 #include "kernel_reader_element.cuh"
 
+namespace cudf {
+namespace orc {
+
 template <class T, class T_writer, class T_reader>
 class ORCdecodeRawDataWarp
 {
@@ -83,7 +86,7 @@ template <typename T, class T_writer, class T_reader>
 void cuda_raw_data_entry(KernelParamCommon* param)
 {
     const int num_CTA = 32;
-    kernel_raw_data_depends<ORCdecodeRawDataWarp<T, T_writer, T_reader>> << <1, num_CTA >> > (*param);
+    kernel_raw_data_depends<ORCdecodeRawDataWarp<T, T_writer, T_reader>> << <1, num_CTA, 0, param->stream >> > (*param);
     ORC_DEBUG_KERNEL_CALL_CHECK();
 }
 
@@ -112,7 +115,7 @@ void cuda_raw_data_writer_select(KernelParamCommon* param)
     }
 }
 
-void cuda_raw_data_depends(KernelParamCommon* param)
+void cudaDecodeRawData(KernelParamCommon* param)
 {
     switch (param->elementType) {
     case OrcElementType::Float32:
@@ -133,3 +136,5 @@ void cuda_raw_data_depends(KernelParamCommon* param)
     }
 }
 
+}   // namespace orc
+}   // namespace cudf

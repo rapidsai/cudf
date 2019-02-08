@@ -19,6 +19,9 @@
 
 #include "kernel_private_common.cuh"
 
+namespace cudf {
+namespace orc {
+
 // inclusive scan + running total in a warp.
 // collect diff values from previous thread and return the accumulated diff values from thread 0,
 // and (value at last thread + sum) in sum.
@@ -333,5 +336,7 @@ orc_uint64 convertDateToOrcTimestampTime(int ms, int us, int ns)
     return total_ns_orc;
 }
 
+}   // namespace orc
+}   // namespace cudf
 
 #endif // __ORC_KERNEL_UTIL_H__

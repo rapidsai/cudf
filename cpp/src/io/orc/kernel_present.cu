@@ -16,6 +16,9 @@
 
 #include "kernel_private.cuh"
 
+namespace cudf {
+namespace orc {
+
 namespace kernel_booleanRLE_CudaOrcKernelRetStats
 {
     enum ORCCodePath {
@@ -353,17 +356,17 @@ void cuda_present_entry(KernelParamBitmap* param)
 
     if (param->parent) {
         using decoder = ORCdecodePresentDependsSingle<T_reader>;
-        kernel_Present<decoder> << <1, numThreads >> > (*param);
+        kernel_Present<decoder> << <1, numThreads, 0, param->stream >> > (*param);
     }
     else {
         if (param->start_id == 0) {
             numThreads = 130;   // := 127 + 3, the maximum length of run or literal encodings, 
             using decoder = ORCdecodePresentFullthrottle<T_reader>;
-            kernel_Present<decoder> << <1, numThreads >> > (*param);
+            kernel_Present<decoder> << <1, numThreads, 0, param->stream >> > (*param);
         }
         else {
             using decoder = ORCdecodePresentCarriedSingle<T_reader>;
-            kernel_Present<decoder> << <1, numThreads >> > (*param);
+            kernel_Present<decoder> << <1, numThreads, 0, param->stream >> > (*param);
         }
     }
     ORC_DEBUG_KERNEL_CALL_CHECK();
@@ -394,8 +397,10 @@ void cuda_present_writer_select(KernelParamBitmap* param)
     }
 }
 
-void cuda_booleanRLEbitmapDepends(KernelParamBitmap* param)
+void cudaDecodePresent(KernelParamBitmap* param)
 {
     cuda_present_writer_select<orc_bitmap>(param);
 }
 
+}   // namespace orc
+}   // namespace cudf

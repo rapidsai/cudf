@@ -23,7 +23,6 @@
 #include "io/orc/orc_read_impl_proto.h"
 #include "io/orc/kernel_util.cuh"
 
-
 TEST(OrcErrorCode, ConversionCoverage)
 {
     // CudaOrcError_t -> gdf_error conversion coverage test

@@ -28,7 +28,7 @@ template <class T> bool Do_test_cuda_unbound_base128_varint(T* expected, int cou
     KernelParamCommon* param = helper.create(expected, count, raw, raw_count, present, present_size, array);
     param->elementType = type;
 
-    cuda_base128_varint_Depends(param);
+    cudaDecodeVarint(param);
 
     return helper.validate();
 }

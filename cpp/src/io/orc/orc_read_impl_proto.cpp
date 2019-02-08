@@ -22,6 +22,10 @@
 #include "orc_read_impl_proto.h"
 #include "orc_memory.h"
 
+namespace cudf {
+namespace orc {
+
+
 #if _DEBUG
 #define ENABLE_DUMP
 #endif
@@ -39,7 +43,7 @@ void CudaOrcReaderImplProto::release()
     DeAllocateArrays();    // deallocate ORC arrays, detached buffers won't be released.
 }
 
-void CudaOrcReaderImplProto::GetPSInfo(const orc::proto::PostScript& ps)
+void CudaOrcReaderImplProto::GetPSInfo(const orc_proto::PostScript& ps)
 {
     footer_info.footerLength = ps.footerlength();
     footer_info.compressionKind = OrcCompressionKind(ps.compression());
@@ -58,7 +62,7 @@ void CudaOrcReaderImplProto::GetPSInfo(const orc::proto::PostScript& ps)
     // PRINTF("magic   : %s", ps.magic().c_str());    // check postscript tail. ORC postsript must end of "ORC"
 }
 
-void CudaOrcReaderImplProto::GetFooterInfo(const orc::proto::Footer& ft) {
+void CudaOrcReaderImplProto::GetFooterInfo(const orc_proto::Footer& ft) {
     footer_info.headerlength = ft.headerlength();
     footer_info.contentlength = ft.contentlength();
     footer_info.numberofrows = ft.numberofrows();
@@ -71,7 +75,7 @@ void CudaOrcReaderImplProto::GetFooterInfo(const orc::proto::Footer& ft) {
     D_MSG(" number of record : %d.", footer_info.numberofrows);
 }
 
-void CudaOrcReaderImplProto::GetStripesInfo(const orc::proto::Footer& ft)
+void CudaOrcReaderImplProto::GetStripesInfo(const orc_proto::Footer& ft)
 {
     size_t startRowIndex = 0;
 
@@ -93,7 +97,7 @@ void CudaOrcReaderImplProto::GetStripesInfo(const orc::proto::Footer& ft)
 }
 
 
-void CudaOrcReaderImplProto::GetTypesInfo(const orc::proto::Footer& ft)
+void CudaOrcReaderImplProto::GetTypesInfo(const orc_proto::Footer& ft)
 {
     assert(ft.statistics_size()  == ft.types_size());
     D_MSG("type count  :%d", ft.types_size());
@@ -259,7 +263,7 @@ bool CudaOrcReaderImplProto::ValidateColumns()
     return retval;
 }
 
-void CudaOrcReaderImplProto::GetMetaDataInfo(const orc::proto::Metadata& mt)
+void CudaOrcReaderImplProto::GetMetaDataInfo(const orc_proto::Metadata& mt)
 {
     D_MSG("Metadata ColumnStatistics:");
     D_MSG("  [stripe, column]: num Values, hasNULL, bytesOnDisk");
@@ -337,7 +341,7 @@ CudaOrcError_t CudaOrcReaderImplProto::ReadFromFile(const char* filename)
 
     // parse postscipt
     const unsigned char* postsript = file_top + file_size - 1 - Postscript_size;
-    orc::proto::PostScript ps;
+    orc_proto::PostScript ps;
     if (!ps.ParseFromArray((void*)postsript, Postscript_size))
     {
         D_MSG("*** fail to parse postscript.");
@@ -354,7 +358,7 @@ CudaOrcError_t CudaOrcReaderImplProto::ReadFromFile(const char* filename)
     }
 
     OrcCompressionKind compKind = footer_info.compressionKind;
-    CompressedProtoLoader<orc::proto::Footer> ft(compKind);
+    CompressedProtoLoader<orc_proto::Footer> ft(compKind);
 
     ORC_RETURN_IF_ERROR(ft.ParseFromArray(postsript - ps.footerlength(), footer_info.footerLength));
 
@@ -371,7 +375,7 @@ CudaOrcError_t CudaOrcReaderImplProto::ReadFromFile(const char* filename)
     }
     else if (!isValid)  // try to read metadata if any of columns is kinda variable length
     {    
-        CompressedProtoLoader<orc::proto::Metadata> mt(compKind);
+        CompressedProtoLoader<orc_proto::Metadata> mt(compKind);
         const orc_byte *pos = postsript - footer_info.footerLength - footer_info.metadataLength;
         ORC_RETURN_IF_ERROR(mt.ParseFromArray(pos, footer_info.metadataLength));
         hasMetadata = true;
@@ -436,7 +440,7 @@ orc_uint32 CudaOrcReaderImplProto::findGMToffset(const char* region)
     return offset;
 }
 
-void CudaOrcReaderImplProto::ParseStripeColumns(const orc::proto::StripeFooter& stripe, OrcStripeArguemnts& stripeArg)
+void CudaOrcReaderImplProto::ParseStripeColumns(const orc_proto::StripeFooter& stripe, OrcStripeArguemnts& stripeArg)
 {
     assert(types.size() == stripe.columns_size());
     stripeArg.setNumOfColumn(stripe.columns_size());
@@ -476,7 +480,7 @@ int ElementSize(OrcElementType type) {
     }
 }
 
-void CudaOrcReaderImplProto::ParseStripeStreams(const orc::proto::StripeFooter& ft, OrcStripeArguemnts& stripeArg)
+void CudaOrcReaderImplProto::ParseStripeStreams(const orc_proto::StripeFooter& ft, OrcStripeArguemnts& stripeArg)
 {
     // the number of stream varies at each stripe
     stripeArg.setNumOfStream(ft.streams_size());
@@ -590,10 +594,10 @@ void CudaOrcReaderImplProto::Decode()
         auto& stripeArg = stripeArgs[i];
 
         stripeArg.SetCompressionKind(footer_info.compressionKind);
-        stripeArg.SetStripeInfo(&info, i);
+        stripeArg.SetStripeInfo(&info, i, bool(i == stripes.size()-1));
         stripeArg.SetDeviceArray(&deviceArray);
 
-        CompressedProtoLoader<orc::proto::StripeFooter> spf(footer_info.compressionKind);
+        CompressedProtoLoader<orc_proto::StripeFooter> spf(footer_info.compressionKind);
         const orc_byte* stripe_footer = file_top + info.offset + info.indexLength + info.dataLength;
         status = spf.ParseFromArray(stripe_footer, info.footerLength);
 
@@ -816,7 +820,7 @@ void CudaOrcReaderImplProto::dumpTypes()
 #endif
 }
 
-void CudaOrcReaderImplProto::dumpMetaData(const orc::proto::Metadata& mt)
+void CudaOrcReaderImplProto::dumpMetaData(const orc_proto::Metadata& mt)
 {
 #ifdef ENABLE_DUMP
     D_MSG("Metadata ColumnStatistics:");
@@ -833,7 +837,7 @@ void CudaOrcReaderImplProto::dumpMetaData(const orc::proto::Metadata& mt)
 #endif
 }
 
-void CudaOrcReaderImplProto::dumpStreamInfo(const orc::proto::StripeFooter& ft)
+void CudaOrcReaderImplProto::dumpStreamInfo(const orc_proto::StripeFooter& ft)
 {
 #ifdef ENABLE_DUMP
     const char* streamKindName[] = { "PRESENT", "DATA", "LENGTH", "DICTIONARY_DATA", "DICTIONARY_COUNT", "SECONDARY", "ROW_INDEX", "BLOOM_FILTER", "BLOOM_FILTER_UTF8" };
@@ -858,5 +862,6 @@ void CudaOrcReaderImplProto::dumpStreamInfo(const orc::proto::StripeFooter& ft)
 #endif
 }
 
-// ----------------------------------------------------------------------------------
+}   // namespace orc
+}   // namespace cudf
 

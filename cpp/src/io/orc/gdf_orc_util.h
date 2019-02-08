@@ -24,6 +24,9 @@
 #include "orc_types.h"
 #include "orc_read.h"
 
+namespace cudf {
+namespace orc {
+
 CudaOrcReader* gdf_create_orc_reader();
 
 gdf_error gdf_orc_convertErrorCode(CudaOrcError_t err);
@@ -32,5 +35,8 @@ gdf_dtype gdf_orc_convertDataKind(ORCTypeKind kind);
 
 gdf_error gdf_orc_set_column_name(gdf_column* col, const std::string& name);
 gdf_error gdf_orc_release_column_name(gdf_column* col);
+
+}   // namespace orc
+}   // namespace cudf
 
 #endif //  __GDF_ORC_UTIL_H__

@@ -21,6 +21,9 @@
 #include <google/protobuf/io/zero_copy_stream_impl_lite.h>
 #include "orc_gzip_stream.h"
 
+namespace cudf {
+namespace orc {
+
 namespace OrcMem
 {
     static size_t blockSize = 2 * 1024 * 1024;
@@ -241,3 +244,6 @@ protected:
 };
 
 #endif
+
+}   // namespace orc
+}   // namespace cudf

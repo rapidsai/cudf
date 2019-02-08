@@ -19,6 +19,8 @@
 
 #include "kernel_private_common.cuh"
 
+namespace cudf {
+namespace orc {
 
 template <class  T>
 class byte_reader {
@@ -231,6 +233,7 @@ protected:
     T_reader_input        reader;
 };
 
-
+}   // namespace orc
+}   // namespace cudf
 
 #endif // __ORC_KERNEL_READER_H__

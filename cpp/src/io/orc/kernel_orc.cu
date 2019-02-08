@@ -19,6 +19,8 @@
 #include "kernel_orc.cuh"
 #include <vector>
 
+namespace cudf {
+namespace orc {
 
 CudaOrcRetStats::CudaOrcRetStats()
 { 
@@ -65,4 +67,5 @@ void CudaOrcRetStats::lazy_dump(int mode, int codepath)
     dump(mode, codepath);
 }
 
-
+}   // namespace orc
+}   // namespace cudf

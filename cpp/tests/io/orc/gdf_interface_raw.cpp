@@ -98,10 +98,10 @@ void test_orc_split_elim(const char* filename, int adjsec)
     20000: {"userid": 5, "string1" : "eat", "subtype" : 0.8, "decimal1" : 5.500000, "ts" : "1969-12-31 16:00:20.0"}
     */
 
-    orc_sint64 *dlong1 = reinterpret_cast<orc_sint64*>(arg.data[0]->data);
+    int64_t *dlong1 = reinterpret_cast<int64_t*>(arg.data[0]->data);
     gdf_string *dstring = reinterpret_cast<gdf_string*>(arg.data[1]->data);
     double *ddouble1 = reinterpret_cast<double*>(arg.data[2]->data);
-    orc_sint64 *dts = reinterpret_cast<orc_sint64*>(arg.data[3]->data);
+    int64_t *dts = reinterpret_cast<int64_t*>(arg.data[3]->data);
 
     EXPECT_EQ(dlong1[0], 2);
     EXPECT_EQ(dlong1[1], 100);
@@ -182,7 +182,7 @@ TEST(gdf_orc_read_raw, columnProjection)
     EXPECT_EQ(NULL, arg.data[1]->valid);
     EXPECT_EQ(std::string("string1"), arg.data[1]->col_name);
 
-    const orc_sint32 *dint1 = reinterpret_cast<orc_sint32*>(arg.data[0]->data);
+    const int32_t *dint1 = reinterpret_cast<int32_t*>(arg.data[0]->data);
     const gdf_string *dstr1 = reinterpret_cast<gdf_string*>(arg.data[1]->data);
 
     // validate the part of output
@@ -224,7 +224,7 @@ TEST(gdf_orc_read_raw, testPredicatePushdown)
     EXPECT_EQ(NULL, arg.data[id]->valid);
     EXPECT_EQ(std::string("string1"), arg.data[id]->col_name);
 
-    orc_sint32 *dint1 = reinterpret_cast<orc_sint32*>(arg.data[0]->data);
+    int32_t *dint1 = reinterpret_cast<int32_t*>(arg.data[0]->data);
     gdf_string *dstring = reinterpret_cast<gdf_string*>(arg.data[1]->data);
 
     // full coverage
@@ -267,15 +267,15 @@ void test_demo_11_read(const char* filename) {
 #endif
     }
 
-    orc_sint32 *dint0 = reinterpret_cast<orc_sint32*>(arg.data[0]->data);
+    int32_t *dint0 = reinterpret_cast<int32_t*>(arg.data[0]->data);
     gdf_string *dstr1 = reinterpret_cast<gdf_string*>(arg.data[1]->data);
     gdf_string *dstr2 = reinterpret_cast<gdf_string*>(arg.data[2]->data);
     gdf_string *dstr3 = reinterpret_cast<gdf_string*>(arg.data[3]->data);
-    orc_sint32 *dint4 = reinterpret_cast<orc_sint32*>(arg.data[4]->data);
+    int32_t *dint4 = reinterpret_cast<int32_t*>(arg.data[4]->data);
     gdf_string *dstr5 = reinterpret_cast<gdf_string*>(arg.data[5]->data);
-    orc_sint32 *dint6 = reinterpret_cast<orc_sint32*>(arg.data[6]->data);
-    orc_sint32 *dint7 = reinterpret_cast<orc_sint32*>(arg.data[7]->data);
-    orc_sint32 *dint8 = reinterpret_cast<orc_sint32*>(arg.data[8]->data);
+    int32_t *dint6 = reinterpret_cast<int32_t*>(arg.data[6]->data);
+    int32_t *dint7 = reinterpret_cast<int32_t*>(arg.data[7]->data);
+    int32_t *dint8 = reinterpret_cast<int32_t*>(arg.data[8]->data);
 
     /*  the reference:
     0: {"_col0": 1, "_col1": "M", "_col2": "M", "_col3": "Primary", "_col4": 500, "_col5": "Good", "_col6": 0, "_col7": 0, "_col8": 0}

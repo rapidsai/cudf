@@ -19,6 +19,9 @@
 
 #include "kernel_private.cuh"
 
+namespace cudf {
+namespace orc {
+
 #define RLE_Repeat        0
 #define RLE_Literal       1
 
@@ -44,5 +47,7 @@ public:
     CudaOrcKernelRetStats   stat;
 };
 
+}   // namespace orc
+}   // namespace cudf
 
 #endif // __ORC_KERNEL_DECODE_COMMON_H__

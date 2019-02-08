@@ -19,6 +19,9 @@
 
 #include "kernel_writer.cuh"
 
+namespace cudf {
+namespace orc {
+
 class bitmap_writer {
 public:
     __device__ bitmap_writer(KernelParamBitmap* param) :
@@ -78,5 +81,7 @@ private:
 
 };
 
+}   // namespace orc
+}   // namespace cudf
 
 #endif // __ORC_KERNEL_WRITER_BITMAP_H__

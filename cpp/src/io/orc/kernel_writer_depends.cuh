@@ -19,6 +19,8 @@
 
 #include "kernel_writer.cuh"
 
+namespace cudf {
+namespace orc {
 
 template <class T, class T_present_reader = byte_reader_present_warp, class T_converter = ORCConverterBase<T>>
 class data_writer_depends : public data_writer<T, T_converter> {
@@ -63,5 +65,7 @@ using data_writer_depends_single = data_writer_depends<T, byte_reader_present_si
 template<class T, class T_converter = ORCConverterBase<T>>
 using data_writer_depends_warp = data_writer_depends<T, byte_reader_present_warp, T_converter>;
 
+}   // namespace orc
+}   // namespace cudf
 
 #endif // __ORC_KERNEL_WRITER_DEPENDS_H__

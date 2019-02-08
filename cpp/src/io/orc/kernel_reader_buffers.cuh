@@ -19,6 +19,8 @@
 
 #include "kernel_private_common.cuh"
 
+namespace cudf {
+namespace orc {
 
 template <class  T>
 class byte_reader_buffers {
@@ -57,5 +59,7 @@ protected:
     size_t local_offset;
 };
 
+}   // namespace orc
+}   // namespace cudf
 
 #endif // __ORC_KERNEL_READER_BUFFERS_H__

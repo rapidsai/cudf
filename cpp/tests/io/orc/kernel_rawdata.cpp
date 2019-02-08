@@ -29,7 +29,7 @@ template <class T> bool Do_test_cuda_raw(T* expected, int count, const orc_byte*
     KernelParamCommon* param = helper.create(expected, count, raw, raw_count * sizeof(T), present, present_size, array);
     param->elementType = elementType;
 
-    cuda_raw_data_depends(param);
+    cudaDecodeRawData(param);
 
     return helper.validate();
 }

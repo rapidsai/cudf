@@ -19,9 +19,10 @@
 
 #include "kernel_private_common.cuh"
 
+namespace cudf {
+namespace orc {
 
 #define ORC_PERF_RETS(expr) {expr; }
-
 
 #ifdef CHECK_ORC_PERF_STATS
 #define ORC_PERF_STATS(expr) {expr; }
@@ -89,5 +90,7 @@ protected:
 
 };
 
+}   // namespace orc
+}   // namespace cudf
 
 #endif // __ORC_KERNEL_RET_STATS_H__

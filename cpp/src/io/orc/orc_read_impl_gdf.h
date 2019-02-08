@@ -18,8 +18,10 @@
 #define __ORC_READER_GDF_HEADER__
 
 #include "orc_read_impl_proto.h"
-
 #include <cudf.h>
+
+namespace cudf {
+namespace orc {
 
 /** ---------------------------------------------------------------------------------*
 * @brief implementation of converting from ORC reader internal format into gdf format
@@ -39,6 +41,7 @@ protected:
     bool IsSupportedType(int id);
 };
 
-
+}   // namespace orc
+}   // namespace cudf
 
 #endif // __ORC_READER_GDF_HEADER__

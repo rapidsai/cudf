@@ -30,6 +30,9 @@
 #error Unsupported OS.
 #endif
 
+namespace cudf {
+namespace orc {
+
 CudaOrcError_t 
 OrcFile::loadFile(orc_byte*  &file_top, size_t &filesize, const char* filename )
 {
@@ -117,3 +120,5 @@ void OrcFile::release()
 #endif
 }
 
+}   // namespace orc
+}   // namespace cudf
