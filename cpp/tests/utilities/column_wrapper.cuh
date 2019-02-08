@@ -17,15 +17,17 @@
 #ifndef COLUMN_WRAPPER_H
 #define COLUMN_WRAPPER_H
 
-#include "cudf.h"
-#include "cudf_test_utils.cuh"
-#include "rmm/rmm.h"
-#include "rmm/thrust_rmm_allocator.h"
-#include "utilities/bit_util.cuh"
-#include "utilities/type_dispatcher.hpp"
+#include <utilities/bit_util.cuh>
+#include <utilities/type_dispatcher.hpp>
+#include <tests/utilities/cudf_test_utils.cuh>
+#include <cudf.h>
+
+#include <rmm/rmm.h>
+#include <rmm/thrust_rmm_allocator.h>
 
 #include <thrust/equal.h>
 #include <thrust/logical.h>
+
 #include <string>
 
 #ifndef CUDA_RT_CALL
