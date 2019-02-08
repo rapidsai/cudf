@@ -1359,6 +1359,40 @@ struct ConvertFunctor {
   }
 };
 
+
+__device__ 
+long seekColumnEnd(const char *raw_csv, const ParseOptions opts, long pos, long stop) {
+	bool quotation	= false;
+	while(true){
+		// Use simple logic to ignore control chars between any quote seq
+		// Handles nominal cases including doublequotes within quotes, but
+		// may not output exact failures as PANDAS for malformed fields
+		if(raw_csv[pos] == opts.quotechar){
+			quotation = !quotation;
+		}
+		else if(quotation==false){
+			if(raw_csv[pos] == opts.delimiter){
+				while (opts.multi_delimiter &&
+					raw_csv[pos + 1] == opts.delimiter) {
+						++pos;
+				}
+				break;
+			}
+			else if(raw_csv[pos] == opts.terminator){
+				break;
+			}
+			else if(raw_csv[pos] == '\r' && ((pos+1) < stop && raw_csv[pos+1] == '\n')){
+				stop--;
+				break;
+			}
+		}
+		if(pos>=stop)
+			break;
+		pos++;
+	}
+	return pos;
+}
+
 /**---------------------------------------------------------------------------*
  * @brief CUDA kernel that parses and converts CSV data into cuDF column data.
  * 
@@ -1406,40 +1440,13 @@ void convertCsvToGdf(char *raw_csv,
 	int  col 		= 0;
 	int  actual_col = 0;
 	int  stringCol 	= 0;
-	bool quotation	= false;
 
 	while(col<num_columns){
 
 		if(start>stop)
 			break;
 
-		while(true){
-			// Use simple logic to ignore control chars between any quote seq
-			// Handles nominal cases including doublequotes within quotes, but
-			// may not output exact failures as PANDAS for malformed fields
-			if(raw_csv[pos] == opts.quotechar){
-				quotation = !quotation;
-			}
-			else if(quotation==false){
-				if(raw_csv[pos] == opts.delimiter){
-					while (opts.multi_delimiter &&
-						raw_csv[pos + 1] == opts.delimiter) {
-							++pos;
-					}
-					break;
-				}
-				else if(raw_csv[pos] == opts.terminator){
-					break;
-				}
-				else if(raw_csv[pos] == '\r' && ((pos+1) < stop && raw_csv[pos+1] == '\n')){
-					stop--;
-					break;
-				}
-			}
-			if(pos>=stop)
-				break;
-			pos++;
-		}
+		pos = seekNextColumn(raw_csv, opts, pos, stop);
 
 		if(parseCol[col]==true){
 
@@ -1569,7 +1576,6 @@ void dataTypeDetection(char *raw_csv,
 	long pos 		= start;
 	int  col 		= 0;
 	int  actual_col = 0;
-	bool quotation	= false;
 
 	// Going through all the columns of a given record
 	while(col<num_columns){
@@ -1577,31 +1583,7 @@ void dataTypeDetection(char *raw_csv,
 		if(start>stop)
 			break;
 
-		// Finding the breaking point for each column
-		while(true){
-			// Use simple logic to ignore control chars between any quote seq
-			// Handles nominal cases including doublequotes within quotes, but
-			// may not output exact failures as PANDAS for malformed fields
-			if(raw_csv[pos] == opts.quotechar){
-				quotation = !quotation;
-			}
-			else if(quotation==false){
-				if(raw_csv[pos] == opts.delimiter){
-					break;
-				}
-				else if(raw_csv[pos] == opts.terminator){
-					break;
-				}
-				else if(raw_csv[pos] == '\r' && ((pos+1) < stop && raw_csv[pos+1] == '\n')){
-					stop--;
-					break;
-				}
-			}
-			if(pos>=stop)
-				break;
-			pos++;
-		}
-
+		pos = seekNextColumn(raw_csv, opts, pos, stop);
 
 		// Checking if this is a column that the user wants --- user can filter columns
 		if(parseCol[col]==true){

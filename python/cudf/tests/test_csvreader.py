@@ -811,8 +811,7 @@ def test_csv_reader_delim_whitespace():
     # with header row
     cu_df = read_csv(StringIO(buffer), delim_whitespace=True)
     pd_df = pd.read_csv(StringIO(buffer), delim_whitespace=True)
-    assert(pd_df.shape == cu_df.shape)
-
+    pd.util.testing.assert_frame_equal(pd_df, cu_df.to_pandas())
 
     # without header row
     cu_df = read_csv(StringIO(buffer), delim_whitespace=True, header=None)
