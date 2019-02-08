@@ -202,6 +202,10 @@ class Series(object):
         """
         return len(self._column)
 
+    @property
+    def empty(self):
+        return not len(self)
+
     def __getitem__(self, arg):
         if isinstance(arg, (list, np.ndarray, pd.Series, range,)):
             arg = Series(arg)
