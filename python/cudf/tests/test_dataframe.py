@@ -1298,6 +1298,24 @@ def test_binops(pdf, gdf, left, right, binop):
     assert_eq(d, g)
 
 
+@pytest.mark.parametrize('func', [
+    lambda df: df.empty,
+    lambda df: df.x.empty,
+])
+def test_unary_operators(func, pdf, gdf):
+    p = func(pdf)
+    g = func(gdf)
+    assert_eq(p, g)
+
+
+def test_is_monotonic(gdf):
+    pdf = pd.DataFrame({'x': [1, 2, 3]}, index=[3, 1, 2])
+    gdf = gd.DataFrame.from_pandas(pdf)
+    assert not gdf.index.is_monotonic
+    assert not gdf.index.is_monotonic_increasing
+    assert not gdf.index.is_monotonic_decreasing
+
+
 def test_dataframe_replace():
     # numerical
     pdf1 = pd.DataFrame({'a': [0, 1, 2, 3], 'b': [0, 1, 2, 3]})
@@ -1437,6 +1455,22 @@ def test_arrow_pandas_compat(pdf, gdf, preserve_index):
     assert_eq(pdf2, gdf2)
 
 
+@pytest.mark.parametrize('nrows', [1, 8, 100, 1000])
+def test_series_hash_encode(nrows):
+    data = np.asarray(range(nrows))
+    s = Series(data, name="x1")
+    num_features = 1000
+
+    encoded_series = s.hash_encode(num_features)
+    assert isinstance(encoded_series, gd.Series)
+    enc_arr = encoded_series.to_array()
+    assert np.all(enc_arr >= 0)
+    assert np.max(enc_arr) < num_features
+
+    enc_with_name_arr = s.hash_encode(num_features, use_name=True).to_array()
+    assert enc_with_name_arr[0] != enc_arr[0]
+
+
 @pytest.mark.parametrize('dtype', ['int8', 'int16', 'int32', 'int64',
                                    'float32', 'float64'])
 def test_cuda_array_interface(dtype):
@@ -1525,6 +1559,16 @@ def test_boolmask(pdf, gdf):
     gdf = gdf[boolmask]
     pdf = pdf[boolmask]
     assert_eq(pdf, gdf)
+
+
+def test_1row_arrow_table():
+    data = [pa.array([0]), pa.array([1])]
+    batch = pa.RecordBatch.from_arrays(data, ['f0', 'f1'])
+    table = pa.Table.from_batches([batch])
+
+    expect = table.to_pandas()
+    got = DataFrame.from_arrow(table)
+    assert_eq(expect, got)
 
 
 def test_arrow_handle_no_index_name(pdf, gdf):

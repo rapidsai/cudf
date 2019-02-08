@@ -14,7 +14,6 @@ import pandas as pd
 import pyarrow as pa
 from pandas.api.types import is_dict_like
 
-from numba.cuda.cudadrv.devicearray import DeviceNDArray
 from types import GeneratorType
 
 from librmm_cffi import librmm as rmm
@@ -23,7 +22,6 @@ from cudf import formatting, _gdf
 from cudf.utils import cudautils, queryutils, applyutils, utils
 from .index import as_index, Index, RangeIndex
 from .series import Series
-from .column import Column
 from cudf.settings import NOTSET, settings
 from cudf.comm.serialize import register_distributed_serializer
 from .categorical import CategoricalColumn
@@ -273,6 +271,10 @@ class DataFrame(object):
         Returns the number of rows
         """
         return self._size
+
+    @property
+    def empty(self):
+        return not len(self)
 
     def assign(self, **kwargs):
         """
@@ -592,9 +594,11 @@ class DataFrame(object):
         index = self._index
         series = Series(col)
         sind = series.index
-        VALID = isinstance(col, (np.ndarray, DeviceNDArray, list, Series,
-                                 Column))
-        if len(self) > 0 and len(series) == 1 and not VALID:
+
+        # This won't handle 0 dimensional arrays which should be okay
+        SCALAR = np.isscalar(col)
+
+        if len(self) > 0 and len(series) == 1 and SCALAR:
             arr = rmm.device_array(shape=len(index), dtype=series.dtype)
             cudautils.gpu_fill_value.forall(arr.size)(arr, col)
             return Series(arr)
@@ -1322,7 +1326,8 @@ class DataFrame(object):
 
         return df
 
-    def groupby(self, by, sort=False, as_index=True, method="hash"):
+    def groupby(self, by=None, sort=False, as_index=True, method="hash",
+                level=None):
         """Groupby
 
         Parameters
@@ -1357,6 +1362,10 @@ class DataFrame(object):
         - Since we don't support multiindex, the *by* columns are stored
           as regular columns.
         """
+
+        if by is None and level is None:
+            raise TypeError('groupby() requires either by or level to be'
+                            'specified.')
         if (method == "cudf"):
             from cudf.groupby.legacy_groupby import Groupby
             if as_index:
@@ -1373,7 +1382,8 @@ class DataFrame(object):
             _gdf.nvtx_range_push("PYGDF_GROUPBY", "purple")
             # The matching `pop` for this range is inside LibGdfGroupby
             # __apply_agg
-            result = Groupby(self, by=by, method=method, as_index=as_index)
+            result = Groupby(self, by=by, method=method, as_index=as_index,
+                             level=level)
             return result
 
     def query(self, expr):
