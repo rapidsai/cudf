@@ -313,3 +313,14 @@ def test_series_groupby_agg(agg):
     sg = s.groupby(s // 2).agg(agg)
     gg = g.groupby(g // 2).agg(agg)
     assert_eq(sg, gg)
+
+
+@pytest.mark.parametrize('agg', ['min', 'max', 'count', 'sum', 'mean'])
+def test_groupby_level_zero(agg):
+    pdf = pd.DataFrame({'x': [1, 2, 3]}, index=[0, 1, 1])
+    gdf = DataFrame.from_pandas(pdf)
+    pdg = pdf.groupby(level=0)
+    gdg = gdf.groupby(level=0)
+    pdresult = getattr(pdg, agg)()
+    gdresult = getattr(gdg, agg)()
+    assert_eq(pdresult, gdresult)

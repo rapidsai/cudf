@@ -1298,6 +1298,24 @@ def test_binops(pdf, gdf, left, right, binop):
     assert_eq(d, g)
 
 
+@pytest.mark.parametrize('func', [
+    lambda df: df.empty,
+    lambda df: df.x.empty,
+])
+def test_unary_operators(func, pdf, gdf):
+    p = func(pdf)
+    g = func(gdf)
+    assert_eq(p, g)
+
+
+def test_is_monotonic(gdf):
+    pdf = pd.DataFrame({'x': [1, 2, 3]}, index=[3, 1, 2])
+    gdf = gd.DataFrame.from_pandas(pdf)
+    assert not gdf.index.is_monotonic
+    assert not gdf.index.is_monotonic_increasing
+    assert not gdf.index.is_monotonic_decreasing
+
+
 def test_dataframe_replace():
     # numerical
     pdf1 = pd.DataFrame({'a': [0, 1, 2, 3], 'b': [0, 1, 2, 3]})
@@ -1541,6 +1559,16 @@ def test_boolmask(pdf, gdf):
     gdf = gdf[boolmask]
     pdf = pdf[boolmask]
     assert_eq(pdf, gdf)
+
+
+def test_1row_arrow_table():
+    data = [pa.array([0]), pa.array([1])]
+    batch = pa.RecordBatch.from_arrays(data, ['f0', 'f1'])
+    table = pa.Table.from_batches([batch])
+
+    expect = table.to_pandas()
+    got = DataFrame.from_arrow(table)
+    assert_eq(expect, got)
 
 
 def test_arrow_handle_no_index_name(pdf, gdf):
