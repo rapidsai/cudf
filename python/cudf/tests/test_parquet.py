@@ -6,12 +6,37 @@ from cudf.tests.utils import assert_eq
 import pytest
 import os
 import pandas as pd
+import numpy as np
 
 
 @pytest.fixture
 def pdf():
-    return pd.DataFrame({'x': range(10),
-                         'y': range(10)})
+    types = ['bool', 'int8', 'int16', 'int32', 'int64', 'float32', 'float64',
+             'datetime64[ms]', 'category']
+    renamer = {'C_l0_g' + str(idx): 'col_' + val for (idx, val) in
+               enumerate(types)}
+    typer = {'col_' + val: val for val in types}
+    ncols = len(types)
+    nrows = 10
+
+    # Create a pandas dataframe with random data of mixed types
+    test_pdf = pd.util.testing.makeCustomDataframe(
+        nrows=nrows,
+        ncols=ncols,
+        data_gen_f=lambda r, c: np.random.randint(1, 100),
+        r_idx_type='i'
+    )
+    # Delete the name of the column index, and rename the row index
+    del(test_pdf.columns.name)
+    test_pdf.index.name = 'index'
+
+    # Cast all the column dtypes to objects, rename them, and then cast to
+    # appropriate types
+    test_pdf = test_pdf.astype('object')\
+                       .rename(renamer, axis=1)\
+                       .astype(typer)
+
+    return test_pdf
 
 
 @pytest.fixture

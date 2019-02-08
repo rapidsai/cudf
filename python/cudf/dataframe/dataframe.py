@@ -1965,8 +1965,8 @@ class DataFrame(object):
             Columns are partitioned in the order they are given
         """
         import cudf.io.parquet as pq
-        pq.to_parquet(self, path, compression='snappy', index=None,
-                      partition_cols=None, **kwargs)
+        pq.to_parquet(self, path, compression=compression, index=index,
+                      partition_cols=partition_cols, **kwargs)
 
 
 class Loc(object):

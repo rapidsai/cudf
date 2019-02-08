@@ -47,7 +47,6 @@ def read_parquet(path, columns=None, **kwargs):
     --------
     .to_parquet
     .read_orc
-    .to_orc
     """
 
     warnings.warn("Using CPU via PyArrow to read Parquet dataset, this will "
@@ -74,6 +73,11 @@ def to_parquet(df, path, compression='snappy', index=None,
     partition_cols : list, optional, default None
         Column names by which to partition the dataset
         Columns are partitioned in the order they are given
+
+    See Also
+    --------
+    .read_parquet
+    .read_orc
     """
     warnings.warn("Using CPU via PyArrow to write Parquet dataset, this will "
                   "be GPU accelerated in the future")
