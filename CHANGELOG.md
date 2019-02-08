@@ -21,6 +21,7 @@
 - PR #763 Format doxygen comments for csv_read_arg struct
 - PR #532 CSV Reader: Use type dispatcher instead of switch block
 - PR #878 Add better indexing to Groupby
+- PR #554 Add `empty` method and `is_monotonic` attribute to `Index`
 
 ## Bug Fixes
 

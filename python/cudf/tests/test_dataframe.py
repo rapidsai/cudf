@@ -1298,6 +1298,24 @@ def test_binops(pdf, gdf, left, right, binop):
     assert_eq(d, g)
 
 
+@pytest.mark.parametrize('func', [
+    lambda df: df.empty,
+    lambda df: df.x.empty,
+])
+def test_unary_operators(func, pdf, gdf):
+    p = func(pdf)
+    g = func(gdf)
+    assert_eq(p, g)
+
+
+def test_is_monotonic(gdf):
+    pdf = pd.DataFrame({'x': [1, 2, 3]}, index=[3, 1, 2])
+    gdf = gd.DataFrame.from_pandas(pdf)
+    assert not gdf.index.is_monotonic
+    assert not gdf.index.is_monotonic_increasing
+    assert not gdf.index.is_monotonic_decreasing
+
+
 def test_dataframe_replace():
     # numerical
     pdf1 = pd.DataFrame({'a': [0, 1, 2, 3], 'b': [0, 1, 2, 3]})

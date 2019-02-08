@@ -272,6 +272,10 @@ class DataFrame(object):
         """
         return self._size
 
+    @property
+    def empty(self):
+        return not len(self)
+
     def assign(self, **kwargs):
         """
         Assign columns to DataFrame from keyword arguments.
