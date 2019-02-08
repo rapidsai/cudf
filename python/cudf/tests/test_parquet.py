@@ -9,15 +9,15 @@ import pandas as pd
 import numpy as np
 
 
-@pytest.fixture
-def pdf():
+@pytest.fixture(params=[0, 1, 10, 100])
+def pdf(request):
     types = ['bool', 'int8', 'int16', 'int32', 'int64', 'float32', 'float64',
              'datetime64[ms]', 'category']
     renamer = {'C_l0_g' + str(idx): 'col_' + val for (idx, val) in
                enumerate(types)}
     typer = {'col_' + val: val for val in types}
     ncols = len(types)
-    nrows = 10
+    nrows = request.param
 
     # Create a pandas dataframe with random data of mixed types
     test_pdf = pd.util.testing.makeCustomDataframe(
