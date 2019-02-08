@@ -30,7 +30,7 @@ requirements:
   #   - conda-forge
   #   - defaults
   build:
-    - cmake 3.12
+    - cmake>=3.12.4
     - nvstrings
   run:
     - pyarrow=0.12.0

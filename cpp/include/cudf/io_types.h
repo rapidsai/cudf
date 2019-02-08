@@ -77,7 +77,7 @@ typedef struct {
   gdf_size_type skiprows;                   ///< Number of rows at the start of the files to skip, default is 0
   gdf_size_type skipfooter;                 ///< Number of rows at the bottom of the file to skip - default is 0
 
-  bool          skip_blank_lines;           // Whether or not to ignore blank lines
+  bool          skip_blank_lines;           ///< Indicates whether to ignore empty lines, or parse and interpret values as NaN 
 
   const char    **true_values;              ///< List of values to recognize as boolean True
   int           num_true_values;            ///< Number of values in the true_values list
@@ -91,7 +91,7 @@ typedef struct {
   bool          keep_default_na;            ///< Keep the default NA values
   bool          na_filter;                  ///< Detect missing values (empty strings and the values in na_values). Passing false can improve performance.
 
-  char          *prefix;                    // If there is no header or names, append this to the column ID as the name
+  char          *prefix;                    ///< If there is no header or names, prepend this to the column ID as the name
   bool          mangle_dupe_cols;           ///< If true, duplicate columns get a suffix. If false, data will be overwritten if there are columns with duplicate names
 
   bool          parse_dates;                // Parse date field into date32 or date64.  If false then date fields are saved as a string. Specifying a date dtype overrides this
@@ -109,7 +109,7 @@ typedef struct {
 
   char          escapechar;                 // Single character used as the escape character
 
-  char          comment;                    // Single character indicating that the remainder of line is a comment
+  char          comment;                    ///< The character used to denote start of a comment line. The rest of the line will not be parsed.
 
   char          *encoding;                  // the data encoding, NULL = UTF-8
 

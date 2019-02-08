@@ -13,8 +13,6 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 
-cimport numpy as np
-
 from cudf.utils import cudautils
 from cudf.utils.utils import calc_chunk_size, mask_dtype, mask_bitsize
 

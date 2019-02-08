@@ -264,8 +264,7 @@ def test_csv_reader_usecols_int_char(tmpdir):
     df_out = pd.read_csv(fname, usecols=[0, 1, 3], parse_dates=[1],
                          dayfirst=True)
     out = read_csv(str(fname), usecols=[0, 1, 3], dayfirst=True)
-    print(df_out)
-    print(out)
+
     assert len(out.columns) == len(df_out.columns)
     assert len(out) == len(df_out)
     pd.util.testing.assert_frame_equal(df_out, out.to_pandas(),
@@ -747,7 +746,7 @@ def test_csv_reader_tabs():
 def test_csv_reader_byte_range(tmpdir, segment_bytes):
     fname = tmpdir.mkdir("gdf_csv").join("tmp_csvreader_file16.csv")
 
-    names = ["int1", "int2"]
+    names = ['int1', 'int2']
 
     rows = 10000
     with open(str(fname), 'w') as fp:
@@ -765,3 +764,42 @@ def test_csv_reader_byte_range(tmpdir, segment_bytes):
 
     # comparing only the values here, concat does not update the index
     np.array_equal(ref_df.to_pandas().values, df.to_pandas().values)
+
+
+@pytest.mark.parametrize('header_row, skip_rows, skip_blanks',
+                         [(1, 0, True), ('infer', 2, True), (1, 4, True),
+                          (3, 0, False), ('infer', 5, False)])
+def test_csv_reader_blanks_and_comments(skip_rows, header_row, skip_blanks):
+
+    lines = ['# first comment line',
+             '\n',
+             '# third comment line',
+             '1,2,3',
+             '4,5,6',
+             '7,8,9',
+             '\n',
+             '# last comment line'
+             '\n',
+             '1,1,1']
+    buffer = '\n'.join(lines) + '\n'
+
+    cu_df = read_csv(StringIO(buffer), comment='#', header=header_row,
+                     skiprows=skip_rows, skip_blank_lines=skip_blanks)
+    pd_df = pd.read_csv(StringIO(buffer), comment='#', header=header_row,
+                        skiprows=skip_rows, skip_blank_lines=skip_blanks)
+
+    assert(cu_df.shape == pd_df.shape)
+    assert(list(cu_df.columns.values) == list(pd_df.columns.values))
+
+
+def test_csv_reader_prefix(tmpdir):
+
+    lines = ['1, 1, 1, 1']
+    buffer = '\n'.join(lines) + '\n'
+
+    prefix_str = 'a_prefix'
+    df = read_csv(StringIO(buffer), header=None, prefix=prefix_str)
+
+    column_names = list(df.columns.values)
+    for col in range(len(column_names)):
+        assert(column_names[col] == prefix_str + str(col))

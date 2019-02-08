@@ -49,8 +49,8 @@ The following instructions are for developers and contributors to cuDF OSS devel
 Compiler requirements:
 
 * `gcc`     version 5.4+
-* `nvcc`    version 9.2
-* `cmake`   version 3.12
+* `nvcc`    version 9.2+
+* `cmake`   version 3.12.4+
 
 CUDA/GPU requirements:
 
