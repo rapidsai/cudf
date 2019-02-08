@@ -5,8 +5,11 @@
 - PR #760 Raise `FileNotFoundError` instead of `GDF_FILE_ERROR` in `read_csv` if the file does not exist
 - PR #539 Add Python bindings for replace function
 - PR #807 CSV Reader: Add byte_range parameter to specify the range in the input file to be read
+- PR #858 Add series feature hashing support
 - PR #871 CSV Reader: Add support for NA values, including user specified strings
 - PR #893 Adds Parquet, ORC, Feather, JSON, and HDF5 IO support via Pandas / PyArrow
+- PR #867 CSV Reader: Add support for ignoring blank lines and comment lines
+- PR #895 Add Series groupby
 
 ## Improvements
 
@@ -17,6 +20,7 @@
 - PR #836 Add ingest support for arrow chunked arrays in Column, Series, DataFrame creation
 - PR #763 Format doxygen comments for csv_read_arg struct
 - PR #532 CSV Reader: Use type dispatcher instead of switch block
+- PR #878 Add better indexing to Groupby
 
 ## Bug Fixes
 
