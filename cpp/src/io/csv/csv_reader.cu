@@ -457,10 +457,12 @@ gdf_error read_csv(csv_read_arg *args)
 				}
 			}
 		} else {
-			// Assign according to column index if there's no dedicated header row
 			h_num_cols = std::count(first_row.begin(), first_row.end(), raw_csv->opts.delimiter) + 1;
+			// assign column indexes as names if the header column is not present
+			raw_csv->col_names.reserve(h_num_cols);
+			const string str_prefix = args->prefix != nullptr ? string(args->prefix) : "";
 			for (int i = 0; i < h_num_cols; ++i) {
-				raw_csv->col_names.push_back(std::to_string(i));
+				raw_csv->col_names.push_back(str_prefix + std::to_string(i));
 			}
 		}
 
