@@ -33,6 +33,14 @@
 - PR #875 Handle unnamed indexes in to/from arrow functions
 - PR #876 Added missing `<type_traits>` include
 - PR #889 Deleted test_rmm.py which has now moved to RMM repo
+- PR #866 Merge v0.5.1 numpy ABI hotfix into 0.6
+
+
+# cuDF 0.5.1 (05 Feb 2019)
+
+## Bug Fixes
+
+- PR #842 Avoid using numpy via cimport to prevent ABI issues in Cython compilation
 
 
 # cuDF 0.5.0 (28 Jan 2019)
