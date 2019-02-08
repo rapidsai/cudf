@@ -22,7 +22,6 @@ from cudf import formatting, _gdf
 from cudf.utils import cudautils, queryutils, applyutils, utils
 from cudf.dataframe.index import as_index, Index, RangeIndex
 from cudf.dataframe.series import Series
-from cudf.dataframe.column import Column
 from cudf.settings import NOTSET, settings
 from cudf.comm.serialize import register_distributed_serializer
 from cudf.dataframe.categorical import CategoricalColumn
