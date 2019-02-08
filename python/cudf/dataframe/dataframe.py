@@ -408,6 +408,98 @@ class DataFrame(object):
             len(self),
         )
 
+    def _binaryop(self, other, fn):
+        # TODO: Is it a df, series, or scalar?
+        df = DataFrame()
+        for col in self._cols:
+            df[col] = self._cols[col]._binaryop(other._cols[col], fn)
+        return df
+
+    def _rbinaryop(self, other, fn):
+        # TODO: Is it a df, series, or scalar?
+        df = DataFrame()
+        for col in self._cols:
+            df[col] = self._cols[col]._rbinaryop(other._cols[col], fn)
+        return df
+
+    def _unaryop(self, fn):
+        # TODO: Is it a df, series, or scalar?
+        df = DataFrame()
+        for col in self._cols:
+            df[col] = self._cols[col]._unaryop(fn)
+        return df
+
+    def __add__(self, other):
+        return self._binaryop(other, 'add')
+
+    def __radd__(self, other):
+        return self._rbinaryop(other, 'add')
+
+    def __sub__(self, other):
+        return self._binaryop(other, 'sub')
+
+    def __rsub__(self, other):
+        return self._rbinaryop(other, 'sub')
+
+    def __mul__(self, other):
+        return self._binaryop(other, 'mul')
+
+    def __rmul__(self, other):
+        return self._rbinaryop(other, 'mul')
+
+    def __pow__(self, other):
+        if other == 2:
+            return self * self
+        else:
+            return NotImplemented
+
+    def __floordiv__(self, other):
+        return self._binaryop(other, 'floordiv')
+
+    def __rfloordiv__(self, other):
+        return self._rbinaryop(other, 'floordiv')
+
+    def __truediv__(self, other):
+        return self._binaryop(other, 'truediv')
+
+    def __rtruediv__(self, other):
+        return self._rbinaryop(other, 'truediv')
+
+    __div__ = __truediv__
+
+    def _unordered_compare(self, other, cmpops):
+        # TODO: Is other a df, series, or scalar?
+        df = DataFrame()
+        for col in self._cols:
+            df[col] = self._cols[col]._unordered_compare(other._cols[col],
+                                                         cmpops)
+        return df
+
+    def _ordered_compare(self, other, cmpops):
+        # TODO: Is other a df, series, or scalar?
+        df = DataFrame()
+        for col in self._cols:
+            df[col] = self._cols[col]._ordered_compare(other._cols[col], cmpops)
+        return df
+
+    def __eq__(self, other):
+        return self._unordered_compare(other, 'eq')
+
+    def __ne__(self, other):
+        return self._unordered_compare(other, 'ne')
+
+    def __lt__(self, other):
+        return self._ordered_compare(other, 'lt')
+
+    def __le__(self, other):
+        return self._ordered_compare(other, 'le')
+
+    def __gt__(self, other):
+        return self._ordered_compare(other, 'gt')
+
+    def __ge__(self, other):
+        return self._ordered_compare(other, 'ge')
+
     def __iter__(self):
         return iter(self.columns)
 

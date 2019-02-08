@@ -1298,6 +1298,30 @@ def test_binops(pdf, gdf, left, right, binop):
     assert_eq(d, g)
 
 
+@pytest.mark.parametrize('binop', [
+    operator.add,
+    operator.mul,
+    pytest.param(operator.floordiv, marks=pytest.mark.xfail()),
+    pytest.param(operator.truediv, marks=pytest.mark.xfail()),
+    pytest.param(operator.mod, marks=pytest.mark.xfail()),
+    pytest.param(operator.pow, marks=pytest.mark.xfail()),
+    operator.eq,
+    operator.lt,
+    operator.le,
+    operator.gt,
+    operator.ge,
+    operator.ne,
+])
+def test_binops_df(pdf, gdf, binop):
+    print(pdf)
+    print(gdf)
+    d = binop(pdf, pdf)
+    g = binop(gdf, gdf)
+    print(d)
+    print(g)
+    assert_eq(d, g)
+
+
 @pytest.mark.parametrize('func', [
     lambda df: df.empty,
     lambda df: df.x.empty,
