@@ -7,6 +7,7 @@ import numpy as np
 import pandas as pd
 
 from cudf.dataframe import DataFrame
+from cudf.dataframe import Series
 from .utils import assert_eq
 
 
@@ -39,7 +40,7 @@ def get_nelem():
 
 @pytest.fixture
 def gdf():
-    return DataFrame({'x': [1, 2], 'y': [1, 2]})
+    return DataFrame({'x': [1, 2, 3], 'y': [0, 1, 1]})
 
 
 @pytest.fixture
@@ -63,8 +64,8 @@ def test_groupby_default(pdf, gdf):
 def test_groupby_getitem_styles():
     pdf = pd.DataFrame({'x': [1, 3, 1], 'y': [1, 2, 3]})
     gdf = cudf.from_pandas(pdf)
-    assert_eq(gdf.groupby('x')['y'].mean(),
-              pdf.groupby('x')['y'].mean())
+    assert_eq(gdf.groupby('x')['y'].sum(),
+              pdf.groupby('x')['y'].sum())
     assert_eq(pdf.groupby('x').y.sum(),
               gdf.groupby('x').y.sum())
     assert_eq(pdf.groupby('x')[['y']].sum(),
@@ -291,3 +292,35 @@ def test_groupby_cudf_2keys_agg(nelem, func, method):
     expect_agg = np.sort(expect_df['val'].values)
     # verify
     np.testing.assert_array_almost_equal(expect_agg, got_agg)
+
+
+@pytest.mark.parametrize('agg', ['min', 'max', 'count', 'sum', 'mean'])
+def test_series_groupby(agg):
+    s = pd.Series([1, 2, 3])
+    g = Series([1, 2, 3])
+    sg = s.groupby(s // 2)
+    gg = g.groupby(g // 2)
+    sa = getattr(sg, agg)()
+    ga = getattr(gg, agg)()
+    assert_eq(sa, ga)
+
+
+@pytest.mark.xfail(reason="Prefixed column names are not removed yet")
+@pytest.mark.parametrize('agg', ['min', 'max', 'count', 'sum', 'mean'])
+def test_series_groupby_agg(agg):
+    s = pd.Series([1, 2, 3])
+    g = Series([1, 2, 3])
+    sg = s.groupby(s // 2).agg(agg)
+    gg = g.groupby(g // 2).agg(agg)
+    assert_eq(sg, gg)
+
+
+@pytest.mark.parametrize('agg', ['min', 'max', 'count', 'sum', 'mean'])
+def test_groupby_level_zero(agg):
+    pdf = pd.DataFrame({'x': [1, 2, 3]}, index=[0, 1, 1])
+    gdf = DataFrame.from_pandas(pdf)
+    pdg = pdf.groupby(level=0)
+    gdg = gdf.groupby(level=0)
+    pdresult = getattr(pdg, agg)()
+    gdresult = getattr(gdg, agg)()
+    assert_eq(pdresult, gdresult)

@@ -792,6 +792,19 @@ def test_csv_reader_blanks_and_comments(skip_rows, header_row, skip_blanks):
     assert(list(cu_df.columns.values) == list(pd_df.columns.values))
 
 
+def test_csv_reader_prefix(tmpdir):
+
+    lines = ['1, 1, 1, 1']
+    buffer = '\n'.join(lines) + '\n'
+
+    prefix_str = 'a_prefix'
+    df = read_csv(StringIO(buffer), header=None, prefix=prefix_str)
+
+    column_names = list(df.columns.values)
+    for col in range(len(column_names)):
+        assert(column_names[col] == prefix_str + str(col))
+
+
 def test_csv_reader_delim_whitespace():
     df = read_csv(StringIO('1    2  3\n4  5 6\n'), delim_whitespace=True)
 

@@ -428,14 +428,16 @@ def numeric_normalize_types(*args):
     return [a.astype(dtype) for a in args]
 
 
-def column_hash_values(column0, *other_columns):
+def column_hash_values(column0, *other_columns, initial_hash_values=None):
     """Hash all values in the given columns.
     Returns a new NumericalColumn[int32]
     """
     columns = [column0] + list(other_columns)
     buf = Buffer(rmm.device_array(len(column0), dtype=np.int32))
     result = NumericalColumn(data=buf, dtype=buf.dtype)
-    _gdf.hash_columns(columns, result)
+    if initial_hash_values:
+        initial_hash_values = rmm.to_device(initial_hash_values)
+    _gdf.hash_columns(columns, result, initial_hash_values)
     return result
 
 

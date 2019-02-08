@@ -39,17 +39,19 @@ def _make_hash_input(hash_input, ncols):
                                get_dtype(hash_input[i].dtype))
         ci.append(col_input)
 
-    yield ci
+    initial_hash_values = rmm.to_device(np.arange(ncols, dtype=np.uint32))
+
+    yield ci, unwrap_devary(initial_hash_values)
 
 
-def _call_hash_multi(api, ncols, col_input, magic, nrows):
+def _call_hash_multi(api, ncols, col_input, magic, initial_hash_values, nrows):
     out_ary = np.zeros(nrows, dtype=np.int32)
     d_out = rmm.to_device(out_ary)
     col_out = new_column()
     libgdf.gdf_column_view(col_out, unwrap_devary(d_out), ffi.NULL,
                            out_ary.size, get_dtype(d_out.dtype))
 
-    api(ncols, col_input, magic, col_out)
+    api(ncols, col_input, magic, initial_hash_values, col_out)
 
     hashed_result = d_out.copy_to_host()
     print(hashed_result)
@@ -86,10 +88,11 @@ def test_hashing():
     ncols = len(hash_input)
     magic = libgdf.GDF_HASH_MURMUR3
 
-    with _make_hash_input(hash_input, ncols) as col_input:
+    with _make_hash_input(hash_input, ncols) as (col_input, init_hash_values):
         # Hash
-        hashed_column = _call_hash_multi(libgdf.gdf_hash, ncols,
-                                         col_input, magic, nrows)
+        for init_vals in [ffi.NULL, init_hash_values]:
+            hashed_column = _call_hash_multi(libgdf.gdf_hash, ncols,
+                                             col_input, magic, init_vals, nrows)
 
-    # Check if first and last row are equal
-    assert tuple([hashed_column[0]]) == tuple([hashed_column[-1]])
+            # Check if first and last row are equal
+            assert tuple([hashed_column[0]]) == tuple([hashed_column[-1]])

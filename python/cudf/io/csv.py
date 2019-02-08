@@ -2,7 +2,7 @@
 
 from libgdf_cffi import libgdf, ffi
 
-from cudf.dataframe.dataframe import Column
+from cudf.dataframe.column import Column
 from cudf.dataframe.numerical import NumericalColumn
 from cudf.dataframe.dataframe import DataFrame
 from cudf.dataframe.datetime import DatetimeColumn
@@ -37,7 +37,9 @@ def read_csv(filepath_or_buffer, lineterminator='\n',
              skipfooter=0, skiprows=0, dayfirst=False, compression='infer',
              thousands=None, decimal='.', true_values=None, false_values=None,
              nrows=None, byte_range=None, skip_blank_lines=True, comment=None,
-             na_values=None, keep_default_na=True, na_filter=True):
+             na_values=None, keep_default_na=True, na_filter=True,
+             prefix=None):
+
     """
     Load and parse a CSV file into a DataFrame
 
@@ -117,6 +119,8 @@ def read_csv(filepath_or_buffer, lineterminator='\n',
     na_filter : bool, default True
         Detect missing values (empty strings and the values in na_values).
         Passing False can improve performance.
+    prefix : str, default None
+        Prefix to add to column numbers when parsing without a header row
 
     Returns
     -------
@@ -300,6 +304,7 @@ def read_csv(filepath_or_buffer, lineterminator='\n',
     csv_reader.num_na_values = len(arr_na_values)
 
     compression_bytes = _wrap_string(compression)
+    prefix_bytes = _wrap_string(prefix)
 
     csv_reader.delimiter = delimiter.encode()
     csv_reader.lineterminator = lineterminator.encode()
@@ -328,6 +333,7 @@ def read_csv(filepath_or_buffer, lineterminator='\n',
     csv_reader.comment = comment.encode() if comment else b'\0'
     csv_reader.keep_default_na = keep_default_na
     csv_reader.na_filter = na_filter
+    csv_reader.prefix = prefix_bytes
 
     # Call read_csv
     libgdf.read_csv(csv_reader)
@@ -369,7 +375,8 @@ def read_csv_strings(filepath_or_buffer, lineterminator='\n',
                      compression='infer', thousands=None, decimal='.',
                      true_values=None, false_values=None, nrows=None,
                      byte_range=None, skip_blank_lines=True, comment=None,
-                     na_values=None, keep_default_na=True, na_filter=True):
+                     na_values=None, keep_default_na=True, na_filter=True,
+                     prefix=None):
 
     """
     **Experimental**: This function exists only as a beta way to use
@@ -550,6 +557,7 @@ def read_csv_strings(filepath_or_buffer, lineterminator='\n',
     csv_reader.num_na_values = len(arr_na_values)
 
     compression_bytes = _wrap_string(compression)
+    prefix_bytes = _wrap_string(prefix)
 
     csv_reader.delimiter = delimiter.encode()
     csv_reader.lineterminator = lineterminator.encode()
@@ -577,6 +585,7 @@ def read_csv_strings(filepath_or_buffer, lineterminator='\n',
     csv_reader.comment = comment.encode() if comment else b'\0'
     csv_reader.keep_default_na = keep_default_na
     csv_reader.na_filter = na_filter
+    csv_reader.prefix = prefix_bytes
 
     # Call read_csv
     libgdf.read_csv(csv_reader)
