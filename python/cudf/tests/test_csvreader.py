@@ -790,3 +790,9 @@ def test_csv_reader_blanks_and_comments(skip_rows, header_row, skip_blanks):
 
     assert(cu_df.shape == pd_df.shape)
     assert(list(cu_df.columns.values) == list(pd_df.columns.values))
+
+
+def test_csv_reader_delim_whitespace():
+    df = read_csv(StringIO('1    2  3\n4  5 6\n'), delim_whitespace=True)
+
+    assert(df.shape == (1, 3))

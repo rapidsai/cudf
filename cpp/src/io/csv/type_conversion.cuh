@@ -150,6 +150,7 @@ struct ParseOptions {
   int32_t* falseValues;
   int32_t trueValuesCount;
   int32_t falseValuesCount;
+  bool multi_delimiter;
 };
 
 /**---------------------------------------------------------------------------*

@@ -224,8 +224,10 @@ gdf_error read_csv(csv_read_arg *args)
 
 	if (args->delim_whitespace) {
 		raw_csv->opts.delimiter = ' ';
+		raw_csv->opts.multi_delimiter = true;
 	} else {
 		raw_csv->opts.delimiter = args->delimiter;
+		raw_csv->opts.multi_delimiter = false;
 	}
 	if (args->windowslinetermination) {
 		raw_csv->opts.terminator = '\n';
@@ -450,6 +452,12 @@ gdf_error read_csv(csv_read_arg *args)
 					first_row[pos] == raw_csv->opts.terminator) {
 					raw_csv->col_names.emplace_back(first_row.data() + prev, pos - prev);
 					h_num_cols++;
+
+					while (raw_csv->opts.multi_delimiter && 
+						first_row[pos] == raw_csv->opts.delimiter && 
+						first_row[pos + 1] == raw_csv->opts.delimiter) {
+							++pos;
+					}
 					if (first_row[pos] == raw_csv->opts.terminator) {
 						break;
 					}
@@ -1415,6 +1423,10 @@ void convertCsvToGdf(char *raw_csv,
 			}
 			else if(quotation==false){
 				if(raw_csv[pos] == opts.delimiter){
+					while (opts.multi_delimiter &&
+						raw_csv[pos + 1] == opts.delimiter) {
+							++pos;
+					}
 					break;
 				}
 				else if(raw_csv[pos] == opts.terminator){
