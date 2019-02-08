@@ -9,7 +9,7 @@ const bool DEVICE_ALLOCATED = true;
 const bool HOST_ALLOCATED = false;
 
 
-typedef unsigned int nv_category_type;
+typedef unsigned int nv_category_index_type;
 /**
  * Take a column whose indices map into this nvcategory and generate a condensed copy
  *
@@ -33,7 +33,7 @@ gdf_error create_nvcategory_from_indices(gdf_column * column, NVCategory * nv_ca
  * @param categories the columns whose dictionaries are going to be merged together.
  * @return a gdf_error indicating success or failure type
  */
-gdf_error merge_categories(std::vector<gdf_column *> categories);
+gdf_error merge_category_dictionaries(gdf_column * category_columns[], int num_columns);
 
 /**
  * Take a vector of columns of type GDF_STRING_CATEGORY and merge their dictionaries together making copies
@@ -45,8 +45,10 @@ gdf_error merge_categories(std::vector<gdf_column *> categories);
  * @param output_categories preallocated columns that will store the newly mapped indicies along with the shared dictionary NVCategory
  * @return a gdf_error indicating success or failure type
  */
-gdf_error merge_categories(std::vector<gdf_column *> input_categories,std::vector<gdf_column *> output_categories);
+gdf_error merge_category_dictionaries(gdf_column * input_columns[],gdf_column * output_columns[], int num_columns);
 
+
+gdf_error concat_categories(gdf_column * input_columns[],gdf_column * output_column, int num_columns);
 
 
 #endif

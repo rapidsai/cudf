@@ -22,47 +22,47 @@ struct NVCategoryTest : public GdfTest
 	gdf_column * create_boolean_column(gdf_size_type num_rows){
 		gdf_column * column = new gdf_column;
 		int * data;
-	    bit_mask::bit_mask_t * valid;
-	    bit_mask::create_bit_mask(&valid, num_rows,1);
+		bit_mask::bit_mask_t * valid;
+		bit_mask::create_bit_mask(&valid, num_rows,1);
 		EXPECT_EQ(RMM_ALLOC(&data, num_rows * sizeof(int8_t) , 0), RMM_SUCCESS);
 		gdf_error err = gdf_column_view(column,
-		                          (void *) data,
-		                          (gdf_valid_type *) valid,
-				                  num_rows,
-		                          GDF_INT8);
+				(void *) data,
+				(gdf_valid_type *) valid,
+				num_rows,
+				GDF_INT8);
 		return column;
 
 	}
 
 
 	gdf_column * create_column_constant(gdf_size_type num_rows, int value){
-			gdf_column * column = new gdf_column;
-			int * data;
-		    bit_mask::bit_mask_t * valid;
-		    bit_mask::create_bit_mask(&valid, num_rows,1);
-			EXPECT_EQ(RMM_ALLOC(&data, num_rows * sizeof(int) , 0), RMM_SUCCESS);
-			cudaMemset(data,value,sizeof(int) * num_rows);
-			gdf_error err = gdf_column_view(column,
-			                          (void *) data,
-			                          (gdf_valid_type *) valid,
-					                  num_rows,
-			                          GDF_INT32);
-			return column;
+		gdf_column * column = new gdf_column;
+		int * data;
+		bit_mask::bit_mask_t * valid;
+		bit_mask::create_bit_mask(&valid, num_rows,1);
+		EXPECT_EQ(RMM_ALLOC(&data, num_rows * sizeof(int) , 0), RMM_SUCCESS);
+		cudaMemset(data,value,sizeof(int) * num_rows);
+		gdf_error err = gdf_column_view(column,
+				(void *) data,
+				(gdf_valid_type *) valid,
+				num_rows,
+				GDF_INT32);
+		return column;
 
-		}
+	}
 
 
 	gdf_column * create_indices_column(gdf_size_type num_rows){
 		gdf_column * column = new gdf_column;
 		int * data;
-	    bit_mask::bit_mask_t * valid;
-	    bit_mask::create_bit_mask(&valid, num_rows,1);
+		bit_mask::bit_mask_t * valid;
+		bit_mask::create_bit_mask(&valid, num_rows,1);
 		EXPECT_EQ(RMM_ALLOC(&data, num_rows * sizeof(int) , 0), RMM_SUCCESS);
 		gdf_error err = gdf_column_view(column,
-		                          (void *) data,
-		                          (gdf_valid_type *) valid,
-				                  num_rows,
-		                          GDF_INT32);
+				(void *) data,
+				(gdf_valid_type *) valid,
+				num_rows,
+				GDF_INT32);
 		return column;
 
 	}
@@ -89,18 +89,18 @@ struct NVCategoryTest : public GdfTest
 
 		gdf_column * column = new gdf_column;
 		int * data;
-	    EXPECT_EQ(RMM_ALLOC(&data, num_rows * sizeof(gdf_nvstring_category) , 0), RMM_SUCCESS);
+		EXPECT_EQ(RMM_ALLOC(&data, num_rows * sizeof(gdf_nvstring_category) , 0), RMM_SUCCESS);
 
 
 		category->get_values( (unsigned int *)data, true );
-	    bit_mask::bit_mask_t * valid;
-	    bit_mask::create_bit_mask(&valid, num_rows,1);
+		bit_mask::bit_mask_t * valid;
+		bit_mask::create_bit_mask(&valid, num_rows,1);
 
 		gdf_error err = gdf_column_view(column,
-		                          (void *) data,
-		                          (gdf_valid_type *)valid,
-				                  num_rows,
-		                          GDF_STRING_CATEGORY);
+				(void *) data,
+				(gdf_valid_type *)valid,
+				num_rows,
+				GDF_STRING_CATEGORY);
 		column->dtype_info.category = category;
 		return column;
 	}
@@ -114,22 +114,22 @@ TEST_F(NVCategoryTest, TEST_NVCATEGORY_SORTING)
 	input_columns[0] = column;
 
 	int8_t *asc_desc;
-    EXPECT_EQ(RMM_ALLOC(&asc_desc, 1 , 0), RMM_SUCCESS);
-    int8_t minus_one = -1;
+	EXPECT_EQ(RMM_ALLOC(&asc_desc, 1 , 0), RMM_SUCCESS);
+	int8_t minus_one = -1;
 	cudaMemset(asc_desc,minus_one,1);
 
 	//doesnt output nvcategory type columns so works as is
-    gdf_error err = gdf_order_by(input_columns,asc_desc,1,output_column,false);
+	gdf_error err = gdf_order_by(input_columns,asc_desc,1,output_column,false);
 
 
 
-//    gather_strings( unsigned int* pos, unsigned int elems, bool devmem=true )->;
+	//    gather_strings( unsigned int* pos, unsigned int elems, bool devmem=true )->;
 
-    print_valid_data(output_column->valid,100);
+	print_valid_data(output_column->valid,100);
 
 	print_typed_column((int32_t *) output_column->data,
-							output_column->valid,
-	                        100);
+			output_column->valid,
+			100);
 
 }
 
@@ -160,34 +160,34 @@ TEST_F(NVCategoryTest, TEST_NVCATEGORY_GROUPBY)
 			constant_value_column_1->size);
 
 	gdf_error err = gdf_group_by_sum(1,                    // # columns
-	                           cols,            //input cols with 0 null_count otherwise GDF_VALIDITY_UNSUPPORTED is returned
-	                           constant_value_column_1,          //column to aggregate on with 0 null_count otherwise GDF_VALIDITY_UNSUPPORTED is returned
-	                           nullptr,  //if not null return indices of re-ordered rows
-	                           output_groups,  //if not null return the grouped-by columns
-	                                                         //(multi-gather based on indices, which are needed anyway)
-	                           out_col_agg,      //aggregation result
-	                           &ctxt);
+			cols,            //input cols with 0 null_count otherwise GDF_VALIDITY_UNSUPPORTED is returned
+			constant_value_column_1,          //column to aggregate on with 0 null_count otherwise GDF_VALIDITY_UNSUPPORTED is returned
+			nullptr,  //if not null return indices of re-ordered rows
+			output_groups,  //if not null return the grouped-by columns
+			//(multi-gather based on indices, which are needed anyway)
+			out_col_agg,      //aggregation result
+			&ctxt);
 
 	print_typed_column((int32_t *) output_groups[0]->data,
 			output_groups[0]->valid,
-	                        output_groups[0]->size);
+			output_groups[0]->size);
 
 
 	print_typed_column((int32_t *) out_col_agg->data,
 			out_col_agg->valid,
-	                        out_col_agg->size);
+			out_col_agg->size);
 
 
 
 
 	err = gdf_group_by_max(1,                    // # columns
-		                           cols,            //input cols with 0 null_count otherwise GDF_VALIDITY_UNSUPPORTED is returned
-		                           category_column_2,          //column to aggregate on with 0 null_count otherwise GDF_VALIDITY_UNSUPPORTED is returned
-		                           nullptr,  //if not null return indices of re-ordered rows
-		                           output_groups,  //if not null return the grouped-by columns
-		                                                         //(multi-gather based on indices, which are needed anyway)
-		                           category_column_out,      //aggregation result
-		                           &ctxt);
+			cols,            //input cols with 0 null_count otherwise GDF_VALIDITY_UNSUPPORTED is returned
+			category_column_2,          //column to aggregate on with 0 null_count otherwise GDF_VALIDITY_UNSUPPORTED is returned
+			nullptr,  //if not null return indices of re-ordered rows
+			output_groups,  //if not null return the grouped-by columns
+			//(multi-gather based on indices, which are needed anyway)
+			category_column_out,      //aggregation result
+			&ctxt);
 
 	if(err != GDF_SUCCESS){
 		std::cout<<"WE ARE NOT JAMMIN!"<<std::endl;
@@ -197,7 +197,7 @@ TEST_F(NVCategoryTest, TEST_NVCATEGORY_GROUPBY)
 
 	print_typed_column((int32_t *) cols[0]->data,
 			cols[0]->valid,
-	                        cols[0]->size);
+			cols[0]->size);
 
 
 	print_typed_column((int32_t *) category_column_2->data,
@@ -206,14 +206,14 @@ TEST_F(NVCategoryTest, TEST_NVCATEGORY_GROUPBY)
 
 	print_typed_column((int32_t *) output_groups[0]->data,
 			output_groups[0]->valid,
-	                        output_groups[0]->size);
+			output_groups[0]->size);
 
 
 	print_typed_column((int32_t *) category_column_out->data,
 			category_column_out->valid,
 			category_column_out->size);
 
-	char ** data = new char *[category_column_out->size];
+	char ** data = new char *[200];
 
 	category_column_out->dtype_info.category->to_strings()->to_host(data, 0, category_column_out->size);
 	std::cout<<"maxes\n";
@@ -225,9 +225,34 @@ TEST_F(NVCategoryTest, TEST_NVCATEGORY_GROUPBY)
 	output_groups[0]->dtype_info.category->to_strings()->to_host(data, 0, category_column_out->size);
 	std::cout<<"groups\n";
 	for(int i = 0; i < category_column_out->size; i++){
-			std::cout<<data[i]<<"\t";
-		}
-		std::cout<<std::endl;
+		std::cout<<data[i]<<"\t";
+	}
+	std::cout<<std::endl;
+
+
+	std::cout<<"lets concat the groups"<<std::endl;
+
+	gdf_column * concat[2];
+	concat[0] = output_groups[0];
+	concat[1] = output_groups[0];
+
+	gdf_column * concat_out = create_nv_category_column(200,true);
+	category_column_groups_out->dtype_info.category = nullptr;
+
+	err = gdf_column_concat(concat_out,concat,2);
+
+	if(err != GDF_SUCCESS){
+		std::cout<<"WE ARE NOT JAMMIN!"<<std::endl;
+	}else{
+		std::cout<<"CONCAT"<<std::endl;
+	}
+
+	concat_out->dtype_info.category->to_strings()->to_host(data, 0, category_column_out->size);
+	std::cout<<"groups\n";
+	for(int i = 0; i < category_column_out->size; i++){
+		std::cout<<data[i]<<"\t";
+	}
+	std::cout<<std::endl;
 
 
 }
@@ -245,7 +270,7 @@ TEST_F(NVCategoryTest, TEST_NVCATEGORY_COMPARISON)
 			*temp_string);
 
 	unsigned int * indices;
-    EXPECT_EQ(RMM_ALLOC(&indices, sizeof(unsigned int) * new_category->size()  , 0), RMM_SUCCESS);
+	EXPECT_EQ(RMM_ALLOC(&indices, sizeof(unsigned int) * new_category->size()  , 0), RMM_SUCCESS);
 	//now reset data
 	new_category->get_values(indices,true);
 
@@ -254,11 +279,11 @@ TEST_F(NVCategoryTest, TEST_NVCATEGORY_COMPARISON)
 
 	print_typed_column((int32_t *) column_left->data,
 			column_left->valid,
-	                        100);
+			100);
 
 	print_typed_column((int32_t *) column_right->data,
 			column_right->valid,
-	                        100);
+			100);
 
 
 	//TODO: damn so this is just a regular silly pointer, i cant just assume i can free it...
@@ -268,18 +293,18 @@ TEST_F(NVCategoryTest, TEST_NVCATEGORY_COMPARISON)
 
 	//so a few options here, managing a single memory buffer is too annoying
 	print_typed_column((int8_t *) output_column->data,
-							output_column->valid,
-	                        100);
+			output_column->valid,
+			100);
 
-    gdf_error err = gpu_comparison(column_left, column_right, output_column,gdf_comparison_operator::GDF_EQUALS);
+	gdf_error err = gpu_comparison(column_left, column_right, output_column,gdf_comparison_operator::GDF_EQUALS);
 
-    std::cout<<err<<std::endl;
-//    gather_strings( unsigned int* pos, unsigned int elems, bool devmem=true )->;
+	std::cout<<err<<std::endl;
+	//    gather_strings( unsigned int* pos, unsigned int elems, bool devmem=true )->;
 
-    print_valid_data(output_column->valid,100);
+	print_valid_data(output_column->valid,100);
 
 	print_typed_column((int8_t *) output_column->data,
-							output_column->valid,
-	                        100);
+			output_column->valid,
+			100);
 
 }
