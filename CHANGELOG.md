@@ -24,6 +24,7 @@
 - PR #532 CSV Reader: Use type dispatcher instead of switch block
 - PR #878 Add better indexing to Groupby
 - PR #554 Add `empty` method and `is_monotonic` attribute to `Index`
+- PR #909 CSV Reader: Avoid host->device->host copy for header row data
 
 ## Bug Fixes
 
