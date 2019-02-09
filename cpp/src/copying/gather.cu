@@ -318,11 +318,11 @@ struct column_gatherer {
           num_destination_rows, gather_map, check_bounds, stream);
 
       GDF_REQUIRE(GDF_SUCCESS == gdf_status, gdf_status);
-    }
 
-    // Update destination columns null count
-    gdf_status = set_null_count(destination_column);
-    GDF_REQUIRE(GDF_SUCCESS == gdf_status, gdf_status);
+      // Update destination columns null count
+      gdf_status = set_null_count(destination_column);
+      GDF_REQUIRE(GDF_SUCCESS == gdf_status, gdf_status);
+    }
 
     CUDA_CHECK_LAST();
 
