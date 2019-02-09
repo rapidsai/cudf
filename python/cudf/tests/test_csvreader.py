@@ -823,3 +823,12 @@ def test_csv_reader_delim_whitespace():
         read_csv(StringIO(buffer),delim_whitespace=True, delimiter=' ')
     with pytest.raises(ValueError):
         read_csv(StringIO(buffer),delim_whitespace=True, sep=' ')
+
+
+def test_csv_reader_unnamed_cols():
+    # first and last columns are unnamed
+    buffer = ',1,2,3,\n4,5,6,7,8\n'
+
+    cu_df = read_csv(StringIO(buffer))
+    pd_df = pd.read_csv(StringIO(buffer))
+    assert(all(pd_df.columns == cu_df.columns))

@@ -476,6 +476,13 @@ gdf_error read_csv(csv_read_arg *args)
 		RMM_TRY( RMM_ALLOC((void**)&raw_csv->d_parseCol,(sizeof(bool) * (h_num_cols)),0 ) );
 		for (int i = 0; i<h_num_cols; i++)
 			raw_csv->h_parseCol[i]=true;
+		
+		// Rename empty column names to "Unnamed: col_index"
+		for (size_t col_idx = 0; col_idx < raw_csv->col_names.size(); ++col_idx) {
+			if (raw_csv->col_names[col_idx].empty()) {
+				raw_csv->col_names[col_idx] = string("Unnamed: ") + std::to_string(col_idx);
+			}
+		}
 
 		int h_dup_cols_removed = 0;
 		// Looking for duplicates
@@ -1446,7 +1453,7 @@ void convertCsvToGdf(char *raw_csv,
 		if(start>stop)
 			break;
 
-		pos = seekNextColumn(raw_csv, opts, pos, stop);
+		pos = seekColumnEnd(raw_csv, opts, pos, stop);
 
 		if(parseCol[col]==true){
 
@@ -1583,7 +1590,7 @@ void dataTypeDetection(char *raw_csv,
 		if(start>stop)
 			break;
 
-		pos = seekNextColumn(raw_csv, opts, pos, stop);
+		pos = seekColumnEnd(raw_csv, opts, pos, stop);
 
 		// Checking if this is a column that the user wants --- user can filter columns
 		if(parseCol[col]==true){
