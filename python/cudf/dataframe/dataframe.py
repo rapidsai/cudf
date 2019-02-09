@@ -522,6 +522,7 @@ class DataFrame(object):
         else:
             index = index if isinstance(index, Index) else as_index(index)
             df = DataFrame()
+            df._index = index
             for k in self.columns:
                 df[k] = self[k].set_index(index)
             return df
@@ -1839,15 +1840,31 @@ class DataFrame(object):
             raise TypeError('not a pyarrow.Table')
 
         index_col = None
+        dtypes = None
         if isinstance(table.schema.metadata, dict):
             if b'pandas' in table.schema.metadata:
-                index_col = json.loads(
+                metadata = json.loads(
                     table.schema.metadata[b'pandas']
-                )['index_columns']
+                )
+                index_col = metadata['index_columns']
+                dtypes = {col['field_name']: col['pandas_type'] for col in
+                          metadata['columns'] if 'field_name' in col}
 
         df = cls()
         for col in table.columns:
-            df[col.name] = col.data
+            if dtypes:
+                dtype = dtypes[col.name]
+                if dtype == 'categorical':
+                    dtype = 'category'
+                elif dtype == 'date':
+                    dtype = 'datetime64[ms]'
+            else:
+                dtype = None
+
+            df[col.name] = columnops.as_column(
+                col.data,
+                dtype=dtype
+            )
         if index_col:
             df = df.set_index(index_col[0])
             new_index_name = pa.pandas_compat._backwards_compatible_index_name(
