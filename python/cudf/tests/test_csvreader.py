@@ -817,3 +817,9 @@ def test_csv_reader_delim_whitespace():
     cu_df = read_csv(StringIO(buffer), delim_whitespace=True, header=None)
     pd_df = pd.read_csv(StringIO(buffer), delim_whitespace=True, header=None)
     assert(pd_df.shape == cu_df.shape)
+
+    # should raise an error if used with delimiter or sep
+    with pytest.raises(ValueError):
+        read_csv(StringIO(buffer),delim_whitespace=True, delimiter=' ')
+    with pytest.raises(ValueError):
+        read_csv(StringIO(buffer),delim_whitespace=True, sep=' ')
