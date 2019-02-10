@@ -11,6 +11,7 @@
 - PR #895 Add Series groupby
 - PR #898 Add DataFrame.groupby(level=0) support
 - PR #888 CSV Reader: Add prefix parameter for column names, used when parsing without a header
+- PR #913 Add DLPack support: convert between cuDF DataFrame and DLTensor
 
 ## Improvements
 
