@@ -5,6 +5,7 @@ from __future__ import print_function, division
 import inspect
 import random
 from collections import OrderedDict
+from collections.abc import Sequence
 import logging
 import warnings
 import numbers
@@ -21,7 +22,7 @@ from librmm_cffi import librmm as rmm
 from cudf import formatting, _gdf
 from cudf.utils import cudautils, queryutils, applyutils, utils
 from .index import as_index, Index, RangeIndex
-from .series import Series
+from cudf.dataframe.series import Series
 from cudf.settings import NOTSET, settings
 from cudf.comm.serialize import register_distributed_serializer
 from .categorical import CategoricalColumn
@@ -408,26 +409,64 @@ class DataFrame(object):
             len(self),
         )
 
+    # binary, rbinary, unary, orderedcompare, unorderedcompare
+    def _call_op(self, other, internal_fn, fn):
+        result = DataFrame()
+        result.set_index(self.index)
+        if isinstance(other, Sequence):
+            for k, col in enumerate(self._cols):
+                result[col] = getattr(self._cols[col], internal_fn)(
+                        other[k],
+                        fn,
+                )
+        elif isinstance(other, DataFrame):
+            for col in other._cols:
+                if col in self._cols:
+                    result[col] = getattr(self._cols[col], internal_fn)(
+                            other._cols[col],
+                            fn,
+                    )
+                else:
+                    result[col] = Series(cudautils.full(self.shape[0],
+                                         np.dtype('float64').type(np.nan),
+                                         'float64'), nan_as_null=False)
+            for col in self._cols:
+                if col not in other._cols:
+                    result[col] = Series(cudautils.full(self.shape[0],
+                                         np.dtype('float64').type(np.nan),
+                                         'float64'), nan_as_null=False)
+        elif isinstance(other, Series):
+            raise NotImplementedError(
+                    "Series to DataFrame arithmetic not supported "
+                    "until strings can be used as indices. Try converting your"
+                    " Series into a DataFrame first.")
+        elif isinstance(other, numbers.Number):
+            for col in self._cols:
+                result[col] = getattr(self._cols[col], internal_fn)(
+                        other,
+                        fn,
+                )
+        else:
+            for col in self._cols:
+                if col in other._cols:
+                    result[col] = getattr(self._cols[col], internal_fn)(
+                            other._cols[col],
+                            fn,
+                    )
+                else:
+                    result[col] = Series(cudautils.full(self.shape[1],
+                                         np.dtype('float64').type(np.nan),
+                                         'float64'), nan_as_null=False)
+        return result
+
     def _binaryop(self, other, fn):
-        # TODO: Is it a df, series, or scalar?
-        df = DataFrame()
-        for col in self._cols:
-            df[col] = self._cols[col]._binaryop(other._cols[col], fn)
-        return df
+        return self._call_op(other, '_binaryop', fn)
 
     def _rbinaryop(self, other, fn):
-        # TODO: Is it a df, series, or scalar?
-        df = DataFrame()
-        for col in self._cols:
-            df[col] = self._cols[col]._rbinaryop(other._cols[col], fn)
-        return df
+        return self._call_op(other, '_rbinaryop', fn)
 
     def _unaryop(self, fn):
-        # TODO: Is it a df, series, or scalar?
-        df = DataFrame()
-        for col in self._cols:
-            df[col] = self._cols[col]._unaryop(fn)
-        return df
+        return self._call_op(self, '_unaryop', fn)
 
     def __add__(self, other):
         return self._binaryop(other, 'add')
@@ -468,19 +507,10 @@ class DataFrame(object):
     __div__ = __truediv__
 
     def _unordered_compare(self, other, cmpops):
-        # TODO: Is other a df, series, or scalar?
-        df = DataFrame()
-        for col in self._cols:
-            df[col] = self._cols[col]._unordered_compare(other._cols[col],
-                                                         cmpops)
-        return df
+        return self._call_op(other, '_unordered_compare', cmpops)
 
     def _ordered_compare(self, other, cmpops):
-        # TODO: Is other a df, series, or scalar?
-        df = DataFrame()
-        for col in self._cols:
-            df[col] = self._cols[col]._ordered_compare(other._cols[col], cmpops)
-        return df
+        return self._call_op(other, '_ordered_compare', cmpops)
 
     def __eq__(self, other):
         return self._unordered_compare(other, 'eq')
