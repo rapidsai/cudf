@@ -17,14 +17,15 @@
 #ifndef COLUMN_WRAPPER_H
 #define COLUMN_WRAPPER_H
 
-#include <thrust/equal.h>
-#include <thrust/logical.h>
-#include <bitset>
 #include "cudf.h"
 #include "cudf_test_utils.cuh"
 #include "rmm/rmm.h"
 #include "utilities/bit_util.cuh"
 #include "utilities/type_dispatcher.hpp"
+
+#include <thrust/equal.h>
+#include <thrust/logical.h>
+#include <bitset>
 
 #ifndef CUDA_RT_CALL
 #define CUDA_RT_CALL(call)                                                    \
