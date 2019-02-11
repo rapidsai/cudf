@@ -7,6 +7,7 @@
 - PR #807 CSV Reader: Add byte_range parameter to specify the range in the input file to be read
 - PR #858 Add series feature hashing support
 - PR #871 CSV Reader: Add support for NA values, including user specified strings
+- PR #893 Adds PyArrow based parquet readers / writers to Python, fix category dtype handling, fix arrow ingest buffer size issues
 - PR #867 CSV Reader: Add support for ignoring blank lines and comment lines
 - PR #895 Add Series groupby
 - PR #898 Add DataFrame.groupby(level=0) support

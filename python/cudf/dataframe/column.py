@@ -40,6 +40,13 @@ class Column(object):
     def _concat(cls, objs):
         if len(objs) == 0:
             return Column(Buffer.null(np.float))
+
+        # Handle categories for categoricals
+        from cudf.dataframe.categorical import CategoricalColumn
+        if all(isinstance(o, CategoricalColumn) for o in objs):
+            new_cats = tuple(set([val for o in objs for val in o]))
+            objs = [o.cat().set_categories(new_cats) for o in objs]
+
         head = objs[0]
         for o in objs:
             if not o.is_type_equivalent(head):
