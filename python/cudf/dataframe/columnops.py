@@ -15,6 +15,7 @@ from .buffer import Buffer
 from .column import Column
 from cudf.utils import utils, cudautils
 from cudf import _gdf
+from cudf.utils.utils import buffers_from_pyarrow
 
 import warnings
 
@@ -28,7 +29,7 @@ class TypedColumnBase(Column):
 
     Notes
     -----
-    For designed to be instantiated directly.  Instantiate subclasses instead.
+    Not designed to be instantiated directly.  Instantiate subclasses instead.
     """
     def __init__(self, **kwargs):
         dtype = kwargs.pop('dtype')
@@ -67,6 +68,9 @@ class TypedColumnBase(Column):
         return inds
 
     def sort_by_values(self, ascending):
+        raise NotImplementedError
+
+    def find_and_replace(self, to_replace, values):
         raise NotImplementedError
 
 
@@ -133,24 +137,49 @@ def column_select_by_position(column, positions):
                                             dtype=selected_index.dtype)
 
 
-def as_column(arbitrary, nan_as_null=True):
+def build_column(buffer, dtype, mask=None, categories=None):
+    from . import numerical, categorical, datetime
+    if dtype == 'datetime64[ms]':
+        return datetime.DatetimeColumn(data=buffer,
+                                       dtype=np.dtype(dtype),
+                                       mask=mask)
+    elif pd.api.types.is_categorical_dtype(dtype):
+        return categorical.CategoricalColumn(data=buffer,
+                                             dtype='categorical',
+                                             categories=categories,
+                                             ordered=False,
+                                             mask=mask)
+    else:
+        return numerical.NumericalColumn(data=buffer,
+                                         dtype=dtype,
+                                         mask=mask)
+
+
+def as_column(arbitrary, nan_as_null=True, dtype=None):
     """Create a Column from an arbitrary object
 
     Currently support inputs are:
 
     * ``Column``
     * ``Buffer``
+    * ``Series``
+    * ``Index``
     * numba device array
+    * cuda array interface
     * numpy array
+    * pyarrow array
     * pandas.Categorical
 
     Returns
     -------
     result : subclass of TypedColumnBase
         - CategoricalColumn for pandas.Categorical input.
+        - DatetimeColumn for datetime input
         - NumericalColumn for all other inputs.
     """
     from . import numerical, categorical, datetime
+    from cudf.dataframe.series import Series
+    from cudf.dataframe.index import Index
 
     if isinstance(arbitrary, Column):
         if not isinstance(arbitrary, TypedColumnBase):
@@ -159,6 +188,12 @@ def as_column(arbitrary, nan_as_null=True):
                                   dtype=arbitrary.dtype)
         else:
             data = arbitrary
+
+    elif isinstance(arbitrary, Series):
+        data = arbitrary._column
+
+    elif isinstance(arbitrary, Index):
+        data = arbitrary._values
 
     elif isinstance(arbitrary, Buffer):
         data = numerical.NumericalColumn(data=arbitrary, dtype=arbitrary.dtype)
@@ -171,34 +206,62 @@ def as_column(arbitrary, nan_as_null=True):
                 mask = cudautils.mask_from_devary(arbitrary)
                 data = data.set_mask(mask)
 
+    elif cuda.is_cuda_array(arbitrary):
+        # Use cuda array interface to do create a numba device array by
+        # reference
+        new_dev_array = cuda.as_cuda_array(arbitrary)
+
+        # Allocate new output array using rmm and copy the numba device array
+        # to an rmm owned device array
+        out_dev_array = rmm.device_array_like(new_dev_array)
+        out_dev_array.copy_to_device(new_dev_array)
+
+        data = as_column(out_dev_array)
+
     elif isinstance(arbitrary, np.ndarray):
         if arbitrary.dtype.kind == 'M':
             data = datetime.DatetimeColumn.from_numpy(arbitrary)
+        elif arbitrary.dtype.kind in ('O', 'U'):
+            raise NotImplementedError("Strings are not yet supported")
         else:
             data = as_column(rmm.to_device(arbitrary), nan_as_null=nan_as_null)
 
     elif isinstance(arbitrary, pa.Array):
         if isinstance(arbitrary, pa.StringArray):
-            raise NotImplementedError("Strings are not yet supported")
+            warnings.warn("Strings are not yet supported, so converting to "
+                          "categorical")
+            data = as_column(arbitrary.dictionary_encode())
         elif isinstance(arbitrary, pa.NullArray):
             pamask = Buffer(np.empty(0, dtype='int8'))
-            padata = Buffer(
-                np.empty(0, dtype=arbitrary.type.to_pandas_dtype())
-            )
-            data = numerical.NumericalColumn(
-                data=padata,
-                mask=pamask,
-                null_count=0,
-                dtype=np.dtype(arbitrary.type.to_pandas_dtype())
-            )
-        elif isinstance(arbitrary, pa.DictionaryArray):
-            if arbitrary.buffers()[0]:
-                pamask = Buffer(np.array(arbitrary.buffers()[0]))
+
+            if dtype and dtype != 'empty':
+                new_dtype = dtype
             else:
-                pamask = None
-            padata = Buffer(np.array(arbitrary.buffers()[1]).view(
-                arbitrary.indices.type.to_pandas_dtype()
-            ))
+                new_dtype = np.dtype(arbitrary.type.to_pandas_dtype())
+
+            if pd.api.types.is_categorical_dtype(new_dtype):
+                padata = Buffer(
+                    np.empty(0, dtype='int8')
+                )
+                data = categorical.CategoricalColumn(
+                    data=padata,
+                    mask=pamask,
+                    null_count=arbitrary.null_count,
+                    categories=[],
+                    ordered=False,
+                )
+            else:
+                padata = Buffer(
+                    np.empty(0, dtype=new_dtype)
+                )
+                data = numerical.NumericalColumn(
+                    data=padata,
+                    mask=pamask,
+                    null_count=0,
+                    dtype=new_dtype
+                )
+        elif isinstance(arbitrary, pa.DictionaryArray):
+            pamask, padata = buffers_from_pyarrow(arbitrary)
             data = categorical.CategoricalColumn(
                 data=padata,
                 mask=pamask,
@@ -208,13 +271,7 @@ def as_column(arbitrary, nan_as_null=True):
             )
         elif isinstance(arbitrary, pa.TimestampArray):
             arbitrary = arbitrary.cast(pa.timestamp('ms'))
-            if arbitrary.buffers()[0]:
-                pamask = Buffer(np.array(arbitrary.buffers()[0]))
-            else:
-                pamask = None
-            padata = Buffer(np.array(arbitrary.buffers()[1]).view(
-                np.dtype('M8[ms]')
-            ))
+            pamask, padata = buffers_from_pyarrow(arbitrary, dtype='M8[ms]')
             data = datetime.DatetimeColumn(
                 data=padata,
                 mask=pamask,
@@ -222,13 +279,7 @@ def as_column(arbitrary, nan_as_null=True):
                 dtype=np.dtype('M8[ms]')
             )
         elif isinstance(arbitrary, pa.Date64Array):
-            if arbitrary.buffers()[0]:
-                pamask = Buffer(np.array(arbitrary.buffers()[0]))
-            else:
-                pamask = None
-            padata = Buffer(np.array(arbitrary.buffers()[1]).view(
-                np.dtype('M8[ms]')
-            ))
+            pamask, padata = buffers_from_pyarrow(arbitrary, dtype='M8[ms]')
             data = datetime.DatetimeColumn(
                 data=padata,
                 mask=pamask,
@@ -245,13 +296,7 @@ def as_column(arbitrary, nan_as_null=True):
             # Arrow uses 1 bit per value while we use int8
             dtype = np.dtype(np.bool)
             arbitrary = arbitrary.cast(pa.int8())
-            if arbitrary.buffers()[0]:
-                pamask = Buffer(np.array(arbitrary.buffers()[0]))
-            else:
-                pamask = None
-            padata = Buffer(np.array(arbitrary.buffers()[1]).view(
-                dtype
-            ))
+            pamask, padata = buffers_from_pyarrow(arbitrary, dtype=dtype)
             data = numerical.NumericalColumn(
                 data=padata,
                 mask=pamask,
@@ -259,19 +304,18 @@ def as_column(arbitrary, nan_as_null=True):
                 dtype=dtype
             )
         else:
-            if arbitrary.buffers()[0]:
-                pamask = Buffer(np.array(arbitrary.buffers()[0]))
-            else:
-                pamask = None
-            padata = Buffer(np.array(arbitrary.buffers()[1]).view(
-                np.dtype(arbitrary.type.to_pandas_dtype())
-            ))
+            pamask, padata = buffers_from_pyarrow(arbitrary)
             data = numerical.NumericalColumn(
                 data=padata,
                 mask=pamask,
                 null_count=arbitrary.null_count,
                 dtype=np.dtype(arbitrary.type.to_pandas_dtype())
             )
+
+    elif isinstance(arbitrary, pa.ChunkedArray):
+        gpu_cols = [as_column(chunk, dtype=dtype) for chunk in
+                    arbitrary.chunks]
+        data = Column._concat(gpu_cols)
 
     elif isinstance(arbitrary, (pd.Series, pd.Categorical)):
         if pd.api.types.is_categorical_dtype(arbitrary):

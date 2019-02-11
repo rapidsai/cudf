@@ -200,7 +200,7 @@ std::map<gdf_dtype, int16_t> column_type_width = {{GDF_INT8, sizeof(int8_t)}, {G
 //storing a map from gdf_type to width
 //TODO: add a way for the space where we store temp bitmaps for compaction be allocated
 //on the outside
-gdf_error gpu_apply_stencil(gdf_column *lhs, gdf_column * stencil, gdf_column * output){
+gdf_error gdf_apply_stencil(gdf_column *lhs, gdf_column * stencil, gdf_column * output){
 	//OK: add a rquire here that output and lhs are the same size
 	GDF_REQUIRE(output->size == lhs->size, GDF_COLUMN_SIZE_MISMATCH);
 	GDF_REQUIRE(lhs->dtype == output->dtype, GDF_DTYPE_MISMATCH);
@@ -245,7 +245,7 @@ gdf_error gpu_apply_stencil(gdf_column *lhs, gdf_column * stencil, gdf_column * 
 		thrust::detail::normal_iterator<thrust::device_ptr<int8_t> > output_start =
 				thrust::detail::make_normal_iterator(thrust::device_pointer_cast((int8_t *) output->data));
 		thrust::detail::normal_iterator<thrust::device_ptr<int8_t> > output_end =
-				thrust::copy_if(rmm::exec_policy(stream),input_start,input_start + lhs->size,zipped_stencil_iter,output_start,is_stencil_true<thrust::detail::normal_iterator<thrust::device_ptr<int8_t> >::value_type >());
+				thrust::copy_if(rmm::exec_policy(stream)->on(stream),input_start,input_start + lhs->size,zipped_stencil_iter,output_start,is_stencil_true<thrust::detail::normal_iterator<thrust::device_ptr<int8_t> >::value_type >());
 		output->size = output_end - output_start;
 	}else if(width == 2){
 		thrust::detail::normal_iterator<thrust::device_ptr<int16_t> > input_start =
@@ -253,7 +253,7 @@ gdf_error gpu_apply_stencil(gdf_column *lhs, gdf_column * stencil, gdf_column * 
 		thrust::detail::normal_iterator<thrust::device_ptr<int16_t> > output_start =
 				thrust::detail::make_normal_iterator(thrust::device_pointer_cast((int16_t *) output->data));
 		thrust::detail::normal_iterator<thrust::device_ptr<int16_t> > output_end =
-				thrust::copy_if(rmm::exec_policy(stream),input_start,input_start + lhs->size,zipped_stencil_iter,output_start,is_stencil_true<thrust::detail::normal_iterator<thrust::device_ptr<int8_t> >::value_type >());
+				thrust::copy_if(rmm::exec_policy(stream)->on(stream),input_start,input_start + lhs->size,zipped_stencil_iter,output_start,is_stencil_true<thrust::detail::normal_iterator<thrust::device_ptr<int8_t> >::value_type >());
 		output->size = output_end - output_start;
 	}else if(width == 4){
 		thrust::detail::normal_iterator<thrust::device_ptr<int32_t> > input_start =
@@ -261,7 +261,7 @@ gdf_error gpu_apply_stencil(gdf_column *lhs, gdf_column * stencil, gdf_column * 
 		thrust::detail::normal_iterator<thrust::device_ptr<int32_t> > output_start =
 				thrust::detail::make_normal_iterator(thrust::device_pointer_cast((int32_t *) output->data));
 		thrust::detail::normal_iterator<thrust::device_ptr<int32_t> > output_end =
-				thrust::copy_if(rmm::exec_policy(stream),input_start,input_start + lhs->size,zipped_stencil_iter,output_start,is_stencil_true<thrust::detail::normal_iterator<thrust::device_ptr<int8_t> >::value_type >());
+				thrust::copy_if(rmm::exec_policy(stream)->on(stream),input_start,input_start + lhs->size,zipped_stencil_iter,output_start,is_stencil_true<thrust::detail::normal_iterator<thrust::device_ptr<int8_t> >::value_type >());
 		output->size = output_end - output_start;
 	}else if(width == 8){
 		thrust::detail::normal_iterator<thrust::device_ptr<int64_t> > input_start =
@@ -269,7 +269,7 @@ gdf_error gpu_apply_stencil(gdf_column *lhs, gdf_column * stencil, gdf_column * 
 		thrust::detail::normal_iterator<thrust::device_ptr<int64_t> > output_start =
 				thrust::detail::make_normal_iterator(thrust::device_pointer_cast((int64_t *) output->data));
 		thrust::detail::normal_iterator<thrust::device_ptr<int64_t> > output_end =
-				thrust::copy_if(rmm::exec_policy(stream),input_start,input_start + lhs->size,zipped_stencil_iter,output_start,is_stencil_true<thrust::detail::normal_iterator<thrust::device_ptr<int8_t> >::value_type >());
+				thrust::copy_if(rmm::exec_policy(stream)->on(stream),input_start,input_start + lhs->size,zipped_stencil_iter,output_start,is_stencil_true<thrust::detail::normal_iterator<thrust::device_ptr<int8_t> >::value_type >());
 		output->size = output_end - output_start;
 	}
 
@@ -306,10 +306,10 @@ gdf_error gpu_apply_stencil(gdf_column *lhs, gdf_column * stencil, gdf_column * 
 	);
 
 	//copy the bitmask to device_vector of int8
-	thrust::copy(rmm::exec_policy(stream), bit_set_iter, bit_set_iter + num_values, valid_bit_mask.begin());
+	thrust::copy(rmm::exec_policy(stream)->on(stream), bit_set_iter, bit_set_iter + num_values, valid_bit_mask.begin());
 
 	//remove the values that don't pass the stencil
-	thrust::remove_if(rmm::exec_policy(stream),valid_bit_mask.begin(), valid_bit_mask.begin() + num_values,zipped_stencil_iter, is_stencil_true<thrust::detail::normal_iterator<thrust::device_ptr<int8_t> >::value_type >());
+	thrust::remove_if(rmm::exec_policy(stream)->on(stream),valid_bit_mask.begin(), valid_bit_mask.begin() + num_values,zipped_stencil_iter, is_stencil_true<thrust::detail::normal_iterator<thrust::device_ptr<int8_t> >::value_type >());
 
 	//recompact the values and store them in the output bitmask
 	//we can group them into pieces of 8 because we aligned this earlier on when we made the device_vector
@@ -319,7 +319,7 @@ gdf_error gpu_apply_stencil(gdf_column *lhs, gdf_column * stencil, gdf_column * 
 
 	//you may notice that we can write out more bytes than our valid_num_bytes, this only happens when we are not aligned to  GDF_VALID_BITSIZE bytes, becasue the
 	//arrow standard requires 64 byte alignment, this is a safe assumption to make
-	thrust::transform(rmm::exec_policy(stream), valid_bit_mask_group_8_iter, valid_bit_mask_group_8_iter + ((num_values + GDF_VALID_BITSIZE - 1) / GDF_VALID_BITSIZE),
+	thrust::transform(rmm::exec_policy(stream)->on(stream), valid_bit_mask_group_8_iter, valid_bit_mask_group_8_iter + ((num_values + GDF_VALID_BITSIZE - 1) / GDF_VALID_BITSIZE),
 			thrust::detail::make_normal_iterator(thrust::device_pointer_cast(output->valid)),bit_mask_pack_op());
 
 	cudaStreamSynchronize(stream);
@@ -378,7 +378,7 @@ size_t  get_right_byte_length(size_t column_size, size_t iter, size_t left_lengt
     return  (A | B);
 }
 
-gdf_error gpu_concat(gdf_column *lhs, gdf_column *rhs, gdf_column *output)
+gdf_error gdf_concat(gdf_column *lhs, gdf_column *rhs, gdf_column *output)
 {
 	GDF_REQUIRE( (lhs->dtype == output->dtype ) && ( rhs->dtype == output->dtype), GDF_VALIDITY_MISSING);
 	GDF_REQUIRE(output->size == lhs->size + rhs->size, GDF_COLUMN_SIZE_MISMATCH);

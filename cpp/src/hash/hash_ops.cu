@@ -76,7 +76,7 @@ struct hash_fnv_array_op : public thrust::unary_function< gdf_size_type, unsigne
 	}
 };
 
-gdf_error gpu_hash_columns(gdf_column ** columns_to_hash, int num_columns, gdf_column * output_column, void * stream_pvoid){
+gdf_error gdf_hash_columns(gdf_column ** columns_to_hash, int num_columns, gdf_column * output_column, void * stream_pvoid){
 	cudaStream_t * stream = (cudaStream_t *)stream_pvoid;
 	//TODO: require sizes of columsn to be same and > 0
 	//require column output type be int64 even though output is unsigned
@@ -113,7 +113,7 @@ gdf_error gpu_hash_columns(gdf_column ** columns_to_hash, int num_columns, gdf_c
 	auto begin = thrust::make_counting_iterator<gdf_size_type>(0);
 	auto end = thrust::make_counting_iterator<gdf_size_type>(0) + columns_to_hash[0]->size;
 	auto pointer_wrapper = thrust::device_pointer_cast((unsigned long long *) output_column->data);
-	thrust::transform(rmm::exec_policy(*stream),
+	thrust::transform(rmm::exec_policy(*stream)->on(*stream),
 			begin,
 			end,
 			thrust::detail::make_normal_iterator(pointer_wrapper),

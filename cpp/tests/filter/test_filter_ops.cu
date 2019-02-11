@@ -30,7 +30,7 @@
 
 /*
  ============================================================================
- Description : Compute gpu_comparison and apply_stencil of gdf_columns using Thrust on GPU
+ Description : Compute gdf_comparison and apply_stencil of gdf_columns using Thrust on GPU
  ============================================================================
  */
 
@@ -51,7 +51,7 @@ TEST_F(FilterOperationsTest, usage_example) {
 
     gdf_column output = gen_gdb_column<int8_t>(column_size, 0);
 
-    gdf_error error = gpu_comparison(&lhs, &rhs, &output, gdf_operator);
+    gdf_error error = gdf_comparison(&lhs, &rhs, &output, gdf_operator);
     EXPECT_TRUE(error == GDF_SUCCESS);
 
     std::cout << "Left" << std::endl;
@@ -66,7 +66,7 @@ TEST_F(FilterOperationsTest, usage_example) {
     check_column_for_comparison_operation<LeftValueType, RightValueType>(&lhs, &rhs, &output, gdf_operator);
 
     /// lhs.dtype === rhs.dtype
-    gpu_apply_stencil(&lhs, &output, &rhs);
+    gdf_apply_stencil(&lhs, &output, &rhs);
 
     check_column_for_stencil_operation<LeftValueType, RightValueType>(&lhs, &output, &rhs);
 
@@ -94,13 +94,13 @@ void test_filterops_using_templates(gdf_comparison_operator gdf_operator = GDF_E
 
             gdf_column output = gen_gdb_column<int8_t>(column_size, 0);
 
-            gdf_error error = gpu_comparison(&lhs, &rhs, &output, gdf_operator);
+            gdf_error error = gdf_comparison(&lhs, &rhs, &output, gdf_operator);
             EXPECT_TRUE(error == GDF_SUCCESS);
 
             check_column_for_comparison_operation<LeftValueType, RightValueType>(&lhs, &rhs, &output, gdf_operator);
 
             if (lhs.dtype == rhs.dtype ) {
-                gpu_apply_stencil(&lhs, &output, &rhs);
+                gdf_apply_stencil(&lhs, &output, &rhs);
                 check_column_for_stencil_operation<LeftValueType, RightValueType>(&lhs, &output, &rhs);
             }
 

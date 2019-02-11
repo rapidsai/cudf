@@ -38,13 +38,22 @@ class Column(object):
     """
     @classmethod
     def _concat(cls, objs):
+        if len(objs) == 0:
+            return Column(Buffer.null(np.float))
+
+        # Handle categories for categoricals
+        from cudf.dataframe.categorical import CategoricalColumn
+        if all(isinstance(o, CategoricalColumn) for o in objs):
+            new_cats = tuple(set([val for o in objs for val in o]))
+            objs = [o.cat().set_categories(new_cats) for o in objs]
+
         head = objs[0]
         for o in objs:
             if not o.is_type_equivalent(head):
                 raise ValueError("All series must be of same type")
         # Filter out inputs that have 0 length
         objs = [o for o in objs if len(o) > 0]
-        nulls = any(o.null_count for o in objs)
+        nulls = sum(o.null_count for o in objs)
         newsize = sum(map(len, objs))
         mem = rmm.device_array(shape=newsize, dtype=head.data.dtype)
         data = Buffer.from_empty(mem, size=newsize)
@@ -54,8 +63,7 @@ class Column(object):
         if nulls:
             mask = Buffer(utils.make_mask(newsize))
 
-        # Libcudf calculates the null_count so we don't need to set it
-        col = head.replace(data=data, mask=mask)
+        col = head.replace(data=data, mask=mask, null_count=nulls)
 
         # Performance the actual concatenation
         if newsize > 0:

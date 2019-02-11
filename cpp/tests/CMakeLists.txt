@@ -27,7 +27,7 @@ include_directories("${GTEST_INCLUDE_DIR}"
                     "${CMAKE_SOURCE_DIR}/src"
                     "${CMAKE_SOURCE_DIR}/thirdparty/cub"
                     "${CMAKE_SOURCE_DIR}/thirdparty/moderngpu/src"
-                    "${CMAKE_SOURCE_DIR}/thirdparty/cnmem/include")
+                    "${CMAKE_SOURCE_DIR}/thirdparty/rmm/include")
 
 ###################################################################################################
 # - library paths ---------------------------------------------------------------------------------
@@ -65,7 +65,7 @@ set(FILTER_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/filter/helper/utils.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/filter/test_example.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/filter/test_filter_ops.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/filter/test_gpu_concat.cu")
+    "${CMAKE_CURRENT_SOURCE_DIR}/filter/test_gdf_concat.cu")
 
 ConfigureTest(FILTER_TEST "${FILTER_TEST_SRC}")
 
@@ -100,6 +100,14 @@ set(BITMASK_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/bitmask/valid_ops_test.cu")
 
 ConfigureTest(BITMASK_TEST "${BITMASK_TEST_SRC}")
+
+###################################################################################################
+# - bit_mask tests ---------------------------------------------------------------------------------
+
+set(BIT_MASK_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/bitmask/bit_mask_test.cu")
+
+ConfigureTest(BIT_MASK_TEST "${BIT_MASK_TEST_SRC}")
 
 ###################################################################################################
 # - datetime tests --------------------------------------------------------------------------------
@@ -158,14 +166,6 @@ set(CSV_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/io/csv/csv_test.cu")
 
 ConfigureTest(CSV_TEST "${CSV_TEST_SRC}")
-
-###################################################################################################
-# - rmm tests -------------------------------------------------------------------------------------
-
-set(RMM_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/rmm/memory_tests.cpp")
-
-ConfigureTest(RMM_TEST "${RMM_TEST_SRC}")
 
 ###################################################################################################
 # - types tests -------------------------------------------------------------------------------------
