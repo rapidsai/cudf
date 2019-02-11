@@ -70,11 +70,14 @@ void gpu_transpose_valids(gdf_valid_type **in_cols_valid,
   gdf_size_type stride_x = blockDim.x * gridDim.x;
   gdf_size_type stride_y = blockDim.y * gridDim.y;
 
-  for(gdf_size_type i = x; i < ncols; i += stride_x)
+  gdf_size_type i = x;
+  gdf_size_type j = y;
+  auto active_threads = __ballot_sync(0xffffffff, i < ncols);
+  while(i < ncols)
   {
-    for(gdf_size_type j = y; j < nrows; j += stride_y)
+    j = y;
+    while(j < nrows)
     {
-      auto active_threads = __ballot_sync(0xffffffff, 1);
       bool const input_is_valid{gdf_is_valid(in_cols_valid[i], j)};
       MaskType const result_mask{__ballot_sync(active_threads, input_is_valid)};
 
@@ -89,7 +92,11 @@ void gpu_transpose_valids(gdf_valid_type **in_cols_valid,
         int num_nulls = __popc(active_threads) - __popc(result_mask);
         atomicAdd(out_cols_null_count + j, num_nulls);
       }
+      
+      j += stride_y;
     }
+    i += stride_x;
+    active_threads = __ballot_sync(active_threads, i < ncols);
   }
 }
 

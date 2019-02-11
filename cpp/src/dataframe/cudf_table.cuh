@@ -438,12 +438,6 @@ public:
 
   };
 
-  __device__
-  void* get_column_device_pointer(size_type column_index)
-  {
-    return d_columns_data_ptr[column_index];
-  }
-
   /* --------------------------------------------------------------------------*/
   /**
    * @Synopsis  Packs the validity mask of a specified row into a contiguous byte-buffer 
