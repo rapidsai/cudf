@@ -57,7 +57,7 @@ inline gdf_dtype gdf_enum_type_for<double>()
     return GDF_FLOAT64;
 }
 
-inline auto get_number_of_bytes_for_valid (size_t column_size) -> size_t {
+inline auto gdf_get_num_chars_bitmask (size_t column_size) -> size_t {
     return sizeof(gdf_valid_type) * (column_size + GDF_VALID_BITSIZE - 1) / GDF_VALID_BITSIZE;
 }
 
@@ -117,7 +117,7 @@ gdf_column convert_to_device_gdf_column (gdf_column *column) {
     cudaMemcpy(raw_pointer, host_out, sizeof(ValueType) * column->size, cudaMemcpyHostToDevice);
 
     gdf_valid_type *host_valid = column->valid;
-    size_t n_bytes = get_number_of_bytes_for_valid(column_size);
+    size_t n_bytes = gdf_get_num_chars_bitmask(column_size);
 
     gdf_valid_type *valid_value_pointer;
     RMM_ALLOC((void **)&valid_value_pointer, n_bytes, 0);
@@ -180,7 +180,7 @@ gdf_column gen_gdb_column(size_t column_size, ValueType init_value)
     //std::cout << "2. gen_gdb_column\n"; 
     
     gdf_valid_type *host_valid = gen_gdf_valid(column_size, init_value);
-    size_t n_bytes = get_number_of_bytes_for_valid(column_size);
+    size_t n_bytes = gdf_get_num_chars_bitmask(column_size);
 
     gdf_valid_type *valid_value_pointer;
     RMM_ALLOC((void **)&valid_value_pointer, n_bytes, 0);
@@ -246,7 +246,7 @@ void check_column_for_comparison_operation(gdf_column *lhs, gdf_column *rhs, gdf
         auto rhs_valid = get_gdf_valid_from_device(rhs);
         auto output_valid = get_gdf_valid_from_device(output);
         
-        size_t n_bytes = get_number_of_bytes_for_valid(output->size);
+        size_t n_bytes = gdf_get_num_chars_bitmask(output->size);
 
         EXPECT_EQ(lhs->size, rhs->size); 
         

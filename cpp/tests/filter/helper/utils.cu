@@ -10,7 +10,7 @@
 
 gdf_valid_type * get_gdf_valid_from_device(gdf_column* column) {
     gdf_valid_type * host_valid_out;
-    size_t n_bytes = get_number_of_bytes_for_valid(column->size);
+    size_t n_bytes = gdf_get_num_chars_bitmask(column->size);
     host_valid_out = new gdf_valid_type[n_bytes];
     cudaMemcpy(host_valid_out,column->valid, n_bytes, cudaMemcpyDeviceToHost);
     return host_valid_out;
@@ -18,7 +18,7 @@ gdf_valid_type * get_gdf_valid_from_device(gdf_column* column) {
 
 std::string gdf_valid_to_str(gdf_valid_type *valid, size_t column_size)
 {
-    size_t n_bytes = get_number_of_bytes_for_valid(column_size);
+    size_t n_bytes = gdf_get_num_chars_bitmask(column_size);
     std::string response;
     for (size_t i = 0; i < n_bytes; i++)
     {
@@ -38,7 +38,7 @@ gdf_valid_type* gen_gdf_valid(size_t column_size, size_t init_value)
     }
     else
     {
-        size_t n_bytes = get_number_of_bytes_for_valid (column_size);
+        size_t n_bytes = gdf_get_num_chars_bitmask (column_size);
         valid = new gdf_valid_type[n_bytes];
         size_t i;
         for (i = 0; i < n_bytes - 1; ++i)

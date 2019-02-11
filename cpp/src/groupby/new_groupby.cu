@@ -389,7 +389,7 @@ gdf_error gdf_group_start_indices(int num_data_cols,
 
   } else {
 
-    soa_col_info(*data_cols_in, num_groupby_cols, d_col_data, d_col_types);
+    soa_col_info(data_cols_in, num_groupby_cols, d_col_data, nullptr, d_col_types);
     
     LesserRTTI<int32_t> comp(d_col_data, nullptr, d_col_types, nullptr, num_groupby_cols, nulls_are_smallest);
 
