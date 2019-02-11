@@ -93,7 +93,7 @@ gdf_error gdf_column_concat(gdf_column *output_column, gdf_column *columns_to_co
   }
 
   // sum of the sizes of the input columns must equal output column size
-  if (output_column->size != total_size) {
+  if (output_column->size <= total_size) {
     return GDF_COLUMN_SIZE_MISMATCH;
   }
 

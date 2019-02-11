@@ -239,10 +239,18 @@ TEST_F(NVCategoryTest, TEST_NVCATEGORY_GROUPBY)
 	gdf_column * concat_out = create_nv_category_column(200,true);
 	category_column_groups_out->dtype_info.category = nullptr;
 
+	std::cout<<"calling concat"<<std::endl;
+
+	std::cout<<"calliing concat category is null = "<<(concat[0]->dtype_info.category == nullptr)<<std::endl;
+	std::cout<<"calliing concat category is null = "<<(output_groups[0]->dtype_info.category == nullptr)<<std::endl;
+
+
 	err = gdf_column_concat(concat_out,concat,2);
 
+	std::cout<<"called concat category is null = "<<(category_column_groups_out->dtype_info.category == nullptr)<<std::endl;
+
 	if(err != GDF_SUCCESS){
-		std::cout<<"WE ARE NOT JAMMIN!"<<std::endl;
+		std::cout<<"WE ARE NOT JAMMIN! "<<err<<std::endl;
 	}else{
 		std::cout<<"CONCAT"<<std::endl;
 	}

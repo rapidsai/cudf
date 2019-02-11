@@ -59,7 +59,7 @@ void print_typed_column(col_type * col_data,
     // If the element is valid, print it's value
     if(true == gdf_is_valid(h_mask.data(), i))
     {
-      std::cout << h_data[i] << " ";
+      std::cout << (int) h_data[i] << "\t";
     }
     // Otherwise, print an @ to represent a null value
     else

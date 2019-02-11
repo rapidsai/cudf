@@ -31,12 +31,13 @@ gdf_error create_nvcategory_from_indices(gdf_column * column, NVCategory * nv_ca
 		NVCategory::destroy(column->dtype_info.category);
 	}
 	column->dtype_info.category = new_category;
+	std::cout<<(column->dtype_info.category  == nullptr)<<std::endl;
 
 	NVStrings::destroy(strings);
 	return GDF_SUCCESS;
 }
 
-
+#include <iostream>
 gdf_error concat_categories(gdf_column * input_columns[],gdf_column * output_column, int num_columns){
 	gdf_dtype column_type = input_columns[0]->dtype;
 
@@ -54,6 +55,7 @@ gdf_error concat_categories(gdf_column * input_columns[],gdf_column * output_col
 		}
 	}
 
+	std::cout<<"Im this far!"<<std::endl;
 	//TODO: we have no way to jsut copy a category this will fail if someone calls concat
 	//on a single input
 	if(num_columns < 2){
@@ -61,15 +63,21 @@ gdf_error concat_categories(gdf_column * input_columns[],gdf_column * output_col
 	}
 	NVCategory * new_category = input_columns[0]->dtype_info.category;
 	NVCategory * temp_category;
+	std::cout<<"about to iterate!"<<std::endl;
 
-	for (int i = 1; i < num_columns; ++i) {
-		NVStrings * temp_strings = input_columns[0]->dtype_info.category->to_strings();
+	for (int i = 1; i < num_columns; i++) {
+		std::cout<<"dtype is "<<(input_columns[i]->dtype_info.category == nullptr)<<std::endl;
+		NVStrings * temp_strings = input_columns[i]->dtype_info.category->to_strings();
+		std::cout<<"made strings"<<std::endl;
 		temp_category = new_category->add_strings(*temp_strings);
+		std::cout<<"added strings"<<std::endl;
 		NVCategory::destroy(new_category);
+		std::cout<<"destroy cat"<<std::endl;
 		NVStrings::destroy(temp_strings);
+		std::cout<<"destroy strings"<<std::endl;
 		new_category = temp_category;
 	}
-
+	std::cout<<"made category!"<<std::endl;
 	new_category->get_values(
 			static_cast<nv_category_index_type *>(output_column->data),
 			true);
