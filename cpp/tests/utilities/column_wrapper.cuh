@@ -44,8 +44,25 @@
 namespace cudf {
 namespace test {
 
+/**---------------------------------------------------------------------------*
+ * @brief Wrapper for a gdf_column.
+ *
+ * An abstraction on top of a gdf_column that provides functionality for
+ * allocating, intiailizing, and otherwise managing gdf_column's for passing to
+ * libcudf APIs in unit testing.
+ *
+ * @tparam ColumnType The underlying data type of the column
+ *---------------------------------------------------------------------------**/
 template <typename ColumnType>
 struct column_wrapper {
+  /**---------------------------------------------------------------------------*
+   * @brief Construct a new column wrapper object
+   *
+   * Constructs a column_wrapper of the specified size with zero-intialized data
+   * and valid bitmask.
+   *
+   * @param column_size The desired size of the column
+   *---------------------------------------------------------------------------**/
   column_wrapper(gdf_size_type column_size) {
     std::vector<ColumnType> host_data(column_size, 0);
     std::vector<gdf_valid_type> host_bitmask(
@@ -53,17 +70,47 @@ struct column_wrapper {
     initialize_with_host_data(host_data, host_bitmask);
   }
 
-  column_wrapper(gdf_column const& other_column) : the_column{other_column} {}
-
+  /**---------------------------------------------------------------------------*
+   * @brief Construct a new column wrapper object
+   *
+   * Constructs a column_wrapper using a std::vector for the host data and valid
+   * bitmasks.
+   *
+   * @param host_data The vector of data to use for the column
+   * @param host_bitmask The validity bitmask to use for the column
+   *---------------------------------------------------------------------------**/
   column_wrapper(std::vector<ColumnType> const& host_data,
                  std::vector<gdf_valid_type> const& host_bitmask) {
     initialize_with_host_data(host_data, host_bitmask);
   }
 
+  /**---------------------------------------------------------------------------*
+   * @brief Construct a new column wrapper object
+   *
+   * Constructs a column_wrapper using a std::vector for the host data.
+   *
+   * The valid bitmask is not initialized.
+   *
+   * @param host_data The vector of data to use for the column
+   *---------------------------------------------------------------------------**/
   column_wrapper(std::vector<ColumnType> const& host_data) {
     initialize_with_host_data(host_data);
   }
 
+  /**---------------------------------------------------------------------------*
+   * @brief Construct a new column wrapper object
+   *
+   * Constructs a column_wrapper using a std::vector for the host data.
+   *
+   * The valid bitmask is initialized using the specified bit_initializer unary
+   * lambda that returns a bool. Bit `i` in the bitmask will be equal to
+   * `bit_intiializer(i)`.
+   *
+   * @tparam BitInitializerType The type of the bit initializer unary lambda
+   * @param host_data The vector of data to use for the column
+   * @param bit_initializer The unary lambda to intialize each bit of the
+   * bitmask
+   *---------------------------------------------------------------------------**/
   template <typename BitInitializerType>
   column_wrapper(std::vector<ColumnType> const& host_data,
                  BitInitializerType bit_initializer) {
@@ -80,6 +127,24 @@ struct column_wrapper {
     initialize_with_host_data(host_data, host_bitmask);
   }
 
+  /**---------------------------------------------------------------------------*
+   * @brief Construct a new column wrapper object
+   *
+   * Constructs a column wrapper using a unary lambda to initialize both the
+   * column's data and validity bitmasks.
+   *
+   * Element `i` in the column's data will be equal to `value_initializer(i)`.
+   *
+   * Bit `i` in the column's bitmask will be equal to `bit_initializer(i)`.
+   *
+   * @tparam ValueInitializerType The type of the value_initializer lambda
+   * @tparam BitInitializerType The type of the bit_initializer lambda
+   * @param column_size The desired size of the column
+   * @param value_initalizer The unary lambda to initialize each value in the
+   * column's data
+   * @param bit_initializer The unary lambda to initialize each bit in the
+   * column's bitmask
+   *---------------------------------------------------------------------------**/
   template <typename ValueInitializerType, typename BitInitializerType>
   column_wrapper(gdf_size_type column_size,
                  ValueInitializerType value_initalizer,
@@ -106,9 +171,20 @@ struct column_wrapper {
     the_column.size = 0;
   }
 
+  /**---------------------------------------------------------------------------*
+   * @brief Returns a pointer to the underlying gdf_column.
+   *
+   *---------------------------------------------------------------------------**/
   gdf_column* get() { return &the_column; }
   gdf_column const* get() const { return &the_column; }
 
+  /**---------------------------------------------------------------------------*
+   * @brief Copies the underying gdf_column's data and bitmask to the host.
+   *
+   * Returns a tuple of two std::vectors. The first is the column's data, and
+   * the second is the column's bitmask.
+   *
+   *---------------------------------------------------------------------------**/
   auto to_host() const {
     gdf_size_type const num_masks{gdf_get_num_chars_bitmask(the_column.size)};
     std::vector<ColumnType> host_data;
@@ -131,18 +207,37 @@ struct column_wrapper {
     return std::make_tuple(host_data, host_bitmask);
   }
 
+  /**---------------------------------------------------------------------------*
+   * @brief Prints the values of the underlying gdf_column.
+   *
+   *---------------------------------------------------------------------------**/
   void print() const {
     // TODO Move the implementation of `print_gdf_column` here once it's removed
     // from usage elsewhere
     print_gdf_column(&the_column);
   }
 
+  /**---------------------------------------------------------------------------*
+   * @brief Functor for comparing if two elements between two gdf_columns are
+   * equal.
+   *
+   *---------------------------------------------------------------------------**/
   struct elements_equal {
     gdf_column lhs_col;
     gdf_column rhs_col;
+    bool const nulls_are_equivalent;
 
-    __host__ __device__ elements_equal(gdf_column lhs, gdf_column rhs)
-        : lhs_col{lhs}, rhs_col{rhs} {}
+    /**---------------------------------------------------------------------------*
+     * @brief Constructs functor for comparing elements between two gdf_column's
+     *
+     * @param lhs The left column for comparison
+     * @param rhs The right column for comparison
+     * @param nulls_are_equal Desired behavior for whether or not nulls are
+     * treated as equal to other nulls. Defaults to true.
+     *---------------------------------------------------------------------------**/
+    __host__ __device__ elements_equal(gdf_column lhs, gdf_column rhs,
+                                       bool nulls_are_equal = true)
+        : lhs_col{lhs}, rhs_col{rhs}, nulls_are_equivalent{nulls_are_equal} {}
 
     __device__ bool operator()(gdf_index_type row) {
       bool const lhs_is_valid{gdf_is_valid(lhs_col.valid, row)};
@@ -158,8 +253,7 @@ struct column_wrapper {
         return false;
       }
 
-      // If both values are invalid, return true
-      return true;
+      return nulls_are_equivalent;
     }
   };
 
@@ -194,10 +288,23 @@ struct column_wrapper {
   }
 
  private:
+  /**---------------------------------------------------------------------------*
+   * @brief Allocates and initializes the underyling gdf_column with host data.
+   *
+   * Creates a gdf_column and copies data from the host for it's data and
+   * bitmask. Sets the corresponding dtype based on the column_wrapper's
+   * ColumnType.
+   *
+   * @param host_data The vector of host data to copy to device for the column's
+   * data
+   * @param host_bitmask Optional vector of host data for the column's bitmask
+   * to copy to device
+   *---------------------------------------------------------------------------**/
   void initialize_with_host_data(
       std::vector<ColumnType> const& host_data,
       std::vector<gdf_valid_type> const& host_bitmask =
           std::vector<gdf_valid_type>{}) {
+
     // Allocate device storage for gdf_column and copy contents from host_data
     RMM_ALLOC(&(the_column.data), host_data.size() * sizeof(ColumnType), 0);
     CUDA_RT_CALL(cudaMemcpy(the_column.data, host_data.data(),
@@ -214,6 +321,13 @@ struct column_wrapper {
     // If a validity bitmask vector was passed in, allocate device storage
     // and copy its contents from the host vector
     if (host_bitmask.size() > 0) {
+      gdf_size_type const required_bitmask_size{
+          gdf_get_num_chars_bitmask(host_data.size())};
+
+      if (host_bitmask.size() < required_bitmask_size) {
+        throw std::runtime_error("Insufficiently sized bitmask vector.");
+      }
+
       RMM_ALLOC(&(the_column.valid),
                 host_bitmask.size() * sizeof(gdf_valid_type), 0);
       CUDA_RT_CALL(cudaMemcpy(the_column.valid, host_bitmask.data(),
@@ -225,6 +339,15 @@ struct column_wrapper {
     set_null_count(&the_column);
   }
 
+/**---------------------------------------------------------------------------*
+ * @brief Compares if all the bits between two bitmasks are equal between [0, num_rows).
+ * 
+ * @param lhs  The left bitmask
+ * @param rhs  The right bitmask
+ * @param num_rows The count of the number of bits that correspond to rows.
+ * @return true If all bits [0, num_rows) are equal between the left and right bitmasks
+ * @return false If any bit [0, num_rows) are not equal between the left and right bitmasks
+*---------------------------------------------------------------------------**/
   bool compare_bitmasks(gdf_valid_type* lhs, gdf_valid_type* rhs,
                         gdf_size_type num_rows) const {
     gdf_size_type const num_masks{gdf_get_num_chars_bitmask(num_rows)};
