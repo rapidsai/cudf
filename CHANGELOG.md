@@ -12,10 +12,12 @@
 - PR #895 Add Series groupby
 - PR #898 Add DataFrame.groupby(level=0) support
 - PR #920 Add feather, JSON, HDF5, ORC readers / writers from PyArrow / Pandas
+- PR #888 CSV Reader: Add prefix parameter for column names, used when parsing without a header
 
 ## Improvements
 
 - PR #730 Improve performance of `gdf_table` constructor
+- PR #813 unified libcudf API functions by replacing gpu_ with gdf_
 - PR #822 Add support for `__cuda_array_interface__` for ingest
 - PR #756 Consolidate common helper functions from unordered map and multimap
 - PR #753 Improve performance of groupby sum and average, especially for cases with few groups.
@@ -24,6 +26,7 @@
 - PR #532 CSV Reader: Use type dispatcher instead of switch block
 - PR #878 Add better indexing to Groupby
 - PR #554 Add `empty` method and `is_monotonic` attribute to `Index`
+- PR #909 CSV Reader: Avoid host->device->host copy for header row data
 
 ## Bug Fixes
 
@@ -39,6 +42,7 @@
 - PR #876 Added missing `<type_traits>` include
 - PR #889 Deleted test_rmm.py which has now moved to RMM repo
 - PR #866 Merge v0.5.1 numpy ABI hotfix into 0.6
+- PR #917 value_counts return int type on empty columns
 
 
 # cuDF 0.5.1 (05 Feb 2019)
