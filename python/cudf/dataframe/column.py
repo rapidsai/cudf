@@ -66,9 +66,7 @@ class Column(object):
         col = head.replace(data=data, mask=mask, null_count=nulls)
 
         # Performance the actual concatenation
-        if len(objs) == 1:
-            return objs[0].copy()
-        elif newsize > 0:
+        if newsize > 0:
             col = _gdf._column_concat(objs, col)
 
         return col
