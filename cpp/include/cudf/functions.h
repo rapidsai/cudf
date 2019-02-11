@@ -834,6 +834,7 @@ gdf_error gdf_hash_columns(gdf_column ** columns_to_hash, int num_columns, gdf_c
  * gdf introspection utlities
  */
 
+gdf_size_type gdf_dtype_size(gdf_dtype dtype);
 gdf_error get_column_byte_width(gdf_column * col, int * width);
 
 /* 
@@ -949,3 +950,35 @@ gdf_error gdf_order_by(gdf_column** input_columns,
                        size_t       num_inputs,
                        gdf_column*  output_indices,
                        int          flag_nulls_are_smallest);
+
+// forward declaration for DLPack functions below
+struct DLManagedTensor;
+
+/** --------------------------------------------------------------------------*
+ * @brief Convert a DLPack DLTensor into gdf_column(s)
+ * 
+ * Currently only 1D tensors are supported.
+ * 
+ * @param[out] columns The output column(s)
+ * @param[out] num_columns The number of gdf_columns in columns
+ * @param[in] tensor The input DLPack DLTensor
+ * @return gdf_error GDF_SUCCESS if conversion is successful
+ * --------------------------------------------------------------------------**/
+gdf_error gdf_from_dlpack(gdf_column** columns,
+                          int *num_columns,
+                          DLManagedTensor const * tensor);
+
+/** --------------------------------------------------------------------------*
+ * @brief Convert an array of gdf_column(s) into a DLPack DLTensor
+ * 
+ * Currently only 1D tensors are supported, so only a single column may be 
+ * passed.
+ * 
+ * @param[out] tensor The output DLTensor
+ * @param[in] columns An array of pointers to gdf_column 
+ * @param[in] num_columns The number of input columns
+ * @return gdf_error GDF_SUCCESS if conversion is successful
+ * --------------------------------------------------------------------------**/
+gdf_error gdf_to_dlpack(DLManagedTensor *tensor,
+                        gdf_column const * columns[],
+                        int num_columns);

@@ -143,6 +143,7 @@ include_directories("${ARROW_INCLUDE_DIR}"
                     "${CMAKE_SOURCE_DIR}/thirdparty/cub"
                     "${CMAKE_SOURCE_DIR}/thirdparty/moderngpu/src"
                     "${CMAKE_SOURCE_DIR}/thirdparty/rmm/include"
+                    "${CMAKE_SOURCE_DIR}/thirdparty/dlpack/include"
                     "${ZLIB_INCLUDE_DIRS}")
 
 ###################################################################################################
@@ -201,6 +202,7 @@ add_library(cudf SHARED
             src/unary/unary_ops.cu
             # src/windowed/windowed_ops.cu ... this is broken
             src/io/convert/csr/cudf_to_csr.cu
+            src/io/convert/dlpack/cudf_dlpack.cpp
             src/io/csv/csv_reader.cu
             src/io/comp/uncomp.cpp
             src/io/comp/cpu_unbz2.cpp

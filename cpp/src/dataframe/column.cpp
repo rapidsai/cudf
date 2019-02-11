@@ -237,6 +237,17 @@ namespace{
     }
   };
 }
+
+/** --------------------------------------------------------------------------*
+ * @brief Get the size in bytes of a gdf_dtype
+ * 
+ * @param dtype The gdf_dtype to get the size of
+ * @return the size in bytes of the input dtype
+ * --------------------------------------------------------------------------**/
+gdf_size_type gdf_dtype_size(gdf_dtype dtype) {
+  return cudf::type_dispatcher(dtype, get_type_size{});
+}
+
 /** ---------------------------------------------------------------------------*
  * @brief Get the byte width of a column
  *
@@ -248,6 +259,6 @@ namespace{
 gdf_error get_column_byte_width(gdf_column * col, 
                                 int * width)
 {
-  *width = cudf::type_dispatcher(col->dtype, get_type_size{});
+  *width = gdf_dtype_size(col->dtype);
 	return GDF_SUCCESS;
 }
