@@ -19,15 +19,20 @@ from librmm_cffi import librmm as rmm
 class SeriesGroupBy(object):
     """Wraps DataFrameGroupby with special attr methods
     """
-    def __init__(self, source_series, group_series):
+    def __init__(self, source_series, group_series, level=None, sort=False):
         self.source_series = source_series
         self.group_series = group_series
+        self.level = level
+        self.sort = sort
 
     def __getattr__(self, attr):
         df = DataFrame()
         df['x'] = self.source_series
-        df['y'] = self.group_series
-        groupby = df.groupby('y')
+        if self.level is not None:
+            df['y'] = self.source_series.index
+        else:
+            df['y'] = self.group_series
+        groupby = df.groupby('y', level=self.level, sort=self.sort)
         result_df = getattr(groupby, attr)()
 
         def get_result():
@@ -42,7 +47,10 @@ class SeriesGroupBy(object):
     def agg(self, agg_types):
         df = DataFrame()
         df['x'] = self.source_series
-        df['y'] = self.group_series
+        if self.level is not None:
+            df['y'] = self.source_series.index
+        else:
+            df['y'] = self.group_series
         groupby = df.groupby('y').agg(agg_types)
         idx = groupby.index
         idx.name = None
