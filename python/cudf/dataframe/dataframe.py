@@ -1985,6 +1985,17 @@ class DataFrame(object):
         pq.to_parquet(self, path, compression=compression, index=index,
                       partition_cols=partition_cols, **kwargs)
 
+    def to_feather(self, path, **kwargs):
+        """
+        Write a DataFrame to the feather format.
+        Parameters
+        ----------
+        path : str
+            File path
+        """
+        import cudf.io.feather as feather
+        feather.to_feather(self, path, **kwargs)
+
 
 class Loc(object):
     """

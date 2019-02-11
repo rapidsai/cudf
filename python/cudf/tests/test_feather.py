@@ -13,8 +13,7 @@ from string import ascii_letters
 
 @pytest.fixture(params=[0, 1, 10, 100])
 def pdf(request):
-    types = ['bool', 'int8', 'int16', 'int32', 'int64', 'float32', 'float64',
-             'datetime64[ms]']
+    types = ['bool', 'int8', 'int16', 'int32', 'int64', 'float32', 'float64']
     renamer = {'C_l0_g' + str(idx): 'col_' + val for (idx, val) in
                enumerate(types)}
     typer = {'col_' + val: val for val in types}
@@ -38,10 +37,14 @@ def pdf(request):
                        .rename(renamer, axis=1)\
                        .astype(typer)
 
-    # Create non-numeric categorical data otherwise parquet may typecast it
+    # Create non-numeric categorical data otherwise may get typecasted
     data = [ascii_letters[np.random.randint(0, 52)] for i in
             range(request.param)]
     test_pdf['col_category'] = pd.Series(data, dtype='category')
+
+    # Feather can't handle indexes properly
+    test_pdf = test_pdf.reset_index(drop=True)
+    test_pdf.index.name = None
 
     return test_pdf
 
@@ -51,10 +54,10 @@ def gdf(pdf):
     return cudf.DataFrame.from_pandas(pdf)
 
 
-@pytest.fixture(params=['snappy', 'gzip', 'brotli', None])
-def parquet_file(request, tmp_path_factory, pdf):
-    fname = tmp_path_factory.mktemp("parquet") / "test.parquet"
-    pdf.to_parquet(fname, engine='pyarrow', compression=request.param)
+@pytest.fixture
+def feather_file(tmp_path_factory, pdf):
+    fname = tmp_path_factory.mktemp("feather") / "test.feather"
+    pdf.to_feather(fname)
     return fname
 
 
@@ -62,48 +65,25 @@ def parquet_file(request, tmp_path_factory, pdf):
 @pytest.mark.filterwarnings("ignore:Strings are not yet supported")
 @pytest.mark.parametrize('columns', [['col_int8'], ['col_category'],
                                      ['col_int32', 'col_float32'], None])
-def test_parquet_reader(parquet_file, columns):
-    expect = pd.read_parquet(parquet_file, columns=columns)
-    got = cudf.read_parquet(parquet_file, columns=columns)
-    if len(expect) == 0:
-        expect = expect.reset_index(drop=True)
-
-    # Pandas parquet reader converts the Arrow Dictionary Array to an `object`
-    # dtype instead of a `categorical` dtype even though the metadata
-    # explicitly states pandas_dtype `categorical`
-    if 'col_category' in expect.columns:
-        expect['col_category'] = expect['col_category'].astype('category')
+def test_feather_reader(feather_file, columns):
+    expect = pd.read_feather(feather_file, columns=columns)
+    got = cudf.read_feather(feather_file, columns=columns)
 
     assert_eq(expect, got, check_categorical=False)
 
 
 @pytest.mark.filterwarnings("ignore:Using CPU")
-def test_parquet_writer(tmpdir, pdf, gdf):
-    pdf_fname = tmpdir.join("pdf.parquet")
-    gdf_fname = tmpdir.join("gdf.parquet")
+def test_feather_writer(tmpdir, pdf, gdf):
+    pdf_fname = tmpdir.join("pdf.feather")
+    gdf_fname = tmpdir.join("gdf.feather")
 
-    pdf.to_parquet(pdf_fname)
-    gdf.to_parquet(gdf_fname)
+    pdf.to_feather(pdf_fname)
+    gdf.to_feather(gdf_fname)
 
     assert(os.path.exists(pdf_fname))
     assert(os.path.exists(gdf_fname))
 
-    expect = pa.parquet.read_pandas(pdf_fname)
-    got = pa.parquet.read_pandas(gdf_fname)
+    expect = pa.feather.read_table(pdf_fname)
+    got = pa.feather.read_table(gdf_fname)
 
-    # Pandas uses a datetime64[ns] while we use a datetime64[ms]
-    expect_idx = expect.schema.get_field_index('col_datetime64[ms]')
-    got_idx = got.schema.get_field_index('col_datetime64[ms]')
-    expect = expect.set_column(
-        expect_idx,
-        expect.column(expect_idx).cast(pa.date64())
-    )
-    expect = expect.replace_schema_metadata()
-    got = got.set_column(
-        got_idx,
-        got.column(got_idx).cast(pa.date64())
-    )
-    got = got.replace_schema_metadata()
-
-    # assert_eq(expect, got)
     assert pa.Table.equals(expect, got)
