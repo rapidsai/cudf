@@ -21,6 +21,7 @@
 #include <thrust/logical.h>
 #include <bitset>
 #include "cudf.h"
+#include "cudf_test_utils.cuh"
 #include "rmm/rmm.h"
 #include "utilities/bit_util.cuh"
 #include "utilities/type_dispatcher.hpp"
@@ -128,6 +129,12 @@ struct column_wrapper {
     }
 
     return std::make_tuple(host_data, host_bitmask);
+  }
+
+  void print() const {
+    // TODO Move the implementation of `print_gdf_column` here once it's removed
+    // from usage elsewhere
+    print_gdf_column(&the_column);
   }
 
   struct elements_equal {
