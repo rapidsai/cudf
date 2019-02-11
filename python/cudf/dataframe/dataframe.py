@@ -21,15 +21,15 @@ from librmm_cffi import librmm as rmm
 
 from cudf import formatting, _gdf
 from cudf.utils import cudautils, queryutils, applyutils, utils
-from .index import as_index, Index, RangeIndex
+from cudf.dataframe.index import as_index, Index, RangeIndex
 from cudf.dataframe.series import Series
 from cudf.settings import NOTSET, settings
 from cudf.comm.serialize import register_distributed_serializer
-from .categorical import CategoricalColumn
-from .buffer import Buffer
+from cudf.dataframe.categorical import CategoricalColumn
+from cudf.dataframe.buffer import Buffer
 from cudf._gdf import nvtx_range_push, nvtx_range_pop
 from cudf._sort import get_sorted_inds
-from . import columnops
+from cudf.dataframe import columnops
 
 import cudf.bindings.join as cpp_join
 
@@ -637,6 +637,7 @@ class DataFrame(object):
         else:
             index = index if isinstance(index, Index) else as_index(index)
             df = DataFrame()
+            df._index = index
             for k in self.columns:
                 df[k] = self[k].set_index(index)
             return df
@@ -1707,7 +1708,7 @@ class DataFrame(object):
             Sequence of column names. If columns is *None* (unspecified),
             all columns in the frame are used.
         """
-        from . import numerical
+        from cudf.dataframe import numerical
 
         if columns is None:
             columns = self.columns
@@ -1954,15 +1955,31 @@ class DataFrame(object):
             raise TypeError('not a pyarrow.Table')
 
         index_col = None
+        dtypes = None
         if isinstance(table.schema.metadata, dict):
             if b'pandas' in table.schema.metadata:
-                index_col = json.loads(
+                metadata = json.loads(
                     table.schema.metadata[b'pandas']
-                )['index_columns']
+                )
+                index_col = metadata['index_columns']
+                dtypes = {col['field_name']: col['pandas_type'] for col in
+                          metadata['columns'] if 'field_name' in col}
 
         df = cls()
         for col in table.columns:
-            df[col.name] = col.data
+            if dtypes:
+                dtype = dtypes[col.name]
+                if dtype == 'categorical':
+                    dtype = 'category'
+                elif dtype == 'date':
+                    dtype = 'datetime64[ms]'
+            else:
+                dtype = None
+
+            df[col.name] = columnops.as_column(
+                col.data,
+                dtype=dtype
+            )
         if index_col:
             df = df.set_index(index_col[0])
             new_index_name = pa.pandas_compat._backwards_compatible_index_name(
@@ -2059,6 +2076,29 @@ class DataFrame(object):
                                          exact=exact,
                                          quant_index=False)
         return result
+
+    def to_parquet(self, path, compression='snappy', index=None,
+                   partition_cols=None, **kwargs):
+        """
+        Write a DataFrame to the parquet format.
+        Parameters
+        ----------
+        path : str
+            File path or Root Directory path. Will be used as Root Directory
+            path while writing a partitioned dataset.
+        compression : {'snappy', 'gzip', 'brotli', None}, default 'snappy'
+            Name of the compression to use. Use ``None`` for no compression.
+        index : bool, default None
+            If ``True``, include the dataframe's index(es) in the file output.
+            If ``False``, they will not be written to the file. If ``None``,
+            the engine's default behavior will be used.
+        partition_cols : list, optional, default None
+            Column names by which to partition the dataset
+            Columns are partitioned in the order they are given
+        """
+        import cudf.io.parquet as pq
+        pq.to_parquet(self, path, compression=compression, index=index,
+                      partition_cols=partition_cols, **kwargs)
 
 
 class Loc(object):
