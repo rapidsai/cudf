@@ -294,13 +294,14 @@ def as_column(arbitrary, nan_as_null=True, dtype=None):
             data = as_column(arbitrary)
         elif isinstance(arbitrary, pa.BooleanArray):
             # Arrow uses 1 bit per value while we use int8
+            dtype = np.dtype(np.bool)
             arbitrary = arbitrary.cast(pa.int8())
-            pamask, padata = buffers_from_pyarrow(arbitrary)
+            pamask, padata = buffers_from_pyarrow(arbitrary, dtype=dtype)
             data = numerical.NumericalColumn(
                 data=padata,
                 mask=pamask,
                 null_count=arbitrary.null_count,
-                dtype='bool'
+                dtype=dtype
             )
         else:
             pamask, padata = buffers_from_pyarrow(arbitrary)
