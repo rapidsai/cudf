@@ -45,7 +45,7 @@ namespace cudf {
 namespace test {
 
 /**---------------------------------------------------------------------------*
- * @brief Wrapper for a gdf_column.
+ * @brief Wrapper for a gdf_column used for unit testing.
  *
  * An abstraction on top of a gdf_column that provides functionality for
  * allocating, intiailizing, and otherwise managing gdf_column's for passing to
@@ -58,15 +58,22 @@ struct column_wrapper {
   /**---------------------------------------------------------------------------*
    * @brief Construct a new column wrapper object
    *
-   * Constructs a column_wrapper of the specified size with zero-intialized data
-   * and valid bitmask.
+   * Constructs a column_wrapper of the specified size with zero-intialized data.
+   * 
+   * Optionally allocates a zero-initialized bitmask.
    *
    * @param column_size The desired size of the column
+   * @param allocate_bitmask Optionally allocate a zero-initialized bitmask 
    *---------------------------------------------------------------------------**/
-  column_wrapper(gdf_size_type column_size) {
+  column_wrapper(gdf_size_type column_size, bool allocate_bitmask = false) {
     std::vector<ColumnType> host_data(column_size, 0);
-    std::vector<gdf_valid_type> host_bitmask(
-        gdf_get_num_chars_bitmask(column_size), 0);
+    std::vector<gdf_valid_type> host_bitmask;
+
+    if(allocate_bitmask){
+        host_bitmask.resize(gdf_get_num_chars_bitmask(column_size));
+        std::fill(host_bitmask.begin(), host_bitmask.end(), 0);
+    }
+
     initialize_with_host_data(host_data, host_bitmask);
   }
 
