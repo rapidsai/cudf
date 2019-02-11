@@ -447,16 +447,9 @@ class DataFrame(object):
                         fn,
                 )
         else:
-            for col in self._cols:
-                if col in other._cols:
-                    result[col] = getattr(self._cols[col], internal_fn)(
-                            other._cols[col],
-                            fn,
-                    )
-                else:
-                    result[col] = Series(cudautils.full(self.shape[1],
-                                         np.dtype('float64').type(np.nan),
-                                         'float64'), nan_as_null=False)
+            raise NotImplementedError(
+                    "DataFrame operations with " + str(type(other)) + " not "
+                    "supported at this time.")
         return result
 
     def _binaryop(self, other, fn):
