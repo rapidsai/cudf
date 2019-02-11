@@ -115,6 +115,75 @@ decltype(auto) type_dispatcher(gdf_dtype dtype,
   return return_type();
 }
 
+/**---------------------------------------------------------------------------*
+ * @brief Type-traits struct for mapping a C++ type to it's corresponding
+ * gdf_dtype.
+ *
+ * This traits structure contains a `gdf_dtype` member `value` that returns the
+ * appropriate `gdf_dtype` for the specified C++ type.
+ *
+ * @tparam T The type to map to a `gdf_dtype`
+ *---------------------------------------------------------------------------**/
+template <typename T>
+struct type_to_gdf_dtype {
+  static constexpr gdf_dtype value{GDF_invalid};
+};
+
+template <>
+struct type_to_gdf_dtype<int8_t> {
+  static constexpr gdf_dtype value{GDF_INT8};
+};
+
+template <>
+struct type_to_gdf_dtype<int16_t> {
+  static constexpr gdf_dtype value{GDF_INT16};
+};
+
+template <>
+struct type_to_gdf_dtype<int32_t> {
+  static constexpr gdf_dtype value{GDF_INT32};
+};
+
+template <>
+struct type_to_gdf_dtype<int64_t> {
+  static constexpr gdf_dtype value{GDF_INT64};
+};
+
+template <>
+struct type_to_gdf_dtype<float> {
+  static constexpr gdf_dtype value{GDF_FLOAT32};
+};
+
+template <>
+struct type_to_gdf_dtype<double> {
+  static constexpr gdf_dtype value{GDF_FLOAT64};
+};
+
+template <>
+struct type_to_gdf_dtype<cudf::date32> {
+  static constexpr gdf_dtype value{GDF_DATE32};
+};
+
+template <>
+struct type_to_gdf_dtype<cudf::date64> {
+  static constexpr gdf_dtype value{GDF_DATE64};
+};
+
+template <>
+struct type_to_gdf_dtype<cudf::timestamp> {
+  static constexpr gdf_dtype value{GDF_TIMESTAMP};
+};
+
+template <>
+struct type_to_gdf_dtype<cudf::category> {
+  static constexpr gdf_dtype value{GDF_CATEGORY};
+};
+
+template <>
+struct type_to_gdf_dtype<NVStrings> {
+  static constexpr gdf_dtype value{GDF_STRING};
+};
+
 } // namespace cudf
 
 #endif
