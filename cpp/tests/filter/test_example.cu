@@ -74,11 +74,11 @@ TEST_F(Example, Equals)
 	print_column(&lhs);
 	std::cout << "Right" << std::endl;
 	print_column(&rhs);
-	error = gpu_comparison(&lhs, &rhs, &output, GDF_EQUALS); // gtest!
+	error = gdf_comparison(&lhs, &rhs, &output, GDF_EQUALS); // gtest!
 	std::cout << "Output" << std::endl;
 	print_column(&output);
 
-	error = gpu_comparison_static_i8(&lhs, 3, &output, GDF_EQUALS);
+	error = gdf_comparison_static_i8(&lhs, 3, &output, GDF_EQUALS);
 	ASSERT_EQ(error, GDF_SUCCESS);
  
 	std::cout << "Output static_i8" << std::endl;

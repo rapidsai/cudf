@@ -200,7 +200,7 @@ std::map<gdf_dtype, int16_t> column_type_width = {{GDF_INT8, sizeof(int8_t)}, {G
 //storing a map from gdf_type to width
 //TODO: add a way for the space where we store temp bitmaps for compaction be allocated
 //on the outside
-gdf_error gpu_apply_stencil(gdf_column *lhs, gdf_column * stencil, gdf_column * output){
+gdf_error gdf_apply_stencil(gdf_column *lhs, gdf_column * stencil, gdf_column * output){
 	//OK: add a rquire here that output and lhs are the same size
 	GDF_REQUIRE(output->size == lhs->size, GDF_COLUMN_SIZE_MISMATCH);
 	GDF_REQUIRE(lhs->dtype == output->dtype, GDF_DTYPE_MISMATCH);
@@ -378,7 +378,7 @@ size_t  get_right_byte_length(size_t column_size, size_t iter, size_t left_lengt
     return  (A | B);
 }
 
-gdf_error gpu_concat(gdf_column *lhs, gdf_column *rhs, gdf_column *output)
+gdf_error gdf_concat(gdf_column *lhs, gdf_column *rhs, gdf_column *output)
 {
 	GDF_REQUIRE( (lhs->dtype == output->dtype ) && ( rhs->dtype == output->dtype), GDF_VALIDITY_MISSING);
 	GDF_REQUIRE(output->size == lhs->size + rhs->size, GDF_COLUMN_SIZE_MISMATCH);
