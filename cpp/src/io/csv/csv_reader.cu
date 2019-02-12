@@ -94,6 +94,7 @@ typedef struct raw_csv_ {
     gdf_size_type skiprows;         ///< host: Number of rows to skip from the start
     gdf_size_type skipfooter;       ///< host: Number of rows to skip from the end
     std::vector<char> header;       ///< host: Header row data, for parsing column names
+    string prefix;                  ///< host: Prepended to column ID if there is no header or input column names
 
     rmm::device_vector<int32_t>	d_trueValues;		// device: array of values to recognize as true
     rmm::device_vector<int32_t>	d_falseValues;		// device: array of values to recognize as false
@@ -197,6 +198,84 @@ __device__ void setBit(gdf_valid_type* address, int bit) {
 		return base_padding + num_columns * column_bytes; 
 	}
 }
+/**
+* @brief Removes the first and Last quote in the string
+*/
+string removeQoutes(string str, char quotechar) {
+	// Exclude first and last quotation char
+	const size_t first_quote = str.find(quotechar);
+	if (first_quote != string::npos) {
+		str.erase(first_quote, 1);
+	}
+	const size_t  last_quote = str.rfind(quotechar);
+	if (last_quote != string::npos) {
+		str.erase(last_quote, 1);
+	}
+
+	return str;
+}
+
+/**
+ * @brief Parse the first row to set the column names in the raw_csv parameter 
+ *
+ * The first row can be either the header row, or the first data row
+ *
+ * @param[in,out] raw_csv Structure containing the csv parsing parameters
+ * and intermediate results
+ * 
+ * @return gdf_error with error code on failure, otherwise GDF_SUCCESS
+*/
+gdf_error setColumnNamesFromCsv(raw_csv_t* raw_csv) {
+	vector<char> first_row = raw_csv->header;
+	// No header, read the first data row
+	if (first_row.empty()) {
+		cu_recstart_t first_row_len{};
+		// If file only contains one row, raw_csv->recStart[1] is not valid
+		if (raw_csv->num_records > 1) {
+			CUDA_TRY(cudaMemcpy(&first_row_len, raw_csv->recStart + 1, sizeof(cu_recstart_t), cudaMemcpyDefault));
+		}
+		else {
+			// File has one row - use the file size for the row size
+			first_row_len = raw_csv->num_bytes / sizeof(char);
+		}
+		first_row.resize(first_row_len);
+		CUDA_TRY(cudaMemcpy(first_row.data(), raw_csv->data, raw_csv->num_bytes, cudaMemcpyDefault));
+	}
+
+	int num_cols = 0;
+
+	bool quotation	= false;
+	for (size_t pos = 0, prev = 0; pos < first_row.size(); ++pos) {
+		// Flip the quotation flag if current character is a quotechar
+		if(first_row[pos] == raw_csv->opts.quotechar) {
+			quotation = !quotation;
+		}
+		else if (!quotation &&
+				 (first_row[pos] == raw_csv->opts.delimiter ||
+				 first_row[pos] == raw_csv->opts.terminator)) {
+			// Got to the end of a column
+			if (raw_csv->header_row >= 0) {
+				// first_row is the header, add the column name
+				string new_col_name(first_row.data() + prev, pos - prev);
+				raw_csv->col_names.push_back(removeQoutes(new_col_name, raw_csv->opts.quotechar));
+			}
+			else {
+				// first_row is the first data row, add the automatically generated name
+				raw_csv->col_names.push_back(raw_csv->prefix + std::to_string(num_cols));
+			}
+			num_cols++;
+
+			// Skip adjacent delimiters if delim_whitespace is set
+			while (raw_csv->opts.multi_delimiter && 
+				   first_row[pos] == raw_csv->opts.delimiter && 
+				   first_row[pos + 1] == raw_csv->opts.delimiter) {
+				++pos;
+			}
+			prev = pos + 1;
+		}
+	}
+	return GDF_SUCCESS;
+}
 
 /**---------------------------------------------------------------------------*
  * @brief Read in a CSV file, extract all fields and return 
@@ -224,6 +303,7 @@ gdf_error read_csv(csv_read_arg *args)
 	raw_csv->skiprows = args->skiprows;
 	raw_csv->skipfooter = args->skipfooter;
 	raw_csv->nrows = args->nrows;
+	raw_csv->prefix = args->prefix == nullptr ? "" : string(args->prefix);
 
 	if (args->delim_whitespace) {
 		raw_csv->opts.delimiter = ' ';
@@ -439,64 +519,12 @@ gdf_error read_csv(csv_read_arg *args)
 
 	// Check if the user gave us a list of column names
 	if(args->names == nullptr) {
-		int h_num_cols = 0;
 
-		vector<char> data_row;
-		if (raw_csv->header.empty()) {
-			cu_recstart_t first_row_len{};
-			if (raw_csv->num_records > 1) {
-				CUDA_TRY(cudaMemcpy(&first_row_len, raw_csv->recStart + 1, sizeof(cu_recstart_t), cudaMemcpyDefault));
-			}
-			else {
-				first_row_len = raw_csv->num_bytes / sizeof(char);
-				std::cout << first_row_len << ' ';
-			}
-			data_row.resize(first_row_len);
-			CUDA_TRY(cudaMemcpy(data_row.data(), raw_csv->data, raw_csv->num_bytes, cudaMemcpyDefault));
+		error = setColumnNamesFromCsv(raw_csv);
+		if (error != GDF_SUCCESS) {
+			return error;
 		}
-		// Parse header row to assign column names
-		const auto& first_row = !raw_csv->header.empty() ? raw_csv->header : data_row;
-		const string str_prefix = args->prefix != nullptr ? string(args->prefix) : "";
-		bool quotation	= false;
-		for (size_t pos = 0, prev = 0; pos < first_row.size(); ++pos) {
-			if(first_row[pos] == raw_csv->opts.quotechar &&
-			(!quotation || pos == 0 || first_row[pos - 1] != '\\')) {
-				quotation = !quotation;
-				continue;
-			}
-			if (!quotation &&
-				(first_row[pos] == raw_csv->opts.delimiter ||
-				first_row[pos] == raw_csv->opts.terminator)) {
-					if (raw_csv->header_row >= 0) {
-						string new_col_name(first_row.data() + prev, pos - prev);
-						// Exclude first and last quotation char
-						const size_t first_quote = new_col_name.find(raw_csv->opts.quotechar);
-						if (first_quote != string::npos) {
-							new_col_name.erase(first_quote, 1);
-						}
-						const size_t  last_quote = new_col_name.rfind(raw_csv->opts.quotechar);
-						if (last_quote != string::npos) {
-							new_col_name.erase(last_quote, 1);
-						}
-
-						raw_csv->col_names.push_back(std::move(new_col_name));
-					}
-					else {
-						raw_csv->col_names.push_back(str_prefix + std::to_string(h_num_cols));
-					}
-				h_num_cols++;
-
-				while (raw_csv->opts.multi_delimiter && 
-					first_row[pos] == raw_csv->opts.delimiter && 
-					first_row[pos + 1] == raw_csv->opts.delimiter) {
-						++pos;
-				}
-				if (!quotation && first_row[pos] == raw_csv->opts.terminator) {
-					break;
-				}
-				prev = pos + 1;
-			}
-		}
+		const int h_num_cols = raw_csv->col_names.size();
 
 		// Allocating a boolean array that will use to state if a column needs to read or filtered.
 		raw_csv->h_parseCol = (bool*)malloc(sizeof(bool) * (h_num_cols));
