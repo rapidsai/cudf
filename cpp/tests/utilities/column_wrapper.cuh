@@ -57,29 +57,32 @@ namespace test {
 template <typename ColumnType>
 struct column_wrapper {
   /**---------------------------------------------------------------------------*
-   * @brief Construct a new column wrapper object
+   * @brief Construct a new column wrapper of a specified size with zero
+   * initialized data.
    *
-   * Constructs a column_wrapper of the specified size with zero-intialized data.
-   * 
+   * Constructs a column_wrapper of the specified size with zero-intialized
+   *data.
+   *
    * Optionally allocates a zero-initialized bitmask.
    *
    * @param column_size The desired size of the column
-   * @param allocate_bitmask Optionally allocate a zero-initialized bitmask 
+   * @param allocate_bitmask Optionally allocate a zero-initialized bitmask
    *---------------------------------------------------------------------------**/
   column_wrapper(gdf_size_type column_size, bool allocate_bitmask = false) {
     std::vector<ColumnType> host_data(column_size, 0);
     std::vector<gdf_valid_type> host_bitmask;
 
-    if(allocate_bitmask){
-        host_bitmask.resize(gdf_get_num_chars_bitmask(column_size));
-        std::fill(host_bitmask.begin(), host_bitmask.end(), 0);
+    if (allocate_bitmask) {
+      host_bitmask.resize(gdf_get_num_chars_bitmask(column_size));
+      std::fill(host_bitmask.begin(), host_bitmask.end(), 0);
     }
 
     initialize_with_host_data(host_data, host_bitmask);
   }
 
   /**---------------------------------------------------------------------------*
-   * @brief Construct a new column wrapper object
+   * @brief Construct a new column wrapper using host vectors for data and
+   * bitmask.
    *
    * Constructs a column_wrapper using a std::vector for the host data and valid
    * bitmasks.
@@ -93,7 +96,8 @@ struct column_wrapper {
   }
 
   /**---------------------------------------------------------------------------*
-   * @brief Construct a new column wrapper object
+   * @brief Construct a new column wrapper using host vector for data with
+   * unallocated bitmask.
    *
    * Constructs a column_wrapper using a std::vector for the host data.
    *
@@ -106,7 +110,8 @@ struct column_wrapper {
   }
 
   /**---------------------------------------------------------------------------*
-   * @brief Construct a new column wrapper object
+   * @brief Construct a new column wrapper using host vector for column data and
+   * lambda initializer for the bitmask.
    *
    * Constructs a column_wrapper using a std::vector for the host data.
    *
@@ -136,7 +141,8 @@ struct column_wrapper {
   }
 
   /**---------------------------------------------------------------------------*
-   * @brief Construct a new column wrapper object
+   * @brief Construct a new column wrapper using lambda initializers for both
+   * the column's data and bitmask.
    *
    * Constructs a column wrapper using a unary lambda to initialize both the
    * column's data and validity bitmasks.
@@ -312,7 +318,6 @@ struct column_wrapper {
       std::vector<ColumnType> const& host_data,
       std::vector<gdf_valid_type> const& host_bitmask =
           std::vector<gdf_valid_type>{}) {
-
     // Allocate device storage for gdf_column and copy contents from host_data
     RMM_ALLOC(&(the_column.data), host_data.size() * sizeof(ColumnType), 0);
     CUDA_RT_CALL(cudaMemcpy(the_column.data, host_data.data(),
@@ -347,15 +352,18 @@ struct column_wrapper {
     set_null_count(&the_column);
   }
 
-/**---------------------------------------------------------------------------*
- * @brief Compares if all the bits between two bitmasks are equal between [0, num_rows).
- * 
- * @param lhs  The left bitmask
- * @param rhs  The right bitmask
- * @param num_rows The count of the number of bits that correspond to rows.
- * @return true If all bits [0, num_rows) are equal between the left and right bitmasks
- * @return false If any bit [0, num_rows) are not equal between the left and right bitmasks
-*---------------------------------------------------------------------------**/
+  /**---------------------------------------------------------------------------*
+   * @brief Compares if all the bits between two bitmasks are equal between [0,
+   *num_rows).
+   *
+   * @param lhs  The left bitmask
+   * @param rhs  The right bitmask
+   * @param num_rows The count of the number of bits that correspond to rows.
+   * @return true If all bits [0, num_rows) are equal between the left and right
+   *bitmasks
+   * @return false If any bit [0, num_rows) are not equal between the left and
+   *right bitmasks
+   *---------------------------------------------------------------------------**/
   bool compare_bitmasks(gdf_valid_type* lhs, gdf_valid_type* rhs,
                         gdf_size_type num_rows) const {
     gdf_size_type const num_masks{gdf_get_num_chars_bitmask(num_rows)};
