@@ -66,7 +66,7 @@ namespace jit {
 
     private:
         std::vector<std::string> compilerFlags { "-std=c++14" };
-        std::vector<std::string> headersName { "operation.h" , "traits.h" , "gdf_data.h" };
+        std::vector<std::string> headersName { "operation.h" , "traits.h" };
 
     private:
         jitify::Program program;

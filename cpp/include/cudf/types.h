@@ -35,29 +35,6 @@ typedef enum {
 } gdf_dtype;
 
 
-/**
- * @union gdf_data
- * @brief Union used for scalar type.
- * It stores a unique value for scalar type.
- * It has a direct relationship with the gdf_dtype.
- */
-typedef union {
-    int8_t   si08;  /**< GDF_INT8      */
-    int16_t  si16;  /**< GDF_INT16     */
-    int32_t  si32;  /**< GDF_INT32     */
-    int64_t  si64;  /**< GDF_INT64     */
-    uint8_t  ui08;  /**< GDF_UINT8     */
-    uint16_t ui16;  /**< GDF_UINT16    */
-    uint32_t ui32;  /**< GDF_UINT32    */
-    uint64_t ui64;  /**< GDF_UINT64    */
-    float    fp32;  /**< GDF_FLOAT32   */
-    double   fp64;  /**< GDF_FLOAT64   */
-    int32_t  dt32;  /**< GDF_DATE32    */
-    int64_t  dt64;  /**< GDF_DATE64    */
-    int64_t  tmst;  /**< GDF_TIMESTAMP */
-} gdf_data;
-
-
 /* --------------------------------------------------------------------------*/
 /**
  * @Synopsis  These are all possible gdf error codes that can be returned from
@@ -124,9 +101,8 @@ typedef struct {
  * @var is_valid A boolean that represents whether the scalar is null.
  */
 typedef struct {
-    gdf_data  data;
+    void*  data;
     gdf_dtype dtype;
-    bool      is_valid;
 } gdf_scalar;
 
 

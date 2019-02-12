@@ -26,13 +26,12 @@ R"***(
     #include <cstdint>
     #include "traits.h"
     #include "operation.h"
-    #include "gdf_data.h"
 
     template <typename TypeOut, typename TypeVax, typename TypeVay, typename TypeOpe>
     __global__
     void kernel_v_s(int size,
-                    TypeOut* out_data, TypeVax* vax_data, gdf_data vay_data,
-                    uint32_t* out_valid, uint32_t* vax_valid, uint32_t vay_valid) {
+                    TypeOut* out_data, TypeVax* vax_data, TypeVay* vay_data,
+                    uint32_t* out_valid, uint32_t* vax_valid) {
         int tid = threadIdx.x;
         int blkid = blockIdx.x;
         int blksz = blockDim.x;
@@ -42,11 +41,11 @@ R"***(
         int step = blksz * gridsz;
 
         for (int i=start; i<size; i+=step) {
-            out_data[i] = TypeOpe::template operate<TypeOut, TypeVax, TypeVay>(vax_data[i], (TypeVay)vay_data);
+            out_data[i] = TypeOpe::template operate<TypeOut, TypeVax, TypeVay>(vax_data[i], vay_data[0]);
 
             if ((i % warpSize) == 0) {
                 int index = i / warpSize;
-                out_valid[index] = vax_valid[index] & vay_valid;
+                out_valid[index] = vax_valid[index];
             }
         }
     }

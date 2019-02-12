@@ -45,6 +45,9 @@ namespace jit {
         if (scalar == nullptr) {
             return Option(false, GDF_DATASET_EMPTY);
         }
+        if (scalar->data == nullptr) {
+            return Option(false, GDF_DATASET_EMPTY);
+        }
         if ((scalar->dtype <= GDF_invalid) || (N_GDF_TYPES <= scalar->dtype)) {
             return Option(false, GDF_UNSUPPORTED_DTYPE);
         }
