@@ -1309,8 +1309,6 @@ def test_binops_series(pdf, gdf, binop):
     gdf = gdf + 1.0
     d = binop(pdf.x, pdf.y)
     g = binop(gdf.x, gdf.y)
-    print(d)
-    print(g)
     assert_eq(d, g)
 
 
