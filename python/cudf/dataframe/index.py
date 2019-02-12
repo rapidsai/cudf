@@ -171,9 +171,11 @@ class RangeIndex(Index):
 
     def copy(self, deep=True):
         if(deep):
-            return deepcopy(self)
+            result = deepcopy(self)
         else:
-            return copy(self)
+            result = copy(self)
+        result.name = self.name
+        return result
 
     def __repr__(self):
         return "{}(start={}, stop={})".format(self.__class__.__name__,
@@ -252,7 +254,7 @@ class RangeIndex(Index):
 
     def to_pandas(self):
         return pd.RangeIndex(start=self._start, stop=self._stop,
-                             dtype=self.dtype)
+                             dtype=self.dtype, name=self.name)
 
 
 def index_from_range(start, stop=None, step=None):
@@ -291,6 +293,7 @@ class GenericIndex(Index):
         else:
             result = copy(self)
         result._values = self._values.copy(deep)
+        result.name = self.name
         return result
 
     def serialize(self, serialize):
@@ -476,8 +479,7 @@ def as_index(arbitrary, name=None):
     elif isinstance(arbitrary, CategoricalColumn):
         return CategoricalIndex(arbitrary, name=name)
     else:
-        name = None
-        if hasattr(arbitrary, 'name'):
+        if hasattr(arbitrary, 'name') and name is None:
             name = arbitrary.name
         if len(arbitrary) == 0:
             return RangeIndex(0, 0, name=name)

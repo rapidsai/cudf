@@ -9,6 +9,18 @@ import pandas as pd
 import numpy as np
 import pyarrow as pa
 from string import ascii_letters
+from distutils.version import LooseVersion
+
+
+if LooseVersion(pd.__version__) < LooseVersion('0.24'):
+    try:
+        import feather # noqa F401
+        _have_feather = True
+    except ImportError:
+        _have_feather = False
+    if not _have_feather:
+        pytest.skip('Feather is not installed and is required for Pandas <'
+                    ' 0.24', allow_module_level=True)
 
 
 @pytest.fixture(params=[0, 1, 10, 100])
@@ -56,16 +68,6 @@ def gdf(pdf):
 
 @pytest.fixture
 def feather_file(tmp_path_factory, pdf):
-    from distutils.version import LooseVersion
-    if LooseVersion(pd.__version__) < LooseVersion('0.24'):
-        try:
-            import feather # noqa F401
-            _have_feather = True
-        except ImportError:
-            _have_feather = False
-        if not _have_feather:
-            pytest.skip('Feather is not installed and is required for Pandas <'
-                        ' 0.24')
     fname = tmp_path_factory.mktemp("feather") / "test.feather"
     pdf.to_feather(fname)
     return fname

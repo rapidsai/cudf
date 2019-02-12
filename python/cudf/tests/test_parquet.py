@@ -30,7 +30,7 @@ def pdf(request):
     )
     # Delete the name of the column index, and rename the row index
     del(test_pdf.columns.name)
-    test_pdf.index.name = 'index'
+    test_pdf.index.name = 'test_index'
 
     # Cast all the column dtypes to objects, rename them, and then cast to
     # appropriate types
