@@ -306,3 +306,23 @@ TEST(ColumnByteWidth, TestByteWidth)
     EXPECT_EQ(pair.second, byte_width);
   }
 }
+
+TEST(ColumnByteWidth, TestGdfTypeSize)
+{ 
+
+  std::map<gdf_dtype, int> enum_to_type_size { {GDF_INT8, sizeof(int8_t)},
+                                                  {GDF_INT16, sizeof(int16_t)},
+                                                  {GDF_INT32, sizeof(int32_t)},
+                                                  {GDF_INT64, sizeof(int64_t)},
+                                                  {GDF_FLOAT32, sizeof(float)},
+                                                  {GDF_FLOAT64, sizeof(double)},
+                                                  {GDF_DATE32, sizeof(gdf_date32)},
+                                                  {GDF_DATE64, sizeof(gdf_date64)},
+                                                  {GDF_TIMESTAMP, sizeof(gdf_timestamp)},
+                                                  {GDF_CATEGORY, sizeof(gdf_category)}
+                                                };
+  for(auto const& pair : enum_to_type_size)
+  {
+    EXPECT_EQ(pair.second, gdf_dtype_size(pair.first));
+  }
+}
