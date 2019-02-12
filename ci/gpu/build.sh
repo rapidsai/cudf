@@ -80,7 +80,7 @@ pip install cupy-cuda92
 
 # Temporarily install feather for testing
 logger "conda install feather-format"
-conda install -y feather-format
+conda install -c conda-forge -y feather-format
 
 logger "Python py.test for libcudf..."
 cd $WORKSPACE/cpp/build/python
