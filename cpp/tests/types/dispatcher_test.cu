@@ -22,12 +22,12 @@
 #endif
 
 #include <cudf.h>
+#include <thrust/device_vector.h>
+#include <cstdint>
 #include <utilities/type_dispatcher.hpp>
 #include "gtest/gtest.h"
 #include "tests/utilities/cudf_test_fixtures.h"
 #include "utilities/tuple_for_each.hpp"
-#include <thrust/device_vector.h>
-#include <cstdint>
 
 /**
  * @file dispatcher_test.cu
@@ -35,10 +35,28 @@
  */
 
 struct DispatcherTest : public GdfTest {
+  /**---------------------------------------------------------------------------*
+   * @brief Lists every type dispatched by the type_dispatcher.
+   *
+   * This tuple *must* list every type supported by the type_dispatcher.
+   *
+   * Furthemore, type_to_gdf_dtype must have a specialization for each of these
+   * types that maps to the corresponding gdf_dtype.
+   *
+   *---------------------------------------------------------------------------**/
   std::tuple<int8_t, int16_t, int32_t, int64_t, float, double, cudf::date32,
              cudf::date64, cudf::timestamp, cudf::category>
       supported_types;
 
+  /**---------------------------------------------------------------------------*
+   * @brief Lists every gdf_dtype that the type_dispatcher supports.
+   *
+   * This vector *must* list every gdf_dtype supported by the type_dispatcher.
+   *
+   * If a new type gdf_dtype is added, but this list is not updated, then the
+   * tests will fail.
+   *
+   *---------------------------------------------------------------------------**/
   std::vector<gdf_dtype> supported_dtypes{
       GDF_INT8,    GDF_INT16,  GDF_INT32,  GDF_INT64,     GDF_FLOAT32,
       GDF_FLOAT64, GDF_DATE32, GDF_DATE64, GDF_TIMESTAMP, GDF_CATEGORY};
@@ -111,7 +129,6 @@ TEST_F(DispatcherTest, DeviceDispatchFunctor) {
     EXPECT_EQ(true, result[0]);
   }
 }
-
 
 using DispatcherDeathTest = DispatcherTest;
 
