@@ -456,14 +456,12 @@ def digitize(column, bins, right=False):
 
     Returns
     -------
-    A NumericalColumn[int32] containing the indices
+    A device array containing the indices
     """
     assert column.dtype == bins.dtype
-    buf = Buffer(rmm.device_array(len(column), dtype=np.int32))
-    result = NumericalColumn(data=buf, dtype=buf.dtype)
-    d_bins = rmm.to_device(bins)
-    cpp_sort.digitize(column, d_bins, result, right)
-    return result
+    bins_buf = Buffer(rmm.to_device(bins))
+    bin_col = NumericalColumn(data=bins_buf, dtype=bins.dtype)
+    return cpp_sort.digitize(column, bin_col, right)
 
 
 register_distributed_serializer(NumericalColumn)

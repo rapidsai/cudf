@@ -682,7 +682,6 @@ cdef extern from "cudf.h" nogil:
 
 
     cdef gdf_error gdf_digitize(gdf_column* col,
-                                void* bins,
-                                size_t num_bins,
+                                gdf_column* bins,
                                 bool right,
-                                gdf_column* out_col_indices);
+                                gdf_index_type* out_indices);

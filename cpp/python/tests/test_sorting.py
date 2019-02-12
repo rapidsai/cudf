@@ -89,14 +89,14 @@ def test_digitize(num_rows, num_bins, right, dtype):
     bin_data.sort()
     bin_data = np.unique(bin_data)
     d_bin_data = rmm.to_device(bin_data)
+    bins = new_column()
+    libgdf.gdf_column_view(bins, unwrap_devary(d_bin_data), ffi.NULL, len(bin_data),
+                           get_dtype(d_bin_data.dtype))
 
     out_ary = np.zeros(num_rows, dtype=np.int32)
     d_out = rmm.to_device(out_ary)
-    col_out = new_column()
-    libgdf.gdf_column_view(col_out, unwrap_devary(d_out), ffi.NULL,
-                           out_ary.size, get_dtype(d_out.dtype))
 
-    libgdf.gdf_digitize(col_in, unwrap_devary(d_bin_data), len(bin_data), right, col_out)
+    libgdf.gdf_digitize(col_in, bins, right, unwrap_devary(d_out))
 
     result = d_out.copy_to_host()
     expected = np.digitize(col_data, bin_data, right)

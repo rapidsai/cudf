@@ -952,23 +952,27 @@ gdf_error gdf_order_by(gdf_column** input_columns,
 
 /* --------------------------------------------------------------------------*
  * @brief Finds the indices of the bins in which each value of the column
- * belongs. For `x` in `col`, if `right == false` this function finds
+ * belongs.
+ *
+ * For `x` in `col`, if `right == false` this function finds
  * `i` such that `bins[i-1] <= x < bins[i]`. If `right == true`, it will find `i`
  * such that `bins[i - 1] < x <= bins[i]`. Finally, if `x < bins[0]` or
  * `x > bins[num_bins - 1]`, it sets the index to `0` or `num_bins`, respectively.
  *
+ * NOTE: This function does not handle null values and will return an error if `col`
+ * or `bins` contain any.
+ *
  * @param[in] col gdf_column with the values to be binned
- * @param[in] bins Device array of ascending bin boundaries
- * @param[in] num_bins Length of bins
+ * @param[in] bins gdf_column of ascending bin boundaries
  * @param[in] right Whether the intervals should include the left or right bin edge
- * @param[out] out_col_indices Pre-allocated gdf_column to be filled with bin indices
+ * @param[out] out_indices Output device array of same size as `col`
+ * to be filled with bin indices
  *
  * @return GDF_SUCCESS upon successful completion, otherwise an
  *         appropriate error code.
  *
  * ----------------------------------------------------------------------------*/
 gdf_error gdf_digitize(gdf_column* col,
-                       void* bins,   // same type as col
-                       size_t num_bins,
+                       gdf_column* bins,   // same type as col
                        bool right,
-                       gdf_column* out_col_indices);
+                       gdf_index_type out_indices[]);

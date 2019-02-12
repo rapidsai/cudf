@@ -10,6 +10,7 @@
 from .cudf_cpp cimport *
 from .cudf_cpp import *
 
+import numpy as np
 import pandas as pd
 import pyarrow as pa
 
@@ -53,24 +54,23 @@ cpdef apply_order_by(in_cols, out_indices, ascending=True, na_position=1):
     check_gdf_error(result)
 
 
-cpdef digitize(column, bins, out_indices, right=False):
+cpdef digitize(column, bins, right=False):
     check_gdf_compatibility(column)
     cdef gdf_column* in_col = column_view_from_column(column)
 
-    check_gdf_compatibility(out_indices)
-    cdef gdf_column* out_col_indices = column_view_from_column(out_indices)
+    check_gdf_compatibility(bins)
+    cdef gdf_column* bins_col = column_view_from_column(bins)
 
-    cdef size_t num_bins = len(bins)
-    cdef uintptr_t bins_ptr = get_ctype_ptr(bins)
     cdef bool cright = right
-
     cdef gdf_error result
+    out = rmm.device_array(len(column), dtype=np.int32)
+    cdef uintptr_t out_ptr = get_ctype_ptr(out)
 
     with nogil:
         result = gdf_digitize(<gdf_column*> in_col,
-                              <void*> bins_ptr,
-                              <size_t> num_bins,
+                              <gdf_column*> bins_col,
                               <bool> cright,
-                              <gdf_column*> out_col_indices)
+                              <gdf_index_type*> out_ptr)
 
     check_gdf_error(result)
+    return out

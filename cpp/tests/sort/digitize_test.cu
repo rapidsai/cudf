@@ -24,6 +24,7 @@
 #include "tests/utilities/cudf_test_fixtures.h"
 #include "tests/utilities/cudf_test_utils.cuh"
 
+#include <rmm/rmm.h>
 #include <rmm/thrust_rmm_allocator.h>
 
 
@@ -33,11 +34,11 @@ struct DigitizeTest : public GdfTest {
     typename std::unique_ptr<gdf_column, std::function<void(gdf_column*)>>;
 
   std::vector<ColumnType> col_in_data;
-  std::vector<ColumnType> bins;
-  std::vector<int32_t> col_out_data;
+  std::vector<ColumnType> bins_data;
+  std::vector<gdf_index_type> out_data;
 
   gdf_col_pointer col_in;
-  gdf_col_pointer col_out;
+  gdf_col_pointer bins;
 
   DigitizeTest(){
     // Use constant seed so the psuedo-random order is the same each time
@@ -54,15 +55,21 @@ struct DigitizeTest : public GdfTest {
     initialize_vector(col_in_data, column_length, column_range, false);
     col_in = create_gdf_column(col_in_data);
 
-    initialize_vector(bins, bins_length, bins_range, true);
+    initialize_vector(bins_data, bins_length, bins_range, true);
+    bins = create_gdf_column(bins_data);
 
-    col_out_data.resize(column_length);
-    col_out = create_gdf_column(col_out_data);
   }
 
   gdf_error digitize(bool right) {
-    rmm::device_vector<ColumnType> d_bins = bins;
-    return gdf_digitize(col_in.get(), d_bins.data().get(), bins.size(), right, col_out.get());
+
+    rmm::device_vector<gdf_index_type> out_indices_dev(col_in->size);
+    gdf_error result = gdf_digitize(col_in.get(), bins.get(), right, out_indices_dev.data().get());
+    out_data.resize(out_indices_dev.size());
+    cudaMemcpy(out_data.data(),
+               out_indices_dev.data().get(),
+               out_indices_dev.size() * sizeof(gdf_index_type),
+               cudaMemcpyDeviceToHost);
+    return result;
   }
 };
 
@@ -83,40 +90,26 @@ TYPED_TEST(DigitizeTest, LowerBound)
   EXPECT_EQ(result, GDF_SUCCESS);
 }
 
-TEST(DigitizeTest, UnsupportedTypeTest) {
-
-  std::vector<gdf_dtype> unsupported_types{ GDF_invalid, GDF_DATE32, GDF_DATE64, GDF_STRING, N_GDF_TYPES};
-  for (auto const &t : unsupported_types) {
-    rmm::device_vector<double> bins(10);
-    std::vector<double> col_data(100);
-    gdf_col_pointer col_in = create_gdf_column(col_data);
-    gdf_col_pointer col_out = create_gdf_column(std::vector<uint32_t>(100));
-
-    // Override type with unsupported type
-    col_in.get()->dtype = t;
-    gdf_error err = gdf_digitize(col_in.get(), bins.data().get(), bins.size(), true, col_out.get());
-    EXPECT_EQ(err, GDF_UNSUPPORTED_DTYPE);
-  }
-}
-
 void digitize_detail(bool right, const std::vector<int32_t>& expected) {
-  std::vector<double> bins{0, 2, 5, 7, 8};
-  rmm::device_vector<double> d_bins = bins;
+  std::vector<double> bins_data{0, 2, 5, 7, 8};
+  gdf_col_pointer bins = create_gdf_column(bins_data);
 
   std::vector<double> col_in_data{-10, 0, 1, 2, 3, 8, 9};
   gdf_col_pointer col_in = create_gdf_column(col_in_data);
 
-  std::vector<int32_t> col_out_data(col_in_data.size());
-  gdf_col_pointer col_out = create_gdf_column(col_out_data);
-  gdf_error result = gdf_digitize(col_in.get(), d_bins.data().get(), bins.size(), right, col_out.get());
+  rmm::device_vector<gdf_index_type> out_indices_dev(col_in_data.size());
+  gdf_error result = gdf_digitize(col_in.get(), bins.get(), right, out_indices_dev.data().get());
 
+  std::vector<gdf_index_type> out_indices(out_indices_dev.size());
+  cudaMemcpy(out_indices.data(),
+             out_indices_dev.data().get(),
+             out_indices_dev.size() * sizeof(gdf_index_type),
+             cudaMemcpyDeviceToHost);
   EXPECT_EQ(result, GDF_SUCCESS);
 
   const size_t num_rows = col_in_data.size();
-  std::vector<int32_t> actual(num_rows);
-  cudaMemcpy(actual.data(), col_out->data, num_rows * sizeof(int32_t), cudaMemcpyDeviceToHost);
   for (unsigned int i = 0; i < num_rows; ++i) {
-    EXPECT_EQ(expected[i], actual[i]);
+    EXPECT_EQ(expected[i], out_indices[i]);
   }
 }
 

@@ -25,46 +25,45 @@
 
 
 namespace { // unnamed namespace
-  template<typename ColumnType>
-  void binary_search_bound(
-    bool upper_bound,
-    void *bins,
-    const size_t& num_bins,
-    void *col_data,
-    const size_t& num_rows,
-    uint32_t *output)
-  {
-    ColumnType const * const p_bins{static_cast<ColumnType*>(bins)};
-    ColumnType const * const p_values{static_cast<ColumnType const*>(col_data)};
-    if (upper_bound)
-      thrust::upper_bound(rmm::exec_policy()->on(0), p_bins, p_bins + num_bins, p_values, p_values + num_rows, output, thrust::less_equal<ColumnType>());
-    else
-      thrust::lower_bound(rmm::exec_policy()->on(0), p_bins, p_bins + num_bins, p_values, p_values + num_rows, output, thrust::less_equal<ColumnType>());
-  }
+  struct binary_search_bound{
+
+    template<typename ColumnType>
+    void operator()(
+      bool upper_bound,
+      void *bins,
+      const size_t& num_bins,
+      void *col_data,
+      const size_t& num_rows,
+      gdf_index_type *output)
+    {
+      ColumnType const * const p_bins{static_cast<ColumnType*>(bins)};
+      ColumnType const * const p_values{static_cast<ColumnType const*>(col_data)};
+      if (upper_bound)
+        thrust::upper_bound(rmm::exec_policy()->on(0), p_bins, p_bins + num_bins, p_values, p_values + num_rows, output, thrust::less_equal<ColumnType>());
+      else
+        thrust::lower_bound(rmm::exec_policy()->on(0), p_bins, p_bins + num_bins, p_values, p_values + num_rows, output, thrust::less_equal<ColumnType>());
+    }
+  };
 } // end unnamed namespace
 
 gdf_error gdf_digitize(gdf_column* col,
-                       void* bins,   // same type as col
-                       size_t num_bins,
+                       gdf_column* bins,   // same type as col
                        bool right,
-                       gdf_column* out_col_indices)
+                       gdf_index_type out_indices[])
 {
+  GDF_REQUIRE(nullptr != col, GDF_DATASET_EMPTY);
+  GDF_REQUIRE(nullptr != bins, GDF_DATASET_EMPTY);
+  GDF_REQUIRE(nullptr != out_indices, GDF_DATASET_EMPTY);
 
-  using size_type = int64_t;
-  const size_type num_rows = col->size;
-  thrust::device_vector<uint32_t> output(size_type);
-  uint32_t * p_output = static_cast<uint32_t*>(out_col_indices->data);
-  const gdf_dtype gdf_input_type = col->dtype;
+  GDF_REQUIRE(col->dtype == bins->dtype, GDF_DTYPE_MISMATCH);
 
-  switch (gdf_input_type) {
-    case GDF_INT8:    { binary_search_bound<int8_t>( right, bins, num_bins, col->data,num_rows, p_output); break; }
-    case GDF_INT16:   { binary_search_bound<int16_t>( right, bins, num_bins, col->data,num_rows, p_output); break; }
-    case GDF_INT32:   { binary_search_bound<int32_t>( right, bins, num_bins, col->data,num_rows, p_output); break; }
-    case GDF_INT64:   { binary_search_bound<int64_t>( right, bins, num_bins, col->data,num_rows, p_output); break; }
-    case GDF_FLOAT32: { binary_search_bound<float>( right, bins, num_bins, col->data,num_rows, p_output); break; }
-    case GDF_FLOAT64: { binary_search_bound<double>( right, bins, num_bins, col->data,num_rows, p_output);  break; }
-    default: return GDF_UNSUPPORTED_DTYPE;
-  }
+  // TODO: Handle when col or bins have null values
+  GDF_REQUIRE(!col->null_count, GDF_VALIDITY_UNSUPPORTED);
+  GDF_REQUIRE(!bins->null_count, GDF_VALIDITY_UNSUPPORTED);
+
+  cudf::type_dispatcher(col->dtype,
+                        binary_search_bound{},
+                        right, bins->data, bins->size, col->data, col->size, out_indices);
 
   CUDA_CHECK_LAST();
 
