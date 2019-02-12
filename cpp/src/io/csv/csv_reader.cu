@@ -1379,9 +1379,21 @@ struct ConvertFunctor {
   }
 };
 
-
+/**---------------------------------------------------------------------------*
+ * @brief CUDA kernel iterates over the data until the end of the current field
+ * 
+ * Also iterates over (one or more) delimiter characters after the field.
+ *
+ * @param[in] raw_csv The entire CSV data to read
+ * @param[in] opts A set of parsing options
+ * @param[in] pos Offset to start the seeking from 
+ * @param[in] stop Offset of the end of the row
+ *
+ * @return long position of the last character in the field, including the 
+ *  delimiter(s) folloing the field data
+ *---------------------------------------------------------------------------**/
 __device__ 
-long seekColumnEnd(const char *raw_csv, const ParseOptions opts, long pos, long stop) {
+long seekFieldEnd(const char *raw_csv, const ParseOptions opts, long pos, long stop) {
 	bool quotation	= false;
 	while(true){
 		// Use simple logic to ignore control chars between any quote seq
@@ -1466,7 +1478,7 @@ void convertCsvToGdf(char *raw_csv,
 		if(start>stop)
 			break;
 
-		pos = seekColumnEnd(raw_csv, opts, pos, stop);
+		pos = seekFieldEnd(raw_csv, opts, pos, stop);
 
 		if(parseCol[col]==true){
 
@@ -1592,7 +1604,7 @@ void dataTypeDetection(char *raw_csv,
 		if(start>stop)
 			break;
 
-		pos = seekColumnEnd(raw_csv, opts, pos, stop);
+		pos = seekFieldEnd(raw_csv, opts, pos, stop);
 
 		// Checking if this is a column that the user wants --- user can filter columns
 		if(parseCol[col]==true){
