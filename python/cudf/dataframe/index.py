@@ -184,13 +184,10 @@ class RangeIndex(Index):
 
     def __getitem__(self, index):
         if isinstance(index, slice):
-            start, stop = utils.normalize_slice(index, len(self))
+            start, stop, step, _ = utils.standard_python_slice(len(self), index)
             start += self._start
             stop += self._start
-            if index.step is None:
-                return RangeIndex(start, stop)
-            else:
-                return index_from_range(start, stop, index.step)
+            return index_from_range(start, stop, step)
         elif isinstance(index, int):
             index = utils.normalize_index(index, len(self))
             index += self._start
