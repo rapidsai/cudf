@@ -4,6 +4,7 @@ from cudf.dataframe.dataframe import DataFrame
 
 import pandas as pd
 import warnings
+from distutils.version import LooseVersion
 
 
 def read_json(path_or_buf=None, orient=None, typ='frame', dtype=True,
@@ -103,6 +104,15 @@ def read_json(path_or_buf=None, orient=None, typ='frame', dtype=True,
 
     warnings.warn("Using CPU via Pandas to read JSON dataset, this may "
                   "be GPU accelerated in the future")
+
+    if LooseVersion(pd.__version__) < LooseVersion('0.24'):
+        if compression == 'infer':
+            warnings.warn("Can't infer compression when using Pandas version <"
+                          " 0.24, please manually specify the compression via "
+                          "'compression' parameter, setting compression to "
+                          "None")
+            compression = None
+
     pd_table = pd.read_json(
         path_or_buf=path_or_buf,
         orient=orient,

@@ -84,6 +84,7 @@ def test_json_reader(json_file):
     assert_eq(expect, got, check_categorical=False)
 
 
+@pytest.mark.filterwarnings("ignore:Can't infer compression")
 @pytest.mark.filterwarnings("ignore:Using CPU")
 def test_json_writer(tmpdir, pdf, gdf):
     pdf_fname = tmpdir.join("pdf.json")
