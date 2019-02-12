@@ -109,9 +109,9 @@ def standard_python_slice(len_idx, arg):
     if (step < 0 and stop >= start) or (step > 0 and start >= stop):
         slice_length = 0
     elif step < 0:
-        slice_length = (stop - start + 1)/step + 1
+        slice_length = (stop - start + 1)//step + 1
     else:
-        slice_length = (stop - start - 1)/step + 1
+        slice_length = (stop - start - 1)//step + 1
 
     return start, stop, step, slice_length
 

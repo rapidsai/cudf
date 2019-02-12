@@ -33,7 +33,11 @@ def gpu_arange(start, size, step, out):
 def arange(start, stop=None, step=1, dtype=np.int64):
     if stop is None:
         start, stop = 0, start
-    size = (stop - start + (step - 1)) // step
+    if step < 0:
+        size = (stop - start + 1) // step + 1
+    else:
+        size = (stop - start - 1) // step + 1
+
     if size < 0:
         msgfmt = "size={size} in arange({start}, {stop}, {step}, {dtype})"
         raise ValueError(msgfmt.format(size=size, start=start, stop=stop,
