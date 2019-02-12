@@ -1343,21 +1343,11 @@ def test_reductions(pdf, gdf, accessor, func):
     assert_eq(func(accessor(pdf)), func(accessor(gdf)))
 
 
-@pytest.mark.parametrize('left', [
-    pytest.param(lambda df: df, marks=pytest.mark.xfail()),
-    lambda df: df.x,
-    lambda df: 3,
-])
-@pytest.mark.parametrize('right', [
-    pytest.param(lambda df: df, marks=pytest.mark.xfail()),
-    lambda df: df.x,
-    lambda df: 3,
-])
 @pytest.mark.parametrize('binop', [
     operator.add,
     operator.mul,
-    pytest.param(operator.floordiv, marks=pytest.mark.xfail()),
-    pytest.param(operator.truediv, marks=pytest.mark.xfail()),
+    operator.floordiv,
+    operator.truediv,
     pytest.param(operator.mod, marks=pytest.mark.xfail()),
     pytest.param(operator.pow, marks=pytest.mark.xfail()),
     operator.eq,
@@ -1367,9 +1357,33 @@ def test_reductions(pdf, gdf, accessor, func):
     operator.ge,
     operator.ne,
 ])
-def test_binops(pdf, gdf, left, right, binop):
-    d = binop(left(pdf), right(pdf))
-    g = binop(left(gdf), right(gdf))
+def test_binops_df(pdf, gdf, binop):
+    pdf = pdf + 1.0
+    gdf = gdf + 1.0
+    d = binop(pdf, pdf)
+    g = binop(gdf, gdf)
+    assert_eq(d, g)
+
+
+@pytest.mark.parametrize('binop', [
+    operator.add,
+    operator.mul,
+    operator.floordiv,
+    operator.truediv,
+    pytest.param(operator.mod, marks=pytest.mark.xfail()),
+    pytest.param(operator.pow, marks=pytest.mark.xfail()),
+    operator.eq,
+    operator.lt,
+    operator.le,
+    operator.gt,
+    operator.ge,
+    operator.ne,
+])
+def test_binops_series(pdf, gdf, binop):
+    pdf = pdf + 1.0
+    gdf = gdf + 1.0
+    d = binop(pdf.x, pdf.y)
+    g = binop(gdf.x, gdf.y)
     assert_eq(d, g)
 
 
