@@ -1,10 +1,12 @@
 from collections import namedtuple
 
 import numpy as np
+import pyarrow as pa
 
 from numba import njit
 
 from librmm_cffi import librmm as rmm
+
 
 mask_dtype = np.dtype(np.uint8)
 mask_bitsize = mask_dtype.itemsize * 8
@@ -124,3 +126,29 @@ def standard_python_slice(len_idx, arg):
 
 
 list_types_tuple = (list, np.array)
+
+
+def buffers_from_pyarrow(pa_arr, dtype=None):
+    from cudf.dataframe.buffer import Buffer
+
+    if pa_arr.buffers()[0]:
+        pamask = Buffer(
+            np.array(pa_arr.buffers()[0]).view('int8')
+        )
+    else:
+        pamask = None
+
+    if dtype:
+        new_dtype = dtype
+    else:
+        if isinstance(pa_arr, pa.DictionaryArray):
+            new_dtype = pa_arr.indices.type.to_pandas_dtype()
+        else:
+            new_dtype = pa_arr.type.to_pandas_dtype()
+
+    padata = Buffer(
+        np.array(pa_arr.buffers()[1]).view(new_dtype)[
+            pa_arr.offset:pa_arr.offset + len(pa_arr)
+        ]
+    )
+    return (pamask, padata)

@@ -82,6 +82,8 @@ def columnview(size, data, mask=None, dtype=None, null_count=None):
     if mask is not None:
         assert null_count is not None
     dtype = dtype or data.dtype
+    if pd.api.types.is_categorical_dtype(dtype):
+        dtype = data.dtype
     return _columnview(size=size, data=unwrap(data), mask=unwrap(mask),
                        dtype=dtype, null_count=null_count)
 
@@ -131,10 +133,7 @@ np_gdf_dict = {np.float64: libgdf.GDF_FLOAT64,
 def np_to_gdf_dtype(dtype):
     """Util to convert numpy dtype to gdf dtype.
     """
-    if pd.api.types.is_categorical_dtype(dtype):
-        return libgdf.GDF_INT8
-    else:
-        return np_gdf_dict[np.dtype(dtype).type]
+    return np_gdf_dict[np.dtype(dtype).type]
 
 
 def gdf_to_np_dtype(dtype):
