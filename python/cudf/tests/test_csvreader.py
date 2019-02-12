@@ -820,9 +820,9 @@ def test_csv_reader_delim_whitespace():
 
     # should raise an error if used with delimiter or sep
     with pytest.raises(ValueError):
-        read_csv(StringIO(buffer),delim_whitespace=True, delimiter=' ')
+        read_csv(StringIO(buffer), delim_whitespace=True, delimiter=' ')
     with pytest.raises(ValueError):
-        read_csv(StringIO(buffer),delim_whitespace=True, sep=' ')
+        read_csv(StringIO(buffer), delim_whitespace=True, sep=' ')
 
 
 def test_csv_reader_unnamed_cols():
