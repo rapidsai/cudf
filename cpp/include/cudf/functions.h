@@ -952,7 +952,9 @@ gdf_error gdf_order_by(gdf_column** input_columns,
                        int          flag_nulls_are_smallest);
 
 // forward declaration for DLPack functions below
+// This approach is necessary to satisfy CFFI
 struct DLManagedTensor;
+typedef struct DLManagedTensor DLManagedTensor_;
 
 /** --------------------------------------------------------------------------*
  * @brief Convert a DLPack DLTensor into gdf_column(s)
@@ -966,7 +968,7 @@ struct DLManagedTensor;
  * --------------------------------------------------------------------------**/
 gdf_error gdf_from_dlpack(gdf_column** columns,
                           int *num_columns,
-                          DLManagedTensor const * tensor);
+                          const DLManagedTensor_ * tensor);
 
 /** --------------------------------------------------------------------------*
  * @brief Convert an array of gdf_column(s) into a DLPack DLTensor
@@ -979,6 +981,6 @@ gdf_error gdf_from_dlpack(gdf_column** columns,
  * @param[in] num_columns The number of input columns
  * @return gdf_error GDF_SUCCESS if conversion is successful
  * --------------------------------------------------------------------------**/
-gdf_error gdf_to_dlpack(DLManagedTensor *tensor,
-                        gdf_column const * columns[],
+gdf_error gdf_to_dlpack(DLManagedTensor_ *tensor,
+                        const gdf_column * columns[],
                         int num_columns);
