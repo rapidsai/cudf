@@ -949,4 +949,3 @@ gdf_error gdf_order_by(gdf_column** input_columns,
                        size_t       num_inputs,
                        gdf_column*  output_indices,
                        int          flag_nulls_are_smallest);
-
