@@ -31,6 +31,7 @@
 #include "utilities/cudf_utils.h"
 
 #include <tests/utilities/cudf_test_fixtures.h>
+#include <tests/utilities/cudf_test_utils.cuh>
 
 // See this header for all of the recursive handling of tuples of vectors
 #include "test_parameters_wo.cuh"
@@ -50,6 +51,8 @@ template <class test_parameters>
 struct GroupByWoAggTest : public GdfTest {
   // // The aggregation type is passed via a member of the template argument class
   // const agg_op op = test_parameters::op;
+
+  const GroupByOutType group_output_type {test_parameters::group_output_type};
 
   gdf_context ctxt;
  
@@ -74,10 +77,10 @@ struct GroupByWoAggTest : public GdfTest {
   std::vector<output_t> input_value;
 
   //contains grouped by column output of the gdf groupby call
-  multi_column_t output_key;
+  multi_column_t cpu_data_cols_out;
 
   //contains the aggregated output column
-  std::vector<output_t> output_value;
+  std::vector<output_t> cpu_out_indices;
 
   // Type for a unique_ptr to a gdf_column with a custom deleter
   // Custom deleter is defined at construction
@@ -88,15 +91,15 @@ struct GroupByWoAggTest : public GdfTest {
   std::vector<gdf_col_pointer> gdf_input_key_columns;
   gdf_col_pointer gdf_input_value_column;
 
-  std::vector<gdf_col_pointer> gdf_output_key_columns;
-  gdf_col_pointer gdf_output_value_column;
+  std::vector<gdf_col_pointer> gdf_cpu_data_cols_out_columns;
+  gdf_col_pointer gdf_output_indices_column;
 
   // Containers for the raw pointers to the gdf_columns that will be used as input
   // to the gdf_group_by functions
   std::vector<gdf_column*> gdf_raw_input_key_columns;
   gdf_column* gdf_raw_input_val_column;
-  std::vector<gdf_column*> gdf_raw_output_key_columns;
-  gdf_column* gdf_raw_output_val_column;
+  std::vector<gdf_column*> gdf_raw_gdf_data_cols_out_columns;
+  gdf_column* gdf_raw_out_indices;
 
   GroupByWoAggTest()
   {
@@ -105,8 +108,13 @@ struct GroupByWoAggTest : public GdfTest {
     static size_t number_of_instantiations{0};
     std::srand(number_of_instantiations++);
 
-    ctxt.flag_groupby_include_nulls = 0;
-    ctxt.flag_nulls_sort_behavior = 0;
+    if (this->group_output_type == GroupByOutType::SQL) {
+      ctxt.flag_groupby_include_nulls = 1;
+      ctxt.flag_nulls_sort_behavior = 0;
+    } else {
+      ctxt.flag_groupby_include_nulls = 0;
+      ctxt.flag_nulls_sort_behavior = 0;
+    }
   }
 
   ~GroupByWoAggTest()
@@ -140,17 +148,25 @@ struct GroupByWoAggTest : public GdfTest {
     EXPECT_EQ(cudaMemcpy(the_column->data, host_vector.data(), host_vector.size() * sizeof(col_type), cudaMemcpyHostToDevice), cudaSuccess);
     if(host_valid != nullptr) {
       auto valid_size = gdf_get_num_chars_bitmask(host_vector.size());
-      EXPECT_EQ(RMM_ALLOC((void**)&(the_column->valid), valid_size, 0), RMM_SUCCESS);
+      // std::cout << "CudfPaddedLength(valid_size): " << CudfPaddedLength(valid_size) << std::endl;
+      EXPECT_EQ(RMM_ALLOC((void**)&(the_column->valid), CudfPaddedLength(valid_size), 0), RMM_SUCCESS);
       EXPECT_EQ(cudaMemcpy(the_column->valid, host_valid, valid_size, cudaMemcpyHostToDevice), cudaSuccess);
     }
     else {
       int valid_size = gdf_get_num_chars_bitmask(host_vector.size());
-      EXPECT_EQ(RMM_ALLOC((void**)&(the_column->valid), valid_size, 0), RMM_SUCCESS);
+      EXPECT_EQ(RMM_ALLOC((void**)&(the_column->valid), CudfPaddedLength(valid_size), 0), RMM_SUCCESS);
       EXPECT_EQ(cudaMemset(the_column->valid, 0xff, valid_size), cudaSuccess);
     }
 
     // Fill the gdf_column members
-    the_column->null_count = n_count;
+    // the_column->null_count = n_count;
+
+    int valid_count;
+    auto gdf_status = gdf_count_nonzero_mask(the_column->valid, host_vector.size(), &valid_count);
+    the_column->null_count = host_vector.size() - valid_count;
+    assert (gdf_status == GDF_SUCCESS);
+
+
     the_column->size = host_vector.size();
     the_column->dtype = gdf_col_type;
     gdf_dtype_extra_info extra_info;
@@ -203,7 +219,7 @@ struct GroupByWoAggTest : public GdfTest {
       print_tuple_vector(input_key);
 
       std::cout << "Value column(s) created. Size: " << input_value.size() << std::endl;
-      print_vector(input_value);
+      // print_vector(input_value); //todo@!
 
       std::cout << "\n==============================================" << std::endl;
 
@@ -242,41 +258,37 @@ struct GroupByWoAggTest : public GdfTest {
   }
 
   void create_gdf_output_buffers(const size_t key_count, const size_t value_per_key, const size_t max_key, const size_t max_val, bool print = false) {
-      // initialize_keys(output_key, key_count, value_per_key, max_key, 0, false);
-      // initialize_values(output_value, key_count, value_per_key, max_val, 0);
+      // initialize_keys(cpu_data_cols_out, key_count, value_per_key, max_key, 0, false);
+      // initialize_values(cpu_out_indices, key_count, value_per_key, max_val, 0);
 
       size_t shuffle_seed = rand();
-      initialize_keys(output_key, key_count, value_per_key, max_key, shuffle_seed);
-      initialize_values(output_value, key_count, value_per_key, max_val, shuffle_seed);
+      initialize_keys(cpu_data_cols_out, key_count, value_per_key, max_key, shuffle_seed);
+      initialize_values(cpu_out_indices, key_count, value_per_key, max_val, shuffle_seed);
     
-      gdf_output_key_columns = initialize_gdf_columns(output_key);
-      gdf_output_value_column = create_gdf_column(output_value);
-      for(auto const& c : gdf_output_key_columns){
-        gdf_raw_output_key_columns.push_back(c.get());
+      gdf_cpu_data_cols_out_columns = initialize_gdf_columns(cpu_data_cols_out);
+      gdf_output_indices_column = create_gdf_column(cpu_out_indices);
+      for(auto const& c : gdf_cpu_data_cols_out_columns){
+        gdf_raw_gdf_data_cols_out_columns.push_back(c.get());
       }
       if(print)
       {
-        std::cout << "gdf_output_key_columns. Size: " << gdf_output_key_columns.size() << "|" << gdf_output_key_columns[0]->size << std::endl;
+        std::cout << "gdf_cpu_data_cols_out_columns. Size: " << gdf_cpu_data_cols_out_columns.size() << "|" << gdf_cpu_data_cols_out_columns[0]->size << std::endl;
        
-        std::cout << "gdf_output_value_column. Size: " << gdf_output_value_column->size << std::endl;
+        std::cout << "gdf_output_indices_column. Size: " << gdf_output_indices_column->size << std::endl;
        
         std::cout << "\n==============================================" << std::endl;
 
       }
-      gdf_raw_output_val_column = gdf_output_value_column.get();
+      gdf_raw_out_indices = gdf_output_indices_column.get();
   }
 
   map_t
-  compute_reference_solution(int flag_groupby_include_nulls = 0) {
+  compute_reference_solution() {
       map_t key_val_map; 
       for (size_t i = 0; i < input_value.size(); ++i) {
           auto l_key = extractKey(input_key, i);
-          if (flag_groupby_include_nulls == 0) { // pandas style
-              auto sch = key_val_map.find(l_key);
-              if (sch == key_val_map.end()) {
-                key_val_map.emplace(l_key, input_value[i]);
-              }
-          } else { // sql style
+          auto sch = key_val_map.find(l_key);
+          if (sch == key_val_map.end()) {
             key_val_map.emplace(l_key, input_value[i]);
           }
       }
@@ -300,31 +312,22 @@ struct GroupByWoAggTest : public GdfTest {
 
     gdf_error error{GDF_SUCCESS};
 
-    gdf_column **group_by_input_key = gdf_raw_input_key_columns.data();
+    gdf_column **group_by_input_key = this->gdf_raw_input_key_columns.data();
     gdf_column *group_by_input_value = gdf_raw_input_val_column;
 
-    gdf_column **group_by_output_key = gdf_raw_output_key_columns.data();
-    gdf_column *group_by_output_value = gdf_raw_output_val_column;
-     
-     /*
-       error = gdf_group_by_min(num_columns,
-                                   group_by_input_key,
-                                   group_by_input_value,
-                                   nullptr,
-                                   group_by_output_key,
-                                   group_by_output_value,
-                                   &ctxt);
-     */
+    gdf_column **gdf_data_cols_out = gdf_raw_gdf_data_cols_out_columns.data();
+    gdf_column *gdf_out_indices = gdf_raw_out_indices;
+    
     std::vector<int> groupby_col_indices;
-    for (size_t i = 0; i < gdf_raw_input_key_columns.size(); i++) 
+    for (size_t i = 0; i < this->gdf_raw_input_key_columns.size(); i++) 
       groupby_col_indices.push_back(i);
 
     error = gdf_group_by_wo_aggregations(num_columns, 
                                         group_by_input_key,
                                         num_columns,
                                         groupby_col_indices.data(),
-                                        group_by_output_key,
-                                        group_by_output_value,
+                                        gdf_data_cols_out,
+                                        gdf_out_indices,
                                          &ctxt
                                         );
 
@@ -334,9 +337,18 @@ struct GroupByWoAggTest : public GdfTest {
     EXPECT_EQ(expected_error, error) << "The gdf group by function did not complete successfully";
 
     if (GDF_SUCCESS == expected_error) {
+        for(size_t i = 0; i < num_columns; ++i) {
+          gdf_column *col = gdf_data_cols_out[i];
+          std::cout << ">>>>>>>>>>>col: \n";
+          print_gdf_column(col);
+          std::cout << "<<<<<<<<<<<col: \n";
+        }
+        std::cout << ">>>>>>>>>>>output indexes: \n";
+        print_gdf_column(gdf_out_indices);
+        std::cout << "<<<<<<<<<<<output indexes: \n";
+
         copy_output(
-                group_by_output_key, output_key,
-                group_by_output_value, output_value);
+                gdf_data_cols_out, cpu_data_cols_out, gdf_out_indices, cpu_out_indices);
 
         //find the widest possible column
         
@@ -349,32 +361,31 @@ struct GroupByWoAggTest : public GdfTest {
         //   }
         // }
 
-        std::cout << "data_cols_out - " <<  num_columns << std::endl;
+        std::cout << "gdf_data_cols_out - " <<  num_columns << std::endl;
         for (size_t i = 0; i < num_columns; ++i) {
-          tuple_each(output_key, [this](auto& v) {
-            for(size_t j = 0; j < this->output_value.size(); j++) {
-              std::cout << "\t" <<  v.at(this->output_value[j]) << std::endl;
+          tuple_each(cpu_data_cols_out, [this](auto& v) {
+            for(size_t j = 0; j < this->cpu_out_indices.size(); j++) {
+              std::cout << "\tcout_out:" <<  v.at(this->cpu_out_indices[j]) << std::endl;
             }   
           });
         }
-        std::cout << "gdf_out_indices - " <<  output_value.size() << std::endl;
-        for (size_t i = 0; i < output_value.size(); ++i) {
-          std::cout << "\t index: " << output_value[i] << std::endl;
+        std::cout << "gdf_out_indices - " <<  cpu_out_indices.size() << std::endl;
+        for (size_t i = 0; i < cpu_out_indices.size(); ++i) {
+          std::cout << "\t index: " << cpu_out_indices[i] << std::endl;
         }
     }
   }
 
   void compare_gdf_result(map_t& reference_map) {
-      ASSERT_EQ(output_value.size(), reference_map.size()) <<
-          "Size of gdf result does not match reference result\n";
-      // ASSERT_EQ(std::get<0>(output_key).size(), output_value.size()) <<
+    ASSERT_EQ(cpu_out_indices.size(), reference_map.size()) << "Size of gdf result does not match reference result\n";
+      // ASSERT_EQ(std::get<0>(cpu_data_cols_out).size(), cpu_out_indices.size()) <<
       //     "Mismatch between aggregation and group by column size.";
     const int num_columns = std::tuple_size<multi_column_t>::value;
 
       // for (size_t i = 0; i < num_columns; ++i) {
-      //     tuple_each(output_key, [this](auto& v) {
-      //       for(size_t j = 0; j < this->output_value.size(); j++) {
-      //         std::cout << "\t" <<  v[this->output_value[j]] << std::endl;
+      //     tuple_each(cpu_data_cols_out, [this](auto& v) {
+      //       for(size_t j = 0; j < this->cpu_out_indices.size(); j++) {
+      //         std::cout << "\t" <<  v[this->cpu_out_indices[j]] << std::endl;
       //       }   
       //     });
       //   }
@@ -387,9 +398,9 @@ struct GroupByWoAggTest : public GdfTest {
             std::cout << val <<  " => " <<  iter.second << std::endl;
         });
       }
-
-      for (size_t i = 0; i < output_value.size(); ++i) {
-          auto sch = reference_map.find(extractKey(output_key, output_value[i]));
+      auto ref_size = reference_map.size();
+      for (size_t i = 0; i < ref_size; ++i) {
+          auto sch = reference_map.find(extractKey(cpu_data_cols_out, cpu_out_indices[i]));
           bool found = (sch != reference_map.end());
           if (found) {
             tuple_each(sch->first, [&](auto &val) {
@@ -400,11 +411,11 @@ struct GroupByWoAggTest : public GdfTest {
           EXPECT_EQ(found, true);
           if (!found) { continue; }
 
-          // std:: cout << "output_value: " <<  output_value[i] << " | " << input_value.at(  output_value[i] ) << std::endl;
+          // std:: cout << "cpu_out_indices: " <<  cpu_out_indices[i] << " | " << input_value.at(  cpu_out_indices[i] ) << std::endl;
           // if (std::is_integral<output_t>::value) {
-          //    EXPECT_EQ(sch->second, input_value.at(  output_value[i] ) ); //warning: not really, we don't sorted input_value like in output_key.... see: v[this->output_value[j]]
+          //    EXPECT_EQ(sch->second, input_value.at(  cpu_out_indices[i] ) ); //warning: not really, we don't sorted input_value like in cpu_data_cols_out.... see: v[this->cpu_out_indices[j]]
           // } else {
-          //    // EXPECT_NEAR(sch->first, output_value[i], sch->second/100.0);
+          //    // EXPECT_NEAR(sch->first, cpu_out_indices[i], sch->second/100.0);
           // }
           //ensure no duplicates in gdf output
           reference_map.erase(sch);
@@ -413,6 +424,7 @@ struct GroupByWoAggTest : public GdfTest {
   
   void print_reference_solution(map_t & dicc) {
     std::stringstream ss;
+    ss << "reference solution:\n";
     for(auto &iter : dicc) {
         print_tuple_value(ss, iter.first);
         ss << " => " <<  iter.second << std::endl;
@@ -422,21 +434,374 @@ struct GroupByWoAggTest : public GdfTest {
 };
 
  
-TYPED_TEST_CASE(GroupByWoAggTest, Implementations);
+// TYPED_TEST_CASE(GroupByWoAggTest, Implementations);
 
-TYPED_TEST(GroupByWoAggTest, GroupbyExampleTest)
+// TYPED_TEST(GroupByWoAggTest, GroupbyExampleTest)
+// {
+//     const size_t num_keys = 3;
+//     const size_t num_values_per_key = 8;
+//     const size_t max_key = num_keys*2;
+//     const size_t max_val = 10;
+//     this->create_input(num_keys, num_values_per_key, max_key, max_val, true);
+//     auto reference_map = this->compute_reference_solution();
+//     this->print_reference_solution(reference_map);
+
+//     this->create_gdf_output_buffers(num_keys, num_values_per_key, max_key, max_val, true);
+//     this->compute_gdf_result();
+//     this->compare_gdf_result(reference_map);
+// }
+
+
+// Create a new derived class from JoinTest so we can do a new Typed Test set of tests
+template <class test_parameters>
+struct GroupValidTest : public GroupByWoAggTest<test_parameters>
 {
-    const size_t num_keys = 3;
-    const size_t num_values_per_key = 8;
-    const size_t max_key = num_keys*2;
-    const size_t max_val = 10;
-    this->create_input(num_keys, num_values_per_key, max_key, max_val, true);
-    auto reference_map = this->compute_reference_solution();
-    this->print_reference_solution(reference_map);
 
-    this->create_gdf_output_buffers(num_keys, num_values_per_key, max_key, max_val, true);
+  // multi_column_t is a tuple of vectors. The number of vectors in the tuple
+  // determines the number of columns to be grouped, and the value_type of each
+  // vector determiens the data type of the column
+  using multi_column_t = typename test_parameters::multi_column_t;
+
+  //output_t is the output type of the aggregation column
+  using output_t = typename test_parameters::output_type;
+
+  //map_t is used for reference solution
+  using map_t = typename test_parameters::ref_map_type;
+
+  //tuple_t is tuple of datatypes associated with each column to be grouped
+  using tuple_t = typename test_parameters::tuple_t;
+
+  using gdf_col_pointer = typename std::unique_ptr<gdf_column, std::function<void(gdf_column*)>>;
+
+  //contains input valid generated for gdf calculation and reference solution
+  std::vector<host_valid_pointer> input_key_valids;
+
+  //contains the input valid aggregation column
+  host_valid_pointer input_value_valid;
+
+  //contains grouped by column valid output of the gdf groupby call
+  std::vector<host_valid_pointer> cpu_data_cols_out_valid;
+  
+  //contains the aggregated output column valid
+  host_valid_pointer cpu_out_indices_valid;
+
+ 
+  /* --------------------------------------------------------------------------*/
+    /**
+     * @Synopsis  Creates a unique_ptr that wraps a gdf_column structure intialized with a host vector
+     *
+     * @Param host_vector The host vector whose data is used to initialize the gdf_column
+     *
+     * @Returns A unique_ptr wrapping the new gdf_column
+     */
+    /* ----------------------------------------------------------------------------*/
+  // Compile time recursion to convert each vector in a tuple of vectors into
+  // a gdf_column and append it to a vector of gdf_columns
+  template<std::size_t I = 0, typename... Tp>
+  inline typename std::enable_if<I == sizeof...(Tp), void>::type
+  convert_tuple_to_gdf_columns(std::vector<gdf_col_pointer> &gdf_columns,std::tuple<std::vector<Tp>...>& t, std::vector<host_valid_pointer>& valids)
+  {
+    //bottom of compile-time recursion
+    //purposely empty...
+  }
+
+  template<std::size_t I = 0, typename... Tp>
+  inline typename std::enable_if<I < sizeof...(Tp), void>::type
+  convert_tuple_to_gdf_columns(std::vector<gdf_col_pointer> &gdf_columns,std::tuple<std::vector<Tp>...>& t, std::vector<host_valid_pointer>& valids)
+  {
+    // Creates a gdf_column for the current vector and pushes it onto
+    // the vector of gdf_columns
+    if (valids.size() == 0) {
+      gdf_columns.push_back(this->create_gdf_column(std::get<I>(t)));
+    }
+    else{
+      auto valid = valids[I].get();
+      auto column_size = std::get<I>(t).size();
+      // auto null_count = gdf::util::null_count(valid, column_size);
+      gdf_columns.push_back(this->create_gdf_column(std::get<I>(t), 0, valid));
+    }
+
+    //recurse to next vector in tuple
+    convert_tuple_to_gdf_columns<I + 1, Tp...>(gdf_columns, t, valids);
+  }
+
+  // Converts a tuple of host vectors into a vector of gdf_columns
+  std::vector<gdf_col_pointer>
+  initialize_gdf_columns(multi_column_t host_columns, std::vector<host_valid_pointer>& cpu_data_cols_out_valid)
+  {
+    std::vector<gdf_col_pointer> gdf_columns;
+    convert_tuple_to_gdf_columns(gdf_columns, host_columns, cpu_data_cols_out_valid);
+    return gdf_columns;
+  }
+  
+  /* --------------------------------------------------------------------------*/
+  /**
+   * @Synopsis  Initializes key columns and aggregation column for gdf group by call
+   *
+   * @Param key_count The number of unique keys
+   * @Param value_per_key The number of times a random aggregation value is generated for a key
+   * @Param max_key The maximum value of the key columns
+   * @Param max_val The maximum value of aggregation column
+   * @Param print Optionally print the keys and aggregation columns for debugging
+   */
+  /* ----------------------------------------------------------------------------*/
+  void create_input_with_nulls(const size_t key_count, const size_t value_per_key,
+                    const size_t max_key, const size_t max_val,
+                    bool print = false) {
+    size_t shuffle_seed = rand();
+    initialize_keys(this->input_key, key_count, value_per_key, max_key, shuffle_seed);
+    initialize_values(this->input_value, key_count, value_per_key, max_val, shuffle_seed);
+
+    // Init valids
+    auto column_length = this->input_value.size();
+    auto n_tuples = std::tuple_size<multi_column_t>::value;
+    for (size_t i = 0; i < n_tuples; i++)
+        input_key_valids.push_back(create_and_init_valid(column_length)); 
+    input_value_valid = create_and_init_valid(column_length);
+
+    this->gdf_input_key_columns = initialize_gdf_columns(this->input_key, input_key_valids);
+    
+    // auto null_count = gdf::util::null_count(input_value_valid.get(), column_length);
+    this->gdf_input_value_column = this->create_gdf_column(this->input_value, 0, input_value_valid.get());
+    int valid_count;
+    auto gdf_status = gdf_count_nonzero_mask(this->gdf_input_value_column->valid, column_length, &valid_count);
+    this->gdf_input_value_column->null_count = column_length - valid_count;
+    assert (gdf_status == GDF_SUCCESS);
+
+    // Fill vector of raw pointers to gdf_columns
+    for(auto const& c : this->gdf_input_key_columns){
+      this->gdf_raw_input_key_columns.push_back(c.get());
+    }
+    this->gdf_raw_input_val_column = this->gdf_input_value_column.get();
+
+    if(print)
+    {
+      std::cout << "Key column(s) created. Size: " << std::get<0>(this->input_key).size() << std::endl;
+      print_tuple_vector(this->input_key, input_key_valids);
+
+      std::cout << "Value column(s) created. Size: " << this->input_value.size() << std::endl;
+      print_vector(this->input_value, input_value_valid.get());
+      std::cout << std::endl;
+      
+    }
+  }
+ 
+  
+  void create_gdf_output_buffers_with_nulls(const size_t key_count, const size_t value_per_key, const size_t max_key, const size_t max_val, bool print = false) {
+      size_t shuffle_seed = rand();
+      initialize_keys(this->cpu_data_cols_out, key_count, value_per_key, max_key, shuffle_seed);
+      initialize_values(this->cpu_out_indices, key_count, value_per_key, max_val, shuffle_seed);
+
+      // Init Valids
+      auto column_length = this->cpu_out_indices.size();
+      auto n_tuples = std::tuple_size<multi_column_t>::value;
+      for (size_t i = 0; i < n_tuples; i++)
+        cpu_data_cols_out_valid.push_back(create_and_init_valid(column_length)); 
+      cpu_out_indices_valid = create_and_init_valid(column_length);
+    
+      this->gdf_cpu_data_cols_out_columns = this->initialize_gdf_columns(this->cpu_data_cols_out, cpu_data_cols_out_valid);
+      auto null_count = gdf::util::null_count(cpu_out_indices_valid.get(), column_length);
+       
+      auto str = gdf::util::gdf_valid_to_str(cpu_out_indices_valid.get(), column_length);
+      
+      this->gdf_output_indices_column = this->create_gdf_column(this->cpu_out_indices, null_count, cpu_out_indices_valid.get());
+      for(auto const& c : this->gdf_cpu_data_cols_out_columns){
+        this->gdf_raw_gdf_data_cols_out_columns.push_back(c.get());
+      }
+      this->gdf_raw_out_indices = this->gdf_output_indices_column.get();
+  }
+
+
+  std::basic_string<bool> get_input_key_valids(std::vector<host_valid_pointer>& valids, int i, bool &all_valid_key) {
+    std::basic_string<bool> valid_key;
+    std::for_each(valids.begin(),
+                  valids.end(),
+                  [&i, &valid_key, &all_valid_key](host_valid_pointer& valid){
+                      bool b1 = gdf_is_valid(valid.get(), i);
+                      all_valid_key = all_valid_key && b1; 
+                      valid_key.push_back(b1);
+                  });
+    return valid_key;
+  } 
+
+  map_t
+  compute_reference_solution_with_nulls(void) {
+      map_t key_val_map;
+      
+      for (size_t i = 0; i < this->input_value.size(); i++) {
+          if (this->group_output_type == GroupByOutType::PANDAS) { // pandas style, todo what happens? 
+              bool all_valid_key = true;
+              auto valid_key = get_input_key_valids(this->input_key_valids, i, all_valid_key);
+              if (all_valid_key) {
+                auto l_key = extractKeyWithNulls(this->input_key, valid_key, i);
+                auto sch = key_val_map.find(l_key);
+                if (sch == key_val_map.end()) {
+                  key_val_map.emplace(l_key, this->input_value[i]);
+                }
+              }
+          }
+          else { // sql style : todo solution with nulls
+              bool all_valid_key = true;
+              auto valid_key = get_input_key_valids(this->input_key_valids, i, all_valid_key);
+              auto l_key = extractKeyWithNulls(this->input_key, valid_key, i);
+              auto sch = key_val_map.find(l_key);
+              if (sch == key_val_map.end()) {
+                key_val_map.emplace(l_key, this->input_value[i]);
+              }
+          }
+      }
+      return key_val_map;
+  }
+
+  /* --------------------------------------------------------------------------*/
+  /**
+   * @Synopsis  Computes the gdf result of grouping the input_keys and input_value
+   */
+  /* ----------------------------------------------------------------------------*/
+  void compute_gdf_result(const gdf_error expected_error = GDF_SUCCESS)
+  {
+    const int num_columns = std::tuple_size<multi_column_t>::value;
+
+    // ctxt.flag_groupby_include_nulls = 0;
+    // if (num_columns > 1) {//@todo, it is working? 
+    //   ctxt.flag_nulls_sort_behavior = 2;
+    // }
+
+    gdf_error error{GDF_SUCCESS};
+
+    gdf_column **group_by_input_key = this->gdf_raw_input_key_columns.data();
+    gdf_column *group_by_input_value = this->gdf_raw_input_val_column;
+
+    gdf_column **gdf_data_cols_out = this->gdf_raw_gdf_data_cols_out_columns.data();
+    gdf_column *gdf_out_indices = this->gdf_raw_out_indices;
+    
+    std::vector<int> groupby_col_indices;
+    for (size_t i = 0; i < this->gdf_raw_input_key_columns.size(); i++) 
+      groupby_col_indices.push_back(i);
+
+    error = gdf_group_by_wo_aggregations(num_columns, 
+                                        group_by_input_key,
+                                        num_columns,
+                                        groupby_col_indices.data(),
+                                        gdf_data_cols_out,
+                                        gdf_out_indices,
+                                         &this->ctxt
+                                        );
+
+
+
+
+    EXPECT_EQ(expected_error, error) << "The gdf group by function did not complete successfully";
+
+    if (GDF_SUCCESS == expected_error) {
+        for(size_t i = 0; i < num_columns; ++i) {
+          gdf_column *col = gdf_data_cols_out[i];
+          std::cout << ">>>>>>>>>>>col: \n";
+          print_gdf_column(col);
+          std::cout << "<<<<<<<<<<<col: \n";
+        }
+        std::cout << ">>>>>>>>>>>output indexes: \n";
+        print_gdf_column(gdf_out_indices);
+        std::cout << "<<<<<<<<<<<output indexes: \n";
+
+        copy_output_with_nulls(
+                gdf_data_cols_out, this->cpu_data_cols_out, this->cpu_data_cols_out_valid, gdf_out_indices, this->cpu_out_indices);
+ 
+        std::cout << "gdf_data_cols_out - " <<  num_columns << std::endl;
+        size_t index = 0;
+        tuple_each(this->cpu_data_cols_out, [this, &index](auto& v) {
+          auto valid = this->cpu_data_cols_out_valid[index].get();
+          for(size_t j = 0; j < this->cpu_out_indices.size(); j++) {
+            bool b1 = gdf_is_valid(valid, this->cpu_out_indices[j]); // too important
+            if (b1) {
+              std::cout << "\tcout_out:" <<  v.at(this->cpu_out_indices[j]) << std::endl;
+            } else {
+              std::cout << "\tcout_out:" <<   '@' << std::endl;
+            }
+          }
+          index++;
+        });
+
+        std::cout << "gdf_out_indices - " <<  this->cpu_out_indices.size() << std::endl;
+        for (size_t i = 0; i < this->cpu_out_indices.size(); ++i) {
+          std::cout << "\t index: " << this->cpu_out_indices[i] << std::endl;
+        }
+    }
+  }
+
+  void compare_gdf_result(map_t& reference_map) {
+    // ASSERT_EQ(this->cpu_out_indices.size(), reference_map.size()) << "Size of gdf result does not match reference result\n";
+      // ASSERT_EQ(std::get<0>(cpu_data_cols_out).size(), cpu_out_indices.size()) <<
+      //     "Mismatch between aggregation and group by column size.";
+      const int num_columns = std::tuple_size<multi_column_t>::value;
+      for(auto &iter : reference_map) {
+      
+        tuple_each(iter.first, [&](auto& val) {
+            std::cout << val <<  " => " <<  iter.second << std::endl;
+        });
+      } 
+      size_t ref_size = reference_map.size();
+      for (size_t i = 0; i < ref_size; ++i) {
+          bool all_valid_key = true;
+          auto valid_key = this->get_input_key_valids(this->cpu_data_cols_out_valid, this->cpu_out_indices[i], all_valid_key);
+          
+          auto l_key = extractKeyWithNulls(this->cpu_data_cols_out, valid_key, this->cpu_out_indices[i]);
+          auto sch = reference_map.find(l_key);
+          bool found = (sch != reference_map.end());
+          if (found) {
+            tuple_each(sch->first, [&](auto &val) {
+              std::cout <<  "sch:  " << val  <<  " => " << sch->second << std::endl;
+            });
+          }
+
+          EXPECT_EQ(found, true);
+          if (!found) { continue; }
+
+         
+          reference_map.erase(sch);
+      }
+  } 
+};
+
+TYPED_TEST_CASE(GroupValidTest, ValidTestImplementations);
+ 
+TYPED_TEST(GroupValidTest, GroupbyValidExampleTest)
+{   
+    const size_t num_keys = 4;
+    const size_t num_values_per_key = 4;
+    const size_t max_key = num_keys * 1;
+    const size_t max_val = 10;
+
+    this->create_input_with_nulls(num_keys, num_values_per_key, max_key, max_val, true);
+    auto reference_map = this->compute_reference_solution_with_nulls();
+    this->print_reference_solution(reference_map);
+    this->create_gdf_output_buffers_with_nulls(num_keys, num_values_per_key, max_key, max_val, true);
+    
     this->compute_gdf_result();
+
     this->compare_gdf_result(reference_map);
 }
 
+
+// TYPED_TEST(GroupValidTest, AllKeysDifferent)
+// {   
+//     const size_t num_keys = 1<<4;
+//     const size_t num_values_per_key = 1;
+//     const size_t max_key = num_keys*2;
+//     const size_t max_val = 1000;
+
+//     this->create_input_with_nulls(num_keys, num_values_per_key, max_key, max_val, true);
+//     auto reference_map = this->compute_reference_solution_with_nulls();
+//     this->print_reference_solution(reference_map);
+//     this->create_gdf_output_buffers_with_nulls(num_keys, num_values_per_key, max_key, max_val, true);
+    
+//     this->compute_gdf_result();
+
+//     this->compare_gdf_result(reference_map);
+// }
+
+
 } //namespace: without_agg
+
+
+

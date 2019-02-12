@@ -30,6 +30,25 @@ gdf_size_type gdf_get_num_chars_bitmask(gdf_size_type size) {
 	return (( size + ( GDF_VALID_BITSIZE - 1)) / GDF_VALID_BITSIZE ); 
 }
 
+
+// variables from apache/arrow
+// Buffers are padded to 64-byte boundaries (for SIMD)
+static constexpr int32_t kArrowAlignment = 64;
+
+// Tensors are padded to 64-byte boundaries
+static constexpr int32_t kTensorAlignment = 64;
+
+// Align on 8-byte boundaries in IPC
+static constexpr int32_t kArrowIpcAlignment = 8;
+
+// Align on 4-byte boundaries in CUDF static 
+constexpr int32_t kCudfIpcAlignment = 4;
+
+//todo, enable arrow ipc utils, and remove this method
+static inline int64_t CudfPaddedLength(int64_t nbytes, int32_t alignment = kCudfIpcAlignment) {
+  return ((nbytes + alignment - 1) / alignment) * alignment;
+}
+
 /* --------------------------------------------------------------------------*/
 /** 
  * @brief Flatten AOS info from gdf_columns into SOA.

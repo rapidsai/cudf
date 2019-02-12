@@ -289,6 +289,51 @@ void copy_output(
     copy_gdf_column(group_by_output_value, output_value);
 }
 
+ 
+
+//Copy device side gdf_column data to an std::vector
+template <typename T>
+void copy_gdf_column_with_nulls(gdf_column* column, std::vector<T>& vec, host_valid_pointer& output_valids) {
+    //TODO : Add map of sizes of gdf_dtype and assert against sizeof(T)
+    vec.resize(column->size);
+    cudaMemcpy(vec.data(), column->data, column->size * sizeof(T), cudaMemcpyDeviceToHost);
+
+    cudaMemcpy(output_valids.get(),  column->valid, gdf_get_num_chars_bitmask(column->size), cudaMemcpyDeviceToHost);
+    
+}
+
+//Empty terminal call
+template<std::size_t I = 0, typename... K>
+inline typename std::enable_if<I == sizeof...(K), void>::type
+copy_gdf_tuple_with_nulls(
+    gdf_column **group_by_output_key,
+    std::tuple<std::vector<K>...>& output_key, std::vector<host_valid_pointer>& output_valids) {}
+
+//Non terminating call to copy the Ith element of group_by_output_key
+//to the Ith element of output_key
+template<std::size_t I = 0, typename... K>
+inline typename std::enable_if<I < sizeof...(K), void>::type
+copy_gdf_tuple_with_nulls(
+    gdf_column **group_by_output_key,
+    std::tuple<std::vector<K>...>& output_key, std::vector<host_valid_pointer>& output_valids) {
+    copy_gdf_column_with_nulls(group_by_output_key[I], std::get<I>(output_key), output_valids[I]);
+    copy_gdf_tuple_with_nulls<I + 1, K...>(group_by_output_key, output_key, output_valids);
+} 
+
+//Copy the contents of gdf_columns to std::vectors
+//group_by_output_key is copied to a tuple of vectors output_key
+//group_by_output_value is copied to a vector output_value
+template <typename gdf_column, typename multi_column_t, typename output_t>
+void copy_output_with_nulls(
+    gdf_column **group_by_output_key,
+    multi_column_t& output_key,
+    std::vector<host_valid_pointer>& output_valids,
+    gdf_column *group_by_output_value,
+    std::vector<output_t>& output_value) {
+    copy_gdf_tuple_with_nulls(group_by_output_key, output_key, output_valids);
+    copy_gdf_column(group_by_output_value, output_value);
+}
+
 
 //
 // custom functions

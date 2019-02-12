@@ -13,7 +13,15 @@ namespace without_agg {
 template <typename... T>
 using VTuple = std::tuple<std::vector<T>...>;
 
-template<
+
+enum struct GroupByOutType
+{
+  PANDAS,//0
+  SQL//1
+};
+
+
+template<GroupByOutType,
          typename>
 struct
 TestParameters {};
@@ -47,13 +55,13 @@ void tuple_each(Tuple &t, Func &&f) {
 //that performs it eg. GDF_HASH or GDF_SORT. VTuple<K...> expects a
 //tuple of datatypes that specify the column types to be tested.
 //AggOutput specifies the output type of the aggregated column.
-template<typename... K>
+template<GroupByOutType group_output_method, typename... K>
 struct
-TestParameters<
+TestParameters<group_output_method,
     VTuple<K...>>
 {
   // // The method to use for the groupby
-  // const static agg_op op = agg_operation;
+  const static GroupByOutType group_output_type {group_output_method};
 
   using multi_column_t = std::tuple<std::vector<K>...>;
   using vector_tuple_t = std::vector<std::tuple<K...>>;
@@ -69,18 +77,22 @@ TestParameters<
 
 const static gdf_method HASH = gdf_method::GDF_HASH;
 typedef ::testing::Types<
-    TestParameters< VTuple<int8_t > >,
-    TestParameters< VTuple<int16_t > >,
-    TestParameters< VTuple<int32_t > >,
-    TestParameters< VTuple<int64_t> >,
-    TestParameters< VTuple<float   > >,
-    TestParameters< VTuple<double  > >,
-    TestParameters< VTuple<int32_t, int32_t > >,
-    TestParameters< VTuple<int32_t, int64_t > >
+    TestParameters< GroupByOutType::SQL, VTuple<int32_t > >,
+    TestParameters< GroupByOutType::PANDAS, VTuple<int16_t > >,
+    TestParameters< GroupByOutType::PANDAS, VTuple<int32_t > >,
+    TestParameters< GroupByOutType::PANDAS, VTuple<int64_t> >,
+    TestParameters< GroupByOutType::PANDAS, VTuple<float   > >,
+    TestParameters< GroupByOutType::PANDAS, VTuple<double  > >,
+    TestParameters< GroupByOutType::PANDAS, VTuple<int32_t, int32_t > >,
+    TestParameters< GroupByOutType::PANDAS, VTuple<int32_t, int64_t > >
   > Implementations;
 
-// typedef ::testing::Types<
-//     TestParameters< agg_op::AVG, HASH, VTuple<int32_t >, int32_t>
-//   > ValidTestImplementations;
+typedef ::testing::Types<
+    TestParameters< GroupByOutType::SQL, VTuple<int32_t >>
+    // TestParameters< GroupByOutType::SQL, VTuple<int64_t >>,
+    // TestParameters< GroupByOutType::SQL, VTuple<double >>,
+    // TestParameters< GroupByOutType::SQL, VTuple<int16_t >>,
+    // TestParameters< GroupByOutType::SQL, VTuple<int32_t, int64_t >>
+  > ValidTestImplementations;
 
 } //namespace: without_agg

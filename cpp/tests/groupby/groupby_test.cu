@@ -128,7 +128,7 @@ struct GroupTest : public GdfTest {
     EXPECT_EQ(RMM_ALLOC(&(the_column->data), host_vector.size() * sizeof(col_type), 0), RMM_SUCCESS);
     EXPECT_EQ(cudaMemcpy(the_column->data, host_vector.data(), host_vector.size() * sizeof(col_type), cudaMemcpyHostToDevice), cudaSuccess);
 
-    int valid_size = gdf_get_num_chars_bitmask(host_vector.size());
+    int valid_size = CudfPaddedLength(gdf_get_num_chars_bitmask(host_vector.size()));
     EXPECT_EQ(RMM_ALLOC((void**)&(the_column->valid), valid_size, 0), RMM_SUCCESS);
     EXPECT_EQ(cudaMemset(the_column->valid, 0xff, valid_size), cudaSuccess);
 

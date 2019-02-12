@@ -31,16 +31,16 @@ using host_valid_pointer = typename std::shared_ptr<gdf_valid_type>;
 static inline host_valid_pointer create_and_init_valid(size_t length)
 {
     auto deleter = [](gdf_valid_type* valid) { delete[] valid; };
-    auto n_bytes = gdf_get_num_chars_bitmask(length);
+    auto n_bytes = CudfPaddedLength(gdf_get_num_chars_bitmask(length));
     auto valid_bits = new gdf_valid_type[n_bytes];
 
-    for (size_t i = 0; i < length; ++i) {
-        if (i < length / 2 || std::rand() % 2 == 1) {
-            gdf::util::turn_bit_on(valid_bits, i);
-        } else {
-            gdf::util::turn_bit_off(valid_bits, i);
-        }
-    }
+    // for (size_t i = 0; i < length; ++i) {
+    //     if (i < length / 2 || std::rand() % 2 == 1) {
+    //         gdf::util::turn_bit_on(valid_bits, i);
+    //     } else {
+    //         gdf::util::turn_bit_off(valid_bits, i);
+    //     }
+    // }
     return host_valid_pointer{ valid_bits, deleter };
 }
 

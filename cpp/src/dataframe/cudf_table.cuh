@@ -304,7 +304,9 @@ public:
     // Allocate storage sufficient to hold a validity bit for every row
     // in the table
     const size_type mask_size = gdf_get_num_chars_bitmask(column_length);
-    device_row_valid.resize(mask_size);
+
+    //@WARNING: valid init size padding!
+    device_row_valid.resize( CudfPaddedLength(mask_size) );
 
        
     // If a row contains a single NULL value, then the entire row is considered
@@ -1044,6 +1046,7 @@ private:
 
       int valid_count;
       gdf_status = count_nonzero_mask(output_column->valid, num_rows, valid_count, stream);
+      assert(gdf_status == GDF_SUCCESS);
       output_column->null_count = output_column->size - valid_count;
     }
   

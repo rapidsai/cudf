@@ -70,6 +70,18 @@ __host__ __device__ __forceinline__ size_t last_byte_index(size_t column_size)
   return (column_size + 8 - 1) / 8;
 }
 
+
+static inline size_t null_count(uint8_t* const bits, size_t column_size)
+{
+  size_t count = 0;
+  for(size_t i = 0; i < column_size; i++)
+  {
+    if (gdf_is_valid(bits, i) == false)
+      count++;
+  }
+  return count;
+}
+
 static inline std::string chartobin(gdf_valid_type c, size_t size = 8)
 {
   std::string bin;
