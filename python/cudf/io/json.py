@@ -105,14 +105,6 @@ def read_json(path_or_buf=None, orient=None, typ='frame', dtype=True,
     warnings.warn("Using CPU via Pandas to read JSON dataset, this may "
                   "be GPU accelerated in the future")
 
-    if LooseVersion(pd.__version__) < LooseVersion('0.24'):
-        if compression == 'infer':
-            warnings.warn("Can't infer compression when using Pandas version <"
-                          " 0.24, please manually specify the compression via "
-                          "'compression' parameter, setting compression to "
-                          "None")
-            compression = None
-
     pd_value = pd.read_json(
         path_or_buf=path_or_buf,
         orient=orient,
@@ -199,8 +191,18 @@ def to_json(cudf_val, path_or_buf=None, orient=None, date_format=None,
     --------
     .read_json
     """
+
     warnings.warn("Using CPU via Pandas to write JSON dataset, this may "
                   "be GPU accelerated in the future")
+
+    if LooseVersion(pd.__version__) < LooseVersion('0.24'):
+        if compression == 'infer':
+            warnings.warn("Can't infer compression when using Pandas version <"
+                          " 0.24, please manually specify the compression via "
+                          "'compression' parameter, setting compression to "
+                          "None")
+            compression = None
+
     pd_value = cudf_val.to_pandas()
     pd.io.json.to_json(
         path_or_buf,
