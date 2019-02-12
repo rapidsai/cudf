@@ -11,7 +11,6 @@ import itertools
 
 @pytest.fixture(params=[0, 1, 10, 100])
 def pdf(request):
-    print("nrows: " + str(request.param))
     types = ['bool', 'int8', 'int16', 'int32', 'int64', 'float32', 'float64',
              'datetime64[ms]']
     renamer = {'C_l0_g' + str(idx): 'col_' + val for (idx, val) in
@@ -56,47 +55,80 @@ params = itertools.product(
 
 
 @pytest.fixture(params=params)
-def json_file(request, tmp_path_factory, pdf):
+def json_files(request, tmp_path_factory, pdf):
     index, compression, orient = request.param
     if index is False and orient not in ('split', 'table'):
         pytest.skip("'index=False' is only valid when 'orient' is 'split' or "
                     "'table'")
     if index is False and orient == 'table':
         pytest.skip("'index=False' isn't valid when 'orient' is 'table'")
-    print(index, compression, orient)
-    fname = tmp_path_factory.mktemp("json") / "test.json"
-    pdf.to_json(fname, index=index, compression=compression,
+    fname_df = tmp_path_factory.mktemp("json") / "test_df.json"
+    fname_series = tmp_path_factory.mktemp("json") / "test_series.json"
+    pdf.to_json(fname_df, index=index, compression=compression,
                 orient=orient)
-    return (fname, orient, compression)
+    pdf['col_int32'].to_json(fname_series, index=index,
+                             compression=compression, orient=orient)
+    return (fname_df, fname_series, orient, compression)
 
 
+@pytest.mark.filterwarnings("ignore:Strings are not yet supported")
 @pytest.mark.filterwarnings("ignore:Using CPU")
-def test_json_reader(json_file):
-    path, orient, compression = json_file
-    expect = pd.read_json(path, orient=orient, compression=compression)
-    got = cudf.read_json(path, orient=orient, compression=compression)
-    if len(expect) == 0:
-        expect = expect.reset_index(drop=True)
-        expect.columns = expect.columns.astype('object')
-    if len(got) == 0:
-        got = got.reset_index()
+def test_json_reader(json_files):
+    path_df, path_series, orient, compression = json_files
+    expect_df = pd.read_json(path_df, orient=orient, compression=compression)
+    got_df = cudf.read_json(path_df, orient=orient, compression=compression)
+    if len(expect_df) == 0:
+        expect_df = expect_df.reset_index(drop=True)
+        expect_df.columns = expect_df.columns.astype('object')
+    if len(got_df) == 0:
+        got_df = got_df.reset_index()
 
-    assert_eq(expect, got, check_categorical=False)
+    assert_eq(expect_df, got_df, check_categorical=False)
+
+    # Only these orients are allowed for Series, but isn't enforced by Pandas
+    if orient in ('split', 'records', 'index'):
+        expect_series = pd.read_json(
+            path_series, orient=orient, compression=compression, typ='series'
+        )
+        got_series = cudf.read_json(
+            path_series, orient=orient, compression=compression, typ='series'
+        )
+        if len(expect_series) == 0:
+            expect_series = expect_series.reset_index(drop=True)
+        if len(got_df) == 0:
+            got_series = got_series.reset_index()
+
+        assert_eq(expect_series, got_series)
 
 
 @pytest.mark.filterwarnings("ignore:Can't infer compression")
 @pytest.mark.filterwarnings("ignore:Using CPU")
 def test_json_writer(tmpdir, pdf, gdf):
-    pdf_fname = tmpdir.join("pdf.json")
-    gdf_fname = tmpdir.join("gdf.json")
+    pdf_df_fname = tmpdir.join("pdf_df.json")
+    gdf_df_fname = tmpdir.join("gdf_df.json")
 
-    pdf.to_json(pdf_fname)
-    gdf.to_json(gdf_fname)
+    pdf.to_json(pdf_df_fname)
+    gdf.to_json(gdf_df_fname)
 
-    assert(os.path.exists(pdf_fname))
-    assert(os.path.exists(gdf_fname))
+    assert(os.path.exists(pdf_df_fname))
+    assert(os.path.exists(gdf_df_fname))
 
-    expect = pd.read_json(pdf_fname)
-    got = pd.read_json(gdf_fname)
+    expect_df = pd.read_json(pdf_df_fname)
+    got_df = pd.read_json(gdf_df_fname)
 
-    assert_eq(expect, got)
+    assert_eq(expect_df, got_df)
+
+    for column in pdf.columns:
+        pdf_series_fname = tmpdir.join(column + "_" + "pdf_series.json")
+        gdf_series_fname = tmpdir.join(column + "_" + "gdf_series.json")
+
+        pdf[column].to_json(pdf_series_fname)
+        gdf[column].to_json(gdf_series_fname)
+
+        assert(os.path.exists(pdf_series_fname))
+        assert(os.path.exists(gdf_series_fname))
+
+        expect_series = pd.read_json(pdf_series_fname, typ='series')
+        got_series = pd.read_json(gdf_series_fname, typ='series')
+
+        assert_eq(expect_series, got_series)

@@ -40,7 +40,7 @@ def pdf(request):
 
     # Create non-numeric categorical data otherwise parquet may typecast it
     data = [ascii_letters[np.random.randint(0, 52)] for i in
-            range(request.param)]
+            range(nrows)]
     test_pdf['col_category'] = pd.Series(data, dtype='category')
 
     return test_pdf

@@ -131,9 +131,7 @@ def to_hdf(path_or_buf, key, value, mode=None, complevel=None, complib=None,
     """
     warnings.warn("Using CPU via Pandas to write HDF dataset, this may "
                   "be GPU accelerated in the future")
-    print(value.index.name)
     pd_value = value.to_pandas()
-    print(pd_value.index.name)
     pd.io.pytables.to_hdf(
         path_or_buf,
         key,

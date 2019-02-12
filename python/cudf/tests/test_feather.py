@@ -51,7 +51,7 @@ def pdf(request):
 
     # Create non-numeric categorical data otherwise may get typecasted
     data = [ascii_letters[np.random.randint(0, 52)] for i in
-            range(request.param)]
+            range(nrows)]
     test_pdf['col_category'] = pd.Series(data, dtype='category')
 
     # Feather can't handle indexes properly

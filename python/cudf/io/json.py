@@ -1,6 +1,6 @@
 # Copyright (c) 2019, NVIDIA CORPORATION.
 
-from cudf.dataframe.dataframe import DataFrame
+import cudf
 
 import pandas as pd
 import warnings
@@ -113,7 +113,7 @@ def read_json(path_or_buf=None, orient=None, typ='frame', dtype=True,
                           "None")
             compression = None
 
-    pd_table = pd.read_json(
+    pd_value = pd.read_json(
         path_or_buf=path_or_buf,
         orient=orient,
         typ=typ,
@@ -129,10 +129,10 @@ def read_json(path_or_buf=None, orient=None, typ='frame', dtype=True,
         chunksize=chunksize,
         compression=compression
     )
-    return DataFrame.from_pandas(pd_table)
+    return cudf.from_pandas(pd_value)
 
 
-def to_json(df, path_or_buf=None, orient=None, date_format=None,
+def to_json(cudf_val, path_or_buf=None, orient=None, date_format=None,
             double_precision=10, force_ascii=True, date_unit='ms',
             default_handler=None, lines=False, compression='infer',
             index=True):
@@ -201,10 +201,10 @@ def to_json(df, path_or_buf=None, orient=None, date_format=None,
     """
     warnings.warn("Using CPU via Pandas to write JSON dataset, this may "
                   "be GPU accelerated in the future")
-    pd_table = df.to_pandas()
-    pd.DataFrame.to_json(
-        pd_table,
-        path_or_buf=path_or_buf,
+    pd_value = cudf_val.to_pandas()
+    pd.io.json.to_json(
+        path_or_buf,
+        pd_value,
         orient=orient,
         date_format=date_format,
         double_precision=double_precision,
