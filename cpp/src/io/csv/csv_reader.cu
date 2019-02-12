@@ -454,16 +454,32 @@ gdf_error read_csv(csv_read_arg *args)
 			data_row.resize(first_row_len);
 			CUDA_TRY(cudaMemcpy(data_row.data(), raw_csv->data, raw_csv->num_bytes, cudaMemcpyDefault));
 		}
-		// Parse header row to assign column names; does not currently handle
-		// quotations to avoid added parsing complexity
+		// Parse header row to assign column names
 		const auto& first_row = !raw_csv->header.empty() ? raw_csv->header : data_row;
-		//std::cout << " [" << first_row.back() << "] ";
 		const string str_prefix = args->prefix != nullptr ? string(args->prefix) : "";
+		bool quotation	= false;
 		for (size_t pos = 0, prev = 0; pos < first_row.size(); ++pos) {
-			if (first_row[pos] == raw_csv->opts.delimiter ||
-				first_row[pos] == raw_csv->opts.terminator) {
+			if(first_row[pos] == raw_csv->opts.quotechar &&
+			(!quotation || pos == 0 || first_row[pos - 1] != '\\')) {
+				quotation = !quotation;
+				continue;
+			}
+			if (!quotation &&
+				(first_row[pos] == raw_csv->opts.delimiter ||
+				first_row[pos] == raw_csv->opts.terminator)) {
 					if (raw_csv->header_row >= 0) {
-						raw_csv->col_names.emplace_back(first_row.data() + prev, pos - prev);
+						string new_col_name(first_row.data() + prev, pos - prev);
+						// Exclude first and last quotation char
+						const size_t first_quote = new_col_name.find(raw_csv->opts.quotechar);
+						if (first_quote != string::npos) {
+							new_col_name.erase(first_quote, 1);
+						}
+						const size_t  last_quote = new_col_name.rfind(raw_csv->opts.quotechar);
+						if (last_quote != string::npos) {
+							new_col_name.erase(last_quote, 1);
+						}
+
+						raw_csv->col_names.push_back(std::move(new_col_name));
 					}
 					else {
 						raw_csv->col_names.push_back(str_prefix + std::to_string(h_num_cols));
@@ -475,7 +491,7 @@ gdf_error read_csv(csv_read_arg *args)
 					first_row[pos + 1] == raw_csv->opts.delimiter) {
 						++pos;
 				}
-				if (first_row[pos] == raw_csv->opts.terminator) {
+				if (!quotation && first_row[pos] == raw_csv->opts.terminator) {
 					break;
 				}
 				prev = pos + 1;

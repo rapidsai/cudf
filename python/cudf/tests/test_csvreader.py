@@ -832,3 +832,17 @@ def test_csv_reader_unnamed_cols():
     cu_df = read_csv(StringIO(buffer))
     pd_df = pd.read_csv(StringIO(buffer))
     assert(all(pd_df.columns == cu_df.columns))
+
+
+def test_csv_reader_header_quotation():
+    buffer = '"1,,1","2,\n,2",3\n4,5,6\n'
+
+    cu_df = read_csv(StringIO(buffer))
+    pd_df = pd.read_csv(StringIO(buffer))
+    assert(cu_df.shape == (1, 3))
+    pd.util.testing.assert_frame_equal(pd_df, cu_df.to_pandas())
+
+    # test cases that fail with pandas
+    buffer_pd_fail = '"1,one," , ",2,two" ,3\n4,5,6\n'
+    cu_df = read_csv(StringIO(buffer_pd_fail))
+    assert(cu_df.shape == (1, 3))
