@@ -7,6 +7,7 @@
 - PR #807 CSV Reader: Add byte_range parameter to specify the range in the input file to be read
 - PR #858 Add series feature hashing support
 - PR #871 CSV Reader: Add support for NA values, including user specified strings
+- PR #893 Adds PyArrow based parquet readers / writers to Python, fix category dtype handling, fix arrow ingest buffer size issues
 - PR #867 CSV Reader: Add support for ignoring blank lines and comment lines
 - PR #895 Add Series groupby
 - PR #898 Add DataFrame.groupby(level=0) support
@@ -24,6 +25,7 @@
 - PR #532 CSV Reader: Use type dispatcher instead of switch block
 - PR #878 Add better indexing to Groupby
 - PR #554 Add `empty` method and `is_monotonic` attribute to `Index`
+- PR #909 CSV Reader: Avoid host->device->host copy for header row data
 
 ## Bug Fixes
 
@@ -39,6 +41,7 @@
 - PR #876 Added missing `<type_traits>` include
 - PR #889 Deleted test_rmm.py which has now moved to RMM repo
 - PR #866 Merge v0.5.1 numpy ABI hotfix into 0.6
+- PR #917 value_counts return int type on empty columns
 
 
 # cuDF 0.5.1 (05 Feb 2019)

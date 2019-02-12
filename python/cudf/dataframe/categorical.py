@@ -175,7 +175,7 @@ class CategoricalColumn(columnops.TypedColumnBase):
                     self.nullmask.mem
                 )
                 .copy_to_host()
-                .astype('int8')
+                .astype(self.data.dtype)
             )
         indices = pa.array(self.cat().codes.data.mem.copy_to_host())
         ordered = self.cat()._ordered
