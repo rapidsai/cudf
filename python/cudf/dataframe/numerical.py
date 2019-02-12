@@ -188,7 +188,7 @@ class NumericalColumn(columnops.TypedColumnBase):
     def unique(self, method='sort'):
         # method variable will indicate what algorithm to use to
         # calculate unique, not used right now
-        if method is not 'sort':
+        if method != 'sort':
             msg = 'non sort based unique() not implemented yet'
             raise NotImplementedError(msg)
         segs, sortedvals = self._unique_segments()
@@ -197,14 +197,14 @@ class NumericalColumn(columnops.TypedColumnBase):
         return self.replace(data=Buffer(out), mask=None)
 
     def unique_count(self, method='sort'):
-        if method is not 'sort':
+        if method != 'sort':
             msg = 'non sort based unique_count() not implemented yet'
             raise NotImplementedError(msg)
         segs, _ = self._unique_segments()
         return len(segs)
 
     def value_counts(self, method='sort'):
-        if method is not 'sort':
+        if method != 'sort':
             msg = 'non sort based value_count() not implemented yet'
             raise NotImplementedError(msg)
         segs, sortedvals = self._unique_segments()
@@ -428,14 +428,16 @@ def numeric_normalize_types(*args):
     return [a.astype(dtype) for a in args]
 
 
-def column_hash_values(column0, *other_columns):
+def column_hash_values(column0, *other_columns, initial_hash_values=None):
     """Hash all values in the given columns.
     Returns a new NumericalColumn[int32]
     """
     columns = [column0] + list(other_columns)
     buf = Buffer(rmm.device_array(len(column0), dtype=np.int32))
     result = NumericalColumn(data=buf, dtype=buf.dtype)
-    _gdf.hash_columns(columns, result)
+    if initial_hash_values:
+        initial_hash_values = rmm.to_device(initial_hash_values)
+    _gdf.hash_columns(columns, result, initial_hash_values)
     return result
 
 

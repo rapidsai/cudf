@@ -30,9 +30,6 @@ nvidia-smi
 logger "Activate conda env..."
 source activate gdf
 
-logger "Bump pyarrow"
-conda install -c conda-forge pyarrow=0.11.1 arrow-cpp=0.11.1 pandas>=0.23.4
-
 logger "Check versions..."
 python --version
 $CC --version
@@ -47,7 +44,7 @@ logger "Build libcudf..."
 mkdir -p $WORKSPACE/cpp/build
 cd $WORKSPACE/cpp/build
 logger "Run cmake libcudf..."
-cmake -DCMAKE_INSTALL_PREFIX=$CONDA_PREFIX ..
+cmake -DCMAKE_INSTALL_PREFIX=$CONDA_PREFIX -DCMAKE_CXX11_ABI=ON ..
 
 logger "Clean up make..."
 make clean
@@ -76,6 +73,10 @@ nvidia-smi
 logger "GoogleTest for libcudf..."
 cd $WORKSPACE/cpp/build
 GTEST_OUTPUT="xml:${WORKSPACE}/test-results/" make -j${PARALLEL_LEVEL} test
+
+# Temporarily install cupy for testing
+logger "pip install cupy"
+pip install cupy-cuda92
 
 logger "Python py.test for libcudf..."
 cd $WORKSPACE/cpp/build/python

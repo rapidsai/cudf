@@ -4,6 +4,7 @@
 #include "cudf/types.h"
 #include "cudf_utils.h"
 #include <iostream>
+#include <type_traits>
 
 /* --------------------------------------------------------------------------*/
 /** 

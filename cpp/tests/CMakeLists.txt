@@ -65,7 +65,7 @@ set(FILTER_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/filter/helper/utils.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/filter/test_example.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/filter/test_filter_ops.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/filter/test_gpu_concat.cu")
+    "${CMAKE_CURRENT_SOURCE_DIR}/filter/test_gdf_concat.cu")
 
 ConfigureTest(FILTER_TEST "${FILTER_TEST_SRC}")
 
@@ -175,6 +175,14 @@ set(TYPES_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/types/dispatcher_test.cu")
 
 ConfigureTest(TYPES_TEST "${TYPES_TEST_SRC}")
+
+###################################################################################################
+# - transpose tests -------------------------------------------------------------------------------
+
+set(TRANSPOSE_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/transpose/transpose_test.cu")
+
+ConfigureTest(TRANSPOSE_TEST "${TRANSPOSE_TEST_SRC}")
 
 ###################################################################################################
 ### enable testing ################################################################################

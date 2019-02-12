@@ -14,8 +14,6 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 
-cimport numpy as np
-
 from librmm_cffi import librmm as rmm
 
 from libc.stdint cimport uintptr_t
