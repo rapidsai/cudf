@@ -95,8 +95,6 @@ typedef struct gdf_column_{
     char *			col_name;			// host-side:	null terminated string
 } gdf_column;
 
-
-
 /* --------------------------------------------------------------------------*/
 /** 
  * @Synopsis  These enums indicate which method is to be used for an operation.
