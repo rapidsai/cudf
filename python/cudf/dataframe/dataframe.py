@@ -17,6 +17,7 @@ from pandas.api.types import is_dict_like
 from types import GeneratorType
 
 from librmm_cffi import librmm as rmm
+from libgdf_cffi import libgdf
 
 from cudf import formatting, _gdf
 from cudf.utils import cudautils, queryutils, applyutils, utils
@@ -1002,6 +1003,71 @@ class DataFrame(object):
             else:
                 df[k] = self[k].reset_index().take(new_positions)
         return df.set_index(self.index.take(new_positions))
+
+    def transpose(self):
+        """Transpose index and columns.
+
+        Returns
+        -------
+        a new (ncol x nrow) dataframe. self is (nrow x ncol)
+
+        Difference from pandas
+        ----------------------
+        Not supporting *copy* because default and only behaviour is copy=True
+        """
+        if len(self.columns) == 0:
+            return self
+
+        dtype = self.dtypes[0]
+        if pd.api.types.is_categorical_dtype(dtype):
+            raise NotImplementedError('Categorical columns are not yet '
+                                      'supported for function')
+        if any(t != dtype for t in self.dtypes):
+            raise ValueError('all columns must have the same dtype')
+        has_null = any(c.null_count for c in self._cols.values())
+
+        df = DataFrame()
+
+        ncols = len(self.columns)
+        cols = [self[col]._column.cffi_view for col in self._cols]
+
+        new_nrow = ncols
+        new_ncol = len(self)
+
+        if has_null:
+            new_col_series = [
+                Series.from_masked_array(
+                    data=Buffer(rmm.device_array(shape=new_nrow, dtype=dtype)),
+                    mask=cudautils.make_empty_mask(size=new_nrow),
+                )
+                for i in range(0, new_ncol)]
+        else:
+            new_col_series = [
+                Series(
+                    data=Buffer(rmm.device_array(shape=new_nrow, dtype=dtype)),
+                )
+                for i in range(0, new_ncol)]
+        new_col_ptrs = [
+            new_col_series[i]._column.cffi_view
+            for i in range(0, new_ncol)]
+
+        # TODO (dm): move to _gdf.py
+        libgdf.gdf_transpose(
+            ncols,
+            cols,
+            new_col_ptrs
+        )
+
+        for series in new_col_series:
+            series._column._update_null_count()
+
+        for i in range(0, new_ncol):
+            df[str(i)] = new_col_series[i]
+        return df
+
+    @property
+    def T(self):
+        return self.transpose()
 
     def merge(self, other, on=None, how='left', lsuffix='_x', rsuffix='_y',
               type="", method='hash'):
