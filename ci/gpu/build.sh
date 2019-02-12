@@ -78,6 +78,10 @@ GTEST_OUTPUT="xml:${WORKSPACE}/test-results/" make -j${PARALLEL_LEVEL} test
 logger "pip install cupy"
 pip install cupy-cuda92
 
+# Temporarily install feather for testing
+logger "conda install feather-format"
+conda install -y feather-format
+
 logger "Python py.test for libcudf..."
 cd $WORKSPACE/cpp/build/python
 py.test --cache-clear --junitxml=${WORKSPACE}/junit-libgdf.xml -v
