@@ -12,6 +12,8 @@
 - PR #895 Add Series groupby
 - PR #898 Add DataFrame.groupby(level=0) support
 - PR #888 CSV Reader: Add prefix parameter for column names, used when parsing without a header
+- PR #918 Add Series.groupby(level=0) support
+- PR #906 Add binary and comparison ops to DataFrame
 
 ## Improvements
 
@@ -63,6 +65,7 @@
 - PR #501 CSV Reader: Add support for user-specified decimal point and thousands separator to read_csv_strings()
 - PR #455 CSV Reader: Add support for user-specified decimal point and thousands separator to read_csv()
 - PR #439 add `DataFrame.drop` method similar to pandas
+- PR #356 add `DataFrame.transpose` method and `DataFrame.T` property similar to pandas
 - PR #505 CSV Reader: Add support for user-specified boolean values
 - PR #350 Implemented Series replace function
 - PR #490 Added print_env.sh script to gather relevant environment details when reporting cuDF issues
