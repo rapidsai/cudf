@@ -78,14 +78,11 @@ def feather_file(tmp_path_factory, pdf):
 @pytest.mark.parametrize('columns', [['col_int8'], ['col_category'],
                                      ['col_int32', 'col_float32'], None])
 def test_feather_reader(feather_file, columns):
-    from distutils.version import LooseVersion
-    if (LooseVersion(pd.__version__) < LooseVersion('0.24') and
-            columns is not None):
-        expect = pd.read_feather(feather_file)
-        expect = expect[columns]
-    else:
-        expect = pd.read_feather(feather_file, columns=columns)
-    got = cudf.read_feather(feather_file, columns=columns)
+    expect = pa.feather.read_table(feather_file, columns=columns)\
+                       .to_pandas()
+    got = cudf.read_feather(feather_file, columns=columns)\
+              .to_arrow(preserve_index=False)\
+              .to_pandas()
 
     assert_eq(expect, got, check_categorical=False)
 

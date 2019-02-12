@@ -46,7 +46,7 @@ def gdf(pdf):
 
 
 index_params = [True, False]
-compression_params = ['infer', 'gzip', 'bz2', 'zip', 'xz', None]
+compression_params = ['gzip', 'bz2', 'zip', 'xz', None]
 orient_params = ['columns', 'records', 'table', 'split']
 params = itertools.product(
     index_params,
