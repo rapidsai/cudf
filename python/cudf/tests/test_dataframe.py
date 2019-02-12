@@ -1234,6 +1234,81 @@ def test_dataframe_shape_empty():
     assert pdf.shape == gdf.shape
 
 
+@pytest.mark.parametrize('num_cols', [1, 2, 10])
+@pytest.mark.parametrize('num_rows', [1, 2, 1000])
+@pytest.mark.parametrize(
+    'dtype',
+    ['int8', 'int16', 'int32', 'int64', 'float32', 'float64',
+     'datetime64[ms]']
+)
+@pytest.mark.parametrize('nulls', ['none', 'some', 'all'])
+def test_dataframe_tranpose(nulls, num_cols, num_rows, dtype):
+    if dtype not in ['float32', 'float64'] and nulls in ['some', 'all']:
+        pytest.skip(msg='nulls not supported in dtype: ' + dtype)
+
+    pdf = pd.DataFrame()
+    from string import ascii_lowercase
+    for i in range(num_cols):
+        colname = ascii_lowercase[i]
+        data = np.random.randint(0, 26, num_rows).astype(dtype)
+        if nulls == 'some':
+            idx = np.random.choice(num_rows,
+                                   size=int(num_rows/2),
+                                   replace=False)
+            data[idx] = np.nan
+        elif nulls == 'all':
+            data[:] = np.nan
+        pdf[colname] = data
+
+    gdf = DataFrame.from_pandas(pdf)
+
+    got_function = gdf.transpose()
+    got_property = gdf.T
+
+    expect = pdf.transpose()
+
+    # Temporarily reset index since we don't use index for col names
+    if len(expect.columns) > 0:
+        expect = expect.reset_index(drop=True)
+        expect.columns = [str(x) for x in range(expect.shape[1])]
+
+    # Pandas creates an empty index of `object` dtype by default while cuDF
+    # creates a RangeIndex by default, type is different but same value
+    pd.testing.assert_frame_equal(
+        expect,
+        got_function.to_pandas(),
+        check_index_type=False
+    )
+    pd.testing.assert_frame_equal(
+        expect,
+        got_property.to_pandas(),
+        check_index_type=False
+    )
+
+
+@pytest.mark.parametrize('num_cols', [0, 1, 2, 10])
+@pytest.mark.parametrize('num_rows', [0, 1, 2, 1000])
+def test_dataframe_tranpose_category(num_cols, num_rows):
+    pytest.xfail("category dtype not yet supported for transpose")
+    pdf = pd.DataFrame()
+    from string import ascii_lowercase
+    for i in range(num_cols):
+        colname = ascii_lowercase[i]
+        data = pd.Series(list(ascii_lowercase), dtype='category')
+        data = data.sample(num_rows, replace=True).reset_index(drop=True)
+        pdf[colname] = data
+
+    gdf = DataFrame.from_pandas(pdf)
+
+    got_function = gdf.transpose()
+    got_property = gdf.T
+
+    expect = pdf.transpose()
+
+    pd.testing.assert_frame_equal(expect, got_function.to_pandas())
+    pd.testing.assert_frame_equal(expect, got_property.to_pandas())
+
+
 def test_generated_column():
     gdf = DataFrame({'a': (i for i in range(5))})
     assert len(gdf) == 5
@@ -1309,8 +1384,6 @@ def test_binops_series(pdf, gdf, binop):
     gdf = gdf + 1.0
     d = binop(pdf.x, pdf.y)
     g = binop(gdf.x, gdf.y)
-    print(d)
-    print(g)
     assert_eq(d, g)
 
 
