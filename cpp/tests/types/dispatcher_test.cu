@@ -13,6 +13,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
+// These tests excerise the `assert(false)` on unsupported dtypes in the
+// type_dispatcher The assert is only present if the NDEBUG macro isn't defined
+#ifdef NDEBUG
+#undef NDEBUG
+#define REDEFINE
+#endif
+
 #include <cudf.h>
 #include <utilities/type_dispatcher.hpp>
 #include "gtest/gtest.h"
@@ -104,9 +112,8 @@ TEST_F(DispatcherTest, DeviceDispatchFunctor) {
   }
 }
 
-// These tests excerise the `assert(false)` on unsupported dtypes in the
-// type_dispatcher The assert is only present if the NDEBUG macro isn't defined
-#ifndef NDEBUG
+
+using DispatcherDeathTest = DispatcherTest;
 
 // Unsuported gdf_dtypes should cause program to exit
 TEST_F(DispatcherDeathTest, UnsuportedTypesTest) {
@@ -139,4 +146,6 @@ TEST_F(DispatcherDeathTest, DeviceDispatchFunctor) {
   }
 }
 
+#ifdef REDEFINE
+#define NDEBUG
 #endif
