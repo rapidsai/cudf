@@ -9,7 +9,7 @@ const bool DEVICE_ALLOCATED = true;
 const bool HOST_ALLOCATED = false;
 
 
-typedef unsigned int nv_category_index_type;
+typedef int nv_category_index_type;
 /**
  * Take a column whose indices map into this nvcategory and generate a condensed copy
  *

@@ -237,7 +237,7 @@ TEST_F(NVCategoryTest, TEST_NVCATEGORY_GROUPBY)
 	concat[1] = output_groups[0];
 
 	gdf_column * concat_out = create_nv_category_column(200,true);
-	category_column_groups_out->dtype_info.category = nullptr;
+
 
 	std::cout<<"calling concat"<<std::endl;
 
