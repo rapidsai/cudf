@@ -95,22 +95,15 @@ TYPED_TEST(ColumnWrapperTest, SizeConstructor) {
 
 TYPED_TEST(ColumnWrapperTest, ValueBitInitConstructor) {
   gdf_size_type const size{1000};
+
   cudf::test::column_wrapper<TypeParam> col(
       size, [](auto row) { return static_cast<TypeParam>(row); },
       [](auto row) { return true; });
 
-  gdf_column const* underlying_column = col.get();
-  ASSERT_NE(nullptr, underlying_column);
-  EXPECT_NE(nullptr, underlying_column->data);
-  EXPECT_NE(nullptr, underlying_column->valid);
-  EXPECT_EQ(size, underlying_column->size);
-  gdf_dtype expected = cudf::type_to_gdf_dtype<TypeParam>::value;
-  EXPECT_EQ(expected, underlying_column->dtype);
-
-  std::vector<TypeParam> col_data;
-  std::vector<gdf_valid_type> col_bitmask;
-  std::tie(col_data, col_bitmask) = col.to_host();
-  EXPECT_EQ(static_cast<size_t>(size), col_data.size());
-  EXPECT_EQ(static_cast<size_t>(gdf_get_num_chars_bitmask(size)),
-            col_bitmask.size());
+  std::vector<TypeParam> expected_values(size);
+  std::iota(expected_values.begin(), expected_values.end(),
+            static_cast<TypeParam>(0));
+  std::vector<gdf_valid_type> expected_bitmask(gdf_get_num_chars_bitmask(size),
+                                               0xff);
+  test_constructor(col, expected_values, expected_bitmask);
 }
