@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, NVIDIA CORPORATION.
+ * Copyright (c) 2019, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,36 +24,10 @@
 #include "tuple_vectors.h"
 #include "utilities/bit_util.cuh"
 #include "utilities/type_dispatcher.hpp"
+#include "utilities/tuple_for_each.hpp"
 
 namespace cudf {
 namespace test {
-namespace detail {
-template <typename Tuple, typename F, std::size_t... Indices>
-void for_each_impl(Tuple&& tuple, F&& f, std::index_sequence<Indices...>) {
-  using swallow = int[];
-  (void)swallow{
-      1, (f(std::get<Indices>(std::forward<Tuple>(tuple))), void(), int{})...};
-}
-
-/**---------------------------------------------------------------------------*
- * @brief A `for_each` over the elements of a tuple.
- *
- * For every element in a tuple, invokes a unary callable and passes the tuple
- *element into the callable.
- *
- * @tparam Tuple The type of the tuple
- * @tparam F The type of the callable
- * @param tuple The tuple to iterate over
- * @param f The unary callable
- *---------------------------------------------------------------------------**/
-template <typename Tuple, typename F>
-void for_each(Tuple&& tuple, F&& f) {
-  constexpr std::size_t N =
-      std::tuple_size<std::remove_reference_t<Tuple>>::value;
-  for_each_impl(std::forward<Tuple>(tuple), std::forward<F>(f),
-                std::make_index_sequence<N>{});
-}
-}  // namespace detail
 
 template <typename>
 struct table_wrapper;
