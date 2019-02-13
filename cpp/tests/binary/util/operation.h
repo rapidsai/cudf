@@ -19,6 +19,8 @@
 #define GDF_TESTS_BINARY_OPERATION_UTIL_OPERATION_H
 
 #include <cmath>
+#include <type_traits>
+#include <cstdint>
 
 namespace gdf {
 namespace library {
@@ -77,9 +79,9 @@ namespace operation {
     struct Mod;
 
     template <typename TypeOut, typename TypeVax, typename TypeVay>
-    struct Mod<TypeOut, TypeVax, TypeVay, uint64_t> {
+    struct Mod<TypeOut, TypeVax, TypeVay, int64_t> {
         TypeOut operator()(TypeVax x, TypeVay y) {
-            return (TypeOut)((uint64_t)x % (uint64_t)y);
+            return (TypeOut)((int64_t)x % (int64_t)y);
         }
     };
 

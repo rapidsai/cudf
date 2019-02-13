@@ -17,14 +17,15 @@
 #ifndef SCALAR_WRAPPER_H
 #define SCALAR_WRAPPER_H
 
-#include <thrust/equal.h>
-#include <thrust/logical.h>
-#include <bitset>
 #include "cudf.h"
 #include "cudf_test_utils.cuh"
 #include "rmm/rmm.h"
 #include "utilities/bit_util.cuh"
 #include "utilities/type_dispatcher.hpp"
+
+#include <thrust/equal.h>
+#include <thrust/logical.h>
+#include <bitset>
 
 #ifndef CUDA_RT_CALL
 #define CUDA_RT_CALL(call)                                                    \
@@ -55,6 +56,20 @@ namespace test {
  *---------------------------------------------------------------------------**/
 template <typename ScalarType>
 struct scalar_wrapper {
+  /**---------------------------------------------------------------------------*
+   * @brief Implicit conversion operator to a gdf_scalar pointer.
+   *
+   * Allows for implicit conversion of a column_wrapper to a pointer to its
+   * underlying gdf_scalar.
+   *
+   * In this way, a column_wrapper can be passed directly into a libcudf API
+   * and will be implicitly converted to a pointer to its underlying gdf_scalar
+   * without the need to use the `get()` member.
+   *
+   * @return gdf_scalar* Pointer to the underlying gdf_scalar
+   *---------------------------------------------------------------------------**/
+  operator gdf_scalar*(){return &the_scalar;};
+
   /**---------------------------------------------------------------------------*
    * @brief Construct a new scalar wrapper object
    *
