@@ -1077,9 +1077,8 @@ class Series(object):
             self._column, initial_hash_values=initial_hash)
 
         # TODO: Binary op when https://github.com/rapidsai/cudf/pull/892 merged
-        cudautils.modulo(hashed_values.data.to_gpu_array(), stop)
-
-        return Series(hashed_values)
+        mod_vals = cudautils.modulo(hashed_values.data.to_gpu_array(), stop)
+        return Series(mod_vals)
 
     def quantile(self, q, interpolation='midpoint', exact=True,
                  quant_index=True):
