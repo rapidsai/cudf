@@ -455,7 +455,8 @@ TEST(gdf_csv_test, Dates)
 
 	std::ofstream outfile(fname, std::ofstream::out);
 	outfile << "05/03/2001\n31/10/2010\n20/10/1994\n18/10/1990\n1/1/1970\n";
-	outfile << "18/04/1995\n14/07/1994\n07/06/2006\n16/09/2005\n2/2/1970\n";
+	outfile << "18/04/1995\n14/07/1994\n07/06/2006 11:20:30.400\n";
+	outfile << "16/09/2005T1:2:30.400PM\n2/2/1970\n";
 	outfile.close();
 	ASSERT_TRUE( checkFile(fname) );
 
@@ -479,9 +480,9 @@ TEST(gdf_csv_test, Dates)
 
 		auto ACol = gdf_host_column<uint64_t>(args.data[0]);
 		EXPECT_THAT( ACol.hostdata(),
-			::testing::ElementsAre(983750400000, 1288483200000, 782611200000,
-								   656208000000, 0, 798163200000, 774144000000,
-								   1149638400000, 1126828800000, 2764800000) );
+		  ::testing::ElementsAre(983750400000, 1288483200000, 782611200000,
+		               656208000000, 0, 798163200000, 774144000000,
+		               1149679230400, 1126875750400, 2764800000) );
 	}
 }
 
