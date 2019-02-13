@@ -72,7 +72,7 @@ struct column_wrapper {
    *
    * @return gdf_column* Pointer to the underlying gdf_column
    *---------------------------------------------------------------------------**/
-  operator gdf_column*(){return &the_column};
+  operator gdf_column*(){return &the_column;};
 
   /**---------------------------------------------------------------------------*
    * @brief Construct a new column wrapper of a specified size with default
