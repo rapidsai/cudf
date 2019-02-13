@@ -47,6 +47,7 @@
 - PR #866 Merge v0.5.1 numpy ABI hotfix into 0.6
 - PR #917 value_counts return int type on empty columns
 - PR #927 CSV Reader: Fix category GDF_CATEGORY hashes not being computed properly
+- PR #921 CSV Reader: Fix parsing errors with delim_whitespace, quotations in the header row, unnamed columns
 
 
 # cuDF 0.5.1 (05 Feb 2019)

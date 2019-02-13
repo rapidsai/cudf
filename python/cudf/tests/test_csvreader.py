@@ -814,3 +814,46 @@ def test_csv_reader_category_hash():
 
     hash_ref = [2022314536, -189888986, 1512937027, 397836265, 1512937027]
     assert(list(df['user']) == hash_ref)
+
+
+def test_csv_reader_delim_whitespace():
+    buffer = '1    2  3\n4  5 6\n'
+
+    # with header row
+    cu_df = read_csv(StringIO(buffer), delim_whitespace=True)
+    pd_df = pd.read_csv(StringIO(buffer), delim_whitespace=True)
+    pd.util.testing.assert_frame_equal(pd_df, cu_df.to_pandas())
+
+    # without header row
+    cu_df = read_csv(StringIO(buffer), delim_whitespace=True, header=None)
+    pd_df = pd.read_csv(StringIO(buffer), delim_whitespace=True, header=None)
+    assert(pd_df.shape == cu_df.shape)
+
+    # should raise an error if used with delimiter or sep
+    with pytest.raises(ValueError):
+        read_csv(StringIO(buffer), delim_whitespace=True, delimiter=' ')
+    with pytest.raises(ValueError):
+        read_csv(StringIO(buffer), delim_whitespace=True, sep=' ')
+
+
+def test_csv_reader_unnamed_cols():
+    # first and last columns are unnamed
+    buffer = ',1,2,3,\n4,5,6,7,8\n'
+
+    cu_df = read_csv(StringIO(buffer))
+    pd_df = pd.read_csv(StringIO(buffer))
+    assert(all(pd_df.columns == cu_df.columns))
+
+
+def test_csv_reader_header_quotation():
+    buffer = '"1,,1","2,\n,2",3\n4,5,6\n'
+
+    cu_df = read_csv(StringIO(buffer))
+    pd_df = pd.read_csv(StringIO(buffer))
+    assert(cu_df.shape == (1, 3))
+    pd.util.testing.assert_frame_equal(pd_df, cu_df.to_pandas())
+
+    # test cases that fail with pandas
+    buffer_pd_fail = '"1,one," , ",2,two" ,3\n4,5,6\n'
+    cu_df = read_csv(StringIO(buffer_pd_fail))
+    assert(cu_df.shape == (1, 3))
