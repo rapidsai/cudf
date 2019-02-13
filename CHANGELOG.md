@@ -48,6 +48,7 @@
 - PR #917 value_counts return int type on empty columns
 - PR #927 CSV Reader: Fix category GDF_CATEGORY hashes not being computed properly
 - PR #921 CSV Reader: Fix parsing errors with delim_whitespace, quotations in the header row, unnamed columns
+- PR #933 Fix handling objects of all nulls in series creation
 
 
 # cuDF 0.5.1 (05 Feb 2019)
