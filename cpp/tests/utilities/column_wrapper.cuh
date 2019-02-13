@@ -60,6 +60,18 @@ struct column_wrapper {
   column_wrapper(column_wrapper<ColumnType> const& other) = delete;
   column_wrapper& operator=(column_wrapper<ColumnType> const& other) = delete;
 
+  /**---------------------------------------------------------------------------*
+   * @brief Implicit conversion operator to a gdf_column pointer.
+   *
+   * Allows for implicit conversion of a column_wrapper to a pointer to its
+   * underlying gdf_column.
+   *
+   * In this way, a column_wrapper can be passed directly into a libcudf API
+   * and will be implicitly converted to a pointer to its underlying gdf_column
+   * without the need to use the `get()` member.
+   *
+   * @return gdf_column* Pointer to the underlying gdf_column
+   *---------------------------------------------------------------------------**/
   operator gdf_column*(){return &the_column};
 
   /**---------------------------------------------------------------------------*
