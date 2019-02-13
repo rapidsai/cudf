@@ -54,19 +54,25 @@ gdf_error gdf_from_dlpack(gdf_column** columns,
                           int *num_columns,
                           DLManagedTensor const * tensor)
 {
-  // Make sure this Tensor uses CUDA memory
-  GDF_REQUIRE(tensor->dl_tensor.ctx.device_type == kDLGPU, GDF_INVALID_API_CALL);
+  // We can copy from host or device pointers
+  GDF_REQUIRE(kDLGPU == tensor->dl_tensor.ctx.device_type ||
+              kDLCPU == tensor->dl_tensor.ctx.device_type ||
+              kDLCPUPinned == tensor->dl_tensor.ctx.device_type, 
+              GDF_INVALID_API_CALL);
   // Make sure the current device ID matches the Tensor's device ID
   int device_id = 0;
   CUDA_TRY(cudaGetDevice(&device_id));
-  GDF_REQUIRE(tensor->dl_tensor.ctx.device_id == device_id, GDF_INVALID_API_CALL);
+  GDF_REQUIRE(tensor->dl_tensor.ctx.device_id == device_id, 
+              GDF_INVALID_API_CALL);
 
   // Currently only 1D tensors are supported
+  GDF_REQUIRE(tensor->dl_tensor.ndim > 0, GDF_DATASET_EMPTY);
   GDF_REQUIRE(tensor->dl_tensor.ndim == 1, GDF_NOTIMPLEMENTED_ERROR);
 
   // Ensure the column is not too big
   GDF_REQUIRE(tensor->dl_tensor.shape[0] > 0, GDF_DATASET_EMPTY);
-  GDF_REQUIRE(tensor->dl_tensor.shape[0] < std::numeric_limits<gdf_size_type>::max(), 
+  GDF_REQUIRE(tensor->dl_tensor.shape[0] < 
+              std::numeric_limits<gdf_size_type>::max(), 
               GDF_COLUMN_SIZE_TOO_BIG);
   
   // compute the GDF datatype
