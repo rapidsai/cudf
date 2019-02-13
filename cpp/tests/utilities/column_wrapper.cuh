@@ -56,25 +56,29 @@ namespace test {
  *---------------------------------------------------------------------------**/
 template <typename ColumnType>
 struct column_wrapper {
+  // TODO implement this
+  column_wrapper(column_wrapper<ColumnType> const& other) = delete;
+
+  column_wrapper& operator=(column_wrapper<ColumnType> const& other) = delete;
+
   /**---------------------------------------------------------------------------*
-   * @brief Construct a new column wrapper of a specified size with zero
-   * initialized data.
+   * @brief Construct a new column wrapper of a specified size with default
+   * initialized data and optionally allocated bitmask.
    *
-   * Constructs a column_wrapper of the specified size with zero-intialized
-   *data.
+   * Constructs a column_wrapper of the specified size with default intialized
+   * data.
    *
-   * Optionally allocates a zero-initialized bitmask.
+   * Optionally allocates a default-initialized bitmask.
    *
    * @param column_size The desired size of the column
    * @param allocate_bitmask Optionally allocate a zero-initialized bitmask
    *---------------------------------------------------------------------------**/
   column_wrapper(gdf_size_type column_size, bool allocate_bitmask = false) {
-    std::vector<ColumnType> host_data(column_size, 0);
+    std::vector<ColumnType> host_data(column_size);
     std::vector<gdf_valid_type> host_bitmask;
 
     if (allocate_bitmask) {
       host_bitmask.resize(gdf_get_num_chars_bitmask(column_size));
-      std::fill(host_bitmask.begin(), host_bitmask.end(), 0);
     }
 
     initialize_with_host_data(host_data, host_bitmask);
@@ -337,7 +341,7 @@ struct column_wrapper {
       gdf_size_type const required_bitmask_size{
           gdf_get_num_chars_bitmask(host_data.size())};
 
-      if (host_bitmask.size() < required_bitmask_size) {
+      if (host_bitmask.size() < static_cast<size_t>(required_bitmask_size)) {
         throw std::runtime_error("Insufficiently sized bitmask vector.");
       }
 
