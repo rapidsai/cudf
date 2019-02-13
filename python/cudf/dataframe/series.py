@@ -1075,7 +1075,10 @@ class Series(object):
         initial_hash = np.asarray(hash(self.name)) if use_name else None
         hashed_values = numerical.column_hash_values(
             self._column, initial_hash_values=initial_hash)
-        hashed_values = np.mod(hashed_values, stop)
+
+        # TODO: Binary op when https://github.com/rapidsai/cudf/pull/892 merged
+        cudautils.modulo(hashed_values.data.to_gpu_array(), stop)
+
         return Series(hashed_values)
 
     def quantile(self, q, interpolation='midpoint', exact=True,

@@ -1544,7 +1544,7 @@ def test_arrow_pandas_compat(pdf, gdf, preserve_index):
     assert_eq(pdf2, gdf2)
 
 
-@pytest.mark.parametrize('nrows', [1, 8, 100, 1000])
+@pytest.mark.parametrize('nrows', [1, 8, 100, 1000, 100000])
 def test_series_hash_encode(nrows):
     data = np.asarray(range(nrows))
     s = Series(data, name="x1")
