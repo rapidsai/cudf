@@ -46,6 +46,7 @@
 - PR #889 Deleted test_rmm.py which has now moved to RMM repo
 - PR #866 Merge v0.5.1 numpy ABI hotfix into 0.6
 - PR #917 value_counts return int type on empty columns
+- PR #927 CSV Reader: Fix category GDF_CATEGORY hashes not being computed properly
 
 
 # cuDF 0.5.1 (05 Feb 2019)
