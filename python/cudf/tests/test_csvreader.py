@@ -807,10 +807,10 @@ def test_csv_reader_prefix():
 
 def test_csv_reader_category_hash():
 
-    lines = ['HBM0676', 'KRC0842', 'ILM1441', 'EJV0094']
+    lines = ['HBM0676', 'KRC0842', 'ILM1441', 'EJV0094', 'ILM1441']
     buffer = '\n'.join(lines) + '\n'
 
     df = read_csv(StringIO(buffer), names=['user'], dtype=['category'])
 
-    hash_ref = [2022314536, -189888986, 1512937027, 397836265]
+    hash_ref = [2022314536, -189888986, 1512937027, 397836265, 1512937027]
     assert(list(df['user']) == hash_ref)
