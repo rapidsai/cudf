@@ -521,6 +521,39 @@ TEST(gdf_csv_test, FloatingPoint)
 	}
 }
 
+TEST(gdf_csv_test, Category)
+{
+	const char* fname = "/tmp/CsvCategory.csv";
+	const char* names[] = { "UserID" };
+	const char* types[] = { "category" };
+
+	std::ofstream outfile(fname, std::ofstream::out);
+	outfile << "HBM0676;KRC0842;ILM1441;EJV0094;";
+	outfile.close();
+	ASSERT_TRUE( checkFile(fname) );
+
+	{
+		csv_read_arg args{};
+		args.input_data_form = gdf_csv_input_form::FILE_PATH;
+		args.filepath_or_buffer = fname;
+		args.num_cols = std::extent<decltype(names)>::value;
+		args.names = names;
+		args.dtype = types;
+		args.delimiter = ',';
+		args.lineterminator = ';';
+		args.header = -1;
+		args.nrows = -1;
+		EXPECT_EQ( read_csv(&args), GDF_SUCCESS );
+
+		EXPECT_EQ( args.num_cols_out, args.num_cols );
+		ASSERT_EQ( args.data[0]->dtype, GDF_CATEGORY );
+
+		auto ACol = gdf_host_column<int32_t>(args.data[0]);
+		EXPECT_THAT( ACol.hostdata(),
+			::testing::ElementsAre(2022314536, -189888986, 1512937027, 397836265) );
+	}
+}
+
 TEST(gdf_csv_test, SkiprowsNrows)
 {
 	const char* fname = "/tmp/CsvSkiprowsNrows.csv";

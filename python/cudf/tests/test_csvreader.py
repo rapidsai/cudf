@@ -792,7 +792,7 @@ def test_csv_reader_blanks_and_comments(skip_rows, header_row, skip_blanks):
     assert(list(cu_df.columns.values) == list(pd_df.columns.values))
 
 
-def test_csv_reader_prefix(tmpdir):
+def test_csv_reader_prefix():
 
     lines = ['1, 1, 1, 1']
     buffer = '\n'.join(lines) + '\n'
@@ -803,6 +803,17 @@ def test_csv_reader_prefix(tmpdir):
     column_names = list(df.columns.values)
     for col in range(len(column_names)):
         assert(column_names[col] == prefix_str + str(col))
+
+
+def test_csv_reader_category_hash():
+
+    lines = ['HBM0676', 'KRC0842', 'ILM1441', 'EJV0094', 'ILM1441']
+    buffer = '\n'.join(lines) + '\n'
+
+    df = read_csv(StringIO(buffer), names=['user'], dtype=['category'])
+
+    hash_ref = [2022314536, -189888986, 1512937027, 397836265, 1512937027]
+    assert(list(df['user']) == hash_ref)
 
 
 def test_csv_reader_delim_whitespace():
