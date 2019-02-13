@@ -58,8 +58,9 @@ template <typename ColumnType>
 struct column_wrapper {
   // TODO implement this
   column_wrapper(column_wrapper<ColumnType> const& other) = delete;
-
   column_wrapper& operator=(column_wrapper<ColumnType> const& other) = delete;
+
+  operator gdf_column*(){return &the_column};
 
   /**---------------------------------------------------------------------------*
    * @brief Construct a new column wrapper of a specified size with default
