@@ -147,8 +147,8 @@ TYPED_TEST(WrappersTest, IncrementOperators){
     for(int i = 0; i < NUM_TRIALS; ++i){
         UnderlyingType t{this->rand()};
         TypeParam w{t};
-        EXPECT_EQ(t++, w++.value);
-        EXPECT_EQ(++t, ++w.value);
+        EXPECT_EQ(t++, (w++).value);
+        EXPECT_EQ(++t, (++w).value);
     }
 }
 
@@ -158,8 +158,8 @@ TYPED_TEST(WrappersTest, DecrementOperators){
     for(int i = 0; i < NUM_TRIALS; ++i){
         UnderlyingType t{this->rand()};
         TypeParam w{t};
-        EXPECT_EQ(t--, w--.value);
-        EXPECT_EQ(--t, --w.value);
+        EXPECT_EQ(t--, (w--).value);
+        EXPECT_EQ(--t, (--w).value);
     }
 }
 
