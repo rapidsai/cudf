@@ -315,7 +315,13 @@ def as_column(arbitrary, nan_as_null=True, dtype=None):
     elif isinstance(arbitrary, pa.ChunkedArray):
         gpu_cols = [as_column(chunk, dtype=dtype) for chunk in
                     arbitrary.chunks]
-        data = Column._concat(gpu_cols)
+
+        if dtype and dtype != 'empty':
+            new_dtype = dtype
+        else:
+            new_dtype = np.dtype(arbitrary.type.to_pandas_dtype())
+
+        data = Column._concat(gpu_cols, dtype=new_dtype)
 
     elif isinstance(arbitrary, (pd.Series, pd.Categorical)):
         if pd.api.types.is_categorical_dtype(arbitrary):

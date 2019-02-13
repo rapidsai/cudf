@@ -17,8 +17,7 @@ def datadir(datadir):
     'orc_file',
     [
         'TestOrcFile.emptyFile.orc',
-        'TestOrcFile.test1.orc',
-        'TestOrcFile.testDate1900.orc'
+        'TestOrcFile.test1.orc'
     ]
 )
 def test_orc_reader(datadir, orc_file):

@@ -37,9 +37,10 @@ class Column(object):
     *null_count*).
     """
     @classmethod
-    def _concat(cls, objs):
+    def _concat(cls, objs, dtype=None):
+        dtype = np.dtype(dtype)
         if len(objs) == 0:
-            return Column(Buffer.null(np.float))
+            return Column(Buffer.null(dtype))
 
         # Handle categories for categoricals
         from cudf.dataframe.categorical import CategoricalColumn

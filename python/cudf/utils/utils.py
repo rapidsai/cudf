@@ -146,6 +146,7 @@ def buffers_from_pyarrow(pa_arr, dtype=None):
         else:
             new_dtype = pa_arr.type.to_pandas_dtype()
 
+    print(new_dtype)
     padata = Buffer(
         np.array(pa_arr.buffers()[1]).view(new_dtype)[
             pa_arr.offset:pa_arr.offset + len(pa_arr)
