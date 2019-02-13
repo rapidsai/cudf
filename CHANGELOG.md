@@ -30,6 +30,7 @@
 - PR #554 Add `empty` method and `is_monotonic` attribute to `Index`
 - PR #909 CSV Reader: Avoid host->device->host copy for header row data
 - PR #916 Improved unit testing and error checking for `gdf_column_concat`
+- PR #941 Replace `numpy` call in `Series.hash_encode` with `numba`
 
 ## Bug Fixes
 
