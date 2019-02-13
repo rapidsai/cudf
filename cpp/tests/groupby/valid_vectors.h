@@ -25,23 +25,21 @@
 #include <utilities/bit_util.cuh>
 
 // host_valid_pointer is a wrapper for gdf_valid_type* with custom deleter
-using host_valid_pointer = typename std::shared_ptr<gdf_valid_type>;
+using host_valid_pointer = std::basic_string<uint8_t>;
 
 // Create a valid pointer and init randomly the last half column
 static inline host_valid_pointer create_and_init_valid(size_t length)
 {
-    auto deleter = [](gdf_valid_type* valid) { delete[] valid; };
-    auto n_bytes = CudfPaddedLength(gdf_get_num_chars_bitmask(length));
-    auto valid_bits = new gdf_valid_type[n_bytes];
-
-    // for (size_t i = 0; i < length; ++i) {
-    //     if (i < length / 2 || std::rand() % 2 == 1) {
-    //         gdf::util::turn_bit_on(valid_bits, i);
-    //     } else {
-    //         gdf::util::turn_bit_off(valid_bits, i);
-    //     }
-    // }
-    return host_valid_pointer{ valid_bits, deleter };
+    auto n_bytes = PaddedLength ( gdf_get_num_chars_bitmask(length) );
+    uint8_t *ptr= new uint8_t[n_bytes];
+    for (size_t i = 0; i < length; ++i) {
+        // if (i < length / 2 || std::rand() % 2 == 1) {
+        //     gdf::util::turn_bit_on(ptr, i);
+        // } else {
+        //     gdf::util::turn_bit_off(ptr, i);
+        // }
+    }
+    return host_valid_pointer(n_bytes, 'C');
 }
 
 

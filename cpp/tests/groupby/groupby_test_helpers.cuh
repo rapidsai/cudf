@@ -289,7 +289,6 @@ void copy_output(
     copy_gdf_column(group_by_output_value, output_value);
 }
 
- 
 
 //Copy device side gdf_column data to an std::vector
 template <typename T>
@@ -298,7 +297,7 @@ void copy_gdf_column_with_nulls(gdf_column* column, std::vector<T>& vec, host_va
     vec.resize(column->size);
     cudaMemcpy(vec.data(), column->data, column->size * sizeof(T), cudaMemcpyDeviceToHost);
 
-    cudaMemcpy(output_valids.get(),  column->valid, gdf_get_num_chars_bitmask(column->size), cudaMemcpyDeviceToHost);
+    cudaMemcpy((uint8_t*)output_valids.data(),  column->valid, gdf_get_num_chars_bitmask(column->size), cudaMemcpyDeviceToHost);
     
 }
 
@@ -342,7 +341,7 @@ void copy_output_with_nulls(
 
 // Prints a vector
 template<typename T>
-void print_vector(std::vector<T>& v, gdf_valid_type* valid = nullptr)
+void print_vector(std::vector<T>& v, const gdf_valid_type* valid = nullptr)
 {
     auto functor = [&valid, &v] (int index) -> std::string {
         if ( gdf_is_valid(valid, index)) {
@@ -374,7 +373,7 @@ print_tuple_vector(std::tuple<std::vector<Tp>...>& t, const std::vector<host_val
   if (valids.size() == 0)
     print_vector(std::get<I>(t), nullptr);
   else
-    print_vector(std::get<I>(t), valids[I].get());
+    print_vector(std::get<I>(t), valids[I].data());
   std::cout << std::endl;
 
   //recurse to next vector in tuple

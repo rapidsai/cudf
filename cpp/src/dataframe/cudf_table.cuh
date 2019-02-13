@@ -306,7 +306,7 @@ public:
     const size_type mask_size = gdf_get_num_chars_bitmask(column_length);
 
     //@WARNING: valid init size padding!
-    device_row_valid.resize( CudfPaddedLength(mask_size) );
+    device_row_valid.resize( PaddedLength(mask_size) );
 
        
     // If a row contains a single NULL value, then the entire row is considered
@@ -1022,7 +1022,8 @@ private:
     }
     if (input_column->valid != nullptr && output_column->valid != nullptr) {
       if (input_column->valid == output_column->valid) { //If gather is in-place
-          rmm::device_vector<gdf_valid_type> remapped_valid_copy(gdf_get_num_chars_bitmask(num_rows), 0);
+          rmm::device_vector<gdf_valid_type> remapped_valid_copy(PaddedLength(gdf_get_num_chars_bitmask(num_rows)), 0);
+
           gather_valid<index_type>(
                   input_column->valid,
                   remapped_valid_copy.data().get(),
@@ -1030,7 +1031,7 @@ private:
                   num_rows, input_column->size, stream);
           thrust::copy(rmm::exec_policy(stream),
                   remapped_valid_copy.begin(),
-                  remapped_valid_copy.end(), output_column->valid);
+                  remapped_valid_copy.begin() + gdf_get_num_chars_bitmask(num_rows), output_column->valid);
       }
       else {
           // Ensure the output bitmask is initialized to zero

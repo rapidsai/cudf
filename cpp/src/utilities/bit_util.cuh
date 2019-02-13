@@ -71,7 +71,7 @@ __host__ __device__ __forceinline__ size_t last_byte_index(size_t column_size)
 }
 
 
-static inline size_t null_count(uint8_t* const bits, size_t column_size)
+static inline size_t null_count(const uint8_t* const bits, size_t column_size)
 {
   size_t count = 0;
   for(size_t i = 0; i < column_size; i++)
@@ -95,7 +95,7 @@ static inline std::string chartobin(gdf_valid_type c, size_t size = 8)
   return bin;
 }
 
-static inline std::string gdf_valid_to_str(gdf_valid_type* valid, size_t column_size)
+static inline std::string gdf_valid_to_str(const gdf_valid_type* valid, size_t column_size)
 {
   size_t last_byte = gdf::util::last_byte_index(column_size);
   std::string response;
