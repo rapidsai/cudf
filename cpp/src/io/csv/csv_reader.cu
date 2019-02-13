@@ -201,7 +201,7 @@ __device__ void setBit(gdf_valid_type* address, int bit) {
 /**
 * @brief Removes the first and Last quote in the string
 */
-string removeQoutes(string str, char quotechar) {
+string removeQuotes(string str, char quotechar) {
 	// Exclude first and last quotation char
 	const size_t first_quote = str.find(quotechar);
 	if (first_quote != string::npos) {
@@ -257,7 +257,7 @@ gdf_error setColumnNamesFromCsv(raw_csv_t* raw_csv) {
 			if (raw_csv->header_row >= 0) {
 				// first_row is the header, add the column name
 				string new_col_name(first_row.data() + prev, pos - prev);
-				raw_csv->col_names.push_back(removeQoutes(new_col_name, raw_csv->opts.quotechar));
+				raw_csv->col_names.push_back(removeQuotes(new_col_name, raw_csv->opts.quotechar));
 			}
 			else {
 				// first_row is the first data row, add the automatically generated name
@@ -266,7 +266,8 @@ gdf_error setColumnNamesFromCsv(raw_csv_t* raw_csv) {
 			num_cols++;
 
 			// Skip adjacent delimiters if delim_whitespace is set
-			while (raw_csv->opts.multi_delimiter && 
+			while (raw_csv->opts.multi_delimiter &&
+				   pos < first_row.size() &&
 				   first_row[pos] == raw_csv->opts.delimiter && 
 				   first_row[pos + 1] == raw_csv->opts.delimiter) {
 				++pos;
@@ -1433,8 +1434,9 @@ long seekFieldEnd(const char *raw_csv, const ParseOptions opts, long pos, long s
 		else if(quotation==false){
 			if(raw_csv[pos] == opts.delimiter){
 				while (opts.multi_delimiter &&
-					raw_csv[pos + 1] == opts.delimiter) {
-						++pos;
+					   pos < stop &&
+					   raw_csv[pos + 1] == opts.delimiter) {
+					++pos;
 				}
 				break;
 			}
