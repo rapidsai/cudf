@@ -14,7 +14,6 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 
-cimport numpy as np
 
 from libgdf_cffi import ffi, libgdf
 from librmm_cffi import librmm as rmm
@@ -53,3 +52,25 @@ cpdef apply_order_by(in_cols, out_indices, ascending=True, na_position=1):
                               <int> flag_nulls_are_smallest)
     
     check_gdf_error(result)
+
+
+cpdef digitize(column, bins, right=False):
+    check_gdf_compatibility(column)
+    cdef gdf_column* in_col = column_view_from_column(column)
+
+    check_gdf_compatibility(bins)
+    cdef gdf_column* bins_col = column_view_from_column(bins)
+
+    cdef bool cright = right
+    cdef gdf_error result
+    out = rmm.device_array(len(column), dtype=np.int32)
+    cdef uintptr_t out_ptr = get_ctype_ptr(out)
+
+    with nogil:
+        result = gdf_digitize(<gdf_column*> in_col,
+                              <gdf_column*> bins_col,
+                              <bool> cright,
+                              <gdf_index_type*> out_ptr)
+
+    check_gdf_error(result)
+    return out

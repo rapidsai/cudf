@@ -77,9 +77,7 @@ class Series(object):
         if not isinstance(data, columnops.TypedColumnBase):
             data = columnops.as_column(data, nan_as_null=nan_as_null)
 
-        if isinstance(index, range):
-            index = RangeIndex(index)
-        if index is not None and not isinstance(index, (RangeIndex, Index,)):
+        if index is not None and not isinstance(index, Index):
             raise TypeError('index not a Index type: got {!r}'.format(index))
 
         assert isinstance(data, columnops.TypedColumnBase)
@@ -204,6 +202,10 @@ class Series(object):
         """
         return len(self._column)
 
+    @property
+    def empty(self):
+        return not len(self)
+
     def __getitem__(self, arg):
         if isinstance(arg, (list, np.ndarray, pd.Series, range,)):
             arg = Series(arg)
@@ -301,8 +303,11 @@ class Series(object):
         # Prepare cells
         cols = OrderedDict([('', self.values_to_string(nrows=nrows))])
         # Format into a table
-        return formatting.format(index=self.index,
-                                 cols=cols, more_rows=more_rows)
+        output = formatting.format(index=self.index,
+                                   cols=cols, more_rows=more_rows,
+                                   series_spacing=True)
+        return output + "\nName: {}, dtype: {}".format(self.name, self.dtype)\
+            if self.name else output + "\ndtype: {}".format(self.dtype)
 
     def __str__(self):
         return self.to_string(nrows=10)
@@ -316,10 +321,14 @@ class Series(object):
         and *other*.  Return the output Series.  The output dtype is
         determined by the input operands.
         """
+        from cudf import DataFrame
+        if isinstance(other, DataFrame):
+            return other._binaryop(self, fn)
         nvtx_range_push("PYGDF_BINARY_OP", "orange")
         other = self._normalize_binop_value(other)
         outcol = self._column.binary_operator(fn, other._column)
         result = self._copy_construct(data=outcol)
+        result.name = None
         nvtx_range_pop()
         return result
 
@@ -329,10 +338,14 @@ class Series(object):
         and *other* for reflected operations.  Return the output Series.
         The output dtype is determined by the input operands.
         """
+        from cudf import DataFrame
+        if isinstance(other, DataFrame):
+            return other._binaryop(self, fn)
         nvtx_range_push("PYGDF_BINARY_OP", "orange")
         other = self._normalize_binop_value(other)
         outcol = other._column.binary_operator(fn, self._column)
         result = self._copy_construct(data=outcol)
+        result.name = None
         nvtx_range_pop()
         return result
 
@@ -403,6 +416,7 @@ class Series(object):
         other = self._normalize_binop_value(other)
         outcol = self._column.unordered_compare(cmpops, other._column)
         result = self._copy_construct(data=outcol)
+        result.name = None
         nvtx_range_pop()
         return result
 
@@ -411,6 +425,7 @@ class Series(object):
         other = self._normalize_binop_value(other)
         outcol = self._column.ordered_compare(cmpops, other._column)
         result = self._copy_construct(data=outcol)
+        result.name = None
         nvtx_range_pop()
         return result
 
@@ -992,7 +1007,7 @@ class Series(object):
             msg = 'non sort based value_count() not implemented yet'
             raise NotImplementedError(msg)
         if self.null_count == len(self):
-            return 0
+            return Series(np.array([], dtype=np.int64))
         vals, cnts = self._column.value_counts(method=method)
         res = Series(cnts, index=as_index(vals))
         if sort:
@@ -1037,6 +1052,32 @@ class Series(object):
 
         return Series(numerical.column_hash_values(self._column))
 
+    def hash_encode(self, stop, use_name=False):
+        """Encode column values as ints in [0, stop) using hash function.
+
+        Parameters
+        ----------
+        stop : int
+            The upper bound on the encoding range.
+        use_name : bool
+            If ``True`` then combine hashed column values
+            with hashed column name. This is useful for when the same
+            values in different columns should be encoded
+            with different hashed values.
+        Returns
+        -------
+        result: Series
+            The encoded Series.
+        """
+        assert stop > 0
+
+        from . import numerical
+        initial_hash = np.asarray(hash(self.name)) if use_name else None
+        hashed_values = numerical.column_hash_values(
+            self._column, initial_hash_values=initial_hash)
+        hashed_values = np.mod(hashed_values, stop)
+        return Series(hashed_values)
+
     def quantile(self, q, interpolation='midpoint', exact=True,
                  quant_index=True):
         """
@@ -1068,6 +1109,32 @@ class Series(object):
         else:
             return Series(self._column.quantile(q, interpolation, exact),
                           index=as_index(np.asarray(q)))
+
+    def digitize(self, bins, right=False):
+        """Return the indices of the bins to which each value in series belongs.
+
+        Notes
+        -----
+        Monotonicity of bins is assumed and not checked.
+
+        Parameters
+        ----------
+        bins : np.array
+            1-D monotonically, increasing array with same type as this series.
+        right : bool
+            Indicates whether interval contains the right or left bin edge.
+
+        Returns
+        -------
+        A new Series containing the indices.
+        """
+        from cudf.dataframe import numerical
+
+        return Series(numerical.digitize(self._column, bins, right))
+
+    def groupby(self, group_series=None, level=None, sort=False):
+        from cudf.groupby.groupby import SeriesGroupBy
+        return SeriesGroupBy(self, group_series, level, sort)
 
 
 register_distributed_serializer(Series)

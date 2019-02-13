@@ -4,6 +4,7 @@
 #include "cudf/types.h"
 #include "cudf_utils.h"
 #include <iostream>
+#include <type_traits>
 
 /* --------------------------------------------------------------------------*/
 /** 
@@ -175,6 +176,42 @@ wrapper<T,type_id> operator/(wrapper<T,type_id> const& lhs, wrapper<T,type_id> c
 {
   return wrapper<T, type_id>{lhs.value / rhs.value};
 }
+
+// prefix increment operator
+template <typename T, gdf_dtype type_id>
+CUDA_HOST_DEVICE_CALLABLE
+wrapper<T,type_id>& operator++(wrapper<T,type_id> & w)
+{
+  w.value++;
+  return w;
+}
+
+// postfix increment operator
+template <typename T, gdf_dtype type_id>
+CUDA_HOST_DEVICE_CALLABLE
+wrapper<T,type_id> operator++(wrapper<T,type_id> & w, int)
+{
+  return wrapper<T,type_id>{w.value++};
+}
+
+// prefix decrement operator
+template <typename T, gdf_dtype type_id>
+CUDA_HOST_DEVICE_CALLABLE
+wrapper<T,type_id>& operator--(wrapper<T,type_id> & w)
+{
+  w.value--;
+  return w;
+}
+
+// postfix decrement operator
+template <typename T, gdf_dtype type_id>
+CUDA_HOST_DEVICE_CALLABLE
+wrapper<T,type_id> operator--(wrapper<T,type_id> & w, int)
+{
+  return wrapper<T,type_id>{w.value--};
+}
+
+
 
 /* --------------------------------------------------------------------------*/
 /** 

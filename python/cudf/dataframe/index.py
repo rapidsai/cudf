@@ -22,6 +22,10 @@ from cudf.comm.serialize import register_distributed_serializer
 class Index(object):
     """The root interface for all Series indexes.
     """
+    is_monotonic = None
+    is_monotonic_increasing = None
+    is_monotonic_decreasing = None
+
     def serialize(self, serialize):
         """Serialize into pickle format suitable for file storage or network
         transmission.
