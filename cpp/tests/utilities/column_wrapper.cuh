@@ -27,6 +27,7 @@
 #include <thrust/equal.h>
 #include <thrust/logical.h>
 #include <bitset>
+#include <string>
 
 #ifndef CUDA_RT_CALL
 #define CUDA_RT_CALL(call)                                                    \
@@ -57,9 +58,22 @@ namespace test {
  *---------------------------------------------------------------------------**/
 template <typename ColumnType>
 struct column_wrapper {
-  // TODO implement this
-  column_wrapper(column_wrapper<ColumnType> const& other) = delete;
-  column_wrapper& operator=(column_wrapper<ColumnType> const& other) = delete;
+  /**---------------------------------------------------------------------------*
+   * @brief Copy constructor copies from another column_wrapper of the same
+   * type.
+   *
+   * @param other The column_wraper to copy
+   *---------------------------------------------------------------------------**/
+  column_wrapper(column_wrapper<ColumnType> const& other)
+      : data{other.data}, bitmask{other.bitmask}, the_column{other.the_column} {
+    the_column.data = data.data().get();
+    the_column.valid = bitmask.data().get();
+  }
+
+  // TODO Implement this via copy & swap. Need a swap function.
+  column_wrapper& operator=(column_wrapper<ColumnType> other) = delete;
+
+  ~column_wrapper() = default;
 
   /**---------------------------------------------------------------------------*
    * @brief Implicit conversion operator to a gdf_column pointer.
@@ -196,8 +210,6 @@ struct column_wrapper {
     }
     initialize_with_host_data(host_data, host_bitmask);
   }
-
-  ~column_wrapper() = default;
 
   /**---------------------------------------------------------------------------*
    * @brief Returns a pointer to the underlying gdf_column.
@@ -355,10 +367,17 @@ struct column_wrapper {
         throw std::runtime_error("Insufficiently sized bitmask vector.");
       }
       bitmask = host_bitmask;
+      the_column.valid = bitmask.data().get();
     } else {
       the_column.valid = nullptr;
     }
-    set_null_count(&the_column);
+
+
+    gdf_error result = set_null_count(&the_column);
+    if (GDF_SUCCESS != result) {
+      throw std::runtime_error("Failed to set null count. Error code: " +
+                               std::to_string(result));
+    }
   }
 
   rmm::device_vector<ColumnType> data;

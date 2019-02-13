@@ -160,7 +160,7 @@ void count_valid_bits(valid32_t const * const masks32,
  * @Synopsis  Counts the number of valid bits for the specified number of rows
  * in a validity bitmask.
  * 
- * If the bitmask is null, returns a count of 0.
+ * If the bitmask is null, returns a count equal to the number of rows.
  * 
  * @Param[in] masks The validity bitmask buffer in device memory
  * @Param[in] num_rows The number of bits to count
@@ -179,7 +179,7 @@ gdf_error gdf_count_nonzero_mask(gdf_valid_type const *masks,
   if(0 == num_rows) {return GDF_SUCCESS;}
 
   if(nullptr == masks){
-      *count = 0;
+      *count = num_rows;
       return GDF_SUCCESS;
   }
 
