@@ -189,7 +189,7 @@ class RangeIndex(Index):
                                                                index)
             start += self._start
             stop += self._start
-            if sln < 0:
+            if sln == 0:
                 return RangeIndex(0)
             else:
                 return index_from_range(start, stop, step)

@@ -9,9 +9,11 @@
 - PR #871 CSV Reader: Add support for NA values, including user specified strings
 - PR #893 Adds PyArrow based parquet readers / writers to Python, fix category dtype handling, fix arrow ingest buffer size issues
 - PR #867 CSV Reader: Add support for ignoring blank lines and comment lines
+- PR #887 Add Series digitize method
 - PR #895 Add Series groupby
 - PR #898 Add DataFrame.groupby(level=0) support
 - PR #888 CSV Reader: Add prefix parameter for column names, used when parsing without a header
+- PR #918 Add Series.groupby(level=0) support
 - PR #906 Add binary and comparison ops to DataFrame
 
 ## Improvements
@@ -27,6 +29,7 @@
 - PR #878 Add better indexing to Groupby
 - PR #554 Add `empty` method and `is_monotonic` attribute to `Index`
 - PR #909 CSV Reader: Avoid host->device->host copy for header row data
+- PR #916 Improved unit testing and error checking for `gdf_column_concat`
 
 ## Bug Fixes
 
@@ -43,7 +46,13 @@
 - PR #889 Deleted test_rmm.py which has now moved to RMM repo
 - PR #866 Merge v0.5.1 numpy ABI hotfix into 0.6
 - PR #917 value_counts return int type on empty columns
+<<<<<<< HEAD
 - PR #923 fix index for negative slicing for cudf dataframe and series
+=======
+- PR #927 CSV Reader: Fix category GDF_CATEGORY hashes not being computed properly
+- PR #921 CSV Reader: Fix parsing errors with delim_whitespace, quotations in the header row, unnamed columns
+
+>>>>>>> 89462008c24a647de457ce595ab44c0c0d758450
 
 # cuDF 0.5.1 (05 Feb 2019)
 

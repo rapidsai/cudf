@@ -1110,9 +1110,31 @@ class Series(object):
             return Series(self._column.quantile(q, interpolation, exact),
                           index=as_index(np.asarray(q)))
 
-    def groupby(self, group_series):
+    def digitize(self, bins, right=False):
+        """Return the indices of the bins to which each value in series belongs.
+
+        Notes
+        -----
+        Monotonicity of bins is assumed and not checked.
+
+        Parameters
+        ----------
+        bins : np.array
+            1-D monotonically, increasing array with same type as this series.
+        right : bool
+            Indicates whether interval contains the right or left bin edge.
+
+        Returns
+        -------
+        A new Series containing the indices.
+        """
+        from cudf.dataframe import numerical
+
+        return Series(numerical.digitize(self._column, bins, right))
+
+    def groupby(self, group_series=None, level=None, sort=False):
         from cudf.groupby.groupby import SeriesGroupBy
-        return SeriesGroupBy(self, group_series)
+        return SeriesGroupBy(self, group_series, level, sort)
 
 
 register_distributed_serializer(Series)
