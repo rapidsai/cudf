@@ -1,7 +1,6 @@
 #ifndef GDF_TYPE_DISPATCHER_H
 #define GDF_TYPE_DISPATCHER_H
 
-
 #include "NVStrings.h"
 #include "cudf/types.h"
 #include "wrapper_types.hpp"
@@ -93,17 +92,16 @@ namespace cudf {
 // This pragma disables a compiler warning that complains about the valid usage
 // of calling a __host__ functor from this function which is __host__ __device__
 #pragma hd_warning_disable
-template < class functor_t, 
-           typename... Ts>
-CUDA_HOST_DEVICE_CALLABLE
-decltype(auto) type_dispatcher(gdf_dtype dtype, 
-                                                         functor_t f,
-                               Ts&&... args)
-{
+template <class functor_t, typename... Ts>
+CUDA_HOST_DEVICE_CALLABLE 
+decltype(auto) type_dispatcher(gdf_dtype dtype,
+                               functor_t f,
+                               Ts&&... args) {
   switch(dtype)
   {
     // The .template is known as a "template disambiguator"
-    // See here for more information: https://stackoverflow.com/questions/3786360/confusing-template-error
+    // See here for more information:
+    // https://stackoverflow.com/questions/3786360/confusing-template-error
     case GDF_INT8:      { return f.template operator()< int8_t >(std::forward<Ts>(args)...); }
     case GDF_INT16:     { return f.template operator()< int16_t >(std::forward<Ts>(args)...); }
     case GDF_INT32:     { return f.template operator()< int32_t >(std::forward<Ts>(args)...); }
