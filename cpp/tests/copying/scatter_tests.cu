@@ -40,7 +40,7 @@ TYPED_TEST(ScatterTest, IdentityTest) {
   thrust::device_vector<gdf_index_type> scatter_map(source_size);
   thrust::sequence(scatter_map.begin(), scatter_map.end());
 
-  cudf::test::column_wrapper<TypeParam> destination_column(destination_size);
+  cudf::test::column_wrapper<TypeParam> destination_column(destination_size, true);
 
   gdf_column* raw_source = source_column.get();
   gdf_column* raw_destination = destination_column.get();
@@ -67,7 +67,7 @@ TYPED_TEST(ScatterTest, ReverseIdentityTest) {
   std::reverse(host_scatter_map.begin(), host_scatter_map.end());
   thrust::device_vector<gdf_index_type> scatter_map(host_scatter_map);
 
-  cudf::test::column_wrapper<TypeParam> destination_column(destination_size);
+  cudf::test::column_wrapper<TypeParam> destination_column(destination_size, true);
 
   gdf_column* raw_source = source_column.get();
   gdf_column* raw_destination = destination_column.get();
@@ -112,7 +112,7 @@ TYPED_TEST(ScatterTest, AllNull) {
   std::shuffle(host_scatter_map.begin(), host_scatter_map.end(), g);
   thrust::device_vector<gdf_index_type> scatter_map(host_scatter_map);
 
-  cudf::test::column_wrapper<TypeParam> destination_column(destination_size);
+  cudf::test::column_wrapper<TypeParam> destination_column(destination_size, true);
 
   gdf_column* raw_source = source_column.get();
   gdf_column* raw_destination = destination_column.get();
@@ -156,7 +156,7 @@ TYPED_TEST(ScatterTest, EveryOtherNull) {
   }
   thrust::device_vector<gdf_index_type> scatter_map(host_scatter_map);
 
-  cudf::test::column_wrapper<TypeParam> destination_column(destination_size);
+  cudf::test::column_wrapper<TypeParam> destination_column(destination_size, true);
 
   gdf_column* raw_source = source_column.get();
   gdf_column* raw_destination = destination_column.get();

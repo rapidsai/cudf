@@ -195,6 +195,12 @@ gdf_error scatter(table const* source_table, gdf_index_type const scatter_map[],
       throw GDF_DTYPE_MISMATCH;
     }
 
+    // source and destination columns must either both have bitmasks
+    // or both NOT have bitmasks
+    if((nullptr == source->valid) xor (nullptr == destination->valid)){
+        throw GDF_DATASET_EMPTY;
+    }
+
     // TODO: Each column could be scattered on a separate stream
     gdf_error gdf_status =
         cudf::type_dispatcher(source->dtype, column_scatterer{}, source,

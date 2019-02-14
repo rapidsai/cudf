@@ -20,20 +20,20 @@
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "tests/utilities/column_wrapper.cuh"
-#include "tests/utilities/table_wrapper.cuh"
 #include "tests/utilities/cudf_test_fixtures.h"
 #include "tests/utilities/cudf_test_utils.cuh"
+#include "tests/utilities/table_wrapper.cuh"
 #include "types.hpp"
 #include "utilities/wrapper_types.hpp"
 
 template <typename T>
 struct GatherTest : GdfTest {};
 
-using test_types = ::testing::Types<int8_t, int16_t, int32_t, int64_t, float, double>;
+using test_types =
+    ::testing::Types<int8_t, int16_t, int32_t, int64_t, float, double>;
 TYPED_TEST_CASE(GatherTest, test_types);
 
 TYPED_TEST(GatherTest, IdentityTest) {
-
   cudf::test::table_wrapper<std::tuple<int, int>> table(100);
 
   constexpr gdf_size_type source_size{1000};
@@ -46,7 +46,8 @@ TYPED_TEST(GatherTest, IdentityTest) {
   thrust::device_vector<gdf_index_type> gather_map(destination_size);
   thrust::sequence(gather_map.begin(), gather_map.end());
 
-  cudf::test::column_wrapper<TypeParam> destination_column(destination_size);
+  cudf::test::column_wrapper<TypeParam> destination_column(destination_size,
+                                                           true);
 
   gdf_column* raw_source = source_column.get();
   gdf_column* raw_destination = destination_column.get();
@@ -76,7 +77,8 @@ TYPED_TEST(GatherTest, ReverseIdentityTest) {
   std::reverse(host_gather_map.begin(), host_gather_map.end());
   thrust::device_vector<gdf_index_type> gather_map(host_gather_map);
 
-  cudf::test::column_wrapper<TypeParam> destination_column(destination_size);
+  cudf::test::column_wrapper<TypeParam> destination_column(destination_size,
+                                                           true);
 
   gdf_column* raw_source = source_column.get();
   gdf_column* raw_destination = destination_column.get();
@@ -121,7 +123,8 @@ TYPED_TEST(GatherTest, AllNull) {
   std::shuffle(host_gather_map.begin(), host_gather_map.end(), g);
   thrust::device_vector<gdf_index_type> gather_map(host_gather_map);
 
-  cudf::test::column_wrapper<TypeParam> destination_column(destination_size);
+  cudf::test::column_wrapper<TypeParam> destination_column(destination_size,
+                                                           true);
 
   gdf_column* raw_source = source_column.get();
   gdf_column* raw_destination = destination_column.get();
@@ -166,7 +169,8 @@ TYPED_TEST(GatherTest, EveryOtherNull) {
 
   thrust::device_vector<gdf_index_type> gather_map(host_gather_map);
 
-  cudf::test::column_wrapper<TypeParam> destination_column(destination_size);
+  cudf::test::column_wrapper<TypeParam> destination_column(destination_size,
+                                                           true);
 
   gdf_column* raw_source = source_column.get();
   gdf_column* raw_destination = destination_column.get();
