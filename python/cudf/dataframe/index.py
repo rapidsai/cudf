@@ -348,7 +348,7 @@ class RangeIndex(Index):
 
     @property
     def _values(self):
-        return Column(self.as_column())
+        return self.as_column()
 
     @property
     def is_contiguous(self):
