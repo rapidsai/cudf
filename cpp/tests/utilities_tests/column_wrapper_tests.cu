@@ -63,6 +63,15 @@ void test_column(cudf::test::column_wrapper<T> const& col,
     EXPECT_NE(nullptr, underlying_column->data);
     EXPECT_TRUE(std::equal(expected_values.begin(), expected_values.end(),
                            actual_values.begin()));
+
+    // Ensure data on device matches expected
+    rmm::device_vector<T> expected_device_data(expected_values);
+    T const* actual_device_data =
+        static_cast<T const*>(underlying_column->data);
+    EXPECT_TRUE(thrust::equal(rmm::exec_policy()->on(0),
+                              expected_device_data.begin(),
+                              expected_device_data.end(), actual_device_data));
+
   } else {
     EXPECT_EQ(nullptr, underlying_column->data);
   }
@@ -70,6 +79,20 @@ void test_column(cudf::test::column_wrapper<T> const& col,
   // Check that actual bitmask matchs expected
   if (expected_bitmask.size() > 0) {
     EXPECT_NE(nullptr, underlying_column->valid);
+
+    gdf_size_type const expected_null_count =
+        expected_values.size() -
+        count_valid_bits_host(expected_bitmask, underlying_column->size);
+
+    EXPECT_EQ(expected_null_count, col.null_count());
+
+    // Ensure data on device matches expected
+    rmm::device_vector<gdf_valid_type> expected_device_bitmask(
+        expected_bitmask);
+    EXPECT_TRUE(thrust::equal(
+        rmm::exec_policy()->on(0), expected_device_bitmask.begin(),
+        expected_device_bitmask.end() - 1, underlying_column->valid));
+
     // The last element in the bitmask has to be handled as a special case
     EXPECT_TRUE(std::equal(expected_bitmask.begin(), expected_bitmask.end() - 1,
                            actual_bitmask.begin()));
@@ -280,4 +303,42 @@ TYPED_TEST(ColumnWrapperTest, UnEqualColumnsWithNulls) {
   cudf::test::column_wrapper<TypeParam> const col2(values, odd_bits_null);
 
   EXPECT_FALSE(col1 == col2);
+}
+
+TYPED_TEST(ColumnWrapperTest, AllInvalid) {
+  gdf_size_type const size{this->random_size()};
+  std::vector<TypeParam> values(size);
+  std::generate(values.begin(), values.end(),
+                [this]() { return TypeParam(this->generator()); });
+
+  auto all_null = [](auto row) { return false; };
+
+  cudf::test::column_wrapper<TypeParam> const col(values, all_null);
+
+  std::vector<TypeParam> data;
+  std::vector<gdf_valid_type> bitmask;
+  std::tie(data, bitmask) = col.to_host();
+
+  for (gdf_size_type i = 0; i < size; ++i) {
+    EXPECT_FALSE(gdf_is_valid(bitmask.data(), i));
+  }
+}
+
+TYPED_TEST(ColumnWrapperTest, AllValid) {
+  gdf_size_type const size{this->random_size()};
+  std::vector<TypeParam> values(size);
+  std::generate(values.begin(), values.end(),
+                [this]() { return TypeParam(this->generator()); });
+
+  auto all_valid = [](auto row) { return true; };
+
+  cudf::test::column_wrapper<TypeParam> const col(values, all_valid);
+
+  std::vector<TypeParam> data;
+  std::vector<gdf_valid_type> bitmask;
+  std::tie(data, bitmask) = col.to_host();
+
+  for (gdf_size_type i = 0; i < size; ++i) {
+    EXPECT_TRUE(gdf_is_valid(bitmask.data(), i));
+  }
 }
