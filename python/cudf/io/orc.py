@@ -6,7 +6,7 @@ import pyarrow.orc as orc
 import warnings
 
 
-def read_orc(path, columns=None):
+def read_orc(path, columns=None, **kwargs):
     """
     Load an orc object from the file path, returning a DataFrame.
 
@@ -16,6 +16,7 @@ def read_orc(path, columns=None):
         File path
     columns : list, default=None
         If not None, only these columns will be read from the file.
+    kwargs are passed to the engine
 
     Returns
     -------
