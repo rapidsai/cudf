@@ -232,34 +232,17 @@ def as_column(arbitrary, nan_as_null=True, dtype=None):
                           "categorical")
             data = as_column(arbitrary.dictionary_encode())
         elif isinstance(arbitrary, pa.NullArray):
-            pamask = Buffer(np.empty(0, dtype='int8'))
-
             if dtype and dtype != 'empty':
                 new_dtype = dtype
             else:
                 new_dtype = np.dtype(arbitrary.type.to_pandas_dtype())
 
             if pd.api.types.is_categorical_dtype(new_dtype):
-                padata = Buffer(
-                    np.empty(0, dtype='int8')
-                )
-                data = categorical.CategoricalColumn(
-                    data=padata,
-                    mask=pamask,
-                    null_count=arbitrary.null_count,
-                    categories=[],
-                    ordered=False,
-                )
+                arbitrary = arbitrary.dictionary_encode()
             else:
-                padata = Buffer(
-                    np.empty(0, dtype=new_dtype)
-                )
-                data = numerical.NumericalColumn(
-                    data=padata,
-                    mask=pamask,
-                    null_count=0,
-                    dtype=new_dtype
-                )
+                arbitrary = arbitrary.cast(_gdf.np_to_pa_dtype(new_dtype))
+
+            data = as_column(arbitrary)
         elif isinstance(arbitrary, pa.DictionaryArray):
             pamask, padata = buffers_from_pyarrow(arbitrary)
             data = categorical.CategoricalColumn(
@@ -320,6 +303,9 @@ def as_column(arbitrary, nan_as_null=True, dtype=None):
     elif isinstance(arbitrary, (pd.Series, pd.Categorical)):
         if pd.api.types.is_categorical_dtype(arbitrary):
             data = as_column(pa.array(arbitrary, from_pandas=True))
+        elif arbitrary.dtype == np.bool:
+            # Bug in PyArrow or HDF that requires us to do this
+            data = as_column(pa.array(np.array(arbitrary), from_pandas=True))
         else:
             data = as_column(pa.array(arbitrary, from_pandas=nan_as_null))
 

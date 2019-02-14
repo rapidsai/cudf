@@ -377,7 +377,6 @@ class Column(object):
             return self.element_indexing(arg)
         elif isinstance(arg, slice):
             # compute mask slice
-            start, stop = utils.normalize_slice(arg, len(self))
             if self.null_count > 0:
                 if arg.step is not None and arg.step != 1:
                     raise NotImplementedError(arg)

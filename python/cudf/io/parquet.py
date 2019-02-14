@@ -6,7 +6,7 @@ import pyarrow.parquet as pq
 import warnings
 
 
-def read_parquet(path, columns=None, **kwargs):
+def read_parquet(path, *args, **kwargs):
     """
     Load a parquet object from the file path, returning a DataFrame.
 
@@ -51,12 +51,11 @@ def read_parquet(path, columns=None, **kwargs):
 
     warnings.warn("Using CPU via PyArrow to read Parquet dataset, this will "
                   "be GPU accelerated in the future")
-    pa_table = pq.read_pandas(path, columns=columns, **kwargs)
+    pa_table = pq.read_pandas(path, *args, **kwargs)
     return DataFrame.from_arrow(pa_table)
 
 
-def to_parquet(df, path, compression='snappy', index=None,
-               partition_cols=None, **kwargs):
+def to_parquet(df, path, *args, **kwargs):
     """
     Write a DataFrame to the parquet format.
     Parameters
@@ -82,5 +81,4 @@ def to_parquet(df, path, compression='snappy', index=None,
     warnings.warn("Using CPU via PyArrow to write Parquet dataset, this will "
                   "be GPU accelerated in the future")
     pa_table = df.to_arrow()
-    pq.write_to_dataset(pa_table, path, partition_cols=partition_cols,
-                        preserve_index=index, compression=compression)
+    pq.write_to_dataset(pa_table, path, *args, **kwargs)
