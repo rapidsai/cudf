@@ -792,7 +792,7 @@ def test_csv_reader_blanks_and_comments(skip_rows, header_row, skip_blanks):
     assert(list(cu_df.columns.values) == list(pd_df.columns.values))
 
 
-def test_csv_reader_prefix(tmpdir):
+def test_csv_reader_prefix():
 
     lines = ['1, 1, 1, 1']
     buffer = '\n'.join(lines) + '\n'
@@ -803,3 +803,70 @@ def test_csv_reader_prefix(tmpdir):
     column_names = list(df.columns.values)
     for col in range(len(column_names)):
         assert(column_names[col] == prefix_str + str(col))
+
+
+def test_csv_reader_category_hash():
+
+    lines = ['HBM0676', 'KRC0842', 'ILM1441', 'EJV0094', 'ILM1441']
+    buffer = '\n'.join(lines) + '\n'
+
+    df = read_csv(StringIO(buffer), names=['user'], dtype=['category'])
+
+    hash_ref = [2022314536, -189888986, 1512937027, 397836265, 1512937027]
+    assert(list(df['user']) == hash_ref)
+
+
+def test_csv_reader_delim_whitespace():
+    buffer = '1    2  3\n4  5 6\n'
+
+    # with header row
+    cu_df = read_csv(StringIO(buffer), delim_whitespace=True)
+    pd_df = pd.read_csv(StringIO(buffer), delim_whitespace=True)
+    pd.util.testing.assert_frame_equal(pd_df, cu_df.to_pandas())
+
+    # without header row
+    cu_df = read_csv(StringIO(buffer), delim_whitespace=True, header=None)
+    pd_df = pd.read_csv(StringIO(buffer), delim_whitespace=True, header=None)
+    assert(pd_df.shape == cu_df.shape)
+
+    # should raise an error if used with delimiter or sep
+    with pytest.raises(ValueError):
+        read_csv(StringIO(buffer), delim_whitespace=True, delimiter=' ')
+    with pytest.raises(ValueError):
+        read_csv(StringIO(buffer), delim_whitespace=True, sep=' ')
+
+
+def test_csv_reader_unnamed_cols():
+    # first and last columns are unnamed
+    buffer = ',1,2,3,\n4,5,6,7,8\n'
+
+    cu_df = read_csv(StringIO(buffer))
+    pd_df = pd.read_csv(StringIO(buffer))
+
+    assert(all(pd_df.columns == cu_df.columns))
+    assert(pd_df.shape == cu_df.shape)
+
+
+def test_csv_reader_header_quotation():
+    buffer = '"1,,1","2,\n,2",3\n4,5,6\n'
+
+    cu_df = read_csv(StringIO(buffer))
+    pd_df = pd.read_csv(StringIO(buffer))
+    assert(cu_df.shape == (1, 3))
+    pd.util.testing.assert_frame_equal(pd_df, cu_df.to_pandas())
+
+    # test cases that fail with pandas
+    buffer_pd_fail = '"1,one," , ",2,two" ,3\n4,5,6\n'
+    cu_df = read_csv(StringIO(buffer_pd_fail))
+    assert(cu_df.shape == (1, 3))
+
+
+def test_csv_reader_oversized_byte_range():
+    # first and last columns are unnamed
+    buffer = 'a,b,c,d,e\n4,5,6,7,8\n'
+
+    cu_df = read_csv(StringIO(buffer), byte_range=(0, 1024))
+    pd_df = pd.read_csv(StringIO(buffer))
+
+    assert(all(pd_df.columns == cu_df.columns))
+    assert(pd_df.shape == cu_df.shape)
