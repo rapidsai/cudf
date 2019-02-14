@@ -12,10 +12,7 @@ from string import ascii_letters
 
 try:
     import tables # noqa F401
-    _have_pytables = True
 except ImportError:
-    _have_pytables = False
-if not _have_pytables:
     pytest.skip('PyTables is not installed and is required for HDF '
                 'reading/writing', allow_module_level=True)
 
