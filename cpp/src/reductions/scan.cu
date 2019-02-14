@@ -65,7 +65,7 @@ struct PrefixSumDispatcher {
         typename std::enable_if_t<!std::is_arithmetic<T>::value, T>* = nullptr>
         gdf_error operator()(gdf_column *inp, gdf_column *out,
             int inclusive) {
-        return GDF_SUCCESS;
+        return GDF_UNSUPPORTED_DTYPE;
     }
 };
 
