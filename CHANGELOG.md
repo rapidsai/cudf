@@ -30,6 +30,7 @@
 - PR #554 Add `empty` method and `is_monotonic` attribute to `Index`
 - PR #909 CSV Reader: Avoid host->device->host copy for header row data
 - PR #916 Improved unit testing and error checking for `gdf_column_concat`
+- PR #943 Updated `count_nonzero_mask` to return `num_rows` when the mask is null
 
 ## Bug Fixes
 
