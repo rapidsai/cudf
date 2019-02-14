@@ -244,9 +244,13 @@ class Index(object):
         return as_index(result)
 
     def __eq__(self, other):
+        if len(self) != len(other):
+            return False
         return self._unordered_compare(other, 'eq')
 
     def __ne__(self, other):
+        if len(self) != len(other):
+            return True
         return self._unordered_compare(other, 'ne')
 
     def __lt__(self, other):
