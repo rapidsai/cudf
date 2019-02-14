@@ -261,6 +261,7 @@ class Groupby(object):
         return result
 
     def __getitem__(self, arg):
+        arg = [arg] if isinstance(arg, str) else arg
         for val in arg:
             if val not in self._val_columns:
                 raise KeyError("Column not found: " + val)
