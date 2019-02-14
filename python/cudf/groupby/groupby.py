@@ -139,6 +139,8 @@ class Groupby(object):
         need_to_index = self._as_index
 
         col_count = 0
+        if isinstance(val_columns, str):
+            val_columns = [val_columns]
         for val_col in val_columns:
             col_agg = self._df[val_col]._column.cffi_view
 
@@ -204,8 +206,11 @@ class Groupby(object):
             out_col_agg_series.data.size = num_row_results
             out_col_agg_series = out_col_agg_series.reset_index()
 
-            result[val_columns_out[col_count]
-                   ] = out_col_agg_series[:num_row_results]
+            if isinstance(val_columns_out, str):
+                result[val_columns_out] = out_col_agg_series[:num_row_results]
+            else:
+                result[val_columns_out[col_count]
+                       ] = out_col_agg_series[:num_row_results]
 
             out_col_agg_series.data.size = num_row_results
             out_col_agg_series = out_col_agg_series.reset_index()
@@ -239,7 +244,7 @@ class Groupby(object):
 
         # If a Groupby has one index column and one value column
         # and as_index is set, return a Series instead of a df
-        if len(val_columns) == 1 and self._as_index:
+        if isinstance(val_columns, str) and self._as_index:
             result_series = result[val_columns]
             idx = index.as_index(result[self._by[0]])
             if self.level == 0:
@@ -253,18 +258,25 @@ class Groupby(object):
         if(self._as_index):
             idx = index.as_index(result[self._by[0]])
             idx.name = self._by[0]
-            result = result.set_index(idx)
             result.drop_column(idx.name)
+            if self.level == 0:
+                idx.name = self._original_index_name
+            else:
+                idx.name = self._by[0]
+            result = result.set_index(idx)
 
         nvtx_range_pop()
 
         return result
 
     def __getitem__(self, arg):
-        arg = [arg] if isinstance(arg, str) else arg
-        for val in arg:
-            if val not in self._val_columns:
-                raise KeyError("Column not found: " + val)
+        if isinstance(arg, str):
+            if arg not in self._val_columns:
+                raise KeyError("Column not found: " + arg)
+        else:
+            for val in arg:
+                if val not in self._val_columns:
+                    raise KeyError("Column not found: " + val)
         self._val_columns = arg
         return self
 

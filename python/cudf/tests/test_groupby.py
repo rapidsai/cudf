@@ -335,3 +335,15 @@ def test_groupby_series_level_zero(agg):
     pdresult = getattr(pdg, agg)()
     gdresult = getattr(gdg, agg)()
     assert_eq(pdresult, gdresult)
+
+
+def test_groupby_column_name():
+    pdf = pd.DataFrame({'xx': [1., 2., 3.], 'yy': [1, 2, 3]})
+    gdf = DataFrame.from_pandas(pdf)
+    g = gdf.groupby('yy')
+    p = pdf.groupby('yy')
+    print(g['xx'].sum())
+    print(p['xx'].sum())
+    gxx = g['xx'].sum()
+    pxx = p['xx'].sum()
+    assert_eq(pxx, gxx)
