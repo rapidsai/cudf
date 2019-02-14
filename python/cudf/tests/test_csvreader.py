@@ -842,7 +842,9 @@ def test_csv_reader_unnamed_cols():
 
     cu_df = read_csv(StringIO(buffer))
     pd_df = pd.read_csv(StringIO(buffer))
+
     assert(all(pd_df.columns == cu_df.columns))
+    assert(pd_df.shape == cu_df.shape)
 
 
 def test_csv_reader_header_quotation():
@@ -857,3 +859,14 @@ def test_csv_reader_header_quotation():
     buffer_pd_fail = '"1,one," , ",2,two" ,3\n4,5,6\n'
     cu_df = read_csv(StringIO(buffer_pd_fail))
     assert(cu_df.shape == (1, 3))
+
+
+def test_csv_reader_oversized_byte_range():
+    # first and last columns are unnamed
+    buffer = 'a,b,c,d,e\n4,5,6,7,8\n'
+
+    cu_df = read_csv(StringIO(buffer), byte_range=(0, 1024))
+    pd_df = pd.read_csv(StringIO(buffer))
+
+    assert(all(pd_df.columns == cu_df.columns))
+    assert(pd_df.shape == cu_df.shape)

@@ -48,6 +48,7 @@
 - PR #917 value_counts return int type on empty columns
 - PR #927 CSV Reader: Fix category GDF_CATEGORY hashes not being computed properly
 - PR #921 CSV Reader: Fix parsing errors with delim_whitespace, quotations in the header row, unnamed columns
+- PR #940 CSV Reader: fix an issue where the last data row is missing when using byte_range
 - PR #945 CSV Reader: Fix incorrect datetime64 when milliseconds or space separator are used
 
 
