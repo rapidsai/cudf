@@ -11,7 +11,7 @@
 - PR #867 CSV Reader: Add support for ignoring blank lines and comment lines
 - PR #895 Add Series groupby
 - PR #898 Add DataFrame.groupby(level=0) support
-- PR #920 Add feather, JSON, HDF5, ORC readers / writers from PyArrow / Pandas
+- PR #920 Add feather, JSON, HDF5 readers / writers from PyArrow / Pandas
 - PR #888 CSV Reader: Add prefix parameter for column names, used when parsing without a header
 
 ## Improvements
