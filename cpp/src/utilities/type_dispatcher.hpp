@@ -1,11 +1,13 @@
 #ifndef GDF_TYPE_DISPATCHER_H
 #define GDF_TYPE_DISPATCHER_H
 
-#include <cassert>
-#include <utility>
+
 #include "NVStrings.h"
 #include "cudf/types.h"
 #include "wrapper_types.hpp"
+#include <cassert>
+#include <utility>
+
 
 /* --------------------------------------------------------------------------*/
 /**
@@ -93,43 +95,25 @@ namespace cudf {
 // of calling a __host__ functor from this function which is __host__ __device__
 #pragma hd_warning_disable
 template <class functor_t, typename... Ts>
-CUDA_HOST_DEVICE_CALLABLE decltype(auto) type_dispatcher(gdf_dtype dtype,
-                                                         functor_t f,
-                                                         Ts&&... args) {
-  switch (dtype) {
+CUDA_HOST_DEVICE_CALLABLE 
+decltype(auto) type_dispatcher(gdf_dtype dtype,
+                               functor_t f,
+                               Ts&&... args) {
+  switch(dtype)
+  {
     // The .template is known as a "template disambiguator"
     // See here for more information:
     // https://stackoverflow.com/questions/3786360/confusing-template-error
-    case GDF_INT8: {
-      return f.template operator()<int8_t>(std::forward<Ts>(args)...);
-    }
-    case GDF_INT16: {
-      return f.template operator()<int16_t>(std::forward<Ts>(args)...);
-    }
-    case GDF_INT32: {
-      return f.template operator()<int32_t>(std::forward<Ts>(args)...);
-    }
-    case GDF_INT64: {
-      return f.template operator()<int64_t>(std::forward<Ts>(args)...);
-    }
-    case GDF_FLOAT32: {
-      return f.template operator()<float>(std::forward<Ts>(args)...);
-    }
-    case GDF_FLOAT64: {
-      return f.template operator()<double>(std::forward<Ts>(args)...);
-    }
-    case GDF_DATE32: {
-      return f.template operator()<date32>(std::forward<Ts>(args)...);
-    }
-    case GDF_DATE64: {
-      return f.template operator()<date64>(std::forward<Ts>(args)...);
-    }
-    case GDF_TIMESTAMP: {
-      return f.template operator()<timestamp>(std::forward<Ts>(args)...);
-    }
-    case GDF_CATEGORY: {
-      return f.template operator()<category>(std::forward<Ts>(args)...);
-    }
+    case GDF_INT8:      { return f.template operator()< int8_t >(std::forward<Ts>(args)...); }
+    case GDF_INT16:     { return f.template operator()< int16_t >(std::forward<Ts>(args)...); }
+    case GDF_INT32:     { return f.template operator()< int32_t >(std::forward<Ts>(args)...); }
+    case GDF_INT64:     { return f.template operator()< int64_t >(std::forward<Ts>(args)...); }
+    case GDF_FLOAT32:   { return f.template operator()< float >(std::forward<Ts>(args)...); }
+    case GDF_FLOAT64:   { return f.template operator()< double >(std::forward<Ts>(args)...); }
+    case GDF_DATE32:    { return f.template operator()< date32 >(std::forward<Ts>(args)...); }
+    case GDF_DATE64:    { return f.template operator()< date64 >(std::forward<Ts>(args)...); }
+    case GDF_TIMESTAMP: { return f.template operator()< timestamp >(std::forward<Ts>(args)...); }
+    case GDF_CATEGORY:  { return f.template operator()< category >(std::forward<Ts>(args)...); }
     default: { assert(false && "type_dispatcher: invalid gdf_type"); }
   }
   // Need to find out what the return type is in order to have a default return

@@ -32,6 +32,9 @@ inline void for_each_impl(Tuple&& tuple, F&& f,
  * For every element in a tuple, invokes a unary callable and passes the tuple
  * element into the callable.
  *
+ * This implementation comes from Louis Dionne on StackExchange:
+ * https://codereview.stackexchange.com/a/67394
+ *
  * @tparam Tuple The type of the tuple
  * @tparam F The type of the callable
  * @param tuple The tuple to iterate over
