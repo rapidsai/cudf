@@ -975,7 +975,7 @@ def test_nonmatching_index_setitem(nrows):
 
 
 @pytest.mark.parametrize('nelem', [0, 1, 5, 20, 100])
-@pytest.mark.parametrize('slice_start', [None, 0, 1, 3, 10])
+@pytest.mark.parametrize('slice_start', [None, 0, 1, 3, 10, -10])
 @pytest.mark.parametrize('slice_end', [None, 0, 1, 30, 50, -1])
 def test_dataframe_masked_slicing(nelem, slice_start, slice_end):
     gdf = DataFrame()
@@ -1667,4 +1667,38 @@ def test_arrow_handle_no_index_name(pdf, gdf):
 
     got = DataFrame.from_arrow(gdf_arrow)
     expect = pdf_arrow.to_pandas()
+    assert_eq(expect, got)
+
+
+@pytest.mark.parametrize('num_rows', [1, 3, 10, 100])
+@pytest.mark.parametrize('num_bins', [1, 2, 4, 20])
+@pytest.mark.parametrize('right', [True, False])
+@pytest.mark.parametrize('dtype', ['int8', 'int16', 'int32', 'int64',
+                                   'float32', 'float64'])
+def test_series_digitize(num_rows, num_bins, right, dtype):
+    data = np.random.randint(0, 100, num_rows).astype(dtype)
+    bins = np.unique(np.sort(np.random.randint(2, 95, num_bins).astype(dtype)))
+    s = Series(data)
+    indices = s.digitize(bins, right)
+    np.testing.assert_array_equal(np.digitize(data, bins, right),
+                                  indices.to_array())
+
+
+@pytest.mark.parametrize('num_elements', [0, 2, 10, 100])
+@pytest.mark.parametrize('null_type', [np.nan, None, 'mixed'])
+def test_series_all_null(num_elements, null_type):
+    if null_type == 'mixed':
+        data = []
+        data1 = [np.nan] * int(num_elements/2)
+        data2 = [None] * int(num_elements/2)
+        for idx in range(len(data1)):
+            data.append(data1[idx])
+            data.append(data2[idx])
+    else:
+        data = [null_type] * num_elements
+
+    # Typecast Pandas because None will return `object` dtype
+    expect = pd.Series(data).astype('float64')
+    got = Series(data)
+
     assert_eq(expect, got)
