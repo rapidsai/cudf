@@ -303,6 +303,9 @@ def as_column(arbitrary, nan_as_null=True, dtype=None):
     elif isinstance(arbitrary, (pd.Series, pd.Categorical)):
         if pd.api.types.is_categorical_dtype(arbitrary):
             data = as_column(pa.array(arbitrary, from_pandas=True))
+        elif arbitrary.dtype == np.bool:
+            # Bug in PyArrow or HDF that requires us to do this
+            data = as_column(pa.array(np.array(arbitrary), from_pandas=True))
         else:
             data = as_column(pa.array(arbitrary, from_pandas=nan_as_null))
 
