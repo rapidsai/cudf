@@ -222,5 +222,6 @@ TYPED_TEST(ColumnWrapperTest, CopyConstructor) {
   EXPECT_TRUE(std::equal(source_bitmask.begin(), source_bitmask.end(),
                          copy_bitmask.begin()));
 
-  // EXPECT_TRUE( source == copy);
+  // Ensure operator== works
+  EXPECT_TRUE(source == copy);
 }

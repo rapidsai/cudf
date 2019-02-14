@@ -266,7 +266,7 @@ struct column_wrapper {
   struct elements_equal {
     gdf_column lhs_col;
     gdf_column rhs_col;
-    bool const nulls_are_equivalent;
+    bool nulls_are_equivalent;
 
     /**---------------------------------------------------------------------------*
      * @brief Constructs functor for comparing elements between two gdf_column's
