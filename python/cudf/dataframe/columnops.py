@@ -319,7 +319,11 @@ def as_column(arbitrary, nan_as_null=True, dtype=None):
         if dtype and dtype != 'empty':
             new_dtype = dtype
         else:
-            new_dtype = np.dtype(arbitrary.type.to_pandas_dtype())
+            pa_type = arbitrary.type
+            if pa.types.is_dictionary(pa_type):
+                new_dtype = 'category'
+            else:
+                new_dtype = np.dtype(pa_type.to_pandas_dtype())
 
         data = Column._concat(gpu_cols, dtype=new_dtype)
 
