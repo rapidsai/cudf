@@ -975,7 +975,7 @@ def test_nonmatching_index_setitem(nrows):
 
 
 @pytest.mark.parametrize('nelem', [0, 1, 5, 20, 100])
-@pytest.mark.parametrize('slice_start', [None, 0, 1, 3, 10])
+@pytest.mark.parametrize('slice_start', [None, 0, 1, 3, 10, -10])
 @pytest.mark.parametrize('slice_end', [None, 0, 1, 30, 50, -1])
 def test_dataframe_masked_slicing(nelem, slice_start, slice_end):
     gdf = DataFrame()
