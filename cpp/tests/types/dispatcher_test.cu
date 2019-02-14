@@ -22,12 +22,13 @@
 #endif
 
 #include <cudf.h>
-#include <thrust/device_vector.h>
-#include <cstdint>
 #include <utilities/type_dispatcher.hpp>
 #include "gtest/gtest.h"
 #include "tests/utilities/cudf_test_fixtures.h"
 #include "utilities/tuple_for_each.hpp"
+
+#include <thrust/device_vector.h>
+#include <cstdint>
 
 /**
  * @file dispatcher_test.cu
