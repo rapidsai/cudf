@@ -17,6 +17,7 @@ from .column import Column
 from .datetime import DatetimeColumn
 from .categorical import CategoricalColumn
 from cudf.comm.serialize import register_distributed_serializer
+from cudf._gdf import nvtx_range_push, nvtx_range_pop
 
 
 class Index(object):
@@ -117,16 +118,148 @@ class Index(object):
         data = Column._concat([o.as_column() for o in objs])
         return as_index(data)
 
-    def __eq__(self, other):
-        if not isinstance(other, Index):
-            return NotImplemented
-        elif len(self) != len(other):
-            return False
+    def _binaryop(self, other, fn):
+        """
+        Internal util to call a binary operator *fn* on operands *self*
+        and *other*.  Return the output Series.  The output dtype is
+        determined by the input operands.
+        """
+        from cudf import DataFrame, Series
+        idx_series = Series(self)
+        if isinstance(other, DataFrame):
+            return other._binaryop(idx_series, fn)
+        nvtx_range_push("PYGDF_BINARY_OP", "orange")
+        other = idx_series._normalize_binop_value(other)
+        outcol = idx_series._column.binary_operator(fn, other._column)
+        result = idx_series._copy_construct(data=outcol)
+        result.name = None
+        nvtx_range_pop()
+        return as_index(result)
 
-        lhs = self.as_column()
-        rhs = other.as_column()
-        res = lhs.unordered_compare('eq', rhs).all()
-        return res
+    def _rbinaryop(self, other, fn):
+        """
+        Internal util to call a binary operator *fn* on operands *self*
+        and *other* for reflected operations.  Return the output Series.
+        The output dtype is determined by the input operands.
+        """
+        from cudf import DataFrame, Series
+        idx_series = Series(self)
+        if isinstance(other, DataFrame):
+            return other._binaryop(idx_series, fn)
+        nvtx_range_push("PYGDF_BINARY_OP", "orange")
+        other = idx_series._normalize_binop_value(other)
+        outcol = other._column.binary_operator(fn, idx_series._column)
+        result = idx_series._copy_construct(data=outcol)
+        result.name = None
+        nvtx_range_pop()
+        return as_index(result)
+
+    def _unaryop(self, fn):
+        """
+        Internal util to call a unary operator *fn* on operands *self*.
+        Return the output Series.  The output dtype is determined by the input
+        operand.
+        """
+        from cudf import Series
+        idx_series = Series(self)
+        outcol = idx_series._column.unary_operator(fn)
+        return as_index(idx_series._copy_construct(data=outcol))
+
+    def __add__(self, other):
+        return self._binaryop(other, 'add')
+
+    def __radd__(self, other):
+        return self._rbinaryop(other, 'add')
+
+    def __sub__(self, other):
+        return self._binaryop(other, 'sub')
+
+    def __rsub__(self, other):
+        return self._rbinaryop(other, 'sub')
+
+    def __mul__(self, other):
+        return self._binaryop(other, 'mul')
+
+    def __rmul__(self, other):
+        return self._rbinaryop(other, 'mul')
+
+    def __pow__(self, other):
+        if other == 2:
+            return self * self
+        else:
+            return NotImplemented
+
+    def __floordiv__(self, other):
+        return self._binaryop(other, 'floordiv')
+
+    def __rfloordiv__(self, other):
+        return self._rbinaryop(other, 'floordiv')
+
+    def __truediv__(self, other):
+        from cudf import Series
+        from cudf.dataframe.series import truediv_int_dtype_corrections
+        if self.dtype in list(truediv_int_dtype_corrections.keys()):
+            truediv_type = truediv_int_dtype_corrections[str(self.dtype)]
+            idx_series = Series(self)
+            result = idx_series.astype(truediv_type)\
+                               ._binaryop(other, 'truediv')
+            return as_index(result)
+        else:
+            return self._binaryop(other, 'truediv')
+
+    def __rtruediv__(self, other):
+        from cudf import Series
+        from cudf.dataframe.series import truediv_int_dtype_corrections
+        if self.dtype in list(truediv_int_dtype_corrections.keys()):
+            truediv_type = truediv_int_dtype_corrections[str(self.dtype)]
+            idx_series = Series(self)
+            result = idx_series.astype(truediv_type)\
+                               ._rbinaryop(other, 'truediv')
+            return as_index(result)
+        else:
+            return self._rbinaryop(other, 'truediv')
+
+    __div__ = __truediv__
+
+    def _unordered_compare(self, other, cmpops):
+        nvtx_range_push("PYGDF_UNORDERED_COMP", "orange")
+        from cudf import Series
+        idx_series = Series(self)
+        other = idx_series._normalize_binop_value(other)
+        outcol = idx_series._column.unordered_compare(cmpops, other._column)
+        result = idx_series._copy_construct(data=outcol)
+        result.name = None
+        nvtx_range_pop()
+        return as_index(result)
+
+    def _ordered_compare(self, other, cmpops):
+        nvtx_range_push("PYGDF_ORDERED_COMP", "orange")
+        from cudf import Series
+        idx_series = Series(self)
+        other = idx_series._normalize_binop_value(other)
+        outcol = idx_series._column.ordered_compare(cmpops, other._column)
+        result = idx_series._copy_construct(data=outcol)
+        result.name = None
+        nvtx_range_pop()
+        return as_index(result)
+
+    def __eq__(self, other):
+        return self._unordered_compare(other, 'eq')
+
+    def __ne__(self, other):
+        return self._unordered_compare(other, 'ne')
+
+    def __lt__(self, other):
+        return self._ordered_compare(other, 'lt')
+
+    def __le__(self, other):
+        return self._ordered_compare(other, 'le')
+
+    def __gt__(self, other):
+        return self._ordered_compare(other, 'gt')
+
+    def __ge__(self, other):
+        return self._ordered_compare(other, 'ge')
 
     def join(self, other, method, how='left', return_indexers=False):
         column_join_res = self.as_column().join(

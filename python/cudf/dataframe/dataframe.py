@@ -229,7 +229,7 @@ class DataFrame(object):
             for k, col in self._cols.items():
                 df[k] = col[arg]
             return df
-        elif isinstance(arg, (list, np.ndarray, pd.Series, Series,)):
+        elif isinstance(arg, (list, np.ndarray, pd.Series, Series, Index)):
             mask = arg
             if isinstance(mask, list):
                 mask = np.array(mask)
