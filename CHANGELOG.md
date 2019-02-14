@@ -12,6 +12,7 @@
 - PR #887 Add Series digitize method
 - PR #895 Add Series groupby
 - PR #898 Add DataFrame.groupby(level=0) support
+- PR #920 Add feather, JSON, HDF5 readers / writers from PyArrow / Pandas
 - PR #888 CSV Reader: Add prefix parameter for column names, used when parsing without a header
 - PR #918 Add Series.groupby(level=0) support
 - PR #906 Add binary and comparison ops to DataFrame
