@@ -426,9 +426,9 @@ gdf_error read_csv(csv_read_arg *args)
 
 		// Include the page padding in the mapped size
 		const size_t page_padding = args->byte_range_offset - map_offset;
-		const size_t padded_byte_range_size = args->byte_range_size + page_padding;
+		const size_t padded_byte_range_size = raw_csv->byte_range_size + page_padding;
 
-		if (args->byte_range_size != 0 && padded_byte_range_size < map_size) {
+		if (raw_csv->byte_range_size != 0 && padded_byte_range_size < map_size) {
 			// Need to make sure that w/ padding we don't overshoot the end of file
 			map_size = min(padded_byte_range_size + calculateMaxRowSize(args->num_cols), map_size);
 			// Ignore page padding for parsing purposes
@@ -445,6 +445,11 @@ gdf_error read_csv(csv_read_arg *args)
 		raw_csv->num_bytes = map_size = args->buffer_size;
 	}
 	else { checkError(GDF_C_ERROR, "invalid input type"); }
+
+	// Reset the byte range size if useless
+	if (raw_csv->byte_range_size >= raw_csv->num_bytes) {
+		raw_csv->byte_range_size = 0;
+	}
 
 	const char* h_uncomp_data;
 	size_t h_uncomp_size = 0;
