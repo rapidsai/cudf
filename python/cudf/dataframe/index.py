@@ -186,7 +186,7 @@ class RangeIndex(Index):
     def __getitem__(self, index):
         if isinstance(index, slice):
             start, stop, step, sln = utils.standard_python_slice(len(self),
-                                                               index)
+                                                                 index)
             start += self._start
             stop += self._start
             if sln == 0:
