@@ -342,8 +342,16 @@ def test_groupby_column_name():
     gdf = DataFrame.from_pandas(pdf)
     g = gdf.groupby('yy')
     p = pdf.groupby('yy')
-    print(g['xx'].sum())
-    print(p['xx'].sum())
     gxx = g['xx'].sum()
     pxx = p['xx'].sum()
+    assert_eq(pxx, gxx)
+
+
+def test_groupby_column_numeral():
+    pdf = pd.DataFrame({0: [1., 2., 3.], 1: [1, 2, 3]})
+    gdf = DataFrame.from_pandas(pdf)
+    p = pdf.groupby(1)
+    g = gdf.groupby(1)
+    pxx = p[0].sum()
+    gxx = g[0].sum()
     assert_eq(pxx, gxx)
