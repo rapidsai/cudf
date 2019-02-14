@@ -185,6 +185,7 @@ ConfigureTest(TYPES_TEST "${TYPES_TEST_SRC}")
 
 ###################################################################################################
 
+
 # - copying tests -------------------------------------------------------------------------------------
 
 set(COPYING_TEST_SRC
@@ -192,6 +193,14 @@ set(COPYING_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/copying/scatter_tests.cu")
 
 ConfigureTest(COPYING_TEST "${COPYING_TEST_SRC}")
+
+# - utilities tests -------------------------------------------------------------------------------------
+
+set(UTILITIES_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/utilities_tests/column_wrapper_tests.cu")
+
+ConfigureTest(UTILITIES_TEST "${UTILITIES_TEST_SRC}")
+
 
 # - transpose tests -------------------------------------------------------------------------------
 

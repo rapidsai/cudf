@@ -20,12 +20,14 @@
 #include "cudf.h"
 #include "cudf_test_utils.cuh"
 #include "rmm/rmm.h"
+#include "rmm/thrust_rmm_allocator.h"
 #include "utilities/bit_util.cuh"
 #include "utilities/type_dispatcher.hpp"
 
 #include <thrust/equal.h>
 #include <thrust/logical.h>
 #include <bitset>
+#include <string>
 
 #ifndef CUDA_RT_CALL
 #define CUDA_RT_CALL(call)                                                    \
@@ -57,29 +59,62 @@ namespace test {
 template <typename ColumnType>
 struct column_wrapper {
   /**---------------------------------------------------------------------------*
-   * @brief Construct a new column wrapper object
+   * @brief Copy constructor copies from another column_wrapper of the same
+   * type.
    *
-   * Constructs a column_wrapper of the specified size with zero-intialized data.
-   * 
-   * Optionally allocates a zero-initialized bitmask.
+   * @param other The column_wraper to copy
+   *---------------------------------------------------------------------------**/
+  column_wrapper(column_wrapper<ColumnType> const& other)
+      : data{other.data}, bitmask{other.bitmask}, the_column{other.the_column} {
+    the_column.data = data.data().get();
+    the_column.valid = bitmask.data().get();
+  }
+
+  // TODO Implement this via copy & swap. Need a swap function.
+  column_wrapper& operator=(column_wrapper<ColumnType> other) = delete;
+
+  ~column_wrapper() = default;
+
+  /**---------------------------------------------------------------------------*
+   * @brief Implicit conversion operator to a gdf_column pointer.
+   *
+   * Allows for implicit conversion of a column_wrapper to a pointer to its
+   * underlying gdf_column.
+   *
+   * In this way, a column_wrapper can be passed directly into a libcudf API
+   * and will be implicitly converted to a pointer to its underlying gdf_column
+   * without the need to use the `get()` member.
+   *
+   * @return gdf_column* Pointer to the underlying gdf_column
+   *---------------------------------------------------------------------------**/
+  operator gdf_column*() { return &the_column; };
+
+  /**---------------------------------------------------------------------------*
+   * @brief Construct a new column wrapper of a specified size with default
+   * initialized data and optionally allocated bitmask.
+   *
+   * Constructs a column_wrapper of the specified size with default intialized
+   * data.
+   *
+   * Optionally allocates a default-initialized bitmask.
    *
    * @param column_size The desired size of the column
-   * @param allocate_bitmask Optionally allocate a zero-initialized bitmask 
+   * @param allocate_bitmask Optionally allocate a zero-initialized bitmask
    *---------------------------------------------------------------------------**/
   column_wrapper(gdf_size_type column_size, bool allocate_bitmask = false) {
-    std::vector<ColumnType> host_data(column_size, 0);
+    std::vector<ColumnType> host_data(column_size);
     std::vector<gdf_valid_type> host_bitmask;
 
-    if(allocate_bitmask){
-        host_bitmask.resize(gdf_get_num_chars_bitmask(column_size));
-        std::fill(host_bitmask.begin(), host_bitmask.end(), 0);
+    if (allocate_bitmask) {
+      host_bitmask.resize(gdf_get_num_chars_bitmask(column_size));
     }
 
     initialize_with_host_data(host_data, host_bitmask);
   }
 
   /**---------------------------------------------------------------------------*
-   * @brief Construct a new column wrapper object
+   * @brief Construct a new column wrapper using host vectors for data and
+   * bitmask.
    *
    * Constructs a column_wrapper using a std::vector for the host data and valid
    * bitmasks.
@@ -93,7 +128,8 @@ struct column_wrapper {
   }
 
   /**---------------------------------------------------------------------------*
-   * @brief Construct a new column wrapper object
+   * @brief Construct a new column wrapper using host vector for data with
+   * unallocated bitmask.
    *
    * Constructs a column_wrapper using a std::vector for the host data.
    *
@@ -106,7 +142,8 @@ struct column_wrapper {
   }
 
   /**---------------------------------------------------------------------------*
-   * @brief Construct a new column wrapper object
+   * @brief Construct a new column wrapper using host vector for column data and
+   * lambda initializer for the bitmask.
    *
    * Constructs a column_wrapper using a std::vector for the host data.
    *
@@ -136,7 +173,8 @@ struct column_wrapper {
   }
 
   /**---------------------------------------------------------------------------*
-   * @brief Construct a new column wrapper object
+   * @brief Construct a new column wrapper using lambda initializers for both
+   * the column's data and bitmask.
    *
    * Constructs a column wrapper using a unary lambda to initialize both the
    * column's data and validity bitmasks.
@@ -173,12 +211,6 @@ struct column_wrapper {
     initialize_with_host_data(host_data, host_bitmask);
   }
 
-  ~column_wrapper() {
-    RMM_FREE(the_column.data, 0);
-    RMM_FREE(the_column.valid, 0);
-    the_column.size = 0;
-  }
-
   /**---------------------------------------------------------------------------*
    * @brief Returns a pointer to the underlying gdf_column.
    *
@@ -199,6 +231,7 @@ struct column_wrapper {
     std::vector<gdf_valid_type> host_bitmask;
 
     if (nullptr != the_column.data) {
+      // TODO Is there a nicer way to get a `std::vector` from a device_vector?
       host_data.resize(the_column.size);
       CUDA_RT_CALL(cudaMemcpy(host_data.data(), the_column.data,
                               the_column.size * sizeof(ColumnType),
@@ -284,7 +317,8 @@ struct column_wrapper {
     if (!(the_column.data && rhs.the_column.data))
       return false;  // if one is null but not both
 
-    if (not thrust::all_of(thrust::make_counting_iterator(0),
+    if (not thrust::all_of(rmm::exec_policy()->on(0),
+                           thrust::make_counting_iterator(0),
                            thrust::make_counting_iterator(the_column.size),
                            elements_equal{the_column, rhs.the_column})) {
       return false;
@@ -312,15 +346,12 @@ struct column_wrapper {
       std::vector<ColumnType> const& host_data,
       std::vector<gdf_valid_type> const& host_bitmask =
           std::vector<gdf_valid_type>{}) {
-
-    // Allocate device storage for gdf_column and copy contents from host_data
-    RMM_ALLOC(&(the_column.data), host_data.size() * sizeof(ColumnType), 0);
-    CUDA_RT_CALL(cudaMemcpy(the_column.data, host_data.data(),
-                            host_data.size() * sizeof(ColumnType),
-                            cudaMemcpyHostToDevice));
+    // thrust::device_vector takes care of host to device copy assignment
+    data = host_data;
 
     // Fill the gdf_column members
-    the_column.size = host_data.size();
+    the_column.data = data.data().get();
+    the_column.size = data.size();
     the_column.dtype = cudf::type_to_gdf_dtype<ColumnType>::value;
     gdf_dtype_extra_info extra_info;
     extra_info.time_unit = TIME_UNIT_NONE;
@@ -332,62 +363,25 @@ struct column_wrapper {
       gdf_size_type const required_bitmask_size{
           gdf_get_num_chars_bitmask(host_data.size())};
 
-      if (host_bitmask.size() < required_bitmask_size) {
+      if (host_bitmask.size() < static_cast<size_t>(required_bitmask_size)) {
         throw std::runtime_error("Insufficiently sized bitmask vector.");
       }
-
-      RMM_ALLOC(&(the_column.valid),
-                host_bitmask.size() * sizeof(gdf_valid_type), 0);
-      CUDA_RT_CALL(cudaMemcpy(the_column.valid, host_bitmask.data(),
-                              host_bitmask.size() * sizeof(gdf_valid_type),
-                              cudaMemcpyHostToDevice));
+      bitmask = host_bitmask;
+      the_column.valid = bitmask.data().get();
     } else {
       the_column.valid = nullptr;
     }
-    set_null_count(&the_column);
-  }
 
-/**---------------------------------------------------------------------------*
- * @brief Compares if all the bits between two bitmasks are equal between [0, num_rows).
- * 
- * @param lhs  The left bitmask
- * @param rhs  The right bitmask
- * @param num_rows The count of the number of bits that correspond to rows.
- * @return true If all bits [0, num_rows) are equal between the left and right bitmasks
- * @return false If any bit [0, num_rows) are not equal between the left and right bitmasks
-*---------------------------------------------------------------------------**/
-  bool compare_bitmasks(gdf_valid_type* lhs, gdf_valid_type* rhs,
-                        gdf_size_type num_rows) const {
-    gdf_size_type const num_masks{gdf_get_num_chars_bitmask(num_rows)};
 
-    // Last bitmask has to be treated as a special case as not all bits may be
-    // defined
-    if (not thrust::equal(thrust::cuda::par, lhs, lhs + num_masks - 1, rhs))
-      return false;
-
-    // Copy last masks to host
-    gdf_valid_type lhs_last_mask{0};
-    gdf_valid_type rhs_last_mask{0};
-
-    CUDA_RT_CALL(cudaMemcpy(&lhs_last_mask, &lhs[num_masks - 1],
-                            sizeof(gdf_valid_type), cudaMemcpyDeviceToHost));
-
-    CUDA_RT_CALL(cudaMemcpy(&rhs_last_mask, &rhs[num_masks - 1],
-                            sizeof(gdf_valid_type), cudaMemcpyDeviceToHost));
-
-    std::bitset<GDF_VALID_BITSIZE> lhs_bitset(lhs_last_mask);
-    std::bitset<GDF_VALID_BITSIZE> rhs_bitset(rhs_last_mask);
-
-    gdf_size_type num_bits_last_mask = num_rows % GDF_VALID_BITSIZE;
-
-    if (0 == num_bits_last_mask) num_bits_last_mask = GDF_VALID_BITSIZE;
-
-    for (gdf_size_type i = 0; i < num_bits_last_mask; ++i) {
-      if (lhs_bitset[i] != rhs_bitset[i]) return false;
+    gdf_error result = set_null_count(&the_column);
+    if (GDF_SUCCESS != result) {
+      throw std::runtime_error("Failed to set null count. Error code: " +
+                               std::to_string(result));
     }
-    return true;
   }
 
+  rmm::device_vector<ColumnType> data;
+  rmm::device_vector<gdf_valid_type> bitmask;
   gdf_column the_column;
 };
 
