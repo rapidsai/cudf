@@ -122,9 +122,11 @@ list_types_tuple = (list, np.array)
 def buffers_from_pyarrow(pa_arr, dtype=None):
     from cudf.dataframe.buffer import Buffer
 
-    if pa_arr.buffers()[0]:
+    buffers = pa_arr.buffers()
+
+    if buffers[0]:
         pamask = Buffer(
-            np.array(pa_arr.buffers()[0]).view('int8')
+            np.array(buffers[0]).view('int8')
         )
     else:
         pamask = None
@@ -137,9 +139,14 @@ def buffers_from_pyarrow(pa_arr, dtype=None):
         else:
             new_dtype = pa_arr.type.to_pandas_dtype()
 
-    padata = Buffer(
-        np.array(pa_arr.buffers()[1]).view(new_dtype)[
-            pa_arr.offset:pa_arr.offset + len(pa_arr)
-        ]
-    )
+    if buffers[1]:
+        padata = Buffer(
+            np.array(buffers[1]).view(new_dtype)[
+                pa_arr.offset:pa_arr.offset + len(pa_arr)
+            ]
+        )
+    else:
+        padata = Buffer(
+            np.empty(0, dtype=new_dtype)
+        )
     return (pamask, padata)

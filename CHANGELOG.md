@@ -51,6 +51,7 @@
 - PR #923 fix index for negative slicing for cudf dataframe and series
 - PR #927 CSV Reader: Fix category GDF_CATEGORY hashes not being computed properly
 - PR #921 CSV Reader: Fix parsing errors with delim_whitespace, quotations in the header row, unnamed columns
+- PR #933 Fix handling objects of all nulls in series creation
 - PR #940 CSV Reader: fix an issue where the last data row is missing when using byte_range
 
 
