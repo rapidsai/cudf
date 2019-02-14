@@ -5,6 +5,7 @@ from __future__ import print_function, division
 import inspect
 import random
 from collections import OrderedDict
+from collections.abc import Sequence
 import logging
 import warnings
 import numbers
@@ -17,6 +18,7 @@ from pandas.api.types import is_dict_like
 from types import GeneratorType
 
 from librmm_cffi import librmm as rmm
+from libgdf_cffi import libgdf
 
 from cudf import formatting, _gdf
 from cudf.utils import cudautils, queryutils, applyutils, utils
@@ -407,6 +409,120 @@ class DataFrame(object):
             len(self.columns),
             len(self),
         )
+
+    # binary, rbinary, unary, orderedcompare, unorderedcompare
+    def _call_op(self, other, internal_fn, fn):
+        result = DataFrame()
+        result.set_index(self.index)
+        if isinstance(other, Sequence):
+            for k, col in enumerate(self._cols):
+                result[col] = getattr(self._cols[col], internal_fn)(
+                        other[k],
+                        fn,
+                )
+        elif isinstance(other, DataFrame):
+            for col in other._cols:
+                if col in self._cols:
+                    result[col] = getattr(self._cols[col], internal_fn)(
+                            other._cols[col],
+                            fn,
+                    )
+                else:
+                    result[col] = Series(cudautils.full(self.shape[0],
+                                         np.dtype('float64').type(np.nan),
+                                         'float64'), nan_as_null=False)
+            for col in self._cols:
+                if col not in other._cols:
+                    result[col] = Series(cudautils.full(self.shape[0],
+                                         np.dtype('float64').type(np.nan),
+                                         'float64'), nan_as_null=False)
+        elif isinstance(other, Series):
+            raise NotImplementedError(
+                    "Series to DataFrame arithmetic not supported "
+                    "until strings can be used as indices. Try converting your"
+                    " Series into a DataFrame first.")
+        elif isinstance(other, numbers.Number):
+            for col in self._cols:
+                result[col] = getattr(self._cols[col], internal_fn)(
+                        other,
+                        fn,
+                )
+        else:
+            raise NotImplementedError(
+                    "DataFrame operations with " + str(type(other)) + " not "
+                    "supported at this time.")
+        return result
+
+    def _binaryop(self, other, fn):
+        return self._call_op(other, '_binaryop', fn)
+
+    def _rbinaryop(self, other, fn):
+        return self._call_op(other, '_rbinaryop', fn)
+
+    def _unaryop(self, fn):
+        return self._call_op(self, '_unaryop', fn)
+
+    def __add__(self, other):
+        return self._binaryop(other, 'add')
+
+    def __radd__(self, other):
+        return self._rbinaryop(other, 'add')
+
+    def __sub__(self, other):
+        return self._binaryop(other, 'sub')
+
+    def __rsub__(self, other):
+        return self._rbinaryop(other, 'sub')
+
+    def __mul__(self, other):
+        return self._binaryop(other, 'mul')
+
+    def __rmul__(self, other):
+        return self._rbinaryop(other, 'mul')
+
+    def __pow__(self, other):
+        if other == 2:
+            return self * self
+        else:
+            return NotImplemented
+
+    def __floordiv__(self, other):
+        return self._binaryop(other, 'floordiv')
+
+    def __rfloordiv__(self, other):
+        return self._rbinaryop(other, 'floordiv')
+
+    def __truediv__(self, other):
+        return self._binaryop(other, 'truediv')
+
+    def __rtruediv__(self, other):
+        return self._rbinaryop(other, 'truediv')
+
+    __div__ = __truediv__
+
+    def _unordered_compare(self, other, cmpops):
+        return self._call_op(other, '_unordered_compare', cmpops)
+
+    def _ordered_compare(self, other, cmpops):
+        return self._call_op(other, '_ordered_compare', cmpops)
+
+    def __eq__(self, other):
+        return self._unordered_compare(other, 'eq')
+
+    def __ne__(self, other):
+        return self._unordered_compare(other, 'ne')
+
+    def __lt__(self, other):
+        return self._ordered_compare(other, 'lt')
+
+    def __le__(self, other):
+        return self._ordered_compare(other, 'le')
+
+    def __gt__(self, other):
+        return self._ordered_compare(other, 'gt')
+
+    def __ge__(self, other):
+        return self._ordered_compare(other, 'ge')
 
     def __iter__(self):
         return iter(self.columns)
@@ -1002,6 +1118,71 @@ class DataFrame(object):
             else:
                 df[k] = self[k].reset_index().take(new_positions)
         return df.set_index(self.index.take(new_positions))
+
+    def transpose(self):
+        """Transpose index and columns.
+
+        Returns
+        -------
+        a new (ncol x nrow) dataframe. self is (nrow x ncol)
+
+        Difference from pandas
+        ----------------------
+        Not supporting *copy* because default and only behaviour is copy=True
+        """
+        if len(self.columns) == 0:
+            return self
+
+        dtype = self.dtypes[0]
+        if pd.api.types.is_categorical_dtype(dtype):
+            raise NotImplementedError('Categorical columns are not yet '
+                                      'supported for function')
+        if any(t != dtype for t in self.dtypes):
+            raise ValueError('all columns must have the same dtype')
+        has_null = any(c.null_count for c in self._cols.values())
+
+        df = DataFrame()
+
+        ncols = len(self.columns)
+        cols = [self[col]._column.cffi_view for col in self._cols]
+
+        new_nrow = ncols
+        new_ncol = len(self)
+
+        if has_null:
+            new_col_series = [
+                Series.from_masked_array(
+                    data=Buffer(rmm.device_array(shape=new_nrow, dtype=dtype)),
+                    mask=cudautils.make_empty_mask(size=new_nrow),
+                )
+                for i in range(0, new_ncol)]
+        else:
+            new_col_series = [
+                Series(
+                    data=Buffer(rmm.device_array(shape=new_nrow, dtype=dtype)),
+                )
+                for i in range(0, new_ncol)]
+        new_col_ptrs = [
+            new_col_series[i]._column.cffi_view
+            for i in range(0, new_ncol)]
+
+        # TODO (dm): move to _gdf.py
+        libgdf.gdf_transpose(
+            ncols,
+            cols,
+            new_col_ptrs
+        )
+
+        for series in new_col_series:
+            series._column._update_null_count()
+
+        for i in range(0, new_ncol):
+            df[str(i)] = new_col_series[i]
+        return df
+
+    @property
+    def T(self):
+        return self.transpose()
 
     def merge(self, other, on=None, how='left', lsuffix='_x', rsuffix='_y',
               type="", method='hash'):
