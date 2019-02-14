@@ -46,13 +46,10 @@
 - PR #889 Deleted test_rmm.py which has now moved to RMM repo
 - PR #866 Merge v0.5.1 numpy ABI hotfix into 0.6
 - PR #917 value_counts return int type on empty columns
-<<<<<<< HEAD
 - PR #923 fix index for negative slicing for cudf dataframe and series
-=======
 - PR #927 CSV Reader: Fix category GDF_CATEGORY hashes not being computed properly
 - PR #921 CSV Reader: Fix parsing errors with delim_whitespace, quotations in the header row, unnamed columns
 
->>>>>>> 89462008c24a647de457ce595ab44c0c0d758450
 
 # cuDF 0.5.1 (05 Feb 2019)
 
