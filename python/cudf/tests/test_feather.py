@@ -15,10 +15,7 @@ from distutils.version import LooseVersion
 if LooseVersion(pd.__version__) < LooseVersion('0.24'):
     try:
         import feather # noqa F401
-        _have_feather = True
     except ImportError:
-        _have_feather = False
-    if not _have_feather:
         pytest.skip('Feather is not installed and is required for Pandas <'
                     ' 0.24', allow_module_level=True)
 

@@ -1136,10 +1136,7 @@ class Series(object):
         from cudf.groupby.groupby import SeriesGroupBy
         return SeriesGroupBy(self, group_series, level, sort)
 
-    def to_json(self, path_or_buf=None, orient=None, date_format=None,
-                double_precision=10, force_ascii=True, date_unit='ms',
-                default_handler=None, lines=False, compression='infer',
-                index=True):
+    def to_json(self, path_or_buf=None, *args, **kwargs):
         """
         Convert the cuDF object to a JSON string.
         Note nulls and NaNs will be converted to null and datetime objects
@@ -1204,18 +1201,11 @@ class Series(object):
         json.to_json(
             self,
             path_or_buf=path_or_buf,
-            orient=orient,
-            date_format=date_format,
-            double_precision=double_precision,
-            force_ascii=force_ascii,
-            date_unit=date_unit,
-            default_handler=default_handler,
-            lines=lines,
-            compression=compression,
-            index=index
+            *args,
+            **kwargs
         )
 
-    def to_hdf(self, path_or_buf, key, **kwargs):
+    def to_hdf(self, path_or_buf, key, *args, **kwargs):
         """
         Write the contained data to an HDF5 file using HDFStore.
 
@@ -1276,7 +1266,7 @@ class Series(object):
             of options.
         """
         import cudf.io.hdf as hdf
-        hdf.to_hdf(path_or_buf, key, self, **kwargs)
+        hdf.to_hdf(path_or_buf, key, self, *args, **kwargs)
 
 
 register_distributed_serializer(Series)

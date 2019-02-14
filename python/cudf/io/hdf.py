@@ -6,7 +6,7 @@ import pandas as pd
 import warnings
 
 
-def read_hdf(path_or_buf, key=None, mode='r', **kwargs):
+def read_hdf(path_or_buf, *args, **kwargs):
     """
     Read from the store, close it if we opened it.
 
@@ -55,17 +55,11 @@ def read_hdf(path_or_buf, key=None, mode='r', **kwargs):
 
     warnings.warn("Using CPU via Pandas to read HDF dataset, this may "
                   "be GPU accelerated in the future")
-    pd_value = pd.read_hdf(
-        path_or_buf,
-        key=key,
-        mode=mode,
-        **kwargs
-    )
+    pd_value = pd.read_hdf(path_or_buf, *args, **kwargs)
     return cudf.from_pandas(pd_value)
 
 
-def to_hdf(path_or_buf, key, value, mode=None, complevel=None, complib=None,
-           append=None, **kwargs):
+def to_hdf(path_or_buf, key, value, *args, **kwargs):
     """
     Write the contained data to an HDF5 file using HDFStore.
 
@@ -136,9 +130,6 @@ def to_hdf(path_or_buf, key, value, mode=None, complevel=None, complib=None,
         path_or_buf,
         key,
         pd_value,
-        mode=mode,
-        complevel=complevel,
-        complib=complib,
-        append=append,
+        *args,
         **kwargs
     )
