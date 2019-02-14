@@ -2,6 +2,7 @@
 #include "rmm/rmm.h"
 #include "utilities/cudf_utils.h"
 #include "utilities/error_utils.h"
+#include "utilities/type_dispatcher.hpp"
 
 #include <cub/device/device_scan.cuh>
 
@@ -47,29 +48,30 @@ struct Scan {
     }
 };
 
-#define SCAN_IMPL(F, T)                                                       \
-gdf_error gdf_prefixsum_##F(gdf_column *inp, gdf_column *out, int inclusive) {\
-    GDF_REQUIRE( inp->size == out->size, GDF_COLUMN_SIZE_MISMATCH );          \
-    GDF_REQUIRE( inp->dtype == out->dtype, GDF_UNSUPPORTED_DTYPE );           \
-    GDF_REQUIRE( !inp->valid || !inp->null_count, GDF_VALIDITY_UNSUPPORTED ); \
-    GDF_REQUIRE( !out->valid || !out->null_count, GDF_VALIDITY_UNSUPPORTED ); \
-    return Scan<T>::call((const T*)inp->data, (T*)out->data, inp->size,       \
-                         inclusive);                                          \
-}
-
-
-SCAN_IMPL(i8,  int8_t)
-SCAN_IMPL(i32, int32_t)
-SCAN_IMPL(i64, int64_t)
-
-
-gdf_error gdf_prefixsum_generic(gdf_column *inp, gdf_column *out,
-                                int inclusive)
-{
-    switch (inp->dtype) {
-    case GDF_INT8:    return gdf_prefixsum_i8(inp, out, inclusive);
-    case GDF_INT32:   return gdf_prefixsum_i32(inp, out, inclusive);
-    case GDF_INT64:   return gdf_prefixsum_i64(inp, out, inclusive);
-    default: return GDF_SUCCESS;
+struct PrefixSumDispatcher {
+    template <typename T,
+        typename std::enable_if_t<std::is_arithmetic<T>::value>* = nullptr>
+        gdf_error operator()(gdf_column *inp, gdf_column *out,
+            int inclusive) {
+        GDF_REQUIRE(inp->size == out->size, GDF_COLUMN_SIZE_MISMATCH);
+        GDF_REQUIRE(inp->dtype == out->dtype, GDF_UNSUPPORTED_DTYPE);
+        GDF_REQUIRE(!inp->valid || !inp->null_count, GDF_VALIDITY_UNSUPPORTED);
+        GDF_REQUIRE(!out->valid || !out->null_count, GDF_VALIDITY_UNSUPPORTED);
+        return Scan<T>::call((const T*)inp->data, (T*)out->data, inp->size,
+            inclusive);
     }
+
+    template <typename T,
+        typename std::enable_if_t<!std::is_arithmetic<T>::value, T>* = nullptr>
+        gdf_error operator()(gdf_column *inp, gdf_column *out,
+            int inclusive) {
+        return GDF_SUCCESS;
+    }
+};
+
+gdf_error gdf_prefixsum(gdf_column *inp, gdf_column *out,
+    int inclusive)
+{
+    return cudf::type_dispatcher(inp->dtype, PrefixSumDispatcher(),
+        inp, out, inclusive);
 }

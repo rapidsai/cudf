@@ -342,7 +342,7 @@ def libgdf_join(col_lhs, col_rhs, on, how, method='sort'):
 
 
 def apply_prefixsum(col_inp, col_out, inclusive):
-    libgdf.gdf_prefixsum_generic(col_inp, col_out, inclusive)
+    libgdf.gdf_prefixsum(col_inp, col_out, inclusive)
 
 
 def apply_segsort(col_keys, col_vals, segments, descending=False,

@@ -47,7 +47,7 @@ def test_prefixsum(dtype, nelem):
                            nelem, gdf_dtype)
 
     inclusive = True
-    libgdf.gdf_prefixsum_generic(col_data, col_result, inclusive)
+    libgdf.gdf_prefixsum(col_data, col_result, inclusive)
 
     expect = np.cumsum(d_data.copy_to_host())
     got = d_result.copy_to_host()
