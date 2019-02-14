@@ -950,8 +950,9 @@ gdf_error gdf_find_and_replace_all(gdf_column*       col,
  *                     (0 is ascending order and 1 is descending). If NULL
  *                     is provided defaults to ascending order for evey column.
  * @Param[in] num_inputs # columns
- * @Param[in] flag_nulls_are_smallest Flag to indicate if nulls are to be considered
- *                                    smaller than non-nulls or viceversa
+ * @Param[in] The context used to control how nulls are treated in a sort
+ *   context->flag_nulls_sort_behavior< 0 = Nulls are are treated as largest, 
+ *   1 = Nulls are treated as smallest, 2 = Special multi-sort case any row with null is largest>
  * @Param[out] output_indices Pre-allocated gdf_column to be filled with sorted
  *                            indices
  * 
@@ -962,7 +963,8 @@ gdf_error gdf_order_by(gdf_column** input_columns,
                        int8_t*      asc_desc,
                        size_t       num_inputs,
                        gdf_column*  output_indices,
-                       int          flag_nulls_are_smallest);
+                       gdf_context * context);
+
 
 /* --------------------------------------------------------------------------*
  * @brief Finds the indices of the bins in which each value of the column

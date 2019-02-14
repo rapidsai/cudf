@@ -98,7 +98,7 @@ struct LesserRTTI
         return false;
       case State::True:
         return true;
-      case State::Undecided:
+      case State::Undecided: //EQUALS
         break;
       }
     }
@@ -161,6 +161,32 @@ struct LesserRTTI
                                           row2,
                                           col_index,
                                           columns_);
+      switch( state )
+      {
+      case State::False:
+        return false;
+
+      case State::True:
+      case State::Undecided:
+        break;
+      }
+    }
+    return true;
+  }
+
+    __host__ __device__
+  bool equal_with_nulls(IndexT row1, IndexT row2) const
+  {
+    for(size_t col_index = 0; col_index < sz_; ++col_index)
+    {
+      gdf_dtype col_type = static_cast<gdf_dtype>(rtti_[col_index]);
+
+      State state = cudf::type_dispatcher(col_type, OpEqual_with_nulls{},
+                                          row1,
+                                          row2,
+                                          col_index,
+                                          columns_,
+                                          valids_);
       switch( state )
       {
       case State::False:
@@ -251,6 +277,34 @@ struct LesserRTTI
     return false;
   }
 
+
+    __device__
+  bool less_with_nulls_always_false(IndexT row1, IndexT row2) const
+  {
+    for(size_t col_index = 0; col_index < sz_; ++col_index)
+    {
+      gdf_dtype col_type = static_cast<gdf_dtype>(rtti_[col_index]);
+
+      State state = cudf::type_dispatcher(col_type, OpLess_with_nulls_always_false{},
+                                          row1,
+                                          row2,
+                                          col_index,
+                                          columns_,
+                                          valids_);
+      switch( state )
+      {
+      case State::False:
+        return false;
+      case State::True:
+        return true;
+      case State::Undecided:
+        break;
+      }
+    }
+    return false;
+  }
+
+
   template<typename ColType>
   __device__
   static ColType at(int col_index,
@@ -323,6 +377,31 @@ private:
 	  		return State::True;
 		  else
 			  return State::False;
+	  }
+  };
+
+struct OpLess_with_nulls_always_false
+  {
+    template<typename ColType>
+	  __device__
+	  State operator() (IndexT row1, IndexT row2,
+                      int col_index,
+                      const void* const * columns,
+                      const gdf_valid_type* const * valids)
+	  {
+		  const ColType res1 = LesserRTTI::at<ColType>(col_index, row1, columns);
+		  const ColType res2 = LesserRTTI::at<ColType>(col_index, row2, columns);
+		  const bool isValid1 = LesserRTTI::is_valid(col_index, row1, valids);
+		  const bool isValid2 = LesserRTTI::is_valid(col_index, row2, valids);
+
+		  if (!isValid2 || !isValid1)
+			  return State::False;
+		  else if( res1 < res2 )
+        return State::True;
+      else if( res1 == res2 )
+        return State::Undecided;
+      else
+        return State::False;
 	  }
   };
 
@@ -399,6 +478,29 @@ private:
     }
   };
 
+  struct OpEqual_with_nulls
+  {
+    template<typename ColType>
+    __device__
+    State operator() (IndexT row1, IndexT row2,
+                       int col_index,
+                      const void* const * columns,
+                      const gdf_valid_type* const * valids)
+    {
+      ColType res1 = LesserRTTI::at<ColType>(col_index, row1, columns);
+      ColType res2 = LesserRTTI::at<ColType>(col_index, row2, columns);
+      bool isValid1 = LesserRTTI::is_valid(col_index, row1, valids);
+		  bool isValid2 = LesserRTTI::is_valid(col_index, row2, valids);
+      
+      if (!isValid2 && !isValid1)
+			  return State::Undecided;
+		  else if( isValid1 && isValid2 && res1 == res2)
+        return State::True;
+      else
+        return State::False;      
+    }
+  };
+  
   struct OpEqualV
   {
     template<typename ColType>
@@ -516,7 +618,7 @@ multi_col_group_by_count_sort(size_t         nrows,
                               cudaStream_t   stream = NULL)
 {
   if( !sorted )
-    multi_col_sort(d_cols, nullptr, d_gdf_t, nullptr, ncols, nrows, false, ptr_d_indx, false, stream);
+    multi_col_sort(d_cols, nullptr, d_gdf_t, nullptr, ncols, nrows, false, ptr_d_indx, false, false, stream);
 
   LesserRTTI<IndexT> f(d_cols, d_gdf_t, ncols);
 
@@ -588,7 +690,7 @@ size_t multi_col_group_by_sort(size_t         nrows,
                                cudaStream_t   stream = NULL)
 {
   if( !sorted )
-    multi_col_sort(d_cols, nullptr, d_gdf_t, nullptr, ncols, nrows, false, ptr_d_indx, false, stream);
+    multi_col_sort(d_cols, nullptr, d_gdf_t, nullptr, ncols, nrows, false, ptr_d_indx, false, false, stream);
 
   
   thrust::gather(rmm::exec_policy(stream)->on(stream),
@@ -765,6 +867,7 @@ size_t multi_col_group_by_avg_sort(size_t         nrows,
   return new_sz;
 }
 
+
 /* --------------------------------------------------------------------------*/
 /** 
  * @brief Sorts an array of columns, using type erasure and RTTI at
@@ -778,6 +881,7 @@ size_t multi_col_group_by_avg_sort(size_t         nrows,
  * @Param[in] nrows # rows
  * @Param[in] have_nulls Whether or not any column have null values
  * @Param[in] nulls_are_smallest Whether or not nulls are smallest
+ * @Param[in] nulls_are_lessthan_always_false. If set to true, nulls will always trigger less than equal to false
  * @Param[in] stream CudaStream to work in
  * @Param[out] d_indx Device array of re-ordered indices after sorting
  * @tparam IndexT The type of d_indx array 
@@ -795,6 +899,7 @@ void multi_col_sort(void* const *           d_cols,
                     bool                    have_nulls,
                     IndexT*                 d_indx,
                     bool                    nulls_are_smallest = false,
+                    bool                    nulls_are_lessthan_always_false = false,
                     cudaStream_t            stream = NULL)
 {
   //cannot use counting_iterator 2 reasons:
@@ -804,13 +909,21 @@ void multi_col_sort(void* const *           d_cols,
   
   LesserRTTI<IndexT> comp(d_cols, d_valids, d_col_types, d_asc_desc, ncols, nulls_are_smallest);
   if (d_valids != nullptr && have_nulls) {
-		thrust::sort(rmm::exec_policy(stream)->on(stream),
-				         d_indx, d_indx+nrows,
-				         [comp] __device__ (IndexT i1, IndexT i2){
-                    return comp.asc_desc_comparison_with_nulls(i1, i2);
-                 });
+    if (nulls_are_lessthan_always_false){ //Pandas 
+      thrust::sort(rmm::exec_policy(stream)->on(stream),
+                  d_indx, d_indx+nrows,
+                  [comp] __device__ (IndexT i1, IndexT i2){
+                      return comp.less_with_nulls_always_false(i1, i2);
+                  });
+    } else { // SQL
+       thrust::sort(rmm::exec_policy(stream)->on(stream),
+                  d_indx, d_indx+nrows,
+                  [comp] __device__ (IndexT i1, IndexT i2){
+                      return comp.asc_desc_comparison_with_nulls(i1, i2);
+                  });
+    }
   }
-  else {
+  else { // no hay nulos!
     thrust::sort(rmm::exec_policy(stream)->on(stream),
                 d_indx, d_indx+nrows,
                 [comp] __device__ (IndexT i1, IndexT i2) {
