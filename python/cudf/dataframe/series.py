@@ -321,10 +321,14 @@ class Series(object):
         and *other*.  Return the output Series.  The output dtype is
         determined by the input operands.
         """
+        from cudf import DataFrame
+        if isinstance(other, DataFrame):
+            return other._binaryop(self, fn)
         nvtx_range_push("PYGDF_BINARY_OP", "orange")
         other = self._normalize_binop_value(other)
         outcol = self._column.binary_operator(fn, other._column)
         result = self._copy_construct(data=outcol)
+        result.name = None
         nvtx_range_pop()
         return result
 
@@ -334,10 +338,14 @@ class Series(object):
         and *other* for reflected operations.  Return the output Series.
         The output dtype is determined by the input operands.
         """
+        from cudf import DataFrame
+        if isinstance(other, DataFrame):
+            return other._binaryop(self, fn)
         nvtx_range_push("PYGDF_BINARY_OP", "orange")
         other = self._normalize_binop_value(other)
         outcol = other._column.binary_operator(fn, self._column)
         result = self._copy_construct(data=outcol)
+        result.name = None
         nvtx_range_pop()
         return result
 
@@ -408,6 +416,7 @@ class Series(object):
         other = self._normalize_binop_value(other)
         outcol = self._column.unordered_compare(cmpops, other._column)
         result = self._copy_construct(data=outcol)
+        result.name = None
         nvtx_range_pop()
         return result
 
@@ -416,6 +425,7 @@ class Series(object):
         other = self._normalize_binop_value(other)
         outcol = self._column.ordered_compare(cmpops, other._column)
         result = self._copy_construct(data=outcol)
+        result.name = None
         nvtx_range_pop()
         return result
 
@@ -997,7 +1007,7 @@ class Series(object):
             msg = 'non sort based value_count() not implemented yet'
             raise NotImplementedError(msg)
         if self.null_count == len(self):
-            return 0
+            return Series(np.array([], dtype=np.int64))
         vals, cnts = self._column.value_counts(method=method)
         res = Series(cnts, index=as_index(vals))
         if sort:
@@ -1100,9 +1110,31 @@ class Series(object):
             return Series(self._column.quantile(q, interpolation, exact),
                           index=as_index(np.asarray(q)))
 
-    def groupby(self, group_series):
+    def digitize(self, bins, right=False):
+        """Return the indices of the bins to which each value in series belongs.
+
+        Notes
+        -----
+        Monotonicity of bins is assumed and not checked.
+
+        Parameters
+        ----------
+        bins : np.array
+            1-D monotonically, increasing array with same type as this series.
+        right : bool
+            Indicates whether interval contains the right or left bin edge.
+
+        Returns
+        -------
+        A new Series containing the indices.
+        """
+        from cudf.dataframe import numerical
+
+        return Series(numerical.digitize(self._column, bins, right))
+
+    def groupby(self, group_series=None, level=None, sort=False):
         from cudf.groupby.groupby import SeriesGroupBy
-        return SeriesGroupBy(self, group_series)
+        return SeriesGroupBy(self, group_series, level, sort)
 
 
 register_distributed_serializer(Series)

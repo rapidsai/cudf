@@ -245,9 +245,9 @@ std::vector<gdf_col_pointer> initialize_gdf_columns(std::tuple<std::vector<Tp>..
 
 // This version of initialize_gdf_columns assumes takes a vector of same-typed column data as input
 // and a validity mask initializer function
-template<typename T, typename valid_initializer_t>
-std::vector<gdf_col_pointer> initialize_gdf_columns(std::vector< std::vector<T> > columns, valid_initializer_t bit_initializer)
-{
+template <typename T, typename valid_initializer_t>
+std::vector<gdf_col_pointer> initialize_gdf_columns(
+    std::vector<std::vector<T>> columns, valid_initializer_t bit_initializer) {
   std::vector<gdf_col_pointer> gdf_columns;
 
   size_t col = 0;
@@ -262,41 +262,48 @@ std::vector<gdf_col_pointer> initialize_gdf_columns(std::vector< std::vector<T> 
   return gdf_columns;
 }
 
-/** ---------------------------------------------------------------------------*
- * @brief Compare two gdf_columns on all fields, including pairwise comparison of 
- * data and valid arrays
- * 
+template <typename T>
+std::vector<gdf_col_pointer> initialize_gdf_columns(
+    std::vector<std::vector<T>> columns) {
+
+  return initialize_gdf_columns(columns,
+                                [](size_t row, size_t col) { return true; });
+}
+/**
+ * ---------------------------------------------------------------------------*
+ * @brief Compare two gdf_columns on all fields, including pairwise comparison
+ * of data and valid arrays
+ *
  * @tparam T The type of columns to compare
  * @param left The left column
  * @param right The right column
  * @return bool Whether or not the columns are equal
  * ---------------------------------------------------------------------------**/
 template <typename T>
-bool gdf_equal_columns(gdf_column* left, gdf_column* right)
-{
+bool gdf_equal_columns(gdf_column* left, gdf_column* right) {
   if (left->size != right->size) return false;
   if (left->dtype != right->dtype) return false;
   if (left->null_count != right->null_count) return false;
   if (left->dtype_info.time_unit != right->dtype_info.time_unit) return false;
-  
-  if (!(left->data && right->data)) return false; // if one is null but not both
-  
-  if (!thrust::equal(thrust::cuda::par, 
-                     reinterpret_cast<T*>(left->data), 
-                     reinterpret_cast<T*>(left->data) + left->size, 
-                     reinterpret_cast<T*>(right->data)) ) 
+
+  if (!(left->data && right->data))
+    return false;  // if one is null but not both
+
+  if (!thrust::equal(thrust::cuda::par, reinterpret_cast<T*>(left->data),
+                     reinterpret_cast<T*>(left->data) + left->size,
+                     reinterpret_cast<T*>(right->data)))
     return false;
-  
-  if (!(left->valid && right->valid)) return false; // if one is null but not both
-  
-  if (!thrust::equal(thrust::cuda::par, 
-                     left->valid, 
-                     left->valid + gdf_get_num_chars_bitmask(left->size), 
+
+  if (!(left->valid && right->valid))
+    return false;  // if one is null but not both
+
+  if (!thrust::equal(thrust::cuda::par, left->valid,
+                     left->valid + gdf_get_num_chars_bitmask(left->size),
                      right->valid))
     return false;
-  
+
   return true;
-}
+  }
 
 
 #endif

@@ -310,6 +310,13 @@ def mask_from_devary(ary):
         gpu_mask_from_devary.forall(bits.size)(ary, bits)
     return bits
 
+
+def make_empty_mask(size):
+    bits = make_mask(size)
+    if bits.size > 0:
+        gpu_fill_value.forall(bits.size)(bits, 0)
+    return bits
+
 #
 # Gather
 #
