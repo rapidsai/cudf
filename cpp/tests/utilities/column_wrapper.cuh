@@ -220,6 +220,12 @@ struct column_wrapper {
   gdf_column const* get() const { return &the_column; }
 
   /**---------------------------------------------------------------------------*
+   * @brief Returns the null count of the underlying column.
+   *
+   *---------------------------------------------------------------------------**/
+  gdf_size_type null_count() const { return the_column.null_count; }
+
+  /**---------------------------------------------------------------------------*
    * @brief Copies the underying gdf_column's data and bitmask to the host.
    *
    * Returns a tuple of two std::vectors. The first is the column's data, and

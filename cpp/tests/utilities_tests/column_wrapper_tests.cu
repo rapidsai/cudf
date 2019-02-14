@@ -80,6 +80,12 @@ void test_column(cudf::test::column_wrapper<T> const& col,
   if (expected_bitmask.size() > 0) {
     EXPECT_NE(nullptr, underlying_column->valid);
 
+    gdf_size_type const expected_null_count =
+        expected_values.size() -
+        count_valid_bits_host(expected_bitmask, underlying_column->size);
+
+    EXPECT_EQ(expected_null_count, col.null_count());
+
     // Ensure data on device matches expected
     rmm::device_vector<gdf_valid_type> expected_device_bitmask(
         expected_bitmask);
