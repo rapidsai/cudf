@@ -225,3 +225,59 @@ TYPED_TEST(ColumnWrapperTest, CopyConstructor) {
   // Ensure operator== works
   EXPECT_TRUE(source == copy);
 }
+
+TYPED_TEST(ColumnWrapperTest, EqualColumnsNoNulls) {
+  gdf_size_type const size{this->random_size()};
+  std::vector<TypeParam> values(size);
+  std::generate(values.begin(), values.end(),
+                [this]() { return TypeParam(this->generator()); });
+
+  cudf::test::column_wrapper<TypeParam> const col1(values);
+  cudf::test::column_wrapper<TypeParam> const col2(values);
+
+  EXPECT_TRUE(col1 == col2);
+}
+
+TYPED_TEST(ColumnWrapperTest, EqualColumnsWithNulls) {
+  gdf_size_type const size{this->random_size()};
+  std::vector<TypeParam> values(size);
+  std::generate(values.begin(), values.end(),
+                [this]() { return TypeParam(this->generator()); });
+
+  auto even_bits_null = [](auto row) { return row % 2; };
+
+  cudf::test::column_wrapper<TypeParam> const col1(values, even_bits_null);
+  cudf::test::column_wrapper<TypeParam> const col2(values, even_bits_null);
+
+  EXPECT_TRUE(col1 == col2);
+}
+
+TYPED_TEST(ColumnWrapperTest, UnEqualColumnsNoNulls) {
+  gdf_size_type const size{this->random_size()};
+  std::vector<TypeParam> values1(size);
+  std::generate(values1.begin(), values1.end(),
+                [this]() { return TypeParam(this->generator()); });
+
+  std::vector<TypeParam> values2(values1);
+  std::shuffle(values2.begin(), values2.end(), this->generator);
+
+  cudf::test::column_wrapper<TypeParam> const col1(values1);
+  cudf::test::column_wrapper<TypeParam> const col2(values2);
+
+  EXPECT_FALSE(col1 == col2);
+}
+
+TYPED_TEST(ColumnWrapperTest, UnEqualColumnsWithNulls) {
+  gdf_size_type const size{this->random_size()};
+  std::vector<TypeParam> values(size);
+  std::generate(values.begin(), values.end(),
+                [this]() { return TypeParam(this->generator()); });
+
+  auto even_bits_null = [](auto row) { return row % 2; };
+  auto odd_bits_null = [](auto row) { return (row + 1) % 2; };
+
+  cudf::test::column_wrapper<TypeParam> const col1(values, even_bits_null);
+  cudf::test::column_wrapper<TypeParam> const col2(values, odd_bits_null);
+
+  EXPECT_FALSE(col1 == col2);
+}

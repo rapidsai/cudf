@@ -96,7 +96,8 @@ struct column_wrapper {
    * Constructs a column_wrapper of the specified size with default intialized
    * data.
    *
-   * Optionally allocates a default-initialized bitmask.
+   * Optionally allocates a default-initialized bitmask (i.e., all bits are
+   *null).
    *
    * @param column_size The desired size of the column
    * @param allocate_bitmask Optionally allocate a zero-initialized bitmask
@@ -133,7 +134,7 @@ struct column_wrapper {
    *
    * Constructs a column_wrapper using a std::vector for the host data.
    *
-   * The valid bitmask is not initialized.
+   * The valid bitmask is not allocated nor initialized.
    *
    * @param host_data The vector of data to use for the column
    *---------------------------------------------------------------------------**/
@@ -371,7 +372,6 @@ struct column_wrapper {
     } else {
       the_column.valid = nullptr;
     }
-
 
     gdf_error result = set_null_count(&the_column);
     if (GDF_SUCCESS != result) {
