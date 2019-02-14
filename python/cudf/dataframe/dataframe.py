@@ -1962,8 +1962,7 @@ class DataFrame(object):
                                          quant_index=False)
         return result
 
-    def to_parquet(self, path, compression='snappy', index=None,
-                   partition_cols=None, **kwargs):
+    def to_parquet(self, path, *args, **kwargs):
         """
         Write a DataFrame to the parquet format.
         Parameters
@@ -1982,10 +1981,9 @@ class DataFrame(object):
             Columns are partitioned in the order they are given
         """
         import cudf.io.parquet as pq
-        pq.to_parquet(self, path, compression=compression, index=index,
-                      partition_cols=partition_cols, **kwargs)
+        pq.to_parquet(self, path, *args, **kwargs)
 
-    def to_feather(self, path, **kwargs):
+    def to_feather(self, path, *args, **kwargs):
         """
         Write a DataFrame to the feather format.
         Parameters
@@ -1994,12 +1992,9 @@ class DataFrame(object):
             File path
         """
         import cudf.io.feather as feather
-        feather.to_feather(self, path, **kwargs)
+        feather.to_feather(self, path, *args, **kwargs)
 
-    def to_json(self, path_or_buf=None, orient=None, date_format=None,
-                double_precision=10, force_ascii=True, date_unit='ms',
-                default_handler=None, lines=False, compression='infer',
-                index=True):
+    def to_json(self, path_or_buf=None, *args, **kwargs):
         """
         Convert the cuDF object to a JSON string.
         Note nulls and NaNs will be converted to null and datetime objects
@@ -2064,18 +2059,11 @@ class DataFrame(object):
         json.to_json(
             self,
             path_or_buf=path_or_buf,
-            orient=orient,
-            date_format=date_format,
-            double_precision=double_precision,
-            force_ascii=force_ascii,
-            date_unit=date_unit,
-            default_handler=default_handler,
-            lines=lines,
-            compression=compression,
-            index=index
+            *args,
+            **kwargs
         )
 
-    def to_hdf(self, path_or_buf, key, **kwargs):
+    def to_hdf(self, path_or_buf, key, *args, **kwargs):
         """
         Write the contained data to an HDF5 file using HDFStore.
 
@@ -2136,7 +2124,7 @@ class DataFrame(object):
             of options.
         """
         import cudf.io.hdf as hdf
-        hdf.to_hdf(path_or_buf, key, self, **kwargs)
+        hdf.to_hdf(path_or_buf, key, self, *args, **kwargs)
 
 
 class Loc(object):

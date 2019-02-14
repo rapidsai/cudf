@@ -6,7 +6,7 @@ from pyarrow import feather
 import warnings
 
 
-def read_feather(path, columns=None, **kwargs):
+def read_feather(path, *args, **kwargs):
     """
     Load an feather object from the file path, returning a DataFrame.
 
@@ -50,11 +50,11 @@ def read_feather(path, columns=None, **kwargs):
 
     warnings.warn("Using CPU via PyArrow to read feather dataset, this may "
                   "be GPU accelerated in the future")
-    pa_table = feather.read_table(path, columns=columns, **kwargs)
+    pa_table = feather.read_table(path, *args, **kwargs)
     return DataFrame.from_arrow(pa_table)
 
 
-def to_feather(df, path, **kwargs):
+def to_feather(df, path, *args, **kwargs):
     """
     Write a DataFrame to the feather format.
     Parameters

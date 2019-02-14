@@ -4,13 +4,9 @@ import cudf
 
 import pandas as pd
 import warnings
-from distutils.version import LooseVersion
 
 
-def read_json(path_or_buf=None, orient=None, typ='frame', dtype=True,
-              convert_axes=True, convert_dates=True, keep_default_dates=True,
-              numpy=False, precise_float=False, date_unit=None, encoding=None,
-              lines=False, chunksize=None, compression='infer'):
+def read_json(path_or_buf, *args, **kwargs):
     """
     Convert a JSON string to a cuDF object.
     Parameters
@@ -105,29 +101,11 @@ def read_json(path_or_buf=None, orient=None, typ='frame', dtype=True,
     warnings.warn("Using CPU via Pandas to read JSON dataset, this may "
                   "be GPU accelerated in the future")
 
-    pd_value = pd.read_json(
-        path_or_buf=path_or_buf,
-        orient=orient,
-        typ=typ,
-        dtype=dtype,
-        convert_axes=convert_axes,
-        convert_dates=convert_dates,
-        keep_default_dates=keep_default_dates,
-        numpy=numpy,
-        precise_float=precise_float,
-        date_unit=date_unit,
-        encoding=encoding,
-        lines=lines,
-        chunksize=chunksize,
-        compression=compression
-    )
+    pd_value = pd.read_json(path_or_buf, *args, **kwargs)
     return cudf.from_pandas(pd_value)
 
 
-def to_json(cudf_val, path_or_buf=None, orient=None, date_format=None,
-            double_precision=10, force_ascii=True, date_unit='ms',
-            default_handler=None, lines=False, compression='infer',
-            index=True):
+def to_json(cudf_val, path_or_buf=None, *args, **kwargs):
     """
     Convert the cuDF object to a JSON string.
     Note nulls and NaNs will be converted to null and datetime objects
@@ -195,25 +173,10 @@ def to_json(cudf_val, path_or_buf=None, orient=None, date_format=None,
     warnings.warn("Using CPU via Pandas to write JSON dataset, this may "
                   "be GPU accelerated in the future")
 
-    if LooseVersion(pd.__version__) < LooseVersion('0.24'):
-        if compression == 'infer':
-            warnings.warn("Can't infer compression when using Pandas version <"
-                          " 0.24, please manually specify the compression via "
-                          "'compression' parameter, setting compression to "
-                          "None")
-            compression = None
-
     pd_value = cudf_val.to_pandas()
     pd.io.json.to_json(
         path_or_buf,
         pd_value,
-        orient=orient,
-        date_format=date_format,
-        double_precision=double_precision,
-        force_ascii=force_ascii,
-        date_unit=date_unit,
-        default_handler=default_handler,
-        lines=lines,
-        compression=compression,
-        index=index
+        *args,
+        **kwargs
     )
