@@ -57,8 +57,8 @@ struct PrefixSumDispatcher {
         GDF_REQUIRE(inp->dtype == out->dtype, GDF_UNSUPPORTED_DTYPE);
         GDF_REQUIRE(!inp->valid || !inp->null_count, GDF_VALIDITY_UNSUPPORTED);
         GDF_REQUIRE(!out->valid || !out->null_count, GDF_VALIDITY_UNSUPPORTED);
-        return Scan<T>::call((const T*)inp->data, (T*)out->data, inp->size,
-            inclusive);
+        return Scan<T>::call(reinterpret_cast<const T*>(inp->data), 
+            reinterpret_cast<T*>(out->data), inp->size, inclusive);
     }
 
     template <typename T,
