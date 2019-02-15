@@ -1921,7 +1921,8 @@ class DataFrame(object):
         df = cls()
         # Set columns
         for colk in dataframe.columns:
-            df[colk] = Series(dataframe[colk].values, nan_as_null=nan_as_null)
+            vals = dataframe[colk].values
+            df[colk] = Series(vals, nan_as_null=nan_as_null)
         # Set index
         return df.set_index(dataframe.index)
 

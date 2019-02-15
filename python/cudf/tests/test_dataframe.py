@@ -1684,6 +1684,17 @@ def test_series_digitize(num_rows, num_bins, right, dtype):
                                   indices.to_array())
 
 
+def test_pandas_non_contiguious():
+    arr1 = np.random.sample([5000, 10])
+    assert arr1.flags['C_CONTIGUOUS'] is True
+    df = pd.DataFrame(arr1)
+    for col in df.columns:
+        assert df[col].values.flags['C_CONTIGUOUS'] is False
+
+    gdf = gd.DataFrame.from_pandas(df)
+    assert_eq(gdf.to_pandas(), df)
+
+
 @pytest.mark.parametrize('num_elements', [0, 2, 10, 100])
 @pytest.mark.parametrize('null_type', [np.nan, None, 'mixed'])
 def test_series_all_null(num_elements, null_type):
