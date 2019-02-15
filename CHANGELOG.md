@@ -5,6 +5,7 @@
 - PR #760 Raise `FileNotFoundError` instead of `GDF_FILE_ERROR` in `read_csv` if the file does not exist
 - PR #539 Add Python bindings for replace function
 - PR #807 CSV Reader: Add byte_range parameter to specify the range in the input file to be read
+- PR #857 Add Tail method for Series/DataFrame and update Head method to use iloc
 - PR #858 Add series feature hashing support
 - PR #871 CSV Reader: Add support for NA values, including user specified strings
 - PR #893 Adds PyArrow based parquet readers / writers to Python, fix category dtype handling, fix arrow ingest buffer size issues

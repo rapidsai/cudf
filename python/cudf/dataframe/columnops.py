@@ -340,7 +340,10 @@ def as_column(arbitrary, nan_as_null=True, dtype=None):
         try:
             data = as_column(memoryview(arbitrary))
         except TypeError:
-            data = as_column(pa.array(arbitrary))
+            try:
+                data = as_column(pa.array(arbitrary))
+            except pa.ArrowInvalid:
+                data = as_column(np.array(arbitrary))
 
     return data
 

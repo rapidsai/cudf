@@ -333,7 +333,37 @@ class DataFrame(object):
            1    1 11.0
 
         """
-        return self[:n]
+        return self.iloc[:n]
+
+    def tail(self, n=5):
+        """
+        Returns the last n rows as a new DataFrame
+
+        Examples
+        --------
+
+        .. code-block:: python
+
+            from cudf.dataframe import DataFrame
+
+            df = DataFrame()
+            df['key'] = [0, 1, 2, 3, 4]
+            df['val'] = [float(i + 10) for i in range(5)]  # insert column
+            print(df.tail(2))
+
+        Output
+
+        .. code-block:: python
+
+               key  val
+           3    3 13.0
+           4    4 14.0
+
+        """
+        if n == 0:
+            return self.iloc[0:0]
+
+        return self.iloc[-n:]
 
     def to_string(self, nrows=NOTSET, ncols=NOTSET):
         """
