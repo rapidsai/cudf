@@ -202,7 +202,7 @@ class NumericalColumn(columnops.TypedColumnBase):
             msg = 'non sort based unique_count() not implemented yet'
             raise NotImplementedError(msg)
         segs, _ = self._unique_segments()
-        if dropna and self.null_count > 0:
+        if dropna == True and self.null_count > 0:
             return len(segs)-1
         return len(segs)
 

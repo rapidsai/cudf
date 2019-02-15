@@ -176,26 +176,20 @@ def test_series_init_none():
     # values should match despite whitespace difference
     assert got.split() == expect.split()
 
-def test_series_nunique():
-    #test for number of unique values
-    #1. nan_as_null=True and dropna=Truei
+@pytest.mark.parametrize('nan_as_null, dropna', 
+                        [(True, True), (True, False), 
+                         (False, True), (False, False)])
+def test_series_nunique(nan_as_null, dropna):
+    # True, False combination is skipped for pandas because if a pandas user
+    # wants to see "NaN" values, they would set nan_as_null to True
     nan = np.dtype('float64').type(np.nan)
-    series = Series(1, 2, 3, nan, None)
-    expect = 3
-    got = series.nunique()
-    assert got == expect
-    #2. nan_as_null=True and dropna=False
-    expect = 4
-    got = series.nunique(dropna=False)
-    assert got == expect
-    #3. nan_as_null=False and dropna=True
-    series = Series(1, 2, 3, nan, None, nan_as_null=False)
-    expect = 4
-    got = series.nunique()
-    assert got == expect
-    #4. nan_as_null=False and dropna=False
-    expect = 5
-    got = series.nunique(dropna=False)
+    cudf_series = Series([1, 2, 3, nan, None], nan_as_null=nan_as_null)
+    pd_series = pd.Series([1, 2, 3, nan, None], {dtype={'x':'object'}, columns=['x'])
+    #if nan_as_null == True and dropna == False:
+    #    expect = 4
+    #else:
+    expect = pd_series.nunique(dropna=dropna)
+    got = cudf_series.nunique(dropna=dropna)
     assert got == expect
 
 def test_series_replace():
