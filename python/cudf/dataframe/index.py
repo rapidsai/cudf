@@ -17,7 +17,6 @@ from .column import Column
 from .datetime import DatetimeColumn
 from .categorical import CategoricalColumn
 from cudf.comm.serialize import register_distributed_serializer
-from cudf._gdf import nvtx_range_push, nvtx_range_pop
 
 
 class Index(object):
