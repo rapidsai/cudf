@@ -1713,3 +1713,19 @@ def test_series_all_null(num_elements, null_type):
     got = Series(data)
 
     assert_eq(expect, got)
+
+
+def test_dataframe_rename():
+    pdf = pd.DataFrame({'a': [1, 2, 3], 'b': [4, 5, 6], 'c': [7, 8, 9]})
+    gdf = DataFrame.from_pandas(pdf)
+
+    expect = pdf.rename(lambda name: 2 * name)
+    got = gdf.rename(lambda name: 2 * name)
+
+    assert_eq(expect, got)
+
+    rename_mapper = {'a': 'z', 'b': 'y', 'c': 'x'}
+    expect = pdf.rename(rename_mapper)
+    got = gdf.rename(rename_mapper)
+
+    assert_eq(expect, got)
