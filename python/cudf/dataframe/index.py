@@ -151,6 +151,7 @@ class RangeIndex(Index):
     _stop: The last value
     name: Name of the index
     """
+
     def __init__(self, start, stop=None, name=None):
         """RangeIndex(size), RangeIndex(start, stop)
 
@@ -171,9 +172,11 @@ class RangeIndex(Index):
 
     def copy(self, deep=True):
         if(deep):
-            return deepcopy(self)
+            result = deepcopy(self)
         else:
-            return copy(self)
+            result = copy(self)
+        result.name = self.name
+        return result
 
     def __repr__(self):
         return "{}(start={}, stop={})".format(self.__class__.__name__,
@@ -184,13 +187,15 @@ class RangeIndex(Index):
 
     def __getitem__(self, index):
         if isinstance(index, slice):
-            start, stop = utils.normalize_slice(index, len(self))
+            start, stop, step, sln = utils.standard_python_slice(len(self),
+                                                                 index)
             start += self._start
             stop += self._start
-            if index.step is None:
-                return RangeIndex(start, stop)
+            if sln == 0:
+                return RangeIndex(0)
             else:
-                return index_from_range(start, stop, index.step)
+                return index_from_range(start, stop, step)
+
         elif isinstance(index, int):
             index = utils.normalize_index(index, len(self))
             index += self._start
@@ -252,7 +257,7 @@ class RangeIndex(Index):
 
     def to_pandas(self):
         return pd.RangeIndex(start=self._start, stop=self._stop,
-                             dtype=self.dtype)
+                             dtype=self.dtype, name=self.name)
 
 
 def index_from_range(start, stop=None, step=None):
@@ -268,6 +273,7 @@ class GenericIndex(Index):
     _values: A Column object
     name: A string
     """
+
     def __init__(self, values, name=None):
         from cudf.dataframe.series import Series
         # normalize the input
@@ -286,11 +292,12 @@ class GenericIndex(Index):
         self.name = name
 
     def copy(self, deep=True):
-        if(deep):
+        if (deep):
             result = deepcopy(self)
         else:
             result = copy(self)
         result._values = self._values.copy(deep)
+        result.name = self.name
         return result
 
     def serialize(self, serialize):
@@ -417,9 +424,10 @@ class CategoricalIndex(GenericIndex):
     _values: A CategoricalColumn object
     name: A string
     """
+
     def __init__(self, values, name=None):
         if isinstance(values, pd.Series) and \
-           pd.api.types.is_categorical_dtype(values.dtype):
+                pd.api.types.is_categorical_dtype(values.dtype):
             values = CategoricalColumn(
                 data=Buffer(values.cat.codes.values),
                 categories=values.cat.categories.tolist(),
@@ -476,8 +484,7 @@ def as_index(arbitrary, name=None):
     elif isinstance(arbitrary, CategoricalColumn):
         return CategoricalIndex(arbitrary, name=name)
     else:
-        name = None
-        if hasattr(arbitrary, 'name'):
+        if hasattr(arbitrary, 'name') and name is None:
             name = arbitrary.name
         if len(arbitrary) == 0:
             return RangeIndex(0, 0, name=name)

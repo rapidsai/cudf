@@ -30,7 +30,7 @@ def pdf(request):
     )
     # Delete the name of the column index, and rename the row index
     del(test_pdf.columns.name)
-    test_pdf.index.name = 'index'
+    test_pdf.index.name = 'test_index'
 
     # Cast all the column dtypes to objects, rename them, and then cast to
     # appropriate types
@@ -40,7 +40,7 @@ def pdf(request):
 
     # Create non-numeric categorical data otherwise parquet may typecast it
     data = [ascii_letters[np.random.randint(0, 52)] for i in
-            range(request.param)]
+            range(nrows)]
     test_pdf['col_category'] = pd.Series(data, dtype='category')
 
     return test_pdf
@@ -60,7 +60,8 @@ def parquet_file(request, tmp_path_factory, pdf):
 
 @pytest.mark.filterwarnings("ignore:Using CPU")
 @pytest.mark.filterwarnings("ignore:Strings are not yet supported")
-@pytest.mark.parametrize('columns', [['x'], ['y'], ['x', 'y'], None])
+@pytest.mark.parametrize('columns', [['col_int8'], ['col_category'],
+                                     ['col_int32', 'col_float32'], None])
 def test_parquet_reader(parquet_file, columns):
     expect = pd.read_parquet(parquet_file, columns=columns)
     got = cudf.read_parquet(parquet_file, columns=columns)

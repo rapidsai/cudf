@@ -33,12 +33,16 @@ def gpu_arange(start, size, step, out):
 def arange(start, stop=None, step=1, dtype=np.int64):
     if stop is None:
         start, stop = 0, start
-    size = (stop - start + (step - 1)) // step
+    if step < 0:
+        size = (stop - start + 1) // step + 1
+    else:
+        size = (stop - start - 1) // step + 1
+
     if size < 0:
         msgfmt = "size={size} in arange({start}, {stop}, {step}, {dtype})"
         raise ValueError(msgfmt.format(size=size, start=start, stop=stop,
                                        step=step, dtype=dtype))
-    out = rmm.device_array(size, dtype=dtype)
+    out = rmm.device_array(shape=int(size), dtype=dtype)
     if size > 0:
         gpu_arange.forall(size)(start, size, step, out)
     return out
@@ -727,3 +731,17 @@ def row_matrix(cols, nrow, ncol, dtype):
                                                       col.to_gpu_array(),
                                                       nrow, ncol)
     return matrix
+
+
+@cuda.jit
+def gpu_modulo(inp, out, d):
+    i = cuda.grid(1)
+    if i < out.size:
+        out[i] = inp[i] % d
+
+
+def modulo(arr, d):
+    """Array element modulo operator"""
+    out = rmm.device_array(shape=arr.shape, dtype=arr.dtype)
+    gpu_modulo.forall(arr.size)(arr, out, d)
+    return out
