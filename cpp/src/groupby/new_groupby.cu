@@ -1,4 +1,6 @@
 #include <cassert>
+#include <thrust/fill.h>
+
 #include "cudf.h"
 #include "new_groupby.hpp"
 #include "utilities/nvtx/nvtx_utils.h"
@@ -190,3 +192,225 @@ gdf_error gdf_group_by(gdf_column* in_key_columns[],
 
   return gdf_error_code;
 }
+
+
+
+// thrust::device_vector set to use rmmAlloc and rmmFree.
+template <typename T>
+using Vector = thrust::device_vector<T, rmm_allocator<T>>;
+
+/* --------------------------------------------------------------------------*/
+  /**
+   * @brief Given a set of columns, of which a subset of these are defined to be the group by columns,
+   * all columns are sorted by the group by columns and returned, along with a column containing
+   * a list of the start indices of each group
+   *
+   * @Param[in] The number of columns in the dataset
+   * @Param[in] The input columns in the dataset
+   * @Param[in] The number of columns to be grouping by
+   * @Param[in] The column indices of the input dataset that will be grouped by
+   * @Param[out] The dataset sorted by the group by columns (needs to be pre-allocated)
+   * @Param[out] A column containing the starting indices of each group. Indices based off of new sort order. (needs to be pre-allocated)
+   * @Param[in] The context used to control how nulls are treated in a sort and in group by
+   *   context->flag_nulls_sort_behavior< 0 = Nulls are are treated as largest, 
+   *   1 = Nulls are treated as smallest, 2 = Special multi-sort case any row with null is largest>
+   *   context-> flag_groupby_include_nulls <0 = Nulls are ignored in group by keys (Pandas style), 
+                        1 = Nulls are treated as values in group by keys where NULL == NULL (SQL style)>
+   *
+   * @Returns gdf_error with error code on failure, otherwise GDF_SUCESS
+   */
+  /* ----------------------------------------------------------------------------*/
+gdf_error gdf_group_by_wo_aggregations(int num_data_cols,
+                           	   	   	   gdf_column** data_cols_in,
+									   int num_groupby_cols,
+									   int * groupby_col_indices,
+									   gdf_column** data_cols_out,
+									   gdf_column* group_start_indices,
+                     gdf_context* ctxt)
+{
+  GDF_REQUIRE((nullptr != data_cols_in), GDF_DATASET_EMPTY);
+  GDF_REQUIRE((nullptr != data_cols_in[0]), GDF_DATASET_EMPTY);
+  GDF_REQUIRE((nullptr != data_cols_out), GDF_DATASET_EMPTY);
+  GDF_REQUIRE((nullptr != data_cols_out[0]), GDF_DATASET_EMPTY);
+  GDF_REQUIRE((num_data_cols > 0), GDF_DATASET_EMPTY);
+  GDF_REQUIRE((num_groupby_cols > 0), GDF_DATASET_EMPTY);
+  GDF_REQUIRE((nullptr != groupby_col_indices), GDF_DATASET_EMPTY);
+
+
+  int32_t nrows = data_cols_in[0]->size;
+
+  // setup for order by call
+  bool group_by_keys_contain_nulls = false;
+  std::vector<gdf_column*> orderby_cols_vect(num_groupby_cols);
+  for (int i = 0; i < num_groupby_cols; i++){
+    orderby_cols_vect[i] = data_cols_in[groupby_col_indices[i]];
+    group_by_keys_contain_nulls = group_by_keys_contain_nulls || orderby_cols_vect[i]->null_count > 0;
+  }
+
+  rmm::device_vector<int32_t> sorted_indices(nrows);
+  gdf_column sorted_indices_col;
+  gdf_error status = gdf_column_view(&sorted_indices_col, (void*)(sorted_indices.data().get()), 
+                            nullptr, nrows, GDF_INT32);
+  if (status != GDF_SUCCESS)
+    return status;
+
+  if (ctxt->flag_groupby_include_nulls == 1 || !group_by_keys_contain_nulls){  // SQL style
+  // run order by and get new sort indexes
+    status = gdf_order_by(&orderby_cols_vect[0],             //input columns
+                          nullptr,
+                          num_groupby_cols,                //number of columns in the first parameter (e.g. number of columsn to sort by)
+                          &sorted_indices_col,            //a gdf_column that is pre allocated for storing sorted indices
+                          ctxt);
+    if (status != GDF_SUCCESS)
+      return status;
+
+    // run gather operation to establish new order
+    std::unique_ptr< gdf_table<int32_t> > table_in{new gdf_table<int32_t>{num_data_cols, data_cols_in}};
+    std::unique_ptr< gdf_table<int32_t> > table_out{new gdf_table<int32_t>{num_data_cols, data_cols_out}};
+
+    status = table_in->gather<int32_t>(sorted_indices, *table_out.get());
+    if (status != GDF_SUCCESS)
+      return status;
+
+    status = gdf_group_start_indices(num_data_cols, data_cols_out, num_groupby_cols,
+                      groupby_col_indices, group_start_indices, ctxt);
+
+    return status;
+  } else {  // Pandas style
+
+    int flag_nulls_sort_behavior = ctxt->flag_nulls_sort_behavior;
+    ctxt->flag_nulls_sort_behavior = 2; // overide behaviour to filter out the nulls
+
+    // run order by and get new sort indexes
+    status = gdf_order_by(&orderby_cols_vect[0],             //input columns
+                          nullptr,
+                          num_groupby_cols,                //number of columns in the first parameter (e.g. number of columsn to sort by)
+                          &sorted_indices_col,            //a gdf_column that is pre allocated for storing sorted indices
+                          ctxt);
+    if (status != GDF_SUCCESS)
+      return status;
+
+    // lets filter out all the nulls in the group by key column by:
+    // we will take the data which has been sorted such that the nulls in the group by keys are all last
+    // then using the gdf_table's property of row-validity mask we can count how many rows have 
+    // a null in the group by keys and use that to resize the data
+    std::unique_ptr< gdf_table<int32_t> > group_by_keys_table{new gdf_table<int32_t>{num_groupby_cols, &orderby_cols_vect[0]}};
+    int valid_count;
+    status = group_by_keys_table->get_num_valid_rows(valid_count);
+    if (status != GDF_SUCCESS)
+      return status;
+
+    for (int i = 0; i < num_data_cols; i++)    {
+      data_cols_in[i]->size = valid_count;
+      data_cols_out[i]->size = valid_count;
+    }
+    
+    // run gather operation to establish new order
+    std::unique_ptr< gdf_table<int32_t> > table_in{new gdf_table<int32_t>{num_data_cols, data_cols_in}};
+    std::unique_ptr< gdf_table<int32_t> > table_out{new gdf_table<int32_t>{num_data_cols, data_cols_out}};
+    
+    status = table_in->gather<int32_t>(sorted_indices, *table_out.get());
+    if (status != GDF_SUCCESS)
+      return status;
+   
+    ctxt->flag_nulls_sort_behavior = flag_nulls_sort_behavior;
+
+    status = gdf_group_start_indices(num_data_cols, data_cols_out, num_groupby_cols,
+                      groupby_col_indices, group_start_indices, ctxt);
+
+    return status;
+  }
+}
+
+
+/* --------------------------------------------------------------------------*/
+  /**
+   * @brief Given a set of columns, of which a subset of these are defined to be the group by columns,
+   * all input data is assumed to already be sorted by these group by columns. 
+   * This function calculates a list of the start indices of each group
+   *
+   * @Param[in] The number of columns in the dataset (assumed to already be sorted)
+   * @Param[in] The input columns in the dataset
+   * @Param[in] The number of columns to be grouping by
+   * @Param[in] The column indices of the input dataset that will be grouped by
+   * @Param[out] A column containing the starting indices of each group. Indices based off of new sort order. (needs to be pre-allocated)
+   * @Param[in] The context used to control how nulls are treated in a sort
+   *   context->flag_nulls_sort_behavior< 0 = Nulls are are treated as largest, 
+   *   1 = Nulls are treated as smallest, 2 = Special multi-sort case any row with null is largest>
+   *
+   * @Returns gdf_error with error code on failure, otherwise GDF_SUCESS
+   */
+  /* ----------------------------------------------------------------------------*/
+gdf_error gdf_group_start_indices(int num_data_cols,
+                     gdf_column** data_cols_in,
+									   int num_groupby_cols,
+									   int * groupby_col_indices,
+									   gdf_column* group_start_indices,
+									   gdf_context* ctxt)
+{
+
+  int32_t nrows = data_cols_in[0]->size;
+  // setup for reduce by key  
+  bool have_nulls = false;
+  for (int i = 0; i < num_groupby_cols; i++) {
+    if (data_cols_in[i]->null_count > 0) {
+      have_nulls = true;
+      break;
+    }
+  }
+
+  Vector<void*> d_cols(num_groupby_cols); 
+  Vector<int> d_types(num_groupby_cols, 0);
+  void** d_col_data = d_cols.data().get();
+  int* d_col_types = d_types.data().get();
+
+  bool nulls_are_smallest = ctxt->flag_nulls_sort_behavior == 1;
+
+  int32_t* result_end;
+  cudaStream_t stream;
+  cudaStreamCreate(&stream);
+  auto exec = rmm::exec_policy(stream)->on(stream);
+  if (have_nulls){
+
+    Vector<gdf_valid_type*> d_valids(num_groupby_cols);
+    gdf_valid_type** d_valids_data = d_valids.data().get();
+
+    soa_col_info(data_cols_in, num_groupby_cols, d_col_data, d_valids_data, d_col_types);
+    
+    LesserRTTI<int32_t> comp(d_col_data, d_valids_data, d_col_types, nullptr, num_groupby_cols, nulls_are_smallest);
+    
+    auto counting_iter = thrust::make_counting_iterator<int32_t>(0);
+    
+    result_end = thrust::unique_copy(exec, counting_iter, counting_iter+nrows, 
+                              (int32_t*)group_start_indices->data,
+                              [comp]  __device__(int32_t key1, int32_t key2){
+                              return comp.equal_with_nulls(key1, key2);
+                            });
+
+  } else {
+
+    soa_col_info(data_cols_in, num_groupby_cols, d_col_data, nullptr, d_col_types);
+    
+    LesserRTTI<int32_t> comp(d_col_data, nullptr, d_col_types, nullptr, num_groupby_cols, nulls_are_smallest);
+
+    auto counting_iter = thrust::make_counting_iterator<int32_t>(0);
+    
+    result_end = thrust::unique_copy(exec, counting_iter, counting_iter+nrows, 
+                              (int32_t*)group_start_indices->data,
+                              [comp]  __device__(int32_t key1, int32_t key2){
+                              return comp.equal(key1, key2);  
+                            });
+  }
+
+  size_t new_sz = thrust::distance((int32_t*)group_start_indices->data, result_end);
+  group_start_indices->size = new_sz;
+	cudaStreamSynchronize(stream);
+	cudaStreamDestroy(stream); 
+
+  return GDF_SUCCESS;
+
+}
+
+
+/* WSM NOTE: For pandas like group by version. Do a less than operator where any null returns false. 
+Then to calculate where the nulls start to ignore them, OR all the valids then do a null count*/

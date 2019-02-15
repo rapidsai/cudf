@@ -368,6 +368,11 @@ public:
     return column_length;
   }
 
+  gdf_error get_num_valid_rows(gdf_size_type & num_valid_rows) {
+      return gdf_count_nonzero_mask(d_row_valid, column_length, &num_valid_rows);
+  }
+  
+  
   __device__ bool is_row_valid(size_type row_index) const
   {
     const bool row_valid = gdf_is_valid(d_row_valid, row_index);

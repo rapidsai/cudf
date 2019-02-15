@@ -926,6 +926,61 @@ gdf_error gdf_quantile_aprrox(	gdf_column*  col_in,       //input column with 0 
                                 void*        t_erased_res, //type-erased result of same type as column;
                                 gdf_context* ctxt);        //context info
 
+
+/* --------------------------------------------------------------------------*/
+  /**
+   * @brief Given a set of columns, of which a subset of these are defined to be the group by columns,
+   * all columns are sorted by the group by columns and returned, along with a column containing
+   * a list of the start indices of each group
+   *
+   * @Param[in] The number of columns in the dataset
+   * @Param[in] The input columns in the dataset
+   * @Param[in] The number of columns to be grouping by
+   * @Param[in] The column indices of the input dataset that will be grouped by
+   * @Param[out] The dataset sorted by the group by columns (needs to be pre-allocated)
+   * @Param[out] A column containing the starting indices of each group. Indices based off of new sort order. (needs to be pre-allocated)
+   * @Param[in] The context used to control how nulls are treated in a sort and in group by
+   *   context->flag_nulls_sort_behavior< 0 = Nulls are are treated as largest, 
+   *   1 = Nulls are treated as smallest, 2 = Special multi-sort case any row with null is largest>
+   *   context-> flag_groupby_include_nulls <0 = Nulls are ignored in group by keys (Pandas style), 
+                        1 = Nulls are treated as values in group by keys where NULL == NULL (SQL style)>
+   *
+   * @Returns gdf_error with error code on failure, otherwise GDF_SUCESS
+   */
+  /* ----------------------------------------------------------------------------*/
+gdf_error gdf_group_by_wo_aggregations(int num_data_cols,
+                           	   	   	   gdf_column** data_cols_in,
+									   int num_groupby_cols,
+									   int * groupby_col_indices,
+									   gdf_column** data_cols_out,
+									   gdf_column* group_start_indices,
+                     gdf_context* ctxt);           
+
+/* --------------------------------------------------------------------------*/
+  /**
+   * @brief Given a set of columns, of which a subset of these are defined to be the group by columns,
+   * all input data is assumed to already be sorted by these group by columns. 
+   * This function calculates a list of the start indices of each group
+   *
+   * @Param[in] The number of columns in the dataset (assumed to already be sorted)
+   * @Param[in] The input columns in the dataset
+   * @Param[in] The number of columns to be grouping by
+   * @Param[in] The column indices of the input dataset that will be grouped by
+   * @Param[out] A column containing the starting indices of each group. Indices based off of new sort order. (needs to be pre-allocated)
+   * @Param[in] The context used to control how nulls are treated in a sort
+   *   context->flag_nulls_sort_behavior< 0 = Nulls are are treated as largest, 
+   *   1 = Nulls are treated as smallest, 2 = Special multi-sort case any row with null is largest>
+   *
+   * @Returns gdf_error with error code on failure, otherwise GDF_SUCESS
+   */
+  /* ----------------------------------------------------------------------------*/
+gdf_error gdf_group_start_indices(int num_data_cols,
+                     gdf_column** data_cols_in,
+									   int num_groupby_cols,
+									   int * groupby_col_indices,
+									   gdf_column* group_start_indices,
+									   gdf_context* ctxt);
+                     
 /* --------------------------------------------------------------------------*
  * @brief Replace elements from `col` according to the mapping `old_values` to
  *        `new_values`, that is, replace all `old_values[i]` present in `col` 
