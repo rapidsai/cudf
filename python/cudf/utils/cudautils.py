@@ -628,7 +628,7 @@ def gpu_mark_segment_begins(arr, markers):
             # consistency for other values. Since a NaN/Inf value is never
             # equal to itself OR itself plus/minus any value, we use this
             # unique property to return correctly for NaN/Inf AND other values
-            markers[i] = not (arr[i] != arr[i - 1]) & 
+            markers[i] = not (arr[i] != arr[i - 1]) & \
                 ((arr[i] != arr[i]) & (arr[i-1] != arr[i-1]))
 
 
