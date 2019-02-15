@@ -122,9 +122,9 @@ class Index(object):
         idx_series = Series(self)
         op = getattr(idx_series, fn)
         if other:
-            return as_index(op(self, other))
+            return as_index(op(other))
         else:
-            return as_index(op(self))
+            return as_index(op())
 
     def __add__(self, other):
         return self._apply_op('__add__', other)
