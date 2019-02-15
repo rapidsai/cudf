@@ -68,7 +68,7 @@ class Series(object):
             name = data.name
             index = as_index(data.index)
         if isinstance(data, Series):
-            index = data._index
+            index = data._index if index is None else index
             name = data.name
             data = data._column
         if data is None:
@@ -202,6 +202,10 @@ class Series(object):
         """
         return len(self._column)
 
+    @property
+    def empty(self):
+        return not len(self)
+
     def __getitem__(self, arg):
         if isinstance(arg, (list, np.ndarray, pd.Series, range,)):
             arg = Series(arg)
@@ -326,8 +330,11 @@ class Series(object):
         # Prepare cells
         cols = OrderedDict([('', self.values_to_string(nrows=nrows))])
         # Format into a table
-        return formatting.format(index=self.index,
-                                 cols=cols, more_rows=more_rows)
+        output = formatting.format(index=self.index,
+                                   cols=cols, more_rows=more_rows,
+                                   series_spacing=True)
+        return output + "\nName: {}, dtype: {}".format(self.name, self.dtype)\
+            if self.name else output + "\ndtype: {}".format(self.dtype)
 
     def __str__(self):
         return self.to_string(nrows=10)
@@ -341,10 +348,14 @@ class Series(object):
         and *other*.  Return the output Series.  The output dtype is
         determined by the input operands.
         """
+        from cudf import DataFrame
+        if isinstance(other, DataFrame):
+            return other._binaryop(self, fn)
         nvtx_range_push("PYGDF_BINARY_OP", "orange")
         other = self._normalize_binop_value(other)
         outcol = self._column.binary_operator(fn, other._column)
         result = self._copy_construct(data=outcol)
+        result.name = None
         nvtx_range_pop()
         return result
 
@@ -354,10 +365,14 @@ class Series(object):
         and *other* for reflected operations.  Return the output Series.
         The output dtype is determined by the input operands.
         """
+        from cudf import DataFrame
+        if isinstance(other, DataFrame):
+            return other._binaryop(self, fn)
         nvtx_range_push("PYGDF_BINARY_OP", "orange")
         other = self._normalize_binop_value(other)
         outcol = other._column.binary_operator(fn, self._column)
         result = self._copy_construct(data=outcol)
+        result.name = None
         nvtx_range_pop()
         return result
 
@@ -428,6 +443,7 @@ class Series(object):
         other = self._normalize_binop_value(other)
         outcol = self._column.unordered_compare(cmpops, other._column)
         result = self._copy_construct(data=outcol)
+        result.name = None
         nvtx_range_pop()
         return result
 
@@ -436,6 +452,7 @@ class Series(object):
         other = self._normalize_binop_value(other)
         outcol = self._column.ordered_compare(cmpops, other._column)
         result = self._copy_construct(data=outcol)
+        result.name = None
         nvtx_range_pop()
         return result
 
@@ -1017,7 +1034,7 @@ class Series(object):
             msg = 'non sort based value_count() not implemented yet'
             raise NotImplementedError(msg)
         if self.null_count == len(self):
-            return 0
+            return Series(np.array([], dtype=np.int64))
         vals, cnts = self._column.value_counts(method=method)
         res = Series(cnts, index=as_index(vals))
         if sort:
@@ -1062,6 +1079,34 @@ class Series(object):
 
         return Series(numerical.column_hash_values(self._column))
 
+    def hash_encode(self, stop, use_name=False):
+        """Encode column values as ints in [0, stop) using hash function.
+
+        Parameters
+        ----------
+        stop : int
+            The upper bound on the encoding range.
+        use_name : bool
+            If ``True`` then combine hashed column values
+            with hashed column name. This is useful for when the same
+            values in different columns should be encoded
+            with different hashed values.
+        Returns
+        -------
+        result: Series
+            The encoded Series.
+        """
+        assert stop > 0
+
+        from . import numerical
+        initial_hash = np.asarray(hash(self.name)) if use_name else None
+        hashed_values = numerical.column_hash_values(
+            self._column, initial_hash_values=initial_hash)
+
+        # TODO: Binary op when https://github.com/rapidsai/cudf/pull/892 merged
+        mod_vals = cudautils.modulo(hashed_values.data.to_gpu_array(), stop)
+        return Series(mod_vals)
+
     def quantile(self, q, interpolation='midpoint', exact=True,
                  quant_index=True):
         """
@@ -1093,6 +1138,164 @@ class Series(object):
         else:
             return Series(self._column.quantile(q, interpolation, exact),
                           index=as_index(np.asarray(q)))
+
+    def digitize(self, bins, right=False):
+        """Return the indices of the bins to which each value in series belongs.
+
+        Notes
+        -----
+        Monotonicity of bins is assumed and not checked.
+
+        Parameters
+        ----------
+        bins : np.array
+            1-D monotonically, increasing array with same type as this series.
+        right : bool
+            Indicates whether interval contains the right or left bin edge.
+
+        Returns
+        -------
+        A new Series containing the indices.
+        """
+        from cudf.dataframe import numerical
+
+        return Series(numerical.digitize(self._column, bins, right))
+
+    def groupby(self, group_series=None, level=None, sort=False):
+        from cudf.groupby.groupby import SeriesGroupBy
+        return SeriesGroupBy(self, group_series, level, sort)
+
+    def to_json(self, path_or_buf=None, *args, **kwargs):
+        """
+        Convert the cuDF object to a JSON string.
+        Note nulls and NaNs will be converted to null and datetime objects
+        will be converted to UNIX timestamps.
+        Parameters
+        ----------
+        path_or_buf : string or file handle, optional
+            File path or object. If not specified, the result is returned as
+            a string.
+        orient : string
+            Indication of expected JSON string format.
+            * Series
+                - default is 'index'
+                - allowed values are: {'split','records','index','table'}
+            * DataFrame
+                - default is 'columns'
+                - allowed values are:
+                {'split','records','index','columns','values','table'}
+            * The format of the JSON string
+                - 'split' : dict like {'index' -> [index],
+                'columns' -> [columns], 'data' -> [values]}
+                - 'records' : list like
+                [{column -> value}, ... , {column -> value}]
+                - 'index' : dict like {index -> {column -> value}}
+                - 'columns' : dict like {column -> {index -> value}}
+                - 'values' : just the values array
+                - 'table' : dict like {'schema': {schema}, 'data': {data}}
+                describing the data, and the data component is
+                like ``orient='records'``.
+        date_format : {None, 'epoch', 'iso'}
+            Type of date conversion. 'epoch' = epoch milliseconds,
+            'iso' = ISO8601. The default depends on the `orient`. For
+            ``orient='table'``, the default is 'iso'. For all other orients,
+            the default is 'epoch'.
+        double_precision : int, default 10
+            The number of decimal places to use when encoding
+            floating point values.
+        force_ascii : bool, default True
+            Force encoded string to be ASCII.
+        date_unit : string, default 'ms' (milliseconds)
+            The time unit to encode to, governs timestamp and ISO8601
+            precision.  One of 's', 'ms', 'us', 'ns' for second, millisecond,
+            microsecond, and nanosecond respectively.
+        default_handler : callable, default None
+            Handler to call if object cannot otherwise be converted to a
+            suitable format for JSON. Should receive a single argument which is
+            the object to convert and return a serialisable object.
+        lines : bool, default False
+            If 'orient' is 'records' write out line delimited json format. Will
+            throw ValueError if incorrect 'orient' since others are not list
+            like.
+        compression : {'infer', 'gzip', 'bz2', 'zip', 'xz', None}
+            A string representing the compression to use in the output file,
+            only used when the first argument is a filename. By default, the
+            compression is inferred from the filename.
+        index : bool, default True
+            Whether to include the index values in the JSON string. Not
+            including the index (``index=False``) is only supported when
+            orient is 'split' or 'table'.
+        """
+        import cudf.io.json as json
+        json.to_json(
+            self,
+            path_or_buf=path_or_buf,
+            *args,
+            **kwargs
+        )
+
+    def to_hdf(self, path_or_buf, key, *args, **kwargs):
+        """
+        Write the contained data to an HDF5 file using HDFStore.
+
+        Hierarchical Data Format (HDF) is self-describing, allowing an
+        application to interpret the structure and contents of a file with
+        no outside information. One HDF file can hold a mix of related objects
+        which can be accessed as a group or as individual objects.
+
+        In order to add another DataFrame or Series to an existing HDF file
+        please use append mode and a different a key.
+
+        For more information see the :ref:`user guide <io.hdf5>`.
+        Parameters
+        ----------
+        path_or_buf : str or pandas.HDFStore
+            File path or HDFStore object.
+        key : str
+            Identifier for the group in the store.
+        mode : {'a', 'w', 'r+'}, default 'a'
+            Mode to open file:
+            - 'w': write, a new file is created (an existing file with
+                the same name would be deleted).
+            - 'a': append, an existing file is opened for reading and
+                writing, and if the file does not exist it is created.
+            - 'r+': similar to 'a', but the file must already exist.
+        format : {'fixed', 'table'}, default 'fixed'
+            Possible values:
+            - 'fixed': Fixed format. Fast writing/reading. Not-appendable,
+                nor searchable.
+            - 'table': Table format. Write as a PyTables Table structure
+                which may perform worse but allow more flexible operations
+                like searching / selecting subsets of the data.
+        append : bool, default False
+            For Table formats, append the input data to the existing.
+        data_columns :  list of columns or True, optional
+            List of columns to create as indexed data columns for on-disk
+            queries, or True to use all columns. By default only the axes
+            of the object are indexed. See :ref:`io.hdf5-query-data-columns`.
+            Applicable only to format='table'.
+        complevel : {0-9}, optional
+            Specifies a compression level for data.
+            A value of 0 disables compression.
+        complib : {'zlib', 'lzo', 'bzip2', 'blosc'}, default 'zlib'
+            Specifies the compression library to be used.
+            As of v0.20.2 these additional compressors for Blosc are supported
+            (default if no compressor specified: 'blosc:blosclz'):
+            {'blosc:blosclz', 'blosc:lz4', 'blosc:lz4hc', 'blosc:snappy',
+            'blosc:zlib', 'blosc:zstd'}.
+            Specifying a compression library which is not available issues
+            a ValueError.
+        fletcher32 : bool, default False
+            If applying compression use the fletcher32 checksum.
+        dropna : bool, default False
+            If true, ALL nan rows will not be written to store.
+        errors : str, default 'strict'
+            Specifies how encoding and decoding errors are to be handled.
+            See the errors argument for :func:`open` for a full list
+            of options.
+        """
+        import cudf.io.hdf as hdf
+        hdf.to_hdf(path_or_buf, key, self, *args, **kwargs)
 
 
 register_distributed_serializer(Series)

@@ -1,10 +1,12 @@
 from collections import namedtuple
 
 import numpy as np
+import pyarrow as pa
 
 from numba import njit
 
 from librmm_cffi import librmm as rmm
+
 
 mask_dtype = np.dtype(np.uint8)
 mask_bitsize = mask_dtype.itemsize * 8
@@ -70,15 +72,6 @@ def normalize_index(index, size, doraise=True):
     return min(index, size)
 
 
-def normalize_slice(arg, size):
-    """Normalize slice
-    """
-    start = arg.start if arg.start is not None else 0
-    stop = arg.stop if arg.stop is not None else size
-    return (normalize_index(start, size, doraise=False),
-            normalize_index(stop, size, doraise=False))
-
-
 # borrowed from a wonderful blog:
 # https://avilpage.com/2015/03/a-slice-of-python-intelligence-behind.html
 def standard_python_slice(len_idx, arg):
@@ -116,11 +109,44 @@ def standard_python_slice(len_idx, arg):
     if (step < 0 and stop >= start) or (step > 0 and start >= stop):
         slice_length = 0
     elif step < 0:
-        slice_length = (stop - start + 1)/step + 1
+        slice_length = (stop - start + 1)//step + 1
     else:
-        slice_length = (stop - start - 1)/step + 1
+        slice_length = (stop - start - 1)//step + 1
 
     return start, stop, step, slice_length
 
 
 list_types_tuple = (list, np.array)
+
+
+def buffers_from_pyarrow(pa_arr, dtype=None):
+    from cudf.dataframe.buffer import Buffer
+
+    buffers = pa_arr.buffers()
+
+    if buffers[0]:
+        pamask = Buffer(
+            np.array(buffers[0]).view('int8')
+        )
+    else:
+        pamask = None
+
+    if dtype:
+        new_dtype = dtype
+    else:
+        if isinstance(pa_arr, pa.DictionaryArray):
+            new_dtype = pa_arr.indices.type.to_pandas_dtype()
+        else:
+            new_dtype = pa_arr.type.to_pandas_dtype()
+
+    if buffers[1]:
+        padata = Buffer(
+            np.array(buffers[1]).view(new_dtype)[
+                pa_arr.offset:pa_arr.offset + len(pa_arr)
+            ]
+        )
+    else:
+        padata = Buffer(
+            np.empty(0, dtype=new_dtype)
+        )
+    return (pamask, padata)

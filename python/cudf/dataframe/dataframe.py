@@ -5,6 +5,7 @@ from __future__ import print_function, division
 import inspect
 import random
 from collections import OrderedDict
+from collections.abc import Sequence
 import logging
 import warnings
 import numbers
@@ -14,23 +15,22 @@ import pandas as pd
 import pyarrow as pa
 from pandas.api.types import is_dict_like
 
-from numba.cuda.cudadrv.devicearray import DeviceNDArray
 from types import GeneratorType
 
 from librmm_cffi import librmm as rmm
+from libgdf_cffi import libgdf
 
 from cudf import formatting, _gdf
 from cudf.utils import cudautils, queryutils, applyutils, utils
-from .index import as_index, Index, RangeIndex
-from .series import Series
-from .column import Column
+from cudf.dataframe.index import as_index, Index, RangeIndex
+from cudf.dataframe.series import Series
 from cudf.settings import NOTSET, settings
 from cudf.comm.serialize import register_distributed_serializer
-from .categorical import CategoricalColumn
-from .buffer import Buffer
+from cudf.dataframe.categorical import CategoricalColumn
+from cudf.dataframe.buffer import Buffer
 from cudf._gdf import nvtx_range_push, nvtx_range_pop
 from cudf._sort import get_sorted_inds
-from . import columnops
+from cudf.dataframe import columnops
 
 import cudf.bindings.join as cpp_join
 
@@ -235,8 +235,13 @@ class DataFrame(object):
                 mask = np.array(mask)
             df = DataFrame()
             if(mask.dtype == 'bool'):
+                # New df-wide index
+                selvals, selinds = columnops.column_select_by_boolmask(
+                        columnops.as_column(self.index), Series(mask))
+                index = self.index.take(selinds.to_gpu_array())
                 for col in self._cols:
-                    df[col] = self._cols[col][arg]
+                    df[col] = Series(self._cols[col][arg], index=index)
+                df.set_index(index)
             else:
                 for col in arg:
                     df[col] = self[col]
@@ -268,6 +273,10 @@ class DataFrame(object):
         Returns the number of rows
         """
         return self._size
+
+    @property
+    def empty(self):
+        return not len(self)
 
     def assign(self, **kwargs):
         """
@@ -418,7 +427,7 @@ class DataFrame(object):
         # Format into a table
         return formatting.format(index=self._index, cols=cols,
                                  show_headers=True, more_cols=more_cols,
-                                 more_rows=more_rows)
+                                 more_rows=more_rows, min_width=2)
 
     def __str__(self):
         nrows = settings.formatting.get('nrows') or 10
@@ -430,6 +439,120 @@ class DataFrame(object):
             len(self.columns),
             len(self),
         )
+
+    # binary, rbinary, unary, orderedcompare, unorderedcompare
+    def _call_op(self, other, internal_fn, fn):
+        result = DataFrame()
+        result.set_index(self.index)
+        if isinstance(other, Sequence):
+            for k, col in enumerate(self._cols):
+                result[col] = getattr(self._cols[col], internal_fn)(
+                        other[k],
+                        fn,
+                )
+        elif isinstance(other, DataFrame):
+            for col in other._cols:
+                if col in self._cols:
+                    result[col] = getattr(self._cols[col], internal_fn)(
+                            other._cols[col],
+                            fn,
+                    )
+                else:
+                    result[col] = Series(cudautils.full(self.shape[0],
+                                         np.dtype('float64').type(np.nan),
+                                         'float64'), nan_as_null=False)
+            for col in self._cols:
+                if col not in other._cols:
+                    result[col] = Series(cudautils.full(self.shape[0],
+                                         np.dtype('float64').type(np.nan),
+                                         'float64'), nan_as_null=False)
+        elif isinstance(other, Series):
+            raise NotImplementedError(
+                    "Series to DataFrame arithmetic not supported "
+                    "until strings can be used as indices. Try converting your"
+                    " Series into a DataFrame first.")
+        elif isinstance(other, numbers.Number):
+            for col in self._cols:
+                result[col] = getattr(self._cols[col], internal_fn)(
+                        other,
+                        fn,
+                )
+        else:
+            raise NotImplementedError(
+                    "DataFrame operations with " + str(type(other)) + " not "
+                    "supported at this time.")
+        return result
+
+    def _binaryop(self, other, fn):
+        return self._call_op(other, '_binaryop', fn)
+
+    def _rbinaryop(self, other, fn):
+        return self._call_op(other, '_rbinaryop', fn)
+
+    def _unaryop(self, fn):
+        return self._call_op(self, '_unaryop', fn)
+
+    def __add__(self, other):
+        return self._binaryop(other, 'add')
+
+    def __radd__(self, other):
+        return self._rbinaryop(other, 'add')
+
+    def __sub__(self, other):
+        return self._binaryop(other, 'sub')
+
+    def __rsub__(self, other):
+        return self._rbinaryop(other, 'sub')
+
+    def __mul__(self, other):
+        return self._binaryop(other, 'mul')
+
+    def __rmul__(self, other):
+        return self._rbinaryop(other, 'mul')
+
+    def __pow__(self, other):
+        if other == 2:
+            return self * self
+        else:
+            return NotImplemented
+
+    def __floordiv__(self, other):
+        return self._binaryop(other, 'floordiv')
+
+    def __rfloordiv__(self, other):
+        return self._rbinaryop(other, 'floordiv')
+
+    def __truediv__(self, other):
+        return self._binaryop(other, 'truediv')
+
+    def __rtruediv__(self, other):
+        return self._rbinaryop(other, 'truediv')
+
+    __div__ = __truediv__
+
+    def _unordered_compare(self, other, cmpops):
+        return self._call_op(other, '_unordered_compare', cmpops)
+
+    def _ordered_compare(self, other, cmpops):
+        return self._call_op(other, '_ordered_compare', cmpops)
+
+    def __eq__(self, other):
+        return self._unordered_compare(other, 'eq')
+
+    def __ne__(self, other):
+        return self._unordered_compare(other, 'ne')
+
+    def __lt__(self, other):
+        return self._ordered_compare(other, 'lt')
+
+    def __le__(self, other):
+        return self._ordered_compare(other, 'le')
+
+    def __gt__(self, other):
+        return self._ordered_compare(other, 'gt')
+
+    def __ge__(self, other):
+        return self._ordered_compare(other, 'ge')
 
     def __iter__(self):
         return iter(self.columns)
@@ -545,6 +668,7 @@ class DataFrame(object):
         else:
             index = index if isinstance(index, Index) else as_index(index)
             df = DataFrame()
+            df._index = index
             for k in self.columns:
                 df[k] = self[k].set_index(index)
             return df
@@ -617,9 +741,11 @@ class DataFrame(object):
         index = self._index
         series = Series(col)
         sind = series.index
-        VALID = isinstance(col, (np.ndarray, DeviceNDArray, list, Series,
-                                 Column))
-        if len(self) > 0 and len(series) == 1 and not VALID:
+
+        # This won't handle 0 dimensional arrays which should be okay
+        SCALAR = np.isscalar(col)
+
+        if len(self) > 0 and len(series) == 1 and SCALAR:
             arr = rmm.device_array(shape=len(index), dtype=series.dtype)
             cudautils.gpu_fill_value.forall(arr.size)(arr, col)
             return Series(arr)
@@ -1023,6 +1149,71 @@ class DataFrame(object):
                 df[k] = self[k].reset_index().take(new_positions)
         return df.set_index(self.index.take(new_positions))
 
+    def transpose(self):
+        """Transpose index and columns.
+
+        Returns
+        -------
+        a new (ncol x nrow) dataframe. self is (nrow x ncol)
+
+        Difference from pandas
+        ----------------------
+        Not supporting *copy* because default and only behaviour is copy=True
+        """
+        if len(self.columns) == 0:
+            return self
+
+        dtype = self.dtypes[0]
+        if pd.api.types.is_categorical_dtype(dtype):
+            raise NotImplementedError('Categorical columns are not yet '
+                                      'supported for function')
+        if any(t != dtype for t in self.dtypes):
+            raise ValueError('all columns must have the same dtype')
+        has_null = any(c.null_count for c in self._cols.values())
+
+        df = DataFrame()
+
+        ncols = len(self.columns)
+        cols = [self[col]._column.cffi_view for col in self._cols]
+
+        new_nrow = ncols
+        new_ncol = len(self)
+
+        if has_null:
+            new_col_series = [
+                Series.from_masked_array(
+                    data=Buffer(rmm.device_array(shape=new_nrow, dtype=dtype)),
+                    mask=cudautils.make_empty_mask(size=new_nrow),
+                )
+                for i in range(0, new_ncol)]
+        else:
+            new_col_series = [
+                Series(
+                    data=Buffer(rmm.device_array(shape=new_nrow, dtype=dtype)),
+                )
+                for i in range(0, new_ncol)]
+        new_col_ptrs = [
+            new_col_series[i]._column.cffi_view
+            for i in range(0, new_ncol)]
+
+        # TODO (dm): move to _gdf.py
+        libgdf.gdf_transpose(
+            ncols,
+            cols,
+            new_col_ptrs
+        )
+
+        for series in new_col_series:
+            series._column._update_null_count()
+
+        for i in range(0, new_ncol):
+            df[str(i)] = new_col_series[i]
+        return df
+
+    @property
+    def T(self):
+        return self.transpose()
+
     def merge(self, other, on=None, how='left', lsuffix='_x', rsuffix='_y',
               type="", method='hash'):
         """Merge GPU DataFrame objects by performing a database-style join operation
@@ -1347,7 +1538,8 @@ class DataFrame(object):
 
         return df
 
-    def groupby(self, by, sort=False, as_index=False, method="hash"):
+    def groupby(self, by=None, sort=False, as_index=True, method="hash",
+                level=None):
         """Groupby
 
         Parameters
@@ -1382,25 +1574,28 @@ class DataFrame(object):
         - Since we don't support multiindex, the *by* columns are stored
           as regular columns.
         """
+
+        if by is None and level is None:
+            raise TypeError('groupby() requires either by or level to be'
+                            'specified.')
         if (method == "cudf"):
             from cudf.groupby.legacy_groupby import Groupby
             if as_index:
-                msg = "as_index==True not supported due to the lack of\
-                    multi-index"
-                raise NotImplementedError(msg)
+                warnings.warn(
+                    'as_index==True not supported due to the lack of '
+                    'multi-index with legacy groupby function. Use hash '
+                    'method for multi-index'
+                )
             result = Groupby(self, by=by)
             return result
         else:
             from cudf.groupby.groupby import Groupby
 
             _gdf.nvtx_range_push("PYGDF_GROUPBY", "purple")
-            if as_index:
-                msg = "as_index==True not supported due to the lack of\
-                    multi-index"
-                raise NotImplementedError(msg)
             # The matching `pop` for this range is inside LibGdfGroupby
             # __apply_agg
-            result = Groupby(self, by=by, method=method)
+            result = Groupby(self, by=by, method=method, as_index=as_index,
+                             level=level)
             return result
 
     def query(self, expr):
@@ -1609,7 +1804,7 @@ class DataFrame(object):
             Sequence of column names. If columns is *None* (unspecified),
             all columns in the frame are used.
         """
-        from . import numerical
+        from cudf.dataframe import numerical
 
         if columns is None:
             columns = self.columns
@@ -1798,7 +1993,8 @@ class DataFrame(object):
             arrays.append(arrow_col)
             types.append(arrow_col.type)
 
-        index_names.append(self.index.name)
+        index_name = pa.pandas_compat._index_level_name(self.index, 0, names)
+        index_names.append(index_name)
         index_columns.append(self.index)
         # It would be better if we didn't convert this if we didn't have to,
         # but we first need better tooling for cudf --> pyarrow type
@@ -1807,7 +2003,7 @@ class DataFrame(object):
         types.append(index_arrow.type)
         if preserve_index:
             arrays.append(index_arrow)
-            names.append(self.index.name)
+            names.append(index_name)
 
         # We may want to add additional metadata to this in the future, but
         # for now lets just piggyback off of what's done for Pandas
@@ -1855,21 +2051,36 @@ class DataFrame(object):
             raise TypeError('not a pyarrow.Table')
 
         index_col = None
+        dtypes = None
         if isinstance(table.schema.metadata, dict):
             if b'pandas' in table.schema.metadata:
-                index_col = json.loads(
+                metadata = json.loads(
                     table.schema.metadata[b'pandas']
-                )['index_columns']
+                )
+                index_col = metadata['index_columns']
+                dtypes = {col['field_name']: col['pandas_type'] for col in
+                          metadata['columns'] if 'field_name' in col}
 
         df = cls()
         for col in table.columns:
-            if len(col.data.chunks) != 1:
-                raise NotImplementedError("Importing from PyArrow Tables "
-                                          "with multiple chunks is not yet "
-                                          "supported")
-            df[col.name] = col.data.chunk(0)
+            if dtypes:
+                dtype = dtypes[col.name]
+                if dtype == 'categorical':
+                    dtype = 'category'
+                elif dtype == 'date':
+                    dtype = 'datetime64[ms]'
+            else:
+                dtype = None
+
+            df[col.name] = columnops.as_column(
+                col.data,
+                dtype=dtype
+            )
         if index_col:
             df = df.set_index(index_col[0])
+            new_index_name = pa.pandas_compat._backwards_compatible_index_name(
+                df.index.name, df.index.name)
+            df.index.name = new_index_name
         return df
 
     def to_records(self, index=True):
@@ -1961,6 +2172,170 @@ class DataFrame(object):
                                          exact=exact,
                                          quant_index=False)
         return result
+
+    def to_parquet(self, path, *args, **kwargs):
+        """
+        Write a DataFrame to the parquet format.
+        Parameters
+        ----------
+        path : str
+            File path or Root Directory path. Will be used as Root Directory
+            path while writing a partitioned dataset.
+        compression : {'snappy', 'gzip', 'brotli', None}, default 'snappy'
+            Name of the compression to use. Use ``None`` for no compression.
+        index : bool, default None
+            If ``True``, include the dataframe's index(es) in the file output.
+            If ``False``, they will not be written to the file. If ``None``,
+            the engine's default behavior will be used.
+        partition_cols : list, optional, default None
+            Column names by which to partition the dataset
+            Columns are partitioned in the order they are given
+        """
+        import cudf.io.parquet as pq
+        pq.to_parquet(self, path, *args, **kwargs)
+
+    def to_feather(self, path, *args, **kwargs):
+        """
+        Write a DataFrame to the feather format.
+        Parameters
+        ----------
+        path : str
+            File path
+        """
+        import cudf.io.feather as feather
+        feather.to_feather(self, path, *args, **kwargs)
+
+    def to_json(self, path_or_buf=None, *args, **kwargs):
+        """
+        Convert the cuDF object to a JSON string.
+        Note nulls and NaNs will be converted to null and datetime objects
+        will be converted to UNIX timestamps.
+        Parameters
+        ----------
+        path_or_buf : string or file handle, optional
+            File path or object. If not specified, the result is returned as
+            a string.
+        orient : string
+            Indication of expected JSON string format.
+            * Series
+                - default is 'index'
+                - allowed values are: {'split','records','index','table'}
+            * DataFrame
+                - default is 'columns'
+                - allowed values are:
+                {'split','records','index','columns','values','table'}
+            * The format of the JSON string
+                - 'split' : dict like {'index' -> [index],
+                'columns' -> [columns], 'data' -> [values]}
+                - 'records' : list like
+                [{column -> value}, ... , {column -> value}]
+                - 'index' : dict like {index -> {column -> value}}
+                - 'columns' : dict like {column -> {index -> value}}
+                - 'values' : just the values array
+                - 'table' : dict like {'schema': {schema}, 'data': {data}}
+                describing the data, and the data component is
+                like ``orient='records'``.
+        date_format : {None, 'epoch', 'iso'}
+            Type of date conversion. 'epoch' = epoch milliseconds,
+            'iso' = ISO8601. The default depends on the `orient`. For
+            ``orient='table'``, the default is 'iso'. For all other orients,
+            the default is 'epoch'.
+        double_precision : int, default 10
+            The number of decimal places to use when encoding
+            floating point values.
+        force_ascii : bool, default True
+            Force encoded string to be ASCII.
+        date_unit : string, default 'ms' (milliseconds)
+            The time unit to encode to, governs timestamp and ISO8601
+            precision.  One of 's', 'ms', 'us', 'ns' for second, millisecond,
+            microsecond, and nanosecond respectively.
+        default_handler : callable, default None
+            Handler to call if object cannot otherwise be converted to a
+            suitable format for JSON. Should receive a single argument which is
+            the object to convert and return a serialisable object.
+        lines : bool, default False
+            If 'orient' is 'records' write out line delimited json format. Will
+            throw ValueError if incorrect 'orient' since others are not list
+            like.
+        compression : {'infer', 'gzip', 'bz2', 'zip', 'xz', None}
+            A string representing the compression to use in the output file,
+            only used when the first argument is a filename. By default, the
+            compression is inferred from the filename.
+        index : bool, default True
+            Whether to include the index values in the JSON string. Not
+            including the index (``index=False``) is only supported when
+            orient is 'split' or 'table'.
+        """
+        import cudf.io.json as json
+        json.to_json(
+            self,
+            path_or_buf=path_or_buf,
+            *args,
+            **kwargs
+        )
+
+    def to_hdf(self, path_or_buf, key, *args, **kwargs):
+        """
+        Write the contained data to an HDF5 file using HDFStore.
+
+        Hierarchical Data Format (HDF) is self-describing, allowing an
+        application to interpret the structure and contents of a file with
+        no outside information. One HDF file can hold a mix of related objects
+        which can be accessed as a group or as individual objects.
+
+        In order to add another DataFrame or Series to an existing HDF file
+        please use append mode and a different a key.
+
+        For more information see the :ref:`user guide <io.hdf5>`.
+        Parameters
+        ----------
+        path_or_buf : str or pandas.HDFStore
+            File path or HDFStore object.
+        key : str
+            Identifier for the group in the store.
+        mode : {'a', 'w', 'r+'}, default 'a'
+            Mode to open file:
+            - 'w': write, a new file is created (an existing file with
+                the same name would be deleted).
+            - 'a': append, an existing file is opened for reading and
+                writing, and if the file does not exist it is created.
+            - 'r+': similar to 'a', but the file must already exist.
+        format : {'fixed', 'table'}, default 'fixed'
+            Possible values:
+            - 'fixed': Fixed format. Fast writing/reading. Not-appendable,
+                nor searchable.
+            - 'table': Table format. Write as a PyTables Table structure
+                which may perform worse but allow more flexible operations
+                like searching / selecting subsets of the data.
+        append : bool, default False
+            For Table formats, append the input data to the existing.
+        data_columns :  list of columns or True, optional
+            List of columns to create as indexed data columns for on-disk
+            queries, or True to use all columns. By default only the axes
+            of the object are indexed. See :ref:`io.hdf5-query-data-columns`.
+            Applicable only to format='table'.
+        complevel : {0-9}, optional
+            Specifies a compression level for data.
+            A value of 0 disables compression.
+        complib : {'zlib', 'lzo', 'bzip2', 'blosc'}, default 'zlib'
+            Specifies the compression library to be used.
+            As of v0.20.2 these additional compressors for Blosc are supported
+            (default if no compressor specified: 'blosc:blosclz'):
+            {'blosc:blosclz', 'blosc:lz4', 'blosc:lz4hc', 'blosc:snappy',
+            'blosc:zlib', 'blosc:zstd'}.
+            Specifying a compression library which is not available issues
+            a ValueError.
+        fletcher32 : bool, default False
+            If applying compression use the fletcher32 checksum.
+        dropna : bool, default False
+            If true, ALL nan rows will not be written to store.
+        errors : str, default 'strict'
+            Specifies how encoding and decoding errors are to be handled.
+            See the errors argument for :func:`open` for a full list
+            of options.
+        """
+        import cudf.io.hdf as hdf
+        hdf.to_hdf(path_or_buf, key, self, *args, **kwargs)
 
 
 class Loc(object):

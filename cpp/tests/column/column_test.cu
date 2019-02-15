@@ -24,17 +24,18 @@ struct print {
   __device__ void operator()(T x) { printf("%x ", x); }
 };
 
+template <typename ColumnType>
 struct ColumnConcatTest : public testing::Test
 {
   ColumnConcatTest() {}
   ~ColumnConcatTest() {}
   
-  template <typename T, typename data_initializer_t, typename null_initializer_t>
+  template <typename data_initializer_t, typename null_initializer_t>
   void multicolumn_test(std::vector<gdf_size_type> column_sizes, 
                         data_initializer_t data_init, 
                         null_initializer_t null_init)
   { 
-    std::vector< std::vector<T> > the_columns(column_sizes.size());
+    std::vector< std::vector<ColumnType> > the_columns(column_sizes.size());
 
     for (size_t i = 0; i < column_sizes.size(); ++i)
       initialize_vector(the_columns[i], column_sizes[i], data_init);
@@ -59,7 +60,7 @@ struct ColumnConcatTest : public testing::Test
     gdf_size_type total_size = 0;
     for (auto sz : column_sizes) total_size += sz;
 
-    std::vector<T> output_data(total_size);
+    std::vector<ColumnType> output_data(total_size);
     std::vector<gdf_valid_type> output_valid(gdf_get_num_chars_bitmask(total_size));
     
     auto output_gdf_col = create_gdf_column(output_data, output_valid);
@@ -69,7 +70,7 @@ struct ColumnConcatTest : public testing::Test
                                               num_columns) );
 
     // make a concatenated reference
-    std::vector<T> ref_data;
+    std::vector<ColumnType> ref_data;
     for (size_t i = 0; i < the_columns.size(); ++i)
       std::copy(the_columns[i].begin(), the_columns[i].end(), std::back_inserter(ref_data));
       
@@ -86,18 +87,16 @@ struct ColumnConcatTest : public testing::Test
 
     EXPECT_EQ(ref_null_count, ref_gdf_col->null_count);
 
-    EXPECT_TRUE(gdf_equal_columns<int>(ref_gdf_col.get(), output_gdf_col.get()));
+    EXPECT_TRUE(gdf_equal_columns<ColumnType>(ref_gdf_col.get(), output_gdf_col.get()));
 
-    //print_valid_data(ref_valid.data(), total_size); printf("\n");
-    //print_valid_data(output_gdf_col->valid, total_size);
   }
 
-  template <typename T, typename data_initializer_t, typename null_initializer_t>
+  template <typename data_initializer_t, typename null_initializer_t>
   void multicolumn_bench(std::vector<size_t> column_sizes, 
                          data_initializer_t data_init, 
                          null_initializer_t null_init)
   {
-    std::vector< std::vector<T> > the_columns(column_sizes.size());
+    std::vector< std::vector<ColumnType> > the_columns(column_sizes.size());
 
     for (size_t i = 0; i < column_sizes.size(); ++i)
       initialize_vector(the_columns[i], column_sizes[i], data_init);
@@ -116,7 +115,7 @@ struct ColumnConcatTest : public testing::Test
     gdf_size_type total_size = 0;
     for (auto sz : column_sizes) total_size += sz;
 
-    std::vector<int32_t> output_data(total_size);
+    std::vector<ColumnType> output_data(total_size);
     std::vector<gdf_valid_type> output_valid(gdf_get_num_chars_bitmask(total_size));
     
     auto output_gdf_col = create_gdf_column(output_data, output_valid);
@@ -140,94 +139,124 @@ struct ColumnConcatTest : public testing::Test
   }
 };
 
-// Test various cases with null pointers or empty columns
-TEST_F(ColumnConcatTest, ErrorConditions)
-{
-  constexpr int num_columns = 4;
+using TestTypes = ::testing::Types<int8_t, int16_t, int32_t, int64_t, float, double>;
 
-  // Test null output column
-  EXPECT_EQ(GDF_DATASET_EMPTY, gdf_column_concat(0, 0, 0));
-  
+TYPED_TEST_CASE(ColumnConcatTest, TestTypes);
+
+TYPED_TEST(ColumnConcatTest, ZeroColumns){
+  EXPECT_EQ(GDF_INVALID_API_CALL, gdf_column_concat(nullptr, nullptr, 0));
+}
+
+TYPED_TEST(ColumnConcatTest, NegativeColumns){
+  EXPECT_EQ(GDF_INVALID_API_CALL, gdf_column_concat(nullptr, nullptr, -1));
+}
+
+TYPED_TEST(ColumnConcatTest, NullOutput){
+  gdf_column input;
+  gdf_column * input_p = &input;
+  EXPECT_EQ(GDF_DATASET_EMPTY, gdf_column_concat(nullptr, &input_p, 1));
+}
+
+TYPED_TEST(ColumnConcatTest, NullInput){
+  gdf_column output;
+  EXPECT_EQ(GDF_DATASET_EMPTY, gdf_column_concat(&output, nullptr, 1));
+}
+
+TYPED_TEST(ColumnConcatTest, NullFirstInputColumn){
+  gdf_column output;
+  gdf_column * input_p = nullptr;
+  EXPECT_EQ(GDF_DATASET_EMPTY, gdf_column_concat(&output, &input_p, 1));
+}
+
+TYPED_TEST(ColumnConcatTest, OutputWrongSize){
+  gdf_size_type num_columns = 4;
   std::vector<gdf_size_type> column_sizes{4, 1, 2, 3};
-  
-  gdf_size_type total_size = 0;
-  for (auto& n : column_sizes)
-    total_size += n;
-  
-  gdf_column **input_columns = new gdf_column*[num_columns];
-  for (int i = 0; i < num_columns; ++i) {
-    input_columns[i] = 0;
-  }
+  ASSERT_EQ(num_columns, static_cast<gdf_size_type>(column_sizes.size()));
 
-  std::vector<int32_t> output_data(total_size);
-  std::vector<gdf_valid_type> output_valid(gdf_get_num_chars_bitmask(total_size));
-  
-  auto output_gdf_col = create_gdf_column(output_data, output_valid);
-  
-  // Test array of null input columns
-  EXPECT_EQ(GDF_DATASET_EMPTY, gdf_column_concat(output_gdf_col.get(), input_columns, num_columns));
+  gdf_size_type const total_size{
+      std::accumulate(column_sizes.begin(), column_sizes.end(), 0)};
 
-  for (int i = 0; i < num_columns; ++i) {
-    gdf_column col;
-    EXPECT_EQ(GDF_SUCCESS, gdf_column_view(&col, 0, 0, column_sizes[i], GDF_INT32));
-    input_columns[i] = &col;
-  }
+  std::vector<gdf_col_pointer> input_column_pointers(num_columns);
+  std::vector<gdf_column*> input_columns(num_columns, nullptr);
 
-  // test null input column data / valid pointers
-  EXPECT_EQ(GDF_DATASET_EMPTY, gdf_column_concat(output_gdf_col.get(), input_columns, num_columns));
-
-  // create some actual input columns
   for (int i = 0; i < num_columns; ++i) {
     gdf_size_type size = column_sizes[i];
-    std::vector<int32_t> data(size);
+    std::vector<TypeParam> data(size);
     std::vector<gdf_valid_type> valid(gdf_get_num_chars_bitmask(size));
-  
-    input_columns[i] = create_gdf_column(data, valid).get();
+    input_column_pointers[i] = create_gdf_column(data, valid);
+    input_columns[i] = input_column_pointers[i].get();
   }
+  std::vector<TypeParam> output_data(total_size);
+  std::vector<gdf_valid_type> output_valid(gdf_get_num_chars_bitmask(total_size));
+  auto output_gdf_col = create_gdf_column(output_data, output_valid);
 
   // test mismatched sizes
   output_gdf_col->size = total_size - 1;
-  EXPECT_EQ(GDF_COLUMN_SIZE_MISMATCH, gdf_column_concat(output_gdf_col.get(), input_columns, num_columns));
+  EXPECT_EQ(GDF_COLUMN_SIZE_MISMATCH, gdf_column_concat(output_gdf_col.get(), input_columns.data(), num_columns));
 }
 
-TEST_F(ColumnConcatTest, RandomData) {
+TYPED_TEST(ColumnConcatTest, NullInputData){
+  gdf_size_type num_columns = 4;
+  std::vector<gdf_size_type> column_sizes{4, 1, 2, 3};
+  ASSERT_EQ(num_columns, static_cast<gdf_size_type>(column_sizes.size()));
+
+  gdf_size_type const total_size{
+      std::accumulate(column_sizes.begin(), column_sizes.end(), 0)};
+
+  std::vector<TypeParam> output_data(total_size);
+  std::vector<gdf_valid_type> output_valid(gdf_get_num_chars_bitmask(total_size));
+  auto output_gdf_col = create_gdf_column(output_data, output_valid);
+
+  std::vector<gdf_column> cols(num_columns);
+  std::vector<gdf_column*> input_columns(num_columns, nullptr);
+  for (int i = 0; i < num_columns; ++i) {
+    cols[i].data = nullptr;
+    cols[i].valid = nullptr;
+    cols[i].size = column_sizes[i];
+    cols[i].dtype = output_gdf_col->dtype;
+    input_columns[i] = &cols[i];
+  }
+
+  EXPECT_EQ(GDF_DATASET_EMPTY, gdf_column_concat(output_gdf_col.get(), input_columns.data(), num_columns));
+}
+
+TYPED_TEST(ColumnConcatTest, RandomData) {
   gdf_size_type column_size = 1005;
   gdf_size_type null_interval = 17;
     
   std::vector<gdf_size_type> column_sizes{column_size, column_size, column_size};
 
-  multicolumn_test<int>(column_sizes, 
+  this->multicolumn_test(column_sizes, 
                         [](int index){ return std::rand(); },
                         [null_interval](gdf_size_type row, gdf_size_type col) { 
                           return (row % null_interval) != 0; 
                         });
 }
   
-TEST_F(ColumnConcatTest, DifferentLengthColumns) {
+TYPED_TEST(ColumnConcatTest, DifferentLengthColumns) {
   gdf_size_type null_interval = 2;
     
   std::vector<gdf_size_type> column_sizes{13, 3, 5};
 
-  multicolumn_test<int>(column_sizes, 
+  this->multicolumn_test(column_sizes, 
                         [](int index){ return std::rand(); },
                         [null_interval](gdf_size_type row, gdf_size_type col) { 
                           return (row % null_interval) != 0; 
                         });
 }
 
-TEST_F(ColumnConcatTest, DifferentLengthColumnsLimitedBits) {   
+TYPED_TEST(ColumnConcatTest, DifferentLengthColumnsLimitedBits) {   
   std::vector<gdf_size_type> column_sizes{13, 3, 5};
 
   auto limited_bits = [column_sizes](gdf_size_type row, gdf_size_type col){ 
     return row < column_sizes[col]; 
   };
 
-  multicolumn_test<int>(column_sizes, 
-                        [](int index){ return std::rand(); },
-                        limited_bits);
+  this->multicolumn_test(
+      column_sizes, [](int index) { return std::rand(); }, limited_bits);
 }
 
-TEST_F(ColumnConcatTest, MoreComplicatedColumns) {   
+TYPED_TEST(ColumnConcatTest, MoreComplicatedColumns) {   
    
   std::vector<gdf_size_type> column_sizes{5, 1003, 17, 117};
 
@@ -245,27 +274,37 @@ TEST_F(ColumnConcatTest, MoreComplicatedColumns) {
     return true;
   };
 
-  multicolumn_test<int>(column_sizes, 
+  this->multicolumn_test(column_sizes, 
                         [](int index){ return std::rand(); },
                         bit_setter);
 }
 
 
-TEST_F(ColumnConcatTest, EightByteColumns) {   
+TYPED_TEST(ColumnConcatTest, EightByteColumns) {   
   std::vector<gdf_size_type> column_sizes{13, 3, 5};
 
   auto limited_bits = [column_sizes](gdf_size_type row, gdf_size_type col){ 
     return row < column_sizes[col]; 
   };
 
-  multicolumn_test<int64_t>(column_sizes, 
+  this->multicolumn_test(column_sizes, 
                             [](int index){ return std::rand(); },
                             limited_bits);
 }
 
 
+TYPED_TEST(ColumnConcatTest, SingleColumn){
+  std::vector<gdf_size_type> column_sizes{13};
+  this->multicolumn_test(column_sizes, 
+                        [](int index){ return std::rand(); },
+                        [](gdf_size_type row, gdf_size_type col) { 
+                          return true; 
+                        });
+}
+
+
 #ifdef ENABLE_CONCAT_BENCHMARK
-TEST_F(ColumnConcatTest, Benchmark) {   
+TYPED_TEST(ColumnConcatTest, Benchmark) {   
    
   size_t n = 42000000;
   std::vector<size_t> column_sizes{n, n, n, n};
@@ -276,7 +315,7 @@ TEST_F(ColumnConcatTest, Benchmark) {
     return (row % null_interval) != 0; 
   };
 
-  multicolumn_bench<int>(column_sizes, 
+  multicolumn_bench<TypeParam>(column_sizes, 
                         [](int index){ return std::rand(); },
                         bit_setter);
 }

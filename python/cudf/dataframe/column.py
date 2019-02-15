@@ -40,6 +40,13 @@ class Column(object):
     def _concat(cls, objs):
         if len(objs) == 0:
             return Column(Buffer.null(np.float))
+
+        # Handle categories for categoricals
+        from cudf.dataframe.categorical import CategoricalColumn
+        if all(isinstance(o, CategoricalColumn) for o in objs):
+            new_cats = tuple(set([val for o in objs for val in o]))
+            objs = [o.cat().set_categories(new_cats) for o in objs]
+
         head = objs[0]
         for o in objs:
             if not o.is_type_equivalent(head):
@@ -101,6 +108,9 @@ class Column(object):
             # check that mask length is sufficient
             assert mask.size * utils.mask_bitsize >= len(self)
 
+        self._update_null_count(null_count)
+
+    def _update_null_count(self, null_count=None):
         assert null_count is None or null_count >= 0
         if null_count is None:
             if self._mask is not None:
@@ -367,7 +377,6 @@ class Column(object):
             return self.element_indexing(arg)
         elif isinstance(arg, slice):
             # compute mask slice
-            start, stop = utils.normalize_slice(arg, len(self))
             if self.null_count > 0:
                 if arg.step is not None and arg.step != 1:
                     raise NotImplementedError(arg)

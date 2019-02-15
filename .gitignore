@@ -19,6 +19,9 @@ dist/
 cudf.egg-info/
 python/build
 python/cudf/bindings/*.cpp
+python/cudf/bindings/.nfs*
+python/*.ipynb
+python/.ipynb_checkpoints
 
 ## Patching
 *.diff

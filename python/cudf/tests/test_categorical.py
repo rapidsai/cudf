@@ -52,6 +52,7 @@ def test_categorical_integer():
 2
 3 c
 4 a
+dtype: category
 """
     assert string.split() == expect_str.split()
 
