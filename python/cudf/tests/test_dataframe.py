@@ -176,6 +176,7 @@ def test_series_init_none():
     # values should match despite whitespace difference
     assert got.split() == expect.split()
 
+
 def test_series_replace():
     a1 = np.array([0, 1, 2, 3, 4])
 

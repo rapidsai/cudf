@@ -94,9 +94,10 @@ def test_series_unique():
         print(got.head())
         assert got.equals(expect)
 
+
 @pytest.mark.parametrize('nan_as_null, dropna',
-                        [(True, True), (True, False),
-                         (False, True), (False, False)])
+                         [(True, True), (True, False),
+                          (False, True), (False, False)])
 def test_series_nunique(nan_as_null, dropna):
     # We remove nulls as opposed to NaNs using the dropna parameter,
     # so to test against pandas we replace NaN with another discrete value
