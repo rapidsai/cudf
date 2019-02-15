@@ -446,11 +446,6 @@ gdf_error read_csv(csv_read_arg *args)
 	}
 	else { checkError(GDF_C_ERROR, "invalid input type"); }
 
-	// Reset the byte range size if useless
-	if (raw_csv->byte_range_size >= raw_csv->num_bytes) {
-		raw_csv->byte_range_size = 0;
-	}
-
 	const char* h_uncomp_data;
 	size_t h_uncomp_size = 0;
 	// Used when the input data is compressed, to ensure the allocated uncompressed data is freed
@@ -1049,14 +1044,9 @@ gdf_error uploadDataToDevice(const char *h_uncomp_data, size_t h_uncomp_size,
                     thrust::make_constant_iterator(start_offset),
                     raw_csv->recStart, thrust::minus<cu_recstart_t>());
 
-  // We added extra for offset=0 position - remove for actual data row count
-  if (raw_csv->byte_range_offset == 0) {
-    raw_csv->num_records--;
-  }
-  // We kept extra for end offset - remove for actual data row count
-  if (raw_csv->byte_range_size != 0) {
-    raw_csv->num_records--;
-  }
+  // The array of row offsets includes EOF
+  // reduce the number of records by one to exclude it from the rwo count
+  raw_csv->num_records--;
 
   return GDF_SUCCESS;
 }

@@ -754,16 +754,16 @@ def test_csv_reader_byte_range(tmpdir, segment_bytes):
             fp.write(str(i) + ', ' + str(2*i) + ' \n')
     file_size = os.stat(str(fname)).st_size
 
-    ref_df = read_csv(str(fname), names=names)
+    ref_df = read_csv(str(fname), names=names).to_pandas()
 
     dfs = []
     for segment in range((file_size + segment_bytes - 1)//segment_bytes):
         dfs.append(read_csv(str(fname), names=names,
                    byte_range=(segment*segment_bytes, segment_bytes)))
-    df = cudf.concat(dfs)
+    df = cudf.concat(dfs).to_pandas()
 
-    # comparing only the values here, concat does not update the index
-    np.array_equal(ref_df.to_pandas().values, df.to_pandas().values)
+    assert(list(df['int1']) == list(ref_df['int1']))
+    assert(list(df['int2']) == list(ref_df['int2']))
 
 
 @pytest.mark.parametrize('header_row, skip_rows, skip_blanks',
