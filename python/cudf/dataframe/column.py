@@ -7,6 +7,7 @@ LibGDF operates on column.
 from numbers import Number
 
 import numpy as np
+import pandas as pd
 from numba import cuda
 
 from librmm_cffi import librmm as rmm
@@ -37,12 +38,21 @@ class Column(object):
     *null_count*).
     """
     @classmethod
-    def _concat(cls, objs):
+    def _concat(cls, objs, dtype=None):
+        from cudf.dataframe.categorical import CategoricalColumn
+
         if len(objs) == 0:
-            return Column(Buffer.null(np.float))
+            if pd.api.types.is_categorical_dtype(dtype):
+                return CategoricalColumn(
+                    data=Column(Buffer.null(np.dtype('int8'))),
+                    null_count=0,
+                    ordered=False
+                )
+            else:
+                dtype = np.dtype(dtype)
+                return Column(Buffer.null(dtype))
 
         # Handle categories for categoricals
-        from cudf.dataframe.categorical import CategoricalColumn
         if all(isinstance(o, CategoricalColumn) for o in objs):
             new_cats = tuple(set([val for o in objs for val in o]))
             objs = [o.cat().set_categories(new_cats) for o in objs]
