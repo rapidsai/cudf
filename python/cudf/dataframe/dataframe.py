@@ -1922,9 +1922,6 @@ class DataFrame(object):
         # Set columns
         for colk in dataframe.columns:
             vals = dataframe[colk].values
-            # CUDF assumes values are always contiguous
-            if not vals.flags['C_CONTIGUOUS']:
-                vals = np.ascontiguousarray(vals)
             df[colk] = Series(vals, nan_as_null=nan_as_null)
         # Set index
         return df.set_index(dataframe.index)

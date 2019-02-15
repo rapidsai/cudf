@@ -1683,6 +1683,7 @@ def test_series_digitize(num_rows, num_bins, right, dtype):
     np.testing.assert_array_equal(np.digitize(data, bins, right),
                                   indices.to_array())
 
+
 def test_numpy_non_contiguious():
     arr1 = np.random.sample([5000, 10])
     assert arr1.flags['C_CONTIGUOUS'] is True

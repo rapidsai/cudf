@@ -219,6 +219,9 @@ def as_column(arbitrary, nan_as_null=True, dtype=None):
         data = as_column(out_dev_array)
 
     elif isinstance(arbitrary, np.ndarray):
+        # CUDF assumes values are always contiguous
+        if not arbitrary.flags['C_CONTIGUOUS']:
+            arbitrary = np.ascontiguousarray(arbitrary)
         if arbitrary.dtype.kind == 'M':
             data = datetime.DatetimeColumn.from_numpy(arbitrary)
         elif arbitrary.dtype.kind in ('O', 'U'):
