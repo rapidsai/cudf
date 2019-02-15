@@ -419,7 +419,10 @@ gdf_error read_csv(csv_read_arg *args)
 
 		// Have to align map offset to page size
 		map_offset = (args->byte_range_offset/page_size)*page_size;
-		if (map_offset >= (size_t)file_size) { close(fd); checkError(GDF_C_ERROR, "The offset is too high"); }
+		if (map_offset >= (size_t)file_size) { 
+			close(fd); 
+			checkError(GDF_INVALID_API_CALL, "The byte_range offset is larger than the file size");
+		}
 
 		// Set to rest-of-the-file size, will reduce based on the byte range size
 		raw_csv->num_bytes = map_size = file_size - map_offset;
