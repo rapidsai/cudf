@@ -180,14 +180,9 @@ def test_series_init_none():
                         [(True, True), (True, False), 
                          (False, True), (False, False)])
 def test_series_nunique(nan_as_null, dropna):
-    # True, False combination is skipped for pandas because if a pandas user
-    # wants to see "NaN" values, they would set nan_as_null to True
     nan = np.dtype('float64').type(np.nan)
-    cudf_series = Series([1, 2, 3, nan, None], nan_as_null=nan_as_null)
-    pd_series = pd.Series([1, 2, 3, nan, None], {dtype={'x':'object'}, columns=['x'])
-    #if nan_as_null == True and dropna == False:
-    #    expect = 4
-    #else:
+    cudf_series = Series([1.0, 2.0, 3.0, nan, None], nan_as_null=nan_as_null)
+    pd_series = pd.Series([1.0, 2.0, 3.0, nan, None], {dtype={'x':'object'}, columns=['x'])
     expect = pd_series.nunique(dropna=dropna)
     got = cudf_series.nunique(dropna=dropna)
     assert got == expect
