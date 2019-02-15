@@ -1048,7 +1048,7 @@ gdf_error uploadDataToDevice(const char *h_uncomp_data, size_t h_uncomp_size,
                     raw_csv->recStart, thrust::minus<cu_recstart_t>());
 
   // The array of row offsets includes EOF
-  // reduce the number of records by one to exclude it from the rwo count
+  // reduce the number of records by one to exclude it from the row count
   raw_csv->num_records--;
 
   return GDF_SUCCESS;
