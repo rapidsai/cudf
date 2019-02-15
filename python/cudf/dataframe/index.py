@@ -261,6 +261,9 @@ class Index(object):
     def __ge__(self, other):
         return self._ordered_compare(other, 'ge')
 
+    def equals(self, other):
+        return (self == other)._values.all()
+
     def join(self, other, method, how='left', return_indexers=False):
         column_join_res = self.as_column().join(
             other.as_column(), how=how, return_indexers=return_indexers,
@@ -337,10 +340,13 @@ class RangeIndex(Index):
             raise ValueError(index)
 
     def __eq__(self, other):
+        return super(RangeIndex, self).__eq__(other)
+
+    def equals(self, other):
         if isinstance(other, RangeIndex):
             return (self._start == other._start and self._stop == other._stop)
         else:
-            return super(RangeIndex, self).__eq__(other)
+            return (self == other)._values.all()
 
     @property
     def dtype(self):
