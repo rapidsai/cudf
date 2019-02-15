@@ -14,6 +14,8 @@ params_dtype = [
     np.int8,
     np.int32,
     np.int64,
+    np.float32,
+    np.float64,
 ]
 
 params_sizes = [1, 2, 13, 64, 100, 1000]
@@ -56,4 +58,6 @@ def test_prefixsum(dtype, nelem):
         assert got[0] == 0
         got = got[1:]
 
-    np.testing.assert_array_equal(expect, got)
+    decimal = 4 if dtype == np.float32 else 6
+    np.testing.assert_array_almost_equal(expect, got, decimal=decimal)
+
