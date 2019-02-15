@@ -176,23 +176,6 @@ def test_series_init_none():
     # values should match despite whitespace difference
     assert got.split() == expect.split()
 
-@pytest.mark.parametrize('nan_as_null, dropna', 
-                        [(True, True), (True, False), 
-                         (False, True), (False, False)])
-def test_series_nunique(nan_as_null, dropna):
-    nan = np.dtype('float64').type(np.nan)
-    pd_series = pd.Series([1.0, 2.0, 3.0, -1.0, nan])
-    cudf_series = Series([1.0, 2.0, 3.0, nan, None], nan_as_null=nan_as_null)
-    expect = pd_series.nunique(dropna=dropna)
-    got = cudf_series.nunique(dropna=dropna)
-    assert expect == got
-
-    pd_series = pd.Series([1.0, -1, 2.0, 3.0])
-    cudf_series = Series([1.0, nan, 2.0, 3.0], nan_as_null=nan_as_null)
-    expect = pd_series.nunique(dropna=dropna)
-    got = cudf_series.nunique(dropna=dropna)
-    assert expect == got
-
 def test_series_replace():
     a1 = np.array([0, 1, 2, 3, 4])
 
