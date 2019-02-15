@@ -181,11 +181,19 @@ def test_series_init_none():
                          (False, True), (False, False)])
 def test_series_nunique(nan_as_null, dropna):
     nan = np.dtype('float64').type(np.nan)
+    pd_series = pd.Series([1.0, 2.0, 3.0, -1.0, nan])
     cudf_series = Series([1.0, 2.0, 3.0, nan, None], nan_as_null=nan_as_null)
-    pd_series = pd.Series([1.0, 2.0, 3.0, nan, None], {dtype={'x':'object'}, columns=['x'])
+    print(f'CUDF:\n{cudf_series}\n\nPandas:\n{pd_series}\n')
     expect = pd_series.nunique(dropna=dropna)
     got = cudf_series.nunique(dropna=dropna)
-    assert got == expect
+    assert expect == got
+
+    pd_series = pd.Series([1.0, -1, 2.0, 3.0])
+    cudf_series = Series([1.0, nan, 2.0, 3.0], nan_as_null=nan_as_null)
+    print(f'CUDF:\n{cudf_series}\n\nPandas:\n{pd_series}\n')
+    expect = pd_series.nunique(dropna=dropna)
+    got = cudf_series.nunique(dropna=dropna)
+    assert expect == got
 
 def test_series_replace():
     a1 = np.array([0, 1, 2, 3, 4])

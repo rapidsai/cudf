@@ -202,8 +202,8 @@ class NumericalColumn(columnops.TypedColumnBase):
             msg = 'non sort based unique_count() not implemented yet'
             raise NotImplementedError(msg)
         segs, _ = self._unique_segments()
-        if dropna == True and self.null_count > 0:
-            return len(segs)-1
+        if dropna == False and self.null_count > 0:
+            return len(segs)+1
         return len(segs)
 
     def value_counts(self, method='sort'):
