@@ -45,8 +45,8 @@ def read_parquet(path, *args, **kwargs):
 
     See Also
     --------
-    .to_parquet
-    .read_orc
+    cudf.io.parquet.to_parquet
+    cudf.io.orc.read_orc
     """
 
     warnings.warn("Using CPU via PyArrow to read Parquet dataset, this will "
@@ -75,8 +75,8 @@ def to_parquet(df, path, *args, **kwargs):
 
     See Also
     --------
-    .read_parquet
-    .read_orc
+    cudf.io.parquet.read_parquet
+    cudf.io.orc.read_orc
     """
     warnings.warn("Using CPU via PyArrow to write Parquet dataset, this will "
                   "be GPU accelerated in the future")

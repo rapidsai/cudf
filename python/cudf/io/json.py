@@ -100,7 +100,6 @@ def read_json(path_or_buf, *args, **kwargs):
 
     warnings.warn("Using CPU via Pandas to read JSON dataset, this may "
                   "be GPU accelerated in the future")
-
     pd_value = pd.read_json(path_or_buf, *args, **kwargs)
     return cudf.from_pandas(pd_value)
 
@@ -172,7 +171,6 @@ def to_json(cudf_val, path_or_buf=None, *args, **kwargs):
 
     warnings.warn("Using CPU via Pandas to write JSON dataset, this may "
                   "be GPU accelerated in the future")
-
     pd_value = cudf_val.to_pandas()
     pd.io.json.to_json(
         path_or_buf,
