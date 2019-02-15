@@ -206,11 +206,13 @@ class CategoricalColumn(columnops.TypedColumnBase):
             categories=self._categories,
             ordered=self._ordered)
 
-    def unique_count(self, method='sort'):
+    def unique_count(self, method='sort', dropna=True):
         if method != 'sort':
             msg = 'non sort based unique_count() not implemented yet'
             raise NotImplementedError(msg)
         segs, _ = self._unique_segments()
+        if dropna is False and self.null_count > 0:
+            return len(segs)+1
         return len(segs)
 
     def value_counts(self, method='sort'):
