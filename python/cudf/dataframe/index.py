@@ -180,6 +180,8 @@ class Index(object):
         return self._apply_op('__ge__', other)
 
     def equals(self, other):
+        if len(self) != len(other):
+            return False
         return (self == other)._values.all()
 
     def join(self, other, method, how='left', return_indexers=False):
