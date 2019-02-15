@@ -1270,6 +1270,36 @@ class Series(object):
         import cudf.io.hdf as hdf
         hdf.to_hdf(path_or_buf, key, self, *args, **kwargs)
 
+    def rename(self, index=None, copy=True):
+        """
+        Alter column labels.
+
+        Function / dict values must be unique (1-to-1). Labels not contained in
+        a dict / Series will be left as-is. Extra labels listed don’t throw an
+        error.
+
+        Parameters
+        ----------
+        index : Scalar, optional
+            Scalar to alter the Series.name attribute.
+        copy : boolean, default True
+            Also copy underlying data
+
+        Returns
+        -------
+        DataFrame
+
+        Difference from pandas:
+          * Support axis='columns' only.
+          * Not supporting: index, inplace, level
+        """
+        out = self.copy(deep=False)
+        out = out.set_index(self.index)
+        if index:
+            out.name = index
+
+        return out.copy(deep=copy)
+
 
 register_distributed_serializer(Series)
 

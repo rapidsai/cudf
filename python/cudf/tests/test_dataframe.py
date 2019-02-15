@@ -1729,3 +1729,13 @@ def test_dataframe_rename():
     got = gdf.rename(rename_mapper)
 
     assert_eq(expect, got)
+
+
+def test_series_rename():
+    pds = pd.Series([1, 2, 3], name='asdf')
+    gds = Series.from_pandas(pds)
+
+    expect = pds.rename('new_name')
+    got = gds.rename('new_name')
+
+    assert_eq(expect, got)
