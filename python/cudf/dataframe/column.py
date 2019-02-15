@@ -320,11 +320,8 @@ class Column(object):
             else:
                 return deep.allocate_mask()
         else:
-            shallow = Column()
-            shallow._data = self._data
-            shallow._mask = self._mask
-            shallow.has_null_mask = self.has_null_mask
-            return shallow
+            params = self._replace_defaults()
+            return type(self)(**params)
 
     def replace(self, **kwargs):
         """Replace attributes of the class and return a new Column.
