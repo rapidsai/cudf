@@ -104,6 +104,12 @@ class NumericalColumn(columnops.TypedColumnBase):
 
     def unordered_compare(self, cmpop, rhs):
         lhs, rhs = numeric_normalize_types(self, rhs)
+        if cmpop == 'eq':
+            if len(self) != len(rhs):
+                return False
+        elif cmpop == 'ne':
+            if len(self) != len(rhs):
+                return True
         return numeric_column_compare(lhs, rhs, op=_unordered_impl[cmpop])
 
     def ordered_compare(self, cmpop, rhs):
