@@ -82,6 +82,8 @@ def columnview(size, data, mask=None, dtype=None, null_count=None):
     if mask is not None:
         assert null_count is not None
     dtype = dtype or data.dtype
+    if pd.api.types.is_categorical_dtype(dtype):
+        dtype = data.dtype
     return _columnview(size=size, data=unwrap(data), mask=unwrap(mask),
                        dtype=dtype, null_count=null_count)
 
@@ -131,10 +133,7 @@ np_gdf_dict = {np.float64: libgdf.GDF_FLOAT64,
 def np_to_gdf_dtype(dtype):
     """Util to convert numpy dtype to gdf dtype.
     """
-    if pd.api.types.is_categorical_dtype(dtype):
-        return libgdf.GDF_INT8
-    else:
-        return np_gdf_dict[np.dtype(dtype).type]
+    return np_gdf_dict[np.dtype(dtype).type]
 
 
 def gdf_to_np_dtype(dtype):
@@ -424,7 +423,7 @@ class SegmentedRadixortPlan(object):
                                                    unwrap_devary(d_ends[s:]))
 
 
-def hash_columns(columns, result):
+def hash_columns(columns, result, initial_hash_values=None):
     """Hash the *columns* and store in *result*.
     Returns *result*
     """
@@ -437,7 +436,11 @@ def hash_columns(columns, result):
     col_out = result.cffi_view
     ncols = len(col_input)
     hashfn = libgdf.GDF_HASH_MURMUR3
-    libgdf.gdf_hash(ncols, col_input, hashfn, col_out)
+    if initial_hash_values is None:
+        initial_hash_values = ffi.NULL
+    else:
+        initial_hash_values = unwrap_devary(initial_hash_values)
+    libgdf.gdf_hash(ncols, col_input, hashfn, initial_hash_values, col_out)
     return result
 
 

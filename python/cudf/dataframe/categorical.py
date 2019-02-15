@@ -175,7 +175,7 @@ class CategoricalColumn(columnops.TypedColumnBase):
                     self.nullmask.mem
                 )
                 .copy_to_host()
-                .astype('int8')
+                .astype(self.data.dtype)
             )
         indices = pa.array(self.cat().codes.data.mem.copy_to_host())
         ordered = self.cat()._ordered
@@ -207,14 +207,14 @@ class CategoricalColumn(columnops.TypedColumnBase):
             ordered=self._ordered)
 
     def unique_count(self, method='sort'):
-        if method is not 'sort':
+        if method != 'sort':
             msg = 'non sort based unique_count() not implemented yet'
             raise NotImplementedError(msg)
         segs, _ = self._unique_segments()
         return len(segs)
 
     def value_counts(self, method='sort'):
-        if method is not 'sort':
+        if method != 'sort':
             msg = 'non sort based value_count() not implemented yet'
             raise NotImplementedError(msg)
         segs, sortedvals = self._unique_segments()

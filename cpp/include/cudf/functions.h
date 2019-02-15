@@ -635,6 +635,21 @@ gdf_error gdf_segmented_radixsort_generic(gdf_segmented_radixsort_plan_type *hdl
                                      unsigned *d_end_offsets);
 
 
+// transpose
+/**
+ * @brief Transposes the table in_cols and copies to out_cols
+ * 
+ * @param[in] ncols Number of columns in in_cols
+ * @param[in] in_cols[] Input table of (ncols) number of columns each of size (nrows)
+ * @param[out] out_cols[] Preallocated output_table of (nrows) columns each of size (ncols)
+ * @return gdf_error GDF_SUCCESS if successful, else appropriate error code
+ */
+gdf_error gdf_transpose(gdf_size_type ncols,
+                        gdf_column** in_cols,
+                        gdf_column** out_cols);
+
+// joins
+
 // joins
 
 /* --------------------------------------------------------------------------*/
@@ -865,21 +880,25 @@ gdf_error gdf_prefixsum_i64(gdf_column *inp, gdf_column *out, int inclusive);
 /* unary operators */
 
 /* hashing */
-
-/* --------------------------------------------------------------------------*/
-/** 
- * @brief  Computes the hash value of each row in the input set of columns.
- * 
- * @Param[in] num_cols The number of columns in the input set
- * @Param[in] input The list of columns whose rows will be hashed
- * @Param[in] hash The hash function to use
- * @Param[out] output The hash value of each row of the input
- * 
- * @Returns   GDF_SUCCESS if the operation was successful, otherwise an appropriate
- * error code
- */
-/* ----------------------------------------------------------------------------*/
-gdf_error gdf_hash(int num_cols, gdf_column **input, gdf_hash_func hash, gdf_column *output);
+/** --------------------------------------------------------------------------*
+ * @brief Computes the hash value of each row in the input set of columns.
+ *
+ * @param[in] num_cols The number of columns in the input set
+ * @param[in] input The list of columns whose rows will be hashed
+ * @param[in] hash The hash function to use
+ * @param[in] initial_hash_values Optional array in device memory specifying an initial hash value for each column
+ * that will be combined with the hash of every element in the column. If this argument is `nullptr`,
+ * then each element will be hashed as-is.
+ * @param[out] output The hash value of each row of the input
+ *
+ * @return    GDF_SUCCESS if the operation was successful, otherwise an
+ *            appropriate error code.
+ * ----------------------------------------------------------------------------**/
+gdf_error gdf_hash(int num_cols,
+                   gdf_column **input,
+                   gdf_hash_func hash,
+                   uint32_t *initial_hash_values,
+                   gdf_column *output);
 
 /* trig */
 
@@ -2526,7 +2545,7 @@ gdf_error gdf_max(gdf_column *col, void *dev_result, gdf_size_type dev_result_si
 * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
 /* ----------------------------------------------------------------------------*/
-gdf_error gpu_comparison_static_i8(gdf_column *lhs, int8_t value, gdf_column *output,gdf_comparison_operator operation);
+gdf_error gdf_comparison_static_i8(gdf_column *lhs, int8_t value, gdf_column *output,gdf_comparison_operator operation);
 
 /* --------------------------------------------------------------------------*/
 /**
@@ -2540,7 +2559,7 @@ gdf_error gpu_comparison_static_i8(gdf_column *lhs, int8_t value, gdf_column *ou
 * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
 /* ----------------------------------------------------------------------------*/
-gdf_error gpu_comparison_static_i16(gdf_column *lhs, int16_t value, gdf_column *output,gdf_comparison_operator operation);
+gdf_error gdf_comparison_static_i16(gdf_column *lhs, int16_t value, gdf_column *output,gdf_comparison_operator operation);
 
 /* --------------------------------------------------------------------------*/
 /**
@@ -2554,7 +2573,7 @@ gdf_error gpu_comparison_static_i16(gdf_column *lhs, int16_t value, gdf_column *
 * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
 /* ----------------------------------------------------------------------------*/
-gdf_error gpu_comparison_static_i32(gdf_column *lhs, int32_t value, gdf_column *output,gdf_comparison_operator operation);
+gdf_error gdf_comparison_static_i32(gdf_column *lhs, int32_t value, gdf_column *output,gdf_comparison_operator operation);
 
 /* --------------------------------------------------------------------------*/
 /**
@@ -2568,7 +2587,7 @@ gdf_error gpu_comparison_static_i32(gdf_column *lhs, int32_t value, gdf_column *
 * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
 /* ----------------------------------------------------------------------------*/
-gdf_error gpu_comparison_static_i64(gdf_column *lhs, int64_t value, gdf_column *output,gdf_comparison_operator operation);
+gdf_error gdf_comparison_static_i64(gdf_column *lhs, int64_t value, gdf_column *output,gdf_comparison_operator operation);
 
 /* --------------------------------------------------------------------------*/
 /**
@@ -2582,7 +2601,7 @@ gdf_error gpu_comparison_static_i64(gdf_column *lhs, int64_t value, gdf_column *
 * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
 /* ----------------------------------------------------------------------------*/
-gdf_error gpu_comparison_static_f32(gdf_column *lhs, float value, gdf_column *output,gdf_comparison_operator operation);
+gdf_error gdf_comparison_static_f32(gdf_column *lhs, float value, gdf_column *output,gdf_comparison_operator operation);
 
 /* --------------------------------------------------------------------------*/
 /**
@@ -2596,7 +2615,7 @@ gdf_error gpu_comparison_static_f32(gdf_column *lhs, float value, gdf_column *ou
 * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
 /* ----------------------------------------------------------------------------*/
-gdf_error gpu_comparison_static_f64(gdf_column *lhs, double value, gdf_column *output,gdf_comparison_operator operation);
+gdf_error gdf_comparison_static_f64(gdf_column *lhs, double value, gdf_column *output,gdf_comparison_operator operation);
 
 /* --------------------------------------------------------------------------*/
 /**
@@ -2610,7 +2629,7 @@ gdf_error gpu_comparison_static_f64(gdf_column *lhs, double value, gdf_column *o
 * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
 /* ----------------------------------------------------------------------------*/
-gdf_error gpu_comparison(gdf_column *lhs, gdf_column *rhs, gdf_column *output,gdf_comparison_operator operation);
+gdf_error gdf_comparison(gdf_column *lhs, gdf_column *rhs, gdf_column *output,gdf_comparison_operator operation);
 
 /* --------------------------------------------------------------------------*/
 /**
@@ -2623,7 +2642,7 @@ gdf_error gpu_comparison(gdf_column *lhs, gdf_column *rhs, gdf_column *output,gd
 * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
 /* ----------------------------------------------------------------------------*/
-gdf_error gpu_apply_stencil(gdf_column *lhs, gdf_column * stencil, gdf_column * output);
+gdf_error gdf_apply_stencil(gdf_column *lhs, gdf_column * stencil, gdf_column * output);
 
 /* --------------------------------------------------------------------------*/
 /**
@@ -2636,7 +2655,7 @@ gdf_error gpu_apply_stencil(gdf_column *lhs, gdf_column * stencil, gdf_column * 
 * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
 /* ----------------------------------------------------------------------------*/
-gdf_error gpu_concat(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
+gdf_error gdf_concat(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
 
 
 /*
@@ -2655,7 +2674,7 @@ gdf_error gpu_concat(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
 * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
 /* ----------------------------------------------------------------------------*/
-gdf_error gpu_hash_columns(gdf_column ** columns_to_hash, int num_columns, gdf_column * output_column, void * stream);
+gdf_error gdf_hash_columns(gdf_column ** columns_to_hash, int num_columns, gdf_column * output_column, void * stream);
 
 
 /*
@@ -2890,3 +2909,30 @@ gdf_error gdf_order_by(gdf_column** input_columns,
                        size_t       num_inputs,
                        gdf_column*  output_indices,
                        int          flag_nulls_are_smallest);
+
+/* --------------------------------------------------------------------------*
+ * @brief Finds the indices of the bins in which each value of the column
+ * belongs.
+ *
+ * For `x` in `col`, if `right == false` this function finds
+ * `i` such that `bins[i-1] <= x < bins[i]`. If `right == true`, it will find `i`
+ * such that `bins[i - 1] < x <= bins[i]`. Finally, if `x < bins[0]` or
+ * `x > bins[num_bins - 1]`, it sets the index to `0` or `num_bins`, respectively.
+ *
+ * NOTE: This function does not handle null values and will return an error if `col`
+ * or `bins` contain any.
+ *
+ * @param[in] col gdf_column with the values to be binned
+ * @param[in] bins gdf_column of ascending bin boundaries
+ * @param[in] right Whether the intervals should include the left or right bin edge
+ * @param[out] out_indices Output device array of same size as `col`
+ * to be filled with bin indices
+ *
+ * @return GDF_SUCCESS upon successful completion, otherwise an
+ *         appropriate error code.
+ *
+ * ----------------------------------------------------------------------------*/
+gdf_error gdf_digitize(gdf_column* col,
+                       gdf_column* bins,   // same type as col
+                       bool right,
+                       gdf_index_type out_indices[]);
