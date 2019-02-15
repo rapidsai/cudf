@@ -183,14 +183,12 @@ def test_series_nunique(nan_as_null, dropna):
     nan = np.dtype('float64').type(np.nan)
     pd_series = pd.Series([1.0, 2.0, 3.0, -1.0, nan])
     cudf_series = Series([1.0, 2.0, 3.0, nan, None], nan_as_null=nan_as_null)
-    print(f'CUDF:\n{cudf_series}\n\nPandas:\n{pd_series}\n')
     expect = pd_series.nunique(dropna=dropna)
     got = cudf_series.nunique(dropna=dropna)
     assert expect == got
 
     pd_series = pd.Series([1.0, -1, 2.0, 3.0])
     cudf_series = Series([1.0, nan, 2.0, 3.0], nan_as_null=nan_as_null)
-    print(f'CUDF:\n{cudf_series}\n\nPandas:\n{pd_series}\n')
     expect = pd_series.nunique(dropna=dropna)
     got = cudf_series.nunique(dropna=dropna)
     assert expect == got
