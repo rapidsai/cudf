@@ -1272,26 +1272,24 @@ class Series(object):
 
     def rename(self, index=None, copy=True):
         """
-        Alter column labels.
+        Alter Series name.
 
-        Function / dict values must be unique (1-to-1). Labels not contained in
-        a dict / Series will be left as-is. Extra labels listed don’t throw an
-        error.
+        Change Series.name with a scalar value.
 
         Parameters
         ----------
         index : Scalar, optional
-            Scalar to alter the Series.name attribute.
+            Scalar to alter the Series.name attribute
         copy : boolean, default True
             Also copy underlying data
 
         Returns
         -------
-        DataFrame
+        Series
 
         Difference from pandas:
-          * Support axis='columns' only.
-          * Not supporting: index, inplace, level
+          * Supports scalar values only for changing name attribute
+          * Not supporting: inplace, level
         """
         out = self.copy(deep=False)
         out = out.set_index(self.index)

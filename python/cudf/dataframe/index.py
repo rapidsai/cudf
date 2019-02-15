@@ -139,6 +139,29 @@ class Index(object):
         else:
             return column_join_res
 
+    def rename(self, name):
+        """
+        Alter Index name.
+
+        Defaults to returning new index.
+
+        Parameters
+        ----------
+        name : label
+            Name(s) to set.
+
+        Returns
+        -------
+        Index
+
+        Difference from pandas:
+          * Not supporting: inplace
+        """
+        out = self.copy(deep=False)
+        out.name = name
+
+        return out.copy(deep=True)
+
 
 class RangeIndex(Index):
     """An iterable integer index defined by a starting value and ending value.
