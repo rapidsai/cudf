@@ -7,8 +7,8 @@ import numpy as np
 from libgdf_cffi import ffi, libgdf
 from librmm_cffi import librmm as rmm
 
-from .utils import (new_column, unwrap_devary, get_dtype, gen_rand)
-
+from .utils import (new_column, unwrap_devary, get_dtype, gen_rand,
+                    buffer_as_bits)
 
 params_dtype = [
     np.int8,
@@ -60,4 +60,49 @@ def test_prefixsum(dtype, nelem):
 
     decimal = 4 if dtype == np.float32 else 6
     np.testing.assert_array_almost_equal(expect, got, decimal=decimal)
+
+
+
+@pytest.mark.parametrize('dtype,nelem', list(_gen_params()))
+def test_prefixsum_masked(dtype, nelem):
+    if dtype == np.int8:
+        data = gen_rand(dtype, nelem, low=-2, high=2)
+    else:
+        data = gen_rand(dtype, nelem)
+    mask = gen_rand(np.int8, (nelem + 8 - 1) // 8)
+    dummy_mask = gen_rand(np.int8, (nelem + 8 - 1) // 8)
+
+    d_data = rmm.to_device(data)
+    d_mask = rmm.to_device(mask)
+
+    d_result = rmm.device_array(d_data.size, dtype=d_data.dtype)
+    d_result_mask = rmm.to_device(dummy_mask)
+
+    col_data = new_column()
+    gdf_dtype = get_dtype(dtype)
+    libgdf.gdf_column_view(col_data, unwrap_devary(d_data), 
+                           unwrap_devary(d_mask), nelem, gdf_dtype)
+
+    col_result = new_column()
+    libgdf.gdf_column_view(col_result, unwrap_devary(d_result),
+                           unwrap_devary(d_result_mask), nelem, gdf_dtype)
+
+    inclusive = True
+    libgdf.gdf_prefixsum(col_data, col_result, inclusive)
+
+    boolmask = buffer_as_bits(mask)[:nelem]
+    expect = np.cumsum(data[boolmask])
+
+    expect = np.cumsum(d_data.copy_to_host())
+    got = d_result.copy_to_host()
+    if not inclusive:
+        expect = expect[:-1]
+        assert got[0] == 0
+        got = got[1:]
+
+    decimal = 4 if dtype == np.float32 else 6
+    np.testing.assert_array_almost_equal(expect, got, decimal=decimal)
+
+
+
 
