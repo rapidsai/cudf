@@ -34,14 +34,6 @@ namespace jit {
             case GDF_DATE64:
             case GDF_TIMESTAMP:
                 return "int64_t";
-            case GDF_UINT8:
-                return "uint8_t";
-            case GDF_UINT16:
-                return "uint16_t";
-            case GDF_UINT32:
-                return "uint32_t";
-            case GDF_UINT64:
-                return "uint64_t";
             case GDF_FLOAT32:
                 return "float";
             case GDF_FLOAT64:

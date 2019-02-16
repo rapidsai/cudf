@@ -27,10 +27,6 @@ typedef enum {
     GDF_TIMESTAMP,	/**< Exact timestamp encoded with int64 since UNIX epoch (Default unit millisecond) */
     GDF_CATEGORY,
     GDF_STRING,
-    GDF_UINT8,
-    GDF_UINT16,
-    GDF_UINT32,
-    GDF_UINT64,
     N_GDF_TYPES, 	/* additional types should go BEFORE N_GDF_TYPES */
 } gdf_dtype;
 
@@ -185,9 +181,6 @@ typedef enum {
  * - gdf_binary_operation_v_s_v
  * - gdf_binary_operation_v_v_s
  * - gdf_binary_operation_v_v_v
- * - gdf_binary_operation_v_s_v_d
- * - gdf_binary_operation_v_v_s_d
- * - gdf_binary_operation_v_v_v_d
  */
 typedef enum {
     GDF_ADD,
