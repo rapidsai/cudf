@@ -189,6 +189,28 @@ cdef extern from "cudf.h" nogil:
         GDF_WINDOW_VA
 
 
+    ctypedef enum gdf_binary_operator:
+        GDF_ADD,
+        GDF_SUB,
+        GDF_MUL,
+        GDF_DIV,
+        GDF_TRUE_DIV,
+        GDF_FLOOR_DIV,
+        GDF_MOD,
+        GDF_POW,
+        GDF_EQUAL,
+        GDF_NOT_EQUAL,
+        GDF_LESS,
+        GDF_GREATER,
+        GDF_LESS_EQUAL,
+        GDF_GREATER_EQUAL
+
+
+    ctypedef struct gdf_scalar:
+        void *data
+        gdf_dtype dtype
+
+
     cdef gdf_error gdf_nvtx_range_push(char  *  name, gdf_color color )
 
     cdef gdf_error gdf_nvtx_range_push_hex(char * name, unsigned int color )
@@ -487,6 +509,10 @@ cdef extern from "cudf.h" nogil:
     cdef gdf_error gdf_extract_datetime_hour(gdf_column *input, gdf_column *output)
     cdef gdf_error gdf_extract_datetime_minute(gdf_column *input, gdf_column *output)
     cdef gdf_error gdf_extract_datetime_second(gdf_column *input, gdf_column *output)
+
+    cdef gdf_error gdf_binary_operation_s_v(gdf_column* out, gdf_scalar* vax, gdf_column* vay, gdf_binary_operator ope)
+    cdef gdf_error gdf_binary_operation_v_s(gdf_column* out, gdf_column* vax, gdf_scalar* vay, gdf_binary_operator ope)
+    cdef gdf_error gdf_binary_operation_v_v(gdf_column* out, gdf_column* vax, gdf_column* vay, gdf_binary_operator ope)
 
     cdef gdf_error gdf_add_generic(gdf_column *lhs, gdf_column *rhs, gdf_column *output)
     cdef gdf_error gdf_add_i32(gdf_column *lhs, gdf_column *rhs, gdf_column *output)
