@@ -43,9 +43,10 @@ R"***(
         for (int i=start; i<size; i+=step) {
             out_data[i] = TypeOpe::template operate<TypeOut, TypeVax, TypeVay>(vax_data[i], vay_data[0]);
 
-            if ((i % warpSize) == 0) {
+            if ((out_valid != nullptr) && (i % warpSize) == 0) {
                 int index = i / warpSize;
-                out_valid[index] = vax_valid[index];
+                uint32_t vax_valid_word = (vax_valid != nullptr) ? vax_valid[index] : 0xffffffff;
+                out_valid[index] = vax_valid_word;
             }
         }
     }
@@ -66,9 +67,11 @@ R"***(
         for (int i=start; i<size; i+=step) {
             out_data[i] = TypeOpe::template operate<TypeOut, TypeVax, TypeVay>(vax_data[i], vay_data[i]);
 
-            if ((i % warpSize) == 0) {
+            if ((out_valid != nullptr) && (i % warpSize) == 0) {
                 int index = i / warpSize;
-                out_valid[index] = vax_valid[index] & vay_valid[index];
+                uint32_t vax_valid_word = (vax_valid != nullptr) ? vax_valid[index] : 0xffffffff;
+                uint32_t vay_valid_word = (vay_valid != nullptr) ? vay_valid[index] : 0xffffffff;
+                out_valid[index] = vax_valid_word & vay_valid_word;
             }
         }
     }
