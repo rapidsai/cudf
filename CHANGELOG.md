@@ -37,6 +37,7 @@
 - PR #941 Replace `numpy` call in `Series.hash_encode` with `numba`
 - PR #943 Updated `count_nonzero_mask` to return `num_rows` when the mask is null
 - PR #942 Added increment/decrement operators for wrapper types
+- PR #966 Updated RMM submodule.
 
 ## Bug Fixes
 
