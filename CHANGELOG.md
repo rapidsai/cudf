@@ -57,10 +57,11 @@
 - PR #927 CSV Reader: Fix category GDF_CATEGORY hashes not being computed properly
 - PR #921 CSV Reader: Fix parsing errors with delim_whitespace, quotations in the header row, unnamed columns
 - PR #933 Fix handling objects of all nulls in series creation
-- PR #940 CSV Reader: fix an issue where the last data row is missing when using byte_range
+- PR #940 CSV Reader: Fix an issue where the last data row is missing when using byte_range
 - PR #945 CSV Reader: Fix incorrect datetime64 when milliseconds or space separator are used
 - PR #959 Groupby: Problem with column name lookup
 - PR #950 Converting dataframe/recarry with non-contiguous arrays
+- PR #963 CSV Reader: Fix another issue with missing data rows when using byte_range
 
 # cuDF 0.5.1 (05 Feb 2019)
 
