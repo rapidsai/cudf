@@ -1297,6 +1297,34 @@ class Series(object):
         import cudf.io.hdf as hdf
         hdf.to_hdf(path_or_buf, key, self, *args, **kwargs)
 
+    def rename(self, index=None, copy=True):
+        """
+        Alter Series name.
+
+        Change Series.name with a scalar value.
+
+        Parameters
+        ----------
+        index : Scalar, optional
+            Scalar to alter the Series.name attribute
+        copy : boolean, default True
+            Also copy underlying data
+
+        Returns
+        -------
+        Series
+
+        Difference from pandas:
+          * Supports scalar values only for changing name attribute
+          * Not supporting: inplace, level
+        """
+        out = self.copy(deep=False)
+        out = out.set_index(self.index)
+        if index:
+            out.name = index
+
+        return out.copy(deep=copy)
+
 
 register_distributed_serializer(Series)
 

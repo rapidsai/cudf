@@ -18,6 +18,7 @@
 - PR #939 Add ORC reader from PyArrow
 - PR #918 Add Series.groupby(level=0) support
 - PR #906 Add binary and comparison ops to DataFrame
+- PR #964 Add `rename` method to `DataFrame`, `Series`, and `Index`
 
 ## Improvements
 

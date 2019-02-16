@@ -1715,6 +1715,32 @@ def test_series_all_null(num_elements, null_type):
     assert_eq(expect, got)
 
 
+def test_dataframe_rename():
+    pdf = pd.DataFrame({'a': [1, 2, 3], 'b': [4, 5, 6], 'c': [7, 8, 9]})
+    gdf = DataFrame.from_pandas(pdf)
+
+    expect = pdf.rename(columns=lambda name: 2 * name)
+    got = gdf.rename(columns=lambda name: 2 * name)
+
+    assert_eq(expect, got)
+
+    rename_mapper = {'a': 'z', 'b': 'y', 'c': 'x'}
+    expect = pdf.rename(columns=rename_mapper)
+    got = gdf.rename(columns=rename_mapper)
+
+    assert_eq(expect, got)
+
+
+def test_series_rename():
+    pds = pd.Series([1, 2, 3], name='asdf')
+    gds = Series.from_pandas(pds)
+
+    expect = pds.rename('new_name')
+    got = gds.rename('new_name')
+
+    assert_eq(expect, got)
+
+
 @pytest.mark.parametrize(
     'data_type',
     ['bool', 'int8', 'int16', 'int32', 'int64',

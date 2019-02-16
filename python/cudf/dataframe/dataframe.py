@@ -5,7 +5,7 @@ from __future__ import print_function, division
 import inspect
 import random
 from collections import OrderedDict
-from collections.abc import Sequence
+from collections.abc import Sequence, Mapping
 import logging
 import warnings
 import numbers
@@ -866,6 +866,49 @@ class DataFrame(object):
         if name not in self._cols:
             raise NameError('column {!r} does not exist'.format(name))
         del self._cols[name]
+
+    def rename(self, mapper=None, columns=None, copy=True):
+        """
+        Alter column labels.
+
+        Function / dict values must be unique (1-to-1). Labels not contained in
+        a dict / Series will be left as-is. Extra labels listed don’t throw an
+        error.
+
+        Parameters
+        ----------
+        mapper, columns : dict-like or function, optional
+            dict-like or functions transformations to apply to
+            the column axis' values.
+        copy : boolean, default True
+            Also copy underlying data
+
+        Returns
+        -------
+        DataFrame
+
+        Difference from pandas:
+          * Support axis='columns' only.
+          * Not supporting: index, inplace, level
+        """
+        # Pandas defaults to using columns over mapper
+        if columns:
+            mapper = columns
+
+        out = DataFrame()
+        out = out.set_index(self.index)
+
+        if isinstance(mapper, Mapping):
+            for column in self.columns:
+                if column in mapper:
+                    out[mapper[column]] = self[column]
+                else:
+                    out[column] = self[column]
+        elif callable(mapper):
+            for column in self.columns:
+                out[mapper(column)] = self[column]
+
+        return out.copy(deep=copy)
 
     @classmethod
     def _concat(cls, objs, ignore_index=False):
