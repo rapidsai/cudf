@@ -121,7 +121,7 @@ class Index(object):
         from cudf.dataframe.series import Series
         idx_series = Series(self)
         op = getattr(idx_series, fn)
-        if other:
+        if other is not None:
             return as_index(op(other))
         else:
             return as_index(op())
