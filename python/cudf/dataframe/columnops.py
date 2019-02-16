@@ -219,6 +219,9 @@ def as_column(arbitrary, nan_as_null=True, dtype=None):
         data = as_column(out_dev_array)
 
     elif isinstance(arbitrary, np.ndarray):
+        # CUDF assumes values are always contiguous
+        if not arbitrary.flags['C_CONTIGUOUS']:
+            arbitrary = np.ascontiguousarray(arbitrary)
         if arbitrary.dtype.kind == 'M':
             data = datetime.DatetimeColumn.from_numpy(arbitrary)
         elif arbitrary.dtype.kind in ('O', 'U'):
@@ -298,7 +301,17 @@ def as_column(arbitrary, nan_as_null=True, dtype=None):
     elif isinstance(arbitrary, pa.ChunkedArray):
         gpu_cols = [as_column(chunk, dtype=dtype) for chunk in
                     arbitrary.chunks]
-        data = Column._concat(gpu_cols)
+
+        if dtype and dtype != 'empty':
+            new_dtype = dtype
+        else:
+            pa_type = arbitrary.type
+            if pa.types.is_dictionary(pa_type):
+                new_dtype = 'category'
+            else:
+                new_dtype = np.dtype(pa_type.to_pandas_dtype())
+
+        data = Column._concat(gpu_cols, dtype=new_dtype)
 
     elif isinstance(arbitrary, (pd.Series, pd.Categorical)):
         if pd.api.types.is_categorical_dtype(arbitrary):
@@ -327,7 +340,10 @@ def as_column(arbitrary, nan_as_null=True, dtype=None):
         try:
             data = as_column(memoryview(arbitrary))
         except TypeError:
-            data = as_column(pa.array(arbitrary))
+            try:
+                data = as_column(pa.array(arbitrary))
+            except pa.ArrowInvalid:
+                data = as_column(np.array(arbitrary))
 
     return data
 

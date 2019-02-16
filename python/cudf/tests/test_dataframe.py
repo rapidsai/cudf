@@ -1684,6 +1684,17 @@ def test_series_digitize(num_rows, num_bins, right, dtype):
                                   indices.to_array())
 
 
+def test_pandas_non_contiguious():
+    arr1 = np.random.sample([5000, 10])
+    assert arr1.flags['C_CONTIGUOUS'] is True
+    df = pd.DataFrame(arr1)
+    for col in df.columns:
+        assert df[col].values.flags['C_CONTIGUOUS'] is False
+
+    gdf = gd.DataFrame.from_pandas(df)
+    assert_eq(gdf.to_pandas(), df)
+
+
 @pytest.mark.parametrize('num_elements', [0, 2, 10, 100])
 @pytest.mark.parametrize('null_type', [np.nan, None, 'mixed'])
 def test_series_all_null(num_elements, null_type):
@@ -1702,3 +1713,76 @@ def test_series_all_null(num_elements, null_type):
     got = Series(data)
 
     assert_eq(expect, got)
+
+
+def test_dataframe_rename():
+    pdf = pd.DataFrame({'a': [1, 2, 3], 'b': [4, 5, 6], 'c': [7, 8, 9]})
+    gdf = DataFrame.from_pandas(pdf)
+
+    expect = pdf.rename(columns=lambda name: 2 * name)
+    got = gdf.rename(columns=lambda name: 2 * name)
+
+    assert_eq(expect, got)
+
+    rename_mapper = {'a': 'z', 'b': 'y', 'c': 'x'}
+    expect = pdf.rename(columns=rename_mapper)
+    got = gdf.rename(columns=rename_mapper)
+
+    assert_eq(expect, got)
+
+
+def test_series_rename():
+    pds = pd.Series([1, 2, 3], name='asdf')
+    gds = Series.from_pandas(pds)
+
+    expect = pds.rename('new_name')
+    got = gds.rename('new_name')
+
+    assert_eq(expect, got)
+
+
+@pytest.mark.parametrize(
+    'data_type',
+    ['bool', 'int8', 'int16', 'int32', 'int64',
+     'float32', 'float64', 'datetime64[ms]']
+)
+@pytest.mark.parametrize('nelem', [0, 100])
+def test_head_tail(nelem, data_type):
+
+    def check_index_equality(left, right):
+        assert left.index == right.index
+
+    def check_values_equality(left, right):
+        if len(left) == 0 and len(right) == 0:
+            return None
+
+        np.testing.assert_array_equal(left.to_pandas(), right.to_pandas())
+
+    def check_frame_series_equality(left, right):
+        check_index_equality(left, right)
+        check_values_equality(left, right)
+
+    gdf = gd.DataFrame(
+        {
+            'a': np.random.randint(0, 1000, nelem).astype(data_type),
+            'b': np.random.randint(0, 1000, nelem).astype(data_type)
+        }
+    )
+
+    check_frame_series_equality(gdf.head(), gdf[:5])
+    check_frame_series_equality(gdf.head(3), gdf[:3])
+    check_frame_series_equality(gdf.head(-2), gdf[:-2])
+    check_frame_series_equality(gdf.head(0), gdf[0:0])
+
+    check_frame_series_equality(gdf['a'].head(), gdf['a'][:5])
+    check_frame_series_equality(gdf['a'].head(3), gdf['a'][:3])
+    check_frame_series_equality(gdf['a'].head(-2), gdf['a'][:-2])
+
+    check_frame_series_equality(gdf.tail(), gdf[-5:])
+    check_frame_series_equality(gdf.tail(3), gdf[-3:])
+    check_frame_series_equality(gdf.tail(-2), gdf[2:])
+    check_frame_series_equality(gdf.tail(0), gdf[0:0])
+
+    check_frame_series_equality(gdf['a'].tail(), gdf['a'][-5:])
+    check_frame_series_equality(gdf['a'].tail(3), gdf['a'][-3:])
+    check_frame_series_equality(gdf['a'].tail(-2), gdf['a'][2:])
