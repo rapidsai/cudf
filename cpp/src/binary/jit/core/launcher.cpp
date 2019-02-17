@@ -23,7 +23,11 @@ namespace gdf {
 namespace binops {
 namespace jit {
 
+#ifdef JITIFY_THREAD_SAFE
+    static jitify::JitCache JitCache;
+#else
     static thread_local jitify::JitCache JitCache;
+#endif
 
     std::istream* headersCode(std::string filename, std::iostream& stream) {
         if (filename == "operation.h") {

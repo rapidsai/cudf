@@ -236,6 +236,12 @@ if(HT_LEGACY_ALLOCATOR)
     set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} --define-macro HT_LEGACY_ALLOCATOR")
 endif(HT_LEGACY_ALLOCATOR)
 
+option(JITIFY_THREAD_SAFE "Use a global cache for JIT compiled kernels" ON)
+if(JITIFY_THREAD_SAFE)
+    message(STATUS "Using global cache for JIT compiled kernels")
+    set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} --define-macro JITIFY_THREAD_SAFE")
+endif(JITIFY_THREAD_SAFE)
+
 
 ###################################################################################################
 # - link libraries --------------------------------------------------------------------------------
