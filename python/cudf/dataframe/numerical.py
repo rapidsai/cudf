@@ -396,8 +396,11 @@ def numeric_column_binop(lhs, rhs, op, out_dtype):
     if lhs.dtype != rhs.dtype:
         # Use JIT implementation
         cpp_binops.apply_op(lhs=lhs, rhs=rhs, out=out, op=op)
-        nnz = _gdf.count_nonzero_mask(out.mask.mem, size=len(out))
-        null_count = len(out) - nnz
+        if masked:
+            nnz = _gdf.count_nonzero_mask(out.mask.mem, size=len(out))
+            null_count = len(out) - nnz
+        else:
+            null_count = 0
     else:
         # Use compiled implementation
         null_count = _gdf.apply_binaryop(_binary_impl[op], lhs, rhs, out)
