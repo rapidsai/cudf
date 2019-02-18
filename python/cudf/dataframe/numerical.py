@@ -393,7 +393,7 @@ def numeric_column_binop(lhs, rhs, op, out_dtype):
     masked = lhs.has_null_mask or rhs.has_null_mask
     out = columnops.column_empty_like(lhs, dtype=out_dtype, masked=masked)
     # Call and fix null_count
-    if lhs.dtype != rhs.dtype:
+    if lhs.dtype != rhs.dtype or op not in _binary_impl:
         # Use JIT implementation
         cpp_binops.apply_op(lhs=lhs, rhs=rhs, out=out, op=op)
         if masked:

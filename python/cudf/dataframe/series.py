@@ -368,11 +368,14 @@ class Series(object):
     def __rmul__(self, other):
         return self._rbinaryop(other, 'mul')
 
+    def __mod__(self, other):
+        return self._binaryop(other, 'mod')
+
+    def __rmod__(self, other):
+        return self._rbinaryop(other, 'mod')
+
     def __pow__(self, other):
-        if other == 2:
-            return self * self
-        else:
-            return NotImplemented
+        return self._binaryop(other, 'pow')
 
     def __floordiv__(self, other):
         return self._binaryop(other, 'floordiv')
