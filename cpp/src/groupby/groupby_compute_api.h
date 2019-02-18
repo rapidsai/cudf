@@ -218,7 +218,7 @@ gdf_error GroupbyHash(gdf_table<size_type> const & groupby_input_table,
         return status;
 
       gdf_context ctxt;
-      ctxt.flag_nulls_sort_behavior = 0;
+      ctxt.flag_nulls_sort_behavior = GDF_NULL_AS_LARGEST;
       status = gdf_order_by(groupby_output_table.get_columns(),             //input columns
                        nullptr,
                        groupby_output_table.get_num_columns(),                //number of columns in the first parameter (e.g. number of columsn to sort by)

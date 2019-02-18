@@ -108,11 +108,11 @@ struct GroupByWoAggTest : public GdfTest {
     std::srand(number_of_instantiations++);
 
     if (this->group_output_type == GroupByOutType::SQL) {
-      ctxt.flag_groupby_include_nulls = 1;
-      ctxt.flag_nulls_sort_behavior = 0;
+      ctxt.flag_groupby_include_nulls = GDF_SQL_STYLE;
+      ctxt.flag_nulls_sort_behavior = GDF_NULL_AS_LARGEST;
     } else {
-      ctxt.flag_groupby_include_nulls = 0;
-      ctxt.flag_nulls_sort_behavior = 0;
+      ctxt.flag_groupby_include_nulls = GDF_PANDAS_STYLE;
+      ctxt.flag_nulls_sort_behavior = GDF_NULL_AS_LARGEST;
     }
   }
 
@@ -319,7 +319,7 @@ struct GroupByWoAggTest : public GdfTest {
     for (size_t i = 0; i < this->gdf_raw_input_key_columns.size(); i++) 
       groupby_col_indices.push_back(i);
 
-    error = gdf_group_by_wo_aggregations(num_columns, 
+    error = gdf_group_by_without_aggregations(num_columns, 
                                         group_by_input_key,
                                         num_columns,
                                         groupby_col_indices.data(),
@@ -688,7 +688,7 @@ struct GroupValidTest : public GroupByWoAggTest<test_parameters>
     for (size_t i = 0; i < this->gdf_raw_input_key_columns.size(); i++) 
       groupby_col_indices.push_back(i);
 
-    error = gdf_group_by_wo_aggregations(num_columns, 
+    error = gdf_group_by_without_aggregations(num_columns, 
                                         group_by_input_key,
                                         num_columns,
                                         groupby_col_indices.data(),
