@@ -92,7 +92,7 @@ struct NVCategoryTest : public GdfTest
 		EXPECT_EQ(RMM_ALLOC(&data, num_rows * sizeof(gdf_nvstring_category) , 0), RMM_SUCCESS);
 
 
-		category->get_values( (unsigned int *)data, true );
+		category->get_values( (int *)data, true );
 		bit_mask::bit_mask_t * valid;
 		bit_mask::create_bit_mask(&valid, num_rows,1);
 
@@ -280,7 +280,7 @@ TEST_F(NVCategoryTest, TEST_NVCATEGORY_COMPARISON)
 	unsigned int * indices;
 	EXPECT_EQ(RMM_ALLOC(&indices, sizeof(unsigned int) * new_category->size()  , 0), RMM_SUCCESS);
 	//now reset data
-	new_category->get_values(indices,true);
+	new_category->get_values((int*)indices,true);
 
 	cudaMemcpy(column_left->data,indices,sizeof(unsigned int) * column_left->size,cudaMemcpyDeviceToDevice);
 	cudaMemcpy(column_right->data,indices + column_left->size,sizeof(unsigned int) * column_right->size,cudaMemcpyDeviceToDevice);

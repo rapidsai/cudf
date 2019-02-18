@@ -102,10 +102,15 @@ gdf_error combine_column_categories(gdf_column * input_columns[],gdf_column * ou
 		return GDF_DATASET_EMPTY;
 	}
 	gdf_size_type total_count;
+
 	gdf_error err = validate_categories(input_columns,num_columns,total_count);
-	gdf_error err = validate_categories(output_columns,num_columns,total_count);
+	if(err != GDF_SUCCESS) return err;
+
+	err = validate_categories(output_columns,num_columns,total_count);
+	if(err != GDF_SUCCESS) return err;
+
 	for(int column_index = 0; column_index < num_columns; column_index++){
-		if(input_columns[i].size != output_columns[i].size){
+		if(input_columns[column_index]->size != output_columns[column_index]->size){
 			return GDF_COLUMN_SIZE_MISMATCH;
 		}
 	}
@@ -113,7 +118,7 @@ gdf_error combine_column_categories(gdf_column * input_columns[],gdf_column * ou
 	std::vector<NVStrings*> input_strings(num_columns);
 	//We have to make a big kahuna nvstrings to store this basically then generate the category from there
 	for(int column_index = 0; column_index < num_columns; column_index++){
-		input_strings[column_index] = input_columns[i]->dtype_info.category->to_strings();
+		input_strings[column_index] = input_columns[column_index]->dtype_info.category->to_strings();
 		if(output_columns[column_index]->dtype_info.category != nullptr){
 			NVCategory::destroy(output_columns[column_index]->dtype_info.category);
 		}
@@ -121,15 +126,15 @@ gdf_error combine_column_categories(gdf_column * input_columns[],gdf_column * ou
 
 	//using ull because bytes can be bigger thann gdf_size_type
 	size_t start_position = 0;
-	NVCategory * new_category = NVCategory::create_from_strings(strings);
+	NVCategory * new_category = NVCategory::create_from_strings(input_strings);
 	for(int column_index = 0; column_index < num_columns; column_index++){
 		//clean up the temporary strings
-		NVStrings::destroy(strings[column_index]);
+		NVStrings::destroy(input_strings[column_index]);
 	}
 	std::vector<cudaError_t> cuda_err(num_columns);
 	for(int column_index = 0; column_index < num_columns; column_index++){
 		output_columns[column_index]->dtype_info.category = new_category;
-		size_t size_to_copy = sizeof(nv_category_index_type) * input_columns[column_index].size;
+		size_t size_to_copy = sizeof(nv_category_index_type) * input_columns[column_index]->size;
 		cuda_err[column_index] = cudaMemcpyAsync(output_columns[column_index]->data,
 				output_columns[column_index]->dtype_info.category->values_cptr() + start_position,
 				size_to_copy,
