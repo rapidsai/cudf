@@ -382,20 +382,21 @@ gdf_error gdf_hash_partition(int num_input_cols,
 
 /* --------------------------------------------------------------------------*/
 /** 
- * @brief Computes the prefix sum of a column
+ * @Synopsis  Computes the prefix sum of a column
  * 
  * @Param[in] inp Input column for prefix sum with null_count = 0
  * @Param[out] out The output column containing the prefix sum of the input
- * @Param inclusive[in] Flag for applying an inclusive prefix sum if non-zero,
- * an exclusive prefix sum if 0.
+ * @Param[in] inclusive Flag for applying an inclusive prefix sum if true,
+ * an exclusive prefix sum if false.
+ * @Param[in] skipna Flag for excluding null values if true.
  * 
  * @Returns   GDF_SUCCESS if the operation was successful,
- * otherwise an appropriate error code. 
- * GDF_VALIDITY_UNSUPPORTED if inp->null_count is not set to 0.
+ * otherwise an appropriate error code.
  * GDF_UNSUPPORTED_DTYPE if inp->dtype is not an arithmetic type.
  */
 /* ----------------------------------------------------------------------------*/
-gdf_error gdf_prefixsum(gdf_column *inp, gdf_column *out, int inclusive);
+gdf_error gdf_prefixsum(gdf_column *inp, gdf_column *out,
+                        bool inclusive, bool skipna);
 
 /* unary operators */
 

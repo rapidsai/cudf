@@ -350,7 +350,7 @@ cdef extern from "cudf.h" nogil:
                                  int partition_offsets[],
                                  gdf_hash_func hash)
 
-    cdef gdf_error gdf_prefixsum(gdf_column *inp, gdf_column *out, int inclusive)
+    cdef gdf_error gdf_prefixsum(gdf_column *inp, gdf_column *out, int inclusive, int skipna)
 
     cdef gdf_error gdf_hash(int num_cols, gdf_column **input, gdf_hash_func hash, gdf_column *output)
 
