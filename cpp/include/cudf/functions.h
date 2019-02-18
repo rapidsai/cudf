@@ -989,8 +989,7 @@ gdf_error gdf_order_by(gdf_column** input_columns,
  * --------------------------------------------------------------------------*/
 gdf_error gdf_replace_nulls(gdf_column*       col_out,
                                    const gdf_column* col_in);
-
-                                   const gdf_column* col_in);/* --------------------------------------------------------------------------*
+/* --------------------------------------------------------------------------*
  * @brief Finds the indices of the bins in which each value of the column
  * belongs.
  *
