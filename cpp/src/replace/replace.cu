@@ -136,6 +136,8 @@ gdf_error gdf_find_and_replace_all(gdf_column*       col,
   return find_and_replace_all(col, old_values, new_values);
 }
 
+namespace{ //anonymous
+
 template <typename Type>
 __global__
 void replace_nulls_with_scalar(gdf_size_type size, Type* out_data, gdf_valid_type * out_valid, const Type *in_data_scalar) 
@@ -171,6 +173,7 @@ void replace_nulls_with_column(gdf_size_type size, Type* out_data, gdf_valid_typ
   }
 }
 
+
 /* --------------------------------------------------------------------------*/
 /** 
  * @brief Functor called by the `type_dispatcher` in order to invoke and instantiate
@@ -203,18 +206,23 @@ struct replace_nulls_kernel_forwarder {
   }
 };
 
+} //end anonymous namespace
 
 gdf_error gdf_replace_nulls(gdf_column* col_out, const gdf_column* new_values_column)
 {
   GDF_REQUIRE(col_out->dtype == new_values_column->dtype, GDF_DTYPE_MISMATCH);
   GDF_REQUIRE(new_values_column->size == 1 || new_values_column->size == col_out->size, GDF_COLUMN_SIZE_MISMATCH);
+   
+  GDF_REQUIRE(nullptr != new_values_column->data, GDF_DATASET_EMPTY);
+  GDF_REQUIRE(nullptr != col_out->data, GDF_DATASET_EMPTY);
+  GDF_REQUIRE(nullptr == new_values_column->valid || 0 == new_values_column->null_count, GDF_VALIDITY_UNSUPPORTED);
 
-    cudf::type_dispatcher(col_out->dtype, replace_nulls_kernel_forwarder{},
-                          col_out->size,
-                          new_values_column->size,
-                          col_out->data,
-                          col_out->valid,
-                          new_values_column->data);
+  cudf::type_dispatcher(col_out->dtype, replace_nulls_kernel_forwarder{},
+                        col_out->size,
+                        new_values_column->size,
+                        col_out->data,
+                        col_out->valid,
+                        new_values_column->data);
   return GDF_SUCCESS;
 }
 
