@@ -8,7 +8,7 @@ import pandas as pd
 
 from cudf.dataframe import DataFrame
 from cudf.dataframe import Series
-from .utils import assert_eq
+from cudf.tests.utils import assert_eq
 
 
 def make_frame(dataframe_class, nelem, seed=0, extra_levels=(), extra_vals=()):
@@ -335,3 +335,23 @@ def test_groupby_series_level_zero(agg):
     pdresult = getattr(pdg, agg)()
     gdresult = getattr(gdg, agg)()
     assert_eq(pdresult, gdresult)
+
+
+def test_groupby_column_name():
+    pdf = pd.DataFrame({'xx': [1., 2., 3.], 'yy': [1, 2, 3]})
+    gdf = DataFrame.from_pandas(pdf)
+    g = gdf.groupby('yy')
+    p = pdf.groupby('yy')
+    gxx = g['xx'].sum()
+    pxx = p['xx'].sum()
+    assert_eq(pxx, gxx)
+
+
+def test_groupby_column_numeral():
+    pdf = pd.DataFrame({0: [1., 2., 3.], 1: [1, 2, 3]})
+    gdf = DataFrame.from_pandas(pdf)
+    p = pdf.groupby(1)
+    g = gdf.groupby(1)
+    pxx = p[0].sum()
+    gxx = g[0].sum()
+    assert_eq(pxx, gxx)

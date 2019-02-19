@@ -5,7 +5,7 @@ from __future__ import print_function, division
 import inspect
 import random
 from collections import OrderedDict
-from collections.abc import Sequence
+from collections.abc import Sequence, Mapping
 import logging
 import warnings
 import numbers
@@ -229,7 +229,7 @@ class DataFrame(object):
             for k, col in self._cols.items():
                 df[k] = col[arg]
             return df
-        elif isinstance(arg, (list, np.ndarray, pd.Series, Series,)):
+        elif isinstance(arg, (list, np.ndarray, pd.Series, Series, Index)):
             mask = arg
             if isinstance(mask, list):
                 mask = np.array(mask)
@@ -333,7 +333,37 @@ class DataFrame(object):
            1    1 11.0
 
         """
-        return self[:n]
+        return self.iloc[:n]
+
+    def tail(self, n=5):
+        """
+        Returns the last n rows as a new DataFrame
+
+        Examples
+        --------
+
+        .. code-block:: python
+
+            from cudf.dataframe import DataFrame
+
+            df = DataFrame()
+            df['key'] = [0, 1, 2, 3, 4]
+            df['val'] = [float(i + 10) for i in range(5)]  # insert column
+            print(df.tail(2))
+
+        Output
+
+        .. code-block:: python
+
+               key  val
+           3    3 13.0
+           4    4 14.0
+
+        """
+        if n == 0:
+            return self.iloc[0:0]
+
+        return self.iloc[-n:]
 
     def to_string(self, nrows=NOTSET, ncols=NOTSET):
         """
@@ -740,7 +770,7 @@ class DataFrame(object):
 
         empty_index = len(self._index) == 0
         series = Series(col)
-        if forceindex or empty_index or self._index == series.index:
+        if forceindex or empty_index or self._index.equals(series.index):
             if empty_index:
                 self._index = series.index
             self._size = len(series)
@@ -836,6 +866,49 @@ class DataFrame(object):
         if name not in self._cols:
             raise NameError('column {!r} does not exist'.format(name))
         del self._cols[name]
+
+    def rename(self, mapper=None, columns=None, copy=True):
+        """
+        Alter column labels.
+
+        Function / dict values must be unique (1-to-1). Labels not contained in
+        a dict / Series will be left as-is. Extra labels listed don’t throw an
+        error.
+
+        Parameters
+        ----------
+        mapper, columns : dict-like or function, optional
+            dict-like or functions transformations to apply to
+            the column axis' values.
+        copy : boolean, default True
+            Also copy underlying data
+
+        Returns
+        -------
+        DataFrame
+
+        Difference from pandas:
+          * Support axis='columns' only.
+          * Not supporting: index, inplace, level
+        """
+        # Pandas defaults to using columns over mapper
+        if columns:
+            mapper = columns
+
+        out = DataFrame()
+        out = out.set_index(self.index)
+
+        if isinstance(mapper, Mapping):
+            for column in self.columns:
+                if column in mapper:
+                    out[mapper[column]] = self[column]
+                else:
+                    out[column] = self[column]
+        elif callable(mapper):
+            for column in self.columns:
+                out[mapper(column)] = self[column]
+
+        return out.copy(deep=copy)
 
     @classmethod
     def _concat(cls, objs, ignore_index=False):
@@ -1184,14 +1257,14 @@ class DataFrame(object):
     def T(self):
         return self.transpose()
 
-    def merge(self, other, on=None, how='left', lsuffix='_x', rsuffix='_y',
+    def merge(self, right, on=None, how='left', lsuffix='_x', rsuffix='_y',
               type="", method='hash'):
         """Merge GPU DataFrame objects by performing a database-style join operation
         by columns or indexes.
 
         Parameters
         ----------
-        other : DataFrame
+        right : DataFrame
         on : label or list; defaults to None
             Column or index level names to join on. These must be found in
             both DataFrames.
@@ -1255,7 +1328,7 @@ class DataFrame(object):
         if how not in ['left', 'inner', 'outer']:
             raise NotImplementedError('{!r} merge not supported yet'
                                       .format(how))
-        same_names = set(self.columns) & set(other.columns)
+        same_names = set(self.columns) & set(right.columns)
         if same_names and not (lsuffix or rsuffix):
             raise ValueError('there are overlapping columns but '
                              'lsuffix and rsuffix are not defined')
@@ -1272,7 +1345,7 @@ class DataFrame(object):
         # Essential parameters
         on = [on] if isinstance(on, str) else list(on)
         lhs = self
-        rhs = other
+        rhs = right
 
         # Pandas inconsistency warning
         if len(lhs) == 0 and len(lhs.columns) > len(rhs.columns) and\
@@ -1287,10 +1360,10 @@ class DataFrame(object):
         for name in on:
             if pd.api.types.is_categorical_dtype(self[name]):
                 lcats = self[name].cat.categories
-                rcats = other[name].cat.categories
+                rcats = right[name].cat.categories
                 if how == 'left':
                     cats = lcats
-                    other[name] = (other[name].cat.set_categories(cats)
+                    right[name] = (right[name].cat.set_categories(cats)
                                    .fillna(-1))
                 elif how == 'right':
                     cats = rcats
@@ -1303,9 +1376,9 @@ class DataFrame(object):
                     self[name] = (self[name].cat.set_categories(cats)
                                   .fillna(-1))
                     self[name] = self[name]._column.as_numerical
-                    other[name] = (other[name].cat.set_categories(cats)
+                    right[name] = (right[name].cat.set_categories(cats)
                                    .fillna(-1))
-                    other[name] = other[name]._column.as_numerical
+                    right[name] = right[name]._column.as_numerical
                 col_cats[name] = cats
         for name, col in lhs._cols.items():
             if pd.api.types.is_categorical_dtype(col) and name not in on:
@@ -1314,7 +1387,7 @@ class DataFrame(object):
         for name, col in rhs._cols.items():
             if pd.api.types.is_categorical_dtype(col) and name not in on:
                 f_n = fix_name(name, rsuffix)
-                col_cats[f_n] = other[name].cat.categories
+                col_cats[f_n] = right[name].cat.categories
 
         # Compute merge
         cols, valids = cpp_join.join(lhs._cols, rhs._cols, on, how,
@@ -1361,7 +1434,7 @@ class DataFrame(object):
                         categories=categories,
                         )
         right_column_idx = len(self.columns)
-        for name in other.columns:
+        for name in right.columns:
             if name not in on:
                 # now copy the columns from `right` that were not in `on`
                 right_name = fix_name(name, rsuffix)
@@ -1921,7 +1994,8 @@ class DataFrame(object):
         df = cls()
         # Set columns
         for colk in dataframe.columns:
-            df[colk] = Series(dataframe[colk].values, nan_as_null=nan_as_null)
+            vals = dataframe[colk].values
+            df[colk] = Series(vals, nan_as_null=nan_as_null)
         # Set index
         return df.set_index(dataframe.index)
 
@@ -2143,8 +2217,7 @@ class DataFrame(object):
                                          quant_index=False)
         return result
 
-    def to_parquet(self, path, compression='snappy', index=None,
-                   partition_cols=None, **kwargs):
+    def to_parquet(self, path, *args, **kwargs):
         """
         Write a DataFrame to the parquet format.
         Parameters
@@ -2163,8 +2236,150 @@ class DataFrame(object):
             Columns are partitioned in the order they are given
         """
         import cudf.io.parquet as pq
-        pq.to_parquet(self, path, compression=compression, index=index,
-                      partition_cols=partition_cols, **kwargs)
+        pq.to_parquet(self, path, *args, **kwargs)
+
+    def to_feather(self, path, *args, **kwargs):
+        """
+        Write a DataFrame to the feather format.
+        Parameters
+        ----------
+        path : str
+            File path
+        """
+        import cudf.io.feather as feather
+        feather.to_feather(self, path, *args, **kwargs)
+
+    def to_json(self, path_or_buf=None, *args, **kwargs):
+        """
+        Convert the cuDF object to a JSON string.
+        Note nulls and NaNs will be converted to null and datetime objects
+        will be converted to UNIX timestamps.
+        Parameters
+        ----------
+        path_or_buf : string or file handle, optional
+            File path or object. If not specified, the result is returned as
+            a string.
+        orient : string
+            Indication of expected JSON string format.
+            * Series
+                - default is 'index'
+                - allowed values are: {'split','records','index','table'}
+            * DataFrame
+                - default is 'columns'
+                - allowed values are:
+                {'split','records','index','columns','values','table'}
+            * The format of the JSON string
+                - 'split' : dict like {'index' -> [index],
+                'columns' -> [columns], 'data' -> [values]}
+                - 'records' : list like
+                [{column -> value}, ... , {column -> value}]
+                - 'index' : dict like {index -> {column -> value}}
+                - 'columns' : dict like {column -> {index -> value}}
+                - 'values' : just the values array
+                - 'table' : dict like {'schema': {schema}, 'data': {data}}
+                describing the data, and the data component is
+                like ``orient='records'``.
+        date_format : {None, 'epoch', 'iso'}
+            Type of date conversion. 'epoch' = epoch milliseconds,
+            'iso' = ISO8601. The default depends on the `orient`. For
+            ``orient='table'``, the default is 'iso'. For all other orients,
+            the default is 'epoch'.
+        double_precision : int, default 10
+            The number of decimal places to use when encoding
+            floating point values.
+        force_ascii : bool, default True
+            Force encoded string to be ASCII.
+        date_unit : string, default 'ms' (milliseconds)
+            The time unit to encode to, governs timestamp and ISO8601
+            precision.  One of 's', 'ms', 'us', 'ns' for second, millisecond,
+            microsecond, and nanosecond respectively.
+        default_handler : callable, default None
+            Handler to call if object cannot otherwise be converted to a
+            suitable format for JSON. Should receive a single argument which is
+            the object to convert and return a serialisable object.
+        lines : bool, default False
+            If 'orient' is 'records' write out line delimited json format. Will
+            throw ValueError if incorrect 'orient' since others are not list
+            like.
+        compression : {'infer', 'gzip', 'bz2', 'zip', 'xz', None}
+            A string representing the compression to use in the output file,
+            only used when the first argument is a filename. By default, the
+            compression is inferred from the filename.
+        index : bool, default True
+            Whether to include the index values in the JSON string. Not
+            including the index (``index=False``) is only supported when
+            orient is 'split' or 'table'.
+        """
+        import cudf.io.json as json
+        json.to_json(
+            self,
+            path_or_buf=path_or_buf,
+            *args,
+            **kwargs
+        )
+
+    def to_hdf(self, path_or_buf, key, *args, **kwargs):
+        """
+        Write the contained data to an HDF5 file using HDFStore.
+
+        Hierarchical Data Format (HDF) is self-describing, allowing an
+        application to interpret the structure and contents of a file with
+        no outside information. One HDF file can hold a mix of related objects
+        which can be accessed as a group or as individual objects.
+
+        In order to add another DataFrame or Series to an existing HDF file
+        please use append mode and a different a key.
+
+        For more information see the :ref:`user guide <io.hdf5>`.
+        Parameters
+        ----------
+        path_or_buf : str or pandas.HDFStore
+            File path or HDFStore object.
+        key : str
+            Identifier for the group in the store.
+        mode : {'a', 'w', 'r+'}, default 'a'
+            Mode to open file:
+            - 'w': write, a new file is created (an existing file with
+                the same name would be deleted).
+            - 'a': append, an existing file is opened for reading and
+                writing, and if the file does not exist it is created.
+            - 'r+': similar to 'a', but the file must already exist.
+        format : {'fixed', 'table'}, default 'fixed'
+            Possible values:
+            - 'fixed': Fixed format. Fast writing/reading. Not-appendable,
+                nor searchable.
+            - 'table': Table format. Write as a PyTables Table structure
+                which may perform worse but allow more flexible operations
+                like searching / selecting subsets of the data.
+        append : bool, default False
+            For Table formats, append the input data to the existing.
+        data_columns :  list of columns or True, optional
+            List of columns to create as indexed data columns for on-disk
+            queries, or True to use all columns. By default only the axes
+            of the object are indexed. See :ref:`io.hdf5-query-data-columns`.
+            Applicable only to format='table'.
+        complevel : {0-9}, optional
+            Specifies a compression level for data.
+            A value of 0 disables compression.
+        complib : {'zlib', 'lzo', 'bzip2', 'blosc'}, default 'zlib'
+            Specifies the compression library to be used.
+            As of v0.20.2 these additional compressors for Blosc are supported
+            (default if no compressor specified: 'blosc:blosclz'):
+            {'blosc:blosclz', 'blosc:lz4', 'blosc:lz4hc', 'blosc:snappy',
+            'blosc:zlib', 'blosc:zstd'}.
+            Specifying a compression library which is not available issues
+            a ValueError.
+        fletcher32 : bool, default False
+            If applying compression use the fletcher32 checksum.
+        dropna : bool, default False
+            If true, ALL nan rows will not be written to store.
+        errors : str, default 'strict'
+            Specifies how encoding and decoding errors are to be handled.
+            See the errors argument for :func:`open` for a full list
+            of options.
+        """
+        import cudf.io.hdf as hdf
+        hdf.to_hdf(path_or_buf, key, self, *args, **kwargs)
 
 
 class Loc(object):
@@ -2298,5 +2513,15 @@ def from_pandas(obj):
             "Got %s" % type(obj)
         )
 
+
+def merge(left, right, *args, **kwargs):
+    return left.merge(right, *args, **kwargs)
+
+
+# a bit of fanciness to inject doctstring with left parameter
+merge_doc = DataFrame.merge.__doc__
+idx = merge_doc.find('right')
+merge.__doc__ = ''.join([merge_doc[:idx], '\n\tleft : DataFrame\n\t',
+                        merge_doc[idx:]])
 
 register_distributed_serializer(DataFrame)

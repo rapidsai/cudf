@@ -731,3 +731,17 @@ def row_matrix(cols, nrow, ncol, dtype):
                                                       col.to_gpu_array(),
                                                       nrow, ncol)
     return matrix
+
+
+@cuda.jit
+def gpu_modulo(inp, out, d):
+    i = cuda.grid(1)
+    if i < out.size:
+        out[i] = inp[i] % d
+
+
+def modulo(arr, d):
+    """Array element modulo operator"""
+    out = rmm.device_array(shape=arr.shape, dtype=arr.dtype)
+    gpu_modulo.forall(arr.size)(arr, out, d)
+    return out
