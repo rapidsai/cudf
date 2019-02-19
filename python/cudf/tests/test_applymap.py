@@ -18,7 +18,6 @@ def test_applymap_round(nelem, masked):
     # Generate data
     np.random.seed(0)
     data = np.random.random(nelem) * 100
-    print(os.path.dirname(utils.__file__))
 
     if masked:
         # Make mask
