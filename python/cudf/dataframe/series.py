@@ -592,27 +592,39 @@ class Series(object):
 
         Examples
         --------
+        .. code-block:: python
 
-        >>> sr = Series(list(range(20)))
-        # get the value from 1st index
-        >>> sr.iloc[1]
-        1
+          from cudf import Series
 
-        # get the values from 0,2,9 and 18th index
-        >>> sr.iloc[0,2,9,18]
-        0    0
-        2    2
-        9    9
-        18   18
+          sr = Series(list(range(20)))
 
-        # get the values using slice indices
-        >>> sr.iloc[3:10:2]
-        3    3
-        5    5
-        7    7
-        9    9
+          # get the value from 1st index
+          sr.iloc[1]
 
-        :return:
+          # get the values from 0,2,9 and 18th index
+          sr.iloc[0,2,9,18]
+
+          # get the values using slice indices
+          sr.iloc[3:10:2]
+
+        Output:
+
+        .. code-block:: python
+
+          1
+
+          0    0
+          2    2
+          9    9
+          18   18
+
+          3    3
+          5    5
+          7    7
+          9    9
+
+        Returns
+        -------
         Series containing the elements corresponding to the indices
         """
         return Iloc(self)
@@ -1246,7 +1258,9 @@ class Series(object):
         In order to add another DataFrame or Series to an existing HDF file
         please use append mode and a different a key.
 
-        For more information see the :ref:`user guide <io.hdf5>`.
+        For more information see the :ref:`user guide
+        <https://pandas.pydata.org/pandas-docs/stable/user_guide/io.html#hdf5-pytables>`_.
+
         Parameters
         ----------
         path_or_buf : str or pandas.HDFStore
@@ -1272,7 +1286,8 @@ class Series(object):
         data_columns :  list of columns or True, optional
             List of columns to create as indexed data columns for on-disk
             queries, or True to use all columns. By default only the axes
-            of the object are indexed. See :ref:`io.hdf5-query-data-columns`.
+            of the object are indexed. `See Query via Data Columns
+            <https://pandas.pydata.org/pandas-docs/stable/user_guide/io.html#hdf5-pytables>`_.
             Applicable only to format='table'.
         complevel : {0-9}, optional
             Specifies a compression level for data.
