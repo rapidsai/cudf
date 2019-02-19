@@ -106,8 +106,15 @@ gdf_error combine_column_categories(gdf_column * input_columns[],gdf_column * ou
 		return GDF_DATASET_EMPTY;
 	}
 	gdf_size_type total_count;
+
 	gdf_error err = validate_categories(input_columns,num_columns,total_count);
+
+	if(err != GDF_SUCCESS) return err;
+
 	err = validate_categories(output_columns,num_columns,total_count);
+	if(err != GDF_SUCCESS) return err;
+
+
 	for(int column_index = 0; column_index < num_columns; column_index++){
 		if(input_columns[column_index]->size != output_columns[column_index]->size){
 			return GDF_COLUMN_SIZE_MISMATCH;
@@ -133,7 +140,7 @@ gdf_error combine_column_categories(gdf_column * input_columns[],gdf_column * ou
 	std::vector<cudaError_t> cuda_err(num_columns);
 	for(int column_index = 0; column_index < num_columns; column_index++){
 		output_columns[column_index]->dtype_info.category = new_category;
-		size_t size_to_copy = sizeof(nv_category_index_type) * input_columns[column_index].size;
+		size_t size_to_copy = sizeof(nv_category_index_type) * input_columns[column_index]->size;
 		cuda_err[column_index] = cudaMemcpyAsync(output_columns[column_index]->data,
 				output_columns[column_index]->dtype_info.category->values_cptr() + start_position,
 				size_to_copy,
