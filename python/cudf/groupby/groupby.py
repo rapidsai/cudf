@@ -88,7 +88,12 @@ class Groupby(object):
         """
         self.level = None
         self._df = df
-        if level == 0:
+        if isinstance(by, Series):
+            self.level = 0
+            self._df[self._LEVEL_0_INDEX_NAME] = by
+            self._original_index_name = self._df.index.name
+            self._by = [self._LEVEL_0_INDEX_NAME]
+        elif level == 0:
             self.level = level
             self._df[self._LEVEL_0_INDEX_NAME] = self._df.index
             self._original_index_name = self._df.index.name
