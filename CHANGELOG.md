@@ -22,6 +22,7 @@
 - PR #964 Add `rename` method to `DataFrame`, `Series`, and `Index`
 - PR #988 Add top-level merge function to cuDF
 - PR #992 Add comparison binaryops to DateTime columns
+- PR #996 Replace relative path imports with absolute paths in tests
 
 ## Improvements
 
