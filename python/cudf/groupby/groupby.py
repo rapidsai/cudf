@@ -87,6 +87,7 @@ class Groupby(object):
             group by. Valid values are "hash".
         """
         self.level = None
+        self._original_index_name = None
         self._df = df
         if isinstance(by, Series):
             if len(by) != len(self._df.index):
