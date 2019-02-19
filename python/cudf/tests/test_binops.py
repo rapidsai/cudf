@@ -11,7 +11,7 @@ import numpy as np
 
 from cudf.dataframe import Series
 
-from . import utils
+from cudf.tests import utils
 
 
 _binops = [

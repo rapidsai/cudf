@@ -17,8 +17,8 @@ from cudf.settings import set_options
 
 from itertools import combinations
 
-from . import utils
-from .utils import assert_eq
+from cudf.tests import utils
+from cudf.tests.utils import assert_eq
 
 
 def test_buffer_basic():

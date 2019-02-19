@@ -1,12 +1,12 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
 
 from itertools import product
+import os
 
 import pytest
 import numpy as np
 
-from . import utils
-
+from cudf.tests import utils
 from cudf import Series
 from math import floor
 
@@ -18,6 +18,7 @@ def test_applymap_round(nelem, masked):
     # Generate data
     np.random.seed(0)
     data = np.random.random(nelem) * 100
+    print(os.path.dirname(utils.__file__))
 
     if masked:
         # Make mask
