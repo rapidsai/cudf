@@ -1,7 +1,6 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
 
 from itertools import product
-import os
 
 import pytest
 import numpy as np
