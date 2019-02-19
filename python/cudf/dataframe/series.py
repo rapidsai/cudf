@@ -173,6 +173,11 @@ class Series(object):
     def as_index(self):
         return self.set_index(RangeIndex(len(self)))
 
+    def to_frame(self):
+        """ Convert Series into a DataFrame """
+        from cudf import DataFrame
+        return DataFrame({self.name: self}, index=self.index)
+
     def set_mask(self, mask, null_count=None):
         """Create new Series by setting a mask array.
 

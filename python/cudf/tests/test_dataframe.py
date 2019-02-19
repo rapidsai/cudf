@@ -1786,3 +1786,8 @@ def test_head_tail(nelem, data_type):
     check_frame_series_equality(gdf['a'].tail(), gdf['a'][-5:])
     check_frame_series_equality(gdf['a'].tail(3), gdf['a'][-3:])
     check_frame_series_equality(gdf['a'].tail(-2), gdf['a'][2:])
+
+
+def test_to_frame(pdf, gdf):
+    assert_eq(pdf.x.to_frame(), gdf.x.to_frame())
+    assert_eq(pdf.x.to_frame(), gdf.x.to_frame())
