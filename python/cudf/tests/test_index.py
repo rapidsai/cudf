@@ -158,3 +158,29 @@ def test_index_rename():
     got = gds.rename('new_name')
 
     assert_eq(expect, got)
+
+
+def test_set_index_as_property():
+    cdf = DataFrame()
+    col1 = np.arange(5)
+    col2 = np.arange(0, 20, 4)
+    cdf['a'] = col1
+    cdf['b'] = col2
+
+    # Check set_index(Series)
+    cdf.index = cdf['b']
+
+    np.testing.assert_array_equal(cdf.index.values, col2)
+
+    with pytest.raises(ValueError):
+        cdf.index = [list(range(10))]
+
+    idx = np.array([100, 200, 300, 400, 500])
+    cdf.index = idx
+    np.testing.assert_array_equal(cdf.index.values, idx)
+
+    df = cdf.to_pandas()
+    np.testing.assert_array_equal(df.index.values, idx)
+
+    head = cdf.head().to_pandas()
+    np.testing.assert_array_equal(head.index.values, idx)

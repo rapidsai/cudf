@@ -649,6 +649,22 @@ class DataFrame(object):
         """
         return self._index
 
+    @index.setter
+    def index(self, _index):
+        new_length = len(_index)
+        old_length = len(self._index)
+
+        if new_length != old_length:
+            msg = f'Length mismatch: Expected index has {old_length}' \
+                    ' elements, new values have {new_length} elements'
+            raise ValueError(msg)
+
+        # try to build an index from generic _index
+        idx = as_index(_index)
+        self._index = idx
+        for k in self.columns:
+                self[k] = self[k].set_index(idx)
+
     def set_index(self, index):
         """Return a new DataFrame with a new index
 
@@ -2404,8 +2420,9 @@ class Loc(object):
                                                      row_slice.stop)
         for col in col_slice:
             sr = self._df[col]
-            df.add_column(col, sr[begin:end], forceindex=True)
+            df.add_column(col, sr[begin:end])
 
+        df.index = self.index[begin:end]
         return df
 
 
@@ -2466,8 +2483,9 @@ class Iloc(object):
 
         for col in self._df.columns:
             sr = self._df[col]
-            df.add_column(col, sr.iloc[tuple(rows)], forceindex=True)
+            df.add_column(col, sr.iloc[tuple(rows)])
 
+        df.index = sr.index.take(np.array(rows))
         return df
 
     def __setitem__(self, key, value):
