@@ -235,8 +235,14 @@ def as_column(arbitrary, nan_as_null=True, dtype=None):
                           "categorical")
             data = as_column(arbitrary.dictionary_encode())
         elif isinstance(arbitrary, pa.NullArray):
-            if dtype and dtype != 'empty':
-                new_dtype = dtype
+            if dtype:
+                if type(dtype) == str:
+                    if dtype == 'empty':
+                        new_dtype = np.dtype(arbitrary.type.to_pandas_dtype())
+                    else:
+                        new_dtype = dtype
+                else:
+                    new_dtype = dtype
             else:
                 new_dtype = np.dtype(arbitrary.type.to_pandas_dtype())
 
@@ -334,16 +340,19 @@ def as_column(arbitrary, nan_as_null=True, dtype=None):
             data = as_column(pa.array([arbitrary]))
 
     elif isinstance(arbitrary, memoryview):
-        data = as_column(np.array(arbitrary))
+        data = as_column(np.array(arbitrary), dtype=dtype,
+                         nan_as_null=nan_as_null)
 
     else:
         try:
             data = as_column(memoryview(arbitrary))
         except TypeError:
             try:
-                data = as_column(pa.array(arbitrary))
+                data = as_column(pa.array(arbitrary, from_pandas=nan_as_null),
+                                 dtype=dtype)
             except pa.ArrowInvalid:
-                data = as_column(np.array(arbitrary))
+                data = as_column(np.array(arbitrary), dtype=dtype,
+                                 nan_as_null=nan_as_null)
 
     return data
 
