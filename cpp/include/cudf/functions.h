@@ -388,15 +388,13 @@ gdf_error gdf_hash_partition(int num_input_cols,
  * @Param[out] out The output column containing the prefix sum of the input
  * @Param[in] inclusive Flag for applying an inclusive prefix sum if true,
  * an exclusive prefix sum if false.
- * @Param[in] skipna Flag for excluding null values if true.
  * 
  * @Returns   GDF_SUCCESS if the operation was successful,
  * otherwise an appropriate error code.
  * GDF_UNSUPPORTED_DTYPE if inp->dtype is not an arithmetic type.
  */
 /* ----------------------------------------------------------------------------*/
-gdf_error gdf_prefixsum(gdf_column *inp, gdf_column *out,
-                        bool inclusive, bool skipna);
+gdf_error gdf_prefixsum(gdf_column *inp, gdf_column *out, bool inclusive);
 
 /* unary operators */
 

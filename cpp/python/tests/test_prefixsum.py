@@ -49,8 +49,7 @@ def test_prefixsum(dtype, nelem):
                            nelem, gdf_dtype)
 
     inclusive = True
-    skipna = True
-    libgdf.gdf_prefixsum(col_data, col_result, inclusive, skipna)
+    libgdf.gdf_prefixsum(col_data, col_result, inclusive)
 
     expect = np.cumsum(d_data.copy_to_host())
     got = d_result.copy_to_host()
@@ -89,14 +88,11 @@ def test_prefixsum_masked(dtype, nelem):
                            unwrap_devary(d_result_mask), nelem, gdf_dtype)
 
     inclusive = True
-    skipna = True
-    libgdf.gdf_prefixsum(col_data, col_result, inclusive, skipna)
+    libgdf.gdf_prefixsum(col_data, col_result, inclusive)
 
     boolmask = buffer_as_bits(mask)[:nelem]
     expect = np.cumsum(data[boolmask])
-
-    expect = np.cumsum(d_data.copy_to_host())
-    got = d_result.copy_to_host()
+    got = d_result.copy_to_host()[boolmask]
     if not inclusive:
         expect = expect[:-1]
         assert got[0] == 0
