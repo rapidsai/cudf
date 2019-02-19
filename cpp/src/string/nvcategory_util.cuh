@@ -57,4 +57,7 @@ gdf_error concat_categories(gdf_column * input_columns[],gdf_column * output_col
  */
 gdf_error combine_column_categories(gdf_column * input_columns[],gdf_column * output_columns[], int num_columns, cudaStream_t stream = 0);
 
+
+gdf_error copy_category_from_input_and_compact_into_output(gdf_column * input_column, gdf_column * output_column);
+
 #endif

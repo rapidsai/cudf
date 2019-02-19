@@ -160,6 +160,7 @@ gdf_error combine_column_categories(gdf_column * input_columns[],gdf_column * ou
 gdf_error free_nvcategory(gdf_column * column){
 	NVCategory::destroy(column->dtype_info.category);
 	column->dtype_info.category = nullptr;
+	return GDF_SUCCESS;
 }
 
 //
@@ -170,7 +171,7 @@ gdf_error copy_category_from_input_and_compact_into_output(gdf_column * input_co
 			output_column->size,
 			true );
 
-	output_column->dtype_info.category = NVCategory::create_from_strings(temp_strings);
+	output_column->dtype_info.category = NVCategory::create_from_strings(*temp_strings);
 
 	cudaError_t error = cudaMemcpy(
 			output_column->data,
