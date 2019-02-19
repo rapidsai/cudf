@@ -19,6 +19,8 @@
 - PR #918 Add Series.groupby(level=0) support
 - PR #906 Add binary and comparison ops to DataFrame
 - PR #964 Add `rename` method to `DataFrame`, `Series`, and `Index`
+- PR #985 Add `Series.to_frame` method
+- PR #985 Add `drop=` keyword to reset_index method
 
 ## Improvements
 
