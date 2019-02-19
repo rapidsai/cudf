@@ -626,6 +626,7 @@ def gpu_mark_segment_begins(arr, markers):
         if not markers[i]:
             markers[i] = arr[i] != arr[i - 1]
 
+            
 @cuda.jit
 def gpu_scatter_segment_begins(markers, scanned, begins):
     i = cuda.grid(1)
