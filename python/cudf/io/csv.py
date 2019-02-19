@@ -122,7 +122,7 @@ def read_csv(filepath_or_buffer, lineterminator='\n',
     prefix : str, default None
         Prefix to add to column numbers when parsing without a header row
     index_col : int or string, default None
-        Column to use as the row labels 
+        Column to use as the row labels
 
     Returns
     -------
