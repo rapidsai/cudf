@@ -191,6 +191,7 @@ add_library(cudf SHARED
             src/comms/ipc/ipc.cu
             src/dataframe/column.cpp
             src/dataframe/context.cpp
+            src/string/nvcategory_util.cu
             src/filter/filter_ops.cu
             src/join/joining.cu
             src/orderby/orderby.cu
@@ -198,7 +199,6 @@ add_library(cudf SHARED
             src/sort/sorting.cu
             src/sqls/sqls_ops.cu
             src/groupby/groupby.cu
-            src/string/nvcategory_util.cu
             src/groupby/new_groupby.cu
             src/binary/binary_ops.cu
             src/bitmask/bitmask_ops.cu

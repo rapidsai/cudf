@@ -47,8 +47,14 @@ gdf_error merge_category_dictionaries(gdf_column * category_columns[], int num_c
  */
 gdf_error merge_category_dictionaries(gdf_column * input_columns[],gdf_column * output_columns[], int num_columns);
 
-
+/**
+ * Takes an array of input_columns and concatenates them into one long column.
+ */
 gdf_error concat_categories(gdf_column * input_columns[],gdf_column * output_column, int num_columns);
 
+/**
+ * Takes an array of input_columns and makes it so that they all share the same keys in NVCategory
+ */
+gdf_error combine_column_categories(gdf_column * input_columns[],gdf_column * output_columns[], int num_columns, cudaStream_t stream = 0);
 
 #endif

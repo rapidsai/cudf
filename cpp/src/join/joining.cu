@@ -533,6 +533,68 @@ gdf_error join_call_compute_df(
     return GDF_SUCCESS;
   }
 
+
+  //if the inputs are nvcategory we need to make the dictionaries comparable
+  gdf_column ** new_left_cols = new gdf_column * [num_left_cols];
+  gdf_column ** new_right_cols = new gdf_column * [num_right_cols];
+  for(int column_index = 0; column_index < num_left_cols; column_index++){
+	  new_left_cols[column_index] = left_cols[column_index];
+  }
+  for(int column_index = 0; column_index < num_right_cols; column_index++){
+	  new_right_cols[column_index] = right_cols[column_index];
+  }
+  std::vector<gdf_column *> nv_category_copied_columns;
+  for(int join_column_index = 0; join_column_index > num_cols_to_join; join_column_index++){
+	  gdf_column * left_original_column = new_left_cols[left_join_cols[join_column_index]];
+	  gdf_column * right_original_column = new_right_cols[right_join_cols[join_column_index]];
+
+	  if(left_original_column->dtype == GDF_STRING_CATEGORY){
+		  if(right_original_column->dtype == GDF_STRING_CATEGORY){
+			  gdf_column * new_left_column = new gdf_column;
+			  gdf_column * new_right_column = new gdf_column;
+			  nv_category_copied_columns.push_back(new_left_column);
+			  nv_category_copied_columns.push_back(new_right_column);
+
+			  gdf_column * new_join_columns[2];
+			  gdf_column * input_join_columns_merge[2];
+			  input_join_columns_merge[0] = left_original_column;
+			  input_join_columns_merge[1] = right_original_column;
+
+			  gdf_column_view(new_left_column, nullptr, nullptr, left_original_column->size, GDF_STRING_CATEGORY);
+			  gdf_column_view(new_right_column, nullptr, nullptr, right_original_column->size, GDF_STRING_CATEGORY);
+
+			  int col_width;
+			  get_column_byte_width(new_left_column, &col_width);
+			  RMM_TRY( RMM_ALLOC((void**)&(new_left_column->data), col_width * left_original_column->size, 0) ); // TODO: non-default stream?
+					  RMM_TRY( RMM_ALLOC((void**)&(new_left_column->valid), sizeof(gdf_valid_type)*gdf_get_num_chars_bitmask(left_original_column->size), 0) );
+					  CUDA_TRY( cudaMemcpy(new_left_column->valid, left_original_column->valid, sizeof(gdf_valid_type)*gdf_get_num_chars_bitmask(left_original_column->size),cudaMemcpyDeviceToDevice) );
+
+					  RMM_TRY( RMM_ALLOC((void**)&(new_right_column->data), col_width * right_original_column->size, 0) ); // TODO: non-default stream?
+					  RMM_TRY( RMM_ALLOC((void**)&(new_right_column->valid), sizeof(gdf_valid_type)*gdf_get_num_chars_bitmask(right_original_column->size), 0) );
+					  CUDA_TRY( cudaMemcpy(new_right_column->valid, right_original_column->valid, sizeof(gdf_valid_type)*gdf_get_num_chars_bitmask(right_original_column->size),cudaMemcpyDeviceToDevice) );
+
+					  gdf_error err = combine_column_categories(input_join_columns_merge,
+							  new_join_columns,
+							  2);
+
+					  new_left_cols[left_join_cols[join_column_index]] = new_left_column;
+					  new_right_cols[right_join_cols[join_column_index]] = new_right_column;
+
+
+		  }else{
+			  return GDF_JOIN_DTYPE_MISMATCH;
+		  }
+	  }
+  }
+
+  //TODO: FELIPE ADD A COMMENT TO REQUEST REVIEW HERE this is very questionable for me to do as
+  // I do do not know if this is ok or not, I am chaning the vlaue of left_cols and right_cols to
+  //point to columns that may have been updated in case we had columns of type GDF_STRING_CATEGORY
+  //I think its fine since its not passed in by reference and we are just pointing this pointer somewehre else
+  left_cols = new_left_cols;
+  right_cols = new_right_cols;
+
+
   // If index outputs are not requested, create columns to store them
   // for computing combined join output
   gdf_column *left_index_out = left_indices;
