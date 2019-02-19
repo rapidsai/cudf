@@ -287,6 +287,7 @@ gdf_error join_call( int num_cols, gdf_column **leftcol, gdf_column **rightcol,
                      gdf_context *join_context)
 {
 
+
   using size_type = int64_t;
 
   GDF_REQUIRE( 0 != num_cols, GDF_DATASET_EMPTY);
@@ -396,6 +397,7 @@ gdf_error construct_join_output_df(
         gdf_column * left_indices,
         gdf_column * right_indices) {
 
+
   PUSH_RANGE("LIBGDF_JOIN_OUTPUT", JOIN_COLOR);
     //create left and right input table with columns not joined on
     std::vector<gdf_column*> lnonjoincol;
@@ -497,16 +499,18 @@ gdf_error construct_join_output_df(
             &join_destination_table, check_bounds);
 
         GDF_REQUIRE(GDF_SUCCESS == err, err);
+
       }
 
       err = cudf::detail::gather(
           &join_source_table,
           static_cast<index_type const *>(left_indices->data),
           &join_destination_table, check_bounds);
+      GDF_REQUIRE(GDF_SUCCESS == err, err);
     }
 
     POP_RANGE();
-    return err;
+    return GDF_SUCCESS;
 }
 
 template <JoinType join_type, typename size_type, typename index_type>
@@ -620,6 +624,7 @@ gdf_error join_call_compute_df(
     r_index_temp.reset(nullptr);
 
     CUDA_CHECK_LAST();
+
 
     return df_err;
 }

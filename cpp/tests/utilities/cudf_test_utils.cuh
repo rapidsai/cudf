@@ -60,6 +60,7 @@ struct column_printer {
                  num_masks * sizeof(gdf_valid_type), cudaMemcpyDeviceToHost);
     }
 
+
     for (gdf_size_type i = 0; i < num_rows; ++i) {
 
       // If the element is valid, print it's value

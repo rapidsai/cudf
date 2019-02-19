@@ -99,10 +99,19 @@ __global__ void gather_bitmask_if_kernel(
     bool const source_bit_is_valid{
         gdf_is_valid(source_mask, gather_map[destination_row])};
 
+    bool const destination_bit_is_valid{
+        gdf_is_valid(destination_mask, destination_row)};
+
+    bool const predicate_is_true{pred(stencil[destination_row])};
+
     // Use ballot to find all valid bits in this warp and create the output
     // bitmask element
-    MaskType const result_mask{__ballot_sync(
-        active_threads, pred(stencil[destination_row]) && source_bit_is_valid)};
+    // If the predicate is false, and the destination bit was valid, don't
+    // overwrite it
+    MaskType const result_mask =
+        __ballot_sync(active_threads,
+                      (predicate_is_true and source_bit_is_valid) or
+                          (not predicate_is_true && destination_bit_is_valid));
 
     gdf_index_type const output_element = destination_row / BITS_PER_MASK;
 
@@ -220,6 +229,7 @@ gdf_error gather_bitmask(gdf_valid_type const* source_mask,
                          bool check_bounds = false, cudaStream_t stream = 0) {
   GDF_REQUIRE(destination_mask != nullptr, GDF_VALIDITY_MISSING);
 
+
   constexpr gdf_size_type BLOCK_SIZE{256};
   const gdf_size_type gather_grid_size =
       (num_destination_rows + BLOCK_SIZE - 1) / BLOCK_SIZE;
@@ -239,19 +249,9 @@ gdf_error gather_bitmask(gdf_valid_type const* source_mask,
         source_mask, num_source_rows, output_bitmask, num_destination_rows,
         gather_map, gather_map, bounds_checker{0, num_source_rows});
   } else {
-    if (nullptr == source_mask) {
-      // If the source mask doesn't exist, and we're not performing bounds
-      // checking, then all values in the destination mask will be valid and
-      // therefore it's more efficient to just do a memset
-      CUDA_TRY(cudaMemsetAsync(destination_mask, 0xFF,
-                               gdf_get_num_chars_bitmask(num_destination_rows) *
-                                   sizeof(gdf_valid_type),
-                               stream));
-    } else {
-      gather_bitmask_kernel<<<gather_grid_size, BLOCK_SIZE, 0, stream>>>(
-          source_mask, num_source_rows, output_bitmask, num_destination_rows,
-          gather_map);
-    }
+    gather_bitmask_kernel<<<gather_grid_size, BLOCK_SIZE, 0, stream>>>(
+        source_mask, num_source_rows, output_bitmask, num_destination_rows,
+        gather_map);
   }
 
   if (in_place) {
@@ -346,6 +346,7 @@ gdf_error gather(table const* source_table, gdf_index_type const gather_map[],
                  table* destination_table, bool check_bounds,
                  cudaStream_t stream) {
   assert(source_table->size() == destination_table->size());
+
 
   gdf_error gdf_status{GDF_SUCCESS};
 
