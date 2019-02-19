@@ -314,7 +314,7 @@ def test_dataframe_merge_on(on):
 def test_dataframe_merge_on_unknown_column():
     np.random.seed(0)
 
-    # Make cuDFå
+    # Make cuDF
     df_left = DataFrame()
     nelem = 500
     df_left['key1'] = np.random.randint(0, 40, nelem)
