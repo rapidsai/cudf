@@ -5,7 +5,7 @@ from __future__ import print_function, division
 import inspect
 import random
 from collections import OrderedDict
-from collections.abc import Sequence
+from collections.abc import Sequence, Mapping
 import logging
 import warnings
 import numbers
@@ -229,7 +229,7 @@ class DataFrame(object):
             for k, col in self._cols.items():
                 df[k] = col[arg]
             return df
-        elif isinstance(arg, (list, np.ndarray, pd.Series, Series,)):
+        elif isinstance(arg, (list, np.ndarray, pd.Series, Series, Index)):
             mask = arg
             if isinstance(mask, list):
                 mask = np.array(mask)
@@ -333,7 +333,37 @@ class DataFrame(object):
            1    1 11.0
 
         """
-        return self[:n]
+        return self.iloc[:n]
+
+    def tail(self, n=5):
+        """
+        Returns the last n rows as a new DataFrame
+
+        Examples
+        --------
+
+        .. code-block:: python
+
+            from cudf.dataframe import DataFrame
+
+            df = DataFrame()
+            df['key'] = [0, 1, 2, 3, 4]
+            df['val'] = [float(i + 10) for i in range(5)]  # insert column
+            print(df.tail(2))
+
+        Output
+
+        .. code-block:: python
+
+               key  val
+           3    3 13.0
+           4    4 14.0
+
+        """
+        if n == 0:
+            return self.iloc[0:0]
+
+        return self.iloc[-n:]
 
     def to_string(self, nrows=NOTSET, ncols=NOTSET):
         """
@@ -740,7 +770,7 @@ class DataFrame(object):
 
         empty_index = len(self._index) == 0
         series = Series(col)
-        if forceindex or empty_index or self._index == series.index:
+        if forceindex or empty_index or self._index.equals(series.index):
             if empty_index:
                 self._index = series.index
             self._size = len(series)
@@ -836,6 +866,49 @@ class DataFrame(object):
         if name not in self._cols:
             raise NameError('column {!r} does not exist'.format(name))
         del self._cols[name]
+
+    def rename(self, mapper=None, columns=None, copy=True):
+        """
+        Alter column labels.
+
+        Function / dict values must be unique (1-to-1). Labels not contained in
+        a dict / Series will be left as-is. Extra labels listed don’t throw an
+        error.
+
+        Parameters
+        ----------
+        mapper, columns : dict-like or function, optional
+            dict-like or functions transformations to apply to
+            the column axis' values.
+        copy : boolean, default True
+            Also copy underlying data
+
+        Returns
+        -------
+        DataFrame
+
+        Difference from pandas:
+          * Support axis='columns' only.
+          * Not supporting: index, inplace, level
+        """
+        # Pandas defaults to using columns over mapper
+        if columns:
+            mapper = columns
+
+        out = DataFrame()
+        out = out.set_index(self.index)
+
+        if isinstance(mapper, Mapping):
+            for column in self.columns:
+                if column in mapper:
+                    out[mapper[column]] = self[column]
+                else:
+                    out[column] = self[column]
+        elif callable(mapper):
+            for column in self.columns:
+                out[mapper(column)] = self[column]
+
+        return out.copy(deep=copy)
 
     @classmethod
     def _concat(cls, objs, ignore_index=False):

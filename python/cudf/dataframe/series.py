@@ -207,7 +207,7 @@ class Series(object):
         return not len(self)
 
     def __getitem__(self, arg):
-        if isinstance(arg, (list, np.ndarray, pd.Series, range,)):
+        if isinstance(arg, (list, np.ndarray, pd.Series, range, Index)):
             arg = Series(arg)
         if isinstance(arg, Series):
             if issubclass(arg.dtype.type, np.integer):
@@ -276,7 +276,34 @@ class Series(object):
         return out
 
     def head(self, n=5):
-        return self[:n]
+        return self.iloc[:n]
+
+    def tail(self, n=5):
+        """
+        Returns the last n rows as a new Series
+
+        Examples
+        --------
+
+        .. code-block:: python
+
+            from cudf.dataframe import Series
+
+            ser = Series([4, 3, 2, 1, 0])
+            print(ser.tail(2))
+
+        Output
+
+        .. code-block:: python
+
+           3    1
+           4    0
+
+        """
+        if n == 0:
+            return self.iloc[0:0]
+
+        return self.iloc[-n:]
 
     def to_string(self, nrows=NOTSET):
         """Convert to string
@@ -407,6 +434,8 @@ class Series(object):
     def _normalize_binop_value(self, other):
         if isinstance(other, Series):
             return other
+        elif isinstance(other, Index):
+            return Series(other)
         else:
             col = self._column.normalize_binop_value(other)
             return self._copy_construct(data=col)
@@ -1269,6 +1298,34 @@ class Series(object):
         """
         import cudf.io.hdf as hdf
         hdf.to_hdf(path_or_buf, key, self, *args, **kwargs)
+
+    def rename(self, index=None, copy=True):
+        """
+        Alter Series name.
+
+        Change Series.name with a scalar value.
+
+        Parameters
+        ----------
+        index : Scalar, optional
+            Scalar to alter the Series.name attribute
+        copy : boolean, default True
+            Also copy underlying data
+
+        Returns
+        -------
+        Series
+
+        Difference from pandas:
+          * Supports scalar values only for changing name attribute
+          * Not supporting: inplace, level
+        """
+        out = self.copy(deep=False)
+        out = out.set_index(self.index)
+        if index:
+            out.name = index
+
+        return out.copy(deep=copy)
 
 
 register_distributed_serializer(Series)

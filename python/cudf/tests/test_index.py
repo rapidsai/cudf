@@ -70,10 +70,10 @@ def test_index_comparision():
     start, stop = 10, 34
     rg = RangeIndex(start, stop)
     gi = GenericIndex(np.arange(start, stop))
-    assert rg == gi
-    assert gi == rg
-    assert rg[:-1] != gi
-    assert rg[:-1] == gi[:-1]
+    assert rg.equals(gi)
+    assert gi.equals(rg)
+    assert not rg[:-1].equals(gi)
+    assert rg[:-1].equals(gi[:-1])
 
 
 @pytest.mark.parametrize('func', [
@@ -148,3 +148,13 @@ def test_pandas_as_index():
     assert_eq(pdf_float_index, gdf_float_index)
     assert_eq(pdf_datetime_index, gdf_datetime_index)
     assert_eq(pdf_category_index, gdf_category_index)
+
+
+def test_index_rename():
+    pds = pd.Index([1, 2, 3], name='asdf')
+    gds = as_index(pds)
+
+    expect = pds.rename('new_name')
+    got = gds.rename('new_name')
+
+    assert_eq(expect, got)
