@@ -2513,12 +2513,15 @@ def from_pandas(obj):
             "Got %s" % type(obj)
         )
 
+
 def merge(left, right, *args, **kwargs):
     return left.merge(right, *args, **kwargs)
+
 
 # a bit of fanciness to inject doctstring with left parameter
 merge_doc = DataFrame.merge.__doc__
 idx = merge_doc.find('right')
-merge.__doc__ =  ''.join([merge_doc[:idx],'\n\tleft : DataFrame\n\t', merge_doc[idx:]])
+merge.__doc__ = ''.join([merge_doc[:idx], '\n\tleft : DataFrame\n\t',
+                        merge_doc[idx:]])
 
 register_distributed_serializer(DataFrame)
