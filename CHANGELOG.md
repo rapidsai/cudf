@@ -15,6 +15,7 @@
 - PR #888 CSV Reader: Add prefix parameter for column names, used when parsing without a header
 - PR #918 Add Series.groupby(level=0) support
 - PR #906 Add binary and comparison ops to DataFrame
+- PR #996 Replace relative path imports with absolute paths in tests
 
 ## Improvements
 
