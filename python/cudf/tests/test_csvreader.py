@@ -870,6 +870,7 @@ def test_csv_reader_oversized_byte_range():
     assert(all(pd_df.columns == cu_df.columns))
     assert(pd_df.shape == cu_df.shape)
 
+
 def test_csv_reader_index_col():
     buffer = '0,1,2\n3,4,5\n6,7,8\n'
     names = ['int1', 'int2', 'int3']
@@ -884,7 +885,6 @@ def test_csv_reader_index_col():
     pd_df = pd.read_csv(StringIO(buffer), header=None, index_col=0)
     for cu_idx, pd_idx in zip(cu_df.index, pd_df.index):
         assert(str(cu_idx) == str(pd_idx))
-
 
     # passing False to avoid using a column as index (no-op in cuDF)
     cu_df = read_csv(StringIO(buffer), header=None, index_col=False)
