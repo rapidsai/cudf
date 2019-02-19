@@ -21,6 +21,7 @@
 - PR #958 Support unary and binary ops on indexes
 - PR #964 Add `rename` method to `DataFrame`, `Series`, and `Index`
 - PR #992 Add comparison binaryops to DateTime columns
+- PR #997 Add property index setter
 
 ## Improvements
 
