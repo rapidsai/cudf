@@ -70,10 +70,10 @@ def test_index_comparision():
     start, stop = 10, 34
     rg = RangeIndex(start, stop)
     gi = GenericIndex(np.arange(start, stop))
-    assert rg == gi
-    assert gi == rg
-    assert rg[:-1] != gi
-    assert rg[:-1] == gi[:-1]
+    assert rg.equals(gi)
+    assert gi.equals(rg)
+    assert not rg[:-1].equals(gi)
+    assert rg[:-1].equals(gi[:-1])
 
 
 @pytest.mark.parametrize('func', [

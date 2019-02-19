@@ -230,7 +230,7 @@ class DataFrame(object):
             for k, col in self._cols.items():
                 df[k] = col[arg]
             return df
-        elif isinstance(arg, (list, np.ndarray, pd.Series, Series,)):
+        elif isinstance(arg, (list, np.ndarray, pd.Series, Series, Index)):
             mask = arg
             if isinstance(mask, list):
                 mask = np.array(mask)
@@ -773,7 +773,7 @@ class DataFrame(object):
 
         empty_index = len(self._index) == 0
         series = Series(col)
-        if forceindex or empty_index or self._index == series.index:
+        if forceindex or empty_index or self._index.equals(series.index):
             if empty_index:
                 self._index = series.index
             self._size = len(series)
