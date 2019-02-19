@@ -44,45 +44,45 @@ namespace { //anonymous
     template <class T>
     struct Scan {
         static
-            gdf_error call(const gdf_column *inp, gdf_column *out, bool inclusive,
+            gdf_error call(const gdf_column *input, gdf_column *output, bool inclusive,
                 cudaStream_t stream) {
             using cub::DeviceScan;
             auto scan_function = (inclusive ? inclusive_sum : exclusive_sum);
-            size_t size = inp->size;
-            const T* input = static_cast<const T*>(inp->data);
-            T* output = static_cast<T*>(out->data);
+            size_t size = input->size;
+            const T* d_input = static_cast<const T*>(input->data);
+            T* d_output = static_cast<T*>(output->data);
 
             // Prepare temp storage
             void *temp_storage = NULL;
             size_t temp_storage_bytes = 0;
-            scan_function(temp_storage, temp_storage_bytes, input, output,
+            scan_function(temp_storage, temp_storage_bytes, d_input, d_output,
                 size, stream);
             RMM_TRY(RMM_ALLOC(&temp_storage, temp_storage_bytes, stream));
 
-            if (inp->valid) {
+            if (input->valid) {
                 // allocate temporary column data
-                T* temp_inp;
-                RMM_TRY(RMM_ALLOC(&temp_inp, size * sizeof(T) + sizeof(gdf_size_type), stream));
+                T* temp_input;
+                RMM_TRY(RMM_ALLOC(&temp_input, size * sizeof(T) + sizeof(gdf_size_type), stream));
 
                 // copy bitmask
                 size_t valid_byte_length = gdf_get_num_chars_bitmask(size);
-                CUDA_TRY(cudaMemcpyAsync(out->valid, inp->valid,
+                CUDA_TRY(cudaMemcpyAsync(output->valid, input->valid,
                         valid_byte_length, cudaMemcpyDeviceToDevice, stream));
-                out->null_count = inp->null_count;
+                output->null_count = input->null_count;
 
-                // copy input data and replace with 0 if mask is not valid
-                apply_copy_mask(static_cast<const T*>(inp->data), inp->valid,
-                    size, temp_inp, static_cast<T>(0), stream);
+                // copy d_input data and replace with 0 if mask is not valid
+                apply_copy_mask(static_cast<const T*>(input->data), input->valid,
+                    size, temp_input, static_cast<T>(0), stream);
 
                 // Do scan
-                scan_function(temp_storage, temp_storage_bytes, temp_inp,
-                    output, size, stream);
+                scan_function(temp_storage, temp_storage_bytes, temp_input,
+                    d_output, size, stream);
 
-                RMM_TRY(RMM_FREE(temp_inp, stream));
+                RMM_TRY(RMM_FREE(temp_input, stream));
             }
             else {  // Do scan
                 scan_function(temp_storage, temp_storage_bytes,
-                    input, output, size, stream);
+                    d_input, d_output, size, stream);
             }
 
             // Cleanup
@@ -93,18 +93,18 @@ namespace { //anonymous
 
         static
             gdf_error exclusive_sum(void *&temp_storage, size_t &temp_storage_bytes,
-                const T *inp, T *out, size_t size, cudaStream_t stream) {
+                const T *input, T *output, size_t size, cudaStream_t stream) {
             cub::DeviceScan::ExclusiveSum(temp_storage, temp_storage_bytes,
-                inp, out, size, stream);
+                input, output, size, stream);
             CUDA_CHECK_LAST();
             return GDF_SUCCESS;
         }
 
         static
             gdf_error inclusive_sum(void *&temp_storage, size_t &temp_storage_bytes,
-                const T *inp, T *out, size_t size, cudaStream_t stream) {
+                const T *input, T *output, size_t size, cudaStream_t stream) {
             cub::DeviceScan::InclusiveSum(temp_storage, temp_storage_bytes,
-                inp, out, size, stream);
+                input, output, size, stream);
             CUDA_CHECK_LAST();
             return GDF_SUCCESS;
         }
@@ -113,24 +113,24 @@ namespace { //anonymous
     struct PrefixSumDispatcher {
         template <typename T,
             typename std::enable_if_t<std::is_arithmetic<T>::value>* = nullptr>
-            gdf_error operator()(gdf_column *inp, gdf_column *out,
+            gdf_error operator()(gdf_column *input, gdf_column *output,
                 bool inclusive, cudaStream_t stream = 0) {
-            GDF_REQUIRE(inp->size == out->size, GDF_COLUMN_SIZE_MISMATCH);
-            GDF_REQUIRE(inp->dtype == out->dtype, GDF_DTYPE_MISMATCH);
+            GDF_REQUIRE(input->size == output->size, GDF_COLUMN_SIZE_MISMATCH);
+            GDF_REQUIRE(input->dtype == output->dtype, GDF_DTYPE_MISMATCH);
 
-            if (!inp->valid) {
-                GDF_REQUIRE(!inp->valid || !inp->null_count, GDF_VALIDITY_MISSING);
-                GDF_REQUIRE(!out->valid, GDF_VALIDITY_MISSING);
+            if (!input->valid) {
+                GDF_REQUIRE(!input->valid || !input->null_count, GDF_VALIDITY_MISSING);
+                GDF_REQUIRE(!output->valid, GDF_VALIDITY_MISSING);
             }
             else {
-                GDF_REQUIRE(inp->valid && out->valid, GDF_DTYPE_MISMATCH);
+                GDF_REQUIRE(input->valid && output->valid, GDF_DTYPE_MISMATCH);
             }
-            return Scan<T>::call(inp, out, inclusive, stream);
+            return Scan<T>::call(input, output, inclusive, stream);
         }
 
         template <typename T,
             typename std::enable_if_t<!std::is_arithmetic<T>::value, T>* = nullptr>
-            gdf_error operator()(gdf_column *inp, gdf_column *out,
+            gdf_error operator()(gdf_column *input, gdf_column *output,
                 bool inclusive, cudaStream_t stream = 0) {
             return GDF_UNSUPPORTED_DTYPE;
         }
@@ -138,9 +138,8 @@ namespace { //anonymous
 
 } // end anonymous namespace
 
-gdf_error gdf_prefixsum(gdf_column *inp, gdf_column *out,
-    bool inclusive)
+gdf_error gdf_prefixsum(gdf_column *input, gdf_column *output, bool inclusive)
 {
-    return cudf::type_dispatcher(inp->dtype, PrefixSumDispatcher(),
-        inp, out, inclusive);
+    return cudf::type_dispatcher(input->dtype, PrefixSumDispatcher(),
+        input, output, inclusive);
 }
