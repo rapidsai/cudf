@@ -676,9 +676,13 @@ class DataFrame(object):
     def reset_index(self, drop=False):
         if not drop:
             name = self.index.name or 'index'
-            self[name] = self.index
-            self = self[[name] + list(self.columns[:-1])]
-        return self.set_index(RangeIndex(len(self)))
+            out = DataFrame()
+            out[name] = self.index
+            for c in self.columns:
+                out[c] = self[c]
+        else:
+            out = self
+        return out.set_index(RangeIndex(len(self)))
 
     def take(self, positions, ignore_index=False):
         out = DataFrame()
