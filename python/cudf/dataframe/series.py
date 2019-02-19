@@ -178,7 +178,7 @@ class Series(object):
     def to_frame(self):
         """ Convert Series into a DataFrame """
         from cudf import DataFrame
-        return DataFrame({self.name: self}, index=self.index)
+        return DataFrame({self.name or 0: self}, index=self.index)
 
     def set_mask(self, mask, null_count=None):
         """Create new Series by setting a mask array.

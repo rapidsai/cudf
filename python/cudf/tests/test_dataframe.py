@@ -1798,4 +1798,8 @@ def test_reset_index(pdf, gdf, drop):
 
 def test_to_frame(pdf, gdf):
     assert_eq(pdf.x.to_frame(), gdf.x.to_frame())
-    assert_eq(pdf.x.to_frame(), gdf.x.to_frame())
+
+    s = pd.Series([1, 2, 3])
+    g = gd.from_pandas(s)
+
+    assert_eq(s, g)
