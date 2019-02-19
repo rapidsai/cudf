@@ -148,3 +148,13 @@ def test_pandas_as_index():
     assert_eq(pdf_float_index, gdf_float_index)
     assert_eq(pdf_datetime_index, gdf_datetime_index)
     assert_eq(pdf_category_index, gdf_category_index)
+
+
+def test_index_rename():
+    pds = pd.Index([1, 2, 3], name='asdf')
+    gds = as_index(pds)
+
+    expect = pds.rename('new_name')
+    got = gds.rename('new_name')
+
+    assert_eq(expect, got)

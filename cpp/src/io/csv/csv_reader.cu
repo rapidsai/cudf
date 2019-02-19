@@ -417,9 +417,13 @@ gdf_error read_csv(csv_read_arg *args)
 		const auto file_size = st.st_size;
 		const auto page_size = sysconf(_SC_PAGESIZE);
 
+		if (args->byte_range_offset >= (size_t)file_size) { 
+			close(fd); 
+			checkError(GDF_INVALID_API_CALL, "The byte_range offset is larger than the file size");
+		}
+
 		// Have to align map offset to page size
 		map_offset = (args->byte_range_offset/page_size)*page_size;
-		if (map_offset >= (size_t)file_size) { close(fd); checkError(GDF_C_ERROR, "The offset is too high"); }
 
 		// Set to rest-of-the-file size, will reduce based on the byte range size
 		raw_csv->num_bytes = map_size = file_size - map_offset;
@@ -445,11 +449,6 @@ gdf_error read_csv(csv_read_arg *args)
 		raw_csv->num_bytes = map_size = args->buffer_size;
 	}
 	else { checkError(GDF_C_ERROR, "invalid input type"); }
-
-	// Reset the byte range size if useless
-	if (raw_csv->byte_range_size >= raw_csv->num_bytes) {
-		raw_csv->byte_range_size = 0;
-	}
 
 	const char* h_uncomp_data;
 	size_t h_uncomp_size = 0;
@@ -1049,14 +1048,9 @@ gdf_error uploadDataToDevice(const char *h_uncomp_data, size_t h_uncomp_size,
                     thrust::make_constant_iterator(start_offset),
                     raw_csv->recStart, thrust::minus<cu_recstart_t>());
 
-  // We added extra for offset=0 position - remove for actual data row count
-  if (raw_csv->byte_range_offset == 0) {
-    raw_csv->num_records--;
-  }
-  // We kept extra for end offset - remove for actual data row count
-  if (raw_csv->byte_range_size != 0) {
-    raw_csv->num_records--;
-  }
+  // The array of row offsets includes EOF
+  // reduce the number of records by one to exclude it from the row count
+  raw_csv->num_records--;
 
   return GDF_SUCCESS;
 }
