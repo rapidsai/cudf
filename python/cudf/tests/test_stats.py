@@ -86,33 +86,13 @@ def test_series_unique():
         mask = arr != -1
         sr = Series.from_masked_array(arr, Series(mask).as_mask())
         assert set(arr[mask]) == set(sr.unique().to_array())
-        assert len(set(arr[mask])) == sr.nunique()
+        assert len(set(arr[mask])) == sr.unique_count()
         df = pd.DataFrame(data=arr[mask], columns=['col'])
         expect = df.col.value_counts().sort_index()
         got = sr.value_counts().to_pandas().sort_index()
         print(expect.head())
         print(got.head())
         assert got.equals(expect)
-
-
-@pytest.mark.parametrize('nan_as_null, dropna',
-                         [(True, True), (True, False),
-                          (False, True), (False, False)])
-def test_series_nunique(nan_as_null, dropna):
-    # We remove nulls as opposed to NaNs using the dropna parameter,
-    # so to test against pandas we replace NaN with another discrete value
-    nan = np.dtype('float64').type(np.nan)
-    pd_series = pd.Series([1.0, 2.0, 3.0, -1.0, nan])
-    cudf_series = Series([1.0, 2.0, 3.0, nan, None], nan_as_null=nan_as_null)
-    expect = pd_series.nunique(dropna=dropna)
-    got = cudf_series.nunique(dropna=dropna)
-    assert expect == got
-
-    pd_series = pd.Series([1.0, -1, 2.0, 3.0])
-    cudf_series = Series([1.0, nan, 2.0, 3.0], nan_as_null=nan_as_null)
-    expect = pd_series.nunique(dropna=dropna)
-    got = cudf_series.nunique(dropna=dropna)
-    assert expect == got
 
 
 def test_series_scale():

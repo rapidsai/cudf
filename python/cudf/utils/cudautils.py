@@ -624,12 +624,7 @@ def gpu_mark_segment_begins(arr, markers):
         markers[0] = 1
     elif 0 < i < markers.size:
         if not markers[i]:
-            # This arithmetic handles NaNs/Infs while still maintaining
-            # consistency for other values. Since a NaN/Inf value is never
-            # equal to itself OR itself plus/minus any value, we use this
-            # unique property to return correctly for NaN/Inf AND other values
-            markers[i] = not (arr[i] != arr[i - 1]) & \
-                ((arr[i] != arr[i]) & (arr[i-1] != arr[i-1]))
+            markers[i] = arr[i] != arr[i - 1]
 
 
 @cuda.jit

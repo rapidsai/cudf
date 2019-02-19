@@ -988,8 +988,8 @@ class Series(object):
         res = self._column.unique(method=method)
         return Series(res)
 
-    def nunique(self, method='sort', dropna=True):
-        """Returns the number of unique values of the Series: approximate version,
+    def nunique(self, method='sort'):
+        """Returns the number of unique valies of the Series: approximate version,
         and exact version to be moved to libgdf
         """
         if method != 'sort':
@@ -997,7 +997,7 @@ class Series(object):
             raise NotImplementedError(msg)
         if self.null_count == len(self):
             return 0
-        return self._column.unique_count(method=method, dropna=dropna)
+        return self._column.unique_count(method=method)
         # return len(self._column.unique())
 
     def value_counts(self, method='sort', sort=True):
