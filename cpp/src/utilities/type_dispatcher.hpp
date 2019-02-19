@@ -1,6 +1,7 @@
 #ifndef GDF_TYPE_DISPATCHER_H
 #define GDF_TYPE_DISPATCHER_H
 
+
 #include "NVStrings.h"
 #include "cudf/types.h"
 #include "wrapper_types.hpp"
@@ -95,8 +96,8 @@ namespace cudf {
 template <class functor_t, typename... Ts>
 CUDA_HOST_DEVICE_CALLABLE 
 decltype(auto) type_dispatcher(gdf_dtype dtype,
-                               functor_t f,
-                               Ts&&... args) {
+                                                         functor_t f,
+                                                         Ts&&... args) {
   switch(dtype)
   {
     // The .template is known as a "template disambiguator"
@@ -121,72 +122,77 @@ decltype(auto) type_dispatcher(gdf_dtype dtype,
 }
 
 /**---------------------------------------------------------------------------*
- * @brief Type-traits struct for mapping a C++ type to it's corresponding
- * gdf_dtype.
+ * @brief Maps a C++ type to it's corresponding gdf_dtype.
  *
- * This traits structure contains a `gdf_dtype` member `value` that returns the
+ * When explicitly passed a template argument of a given type, returns the
  * appropriate `gdf_dtype` for the specified C++ type.
+ *
+ * For example:
+ * ```
+ * return gdf_dtype_of<int32_t>();        // Returns GDF_INT32
+ * return gdf_dtype_of<cudf::category>(); // Returns GDF_CATEGORY
+ * ```
  *
  * @tparam T The type to map to a `gdf_dtype`
  *---------------------------------------------------------------------------**/
 template <typename T>
-struct type_to_gdf_dtype {
-  static constexpr gdf_dtype value{GDF_invalid};
+inline constexpr gdf_dtype gdf_dtype_of() {
+  return GDF_invalid;
 };
 
 template <>
-struct type_to_gdf_dtype<int8_t> {
-  static constexpr gdf_dtype value{GDF_INT8};
+inline constexpr gdf_dtype gdf_dtype_of<int8_t>() {
+  return GDF_INT8;
 };
 
 template <>
-struct type_to_gdf_dtype<int16_t> {
-  static constexpr gdf_dtype value{GDF_INT16};
+inline constexpr gdf_dtype gdf_dtype_of<int16_t>() {
+  return GDF_INT16;
 };
 
 template <>
-struct type_to_gdf_dtype<int32_t> {
-  static constexpr gdf_dtype value{GDF_INT32};
+inline constexpr gdf_dtype gdf_dtype_of<int32_t>() {
+  return GDF_INT32;
 };
 
 template <>
-struct type_to_gdf_dtype<int64_t> {
-  static constexpr gdf_dtype value{GDF_INT64};
+inline constexpr gdf_dtype gdf_dtype_of<int64_t>() {
+  return GDF_INT64;
 };
 
 template <>
-struct type_to_gdf_dtype<float> {
-  static constexpr gdf_dtype value{GDF_FLOAT32};
+inline constexpr gdf_dtype gdf_dtype_of<float>() {
+  return GDF_FLOAT32;
 };
 
 template <>
-struct type_to_gdf_dtype<double> {
-  static constexpr gdf_dtype value{GDF_FLOAT64};
+inline constexpr gdf_dtype gdf_dtype_of<double>() {
+  return GDF_FLOAT64;
 };
 
 template <>
-struct type_to_gdf_dtype<cudf::date32> {
-  static constexpr gdf_dtype value{GDF_DATE32};
+inline constexpr gdf_dtype gdf_dtype_of<cudf::date32>() {
+  return GDF_DATE32;
 };
 
 template <>
-struct type_to_gdf_dtype<cudf::date64> {
-  static constexpr gdf_dtype value{GDF_DATE64};
+inline constexpr gdf_dtype gdf_dtype_of<cudf::date64>() {
+  return GDF_DATE64;
 };
 
 template <>
-struct type_to_gdf_dtype<cudf::timestamp> {
-  static constexpr gdf_dtype value{GDF_TIMESTAMP};
+inline constexpr gdf_dtype gdf_dtype_of<cudf::timestamp>() {
+  return GDF_TIMESTAMP;
 };
 
 template <>
-struct type_to_gdf_dtype<cudf::category> {
-  static constexpr gdf_dtype value{GDF_CATEGORY};
+inline constexpr gdf_dtype gdf_dtype_of<cudf::category>() {
+  return GDF_CATEGORY;
 };
 
 template <>
-struct type_to_gdf_dtype<NVStrings> {
-  static constexpr gdf_dtype value{GDF_STRING};
+inline constexpr gdf_dtype gdf_dtype_of<NVStrings>() {
+  return GDF_STRING;
 };
 
 }  // namespace cudf
