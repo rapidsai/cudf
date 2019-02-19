@@ -154,10 +154,12 @@ class Series(object):
     def __deepcopy__(self):
         return self.copy()
 
-    def reset_index(self):
-        """Reset index to RangeIndex
-        """
-        return self._copy_construct(index=RangeIndex(len(self)))
+    def reset_index(self, drop=False):
+        """ Reset index to RangeIndex """
+        if not drop:
+            return self.to_frame().reset_index(drop=drop)
+        else:
+            return self._copy_construct(index=RangeIndex(len(self)))
 
     def set_index(self, index):
         """Returns a new Series with a different index.
