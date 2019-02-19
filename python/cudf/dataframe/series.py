@@ -214,7 +214,7 @@ class Series(object):
         return not len(self)
 
     def __getitem__(self, arg):
-        if isinstance(arg, (list, np.ndarray, pd.Series, range,)):
+        if isinstance(arg, (list, np.ndarray, pd.Series, range, Index)):
             arg = Series(arg)
         if isinstance(arg, Series):
             if issubclass(arg.dtype.type, np.integer):
@@ -441,6 +441,8 @@ class Series(object):
     def _normalize_binop_value(self, other):
         if isinstance(other, Series):
             return other
+        elif isinstance(other, Index):
+            return Series(other)
         else:
             col = self._column.normalize_binop_value(other)
             return self._copy_construct(data=col)

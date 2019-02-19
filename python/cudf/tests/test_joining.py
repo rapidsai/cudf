@@ -272,26 +272,43 @@ def test_dataframe_merge_on(on):
 
     # Test (from cuDF; doesn't check for ordering)
     join_result = df_left.merge(df_right, on=on, how='left')
+    join_result_cudf = cudf.merge(df_left, df_right, on=on, how='left')
 
     join_result['right_val'] = (join_result['right_val']
                                 .astype(np.float64)
                                 .fillna(np.nan))
+
+    join_result_cudf['right_val'] = (join_result_cudf['right_val']
+                                     .astype(np.float64)
+                                     .fillna(np.nan))
+
     for col in list(pddf_joined.columns):
         if(col.count('_y') > 0):
             join_result[col] = (join_result[col]
                                 .astype(np.float64)
                                 .fillna(np.nan))
+            join_result_cudf[col] = (join_result_cudf[col]
+                                     .astype(np.float64)
+                                     .fillna(np.nan))
 
     # Test dataframe equality (ignore order of rows and columns)
-    pd.util.testing.assert_frame_equal(
-        join_result
-        .to_pandas()
-        .sort_values(list(pddf_joined.columns))
-        .reset_index(drop=True),
-        pddf_joined
-        .sort_values(list(pddf_joined.columns))
-        .reset_index(drop=True),
-        check_like=True)
+    cdf_result = join_result.to_pandas() \
+                            .sort_values(list(pddf_joined.columns)) \
+                            .reset_index(drop=True)
+
+    pdf_result = pddf_joined.sort_values(list(pddf_joined.columns)) \
+                            .reset_index(drop=True)
+
+    pd.util.testing.assert_frame_equal(cdf_result, pdf_result,
+                                       check_like=True)
+
+    merge_func_result_cdf = join_result_cudf.to_pandas() \
+                                            .sort_values(
+                                                list(pddf_joined.columns)) \
+                                            .reset_index(drop=True)
+
+    pd.util.testing.assert_frame_equal(merge_func_result_cdf, cdf_result,
+                                       check_like=True)
 
 
 def test_dataframe_merge_on_unknown_column():

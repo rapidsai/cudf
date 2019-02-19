@@ -229,7 +229,7 @@ class DataFrame(object):
             for k, col in self._cols.items():
                 df[k] = col[arg]
             return df
-        elif isinstance(arg, (list, np.ndarray, pd.Series, Series,)):
+        elif isinstance(arg, (list, np.ndarray, pd.Series, Series, Index)):
             mask = arg
             if isinstance(mask, list):
                 mask = np.array(mask)
@@ -778,7 +778,7 @@ class DataFrame(object):
 
         empty_index = len(self._index) == 0
         series = Series(col)
-        if forceindex or empty_index or self._index == series.index:
+        if forceindex or empty_index or self._index.equals(series.index):
             if empty_index:
                 self._index = series.index
             self._size = len(series)
@@ -1265,14 +1265,14 @@ class DataFrame(object):
     def T(self):
         return self.transpose()
 
-    def merge(self, other, on=None, how='left', lsuffix='_x', rsuffix='_y',
+    def merge(self, right, on=None, how='left', lsuffix='_x', rsuffix='_y',
               type="", method='hash'):
         """Merge GPU DataFrame objects by performing a database-style join operation
         by columns or indexes.
 
         Parameters
         ----------
-        other : DataFrame
+        right : DataFrame
         on : label or list; defaults to None
             Column or index level names to join on. These must be found in
             both DataFrames.
@@ -1336,7 +1336,7 @@ class DataFrame(object):
         if how not in ['left', 'inner', 'outer']:
             raise NotImplementedError('{!r} merge not supported yet'
                                       .format(how))
-        same_names = set(self.columns) & set(other.columns)
+        same_names = set(self.columns) & set(right.columns)
         if same_names and not (lsuffix or rsuffix):
             raise ValueError('there are overlapping columns but '
                              'lsuffix and rsuffix are not defined')
@@ -1353,7 +1353,7 @@ class DataFrame(object):
         # Essential parameters
         on = [on] if isinstance(on, str) else list(on)
         lhs = self
-        rhs = other
+        rhs = right
 
         # Pandas inconsistency warning
         if len(lhs) == 0 and len(lhs.columns) > len(rhs.columns) and\
@@ -1368,10 +1368,10 @@ class DataFrame(object):
         for name in on:
             if pd.api.types.is_categorical_dtype(self[name]):
                 lcats = self[name].cat.categories
-                rcats = other[name].cat.categories
+                rcats = right[name].cat.categories
                 if how == 'left':
                     cats = lcats
-                    other[name] = (other[name].cat.set_categories(cats)
+                    right[name] = (right[name].cat.set_categories(cats)
                                    .fillna(-1))
                 elif how == 'right':
                     cats = rcats
@@ -1384,9 +1384,9 @@ class DataFrame(object):
                     self[name] = (self[name].cat.set_categories(cats)
                                   .fillna(-1))
                     self[name] = self[name]._column.as_numerical
-                    other[name] = (other[name].cat.set_categories(cats)
+                    right[name] = (right[name].cat.set_categories(cats)
                                    .fillna(-1))
-                    other[name] = other[name]._column.as_numerical
+                    right[name] = right[name]._column.as_numerical
                 col_cats[name] = cats
         for name, col in lhs._cols.items():
             if pd.api.types.is_categorical_dtype(col) and name not in on:
@@ -1395,7 +1395,7 @@ class DataFrame(object):
         for name, col in rhs._cols.items():
             if pd.api.types.is_categorical_dtype(col) and name not in on:
                 f_n = fix_name(name, rsuffix)
-                col_cats[f_n] = other[name].cat.categories
+                col_cats[f_n] = right[name].cat.categories
 
         # Compute merge
         cols, valids = cpp_join.join(lhs._cols, rhs._cols, on, how,
@@ -1442,7 +1442,7 @@ class DataFrame(object):
                         categories=categories,
                         )
         right_column_idx = len(self.columns)
-        for name in other.columns:
+        for name in right.columns:
             if name not in on:
                 # now copy the columns from `right` that were not in `on`
                 right_name = fix_name(name, rsuffix)
@@ -2521,5 +2521,15 @@ def from_pandas(obj):
             "Got %s" % type(obj)
         )
 
+
+def merge(left, right, *args, **kwargs):
+    return left.merge(right, *args, **kwargs)
+
+
+# a bit of fanciness to inject doctstring with left parameter
+merge_doc = DataFrame.merge.__doc__
+idx = merge_doc.find('right')
+merge.__doc__ = ''.join([merge_doc[:idx], '\n\tleft : DataFrame\n\t',
+                        merge_doc[idx:]])
 
 register_distributed_serializer(DataFrame)
