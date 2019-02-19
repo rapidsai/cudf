@@ -1786,3 +1786,13 @@ def test_head_tail(nelem, data_type):
     check_frame_series_equality(gdf['a'].tail(), gdf['a'][-5:])
     check_frame_series_equality(gdf['a'].tail(3), gdf['a'][-3:])
     check_frame_series_equality(gdf['a'].tail(-2), gdf['a'][2:])
+
+
+def test_dataframe_empty_sort_index():
+    pdf = pd.DataFrame({'x': []})
+    gdf = DataFrame.from_pandas(pdf)
+
+    expect = pdf.sort_index()
+    got = gdf.sort_index()
+
+    assert_eq(expect, got)
