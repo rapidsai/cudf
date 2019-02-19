@@ -139,6 +139,29 @@ class Index(object):
         else:
             return column_join_res
 
+    def rename(self, name):
+        """
+        Alter Index name.
+
+        Defaults to returning new index.
+
+        Parameters
+        ----------
+        name : label
+            Name(s) to set.
+
+        Returns
+        -------
+        Index
+
+        Difference from pandas:
+          * Not supporting: inplace
+        """
+        out = self.copy(deep=False)
+        out.name = name
+
+        return out.copy(deep=True)
+
 
 class RangeIndex(Index):
     """An iterable integer index defined by a starting value and ending value.
@@ -171,10 +194,12 @@ class RangeIndex(Index):
         self.name = name
 
     def copy(self, deep=True):
-        if (deep):
-            return deepcopy(self)
+        if(deep):
+            result = deepcopy(self)
         else:
-            return copy(self)
+            result = copy(self)
+        result.name = self.name
+        return result
 
     def __repr__(self):
         return "{}(start={}, stop={})".format(self.__class__.__name__,
@@ -255,7 +280,7 @@ class RangeIndex(Index):
 
     def to_pandas(self):
         return pd.RangeIndex(start=self._start, stop=self._stop,
-                             dtype=self.dtype)
+                             dtype=self.dtype, name=self.name)
 
 
 def index_from_range(start, stop=None, step=None):
@@ -295,6 +320,7 @@ class GenericIndex(Index):
         else:
             result = copy(self)
         result._values = self._values.copy(deep)
+        result.name = self.name
         return result
 
     def serialize(self, serialize):
@@ -481,8 +507,7 @@ def as_index(arbitrary, name=None):
     elif isinstance(arbitrary, CategoricalColumn):
         return CategoricalIndex(arbitrary, name=name)
     else:
-        name = None
-        if hasattr(arbitrary, 'name'):
+        if hasattr(arbitrary, 'name') and name is None:
             name = arbitrary.name
         if len(arbitrary) == 0:
             return RangeIndex(0, 0, name=name)

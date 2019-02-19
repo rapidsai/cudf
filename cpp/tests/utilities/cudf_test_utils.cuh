@@ -125,7 +125,7 @@ gdf_col_pointer create_gdf_column(std::vector<ColumnType> const & host_vector,
                                   std::vector<gdf_valid_type> const & valid_vector = std::vector<gdf_valid_type>())
 {
   // Get the corresponding gdf_dtype for the ColumnType
-  gdf_dtype gdf_col_type{cudf::type_to_gdf_dtype<ColumnType>::value};
+  gdf_dtype gdf_col_type{cudf::gdf_dtype_of<ColumnType>()};
 
   EXPECT_TRUE(GDF_invalid != gdf_col_type);
 

@@ -48,7 +48,7 @@ void test_column(cudf::test::column_wrapper<T> const& col,
   ASSERT_NE(nullptr, underlying_column);
   EXPECT_EQ(expected_values.size(),
             static_cast<size_t>(underlying_column->size));
-  gdf_dtype expected_dtype = cudf::type_to_gdf_dtype<T>::value;
+  gdf_dtype expected_dtype = cudf::gdf_dtype_of<T>();
   EXPECT_EQ(expected_dtype, underlying_column->dtype);
 
   std::vector<T> actual_values;

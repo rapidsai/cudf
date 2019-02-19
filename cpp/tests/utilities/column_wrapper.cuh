@@ -359,7 +359,7 @@ struct column_wrapper {
     // Fill the gdf_column members
     the_column.data = data.data().get();
     the_column.size = data.size();
-    the_column.dtype = cudf::type_to_gdf_dtype<ColumnType>::value;
+    the_column.dtype = cudf::gdf_dtype_of<ColumnType>();
     gdf_dtype_extra_info extra_info;
     extra_info.time_unit = TIME_UNIT_NONE;
     the_column.dtype_info = extra_info;
