@@ -351,7 +351,7 @@ class Series(object):
         from cudf import DataFrame
         if isinstance(other, DataFrame):
             return other._binaryop(self, fn)
-        nvtx_range_push("PYGDF_BINARY_OP", "orange")
+        nvtx_range_push("CUDF_BINARY_OP", "orange")
         other = self._normalize_binop_value(other)
         outcol = self._column.binary_operator(fn, other._column)
         result = self._copy_construct(data=outcol)
@@ -368,7 +368,7 @@ class Series(object):
         from cudf import DataFrame
         if isinstance(other, DataFrame):
             return other._binaryop(self, fn)
-        nvtx_range_push("PYGDF_BINARY_OP", "orange")
+        nvtx_range_push("CUDF_BINARY_OP", "orange")
         other = self._normalize_binop_value(other)
         outcol = other._column.binary_operator(fn, self._column)
         result = self._copy_construct(data=outcol)
@@ -441,7 +441,7 @@ class Series(object):
             return self._copy_construct(data=col)
 
     def _unordered_compare(self, other, cmpops):
-        nvtx_range_push("PYGDF_UNORDERED_COMP", "orange")
+        nvtx_range_push("CUDF_UNORDERED_COMP", "orange")
         other = self._normalize_binop_value(other)
         outcol = self._column.unordered_compare(cmpops, other._column)
         result = self._copy_construct(data=outcol)
@@ -450,7 +450,7 @@ class Series(object):
         return result
 
     def _ordered_compare(self, other, cmpops):
-        nvtx_range_push("PYGDF_ORDERED_COMP", "orange")
+        nvtx_range_push("CUDF_ORDERED_COMP", "orange")
         other = self._normalize_binop_value(other)
         outcol = self._column.ordered_compare(cmpops, other._column)
         result = self._copy_construct(data=outcol)

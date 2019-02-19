@@ -3,7 +3,7 @@
 #
 # Copyright (c) 2018, NVIDIA CORPORATION.
 #
-# pygdf documentation build configuration file, created by
+# cudf documentation build configuration file, created by
 # sphinx-quickstart on Wed May  3 10:59:22 2017.
 #
 # This file is execfile()d with the current directory set to its

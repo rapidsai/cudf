@@ -97,9 +97,9 @@ class DataFrame(object):
     .. code-block:: python
 
           import pandas as pd
-          from pygdf.dataframe import DataFrame
+          import cudf
           pdf = pd.DataFrame({'a': [0, 1, 2, 3],'b': [0.1, 0.2, None, 0.3]})
-          df = DataFrame.from_pandas(pdf)
+          df = cudf.from_pandas(pdf)
           print(df)
 
     Output:
@@ -912,7 +912,7 @@ class DataFrame(object):
 
     @classmethod
     def _concat(cls, objs, ignore_index=False):
-        nvtx_range_push("PYGDF_CONCAT", "orange")
+        nvtx_range_push("CUDF_CONCAT", "orange")
         if len(set(frozenset(o.columns) for o in objs)) != 1:
             what = set(frozenset(o.columns) for o in objs)
             raise ValueError('columns mismatch: {}'.format(what))
@@ -1315,7 +1315,7 @@ class DataFrame(object):
              2    4 14.0   12.0
 
         """
-        _gdf.nvtx_range_push("PYGDF_JOIN", "blue")
+        _gdf.nvtx_range_push("CUDF_JOIN", "blue")
 
         # Early termination Error checking
         if type != "":
@@ -1480,7 +1480,7 @@ class DataFrame(object):
         - *on* is not supported yet due to lack of multi-index support.
         """
 
-        _gdf.nvtx_range_push("PYGDF_JOIN", "blue")
+        _gdf.nvtx_range_push("CUDF_JOIN", "blue")
 
         # Outer joins still use the old implementation
         if type != "":
@@ -1634,7 +1634,7 @@ class DataFrame(object):
         else:
             from cudf.groupby.groupby import Groupby
 
-            _gdf.nvtx_range_push("PYGDF_GROUPBY", "purple")
+            _gdf.nvtx_range_push("CUDF_GROUPBY", "purple")
             # The matching `pop` for this range is inside LibGdfGroupby
             # __apply_agg
             result = Groupby(self, by=by, method=method, as_index=as_index,
@@ -1703,7 +1703,7 @@ class DataFrame(object):
 
         """
 
-        _gdf.nvtx_range_push("PYGDF_QUERY", "purple")
+        _gdf.nvtx_range_push("CUDF_QUERY", "purple")
         # Get calling environment
         callframe = inspect.currentframe().f_back
         callenv = {

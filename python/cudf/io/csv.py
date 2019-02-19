@@ -192,7 +192,7 @@ def read_csv(filepath_or_buffer, lineterminator='\n',
             msg = '''All column dtypes must be specified.'''
             raise TypeError(msg)
 
-    nvtx_range_push("PYGDF_READ_CSV", "purple")
+    nvtx_range_push("CUDF_READ_CSV", "purple")
 
     csv_reader = ffi.new('csv_read_arg*')
 
