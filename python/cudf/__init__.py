@@ -2,7 +2,7 @@
 
 from cudf import dataframe
 
-from cudf.dataframe import DataFrame, from_pandas
+from cudf.dataframe import DataFrame, from_pandas, merge
 from cudf.dataframe import Index
 from cudf.dataframe import Series
 from cudf.multi import concat

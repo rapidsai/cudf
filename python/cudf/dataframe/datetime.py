@@ -17,6 +17,13 @@ _unordered_impl = {
     'ne': libgdf.gdf_ne_generic,
 }
 
+_ordered_impl = {
+    'lt': libgdf.gdf_lt_generic,
+    'le': libgdf.gdf_le_generic,
+    'gt': libgdf.gdf_gt_generic,
+    'ge': libgdf.gdf_ge_generic,
+}
+
 
 class DatetimeColumn(columnops.TypedColumnBase):
     # TODO - we only support milliseconds (date64)
@@ -139,6 +146,14 @@ class DatetimeColumn(columnops.TypedColumnBase):
         return binop(
             lhs, rhs,
             op=_unordered_impl[cmpop],
+            out_dtype=np.bool
+        )
+
+    def ordered_compare(self, cmpop, rhs):
+        lhs, rhs = self, rhs
+        return binop(
+            lhs, rhs,
+            op=_ordered_impl[cmpop],
             out_dtype=np.bool
         )
 

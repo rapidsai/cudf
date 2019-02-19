@@ -20,6 +20,9 @@
 - PR #906 Add binary and comparison ops to DataFrame
 - PR #958 Support unary and binary ops on indexes
 - PR #964 Add `rename` method to `DataFrame`, `Series`, and `Index`
+- PR #988 Add top-level merge function to cuDF
+- PR #992 Add comparison binaryops to DateTime columns
+- PR #996 Replace relative path imports with absolute paths in tests
 
 ## Improvements
 
@@ -39,6 +42,7 @@
 - PR #943 Updated `count_nonzero_mask` to return `num_rows` when the mask is null
 - PR #942 Added increment/decrement operators for wrapper types
 - PR #966 Updated RMM submodule.
+- PR #998 Add IO reader/writer modules to API docs, fix for missing cudf.Series docs
 
 ## Bug Fixes
 
