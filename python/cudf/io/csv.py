@@ -170,6 +170,12 @@ def read_csv(filepath_or_buffer, lineterminator='\n',
     .read_csv_strings
     """
 
+    if delim_whitespace:
+        if delimiter is not None:
+            raise ValueError("cannot set both delimiter and delim_whitespace")
+        if sep != ',':
+            raise ValueError("cannot set both sep and delim_whitespace")
+
     # Alias sep -> delimiter.
     if delimiter is None:
         delimiter = sep

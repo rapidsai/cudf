@@ -16,6 +16,17 @@
 #define CUDA_LAUNCHABLE
 #endif
 
+inline gdf_error set_null_count(gdf_column* col) {
+  gdf_size_type valid_count{};
+  gdf_error result =
+      gdf_count_nonzero_mask(col->valid, col->size, &valid_count);
+
+  GDF_REQUIRE(GDF_SUCCESS == result, result);
+
+  col->null_count = col->size - valid_count;
+
+  return GDF_SUCCESS;
+}
 
 CUDA_HOST_DEVICE_CALLABLE 
 bool gdf_is_valid(const gdf_valid_type *valid, gdf_index_type pos) {

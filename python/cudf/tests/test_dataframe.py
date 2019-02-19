@@ -17,8 +17,8 @@ from cudf.settings import set_options
 
 from itertools import combinations
 
-from . import utils
-from .utils import assert_eq
+from cudf.tests import utils
+from cudf.tests.utils import assert_eq
 
 
 def test_buffer_basic():
@@ -975,7 +975,7 @@ def test_nonmatching_index_setitem(nrows):
 
 
 @pytest.mark.parametrize('nelem', [0, 1, 5, 20, 100])
-@pytest.mark.parametrize('slice_start', [None, 0, 1, 3, 10])
+@pytest.mark.parametrize('slice_start', [None, 0, 1, 3, 10, -10])
 @pytest.mark.parametrize('slice_end', [None, 0, 1, 30, 50, -1])
 def test_dataframe_masked_slicing(nelem, slice_start, slice_end):
     gdf = DataFrame()
@@ -1234,6 +1234,81 @@ def test_dataframe_shape_empty():
     assert pdf.shape == gdf.shape
 
 
+@pytest.mark.parametrize('num_cols', [1, 2, 10])
+@pytest.mark.parametrize('num_rows', [1, 2, 1000])
+@pytest.mark.parametrize(
+    'dtype',
+    ['int8', 'int16', 'int32', 'int64', 'float32', 'float64',
+     'datetime64[ms]']
+)
+@pytest.mark.parametrize('nulls', ['none', 'some', 'all'])
+def test_dataframe_tranpose(nulls, num_cols, num_rows, dtype):
+    if dtype not in ['float32', 'float64'] and nulls in ['some', 'all']:
+        pytest.skip(msg='nulls not supported in dtype: ' + dtype)
+
+    pdf = pd.DataFrame()
+    from string import ascii_lowercase
+    for i in range(num_cols):
+        colname = ascii_lowercase[i]
+        data = np.random.randint(0, 26, num_rows).astype(dtype)
+        if nulls == 'some':
+            idx = np.random.choice(num_rows,
+                                   size=int(num_rows/2),
+                                   replace=False)
+            data[idx] = np.nan
+        elif nulls == 'all':
+            data[:] = np.nan
+        pdf[colname] = data
+
+    gdf = DataFrame.from_pandas(pdf)
+
+    got_function = gdf.transpose()
+    got_property = gdf.T
+
+    expect = pdf.transpose()
+
+    # Temporarily reset index since we don't use index for col names
+    if len(expect.columns) > 0:
+        expect = expect.reset_index(drop=True)
+        expect.columns = [str(x) for x in range(expect.shape[1])]
+
+    # Pandas creates an empty index of `object` dtype by default while cuDF
+    # creates a RangeIndex by default, type is different but same value
+    pd.testing.assert_frame_equal(
+        expect,
+        got_function.to_pandas(),
+        check_index_type=False
+    )
+    pd.testing.assert_frame_equal(
+        expect,
+        got_property.to_pandas(),
+        check_index_type=False
+    )
+
+
+@pytest.mark.parametrize('num_cols', [0, 1, 2, 10])
+@pytest.mark.parametrize('num_rows', [0, 1, 2, 1000])
+def test_dataframe_tranpose_category(num_cols, num_rows):
+    pytest.xfail("category dtype not yet supported for transpose")
+    pdf = pd.DataFrame()
+    from string import ascii_lowercase
+    for i in range(num_cols):
+        colname = ascii_lowercase[i]
+        data = pd.Series(list(ascii_lowercase), dtype='category')
+        data = data.sample(num_rows, replace=True).reset_index(drop=True)
+        pdf[colname] = data
+
+    gdf = DataFrame.from_pandas(pdf)
+
+    got_function = gdf.transpose()
+    got_property = gdf.T
+
+    expect = pdf.transpose()
+
+    pd.testing.assert_frame_equal(expect, got_function.to_pandas())
+    pd.testing.assert_frame_equal(expect, got_property.to_pandas())
+
+
 def test_generated_column():
     gdf = DataFrame({'a': (i for i in range(5))})
     assert len(gdf) == 5
@@ -1268,21 +1343,11 @@ def test_reductions(pdf, gdf, accessor, func):
     assert_eq(func(accessor(pdf)), func(accessor(gdf)))
 
 
-@pytest.mark.parametrize('left', [
-    pytest.param(lambda df: df, marks=pytest.mark.xfail()),
-    lambda df: df.x,
-    lambda df: 3,
-])
-@pytest.mark.parametrize('right', [
-    pytest.param(lambda df: df, marks=pytest.mark.xfail()),
-    lambda df: df.x,
-    lambda df: 3,
-])
 @pytest.mark.parametrize('binop', [
     operator.add,
     operator.mul,
-    pytest.param(operator.floordiv, marks=pytest.mark.xfail()),
-    pytest.param(operator.truediv, marks=pytest.mark.xfail()),
+    operator.floordiv,
+    operator.truediv,
     pytest.param(operator.mod, marks=pytest.mark.xfail()),
     pytest.param(operator.pow, marks=pytest.mark.xfail()),
     operator.eq,
@@ -1292,9 +1357,33 @@ def test_reductions(pdf, gdf, accessor, func):
     operator.ge,
     operator.ne,
 ])
-def test_binops(pdf, gdf, left, right, binop):
-    d = binop(left(pdf), right(pdf))
-    g = binop(left(gdf), right(gdf))
+def test_binops_df(pdf, gdf, binop):
+    pdf = pdf + 1.0
+    gdf = gdf + 1.0
+    d = binop(pdf, pdf)
+    g = binop(gdf, gdf)
+    assert_eq(d, g)
+
+
+@pytest.mark.parametrize('binop', [
+    operator.add,
+    operator.mul,
+    operator.floordiv,
+    operator.truediv,
+    pytest.param(operator.mod, marks=pytest.mark.xfail()),
+    pytest.param(operator.pow, marks=pytest.mark.xfail()),
+    operator.eq,
+    operator.lt,
+    operator.le,
+    operator.gt,
+    operator.ge,
+    operator.ne,
+])
+def test_binops_series(pdf, gdf, binop):
+    pdf = pdf + 1.0
+    gdf = gdf + 1.0
+    d = binop(pdf.x, pdf.y)
+    g = binop(gdf.x, gdf.y)
     assert_eq(d, g)
 
 
@@ -1455,7 +1544,7 @@ def test_arrow_pandas_compat(pdf, gdf, preserve_index):
     assert_eq(pdf2, gdf2)
 
 
-@pytest.mark.parametrize('nrows', [1, 8, 100, 1000])
+@pytest.mark.parametrize('nrows', [1, 8, 100, 1000, 100000])
 def test_series_hash_encode(nrows):
     data = np.asarray(range(nrows))
     s = Series(data, name="x1")
@@ -1579,3 +1668,121 @@ def test_arrow_handle_no_index_name(pdf, gdf):
     got = DataFrame.from_arrow(gdf_arrow)
     expect = pdf_arrow.to_pandas()
     assert_eq(expect, got)
+
+
+@pytest.mark.parametrize('num_rows', [1, 3, 10, 100])
+@pytest.mark.parametrize('num_bins', [1, 2, 4, 20])
+@pytest.mark.parametrize('right', [True, False])
+@pytest.mark.parametrize('dtype', ['int8', 'int16', 'int32', 'int64',
+                                   'float32', 'float64'])
+def test_series_digitize(num_rows, num_bins, right, dtype):
+    data = np.random.randint(0, 100, num_rows).astype(dtype)
+    bins = np.unique(np.sort(np.random.randint(2, 95, num_bins).astype(dtype)))
+    s = Series(data)
+    indices = s.digitize(bins, right)
+    np.testing.assert_array_equal(np.digitize(data, bins, right),
+                                  indices.to_array())
+
+
+def test_pandas_non_contiguious():
+    arr1 = np.random.sample([5000, 10])
+    assert arr1.flags['C_CONTIGUOUS'] is True
+    df = pd.DataFrame(arr1)
+    for col in df.columns:
+        assert df[col].values.flags['C_CONTIGUOUS'] is False
+
+    gdf = gd.DataFrame.from_pandas(df)
+    assert_eq(gdf.to_pandas(), df)
+
+
+@pytest.mark.parametrize('num_elements', [0, 2, 10, 100])
+@pytest.mark.parametrize('null_type', [np.nan, None, 'mixed'])
+def test_series_all_null(num_elements, null_type):
+    if null_type == 'mixed':
+        data = []
+        data1 = [np.nan] * int(num_elements/2)
+        data2 = [None] * int(num_elements/2)
+        for idx in range(len(data1)):
+            data.append(data1[idx])
+            data.append(data2[idx])
+    else:
+        data = [null_type] * num_elements
+
+    # Typecast Pandas because None will return `object` dtype
+    expect = pd.Series(data).astype('float64')
+    got = Series(data)
+
+    assert_eq(expect, got)
+
+
+def test_dataframe_rename():
+    pdf = pd.DataFrame({'a': [1, 2, 3], 'b': [4, 5, 6], 'c': [7, 8, 9]})
+    gdf = DataFrame.from_pandas(pdf)
+
+    expect = pdf.rename(columns=lambda name: 2 * name)
+    got = gdf.rename(columns=lambda name: 2 * name)
+
+    assert_eq(expect, got)
+
+    rename_mapper = {'a': 'z', 'b': 'y', 'c': 'x'}
+    expect = pdf.rename(columns=rename_mapper)
+    got = gdf.rename(columns=rename_mapper)
+
+    assert_eq(expect, got)
+
+
+def test_series_rename():
+    pds = pd.Series([1, 2, 3], name='asdf')
+    gds = Series.from_pandas(pds)
+
+    expect = pds.rename('new_name')
+    got = gds.rename('new_name')
+
+    assert_eq(expect, got)
+
+
+@pytest.mark.parametrize(
+    'data_type',
+    ['bool', 'int8', 'int16', 'int32', 'int64',
+     'float32', 'float64', 'datetime64[ms]']
+)
+@pytest.mark.parametrize('nelem', [0, 100])
+def test_head_tail(nelem, data_type):
+
+    def check_index_equality(left, right):
+        assert left.index.equals(right.index)
+
+    def check_values_equality(left, right):
+        if len(left) == 0 and len(right) == 0:
+            return None
+
+        np.testing.assert_array_equal(left.to_pandas(), right.to_pandas())
+
+    def check_frame_series_equality(left, right):
+        check_index_equality(left, right)
+        check_values_equality(left, right)
+
+    gdf = gd.DataFrame(
+        {
+            'a': np.random.randint(0, 1000, nelem).astype(data_type),
+            'b': np.random.randint(0, 1000, nelem).astype(data_type)
+        }
+    )
+
+    check_frame_series_equality(gdf.head(), gdf[:5])
+    check_frame_series_equality(gdf.head(3), gdf[:3])
+    check_frame_series_equality(gdf.head(-2), gdf[:-2])
+    check_frame_series_equality(gdf.head(0), gdf[0:0])
+
+    check_frame_series_equality(gdf['a'].head(), gdf['a'][:5])
+    check_frame_series_equality(gdf['a'].head(3), gdf['a'][:3])
+    check_frame_series_equality(gdf['a'].head(-2), gdf['a'][:-2])
+
+    check_frame_series_equality(gdf.tail(), gdf[-5:])
+    check_frame_series_equality(gdf.tail(3), gdf[-3:])
+    check_frame_series_equality(gdf.tail(-2), gdf[2:])
+    check_frame_series_equality(gdf.tail(0), gdf[0:0])
+
+    check_frame_series_equality(gdf['a'].tail(), gdf['a'][-5:])
+    check_frame_series_equality(gdf['a'].tail(3), gdf['a'][-3:])
+    check_frame_series_equality(gdf['a'].tail(-2), gdf['a'][2:])

@@ -7,6 +7,7 @@ LibGDF operates on column.
 from numbers import Number
 
 import numpy as np
+import pandas as pd
 from numba import cuda
 
 from librmm_cffi import librmm as rmm
@@ -37,12 +38,21 @@ class Column(object):
     *null_count*).
     """
     @classmethod
-    def _concat(cls, objs):
+    def _concat(cls, objs, dtype=None):
+        from cudf.dataframe.categorical import CategoricalColumn
+
         if len(objs) == 0:
-            return Column(Buffer.null(np.float))
+            if pd.api.types.is_categorical_dtype(dtype):
+                return CategoricalColumn(
+                    data=Column(Buffer.null(np.dtype('int8'))),
+                    null_count=0,
+                    ordered=False
+                )
+            else:
+                dtype = np.dtype(dtype)
+                return Column(Buffer.null(dtype))
 
         # Handle categories for categoricals
-        from cudf.dataframe.categorical import CategoricalColumn
         if all(isinstance(o, CategoricalColumn) for o in objs):
             new_cats = tuple(set([val for o in objs for val in o]))
             objs = [o.cat().set_categories(new_cats) for o in objs]
@@ -108,6 +118,9 @@ class Column(object):
             # check that mask length is sufficient
             assert mask.size * utils.mask_bitsize >= len(self)
 
+        self._update_null_count(null_count)
+
+    def _update_null_count(self, null_count=None):
         assert null_count is None or null_count >= 0
         if null_count is None:
             if self._mask is not None:
@@ -317,11 +330,8 @@ class Column(object):
             else:
                 return deep.allocate_mask()
         else:
-            shallow = Column()
-            shallow._data = self._data
-            shallow._mask = self._mask
-            shallow.has_null_mask = self.has_null_mask
-            return shallow
+            params = self._replace_defaults()
+            return type(self)(**params)
 
     def replace(self, **kwargs):
         """Replace attributes of the class and return a new Column.
@@ -374,7 +384,6 @@ class Column(object):
             return self.element_indexing(arg)
         elif isinstance(arg, slice):
             # compute mask slice
-            start, stop = utils.normalize_slice(arg, len(self))
             if self.null_count > 0:
                 if arg.step is not None and arg.step != 1:
                     raise NotImplementedError(arg)

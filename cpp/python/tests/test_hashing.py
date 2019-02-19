@@ -92,7 +92,8 @@ def test_hashing():
         # Hash
         for init_vals in [ffi.NULL, init_hash_values]:
             hashed_column = _call_hash_multi(libgdf.gdf_hash, ncols,
-                                             col_input, magic, init_vals, nrows)
+                                             col_input, magic, init_vals,
+                                             nrows)
 
             # Check if first and last row are equal
             assert tuple([hashed_column[0]]) == tuple([hashed_column[-1]])

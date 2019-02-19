@@ -3,6 +3,7 @@
 import numpy as np
 import collections
 
+from numbers import Number
 from pandas.api.types import is_categorical_dtype
 
 from cudf.dataframe.dataframe import DataFrame
@@ -19,15 +20,20 @@ from librmm_cffi import librmm as rmm
 class SeriesGroupBy(object):
     """Wraps DataFrameGroupby with special attr methods
     """
-    def __init__(self, source_series, group_series):
+    def __init__(self, source_series, group_series, level=None, sort=False):
         self.source_series = source_series
         self.group_series = group_series
+        self.level = level
+        self.sort = sort
 
     def __getattr__(self, attr):
         df = DataFrame()
         df['x'] = self.source_series
-        df['y'] = self.group_series
-        groupby = df.groupby('y')
+        if self.level is not None:
+            df['y'] = self.source_series.index
+        else:
+            df['y'] = self.group_series
+        groupby = df.groupby('y', level=self.level, sort=self.sort)
         result_df = getattr(groupby, attr)()
 
         def get_result():
@@ -42,7 +48,10 @@ class SeriesGroupBy(object):
     def agg(self, agg_types):
         df = DataFrame()
         df['x'] = self.source_series
-        df['y'] = self.group_series
+        if self.level is not None:
+            df['y'] = self.source_series.index
+        else:
+            df['y'] = self.group_series
         groupby = df.groupby('y').agg(agg_types)
         idx = groupby.index
         idx.name = None
@@ -77,7 +86,6 @@ class Groupby(object):
             A string indicating the libgdf method to use to perform the
             group by. Valid values are "hash".
         """
-
         self.level = None
         self._df = df
         if level == 0:
@@ -88,7 +96,7 @@ class Groupby(object):
         elif level and level > 0:
             raise NotImplementedError('MultiIndex not supported yet in cudf')
         else:
-            self._by = [by] if isinstance(by, str) else list(by)
+            self._by = [by] if isinstance(by, (str, Number)) else list(by)
         self._val_columns = [idx for idx in self._df.columns
                              if idx not in self._by]
         self._as_index = as_index
@@ -131,6 +139,8 @@ class Groupby(object):
         need_to_index = self._as_index
 
         col_count = 0
+        if isinstance(val_columns, (str, Number)):
+            val_columns = [val_columns]
         for val_col in val_columns:
             col_agg = self._df[val_col]._column.cffi_view
 
@@ -196,8 +206,11 @@ class Groupby(object):
             out_col_agg_series.data.size = num_row_results
             out_col_agg_series = out_col_agg_series.reset_index()
 
-            result[val_columns_out[col_count]
-                   ] = out_col_agg_series[:num_row_results]
+            if isinstance(val_columns_out, (str, Number)):
+                result[val_columns_out] = out_col_agg_series[:num_row_results]
+            else:
+                result[val_columns_out[col_count]
+                       ] = out_col_agg_series[:num_row_results]
 
             out_col_agg_series.data.size = num_row_results
             out_col_agg_series = out_col_agg_series.reset_index()
@@ -231,7 +244,7 @@ class Groupby(object):
 
         # If a Groupby has one index column and one value column
         # and as_index is set, return a Series instead of a df
-        if len(val_columns) == 1 and self._as_index:
+        if isinstance(val_columns, (str, Number)) and self._as_index:
             result_series = result[val_columns]
             idx = index.as_index(result[self._by[0]])
             if self.level == 0:
@@ -245,19 +258,35 @@ class Groupby(object):
         if(self._as_index):
             idx = index.as_index(result[self._by[0]])
             idx.name = self._by[0]
-            result = result.set_index(idx)
             result.drop_column(idx.name)
+            if self.level == 0:
+                idx.name = self._original_index_name
+            else:
+                idx.name = self._by[0]
+            result = result.set_index(idx)
 
         nvtx_range_pop()
 
         return result
 
     def __getitem__(self, arg):
-        for val in arg:
-            if val not in self._val_columns:
-                raise KeyError("Column not found: " + val)
-        self._val_columns = arg
-        return self
+        if isinstance(arg, (str, Number)):
+            if arg not in self._val_columns:
+                raise KeyError("Column not found: " + str(arg))
+        else:
+            for val in arg:
+                if val not in self._val_columns:
+                    raise KeyError("Column not found: " + str(val))
+        result = self.copy()
+        result._val_columns = arg
+        return result
+
+    def copy(self, deep=True):
+        df = self._df.copy(deep) if deep else self._df
+        result = Groupby(df, self._by)
+        result._method = self._method
+        result._val_columns = self._val_columns
+        return result
 
     def __getattr__(self, key):
         if key != '_val_columns' and key in self._val_columns:

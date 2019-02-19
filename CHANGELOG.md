@@ -5,13 +5,24 @@
 - PR #760 Raise `FileNotFoundError` instead of `GDF_FILE_ERROR` in `read_csv` if the file does not exist
 - PR #539 Add Python bindings for replace function
 - PR #807 CSV Reader: Add byte_range parameter to specify the range in the input file to be read
+- PR #857 Add Tail method for Series/DataFrame and update Head method to use iloc
 - PR #858 Add series feature hashing support
 - PR #871 CSV Reader: Add support for NA values, including user specified strings
 - PR #893 Adds PyArrow based parquet readers / writers to Python, fix category dtype handling, fix arrow ingest buffer size issues
 - PR #867 CSV Reader: Add support for ignoring blank lines and comment lines
+- PR #887 Add Series digitize method
 - PR #895 Add Series groupby
 - PR #898 Add DataFrame.groupby(level=0) support
+- PR #920 Add feather, JSON, HDF5 readers / writers from PyArrow / Pandas
 - PR #888 CSV Reader: Add prefix parameter for column names, used when parsing without a header
+- PR #939 Add ORC reader from PyArrow
+- PR #918 Add Series.groupby(level=0) support
+- PR #906 Add binary and comparison ops to DataFrame
+- PR #958 Support unary and binary ops on indexes
+- PR #964 Add `rename` method to `DataFrame`, `Series`, and `Index`
+- PR #988 Add top-level merge function to cuDF
+- PR #992 Add comparison binaryops to DateTime columns
+- PR #996 Replace relative path imports with absolute paths in tests
 
 ## Improvements
 
@@ -25,6 +36,13 @@
 - PR #532 CSV Reader: Use type dispatcher instead of switch block
 - PR #878 Add better indexing to Groupby
 - PR #554 Add `empty` method and `is_monotonic` attribute to `Index`
+- PR #909 CSV Reader: Avoid host->device->host copy for header row data
+- PR #916 Improved unit testing and error checking for `gdf_column_concat`
+- PR #941 Replace `numpy` call in `Series.hash_encode` with `numba`
+- PR #943 Updated `count_nonzero_mask` to return `num_rows` when the mask is null
+- PR #942 Added increment/decrement operators for wrapper types
+- PR #966 Updated RMM submodule.
+- PR #998 Add IO reader/writer modules to API docs, fix for missing cudf.Series docs
 
 ## Bug Fixes
 
@@ -42,6 +60,15 @@
 - PR #866 Merge v0.5.1 numpy ABI hotfix into 0.6
 - PR #917 value_counts return int type on empty columns
 - PR #611 Renamed `gdf_reduce_optimal_output_size()` -> `gdf_reduction_get_intermediate_output_size()`
+- PR #923 fix index for negative slicing for cudf dataframe and series
+- PR #927 CSV Reader: Fix category GDF_CATEGORY hashes not being computed properly
+- PR #921 CSV Reader: Fix parsing errors with delim_whitespace, quotations in the header row, unnamed columns
+- PR #933 Fix handling objects of all nulls in series creation
+- PR #940 CSV Reader: Fix an issue where the last data row is missing when using byte_range
+- PR #945 CSV Reader: Fix incorrect datetime64 when milliseconds or space separator are used
+- PR #959 Groupby: Problem with column name lookup
+- PR #950 Converting dataframe/recarry with non-contiguous arrays
+- PR #963 CSV Reader: Fix another issue with missing data rows when using byte_range
 
 
 # cuDF 0.5.1 (05 Feb 2019)
@@ -62,6 +89,7 @@
 - PR #501 CSV Reader: Add support for user-specified decimal point and thousands separator to read_csv_strings()
 - PR #455 CSV Reader: Add support for user-specified decimal point and thousands separator to read_csv()
 - PR #439 add `DataFrame.drop` method similar to pandas
+- PR #356 add `DataFrame.transpose` method and `DataFrame.T` property similar to pandas
 - PR #505 CSV Reader: Add support for user-specified boolean values
 - PR #350 Implemented Series replace function
 - PR #490 Added print_env.sh script to gather relevant environment details when reporting cuDF issues
