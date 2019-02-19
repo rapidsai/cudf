@@ -291,6 +291,8 @@ class Groupby(object):
         result = Groupby(df, self._by)
         result._method = self._method
         result._val_columns = self._val_columns
+        result.level = self.level
+        result._original_index_name = self._original_index_name
         return result
 
     def __getattr__(self, key):
