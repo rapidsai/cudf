@@ -89,6 +89,9 @@ class Groupby(object):
         self.level = None
         self._df = df
         if isinstance(by, Series):
+            if len(by) != len(self._df.index):
+                raise NotImplementedError("CUDF doesn't support series groupby"
+                                          "with indices of arbitrary length")
             self.level = 0
             self._df[self._LEVEL_0_INDEX_NAME] = by
             self._original_index_name = self._df.index.name
