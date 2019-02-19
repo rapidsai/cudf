@@ -70,9 +70,11 @@ _cmpops = [
 
 @pytest.mark.parametrize('obj_class', ['Series', 'Index'])
 @pytest.mark.parametrize('cmpop', _cmpops)
-def test_series_compare(cmpop, obj_class):
-    arr1 = np.random.random(100)
-    arr2 = np.random.random(100)
+@pytest.mark.parametrize('dtype', ['int8', 'int16', 'int32', 'int64',
+                                   'float32', 'float64', 'datetime64[ms]'])
+def test_series_compare(cmpop, obj_class, dtype):
+    arr1 = np.random.randint(0, 100, 100).astype(dtype)
+    arr2 = np.random.randint(0, 100, 100).astype(dtype)
     sr1 = Series(arr1)
     sr2 = Series(arr2)
 
@@ -95,9 +97,12 @@ def test_series_compare(cmpop, obj_class):
 
 
 @pytest.mark.parametrize('obj_class', ['Series', 'Index'])
-@pytest.mark.parametrize('nelem,cmpop', list(product([1, 2, 100], _cmpops)))
-def test_series_compare_scalar(nelem, cmpop, obj_class):
-    arr1 = np.random.random(nelem)
+@pytest.mark.parametrize('nelem', [1, 2, 100])
+@pytest.mark.parametrize('cmpop', _cmpops)
+@pytest.mark.parametrize('dtype', ['int8', 'int16', 'int32', 'int64',
+                                   'float32', 'float64', 'datetime64[ms]'])
+def test_series_compare_scalar(nelem, cmpop, obj_class, dtype):
+    arr1 = np.random.randint(0, 100, 100).astype(dtype)
     sr1 = Series(arr1)
     rhs = np.asscalar(random.choice(arr1))
 
