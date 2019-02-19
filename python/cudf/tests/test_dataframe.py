@@ -17,8 +17,8 @@ from cudf.settings import set_options
 
 from itertools import combinations
 
-from . import utils
-from .utils import assert_eq
+from cudf.tests import utils
+from cudf.tests.utils import assert_eq
 
 
 def test_buffer_basic():
@@ -1750,7 +1750,7 @@ def test_series_rename():
 def test_head_tail(nelem, data_type):
 
     def check_index_equality(left, right):
-        assert left.index == right.index
+        assert left.index.equals(right.index)
 
     def check_values_equality(left, right):
         if len(left) == 0 and len(right) == 0:
