@@ -2420,9 +2420,8 @@ class Loc(object):
                                                      row_slice.stop)
         for col in col_slice:
             sr = self._df[col]
-            df.add_column(col, sr[begin:end])
+            df.add_column(col, sr[begin:end], forceindex=True)
 
-        df.index = self.index[begin:end]
         return df
 
 
