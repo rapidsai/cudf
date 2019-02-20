@@ -482,7 +482,6 @@ def test_csv_reader_bools(tmpdir, names, dtypes, data, trues, falses):
     pd.util.testing.assert_frame_equal(df_out, out.to_pandas())
 
 
-
 def test_csv_quotednumbers(tmpdir):
     fname = tmpdir.mkdir("gdf_csv").join("tmp_csvreader_file12.csv")
 
