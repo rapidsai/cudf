@@ -67,7 +67,7 @@
 __host__ __device__ bool extractDate(const char *data, long sIdx, long eIdx,
                                      bool dayfirst, int *year, int *month,
                                      int *day);
-__host__ __device__ void extractTime(const char *data, int start, int end,
+__host__ __device__ void extractTime(const char *data, long start, long end,
                                      int *hour, int *minute, int *second,
                                      int *millisecond);
 
@@ -312,7 +312,7 @@ bool extractDate(const char *data, long sIdx, long eIdx, bool dayfirst, int *yea
  * @param[out] second The second value (0 if not present)
  * @param[out] millisecond The millisecond (0 if not present)
  */
-__host__ __device__ void extractTime(const char *data, int start, int end,
+__host__ __device__ void extractTime(const char *data, long start, long end,
                                      int *hour, int *minute, int *second,
                                      int *millisecond) {
   constexpr char sep = ':';
