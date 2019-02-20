@@ -2484,7 +2484,8 @@ class Iloc(object):
             sr = self._df[col]
             df.add_column(col, sr.iloc[tuple(rows)])
 
-        df.index = sr.index.take(np.array(rows))
+        df.index = sr.index[rows]
+        # df.index = sr.index.take(np.array(rows))
         return df
 
     def __setitem__(self, key, value):

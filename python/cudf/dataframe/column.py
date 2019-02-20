@@ -401,6 +401,15 @@ class Column(object):
             else:
                 newbuffer = self.data[arg]
                 return self.replace(data=newbuffer)
+        elif isinstance(arg, (list, np.ndarray)):
+            # buffer = list()
+            # for i in arg:
+            #     buffer.append(self[i])
+            # newbuffer = as_(buffer)
+            # breakpoint()
+            # return self.replace(data=newbuffer)
+            arg = np.array(arg)
+            return self.take(arg)
         else:
             raise NotImplementedError(type(arg))
 
