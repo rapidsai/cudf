@@ -22,7 +22,7 @@
 #include "binary/jit/util/operator.h"
 #include <jitify.hpp>
 
-namespace gdf {
+namespace cudf {
 namespace binops {
 namespace jit {
 
@@ -78,6 +78,6 @@ namespace jit {
 
 } // namespace jit
 } // namespace binops
-} // namespace gdf
+} // namespace cudf
 
 #endif

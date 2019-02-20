@@ -22,7 +22,7 @@
 #include <type_traits>
 #include <cstdint>
 
-namespace gdf {
+namespace cudf {
 namespace library {
 namespace operation {
 
@@ -108,6 +108,6 @@ namespace operation {
 
 }  // namespace operation
 }  // namespace library
-}  // namespace gdf
+}  // namespace cudf
 
 #endif

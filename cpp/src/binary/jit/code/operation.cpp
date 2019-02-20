@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-namespace gdf {
+namespace cudf {
 namespace binops {
 namespace jit {
 namespace code {
@@ -303,4 +303,4 @@ R"***(
 } // namespace code
 } // namespace jit
 } // namespace binops
-} // namespace gdf
+} // namespace cudf

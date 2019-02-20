@@ -18,7 +18,7 @@
 #ifndef GDF_BINARY_OPERATION_JIT_CODE_CODE_H
 #define GDF_BINARY_OPERATION_JIT_CODE_CODE_H
 
-namespace gdf {
+namespace cudf {
 namespace binops {
 namespace jit {
 namespace code {

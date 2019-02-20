@@ -19,7 +19,7 @@
 #include "binary/jit/util/type.h"
 #include <cstring>
 
-namespace gdf {
+namespace cudf {
 namespace binops {
 namespace jit {
 
@@ -40,4 +40,4 @@ namespace jit {
 
 } // namespace jit
 } // namespace binops
-} // namespace gdf
+} // namespace cudf

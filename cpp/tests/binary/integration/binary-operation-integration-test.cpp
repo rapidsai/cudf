@@ -17,7 +17,7 @@
 
 #include "tests/binary/integration/assert-binops.h"
 
-namespace gdf {
+namespace cudf {
 namespace test {
 namespace binop {
 
@@ -37,7 +37,7 @@ struct BinaryOperationIntegrationTest : public ::testing::Test {
 
 
 TEST_F(BinaryOperationIntegrationTest, Add_Scalar_Vector_SI32_FP32_SI64) {
-    using ADD = gdf::library::operation::Add<int32_t, float, int64_t>;
+    using ADD = cudf::library::operation::Add<int32_t, float, int64_t>;
 
     auto lhs = cudf::test::scalar_wrapper<float>{100};
     auto rhs = cudf::test::column_wrapper<int64_t>{100000, 
@@ -53,7 +53,7 @@ TEST_F(BinaryOperationIntegrationTest, Add_Scalar_Vector_SI32_FP32_SI64) {
 
 
 TEST_F(BinaryOperationIntegrationTest, Sub_Scalar_Vector_SI32_FP32_SI64) {
-    using SUB = gdf::library::operation::Sub<int32_t, float, int64_t>;
+    using SUB = cudf::library::operation::Sub<int32_t, float, int64_t>;
 
     auto lhs = cudf::test::scalar_wrapper<float>{10000};
     auto rhs = cudf::test::column_wrapper<int64_t>{100000, 
@@ -69,7 +69,7 @@ TEST_F(BinaryOperationIntegrationTest, Sub_Scalar_Vector_SI32_FP32_SI64) {
 
 
 TEST_F(BinaryOperationIntegrationTest, Add_Vector_Scalar_SI08_SI16_SI32) {
-    using ADD = gdf::library::operation::Add<int8_t, int16_t, int32_t>;
+    using ADD = cudf::library::operation::Add<int8_t, int16_t, int32_t>;
 
     auto lhs = cudf::test::column_wrapper<int16_t>{100,
         [](gdf_size_type row) {return row;},
@@ -85,7 +85,7 @@ TEST_F(BinaryOperationIntegrationTest, Add_Vector_Scalar_SI08_SI16_SI32) {
 
 
 TEST_F(BinaryOperationIntegrationTest, Add_Vector_Vector_SI32_FP64_SI08) {
-    using ADD = gdf::library::operation::Add<int32_t, double, int8_t>;
+    using ADD = cudf::library::operation::Add<int32_t, double, int8_t>;
 
     auto lhs = cudf::test::column_wrapper<double>{100,
         [](gdf_size_type row) {return row * 2.0;},
@@ -103,7 +103,7 @@ TEST_F(BinaryOperationIntegrationTest, Add_Vector_Vector_SI32_FP64_SI08) {
 
 
 TEST_F(BinaryOperationIntegrationTest, Sub_Vector_Vector_SI64) {
-    using SUB = gdf::library::operation::Sub<int64_t, int64_t, int64_t>;
+    using SUB = cudf::library::operation::Sub<int64_t, int64_t, int64_t>;
 
     auto lhs = cudf::test::column_wrapper<int64_t>{50000,
         [](gdf_size_type row) {return 100000 + row * 2;},
@@ -121,7 +121,7 @@ TEST_F(BinaryOperationIntegrationTest, Sub_Vector_Vector_SI64) {
 
 
 TEST_F(BinaryOperationIntegrationTest, Mul_Vector_Vector_SI64) {
-    using MUL = gdf::library::operation::Mul<int64_t, int64_t, int64_t>;
+    using MUL = cudf::library::operation::Mul<int64_t, int64_t, int64_t>;
 
     auto lhs = cudf::test::column_wrapper<int64_t>{50000,
         [](gdf_size_type row) {return 100000 + row * 2;},
@@ -139,7 +139,7 @@ TEST_F(BinaryOperationIntegrationTest, Mul_Vector_Vector_SI64) {
 
 
 TEST_F(BinaryOperationIntegrationTest, Div_Vector_Vector_SI64) {
-    using DIV = gdf::library::operation::Div<int64_t, int64_t, int64_t>;
+    using DIV = cudf::library::operation::Div<int64_t, int64_t, int64_t>;
 
     auto lhs = cudf::test::column_wrapper<int64_t>{50000,
         [](gdf_size_type row) {return 100000 + row * 2;},
@@ -157,7 +157,7 @@ TEST_F(BinaryOperationIntegrationTest, Div_Vector_Vector_SI64) {
 
 
 TEST_F(BinaryOperationIntegrationTest, TrueDiv_Vector_Vector_SI64) {
-    using TRUEDIV = gdf::library::operation::TrueDiv<int64_t, int64_t, int64_t>;
+    using TRUEDIV = cudf::library::operation::TrueDiv<int64_t, int64_t, int64_t>;
 
     auto lhs = cudf::test::column_wrapper<int64_t>{50000,
         [](gdf_size_type row) {return 100000 + row * 2;},
@@ -175,7 +175,7 @@ TEST_F(BinaryOperationIntegrationTest, TrueDiv_Vector_Vector_SI64) {
 
 
 TEST_F(BinaryOperationIntegrationTest, FloorDiv_Vector_Vector_SI64) {
-    using FLOORDIV = gdf::library::operation::FloorDiv<int64_t, int64_t, int64_t>;
+    using FLOORDIV = cudf::library::operation::FloorDiv<int64_t, int64_t, int64_t>;
 
     auto lhs = cudf::test::column_wrapper<int64_t>{50000,
         [](gdf_size_type row) {return 100000 + row * 2;},
@@ -193,7 +193,7 @@ TEST_F(BinaryOperationIntegrationTest, FloorDiv_Vector_Vector_SI64) {
 
 
 TEST_F(BinaryOperationIntegrationTest, Mod_Vector_Vector_SI64) {
-    using MOD = gdf::library::operation::Mod<int64_t, int64_t, int64_t>;
+    using MOD = cudf::library::operation::Mod<int64_t, int64_t, int64_t>;
 
     auto lhs = cudf::test::column_wrapper<int64_t>{50,
         [](gdf_size_type row) {return 120 + row * 2;},
@@ -211,7 +211,7 @@ TEST_F(BinaryOperationIntegrationTest, Mod_Vector_Vector_SI64) {
 
 
 TEST_F(BinaryOperationIntegrationTest, Mod_Vector_Vector_FP32) {
-    using MOD = gdf::library::operation::Mod<float, float, float>;
+    using MOD = cudf::library::operation::Mod<float, float, float>;
 
     auto lhs = cudf::test::column_wrapper<float>{50,
         [](gdf_size_type row) {return 120 + row * 2;},
@@ -229,7 +229,7 @@ TEST_F(BinaryOperationIntegrationTest, Mod_Vector_Vector_FP32) {
 
 
 TEST_F(BinaryOperationIntegrationTest, Mod_Vector_Vector_FP64) {
-    using MOD = gdf::library::operation::Mod<double, double, double>;
+    using MOD = cudf::library::operation::Mod<double, double, double>;
 
     auto lhs = cudf::test::column_wrapper<double>{50,
         [](gdf_size_type row) {return 120 + row * 2;},
@@ -247,7 +247,7 @@ TEST_F(BinaryOperationIntegrationTest, Mod_Vector_Vector_FP64) {
 
 
 TEST_F(BinaryOperationIntegrationTest, Pow_Vector_Vector_SI64) {
-    using POW = gdf::library::operation::Pow<int64_t, int64_t, int64_t>;
+    using POW = cudf::library::operation::Pow<int64_t, int64_t, int64_t>;
 
     auto lhs = cudf::test::column_wrapper<int64_t>{500,
         [](gdf_size_type row) {return row;},
@@ -265,4 +265,4 @@ TEST_F(BinaryOperationIntegrationTest, Pow_Vector_Vector_SI64) {
 
 } // namespace binop
 } // namespace test
-} // namespace gdf
+} // namespace cudf

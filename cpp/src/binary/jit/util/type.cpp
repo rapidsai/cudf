@@ -17,7 +17,7 @@
 
 #include "binary/jit/util/type.h"
 
-namespace gdf {
+namespace cudf {
 namespace binops {
 namespace jit {
 
@@ -80,4 +80,4 @@ namespace jit {
 
 } // namespace jit
 } // namespace binops
-} // namespace gdf
+} // namespace cudf

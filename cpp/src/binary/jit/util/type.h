@@ -20,7 +20,7 @@
 
 #include "cudf.h"
 
-namespace gdf {
+namespace cudf {
 namespace binops {
 namespace jit {
 

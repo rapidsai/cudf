@@ -19,7 +19,7 @@
 #include "binary/jit/util/operator.h"
 #include "cudf.h"
 
-namespace gdf {
+namespace cudf {
 namespace binops {
 namespace jit {
 
@@ -153,17 +153,17 @@ namespace jit {
 
 } // namespace jit
 } // namespace binops
-} // namespace gdf
+} // namespace cudf
 
 
 gdf_error gdf_binary_operation_s_v(gdf_column* out, gdf_scalar* lhs, gdf_column* rhs, gdf_binary_operator ope) {
-    return gdf::binops::jit::binary_operation(out, lhs, rhs, ope);
+    return cudf::binops::jit::binary_operation(out, lhs, rhs, ope);
 }
 
 gdf_error gdf_binary_operation_v_s(gdf_column* out, gdf_column* lhs, gdf_scalar* rhs, gdf_binary_operator ope) {
-    return gdf::binops::jit::binary_operation(out, lhs, rhs, ope);
+    return cudf::binops::jit::binary_operation(out, lhs, rhs, ope);
 }
 
 gdf_error gdf_binary_operation_v_v(gdf_column* out, gdf_column* lhs, gdf_column* rhs, gdf_binary_operator ope) {
-    return gdf::binops::jit::binary_operation(out, lhs, rhs, ope);
+    return cudf::binops::jit::binary_operation(out, lhs, rhs, ope);
 }

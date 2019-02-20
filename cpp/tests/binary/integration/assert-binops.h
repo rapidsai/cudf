@@ -23,7 +23,7 @@
 #include "tests/utilities/scalar_wrapper.cuh"
 #include "gtest/gtest.h"
 
-namespace gdf {
+namespace cudf {
 namespace test {
 namespace binop {
 
@@ -115,7 +115,7 @@ template <typename TypeOut, typename TypeLhs, typename TypeRhs>
 void ASSERT_BINOP(cudf::test::column_wrapper<TypeOut>& out,
                   cudf::test::column_wrapper<TypeLhs>& lhs,
                   cudf::test::column_wrapper<TypeRhs>& rhs,
-                  gdf::library::operation::Pow<TypeOut, TypeLhs, TypeRhs>&& ope) {
+                  cudf::library::operation::Pow<TypeOut, TypeLhs, TypeRhs>&& ope) {
     auto lhs_h = lhs.to_host();
     auto lhs_data = std::get<0>(lhs_h);
     auto rhs_h = rhs.to_host();
@@ -143,6 +143,6 @@ void ASSERT_BINOP(cudf::test::column_wrapper<TypeOut>& out,
 
 } // namespace binop
 } // namespace test
-} // namespace gdf
+} // namespace cudf
 
 #endif
