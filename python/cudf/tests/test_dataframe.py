@@ -1668,6 +1668,7 @@ def test_dataframe_boolmask(mask_shape):
     for col in gdf.columns:
         assert np.array_equal(gdf[col].fillna(-1), pdf[col].fillna(-1))
 
+
 def test_1row_arrow_table():
     data = [pa.array([0]), pa.array([1])]
     batch = pa.RecordBatch.from_arrays(data, ['f0', 'f1'])
