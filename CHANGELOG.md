@@ -27,6 +27,7 @@
 - PR #996 Replace relative path imports with absolute paths in tests
 - PR #995 CSV Reader: Add index_col parameter to specify the column name or index to be used as row labels
 - PR #1007 Replace relative path imports with absolute paths in cudf
+- PR #997 Add property index setter
 - PR #1013 select columns with df.columns
 
 ## Improvements
