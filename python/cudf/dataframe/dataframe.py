@@ -666,7 +666,7 @@ class DataFrame(object):
         idx = as_index(_index)
         self._index = idx
         for k in self.columns:
-                self[k] = self[k].set_index(idx)
+            self[k] = self[k].set_index(idx)
 
     def set_index(self, index):
         """Return a new DataFrame with a new index
