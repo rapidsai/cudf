@@ -1965,9 +1965,11 @@ class DataFrame(object):
            <class 'pandas.core.frame.DataFrame'>
 
         """
+        out = pd.DataFrame()
         index = self.index.to_pandas()
-        data = {c: x.to_pandas(index=index) for c, x in self._cols.items()}
-        return pd.DataFrame(data, columns=list(self._cols), index=index)
+        for c, x in self._cols.items():
+            out[c] = x.to_pandas(index=index)
+        return out
 
     @classmethod
     def from_pandas(cls, dataframe, nan_as_null=True):
