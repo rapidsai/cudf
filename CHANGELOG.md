@@ -20,13 +20,18 @@
 - PR #906 Add binary and comparison ops to DataFrame
 - PR #958 Support unary and binary ops on indexes
 - PR #964 Add `rename` method to `DataFrame`, `Series`, and `Index`
+- PR #985 Add `Series.to_frame` method
+- PR #985 Add `drop=` keyword to reset_index method
 - PR #994 Remove references to pygdf
 - PR #990 Add external series groupby support
 - PR #988 Add top-level merge function to cuDF
 - PR #992 Add comparison binaryops to DateTime columns
 - PR #996 Replace relative path imports with absolute paths in tests
 - PR #995 CSV Reader: Add index_col parameter to specify the column name or index to be used as row labels
+- PR #1004 Add `from_gpu_matrix` method to DataFrame
 - PR #1007 Replace relative path imports with absolute paths in cudf
+- PR #997 Add property index setter
+- PR #1013 select columns with df.columns
 
 ## Improvements
 
@@ -47,6 +52,7 @@
 - PR #942 Added increment/decrement operators for wrapper types
 - PR #966 Updated RMM submodule.
 - PR #998 Add IO reader/writer modules to API docs, fix for missing cudf.Series docs
+- PR #1017 concatenate along columns for Series and DataFrames
 - PR #1002 Support indexing a dataframe with another boolean dataframe
 
 ## Bug Fixes
@@ -76,6 +82,8 @@
 - PR #963 CSV Reader: Fix another issue with missing data rows when using byte_range
 - PR #999 Fix 0 sized kernel launches and empty sort_index exception
 - PR #993 Fix dtype in selecting 0 rows from objects
+- PR #1009 Fix performance regression in `to_pandas` method on DataFrame
+- PR #1008 Remove custom dask communication approach
 
 
 # cuDF 0.5.1 (05 Feb 2019)
