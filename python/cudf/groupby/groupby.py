@@ -87,8 +87,17 @@ class Groupby(object):
             group by. Valid values are "hash".
         """
         self.level = None
+        self._original_index_name = None
         self._df = df
-        if level == 0:
+        if isinstance(by, Series):
+            if len(by) != len(self._df.index):
+                raise NotImplementedError("CUDF doesn't support series groupby"
+                                          "with indices of arbitrary length")
+            self.level = 0
+            self._df[self._LEVEL_0_INDEX_NAME] = by
+            self._original_index_name = self._df.index.name
+            self._by = [self._LEVEL_0_INDEX_NAME]
+        elif level == 0:
             self.level = level
             self._df[self._LEVEL_0_INDEX_NAME] = self._df.index
             self._original_index_name = self._df.index.name
@@ -286,6 +295,8 @@ class Groupby(object):
         result = Groupby(df, self._by)
         result._method = self._method
         result._val_columns = self._val_columns
+        result.level = self.level
+        result._original_index_name = self._original_index_name
         return result
 
     def __getattr__(self, key):

@@ -5,9 +5,9 @@
 # cython: embedsignature = True
 # cython: language_level = 3
 
-from .cudf_cpp cimport *
+from cudf.bindings.cudf_cpp cimport *
 
-from .GDFError import GDFError
+from cudf.bindings.GDFError import GDFError
 
 import numpy as np
 import pandas as pd

@@ -11,12 +11,12 @@ from pandas.api.types import is_scalar, is_dict_like
 
 from cudf.utils import cudautils, utils
 from cudf import formatting
-from .buffer import Buffer
-from .index import Index, RangeIndex, as_index
+from cudf.dataframe.buffer import Buffer
+from cudf.dataframe.index import Index, RangeIndex, as_index
 from cudf.settings import NOTSET, settings
-from .column import Column
-from .datetime import DatetimeColumn
-from . import columnops
+from cudf.dataframe.column import Column
+from cudf.dataframe.datetime import DatetimeColumn
+from cudf.dataframe import columnops
 from cudf.comm.serialize import register_distributed_serializer
 from cudf._gdf import nvtx_range_push, nvtx_range_pop
 
@@ -351,7 +351,7 @@ class Series(object):
         from cudf import DataFrame
         if isinstance(other, DataFrame):
             return other._binaryop(self, fn)
-        nvtx_range_push("PYGDF_BINARY_OP", "orange")
+        nvtx_range_push("CUDF_BINARY_OP", "orange")
         other = self._normalize_binop_value(other)
         outcol = self._column.binary_operator(fn, other._column)
         result = self._copy_construct(data=outcol)
@@ -368,7 +368,7 @@ class Series(object):
         from cudf import DataFrame
         if isinstance(other, DataFrame):
             return other._binaryop(self, fn)
-        nvtx_range_push("PYGDF_BINARY_OP", "orange")
+        nvtx_range_push("CUDF_BINARY_OP", "orange")
         other = self._normalize_binop_value(other)
         outcol = other._column.binary_operator(fn, self._column)
         result = self._copy_construct(data=outcol)
@@ -441,7 +441,7 @@ class Series(object):
             return self._copy_construct(data=col)
 
     def _unordered_compare(self, other, cmpops):
-        nvtx_range_push("PYGDF_UNORDERED_COMP", "orange")
+        nvtx_range_push("CUDF_UNORDERED_COMP", "orange")
         other = self._normalize_binop_value(other)
         outcol = self._column.unordered_compare(cmpops, other._column)
         result = self._copy_construct(data=outcol)
@@ -450,7 +450,7 @@ class Series(object):
         return result
 
     def _ordered_compare(self, other, cmpops):
-        nvtx_range_push("PYGDF_ORDERED_COMP", "orange")
+        nvtx_range_push("CUDF_ORDERED_COMP", "orange")
         other = self._normalize_binop_value(other)
         outcol = self._column.ordered_compare(cmpops, other._column)
         result = self._copy_construct(data=outcol)
@@ -594,27 +594,39 @@ class Series(object):
 
         Examples
         --------
+        .. code-block:: python
 
-        >>> sr = Series(list(range(20)))
-        # get the value from 1st index
-        >>> sr.iloc[1]
-        1
+          from cudf import Series
 
-        # get the values from 0,2,9 and 18th index
-        >>> sr.iloc[0,2,9,18]
-        0    0
-        2    2
-        9    9
-        18   18
+          sr = Series(list(range(20)))
 
-        # get the values using slice indices
-        >>> sr.iloc[3:10:2]
-        3    3
-        5    5
-        7    7
-        9    9
+          # get the value from 1st index
+          sr.iloc[1]
 
-        :return:
+          # get the values from 0,2,9 and 18th index
+          sr.iloc[0,2,9,18]
+
+          # get the values using slice indices
+          sr.iloc[3:10:2]
+
+        Output:
+
+        .. code-block:: python
+
+          1
+
+          0    0
+          2    2
+          9    9
+          18   18
+
+          3    3
+          5    5
+          7    7
+          9    9
+
+        Returns
+        -------
         Series containing the elements corresponding to the indices
         """
         return Iloc(self)
@@ -1248,7 +1260,9 @@ class Series(object):
         In order to add another DataFrame or Series to an existing HDF file
         please use append mode and a different a key.
 
-        For more information see the :ref:`user guide <io.hdf5>`.
+        For more information see the :ref:`user guide
+        <https://pandas.pydata.org/pandas-docs/stable/user_guide/io.html#hdf5-pytables>`_.
+
         Parameters
         ----------
         path_or_buf : str or pandas.HDFStore
@@ -1274,7 +1288,8 @@ class Series(object):
         data_columns :  list of columns or True, optional
             List of columns to create as indexed data columns for on-disk
             queries, or True to use all columns. By default only the axes
-            of the object are indexed. See :ref:`io.hdf5-query-data-columns`.
+            of the object are indexed. `See Query via Data Columns
+            <https://pandas.pydata.org/pandas-docs/stable/user_guide/io.html#hdf5-pytables>`_.
             Applicable only to format='table'.
         complevel : {0-9}, optional
             Specifies a compression level for data.
@@ -1417,7 +1432,10 @@ class Iloc(object):
         for idx in rows:
             ret_list.append(self._sr[idx])
 
-        return Series(ret_list, index=as_index(np.asarray(rows)))
+        col_data = columnops.as_column(ret_list, dtype=self._sr.dtype,
+                                       nan_as_null=True)
+
+        return Series(col_data, index=as_index(np.asarray(rows)))
 
     def __setitem__(self, key, value):
         # throws an exception while updating

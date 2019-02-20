@@ -9,10 +9,10 @@ import pyarrow as pa
 from libgdf_cffi import libgdf
 from librmm_cffi import librmm as rmm
 
-from . import columnops, datetime
+from cudf.dataframe import columnops, datetime
 from cudf.utils import cudautils, utils
 from cudf import _gdf
-from .buffer import Buffer
+from cudf.dataframe.buffer import Buffer
 from cudf.comm.serialize import register_distributed_serializer
 from cudf._gdf import nvtx_range_push, nvtx_range_pop
 from cudf._sort import get_sorted_inds
@@ -114,6 +114,9 @@ class NumericalColumn(columnops.TypedColumnBase):
         other_dtype = np.min_scalar_type(other)
         if other_dtype.kind in 'biuf':
             other_dtype = np.promote_types(self.dtype, other_dtype)
+            # Temporary workaround since libcudf doesn't support int16 ops
+            if other_dtype == np.dtype('int16'):
+                other_dtype = np.dtype('int32')
             ary = utils.scalar_broadcast_to(other, shape=len(self),
                                             dtype=other_dtype)
             return self.replace(data=Buffer(ary), dtype=ary.dtype)
@@ -400,7 +403,7 @@ def numeric_column_binop(lhs, rhs, op, out_dtype):
     if lhs.dtype != rhs.dtype:
         raise TypeError('{} != {}'.format(lhs.dtype, rhs.dtype))
 
-    nvtx_range_push("PYGDF_BINARY_OP", "orange")
+    nvtx_range_push("CUDF_BINARY_OP", "orange")
     # Allocate output
     masked = lhs.has_null_mask or rhs.has_null_mask
     out = columnops.column_empty_like(lhs, dtype=out_dtype, masked=masked)
@@ -426,6 +429,9 @@ def numeric_normalize_types(*args):
     """Cast all args to a common type using numpy promotion logic
     """
     dtype = np.result_type(*[a.dtype for a in args])
+    # Temporary workaround since libcudf doesn't support int16 ops
+    if dtype == np.dtype('int16'):
+        dtype = np.dtype('int32')
     return [a.astype(dtype) for a in args]
 
 
