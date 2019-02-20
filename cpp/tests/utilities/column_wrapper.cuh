@@ -51,7 +51,7 @@ namespace test {
  * @brief Wrapper for a gdf_column used for unit testing.
  *
  * An abstraction on top of a gdf_column that provides functionality for
- * allocating, intiailizing, and otherwise managing gdf_column's for passing to
+ * allocating, initializing, and otherwise managing gdf_columns for passing to
  * libcudf APIs in unit testing.
  *
  * @tparam ColumnType The underlying data type of the column
