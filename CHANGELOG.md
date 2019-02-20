@@ -64,6 +64,7 @@
 - PR #959 Groupby: Problem with column name lookup
 - PR #950 Converting dataframe/recarry with non-contiguous arrays
 - PR #963 CSV Reader: Fix another issue with missing data rows when using byte_range
+- PR #1001 CSV Reader: Fix a memory access error when reading a large (>2GB) file with date columns
 
 # cuDF 0.5.1 (05 Feb 2019)
 
