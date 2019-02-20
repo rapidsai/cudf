@@ -1,6 +1,5 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
 
-import sys
 import atexit
 import multiprocessing as mp
 
