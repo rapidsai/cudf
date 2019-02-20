@@ -94,25 +94,24 @@ def test_series_unique():
         print(got.head())
         assert got.equals(expect)
 
+
 @pytest.mark.parametrize('nan_as_null, dropna',
                          [(True, True), (True, False),
                           (False, True), (False, False)])
-#@pytest.mark.parametrize('data', [[1.0, np.nan, np.nan], [1, 2, 3, 2, 2],
-#                                  [1.0, 2.0, 3.0, np.nan, None]])
 def test_series_nunique(nan_as_null, dropna):
     # We remove nulls as opposed to NaNs using the dropna parameter,
     # so to test against pandas we replace NaN with another discrete value
-    nan = np.nan
-    cudf_series = Series([1,2,3,2,2], nan_as_null=nan_as_null)
-    pd_series = pd.Series([1,2,3,2,2])
+    cudf_series = Series([1, 2, 2, 3, 3], nan_as_null=nan_as_null)
+    pd_series = pd.Series([1 ,2, 2, 3, 3])
     expect = pd_series.nunique(dropna=dropna)
     got = cudf_series.nunique(dropna=dropna)
     assert expect == got
 
-    cudf_series = Series([1.0, 2.0, 3.0, np.nan, None], nan_as_null=nan_as_null)
-    if nan_as_null == True:
+    cudf_series = Series([1.0, 2.0, 3.0, np.nan, None],
+                         nan_as_null=nan_as_null)
+    if nan_as_null is True:
         pd_series = pd.Series([1.0, 2.0, 3.0, np.nan, None])
-    else:    
+    else:
         pd_series = pd.Series([1.0, 2.0, 3.0, -1.0, None])
 
     expect = pd_series.nunique(dropna=dropna)
@@ -120,7 +119,7 @@ def test_series_nunique(nan_as_null, dropna):
     assert expect == got
 
     cudf_series = Series([1.0, np.nan, np.nan], nan_as_null=nan_as_null)
-    if nan_as_null == True:
+    if nan_as_null is True:
         pd_series = pd.Series([1.0, np.nan, np.nan])
     else:
         pd_series = pd.Series([1.0, -1.0, -1.0])

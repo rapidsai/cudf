@@ -692,13 +692,13 @@ def find_segments(arr, segs=None, markers=None):
     else:
         assert markers.size == arr.size
         assert markers.dtype == np.dtype(np.int32), markers.dtype
-    
+
     if markers.size > 0:
         if arr.dtype in ('float32', 'float64'):
             gpu_mark_segment_begins_float.forall(markers.size)(arr, markers)
         else:
-            gpu_mark_segment_begins_int.forall(markers.size)(arr,markers)
-            
+            gpu_mark_segment_begins_int.forall(markers.size)(arr, markers)
+
     if segs is not None and null_markers and segs.size > 0:
         gpu_mark_seg_segments.forall(segs.size)(segs, markers)
     # Compute index of marked locations
