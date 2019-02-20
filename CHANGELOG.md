@@ -20,7 +20,11 @@
 - PR #906 Add binary and comparison ops to DataFrame
 - PR #958 Support unary and binary ops on indexes
 - PR #964 Add `rename` method to `DataFrame`, `Series`, and `Index`
+- PR #990 Add external series groupby support
+- PR #988 Add top-level merge function to cuDF
 - PR #992 Add comparison binaryops to DateTime columns
+- PR #996 Replace relative path imports with absolute paths in tests
+- PR #995 CSV Reader: Add index_col parameter to specify the column name or index to be used as row labels
 
 ## Improvements
 
@@ -40,6 +44,7 @@
 - PR #943 Updated `count_nonzero_mask` to return `num_rows` when the mask is null
 - PR #942 Added increment/decrement operators for wrapper types
 - PR #966 Updated RMM submodule.
+- PR #998 Add IO reader/writer modules to API docs, fix for missing cudf.Series docs
 
 ## Bug Fixes
 
@@ -56,6 +61,7 @@
 - PR #889 Deleted test_rmm.py which has now moved to RMM repo
 - PR #866 Merge v0.5.1 numpy ABI hotfix into 0.6
 - PR #917 value_counts return int type on empty columns
+- PR #611 Renamed `gdf_reduce_optimal_output_size()` -> `gdf_reduction_get_intermediate_output_size()`
 - PR #923 fix index for negative slicing for cudf dataframe and series
 - PR #927 CSV Reader: Fix category GDF_CATEGORY hashes not being computed properly
 - PR #921 CSV Reader: Fix parsing errors with delim_whitespace, quotations in the header row, unnamed columns
@@ -66,6 +72,7 @@
 - PR #950 Converting dataframe/recarry with non-contiguous arrays
 - PR #963 CSV Reader: Fix another issue with missing data rows when using byte_range
 - PR #999 Fix 0 sized kernel launches and empty sort_index exception
+- PR #993 Fix dtype in selecting 0 rows from objects
 
 
 # cuDF 0.5.1 (05 Feb 2019)
