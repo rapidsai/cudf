@@ -57,4 +57,10 @@ def test_applymap_change_out_dtype():
     # Check
     expect = np.array(data, dtype=float)
     got = out.to_array()
-    np.testing.assert_array_equal(expect, got)
+    np.testing.assert_array_equal(expect, got)i
+
+
+def test_datetime_applymap():
+    np.arange('2010-01-01T12:00:00.000', '2010-10-01T12:00:00:00.100', 
+              dtype='datetime64[ms]')
+    

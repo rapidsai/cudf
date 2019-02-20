@@ -189,6 +189,26 @@ class DatetimeColumn(columnops.TypedColumnBase):
             raise TypeError(
                 "datetime column of {} has no NaN value".format(self.dtype))
 
+    def applymap(self, udf, out_dtype=None):
+        """Apply a elemenwise function to transform the values in the Column.
+        Parameters
+        ----------
+        udf : function
+            Wrapped by numba jit for call on the GPU as a device function.
+        out_dtype  : numpy.dtype; optional
+            The dtype for use in the output.
+            By default, use the same dtype as *self.dtype*.
+        Returns
+        -------
+        result : Column
+            The mask is preserved.
+        """
+        if out_dtype is None:
+            out_dtype = self.dtype
+        out = columnops.column_applymap(udf=udf, column=self,
+                                        out_dtype=out_dtype)
+        return self.replace(data=out, dtype=out_dtype)
+
 
 def binop(lhs, rhs, op, out_dtype):
     nvtx_range_push("CUDF_BINARY_OP", "orange")
