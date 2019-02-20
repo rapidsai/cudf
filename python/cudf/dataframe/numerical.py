@@ -114,6 +114,9 @@ class NumericalColumn(columnops.TypedColumnBase):
         other_dtype = np.min_scalar_type(other)
         if other_dtype.kind in 'biuf':
             other_dtype = np.promote_types(self.dtype, other_dtype)
+            # Temporary workaround since libcudf doesn't support int16 ops
+            if other_dtype == np.dtype('int16'):
+                other_dtype = np.dtype('int32')
             ary = utils.scalar_broadcast_to(other, shape=len(self),
                                             dtype=other_dtype)
             return self.replace(data=Buffer(ary), dtype=ary.dtype)
@@ -426,6 +429,9 @@ def numeric_normalize_types(*args):
     """Cast all args to a common type using numpy promotion logic
     """
     dtype = np.result_type(*[a.dtype for a in args])
+    # Temporary workaround since libcudf doesn't support int16 ops
+    if dtype == np.dtype('int16'):
+        dtype = np.dtype('int32')
     return [a.astype(dtype) for a in args]
 
 

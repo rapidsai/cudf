@@ -8,7 +8,7 @@ import pandas as pd
 
 from cudf.dataframe import DataFrame
 from cudf.dataframe import Series
-from .utils import assert_eq
+from cudf.tests.utils import assert_eq
 
 
 def make_frame(dataframe_class, nelem, seed=0, extra_levels=(), extra_vals=()):

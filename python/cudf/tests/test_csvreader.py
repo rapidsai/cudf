@@ -13,7 +13,7 @@ from cudf import read_csv
 from cudf.io.csv import read_csv_strings
 import cudf
 import nvstrings
-from .utils import assert_eq
+from cudf.tests.utils import assert_eq
 import gzip
 import shutil
 import os
