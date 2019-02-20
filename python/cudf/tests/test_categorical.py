@@ -317,7 +317,7 @@ def test_categorical_unique_count(nelem):
     # gdf
     gdf = DataFrame()
     gdf['a'] = Series.from_categorical(pd_cat)
-    gdf_unique_count = gdf['a'].unique_count()
+    gdf_unique_count = gdf['a'].nunique()
 
     # pandas
     pdf = pd.DataFrame()

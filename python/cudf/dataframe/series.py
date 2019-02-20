@@ -154,10 +154,12 @@ class Series(object):
     def __deepcopy__(self):
         return self.copy()
 
-    def reset_index(self):
-        """Reset index to RangeIndex
-        """
-        return self._copy_construct(index=RangeIndex(len(self)))
+    def reset_index(self, drop=False):
+        """ Reset index to RangeIndex """
+        if not drop:
+            return self.to_frame().reset_index(drop=drop)
+        else:
+            return self._copy_construct(index=RangeIndex(len(self)))
 
     def set_index(self, index):
         """Returns a new Series with a different index.
@@ -172,6 +174,11 @@ class Series(object):
 
     def as_index(self):
         return self.set_index(RangeIndex(len(self)))
+
+    def to_frame(self):
+        """ Convert Series into a DataFrame """
+        from cudf import DataFrame
+        return DataFrame({self.name or 0: self}, index=self.index)
 
     def set_mask(self, mask, null_count=None):
         """Create new Series by setting a mask array.
@@ -486,8 +493,15 @@ class Series(object):
         return self._column.dtype
 
     @classmethod
-    def _concat(cls, objs, index=True):
+    def _concat(cls, objs, axis=0, index=True):
         # Concatenate index if not provided
+        if axis == 1:
+            from cudf import DataFrame
+            df = DataFrame()
+            for o in objs:
+                df[o.name] = o
+            return df
+
         if index is True:
             index = Index._concat([o.index for o in objs])
 
@@ -1029,8 +1043,8 @@ class Series(object):
         res = self._column.unique(method=method)
         return Series(res)
 
-    def unique_count(self, method='sort'):
-        """Returns the number of unique valies of the Series: approximate version,
+    def nunique(self, method='sort', dropna=True):
+        """Returns the number of unique values of the Series: approximate version,
         and exact version to be moved to libgdf
         """
         if method != 'sort':
@@ -1038,7 +1052,7 @@ class Series(object):
             raise NotImplementedError(msg)
         if self.null_count == len(self):
             return 0
-        return self._column.unique_count(method=method)
+        return self._column.unique_count(method=method, dropna=dropna)
         # return len(self._column.unique())
 
     def value_counts(self, method='sort', sort=True):

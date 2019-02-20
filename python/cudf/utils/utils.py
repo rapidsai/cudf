@@ -2,6 +2,7 @@ from collections import namedtuple
 
 import numpy as np
 import pyarrow as pa
+from math import isnan, isinf
 
 from numba import njit
 
@@ -37,6 +38,18 @@ def mask_get(mask, pos):
 @njit
 def mask_set(mask, pos):
     mask[pos // mask_bitsize] |= 1 << (pos % mask_bitsize)
+
+
+@njit
+def check_equals_float(a, b):
+    return (a == b or (isnan(a) and isnan(b)) or
+            ((isinf(a) and a < 0) and (isinf(b) and b < 0)) or
+            ((isinf(a) and a > 0) and (isinf(b) and b > 0)))
+
+
+@njit
+def check_equals_int(a, b):
+    return (a == b)
 
 
 def make_mask(size):
