@@ -28,6 +28,10 @@ namespace jit {
 
     std::istream* headersCode(std::string filename, std::iostream& stream);
 
+    /**---------------------------------------------------------------------------*
+     * @brief Class used to handle compilation and execution of JIT kernels
+     * 
+     *---------------------------------------------------------------------------**/
     class Launcher {
     public:
         static Launcher launch() {
@@ -47,8 +51,22 @@ namespace jit {
         Launcher& operator=(const Launcher&) = delete;
 
     public:
+        /**---------------------------------------------------------------------------*
+         * @brief  Set the kernel name that this launcher will compile and launch
+         * 
+         * @param value  kernel name
+         *---------------------------------------------------------------------------**/
         Launcher& kernel(std::string&& value);
 
+        /**---------------------------------------------------------------------------*
+         * @brief Method to generate vector containing all template types for a JIT
+         *  kernel. This vector is used to instantiate the kernel code for one set of types
+         * 
+         * @tparam Args  Output dtype, LHS dtype, RHS dtype
+         * @param type   Operator type (direct (lhs op rhs) or reverse (rhs op lhs))
+         * @param args   gdf_column* output, lhs, rhs
+         * @return Launcher& ref to this launcehr object
+         *---------------------------------------------------------------------------**/
         template <typename ... Args>
         Launcher& instantiate(gdf_binary_operator ope, Operator::Type type, Args&& ... args) {
             Operator operatorSelector;
@@ -56,13 +74,27 @@ namespace jit {
             return *this;
         }
 
+        /**---------------------------------------------------------------------------*
+         * @brief Handle the Jitify API to instantiate and launch using information 
+         *  contained in the members of `this`
+         * 
+         * @param out[out] Output column
+         * @param lhs[in]  LHS column
+         * @param rhs[in]  RHS scalar (single value)
+         * @return gdf_error 
+         *---------------------------------------------------------------------------**/
         gdf_error launch(gdf_column* out, gdf_column* lhs, gdf_scalar* rhs);
 
+        /**---------------------------------------------------------------------------*
+         * @brief Handle the Jitify API to instantiate and launch using information 
+         *  contained in the members of `this`
+         * 
+         * @param out[out] Output column
+         * @param lhs[in]  LHS column
+         * @param rhs[in]  RHS column
+         * @return gdf_error 
+         *---------------------------------------------------------------------------**/
         gdf_error launch(gdf_column* out, gdf_column* lhs, gdf_column* rhs);
-
-        gdf_error launch(gdf_column* out, gdf_column* lhs, gdf_scalar* rhs, gdf_scalar* def);
-
-        gdf_error launch(gdf_column* out, gdf_column* lhs, gdf_column* rhs, gdf_scalar* def);
 
     private:
         std::vector<std::string> compilerFlags { "-std=c++14" };

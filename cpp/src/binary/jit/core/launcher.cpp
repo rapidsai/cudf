@@ -23,12 +23,26 @@ namespace cudf {
 namespace binops {
 namespace jit {
 
+/**---------------------------------------------------------------------------*
+ * @brief Cache to hold previously compiled code in. If JITIFY_THREAD_SAFE is
+ *  defined, then the cache is held globally in the process, otherwise it is
+ *  held locally in each thread
+ * 
+ *---------------------------------------------------------------------------**/
 #ifdef JITIFY_THREAD_SAFE
     static jitify::JitCache JitCache;
 #else
     static thread_local jitify::JitCache JitCache;
 #endif
 
+    /**---------------------------------------------------------------------------*
+     * @brief  Used to provide Jitify with strings that should be used as headers
+     *  during JIT compilation.
+     * 
+     * @param filename  file which was requested to include in source
+     * @param stream    stream to pass string of the requested header to
+     * @return std::istream* 
+     *---------------------------------------------------------------------------**/
     std::istream* headersCode(std::string filename, std::iostream& stream) {
         if (filename == "operation.h") {
             stream << code::operation;
