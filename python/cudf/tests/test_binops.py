@@ -12,7 +12,7 @@ import numpy as np
 from cudf.dataframe import Series
 from cudf.dataframe.index import as_index
 
-from . import utils
+from cudf.tests import utils
 
 
 _binops = [

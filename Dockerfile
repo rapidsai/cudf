@@ -3,7 +3,7 @@ ARG CUDA_VERSION=9.2
 ARG LINUX_VERSION=ubuntu16.04
 FROM nvidia/cuda:${CUDA_VERSION}-devel-${LINUX_VERSION}
 ENV LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/cuda/lib64:/usr/local/lib
-# Needed for pygdf.concat(), avoids "OSError: library nvvm not found"
+# Needed for cudf.concat(), avoids "OSError: library nvvm not found"
 ENV NUMBAPRO_NVVM=/usr/local/cuda/nvvm/lib64/libnvvm.so
 ENV NUMBAPRO_LIBDEVICE=/usr/local/cuda/nvvm/libdevice/
 
