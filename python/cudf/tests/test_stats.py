@@ -102,7 +102,7 @@ def test_series_nunique(nan_as_null, dropna):
     # We remove nulls as opposed to NaNs using the dropna parameter,
     # so to test against pandas we replace NaN with another discrete value
     cudf_series = Series([1, 2, 2, 3, 3], nan_as_null=nan_as_null)
-    pd_series = pd.Series([1 ,2, 2, 3, 3])
+    pd_series = pd.Series([1, 2, 2, 3, 3])
     expect = pd_series.nunique(dropna=dropna)
     got = cudf_series.nunique(dropna=dropna)
     assert expect == got

@@ -44,7 +44,7 @@ def mask_set(mask, pos):
 def check_equals_float(a, b):
     return (a == b or (isnan(a) and isnan(b)) or
             ((isinf(a) and a < 0) and (isinf(b) and b < 0)) or
-            ((isinf(a) and a > 0) and (isinf(b) and b > 0))) 
+            ((isinf(a) and a > 0) and (isinf(b) and b > 0)))
 
 
 @njit

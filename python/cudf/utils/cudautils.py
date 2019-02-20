@@ -639,7 +639,7 @@ def gpu_mark_segment_begins_float(arr, markers):
         markers[0] = 1
     elif 0 < i < markers.size:
         if not markers[i]:
-            markers[i] = not check_equals_float(arr[i], arr[i - 1]) 
+            markers[i] = not check_equals_float(arr[i], arr[i - 1])
 
 
 @cuda.jit
