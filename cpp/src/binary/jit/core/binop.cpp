@@ -17,102 +17,28 @@
 
 #include "binary/jit/core/launcher.h"
 #include "binary/jit/util/operator.h"
+#include "utilities/error_utils.h"
 #include "cudf.h"
 
 namespace cudf {
 namespace binops {
 namespace jit {
 
-    struct Option {
-        Option(bool state, gdf_error value)
-         : is_correct{state}, gdf_error_value{value}
-        { }
-
-        operator bool() {
-            return is_correct;
-        }
-
-        gdf_error get_gdf_error() {
-            return gdf_error_value;
-        }
-
-    private:
-        bool is_correct;
-        gdf_error gdf_error_value;
-    };
-
-    Option verify_scalar(gdf_scalar* scalar) {
-        if (scalar == nullptr) {
-            return Option(false, GDF_DATASET_EMPTY);
-        }
-        if (scalar->data == nullptr) {
-            return Option(false, GDF_DATASET_EMPTY);
-        }
-        if ((scalar->dtype <= GDF_invalid) || (N_GDF_TYPES <= scalar->dtype)) {
-            return Option(false, GDF_UNSUPPORTED_DTYPE);
-        }
-        return Option(true, GDF_SUCCESS);
-    }
-
-    Option verify_column(gdf_column* vector) {
-        if (vector == nullptr) {
-            return Option(false, GDF_DATASET_EMPTY);
-        }
-        if (vector->size == 0) {
-            return Option(false, GDF_SUCCESS);
-        }
-        if (vector->data == nullptr) {
-            return Option(false, GDF_DATASET_EMPTY);
-        }
-        if ((vector->dtype <= GDF_invalid) || (N_GDF_TYPES <= vector->dtype)) {
-            return Option(false, GDF_UNSUPPORTED_DTYPE);
-        }
-        return Option(true, GDF_SUCCESS);
-    }
-
-    Option verify_column(gdf_column* out, gdf_column* lhs) {
-        auto result = verify_column(out);
-        if (!result) {
-            return result;
-        }
-        result = verify_column(lhs);
-        if (!result) {
-            return result;
-        }
-        if (out->size < lhs->size) {
-            return Option(false, GDF_COLUMN_SIZE_MISMATCH);
-        }
-        return Option(true, GDF_SUCCESS);
-    }
-
-    Option verify_column(gdf_column* out, gdf_column* lhs, gdf_column* rhs) {
-        auto result = verify_column(out);
-        if (!result) {
-            return result;
-        }
-        result = verify_column(lhs);
-        if (!result) {
-            return result;
-        }
-        result = verify_column(rhs);
-        if (!result) {
-            return result;
-        }
-        if ((out->size < lhs->size) || (out->size < rhs->size) || (rhs->size != lhs->size)) {
-            return Option(false, GDF_COLUMN_SIZE_MISMATCH);
-        }
-        return Option(true, GDF_SUCCESS);
-    }
-
     gdf_error binary_operation(gdf_column* out, gdf_scalar* lhs, gdf_column* rhs, gdf_binary_operator ope) {
-        auto option_scalar = verify_scalar(lhs);
-        if (!option_scalar) {
-            return option_scalar.get_gdf_error();
-        }
-        auto option_column = verify_column(out, rhs);
-        if (!option_column) {
-            return option_column.get_gdf_error();
-        }
+
+        // Check for null pointers in input
+        GDF_REQUIRE((out != nullptr) && (lhs != nullptr) && (rhs != nullptr), GDF_DATASET_EMPTY)
+
+        // Check for 0 sized data
+        GDF_REQUIRE((out->size != 0) && (rhs->size != 0), GDF_SUCCESS)
+        GDF_REQUIRE((out->size == rhs->size), GDF_COLUMN_SIZE_MISMATCH)
+
+        // Check for null data pointer
+        GDF_REQUIRE((out->data != nullptr) && (lhs->data != nullptr) && (rhs->data != nullptr), GDF_DATASET_EMPTY)
+
+        // Check for datatype
+        GDF_REQUIRE((out->dtype > GDF_invalid) && (lhs->dtype > GDF_invalid) && (rhs->dtype > GDF_invalid), GDF_UNSUPPORTED_DTYPE)
+        GDF_REQUIRE((out->dtype < N_GDF_TYPES) && (lhs->dtype < N_GDF_TYPES) && (rhs->dtype < N_GDF_TYPES), GDF_UNSUPPORTED_DTYPE)
 
         Launcher::launch().kernel("kernel_v_s")
                           .instantiate(ope, Operator::Type::Reverse, out, rhs, lhs)
@@ -122,14 +48,20 @@ namespace jit {
     }
 
     gdf_error binary_operation(gdf_column* out, gdf_column* lhs, gdf_scalar* rhs, gdf_binary_operator ope) {
-        auto option_scalar = verify_scalar(rhs);
-        if (!option_scalar) {
-            return option_scalar.get_gdf_error();
-        }
-        auto option_column = verify_column(out, lhs);
-        if (!option_column) {
-            return option_column.get_gdf_error();
-        }
+
+        // Check for null pointers in input
+        GDF_REQUIRE((out != nullptr) && (lhs != nullptr) && (rhs != nullptr), GDF_DATASET_EMPTY)
+
+        // Check for 0 sized data
+        GDF_REQUIRE((out->size != 0) && (lhs->size != 0), GDF_SUCCESS)
+        GDF_REQUIRE((out->size == lhs->size), GDF_COLUMN_SIZE_MISMATCH)
+
+        // Check for null data pointer
+        GDF_REQUIRE((out->data != nullptr) && (lhs->data != nullptr) && (rhs->data != nullptr), GDF_DATASET_EMPTY)
+
+        // Check for datatype
+        GDF_REQUIRE((out->dtype > GDF_invalid) && (lhs->dtype > GDF_invalid) && (rhs->dtype > GDF_invalid), GDF_UNSUPPORTED_DTYPE)
+        GDF_REQUIRE((out->dtype < N_GDF_TYPES) && (lhs->dtype < N_GDF_TYPES) && (rhs->dtype < N_GDF_TYPES), GDF_UNSUPPORTED_DTYPE)
 
         Launcher::launch().kernel("kernel_v_s")
                           .instantiate(ope, Operator::Type::Direct, out, lhs, rhs)
@@ -139,11 +71,21 @@ namespace jit {
     }
 
     gdf_error binary_operation(gdf_column* out, gdf_column* lhs, gdf_column* rhs, gdf_binary_operator ope) {
-        auto option_column = verify_column(out, lhs, rhs);
-        if (!option_column) {
-            return option_column.get_gdf_error();
-        }
 
+        // Check for null pointers in input
+        GDF_REQUIRE((out != nullptr) && (lhs != nullptr) && (rhs != nullptr), GDF_DATASET_EMPTY)
+
+        // Check for 0 sized data
+        GDF_REQUIRE((out->size != 0) && (lhs->size != 0) && (rhs->size != 0), GDF_SUCCESS)
+        GDF_REQUIRE((out->size == lhs->size) && (lhs->size == rhs->size), GDF_COLUMN_SIZE_MISMATCH)
+
+        // Check for null data pointer
+        GDF_REQUIRE((out->data != nullptr) && (lhs->data != nullptr) && (rhs->data != nullptr), GDF_DATASET_EMPTY)
+
+        // Check for datatype
+        GDF_REQUIRE((out->dtype > GDF_invalid) && (lhs->dtype > GDF_invalid) && (rhs->dtype > GDF_invalid), GDF_UNSUPPORTED_DTYPE)
+        GDF_REQUIRE((out->dtype < N_GDF_TYPES) && (lhs->dtype < N_GDF_TYPES) && (rhs->dtype < N_GDF_TYPES), GDF_UNSUPPORTED_DTYPE)
+        
         Launcher::launch().kernel("kernel_v_v")
                           .instantiate(ope, Operator::Type::Direct, out, lhs, rhs)
                           .launch(out, lhs, rhs);
