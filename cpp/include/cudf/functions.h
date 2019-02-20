@@ -713,7 +713,8 @@ gdf_error gdf_validity_and(gdf_column *lhs, gdf_column *rhs, gdf_column *output)
 /* reductions
 
 The following reduction functions use the result array as a temporary working
-space.  Use gdf_reduce_optimal_output_size() to get its optimal size.
+space.  Use gdf_reduction_get_intermediate_output_size() to get the necessary
+size for this use.
 */
 
 
@@ -728,7 +729,7 @@ space.  Use gdf_reduce_optimal_output_size() to get its optimal size.
  *       block sum rather than launch a second kernel. When that happens, this
  *       function can go away and the output can be a single element.
  * --------------------------------------------------------------------------*/
-unsigned int gdf_reduce_optimal_output_size();
+unsigned int gdf_reduction_get_intermediate_output_size();
 
 /* --------------------------------------------------------------------------*
  * @brief  Computes the sum of the values in all rows of a column
@@ -736,7 +737,7 @@ unsigned int gdf_reduce_optimal_output_size();
  * @param[in] col Input column
  * @param[out] dev_result The output sum 
  * @param[in] dev_result_size The size of dev_result in elements, which should
- *                            be computed using gdf_reduce_optimal_output_size
+ *                            be computed using gdf_reduction_get_intermediate_output_size
  *                            This is used as intermediate storage, and the 
  *                            first element contains the total result
  * 
@@ -753,7 +754,7 @@ gdf_error gdf_sum(gdf_column *col, void *dev_result, gdf_size_type dev_result_si
  * @param[in] col Input column
  * @param[out] dev_result The output product
  * @param[in] dev_result_size The size of dev_result in elements, which should
- *                            be computed using gdf_reduce_optimal_output_size
+ *                            be computed using gdf_reduction_get_intermediate_output_size
  *                            This is used as intermediate storage, and the 
  *                            first element contains the total result
  * 
@@ -770,7 +771,7 @@ gdf_error gdf_product(gdf_column *col, void *dev_result, gdf_size_type dev_resul
  * @param[in] col Input column
  * @param[out] dev_result The output sum of squares
  * @param[in] dev_result_size The size of dev_result in elements, which should
- *                            be computed using gdf_reduce_optimal_output_size
+ *                            be computed using gdf_reduction_get_intermediate_output_size
  *                            This is used as intermediate storage, and the 
  *                            first element contains the total result
  * 
@@ -788,7 +789,7 @@ gdf_error gdf_sum_of_squares(gdf_column *col, void *dev_result, gdf_size_type de
  * @param[in] col Input column
  * @param[out] dev_result The output minimum
  * @param[in] dev_result_size The size of dev_result in elements, which should
- *                            be computed using gdf_reduce_optimal_output_size
+ *                            be computed using gdf_reduction_get_intermediate_output_size
  *                            This is used as intermediate storage, and the 
  *                            first element contains the total result
  * 
@@ -804,7 +805,7 @@ gdf_error gdf_min(gdf_column *col, void *dev_result, gdf_size_type dev_result_si
  * @param[in] col Input column
  * @param[out] dev_result The output maximum
  * @param[in] dev_result_size The size of dev_result in elements, which should
- *                            be computed using gdf_reduce_optimal_output_size
+ *                            be computed using gdf_reduction_get_intermediate_output_size
  *                            This is used as intermediate storage, and the 
  *                            first element contains the total result
  * 

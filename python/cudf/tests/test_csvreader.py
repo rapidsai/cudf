@@ -862,7 +862,6 @@ def test_csv_reader_header_quotation():
 
 
 def test_csv_reader_oversized_byte_range():
-    # first and last columns are unnamed
     buffer = 'a,b,c,d,e\n4,5,6,7,8\n'
 
     cu_df = read_csv(StringIO(buffer), byte_range=(0, 1024))
@@ -870,3 +869,25 @@ def test_csv_reader_oversized_byte_range():
 
     assert(all(pd_df.columns == cu_df.columns))
     assert(pd_df.shape == cu_df.shape)
+
+
+def test_csv_reader_index_col():
+    buffer = '0,1,2\n3,4,5\n6,7,8\n'
+    names = ['int1', 'int2', 'int3']
+
+    # using a column name
+    cu_df = read_csv(StringIO(buffer), names=names, index_col='int1')
+    pd_df = pd.read_csv(StringIO(buffer), names=names, index_col='int1')
+    pd.util.testing.assert_frame_equal(pd_df, cu_df.to_pandas())
+
+    # using a column index
+    cu_df = read_csv(StringIO(buffer), header=None, index_col=0)
+    pd_df = pd.read_csv(StringIO(buffer), header=None, index_col=0)
+    for cu_idx, pd_idx in zip(cu_df.index, pd_df.index):
+        assert(str(cu_idx) == str(pd_idx))
+
+    # passing False to avoid using a column as index (no-op in cuDF)
+    cu_df = read_csv(StringIO(buffer), header=None, index_col=False)
+    pd_df = pd.read_csv(StringIO(buffer), header=None, index_col=False)
+    for cu_idx, pd_idx in zip(cu_df.index, pd_df.index):
+        assert(str(cu_idx) == str(pd_idx))

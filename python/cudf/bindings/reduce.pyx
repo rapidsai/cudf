@@ -33,7 +33,7 @@ def apply_reduce(reduction, col):
     """
 
 
-    outsz = gdf_reduce_optimal_output_size()
+    outsz = gdf_reduction_get_intermediate_output_size()
     out = rmm.device_array(outsz, dtype=col.dtype)
     cdef uintptr_t out_ptr = get_ctype_ptr(out)
 
