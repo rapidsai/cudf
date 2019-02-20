@@ -73,6 +73,7 @@
 - PR #950 Converting dataframe/recarry with non-contiguous arrays
 - PR #963 CSV Reader: Fix another issue with missing data rows when using byte_range
 - PR #993 Fix dtype in selecting 0 rows from objects
+- PR #1008 Remove custom dask communication approach
 
 
 
