@@ -2186,6 +2186,58 @@ class DataFrame(object):
             return df.set_index(indices.astype(np.int64))
         return df
 
+    @classmethod
+    def from_gpu_matrix(self, data, index=None, columns=None, nan_as_null=False):
+        """Convert from a numba gpu ndarray.
+
+        Parameters
+        ----------
+        data : numba gpu ndarray
+        index : str
+            The name of the index column in *data*.
+            If None, the default index is used.
+        columns : list of str
+            List of column names to include.
+
+        Returns
+        -------
+        DataFrame
+        """
+        if data.ndim != 2:
+            raise ValueError("matrix dimension expected 2 but found {!r}".format(data.ndim))
+
+        if columns is None:
+            names = [i for i in range(data.shape[1])]
+        else:
+            if len(columns) != data.shape[1]:
+                msg = "columns length expected {!r} but found {!r}"
+                raise ValueError(msg.format(data.ndim, len(columns)))
+            names = columns
+
+        if index is not None and len(index) != data.shape[0]:
+            msg = "index length expected {!r} but found {!r}"
+            raise ValueError(msg.format(data.ndim, len(columns)))
+
+        df = DataFrame()
+        data = data.transpose()  # to mimic the pandas behaviour
+        for i, k in enumerate(names):
+            df[k] = Series(data[i], nan_as_null=nan_as_null)
+
+        if index is not None:
+            indices = data[index]
+            return df.set_index(indices.astype(np.int64))
+
+        return df
+
+    def to_gpu_matrix(self):
+        """Convert to a numba gpu ndarray
+
+
+
+        Returns
+        -------
+        numba gpu ndarray
+        """
     def quantile(self,
                  q=0.5,
                  interpolation='linear',
