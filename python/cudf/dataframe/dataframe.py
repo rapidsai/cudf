@@ -1965,8 +1965,8 @@ class DataFrame(object):
            <class 'pandas.core.frame.DataFrame'>
 
         """
-        out = pd.DataFrame()
         index = self.index.to_pandas()
+        out = pd.DataFrame(index=index)
         for c, x in self._cols.items():
             out[c] = x.to_pandas(index=index)
         return out
