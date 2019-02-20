@@ -1788,6 +1788,16 @@ def test_head_tail(nelem, data_type):
     check_frame_series_equality(gdf['a'].tail(-2), gdf['a'][2:])
 
 
+def test_dataframe_empty_sort_index():
+    pdf = pd.DataFrame({'x': []})
+    gdf = DataFrame.from_pandas(pdf)
+
+    expect = pdf.sort_index()
+    got = gdf.sort_index()
+
+    assert_eq(expect, got)
+
+
 @pytest.mark.parametrize('dtype', ['int8', 'int16', 'int32', 'int64',
                                    'float32', 'float64', 'datetime64[ms]',
                                    'category'])
