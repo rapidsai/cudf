@@ -7,7 +7,7 @@ from math import isnan
 
 from librmm_cffi import librmm as rmm
 
-from .utils import mask_bitsize, mask_get, mask_set, make_mask
+from cudf.utils.utils import mask_bitsize, mask_get, mask_set, make_mask
 
 
 def optimal_block_count(minblkct):

@@ -1786,3 +1786,36 @@ def test_head_tail(nelem, data_type):
     check_frame_series_equality(gdf['a'].tail(), gdf['a'][-5:])
     check_frame_series_equality(gdf['a'].tail(3), gdf['a'][-3:])
     check_frame_series_equality(gdf['a'].tail(-2), gdf['a'][2:])
+
+
+@pytest.mark.parametrize('dtype', ['int8', 'int16', 'int32', 'int64',
+                                   'float32', 'float64', 'datetime64[ms]',
+                                   'category'])
+def test_dataframe_0_row_dtype(dtype):
+    if dtype == 'category':
+        data = pd.Series(['a', 'b', 'c', 'd', 'e'], dtype='category')
+    else:
+        data = np.array([1, 2, 3, 4, 5], dtype=dtype)
+
+    expect = DataFrame()
+    expect['x'] = data
+    expect['y'] = data
+    got = expect.head(0)
+
+    for col_name in got.columns:
+        assert expect[col_name].dtype == got[col_name].dtype
+
+    expect = Series(data)
+    got = expect.head(0)
+
+    assert expect.dtype == got.dtype
+
+
+@pytest.mark.parametrize('nan_as_null', [True, False])
+def test_series_list_nanasnull(nan_as_null):
+    data = [1.0, 2.0, 3.0, np.nan, None]
+
+    expect = pa.array(data, from_pandas=nan_as_null)
+    got = Series(data, nan_as_null=nan_as_null)
+
+    assert pa.Array.equals(expect, got.to_arrow())

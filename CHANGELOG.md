@@ -25,6 +25,7 @@
 - PR #992 Add comparison binaryops to DateTime columns
 - PR #996 Replace relative path imports with absolute paths in tests
 - PR #995 CSV Reader: Add index_col parameter to specify the column name or index to be used as row labels
+- PR #1007 Replace relative path imports with absolute paths in cudf
 - PR #997 Add property index setter
 
 ## Improvements
@@ -72,6 +73,8 @@
 - PR #959 Groupby: Problem with column name lookup
 - PR #950 Converting dataframe/recarry with non-contiguous arrays
 - PR #963 CSV Reader: Fix another issue with missing data rows when using byte_range
+- PR #993 Fix dtype in selecting 0 rows from objects
+
 
 
 # cuDF 0.5.1 (05 Feb 2019)

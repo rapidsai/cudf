@@ -11,12 +11,12 @@ from pandas.api.types import is_scalar, is_dict_like
 
 from cudf.utils import cudautils, utils
 from cudf import formatting
-from .buffer import Buffer
-from .index import Index, RangeIndex, as_index
+from cudf.dataframe.buffer import Buffer
+from cudf.dataframe.index import Index, RangeIndex, as_index
 from cudf.settings import NOTSET, settings
-from .column import Column
-from .datetime import DatetimeColumn
-from . import columnops
+from cudf.dataframe.column import Column
+from cudf.dataframe.datetime import DatetimeColumn
+from cudf.dataframe import columnops
 from cudf.comm.serialize import register_distributed_serializer
 from cudf._gdf import nvtx_range_push, nvtx_range_pop
 
@@ -1432,7 +1432,10 @@ class Iloc(object):
         for idx in rows:
             ret_list.append(self._sr[idx])
 
-        return Series(ret_list, index=as_index(np.asarray(rows)))
+        col_data = columnops.as_column(ret_list, dtype=self._sr.dtype,
+                                       nan_as_null=True)
+
+        return Series(col_data, index=as_index(np.asarray(rows)))
 
     def __setitem__(self, key, value):
         # throws an exception while updating
