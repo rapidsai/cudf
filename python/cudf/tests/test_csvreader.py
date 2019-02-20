@@ -479,8 +479,8 @@ def test_csv_reader_bools(tmpdir, names, dtypes, data, trues, falses):
     out = read_csv(str(fname), names=names, dtype=dtypes, skiprows=1,
                    true_values=trues, false_values=falses)
 
-    assert len(out.columns) == len(df_out.columns)
-    assert len(out) == len(df_out)
+    pd.util.testing.assert_frame_equal(df_out, out.to_pandas())
+
 
 
 def test_csv_quotednumbers(tmpdir):

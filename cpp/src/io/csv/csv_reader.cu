@@ -1382,9 +1382,10 @@ struct ConvertFunctor {
 
     // Check for user-specified true/false values where the output is
     // replaced with 1/0 respectively
-    if (serializedTrieContains(opts.trueValuesTrie, csvData + start, end - start)) {
+    const size_t field_len = end - start + 1;
+    if (serializedTrieContains(opts.trueValuesTrie, csvData + start, field_len)) {
       value = 1;
-    } else if (serializedTrieContains(opts.falseValuesTrie, csvData + start, end - start)) {
+    } else if (serializedTrieContains(opts.falseValuesTrie, csvData + start, field_len)) {
       value = 0;
     }
   }
@@ -1687,9 +1688,9 @@ void dataTypeDetection(char *raw_csv,
 				// Checking to see if we the integer value requires 8,16,32,64 bits.
 				// This will allow us to allocate the exact amount of memory.
 				const auto value = convertStrToValue<int64_t>(raw_csv, start, tempPos, opts);
-
-				if (serializedTrieContains(opts.trueValuesTrie, raw_csv + start, tempPos - start) ||
-					serializedTrieContains(opts.falseValuesTrie, raw_csv + start, tempPos - start)){
+				const size_t field_len = tempPos - start + 1;
+				if (serializedTrieContains(opts.trueValuesTrie, raw_csv + start, field_len) ||
+					serializedTrieContains(opts.falseValuesTrie, raw_csv + start, field_len)){
 					atomicAdd(& d_columnData[actual_col].countInt8, 1L);
 				}
 				else if(value >= (1L<<31)){
