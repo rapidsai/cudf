@@ -891,3 +891,16 @@ def test_csv_reader_index_col():
     pd_df = pd.read_csv(StringIO(buffer), header=None, index_col=False)
     for cu_idx, pd_idx in zip(cu_df.index, pd_df.index):
         assert(str(cu_idx) == str(pd_idx))
+
+
+def test_csv_reader_bools_false_positives(tmpdir):
+    # values that are equal to ["True", "TRUE", "False", "FALSE"]
+    # when using ints to detect bool values
+    items = [3977, 4329, 24015, 27567]
+
+    buffer = '\n'.join(str(i) for i in items) + '\n'
+
+    df = read_csv(StringIO(buffer),
+                  header=None, dtype=["int32"])
+
+    np.testing.assert_array_equal(items, df['0'])
