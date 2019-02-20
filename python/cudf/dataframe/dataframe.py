@@ -98,6 +98,7 @@ class DataFrame(object):
 
           import pandas as pd
           import cudf
+
           pdf = pd.DataFrame({'a': [0, 1, 2, 3],'b': [0.1, 0.2, None, 0.3]})
           df = cudf.from_pandas(pdf)
           print(df)
@@ -229,7 +230,8 @@ class DataFrame(object):
             for k, col in self._cols.items():
                 df[k] = col[arg]
             return df
-        elif isinstance(arg, (list, np.ndarray, pd.Series, Series, Index)):
+        elif isinstance(arg, (list, np.ndarray, pd.Series,
+                        Series, Index, pd.Index)):
             mask = arg
             if isinstance(mask, list):
                 mask = np.array(mask)
@@ -651,6 +653,22 @@ class DataFrame(object):
         """
         return self._index
 
+    @index.setter
+    def index(self, _index):
+        new_length = len(_index)
+        old_length = len(self._index)
+
+        if new_length != old_length:
+            msg = f'Length mismatch: Expected index has {old_length}' \
+                    ' elements, new values have {new_length} elements'
+            raise ValueError(msg)
+
+        # try to build an index from generic _index
+        idx = as_index(_index)
+        self._index = idx
+        for k in self.columns:
+            self[k] = self[k].set_index(idx)
+
     def set_index(self, index):
         """Return a new DataFrame with a new index
 
@@ -916,7 +934,7 @@ class DataFrame(object):
 
     @classmethod
     def _concat(cls, objs, ignore_index=False):
-        nvtx_range_push("CUDF_CONCAT", "orange")
+        nvtx_range_push("PYGDF_CONCAT", "orange")
         if len(set(frozenset(o.columns) for o in objs)) != 1:
             what = set(frozenset(o.columns) for o in objs)
             raise ValueError('columns mismatch: {}'.format(what))
@@ -1324,7 +1342,7 @@ class DataFrame(object):
              2    4 14.0   12.0
 
         """
-        _gdf.nvtx_range_push("CUDF_JOIN", "blue")
+        _gdf.nvtx_range_push("PYGDF_JOIN", "blue")
 
         # Early termination Error checking
         if type != "":
@@ -1488,7 +1506,7 @@ class DataFrame(object):
         - *on* is not supported yet due to lack of multi-index support.
         """
 
-        _gdf.nvtx_range_push("CUDF_JOIN", "blue")
+        _gdf.nvtx_range_push("PYGDF_JOIN", "blue")
 
         # Outer joins still use the old implementation
         if type != "":
@@ -1642,7 +1660,7 @@ class DataFrame(object):
         else:
             from cudf.groupby.groupby import Groupby
 
-            _gdf.nvtx_range_push("CUDF_GROUPBY", "purple")
+            _gdf.nvtx_range_push("PYGDF_GROUPBY", "purple")
             # The matching `pop` for this range is inside LibGdfGroupby
             # __apply_agg
             result = Groupby(self, by=by, method=method, as_index=as_index,
@@ -1711,7 +1729,7 @@ class DataFrame(object):
 
         """
 
-        _gdf.nvtx_range_push("CUDF_QUERY", "purple")
+        _gdf.nvtx_range_push("PYGDF_QUERY", "purple")
         # Get calling environment
         callframe = inspect.currentframe().f_back
         callenv = {
@@ -2339,8 +2357,13 @@ class Iloc(object):
 
         for col in self._df.columns:
             sr = self._df[col]
-            df.add_column(col, sr.iloc[tuple(rows)], forceindex=True)
+            df.add_column(col, sr.iloc[tuple(rows)])
 
+        # use RangeIndex if arg is a slice
+        if isinstance(arg, slice):
+            df.index = sr.index[arg]
+        else:
+            df.index = sr.index[rows]
         return df
 
     def __setitem__(self, key, value):
