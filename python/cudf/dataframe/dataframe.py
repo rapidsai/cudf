@@ -2358,7 +2358,12 @@ class Iloc(object):
             sr = self._df[col]
             df.add_column(col, sr.iloc[tuple(rows)])
 
-        df.index = sr.index[rows]
+        # 0-length rows can occur when when iloc[n=0]
+        # head(0)
+        if isinstance(arg, slice):
+            df.index = sr.index[arg]
+        else:
+            df.index = sr.index[rows]
         return df
 
     def __setitem__(self, key, value):
