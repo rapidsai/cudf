@@ -1700,6 +1700,25 @@ def test_boolmask(pdf, gdf):
     assert_eq(pdf, gdf)
 
 
+@pytest.mark.parametrize('mask_shape', [(2, 'ab'), (2, 'abc'), (3, 'ab'), (3, 'abc'), (3, 'abcd'), (4, 'abc'), (4, 'abcd')])  # noqa: E501
+def test_dataframe_boolmask(mask_shape):
+    pdf = pd.DataFrame()
+    for col in 'abc':
+        pdf[col] = np.random.randint(0, 10, 3)
+    pdf_mask = pd.DataFrame()
+    for col in mask_shape[1]:
+        pdf_mask[col] = np.random.randint(0, 2, mask_shape[0]) > 0
+    gdf = DataFrame.from_pandas(pdf)
+    gdf_mask = DataFrame.from_pandas(pdf_mask)
+
+    gdf = gdf[gdf_mask]
+    pdf = pdf[pdf_mask]
+
+    assert np.array_equal(gdf.columns, pdf.columns)
+    for col in gdf.columns:
+        assert np.array_equal(gdf[col].fillna(-1), pdf[col].fillna(-1))
+
+
 def test_1row_arrow_table():
     data = [pa.array([0]), pa.array([1])]
     batch = pa.RecordBatch.from_arrays(data, ['f0', 'f1'])

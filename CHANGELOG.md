@@ -54,6 +54,7 @@
 - PR #966 Updated RMM submodule.
 - PR #998 Add IO reader/writer modules to API docs, fix for missing cudf.Series docs
 - PR #1017 concatenate along columns for Series and DataFrames
+- PR #1002 Support indexing a dataframe with another boolean dataframe
 
 ## Bug Fixes
 
