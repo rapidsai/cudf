@@ -965,6 +965,25 @@ def test_dataframe_empty_concat():
     assert len(gdf3.columns) == 2
 
 
+def test_concat_with_axis():
+    df1 = pd.DataFrame(dict(x=np.arange(5), y=np.arange(5)))
+    df2 = pd.DataFrame(dict(a=np.arange(5), b=np.arange(5)))
+
+    concat_df = pd.concat([df1, df2], axis=1)
+    cdf1 = gd.from_pandas(df1)
+    cdf2 = gd.from_pandas(df2)
+
+    concat_cdf = gd.concat([cdf1, cdf2], axis=1)
+    assert_eq(concat_cdf, concat_df)
+
+    concat_s = pd.concat([df1.x, df1.y], axis=1)
+    s1 = gd.Series.from_pandas(df1.x)
+    s2 = gd.Series.from_pandas(df1.y)
+    concat_cdf_s = gd.concat([s1, s2], axis=1)
+
+    assert_eq(concat_cdf_s, concat_s)
+
+
 @pytest.mark.parametrize('nrows', [0, 3, 10, 100, 1000])
 def test_nonmatching_index_setitem(nrows):
     np.random.seed(0)
