@@ -1196,7 +1196,7 @@ class DataFrame(object):
             column = columns
         if not (0 <= n < len(self)):
             raise ValueError("n out-of-bound")
-        col = self[column].reset_index()
+        col = self[column].reset_index(drop=True)
         # Operate
         sorted_series = getattr(col, method)(n=n, keep=keep)
         df = DataFrame()
@@ -1205,7 +1205,7 @@ class DataFrame(object):
             if k == column:
                 df[k] = sorted_series
             else:
-                df[k] = self[k].reset_index().take(new_positions)
+                df[k] = self[k].reset_index(drop=True).take(new_positions)
         return df.set_index(self.index.take(new_positions))
 
     def transpose(self):
@@ -1541,8 +1541,8 @@ class DataFrame(object):
         for name in other.columns:
             rhs[name] = other[name]
 
-        lhs = lhs.reset_index()
-        rhs = rhs.reset_index()
+        lhs = lhs.reset_index(drop=True)
+        rhs = rhs.reset_index(drop=True)
 
         cat_join = False
 

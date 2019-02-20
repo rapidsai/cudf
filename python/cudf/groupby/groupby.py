@@ -213,7 +213,7 @@ class Groupby(object):
                             ordered=self._df[thisBy].cat.ordered)
 
             out_col_agg_series.data.size = num_row_results
-            out_col_agg_series = out_col_agg_series.reset_index()
+            out_col_agg_series = out_col_agg_series.reset_index(drop=True)
 
             if isinstance(val_columns_out, (str, Number)):
                 result[val_columns_out] = out_col_agg_series[:num_row_results]
@@ -222,7 +222,7 @@ class Groupby(object):
                        ] = out_col_agg_series[:num_row_results]
 
             out_col_agg_series.data.size = num_row_results
-            out_col_agg_series = out_col_agg_series.reset_index()
+            out_col_agg_series = out_col_agg_series.reset_index(drop=True)
 
             first_run = False
             col_count = col_count + 1
