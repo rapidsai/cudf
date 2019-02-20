@@ -266,6 +266,10 @@ def test_dataframe_column_name_indexing():
     pdf[1] = np.arange(1, 1 + nelem)
     pdf[2] = np.random.random(nelem)
     df = DataFrame.from_pandas(pdf)
+
+    assert_eq(df[df.columns], df)
+    assert_eq(df[df.columns[:1]], df[['key1']])
+
     for i in range(1, len(pdf.columns)+1):
         for idx in combinations(pdf.columns, i):
             assert(pdf[list(idx)].equals(df[list(idx)].to_pandas()))
@@ -276,6 +280,9 @@ def test_dataframe_column_name_indexing():
         df[i] = range(nelem)
     gdf = DataFrame.from_pandas(df)
     assert_eq(gdf, df)
+
+    assert_eq(gdf[gdf.columns], gdf)
+    assert_eq(gdf[gdf.columns[:3]], gdf[[0, 1, 2]])
 
 
 def test_dataframe_drop_method():
@@ -1810,3 +1817,46 @@ def test_head_tail(nelem, data_type):
     check_frame_series_equality(gdf['a'].tail(), gdf['a'][-5:])
     check_frame_series_equality(gdf['a'].tail(3), gdf['a'][-3:])
     check_frame_series_equality(gdf['a'].tail(-2), gdf['a'][2:])
+
+
+def test_dataframe_empty_sort_index():
+    pdf = pd.DataFrame({'x': []})
+    gdf = DataFrame.from_pandas(pdf)
+
+    expect = pdf.sort_index()
+    got = gdf.sort_index()
+
+    assert_eq(expect, got)
+
+
+@pytest.mark.parametrize('dtype', ['int8', 'int16', 'int32', 'int64',
+                                   'float32', 'float64', 'datetime64[ms]',
+                                   'category'])
+def test_dataframe_0_row_dtype(dtype):
+    if dtype == 'category':
+        data = pd.Series(['a', 'b', 'c', 'd', 'e'], dtype='category')
+    else:
+        data = np.array([1, 2, 3, 4, 5], dtype=dtype)
+
+    expect = DataFrame()
+    expect['x'] = data
+    expect['y'] = data
+    got = expect.head(0)
+
+    for col_name in got.columns:
+        assert expect[col_name].dtype == got[col_name].dtype
+
+    expect = Series(data)
+    got = expect.head(0)
+
+    assert expect.dtype == got.dtype
+
+
+@pytest.mark.parametrize('nan_as_null', [True, False])
+def test_series_list_nanasnull(nan_as_null):
+    data = [1.0, 2.0, 3.0, np.nan, None]
+
+    expect = pa.array(data, from_pandas=nan_as_null)
+    got = Series(data, nan_as_null=nan_as_null)
+
+    assert pa.Array.equals(expect, got.to_arrow())

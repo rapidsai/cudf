@@ -9,13 +9,13 @@ from copy import deepcopy, copy
 
 from librmm_cffi import librmm as rmm
 
-from . import columnops
+from cudf.dataframe import columnops
 from cudf.utils import cudautils, utils
-from .buffer import Buffer
-from .numerical import NumericalColumn
-from .column import Column
-from .datetime import DatetimeColumn
-from .categorical import CategoricalColumn
+from cudf.dataframe.buffer import Buffer
+from cudf.dataframe.numerical import NumericalColumn
+from cudf.dataframe.column import Column
+from cudf.dataframe.datetime import DatetimeColumn
+from cudf.dataframe.categorical import CategoricalColumn
 from cudf.comm.serialize import register_distributed_serializer
 
 
@@ -279,6 +279,9 @@ class RangeIndex(Index):
             index = utils.normalize_index(index, len(self))
             index += self._start
             return index
+        elif isinstance(index, (list, np.ndarray)):
+            index = np.array(index)
+            return self.take(index)
         else:
             raise ValueError(index)
 
