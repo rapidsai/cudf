@@ -1025,9 +1025,10 @@ def test_from_gpu_matrix():
 
 
 @pytest.mark.xfail(reason="matrix dimension is not 2")
-def test_from_gpu_matrix():
+def test_from_gpu_matrix_wrong_dimensions():
     d_ary = rmm.device_array((2, 3, 4), dtype=np.int32)
     gdf = gd.DataFrame.from_gpu_matrix(d_ary)
+    assert gdf is not None
 
 
 @pytest.mark.xfail(reason="constructor does not coerce index inputs")

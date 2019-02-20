@@ -25,6 +25,7 @@
 - PR #992 Add comparison binaryops to DateTime columns
 - PR #996 Replace relative path imports with absolute paths in tests
 - PR #995 CSV Reader: Add index_col parameter to specify the column name or index to be used as row labels
+- PR #1004 Add `from_gpu_matrix` method to DataFrame
 
 ## Improvements
 
