@@ -169,7 +169,7 @@ def np_to_pa_dtype(dtype):
 
 def apply_reduce(fn, inp):
     # allocate output+temp array
-    outsz = libgdf.gdf_reduce_optimal_output_size()
+    outsz = libgdf.gdf_reduction_get_intermediate_output_size()
     out = rmm.device_array(outsz, dtype=inp.dtype)
     # call reduction
     fn(inp.cffi_view, unwrap_devary(out), outsz)
