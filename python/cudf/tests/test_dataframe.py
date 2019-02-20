@@ -1838,6 +1838,23 @@ def test_head_tail(nelem, data_type):
     check_frame_series_equality(gdf['a'].tail(-2), gdf['a'][2:])
 
 
+@pytest.mark.parametrize('drop', [True, False])
+def test_reset_index(pdf, gdf, drop):
+    assert_eq(pdf.reset_index(drop=drop),
+              gdf.reset_index(drop=drop))
+    assert_eq(pdf.x.reset_index(drop=drop),
+              gdf.x.reset_index(drop=drop))
+
+
+def test_to_frame(pdf, gdf):
+    assert_eq(pdf.x.to_frame(), gdf.x.to_frame())
+
+    s = pd.Series([1, 2, 3])
+    g = gd.from_pandas(s)
+
+    assert_eq(s, g)
+
+
 def test_dataframe_empty_sort_index():
     pdf = pd.DataFrame({'x': []})
     gdf = DataFrame.from_pandas(pdf)
