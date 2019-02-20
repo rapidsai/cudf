@@ -173,7 +173,9 @@ struct DeviceSumOfSquares {
     static constexpr T identity() { return T{0}; }
 };
 
-struct DeviceMin {
+struct DeviceForNonArithmetic {};
+
+struct DeviceMin : DeviceForNonArithmetic {
     typedef IdentityLoader Loader;
     typedef DeviceMin second;
 
@@ -187,7 +189,7 @@ struct DeviceMin {
     static constexpr T identity() { return std::numeric_limits<T>::max(); }
 };
 
-struct DeviceMax {
+struct DeviceMax : DeviceForNonArithmetic {
     typedef IdentityLoader Loader;
     typedef DeviceMax second;
 
@@ -203,22 +205,44 @@ struct DeviceMax {
 
 template <typename Op>
 struct ReduceDispatcher {
-    template <typename T,
-              typename std::enable_if_t<std::is_arithmetic<T>::value>* = nullptr>
-    gdf_error operator()(gdf_column *col, 
+    template <typename T>
+    gdf_error launch(gdf_column *col,
                          void *dev_result, 
-                         gdf_size_type dev_result_size) {
+                         gdf_size_type dev_result_size)
+    {
         GDF_REQUIRE(col->size > col->null_count, GDF_DATASET_EMPTY);
         T identity = Op::template identity<T>();
         return ReduceOp<T, Op>::launch(col, identity, 
-                                       reinterpret_cast<T*>(dev_result), 
+                                       static_cast<T*>(dev_result),
                                        dev_result_size); 
     }
 
     template <typename T,
-              typename std::enable_if_t<!std::is_arithmetic<T>::value, T>* = nullptr>
-    gdf_error operator()(gdf_column *col, 
-                         void *dev_result, 
+              typename std::enable_if<std::is_arithmetic<T>::value>::type* = nullptr>
+    gdf_error operator()(gdf_column *col,
+                         void *dev_result,
+                         gdf_size_type dev_result_size)
+    {
+        return launch<T>(col, dev_result, dev_result_size);
+    }
+
+    template <typename T, typename std::enable_if<
+              !std::is_arithmetic<T>::value &&
+              std::is_base_of<DeviceForNonArithmetic, Op>::value
+              >::type* = nullptr>
+    gdf_error operator()(gdf_column *col,
+                         void *dev_result,
+                         gdf_size_type dev_result_size)
+    {
+        return launch<T>(col, dev_result, dev_result_size);
+    }
+
+    template <typename T, typename std::enable_if<
+              !std::is_arithmetic<T>::value &&
+              !std::is_base_of<DeviceForNonArithmetic, Op>::value
+              >::type* = nullptr>
+    gdf_error operator()(gdf_column *col,
+                         void *dev_result,
                          gdf_size_type dev_result_size) {
         return GDF_UNSUPPORTED_DTYPE;
     }
