@@ -11,12 +11,12 @@ from pandas.api.types import is_scalar, is_dict_like
 
 from cudf.utils import cudautils, utils
 from cudf import formatting
-from .buffer import Buffer
-from .index import Index, RangeIndex, as_index
+from cudf.dataframe.buffer import Buffer
+from cudf.dataframe.index import Index, RangeIndex, as_index
 from cudf.settings import NOTSET, settings
-from .column import Column
-from .datetime import DatetimeColumn
-from . import columnops
+from cudf.dataframe.column import Column
+from cudf.dataframe.datetime import DatetimeColumn
+from cudf.dataframe import columnops
 from cudf.comm.serialize import register_distributed_serializer
 from cudf._gdf import nvtx_range_push, nvtx_range_pop
 

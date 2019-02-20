@@ -11,8 +11,8 @@ from numba import cuda, njit
 
 from librmm_cffi import librmm as rmm
 
-from .buffer import Buffer
-from .column import Column
+from cudf.dataframe.buffer import Buffer
+from cudf.dataframe.column import Column
 from cudf.utils import utils, cudautils
 from cudf import _gdf
 from cudf.utils.utils import buffers_from_pyarrow

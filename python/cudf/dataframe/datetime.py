@@ -4,10 +4,10 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 
-from . import columnops, numerical
+from cudf.dataframe import columnops, numerical
 from cudf import _gdf
 from cudf.utils import utils
-from .buffer import Buffer
+from cudf.dataframe.buffer import Buffer
 from libgdf_cffi import libgdf
 from cudf.comm.serialize import register_distributed_serializer
 from cudf._gdf import nvtx_range_push, nvtx_range_pop
