@@ -1014,6 +1014,30 @@ def test_from_pandas():
     pd.testing.assert_series_equal(s, gs.to_pandas())
 
 
+def test_from_gpu_matrix():
+    h_ary = np.array([[1, 2, 3], [4, 5, 6]], np.int32)
+    d_ary = rmm.to_device(h_ary)
+
+    gdf = gd.DataFrame.from_gpu_matrix(d_ary, columns=['a', 'b', 'c'])
+    df = pd.DataFrame(h_ary, columns=['a', 'b', 'c'])
+    assert isinstance(gdf, gd.DataFrame)
+
+    pd.testing.assert_frame_equal(df, gdf.to_pandas())
+
+    gdf = gd.DataFrame.from_gpu_matrix(d_ary)
+    df = pd.DataFrame(h_ary)
+    assert isinstance(gdf, gd.DataFrame)
+
+    pd.testing.assert_frame_equal(df, gdf.to_pandas())
+
+
+@pytest.mark.xfail(reason="matrix dimension is not 2")
+def test_from_gpu_matrix_wrong_dimensions():
+    d_ary = rmm.device_array((2, 3, 4), dtype=np.int32)
+    gdf = gd.DataFrame.from_gpu_matrix(d_ary)
+    assert gdf is not None
+
+
 @pytest.mark.xfail(reason="constructor does not coerce index inputs")
 def test_index_in_dataframe_constructor():
     a = pd.DataFrame({'x': [1, 2, 3]}, index=[4., 5., 6.])

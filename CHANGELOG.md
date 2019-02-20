@@ -26,6 +26,7 @@
 - PR #992 Add comparison binaryops to DateTime columns
 - PR #996 Replace relative path imports with absolute paths in tests
 - PR #995 CSV Reader: Add index_col parameter to specify the column name or index to be used as row labels
+- PR #1004 Add `from_gpu_matrix` method to DataFrame
 - PR #997 Add property index setter
 - PR #1007 Replace relative path imports with absolute paths in cudf
 - PR #1013 select columns with df.columns
@@ -78,6 +79,7 @@
 - PR #963 CSV Reader: Fix another issue with missing data rows when using byte_range
 - PR #999 Fix 0 sized kernel launches and empty sort_index exception
 - PR #993 Fix dtype in selecting 0 rows from objects
+- PR #1008 Remove custom dask communication approach
 
 
 # cuDF 0.5.1 (05 Feb 2019)
