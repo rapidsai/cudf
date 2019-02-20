@@ -1998,8 +1998,10 @@ class DataFrame(object):
 
         """
         index = self.index.to_pandas()
-        data = {c: x.to_pandas(index=index) for c, x in self._cols.items()}
-        return pd.DataFrame(data, columns=list(self._cols), index=index)
+        out = pd.DataFrame(index=index)
+        for c, x in self._cols.items():
+            out[c] = x.to_pandas(index=index)
+        return out
 
     @classmethod
     def from_pandas(cls, dataframe, nan_as_null=True):

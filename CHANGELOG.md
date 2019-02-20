@@ -81,6 +81,7 @@
 - PR #963 CSV Reader: Fix another issue with missing data rows when using byte_range
 - PR #999 Fix 0 sized kernel launches and empty sort_index exception
 - PR #993 Fix dtype in selecting 0 rows from objects
+- PR #1009 Fix performance regression in `to_pandas` method on DataFrame
 - PR #1008 Remove custom dask communication approach
 
 
