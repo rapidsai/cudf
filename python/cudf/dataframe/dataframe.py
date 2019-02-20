@@ -259,7 +259,7 @@ class DataFrame(object):
                 boolbits = cudautils.compact_mask_bytes(
                            other[col].to_gpu_array())
             else:
-                boolbits = cudautils.full(len(self[col]), 0, np.uint8)
+                boolbits = cudautils.make_empty_mask(len(self[col]))
             df[col]._column = df[col]._column.set_mask(boolbits)
         return df
 
