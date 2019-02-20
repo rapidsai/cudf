@@ -7,7 +7,8 @@ from math import isnan
 
 from librmm_cffi import librmm as rmm
 
-from cudf.utils.utils import mask_bitsize, mask_get, mask_set, make_mask
+from cudf.utils.utils import (check_equals_int, check_equals_float,
+                              mask_bitsize, mask_get, mask_set, make_mask)
 
 
 def optimal_block_count(minblkct):
@@ -618,19 +619,23 @@ class UniqueK(object):
 
 
 @cuda.jit
-def gpu_mark_segment_begins(arr, markers):
+def gpu_mark_segment_begins_float(arr, markers):
     i = cuda.grid(1)
     if i == 0:
         markers[0] = 1
     elif 0 < i < markers.size:
         if not markers[i]:
-            # This arithmetic handles NaNs/Infs while still maintaining
-            # consistency for other values. Since a NaN/Inf value is never
-            # equal to itself OR itself plus/minus any value, we use this
-            # unique property to return correctly for NaN/Inf AND other values
-            markers[i] = not ((arr[i] != arr[i - 1]) & \
-                ((arr[i] != arr[i]) & (arr[i - 1] != arr[i - 1])))
-            #markers[i] = arr[i] != arr[i - 1]
+            markers[i] = not check_equals_float(arr[i], arr[i - 1]) 
+
+
+@cuda.jit
+def gpu_mark_segment_begins_int(arr, markers):
+    i = cuda.grid(1)
+    if i == 0:
+        markers[0] = 1
+    elif 0 < i < markers.size:
+        if not markers[i]:
+            markers[i] = not check_equals_int(arr[i], arr[i - 1])
 
 
 @cuda.jit
@@ -673,7 +678,12 @@ def find_segments(arr, segs=None, markers=None):
     else:
         assert markers.size == arr.size
         assert markers.dtype == np.dtype(np.int32), markers.dtype
-    gpu_mark_segment_begins.forall(markers.size)(arr, markers)
+    
+    if arr.dtype in ('float32', 'float64'):
+        gpu_mark_segment_begins_float.forall(markers.size)(arr, markers)
+    else:
+        gpu_mark_segment_begins_int.forall(markers.size)(arr,markers)
+
     if segs is not None and null_markers:
         gpu_mark_seg_segments.forall(segs.size)(segs, markers)
     # Compute index of marked locations
