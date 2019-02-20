@@ -2187,7 +2187,8 @@ class DataFrame(object):
         return df
 
     @classmethod
-    def from_gpu_matrix(self, data, index=None, columns=None, nan_as_null=False):
+    def from_gpu_matrix(self, data, index=None, columns=None,
+                        nan_as_null=False):
         """Convert from a numba gpu ndarray.
 
         Parameters
@@ -2204,7 +2205,8 @@ class DataFrame(object):
         DataFrame
         """
         if data.ndim != 2:
-            raise ValueError("matrix dimension expected 2 but found {!r}".format(data.ndim))
+            raise ValueError("matrix dimension expected 2 but found {!r}"
+                             .format(data.ndim))
 
         if columns is None:
             names = [i for i in range(data.shape[1])]
