@@ -23,38 +23,39 @@ namespace code {
 const char* traits =
 R"***(
 #pragma once
+    #include <cstdint>
+    #include <type_traits>
 
-    struct IntegralSigned {};
+    // -------------------------------------------------------------------------
+    // Simplifying std::is_integral
+    template <typename T>
+    constexpr bool isIntegral = std::is_integral<T>::value;
 
-    struct IntegralUnsigned {};
+    // -------------------------------------------------------------------------
+    // type_traits cannot tell the difference between float and double
+    template <typename Type>
+    constexpr bool isFloat = false;
+
+    template <>
+    constexpr bool isFloat<float> = true;
 
 
     template <typename Type>
-    constexpr bool isIntegral = false;
+    constexpr bool isDouble = false;
 
     template <>
-    constexpr bool isIntegral<int8_t> = true;
+    constexpr bool isDouble<double> = true;
 
-    template <>
-    constexpr bool isIntegral<int16_t> = true;
+    // -------------------------------------------------------------------------
+    // Simplifying std::enable_if
+    template <bool B, class T = void>
+    using enableIf = typename std::enable_if<B,T>::type;
 
-    template <>
-    constexpr bool isIntegral<int32_t> = true;
+    // -------------------------------------------------------------------------
+    // Implementing std::common_type for two types
+    struct IntegralSigned {};
 
-    template <>
-    constexpr bool isIntegral<int64_t> = true;
-
-    template <>
-    constexpr bool isIntegral<uint8_t> = true;
-
-    template <>
-    constexpr bool isIntegral<uint16_t> = true;
-
-    template <>
-    constexpr bool isIntegral<uint32_t> = true;
-
-    template <>
-    constexpr bool isIntegral<uint64_t> = true;
+    struct IntegralUnsigned {};
 
 
 
@@ -101,19 +102,6 @@ R"***(
     template <>
     constexpr bool isIntegralUnsigned<uint64_t> = true;
 
-
-    template <typename Type>
-    constexpr bool isFloat = false;
-
-    template <>
-    constexpr bool isFloat<float> = true;
-
-
-    template <typename Type>
-    constexpr bool isDouble = false;
-
-    template <>
-    constexpr bool isDouble<double> = true;
 
 
     template <typename X, typename Y>
@@ -182,20 +170,6 @@ R"***(
 
     template <bool B, typename T, typename F>
     using If = typename helperIf<B, T, F>::type;
-
-
-
-    template<bool B, class T>
-    struct helperEnableIf
-    {};
-
-    template<class T>
-    struct helperEnableIf<true, T> {
-        using type = T;
-    };
-
-    template <bool B, class T = void>
-    using enableIf = typename helperEnableIf<B,T>::type;
 
 
 

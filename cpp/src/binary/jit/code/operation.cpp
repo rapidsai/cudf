@@ -23,6 +23,7 @@ namespace code {
 const char* operation =
 R"***(
 #pragma once
+    #include "traits.h"
 
     struct Add {
         template <typename TypeOut, typename TypeLhs, typename TypeRhs>

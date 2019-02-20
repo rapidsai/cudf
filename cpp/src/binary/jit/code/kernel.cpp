@@ -23,8 +23,6 @@ namespace code {
 
 const char* kernel =
 R"***(
-    #include <cstdint>
-    #include "traits.h"
     #include "operation.h"
 
     template <typename TypeOut, typename TypeLhs, typename TypeRhs, typename TypeOpe>
