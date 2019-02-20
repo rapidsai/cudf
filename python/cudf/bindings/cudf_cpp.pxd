@@ -510,9 +510,9 @@ cdef extern from "cudf.h" nogil:
     cdef gdf_error gdf_extract_datetime_minute(gdf_column *input, gdf_column *output)
     cdef gdf_error gdf_extract_datetime_second(gdf_column *input, gdf_column *output)
 
-    cdef gdf_error gdf_binary_operation_s_v(gdf_column* out, gdf_scalar* vax, gdf_column* vay, gdf_binary_operator ope)
-    cdef gdf_error gdf_binary_operation_v_s(gdf_column* out, gdf_column* vax, gdf_scalar* vay, gdf_binary_operator ope)
-    cdef gdf_error gdf_binary_operation_v_v(gdf_column* out, gdf_column* vax, gdf_column* vay, gdf_binary_operator ope)
+    cdef gdf_error gdf_binary_operation_s_v(gdf_column* out, gdf_scalar* lhs, gdf_column* rhs, gdf_binary_operator ope)
+    cdef gdf_error gdf_binary_operation_v_s(gdf_column* out, gdf_column* lhs, gdf_scalar* rhs, gdf_binary_operator ope)
+    cdef gdf_error gdf_binary_operation_v_v(gdf_column* out, gdf_column* lhs, gdf_column* rhs, gdf_binary_operator ope)
 
     cdef gdf_error gdf_add_generic(gdf_column *lhs, gdf_column *rhs, gdf_column *output)
     cdef gdf_error gdf_add_i32(gdf_column *lhs, gdf_column *rhs, gdf_column *output)

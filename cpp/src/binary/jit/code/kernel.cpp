@@ -27,11 +27,11 @@ R"***(
     #include "traits.h"
     #include "operation.h"
 
-    template <typename TypeOut, typename TypeVax, typename TypeVay, typename TypeOpe>
+    template <typename TypeOut, typename TypeLhs, typename TypeRhs, typename TypeOpe>
     __global__
     void kernel_v_s(int size,
-                    TypeOut* out_data, TypeVax* vax_data, TypeVay* vay_data,
-                    uint32_t* out_valid, uint32_t* vax_valid) {
+                    TypeOut* out_data, TypeLhs* lhs_data, TypeRhs* rhs_data,
+                    uint32_t* out_valid, uint32_t* lhs_valid) {
         int tid = threadIdx.x;
         int blkid = blockIdx.x;
         int blksz = blockDim.x;
@@ -41,21 +41,21 @@ R"***(
         int step = blksz * gridsz;
 
         for (int i=start; i<size; i+=step) {
-            out_data[i] = TypeOpe::template operate<TypeOut, TypeVax, TypeVay>(vax_data[i], vay_data[0]);
+            out_data[i] = TypeOpe::template operate<TypeOut, TypeLhs, TypeRhs>(lhs_data[i], rhs_data[0]);
 
             if ((out_valid != nullptr) && (i % warpSize) == 0) {
                 int index = i / warpSize;
-                uint32_t vax_valid_word = (vax_valid != nullptr) ? vax_valid[index] : 0xffffffff;
-                out_valid[index] = vax_valid_word;
+                uint32_t lhs_valid_word = (lhs_valid != nullptr) ? lhs_valid[index] : 0xffffffff;
+                out_valid[index] = lhs_valid_word;
             }
         }
     }
 
-    template <typename TypeOut, typename TypeVax, typename TypeVay, typename TypeOpe>
+    template <typename TypeOut, typename TypeLhs, typename TypeRhs, typename TypeOpe>
     __global__
     void kernel_v_v(int size,
-                    TypeOut* out_data, TypeVax* vax_data, TypeVay* vay_data,
-                    uint32_t* out_valid, uint32_t* vax_valid, uint32_t* vay_valid) {
+                    TypeOut* out_data, TypeLhs* lhs_data, TypeRhs* rhs_data,
+                    uint32_t* out_valid, uint32_t* lhs_valid, uint32_t* rhs_valid) {
         int tid = threadIdx.x;
         int blkid = blockIdx.x;
         int blksz = blockDim.x;
@@ -65,13 +65,13 @@ R"***(
         int step = blksz * gridsz;
 
         for (int i=start; i<size; i+=step) {
-            out_data[i] = TypeOpe::template operate<TypeOut, TypeVax, TypeVay>(vax_data[i], vay_data[i]);
+            out_data[i] = TypeOpe::template operate<TypeOut, TypeLhs, TypeRhs>(lhs_data[i], rhs_data[i]);
 
             if ((out_valid != nullptr) && (i % warpSize) == 0) {
                 int index = i / warpSize;
-                uint32_t vax_valid_word = (vax_valid != nullptr) ? vax_valid[index] : 0xffffffff;
-                uint32_t vay_valid_word = (vay_valid != nullptr) ? vay_valid[index] : 0xffffffff;
-                out_valid[index] = vax_valid_word & vay_valid_word;
+                uint32_t lhs_valid_word = (lhs_valid != nullptr) ? lhs_valid[index] : 0xffffffff;
+                uint32_t rhs_valid_word = (rhs_valid != nullptr) ? rhs_valid[index] : 0xffffffff;
+                out_valid[index] = lhs_valid_word & rhs_valid_word;
             }
         }
     }

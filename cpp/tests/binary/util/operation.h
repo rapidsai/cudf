@@ -26,83 +26,83 @@ namespace gdf {
 namespace library {
 namespace operation {
 
-    template <typename TypeOut, typename TypeVax, typename TypeVay>
+    template <typename TypeOut, typename TypeLhs, typename TypeRhs>
     struct Add {
-        TypeOut operator()(TypeVax vax, TypeVay vay) {
-            using TypeCommon = typename std::common_type<TypeVax, TypeVay>::type;
-            return (TypeOut)((TypeCommon)vax + (TypeCommon)vay);
+        TypeOut operator()(TypeLhs lhs, TypeRhs rhs) {
+            using TypeCommon = typename std::common_type<TypeLhs, TypeRhs>::type;
+            return (TypeOut)((TypeCommon)lhs + (TypeCommon)rhs);
         }
     };
 
-    template <typename TypeOut, typename TypeVax, typename TypeVay>
+    template <typename TypeOut, typename TypeLhs, typename TypeRhs>
     struct Sub {
-        TypeOut operator()(TypeVax vax, TypeVay vay) {
-            using TypeCommon = typename std::common_type<TypeVax, TypeVay>::type;
-            return (TypeOut)((TypeCommon)vax - (TypeCommon)vay);
+        TypeOut operator()(TypeLhs lhs, TypeRhs rhs) {
+            using TypeCommon = typename std::common_type<TypeLhs, TypeRhs>::type;
+            return (TypeOut)((TypeCommon)lhs - (TypeCommon)rhs);
         }
     };
 
-    template <typename TypeOut, typename TypeVax, typename TypeVay>
+    template <typename TypeOut, typename TypeLhs, typename TypeRhs>
     struct Mul {
-        TypeOut operator()(TypeVax vax, TypeVay vay) {
-            using TypeCommon = typename std::common_type<TypeVax, TypeVay>::type;
-            return (TypeOut)((TypeCommon)vax * (TypeCommon)vay);
+        TypeOut operator()(TypeLhs lhs, TypeRhs rhs) {
+            using TypeCommon = typename std::common_type<TypeLhs, TypeRhs>::type;
+            return (TypeOut)((TypeCommon)lhs * (TypeCommon)rhs);
         }
     };
 
-    template <typename TypeOut, typename TypeVax, typename TypeVay>
+    template <typename TypeOut, typename TypeLhs, typename TypeRhs>
     struct Div {
-        TypeOut operator()(TypeVax vax, TypeVay vay) {
-            using TypeCommon = typename std::common_type<TypeVax, TypeVay>::type;
-            return (TypeOut)((TypeCommon)vax / (TypeCommon)vay);
+        TypeOut operator()(TypeLhs lhs, TypeRhs rhs) {
+            using TypeCommon = typename std::common_type<TypeLhs, TypeRhs>::type;
+            return (TypeOut)((TypeCommon)lhs / (TypeCommon)rhs);
         }
     };
 
-    template <typename TypeOut, typename TypeVax, typename TypeVay>
+    template <typename TypeOut, typename TypeLhs, typename TypeRhs>
     struct TrueDiv {
-        TypeOut operator()(TypeVax vax, TypeVay vay) {
-            return (TypeOut)((double)vax / (double)vay);
+        TypeOut operator()(TypeLhs lhs, TypeRhs rhs) {
+            return (TypeOut)((double)lhs / (double)rhs);
         }
     };
 
-    template <typename TypeOut, typename TypeVax, typename TypeVay>
+    template <typename TypeOut, typename TypeLhs, typename TypeRhs>
     struct FloorDiv {
-        TypeOut operator()(TypeVax vax, TypeVay vay) {
-            return (TypeOut)floor((double)vax / (double)vay);
+        TypeOut operator()(TypeLhs lhs, TypeRhs rhs) {
+            return (TypeOut)floor((double)lhs / (double)rhs);
         }
     };
 
     template <typename TypeOut,
-              typename TypeVax,
-              typename TypeVay,
-              typename Common = typename std::common_type<TypeVax, TypeVay>::type>
+              typename TypeLhs,
+              typename TypeRhs,
+              typename Common = typename std::common_type<TypeLhs, TypeRhs>::type>
     struct Mod;
 
-    template <typename TypeOut, typename TypeVax, typename TypeVay>
-    struct Mod<TypeOut, TypeVax, TypeVay, int64_t> {
-        TypeOut operator()(TypeVax x, TypeVay y) {
+    template <typename TypeOut, typename TypeLhs, typename TypeRhs>
+    struct Mod<TypeOut, TypeLhs, TypeRhs, int64_t> {
+        TypeOut operator()(TypeLhs x, TypeRhs y) {
             return (TypeOut)((int64_t)x % (int64_t)y);
         }
     };
 
-    template <typename TypeOut, typename TypeVax, typename TypeVay>
-    struct Mod<TypeOut, TypeVax, TypeVay, float> {
-        TypeOut operator()(TypeVax x, TypeVay y) {
+    template <typename TypeOut, typename TypeLhs, typename TypeRhs>
+    struct Mod<TypeOut, TypeLhs, TypeRhs, float> {
+        TypeOut operator()(TypeLhs x, TypeRhs y) {
             return (TypeOut)fmod((float)x, (float)y);
         }
     };
 
-    template <typename TypeOut, typename TypeVax, typename TypeVay>
-    struct Mod<TypeOut, TypeVax, TypeVay, double> {
-        TypeOut operator()(TypeVax x, TypeVay y) {
+    template <typename TypeOut, typename TypeLhs, typename TypeRhs>
+    struct Mod<TypeOut, TypeLhs, TypeRhs, double> {
+        TypeOut operator()(TypeLhs x, TypeRhs y) {
             return (TypeOut)fmod((double)x, (double)y);
         }
     };
 
-    template <typename TypeOut, typename TypeVax, typename TypeVay>
+    template <typename TypeOut, typename TypeLhs, typename TypeRhs>
     struct Pow {
-        TypeOut operator()(TypeVax vax, TypeVay vay) {
-            return (TypeOut)pow((double)vax, (double)vay);
+        TypeOut operator()(TypeLhs lhs, TypeRhs rhs) {
+            return (TypeOut)pow((double)lhs, (double)rhs);
         }
     };
 

@@ -27,82 +27,82 @@ namespace gdf {
 namespace test {
 namespace binop {
 
-template <typename TypeOut, typename TypeVax, typename TypeVay, typename TypeOpe>
+template <typename TypeOut, typename TypeLhs, typename TypeRhs, typename TypeOpe>
 void ASSERT_BINOP(cudf::test::column_wrapper<TypeOut>& out,
-                  cudf::test::scalar_wrapper<TypeVax>& vax,
-                  cudf::test::column_wrapper<TypeVay>& vay,
+                  cudf::test::scalar_wrapper<TypeLhs>& lhs,
+                  cudf::test::column_wrapper<TypeRhs>& rhs,
                   TypeOpe&& ope) {
-    auto vax_h = vax.to_host();
-    auto vay_h = vay.to_host();
-    auto vay_data = std::get<0>(vay_h);
+    auto lhs_h = lhs.to_host();
+    auto rhs_h = rhs.to_host();
+    auto rhs_data = std::get<0>(rhs_h);
     auto out_h = out.to_host();
     auto out_data = std::get<0>(out_h);
 
-    ASSERT_TRUE(out_data.size() == vay_data.size());
+    ASSERT_TRUE(out_data.size() == rhs_data.size());
     for (int index = 0; index < out_data.size(); ++index) {
-        ASSERT_TRUE(out_data[index] == (TypeOut)(ope(vax_h, vay_data[index])));
+        ASSERT_TRUE(out_data[index] == (TypeOut)(ope(lhs_h, rhs_data[index])));
     }
 
-    auto vay_valid = std::get<1>(vay_h);
+    auto rhs_valid = std::get<1>(rhs_h);
     auto out_valid = std::get<1>(out_h);
 
-    ASSERT_TRUE(out_valid.size() == vay_valid.size());
+    ASSERT_TRUE(out_valid.size() == rhs_valid.size());
     for (int index = 0; index < out_valid.size(); ++index) {
-        ASSERT_TRUE(out_valid[index] == vay_valid[index]);
+        ASSERT_TRUE(out_valid[index] == rhs_valid[index]);
     }
 }
 
-template <typename TypeOut, typename TypeVax, typename TypeVay, typename TypeOpe>
+template <typename TypeOut, typename TypeLhs, typename TypeRhs, typename TypeOpe>
 void ASSERT_BINOP(cudf::test::column_wrapper<TypeOut>& out,
-                  cudf::test::column_wrapper<TypeVax>& vax,
-                  cudf::test::scalar_wrapper<TypeVay>& vay,
+                  cudf::test::column_wrapper<TypeLhs>& lhs,
+                  cudf::test::scalar_wrapper<TypeRhs>& rhs,
                   TypeOpe&& ope) {
-    auto vay_h = vay.to_host();
-    auto vax_h = vax.to_host();
-    auto vax_data = std::get<0>(vax_h);
+    auto rhs_h = rhs.to_host();
+    auto lhs_h = lhs.to_host();
+    auto lhs_data = std::get<0>(lhs_h);
     auto out_h = out.to_host();
     auto out_data = std::get<0>(out_h);
 
-    ASSERT_TRUE(out_data.size() == vax_data.size());
+    ASSERT_TRUE(out_data.size() == lhs_data.size());
     for (int index = 0; index < out_data.size(); ++index) {
-        ASSERT_TRUE(out_data[index] == (TypeOut)(ope(vax_data[index], vay_h)));
+        ASSERT_TRUE(out_data[index] == (TypeOut)(ope(lhs_data[index], rhs_h)));
     }
 
-    auto vax_valid = std::get<1>(vax_h);
+    auto lhs_valid = std::get<1>(lhs_h);
     auto out_valid = std::get<1>(out_h);
 
-    ASSERT_TRUE(out_valid.size() == vax_valid.size());
+    ASSERT_TRUE(out_valid.size() == lhs_valid.size());
     for (int index = 0; index < out_valid.size(); ++index) {
-        ASSERT_TRUE(out_valid[index] == (vax_valid[index]));
+        ASSERT_TRUE(out_valid[index] == (lhs_valid[index]));
     }
 }
 
-template <typename TypeOut, typename TypeVax, typename TypeVay, typename TypeOpe>
+template <typename TypeOut, typename TypeLhs, typename TypeRhs, typename TypeOpe>
 void ASSERT_BINOP(cudf::test::column_wrapper<TypeOut>& out,
-                  cudf::test::column_wrapper<TypeVax>& vax,
-                  cudf::test::column_wrapper<TypeVay>& vay,
+                  cudf::test::column_wrapper<TypeLhs>& lhs,
+                  cudf::test::column_wrapper<TypeRhs>& rhs,
                   TypeOpe&& ope) {
-    auto vax_h = vax.to_host();
-    auto vax_data = std::get<0>(vax_h);
-    auto vay_h = vay.to_host();
-    auto vay_data = std::get<0>(vay_h);
+    auto lhs_h = lhs.to_host();
+    auto lhs_data = std::get<0>(lhs_h);
+    auto rhs_h = rhs.to_host();
+    auto rhs_data = std::get<0>(rhs_h);
     auto out_h = out.to_host();
     auto out_data = std::get<0>(out_h);
 
-    ASSERT_TRUE(out_data.size() == vax_data.size());
-    ASSERT_TRUE(out_data.size() == vay_data.size());
+    ASSERT_TRUE(out_data.size() == lhs_data.size());
+    ASSERT_TRUE(out_data.size() == rhs_data.size());
     for (int index = 0; index < out_data.size(); ++index) {
-        ASSERT_TRUE(out_data[index] == (TypeOut)(ope(vax_data[index], vay_data[index])));
+        ASSERT_TRUE(out_data[index] == (TypeOut)(ope(lhs_data[index], rhs_data[index])));
     }
 
-    auto vax_valid = std::get<1>(vax_h);
-    auto vay_valid = std::get<1>(vay_h);
+    auto lhs_valid = std::get<1>(lhs_h);
+    auto rhs_valid = std::get<1>(rhs_h);
     auto out_valid = std::get<1>(out_h);
 
-    ASSERT_TRUE(out_valid.size() == vax_valid.size());
-    ASSERT_TRUE(out_valid.size() == vay_valid.size());
+    ASSERT_TRUE(out_valid.size() == lhs_valid.size());
+    ASSERT_TRUE(out_valid.size() == rhs_valid.size());
     for (int index = 0; index < out_valid.size(); ++index) {
-        ASSERT_TRUE(out_valid[index] == vax_valid[index] | vay_valid[index]);
+        ASSERT_TRUE(out_valid[index] == lhs_valid[index] | rhs_valid[index]);
     }
 }
 
@@ -111,33 +111,33 @@ void ASSERT_BINOP(cudf::test::column_wrapper<TypeOut>& out,
  * Mathematical Standard Library Functions with Maximum ULP Error'
  * The pow function has 2 (full range) maximum ulp error.
  */
-template <typename TypeOut, typename TypeVax, typename TypeVay>
+template <typename TypeOut, typename TypeLhs, typename TypeRhs>
 void ASSERT_BINOP(cudf::test::column_wrapper<TypeOut>& out,
-                  cudf::test::column_wrapper<TypeVax>& vax,
-                  cudf::test::column_wrapper<TypeVay>& vay,
-                  gdf::library::operation::Pow<TypeOut, TypeVax, TypeVay>&& ope) {
-    auto vax_h = vax.to_host();
-    auto vax_data = std::get<0>(vax_h);
-    auto vay_h = vay.to_host();
-    auto vay_data = std::get<0>(vay_h);
+                  cudf::test::column_wrapper<TypeLhs>& lhs,
+                  cudf::test::column_wrapper<TypeRhs>& rhs,
+                  gdf::library::operation::Pow<TypeOut, TypeLhs, TypeRhs>&& ope) {
+    auto lhs_h = lhs.to_host();
+    auto lhs_data = std::get<0>(lhs_h);
+    auto rhs_h = rhs.to_host();
+    auto rhs_data = std::get<0>(rhs_h);
     auto out_h = out.to_host();
     auto out_data = std::get<0>(out_h);
 
     const int ULP = 2.0;
-    ASSERT_TRUE(out_data.size() == vax_data.size());
-    ASSERT_TRUE(out_data.size() == vay_data.size());
+    ASSERT_TRUE(out_data.size() == lhs_data.size());
+    ASSERT_TRUE(out_data.size() == rhs_data.size());
     for (int index = 0; index < out_data.size(); ++index) {
-        ASSERT_TRUE(abs(out_data[index] - (TypeOut)(ope(vax_data[index], vay_data[index]))) < ULP);
+        ASSERT_TRUE(abs(out_data[index] - (TypeOut)(ope(lhs_data[index], rhs_data[index]))) < ULP);
     }
 
-    auto vax_valid = std::get<1>(vax_h);
-    auto vay_valid = std::get<1>(vay_h);
+    auto lhs_valid = std::get<1>(lhs_h);
+    auto rhs_valid = std::get<1>(rhs_h);
     auto out_valid = std::get<1>(out_h);
 
-    ASSERT_TRUE(out_valid.size() == vax_valid.size());
-    ASSERT_TRUE(out_valid.size() == vay_valid.size());
+    ASSERT_TRUE(out_valid.size() == lhs_valid.size());
+    ASSERT_TRUE(out_valid.size() == rhs_valid.size());
     for (int index = 0; index < out_valid.size(); ++index) {
-        ASSERT_TRUE(out_valid[index] == (vax_valid[index] & vay_valid[index]));
+        ASSERT_TRUE(out_valid[index] == (lhs_valid[index] & rhs_valid[index]));
     }
 }
 

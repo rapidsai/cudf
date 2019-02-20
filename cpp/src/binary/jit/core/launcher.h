@@ -56,13 +56,13 @@ namespace jit {
             return *this;
         }
 
-        gdf_error launch(gdf_column* out, gdf_column* vax, gdf_scalar* vay);
+        gdf_error launch(gdf_column* out, gdf_column* lhs, gdf_scalar* rhs);
 
-        gdf_error launch(gdf_column* out, gdf_column* vax, gdf_column* vay);
+        gdf_error launch(gdf_column* out, gdf_column* lhs, gdf_column* rhs);
 
-        gdf_error launch(gdf_column* out, gdf_column* vax, gdf_scalar* vay, gdf_scalar* def);
+        gdf_error launch(gdf_column* out, gdf_column* lhs, gdf_scalar* rhs, gdf_scalar* def);
 
-        gdf_error launch(gdf_column* out, gdf_column* vax, gdf_column* vay, gdf_scalar* def);
+        gdf_error launch(gdf_column* out, gdf_column* lhs, gdf_column* rhs, gdf_scalar* def);
 
     private:
         std::vector<std::string> compilerFlags { "-std=c++14" };

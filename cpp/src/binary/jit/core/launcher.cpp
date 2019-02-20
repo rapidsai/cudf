@@ -54,24 +54,24 @@ namespace jit {
         return *this;
     }
 
-    gdf_error Launcher::launch(gdf_column* out, gdf_column* vax, gdf_scalar* vay) {
+    gdf_error Launcher::launch(gdf_column* out, gdf_column* lhs, gdf_scalar* rhs) {
         program.kernel(kernelName.c_str())
                .instantiate(arguments)
                .configure_1d_max_occupancy()
                .launch(out->size,
-                       out->data, vax->data, vay->data,
-                       out->valid, vax->valid);
+                       out->data, lhs->data, rhs->data,
+                       out->valid, lhs->valid);
 
         return GDF_SUCCESS;
     }
 
-    gdf_error Launcher::launch(gdf_column* out, gdf_column* vax, gdf_column* vay) {
+    gdf_error Launcher::launch(gdf_column* out, gdf_column* lhs, gdf_column* rhs) {
         program.kernel(kernelName.c_str())
                .instantiate(arguments)
                .configure_1d_max_occupancy()
                .launch(out->size,
-                       out->data, vax->data, vay->data,
-                       out->valid, vax->valid, vay->valid);
+                       out->data, lhs->data, rhs->data,
+                       out->valid, lhs->valid, rhs->valid);
 
         return GDF_SUCCESS;
     }

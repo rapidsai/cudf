@@ -199,36 +199,36 @@ R"***(
 
 
 
-    template <typename Vax, typename Vay, typename = void>
+    template <typename Lhs, typename Rhs, typename = void>
     struct HelperCommonNumber {};
 
-    template <typename Vax, typename Vay>
-    struct HelperCommonNumber<Vax, Vay, enableIf<(isFloatingPoint<Vax> || isFloatingPoint<Vay>)>> {
-        using Type = If<(sizeof(Vax) == 8 || sizeof(Vay) == 8), double, float>;
+    template <typename Lhs, typename Rhs>
+    struct HelperCommonNumber<Lhs, Rhs, enableIf<(isFloatingPoint<Lhs> || isFloatingPoint<Rhs>)>> {
+        using Type = If<(sizeof(Lhs) == 8 || sizeof(Rhs) == 8), double, float>;
     };
 
-    template <typename Vax, typename Vay>
-    struct HelperCommonNumber<Vax, Vay, enableIf<(isIntegralSigned<Vax> && isIntegralSigned<Vay>)>> {
-        using Type = IntegralMap<(MaxSize<Vax, Vay>), IntegralSigned>;
+    template <typename Lhs, typename Rhs>
+    struct HelperCommonNumber<Lhs, Rhs, enableIf<(isIntegralSigned<Lhs> && isIntegralSigned<Rhs>)>> {
+        using Type = IntegralMap<(MaxSize<Lhs, Rhs>), IntegralSigned>;
     };
 
-    template <typename Vax, typename Vay>
-    struct HelperCommonNumber<Vax, Vay, enableIf<(isIntegralSigned<Vax> && isIntegralUnsigned<Vay>)>> {
-        using Type = IntegralMap<(MaxSize<Vax, Vay>), IntegralSigned>;
+    template <typename Lhs, typename Rhs>
+    struct HelperCommonNumber<Lhs, Rhs, enableIf<(isIntegralSigned<Lhs> && isIntegralUnsigned<Rhs>)>> {
+        using Type = IntegralMap<(MaxSize<Lhs, Rhs>), IntegralSigned>;
     };
 
-    template <typename Vax, typename Vay>
-    struct HelperCommonNumber<Vax, Vay, enableIf<(isIntegralUnsigned<Vax> && isIntegralSigned<Vay>)>> {
-        using Type = IntegralMap<(MaxSize<Vax, Vay>), IntegralSigned>;
+    template <typename Lhs, typename Rhs>
+    struct HelperCommonNumber<Lhs, Rhs, enableIf<(isIntegralUnsigned<Lhs> && isIntegralSigned<Rhs>)>> {
+        using Type = IntegralMap<(MaxSize<Lhs, Rhs>), IntegralSigned>;
     };
 
-    template <typename Vax, typename Vay>
-    struct HelperCommonNumber<Vax, Vay, enableIf<(isIntegralUnsigned<Vax> && isIntegralUnsigned<Vay>)>> {
-        using Type = IntegralMap<(MaxSize<Vax, Vay>), IntegralUnsigned>;
+    template <typename Lhs, typename Rhs>
+    struct HelperCommonNumber<Lhs, Rhs, enableIf<(isIntegralUnsigned<Lhs> && isIntegralUnsigned<Rhs>)>> {
+        using Type = IntegralMap<(MaxSize<Lhs, Rhs>), IntegralUnsigned>;
     };
 
-    template <typename Vax, typename Vay>
-    using CommonNumber = typename HelperCommonNumber<Vax, Vay>::Type;
+    template <typename Lhs, typename Rhs>
+    using CommonNumber = typename HelperCommonNumber<Lhs, Rhs>::Type;
 )***";
 
 } // namespace code
