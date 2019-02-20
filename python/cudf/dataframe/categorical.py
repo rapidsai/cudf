@@ -4,8 +4,8 @@ import pandas as pd
 import numpy as np
 import pyarrow as pa
 
-from . import numerical, columnops
-from .buffer import Buffer
+from cudf.dataframe import numerical, columnops
+from cudf.dataframe.buffer import Buffer
 from cudf.utils import utils, cudautils
 from cudf.comm.serialize import register_distributed_serializer
 

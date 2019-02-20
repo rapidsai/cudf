@@ -9,10 +9,10 @@ import pyarrow as pa
 from libgdf_cffi import libgdf
 from librmm_cffi import librmm as rmm
 
-from . import columnops, datetime
+from cudf.dataframe import columnops, datetime
 from cudf.utils import cudautils, utils
 from cudf import _gdf
-from .buffer import Buffer
+from cudf.dataframe.buffer import Buffer
 from cudf.comm.serialize import register_distributed_serializer
 from cudf._gdf import nvtx_range_push, nvtx_range_pop
 from cudf._sort import get_sorted_inds

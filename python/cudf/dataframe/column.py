@@ -14,7 +14,7 @@ from librmm_cffi import librmm as rmm
 
 from cudf import _gdf
 from cudf.utils import cudautils, utils
-from .buffer import Buffer
+from cudf.dataframe.buffer import Buffer
 
 
 class Column(object):
