@@ -931,11 +931,19 @@ class DataFrame(object):
         return out.copy(deep=copy)
 
     @classmethod
-    def _concat(cls, objs, ignore_index=False):
+    def _concat(cls, objs, axis=0, ignore_index=False):
         nvtx_range_push("CUDF_CONCAT", "orange")
+        if axis == 1:
+            df = DataFrame()
+            for o in objs:
+                for col in o.columns:
+                    df[col] = o[col]
+            return df
+
         if len(set(frozenset(o.columns) for o in objs)) != 1:
             what = set(frozenset(o.columns) for o in objs)
             raise ValueError('columns mismatch: {}'.format(what))
+
         objs = [o for o in objs]
         if ignore_index:
             index = RangeIndex(sum(map(len, objs)))

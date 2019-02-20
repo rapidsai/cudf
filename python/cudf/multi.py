@@ -3,12 +3,13 @@ from cudf.dataframe.series import Series
 from cudf.dataframe.index import Index
 
 
-def concat(objs, ignore_index=False):
+def concat(objs, axis=0, ignore_index=False):
     """Concatenate DataFrames, Series, or Indices row-wise.
 
     Parameters
     ----------
     objs : list of DataFrame, Series, or Index
+    axis : concatenation axis, 0 - index, 1 - columns
     ignore_index : bool
         Set True to ignore the index of the *objs* and provide a
         default range index instead.
@@ -31,9 +32,9 @@ def concat(objs, ignore_index=False):
     typ = list(typs)[0]
 
     if typ is DataFrame:
-        return DataFrame._concat(objs, ignore_index=ignore_index)
+        return DataFrame._concat(objs, axis=axis, ignore_index=ignore_index)
     elif typ is Series:
-        return Series._concat(objs)
+        return Series._concat(objs, axis=axis)
     elif issubclass(typ, Index):
         return Index._concat(objs)
     else:

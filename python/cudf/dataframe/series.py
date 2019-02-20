@@ -486,8 +486,15 @@ class Series(object):
         return self._column.dtype
 
     @classmethod
-    def _concat(cls, objs, index=True):
+    def _concat(cls, objs, axis=0, index=True):
         # Concatenate index if not provided
+        if axis == 1:
+            from cudf import DataFrame
+            df = DataFrame()
+            for o in objs:
+                df[o.name] = o
+            return df
+
         if index is True:
             index = Index._concat([o.index for o in objs])
 

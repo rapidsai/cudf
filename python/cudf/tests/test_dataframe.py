@@ -266,6 +266,10 @@ def test_dataframe_column_name_indexing():
     pdf[1] = np.arange(1, 1 + nelem)
     pdf[2] = np.random.random(nelem)
     df = DataFrame.from_pandas(pdf)
+
+    assert_eq(df[df.columns], df)
+    assert_eq(df[df.columns[:1]], df[['key1']])
+
     for i in range(1, len(pdf.columns)+1):
         for idx in combinations(pdf.columns, i):
             assert(pdf[list(idx)].equals(df[list(idx)].to_pandas()))
@@ -276,6 +280,9 @@ def test_dataframe_column_name_indexing():
         df[i] = range(nelem)
     gdf = DataFrame.from_pandas(df)
     assert_eq(gdf, df)
+
+    assert_eq(gdf[gdf.columns], gdf)
+    assert_eq(gdf[gdf.columns[:3]], gdf[[0, 1, 2]])
 
 
 def test_dataframe_drop_method():
@@ -956,6 +963,25 @@ def test_dataframe_empty_concat():
     gdf3 = gd.concat([gdf1, gdf2])
     assert len(gdf3) == 0
     assert len(gdf3.columns) == 2
+
+
+def test_concat_with_axis():
+    df1 = pd.DataFrame(dict(x=np.arange(5), y=np.arange(5)))
+    df2 = pd.DataFrame(dict(a=np.arange(5), b=np.arange(5)))
+
+    concat_df = pd.concat([df1, df2], axis=1)
+    cdf1 = gd.from_pandas(df1)
+    cdf2 = gd.from_pandas(df2)
+
+    concat_cdf = gd.concat([cdf1, cdf2], axis=1)
+    assert_eq(concat_cdf, concat_df)
+
+    concat_s = pd.concat([df1.x, df1.y], axis=1)
+    s1 = gd.Series.from_pandas(df1.x)
+    s2 = gd.Series.from_pandas(df1.y)
+    concat_cdf_s = gd.concat([s1, s2], axis=1)
+
+    assert_eq(concat_cdf_s, concat_s)
 
 
 @pytest.mark.parametrize('nrows', [0, 3, 10, 100, 1000])
