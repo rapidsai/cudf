@@ -246,9 +246,22 @@ class DataFrame(object):
                 for col in arg:
                     df[col] = self[col]
             return df
+        elif isinstance(arg, DataFrame):
+            return self.mask(arg)
         else:
             msg = "__getitem__ on type {!r} is not supported"
             raise TypeError(msg.format(type(arg)))
+
+    def mask(self, other):
+        df = self.copy()
+        for col in self.columns:
+            if col in other.columns:
+                boolbits = cudautils.compact_mask_bytes(
+                           other[col].to_gpu_array())
+            else:
+                boolbits = cudautils.full(len(self[col]), 0, np.uint8)
+            df[col]._column = df[col]._column.set_mask(boolbits)
+        return df
 
     def __setitem__(self, name, col):
         """Add/set column by *name*

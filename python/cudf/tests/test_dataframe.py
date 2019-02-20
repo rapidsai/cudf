@@ -1660,10 +1660,13 @@ def test_dataframe_boolmask(mask_shape):
         pdf_mask[col] = np.random.randint(0, 2, mask_shape[0]) > 0
     gdf = DataFrame.from_pandas(pdf)
     gdf_mask = DataFrame.from_pandas(pdf_mask)
-    print(pdf[pdf_mask])
-    print(gdf[gdf_mask])
-    assert_eq(pdf[pdf_mask], gdf[gdf_mask])
 
+    gdf = gdf[gdf_mask]
+    pdf = pdf[pdf_mask]
+
+    assert np.array_equal(gdf.columns, pdf.columns)
+    for col in gdf.columns:
+        assert np.array_equal(gdf[col].fillna(-1), pdf[col].fillna(-1))
 
 def test_1row_arrow_table():
     data = [pa.array([0]), pa.array([1])]
