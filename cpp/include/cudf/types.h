@@ -86,19 +86,13 @@ typedef struct {
 } gdf_dtype_extra_info;
 
 
-/**
- * @struct gdf_scalar
- * @brief  literal or variable
- *
- * The struct is used as a literal or a variable in the libgdf library.
- *
- * @var data     A union that represents the value.
- * @var dtype    An enum that represents the type of the value.
- * @var is_valid A boolean that represents whether the scalar is null.
- */
+/**---------------------------------------------------------------------------*
+ * @brief A struct to hold a scalar (single) value and its type information
+ * 
+ *---------------------------------------------------------------------------**/
 typedef struct {
-    void*  data;
-    gdf_dtype dtype;
+  void*  data;      /**< Pointer to the scalar data */
+  gdf_dtype dtype;  /**< The datatype of the scalar's data */
 } gdf_scalar;
 
 
@@ -174,34 +168,25 @@ typedef enum {
 } gdf_color;
 
 
-/**
- * @enum gdf_binary_operator
- * It contains the different operations that can be performed in the binary operations.
- * The enumeration is used in the following functions:
- * - gdf_binary_operation_v_s_v
- * - gdf_binary_operation_v_v_s
- * - gdf_binary_operation_v_v_v
- */
+/**---------------------------------------------------------------------------*
+ * @brief Types of binary operations that can be performed on data.
+ * 
+ *---------------------------------------------------------------------------**/
 typedef enum {
-    GDF_ADD,
-    GDF_SUB,
-    GDF_MUL,
-    GDF_DIV,
-    GDF_TRUE_DIV,
-    GDF_FLOOR_DIV,
-    GDF_MOD,
-    GDF_POW,
-    GDF_EQUAL,
-    GDF_NOT_EQUAL,
-    GDF_LESS,
-    GDF_GREATER,
-    GDF_LESS_EQUAL,
-    GDF_GREATER_EQUAL,
-    //GDF_COMBINE,
-    //GDF_COMBINE_FIRST,
-    //GDF_ROUND,
-    //GDF_PRODUCT,
-    //GDF_DOT
+  GDF_ADD,            /**< operator + */
+  GDF_SUB,            /**< operator - */
+  GDF_MUL,            /**< operator * */
+  GDF_DIV,            /**< operator / using common type of lhs and rhs */
+  GDF_TRUE_DIV,       /**< operator / after promoting type to floating point*/
+  GDF_FLOOR_DIV,      /**< operator / after promoting to float and then flooring the result */
+  GDF_MOD,            /**< operator %  */
+  GDF_POW,            /**< lhs ^ rhs   */
+  GDF_EQUAL,          /**< operator == */
+  GDF_NOT_EQUAL,      /**< operator != */
+  GDF_LESS,           /**< operator <  */
+  GDF_GREATER,        /**< operator >  */
+  GDF_LESS_EQUAL,     /**< operator <= */
+  GDF_GREATER_EQUAL,  /**< operator >= */
 } gdf_binary_operator;
 
 

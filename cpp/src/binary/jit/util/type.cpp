@@ -61,9 +61,6 @@ namespace jit {
                 return "Mod";
             case GDF_POW:
                 return "Pow";
-            //case GDF_COMBINE:
-            //case GDF_COMBINE_FIRST:
-            //case GDF_ROUND:
             case GDF_EQUAL:
                 return "Equal";
             case GDF_NOT_EQUAL:
@@ -76,8 +73,6 @@ namespace jit {
                 return "LessEqual";
             case GDF_GREATER_EQUAL:
                 return "GreaterEqual";
-            //GDF_PRODUCT,
-            //GDF_DOT
             default:
                 return "None";
         }
