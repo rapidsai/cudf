@@ -230,7 +230,8 @@ class DataFrame(object):
             for k, col in self._cols.items():
                 df[k] = col[arg]
             return df
-        elif isinstance(arg, (list, np.ndarray, pd.Series, Series, Index)):
+        elif isinstance(arg, (list, np.ndarray, pd.Series,
+                        Series, Index, pd.Index)):
             mask = arg
             if isinstance(mask, list):
                 mask = np.array(mask)
@@ -651,6 +652,22 @@ class DataFrame(object):
         """Returns the index of the DataFrame
         """
         return self._index
+
+    @index.setter
+    def index(self, _index):
+        new_length = len(_index)
+        old_length = len(self._index)
+
+        if new_length != old_length:
+            msg = f'Length mismatch: Expected index has {old_length}' \
+                    ' elements, new values have {new_length} elements'
+            raise ValueError(msg)
+
+        # try to build an index from generic _index
+        idx = as_index(_index)
+        self._index = idx
+        for k in self.columns:
+            self[k] = self[k].set_index(idx)
 
     def set_index(self, index):
         """Return a new DataFrame with a new index
@@ -2340,8 +2357,9 @@ class Iloc(object):
 
         for col in self._df.columns:
             sr = self._df[col]
-            df.add_column(col, sr.iloc[tuple(rows)], forceindex=True)
+            df.add_column(col, sr.iloc[tuple(rows)])
 
+        df.index = sr.index[rows]
         return df
 
     def __setitem__(self, key, value):

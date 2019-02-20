@@ -266,6 +266,10 @@ def test_dataframe_column_name_indexing():
     pdf[1] = np.arange(1, 1 + nelem)
     pdf[2] = np.random.random(nelem)
     df = DataFrame.from_pandas(pdf)
+
+    assert_eq(df[df.columns], df)
+    assert_eq(df[df.columns[:1]], df[['key1']])
+
     for i in range(1, len(pdf.columns)+1):
         for idx in combinations(pdf.columns, i):
             assert(pdf[list(idx)].equals(df[list(idx)].to_pandas()))
@@ -276,6 +280,9 @@ def test_dataframe_column_name_indexing():
         df[i] = range(nelem)
     gdf = DataFrame.from_pandas(df)
     assert_eq(gdf, df)
+
+    assert_eq(gdf[gdf.columns], gdf)
+    assert_eq(gdf[gdf.columns[:3]], gdf[[0, 1, 2]])
 
 
 def test_dataframe_drop_method():
