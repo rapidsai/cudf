@@ -41,6 +41,7 @@
 - PR #943 Updated `count_nonzero_mask` to return `num_rows` when the mask is null
 - PR #942 Added increment/decrement operators for wrapper types
 - PR #966 Updated RMM submodule.
+- PR #1002 Support indexing a dataframe with another boolean dataframe
 
 ## Bug Fixes
 
