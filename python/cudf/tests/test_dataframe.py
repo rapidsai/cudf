@@ -266,6 +266,10 @@ def test_dataframe_column_name_indexing():
     pdf[1] = np.arange(1, 1 + nelem)
     pdf[2] = np.random.random(nelem)
     df = DataFrame.from_pandas(pdf)
+
+    assert_eq(df[df.columns], df)
+    assert_eq(df[df.columns[:1]], df[['key1']])
+
     for i in range(1, len(pdf.columns)+1):
         for idx in combinations(pdf.columns, i):
             assert(pdf[list(idx)].equals(df[list(idx)].to_pandas()))
@@ -276,6 +280,9 @@ def test_dataframe_column_name_indexing():
         df[i] = range(nelem)
     gdf = DataFrame.from_pandas(df)
     assert_eq(gdf, df)
+
+    assert_eq(gdf[gdf.columns], gdf)
+    assert_eq(gdf[gdf.columns[:3]], gdf[[0, 1, 2]])
 
 
 def test_dataframe_drop_method():
@@ -1005,6 +1012,30 @@ def test_from_pandas():
     assert isinstance(gs, gd.Series)
 
     pd.testing.assert_series_equal(s, gs.to_pandas())
+
+
+def test_from_gpu_matrix():
+    h_ary = np.array([[1, 2, 3], [4, 5, 6]], np.int32)
+    d_ary = rmm.to_device(h_ary)
+
+    gdf = gd.DataFrame.from_gpu_matrix(d_ary, columns=['a', 'b', 'c'])
+    df = pd.DataFrame(h_ary, columns=['a', 'b', 'c'])
+    assert isinstance(gdf, gd.DataFrame)
+
+    pd.testing.assert_frame_equal(df, gdf.to_pandas())
+
+    gdf = gd.DataFrame.from_gpu_matrix(d_ary)
+    df = pd.DataFrame(h_ary)
+    assert isinstance(gdf, gd.DataFrame)
+
+    pd.testing.assert_frame_equal(df, gdf.to_pandas())
+
+
+@pytest.mark.xfail(reason="matrix dimension is not 2")
+def test_from_gpu_matrix_wrong_dimensions():
+    d_ary = rmm.device_array((2, 3, 4), dtype=np.int32)
+    gdf = gd.DataFrame.from_gpu_matrix(d_ary)
+    assert gdf is not None
 
 
 @pytest.mark.xfail(reason="constructor does not coerce index inputs")
@@ -1786,6 +1817,16 @@ def test_head_tail(nelem, data_type):
     check_frame_series_equality(gdf['a'].tail(), gdf['a'][-5:])
     check_frame_series_equality(gdf['a'].tail(3), gdf['a'][-3:])
     check_frame_series_equality(gdf['a'].tail(-2), gdf['a'][2:])
+
+
+def test_dataframe_empty_sort_index():
+    pdf = pd.DataFrame({'x': []})
+    gdf = DataFrame.from_pandas(pdf)
+
+    expect = pdf.sort_index()
+    got = gdf.sort_index()
+
+    assert_eq(expect, got)
 
 
 @pytest.mark.parametrize('dtype', ['int8', 'int16', 'int32', 'int64',
