@@ -73,7 +73,7 @@
 - PR #950 Converting dataframe/recarry with non-contiguous arrays
 - PR #963 CSV Reader: Fix another issue with missing data rows when using byte_range
 - PR #993 Fix dtype in selecting 0 rows from objects
-
+- PR #1009 Fix performance regression in `to_pandas` method on DataFrame
 
 
 # cuDF 0.5.1 (05 Feb 2019)
