@@ -279,6 +279,9 @@ class RangeIndex(Index):
             index = utils.normalize_index(index, len(self))
             index += self._start
             return index
+        elif isinstance(index, (list, np.ndarray)):
+            index = np.array(index)
+            return self.take(index)
         else:
             raise ValueError(index)
 
