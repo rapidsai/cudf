@@ -320,7 +320,7 @@ bool gdf_equal_columns(gdf_column* left, gdf_column* right) {
       return 0;
     }
 
-    size_t count{0};
+    gdf_size_type count{0};
 
     // Count the valid bits for all masks except the last one
     for (size_t i = 0; i < (masks.size() - 1); ++i) {
@@ -334,16 +334,21 @@ bool gdf_equal_columns(gdf_column* left, gdf_column* right) {
 
     // Only count the bits in the last mask that correspond to rows
     int num_rows_last_mask = num_rows % GDF_VALID_BITSIZE;
+    if (num_rows_last_mask == 0) {
+      num_rows_last_mask = GDF_VALID_BITSIZE;
+    }
 
-    if (num_rows_last_mask == 0) num_rows_last_mask = GDF_VALID_BITSIZE;
+    // Mask off only the bits that correspond to rows
+    gdf_valid_type const rows_mask = ( gdf_valid_type{1} << num_rows_last_mask ) - 1;
+    gdf_valid_type last_mask = masks.back() & rows_mask;
 
-    gdf_valid_type last_mask = *(masks.end() - 1);
-    for (int i = 0; (i < num_rows_last_mask) && (last_mask > 0); ++i) {
-      count += (last_mask & gdf_valid_type(1));
-      last_mask >>= 1;
+    while (last_mask > 0) {
+      last_mask &= (last_mask - 1);
+      count++;
     }
 
     return count;
+
   }
 
 #endif
