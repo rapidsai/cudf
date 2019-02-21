@@ -296,7 +296,7 @@ struct column_wrapper {
       }
 
       // If one value is valid but the other is not
-      if (lhs_is_valid xor rhs_is_valid) {
+      if (lhs_is_valid != rhs_is_valid) {
         return false;
       }
 
