@@ -70,7 +70,6 @@ struct column_wrapper {
     the_column.valid = bitmask.data().get();
   }
 
-  // TODO Implement this via copy & swap. Need a swap function.
   column_wrapper& operator=(column_wrapper<ColumnType> other) = delete;
 
   ~column_wrapper() = default;
@@ -386,8 +385,12 @@ struct column_wrapper {
     }
   }
 
-  rmm::device_vector<ColumnType> data;
-  rmm::device_vector<gdf_valid_type> bitmask;
+  rmm::device_vector<ColumnType> data;  ///< Container for the column's data
+
+  // If the column's bitmask does not exist (doesn't contain null values), then
+  // the size of this vector will be zero
+  rmm::device_vector<gdf_valid_type> bitmask;  ///< Container for the column's bitmask
+
   gdf_column the_column;
 };
 
