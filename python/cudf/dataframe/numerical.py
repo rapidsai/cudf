@@ -394,14 +394,7 @@ class NumericalColumn(columnops.TypedColumnBase):
 
 
 def numeric_column_binop(lhs, rhs, op, out_dtype):
-<<<<<<< HEAD
-    nvtx_range_push("PYGDF_BINARY_OP", "orange")
-=======
-    if lhs.dtype != rhs.dtype:
-        raise TypeError('{} != {}'.format(lhs.dtype, rhs.dtype))
-
     nvtx_range_push("CUDF_BINARY_OP", "orange")
->>>>>>> bug-binops-nullmask-and
     # Allocate output
     masked = lhs.has_null_mask or rhs.has_null_mask
     out = columnops.column_empty_like(lhs, dtype=out_dtype, masked=masked)
