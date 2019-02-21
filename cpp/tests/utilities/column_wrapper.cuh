@@ -26,7 +26,6 @@
 
 #include <thrust/equal.h>
 #include <thrust/logical.h>
-#include <bitset>
 #include <string>
 
 #ifndef CUDA_RT_CALL
