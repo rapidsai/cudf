@@ -186,29 +186,40 @@ struct ParseOptions {
   bool multi_delimiter;
 };
 
+/**
+* @brief Specialization of determineBase for integral types. Checks if the
+* string represents a hex value and updates the starting position if it does.
+*/
 template <typename T,
 typename std::enable_if_t<std::is_integral<T>::value> * = nullptr>
-__host__ __device__ __forceinline__
+__host__ __device__ __forceinline__ 
 int determineBase(const char* data, long *start, long end) {
-	// check if this is a hex number
-	if (end - *start >= 2 && data[*start] == '0' && data[*start + 1] == 'x') {
-		*start += 2;
-		return 16;
-	}
-	return 10;
+  // check if this is a hex number
+  if (end - *start >= 2 && data[*start] == '0' && data[*start + 1] == 'x') {
+    *start += 2;
+    return 16;
+  }
+  return 10;
 }
 
+/**
+* @brief Specialization of determineBase for non-integral numeric types.
+* Always returns 10, only decimal floating-point numbers are supported.
+*/
 template <typename T,
 typename std::enable_if_t<!std::is_integral<T>::value> * = nullptr>
-__host__ __device__ __forceinline__
+__host__ __device__ __forceinline__ 
 int determineBase(const char* data, long *start, long end) {
   return 10;
 }
 
+/**
+* @brief Specialization of decodeAsciiDigit for integral types.
+* Handles hexadecimal digits, both uppercase and lowercase.
+*/
 template <typename T,
 typename std::enable_if_t<std::is_integral<T>::value> * = nullptr>
-__host__ __device__ __forceinline__
-char digitToValue(char d, int base) {
+__host__ __device__ __forceinline__ char decodeAsciiDigit(char d, int base) {
   if (base == 16) {
     if (d >= 'a' && d <= 'f')
       return d - 'a' + 10;
@@ -218,10 +229,13 @@ char digitToValue(char d, int base) {
   return d - '0';
 }
 
+/**
+* @brief Specialization of decodeAsciiDigit for non-integral numeric types.
+* Only handles decimal digits.
+*/
 template <typename T,
 typename std::enable_if_t<!std::is_integral<T>::value> * = nullptr>
-__host__ __device__ __forceinline__
-char digitToValue(char d, int base) {
+__host__ __device__ __forceinline__ char decodeAsciiDigit(char d, int base) {
   return d - '0';
 }
 
@@ -262,7 +276,7 @@ __host__ __device__ T convertStrToValue(const char* data, long start, long end,
       break;
     } else if (data[index] != opts.thousands) {
       value *= base;
-      value += digitToValue<T>(data[index], base);
+      value += decodeAsciiDigit<T>(data[index], base);
     }
     ++index;
   }
@@ -276,7 +290,7 @@ __host__ __device__ T convertStrToValue(const char* data, long start, long end,
         break;
       } else if (data[index] != opts.thousands) {
         value *= base;
-        value += digitToValue<T>(data[index], base);
+        value += decodeAsciiDigit<T>(data[index], base);
         divisor *= base;
       }
       ++index;
