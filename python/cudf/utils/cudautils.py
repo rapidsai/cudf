@@ -185,15 +185,41 @@ def gpu_copy_to_dense(data, mask, slots, out):
 
 
 @cuda.jit
-def gpu_invert_value(data):
+def gpu_invert_value(data, out):
     tid = cuda.grid(1)
     if tid < data.size:
-        data[tid] = ~data[tid]
+        out[tid] = not data[tid]
 
 
-def invert_mask(arr):
+def invert_mask(arr, out):
     if arr.size > 0:
-        gpu_invert_value.forall(arr.size)(arr)
+        gpu_invert_value.forall(arr.size)(arr, out)
+
+
+def fill_mask(data, mask, value):
+    """fill a column based custom make with the same value
+
+    Parameters
+    ----------
+    data : [type]
+        [description]
+    mask : [type]
+        [description]
+    value : [type]
+        [description]
+
+    Returns
+    -------
+    [type]
+        [description]
+    """
+
+    out = rmm.device_array_like(data)
+    out.copy_to_device(data)
+    if data.size > 0:
+        configured = gpu_fill_masked.forall(data.size)
+        configured(value, mask, out)
+    return out
 
 
 @cuda.jit

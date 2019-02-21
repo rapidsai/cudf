@@ -531,11 +531,13 @@ class Series(object):
         return self._column.has_null_mask
 
     def masked_assign(self, value, mask):
-        # need to invert to properly use fillna
+        # need to invert to properly use gpu_fill_mask
         mask._invert()
         mask_gpu = mask.as_mask()
-        data = self._column.fillna(value, mask_gpu)
-        return self._copy_construct(data=data)
+        data = cudautils.fill_mask(data=self.data.to_gpu_array(),
+                                   mask=mask_gpu,
+                                   value=value)
+        return self._copy_construct(data=Buffer(data))
 
     def fillna(self, value):
         """Fill null values with ``value``.
@@ -543,6 +545,7 @@ class Series(object):
         Returns a copy with null filled.
         """
         data = self._column.fillna(value)
+
         return self._copy_construct(data=data)
 
     def to_array(self, fillna=None):
@@ -566,8 +569,8 @@ class Series(object):
     def _invert(self):
         """Internal convenience function for inverting masked array
         """
-
-        cudautils.invert_mask(self.to_gpu_array())
+        gpu_mask = self.to_gpu_array()
+        cudautils.invert_mask(gpu_mask, gpu_mask)
 
     def to_gpu_array(self, fillna=None):
         """Get a dense numba device array for the data.
