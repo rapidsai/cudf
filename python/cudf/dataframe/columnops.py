@@ -11,10 +11,11 @@ from numba import cuda, njit
 
 from librmm_cffi import librmm as rmm
 
-from .buffer import Buffer
-from .column import Column
+from cudf.dataframe.buffer import Buffer
+from cudf.dataframe.column import Column
 from cudf.utils import utils, cudautils
 from cudf import _gdf
+from cudf.utils.utils import buffers_from_pyarrow
 
 import warnings
 
@@ -154,7 +155,7 @@ def build_column(buffer, dtype, mask=None, categories=None):
                                          mask=mask)
 
 
-def as_column(arbitrary, nan_as_null=True):
+def as_column(arbitrary, nan_as_null=True, dtype=None):
     """Create a Column from an arbitrary object
 
     Currently support inputs are:
@@ -218,6 +219,9 @@ def as_column(arbitrary, nan_as_null=True):
         data = as_column(out_dev_array)
 
     elif isinstance(arbitrary, np.ndarray):
+        # CUDF assumes values are always contiguous
+        if not arbitrary.flags['C_CONTIGUOUS']:
+            arbitrary = np.ascontiguousarray(arbitrary)
         if arbitrary.dtype.kind == 'M':
             data = datetime.DatetimeColumn.from_numpy(arbitrary)
         elif arbitrary.dtype.kind in ('O', 'U'):
@@ -227,26 +231,22 @@ def as_column(arbitrary, nan_as_null=True):
 
     elif isinstance(arbitrary, pa.Array):
         if isinstance(arbitrary, pa.StringArray):
-            raise NotImplementedError("Strings are not yet supported")
+            warnings.warn("Strings are not yet supported, so converting to "
+                          "categorical")
+            data = as_column(arbitrary.dictionary_encode())
         elif isinstance(arbitrary, pa.NullArray):
-            pamask = Buffer(np.empty(0, dtype='int8'))
-            padata = Buffer(
-                np.empty(0, dtype=arbitrary.type.to_pandas_dtype())
-            )
-            data = numerical.NumericalColumn(
-                data=padata,
-                mask=pamask,
-                null_count=0,
-                dtype=np.dtype(arbitrary.type.to_pandas_dtype())
-            )
-        elif isinstance(arbitrary, pa.DictionaryArray):
-            if arbitrary.buffers()[0]:
-                pamask = Buffer(np.array(arbitrary.buffers()[0]))
+            new_dtype = dtype
+            if (type(dtype) == str and dtype == 'empty') or dtype is None:
+                new_dtype = np.dtype(arbitrary.type.to_pandas_dtype())
+
+            if pd.api.types.is_categorical_dtype(new_dtype):
+                arbitrary = arbitrary.dictionary_encode()
             else:
-                pamask = None
-            padata = Buffer(np.array(arbitrary.buffers()[1]).view(
-                arbitrary.indices.type.to_pandas_dtype()
-            ))
+                arbitrary = arbitrary.cast(_gdf.np_to_pa_dtype(new_dtype))
+
+            data = as_column(arbitrary)
+        elif isinstance(arbitrary, pa.DictionaryArray):
+            pamask, padata = buffers_from_pyarrow(arbitrary)
             data = categorical.CategoricalColumn(
                 data=padata,
                 mask=pamask,
@@ -256,13 +256,7 @@ def as_column(arbitrary, nan_as_null=True):
             )
         elif isinstance(arbitrary, pa.TimestampArray):
             arbitrary = arbitrary.cast(pa.timestamp('ms'))
-            if arbitrary.buffers()[0]:
-                pamask = Buffer(np.array(arbitrary.buffers()[0]))
-            else:
-                pamask = None
-            padata = Buffer(np.array(arbitrary.buffers()[1]).view(
-                np.dtype('M8[ms]')
-            ))
+            pamask, padata = buffers_from_pyarrow(arbitrary, dtype='M8[ms]')
             data = datetime.DatetimeColumn(
                 data=padata,
                 mask=pamask,
@@ -270,13 +264,7 @@ def as_column(arbitrary, nan_as_null=True):
                 dtype=np.dtype('M8[ms]')
             )
         elif isinstance(arbitrary, pa.Date64Array):
-            if arbitrary.buffers()[0]:
-                pamask = Buffer(np.array(arbitrary.buffers()[0]))
-            else:
-                pamask = None
-            padata = Buffer(np.array(arbitrary.buffers()[1]).view(
-                np.dtype('M8[ms]')
-            ))
+            pamask, padata = buffers_from_pyarrow(arbitrary, dtype='M8[ms]')
             data = datetime.DatetimeColumn(
                 data=padata,
                 mask=pamask,
@@ -293,13 +281,7 @@ def as_column(arbitrary, nan_as_null=True):
             # Arrow uses 1 bit per value while we use int8
             dtype = np.dtype(np.bool)
             arbitrary = arbitrary.cast(pa.int8())
-            if arbitrary.buffers()[0]:
-                pamask = Buffer(np.array(arbitrary.buffers()[0]))
-            else:
-                pamask = None
-            padata = Buffer(np.array(arbitrary.buffers()[1]).view(
-                dtype
-            ))
+            pamask, padata = buffers_from_pyarrow(arbitrary, dtype=dtype)
             data = numerical.NumericalColumn(
                 data=padata,
                 mask=pamask,
@@ -307,13 +289,7 @@ def as_column(arbitrary, nan_as_null=True):
                 dtype=dtype
             )
         else:
-            if arbitrary.buffers()[0]:
-                pamask = Buffer(np.array(arbitrary.buffers()[0]))
-            else:
-                pamask = None
-            padata = Buffer(np.array(arbitrary.buffers()[1]).view(
-                np.dtype(arbitrary.type.to_pandas_dtype())
-            ))
+            pamask, padata = buffers_from_pyarrow(arbitrary)
             data = numerical.NumericalColumn(
                 data=padata,
                 mask=pamask,
@@ -322,12 +298,26 @@ def as_column(arbitrary, nan_as_null=True):
             )
 
     elif isinstance(arbitrary, pa.ChunkedArray):
-        gpu_cols = [as_column(chunk) for chunk in arbitrary.chunks]
-        data = Column._concat(gpu_cols)
+        gpu_cols = [as_column(chunk, dtype=dtype) for chunk in
+                    arbitrary.chunks]
+
+        if dtype and dtype != 'empty':
+            new_dtype = dtype
+        else:
+            pa_type = arbitrary.type
+            if pa.types.is_dictionary(pa_type):
+                new_dtype = 'category'
+            else:
+                new_dtype = np.dtype(pa_type.to_pandas_dtype())
+
+        data = Column._concat(gpu_cols, dtype=new_dtype)
 
     elif isinstance(arbitrary, (pd.Series, pd.Categorical)):
         if pd.api.types.is_categorical_dtype(arbitrary):
             data = as_column(pa.array(arbitrary, from_pandas=True))
+        elif arbitrary.dtype == np.bool:
+            # Bug in PyArrow or HDF that requires us to do this
+            data = as_column(pa.array(np.array(arbitrary), from_pandas=True))
         else:
             data = as_column(pa.array(arbitrary, from_pandas=nan_as_null))
 
@@ -343,13 +333,19 @@ def as_column(arbitrary, nan_as_null=True):
             data = as_column(pa.array([arbitrary]))
 
     elif isinstance(arbitrary, memoryview):
-        data = as_column(np.array(arbitrary))
+        data = as_column(np.array(arbitrary), dtype=dtype,
+                         nan_as_null=nan_as_null)
 
     else:
         try:
             data = as_column(memoryview(arbitrary))
         except TypeError:
-            data = as_column(pa.array(arbitrary))
+            try:
+                data = as_column(pa.array(arbitrary, from_pandas=nan_as_null),
+                                 dtype=dtype)
+            except pa.ArrowInvalid:
+                data = as_column(np.array(arbitrary), dtype=dtype,
+                                 nan_as_null=nan_as_null)
 
     return data
 

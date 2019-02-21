@@ -199,6 +199,20 @@ gdf_error gdf_segmented_radixsort_generic(gdf_segmented_radixsort_plan_type *hdl
                                      unsigned *d_begin_offsets,
                                      unsigned *d_end_offsets);
 
+
+// transpose
+/**
+ * @brief Transposes the table in_cols and copies to out_cols
+ * 
+ * @param[in] ncols Number of columns in in_cols
+ * @param[in] in_cols[] Input table of (ncols) number of columns each of size (nrows)
+ * @param[out] out_cols[] Preallocated output_table of (nrows) columns each of size (ncols)
+ * @return gdf_error GDF_SUCCESS if successful, else appropriate error code
+ */
+gdf_error gdf_transpose(gdf_size_type ncols,
+                        gdf_column** in_cols,
+                        gdf_column** out_cols);
+
 // joins
 
 
@@ -762,7 +776,8 @@ gdf_error gdf_validity_and(gdf_column *lhs, gdf_column *rhs, gdf_column *output)
 /* reductions
 
 The following reduction functions use the result array as a temporary working
-space.  Use gdf_reduce_optimal_output_size() to get its optimal size.
+space.  Use gdf_reduction_get_intermediate_output_size() to get the necessary
+size for this use.
 */
 
 
@@ -777,7 +792,7 @@ space.  Use gdf_reduce_optimal_output_size() to get its optimal size.
  *       block sum rather than launch a second kernel. When that happens, this
  *       function can go away and the output can be a single element.
  * --------------------------------------------------------------------------*/
-unsigned int gdf_reduce_optimal_output_size();
+unsigned int gdf_reduction_get_intermediate_output_size();
 
 /* --------------------------------------------------------------------------*
  * @brief  Computes the sum of the values in all rows of a column
@@ -785,7 +800,7 @@ unsigned int gdf_reduce_optimal_output_size();
  * @param[in] col Input column
  * @param[out] dev_result The output sum 
  * @param[in] dev_result_size The size of dev_result in elements, which should
- *                            be computed using gdf_reduce_optimal_output_size
+ *                            be computed using gdf_reduction_get_intermediate_output_size
  *                            This is used as intermediate storage, and the 
  *                            first element contains the total result
  * 
@@ -802,7 +817,7 @@ gdf_error gdf_sum(gdf_column *col, void *dev_result, gdf_size_type dev_result_si
  * @param[in] col Input column
  * @param[out] dev_result The output product
  * @param[in] dev_result_size The size of dev_result in elements, which should
- *                            be computed using gdf_reduce_optimal_output_size
+ *                            be computed using gdf_reduction_get_intermediate_output_size
  *                            This is used as intermediate storage, and the 
  *                            first element contains the total result
  * 
@@ -819,7 +834,7 @@ gdf_error gdf_product(gdf_column *col, void *dev_result, gdf_size_type dev_resul
  * @param[in] col Input column
  * @param[out] dev_result The output sum of squares
  * @param[in] dev_result_size The size of dev_result in elements, which should
- *                            be computed using gdf_reduce_optimal_output_size
+ *                            be computed using gdf_reduction_get_intermediate_output_size
  *                            This is used as intermediate storage, and the 
  *                            first element contains the total result
  * 
@@ -837,7 +852,7 @@ gdf_error gdf_sum_of_squares(gdf_column *col, void *dev_result, gdf_size_type de
  * @param[in] col Input column
  * @param[out] dev_result The output minimum
  * @param[in] dev_result_size The size of dev_result in elements, which should
- *                            be computed using gdf_reduce_optimal_output_size
+ *                            be computed using gdf_reduction_get_intermediate_output_size
  *                            This is used as intermediate storage, and the 
  *                            first element contains the total result
  * 
@@ -853,7 +868,7 @@ gdf_error gdf_min(gdf_column *col, void *dev_result, gdf_size_type dev_result_si
  * @param[in] col Input column
  * @param[out] dev_result The output maximum
  * @param[in] dev_result_size The size of dev_result in elements, which should
- *                            be computed using gdf_reduce_optimal_output_size
+ *                            be computed using gdf_reduction_get_intermediate_output_size
  *                            This is used as intermediate storage, and the 
  *                            first element contains the total result
  * 
@@ -1012,3 +1027,30 @@ gdf_error gdf_order_by(gdf_column** input_columns,
                        size_t       num_inputs,
                        gdf_column*  output_indices,
                        int          flag_nulls_are_smallest);
+
+/* --------------------------------------------------------------------------*
+ * @brief Finds the indices of the bins in which each value of the column
+ * belongs.
+ *
+ * For `x` in `col`, if `right == false` this function finds
+ * `i` such that `bins[i-1] <= x < bins[i]`. If `right == true`, it will find `i`
+ * such that `bins[i - 1] < x <= bins[i]`. Finally, if `x < bins[0]` or
+ * `x > bins[num_bins - 1]`, it sets the index to `0` or `num_bins`, respectively.
+ *
+ * NOTE: This function does not handle null values and will return an error if `col`
+ * or `bins` contain any.
+ *
+ * @param[in] col gdf_column with the values to be binned
+ * @param[in] bins gdf_column of ascending bin boundaries
+ * @param[in] right Whether the intervals should include the left or right bin edge
+ * @param[out] out_indices Output device array of same size as `col`
+ * to be filled with bin indices
+ *
+ * @return GDF_SUCCESS upon successful completion, otherwise an
+ *         appropriate error code.
+ *
+ * ----------------------------------------------------------------------------*/
+gdf_error gdf_digitize(gdf_column* col,
+                       gdf_column* bins,   // same type as col
+                       bool right,
+                       gdf_index_type out_indices[]);

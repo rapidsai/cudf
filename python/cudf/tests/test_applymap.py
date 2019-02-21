@@ -5,8 +5,7 @@ from itertools import product
 import pytest
 import numpy as np
 
-from . import utils
-
+from cudf.tests import utils
 from cudf import Series
 from math import floor
 

@@ -11,12 +11,12 @@ from pandas.api.types import is_scalar, is_dict_like
 
 from cudf.utils import cudautils, utils
 from cudf import formatting
-from .buffer import Buffer
-from .index import Index, RangeIndex, as_index
+from cudf.dataframe.buffer import Buffer
+from cudf.dataframe.index import Index, RangeIndex, as_index
 from cudf.settings import NOTSET, settings
-from .column import Column
-from .datetime import DatetimeColumn
-from . import columnops
+from cudf.dataframe.column import Column
+from cudf.dataframe.datetime import DatetimeColumn
+from cudf.dataframe import columnops
 from cudf.comm.serialize import register_distributed_serializer
 from cudf._gdf import nvtx_range_push, nvtx_range_pop
 
@@ -154,10 +154,12 @@ class Series(object):
     def __deepcopy__(self):
         return self.copy()
 
-    def reset_index(self):
-        """Reset index to RangeIndex
-        """
-        return self._copy_construct(index=RangeIndex(len(self)))
+    def reset_index(self, drop=False):
+        """ Reset index to RangeIndex """
+        if not drop:
+            return self.to_frame().reset_index(drop=drop)
+        else:
+            return self._copy_construct(index=RangeIndex(len(self)))
 
     def set_index(self, index):
         """Returns a new Series with a different index.
@@ -172,6 +174,11 @@ class Series(object):
 
     def as_index(self):
         return self.set_index(RangeIndex(len(self)))
+
+    def to_frame(self):
+        """ Convert Series into a DataFrame """
+        from cudf import DataFrame
+        return DataFrame({self.name or 0: self}, index=self.index)
 
     def set_mask(self, mask, null_count=None):
         """Create new Series by setting a mask array.
@@ -207,7 +214,7 @@ class Series(object):
         return not len(self)
 
     def __getitem__(self, arg):
-        if isinstance(arg, (list, np.ndarray, pd.Series, range,)):
+        if isinstance(arg, (list, np.ndarray, pd.Series, range, Index)):
             arg = Series(arg)
         if isinstance(arg, Series):
             if issubclass(arg.dtype.type, np.integer):
@@ -276,7 +283,34 @@ class Series(object):
         return out
 
     def head(self, n=5):
-        return self[:n]
+        return self.iloc[:n]
+
+    def tail(self, n=5):
+        """
+        Returns the last n rows as a new Series
+
+        Examples
+        --------
+
+        .. code-block:: python
+
+            from cudf.dataframe import Series
+
+            ser = Series([4, 3, 2, 1, 0])
+            print(ser.tail(2))
+
+        Output
+
+        .. code-block:: python
+
+           3    1
+           4    0
+
+        """
+        if n == 0:
+            return self.iloc[0:0]
+
+        return self.iloc[-n:]
 
     def to_string(self, nrows=NOTSET):
         """Convert to string
@@ -321,10 +355,14 @@ class Series(object):
         and *other*.  Return the output Series.  The output dtype is
         determined by the input operands.
         """
-        nvtx_range_push("PYGDF_BINARY_OP", "orange")
+        from cudf import DataFrame
+        if isinstance(other, DataFrame):
+            return other._binaryop(self, fn)
+        nvtx_range_push("CUDF_BINARY_OP", "orange")
         other = self._normalize_binop_value(other)
         outcol = self._column.binary_operator(fn, other._column)
         result = self._copy_construct(data=outcol)
+        result.name = None
         nvtx_range_pop()
         return result
 
@@ -334,10 +372,14 @@ class Series(object):
         and *other* for reflected operations.  Return the output Series.
         The output dtype is determined by the input operands.
         """
-        nvtx_range_push("PYGDF_BINARY_OP", "orange")
+        from cudf import DataFrame
+        if isinstance(other, DataFrame):
+            return other._binaryop(self, fn)
+        nvtx_range_push("CUDF_BINARY_OP", "orange")
         other = self._normalize_binop_value(other)
         outcol = other._column.binary_operator(fn, self._column)
         result = self._copy_construct(data=outcol)
+        result.name = None
         nvtx_range_pop()
         return result
 
@@ -402,23 +444,27 @@ class Series(object):
     def _normalize_binop_value(self, other):
         if isinstance(other, Series):
             return other
+        elif isinstance(other, Index):
+            return Series(other)
         else:
             col = self._column.normalize_binop_value(other)
             return self._copy_construct(data=col)
 
     def _unordered_compare(self, other, cmpops):
-        nvtx_range_push("PYGDF_UNORDERED_COMP", "orange")
+        nvtx_range_push("CUDF_UNORDERED_COMP", "orange")
         other = self._normalize_binop_value(other)
         outcol = self._column.unordered_compare(cmpops, other._column)
         result = self._copy_construct(data=outcol)
+        result.name = None
         nvtx_range_pop()
         return result
 
     def _ordered_compare(self, other, cmpops):
-        nvtx_range_push("PYGDF_ORDERED_COMP", "orange")
+        nvtx_range_push("CUDF_ORDERED_COMP", "orange")
         other = self._normalize_binop_value(other)
         outcol = self._column.ordered_compare(cmpops, other._column)
         result = self._copy_construct(data=outcol)
+        result.name = None
         nvtx_range_pop()
         return result
 
@@ -450,7 +496,7 @@ class Series(object):
         return self._column.dtype
 
     @classmethod
-    def _concat(cls, objs, index=True):
+    def _concat(cls, objs, axis=0, index=True):
         # Concatenate index if not provided
         if index is True:
             index = Index._concat([o.index for o in objs])
@@ -558,27 +604,39 @@ class Series(object):
 
         Examples
         --------
+        .. code-block:: python
 
-        >>> sr = Series(list(range(20)))
-        # get the value from 1st index
-        >>> sr.iloc[1]
-        1
+          from cudf import Series
 
-        # get the values from 0,2,9 and 18th index
-        >>> sr.iloc[0,2,9,18]
-        0    0
-        2    2
-        9    9
-        18   18
+          sr = Series(list(range(20)))
 
-        # get the values using slice indices
-        >>> sr.iloc[3:10:2]
-        3    3
-        5    5
-        7    7
-        9    9
+          # get the value from 1st index
+          sr.iloc[1]
 
-        :return:
+          # get the values from 0,2,9 and 18th index
+          sr.iloc[0,2,9,18]
+
+          # get the values using slice indices
+          sr.iloc[3:10:2]
+
+        Output:
+
+        .. code-block:: python
+
+          1
+
+          0    0
+          2    2
+          9    9
+          18   18
+
+          3    3
+          5    5
+          7    7
+          9    9
+
+        Returns
+        -------
         Series containing the elements corresponding to the indices
         """
         return Iloc(self)
@@ -981,8 +1039,8 @@ class Series(object):
         res = self._column.unique(method=method)
         return Series(res)
 
-    def unique_count(self, method='sort'):
-        """Returns the number of unique valies of the Series: approximate version,
+    def nunique(self, method='sort', dropna=True):
+        """Returns the number of unique values of the Series: approximate version,
         and exact version to be moved to libgdf
         """
         if method != 'sort':
@@ -990,7 +1048,7 @@ class Series(object):
             raise NotImplementedError(msg)
         if self.null_count == len(self):
             return 0
-        return self._column.unique_count(method=method)
+        return self._column.unique_count(method=method, dropna=dropna)
         # return len(self._column.unique())
 
     def value_counts(self, method='sort', sort=True):
@@ -1000,7 +1058,7 @@ class Series(object):
             msg = 'non sort based value_count() not implemented yet'
             raise NotImplementedError(msg)
         if self.null_count == len(self):
-            return 0
+            return Series(np.array([], dtype=np.int64))
         vals, cnts = self._column.value_counts(method=method)
         res = Series(cnts, index=as_index(vals))
         if sort:
@@ -1068,8 +1126,10 @@ class Series(object):
         initial_hash = np.asarray(hash(self.name)) if use_name else None
         hashed_values = numerical.column_hash_values(
             self._column, initial_hash_values=initial_hash)
-        hashed_values = np.mod(hashed_values, stop)
-        return Series(hashed_values)
+
+        # TODO: Binary op when https://github.com/rapidsai/cudf/pull/892 merged
+        mod_vals = cudautils.modulo(hashed_values.data.to_gpu_array(), stop)
+        return Series(mod_vals)
 
     def quantile(self, q, interpolation='midpoint', exact=True,
                  quant_index=True):
@@ -1103,9 +1163,194 @@ class Series(object):
             return Series(self._column.quantile(q, interpolation, exact),
                           index=as_index(np.asarray(q)))
 
-    def groupby(self, group_series):
+    def digitize(self, bins, right=False):
+        """Return the indices of the bins to which each value in series belongs.
+
+        Notes
+        -----
+        Monotonicity of bins is assumed and not checked.
+
+        Parameters
+        ----------
+        bins : np.array
+            1-D monotonically, increasing array with same type as this series.
+        right : bool
+            Indicates whether interval contains the right or left bin edge.
+
+        Returns
+        -------
+        A new Series containing the indices.
+        """
+        from cudf.dataframe import numerical
+
+        return Series(numerical.digitize(self._column, bins, right))
+
+    def groupby(self, group_series=None, level=None, sort=False):
         from cudf.groupby.groupby import SeriesGroupBy
-        return SeriesGroupBy(self, group_series)
+        return SeriesGroupBy(self, group_series, level, sort)
+
+    def to_json(self, path_or_buf=None, *args, **kwargs):
+        """
+        Convert the cuDF object to a JSON string.
+        Note nulls and NaNs will be converted to null and datetime objects
+        will be converted to UNIX timestamps.
+        Parameters
+        ----------
+        path_or_buf : string or file handle, optional
+            File path or object. If not specified, the result is returned as
+            a string.
+        orient : string
+            Indication of expected JSON string format.
+            * Series
+                - default is 'index'
+                - allowed values are: {'split','records','index','table'}
+            * DataFrame
+                - default is 'columns'
+                - allowed values are:
+                {'split','records','index','columns','values','table'}
+            * The format of the JSON string
+                - 'split' : dict like {'index' -> [index],
+                'columns' -> [columns], 'data' -> [values]}
+                - 'records' : list like
+                [{column -> value}, ... , {column -> value}]
+                - 'index' : dict like {index -> {column -> value}}
+                - 'columns' : dict like {column -> {index -> value}}
+                - 'values' : just the values array
+                - 'table' : dict like {'schema': {schema}, 'data': {data}}
+                describing the data, and the data component is
+                like ``orient='records'``.
+        date_format : {None, 'epoch', 'iso'}
+            Type of date conversion. 'epoch' = epoch milliseconds,
+            'iso' = ISO8601. The default depends on the `orient`. For
+            ``orient='table'``, the default is 'iso'. For all other orients,
+            the default is 'epoch'.
+        double_precision : int, default 10
+            The number of decimal places to use when encoding
+            floating point values.
+        force_ascii : bool, default True
+            Force encoded string to be ASCII.
+        date_unit : string, default 'ms' (milliseconds)
+            The time unit to encode to, governs timestamp and ISO8601
+            precision.  One of 's', 'ms', 'us', 'ns' for second, millisecond,
+            microsecond, and nanosecond respectively.
+        default_handler : callable, default None
+            Handler to call if object cannot otherwise be converted to a
+            suitable format for JSON. Should receive a single argument which is
+            the object to convert and return a serialisable object.
+        lines : bool, default False
+            If 'orient' is 'records' write out line delimited json format. Will
+            throw ValueError if incorrect 'orient' since others are not list
+            like.
+        compression : {'infer', 'gzip', 'bz2', 'zip', 'xz', None}
+            A string representing the compression to use in the output file,
+            only used when the first argument is a filename. By default, the
+            compression is inferred from the filename.
+        index : bool, default True
+            Whether to include the index values in the JSON string. Not
+            including the index (``index=False``) is only supported when
+            orient is 'split' or 'table'.
+        """
+        import cudf.io.json as json
+        json.to_json(
+            self,
+            path_or_buf=path_or_buf,
+            *args,
+            **kwargs
+        )
+
+    def to_hdf(self, path_or_buf, key, *args, **kwargs):
+        """
+        Write the contained data to an HDF5 file using HDFStore.
+
+        Hierarchical Data Format (HDF) is self-describing, allowing an
+        application to interpret the structure and contents of a file with
+        no outside information. One HDF file can hold a mix of related objects
+        which can be accessed as a group or as individual objects.
+
+        In order to add another DataFrame or Series to an existing HDF file
+        please use append mode and a different a key.
+
+        For more information see the :ref:`user guide
+        <https://pandas.pydata.org/pandas-docs/stable/user_guide/io.html#hdf5-pytables>`_.
+
+        Parameters
+        ----------
+        path_or_buf : str or pandas.HDFStore
+            File path or HDFStore object.
+        key : str
+            Identifier for the group in the store.
+        mode : {'a', 'w', 'r+'}, default 'a'
+            Mode to open file:
+            - 'w': write, a new file is created (an existing file with
+                the same name would be deleted).
+            - 'a': append, an existing file is opened for reading and
+                writing, and if the file does not exist it is created.
+            - 'r+': similar to 'a', but the file must already exist.
+        format : {'fixed', 'table'}, default 'fixed'
+            Possible values:
+            - 'fixed': Fixed format. Fast writing/reading. Not-appendable,
+                nor searchable.
+            - 'table': Table format. Write as a PyTables Table structure
+                which may perform worse but allow more flexible operations
+                like searching / selecting subsets of the data.
+        append : bool, default False
+            For Table formats, append the input data to the existing.
+        data_columns :  list of columns or True, optional
+            List of columns to create as indexed data columns for on-disk
+            queries, or True to use all columns. By default only the axes
+            of the object are indexed. `See Query via Data Columns
+            <https://pandas.pydata.org/pandas-docs/stable/user_guide/io.html#hdf5-pytables>`_.
+            Applicable only to format='table'.
+        complevel : {0-9}, optional
+            Specifies a compression level for data.
+            A value of 0 disables compression.
+        complib : {'zlib', 'lzo', 'bzip2', 'blosc'}, default 'zlib'
+            Specifies the compression library to be used.
+            As of v0.20.2 these additional compressors for Blosc are supported
+            (default if no compressor specified: 'blosc:blosclz'):
+            {'blosc:blosclz', 'blosc:lz4', 'blosc:lz4hc', 'blosc:snappy',
+            'blosc:zlib', 'blosc:zstd'}.
+            Specifying a compression library which is not available issues
+            a ValueError.
+        fletcher32 : bool, default False
+            If applying compression use the fletcher32 checksum.
+        dropna : bool, default False
+            If true, ALL nan rows will not be written to store.
+        errors : str, default 'strict'
+            Specifies how encoding and decoding errors are to be handled.
+            See the errors argument for :func:`open` for a full list
+            of options.
+        """
+        import cudf.io.hdf as hdf
+        hdf.to_hdf(path_or_buf, key, self, *args, **kwargs)
+
+    def rename(self, index=None, copy=True):
+        """
+        Alter Series name.
+
+        Change Series.name with a scalar value.
+
+        Parameters
+        ----------
+        index : Scalar, optional
+            Scalar to alter the Series.name attribute
+        copy : boolean, default True
+            Also copy underlying data
+
+        Returns
+        -------
+        Series
+
+        Difference from pandas:
+          * Supports scalar values only for changing name attribute
+          * Not supporting: inplace, level
+        """
+        out = self.copy(deep=False)
+        out = out.set_index(self.index)
+        if index:
+            out.name = index
+
+        return out.copy(deep=copy)
 
 
 register_distributed_serializer(Series)
@@ -1197,7 +1442,10 @@ class Iloc(object):
         for idx in rows:
             ret_list.append(self._sr[idx])
 
-        return Series(ret_list, index=as_index(np.asarray(rows)))
+        col_data = columnops.as_column(ret_list, dtype=self._sr.dtype,
+                                       nan_as_null=True)
+
+        return Series(col_data, index=as_index(np.asarray(rows)))
 
     def __setitem__(self, key, value):
         # throws an exception while updating

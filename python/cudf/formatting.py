@@ -66,7 +66,7 @@ def format(index, cols, show_headers=True, more_cols=0, more_rows=0,
                 widths[k] = widths[k]-2 if k == 0 else\
                     max(min_width-1, widths[k]-1)
     out = []
-    widthkey = min(len(str(nrows)), len(headers[0]))
+    widthkey = min(len(str(nrows)), len(str(headers[0])))
 
     cell_template = "{:>{}}"
     #   format headers

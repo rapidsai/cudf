@@ -23,8 +23,9 @@
 #include "utilities/cudf_utils.h"
 #include "utilities/error_utils.h"
 #include "rmm/rmm.h"
-#include <cuda_runtime_api.h>
 #include "utilities/type_dispatcher.hpp"
+#include <cuda_runtime_api.h>
+#include <algorithm>
 
 // forward decl -- see validops.cu
 gdf_error gdf_mask_concat(gdf_valid_type *output_mask,
@@ -53,48 +54,37 @@ gdf_error gdf_mask_concat(gdf_valid_type *output_mask,
  * ---------------------------------------------------------------------------**/
 gdf_error gdf_column_concat(gdf_column *output_column, gdf_column *columns_to_concat[], int num_columns)
 {
-  
-  if (nullptr == columns_to_concat){
-    return GDF_DATASET_EMPTY;
-  }
-
-  if ((nullptr == columns_to_concat[0])
-      || (nullptr == output_column)){
-    return GDF_DATASET_EMPTY;
-  }
+  GDF_REQUIRE(num_columns > 0, GDF_INVALID_API_CALL);
+  GDF_REQUIRE(output_column != nullptr, GDF_DATASET_EMPTY);
+  GDF_REQUIRE(columns_to_concat != nullptr, GDF_DATASET_EMPTY);
+  GDF_REQUIRE(columns_to_concat[0] != nullptr, GDF_DATASET_EMPTY);
 
   const gdf_dtype column_type = columns_to_concat[0]->dtype;
 
-  if (column_type != output_column->dtype){
-    return GDF_DTYPE_MISMATCH;
-  }
-
-  gdf_size_type total_size = 0;
-  bool at_least_one_mask_present = false;
+  gdf_size_type total_size{0};
 
   // Ensure all the columns are properly allocated
   // and have matching types
-  for (int i = 0; i < num_columns; ++i) {
-    gdf_column* current_column = columns_to_concat[i];
-    if (nullptr == current_column) {
-      return GDF_DATASET_EMPTY;
+  for (gdf_size_type i = 0; i < num_columns; ++i) {
+    gdf_column *current_column = columns_to_concat[i];
+
+    GDF_REQUIRE(current_column != nullptr, GDF_DATASET_EMPTY);
+
+    if((current_column->size > 0) && (nullptr == current_column->data)){
+        return GDF_DATASET_EMPTY;
     }
-    if ((current_column->size > 0) && (nullptr == current_column->data))
-    {
-      return GDF_DATASET_EMPTY;
-    }
-    if (column_type != current_column->dtype) {
-      return GDF_DTYPE_MISMATCH;
-    }
+
+    GDF_REQUIRE(column_type == current_column->dtype, GDF_DTYPE_MISMATCH);
 
     total_size += current_column->size;
-    at_least_one_mask_present |= (nullptr != columns_to_concat[i]->valid);
   }
 
-  // sum of the sizes of the input columns must equal output column size
-  if (output_column->size != total_size) {
-    return GDF_COLUMN_SIZE_MISMATCH;
-  }
+  bool const at_least_one_mask_present{
+      std::any_of(columns_to_concat, columns_to_concat + num_columns,
+                  [](gdf_column *col) { return (nullptr != col->valid); })};
+
+  GDF_REQUIRE(column_type == output_column->dtype, GDF_DTYPE_MISMATCH);
+  GDF_REQUIRE(output_column->size == total_size, GDF_COLUMN_SIZE_MISMATCH);
 
   // TODO optimizations if needed
   // 1. Either 
@@ -109,14 +99,13 @@ gdf_error gdf_column_concat(gdf_column *output_column, gdf_column *columns_to_co
   output_column->null_count = 0;
   int column_byte_width = 0;
   gdf_error result = get_column_byte_width(output_column, &column_byte_width);
-  if (GDF_SUCCESS != result) return result;  
+  GDF_REQUIRE(GDF_SUCCESS == result, result);
 
   // copy data
   for (int i = 0; i < num_columns; ++i) {   
     gdf_size_type bytes = column_byte_width * columns_to_concat[i]->size;
     CUDA_TRY( cudaMemcpy(target, columns_to_concat[i]->data, bytes, cudaMemcpyDeviceToDevice) );
     target += bytes;
-
     output_column->null_count += columns_to_concat[i]->null_count;
   }
   

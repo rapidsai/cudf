@@ -7,7 +7,7 @@ import pandas as pd
 from numba import cuda
 
 from cudf.dataframe.dataframe import DataFrame
-from .utils import assert_eq
+from cudf.tests.utils import assert_eq
 
 """
 DataFrame copy expectations

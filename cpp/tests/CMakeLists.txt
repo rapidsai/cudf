@@ -177,6 +177,13 @@ set(CSV_TEST_SRC
 ConfigureTest(CSV_TEST "${CSV_TEST_SRC}")
 
 ###################################################################################################
+# - sort tests -------------------------------------------------------------------------------------
+
+set(SORT_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/sort/digitize_test.cu")
+
+ConfigureTest(SORT_TEST "${SORT_TEST_SRC}")
+###################################################################################################
 # - types tests -------------------------------------------------------------------------------------
 
 set(TYPES_TEST_SRC
@@ -192,6 +199,14 @@ set(UTILITIES_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/utilities_tests/column_wrapper_tests.cu")
 
 ConfigureTest(UTILITIES_TEST "${UTILITIES_TEST_SRC}")
+
+###################################################################################################
+# - transpose tests -------------------------------------------------------------------------------
+
+set(TRANSPOSE_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/transpose/transpose_test.cu")
+
+ConfigureTest(TRANSPOSE_TEST "${TRANSPOSE_TEST_SRC}")
 
 ###################################################################################################
 ### enable testing ################################################################################

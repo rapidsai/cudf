@@ -9,13 +9,13 @@ from copy import deepcopy, copy
 
 from librmm_cffi import librmm as rmm
 
-from . import columnops
+from cudf.dataframe import columnops
 from cudf.utils import cudautils, utils
-from .buffer import Buffer
-from .numerical import NumericalColumn
-from .column import Column
-from .datetime import DatetimeColumn
-from .categorical import CategoricalColumn
+from cudf.dataframe.buffer import Buffer
+from cudf.dataframe.numerical import NumericalColumn
+from cudf.dataframe.column import Column
+from cudf.dataframe.datetime import DatetimeColumn
+from cudf.dataframe.categorical import CategoricalColumn
 from cudf.comm.serialize import register_distributed_serializer
 
 
@@ -117,16 +117,72 @@ class Index(object):
         data = Column._concat([o.as_column() for o in objs])
         return as_index(data)
 
-    def __eq__(self, other):
-        if not isinstance(other, Index):
-            return NotImplemented
-        elif len(self) != len(other):
-            return False
+    def _apply_op(self, fn, other=None):
+        from cudf.dataframe.series import Series
+        idx_series = Series(self)
+        op = getattr(idx_series, fn)
+        if other is not None:
+            return as_index(op(other))
+        else:
+            return as_index(op())
 
-        lhs = self.as_column()
-        rhs = other.as_column()
-        res = lhs.unordered_compare('eq', rhs).all()
-        return res
+    def __add__(self, other):
+        return self._apply_op('__add__', other)
+
+    def __radd__(self, other):
+        return self._apply_op('__radd__', other)
+
+    def __sub__(self, other):
+        return self._apply_op('__sub__', other)
+
+    def __rsub__(self, other):
+        return self._apply_op('__rsub__', other)
+
+    def __mul__(self, other):
+        return self._apply_op('__mul__', other)
+
+    def __rmul__(self, other):
+        return self._apply_op('__rmul__', other)
+
+    def __pow__(self, other):
+        return self._apply_op('__pow__', other)
+
+    def __floordiv__(self, other):
+        return self._apply_op('__floordiv__', other)
+
+    def __rfloordiv__(self, other):
+        return self._apply_op('__rfloordiv__', other)
+
+    def __truediv__(self, other):
+        return self._apply_op('__truediv__', other)
+
+    def __rtruediv__(self, other):
+        return self._apply_op('__rtruediv__', other)
+
+    __div__ = __truediv__
+
+    def __eq__(self, other):
+        return self._apply_op('__eq__', other)
+
+    def __ne__(self, other):
+        return self._apply_op('__ne__', other)
+
+    def __lt__(self, other):
+        return self._apply_op('__lt__', other)
+
+    def __le__(self, other):
+        return self._apply_op('__le__', other)
+
+    def __gt__(self, other):
+        return self._apply_op('__gt__', other)
+
+    def __ge__(self, other):
+        return self._apply_op('__ge__', other)
+
+    def equals(self, other):
+        if len(self) != len(other):
+            return False
+        return (self == other)._values.all()
 
     def join(self, other, method, how='left', return_indexers=False):
         column_join_res = self.as_column().join(
@@ -138,6 +194,29 @@ class Index(object):
             return joined_index, indexers
         else:
             return column_join_res
+
+    def rename(self, name):
+        """
+        Alter Index name.
+
+        Defaults to returning new index.
+
+        Parameters
+        ----------
+        name : label
+            Name(s) to set.
+
+        Returns
+        -------
+        Index
+
+        Difference from pandas:
+          * Not supporting: inplace
+        """
+        out = self.copy(deep=False)
+        out.name = name
+
+        return out.copy(deep=True)
 
 
 class RangeIndex(Index):
@@ -151,6 +230,7 @@ class RangeIndex(Index):
     _stop: The last value
     name: Name of the index
     """
+
     def __init__(self, start, stop=None, name=None):
         """RangeIndex(size), RangeIndex(start, stop)
 
@@ -171,9 +251,11 @@ class RangeIndex(Index):
 
     def copy(self, deep=True):
         if(deep):
-            return deepcopy(self)
+            result = deepcopy(self)
         else:
-            return copy(self)
+            result = copy(self)
+        result.name = self.name
+        return result
 
     def __repr__(self):
         return "{}(start={}, stop={})".format(self.__class__.__name__,
@@ -184,25 +266,33 @@ class RangeIndex(Index):
 
     def __getitem__(self, index):
         if isinstance(index, slice):
-            start, stop = utils.normalize_slice(index, len(self))
+            start, stop, step, sln = utils.standard_python_slice(len(self),
+                                                                 index)
             start += self._start
             stop += self._start
-            if index.step is None:
-                return RangeIndex(start, stop)
+            if sln == 0:
+                return RangeIndex(0)
             else:
-                return index_from_range(start, stop, index.step)
+                return index_from_range(start, stop, step)
+
         elif isinstance(index, int):
             index = utils.normalize_index(index, len(self))
             index += self._start
             return index
+        elif isinstance(index, (list, np.ndarray)):
+            index = np.array(index)
+            return self.take(index)
         else:
             raise ValueError(index)
 
     def __eq__(self, other):
+        return super(RangeIndex, self).__eq__(other)
+
+    def equals(self, other):
         if isinstance(other, RangeIndex):
             return (self._start == other._start and self._stop == other._stop)
         else:
-            return super(RangeIndex, self).__eq__(other)
+            return (self == other)._values.all()
 
     @property
     def dtype(self):
@@ -210,7 +300,7 @@ class RangeIndex(Index):
 
     @property
     def _values(self):
-        return Column(range(self._start, self._stop))
+        return self.as_column()
 
     @property
     def is_contiguous(self):
@@ -252,7 +342,7 @@ class RangeIndex(Index):
 
     def to_pandas(self):
         return pd.RangeIndex(start=self._start, stop=self._stop,
-                             dtype=self.dtype)
+                             dtype=self.dtype, name=self.name)
 
 
 def index_from_range(start, stop=None, step=None):
@@ -268,6 +358,7 @@ class GenericIndex(Index):
     _values: A Column object
     name: A string
     """
+
     def __init__(self, values, name=None):
         from cudf.dataframe.series import Series
         # normalize the input
@@ -286,11 +377,12 @@ class GenericIndex(Index):
         self.name = name
 
     def copy(self, deep=True):
-        if(deep):
+        if (deep):
             result = deepcopy(self)
         else:
             result = copy(self)
         result._values = self._values.copy(deep)
+        result.name = self.name
         return result
 
     def serialize(self, serialize):
@@ -417,9 +509,10 @@ class CategoricalIndex(GenericIndex):
     _values: A CategoricalColumn object
     name: A string
     """
+
     def __init__(self, values, name=None):
         if isinstance(values, pd.Series) and \
-           pd.api.types.is_categorical_dtype(values.dtype):
+                pd.api.types.is_categorical_dtype(values.dtype):
             values = CategoricalColumn(
                 data=Buffer(values.cat.codes.values),
                 categories=values.cat.categories.tolist(),
@@ -476,8 +569,7 @@ def as_index(arbitrary, name=None):
     elif isinstance(arbitrary, CategoricalColumn):
         return CategoricalIndex(arbitrary, name=name)
     else:
-        name = None
-        if hasattr(arbitrary, 'name'):
+        if hasattr(arbitrary, 'name') and name is None:
             name = arbitrary.name
         if len(arbitrary) == 0:
             return RangeIndex(0, 0, name=name)

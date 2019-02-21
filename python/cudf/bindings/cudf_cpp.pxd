@@ -601,7 +601,7 @@ cdef extern from "cudf.h" nogil:
 
     cdef gdf_error gdf_validity_and(gdf_column *lhs, gdf_column *rhs, gdf_column *output)
 
-    cdef unsigned int gdf_reduce_optimal_output_size()
+    cdef unsigned int gdf_reduction_get_intermediate_output_size()
 
     cdef gdf_error gdf_sum(gdf_column *col, void *dev_result, gdf_size_type dev_result_size)
     cdef gdf_error gdf_product(gdf_column *col, void *dev_result, gdf_size_type dev_result_size)
@@ -706,3 +706,8 @@ cdef extern from "cudf.h" nogil:
                                    gdf_column* old_values,
                                    gdf_column* new_values);
 
+
+    cdef gdf_error gdf_digitize(gdf_column* col,
+                                gdf_column* bins,
+                                bool right,
+                                gdf_index_type* out_indices);
