@@ -185,6 +185,18 @@ def gpu_copy_to_dense(data, mask, slots, out):
 
 
 @cuda.jit
+def gpu_invert_value(data):
+    tid = cuda.grid(1)
+    if tid < data.size:
+        data[tid] = ~data[tid]
+
+
+def invert_mask(arr):
+    if arr.size > 0:
+        gpu_invert_value.forall(arr.size)(arr)
+
+
+@cuda.jit
 def gpu_fill_value(data, value):
     tid = cuda.grid(1)
     if tid < data.size:

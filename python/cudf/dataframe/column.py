@@ -407,15 +407,17 @@ class Column(object):
         else:
             raise NotImplementedError(type(arg))
 
-    def fillna(self, value):
+    def fillna(self, value, mask=None):
         """Fill null values with ``value``.
 
         Returns a copy with null filled.
         """
-        if not self.has_null_mask:
+        if (not self.has_null_mask) and (mask is None):
             return self
+        if mask is None:
+            mask = self.mask.to_gpu_array()
         out = cudautils.fillna(data=self.data.to_gpu_array(),
-                               mask=self.mask.to_gpu_array(),
+                               mask=mask,
                                value=value)
         return self.replace(data=Buffer(out), mask=None, null_count=0)
 

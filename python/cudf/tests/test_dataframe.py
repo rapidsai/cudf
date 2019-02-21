@@ -1729,6 +1729,16 @@ def test_dataframe_boolmask(mask_shape):
         assert np.array_equal(gdf[col].fillna(-1), pdf[col].fillna(-1))
 
 
+def test_dataframe_assignment():
+    pdf = pd.DataFrame()
+    for col in 'abc':
+        pdf[col] = np.array([0, 1, 1, -2, 10])
+    gdf = DataFrame.from_pandas(pdf)
+    gdf[gdf < 0] = 999
+    pdf[pdf < 0] = 999
+    assert_eq(gdf, pdf)
+
+
 def test_1row_arrow_table():
     data = [pa.array([0]), pa.array([1])]
     batch = pa.RecordBatch.from_arrays(data, ['f0', 'f1'])

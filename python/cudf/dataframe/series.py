@@ -530,6 +530,13 @@ class Series(object):
         """A boolean indicating whether a null-mask is needed"""
         return self._column.has_null_mask
 
+    def masked_assign(self, value, mask):
+        # need to invert to properly use fillna
+        mask._invert()
+        mask_gpu = mask.as_mask()
+        data = self._column.fillna(value, mask_gpu)
+        return self._copy_construct(data=data)
+
     def fillna(self, value):
         """Fill null values with ``value``.
 
@@ -555,6 +562,12 @@ class Series(object):
         output size could be smaller.
         """
         return self._column.to_array(fillna=fillna)
+
+    def _invert(self):
+        """Internal convenience function for inverting masked array
+        """
+
+        cudautils.invert_mask(self.to_gpu_array())
 
     def to_gpu_array(self, fillna=None):
         """Get a dense numba device array for the data.
