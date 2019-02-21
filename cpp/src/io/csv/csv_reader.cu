@@ -157,8 +157,8 @@ __global__ void dataTypeDetection(char *raw_csv, const ParseOptions opts,
 //
 //---------------CUDA Valid (8 blocks of 8-bits) Bitmap Kernels ---------------------------------------------
 //
-__device__ int whichBitmap(int record) { return (record/8);  }
-__device__ int whichBit(int bit) { return (bit % 8);  }
+__device__ long whichBitmap(long record) { return (record/8);  }
+__device__ int whichBit(long record) { return (record % 8);  }
 
 __inline__ __device__ void validAtomicOR(gdf_valid_type* address, gdf_valid_type val)
 {
@@ -417,9 +417,13 @@ gdf_error read_csv(csv_read_arg *args)
 		const auto file_size = st.st_size;
 		const auto page_size = sysconf(_SC_PAGESIZE);
 
+		if (args->byte_range_offset >= (size_t)file_size) { 
+			close(fd); 
+			checkError(GDF_INVALID_API_CALL, "The byte_range offset is larger than the file size");
+		}
+
 		// Have to align map offset to page size
 		map_offset = (args->byte_range_offset/page_size)*page_size;
-		if (map_offset >= (size_t)file_size) { close(fd); checkError(GDF_C_ERROR, "The offset is too high"); }
 
 		// Set to rest-of-the-file size, will reduce based on the byte range size
 		raw_csv->num_bytes = map_size = file_size - map_offset;
@@ -445,11 +449,6 @@ gdf_error read_csv(csv_read_arg *args)
 		raw_csv->num_bytes = map_size = args->buffer_size;
 	}
 	else { checkError(GDF_C_ERROR, "invalid input type"); }
-
-	// Reset the byte range size if useless
-	if (raw_csv->byte_range_size >= raw_csv->num_bytes) {
-		raw_csv->byte_range_size = 0;
-	}
 
 	const char* h_uncomp_data;
 	size_t h_uncomp_size = 0;
@@ -758,21 +757,24 @@ gdf_error read_csv(csv_read_arg *args)
 		memcpy(gdf->col_name, str.c_str(), len);
 		gdf->col_name[len -1] = '\0';
 
-		allocateGdfDataSpace(gdf);
+		error = allocateGdfDataSpace(gdf);
+		if (error != GDF_SUCCESS) {
+			return error;
+		}
 
 		cols[col] 		= gdf;
 		h_dtypes[col] 	= gdf->dtype;
 		h_data[col] 	= gdf->data;
-		h_valid[col] 	= gdf->valid;	
+		h_valid[col] 	= gdf->valid;
     }
 
 	CUDA_TRY( cudaMemcpy(d_dtypes,h_dtypes, sizeof(gdf_dtype) * (raw_csv->num_active_cols), cudaMemcpyHostToDevice));
 	CUDA_TRY( cudaMemcpy(d_data,h_data, sizeof(void*) * (raw_csv->num_active_cols), cudaMemcpyHostToDevice));
 	CUDA_TRY( cudaMemcpy(d_valid,h_valid, sizeof(gdf_valid_type*) * (raw_csv->num_active_cols), cudaMemcpyHostToDevice));
 
-	free(h_dtypes); 
-	free(h_valid); 
-	free(h_data); 
+	free(h_dtypes);
+	free(h_valid);
+	free(h_data);
 
 	if (raw_csv->num_records != 0) {
 		error = launch_dataConvertColumns(raw_csv, d_data, d_valid, d_dtypes, d_str_cols, d_valid_count);
@@ -780,7 +782,7 @@ gdf_error read_csv(csv_read_arg *args)
 			return error;
 		}
 		// Sync with the default stream, just in case create_from_index() is asynchronous 
-		cudaStreamSynchronize(0);
+		CUDA_TRY(cudaStreamSynchronize(0));
 
 		stringColCount=0;
 		for (int col = 0; col < raw_csv->num_active_cols; col++) {
@@ -1049,14 +1051,9 @@ gdf_error uploadDataToDevice(const char *h_uncomp_data, size_t h_uncomp_size,
                     thrust::make_constant_iterator(start_offset),
                     raw_csv->recStart, thrust::minus<cu_recstart_t>());
 
-  // We added extra for offset=0 position - remove for actual data row count
-  if (raw_csv->byte_range_offset == 0) {
-    raw_csv->num_records--;
-  }
-  // We kept extra for end offset - remove for actual data row count
-  if (raw_csv->byte_range_size != 0) {
-    raw_csv->num_records--;
-  }
+  // The array of row offsets includes EOF
+  // reduce the number of records by one to exclude it from the row count
+  raw_csv->num_records--;
 
   return GDF_SUCCESS;
 }
@@ -1547,8 +1544,8 @@ void convertCsvToGdf(char *raw_csv,
 				}
 
 				// set the valid bitmap - all bits were set to 0 to start
-				int bitmapIdx 	= whichBitmap(rec_id);  	// which bitmap
-				int bitIdx		= whichBit(rec_id);		// which bit - over an 8-bit index
+				long bitmapIdx 	= whichBitmap(rec_id);  	// which bitmap
+				long bitIdx		= whichBit(rec_id);		// which bit - over an 8-bit index
 				setBit(valid[actual_col]+bitmapIdx, bitIdx);		// This is done with atomics
 
 				atomicAdd((unsigned long long int*)&num_valid[actual_col],(unsigned long long int)1);

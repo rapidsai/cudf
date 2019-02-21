@@ -1,7 +1,7 @@
 from cudf.dataframe import (buffer, dataframe, series,
     index, numerical, datetime)
 
-from cudf.dataframe.dataframe import DataFrame, from_pandas
+from cudf.dataframe.dataframe import DataFrame, from_pandas, merge
 from cudf.dataframe.index import (Index, GenericIndex,
     RangeIndex, DatetimeIndex, CategoricalIndex)
 from cudf.dataframe.series import Series

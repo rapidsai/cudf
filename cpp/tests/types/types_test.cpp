@@ -140,6 +140,29 @@ TYPED_TEST(WrappersTest, ArithmeticOperators)
     }
 }
 
+
+TYPED_TEST(WrappersTest, IncrementOperators){
+    using UnderlyingType = typename TypeParam::value_type;
+
+    for(int i = 0; i < NUM_TRIALS; ++i){
+        UnderlyingType t{this->rand()};
+        TypeParam w{t};
+        EXPECT_EQ(t++, (w++).value);
+        EXPECT_EQ(++t, (++w).value);
+    }
+}
+
+TYPED_TEST(WrappersTest, DecrementOperators){
+    using UnderlyingType = typename TypeParam::value_type;
+
+    for(int i = 0; i < NUM_TRIALS; ++i){
+        UnderlyingType t{this->rand()};
+        TypeParam w{t};
+        EXPECT_EQ(t--, (w--).value);
+        EXPECT_EQ(--t, (--w).value);
+    }
+}
+
 TYPED_TEST(WrappersTest, BooleanOperators)
 {
     using UnderlyingType = typename TypeParam::value_type;
