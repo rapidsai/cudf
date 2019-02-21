@@ -1,6 +1,7 @@
 /*
  * Copyright 2018 BlazingDB, Inc.
  *     Copyright 2018 Cristhian Alberto Gonzales Castillo <cristhian@blazingdb.com>
+ *     Copyright 2018 Alexander Ocsa <alexander@blazingdb.com>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -208,21 +209,21 @@ struct replace_nulls_kernel_forwarder {
 
 } //end anonymous namespace
 
-gdf_error gdf_replace_nulls(gdf_column* col_out, const gdf_column* new_values_column)
+gdf_error gdf_replace_nulls(gdf_column* col_out, const gdf_column* col_in)
 {
-  GDF_REQUIRE(col_out->dtype == new_values_column->dtype, GDF_DTYPE_MISMATCH);
-  GDF_REQUIRE(new_values_column->size == 1 || new_values_column->size == col_out->size, GDF_COLUMN_SIZE_MISMATCH);
+  GDF_REQUIRE(col_out->dtype == col_in->dtype, GDF_DTYPE_MISMATCH);
+  GDF_REQUIRE(col_in->size == 1 || col_in->size == col_out->size, GDF_COLUMN_SIZE_MISMATCH);
    
-  GDF_REQUIRE(nullptr != new_values_column->data, GDF_DATASET_EMPTY);
+  GDF_REQUIRE(nullptr != col_in->data, GDF_DATASET_EMPTY);
   GDF_REQUIRE(nullptr != col_out->data, GDF_DATASET_EMPTY);
-  GDF_REQUIRE(nullptr == new_values_column->valid || 0 == new_values_column->null_count, GDF_VALIDITY_UNSUPPORTED);
+  GDF_REQUIRE(nullptr == col_in->valid || 0 == col_in->null_count, GDF_VALIDITY_UNSUPPORTED);
 
   cudf::type_dispatcher(col_out->dtype, replace_nulls_kernel_forwarder{},
                         col_out->size,
-                        new_values_column->size,
+                        col_in->size,
                         col_out->data,
                         col_out->valid,
-                        new_values_column->data);
+                        col_in->data);
   return GDF_SUCCESS;
 }
 
