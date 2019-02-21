@@ -17,11 +17,48 @@
 
 #include "binary/jit/core/launcher.h"
 #include "binary/jit/util/operator.h"
+#include "bitmask/bitmask_ops.h"
 #include "utilities/error_utils.h"
 #include "cudf.h"
 
 namespace cudf {
 namespace binops {
+
+    
+    gdf_error binary_valid_mask_and(gdf_size_type & out_null_count,
+                                    gdf_valid_type * valid_out,
+                                    gdf_valid_type * valid_left,
+                                    gdf_valid_type * valid_right,
+                                    gdf_size_type num_values) {
+        if (num_values == 0) {
+            out_null_count = 0;
+            return GDF_SUCCESS;
+        }
+
+        GDF_REQUIRE((valid_out != nullptr), GDF_DATASET_EMPTY)
+
+        cudaStream_t stream;
+        cudaStreamCreate(&stream);
+
+        if ( valid_left != nullptr && valid_right != nullptr ) {
+            return apply_bitmask_to_bitmask(out_null_count, valid_out, valid_left, valid_right, stream, num_values);
+        }
+        
+    	gdf_size_type num_chars_bitmask = ( ( num_values +( GDF_VALID_BITSIZE - 1)) / GDF_VALID_BITSIZE );
+
+        if ( valid_left == nullptr && valid_right != nullptr ) {
+            CUDA_TRY( cudaMemcpy(valid_out, valid_right, num_values, cudaMemcpyDeviceToDevice) );
+        } 
+        else if ( valid_left != nullptr && valid_right == nullptr ) {
+            CUDA_TRY( cudaMemcpy(valid_out, valid_left, num_values, cudaMemcpyDeviceToDevice) );
+        } 
+        else if ( valid_left == nullptr && valid_right == nullptr ) {
+            CUDA_TRY( cudaMemset(valid_out, 0xff, num_values) );
+        }
+
+    	return update_null_count(out_null_count, valid_out, stream, num_values);
+    }
+
 namespace jit {
 
     gdf_error binary_operation(gdf_column* out, gdf_scalar* lhs, gdf_column* rhs, gdf_binary_operator ope) {
@@ -39,6 +76,8 @@ namespace jit {
         // Check for datatype
         GDF_REQUIRE((out->dtype > GDF_invalid) && (lhs->dtype > GDF_invalid) && (rhs->dtype > GDF_invalid), GDF_UNSUPPORTED_DTYPE)
         GDF_REQUIRE((out->dtype < N_GDF_TYPES) && (lhs->dtype < N_GDF_TYPES) && (rhs->dtype < N_GDF_TYPES), GDF_UNSUPPORTED_DTYPE)
+
+        binary_valid_mask_and(out->null_count, out->valid, nullptr, rhs->valid, rhs->size);
 
         Launcher::launch().kernel("kernel_v_s")
                           .instantiate(ope, Operator::Type::Reverse, out, rhs, lhs)
@@ -63,6 +102,8 @@ namespace jit {
         GDF_REQUIRE((out->dtype > GDF_invalid) && (lhs->dtype > GDF_invalid) && (rhs->dtype > GDF_invalid), GDF_UNSUPPORTED_DTYPE)
         GDF_REQUIRE((out->dtype < N_GDF_TYPES) && (lhs->dtype < N_GDF_TYPES) && (rhs->dtype < N_GDF_TYPES), GDF_UNSUPPORTED_DTYPE)
 
+        binary_valid_mask_and(out->null_count, out->valid, lhs->valid, nullptr, lhs->size);
+
         Launcher::launch().kernel("kernel_v_s")
                           .instantiate(ope, Operator::Type::Direct, out, lhs, rhs)
                           .launch(out, lhs, rhs);
@@ -86,6 +127,8 @@ namespace jit {
         GDF_REQUIRE((out->dtype > GDF_invalid) && (lhs->dtype > GDF_invalid) && (rhs->dtype > GDF_invalid), GDF_UNSUPPORTED_DTYPE)
         GDF_REQUIRE((out->dtype < N_GDF_TYPES) && (lhs->dtype < N_GDF_TYPES) && (rhs->dtype < N_GDF_TYPES), GDF_UNSUPPORTED_DTYPE)
         
+        binary_valid_mask_and(out->null_count, out->valid, lhs->valid, rhs->valid, rhs->size);
+
         Launcher::launch().kernel("kernel_v_v")
                           .instantiate(ope, Operator::Type::Direct, out, lhs, rhs)
                           .launch(out, lhs, rhs);

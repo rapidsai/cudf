@@ -40,12 +40,6 @@ R"***(
 
         for (int i=start; i<size; i+=step) {
             out_data[i] = TypeOpe::template operate<TypeOut, TypeLhs, TypeRhs>(lhs_data[i], rhs_data[0]);
-
-            if ((out_valid != nullptr) && (i % warpSize) == 0) {
-                int index = i / warpSize;
-                uint32_t lhs_valid_word = (lhs_valid != nullptr) ? lhs_valid[index] : 0xffffffff;
-                out_valid[index] = lhs_valid_word;
-            }
         }
     }
 
@@ -64,13 +58,6 @@ R"***(
 
         for (int i=start; i<size; i+=step) {
             out_data[i] = TypeOpe::template operate<TypeOut, TypeLhs, TypeRhs>(lhs_data[i], rhs_data[i]);
-
-            if ((out_valid != nullptr) && (i % warpSize) == 0) {
-                int index = i / warpSize;
-                uint32_t lhs_valid_word = (lhs_valid != nullptr) ? lhs_valid[index] : 0xffffffff;
-                uint32_t rhs_valid_word = (rhs_valid != nullptr) ? rhs_valid[index] : 0xffffffff;
-                out_valid[index] = lhs_valid_word & rhs_valid_word;
-            }
         }
     }
 )***";

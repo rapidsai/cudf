@@ -59,24 +59,12 @@ gdf_error all_bitmask_on(gdf_valid_type * valid_out, gdf_size_type & out_null_co
 	return GDF_SUCCESS;
 }
 
-gdf_error apply_bitmask_to_bitmask(gdf_size_type & out_null_count, gdf_valid_type * valid_out, gdf_valid_type * valid_left, gdf_valid_type * valid_right,
-		cudaStream_t stream, gdf_size_type num_values){
-
+gdf_error update_null_count(gdf_size_type & out_null_count, gdf_valid_type * valid, cudaStream_t stream, gdf_size_type num_values) {
 	gdf_size_type num_chars_bitmask = ( ( num_values +( GDF_VALID_BITSIZE - 1)) / GDF_VALID_BITSIZE );
-	thrust::device_ptr<gdf_valid_type> valid_out_ptr = thrust::device_pointer_cast(valid_out);
-	thrust::device_ptr<gdf_valid_type> valid_left_ptr = thrust::device_pointer_cast(valid_left);
-	//here we are basically figuring out what is the last pointed to unsigned char that can contain part of the bitmask
-	thrust::device_ptr<gdf_valid_type> valid_left_end_ptr = thrust::device_pointer_cast(valid_left + num_chars_bitmask );
-	thrust::device_ptr<gdf_valid_type> valid_right_ptr = thrust::device_pointer_cast(valid_right);
-
-
-	thrust::transform(rmm::exec_policy(stream)->on(stream), thrust::detail::make_normal_iterator(valid_left_ptr),
-			thrust::detail::make_normal_iterator(valid_left_end_ptr), thrust::detail::make_normal_iterator(valid_right_ptr),
-			thrust::detail::make_normal_iterator(valid_out_ptr), thrust::bit_and<gdf_valid_type>());
-
+	thrust::device_ptr<gdf_valid_type> valid_out_ptr = thrust::device_pointer_cast(valid);
 
 	char * last_char = new char[1];
-	cudaError_t error = cudaMemcpyAsync(last_char,valid_out + ( num_chars_bitmask-1),sizeof(gdf_valid_type),cudaMemcpyDeviceToHost,stream);
+	cudaError_t error = cudaMemcpyAsync(last_char,valid + ( num_chars_bitmask-1),sizeof(gdf_valid_type),cudaMemcpyDeviceToHost,stream);
 
 
 	rmm::device_vector<gdf_valid_type> bit_mask_null_counts_device(bit_mask_null_counts);
@@ -93,3 +81,20 @@ gdf_error apply_bitmask_to_bitmask(gdf_size_type & out_null_count, gdf_valid_typ
 	return GDF_SUCCESS;
 }
 
+gdf_error apply_bitmask_to_bitmask(gdf_size_type & out_null_count, gdf_valid_type * valid_out, gdf_valid_type * valid_left, gdf_valid_type * valid_right,
+		cudaStream_t stream, gdf_size_type num_values){
+
+	gdf_size_type num_chars_bitmask = ( ( num_values +( GDF_VALID_BITSIZE - 1)) / GDF_VALID_BITSIZE );
+	thrust::device_ptr<gdf_valid_type> valid_out_ptr = thrust::device_pointer_cast(valid_out);
+	thrust::device_ptr<gdf_valid_type> valid_left_ptr = thrust::device_pointer_cast(valid_left);
+	//here we are basically figuring out what is the last pointed to unsigned char that can contain part of the bitmask
+	thrust::device_ptr<gdf_valid_type> valid_left_end_ptr = thrust::device_pointer_cast(valid_left + num_chars_bitmask );
+	thrust::device_ptr<gdf_valid_type> valid_right_ptr = thrust::device_pointer_cast(valid_right);
+
+
+	thrust::transform(rmm::exec_policy(stream)->on(stream), thrust::detail::make_normal_iterator(valid_left_ptr),
+			thrust::detail::make_normal_iterator(valid_left_end_ptr), thrust::detail::make_normal_iterator(valid_right_ptr),
+			thrust::detail::make_normal_iterator(valid_out_ptr), thrust::bit_and<gdf_valid_type>());
+
+	return update_null_count(out_null_count, valid_out, stream, num_values);
+}
