@@ -13,8 +13,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#ifndef TUPLE_FOR_EACH_H
-#define TUPLE_FOR_EACH_H
+#ifndef TUPLE_FOR_EACH_HPP
+#define TUPLE_FOR_EACH_HPP
 
 namespace cudf {
 namespace detail {
@@ -32,10 +32,13 @@ inline void for_each_impl(Tuple&& tuple, F&& f,
  * For every element in a tuple, invokes a unary callable and passes the tuple
  * element into the callable.
  *
+ * This implementation comes from Louis Dionne on StackExchange:
+ * https://codereview.stackexchange.com/a/67394
+ *
  * @tparam Tuple The type of the tuple
  * @tparam F The type of the callable
- * @param tuple The tuple to iterate over
- * @param f The unary callable
+ * @param[in] tuple The tuple to iterate over
+ * @param[in] f The unary callable
  *---------------------------------------------------------------------------**/
 template <typename Tuple, typename F>
 inline void for_each(Tuple&& tuple, F&& f) {

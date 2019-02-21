@@ -22,12 +22,15 @@
 #endif
 
 #include <cudf.h>
-#include <thrust/device_vector.h>
-#include <cstdint>
+
 #include <utilities/type_dispatcher.hpp>
 #include "gtest/gtest.h"
 #include "tests/utilities/cudf_test_fixtures.h"
 #include "utilities/tuple_for_each.hpp"
+
+#include <thrust/device_vector.h>
+#include <cstdint>
+
 
 /**
  * @file dispatcher_test.cu
@@ -40,7 +43,7 @@ struct DispatcherTest : public GdfTest {
    *
    * This tuple *must* list every type supported by the type_dispatcher.
    *
-   * Furthemore, type_to_gdf_dtype must have a specialization for each of these
+   * Furthemore, gdf_dtype_of must have a specialization for each of these
    * types that maps to the corresponding gdf_dtype.
    *
    *---------------------------------------------------------------------------**/
@@ -95,8 +98,8 @@ struct type_tester {
 TEST_F(DispatcherTest, TraitsTest) {
   cudf::detail::for_each(supported_types, [](auto type_dummy) {
     using T = decltype(type_dummy);
-    EXPECT_TRUE(cudf::type_dispatcher(cudf::type_to_gdf_dtype<T>::value,
-                                      type_tester<T>{}));
+    EXPECT_TRUE(
+        cudf::type_dispatcher(cudf::gdf_dtype_of<T>(), type_tester<T>{}));
   });
 }
 
@@ -104,7 +107,7 @@ namespace {
 struct test_functor {
   template <typename T>
   __host__ __device__ bool operator()(gdf_dtype type_id) {
-    return (type_id == cudf::type_to_gdf_dtype<T>::value);
+    return (type_id == cudf::gdf_dtype_of<T>());
   }
 };
 
@@ -114,6 +117,7 @@ __global__ void dispatch_test_kernel(gdf_dtype type, bool* d_result) {
 }
 }  // namespace
 
+// Every supported gdf_dtype should dispatch the correct type
 TEST_F(DispatcherTest, HostDispatchFunctor) {
   for (auto const& t : this->supported_dtypes) {
     bool result = cudf::type_dispatcher(t, test_functor{}, t);
