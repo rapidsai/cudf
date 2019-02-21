@@ -891,3 +891,14 @@ def test_csv_reader_index_col():
     pd_df = pd.read_csv(StringIO(buffer), header=None, index_col=False)
     for cu_idx, pd_idx in zip(cu_df.index, pd_df.index):
         assert(str(cu_idx) == str(pd_idx))
+
+
+def test_csv_reader_hex(tmpdir):
+    lines = ['0x0','0xA','-0x10','0xbc','0xfEd']
+
+    buffer = '\n'.join(lines) + '\n'
+
+    df = read_csv(StringIO(buffer), dtype=['int32'], names=['hex_int'])
+
+    values = [0, 10, -16, 188, 4077]
+    np.testing.assert_array_equal(values, df['hex_int'])

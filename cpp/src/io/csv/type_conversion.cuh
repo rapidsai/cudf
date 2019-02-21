@@ -186,6 +186,45 @@ struct ParseOptions {
   bool multi_delimiter;
 };
 
+template <typename T,
+typename std::enable_if_t<std::is_integral<T>::value> * = nullptr>
+__host__ __device__ __forceinline__
+int determineBase(const char* data, long *start, long end) {
+	// check if this is a hex number
+	if (end - *start >= 2 && data[*start] == '0' && data[*start + 1] == 'x') {
+		*start += 2;
+		return 16;
+	}
+	return 10;
+}
+
+template <typename T,
+typename std::enable_if_t<!std::is_integral<T>::value> * = nullptr>
+__host__ __device__ __forceinline__
+int determineBase(const char* data, long *start, long end) {
+  return 10;
+}
+
+template <typename T,
+typename std::enable_if_t<std::is_integral<T>::value> * = nullptr>
+__host__ __device__ __forceinline__
+char digitToValue(char d, int base) {
+  if (base == 16) {
+    if (d >= 'a' && d <= 'f')
+      return d - 'a' + 10;
+    if (d >= 'A' && d <= 'F')
+      return d - 'A' + 10;
+  }
+  return d - '0';
+}
+
+template <typename T,
+typename std::enable_if_t<!std::is_integral<T>::value> * = nullptr>
+__host__ __device__ __forceinline__
+char digitToValue(char d, int base) {
+  return d - '0';
+}
+
 /**---------------------------------------------------------------------------*
  * @brief Default function for extracting a data value from a character string.
  * Handles all arithmetic data types; other data types are handled in
@@ -210,17 +249,20 @@ __host__ __device__ T convertStrToValue(const char* data, long start, long end,
     start++;
   }
 
+  const int base = determineBase<T>(data, &start, end);
+
   // Handle the whole part of the number
   long index = start;
   while (index <= end) {
     if (data[index] == opts.decimal) {
       ++index;
       break;
-    } else if (data[index] == 'e' || data[index] == 'E') {
+    } else if (base == 10 && 
+        (data[index] == 'e' || data[index] == 'E')) {
       break;
     } else if (data[index] != opts.thousands) {
-      value *= 10;
-      value += data[index] - '0';
+      value *= base;
+      value += digitToValue<T>(data[index], base);
     }
     ++index;
   }
@@ -233,9 +275,9 @@ __host__ __device__ T convertStrToValue(const char* data, long start, long end,
         ++index;
         break;
       } else if (data[index] != opts.thousands) {
-        value *= 10;
-        value += data[index] - '0';
-        divisor *= 10;
+        value *= base;
+        value += digitToValue<T>(data[index], base);
+        divisor *= base;
       }
       ++index;
     }
