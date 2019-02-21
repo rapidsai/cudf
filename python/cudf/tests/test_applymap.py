@@ -4,6 +4,7 @@ from itertools import product
 
 import pytest
 import numpy as np
+import pandas as pd
 
 from cudf.tests import utils
 from cudf import Series
@@ -57,10 +58,19 @@ def test_applymap_change_out_dtype():
     # Check
     expect = np.array(data, dtype=float)
     got = out.to_array()
-    np.testing.assert_array_equal(expect, got)i
+    np.testing.assert_array_equal(expect, got)
 
 
 def test_datetime_applymap():
-    np.arange('2010-01-01T12:00:00.000', '2010-10-01T12:00:00:00.100', 
-              dtype='datetime64[ms]')
-    
+    data = np.arange(10).astype('datetime64[ms]')
+    cudf_series = Series(data)
+    pd_series = pd.Series(data)
+
+    def to_timestamp(date2):
+        return pd.Timestamp(date2)
+
+    got = cudf_series.applymap(to_timestamp)
+    expect = pd_series.apply(to_timestamp)
+    assert got == expect
+
+
