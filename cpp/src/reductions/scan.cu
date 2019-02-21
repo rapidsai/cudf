@@ -59,10 +59,11 @@ namespace { //anonymous
                 size, stream);
             RMM_TRY(RMM_ALLOC(&temp_storage, temp_storage_bytes, stream));
 
-            if (input->valid) {
+            bool const input_has_nulls{ input->valid != nullptr && input->null_count > 0 };
+            if (input_has_nulls) {
                 // allocate temporary column data
                 T* temp_input;
-                RMM_TRY(RMM_ALLOC(&temp_input, size * sizeof(T) + sizeof(gdf_size_type), stream));
+                RMM_TRY(RMM_ALLOC(&temp_input, size * sizeof(T), stream));
 
                 // copy bitmask
                 size_t valid_byte_length = gdf_get_num_chars_bitmask(size);
@@ -113,7 +114,7 @@ namespace { //anonymous
     struct PrefixSumDispatcher {
         template <typename T,
             typename std::enable_if_t<std::is_arithmetic<T>::value>* = nullptr>
-            gdf_error operator()(gdf_column *input, gdf_column *output,
+            gdf_error operator()(const gdf_column *input, gdf_column *output,
                 bool inclusive, cudaStream_t stream = 0) {
             GDF_REQUIRE(input->size == output->size, GDF_COLUMN_SIZE_MISMATCH);
             GDF_REQUIRE(input->dtype == output->dtype, GDF_DTYPE_MISMATCH);
@@ -123,14 +124,14 @@ namespace { //anonymous
                 GDF_REQUIRE(!output->valid, GDF_VALIDITY_MISSING);
             }
             else {
-                GDF_REQUIRE(input->valid && output->valid, GDF_DTYPE_MISMATCH);
+                GDF_REQUIRE(input->valid && output->valid, GDF_VALIDITY_MISSING);
             }
             return Scan<T>::call(input, output, inclusive, stream);
         }
 
         template <typename T,
             typename std::enable_if_t<!std::is_arithmetic<T>::value, T>* = nullptr>
-            gdf_error operator()(gdf_column *input, gdf_column *output,
+            gdf_error operator()(const gdf_column *input, gdf_column *output,
                 bool inclusive, cudaStream_t stream = 0) {
             return GDF_UNSUPPORTED_DTYPE;
         }
@@ -138,7 +139,7 @@ namespace { //anonymous
 
 } // end anonymous namespace
 
-gdf_error gdf_prefixsum(gdf_column *input, gdf_column *output, bool inclusive)
+gdf_error gdf_prefixsum(const gdf_column *input, gdf_column *output, bool inclusive)
 {
     return cudf::type_dispatcher(input->dtype, PrefixSumDispatcher(),
         input, output, inclusive);

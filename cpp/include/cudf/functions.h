@@ -394,7 +394,7 @@ gdf_error gdf_hash_partition(int num_input_cols,
  * GDF_UNSUPPORTED_DTYPE if inp->dtype is not an arithmetic type.
  */
 /* ----------------------------------------------------------------------------*/
-gdf_error gdf_prefixsum(gdf_column *input, gdf_column *output, bool inclusive);
+gdf_error gdf_prefixsum(const gdf_column *input, gdf_column *output, bool inclusive);
 
 /* unary operators */
 

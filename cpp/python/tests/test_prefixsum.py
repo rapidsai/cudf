@@ -10,6 +10,8 @@ from librmm_cffi import librmm as rmm
 from .utils import (new_column, unwrap_devary, get_dtype, gen_rand,
                     buffer_as_bits)
 
+from cudf._gdf import count_nonzero_mask
+
 params_dtype = [
     np.int8,
     np.int32,
@@ -78,10 +80,12 @@ def test_prefixsum_masked(dtype, nelem):
     d_result = rmm.device_array(d_data.size, dtype=d_data.dtype)
     d_result_mask = rmm.to_device(dummy_mask)
 
-    col_data = new_column()
     gdf_dtype = get_dtype(dtype)
-    libgdf.gdf_column_view(col_data, unwrap_devary(d_data), 
-                           unwrap_devary(d_mask), nelem, gdf_dtype)
+
+    col_data = new_column()
+    libgdf.gdf_column_view_augmented(col_data, unwrap_devary(d_data),
+                                     unwrap_devary(d_mask), nelem, gdf_dtype,
+                                     count_nonzero_mask(d_mask, nelem))
 
     col_result = new_column()
     libgdf.gdf_column_view(col_result, unwrap_devary(d_result),
