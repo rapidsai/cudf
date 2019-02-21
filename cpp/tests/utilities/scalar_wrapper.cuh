@@ -152,7 +152,7 @@ struct scalar_wrapper {
                             cudaMemcpyHostToDevice));
 
     // Fill the gdf_scalar members
-    the_scalar.dtype = cudf::type_to_gdf_dtype<ScalarType>::value;
+    the_scalar.dtype = cudf::gdf_dtype_of<ScalarType>();
   }
 
   gdf_scalar the_scalar;
