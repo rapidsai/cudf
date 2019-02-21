@@ -26,6 +26,23 @@ def concat(objs, axis=0, ignore_index=False):
         return objs[0]
 
     typs = set(type(o) for o in objs)
+    allowed_typs = {Series, DataFrame}
+    # when axis is 1 (column) we can concat with Series and Dataframes
+    if axis == 1:
+        assert typs.issubset(allowed_typs)
+        df = DataFrame()
+        for idx, o in enumerate(objs):
+            if isinstance(o, Series):
+                name = o.name
+                if o.name is None:
+                    # pandas uses 0-offset
+                    name = idx - 1
+                df[name] = o
+            else:
+                for col in o.columns:
+                    df[col] = o[col]
+        return df
+
     if len(typs) > 1:
         raise ValueError("`concat` expects all objects to be of the same "
                          "type. Got mix of %r." % [t.__name__ for t in typs])
