@@ -87,6 +87,7 @@
 - PR #1009 Fix performance regression in `to_pandas` method on DataFrame
 - PR #1008 Remove custom dask communication approach
 - PR #1001 CSV Reader: Fix a memory access error when reading a large (>2GB) file with date columns
+- PR #1019 Binary Ops: Fix error when one input column has null mask but other doesn't
 
 
 # cuDF 0.5.1 (05 Feb 2019)
