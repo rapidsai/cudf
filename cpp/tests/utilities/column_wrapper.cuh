@@ -290,7 +290,7 @@ struct column_wrapper {
       bool const lhs_is_valid{gdf_is_valid(lhs_col.valid, row)};
       bool const rhs_is_valid{gdf_is_valid(rhs_col.valid, row)};
 
-      if (lhs_is_valid && rhs_is_valid) {
+      if (lhs_is_valid and rhs_is_valid) {
         return static_cast<ColumnType const*>(lhs_col.data)[row] ==
                static_cast<ColumnType const*>(rhs_col.data)[row];
       }
