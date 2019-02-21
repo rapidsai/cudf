@@ -973,15 +973,25 @@ def test_concat_with_axis():
     cdf1 = gd.from_pandas(df1)
     cdf2 = gd.from_pandas(df2)
 
+    # concat only dataframes
     concat_cdf = gd.concat([cdf1, cdf2], axis=1)
     assert_eq(concat_cdf, concat_df)
 
+    # concat only series
     concat_s = pd.concat([df1.x, df1.y], axis=1)
-    s1 = gd.Series.from_pandas(df1.x)
-    s2 = gd.Series.from_pandas(df1.y)
-    concat_cdf_s = gd.concat([s1, s2], axis=1)
+    cs1 = gd.Series.from_pandas(df1.x)
+    cs2 = gd.Series.from_pandas(df1.y)
+    concat_cdf_s = gd.concat([cs1, cs2], axis=1)
 
     assert_eq(concat_cdf_s, concat_s)
+
+    # concat series and dataframes
+    s3 = pd.Series(np.random.random(5))
+    cs3 = gd.Series.from_pandas(s3)
+
+    concat_cdf_all = gd.concat([cdf1, cs3, cdf2], axis=1)
+    concat_df_all = pd.concat([df1, s3, df2], axis=1)
+    assert_eq(concat_cdf_all, concat_df_all)
 
 
 @pytest.mark.parametrize('nrows', [0, 3, 10, 100, 1000])
