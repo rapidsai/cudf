@@ -156,13 +156,13 @@ def test_validity_add(nelem, lhs_nulls, rhs_nulls):
     res = lhs + rhs
     if lhs_nulls == 'some' and rhs_nulls == 'some':
         res_mask = np.asarray(utils.expand_bits_to_bytes(lhs_mask & rhs_mask),
-                            dtype=np.bool)[:nelem]
+                              dtype=np.bool)[:nelem]
     if lhs_nulls == 'some' and rhs_nulls == 'none':
         res_mask = np.asarray(utils.expand_bits_to_bytes(lhs_mask),
-                            dtype=np.bool)[:nelem]
+                              dtype=np.bool)[:nelem]
     if lhs_nulls == 'none' and rhs_nulls == 'some':
         res_mask = np.asarray(utils.expand_bits_to_bytes(rhs_mask),
-                            dtype=np.bool)[:nelem]
+                              dtype=np.bool)[:nelem]
     # Fill NA values
     na_value = -10000
     got = res.fillna(na_value).to_array()
