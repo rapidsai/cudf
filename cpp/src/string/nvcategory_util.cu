@@ -5,6 +5,7 @@
 #include <NVCategory.h>
 #include <NVStrings.h>
 #include "rmm/rmm.h"
+#include "bitmask/bit_mask.h"
 
 gdf_error create_nvcategory_from_indices(gdf_column * column, NVCategory * nv_category){
 
@@ -181,4 +182,28 @@ gdf_error copy_category_from_input_and_compact_into_output(gdf_column * input_co
 
 	NVStrings::destroy(temp_strings);
 	return GDF_SUCCESS;
+}
+
+gdf_column* create_column_nvcategory_from_one_string(const char* str){
+
+	const int num_rows = 1;
+	NVCategory* category = NVCategory::create_from_array(&str, num_rows);
+
+	gdf_column * column = new gdf_column;
+	int * data;
+	RMM_ALLOC(&data, num_rows * sizeof(gdf_nvstring_category), 0);
+
+	category->get_values(static_cast<nv_category_index_type *>(data),
+		DEVICE_ALLOCATED);
+
+	bit_mask::bit_mask_t * valid;
+	bit_mask::create_bit_mask(&valid, num_rows, 1);
+
+	gdf_error err = gdf_column_view(column,
+			(void *) data,
+			(gdf_valid_type *)valid,
+			num_rows,
+			GDF_STRING_CATEGORY);
+	column->dtype_info.category = category;
+	return column;
 }

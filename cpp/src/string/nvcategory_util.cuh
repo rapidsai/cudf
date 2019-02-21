@@ -60,4 +60,6 @@ gdf_error combine_column_categories(gdf_column * input_columns[],gdf_column * ou
 
 gdf_error copy_category_from_input_and_compact_into_output(gdf_column * input_column, gdf_column * output_column);
 
+gdf_column* create_column_nvcategory_from_one_string(const char* str);
+
 #endif
