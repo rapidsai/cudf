@@ -17,10 +17,12 @@ namespace { //anonymous
             const T *data, const gdf_valid_type *mask,
             gdf_size_type size, T *results, T identity)
     {
-        int id = blockIdx.x * blockDim.x + threadIdx.x;
-        if (id >= size)return;
+        size_type id = threadIdx.x + blockIdx.x * blockDim.x;
 
-        results[id] = (gdf_is_valid(mask, id)) ? data[id] : identity;
+        while (id < size) {
+            results[id] = (gdf_is_valid(mask, id)) ? data[id] : identity;
+            id += blockDim.x * gridDim.x;
+        }
     }
 
     template <class T>
