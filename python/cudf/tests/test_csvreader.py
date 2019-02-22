@@ -915,4 +915,3 @@ def test_csv_reader_pd_consistent_quotes():
 
     col = [str(elem) for elem in cu_cols[0].to_host()]
     np.testing.assert_array_equal(pd_df['text'], col)
-    
