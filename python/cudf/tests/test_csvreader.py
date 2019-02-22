@@ -891,3 +891,26 @@ def test_csv_reader_index_col():
     pd_df = pd.read_csv(StringIO(buffer), header=None, index_col=False)
     for cu_idx, pd_idx in zip(cu_df.index, pd_df.index):
         assert(str(cu_idx) == str(pd_idx))
+
+def test_csv_reader_pd_consistent_quotes():
+    names = ['text']
+    dtypes = ['str']
+    lines = ['"a"', '"b ""c"" d"', '"f!\n."']
+
+    buffer = '\n'.join(lines) + '\n'
+
+    # enable quoting
+    cu_cols = read_csv_strings(StringIO(buffer), names=names, dtype=dtypes,
+                             quoting=True)
+    pd_df = pd.read_csv(StringIO(buffer), names=names, quoting=0)
+
+    col = [str(elem) for elem in cu_cols[0].to_host()]
+    np.testing.assert_array_equal(pd_df['text'], col)
+
+    # disable quoting
+    cu_cols = read_csv_strings(StringIO(buffer), names=names, dtype=dtypes,
+                               quoting=False)
+    pd_df = pd.read_csv(StringIO(buffer), names=names, quoting=3)
+
+    col = [str(elem) for elem in cu_cols[0].to_host()]
+    np.testing.assert_array_equal(pd_df['text'], col)

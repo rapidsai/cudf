@@ -318,12 +318,12 @@ gdf_error read_csv(csv_read_arg *args)
 	} else {
 		raw_csv->opts.terminator = args->lineterminator;
 	}
-	if (args->quotechar != '\0') {
+	if (args->quotechar != '\0' && args->quoting) {
 		raw_csv->opts.quotechar = args->quotechar;
-		raw_csv->opts.keepquotes = !args->quoting;
+		raw_csv->opts.keepquotes = false;
 		raw_csv->opts.doublequote = args->doublequote;
 	} else {
-		raw_csv->opts.quotechar = args->quotechar;
+		raw_csv->opts.quotechar = '\0';
 		raw_csv->opts.keepquotes = true;
 		raw_csv->opts.doublequote = false;
 	}

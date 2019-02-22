@@ -65,8 +65,7 @@ def read_csv(filepath_or_buffer, lineterminator='\n',
     quotechar : char, default '"'
         Character to indicate start and end of quote item.
     quoting : bool, default True
-        If True, start and end quotechar are removed from returned strings
-        If False, start and end quotechar are kept in returned strings
+        Enable quoting (False is equivalent to setting quotechar to '\0')
     doublequote : bool, default True
         When quotechar is specified and quoting is True, indicates whether to
         interpret two consecutive quotechar inside fields as single quotechar
