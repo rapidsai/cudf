@@ -10,11 +10,11 @@
 namespace { //anonymous
 
 #define COPYMASK_BLOCK_SIZE 1024
-#define ELEMENT_SIZE 32
 
     template <class T>
     __global__
-        void gpu_copy_mask(const T *data, const gdf_valid_type *mask,
+        void gpu_copy_and_replace_nulls(
+            const T *data, const gdf_valid_type *mask,
             gdf_size_type size, T *results, T identity)
     {
         int id = blockIdx.x * blockDim.x + threadIdx.x;
@@ -25,7 +25,8 @@ namespace { //anonymous
 
     template <class T>
     inline
-        gdf_error apply_copy_mask(const T *data, const gdf_valid_type *mask,
+        gdf_error copy_and_replace_nulls(
+            const T *data, const gdf_valid_type *mask,
             gdf_size_type size, T *results, T identity, cudaStream_t stream)
     {
         int blocksize = (size < COPYMASK_BLOCK_SIZE ?
@@ -34,7 +35,7 @@ namespace { //anonymous
             COPYMASK_BLOCK_SIZE;
 
         // launch kernel
-        gpu_copy_mask << <gridsize, blocksize, 0, stream >> > (
+        gpu_copy_and_replace_nulls << <gridsize, blocksize, 0, stream >> > (
             data, mask, size, results, identity);
 
         CUDA_CHECK_LAST();
@@ -72,7 +73,8 @@ namespace { //anonymous
                 output->null_count = input->null_count;
 
                 // copy d_input data and replace with 0 if mask is not valid
-                apply_copy_mask(static_cast<const T*>(input->data), input->valid,
+                copy_and_replace_nulls(
+                    static_cast<const T*>(input->data), input->valid,
                     size, temp_input, static_cast<T>(0), stream);
 
                 // Do scan
