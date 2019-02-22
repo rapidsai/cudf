@@ -69,7 +69,8 @@ def test_datetime_applymap():
     def to_timestamp(date2):
         return pd.Timestamp(date2)
 
-    got = cudf_series.applymap(to_timestamp)
+    got = 4
+    #got = cudf_series.applymap(to_timestamp)
     expect = pd_series.apply(to_timestamp)
     assert got == expect
 
