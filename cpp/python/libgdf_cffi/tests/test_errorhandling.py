@@ -2,7 +2,7 @@ import numpy as np
 
 from libgdf_cffi import ffi, libgdf  # , GDFError
 
-from .utils import new_column, get_dtype
+from libgdf_cffi.tests.utils import new_column, get_dtype
 
 
 def test_cuda_error():

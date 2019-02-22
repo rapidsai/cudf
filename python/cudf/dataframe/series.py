@@ -34,7 +34,7 @@ class Series(object):
 
         If ``codes`` is defined, use it instead of ``categorical.codes``
         """
-        from .categorical import pandas_categorical_as_column
+        from cudf.dataframe.categorical import pandas_categorical_as_column
 
         col = pandas_categorical_as_column(categorical, codes=codes)
         return Series(data=col)
@@ -1096,7 +1096,7 @@ class Series(object):
     def hash_values(self):
         """Compute the hash of values in this column.
         """
-        from . import numerical
+        from cudf.dataframe import numerical
 
         return Series(numerical.column_hash_values(self._column))
 
@@ -1119,7 +1119,7 @@ class Series(object):
         """
         assert stop > 0
 
-        from . import numerical
+        from cudf.dataframe import numerical
         initial_hash = np.asarray(hash(self.name)) if use_name else None
         hashed_values = numerical.column_hash_values(
             self._column, initial_hash_values=initial_hash)
