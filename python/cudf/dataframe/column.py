@@ -39,6 +39,8 @@ class Column(object):
     """
     @classmethod
     def _concat(cls, objs, dtype=None):
+        import nvstrings
+        from cudf.dataframe.string import StringColumn
         from cudf.dataframe.categorical import CategoricalColumn
 
         if len(objs) == 0:
@@ -48,9 +50,19 @@ class Column(object):
                     null_count=0,
                     ordered=False
                 )
+            elif dtype == np.dtype('str'):
+                return StringColumn(
+                    data=nvstrings.to_device([]),
+                    null_count=0
+                )
             else:
                 dtype = np.dtype(dtype)
                 return Column(Buffer.null(dtype))
+
+        # Handle strings separately
+        if all(isinstance(o, StringColumn) for o in objs):
+            # TODO implement this logic
+            pass
 
         # Handle categories for categoricals
         if all(isinstance(o, CategoricalColumn) for o in objs):

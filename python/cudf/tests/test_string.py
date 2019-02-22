@@ -5,6 +5,7 @@ import pytest
 import numpy as np
 import pandas as pd
 import pyarrow as pa
+from numba import cuda
 
 from cudf.dataframe import Series
 # from cudf.tests.utils import assert_eq
@@ -20,7 +21,7 @@ def test_string_ingest(construct):
     assert len(got) == 5
 
 
-def test_string_export(construct):
+def test_string_export():
     data = ['a', 'a', 'b', 'c', 'a']
     ps = pd.Series(data)
     gs = Series(data)
@@ -34,7 +35,9 @@ def test_string_export(construct):
     np.testing.assert_array_equal(expect, got)
 
     expect = pa.Array.from_pandas(ps)
+    print(expect)
     got = gs.to_arrow()
+    print(got)
     assert pa.Array.equals(expect, got)
 
 
@@ -46,13 +49,15 @@ def test_string_get_item(item):
     ps = pd.Series(data)
     gs = Series(data)
 
-    expect = ps[item].to_arrow()
-    got = pa.Array.from_pandas(gs[item])
+    got = gs[item].to_arrow()
+    if isinstance(item, cuda.devicearray.DeviceNDArray):
+        item = item.copy_to_host()
+    expect = pa.Array.from_pandas(ps[item])
 
     pa.Array.equals(expect, got)
 
 
-@pytest.mark.parametrize('item', [0, 2, 4, slice(1, 3)])
+@pytest.mark.parametrize('item', [0, 2, 4, slice(1, 3, 1)])
 def test_string_repr(item):
     data = ['a', 'b', 'c', 'd', 'e']
     ps = pd.Series(data)

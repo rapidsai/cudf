@@ -214,30 +214,33 @@ class Series(object):
         return not len(self)
 
     def __getitem__(self, arg):
-        if isinstance(arg, (list, np.ndarray, pd.Series, range, Index)):
-            arg = Series(arg)
-        if isinstance(arg, Series):
-            if issubclass(arg.dtype.type, np.integer):
-                selvals, selinds = columnops.column_select_by_position(
-                    self._column, arg)
-                index = self.index.take(selinds.to_gpu_array())
-            elif arg.dtype in [np.bool, np.bool_]:
-                selvals, selinds = columnops.column_select_by_boolmask(
-                    self._column, arg)
-                index = self.index.take(selinds.to_gpu_array())
-            else:
-                raise NotImplementedError(arg.dtype)
-            return self._copy_construct(data=selvals, index=index)
-
-        elif isinstance(arg, slice):
-            index = self.index[arg]         # slice index
-            col = self._column[arg]         # slice column
-            return self._copy_construct(data=col, index=index)
-        elif isinstance(arg, Number):
-            # The following triggers a IndexError if out-of-bound
-            return self._column.element_indexing(arg)
+        if self.dtype == np.dtype('str'):
+            return Series(self._column[arg])
         else:
-            raise NotImplementedError(type(arg))
+            if isinstance(arg, (list, np.ndarray, pd.Series, range, Index)):
+                arg = Series(arg)
+            if isinstance(arg, Series):
+                if issubclass(arg.dtype.type, np.integer):
+                    selvals, selinds = columnops.column_select_by_position(
+                        self._column, arg)
+                    index = self.index.take(selinds.to_gpu_array())
+                elif arg.dtype in [np.bool, np.bool_]:
+                    selvals, selinds = columnops.column_select_by_boolmask(
+                        self._column, arg)
+                    index = self.index.take(selinds.to_gpu_array())
+                else:
+                    raise NotImplementedError(arg.dtype)
+                return self._copy_construct(data=selvals, index=index)
+
+            elif isinstance(arg, slice):
+                index = self.index[arg]         # slice index
+                col = self._column[arg]         # slice column
+                return self._copy_construct(data=col, index=index)
+            elif isinstance(arg, Number):
+                # The following triggers a IndexError if out-of-bound
+                return self._column.element_indexing(arg)
+            else:
+                raise NotImplementedError(type(arg))
 
     def take(self, indices, ignore_index=False):
         """Return Series by taking values from the corresponding *indices*.

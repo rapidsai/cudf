@@ -178,7 +178,7 @@ def as_column(arbitrary, nan_as_null=True, dtype=None):
         - DatetimeColumn for datetime input
         - NumericalColumn for all other inputs.
     """
-    from cudf.dataframe import numerical, categorical, datetime, strings
+    from cudf.dataframe import numerical, categorical, datetime, string
     from cudf.dataframe.series import Series
     from cudf.dataframe.index import Index
 
@@ -200,7 +200,7 @@ def as_column(arbitrary, nan_as_null=True, dtype=None):
         data = numerical.NumericalColumn(data=arbitrary, dtype=arbitrary.dtype)
 
     elif isinstance(arbitrary, nvstrings.nvstrings):
-        data = strings.StringColumn(data=arbitrary)
+        data = string.StringColumn(data=arbitrary)
 
     elif cuda.devicearray.is_cuda_ndarray(arbitrary):
         data = as_column(Buffer(arbitrary))

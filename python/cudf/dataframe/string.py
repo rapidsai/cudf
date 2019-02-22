@@ -6,6 +6,7 @@ import pyarrow as pa
 import nvstrings
 from numbers import Number
 from numba import cuda
+import warnings
 
 from cudf.dataframe import columnops
 from cudf.utils import utils
@@ -24,12 +25,12 @@ class StringAccessor(object):
 
     def __getattr__(self, attr, *args, **kwargs):
         if hasattr(self._parent._data, attr):
-            passed_attr = getattr(self._parent, attr)
+            passed_attr = getattr(self._parent._data, attr)
             if callable(passed_attr):
                 def wrapper(*args, **kwargs):
-                    return columnops.as_column(
-                        getattr(self._parent._data, attr)(*args, **kwargs)
-                    )
+                    return getattr(self._parent._data, attr)(*args, **kwargs)
+                if isinstance(wrapper, nvstrings.nvstrings):
+                    wrapper = columnops.as_column(wrapper)
                 return wrapper
             else:
                 return passed_attr
@@ -89,7 +90,7 @@ class StringColumn(columnops.TypedColumnBase):
         """ nvstrings object """
         return self._data
 
-    def __getitem__(self, arg):
+    def element_indexing(self, arg):
         if isinstance(arg, Number):
             arg = int(arg)
             return columnops.as_column(self._data[arg])
@@ -99,12 +100,15 @@ class StringColumn(columnops.TypedColumnBase):
             return columnops.as_column(self._data[arg])
         elif isinstance(arg, np.ndarray):
             gpu_arr = rmm.to_device(arg)
-            return self[gpu_arr]
+            return self.element_indexing(gpu_arr)
         elif isinstance(arg, cuda.devicearray.DeviceNDArray):
             gpu_ptr = get_ctype_ptr(arg)
-            return self._data.gather(gpu_ptr)
+            return columnops.as_column(self._data.gather(gpu_ptr))
         else:
             raise NotImplementedError(type(arg))
+
+    def __getitem__(self, arg):
+        return self.element_indexing(arg)
 
     def astype(self, dtype):
         if self.dtype == dtype:
@@ -123,12 +127,17 @@ class StringColumn(columnops.TypedColumnBase):
 
     def to_arrow(self):
         sbuf = np.empty(self._data.byte_count(), dtype='int8')
-        obuf = np.empty(len(self._data), dtype='int32')
+        obuf = np.empty(len(self._data) + 1, dtype='int32')
+        obuf[len(obuf) - 1] = self._data.byte_count()
 
         mask_size = utils.calc_chunk_size(len(self._data), utils.mask_bitsize)
-        nbuf = np.empty(mask_size, dtype='int8')
+        # nbuf = np.empty(mask_size, dtype='int8')
+        nbuf = np.full(mask_size, 255, dtype='int8')
 
-        self.to_offsets(sbuf, obuf, nbuf=nbuf)
+        self.str().to_offsets(sbuf, obuf, nbuf=nbuf)
+        sbuf = pa.py_buffer(sbuf)
+        obuf = pa.py_buffer(obuf)
+        nbuf = pa.py_buffer(nbuf)
         return pa.StringArray.from_buffers(len(self._data), obuf, sbuf, nbuf,
                                            self._data.null_count())
 
@@ -136,7 +145,7 @@ class StringColumn(columnops.TypedColumnBase):
         pd_series = self.to_arrow().to_pandas()
         return pd.Series(pd_series, index=index)
 
-    def to_array(self):
+    def to_array(self, fillna=None):
         """Get a dense numpy array for the data.
 
         Notes
@@ -149,12 +158,14 @@ class StringColumn(columnops.TypedColumnBase):
         ------
         ``NotImplementedError`` if there are nulls
         """
+        if fillna is not None:
+            warnings.warn("fillna parameter not supported for string arrays")
         if self.null_count > 0:
             raise NotImplementedError(
                 "Converting to NumPy array is not yet supported for columns "
                 "with nulls"
             )
-        return self.to_arrow().to_numpy()
+        return self.to_arrow().to_pandas()
 
 
 # register_distributed_serializer(StringColumn)
