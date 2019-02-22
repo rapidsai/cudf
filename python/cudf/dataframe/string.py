@@ -132,7 +132,7 @@ class StringColumn(columnops.TypedColumnBase):
 
         mask_size = utils.calc_chunk_size(len(self._data), utils.mask_bitsize)
         # nbuf = np.empty(mask_size, dtype='int8')
-        nbuf = np.full(mask_size, 255, dtype='int8')
+        nbuf = np.full(mask_size, 255, dtype='int8') # Remove this once the bug is fixed in nvstrings
 
         self.str().to_offsets(sbuf, obuf, nbuf=nbuf)
         sbuf = pa.py_buffer(sbuf)
