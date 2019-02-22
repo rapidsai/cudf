@@ -10,6 +10,7 @@ import pyarrow as pa
 from numba import cuda, njit
 
 from librmm_cffi import librmm as rmm
+import nvstrings
 
 from cudf.dataframe.buffer import Buffer
 from cudf.dataframe.column import Column
@@ -177,13 +178,13 @@ def as_column(arbitrary, nan_as_null=True, dtype=None):
         - DatetimeColumn for datetime input
         - NumericalColumn for all other inputs.
     """
-    from . import numerical, categorical, datetime
+    from cudf.dataframe import numerical, categorical, datetime, strings
     from cudf.dataframe.series import Series
     from cudf.dataframe.index import Index
 
     if isinstance(arbitrary, Column):
         if not isinstance(arbitrary, TypedColumnBase):
-            # interpret as numeric
+            # TODO make this work for datetimes and string columns
             data = arbitrary.view(numerical.NumericalColumn,
                                   dtype=arbitrary.dtype)
         else:
@@ -197,6 +198,9 @@ def as_column(arbitrary, nan_as_null=True, dtype=None):
 
     elif isinstance(arbitrary, Buffer):
         data = numerical.NumericalColumn(data=arbitrary, dtype=arbitrary.dtype)
+
+    elif isinstance(arbitrary, nvstrings.nvstrings):
+        data = strings.StringColumn(data=arbitrary)
 
     elif cuda.devicearray.is_cuda_ndarray(arbitrary):
         data = as_column(Buffer(arbitrary))
@@ -225,15 +229,29 @@ def as_column(arbitrary, nan_as_null=True, dtype=None):
         if arbitrary.dtype.kind == 'M':
             data = datetime.DatetimeColumn.from_numpy(arbitrary)
         elif arbitrary.dtype.kind in ('O', 'U'):
-            raise NotImplementedError("Strings are not yet supported")
+            data = as_column(pa.Array.from_pandas(arbitrary))
         else:
             data = as_column(rmm.to_device(arbitrary), nan_as_null=nan_as_null)
 
     elif isinstance(arbitrary, pa.Array):
         if isinstance(arbitrary, pa.StringArray):
-            warnings.warn("Strings are not yet supported, so converting to "
-                          "categorical")
-            data = as_column(arbitrary.dictionary_encode())
+            count = len(arbitrary)
+            null_count = arbitrary.null_count
+
+            buffers = arbitrary.buffers()
+            # Buffer of actual strings values
+            sbuf = np.frombuffer(buffers[2], dtype='int8')
+            # Buffer of offsets values
+            obuf = np.frombuffer(buffers[1], dtype='int32')
+            # Buffer of null bitmask
+            nbuf = None
+            if null_count > 0:
+                nbuf = np.frombuffer(buffers[0], dtype='int8')
+
+            data = as_column(
+                nvstrings.from_offsets(sbuf, obuf, count, nbuf=nbuf,
+                                       ncount=null_count)
+            )
         elif isinstance(arbitrary, pa.NullArray):
             new_dtype = dtype
             if (type(dtype) == str and dtype == 'empty') or dtype is None:
