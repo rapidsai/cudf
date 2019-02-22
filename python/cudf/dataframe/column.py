@@ -425,12 +425,10 @@ class Column(object):
         """
 
         # need to invert to properly use gpu_fill_mask
-        mask._column._invert()
-        mask_gpu = mask.as_mask()
+        mask_invert = mask._column._invert()
         out = cudautils.fill_mask(data=self.data.to_gpu_array(),
-                                  mask=mask_gpu,
+                                  mask=mask_invert.as_mask(),
                                   value=value)
-
         return self.replace(data=Buffer(out), mask=None, null_count=0)
 
     def fillna(self, value):
@@ -440,9 +438,9 @@ class Column(object):
         """
         if not self.has_null_mask:
             return self
-        out = cudautils.fill_mask(data=self.data.to_gpu_array(),
-                                  mask=self.mask.to_gpu_array(),
-                                  value=value)
+        out = cudautils.fillna(data=self.data.to_gpu_array(),
+                               mask=self.mask.to_gpu_array(),
+                               value=value)
         return self.replace(data=Buffer(out), mask=None, null_count=0)
 
     def to_dense_buffer(self, fillna=None):
@@ -470,13 +468,21 @@ class Column(object):
             else:
                 return self._copy_to_dense_buffer()
         else:
-            return self.data
+            # always return a copy of the data rather than a reference
+            return self.data.copy()
 
     def _invert(self):
         """Internal convenience function for inverting masked array
+
+        Returns
+        -------
+        DeviceNDArray
+           logical inverted mask
         """
-        gpu_mask = self.to_gpu_array(fillna=None)
+
+        gpu_mask = self.to_gpu_array()
         cudautils.invert_mask(gpu_mask, gpu_mask)
+        return self.replace(data=Buffer(gpu_mask), mask=None, null_count=0)
 
     def _copy_to_dense_buffer(self):
         data = self.data.to_gpu_array()

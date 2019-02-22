@@ -210,8 +210,8 @@ def fill_mask(data, mask, value):
 
     Returns
     -------
-    [type]
-        [description]
+    device array
+        mask filled column with scalar value
     """
 
     out = rmm.device_array_like(data)
