@@ -164,7 +164,7 @@ class Column(object):
         return data, mask
 
     def _get_mask_as_column(self):
-        from .numerical import NumericalColumn
+        from cudf.dataframe.numerical import NumericalColumn
 
         data = Buffer(cudautils.ones(len(self), dtype=np.bool_))
         mask = NumericalColumn(data=data, mask=None, null_count=0,

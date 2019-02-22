@@ -301,7 +301,7 @@ class NumericalColumn(columnops.TypedColumnBase):
 
     def _hashjoin(self, other, how='left', return_indexers=False):
 
-        from .series import Series
+        from cudf.dataframe.series import Series
 
         if not self.is_type_equivalent(other):
             raise TypeError('*other* is not compatible')
@@ -347,7 +347,7 @@ class NumericalColumn(columnops.TypedColumnBase):
         When the column is a index, set *return_indexers* to obtain
         the indices for shuffling the remaining columns.
         """
-        from .series import Series
+        from cudf.dataframe.series import Series
 
         if not self.is_type_equivalent(other):
             raise TypeError('*other* is not compatible')

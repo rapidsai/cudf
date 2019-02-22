@@ -3,7 +3,7 @@ py.test will automatically detect this file.
 """
 import random
 import pytest
-from . import utils
+from libgdf_cffi.tests import utils
 
 from librmm_cffi import librmm_config as rmm_cfg
 rmm_cfg.use_pool_allocator = True
