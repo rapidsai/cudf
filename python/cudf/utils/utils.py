@@ -52,7 +52,7 @@ def require_writeable_array(arr):
 
 
 def scalar_broadcast_to(scalar, shape, dtype):
-    from .cudautils import fill_value
+    from cudf.utils.cudautils import fill_value
 
     if not isinstance(shape, tuple):
         shape = (shape,)
