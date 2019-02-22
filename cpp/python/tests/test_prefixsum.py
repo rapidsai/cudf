@@ -8,7 +8,7 @@ from libgdf_cffi import ffi, libgdf
 from librmm_cffi import librmm as rmm
 
 from .utils import (new_column, unwrap_devary, get_dtype, gen_rand,
-                    buffer_as_bits, count_nonzero_mask)
+                    buffer_as_bits, count_nulls)
 
 params_dtype = [
     np.int8,
@@ -83,7 +83,7 @@ def test_prefixsum_masked(dtype, nelem):
     col_data = new_column()
     libgdf.gdf_column_view_augmented(col_data, unwrap_devary(d_data),
                                      unwrap_devary(d_mask), nelem, gdf_dtype,
-                                     count_nonzero_mask(d_mask, nelem))
+                                     count_nulls(d_mask, nelem))
 
     col_result = new_column()
     libgdf.gdf_column_view(col_result, unwrap_devary(d_result),
