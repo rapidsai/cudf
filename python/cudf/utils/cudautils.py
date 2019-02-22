@@ -197,16 +197,16 @@ def invert_mask(arr, out):
 
 
 def fill_mask(data, mask, value):
-    """fill a column based custom make with the same value
+    """fill a column with the same value using a custom mask
 
     Parameters
     ----------
-    data : [type]
-        [description]
-    mask : [type]
-        [description]
-    value : [type]
-        [description]
+    data : device array
+        data
+    mask : device array
+        validity mask
+    value : scale
+        fill value
 
     Returns
     -------

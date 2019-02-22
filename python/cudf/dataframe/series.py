@@ -531,6 +531,22 @@ class Series(object):
         return self._column.has_null_mask
 
     def masked_assign(self, value, mask):
+        """Assign a scalar value to a series using a boolean mask
+        df[df < 0] = 0
+
+        Parameters
+        ----------
+        value : scalar
+            scalar value for assignment
+        mask : cudf Series
+            Boolean Series
+
+        Returns
+        -------
+        cudf Series
+            cudf series with new value set to where mask is True
+        """
+
         # need to invert to properly use gpu_fill_mask
         mask._invert()
         mask_gpu = mask.as_mask()
