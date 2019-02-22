@@ -56,6 +56,7 @@
 - PR #1017 concatenate along columns for Series and DataFrames
 - PR #1002 Support indexing a dataframe with another boolean dataframe
 - PR #1018 Better concatenation for Series and Dataframes
+- PR #1026 CSV Reader: Change the meaning of the quoting parameter to match Pandas
 
 ## Bug Fixes
 
