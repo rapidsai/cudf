@@ -81,7 +81,7 @@ def test_json_reader(json_files):
         expect_df = expect_df.reset_index(drop=True)
         expect_df.columns = expect_df.columns.astype('object')
     if len(got_df) == 0:
-        got_df = got_df.reset_index()
+        got_df = got_df.reset_index(drop=True)
 
     assert_eq(expect_df, got_df, check_categorical=False)
 
@@ -96,7 +96,7 @@ def test_json_reader(json_files):
         if len(expect_series) == 0:
             expect_series = expect_series.reset_index(drop=True)
         if len(got_df) == 0:
-            got_series = got_series.reset_index()
+            got_series = got_series.reset_index(drop=True)
 
         assert_eq(expect_series, got_series)
 

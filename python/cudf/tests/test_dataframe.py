@@ -266,6 +266,10 @@ def test_dataframe_column_name_indexing():
     pdf[1] = np.arange(1, 1 + nelem)
     pdf[2] = np.random.random(nelem)
     df = DataFrame.from_pandas(pdf)
+
+    assert_eq(df[df.columns], df)
+    assert_eq(df[df.columns[:1]], df[['key1']])
+
     for i in range(1, len(pdf.columns)+1):
         for idx in combinations(pdf.columns, i):
             assert(pdf[list(idx)].equals(df[list(idx)].to_pandas()))
@@ -276,6 +280,9 @@ def test_dataframe_column_name_indexing():
         df[i] = range(nelem)
     gdf = DataFrame.from_pandas(df)
     assert_eq(gdf, df)
+
+    assert_eq(gdf[gdf.columns], gdf)
+    assert_eq(gdf[gdf.columns[:3]], gdf[[0, 1, 2]])
 
 
 def test_dataframe_drop_method():
@@ -958,6 +965,35 @@ def test_dataframe_empty_concat():
     assert len(gdf3.columns) == 2
 
 
+def test_concat_with_axis():
+    df1 = pd.DataFrame(dict(x=np.arange(5), y=np.arange(5)))
+    df2 = pd.DataFrame(dict(a=np.arange(5), b=np.arange(5)))
+
+    concat_df = pd.concat([df1, df2], axis=1)
+    cdf1 = gd.from_pandas(df1)
+    cdf2 = gd.from_pandas(df2)
+
+    # concat only dataframes
+    concat_cdf = gd.concat([cdf1, cdf2], axis=1)
+    assert_eq(concat_cdf, concat_df)
+
+    # concat only series
+    concat_s = pd.concat([df1.x, df1.y], axis=1)
+    cs1 = gd.Series.from_pandas(df1.x)
+    cs2 = gd.Series.from_pandas(df1.y)
+    concat_cdf_s = gd.concat([cs1, cs2], axis=1)
+
+    assert_eq(concat_cdf_s, concat_s)
+
+    # concat series and dataframes
+    s3 = pd.Series(np.random.random(5))
+    cs3 = gd.Series.from_pandas(s3)
+
+    concat_cdf_all = gd.concat([cdf1, cs3, cdf2], axis=1)
+    concat_df_all = pd.concat([df1, s3, df2], axis=1)
+    assert_eq(concat_cdf_all, concat_df_all)
+
+
 @pytest.mark.parametrize('nrows', [0, 3, 10, 100, 1000])
 def test_nonmatching_index_setitem(nrows):
     np.random.seed(0)
@@ -1005,6 +1041,30 @@ def test_from_pandas():
     assert isinstance(gs, gd.Series)
 
     pd.testing.assert_series_equal(s, gs.to_pandas())
+
+
+def test_from_gpu_matrix():
+    h_ary = np.array([[1, 2, 3], [4, 5, 6]], np.int32)
+    d_ary = rmm.to_device(h_ary)
+
+    gdf = gd.DataFrame.from_gpu_matrix(d_ary, columns=['a', 'b', 'c'])
+    df = pd.DataFrame(h_ary, columns=['a', 'b', 'c'])
+    assert isinstance(gdf, gd.DataFrame)
+
+    pd.testing.assert_frame_equal(df, gdf.to_pandas())
+
+    gdf = gd.DataFrame.from_gpu_matrix(d_ary)
+    df = pd.DataFrame(h_ary)
+    assert isinstance(gdf, gd.DataFrame)
+
+    pd.testing.assert_frame_equal(df, gdf.to_pandas())
+
+
+@pytest.mark.xfail(reason="matrix dimension is not 2")
+def test_from_gpu_matrix_wrong_dimensions():
+    d_ary = rmm.device_array((2, 3, 4), dtype=np.int32)
+    gdf = gd.DataFrame.from_gpu_matrix(d_ary)
+    assert gdf is not None
 
 
 @pytest.mark.xfail(reason="constructor does not coerce index inputs")
@@ -1650,6 +1710,25 @@ def test_boolmask(pdf, gdf):
     assert_eq(pdf, gdf)
 
 
+@pytest.mark.parametrize('mask_shape', [(2, 'ab'), (2, 'abc'), (3, 'ab'), (3, 'abc'), (3, 'abcd'), (4, 'abc'), (4, 'abcd')])  # noqa: E501
+def test_dataframe_boolmask(mask_shape):
+    pdf = pd.DataFrame()
+    for col in 'abc':
+        pdf[col] = np.random.randint(0, 10, 3)
+    pdf_mask = pd.DataFrame()
+    for col in mask_shape[1]:
+        pdf_mask[col] = np.random.randint(0, 2, mask_shape[0]) > 0
+    gdf = DataFrame.from_pandas(pdf)
+    gdf_mask = DataFrame.from_pandas(pdf_mask)
+
+    gdf = gdf[gdf_mask]
+    pdf = pdf[pdf_mask]
+
+    assert np.array_equal(gdf.columns, pdf.columns)
+    for col in gdf.columns:
+        assert np.array_equal(gdf[col].fillna(-1), pdf[col].fillna(-1))
+
+
 def test_1row_arrow_table():
     data = [pa.array([0]), pa.array([1])]
     batch = pa.RecordBatch.from_arrays(data, ['f0', 'f1'])
@@ -1786,6 +1865,33 @@ def test_head_tail(nelem, data_type):
     check_frame_series_equality(gdf['a'].tail(), gdf['a'][-5:])
     check_frame_series_equality(gdf['a'].tail(3), gdf['a'][-3:])
     check_frame_series_equality(gdf['a'].tail(-2), gdf['a'][2:])
+
+
+@pytest.mark.parametrize('drop', [True, False])
+def test_reset_index(pdf, gdf, drop):
+    assert_eq(pdf.reset_index(drop=drop),
+              gdf.reset_index(drop=drop))
+    assert_eq(pdf.x.reset_index(drop=drop),
+              gdf.x.reset_index(drop=drop))
+
+
+def test_to_frame(pdf, gdf):
+    assert_eq(pdf.x.to_frame(), gdf.x.to_frame())
+
+    s = pd.Series([1, 2, 3])
+    g = gd.from_pandas(s)
+
+    assert_eq(s, g)
+
+
+def test_dataframe_empty_sort_index():
+    pdf = pd.DataFrame({'x': []})
+    gdf = DataFrame.from_pandas(pdf)
+
+    expect = pdf.sort_index()
+    got = gdf.sort_index()
+
+    assert_eq(expect, got)
 
 
 @pytest.mark.parametrize('dtype', ['int8', 'int16', 'int32', 'int64',
