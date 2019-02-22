@@ -156,17 +156,6 @@ typedef enum {
   GDF_NUM_COLORS, /** Add new colors above this line */
 } gdf_color;
 
-/* --------------------------------------------------------------------------*/
-/** 
- * @Synopsis  These enums indicate the supported group_by_style operations that can be
- * performed  as part of a gdf_group_by or gdf_group_by_without_aggregations operation
- */
-/* ----------------------------------------------------------------------------*/
-typedef enum {
-  GDF_PANDAS_STYLE = 0, 
-  GDF_SQL_STYLE,
-} gdf_group_by_style;
-
 
 /* --------------------------------------------------------------------------*/
 /** 
@@ -193,8 +182,8 @@ typedef struct gdf_context_{
   int flag_sort_result;         /**< When method is GDF_HASH, 0 = result is not sorted, 1 = result is sorted */
   int flag_sort_inplace;        /**< 0 = No sort in place allowed, 1 = else */
   gdf_group_by_style flag_groupby_include_nulls; 
-                                /**< GDF_PANDAS_STYLE = Nulls are ignored in group by keys (Pandas style), 
-                                GDF_SQL_STYLE = Nulls are treated as values in group by keys where NULL == NULL (SQL style)*/ 
+                                /**< 0 = Nulls are ignored in group by keys (Pandas style), 
+                                1 = Nulls are treated as values in group by keys where NULL == NULL (SQL style)*/ 
   gdf_nulls_sort_behavior flag_nulls_sort_behavior; 
                                 /**< GDF_NULL_AS_LARGEST = Nulls are are treated as largest,
                                 GDF_NULL_AS_SMALLEST    = Nulls are treated as smallest, 
