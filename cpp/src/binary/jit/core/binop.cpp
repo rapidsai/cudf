@@ -47,13 +47,13 @@ namespace binops {
     	gdf_size_type num_chars_bitmask = ( ( num_values +( GDF_VALID_BITSIZE - 1)) / GDF_VALID_BITSIZE );
 
         if ( valid_left == nullptr && valid_right != nullptr ) {
-            CUDA_TRY( cudaMemcpy(valid_out, valid_right, num_values, cudaMemcpyDeviceToDevice) );
+            CUDA_TRY( cudaMemcpy(valid_out, valid_right, num_chars_bitmask, cudaMemcpyDeviceToDevice) );
         } 
         else if ( valid_left != nullptr && valid_right == nullptr ) {
-            CUDA_TRY( cudaMemcpy(valid_out, valid_left, num_values, cudaMemcpyDeviceToDevice) );
+            CUDA_TRY( cudaMemcpy(valid_out, valid_left, num_chars_bitmask, cudaMemcpyDeviceToDevice) );
         } 
         else if ( valid_left == nullptr && valid_right == nullptr ) {
-            CUDA_TRY( cudaMemset(valid_out, 0xff, num_values) );
+            CUDA_TRY( cudaMemset(valid_out, 0xff, num_chars_bitmask) );
         }
 
     	return update_null_count(out_null_count, valid_out, stream, num_values);
