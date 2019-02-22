@@ -407,6 +407,32 @@ class Column(object):
         else:
             raise NotImplementedError(type(arg))
 
+    def masked_assign(self, value, mask):
+        """Assign a scalar value to a series using a boolean mask
+        df[df < 0] = 0
+
+        Parameters
+        ----------
+        value : scalar
+            scalar value for assignment
+        mask : cudf Series
+            Boolean Series
+
+        Returns
+        -------
+        cudf Series
+            cudf series with new value set to where mask is True
+        """
+
+        # need to invert to properly use gpu_fill_mask
+        mask._column._invert()
+        mask_gpu = mask.as_mask()
+        out = cudautils.fill_mask(data=self.data.to_gpu_array(),
+                                  mask=mask_gpu,
+                                  value=value)
+
+        return self.replace(data=Buffer(out), mask=None, null_count=0)
+
     def fillna(self, value):
         """Fill null values with ``value``.
 
@@ -445,6 +471,12 @@ class Column(object):
                 return self._copy_to_dense_buffer()
         else:
             return self.data
+
+    def _invert(self):
+        """Internal convenience function for inverting masked array
+        """
+        gpu_mask = self.to_gpu_array()
+        cudautils.invert_mask(gpu_mask, gpu_mask)
 
     def _copy_to_dense_buffer(self):
         data = self.data.to_gpu_array()
