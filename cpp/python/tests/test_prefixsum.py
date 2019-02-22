@@ -8,9 +8,7 @@ from libgdf_cffi import ffi, libgdf
 from librmm_cffi import librmm as rmm
 
 from .utils import (new_column, unwrap_devary, get_dtype, gen_rand,
-                    buffer_as_bits)
-
-from cudf._gdf import count_nonzero_mask
+                    buffer_as_bits, count_nonzero_mask)
 
 params_dtype = [
     np.int8,
