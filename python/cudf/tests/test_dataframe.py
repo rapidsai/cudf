@@ -248,6 +248,12 @@ def test_dataframe_basic():
     print(mat)
     np.testing.assert_equal(mat, expect)
 
+    # test dataframe with tuple name
+    df_tup = DataFrame()
+    data = np.arange(10)
+    df_tup[(1, 'foobar')] = data
+    np.testing.assert_equal(data, df_tup[(1, 'foobar')].to_array())
+
 
 def test_dataframe_column_name_indexing():
     df = DataFrame()
