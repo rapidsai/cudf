@@ -475,7 +475,7 @@ class Column(object):
     def _invert(self):
         """Internal convenience function for inverting masked array
         """
-        gpu_mask = self.to_gpu_array()
+        gpu_mask = self.to_gpu_array(fillna=None)
         cudautils.invert_mask(gpu_mask, gpu_mask)
 
     def _copy_to_dense_buffer(self):
