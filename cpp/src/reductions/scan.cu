@@ -17,7 +17,7 @@ namespace { //anonymous
             const T *data, const gdf_valid_type *mask,
             gdf_size_type size, T *results, T identity)
     {
-        size_type id = threadIdx.x + blockIdx.x * blockDim.x;
+        gdf_size_type id = threadIdx.x + blockIdx.x * blockDim.x;
 
         while (id < size) {
             results[id] = (gdf_is_valid(mask, id)) ? data[id] : identity;
