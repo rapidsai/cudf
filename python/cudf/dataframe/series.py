@@ -592,9 +592,9 @@ class Series(object):
 
         Examples
         --------
-        >>> from cudf import Series
+        >>> import cudf
 
-        >>> sr = Series(list(range(20)))
+        >>> sr = cudf.Series(list(range(20)))
 
         >>> # get the value from 1st index
         >>> sr.iloc[1]

@@ -44,8 +44,8 @@ class DataFrame(object):
 
     Build dataframe with `__setitem__`:
 
-    >>> from cudf import DataFrame
-    >>> df = DataFrame()
+    >>> import cudf
+    >>> df = cudf.DataFrame()
     >>> df['key'] = [0, 1, 2, 3, 4]
     >>> df['val'] = [float(i + 10) for i in range(5)]  # insert column
     >>> print(df)
@@ -58,7 +58,7 @@ class DataFrame(object):
 
     Build dataframe with initializer:
 
-    >>> from cudf import DataFrame
+    >>> import cudf
     >>> import numpy as np
     >>> import datetime
     >>> ids = np.arange(5)
@@ -69,7 +69,7 @@ class DataFrame(object):
     >>> dts = np.array(datetimes, dtype='datetime64')
 
     >>> # Create the GPU DataFrame
-    >>> df = DataFrame([('id', ids), ('datetimes', dts)])
+    >>> df = cudf.DataFrame([('id', ids), ('datetimes', dts)])
     >>> print(df)
         id           datetimes
     0    0 2018-10-07T12:00:00.000
@@ -324,9 +324,8 @@ class DataFrame(object):
 
         Examples
         --------
-        >>> from cudf.dataframe import DataFrame
-
-        >>> df = DataFrame()
+        >>> import cudf
+        >>> df = cudf.DataFrame()
         >>> df['key'] = [0, 1, 2, 3, 4]
         >>> df['val'] = [float(i + 10) for i in range(5)]  # insert column
         >>> print(df.tail(2))
