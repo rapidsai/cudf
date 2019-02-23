@@ -291,21 +291,12 @@ class Series(object):
 
         Examples
         --------
+        >>> import cudf
 
-        .. code-block:: python
-
-            from cudf.dataframe import Series
-
-            ser = Series([4, 3, 2, 1, 0])
-            print(ser.tail(2))
-
-        Output
-
-        .. code-block:: python
-
-           3    1
-           4    0
-
+        >>> ser = cudf.Series([4, 3, 2, 1, 0])
+        >>> print(ser.tail(2))
+        3    1
+        4    0
         """
         if n == 0:
             return self.iloc[0:0]
@@ -601,36 +592,27 @@ class Series(object):
 
         Examples
         --------
-        .. code-block:: python
+        >>> from cudf import Series
 
-          from cudf import Series
+        >>> sr = Series(list(range(20)))
 
-          sr = Series(list(range(20)))
+        >>> # get the value from 1st index
+        >>> sr.iloc[1]
+        1
 
-          # get the value from 1st index
-          sr.iloc[1]
+        >>> # get the values from 0,2,9 and 18th index
+        >>> sr.iloc[0,2,9,18]
+         0    0
+         2    2
+         9    9
+        18   18
 
-          # get the values from 0,2,9 and 18th index
-          sr.iloc[0,2,9,18]
-
-          # get the values using slice indices
-          sr.iloc[3:10:2]
-
-        Output:
-
-        .. code-block:: python
-
-          1
-
-          0    0
-          2    2
-          9    9
-          18   18
-
-          3    3
-          5    5
-          7    7
-          9    9
+        >>> # get the values using slice indices
+        >>> sr.iloc[3:10:2]
+        3    3
+        5    5
+        7    7
+        9    9
 
         Returns
         -------
@@ -705,23 +687,14 @@ class Series(object):
 
         Examples
         --------
-
-        .. code-block:: python
-
-              from cudf.dataframe import Series
-              s = Series([1,5,2,4,3])
-              s.sort_values()
-
-        Output:
-
-        .. code-block:: python
-
-              0    1
-              2    2
-              4    3
-              3    4
-              1    5
-
+        >>> import cudf
+        >>> s = cudf.Series([1, 5, 2, 4, 3])
+        >>> s.sort_values()
+        0    1
+        2    2
+        4    3
+        3    4
+        1    5
         """
         if len(self) == 0:
             return self

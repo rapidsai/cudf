@@ -44,74 +44,52 @@ class DataFrame(object):
 
     Build dataframe with `__setitem__`:
 
-    .. code-block:: python
-
-          from cudf import DataFrame
-          df = DataFrame()
-          df['key'] = [0, 1, 2, 3, 4]
-          df['val'] = [float(i + 10) for i in range(5)]  # insert column
-          print(df)
-
-    Output:
-
-    .. code-block:: python
-
-              key  val
-          0    0 10.0
-          1    1 11.0
-          2    2 12.0
-          3    3 13.0
-          4    4 14.0
+    >>> from cudf import DataFrame
+    >>> df = DataFrame()
+    >>> df['key'] = [0, 1, 2, 3, 4]
+    >>> df['val'] = [float(i + 10) for i in range(5)]  # insert column
+    >>> df
+        key  val
+    0    0 10.0
+    1    1 11.0
+    2    2 12.0
+    3    3 13.0
+    4    4 14.0
 
     Build dataframe with initializer:
 
-    .. code-block:: python
+    >>> from cudf import DataFrame
+    >>> import numpy as np
+    >>> import datetime
+    >>> ids = np.arange(5)
 
-          from cudf import DataFrame
-          import numpy as np
-          import datetime as dt
-          ids = np.arange(5)
+    >>> # Create some datetime data
+    >>> t0 = datetime.datetime.strptime('2018-10-07 12:00:00', '%Y-%m-%d %H:%M:%S')
+    >>> datetimes = [(t0+ datetime.timedelta(seconds=x)) for x in range(5)]
+    >>> dts = np.array(datetimes, dtype='datetime64')
 
-          # Create some datetime data
-          t0 = dt.datetime.strptime('2018-10-07 12:00:00', '%Y-%m-%d %H:%M:%S')
-          datetimes = [(t0+ dt.timedelta(seconds=x)) for x in range(5)]
-          dts = np.array(datetimes, dtype='datetime64')
-
-          # Create the GPU DataFrame
-          df = DataFrame([('id', ids), ('datetimes', dts)])
-          print(df)
-
-    Output:
-
-    .. code-block:: python
-
-              id               datetimes
-          0    0 2018-10-07T12:00:00.000
-          1    1 2018-10-07T12:00:01.000
-          2    2 2018-10-07T12:00:02.000
-          3    3 2018-10-07T12:00:03.000
-          4    4 2018-10-07T12:00:04.000
+    >>> # Create the GPU DataFrame
+    >>> df = DataFrame([('id', ids), ('datetimes', dts)])
+    >>> df
+        id               datetimes
+    0    0 2018-10-07T12:00:00.000
+    1    1 2018-10-07T12:00:01.000
+    2    2 2018-10-07T12:00:02.000
+    3    3 2018-10-07T12:00:03.000
+    4    4 2018-10-07T12:00:04.000
 
     Convert from a Pandas DataFrame:
 
-    .. code-block:: python
-
-          import pandas as pd
-          import cudf
-          pdf = pd.DataFrame({'a': [0, 1, 2, 3],'b': [0.1, 0.2, None, 0.3]})
-          df = cudf.from_pandas(pdf)
-          print(df)
-
-    Output:
-
-    .. code-block:: python
-
-            a b
-          0 0 0.1
-          1 1 0.2
-          2 2 nan
-          3 3 0.3
-
+    >>> import pandas as pd
+    >>> import cudf
+    >>> pdf = pd.DataFrame({'a': [0, 1, 2, 3],'b': [0.1, 0.2, None, 0.3]})
+    >>> df = cudf.from_pandas(pdf)
+    >>> df
+      a b
+    0 0 0.1
+    1 1 0.2
+    2 2 nan
+    3 3 0.3
     """
     def __init__(self, name_series=None, index=None):
         if index is None:
@@ -299,23 +277,14 @@ class DataFrame(object):
         Examples
         --------
 
-        .. code-block:: python
-
-            import cudf
-
-            df = cudf.DataFrame()
-            df = df.assign(a=[0,1,2], b=[3,4,5])
-            print(df)
-
-        Output:
-
-        .. code-block:: python
-
-                  a    b
-             0    0    3
-             1    1    4
-             2    2    5
-
+        >>> import cudf
+        >>> df = cudf.DataFrame()
+        >>> df = df.assign(a=[0, 1, 2], b=[3, 4, 5])
+        >>> df
+             a    b
+        0    0    3
+        1    1    4
+        2    2    5
         """
         new = self.copy()
         for k, v in kwargs.items():
@@ -329,23 +298,14 @@ class DataFrame(object):
         Examples
         --------
 
-        .. code-block:: python
-
-            from cudf import DataFrame
-
-            df = DataFrame()
-            df['key'] = [0, 1, 2, 3, 4]
-            df['val'] = [float(i + 10) for i in range(5)]  # insert column
-            print(df.head(2))
-
-        Output
-
-        .. code-block:: python
-
-               key  val
-           0    0 10.0
-           1    1 11.0
-
+        >>> import cudf
+        >>> df = cudf.DataFrame()
+        >>> df['key'] = [0, 1, 2, 3, 4]
+        >>> df['val'] = [float(i + 10) for i in range(5)]  # insert column
+        >>> df.head(2)
+            key  val
+        0     0 10.0
+        1     1 11.0
         """
         return self.iloc[:n]
 
@@ -355,23 +315,15 @@ class DataFrame(object):
 
         Examples
         --------
+        >>> from cudf.dataframe import DataFrame
 
-        .. code-block:: python
-
-            from cudf.dataframe import DataFrame
-
-            df = DataFrame()
-            df['key'] = [0, 1, 2, 3, 4]
-            df['val'] = [float(i + 10) for i in range(5)]  # insert column
-            print(df.tail(2))
-
-        Output
-
-        .. code-block:: python
-
-               key  val
-           3    3 13.0
-           4    4 14.0
+        >>> df = DataFrame()
+        >>> df['key'] = [0, 1, 2, 3, 4]
+        >>> df['val'] = [float(i + 10) for i in range(5)]  # insert column
+        >>> df.tail(2)
+           key  val
+        3    3 13.0
+        4    4 14.0
 
         """
         if n == 0:
@@ -395,21 +347,12 @@ class DataFrame(object):
 
         Examples
         --------
-
-        .. code-block:: python
-
-            from cudf import DataFrame
-            df = DataFrame()
-            df['key'] = [0, 1, 2]
-            df['val'] = [float(i + 10) for i in range(3)]
-            df.to_string()
-
-        Output:
-
-        .. code-block:: python
-
-          '   key  val\\n0    0 10.0\\n1    1 11.0\\n2    2 12.0'
-
+        >>> import cudf
+        >>> df = cudf.DataFrame()
+        >>> df['key'] = [0, 1, 2]
+        >>> df['val'] = [float(i + 10) for i in range(3)]
+        >>> df.to_string()
+        '   key  val\\n0    0 10.0\\n1    1 11.0\\n2    2 12.0'
         """
         if nrows is NOTSET:
             nrows = settings.formatting.get('nrows')
@@ -583,25 +526,16 @@ class DataFrame(object):
 
         Examples
         --------
-        .. code-block:: python
-
-           df = DataFrame([('a', list(range(20))),
-                           ('b', list(range(20))),
-                           ('c', list(range(20)))])
-
-           # get rows from index 2 to index 5 from 'a' and 'b' columns.
-           df.loc[2:5, ['a', 'b']]
-
-        Output:
-
-        .. code-block:: python
-
-               a    b
-          2    2    2
-          3    3    3
-          4    4    4
-          5    5    5
-
+        >>> df = DataFrame([('a', list(range(20))),
+        ...                 ('b', list(range(20))),
+        ...                 ('c', list(range(20)))])
+        >>> # get rows from index 2 to index 5 from 'a' and 'b' columns.
+        >>> df.loc[2:5, ['a', 'b']]
+             a    b
+        2    2    2
+        3    3    3
+        4    4    4
+        5    5    5
         """
         return Loc(self)
 
@@ -612,45 +546,29 @@ class DataFrame(object):
 
         Examples
         --------
-        .. code-block:: python
+        >>> df = DataFrame([('a', list(range(20))),
+        ...                 ('b', list(range(20))),
+        ...                 ('c', list(range(20)))])
 
-          df = DataFrame([('a', list(range(20))),
-                          ('b', list(range(20))),
-                          ('c', list(range(20)))])
+        >>> df.iloc[1]  # get the row from index 1st
+        a    1
+        b    1
+        c    1
 
-          #get the row from index 1st
-          df.iloc[1]
+        >>> df.iloc[[0, 2, 9, 18]]  # get the rows from indices 0,2,9 and 18.
+              a    b    c
+         0    0    0    0
+         2    2    2    2
+         9    9    9    9
+        18   18   18   18
 
-          # get the rows from indices 0,2,9 and 18.
-          df.iloc[[0, 2, 9, 18]]
-
-          # get the rows using slice indices
-          df.iloc[3:10:2]
-
-        Output:
-
-        .. code-block:: python
-
-          #get the row from index 1st
-          a    1
-          b    1
-          c    1
-
-          # get the rows from indices 0,2,9 and 18.
-               a    b    c
-          0    0    0    0
-          2    2    2    2
-          9    9    9    9
-          18   18   18   18
-
-          # get the rows using slice indices
-               a    b    c
-          3    3    3    3
-          5    5    5    5
-          7    7    7    7
-          9    9    9    9
+        >>> df.iloc[3:10:2]  # get the rows using slice indices
+             a    b    c
+        3    3    3    3
+        5    5    5    5
+        7    7    7    7
+        9    9    9    9
         """
-
         return Iloc(self)
 
     @property
@@ -852,36 +770,28 @@ class DataFrame(object):
 
         Examples
         --------
+        >>> from cudf import DataFrame
 
-        .. code-block:: python
+        >>> df = DataFrame()
+        >>> df['key'] = [0, 1, 2, 3, 4]
+        >>> df['val'] = [float(i + 10) for i in range(5)]
+        >>> df_new = df.drop('val')
 
-            from cudf import DataFrame
+        >>> df
+            key  val
+        0    0 10.0
+        1    1 11.0
+        2    2 12.0
+        3    3 13.0
+        4    4 14.0
 
-            df = DataFrame()
-            df['key'] = [0, 1, 2, 3, 4]
-            df['val'] = [float(i + 10) for i in range(5)]
-            df_new = df.drop('val')
-
-            print(df)
-            print(df_new)
-
-        Output:
-
-        .. code-block:: python
-
-                key  val
-            0    0 10.0
-            1    1 11.0
-            2    2 12.0
-            3    3 13.0
-            4    4 14.0
-
-                key
-            0    0
-            1    1
-            2    2
-            3    3
-            4    4
+        >>> df_new
+            key
+        0     0
+        1     1
+        2     2
+        3     3
+        4     4
         """
         columns = [labels] if isinstance(labels, str) else list(labels)
 
@@ -1061,37 +971,29 @@ class DataFrame(object):
 
         Examples
         --------
+        >>> import pandas as pd
+        >>> import cudf
 
-        .. code-block:: python
+        >>> pet_owner = [1, 2, 3, 4, 5]
+        >>> pet_type = ['fish', 'dog', 'fish', 'bird', 'fish']
+        >>> df = pd.DataFrame({'pet_owner': pet_owner, 'pet_type': pet_type})
+        >>> df.pet_type = df.pet_type.astype('category')
 
-          import pandas as pd
-          from cudf import DataFrame as gdf
+        Create a column with numerically encoded category values
 
-          pet_owner = [1, 2, 3, 4, 5]
-          pet_type = ['fish', 'dog', 'fish', 'bird', 'fish']
-          df = pd.DataFrame({'pet_owner': pet_owner, 'pet_type': pet_type})
-          df.pet_type = df.pet_type.astype('category')
+        >>> df['pet_codes'] = df.pet_type.cat.codes
+        >>> gdf = cudf.from_pandas(df)
 
-          # Create a column with numerically encoded category values
-          df['pet_codes'] = df.pet_type.cat.codes
-          my_gdf = gdf.from_pandas(df)
+        Create the list of category codes to use in the encoding
 
-          # Create the list of category codes to use in the encoding
-          codes = my_gdf.pet_codes.unique()
-          enc_gdf = my_gdf.one_hot_encoding('pet_codes', 'pet_dummy', codes)
-          enc_gdf.head()
-
-        Output:
-
-        .. code-block:: python
-
+        >>> codes = gdf.pet_codes.unique()
+        >>> gdf.one_hot_encoding('pet_codes', 'pet_dummy', codes).head()
           pet_owner pet_type pet_codes pet_dummy_0 pet_dummy_1 pet_dummy_2
-          0         1     fish         2         0.0         0.0         1.0
-          1         2      dog         1         0.0         1.0         0.0
-          2         3     fish         2         0.0         0.0         1.0
-          3         4     bird         0         1.0         0.0         0.0
-          4         5     fish         2         0.0         0.0         1.0
-
+        0         1     fish         2         0.0         0.0         1.0
+        1         2      dog         1         0.0         1.0         0.0
+        2         3     fish         2         0.0         0.0         1.0
+        3         4     bird         0         1.0         0.0         0.0
+        4         5     fish         2         0.0         0.0         1.0
         """
         newnames = [prefix_sep.join([prefix, str(cat)]) for cat in cats]
         newcols = self[column].one_hot_encoding(cats=cats, dtype=dtype)
@@ -1175,25 +1077,15 @@ class DataFrame(object):
 
         Examples
         --------
-
-        .. code-block:: python
-
-              from cudf import DataFrame
-
-              a = ('a', [0, 1, 2])
-              b = ('b', [-3, 2, 0])
-              df = DataFrame([a, b])
-              df.sort_values('b')
-
-        Output:
-
-        .. code-block:: python
-
-                    a    b
-               0    0   -3
-               2    2    0
-               1    1    2
-
+        >>> import cudf
+        >>> a = ('a', [0, 1, 2])
+        >>> b = ('b', [-3, 2, 0])
+        >>> df = cudf.DataFrame([a, b])
+        >>> df.sort_values('b')
+             a    b
+        0    0   -3
+        2    2    0
+        1    1    2
         """
         # argsort the `by` column
         return self._sort_by(self[by].argsort(
@@ -1336,32 +1228,23 @@ class DataFrame(object):
 
         Examples
         --------
+        >>> import cudf
 
-        .. code-block:: python
+        >>> df_a = cudf.DataFrame()
+        >>> df['key'] = [0, 1, 2, 3, 4]
+        >>> df['vals_a'] = [float(i + 10) for i in range(5)]
 
-            from cudf import DataFrame
-
-            df_a = DataFrame()
-            df['key'] = [0, 1, 2, 3, 4]
-            df['vals_a'] = [float(i + 10) for i in range(5)]
-
-            df_b = DataFrame()
-            df_b['key'] = [1, 2, 4]
-            df_b['vals_b'] = [float(i+10) for i in range(3)]
-            df_merged = df_a.merge(df_b, on=['key'], how='left')
-            print(df_merged.sort_values('key'))
-
-        Output:
-
-        .. code-block:: python
-
+        >>> df_b = cudf.DataFrame()
+        >>> df_b['key'] = [1, 2, 4]
+        >>> df_b['vals_b'] = [float(i+10) for i in range(3)]
+        >>> df_merged = df_a.merge(df_b, on=['key'], how='left')
+        >>> print(df_merged.sort_values('key'))
              key  val vals_b
-             3    0 10.0
-             0    1 11.0   10.0
-             1    2 12.0   11.0
-             4    3 13.0
-             2    4 14.0   12.0
-
+         3     0 10.0
+         0     1 11.0   10.0
+         1     2 12.0   11.0
+         4     3 13.0
+         2     4 14.0   12.0
         """
         _gdf.nvtx_range_push("CUDF_JOIN", "blue")
 
@@ -1709,47 +1592,30 @@ class DataFrame(object):
 
         Examples
         --------
+        >>> import cudf
 
-        .. code-block:: python
-
-              from cudf import DataFrame
-
-              a = ('a', [1, 2, 2])
-              b = ('b', [3, 4, 5])
-              df = DataFrame([a, b])
-              expr = "(a == 2 and b == 4) or (b == 3)"
-              df.query(expr)
-
-        Output:
-
-        .. code-block:: python
-
-                     a    b
-                0    1    3
-                1    2    4
+        >>> a = ('a', [1, 2, 2])
+        >>> b = ('b', [3, 4, 5])
+        >>> df = cudf.DataFrame([a, b])
+        >>> expr = "(a == 2 and b == 4) or (b == 3)"
+        >>> df.query(expr)
+             a    b
+        0    1    3
+        1    2    4
 
         DateTime conditionals:
 
-        .. code-block:: python
+        >>> import numpy as np
+        >>> import datetime
 
-           from cudf import DataFrame
-           import numpy as np
-
-           df = DataFrame()
-           data = np.array(['2018-10-07', '2018-10-08'], dtype='datetime64')
-           df['datetimes'] = data
-           search_date = dt.datetime.strptime('2018-10-08', '%Y-%m-%d')
-           df.query('datetimes==@search_date')
-
-        Output:
-
-        .. code-block:: python
-
-                            datetimes
-            1 2018-10-08T00:00:00.000
-
+        >>> df = cudf.DataFrame()
+        >>> data = np.array(['2018-10-07', '2018-10-08'], dtype='datetime64')
+        >>> df['datetimes'] = data
+        >>> search_date = datetime.datetime.strptime('2018-10-08', '%Y-%m-%d')
+        >>> df.query('datetimes==@search_date')
+                        datetimes
+        1 2018-10-08T00:00:00.000
         """
-
         _gdf.nvtx_range_push("CUDF_QUERY", "purple")
         # Get calling environment
         callframe = inspect.currentframe().f_back
@@ -1780,7 +1646,6 @@ class DataFrame(object):
 
         Examples
         --------
-
         The user function should loop over the columns and set the output for
         each row. Loop execution order is arbitrary, so each iteration of
         the loop **MUST** be independent of each other.
@@ -1790,47 +1655,38 @@ class DataFrame(object):
         The loop in the function resembles serial code, but executes
         concurrently in multiple threads.
 
-        .. code-block:: python
+        >>> import cudf
+        >>> import numpy as np
 
-          import cudf
-          import numpy as np
+        >>> df = cudf.DataFrame()
+        >>> nelem = 3
+        >>> df['in1'] = np.arange(nelem)
+        >>> df['in2'] = np.arange(nelem)
+        >>> df['in3'] = np.arange(nelem)
 
-          df = cudf.DataFrame()
-          nelem = 3
-          df['in1'] = np.arange(nelem)
-          df['in2'] = np.arange(nelem)
-          df['in3'] = np.arange(nelem)
+        Define input columns for the kernel
 
-          # Define input columns for the kernel
-          in1 = df['in1']
-          in2 = df['in2']
-          in3 = df['in3']
+        >>> in1 = df['in1']
+        >>> in2 = df['in2']
+        >>> in3 = df['in3']
 
-          def kernel(in1, in2, in3, out1, out2, kwarg1, kwarg2):
-              for i, (x, y, z) in enumerate(zip(in1, in2, in3)):
-                 out1[i] = kwarg2 * x - kwarg1 * y
-                 out2[i] = y - kwarg1 * z
+        >>> def kernel(in1, in2, in3, out1, out2, kwarg1, kwarg2):
+        ...     for i, (x, y, z) in enumerate(zip(in1, in2, in3)):
+        ...         out1[i] = kwarg2 * x - kwarg1 * y
+        ...         out2[i] = y - kwarg1 * z
 
         Call ``.apply_rows`` with the name of the input columns, the name and
         dtype of the output columns, and, optionally, a dict of extra
         arguments.
 
-        .. code-block:: python
-
-          df.apply_rows(kernel,
-                        incols=['in1', 'in2', 'in3'],
-                        outcols=dict(out1=np.float64, out2=np.float64),
-                        kwargs=dict(kwarg1=3, kwarg2=4))
-
-        Output:
-
-        .. code-block:: python
-
-                 in1  in2  in3 out1 out2
-             0    0    0    0  0.0  0.0
-             1    1    1    1  1.0 -2.0
-             2    2    2    2  2.0 -4.0
-
+        >>> df.apply_rows(kernel,
+        ...               incols=['in1', 'in2', 'in3'],
+        ...               outcols=dict(out1=np.float64, out2=np.float64),
+        ...               kwargs=dict(kwarg1=3, kwarg2=4))
+           in1  in2  in3 out1 out2
+        0    0    0    0  0.0  0.0
+        1    1    1    1  1.0 -2.0
+        2    2    2    2  2.0 -4.0
         """
         return applyutils.apply_rows(self, func, incols, outcols, kwargs,
                                      cache_key=cache_key)
@@ -1865,20 +1721,19 @@ class DataFrame(object):
         ``range(cuda.threadIdx.x, in1.size, cuda.blockDim.x)``, the *kernel*
         function can be used with any *tpb* in a efficient manner.
 
-        .. code-block:: python
+        >>> from numba import cuda
 
-          from numba import cuda
-          def kernel(in1, in2, in3, out1):
-               for i in range(cuda.threadIdx.x, in1.size, cuda.blockDim.x):
-                   x = in1[i]
-                   y = in2[i]
-                   z = in3[i]
-                   out1[i] = x * y + z
+        >>> @cuda.jit
+        ... def kernel(in1, in2, in3, out1):
+        ...      for i in range(cuda.threadIdx.x, in1.size, cuda.blockDim.x):
+        ...          x = in1[i]
+        ...          y = in2[i]
+        ...          z = in3[i]
+        ...          out1[i] = x * y + z
 
         See also
         --------
-        .apply_rows
-
+        DataFrame.apply_rows
         """
         if chunks is None:
             raise ValueError('*chunks* must be defined')
@@ -1985,23 +1840,13 @@ class DataFrame(object):
 
         Examples
         --------
+        >>> import cudf
+        >>> a = ('a', [0, 1, 2])
+        >>> b = ('b', [-3, 2, 0])
+        >>> df = cudf.DataFrame([a, b])
 
-        .. code-block:: python
-
-          from cudf import DataFrame
-
-          a = ('a', [0, 1, 2])
-          b = ('b', [-3, 2, 0])
-          df = DataFrame([a, b])
-          pdf = df.to_pandas()
-          type(pdf)
-
-        Output:
-
-        .. code-block:: python
-
-           <class 'pandas.core.frame.DataFrame'>
-
+        >>> type(df.to_pandas())
+        <class 'pandas.core.frame.DataFrame'>
         """
         index = self.index.to_pandas()
         out = pd.DataFrame(index=index)
@@ -2020,22 +1865,13 @@ class DataFrame(object):
 
         Examples
         --------
+        >>> import cudf
+        >>> import pandas as pd
 
-        .. code-block:: python
-
-            import cudf
-            import pandas as pd
-
-            data = [[0,1], [1,2], [3,4]]
-            pdf = pd.DataFrame(data, columns=['a', 'b'], dtype=int)
-            cudf.DataFrame.from_pandas(pdf)
-
-        Output:
-
-        .. code-block:: python
-
-            <cudf.DataFrame ncols=2 nrows=3 >
-
+        >>> data = [[0,1], [1,2], [3,4]]
+        >>> pdf = pd.DataFrame(data, columns=['a', 'b'], dtype=int)
+        >>> cudf.from_pandas(pdf)
+        <cudf.DataFrame ncols=2 nrows=3 >
         """
         if not isinstance(dataframe, pd.DataFrame):
             raise TypeError('not a pandas.DataFrame')
@@ -2054,25 +1890,16 @@ class DataFrame(object):
 
         Examples
         --------
+        >>> from cudf import DataFrame
 
-        .. code-block:: python
-
-            from cudf import DataFrame
-
-            a = ('a', [0, 1, 2])
-            b = ('b', [-3, 2, 0])
-            df = DataFrame([a, b])
-            df.to_arrow()
-
-        Output:
-
-        .. code-block:: python
-
-           pyarrow.Table
-           None: int64
-           a: int64
-           b: int64
-
+        >>> a = ('a', [0, 1, 2])
+        >>> b = ('b', [-3, 2, 0])
+        >>> df = cudf.DataFrame([a, b])
+        >>> df.to_arrow()
+        pyarrow.Table
+        None: int64
+        a: int64
+        b: int64
         """
         arrays = []
         names = []
@@ -2121,23 +1948,14 @@ class DataFrame(object):
 
         Examples
         --------
+        >>> import pyarrow as pa
+        >>> import cudf
 
-        .. code-block:: python
-
-            import pyarrow as pa
-            from cudf import DataFrame
-
-            data = [pa.array([1, 2, 3]), pa.array([4, 5, 6])
-            batch = pa.RecordBatch.from_arrays(data, ['f0', 'f1'])
-            table = pa.Table.from_batches([batch])
-            DataFrame.from_arrow(table)
-
-        Output:
-
-        .. code-block:: python
-
-            <cudf.DataFrame ncols=2 nrows=3 >
-
+        >>> data = [pa.array([1, 2, 3]), pa.array([4, 5, 6])
+        >>> batch = pa.RecordBatch.from_arrays(data, ['f0', 'f1'])
+        >>> table = pa.Table.from_batches([batch])
+        >>> cudf.DataFrame.from_arrow(table)
+        <cudf.DataFrame ncols=2 nrows=3 >
         """
         import json
         if not isinstance(table, pa.Table):
@@ -2460,22 +2278,13 @@ def from_pandas(obj):
 
     Examples
     --------
+    >>> import cudf
+    >>> import pandas as pd
 
-    .. code-block:: python
-
-        import cudf
-        import pandas as pd
-
-        data = [[0,1], [1,2], [3,4]]
-        pdf = pd.DataFrame(data, columns=['a', 'b'], dtype=int)
-        cudf.from_pandas(pdf)
-
-    Output:
-
-    .. code-block:: python
-
-        <cudf.DataFrame ncols=2 nrows=3 >
-
+    >>> data = [[0, 1], [1, 2], [3, 4]]
+    >>> pdf = pd.DataFrame(data, columns=['a', 'b'], dtype=int)
+    >>> cudf.from_pandas(pdf)
+    <cudf.DataFrame ncols=2 nrows=3 >
     """
     if isinstance(obj, pd.DataFrame):
         return DataFrame.from_pandas(obj)
