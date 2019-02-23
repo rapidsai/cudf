@@ -1,4 +1,4 @@
-# Copyright (c) 2018, NVIDIA CORPORATION.
+# Copyright (c) 2019, NVIDIA CORPORATION.
 
 import cudf
 from cudf.tests.utils import assert_eq
@@ -60,11 +60,12 @@ def parquet_file(request, tmp_path_factory, pdf):
 
 @pytest.mark.filterwarnings("ignore:Using CPU")
 @pytest.mark.filterwarnings("ignore:Strings are not yet supported")
+@pytest.mark.parametrize('engine', ['pyarrow', 'cudf'])
 @pytest.mark.parametrize('columns', [['col_int8'], ['col_category'],
                                      ['col_int32', 'col_float32'], None])
-def test_parquet_reader(parquet_file, columns):
+def test_parquet_reader(parquet_file, columns, engine):
     expect = pd.read_parquet(parquet_file, columns=columns)
-    got = cudf.read_parquet(parquet_file, columns=columns)
+    got = cudf.read_parquet(parquet_file, engine=engine, columns=columns)
     if len(expect) == 0:
         expect = expect.reset_index(drop=True)
         if 'col_category' in expect.columns:

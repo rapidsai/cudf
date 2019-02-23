@@ -1,5 +1,5 @@
 #=============================================================================
-# Copyright (c) 2018, NVIDIA CORPORATION.
+# Copyright (c) 2018-2019, NVIDIA CORPORATION.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -228,6 +228,7 @@ add_library(cudf SHARED
             src/io/convert/csr/cudf_to_csr.cu
             src/io/convert/dlpack/cudf_dlpack.cpp
             src/io/csv/csv_reader.cu
+            src/io/parquet/parquet_reader.cpp
             src/io/comp/uncomp.cpp
             src/io/comp/cpu_unbz2.cpp
             src/utilities/cuda_utils.cu
