@@ -1587,6 +1587,20 @@ gdf_error launch_dataTypeDetection(raw_csv_t *raw_csv,
   return GDF_SUCCESS;
 }
 
+/**
+* @brief Returns true is the input character is a valid digit.
+* Supports both decimal and hexadecimal digits (uppercase and lowercase).
+*/
+__device__
+bool isDigit(char c, bool is_hex){
+	if (c >= '0' && c <= '9') return true;
+	if (is_hex) {
+		if (c >= 'A' && c <= 'F') return true;
+		if (c >= 'a' && c <= 'f') return true;
+	}
+	return false;
+}
+
 /**---------------------------------------------------------------------------*
  * @brief CUDA kernel that parses and converts CSV data into cuDF column data.
  *
@@ -1660,10 +1674,16 @@ void dataTypeDetection(char *raw_csv,
 			// This could possibly result in additional empty fields
 			adjustForWhitespaceAndQuotes(raw_csv, &start, &tempPos);
 
-			long strLen=tempPos-start+1;
+			const long strLen = tempPos - start + 1;
+
+			const bool maybe_hex = (strLen > 2 && raw_csv[start] == '0' && raw_csv[start + 1] == 'x');
+			// Make up for the 'x' that will be not marked as valid digit
+			if (maybe_hex) {
+				++countNumber;
+			}
 
 			for(long startPos=start; startPos<=tempPos; startPos++){
-				if(raw_csv[startPos]>= '0' && raw_csv[startPos] <= '9'){
+				if(isDigit(raw_csv[startPos], maybe_hex)){
 					countNumber++;
 					continue;
 				}

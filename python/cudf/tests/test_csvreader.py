@@ -905,12 +905,18 @@ def test_csv_reader_bools_false_positives(tmpdir):
     np.testing.assert_array_equal(items, df['0'])
 
 
-def test_csv_reader_hex(tmpdir):
+def test_csv_reader_hex_ints(tmpdir):
     lines = ['0x0', '0x1000', '0xfedcba', '0xABCDEF', '0xaBcDeF']
+    values = [int(hex_int, 16) for hex_int in lines]
 
     buffer = '\n'.join(lines) + '\n'
 
-    df = read_csv(StringIO(buffer), dtype=['int32'], names=['hex_int'])
+    # with explicit data types
+    df = read_csv(StringIO(buffer),
+                  dtype=['int32'], names=['hex_int'])
+    np.testing.assert_array_equal(values, df['hex_int'])
 
-    values = [int(hex_int, 16) for hex_int in lines]
+    # with data type inference
+    df = read_csv(StringIO(buffer),
+                  names=['hex_int'])
     np.testing.assert_array_equal(values, df['hex_int'])
