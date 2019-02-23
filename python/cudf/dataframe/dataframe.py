@@ -60,23 +60,23 @@ class DataFrame(object):
 
     >>> import cudf
     >>> import numpy as np
-    >>> import datetime
+    >>> from datetime import datetime, timedelta
     >>> ids = np.arange(5)
 
     >>> # Create some datetime data
-    >>> t0 = datetime.datetime.strptime('2018-10-07 12:00:00', '%Y-%m-%d %H:%M:%S')
-    >>> datetimes = [(t0+ datetime.timedelta(seconds=x)) for x in range(5)]
+    >>> t0 = datetime.strptime('2018-10-07 12:00:00', '%Y-%m-%d %H:%M:%S')
+    >>> datetimes = [(t0+ timedelta(seconds=x)) for x in range(5)]
     >>> dts = np.array(datetimes, dtype='datetime64')
 
     >>> # Create the GPU DataFrame
     >>> df = cudf.DataFrame([('id', ids), ('datetimes', dts)])
-    >>> print(df)
-        id           datetimes
-    0    0 2018-10-07T12:00:00.000
-    1    1 2018-10-07T12:00:01.000
-    2    2 2018-10-07T12:00:02.000
-    3    3 2018-10-07T12:00:03.000
-    4    4 2018-10-07T12:00:04.000
+    >>> df
+        id                datetimes
+    0    0  2018-10-07T12:00:00.000
+    1    1  2018-10-07T12:00:01.000
+    2    2  2018-10-07T12:00:02.000
+    3    3  2018-10-07T12:00:03.000
+    4    4  2018-10-07T12:00:04.000
 
     Convert from a Pandas DataFrame:
 
@@ -558,19 +558,19 @@ class DataFrame(object):
         ...                 ('b', list(range(20))),
         ...                 ('c', list(range(20)))])
 
-        >>> print(df.iloc[1])  # get the row from index 1st
+        >>> df.iloc[1]  # get the row from index 1st
         a    1
         b    1
         c    1
 
-        >>> print(df.iloc[[0, 2, 9, 18]])  # get the rows from indices 0,2,9 and 18.
+        >>> df.iloc[[0, 2, 9, 18]]  # get the rows from indices 0,2,9 and 18.
               a    b    c
          0    0    0    0
          2    2    2    2
          9    9    9    9
         18   18   18   18
 
-        >>> print(df.iloc[3:10:2])  # get the rows using slice indices
+        >>> df.iloc[3:10:2]  # get the rows using slice indices
              a    b    c
         3    3    3    3
         5    5    5    5
@@ -995,13 +995,13 @@ class DataFrame(object):
         Create the list of category codes to use in the encoding
 
         >>> codes = gdf.pet_codes.unique()
-        >>> print(gdf.one_hot_encoding('pet_codes', 'pet_dummy', codes).head())
-           pet_owner  pet_type  pet_codes  pet_dummy_0  pet_dummy_1  pet_dummy_2
-        0          1      fish          2          0.0          0.0          1.0
-        1          2       dog          1          0.0          1.0          0.0
-        2          3      fish          2          0.0          0.0          1.0
-        3          4      bird          0          1.0          0.0          0.0
-        4          5      fish          2          0.0          0.0          1.0
+        >>> gdf.one_hot_encoding('pet_codes', 'pet_dummy', codes).head()
+          pet_owner  pet_type  pet_codes  pet_dummy_0  pet_dummy_1  pet_dummy_2
+        0         1      fish          2          0.0          0.0          1.0
+        1         2       dog          1          0.0          1.0          0.0
+        2         3      fish          2          0.0          0.0          1.0
+        3         4      bird          0          1.0          0.0          0.0
+        4         5      fish          2          0.0          0.0          1.0
         """
         newnames = [prefix_sep.join([prefix, str(cat)]) for cat in cats]
         newcols = self[column].one_hot_encoding(cats=cats, dtype=dtype)
@@ -1246,7 +1246,7 @@ class DataFrame(object):
         >>> df_b['key'] = [1, 2, 4]
         >>> df_b['vals_b'] = [float(i+10) for i in range(3)]
         >>> df_merged = df_a.merge(df_b, on=['key'], how='left')
-        >>> print(df_merged.sort_values('key'))  # doctest: +NORMALIZE_WHITESPACE
+        >>> df_merged.sort_values('key')  # doctest: +SKIP
            key  vals_a  vals_b
         3    0    10.0
         0    1    11.0    10.0
