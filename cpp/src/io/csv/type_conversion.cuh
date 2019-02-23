@@ -243,10 +243,10 @@ __host__ __device__ T convertStrToValue(const char* data, long start, long end,
 
     // Handle exponential part of the number if necessary
     int32_t exponent = 0;
+    int32_t exponentsign = 1; 
     while (index <= end) {
       if (data[index] == '-') {
-        ++index;
-        exponent = (data[index] - '0') * -1;
+        exponentsign = -1;
       } else {
         exponent *= 10;
         exponent += data[index] - '0';
@@ -258,7 +258,7 @@ __host__ __device__ T convertStrToValue(const char* data, long start, long end,
       value /= divisor;
     }
     if (exponent != 0) {
-      value *= exp10f(exponent);
+      value *= exp10f(exponent * exponentsign);
     }
   }
 
