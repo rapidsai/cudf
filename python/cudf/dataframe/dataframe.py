@@ -48,13 +48,13 @@ class DataFrame(object):
     >>> df = DataFrame()
     >>> df['key'] = [0, 1, 2, 3, 4]
     >>> df['val'] = [float(i + 10) for i in range(5)]  # insert column
-    >>> df
-        key  val
-    0    0 10.0
-    1    1 11.0
-    2    2 12.0
-    3    3 13.0
-    4    4 14.0
+    >>> print(df)
+       key   val
+    0    0  10.0
+    1    1  11.0
+    2    2  12.0
+    3    3  13.0
+    4    4  14.0
 
     Build dataframe with initializer:
 
@@ -70,8 +70,8 @@ class DataFrame(object):
 
     >>> # Create the GPU DataFrame
     >>> df = DataFrame([('id', ids), ('datetimes', dts)])
-    >>> df
-        id               datetimes
+    >>> print(df)
+        id           datetimes
     0    0 2018-10-07T12:00:00.000
     1    1 2018-10-07T12:00:01.000
     2    2 2018-10-07T12:00:02.000
@@ -176,26 +176,35 @@ class DataFrame(object):
         >>> df = DataFrame([('a', list(range(20))),
         ...                 ('b', list(range(20))),
         ...                 ('c', list(range(20)))])
-        >>> df[:4]    # get first 4 rows of all columns
-             a    b    c
-        0    0    0    0
-        1    1    1    1
-        2    2    2    2
-        3    3    3    3
-        >>> df[-5:]  # get last 5 rows of all columns
-             a    b    c
-        15   15   15   15
-        16   16   16   16
-        17   17   17   17
-        18   18   18   18
-        19   19   19   19
-        >>>df[['a','c']] # get columns a and c
-             a    c
-        0    0    0
-        1    1    1
-        2    2    2
-        3    3    3
-        >>> df[[True, False, True, False]] # mask the entire dataframe,
+        >>> print(df[:4])    # get first 4 rows of all columns
+           a  b  c
+        0  0  0  0
+        1  1  1  1
+        2  2  2  2
+        3  3  3  3
+
+        >>> print(df[-5:])  # get last 5 rows of all columns
+            a   b   c
+        15  15  15  15
+        16  16  16  16
+        17  17  17  17
+        18  18  18  18
+        19  19  19  19
+
+        >>> print(df[['a', 'c']]) # get columns a and c
+           a  c
+        0  0  0
+        1  1  1
+        2  2  2
+        3  3  3
+        4  4  4
+        5  5  5
+        6  6  6
+        7  7  7
+        8  8  8
+        9  9  9
+
+        >>> print(df[[True, False, True, False]]) # mask the entire dataframe,
         # returning the rows specified in the boolean mask
         """
         if isinstance(arg, str) or isinstance(arg, numbers.Integral):
@@ -280,11 +289,11 @@ class DataFrame(object):
         >>> import cudf
         >>> df = cudf.DataFrame()
         >>> df = df.assign(a=[0, 1, 2], b=[3, 4, 5])
-        >>> df
-             a    b
-        0    0    3
-        1    1    4
-        2    2    5
+        >>> print(df)
+           a  b
+        0  0  3
+        1  1  4
+        2  2  5
         """
         new = self.copy()
         for k, v in kwargs.items():
@@ -302,10 +311,10 @@ class DataFrame(object):
         >>> df = cudf.DataFrame()
         >>> df['key'] = [0, 1, 2, 3, 4]
         >>> df['val'] = [float(i + 10) for i in range(5)]  # insert column
-        >>> df.head(2)
-            key  val
-        0     0 10.0
-        1     1 11.0
+        >>> print(df.head(2))
+           key   val
+        0    0  10.0
+        1    1  11.0
         """
         return self.iloc[:n]
 
@@ -320,10 +329,10 @@ class DataFrame(object):
         >>> df = DataFrame()
         >>> df['key'] = [0, 1, 2, 3, 4]
         >>> df['val'] = [float(i + 10) for i in range(5)]  # insert column
-        >>> df.tail(2)
-           key  val
-        3    3 13.0
-        4    4 14.0
+        >>> print(df.tail(2))
+           key   val
+        3    3  13.0
+        4    4  14.0
 
         """
         if n == 0:
@@ -352,7 +361,7 @@ class DataFrame(object):
         >>> df['key'] = [0, 1, 2]
         >>> df['val'] = [float(i + 10) for i in range(3)]
         >>> df.to_string()
-        '   key  val\\n0    0 10.0\\n1    1 11.0\\n2    2 12.0'
+        '   key   val\\n0    0  10.0\\n1    1  11.0\\n2    2  12.0'
         """
         if nrows is NOTSET:
             nrows = settings.formatting.get('nrows')
@@ -530,12 +539,12 @@ class DataFrame(object):
         ...                 ('b', list(range(20))),
         ...                 ('c', list(range(20)))])
         >>> # get rows from index 2 to index 5 from 'a' and 'b' columns.
-        >>> df.loc[2:5, ['a', 'b']]
-             a    b
-        2    2    2
-        3    3    3
-        4    4    4
-        5    5    5
+        >>> print(df.loc[2:5, ['a', 'b']])
+           a  b
+        2  2  2
+        3  3  3
+        4  4  4
+        5  5  5
         """
         return Loc(self)
 
@@ -550,19 +559,19 @@ class DataFrame(object):
         ...                 ('b', list(range(20))),
         ...                 ('c', list(range(20)))])
 
-        >>> df.iloc[1]  # get the row from index 1st
+        >>> print(df.iloc[1])  # get the row from index 1st
         a    1
         b    1
         c    1
 
-        >>> df.iloc[[0, 2, 9, 18]]  # get the rows from indices 0,2,9 and 18.
+        >>> print(df.iloc[[0, 2, 9, 18]])  # get the rows from indices 0,2,9 and 18.
               a    b    c
          0    0    0    0
          2    2    2    2
          9    9    9    9
         18   18   18   18
 
-        >>> df.iloc[3:10:2]  # get the rows using slice indices
+        >>> print(df.iloc[3:10:2])  # get the rows using slice indices
              a    b    c
         3    3    3    3
         5    5    5    5
@@ -770,28 +779,28 @@ class DataFrame(object):
 
         Examples
         --------
-        >>> from cudf import DataFrame
+        >>> import cudf
 
-        >>> df = DataFrame()
+        >>> df = cudf.DataFrame()
         >>> df['key'] = [0, 1, 2, 3, 4]
         >>> df['val'] = [float(i + 10) for i in range(5)]
         >>> df_new = df.drop('val')
 
-        >>> df
-            key  val
-        0    0 10.0
-        1    1 11.0
-        2    2 12.0
-        3    3 13.0
-        4    4 14.0
+        >>> print(df)
+           key   val
+        0    0  10.0
+        1    1  11.0
+        2    2  12.0
+        3    3  13.0
+        4    4  14.0
 
-        >>> df_new
-            key
-        0     0
-        1     1
-        2     2
-        3     3
-        4     4
+        >>> print(df_new)
+           key
+        0    0
+        1    1
+        2    2
+        3    3
+        4    4
         """
         columns = [labels] if isinstance(labels, str) else list(labels)
 
@@ -987,13 +996,13 @@ class DataFrame(object):
         Create the list of category codes to use in the encoding
 
         >>> codes = gdf.pet_codes.unique()
-        >>> gdf.one_hot_encoding('pet_codes', 'pet_dummy', codes).head()
-          pet_owner pet_type pet_codes pet_dummy_0 pet_dummy_1 pet_dummy_2
-        0         1     fish         2         0.0         0.0         1.0
-        1         2      dog         1         0.0         1.0         0.0
-        2         3     fish         2         0.0         0.0         1.0
-        3         4     bird         0         1.0         0.0         0.0
-        4         5     fish         2         0.0         0.0         1.0
+        >>> print(gdf.one_hot_encoding('pet_codes', 'pet_dummy', codes).head())
+           pet_owner  pet_type  pet_codes  pet_dummy_0  pet_dummy_1  pet_dummy_2
+        0          1      fish          2          0.0          0.0          1.0
+        1          2       dog          1          0.0          1.0          0.0
+        2          3      fish          2          0.0          0.0          1.0
+        3          4      bird          0          1.0          0.0          0.0
+        4          5      fish          2          0.0          0.0          1.0
         """
         newnames = [prefix_sep.join([prefix, str(cat)]) for cat in cats]
         newcols = self[column].one_hot_encoding(cats=cats, dtype=dtype)
@@ -1081,11 +1090,11 @@ class DataFrame(object):
         >>> a = ('a', [0, 1, 2])
         >>> b = ('b', [-3, 2, 0])
         >>> df = cudf.DataFrame([a, b])
-        >>> df.sort_values('b')
-             a    b
-        0    0   -3
-        2    2    0
-        1    1    2
+        >>> print(df.sort_values('b'))
+           a  b
+        0  0 -3
+        2  2  0
+        1  1  2
         """
         # argsort the `by` column
         return self._sort_by(self[by].argsort(
@@ -1231,20 +1240,20 @@ class DataFrame(object):
         >>> import cudf
 
         >>> df_a = cudf.DataFrame()
-        >>> df['key'] = [0, 1, 2, 3, 4]
-        >>> df['vals_a'] = [float(i + 10) for i in range(5)]
+        >>> df_a['key'] = [0, 1, 2, 3, 4]
+        >>> df_a['vals_a'] = [float(i + 10) for i in range(5)]
 
         >>> df_b = cudf.DataFrame()
         >>> df_b['key'] = [1, 2, 4]
         >>> df_b['vals_b'] = [float(i+10) for i in range(3)]
         >>> df_merged = df_a.merge(df_b, on=['key'], how='left')
-        >>> print(df_merged.sort_values('key'))
-             key  val vals_b
-         3     0 10.0
-         0     1 11.0   10.0
-         1     2 12.0   11.0
-         4     3 13.0
-         2     4 14.0   12.0
+        >>> print(df_merged.sort_values('key'))  # doctest: +NORMALIZE_WHITESPACE
+           key  vals_a  vals_b
+        3    0    10.0
+        0    1    11.0    10.0
+        1    2    12.0    11.0
+        4    3    13.0
+        2    4    14.0    12.0
         """
         _gdf.nvtx_range_push("CUDF_JOIN", "blue")
 
@@ -1598,10 +1607,10 @@ class DataFrame(object):
         >>> b = ('b', [3, 4, 5])
         >>> df = cudf.DataFrame([a, b])
         >>> expr = "(a == 2 and b == 4) or (b == 3)"
-        >>> df.query(expr)
-             a    b
-        0    1    3
-        1    2    4
+        >>> print(df.query(expr))
+           a  b
+        0  1  3
+        1  2  4
 
         DateTime conditionals:
 
@@ -1612,7 +1621,7 @@ class DataFrame(object):
         >>> data = np.array(['2018-10-07', '2018-10-08'], dtype='datetime64')
         >>> df['datetimes'] = data
         >>> search_date = datetime.datetime.strptime('2018-10-08', '%Y-%m-%d')
-        >>> df.query('datetimes==@search_date')
+        >>> print(df.query('datetimes==@search_date'))
                         datetimes
         1 2018-10-08T00:00:00.000
         """
@@ -1890,7 +1899,7 @@ class DataFrame(object):
 
         Examples
         --------
-        >>> from cudf import DataFrame
+        >>> import cudf
 
         >>> a = ('a', [0, 1, 2])
         >>> b = ('b', [-3, 2, 0])
@@ -1951,7 +1960,7 @@ class DataFrame(object):
         >>> import pyarrow as pa
         >>> import cudf
 
-        >>> data = [pa.array([1, 2, 3]), pa.array([4, 5, 6])
+        >>> data = [pa.array([1, 2, 3]), pa.array([4, 5, 6])]
         >>> batch = pa.RecordBatch.from_arrays(data, ['f0', 'f1'])
         >>> table = pa.Table.from_batches([batch])
         >>> cudf.DataFrame.from_arrow(table)
