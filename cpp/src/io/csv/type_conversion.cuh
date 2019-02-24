@@ -21,6 +21,8 @@
 #include "utilities/wrapper_types.hpp"
 #include <cuda_runtime_api.h>
 
+#include "utilities/trie.cuh"
+
 /**---------------------------------------------------------------------------*
  * @brief Checks whether the given character is a whitespace character.
  * 
@@ -179,10 +181,9 @@ struct ParseOptions {
   bool doublequote;
   bool dayfirst;
   bool skipblanklines;
-  int32_t* trueValues;
-  int32_t* falseValues;
-  int32_t trueValuesCount;
-  int32_t falseValuesCount;
+  SerialTrieNode* trueValuesTrie;
+  SerialTrieNode* falseValuesTrie;
+  SerialTrieNode* naValuesTrie;
   bool multi_delimiter;
 };
 

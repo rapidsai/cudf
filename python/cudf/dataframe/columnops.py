@@ -108,7 +108,7 @@ def column_select_by_boolmask(column, boolmask):
 
     Returns (selected_column, selected_positions)
     """
-    from .numerical import NumericalColumn
+    from cudf.dataframe.numerical import NumericalColumn
     assert column.null_count == 0  # We don't properly handle the boolmask yet
     boolbits = cudautils.compact_mask_bytes(boolmask.to_gpu_array())
     indices = cudautils.arange(len(boolmask))
@@ -127,7 +127,7 @@ def column_select_by_position(column, positions):
 
     Returns (selected_column, selected_positions)
     """
-    from .numerical import NumericalColumn
+    from cudf.dataframe.numerical import NumericalColumn
     assert column.null_count == 0
 
     selvals = cudautils.gather(column.data.to_gpu_array(),
@@ -141,7 +141,7 @@ def column_select_by_position(column, positions):
 
 
 def build_column(buffer, dtype, mask=None, categories=None):
-    from . import numerical, categorical, datetime
+    from cudf.dataframe import numerical, categorical, datetime
     if dtype == 'datetime64[ms]':
         return datetime.DatetimeColumn(data=buffer,
                                        dtype=np.dtype(dtype),

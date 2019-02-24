@@ -33,6 +33,7 @@
 - PR #1007 Replace relative path imports with absolute paths in cudf
 - PR #1013 select columns with df.columns
 - PR #1016 Rename Series.unique_count() to nunique() to match pandas API
+- PR #1029 Remove rest of relative path imports
 
 ## Improvements
 
@@ -88,6 +89,7 @@
 - PR #1008 Remove custom dask communication approach
 - PR #1001 CSV Reader: Fix a memory access error when reading a large (>2GB) file with date columns
 - PR #1019 Binary Ops: Fix error when one input column has null mask but other doesn't
+- PR #1014 CSV Reader: Fix false positives in bool value detection
 
 
 # cuDF 0.5.1 (05 Feb 2019)
