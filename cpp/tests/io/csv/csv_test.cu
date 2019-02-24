@@ -110,8 +110,12 @@ TEST(gdf_csv_test, Numbers)
 		EXPECT_THAT( ACol.hostdata(), ::testing::ElementsAre<int16_t>(10, -11, 12, -13) );
 		EXPECT_THAT( BCol.hostdata(), ::testing::ElementsAre<int32_t>(20, -21, 22, -23) );
 		EXPECT_THAT( CCol.hostdata(), ::testing::ElementsAre<int64_t>(30, -31, 32, -33) );
-		EXPECT_THAT( DCol.hostdata(), ::testing::ElementsAre<double>(0.40, -0.41, 0.42, -0.43) );
-		EXPECT_THAT( ECol.hostdata(), ::testing::ElementsAre<float>(50000, -51111, 52222, -53333) );
+		EXPECT_THAT( DCol.hostdata(),
+			::testing::Pointwise(FloatNearPointwise(1e-7),
+				std::vector<double>{ 0.40, -0.41, 0.42, -0.43 }) );
+		EXPECT_THAT( ECol.hostdata(),
+			::testing::Pointwise(FloatNearPointwise(1e-7),
+				std::vector<float>{ 50000, -51111, 52222, -53333 }) );
 	}
 }
 
