@@ -298,12 +298,12 @@ def test_csv_reader_mangle_dupe_cols_header(tmpdir):
 def test_csv_reader_float_decimal(tmpdir):
     fname = tmpdir.mkdir("gdf_csv").join("tmp_csvreader_file12.csv")
 
-    names = ['basic_32', 'basic_64', 'round', 'decimal_only']
-    dtypes = ['float32', 'float64', 'float64', 'float32']
+    names = ['basic_32', 'basic_64', 'round', 'decimal_only', 'precision']
+    dtypes = ['float32', 'float64', 'float64', 'float32', 'float64']
     lines = [';'.join(names),
-             '1,2;1234,5678;12345;0,123',
-             '3,4;3456,7890;67890;,456',
-             '5,6e0;0,5679e2;1,2e10;0,07e-001']
+             '1,2;1234,5678;12345;0,123;-73,98007199999998',
+             '3,4;3456,7890;67890;,456;1,7976931348623157e+307',
+             '5,6e0;0,5679e2;1,2e10;0,07e-001;0,0']
 
     with open(str(fname), 'w') as fp:
         fp.write('\n'.join(lines) + '\n')
@@ -312,6 +312,7 @@ def test_csv_reader_float_decimal(tmpdir):
     basic_64_ref = [1234.5678, 3456.7890, 56.79]
     round_ref = [12345, 67890, 12000000000]
     decimal_only_ref = [0.123, 0.456, 0.007]
+    precision_ref = [-73.98007199999998, 1.7976931348623157e+307, 0.0]
 
     df = read_csv(str(fname), names=names, dtype=dtypes, skiprows=1,
                   delimiter=';', decimal=',')
@@ -320,6 +321,7 @@ def test_csv_reader_float_decimal(tmpdir):
     np.testing.assert_allclose(basic_64_ref, df['basic_64'])
     np.testing.assert_allclose(round_ref, df['round'])
     np.testing.assert_allclose(decimal_only_ref, df['decimal_only'])
+    np.testing.assert_allclose(precision_ref, df['precision'])
 
 
 def test_csv_reader_NaN_values():

@@ -220,45 +220,40 @@ __host__ __device__ T convertStrToValue(const char* data, long start, long end,
     } else if (data[index] == 'e' || data[index] == 'E') {
       break;
     } else if (data[index] != opts.thousands) {
-      value *= 10;
-      value += data[index] - '0';
+      value = (value * 10) + (data[index] - '0');
     }
     ++index;
   }
 
   if (std::is_floating_point<T>::value) {
     // Handle fractional part of the number if necessary
-    int32_t divisor = 1;
+    double divisor = 1;
     while (index <= end) {
       if (data[index] == 'e' || data[index] == 'E') {
         ++index;
         break;
       } else if (data[index] != opts.thousands) {
-        value *= 10;
-        value += data[index] - '0';
-        divisor *= 10;
+        divisor /= 10;
+        value += (data[index] - '0') * divisor;
       }
       ++index;
     }
 
     // Handle exponential part of the number if necessary
     int32_t exponent = 0;
-    int32_t exponentsign = 1; 
+    int32_t exponentsign = 1;
     while (index <= end) {
       if (data[index] == '-') {
         exponentsign = -1;
+      } else if (data[index] == '+') {
+        exponentsign = 1;
       } else {
-        exponent *= 10;
-        exponent += data[index] - '0';
+        exponent = (exponent * 10) + (data[index] - '0');
       }
       ++index;
     }
-
-    if (divisor > 1) {
-      value /= divisor;
-    }
     if (exponent != 0) {
-      value *= exp10f(exponent * exponentsign);
+      value *= exp10(double(exponent * exponentsign));
     }
   }
 
