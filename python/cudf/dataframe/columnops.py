@@ -73,6 +73,9 @@ class TypedColumnBase(Column):
     def find_and_replace(self, to_replace, values):
         raise NotImplementedError
 
+    def fillna(self, col, fill_value):
+        raise NotImplementedError
+
 
 def column_empty_like(column, dtype, masked):
     """Allocate a new column like the given *column*
