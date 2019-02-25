@@ -28,8 +28,7 @@ R"***(
     struct Add {
         template <typename TypeOut, typename TypeLhs, typename TypeRhs>
         static TypeOut operate(TypeLhs x, TypeRhs y) {
-            using Common = CommonNumber<TypeLhs, TypeRhs>;
-            return (TypeOut)((Common)x + (Common)y);
+            return ((TypeOut)x + (TypeOut)y);
         }
     };
 
@@ -38,24 +37,21 @@ R"***(
     struct Sub {
         template <typename TypeOut, typename TypeLhs, typename TypeRhs>
         static TypeOut operate(TypeLhs x, TypeRhs y) {
-            using Common = CommonNumber<TypeLhs, TypeRhs>;
-            return (TypeOut)((Common)x - (Common)y);
+            return ((TypeOut)x - (TypeOut)y);
         }
     };
 
     struct RSub {
         template <typename TypeOut, typename TypeLhs, typename TypeRhs>
         static TypeOut operate(TypeLhs x, TypeRhs y) {
-            using Common = CommonNumber<TypeLhs, TypeRhs>;
-            return (TypeOut)((Common)y - (Common)x);
+            return ((TypeOut)y - (TypeOut)x);
         }
     };
 
     struct Mul {
         template <typename TypeOut, typename TypeLhs, typename TypeRhs>
         static TypeOut operate(TypeLhs x, TypeRhs y) {
-            using Common = CommonNumber<TypeLhs, TypeRhs>;
-            return (TypeOut)((Common)x * (Common)y);
+            return ((TypeOut)x * (TypeOut)y);
         }
     };
 
@@ -64,44 +60,42 @@ R"***(
     struct Div {
         template <typename TypeOut, typename TypeLhs, typename TypeRhs>
         static TypeOut operate(TypeLhs x, TypeRhs y) {
-            using Common = CommonNumber<TypeLhs, TypeRhs>;
-            return (TypeOut)((Common)x / (Common)y);
+            return ((TypeOut)x / (TypeOut)y);
         }
     };
 
     struct RDiv {
         template <typename TypeOut, typename TypeLhs, typename TypeRhs>
         static TypeOut operate(TypeLhs x, TypeRhs y) {
-            using Common = CommonNumber<TypeLhs, TypeRhs>;
-            return (TypeOut)((Common)y / (Common)x);
+            return ((TypeOut)y / (TypeOut)x);
         }
     };
 
     struct TrueDiv {
         template <typename TypeOut, typename TypeLhs, typename TypeRhs>
         static TypeOut operate(TypeLhs x, TypeRhs y) {
-            return (TypeOut)((double)x / (double)y);
+            return ((double)x / (double)y);
         }
     };
 
     struct RTrueDiv {
         template <typename TypeOut, typename TypeLhs, typename TypeRhs>
         static TypeOut operate(TypeLhs x, TypeRhs y) {
-            return (TypeOut)((double)y / (double)x);
+            return ((double)y / (double)x);
         }
     };
 
     struct FloorDiv {
         template <typename TypeOut, typename TypeLhs, typename TypeRhs>
         static TypeOut operate(TypeLhs x, TypeRhs y) {
-            return (TypeOut)floor((double)x / (double)y);
+            return floor((double)x / (double)y);
         }
     };
 
     struct RFloorDiv {
         template <typename TypeOut, typename TypeLhs, typename TypeRhs>
         static TypeOut operate(TypeLhs x, TypeRhs y) {
-            return (TypeOut)floor((double)y / (double)x);
+            return floor((double)y / (double)x);
         }
     };
 
@@ -109,28 +103,25 @@ R"***(
         template <typename TypeOut,
                   typename TypeLhs,
                   typename TypeRhs,
-                  typename Common = CommonNumber<TypeLhs, TypeRhs>,
-                  enableIf<(isIntegral<Common>)>* = nullptr>
+                  enableIf<(isIntegral<TypeOut>)>* = nullptr>
         static TypeOut operate(TypeLhs x, TypeRhs y) {
-            return (TypeOut)((Common)x % (Common)y);
+            return ((TypeOut)x % (TypeOut)y);
         }
 
         template <typename TypeOut,
                   typename TypeLhs,
                   typename TypeRhs,
-                  typename Common = CommonNumber<TypeLhs, TypeRhs>,
-                  enableIf<(isFloat<Common>)>* = nullptr>
+                  enableIf<(isFloat<TypeOut>)>* = nullptr>
         static TypeOut operate(TypeLhs x, TypeRhs y) {
-            return (TypeOut)fmodf((Common)x, (Common)y);
+            return fmodf((TypeOut)x, (TypeOut)y);
         }
 
         template <typename TypeOut,
                   typename TypeLhs,
                   typename TypeRhs,
-                  typename Common = CommonNumber<TypeLhs, TypeRhs>,
-                  enableIf<(isDouble<Common>)>* = nullptr>
+                  enableIf<(isDouble<TypeOut>)>* = nullptr>
         static TypeOut operate(TypeLhs x, TypeRhs y) {
-            return (TypeOut)fmod((Common)x, (Common)y);
+            return fmod((TypeOut)x, (TypeOut)y);
         }
     };
 
@@ -138,50 +129,46 @@ R"***(
         template <typename TypeOut,
                   typename TypeLhs,
                   typename TypeRhs,
-                  typename Common = CommonNumber<TypeLhs, TypeRhs>,
-                  enableIf<(isIntegral<Common>)>* = nullptr>
+                  enableIf<(isIntegral<TypeOut>)>* = nullptr>
         static TypeOut operate(TypeLhs x, TypeRhs y) {
-            return (TypeOut)((Common)y % (Common)x);
+            return ((TypeOut)y % (TypeOut)x);
         }
 
         template <typename TypeOut,
                   typename TypeLhs,
                   typename TypeRhs,
-                  typename Common = CommonNumber<TypeLhs, TypeRhs>,
-                  enableIf<(isFloat<Common>)>* = nullptr>
+                  enableIf<(isFloat<TypeOut>)>* = nullptr>
         static TypeOut operate(TypeLhs x, TypeRhs y) {
-            return (TypeOut)fmodf((Common)y, (Common)x);
+            return fmodf((TypeOut)y, (TypeOut)x);
         }
 
         template <typename TypeOut,
                   typename TypeLhs,
                   typename TypeRhs,
-                  typename Common = CommonNumber<TypeLhs, TypeRhs>,
-                  enableIf<(isDouble<Common>)>* = nullptr>
+                  enableIf<(isDouble<TypeOut>)>* = nullptr>
         static TypeOut operate(TypeLhs x, TypeRhs y) {
-            return (TypeOut)fmod((Common)y, (Common)x);
+            return fmod((TypeOut)y, (TypeOut)x);
         }
     };
 
     struct Pow {
         template <typename TypeOut, typename TypeLhs, typename TypeRhs>
         static TypeOut operate(TypeLhs x, TypeRhs y) {
-            return (TypeOut)pow((double)x, (double)y);
+            return pow((double)x, (double)y);
         }
     };
 
     struct RPow {
         template <typename TypeOut, typename TypeLhs, typename TypeRhs>
         static TypeOut operate(TypeLhs x, TypeRhs y) {
-            return (TypeOut)pow((double)y, (double)x);
+            return pow((double)y, (double)x);
         }
     };
 
     struct Equal {
         template <typename TypeOut, typename TypeLhs, typename TypeRhs>
         static TypeOut operate(TypeLhs x, TypeRhs y) {
-            using Common = CommonNumber<TypeLhs, TypeRhs>;
-            return (TypeOut)((Common)x == (Common)y);
+            return (x == y);
         }
     };
 
@@ -190,8 +177,7 @@ R"***(
     struct NotEqual {
         template <typename TypeOut, typename TypeLhs, typename TypeRhs>
         static TypeOut operate(TypeLhs x, TypeRhs y) {
-            using Common = CommonNumber<TypeLhs, TypeRhs>;
-            return (TypeOut)((Common)x != (Common)y);
+            return (x != y);
         }
     };
 
@@ -200,64 +186,56 @@ R"***(
     struct Less {
         template <typename TypeOut, typename TypeLhs, typename TypeRhs>
         static TypeOut operate(TypeLhs x, TypeRhs y) {
-            using Common = CommonNumber<TypeLhs, TypeRhs>;
-            return (TypeOut)((Common)x < (Common)y);
+            return (x < y);
         }
     };
 
     struct RLess {
         template <typename TypeOut, typename TypeLhs, typename TypeRhs>
         static TypeOut operate(TypeLhs x, TypeRhs y) {
-            using Common = CommonNumber<TypeLhs, TypeRhs>;
-            return (TypeOut)((Common)y < (Common)x);
+            return (y < x);
         }
     };
 
     struct Greater {
         template <typename TypeOut, typename TypeLhs, typename TypeRhs>
         static TypeOut operate(TypeLhs x, TypeRhs y) {
-            using Common = CommonNumber<TypeLhs, TypeRhs>;
-            return (TypeOut)((Common)x > (Common)y);
+            return (x > y);
         }
     };
 
     struct RGreater {
         template <typename TypeOut, typename TypeLhs, typename TypeRhs>
         static TypeOut operate(TypeLhs x, TypeRhs y) {
-            using Common = CommonNumber<TypeLhs, TypeRhs>;
-            return (TypeOut)((Common)y > (Common)x);
+            return (y > x);
         }
     };
 
     struct LessEqual {
         template <typename TypeOut, typename TypeLhs, typename TypeRhs>
         static TypeOut operate(TypeLhs x, TypeRhs y) {
-            using Common = CommonNumber<TypeLhs, TypeRhs>;
-            return (TypeOut)((Common)x <= (Common)y);
+            return (x <= y);
         }
     };
 
     struct RLessEqual {
         template <typename TypeOut, typename TypeLhs, typename TypeRhs>
         static TypeOut operate(TypeLhs x, TypeRhs y) {
-            using Common = CommonNumber<TypeLhs, TypeRhs>;
-            return (TypeOut)((Common)y <= (Common)x);
+            return (y <= x);
         }
     };
 
     struct GreaterEqual {
         template <typename TypeOut, typename TypeLhs, typename TypeRhs>
         static TypeOut operate(TypeLhs x, TypeRhs y) {
-            using Common = CommonNumber<TypeLhs, TypeRhs>;
-            return (TypeOut)((Common)x >= (Common)y);
+            return (x >= y);
         }
     };
 
     struct RGreaterEqual {
         template <typename TypeOut, typename TypeLhs, typename TypeRhs>
         static TypeOut operate(TypeLhs x, TypeRhs y) {
-            using Common = CommonNumber<TypeLhs, TypeRhs>;
-            return (TypeOut)((Common)y >= (Common)x);
+            return (y >= x);
         }
     };
 )***";
