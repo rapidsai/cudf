@@ -781,3 +781,13 @@ def modulo(arr, d):
     if arr.size > 0:
         gpu_modulo.forall(arr.size)(arr, out, d)
     return out
+
+
+def boolean_array_to_index_array(bool_array):
+    """ Converts a boolean array to an integer array to be used for gather /
+        scatter operations
+    """
+    boolbits = compact_mask_bytes(bool_array)
+    indices = arange(len(bool_array))
+    _, selinds = copy_to_dense(indices, mask=boolbits)
+    return selinds

@@ -106,7 +106,7 @@ def column_select_by_boolmask(column, boolmask):
 
     Returns (selected_column, selected_positions)
     """
-    from .numerical import NumericalColumn
+    from cudf.dataframe.numerical import NumericalColumn
     assert column.null_count == 0  # We don't properly handle the boolmask yet
     boolbits = cudautils.compact_mask_bytes(boolmask.to_gpu_array())
     indices = cudautils.arange(len(boolmask))

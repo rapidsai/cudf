@@ -8,6 +8,7 @@ from numbers import Number
 import numpy as np
 import pandas as pd
 from pandas.api.types import is_scalar, is_dict_like
+from numba.cuda.cudadrv.devicearray import DeviceNDArray
 
 from cudf.utils import cudautils, utils
 from cudf import formatting
@@ -214,33 +215,42 @@ class Series(object):
         return not len(self)
 
     def __getitem__(self, arg):
-        if self.dtype == np.dtype('str'):
-            return Series(self._column[arg])
-        else:
-            if isinstance(arg, (list, np.ndarray, pd.Series, range, Index)):
-                arg = Series(arg)
-            if isinstance(arg, Series):
-                if issubclass(arg.dtype.type, np.integer):
+        if isinstance(arg, (list, np.ndarray, DeviceNDArray, pd.Series, range,
+                            Index)):
+            arg = Series(arg)
+        if isinstance(arg, Series):
+            if issubclass(arg.dtype.type, np.integer):
+                if self.dtype == np.dtype('str'):
+                    idx = arg.to_gpu_array()
+                    selvals = self._column[idx]
+                    index = self.index.take(idx)
+                else:
                     selvals, selinds = columnops.column_select_by_position(
                         self._column, arg)
                     index = self.index.take(selinds.to_gpu_array())
-                elif arg.dtype in [np.bool, np.bool_]:
+            elif arg.dtype in [np.bool, np.bool_]:
+                if self.dtype == np.dtype('str'):
+                    idx = cudautils.boolean_array_to_index_array(
+                        arg.to_gpu_array())
+                    selvals = self._column[idx]
+                    index = self.index.take(idx)
+                else:
                     selvals, selinds = columnops.column_select_by_boolmask(
                         self._column, arg)
                     index = self.index.take(selinds.to_gpu_array())
-                else:
-                    raise NotImplementedError(arg.dtype)
-                return self._copy_construct(data=selvals, index=index)
-
-            elif isinstance(arg, slice):
-                index = self.index[arg]         # slice index
-                col = self._column[arg]         # slice column
-                return self._copy_construct(data=col, index=index)
-            elif isinstance(arg, Number):
-                # The following triggers a IndexError if out-of-bound
-                return self._column.element_indexing(arg)
             else:
-                raise NotImplementedError(type(arg))
+                raise NotImplementedError(arg.dtype)
+            return self._copy_construct(data=selvals, index=index)
+
+        elif isinstance(arg, slice):
+            index = self.index[arg]         # slice index
+            col = self._column[arg]         # slice column
+            return self._copy_construct(data=col, index=index)
+        elif isinstance(arg, Number):
+            # The following triggers a IndexError if out-of-bound
+            return self._column.element_indexing(arg)
+        else:
+            raise NotImplementedError(type(arg))
 
     def take(self, indices, ignore_index=False):
         """Return Series by taking values from the corresponding *indices*.
@@ -327,8 +337,12 @@ class Series(object):
         if nrows is NOTSET:
             nrows = settings.formatting.get(nrows)
 
+        str_dtype = self.dtype
+        if str_dtype == np.dtype('str'):
+            str_dtype = 'str'
+
         if len(self) == 0:
-            return "<empty Series of dtype={}>".format(self.dtype)
+            return "<empty Series of dtype={}>".format(str_dtype)
 
         if nrows is None:
             nrows = len(self)
@@ -343,8 +357,8 @@ class Series(object):
         output = formatting.format(index=self.index,
                                    cols=cols, more_rows=more_rows,
                                    series_spacing=True)
-        return output + "\nName: {}, dtype: {}".format(self.name, self.dtype)\
-            if self.name else output + "\ndtype: {}".format(self.dtype)
+        return output + "\nName: {}, dtype: {}".format(self.name, str_dtype)\
+            if self.name else output + "\ndtype: {}".format(str_dtype)
 
     def __str__(self):
         return self.to_string(nrows=10)

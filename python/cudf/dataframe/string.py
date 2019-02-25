@@ -5,11 +5,11 @@ import numpy as np
 import pyarrow as pa
 import nvstrings
 from numbers import Number
-from numba import cuda
+from numba.cuda.cudadrv.devicearray import DeviceNDArray
 import warnings
 
 from cudf.dataframe import columnops
-from cudf.utils import utils
+from cudf.utils import utils, cudautils
 # from cudf.comm.serialize import register_distributed_serializer
 
 from cudf.bindings.cudf_cpp import get_ctype_ptr
@@ -93,19 +93,31 @@ class StringColumn(columnops.TypedColumnBase):
     def element_indexing(self, arg):
         if isinstance(arg, Number):
             arg = int(arg)
-            return columnops.as_column(self._data[arg])
+            if arg > (len(self) - 1) or arg < 0:
+                raise IndexError
+            out = self._data[arg]
         elif isinstance(arg, slice):
-            return columnops.as_column(self._data[arg])
+            out = self._data[arg]
         elif isinstance(arg, list):
-            return columnops.as_column(self._data[arg])
+            out = self._data[arg]
         elif isinstance(arg, np.ndarray):
             gpu_arr = rmm.to_device(arg)
             return self.element_indexing(gpu_arr)
-        elif isinstance(arg, cuda.devicearray.DeviceNDArray):
-            gpu_ptr = get_ctype_ptr(arg)
-            return columnops.as_column(self._data.gather(gpu_ptr))
+        elif isinstance(arg, DeviceNDArray):
+            # NVStrings gather call expects an array of int32s
+            arg = cudautils.astype(arg, np.dtype('int32'))
+            if len(arg) > 0:
+                gpu_ptr = get_ctype_ptr(arg)
+                out = self._data.gather(gpu_ptr, len(arg))
+            else:
+                out = self._data.gather([])
         else:
             raise NotImplementedError(type(arg))
+
+        if len(out) == 1:
+            return out.to_host()[0]
+        else:
+            return columnops.as_column(out)
 
     def __getitem__(self, arg):
         return self.element_indexing(arg)
@@ -118,21 +130,19 @@ class StringColumn(columnops.TypedColumnBase):
             out_arr = rmm.device_array(shape=len(self), dtype='int32')
             out_ptr = get_ctype_ptr(out_arr)
             self.str().stoi(devptr=out_ptr)
-            return out_arr.astype(dtype)
-        elif dtype in (np.dtype('float32', 'float64')):
-            out_arr = rmm.device_array(shape=len(self), dtype='float64')
+        elif dtype in (np.dtype('float32'), np.dtype('float64')):
+            out_arr = rmm.device_array(shape=len(self), dtype='float32')
             out_ptr = get_ctype_ptr(out_arr)
             self.str().stof(devptr=out_ptr)
-            return out_arr.astype(dtype)
+        out_col = columnops.as_column(out_arr)
+        return out_col.astype(dtype)
 
     def to_arrow(self):
         sbuf = np.empty(self._data.byte_count(), dtype='int8')
         obuf = np.empty(len(self._data) + 1, dtype='int32')
-        obuf[len(obuf) - 1] = self._data.byte_count()
 
         mask_size = utils.calc_chunk_size(len(self._data), utils.mask_bitsize)
-        # nbuf = np.empty(mask_size, dtype='int8')
-        nbuf = np.full(mask_size, 255, dtype='int8') # Remove this once the bug is fixed in nvstrings
+        nbuf = np.empty(mask_size, dtype='int8')
 
         self.str().to_offsets(sbuf, obuf, nbuf=nbuf)
         sbuf = pa.py_buffer(sbuf)
