@@ -131,6 +131,7 @@ inline thrust::host_vector<SerialTrieNode> createSerializedTrie(const std::vecto
  *---------------------------------------------------------------------------**/
 __host__ __device__
 inline bool serializedTrieContains(const SerialTrieNode* trie, const char* key, size_t key_len) {
+	if (trie == nullptr) return false;
 	int curr_node = 0;
 	for (size_t i = 0; i < key_len; ++i) {
 		// Don't jump away from root node

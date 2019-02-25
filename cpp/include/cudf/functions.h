@@ -2427,7 +2427,8 @@ gdf_error gdf_validity_and(gdf_column *lhs, gdf_column *rhs, gdf_column *output)
 /* reductions
 
 The following reduction functions use the result array as a temporary working
-space.  Use gdf_reduce_optimal_output_size() to get its optimal size.
+space.  Use gdf_reduction_get_intermediate_output_size() to get the necessary
+size for this use.
 */
 
 
@@ -2442,7 +2443,7 @@ space.  Use gdf_reduce_optimal_output_size() to get its optimal size.
  *       block sum rather than launch a second kernel. When that happens, this
  *       function can go away and the output can be a single element.
  * --------------------------------------------------------------------------*/
-unsigned int gdf_reduce_optimal_output_size();
+unsigned int gdf_reduction_get_intermediate_output_size();
 
 /* --------------------------------------------------------------------------*
  * @brief  Computes the sum of the values in all rows of a column
@@ -2450,7 +2451,7 @@ unsigned int gdf_reduce_optimal_output_size();
  * @Param[in] col Input column
  * @Param[out] dev_result The output sum 
  * @Param[in] dev_result_size The size of dev_result in elements, which should
- *                            be computed using gdf_reduce_optimal_output_size
+ *                            be computed using gdf_reduction_get_intermediate_output_size
  *                            This is used as intermediate storage, and the 
  *                            first element contains the total result
  * 
@@ -2467,7 +2468,7 @@ gdf_error gdf_sum(gdf_column *col, void *dev_result, gdf_size_type dev_result_si
  * @Param[in] col Input column
  * @Param[out] dev_result The output product
  * @Param[in] dev_result_size The size of dev_result in elements, which should
- *                            be computed using gdf_reduce_optimal_output_size
+ *                            be computed using gdf_reduction_get_intermediate_output_size
  *                            This is used as intermediate storage, and the 
  *                            first element contains the total result
  * 
@@ -2484,7 +2485,7 @@ gdf_error gdf_product(gdf_column *col, void *dev_result, gdf_size_type dev_resul
  * @Param[in] col Input column
  * @Param[out] dev_result The output sum of squares
  * @Param[in] dev_result_size The size of dev_result in elements, which should
- *                            be computed using gdf_reduce_optimal_output_size
+ *                            be computed using gdf_reduction_get_intermediate_output_size
  *                            This is used as intermediate storage, and the 
  *                            first element contains the total result
  * 
@@ -2502,7 +2503,7 @@ gdf_error gdf_sum_of_squares(gdf_column *col, void *dev_result, gdf_size_type de
  * @Param[in] col Input column
  * @Param[out] dev_result The output minimum
  * @Param[in] dev_result_size The size of dev_result in elements, which should
- *                            be computed using gdf_reduce_optimal_output_size
+ *                            be computed using gdf_reduction_get_intermediate_output_size
  *                            This is used as intermediate storage, and the 
  *                            first element contains the total result
  * 
@@ -2518,7 +2519,7 @@ gdf_error gdf_min(gdf_column *col, void *dev_result, gdf_size_type dev_result_si
  * @Param[in] col Input column
  * @Param[out] dev_result The output maximum
  * @Param[in] dev_result_size The size of dev_result in elements, which should
- *                            be computed using gdf_reduce_optimal_output_size
+ *                            be computed using gdf_reduction_get_intermediate_output_size
  *                            This is used as intermediate storage, and the 
  *                            first element contains the total result
  * 
@@ -2910,6 +2911,31 @@ gdf_error gdf_order_by(gdf_column** input_columns,
                        gdf_column*  output_indices,
                        int          flag_nulls_are_smallest);
 
+/* --------------------------------------------------------------------------*
+ * @brief Replaces all null values in a column with either a specific value or corresponding values of another column
+ *
+ * This function is a binary function. It will take in two gdf_columns.
+
+ * The first one is expected to be a regular gdf_column, the second one
+ * has to be a column of the same type as the first, and it has to be of
+ * size one or of the same size as the other column.
+ * 
+ * case 1: If the second column contains only one value, then this funciton will
+ * replace all nulls in the first column with the value in the second
+ * column.
+ *  
+ * case 2: If the second column is of the same size as the first, then the function will
+ * replace all nulls of the first column with the corresponding elemetns of the
+ * second column
+ * 
+ * @Param[in,out] col_out A gdf_column that is the output of this function with null values replaced
+ * @Param[in] col_in A gdf_column that is of size 1 or same size as col_out, contains value / values to be placed in col_out
+ * 
+ * @Returns GDF_SUCCESS upon successful completion
+ *
+ * --------------------------------------------------------------------------*/
+gdf_error gdf_replace_nulls(gdf_column*       col_out,
+                                   const gdf_column* col_in);
 /* --------------------------------------------------------------------------*
  * @brief Finds the indices of the bins in which each value of the column
  * belongs.

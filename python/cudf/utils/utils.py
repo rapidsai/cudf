@@ -2,6 +2,7 @@ from collections import namedtuple
 
 import numpy as np
 import pyarrow as pa
+from math import isnan, isinf
 
 from numba import njit
 
@@ -39,6 +40,18 @@ def mask_set(mask, pos):
     mask[pos // mask_bitsize] |= 1 << (pos % mask_bitsize)
 
 
+@njit
+def check_equals_float(a, b):
+    return (a == b or (isnan(a) and isnan(b)) or
+            ((isinf(a) and a < 0) and (isinf(b) and b < 0)) or
+            ((isinf(a) and a > 0) and (isinf(b) and b > 0)))
+
+
+@njit
+def check_equals_int(a, b):
+    return (a == b)
+
+
 def make_mask(size):
     """Create mask to obtain at least *size* number of bits.
     """
@@ -52,7 +65,7 @@ def require_writeable_array(arr):
 
 
 def scalar_broadcast_to(scalar, shape, dtype):
-    from .cudautils import fill_value
+    from cudf.utils.cudautils import fill_value
 
     if not isinstance(shape, tuple):
         shape = (shape,)
@@ -70,15 +83,6 @@ def normalize_index(index, size, doraise=True):
     if doraise and not (0 <= index < size):
         raise IndexError('out-of-bound')
     return min(index, size)
-
-
-def normalize_slice(arg, size):
-    """Normalize slice
-    """
-    start = arg.start if arg.start is not None else 0
-    stop = arg.stop if arg.stop is not None else size
-    return (normalize_index(start, size, doraise=False),
-            normalize_index(stop, size, doraise=False))
 
 
 # borrowed from a wonderful blog:
@@ -118,9 +122,9 @@ def standard_python_slice(len_idx, arg):
     if (step < 0 and stop >= start) or (step > 0 and start >= stop):
         slice_length = 0
     elif step < 0:
-        slice_length = (stop - start + 1)/step + 1
+        slice_length = (stop - start + 1)//step + 1
     else:
-        slice_length = (stop - start - 1)/step + 1
+        slice_length = (stop - start - 1)//step + 1
 
     return start, stop, step, slice_length
 
@@ -131,9 +135,11 @@ list_types_tuple = (list, np.array)
 def buffers_from_pyarrow(pa_arr, dtype=None):
     from cudf.dataframe.buffer import Buffer
 
-    if pa_arr.buffers()[0]:
+    buffers = pa_arr.buffers()
+
+    if buffers[0]:
         pamask = Buffer(
-            np.array(pa_arr.buffers()[0]).view('int8')
+            np.array(buffers[0]).view('int8')
         )
     else:
         pamask = None
@@ -146,9 +152,14 @@ def buffers_from_pyarrow(pa_arr, dtype=None):
         else:
             new_dtype = pa_arr.type.to_pandas_dtype()
 
-    padata = Buffer(
-        np.array(pa_arr.buffers()[1]).view(new_dtype)[
-            pa_arr.offset:pa_arr.offset + len(pa_arr)
-        ]
-    )
+    if buffers[1]:
+        padata = Buffer(
+            np.array(buffers[1]).view(new_dtype)[
+                pa_arr.offset:pa_arr.offset + len(pa_arr)
+            ]
+        )
+    else:
+        padata = Buffer(
+            np.empty(0, dtype=new_dtype)
+        )
     return (pamask, padata)
