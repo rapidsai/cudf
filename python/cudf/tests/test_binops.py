@@ -122,34 +122,55 @@ def test_series_compare_scalar(nelem, cmpop, obj_class, dtype):
     np.testing.assert_equal(result2.to_array(),  cmpop(rhs, arr1))
 
 
+_nulls = [
+    'none',
+    'some',
+]
+
+
 @pytest.mark.parametrize('nelem', [1, 7, 8, 9, 32, 64, 128])
-def test_validity_add(nelem):
+@pytest.mark.parametrize('lhs_nulls,rhs_nulls', list(product(_nulls, _nulls)))
+def test_validity_add(nelem, lhs_nulls, rhs_nulls):
     np.random.seed(0)
     # LHS
     lhs_data = np.random.random(nelem)
-    lhs_mask = utils.random_bitmask(nelem)
-    lhs_bitmask = utils.expand_bits_to_bytes(lhs_mask)[:nelem]
-    lhs_null_count = utils.count_zero(lhs_bitmask)
-    assert lhs_null_count >= 0
-    lhs = Series.from_masked_array(lhs_data, lhs_mask)
-    assert lhs.null_count == lhs_null_count
+    if lhs_nulls == 'some':
+        lhs_mask = utils.random_bitmask(nelem)
+        lhs_bitmask = utils.expand_bits_to_bytes(lhs_mask)[:nelem]
+        lhs_null_count = utils.count_zero(lhs_bitmask)
+        assert lhs_null_count >= 0
+        lhs = Series.from_masked_array(lhs_data, lhs_mask)
+        assert lhs.null_count == lhs_null_count
+    else:
+        lhs = Series(lhs_data)
     # RHS
     rhs_data = np.random.random(nelem)
-    rhs_mask = utils.random_bitmask(nelem)
-    rhs_bitmask = utils.expand_bits_to_bytes(rhs_mask)[:nelem]
-    rhs_null_count = utils.count_zero(rhs_bitmask)
-    assert rhs_null_count >= 0
-    rhs = Series.from_masked_array(rhs_data, rhs_mask)
-    assert rhs.null_count == rhs_null_count
+    if rhs_nulls == 'some':
+        rhs_mask = utils.random_bitmask(nelem)
+        rhs_bitmask = utils.expand_bits_to_bytes(rhs_mask)[:nelem]
+        rhs_null_count = utils.count_zero(rhs_bitmask)
+        assert rhs_null_count >= 0
+        rhs = Series.from_masked_array(rhs_data, rhs_mask)
+        assert rhs.null_count == rhs_null_count
+    else:
+        rhs = Series(rhs_data)
     # Result
     res = lhs + rhs
-    res_mask = np.asarray(utils.expand_bits_to_bytes(lhs_mask & rhs_mask),
-                          dtype=np.bool)[:nelem]
+    if lhs_nulls == 'some' and rhs_nulls == 'some':
+        res_mask = np.asarray(utils.expand_bits_to_bytes(lhs_mask & rhs_mask),
+                              dtype=np.bool)[:nelem]
+    if lhs_nulls == 'some' and rhs_nulls == 'none':
+        res_mask = np.asarray(utils.expand_bits_to_bytes(lhs_mask),
+                              dtype=np.bool)[:nelem]
+    if lhs_nulls == 'none' and rhs_nulls == 'some':
+        res_mask = np.asarray(utils.expand_bits_to_bytes(rhs_mask),
+                              dtype=np.bool)[:nelem]
     # Fill NA values
     na_value = -10000
     got = res.fillna(na_value).to_array()
     expect = lhs_data + rhs_data
-    expect[~res_mask] = na_value
+    if lhs_nulls == 'some' or rhs_nulls == 'some':
+        expect[~res_mask] = na_value
 
     np.testing.assert_array_equal(expect, got)
 
