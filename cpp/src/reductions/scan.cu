@@ -47,9 +47,10 @@ namespace { //anonymous
     template <class T>
     struct Scan {
         static
-            gdf_error call(const gdf_column *input, gdf_column *output, bool inclusive,
-                cudaStream_t stream) {
+            gdf_error call(const gdf_column *input, gdf_column *output,
+                bool inclusive, cudaStream_t stream) {
             using cub::DeviceScan;
+            gdf_error ret;
             auto scan_function = (inclusive ? inclusive_sum : exclusive_sum);
             size_t size = input->size;
             const T* d_input = static_cast<const T*>(input->data);
@@ -58,8 +59,8 @@ namespace { //anonymous
             // Prepare temp storage
             void *temp_storage = NULL;
             size_t temp_storage_bytes = 0;
-            scan_function(temp_storage, temp_storage_bytes, d_input, d_output,
-                size, stream);
+            GDF_REQUIRE(GDF_SUCCESS == (ret = scan_function(temp_storage,
+                temp_storage_bytes, d_input, d_output, size, stream)), ret);
             RMM_TRY(RMM_ALLOC(&temp_storage, temp_storage_bytes, stream));
 
             bool const input_has_nulls{ input->valid != nullptr && input->null_count > 0 };
@@ -80,6 +81,8 @@ namespace { //anonymous
                     size, temp_input, static_cast<T>(0), stream);
 
                 // Do scan
+                GDF_REQUIRE(GDF_SUCCESS == (ret = scan_function(temp_storage,
+                    temp_storage_bytes, d_input, d_output, size, stream)), ret);
                 scan_function(temp_storage, temp_storage_bytes, temp_input,
                     d_output, size, stream);
 
@@ -123,12 +126,13 @@ namespace { //anonymous
             GDF_REQUIRE(input->size == output->size, GDF_COLUMN_SIZE_MISMATCH);
             GDF_REQUIRE(input->dtype == output->dtype, GDF_DTYPE_MISMATCH);
 
-            if (!input->valid) {
-                GDF_REQUIRE(!input->valid || !input->null_count, GDF_VALIDITY_MISSING);
-                GDF_REQUIRE(!output->valid, GDF_VALIDITY_MISSING);
+            if (nullptr == input->valid) {
+                GDF_REQUIRE(0 == input->null_count, GDF_VALIDITY_MISSING);
+                GDF_REQUIRE(nullptr == output->valid, GDF_VALIDITY_UNSUPPORTED);
             }
             else {
-                GDF_REQUIRE(input->valid && output->valid, GDF_VALIDITY_MISSING);
+                GDF_REQUIRE(nullptr != input->valid && nullptr != output->valid,
+                            GDF_VALIDITY_MISSING);
             }
             return Scan<T>::call(input, output, inclusive, stream);
         }
