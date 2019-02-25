@@ -7,8 +7,8 @@ import numpy as np
 from libgdf_cffi import ffi, libgdf
 from librmm_cffi import librmm as rmm
 
-from .utils import (new_column, unwrap_devary, get_dtype, gen_rand,
-                    buffer_as_bits, count_nulls)
+from libgdf_cffi.tests.utils import (new_column, unwrap_devary,
+          get_dtype, gen_rand, buffer_as_bits, count_nulls)
 
 params_dtype = [
     np.int8,

@@ -288,16 +288,14 @@ def read_csv(filepath_or_buffer, lineterminator='\n',
             raise ValueError("""cannot manually limit rows to be read when
                                 using the byte range parameter""")
 
-    # Start with default values recognized as boolean
-    arr_true_values = [_wrap_string(str('True')), _wrap_string(str('TRUE'))]
-    arr_false_values = [_wrap_string(str('False')), _wrap_string(str('FALSE'))]
-
+    arr_true_values = []
     for value in true_values or []:
         arr_true_values.append(_wrap_string(str(value)))
     arr_true_values_ptr = ffi.new('char*[]', arr_true_values)
     csv_reader.true_values = arr_true_values_ptr
     csv_reader.num_true_values = len(arr_true_values)
 
+    arr_false_values = []
     for value in false_values or []:
         arr_false_values.append(_wrap_string(str(value)))
     false_values_ptr = ffi.new('char*[]', arr_false_values)
