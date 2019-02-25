@@ -13,7 +13,7 @@ from cudf import read_csv
 from cudf.io.csv import read_csv_strings
 import cudf
 import nvstrings
-from .utils import assert_eq
+from cudf.tests.utils import assert_eq
 import gzip
 import shutil
 import os
@@ -31,9 +31,9 @@ def make_numeric_dataframe(nrows, dtype):
 def make_datetime_dataframe():
     df = pd.DataFrame()
     df['col1'] = np.array(['31/10/2010', '05/03/2001', '20/10/1994',
-                          '18/10/1990', '1/1/1970'])
-    df['col2'] = np.array(['18/04/1995', '14/07/1994', '07/06/2006',
-                          '16/09/2005', '2/2/1970'])
+                          '18/10/1990', '1/1/1970', '2016-04-30T01:02:03.400'])
+    df['col2'] = np.array(['18/04/1995', '14 / 07 / 1994', '07/06/2006',
+                          '16/09/2005', '2/2/1970', '2007-4-30 1:6:40.000PM'])
     return df
 
 
@@ -479,8 +479,7 @@ def test_csv_reader_bools(tmpdir, names, dtypes, data, trues, falses):
     out = read_csv(str(fname), names=names, dtype=dtypes, skiprows=1,
                    true_values=trues, false_values=falses)
 
-    assert len(out.columns) == len(df_out.columns)
-    assert len(out) == len(df_out)
+    pd.util.testing.assert_frame_equal(df_out, out.to_pandas())
 
 
 def test_csv_quotednumbers(tmpdir):
@@ -754,16 +753,16 @@ def test_csv_reader_byte_range(tmpdir, segment_bytes):
             fp.write(str(i) + ', ' + str(2*i) + ' \n')
     file_size = os.stat(str(fname)).st_size
 
-    ref_df = read_csv(str(fname), names=names)
+    ref_df = read_csv(str(fname), names=names).to_pandas()
 
     dfs = []
     for segment in range((file_size + segment_bytes - 1)//segment_bytes):
         dfs.append(read_csv(str(fname), names=names,
                    byte_range=(segment*segment_bytes, segment_bytes)))
-    df = cudf.concat(dfs)
+    df = cudf.concat(dfs).to_pandas()
 
-    # comparing only the values here, concat does not update the index
-    np.array_equal(ref_df.to_pandas().values, df.to_pandas().values)
+    assert(list(df['int1']) == list(ref_df['int1']))
+    assert(list(df['int2']) == list(ref_df['int2']))
 
 
 @pytest.mark.parametrize('header_row, skip_rows, skip_blanks',
@@ -862,7 +861,6 @@ def test_csv_reader_header_quotation():
 
 
 def test_csv_reader_oversized_byte_range():
-    # first and last columns are unnamed
     buffer = 'a,b,c,d,e\n4,5,6,7,8\n'
 
     cu_df = read_csv(StringIO(buffer), byte_range=(0, 1024))
@@ -870,3 +868,38 @@ def test_csv_reader_oversized_byte_range():
 
     assert(all(pd_df.columns == cu_df.columns))
     assert(pd_df.shape == cu_df.shape)
+
+
+def test_csv_reader_index_col():
+    buffer = '0,1,2\n3,4,5\n6,7,8\n'
+    names = ['int1', 'int2', 'int3']
+
+    # using a column name
+    cu_df = read_csv(StringIO(buffer), names=names, index_col='int1')
+    pd_df = pd.read_csv(StringIO(buffer), names=names, index_col='int1')
+    pd.util.testing.assert_frame_equal(pd_df, cu_df.to_pandas())
+
+    # using a column index
+    cu_df = read_csv(StringIO(buffer), header=None, index_col=0)
+    pd_df = pd.read_csv(StringIO(buffer), header=None, index_col=0)
+    for cu_idx, pd_idx in zip(cu_df.index, pd_df.index):
+        assert(str(cu_idx) == str(pd_idx))
+
+    # passing False to avoid using a column as index (no-op in cuDF)
+    cu_df = read_csv(StringIO(buffer), header=None, index_col=False)
+    pd_df = pd.read_csv(StringIO(buffer), header=None, index_col=False)
+    for cu_idx, pd_idx in zip(cu_df.index, pd_df.index):
+        assert(str(cu_idx) == str(pd_idx))
+
+
+def test_csv_reader_bools_false_positives(tmpdir):
+    # values that are equal to ["True", "TRUE", "False", "FALSE"]
+    # when using ints to detect bool values
+    items = [3977, 4329, 24015, 27567]
+
+    buffer = '\n'.join(str(i) for i in items) + '\n'
+
+    df = read_csv(StringIO(buffer),
+                  header=None, dtype=["int32"])
+
+    np.testing.assert_array_equal(items, df['0'])

@@ -1,1 +1,1 @@
-from .general import *
+from cudf.reshape.general import *

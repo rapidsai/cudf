@@ -65,3 +65,17 @@ def test_from_records_withindex(columns):
     if columns and 'b' in columns:
         np.testing.assert_array_equal(bb, df['b'])
     np.testing.assert_array_equal(ii, df.index.values)
+
+
+def test_numpy_non_contiguious():
+    recdtype = np.dtype([
+        ('index', np.int64),
+        ('a', np.int32),
+    ])
+    rec = np.recarray(10, dtype=recdtype)
+    rec.index = np.arange(30, 40)
+    rec.a = aa = np.arange(20, dtype=np.int32)[::2]
+    assert rec.a.flags['C_CONTIGUOUS'] is False
+
+    gdf = DataFrame.from_records(rec, index='index')
+    np.testing.assert_array_equal(aa, gdf['a'].to_array())

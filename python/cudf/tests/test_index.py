@@ -70,10 +70,10 @@ def test_index_comparision():
     start, stop = 10, 34
     rg = RangeIndex(start, stop)
     gi = GenericIndex(np.arange(start, stop))
-    assert rg == gi
-    assert gi == rg
-    assert rg[:-1] != gi
-    assert rg[:-1] == gi[:-1]
+    assert rg.equals(gi)
+    assert gi.equals(rg)
+    assert not rg[:-1].equals(gi)
+    assert rg[:-1].equals(gi[:-1])
 
 
 @pytest.mark.parametrize('func', [
@@ -148,3 +148,39 @@ def test_pandas_as_index():
     assert_eq(pdf_float_index, gdf_float_index)
     assert_eq(pdf_datetime_index, gdf_datetime_index)
     assert_eq(pdf_category_index, gdf_category_index)
+
+
+def test_index_rename():
+    pds = pd.Index([1, 2, 3], name='asdf')
+    gds = as_index(pds)
+
+    expect = pds.rename('new_name')
+    got = gds.rename('new_name')
+
+    assert_eq(expect, got)
+
+
+def test_set_index_as_property():
+    cdf = DataFrame()
+    col1 = np.arange(10)
+    col2 = np.arange(0, 20, 2)
+    cdf['a'] = col1
+    cdf['b'] = col2
+
+    # Check set_index(Series)
+    cdf.index = cdf['b']
+
+    np.testing.assert_array_equal(cdf.index.values, col2)
+
+    with pytest.raises(ValueError):
+        cdf.index = [list(range(10))]
+
+    idx = np.arange(0, 1000, 100)
+    cdf.index = idx
+    np.testing.assert_array_equal(cdf.index.values, idx)
+
+    df = cdf.to_pandas()
+    np.testing.assert_array_equal(df.index.values, idx)
+
+    head = cdf.head().to_pandas()
+    np.testing.assert_array_equal(head.index.values, idx[:5])

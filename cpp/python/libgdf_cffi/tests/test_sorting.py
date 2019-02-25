@@ -7,7 +7,7 @@ import numpy as np
 from libgdf_cffi import ffi, libgdf
 from librmm_cffi import librmm as rmm
 
-from .utils import new_column, unwrap_devary, get_dtype, gen_rand
+from libgdf_cffi.tests.utils import new_column, unwrap_devary, get_dtype, gen_rand
 
 
 radixsort_args = list(product([2, 3, 10, 11, 100, 1000, 5000],
@@ -82,16 +82,16 @@ def test_digitize(num_rows, num_bins, right, dtype):
     col_data = gen_rand(dtype, num_rows)
     d_col_data = rmm.to_device(col_data)
     col_in = new_column()
-    libgdf.gdf_column_view(col_in, unwrap_devary(d_col_data), ffi.NULL, num_rows,
-                           get_dtype(d_col_data.dtype))
+    libgdf.gdf_column_view(col_in, unwrap_devary(d_col_data), ffi.NULL,
+                           num_rows, get_dtype(d_col_data.dtype))
 
     bin_data = gen_rand(dtype, num_bins)
     bin_data.sort()
     bin_data = np.unique(bin_data)
     d_bin_data = rmm.to_device(bin_data)
     bins = new_column()
-    libgdf.gdf_column_view(bins, unwrap_devary(d_bin_data), ffi.NULL, len(bin_data),
-                           get_dtype(d_bin_data.dtype))
+    libgdf.gdf_column_view(bins, unwrap_devary(d_bin_data), ffi.NULL,
+                           len(bin_data), get_dtype(d_bin_data.dtype))
 
     out_ary = np.zeros(num_rows, dtype=np.int32)
     d_out = rmm.to_device(out_ary)
@@ -101,4 +101,3 @@ def test_digitize(num_rows, num_bins, right, dtype):
     result = d_out.copy_to_host()
     expected = np.digitize(col_data, bin_data, right)
     np.testing.assert_array_equal(expected, result)
-
