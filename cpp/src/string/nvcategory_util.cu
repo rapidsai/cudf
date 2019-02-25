@@ -174,11 +174,11 @@ gdf_error copy_category_from_input_and_compact_into_output(gdf_column * input_co
 
 	output_column->dtype_info.category = NVCategory::create_from_strings(*temp_strings);
 
-	cudaError_t error = cudaMemcpy(
+	/*cudaError_t error = cudaMemcpy(
 			output_column->data,
 			output_column->dtype_info.category->values_cptr(),
 			sizeof(nv_category_index_type) * output_column->size,
-			cudaMemcpyDeviceToDevice);
+			cudaMemcpyDeviceToDevice);*/
 
 	NVStrings::destroy(temp_strings);
 	return GDF_SUCCESS;

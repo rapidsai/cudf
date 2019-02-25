@@ -945,3 +945,5 @@ gdf_error gdf_order_by(gdf_column** input_columns,
                        size_t       num_inputs,
                        gdf_column*  output_indices,
                        int          flag_nulls_are_smallest);
+
+gdf_error copy_category_from_input_and_compact_into_output(gdf_column * input_column, gdf_column * output_column);
