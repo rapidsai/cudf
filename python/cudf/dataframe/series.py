@@ -505,6 +505,10 @@ class Series(object):
         return self._column.cat()
 
     @property
+    def str(self):
+        return self._column.str()
+
+    @property
     def dtype(self):
         """dtype of the Series"""
         return self._column.dtype
