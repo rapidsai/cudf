@@ -222,6 +222,22 @@ add_library(cudf SHARED
 SET_TARGET_PROPERTIES(cudf PROPERTIES BUILD_RPATH "\$ORIGIN")
 
 ###################################################################################################
+# - jitify ----------------------------------------------------------------------------------------
+
+add_executable(stringify "${CMAKE_SOURCE_DIR}/thirdparty/jitify/stringify.cpp")
+execute_process(WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+    COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/include)
+
+add_custom_target(stringify_run
+    COMMAND ${CMAKE_BINARY_DIR}/stringify cudf/types.h > ${CMAKE_BINARY_DIR}/include/types.h.jit
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include
+    COMMENT "stringify header types.h"
+    DEPENDS stringify
+)
+
+add_dependencies(cudf stringify_run)
+
+###################################################################################################
 # - build options ---------------------------------------------------------------------------------
 
 option(USE_NVTX "Build with NVTX support" ON)

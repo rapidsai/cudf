@@ -17,6 +17,7 @@
 
 #include "binary/jit/core/launcher.h"
 #include "binary/jit/code/code.h"
+#include "types.h.jit"
 #include <cstdint>
 
 namespace cudf {
@@ -34,6 +35,10 @@ namespace jit {
 #else
     static thread_local jitify::JitCache JitCache;
 #endif
+
+    const std::vector<std::string> Launcher::compilerFlags { "-std=c++14" };
+    const std::vector<std::string> Launcher::headersName 
+        { "operation.h" , "traits.h" , cudf_types_h };
 
     /**---------------------------------------------------------------------------*
      * @brief  Used to provide Jitify with strings that should be used as headers

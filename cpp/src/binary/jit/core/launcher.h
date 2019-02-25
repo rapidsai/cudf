@@ -97,8 +97,8 @@ namespace jit {
         gdf_error launch(gdf_column* out, gdf_column* lhs, gdf_column* rhs);
 
     private:
-        std::vector<std::string> compilerFlags { "-std=c++14" };
-        std::vector<std::string> headersName { "operation.h" , "traits.h" };
+        static const std::vector<std::string> compilerFlags;
+        static const std::vector<std::string> headersName;
 
     private:
         jitify::Program program;
