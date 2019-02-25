@@ -28,8 +28,7 @@ R"***(
     template <typename TypeOut, typename TypeLhs, typename TypeRhs, typename TypeOpe>
     __global__
     void kernel_v_s(int size,
-                    TypeOut* out_data, TypeLhs* lhs_data, TypeRhs* rhs_data,
-                    uint32_t* out_valid, uint32_t* lhs_valid) {
+                    TypeOut* out_data, TypeLhs* lhs_data, TypeRhs* rhs_data) {
         int tid = threadIdx.x;
         int blkid = blockIdx.x;
         int blksz = blockDim.x;
@@ -46,8 +45,7 @@ R"***(
     template <typename TypeOut, typename TypeLhs, typename TypeRhs, typename TypeOpe>
     __global__
     void kernel_v_v(int size,
-                    TypeOut* out_data, TypeLhs* lhs_data, TypeRhs* rhs_data,
-                    uint32_t* out_valid, uint32_t* lhs_valid, uint32_t* rhs_valid) {
+                    TypeOut* out_data, TypeLhs* lhs_data, TypeRhs* rhs_data) {
         int tid = threadIdx.x;
         int blkid = blockIdx.x;
         int blksz = blockDim.x;

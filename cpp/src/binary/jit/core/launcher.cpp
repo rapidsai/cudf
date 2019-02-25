@@ -73,8 +73,7 @@ namespace jit {
                .instantiate(arguments)
                .configure_1d_max_occupancy()
                .launch(out->size,
-                       out->data, lhs->data, rhs->data,
-                       out->valid, lhs->valid);
+                       out->data, lhs->data, rhs->data);
 
         return GDF_SUCCESS;
     }
@@ -84,8 +83,7 @@ namespace jit {
                .instantiate(arguments)
                .configure_1d_max_occupancy()
                .launch(out->size,
-                       out->data, lhs->data, rhs->data,
-                       out->valid, lhs->valid, rhs->valid);
+                       out->data, lhs->data, rhs->data);
 
         return GDF_SUCCESS;
     }
