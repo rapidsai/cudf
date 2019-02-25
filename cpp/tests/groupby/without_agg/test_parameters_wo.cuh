@@ -68,7 +68,7 @@ TestParameters<group_output_method,
   // The method to use for the groupby
   const static gdf_method group_type{GDF_SORT};
 
-  using output_type = int32_t;
+  using output_type = gdf_size_type;
 
   using tuple_t = std::tuple<K...>;
 

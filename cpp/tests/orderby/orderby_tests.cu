@@ -328,7 +328,10 @@ struct OrderByTest : public GdfTest
     gdf_column* sorted_indices_output = gdf_raw_output_indices_column;
 
     gdf_context ctxt;
-    ctxt.flag_nulls_sort_behavior = nulls_are_smallest ? 1 : 0;
+    if (nulls_are_smallest)
+      ctxt.flag_nulls_sort_behavior = GDF_NULL_AS_SMALLEST;
+    else
+      ctxt.flag_nulls_sort_behavior = GDF_NULL_AS_LARGEST;
 
     result_error = gdf_order_by(columns_to_sort,
                                 (use_default_sort_order ? nullptr : (int8_t*)(sort_order_types->data)),

@@ -235,7 +235,7 @@ gdf_error gdf_unique_indices(gdf_size_type num_data_cols,
     auto counting_iter = thrust::make_counting_iterator<gdf_size_type>(0);
     
     result_end = thrust::unique_copy(exec, counting_iter, counting_iter+nrows, 
-                              unique_key_indices,
+                              unique_indices,
                               [comp]  __device__(gdf_size_type key1, gdf_size_type key2){
                               return comp.equal_with_nulls(key1, key2);
                             });
@@ -249,14 +249,14 @@ gdf_error gdf_unique_indices(gdf_size_type num_data_cols,
     auto counting_iter = thrust::make_counting_iterator<gdf_size_type>(0);
     
     result_end = thrust::unique_copy(exec, counting_iter, counting_iter+nrows, 
-                              unique_key_indices,
+                              unique_indices,
                               [comp]  __device__(gdf_size_type key1, gdf_size_type key2){
                               return comp.equal(key1, key2);  
                             });
   }
 
-  gdf_size_type new_sz = thrust::distance(unique_key_indices, result_end);
-  *num_unique_key_indices = new_sz;
+  gdf_size_type new_sz = thrust::distance(unique_indices, result_end);
+  *num_unique_indices = new_sz;
 	cudaStreamSynchronize(stream);
 	cudaStreamDestroy(stream); 
 
@@ -323,7 +323,7 @@ gdf_error gdf_group_by_without_aggregations(gdf_size_type num_data_cols,
       orderby_cols_vect[i] = data_cols_out[key_col_indices[i]];
     }
 
-    status = gdf_unique_indices(num_key_cols, orderby_cols_vect, group_start_indices, num_group_start_indices, ctxt);
+    status = gdf_unique_indices(num_key_cols, &orderby_cols_vect[0], group_start_indices, num_group_start_indices, ctxt);
 
     return status;
   } else {  // Pandas style
@@ -369,7 +369,7 @@ gdf_error gdf_group_by_without_aggregations(gdf_size_type num_data_cols,
    
     ctxt->flag_nulls_sort_behavior = flag_nulls_sort_behavior;
 
-    status = gdf_unique_indices(num_key_cols, orderby_cols_vect, group_start_indices, num_group_start_indices, ctxt);
+    status = gdf_unique_indices(num_key_cols, &orderby_cols_vect[0], group_start_indices, num_group_start_indices, ctxt);
 
     return status;
   }

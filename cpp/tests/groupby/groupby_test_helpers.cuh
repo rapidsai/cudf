@@ -301,6 +301,18 @@ void copy_output(
     copy_gdf_column(group_by_output_value, output_value);
 }
 
+template <typename gdf_column, typename multi_column_t>
+void copy_output_with_array(
+    gdf_column **group_by_output_key,
+    multi_column_t& output_key,
+    gdf_size_type *group_by_output_value_array,
+    gdf_size_type group_by_output_value_size,
+    std::vector<gdf_size_type>& output_value) {
+    copy_gdf_tuple(group_by_output_key, output_key);
+    output_value.resize(group_by_output_value_size);
+    cudaMemcpy(output_value.data(), group_by_output_value_array, group_by_output_value_size * sizeof(gdf_size_type), cudaMemcpyDeviceToHost);
+}
+
  
 
 //Copy device side gdf_column data to an std::vector
@@ -363,6 +375,20 @@ void copy_output_with_nulls(
     std::vector<output_t>& output_value) {
     copy_gdf_tuple_with_nulls(group_by_output_key, output_key, output_valids);
     copy_gdf_column(group_by_output_value, output_value);
+}
+
+
+template <typename gdf_column, typename multi_column_t>
+void copy_output_with_array_with_nulls(
+    gdf_column **group_by_output_key,
+    multi_column_t& output_key,
+    std::vector<host_valid_pointer>& output_valids,
+    gdf_size_type *group_by_output_value_array,
+    gdf_size_type group_by_output_value_size,
+    std::vector<gdf_size_type>& output_value) {
+    copy_gdf_tuple_with_nulls(group_by_output_key, output_key, output_valids);
+    output_value.resize(group_by_output_value_size);
+    cudaMemcpy(output_value.data(), group_by_output_value_array, group_by_output_value_size * sizeof(gdf_size_type), cudaMemcpyDeviceToHost);
 }
 
 //
