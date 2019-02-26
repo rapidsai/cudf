@@ -212,21 +212,21 @@ public:
 
     /* --------------------------------------------------------------------------*/
     /** 
-     * @Synopsis  Inserts a new (key, value) pair. If the key already exists in the map
+     * @brief  Inserts a new (key, value) pair. If the key already exists in the map
                   an aggregation operation is performed with the new value and existing value.
                   E.g., if the aggregation operation is 'max', then the maximum is computed
                   between the new value and existing value and the result is stored in the map.
      * 
-     * @Param[in] x The new (key, value) pair to insert
-     * @Param[in] op The aggregation operation to perform
-     * @Param[in] keys_equal An optional functor for comparing two keys 
-     * @Param[in] precomputed_hash Indicates if a precomputed hash value is being passed in to use
+     * @param[in] x The new (key, value) pair to insert
+     * @param[in] op The aggregation operation to perform
+     * @param[in] keys_equal An optional functor for comparing two keys 
+     * @param[in] precomputed_hash Indicates if a precomputed hash value is being passed in to use
      * to determine the write location of the new key
-     * @Param[in] precomputed_hash_value The precomputed hash value
+     * @param[in] precomputed_hash_value The precomputed hash value
      * @tparam aggregation_type A functor for a binary operation that performs the aggregation
      * @tparam comparison_type A functor for comparing two keys
      * 
-     * @Returns An iterator to the newly inserted key,value pair
+     * @returns An iterator to the newly inserted key,value pair
      */
     /* ----------------------------------------------------------------------------*/
     template<typename aggregation_type,

@@ -59,15 +59,15 @@ struct MurmurHash3_32
     
     /* --------------------------------------------------------------------------*/
     /** 
-     * @Synopsis  Combines two hash values into a new single hash value. Called 
+     * @brief  Combines two hash values into a new single hash value. Called 
      * repeatedly to create a hash value from several variables.
      * Taken from the Boost hash_combine function 
      * https://www.boost.org/doc/libs/1_35_0/doc/html/boost/hash_combine_id241013.html
      * 
-     * @Param lhs The first hash value to combine
-     * @Param rhs The second hash value to combine
+     * @param lhs The first hash value to combine
+     * @param rhs The second hash value to combine
      * 
-     * @Returns A hash value that intelligently combines the lhs and rhs hash values
+     * @returns A hash value that intelligently combines the lhs and rhs hash values
      */
     /* ----------------------------------------------------------------------------*/
     __host__ __device__ result_type hash_combine(result_type lhs, result_type rhs)
@@ -124,7 +124,7 @@ private:
 
 /* --------------------------------------------------------------------------*/
 /** 
- * @Synopsis  This hash function simply returns the value that is asked to be hash
+ * @brief  This hash function simply returns the value that is asked to be hash
  reinterpreted as the result_type of the functor.
  */
 /* ----------------------------------------------------------------------------*/
@@ -135,15 +135,15 @@ struct IdentityHash
 
     /* --------------------------------------------------------------------------*/
     /** 
-     * @Synopsis  Combines two hash values into a new single hash value. Called 
+     * @brief  Combines two hash values into a new single hash value. Called 
      * repeatedly to create a hash value from several variables.
      * Taken from the Boost hash_combine function 
      * https://www.boost.org/doc/libs/1_35_0/doc/html/boost/hash_combine_id241013.html
      * 
-     * @Param lhs The first hash value to combine
-     * @Param rhs The second hash value to combine
+     * @param lhs The first hash value to combine
+     * @param rhs The second hash value to combine
      * 
-     * @Returns A hash value that intelligently combines the lhs and rhs hash values
+     * @returns A hash value that intelligently combines the lhs and rhs hash values
      */
     /* ----------------------------------------------------------------------------*/
     __host__ __device__ result_type hash_combine(result_type lhs, result_type rhs) const

@@ -71,13 +71,13 @@ public:
 
     /* --------------------------------------------------------------------------*/
     /**
-     * @Synopsis Allocates memory and optionally fills the hash map with unused keys/values
+     * @brief Allocates memory and optionally fills the hash map with unused keys/values
      *
-     * @Param[in] n The size of the hash table (the number of key-value pairs)
-     * @Param[in] init Initialize the hash table with the unused keys/values
-     * @Param[in] hf An optional hashing function
-     * @Param[in] eql An optional functor for comparing if two keys are equal
-     * @Param[in] a An optional functor for allocating the hash table memory
+     * @param[in] n The size of the hash table (the number of key-value pairs)
+     * @param[in] init Initialize the hash table with the unused keys/values
+     * @param[in] hf An optional hashing function
+     * @param[in] eql An optional functor for comparing if two keys are equal
+     * @param[in] a An optional functor for allocating the hash table memory
      */
     /* ----------------------------------------------------------------------------*/
     explicit concurrent_unordered_multimap(size_type n,
@@ -138,12 +138,12 @@ public:
    
     /* --------------------------------------------------------------------------*/
     /**
-     * @Synopsis Computes a hash value for a key
+     * @brief Computes a hash value for a key
      *
-     * @Param[in] the_key The key to compute a hash for
+     * @param[in] the_key The key to compute a hash for
      * @tparam hash_value_type The datatype of the hash value
      *
-     * @Returns   The hash value for the key
+     * @returns   The hash value for the key
      */
     /* ----------------------------------------------------------------------------*/
     template <typename hash_value_type = typename Hasher::result_type>
@@ -155,19 +155,19 @@ public:
 
     /* --------------------------------------------------------------------------*/
     /**
-     * @Synopsis Computes the destination hash map partition for a key
+     * @brief Computes the destination hash map partition for a key
      *
-     * @Param[in] the_key The key to search for
-     * @Param[in] num_parts The total number of partitions in the partitioned
+     * @param[in] the_key The key to search for
+     * @param[in] num_parts The total number of partitions in the partitioned
      * hash table
-     * @Param[in] precomputed_hash A flag indicating whether or not a precomputed
+     * @param[in] precomputed_hash A flag indicating whether or not a precomputed
      * hash value is passed in
-     * @Param[in] precomputed_hash_value A precomputed hash value to use for determing
+     * @param[in] precomputed_hash_value A precomputed hash value to use for determing
      * the write location of the key into the hash map instead of computing the
      * the hash value directly from the key
      * @tparam hash_value_type The datatype of the hash value
      *
-     * @Returns   The destination hash table partition for the specified key
+     * @returns   The destination hash table partition for the specified key
      */
     /* ----------------------------------------------------------------------------*/
     template <typename hash_value_type = typename Hasher::result_type>
@@ -204,19 +204,19 @@ public:
 
     /* --------------------------------------------------------------------------*/
     /** 
-     * @Synopsis  Inserts a (key, value) pair into the hash map
+     * @brief  Inserts a (key, value) pair into the hash map
      * 
-     * @Param[in] x The (key, value) pair to insert
-     * @Param[in] precomputed_hash A flag indicating whether or not a precomputed 
+     * @param[in] x The (key, value) pair to insert
+     * @param[in] precomputed_hash A flag indicating whether or not a precomputed 
      * hash value is passed in
-     * @Param[in] precomputed_hash_value A precomputed hash value to use for determing
+     * @param[in] precomputed_hash_value A precomputed hash value to use for determing
      * the write location of the key into the hash map instead of computing the
      * the hash value directly from the key
-     * @Param[in] keys_are_equal An optional functor for comparing if two keys are equal
+     * @param[in] keys_are_equal An optional functor for comparing if two keys are equal
      * @tparam hash_value_type The datatype of the hash value
      * @tparam comparison_type The type of the key comparison functor
      * 
-     * @Returns An iterator to the newly inserted (key, value) pair
+     * @returns An iterator to the newly inserted (key, value) pair
      */
     /* ----------------------------------------------------------------------------*/
     template < typename hash_value_type = typename Hasher::result_type,
@@ -300,25 +300,25 @@ public:
 
     /* --------------------------------------------------------------------------*/
     /**
-     * @Synopsis  Inserts a (key, value) pair into the hash map partition. This
+     * @brief  Inserts a (key, value) pair into the hash map partition. This
      * is useful when building the hash table in multiple passes, one
      * contiguous partition at a time, or when building the hash table
      * distributed between multiple devices.
      *
-     * @Param[in] x The (key, value) pair to insert
-     * @Param[in] part The partition number for the partitioned hash table build
-     * @Param[in] num_parts The total number of partitions in the partitioned
+     * @param[in] x The (key, value) pair to insert
+     * @param[in] part The partition number for the partitioned hash table build
+     * @param[in] num_parts The total number of partitions in the partitioned
      * hash table
-     * @Param[in] precomputed_hash A flag indicating whether or not a precomputed
+     * @param[in] precomputed_hash A flag indicating whether or not a precomputed
      * hash value is passed in
-     * @Param[in] precomputed_hash_value A precomputed hash value to use for determing
+     * @param[in] precomputed_hash_value A precomputed hash value to use for determing
      * the write location of the key into the hash map instead of computing the
      * the hash value directly from the key
-     * @Param[in] keys_are_equal An optional functor for comparing if two keys are equal
+     * @param[in] keys_are_equal An optional functor for comparing if two keys are equal
      * @tparam hash_value_type The datatype of the hash value
      * @tparam comparison_type The type of the key comparison functor
      *
-     * @Returns An iterator to the newly inserted (key, value) pair
+     * @returns An iterator to the newly inserted (key, value) pair
      */
     /* ----------------------------------------------------------------------------*/
     template < typename hash_value_type = typename Hasher::result_type,
@@ -357,20 +357,20 @@ public:
     
     /* --------------------------------------------------------------------------*/
     /** 
-     * @Synopsis Searches for a key in the hash map and returns an iterator to the first
+     * @brief Searches for a key in the hash map and returns an iterator to the first
      * instance of the key in the map.
      * 
-     * @Param[in] the_key The key to search for
-     * @Param[in] precomputed_hash A flag indicating whether or not a precomputed 
+     * @param[in] the_key The key to search for
+     * @param[in] precomputed_hash A flag indicating whether or not a precomputed 
      * hash value is passed in
-     * @Param[in] precomputed_hash_value A precomputed hash value to use for determing
+     * @param[in] precomputed_hash_value A precomputed hash value to use for determing
      * the write location of the key into the hash map instead of computing the
      * the hash value directly from the key
-     * @Param[in] keys_are_equal An optional functor for comparing if two keys are equal
+     * @param[in] keys_are_equal An optional functor for comparing if two keys are equal
      * @tparam hash_value_type The datatype of the hash value
      * @tparam comparison_type The type of the key comparison functor
      * 
-     * @Returns   An iterator to the first instance of the key in the map
+     * @returns   An iterator to the first instance of the key in the map
      */
     /* ----------------------------------------------------------------------------*/
     template < typename hash_value_type = typename Hasher::result_type,
