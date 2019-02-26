@@ -44,8 +44,8 @@ gdf_error gdf_mask_concat(gdf_valid_type *output_mask,
  * @param[out] output_column A column whose buffers are already allocated that
  *             will contain the concatenation of the input columns data and
  *             validity bitmasks
- * @Param[in] columns_to_concat[] The columns to concatenate
- * @Param[in] num_columns The number of columns to concatenate
+ * @param[in] columns_to_concat[] The columns to concatenate
+ * @param[in] num_columns The number of columns to concatenate
  * 
  * @return gdf_error GDF_SUCCESS upon completion; GDF_DATASET_EMPTY if any data
  *         pointer is NULL, GDF_COLUMN_SIZE_MISMATCH if the output column size
