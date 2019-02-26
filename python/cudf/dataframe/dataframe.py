@@ -1362,7 +1362,6 @@ class DataFrame(object):
              1    2 12.0   11.0
              4    3 13.0
              2    4 14.0   12.0
-right
         """
         _gdf.nvtx_range_push("CUDF_JOIN", "blue")
 
@@ -1372,6 +1371,11 @@ right
         elif left_on:
             on = left_on
             right[left_on] = right.index
+
+        if left_index and right_index:
+            on = 'ix'
+            self[on] = self.index
+            right[on] = right.index
 
         # Early termination Error checking
         if type != "":
@@ -1516,6 +1520,13 @@ right
             reverse = self[left_on][df[left_on]-1]
             new_index = new_index[reverse-1]
             df.index = new_index
+
+        if left_index and right_index:
+            df.drop_column('ix')
+            df = df.set_index(self.index[df.index.values])
+
+        if left_on and right_on:
+            df.index = RangeIndex(0, len(df))
 
         _gdf.nvtx_range_pop()
 
