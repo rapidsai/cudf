@@ -35,15 +35,15 @@ namespace{ //anonymous
    *        rule: replace all `old_values[i]` in [old_values_begin`, `old_values_end`)
    *        present in `d_col_data` with `d_new_values[i]`.
    * 
-   * @Param[in,out] d_col_data Device array with the data to be modified
-   * @Param[in] nrows # rows in `d_col_data`
-   * @Param[in] old_values_begin Device pointer to the beginning of the sequence 
+   * @param[in,out] d_col_data Device array with the data to be modified
+   * @param[in] nrows # rows in `d_col_data`
+   * @param[in] old_values_begin Device pointer to the beginning of the sequence 
    * of old values to be replaced
-   * @Param[in] old_values_end  Device pointer to the end of the sequence 
+   * @param[in] old_values_end  Device pointer to the end of the sequence 
    * of old values to be replaced
-   * @Param[in] d_new_values Device array with the new values
+   * @param[in] d_new_values Device array with the new values
    * 
-   * @Returns
+   * @returns
    */
   /* ----------------------------------------------------------------------------*/
   template <class T>
@@ -123,11 +123,11 @@ namespace{ //anonymous
  *        `new_values`, that is, replace all `old_values[i]` present in `col` 
  *        with `new_values[i]`.
  * 
- * @Param[in,out] col gdf_column with the data to be modified
- * @Param[in] old_values gdf_column with the old values to be replaced
- * @Param[in] new_values gdf_column with the new values
+ * @param[in,out] col gdf_column with the data to be modified
+ * @param[in] old_values gdf_column with the old values to be replaced
+ * @param[in] new_values gdf_column with the new values
  * 
- * @Returns GDF_SUCCESS upon successful completion
+ * @returns GDF_SUCCESS upon successful completion
  */
 /* ----------------------------------------------------------------------------*/
 gdf_error gdf_find_and_replace_all(gdf_column*       col,

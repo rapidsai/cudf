@@ -873,20 +873,20 @@ size_t multi_col_group_by_avg_sort(size_t         nrows,
  * @brief Sorts an array of columns, using type erasure and RTTI at
  * comparison operator level.
  * 
- * @Param[in] d_cols Device array to ncols type erased columns
- * @Param[in] d_valids Device array to ncols gdf_valid_type columns
- * @Param[in] d_col_types Device array of runtime column types
- * @Param[in] d_asc_desc Device array of column sort order types
- * @Param[in] ncols # columns
- * @Param[in] nrows # rows
- * @Param[in] have_nulls Whether or not any column have null values
- * @Param[in] nulls_are_smallest Whether or not nulls are smallest
+ * @param[in] d_cols Device array to ncols type erased columns
+ * @param[in] d_valids Device array to ncols gdf_valid_type columns
+ * @param[in] d_col_types Device array of runtime column types
+ * @param[in] d_asc_desc Device array of column sort order types
+ * @param[in] ncols # columns
+ * @param[in] nrows # rows
+ * @param[in] have_nulls Whether or not any column have null values
+ * @param[in] nulls_are_smallest Whether or not nulls are smallest
  * @Param[in] nulls_are_lessthan_always_false. If set to true, nulls will always trigger less than equal to false
- * @Param[in] stream CudaStream to work in
- * @Param[out] d_indx Device array of re-ordered indices after sorting
+ * @param[in] stream CudaStream to work in
+ * @param[out] d_indx Device array of re-ordered indices after sorting
  * @tparam IndexT The type of d_indx array 
  * 
- * @Returns
+ * @returns
  */
 /* ----------------------------------------------------------------------------*/
 template<typename IndexT>
