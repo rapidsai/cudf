@@ -7,16 +7,14 @@
 
 # Copyright (c) 2018, NVIDIA CORPORATION.
 
-from .cudf_cpp cimport *
-from .cudf_cpp import *
+from cudf.bindings.cudf_cpp cimport *
+from cudf.bindings.cudf_cpp import *
 
 import numpy as np
 import pandas as pd
 import pyarrow as pa
 pandas_version = tuple(map(int,pd.__version__.split('.', 2)[:2]))
 
-
-cimport numpy as np
 
 from librmm_cffi import librmm as rmm
 
@@ -35,7 +33,7 @@ def apply_reduce(reduction, col):
     """
 
 
-    outsz = gdf_reduce_optimal_output_size()
+    outsz = gdf_reduction_get_intermediate_output_size()
     out = rmm.device_array(outsz, dtype=col.dtype)
     cdef uintptr_t out_ptr = get_ctype_ptr(out)
 

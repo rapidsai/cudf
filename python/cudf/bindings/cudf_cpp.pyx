@@ -5,15 +5,13 @@
 # cython: embedsignature = True
 # cython: language_level = 3
 
-from .cudf_cpp cimport *
+from cudf.bindings.cudf_cpp cimport *
 
-from .GDFError import GDFError
+from cudf.bindings.GDFError import GDFError
 
 import numpy as np
 import pandas as pd
 import pyarrow as pa
-
-cimport numpy as np
 
 from cudf.utils import cudautils
 from cudf.utils.utils import calc_chunk_size, mask_dtype, mask_bitsize

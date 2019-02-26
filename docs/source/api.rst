@@ -14,12 +14,15 @@ DataFrame
 .. automodule:: cudf.multi
     :members:
 
+..
+  For cudf.melt
+..
 .. automodule:: cudf.reshape.general
     :members:
 
 Series
 ------
-.. autoclass:: cudf.dataframe.series
+.. autoclass:: Series
     :members:
  
 Groupby
@@ -44,6 +47,16 @@ Groupby
 IO
 --
 .. automodule:: cudf.io.csv
+    :members:
+.. automodule:: cudf.io.parquet
+    :members:
+.. automodule:: cudf.io.orc
+    :members:
+.. automodule:: cudf.io.json
+    :members:
+.. automodule:: cudf.io.feather
+    :members:
+.. automodule:: cudf.io.hdf
     :members:
 
 GpuArrowReader

@@ -16,6 +16,17 @@
 #define CUDA_LAUNCHABLE
 #endif
 
+inline gdf_error set_null_count(gdf_column* col) {
+  gdf_size_type valid_count{};
+  gdf_error result =
+      gdf_count_nonzero_mask(col->valid, col->size, &valid_count);
+
+  GDF_REQUIRE(GDF_SUCCESS == result, result);
+
+  col->null_count = col->size - valid_count;
+
+  return GDF_SUCCESS;
+}
 
 CUDA_HOST_DEVICE_CALLABLE 
 bool gdf_is_valid(const gdf_valid_type *valid, gdf_index_type pos) {
@@ -76,12 +87,12 @@ gdf_size_type gdf_get_num_bytes_for_valids_allocation(gdf_size_type column_size)
 /** 
  * @brief Flatten AOS info from gdf_columns into SOA.
  * 
- * @Param[in] cols Host-side array of gdf_columns
- * @Param[in] ncols # columns
- * @Param[out] d_cols Pointer to device array of columns
- * @Param[out] d_types Device array of column types
+ * @param[in] cols Host-side array of gdf_columns
+ * @param[in] ncols # columns
+ * @param[out] d_cols Pointer to device array of columns
+ * @param[out] d_types Device array of column types
  * 
- * @Returns GDF_SUCCESS upon successful completion
+ * @returns GDF_SUCCESS upon successful completion
  */
 /* ----------------------------------------------------------------------------*/
 inline gdf_error soa_col_info(gdf_column* cols, size_t ncols, void** d_cols, int* d_types)
@@ -106,13 +117,13 @@ inline gdf_error soa_col_info(gdf_column* cols, size_t ncols, void** d_cols, int
 /** 
  * @brief Flatten AOS info from gdf_columns into SOA.
  * 
- * @Param[in] cols Host-side array of pointers to gdf_columns
- * @Param[in] ncols # columns
- * @Param[out] d_cols Pointer to device array of columns
- * @Param[out] d_valids Pointer to device array of gdf_valid_type for each column
- * @Param[out] d_types Device array of column types
+ * @param[in] cols Host-side array of pointers to gdf_columns
+ * @param[in] ncols # columns
+ * @param[out] d_cols Pointer to device array of columns
+ * @param[out] d_valids Pointer to device array of gdf_valid_type for each column
+ * @param[out] d_types Device array of column types
  * 
- * @Returns GDF_SUCCESS upon successful completion
+ * @returns GDF_SUCCESS upon successful completion
  */
 /* ----------------------------------------------------------------------------*/
 inline gdf_error soa_col_info(gdf_column** cols, size_t ncols, void** d_cols, gdf_valid_type** d_valids, int* d_types)
