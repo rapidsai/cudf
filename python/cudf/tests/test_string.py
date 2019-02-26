@@ -7,6 +7,7 @@ import pandas as pd
 import pyarrow as pa
 from numba import cuda
 
+from cudf import concat
 from cudf.dataframe import Series
 from cudf.tests.utils import assert_eq
 from librmm_cffi import librmm as rmm
@@ -113,5 +114,20 @@ def test_string_astype(dtype):
 
     expect = ps.astype(dtype)
     got = gs.astype(dtype)
+
+    assert_eq(expect, got)
+
+
+def test_string_concat():
+    data1 = ['a', 'b', 'c', 'd', 'e']
+    data2 = ['f', 'g', 'h', 'i', 'j']
+
+    ps1 = pd.Series(data1)
+    ps2 = pd.Series(data2)
+    gs1 = Series(data1)
+    gs2 = Series(data2)
+
+    expect = pd.concat([ps1, ps2])
+    got = concat([gs1, gs2])
 
     assert_eq(expect, got)

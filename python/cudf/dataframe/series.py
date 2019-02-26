@@ -506,7 +506,7 @@ class Series(object):
 
     @property
     def str(self):
-        return self._column.str()
+        return self._column.str(self.index)
 
     @property
     def dtype(self):

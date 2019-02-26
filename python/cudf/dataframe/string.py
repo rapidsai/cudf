@@ -16,12 +16,13 @@ from cudf.bindings.cudf_cpp import get_ctype_ptr
 from librmm_cffi import librmm as rmm
 
 
-class StringAccessor(object):
+class StringMethods(object):
     """
     This mimicks pandas `df.str` interface.
     """
-    def __init__(self, parent):
+    def __init__(self, parent, index=None):
         self._parent = parent
+        self._index = index
 
     def __getattr__(self, attr, *args, **kwargs):
         if hasattr(self._parent._data, attr):
@@ -36,6 +37,84 @@ class StringAccessor(object):
                 return passed_attr
         else:
             raise AttributeError(attr)
+
+    def len(self):
+        """
+        Computes the length of each element in the Series/Index.
+
+        Returns
+        -------
+          Series or Index of int: A Series or Index of integer values
+            indicating the length of each element in the Series or Index.
+        """
+        from cudf.dataframe.series import Series
+        out_dev_arr = rmm.device_array(len(self._parent), dtype='int32')
+        ptr = get_ctype_ptr(out_dev_arr)
+        self._parent.data.len(ptr)
+        return Series(out_dev_arr)
+
+    def cat(self, others=None, sep=None, na_rep=None):
+        """
+        Concatenate strings in the Series/Index with given separator.
+
+        If *others* is specified, this function concatenates the Series/Index
+        and elements of others element-wise. If others is not passed, then all
+        values in the Series/Index are concatenated into a single string with
+        a given sep.
+
+        Parameters
+        ----------
+            others : Series or List of str
+                Strings to be appended.
+                The number of strings must match size() of this instance.
+                This must be either a Series of string dtype or a Python
+                list of strings.
+
+            sep : str
+                If specified, this separator will be appended to each string
+                before appending the others.
+
+            na_rep : str
+                This character will take the place of any null strings
+                (not empty strings) in either list.
+
+                - If `na_rep` is None, and `others` is None, missing values in
+                the Series/Index are omitted from the result.
+                - If `na_rep` is None, and `others` is not None, a row
+                containing a missing value in any of the columns (before
+                concatenation) will have a missing value in the result.
+
+        Returns
+        -------
+        concat : str or Series/Index of str dtype
+            If `others` is None, `str` is returned, otherwise a `Series/Index`
+            (same type as caller) of str dtype is returned.
+        """
+        from cudf.dataframe import Series, Index
+        if isinstance(others, (Series, Index)):
+            assert others.dtype == np.dtype('str')
+            others = others.data
+        out = Series(self._parent.data.cat(others=others, sep=sep,
+                                           na_rep=na_rep))
+        if len(out) == 1:
+            out = out[0]
+        return out
+
+    def join(self, sep):
+        """
+        Concatenate the Series/Index of strings into a single string.
+
+        Parameters
+        ----------
+            sep : str
+                Delimiter to use between string elements.
+
+        Returns
+        -------
+            str
+        """
+        from cudf.dataframe import Series
+        return Series(self._parent.data.join(sep=sep))[0]
 
 
 class StringColumn(columnops.TypedColumnBase):
@@ -75,8 +154,8 @@ class StringColumn(columnops.TypedColumnBase):
     #               dtype=dtype, categories=categories, ordered=ordered)
     #     return col
 
-    def str(self):
-        return StringAccessor(self)
+    def str(self, index=None):
+        return StringMethods(self, index=index)
 
     def __len__(self):
         return self._data.size()
