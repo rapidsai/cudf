@@ -25,6 +25,20 @@ namespace { //anonymous
         }
     }
 
+/* --------------------------------------------------------------------------*/
+/**
+ * @brief Copy data stream and replace nulls by a scholar value
+ *
+ * @Param[in] data The stream to be copied
+ * @Param[in] mask The bitmask stream for nulls
+ * @Param[in] size The element count of stream
+ * @Param[out] results The stream for the result
+ * @Param[in] identity The scholar value to be used to replace nulls
+ * @Param[in] stream The cuda stream to be used
+ *
+ * @Returns  If the operation was successful, returns GDF_SUCCESS
+ */
+/* ----------------------------------------------------------------------------*/
     template <class T>
     inline
         gdf_error copy_and_replace_nulls(
@@ -49,7 +63,6 @@ namespace { //anonymous
         static
             gdf_error call(const gdf_column *input, gdf_column *output,
                 bool inclusive, cudaStream_t stream) {
-            using cub::DeviceScan;
             gdf_error ret;
             auto scan_function = (inclusive ? inclusive_sum : exclusive_sum);
             size_t size = input->size;
@@ -63,34 +76,37 @@ namespace { //anonymous
                 temp_storage_bytes, d_input, d_output, size, stream)), ret);
             RMM_TRY(RMM_ALLOC(&temp_storage, temp_storage_bytes, stream));
 
-            bool const input_has_nulls{ input->valid != nullptr && input->null_count > 0 };
+            if( nullptr != input->valid ){
+                // copy null bitmask
+                size_t valid_byte_length = gdf_get_num_chars_bitmask(size);
+                CUDA_TRY(cudaMemcpyAsync(output->valid, input->valid,
+                        valid_byte_length, cudaMemcpyDeviceToDevice, stream));
+                output->null_count = input->null_count;
+            }
+
+            bool const input_has_nulls{ nullptr != input->valid &&
+                                        input->null_count > 0 };
             if (input_has_nulls) {
                 // allocate temporary column data
                 T* temp_input;
                 RMM_TRY(RMM_ALLOC(&temp_input, size * sizeof(T), stream));
 
-                // copy bitmask
-                size_t valid_byte_length = gdf_get_num_chars_bitmask(size);
-                CUDA_TRY(cudaMemcpyAsync(output->valid, input->valid,
-                        valid_byte_length, cudaMemcpyDeviceToDevice, stream));
-                output->null_count = input->null_count;
-
-                // copy d_input data and replace with 0 if mask is not valid
+                // copy d_input data and replace with 0 if mask is null
                 copy_and_replace_nulls(
                     static_cast<const T*>(input->data), input->valid,
                     size, temp_input, static_cast<T>(0), stream);
 
                 // Do scan
-                GDF_REQUIRE(GDF_SUCCESS == (ret = scan_function(temp_storage,
-                    temp_storage_bytes, d_input, d_output, size, stream)), ret);
-                scan_function(temp_storage, temp_storage_bytes, temp_input,
-                    d_output, size, stream);
+                ret = scan_function(temp_storage, temp_storage_bytes,
+                    temp_input, d_output, size, stream);
+                GDF_REQUIRE(GDF_SUCCESS == ret, ret);
 
                 RMM_TRY(RMM_FREE(temp_input, stream));
             }
             else {  // Do scan
-                scan_function(temp_storage, temp_storage_bytes,
+                ret = scan_function(temp_storage, temp_storage_bytes,
                     d_input, d_output, size, stream);
+                GDF_REQUIRE(GDF_SUCCESS == ret, ret);
             }
 
             // Cleanup
