@@ -1518,14 +1518,14 @@ class DataFrame(object):
         if right_on:
             new_index = Series(right.index,
                                index=RangeIndex(1, len(right[right_on])))
-            reverse = right[right_on][df[right_on]-1]
-            new_index = new_index[reverse-1]
+            indexed = right[right_on][df[right_on]-1]
+            new_index = new_index[indexed-1]
             df.index = new_index
         elif left_on:
             new_index = Series(self.index,
                                index=RangeIndex(1, len(self[left_on])))
-            reverse = self[left_on][df[left_on]-1]
-            new_index = new_index[reverse-1]
+            indexed = self[left_on][df[left_on]-1]
+            new_index = new_index[indexed-1]
             df.index = new_index
 
         if left_index and right_index:
