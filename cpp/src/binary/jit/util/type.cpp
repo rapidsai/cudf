@@ -16,34 +16,37 @@
  */
 
 #include "binary/jit/util/type.h"
+#include "utilities/type_dispatcher.hpp"
 
 namespace cudf {
 namespace binops {
 namespace jit {
 
-    const char* getTypeName(gdf_dtype type) {
-        switch (type) {
-            case GDF_INT8:
-                return "int8_t";
-            case GDF_INT16:
-                return "int16_t";
-            case GDF_INT32:
-            case GDF_DATE32:
-                return "int32_t";
-            case GDF_INT64:
-            case GDF_DATE64:
-            case GDF_TIMESTAMP:
-                return "int64_t";
-            case GDF_FLOAT32:
-                return "float";
-            case GDF_FLOAT64:
-                return "double";
-            default:
-                return "double";
+    struct type_name {
+        template <class T>
+        CUDA_HOST_DEVICE_CALLABLE
+        std::string operator()() {
+#if defined(__clang__) || defined(__GNUC__)
+            std::string p = __PRETTY_FUNCTION__;
+            std::string search_str = "T = ";
+            size_t start_pos = p.find(search_str) + search_str.size();
+            std::string wrapper_str = "wrapper<";
+            size_t wrapper_pos = p.find(wrapper_str, start_pos);
+            if (wrapper_pos != std::string::npos)
+                start_pos = wrapper_pos + wrapper_str.size();
+            size_t end_pos = p.find_first_of(",;]", start_pos);
+            return p.substr(start_pos, end_pos - start_pos);
+#else
+#   error Only clang and gcc supported
+#endif
         }
-    }
+    };
 
-    const char* getOperatorName(gdf_binary_operator ope) {
+    std::string getTypeName(gdf_dtype type) {
+        return type_dispatcher(type, type_name());
+    }
+ 
+    std::string getOperatorName(gdf_binary_operator ope) {
         switch (ope) {
             case GDF_ADD:
                 return "Add";

@@ -19,14 +19,15 @@
 #define GDF_BINARY_OPERATION_JIT_UTIL_TYPE_H
 
 #include "cudf.h"
+#include <string>
 
 namespace cudf {
 namespace binops {
 namespace jit {
 
-    const char* getTypeName(gdf_dtype type);
+    std::string getTypeName(gdf_dtype type);
 
-    const char* getOperatorName(gdf_binary_operator ope);
+    std::string getOperatorName(gdf_binary_operator ope);
 
 }
 }

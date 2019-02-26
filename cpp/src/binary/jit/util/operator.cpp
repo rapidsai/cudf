@@ -34,7 +34,7 @@ namespace jit {
             buffer[0] = 'R';
             buffer[1] = '\0';
         }
-        strcat(buffer, jit::getOperatorName(ope));
+        strcat(buffer, jit::getOperatorName(ope).data());
         return buffer;
     }
 
