@@ -193,13 +193,15 @@ gdf_error gdf_column_view_augmented(gdf_column *column,
                                     gdf_valid_type *valid,
 		                                gdf_size_type size,
                                     gdf_dtype dtype,
-                                    gdf_size_type null_count)
+                                    gdf_size_type null_count,
+                                    gdf_dtype_extra_info extra_info)
 {
 	column->data = data;
 	column->valid = valid;
 	column->size = size;
 	column->dtype = dtype;
 	column->null_count = null_count;
+	column->dtype_info = extra_info;
 	return GDF_SUCCESS;
 }
 
