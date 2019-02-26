@@ -1305,10 +1305,11 @@ class DataFrame(object):
     def T(self):
         return self.transpose()
 
-    def merge(self, right, on=None, how='left', lsuffix='_x', rsuffix='_y',
+    def merge(self, right, on=None, how='inner', right_on=None,
+              left_index=False, lsuffix='_x', rsuffix='_y',
               type="", method='hash'):
-        """Merge GPU DataFrame objects by performing a database-style join operation
-        by columns or indexes.
+        """Merge GPU DataFrame objects by performing a database-style join
+        operation by columns or indexes.
 
         Parameters
         ----------
@@ -1364,6 +1365,10 @@ class DataFrame(object):
 
         """
         _gdf.nvtx_range_push("CUDF_JOIN", "blue")
+
+        if right_on:
+            on = right_on
+            self[right_on] = self.index
 
         # Early termination Error checking
         if type != "":
@@ -1437,6 +1442,9 @@ class DataFrame(object):
                 f_n = fix_name(name, rsuffix)
                 col_cats[f_n] = right[name].cat.categories
 
+        print(lhs)
+        print(rhs)
+        breakpoint()
         # Compute merge
         cols, valids = cpp_join.join(lhs._cols, rhs._cols, on, how,
                                      method=method)
