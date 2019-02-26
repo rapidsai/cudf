@@ -110,8 +110,12 @@ TEST(gdf_csv_test, Numbers)
 		EXPECT_THAT( ACol.hostdata(), ::testing::ElementsAre<int16_t>(10, -11, 12, -13) );
 		EXPECT_THAT( BCol.hostdata(), ::testing::ElementsAre<int32_t>(20, -21, 22, -23) );
 		EXPECT_THAT( CCol.hostdata(), ::testing::ElementsAre<int64_t>(30, -31, 32, -33) );
-		EXPECT_THAT( DCol.hostdata(), ::testing::ElementsAre<double>(0.40, -0.41, 0.42, -0.43) );
-		EXPECT_THAT( ECol.hostdata(), ::testing::ElementsAre<float>(50000, -51111, 52222, -53333) );
+		EXPECT_THAT( DCol.hostdata(),
+			::testing::Pointwise(FloatNearPointwise(1e-7),
+				std::vector<double>{ 0.40, -0.41, 0.42, -0.43 }) );
+		EXPECT_THAT( ECol.hostdata(),
+			::testing::Pointwise(FloatNearPointwise(1e-7),
+				std::vector<float>{ 50000, -51111, 52222, -53333 }) );
 	}
 }
 
@@ -455,7 +459,8 @@ TEST(gdf_csv_test, Dates)
 
 	std::ofstream outfile(fname, std::ofstream::out);
 	outfile << "05/03/2001\n31/10/2010\n20/10/1994\n18/10/1990\n1/1/1970\n";
-	outfile << "18/04/1995\n14/07/1994\n07/06/2006\n16/09/2005\n2/2/1970\n";
+	outfile << "18/04/1995\n14/07/1994\n07/06/2006 11:20:30.400\n";
+	outfile << "16/09/2005T1:2:30.400PM\n2/2/1970\n";
 	outfile.close();
 	ASSERT_TRUE( checkFile(fname) );
 
@@ -479,9 +484,9 @@ TEST(gdf_csv_test, Dates)
 
 		auto ACol = gdf_host_column<uint64_t>(args.data[0]);
 		EXPECT_THAT( ACol.hostdata(),
-			::testing::ElementsAre(983750400000, 1288483200000, 782611200000,
-								   656208000000, 0, 798163200000, 774144000000,
-								   1149638400000, 1126828800000, 2764800000) );
+		  ::testing::ElementsAre(983750400000, 1288483200000, 782611200000,
+		               656208000000, 0, 798163200000, 774144000000,
+		               1149679230400, 1126875750400, 2764800000) );
 	}
 }
 
@@ -492,7 +497,7 @@ TEST(gdf_csv_test, FloatingPoint)
 	const char* types[]			= { "float32" };
 
 	std::ofstream outfile(fname, std::ofstream::out);
-	outfile << "5.6;0.5679e2;1.2e10;0.07e1;3000e-3;12.34e0;";
+	outfile << "5.6;0.5679e2;1.2e10;0.07e1;3000e-3;12.34e0;3.1e-001;-73.98007199999998;";
 	outfile.close();
 	ASSERT_TRUE( checkFile(fname) );
 
@@ -517,7 +522,40 @@ TEST(gdf_csv_test, FloatingPoint)
 		auto ACol = gdf_host_column<float>(args.data[0]);
 		EXPECT_THAT( ACol.hostdata(),
 			::testing::Pointwise(FloatNearPointwise(1e-6),
-				std::vector<float>{ 5.6, 56.79, 12000000000, 0.7, 3.000, 12.34 }) );
+				std::vector<float>{ 5.6, 56.79, 12000000000, 0.7, 3.000, 12.34, 0.31, -73.98007199999998 }) );
+	}
+}
+
+TEST(gdf_csv_test, Category)
+{
+	const char* fname = "/tmp/CsvCategory.csv";
+	const char* names[] = { "UserID" };
+	const char* types[] = { "category" };
+
+	std::ofstream outfile(fname, std::ofstream::out);
+	outfile << "HBM0676;KRC0842;ILM1441;EJV0094;";
+	outfile.close();
+	ASSERT_TRUE( checkFile(fname) );
+
+	{
+		csv_read_arg args{};
+		args.input_data_form = gdf_csv_input_form::FILE_PATH;
+		args.filepath_or_buffer = fname;
+		args.num_cols = std::extent<decltype(names)>::value;
+		args.names = names;
+		args.dtype = types;
+		args.delimiter = ',';
+		args.lineterminator = ';';
+		args.header = -1;
+		args.nrows = -1;
+		EXPECT_EQ( read_csv(&args), GDF_SUCCESS );
+
+		EXPECT_EQ( args.num_cols_out, args.num_cols );
+		ASSERT_EQ( args.data[0]->dtype, GDF_CATEGORY );
+
+		auto ACol = gdf_host_column<int32_t>(args.data[0]);
+		EXPECT_THAT( ACol.hostdata(),
+			::testing::ElementsAre(2022314536, -189888986, 1512937027, 397836265) );
 	}
 }
 

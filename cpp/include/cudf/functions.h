@@ -199,6 +199,20 @@ gdf_error gdf_segmented_radixsort_generic(gdf_segmented_radixsort_plan_type *hdl
                                      unsigned *d_begin_offsets,
                                      unsigned *d_end_offsets);
 
+
+// transpose
+/**
+ * @brief Transposes the table in_cols and copies to out_cols
+ * 
+ * @param[in] ncols Number of columns in in_cols
+ * @param[in] in_cols[] Input table of (ncols) number of columns each of size (nrows)
+ * @param[out] out_cols[] Preallocated output_table of (nrows) columns each of size (ncols)
+ * @return gdf_error GDF_SUCCESS if successful, else appropriate error code
+ */
+gdf_error gdf_transpose(gdf_size_type ncols,
+                        gdf_column** in_cols,
+                        gdf_column** out_cols);
+
 // joins
 
 
@@ -699,7 +713,8 @@ gdf_error gdf_validity_and(gdf_column *lhs, gdf_column *rhs, gdf_column *output)
 /* reductions
 
 The following reduction functions use the result array as a temporary working
-space.  Use gdf_reduce_optimal_output_size() to get its optimal size.
+space.  Use gdf_reduction_get_intermediate_output_size() to get the necessary
+size for this use.
 */
 
 
@@ -714,7 +729,7 @@ space.  Use gdf_reduce_optimal_output_size() to get its optimal size.
  *       block sum rather than launch a second kernel. When that happens, this
  *       function can go away and the output can be a single element.
  * --------------------------------------------------------------------------*/
-unsigned int gdf_reduce_optimal_output_size();
+unsigned int gdf_reduction_get_intermediate_output_size();
 
 /* --------------------------------------------------------------------------*
  * @brief  Computes the sum of the values in all rows of a column
@@ -722,7 +737,7 @@ unsigned int gdf_reduce_optimal_output_size();
  * @param[in] col Input column
  * @param[out] dev_result The output sum 
  * @param[in] dev_result_size The size of dev_result in elements, which should
- *                            be computed using gdf_reduce_optimal_output_size
+ *                            be computed using gdf_reduction_get_intermediate_output_size
  *                            This is used as intermediate storage, and the 
  *                            first element contains the total result
  * 
@@ -739,7 +754,7 @@ gdf_error gdf_sum(gdf_column *col, void *dev_result, gdf_size_type dev_result_si
  * @param[in] col Input column
  * @param[out] dev_result The output product
  * @param[in] dev_result_size The size of dev_result in elements, which should
- *                            be computed using gdf_reduce_optimal_output_size
+ *                            be computed using gdf_reduction_get_intermediate_output_size
  *                            This is used as intermediate storage, and the 
  *                            first element contains the total result
  * 
@@ -756,7 +771,7 @@ gdf_error gdf_product(gdf_column *col, void *dev_result, gdf_size_type dev_resul
  * @param[in] col Input column
  * @param[out] dev_result The output sum of squares
  * @param[in] dev_result_size The size of dev_result in elements, which should
- *                            be computed using gdf_reduce_optimal_output_size
+ *                            be computed using gdf_reduction_get_intermediate_output_size
  *                            This is used as intermediate storage, and the 
  *                            first element contains the total result
  * 
@@ -774,7 +789,7 @@ gdf_error gdf_sum_of_squares(gdf_column *col, void *dev_result, gdf_size_type de
  * @param[in] col Input column
  * @param[out] dev_result The output minimum
  * @param[in] dev_result_size The size of dev_result in elements, which should
- *                            be computed using gdf_reduce_optimal_output_size
+ *                            be computed using gdf_reduction_get_intermediate_output_size
  *                            This is used as intermediate storage, and the 
  *                            first element contains the total result
  * 
@@ -790,7 +805,7 @@ gdf_error gdf_min(gdf_column *col, void *dev_result, gdf_size_type dev_result_si
  * @param[in] col Input column
  * @param[out] dev_result The output maximum
  * @param[in] dev_result_size The size of dev_result in elements, which should
- *                            be computed using gdf_reduce_optimal_output_size
+ *                            be computed using gdf_reduction_get_intermediate_output_size
  *                            This is used as intermediate storage, and the 
  *                            first element contains the total result
  * 
@@ -807,28 +822,28 @@ gdf_error gdf_max(gdf_column *col, void *dev_result, gdf_size_type dev_result_si
 
 
 //These compare every value on the left hand side to a static value and return a stencil in output which will have 1 when the comparison operation returns 1 and 0 otherwise
-gdf_error gpu_comparison_static_i8(gdf_column *lhs, int8_t value, gdf_column *output,gdf_comparison_operator operation);
-gdf_error gpu_comparison_static_i16(gdf_column *lhs, int16_t value, gdf_column *output,gdf_comparison_operator operation);
-gdf_error gpu_comparison_static_i32(gdf_column *lhs, int32_t value, gdf_column *output,gdf_comparison_operator operation);
-gdf_error gpu_comparison_static_i64(gdf_column *lhs, int64_t value, gdf_column *output,gdf_comparison_operator operation);
-gdf_error gpu_comparison_static_f32(gdf_column *lhs, float value, gdf_column *output,gdf_comparison_operator operation);
-gdf_error gpu_comparison_static_f64(gdf_column *lhs, double value, gdf_column *output,gdf_comparison_operator operation);
+gdf_error gdf_comparison_static_i8(gdf_column *lhs, int8_t value, gdf_column *output,gdf_comparison_operator operation);
+gdf_error gdf_comparison_static_i16(gdf_column *lhs, int16_t value, gdf_column *output,gdf_comparison_operator operation);
+gdf_error gdf_comparison_static_i32(gdf_column *lhs, int32_t value, gdf_column *output,gdf_comparison_operator operation);
+gdf_error gdf_comparison_static_i64(gdf_column *lhs, int64_t value, gdf_column *output,gdf_comparison_operator operation);
+gdf_error gdf_comparison_static_f32(gdf_column *lhs, float value, gdf_column *output,gdf_comparison_operator operation);
+gdf_error gdf_comparison_static_f64(gdf_column *lhs, double value, gdf_column *output,gdf_comparison_operator operation);
 
 //allows you two compare two columns against each other using a comparison operation, retunrs a stencil like functions above
-gdf_error gpu_comparison(gdf_column *lhs, gdf_column *rhs, gdf_column *output,gdf_comparison_operator operation);
+gdf_error gdf_comparison(gdf_column *lhs, gdf_column *rhs, gdf_column *output,gdf_comparison_operator operation);
 
 //takes a stencil and uses it to compact a colum e.g. remove all values for which the stencil = 0
 //The lhs column is expected to have 0 null_count otherwise GDF_VALIDITY_UNSUPPORTED is returned
-gdf_error gpu_apply_stencil(gdf_column *lhs, gdf_column * stencil, gdf_column * output);
+gdf_error gdf_apply_stencil(gdf_column *lhs, gdf_column * stencil, gdf_column * output);
 
-gdf_error gpu_concat(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
+gdf_error gdf_concat(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
 
 /*
  * Hashing
  */
 //class cudaStream_t;
 
-gdf_error gpu_hash_columns(gdf_column ** columns_to_hash, int num_columns, gdf_column * output_column, void * stream);
+gdf_error gdf_hash_columns(gdf_column ** columns_to_hash, int num_columns, gdf_column * output_column, void * stream);
 
 /*
  * gdf introspection utlities
@@ -949,3 +964,55 @@ gdf_error gdf_order_by(gdf_column** input_columns,
                        size_t       num_inputs,
                        gdf_column*  output_indices,
                        int          flag_nulls_are_smallest);
+
+/* --------------------------------------------------------------------------*
+ * @brief Replaces all null values in a column with either a specific value or corresponding values of another column
+ *
+ * This function is a binary function. It will take in two gdf_columns.
+
+ * The first one is expected to be a regular gdf_column, the second one
+ * has to be a column of the same type as the first, and it has to be of
+ * size one or of the same size as the other column.
+ * 
+ * case 1: If the second column contains only one value, then this funciton will
+ * replace all nulls in the first column with the value in the second
+ * column.
+ *  
+ * case 2: If the second column is of the same size as the first, then the function will
+ * replace all nulls of the first column with the corresponding elemetns of the
+ * second column
+ * 
+ * @Param[in,out] col_out A gdf_column that is the output of this function with null values replaced
+ * @Param[in] col_in A gdf_column that is of size 1 or same size as col_out, contains value / values to be placed in col_out
+ * 
+ * @Returns GDF_SUCCESS upon successful completion
+ *
+ * --------------------------------------------------------------------------*/
+gdf_error gdf_replace_nulls(gdf_column*       col_out,
+                                   const gdf_column* col_in);
+/* --------------------------------------------------------------------------*
+ * @brief Finds the indices of the bins in which each value of the column
+ * belongs.
+ *
+ * For `x` in `col`, if `right == false` this function finds
+ * `i` such that `bins[i-1] <= x < bins[i]`. If `right == true`, it will find `i`
+ * such that `bins[i - 1] < x <= bins[i]`. Finally, if `x < bins[0]` or
+ * `x > bins[num_bins - 1]`, it sets the index to `0` or `num_bins`, respectively.
+ *
+ * NOTE: This function does not handle null values and will return an error if `col`
+ * or `bins` contain any.
+ *
+ * @param[in] col gdf_column with the values to be binned
+ * @param[in] bins gdf_column of ascending bin boundaries
+ * @param[in] right Whether the intervals should include the left or right bin edge
+ * @param[out] out_indices Output device array of same size as `col`
+ * to be filled with bin indices
+ *
+ * @return GDF_SUCCESS upon successful completion, otherwise an
+ *         appropriate error code.
+ *
+ * ----------------------------------------------------------------------------*/
+gdf_error gdf_digitize(gdf_column* col,
+                       gdf_column* bins,   // same type as col
+                       bool right,
+                       gdf_index_type out_indices[]);
