@@ -1593,15 +1593,15 @@ gdf_error launch_dataTypeDetection(raw_csv_t *raw_csv,
  * Data is processed in one row/record at a time, so the number of total
  * threads (tid) is equal to the number of rows.
  *
- * @Param[in] raw_csv The entire CSV data to read
- * @Param[in] opts A set of parsing options
- * @Param[in] num_records The number of lines/rows of CSV data
- * @Param[in] num_columns The number of columns of CSV data
- * @Param[in] parseCol Whether to parse or skip a column
- * @Param[in] recStart The start the CSV data of interest
- * @Param[out] d_columnData The count for each column data type
+ * @param[in] raw_csv The entire CSV data to read
+ * @param[in] opts A set of parsing options
+ * @param[in] num_records The number of lines/rows of CSV data
+ * @param[in] num_columns The number of columns of CSV data
+ * @param[in] parseCol Whether to parse or skip a column
+ * @param[in] recStart The start the CSV data of interest
+ * @param[out] d_columnData The count for each column data type
  *
- * @Returns GDF_SUCCESS upon successful computation
+ * @returns GDF_SUCCESS upon successful computation
  *---------------------------------------------------------------------------**/
 __global__
 void dataTypeDetection(char *raw_csv,
