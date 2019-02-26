@@ -1312,8 +1312,8 @@ class DataFrame(object):
     def T(self):
         return self.transpose()
 
-    def merge(self, right, on=None, how='inner', right_on=None, left_on=None,
-              right_index=False, left_index=False, lsuffix='_x', rsuffix='_y',
+    def merge(self, right, on=None, how='inner', left_on=None, right_on=None,
+              left_index=False, right_index=False, lsuffix='_x', rsuffix='_y',
               type="", method='hash'):
         """Merge GPU DataFrame objects by performing a database-style join
         operation by columns or indexes.
@@ -1328,6 +1328,18 @@ class DataFrame(object):
             If on is None and not merging on indexes then
             this defaults to the intersection of the columns
             in both DataFrames.
+        left_on : label or list, or array-like
+            Column or index level names to join on in the left DataFrame.
+            Can also be an array or list of arrays of the length of the
+            left DataFrame. These arrays are treated as if they are columns.
+        right_on : label or list, or array-like
+            Column or index level names to join on in the right DataFrame.
+            Can also be an array or list of arrays of the length of the
+            right DataFrame. These arrays are treated as if they are columns.
+        left_index : bool, default False
+            Use the index from the left DataFrame as the join key(s).
+        right_index : bool, default False
+            Use the index from the right DataFrame as the join key.
         how : str, defaults to 'left'
             Only accepts 'left'
             left: use only keys from left frame, similar to
