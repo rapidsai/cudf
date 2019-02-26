@@ -33,6 +33,7 @@ struct SerialTrieNode {
 	int16_t children_offset = -1;
 	char character;
 	bool is_leaf;
+    SerialTrieNode() = default; // FIXME This is necessary for a Thrust bug on CentOS7 + CUDA10
 	explicit SerialTrieNode(char c, bool leaf = false) noexcept
 		: character(c), is_leaf(leaf) {}
 };
