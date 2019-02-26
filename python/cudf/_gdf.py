@@ -188,6 +188,12 @@ _join_method_api = {
     'hash': libgdf.GDF_HASH
 }
 
+_null_sort_behavior_api = {
+    'null_as_largest': libgdf.GDF_NULL_AS_LARGEST, 
+    'null_as_smallest': libgdf.GDF_NULL_AS_SMALLEST,
+    'null_as_largest_multisort': libgdf.GDF_NULL_AS_LARGEST_FOR_MULTISORT
+}
+
 
 def cffi_view_to_column_mem(cffi_view):
     intaddr = int(ffi.cast("uintptr_t", cffi_view.data))
@@ -220,12 +226,13 @@ def apply_join(col_lhs, col_rhs, how, method='hash'):
 
     joiner = _join_how_api[how]
     method_api = _join_method_api[method]
+    null_sort_behavior_api = _null_sort_behavior_api['null_as_largest']
     gdf_context = ffi.new('gdf_context*')
 
     if method == 'hash':
-        libgdf.gdf_context_view(gdf_context, 0, method_api, 0, 0, 0)
+        libgdf.gdf_context_view(gdf_context, 0, method_api, 0, 0, 0, null_sort_behavior_api)
     elif method == 'sort':
-        libgdf.gdf_context_view(gdf_context, 1, method_api, 0, 0, 0)
+        libgdf.gdf_context_view(gdf_context, 1, method_api, 0, 0, 0, null_sort_behavior_api)
     else:
         msg = "method not supported"
         raise ValueError(msg)
@@ -267,9 +274,10 @@ def apply_join(col_lhs, col_rhs, how, method='hash'):
 def libgdf_join(col_lhs, col_rhs, on, how, method='sort'):
     joiner = _join_how_api[how]
     method_api = _join_method_api[method]
+    null_sort_behavior_api = _null_sort_behavior_api['null_as_largest']
     gdf_context = ffi.new('gdf_context*')
 
-    libgdf.gdf_context_view(gdf_context, 0, method_api, 0, 0, 0)
+    libgdf.gdf_context_view(gdf_context, 0, method_api, 0, 0, 0, null_sort_behavior_api)
 
     if how not in ['left', 'inner', 'outer']:
         msg = "new join api only supports left or inner"
@@ -578,8 +586,8 @@ def quantile(column, quant, method, exact):
     """
     gdf_context = ffi.new('gdf_context*')
     method_api = _join_method_api['sort']
-    libgdf.gdf_context_view(gdf_context, 0, method_api, 0, 0, 0)
-    # libgdf.gdf_context_view(gdf_context, 0, method_api, 0)
+    null_sort_behavior_api = _null_sort_behavior_api['null_as_largest']
+    libgdf.gdf_context_view(gdf_context, 0, method_api, 0, 0, 0, null_sort_behavior_api)
     # px = ffi.new("double *")
     res = []
     for q in quant:
