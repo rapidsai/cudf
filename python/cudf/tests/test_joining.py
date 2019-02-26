@@ -490,3 +490,27 @@ def test_merge_left_index():
     gd_merge = gleft.merge(gright, left_index=True, right_on='y')
 
     assert_eq(pd_merge, gd_merge)
+
+
+def test_merge_right_index():
+    left = pd.DataFrame({'x': [1, 2, 3, 4, 5, 6]}, index=[1, 2, 3, 4, 5, 6])
+    right = pd.DataFrame({'y': [10, 20, 30, 6, 5, 4]},
+                         index=[1, 2, 3, 4, 5, 7])
+    gleft = DataFrame.from_pandas(left)
+    gright = DataFrame.from_pandas(right)
+    pd_merge = left.merge(right, right_index=True, left_on='x')
+    gd_merge = gleft.merge(gright, right_index=True, left_on='x')
+
+    assert_eq(pd_merge, gd_merge)
+
+
+def test_merge_left_right_index():
+    left = pd.DataFrame({'x': [1, 2, 3, 4, 5, 6]}, index=[1, 2, 3, 4, 5, 6])
+    right = pd.DataFrame({'y': [10, 20, 30, 6, 5, 4]},
+                         index=[1, 2, 3, 4, 5, 7])
+    gleft = DataFrame.from_pandas(left)
+    gright = DataFrame.from_pandas(right)
+    pd_merge = left.merge(right, left_index=True, right_index=True)
+    gd_merge = gleft.merge(gright, left_index=True, right_index=True)
+
+    assert_eq(pd_merge, gd_merge)

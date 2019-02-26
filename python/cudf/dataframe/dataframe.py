@@ -1305,8 +1305,8 @@ class DataFrame(object):
     def T(self):
         return self.transpose()
 
-    def merge(self, right, on=None, how='inner', right_on=None,
-              left_index=False, lsuffix='_x', rsuffix='_y',
+    def merge(self, right, on=None, how='inner', right_on=None, left_on=None,
+              right_index=False, left_index=False, lsuffix='_x', rsuffix='_y',
               type="", method='hash'):
         """Merge GPU DataFrame objects by performing a database-style join
         operation by columns or indexes.
@@ -1362,13 +1362,16 @@ class DataFrame(object):
              1    2 12.0   11.0
              4    3 13.0
              2    4 14.0   12.0
-
+right
         """
         _gdf.nvtx_range_push("CUDF_JOIN", "blue")
 
         if right_on:
             on = right_on
             self[right_on] = self.index
+        elif left_on:
+            on = left_on
+            right[left_on] = right.index
 
         # Early termination Error checking
         if type != "":
@@ -1442,9 +1445,6 @@ class DataFrame(object):
                 f_n = fix_name(name, rsuffix)
                 col_cats[f_n] = right[name].cat.categories
 
-        print(lhs)
-        print(rhs)
-        breakpoint()
         # Compute merge
         cols, valids = cpp_join.join(lhs._cols, rhs._cols, on, how,
                                      method=method)
@@ -1503,6 +1503,19 @@ class DataFrame(object):
                         categories=categories,
                         )
                 right_column_idx = right_column_idx + 1
+
+        if right_on:
+            new_index = Series(right.index,
+                               index=RangeIndex(1, len(right[right_on])))
+            reverse = right[right_on][df[right_on]-1]
+            new_index = new_index[reverse-1]
+            df.index = new_index
+        elif left_on:
+            new_index = Series(self.index,
+                               index=RangeIndex(1, len(self[left_on])))
+            reverse = self[left_on][df[left_on]-1]
+            new_index = new_index[reverse-1]
+            df.index = new_index
 
         _gdf.nvtx_range_pop()
 
