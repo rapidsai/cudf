@@ -7,7 +7,7 @@ import numpy as np
 from libgdf_cffi import ffi, libgdf
 from librmm_cffi import librmm as rmm
 
-from .utils import (new_column, unwrap_devary, get_dtype, gen_rand)
+from libgdf_cffi.tests.utils import (new_column, unwrap_devary, get_dtype, gen_rand)
 
 
 params_dtype = [

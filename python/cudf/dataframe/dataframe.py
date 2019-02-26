@@ -220,7 +220,8 @@ class DataFrame(object):
         >>> df[[True, False, True, False]] # mask the entire dataframe,
         # returning the rows specified in the boolean mask
         """
-        if isinstance(arg, str) or isinstance(arg, numbers.Integral):
+        if isinstance(arg, str) or isinstance(arg, numbers.Integral) or \
+           isinstance(arg, tuple):
             s = self._cols[arg]
             s.name = arg
             return s
@@ -265,10 +266,16 @@ class DataFrame(object):
         return df
 
     def __setitem__(self, name, col):
-        """Add/set column by *name*
+        """Add/set column by *name or DataFrame*
         """
+        # div[div < 0] = 0
+        if isinstance(name, DataFrame):
+            for col_name in self._cols:
+                mask = name[col_name]
+                self._cols[col_name] = self._cols[col_name] \
+                                           .masked_assign(value=col, mask=mask)
 
-        if name in self._cols:
+        elif name in self._cols:
             self._cols[name] = self._prepare_series_for_add(col)
         else:
             self.add_column(name, col)
