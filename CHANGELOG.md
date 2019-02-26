@@ -48,6 +48,7 @@
 - PR #532 CSV Reader: Use type dispatcher instead of switch block
 - PR #878 Add better indexing to Groupby
 - PR #554 Add `empty` method and `is_monotonic` attribute to `Index`
+- PR #1040 Fixed up Doxygen comment tags
 - PR #909 CSV Reader: Avoid host->device->host copy for header row data
 - PR #916 Improved unit testing and error checking for `gdf_column_concat`
 - PR #941 Replace `numpy` call in `Series.hash_encode` with `numba`
@@ -58,6 +59,7 @@
 - PR #1017 concatenate along columns for Series and DataFrames
 - PR #1002 Support indexing a dataframe with another boolean dataframe
 - PR #1018 Better concatenation for Series and Dataframes
+
 
 ## Bug Fixes
 
