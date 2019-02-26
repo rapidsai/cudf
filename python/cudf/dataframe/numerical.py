@@ -410,7 +410,7 @@ def numeric_column_binop(lhs, rhs, op, out_dtype):
     else:
         # Use compiled implementation
         null_count = _gdf.apply_binaryop(_binary_impl[op], lhs, rhs, out)
-    
+
     out = out.replace(null_count=null_count)
     result = out.view(NumericalColumn, dtype=out_dtype)
     nvtx_range_pop()
