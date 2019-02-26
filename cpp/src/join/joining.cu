@@ -46,7 +46,7 @@ constexpr output_index_type MAX_JOIN_SIZE{std::numeric_limits<output_index_type>
  * @tparam join_type The type of join to be performed
  * @tparam size_type The data type used for size calculations
  * 
- * @Returns Upon successful computation, returns GDF_SUCCESS. Otherwise returns appropriate error code 
+ * @returns Upon successful computation, returns GDF_SUCCESS. Otherwise returns appropriate error code 
  */
 /* ----------------------------------------------------------------------------*/
 template <JoinType join_type, 
@@ -132,7 +132,7 @@ gdf_error sort_join_typed(gdf_column *leftcol, gdf_column *rightcol,
  *             are already sorted.
  * @tparama join_type The type of join to perform
  * 
- * @Returns GDF_SUCCESS upon succesful completion of the join, otherwise returns 
+ * @returns GDF_SUCCESS upon succesful completion of the join, otherwise returns 
  *          appropriate error code.
  */
 /* ----------------------------------------------------------------------------*/
@@ -177,7 +177,7 @@ gdf_error sort_join<JoinType::LEFT_JOIN>(gdf_column *leftcol, gdf_column *rightc
  * @tparam data_type The data type to be used for the buffer
  * @tparam size_type The data type used for size calculations
  * 
- * @Returns GDF_SUCCESS upon succesful completion
+ * @returns GDF_SUCCESS upon succesful completion
  */
 /* ----------------------------------------------------------------------------*/
 template <typename data_type,
@@ -200,7 +200,7 @@ gdf_error allocValueBuffer(data_type ** buffer,
  * @tparam data_type The data type to be used for the buffer
  * @tparam size_type The data type used for size calculations
  * 
- * @Returns GDF_SUCCESS upon succesful completion
+ * @returns GDF_SUCCESS upon succesful completion
  */
 /* ----------------------------------------------------------------------------*/
 template <typename data_type,
@@ -225,7 +225,7 @@ gdf_error allocSequenceBuffer(data_type ** buffer,
  * @param[out] right_result The join computed indices of the right table
  * @tparam size_type The data type used for size calculations
  * 
- * @Returns GDF_SUCCESS upon succesfull compute, otherwise returns appropriate error code
+ * @returns GDF_SUCCESS upon succesfull compute, otherwise returns appropriate error code
  */
 /* ----------------------------------------------------------------------------*/
 template<typename size_type>
@@ -280,7 +280,7 @@ gdf_error trivial_full_join(
  *                         whether to perform a hash or sort based join
  * @tparam join_type The type of join to be performed
  * 
- * @Returns GDF_SUCCESS upon succesfull compute, otherwise returns appropriate error code
+ * @returns GDF_SUCCESS upon succesfull compute, otherwise returns appropriate error code
  */
 /* ----------------------------------------------------------------------------*/
 template <JoinType join_type>

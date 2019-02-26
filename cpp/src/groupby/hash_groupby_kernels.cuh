@@ -24,20 +24,20 @@
 
 /* --------------------------------------------------------------------------*/
 /** 
- * @Synopsis Takes in two columns of equal length. One column to groupby and the
+ * @brief Takes in two columns of equal length. One column to groupby and the
  * other to aggregate with a provided aggregation operation. The pair
  * (groupby[i], aggregation[i]) are inserted as a key-value pair into a hash table.
  * When inserting values for the same key multiple times, the aggregation operation 
  * is performed between the existing value and the new value.
  *            
  * 
- * @Param the_map The hash table to use for building the aggregation table
- * @Param groupby_column The column used as keys into the hash table
- * @Param aggregation_column The column used as the values of the hash table
- * @Param column_size The size of both columns
- * @Param op The aggregation operation to perform between new and existing hash table values
+ * @param the_map The hash table to use for building the aggregation table
+ * @param groupby_column The column used as keys into the hash table
+ * @param aggregation_column The column used as the values of the hash table
+ * @param column_size The size of both columns
+ * @param op The aggregation operation to perform between new and existing hash table values
  * 
- * @Returns   
+ * @returns   
  */
 /* ----------------------------------------------------------------------------*/
 template<typename map_type, 
@@ -110,17 +110,17 @@ __global__ void build_aggregation_table(map_type * const __restrict__ the_map,
 
 /* --------------------------------------------------------------------------*/
 /** 
- * @Synopsis Extracts the keys and their respective values from the hash table
+ * @brief Extracts the keys and their respective values from the hash table
  * and returns them as contiguous arrays.
  * 
- * @Param the_map The hash table to extract from 
- * @Param map_size The total capacity of the hash table
- * @Param groupby_out_column The output array for the hash table keys
- * @Param aggregation_out_column The output array for the hash table values
- * @Param global_write_index A variable in device global memory used to coordinate
+ * @param the_map The hash table to extract from 
+ * @param map_size The total capacity of the hash table
+ * @param groupby_out_column The output array for the hash table keys
+ * @param aggregation_out_column The output array for the hash table values
+ * @param global_write_index A variable in device global memory used to coordinate
  * where threads write their output
  * 
- * @Returns   
+ * @returns   
  */
 /* ----------------------------------------------------------------------------*/
 template<typename map_type,

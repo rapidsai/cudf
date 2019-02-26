@@ -12,7 +12,7 @@
  * @param[in] name The name of the NVTX range
  * @param[in] color The predefined gdf_color enum to use to color this range
  * 
- * @Returns   
+ * @returns   
  */
 /* ----------------------------------------------------------------------------*/
 gdf_error gdf_nvtx_range_push(char const * const name, gdf_color color );
@@ -32,7 +32,7 @@ gdf_error gdf_nvtx_range_push(char const * const name, gdf_color color );
  * @param[in] name The name of the NVTX range
  * @param[in] color The ARGB hex color code to use to color this range (e.g., 0xFF00FF00)
  * 
- * @Returns   
+ * @returns   
  */
 /* ----------------------------------------------------------------------------*/
 gdf_error gdf_nvtx_range_push_hex(char const * const name, unsigned int color );
@@ -46,7 +46,7 @@ gdf_error gdf_nvtx_range_push_hex(char const * const name, unsigned int color );
  * will demarcate the end of the inner-most range, i.e., the most recent call to
  * gdf_nvtx_range_push.
  * 
- * @Returns   
+ * @returns   
  */
 /* --------------------------------------------------------------------------*/
 gdf_error gdf_nvtx_range_pop();
@@ -61,7 +61,7 @@ gdf_error gdf_nvtx_range_pop();
  * @param[in] num_rows The number of rows represented in the bit-validity mask.
  * @param[out] count The number of valid rows in the mask
  * 
- * @Returns  GDF_SUCCESS upon successful completion. 
+ * @returns  GDF_SUCCESS upon successful completion. 
  */
 /* --------------------------------------------------------------------------*/
 gdf_error gdf_count_nonzero_mask(gdf_valid_type const *masks,
@@ -135,7 +135,7 @@ gdf_error gdf_column_free(gdf_column *column);
  * @param[in] num_columns The number of columns to concatenate
  * contain the concatenation of the input columns
  * 
- * @Returns GDF_SUCCESS upon successful completion
+ * @returns GDF_SUCCESS upon successful completion
  */
 /* ----------------------------------------------------------------------------*/
 gdf_error gdf_column_concat(gdf_column *output, gdf_column *columns_to_concat[], int num_columns);
@@ -677,7 +677,7 @@ gdf_error gdf_transpose(gdf_size_type ncols,
  * @param[in] join_context The context to use to control how the join is performed,e.g.,
  * sort vs hash based implementation
  * 
- * @Returns   GDF_SUCCESS if the join operation was successful, otherwise an appropriate
+ * @returns   GDF_SUCCESS if the join operation was successful, otherwise an appropriate
  * error code
  */
 /* ----------------------------------------------------------------------------*/
@@ -720,7 +720,7 @@ gdf_error gdf_inner_join(
  * @param[in] join_context The context to use to control how the join is performed,e.g.,
  * sort vs hash based implementation
  * 
- * @Returns   GDF_SUCCESS if the join operation was successful, otherwise an appropriate
+ * @returns   GDF_SUCCESS if the join operation was successful, otherwise an appropriate
  * error code
  */
 /* ----------------------------------------------------------------------------*/
@@ -763,7 +763,7 @@ gdf_error gdf_left_join(
  * @param[in] join_context The context to use to control how the join is performed,e.g.,
  * sort vs hash based implementation
  * 
- * @Returns   GDF_SUCCESS if the join operation was successful, otherwise an appropriate
+ * @returns   GDF_SUCCESS if the join operation was successful, otherwise an appropriate
  * error code
  */
 /* ----------------------------------------------------------------------------*/
@@ -802,7 +802,7 @@ gdf_error gdf_full_join(
  * of partition 'i'
  * @param[in] hash The hash function to use
  * 
- * @Returns  If the operation was successful, returns GDF_SUCCESS
+ * @returns  If the operation was successful, returns GDF_SUCCESS
  */
 /* ----------------------------------------------------------------------------*/
 gdf_error gdf_hash_partition(int num_input_cols, 
@@ -824,7 +824,7 @@ gdf_error gdf_hash_partition(int num_input_cols,
  * @param[out] out The output column containing the prefix sum of the input
  * @param[in] inclusive Flag for applying an inclusive prefix sum
  * 
- * @Returns   GDF_SUCCESS if the operation was successful, otherwise an appropriate
+ * @returns   GDF_SUCCESS if the operation was successful, otherwise an appropriate
  * error code. If inp->null_count is not set to 0 GDF_VALIDITY_UNSUPPORTED is
  * returned.
  */
@@ -839,7 +839,7 @@ gdf_error gdf_prefixsum_generic(gdf_column *inp, gdf_column *out, int inclusive)
  * @param[out] out The output column containing the prefix sum of the input
  * @param[in] inclusive Flag for applying an inclusive prefix sum
  * 
- * @Returns   GDF_SUCCESS if the operation was successful, otherwise an appropriate
+ * @returns   GDF_SUCCESS if the operation was successful, otherwise an appropriate
  * error code. If inp->null_count is not set to 0 GDF_VALIDITY_UNSUPPORTED is
  * returned.
  */
@@ -854,7 +854,7 @@ gdf_error gdf_prefixsum_i8(gdf_column *inp, gdf_column *out, int inclusive);
  * @param[out] out The output column containing the prefix sum of the input
  * @param[in] inclusive Flag for applying an inclusive prefix sum
  * 
- * @Returns   GDF_SUCCESS if the operation was successful, otherwise an appropriate
+ * @returns   GDF_SUCCESS if the operation was successful, otherwise an appropriate
  * error code. If inp->null_count is not set to 0 GDF_VALIDITY_UNSUPPORTED is
  * returned.
  */
@@ -869,7 +869,7 @@ gdf_error gdf_prefixsum_i32(gdf_column *inp, gdf_column *out, int inclusive);
  * @param[out] out The output column containing the prefix sum of the input
  * @param[in] inclusive Flag for applying an inclusive prefix sum
  * 
- * @Returns   GDF_SUCCESS if the operation was successful, otherwise an appropriate
+ * @returns   GDF_SUCCESS if the operation was successful, otherwise an appropriate
  * error code. If inp->null_count is not set to 0 GDF_VALIDITY_UNSUPPORTED is
  * returned.
  */
@@ -2881,9 +2881,9 @@ gdf_error gdf_quantile_aprrox(gdf_column* col_in,
  * @param[in] old_values gdf_column with the old values to be replaced
  * @param[in] new_values gdf_column with the new values
  * 
- * @Returns GDF_SUCCESS upon successful completion
- */
-/* ----------------------------------------------------------------------------*/
+ * @returns GDF_SUCCESS upon successful completion
+ *
+ * --------------------------------------------------------------------------*/
 gdf_error gdf_find_and_replace_all(gdf_column*       col,
                                    const gdf_column* old_values,
                                    const gdf_column* new_values);
@@ -2902,9 +2902,9 @@ gdf_error gdf_find_and_replace_all(gdf_column*       col,
  * @param[out] output_indices Pre-allocated gdf_column to be filled with sorted
  *                            indices
  * 
- * @Returns GDF_SUCCESS upon successful completion
- */
-/* ----------------------------------------------------------------------------*/
+ * @returns GDF_SUCCESS upon successful completion
+ *
+ * ----------------------------------------------------------------------------*/
 gdf_error gdf_order_by(gdf_column** input_columns,
                        int8_t*      asc_desc,
                        size_t       num_inputs,

@@ -40,7 +40,7 @@ constexpr unsigned int THREAD_BLOCK_SIZE{256};
 
 /* --------------------------------------------------------------------------*/
 /**
- * @Synopsis  This functor is used inside the hash table's insert function to 
+ * @brief  This functor is used inside the hash table's insert function to 
  * compare equality between two keys in the hash table. 
  * 
  * If comparing a key to the map's unused key, simply performs the 
@@ -59,12 +59,12 @@ struct row_comparator
 
   /* --------------------------------------------------------------------------*/
   /** 
-   * @Synopsis  Constructs a row_comparator functor to check for equality between
+   * @brief  Constructs a row_comparator functor to check for equality between
    * keys in the hash table.
    * 
-   * @Param map The hash table
-   * @Param l_table The left gdf_table
-   * @Param r_table The right gdf_table
+   * @param map The hash table
+   * @param l_table The left gdf_table
+   * @param r_table The right gdf_table
    */
   /* ----------------------------------------------------------------------------*/
   row_comparator(map_type const & map,
@@ -80,7 +80,7 @@ struct row_comparator
 
   /* --------------------------------------------------------------------------*/
   /** 
-   * @Synopsis Used in the hash table's insert function to check for equality between
+   * @brief Used in the hash table's insert function to check for equality between
    * two keys. Two cases are possible:
    *
    * 1. If left_index OR right_index is equal to the map's unused_key, then the functor
@@ -90,10 +90,10 @@ struct row_comparator
    * 2. Else, the functor is being used to compare two rows of gdf_tables. In this case,
    * the gdf_table rows_equal function is used to check if the two rows are equal.
    * 
-   * @Param left_index The left table index to compare
-   * @Param right_index The right table index to compare
+   * @param left_index The left table index to compare
+   * @param right_index The right table index to compare
    * 
-   * @Returns   
+   * @returns   
    */
   /* ----------------------------------------------------------------------------*/
   __device__ bool operator()(key_type const & left_index, 
@@ -118,21 +118,21 @@ struct row_comparator
 
 /* --------------------------------------------------------------------------*/
 /** 
-* @Synopsis Performs the groupby operation for an arbtirary number of groupby columns and
+* @brief Performs the groupby operation for an arbtirary number of groupby columns and
 * and a single aggregation column.
 * 
-* @Param[in] groupby_input_table The set of columns to groupby
-* @Param[in] in_aggregation_column The column to perform the aggregation on. These act as the hash table values
-* @Param[out] groupby_output_table Preallocated buffer(s) for the groupby column result. This will hold a single
+* @param[in] groupby_input_table The set of columns to groupby
+* @param[in] in_aggregation_column The column to perform the aggregation on. These act as the hash table values
+* @param[out] groupby_output_table Preallocated buffer(s) for the groupby column result. This will hold a single
 * entry for every unique row in the input table.
-* @Param[out] out_aggregation_column Preallocated output buffer for the resultant aggregation column that 
+* @param[out] out_aggregation_column Preallocated output buffer for the resultant aggregation column that 
 *                                     corresponds to the out_groupby_column where entry 'i' is the aggregation 
 *                                     for the group out_groupby_column[i] 
-* @Param out_size The size of the output
-* @Param aggregation_op The aggregation operation to perform 
-* @Param sort_result Flag to optionally sort the output table
+* @param out_size The size of the output
+* @param aggregation_op The aggregation operation to perform 
+* @param sort_result Flag to optionally sort the output table
 * 
-* @Returns   
+* @returns   
 */
 /* ----------------------------------------------------------------------------*/
 template< typename aggregation_type,
