@@ -289,7 +289,7 @@ gdf_error gdf_group_by_without_aggregations(gdf_size_type num_data_cols,
   // setup for order by call
   bool group_by_keys_contain_nulls = false;
   std::vector<gdf_column*> orderby_cols_vect(num_key_cols);
-  for (int i = 0; i < num_key_cols; i++){
+  for (gdf_size_type i = 0; i < num_key_cols; i++){
     orderby_cols_vect[i] = data_cols_in[key_col_indices[i]];
     group_by_keys_contain_nulls = group_by_keys_contain_nulls || orderby_cols_vect[i]->null_count > 0;
   }
@@ -319,7 +319,7 @@ gdf_error gdf_group_by_without_aggregations(gdf_size_type num_data_cols,
     if (status != GDF_SUCCESS)
       return status;
 
-    for (int i = 0; i < num_key_cols; i++){
+    for (gdf_size_type i = 0; i < num_key_cols; i++){
       orderby_cols_vect[i] = data_cols_out[key_col_indices[i]];
     }
 
@@ -350,7 +350,7 @@ gdf_error gdf_group_by_without_aggregations(gdf_size_type num_data_cols,
     if (status != GDF_SUCCESS)
       return status;
 
-    for (int i = 0; i < num_data_cols; i++)    {
+    for (gdf_size_type i = 0; i < num_data_cols; i++)    {
       data_cols_in[i]->size = valid_count;
       data_cols_out[i]->size = valid_count;
     }
@@ -363,7 +363,7 @@ gdf_error gdf_group_by_without_aggregations(gdf_size_type num_data_cols,
     if (status != GDF_SUCCESS)
       return status;
 
-    for (int i = 0; i < num_key_cols; i++){
+    for (gdf_size_type i = 0; i < num_key_cols; i++){
       orderby_cols_vect[i] = data_cols_out[key_col_indices[i]];
     }
    
