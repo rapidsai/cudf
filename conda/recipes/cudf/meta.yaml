@@ -25,7 +25,7 @@ requirements:
   #   - conda-forge
   #   - defaults
   build:
-    - python
+    - python x.x
     - cython>=0.29,<0.30
     - setuptools
     - libcudf={{ version }}
@@ -33,7 +33,7 @@ requirements:
     - numba>=0.40
     - nvstrings
   run:
-    - python
+    - python x.x
     - cython>=0.29,<0.30
     - setuptools
     - libcudf={{ version }}

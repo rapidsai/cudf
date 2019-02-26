@@ -6,8 +6,8 @@
 #   * librmm_cffi
 #   * cudf
 
-# cython, cffi, nvstrings, & numpy must be installed to run this
-# conda create -n build python=X.Y cython cffi numpy -c nvidia nvstrings
+# cython, cffi, & nvstrings must be installed to run this
+# conda create -n build python=X.Y cython cffi -c nvidia nvstrings
 # python setup_pip.py bdist_wheel
 
 import os
@@ -20,7 +20,6 @@ from setuptools.command.build_ext import build_ext
 from distutils.command.install_headers import install_headers
 from distutils.sysconfig import get_python_lib
 from Cython.Build import cythonize
-import numpy
 import zipfile
 from hashlib import sha256
 from base64 import urlsafe_b64encode
@@ -121,11 +120,6 @@ setup_requires = install_requires.copy()
 
 install_requires.append('nvstrings-cuda{}'.format(cuda_version))
 
-try:
-    numpy_include = numpy.get_include()
-except AttributeError:
-    numpy_include = numpy.get_numpy_include()
-
 cython_files = ['python/cudf/bindings/*.pyx']
 
 extensions = [
@@ -133,7 +127,7 @@ extensions = [
     CMakeExtension('cudf', sourcedir='cpp'),
     Extension("*",
               sources=cython_files,
-              include_dirs=[numpy_include, 'cpp/include/'],
+              include_dirs=['cpp/include/'],
               library_dirs=[get_python_lib(), distutils_dir_name('lib')],
               libraries=['cudf'],
               language='c++',

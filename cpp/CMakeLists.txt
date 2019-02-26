@@ -182,6 +182,7 @@ add_library(cudf SHARED
             src/filter/filter_ops.cu
             src/join/joining.cu
             src/orderby/orderby.cu
+            src/sort/digitize.cu
             src/sort/segmented_sorting.cu
             src/sort/sorting.cu
             src/sqls/sqls_ops.cu
@@ -198,6 +199,7 @@ add_library(cudf SHARED
             src/reductions/reductions.cu
             src/replace/replace.cu
             src/reductions/scan.cu
+            src/transpose/transpose.cu
             src/unary/unary_ops.cu
             # src/windowed/windowed_ops.cu ... this is broken
             src/io/convert/csr/cudf_to_csr.cu

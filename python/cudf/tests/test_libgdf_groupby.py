@@ -30,7 +30,7 @@ def test_groupby_mean(nelem):
     # gdf
     got_df = make_frame(DataFrame, nelem=nelem).groupby(
         ['x', 'y'], method="hash").mean()
-    got = np.sort(got_df['mean_val'].to_array())
+    got = np.sort(got_df['val'].to_array())
     # pandas
     expect_df = make_frame(pd.DataFrame,
                            nelem=nelem).groupby(['x', 'y']).mean()
@@ -46,7 +46,7 @@ def test_groupby_mean_3level(nelem):
     # gdf
     got_df = make_frame(DataFrame, nelem=nelem, extra_levels=lvls)\
         .groupby(bys, method="hash").mean()
-    got = np.sort(got_df['mean_val'].to_array())
+    got = np.sort(got_df['val'].to_array())
     # pandas
     expect_df = make_frame(pd.DataFrame, nelem=nelem,
                            extra_levels=lvls).groupby(bys).mean()
@@ -120,7 +120,7 @@ def test_groupby_2keys_agg(nelem, func):
     got_df = make_frame(DataFrame, nelem=nelem)\
         .groupby(['x', 'y'], method="hash").agg(func)
 
-    got_agg = np.sort(got_df[func + '_val'].to_array())
+    got_agg = np.sort(got_df['val'].to_array())
     # pandas
     expect_df = make_frame(pd.DataFrame, nelem=nelem)\
         .groupby(['x', 'y']).agg(func)
