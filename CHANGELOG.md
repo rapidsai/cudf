@@ -35,6 +35,7 @@
 - PR #1016 Rename Series.unique_count() to nunique() to match pandas API
 - PR #1029 Remove rest of relative path imports
 - PR #1021 Add filtered selection with assignment for Dataframes
+- PR #1052 Add left/right_index and left/right_on keywords to merge
 
 ## Improvements
 
