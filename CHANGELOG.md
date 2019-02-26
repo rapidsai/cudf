@@ -59,6 +59,7 @@
 - PR #1017 concatenate along columns for Series and DataFrames
 - PR #1002 Support indexing a dataframe with another boolean dataframe
 - PR #1018 Better concatenation for Series and Dataframes
+- PR #1047 Adding gdf_dtype_extra_info to gdf_column_view_augmented
 
 
 ## Bug Fixes
