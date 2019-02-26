@@ -83,7 +83,7 @@ gdf_column convert_to_device_gdf_column (gdf_column *column) {
     cudaMemcpy(valid_value_pointer, host_valid, n_bytes, cudaMemcpyHostToDevice);
 
     gdf_column output;
-    gdf_column_view_augmented(&output, (void *)raw_pointer, valid_value_pointer, column_size, column->dtype, column->null_count);
+    gdf_column_view_augmented(&output, (void *)raw_pointer, valid_value_pointer, column_size, column->dtype, column->null_count, column->dtype_info);
     return output;
 }
 
@@ -153,7 +153,8 @@ gdf_column gen_gdb_column(size_t column_size, ValueType init_value)
                              (void *)raw_pointer, valid_value_pointer,
                              column_size,
                              gdf_enum_type_value,
-                             zero_bits);
+                             zero_bits,
+                             {});
     //std::cout << "4. gen_gdb_column\n"; 
     
     delete []host_valid;

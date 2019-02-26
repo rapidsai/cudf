@@ -224,8 +224,13 @@ cdef extern from "cudf.h" nogil:
     gdf_error gdf_column_view(gdf_column *column, void *data, gdf_valid_type *valid,
                               gdf_size_type size, gdf_dtype dtype)
 
-    cdef gdf_error gdf_column_view_augmented(gdf_column *column, void *data, gdf_valid_type *valid,
-                              gdf_size_type size, gdf_dtype dtype, gdf_size_type null_count)
+    cdef gdf_error gdf_column_view_augmented(gdf_column *column,
+                                             void *data,
+                                             gdf_valid_type *valid,
+                                             gdf_size_type size,
+                                             gdf_dtype dtype,
+                                             gdf_size_type null_count,
+                                             gdf_dtype_extra_info extra_info)
 
     cdef gdf_error gdf_column_free(gdf_column *column)
 

@@ -110,8 +110,12 @@ TEST(gdf_csv_test, Numbers)
 		EXPECT_THAT( ACol.hostdata(), ::testing::ElementsAre<int16_t>(10, -11, 12, -13) );
 		EXPECT_THAT( BCol.hostdata(), ::testing::ElementsAre<int32_t>(20, -21, 22, -23) );
 		EXPECT_THAT( CCol.hostdata(), ::testing::ElementsAre<int64_t>(30, -31, 32, -33) );
-		EXPECT_THAT( DCol.hostdata(), ::testing::ElementsAre<double>(0.40, -0.41, 0.42, -0.43) );
-		EXPECT_THAT( ECol.hostdata(), ::testing::ElementsAre<float>(50000, -51111, 52222, -53333) );
+		EXPECT_THAT( DCol.hostdata(),
+			::testing::Pointwise(FloatNearPointwise(1e-7),
+				std::vector<double>{ 0.40, -0.41, 0.42, -0.43 }) );
+		EXPECT_THAT( ECol.hostdata(),
+			::testing::Pointwise(FloatNearPointwise(1e-7),
+				std::vector<float>{ 50000, -51111, 52222, -53333 }) );
 	}
 }
 
@@ -493,7 +497,7 @@ TEST(gdf_csv_test, FloatingPoint)
 	const char* types[]			= { "float32" };
 
 	std::ofstream outfile(fname, std::ofstream::out);
-	outfile << "5.6;0.5679e2;1.2e10;0.07e1;3000e-3;12.34e0;";
+	outfile << "5.6;0.5679e2;1.2e10;0.07e1;3000e-3;12.34e0;3.1e-001;-73.98007199999998;";
 	outfile.close();
 	ASSERT_TRUE( checkFile(fname) );
 
@@ -518,7 +522,7 @@ TEST(gdf_csv_test, FloatingPoint)
 		auto ACol = gdf_host_column<float>(args.data[0]);
 		EXPECT_THAT( ACol.hostdata(),
 			::testing::Pointwise(FloatNearPointwise(1e-6),
-				std::vector<float>{ 5.6, 56.79, 12000000000, 0.7, 3.000, 12.34 }) );
+				std::vector<float>{ 5.6, 56.79, 12000000000, 0.7, 3.000, 12.34, 0.31, -73.98007199999998 }) );
 	}
 }
 

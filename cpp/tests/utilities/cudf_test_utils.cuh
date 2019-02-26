@@ -112,11 +112,11 @@ void print_valid_data(const gdf_valid_type *validity_mask,
 
 /* --------------------------------------------------------------------------*/
 /**
- * @Synopsis  Creates a unique_ptr that wraps a gdf_column structure intialized with a host vector
+ * @brief  Creates a unique_ptr that wraps a gdf_column structure intialized with a host vector
  *
- * @Param host_vector The host vector whose data is used to initialize the gdf_column
+ * @param host_vector The host vector whose data is used to initialize the gdf_column
  *
- * @Returns A unique_ptr wrapping the new gdf_column
+ * @returns A unique_ptr wrapping the new gdf_column
  */
 /* ----------------------------------------------------------------------------*/
 template <typename ColumnType>
