@@ -19,12 +19,27 @@
 #include "binary/jit/util/operator.h"
 #include "bitmask/bitmask_ops.h"
 #include "utilities/error_utils.h"
+#include "utilities/cudf_utils.h"
 #include "cudf.h"
 
 namespace cudf {
 namespace binops {
 
-    
+    /**---------------------------------------------------------------------------*
+     * @brief Computes bitwise AND of two input columns
+     * 
+     * This is just a wrapper on apply_bitmask_to_bitmask that can also handle
+     * cases when one or both of the input masa are nullptr, in which case, it
+     * copies the mask from the non nullptr input or sets all the output mask to
+     * valid respectively
+     * 
+     * @param out_null_coun[out] number of nulls in output
+     * @param valid_out preallocated output mask
+     * @param valid_left input mask 1
+     * @param valid_right input mask 2
+     * @param num_values number of values in each input mask valid_left and valid_right
+     * @return gdf_error 
+     *---------------------------------------------------------------------------**/
     gdf_error binary_valid_mask_and(gdf_size_type & out_null_count,
                                     gdf_valid_type * valid_out,
                                     gdf_valid_type * valid_left,
@@ -37,14 +52,16 @@ namespace binops {
 
         GDF_REQUIRE((valid_out != nullptr), GDF_DATASET_EMPTY)
 
-        cudaStream_t stream;
-        cudaStreamCreate(&stream);
-
         if ( valid_left != nullptr && valid_right != nullptr ) {
-            return apply_bitmask_to_bitmask(out_null_count, valid_out, valid_left, valid_right, stream, num_values);
+            cudaStream_t stream;
+            CUDA_TRY( cudaStreamCreate(&stream) );
+            auto error = apply_bitmask_to_bitmask(out_null_count, valid_out, valid_left, valid_right, stream, num_values);
+            CUDA_TRY(cudaStreamSynchronize(stream));
+            CUDA_TRY(cudaStreamDestroy(stream));
+            return error;
         }
         
-    	gdf_size_type num_chars_bitmask = ( ( num_values +( GDF_VALID_BITSIZE - 1)) / GDF_VALID_BITSIZE );
+    	gdf_size_type num_chars_bitmask = gdf_get_num_chars_bitmask( num_values );
 
         if ( valid_left == nullptr && valid_right != nullptr ) {
             CUDA_TRY( cudaMemcpy(valid_out, valid_right, num_chars_bitmask, cudaMemcpyDeviceToDevice) );
@@ -56,7 +73,7 @@ namespace binops {
             CUDA_TRY( cudaMemset(valid_out, 0xff, num_chars_bitmask) );
         }
 
-    	return update_null_count(out_null_count, valid_out, stream, num_values);
+    	return gdf_count_nonzero_mask(valid_out, num_values, &out_null_count);
     }
 
 namespace jit {
