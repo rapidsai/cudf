@@ -248,6 +248,12 @@ def test_dataframe_basic():
     print(mat)
     np.testing.assert_equal(mat, expect)
 
+    # test dataframe with tuple name
+    df_tup = DataFrame()
+    data = np.arange(10)
+    df_tup[(1, 'foobar')] = data
+    np.testing.assert_equal(data, df_tup[(1, 'foobar')].to_array())
+
 
 def test_dataframe_column_name_indexing():
     df = DataFrame()
@@ -1727,6 +1733,16 @@ def test_dataframe_boolmask(mask_shape):
     assert np.array_equal(gdf.columns, pdf.columns)
     for col in gdf.columns:
         assert np.array_equal(gdf[col].fillna(-1), pdf[col].fillna(-1))
+
+
+def test_dataframe_assignment():
+    pdf = pd.DataFrame()
+    for col in 'abc':
+        pdf[col] = np.array([0, 1, 1, -2, 10])
+    gdf = DataFrame.from_pandas(pdf)
+    gdf[gdf < 0] = 999
+    pdf[pdf < 0] = 999
+    assert_eq(gdf, pdf)
 
 
 def test_1row_arrow_table():
