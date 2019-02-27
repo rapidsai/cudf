@@ -379,9 +379,7 @@ gdf_error gdf_hash_partition(int num_input_cols,
                              gdf_hash_func hash);
 
 /* prefixsum */
-
-/* --------------------------------------------------------------------------*/
-/**
+/** --------------------------------------------------------------------------*
  * @brief  Computes the prefix sum of a column.
  * The Null values are skipped for the operation,
  * and the output column has same null values with the input column.
@@ -395,54 +393,7 @@ gdf_error gdf_hash_partition(int num_input_cols,
  * @returns   GDF_SUCCESS if the operation was successful,
  * otherwise an appropriate error code.
  * GDF_UNSUPPORTED_DTYPE if input->dtype is not an arithmetic type.
- */
-/* ----------------------------------------------------------------------------*/
-gdf_error gdf_prefixsum_generic(gdf_column *inp, gdf_column *out, bool inclusive);
-
-/* --------------------------------------------------------------------------*/
-/** 
- * @brief  Computes the prefix sum of a column
- * 
- * @param inp Input column for prefix sum with null_count = 0
- * @param out The output column containing the prefix sum of the input
- * @param inclusive Flag for applying an inclusive prefix sum
- * 
- * @returns   GDF_SUCCESS if the operation was successful, otherwise an appropriate
- * error code. If inp->null_count is not set to 0 GDF_VALIDITY_UNSUPPORTED is
- * returned.
- */
-/* ----------------------------------------------------------------------------*/
-gdf_error gdf_prefixsum_i8(gdf_column *inp, gdf_column *out, int inclusive);
-
-/* --------------------------------------------------------------------------*/
-/** 
- * @brief  Computes the prefix sum of a column
- * 
- * @param inp Input column for prefix sum with null_count = 0
- * @param out The output column containing the prefix sum of the input
- * @param inclusive Flag for applying an inclusive prefix sum
- * 
- * @returns   GDF_SUCCESS if the operation was successful, otherwise an appropriate
- * error code. If inp->null_count is not set to 0 GDF_VALIDITY_UNSUPPORTED is
- * returned.
- */
-/* ----------------------------------------------------------------------------*/
-gdf_error gdf_prefixsum_i32(gdf_column *inp, gdf_column *out, int inclusive);
-
-/* --------------------------------------------------------------------------*/
-/** 
- * @brief  Computes the prefix sum of a column
- * 
- * @param inp Input column for prefix sum with null_count = 0
- * @param out The output column containing the prefix sum of the input
- * @param inclusive Flag for applying an inclusive prefix sum
- * 
- * @returns   GDF_SUCCESS if the operation was successful, otherwise an appropriate
- * error code. If inp->null_count is not set to 0 GDF_VALIDITY_UNSUPPORTED is
- * returned.
->>>>>>> branch-0.6
- */
-/* ----------------------------------------------------------------------------*/
+ * ----------------------------------------------------------------------------**/
 gdf_error gdf_prefixsum(const gdf_column *input, gdf_column *output, bool inclusive);
 
 /* unary operators */
