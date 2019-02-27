@@ -2388,7 +2388,7 @@ class Loc(object):
 
         if isinstance(arg, int):
             if arg < 0 or arg >= len(self._df):
-                raise IndexError(arg)
+                raise IndexError("label scalar %s is out of bound" % arg)
             row_label = arg
             col_slice = self._df.columns
 
