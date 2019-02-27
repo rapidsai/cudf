@@ -617,11 +617,8 @@ gdf_error gdf_extract_datetime_second(gdf_column *input, gdf_column *output);
  * The function performs the binary operation of a gdf_scalar operand and a
  * gdf_column operand.
  *
- * The valid field in the gdf_column output will be 1 (by bit) when the two
- * operands (lhs and rhs) are not null. Otherwise, it will be 0 (by bit).
- *
- * It is required to set in an appropriate manner the fields in the gdf_scalar and
- * gdf_column structs due to that the binary operation will not be performed.
+ * If the valid field in the gdf_column output is not nullptr, then the valid
+ * mask from rhs gdf_column is copied into the data pointer to by out->valid
  *
  * @param out (gdf_column) Output of the operation.
  * @param lhs (gdf_scalar) First operand of the operation.
@@ -638,11 +635,8 @@ gdf_error gdf_binary_operation_s_v(gdf_column* out, gdf_scalar* lhs, gdf_column*
  * The function performs the binary operation of a gdf_column operand and a
  * gdf_scalar operand.
  *
- * The valid field in the gdf_column output will be 1 (by bit) when the two
- * operands (lhs and rhs) are not null. Otherwise, it will be 0 (by bit).
- *
- * It is required to set in an appropriate manner the fields in the gdf_scalar and
- * gdf_column structs due to that the binary operation will not be performed.
+ * If the valid field in the gdf_column output is not nullptr, then the valid
+ * mask from lhs gdf_column is copied into the data pointer to by out->valid
  *
  * @param out (gdf_column) Output of the operation.
  * @param lhs (gdf_column) First operand of the operation.
@@ -658,11 +652,8 @@ gdf_error gdf_binary_operation_v_s(gdf_column* out, gdf_column* lhs, gdf_scalar*
  *
  * The function performs the binary operation of two gdf_column operands.
  *
- * The valid field in the gdf_column output will be 1 (by bit) when the two
- * operands (lhs and rhs) are not null. Otherwise, it will be 0 (by bit).
- *
- * It is required to set in an appropriate manner the fields in the gdf_column
- * struct due to that the binary operation will not be performed.
+ * If the valid field in the gdf_column output is not nullptr, then it will be
+ * filled with the bitwise AND of the valid masks of lhs and rhs gdf_column's
  *
  * @param out (gdf_column) Output of the operation.
  * @param lhs (gdf_column) First operand of the operation.
