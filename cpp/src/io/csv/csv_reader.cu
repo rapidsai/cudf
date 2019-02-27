@@ -432,9 +432,11 @@ gdf_error read_csv(csv_read_arg *args)
 		if (raw_csv->byte_range_size != 0 && padded_byte_range_size < map_size) {
 			// Need to make sure that w/ padding we don't overshoot the end of file
 			map_size = min(padded_byte_range_size + calculateMaxRowSize(args->num_cols), map_size);
-			// Ignore page padding for parsing purposes
-			raw_csv->num_bytes = map_size - page_padding;
+
 		}
+
+		// Ignore page padding for parsing purposes
+		raw_csv->num_bytes = map_size - page_padding;
 
 		map_data = mmap(0, map_size, PROT_READ, MAP_PRIVATE, fd, map_offset);
 	
@@ -1185,17 +1187,11 @@ __global__ void countRecords(char *data, const char terminator, const char quote
 	// process the data
 	cu_reccnt_t tokenCount = 0;
 	for (long x = 0; x < byteToProcess; x++) {
-		
 		// Scan and log records. If quotations are enabled, then also log quotes
 		// for a postprocess ignore, as the chunk here has limited visibility.
 		if ((raw[x] == terminator) || (quotechar != '\0' && raw[x] == quotechar)) {
 			tokenCount++;
-		} else if (terminator == '\n' && (x + 1L) < byteToProcess && 
-		           raw[x] == '\r' && raw[x + 1L] == '\n') {
-			x++;
-			tokenCount++;
 		}
-
 	}
 	atomicAdd(num_records, tokenCount);
 }
@@ -1244,8 +1240,8 @@ gdf_error launch_storeRecordStart(const char *h_data, size_t h_size,
 		// include_first_row should only apply to the first chunk
 		const bool cu_include_first_row = (ci == 0) && (csvData->byte_range_offset == 0);
 		
-		// Copy chunk to device. Copy extra byte if not last chunk
-		CUDA_TRY(cudaMemcpy(d_chunk, h_chunk, ci < (chunk_count - 1)?chunk_bytes:chunk_bytes + 1, cudaMemcpyDefault));
+		// Copy chunk to device
+		CUDA_TRY(cudaMemcpy(d_chunk, h_chunk, chunk_bytes, cudaMemcpyDefault));
 
 		const int gridSize = (chunk_bits + blockSize - 1) / blockSize;
 		storeRecordStart <<< gridSize, blockSize >>> (
@@ -1309,22 +1305,12 @@ __global__ void storeRecordStart(char *data, size_t chunk_offset,
 
 	// process the data
 	for (long x = 0; x < byteToProcess; x++) {
-
 		// Scan and log records. If quotations are enabled, then also log quotes
 		// for a postprocess ignore, as the chunk here has limited visibility.
 		if ((raw[x] == terminator) || (quotechar != '\0' && raw[x] == quotechar)) {
-
-			const auto pos = atomicAdd(num_records, 1ull);
-			recStart[pos] = did + chunk_offset + x + 1;
-
-		} else if (terminator == '\n' && (x + 1L) < byteToProcess && 
-				   raw[x] == '\r' && raw[x + 1L] == '\n') {
-
-			x++;
 			const auto pos = atomicAdd(num_records, 1ull);
 			recStart[pos] = did + chunk_offset + x + 1;
 		}
-
 	}
 }
 
