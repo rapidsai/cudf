@@ -381,7 +381,7 @@ gdf_error gdf_hash_partition(int num_input_cols,
 /* prefixsum */
 /** --------------------------------------------------------------------------*
  * @brief  Computes the prefix sum of a column.
- * The Null values are skipped for the operation, and if an input element
+ * The null values are skipped for the operation, and if an input element
  * at `i` is null, then the output element at `i` will also be null.
  *
  * @param[in] input The input column for prefix sum
