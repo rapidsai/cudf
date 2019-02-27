@@ -907,6 +907,19 @@ def test_csv_reader_bools_false_positives(tmpdir):
     np.testing.assert_array_equal(items, df['0'])
 
 
+def test_csv_reader_aligned_byte_range(tmpdir):
+    fname = tmpdir.mkdir("gdf_csv").join("tmp_csvreader_file19.csv")
+    nelem = 1000
+
+    input_df = pd.DataFrame({'key': np.arange(0, nelem),
+                             'zeros': np.zeros(nelem)})
+    input_df.to_csv(fname)
+
+    df = cudf.read_csv(str(fname), byte_range=(0, 4096))
+    # read_csv call above used to crash; the assert below is not crucial
+    assert(np.count_nonzero(df['zeros']) == 0)
+
+
 def test_csv_reader_hex_ints(tmpdir):
     lines = ['0x0', '-0x1000', '0xfedcba', '0xABCDEF', '0xaBcDeF']
     values = [int(hex_int, 16) for hex_int in lines]
