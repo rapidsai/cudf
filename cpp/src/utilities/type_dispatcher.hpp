@@ -71,13 +71,13 @@
  * lambda must be the same, else there will be a compiler error as you would be
  * trying to return different types from the same function.
  *
- * @Param dtype The gdf_dtype enum that determines which type will be dispatched
- * @Param f The functor with a templated "operator()" that will be invoked with 
+ * @param dtype The gdf_dtype enum that determines which type will be dispatched
+ * @param f The functor with a templated "operator()" that will be invoked with 
  * the dispatched type
- * @Param args A parameter-pack (i.e., arbitrary number of arguments) that will 
+ * @param args A parameter-pack (i.e., arbitrary number of arguments) that will 
  * be perfectly-forwarded as the arguments of the functor's "operator()".
  *
- * @Returns Whatever is returned by the functor's "operator()". 
+ * @returns Whatever is returned by the functor's "operator()". 
  *
  */
 /* ----------------------------------------------------------------------------*/

@@ -34,6 +34,7 @@
 - PR #1013 select columns with df.columns
 - PR #1016 Rename Series.unique_count() to nunique() to match pandas API
 - PR #1029 Remove rest of relative path imports
+- PR #1021 Add filtered selection with assignment for Dataframes
 
 ## Improvements
 
@@ -47,6 +48,7 @@
 - PR #532 CSV Reader: Use type dispatcher instead of switch block
 - PR #878 Add better indexing to Groupby
 - PR #554 Add `empty` method and `is_monotonic` attribute to `Index`
+- PR #1040 Fixed up Doxygen comment tags
 - PR #909 CSV Reader: Avoid host->device->host copy for header row data
 - PR #916 Improved unit testing and error checking for `gdf_column_concat`
 - PR #941 Replace `numpy` call in `Series.hash_encode` with `numba`
@@ -57,6 +59,7 @@
 - PR #1017 concatenate along columns for Series and DataFrames
 - PR #1002 Support indexing a dataframe with another boolean dataframe
 - PR #1018 Better concatenation for Series and Dataframes
+- PR #1047 Adding gdf_dtype_extra_info to gdf_column_view_augmented
 - PR #1024 CSV Reader: Add support for hexadecimal integers in integral-type columns
 
 ## Bug Fixes
@@ -91,6 +94,7 @@
 - PR #1001 CSV Reader: Fix a memory access error when reading a large (>2GB) file with date columns
 - PR #1019 Binary Ops: Fix error when one input column has null mask but other doesn't
 - PR #1014 CSV Reader: Fix false positives in bool value detection
+- PR #1034 CSV Reader: Fix parsing floating point precision and leading zero exponents
 
 
 # cuDF 0.5.1 (05 Feb 2019)
