@@ -33,6 +33,7 @@
 - PR #1007 Replace relative path imports with absolute paths in cudf
 - PR #1013 select columns with df.columns
 - PR #1016 Rename Series.unique_count() to nunique() to match pandas API
+- PR #947 Prefixsum to handle nulls and float types
 - PR #1029 Remove rest of relative path imports
 - PR #1021 Add filtered selection with assignment for Dataframes
 
