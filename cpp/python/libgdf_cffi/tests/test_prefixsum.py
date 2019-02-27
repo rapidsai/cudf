@@ -79,11 +79,14 @@ def test_prefixsum_masked(dtype, nelem):
     d_result_mask = rmm.to_device(dummy_mask)
 
     gdf_dtype = get_dtype(dtype)
+    extra_dtype_info = ffi.new('gdf_dtype_extra_info*')
+    extra_dtype_info.time_unit = libgdf.TIME_UNIT_NONE
 
     col_data = new_column()
     libgdf.gdf_column_view_augmented(col_data, unwrap_devary(d_data),
                                      unwrap_devary(d_mask), nelem, gdf_dtype,
-                                     count_nulls(d_mask, nelem))
+                                     count_nulls(d_mask, nelem),
+                                     extra_dtype_info[0])
 
     col_result = new_column()
     libgdf.gdf_column_view(col_result, unwrap_devary(d_result),
