@@ -3,8 +3,8 @@ from __future__ import absolute_import
 import os
 import sys
 from itertools import chain
-from .wrapper import _libgdf_wrapper
-from .wrapper import GDFError         # noqa: F401  # re-exported
+from libgdf_cffi.wrapper import _libgdf_wrapper
+from libgdf_cffi.wrapper import GDFError         # noqa: F401  # re-exported
 
 try:
     from .libgdf_cffi import ffi

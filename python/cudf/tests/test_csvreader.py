@@ -298,12 +298,12 @@ def test_csv_reader_mangle_dupe_cols_header(tmpdir):
 def test_csv_reader_float_decimal(tmpdir):
     fname = tmpdir.mkdir("gdf_csv").join("tmp_csvreader_file12.csv")
 
-    names = ['basic_32', 'basic_64', 'round', 'decimal_only']
-    dtypes = ['float32', 'float64', 'float64', 'float32']
+    names = ['basic_32', 'basic_64', 'round', 'decimal_only', 'precision']
+    dtypes = ['float32', 'float64', 'float64', 'float32', 'float64']
     lines = [';'.join(names),
-             '1,2;1234,5678;12345;0,123',
-             '3,4;3456,7890;67890;,456',
-             '5,6e0;0,5679e2;1,2e10;0,07e-1']
+             '1,2;1234,5678;12345;0,123;-73,98007199999998',
+             '3,4;3456,7890;67890;,456;1,7976931348623157e+307',
+             '5,6e0;0,5679e2;1,2e10;0,07e-001;0,0']
 
     with open(str(fname), 'w') as fp:
         fp.write('\n'.join(lines) + '\n')
@@ -312,6 +312,7 @@ def test_csv_reader_float_decimal(tmpdir):
     basic_64_ref = [1234.5678, 3456.7890, 56.79]
     round_ref = [12345, 67890, 12000000000]
     decimal_only_ref = [0.123, 0.456, 0.007]
+    precision_ref = [-73.98007199999998, 1.7976931348623157e+307, 0.0]
 
     df = read_csv(str(fname), names=names, dtype=dtypes, skiprows=1,
                   delimiter=';', decimal=',')
@@ -320,6 +321,7 @@ def test_csv_reader_float_decimal(tmpdir):
     np.testing.assert_allclose(basic_64_ref, df['basic_64'])
     np.testing.assert_allclose(round_ref, df['round'])
     np.testing.assert_allclose(decimal_only_ref, df['decimal_only'])
+    np.testing.assert_allclose(precision_ref, df['precision'])
 
 
 def test_csv_reader_NaN_values():
@@ -479,8 +481,7 @@ def test_csv_reader_bools(tmpdir, names, dtypes, data, trues, falses):
     out = read_csv(str(fname), names=names, dtype=dtypes, skiprows=1,
                    true_values=trues, false_values=falses)
 
-    assert len(out.columns) == len(df_out.columns)
-    assert len(out) == len(df_out)
+    pd.util.testing.assert_frame_equal(df_out, out.to_pandas())
 
 
 def test_csv_quotednumbers(tmpdir):
@@ -891,6 +892,50 @@ def test_csv_reader_index_col():
     pd_df = pd.read_csv(StringIO(buffer), header=None, index_col=False)
     for cu_idx, pd_idx in zip(cu_df.index, pd_df.index):
         assert(str(cu_idx) == str(pd_idx))
+
+
+def test_csv_reader_bools_false_positives(tmpdir):
+    # values that are equal to ["True", "TRUE", "False", "FALSE"]
+    # when using ints to detect bool values
+    items = [3977, 4329, 24015, 27567]
+
+    buffer = '\n'.join(str(i) for i in items) + '\n'
+
+    df = read_csv(StringIO(buffer),
+                  header=None, dtype=["int32"])
+
+    np.testing.assert_array_equal(items, df['0'])
+
+
+def test_csv_reader_aligned_byte_range(tmpdir):
+    fname = tmpdir.mkdir("gdf_csv").join("tmp_csvreader_file19.csv")
+    nelem = 1000
+
+    input_df = pd.DataFrame({'key': np.arange(0, nelem),
+                             'zeros': np.zeros(nelem)})
+    input_df.to_csv(fname)
+
+    df = cudf.read_csv(str(fname), byte_range=(0, 4096))
+    # read_csv call above used to crash; the assert below is not crucial
+    assert(np.count_nonzero(df['zeros']) == 0)
+
+
+def test_csv_reader_hex_ints(tmpdir):
+    lines = ['0x0', '-0x1000', '0xfedcba', '0xABCDEF', '0xaBcDeF']
+    values = [int(hex_int, 16) for hex_int in lines]
+
+    buffer = '\n'.join(lines) + '\n'
+
+    # with explicit data types
+    df = read_csv(StringIO(buffer),
+                  dtype=['int32'], names=['hex_int'])
+    np.testing.assert_array_equal(values, df['hex_int'])
+
+    # with data type inference
+    df = read_csv(StringIO(buffer),
+                  names=['hex_int'])
+    np.testing.assert_array_equal(values, df['hex_int'])
+
 
 def test_csv_reader_pd_consistent_quotes():
     names = ['text']
