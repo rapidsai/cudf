@@ -362,8 +362,6 @@ def column_applymap(udf, column, out_dtype):
 
     Parameters
     ----------
-
-
     udf : function
         Wrapped by numba jit for call on the GPU as a device function.
     column : Column
