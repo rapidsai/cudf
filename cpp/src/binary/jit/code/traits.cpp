@@ -29,7 +29,7 @@ R"***(
     // -------------------------------------------------------------------------
     // Simplifying std::is_integral
     template <typename T>
-    constexpr bool isIntegral = std::is_integral<T>::value;
+    constexpr bool is_integral_v = std::is_integral<T>::value;
 
     // -------------------------------------------------------------------------
     // type_traits cannot tell the difference between float and double
@@ -45,12 +45,6 @@ R"***(
 
     template <>
     constexpr bool isDouble<double> = true;
-
-    // -------------------------------------------------------------------------
-    // Simplifying std::enable_if
-    template <bool B, class T = void>
-    using enableIf = typename std::enable_if<B,T>::type;
-
 )***";
 
 } // namespace code

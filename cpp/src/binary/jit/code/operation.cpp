@@ -28,7 +28,7 @@ R"***(
     struct Add {
         template <typename TypeOut, typename TypeLhs, typename TypeRhs>
         static TypeOut operate(TypeLhs x, TypeRhs y) {
-            return ((TypeOut)x + (TypeOut)y);
+            return (static_cast<TypeOut>(x) + static_cast<TypeOut>(y));
         }
     };
 
@@ -37,21 +37,21 @@ R"***(
     struct Sub {
         template <typename TypeOut, typename TypeLhs, typename TypeRhs>
         static TypeOut operate(TypeLhs x, TypeRhs y) {
-            return ((TypeOut)x - (TypeOut)y);
+            return (static_cast<TypeOut>(x) - static_cast<TypeOut>(y));
         }
     };
 
     struct RSub {
         template <typename TypeOut, typename TypeLhs, typename TypeRhs>
         static TypeOut operate(TypeLhs x, TypeRhs y) {
-            return ((TypeOut)y - (TypeOut)x);
+            return (static_cast<TypeOut>(y) - static_cast<TypeOut>(x));
         }
     };
 
     struct Mul {
         template <typename TypeOut, typename TypeLhs, typename TypeRhs>
         static TypeOut operate(TypeLhs x, TypeRhs y) {
-            return ((TypeOut)x * (TypeOut)y);
+            return (static_cast<TypeOut>(x) * static_cast<TypeOut>(y));
         }
     };
 
@@ -60,42 +60,42 @@ R"***(
     struct Div {
         template <typename TypeOut, typename TypeLhs, typename TypeRhs>
         static TypeOut operate(TypeLhs x, TypeRhs y) {
-            return ((TypeOut)x / (TypeOut)y);
+            return (static_cast<TypeOut>(x) / static_cast<TypeOut>(y));
         }
     };
 
     struct RDiv {
         template <typename TypeOut, typename TypeLhs, typename TypeRhs>
         static TypeOut operate(TypeLhs x, TypeRhs y) {
-            return ((TypeOut)y / (TypeOut)x);
+            return (static_cast<TypeOut>(y) / static_cast<TypeOut>(x));
         }
     };
 
     struct TrueDiv {
         template <typename TypeOut, typename TypeLhs, typename TypeRhs>
         static TypeOut operate(TypeLhs x, TypeRhs y) {
-            return ((double)x / (double)y);
+            return (static_cast<double>(x) / static_cast<double>(y));
         }
     };
 
     struct RTrueDiv {
         template <typename TypeOut, typename TypeLhs, typename TypeRhs>
         static TypeOut operate(TypeLhs x, TypeRhs y) {
-            return ((double)y / (double)x);
+            return (static_cast<double>(y) / static_cast<double>(x));
         }
     };
 
     struct FloorDiv {
         template <typename TypeOut, typename TypeLhs, typename TypeRhs>
         static TypeOut operate(TypeLhs x, TypeRhs y) {
-            return floor((double)x / (double)y);
+            return floor(static_cast<double>(x) / static_cast<double>(y));
         }
     };
 
     struct RFloorDiv {
         template <typename TypeOut, typename TypeLhs, typename TypeRhs>
         static TypeOut operate(TypeLhs x, TypeRhs y) {
-            return floor((double)y / (double)x);
+            return floor(static_cast<double>(y) / static_cast<double>(x));
         }
     };
 
@@ -103,25 +103,25 @@ R"***(
         template <typename TypeOut,
                   typename TypeLhs,
                   typename TypeRhs,
-                  enableIf<(isIntegral<TypeOut>)>* = nullptr>
+                  enable_if_t<(is_integral_v<TypeOut>)>* = nullptr>
         static TypeOut operate(TypeLhs x, TypeRhs y) {
-            return ((TypeOut)x % (TypeOut)y);
+            return (static_cast<TypeOut>(x) % static_cast<TypeOut>(y));
         }
 
         template <typename TypeOut,
                   typename TypeLhs,
                   typename TypeRhs,
-                  enableIf<(isFloat<TypeOut>)>* = nullptr>
+                  enable_if_t<(isFloat<TypeOut>)>* = nullptr>
         static TypeOut operate(TypeLhs x, TypeRhs y) {
-            return fmodf((TypeOut)x, (TypeOut)y);
+            return fmodf(static_cast<TypeOut>(x), static_cast<TypeOut>(y));
         }
 
         template <typename TypeOut,
                   typename TypeLhs,
                   typename TypeRhs,
-                  enableIf<(isDouble<TypeOut>)>* = nullptr>
+                  enable_if_t<(isDouble<TypeOut>)>* = nullptr>
         static TypeOut operate(TypeLhs x, TypeRhs y) {
-            return fmod((TypeOut)x, (TypeOut)y);
+            return fmod(static_cast<TypeOut>(x), static_cast<TypeOut>(y));
         }
     };
 
@@ -129,39 +129,39 @@ R"***(
         template <typename TypeOut,
                   typename TypeLhs,
                   typename TypeRhs,
-                  enableIf<(isIntegral<TypeOut>)>* = nullptr>
+                  enable_if_t<(is_integral_v<TypeOut>)>* = nullptr>
         static TypeOut operate(TypeLhs x, TypeRhs y) {
-            return ((TypeOut)y % (TypeOut)x);
+            return (static_cast<TypeOut>(y) % static_cast<TypeOut>(x));
         }
 
         template <typename TypeOut,
                   typename TypeLhs,
                   typename TypeRhs,
-                  enableIf<(isFloat<TypeOut>)>* = nullptr>
+                  enable_if_t<(isFloat<TypeOut>)>* = nullptr>
         static TypeOut operate(TypeLhs x, TypeRhs y) {
-            return fmodf((TypeOut)y, (TypeOut)x);
+            return fmodf(static_cast<TypeOut>(y), static_cast<TypeOut>(x));
         }
 
         template <typename TypeOut,
                   typename TypeLhs,
                   typename TypeRhs,
-                  enableIf<(isDouble<TypeOut>)>* = nullptr>
+                  enable_if_t<(isDouble<TypeOut>)>* = nullptr>
         static TypeOut operate(TypeLhs x, TypeRhs y) {
-            return fmod((TypeOut)y, (TypeOut)x);
+            return fmod(static_cast<TypeOut>(y), static_cast<TypeOut>(x));
         }
     };
 
     struct Pow {
         template <typename TypeOut, typename TypeLhs, typename TypeRhs>
         static TypeOut operate(TypeLhs x, TypeRhs y) {
-            return pow((double)x, (double)y);
+            return pow(static_cast<double>(x), static_cast<double>(y));
         }
     };
 
     struct RPow {
         template <typename TypeOut, typename TypeLhs, typename TypeRhs>
         static TypeOut operate(TypeLhs x, TypeRhs y) {
-            return pow((double)y, (double)x);
+            return pow(static_cast<double>(y), static_cast<double>(x));
         }
     };
 
@@ -251,30 +251,30 @@ R"***(
  *                typename TypeLhs,
  *                typename TypeRhs,
  *                typename Common = CommonNumber<TypeLhs, TypeRhs>,
- *                enableIf<(isIntegralSigned<Common>)>* = nullptr>
+ *                enable_if_t<(isIntegralSigned<Common>)>* = nullptr>
  *      __device__
  *      TypeOut operate(TypeLhs x, TypeRhs y) {
- *          return (TypeOut)((Common)x + (Common)y);
+ *          return static_cast<TypeOu>(t)((Common)x + (Common)y);
  *      }
  *
  *      template <typename TypeOut,
  *                typename TypeLhs,
  *                typename TypeRhs,
  *                typename Common = CommonNumber<TypeLhs, TypeRhs>,
- *                enableIf<(isIntegralUnsigned<Common>)>* = nullptr>
+ *                enable_if_t<(isIntegralUnsigned<Common>)>* = nullptr>
  *      __device__
  *      TypeOut operate(TypeLhs x, TypeRhs y) {
- *          return (TypeOut)((Common)x + (Common)y);
+ *          return static_cast<TypeOu>(t)((Common)x + (Common)y);
  *      }
  *
  *      template <typename TypeOut,
  *                typename TypeLhs,
  *                typename TypeRhs,
  *                typename Common = CommonNumber<TypeLhs, TypeRhs>,
- *                enableIf<(isFloatingPoint<Common>)>* = nullptr>
+ *                enable_if_t<(isFloatingPoint<Common>)>* = nullptr>
  *      __device__
  *      TypeOut operate(TypeLhs x, TypeRhs y) {
- *          return (TypeOut)((Common)x + (Common)y);
+ *          return static_cast<TypeOu>(t)((Common)x + (Common)y);
  *      }
  *  };
  */
