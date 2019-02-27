@@ -60,6 +60,7 @@
 - PR #1002 Support indexing a dataframe with another boolean dataframe
 - PR #1018 Better concatenation for Series and Dataframes
 - PR #1047 Adding gdf_dtype_extra_info to gdf_column_view_augmented
+- PR #1024 CSV Reader: Add support for hexadecimal integers in integral-type columns
 - PR #1026 CSV Reader: Change the meaning of the quoting parameter to match Pandas
 
 ## Bug Fixes
@@ -95,6 +96,9 @@
 - PR #1019 Binary Ops: Fix error when one input column has null mask but other doesn't
 - PR #1014 CSV Reader: Fix false positives in bool value detection
 - PR #1034 CSV Reader: Fix parsing floating point precision and leading zero exponents
+- PR #1044 CSV Reader: Fix a segfault when byte range aligns with a page
+- PR #1058 Added support for `DataFrame.loc[scalar]`
+- PR #1060 Fix column creation with all valid nan values
 
 
 # cuDF 0.5.1 (05 Feb 2019)
