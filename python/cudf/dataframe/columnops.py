@@ -242,9 +242,16 @@ def as_column(arbitrary, nan_as_null=True, dtype=None):
             if pd.api.types.is_categorical_dtype(new_dtype):
                 arbitrary = arbitrary.dictionary_encode()
             else:
-                arbitrary = arbitrary.cast(_gdf.np_to_pa_dtype(new_dtype))
-
-            data = as_column(arbitrary)
+                if nan_as_null:
+                    arbitrary = arbitrary.cast(_gdf.np_to_pa_dtype(new_dtype))
+                else:
+                    # casting a null array doesn't make nans valid
+                    # so we create one with valid nans from scratch:
+                    arbitrary = utils.scalar_broadcast_to(
+                        np.nan,
+                        (len(arbitrary),),
+                        dtype=new_dtype)
+            data = as_column(arbitrary, nan_as_null=nan_as_null)
         elif isinstance(arbitrary, pa.DictionaryArray):
             pamask, padata = buffers_from_pyarrow(arbitrary)
             data = categorical.CategoricalColumn(
@@ -342,7 +349,7 @@ def as_column(arbitrary, nan_as_null=True, dtype=None):
         except TypeError:
             try:
                 data = as_column(pa.array(arbitrary, from_pandas=nan_as_null),
-                                 dtype=dtype)
+                                 dtype=dtype, nan_as_null=nan_as_null)
             except pa.ArrowInvalid:
                 data = as_column(np.array(arbitrary), dtype=dtype,
                                  nan_as_null=nan_as_null)
@@ -355,6 +362,8 @@ def column_applymap(udf, column, out_dtype):
 
     Parameters
     ----------
+
+
     udf : function
         Wrapped by numba jit for call on the GPU as a device function.
     column : Column
