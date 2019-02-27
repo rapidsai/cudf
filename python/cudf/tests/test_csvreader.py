@@ -908,7 +908,7 @@ def test_csv_reader_bools_false_positives(tmpdir):
 
 
 def test_csv_reader_hex_ints(tmpdir):
-    lines = ['0x0', '0x1000', '0xfedcba', '0xABCDEF', '0xaBcDeF']
+    lines = ['0x0', '-0x1000', '0xfedcba', '0xABCDEF', '0xaBcDeF']
     values = [int(hex_int, 16) for hex_int in lines]
 
     buffer = '\n'.join(lines) + '\n'
