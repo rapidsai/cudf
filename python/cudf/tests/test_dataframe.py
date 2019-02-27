@@ -419,7 +419,7 @@ def test_dataframe_loc(scalar, step):
     del fewer
 
     fewer = df.loc[begin:end, ['c', 'd']]
-    assert len(fewer) == end - begin
+    assert len(fewer) == end - begin + 1
     assert tuple(fewer.columns) == ('c', 'd')
     np.testing.assert_equal(fewer['c'].to_array(), hc[begin:end + 1])
     np.testing.assert_equal(fewer['d'].to_array(), hd[begin:end + 1])
