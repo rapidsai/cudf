@@ -113,6 +113,8 @@ class DataFrame(object):
           3 3 0.3
 
     """
+    LEFT_RIGHT_INDEX_NAME = 'cudf_left_right_index_key'
+
     def __init__(self, name_series=None, index=None):
         if index is None:
             index = RangeIndex(start=0)
@@ -1392,7 +1394,7 @@ class DataFrame(object):
             right[left_on] = right.index
 
         if left_index and right_index:
-            on = 'ix'
+            on = self.LEFT_RIGHT_INDEX_NAME
             self[on] = self.index
             right[on] = right.index
 
@@ -1541,7 +1543,7 @@ class DataFrame(object):
             df.index = new_index
 
         if left_index and right_index:
-            df.drop_column('ix')
+            df.drop_column(self.LEFT_RIGHT_INDEX_NAME)
             df = df.set_index(self.index[df.index.values])
 
         if left_on and right_on:
