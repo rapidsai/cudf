@@ -26,7 +26,6 @@
 
 #include <thrust/equal.h>
 #include <thrust/logical.h>
-#include <bitset>
 #include <string>
 
 #ifndef CUDA_RT_CALL
@@ -70,7 +69,6 @@ struct column_wrapper {
     the_column.valid = bitmask.data().get();
   }
 
-  // TODO Implement this via copy & swap. Need a swap function.
   column_wrapper& operator=(column_wrapper<ColumnType> other) = delete;
 
   ~column_wrapper() = default;
@@ -291,13 +289,13 @@ struct column_wrapper {
       bool const lhs_is_valid{gdf_is_valid(lhs_col.valid, row)};
       bool const rhs_is_valid{gdf_is_valid(rhs_col.valid, row)};
 
-      if (lhs_is_valid && rhs_is_valid) {
+      if (lhs_is_valid and rhs_is_valid) {
         return static_cast<ColumnType const*>(lhs_col.data)[row] ==
                static_cast<ColumnType const*>(rhs_col.data)[row];
       }
 
       // If one value is valid but the other is not
-      if (lhs_is_valid xor rhs_is_valid) {
+      if (lhs_is_valid != rhs_is_valid) {
         return false;
       }
 
@@ -386,8 +384,12 @@ struct column_wrapper {
     }
   }
 
-  rmm::device_vector<ColumnType> data;
-  rmm::device_vector<gdf_valid_type> bitmask;
+  rmm::device_vector<ColumnType> data;  ///< Container for the column's data
+
+  // If the column's bitmask does not exist (doesn't contain null values), then
+  // the size of this vector will be zero
+  rmm::device_vector<gdf_valid_type> bitmask;  ///< Container for the column's bitmask
+
   gdf_column the_column;
 };
 

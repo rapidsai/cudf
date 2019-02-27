@@ -38,48 +38,12 @@
 using gdf_col_pointer = typename std::unique_ptr<gdf_column, 
                                                  std::function<void(gdf_column*)>>;
 
-namespace {
-
-struct column_printer {
-  template <typename ColumnType>
-  void operator()(gdf_column const* the_column) {
-
-    gdf_size_type const num_rows{the_column->size};
-
-    ColumnType const* col_data{
-        static_cast<ColumnType const*>(the_column->data)};
-
-    std::vector<ColumnType> h_data(num_rows);
-    cudaMemcpy(h_data.data(), col_data, num_rows * sizeof(ColumnType),
-               cudaMemcpyDeviceToHost);
-
-    gdf_size_type const num_masks{gdf_get_num_chars_bitmask(num_rows)};
-    std::vector<gdf_valid_type> h_mask(num_masks, ~gdf_valid_type{0});
-    if (nullptr != the_column->valid) {
-      cudaMemcpy(h_mask.data(), the_column->valid,
-                 num_masks * sizeof(gdf_valid_type), cudaMemcpyDeviceToHost);
-    }
-
-    for (gdf_size_type i = 0; i < num_rows; ++i) {
-      // If the element is valid, print it's value
-      if (true == gdf_is_valid(h_mask.data(), i)) {
-        std::cout << h_data[i] << " ";
-      }
-      // Otherwise, print an @ to represent a null value
-      else {
-        std::cout << "@"
-                  << " ";
-      }
-    }
-    std::cout << std::endl;
-  }
-};
-}
-
-void print_gdf_column(gdf_column const * the_column)
-{
-    cudf::type_dispatcher(the_column->dtype, column_printer{}, the_column);
-}
+/**---------------------------------------------------------------------------*
+ * @brief prints column data from a column on device
+ * 
+ * @param the_column host pointer to gdf_column object
+ *---------------------------------------------------------------------------**/
+void print_gdf_column(gdf_column const * the_column);
 
 /** ---------------------------------------------------------------------------*
  * @brief prints validity data from either a host or device pointer
@@ -88,27 +52,7 @@ void print_gdf_column(gdf_column const * the_column)
  * @param num_rows The length of the column (not the bitmask) in rows
  * ---------------------------------------------------------------------------**/
 void print_valid_data(const gdf_valid_type *validity_mask, 
-                      const size_t num_rows)
-{
-  cudaError_t error;
-  cudaPointerAttributes attrib;
-  cudaPointerGetAttributes(&attrib, validity_mask);
-  error = cudaGetLastError();
-
-  const size_t num_masks = gdf_get_num_chars_bitmask(num_rows);
-  std::vector<gdf_valid_type> h_mask(num_masks);
-  if (error != cudaErrorInvalidValue && attrib.memoryType == cudaMemoryTypeDevice)
-    cudaMemcpy(h_mask.data(), validity_mask, num_masks * sizeof(gdf_valid_type), cudaMemcpyDeviceToHost);
-  else
-    memcpy(h_mask.data(), validity_mask, num_masks * sizeof(gdf_valid_type));
-
-  std::transform(h_mask.begin(), h_mask.end(), std::ostream_iterator<std::string>(std::cout, " "), 
-                 [](gdf_valid_type x){ 
-                   auto bits = std::bitset<GDF_VALID_BITSIZE>(x).to_string('@'); 
-                   return std::string(bits.rbegin(), bits.rend());  
-                 });
-  std::cout << std::endl;
-}
+                      const size_t num_rows);
 
 /* --------------------------------------------------------------------------*/
 /**
@@ -320,7 +264,7 @@ bool gdf_equal_columns(gdf_column* left, gdf_column* right) {
       return 0;
     }
 
-    size_t count{0};
+    gdf_size_type count{0};
 
     // Count the valid bits for all masks except the last one
     for (size_t i = 0; i < (masks.size() - 1); ++i) {
@@ -334,16 +278,21 @@ bool gdf_equal_columns(gdf_column* left, gdf_column* right) {
 
     // Only count the bits in the last mask that correspond to rows
     int num_rows_last_mask = num_rows % GDF_VALID_BITSIZE;
+    if (num_rows_last_mask == 0) {
+      num_rows_last_mask = GDF_VALID_BITSIZE;
+    }
 
-    if (num_rows_last_mask == 0) num_rows_last_mask = GDF_VALID_BITSIZE;
+    // Mask off only the bits that correspond to rows
+    gdf_valid_type const rows_mask = ( gdf_valid_type{1} << num_rows_last_mask ) - 1;
+    gdf_valid_type last_mask = masks.back() & rows_mask;
 
-    gdf_valid_type last_mask = *(masks.end() - 1);
-    for (int i = 0; (i < num_rows_last_mask) && (last_mask > 0); ++i) {
-      count += (last_mask & gdf_valid_type(1));
-      last_mask >>= 1;
+    while (last_mask > 0) {
+      last_mask &= (last_mask - 1);
+      count++;
     }
 
     return count;
+
   }
 
 #endif
