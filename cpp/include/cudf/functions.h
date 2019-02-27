@@ -616,6 +616,8 @@ gdf_error gdf_extract_datetime_second(gdf_column *input, gdf_column *output);
  *
  * The function performs the binary operation of a gdf_scalar operand and a
  * gdf_column operand.
+ * 
+ * The desired output type needs to be specified in out->dtype
  *
  * If the valid field in the gdf_column output is not nullptr, then the valid
  * mask from rhs gdf_column is copied into the data pointer to by out->valid
@@ -635,6 +637,8 @@ gdf_error gdf_binary_operation_s_v(gdf_column* out, gdf_scalar* lhs, gdf_column*
  * The function performs the binary operation of a gdf_column operand and a
  * gdf_scalar operand.
  *
+ * The desired output type needs to be specified in out->dtype
+ *
  * If the valid field in the gdf_column output is not nullptr, then the valid
  * mask from lhs gdf_column is copied into the data pointer to by out->valid
  *
@@ -651,6 +655,8 @@ gdf_error gdf_binary_operation_v_s(gdf_column* out, gdf_column* lhs, gdf_scalar*
  * @brief Binary operation function between two gdf_column structs.
  *
  * The function performs the binary operation of two gdf_column operands.
+ *
+ * The desired output type needs to be specified in out->dtype
  *
  * If the valid field in the gdf_column output is not nullptr, then it will be
  * filled with the bitwise AND of the valid masks of lhs and rhs gdf_column's

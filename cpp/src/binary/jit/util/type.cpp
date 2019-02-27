@@ -22,6 +22,25 @@ namespace cudf {
 namespace binops {
 namespace jit {
 
+    /**---------------------------------------------------------------------------*
+     * @brief Functor to get type name in string
+     * 
+     * This functor uses the unofficial compiler macro __PRETTY_FUNCTION__
+     * to obtain the function signature which contains the template type name.
+     * The type name is searched and extracted from the string.
+     * 
+     * Example (clang): __PRETTY_FUNCTION__ =
+     * std::string type_name::operator()() [T = short]
+     * returns std::string("short")
+     * 
+     * Example (gcc): __PRETTY_FUNCTION__ =
+     * std::__cxx11::string type_name::operator()() [with T = short int; std::__cxx11::string = std::__cxx11::basic_string<char>]
+     * returns std::string("short int")
+     * 
+     * In case the type is wrapped using `wrapper`, the extra string "wrapper<" is
+     * also skipped to get the underlying wrapped type.
+     * 
+     *---------------------------------------------------------------------------**/
     struct type_name {
         template <class T>
         CUDA_HOST_DEVICE_CALLABLE
@@ -42,10 +61,22 @@ namespace jit {
         }
     };
 
+    /**---------------------------------------------------------------------------*
+     * @brief Get the Type Name
+     * 
+     * @param type The data type
+     * @return std::string Name of the data type in string
+     *---------------------------------------------------------------------------**/
     std::string getTypeName(gdf_dtype type) {
         return type_dispatcher(type, type_name());
     }
  
+    /**---------------------------------------------------------------------------*
+     * @brief Get the Operator Name
+     * 
+     * @param ope (enum) The binary operator as enum of type gdf_binary_operator
+     * @return std::string The name of the operator as string
+     *---------------------------------------------------------------------------**/
     std::string getOperatorName(gdf_binary_operator ope) {
         switch (ope) {
             case GDF_ADD:
