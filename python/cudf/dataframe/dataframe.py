@@ -609,8 +609,8 @@ class DataFrame(object):
 
         .. code-block:: python
           # get the row by index label from 'a' and 'b' columns.
-               a    b
-          0    0    0
+          a    0
+          b    0
 
           # get rows from index 2 to index 5 from 'a' and 'b' columns.
                a    b
@@ -2423,7 +2423,6 @@ class Loc(object):
             ret_list = np.array(ret_list, dtype=promoted_type)
             return Series(ret_list,
                           index=as_index(col_list))
-
 
         df = DataFrame()
         begin, end = self._df.index.find_label_range(row_slice.start,
