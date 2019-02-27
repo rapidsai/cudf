@@ -1591,7 +1591,7 @@ gdf_error launch_dataTypeDetection(raw_csv_t *raw_csv,
 * @brief Returns true is the input character is a valid digit.
 * Supports both decimal and hexadecimal digits (uppercase and lowercase).
 */
-__device__
+__device__ __forceinline__
 bool isDigit(char c, bool is_hex){
 	if (c >= '0' && c <= '9') return true;
 	if (is_hex) {
