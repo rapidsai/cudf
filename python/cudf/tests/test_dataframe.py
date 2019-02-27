@@ -1847,6 +1847,13 @@ def test_series_all_null(num_elements, null_type):
     assert_eq(expect, got)
 
 
+@pytest.mark.parametrize('num_elements', [0, 2, 10, 100])
+def test_series_all_valid_nan(num_elements):
+    data = [np.nan] * num_elements
+    sr = Series(data, nan_as_null=False)
+    np.testing.assert_equal(sr.null_count, 0)
+
+
 def test_dataframe_rename():
     pdf = pd.DataFrame({'a': [1, 2, 3], 'b': [4, 5, 6], 'c': [7, 8, 9]})
     gdf = DataFrame.from_pandas(pdf)
