@@ -96,6 +96,7 @@
 - PR #1014 CSV Reader: Fix false positives in bool value detection
 - PR #1034 CSV Reader: Fix parsing floating point precision and leading zero exponents
 - PR #1044 CSV Reader: Fix a segfault when byte range aligns with a page
+- PR #1060 Fix column creation with all valid nan values
 
 
 # cuDF 0.5.1 (05 Feb 2019)
