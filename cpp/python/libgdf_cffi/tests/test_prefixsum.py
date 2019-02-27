@@ -12,6 +12,7 @@ from libgdf_cffi.tests.utils import (new_column, unwrap_devary,
 
 params_dtype = [
     np.int8,
+    np.int16,
     np.int32,
     np.int64,
     np.float32,
@@ -23,7 +24,7 @@ params_sizes = [1, 2, 13, 64, 100, 1000]
 
 def _gen_params():
     for t, n in product(params_dtype, params_sizes):
-        if t == np.int8 and n > 20:
+        if (t == np.int8, np.int16 ) and n > 20:
             # to keep data in range
             continue
         yield t, n
