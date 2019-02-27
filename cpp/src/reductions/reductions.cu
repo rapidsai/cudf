@@ -8,15 +8,13 @@
 #include <limits>
 #include <type_traits>
 
+#include "reduction_operators.cuh"
+
 #define REDUCTION_BLOCK_SIZE 128
 
-struct IdentityLoader{
-    template<typename T>
-    __device__
-    T operator() (const T *ptr, int pos) const {
-        return ptr[pos];
-    }
-};
+namespace { // anonymous namespace
+
+using namespace cudf::reduction;
 
 /*
 Generic reduction implementation with support for validity mask
@@ -122,87 +120,6 @@ struct ReduceOp {
 
 };
 
-
-struct DeviceSum {
-    typedef IdentityLoader Loader;
-    typedef DeviceSum second;
-
-    template<typename T>
-    __device__
-    T operator() (const T &lhs, const T &rhs) {
-        return lhs + rhs;
-    }
-
-    template<typename T>
-    static constexpr T identity() { return T{0}; }
-};
-
-struct DeviceProduct {
-    typedef IdentityLoader Loader;
-    typedef DeviceProduct second;
-
-    template<typename T>
-    __device__
-    T operator() (const T &lhs, const T &rhs) {
-        return lhs * rhs;
-    }
-
-    template<typename T>
-    static constexpr T identity() { return T{1}; }
-};
-
-struct DeviceSumOfSquares {
-    struct Loader {
-        template<typename T>
-        __device__
-        T operator() (const T* ptr, int pos) const {
-            T val = ptr[pos];   // load
-            return val * val;   // squared
-        }
-    };
-    // round 2 just uses the basic sum reduction
-    typedef DeviceSum second;
-
-    template<typename T>
-    __device__
-    T operator() (const T &lhs, const T &rhs) const {
-        return lhs + rhs;
-    }
-
-    template<typename T>
-    static constexpr T identity() { return T{0}; }
-};
-
-struct DeviceForNonArithmetic {};
-
-struct DeviceMin : DeviceForNonArithmetic {
-    typedef IdentityLoader Loader;
-    typedef DeviceMin second;
-
-    template<typename T>
-    __device__
-    T operator() (const T &lhs, const T &rhs) {
-        return lhs <= rhs? lhs: rhs;
-    }
-
-    template<typename T>
-    static constexpr T identity() { return std::numeric_limits<T>::max(); }
-};
-
-struct DeviceMax : DeviceForNonArithmetic {
-    typedef IdentityLoader Loader;
-    typedef DeviceMax second;
-
-    template<typename T>
-    __device__
-    T operator() (const T &lhs, const T &rhs) {
-        return lhs >= rhs? lhs: rhs;
-    }
-
-    template<typename T>
-    static constexpr T identity() { return std::numeric_limits<T>::lowest(); }
-};
-
 template <typename Op>
 struct ReduceDispatcher {
     template <typename T>
@@ -247,6 +164,9 @@ struct ReduceDispatcher {
         return GDF_UNSUPPORTED_DTYPE;
     }
 };
+
+
+}   // anonymous namespace
 
 
 gdf_error gdf_sum(gdf_column *col,
