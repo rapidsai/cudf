@@ -60,7 +60,7 @@
 - PR #1002 Support indexing a dataframe with another boolean dataframe
 - PR #1018 Better concatenation for Series and Dataframes
 - PR #1047 Adding gdf_dtype_extra_info to gdf_column_view_augmented
-
+- PR #1024 CSV Reader: Add support for hexadecimal integers in integral-type columns
 
 ## Bug Fixes
 
