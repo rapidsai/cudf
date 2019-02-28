@@ -29,7 +29,7 @@ namespace binops {
      * @brief Computes bitwise AND of two input columns
      * 
      * This is just a wrapper on apply_bitmask_to_bitmask that can also handle
-     * cases when one or both of the input masa are nullptr, in which case, it
+     * cases when one or both of the input masks are nullptr, in which case, it
      * copies the mask from the non nullptr input or sets all the output mask to
      * valid respectively
      * 
@@ -50,6 +50,11 @@ namespace binops {
             return GDF_SUCCESS;
         }
 
+        if (valid_out == nullptr && valid_left == nullptr && valid_right == nullptr) {
+            out_null_count = 0;
+            return GDF_SUCCESS;
+        }
+        
         GDF_REQUIRE((valid_out != nullptr), GDF_DATASET_EMPTY)
 
         if ( valid_left != nullptr && valid_right != nullptr ) {
@@ -73,7 +78,10 @@ namespace binops {
             CUDA_TRY( cudaMemset(valid_out, 0xff, num_chars_bitmask) );
         }
 
-    	return gdf_count_nonzero_mask(valid_out, num_values, &out_null_count);
+        gdf_size_type non_nulls;
+    	auto error = gdf_count_nonzero_mask(valid_out, num_values, &non_nulls);
+        out_null_count = num_values - non_nulls;
+        return error;
     }
 
 namespace jit {

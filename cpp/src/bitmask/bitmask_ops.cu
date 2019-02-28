@@ -38,5 +38,8 @@ gdf_error apply_bitmask_to_bitmask(gdf_size_type & out_null_count, gdf_valid_typ
 					  valid_out,
 					  thrust::bit_and<gdf_valid_type>());
 
-	return gdf_count_nonzero_mask(valid_out, num_values, &out_null_count);
+	gdf_size_type non_nulls;
+	auto error = gdf_count_nonzero_mask(valid_out, num_values, &non_nulls);
+	out_null_count = num_values - non_nulls;
+	return error;
 }

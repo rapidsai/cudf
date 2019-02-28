@@ -61,8 +61,12 @@ def apply_op(lhs, rhs, out, op):
             <gdf_column*>c_rhs,
             c_op)
 
+    cdef int nullct = c_out[0].null_count
+    
     free(c_lhs)
     free(c_rhs)
     free(c_out)
 
     check_gdf_error(result)
+
+    return nullct
