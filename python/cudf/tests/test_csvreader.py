@@ -946,7 +946,7 @@ def test_csv_reader_pd_consistent_quotes():
 
     # enable quoting
     cu_cols = read_csv_strings(StringIO(buffer), names=names, dtype=dtypes,
-                             quoting=0)
+                               quoting=0)
     pd_df = pd.read_csv(StringIO(buffer), names=names, quoting=0)
 
     col = [str(elem) for elem in cu_cols[0].to_host()]
