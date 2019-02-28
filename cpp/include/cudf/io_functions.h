@@ -21,3 +21,5 @@
 gdf_error read_csv(csv_read_arg *args);
 
 gdf_error gdf_to_csr(gdf_column **gdfData, int num_cols, csr_gdf *csrReturn);
+
+gdf_error gdf_to_interchange(gdf_column ** cols, int * n_cols, gdf_interchange_column ** intc_cols);
