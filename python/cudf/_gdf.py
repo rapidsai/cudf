@@ -37,6 +37,8 @@ def columnview_from_devary(devary, dtype=None):
 
 def _columnview(size, data, mask, dtype, null_count):
     colview = ffi.new('gdf_column*')
+    extra_dtype_info = ffi.new('gdf_dtype_extra_info*')
+    extra_dtype_info.time_unit = libgdf.TIME_UNIT_NONE
     if null_count is None:
         libgdf.gdf_column_view(
             colview,
@@ -53,6 +55,7 @@ def _columnview(size, data, mask, dtype, null_count):
             size,
             np_to_gdf_dtype(dtype),
             null_count,
+            extra_dtype_info[0],
             )
     return colview
 
@@ -169,7 +172,7 @@ def np_to_pa_dtype(dtype):
 
 def apply_reduce(fn, inp):
     # allocate output+temp array
-    outsz = libgdf.gdf_reduce_optimal_output_size()
+    outsz = libgdf.gdf_reduction_get_intermediate_output_size()
     out = rmm.device_array(outsz, dtype=inp.dtype)
     # call reduction
     fn(inp.cffi_view, unwrap_devary(out), outsz)
@@ -342,7 +345,7 @@ def libgdf_join(col_lhs, col_rhs, on, how, method='sort'):
 
 
 def apply_prefixsum(col_inp, col_out, inclusive):
-    libgdf.gdf_prefixsum_generic(col_inp, col_out, inclusive)
+    libgdf.gdf_prefixsum(col_inp, col_out, inclusive)
 
 
 def apply_segsort(col_keys, col_vals, segments, descending=False,

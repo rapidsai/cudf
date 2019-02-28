@@ -41,6 +41,7 @@ constexpr int BITS_PER_MASK32 = GDF_VALID_BITSIZE * RATIO;
 constexpr int block_size = 256;
 
 
+
 /* --------------------------------------------------------------------------*/
 /** 
  * @brief Kernel to count the number of set bits in a column's validity buffer
@@ -50,11 +51,11 @@ constexpr int block_size = 256;
  * number of set bits. This requires handling the last 4B element as a special 
  * case as the buffer may not be a multiple of 4 bytes.
  * 
- * @Param[in] masks32 Pointer to buffer (casted as a 4B type) whose bits will be counted
- * @Param[in] num_masks32 The number of 4B elements in the buffer
- * @Param[in] num_rows The number of rows in the column, i.e., the number of bits
+ * @param[in] masks32 Pointer to buffer (casted as a 4B type) whose bits will be counted
+ * @param[in] num_masks32 The number of 4B elements in the buffer
+ * @param[in] num_rows The number of rows in the column, i.e., the number of bits
  * in the buffer that correspond to rows
- * @Param[out] global_count The number of set bits in the range of bits [0, num_rows)
+ * @param[out] global_count The number of set bits in the range of bits [0, num_rows)
  */
 /* ----------------------------------------------------------------------------*/
 template <typename size_type>
@@ -112,16 +113,16 @@ void count_valid_bits(valid32_t const * const masks32,
 }
 
 /* ---------------------------------------------------------------------------*
- * @Synopsis  Counts the number of valid bits for the specified number of rows
+ * @brief  Counts the number of valid bits for the specified number of rows
  * in a validity bitmask.
  * 
  * If the bitmask is null, returns a count equal to the number of rows.
  * 
- * @Param[in] masks The validity bitmask buffer in device memory
- * @Param[in] num_rows The number of bits to count
- * @Param[out] count The number of valid bits in the buffer from [0, num_rows)
+ * @param[in] masks The validity bitmask buffer in device memory
+ * @param[in] num_rows The number of bits to count
+ * @param[out] count The number of valid bits in the buffer from [0, num_rows)
  * 
- * @Returns  GDF_SUCCESS upon successful completion 
+ * @returns  GDF_SUCCESS upon successful completion 
  *
  * ----------------------------------------------------------------------------*/
 

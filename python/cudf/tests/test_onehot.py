@@ -3,7 +3,7 @@
 import numpy as np
 
 from cudf.dataframe import DataFrame, Series, GenericIndex
-from . import utils
+from cudf.tests import utils
 
 
 def test_onehot_simple():

@@ -9,13 +9,13 @@ from copy import deepcopy, copy
 
 from librmm_cffi import librmm as rmm
 
-from . import columnops
+from cudf.dataframe import columnops
 from cudf.utils import cudautils, utils
-from .buffer import Buffer
-from .numerical import NumericalColumn
-from .column import Column
-from .datetime import DatetimeColumn
-from .categorical import CategoricalColumn
+from cudf.dataframe.buffer import Buffer
+from cudf.dataframe.numerical import NumericalColumn
+from cudf.dataframe.column import Column
+from cudf.dataframe.datetime import DatetimeColumn
+from cudf.dataframe.categorical import CategoricalColumn
 from cudf.comm.serialize import register_distributed_serializer
 
 
@@ -117,16 +117,72 @@ class Index(object):
         data = Column._concat([o.as_column() for o in objs])
         return as_index(data)
 
-    def __eq__(self, other):
-        if not isinstance(other, Index):
-            return NotImplemented
-        elif len(self) != len(other):
-            return False
+    def _apply_op(self, fn, other=None):
+        from cudf.dataframe.series import Series
+        idx_series = Series(self)
+        op = getattr(idx_series, fn)
+        if other is not None:
+            return as_index(op(other))
+        else:
+            return as_index(op())
 
-        lhs = self.as_column()
-        rhs = other.as_column()
-        res = lhs.unordered_compare('eq', rhs).all()
-        return res
+    def __add__(self, other):
+        return self._apply_op('__add__', other)
+
+    def __radd__(self, other):
+        return self._apply_op('__radd__', other)
+
+    def __sub__(self, other):
+        return self._apply_op('__sub__', other)
+
+    def __rsub__(self, other):
+        return self._apply_op('__rsub__', other)
+
+    def __mul__(self, other):
+        return self._apply_op('__mul__', other)
+
+    def __rmul__(self, other):
+        return self._apply_op('__rmul__', other)
+
+    def __pow__(self, other):
+        return self._apply_op('__pow__', other)
+
+    def __floordiv__(self, other):
+        return self._apply_op('__floordiv__', other)
+
+    def __rfloordiv__(self, other):
+        return self._apply_op('__rfloordiv__', other)
+
+    def __truediv__(self, other):
+        return self._apply_op('__truediv__', other)
+
+    def __rtruediv__(self, other):
+        return self._apply_op('__rtruediv__', other)
+
+    __div__ = __truediv__
+
+    def __eq__(self, other):
+        return self._apply_op('__eq__', other)
+
+    def __ne__(self, other):
+        return self._apply_op('__ne__', other)
+
+    def __lt__(self, other):
+        return self._apply_op('__lt__', other)
+
+    def __le__(self, other):
+        return self._apply_op('__le__', other)
+
+    def __gt__(self, other):
+        return self._apply_op('__gt__', other)
+
+    def __ge__(self, other):
+        return self._apply_op('__ge__', other)
+
+    def equals(self, other):
+        if len(self) != len(other):
+            return False
+        return (self == other)._values.all()
 
     def join(self, other, method, how='left', return_indexers=False):
         column_join_res = self.as_column().join(
@@ -223,14 +279,20 @@ class RangeIndex(Index):
             index = utils.normalize_index(index, len(self))
             index += self._start
             return index
+        elif isinstance(index, (list, np.ndarray)):
+            index = np.array(index)
+            return self.take(index)
         else:
             raise ValueError(index)
 
     def __eq__(self, other):
+        return super(RangeIndex, self).__eq__(other)
+
+    def equals(self, other):
         if isinstance(other, RangeIndex):
             return (self._start == other._start and self._stop == other._stop)
         else:
-            return super(RangeIndex, self).__eq__(other)
+            return (self == other)._values.all()
 
     @property
     def dtype(self):
@@ -238,7 +300,7 @@ class RangeIndex(Index):
 
     @property
     def _values(self):
-        return Column(range(self._start, self._stop))
+        return self.as_column()
 
     @property
     def is_contiguous(self):
