@@ -220,7 +220,8 @@ class DataFrame(object):
         >>> df[[True, False, True, False]] # mask the entire dataframe,
         # returning the rows specified in the boolean mask
         """
-        if isinstance(arg, str) or isinstance(arg, numbers.Integral):
+        if isinstance(arg, str) or isinstance(arg, numbers.Integral) or \
+           isinstance(arg, tuple):
             s = self._cols[arg]
             s.name = arg
             return s
@@ -265,10 +266,16 @@ class DataFrame(object):
         return df
 
     def __setitem__(self, name, col):
-        """Add/set column by *name*
+        """Add/set column by *name or DataFrame*
         """
+        # div[div < 0] = 0
+        if isinstance(name, DataFrame):
+            for col_name in self._cols:
+                mask = name[col_name]
+                self._cols[col_name] = self._cols[col_name] \
+                                           .masked_assign(value=col, mask=mask)
 
-        if name in self._cols:
+        elif name in self._cols:
             self._cols[name] = self._prepare_series_for_add(col)
         else:
             self.add_column(name, col)
@@ -589,19 +596,36 @@ class DataFrame(object):
                            ('b', list(range(20))),
                            ('c', list(range(20)))])
 
+           # get the row by index label from 'a' and 'b' columns.
+           df.loc[0, ['a', 'b']]
+
            # get rows from index 2 to index 5 from 'a' and 'b' columns.
            df.loc[2:5, ['a', 'b']]
+
+           # get the every 3rd rows from index 2 to 10 from 'a' and 'b'.
+           df.loc[2:10:3, ['a', 'b']]
 
         Output:
 
         .. code-block:: python
+          # get the row by index label from 'a' and 'b' columns.
+          a    0
+          b    0
 
+          # get rows from index 2 to index 5 from 'a' and 'b' columns.
                a    b
           2    2    2
           3    3    3
           4    4    4
           5    5    5
 
+          # get the every 3rd rows from index 2 to 10 from 'a' and 'b'.
+                a    b
+            2   2    2
+            5   5    5
+            8   8    8
+
+          #
         """
         return Loc(self)
 
@@ -2359,20 +2383,54 @@ class Loc(object):
         self._df = df
 
     def __getitem__(self, arg):
-        if isinstance(arg, tuple):
-            row_slice, col_slice = arg
+        row_slice = None
+        row_label = None
+
+        if isinstance(arg, int):
+            if arg < 0 or arg >= len(self._df):
+                raise IndexError("label scalar %s is out of bound" % arg)
+            row_label = arg
+            col_slice = self._df.columns
+
+        elif isinstance(arg, tuple):
+            arg_1, arg_2 = arg
+            if isinstance(arg_1, int):
+                row_label = arg_1
+            elif isinstance(arg_1, slice):
+                row_slice = arg_1
+            else:
+                raise TypeError(type(arg_1))
+            col_slice = arg_2
+
         elif isinstance(arg, slice):
             row_slice = arg
             col_slice = self._df.columns
         else:
             raise TypeError(type(arg))
 
+        if row_label is not None:
+            ret_list = []
+            col_list = pd.Categorical(list(col_slice))
+            for col in col_list:
+                if pd.api.types.is_categorical_dtype(
+                        self._df[col][row_label].dtype
+                ):
+                    raise NotImplementedError(
+                        "categorical dtypes are not yet supported in loc"
+                    )
+                ret_list.append(self._df[col][row_label])
+            promoted_type = np.result_type(*[val.dtype for val in ret_list])
+            ret_list = np.array(ret_list, dtype=promoted_type)
+            return Series(ret_list,
+                          index=as_index(col_list))
+
         df = DataFrame()
         begin, end = self._df.index.find_label_range(row_slice.start,
                                                      row_slice.stop)
+        row_step = row_slice.step if row_slice.step is not None else 1
         for col in col_slice:
             sr = self._df[col]
-            df.add_column(col, sr[begin:end], forceindex=True)
+            df.add_column(col, sr[begin:end:row_step], forceindex=True)
 
         return df
 
