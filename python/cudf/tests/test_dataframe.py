@@ -248,6 +248,12 @@ def test_dataframe_basic():
     print(mat)
     np.testing.assert_equal(mat, expect)
 
+    # test dataframe with tuple name
+    df_tup = DataFrame()
+    data = np.arange(10)
+    df_tup[(1, 'foobar')] = data
+    np.testing.assert_equal(data, df_tup[(1, 'foobar')].to_array())
+
 
 def test_dataframe_column_name_indexing():
     df = DataFrame()
@@ -375,7 +381,9 @@ def test_dataframe_slicing():
     del subrange
 
 
-def test_dataframe_loc():
+@pytest.mark.parametrize('step', [1, 2, 5])
+@pytest.mark.parametrize('scalar', [0, 20, 100])
+def test_dataframe_loc(scalar, step):
     df = DataFrame()
     size = 123
     df['a'] = ha = np.random.randint(low=0, high=100, size=size)\
@@ -385,17 +393,34 @@ def test_dataframe_loc():
         .astype(np.int64)
     df['d'] = hd = np.random.random(size).astype(np.float64)
 
+    pdf = pd.DataFrame()
+    pdf['a'] = ha
+    pdf['b'] = hb
+    pdf['c'] = hc
+    pdf['d'] = hd
+
+    # Scalar label
+    np.testing.assert_equal(df.loc[scalar].to_array(), pdf.loc[scalar])
+
     # Full slice
     full = df.loc[:, ['c']]
     assert tuple(full.columns) == ('c',)
     np.testing.assert_equal(full['c'].to_array(), hc)
 
-    begin = 117
+    begin = 110
     end = 122
-    fewer = df.loc[begin:end, ['c', 'd', 'a']]
-    assert len(fewer) == end - begin + 1
+
+    fewer = df.loc[begin:end:step, ['c', 'd', 'a']]
+    assert len(fewer) == (end - begin)//step + 1
     assert tuple(fewer.columns) == ('c', 'd', 'a')
-    np.testing.assert_equal(fewer['a'].to_array(), ha[begin:end + 1])
+    np.testing.assert_equal(fewer['a'].to_array(), ha[begin:end + 1:step])
+    np.testing.assert_equal(fewer['c'].to_array(), hc[begin:end + 1:step])
+    np.testing.assert_equal(fewer['d'].to_array(), hd[begin:end + 1:step])
+    del fewer
+
+    fewer = df.loc[begin:end, ['c', 'd']]
+    assert len(fewer) == end - begin + 1
+    assert tuple(fewer.columns) == ('c', 'd')
     np.testing.assert_equal(fewer['c'].to_array(), hc[begin:end + 1])
     np.testing.assert_equal(fewer['d'].to_array(), hd[begin:end + 1])
     del fewer
@@ -411,6 +436,24 @@ def test_dataframe_loc():
     np.testing.assert_equal(fewer['a'].to_array(), ha[begin:end + 1])
     np.testing.assert_equal(fewer['c'].to_array(), hc[begin:end + 1])
     np.testing.assert_equal(fewer['d'].to_array(), hd[begin:end + 1])
+
+
+@pytest.mark.xfail(
+    raises=IndexError,
+    reason="label scalar is out of bound"
+)
+def test_dataframe_loc_outbound():
+    df = DataFrame()
+    size = 10
+    df['a'] = ha = np.random.randint(low=0, high=100, size=size) \
+        .astype(np.int32)
+    df['b'] = hb = np.random.random(size).astype(np.float32)  # noqa: F841
+
+    pdf = pd.DataFrame()
+    pdf['a'] = ha
+    pdf['b'] = hb
+
+    np.testing.assert_equal(df.loc[11].to_array(), pdf.loc[11])
 
 
 @pytest.mark.parametrize('nelem', [2, 5, 20, 100])
@@ -1302,7 +1345,7 @@ def test_dataframe_shape_empty():
      'datetime64[ms]']
 )
 @pytest.mark.parametrize('nulls', ['none', 'some', 'all'])
-def test_dataframe_tranpose(nulls, num_cols, num_rows, dtype):
+def test_dataframe_transpose(nulls, num_cols, num_rows, dtype):
     if dtype not in ['float32', 'float64'] and nulls in ['some', 'all']:
         pytest.skip(msg='nulls not supported in dtype: ' + dtype)
 
@@ -1729,6 +1772,16 @@ def test_dataframe_boolmask(mask_shape):
         assert np.array_equal(gdf[col].fillna(-1), pdf[col].fillna(-1))
 
 
+def test_dataframe_assignment():
+    pdf = pd.DataFrame()
+    for col in 'abc':
+        pdf[col] = np.array([0, 1, 1, -2, 10])
+    gdf = DataFrame.from_pandas(pdf)
+    gdf[gdf < 0] = 999
+    pdf[pdf < 0] = 999
+    assert_eq(gdf, pdf)
+
+
 def test_1row_arrow_table():
     data = [pa.array([0]), pa.array([1])]
     batch = pa.RecordBatch.from_arrays(data, ['f0', 'f1'])
@@ -1792,6 +1845,13 @@ def test_series_all_null(num_elements, null_type):
     got = Series(data)
 
     assert_eq(expect, got)
+
+
+@pytest.mark.parametrize('num_elements', [0, 2, 10, 100])
+def test_series_all_valid_nan(num_elements):
+    data = [np.nan] * num_elements
+    sr = Series(data, nan_as_null=False)
+    np.testing.assert_equal(sr.null_count, 0)
 
 
 def test_dataframe_rename():

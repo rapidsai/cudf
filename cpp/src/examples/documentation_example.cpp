@@ -49,7 +49,7 @@ class example_class {
   // DESCRIPTION: Non-trivial member functions should have a brief description
   // of the function as well as all of its parameters. Every parameter should be
   // decorated to indicate if it is an input or output parameter, or both with
-  // @Param[in], @Param[out], and @Param[in,out] respectively.
+  // @param[in], @param[out], and @param[in,out] respectively.
   /**---------------------------------------------------------------------------*
    * @brief This is a complicated function that requires more detailed
    * documentation.

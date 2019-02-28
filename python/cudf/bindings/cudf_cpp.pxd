@@ -202,8 +202,13 @@ cdef extern from "cudf.h" nogil:
     gdf_error gdf_column_view(gdf_column *column, void *data, gdf_valid_type *valid,
                               gdf_size_type size, gdf_dtype dtype)
 
-    cdef gdf_error gdf_column_view_augmented(gdf_column *column, void *data, gdf_valid_type *valid,
-                              gdf_size_type size, gdf_dtype dtype, gdf_size_type null_count)
+    cdef gdf_error gdf_column_view_augmented(gdf_column *column,
+                                             void *data,
+                                             gdf_valid_type *valid,
+                                             gdf_size_type size,
+                                             gdf_dtype dtype,
+                                             gdf_size_type null_count,
+                                             gdf_dtype_extra_info extra_info)
 
     cdef gdf_error gdf_column_free(gdf_column *column)
 
@@ -350,10 +355,7 @@ cdef extern from "cudf.h" nogil:
                                  int partition_offsets[],
                                  gdf_hash_func hash)
 
-    cdef gdf_error gdf_prefixsum_generic(gdf_column *inp, gdf_column *out, int inclusive)
-    cdef gdf_error gdf_prefixsum_i8(gdf_column *inp, gdf_column *out, int inclusive)
-    cdef gdf_error gdf_prefixsum_i32(gdf_column *inp, gdf_column *out, int inclusive)
-    cdef gdf_error gdf_prefixsum_i64(gdf_column *inp, gdf_column *out, int inclusive)
+    cdef gdf_error gdf_prefixsum(gdf_column *inp, gdf_column *out, bool inclusive)
 
     cdef gdf_error gdf_hash(int num_cols, gdf_column **input, gdf_hash_func hash, gdf_column *output)
 
@@ -678,7 +680,11 @@ cdef extern from "cudf.h" nogil:
 
     cdef gdf_error gdf_find_and_replace_all(gdf_column*       col,
                                    gdf_column* old_values,
-                                   gdf_column* new_values);
+                                   gdf_column* new_values)
+
+
+    cdef gdf_error gdf_replace_nulls(gdf_column* col_out,
+                                     const gdf_column* col_in)
 
 
     cdef gdf_error gdf_digitize(gdf_column* col,

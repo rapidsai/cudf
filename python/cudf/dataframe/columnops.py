@@ -73,6 +73,9 @@ class TypedColumnBase(Column):
     def find_and_replace(self, to_replace, values):
         raise NotImplementedError
 
+    def fillna(self, col, fill_value):
+        raise NotImplementedError
+
 
 def column_empty_like(column, dtype, masked):
     """Allocate a new column like the given *column*
@@ -242,9 +245,16 @@ def as_column(arbitrary, nan_as_null=True, dtype=None):
             if pd.api.types.is_categorical_dtype(new_dtype):
                 arbitrary = arbitrary.dictionary_encode()
             else:
-                arbitrary = arbitrary.cast(_gdf.np_to_pa_dtype(new_dtype))
-
-            data = as_column(arbitrary)
+                if nan_as_null:
+                    arbitrary = arbitrary.cast(_gdf.np_to_pa_dtype(new_dtype))
+                else:
+                    # casting a null array doesn't make nans valid
+                    # so we create one with valid nans from scratch:
+                    arbitrary = utils.scalar_broadcast_to(
+                        np.nan,
+                        (len(arbitrary),),
+                        dtype=new_dtype)
+            data = as_column(arbitrary, nan_as_null=nan_as_null)
         elif isinstance(arbitrary, pa.DictionaryArray):
             pamask, padata = buffers_from_pyarrow(arbitrary)
             data = categorical.CategoricalColumn(
@@ -330,7 +340,7 @@ def as_column(arbitrary, nan_as_null=True, dtype=None):
                 arbitrary = arbitrary.astype('int64')
             data = as_column(pa.array([arbitrary], type=data_type))
         else:
-            data = as_column(pa.array([arbitrary]))
+            data = as_column(pa.array([arbitrary]), nan_as_null=nan_as_null)
 
     elif isinstance(arbitrary, memoryview):
         data = as_column(np.array(arbitrary), dtype=dtype,
@@ -342,7 +352,7 @@ def as_column(arbitrary, nan_as_null=True, dtype=None):
         except TypeError:
             try:
                 data = as_column(pa.array(arbitrary, from_pandas=nan_as_null),
-                                 dtype=dtype)
+                                 dtype=dtype, nan_as_null=nan_as_null)
             except pa.ArrowInvalid:
                 data = as_column(np.array(arbitrary), dtype=dtype,
                                  nan_as_null=nan_as_null)

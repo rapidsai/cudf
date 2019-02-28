@@ -6,6 +6,7 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 
+
 from libgdf_cffi import libgdf
 from librmm_cffi import librmm as rmm
 
@@ -278,7 +279,7 @@ class NumericalColumn(columnops.TypedColumnBase):
         """
         dkind = self.dtype.kind
         if dkind == 'f':
-            return np.nan
+            return self.dtype.type(np.nan)
         elif dkind in 'iu':
             return -1
         else:
@@ -399,6 +400,17 @@ class NumericalColumn(columnops.TypedColumnBase):
                to_replace_col, value_col, replaced)
         cpp_replace.replace(replaced, to_replace_col, value_col)
         return replaced
+
+    def fillna(self, fill_value, nan_as_null=True):
+        """
+        Fill null values with *fill_value*
+        """
+        result = self.copy()
+        fill_value_col, result = numeric_normalize_types(
+            columnops.as_column(fill_value, nan_as_null=nan_as_null), result)
+        cpp_replace.replace_nulls(result, fill_value_col)
+        result = result.replace(mask=None)
+        return result
 
 
 def numeric_column_binop(lhs, rhs, op, out_dtype):
