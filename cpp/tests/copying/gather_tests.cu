@@ -22,7 +22,6 @@
 #include "tests/utilities/column_wrapper.cuh"
 #include "tests/utilities/cudf_test_fixtures.h"
 #include "tests/utilities/cudf_test_utils.cuh"
-#include "tests/utilities/table_wrapper.cuh"
 #include "types.hpp"
 #include "utilities/wrapper_types.hpp"
 
