@@ -1345,7 +1345,7 @@ def test_dataframe_shape_empty():
      'datetime64[ms]']
 )
 @pytest.mark.parametrize('nulls', ['none', 'some', 'all'])
-def test_dataframe_tranpose(nulls, num_cols, num_rows, dtype):
+def test_dataframe_transpose(nulls, num_cols, num_rows, dtype):
     if dtype not in ['float32', 'float64'] and nulls in ['some', 'all']:
         pytest.skip(msg='nulls not supported in dtype: ' + dtype)
 
