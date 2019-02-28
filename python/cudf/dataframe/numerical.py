@@ -279,7 +279,7 @@ class NumericalColumn(columnops.TypedColumnBase):
         """
         dkind = self.dtype.kind
         if dkind == 'f':
-            return np.nan
+            return self.dtype.type(np.nan)
         elif dkind in 'iu':
             return -1
         else:
