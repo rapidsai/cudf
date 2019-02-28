@@ -228,12 +228,14 @@ add_executable(stringify "${CMAKE_SOURCE_DIR}/thirdparty/jitify/stringify.cpp")
 execute_process(WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
     COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/include)
 
-add_custom_target(stringify_run
-    COMMAND ${CMAKE_BINARY_DIR}/stringify cudf/types.h > ${CMAKE_BINARY_DIR}/include/types.h.jit
-    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include
-    COMMENT "stringify header types.h"
-    DEPENDS stringify
-)
+add_custom_command(OUTPUT ${CMAKE_BINARY_DIR}/include/types.h.jit
+                   WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include
+                   COMMAND ${CMAKE_BINARY_DIR}/stringify cudf/types.h > ${CMAKE_BINARY_DIR}/include/types.h.jit
+                   COMMENT "stringify header types.h"
+                   DEPENDS stringify
+                   MAIN_DEPENDENCY ${CMAKE_CURRENT_SOURCE_DIR}/include/cudf/types.h)
+
+add_custom_target(stringify_run DEPENDS ${CMAKE_BINARY_DIR}/include/types.h.jit)
 
 add_dependencies(cudf stringify_run)
 
