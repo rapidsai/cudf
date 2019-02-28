@@ -44,6 +44,7 @@ struct file_ender_s
 struct SchemaElement
 {
     Type type = BOOLEAN;
+    ConvertedType converted_type = UNKNOWN;
     int32_t type_length = 0;    // Byte length of FIXED_LENGTH_BYTE_ARRAY elements, or maximum bit length for other types
     FieldRepetitionType repetition_type = REQUIRED;
     std::string name = "";
@@ -88,12 +89,19 @@ struct RowGroup
     int64_t num_rows = 0;
 };
 
+struct KeyValue
+{
+    std::string key;
+    std::string value;
+};
+
 struct FileMetaData
 {
     int32_t version = 0;
     std::vector<SchemaElement> schema;
     int64_t num_rows = 0;
     std::vector<RowGroup> row_groups;
+    std::vector<KeyValue> key_value_metadata;
     std::string created_by = "";
 };
 
@@ -187,6 +195,7 @@ public:
     DECL_PARQUET_STRUCT(PageHeader);
     DECL_PARQUET_STRUCT(DataPageHeader);
     DECL_PARQUET_STRUCT(DictionaryPageHeader);
+    DECL_PARQUET_STRUCT(KeyValue);
 
 public:
     int NumRequiredBits(uint32_t max_level) { return 32 - CountLeadingZeros32(max_level); }

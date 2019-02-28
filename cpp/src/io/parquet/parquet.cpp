@@ -140,6 +140,7 @@ PARQUET_BEGIN_STRUCT(FileMetaData)
     PARQUET_FLD_STRUCT_LIST(2, schema)
     PARQUET_FLD_INT64(3, num_rows)
     PARQUET_FLD_STRUCT_LIST(4, row_groups)
+    PARQUET_FLD_STRUCT_LIST(5, key_value_metadata)
     PARQUET_FLD_STRING(6, created_by)
 PARQUET_END_STRUCT()
 
@@ -149,6 +150,7 @@ PARQUET_BEGIN_STRUCT(SchemaElement)
     PARQUET_FLD_ENUM(3, repetition_type, FieldRepetitionType)
     PARQUET_FLD_STRING(4, name)
     PARQUET_FLD_INT32(5, num_children)
+    PARQUET_FLD_ENUM(6, converted_type, ConvertedType)
 PARQUET_END_STRUCT()
 
 PARQUET_BEGIN_STRUCT(RowGroup)
@@ -198,6 +200,11 @@ PARQUET_END_STRUCT()
 PARQUET_BEGIN_STRUCT(DictionaryPageHeader)
     PARQUET_FLD_INT32(1, num_values)
     PARQUET_FLD_ENUM(2, encoding, Encoding);
+PARQUET_END_STRUCT()
+
+PARQUET_BEGIN_STRUCT(KeyValue)
+    PARQUET_FLD_STRING(1, key)
+    PARQUET_FLD_STRING(2, value)
 PARQUET_END_STRUCT()
 
 
