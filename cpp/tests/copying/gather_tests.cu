@@ -33,7 +33,6 @@ using test_types =
 TYPED_TEST_CASE(GatherTest, test_types);
 
 TYPED_TEST(GatherTest, IdentityTest) {
-  cudf::test::table_wrapper<std::tuple<int, int>> table(100);
 
   constexpr gdf_size_type source_size{1000};
   constexpr gdf_size_type destination_size{1000};
