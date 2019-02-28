@@ -545,18 +545,21 @@ gdf_error join_call_compute_df(
 	  new_right_cols[column_index] = right_cols[column_index];
   }
   std::vector<gdf_column *> nv_category_copied_columns;
-  for(int join_column_index = 0; join_column_index > num_cols_to_join; join_column_index++){
+  for(int join_column_index = 0; join_column_index < num_cols_to_join; join_column_index++){
 	  gdf_column * left_original_column = new_left_cols[left_join_cols[join_column_index]];
 	  gdf_column * right_original_column = new_right_cols[right_join_cols[join_column_index]];
 
 	  if(left_original_column->dtype == GDF_STRING_CATEGORY){
 		  if(right_original_column->dtype == GDF_STRING_CATEGORY){
+        gdf_column * new_join_columns[2];
+        new_join_columns[0] = left_original_column;
+        new_join_columns[1] = right_original_column;
+
 			  gdf_column * new_left_column = new gdf_column;
 			  gdf_column * new_right_column = new gdf_column;
 			  nv_category_copied_columns.push_back(new_left_column);
 			  nv_category_copied_columns.push_back(new_right_column);
 
-			  gdf_column * new_join_columns[2];
 			  gdf_column * input_join_columns_merge[2];
 			  input_join_columns_merge[0] = left_original_column;
 			  input_join_columns_merge[1] = right_original_column;
@@ -567,20 +570,19 @@ gdf_error join_call_compute_df(
 			  int col_width;
 			  get_column_byte_width(new_left_column, &col_width);
 			  RMM_TRY( RMM_ALLOC((void**)&(new_left_column->data), col_width * left_original_column->size, 0) ); // TODO: non-default stream?
-					  RMM_TRY( RMM_ALLOC((void**)&(new_left_column->valid), sizeof(gdf_valid_type)*gdf_get_num_chars_bitmask(left_original_column->size), 0) );
-					  CUDA_TRY( cudaMemcpy(new_left_column->valid, left_original_column->valid, sizeof(gdf_valid_type)*gdf_get_num_chars_bitmask(left_original_column->size),cudaMemcpyDeviceToDevice) );
+        RMM_TRY( RMM_ALLOC((void**)&(new_left_column->valid), sizeof(gdf_valid_type)*gdf_get_num_chars_bitmask(left_original_column->size), 0) );
+        CUDA_TRY( cudaMemcpy(new_left_column->valid, left_original_column->valid, sizeof(gdf_valid_type)*gdf_get_num_chars_bitmask(left_original_column->size),cudaMemcpyDeviceToDevice) );
 
-					  RMM_TRY( RMM_ALLOC((void**)&(new_right_column->data), col_width * right_original_column->size, 0) ); // TODO: non-default stream?
-					  RMM_TRY( RMM_ALLOC((void**)&(new_right_column->valid), sizeof(gdf_valid_type)*gdf_get_num_chars_bitmask(right_original_column->size), 0) );
-					  CUDA_TRY( cudaMemcpy(new_right_column->valid, right_original_column->valid, sizeof(gdf_valid_type)*gdf_get_num_chars_bitmask(right_original_column->size),cudaMemcpyDeviceToDevice) );
+        RMM_TRY( RMM_ALLOC((void**)&(new_right_column->data), col_width * right_original_column->size, 0) ); // TODO: non-default stream?
+        RMM_TRY( RMM_ALLOC((void**)&(new_right_column->valid), sizeof(gdf_valid_type)*gdf_get_num_chars_bitmask(right_original_column->size), 0) );
+        CUDA_TRY( cudaMemcpy(new_right_column->valid, right_original_column->valid, sizeof(gdf_valid_type)*gdf_get_num_chars_bitmask(right_original_column->size),cudaMemcpyDeviceToDevice) );
 
-					  gdf_error err = combine_column_categories(input_join_columns_merge,
-							  new_join_columns,
-							  2);
+        gdf_error err = sync_column_categories(input_join_columns_merge,
+            new_join_columns,
+            2);
 
-					  new_left_cols[left_join_cols[join_column_index]] = new_left_column;
-					  new_right_cols[right_join_cols[join_column_index]] = new_right_column;
-
+        new_left_cols[left_join_cols[join_column_index]] = new_join_columns[0];
+        new_right_cols[right_join_cols[join_column_index]] = new_join_columns[1];
 
 		  }else{
 			  return GDF_JOIN_DTYPE_MISMATCH;
