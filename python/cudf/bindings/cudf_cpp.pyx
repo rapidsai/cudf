@@ -5,9 +5,9 @@
 # cython: embedsignature = True
 # cython: language_level = 3
 
-from .cudf_cpp cimport *
+from cudf.bindings.cudf_cpp cimport *
 
-from .GDFError import GDFError
+from cudf.bindings.GDFError import GDFError
 
 import numpy as np
 import pandas as pd
@@ -102,7 +102,8 @@ cdef gdf_column* column_view_from_column(col):
 
     cdef gdf_dtype c_dtype = g_dtype
     cdef gdf_size_type len_col = len(col)
-    cdef gdf_size_type col_null_count = col.null_count
+    cdef gdf_size_type c_null_count = col.null_count
+    cdef gdf_dtype_extra_info c_extra_dtype_info = gdf_dtype_extra_info(time_unit = TIME_UNIT_NONE)
 
     with nogil:
         gdf_column_view_augmented(<gdf_column*>c_col,
@@ -110,7 +111,8 @@ cdef gdf_column* column_view_from_column(col):
                                 <gdf_valid_type*> valid_ptr,
                                 len_col,
                                 c_dtype,
-                                col_null_count)
+                                c_null_count,
+                                c_extra_dtype_info)
 
 
     return c_col
@@ -165,6 +167,7 @@ cdef gdf_column* column_view_from_NDArrays(size, data, mask, dtype,
     cdef gdf_dtype c_dtype = g_dtype
     cdef gdf_size_type c_size = size
     cdef gdf_size_type c_null_count = null_count
+    cdef gdf_dtype_extra_info c_extra_dtype_info = gdf_dtype_extra_info(time_unit = TIME_UNIT_NONE)
     
     with nogil:
         gdf_column_view_augmented(<gdf_column*>c_col,
@@ -172,7 +175,8 @@ cdef gdf_column* column_view_from_NDArrays(size, data, mask, dtype,
                                 <gdf_valid_type*> valid_ptr,
                                 c_size,
                                 c_dtype,
-                                c_null_count)
+                                c_null_count,
+                                c_extra_dtype_info)
 
     return c_col
 

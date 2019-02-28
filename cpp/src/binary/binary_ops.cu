@@ -510,6 +510,7 @@ DEF_BITWISE_IMPL_GROUP(xor, DeviceBitwiseXor)
 gdf_column gdf_validity_column(const gdf_column &col) {
     gdf_column ret;
     ret.data = col.valid;
+    // TODO: this will need to be changed when gdf_valid_type is changed to 4 byte
     ret.dtype = GDF_INT8;
     ret.valid = nullptr;
     ret.size = (col.size + GDF_VALID_BITSIZE - 1) / GDF_VALID_BITSIZE;
@@ -517,10 +518,25 @@ gdf_column gdf_validity_column(const gdf_column &col) {
 }
 
 gdf_error gdf_validity_and(gdf_column *lhs, gdf_column *rhs, gdf_column *output) {
-    GDF_REQUIRE ( lhs->valid && rhs->valid && output->valid, GDF_VALIDITY_MISSING);
+    GDF_REQUIRE ( output->valid, GDF_VALIDITY_MISSING);
     gdf_column x = gdf_validity_column(*lhs);
     gdf_column y = gdf_validity_column(*rhs);
     gdf_column z = gdf_validity_column(*output);
+    
+    // TODO: this will need to be changed when gdf_valid_type is changed to 4 byte
+    if ( x.data == nullptr && y.data != nullptr ) {
+        CUDA_TRY( cudaMemcpy(z.data, y.data, y.size, cudaMemcpyDeviceToDevice) );
+        return GDF_SUCCESS;
+    } 
+    else if ( x.data != nullptr && y.data == nullptr ) {
+        CUDA_TRY( cudaMemcpy(z.data, x.data, x.size, cudaMemcpyDeviceToDevice) );
+        return GDF_SUCCESS;
+    } 
+    else if ( x.data == nullptr && y.data == nullptr ) {
+        CUDA_TRY( cudaMemset(z.data, 0xff, x.size) );
+        return GDF_SUCCESS;
+    }
+    
     gdf_bitwise_and_i8(&x, &y, &z);
     return GDF_SUCCESS;
 }

@@ -11,12 +11,12 @@ from pandas.api.types import is_scalar, is_dict_like
 
 from cudf.utils import cudautils, utils
 from cudf import formatting
-from .buffer import Buffer
-from .index import Index, RangeIndex, as_index
+from cudf.dataframe.buffer import Buffer
+from cudf.dataframe.index import Index, RangeIndex, as_index
 from cudf.settings import NOTSET, settings
-from .column import Column
-from .datetime import DatetimeColumn
-from . import columnops
+from cudf.dataframe.column import Column
+from cudf.dataframe.datetime import DatetimeColumn
+from cudf.dataframe import columnops
 from cudf.comm.serialize import register_distributed_serializer
 from cudf._gdf import nvtx_range_push, nvtx_range_pop
 
@@ -34,7 +34,7 @@ class Series(object):
 
         If ``codes`` is defined, use it instead of ``categorical.codes``
         """
-        from .categorical import pandas_categorical_as_column
+        from cudf.dataframe.categorical import pandas_categorical_as_column
 
         col = pandas_categorical_as_column(categorical, codes=codes)
         return Series(data=col)
@@ -154,10 +154,12 @@ class Series(object):
     def __deepcopy__(self):
         return self.copy()
 
-    def reset_index(self):
-        """Reset index to RangeIndex
-        """
-        return self._copy_construct(index=RangeIndex(len(self)))
+    def reset_index(self, drop=False):
+        """ Reset index to RangeIndex """
+        if not drop:
+            return self.to_frame().reset_index(drop=drop)
+        else:
+            return self._copy_construct(index=RangeIndex(len(self)))
 
     def set_index(self, index):
         """Returns a new Series with a different index.
@@ -172,6 +174,11 @@ class Series(object):
 
     def as_index(self):
         return self.set_index(RangeIndex(len(self)))
+
+    def to_frame(self):
+        """ Convert Series into a DataFrame """
+        from cudf import DataFrame
+        return DataFrame({self.name or 0: self}, index=self.index)
 
     def set_mask(self, mask, null_count=None):
         """Create new Series by setting a mask array.
@@ -207,7 +214,7 @@ class Series(object):
         return not len(self)
 
     def __getitem__(self, arg):
-        if isinstance(arg, (list, np.ndarray, pd.Series, range,)):
+        if isinstance(arg, (list, np.ndarray, pd.Series, range, Index)):
             arg = Series(arg)
         if isinstance(arg, Series):
             if issubclass(arg.dtype.type, np.integer):
@@ -351,7 +358,7 @@ class Series(object):
         from cudf import DataFrame
         if isinstance(other, DataFrame):
             return other._binaryop(self, fn)
-        nvtx_range_push("PYGDF_BINARY_OP", "orange")
+        nvtx_range_push("CUDF_BINARY_OP", "orange")
         other = self._normalize_binop_value(other)
         outcol = self._column.binary_operator(fn, other._column)
         result = self._copy_construct(data=outcol)
@@ -368,7 +375,7 @@ class Series(object):
         from cudf import DataFrame
         if isinstance(other, DataFrame):
             return other._binaryop(self, fn)
-        nvtx_range_push("PYGDF_BINARY_OP", "orange")
+        nvtx_range_push("CUDF_BINARY_OP", "orange")
         other = self._normalize_binop_value(other)
         outcol = other._column.binary_operator(fn, self._column)
         result = self._copy_construct(data=outcol)
@@ -434,12 +441,14 @@ class Series(object):
     def _normalize_binop_value(self, other):
         if isinstance(other, Series):
             return other
+        elif isinstance(other, Index):
+            return Series(other)
         else:
             col = self._column.normalize_binop_value(other)
             return self._copy_construct(data=col)
 
     def _unordered_compare(self, other, cmpops):
-        nvtx_range_push("PYGDF_UNORDERED_COMP", "orange")
+        nvtx_range_push("CUDF_UNORDERED_COMP", "orange")
         other = self._normalize_binop_value(other)
         outcol = self._column.unordered_compare(cmpops, other._column)
         result = self._copy_construct(data=outcol)
@@ -448,7 +457,7 @@ class Series(object):
         return result
 
     def _ordered_compare(self, other, cmpops):
-        nvtx_range_push("PYGDF_ORDERED_COMP", "orange")
+        nvtx_range_push("CUDF_ORDERED_COMP", "orange")
         other = self._normalize_binop_value(other)
         outcol = self._column.ordered_compare(cmpops, other._column)
         result = self._copy_construct(data=outcol)
@@ -484,7 +493,7 @@ class Series(object):
         return self._column.dtype
 
     @classmethod
-    def _concat(cls, objs, index=True):
+    def _concat(cls, objs, axis=0, index=True):
         # Concatenate index if not provided
         if index is True:
             index = Index._concat([o.index for o in objs])
@@ -521,12 +530,33 @@ class Series(object):
         """A boolean indicating whether a null-mask is needed"""
         return self._column.has_null_mask
 
+    def masked_assign(self, value, mask):
+        """Assign a scalar value to a series using a boolean mask
+        df[df < 0] = 0
+
+        Parameters
+        ----------
+        value : scalar
+            scalar value for assignment
+        mask : cudf Series
+            Boolean Series
+
+        Returns
+        -------
+        cudf Series
+            cudf series with new value set to where mask is True
+        """
+
+        data = self._column.masked_assign(value, mask)
+        return self._copy_construct(data=data)
+
     def fillna(self, value):
         """Fill null values with ``value``.
 
         Returns a copy with null filled.
         """
         data = self._column.fillna(value)
+
         return self._copy_construct(data=data)
 
     def to_array(self, fillna=None):
@@ -592,27 +622,39 @@ class Series(object):
 
         Examples
         --------
+        .. code-block:: python
 
-        >>> sr = Series(list(range(20)))
-        # get the value from 1st index
-        >>> sr.iloc[1]
-        1
+          from cudf import Series
 
-        # get the values from 0,2,9 and 18th index
-        >>> sr.iloc[0,2,9,18]
-        0    0
-        2    2
-        9    9
-        18   18
+          sr = Series(list(range(20)))
 
-        # get the values using slice indices
-        >>> sr.iloc[3:10:2]
-        3    3
-        5    5
-        7    7
-        9    9
+          # get the value from 1st index
+          sr.iloc[1]
 
-        :return:
+          # get the values from 0,2,9 and 18th index
+          sr.iloc[0,2,9,18]
+
+          # get the values using slice indices
+          sr.iloc[3:10:2]
+
+        Output:
+
+        .. code-block:: python
+
+          1
+
+          0    0
+          2    2
+          9    9
+          18   18
+
+          3    3
+          5    5
+          7    7
+          9    9
+
+        Returns
+        -------
         Series containing the elements corresponding to the indices
         """
         return Iloc(self)
@@ -1015,8 +1057,8 @@ class Series(object):
         res = self._column.unique(method=method)
         return Series(res)
 
-    def unique_count(self, method='sort'):
-        """Returns the number of unique valies of the Series: approximate version,
+    def nunique(self, method='sort', dropna=True):
+        """Returns the number of unique values of the Series: approximate version,
         and exact version to be moved to libgdf
         """
         if method != 'sort':
@@ -1024,7 +1066,7 @@ class Series(object):
             raise NotImplementedError(msg)
         if self.null_count == len(self):
             return 0
-        return self._column.unique_count(method=method)
+        return self._column.unique_count(method=method, dropna=dropna)
         # return len(self._column.unique())
 
     def value_counts(self, method='sort', sort=True):
@@ -1075,7 +1117,7 @@ class Series(object):
     def hash_values(self):
         """Compute the hash of values in this column.
         """
-        from . import numerical
+        from cudf.dataframe import numerical
 
         return Series(numerical.column_hash_values(self._column))
 
@@ -1098,7 +1140,7 @@ class Series(object):
         """
         assert stop > 0
 
-        from . import numerical
+        from cudf.dataframe import numerical
         initial_hash = np.asarray(hash(self.name)) if use_name else None
         hashed_values = numerical.column_hash_values(
             self._column, initial_hash_values=initial_hash)
@@ -1246,7 +1288,9 @@ class Series(object):
         In order to add another DataFrame or Series to an existing HDF file
         please use append mode and a different a key.
 
-        For more information see the :ref:`user guide <io.hdf5>`.
+        For more information see the :ref:`user guide
+        <https://pandas.pydata.org/pandas-docs/stable/user_guide/io.html#hdf5-pytables>`_.
+
         Parameters
         ----------
         path_or_buf : str or pandas.HDFStore
@@ -1272,7 +1316,8 @@ class Series(object):
         data_columns :  list of columns or True, optional
             List of columns to create as indexed data columns for on-disk
             queries, or True to use all columns. By default only the axes
-            of the object are indexed. See :ref:`io.hdf5-query-data-columns`.
+            of the object are indexed. `See Query via Data Columns
+            <https://pandas.pydata.org/pandas-docs/stable/user_guide/io.html#hdf5-pytables>`_.
             Applicable only to format='table'.
         complevel : {0-9}, optional
             Specifies a compression level for data.
@@ -1415,7 +1460,10 @@ class Iloc(object):
         for idx in rows:
             ret_list.append(self._sr[idx])
 
-        return Series(ret_list, index=as_index(np.asarray(rows)))
+        col_data = columnops.as_column(ret_list, dtype=self._sr.dtype,
+                                       nan_as_null=True)
+
+        return Series(col_data, index=as_index(np.asarray(rows)))
 
     def __setitem__(self, key, value):
         # throws an exception while updating

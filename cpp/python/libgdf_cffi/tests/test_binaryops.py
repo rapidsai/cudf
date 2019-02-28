@@ -5,7 +5,7 @@ import numpy as np
 from libgdf_cffi import ffi, libgdf, GDFError
 from librmm_cffi import librmm as rmm
 
-from .utils import new_column, unwrap_devary, get_dtype, gen_rand, fix_zeros
+from libgdf_cffi.tests.utils import new_column, unwrap_devary, get_dtype, gen_rand, fix_zeros
 
 
 def arith_op_test(dtype, ulp, expect_fn, test_fn, nelem=128,

@@ -7,8 +7,8 @@
 
 # Copyright (c) 2018, NVIDIA CORPORATION.
 
-from .cudf_cpp cimport *
-from .cudf_cpp import *
+from cudf.bindings.cudf_cpp cimport *
+from cudf.bindings.cudf_cpp import *
 
 import numpy as np
 import pandas as pd
