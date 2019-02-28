@@ -464,7 +464,7 @@ class Column(object):
             if fillna == 'pandas':
                 na_value = self.default_na_value()
                 # fill nan
-                return self.fillna(na_value)
+                return self.fillna(na_value, nan_as_null=False)
             else:
                 return self._copy_to_dense_buffer()
         else:
