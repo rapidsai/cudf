@@ -6,7 +6,9 @@ project(CUDF_TESTS LANGUAGES C CXX CUDA)
 # - compiler function -----------------------------------------------------------------------------
 
 function(ConfigureTest CMAKE_TEST_NAME CMAKE_TEST_SRC)
-    add_executable(${CMAKE_TEST_NAME} ${CMAKE_TEST_SRC})
+    add_executable(${CMAKE_TEST_NAME}
+                   ${CMAKE_TEST_SRC}
+                   "${CMAKE_CURRENT_SOURCE_DIR}/utilities/cudf_test_utils.cu")
     set_target_properties(${CMAKE_TEST_NAME} PROPERTIES POSITION_INDEPENDENT_CODE ON)
     target_link_libraries(${CMAKE_TEST_NAME} gmock gtest gmock_main gtest_main pthread cudf)
     set_target_properties(${CMAKE_TEST_NAME} PROPERTIES
@@ -150,6 +152,11 @@ set(REPLACE_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/replace/replace_tests.cu")
 
 ConfigureTest(REPLACE_TEST "${REPLACE_TEST_SRC}")
+
+set(REPLACE_NULLS_TEST_SRC 
+    "${CMAKE_CURRENT_SOURCE_DIR}/replace/replace-nulls_tests.cu")
+
+ConfigureTest(REPLACE_NULLS_TEST "${REPLACE_NULLS_TEST_SRC}")
 
 ###################################################################################################
 # - unary tests -----------------------------------------------------------------------------------

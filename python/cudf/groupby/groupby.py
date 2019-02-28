@@ -87,8 +87,17 @@ class Groupby(object):
             group by. Valid values are "hash".
         """
         self.level = None
+        self._original_index_name = None
         self._df = df
-        if level == 0:
+        if isinstance(by, Series):
+            if len(by) != len(self._df.index):
+                raise NotImplementedError("CUDF doesn't support series groupby"
+                                          "with indices of arbitrary length")
+            self.level = 0
+            self._df[self._LEVEL_0_INDEX_NAME] = by
+            self._original_index_name = self._df.index.name
+            self._by = [self._LEVEL_0_INDEX_NAME]
+        elif level == 0:
             self.level = level
             self._df[self._LEVEL_0_INDEX_NAME] = self._df.index
             self._original_index_name = self._df.index.name
@@ -204,7 +213,7 @@ class Groupby(object):
                             ordered=self._df[thisBy].cat.ordered)
 
             out_col_agg_series.data.size = num_row_results
-            out_col_agg_series = out_col_agg_series.reset_index()
+            out_col_agg_series = out_col_agg_series.reset_index(drop=True)
 
             if isinstance(val_columns_out, (str, Number)):
                 result[val_columns_out] = out_col_agg_series[:num_row_results]
@@ -213,7 +222,7 @@ class Groupby(object):
                        ] = out_col_agg_series[:num_row_results]
 
             out_col_agg_series.data.size = num_row_results
-            out_col_agg_series = out_col_agg_series.reset_index()
+            out_col_agg_series = out_col_agg_series.reset_index(drop=True)
 
             first_run = False
             col_count = col_count + 1
@@ -286,6 +295,8 @@ class Groupby(object):
         result = Groupby(df, self._by)
         result._method = self._method
         result._val_columns = self._val_columns
+        result.level = self.level
+        result._original_index_name = self._original_index_name
         return result
 
     def __getattr__(self, key):

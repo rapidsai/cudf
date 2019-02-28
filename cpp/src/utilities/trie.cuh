@@ -29,15 +29,16 @@
 #include <cuda_runtime.h>
 #include <thrust/host_vector.h>
 
+static constexpr char trie_terminating_character = '\n';
+
 struct SerialTrieNode {
-	int16_t children_offset = -1;
-	char character;
-	bool is_leaf;
+	int16_t children_offset{-1};
+	char character{trie_terminating_character};
+	bool is_leaf{false};
+    SerialTrieNode() = default; // FIXME This is necessary for a Thrust bug on CentOS7 + CUDA10
 	explicit SerialTrieNode(char c, bool leaf = false) noexcept
 		: character(c), is_leaf(leaf) {}
 };
-
-static constexpr char trie_terminating_character = '\n';
 
 
 /**---------------------------------------------------------------------------*
@@ -131,6 +132,7 @@ inline thrust::host_vector<SerialTrieNode> createSerializedTrie(const std::vecto
  *---------------------------------------------------------------------------**/
 __host__ __device__
 inline bool serializedTrieContains(const SerialTrieNode* trie, const char* key, size_t key_len) {
+	if (trie == nullptr) return false;
 	int curr_node = 0;
 	for (size_t i = 0; i < key_len; ++i) {
 		// Don't jump away from root node

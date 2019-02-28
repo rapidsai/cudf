@@ -38,7 +38,7 @@ def read_csv(filepath_or_buffer, lineterminator='\n',
              thousands=None, decimal='.', true_values=None, false_values=None,
              nrows=None, byte_range=None, skip_blank_lines=True, comment=None,
              na_values=None, keep_default_na=True, na_filter=True,
-             prefix=None):
+             prefix=None, index_col=None):
 
     """
     Load and parse a CSV file into a DataFrame
@@ -121,6 +121,8 @@ def read_csv(filepath_or_buffer, lineterminator='\n',
         Passing False can improve performance.
     prefix : str, default None
         Prefix to add to column numbers when parsing without a header row
+    index_col : int or string, default None
+        Column to use as the row labels
 
     Returns
     -------
@@ -192,7 +194,7 @@ def read_csv(filepath_or_buffer, lineterminator='\n',
             msg = '''All column dtypes must be specified.'''
             raise TypeError(msg)
 
-    nvtx_range_push("PYGDF_READ_CSV", "purple")
+    nvtx_range_push("CUDF_READ_CSV", "purple")
 
     csv_reader = ffi.new('csv_read_arg*')
 
@@ -286,16 +288,14 @@ def read_csv(filepath_or_buffer, lineterminator='\n',
             raise ValueError("""cannot manually limit rows to be read when
                                 using the byte range parameter""")
 
-    # Start with default values recognized as boolean
-    arr_true_values = [_wrap_string(str('True')), _wrap_string(str('TRUE'))]
-    arr_false_values = [_wrap_string(str('False')), _wrap_string(str('FALSE'))]
-
+    arr_true_values = []
     for value in true_values or []:
         arr_true_values.append(_wrap_string(str(value)))
     arr_true_values_ptr = ffi.new('char*[]', arr_true_values)
     csv_reader.true_values = arr_true_values_ptr
     csv_reader.num_true_values = len(arr_true_values)
 
+    arr_false_values = []
     for value in false_values or []:
         arr_false_values.append(_wrap_string(str(value)))
     false_values_ptr = ffi.new('char*[]', arr_false_values)
@@ -367,6 +367,13 @@ def read_csv(filepath_or_buffer, lineterminator='\n',
     for k, v in zip(new_names, outcols):
         df[k] = v
 
+    # Set index if the index_col parameter is passed
+    if index_col is not None and index_col is not False:
+        if isinstance(index_col, (int)):
+            df = df.set_index(df.columns[index_col])
+        else:
+            df = df.set_index(index_col)
+
     nvtx_range_pop()
 
     return df
@@ -382,7 +389,7 @@ def read_csv_strings(filepath_or_buffer, lineterminator='\n',
                      true_values=None, false_values=None, nrows=None,
                      byte_range=None, skip_blank_lines=True, comment=None,
                      na_values=None, keep_default_na=True, na_filter=True,
-                     prefix=None):
+                     prefix=None, index_col=None):
 
     """
     **Experimental**: This function exists only as a beta way to use

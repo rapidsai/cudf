@@ -8,7 +8,7 @@ import pandas as pd
 
 from cudf.dataframe import DataFrame
 from cudf.dataframe import Series
-from .utils import assert_eq
+from cudf.tests.utils import assert_eq
 
 
 def make_frame(dataframe_class, nelem, seed=0, extra_levels=(), extra_vals=()):
@@ -354,4 +354,25 @@ def test_groupby_column_numeral():
     g = gdf.groupby(1)
     pxx = p[0].sum()
     gxx = g[0].sum()
+    assert_eq(pxx, gxx)
+
+
+@pytest.mark.parametrize('series', [[0, 1, 0], [1, 1, 1], [0, 1, 1], [1, 2, 3], [4, 3, 2], [0, 2, 0]])  # noqa: E501
+def test_groupby_external_series(series):
+    pdf = pd.DataFrame({'x': [1., 2., 3.], 'y': [1, 2, 1]})
+    gdf = DataFrame.from_pandas(pdf)
+    pxx = pdf.groupby(pd.Series(series)).x.sum()
+    gxx = gdf.groupby(cudf.Series(series)).x.sum()
+    assert_eq(pxx, gxx)
+
+
+@pytest.mark.xfail(raises=NotImplementedError,
+                   reason="CUDF doesn't support arbitrary series index lengths"
+                          "for groupby")
+@pytest.mark.parametrize('series', [[0, 1], [1, 1, 1, 1]])
+def test_groupby_external_series_incorrect_length(series):
+    pdf = pd.DataFrame({'x': [1., 2., 3.], 'y': [1, 2, 1]})
+    gdf = DataFrame.from_pandas(pdf)
+    pxx = pdf.groupby(pd.Series(series)).x.sum()
+    gxx = gdf.groupby(cudf.Series(series)).x.sum()
     assert_eq(pxx, gxx)

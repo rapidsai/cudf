@@ -18,7 +18,24 @@
 - PR #939 Add ORC reader from PyArrow
 - PR #918 Add Series.groupby(level=0) support
 - PR #906 Add binary and comparison ops to DataFrame
+- PR #958 Support unary and binary ops on indexes
 - PR #964 Add `rename` method to `DataFrame`, `Series`, and `Index`
+- PR #985 Add `Series.to_frame` method
+- PR #985 Add `drop=` keyword to reset_index method
+- PR #994 Remove references to pygdf
+- PR #990 Add external series groupby support
+- PR #988 Add top-level merge function to cuDF
+- PR #992 Add comparison binaryops to DateTime columns
+- PR #996 Replace relative path imports with absolute paths in tests
+- PR #995 CSV Reader: Add index_col parameter to specify the column name or index to be used as row labels
+- PR #1004 Add `from_gpu_matrix` method to DataFrame
+- PR #997 Add property index setter
+- PR #1007 Replace relative path imports with absolute paths in cudf
+- PR #1013 select columns with df.columns
+- PR #1016 Rename Series.unique_count() to nunique() to match pandas API
+- PR #947 Prefixsum to handle nulls and float types
+- PR #1029 Remove rest of relative path imports
+- PR #1021 Add filtered selection with assignment for Dataframes
 
 ## Improvements
 
@@ -33,6 +50,7 @@
 - PR #694 Unit test utilities improvements
 - PR #878 Add better indexing to Groupby
 - PR #554 Add `empty` method and `is_monotonic` attribute to `Index`
+- PR #1040 Fixed up Doxygen comment tags
 - PR #909 CSV Reader: Avoid host->device->host copy for header row data
 - PR #916 Improved unit testing and error checking for `gdf_column_concat`
 - PR #941 Replace `numpy` call in `Series.hash_encode` with `numba`
@@ -41,6 +59,13 @@
 - PR #943 Updated `count_nonzero_mask` to return `num_rows` when the mask is null
 - PR #952 Added trait to map C++ type to `gdf_dtype`
 - PR #966 Updated RMM submodule.
+- PR #998 Add IO reader/writer modules to API docs, fix for missing cudf.Series docs
+- PR #1017 concatenate along columns for Series and DataFrames
+- PR #1002 Support indexing a dataframe with another boolean dataframe
+- PR #1018 Better concatenation for Series and Dataframes
+- PR #1047 Adding gdf_dtype_extra_info to gdf_column_view_augmented
+- PR #1054 Added default ctor to SerialTrieNode to overcome Thrust issue in CentOS7 + CUDA10
+- PR #1024 CSV Reader: Add support for hexadecimal integers in integral-type columns
 
 
 
@@ -59,6 +84,7 @@
 - PR #889 Deleted test_rmm.py which has now moved to RMM repo
 - PR #866 Merge v0.5.1 numpy ABI hotfix into 0.6
 - PR #917 value_counts return int type on empty columns
+- PR #611 Renamed `gdf_reduce_optimal_output_size()` -> `gdf_reduction_get_intermediate_output_size()`
 - PR #923 fix index for negative slicing for cudf dataframe and series
 - PR #927 CSV Reader: Fix category GDF_CATEGORY hashes not being computed properly
 - PR #921 CSV Reader: Fix parsing errors with delim_whitespace, quotations in the header row, unnamed columns
@@ -68,6 +94,18 @@
 - PR #959 Groupby: Problem with column name lookup
 - PR #950 Converting dataframe/recarry with non-contiguous arrays
 - PR #963 CSV Reader: Fix another issue with missing data rows when using byte_range
+- PR #999 Fix 0 sized kernel launches and empty sort_index exception
+- PR #993 Fix dtype in selecting 0 rows from objects
+- PR #1009 Fix performance regression in `to_pandas` method on DataFrame
+- PR #1008 Remove custom dask communication approach
+- PR #1001 CSV Reader: Fix a memory access error when reading a large (>2GB) file with date columns
+- PR #1019 Binary Ops: Fix error when one input column has null mask but other doesn't
+- PR #1014 CSV Reader: Fix false positives in bool value detection
+- PR #1034 CSV Reader: Fix parsing floating point precision and leading zero exponents
+- PR #1044 CSV Reader: Fix a segfault when byte range aligns with a page
+- PR #1058 Added support for `DataFrame.loc[scalar]`
+- PR #1060 Fix column creation with all valid nan values
+
 
 # cuDF 0.5.1 (05 Feb 2019)
 
@@ -100,16 +138,7 @@
 - PR #564 Update python `sort_values` method to use updated libcudf `gdf_order_by` API
 - PR #509 CSV Reader: Input CSV file can now be passed in as a text or a binary buffer
 - PR #607 Add `__iter__` and iteritems to DataFrame class
-- PR #576 Create BitMask class and unit test to make 32-bit bit masks
-- PR #608 Added the `DataFrame.iloc[]` and `Series.iloc[]` features
-- PR #600 Enable deep or shallow copy
-- PR #635 Add Doxygen template
-- PR #649 Add `cudf.from_pandas` function
-- PR #633 CSV Reader: Add support for the nrows parameter to specify the number of rows to read from the input file
-- PR #668 Added Python 3.7 support, upgraded packages: pandas>=0.23.4, pyarrow=0.11.1, numba>=0.40.0, cython>=0.29, GLIBCXX11 ABI compatibility; align with gcc7 conda update
-- PR #679 Test Series indexing, support integer scalars and integer sequences
-- PR #567 Adds setup for a wheel which is installable by pip
-- PR #718 Expose `product` reduction method to Python and add `GDF_NOTIMPLEMENTED_ERROR` error value
+- PR #643 added a new api gdf_replace_nulls that allows a user to replace nulls in a column
 
 ## Improvements
 

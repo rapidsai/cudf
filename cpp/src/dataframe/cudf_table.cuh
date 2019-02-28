@@ -34,7 +34,7 @@
 
 /* --------------------------------------------------------------------------*/
 /** 
- * @Synopsis  Computes the validity mask for the rows in the gdf_table.
+ * @brief  Computes the validity mask for the rows in the gdf_table.
 
    If a single value in a row of the table is NULL, then the entire row is 
    considered to be NULL. Therefore, we can AND all of the bitmasks of each
@@ -50,11 +50,11 @@ struct row_masker
    
   /* --------------------------------------------------------------------------*/
   /** 
-   * @Synopsis Computes the bit-wise AND across all columns for the specified mask
+   * @brief Computes the bit-wise AND across all columns for the specified mask
    * 
-   * @Param mask_number The index of the mask to compute the bit-wise AND across all columns
+   * @param mask_number The index of the mask to compute the bit-wise AND across all columns
    * 
-   * @Returns The bit-wise AND across all columns for the specified mask number
+   * @returns The bit-wise AND across all columns for the specified mask number
    */
   /* ----------------------------------------------------------------------------*/
   __device__ __forceinline__
@@ -82,7 +82,6 @@ struct row_masker
 
 /* --------------------------------------------------------------------------*/
 /** 
- * @Synopsis A class provides useful functionality for operating on a set of gdf_columns. 
 
     The gdf_table class is meant to wrap a set of gdf_columns and provide functions
     for operating across all of the columns. It can be thought of as a `matrix`
@@ -180,9 +179,9 @@ public:
 
   /* --------------------------------------------------------------------------*/
   /** 
-   * @Synopsis  Updates the length of the gdf_columns in the table
+   * @brief  Updates the length of the gdf_columns in the table
    * 
-   * @Param new_length The new length
+   * @param new_length The new length
    */
   /* ----------------------------------------------------------------------------*/
   void set_column_length(const size_type new_length)
@@ -230,10 +229,10 @@ public:
 
   /* --------------------------------------------------------------------------*/
   /** 
-   * @Synopsis  Gets the size in bytes of a row in the gdf_table, i.e., the sum of 
+   * @brief  Gets the size in bytes of a row in the gdf_table, i.e., the sum of 
    * the byte widths of all columns in the table
    * 
-   * @Returns The size in bytes of the row in the table
+   * @returns The size in bytes of the row in the table
    */
   /* ----------------------------------------------------------------------------*/
   byte_type get_row_size_bytes() const
@@ -244,14 +243,14 @@ public:
 
   /* --------------------------------------------------------------------------*/
   /** 
-   * @Synopsis  Packs the elements of a specified row into a contiguous byte-buffer
+   * @brief  Packs the elements of a specified row into a contiguous byte-buffer
    *
    * This function is called by a single thread, and the thread will copy each element
    * of the row into a single contiguous buffer. TODO: This could be done by multiple threads
    * by passing in a cooperative group. 
    * 
-   * @Param index The row of the table to return
-   * @Param row_byte_buffer A pointer to a preallocated buffer large enough to hold a 
+   * @param index The row of the table to return
+   * @param row_byte_buffer A pointer to a preallocated buffer large enough to hold a 
       row of the table 
    * 
    */
@@ -327,15 +326,15 @@ public:
   }
     /* --------------------------------------------------------------------------*/
     /** 
-     * @Synopsis  Copies a row from a source table to a target row in this table
+     * @brief  Copies a row from a source table to a target row in this table
      *  
      * This device function should be called by a single thread and the thread will copy all of 
      * the elements in the row from one table to the other. TODO: In the future, this could be done
      * by multiple threads by passing in a cooperative group.
      * 
-     * @Param other The other table from which the row is copied
-     * @Param my_row_index The index of the row in this table that will be written to
-     * @Param other_row_index The index of the row from the other table that will be copied from
+     * @param other The other table from which the row is copied
+     * @param my_row_index The index of the row in this table that will be written to
+     * @param other_row_index The index of the row from the other table that will be copied from
      */
     /* ----------------------------------------------------------------------------*/
   __device__ 
@@ -379,14 +378,14 @@ public:
 
   /* --------------------------------------------------------------------------*/
   /** 
-   * @Synopsis  Checks for equality between a target row in this table and a source 
+   * @brief  Checks for equality between a target row in this table and a source 
    * row in another table.
    * 
-   * @Param rhs The other table whose row is compared to this tables
-   * @Param this_row_index The row index of this table to compare
-   * @Param rhs_row_index The row index of the rhs table to compare
+   * @param rhs The other table whose row is compared to this tables
+   * @param this_row_index The row index of this table to compare
+   * @param rhs_row_index The row index of the rhs table to compare
    * 
-   * @Returns True if the elements in both rows are equivalent, otherwise False
+   * @returns True if the elements in both rows are equivalent, otherwise False
    */
   /* ----------------------------------------------------------------------------*/
   __device__
