@@ -36,6 +36,7 @@
 - PR #947 Prefixsum to handle nulls and float types
 - PR #1029 Remove rest of relative path imports
 - PR #1021 Add filtered selection with assignment for Dataframes
+- PR #1065 Add CUDF Interchange Format to simplify data exchange to/from XGBoost
 
 ## Improvements
 
