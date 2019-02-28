@@ -27,16 +27,18 @@ def is_file_like(obj):
         return False
     return True
 
+
 _quoting_enum = {
-	'minimal':libgdf.QUOTE_MINIMAL,
-	0:libgdf.QUOTE_MINIMAL,
-	'all':libgdf.QUOTE_ALL,
-	1:libgdf.QUOTE_ALL,
-	'nonnumeric':libgdf.QUOTE_NONNUMERIC,
-	2:libgdf.QUOTE_NONNUMERIC,
-	'none':libgdf.QUOTE_NONE,
-	3:libgdf.QUOTE_NONE,
+    'minimal': libgdf.QUOTE_MINIMAL,
+    0: libgdf.QUOTE_MINIMAL,
+    'all': libgdf.QUOTE_ALL,
+    1: libgdf.QUOTE_ALL,
+    'nonnumeric': libgdf.QUOTE_NONNUMERIC,
+    2: libgdf.QUOTE_NONNUMERIC,
+    'none': libgdf.QUOTE_NONE,
+    3: libgdf.QUOTE_NONE,
 }
+
 
 def read_csv(filepath_or_buffer, lineterminator='\n',
              quotechar='"', quoting='minimal', doublequote=True,
@@ -55,15 +57,15 @@ def read_csv(filepath_or_buffer, lineterminator='\n',
 
     Parameters
     ----------
-    filepath_or_buffer : strquoting
-        Path of file to be read orquoting a file-like object containing the file.
-    sep : char, default ','quoting
-        Delimiter to be used.quoting
-    delimiter : char, default Nonequoting
-        Alternative argument name quotingfor sep.
-    delim_whitespace : bool, defauquotinglt False
-        Determines whether to use quotingwhitespace as delimiter.
-    lineterminator : char, defaultquoting '\\n'
+    filepath_or_buffer : str
+        Path of file to be read or a file-like object containing the file.
+    sep : char, default ','
+        Delimiter to be used.
+    delimiter : char, default None
+        Alternative argument name for sep.
+    delim_whitespace : bool, default False
+        Determines whether to use whitespace as delimiter.
+    lineterminator : char, default '\\n'
         Character to indicate end of line.
     skipinitialspace : bool, default False
         Skip spaces after delimiter.
