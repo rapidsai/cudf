@@ -77,8 +77,9 @@ def read_csv(filepath_or_buffer, lineterminator='\n',
     quotechar : char, default '"'
         Character to indicate start and end of quote item.
     quoting : str or int, default 'minimal'
-        Control quoting behavior. Setting to 3 or 'none' disables quoting.
-        Quoting is enabled with all other values.
+        Controls quoting behavior. Set to one of 'minimal'(0), 'all'(1),
+        'nonnumeric'(2) or 'none'(3). Setting to 3 or 'none' disables 
+        quoting. Quoting is enabled with all other values.
     doublequote : bool, default True
         When quoting is enabled, indicates whether to interpret two
         consecutive quotechar inside fields as single quotechar
