@@ -1,6 +1,5 @@
 #pragma once
 
-/* --------------------------------------------------------------------------*/
 /** 
  * @brief  Start a NVTX range with predefined color.
  *
@@ -12,15 +11,10 @@
  * @param[in] name The name of the NVTX range
  * @param[in] color The predefined gdf_color enum to use to color this range
  * 
- * @returns   
+ * @Returnss   
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_nvtx_range_push(char const * const name, gdf_color color );
 
-
-
-
-/* --------------------------------------------------------------------------*/
 /** 
  * @brief  Start a NVTX range with a custom ARGB color code.
  *
@@ -32,13 +26,10 @@ gdf_error gdf_nvtx_range_push(char const * const name, gdf_color color );
  * @param[in] name The name of the NVTX range
  * @param[in] color The ARGB hex color code to use to color this range (e.g., 0xFF00FF00)
  * 
- * @returns   
+ * @Returnss   
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_nvtx_range_push_hex(char const * const name, unsigned int color );
 
-
-/* --------------------------------------------------------------------------*/
 /** 
  * @brief Ends the inner-most NVTX range.
  *
@@ -46,12 +37,10 @@ gdf_error gdf_nvtx_range_push_hex(char const * const name, unsigned int color );
  * will demarcate the end of the inner-most range, i.e., the most recent call to
  * gdf_nvtx_range_push.
  * 
- * @returns   
+ * @Returnss   
  */
-/* --------------------------------------------------------------------------*/
 gdf_error gdf_nvtx_range_pop();
 
-/* --------------------------------------------------------------------------*/
 /** 
  * @brief  Counts the number of valid bits in the mask that corresponds to
  * the specified number of rows.
@@ -61,25 +50,21 @@ gdf_error gdf_nvtx_range_pop();
  * @param[in] num_rows The number of rows represented in the bit-validity mask.
  * @param[out] count The number of valid rows in the mask
  * 
- * @returns  GDF_SUCCESS upon successful completion. 
+ * @Returnss  GDF_SUCCESS upon successful completion. 
  */
-/* --------------------------------------------------------------------------*/
 gdf_error gdf_count_nonzero_mask(gdf_valid_type const *masks,
                                  gdf_size_type num_rows, gdf_size_type *count);
 
 
 /* column operations */
 
-/* --------------------------------------------------------------------------*/
 /** 
  * @brief Return the size of the gdf_column data type.
  *
  * @Returns gdf_size_type Size of the gdf_column data type.
  */
-/* ----------------------------------------------------------------------------*/
 gdf_size_type gdf_column_sizeof();
 
-/* --------------------------------------------------------------------------*/
 /** 
  * @brief Create a GDF column given data and validity bitmask pointers, size, and
  *        datatype
@@ -92,11 +77,9 @@ gdf_size_type gdf_column_sizeof();
  * 
  * @Returns gdf_error Returns GDF_SUCCESS upon successful creation.
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_column_view(gdf_column *column, void *data, gdf_valid_type *valid,
                           gdf_size_type size, gdf_dtype dtype);
 
-/* --------------------------------------------------------------------------*/
 /** 
  * @brief Create a GDF column given data and validity bitmask pointers, size, and
  *        datatype, and count of null (non-valid) elements
@@ -110,11 +93,9 @@ gdf_error gdf_column_view(gdf_column *column, void *data, gdf_valid_type *valid,
  * 
  * @Returns gdf_error Returns GDF_SUCCESS upon successful creation.
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_column_view_augmented(gdf_column *column, void *data, gdf_valid_type *valid,
                           gdf_size_type size, gdf_dtype dtype, gdf_size_type null_count);
 
-/* --------------------------------------------------------------------------*/
 /** 
  * @brief Free the CUDA device memory of a gdf_column
  *
@@ -122,28 +103,24 @@ gdf_error gdf_column_view_augmented(gdf_column *column, void *data, gdf_valid_ty
  * 
  * @Returns gdf_error GDF_SUCCESS or GDF_ERROR if there is an error freeing the data
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_column_free(gdf_column *column);
 
-/* --------------------------------------------------------------------------*/
 /** 
  * @brief  Concatenates the gdf_columns into a single, contiguous column,
  * including the validity bitmasks
  * 
  * @param[out] output A column whose buffers are already allocated that will 
+ *                    contain the concatenation of the input columns
  * @param[in] columns_to_conat[] The columns to concatenate
  * @param[in] num_columns The number of columns to concatenate
- * contain the concatenation of the input columns
  * 
- * @returns GDF_SUCCESS upon successful completion
+ * @Returnss GDF_SUCCESS upon successful completion
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_column_concat(gdf_column *output, gdf_column *columns_to_concat[], int num_columns);
 
 
 /* context operations */
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  Constructor for the gdf_context struct
  *
@@ -154,14 +131,12 @@ gdf_error gdf_column_concat(gdf_column *output, gdf_column *columns_to_concat[],
  *
  * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_context_view(gdf_context *context, int flag_sorted, gdf_method flag_method,
                            int flag_distinct, int flag_sort_result, int flag_sort_inplace);
 
 
 /* error handling */
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  Converts a gdf_error error code into a string
  *
@@ -169,19 +144,15 @@ gdf_error gdf_context_view(gdf_context *context, int flag_sorted, gdf_method fla
  *
  * @Returns  name of the error
  */
-/* ----------------------------------------------------------------------------*/
 const char * gdf_error_get_name(gdf_error errcode);
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  Returns the last error from a runtime call.
  *
  * @Returns  last error from a runtime call.
  */
-/* ----------------------------------------------------------------------------*/
 int gdf_cuda_last_error();
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  Returns the description string for an error code.
  *
@@ -189,10 +160,8 @@ int gdf_cuda_last_error();
  *
  * @Returns  description string for an error code.
  */
-/* ----------------------------------------------------------------------------*/
 const char * gdf_cuda_error_string(int cuda_error);
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  Returns the string representation of an error code enum name.
  *
@@ -200,25 +169,21 @@ const char * gdf_cuda_error_string(int cuda_error);
  *
  * @Returns  string representation of an error code enum name.
  */
-/* ----------------------------------------------------------------------------*/
 const char * gdf_cuda_error_name(int cuda_error);
 
 
 /* ipc */
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  Opens a parser from a pyarrow RecordBatch schema
  *
  * @param[in] Pointer to a byte array containing the pyarrow RecordBatch schema
  * @param[in] Size of the byte array
-  *
+ *
  * @Returns Pointer to a parsing struct gdf_ipc_parser_type
  */
-/* ----------------------------------------------------------------------------*/
 gdf_ipc_parser_type* gdf_ipc_parser_open(const uint8_t *schema, size_t length);
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  Opens a pyarrow RecordBatch bytearray
  *
@@ -228,12 +193,10 @@ gdf_ipc_parser_type* gdf_ipc_parser_open(const uint8_t *schema, size_t length);
  *
  * @Returns
  */
-/* ----------------------------------------------------------------------------*/
 void gdf_ipc_parser_open_recordbatches(gdf_ipc_parser_type *handle,
                                        const uint8_t *recordbatches,
                                        size_t length);
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  Closes a parser from a pyarrow RecordBatch schema
  *
@@ -241,10 +204,8 @@ void gdf_ipc_parser_open_recordbatches(gdf_ipc_parser_type *handle,
  *
  * @Returns void
  */
-/* ----------------------------------------------------------------------------*/
 void gdf_ipc_parser_close(gdf_ipc_parser_type *handle);
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  Checks for a failure in the parser
  *
@@ -252,10 +213,8 @@ void gdf_ipc_parser_close(gdf_ipc_parser_type *handle);
  *
  * @Returns 1 if error
  */
-/* ----------------------------------------------------------------------------*/
 int gdf_ipc_parser_failed(gdf_ipc_parser_type *handle);
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  Returns parsed data as json
  *
@@ -263,10 +222,8 @@ int gdf_ipc_parser_failed(gdf_ipc_parser_type *handle);
  *
  * @Returns char* of parsed data as json
  */
-/* ----------------------------------------------------------------------------*/
 const char* gdf_ipc_parser_to_json(gdf_ipc_parser_type *handle);
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  Gets error from gdf_ipc_parser_type
  *
@@ -274,10 +231,8 @@ const char* gdf_ipc_parser_to_json(gdf_ipc_parser_type *handle);
  *
  * @Returns Error message as char*
  */
-/* ----------------------------------------------------------------------------*/
 const char* gdf_ipc_parser_get_error(gdf_ipc_parser_type *handle);
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  Gets parsed data from gdf_ipc_parser_type
  *
@@ -285,10 +240,8 @@ const char* gdf_ipc_parser_get_error(gdf_ipc_parser_type *handle);
  *
  * @Returns Pointer parsed data
  */
-/* ----------------------------------------------------------------------------*/
 const void* gdf_ipc_parser_get_data(gdf_ipc_parser_type *handle);
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  Gets data offset from gdf_ipc_parser_type
  *
@@ -296,10 +249,8 @@ const void* gdf_ipc_parser_get_data(gdf_ipc_parser_type *handle);
  *
  * @Returns Data offset
  */
-/* ----------------------------------------------------------------------------*/
 int64_t gdf_ipc_parser_get_data_offset(gdf_ipc_parser_type *handle);
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  Returns parsed schema as json
  *
@@ -307,10 +258,8 @@ int64_t gdf_ipc_parser_get_data_offset(gdf_ipc_parser_type *handle);
  *
  * @Returns char* of parsed schema as json
  */
-/* ----------------------------------------------------------------------------*/
 const char *gdf_ipc_parser_get_schema_json(gdf_ipc_parser_type *handle);
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  Returns layout as json
  *
@@ -318,13 +267,11 @@ const char *gdf_ipc_parser_get_schema_json(gdf_ipc_parser_type *handle);
  *
  * @Returns char* of layout as json
  */
-/* ----------------------------------------------------------------------------*/
 const char *gdf_ipc_parser_get_layout_json(gdf_ipc_parser_type *handle);
 
 
 /* sorting */
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  Constructor for the gdf_radixsort_plan_type object
  *
@@ -335,11 +282,9 @@ const char *gdf_ipc_parser_get_layout_json(gdf_ipc_parser_type *handle);
  *
  * @Returns  gdf_radixsort_plan_type object pointer
  */
-/* ----------------------------------------------------------------------------*/
 gdf_radixsort_plan_type* gdf_radixsort_plan(size_t num_items, int descending,
                                         unsigned begin_bit, unsigned end_bit);
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  Allocates device memory for the radixsort
  *
@@ -349,11 +294,9 @@ gdf_radixsort_plan_type* gdf_radixsort_plan(size_t num_items, int descending,
  *
  * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_radixsort_plan_setup(gdf_radixsort_plan_type *hdl,
                                    size_t sizeof_key, size_t sizeof_val);
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  Frees device memory used for the radixsort
  *
@@ -361,7 +304,6 @@ gdf_error gdf_radixsort_plan_setup(gdf_radixsort_plan_type *hdl,
  *
  * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_radixsort_plan_free(gdf_radixsort_plan_type *hdl);
 
 
@@ -371,7 +313,6 @@ gdf_error gdf_radixsort_plan_free(gdf_radixsort_plan_type *hdl);
  * otherwise a GDF_VALIDITY_UNSUPPORTED error is returned.
  */
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  Performs a radixsort on the key and value columns where the key is an int8
  *
@@ -381,12 +322,10 @@ gdf_error gdf_radixsort_plan_free(gdf_radixsort_plan_type *hdl);
  *
  * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_radixsort_i8(gdf_radixsort_plan_type *hdl,
                            gdf_column *keycol,
                            gdf_column *valcol);
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  Performs a radixsort on the key and value columns where the key is an int32
  *
@@ -396,12 +335,10 @@ gdf_error gdf_radixsort_i8(gdf_radixsort_plan_type *hdl,
  *
  * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_radixsort_i32(gdf_radixsort_plan_type *hdl,
                             gdf_column *keycol,
                             gdf_column *valcol);
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  performs a radixsort on the key and value columns where the key is an int64
  *
@@ -411,12 +348,10 @@ gdf_error gdf_radixsort_i32(gdf_radixsort_plan_type *hdl,
  *
  * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_radixsort_i64(gdf_radixsort_plan_type *hdl,
                             gdf_column *keycol,
                             gdf_column *valcol);
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  performs a radixsort on the key and value columns where the key is an float
  *
@@ -426,12 +361,10 @@ gdf_error gdf_radixsort_i64(gdf_radixsort_plan_type *hdl,
  *
  * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_radixsort_f32(gdf_radixsort_plan_type *hdl,
                             gdf_column *keycol,
                             gdf_column *valcol);
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  performs a radixsort on the key and value columns where the key is an double
  *
@@ -441,12 +374,10 @@ gdf_error gdf_radixsort_f32(gdf_radixsort_plan_type *hdl,
  *
  * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_radixsort_f64(gdf_radixsort_plan_type *hdl,
                             gdf_column *keycol,
                             gdf_column *valcol);
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  performs a radixsort on the key and value columns where the key is any type
  *
@@ -456,7 +387,6 @@ gdf_error gdf_radixsort_f64(gdf_radixsort_plan_type *hdl,
  *
  * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_radixsort_generic(gdf_radixsort_plan_type *hdl,
                                 gdf_column *keycol,
                                 gdf_column *valcol);
@@ -464,7 +394,6 @@ gdf_error gdf_radixsort_generic(gdf_radixsort_plan_type *hdl,
 
 /* segmented sorting */
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  Constructor for the gdf_segmented_radixsort_plan_type object
  *
@@ -475,13 +404,11 @@ gdf_error gdf_radixsort_generic(gdf_radixsort_plan_type *hdl,
  *
  * @Returns  gdf_segmented_radixsort_plan_type object pointer
  */
-/* ----------------------------------------------------------------------------*/
 gdf_segmented_radixsort_plan_type* gdf_segmented_radixsort_plan(size_t num_items,
                                                                 int descending,
                                                                 unsigned begin_bit,
                                                                 unsigned end_bit);
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  Allocates device memory for the segmented radixsort
  *
@@ -491,12 +418,10 @@ gdf_segmented_radixsort_plan_type* gdf_segmented_radixsort_plan(size_t num_items
  *
  * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_segmented_radixsort_plan_setup(gdf_segmented_radixsort_plan_type *hdl,
                                             size_t sizeof_key,
                                             size_t sizeof_val);
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  Frees device memory used for the segmented radixsort
  *
@@ -504,17 +429,15 @@ gdf_error gdf_segmented_radixsort_plan_setup(gdf_segmented_radixsort_plan_type *
  *
  * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_segmented_radixsort_plan_free(gdf_segmented_radixsort_plan_type *hdl);
 
 
 /*
-* The following function performs a sort on the key and value columns.
-* The null_count of the keycol and valcol columns are expected to be 0
-* otherwise a GDF_VALIDITY_UNSUPPORTED error is returned.
-*/
+ * The following function performs a sort on the key and value columns.
+ * The null_count of the keycol and valcol columns are expected to be 0
+ * otherwise a GDF_VALIDITY_UNSUPPORTED error is returned.
+ */
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  performs a segmented radixsort on the key and value columns where the key is an int8
  *
@@ -527,14 +450,12 @@ gdf_error gdf_segmented_radixsort_plan_free(gdf_segmented_radixsort_plan_type *h
  *
  * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_segmented_radixsort_i8(gdf_segmented_radixsort_plan_type *hdl,
                                      gdf_column *keycol, gdf_column *valcol,
                                      unsigned num_segments,
                                      unsigned *d_begin_offsets,
                                      unsigned *d_end_offsets);
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  performs a segmented radixsort on the key and value columns where the key is an int32
  *
@@ -547,14 +468,12 @@ gdf_error gdf_segmented_radixsort_i8(gdf_segmented_radixsort_plan_type *hdl,
  *
  * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_segmented_radixsort_i32(gdf_segmented_radixsort_plan_type *hdl,
                                      gdf_column *keycol, gdf_column *valcol,
                                      unsigned num_segments,
                                      unsigned *d_begin_offsets,
                                      unsigned *d_end_offsets);
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  performs a segmented radixsort on the key and value columns where the key is an int64
  *
@@ -567,14 +486,12 @@ gdf_error gdf_segmented_radixsort_i32(gdf_segmented_radixsort_plan_type *hdl,
  *
  * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_segmented_radixsort_i64(gdf_segmented_radixsort_plan_type *hdl,
                                      gdf_column *keycol, gdf_column *valcol,
                                      unsigned num_segments,
                                      unsigned *d_begin_offsets,
                                      unsigned *d_end_offsets);
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  performs a segmented radixsort on the key and value columns where the key is an float
  *
@@ -587,14 +504,12 @@ gdf_error gdf_segmented_radixsort_i64(gdf_segmented_radixsort_plan_type *hdl,
  *
  * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_segmented_radixsort_f32(gdf_segmented_radixsort_plan_type *hdl,
                                      gdf_column *keycol, gdf_column *valcol,
                                      unsigned num_segments,
                                      unsigned *d_begin_offsets,
                                      unsigned *d_end_offsets);
                                     
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  performs a segmented radixsort on the key and value columns where the key is an double
  *
@@ -607,14 +522,12 @@ gdf_error gdf_segmented_radixsort_f32(gdf_segmented_radixsort_plan_type *hdl,
  *
  * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_segmented_radixsort_f64(gdf_segmented_radixsort_plan_type *hdl,
                                      gdf_column *keycol, gdf_column *valcol,
                                      unsigned num_segments,
                                      unsigned *d_begin_offsets,
                                      unsigned *d_end_offsets);
                                     
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  performs a segmented radixsort on the key and value columns where the key is any type
  *
@@ -627,7 +540,6 @@ gdf_error gdf_segmented_radixsort_f64(gdf_segmented_radixsort_plan_type *hdl,
  *
  * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_segmented_radixsort_generic(gdf_segmented_radixsort_plan_type *hdl,
                                      gdf_column *keycol, gdf_column *valcol,
                                      unsigned num_segments,
@@ -642,7 +554,7 @@ gdf_error gdf_segmented_radixsort_generic(gdf_segmented_radixsort_plan_type *hdl
  * @param[in] ncols Number of columns in in_cols
  * @param[in] in_cols[] Input table of (ncols) number of columns each of size (nrows)
  * @param[out] out_cols[] Preallocated output_table of (nrows) columns each of size (ncols)
- * @return gdf_error GDF_SUCCESS if successful, else appropriate error code
+ * @Returns gdf_error GDF_SUCCESS if successful, else appropriate error code
  */
 gdf_error gdf_transpose(gdf_size_type ncols,
                         gdf_column** in_cols,
@@ -650,9 +562,6 @@ gdf_error gdf_transpose(gdf_size_type ncols,
 
 // joins
 
-// joins
-
-/* --------------------------------------------------------------------------*/
 /** 
  * @brief  Performs an inner join on the specified columns of two
  * dataframes (left, right)
@@ -677,10 +586,9 @@ gdf_error gdf_transpose(gdf_size_type ncols,
  * @param[in] join_context The context to use to control how the join is performed,e.g.,
  * sort vs hash based implementation
  * 
- * @returns   GDF_SUCCESS if the join operation was successful, otherwise an appropriate
+ * @Returnss   GDF_SUCCESS if the join operation was successful, otherwise an appropriate
  * error code
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_inner_join(
                          gdf_column **left_cols, 
                          int num_left_cols,
@@ -695,7 +603,6 @@ gdf_error gdf_inner_join(
                          gdf_column * right_indices,
                          gdf_context *join_context);
 
-/* --------------------------------------------------------------------------*/
 /** 
  * @brief  Performs a left join (also known as left outer join) on the
  * specified columns of two dataframes (left, right)
@@ -720,10 +627,9 @@ gdf_error gdf_inner_join(
  * @param[in] join_context The context to use to control how the join is performed,e.g.,
  * sort vs hash based implementation
  * 
- * @returns   GDF_SUCCESS if the join operation was successful, otherwise an appropriate
+ * @Returnss   GDF_SUCCESS if the join operation was successful, otherwise an appropriate
  * error code
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_left_join(
                          gdf_column **left_cols, 
                          int num_left_cols,
@@ -738,7 +644,6 @@ gdf_error gdf_left_join(
                          gdf_column * right_indices,
                          gdf_context *join_context);
 
-/* --------------------------------------------------------------------------*/
 /** 
  * @brief  Performs a full join (also known as full outer join) on the
  * specified columns of two dataframes (left, right)
@@ -763,10 +668,9 @@ gdf_error gdf_left_join(
  * @param[in] join_context The context to use to control how the join is performed,e.g.,
  * sort vs hash based implementation
  * 
- * @returns   GDF_SUCCESS if the join operation was successful, otherwise an appropriate
+ * @Returnss   GDF_SUCCESS if the join operation was successful, otherwise an appropriate
  * error code
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_full_join(
                          gdf_column **left_cols, 
                          int num_left_cols,
@@ -783,7 +687,6 @@ gdf_error gdf_full_join(
 
 /* partioning */
 
-/* --------------------------------------------------------------------------*/
 /** 
  * @brief Computes the hash values of the rows in the specified columns of the 
  * input columns and bins the hash values into the desired number of partitions. 
@@ -802,9 +705,8 @@ gdf_error gdf_full_join(
  * of partition 'i'
  * @param[in] hash The hash function to use
  * 
- * @returns  If the operation was successful, returns GDF_SUCCESS
+ * @Returnss  If the operation was successful, returns GDF_SUCCESS
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_hash_partition(int num_input_cols, 
                              gdf_column * input[], 
                              int columns_to_hash[],
@@ -816,7 +718,6 @@ gdf_error gdf_hash_partition(int num_input_cols,
 
 /* prefixsum */
 
-/* --------------------------------------------------------------------------*/
 /** 
  * @brief  Computes the prefix sum of a column
  * 
@@ -824,14 +725,12 @@ gdf_error gdf_hash_partition(int num_input_cols,
  * @param[out] out The output column containing the prefix sum of the input
  * @param[in] inclusive Flag for applying an inclusive prefix sum
  * 
- * @returns   GDF_SUCCESS if the operation was successful, otherwise an appropriate
+ * @Returnss   GDF_SUCCESS if the operation was successful, otherwise an appropriate
  * error code. If inp->null_count is not set to 0 GDF_VALIDITY_UNSUPPORTED is
  * returned.
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_prefixsum_generic(gdf_column *inp, gdf_column *out, int inclusive);
 
-/* --------------------------------------------------------------------------*/
 /** 
  * @brief  Computes the prefix sum of a column
  * 
@@ -839,14 +738,12 @@ gdf_error gdf_prefixsum_generic(gdf_column *inp, gdf_column *out, int inclusive)
  * @param[out] out The output column containing the prefix sum of the input
  * @param[in] inclusive Flag for applying an inclusive prefix sum
  * 
- * @returns   GDF_SUCCESS if the operation was successful, otherwise an appropriate
+ * @Returnss   GDF_SUCCESS if the operation was successful, otherwise an appropriate
  * error code. If inp->null_count is not set to 0 GDF_VALIDITY_UNSUPPORTED is
  * returned.
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_prefixsum_i8(gdf_column *inp, gdf_column *out, int inclusive);
 
-/* --------------------------------------------------------------------------*/
 /** 
  * @brief  Computes the prefix sum of a column
  * 
@@ -854,14 +751,12 @@ gdf_error gdf_prefixsum_i8(gdf_column *inp, gdf_column *out, int inclusive);
  * @param[out] out The output column containing the prefix sum of the input
  * @param[in] inclusive Flag for applying an inclusive prefix sum
  * 
- * @returns   GDF_SUCCESS if the operation was successful, otherwise an appropriate
+ * @Returnss   GDF_SUCCESS if the operation was successful, otherwise an appropriate
  * error code. If inp->null_count is not set to 0 GDF_VALIDITY_UNSUPPORTED is
  * returned.
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_prefixsum_i32(gdf_column *inp, gdf_column *out, int inclusive);
 
-/* --------------------------------------------------------------------------*/
 /** 
  * @brief  Computes the prefix sum of a column
  * 
@@ -869,11 +764,10 @@ gdf_error gdf_prefixsum_i32(gdf_column *inp, gdf_column *out, int inclusive);
  * @param[out] out The output column containing the prefix sum of the input
  * @param[in] inclusive Flag for applying an inclusive prefix sum
  * 
- * @returns   GDF_SUCCESS if the operation was successful, otherwise an appropriate
+ * @Returnss   GDF_SUCCESS if the operation was successful, otherwise an appropriate
  * error code. If inp->null_count is not set to 0 GDF_VALIDITY_UNSUPPORTED is
  * returned.
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_prefixsum_i64(gdf_column *inp, gdf_column *out, int inclusive);
 
 
@@ -891,7 +785,7 @@ gdf_error gdf_prefixsum_i64(gdf_column *inp, gdf_column *out, int inclusive);
  * then each element will be hashed as-is.
  * @param[out] output The hash value of each row of the input
  *
- * @return    GDF_SUCCESS if the operation was successful, otherwise an
+ * @Returns    GDF_SUCCESS if the operation was successful, otherwise an
  *            appropriate error code.
  * ----------------------------------------------------------------------------**/
 gdf_error gdf_hash(int num_cols,
@@ -902,487 +796,408 @@ gdf_error gdf_hash(int num_cols,
 
 /* trig */
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  Computes trigonometric sine function for any floating point data type
  *
  * @param[in] gdf_column of the input
  * @param[out] output gdf_column. The output memory needs to be preallocated
  *
-* @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
+ * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_sin_generic(gdf_column *input, gdf_column *output);
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  Computes trigonometric sine function for float data type
  *
  * @param[in] gdf_column of the input
  * @param[out] output gdf_column. The output memory needs to be preallocated
  *
-* @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
+ * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_sin_f32(gdf_column *input, gdf_column *output);
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  Computes trigonometric sine function for double data type
  *
  * @param[in] gdf_column of the input
  * @param[out] output gdf_column. The output memory needs to be preallocated
  *
-* @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
+ * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_sin_f64(gdf_column *input, gdf_column *output);
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  Computes trigonometric cosine function for any floating point data type
  *
  * @param[in] gdf_column of the input
  * @param[out] output gdf_column. The output memory needs to be preallocated
  *
-* @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
+ * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_cos_generic(gdf_column *input, gdf_column *output);
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  Computes trigonometric cosine function for float data type
  *
  * @param[in] gdf_column of the input
  * @param[out] output gdf_column. The output memory needs to be preallocated
  *
-* @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
+ * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_cos_f32(gdf_column *input, gdf_column *output);
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  Computes trigonometric cosine function for double data type
  *
  * @param[in] gdf_column of the input
  * @param[out] output gdf_column. The output memory needs to be preallocated
  *
-* @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
+ * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_cos_f64(gdf_column *input, gdf_column *output);
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  Computes trigonometric tangent function for any floating point data type
  *
  * @param[in] gdf_column of the input
  * @param[out] output gdf_column. The output memory needs to be preallocated
  *
-* @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
+ * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_tan_generic(gdf_column *input, gdf_column *output);
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  Computes trigonometric tangent function for float data type
  *
  * @param[in] gdf_column of the input
  * @param[out] output gdf_column. The output memory needs to be preallocated
  *
-* @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
+ * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_tan_f32(gdf_column *input, gdf_column *output);
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  Computes trigonometric tangent function for double data type
  *
  * @param[in] gdf_column of the input
  * @param[out] output gdf_column. The output memory needs to be preallocated
  *
-* @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
+ * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_tan_f64(gdf_column *input, gdf_column *output);
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  Computes trigonometric arcsin function for any floating point data type
  *
  * @param[in] gdf_column of the input
  * @param[out] output gdf_column. The output memory needs to be preallocated
  *
-* @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
+ * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_asin_generic(gdf_column *input, gdf_column *output);
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  Computes trigonometric arcsin function for float data type
  *
  * @param[in] gdf_column of the input
  * @param[out] output gdf_column. The output memory needs to be preallocated
  *
-* @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
+ * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_asin_f32(gdf_column *input, gdf_column *output);
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  Computes trigonometric arcsin function for double data type
  *
  * @param[in] gdf_column of the input
  * @param[out] output gdf_column. The output memory needs to be preallocated
  *
-* @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
+ * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_asin_f64(gdf_column *input, gdf_column *output);
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  Computes trigonometric arccos function for any floating point data type
  *
  * @param[in] gdf_column of the input
  * @param[out] output gdf_column. The output memory needs to be preallocated
  *
-* @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
+ * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_acos_generic(gdf_column *input, gdf_column *output);
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  Computes trigonometric arccos function for float data type
  *
  * @param[in] gdf_column of the input
  * @param[out] output gdf_column. The output memory needs to be preallocated
  *
-* @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
+ * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_acos_f32(gdf_column *input, gdf_column *output);
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  Computes trigonometric arccos function for double data type
  *
  * @param[in] gdf_column of the input
  * @param[out] output gdf_column. The output memory needs to be preallocated
  *
-* @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
+ * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_acos_f64(gdf_column *input, gdf_column *output);
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  Computes trigonometric arctan function for any floating point data type
  *
  * @param[in] gdf_column of the input
  * @param[out] output gdf_column. The output memory needs to be preallocated
  *
-* @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
+ * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_atan_generic(gdf_column *input, gdf_column *output);
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  Computes trigonometric arctan function for a float data type
  *
  * @param[in] gdf_column of the input
  * @param[out] output gdf_column. The output memory needs to be preallocated
  *
-* @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
+ * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_atan_f32(gdf_column *input, gdf_column *output);
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  Computes trigonometric arctan function for a double data type
  *
  * @param[in] gdf_column of the input
  * @param[out] output gdf_column. The output memory needs to be preallocated
  *
-* @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
+ * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_atan_f64(gdf_column *input, gdf_column *output);
 
 
 /* exponential */
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  Computes e (Euler's number, 2.7182818...) raised to the given power arg for any floating point data type
  *
  * @param[in] gdf_column of the input
  * @param[out] output gdf_column. The output memory needs to be preallocated
  *
-* @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
+ * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_exp_generic(gdf_column *input, gdf_column *output);
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  Computes e (Euler's number, 2.7182818...) raised to the given power arg float data type
  *
  * @param[in] gdf_column of the input
  * @param[out] output gdf_column. The output memory needs to be preallocated
  *
-* @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
+ * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_exp_f32(gdf_column *input, gdf_column *output);
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  Computes e (Euler's number, 2.7182818...) raised to the given power arg for double data type
  *
  * @param[in] gdf_column of the input
  * @param[out] output gdf_column. The output memory needs to be preallocated
  *
-* @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
+ * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_exp_f64(gdf_column *input, gdf_column *output);
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  Computes the natural (base e) logarithm of arg for any floating point data type
  *
  * @param[in] gdf_column of the input
  * @param[out] output gdf_column. The output memory needs to be preallocated
  *
-* @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
+ * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_log_generic(gdf_column *input, gdf_column *output);
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  Computes the natural (base e) logarithm of arg for float data type
  *
  * @param[in] gdf_column of the input
  * @param[out] output gdf_column. The output memory needs to be preallocated
  *
-* @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
+ * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_log_f32(gdf_column *input, gdf_column *output);
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  Computes the natural (base e) logarithm of arg for double data type
  *
  * @param[in] gdf_column of the input
  * @param[out] output gdf_column. The output memory needs to be preallocated
  *
-* @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
+ * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_log_f64(gdf_column *input, gdf_column *output);
 
 
 /* power */
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  Computes the square root for any floating point data type
  *
  * @param[in] gdf_column of the input
  * @param[out] output gdf_column. The output memory needs to be preallocated
  *
-* @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
+ * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_sqrt_generic(gdf_column *input, gdf_column *output);
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  Computes the square root for float data type
  *
  * @param[in] gdf_column of the input
  * @param[out] output gdf_column. The output memory needs to be preallocated
  *
-* @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
+ * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_sqrt_f32(gdf_column *input, gdf_column *output);
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  Computes the square root for double data type
  *
  * @param[in] gdf_column of the input
  * @param[out] output gdf_column. The output memory needs to be preallocated
  *
-* @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
+ * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_sqrt_f64(gdf_column *input, gdf_column *output);
 
 
 /* rounding */
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  Computes the smallest integer value not less than arg for any floating point data type
  *
  * @param[in] gdf_column of the input
  * @param[out] output gdf_column. The output memory needs to be preallocated
  *
-* @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
+ * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_ceil_generic(gdf_column *input, gdf_column *output);
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  Computes the smallest integer value not less than arg for float data type
  *
  * @param[in] gdf_column of the input
  * @param[out] output gdf_column. The output memory needs to be preallocated
  *
-* @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
+ * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_ceil_f32(gdf_column *input, gdf_column *output);
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  Computes the smallest integer value not less than arg for double data type
  *
  * @param[in] gdf_column of the input
  * @param[out] output gdf_column. The output memory needs to be preallocated
  *
-* @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
+ * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_ceil_f64(gdf_column *input, gdf_column *output);
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  Computes the largest integer value not greater than arg for any floating point data type
  *
  * @param[in] gdf_column of the input
  * @param[out] output gdf_column. The output memory needs to be preallocated
  *
-* @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
+ * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_floor_generic(gdf_column *input, gdf_column *output);
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  Computes the largest integer value not greater than arg for float data type
  *
  * @param[in] gdf_column of the input
  * @param[out] output gdf_column. The output memory needs to be preallocated
  *
-* @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
+ * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_floor_f32(gdf_column *input, gdf_column *output);
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  Computes the largest integer value not greater than arg for double data type
  *
  * @param[in] gdf_column of the input
  * @param[out] output gdf_column. The output memory needs to be preallocated
  *
-* @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
+ * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_floor_f64(gdf_column *input, gdf_column *output);
 
 
 /* casting */
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  Casts data in a gdf_column of any data type to a GDF_FLOAT32
  *
  * @param[in] gdf_column of the input
  * @param[out] output gdf_column. The output memory needs to be preallocated
  *
-* @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
+ * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_cast_generic_to_f32(gdf_column *input, gdf_column *output);
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  Casts data in a gdf_column of type GDF_INT8 to a GDF_FLOAT32
  *
  * @param[in] gdf_column of the input
  * @param[out] output gdf_column. The output memory needs to be preallocated
  *
-* @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
+ * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_cast_i8_to_f32(gdf_column *input, gdf_column *output);
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  Casts data in a gdf_column of type GDF_INT32 to a GDF_FLOAT32
  *
  * @param[in] gdf_column of the input
  * @param[out] output gdf_column. The output memory needs to be preallocated
  *
-* @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
+ * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_cast_i32_to_f32(gdf_column *input, gdf_column *output);
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  Casts data in a gdf_column of type GDF_INT64 to a GDF_FLOAT32
  *
  * @param[in] gdf_column of the input
  * @param[out] output gdf_column. The output memory needs to be preallocated
  *
-* @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
+ * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_cast_i64_to_f32(gdf_column *input, gdf_column *output);
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  Casts data in a gdf_column of type GDF_FLOAT32 to a GDF_FLOAT32
  *
  * @param[in] gdf_column of the input
  * @param[out] output gdf_column. The output memory needs to be preallocated
  *
-* @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
+ * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_cast_f32_to_f32(gdf_column *input, gdf_column *output);
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  Casts data in a gdf_column of type GDF_FLOAT64 to a GDF_FLOAT32
  *
  * @param[in] gdf_column of the input
  * @param[out] output gdf_column. The output memory needs to be preallocated
  *
-* @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
+ * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_cast_f64_to_f32(gdf_column *input, gdf_column *output);
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  Casts data in a gdf_column of type GDF_DATE32 to a GDF_FLOAT32
  *
@@ -1391,12 +1206,10 @@ gdf_error gdf_cast_f64_to_f32(gdf_column *input, gdf_column *output);
  * @param[in] gdf_column of the input
  * @param[out] output gdf_column. The output memory needs to be preallocated
  *
-* @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
+ * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_cast_date32_to_f32(gdf_column *input, gdf_column *output);
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  Casts data in a gdf_column of type GDF_DATE64 to a GDF_FLOAT32
  *
@@ -1405,12 +1218,10 @@ gdf_error gdf_cast_date32_to_f32(gdf_column *input, gdf_column *output);
  * @param[in] gdf_column of the input
  * @param[out] output gdf_column. The output memory needs to be preallocated
  *
-* @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
+ * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_cast_date64_to_f32(gdf_column *input, gdf_column *output);
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  Casts data in a gdf_column of type GDF_TIMESTAMP to a GDF_FLOAT32
  *
@@ -1419,84 +1230,70 @@ gdf_error gdf_cast_date64_to_f32(gdf_column *input, gdf_column *output);
  * @param[in] gdf_column of the input
  * @param[out] output gdf_column. The output memory needs to be preallocated
  *
-* @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
+ * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_cast_timestamp_to_f32(gdf_column *input, gdf_column *output);
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  Casts data in a gdf_column of any data type to a GDF_FLOAT64
  *
  * @param[in] gdf_column of the input
  * @param[out] output gdf_column. The output memory needs to be preallocated
  *
-* @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
+ * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_cast_generic_to_f64(gdf_column *input, gdf_column *output);
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  Casts data in a gdf_column type GDF_INT8 to a GDF_FLOAT64
  *
  * @param[in] gdf_column of the input
  * @param[out] output gdf_column. The output memory needs to be preallocated
  *
-* @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
+ * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_cast_i8_to_f64(gdf_column *input, gdf_column *output);
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  Casts data in a gdf_column type GDF_INT32 to a GDF_FLOAT64
  *
  * @param[in] gdf_column of the input
  * @param[out] output gdf_column. The output memory needs to be preallocated
  *
-* @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
+ * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_cast_i32_to_f64(gdf_column *input, gdf_column *output);
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  Casts data in a gdf_column type GDF_INT64 to a GDF_FLOAT64
  *
  * @param[in] gdf_column of the input
  * @param[out] output gdf_column. The output memory needs to be preallocated
  *
-* @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
+ * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_cast_i64_to_f64(gdf_column *input, gdf_column *output);
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  Casts data in a gdf_column type GDF_FLOAT32 to a GDF_FLOAT64
  *
  * @param[in] gdf_column of the input
  * @param[out] output gdf_column. The output memory needs to be preallocated
  *
-* @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
+ * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_cast_f32_to_f64(gdf_column *input, gdf_column *output);
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  Casts data in a gdf_column type GDF_FLOAT64 to a GDF_FLOAT64
  *
  * @param[in] gdf_column of the input
  * @param[out] output gdf_column. The output memory needs to be preallocated
  *
-* @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
+ * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_cast_f64_to_f64(gdf_column *input, gdf_column *output);
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  Casts data in a gdf_column type GDF_DATE32 to a GDF_FLOAT64
  *
@@ -1505,12 +1302,10 @@ gdf_error gdf_cast_f64_to_f64(gdf_column *input, gdf_column *output);
  * @param[in] gdf_column of the input
  * @param[out] output gdf_column. The output memory needs to be preallocated
  *
-* @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
+ * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_cast_date32_to_f64(gdf_column *input, gdf_column *output);
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  Casts data in a gdf_column type GDF_DATE64 to a GDF_FLOAT64
  *
@@ -1519,12 +1314,10 @@ gdf_error gdf_cast_date32_to_f64(gdf_column *input, gdf_column *output);
  * @param[in] gdf_column of the input
  * @param[out] output gdf_column. The output memory needs to be preallocated
  *
-* @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
+ * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_cast_date64_to_f64(gdf_column *input, gdf_column *output);
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  Casts data in a gdf_column type GDF_TIMESTAMP to a GDF_FLOAT64
  *
@@ -1533,84 +1326,70 @@ gdf_error gdf_cast_date64_to_f64(gdf_column *input, gdf_column *output);
  * @param[in] gdf_column of the input
  * @param[out] output gdf_column. The output memory needs to be preallocated
  *
-* @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
+ * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_cast_timestamp_to_f64(gdf_column *input, gdf_column *output);
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  Casts data in a gdf_column of any data type to a GDF_INT8
  *
  * @param[in] gdf_column of the input
  * @param[out] output gdf_column. The output memory needs to be preallocated
  *
-* @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
+ * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_cast_generic_to_i8(gdf_column *input, gdf_column *output);
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  Casts data in a gdf_column type GDF_INT8 to a GDF_INT8
  *
  * @param[in] gdf_column of the input
  * @param[out] output gdf_column. The output memory needs to be preallocated
  *
-* @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
+ * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_cast_i8_to_i8(gdf_column *input, gdf_column *output);
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  Casts data in a gdf_column type GDF_INT32 to a GDF_INT8
  *
  * @param[in] gdf_column of the input
  * @param[out] output gdf_column. The output memory needs to be preallocated
  *
-* @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
+ * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_cast_i32_to_i8(gdf_column *input, gdf_column *output);
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  Casts data in a gdf_column type GDF_INT64 to a GDF_INT8
  *
  * @param[in] gdf_column of the input
  * @param[out] output gdf_column. The output memory needs to be preallocated
  *
-* @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
+ * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_cast_i64_to_i8(gdf_column *input, gdf_column *output);
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  Casts data in a gdf_column type GDF_FLOAT32 to a GDF_INT8
  *
  * @param[in] gdf_column of the input
  * @param[out] output gdf_column. The output memory needs to be preallocated
  *
-* @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
+ * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_cast_f32_to_i8(gdf_column *input, gdf_column *output);
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  Casts data in a gdf_column type GDF_FLOAT64 to a GDF_INT8
  *
  * @param[in] gdf_column of the input
  * @param[out] output gdf_column. The output memory needs to be preallocated
  *
-* @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
+ * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_cast_f64_to_i8(gdf_column *input, gdf_column *output);
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  Casts data in a gdf_column type GDF_DATE32 to a GDF_INT8
  *
@@ -1619,12 +1398,10 @@ gdf_error gdf_cast_f64_to_i8(gdf_column *input, gdf_column *output);
  * @param[in] gdf_column of the input
  * @param[out] output gdf_column. The output memory needs to be preallocated
  *
-* @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
+ * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_cast_date32_to_i8(gdf_column *input, gdf_column *output);
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  Casts data in a gdf_column type GDF_DATE64 to a GDF_INT8
  *
@@ -1633,12 +1410,10 @@ gdf_error gdf_cast_date32_to_i8(gdf_column *input, gdf_column *output);
  * @param[in] gdf_column of the input
  * @param[out] output gdf_column. The output memory needs to be preallocated
  *
-* @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
+ * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_cast_date64_to_i8(gdf_column *input, gdf_column *output);
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  Casts data in a gdf_column type GDF_TIMESTAMP to a GDF_INT8
  *
@@ -1647,84 +1422,70 @@ gdf_error gdf_cast_date64_to_i8(gdf_column *input, gdf_column *output);
  * @param[in] gdf_column of the input
  * @param[out] output gdf_column. The output memory needs to be preallocated
  *
-* @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
+ * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_cast_timestamp_to_i8(gdf_column *input, gdf_column *output);
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  Casts data in a gdf_column of any data type to a GDF_INT32
  *
  * @param[in] gdf_column of the input
  * @param[out] output gdf_column. The output memory needs to be preallocated
  *
-* @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
+ * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_cast_generic_to_i32(gdf_column *input, gdf_column *output);
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  Casts data in a gdf_column type GDF_INT8 to a GDF_INT32
  *
  * @param[in] gdf_column of the input
  * @param[out] output gdf_column. The output memory needs to be preallocated
  *
-* @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
+ * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_cast_i8_to_i32(gdf_column *input, gdf_column *output);
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  Casts data in a gdf_column type GDF_INT32 to a GDF_INT32
  *
  * @param[in] gdf_column of the input
  * @param[out] output gdf_column. The output memory needs to be preallocated
  *
-* @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
+ * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_cast_i32_to_i32(gdf_column *input, gdf_column *output);
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  Casts data in a gdf_column type GDF_INT64 to a GDF_INT32
  *
  * @param[in] gdf_column of the input
  * @param[out] output gdf_column. The output memory needs to be preallocated
  *
-* @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
+ * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_cast_i64_to_i32(gdf_column *input, gdf_column *output);
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  Casts data in a gdf_column type GDF_FLOAT32 to a GDF_INT32
  *
  * @param[in] gdf_column of the input
  * @param[out] output gdf_column. The output memory needs to be preallocated
  *
-* @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
+ * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_cast_f32_to_i32(gdf_column *input, gdf_column *output);
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  Casts data in a gdf_column type GDF_FLOAT64 to a GDF_INT32
  *
  * @param[in] gdf_column of the input
  * @param[out] output gdf_column. The output memory needs to be preallocated
  *
-* @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
+ * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_cast_f64_to_i32(gdf_column *input, gdf_column *output);
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  Casts data in a gdf_column type GDF_DATE32 to a GDF_INT32
  *
@@ -1733,12 +1494,10 @@ gdf_error gdf_cast_f64_to_i32(gdf_column *input, gdf_column *output);
  * @param[in] gdf_column of the input
  * @param[out] output gdf_column. The output memory needs to be preallocated
  *
-* @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
+ * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_cast_date32_to_i32(gdf_column *input, gdf_column *output);
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  Casts data in a gdf_column type GDF_DATE64 to a GDF_INT32
  *
@@ -1747,12 +1506,10 @@ gdf_error gdf_cast_date32_to_i32(gdf_column *input, gdf_column *output);
  * @param[in] gdf_column of the input
  * @param[out] output gdf_column. The output memory needs to be preallocated
  *
-* @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
+ * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_cast_date64_to_i32(gdf_column *input, gdf_column *output);
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  Casts data in a gdf_column type GDF_TIMESTAMP to a GDF_INT32
  *
@@ -1761,84 +1518,70 @@ gdf_error gdf_cast_date64_to_i32(gdf_column *input, gdf_column *output);
  * @param[in] gdf_column of the input
  * @param[out] output gdf_column. The output memory needs to be preallocated
  *
-* @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
+ * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_cast_timestamp_to_i32(gdf_column *input, gdf_column *output);
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  Casts data in a gdf_column of any data type to a GDF_INT64
  *
  * @param[in] gdf_column of the input
  * @param[out] output gdf_column. The output memory needs to be preallocated
  *
-* @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
+ * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_cast_generic_to_i64(gdf_column *input, gdf_column *output);
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  Casts data in a gdf_column type GDF_INT8 to a GDF_INT64
  *
  * @param[in] gdf_column of the input
  * @param[out] output gdf_column. The output memory needs to be preallocated
  *
-* @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
+ * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_cast_i8_to_i64(gdf_column *input, gdf_column *output);
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  Casts data in a gdf_column type GDF_INT32 to a GDF_INT64
  *
  * @param[in] gdf_column of the input
  * @param[out] output gdf_column. The output memory needs to be preallocated
  *
-* @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
+ * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_cast_i32_to_i64(gdf_column *input, gdf_column *output);
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  Casts data in a gdf_column type GDF_INT64 to a GDF_INT64
  *
  * @param[in] gdf_column of the input
  * @param[out] output gdf_column. The output memory needs to be preallocated
  *
-* @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
+ * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_cast_i64_to_i64(gdf_column *input, gdf_column *output);
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  Casts data in a gdf_column type GDF_FLOAT32 to a GDF_INT64
  *
  * @param[in] gdf_column of the input
  * @param[out] output gdf_column. The output memory needs to be preallocated
  *
-* @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
+ * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_cast_f32_to_i64(gdf_column *input, gdf_column *output);
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  Casts data in a gdf_column type GDF_FLOAT64 to a GDF_INT64
  *
  * @param[in] gdf_column of the input
  * @param[out] output gdf_column. The output memory needs to be preallocated
  *
-* @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
+ * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_cast_f64_to_i64(gdf_column *input, gdf_column *output);
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  Casts data in a gdf_column type GDF_DATE32 to a GDF_INT64
  *
@@ -1847,12 +1590,10 @@ gdf_error gdf_cast_f64_to_i64(gdf_column *input, gdf_column *output);
  * @param[in] gdf_column of the input
  * @param[out] output gdf_column. The output memory needs to be preallocated
  *
-* @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
+ * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_cast_date32_to_i64(gdf_column *input, gdf_column *output);
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  Casts data in a gdf_column type GDF_DATE64 to a GDF_INT64
  *
@@ -1861,12 +1602,10 @@ gdf_error gdf_cast_date32_to_i64(gdf_column *input, gdf_column *output);
  * @param[in] gdf_column of the input
  * @param[out] output gdf_column. The output memory needs to be preallocated
  *
-* @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
+ * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_cast_date64_to_i64(gdf_column *input, gdf_column *output);
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  Casts data in a gdf_column type GDF_TIMESTAMP to a GDF_INT64
  *
@@ -1875,24 +1614,20 @@ gdf_error gdf_cast_date64_to_i64(gdf_column *input, gdf_column *output);
  * @param[in] gdf_column of the input
  * @param[out] output gdf_column. The output memory needs to be preallocated
  *
-* @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
+ * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_cast_timestamp_to_i64(gdf_column *input, gdf_column *output);
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  Casts data in a gdf_column of any data type to a GDF_DATE32
  *
  * @param[in] gdf_column of the input
  * @param[out] output gdf_column. The output memory needs to be preallocated
  *
-* @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
+ * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_cast_generic_to_date32(gdf_column *input, gdf_column *output);
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  Casts data in a gdf_column type GDF_INT8 to a GDF_DATE32
  *
@@ -1901,12 +1636,10 @@ gdf_error gdf_cast_generic_to_date32(gdf_column *input, gdf_column *output);
  * @param[in] gdf_column of the input
  * @param[out] output gdf_column. The output memory needs to be preallocated
  *
-* @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
+ * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_cast_i8_to_date32(gdf_column *input, gdf_column *output);
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  Casts data in a gdf_column type GDF_INT32 to a GDF_DATE32
  *
@@ -1915,12 +1648,10 @@ gdf_error gdf_cast_i8_to_date32(gdf_column *input, gdf_column *output);
  * @param[in] gdf_column of the input
  * @param[out] output gdf_column. The output memory needs to be preallocated
  *
-* @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
+ * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_cast_i32_to_date32(gdf_column *input, gdf_column *output);
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  Casts data in a gdf_column type GDF_INT64 to a GDF_DATE32
  *
@@ -1929,12 +1660,10 @@ gdf_error gdf_cast_i32_to_date32(gdf_column *input, gdf_column *output);
  * @param[in] gdf_column of the input
  * @param[out] output gdf_column. The output memory needs to be preallocated
  *
-* @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
+ * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_cast_i64_to_date32(gdf_column *input, gdf_column *output);
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  Casts data in a gdf_column type GDF_FLOAT32 to a GDF_DATE32
  *
@@ -1943,12 +1672,10 @@ gdf_error gdf_cast_i64_to_date32(gdf_column *input, gdf_column *output);
  * @param[in] gdf_column of the input
  * @param[out] output gdf_column. The output memory needs to be preallocated
  *
-* @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
+ * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_cast_f32_to_date32(gdf_column *input, gdf_column *output);
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  Casts data in a gdf_column type GDF_FLOAT64 to a GDF_DATE32
  *
@@ -1957,24 +1684,20 @@ gdf_error gdf_cast_f32_to_date32(gdf_column *input, gdf_column *output);
  * @param[in] gdf_column of the input
  * @param[out] output gdf_column. The output memory needs to be preallocated
  *
-* @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
+ * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_cast_f64_to_date32(gdf_column *input, gdf_column *output);
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  Casts data in a gdf_column type GDF_DATE32 to a GDF_DATE32
  *
  * @param[in] gdf_column of the input
  * @param[out] output gdf_column. The output memory needs to be preallocated
  *
-* @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
+ * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_cast_date32_to_date32(gdf_column *input, gdf_column *output);
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  Casts data in a gdf_column type GDF_DATE64 to a GDF_DATE32
  *
@@ -1983,12 +1706,10 @@ gdf_error gdf_cast_date32_to_date32(gdf_column *input, gdf_column *output);
  * @param[in] gdf_column of the input
  * @param[out] output gdf_column. The output memory needs to be preallocated
  *
-* @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
+ * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_cast_date64_to_date32(gdf_column *input, gdf_column *output);
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  Casts data in a gdf_column type GDF_TIMESTAMP to a GDF_DATE32
  *
@@ -1997,24 +1718,20 @@ gdf_error gdf_cast_date64_to_date32(gdf_column *input, gdf_column *output);
  * @param[in] gdf_column of the input
  * @param[out] output gdf_column. The output memory needs to be preallocated
  *
-* @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
+ * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_cast_timestamp_to_date32(gdf_column *input, gdf_column *output);
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  Casts data in a gdf_column of any data type to a GDF_FLOAT64
  *
  * @param[in] gdf_column of the input
  * @param[out] output gdf_column. The output memory needs to be preallocated
  *
-* @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
+ * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_cast_generic_to_date64(gdf_column *input, gdf_column *output);
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  Casts data in a gdf_column type GDF_INT8 to a GDF_DATE64
  *
@@ -2023,12 +1740,10 @@ gdf_error gdf_cast_generic_to_date64(gdf_column *input, gdf_column *output);
  * @param[in] gdf_column of the input
  * @param[out] output gdf_column. The output memory needs to be preallocated
  *
-* @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
+ * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_cast_i8_to_date64(gdf_column *input, gdf_column *output);
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  Casts data in a gdf_column type GDF_INT32 to a GDF_DATE64
  *
@@ -2037,12 +1752,10 @@ gdf_error gdf_cast_i8_to_date64(gdf_column *input, gdf_column *output);
  * @param[in] gdf_column of the input
  * @param[out] output gdf_column. The output memory needs to be preallocated
  *
-* @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
+ * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_cast_i32_to_date64(gdf_column *input, gdf_column *output);
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  Casts data in a gdf_column type GDF_INT64 to a GDF_DATE64
  *
@@ -2051,12 +1764,10 @@ gdf_error gdf_cast_i32_to_date64(gdf_column *input, gdf_column *output);
  * @param[in] gdf_column of the input
  * @param[out] output gdf_column. The output memory needs to be preallocated
  *
-* @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
+ * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_cast_i64_to_date64(gdf_column *input, gdf_column *output);
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  Casts data in a gdf_column type GDF_FLOAT32 to a GDF_DATE64
  *
@@ -2065,12 +1776,10 @@ gdf_error gdf_cast_i64_to_date64(gdf_column *input, gdf_column *output);
  * @param[in] gdf_column of the input
  * @param[out] output gdf_column. The output memory needs to be preallocated
  *
-* @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
+ * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_cast_f32_to_date64(gdf_column *input, gdf_column *output);
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  Casts data in a gdf_column type GDF_FLOAT64 to a GDF_DATE64
  *
@@ -2079,12 +1788,10 @@ gdf_error gdf_cast_f32_to_date64(gdf_column *input, gdf_column *output);
  * @param[in] gdf_column of the input
  * @param[out] output gdf_column. The output memory needs to be preallocated
  *
-* @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
+ * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_cast_f64_to_date64(gdf_column *input, gdf_column *output);
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  Casts data in a gdf_column type GDF_DATE32 to a GDF_DATE64
  *
@@ -2093,24 +1800,20 @@ gdf_error gdf_cast_f64_to_date64(gdf_column *input, gdf_column *output);
  * @param[in] gdf_column of the input
  * @param[out] output gdf_column. The output memory needs to be preallocated
  *
-* @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
+ * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_cast_date32_to_date64(gdf_column *input, gdf_column *output);
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  Casts data in a gdf_column type GDF_DATE64 to a GDF_DATE64
  *
  * @param[in] gdf_column of the input
  * @param[out] output gdf_column. The output memory needs to be preallocated
  *
-* @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
+ * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_cast_date64_to_date64(gdf_column *input, gdf_column *output);
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  Casts data in a gdf_column type GDF_TIMESTAMP to a GDF_DATE32
  *
@@ -2119,24 +1822,20 @@ gdf_error gdf_cast_date64_to_date64(gdf_column *input, gdf_column *output);
  * @param[in] gdf_column of the input
  * @param[out] output gdf_column. The output memory needs to be preallocated
  *
-* @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
+ * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_cast_timestamp_to_date64(gdf_column *input, gdf_column *output);
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  Casts data in a gdf_column of any data type to a GDF_TIMESTAMP
  *
  * @param[in] gdf_column of the input
  * @param[out] output gdf_column. The output memory needs to be preallocated
  *
-* @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
+ * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_cast_generic_to_timestamp(gdf_column *input, gdf_column *output, gdf_time_unit time_unit);
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  Casts data in a gdf_column type GDF_INT8 to a GDF_TIMESTAMP
  *
@@ -2145,12 +1844,10 @@ gdf_error gdf_cast_generic_to_timestamp(gdf_column *input, gdf_column *output, g
  * @param[in] gdf_column of the input
  * @param[out] output gdf_column. The output memory needs to be preallocated
  *
-* @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
+ * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_cast_i8_to_timestamp(gdf_column *input, gdf_column *output, gdf_time_unit time_unit);
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  Casts data in a gdf_column type GDF_INT32 to a GDF_TIMESTAMP
  *
@@ -2159,12 +1856,10 @@ gdf_error gdf_cast_i8_to_timestamp(gdf_column *input, gdf_column *output, gdf_ti
  * @param[in] gdf_column of the input
  * @param[out] output gdf_column. The output memory needs to be preallocated
  *
-* @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
+ * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_cast_i32_to_timestamp(gdf_column *input, gdf_column *output, gdf_time_unit time_unit);
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  Casts data in a gdf_column type GDF_INT64 to a GDF_TIMESTAMP
  *
@@ -2173,12 +1868,10 @@ gdf_error gdf_cast_i32_to_timestamp(gdf_column *input, gdf_column *output, gdf_t
  * @param[in] gdf_column of the input
  * @param[out] output gdf_column. The output memory needs to be preallocated
  *
-* @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
+ * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_cast_i64_to_timestamp(gdf_column *input, gdf_column *output, gdf_time_unit time_unit);
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  Casts data in a gdf_column type GDF_FLOAT32 to a GDF_TIMESTAMP
  *
@@ -2187,12 +1880,10 @@ gdf_error gdf_cast_i64_to_timestamp(gdf_column *input, gdf_column *output, gdf_t
  * @param[in] gdf_column of the input
  * @param[out] output gdf_column. The output memory needs to be preallocated
  *
-* @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
+ * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_cast_f32_to_timestamp(gdf_column *input, gdf_column *output, gdf_time_unit time_unit);
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  Casts data in a gdf_column type GDF_FLOAT64 to a GDF_TIMESTAMP
  *
@@ -2201,12 +1892,10 @@ gdf_error gdf_cast_f32_to_timestamp(gdf_column *input, gdf_column *output, gdf_t
  * @param[in] gdf_column of the input
  * @param[out] output gdf_column. The output memory needs to be preallocated
  *
-* @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
+ * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_cast_f64_to_timestamp(gdf_column *input, gdf_column *output, gdf_time_unit time_unit);
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  Casts data in a gdf_column type GDF_DATE32 to a GDF_TIMESTAMP
  *
@@ -2215,12 +1904,10 @@ gdf_error gdf_cast_f64_to_timestamp(gdf_column *input, gdf_column *output, gdf_t
  * @param[in] gdf_column of the input
  * @param[out] output gdf_column. The output memory needs to be preallocated
  *
-* @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
+ * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_cast_date32_to_timestamp(gdf_column *input, gdf_column *output, gdf_time_unit time_unit);
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  Casts data in a gdf_column type GDF_DATE64 to a GDF_TIMESTAMP
  *
@@ -2229,96 +1916,81 @@ gdf_error gdf_cast_date32_to_timestamp(gdf_column *input, gdf_column *output, gd
  * @param[in] gdf_column of the input
  * @param[out] output gdf_column. The output memory needs to be preallocated
  *
-* @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
+ * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_cast_date64_to_timestamp(gdf_column *input, gdf_column *output, gdf_time_unit time_unit);
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  Casts data in a gdf_column type GDF_TIMESTAMP to a GDF_TIMESTAMP
  *
  * @param[in] gdf_column of the input
  * @param[out] output gdf_column. The output memory needs to be preallocated
  *
-* @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
+ * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_cast_timestamp_to_timestamp(gdf_column *input, gdf_column *output, gdf_time_unit time_unit);
 
 
 /* datetime extract*/
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  Extracts year from any date time type and places results into a preallocated GDF_INT16 column
  *
  * @param[in] gdf_column of the input
  * @param[out] output gdf_column. The output memory needs to be preallocated
  *
-* @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
+ * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_extract_datetime_year(gdf_column *input, gdf_column *output);
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  Extracts month from any date time type and places results into a preallocated GDF_INT16 column
  *
  * @param[in] gdf_column of the input
  * @param[out] output gdf_column. The output memory needs to be preallocated
  *
-* @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
+ * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_extract_datetime_month(gdf_column *input, gdf_column *output);
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  Extracts day from any date time type and places results into a preallocated GDF_INT16 column
  *
  * @param[in] gdf_column of the input
  * @param[out] output gdf_column. The output memory needs to be preallocated
  *
-* @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
+ * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_extract_datetime_day(gdf_column *input, gdf_column *output);
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  Extracts hour from either GDF_DATE64 or GDF_TIMESTAMP type and places results into a preallocated GDF_INT16 column
  *
  * @param[in] gdf_column of the input
  * @param[out] output gdf_column. The output memory needs to be preallocated
  *
-* @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
+ * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_extract_datetime_hour(gdf_column *input, gdf_column *output);
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  Extracts minute from either GDF_DATE64 or GDF_TIMESTAMP type and places results into a preallocated GDF_INT16 column
  *
  * @param[in] gdf_column of the input
  * @param[out] output gdf_column. The output memory needs to be preallocated
  *
-* @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
+ * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_extract_datetime_minute(gdf_column *input, gdf_column *output);
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  Extracts second from either GDF_DATE64 or GDF_TIMESTAMP type and places results into a preallocated GDF_INT16 column
  *
  * @param[in] gdf_column of the input
  * @param[out] output gdf_column. The output memory needs to be preallocated
  *
-* @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
+ * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_extract_datetime_second(gdf_column *input, gdf_column *output);
 
 
@@ -2432,20 +2104,20 @@ size for this use.
 */
 
 
-/* --------------------------------------------------------------------------*
+/**
  * @brief  Reports the intermediate buffer size in elements required for 
  *         all cuDF reduction operations (gdf_sum, gdf_product, 
  *         gdf_sum_of_squares, gdf_min and gdf_max)
- * * 
- * @return  The size of output/intermediate buffer to allocate for reductions
+ *
+ * @Returns  The size of output/intermediate buffer to allocate for reductions
  * 
  * @todo Reductions should be re-implemented to use an atomic add for each
  *       block sum rather than launch a second kernel. When that happens, this
  *       function can go away and the output can be a single element.
- * --------------------------------------------------------------------------*/
+ */
 unsigned int gdf_reduction_get_intermediate_output_size();
 
-/* --------------------------------------------------------------------------*
+/**
  * @brief  Computes the sum of the values in all rows of a column
  * 
  * @param[in] col Input column
@@ -2455,13 +2127,13 @@ unsigned int gdf_reduction_get_intermediate_output_size();
  *                            This is used as intermediate storage, and the 
  *                            first element contains the total result
  * 
- * @return    GDF_SUCCESS if the operation was successful, otherwise an 
+ * @Returns    GDF_SUCCESS if the operation was successful, otherwise an 
  *            appropriate error code. 
  * 
- * --------------------------------------------------------------------------*/
+ */
 gdf_error gdf_sum(gdf_column *col, void *dev_result, gdf_size_type dev_result_size);
 
-/* --------------------------------------------------------------------------*
+/**
  * @brief  Computes the multiplicative product of the values in all rows of 
  *         a column
  * 
@@ -2472,12 +2144,12 @@ gdf_error gdf_sum(gdf_column *col, void *dev_result, gdf_size_type dev_result_si
  *                            This is used as intermediate storage, and the 
  *                            first element contains the total result
  * 
- * @return    GDF_SUCCESS if the operation was successful, otherwise an 
+ * @Returns    GDF_SUCCESS if the operation was successful, otherwise an 
  *            appropriate error code. 
- * --------------------------------------------------------------------------*/
+ */
 gdf_error gdf_product(gdf_column *col, void *dev_result, gdf_size_type dev_result_size);
 
-/* --------------------------------------------------------------------------*
+/**
  * @brief  Computes the sum of squares of the values in all rows of a column
  * 
  * Sum of squares is useful for variance implementation.
@@ -2489,15 +2161,15 @@ gdf_error gdf_product(gdf_column *col, void *dev_result, gdf_size_type dev_resul
  *                            This is used as intermediate storage, and the 
  *                            first element contains the total result
  * 
- * @return    GDF_SUCCESS if the operation was successful, otherwise an 
+ * @Returns    GDF_SUCCESS if the operation was successful, otherwise an 
  *            appropriate error code. 
  * 
  * @todo could be implemented using inner_product if that function is 
  *       implemented
- * --------------------------------------------------------------------------*/
+ */
 gdf_error gdf_sum_of_squares(gdf_column *col, void *dev_result, gdf_size_type dev_result_size);
 
-/* --------------------------------------------------------------------------*
+/**
  * @brief  Computes the minimum of the values in all rows of a column
  * 
  * @param[in] col Input column
@@ -2507,13 +2179,13 @@ gdf_error gdf_sum_of_squares(gdf_column *col, void *dev_result, gdf_size_type de
  *                            This is used as intermediate storage, and the 
  *                            first element contains the total result
  * 
- * @return    GDF_SUCCESS if the operation was successful, otherwise an 
+ * @Returns    GDF_SUCCESS if the operation was successful, otherwise an 
  *            appropriate error code. 
  * 
- * --------------------------------------------------------------------------*/
+ */
 gdf_error gdf_min(gdf_column *col, void *dev_result, gdf_size_type dev_result_size);
 
-/* --------------------------------------------------------------------------*
+/**
  * @brief  Computes the maximum of the values in all rows of a column
  * 
  * @param[in] col Input column
@@ -2523,10 +2195,10 @@ gdf_error gdf_min(gdf_column *col, void *dev_result, gdf_size_type dev_result_si
  *                            This is used as intermediate storage, and the 
  *                            first element contains the total result
  * 
- * @return    GDF_SUCCESS if the operation was successful, otherwise an 
+ * @Returns    GDF_SUCCESS if the operation was successful, otherwise an 
  *            appropriate error code. 
  * 
- * --------------------------------------------------------------------------*/
+ */
 gdf_error gdf_max(gdf_column *col, void *dev_result, gdf_size_type dev_result_size);
 
 
@@ -2534,7 +2206,6 @@ gdf_error gdf_max(gdf_column *col, void *dev_result, gdf_size_type dev_result_si
  * Filtering and comparison operators
  */
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  Compare every value on the left hand side to a static value and return a stencil in output which will have 1 when the comparison operation returns 1 and 0 otherwise
  *
@@ -2543,12 +2214,10 @@ gdf_error gdf_max(gdf_column *col, void *dev_result, gdf_size_type dev_result_si
  * @param[out] output gdf_column of type GDF_INT8. The output memory needs to be preallocated
  * @param[in] gdf_comparison_operator enum defining the comparison operator to be used
  *
-* @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
+ * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_comparison_static_i8(gdf_column *lhs, int8_t value, gdf_column *output,gdf_comparison_operator operation);
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  Compare every value on the left hand side to a static value and return a stencil in output which will have 1 when the comparison operation returns 1 and 0 otherwise
  *
@@ -2557,12 +2226,10 @@ gdf_error gdf_comparison_static_i8(gdf_column *lhs, int8_t value, gdf_column *ou
  * @param[out] output gdf_column of type GDF_INT8. The output memory needs to be preallocated
  * @param[in] gdf_comparison_operator enum defining the comparison operator to be used
  *
-* @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
+ * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_comparison_static_i16(gdf_column *lhs, int16_t value, gdf_column *output,gdf_comparison_operator operation);
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  Compare every value on the left hand side to a static value and return a stencil in output which will have 1 when the comparison operation returns 1 and 0 otherwise
  *
@@ -2571,12 +2238,10 @@ gdf_error gdf_comparison_static_i16(gdf_column *lhs, int16_t value, gdf_column *
  * @param[out] output gdf_column of type GDF_INT8. The output memory needs to be preallocated
  * @param[in] gdf_comparison_operator enum defining the comparison operator to be used
  *
-* @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
+ * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_comparison_static_i32(gdf_column *lhs, int32_t value, gdf_column *output,gdf_comparison_operator operation);
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  Compare every value on the left hand side to a static value and return a stencil in output which will have 1 when the comparison operation returns 1 and 0 otherwise
  *
@@ -2585,12 +2250,10 @@ gdf_error gdf_comparison_static_i32(gdf_column *lhs, int32_t value, gdf_column *
  * @param[out] output gdf_column of type GDF_INT8. The output memory needs to be preallocated
  * @param[in] gdf_comparison_operator enum defining the comparison operator to be used
  *
-* @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
+ * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_comparison_static_i64(gdf_column *lhs, int64_t value, gdf_column *output,gdf_comparison_operator operation);
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  Compare every value on the left hand side to a static value and return a stencil in output which will have 1 when the comparison operation returns 1 and 0 otherwise
  *
@@ -2599,12 +2262,10 @@ gdf_error gdf_comparison_static_i64(gdf_column *lhs, int64_t value, gdf_column *
  * @param[out] output gdf_column of type GDF_INT8. The output memory needs to be preallocated
  * @param[in] gdf_comparison_operator enum defining the comparison operator to be used
  *
-* @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
+ * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_comparison_static_f32(gdf_column *lhs, float value, gdf_column *output,gdf_comparison_operator operation);
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  Compare every value on the left hand side to a static value and return a stencil in output which will have 1 when the comparison operation returns 1 and 0 otherwise
  *
@@ -2613,12 +2274,10 @@ gdf_error gdf_comparison_static_f32(gdf_column *lhs, float value, gdf_column *ou
  * @param[out] output gdf_column of type GDF_INT8. The output memory needs to be preallocated
  * @param[in] gdf_comparison_operator enum defining the comparison operator to be used
  *
-* @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
+ * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_comparison_static_f64(gdf_column *lhs, double value, gdf_column *output,gdf_comparison_operator operation);
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  Compare two columns of any types against each other using a comparison operation, returns a stencil in output which will have 1 when the comparison operation returns 1 and 0 otherwise
  *
@@ -2627,12 +2286,10 @@ gdf_error gdf_comparison_static_f64(gdf_column *lhs, double value, gdf_column *o
  * @param[out] output gdf_column of type GDF_INT8. The output memory needs to be preallocated
  * @param[in] gdf_comparison_operator enum defining the comparison operator to be used
  *
-* @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
+ * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_comparison(gdf_column *lhs, gdf_column *rhs, gdf_column *output,gdf_comparison_operator operation);
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  takes a stencil and uses it to compact a colum e.g. remove all values for which the stencil = 0
  *
@@ -2640,12 +2297,10 @@ gdf_error gdf_comparison(gdf_column *lhs, gdf_column *rhs, gdf_column *output,gd
  * @param[in] gdf_column holding the stencil
  * @param[out] output gdf_column of same type as input. The output memory needs to be preallocated to be the same size as input
  *
-* @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
+ * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_apply_stencil(gdf_column *lhs, gdf_column * stencil, gdf_column * output);
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  Concatenates two gdf_columns
  *
@@ -2653,9 +2308,8 @@ gdf_error gdf_apply_stencil(gdf_column *lhs, gdf_column * stencil, gdf_column * 
  * @param[in] gdf_column of same type as the first
  * @param[out] output gdf_column of same type as inputs. The output memory needs to be preallocated to be the same size as the sum of both inputs
  *
-* @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
+ * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_concat(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
 
 
@@ -2663,7 +2317,6 @@ gdf_error gdf_concat(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
  * Hashing
  */
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  Creates a hash of multiple gdf_columns
  *
@@ -2672,9 +2325,8 @@ gdf_error gdf_concat(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
  * @param[out] output gdf_column of type GDF_INT64. The output memory needs to be preallocated
  * @param[in] A pointer to a cudaStream_t. If nullptr, the function will create a stream to use.
  *
-* @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
+ * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_hash_columns(gdf_column ** columns_to_hash, int num_columns, gdf_column * output_column, void * stream);
 
 
@@ -2682,16 +2334,14 @@ gdf_error gdf_hash_columns(gdf_column ** columns_to_hash, int num_columns, gdf_c
  * gdf introspection utlities
  */
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  Returns the byte width of the data type of the gdf_column
  *
  * @param[in] gdf_column whose data type's byte width will be determined
  * @param[out] the byte width of the data type
  *
-* @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
+ * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error get_column_byte_width(gdf_column * col, int * width);
 
 
@@ -2702,7 +2352,6 @@ gdf_error get_column_byte_width(gdf_column * col, int * width);
    GROUP-BY
  */
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  Performs SQL like WHERE (Filtering)
  *
@@ -2715,9 +2364,8 @@ gdf_error get_column_byte_width(gdf_column * col, int * width);
  * @param[out] device-side array of row indices that remain after filtering
  * @param[out] host-side # rows that remain after filtering
  *
-* @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
+ * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_filter(size_t nrows,
                     gdf_column* cols,
                     size_t ncols,
@@ -2737,10 +2385,9 @@ gdf_error gdf_filter(size_t nrows,
  * @param[out] if not null return the grouped-by columns (multi-gather based on indices, which are needed anyway)
  * @param[out] aggregation result
  * @param[in] struct with additional info: bool is_sorted, flag_sort_or_hash, bool flag_count_distinct
-  *
-* @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
+ *
+ * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_group_by_sum(int ncols,
                            gdf_column** cols,
                            gdf_column* col_agg,
@@ -2759,10 +2406,9 @@ gdf_error gdf_group_by_sum(int ncols,
  * @param[out] if not null return the grouped-by columns (multi-gather based on indices, which are needed anyway)
  * @param[out] aggregation result
  * @param[in] struct with additional info: bool is_sorted, flag_sort_or_hash, bool flag_count_distinct
-  *
-* @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
+ *
+ * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_group_by_min(int ncols,
                            gdf_column** cols,
                            gdf_column* col_agg,
@@ -2781,10 +2427,9 @@ gdf_error gdf_group_by_min(int ncols,
  * @param[out] if not null return the grouped-by columns (multi-gather based on indices, which are needed anyway)
  * @param[out] aggregation result
  * @param[in] struct with additional info: bool is_sorted, flag_sort_or_hash, bool flag_count_distinct
-  *
-* @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
+ *
+ * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_group_by_max(int ncols,
                            gdf_column** cols,
                            gdf_column* col_agg,
@@ -2803,10 +2448,9 @@ gdf_error gdf_group_by_max(int ncols,
  * @param[out] if not null return the grouped-by columns (multi-gather based on indices, which are needed anyway)
  * @param[out] aggregation result
  * @param[in] struct with additional info: bool is_sorted, flag_sort_or_hash, bool flag_count_distinct
-  *
-* @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
+ *
+ * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_group_by_avg(int ncols,
                            gdf_column** cols,
                            gdf_column* col_agg,
@@ -2825,10 +2469,9 @@ gdf_error gdf_group_by_avg(int ncols,
  * @param[out] if not null return the grouped-by columns (multi-gather based on indices, which are needed anyway)
  * @param[out] aggregation result
  * @param[in] struct with additional info: bool is_sorted, flag_sort_or_hash, bool flag_count_distinct
-  *
-* @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
+ *
+ * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_group_by_count(int ncols,
                              gdf_column** cols,
                              gdf_column* col_agg,
@@ -2845,10 +2488,9 @@ gdf_error gdf_group_by_count(int ncols,
  * @param[in] requested quantile in [0,1]
  * @param[out] result; for <exact> should probably be double*; it's void* because: (1) for uniformity of interface with <approx>; (2) for possible types bigger than double, in the future;
  * @param[in] struct with additional info
-  *
-* @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
+ *
+ * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-/* ----------------------------------------------------------------------------*/
 gdf_error gdf_quantile_exact(gdf_column* col_in,
                             gdf_quantile_method prec,
                             double q,
@@ -2862,16 +2504,14 @@ gdf_error gdf_quantile_exact(gdf_column* col_in,
  * @param[in] requested quantile in [0,1]
  * @param[out] result; type-erased result of same type as column;
  * @param[in] struct with additional info
-  *
-* @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
+ *
+ * @Returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-/* ----------------------------------------------------------------------------*/
-gdf_error gdf_quantile_aprrox(gdf_column* col_in,
+gdf_error gdf_quantile_approx(gdf_column* col_in,
                               double q,
                               void* t_erased_res,
                               gdf_context* ctxt);
 
-/* --------------------------------------------------------------------------*/
 /** 
  * @brief Replace elements from `col` according to the mapping `old_values` to
  *        `new_values`, that is, replace all `old_values[i]` present in `col` 
@@ -2881,14 +2521,13 @@ gdf_error gdf_quantile_aprrox(gdf_column* col_in,
  * @param[in] old_values gdf_column with the old values to be replaced
  * @param[in] new_values gdf_column with the new values
  * 
- * @returns GDF_SUCCESS upon successful completion
+ * @Returnss GDF_SUCCESS upon successful completion
  *
- * --------------------------------------------------------------------------*/
+ */
 gdf_error gdf_find_and_replace_all(gdf_column*       col,
                                    const gdf_column* old_values,
                                    const gdf_column* new_values);
 
-/* --------------------------------------------------------------------------*/
 /** 
  * @brief Sorts an array of gdf_column.
  * 
@@ -2902,16 +2541,15 @@ gdf_error gdf_find_and_replace_all(gdf_column*       col,
  * @param[out] output_indices Pre-allocated gdf_column to be filled with sorted
  *                            indices
  * 
- * @returns GDF_SUCCESS upon successful completion
- *
- * ----------------------------------------------------------------------------*/
+ * @Returnss GDF_SUCCESS upon successful completion
+ */
 gdf_error gdf_order_by(gdf_column** input_columns,
                        int8_t*      asc_desc,
                        size_t       num_inputs,
                        gdf_column*  output_indices,
                        int          flag_nulls_are_smallest);
 
-/* --------------------------------------------------------------------------*
+/**
  * @brief Replaces all null values in a column with either a specific value or corresponding values of another column
  *
  * This function is a binary function. It will take in two gdf_columns.
@@ -2932,11 +2570,10 @@ gdf_error gdf_order_by(gdf_column** input_columns,
  * @param[in] col_in A gdf_column that is of size 1 or same size as col_out, contains value / values to be placed in col_out
  * 
  * @Returns GDF_SUCCESS upon successful completion
- *
- * --------------------------------------------------------------------------*/
+ */
 gdf_error gdf_replace_nulls(gdf_column*       col_out,
                                    const gdf_column* col_in);
-/* --------------------------------------------------------------------------*
+/**
  * @brief Finds the indices of the bins in which each value of the column
  * belongs.
  *
@@ -2954,10 +2591,9 @@ gdf_error gdf_replace_nulls(gdf_column*       col_out,
  * @param[out] out_indices Output device array of same size as `col`
  * to be filled with bin indices
  *
- * @return GDF_SUCCESS upon successful completion, otherwise an
+ * @Returns GDF_SUCCESS upon successful completion, otherwise an
  *         appropriate error code.
- *
- * ----------------------------------------------------------------------------*/
+ */
 gdf_error gdf_digitize(gdf_column* col,
                        gdf_column* bins,   // same type as col
                        bool right,
