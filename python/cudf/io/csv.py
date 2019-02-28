@@ -27,9 +27,19 @@ def is_file_like(obj):
         return False
     return True
 
+_quoting_enum = {
+	'minimal':libgdf.QUOTE_MINIMAL,
+	0:libgdf.QUOTE_MINIMAL,
+	'all':libgdf.QUOTE_ALL,
+	1:libgdf.QUOTE_ALL,
+	'nonnumeric':libgdf.QUOTE_NONNUMERIC,
+	2:libgdf.QUOTE_NONNUMERIC,
+	'none':libgdf.QUOTE_NONE,
+	3:libgdf.QUOTE_NONE,
+}
 
 def read_csv(filepath_or_buffer, lineterminator='\n',
-             quotechar='"', quoting=True, doublequote=True,
+             quotechar='"', quoting='minimal', doublequote=True,
              header='infer',
              mangle_dupe_cols=True, usecols=None,
              sep=',', delimiter=None, delim_whitespace=False,
@@ -45,15 +55,15 @@ def read_csv(filepath_or_buffer, lineterminator='\n',
 
     Parameters
     ----------
-    filepath_or_buffer : str
-        Path of file to be read or a file-like object containing the file.
-    sep : char, default ','
-        Delimiter to be used.
-    delimiter : char, default None
-        Alternative argument name for sep.
-    delim_whitespace : bool, default False
-        Determines whether to use whitespace as delimiter.
-    lineterminator : char, default '\\n'
+    filepath_or_buffer : strquoting
+        Path of file to be read orquoting a file-like object containing the file.
+    sep : char, default ','quoting
+        Delimiter to be used.quoting
+    delimiter : char, default Nonequoting
+        Alternative argument name quotingfor sep.
+    delim_whitespace : bool, defauquotinglt False
+        Determines whether to use quotingwhitespace as delimiter.
+    lineterminator : char, defaultquoting '\\n'
         Character to indicate end of line.
     skipinitialspace : bool, default False
         Skip spaces after delimiter.
@@ -64,11 +74,12 @@ def read_csv(filepath_or_buffer, lineterminator='\n',
         or a dictionary with column_name:dtype (pandas style).
     quotechar : char, default '"'
         Character to indicate start and end of quote item.
-    quoting : bool, default True
-        Enable quoting (False is equivalent to setting quotechar to '\0')
+    quoting : str or int, default 'minimal'
+        Control quoting behavior. Setting to 3 or 'none' disables quoting.
+        Quoting is enabled with all other values.
     doublequote : bool, default True
-        When quotechar is specified and quoting is True, indicates whether to
-        interpret two consecutive quotechar inside fields as single quotechar
+        When quoting is enabled, indicates whether to interpret two
+        consecutive quotechar inside fields as single quotechar
     header : int, default 'infer'
         Row number to use as the column names. Default behavior is to infer
         the column names: if no names are passed, header=0;
@@ -314,7 +325,7 @@ def read_csv(filepath_or_buffer, lineterminator='\n',
     csv_reader.delimiter = delimiter.encode()
     csv_reader.lineterminator = lineterminator.encode()
     csv_reader.quotechar = quotechar.encode()
-    csv_reader.quoting = quoting
+    csv_reader.quoting = _quoting_enum[quoting]
     csv_reader.doublequote = doublequote
     csv_reader.delim_whitespace = delim_whitespace
     csv_reader.skipinitialspace = skipinitialspace
@@ -379,7 +390,7 @@ def read_csv(filepath_or_buffer, lineterminator='\n',
 
 
 def read_csv_strings(filepath_or_buffer, lineterminator='\n',
-                     quotechar='"', quoting=True, doublequote=True,
+                     quotechar='"', quoting='minimal', doublequote=True,
                      header='infer',
                      sep=',', delimiter=None, delim_whitespace=False,
                      skipinitialspace=False, names=None, dtype=None,
@@ -574,7 +585,7 @@ def read_csv_strings(filepath_or_buffer, lineterminator='\n',
     csv_reader.delimiter = delimiter.encode()
     csv_reader.lineterminator = lineterminator.encode()
     csv_reader.quotechar = quotechar.encode()
-    csv_reader.quoting = quoting
+    csv_reader.quoting = _quoting_enum[quoting]
     csv_reader.doublequote = doublequote
     csv_reader.delim_whitespace = delim_whitespace
     csv_reader.skipinitialspace = skipinitialspace

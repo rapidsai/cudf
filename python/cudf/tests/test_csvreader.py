@@ -229,7 +229,7 @@ def test_csv_reader_strings_quotechars(tmpdir):
         fp.write('\n'.join(lines) + '\n')
 
     cols = read_csv_strings(str(fname), names=names, dtype=dtypes, skiprows=1,
-                            quotechar='\"', quoting=True)
+                            quotechar='\"', quoting='all')
 
     assert(len(cols) == 2)
     assert(type(cols[0]) == nvstrings.nvstrings)
@@ -946,7 +946,7 @@ def test_csv_reader_pd_consistent_quotes():
 
     # enable quoting
     cu_cols = read_csv_strings(StringIO(buffer), names=names, dtype=dtypes,
-                             quoting=True)
+                             quoting=0)
     pd_df = pd.read_csv(StringIO(buffer), names=names, quoting=0)
 
     col = [str(elem) for elem in cu_cols[0].to_host()]
@@ -954,7 +954,7 @@ def test_csv_reader_pd_consistent_quotes():
 
     # disable quoting
     cu_cols = read_csv_strings(StringIO(buffer), names=names, dtype=dtypes,
-                               quoting=False)
+                               quoting='none')
     pd_df = pd.read_csv(StringIO(buffer), names=names, quoting=3)
 
     col = [str(elem) for elem in cu_cols[0].to_host()]

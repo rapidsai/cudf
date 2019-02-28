@@ -312,7 +312,7 @@ TEST(gdf_csv_test, QuotedStrings)
 		args.delimiter = ',';
 		args.lineterminator = '\n';
 		args.quotechar = '`';
-		args.quoting = true;          // enable quoting
+		args.quoting = QUOTE_ALL;     // enable quoting
 		args.doublequote = true;      // replace double quotechar with single
 		args.skip_blank_lines = true;
 		args.header = 0;
@@ -372,7 +372,7 @@ TEST(gdf_csv_test, IgnoreQuotes)
 		args.delimiter = ',';
 		args.lineterminator = '\n';
 		args.quotechar = '\"';
-		args.quoting = false;         // disable quoting
+		args.quoting = QUOTE_NONE;    // disable quoting
 		args.doublequote = false;     // do not replace double quotechar with single
 		args.skip_blank_lines = true;
 		args.header = 0;

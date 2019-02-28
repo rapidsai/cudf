@@ -318,7 +318,7 @@ gdf_error read_csv(csv_read_arg *args)
 	} else {
 		raw_csv->opts.terminator = args->lineterminator;
 	}
-	if (args->quotechar != '\0' && args->quoting) {
+	if (args->quotechar != '\0' && args->quoting != QUOTE_NONE) {
 		raw_csv->opts.quotechar = args->quotechar;
 		raw_csv->opts.keepquotes = false;
 		raw_csv->opts.doublequote = args->doublequote;
