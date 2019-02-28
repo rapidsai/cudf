@@ -14,12 +14,6 @@
  * limitations under the License.
  */
 
-// These tests excerise the `assert(false)` on unsupported dtypes in the
-// type_dispatcher The assert is only present if the NDEBUG macro isn't defined
-#ifdef NDEBUG
-#undef NDEBUG
-#define REDEFINE
-#endif
 
 #include <cudf.h>
 #include <utilities/type_dispatcher.hpp>
@@ -120,15 +114,15 @@ TEST_F(DispatcherTest, DeviceDispatchFunctor) {
   }
 }
 
-using DispatcherDeathTest = DispatcherTest;
-
-// Unsuported gdf_dtypes should cause program to exit
-TEST_F(DispatcherDeathTest, UnsuportedTypesTest) {
-  testing::FLAGS_gtest_death_test_style = "threadsafe";
+// Unsuported gdf_dtypes should throw std::runtime_error in host code
+TEST_F(DispatcherTest, UnsuportedTypesTest) {
   for (auto const& t : unsupported_dtypes) {
-    EXPECT_DEATH(cudf::type_dispatcher(t, test_functor{}, t), "");
+    EXPECT_THROW(cudf::type_dispatcher(t, test_functor{}, t), std::runtime_error);
   }
 }
+
+using DispatcherDeathTest = DispatcherTest;
+
 
 // Unsuported gdf_dtypes in device code should set appropriate error code
 // and invalidates device context
@@ -152,7 +146,3 @@ TEST_F(DispatcherDeathTest, DeviceDispatchFunctor) {
     EXPECT_DEATH(call_kernel(t), "");
   }
 }
-
-#ifdef REDEFINE
-#define NDEBUG
-#endif
