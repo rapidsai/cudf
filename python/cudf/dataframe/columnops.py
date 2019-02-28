@@ -340,7 +340,7 @@ def as_column(arbitrary, nan_as_null=True, dtype=None):
                 arbitrary = arbitrary.astype('int64')
             data = as_column(pa.array([arbitrary], type=data_type))
         else:
-            data = as_column(pa.array([arbitrary]))
+            data = as_column(pa.array([arbitrary]), nan_as_null=nan_as_null)
 
     elif isinstance(arbitrary, memoryview):
         data = as_column(np.array(arbitrary), dtype=dtype,
