@@ -2331,9 +2331,27 @@ class DataFrame(object):
                                          quant_index=False)
         return result
 
-    select_dtypes = pd.DataFrame.select_dtypes
-    axes = pd.DataFrame.axes
-    _info_axis_number = pd.DataFrame._info_axis_number
+    def select_dtypes(self, include=None):
+        """Return a subset of the DataFrame’s columns based on the column dtypes.
+
+        Parameters
+        ----------
+        include : [type]
+            [description] (the default is None, which [default_description])
+
+        """
+        if isinstance(include, str):
+            include = list(include)
+        df = DataFrame()
+
+        # convert any dtype() to string for comparison
+        include = [str(d) for d in include]
+
+        for x in self._cols.values():
+            if str(x.dtype) in include:
+                df.add_column(x)
+
+        return df
 
     @property
     def ndim(self):
