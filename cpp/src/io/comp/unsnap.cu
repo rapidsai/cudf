@@ -39,12 +39,21 @@
 #define LOG2_BATCH_COUNT    2
 #define BATCH_COUNT         (1 << LOG2_BATCH_COUNT)
 
+struct unsnap_batch_s
+{
+    int32_t len;    // 1..64 = Number of bytes to copy at given offset, 65..97 = Number of literal bytes
+    union
+    {
+        uint32_t offset;        // offset for copy
+        uint8_t literals[32];   // literal bytes for literal batch
+    } u;
+};
+
 
 struct unsnap_queue_s
 {
-    int32_t batch_len[BATCH_COUNT];         // <0: exit, 0:finished/unfilled batch, >0: entries in batch
-    uint8_t wlen[BATCH_COUNT * BATCH_SIZE]; // warp_length*2 + is_literal
-    uint32_t offset[BATCH_COUNT * BATCH_SIZE];
+    int32_t batch_len[BATCH_COUNT];     // Length of each batch - <0:end, 0:not ready, >0:symbol count
+    unsnap_batch_s batch[BATCH_COUNT * BATCH_SIZE];
 };
 
 
@@ -52,8 +61,8 @@ struct unsnap_state_s
 {
     const uint8_t *cur;
     const uint8_t *end;
-    uint8_t *dst;
     uint32_t uncompressed_size;
+    uint32_t bytes_left;
     int32_t error;
     volatile unsnap_queue_s q;
     gpu_inflate_input_s in;
@@ -66,109 +75,211 @@ __device__ uint32_t snappy_decode_symbols(unsnap_state_s *s)
     uint32_t cur = 0;
     uint32_t end = (uint32_t)min((size_t)(s->end - bs), (size_t)0xffffffffu);
     uint32_t bytes_left = s->uncompressed_size;
-    uint32_t cur_len = 0;
-    uint32_t offset = 0;
     uint32_t is_literal = 0;
     uint32_t dst_pos = 0;
-    int32_t b = 0;
-    while (bytes_left > 0)
+    int32_t batch = 0;
+    uint32_t lit_len = 0;
+    for (;;)
     {
-        uint32_t wlen;
+        volatile unsnap_batch_s *b = &s->q.batch[batch * BATCH_SIZE];
+        int32_t batch_len = 0;
 
-        if (cur_len == 0)
+        while (bytes_left > 0)
         {
-            if (cur >= end)
-                break;
-            cur_len = bs[cur++];
-            if (cur_len & 2)
+            uint32_t blen;
+
+            if (lit_len == 0)
             {
-                // xxxxxx1x: copy with 6-bit length, 2-byte or 4-byte offset
-                if (2 * (1 + (cur_len & 1)) > end - cur)
+                if (cur >= end)
                     break;
-                offset = bs[cur] + (bs[cur+1] << 8);
-                cur += 2;
-                if (cur_len & 1) // 4-byte offset
+                blen = bs[cur++];
+                if (blen & 2)
                 {
-                    offset |= (bs[cur] << 16) | (bs[cur+1] << 24);
-                    cur += 2;
-                }
-                cur_len = (cur_len >> 2) + 1;
-                is_literal = 0;
-                if (offset > dst_pos)
-                    break;
-            }
-            else
-            {
-                if (cur_len & 1)
-                {
-                    // xxxxxx01.oooooooo: copy with 3-bit length, 11-bit offset
-                    if (cur >= end)
+                    uint32_t offset;
+                    // xxxxxx1x: copy with 6-bit length, 2-byte or 4-byte offset
+                    if (2 * (1 + (blen & 1)) > end - cur)
                         break;
-                    offset = ((cur_len & 0xe0) << 3) | bs[cur++];
-                    cur_len = ((cur_len >> 2) & 7) + 4;
+                    offset = bs[cur] + (bs[cur+1] << 8);
+                    cur += 2;
+                    if (blen & 1) // 4-byte offset
+                    {
+                        offset |= (bs[cur] << 16) | (bs[cur+1] << 24);
+                        cur += 2;
+                    }
+                    blen = (blen >> 2) + 1;
                     is_literal = 0;
                     if (offset > dst_pos)
                         break;
+                    b->u.offset = offset;
                 }
                 else
                 {
-                    // xxxxxx00: literal
-                    cur_len >>= 2;
-                    if (cur_len >= 60)
+                    if (blen & 1)
                     {
-                        uint32_t num_bytes = cur_len - 59;
-                        if (num_bytes >= end - cur)
+                        uint32_t offset;
+                        // xxxxxx01.oooooooo: copy with 3-bit length, 11-bit offset
+                        if (cur >= end)
                             break;
-                        cur_len = bs[cur++];
-                        if (num_bytes > 1)
+                        offset = ((blen & 0xe0) << 3) | bs[cur++];
+                        blen = ((blen >> 2) & 7) + 4;
+                        is_literal = 0;
+                        if (offset > dst_pos)
+                            break;
+                        b->u.offset = offset;
+                    }
+                    else
+                    {
+                        // xxxxxx00: literal
+                        blen >>= 2;
+                        if (blen >= 60)
                         {
-                            cur_len |= bs[cur++] << 8;
-                            if (num_bytes > 2)
+                            uint32_t num_bytes = blen - 59;
+                            if (num_bytes >= end - cur)
+                                break;
+                            blen = bs[cur++];
+                            if (num_bytes > 1)
                             {
-                                cur_len |= bs[cur++] << 16;
-                                if (num_bytes > 3)
+                                blen |= bs[cur++] << 8;
+                                if (num_bytes > 2)
                                 {
-                                    cur_len |= bs[cur++] << 24;
-                                    if (cur_len >= end)
-                                        break;
+                                    blen |= bs[cur++] << 16;
+                                    if (num_bytes > 3)
+                                    {
+                                        blen |= bs[cur++] << 24;
+                                        if (blen >= end)
+                                            break;
+                                    }
                                 }
                             }
                         }
+                        blen += 1;
+                        if (blen > end - cur)
+                            break;
+                        lit_len = blen;
                     }
-                    cur_len += 1;
-                    offset = cur;
-                    if (cur_len > end - cur)
-                        break;
-                    cur += cur_len;
-                    is_literal = 1;
                 }
             }
-            dst_pos += cur_len;
+            if (lit_len != 0)
+            {
+                blen = min(lit_len, 32);
+                lit_len -= blen;
+                is_literal = 64;
+                for (uint32_t i = 0; i < blen; i++)
+                {
+                    b->u.literals[i] = bs[cur+i];
+                }
+                cur += blen;
+            }
+            dst_pos += blen;
+            if (bytes_left < blen)
+            {
+                break;
+            }
+            bytes_left -= blen;
+            b->len = blen + is_literal;
+            b++;
+            if (++batch_len == BATCH_SIZE)
+                break;
         }
-        wlen = min(cur_len, 32u);
-        cur_len -= wlen;
-        if (bytes_left < wlen)
+        if (batch_len != 0)
+        {
+            s->q.batch_len[batch] = batch_len;
+            batch = (batch + 1) & (BATCH_COUNT - 1);
+        }
+        while (s->q.batch_len[batch] != 0)
+        {
+            NANOSLEEP(100);
+        }
+        if (batch_len != BATCH_SIZE || bytes_left == 0)
         {
             break;
         }
-        bytes_left -= wlen;
-        s->q.wlen[b] = wlen * 2 + is_literal;
-        s->q.offset[b] = offset;
-        b = (b + 1) & (BATCH_COUNT * BATCH_SIZE - 1);
     }
+    s->q.batch_len[batch] = -1;
     return bytes_left;
 }
 
 
-// blockDim {64,2,1}
+// WARP1: process symbols and output uncompressed stream
+// NOTE: No error checks at this stage (WARP0 responsible for not sending offsets and lengths that would result in out-of-bounds accesses)
+__device__ void snappy_process_symbols(unsnap_state_s *s, int t)
+{
+    uint8_t *out = reinterpret_cast<uint8_t *>(s->in.dstDevice);
+    int batch = 0;
+
+    do
+    {
+        volatile unsnap_batch_s *b = &s->q.batch[batch * BATCH_SIZE];
+        int32_t batch_len;
+
+        if (t == 0)
+        {
+            while ((batch_len = s->q.batch_len[batch]) == 0)
+            {
+                NANOSLEEP(100);
+            }
+        }
+        else
+        {
+            batch_len = 0;
+        }
+        batch_len = SHFL0(batch_len);
+        if (batch_len <= 0)
+        {
+            break;
+        }
+        for (int i = 0; i < batch_len; i++, b++)
+        {
+            int blen = b->len;
+            if (blen <= 64)
+            {
+                // Copy
+                uint32_t dist = b->u.offset;
+                if (t < blen)
+                {
+                    uint32_t pos = t;
+                    const uint8_t *src = out + ((pos >= dist) ? (pos % dist) : pos) - dist;
+                    out[t] = *src;
+                }
+                SYNCWARP();
+                if (32 + t < blen)
+                {
+                    uint32_t pos = 32 + t;
+                    const uint8_t *src = out + ((pos >= dist) ? (pos % dist) : pos) - dist;
+                    out[32 + t] = *src;
+                }
+                SYNCWARP();
+            }
+            else
+            {
+                // Literal
+                blen -= 64;
+                if (t < blen)
+                {
+                    out[t] = b->u.literals[t];
+                }
+            }
+            out += blen;
+        }
+        SYNCWARP();
+        if (t == 0)
+        {
+            s->q.batch_len[batch] = 0;
+        }
+        batch = (batch + 1) & (BATCH_COUNT - 1);
+    } while (1);
+}
+
+
+// blockDim {128,1,1}
 extern "C" __global__ void __launch_bounds__(128)
 unsnap_kernel(gpu_inflate_input_s *inputs, gpu_inflate_status_s *outputs, int count)
 {
-    __shared__ __align__(16) unsnap_state_s state_g[2];
+    __shared__ __align__(16) unsnap_state_s state_g;
 
     int t = threadIdx.x;
-    unsnap_state_s *s = &state_g[threadIdx.y];
-    int strm_id = blockIdx.x * 2 + threadIdx.y;
+    unsnap_state_s *s = &state_g;
+    int strm_id = blockIdx.x;
 
     if (strm_id < count && t < sizeof(gpu_inflate_input_s) / sizeof(uint32_t))
     {
@@ -213,6 +324,7 @@ unsnap_kernel(gpu_inflate_input_s *inputs, gpu_inflate_status_s *outputs, int co
                 }
             }
             s->uncompressed_size = uncompressed_size;
+            s->bytes_left = uncompressed_size;
             s->cur = cur;
             s->end = end;
             if ((cur >= end && uncompressed_size != 0) || (uncompressed_size > s->in.dstSize))
@@ -233,20 +345,25 @@ unsnap_kernel(gpu_inflate_input_s *inputs, gpu_inflate_status_s *outputs, int co
             // WARP0: decode lengths and offsets
             if (!t)
             {
-                snappy_decode_symbols(s);
+                s->bytes_left = snappy_decode_symbols(s);
+                if (s->bytes_left != 0)
+                {
+                    s->error = -2;
+                }
             }
         }
-        else
+        else if (t < 64)
         {
-
+            // WARP1: LZ77
+            snappy_process_symbols(s, t & 0x1f);
         }
     }
     __syncthreads();
     if (!t && strm_id < count)
     {
-        outputs[strm_id].bytes_written = 0;
+        outputs[strm_id].bytes_written = s->uncompressed_size - s->bytes_left;
         outputs[strm_id].status = s->error;
-        outputs[strm_id].reserved = s->uncompressed_size;
+        outputs[strm_id].reserved = 0;
     }
 }
 
@@ -254,7 +371,7 @@ unsnap_kernel(gpu_inflate_input_s *inputs, gpu_inflate_status_s *outputs, int co
 cudaError_t __host__ gpu_unsnap(gpu_inflate_input_s *inputs, gpu_inflate_status_s *outputs, int count, cudaStream_t stream)
 {
     uint32_t count32 = (count > 0) ? count : 0;
-    dim3 dim_block(64, 2);      // 2 warps per stream, 2 streams per block
+    dim3 dim_block(128, 1);      // 2 warps per stream, 2 streams per block
     dim3 dim_grid(count32, 1);  // TODO: Check max grid dimensions vs max expected count
 
     unsnap_kernel << < dim_grid, dim_block, 0, stream >> >(inputs, outputs, count32);
