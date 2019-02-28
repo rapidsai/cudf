@@ -29,15 +29,16 @@
 #include <cuda_runtime.h>
 #include <thrust/host_vector.h>
 
+static constexpr char trie_terminating_character = '\n';
+
 struct SerialTrieNode {
-	int16_t children_offset = -1;
-	char character;
-	bool is_leaf;
+	int16_t children_offset{-1};
+	char character{trie_terminating_character};
+	bool is_leaf{false};
+    SerialTrieNode() = default; // FIXME This is necessary for a Thrust bug on CentOS7 + CUDA10
 	explicit SerialTrieNode(char c, bool leaf = false) noexcept
 		: character(c), is_leaf(leaf) {}
 };
-
-static constexpr char trie_terminating_character = '\n';
 
 
 /**---------------------------------------------------------------------------*
