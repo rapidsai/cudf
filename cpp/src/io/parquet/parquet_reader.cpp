@@ -35,24 +35,6 @@ static constexpr int NUM_SUPPORTED_CODECS = 2;
 static const parquet::Compression g_supportedCodecs[NUM_SUPPORTED_CODECS] = { parquet::GZIP, parquet::SNAPPY };
 static const char * const g_supportedCodecsNames[NUM_SUPPORTED_CODECS] = { "GZIP", "SNAPPY" };
 
-#define DUMP_PERF   1
-#if DUMP_PERF
-#include <chrono>
-class perf_chk
-{
-private:
-    std::chrono::high_resolution_clock::time_point m_tStart, m_tEnd;
-    double *m_accd;
-public:
-    perf_chk(double *accd) { m_accd = accd; init(); }
-    void init() { m_tStart = std::chrono::high_resolution_clock::now(); }
-    ~perf_chk() { m_tEnd = std::chrono::high_resolution_clock::now(); *m_accd += 1.e-6 * (double)std::chrono::duration_cast<std::chrono::microseconds>(m_tEnd - m_tStart).count(); } // WTF
-};
-#define PERF_SAMPLE_START(acc)  { perf_chk _local_perf(acc); 
-#define PERF_SAMPLE_END()       }
-#define PERF_SAMPLE_RESET()     _local_perf.init()
-#endif // DUMP_PERF
-
 uint8_t *LoadFile(const char *input_fname, size_t *len)
 {
     size_t file_size;
@@ -437,11 +419,7 @@ gdf_error read_parquet(pq_read_arg *args) {
         RMM_ALLOC_HOST((void **)&inflate_out, sizeof(gpu_inflate_status_s) * num_compressed_pages);
         RMM_ALLOC((void **)&inflate_out_dev, sizeof(gpu_inflate_status_s) * num_compressed_pages, 0);
         RMM_ALLOC((void **)&decompressed_pages, total_decompressed_size, 0);
-#if PADUMP_ZLIB_BENCH
-        uint8_t **zlib_src = new uint8_t *[num_compressed_pages];
-        double zlib_time = 0;
-#endif
-        PERF_SAMPLE_START(&uncomp_time);
+
         for (int codec_idx = 0; codec_idx < NUM_SUPPORTED_CODECS; codec_idx++)
         {
             parquet::Compression codec = g_supportedCodecs[codec_idx];
@@ -456,15 +434,6 @@ gdf_error read_parquet(pq_read_arg *args) {
                     {
                         for (int k = 0; k < chunk_desc[chunk].max_num_pages; k++, comp_cnt++)
                         {
-#if PADUMP_ZLIB_BENCH
-                            ptrdiff_t src_ofs = page_index[page_cnt + k].compressed_page_data - chunk_desc[chunk].compressed_data;
-                            size_t first_page_offset = (size_t)chunk_map[chunk]->meta_data.data_page_offset;
-                            if (chunk_map[chunk]->meta_data.dictionary_page_offset != 0)
-                            {
-                                first_page_offset = std::min(first_page_offset, (size_t)chunk_map[chunk]->meta_data.dictionary_page_offset);
-                            }
-                            zlib_src[comp_cnt] = raw + first_page_offset + src_ofs;
-#endif
                             inflate_in[comp_cnt].srcDevice = page_index[page_cnt + k].compressed_page_data;
                             inflate_in[comp_cnt].srcSize = page_index[page_cnt + k].compressed_page_size;
                             inflate_in[comp_cnt].dstDevice = decompressed_pages + decompressed_ofs;
@@ -496,46 +465,14 @@ gdf_error read_parquet(pq_read_arg *args) {
             }
         }
         cudaStreamSynchronize(0);
-        PERF_SAMPLE_END();
+
         printf("%zd bytes in %.1fms (%.2fMB/s)\n", total_decompressed_size, uncomp_time * 1000.0, 1.e-6 * total_decompressed_size / uncomp_time);
         for (int i = 0; i < comp_cnt; i++)
         {
             if (inflate_out[i].status != 0 || inflate_out[i].bytes_written > 100000)
                 printf("status[%d] = %d (%zd bytes)\n", i, inflate_out[i].status, (size_t)inflate_out[i].bytes_written);
         }
-    #if PADUMP_ZLIB_BENCH
-        if (compressed_page_cnt[0]) // NOTE: Assumes 1st entry is GZIP and a single codec is used
-        {
-            uint8_t *zlib_output = new uint8_t[total_decompressed_size];
-            uint8_t *dst = zlib_output;
-            uint8_t *decompressed_pages_host = nullptr;
-            RMM_ALLOC_HOST((void **)&decompressed_pages_host, total_decompressed_size);
-            PERF_SAMPLE_START(&zlib_time);
-            for (int i = 0; i < gzip_page_cnt; i++)
-            {
-                size_t comp_len = inflate_in[i].srcSize;
-                size_t uncomp_len = inflate_in[i].dstSize;
-                int zerr = zlib_uncompress(dst, uncomp_len, zlib_src[i], comp_len);
-                if (zerr)
-                    printf("ZLIB: %d (data=%02x.%02x.%02x.%02x, src:%d, dst:%d)\n", zerr, zlib_src[i][0], zlib_src[i][1], zlib_src[i][2], zlib_src[i][3], (int)inflate_in[i].srcSize, (int)uncomp_len);
-                dst += uncomp_len;
-            }
-            PERF_SAMPLE_END();
-            cudaMemcpy(decompressed_pages_host, decompressed_pages, total_decompressed_size, cudaMemcpyDeviceToHost);
-            for (size_t i=0; i<total_decompressed_size; i++)
-            {
-                if (zlib_output[i] != decompressed_pages_host[i])
-                {
-                    printf("mismatch at byte %zd: 0x%x/0x%x\n", i, decompressed_pages_host[i], zlib_output[i]);
-                    break;
-                }
-            }
-            delete[] zlib_output;
-            RMM_FREE_HOST(decompressed_pages_host);
-            printf("ZLIB: %zd bytes in %.1fms (%.2fMB/s)\n", total_decompressed_size, zlib_time * 1000.0, 1.e-6 * total_decompressed_size / zlib_time);
-        }
-        delete[] zlib_src;
-    #endif                  
+
         RMM_FREE_HOST(inflate_in);
         RMM_FREE_HOST(inflate_out);
         RMM_FREE(inflate_out_dev, 0);
@@ -719,82 +656,6 @@ gdf_error read_parquet(pq_read_arg *args) {
             printf("\n");
             RMM_FREE_HOST(data);
         }*/
-    }
-
-    // Read pages on CPU (REMOVEME)
-    for (size_t i = 0; i < file_md.row_groups.size(); i++)
-    {
-        const parquet::RowGroup *g = &file_md.row_groups[i];
-        for (size_t j = 0; j < g->columns.size(); j++)
-        {
-            const parquet::ColumnChunk *col = &g->columns[j];
-            if (col->meta_data.data_page_offset > 0 && (size_t)col->meta_data.data_page_offset < raw_size)
-            {
-                int64_t values_remaining = col->meta_data.num_values;
-                size_t page_offset = (size_t)col->meta_data.data_page_offset;
-                int32_t page_count = 0;
-                if (col->meta_data.dictionary_page_offset != 0)
-                {
-                    page_offset = std::min(page_offset, (size_t)col->meta_data.dictionary_page_offset);
-                }
-                printf("Page headers for Row group #%zd, Column #%zd:\n", i, j);
-                do
-                {
-                    parquet::PageHeader page_hdr;
-                    int32_t num_values = 0;
-
-                    cp.init(raw + page_offset, (size_t)(col->meta_data.data_page_offset + col->meta_data.total_compressed_size - page_offset));
-                    if (cp.read(&page_hdr))
-                    {
-                        //printf(" page_type = %d, uncompressed_size = %d, compressed_size = %d\n", page_hdr.type, page_hdr.uncompressed_page_size, page_hdr.compressed_page_size);
-                        switch (page_hdr.type)
-                        {
-                        case parquet::DATA_PAGE:
-                            num_values = page_hdr.data_page_header.num_values;
-                            /*if (page_hdr.data_page_header.encoding == parquet::PLAIN_DICTIONARY)
-                            {
-                                printf(" Data page(%d bytes): num_values = %d, encoding=%d (def:%d, rep:%d)\n", page_hdr.uncompressed_page_size, page_hdr.data_page_header.num_values, page_hdr.data_page_header.encoding, page_hdr.data_page_header.definition_level_encoding, page_hdr.data_page_header.repetition_level_encoding);
-                                printf("data bytes = %02x.%02x.%02x.%02x.%02x.%02x...\n", raw[page_offset+cp.bytecount()], raw[page_offset + cp.bytecount() + 1], raw[page_offset + cp.bytecount() + 2], raw[page_offset + cp.bytecount() + 3], raw[page_offset + cp.bytecount() + 4], raw[page_offset + cp.bytecount() + 5]);
-                                printf("             %02x.%02x.%02x.%02x.%02x.%02x...\n", raw[page_offset + cp.bytecount() + 6], raw[page_offset + cp.bytecount() + 7], raw[page_offset + cp.bytecount() + 8], raw[page_offset + cp.bytecount() + 9], raw[page_offset + cp.bytecount() + 10], raw[page_offset + cp.bytecount() + 11]);
-                            }*/
-                            if (file_md.schema[col->schema_idx].max_definition_level > 0)
-                            {
-                                switch (page_hdr.data_page_header.definition_level_encoding)
-                                {
-                                case parquet::RLE:
-                                case parquet::BIT_PACKED:
-                                    break;
-                                default:
-                                    printf("Invalid encoding type for definition levels\n");
-                                    break;
-                                }
-
-                            }
-                            break;
-                        case parquet::DICTIONARY_PAGE:
-                            printf(" Dictionary page: num_values = %d, encoding = %d\n", page_hdr.dictionary_page_header.num_values, page_hdr.dictionary_page_header.encoding);
-                            break;
-                        default:
-                            printf(" <unsupported page type %d>\n", (int)page_hdr.type);
-                        }
-                        page_offset += cp.bytecount() + page_hdr.compressed_page_size;
-                    }
-                    else
-                    {
-                        printf(" <failed to read page header>\n");
-                        break;
-                    }
-                    if (num_values < 0)
-                    {
-                        break;
-                    }
-                    values_remaining -= num_values;
-                    page_count++;
-
-                } while (values_remaining > 0);
-                printf(" -> %d pages, %zd/%zd values\n", page_count, (size_t)(col->meta_data.num_values - values_remaining), (size_t)col->meta_data.num_values);
-            }
-        }
     }
 
     RMM_FREE(str_dict_index, 0);
