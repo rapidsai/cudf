@@ -36,6 +36,7 @@
 - PR #947 Prefixsum to handle nulls and float types
 - PR #1029 Remove rest of relative path imports
 - PR #1021 Add filtered selection with assignment for Dataframes
+- PR #872 Adding NVCategory support to cudf apis
 
 ## Improvements
 
@@ -63,7 +64,6 @@
 - PR #1047 Adding gdf_dtype_extra_info to gdf_column_view_augmented
 - PR #1054 Added default ctor to SerialTrieNode to overcome Thrust issue in CentOS7 + CUDA10
 - PR #1024 CSV Reader: Add support for hexadecimal integers in integral-type columns
-- PR #872 Adding NVCategory support to cudf apis
 
 ## Bug Fixes
 
