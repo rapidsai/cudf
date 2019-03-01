@@ -61,7 +61,8 @@ struct page_state_s {
     int32_t valid_map_offset;       // offset in valid_map, in bits
     int32_t first_row;
     int32_t num_rows;
-    int32_t dtype_len;
+    int32_t dtype_len;              // Output data type
+    int32_t dtype_len_in;           // Can be larger than dtype_len if truncating 32-bit into 8-bit
     int32_t dict_bits;              // # of bits to store dictionary indices
     uint32_t dict_run;
     int32_t dict_val;
@@ -529,7 +530,7 @@ __device__ void gpuDecodeValues(volatile page_state_s *s, int t)
             {
                 // Read and store the value
                 unsigned int len = s->dtype_len;
-                unsigned int dict_pos = dict_idx * len;
+                unsigned int dict_pos = dict_idx * s->dtype_len_in;
                 uint8_t *dst8 = s->data_out;
                 if (dst8)
                 {
@@ -628,6 +629,7 @@ gpuDecodePageData(PageInfo *pages, ColumnChunkDesc *chunks, int32_t num_pages, i
             uint8_t *cur = s->page.compressed_page_data;
             uint8_t *end = cur + s->page.uncompressed_page_size;
             size_t page_start_row = s->col.start_row + s->page.chunk_row;
+            uint32_t dtype_len_out = s->col.data_type >> 3;
             // Validate data type
             switch(s->col.data_type & 7)
             {
@@ -649,9 +651,18 @@ gpuDecodePageData(PageInfo *pages, ColumnChunkDesc *chunks, int32_t num_pages, i
                 s->dtype_len = sizeof(nvstrdesc_s);
                 break;
             default: // FIXED_LEN_BYTE_ARRAY:
-                s->dtype_len = s->col.data_type >> 3;
+                s->dtype_len = dtype_len_out;
                 s->error |= (s->dtype_len <= 0);
                 break;
+            }
+            // Special check for downconversions
+            s->dtype_len_in = s->dtype_len;
+            if ((s->col.data_type & 7) == INT32)
+            {
+                if (dtype_len_out == 1)
+                    s->dtype_len = 1; // INT8 output
+                if (dtype_len_out == 2)
+                    s->dtype_len = 2; // INT16 output
             }
             // Setup local valid map and compute first & num rows relative to the current page
             s->data_out = reinterpret_cast<uint8_t *>(s->col.column_data_base);
