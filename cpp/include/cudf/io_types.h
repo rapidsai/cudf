@@ -36,8 +36,8 @@ typedef enum
    */
 typedef enum 
 {
-  QUOTE_MINIMAL,                            ///< Quote all fields; enable quotation when parsing.
-  QUOTE_ALL,                                ///< Only quote those fields which contain special characters; enable quotation when parsing.
+  QUOTE_MINIMAL,                            ///< Only quote those fields which contain special characters; enable quotation when parsing.
+  QUOTE_ALL,                                ///< Quote all fields; enable quotation when parsing.
   QUOTE_NONNUMERIC,                         ///< Quote all non-numeric fields; enable quotation when parsing.
   QUOTE_NONE                                ///< Never quote fields; disable quotation when parsing.
 } gdf_csv_quote_style;
