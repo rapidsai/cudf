@@ -159,10 +159,6 @@ __device__ uint32_t InitLevelSection(page_state_s *s, const uint8_t *cur, const 
         s->error = 3;
         len = 0;
     }
-    if (cur + (uint32_t)len > end)
-    {
-        s->error = 4;
-    }
     return (uint32_t)len;
 }
 
