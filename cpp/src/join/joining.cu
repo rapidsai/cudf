@@ -22,6 +22,7 @@
 #include "cudf.h"
 #include "rmm/rmm.h"
 #include "utilities/error_utils.h"
+#include "utilities/type_dispatcher.hpp"
 #include "dataframe/cudf_table.cuh"
 #include "utilities/nvtx/nvtx_utils.h"
 
@@ -119,6 +120,17 @@ gdf_error sort_join_typed(gdf_column *leftcol, gdf_column *rightcol,
   return err;
 }
 
+template <JoinType join_type>
+struct sort_join_typed_functor{
+  template <typename T>
+  gdf_error operator()(gdf_column *leftcol, gdf_column *rightcol,
+                       gdf_column *l_result, gdf_column *r_result,
+                       gdf_context *ctxt)
+  {
+    return sort_join_typed<join_type, T>(leftcol, rightcol, l_result, r_result, ctxt);
+  }
+};
+
 /* --------------------------------------------------------------------------*/
 /** 
  * @brief  Computes the join operation between a single left and single right column
@@ -144,18 +156,9 @@ gdf_error sort_join(gdf_column *leftcol, gdf_column *rightcol,
 
   if(GDF_SORT != ctxt->flag_method) return GDF_INVALID_API_CALL;
 
-  switch ( leftcol->dtype ){
-    case GDF_INT8:      return sort_join_typed<join_type, int8_t>(leftcol, rightcol, l_result, r_result, ctxt);
-    case GDF_INT16:     return sort_join_typed<join_type,int16_t>(leftcol, rightcol, l_result, r_result, ctxt);
-    case GDF_INT32:     return sort_join_typed<join_type,int32_t>(leftcol, rightcol, l_result, r_result, ctxt);
-    case GDF_INT64:     return sort_join_typed<join_type,int64_t>(leftcol, rightcol, l_result, r_result, ctxt);
-    case GDF_FLOAT32:   return sort_join_typed<join_type,int32_t>(leftcol, rightcol, l_result, r_result, ctxt);
-    case GDF_FLOAT64:   return sort_join_typed<join_type,int64_t>(leftcol, rightcol, l_result, r_result, ctxt);
-    case GDF_DATE32:    return sort_join_typed<join_type,int32_t>(leftcol, rightcol, l_result, r_result, ctxt);
-    case GDF_DATE64:    return sort_join_typed<join_type,int64_t>(leftcol, rightcol, l_result, r_result, ctxt);
-    case GDF_TIMESTAMP: return sort_join_typed<join_type,int64_t>(leftcol, rightcol, l_result, r_result, ctxt);
-    default: return GDF_UNSUPPORTED_DTYPE;
-  }
+  return cudf::type_dispatcher(leftcol->dtype,
+                               sort_join_typed_functor<join_type>{},
+                               leftcol, rightcol, l_result, r_result, ctxt);
 }
 
 template
