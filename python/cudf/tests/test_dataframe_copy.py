@@ -7,7 +7,7 @@ import pandas as pd
 from numba import cuda
 
 from cudf.dataframe.dataframe import DataFrame
-from .utils import assert_eq
+from cudf.tests.utils import assert_eq
 
 """
 DataFrame copy expectations
@@ -151,7 +151,9 @@ def test_kernel_deep_copy():
     gdf = DataFrame.from_pandas(pdf)
     cdf = gdf.copy(deep=True)
     sr = gdf['b']
-    add_one[1, len(sr)](sr.to_gpu_array())
+    # column.to_gpu_array calls to_dense_buffer which returns a copy
+    # need to access buffer directly and then call gpu_array
+    add_one[1, len(sr)](sr.data.to_gpu_array())
     assert not gdf.to_string().split() == cdf.to_string().split()
 
 

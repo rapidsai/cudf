@@ -222,7 +222,8 @@ class Groupby(object):
         segs = sr_segs.to_array()
 
         for k in self._by:
-            outdf[k] = grouped_df[k].take(sr_segs.to_gpu_array()).reset_index()
+            outdf[k] = grouped_df[k].take(sr_segs.to_gpu_array())\
+                                    .reset_index(drop=True)
 
         size = len(outdf)
 
@@ -230,7 +231,7 @@ class Groupby(object):
         for k, infos in functors_mapping.items():
             values = defaultdict(lambda: np.zeros(size, dtype=np.float64))
             begin = segs
-            sr = grouped_df[k].reset_index()
+            sr = grouped_df[k].reset_index(drop=True)
             for newk, functor in infos.items():
                 if functor.__name__ == 'mean':
                     dev_begins = rmm.to_device(np.asarray(begin))
@@ -294,7 +295,7 @@ class Groupby(object):
             return _dfsegs_pack(df=df, segs=Buffer(np.asarray([])))
         # Prepare dataframe
         orig_df = df.copy()
-        df = df.loc[:, levels].reset_index()
+        df = df.loc[:, levels].reset_index(drop=True)
         rowid_column = '__cudf.groupby.rowid'
         df[rowid_column] = df.index.as_column()
 
@@ -402,7 +403,7 @@ class Groupby(object):
         and store the new columns into *out_df*
         """
         for k in src_df.columns:
-            col = src_df[k].reset_index()
+            col = src_df[k].reset_index(drop=True)
             newcol = col.take(reordering_indices, ignore_index=True)
             out_df[k] = newcol
         return out_df
