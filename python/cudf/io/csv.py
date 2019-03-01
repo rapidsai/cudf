@@ -29,19 +29,15 @@ def is_file_like(obj):
 
 
 _quoting_enum = {
-    'minimal': libgdf.QUOTE_MINIMAL,
     0: libgdf.QUOTE_MINIMAL,
-    'all': libgdf.QUOTE_ALL,
     1: libgdf.QUOTE_ALL,
-    'nonnumeric': libgdf.QUOTE_NONNUMERIC,
     2: libgdf.QUOTE_NONNUMERIC,
-    'none': libgdf.QUOTE_NONE,
     3: libgdf.QUOTE_NONE,
 }
 
 
 def read_csv(filepath_or_buffer, lineterminator='\n',
-             quotechar='"', quoting='minimal', doublequote=True,
+             quotechar='"', quoting=0, doublequote=True,
              header='infer',
              mangle_dupe_cols=True, usecols=None,
              sep=',', delimiter=None, delim_whitespace=False,
@@ -76,10 +72,10 @@ def read_csv(filepath_or_buffer, lineterminator='\n',
         or a dictionary with column_name:dtype (pandas style).
     quotechar : char, default '"'
         Character to indicate start and end of quote item.
-    quoting : str or int, default 'minimal'
-        Controls quoting behavior. Set to one of 'minimal'(0), 'all'(1),
-        'nonnumeric'(2) or 'none'(3). Setting to 3 or 'none' disables
-        quoting. Quoting is enabled with all other values.
+    quoting : str or int, default 0
+        Controls quoting behavior. Set to one of 
+        0(QUOTE_MINIMAL), 1(QUOTE_ALL), 2(QUOTE_NONNUMERIC) or 3(QUOTE_NONE).
+        Quoting is enabled with all values except 3.
     doublequote : bool, default True
         When quoting is enabled, indicates whether to interpret two
         consecutive quotechar inside fields as single quotechar
@@ -393,7 +389,7 @@ def read_csv(filepath_or_buffer, lineterminator='\n',
 
 
 def read_csv_strings(filepath_or_buffer, lineterminator='\n',
-                     quotechar='"', quoting='minimal', doublequote=True,
+                     quotechar='"', quoting=0, doublequote=True,
                      header='infer',
                      sep=',', delimiter=None, delim_whitespace=False,
                      skipinitialspace=False, names=None, dtype=None,
