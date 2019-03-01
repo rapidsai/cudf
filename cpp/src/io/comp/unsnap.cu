@@ -41,12 +41,8 @@
 
 struct unsnap_batch_s
 {
-    int32_t len;    // 1..64 = Number of bytes to copy at given offset, 65..97 = Number of literal bytes
-    union
-    {
-        uint32_t offset;        // offset for copy
-        uint8_t literals[32];   // literal bytes for literal batch
-    } u;
+    int32_t len;        // 1..64 = Number of bytes to copy at given offset, 65..97 = Number of literal bytes
+    uint32_t offset;    // copy distance or absolute literal offset in byte stream
 };
 
 
@@ -59,7 +55,7 @@ struct unsnap_queue_s
 
 struct unsnap_state_s
 {
-    const uint8_t *cur;
+    const uint8_t *base;
     const uint8_t *end;
     uint32_t uncompressed_size;
     uint32_t bytes_left;
@@ -71,7 +67,7 @@ struct unsnap_state_s
 
 __device__ uint32_t snappy_decode_symbols(unsnap_state_s *s)
 {
-    const uint8_t *bs = s->cur;
+    const uint8_t *bs = s->base;
     uint32_t cur = 0;
     uint32_t end = (uint32_t)min((size_t)(s->end - bs), (size_t)0xffffffffu);
     uint32_t bytes_left = s->uncompressed_size;
@@ -108,9 +104,9 @@ __device__ uint32_t snappy_decode_symbols(unsnap_state_s *s)
                     }
                     blen = (blen >> 2) + 1;
                     is_literal = 0;
-                    if (offset > dst_pos)
+                    if (offset - 1u >= dst_pos)
                         break;
-                    b->u.offset = offset;
+                    b->offset = offset;
                 }
                 else
                 {
@@ -123,9 +119,9 @@ __device__ uint32_t snappy_decode_symbols(unsnap_state_s *s)
                         offset = ((blen & 0xe0) << 3) | bs[cur++];
                         blen = ((blen >> 2) & 7) + 4;
                         is_literal = 0;
-                        if (offset > dst_pos)
+                        if (offset - 1u >= dst_pos)
                             break;
-                        b->u.offset = offset;
+                        b->offset = offset;
                     }
                     else
                     {
@@ -164,10 +160,7 @@ __device__ uint32_t snappy_decode_symbols(unsnap_state_s *s)
                 blen = min(lit_len, 32);
                 lit_len -= blen;
                 is_literal = 64;
-                for (uint32_t i = 0; i < blen; i++)
-                {
-                    b->u.literals[i] = bs[cur+i];
-                }
+                b->offset = cur;
                 cur += blen;
             }
             dst_pos += blen;
@@ -204,6 +197,7 @@ __device__ uint32_t snappy_decode_symbols(unsnap_state_s *s)
 // NOTE: No error checks at this stage (WARP0 responsible for not sending offsets and lengths that would result in out-of-bounds accesses)
 __device__ void snappy_process_symbols(unsnap_state_s *s, int t)
 {
+    const uint8_t *literal_base = s->base;
     uint8_t *out = reinterpret_cast<uint8_t *>(s->in.dstDevice);
     int batch = 0;
 
@@ -231,10 +225,10 @@ __device__ void snappy_process_symbols(unsnap_state_s *s, int t)
         for (int i = 0; i < batch_len; i++, b++)
         {
             int blen = b->len;
+            uint32_t dist = b->offset;
             if (blen <= 64)
             {
                 // Copy
-                uint32_t dist = b->u.offset;
                 if (t < blen)
                 {
                     uint32_t pos = t;
@@ -256,7 +250,7 @@ __device__ void snappy_process_symbols(unsnap_state_s *s, int t)
                 blen -= 64;
                 if (t < blen)
                 {
-                    out[t] = b->u.literals[t];
+                    out[t] = literal_base[dist + t];
                 }
             }
             out += blen;
@@ -325,7 +319,7 @@ unsnap_kernel(gpu_inflate_input_s *inputs, gpu_inflate_status_s *outputs, int co
             }
             s->uncompressed_size = uncompressed_size;
             s->bytes_left = uncompressed_size;
-            s->cur = cur;
+            s->base = cur;
             s->end = end;
             if ((cur >= end && uncompressed_size != 0) || (uncompressed_size > s->in.dstSize))
             {
@@ -371,7 +365,7 @@ unsnap_kernel(gpu_inflate_input_s *inputs, gpu_inflate_status_s *outputs, int co
 cudaError_t __host__ gpu_unsnap(gpu_inflate_input_s *inputs, gpu_inflate_status_s *outputs, int count, cudaStream_t stream)
 {
     uint32_t count32 = (count > 0) ? count : 0;
-    dim3 dim_block(128, 1);      // 2 warps per stream, 2 streams per block
+    dim3 dim_block(128, 1);     // 4 warps per stream, 1 stream per block
     dim3 dim_grid(count32, 1);  // TODO: Check max grid dimensions vs max expected count
 
     unsnap_kernel << < dim_grid, dim_block, 0, stream >> >(inputs, outputs, count32);

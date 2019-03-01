@@ -551,11 +551,19 @@ __device__ void gpuDecodeValues(volatile page_state_s *s, int t)
                         ofs <<= 3;      // bytes -> bits
                         for (unsigned int i = 0; i < len; i += 4)
                         {
-                            uint32_t bytebuf = (dict_pos < dict_size) ? *(const uint32_t *)(src8 + dict_pos) : 0;
-                            if (ofs)
+                            uint32_t bytebuf;
+                            if (dict_pos < dict_size)
                             {
-                                uint32_t bytebufnext = (dict_pos + 4 < dict_size) ? *(const uint32_t *)(src8 + dict_pos + 4) : 0;
-                                bytebuf = __funnelshift_r(bytebuf, bytebufnext, ofs);
+                                bytebuf = *(const uint32_t *)(src8 + dict_pos);
+                                if (ofs)
+                                {
+                                    uint32_t bytebufnext = *(const uint32_t *)(src8 + dict_pos + 4);
+                                    bytebuf = __funnelshift_r(bytebuf, bytebufnext, ofs);
+                                }
+                            }
+                            else
+                            {
+                                bytebuf = 0;
                             }
                             dict_pos += 4;
                             *(uint32_t *)(dst8 + i) = bytebuf;
