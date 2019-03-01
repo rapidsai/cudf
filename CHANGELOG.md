@@ -100,6 +100,7 @@
 - PR #1044 CSV Reader: Fix a segfault when byte range aligns with a page
 - PR #1058 Added support for `DataFrame.loc[scalar]`
 - PR #1060 Fix column creation with all valid nan values
+- PR #1073 CSV Reader: Fix an issue where a column name includes the return character
 
 
 # cuDF 0.5.1 (05 Feb 2019)

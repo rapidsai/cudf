@@ -685,21 +685,19 @@ def test_csv_reader_filenotfound(tmpdir):
 
 
 def test_csv_reader_carriage_return(tmpdir):
-
-    fname = tmpdir.mkdir("gdf_csv").join("tmp_csvreader_file16.csv")
-
     rows = 1000
+    names = ['int_row', 'int_double_row']
 
-    with open(str(fname), 'w') as fp:
-        for i in range(rows):
-            fp.write(str(i) + ', ' + str(2*i) + '\r\n')
+    buffer = ','.join(names) + '\r\n'
+    for row in range(rows):
+        buffer += str(row) + ', ' + str(2*row) + '\r\n'
 
-    df = read_csv(str(fname), names=["int1", "int2"])
+    df = read_csv(StringIO(buffer))
 
     assert(len(df) == rows)
     for row in range(0, rows):
-        assert(df['int1'][row] == row)
-        assert(df['int2'][row] == 2 * row)
+        assert(df[names[0]][row] == row)
+        assert(df[names[1]][row] == 2 * row)
 
 
 def test_csv_reader_bzip2_compression(tmpdir):
