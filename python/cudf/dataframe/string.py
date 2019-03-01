@@ -51,7 +51,7 @@ class StringMethods(object):
         out_dev_arr = rmm.device_array(len(self._parent), dtype='int32')
         ptr = get_ctype_ptr(out_dev_arr)
         self._parent.data.len(ptr)
-        return Series(out_dev_arr)
+        return Series(out_dev_arr, index=self._index)
 
     def cat(self, others=None, sep=None, na_rep=None):
         """
@@ -94,9 +94,11 @@ class StringMethods(object):
         if isinstance(others, (Series, Index)):
             assert others.dtype == np.dtype('str')
             others = others.data
-        out = Series(self._parent.data.cat(others=others, sep=sep,
-                                           na_rep=na_rep))
-        if len(out) == 1:
+        out = Series(
+            self._parent.data.cat(others=others, sep=sep, na_rep=na_rep),
+            index=self._index
+        )
+        if len(out) == 1 and others is None:
             out = out[0]
         return out
 

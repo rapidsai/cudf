@@ -13,6 +13,46 @@ from cudf.tests.utils import assert_eq
 from librmm_cffi import librmm as rmm
 
 
+data_list = [
+    ['a', 'b', 'c', 'd', 'e'],
+    ['a', None, 'c', None, 'e'],
+    [None, None, None, None, None]
+]
+
+data_id_list = [
+    "no_nulls",
+    "some_nulls",
+    "all_nulls"
+]
+
+idx_list = [
+    None,
+    [10, 11, 12, 13, 14]
+]
+
+idx_id_list = [
+    "None_index",
+    "Set_index"
+]
+
+
+@pytest.fixture(params=data_list, ids=data_id_list)
+def data(request):
+    return request.param
+
+
+@pytest.fixture(params=idx_list, ids=idx_id_list)
+def index(request):
+    return request.param
+
+
+@pytest.fixture
+def ps_gs(data, index):
+    ps = pd.Series(data, index=index)
+    gs = Series(data, index=index)
+    return (ps, gs)
+
+
 @pytest.mark.parametrize('construct', [list, np.array, pd.Series, pa.array])
 def test_string_ingest(construct):
     expect = ['a', 'a', 'b', 'c', 'a']
@@ -20,12 +60,12 @@ def test_string_ingest(construct):
     got = Series(data)
     assert got.dtype == np.dtype('str')
     assert len(got) == 5
+    for idx, val in enumerate(expect):
+        assert expect[idx] == got[idx]
 
 
-def test_string_export():
-    data = ['a', 'a', 'b', 'c', 'a']
-    ps = pd.Series(data)
-    gs = Series(data)
+def test_string_export(ps_gs):
+    ps, gs = ps_gs
 
     expect = ps
     got = gs.to_pandas()
@@ -64,10 +104,8 @@ def test_string_export():
         rmm.to_device(np.random.randint(0, 2, 5).astype('bool'))
     ]
 )
-def test_string_get_item(item):
-    data = ['a', 'b', 'c', 'd', 'e']
-    ps = pd.Series(data)
-    gs = Series(data)
+def test_string_get_item(ps_gs, item):
+    ps, gs = ps_gs
 
     got = gs[item]
     if isinstance(got, Series):
@@ -85,10 +123,8 @@ def test_string_get_item(item):
 
 
 @pytest.mark.parametrize('item', [0, slice(1, 3), slice(5)])
-def test_string_repr(item):
-    data = ['a', 'b', 'c', 'd', 'e']
-    ps = pd.Series(data)
-    gs = Series(data)
+def test_string_repr(ps_gs, item):
+    ps, gs = ps_gs
 
     got_out = gs[item]
     expect_out = ps[item]
@@ -129,5 +165,42 @@ def test_string_concat():
 
     expect = pd.concat([ps1, ps2])
     got = concat([gs1, gs2])
+
+    assert_eq(expect, got)
+
+
+def test_string_len(ps_gs):
+    ps, gs = ps_gs
+
+    expect = ps.str.len()
+    got = gs.str.len()
+
+    assert_eq(expect, got)
+
+
+@pytest.mark.parametrize('others', [
+    None,
+    ['f', 'g', 'h', 'i', 'j'],
+    pd.Series(['f', 'g', 'h', 'i', 'j'])
+])
+@pytest.mark.parametrize('sep', [None, '', ' ', '|', ',', '|||'])
+@pytest.mark.parametrize('na_rep', [None, '', 'null', 'a'])
+def test_string_cat(ps_gs, others, sep, na_rep):
+    ps, gs = ps_gs
+
+    expect = ps.str.cat(others=others, sep=sep, na_rep=na_rep)
+    if isinstance(others, pd.Series):
+        others = Series(others)
+    got = gs.str.cat(others=others, sep=sep, na_rep=na_rep)
+
+    assert_eq(expect, got)
+
+
+@pytest.mark.parametrize('sep', [None, '', ' ', '|', ',', '|||'])
+def test_string_join(data, sep):
+    ps, gs = ps_gs
+
+    expect = ps.str.join(sep)
+    got = gs.str.join(sep)
 
     assert_eq(expect, got)
