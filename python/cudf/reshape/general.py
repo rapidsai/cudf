@@ -43,7 +43,6 @@ def melt(frame, id_vars=None, value_vars=None, var_name='variable',
     --------
     >>> import cudf
     >>> import numpy as np
-
     >>> df = cudf.DataFrame({'A': {0: 1, 1: 1, 2: 5},
     ...                      'B': {0: 1, 1: 3, 2: 6},
     ...                      'C': {0: 1.0, 1: np.nan, 2: 4.0},

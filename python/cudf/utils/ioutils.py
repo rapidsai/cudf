@@ -17,7 +17,6 @@ DataFrame
 Examples
 --------
 >>> import cudf
-
 >>> df = cudf.read_parquet(filename)
 >>> df
   num1                datetime text
@@ -75,7 +74,6 @@ DataFrame
 Examples
 --------
 >>> import cudf
-
 >>> df = cudf.read_orc(filename)
 >>> df
   num1                datetime text

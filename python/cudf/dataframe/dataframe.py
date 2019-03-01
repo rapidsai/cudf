@@ -63,12 +63,14 @@ class DataFrame(object):
     >>> from datetime import datetime, timedelta
     >>> ids = np.arange(5)
 
-    >>> # Create some datetime data
+    Create some datetime data
+
     >>> t0 = datetime.strptime('2018-10-07 12:00:00', '%Y-%m-%d %H:%M:%S')
     >>> datetimes = [(t0+ timedelta(seconds=x)) for x in range(5)]
     >>> dts = np.array(datetimes, dtype='datetime64')
 
-    >>> # Create the GPU DataFrame
+    Create the GPU DataFrame
+
     >>> df = cudf.DataFrame([('id', ids), ('datetimes', dts)])
     >>> df
         id                datetimes
@@ -182,7 +184,6 @@ class DataFrame(object):
         1  1  1  1
         2  2  2  2
         3  3  3  3
-
         >>> print(df[-5:])  # get last 5 rows of all columns
             a   b   c
         15  15  15  15
@@ -190,7 +191,6 @@ class DataFrame(object):
         17  17  17  17
         18  18  18  18
         19  19  19  19
-
         >>> print(df[['a', 'c']]) # get columns a and c
            a  c
         0  0  0
@@ -203,7 +203,6 @@ class DataFrame(object):
         7  7  7
         8  8  8
         9  9  9
-
         >>> print(df[[True, False, True, False]]) # mask the entire dataframe,
         # returning the rows specified in the boolean mask
         """
@@ -285,7 +284,6 @@ class DataFrame(object):
 
         Examples
         --------
-
         >>> import cudf
         >>> df = cudf.DataFrame()
         >>> df = df.assign(a=[0, 1, 2], b=[3, 4, 5])
@@ -306,7 +304,6 @@ class DataFrame(object):
 
         Examples
         --------
-
         >>> import cudf
         >>> df = cudf.DataFrame()
         >>> df['key'] = [0, 1, 2, 3, 4]
@@ -557,19 +554,16 @@ class DataFrame(object):
         >>> df = DataFrame([('a', list(range(20))),
         ...                 ('b', list(range(20))),
         ...                 ('c', list(range(20)))])
-
         >>> df.iloc[1]  # get the row from index 1st
         a    1
         b    1
         c    1
-
         >>> df.iloc[[0, 2, 9, 18]]  # get the rows from indices 0,2,9 and 18.
               a    b    c
          0    0    0    0
          2    2    2    2
          9    9    9    9
         18   18   18   18
-
         >>> df.iloc[3:10:2]  # get the rows using slice indices
              a    b    c
         3    3    3    3
@@ -779,12 +773,10 @@ class DataFrame(object):
         Examples
         --------
         >>> import cudf
-
         >>> df = cudf.DataFrame()
         >>> df['key'] = [0, 1, 2, 3, 4]
         >>> df['val'] = [float(i + 10) for i in range(5)]
         >>> df_new = df.drop('val')
-
         >>> print(df)
            key   val
         0    0  10.0
@@ -792,7 +784,6 @@ class DataFrame(object):
         2    2  12.0
         3    3  13.0
         4    4  14.0
-
         >>> print(df_new)
            key
         0    0
@@ -981,7 +972,6 @@ class DataFrame(object):
         --------
         >>> import pandas as pd
         >>> import cudf
-
         >>> pet_owner = [1, 2, 3, 4, 5]
         >>> pet_type = ['fish', 'dog', 'fish', 'bird', 'fish']
         >>> df = pd.DataFrame({'pet_owner': pet_owner, 'pet_type': pet_type})
@@ -1237,11 +1227,9 @@ class DataFrame(object):
         Examples
         --------
         >>> import cudf
-
         >>> df_a = cudf.DataFrame()
         >>> df_a['key'] = [0, 1, 2, 3, 4]
         >>> df_a['vals_a'] = [float(i + 10) for i in range(5)]
-
         >>> df_b = cudf.DataFrame()
         >>> df_b['key'] = [1, 2, 4]
         >>> df_b['vals_b'] = [float(i+10) for i in range(3)]
@@ -1601,7 +1589,6 @@ class DataFrame(object):
         Examples
         --------
         >>> import cudf
-
         >>> a = ('a', [1, 2, 2])
         >>> b = ('b', [3, 4, 5])
         >>> df = cudf.DataFrame([a, b])
@@ -1615,7 +1602,6 @@ class DataFrame(object):
 
         >>> import numpy as np
         >>> import datetime
-
         >>> df = cudf.DataFrame()
         >>> data = np.array(['2018-10-07', '2018-10-08'], dtype='datetime64')
         >>> df['datetimes'] = data
@@ -1665,7 +1651,6 @@ class DataFrame(object):
 
         >>> import cudf
         >>> import numpy as np
-
         >>> df = cudf.DataFrame()
         >>> nelem = 3
         >>> df['in1'] = np.arange(nelem)
@@ -1677,7 +1662,6 @@ class DataFrame(object):
         >>> in1 = df['in1']
         >>> in2 = df['in2']
         >>> in3 = df['in3']
-
         >>> def kernel(in1, in2, in3, out1, out2, kwarg1, kwarg2):
         ...     for i, (x, y, z) in enumerate(zip(in1, in2, in3)):
         ...         out1[i] = kwarg2 * x - kwarg1 * y
@@ -1730,7 +1714,6 @@ class DataFrame(object):
         function can be used with any *tpb* in a efficient manner.
 
         >>> from numba import cuda
-
         >>> @cuda.jit
         ... def kernel(in1, in2, in3, out1):
         ...      for i in range(cuda.threadIdx.x, in1.size, cuda.blockDim.x):
@@ -1852,7 +1835,6 @@ class DataFrame(object):
         >>> a = ('a', [0, 1, 2])
         >>> b = ('b', [-3, 2, 0])
         >>> df = cudf.DataFrame([a, b])
-
         >>> type(df.to_pandas())
         <class 'pandas.core.frame.DataFrame'>
         """
@@ -1875,7 +1857,6 @@ class DataFrame(object):
         --------
         >>> import cudf
         >>> import pandas as pd
-
         >>> data = [[0,1], [1,2], [3,4]]
         >>> pdf = pd.DataFrame(data, columns=['a', 'b'], dtype=int)
         >>> cudf.from_pandas(pdf)
@@ -1899,7 +1880,6 @@ class DataFrame(object):
         Examples
         --------
         >>> import cudf
-
         >>> a = ('a', [0, 1, 2])
         >>> b = ('b', [-3, 2, 0])
         >>> df = cudf.DataFrame([a, b])
@@ -1958,7 +1938,6 @@ class DataFrame(object):
         --------
         >>> import pyarrow as pa
         >>> import cudf
-
         >>> data = [pa.array([1, 2, 3]), pa.array([4, 5, 6])]
         >>> batch = pa.RecordBatch.from_arrays(data, ['f0', 'f1'])
         >>> table = pa.Table.from_batches([batch])
@@ -2288,7 +2267,6 @@ def from_pandas(obj):
     --------
     >>> import cudf
     >>> import pandas as pd
-
     >>> data = [[0, 1], [1, 2], [3, 4]]
     >>> pdf = pd.DataFrame(data, columns=['a', 'b'], dtype=int)
     >>> cudf.from_pandas(pdf)

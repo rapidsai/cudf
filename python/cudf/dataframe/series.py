@@ -292,7 +292,6 @@ class Series(object):
         Examples
         --------
         >>> import cudf
-
         >>> ser = cudf.Series([4, 3, 2, 1, 0])
         >>> print(ser.tail(2))
         3    1
@@ -593,21 +592,23 @@ class Series(object):
         Examples
         --------
         >>> import cudf
-
         >>> sr = cudf.Series(list(range(20)))
 
-        >>> # get the value from 1st index
+        Get the value from 1st index
+
         >>> sr.iloc[1]
         1
 
-        >>> # get the values from 0,2,9 and 18th index
+        Get the values from 0,2,9 and 18th index
+
         >>> sr.iloc[0,2,9,18]
          0    0
          2    2
          9    9
         18   18
 
-        >>> # get the values using slice indices
+        Get the values using slice indices
+
         >>> sr.iloc[3:10:2]
         3    3
         5    5

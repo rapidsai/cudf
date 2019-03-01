@@ -130,9 +130,10 @@ def read_csv(filepath_or_buffer, lineterminator='\n',
 
     Examples
     --------
-    >>> import cudf
 
-    >>> # Create a test csv file
+    Create a test csv file
+
+    >>> import cudf
     >>> filename = 'foo.csv'
     >>> lines = [
     ...   "num1,datetime,text",
@@ -140,18 +141,12 @@ def read_csv(filepath_or_buffer, lineterminator='\n',
     ...   "456,2018-11-14T12:35:01,def",
     ...   "789,2018-11-15T18:02:59,ghi"
     ... ]
-
     >>> with open(filename, 'w') as fp:
     ...     fp.write('\\n'.join(lines)+'\\n')
 
-    >>> # Read the file with cudf
-    >>> names = ['num1', 'datetime', 'text']
-    >>> # Note 'int' for 3rd column- text will be hashed
-    >>> dtypes = ['int', 'date', 'int']
-    >>> df = cudf.read_csv(filename, delimiter=',',
-    ...                    names=names, dtype=dtypes,
-    ...                    skiprows=1)
-    >>> df
+    Read the file with ``cudf.read_csv``
+
+    >>> cudf.read_csv(filename)
       num1                datetime text
     0  123 2018-11-13T12:00:00.000 5451
     1  456 2018-11-14T12:35:01.000 5784
@@ -401,9 +396,10 @@ def read_csv_strings(filepath_or_buffer, lineterminator='\n',
 
     Examples
     --------
-    >>> import cudf
 
-    >>> # Create a test csv file
+    Create a test csv file
+
+    >>> import cudf
     >>> filename = 'foo.csv'
     >>> lines = [
     ...   "num1,datetime,text",
@@ -414,29 +410,22 @@ def read_csv_strings(filepath_or_buffer, lineterminator='\n',
     >>> with open(filename, 'w') as fp:
     ...     fp.write('\\n'.join(lines)+'\\n')
 
-    >>> # Read the file with cudf
+    Read the file with cudf
+
     >>> names = ['num1', 'datetime', 'text']
     >>> dtypes = ['int', 'date', 'str']
     >>> columns = cudf.io.csv.read_csv_strings(filename, delimiter=',',
     ...                         names=names, dtype=dtypes,
     ...                         skiprows=1)
-    >>> # Display results
-    >>> columns[0]
+
+    Display results
+
     >>> print(columns[0])
-    >>> columns[2]
+    0  123
+    1  456
+    2  789
     >>> print(columns[2])
-
-    Output:
-
-    .. code-block:: python
-
-      <cudf.Series nrows=3 >
-      0  123
-      1  456
-      2  789
-
-      <nvstrings count=3>
-      ['abc', 'def', 'ghi']
+    ['abc', 'def', 'ghi']
 
     See Also
     --------
