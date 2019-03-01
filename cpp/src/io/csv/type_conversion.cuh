@@ -21,6 +21,8 @@
 #include "utilities/wrapper_types.hpp"
 #include <cuda_runtime_api.h>
 
+#include "utilities/trie.cuh"
+
 /**---------------------------------------------------------------------------*
  * @brief Checks whether the given character is a whitespace character.
  * 
@@ -179,12 +181,64 @@ struct ParseOptions {
   bool doublequote;
   bool dayfirst;
   bool skipblanklines;
-  int32_t* trueValues;
-  int32_t* falseValues;
-  int32_t trueValuesCount;
-  int32_t falseValuesCount;
+  SerialTrieNode* trueValuesTrie;
+  SerialTrieNode* falseValuesTrie;
+  SerialTrieNode* naValuesTrie;
   bool multi_delimiter;
 };
+
+/**
+* @brief Specialization of determineBase for integral types. Checks if the
+* string represents a hex value and updates the starting position if it does.
+*/
+template <typename T,
+typename std::enable_if_t<std::is_integral<T>::value> * = nullptr>
+__host__ __device__ __forceinline__ 
+int determineBase(const char* data, long *start, long end) {
+  // check if this is a hex number
+  if (end - *start >= 2 && data[*start] == '0' && data[*start + 1] == 'x') {
+    *start += 2;
+    return 16;
+  }
+  return 10;
+}
+
+/**
+* @brief Specialization of determineBase for non-integral numeric types.
+* Always returns 10, only decimal floating-point numbers are supported.
+*/
+template <typename T,
+typename std::enable_if_t<!std::is_integral<T>::value> * = nullptr>
+__host__ __device__ __forceinline__ 
+int determineBase(const char* data, long *start, long end) {
+  return 10;
+}
+
+/**
+* @brief Specialization of decodeAsciiDigit for integral types.
+* Handles hexadecimal digits, both uppercase and lowercase.
+*/
+template <typename T,
+typename std::enable_if_t<std::is_integral<T>::value> * = nullptr>
+__host__ __device__ __forceinline__ char decodeAsciiDigit(char d, int base) {
+  if (base == 16) {
+    if (d >= 'a' && d <= 'f')
+      return d - 'a' + 10;
+    if (d >= 'A' && d <= 'F')
+      return d - 'A' + 10;
+  }
+  return d - '0';
+}
+
+/**
+* @brief Specialization of decodeAsciiDigit for non-integral numeric types.
+* Only handles decimal digits.
+*/
+template <typename T,
+typename std::enable_if_t<!std::is_integral<T>::value> * = nullptr>
+__host__ __device__ __forceinline__ char decodeAsciiDigit(char d, int base) {
+  return d - '0';
+}
 
 /**---------------------------------------------------------------------------*
  * @brief Default function for extracting a data value from a character string.
@@ -210,54 +264,52 @@ __host__ __device__ T convertStrToValue(const char* data, long start, long end,
     start++;
   }
 
+  const int base = determineBase<T>(data, &start, end);
+
   // Handle the whole part of the number
   long index = start;
   while (index <= end) {
     if (data[index] == opts.decimal) {
       ++index;
       break;
-    } else if (data[index] == 'e' || data[index] == 'E') {
+    } else if (base == 10 && 
+        (data[index] == 'e' || data[index] == 'E')) {
       break;
     } else if (data[index] != opts.thousands) {
-      value *= 10;
-      value += data[index] - '0';
+      value = (value * base) + decodeAsciiDigit<T>(data[index], base);
     }
     ++index;
   }
 
   if (std::is_floating_point<T>::value) {
     // Handle fractional part of the number if necessary
-    int32_t divisor = 1;
+    double divisor = 1;
     while (index <= end) {
       if (data[index] == 'e' || data[index] == 'E') {
         ++index;
         break;
       } else if (data[index] != opts.thousands) {
-        value *= 10;
-        value += data[index] - '0';
-        divisor *= 10;
+        divisor /= base;
+        value += decodeAsciiDigit<T>(data[index], base) * divisor;
       }
       ++index;
     }
 
     // Handle exponential part of the number if necessary
     int32_t exponent = 0;
+    int32_t exponentsign = 1;
     while (index <= end) {
       if (data[index] == '-') {
-        ++index;
-        exponent = (data[index] - '0') * -1;
+        exponentsign = -1;
+      } else if (data[index] == '+') {
+        exponentsign = 1;
       } else {
-        exponent *= 10;
-        exponent += data[index] - '0';
+        exponent = (exponent * 10) + (data[index] - '0');
       }
       ++index;
     }
-
-    if (divisor > 1) {
-      value /= divisor;
-    }
     if (exponent != 0) {
-      value *= exp10f(exponent);
+      value *= exp10(double(exponent * exponentsign));
     }
   }
 

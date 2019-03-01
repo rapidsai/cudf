@@ -281,7 +281,7 @@ int cpu_inflate(uint8_t *uncomp_data, size_t *destLen, const uint8_t *comp_data,
  * @param strm_type[in] Type of compression of the input data
  * @param dst[out] Vector containing the uncompressed output
  * 
- * @Returns gdf_error with error code on failure, otherwise GDF_SUCCESS
+ * @returns gdf_error with error code on failure, otherwise GDF_SUCCESS
  */
 /* ----------------------------------------------------------------------------*/
 gdf_error io_uncompress_single_h2d(const void *src, gdf_size_type src_size, int strm_type, std::vector<char>& dst)

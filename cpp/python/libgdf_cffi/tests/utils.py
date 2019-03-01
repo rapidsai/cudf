@@ -68,3 +68,17 @@ def buffer_as_bits(data):
 
     binaries = ''.join(fix_binary(bin(x)) for x in bytearray(data))
     return list(map(lambda x: x == '1', binaries))
+
+
+def count_nulls(mask, size):
+    mask_bitsize = 8
+    assert mask.size * mask_bitsize >= size
+    nnz = ffi.new('int*')
+    nnz[0] = 0
+    mask_ptr = unwrap_devary(mask)
+
+    if mask_ptr != ffi.NULL:
+        libgdf.gdf_count_nonzero_mask(mask_ptr, size, nnz)
+
+    return (size - nnz[0])
+

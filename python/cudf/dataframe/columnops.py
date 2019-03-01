@@ -125,7 +125,7 @@ def column_select_by_position(column, positions):
 
     Returns (selected_column, selected_positions)
     """
-    from .numerical import NumericalColumn
+    from cudf.dataframe.numerical import NumericalColumn
     assert column.null_count == 0
 
     selvals = cudautils.gather(column.data.to_gpu_array(),
@@ -139,7 +139,7 @@ def column_select_by_position(column, positions):
 
 
 def build_column(buffer, dtype, mask=None, categories=None):
-    from . import numerical, categorical, datetime
+    from cudf.dataframe import numerical, categorical, datetime
     if dtype == 'datetime64[ms]':
         return datetime.DatetimeColumn(data=buffer,
                                        dtype=np.dtype(dtype),
@@ -263,9 +263,16 @@ def as_column(arbitrary, nan_as_null=True, dtype=None):
             if pd.api.types.is_categorical_dtype(new_dtype):
                 arbitrary = arbitrary.dictionary_encode()
             else:
-                arbitrary = arbitrary.cast(_gdf.np_to_pa_dtype(new_dtype))
-
-            data = as_column(arbitrary)
+                if nan_as_null:
+                    arbitrary = arbitrary.cast(_gdf.np_to_pa_dtype(new_dtype))
+                else:
+                    # casting a null array doesn't make nans valid
+                    # so we create one with valid nans from scratch:
+                    arbitrary = utils.scalar_broadcast_to(
+                        np.nan,
+                        (len(arbitrary),),
+                        dtype=new_dtype)
+            data = as_column(arbitrary, nan_as_null=nan_as_null)
         elif isinstance(arbitrary, pa.DictionaryArray):
             pamask, padata = buffers_from_pyarrow(arbitrary)
             data = categorical.CategoricalColumn(
@@ -366,7 +373,8 @@ def as_column(arbitrary, nan_as_null=True, dtype=None):
                 if dtype is not None:
                     pa_type = _gdf.np_to_pa_dtype(np.dtype(dtype).type)
                 data = as_column(
-                    pa.array(arbitrary, type=pa_type, from_pandas=nan_as_null)
+                    pa.array(arbitrary, type=pa_type, from_pandas=nan_as_null),
+                    nan_as_null=nan_as_null
                 )
             except pa.ArrowInvalid:
                 np_type = None
