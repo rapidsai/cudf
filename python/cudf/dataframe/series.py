@@ -294,7 +294,10 @@ class Series(object):
         """Returns a list of string for each element.
         """
         values = self[:nrows]
-        out = ['' if v is None else str(v) for v in values]
+        if self.dtype == np.dtype('str'):
+            out = [str(v) for v in values]
+        else:
+            out = ['' if v is None else str(v) for v in values]
         return out
 
     def head(self, n=5):

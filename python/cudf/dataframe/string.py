@@ -104,19 +104,10 @@ class StringMethods(object):
 
     def join(self, sep):
         """
-        Concatenate the Series/Index of strings into a single string.
-
-        Parameters
-        ----------
-            sep : str
-                Delimiter to use between string elements.
-
-        Returns
-        -------
-            str
+        Join lists contained as elements in the Series/Index with passed
+        delimiter.
         """
-        from cudf.dataframe import Series
-        return Series(self._parent.data.join(sep=sep))[0]
+        raise NotImplementedError("We don't support nested types yet")
 
 
 class StringColumn(columnops.TypedColumnBase):
