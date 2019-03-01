@@ -2228,7 +2228,7 @@ class DataFrame(object):
 
         Parameters
         ----------
-        data : numpy structured dtype or recarray
+        data : numpy structured dtype or recarray of ndim=2
         index : str
             The name of the index column in *data*.
             If None, the default index is used.
@@ -2239,11 +2239,26 @@ class DataFrame(object):
         -------
         DataFrame
         """
-        names = data.dtype.names if columns is None else columns
+        if data.ndim != 2:
+            raise ValueError("records dimension expected 2 but found {!r}"
+                             .format(data.ndim))
+
+        if columns is None and data.dtype.names is None:
+            names = [i for i in range(data.shape[1])]
+        else:
+            if len(columns) != data.shape[1]:
+                msg = "columns length expected {!r} but found {!r}"
+                raise ValueError(msg.format(data.ndim, len(columns)))
+            names = columns
+
+        if index is not None and len(index) != data.shape[0]:
+            msg = "index length expected {!r} but found {!r}"
+            raise ValueError(msg.format(data.ndim, len(columns)))
+
         df = DataFrame()
-        for k in names:
+        for i, k in enumerate(names):
             # FIXME: unnecessary copy
-            df[k] = Series(np.ascontiguousarray(data[k]),
+            df[k] = Series(np.ascontiguousarray(data[i]),
                            nan_as_null=nan_as_null)
         if index is not None:
             indices = data[index]
