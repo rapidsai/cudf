@@ -64,7 +64,8 @@ class Series(object):
         col = columnops.as_column(data).set_mask(mask, null_count=null_count)
         return cls(data=col)
 
-    def __init__(self, data=None, index=None, name=None, nan_as_null=True):
+    def __init__(self, data=None, index=None, name=None, nan_as_null=True,
+                 dtype=None):
         if isinstance(data, pd.Series):
             name = data.name
             index = as_index(data.index)
@@ -76,10 +77,11 @@ class Series(object):
             data = {}
 
         if not isinstance(data, columnops.TypedColumnBase):
-            data = columnops.as_column(data, nan_as_null=nan_as_null)
+            data = columnops.as_column(data, nan_as_null=nan_as_null,
+                                       dtype=dtype)
 
         if index is not None and not isinstance(index, Index):
-            raise TypeError('index not a Index type: got {!r}'.format(index))
+            index = as_index(index)
 
         assert isinstance(data, columnops.TypedColumnBase)
         self._column = data

@@ -48,8 +48,8 @@ def index(request):
 
 @pytest.fixture
 def ps_gs(data, index):
-    ps = pd.Series(data, index=index)
-    gs = Series(data, index=index)
+    ps = pd.Series(data, index=index, dtype='str')
+    gs = Series(data, index=index, dtype='str')
     return (ps, gs)
 
 
@@ -76,8 +76,10 @@ def test_string_export(ps_gs):
     np.testing.assert_array_equal(expect, got)
 
     expect = pa.Array.from_pandas(ps)
+    print(type(expect))
     print(expect)
     got = gs.to_arrow()
+    print(type(got))
     print(got)
     assert pa.Array.equals(expect, got)
 
@@ -197,7 +199,7 @@ def test_string_cat(ps_gs, others, sep, na_rep):
 
 
 @pytest.mark.parametrize('sep', [None, '', ' ', '|', ',', '|||'])
-def test_string_join(data, sep):
+def test_string_join(ps_gs, sep):
     ps, gs = ps_gs
 
     expect = ps.str.join(sep)

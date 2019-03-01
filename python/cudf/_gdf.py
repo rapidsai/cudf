@@ -164,8 +164,8 @@ def np_to_pa_dtype(dtype):
         np.int8:        pa.int8(),
         np.bool_:       pa.int8(),
         np.datetime64:  pa.date64(),
-        np.object:      pa.string(),
-        np.unicode:     pa.string(),
+        np.object_:      pa.string(),
+        np.unicode_:     pa.string(),
     }[np.dtype(dtype).type]
 
 

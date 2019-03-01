@@ -61,8 +61,8 @@ class Column(object):
 
         # Handle strings separately
         if all(isinstance(o, StringColumn) for o in objs):
-            # TODO implement this logic
-            pass
+            objs = [o._data for o in objs]
+            return StringColumn(data=nvstrings.from_strings(*objs))
 
         # Handle categories for categoricals
         if all(isinstance(o, CategoricalColumn) for o in objs):

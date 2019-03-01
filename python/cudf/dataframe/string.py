@@ -171,6 +171,10 @@ class StringColumn(columnops.TypedColumnBase):
         """ nvstrings object """
         return self._data
 
+    @property
+    def null_count(self):
+        return self._null_count
+
     def element_indexing(self, arg):
         if isinstance(arg, Number):
             arg = int(arg)
@@ -229,8 +233,14 @@ class StringColumn(columnops.TypedColumnBase):
         sbuf = pa.py_buffer(sbuf)
         obuf = pa.py_buffer(obuf)
         nbuf = pa.py_buffer(nbuf)
-        return pa.StringArray.from_buffers(len(self._data), obuf, sbuf, nbuf,
-                                           self._data.null_count())
+        if self.null_count == len(self):
+            return pa.NullArray.from_buffers(
+                pa.null(), len(self), np.empty(0), self.null_count
+            )
+        else:
+            return pa.StringArray.from_buffers(
+                len(self._data), obuf, sbuf, nbuf, self._data.null_count()
+            )
 
     def to_pandas(self, index=None):
         pd_series = self.to_arrow().to_pandas()
@@ -251,11 +261,11 @@ class StringColumn(columnops.TypedColumnBase):
         """
         if fillna is not None:
             warnings.warn("fillna parameter not supported for string arrays")
-        if self.null_count > 0:
-            raise NotImplementedError(
-                "Converting to NumPy array is not yet supported for columns "
-                "with nulls"
-            )
+        # if self.null_count > 0:
+        #     raise NotImplementedError(
+        #         "Converting to NumPy array is not yet supported for columns "
+        #         "with nulls"
+        #     )
         return self.to_arrow().to_pandas()
 
 
