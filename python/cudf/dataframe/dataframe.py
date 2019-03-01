@@ -541,15 +541,15 @@ class DataFrame(object):
         >>> df = DataFrame([('a', list(range(20))),
         ...                 ('b', list(range(20))),
         ...                 ('c', list(range(20)))])
-        
+
         Get the row by index label from 'a' and 'b' columns
-        
+
         >>> df.loc[0, ['a', 'b']]
         a    0
         b    0
-        
+
         Get rows from index 2 to index 5 from 'a' and 'b' columns.
-        
+
         >>> df.loc[2:5, ['a', 'b']]
            a  b
         2  2  2
@@ -558,7 +558,7 @@ class DataFrame(object):
         5  5  5
 
         Get the every 3rd rows from index 2 to 10 from 'a' and 'b'
-        
+
         >>> df.loc[2:10:3, ['a', 'b']]
             a    b
         2   2    2
