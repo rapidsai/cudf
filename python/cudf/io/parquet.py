@@ -7,6 +7,7 @@ from cudf.dataframe.dataframe import DataFrame
 from cudf.dataframe.numerical import NumericalColumn
 from cudf.utils import ioutils
 
+import pyarrow as pa
 import pyarrow.parquet as pq
 import numpy as np
 
@@ -51,7 +52,7 @@ def read_parquet(path, engine='pyarrow', *args, **kwargs):
         if out == ffi.NULL:
             raise ValueError("Failed to parse data")
 
-        # Extract parsed columns
+        # Extract parsed columns and construct dataframe
         outcols = []
         new_names = []
         for i in range(pq_reader.num_cols_out):
@@ -61,10 +62,13 @@ def read_parquet(path, engine='pyarrow', *args, **kwargs):
                 outcols.append(newcol.view(DatetimeColumn, dtype='datetime64[ms]'))
             else:
                 outcols.append(newcol.view(NumericalColumn, dtype=newcol.dtype))
-
         df = DataFrame()
         for k, v in zip(new_names, outcols):
             df[k] = v
+
+        # Set column to use as row indexes if available
+        if pq_reader.index_col != ffi.NULL:
+            df = df.set_index(df.columns[pq_reader.index_col[0]])
     else:
         warnings.warn("Using CPU via PyArrow to read Parquet dataset.")
         pa_table = pq.read_pandas(path, *args, **kwargs)

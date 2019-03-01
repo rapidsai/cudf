@@ -147,9 +147,10 @@ typedef struct {
   /*
    * Output arguments
    */
-  int           num_cols_out;               ///< Out: return the number of columns read in
-  int           num_rows_out;               ///< Out: return the number of rows read in
-  gdf_column    **data;                     ///< Out: return the array of *gdf_columns
+  int           num_cols_out;               ///< Out: Number of columns returned
+  int           num_rows_out;               ///< Out: Number of rows returned
+  gdf_column    **data;                     ///< Out: Array of gdf_columns*
+  int           *index_col;                 ///< Out: If available, column index to use as row labels
 
   /*
    * Input arguments

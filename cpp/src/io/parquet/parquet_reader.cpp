@@ -53,19 +53,6 @@ public:
 #define PERF_SAMPLE_RESET()     _local_perf.init()
 #endif // DUMP_PERF
 
-// TODO: Move into metadata or scheme class?
-std::string to_dot_string(std::vector<std::string> const &path_in_schema)
-{
-    size_t n = path_in_schema.size();
-    std::string s = (n > 0) ? path_in_schema[0] : "";
-    for (size_t i = 1; i < n; i++)
-    {
-        s += '.';
-        s += path_in_schema[i];
-    }
-    return s;
-}
-
 uint8_t *LoadFile(const char *input_fname, size_t *len)
 {
     size_t file_size;
@@ -103,6 +90,38 @@ uint8_t *LoadFile(const char *input_fname, size_t *len)
     return raw;
 }
 
+// TODO: Move into metadata or schema class
+std::string to_dot_string(std::vector<std::string> const &path_in_schema) {
+  size_t n = path_in_schema.size();
+  std::string s = (n > 0) ? path_in_schema[0] : "";
+  for (size_t i = 1; i < n; i++) {
+    s += '.';
+    s += path_in_schema[i];
+  }
+  return s;
+}
+
+// TODO: Move into metadata or schema class
+std::string get_index_col(parquet::FileMetaData md) {
+  const auto it =
+      std::find_if(md.key_value_metadata.begin(), md.key_value_metadata.end(),
+                   [](const auto& item) { return item.key == "pandas"; });
+
+  if (it != md.key_value_metadata.end()) {
+    const auto pos = it->value.find("index_columns");
+
+    if (pos != std::string::npos) {
+      const auto begin = it->value.find('[', pos);
+      const auto end = it->value.find(']', begin);
+      if ((end - begin) > 4) {
+        return it->value.substr(begin + 2, end - begin - 3);
+      }
+    }
+  }
+
+  return "";
+}
+
 /**---------------------------------------------------------------------------*
  * @brief Reads Apache Parquet-formatted data and returns an allocated array of
  * gdf_columns.
@@ -131,6 +150,8 @@ gdf_error read_parquet(pq_read_arg *args) {
     uint8_t *decompressed_pages = nullptr;
     gdf_column **columns = nullptr;
     int max_num_columns = 0, num_columns = 0, max_num_chunks = 0, num_chunks = 0;
+    int* index_col = nullptr;
+    std::string index_col_name = "";
 
     raw = LoadFile(args->source, &raw_size);
     if (!raw || raw_size < sizeof(parquet::file_header_s) + sizeof(parquet::file_ender_s))
@@ -177,19 +198,26 @@ gdf_error read_parquet(pq_read_arg *args) {
     {
         goto error_exit;
     }
+
+    // Use user-specified column names
+    // Otherwise generate names from schema path of columns in the 1st row group
     if (args->use_cols) {
-      // Use user-specified column names
       col_names.reserve(args->use_cols_len);
       for (int i = 0; i < args->use_cols_len; ++i) {
           col_names.emplace_back(args->use_cols[i]);
       }
     } else {
-      // Generate column names from schema path of columns in the 1st row group
       col_names.resize(max_num_columns);
       for (int i = 0; i < max_num_columns; ++i) {
           col_names.emplace_back(to_dot_string(file_md.row_groups[0].columns[i].meta_data.path_in_schema));
       }
     }
+    index_col_name = get_index_col(file_md);
+    if (index_col_name != "") {
+      index_col = (int *)malloc(sizeof(int));
+      col_names.emplace_back(index_col_name);
+    }
+
     num_columns = (int)col_names.size();
     printf("Selected %d columns:\n", num_columns);
     columns = (gdf_column **)malloc(num_columns * sizeof(gdf_column *));
@@ -204,6 +232,9 @@ gdf_error read_parquet(pq_read_arg *args) {
             std::string s = to_dot_string(file_md.row_groups[0].columns[col_idx].meta_data.path_in_schema);
             if (s == col_names[i])
             {
+                if (s == index_col_name) {
+                    *index_col = i;
+                }
                 break;
             }
         }
@@ -783,6 +814,8 @@ gdf_error read_parquet(pq_read_arg *args) {
 
     args->data = columns;
     args->num_cols_out = num_columns;
+    args->index_col = index_col;
+
     return GDF_SUCCESS;
 
 error_exit:
