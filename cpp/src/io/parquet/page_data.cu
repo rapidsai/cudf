@@ -433,6 +433,67 @@ __device__ int gpuDecodeDictionaryIndices(volatile page_state_s *s, int batch_le
 }
 
 
+// Same as the more generic gpuDecodeDictionaryIndices, but hardcoded for dict_size=1
+__device__ int gpuDecodeRleBooleans(volatile page_state_s *s, int batch_len, int t)
+{
+    const uint8_t *end = s->data_end;
+    int is_literal = 0, dict_idx;
+
+    if (!t)
+    {
+        uint32_t run = s->dict_run;
+        const uint8_t *cur = s->data_start;
+        if (run <= 1)
+        {
+            run = (cur < end) ? get_vlq32(cur, end) : 0;
+            if (!(run & 1))
+            {
+                // Repeated value
+                s->dict_val = (cur < end) ? cur[0] & 1 : 0;
+                cur++;
+            }
+        }
+        if (run & 1)
+        {
+            // Literal batch: must output a multiple of 8, except for the last batch
+            int batch_len_div8;
+            batch_len = max(min(batch_len, (int)(run >> 1) * 8), 1);
+            if (batch_len >= 8)
+            {
+                batch_len &= ~7;
+            }
+            batch_len_div8 = (batch_len + 7) >> 3;
+            run -= batch_len_div8 * 2;
+            cur += batch_len_div8;
+        }
+        else
+        {
+            batch_len = max(min(batch_len, (int)(run >> 1)), 1);
+            run -= batch_len * 2;
+        }
+        s->dict_run = run;
+        s->data_start = cur;
+        is_literal = run & 1;
+        __threadfence_block();
+    }
+    SYNCWARP();
+    is_literal = SHFL0(is_literal);
+    batch_len = SHFL0(batch_len);
+    if (is_literal && t < batch_len)
+    {
+        int32_t ofs = t - ((batch_len + 7) & ~7);
+        const uint8_t *p = s->data_start + (ofs >> 3);
+        dict_idx = (p < end) ? (p[0] >> (ofs & 7u)) & 1 : 0;
+    }
+    else
+    {
+        dict_idx = s->dict_val;
+    }
+    s->scratch.dict_idx[t] = dict_idx;
+    return batch_len;
+}
+
+
 // Parse the length of strings in the batch and initializes the corresponding string descriptor
 __device__ void gpuInitStringDescriptors(volatile page_state_s *s, int batch_len, int t)
 {
@@ -466,7 +527,8 @@ __device__ void gpuInitStringDescriptors(volatile page_state_s *s, int batch_len
 enum CodingMode {
     PLAIN_FIXED_LENGTH,     // Plain, fixed length symbols
     PLAIN_VARIABLE_LENGTH,  // Plain string 32-bit length followed by data
-    DICTIONARY_RLE          // RLE-coded dictionary indices
+    DICTIONARY_RLE,         // RLE-coded dictionary indices
+    BOOL_RLE,               // 1-bit bool to byte
 };
 
 
@@ -478,8 +540,8 @@ __device__ void gpuDecodeValues(volatile page_state_s *s, int t)
     for (;;)
     {
         const uint8_t *dict;
-        unsigned int dict_size;
-        int dict_idx, row_idx;
+        unsigned int dict_size, dict_pos;
+        int row_idx;
         if (!t)
         {
             // Wait for data from WARP0
@@ -502,20 +564,25 @@ __device__ void gpuDecodeValues(volatile page_state_s *s, int t)
         if (mode == DICTIONARY_RLE)
         {
             batch_len = gpuDecodeDictionaryIndices(s, batch_len, t); // May lower the value of batch_len
-            dict_idx = s->scratch.dict_idx[t];
+            dict_pos = s->scratch.dict_idx[t] * s->dtype_len_in;
             dict = s->dict_base;
             dict_size = s->dict_size;
         }
         else if (mode == PLAIN_VARIABLE_LENGTH)
         {
             gpuInitStringDescriptors(s, batch_len, t);
-            dict_idx = 0;
+            dict_pos = 0;
             dict = const_cast<const uint8_t *>(reinterpret_cast<volatile uint8_t *>(&s->scratch.str_desc[t]));
             dict_size = sizeof(s->scratch.str_desc[0]);
         }
+        else if (mode == BOOL_RLE)
+        {
+            batch_len = gpuDecodeRleBooleans(s, batch_len, t); // May lower the value of batch_len
+            dict_pos = s->scratch.dict_idx[t];
+        }
         else // PLAIN_FIXED_LENGTH
         {
-            dict_idx = rd_count + t;
+            dict_pos = (rd_count + t) * s->dtype_len_in;
             dict = s->data_start;
             dict_size = s->dict_size;
         }
@@ -526,12 +593,16 @@ __device__ void gpuDecodeValues(volatile page_state_s *s, int t)
             {
                 // Read and store the value
                 unsigned int len = s->dtype_len;
-                unsigned int dict_pos = dict_idx * s->dtype_len_in;
                 uint8_t *dst8 = s->data_out;
                 if (dst8)
                 {
                     dst8 += len * row_idx;
-                    if (len & 3)
+                    if (mode == BOOL_RLE)
+                    {
+                        // Boolean output indices (index into a fixed 2-entry {0,1} dictionary)
+                        *dst8 = dict_pos;
+                    }
+                    else if (len & 3)
                     {
                         // Generic slow path
                         for (unsigned int i = 0; i < len; i++)
@@ -630,7 +701,7 @@ gpuDecodePageData(PageInfo *pages, ColumnChunkDesc *chunks, int32_t num_pages, i
             switch(s->col.data_type & 7)
             {
             case BOOLEAN:
-                s->dtype_len = 1;  // TBD: Output 1 byte per boolean or bitmap ?
+                s->dtype_len = 1;  // Boolean are stored as 1 byte on the output
                 break;
             case INT32:
             case FLOAT:
@@ -720,8 +791,13 @@ gpuDecodePageData(PageInfo *pages, ColumnChunkDesc *chunks, int32_t num_pages, i
                 break;
             case PLAIN:
                 s->dict_size = static_cast<int32_t>(end - cur);
+                if ((s->col.data_type & 7) == BOOLEAN)
+                {
+                    s->dict_run = s->dict_size * 2 + 1;
+                }
                 break;
             case RLE:
+                s->dict_run = 0;
                 break;
             default:
                 s->error = 1;   // Unsupported encoding
@@ -764,6 +840,8 @@ gpuDecodePageData(PageInfo *pages, ColumnChunkDesc *chunks, int32_t num_pages, i
                     gpuDecodeValues<DICTIONARY_RLE>(s, t & 0x1f);
                 else if ((s->col.data_type & 7) == BYTE_ARRAY)
                     gpuDecodeValues<PLAIN_VARIABLE_LENGTH>(s, t & 0x1f);
+                else if ((s->col.data_type & 7) == BOOLEAN)
+                    gpuDecodeValues<BOOL_RLE>(s, t & 0x1f);
                 else
                     gpuDecodeValues<PLAIN_FIXED_LENGTH>(s, t & 0x1f);
             }
