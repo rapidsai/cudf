@@ -1386,6 +1386,10 @@ class DataFrame(object):
         """
         _gdf.nvtx_range_push("CUDF_JOIN", "blue")
 
+        if left_on and right_on:
+            raise NotImplementedError("left_on='x', right_on='y' not supported"
+                                      "in CUDF at this time.")
+
         if right_on:
             on = right_on
             self[right_on] = self.index
