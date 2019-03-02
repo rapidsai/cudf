@@ -2001,3 +2001,16 @@ def test_fillna_numerical(dtype, null_value):
     got = sr.fillna(fill_value).to_array()
 
     np.testing.assert_equal(expect, got)
+
+@pytest.mark.parametrize(
+    'null_value',
+    [None, np.nan])
+def test_fillna_categorical(null_value):
+    data = ['a', 'b', 'a', null_value, 'c']
+    psr = pd.Series(data, dtype='category')
+    sr = Series.from_pandas(psr)
+
+    expect = psr.fillna('a')
+    got = sr.fillna('a')
+
+    assert_eq(expect, got)

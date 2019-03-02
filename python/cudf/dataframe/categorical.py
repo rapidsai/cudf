@@ -283,18 +283,6 @@ class CategoricalColumn(columnops.TypedColumnBase):
                                          dtype=self.dtype,
                                          categories=tuple(cats),
                                          ordered=self._ordered)
-
-        if how == 'inner':
-            # Adjust for inner join.
-            # Only retain categories common on both side.
-            cats = sorted(set(lcats) & set(rcats))
-            joined_index = joined_index.cat().set_categories(cats)
-
-        if return_indexers:
-            return joined_index, indexers
-        else:
-            return joined_index
-
     def find_and_replace(self, to_replace, value):
         """
         Return col with *to_replace* replaced with *value*.
@@ -313,6 +301,18 @@ class CategoricalColumn(columnops.TypedColumnBase):
         cpp_replace.replace(replaced, to_replace_col, value_col)
 
         return self.replace(data=replaced.data)
+
+    def fillna(self, fill_value):
+        """
+        Fill null values with *fill_value*
+        """
+        codes = columnops.as_column(self.cat().codes)
+        if np.isscalar(fill_value):
+            fill_value = self._encode(fill_value)
+        else:
+            fill_value = fill_value.cat.codes()
+        filled = codes.fillna(fill_value)
+        return self.replace(data=filled.data, mask=None)
 
 
 def pandas_categorical_as_column(categorical, codes=None):
