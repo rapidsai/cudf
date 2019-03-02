@@ -127,6 +127,7 @@ __device__ uint32_t InitLevelSection(page_state_s *s, const uint8_t *cur, const 
                 if (!(run & 1))
                 {
                     int v = (cur < end) ? cur[0] : 0;
+                    cur++;
                     if (level_bits > 8)
                     {
                         v |= ((cur < end) ? cur[0] : 0) << 8;
