@@ -193,6 +193,39 @@ void print_gdf_column(gdf_column *col, int index) {
   std::cout << std::endl;
 }
 
+// TODO: Move into class
+/*struct ColumnChunkDesc : public parquet::gpu::ColumnChunkDesc {
+  ColumnChunkDesc(const parquet::ColumnChunk* col, size_t num_rows, uint8_t type_length) {
+    compressed_data = nullptr;
+    compressed_size = col->meta_data.total_compressed_size;
+    num_values = col->meta_data.num_values;
+    start_row = row;
+    num_rows = static_cast<uint32_t>(num_rows);
+    max_def_level = (int16_t)file_md.schema[col->schema_idx].max_definition_level;
+    max_rep_level = (int16_t)file_md.schema[col->schema_idx].max_repetition_level;
+    def_level_bits = (uint8_t)cp.NumRequiredBits(file_md.schema[col->schema_idx].max_definition_level);
+    rep_level_bits = (uint8_t)cp.NumRequiredBits(file_md.schema[col->schema_idx].max_repetition_level);
+
+    auto data_type = file_md.schema[col->schema_idx].type;
+    auto type_length = (data_type == parquet::FIXED_LEN_BYTE_ARRAY) ? (file_md.schema[col->schema_idx].type_length << 3) : 0;
+    if (columns[k]->dtype == GDF_INT8)
+        type_length = 1;
+    else if (columns[k]->dtype == GDF_INT16)
+        type_length = 2;
+    chunk->data_type = static_cast<uint16_t>(data_type | (type_length << 3));
+
+    num_data_pages = 0;
+    num_dict_pages = 0;
+    max_num_pages = 0;
+    page_info = nullptr;
+    str_dict_index = nullptr;
+    valid_map_base = nullptr;
+    column_data_base = nullptr;
+  }
+};*/
+
+//thrust::system::cuda::experimental::pinned_allocator<float>;
+
 /**---------------------------------------------------------------------------*
  * @brief Reads Apache Parquet-formatted data and returns an allocated array of
  * gdf_columns.
@@ -328,88 +361,76 @@ gdf_error read_parquet(pq_read_arg *args) {
     printf(" row_groups (%zd entries):\n", file_md.row_groups.size());
     chunk_map.resize(max_num_chunks);
     chunk_col.resize(max_num_chunks);
-    for (size_t i = 0, row = 0; i < file_md.row_groups.size(); i++)
-    {
-        const parquet::RowGroup *g = &file_md.row_groups[i];
-        printf("  [%zd] total_size=%zd, %zd rows, %zd columns:\n", i, (size_t)g->total_byte_size, (size_t)g->num_rows, g->columns.size());
-        for (size_t j = 0; j < g->columns.size(); j++)
-        {
-            const parquet::ColumnChunk *col = &g->columns[j];
-            std::string name = to_dot_string(col->meta_data.path_in_schema);
-            for (int k = 0; k < num_columns; k++)
-            {
-                if (name == columns[k]->col_name)
-                {
-                    if (num_chunks < max_num_chunks)
-                    {
-                        parquet::gpu::ColumnChunkDesc *chunk = &chunk_desc[num_chunks];
-                        size_t first_page_offset = (size_t)col->meta_data.data_page_offset;
-                        if (col->meta_data.dictionary_page_offset != 0)
-                        {
-                            first_page_offset = std::min(first_page_offset, (size_t)col->meta_data.dictionary_page_offset);
-                        }
-                        chunk->compressed_data = nullptr;
-                        chunk->compressed_size = col->meta_data.total_compressed_size;
-                        chunk->num_values = col->meta_data.num_values;
-                        chunk->start_row = row;
-                        chunk->num_rows = static_cast<uint32_t>(g->num_rows);
-                        chunk->max_def_level = (int16_t)file_md.schema[col->schema_idx].max_definition_level;
-                        chunk->max_rep_level = (int16_t)file_md.schema[col->schema_idx].max_repetition_level;
-                        chunk->def_level_bits = (uint8_t)cp.NumRequiredBits(file_md.schema[col->schema_idx].max_definition_level);
-                        chunk->rep_level_bits = (uint8_t)cp.NumRequiredBits(file_md.schema[col->schema_idx].max_repetition_level);
 
-                        auto data_type = file_md.schema[col->schema_idx].type;
-                        auto type_length = (data_type == parquet::FIXED_LEN_BYTE_ARRAY) ? (file_md.schema[col->schema_idx].type_length << 3) : 0;
-                        if (columns[k]->dtype == GDF_INT8)
-                            type_length = 1;
-                        else if (columns[k]->dtype == GDF_INT16)
-                            type_length = 2;
-                        chunk->data_type = static_cast<uint16_t>(data_type | (type_length << 3));
-                        std::cout << "dtypw: " << columns[k]->dtype << "length " << type_length << std::endl;
+    // Initialize column chunk info
+    for (size_t i = 0, row = 0; i < file_md.row_groups.size(); i++) {
+      const parquet::RowGroup *g = &file_md.row_groups[i];
+      printf("  [%zd] total_size=%zd, %zd rows, %zd columns:\n", i,
+             g->total_byte_size, g->num_rows,
+             g->columns.size());
+      for (size_t j = 0; j < g->columns.size(); j++) {
+        const parquet::ColumnChunk *col = &g->columns[j];
+        const auto name = to_dot_string(col->meta_data.path_in_schema);
 
-                        chunk->num_data_pages = 0;
-                        chunk->num_dict_pages = 0;
-                        chunk->max_num_pages = 0;
-                        chunk->page_info = nullptr;
-                        chunk->str_dict_index = nullptr;
-                        chunk->valid_map_base = nullptr;
-                        chunk->column_data_base = nullptr;
-                        if (col->meta_data.total_compressed_size > 0)
-                        {
-                            RMM_ALLOC((void **)&chunk->compressed_data, col->meta_data.total_compressed_size, 0);
-                            if (!chunk->compressed_data)
-                                goto error_exit;
-                            cudaMemcpyAsync(chunk->compressed_data, raw + first_page_offset, col->meta_data.total_compressed_size, cudaMemcpyHostToDevice);
-                        }
-                        chunk_map[num_chunks] = col;
-                        chunk_col[num_chunks] = k;
-                        num_chunks++;
-                    }
-                    else
-                    {
-                        printf("Too many chunks!!!\n");
-                    }
-                    break;
-                }
+        for (int k = 0; k < num_columns; k++) {
+          if (name == columns[k]->col_name) {
+            if (num_chunks < max_num_chunks) {
+              auto &schema = file_md.schema[col->schema_idx];
+              auto *chunk = &chunk_desc[num_chunks];
+              auto first_page_offset =
+                  (col->meta_data.dictionary_page_offset != 0)
+                      ? std::min(col->meta_data.data_page_offset,
+                                 col->meta_data.dictionary_page_offset)
+                      : col->meta_data.data_page_offset;
+
+              chunk->compressed_data = nullptr;
+              chunk->compressed_size = col->meta_data.total_compressed_size;
+              chunk->num_values = col->meta_data.num_values;
+              chunk->start_row = row;
+              chunk->num_rows = (uint32_t)g->num_rows;
+              chunk->max_def_level = (int16_t)schema.max_definition_level;
+              chunk->max_rep_level = (int16_t)schema.max_repetition_level;
+              chunk->def_level_bits =
+                  (uint8_t)cp.NumRequiredBits(schema.max_definition_level);
+              chunk->rep_level_bits =
+                  (uint8_t)cp.NumRequiredBits(schema.max_repetition_level);
+
+              // TODO: Convert to typedispatcher
+              auto type_length = (schema.type == parquet::FIXED_LEN_BYTE_ARRAY)
+                                     ? (schema.type_length << 3)
+                                     : 0;
+              if (columns[k]->dtype == GDF_INT8)
+                type_length = 1;
+              else if (columns[k]->dtype == GDF_INT16)
+                type_length = 2;
+              chunk->data_type = (uint16_t)(schema.type | (type_length << 3));
+              chunk->num_data_pages = 0;
+              chunk->num_dict_pages = 0;
+              chunk->max_num_pages = 0;
+              chunk->page_info = nullptr;
+              chunk->str_dict_index = nullptr;
+              chunk->valid_map_base = nullptr;
+              chunk->column_data_base = nullptr;
+              if (col->meta_data.total_compressed_size > 0) {
+                RMM_ALLOC(&chunk->compressed_data, col->meta_data.total_compressed_size, 0);
+                if (!chunk->compressed_data) goto error_exit;
+                cudaMemcpyAsync(chunk->compressed_data, raw + first_page_offset,
+                                col->meta_data.total_compressed_size,
+                                cudaMemcpyHostToDevice);
+              }
+              chunk_map[num_chunks] = col;
+              chunk_col[num_chunks] = k;
+              num_chunks++;
+            } else {
+              printf("Too many chunks!!!\n");
             }
-            printf("   col%zd \"%s\"@%-9zd, type=%d, codec=%d, num_values=%zd, schema_idx=%d\n", j, col->file_path.c_str(), (size_t)col->file_offset, col->meta_data.type, col->meta_data.codec, (size_t)col->meta_data.num_values, col->schema_idx);
-            printf("      path in schema: \"%s\"\n", name.c_str());
-            if (col->meta_data.encodings.size())
-            {
-                printf("      encodings={");
-                for (size_t k=0; k<col->meta_data.encodings.size(); k++)
-                    printf("%d,", col->meta_data.encodings[k]);
-                printf("},\n");
-            }
-            printf("      total uncompressed size = %zd, compressed to %zd\n", (size_t)col->meta_data.total_uncompressed_size, (size_t)col->meta_data.total_compressed_size);
-            if (col->offset_index_length || col->column_index_length)
-            {
-                printf("       index offset:%d@0x%zx, column:%d@0x%zx\n", col->offset_index_length, (size_t)col->offset_index_offset, col->column_index_length, (size_t)col->column_index_offset);
-            }
-            printf("      data page offset @%zd, index @%zd, dictionary @%zd\n", (size_t)col->meta_data.data_page_offset, (size_t)col->meta_data.index_page_offset, (size_t)col->meta_data.dictionary_page_offset);
+            break;
+          }
         }
-        row += g->num_rows;
+      }
+      row += g->num_rows;
     }
+
     // Copy column chunks to GPU and count data pages
     cudaMemcpyAsync(chunk_desc_dev, chunk_desc, sizeof(parquet::gpu::ColumnChunkDesc) * num_chunks, cudaMemcpyHostToDevice);
     DecodePageHeaders(chunk_desc_dev, num_chunks);
@@ -473,81 +494,82 @@ gdf_error read_parquet(pq_read_arg *args) {
           compressed_page_cnt[i] += codec_page_cnt;
           num_compressed_pages += codec_page_cnt;
       }
-    }
-    if (num_compressed_pages > 0)
-    {
-        gpu_inflate_input_s *inflate_in = nullptr, *inflate_in_dev = nullptr;
-        gpu_inflate_status_s *inflate_out = nullptr, *inflate_out_dev = nullptr;
-        size_t decompressed_ofs = 0;
-        int32_t comp_cnt = 0;
-        double uncomp_time = 0;
 
-        RMM_ALLOC_HOST((void **)&inflate_in, sizeof(gpu_inflate_input_s) * num_compressed_pages);
-        RMM_ALLOC((void **)&inflate_in_dev, sizeof(gpu_inflate_input_s) * num_compressed_pages, 0);
-        RMM_ALLOC_HOST((void **)&inflate_out, sizeof(gpu_inflate_status_s) * num_compressed_pages);
-        RMM_ALLOC((void **)&inflate_out_dev, sizeof(gpu_inflate_status_s) * num_compressed_pages, 0);
-        RMM_ALLOC((void **)&decompressed_pages, total_decompressed_size, 0);
+      if (num_compressed_pages > 0)
+      {
+          gpu_inflate_input_s *inflate_in = nullptr, *inflate_in_dev = nullptr;
+          gpu_inflate_status_s *inflate_out = nullptr, *inflate_out_dev = nullptr;
+          size_t decompressed_ofs = 0;
+          int32_t comp_cnt = 0;
+          double uncomp_time = 0;
 
-        for (int codec_idx = 0; codec_idx < NUM_SUPPORTED_CODECS; codec_idx++)
-        {
-            parquet::Compression codec = g_supportedCodecs[codec_idx];
-            if (compressed_page_cnt[codec_idx] > 0)
-            {
-                int32_t start_pos = comp_cnt;
+          RMM_ALLOC_HOST((void **)&inflate_in, sizeof(gpu_inflate_input_s) * num_compressed_pages);
+          RMM_ALLOC((void **)&inflate_in_dev, sizeof(gpu_inflate_input_s) * num_compressed_pages, 0);
+          RMM_ALLOC_HOST((void **)&inflate_out, sizeof(gpu_inflate_status_s) * num_compressed_pages);
+          RMM_ALLOC((void **)&inflate_out_dev, sizeof(gpu_inflate_status_s) * num_compressed_pages, 0);
+          RMM_ALLOC((void **)&decompressed_pages, total_decompressed_size, 0);
 
-                // Fill in decompression in/out structures & update page ptr to point to the decompressed data
-                for (int chunk = 0, page_cnt = 0; chunk < num_chunks; chunk++)
-                {
-                    if (chunk_map[chunk]->meta_data.codec == codec)
-                    {
-                        for (int k = 0; k < chunk_desc[chunk].max_num_pages; k++, comp_cnt++)
-                        {
-                            inflate_in[comp_cnt].srcDevice = page_index[page_cnt + k].compressed_page_data;
-                            inflate_in[comp_cnt].srcSize = page_index[page_cnt + k].compressed_page_size;
-                            inflate_in[comp_cnt].dstDevice = decompressed_pages + decompressed_ofs;
-                            inflate_in[comp_cnt].dstSize = page_index[page_cnt + k].uncompressed_page_size;
-                            inflate_out[comp_cnt].bytes_written = 0;
-                            inflate_out[comp_cnt].status = -1000;
-                            inflate_out[comp_cnt].reserved = 0;
-                            page_index[page_cnt + k].compressed_page_data = decompressed_pages + decompressed_ofs;
-                            decompressed_ofs += page_index[page_cnt + k].uncompressed_page_size;
-                        }
-                    }
-                    page_cnt += chunk_desc[chunk].max_num_pages;
-                }
-                cudaMemcpyAsync(inflate_in_dev + start_pos, inflate_in + start_pos, sizeof(gpu_inflate_input_s) * (comp_cnt - start_pos), cudaMemcpyHostToDevice);
-                cudaMemcpyAsync(inflate_out_dev + start_pos, inflate_out + start_pos, sizeof(gpu_inflate_status_s) * (comp_cnt - start_pos), cudaMemcpyHostToDevice);
-                switch(codec)
-                {
-                case parquet::GZIP:
-                    gpuinflate(inflate_in_dev + start_pos, inflate_out_dev + start_pos, comp_cnt - start_pos, 1);
-                    break;
-                case parquet::SNAPPY:
-                    gpu_unsnap(inflate_in_dev + start_pos, inflate_out_dev + start_pos, comp_cnt - start_pos);
-                    break;
-                default:
-                    printf("This is a bug\n");
-                    break;
-                }
-                cudaMemcpyAsync(inflate_out + start_pos, inflate_out_dev + start_pos, sizeof(gpu_inflate_status_s) * (comp_cnt - start_pos), cudaMemcpyDeviceToHost);
-            }
-        }
-        cudaStreamSynchronize(0);
+          for (int codec_idx = 0; codec_idx < NUM_SUPPORTED_CODECS; codec_idx++)
+          {
+              parquet::Compression codec = g_supportedCodecs[codec_idx];
+              if (compressed_page_cnt[codec_idx] > 0)
+              {
+                  int32_t start_pos = comp_cnt;
 
-        printf("%zd bytes in %.1fms (%.2fMB/s)\n", total_decompressed_size, uncomp_time * 1000.0, 1.e-6 * total_decompressed_size / uncomp_time);
-        for (int i = 0; i < comp_cnt; i++)
-        {
-            if (inflate_out[i].status != 0 || inflate_out[i].bytes_written > 100000)
-                printf("status[%d] = %d (%zd bytes)\n", i, inflate_out[i].status, (size_t)inflate_out[i].bytes_written);
-        }
+                  // Fill in decompression in/out structures & update page ptr to point to the decompressed data
+                  for (int chunk = 0, page_cnt = 0; chunk < num_chunks; chunk++)
+                  {
+                      if (chunk_map[chunk]->meta_data.codec == codec)
+                      {
+                          for (int k = 0; k < chunk_desc[chunk].max_num_pages; k++, comp_cnt++)
+                          {
+                              inflate_in[comp_cnt].srcDevice = page_index[page_cnt + k].compressed_page_data;
+                              inflate_in[comp_cnt].srcSize = page_index[page_cnt + k].compressed_page_size;
+                              inflate_in[comp_cnt].dstDevice = decompressed_pages + decompressed_ofs;
+                              inflate_in[comp_cnt].dstSize = page_index[page_cnt + k].uncompressed_page_size;
+                              inflate_out[comp_cnt].bytes_written = 0;
+                              inflate_out[comp_cnt].status = -1000;
+                              inflate_out[comp_cnt].reserved = 0;
+                              page_index[page_cnt + k].compressed_page_data = decompressed_pages + decompressed_ofs;
+                              decompressed_ofs += page_index[page_cnt + k].uncompressed_page_size;
+                          }
+                      }
+                      page_cnt += chunk_desc[chunk].max_num_pages;
+                  }
+                  cudaMemcpyAsync(inflate_in_dev + start_pos, inflate_in + start_pos, sizeof(gpu_inflate_input_s) * (comp_cnt - start_pos), cudaMemcpyHostToDevice);
+                  cudaMemcpyAsync(inflate_out_dev + start_pos, inflate_out + start_pos, sizeof(gpu_inflate_status_s) * (comp_cnt - start_pos), cudaMemcpyHostToDevice);
+                  switch(codec)
+                  {
+                  case parquet::GZIP:
+                      gpuinflate(inflate_in_dev + start_pos, inflate_out_dev + start_pos, comp_cnt - start_pos, 1);
+                      break;
+                  case parquet::SNAPPY:
+                      gpu_unsnap(inflate_in_dev + start_pos, inflate_out_dev + start_pos, comp_cnt - start_pos);
+                      break;
+                  default:
+                      printf("This is a bug\n");
+                      break;
+                  }
+                  cudaMemcpyAsync(inflate_out + start_pos, inflate_out_dev + start_pos, sizeof(gpu_inflate_status_s) * (comp_cnt - start_pos), cudaMemcpyDeviceToHost);
+              }
+          }
+          cudaStreamSynchronize(0);
 
-        RMM_FREE_HOST(inflate_in);
-        RMM_FREE_HOST(inflate_out);
-        RMM_FREE(inflate_out_dev, 0);
-        RMM_FREE(inflate_in_dev, 0);
-        // Update pages in device memory with the updated value of compressed_page_data, now pointing to the uncompressed data buffer
-        cudaMemcpyAsync(page_index_dev, page_index, sizeof(parquet::gpu::PageInfo) * total_pages, cudaMemcpyHostToDevice);
-        cudaStreamSynchronize(0);
+          printf("%zd bytes in %.1fms (%.2fMB/s)\n", total_decompressed_size, uncomp_time * 1000.0, 1.e-6 * total_decompressed_size / uncomp_time);
+          for (int i = 0; i < comp_cnt; i++)
+          {
+              if (inflate_out[i].status != 0 || inflate_out[i].bytes_written > 100000)
+                  printf("status[%d] = %d (%zd bytes)\n", i, inflate_out[i].status, (size_t)inflate_out[i].bytes_written);
+          }
+
+          RMM_FREE_HOST(inflate_in);
+          RMM_FREE_HOST(inflate_out);
+          RMM_FREE(inflate_out_dev, 0);
+          RMM_FREE(inflate_in_dev, 0);
+          // Update pages in device memory with the updated value of compressed_page_data, now pointing to the uncompressed data buffer
+          cudaMemcpyAsync(page_index_dev, page_index, sizeof(parquet::gpu::PageInfo) * total_pages, cudaMemcpyHostToDevice);
+          cudaStreamSynchronize(0);
+      }
     }
 
     // Allocate column data
