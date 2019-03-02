@@ -283,6 +283,18 @@ class CategoricalColumn(columnops.TypedColumnBase):
                                          dtype=self.dtype,
                                          categories=tuple(cats),
                                          ordered=self._ordered)
+
+        if how == 'inner':
+            # Adjust for inner join.
+            # Only retain categories common on both side.
+            cats = sorted(set(lcats) & set(rcats))
+            joined_index = joined_index.cat().set_categories(cats)
+
+        if return_indexers:
+            return joined_index, indexers
+        else:
+            return joined_index
+
     def find_and_replace(self, to_replace, value):
         """
         Return col with *to_replace* replaced with *value*.
