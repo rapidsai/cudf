@@ -323,8 +323,9 @@ class CategoricalColumn(columnops.TypedColumnBase):
             fill_value = self._encode(fill_value)
         else:
             fill_value = fill_value.cat.codes()
-        filled = codes.fillna(fill_value)
-        return self.replace(data=filled.data, mask=None)
+        cpp_replace.replace_nulls(codes, columnops.as_column(fill_value,
+                                                             nan_as_null=False))
+        return self.replace(data=codes.data, mask=None)
 
 
 def pandas_categorical_as_column(categorical, codes=None):
