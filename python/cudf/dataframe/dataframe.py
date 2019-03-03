@@ -2340,8 +2340,11 @@ class DataFrame(object):
             [description] (the default is None, which [default_description])
 
         """
+
+        # TODO: mechanism to hand int->int64 float->float64...
+
         if isinstance(include, str):
-            include = list(include)
+            include = [include]
         df = DataFrame()
 
         # convert any dtype() to string for comparison
@@ -2349,7 +2352,7 @@ class DataFrame(object):
 
         for x in self._cols.values():
             if str(x.dtype) in include:
-                df.add_column(x)
+                df.add_column(x.name, x.data)
 
         return df
 
