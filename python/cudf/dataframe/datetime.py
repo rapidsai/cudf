@@ -12,6 +12,8 @@ from libgdf_cffi import libgdf
 from cudf.comm.serialize import register_distributed_serializer
 from cudf._gdf import nvtx_range_push, nvtx_range_pop
 
+import cudf.bindings.replace as cpp_replace
+
 _unordered_impl = {
     'eq': libgdf.gdf_eq_generic,
     'ne': libgdf.gdf_ne_generic,
@@ -188,6 +190,23 @@ class DatetimeColumn(columnops.TypedColumnBase):
         else:
             raise TypeError(
                 "datetime column of {} has no NaN value".format(self.dtype))
+
+    def fillna(self, fill_value):
+        result = self.copy()
+        if np.isscalar(fill_value):
+            if fill_value == self.default_na_value():
+                fill_value_col = columnops.as_column(
+                    fill_value, nan_as_null=False)
+            else: 
+                fill_value_col = columnops.as_column(
+                    [pd.to_datetime(fill_value)],
+                    nan_as_null=False)
+        else:
+            fill_value_col = columnops.as_column(
+                fill_value, nan_as_null=False)
+        cpp_replace.replace_nulls(result, fill_value_col)
+        result = result.replace(mask=None)
+        return result
 
 
 def binop(lhs, rhs, op, out_dtype):
