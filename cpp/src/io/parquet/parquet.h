@@ -198,7 +198,7 @@ public:
     DECL_PARQUET_STRUCT(KeyValue);
 
 public:
-    int NumRequiredBits(uint32_t max_level) { return 32 - CountLeadingZeros32(max_level); }
+    static int NumRequiredBits(uint32_t max_level) { return 32 - CountLeadingZeros32(max_level); }
     bool InitSchema(FileMetaData *md);
 
 protected:

@@ -4,6 +4,7 @@ from libgdf_cffi import libgdf, ffi
 
 from cudf.dataframe.column import Column
 from cudf.dataframe.dataframe import DataFrame
+from cudf.dataframe.datetime import DatetimeColumn
 from cudf.dataframe.numerical import NumericalColumn
 from cudf.utils import ioutils
 
