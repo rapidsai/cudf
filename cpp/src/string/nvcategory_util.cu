@@ -5,7 +5,10 @@
 #include <NVCategory.h>
 #include <NVStrings.h>
 #include "rmm/rmm.h"
-#include "bitmask/bit_mask.h"
+
+#include "utilities/error_utils.h"
+#include "utilities/nvtx/nvtx_utils.h"
+
 
 gdf_error create_nvcategory_from_indices(gdf_column * column, NVCategory * nv_category){
 
@@ -239,8 +242,12 @@ gdf_column* create_column_nvcategory_from_one_string(const char* str){
 	category->get_values(static_cast<nv_category_index_type *>(data),
 		DEVICE_ALLOCATED);
 
-	bit_mask::bit_mask_t * valid;
-	bit_mask::create_bit_mask(&valid, num_rows, 1);
+
+	gdf_valid_type * valid;
+	signed int all_ones = -1;
+	RMM_ALLOC(&valid, 4, 0);
+	cudaMemcpy(valid, &all_ones, 4,cudaMemcpyHostToDevice) ;
+
 
 	gdf_error err = gdf_column_view(column,
 			(void *) data,

@@ -25,6 +25,7 @@
 #include "dataframe/cudf_table.cuh"
 #include "utilities/nvtx/nvtx_utils.h"
 #include "string/nvcategory_util.cuh"
+#include <NVCategory.h>
 
 #include "joining.h"
 
@@ -536,8 +537,9 @@ gdf_error join_call_compute_df(
 
 
   //if the inputs are nvcategory we need to make the dictionaries comparable
-  gdf_column ** new_left_cols = new gdf_column * [num_left_cols];
-  gdf_column ** new_right_cols = new gdf_column * [num_right_cols];
+
+  std::vector<gdf_column *> new_left_cols(num_left_cols);
+  std::vector<gdf_column *> new_right_cols(num_right_cols);
   for(int column_index = 0; column_index < num_left_cols; column_index++){
 	  new_left_cols[column_index] = left_cols[column_index];
   }
@@ -594,8 +596,8 @@ gdf_error join_call_compute_df(
   // I do do not know if this is ok or not, I am chaning the vlaue of left_cols and right_cols to
   //point to columns that may have been updated in case we had columns of type GDF_STRING_CATEGORY
   //I think its fine since its not passed in by reference and we are just pointing this pointer somewehre else
-  left_cols = new_left_cols;
-  right_cols = new_right_cols;
+  left_cols = new_left_cols.data();
+  right_cols = new_right_cols.data();
 
 
   // If index outputs are not requested, create columns to store them
@@ -658,6 +660,30 @@ gdf_error join_call_compute_df(
 
     l_index_temp.reset(nullptr);
     r_index_temp.reset(nullptr);
+
+    //This code is done with the understanding that result columns is
+    //first left columns followed by right.
+
+    for(int output_column_index = 0; output_column_index < result_num_cols; output_column_index++){
+    	gdf_column * original_column;
+    	if(output_column_index < num_left_cols){
+    		original_column = new_left_cols[output_column_index];
+    	}else{
+    		original_column = new_right_cols[output_column_index - num_left_cols];
+    	}
+
+    	if(original_column->dtype == GDF_STRING_CATEGORY){
+    		gdf_error category_error =
+    				copy_category_from_input_and_compact_into_output(
+    				original_column,
+    				result_cols[output_column_index]);
+    	    GDF_REQUIRE(GDF_SUCCESS == category_error, category_error);
+        	NVCategory::destroy(original_column->dtype_info.category);
+        	gdf_column_free(original_column);
+    	}
+
+
+    }
 
     CUDA_CHECK_LAST();
 

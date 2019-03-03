@@ -390,7 +390,7 @@ TEST_F(NVCategoryTest, TEST_NVCATEGORY_COMPARISON)
 			output_column->valid,
 			100);
 
-	gdf_error err = gpu_comparison(column_left, column_right, output_column,gdf_comparison_operator::GDF_EQUALS);
+	gdf_error err = gdf_comparison(column_left, column_right, output_column,gdf_comparison_operator::GDF_EQUALS);
 
 	std::cout<<err<<std::endl;
 	//    gather_strings( unsigned int* pos, unsigned int elems, bool devmem=true )->;
@@ -654,7 +654,6 @@ struct NVCategoryJoinTest : public GdfTest
       std::copy(host_pair_result.begin(), host_pair_result.end(), std::ostream_iterator<result_type>(std::cout, ""));
       std::cout << "\n";
     }
-
     return host_pair_result;
   }
 };
@@ -663,7 +662,7 @@ TEST_F(NVCategoryJoinTest, join_test){
 
 	bool print = true;
 	size_t rows_size = 16;
-	size_t max_int_value = 50;
+//	size_t max_int_value = 50;
 	join_op op = join_op::INNER;
 
 	size_t length = 1;
