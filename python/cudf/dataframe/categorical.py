@@ -320,11 +320,11 @@ class CategoricalColumn(columnops.TypedColumnBase):
         """
         codes = columnops.as_column(self.cat().codes)
         if np.isscalar(fill_value):
-            fill_value = self._encode(fill_value)
+            fill_value = columnops.as_column(self._encode(fill_value)).astype(
+                codes.dtype)
         else:
             fill_value = fill_value.cat.codes()
-        cpp_replace.replace_nulls(codes, columnops.as_column(fill_value,
-                                                             nan_as_null=False))
+        cpp_replace.replace_nulls(codes, fill_value)
         return self.replace(data=codes.data, mask=None)
 
 
